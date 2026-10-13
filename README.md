@@ -4,7 +4,10 @@ A keyboard-first file manager for Windows, written in Rust. Total Commander's sp
 
 Status: design chosen, architecture in discussion. No application code yet.
 
-- [Discussion and decisions so far](docs/discussion.md)
+- [Discussion so far](docs/discussion.md), including why Rust
+- [Architecture](docs/architecture.md): crates, state, caching, start-up, safety, terminal
+- [Plugins](docs/plugins.md): what they are, permissions, lifecycle, how to build one
+- [Decisions](docs/decisions.md)
 - Interactive prototypes: open [`design/prototype/picker.html`](design/prototype/picker.html) in a browser (chosen direction: **B**), or the single-file [`design/commander-bundle.html`](design/commander-bundle.html).
 - Screenshots of the chosen design: [`design/screens`](design/screens)
 
