@@ -20,8 +20,12 @@ pub fn run(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     };
     let steps = steps(&GateOptions { with_coverage });
+    run_steps(root, &steps)
+}
+
+pub(super) fn run_steps(root: &Path, steps: &[Step]) -> ExitCode {
     let started = Instant::now();
-    for step in &steps {
+    for step in steps {
         let code = run_step(root, step);
         if code != ExitCode::SUCCESS {
             return code;

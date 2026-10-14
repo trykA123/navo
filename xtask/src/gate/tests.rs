@@ -88,3 +88,106 @@ fn steps_with_coverage_have_ten_steps() {
         10
     );
 }
+
+#[test]
+fn all_steps_passing_return_success() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let steps = [
+        Step {
+            name: "first",
+            program: "cargo",
+            args: &["--version"],
+        },
+        Step {
+            name: "second",
+            program: "cargo",
+            args: &["--version"],
+        },
+    ];
+    assert_eq!(
+        super::run::run_steps(root, &steps),
+        std::process::ExitCode::SUCCESS
+    );
+}
+
+struct TestRoot(std::path::PathBuf);
+
+impl TestRoot {
+    fn new() -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("rusty-gate-{}-{timestamp}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        Self(root)
+    }
+}
+
+impl Drop for TestRoot {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.0).unwrap();
+    }
+}
+
+#[test]
+fn first_failure_prevents_later_steps_from_running() {
+    let root = TestRoot::new();
+    let steps = [
+        Step {
+            name: "passing",
+            program: "cargo",
+            args: &["--version"],
+        },
+        Step {
+            name: "failing",
+            program: "cargo",
+            args: &["xtask-no-such-subcommand"],
+        },
+        Step {
+            name: "later",
+            program: "cargo",
+            args: &["new", "--lib", "--vcs", "none", "gate-later-step"],
+        },
+    ];
+    let marker = root.0.join("gate-later-step/Cargo.toml");
+    assert_ne!(
+        super::run::run_steps(&root.0, &steps),
+        std::process::ExitCode::SUCCESS
+    );
+    assert!(!marker.exists());
+    assert_eq!(
+        super::run::run_steps(&root.0, &steps[2..]),
+        std::process::ExitCode::SUCCESS
+    );
+    assert!(marker.is_file());
+}
+
+#[test]
+fn failing_step_propagates_its_exit_code() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let steps = [Step {
+        name: "failing",
+        program: "cargo",
+        args: &["xtask-no-such-subcommand"],
+    }];
+    assert_eq!(
+        super::run::run_steps(root, &steps),
+        std::process::ExitCode::from(101)
+    );
+}
+
+#[test]
+fn unspawnable_step_returns_failure() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let steps = [Step {
+        name: "unspawnable",
+        program: "rusty-gate-no-such-program",
+        args: &[],
+    }];
+    assert_eq!(
+        super::run::run_steps(root, &steps),
+        std::process::ExitCode::FAILURE
+    );
+}

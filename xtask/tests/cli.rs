@@ -56,4 +56,20 @@ mod tests {
         assert_eq!(output.stderr, b"usage: cargo xtask coverage\n");
         assert!(output.stdout.is_empty());
     }
+
+    #[test]
+    fn gate_rejects_unknown_options() {
+        let output = invoke(&["gate", "--bogus"]);
+        assert_eq!(output.status.code(), Some(2));
+        assert_eq!(output.stderr, b"usage: cargo xtask gate [--coverage]\n");
+        assert!(output.stdout.is_empty());
+    }
+
+    #[test]
+    fn gate_with_coverage_rejects_extra_arguments() {
+        let output = invoke(&["gate", "--coverage", "extra"]);
+        assert_eq!(output.status.code(), Some(2));
+        assert_eq!(output.stderr, b"usage: cargo xtask gate [--coverage]\n");
+        assert!(output.stdout.is_empty());
+    }
 }
