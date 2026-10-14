@@ -380,5 +380,6 @@ fn root_check_reports_non_utf8_rust_sources() {
     let tree = TestTree::new();
     tree.write("xtask/src/main.rs", [0xff]);
     let error = run::run_check(&tree.0).unwrap_err();
-    assert!(error.starts_with(&format!("{}:", tree.0.join("xtask/src/main.rs").display())));
+    let source = tree.0.join("xtask").join("src").join("main.rs");
+    assert!(error.starts_with(&format!("{}:", source.display())));
 }
