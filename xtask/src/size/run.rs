@@ -26,7 +26,7 @@ pub fn run(args: &[String]) -> ExitCode {
     }
 }
 
-fn run_check(root: &Path) -> Result<bool, String> {
+pub(super) fn run_check(root: &Path) -> Result<bool, String> {
     let exceptions = read_exceptions(root)?;
     let files = read_files(root)?;
     let violations = check_files(&files, &exceptions);
@@ -53,7 +53,7 @@ fn read_exceptions(root: &Path) -> Result<Vec<Exception>, String> {
     }
 }
 
-fn read_files(root: &Path) -> Result<Vec<(PathBuf, String)>, String> {
+pub(super) fn read_files(root: &Path) -> Result<Vec<(PathBuf, String)>, String> {
     let mut files = Vec::new();
     for directory in ["crates", "xtask"] {
         visit_directory(root, &root.join(directory), &mut files)?;

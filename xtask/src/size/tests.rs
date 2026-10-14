@@ -187,3 +187,198 @@ fn files_under_a_tests_folder_are_skipped() {
     let files = [file("crates/rusty-core/tests/big.rs", code(900))];
     assert!(check_files(&files, &[]).is_empty());
 }
+
+#[test]
+fn raw_strings_preserve_comment_markers() {
+    let source = "let a = r\"//\";\nlet b = r\"/*\";\n// skipped\n";
+    assert_eq!(count_code_lines(source), 2);
+}
+
+#[test]
+fn hashed_raw_strings_preserve_quotes_and_comment_markers() {
+    let source = r##"let a = r#""//"#;
+let b = r#""/*"#;
+// skipped
+"##;
+    assert_eq!(count_code_lines(source), 2);
+}
+
+#[test]
+fn byte_raw_strings_preserve_comment_markers() {
+    let source = "let a = br\"//\";\nlet b = br#\"/*\"#;\n// skipped\n";
+    assert_eq!(count_code_lines(source), 2);
+}
+
+#[test]
+fn raw_strings_spanning_lines_count_their_contents() {
+    let source = "let a = r\"start\n// text\n/* text */\n\";\n// skipped\n";
+    assert_eq!(count_code_lines(source), 4);
+}
+
+#[test]
+fn hashed_raw_strings_require_the_matching_closing_hashes() {
+    let source = "let a = r##\"start\n\"# // text\n/* text */\n\"##;\n// skipped\n";
+    assert_eq!(count_code_lines(source), 4);
+}
+
+#[test]
+fn escaped_quotes_do_not_end_strings() {
+    let source = "let a = \"a\\\"//b\";\n// skipped\n";
+    assert_eq!(count_code_lines(source), 1);
+}
+
+#[test]
+fn strings_spanning_lines_count_comment_markers_as_text() {
+    let source = "let a = \"start\n// text\n/* text */\n\";\n// skipped\n";
+    assert_eq!(count_code_lines(source), 4);
+}
+
+#[test]
+fn quote_and_slash_char_literals_do_not_change_lexer_state() {
+    let source = "let a = '\"';\nlet b = '\\'';\nlet c = '/';\n// skipped\n";
+    assert_eq!(count_code_lines(source), 3);
+}
+
+#[test]
+fn lifetimes_are_code_and_do_not_start_literals() {
+    let source = "fn f<'a>(x: &'a str) {}\n'a\n'\n// skipped\n";
+    assert_eq!(count_code_lines(source), 3);
+}
+
+#[test]
+fn block_comment_opening_after_code_counts_only_the_code_line() {
+    assert_eq!(count_code_lines("x; /* c\n*/\n"), 1);
+}
+
+#[test]
+fn invalid_size_exceptions_display_the_parse_message() {
+    let error = SizeError::InvalidToml("bad syntax".to_owned());
+    assert_eq!(error.to_string(), "invalid size exceptions: bad syntax");
+}
+
+#[test]
+fn excessive_size_exception_displays_the_path_limit_and_ceiling() {
+    let error = SizeError::LimitAboveCeiling {
+        path: PathBuf::from("src/large.rs"),
+        limit: 801,
+    };
+    assert_eq!(
+        error.to_string(),
+        "src/large.rs: exception limit 801 exceeds ceiling 800"
+    );
+}
+
+#[test]
+fn missing_size_exception_reason_displays_the_path() {
+    let error = SizeError::MissingReason {
+        path: PathBuf::from("src/large.rs"),
+    };
+    assert_eq!(
+        error.to_string(),
+        "src/large.rs: exception requires a non-blank reason"
+    );
+}
+
+struct TestTree(PathBuf);
+
+impl TestTree {
+    fn new() -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("rusty-size-{}-{timestamp}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        std::fs::create_dir(root.join("crates")).unwrap();
+        std::fs::create_dir(root.join("xtask")).unwrap();
+        Self(root)
+    }
+
+    fn write(&self, path: &str, source: impl AsRef<[u8]>) {
+        let path = self.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, source).unwrap();
+    }
+}
+
+impl Drop for TestTree {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.0).unwrap();
+    }
+}
+
+#[test]
+fn walk_sorts_rust_sources_and_skips_build_test_and_other_files() {
+    let tree = TestTree::new();
+    tree.write("xtask/src/main.rs", "fn main() {}\n");
+    tree.write("crates/a/src/lib.rs", "pub fn a() {}\n");
+    for path in [
+        "crates/a/target/big.rs",
+        "crates/a/tests/big.rs",
+        "crates/a/src/tests.rs",
+        "xtask/src/readme.txt",
+    ] {
+        tree.write(path, [0xff]);
+    }
+    assert_eq!(
+        run::read_files(&tree.0).unwrap(),
+        vec![
+            file("crates/a/src/lib.rs", "pub fn a() {}\n".to_owned()),
+            file("xtask/src/main.rs", "fn main() {}\n".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn root_check_rejects_a_401_line_source() {
+    let tree = TestTree::new();
+    tree.write("crates/a/src/lib.rs", code(401));
+    assert!(!run::run_check(&tree.0).unwrap());
+}
+
+#[test]
+fn root_check_applies_the_repository_exception_file() {
+    let tree = TestTree::new();
+    tree.write("crates/a/src/lib.rs", code(401));
+    tree.write(
+        "size-exceptions.toml",
+        "[[exception]]\npath = \"crates/a/src/lib.rs\"\nlimit = 401\nreason = \"state machine\"\n",
+    );
+    assert!(run::run_check(&tree.0).unwrap());
+}
+
+#[test]
+fn root_check_reports_invalid_exceptions() {
+    let tree = TestTree::new();
+    tree.write("size-exceptions.toml", "[[exception");
+    let error = run::run_check(&tree.0).unwrap_err();
+    assert!(error.starts_with("invalid size exceptions:"));
+}
+
+#[test]
+fn root_check_reports_unreadable_exceptions() {
+    let tree = TestTree::new();
+    tree.write("size-exceptions.toml", [0xff]);
+    let error = run::run_check(&tree.0).unwrap_err();
+    assert!(error.starts_with(&format!(
+        "{}:",
+        tree.0.join("size-exceptions.toml").display()
+    )));
+}
+
+#[test]
+fn root_check_reports_a_missing_source_directory() {
+    let tree = TestTree::new();
+    std::fs::remove_dir(tree.0.join("crates")).unwrap();
+    let error = run::run_check(&tree.0).unwrap_err();
+    assert!(error.starts_with(&format!("{}:", tree.0.join("crates").display())));
+}
+
+#[test]
+fn root_check_reports_non_utf8_rust_sources() {
+    let tree = TestTree::new();
+    tree.write("xtask/src/main.rs", [0xff]);
+    let error = run::run_check(&tree.0).unwrap_err();
+    assert!(error.starts_with(&format!("{}:", tree.0.join("xtask/src/main.rs").display())));
+}
