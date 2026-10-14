@@ -33,6 +33,8 @@ Prerequisites: Rust 1.99.0 (pinned in `rust-toolchain.toml`) and the tools in [d
 
 Other subcommands: `cargo xtask size`, `cargo xtask coverage`, `cargo xtask binsize <path>`.
 
+On Linux, `scripts/install-local.sh` builds an `x86-64-v3` binary (as CachyOS does) into `target/x86-64-v3/` and installs it as `~/.local/bin/ferrite`.
+
 CI: every push runs the gate on Linux and the tests on Windows, and builds `ferrite.exe` and a Linux `ferrite` binary as artifacts.
 
 Plans live in [plans/](plans/README.md). Each plan is cut into atoms and ends in a gate.
