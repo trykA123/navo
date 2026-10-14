@@ -1,0 +1,36 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+allow_attributes_without_reason = "deny"
+dbg_macro = "deny"
+excessive_nesting = "deny"
+expect_used = "deny"
+panic = "deny"
+print_stderr = "deny"
+print_stdout = "deny"
+todo = "deny"
+too_many_arguments = "deny"
+too_many_lines = "deny"
+undocumented_unsafe_blocks = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "unwind"

@@ -1,0 +1,8 @@
+[files]
+extend-exclude = [
+    "target/",
+    "design/prototype/fonts/",
+    "design/screens/",
+    "*.png",
+    "*.ttf",
+]

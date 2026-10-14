@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+        with:
+          components: rustfmt, clippy, llvm-tools
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest@0.9.148,cargo-llvm-cov@0.9.1,cargo-deny@0.20.2,cargo-audit@0.22.2,typos@1.51.1,taplo@0.10.0
+      - run: cargo xtask gate --coverage
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: junit-linux
+          path: target/nextest/ci/junit.xml
+
+  gate-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+        with:
+          components: rustfmt, clippy, llvm-tools
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest@0.9.148
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo nextest run --workspace --profile ci
+      - run: cargo test --workspace --doc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: junit-windows
+          path: target/nextest/ci/junit.xml
+
+  build-windows:
+    runs-on: windows-latest
+    needs: [gate-linux, gate-windows]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+        with:
+          components: rustfmt, clippy, llvm-tools
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build --release -p rusty-app
+      - run: cargo xtask binsize target/release/ferrite.exe
+      - shell: pwsh
+        run: |
+          $out = (& target/release/ferrite.exe | Out-String).Trim()
+          if ($out -ne 'ferrite 0.0.1') { throw "unexpected output: $out" }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ferrite-windows-x64-${{ github.sha }}
+          path: target/release/ferrite.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: [gate-linux, gate-windows]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+        with:
+          components: rustfmt, clippy, llvm-tools
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build --release -p rusty-app
+      - run: cargo xtask binsize target/release/ferrite
+      - run: test "$(target/release/ferrite)" = "ferrite 0.0.1"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ferrite-linux-x64-${{ github.sha }}
+          path: target/release/ferrite
