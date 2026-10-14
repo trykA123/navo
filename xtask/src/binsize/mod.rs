@@ -11,5 +11,10 @@ pub fn check_size(bytes: u64, limit: u64) -> Result<u64, TooLarge> {
     todo!()
 }
 
+pub fn run(args: &[String]) -> std::process::ExitCode {
+    let _ = args;
+    todo!()
+}
+
 #[cfg(test)]
 mod tests;

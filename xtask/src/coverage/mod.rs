@@ -28,5 +28,10 @@ pub fn misses(coverage: &BTreeMap<String, f64>, floors: &BTreeMap<String, f64>) 
     todo!()
 }
 
+pub fn run(args: &[String]) -> std::process::ExitCode {
+    let _ = args;
+    todo!()
+}
+
 #[cfg(test)]
 mod tests;

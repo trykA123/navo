@@ -36,5 +36,10 @@ pub fn check_files(_files: &[(PathBuf, String)], _exceptions: &[Exception]) -> V
     todo!()
 }
 
+pub fn run(args: &[String]) -> std::process::ExitCode {
+    let _ = args;
+    todo!()
+}
+
 #[cfg(test)]
 mod tests;
