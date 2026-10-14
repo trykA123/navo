@@ -1,5 +1,15 @@
 use std::path::PathBuf;
 
+mod check;
+mod count;
+mod exceptions;
+mod run;
+
+pub use check::check_files;
+pub use count::count_code_lines;
+pub use exceptions::parse_exceptions;
+pub use run::run;
+
 pub const DEFAULT_LIMIT: usize = 400;
 pub const CEILING: usize = 800;
 
@@ -22,23 +32,6 @@ pub struct SizeViolation {
     pub path: PathBuf,
     pub lines: usize,
     pub limit: usize,
-}
-
-pub fn count_code_lines(_source: &str) -> usize {
-    todo!()
-}
-
-pub fn parse_exceptions(_toml: &str) -> Result<Vec<Exception>, SizeError> {
-    todo!()
-}
-
-pub fn check_files(_files: &[(PathBuf, String)], _exceptions: &[Exception]) -> Vec<SizeViolation> {
-    todo!()
-}
-
-pub fn run(args: &[String]) -> std::process::ExitCode {
-    let _ = args;
-    todo!()
 }
 
 #[cfg(test)]
