@@ -6,3 +6,6 @@ extend-exclude = [
     "*.png",
     "*.ttf",
 ]
+
+[default.extend-words]
+wdth = "wdth"
