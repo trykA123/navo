@@ -3,7 +3,7 @@ mod report;
 mod run;
 
 pub use floors::{misses, parse_floors};
-pub use report::crate_line_coverage;
+pub use report::{crate_line_coverage, crate_line_coverage_in};
 pub use run::run;
 
 #[derive(Debug, PartialEq)]

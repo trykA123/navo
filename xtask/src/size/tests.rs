@@ -1,5 +1,6 @@
 use super::*;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn code(n: usize) -> String {
     "let x = 1;\n".repeat(n)
@@ -283,12 +284,16 @@ struct TestTree(PathBuf);
 
 impl TestTree {
     fn new() -> Self {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("rusty-size-{}-{timestamp}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "rusty-size-{}-{timestamp}-{id}",
+            std::process::id()
+        ));
         std::fs::create_dir(&root).unwrap();
         std::fs::create_dir(root.join("crates")).unwrap();
         std::fs::create_dir(root.join("xtask")).unwrap();
@@ -304,8 +309,22 @@ impl TestTree {
 
 impl Drop for TestTree {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
+        let _ = std::fs::remove_dir_all(&self.0);
     }
+}
+
+#[test]
+fn temporary_trees_have_unique_paths() {
+    let first = TestTree::new();
+    let second = TestTree::new();
+    assert_ne!(first.0, second.0);
+}
+
+#[test]
+fn temporary_tree_cleanup_ignores_missing_directories() {
+    let tree = TestTree::new();
+    std::fs::remove_dir_all(&tree.0).unwrap();
+    drop(tree);
 }
 
 #[test]

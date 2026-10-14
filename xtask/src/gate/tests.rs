@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{GateOptions, Step, steps};
 
@@ -114,12 +115,16 @@ struct TestRoot(std::path::PathBuf);
 
 impl TestRoot {
     fn new() -> Self {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("rusty-gate-{}-{timestamp}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "rusty-gate-{}-{timestamp}-{id}",
+            std::process::id()
+        ));
         std::fs::create_dir(&root).unwrap();
         Self(root)
     }
@@ -127,8 +132,22 @@ impl TestRoot {
 
 impl Drop for TestRoot {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
+        let _ = std::fs::remove_dir_all(&self.0);
     }
+}
+
+#[test]
+fn temporary_roots_have_unique_paths() {
+    let first = TestRoot::new();
+    let second = TestRoot::new();
+    assert_ne!(first.0, second.0);
+}
+
+#[test]
+fn temporary_root_cleanup_ignores_missing_directories() {
+    let root = TestRoot::new();
+    std::fs::remove_dir_all(&root.0).unwrap();
+    drop(root);
 }
 
 #[test]

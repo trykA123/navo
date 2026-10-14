@@ -3,7 +3,9 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
-use super::{FloorMiss, crate_line_coverage, misses, parse_floors};
+#[cfg(test)]
+use super::crate_line_coverage;
+use super::{FloorMiss, crate_line_coverage_in, misses, parse_floors};
 
 pub fn run(args: &[String]) -> ExitCode {
     if !args.is_empty() {
@@ -34,7 +36,8 @@ pub(super) fn check_report(root: &Path) -> Result<ExitCode, String> {
         .map_err(|error| format!("reading target/llvm-cov.json: {error}"))?;
     let floors = fs::read_to_string(root.join("xtask/coverage-floors.toml"))
         .map_err(|error| format!("reading xtask/coverage-floors.toml: {error}"))?;
-    let (lines, passed) = evaluate_report(&report, &floors)?;
+    let coverage = crate_line_coverage_in(&report, root).map_err(|error| error.to_string())?;
+    let (lines, passed) = evaluate_coverage(&coverage, &floors)?;
     for line in lines {
         println!("{line}");
     }
@@ -61,11 +64,19 @@ fn collect_coverage(root: &Path) -> Result<bool, String> {
         .map_err(|error| format!("running cargo llvm-cov nextest: {error}"))
 }
 
+#[cfg(test)]
 pub(super) fn evaluate_report(report: &str, floors: &str) -> Result<(Vec<String>, bool), String> {
     let coverage = crate_line_coverage(report).map_err(|error| error.to_string())?;
+    evaluate_coverage(&coverage, floors)
+}
+
+fn evaluate_coverage(
+    coverage: &BTreeMap<String, f64>,
+    floors: &str,
+) -> Result<(Vec<String>, bool), String> {
     let floors = parse_floors(floors).map_err(|error| error.to_string())?;
-    let missed = misses(&coverage, &floors);
-    let mut lines = floor_lines(&coverage, &floors);
+    let missed = misses(coverage, &floors);
+    let mut lines = floor_lines(coverage, &floors);
     lines.extend(miss_lines(&missed));
     Ok((lines, missed.is_empty()))
 }
