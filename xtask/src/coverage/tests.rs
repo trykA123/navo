@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
+use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{CoverageError, FloorMiss, crate_line_coverage, misses, parse_floors};
+use super::{
+    CoverageError, FloorMiss, crate_line_coverage, crate_line_coverage_in, misses, parse_floors,
+};
 
 const REPORT: &str = r#"{
   "data": [{
@@ -33,6 +37,45 @@ fn line_coverage_sums_counts_per_crate() {
 fn line_coverage_ignores_files_outside_known_crates() {
     let got = crate_line_coverage(REPORT).unwrap();
     assert_eq!(got.len(), 2);
+}
+
+#[test]
+fn coverage_in_a_checkout_under_crates_uses_repo_relative_paths() {
+    let report = REPORT.replace("/home/u/rusty", "/home/u/crates/rusty");
+    for root in ["/home/u/crates/rusty", "/home/u/crates/rusty/"] {
+        assert_eq!(
+            crate_line_coverage_in(&report, Path::new(root)).unwrap(),
+            map(&[("rusty-core", 95.0), ("xtask", 75.0)])
+        );
+    }
+}
+
+#[test]
+fn coverage_in_a_repo_ignores_outside_files_and_similar_root_prefixes() {
+    let report = r#"{"data":[{"files":[
+        {"filename":"/home/u/other/crates/rusty-core/src/a.rs"},
+        {"filename":"/home/u/rusty-other/xtask/src/main.rs"},
+        {"filename":"/home/u/rusty"}]}]}"#;
+    assert!(
+        crate_line_coverage_in(report, Path::new("/home/u/rusty"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn coverage_in_a_windows_checkout_normalizes_roots_and_filenames() {
+    let report = r#"{"data":[{"files":[
+        {"filename":"C:\\work\\xtask\\rusty\\crates\\rusty-core\\src\\a.rs",
+         "summary":{"lines":{"count":4,"covered":3}}},
+        {"filename":"C:/work/xtask/rusty/xtask/src/main.rs",
+         "summary":{"lines":{"count":2,"covered":1}}}]}]}"#;
+    for root in [r"C:\work\xtask\rusty", r"C:\work\xtask\rusty\"] {
+        assert_eq!(
+            crate_line_coverage_in(report, Path::new(root)).unwrap(),
+            map(&[("rusty-core", 75.0), ("xtask", 50.0)])
+        );
+    }
 }
 
 #[test]
@@ -241,16 +284,26 @@ struct TestReport(std::path::PathBuf);
 
 impl TestReport {
     fn new(floors: &str) -> Self {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("rusty-coverage-{}-{timestamp}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "rusty-coverage-{}-{timestamp}-{id}",
+            std::process::id()
+        ));
         std::fs::create_dir(&root).unwrap();
         std::fs::create_dir(root.join("target")).unwrap();
         std::fs::create_dir(root.join("xtask")).unwrap();
-        std::fs::write(root.join("target/llvm-cov.json"), REPORT).unwrap();
+        let mut report: serde_json::Value = serde_json::from_str(REPORT).unwrap();
+        let prefix = root.to_string_lossy().replace('\\', "/");
+        for file in report["data"][0]["files"].as_array_mut().unwrap() {
+            let filename = file["filename"].as_str().unwrap();
+            file["filename"] = filename.replace("/home/u/rusty", &prefix).into();
+        }
+        std::fs::write(root.join("target/llvm-cov.json"), report.to_string()).unwrap();
         std::fs::write(root.join("xtask/coverage-floors.toml"), floors).unwrap();
         Self(root)
     }
@@ -258,8 +311,22 @@ impl TestReport {
 
 impl Drop for TestReport {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).unwrap();
+        let _ = std::fs::remove_dir_all(&self.0);
     }
+}
+
+#[test]
+fn temporary_reports_have_unique_paths() {
+    let first = TestReport::new("[floors]");
+    let second = TestReport::new("[floors]");
+    assert_ne!(first.0, second.0);
+}
+
+#[test]
+fn temporary_report_cleanup_ignores_missing_directories() {
+    let report = TestReport::new("[floors]");
+    std::fs::remove_dir_all(&report.0).unwrap();
+    drop(report);
 }
 
 #[test]

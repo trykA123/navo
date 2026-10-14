@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -11,7 +12,26 @@ struct LineCoverage {
     covered: u64,
 }
 
+pub fn crate_line_coverage_in(
+    llvm_cov_json: &str,
+    root: &Path,
+) -> Result<BTreeMap<String, f64>, CoverageError> {
+    let root = root.to_string_lossy().replace('\\', "/");
+    if root.is_empty() {
+        return super::crate_line_coverage(llvm_cov_json);
+    }
+    let prefix = format!("{}/", root.trim_end_matches('/'));
+    line_coverage(llvm_cov_json, Some(&prefix))
+}
+
 pub fn crate_line_coverage(llvm_cov_json: &str) -> Result<BTreeMap<String, f64>, CoverageError> {
+    line_coverage(llvm_cov_json, None)
+}
+
+fn line_coverage(
+    llvm_cov_json: &str,
+    root: Option<&str>,
+) -> Result<BTreeMap<String, f64>, CoverageError> {
     let report: Value = serde_json::from_str(llvm_cov_json)
         .map_err(|error| CoverageError::InvalidReport(error.to_string()))?;
     let files = report
@@ -20,7 +40,7 @@ pub fn crate_line_coverage(llvm_cov_json: &str) -> Result<BTreeMap<String, f64>,
         .ok_or_else(|| CoverageError::InvalidReport("missing data[0].files array".to_owned()))?;
     let mut totals = BTreeMap::new();
     for file in files {
-        let Some((crate_name, lines)) = file_coverage(file)? else {
+        let Some((crate_name, lines)) = file_coverage(file, root)? else {
             continue;
         };
         let (count, covered) = totals.entry(crate_name).or_insert((0.0, 0.0));
@@ -40,12 +60,20 @@ pub fn crate_line_coverage(llvm_cov_json: &str) -> Result<BTreeMap<String, f64>,
         .collect())
 }
 
-fn file_coverage(file: &Value) -> Result<Option<(String, LineCoverage)>, CoverageError> {
+fn file_coverage(
+    file: &Value,
+    root: Option<&str>,
+) -> Result<Option<(String, LineCoverage)>, CoverageError> {
     let filename = file
         .get("filename")
         .and_then(Value::as_str)
         .ok_or_else(|| CoverageError::InvalidReport("missing file filename".to_owned()))?;
-    let Some(crate_name) = crate_name(filename) else {
+    let normalized = filename.replace('\\', "/");
+    let path = match root {
+        Some(root) => normalized.strip_prefix(root),
+        None => Some(normalized.as_str()),
+    };
+    let Some(crate_name) = path.and_then(crate_name) else {
         return Ok(None);
     };
     let lines = file.pointer("/summary/lines").ok_or_else(|| {
@@ -57,8 +85,7 @@ fn file_coverage(file: &Value) -> Result<Option<(String, LineCoverage)>, Coverag
 }
 
 fn crate_name(filename: &str) -> Option<String> {
-    let normalized = filename.replace('\\', "/");
-    let mut segments = normalized.split('/');
+    let mut segments = filename.split('/');
     while let Some(segment) = segments.next() {
         match segment {
             "crates" => {

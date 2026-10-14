@@ -4,6 +4,7 @@ mod tests {
         fs::File,
         path::{Path, PathBuf},
         process::{Command, Output},
+        sync::atomic::{AtomicUsize, Ordering},
     };
 
     const RUSTY_EXE_LIMIT: u64 = 30 * 1024 * 1024;
@@ -12,12 +13,16 @@ mod tests {
 
     impl TestFile {
         fn new(bytes: u64) -> Self {
+            static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+            let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
-            let path = std::env::temp_dir()
-                .join(format!("rusty-binsize-{}-{timestamp}", std::process::id()));
+            let path = std::env::temp_dir().join(format!(
+                "rusty-binsize-{}-{timestamp}-{id}",
+                std::process::id()
+            ));
             File::create_new(&path).unwrap().set_len(bytes).unwrap();
             Self(path)
         }
@@ -25,8 +30,22 @@ mod tests {
 
     impl Drop for TestFile {
         fn drop(&mut self) {
-            std::fs::remove_file(&self.0).unwrap();
+            let _ = std::fs::remove_file(&self.0);
         }
+    }
+
+    #[test]
+    fn temporary_files_have_unique_paths() {
+        let first = TestFile::new(0);
+        let second = TestFile::new(0);
+        assert_ne!(first.0, second.0);
+    }
+
+    #[test]
+    fn temporary_file_cleanup_ignores_missing_files() {
+        let file = TestFile::new(0);
+        std::fs::remove_file(&file.0).unwrap();
+        drop(file);
     }
 
     fn invoke(path: &Path) -> Output {
