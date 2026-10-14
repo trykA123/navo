@@ -63,12 +63,29 @@ jobs:
           components: rustfmt, clippy, llvm-tools
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo build --release -p rusty-app
-      - run: cargo xtask binsize target/release/rusty.exe
+      - run: cargo xtask binsize target/release/ferrite.exe
       - shell: pwsh
         run: |
-          $out = (& target/release/rusty.exe | Out-String).Trim()
-          if ($out -ne 'rusty 0.0.1') { throw "unexpected output: $out" }
+          $out = (& target/release/ferrite.exe | Out-String).Trim()
+          if ($out -ne 'ferrite 0.0.1') { throw "unexpected output: $out" }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: rusty-windows-x64-${{ github.sha }}
-          path: target/release/rusty.exe
+          name: ferrite-windows-x64-${{ github.sha }}
+          path: target/release/ferrite.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: [gate-linux, gate-windows]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+        with:
+          components: rustfmt, clippy, llvm-tools
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo build --release -p rusty-app
+      - run: cargo xtask binsize target/release/ferrite
+      - run: test "$(target/release/ferrite)" = "ferrite 0.0.1"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ferrite-linux-x64-${{ github.sha }}
+          path: target/release/ferrite

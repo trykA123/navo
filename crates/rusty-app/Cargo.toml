@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "rusty"
+name = "ferrite"
 path = "src/main.rs"
 
 [dependencies]

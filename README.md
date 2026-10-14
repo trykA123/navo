@@ -1,6 +1,6 @@
-# Rusty
+# Ferrite
 
-A keyboard-first file manager for Windows, written in Rust. Total Commander's speed and density, plus tiled panes, saved sets of panels, pins, a configurable drawer (transfers, clipboard, search, compare, terminal and more), fast fuzzy search and plugins.
+A keyboard-first file manager for Windows, written in Rust. Rusty is the project's codename; the app is Ferrite (D29). Total Commander's speed and density, plus tiled panes, saved sets of panels, pins, a configurable drawer (transfers, clipboard, search, compare, terminal and more), fast fuzzy search and plugins.
 
 Status: Foundation phase. The workspace, quality gate and CI are in place (plan P1); no application features yet.
 
@@ -33,6 +33,6 @@ Prerequisites: Rust 1.99.0 (pinned in `rust-toolchain.toml`) and the tools in [d
 
 Other subcommands: `cargo xtask size`, `cargo xtask coverage`, `cargo xtask binsize <path>`.
 
-CI: every push runs the gate on Linux and the tests on Windows, and builds `rusty.exe` as an artifact.
+CI: every push runs the gate on Linux and the tests on Windows, and builds `ferrite.exe` and a Linux `ferrite` binary as artifacts.
 
 Plans live in [plans/](plans/README.md). Each plan is cut into atoms and ends in a gate.
