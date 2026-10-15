@@ -1,20 +1,46 @@
 mod files;
+mod modes;
+mod paged;
 mod view;
 
 use gpui_kit::component::input::{EditorState, InputEvent};
-use gpui_kit::{FocusHandle, Focusable, KeyBinding, Subscription};
+use gpui_kit::{FocusHandle, KeyBinding, Subscription};
 use rusty_core::{Command, Location};
 
-pub use files::{FileHooks, FileStamp, FileText, Save, SaveError};
+pub use files::{
+    FileHooks, FileStamp, FileText, IndexRun, OpenAs, Paged, Reopen, Save, SaveError, SharedSource,
+};
+pub use paged::{PagedKind, PagedView};
 
 use super::FerriteWindow;
 use crate::prelude::*;
 
 const CONTEXT: &str = "Viewer";
+const PAGED_CONTEXT: &str = "Paged";
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
 const CHANGED_WARNING: &str = "Changed on disk since it was opened. Ctrl+S again overwrites it.";
 
-gpui_kit::actions!(viewer, [SaveFile, CloseViewer]);
+gpui_kit::actions!(
+    viewer,
+    [
+        SaveFile,
+        CloseViewer,
+        ShowText,
+        ShowHex,
+        RowUp,
+        RowDown,
+        PageUp,
+        PageDown,
+        GoStart,
+        GoEnd,
+        ScrollLeft,
+        ScrollRight,
+        OpenFind,
+        OpenGoTo,
+        MatchCase,
+        Back,
+    ]
+);
 
 pub fn bind_keys(cx: &mut App) {
     let context = Some(CONTEXT);
@@ -22,6 +48,20 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-s", SaveFile, context),
         KeyBinding::new("escape", CloseViewer, context),
         KeyBinding::new("f3", CloseViewer, context),
+        KeyBinding::new("alt-1", ShowText, context),
+        KeyBinding::new("alt-3", ShowHex, context),
+        KeyBinding::new("up", RowUp, context),
+        KeyBinding::new("down", RowDown, context),
+        KeyBinding::new("pageup", PageUp, context),
+        KeyBinding::new("pagedown", PageDown, context),
+        KeyBinding::new("ctrl-home", GoStart, context),
+        KeyBinding::new("ctrl-end", GoEnd, context),
+        KeyBinding::new("left", ScrollLeft, context),
+        KeyBinding::new("right", ScrollRight, context),
+        KeyBinding::new("ctrl-f", OpenFind, context),
+        KeyBinding::new("ctrl-g", OpenGoTo, context),
+        KeyBinding::new("alt-c", MatchCase, context),
+        KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
     ]);
 }
 
@@ -36,7 +76,10 @@ pub(super) struct Viewer {
     dirty: bool,
     overwrite: bool,
     leaving: bool,
+    to_hex: bool,
+    editable: bool,
     message: Option<SharedString>,
+    paged: Option<Entity<PagedView>>,
     _changes: Option<Subscription>,
 }
 
@@ -117,17 +160,16 @@ impl FerriteWindow {
             dirty: false,
             overwrite: false,
             leaving: false,
+            to_hex: false,
+            editable: true,
             message: None,
+            paged: None,
             _changes: None,
         };
-        match (self.files.read)(&viewer.location) {
-            Ok(file) => attach_editor(&mut viewer, file, window, cx),
-            Err(message) => viewer.message = Some(message.into()),
+        if let Err(message) = self.open_first(&mut viewer, window, cx) {
+            viewer.message = Some(message.into());
         }
-        let focus = match &viewer.editor {
-            Some(editor) => editor.read(cx).focus_handle(cx),
-            None => viewer.focus.clone(),
-        };
+        let focus = viewer.focus_target(cx);
         window.defer(cx, move |window, cx| window.focus(&focus, cx));
         self.viewer = Some(viewer);
         cx.notify();
@@ -137,6 +179,7 @@ impl FerriteWindow {
         if let Some(viewer) = &mut self.viewer {
             viewer.dirty = true;
             viewer.leaving = false;
+            viewer.to_hex = false;
             viewer.overwrite = false;
         }
         cx.notify();
@@ -224,3 +267,6 @@ fn attach_editor(
         .read_only
         .then(|| "Not valid UTF-8: opened read-only.".into());
 }
+
+#[cfg(test)]
+mod tests;

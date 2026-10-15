@@ -27,7 +27,7 @@ fn two_panes(fs: &FakeFs) -> AppState {
     state
 }
 
-fn fake() -> Arc<FakeFs> {
+pub(super) fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home/docs");
     fs.add_file("home/docs/report.txt", 7);
@@ -65,7 +65,7 @@ fn open_with(
     open_options(cx, options)
 }
 
-fn open_options(
+pub(super) fn open_options(
     cx: &mut TestAppContext,
     options: StartOptions,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
@@ -93,7 +93,7 @@ fn open_options(
     handle
 }
 
-fn settle(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) {
+pub(super) fn settle(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         view.update(cx, |view, cx| view.wake(cx));
@@ -153,7 +153,7 @@ fn every_system_appearance_maps_to_a_theme_mode() {
     assert_eq!(super::mode_of(A::VibrantDark), Mode::Dark);
 }
 
-fn home_beside_dest(fs: &FakeFs) -> AppState {
+pub(super) fn home_beside_dest(fs: &FakeFs) -> AppState {
     let mut state = two_panes(fs);
     let location = fs.location("dest");
     let _ = apply(&mut state, &Command::PaneNavigate { location });
@@ -167,7 +167,7 @@ fn home_beside_dest(fs: &FakeFs) -> AppState {
     state
 }
 
-fn press(
+pub(super) fn press(
     cx: &mut TestAppContext,
     window: AnyWindowHandle,
     view: &Entity<FerriteWindow>,
@@ -257,7 +257,7 @@ fn typing_in_a_pane_filters_it_and_escape_brings_everything_back(cx: &mut TestAp
     assert_eq!(shown(cx, &view), ["docs", "a.txt"]);
 }
 
-fn type_in(
+pub(super) fn type_in(
     cx: &mut TestAppContext,
     window: AnyWindowHandle,
     view: &Entity<FerriteWindow>,
@@ -507,6 +507,8 @@ fn viewer_window(
                 saved.borrow_mut().push(save.text.to_owned());
                 Ok(None)
             }),
+            pick: Rc::new(|_| Ok(super::OpenAs::Text)),
+            paged: Rc::new(|_| Err("No paged view here.".to_owned())),
         },
         view: None,
     };
@@ -514,7 +516,7 @@ fn viewer_window(
     (window, view, written)
 }
 
-fn viewer_open(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
+pub(super) fn viewer_open(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
     view.read_with(cx, |view, _| view.viewer.is_some())
 }
 

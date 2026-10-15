@@ -3,27 +3,39 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
+use rusty_ui::window_view::PagedView;
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
+use crate::viewer_sample;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {
     Primitives,
     Pane,
     Operate,
+    Hex,
+    PagedText,
 }
 
 impl Page {
-    pub const ALL: [Self; 3] = [Self::Primitives, Self::Pane, Self::Operate];
+    pub const ALL: [Self; 5] = [
+        Self::Primitives,
+        Self::Pane,
+        Self::Operate,
+        Self::Hex,
+        Self::PagedText,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Primitives => "Primitives",
             Self::Pane => "Pane",
             Self::Operate => "Operate",
+            Self::Hex => "Hex",
+            Self::PagedText => "Paged text",
         }
     }
 }
@@ -33,6 +45,8 @@ pub struct Gallery {
     page: Page,
     pane: Entity<PanePage>,
     operate: Entity<OperatePage>,
+    hex: Entity<PagedView>,
+    paged_text: Entity<PagedView>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -46,6 +60,8 @@ impl Gallery {
             page: Page::Primitives,
             pane: cx.new(PanePage::new),
             operate: cx.new(OperatePage::new),
+            hex: viewer_sample::hex_view(cx),
+            paged_text: viewer_sample::text_view(cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -145,6 +161,8 @@ impl Render for Gallery {
         match self.page {
             Page::Pane => root.child(self.pane.clone()),
             Page::Operate => root.child(self.operate.clone()),
+            Page::Hex => root.child(self.hex.clone()),
+            Page::PagedText => root.child(self.paged_text.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }

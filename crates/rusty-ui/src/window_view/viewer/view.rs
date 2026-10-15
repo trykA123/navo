@@ -1,10 +1,26 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::Editor;
 
-use super::{CONTEXT, CloseViewer, SaveFile, Viewer};
+use super::{CONTEXT, CloseViewer, SaveFile, ShowHex, ShowText, Viewer};
+use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::FerriteWindow;
+
+fn facts(t: &Theme, viewer: &Viewer) -> Div {
+    let mode = if viewer.read_only {
+        "Text · read-only"
+    } else {
+        "Text"
+    };
+    div()
+        .flex()
+        .gap(t.spacing.md)
+        .text_color(t.colors.muted)
+        .text_size(t.typography.small)
+        .child(mode)
+        .children(viewer.stamp.map(|stamp| format::size(stamp.len)))
+}
 
 fn header(t: &Theme, viewer: &Viewer) -> Div {
     div()
@@ -23,6 +39,7 @@ fn header(t: &Theme, viewer: &Viewer) -> Div {
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(viewer.title.clone()),
         )
+        .child(facts(t, viewer))
         .when(viewer.dirty, |d| {
             d.child(div().text_color(t.colors.mark).child("●"))
         })
@@ -41,7 +58,7 @@ fn header(t: &Theme, viewer: &Viewer) -> Div {
             div()
                 .text_color(t.colors.faint)
                 .text_size(t.typography.small)
-                .child("Ctrl+F find · Ctrl+S save · Esc close"),
+                .child("Alt+3 hex · Ctrl+F find · Ctrl+S save · Esc close"),
         )
 }
 
@@ -65,21 +82,25 @@ impl FerriteWindow {
         let t = tokens::current(cx).clone();
         let save = cx.listener(|view, _: &SaveFile, _, cx| view.save_viewer(cx));
         let close = cx.listener(|view, _: &CloseViewer, window, cx| view.close_viewer(window, cx));
-        Some(
-            div()
-                .id("viewer")
-                .key_context(CONTEXT)
-                .track_focus(&viewer.focus)
-                .on_action(save)
-                .on_action(close)
-                .flex()
-                .flex_col()
-                .flex_1()
-                .min_h_0()
-                .bg(t.colors.surface)
-                .child(header(&t, viewer))
-                .child(body(&t, viewer))
-                .into_any_element(),
-        )
+        let text = cx.listener(|view, _: &ShowText, window, cx| view.show_text(window, cx));
+        let hex = cx.listener(|view, _: &ShowHex, window, cx| view.show_hex(window, cx));
+        let root = div()
+            .id("viewer")
+            .key_context(CONTEXT)
+            .track_focus(&viewer.focus)
+            .on_action(save)
+            .on_action(close)
+            .on_action(text)
+            .on_action(hex)
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .bg(t.colors.surface);
+        let root = match &viewer.paged {
+            Some(paged) => root.child(paged.clone()),
+            None => root.child(header(&t, viewer)).child(body(&t, viewer)),
+        };
+        Some(root.into_any_element())
     }
 }

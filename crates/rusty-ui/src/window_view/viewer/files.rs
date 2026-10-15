@@ -1,6 +1,9 @@
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
+use rusty_core::paging::{ByteSource, LineIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStamp {
@@ -41,12 +44,39 @@ pub enum SaveError {
     Failed(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenAs {
+    Text,
+    Hex,
+    PagedText,
+}
+
+pub type SharedSource = Arc<dyn ByteSource + Send + Sync>;
+pub type Reopen = Arc<dyn Fn() -> Result<Box<dyn ByteSource + Send>, String> + Send + Sync>;
+pub type IndexRun = Arc<
+    dyn Fn(&AtomicBool, &mut dyn FnMut(&LineIndex)) -> Result<Option<LineIndex>, String>
+        + Send
+        + Sync,
+>;
+
+pub struct Paged {
+    pub source: SharedSource,
+    pub reopen: Reopen,
+    pub index: IndexRun,
+    pub summary: Option<String>,
+    pub editable: bool,
+}
+
 type Read = Rc<dyn Fn(&Location) -> Result<FileText, String>>;
 type Write = Rc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError>>;
+type Pick = Rc<dyn Fn(&Location) -> Result<OpenAs, String>>;
+type OpenPaged = Rc<dyn Fn(&Location) -> Result<Paged, String>>;
 
 pub struct FileHooks {
     pub read: Read,
     pub write: Write,
+    pub pick: Pick,
+    pub paged: OpenPaged,
 }
 
 impl FileHooks {
@@ -55,6 +85,8 @@ impl FileHooks {
         Self {
             read: Rc::new(|_| Err("Files cannot be opened here.".to_owned())),
             write: Rc::new(|_, _| Err(SaveError::Failed("Files cannot be saved here.".to_owned()))),
+            pick: Rc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            paged: Rc::new(|_| Err("Files cannot be opened here.".to_owned())),
         }
     }
 }

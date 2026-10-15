@@ -29,6 +29,8 @@ fn file_name(page: Page, mode: Mode) -> String {
         Page::Primitives => "p7-gallery",
         Page::Pane => "p7-pane",
         Page::Operate => "p8-confirm",
+        Page::Hex => "p13-hex",
+        Page::PagedText => "p13-text",
     };
     let mode = match mode {
         Mode::Light => "light",

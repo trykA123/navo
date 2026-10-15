@@ -7,6 +7,7 @@ mod pane_page;
 mod pane_sample;
 mod screenshot;
 mod sections;
+mod viewer_sample;
 
 #[cfg(test)]
 mod tests;

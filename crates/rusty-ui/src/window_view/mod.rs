@@ -24,7 +24,10 @@ use crate::tokens::{self, Mode};
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use editor::EditorHooks;
-pub use viewer::{FileHooks, FileStamp, FileText, Save, SaveError};
+pub use viewer::{
+    FileHooks, FileStamp, FileText, IndexRun, OpenAs, Paged, PagedKind, PagedView, Reopen, Save,
+    SaveError, SharedSource,
+};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
