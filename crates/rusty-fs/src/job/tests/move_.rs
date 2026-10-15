@@ -86,3 +86,26 @@ fn a_move_without_links_removes_the_source_folder() {
         (JobOutcome::Done, Vec::new())
     );
 }
+
+#[test]
+fn a_move_keeps_a_source_whose_target_appeared_after_planning() {
+    let fs = fixture(&[("src/b/c.txt", BIG), ("src/b/d.txt", 6_000)]);
+    let plan = move_plan(&fs);
+    fs.add_file("dst/b/d.txt", 3);
+    let (outcome, _) = run(&fs, &plan);
+    assert_eq!(outcome, JobOutcome::Done);
+    assert_eq!(size(&fs, "src/b/d.txt"), Some(6_000));
+    assert_eq!(size(&fs, "dst/b/d.txt"), Some(3));
+    assert_eq!(size(&fs, "src/b/c.txt"), None);
+    assert_eq!(size(&fs, "dst/b/c.txt"), Some(BIG));
+}
+
+#[test]
+fn a_move_onto_an_existing_name_keeps_both_files() {
+    let fs = fixture(&[("src/a.txt", 10_000)]);
+    fs.add_file("dst/a.txt", 3);
+    let plan = plan(&request(&fs, OpKind::Move, &["src/a.txt"], "dst"));
+    let _ = run(&fs, &plan);
+    assert_eq!(size(&fs, "src/a.txt"), Some(10_000));
+    assert_eq!(size(&fs, "dst/a.txt"), Some(3));
+}

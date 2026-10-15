@@ -89,13 +89,10 @@ fn overwrite_older_skips_when_both_have_the_same_time() {
 }
 
 #[test]
-fn ask_keeps_the_step_for_the_engine_to_ask() {
+fn ask_leaves_the_file_out_until_someone_answers() {
     assert_eq!(
         outcome(clash(ConflictPolicy::Ask, 2_000, 1_000)),
-        (
-            vec![copy_file(SOURCE, TARGET, 5)],
-            conflict(Resolution::Ask)
-        )
+        (Vec::new(), conflict(Resolution::Ask))
     );
 }
 

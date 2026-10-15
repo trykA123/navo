@@ -4,6 +4,7 @@ use rusty_fs::{
     scan,
 };
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
@@ -101,7 +102,10 @@ impl JobWork {
             sent: Instant::now(),
             last: None,
         };
-        let outcome = self.execute(&mut |progress| reporter.report(progress));
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            self.execute(&mut |progress| reporter.report(progress))
+        }))
+        .unwrap_or_else(|_| Err("The job stopped unexpectedly".to_owned()));
         let _ = self.sender.send(Message::Job(JobUpdate::Done {
             id: self.id,
             progress: reporter.last,

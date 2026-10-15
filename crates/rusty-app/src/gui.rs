@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -20,7 +21,7 @@ pub fn open() {
         |file| initial_state(file, home.clone()),
     );
     let local = Arc::new(LocalFs::new());
-    let operations = operations(dirs.as_ref(), &home, local.as_ref());
+    let (operations, _instance) = operations(dirs.as_ref(), &home, local.as_ref());
     let on_save = Rc::new(move |state: &AppState| {
         if let (Some(dirs), Some(file)) = (dirs.as_ref(), session.as_deref())
             && dirs.ensure().is_ok()
@@ -37,13 +38,18 @@ pub fn open() {
     });
 }
 
-pub fn operations(dirs: Option<&StoreDirs>, home: &Location, ops: &dyn ProviderOps) -> Operations {
+pub fn operations(
+    dirs: Option<&StoreDirs>,
+    home: &Location,
+    ops: &dyn ProviderOps,
+) -> (Operations, Option<File>) {
     let mut protected = vec![home.clone()];
     let Some(dirs) = dirs else {
-        return Operations {
+        let unlogged = Operations {
             protected,
             ..Operations::unlogged()
         };
+        return (unlogged, None);
     };
     protected.extend(
         [&dirs.config, &dirs.data]
@@ -54,17 +60,22 @@ pub fn operations(dirs: Option<&StoreDirs>, home: &Location, ops: &dyn ProviderO
         .ensure()
         .ok()
         .and_then(|()| jobs::open(&dirs.data.join("ferrite.db")).ok());
+    let instance = jobs::claim(&dirs.data.join("ferrite.lock"));
     let Some(journal) = journal else {
-        return Operations {
+        let unlogged = Operations {
             protected,
             ..Operations::unlogged()
         };
+        return (unlogged, instance);
     };
-    let _ = jobs::recover(&journal, ops);
-    Operations {
+    if instance.is_some() {
+        let _ = jobs::recover(&journal, ops);
+    }
+    let logged = Operations {
         log: jobs::log_factory(journal),
         protected,
-    }
+    };
+    (logged, instance)
 }
 
 #[cfg(test)]

@@ -122,3 +122,14 @@ fn the_journal_file_keeps_jobs_across_opens() {
     let reopened = open(&file).unwrap();
     assert_eq!(lock(&reopened).unfinished().unwrap().len(), 1);
 }
+
+#[test]
+fn only_one_process_can_claim_the_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("ferrite.lock");
+    let first = super::claim(&file);
+    assert!(first.is_some());
+    assert!(super::claim(&file).is_none());
+    drop(first);
+    assert!(super::claim(&file).is_some());
+}

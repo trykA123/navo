@@ -116,3 +116,31 @@ fn a_same_volume_move_totals_what_it_moves() {
         }
     );
 }
+
+#[test]
+fn an_unanswered_conflict_keeps_its_source_and_its_folders() {
+    let request = PlanRequest {
+        existing: vec![existing(r"D:\x\b\e.txt", ItemKind::File, 1_000)],
+        policy: ConflictPolicy::Ask,
+        ..move_into(tree(), r"D:\x", false)
+    };
+    let steps = plan(&request).steps;
+    assert!(!steps.contains(&remove_file(r"C:\a\b\e.txt")));
+    assert!(!steps.contains(&remove_folder(r"C:\a\b")));
+    assert!(steps.contains(&remove_file(r"C:\a\f.txt")));
+}
+
+#[test]
+fn a_same_volume_move_leaves_an_unanswered_conflict_in_place() {
+    let request = PlanRequest {
+        existing: vec![
+            existing(r"C:\x\f.txt", ItemKind::File, 1_000),
+            existing(r"C:\x\b", ItemKind::Folder, 1_000),
+        ],
+        policy: ConflictPolicy::Ask,
+        ..move_into(tree(), r"C:\x", true)
+    };
+    let plan = plan(&request);
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.conflicts.len(), 2);
+}

@@ -5,6 +5,7 @@ mod status;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 
 use gpui_kit::{FocusHandle, Subscription, WindowAppearance};
 use rusty_core::{AppState, Command, Direction, PaneId};
@@ -16,6 +17,8 @@ use crate::prelude::*;
 use crate::primitives::{Splitter, SplitterState};
 use crate::title_bar::{FerriteTitleBar, HeaderSearch};
 use crate::tokens::{self, Mode};
+
+const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
@@ -158,12 +161,17 @@ impl FerriteWindow {
         (self.on_save)(self.browser.state());
     }
 
+    fn close(&mut self) {
+        let _ = self.browser.shutdown(JOB_STOP_WAIT);
+        self.save();
+    }
+
     fn title_bar(cx: &mut Context<Self>) -> FerriteTitleBar {
         let this = cx.weak_entity();
         FerriteTitleBar::new("Ferrite")
             .header(HeaderSearch::new())
             .on_close(move |_, cx| {
-                let _ = this.update(cx, |view, _| view.save());
+                let _ = this.update(cx, |view, _| view.close());
                 cx.quit();
             })
     }
@@ -171,7 +179,7 @@ impl FerriteWindow {
     fn close_saves_and_quits(window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.weak_entity();
         window.on_window_should_close(cx, move |_, cx| {
-            let _ = this.update(cx, |view, _| view.save());
+            let _ = this.update(cx, |view, _| view.close());
             cx.quit();
             true
         });

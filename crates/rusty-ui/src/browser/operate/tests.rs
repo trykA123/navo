@@ -316,3 +316,59 @@ fn a_protected_source_is_flagged_in_the_plan() {
             .any(|risk| matches!(risk, rusty_core::Risk::Protected(_)))
     );
 }
+
+#[test]
+fn shutdown_cancels_a_running_job_and_waits_for_its_end() {
+    let fs = fake();
+    let gate = Arc::new(AtomicBool::new(false));
+    let open = Arc::clone(&gate);
+    let record = Arc::new(Mutex::new(Record::default()));
+    let shared = Arc::clone(&record);
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.set_operations(Operations {
+        log: Arc::new(move |_: &OperationPlan| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !open.load(Ordering::Acquire) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            Ok(Box::new(SharedLog(Arc::clone(&shared))) as Box<dyn OpLog>)
+        }),
+        protected: Vec::new(),
+    });
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.confirm();
+    let opener = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(30));
+        gate.store(true, Ordering::Release);
+    });
+    assert!(browser.shutdown(Duration::from_secs(5)));
+    let _ = opener.join();
+    assert_eq!(browser.jobs()[0].status, JobStatus::Cancelled);
+    assert_eq!(record.lock().unwrap().finished, Some(JobOutcome::Cancelled));
+    assert!(!exists(&fs, "dest/docs"));
+}
+
+#[test]
+fn shutdown_with_no_jobs_returns_at_once() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    assert!(browser.shutdown(Duration::ZERO));
+}
+
+#[test]
+fn a_job_that_panics_ends_as_failed() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.set_operations(Operations {
+        log: Arc::new(|_: &OperationPlan| -> Result<Box<dyn OpLog>, String> {
+            panic!("journal broke")
+        }),
+        protected: Vec::new(),
+    });
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.confirm();
+    settle(&mut browser);
+    assert!(matches!(browser.jobs()[0].status, JobStatus::Failed(_)));
+}

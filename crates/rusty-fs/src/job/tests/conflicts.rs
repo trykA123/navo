@@ -51,14 +51,15 @@ fn a_failed_overwrite_fails_at_its_step() {
 }
 
 fn ask() -> (FakeFs, JobOutcome, Harness) {
-    let fs = old_target();
+    let fs = fixture(&[("src/a.txt", BIG), ("src/b.txt", 2_000)]);
     let plan = plan_with(&fs, &["src/a.txt", "src/b.txt"], ConflictPolicy::Ask);
+    fs.add_file("dst/a.txt", 3);
     let (outcome, harness) = run(&fs, &plan);
     (fs, outcome, harness)
 }
 
 #[test]
-fn an_asked_conflict_is_logged_skipped() {
+fn a_target_that_appears_after_planning_is_logged_skipped() {
     let (_, _, harness) = ask();
     assert_eq!(
         harness.logged(),

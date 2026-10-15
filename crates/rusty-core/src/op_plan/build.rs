@@ -103,9 +103,9 @@ impl<'a> Walk<'a> {
             (false, None) => None,
         };
         let target = match &resolution {
-            Some(Resolution::Skip) => None,
+            Some(Resolution::Skip | Resolution::Ask) => None,
             Some(Resolution::Rename(renamed)) => Some(renamed.clone()),
-            Some(Resolution::Overwrite | Resolution::Ask) | None => Some(destination.clone()),
+            Some(Resolution::Overwrite) | None => Some(destination.clone()),
         };
         if let Some(resolution) = resolution {
             self.conflict(item, destination, resolution);
@@ -235,9 +235,9 @@ impl Walk<'_> {
                 .existing_at(&destination)
                 .map(|found| self.resolve(item, found, &destination));
             let renamed = match &resolution {
-                Some(Resolution::Skip) => None,
+                Some(Resolution::Skip | Resolution::Ask) => None,
                 Some(Resolution::Rename(other)) => Some(other.clone()),
-                _ => Some(destination.clone()),
+                Some(Resolution::Overwrite) | None => Some(destination.clone()),
             };
             if let Some(resolution) = resolution {
                 self.conflict(item, destination, resolution);

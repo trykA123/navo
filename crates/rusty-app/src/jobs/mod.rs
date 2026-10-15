@@ -1,3 +1,4 @@
+use std::fs::{File, OpenOptions};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +31,17 @@ fn now_ms() -> i64 {
         .map_or(0, |elapsed| {
             i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
         })
+}
+
+pub fn claim(file: &Path) -> Option<File> {
+    let lock = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(file)
+        .ok()?;
+    lock.try_lock().ok()?;
+    Some(lock)
 }
 
 pub fn log_factory(journal: SharedJournal) -> LogFactory {

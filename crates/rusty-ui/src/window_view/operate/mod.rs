@@ -31,7 +31,8 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         OpKind::Recycle => (format!("Move {count} to the Recycle Bin?"), "Recycle"),
         OpKind::Delete => (format!("Delete {count} permanently?"), "Delete permanently"),
     };
-    let protected = is_protected(&pending.plan);
+    let protected = is_protected(&pending.plan)
+        && matches!(pending.plan.kind, OpKind::Recycle | OpKind::Delete);
     ConfirmProps {
         title: title.into(),
         lines: pending

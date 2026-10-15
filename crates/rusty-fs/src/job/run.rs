@@ -30,6 +30,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
         files_total: plan.totals.files,
         current: None,
     };
+    let mut kept = Vec::new();
     for (seq, step) in (0_u32..).zip(&plan.steps) {
         if done.contains(&seq) {
             advance(&mut progress, step);
@@ -40,8 +41,14 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
         }
         progress.current = Some(current_of(step));
         let start = progress.bytes_done;
-        match apply(plan, step, ctx, &mut progress) {
+        let result = if holds_kept(step, &kept) {
+            Ok(StepOutcome::Skipped)
+        } else {
+            apply(plan, step, ctx, &mut progress)
+        };
+        match result {
             Ok(outcome) => {
+                note_kept(step, outcome, &mut kept);
                 if let Err(error) = ctx.log.step(seq, outcome) {
                     return JobOutcome::Failed { seq, error };
                 }
@@ -59,6 +66,27 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
         }
     }
     JobOutcome::Done
+}
+
+fn note_kept(step: &Step, outcome: StepOutcome, kept: &mut Vec<Location>) {
+    if let Step::CopyFile { source, .. } = step
+        && outcome != StepOutcome::Done
+    {
+        kept.push(source.clone());
+    }
+}
+
+fn holds_kept(step: &Step, kept: &[Location]) -> bool {
+    let location = match step {
+        Step::RemoveFile { location }
+        | Step::RemoveLink { location }
+        | Step::RemoveFolder { location } => location,
+        _ => return false,
+    };
+    kept.iter().any(|source| {
+        std::iter::successors(Some(source.clone()), Location::parent)
+            .any(|ancestor| ancestor.same_place(location))
+    })
 }
 
 fn advance(progress: &mut Progress, step: &Step) {

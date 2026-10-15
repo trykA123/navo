@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use rusty_core::{
     Command, FsError, Location, OpKind, OperationPlan, ProviderPath, list_active_tabs,
@@ -88,6 +89,21 @@ impl Browser {
         }
         self.jobs.push(view);
         true
+    }
+
+    pub fn shutdown(&mut self, wait: Duration) -> bool {
+        for job in &self.jobs {
+            if job.status == JobStatus::Running {
+                job.cancel.cancel();
+            }
+        }
+        let deadline = Instant::now() + wait;
+        while self.running() && Instant::now() < deadline {
+            self.poll();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        self.poll();
+        !self.running()
     }
 
     pub fn cancel_job(&mut self, id: u64) -> bool {

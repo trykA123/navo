@@ -136,3 +136,13 @@ fn every_job_status_maps_to_a_row_state() {
         "Recycle 1 item"
     );
 }
+
+#[test]
+fn a_copy_into_a_protected_folder_needs_no_typed_word() {
+    let mut risky = plan(OpKind::Copy);
+    risky.risks.push(Risk::Protected(at("/home")));
+    let props = confirm_props(&pending(risky, Some(at("/home"))));
+    assert!(!props.danger);
+    assert!(props.typed.is_none());
+    assert_eq!(props.summary, "3 files, 1 folder · 2.0 KB");
+}
