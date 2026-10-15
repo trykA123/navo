@@ -132,9 +132,8 @@ fn concurrent_writers_never_empty_the_target_or_the_backup() {
                 let bytes = [letter; 8];
                 for _ in 0..300 {
                     let _ = write_atomic(&target, &bytes);
-                    if let Ok(now) = fs::read(&target) {
-                        assert!(!now.is_empty(), "target was emptied");
-                    }
+                    let emptied = fs::read(&target).is_ok_and(|now| now.is_empty());
+                    assert!(!emptied, "target was emptied");
                 }
             })
         })
