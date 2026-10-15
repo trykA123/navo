@@ -32,13 +32,14 @@ fn small_text_opens_for_editing() {
 }
 
 #[test]
-fn a_nul_byte_or_utf16_opens_as_hex() {
+fn a_nul_byte_opens_as_hex_and_utf16_as_text() {
     let dir = tempfile::tempdir().unwrap();
     let binary = file(&dir, "tool.exe", b"MZ\x90\x00\x03");
     let utf16 = file(&dir, "wide.txt", &[0xFF, 0xFE, b'a', 0]);
     assert_eq!(opens_as(&binary), ("hex", false));
-    assert_eq!(opens_as(&utf16), ("hex", false));
+    assert_eq!(opens_as(&utf16), ("text", true));
     assert!(!paged(&binary).unwrap().editable);
+    assert!(paged(&utf16).unwrap().editable);
 }
 
 #[test]

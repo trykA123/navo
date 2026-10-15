@@ -9,20 +9,21 @@ use std::sync::Arc;
 
 use gpui_kit::component::input::{EditorState, InputEvent, RangeDecorationCollection};
 use gpui_kit::{Subscription, Task};
+use rusty_core::encoding::TextEncoding;
 
-pub(super) use body::EditorBody;
+pub(super) use body::{EditorBody, EditorFile};
 
+use super::FileStamp;
 use super::body::Host;
 use super::search::Marking;
 use super::search::memory::{MemoryLink, attach_memory};
 use super::search::overview::Overview;
-use super::{FileStamp, FileText, language_of};
 use crate::prelude::*;
 use crate::tokens::Mode;
 use find::EditorFind;
 use marking::text_source;
 
-const NOT_UTF8: &str = "Not valid UTF-8: opened read-only.";
+const NOT_LOSSLESS: &str = "Not valid in its encoding: opened read-only.";
 
 pub(super) struct EditorView {
     host: Host,
@@ -30,6 +31,7 @@ pub(super) struct EditorView {
     editing: bool,
     can_edit: bool,
     crlf: bool,
+    encoding: TextEncoding,
     stamp: Option<FileStamp>,
     dirty: bool,
     revision: u64,
@@ -46,8 +48,8 @@ pub(super) struct EditorView {
 }
 
 impl EditorView {
-    fn new(file: FileText, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let language = language_of(&host.title);
+    fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let EditorFile { file, language } = opened;
         let shared: Arc<str> = Arc::from(file.text.as_str());
         let text = file.text;
         let editor = cx.new(|cx| {
@@ -77,12 +79,13 @@ impl EditorView {
             editing: false,
             can_edit: !file.read_only,
             crlf: file.crlf,
+            encoding: file.encoding,
             stamp: file.stamp,
             dirty: false,
             revision: 0,
             overwrite: false,
             saving: None,
-            note: file.read_only.then(|| NOT_UTF8.into()),
+            note: file.read_only.then(|| NOT_LOSSLESS.into()),
             find: EditorFind::default(),
             marking: Marking::new(text_source(shared)),
             decorations,

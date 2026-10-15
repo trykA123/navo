@@ -8,11 +8,16 @@ use crate::window_view::viewer::FileText;
 use crate::window_view::viewer::body::{BodyAct, BodyKeys, Host, Key, ViewerBody};
 use crate::window_view::viewer::search::bar::{FIND_KEYS, LIST_KEYS, MARK_KEYS};
 
+pub(in crate::window_view::viewer) struct EditorFile {
+    pub file: FileText,
+    pub language: &'static str,
+}
+
 pub(in crate::window_view::viewer) struct EditorBody(pub Entity<EditorView>);
 
 impl EditorBody {
     pub(in crate::window_view::viewer) fn new(
-        file: FileText,
+        file: EditorFile,
         host: Host,
         window: &mut Window,
         cx: &mut App,

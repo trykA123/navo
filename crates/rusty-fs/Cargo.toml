@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 rusty-core = { path = "../rusty-core" }
+encoding_rs = "0.8.42"
 thiserror = "2.0.21"
 trash = "5.2.9"
 

@@ -116,45 +116,6 @@ impl Viewer {
     }
 }
 
-const KNOWN: [&str; 26] = [
-    "toml", "json", "css", "html", "go", "java", "lua", "php", "proto", "scala", "swift", "zig",
-    "c", "cpp", "tsx", "svelte", "astro", "diff", "graphql", "ejs", "erb", "cmake", "rust",
-    "python", "bash", "markdown",
-];
-
-pub(super) fn language_of(name: &str) -> &'static str {
-    let lower = name.to_ascii_lowercase();
-    if lower == "makefile" || lower == "gnumakefile" {
-        return "make";
-    }
-    let ext = lower
-        .rsplit_once('.')
-        .filter(|(stem, _)| !stem.is_empty())
-        .map_or("", |(_, ext)| ext);
-    match ext {
-        "h" => "c",
-        "hpp" | "hh" | "cc" | "cxx" => "cpp",
-        "js" | "jsx" | "mjs" | "cjs" => "javascript",
-        "ts" | "mts" | "cts" => "typescript",
-        "htm" | "xhtml" => "html",
-        "sh" | "zsh" => "bash",
-        "kts" | "kt" => "kotlin",
-        "cs" => "csharp",
-        "py" | "pyi" => "python",
-        "rs" => "rust",
-        "md" | "mdx" => "markdown",
-        "yml" | "yaml" => "yaml",
-        "rb" => "ruby",
-        "ex" | "exs" => "elixir",
-        "mk" => "make",
-        _ => KNOWN
-            .iter()
-            .find(|known| **known == ext)
-            .copied()
-            .unwrap_or("text"),
-    }
-}
-
 impl FerriteWindow {
     pub(super) fn view_row(&mut self, row: u64, window: &mut Window, cx: &mut Context<Self>) {
         let tab = self.browser.state().active_tab();

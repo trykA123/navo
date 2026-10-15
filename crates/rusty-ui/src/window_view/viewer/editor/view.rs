@@ -66,7 +66,8 @@ impl EditorView {
                     .text_color(t.colors.muted)
                     .text_size(t.typography.small)
                     .child(mode)
-                    .children(self.stamp.map(|stamp| format::size(stamp.len))),
+                    .children(self.stamp.map(|stamp| format::size(stamp.len)))
+                    .child(self.encoding.label()),
             )
             .when(self.dirty, |d| {
                 d.child(div().text_color(t.colors.mark).child("●"))

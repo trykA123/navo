@@ -4,16 +4,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use rusty_core::Location;
+use rusty_core::encoding::looks_binary;
 use rusty_core::paging::{ByteSource, read_full};
 use rusty_fs::{PagedFile, index_lines};
 use rusty_ui::window_view::{Head, Paged};
 
 use super::summary::{SUMMARY_HEAD, binary_summary};
 use super::{MAX_VIEW, SNIFF, path_of};
-
-fn looks_binary(head: &[u8]) -> bool {
-    head.starts_with(&[0xFF, 0xFE]) || head.starts_with(&[0xFE, 0xFF]) || head.contains(&0)
-}
 
 fn sniff(path: &Path) -> Result<Head, String> {
     let mut file = File::open(path).map_err(|error| format!("Cannot open it: {error}"))?;

@@ -77,6 +77,7 @@ pub(super) fn open_options(
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let handle = cx.update(|cx| {
         gpui_kit::init(cx);
+        crate::languages::register_languages();
         tokens::apply(Mode::Light, cx);
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
@@ -593,19 +594,19 @@ fn a_file_that_cannot_be_read_says_why(cx: &mut TestAppContext) {
 
 #[test]
 fn extensions_pick_their_language() {
-    use super::viewer::language_of;
-    assert_eq!(language_of("main.rs"), "rust");
-    assert_eq!(language_of("App.TSX"), "tsx");
-    assert_eq!(language_of("Main.JAVA"), "java");
-    assert_eq!(language_of("Makefile"), "make");
-    assert_eq!(language_of("mix.exs"), "elixir");
-    assert_eq!(language_of("notes.md"), "markdown");
-    assert_eq!(language_of("config.yml"), "yaml");
-    assert_eq!(language_of("Cargo.toml"), "toml");
-    assert_eq!(language_of("run.sh"), "bash");
-    assert_eq!(language_of("readme"), "text");
-    assert_eq!(language_of(".bashrc"), "text");
-    assert_eq!(language_of("app.log"), "text");
+    use crate::languages::detect;
+    assert_eq!(detect("main.rs", b""), "rust");
+    assert_eq!(detect("App.TSX", b""), "tsx");
+    assert_eq!(detect("Main.JAVA", b""), "java");
+    assert_eq!(detect("Makefile", b""), "make");
+    assert_eq!(detect("mix.exs", b""), "elixir");
+    assert_eq!(detect("notes.md", b""), "markdown");
+    assert_eq!(detect("config.yml", b""), "yaml");
+    assert_eq!(detect("Cargo.toml", b""), "toml");
+    assert_eq!(detect("run.sh", b""), "bash");
+    assert_eq!(detect("readme", b""), "text");
+    assert_eq!(detect(".bashrc", b""), "text");
+    assert_eq!(detect("app.log", b""), "text");
 }
 
 #[gpui_kit::test]
