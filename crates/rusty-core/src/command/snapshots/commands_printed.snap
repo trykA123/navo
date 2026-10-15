@@ -1,0 +1,22 @@
+---
+source: crates/rusty-core/src/command/tests/snapshots.rs
+expression: "lines.join(\"\\n\")"
+---
+pane.open-tab { location: "C:\\Users\\admin" }
+pane.close-tab { tab: 2 }
+pane.navigate { location: "/home/admin" }
+pane.back
+pane.forward
+pane.cursor-move { to: page-down }
+selection.toggle
+selection.toggle-down
+selection.range { to: 7 }
+selection.add-pattern { pattern: "*.rs" }
+selection.remove-pattern { pattern: "?.txt" }
+selection.invert
+selection.all
+selection.clear
+layout.split { direction: right }
+layout.close
+layout.focus { direction: up }
+app.save-session

@@ -1,0 +1,14 @@
+---
+source: crates/rusty-core/src/command/tests/snapshots.rs
+expression: "lines.join(\"\\n\")"
+---
+"pane.back {" => at byte 11: unexpected end of input
+"pane.back x" => at byte 10: unexpected character 'x'
+"pane.fly" => at byte 0: unknown command `pane.fly`
+"selection.range { row: 1 }" => at byte 18: `selection.range` has no field `row`
+"selection.range { to: 1, to: 2 }" => at byte 25: field `to` is given more than once
+"pane.navigate {}" => at byte 15: `pane.navigate` needs the field `location`
+"pane.navigate { location: 5 }" => at byte 26: field `location` expects string
+"selection.range { to: -1 }" => at byte 22: invalid value for `to`: expected a whole number from 0 to 18446744073709551615
+"selection.add-pattern { pattern: \"\\q\" }" => at byte 34: invalid escape sequence
+"pane.navigate { location: \"C:\\\\Users" => at byte 26: string is not closed
