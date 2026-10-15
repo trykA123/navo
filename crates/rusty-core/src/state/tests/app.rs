@@ -249,3 +249,20 @@ fn focus_direction_without_a_neighbour_is_a_layout_error() {
         Err(StateError::Layout(LayoutError::NoNeighbour(Direction::Up)))
     );
 }
+
+#[test]
+fn tab_finds_a_tab_in_any_window() {
+    let mut state = AppState::new(loc("/home"));
+    let first = state.active_tab().id();
+    state.open_window(loc("/work"));
+    assert_eq!(
+        state.tab(first).map(|t| t.location().as_str()),
+        Some("/home")
+    );
+}
+
+#[test]
+fn tab_of_an_unknown_id_is_none() {
+    let state = AppState::new(loc("/home"));
+    assert!(state.tab(TabId::new(999)).is_none());
+}

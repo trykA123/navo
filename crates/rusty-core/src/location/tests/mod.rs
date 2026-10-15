@@ -3,6 +3,7 @@ use super::*;
 mod compare;
 mod escape_collision;
 mod join;
+mod parent;
 mod path;
 mod props;
 mod text_form;

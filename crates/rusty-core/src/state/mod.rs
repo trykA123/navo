@@ -139,6 +139,14 @@ impl AppState {
         self.panes_mut().find(|p| p.id() == id)
     }
 
+    #[must_use]
+    pub fn tab(&self, id: TabId) -> Option<&Tab> {
+        self.windows()
+            .flat_map(Window::panes)
+            .flat_map(Pane::tabs)
+            .find(|tab| tab.id() == id)
+    }
+
     pub(crate) fn tab_mut(&mut self, id: TabId) -> Option<&mut Tab> {
         self.panes_mut().find_map(|p| p.tab_mut(id))
     }
