@@ -11,30 +11,31 @@ pub struct Listing {
     entries: Arc<[Entry]>,
 }
 
-#[allow(unused_variables, reason = "stubs until the state is implemented")]
 impl Listing {
     #[must_use]
     pub fn new(entries: Vec<Entry>) -> Self {
-        todo!()
+        Self {
+            entries: entries.into(),
+        }
     }
 
     #[must_use]
     pub fn len(&self) -> u64 {
-        todo!()
+        self.entries.len() as u64
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        todo!()
+        self.entries.is_empty()
     }
 
     #[must_use]
     pub fn get(&self, row: u64) -> Option<&Entry> {
-        todo!()
+        usize::try_from(row).ok().and_then(|i| self.entries.get(i))
     }
 
     #[must_use]
     pub fn entries(&self) -> &[Entry] {
-        todo!()
+        &self.entries
     }
 }
