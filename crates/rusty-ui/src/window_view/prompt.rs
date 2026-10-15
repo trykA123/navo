@@ -6,6 +6,7 @@ use crate::prompt_dialog::{PromptDialog, PromptProps};
 pub(super) enum PromptKind {
     Rename { from: String },
     NewFolder,
+    Select { add: bool },
 }
 
 pub(super) struct Prompt {
@@ -15,6 +16,7 @@ pub(super) struct Prompt {
 }
 
 const NEW_FOLDER: &str = "New folder";
+const EVERY_FILE: &str = "*.*";
 
 pub(super) fn stem_end(name: &str) -> usize {
     name.rfind('.').filter(|dot| *dot > 0).unwrap_or(name.len())
@@ -38,6 +40,19 @@ pub(super) fn prompt_props(kind: &PromptKind, error: Option<SharedString>) -> Pr
             confirm_label: "Create".into(),
             error,
         },
+        PromptKind::Select { add } => PromptProps {
+            title: if *add {
+                "Select files"
+            } else {
+                "Unselect files"
+            }
+            .into(),
+            label: "Pattern".into(),
+            value: EVERY_FILE.into(),
+            select: 0..EVERY_FILE.len(),
+            confirm_label: if *add { "Select" } else { "Unselect" }.into(),
+            error,
+        },
     }
 }
 
@@ -53,6 +68,10 @@ impl FerriteWindow {
         if let Some(from) = name {
             self.open_prompt(PromptKind::Rename { from });
         }
+    }
+
+    pub(super) fn ask_pattern(&mut self, add: bool) {
+        self.open_prompt(PromptKind::Select { add });
     }
 
     pub(super) fn ask_new_folder(&mut self) {
@@ -100,17 +119,39 @@ impl FerriteWindow {
             return;
         };
         let result = match &prompt.kind {
-            PromptKind::Rename { from } => self.browser.rename(from, value),
-            PromptKind::NewFolder => self.browser.new_folder(value),
+            PromptKind::Rename { from } => self.browser.rename(from, value).map_err(|p| match p {
+                crate::browser::NameProblem::Unchanged => None,
+                other => Some(other.to_string()),
+            }),
+            PromptKind::NewFolder => self
+                .browser
+                .new_folder(value)
+                .map_err(|p| Some(p.to_string())),
+            PromptKind::Select { add } => self.mark_pattern(*add, value),
         };
         match result {
-            Ok(()) | Err(crate::browser::NameProblem::Unchanged) => self.close_prompt(window, cx),
-            Err(problem) => {
+            Ok(()) | Err(None) => self.close_prompt(window, cx),
+            Err(Some(problem)) => {
                 if let Some(prompt) = &mut self.prompt {
-                    prompt.error = Some(problem.to_string().into());
+                    prompt.error = Some(problem.into());
                 }
                 cx.notify();
             }
+        }
+    }
+
+    fn mark_pattern(&mut self, add: bool, pattern: &str) -> Result<(), Option<String>> {
+        let pattern = pattern.to_owned();
+        let command = if add {
+            rusty_core::Command::SelectionAddPattern { pattern }
+        } else {
+            rusty_core::Command::SelectionRemovePattern { pattern }
+        };
+        match self.browser.command(&command) {
+            Err(rusty_core::CommandError::Pattern(_)) => {
+                Err(Some("Type a pattern, like *.txt".to_owned()))
+            }
+            _ => Ok(()),
         }
     }
 

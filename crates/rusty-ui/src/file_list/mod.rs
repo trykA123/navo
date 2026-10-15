@@ -44,6 +44,7 @@ pub enum FileListAction {
     Filter(FilterEdit),
     Rename(u64),
     NewFolder,
+    SelectPattern { add: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -180,6 +181,18 @@ impl ListContext {
     fn type_key(&self, event: &KeyDownEvent, window: &mut Window, cx: &mut App) {
         if let Some(ch) = typed_char(&event.keystroke) {
             self.act(FileListAction::Filter(FilterEdit::Push(ch)), window, cx);
+        }
+    }
+
+    fn mark_key(&self, key: char, window: &mut Window, cx: &mut App) {
+        if self.props.filter.is_some() {
+            self.act(FileListAction::Filter(FilterEdit::Push(key)), window, cx);
+            return;
+        }
+        match key {
+            '+' => self.act(FileListAction::SelectPattern { add: true }, window, cx),
+            '-' => self.act(FileListAction::SelectPattern { add: false }, window, cx),
+            _ => self.send(Command::SelectionInvert, window, cx),
         }
     }
 

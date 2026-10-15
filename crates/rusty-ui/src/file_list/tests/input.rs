@@ -296,3 +296,43 @@ fn f2_and_shift_f6_ask_to_rename_the_cursor_row_and_f7_asks_for_a_folder(cx: &mu
         ]
     );
 }
+
+#[gpui_kit::test]
+fn plus_minus_and_star_work_on_marks(cx: &mut TestAppContext) {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        window.press("+", cx);
+        window.press("-", cx);
+        window.press("*", cx);
+    })
+    .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [
+            FileListAction::SelectPattern { add: true },
+            FileListAction::SelectPattern { add: false },
+        ]
+    );
+    assert_eq!(commands(&harness, cx), [Command::SelectionInvert]);
+}
+
+#[gpui_kit::test]
+fn plus_minus_and_star_go_to_an_active_filter(cx: &mut TestAppContext) {
+    use crate::file_list::FilterEdit;
+    let (window, harness) = open_list(cx, filtered("pa"));
+    cx.update_window(window, |_, window, cx| {
+        window.press("-", cx);
+        window.press("+", cx);
+        window.press("*", cx);
+    })
+    .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [
+            FileListAction::Filter(FilterEdit::Push('-')),
+            FileListAction::Filter(FilterEdit::Push('+')),
+            FileListAction::Filter(FilterEdit::Push('*')),
+        ]
+    );
+    assert_eq!(commands(&harness, cx), []);
+}

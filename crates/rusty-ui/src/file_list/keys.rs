@@ -33,6 +33,9 @@ gpui_kit::actions!(
         ClearFilter,
         RenameItem,
         NewFolder,
+        MarkPattern,
+        UnmarkPattern,
+        InvertMarks,
     ]
 );
 
@@ -62,6 +65,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("f2", RenameItem, context),
         KeyBinding::new("shift-f6", RenameItem, context),
         KeyBinding::new("f7", NewFolder, context),
+        KeyBinding::new("+", MarkPattern, context),
+        KeyBinding::new("-", UnmarkPattern, context),
+        KeyBinding::new("*", InvertMarks, context),
     ]);
 }
 
@@ -78,6 +84,14 @@ fn move_to<A: Action>(
     to: CursorMove,
 ) -> impl Fn(&A, &mut Window, &mut App) + 'static {
     send(ctx, Command::PaneCursorMove { to })
+}
+
+fn mark<A: Action>(
+    ctx: &Rc<ListContext>,
+    key: char,
+) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    let ctx = ctx.clone();
+    move |_, window, cx| ctx.mark_key(key, window, cx)
 }
 
 fn operate<A: Action>(
@@ -121,6 +135,9 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
             let ctx = ctx.clone();
             move |_: &NewFolder, window, cx| ctx.act(FileListAction::NewFolder, window, cx)
         })
+        .on_action(mark::<MarkPattern>(ctx, '+'))
+        .on_action(mark::<UnmarkPattern>(ctx, '-'))
+        .on_action(mark::<InvertMarks>(ctx, '*'))
         .on_key_down({
             let ctx = ctx.clone();
             move |event, window, cx| ctx.type_key(event, window, cx)

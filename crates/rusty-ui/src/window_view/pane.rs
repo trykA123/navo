@@ -150,6 +150,7 @@ impl FerriteWindow {
                         }
                         FileListAction::Rename(row) => this.ask_rename(*row),
                         FileListAction::NewFolder => this.ask_new_folder(),
+                        FileListAction::SelectPattern { add } => this.ask_pattern(*add),
                     }
                     this.focus_core_pane(window, cx);
                     cx.notify();
