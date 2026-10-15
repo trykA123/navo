@@ -19,8 +19,13 @@ fn version_counts_the_migrations() {
 }
 
 #[test]
-fn first_migration_creates_every_table() {
+fn first_migration_creates_every_v1_table() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(MIGRATIONS[0]).unwrap();
-    assert_eq!(table_names(&conn), TABLES);
+    assert_eq!(table_names(&conn), V1_TABLES);
+}
+
+#[test]
+fn version_is_two() {
+    assert_eq!(Db::VERSION, 2);
 }

@@ -42,6 +42,13 @@ fn v1_fixture_reports_its_starting_version() {
 }
 
 #[test]
+fn v1_fixture_gets_every_table() {
+    let dir = tmp();
+    let (db, _) = open_fixture(&dir, V1_SQL);
+    assert_eq!(table_names(db.connection()), TABLES);
+}
+
+#[test]
 fn v1_fixture_rows_survive_open() {
     let dir = tmp();
     let path = db_path(&dir);

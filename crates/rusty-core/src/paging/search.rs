@@ -2,12 +2,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use aho_corasick::AhoCorasick;
 use memchr::memmem;
+use serde::{Deserialize, Serialize};
 
 use super::{ByteSource, read_full, span};
 
 pub const SEARCH_CHUNK: usize = 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Needle {
     Text { text: String, match_case: bool },
     Bytes(Vec<u8>),

@@ -10,7 +10,7 @@ mod settings;
 
 pub use atomic_write::{backup_path, replace_atomic, write_atomic};
 pub use cache_db::{CacheDb, CacheError, CacheOpen};
-pub use db::{Db, DbError, OpenReport};
+pub use db::{Db, DbError, FileMemory, OpenReport, Stamp};
 pub use dirs::StoreDirs;
 pub use journal::{
     JobId, JobJournal, JobState, JournalError, JournalStep, StepState, UnfinishedJob,

@@ -8,8 +8,10 @@ use rusqlite::{Connection, TransactionBehavior};
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 mod migrations;
+mod viewer;
 
 use migrations::MIGRATIONS;
+pub use viewer::{FileMemory, Stamp};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {

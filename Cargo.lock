@@ -6125,6 +6125,7 @@ dependencies = [
  "aho-corasick",
  "insta",
  "memchr",
+ "postcard",
  "proptest",
  "serde",
  "serde_json",

@@ -1,8 +1,10 @@
+mod count;
 mod hex;
 mod index;
 mod rows;
 mod search;
 
+pub use count::{Counted, count, ordinal};
 pub use hex::{HEX_WIDTH, HexRow, hex_row, hex_row_start, hex_rows};
 pub use index::{LineIndex, MARK_BYTES, MARK_EVERY};
 pub use rows::{LOOK_BACK, MAX_ROW, Row, previous_row, row_at, row_start_at, rows_down, rows_up};
@@ -59,6 +61,8 @@ impl ByteSource for [u8] {
     }
 }
 
+#[cfg(test)]
+mod tests_count;
 #[cfg(test)]
 mod tests_hex;
 #[cfg(test)]

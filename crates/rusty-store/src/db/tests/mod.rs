@@ -12,8 +12,9 @@ mod guards;
 mod memory;
 mod migrations;
 mod props;
+mod viewer;
 
-const TABLES: [&str; 7] = [
+const V1_TABLES: [&str; 7] = [
     "frecency",
     "history",
     "job",
@@ -21,6 +22,18 @@ const TABLES: [&str; 7] = [
     "module_kv",
     "tags",
     "undo",
+];
+
+const TABLES: [&str; 9] = [
+    "frecency",
+    "history",
+    "job",
+    "job_step",
+    "module_kv",
+    "search_history",
+    "tags",
+    "undo",
+    "viewer_memory",
 ];
 
 const V0_SQL: &str = include_str!("../../../tests/fixtures/db/v0.sql");
@@ -64,7 +77,7 @@ fn table_names(conn: &Connection) -> Vec<String> {
 }
 
 fn row_counts(conn: &Connection) -> Vec<(&'static str, i64)> {
-    TABLES
+    V1_TABLES
         .iter()
         .map(|table| {
             let sql = format!("SELECT count(*) FROM {table}");
