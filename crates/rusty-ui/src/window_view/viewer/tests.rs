@@ -125,7 +125,7 @@ fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, reads: &Arc<AtomicUsize>) -> Pa
     }
 }
 
-fn hooks(setup: Setup, log: &Log) -> FileHooks {
+pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
     let bytes = Arc::new(setup.bytes.clone());
     let text = String::from_utf8_lossy(&setup.bytes).into_owned();
     let head = Head {
@@ -166,7 +166,7 @@ pub(super) fn window_on(
 ) -> (AnyWindowHandle, Entity<FerriteWindow>, Log) {
     let log = Log::default();
     let files = hooks(setup, &log);
-    let (window, view) = window_with(cx, fs, files);
+    let (window, view) = window_with(cx, fs, files, super::Kinds::builtin());
     (window, view, log)
 }
 
@@ -174,6 +174,7 @@ pub(super) fn window_with(
     cx: &mut TestAppContext,
     fs: Arc<FakeFs>,
     files: FileHooks,
+    kinds: super::Kinds,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let options = StartOptions {
         state: home_beside_dest(&fs),
@@ -184,6 +185,7 @@ pub(super) fn window_with(
         launcher: Arc::new(|_| {}),
         editor: crate::window_view::EditorHooks::none(),
         files,
+        kinds,
         drives: crate::window_view::DriveHooks::none(),
         view: None,
     };

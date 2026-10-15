@@ -123,7 +123,12 @@ impl FerriteWindow {
         let Some(viewer) = &mut self.viewer else {
             return;
         };
-        let Some(kind) = viewer.kind_in(pick.slot) else {
+        let kind = if pick.edit {
+            viewer.editable_kind()
+        } else {
+            viewer.next_in(pick.slot)
+        };
+        let Some(kind) = kind else {
             return;
         };
         if viewer.is_shown(&kind) || viewer.switch_warning(pick.slot, cx) {

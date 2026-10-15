@@ -39,6 +39,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
         launcher: launch::launcher(),
         editor: editor::hooks(settings.as_deref(), |name| std::env::var(name).ok()),
         files: files::hooks(),
+        kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
         view: view.and_then(|path| view_location(&path)),
     });

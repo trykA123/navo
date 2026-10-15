@@ -2,7 +2,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::find::{line_start, numbered_lines};
-use super::{Log, Setup, press_only, redraw, text_window, top};
+use super::{Log, Setup, paged, press_only, redraw, text_window, top};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, settle, type_in};
 
@@ -61,4 +61,22 @@ fn go_to_line_is_resolved_in_the_background(cx: &mut TestAppContext) {
     };
     press_without_reading(cx, &open, "enter");
     assert_eq!(top(cx, &view), line_500);
+}
+
+#[gpui_kit::test]
+fn a_running_fill_is_never_cancelled_and_every_queued_move_lands(cx: &mut TestAppContext) {
+    let bytes = numbered_lines();
+    let (window, view, _) = text_window(cx, Setup::huge(bytes.clone()));
+    let paged = paged(cx, &view);
+    let (rows, fills) = paged.read_with(cx, |paged, _| (paged.rows, paged.fills()));
+    press_only(cx, window, "pagedown");
+    press_only(cx, window, "pagedown");
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("window");
+    assert_eq!(paged.read_with(cx, |paged, _| paged.fills()), fills + 1);
+    settle(cx, &view);
+    redraw(cx, window);
+    let line = usize::try_from(1 + 2 * rows).expect("small");
+    assert_eq!(top(cx, &view), line_start(&bytes, line));
+    assert_eq!(paged.read_with(cx, |paged, _| paged.fills()), fills + 2);
 }

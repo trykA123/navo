@@ -134,8 +134,24 @@ impl Viewer {
         }
     }
 
-    fn kind_in(&self, slot: Slot) -> Option<Kind> {
-        self.kinds.iter().find(|kind| kind.slot() == slot).cloned()
+    fn editable_kind(&self) -> Option<Kind> {
+        let sniff = self.sniff();
+        self.kinds
+            .iter()
+            .find(|kind| kind.editable(&sniff))
+            .cloned()
+    }
+
+    fn next_in(&self, slot: Slot) -> Option<Kind> {
+        let in_slot: Vec<&Kind> = self
+            .kinds
+            .iter()
+            .filter(|kind| kind.slot() == slot)
+            .collect();
+        let shown = self.kind.as_ref().map(|kind| kind.id());
+        let at = in_slot.iter().position(|kind| Some(kind.id()) == shown);
+        let next = at.map_or(0, |at| (at + 1) % in_slot.len());
+        in_slot.get(next).map(|kind| Kind::clone(kind))
     }
 
     fn is_editing(&self, cx: &App) -> bool {

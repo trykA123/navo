@@ -17,15 +17,15 @@ impl Viewer {
     }
 
     fn can_switch_to_edit(&self) -> bool {
-        let Some(text) = self.kind_in(Slot::Text) else {
+        let Some(editable) = self.editable_kind() else {
             return false;
         };
         let shown = self.body.is_some()
             && self
                 .kind
                 .as_ref()
-                .is_some_and(|kind| kind.id() == text.id());
-        !shown && text.editable(&self.sniff())
+                .is_some_and(|kind| kind.id() == editable.id());
+        !shown
     }
 
     pub(super) fn can_start_editing(&self, cx: &App) -> bool {

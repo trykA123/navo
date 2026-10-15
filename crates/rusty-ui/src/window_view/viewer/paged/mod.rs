@@ -20,7 +20,7 @@ use super::files::{IndexRun, Paged, Reopen, SharedSource};
 use crate::prelude::*;
 use find::FindState;
 use jobs::{IndexDone, IndexMessage, Job};
-use moves::Move;
+use moves::{Move, MoveQueue};
 use rows::RowCache;
 use scroll::ByteScroll;
 
@@ -35,8 +35,7 @@ pub struct PagedView {
     index_run: IndexRun,
     pub(super) kind: PagedKind,
     pub(super) top: u64,
-    moves: Vec<Move>,
-    move_seq: u64,
+    moves: MoveQueue,
     shift: usize,
     focus: FocusHandle,
     scroll: ByteScroll,
@@ -71,8 +70,7 @@ impl PagedView {
             index_run: paged.index,
             kind,
             top: 0,
-            moves: Vec::new(),
-            move_seq: 0,
+            moves: MoveQueue::default(),
             shift: 0,
             focus: cx.focus_handle(),
             scroll: ByteScroll::default(),
@@ -144,11 +142,7 @@ impl PagedView {
     }
 
     fn queue_move(&mut self, to: Move, cx: &mut Context<Self>) {
-        match (self.moves.last_mut(), to) {
-            (Some(Move::Rows(rows)), Move::Rows(more)) => *rows = rows.saturating_add(more),
-            _ => self.moves.push(to),
-        }
-        self.move_seq += 1;
+        self.moves.push(to);
         self.request_rows(cx);
         cx.notify();
     }
@@ -213,6 +207,13 @@ impl PagedView {
         } else {
             cx.notify();
         }
+    }
+}
+
+#[cfg(test)]
+impl PagedView {
+    pub(super) fn fills(&self) -> u64 {
+        self.cache.fills
     }
 }
 

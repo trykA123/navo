@@ -64,6 +64,7 @@ fn open_with(
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks::none(),
         files: super::FileHooks::none(),
+        kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
     };
@@ -426,6 +427,7 @@ fn editor_window(
             }),
         },
         files: super::FileHooks::none(),
+        kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
     };
@@ -522,6 +524,7 @@ fn viewer_window(
             }),
             paged: Arc::new(|_| Err("No paged view here.".to_owned())),
         },
+        kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
     };

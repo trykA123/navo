@@ -40,6 +40,7 @@ pub(super) struct FindState {
     pub anchor: Option<u64>,
     pub note: Option<SharedString>,
     last: Option<String>,
+    parked: Option<(String, bool)>,
     job: Option<Job>,
 }
 
@@ -51,6 +52,7 @@ impl FindState {
         self.anchor = None;
         self.note = None;
         self.last = None;
+        self.parked = None;
     }
 
     fn cancel(&mut self) {
@@ -193,6 +195,10 @@ impl PagedView {
             Err(error) => return self.set_bar_error(Some(error), cx),
         };
         self.find.last = Some(text.to_owned());
+        if !self.moves.is_empty() {
+            self.find.parked = Some((text.to_owned(), backward));
+            return self.set_bar_error(None, cx);
+        }
         let from = match (self.find.anchor, backward) {
             (Some(anchor), false) => anchor + 1,
             (Some(anchor), true) => anchor,
@@ -217,6 +223,12 @@ impl PagedView {
         };
         self.find.job = Some(start_search(self.reopen.clone(), search, cx));
         self.set_bar_error(None, cx);
+    }
+
+    pub(super) fn resume_find(&mut self, cx: &mut Context<Self>) {
+        if let Some((text, backward)) = self.find.parked.take() {
+            self.start_find(&text, backward, cx);
+        }
     }
 
     pub(super) fn search_message(&mut self, message: SearchMessage, cx: &mut Context<Self>) {

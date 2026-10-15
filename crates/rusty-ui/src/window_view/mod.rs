@@ -48,6 +48,7 @@ pub struct StartOptions {
     pub launcher: Launcher,
     pub editor: EditorHooks,
     pub files: FileHooks,
+    pub kinds: Kinds,
     pub drives: DriveHooks,
     pub view: Option<rusty_core::Location>,
 }
@@ -118,7 +119,7 @@ impl FerriteWindow {
             prompt: None,
             editor: options.editor,
             files: options.files,
-            kinds: viewer::Kinds::builtin(),
+            kinds: options.kinds,
             viewer: None,
             next_prompt: 0,
             provider,

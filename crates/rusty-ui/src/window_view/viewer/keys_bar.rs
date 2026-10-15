@@ -11,7 +11,7 @@ impl Viewer {
         let shown = self.kind.as_ref().map(|kind| kind.id());
         SLOTS
             .iter()
-            .filter_map(|slot| self.kind_in(*slot))
+            .filter_map(|slot| self.next_in(*slot))
             .filter(|kind| Some(kind.id()) != shown)
             .map(|kind| {
                 let slot = kind.slot();

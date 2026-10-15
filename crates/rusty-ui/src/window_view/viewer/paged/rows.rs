@@ -8,7 +8,6 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Want {
     pub top: u64,
-    pub move_seq: u64,
     pub count: usize,
     pub kind: PagedKind,
     pub index_rev: u64,
@@ -28,14 +27,14 @@ struct Filled {
 struct FillResult {
     top: u64,
     note: Option<String>,
-    consumed: usize,
     drawn: Result<Drawn, String>,
 }
 
 #[derive(Default)]
 pub(super) struct RowCache {
     filled: Option<Filled>,
-    pending: Option<(Want, gpui_kit::Task<()>)>,
+    pending: Option<gpui_kit::Task<()>>,
+    pub fills: u64,
 }
 
 pub(super) enum Shown<'a> {
@@ -149,19 +148,13 @@ fn fill<S: ByteSource + ?Sized>(
         PagedKind::Hex => hex_lines(source, top, want.count).map(Drawn::Hex),
         PagedKind::Text => text_lines(source, top, want.count, index).map(Drawn::Text),
     };
-    FillResult {
-        top,
-        note,
-        consumed: moves.len(),
-        drawn,
-    }
+    FillResult { top, note, drawn }
 }
 
 impl PagedView {
     pub(super) fn want(&self) -> Want {
         Want {
             top: self.top,
-            move_seq: self.move_seq,
             count: usize::try_from(self.rows).unwrap_or(usize::MAX),
             kind: self.kind,
             index_rev: self.index_rev,
@@ -170,43 +163,35 @@ impl PagedView {
     }
 
     pub(super) fn request_rows(&mut self, cx: &mut Context<Self>) {
+        if self.cache.pending.is_some() {
+            return;
+        }
         let want = self.want();
-        let cache = &self.cache;
-        let is_filled = cache
+        let is_filled = self
+            .cache
             .filled
             .as_ref()
-            .is_some_and(|filled| filled.want == want && self.moves.is_empty());
-        let is_pending = cache
-            .pending
-            .as_ref()
-            .is_some_and(|(wanted, _)| *wanted == want);
-        if is_filled || is_pending {
+            .is_some_and(|filled| filled.want == want);
+        if is_filled && self.moves.is_empty() {
             return;
         }
         let source = self.source.clone();
         let index = self.index.clone();
-        let moves = self.moves.clone();
-        let task = cx.spawn(async move |this, cx| {
+        let (moves, through) = self.moves.send();
+        self.cache.fills += 1;
+        self.cache.pending = Some(cx.spawn(async move |this, cx| {
             let filled = cx
                 .background_spawn(async move { fill(&*source, want, &moves, index.as_deref()) })
                 .await;
-            let _ = this.update(cx, |view, cx| view.rows_filled(want, filled, cx));
-        });
-        self.cache.pending = Some((want, task));
+            let _ = this.update(cx, |view, cx| view.rows_filled((want, through), filled, cx));
+        }));
     }
 
-    fn rows_filled(&mut self, want: Want, filled: FillResult, cx: &mut Context<Self>) {
-        let is_current = self
-            .cache
-            .pending
-            .as_ref()
-            .is_some_and(|(wanted, _)| *wanted == want);
-        if !is_current {
-            return;
-        }
+    fn rows_filled(&mut self, sent: (Want, u64), filled: FillResult, cx: &mut Context<Self>) {
+        let (want, through) = sent;
         self.cache.pending = None;
         self.top = filled.top;
-        self.moves.drain(..filled.consumed.min(self.moves.len()));
+        self.moves.land(through);
         if let Some(note) = filled.note {
             self.note = Some(note.into());
         }
@@ -218,8 +203,9 @@ impl PagedView {
             want,
             drawn: filled.drawn,
         });
-        if !self.moves.is_empty() {
-            self.request_rows(cx);
+        self.request_rows(cx);
+        if self.moves.is_empty() {
+            self.resume_find(cx);
         }
         cx.notify();
     }

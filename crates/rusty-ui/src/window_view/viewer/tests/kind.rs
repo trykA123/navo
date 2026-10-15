@@ -5,7 +5,7 @@ use gpui_kit::{AnyView, FocusHandle, TestAppContext};
 use rusty_core::Location;
 
 use super::find::bottom_keys;
-use super::{Setup, has_editor, redraw, text_of, window_on};
+use super::{Log, Setup, has_editor, hooks, redraw, text_of, window_with};
 use crate::prelude::*;
 use crate::window_view::tests::{fake, press};
 use crate::window_view::viewer::{
@@ -53,15 +53,31 @@ impl ViewerBody for NotesBody {
     }
 }
 
-struct Notes;
+struct Notes {
+    id: &'static str,
+    name: &'static str,
+    score: u8,
+}
+
+const NOTES: Notes = Notes {
+    id: "notes",
+    name: "Notes",
+    score: 99,
+};
+
+const MEMO: Notes = Notes {
+    id: "memo",
+    name: "Memo",
+    score: 98,
+};
 
 impl ViewerKind for Notes {
     fn id(&self) -> &'static str {
-        "notes"
+        self.id
     }
 
     fn name(&self) -> &'static str {
-        "Notes"
+        self.name
     }
 
     fn slot(&self) -> Slot {
@@ -69,7 +85,11 @@ impl ViewerKind for Notes {
     }
 
     fn score(&self, sniff: &Sniff<'_>) -> u8 {
-        if sniff.name.ends_with(".txt") { 99 } else { 0 }
+        if sniff.name.ends_with(".txt") {
+            self.score
+        } else {
+            0
+        }
     }
 
     fn load(
@@ -79,7 +99,7 @@ impl ViewerKind for Notes {
         _: &Sniff<'_>,
     ) -> Result<Loaded, String> {
         let file = (hooks.read)(location)?;
-        Ok(Box::new(format!("notes: {}", file.text.trim_end())))
+        Ok(Box::new(format!("{}: {}", self.id, file.text.trim_end())))
     }
 
     fn attach(
@@ -102,8 +122,8 @@ impl ViewerKind for Notes {
 
 #[gpui_kit::test]
 fn a_registered_kind_opens_first_and_slots_switch_to_and_from_it(cx: &mut TestAppContext) {
-    let (window, view, _) = window_on(cx, fake(), Setup::new(b"hello\n".to_vec()));
-    view.update(cx, |view, _| view.kinds = Kinds::builtin().with(Notes));
+    let files = hooks(Setup::new(b"hello\n".to_vec()), &Log::default());
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin().with(NOTES));
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);
@@ -113,6 +133,23 @@ fn a_registered_kind_opens_first_and_slots_switch_to_and_from_it(cx: &mut TestAp
     assert!(keys.contains(&"3 Hex".to_owned()), "{keys:?}");
     press(cx, window, &view, "1");
     assert!(has_editor(cx, &view));
+    assert!(bottom_keys(cx, window).contains(&"5 Notes".to_owned()));
+    press(cx, window, &view, "5");
+    assert_eq!(text_of(cx, window, "notes-body"), "notes: hello");
+}
+
+#[gpui_kit::test]
+fn the_slot_key_cycles_through_kinds_that_share_it(cx: &mut TestAppContext) {
+    let files = hooks(Setup::new(b"hello\n".to_vec()), &Log::default());
+    let kinds = Kinds::builtin().with(NOTES).with(MEMO);
+    let (window, view) = window_with(cx, fake(), files, kinds);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+    assert_eq!(text_of(cx, window, "notes-body"), "notes: hello");
+    assert!(bottom_keys(cx, window).contains(&"5 Memo".to_owned()));
+    press(cx, window, &view, "5");
+    assert_eq!(text_of(cx, window, "notes-body"), "memo: hello");
     assert!(bottom_keys(cx, window).contains(&"5 Notes".to_owned()));
     press(cx, window, &view, "5");
     assert_eq!(text_of(cx, window, "notes-body"), "notes: hello");

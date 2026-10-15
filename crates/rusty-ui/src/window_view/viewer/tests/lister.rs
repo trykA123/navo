@@ -3,8 +3,8 @@ use rusty_core::paging::hex_row_start;
 
 use super::find::{bottom_keys, line_start, numbered_lines};
 use super::{
-    Setup, editor_of, editor_text, has_editor, kind, mixed, paged_window, text_window, top,
-    visible, window_on,
+    Setup, editor_of, editor_text, has_editor, kind, mixed, paged_window, press_only, text_window,
+    top, visible, window_on,
 };
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{fake, press, type_in};
@@ -197,4 +197,17 @@ fn enter_finds_next_in_the_read_only_editor_and_breaks_lines_while_editing(
     press(cx, window, &view, "ctrl-e");
     press(cx, window, &view, "enter");
     assert_ne!(editor_text(cx, &view), "one\ntwo\none\n");
+}
+
+#[gpui_kit::test]
+fn a_search_waits_for_queued_moves_before_it_starts(cx: &mut TestAppContext) {
+    let bytes = numbered_lines();
+    let line_900 = line_start(&bytes, 900);
+    let (window, view) = paged_window(cx, Setup::huge(bytes));
+    search(cx, window, &view);
+    press_only(cx, window, "ctrl-end");
+    press_only(cx, window, "shift-f3");
+    crate::window_view::tests::settle(cx, &view);
+    super::redraw(cx, window);
+    assert_eq!(top(cx, &view), line_900);
 }

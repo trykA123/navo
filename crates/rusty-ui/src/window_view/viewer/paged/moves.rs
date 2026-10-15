@@ -61,3 +61,79 @@ pub(super) fn apply_moves<S: ByteSource + ?Sized>(
         }
     })
 }
+
+impl Move {
+    fn is_absolute(self) -> bool {
+        matches!(
+            self,
+            Self::End | Self::Fraction(_) | Self::Offset(_) | Self::Line(_)
+        )
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct MoveQueue {
+    queued: Vec<(u64, Move)>,
+    next: u64,
+    sent: Option<u64>,
+}
+
+impl MoveQueue {
+    pub(super) fn push(&mut self, to: Move) {
+        if to.is_absolute() {
+            self.queued.clear();
+        }
+        let sent = self.sent;
+        if let (Some((seq, Move::Rows(rows))), Move::Rows(more)) = (self.queued.last_mut(), to)
+            && sent.is_none_or(|sent| *seq > sent)
+        {
+            *rows = rows.saturating_add(more);
+            return;
+        }
+        self.next += 1;
+        self.queued.push((self.next, to));
+    }
+
+    pub(super) fn send(&mut self) -> (Vec<Move>, u64) {
+        self.sent = Some(self.next);
+        (self.queued.iter().map(|(_, to)| *to).collect(), self.next)
+    }
+
+    pub(super) fn land(&mut self, through: u64) {
+        self.queued.retain(|(seq, _)| *seq > through);
+        self.sent = None;
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.queued.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Move, MoveQueue};
+
+    #[test]
+    fn rows_merge_until_they_are_sent() {
+        let mut queue = MoveQueue::default();
+        queue.push(Move::Rows(1));
+        queue.push(Move::Rows(2));
+        let (sent, through) = queue.send();
+        assert_eq!(sent, [Move::Rows(3)]);
+        queue.push(Move::Rows(4));
+        queue.land(through);
+        assert_eq!(queue.send().0, [Move::Rows(4)]);
+    }
+
+    #[test]
+    fn an_absolute_move_drops_what_was_queued_before_it() {
+        let mut queue = MoveQueue::default();
+        queue.push(Move::Rows(5));
+        let (_, through) = queue.send();
+        queue.push(Move::Rows(1));
+        queue.push(Move::End);
+        queue.push(Move::Rows(-1));
+        queue.land(through);
+        assert_eq!(queue.send().0, [Move::End, Move::Rows(-1)]);
+    }
+}

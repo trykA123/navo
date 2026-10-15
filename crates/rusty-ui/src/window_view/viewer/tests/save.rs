@@ -4,7 +4,7 @@ use gpui_kit::TestAppContext;
 
 use super::{editor_text, press_only, redraw, text_of, window_with};
 use crate::window_view::tests::{fake, press, settle, type_in};
-use crate::window_view::viewer::{FileHooks, FileStamp, FileText, Head, SaveError};
+use crate::window_view::viewer::{FileHooks, FileStamp, FileText, Head, Kinds, SaveError};
 
 #[derive(Default)]
 struct Disk {
@@ -77,7 +77,7 @@ fn a_save_that_lands_after_a_kind_switch_never_updates_the_new_editor(cx: &mut T
         stamp: 1,
         ..Disk::default()
     }));
-    let (window, view) = window_with(cx, fake(), disk_hooks(&disk));
+    let (window, view) = window_with(cx, fake(), disk_hooks(&disk), Kinds::builtin());
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     press(cx, window, &view, "ctrl-e");
