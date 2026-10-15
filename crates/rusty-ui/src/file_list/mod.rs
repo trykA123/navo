@@ -32,6 +32,7 @@ pub enum FileListAction {
     Open(u64),
     Up,
     SwitchPane,
+    Operate(rusty_core::OpKind),
 }
 
 #[derive(Clone, Debug)]

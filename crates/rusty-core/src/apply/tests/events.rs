@@ -249,3 +249,15 @@ fn list_missing_skips_loaded_tabs() {
     let mut state = at_work(files(3));
     assert_eq!(crate::list_missing(&mut state), vec![]);
 }
+
+#[test]
+fn list_active_tabs_relists_every_pane_after_an_operation() {
+    let mut state = at_work(files(3));
+    run(
+        &mut state,
+        Command::LayoutSplit {
+            direction: Direction::Right,
+        },
+    );
+    assert_eq!(crate::list_active_tabs(&mut state).len(), 2);
+}

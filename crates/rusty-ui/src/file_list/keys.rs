@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::{Action, App, Div, InteractiveElement, KeyBinding, Stateful, Window};
-use rusty_core::{Command, CursorMove};
+use rusty_core::{Command, CursorMove, OpKind};
 
 use super::{FileListAction, ListContext};
 
@@ -21,6 +21,10 @@ gpui_kit::actions!(
         OpenRow,
         OpenParent,
         SwitchPane,
+        CopyItems,
+        MoveItems,
+        RecycleItems,
+        DeleteItems,
     ]
 );
 
@@ -38,6 +42,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", OpenRow, context),
         KeyBinding::new("backspace", OpenParent, context),
         KeyBinding::new("tab", SwitchPane, context),
+        KeyBinding::new("f5", CopyItems, context),
+        KeyBinding::new("f6", MoveItems, context),
+        KeyBinding::new("f8", RecycleItems, context),
+        KeyBinding::new("delete", RecycleItems, context),
+        KeyBinding::new("shift-delete", DeleteItems, context),
+        KeyBinding::new("shift-f8", DeleteItems, context),
     ]);
 }
 
@@ -54,6 +64,14 @@ fn move_to<A: Action>(
     to: CursorMove,
 ) -> impl Fn(&A, &mut Window, &mut App) + 'static {
     send(ctx, Command::PaneCursorMove { to })
+}
+
+fn operate<A: Action>(
+    ctx: &Rc<ListContext>,
+    kind: OpKind,
+) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    let ctx = ctx.clone();
+    move |_, window, cx| ctx.act(FileListAction::Operate(kind), window, cx)
 }
 
 pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
@@ -73,4 +91,8 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
         .on_action(move |_: &SwitchPane, window, cx| {
             switch.act(FileListAction::SwitchPane, window, cx);
         })
+        .on_action(operate::<CopyItems>(ctx, OpKind::Copy))
+        .on_action(operate::<MoveItems>(ctx, OpKind::Move))
+        .on_action(operate::<RecycleItems>(ctx, OpKind::Recycle))
+        .on_action(operate::<DeleteItems>(ctx, OpKind::Delete))
 }

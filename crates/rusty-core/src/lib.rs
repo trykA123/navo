@@ -13,7 +13,9 @@ mod selection;
 mod session;
 mod state;
 
-pub use apply::{CommandError, Effect, Event, apply, apply_event, list_missing, list_unloaded};
+pub use apply::{
+    CommandError, Effect, Event, apply, apply_event, list_active_tabs, list_missing, list_unloaded,
+};
 pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
 pub use direction::Direction;
 pub use fs_error::{FsError, FsErrorKind, RecoveryAction};

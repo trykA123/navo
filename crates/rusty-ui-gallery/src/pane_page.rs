@@ -81,7 +81,7 @@ impl PanePage {
                 .ok()
                 .and_then(|index| self.rows.get(index))
                 .and_then(|entry| tab.location().join(&entry.name).ok()),
-            FileListAction::SwitchPane => None,
+            FileListAction::SwitchPane | FileListAction::Operate(_) => None,
         };
         if let Some(location) = target {
             self.run(&Command::PaneNavigate { location });

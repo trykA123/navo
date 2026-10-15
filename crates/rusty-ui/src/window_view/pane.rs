@@ -127,6 +127,7 @@ impl FerriteWindow {
                             this.browser.go_up();
                         }
                         FileListAction::SwitchPane => this.switch_pane(window, cx),
+                        FileListAction::Operate(_) => {}
                     }
                     this.focus_core_pane(window, cx);
                     cx.notify();

@@ -9,7 +9,7 @@ pub use protect::is_protected;
 
 use crate::Location;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OpKind {
     Copy,
     Move,
@@ -155,7 +155,7 @@ pub fn plan(request: &PlanRequest) -> OperationPlan {
     let totals = risks::totals(request, &walk.steps, &walk.moved);
     let risks = risks::risks(request, &walk, &totals);
     OperationPlan {
-        kind: request.kind.clone(),
+        kind: request.kind,
         steps: walk.steps,
         totals,
         conflicts: walk.conflicts,

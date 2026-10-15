@@ -129,3 +129,40 @@ fn tab_asks_to_switch_panes(cx: &mut TestAppContext) {
         .expect("window");
     assert_eq!(actions(&harness, cx), [FileListAction::SwitchPane]);
 }
+
+fn pressed(key: &str, cx: &mut TestAppContext) -> Vec<FileListAction> {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| window.press(key, cx))
+        .expect("window");
+    actions(&harness, cx)
+}
+
+#[gpui_kit::test]
+fn f5_asks_to_copy(cx: &mut TestAppContext) {
+    assert_eq!(
+        pressed("f5", cx),
+        [FileListAction::Operate(rusty_core::OpKind::Copy)]
+    );
+}
+
+#[gpui_kit::test]
+fn f6_asks_to_move(cx: &mut TestAppContext) {
+    assert_eq!(
+        pressed("f6", cx),
+        [FileListAction::Operate(rusty_core::OpKind::Move)]
+    );
+}
+
+#[gpui_kit::test]
+fn f8_and_delete_ask_to_recycle(cx: &mut TestAppContext) {
+    let recycle = [FileListAction::Operate(rusty_core::OpKind::Recycle)];
+    assert_eq!(pressed("f8", cx), recycle);
+    assert_eq!(pressed("delete", cx), recycle);
+}
+
+#[gpui_kit::test]
+fn shift_delete_and_shift_f8_ask_to_delete_permanently(cx: &mut TestAppContext) {
+    let delete = [FileListAction::Operate(rusty_core::OpKind::Delete)];
+    assert_eq!(pressed("shift-delete", cx), delete);
+    assert_eq!(pressed("shift-f8", cx), delete);
+}

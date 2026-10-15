@@ -122,6 +122,13 @@ impl AppState {
         request
     }
 
+    pub(crate) fn active_tab_ids(&self) -> Vec<TabId> {
+        self.windows()
+            .flat_map(Window::panes)
+            .map(|pane| pane.active().id())
+            .collect()
+    }
+
     pub(crate) fn active_tabs_without_listing(&self) -> Vec<TabId> {
         self.windows()
             .flat_map(Window::panes)
