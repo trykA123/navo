@@ -5,6 +5,7 @@ use super::*;
 
 const KB: u64 = 1024;
 
+#[cfg(target_os = "linux")]
 const SAMPLE: &str = "Name:\ttest
 Umask:\t0022
 State:\tR (running)
