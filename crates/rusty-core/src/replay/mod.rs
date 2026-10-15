@@ -20,11 +20,14 @@ pub struct CommandLog {
     home: Location,
     records: Vec<Record>,
     start: usize,
+    dropped: u64,
 }
 
 impl PartialEq for CommandLog {
     fn eq(&self, other: &Self) -> bool {
-        self.home == other.home && self.records() == other.records()
+        self.home == other.home
+            && self.dropped == other.dropped
+            && self.records() == other.records()
     }
 }
 
@@ -50,12 +53,22 @@ impl CommandLog {
             home,
             records: Vec::new(),
             start: 0,
+            dropped: 0,
         }
     }
 
     #[must_use]
     pub fn home(&self) -> &Location {
         &self.home
+    }
+
+    #[must_use]
+    pub fn dropped(&self) -> u64 {
+        self.dropped
+    }
+
+    pub(super) fn set_dropped(&mut self, dropped: u64) {
+        self.dropped = dropped;
     }
 
     #[must_use]
@@ -67,6 +80,7 @@ impl CommandLog {
         self.records.push(Record { after_ms, entry });
         if self.records.len() - self.start > Self::LIMIT {
             self.start += 1;
+            self.dropped = self.dropped.saturating_add(1);
         }
         if self.start >= Self::LIMIT {
             self.records.drain(..self.start);

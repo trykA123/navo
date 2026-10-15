@@ -11,6 +11,9 @@ pub(super) fn write(log: &CommandLog) -> String {
         CommandLog::VERSION,
         quote(log.home().as_str())
     );
+    if log.dropped() > 0 {
+        let _ = writeln!(out, "dropped {}", log.dropped());
+    }
     for record in log.records() {
         let _ = write!(out, "+{} ", record.after_ms);
         match &record.entry {
@@ -58,6 +61,13 @@ pub(super) fn read(text: &str) -> Result<CommandLog, LogError> {
         .map_err(at(2))?;
     let mut log = CommandLog::new(home);
     let mut next = 2;
+    if let Some(count) = lines.get(next).and_then(|l| l.strip_prefix("dropped ")) {
+        let dropped = count
+            .parse()
+            .map_err(|_| at(3)(format!("bad dropped count {count:?}")))?;
+        log.set_dropped(dropped);
+        next += 1;
+    }
     while let Some(line) = lines.get(next) {
         let number = next + 1;
         next += 1;

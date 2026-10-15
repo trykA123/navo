@@ -166,3 +166,8 @@ fn many_stars_finish_quickly() {
 fn many_stars_still_reject() {
     assert!(!pat("*a*a*a*a*a*a*b").matches(&"a".repeat(10_000)));
 }
+
+#[test]
+fn final_sigma_matches_its_own_case() {
+    assert!(pat("*Σ").matches("ΑΣ"));
+}

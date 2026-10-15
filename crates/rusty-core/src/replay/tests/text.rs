@@ -262,3 +262,27 @@ fn a_malformed_field_list_names_its_line() {
         Some(4)
     );
 }
+
+#[test]
+fn a_trimmed_log_writes_and_reads_its_dropped_count() {
+    let mut log = CommandLog::new(loc("/home"));
+    for _ in 0..CommandLog::LIMIT + 3 {
+        log.push(1, run(Command::PaneBack));
+    }
+    let text = log.to_text();
+    assert!(text.lines().nth(2) == Some("dropped 3"), "{}", &text[..60]);
+    assert_eq!(CommandLog::parse(&text).map(|l| l.dropped()), Ok(3));
+}
+
+#[test]
+fn a_complete_log_has_no_dropped_line() {
+    assert!(!sample().to_text().contains("\ndropped "));
+}
+
+#[test]
+fn a_bad_dropped_count_names_line_three() {
+    assert_eq!(
+        error_line("ferrite-log 1\nhome \"/h\"\ndropped x\n"),
+        Some(3)
+    );
+}
