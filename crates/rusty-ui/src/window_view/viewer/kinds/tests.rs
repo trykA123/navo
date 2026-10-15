@@ -56,6 +56,19 @@ fn utf16_with_or_without_a_bom_opens_as_text_and_binary_as_hex() {
 }
 
 #[test]
+fn utf16_over_the_edit_limit_opens_as_hex() {
+    for (little, bom) in [(true, true), (false, true), (true, false)] {
+        let bytes = utf16("Some notes, written on Windows.\r\n", little, bom);
+        assert_eq!(
+            first(&bytes, EDIT_LIMIT + 1),
+            ("hex", false),
+            "little {little}, bom {bom}"
+        );
+        assert_eq!(first(&bytes, EDIT_LIMIT), ("text", true));
+    }
+}
+
+#[test]
 fn text_over_16_mb_opens_as_paged_text() {
     assert_eq!(first(b"line\n", EDIT_LIMIT + 1), ("text", false));
     assert_eq!(first(b"line\n", EDIT_LIMIT), ("text", true));

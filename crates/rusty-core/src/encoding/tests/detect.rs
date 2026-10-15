@@ -198,3 +198,63 @@ fn only_the_first_64_kb_feed_the_guess() {
         found(FALLBACK, false, DetectedBy::Fallback)
     );
 }
+
+#[test]
+fn short_utf8_with_a_stray_or_cut_tail_is_still_utf8() {
+    let cases = [
+        ["Grüße aus Köln\n".as_bytes(), &[0xFF]].concat(),
+        ["Notiz: Grüße\n".as_bytes(), &[0xA0]].concat(),
+        [&b"abc"[..], &[0xC3]].concat(),
+    ];
+    for bytes in cases {
+        assert_eq!(
+            detect(&bytes, FALLBACK),
+            found(UTF_8, false, DetectedBy::Guess),
+            "{bytes:?}"
+        );
+    }
+}
+
+#[test]
+fn short_windows_1252_is_not_taken_for_utf8() {
+    let short = bytes_in(WINDOWS_1252, "café naïve");
+    assert_ne!(detect(&short, FALLBACK).encoding, UTF_8);
+    assert_eq!(detect(&short, WINDOWS_1252).encoding, WINDOWS_1252);
+    let longer = bytes_in(
+        WINDOWS_1252,
+        "Un café naïve, une crème brûlée et un gâteau.",
+    );
+    assert_eq!(detect(&longer, FALLBACK).encoding, WINDOWS_1252);
+}
+
+#[test]
+fn a_charset_outside_the_meta_tag_is_ignored() {
+    let text = "<!doctype html>\n<html><head><meta name=\"description\"><title>Use charset=koi8-r here</title></head><body>Привет</body></html>\n";
+    assert_eq!(
+        detect(text.as_bytes(), FALLBACK),
+        found(UTF_8, false, DetectedBy::Utf8)
+    );
+}
+
+#[test]
+fn a_charset_in_a_later_meta_tag_counts() {
+    let text = "<!doctype html>\n<html><head><meta name=\"viewport\" content=\"width=device-width\"><meta charset=\"windows-1251\"><title>Привет</title></head></html>\n";
+    assert_eq!(
+        detect(&bytes_in(WINDOWS_1251, text), FALLBACK),
+        found(WINDOWS_1251, false, DetectedBy::Declaration)
+    );
+}
+
+#[test]
+fn utf8_under_a_single_byte_declaration_is_utf8() {
+    let text = "<?xml version='1.0' encoding='windows-1252'?>\n<menu>café crème</menu>\n";
+    assert_eq!(
+        detect(text.as_bytes(), FALLBACK),
+        found(UTF_8, false, DetectedBy::Utf8)
+    );
+    let ascii = "<?xml version='1.0' encoding='windows-1252'?>\n<menu/>\n";
+    assert_eq!(
+        detect(ascii.as_bytes(), FALLBACK),
+        found(WINDOWS_1252, false, DetectedBy::Declaration)
+    );
+}

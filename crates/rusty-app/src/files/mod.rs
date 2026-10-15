@@ -59,9 +59,10 @@ pub fn read(location: &Location) -> Result<FileText, String> {
     }
     let stamp = stamp_of(&path);
     let decoded = decode(&bytes, code_page::ansi());
+    let crlf = mostly_crlf(decoded.text.as_bytes());
     Ok(FileText {
-        crlf: mostly_crlf(decoded.text.as_bytes()),
-        read_only: !decoded.lossless,
+        crlf,
+        read_only: !decoded.lossless || line_endings(&decoded.text, crlf) != decoded.text,
         text: decoded.text,
         stamp,
         encoding: decoded.encoding,

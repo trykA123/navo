@@ -162,3 +162,60 @@ fn a_utf32_file_is_refused_as_binary() {
     .unwrap();
     assert!(read(&at(&file)).unwrap_err().contains("binary"));
 }
+
+fn noise(len: usize) -> Vec<u8> {
+    let mut state = 0x2545_F491_4F6C_DD1D_u64;
+    (0..len)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state.to_le_bytes()[0]
+        })
+        .collect()
+}
+
+fn read_only_or_binary(name: &str, bytes: &[u8]) {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join(name);
+    fs::write(&file, bytes).unwrap();
+    match read(&at(&file)) {
+        Ok(opened) => assert!(opened.read_only, "{name} opened editable"),
+        Err(message) => assert!(message.contains("binary"), "{message}"),
+    }
+}
+
+#[test]
+fn a_script_with_a_binary_payload_is_not_editable() {
+    let header = "#!/bin/sh\necho installing\n".repeat(400);
+    assert!(header.len() > 8 * 1024);
+    let mut payload = noise(200 * 1024);
+    payload[1000] = 0;
+    payload[1001..1003].copy_from_slice(b"\r\n");
+    let bytes = [header.as_bytes(), &payload].concat();
+    read_only_or_binary("setup.sh", &bytes);
+}
+
+#[test]
+fn bomless_utf16_followed_by_zero_bytes_is_not_editable() {
+    let text = "Some notes, written on Windows.\r\n".repeat(64);
+    let wide: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let bytes = [&wide[..4096], &[0; 4096]].concat();
+    read_only_or_binary("wide.txt", &bytes);
+}
+
+#[test]
+fn mixed_line_endings_open_read_only() {
+    let (_dir, _, opened) = opened("mixed.txt", b"one\r\ntwo\nthree\nfour\n");
+    assert!(opened.read_only);
+}
+
+#[test]
+fn short_near_utf8_opens_read_only_as_utf8() {
+    let (_dir, _, opened) = opened(
+        "koeln.txt",
+        &["Grüße aus Köln\n".as_bytes(), &[0xFF]].concat(),
+    );
+    assert_eq!(opened.encoding.label(), "UTF-8");
+    assert!(opened.read_only);
+}

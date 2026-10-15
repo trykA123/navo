@@ -114,7 +114,9 @@ fn decode_with(bytes: &[u8], encoding: TextEncoding) -> Decoded {
     let body = &bytes[skip..];
     let (text, malformed) = encoding.encoding.decode_without_bom_handling(body);
     let text = text.into_owned();
-    let lossless = !malformed && encode(&text, &encoding).is_ok_and(|again| again == bytes);
+    let lossless = !malformed
+        && !text.contains('\0')
+        && encode(&text, &encoding).is_ok_and(|again| again == bytes);
     Decoded {
         text,
         encoding,
@@ -124,6 +126,12 @@ fn decode_with(bytes: &[u8], encoding: TextEncoding) -> Decoded {
 
 pub fn encode(text: &str, encoding: &TextEncoding) -> Result<Vec<u8>, EncodeError> {
     encode::encode(text, encoding)
+}
+
+#[must_use]
+pub fn is_utf16(head: &[u8]) -> bool {
+    detect::bom(head).is_some_and(|(found, _)| utf16::is_utf16(found))
+        || utf16::by_pattern(head).is_some()
 }
 
 #[must_use]

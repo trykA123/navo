@@ -65,3 +65,10 @@ fn a_chosen_encoding_keeps_and_strips_its_matching_bom() {
         }
     );
 }
+
+#[test]
+fn text_with_a_nul_is_not_lossless() {
+    let decoded = decode(b"#!/bin/sh\necho hi\n\0\x01tail\n", FALLBACK);
+    assert!(decoded.text.contains('\0'));
+    assert!(!decoded.lossless);
+}

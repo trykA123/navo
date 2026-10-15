@@ -59,3 +59,14 @@ fn a_table_of_small_numbers_is_binary_with_or_without_a_bom() {
     assert!(looks_binary(&small_numbers()));
     assert!(looks_binary(&with_bom(&[0xFF, 0xFE], &small_numbers())));
 }
+
+#[test]
+fn bomless_utf16_with_one_nul_unit_is_binary() {
+    let head = [
+        &utf16("Some notes, written on Windows.", true)[..],
+        &[0, 0],
+        &utf16("More notes.", true),
+    ]
+    .concat();
+    assert!(looks_binary(&head));
+}
