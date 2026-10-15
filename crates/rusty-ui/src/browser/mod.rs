@@ -9,7 +9,7 @@ use rusty_core::{
 };
 use rusty_fs::{
     EntryKind, FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps,
-    folder_size, load_folder, volume_of,
+    load_folder, volume_of,
 };
 
 pub use naming::NameProblem;
@@ -26,16 +26,9 @@ struct Loaded {
     result: Result<FolderSnapshot, FsError>,
 }
 
-struct Measured {
-    tab: TabId,
-    folder: Location,
-    name: String,
-    bytes: u64,
-}
-
 enum Message {
     Loaded(Loaded),
-    Measured(Measured),
+    Measured(measure::Measured),
     Job(JobUpdate),
     Named(naming::Named),
 }
@@ -71,6 +64,7 @@ pub struct Browser {
     ended: Vec<u64>,
     filters: HashMap<TabId, filter::Filter>,
     full: HashMap<TabId, filter::Full>,
+    sorts: HashMap<TabId, crate::file_list::SortKey>,
     next_op: u64,
     launcher: Launcher,
 }
@@ -104,6 +98,7 @@ impl Browser {
             ended: Vec::new(),
             filters: HashMap::new(),
             full: HashMap::new(),
+            sorts: HashMap::new(),
             next_op: 0,
             launcher: Arc::new(|_| {}),
         }
@@ -269,66 +264,6 @@ impl Browser {
         );
     }
 
-    fn measure(&mut self, tab: TabId, folder: Location, name: String) {
-        let Ok(target) = folder.join(&ProviderPath::from_text(&name)) else {
-            return;
-        };
-        let (provider, sender, wake) = (
-            Arc::clone(&self.provider),
-            self.sender.clone(),
-            Arc::clone(&self.wake),
-        );
-        let slot = JobSlot {
-            volume: volume_of(&target),
-            priority: Priority::Idle,
-            owner: self.sizes_owner.id(),
-        };
-        self.in_flight += 1;
-        self.sizes.submit(
-            slot,
-            Box::new(move |cancel| {
-                let bytes = folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes);
-                let _ = sender.send(Message::Measured(Measured {
-                    tab,
-                    folder,
-                    name,
-                    bytes,
-                }));
-                wake();
-            }),
-        );
-    }
-
-    fn accept_size(&mut self, measured: &Measured) -> bool {
-        let here = self
-            .state
-            .tab(measured.tab)
-            .is_some_and(|tab| tab.location() == &measured.folder);
-        if !here {
-            return false;
-        }
-        self.remember_size(measured.tab, &measured.name, measured.bytes);
-        let Some(tab) = self.state.tab(measured.tab) else {
-            return false;
-        };
-        let Some(row) = tab
-            .listing()
-            .and_then(|l| l.entries().iter().position(|e| e.name == measured.name))
-        else {
-            return false;
-        };
-        let Some(details) = self.details.get(&measured.tab) else {
-            return false;
-        };
-        let mut rows = details.to_vec();
-        let Some(entry) = rows.get_mut(row) else {
-            return false;
-        };
-        entry.size = measured.bytes;
-        self.details.insert(measured.tab, rows.into());
-        true
-    }
-
     fn accept(&mut self, loaded: Loaded) -> bool {
         let Loaded {
             tab,
@@ -353,6 +288,7 @@ impl Browser {
                     listing: snapshot.listing,
                     details: snapshot.details.into(),
                 };
+                let full = self.sort_full(tab, full);
                 let (listing, details) = self.narrow(tab, &location, full);
                 self.details.insert(tab, details);
                 listing
@@ -392,7 +328,9 @@ impl Browser {
 }
 
 mod filter;
+mod measure;
 mod naming;
 mod operate;
+mod sort;
 #[cfg(test)]
 mod tests;

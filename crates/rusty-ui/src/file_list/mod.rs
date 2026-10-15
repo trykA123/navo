@@ -1,6 +1,8 @@
+mod header;
 mod keys;
 mod kind;
 mod row;
+mod sort;
 
 #[cfg(test)]
 mod tests;
@@ -19,6 +21,7 @@ use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
 
 pub use keys::bind_keys;
+pub use sort::{SortBy, SortKey};
 
 use crate::primitives::{ListScroll, RowSemantics, VirtualList};
 use crate::tokens::{self, Theme};
@@ -45,6 +48,7 @@ pub enum FileListAction {
     Rename(u64),
     NewFolder,
     SelectPattern { add: bool },
+    Sort(SortBy),
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +59,7 @@ pub struct FileListProps {
     pub marked: Rc<Selection>,
     pub is_active: bool,
     pub filter: Option<SharedString>,
+    pub sort: SortKey,
 }
 
 #[derive(IntoElement)]
@@ -384,7 +389,7 @@ impl RenderOnce for FileList {
             .when_some(ctx.props.filter.clone(), |list, text| {
                 list.child(row::filter_bar(&t, text, len))
             })
-            .child(row::header(&t))
+            .child(header::header(&t, ctx.props.sort, &ctx))
             .child(area)
     }
 }

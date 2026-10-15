@@ -104,7 +104,7 @@ impl Browser {
         }
     }
 
-    fn set_filter(&mut self, tab: TabId, text: String) -> bool {
+    pub(super) fn set_filter(&mut self, tab: TabId, text: String) -> bool {
         let Some(t) = self.state.tab(tab) else {
             return false;
         };

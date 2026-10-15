@@ -21,11 +21,11 @@ pub(super) struct RowLook<'a> {
     pub is_active_pane: bool,
 }
 
-fn ext_column(t: &Theme) -> Pixels {
+pub(super) fn ext_column(t: &Theme) -> Pixels {
     t.spacing.xxl * 3.
 }
 
-fn date_column(t: &Theme) -> Pixels {
+pub(super) fn date_column(t: &Theme) -> Pixels {
     t.spacing.date_column + t.spacing.xl
 }
 
@@ -39,7 +39,7 @@ fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
     }]
 }
 
-fn columns(t: &Theme) -> Div {
+pub(super) fn columns(t: &Theme) -> Div {
     div()
         .flex()
         .items_center()
@@ -57,32 +57,6 @@ fn right_cell(width: Pixels, text: impl Into<SharedString>) -> Div {
         .justify_end()
         .overflow_hidden()
         .child(text.into())
-}
-
-pub(super) fn header(t: &Theme) -> Div {
-    let c = &t.colors;
-    columns(t)
-        .flex_none()
-        .h(t.spacing.row_height)
-        .text_size(t.typography.tiny)
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(c.muted)
-        .bg(c.rail)
-        .border_t_1()
-        .border_b_1()
-        .border_color(c.line)
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(t.spacing.xs)
-                .flex_1()
-                .child("Name")
-                .child(icon(IconName::ArrowUp, px(10.), c.accent_text)),
-        )
-        .child(div().w(ext_column(t)).flex_none().child("Ext"))
-        .child(right_cell(t.spacing.size_column, "Size"))
-        .child(right_cell(date_column(t), "Date"))
 }
 
 fn name_cell(look: &RowLook, name: &str, extension: &str) -> Div {

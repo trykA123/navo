@@ -336,3 +336,43 @@ fn plus_minus_and_star_go_to_an_active_filter(cx: &mut TestAppContext) {
     );
     assert_eq!(commands(&harness, cx), []);
 }
+
+#[gpui_kit::test]
+fn ctrl_f3_to_f6_sort_by_name_ext_date_and_size(cx: &mut TestAppContext) {
+    use crate::file_list::SortBy;
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        for key in ["ctrl-f3", "ctrl-f4", "ctrl-f5", "ctrl-f6"] {
+            window.press(key, cx);
+        }
+    })
+    .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [
+            FileListAction::Sort(SortBy::Name),
+            FileListAction::Sort(SortBy::Ext),
+            FileListAction::Sort(SortBy::Date),
+            FileListAction::Sort(SortBy::Size),
+        ]
+    );
+}
+
+#[gpui_kit::test]
+fn a_header_click_sorts_by_that_column(cx: &mut TestAppContext) {
+    use crate::file_list::SortBy;
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("left").click(("sort", 2usize), cx);
+        window.within("left").click(("sort", 3usize), cx);
+    })
+    .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [
+            FileListAction::Sort(SortBy::Size),
+            FileListAction::Sort(SortBy::Date),
+        ]
+    );
+}

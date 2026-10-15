@@ -354,3 +354,15 @@ fn an_empty_pattern_keeps_the_prompt_open(cx: &mut TestAppContext) {
     press(cx, window, &view, "enter");
     assert!(prompt_open(cx, &view));
 }
+
+#[gpui_kit::test]
+fn ctrl_f6_sorts_the_pane_by_size(cx: &mut TestAppContext) {
+    use crate::file_list::SortBy;
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "ctrl-f6");
+    let tab = view.read_with(cx, |view, _| view.browser.state().active_tab().id());
+    let key = view.read_with(cx, |view, _| view.browser.sort_key(tab));
+    assert_eq!(key.by, SortBy::Size);
+}

@@ -86,7 +86,8 @@ impl PanePage {
             | FileListAction::Filter(_)
             | FileListAction::Rename(_)
             | FileListAction::NewFolder
-            | FileListAction::SelectPattern { .. } => None,
+            | FileListAction::SelectPattern { .. }
+            | FileListAction::Sort(_) => None,
         };
         if let Some(location) = target {
             self.run(&Command::PaneNavigate { location });
@@ -111,6 +112,7 @@ impl PanePage {
             marked: Rc::new(tab.selection().clone()),
             is_active: true,
             filter: None,
+            sort: rusty_ui::file_list::SortKey::default(),
         }
     }
 

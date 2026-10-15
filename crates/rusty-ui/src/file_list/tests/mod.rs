@@ -55,6 +55,7 @@ pub(super) fn props(rows: Rc<[FsEntry]>) -> FileListProps {
         marked: Rc::new(Selection::new(len)),
         is_active: true,
         filter: None,
+        sort: crate::file_list::SortKey::default(),
     }
 }
 

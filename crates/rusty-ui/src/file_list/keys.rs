@@ -6,7 +6,7 @@ use gpui_kit::{
 };
 use rusty_core::{Command, CursorMove, OpKind};
 
-use super::{FileListAction, ListContext};
+use super::{FileListAction, ListContext, SortBy};
 
 pub(super) const CONTEXT: &str = "FileList";
 
@@ -36,6 +36,10 @@ gpui_kit::actions!(
         MarkPattern,
         UnmarkPattern,
         InvertMarks,
+        SortName,
+        SortExt,
+        SortDate,
+        SortSize,
     ]
 );
 
@@ -68,6 +72,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("+", MarkPattern, context),
         KeyBinding::new("-", UnmarkPattern, context),
         KeyBinding::new("*", InvertMarks, context),
+        KeyBinding::new("ctrl-f3", SortName, context),
+        KeyBinding::new("ctrl-f4", SortExt, context),
+        KeyBinding::new("ctrl-f5", SortDate, context),
+        KeyBinding::new("ctrl-f6", SortSize, context),
     ]);
 }
 
@@ -84,6 +92,14 @@ fn move_to<A: Action>(
     to: CursorMove,
 ) -> impl Fn(&A, &mut Window, &mut App) + 'static {
     send(ctx, Command::PaneCursorMove { to })
+}
+
+fn sort<A: Action>(
+    ctx: &Rc<ListContext>,
+    by: SortBy,
+) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    let ctx = ctx.clone();
+    move |_, window, cx| ctx.act(FileListAction::Sort(by), window, cx)
 }
 
 fn mark<A: Action>(
@@ -106,7 +122,8 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
     let open = ctx.clone();
     let up = ctx.clone();
     let switch = ctx.clone();
-    root.on_action(move_to::<CursorUp>(ctx, CursorMove::Up))
+    let root = root
+        .on_action(move_to::<CursorUp>(ctx, CursorMove::Up))
         .on_action(move_to::<CursorDown>(ctx, CursorMove::Down))
         .on_action(move_to::<PageUp>(ctx, CursorMove::PageUp))
         .on_action(move_to::<PageDown>(ctx, CursorMove::PageDown))
@@ -126,32 +143,40 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
         .on_action({
             let ctx = ctx.clone();
             move |_: &ClearFilter, window, cx| ctx.clear_filter(window, cx)
-        })
-        .on_action({
-            let ctx = ctx.clone();
-            move |_: &RenameItem, window, cx| ctx.rename_cursor(window, cx)
-        })
-        .on_action({
-            let ctx = ctx.clone();
-            move |_: &NewFolder, window, cx| ctx.act(FileListAction::NewFolder, window, cx)
-        })
-        .on_action(mark::<MarkPattern>(ctx, '+'))
-        .on_action(mark::<UnmarkPattern>(ctx, '-'))
-        .on_action(mark::<InvertMarks>(ctx, '*'))
-        .on_key_down({
-            let ctx = ctx.clone();
-            move |event, window, cx| ctx.type_key(event, window, cx)
-        })
-        .on_action(send::<GoBack>(ctx, Command::PaneBack))
-        .on_action(send::<GoForward>(ctx, Command::PaneForward))
-        .on_mouse_down(side_button(NavigationDirection::Back), {
-            let ctx = ctx.clone();
-            move |_, window, cx| ctx.send(Command::PaneBack, window, cx)
-        })
-        .on_mouse_down(side_button(NavigationDirection::Forward), {
-            let ctx = ctx.clone();
-            move |_, window, cx| ctx.send(Command::PaneForward, window, cx)
-        })
+        });
+    register_more(root, ctx)
+}
+
+fn register_more(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
+    root.on_action({
+        let ctx = ctx.clone();
+        move |_: &RenameItem, window, cx| ctx.rename_cursor(window, cx)
+    })
+    .on_action({
+        let ctx = ctx.clone();
+        move |_: &NewFolder, window, cx| ctx.act(FileListAction::NewFolder, window, cx)
+    })
+    .on_action(sort::<SortName>(ctx, SortBy::Name))
+    .on_action(sort::<SortExt>(ctx, SortBy::Ext))
+    .on_action(sort::<SortDate>(ctx, SortBy::Date))
+    .on_action(sort::<SortSize>(ctx, SortBy::Size))
+    .on_action(mark::<MarkPattern>(ctx, '+'))
+    .on_action(mark::<UnmarkPattern>(ctx, '-'))
+    .on_action(mark::<InvertMarks>(ctx, '*'))
+    .on_key_down({
+        let ctx = ctx.clone();
+        move |event, window, cx| ctx.type_key(event, window, cx)
+    })
+    .on_action(send::<GoBack>(ctx, Command::PaneBack))
+    .on_action(send::<GoForward>(ctx, Command::PaneForward))
+    .on_mouse_down(side_button(NavigationDirection::Back), {
+        let ctx = ctx.clone();
+        move |_, window, cx| ctx.send(Command::PaneBack, window, cx)
+    })
+    .on_mouse_down(side_button(NavigationDirection::Forward), {
+        let ctx = ctx.clone();
+        move |_, window, cx| ctx.send(Command::PaneForward, window, cx)
+    })
 }
 
 fn side_button(direction: NavigationDirection) -> MouseButton {

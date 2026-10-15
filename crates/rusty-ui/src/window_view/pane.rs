@@ -59,6 +59,7 @@ impl FerriteWindow {
                 .browser
                 .filter_text(tab.id())
                 .map(|text| text.to_owned().into()),
+            sort: self.browser.sort_key(tab.id()),
         };
         let focus = self.handle(pane, cx);
         let _ = window;
@@ -151,6 +152,9 @@ impl FerriteWindow {
                         FileListAction::Rename(row) => this.ask_rename(*row),
                         FileListAction::NewFolder => this.ask_new_folder(),
                         FileListAction::SelectPattern { add } => this.ask_pattern(*add),
+                        FileListAction::Sort(by) => {
+                            this.browser.sort_by(*by);
+                        }
                     }
                     this.focus_core_pane(window, cx);
                     cx.notify();
