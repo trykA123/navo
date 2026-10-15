@@ -53,6 +53,10 @@ impl Window {
         self.pane(id).is_some()
     }
 
+    pub(super) fn panes_mut(&mut self) -> impl Iterator<Item = &mut Pane> {
+        std::iter::once(&mut self.focused).chain(self.others.values_mut())
+    }
+
     pub(super) fn focused_pane(&self) -> &Pane {
         &self.focused
     }

@@ -110,6 +110,10 @@ impl Tab {
         self.view.cursor = self.clamp(row);
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "scrolling arrives with the pane view in P7")
+    )]
     pub(crate) fn set_scroll(&mut self, row: u64) {
         self.view.scroll = self.clamp(row);
     }

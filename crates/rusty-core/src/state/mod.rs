@@ -1,8 +1,3 @@
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the mutators get their caller, apply(), in C10")
-)]
-
 mod history;
 mod listing;
 mod pane;
@@ -101,6 +96,14 @@ impl AppState {
         self.focused.focused_pane_mut()
     }
 
+    pub(crate) fn pane_mut(&mut self, id: PaneId) -> Option<&mut Pane> {
+        self.panes_mut().find(|p| p.id() == id)
+    }
+
+    pub(crate) fn tab_mut(&mut self, id: TabId) -> Option<&mut Tab> {
+        self.panes_mut().find_map(|p| p.tab_mut(id))
+    }
+
     pub(crate) fn new_tab(&mut self, location: Location) -> Tab {
         Tab::new(TabId::new(self.take_ids(1)), location)
     }
@@ -131,6 +134,10 @@ impl AppState {
         self.focused.focus_direction(direction)
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "window commands arrive with P7")
+    )]
     pub(crate) fn open_window(&mut self, location: Location) -> WindowId {
         let first = self.take_ids(3);
         let id = WindowId::new(first);
@@ -140,6 +147,10 @@ impl AppState {
         id
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "window commands arrive with P7")
+    )]
     pub(crate) fn close_window(&mut self, id: WindowId) -> Result<(), StateError> {
         if self.window(id).is_none() {
             return Err(StateError::UnknownWindow(id));
@@ -152,6 +163,10 @@ impl AppState {
         Ok(())
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "window commands arrive with P7")
+    )]
     pub(crate) fn focus_window(&mut self, id: WindowId) -> Result<(), StateError> {
         if id == self.focused.id() {
             return Ok(());
@@ -163,6 +178,12 @@ impl AppState {
         let old = std::mem::replace(&mut self.focused, window);
         self.others.insert(old.id(), old);
         Ok(())
+    }
+
+    fn panes_mut(&mut self) -> impl Iterator<Item = &mut Pane> {
+        std::iter::once(&mut self.focused)
+            .chain(self.others.values_mut())
+            .flat_map(Window::panes_mut)
     }
 
     fn windows(&self) -> impl Iterator<Item = &Window> {
