@@ -1,6 +1,9 @@
 mod convert;
 
-use serde::{Deserialize, Serialize};
+use std::cell::Cell;
+
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::AppState;
 
@@ -19,7 +22,7 @@ pub struct WindowState {
     pub panes: Vec<PaneState>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum LayoutState {
     Pane(u64),
     Split {
@@ -28,6 +31,65 @@ pub enum LayoutState {
         first: Box<LayoutState>,
         second: Box<LayoutState>,
     },
+}
+
+pub const MAX_LAYOUT_DEPTH: usize = 64;
+
+#[derive(Deserialize)]
+#[serde(rename = "LayoutState")]
+enum LayoutRepr {
+    Pane(u64),
+    Split {
+        side_by_side: bool,
+        ratio: u16,
+        first: Box<LayoutState>,
+        second: Box<LayoutState>,
+    },
+}
+
+thread_local! {
+    static LAYOUT_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+struct DepthGuard;
+
+impl DepthGuard {
+    fn enter() -> Option<Self> {
+        LAYOUT_DEPTH.with(|depth| {
+            let now = depth.get();
+            (now < MAX_LAYOUT_DEPTH).then(|| {
+                depth.set(now + 1);
+                Self
+            })
+        })
+    }
+}
+
+impl Drop for DepthGuard {
+    fn drop(&mut self) {
+        LAYOUT_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    }
+}
+
+impl<'de> Deserialize<'de> for LayoutState {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let _guard =
+            DepthGuard::enter().ok_or_else(|| D::Error::custom("layout is nested too deeply"))?;
+        Ok(match LayoutRepr::deserialize(deserializer)? {
+            LayoutRepr::Pane(id) => Self::Pane(id),
+            LayoutRepr::Split {
+                side_by_side,
+                ratio,
+                first,
+                second,
+            } => Self::Split {
+                side_by_side,
+                ratio,
+                first,
+                second,
+            },
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

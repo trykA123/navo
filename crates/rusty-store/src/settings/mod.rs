@@ -27,6 +27,8 @@ pub enum SettingsError {
     },
     #[error("the settings file on disk is invalid; fix it before saving")]
     FileInvalid,
+    #[error("the settings file changed on disk; reload it before saving")]
+    FileChanged,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -39,6 +41,7 @@ pub struct LoadReport {
 pub struct SettingsStore {
     path: PathBuf,
     current: Settings,
+    on_disk: Option<String>,
 }
 
 impl SettingsStore {
@@ -46,6 +49,7 @@ impl SettingsStore {
         let mut store = Self {
             path: path.to_owned(),
             current: Settings::default(),
+            on_disk: None,
         };
         let report = store.reload();
         (store, report)
@@ -57,25 +61,33 @@ impl SettingsStore {
     }
 
     pub fn reload(&mut self) -> LoadReport {
-        match read(&self.path).and_then(|text| text.map(|t| parse(&t)).transpose()) {
-            Ok(None) => LoadReport::default(),
-            Ok(Some((settings, unknown_keys))) => {
+        let text = match read(&self.path) {
+            Ok(text) => text,
+            Err(error) => return failed(error),
+        };
+        let Some(text) = text else {
+            self.on_disk = None;
+            return LoadReport::default();
+        };
+        match parse(&text) {
+            Ok((settings, unknown_keys)) => {
                 self.current = settings;
+                self.on_disk = Some(text);
                 LoadReport {
                     unknown_keys,
                     error: None,
                 }
             }
-            Err(error) => LoadReport {
-                unknown_keys: Vec::new(),
-                error: Some(error),
-            },
+            Err(error) => failed(error),
         }
     }
 
     pub fn save(&mut self, settings: Settings) -> Result<(), SettingsError> {
         if let Some(text) = read(&self.path)? {
             parse(&text).map_err(|_| SettingsError::FileInvalid)?;
+            if self.on_disk.as_deref() != Some(text.as_str()) {
+                return Err(SettingsError::FileChanged);
+            }
         }
         let text = parse::try_to_toml(&settings).map_err(|e| SettingsError::Io {
             kind: io::ErrorKind::InvalidData,
@@ -83,7 +95,15 @@ impl SettingsStore {
         })?;
         write_atomic(&self.path, text.as_bytes()).map_err(io_error)?;
         self.current = settings;
+        self.on_disk = Some(text);
         Ok(())
+    }
+}
+
+fn failed(error: SettingsError) -> LoadReport {
+    LoadReport {
+        unknown_keys: Vec::new(),
+        error: Some(error),
     }
 }
 

@@ -1,6 +1,11 @@
 use std::path::Path;
 
-use rusqlite::Connection;
+use std::time::Duration;
+
+use rusqlite::config::DbConfig;
+use rusqlite::{Connection, TransactionBehavior};
+
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 mod migrations;
 
@@ -31,9 +36,10 @@ impl Db {
     pub const VERSION: u32 = MIGRATIONS.len() as u32;
 
     pub fn open(path: &Path, unclean_exit: bool) -> Result<(Self, OpenReport), DbError> {
-        let mut db = Self {
-            conn: Connection::open(path)?,
-        };
+        let conn = Connection::open(path)?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true)?;
+        let mut db = Self { conn };
         let from_version = db.version()?;
         if from_version > Self::VERSION {
             return Err(DbError::TooNew {
@@ -44,6 +50,8 @@ impl Db {
         if unclean_exit {
             db.check_integrity()?;
         }
+        db.conn
+            .set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, false)?;
         db.configure()?;
         db.migrate(from_version)?;
         let report = OpenReport {
@@ -90,19 +98,22 @@ impl Db {
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;
-             PRAGMA busy_timeout = 5000;",
+",
         )?;
         Ok(())
     }
 
-    fn migrate(&mut self, from_version: u32) -> Result<(), DbError> {
-        for (version, sql) in (1..=Self::VERSION)
-            .zip(MIGRATIONS)
-            .skip(from_version as usize)
-        {
-            let transaction = self.conn.transaction()?;
-            transaction.execute_batch(sql)?;
-            transaction.pragma_update(None, "user_version", version)?;
+    fn migrate(&mut self, _from_version: u32) -> Result<(), DbError> {
+        for (version, sql) in (1..=Self::VERSION).zip(MIGRATIONS) {
+            let transaction = self
+                .conn
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current: u32 =
+                transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
+            if current < version {
+                transaction.execute_batch(sql)?;
+                transaction.pragma_update(None, "user_version", version)?;
+            }
             transaction.commit()?;
         }
         Ok(())

@@ -19,8 +19,10 @@ pub(super) fn open(path: &Path) -> Result<(Connection, CacheOpen), CacheError> {
         Err(error) => return Err(error.into()),
         Ok(_) => {}
     }
-    if let Ok(conn) = open_checked(path) {
-        return Ok((conn, CacheOpen::Opened));
+    match open_checked(path) {
+        Ok(conn) => return Ok((conn, CacheOpen::Opened)),
+        Err(error) if !is_corruption(&error) => return Err(error.into()),
+        Err(_) => {}
     }
     let moved_to = quarantine(path)?;
     Ok((Connection::open(path)?, CacheOpen::Recreated { moved_to }))
@@ -32,6 +34,13 @@ fn open_checked(path: &Path) -> Result<Connection, rusqlite::Error> {
     check_integrity(&conn)?;
     conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, false)?;
     Ok(conn)
+}
+
+fn is_corruption(error: &rusqlite::Error) -> bool {
+    matches!(
+        error.sqlite_error_code(),
+        Some(rusqlite::ErrorCode::NotADatabase | rusqlite::ErrorCode::DatabaseCorrupt)
+    )
 }
 
 fn check_integrity(conn: &Connection) -> Result<(), rusqlite::Error> {

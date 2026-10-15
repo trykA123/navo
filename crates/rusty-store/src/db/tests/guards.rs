@@ -89,3 +89,29 @@ fn unclean_exit_leaves_a_corrupt_file_unchanged() {
     let _ = Db::open(&path, true);
     assert_eq!(fs::read(&path).unwrap(), before);
 }
+
+fn leave_hot_wal(path: &Path, version: u32) {
+    let conn = Connection::open(path).unwrap();
+    conn.execute_batch("PRAGMA journal_mode = WAL; CREATE TABLE t(x);")
+        .unwrap();
+    conn.set_db_config(
+        rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+        true,
+    )
+    .unwrap();
+    conn.execute_batch(&format!(
+        "INSERT INTO t VALUES (randomblob(50000)); PRAGMA user_version = {version};"
+    ))
+    .unwrap();
+}
+
+#[test]
+fn too_new_file_with_a_hot_wal_is_not_checkpointed() {
+    let dir = tmp();
+    let path = db_path(&dir);
+    leave_hot_wal(&path, Db::VERSION + 1);
+    let wal = path.with_extension("db-wal");
+    let before = (fs::read(&path).unwrap(), fs::read(&wal).unwrap());
+    assert!(Db::open(&path, false).is_err());
+    assert_eq!((fs::read(&path).unwrap(), fs::read(&wal).unwrap()), before);
+}

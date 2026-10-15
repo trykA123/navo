@@ -30,8 +30,12 @@ pub enum SessionSource {
 }
 
 const HEADER_LEN: usize = 16 + 2 + 4 + 4;
+const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
 pub fn write_session(path: &Path, session: &SessionState) -> Result<(), SessionFileError> {
+    if path.exists() && read_session_file(path).is_err() {
+        fs::remove_file(path)?;
+    }
     let body =
         postcard::to_allocvec(session).map_err(|e| SessionFileError::Decode(e.to_string()))?;
     let len = u32::try_from(body.len())
@@ -47,6 +51,11 @@ pub fn write_session(path: &Path, session: &SessionState) -> Result<(), SessionF
 }
 
 pub fn read_session_file(path: &Path) -> Result<SessionState, SessionFileError> {
+    if fs::metadata(path)?.len() > MAX_FILE_BYTES {
+        return Err(SessionFileError::Decode(
+            "session file is too large".to_owned(),
+        ));
+    }
     let bytes = fs::read(path)?;
     let (header, body) = bytes
         .split_at_checked(HEADER_LEN)

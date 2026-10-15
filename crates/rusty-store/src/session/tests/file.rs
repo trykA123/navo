@@ -97,3 +97,52 @@ fn missing_file_is_io_not_found() {
     let result = read_session_file(&session_file(&dir));
     assert!(result.as_ref().is_err_and(not_found), "{result:?}");
 }
+
+fn nested(depth: usize) -> rusty_core::LayoutState {
+    (0..depth).fold(rusty_core::LayoutState::Pane(1), |inner, _| {
+        rusty_core::LayoutState::Split {
+            side_by_side: true,
+            ratio: 500,
+            first: Box::new(inner),
+            second: Box::new(rusty_core::LayoutState::Pane(2)),
+        }
+    })
+}
+
+#[test]
+fn a_layout_nested_past_the_limit_is_a_decode_error() {
+    let dir = tmp();
+    let path = dir.path().join("session.bin");
+    let mut session =
+        rusty_core::AppState::new(rusty_core::Location::new("/home").unwrap()).to_session(10);
+    session.windows[0].layout = nested(rusty_core::MAX_LAYOUT_DEPTH + 5);
+    write_session(&path, &session).unwrap();
+    assert!(matches!(
+        read_session_file(&path),
+        Err(SessionFileError::Decode(_))
+    ));
+}
+
+#[test]
+fn a_layout_at_the_depth_limit_still_decodes() {
+    let dir = tmp();
+    let path = dir.path().join("session.bin");
+    let mut session =
+        rusty_core::AppState::new(rusty_core::Location::new("/home").unwrap()).to_session(10);
+    session.windows[0].layout = nested(rusty_core::MAX_LAYOUT_DEPTH - 1);
+    write_session(&path, &session).unwrap();
+    assert!(read_session_file(&path).is_ok());
+}
+
+#[test]
+fn writing_after_a_backup_load_keeps_the_good_backup() {
+    let dir = tmp();
+    let path = dir.path().join("session.bin");
+    let session =
+        rusty_core::AppState::new(rusty_core::Location::new("/home").unwrap()).to_session(10);
+    write_session(&path, &session).unwrap();
+    write_session(&path, &session).unwrap();
+    std::fs::write(&path, b"garbage").unwrap();
+    write_session(&path, &session).unwrap();
+    assert!(read_session_file(&crate::backup_path(&path)).is_ok());
+}
