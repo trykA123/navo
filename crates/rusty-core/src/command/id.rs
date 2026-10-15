@@ -69,8 +69,8 @@ impl CommandId {
     }
 
     #[must_use]
-    pub fn from_name(_name: &str) -> Option<Self> {
-        todo!()
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|id| id.as_str() == name)
     }
 }
 
