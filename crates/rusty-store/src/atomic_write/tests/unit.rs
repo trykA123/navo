@@ -119,3 +119,47 @@ fn backup_path_keeps_every_dot_in_the_name() {
         Path::new("/cfg/session.v2.bin.bak")
     );
 }
+
+#[test]
+fn concurrent_writers_never_empty_the_target_or_the_backup() {
+    let dir = tmp();
+    let target = dir.path().join("session.bin");
+    fs::write(&target, b"seed").unwrap();
+    let writers: Vec<_> = (b'a'..=b'h')
+        .map(|letter| {
+            let target = target.clone();
+            std::thread::spawn(move || {
+                let bytes = [letter; 8];
+                for _ in 0..300 {
+                    let _ = write_atomic(&target, &bytes);
+                    let now = fs::read(&target).unwrap_or_default();
+                    assert!(!now.is_empty(), "target was emptied");
+                }
+            })
+        })
+        .collect();
+    for writer in writers {
+        writer.join().unwrap();
+    }
+    assert_eq!(fs::read(&target).unwrap().len(), 8);
+    assert!(!fs::read(backup_path(&target)).unwrap().is_empty());
+    assert_eq!(temp_files(dir.path()), Vec::<String>::new());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_target_keeps_its_link_and_updates_the_file() {
+    let dir = tmp();
+    let real = dir.path().join("real.toml");
+    let link = dir.path().join("ferrite.toml");
+    fs::write(&real, b"old").unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    write_atomic(&link, b"new").unwrap();
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read(&real).unwrap(), b"new");
+}

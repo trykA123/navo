@@ -63,6 +63,19 @@ impl Tab {
         }
     }
 
+    pub(crate) fn restore(
+        id: TabId,
+        location: Location,
+        history: History,
+        view: ViewState,
+    ) -> Self {
+        Self {
+            view,
+            history,
+            ..Self::new(id, location)
+        }
+    }
+
     pub(crate) fn navigate(&mut self, location: Location) {
         let previous = self.leave(location);
         self.history.push(previous);

@@ -199,3 +199,33 @@ fn save_to_an_unreadable_path_is_an_io_error() {
         Err(SettingsError::Io { .. })
     ));
 }
+
+#[test]
+fn save_refuses_a_valid_edit_made_after_the_load() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let (mut store, _) = SettingsStore::load(&path);
+    let edit = "# my comment\n[appearance]\nfont-size = 15\n";
+    write(&path, edit);
+    assert_eq!(store.save(dark_mode()), Err(SettingsError::FileChanged));
+    assert_eq!(fs::read_to_string(&path).unwrap(), edit);
+}
+
+#[test]
+fn save_after_reloading_the_edit_succeeds() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let (mut store, _) = SettingsStore::load(&path);
+    write(&path, "[appearance]\nfont-size = 15\n");
+    store.reload();
+    assert_eq!(store.save(dark_mode()), Ok(()));
+}
+
+#[test]
+fn consecutive_saves_do_not_count_as_edits() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(dark_mode()).unwrap();
+    assert_eq!(store.save(Settings::default()), Ok(()));
+}

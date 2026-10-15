@@ -96,6 +96,27 @@ impl AppState {
         self.focused.focused_pane_mut()
     }
 
+    pub(crate) fn restore(
+        windows: Vec<Window>,
+        focused: WindowId,
+        next_id: u64,
+    ) -> Result<Self, String> {
+        let mut others: BTreeMap<WindowId, Window> =
+            windows.into_iter().map(|w| (w.id(), w)).collect();
+        let focused = others
+            .remove(&focused)
+            .ok_or_else(|| format!("focused window {} does not exist", focused.get()))?;
+        Ok(Self {
+            focused,
+            others,
+            next_id,
+        })
+    }
+
+    pub(crate) fn next_id(&self) -> u64 {
+        self.next_id
+    }
+
     pub(crate) fn pane_mut(&mut self, id: PaneId) -> Option<&mut Pane> {
         self.panes_mut().find(|p| p.id() == id)
     }

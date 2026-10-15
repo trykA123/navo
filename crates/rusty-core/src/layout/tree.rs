@@ -1,4 +1,5 @@
 use crate::PaneId;
+use crate::session::LayoutState;
 
 pub(super) const MIN_RATIO: u16 = 100;
 pub(super) const MAX_RATIO: u16 = 900;
@@ -138,6 +139,52 @@ impl Node {
             } else {
                 ratio.saturating_sub(delta).max(MIN_RATIO)
             };
+        }
+    }
+
+    pub(super) fn to_state(&self) -> LayoutState {
+        match self {
+            Self::Leaf(pane) => LayoutState::Pane(pane.get()),
+            Self::Split {
+                axis,
+                ratio,
+                first,
+                second,
+            } => LayoutState::Split {
+                side_by_side: *axis == Axis::SideBySide,
+                ratio: *ratio,
+                first: Box::new(first.to_state()),
+                second: Box::new(second.to_state()),
+            },
+        }
+    }
+
+    pub(super) fn from_state(state: &LayoutState) -> Result<Self, String> {
+        match state {
+            LayoutState::Pane(id) => Ok(Self::Leaf(PaneId::new(*id))),
+            LayoutState::Split {
+                side_by_side,
+                ratio,
+                first,
+                second,
+            } => {
+                if !(MIN_RATIO..=MAX_RATIO).contains(ratio) {
+                    return Err(format!(
+                        "split ratio {ratio} is outside {MIN_RATIO}..={MAX_RATIO}"
+                    ));
+                }
+                let axis = if *side_by_side {
+                    Axis::SideBySide
+                } else {
+                    Axis::Stacked
+                };
+                Ok(Self::Split {
+                    axis,
+                    ratio: *ratio,
+                    first: Box::new(Self::from_state(first)?),
+                    second: Box::new(Self::from_state(second)?),
+                })
+            }
         }
     }
 }

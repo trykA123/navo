@@ -1,6 +1,7 @@
 mod geometry;
 mod tree;
 
+use crate::session::LayoutState;
 use crate::{Direction, PaneId};
 use tree::{Axis, Node, Side};
 
@@ -165,6 +166,29 @@ impl Layout {
             .ok_or(LayoutError::NoSplitToResize(direction))?;
         split.shift_ratio(grows_first(direction), delta);
         Ok(())
+    }
+
+    pub(crate) fn to_state(&self) -> LayoutState {
+        self.root.to_state()
+    }
+
+    pub(crate) fn from_state(state: &LayoutState, focused: PaneId) -> Result<Self, String> {
+        let layout = Self {
+            root: Node::from_state(state)?,
+            focused,
+        };
+        let mut panes = layout.panes();
+        if !panes.contains(&focused) {
+            return Err(format!(
+                "focused pane {} is not in the layout",
+                focused.get()
+            ));
+        }
+        panes.sort_unstable();
+        if panes.windows(2).any(|w| w[0] == w[1]) {
+            return Err("the layout names a pane twice".to_owned());
+        }
+        Ok(layout)
     }
 
     fn path_to(&self, pane: PaneId) -> Result<Vec<Side>, LayoutError> {

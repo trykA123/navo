@@ -19,6 +19,13 @@ impl History {
         &self.forward
     }
 
+    pub(crate) fn from_stacks(mut back: Vec<Location>, mut forward: Vec<Location>) -> Self {
+        let excess = back.len().saturating_sub(Self::LIMIT);
+        back.drain(..excess);
+        forward.truncate(Self::LIMIT);
+        Self { back, forward }
+    }
+
     pub(super) fn contains(&self, location: &Location) -> bool {
         self.back.contains(location) || self.forward.contains(location)
     }
