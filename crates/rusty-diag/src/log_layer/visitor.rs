@@ -34,6 +34,9 @@ impl<'a> FieldVisitor<'a> {
     fn push_text(&mut self, field: &Field, text: &str) {
         if field.name() == "message" {
             self.message = self.redactor.text(text);
+        } else if is_query_field(field.name()) {
+            let hidden = format!("<text:{} chars>", text.chars().count());
+            self.push(field, Value::String(hidden));
         } else {
             let redacted = self.redactor.text(text);
             self.push(field, Value::String(redacted));
@@ -43,6 +46,10 @@ impl<'a> FieldVisitor<'a> {
 
 fn is_path_field(name: &str) -> bool {
     name == "path" || name.ends_with("_path")
+}
+
+fn is_query_field(name: &str) -> bool {
+    matches!(name, "query" | "search" | "filter" | "pattern") || name.ends_with("_query")
 }
 
 impl Visit for FieldVisitor<'_> {

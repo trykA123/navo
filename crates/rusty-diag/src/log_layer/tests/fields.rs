@@ -48,3 +48,30 @@ fn debug_field_is_redacted_through_text() {
     let c = capture(|| tracing::info!(target: TARGET, owner = ?owner, "x"));
     assert_eq!(c.only_fields()["owner"], json!("Some(\"<user>\")"));
 }
+
+#[test]
+fn query_field_is_replaced_by_its_length() {
+    let c = capture(|| tracing::info!(target: TARGET, query = "canary secret plan", "x"));
+    assert_eq!(c.only_fields()["query"], json!("<text:18 chars>"));
+}
+
+#[test]
+fn search_like_fields_are_replaced_by_their_length() {
+    let c = capture(
+        || tracing::info!(target: TARGET, search = "ab", filter = "été", pattern = "*.rs", name_query = "x", "x"),
+    );
+    let f = c.only_fields();
+    let values: Vec<_> = ["search", "filter", "pattern", "name_query"]
+        .iter()
+        .map(|name| f[*name].clone())
+        .collect();
+    assert_eq!(
+        values,
+        [
+            json!("<text:2 chars>"),
+            json!("<text:3 chars>"),
+            json!("<text:4 chars>"),
+            json!("<text:1 chars>")
+        ]
+    );
+}

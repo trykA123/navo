@@ -1,9 +1,19 @@
-use std::path::Path;
+use std::fs::{self, File};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::Serialize;
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipWriter};
 
 use crate::{MemoryReport, Redactor};
+
+mod document;
+mod summary;
+
+use document::Document;
+use summary::{SECTIONS, summary_text};
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct BuildInfo {
@@ -49,11 +59,48 @@ pub struct ReportSummary {
 }
 
 pub fn write_report(
-    _path: &Path,
-    _input: &ReportInput,
-    _redactor: &Redactor,
-) -> std::io::Result<ReportSummary> {
-    todo!()
+    path: &Path,
+    input: &ReportInput,
+    redactor: &Redactor,
+) -> io::Result<ReportSummary> {
+    let report = serde_json::to_vec_pretty(&Document::new(input, redactor))?;
+    let summary = summary_text(input);
+    let temp = temp_path(path)?;
+    let written = write_zip(&temp, &report, summary.as_bytes())
+        .and_then(|()| fs::rename(&temp, path))
+        .and_then(|()| fs::metadata(path));
+    let bytes = match written {
+        Ok(metadata) => metadata.len(),
+        Err(error) => {
+            let _ = fs::remove_file(&temp);
+            return Err(error);
+        }
+    };
+    Ok(ReportSummary {
+        sections: SECTIONS.iter().map(|&s| s.to_owned()).collect(),
+        events: input.events.len(),
+        errors: input.errors.len(),
+        bytes,
+    })
+}
+
+fn temp_path(path: &Path) -> io::Result<PathBuf> {
+    let name = path.file_name().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "report path has no file name")
+    })?;
+    let mut temp = name.to_owned();
+    temp.push(format!(".{}.tmp", std::process::id()));
+    Ok(path.with_file_name(temp))
+}
+
+fn write_zip(temp: &Path, report: &[u8], summary: &[u8]) -> io::Result<()> {
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    let mut zip = ZipWriter::new(File::create_new(temp)?);
+    zip.start_file("report.json", options)?;
+    zip.write_all(report)?;
+    zip.start_file("summary.txt", options)?;
+    zip.write_all(summary)?;
+    zip.finish()?.sync_all()
 }
 
 #[cfg(test)]

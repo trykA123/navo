@@ -134,7 +134,6 @@ fn leaks(haystacks: &[(String, Vec<u8>)]) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "needs query redaction (L10)"]
 fn canary_values_never_reach_the_logs_or_the_report() {
     let dir = TempDir::new().unwrap();
     let logs = dir.path().join("logs");
