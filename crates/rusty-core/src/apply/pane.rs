@@ -1,5 +1,5 @@
 use super::{CommandError, Effect, last_row, list_active};
-use crate::{AppState, CursorMove, Listing, Location, PaneId, TabId};
+use crate::{AppState, CursorMove, Location, PaneId};
 
 pub(super) fn open_tab(state: &mut AppState, location: Option<&Location>) -> Vec<Effect> {
     let location = location
@@ -59,17 +59,6 @@ pub(super) fn cursor_move(
     };
     state.active_tab_mut().set_cursor(row.min(last));
     Ok(Vec::new())
-}
-
-pub(super) fn listing_loaded(
-    state: &mut AppState,
-    tab: TabId,
-    location: &Location,
-    listing: Listing,
-) {
-    if let Some(tab) = state.tab_mut(tab).filter(|t| t.location() == location) {
-        tab.set_listing(listing);
-    }
 }
 
 pub(super) fn page_rows_changed(state: &mut AppState, pane: PaneId, rows: u64) {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::{History, Listing, StateError};
 use crate::{Location, Selection, TabId};
@@ -15,6 +15,7 @@ pub struct Tab {
     location: Location,
     view: ViewState,
     listing: Option<Listing>,
+    pending: Option<u64>,
     selection: Selection,
     history: History,
     views: HashMap<Location, ViewState>,
@@ -57,6 +58,7 @@ impl Tab {
             location,
             view: ViewState::default(),
             listing: None,
+            pending: None,
             selection: Selection::new(0),
             history: History::default(),
             views: HashMap::new(),
@@ -112,6 +114,44 @@ impl Tab {
         &mut self.selection
     }
 
+    #[must_use]
+    pub fn pending_request(&self) -> Option<u64> {
+        self.pending
+    }
+
+    pub(crate) fn expect_listing(&mut self, request: u64) {
+        self.pending = Some(request);
+    }
+
+    pub(crate) fn accept_listing(
+        &mut self,
+        request: u64,
+        location: &Location,
+        listing: Listing,
+    ) -> bool {
+        if self.pending != Some(request) || &self.location != location {
+            return false;
+        }
+        self.pending = None;
+        let marked: HashSet<String> = self
+            .listing
+            .as_ref()
+            .map(|old| {
+                self.selection
+                    .marked()
+                    .into_iter()
+                    .filter_map(|row| old.get(row).map(|e| e.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let keep: Vec<u64> = (0..listing.len())
+            .filter(|row| listing.get(*row).is_some_and(|e| marked.contains(&e.name)))
+            .collect();
+        self.set_listing(listing);
+        self.selection.mark_rows(keep);
+        true
+    }
+
     pub(crate) fn set_listing(&mut self, listing: Listing) {
         self.selection = Selection::new(listing.len());
         self.listing = Some(listing);
@@ -134,6 +174,7 @@ impl Tab {
     fn leave(&mut self, target: Location) -> Location {
         self.views.insert(self.location.clone(), self.view);
         self.listing = None;
+        self.pending = None;
         self.selection = Selection::new(0);
         std::mem::replace(&mut self.location, target)
     }

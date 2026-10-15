@@ -2,14 +2,27 @@ use super::{
     at_work, cursor, files, find_tab, home, load, loc, marked, move_cursor, navigate, page_rows,
     run,
 };
-use crate::{Command, CursorMove, Direction, Event, PaneId, Selection, TabId, apply_event};
+use crate::{
+    Command, CursorMove, Direction, Effect, Event, PaneId, TabId, apply_event, list_unloaded,
+};
 
-fn loaded(tab: TabId, location: &str, len: usize) -> Event {
+fn loaded(tab: TabId, location: &str, request: u64, len: usize) -> Event {
     Event::ListingLoaded {
         tab,
         location: loc(location),
+        request,
         listing: files(len),
     }
+}
+
+fn request_of(effects: &[Effect]) -> u64 {
+    effects
+        .iter()
+        .find_map(|e| match e {
+            Effect::ListFolder { request, .. } => Some(*request),
+            _ => None,
+        })
+        .unwrap_or(0)
 }
 
 #[test]
@@ -19,11 +32,60 @@ fn listing_loaded_sets_the_listing() {
 }
 
 #[test]
-fn listing_loaded_resets_the_selection() {
+fn a_refresh_keeps_the_marks_by_name() {
     let mut state = at_work(files(4));
+    move_cursor(&mut state, CursorMove::Row(2));
     run(&mut state, Command::SelectionToggle);
     load(&mut state, files(6));
-    assert_eq!(state.active_tab().selection(), &Selection::new(6));
+    assert_eq!(marked(&state), vec![2]);
+}
+
+#[test]
+fn a_refresh_drops_marks_of_names_that_are_gone() {
+    let mut state = at_work(files(4));
+    move_cursor(&mut state, CursorMove::Row(3));
+    run(&mut state, Command::SelectionToggle);
+    load(&mut state, files(2));
+    assert_eq!(marked(&state), Vec::<u64>::new());
+}
+
+#[test]
+fn an_older_answer_for_the_same_folder_is_ignored() {
+    let mut state = home();
+    let tab = state.active_tab().id();
+    let first = request_of(&navigate(&mut state, "/work"));
+    navigate(&mut state, "/other");
+    run(&mut state, Command::PaneBack);
+    let before = state.clone();
+    let _ = apply_event(&mut state, loaded(tab, "/work", first, 3));
+    assert_eq!(state, before);
+}
+
+#[test]
+fn requests_count_up() {
+    let mut state = home();
+    let first = request_of(&navigate(&mut state, "/a"));
+    let second = request_of(&navigate(&mut state, "/b"));
+    assert_eq!((first, second), (1, 2));
+}
+
+#[test]
+fn list_unloaded_asks_for_every_active_tab_without_a_listing() {
+    let mut state = home();
+    run(
+        &mut state,
+        Command::LayoutSplit {
+            direction: Direction::Right,
+        },
+    );
+    let effects = list_unloaded(&mut state);
+    assert_eq!(effects.len(), 1);
+}
+
+#[test]
+fn list_unloaded_skips_loaded_and_pending_tabs() {
+    let mut state = at_work(files(3));
+    assert_eq!(list_unloaded(&mut state), vec![]);
 }
 
 #[test]
@@ -40,21 +102,21 @@ fn listing_loaded_clamps_the_remembered_cursor() {
 fn listing_loaded_after_navigating_away_is_ignored() {
     let mut state = home();
     let tab = state.active_tab().id();
-    navigate(&mut state, "/work");
+    let request = request_of(&navigate(&mut state, "/work"));
     navigate(&mut state, "/other");
     let before = state.clone();
-    let _ = apply_event(&mut state, loaded(tab, "/work", 3));
+    let _ = apply_event(&mut state, loaded(tab, "/work", request, 3));
     assert_eq!(state, before);
 }
 
 #[test]
 fn listing_loaded_for_a_closed_tab_is_ignored() {
     let mut state = home();
-    run(&mut state, Command::PaneOpenTab { location: None });
+    let request = request_of(&run(&mut state, Command::PaneOpenTab { location: None }));
     let closed = state.active_tab().id();
     run(&mut state, Command::PaneCloseTab { tab: None });
     let before = state.clone();
-    let _ = apply_event(&mut state, loaded(closed, "/home", 3));
+    let _ = apply_event(&mut state, loaded(closed, "/home", request, 3));
     assert_eq!(state, before);
 }
 
@@ -62,13 +124,14 @@ fn listing_loaded_for_a_closed_tab_is_ignored() {
 fn listing_loaded_reaches_a_tab_in_another_pane() {
     let mut state = home();
     let first = state.active_tab().id();
+    let request = request_of(&list_unloaded(&mut state));
     run(
         &mut state,
         Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
-    let _ = apply_event(&mut state, loaded(first, "/home", 3));
+    let _ = apply_event(&mut state, loaded(first, "/home", request, 3));
     assert_eq!(find_tab(&state, first).unwrap().listing(), Some(&files(3)));
 }
 
@@ -76,8 +139,9 @@ fn listing_loaded_reaches_a_tab_in_another_pane() {
 fn listing_loaded_for_an_inactive_tab_leaves_the_active_tab_alone() {
     let mut state = home();
     let first = state.active_tab().id();
+    let request = request_of(&list_unloaded(&mut state));
     run(&mut state, Command::PaneOpenTab { location: None });
-    let _ = apply_event(&mut state, loaded(first, "/home", 3));
+    let _ = apply_event(&mut state, loaded(first, "/home", request, 3));
     assert_eq!(state.active_tab().listing(), None);
 }
 
@@ -153,7 +217,7 @@ fn listing_loaded_for_another_location_keeps_the_marks() {
     let mut state = at_work(files(4));
     run(&mut state, Command::SelectionToggle);
     let tab = state.active_tab().id();
-    let _ = apply_event(&mut state, loaded(tab, "/elsewhere", 2));
+    let _ = apply_event(&mut state, loaded(tab, "/elsewhere", 999, 2));
     assert_eq!(marked(&state), vec![0]);
 }
 
@@ -161,5 +225,9 @@ fn listing_loaded_for_another_location_keeps_the_marks() {
 fn listing_loaded_produces_no_effects() {
     let mut state = home();
     let tab = state.active_tab().id();
-    assert_eq!(apply_event(&mut state, loaded(tab, "/home", 3)), vec![]);
+    let request = request_of(&list_unloaded(&mut state));
+    assert_eq!(
+        apply_event(&mut state, loaded(tab, "/home", request, 3)),
+        vec![]
+    );
 }
