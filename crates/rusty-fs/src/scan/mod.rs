@@ -20,17 +20,26 @@ pub fn scan(
                 return Err(cancelled(&location));
             }
             if entry.kind == EntryKind::Folder {
-                let children = load_folder(provider, &location, cancel)?.details;
-                for child in children.into_iter().rev() {
-                    if let Ok(child_location) = location.join(&child.name) {
-                        pending.push((child_location, child, depth + 1));
-                    }
-                }
+                pending.extend(children(provider, &location, depth, cancel)?);
             }
             items.push(scanned(location, &entry, depth));
         }
     }
     Ok(items)
+}
+
+fn children(
+    provider: &dyn Provider,
+    folder: &Location,
+    depth: u32,
+    cancel: &CancelToken,
+) -> Result<Vec<(Location, FsEntry, u32)>, FsError> {
+    let details = load_folder(provider, folder, cancel)?.details;
+    Ok(details
+        .into_iter()
+        .rev()
+        .filter_map(|child| Some((folder.join(&child.name).ok()?, child, depth + 1)))
+        .collect())
 }
 
 pub fn existing_at(
@@ -42,16 +51,12 @@ pub fn existing_at(
     let mut existing = Vec::new();
     for folder in target_folders(items, target) {
         let mut sink = |batch: EntryBatch| {
-            for entry in batch.entries {
-                if let Ok(location) = folder.join(&entry.name) {
-                    existing.push(ExistingItem {
-                        location,
-                        kind: item_kind(entry.kind),
-                        size: entry.size,
-                        modified_ms: entry.modified_ms,
-                    });
-                }
-            }
+            existing.extend(
+                batch
+                    .entries
+                    .into_iter()
+                    .filter_map(|entry| existing_item(&folder, entry)),
+            );
             ControlFlow::Continue(())
         };
         match provider.list(&folder, &mut sink, cancel) {
@@ -62,6 +67,15 @@ pub fn existing_at(
         }
     }
     Ok(existing)
+}
+
+fn existing_item(folder: &Location, entry: FsEntry) -> Option<ExistingItem> {
+    Some(ExistingItem {
+        location: folder.join(&entry.name).ok()?,
+        kind: item_kind(entry.kind),
+        size: entry.size,
+        modified_ms: entry.modified_ms,
+    })
 }
 
 fn target_folders(items: &[ScannedItem], target: &Location) -> Vec<Location> {
