@@ -57,11 +57,11 @@ impl Closers {
             if !followed_ok {
                 continue;
             }
-            for (kind, (_, close)) in PAIRS.iter().enumerate() {
-                if *close == ch {
-                    positions[kind].push(index);
-                }
-            }
+            PAIRS
+                .iter()
+                .zip(positions.iter_mut())
+                .filter(|((_, close), _)| *close == ch)
+                .for_each(|(_, list)| list.push(index));
         }
         Self { positions }
     }
