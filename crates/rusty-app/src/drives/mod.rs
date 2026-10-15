@@ -7,11 +7,14 @@ use rusty_shell::{Drive, DriveKind, Space};
 use rusty_ui::window_view::{DriveHooks, DriveIcon, DriveInfo};
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
-const NETWORK_EVERY: Duration = Duration::from_secs(30);
+const REREAD_EVERY: Duration = Duration::from_secs(30);
 
-type Details = (Option<String>, Option<Space>);
+pub type Details = (Option<String>, Option<Space>);
+type Probe<'a> = dyn Fn(&str) -> Option<Details> + Sync + 'a;
 
 struct Known {
+    kind: DriveKind,
+    remote: Option<String>,
     details: Details,
     read_at: Instant,
 }
@@ -21,47 +24,66 @@ pub struct DriveCache {
     known: HashMap<String, Known>,
 }
 
+fn every(kind: DriveKind) -> Duration {
+    match kind {
+        DriveKind::Removable | DriveKind::Optical => Duration::ZERO,
+        _ => REREAD_EVERY,
+    }
+}
+
 impl DriveCache {
     pub fn refresh(
         &mut self,
         drives: Vec<Drive>,
-        probe: &dyn Fn(&str) -> Option<Details>,
+        probe: &Probe<'_>,
         now: Instant,
     ) -> Vec<DriveInfo> {
         self.known
             .retain(|root, _| drives.iter().any(|drive| drive.root == *root));
+        let stale: Vec<&Drive> = drives
+            .iter()
+            .filter(|drive| drive.connected && self.is_stale(drive, now))
+            .collect();
+        let read: Vec<(usize, Option<Details>)> = std::thread::scope(|scope| {
+            let jobs: Vec<_> = stale
+                .iter()
+                .enumerate()
+                .map(|(at, drive)| scope.spawn(move || (at, probe(&drive.root))))
+                .collect();
+            jobs.into_iter().filter_map(|job| job.join().ok()).collect()
+        });
+        for (at, details) in read {
+            if let (Some(drive), Some(details)) = (stale.get(at), details) {
+                let known = Known {
+                    kind: drive.kind,
+                    remote: drive.remote.clone(),
+                    details,
+                    read_at: now,
+                };
+                self.known.insert(drive.root.clone(), known);
+            }
+        }
         drives
             .into_iter()
             .filter_map(|drive| {
-                let details = self.details_of(&drive, probe, now);
+                let details = self.details_of(&drive);
                 info_of(drive, details)
             })
             .collect()
     }
 
-    fn details_of(
-        &mut self,
-        drive: &Drive,
-        probe: &dyn Fn(&str) -> Option<Details>,
-        now: Instant,
-    ) -> Details {
-        let stale = self.known.get(&drive.root).is_none_or(|known| {
-            drive.kind == DriveKind::Network && now.duration_since(known.read_at) >= NETWORK_EVERY
-        });
-        if drive.connected
-            && stale
-            && let Some(details) = probe(&drive.root)
-        {
-            self.known.insert(
-                drive.root.clone(),
-                Known {
-                    details,
-                    read_at: now,
-                },
-            );
-        }
+    fn is_stale(&self, drive: &Drive, now: Instant) -> bool {
+        self.known.get(&drive.root).is_none_or(|known| {
+            known.kind != drive.kind
+                || known.remote != drive.remote
+                || now.duration_since(known.read_at) >= every(drive.kind)
+        })
+    }
+
+    fn details_of(&self, drive: &Drive) -> Details {
         self.known
             .get(&drive.root)
+            .filter(|known| known.kind == drive.kind && known.remote == drive.remote)
             .map(|known| known.details.clone())
             .unwrap_or_default()
     }

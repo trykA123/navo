@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{AsyncApp, WeakEntity};
-use rusty_core::{Command, Location, PaneId};
+use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
 use crate::pane_chrome::{DriveBar, current_drive};
@@ -36,7 +36,7 @@ pub(super) struct Drives {
     hooks: DriveHooks,
     pub(super) list: Rc<[DriveInfo]>,
     reconnecting: Vec<char>,
-    errors: HashMap<PaneId, (Location, SharedString)>,
+    errors: HashMap<PaneId, (Location, usize, SharedString)>,
 }
 
 impl Drives {
@@ -49,11 +49,13 @@ impl Drives {
         }
     }
 
-    pub(super) fn error(&self, pane: PaneId, location: &Location) -> Option<SharedString> {
+    pub(super) fn error(&self, pane: PaneId, tab: &Tab) -> Option<SharedString> {
         self.errors
             .get(&pane)
-            .filter(|(at, _)| at.same_place(location))
-            .map(|(_, message)| message.clone())
+            .filter(|(at, depth, _)| {
+                at.same_place(tab.location()) && *depth == tab.history().back().len()
+            })
+            .map(|(_, _, message)| message.clone())
     }
 }
 
@@ -155,15 +157,13 @@ impl FerriteWindow {
     }
 
     fn drive_error(&mut self, pane: PaneId, message: SharedString) {
-        let Some(location) = self
-            .browser
-            .state()
-            .pane(pane)
-            .map(|p| p.active().location().clone())
-        else {
+        let Some((location, depth)) = self.browser.state().pane(pane).map(|p| {
+            let tab = p.active();
+            (tab.location().clone(), tab.history().back().len())
+        }) else {
             return;
         };
-        self.drives.errors.insert(pane, (location, message));
+        self.drives.errors.insert(pane, (location, depth, message));
     }
 
     pub(super) fn drive_bar(&self, pane: PaneId, cx: &mut Context<Self>) -> DriveBar {

@@ -113,3 +113,20 @@ fn alt_f2_targets_the_second_pane_and_escape_closes_without_moving(cx: &mut Test
         assert_eq!(rig.location(cx, pane), local(r"C:\home"));
     }
 }
+
+#[gpui_kit::test]
+fn a_reconnect_error_is_gone_after_leaving_and_coming_back(cx: &mut TestAppContext) {
+    let setup = Setup {
+        reconnect: Err("The network path was not found.".to_owned()),
+        ..Setup::default()
+    };
+    let rig = drive_window(cx, setup);
+    let pane = first_pane(&rig, cx);
+    rig.click(cx, bar(pane), ("drive", 2));
+    rig.click(cx, bar(pane), ("drive", 1));
+    rig.click(cx, bar(pane), ("drive", 0));
+    assert_eq!(rig.location(cx, pane), local(r"C:\home"));
+    rig.frame(cx, |window, _| {
+        assert!(window.try_find(("pane-error", pane.get())).is_none());
+    });
+}

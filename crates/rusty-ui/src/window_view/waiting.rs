@@ -88,12 +88,14 @@ impl FerriteWindow {
             .bg(t.colors.surface)
             .text_color(t.colors.muted)
             .child(format!("Waiting for {path}…"))
-            .child(
-                div()
-                    .text_size(t.typography.small)
-                    .text_color(t.colors.faint)
-                    .child("Esc goes back"),
-            )
+            .when(!tab.history().back().is_empty(), |this| {
+                this.child(
+                    div()
+                        .text_size(t.typography.small)
+                        .text_color(t.colors.faint)
+                        .child("Esc goes back"),
+                )
+            })
             .into_any_element()
     }
 }

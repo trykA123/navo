@@ -1,4 +1,6 @@
 use std::ptr;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{HANDLE, NO_ERROR};
 use windows_sys::Win32::NetworkManagement::WNet::{
@@ -43,13 +45,34 @@ fn letters(mask: u32) -> impl Iterator<Item = char> {
         .map(|bit| char::from(b'A' + bit))
 }
 
-fn connection(letter: char) -> Option<String> {
+const ERROR_CONNECTION_UNAVAIL: u32 = 1201;
+const REMEMBERED_EVERY: Duration = Duration::from_secs(30);
+
+static REMEMBERED: Mutex<Option<(Instant, Vec<(char, String)>)>> = Mutex::new(None);
+
+fn connection(letter: char) -> Option<(String, bool)> {
     let local = wide(&format!("{letter}:"));
     let mut remote = vec![0u16; NAME_LEN];
     let mut len = u32::try_from(remote.len()).unwrap_or(0);
     // SAFETY: `local` is NUL-terminated, `remote` holds `len` units and `len` is a valid pointer.
     let status = unsafe { WNetGetConnectionW(local.as_ptr(), remote.as_mut_ptr(), &raw mut len) };
-    (status == NO_ERROR).then(|| from_wide(&remote))
+    match status {
+        NO_ERROR => Some((from_wide(&remote), true)),
+        ERROR_CONNECTION_UNAVAIL => Some((from_wide(&remote), false)),
+        _ => None,
+    }
+}
+
+fn remembered_cached() -> Vec<(char, String)> {
+    let mut cached = REMEMBERED.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((read_at, list)) = cached.as_ref()
+        && read_at.elapsed() < REMEMBERED_EVERY
+    {
+        return list.clone();
+    }
+    let list = remembered();
+    *cached = Some((Instant::now(), list.clone()));
+    list
 }
 
 fn remembered() -> Vec<(char, String)> {
@@ -141,12 +164,15 @@ pub fn raw_drives() -> RawDrives {
         let kind = kind_of(unsafe { GetDriveTypeW(root.as_ptr()) });
         raw.kinds.push((letter, kind));
         if kind == DriveKind::Network
-            && let Some(remote) = connection(letter)
+            && let Some((remote, available)) = connection(letter)
         {
             raw.mapped.push((letter, remote));
+            if !available {
+                raw.unavailable.push(letter);
+            }
         }
     }
-    raw.remembered = remembered();
+    raw.remembered = remembered_cached();
     raw
 }
 

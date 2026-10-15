@@ -47,7 +47,7 @@ impl FerriteWindow {
 
     fn pane_error(&self, pane: PaneId, tab: &Tab) -> Option<SharedString> {
         self.drives
-            .error(pane, tab.location())
+            .error(pane, tab)
             .or_else(|| self.browser.error(tab.id()).map(|e| e.message().into()))
     }
 

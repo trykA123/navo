@@ -30,15 +30,23 @@ fn expand(text: &str, env: &dyn Fn(&str) -> Option<String>) -> Result<String, St
         };
         let name = &rest[start + 1..start + 1 + length];
         out.push_str(&rest[..start]);
-        if name.is_empty() {
+        if !is_variable(name) {
             out.push('%');
-        } else {
-            out.push_str(&env(name).ok_or_else(|| format!("Unknown variable %{name}%."))?);
+            rest = &rest[start + 1..];
+            continue;
         }
+        out.push_str(&env(name).ok_or_else(|| format!("Unknown variable %{name}%."))?);
         rest = &rest[start + length + 2..];
     }
     out.push_str(rest);
     Ok(out)
+}
+
+fn is_variable(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '(' | ')' | '-'))
 }
 
 fn home(text: &str, env: &dyn Fn(&str) -> Option<String>) -> Result<String, String> {
@@ -70,6 +78,8 @@ fn windows_path(text: &str, current: &Location) -> Result<String, String> {
     let text = text.replace('/', "\\");
     let joined = if is_windows_absolute(&text) {
         text
+    } else if let Some(rest) = text.strip_prefix('\\') {
+        format!("{}{rest}", current.root().as_str())
     } else {
         format!("{}\\{text}", current.as_str())
     };

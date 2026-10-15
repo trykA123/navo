@@ -201,3 +201,21 @@ fn a_unix_absolute_path_on_a_windows_folder_is_an_error() {
 fn a_relative_path_on_another_provider_joins_that_provider() {
     assert_eq!(typed("b", "fake://home/a"), Ok(loc("fake://home/a/b")));
 }
+
+#[test]
+fn a_rooted_path_starts_at_the_current_drive() {
+    assert_eq!(at_admin(r"\foo"), Ok(loc(r"C:\foo")));
+    assert_eq!(
+        typed(r"\x\y", r"\\nas\media\films"),
+        Ok(loc(r"\\nas\media\x\y"))
+    );
+}
+
+#[test]
+fn percent_signs_in_folder_names_stay_literal() {
+    assert_eq!(
+        at_admin(r"C:\50% off\100% real"),
+        Ok(loc(r"C:\50% off\100% real"))
+    );
+    assert_eq!(at_admin("100%"), Ok(loc(r"C:\Users\admin\100%")));
+}

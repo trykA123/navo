@@ -31,6 +31,7 @@ pub struct RawDrives {
     pub kinds: Vec<(char, DriveKind)>,
     pub mapped: Vec<(char, String)>,
     pub remembered: Vec<(char, String)>,
+    pub unavailable: Vec<char>,
 }
 
 const PSEUDO: [&str; 9] = [
@@ -73,8 +74,13 @@ pub fn assemble(raw: &RawDrives) -> Vec<Drive> {
             let remembered = first_by_letter(&raw.remembered, letter);
             if raw.mask & (1 << bit) != 0 {
                 let kind = first_by_letter(&raw.kinds, letter).unwrap_or(DriveKind::Unknown);
+                let remembered = remembered.filter(|_| kind == DriveKind::Network);
                 let remote = first_by_letter(&raw.mapped, letter).or(remembered);
-                Some(drive(letter, kind, remote, true))
+                let connected = !raw
+                    .unavailable
+                    .iter()
+                    .any(|found| found.eq_ignore_ascii_case(&letter));
+                Some(drive(letter, kind, remote, connected))
             } else {
                 remembered.map(|remote| drive(letter, DriveKind::Network, Some(remote), false))
             }
