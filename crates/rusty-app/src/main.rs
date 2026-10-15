@@ -7,6 +7,7 @@
 mod browse;
 mod cli;
 mod diag;
+mod startup;
 #[cfg(windows)]
 mod windows_memory;
 

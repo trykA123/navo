@@ -13,6 +13,7 @@ path = "src/main.rs"
 rusty-core = { path = "../rusty-core" }
 rusty-diag = { path = "../rusty-diag" }
 rusty-fs = { path = "../rusty-fs" }
+rusty-store = { path = "../rusty-store" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
