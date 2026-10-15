@@ -129,3 +129,65 @@ fn a_refresh_keeps_the_sort_and_the_filter() {
     let tab = browser.state().active_tab().id();
     assert_eq!(browser.sort_key(tab).by, SortBy::Size);
 }
+
+fn marked_names(browser: &Browser) -> Vec<String> {
+    let tab = browser.state().active_tab();
+    let listing = tab
+        .listing()
+        .cloned()
+        .unwrap_or_else(|| rusty_core::Listing::new(Vec::new()));
+    tab.selection()
+        .marked()
+        .into_iter()
+        .filter_map(|row| listing.get(row).map(|e| e.name.clone()))
+        .collect()
+}
+
+#[test]
+fn marks_follow_their_names_through_a_sort() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser
+        .command(&Command::PaneCursorMove {
+            to: CursorMove::Row(3),
+        })
+        .unwrap();
+    browser.command(&Command::SelectionToggle).unwrap();
+    browser.sort_by(SortBy::Size);
+    assert_eq!(marked_names(&browser), ["b.txt"]);
+}
+
+#[test]
+fn sorting_under_an_active_filter_keeps_rows_and_details_aligned() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser.filter_push('*');
+    browser.filter_push('t');
+    browser.sort_by(SortBy::Size);
+    browser.sort_by(SortBy::Size);
+    assert_eq!(names(&browser), ["zeta", "b.txt"]);
+    assert_eq!(names(&browser), detail_names(&browser));
+}
+
+#[test]
+fn a_folder_measured_after_a_sort_gets_its_own_size() {
+    let fs = fake();
+    fs.add_file("home/zeta/big.bin", 9_000);
+    let mut browser = browser(&fs);
+    browser.sort_by(SortBy::Name);
+    assert_eq!(names(&browser)[0], "zeta");
+    browser
+        .command(&Command::PaneCursorMove {
+            to: CursorMove::Row(0),
+        })
+        .unwrap();
+    browser.command(&Command::SelectionToggle).unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    let zeta = browser
+        .details(tab)
+        .iter()
+        .find(|e| e.name.to_text() == "zeta")
+        .map(|e| e.size);
+    assert_eq!(zeta, Some(9_000));
+}

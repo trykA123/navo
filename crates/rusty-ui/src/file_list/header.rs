@@ -16,6 +16,7 @@ struct Column {
     by: SortBy,
     index: usize,
     label: &'static str,
+    keys: &'static str,
     width: Option<Pixels>,
 }
 
@@ -25,24 +26,28 @@ fn columns_of(t: &Theme) -> [Column; 4] {
             by: SortBy::Name,
             index: 0,
             label: "Name",
+            keys: "Ctrl+F3",
             width: None,
         },
         Column {
             by: SortBy::Ext,
             index: 1,
             label: "Ext",
+            keys: "Ctrl+F4",
             width: Some(ext_column(t)),
         },
         Column {
             by: SortBy::Size,
             index: 2,
             label: "Size",
+            keys: "Ctrl+F6",
             width: Some(t.spacing.size_column),
         },
         Column {
             by: SortBy::Date,
             index: 3,
             label: "Date",
+            keys: "Ctrl+F5",
             width: Some(date_column(t)),
         },
     ]
@@ -62,6 +67,14 @@ fn cell(t: &Theme, column: Column, sort: SortKey, ctx: &Rc<ListContext>) -> impl
         .id(("sort", column.index))
         .role(Role::Button)
         .aria_label(column.label)
+        .aria_keyshortcuts(column.keys)
+        .when(is_active, |cell| {
+            cell.aria_description(if sort.descending {
+                "Sorted descending"
+            } else {
+                "Sorted ascending"
+            })
+        })
         .test_support()
         .flex()
         .items_center()

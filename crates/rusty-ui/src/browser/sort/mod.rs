@@ -34,9 +34,32 @@ impl Browser {
     }
 }
 
+struct Keyed {
+    is_file: bool,
+    lower: String,
+    extension: String,
+    entry: FsEntry,
+}
+
+fn keyed(entry: FsEntry) -> Keyed {
+    let lower = entry.name.display().to_lowercase();
+    let is_file = entry.kind != EntryKind::Folder;
+    let extension = match lower.rsplit_once('.') {
+        Some((stem, ext)) if is_file && !stem.is_empty() => ext.to_owned(),
+        _ => String::new(),
+    };
+    Keyed {
+        is_file,
+        lower,
+        extension,
+        entry,
+    }
+}
+
 fn sorted(full: Full, key: SortKey) -> Full {
-    let mut rows: Vec<FsEntry> = full.details.to_vec();
+    let mut rows: Vec<Keyed> = full.details.iter().cloned().map(keyed).collect();
     rows.sort_by(|a, b| compare(a, b, key));
+    let rows: Vec<FsEntry> = rows.into_iter().map(|row| row.entry).collect();
     let listing = Listing::new(
         rows.iter()
             .map(|entry| Entry {
@@ -51,42 +74,27 @@ fn sorted(full: Full, key: SortKey) -> Full {
     }
 }
 
-fn compare(a: &FsEntry, b: &FsEntry, key: SortKey) -> Ordering {
-    let files_last = |entry: &FsEntry| entry.kind != EntryKind::Folder;
-    let by_key = by(a, b, key.by);
-    let by_key = if key.descending {
-        by_key.reverse()
-    } else {
-        by_key
-    };
-    files_last(a)
-        .cmp(&files_last(b))
-        .then(by_key)
-        .then_with(|| lower(a).cmp(&lower(b)))
+fn compare(a: &Keyed, b: &Keyed, key: SortKey) -> Ordering {
+    a.is_file.cmp(&b.is_file).then_with(|| {
+        let by_key = by(a, b, key.by);
+        let by_key = if key.descending {
+            by_key.reverse()
+        } else {
+            by_key
+        };
+        by_key.then_with(|| a.lower.cmp(&b.lower))
+    })
 }
 
-fn by(a: &FsEntry, b: &FsEntry, sort: SortBy) -> Ordering {
+fn by(a: &Keyed, b: &Keyed, sort: SortBy) -> Ordering {
     match sort {
-        SortBy::Name => lower(a).cmp(&lower(b)),
-        SortBy::Ext => extension(a)
-            .cmp(&extension(b))
-            .then_with(|| lower(a).cmp(&lower(b))),
-        SortBy::Size => a.size.cmp(&b.size),
-        SortBy::Date => a.modified_ms.cmp(&b.modified_ms),
-    }
-}
-
-fn lower(entry: &FsEntry) -> String {
-    entry.name.display().to_lowercase()
-}
-
-fn extension(entry: &FsEntry) -> String {
-    if entry.kind == EntryKind::Folder {
-        return String::new();
-    }
-    match lower(entry).rsplit_once('.') {
-        Some((stem, ext)) if !stem.is_empty() => ext.to_owned(),
-        _ => String::new(),
+        SortBy::Name => a.lower.cmp(&b.lower),
+        SortBy::Ext => a
+            .extension
+            .cmp(&b.extension)
+            .then_with(|| a.lower.cmp(&b.lower)),
+        SortBy::Size => a.entry.size.cmp(&b.entry.size),
+        SortBy::Date => a.entry.modified_ms.cmp(&b.entry.modified_ms),
     }
 }
 
