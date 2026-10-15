@@ -25,6 +25,7 @@ struct Page {
 }
 
 struct Cache {
+    applied: u64,
     modified: Option<SystemTime>,
     pages: Vec<Page>,
     reads: u64,
@@ -35,10 +36,12 @@ pub struct PagedFile {
     file: File,
     len: AtomicU64,
     changed: AtomicBool,
+    stats: AtomicU64,
     cache: Mutex<Cache>,
 }
 
 struct Stat {
+    seq: u64,
     len: u64,
     modified: Option<SystemTime>,
 }
@@ -53,6 +56,7 @@ impl PagedFile {
             return Err("Only files open here.".to_owned());
         }
         let cache = Cache {
+            applied: 0,
             modified: metadata.modified().ok(),
             pages: Vec::with_capacity(CACHE_PAGES),
             reads: 0,
@@ -62,6 +66,7 @@ impl PagedFile {
             file,
             len: AtomicU64::new(metadata.len()),
             changed: AtomicBool::new(false),
+            stats: AtomicU64::new(1),
             cache: Mutex::new(cache),
         })
     }
@@ -81,23 +86,30 @@ impl PagedFile {
     }
 
     fn stat(&self) -> Option<Stat> {
+        let seq = self.stats.fetch_add(1, Ordering::AcqRel);
         let metadata = self.file.metadata().ok()?;
         Some(Stat {
+            seq,
             len: metadata.len(),
             modified: metadata.modified().ok(),
         })
     }
 
-    fn apply(&self, cache: &mut Cache, stat: Option<Stat>) {
+    fn apply(&self, cache: &mut Cache, stat: Option<Stat>) -> bool {
         let Some(stat) = stat else {
-            return;
+            return true;
         };
+        if stat.seq < cache.applied {
+            return false;
+        }
+        cache.applied = stat.seq;
         if stat.len != self.len.load(Ordering::Acquire) || stat.modified != cache.modified {
             self.len.store(stat.len, Ordering::Release);
             cache.modified = stat.modified;
             cache.pages.clear();
             self.changed.store(true, Ordering::Release);
         }
+        true
     }
 
     fn past_end(&self, offset: u64) -> bool {
@@ -116,7 +128,7 @@ impl PagedFile {
         };
         if due {
             let stat = self.stat();
-            self.apply(&mut self.cache(), stat);
+            let _ = self.apply(&mut self.cache(), stat);
         }
         offset >= self.len.load(Ordering::Acquire)
     }
@@ -148,8 +160,10 @@ impl PagedFile {
         bytes.truncate(read);
         let count = copy_out(&bytes, within, buf);
         let mut cache = self.cache();
-        self.apply(&mut cache, stat);
         cache.reads += 1;
+        if !self.apply(&mut cache, stat) {
+            return Ok(count);
+        }
         cache.pages.retain(|page| page.number != number);
         if cache.pages.len() >= CACHE_PAGES {
             cache.pages.pop();

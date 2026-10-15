@@ -234,3 +234,16 @@ fn length_and_change_flag_never_wait_for_a_page_read() {
     assert!(!file.take_changed());
     drop(held);
 }
+
+#[test]
+fn an_older_stat_never_undoes_a_newer_one() {
+    let (_dir, path) = file_with(PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    let older = file.stat();
+    append(&path, b"later bytes");
+    let newer = file.stat();
+    assert!(file.apply(&mut file.cache(), newer));
+    assert_eq!(file.len(), PAGE + 11);
+    assert!(!file.apply(&mut file.cache(), older));
+    assert_eq!(file.len(), PAGE + 11);
+}
