@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod apply;
 mod command;
 mod direction;
 mod id;
@@ -8,6 +9,7 @@ mod location;
 mod selection;
 mod state;
 
+pub use apply::{CommandError, Effect, Event, apply, apply_event};
 pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
 pub use direction::Direction;
 pub use id::{PaneId, TabId, WindowId};
