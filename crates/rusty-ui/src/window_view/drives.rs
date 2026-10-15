@@ -95,6 +95,11 @@ impl FerriteWindow {
         current_drive(&self.drives.list, pane.active().location())
     }
 
+    pub(super) fn free_on_drive(&self, pane: PaneId) -> Option<u64> {
+        let index = self.current_drive(pane)?;
+        self.drives.list.get(index)?.space.map(|(_, free)| free)
+    }
+
     pub(super) fn pick_drive(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(drive) = self.drives.list.get(index).cloned() else {
             return;

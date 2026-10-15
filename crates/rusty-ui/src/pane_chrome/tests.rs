@@ -159,3 +159,19 @@ fn the_current_drive_holds_the_location_and_letters_pick_drives() {
     assert_eq!(drive_for_key(&drives, "x"), None);
     assert_eq!(drive_for_key(&drives, "f1"), None);
 }
+
+#[test]
+fn the_deepest_mount_holding_the_location_is_the_current_drive() {
+    let drives = [
+        drive(None, "/", None),
+        drive(None, "/mnt/data", None),
+        drive(None, "/mnt/dat", None),
+    ];
+    assert_eq!(
+        current_drive(&drives, &location("/mnt/data/films")),
+        Some(1)
+    );
+    assert_eq!(current_drive(&drives, &location("/mnt/data")), Some(1));
+    assert_eq!(current_drive(&drives, &location("/mnt/database")), Some(0));
+    assert_eq!(current_drive(&drives, &location("/home/admin")), Some(0));
+}

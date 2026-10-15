@@ -8,6 +8,7 @@
 mod cli;
 mod console;
 mod diag;
+mod drives;
 mod editor;
 mod files;
 mod gui;

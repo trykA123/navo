@@ -7,10 +7,10 @@ use rusty_fs::{LocalFs, ProviderOps};
 use rusty_store::StoreDirs;
 use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
-use rusty_ui::window_view::{DriveHooks, StartOptions, run};
+use rusty_ui::window_view::{StartOptions, run};
 
 use crate::startup::{home_location, initial_state, save};
-use crate::{editor, files, jobs, launch};
+use crate::{drives, editor, files, jobs, launch};
 
 pub fn open(view: Option<std::path::PathBuf>) {
     let dirs = StoreDirs::detect();
@@ -39,7 +39,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
         launcher: launch::launcher(),
         editor: editor::hooks(settings.as_deref(), |name| std::env::var(name).ok()),
         files: files::hooks(),
-        drives: DriveHooks::none(),
+        drives: drives::hooks(),
         view: view.and_then(|path| view_location(&path)),
     });
 }

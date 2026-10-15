@@ -6105,6 +6105,7 @@ dependencies = [
  "rusty-core",
  "rusty-diag",
  "rusty-fs",
+ "rusty-shell",
  "rusty-store",
  "rusty-ui",
  "serde_json",

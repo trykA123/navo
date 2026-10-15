@@ -110,5 +110,19 @@ impl DriveInfo {
 #[must_use]
 pub fn current_drive(drives: &[DriveInfo], location: &Location) -> Option<usize> {
     let root = location.root();
-    drives.iter().position(|drive| root.same_place(&drive.root))
+    drives
+        .iter()
+        .enumerate()
+        .filter(|(_, drive)| root.same_place(&drive.root) || mounted_under(location, &drive.root))
+        .max_by_key(|(_, drive)| drive.root.as_str().len())
+        .map(|(index, _)| index)
+}
+
+fn mounted_under(location: &Location, mount: &Location) -> bool {
+    let (path, mount) = (location.as_str(), mount.as_str());
+    location.is_local()
+        && mount.starts_with('/')
+        && path
+            .strip_prefix(mount)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/') || mount.ends_with('/'))
 }

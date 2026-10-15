@@ -11,7 +11,7 @@ use crate::FocusHandle;
 use crate::file_list::{FileList, FileListAction, FileListProps, FilterEdit};
 use crate::pane_chrome::{PaneTabs, PathBar, path_segments};
 use crate::prelude::*;
-use crate::status_bar::StatusBar;
+use crate::status_bar::{StatusBar, StatusBarProps};
 use crate::tokens;
 
 fn title_of(tab: &Tab) -> SharedString {
@@ -45,10 +45,16 @@ impl FerriteWindow {
         };
     }
 
+    fn pane_error(&self, pane: PaneId, tab: &Tab) -> Option<SharedString> {
+        self.drives
+            .error(pane, tab.location())
+            .or_else(|| self.browser.error(tab.id()).map(|e| e.message().into()))
+    }
+
     pub(super) fn pane_view(
         &mut self,
         pane: PaneId,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let t = tokens::current(cx).clone();
@@ -62,11 +68,11 @@ impl FerriteWindow {
         let active_index = core_pane.active_index();
         let is_active = state.focused_pane() == pane;
         let rows = self.browser.details(tab.id());
-        let error = self
-            .drives
-            .error(pane, tab.location())
-            .or_else(|| self.browser.error(tab.id()).map(|e| e.message().into()));
-        let status = status_of(&rows, tab.selection());
+        let error = self.pane_error(pane, tab);
+        let status = StatusBarProps {
+            free_bytes: self.free_on_drive(pane),
+            ..status_of(&rows, tab.selection())
+        };
         let props = FileListProps {
             folder: title_of(tab),
             rows,
@@ -80,7 +86,6 @@ impl FerriteWindow {
             sort: self.browser.sort_key(tab.id()),
         };
         let focus = self.handle(pane, cx);
-        let _ = window;
         let path = self.path_row(pane, cx);
         let list = match waiting {
             Some(tab) => Self::waiting_view(pane, &tab, &focus, cx),
