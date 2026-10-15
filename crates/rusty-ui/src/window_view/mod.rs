@@ -3,6 +3,7 @@ mod operate;
 mod pane;
 mod prompt;
 mod status;
+mod viewer;
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -23,6 +24,7 @@ use crate::tokens::{self, Mode};
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use editor::EditorHooks;
+pub use viewer::{FileHooks, FileText};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
@@ -34,6 +36,7 @@ pub struct StartOptions {
     pub operations: Operations,
     pub launcher: Launcher,
     pub editor: EditorHooks,
+    pub files: FileHooks,
 }
 
 pub fn run(options: StartOptions) {
@@ -42,6 +45,7 @@ pub fn run(options: StartOptions) {
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
+        viewer::bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -64,6 +68,8 @@ pub struct FerriteWindow {
     on_save: SaveSession,
     prompt: Option<prompt::Prompt>,
     editor: EditorHooks,
+    files: FileHooks,
+    viewer: Option<viewer::Viewer>,
     next_prompt: u64,
     _appearance: Subscription,
 }
@@ -88,6 +94,8 @@ impl FerriteWindow {
             on_save: options.on_save,
             prompt: None,
             editor: options.editor,
+            files: options.files,
+            viewer: None,
             next_prompt: 0,
             _appearance: cx.observe_window_appearance(window, |_, window, cx| {
                 tokens::apply(mode_of(window.appearance()), cx);
@@ -216,6 +224,7 @@ impl Render for FerriteWindow {
             (Some(only), None) => only,
             _ => div().into_any_element(),
         };
+        let body = self.viewer_view(cx).unwrap_or(body);
         let jobs = self.job_strip(cx);
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
         div()

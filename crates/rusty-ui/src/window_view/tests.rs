@@ -59,6 +59,7 @@ fn open_with(
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks::none(),
+        files: super::FileHooks::none(),
     };
     open_options(cx, options)
 }
@@ -73,6 +74,7 @@ fn open_options(
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
+        super::viewer::bind_keys(cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),
@@ -416,6 +418,7 @@ fn editor_window(
                 Ok(())
             }),
         },
+        files: super::FileHooks::none(),
     };
     let (window, view) = open_options(cx, options);
     (window, view, log)
@@ -461,4 +464,105 @@ fn shift_f4_lets_you_change_the_editor_and_folders_are_skipped(cx: &mut TestAppC
     press(cx, window, &view, "down");
     press(cx, window, &view, "shift-f4");
     assert!(prompt_open(cx, &view));
+}
+
+fn viewer_window(
+    cx: &mut TestAppContext,
+    read: Result<&str, &str>,
+) -> (
+    AnyWindowHandle,
+    Entity<FerriteWindow>,
+    Rc<std::cell::RefCell<Vec<String>>>,
+) {
+    let written = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let saved = written.clone();
+    let read = read.map(str::to_owned).map_err(str::to_owned);
+    let fs = fake();
+    let options = StartOptions {
+        state: home_beside_dest(&fs),
+        provider: fs,
+        on_save: Rc::new(|_| {}),
+        mode: Mode::Light,
+        operations: Operations::unlogged(),
+        launcher: Arc::new(|_| {}),
+        editor: super::EditorHooks::none(),
+        files: super::FileHooks {
+            read: Rc::new(move |_| {
+                read.clone().map(|text| super::FileText {
+                    text,
+                    read_only: false,
+                })
+            }),
+            write: Rc::new(move |_, text| {
+                saved.borrow_mut().push(text.to_owned());
+                Ok(())
+            }),
+        },
+    };
+    let (window, view) = open_options(cx, options);
+    (window, view, written)
+}
+
+fn viewer_open(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
+    view.read_with(cx, |view, _| view.viewer.is_some())
+}
+
+#[gpui_kit::test]
+fn f3_opens_the_file_and_escape_closes_it(cx: &mut TestAppContext) {
+    let (window, view, _) = viewer_window(cx, Ok("hello\n"));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    assert!(viewer_open(cx, &view));
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn ctrl_s_saves_what_was_typed(cx: &mut TestAppContext) {
+    let (window, view, written) = viewer_window(cx, Ok("hello\n"));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    type_in(cx, window, &view, "say ");
+    press(cx, window, &view, "ctrl-s");
+    assert_eq!(written.borrow().as_slice(), ["say hello\n"]);
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn unsaved_changes_need_a_second_escape(cx: &mut TestAppContext) {
+    let (window, view, written) = viewer_window(cx, Ok("hello\n"));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    type_in(cx, window, &view, "x");
+    press(cx, window, &view, "escape");
+    assert!(viewer_open(cx, &view));
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+    assert!(written.borrow().is_empty());
+}
+
+#[gpui_kit::test]
+fn a_file_that_cannot_be_read_says_why(cx: &mut TestAppContext) {
+    let (window, view, _) = viewer_window(cx, Err("This looks like a binary file."));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    cx.update_window(window, |_, window, _| {
+        assert!(window.find("viewer-message").visible());
+    })
+    .expect("window");
+}
+
+#[test]
+fn extensions_pick_their_language() {
+    use super::viewer::language_of;
+    assert_eq!(language_of("main.rs"), "rust");
+    assert_eq!(language_of("App.TSX"), "TSX");
+    assert_eq!(language_of("notes.md"), "markdown");
+    assert_eq!(language_of("config.yml"), "yaml");
+    assert_eq!(language_of("Cargo.toml"), "toml");
+    assert_eq!(language_of("run.sh"), "bash");
+    assert_eq!(language_of("readme"), "text");
+    assert_eq!(language_of(".bashrc"), "text");
+    assert_eq!(language_of("app.log"), "text");
 }

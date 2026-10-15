@@ -42,6 +42,7 @@ gpui_kit::actions!(
         SortSize,
         EditItem,
         ChooseEditor,
+        ViewItem,
     ]
 );
 
@@ -78,6 +79,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-f4", SortExt, context),
         KeyBinding::new("ctrl-f5", SortDate, context),
         KeyBinding::new("ctrl-f6", SortSize, context),
+        KeyBinding::new("f3", ViewItem, context),
         KeyBinding::new("f4", EditItem, context),
         KeyBinding::new("shift-f4", ChooseEditor, context),
     ]);
@@ -159,6 +161,10 @@ fn register_more(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
     .on_action({
         let ctx = ctx.clone();
         move |_: &NewFolder, window, cx| ctx.act(FileListAction::NewFolder, window, cx)
+    })
+    .on_action({
+        let ctx = ctx.clone();
+        move |_: &ViewItem, window, cx| ctx.view_cursor(window, cx)
     })
     .on_action({
         let ctx = ctx.clone();

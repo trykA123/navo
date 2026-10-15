@@ -10,7 +10,7 @@ use rusty_ui::tokens::Mode;
 use rusty_ui::window_view::{StartOptions, run};
 
 use crate::startup::{home_location, initial_state, save};
-use crate::{editor, jobs, launch};
+use crate::{editor, files, jobs, launch};
 
 pub fn open() {
     let dirs = StoreDirs::detect();
@@ -38,6 +38,7 @@ pub fn open() {
         operations,
         launcher: launch::launcher(),
         editor: editor::hooks(settings.as_deref(), |name| std::env::var(name).ok()),
+        files: files::hooks(),
     });
 }
 
