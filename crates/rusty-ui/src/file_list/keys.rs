@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use gpui_kit::{Action, App, Div, InteractiveElement, KeyBinding, Stateful, Window};
+use gpui_kit::{
+    Action, App, Div, InteractiveElement, KeyBinding, MouseButton, NavigationDirection, Stateful,
+    Window,
+};
 use rusty_core::{Command, CursorMove, OpKind};
 
 use super::{FileListAction, ListContext};
@@ -25,6 +28,8 @@ gpui_kit::actions!(
         MoveItems,
         RecycleItems,
         DeleteItems,
+        GoBack,
+        GoForward,
     ]
 );
 
@@ -48,6 +53,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("delete", RecycleItems, context),
         KeyBinding::new("shift-delete", DeleteItems, context),
         KeyBinding::new("shift-f8", DeleteItems, context),
+        KeyBinding::new("alt-left", GoBack, context),
+        KeyBinding::new("alt-right", GoForward, context),
     ]);
 }
 
@@ -95,4 +102,18 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
         .on_action(operate::<MoveItems>(ctx, OpKind::Move))
         .on_action(operate::<RecycleItems>(ctx, OpKind::Recycle))
         .on_action(operate::<DeleteItems>(ctx, OpKind::Delete))
+        .on_action(send::<GoBack>(ctx, Command::PaneBack))
+        .on_action(send::<GoForward>(ctx, Command::PaneForward))
+        .on_mouse_down(side_button(NavigationDirection::Back), {
+            let ctx = ctx.clone();
+            move |_, window, cx| ctx.send(Command::PaneBack, window, cx)
+        })
+        .on_mouse_down(side_button(NavigationDirection::Forward), {
+            let ctx = ctx.clone();
+            move |_, window, cx| ctx.send(Command::PaneForward, window, cx)
+        })
+}
+
+fn side_button(direction: NavigationDirection) -> MouseButton {
+    MouseButton::Navigate(direction)
 }

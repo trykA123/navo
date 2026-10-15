@@ -176,3 +176,46 @@ fn shift_delete_and_shift_f8_ask_to_delete_permanently(cx: &mut TestAppContext) 
     assert_eq!(pressed("shift-delete", cx), delete);
     assert_eq!(pressed("shift-f8", cx), delete);
 }
+
+#[gpui_kit::test]
+fn alt_arrows_go_back_and_forward(cx: &mut TestAppContext) {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        window.press("alt-left", cx);
+        window.press("alt-right", cx);
+    })
+    .expect("window");
+    assert_eq!(
+        commands(&harness, cx),
+        [Command::PaneBack, Command::PaneForward]
+    );
+}
+
+#[gpui_kit::test]
+fn the_mouse_side_buttons_go_back_and_forward(cx: &mut TestAppContext) {
+    use gpui_kit::{InputEvent as _, MouseButton, MouseDownEvent, NavigationDirection};
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let position = window
+            .within("left")
+            .find(("row", 1usize))
+            .bounds()
+            .center();
+        for direction in [NavigationDirection::Back, NavigationDirection::Forward] {
+            let event = MouseDownEvent {
+                button: MouseButton::Navigate(direction),
+                position,
+                modifiers: gpui_kit::Modifiers::default(),
+                click_count: 1,
+                first_mouse: false,
+            };
+            window.dispatch_event(event.to_platform_input(), cx);
+        }
+    })
+    .expect("window");
+    assert_eq!(
+        commands(&harness, cx),
+        [Command::PaneBack, Command::PaneForward]
+    );
+}
