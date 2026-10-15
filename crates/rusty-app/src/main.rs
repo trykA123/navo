@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(
     clippy::print_stdout,
     clippy::print_stderr,
@@ -6,6 +7,7 @@
 
 mod browse;
 mod cli;
+mod console;
 mod diag;
 mod startup;
 #[cfg(windows)]
@@ -18,8 +20,12 @@ use cli::Command;
 
 fn main() -> ExitCode {
     let started = Instant::now();
-    match cli::parse(std::env::args_os().skip(1)) {
-        Ok(Command::Version) => {
+    let parsed = cli::parse(std::env::args_os().skip(1));
+    if parsed.as_ref().map_or(true, Command::uses_console) {
+        console::attach();
+    }
+    match parsed {
+        Ok(Command::Open | Command::Version) => {
             println!("ferrite {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
