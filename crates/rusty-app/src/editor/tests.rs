@@ -2,7 +2,7 @@ use std::fs;
 
 use rusty_core::Location;
 
-use super::{hooks, resolves};
+use super::{hooks, resolve};
 
 fn exe(dir: &std::path::Path, name: &str) -> String {
     let path = dir.join(name);
@@ -22,18 +22,21 @@ fn a_full_path_or_a_name_on_the_search_path_resolves() {
     let dir = tempfile::tempdir().unwrap();
     let full = exe(dir.path(), "edit.exe");
     let found = search(dir.path(), "");
-    assert!(resolves(&full, &found));
-    assert!(resolves("edit.exe", &found));
-    assert!(!resolves("missing.exe", &found));
-    assert!(!resolves("", &found));
+    assert_eq!(
+        resolve(&full, &found),
+        Some(std::path::PathBuf::from(&full))
+    );
+    assert!(resolve("edit.exe", &found).is_some());
+    assert!(resolve("missing.exe", &found).is_none());
+    assert!(resolve("", &found).is_none());
 }
 
 #[test]
 fn a_bare_name_finds_its_exe_through_pathext() {
     let dir = tempfile::tempdir().unwrap();
-    exe(dir.path(), "notepad.exe");
-    assert!(resolves("notepad", &search(dir.path(), ".COM;.EXE")));
-    assert!(!resolves("notepad", &search(dir.path(), "")));
+    let full = exe(dir.path(), "notepad.exe");
+    let found = resolve("notepad", &search(dir.path(), ".COM;.EXE"));
+    assert_eq!(found, Some(std::path::PathBuf::from(full)));
 }
 
 #[test]
@@ -51,7 +54,7 @@ fn a_chosen_editor_is_saved_and_read_back() {
     let program = exe(dir.path(), "edit.exe");
     let first = hooks(Some(&settings), |_| None);
     assert_eq!(first.chosen, None);
-    assert_eq!((first.remember)(&program), Ok(()));
+    assert_eq!((first.remember)(&program), Ok(program.clone()));
     let again = hooks(Some(&settings), |_| None);
     assert_eq!(again.chosen, Some(program));
 }
@@ -64,7 +67,7 @@ fn a_settings_file_edited_by_hand_does_not_block_the_choice() {
     let program = exe(dir.path(), "edit.exe");
     let editor = hooks(Some(&settings), |_| None);
     fs::write(&settings, "[files]\nshow-hidden = false\n").unwrap();
-    assert_eq!((editor.remember)(&program), Ok(()));
+    assert_eq!((editor.remember)(&program), Ok(program.clone()));
     let again = hooks(Some(&settings), |_| None);
     assert_eq!(again.chosen, Some(program));
 }

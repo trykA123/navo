@@ -408,7 +408,7 @@ fn editor_window(
             remember: Rc::new(move |program| {
                 if program.ends_with(".exe") {
                     remembered.borrow_mut().remembered.push(program.to_owned());
-                    Ok(())
+                    Ok(program.to_owned())
                 } else {
                     Err("No program at that path.".to_owned())
                 }

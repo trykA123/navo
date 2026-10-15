@@ -58,43 +58,45 @@ fn suggest(var: &impl Fn(&str) -> Option<String>) -> Option<String> {
     found.map(|path| path.to_string_lossy().into_owned())
 }
 
-pub fn resolves(program: &str, search: &Search) -> bool {
+pub fn resolve(program: &str, search: &Search) -> Option<PathBuf> {
     let path = Path::new(program);
     if program.is_empty() {
-        return false;
+        return None;
     }
     if path.is_file() {
-        return true;
+        return Some(path.to_owned());
     }
     if path.components().count() != 1 {
-        return false;
+        return None;
     }
-    let names: Vec<String> = std::iter::once(program.to_owned())
-        .chain(
-            search
-                .extensions
-                .split(';')
-                .filter(|ext| !ext.is_empty())
-                .map(|ext| format!("{program}{}", ext.to_lowercase())),
-        )
-        .collect();
-    std::env::split_paths(&search.path)
-        .any(|folder| names.iter().any(|name| folder.join(name).is_file()))
+    let with_extensions = search
+        .extensions
+        .split(';')
+        .filter(|ext| !ext.is_empty())
+        .map(|ext| format!("{program}{}", ext.to_lowercase()));
+    let bare = (!cfg!(windows)).then(|| program.to_owned());
+    let names: Vec<String> = with_extensions.chain(bare).collect();
+    std::env::split_paths(&search.path).find_map(|folder| {
+        names
+            .iter()
+            .map(|name| folder.join(name))
+            .find(|candidate| candidate.is_file())
+    })
 }
 
 fn remember(
     store: Option<&Rc<RefCell<SettingsStore>>>,
     program: &str,
     search: &Search,
-) -> Result<(), String> {
-    let program = clean(program);
-    if !resolves(&program, search) {
+) -> Result<String, String> {
+    let Some(found) = resolve(&clean(program), search) else {
         return Err("No program at that path.".to_owned());
-    }
+    };
+    let found = found.to_string_lossy().into_owned();
     if let Some(store) = store {
-        save_choice(store, &program);
+        save_choice(store, &found);
     }
-    Ok(())
+    Ok(found)
 }
 
 fn save_choice(store: &Rc<RefCell<SettingsStore>>, program: &str) {

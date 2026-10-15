@@ -3,7 +3,7 @@ use std::fs;
 use rusty_core::Location;
 use rusty_ui::window_view::{Save, SaveError};
 
-use super::{line_endings, read, write};
+use super::{line_endings, mostly_crlf, read, write};
 
 fn at(path: &std::path::Path) -> Location {
     Location::new(path.to_string_lossy().into_owned()).unwrap()
@@ -98,4 +98,25 @@ fn text_that_is_not_utf8_opens_read_only() {
 fn a_missing_or_remote_file_explains_itself() {
     assert!(read(&Location::new("/no/such/file.txt").unwrap()).is_err());
     assert!(read(&Location::new("fake://home/a.txt").unwrap()).is_err());
+}
+
+#[test]
+fn the_majority_line_ending_wins() {
+    assert!(mostly_crlf(b"a\r\nb\r\nc\n"));
+    assert!(!mostly_crlf(b"a\nb\nc\r\n"));
+    assert!(!mostly_crlf(b"no newline"));
+}
+
+#[cfg(unix)]
+#[test]
+fn saving_keeps_the_file_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join(".env");
+    fs::write(&file, "KEY=1\n").unwrap();
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+    let text = read(&at(&file)).unwrap();
+    write(&at(&file), &save("KEY=2\n", false, text.stamp)).unwrap();
+    let mode = fs::metadata(&file).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
 }

@@ -6,7 +6,7 @@ use super::FerriteWindow;
 use super::prompt::PromptKind;
 use crate::prelude::*;
 
-type Remember = Rc<dyn Fn(&str) -> Result<(), String>>;
+type Remember = Rc<dyn Fn(&str) -> Result<String, String>>;
 type OpenWith = Rc<dyn Fn(&str, &Location) -> Result<(), String>>;
 
 pub struct EditorHooks {
@@ -74,8 +74,9 @@ impl FerriteWindow {
         program: &str,
         target: &Location,
     ) -> Result<(), Option<String>> {
-        (self.editor.remember)(program).map_err(Some)?;
-        self.editor.chosen = Some(program.to_owned());
-        (self.editor.open)(program, target).map_err(Some)
+        let program = (self.editor.remember)(program).map_err(Some)?;
+        let opened = (self.editor.open)(&program, target).map_err(Some);
+        self.editor.chosen = Some(program);
+        opened
     }
 }

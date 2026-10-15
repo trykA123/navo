@@ -137,6 +137,7 @@ impl FerriteWindow {
         if let Some(viewer) = &mut self.viewer {
             viewer.dirty = true;
             viewer.leaving = false;
+            viewer.overwrite = false;
         }
         cx.notify();
     }

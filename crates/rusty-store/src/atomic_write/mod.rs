@@ -77,6 +77,11 @@ fn replace(
 ) -> io::Result<()> {
     let mut file = OpenOptions::new().write(true).create_new(true).open(temp)?;
     file.write_all(payload.bytes)?;
+    if !payload.backup
+        && let Ok(old) = fs::metadata(path)
+    {
+        fs::set_permissions(temp, old.permissions())?;
+    }
     hook(Stage::TempWritten)?;
     file.sync_all()?;
     drop(file);

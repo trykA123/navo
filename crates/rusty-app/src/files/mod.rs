@@ -56,7 +56,7 @@ pub fn read(location: &Location) -> Result<FileText, String> {
     if bytes.iter().take(SNIFF).any(|byte| *byte == 0) {
         return Err("This looks like a binary file. F4 opens it in your editor.".to_owned());
     }
-    let crlf = bytes.windows(2).any(|pair| pair == b"\r\n");
+    let crlf = mostly_crlf(&bytes);
     let stamp = stamp_of(&path);
     let (text, read_only) = match String::from_utf8(bytes) {
         Ok(text) => (text, false),
@@ -68,6 +68,12 @@ pub fn read(location: &Location) -> Result<FileText, String> {
         crlf,
         stamp,
     })
+}
+
+pub fn mostly_crlf(bytes: &[u8]) -> bool {
+    let crlf = bytes.windows(2).filter(|pair| *pair == b"\r\n").count();
+    let lf = bytes.iter().filter(|byte| **byte == b'\n').count();
+    crlf * 2 > lf
 }
 
 pub fn line_endings(text: &str, crlf: bool) -> String {
