@@ -5,13 +5,14 @@ use tempfile::TempDir;
 
 use super::{Capture, TARGET, capture_with, config, redacted, redactor};
 
-const MESSAGES: [&str; 6] = [
+const MESSAGES: [&str; 7] = [
     r"session start user=canary-user-7731 host=CANARY-PC-7731 domain=CANARYDOM",
     r"open folder C:\Users\canary-user-7731\Documents\canary-project-7731",
     r"listing \\canary-srv-7731\share\Reports\2026 took 412 ms (network)",
     r"lock owner: CANARYDOM\canary-user-7731 (pid 4412)",
     r"watcher started on c:/users/canary-user-7731/.cargo/registry",
     r"shutdown: CANARY-PC-7731 idle, canary-user-7731 logged off",
+    r"cannot rename 'Secret Plan.docx'",
 ];
 
 const RAW_PATHS: [&str; 3] = [
@@ -46,7 +47,7 @@ fn leaks(text: &str) -> Vec<String> {
     text.lines()
         .filter(|l| {
             let lower = l.to_lowercase();
-            lower.contains("canary") || lower.contains("7731")
+            lower.contains("canary") || lower.contains("7731") || lower.contains("secret plan.docx")
         })
         .map(str::to_owned)
         .collect()

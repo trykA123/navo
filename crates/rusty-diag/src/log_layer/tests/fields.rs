@@ -75,3 +75,15 @@ fn search_like_fields_are_replaced_by_their_length() {
         ]
     );
 }
+
+#[test]
+fn debug_query_field_counts_the_text_without_its_quotes() {
+    let c = capture(|| tracing::info!(target: TARGET, query = ?"abc", "x"));
+    assert_eq!(c.only_fields()["query"], json!("<text:3 chars>"));
+}
+
+#[test]
+fn quoted_fragment_in_a_message_becomes_its_length() {
+    let c = capture(|| tracing::warn!(target: TARGET, "cannot rename 'Secret Plan.docx'"));
+    assert_eq!(c.only()["msg"], json!("cannot rename '<text:16 chars>'"));
+}

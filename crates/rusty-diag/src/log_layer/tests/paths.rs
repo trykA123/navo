@@ -167,3 +167,33 @@ fn is_redacted_path_accepts_every_redactor_output() {
         .collect();
     assert!(refused.is_empty(), "refused: {refused:#?}");
 }
+
+#[test]
+fn is_redacted_path_rejects_an_extension_off_the_allow_list() {
+    assert!(!is_redacted_path(r"D:\<d:3fa2>\<f:07e1>.smith"));
+}
+
+#[test]
+fn raw_str_file_field_is_dropped_as_a_miss() {
+    let c = capture(|| tracing::info!(target: TARGET, file = "Secret Plan.docx", "x"));
+    let hidden = !c.only_raw().to_lowercase().contains("secret");
+    assert!(hidden && c.misses.count() == 1, "{}", c.only_raw());
+}
+
+#[test]
+fn every_name_carrying_field_needs_a_redacted_path() {
+    let c = capture(|| {
+        tracing::info!(
+            target: TARGET,
+            file = "a", folder = "a", dir = "a", name = "a", src = "a", dst = "a",
+            dest = "a", from = "a", to = "a", out_file = "a", cache_dir = "a", user_name = "a",
+            "x"
+        );
+    });
+    let kept: Vec<String> = c.only_fields().keys().cloned().collect();
+    assert!(
+        kept.is_empty() && c.misses.count() == 12,
+        "{kept:?} {}",
+        c.misses.count()
+    );
+}

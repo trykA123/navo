@@ -146,3 +146,104 @@ fn failed_write_leaves_nothing_behind() {
     let left: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
     assert!(left.is_empty(), "{left:?}");
 }
+
+#[test]
+fn quoted_fragment_in_a_setting_value_becomes_its_length() {
+    let written = write(&ReportInput {
+        settings_changed: vec![("last".to_owned(), "'Secret Plan.docx'".to_owned())],
+        ..input()
+    });
+    let report = report_json(&written.path);
+    assert_eq!(
+        report["configuration"]["settings_changed"][0]["value"],
+        Value::from("'<text:16 chars>'")
+    );
+}
+
+#[test]
+fn quoted_fragment_in_an_error_detail_becomes_its_length() {
+    let written = write(&ReportInput {
+        errors: vec![super::error("rename", "cannot rename 'Secret Plan.docx'")],
+        ..input()
+    });
+    let report = report_json(&written.path);
+    assert_eq!(
+        report["errors"][0]["detail"],
+        Value::from("cannot rename '<text:16 chars>'")
+    );
+}
+
+#[test]
+fn event_with_an_escaped_redacted_path_stays_a_json_object() {
+    let line = r#"{"t":1,"level":"INFO","target":"ferrite","msg":"open D:\\<d:d903>\\<f:7b6a>.txt","fields":{}}"#;
+    let written = write(&ReportInput {
+        events: vec![Arc::from(line)],
+        ..input()
+    });
+    let report = report_json(&written.path);
+    assert_eq!(
+        report["recent_events"][0]["msg"],
+        Value::from(r"open D:\<d:d903>\<f:7b6a>.txt")
+    );
+}
+
+#[test]
+fn event_with_an_escaped_unc_root_decodes_to_the_root() {
+    let line = r#"{"t":1,"level":"INFO","target":"ferrite","msg":"x \\\\<server:1>","fields":{}}"#;
+    let written = write(&ReportInput {
+        events: vec![Arc::from(line)],
+        ..input()
+    });
+    let report = report_json(&written.path);
+    assert_eq!(
+        report["recent_events"][0]["msg"],
+        Value::from(r"x \\<server:1>")
+    );
+}
+
+#[test]
+fn writing_over_an_existing_file_fails_with_already_exists() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("report.zip");
+    fs::write(&path, b"keep me").unwrap();
+    let result = write_report(&path, &input(), &redactor());
+    assert_eq!(
+        result.map_err(|e| e.kind()).err(),
+        Some(std::io::ErrorKind::AlreadyExists)
+    );
+}
+
+#[test]
+fn writing_over_an_existing_file_leaves_it_unchanged() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("report.zip");
+    fs::write(&path, b"keep me").unwrap();
+    let _ = write_report(&path, &input(), &redactor());
+    assert_eq!(fs::read(&path).unwrap(), b"keep me");
+}
+
+#[test]
+fn a_foreign_temp_file_survives_a_failed_write() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("report.zip");
+    let temp = dir
+        .path()
+        .join(format!("report.zip.{}.tmp", std::process::id()));
+    fs::write(&temp, b"not ours").unwrap();
+    let _ = write_report(&path, &input(), &redactor());
+    assert_eq!(fs::read(&temp).ok(), Some(b"not ours".to_vec()));
+}
+
+#[test]
+fn a_failed_rename_leaves_no_temp_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("report.zip");
+    fs::create_dir(&path).unwrap();
+    let _ = write_report(&path, &input(), &redactor());
+    let temps: Vec<_> = fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .filter(|name| name.to_string_lossy().ends_with(".tmp"))
+        .collect();
+    assert!(temps.is_empty(), "{temps:?}");
+}

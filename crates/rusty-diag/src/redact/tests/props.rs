@@ -92,6 +92,34 @@ fn segment(spaces: bool) -> impl Strategy<Value = String> {
     proptest::string::string_regex(pattern).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
+fn dotted_segment() -> impl Strategy<Value = String> {
+    let word = "([a-zA-Z0-9.\u{e9}\u{436}]{1,6}|[0-9]{1,4}\\.[0-9]{1,2})";
+    let pattern = format!("{word}( {word}){{0,2}}");
+    proptest::string::string_regex(&pattern).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn dotted_case(roots: &'static [Root], extension: bool) -> impl Strategy<Value = Case> {
+    let extension = if extension {
+        proptest::sample::select(&EXTENSIONS[..])
+            .prop_map(Some)
+            .boxed()
+    } else {
+        prop::option::of(proptest::sample::select(&EXTENSIONS[..])).boxed()
+    };
+    (
+        proptest::sample::select(roots),
+        prop::collection::vec(dotted_segment(), 1..=6),
+        extension,
+        any::<[u8; 16]>(),
+    )
+        .prop_map(|(root, segments, extension, salt)| Case {
+            root,
+            segments,
+            extension,
+            salt,
+        })
+}
+
 fn case(roots: &'static [Root], spaces: bool) -> impl Strategy<Value = Case> {
     (
         proptest::sample::select(roots),
@@ -145,6 +173,29 @@ proptest! {
     #[test]
     fn text_output_holds_no_part_of_any_segment(case in case(TEXT_ROOTS, true)) {
         let line = format!("-> {} <-", case.path());
+        let out = case.root.redactor(case.salt).text(&line);
+        let leak = leaked(&case, &out);
+        prop_assert!(leak.is_none(), "{:?} leaked into {:?}", leak, out);
+    }
+
+    #[test]
+    fn path_output_with_dotted_segments_holds_no_segment_text(case in dotted_case(PATH_ROOTS, false)) {
+        let out = case.root.redactor(case.salt).path(&case.path(), case.kind(), DriveKind::Local);
+        let leak = leaked(&case, out.as_str());
+        prop_assert!(leak.is_none(), "{:?} leaked into {:?}", leak, out.as_str());
+    }
+
+    #[test]
+    fn wrapped_text_with_dotted_segments_holds_no_segment_text(case in dotted_case(TEXT_ROOTS, true)) {
+        let line = format!("-> {} <-", case.path());
+        let out = case.root.redactor(case.salt).text(&line);
+        let leak = leaked(&case, &out);
+        prop_assert!(leak.is_none(), "{:?} leaked into {:?}", leak, out);
+    }
+
+    #[test]
+    fn unwrapped_text_with_trailing_words_holds_no_segment_text(case in dotted_case(TEXT_ROOTS, true)) {
+        let line = format!("{} \u{3bb}\u{3ac}\u{3b8}\u{3bf}\u{3c2} \u{3be}\u{3b1}\u{3bd}\u{3ac}", case.path());
         let out = case.root.redactor(case.salt).text(&line);
         let leak = leaked(&case, &out);
         prop_assert!(leak.is_none(), "{:?} leaked into {:?}", leak, out);

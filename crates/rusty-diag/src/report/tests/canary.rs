@@ -15,7 +15,13 @@ use crate::{
 };
 
 const TARGET: &str = "ferrite::session";
-const NEEDLES: [&str; 4] = ["canary", "7731", "canarydom", "secret plan"];
+const NEEDLES: [&str; 5] = [
+    "canary",
+    "7731",
+    "canarydom",
+    "secret plan",
+    "secret plan.docx",
+];
 
 const MESSAGES: [&str; 5] = [
     r"session start user=canary-user-7731 host=CANARY-PC-7731 domain=CANARYDOM",
@@ -45,7 +51,7 @@ const POOL: [&str; 12] = [
 
 fn emit(round: usize) {
     let msg = MESSAGES[round % MESSAGES.len()];
-    match round % 6 {
+    match round % 7 {
         0 => {
             tracing::info!(target: TARGET, user = "canary-user-7731", host = %"CANARY-PC-7731", "{msg}")
         }
@@ -57,6 +63,7 @@ fn emit(round: usize) {
             tracing::error!(target: TARGET, share = UNC_PATH, domain = "CANARYDOM", code = 5, "{msg}")
         }
         4 => tracing::info!(target: TARGET, query = "canary secret plan", hits = 3, "search done"),
+        5 => tracing::warn!(target: TARGET, "cannot rename 'Secret Plan.docx'"),
         _ => {
             tracing::trace!(target: TARGET, source_path = PROFILE_PATH, "{msg} {PROFILE_PATH} {UNC_PATH}")
         }
@@ -96,10 +103,13 @@ fn session_input(events: Vec<Arc<str>>, redaction_misses: u64) -> ReportInput {
             ("pinned".to_owned(), UNC_PATH.to_owned()),
             ("CANARY-PC-7731.window".to_owned(), "maximised".to_owned()),
         ],
-        errors: vec![error(
-            &format!("list {UNC_PATH}"),
-            r"access denied for CANARYDOM\canary-user-7731",
-        )],
+        errors: vec![
+            error(
+                &format!("list {UNC_PATH}"),
+                r"access denied for CANARYDOM\canary-user-7731",
+            ),
+            error("rename", "cannot rename 'Secret Plan.docx'"),
+        ],
         events,
         memory: Some(session_memory()),
         startup_ms: vec![("window".to_owned(), 10.5)],

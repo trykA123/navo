@@ -329,3 +329,21 @@ fn malformed_unc_hides_the_server() {
         assert_absent(file(&r, input).as_str(), &["lonelyserver"]);
     }
 }
+
+#[test]
+fn a_name_after_the_last_dot_that_is_no_known_extension_is_hidden() {
+    let out = file(&plain(), r"D:\Contacts\Jane.Doe");
+    assert_absent(out.as_str(), &["doe"]);
+}
+
+#[test]
+fn a_known_extension_in_upper_case_is_kept_in_lower_case() {
+    let out = file(&plain(), r"D:\a\report.PDF");
+    assert_eq!(shape(out.as_str()), r"D:\<d>\<f>.pdf");
+}
+
+#[test]
+fn forward_slash_unc_path_is_read_as_unc() {
+    let out = file(&plain(), "//server/share/x.txt");
+    assert_eq!(shape(out.as_str()), r"\\<server:1>\<share:1>\<f>.txt");
+}

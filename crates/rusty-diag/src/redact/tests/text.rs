@@ -168,3 +168,104 @@ fn a_second_path_in_the_same_run_starts_a_new_path() {
     let out = redactor().text(r"copy C:\a\x.txt to D:\b\y.txt done");
     assert_eq!(shape(&out), r"copy C:\<d>\<f>.txt to D:\<d>\<f>.txt done");
 }
+
+fn user(name: &str) -> Redactor {
+    let identity = Identity {
+        user: Some(name.to_owned()),
+        ..Identity::default()
+    };
+    Redactor::new(Salt::from_bytes(SALT_A), identity)
+}
+
+#[test]
+fn a_dotted_number_before_the_extension_word_does_not_end_the_file_name() {
+    let out = redactor().text(r"failed D:\Clients\Report 2024.03 Acme Merger.pdf");
+    assert_eq!(shape(&out), r"failed D:\<d>\<f>.pdf");
+}
+
+#[test]
+fn a_version_word_before_the_extension_word_does_not_end_the_file_name() {
+    let out = redactor().text(r"C:\x\v1.2 final draft for Bob.docx");
+    assert_eq!(shape(&out), r"C:\<d>\<f>.docx");
+}
+
+#[test]
+fn a_dotted_user_name_as_a_drive_file_leaves_no_part_of_the_name() {
+    let out = user("john.smith").text(r"open D:\backup\john.smith");
+    assert_absent(&out, &["smith"]);
+}
+
+#[test]
+fn a_dotted_user_name_as_a_unc_file_leaves_no_part_of_the_name() {
+    let out = user("john.smith").text(r"\\fs01\home$\john.smith");
+    assert_absent(&out, &["smith"]);
+}
+
+#[test]
+fn forward_slash_unc_path_in_text_hides_server_share_and_file() {
+    let out = redactor().text("open //fileserver01/finance/Payroll Q3.xlsx");
+    assert_absent(&out, &["fileserver01", "finance", "payroll", "q3"]);
+}
+
+#[test]
+fn a_url_is_not_a_path() {
+    let line = "see https://example.com/a for help";
+    assert_eq!(redactor().text(line), line);
+}
+
+#[test]
+fn single_quoted_fragment_becomes_its_length() {
+    assert_eq!(
+        redactor().text("cannot rename 'Secret Plan.docx'"),
+        "cannot rename '<text:16 chars>'"
+    );
+}
+
+#[test]
+fn double_quoted_fragment_becomes_its_length() {
+    assert_eq!(
+        redactor().text(r#"cannot rename "Secret Plan.docx""#),
+        r#"cannot rename "<text:16 chars>""#
+    );
+}
+
+#[test]
+fn curly_quoted_fragment_becomes_its_length() {
+    assert_eq!(
+        redactor().text("cannot rename \u{201c}\u{e9}t\u{e9} Plan\u{201d}"),
+        "cannot rename \u{201c}<text:8 chars>\u{201d}"
+    );
+}
+
+#[test]
+fn a_share_name_seen_in_a_path_is_replaced_in_later_text() {
+    let out = redactor().text(r"open \\fs01\finance$\a.txt then share finance$ was slow");
+    assert_eq!(
+        shape(&out),
+        r"open \\<server:1>\<share:1>\<f>.txt then share <share:1> was slow"
+    );
+}
+
+#[test]
+fn unix_path_outside_the_profile_after_a_space_is_redacted() {
+    let out = redactor().text("open /mnt/data/Medical Records/scan.pdf failed");
+    assert_absent(&out, &["medical", "records", "scan"]);
+}
+
+#[test]
+fn unix_path_outside_the_profile_at_start_after_equals_or_quote_is_redacted() {
+    let r = redactor();
+    for line in [
+        "/mnt/data/scan.pdf failed",
+        "file=/mnt/data/scan.pdf",
+        "open '/mnt/data/scan.pdf'",
+    ] {
+        assert_absent(&r.text(line), &["mnt", "data", "scan"]);
+    }
+}
+
+#[test]
+fn slashes_inside_words_and_numbers_are_not_paths() {
+    let line = "ratio a/b is 1/2 and/or more";
+    assert_eq!(redactor().text(line), line);
+}
