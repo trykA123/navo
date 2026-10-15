@@ -7,6 +7,12 @@ use rusty_core::Location;
 use rusty_store::replace_atomic;
 use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
 
+#[allow(dead_code, reason = "wired by P13 A4")]
+mod summary;
+
+#[allow(unused_imports, reason = "wired by P13 A4")]
+pub use summary::{SUMMARY_HEAD, binary_summary};
+
 const MAX_VIEW: u64 = 16 * 1024 * 1024;
 const SNIFF: usize = 8 * 1024;
 
