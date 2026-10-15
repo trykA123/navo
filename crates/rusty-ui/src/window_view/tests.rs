@@ -106,3 +106,12 @@ fn closing_the_window_saves_the_session(cx: &mut TestAppContext) {
     visual.simulate_close();
     assert_eq!(saves.get(), 1);
 }
+
+#[test]
+fn every_system_appearance_maps_to_a_theme_mode() {
+    use gpui_kit::WindowAppearance as A;
+    assert_eq!(super::mode_of(A::Light), Mode::Light);
+    assert_eq!(super::mode_of(A::VibrantLight), Mode::Light);
+    assert_eq!(super::mode_of(A::Dark), Mode::Dark);
+    assert_eq!(super::mode_of(A::VibrantDark), Mode::Dark);
+}
