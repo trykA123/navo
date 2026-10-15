@@ -100,7 +100,10 @@ impl PagedFile {
     fn copy_from_page(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
         let mut cache = self.cache();
         if offset >= cache.len {
-            return Ok(0);
+            self.check_change(&mut cache);
+            if offset >= cache.len {
+                return Ok(0);
+            }
         }
         let number = offset / PAGE;
         let within = usize::try_from(offset % PAGE).unwrap_or(0);

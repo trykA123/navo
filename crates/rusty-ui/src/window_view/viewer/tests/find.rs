@@ -113,3 +113,34 @@ fn escape_closes_the_search_bar_before_the_viewer(cx: &mut TestAppContext) {
     press(cx, window, &view, "escape");
     assert!(!viewer_open(cx, &view));
 }
+
+fn shown(cx: &mut TestAppContext, window: gpui_kit::AnyWindowHandle, id: &'static str) -> String {
+    cx.update_window(window, |_, window, _| {
+        window
+            .try_find(id)
+            .and_then(|found| found.label().map(str::to_owned))
+            .unwrap_or_default()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn a_finished_index_shows_the_line_count(cx: &mut TestAppContext) {
+    let bytes = numbered_lines();
+    let lines = bytes.iter().filter(|byte| **byte == b'\n').count()
+        + usize::from(bytes.last() != Some(&b'\n'));
+    let (window, _view) = paged_window(cx, Setup::new(OpenAs::PagedText, bytes));
+    let count = shown(cx, window, "paged-index").replace(',', "");
+    assert_eq!(count, format!("{lines} lines"));
+}
+
+#[gpui_kit::test]
+fn a_failed_index_shows_its_error_instead_of_progress(cx: &mut TestAppContext) {
+    let setup = Setup {
+        index_fails: true,
+        ..Setup::new(OpenAs::PagedText, numbered_lines())
+    };
+    let (window, _view) = paged_window(cx, setup);
+    assert!(!visible(cx, window, "paged-index"));
+    assert!(status(cx, window).contains("gone"));
+}

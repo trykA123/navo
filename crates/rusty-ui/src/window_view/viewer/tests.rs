@@ -38,6 +38,7 @@ pub(super) struct Setup {
     pub bytes: Vec<u8>,
     pub editable: bool,
     pub changed: bool,
+    pub index_fails: bool,
 }
 
 impl Setup {
@@ -47,12 +48,16 @@ impl Setup {
             bytes,
             editable: false,
             changed: false,
+            index_fails: false,
         }
     }
 }
 
-fn index_run(bytes: Arc<Vec<u8>>) -> super::IndexRun {
+fn index_run(bytes: Arc<Vec<u8>>, fails: bool) -> super::IndexRun {
     Arc::new(move |cancel, progress| {
+        if fails {
+            return Err("Cannot read it: gone".to_owned());
+        }
         let mut index = LineIndex::new();
         for chunk in bytes.chunks(64 * 1024) {
             if cancel.load(Ordering::Relaxed) {
@@ -79,7 +84,7 @@ fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup) -> Paged {
                 changed: AtomicBool::new(false),
             }) as Box<dyn ByteSource + Send>)
         }),
-        index: index_run(bytes.clone()),
+        index: index_run(bytes.clone(), setup.index_fails),
         summary: None,
         editable: setup.editable,
     }

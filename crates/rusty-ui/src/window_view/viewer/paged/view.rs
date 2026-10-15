@@ -57,7 +57,7 @@ impl PagedView {
     }
 
     fn index_status(&self) -> Option<SharedString> {
-        if self.kind != PagedKind::Text {
+        if self.kind != PagedKind::Text || self.index_failed {
             return None;
         }
         let len = self.source.len();
@@ -66,10 +66,7 @@ impl PagedView {
             let scanned = index.map_or(0, |index| index.scanned());
             return Some(format!("Indexing… {}%", percent(scanned, len)).into());
         }
-        let lines = index
-            .and_then(|index| index.line_number(&*self.source, len.saturating_sub(1)).ok())
-            .flatten()
-            .unwrap_or(0);
+        let lines = self.line_count.unwrap_or(0);
         Some(format::count(lines, "line", "lines").into())
     }
 

@@ -211,3 +211,14 @@ fn a_change_drops_the_cache() {
     let _ = read(&file, 0, 10);
     assert_eq!(file.disk_reads(), loaded + 1);
 }
+
+#[test]
+fn reading_past_the_end_notices_a_grown_file_whose_tail_is_cached() {
+    let (_dir, path) = file_with(100);
+    let file = PagedFile::open(&path).unwrap();
+    assert_eq!(read(&file, 0, 200), expected(0, 100));
+    append(&path, b"new lines");
+    assert_eq!(read(&file, 100, 64), b"new lines");
+    assert!(file.take_changed());
+    assert_eq!(file.len(), 109);
+}

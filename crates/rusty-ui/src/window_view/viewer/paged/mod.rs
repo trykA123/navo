@@ -38,6 +38,8 @@ pub struct PagedView {
     note: Option<SharedString>,
     index: Option<LineIndex>,
     index_done: bool,
+    index_failed: bool,
+    line_count: Option<u64>,
     index_job: Option<Job>,
     find: FindState,
 }
@@ -67,6 +69,8 @@ impl PagedView {
             note: None,
             index: None,
             index_done: false,
+            index_failed: false,
+            line_count: None,
             index_job: None,
             find: FindState::default(),
         };
@@ -84,11 +88,15 @@ impl PagedView {
         match message {
             IndexMessage::Snapshot(snapshot) => self.index = Some(snapshot),
             IndexMessage::Done(Ok(Some(index))) => {
+                self.line_count = index.line_count(&*self.source).ok();
                 self.index = Some(index);
                 self.index_done = true;
             }
             IndexMessage::Done(Ok(None)) => {}
-            IndexMessage::Done(Err(error)) => self.note = Some(error.into()),
+            IndexMessage::Done(Err(error)) => {
+                self.index_failed = true;
+                self.note = Some(error.into());
+            }
         }
         cx.notify();
     }

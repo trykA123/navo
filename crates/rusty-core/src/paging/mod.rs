@@ -4,7 +4,7 @@ mod rows;
 mod search;
 
 pub use hex::{HEX_WIDTH, HexRow, hex_row, hex_row_start, hex_rows};
-pub use index::{LineIndex, MARK_EVERY};
+pub use index::{LineIndex, MARK_BYTES, MARK_EVERY};
 pub use rows::{LOOK_BACK, MAX_ROW, Row, previous_row, row_at, row_start_at, rows_down, rows_up};
 pub use search::{Found, Needle, SEARCH_CHUNK, Search, find, parse_hex};
 
@@ -63,6 +63,8 @@ impl ByteSource for [u8] {
 mod tests_hex;
 #[cfg(test)]
 mod tests_index;
+#[cfg(test)]
+mod tests_review;
 #[cfg(test)]
 mod tests_rows;
 #[cfg(test)]
