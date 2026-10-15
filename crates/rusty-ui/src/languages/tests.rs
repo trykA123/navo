@@ -73,9 +73,6 @@ fn new_extensions_pick_their_language() {
         ("paper.tex", "", "latex"),
         ("style.sty", "", "latex"),
         ("bridge.mm", "", "objc"),
-        ("Form1.vb", "", "vb"),
-        ("setup.vbs", "", "vb"),
-        ("Module1.bas", "", "vb"),
         ("boot.s", "", "asm"),
         ("boot.S", "", "asm"),
         ("start.asm", "", "asm"),
@@ -154,7 +151,7 @@ fn dot_m_is_objective_c_or_text() {
 }
 
 #[test]
-fn dot_cls_is_latex_or_vb() {
+fn dot_cls_is_latex_or_text() {
     check(&[
         (
             "thesis.cls",
@@ -162,8 +159,7 @@ fn dot_cls_is_latex_or_vb() {
             "latex",
         ),
         ("report.cls", "\\documentclass{article}", "latex"),
-        ("Sheet.cls", "VERSION 1.0 CLASS\nBEGIN\nEND", "vb"),
-        ("Sheet.cls", "Attribute VB_Name = \"Sheet\"\n", "vb"),
+        ("Sheet.cls", "VERSION 1.0 CLASS\nBEGIN\nEND", "text"),
         ("Account.cls", "public class Account {}", "text"),
     ]);
 }

@@ -1,6 +1,6 @@
 pub(super) const TEXT: &str = "text";
 
-pub(super) const EXTENSIONS: [(&str, &[&str]); 47] = [
+pub(super) const EXTENSIONS: [(&str, &[&str]); 46] = [
     ("astro", &["astro"]),
     ("asm", &["s", "asm"]),
     ("bash", &["sh", "zsh", "bash"]),
@@ -45,7 +45,6 @@ pub(super) const EXTENSIONS: [(&str, &[&str]); 47] = [
     ("toml", &["toml"]),
     ("tsx", &["tsx"]),
     ("typescript", &["ts", "mts", "cts"]),
-    ("vb", &["vb", "vbs", "bas", "frm"]),
     ("xml", XML),
     ("yaml", &["yml", "yaml"]),
 ];

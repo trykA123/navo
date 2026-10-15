@@ -4,7 +4,7 @@ use gpui_kit::component::highlighter::{HighlightTheme, LanguageRegistry, SyntaxH
 use super::super::grammars::grammars;
 use super::super::{names, register_languages};
 
-const SAMPLES: [(&str, &str); 14] = [
+const SAMPLES: [(&str, &str); 13] = [
     (
         "xml",
         "<?xml version=\"1.0\"?>\n<!-- part -->\n<ecu name=\"main\">text</ecu>\n",
@@ -37,10 +37,6 @@ const SAMPLES: [(&str, &str); 14] = [
     (
         "objc",
         "#import <Foundation/Foundation.h>\n@interface Thing : NSObject\n@end\nint main() { return 0; }\n",
-    ),
-    (
-        "vb",
-        "' note\nPublic Class Thing\n    Public Function Size() As Integer\n        Return 42\n    End Function\nEnd Class\n",
     ),
     ("asm", "; note\nstart:\n    mov eax, 42\n    ret\n"),
 ];

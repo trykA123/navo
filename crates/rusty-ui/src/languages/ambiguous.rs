@@ -16,7 +16,6 @@ const OBJC_MARKS: [&str; 6] = [
     "@class",
 ];
 const LATEX_MARKS: [&str; 3] = ["\\documentclass", "\\ProvidesClass", "\\NeedsTeXFormat"];
-const VB_MARKS: [&str; 2] = ["VERSION ", "Attribute VB_"];
 const C_MARKS: [&str; 6] = [
     "#include", "#define", "#ifndef", "#ifdef", "#if ", "#pragma",
 ];
@@ -40,13 +39,7 @@ fn objective_c(text: &str) -> Option<&'static str> {
 }
 
 fn class_file(text: &str) -> Option<&'static str> {
-    if starts_any(text, &LATEX_MARKS) {
-        Some("latex")
-    } else if starts_any(text, &VB_MARKS) {
-        Some("vb")
-    } else {
-        None
-    }
+    starts_any(text, &LATEX_MARKS).then_some("latex")
 }
 
 fn include_file(text: &str) -> Option<&'static str> {

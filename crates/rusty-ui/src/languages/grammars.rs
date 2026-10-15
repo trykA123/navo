@@ -12,7 +12,7 @@ pub(crate) struct Grammar {
     pub highlights: String,
 }
 
-const GRAMMARS: [(&str, LanguageFn, &[&str]); 14] = [
+const GRAMMARS: [(&str, LanguageFn, &[&str]); 13] = [
     (
         "xml",
         tree_sitter_xml::LANGUAGE_XML,
@@ -75,11 +75,6 @@ const GRAMMARS: [(&str, LanguageFn, &[&str]); 14] = [
             tree_sitter_c::HIGHLIGHT_QUERY,
             tree_sitter_objc::HIGHLIGHTS_QUERY,
         ],
-    ),
-    (
-        "vb",
-        tree_sitter_vb_dotnet::LANGUAGE,
-        &[include_str!("queries/vb.scm")],
     ),
     (
         "asm",
