@@ -9,6 +9,7 @@ mod layout;
 mod location;
 mod name;
 mod op_plan;
+pub mod paging;
 mod replay;
 mod selection;
 mod session;

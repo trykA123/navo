@@ -6121,7 +6121,9 @@ version = "0.0.1"
 name = "rusty-core"
 version = "0.0.1"
 dependencies = [
+ "aho-corasick",
  "insta",
+ "memchr",
  "proptest",
  "serde",
  "serde_json",

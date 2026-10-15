@@ -6,6 +6,7 @@ mod io_queue;
 mod job;
 mod local;
 mod measure;
+mod paged;
 mod provider;
 mod scan;
 mod snapshot;
@@ -21,6 +22,9 @@ pub use job::{
 };
 pub use local::LocalFs;
 pub use measure::{FolderSize, folder_size};
+pub use paged::{
+    CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
+};
 pub use provider::{
     Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider,
     ProviderOps,
