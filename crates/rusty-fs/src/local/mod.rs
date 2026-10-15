@@ -1,8 +1,22 @@
-use std::path::PathBuf;
+#[cfg(unix)]
+mod unix;
+#[cfg(unix)]
+use unix as platform;
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows as platform;
 
-use rusty_core::{FsError, Location, ProviderId};
+use std::ffi::OsStr;
+use std::fs::{self, Metadata, ReadDir};
+use std::io;
+use std::iter::Peekable;
+use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
-use crate::{CancelToken, Capabilities, FsEntry, ListSink, Provider};
+use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
+
+use crate::{CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider};
 
 const DEFAULT_BATCH: usize = 512;
 
@@ -25,6 +39,25 @@ impl LocalFs {
             batch_size: size.max(1),
         }
     }
+
+    fn read_batch(
+        &self,
+        children: &mut Peekable<ReadDir>,
+        folder: &Location,
+    ) -> Result<Vec<FsEntry>, FsError> {
+        let mut entries = Vec::with_capacity(self.batch_size.min(DEFAULT_BATCH));
+        while entries.len() < self.batch_size {
+            let Some(child) = children.next() else {
+                break;
+            };
+            let child = child.map_err(|e| io_error(&e, folder))?;
+            let name = child.file_name();
+            if let Ok(metadata) = child.metadata() {
+                entries.push(entry(platform::entry_name(&name), &name, &metadata));
+            }
+        }
+        Ok(entries)
+    }
 }
 
 impl Default for LocalFs {
@@ -35,29 +68,119 @@ impl Default for LocalFs {
 
 impl Provider for LocalFs {
     fn id(&self) -> ProviderId {
-        todo!()
+        ProviderId::local()
     }
 
     fn capabilities(&self) -> Capabilities {
-        todo!()
+        Capabilities::default()
     }
 
     fn list(
         &self,
-        _folder: &Location,
-        _sink: &mut dyn ListSink,
-        _cancel: &CancelToken,
+        folder: &Location,
+        sink: &mut dyn ListSink,
+        cancel: &CancelToken,
     ) -> Result<(), FsError> {
-        todo!()
+        let path = os_path(folder)?;
+        let mut children = open_dir(&path, folder)?.peekable();
+        loop {
+            let entries = self.read_batch(&mut children, folder)?;
+            let last = children.peek().is_none();
+            if cancel.is_cancelled() {
+                return Err(error(FsErrorKind::Cancelled, folder));
+            }
+            if sink.batch(EntryBatch { entries, last }).is_break() || last {
+                return Ok(());
+            }
+        }
     }
 
-    fn metadata(&self, _location: &Location) -> Result<FsEntry, FsError> {
-        todo!()
+    fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        let path = os_path(location)?;
+        let metadata = fs::symlink_metadata(&path).map_err(|e| io_error(&e, location))?;
+        let entry = match path.file_name() {
+            Some(name) => entry(platform::entry_name(name), name, &metadata),
+            None => entry(location.path().clone(), path.as_os_str(), &metadata),
+        };
+        Ok(entry)
     }
 }
 
-pub(crate) fn os_path(_location: &Location) -> Result<PathBuf, FsError> {
-    todo!()
+pub(crate) fn os_path(location: &Location) -> Result<PathBuf, FsError> {
+    if !location.is_local() {
+        return Err(error(FsErrorKind::NameInvalid, location));
+    }
+    platform::os_path(location.path()).ok_or_else(|| error(FsErrorKind::NameInvalid, location))
+}
+
+fn open_dir(path: &Path, folder: &Location) -> Result<ReadDir, FsError> {
+    fs::read_dir(path).map_err(|e| {
+        let mut failure = io_error(&e, folder);
+        if failure.kind == FsErrorKind::NotFound
+            && fs::symlink_metadata(path).is_ok_and(|m| m.is_file())
+        {
+            failure.kind = FsErrorKind::NameInvalid;
+        }
+        failure
+    })
+}
+
+fn entry(name: ProviderPath, os_name: &OsStr, metadata: &Metadata) -> FsEntry {
+    let file_type = metadata.file_type();
+    let kind = if file_type.is_symlink() {
+        EntryKind::Link
+    } else if file_type.is_dir() {
+        EntryKind::Folder
+    } else {
+        EntryKind::File
+    };
+    FsEntry {
+        name,
+        kind,
+        size: if kind == EntryKind::File {
+            metadata.len()
+        } else {
+            0
+        },
+        modified_ms: modified_ms(metadata),
+        attributes: platform::attributes(os_name, metadata),
+    }
+}
+
+fn modified_ms(metadata: &Metadata) -> Option<i64> {
+    match metadata.modified().ok()?.duration_since(UNIX_EPOCH) {
+        Ok(after) => i64::try_from(after.as_millis()).ok(),
+        Err(before) => i64::try_from(before.duration().as_millis())
+            .ok()
+            .map(i64::wrapping_neg),
+    }
+}
+
+fn error(kind: FsErrorKind, location: &Location) -> FsError {
+    FsError {
+        kind,
+        location: Some(location.clone()),
+        os_code: None,
+    }
+}
+
+fn io_error(failure: &io::Error, location: &Location) -> FsError {
+    let os_code = failure.raw_os_error();
+    let kind = os_code.map_or_else(|| kind_of_io(failure.kind()), platform::error_kind);
+    FsError {
+        kind,
+        location: Some(location.clone()),
+        os_code,
+    }
+}
+
+fn kind_of_io(kind: io::ErrorKind) -> FsErrorKind {
+    match kind {
+        io::ErrorKind::NotFound => FsErrorKind::NotFound,
+        io::ErrorKind::PermissionDenied => FsErrorKind::AccessDenied,
+        io::ErrorKind::NotADirectory | io::ErrorKind::InvalidFilename => FsErrorKind::NameInvalid,
+        _ => FsErrorKind::Unknown,
+    }
 }
 
 #[cfg(test)]
