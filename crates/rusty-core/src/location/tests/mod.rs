@@ -1,6 +1,7 @@
 use super::*;
 
 mod compare;
+mod escape_collision;
 mod join;
 mod path;
 mod props;

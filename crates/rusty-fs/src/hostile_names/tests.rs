@@ -223,3 +223,33 @@ fn display_holds_no_nul() {
         Vec::<&str>::new()
     );
 }
+
+fn joined_survive(folder: &Location, names: Vec<HostileName>) {
+    for hostile in names {
+        let joined = folder.join(&hostile.name).unwrap();
+        assert_eq!(
+            Location::new(joined.as_str()),
+            Ok(joined),
+            "{}",
+            hostile.label
+        );
+    }
+}
+
+#[test]
+fn every_name_joined_under_a_fake_folder_survives_the_text_form() {
+    joined_survive(&FakeFs::new().location("dir"), corpus());
+}
+
+#[test]
+fn windows_names_joined_under_a_drive_folder_survive_the_text_form() {
+    joined_survive(
+        &Location::new(r"C:\d").unwrap(),
+        for_family(Family::Windows),
+    );
+}
+
+#[test]
+fn unix_names_joined_under_a_unix_folder_survive_the_text_form() {
+    joined_survive(&Location::new("/d").unwrap(), for_family(Family::Unix));
+}
