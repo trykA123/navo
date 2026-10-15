@@ -1,11 +1,33 @@
 use rusty_ui::prelude::*;
-use rusty_ui::primitives::{IconButton, IconName, ListScroll, SplitterState, icon};
+use rusty_ui::primitives::{
+    Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState, icon,
+};
 use rusty_ui::tokens::{self, Mode, Theme};
 
+use crate::pane_page::PanePage;
 use crate::sections;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Page {
+    Primitives,
+    Pane,
+}
+
+impl Page {
+    pub const ALL: [Self; 2] = [Self::Primitives, Self::Pane];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Primitives => "Primitives",
+            Self::Pane => "Pane",
+        }
+    }
+}
 
 pub struct Gallery {
     mode: Mode,
+    page: Page,
+    pane: Entity<PanePage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -16,6 +38,8 @@ impl Gallery {
     pub fn new(mode: Mode, cx: &mut App) -> Self {
         Self {
             mode,
+            page: Page::Primitives,
+            pane: cx.new(PanePage::new),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -27,6 +51,29 @@ impl Gallery {
         self.mode = mode;
         tokens::apply(mode, cx);
         cx.notify();
+    }
+
+    pub fn set_page(&mut self, page: Page, cx: &mut Context<Self>) {
+        self.page = page;
+        cx.notify();
+    }
+
+    fn page_switch(&self, cx: &mut Context<Self>) -> impl Iterator<Item = Button> {
+        let current = self.page;
+        let pages: Vec<Button> = Page::ALL
+            .into_iter()
+            .map(|page| {
+                let variant = if page == current {
+                    ButtonVariant::Primary
+                } else {
+                    ButtonVariant::Ghost
+                };
+                Button::new(page.label(), page.label())
+                    .variant(variant)
+                    .on_click(cx.listener(move |this: &mut Self, _, _, cx| this.set_page(page, cx)))
+            })
+            .collect();
+        pages.into_iter()
     }
 
     fn header(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
@@ -53,6 +100,7 @@ impl Gallery {
                     .font_weight(FontWeight::BOLD)
                     .child("Ferrite components"),
             )
+            .children(self.page_switch(cx))
             .child(toggle)
     }
 
@@ -92,7 +140,7 @@ fn column(t: &Theme) -> Div {
 impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        div()
+        let root = div()
             .size_full()
             .flex()
             .flex_col()
@@ -101,16 +149,23 @@ impl Render for Gallery {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .child(self.header(&t, cx))
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_h_0()
-                    .gap(t.spacing.xxl * 2.)
-                    .p(t.spacing.xxl)
-                    .child(self.left_column(&t, window, cx))
-                    .child(self.right_column(&t)),
-            )
+            .child(self.header(&t, cx));
+        match self.page {
+            Page::Pane => root.child(self.pane.clone()),
+            Page::Primitives => root.child(self.primitives(&t, window, cx)),
+        }
+    }
+}
+
+impl Gallery {
+    fn primitives(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_1()
+            .min_h_0()
+            .gap(t.spacing.xxl * 2.)
+            .p(t.spacing.xxl)
+            .child(self.left_column(t, window, cx))
+            .child(self.right_column(t))
     }
 }

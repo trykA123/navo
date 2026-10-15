@@ -2,6 +2,8 @@
 
 mod gallery;
 mod options;
+mod pane_page;
+mod pane_sample;
 mod screenshot;
 mod sections;
 

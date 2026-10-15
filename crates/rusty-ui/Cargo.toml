@@ -6,7 +6,10 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 gpui-kit = "=0.7.3"
+rusty-core = { path = "../rusty-core" }
+rusty-fs = { path = "../rusty-fs" }
 
 [dev-dependencies]
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }

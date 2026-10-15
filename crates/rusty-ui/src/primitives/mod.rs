@@ -16,4 +16,4 @@ pub use kbd::Kbd;
 pub use splitter::{Splitter, SplitterState};
 pub use tabs::{Tab, Tabs};
 pub use tooltip::Tooltip;
-pub use virtual_list::{ListScroll, VirtualList};
+pub use virtual_list::{ListScroll, RowSemantics, VirtualList};
