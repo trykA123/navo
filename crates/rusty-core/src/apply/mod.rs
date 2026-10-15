@@ -100,6 +100,14 @@ pub fn list_unloaded(state: &mut AppState) -> Vec<Effect> {
         .collect()
 }
 
+pub fn list_missing(state: &mut AppState) -> Vec<Effect> {
+    state
+        .active_tabs_without_listing()
+        .into_iter()
+        .filter_map(|tab| list_tab(state, tab))
+        .collect()
+}
+
 fn list_tab(state: &mut AppState, id: TabId) -> Option<Effect> {
     let request = state.take_request();
     let tab = state.tab_mut(id)?;

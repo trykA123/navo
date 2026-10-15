@@ -6072,6 +6072,7 @@ dependencies = [
  "rusty-diag",
  "rusty-fs",
  "rusty-store",
+ "rusty-ui",
  "serde_json",
  "tempfile",
  "windows-sys 0.61.2",

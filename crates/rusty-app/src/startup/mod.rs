@@ -1,8 +1,3 @@
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the window starts from the session from U10")
-)]
-
 use std::path::Path;
 
 use rusty_core::{AppState, Command, Direction, Location, apply};

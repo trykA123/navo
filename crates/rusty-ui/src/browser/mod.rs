@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use rusty_core::{
     AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location,
-    ProviderPath, TabId, apply, apply_event, list_unloaded,
+    ProviderPath, TabId, apply, apply_event, list_missing,
 };
 use rusty_fs::{
     FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, Provider, load_folder,
@@ -28,7 +29,7 @@ pub struct Browser {
     sender: Sender<Loaded>,
     receiver: Receiver<Loaded>,
     wake: Waker,
-    details: HashMap<TabId, Arc<[FsEntry]>>,
+    details: HashMap<TabId, Rc<[FsEntry]>>,
     errors: HashMap<TabId, FsError>,
     focus_after_load: HashMap<TabId, String>,
     in_flight: usize,
@@ -57,7 +58,7 @@ impl Browser {
     }
 
     pub fn start(&mut self) {
-        let effects = list_unloaded(&mut self.state);
+        let effects = list_missing(&mut self.state);
         self.run(effects);
     }
 
@@ -131,8 +132,11 @@ impl Browser {
     }
 
     #[must_use]
-    pub fn details(&self, tab: TabId) -> &[FsEntry] {
-        self.details.get(&tab).map_or(&[], |d| d)
+    pub fn details(&self, tab: TabId) -> Rc<[FsEntry]> {
+        self.details
+            .get(&tab)
+            .cloned()
+            .unwrap_or_else(|| Rc::from([]))
     }
 
     #[must_use]

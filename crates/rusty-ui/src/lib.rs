@@ -12,6 +12,7 @@ pub mod primitives;
 pub mod status_bar;
 pub mod title_bar;
 pub mod tokens;
+pub mod window_view;
 
 #[cfg(test)]
 mod test_window;

@@ -8,6 +8,7 @@
 mod cli;
 mod console;
 mod diag;
+mod gui;
 mod startup;
 #[cfg(windows)]
 mod windows_memory;
@@ -24,7 +25,11 @@ fn main() -> ExitCode {
         console::attach();
     }
     match parsed {
-        Ok(Command::Open | Command::Version) => {
+        Ok(Command::Open) => {
+            gui::open();
+            ExitCode::SUCCESS
+        }
+        Ok(Command::Version) => {
             println!("ferrite {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
