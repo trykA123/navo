@@ -1,6 +1,7 @@
 use rusty_ui::prelude::*;
-use rusty_ui::primitives::{IconButton, IconName, ListScroll, SplitterState, icon};
+use rusty_ui::primitives::{IconButton, IconName, ListScroll, SplitterState};
 use rusty_ui::tokens::{self, Mode, Theme};
+use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::sections;
 
@@ -29,7 +30,7 @@ impl Gallery {
         cx.notify();
     }
 
-    fn header(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
+    fn header(&self, cx: &mut Context<Self>) -> FerriteTitleBar {
         let (glyph, label) = match self.mode {
             Mode::Light => (IconName::Moon, "Switch to the dark theme"),
             Mode::Dark => (IconName::Sun, "Switch to the light theme"),
@@ -37,23 +38,9 @@ impl Gallery {
         let toggle = IconButton::new("theme-toggle", glyph, label).on_click(
             cx.listener(|this: &mut Self, _, _, cx| this.set_mode(this.mode.toggled(), cx)),
         );
-        div()
-            .flex()
-            .items_center()
-            .gap(t.spacing.md)
-            .flex_none()
-            .h(t.spacing.header_height)
-            .px(t.spacing.xl)
-            .border_b_1()
-            .border_color(t.colors.line)
-            .child(icon(IconName::Layers, t.spacing.xxl, t.colors.accent))
-            .child(
-                div()
-                    .flex_1()
-                    .font_weight(FontWeight::BOLD)
-                    .child("Ferrite components"),
-            )
-            .child(toggle)
+        FerriteTitleBar::new("Ferrite")
+            .header(HeaderSearch::new())
+            .header(toggle)
     }
 
     fn left_column(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
@@ -101,7 +88,7 @@ impl Render for Gallery {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .child(self.header(&t, cx))
+            .child(self.header(cx))
             .child(
                 div()
                     .flex()

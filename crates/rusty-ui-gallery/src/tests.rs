@@ -57,6 +57,8 @@ fn the_gallery_opens_a_window_with_every_primitive(cx: &mut TestAppContext) {
             "tabs",
             "rows",
             "split",
+            "title-bar-title",
+            "title-bar-search",
         ] {
             assert!(window.find(id).visible(), "{id} is not on screen");
         }

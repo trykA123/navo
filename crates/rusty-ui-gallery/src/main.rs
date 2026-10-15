@@ -28,12 +28,8 @@ fn window_options(cx: &App) -> WindowOptions {
     let bounds = Bounds::centered(None, size(px(1280.), px(720.)), cx);
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
-        titlebar: Some(TitlebarOptions {
-            title: Some("Ferrite components".into()),
-            ..Default::default()
-        }),
         app_id: Some("ferrite-gallery".into()),
-        ..Default::default()
+        ..rusty_ui::window_options("Ferrite components")
     }
 }
 
