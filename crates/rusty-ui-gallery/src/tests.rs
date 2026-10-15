@@ -120,3 +120,36 @@ fn the_pane_page_shows_one_pane_of_sample_rows(cx: &mut TestAppContext) {
     })
     .expect("window");
 }
+
+#[gpui_kit::test]
+fn the_operate_page_shows_both_dialogs_and_every_job_state(cx: &mut TestAppContext) {
+    let (window, _) = cx.update(|cx| {
+        rusty_ui::init(Mode::Light, cx).expect("bundled fonts load");
+        rusty_ui::confirm_dialog::bind_keys(cx);
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Point::default(),
+                size: size(px(1280.), px(720.)),
+            })),
+            ..Default::default()
+        };
+        rusty_ui::open_window(options, cx, |_, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        })
+        .expect("open the gallery window")
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("Operate", cx);
+        for id in ["confirm-permanent", "confirm-protected"] {
+            assert_eq!(window.find(id).role(), Some(Role::AlertDialog), "{id}");
+            assert!(window.find(id).visible(), "{id} is not on screen");
+        }
+        for index in 0..4usize {
+            assert!(window.find(("job", index)).visible(), "job {index}");
+        }
+        assert!(window.within(("job", 0usize)).try_find("cancel").is_some());
+        assert!(window.within(("job", 1usize)).try_find("cancel").is_none());
+    })
+    .expect("window");
+}

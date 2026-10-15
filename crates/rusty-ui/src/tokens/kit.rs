@@ -21,6 +21,14 @@ fn map_colors(c: &Colors, k: &mut ThemeColor) {
     k.button_primary_hover = c.accent_text;
     k.button_primary_active = c.accent_text;
     k.button_primary_foreground = c.background;
+    k.danger = c.mark;
+    k.danger_hover = c.mark;
+    k.danger_active = c.mark;
+    k.danger_foreground = c.background;
+    k.button_danger = c.mark;
+    k.button_danger_hover = c.mark;
+    k.button_danger_active = c.mark;
+    k.button_danger_foreground = c.background;
     k.button = c.surface;
     k.button_hover = c.hover;
     k.button_active = c.selection;
