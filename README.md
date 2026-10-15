@@ -33,7 +33,9 @@ Prerequisites: Rust 1.99.0 (pinned in `rust-toolchain.toml`) and the tools in [d
 
 Other subcommands: `cargo xtask size`, `cargo xtask coverage`, `cargo xtask binsize <path>`.
 
-On Linux, `scripts/install-local.sh` builds an `x86-64-v3` binary (as CachyOS does) into `target/x86-64-v3/` and installs it as `~/.local/bin/ferrite`.
+On Linux, `scripts/install-local.sh` builds an `x86-64-v3` binary (as CachyOS does) into `target/x86-64-v3/` and installs it as `~/.local/bin/ferrite`, with its icons and a `.desktop` entry under `~/.local/share`.
+
+The app icon and wordmark live in `assets/brand/`. After editing an SVG there, run `scripts/build-icons.sh` to rebuild the PNG files and `ferrite.ico`.
 
 CI: every push runs the gate on Linux and the tests on Windows, and builds `ferrite.exe` and a Linux `ferrite` binary as artifacts.
 

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ferrite
+GenericName=File Manager
+Comment=Keyboard-first file manager
+Exec=ferrite
+Icon=ferrite
+Terminal=false
+Categories=System;FileTools;FileManager;
+Keywords=files;folders;commander;
