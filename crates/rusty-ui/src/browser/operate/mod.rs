@@ -106,6 +106,21 @@ impl Browser {
         !self.running()
     }
 
+    pub fn take_ended(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.ended)
+    }
+
+    pub fn forget_jobs(&mut self, ids: &[u64]) -> bool {
+        let before = self.jobs.len();
+        self.jobs
+            .retain(|job| job.status == JobStatus::Running || !ids.contains(&job.id));
+        self.jobs.len() != before
+    }
+
+    pub fn dismiss_job(&mut self, id: u64) -> bool {
+        self.forget_jobs(&[id])
+    }
+
     pub fn cancel_job(&mut self, id: u64) -> bool {
         let Some(job) = self.jobs.iter().find(|job| job.id == id) else {
             return false;
@@ -254,6 +269,9 @@ impl Browser {
         };
         let mut source_tab = None;
         let is_done = status == JobStatus::Done;
+        if matches!(status, JobStatus::Done | JobStatus::Cancelled) {
+            self.ended.push(id);
+        }
         self.with_job(id, |job| {
             if let Some(progress) = progress {
                 job.progress = progress;

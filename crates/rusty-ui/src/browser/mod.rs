@@ -65,6 +65,7 @@ pub struct Browser {
     operations: Operations,
     pending: Option<PendingOp>,
     jobs: Vec<JobView>,
+    ended: Vec<u64>,
     next_op: u64,
     launcher: Launcher,
 }
@@ -94,6 +95,7 @@ impl Browser {
             operations: Operations::unlogged(),
             pending: None,
             jobs: Vec::new(),
+            ended: Vec::new(),
             next_op: 0,
             launcher: Arc::new(|_| {}),
         }

@@ -372,3 +372,63 @@ fn a_job_that_panics_ends_as_failed() {
     settle(&mut browser);
     assert!(matches!(browser.jobs()[0].status, JobStatus::Failed(_)));
 }
+
+#[test]
+fn a_finished_job_is_reported_once_and_can_be_forgotten() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.confirm();
+    settle(&mut browser);
+    let id = browser.jobs()[0].id;
+    assert_eq!(browser.take_ended(), [id]);
+    assert!(browser.take_ended().is_empty());
+    assert!(browser.forget_jobs(&[id]));
+    assert!(browser.jobs().is_empty());
+}
+
+#[test]
+fn a_failed_job_stays_until_dismissed() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.set_operations(Operations {
+        log: Arc::new(|_: &OperationPlan| Err("journal is read-only".to_owned())),
+        protected: Vec::new(),
+    });
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.confirm();
+    settle(&mut browser);
+    let id = browser.jobs()[0].id;
+    assert!(browser.take_ended().is_empty());
+    assert!(!browser.forget_jobs(&[id + 1]));
+    assert!(browser.dismiss_job(id));
+    assert!(browser.jobs().is_empty());
+}
+
+#[test]
+fn a_running_job_is_never_forgotten() {
+    let fs = fake();
+    let gate = Arc::new(AtomicBool::new(false));
+    let open = Arc::clone(&gate);
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.set_operations(Operations {
+        log: Arc::new(move |_: &OperationPlan| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !open.load(Ordering::Acquire) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            Ok(Box::new(SharedLog(Arc::default())) as Box<dyn OpLog>)
+        }),
+        protected: Vec::new(),
+    });
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.confirm();
+    let id = browser.jobs()[0].id;
+    assert!(!browser.forget_jobs(&[id]));
+    assert!(!browser.dismiss_job(id));
+    gate.store(true, Ordering::Release);
+    settle(&mut browser);
+}

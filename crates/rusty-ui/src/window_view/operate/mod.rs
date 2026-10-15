@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use rusty_core::{Location, OpKind, OperationPlan, Risk};
 
 use super::FerriteWindow;
@@ -7,6 +9,8 @@ use crate::format;
 use crate::job_row::{JobRow, JobRowProps, JobRowState};
 use crate::prelude::*;
 use crate::tokens;
+
+const JOB_LINGER: Duration = Duration::from_secs(4);
 
 fn items(count: usize) -> String {
     format::count(u64::try_from(count).unwrap_or(u64::MAX), "item", "items")
@@ -133,10 +137,38 @@ impl FerriteWindow {
     }
 
     fn job_row(job: &JobView, cx: &mut Context<Self>) -> JobRow {
-        let (id, this) = (job.id, cx.weak_entity());
-        JobRow::new(("job", id), job_props(job)).on_cancel(move |_, cx| {
-            let _ = this.update(cx, |view, cx| view.cancel_job(id, cx));
+        let (id, this, that) = (job.id, cx.weak_entity(), cx.weak_entity());
+        JobRow::new(("job", id), job_props(job))
+            .on_cancel(move |_, cx| {
+                let _ = this.update(cx, |view, cx| view.cancel_job(id, cx));
+            })
+            .on_dismiss(move |_, cx| {
+                let _ = that.update(cx, |view, cx| view.dismiss_job(id, cx));
+            })
+    }
+
+    pub(super) fn linger_ended(&mut self, cx: &mut Context<Self>) {
+        let ended = self.browser.take_ended();
+        if ended.is_empty() {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(JOB_LINGER).await;
+            let _ = this.update(cx, |view, cx| view.forget_jobs(&ended, cx));
         })
+        .detach();
+    }
+
+    fn forget_jobs(&mut self, ids: &[u64], cx: &mut Context<Self>) {
+        if self.browser.forget_jobs(ids) {
+            cx.notify();
+        }
+    }
+
+    fn dismiss_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        if self.browser.dismiss_job(id) {
+            cx.notify();
+        }
     }
 
     fn cancel_job(&mut self, id: u64, cx: &mut Context<Self>) {

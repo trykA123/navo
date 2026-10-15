@@ -204,3 +204,17 @@ fn shift_delete_asks_with_danger_and_escape_deletes_nothing(cx: &mut TestAppCont
     assert!(view.read_with(cx, |view, _| view.browser.jobs().is_empty()));
     assert!(fs.metadata(&fs.location("home/docs")).is_ok());
 }
+
+#[gpui_kit::test]
+fn a_finished_job_row_goes_away_after_a_moment(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "f5");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert_eq!(view.read_with(cx, |view, _| view.browser.jobs().len()), 1);
+    cx.executor().advance_clock(Duration::from_secs(5));
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |view, _| view.browser.jobs().is_empty()));
+}

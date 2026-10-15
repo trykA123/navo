@@ -83,6 +83,7 @@ pub struct JobRow {
     id: ElementId,
     props: JobRowProps,
     on_cancel: Option<Handler>,
+    on_dismiss: Option<Handler>,
 }
 
 impl JobRow {
@@ -91,11 +92,17 @@ impl JobRow {
             id: id.into(),
             props,
             on_cancel: None,
+            on_dismiss: None,
         }
     }
 
     pub fn on_cancel(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_cancel = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn on_dismiss(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_dismiss = Some(Rc::new(handler));
         self
     }
 }
@@ -194,21 +201,26 @@ fn status(t: &Theme, props: &JobRowProps) -> impl IntoElement {
         .child(label("status", props.status_text()))
 }
 
+fn action(props: &JobRowProps, on_cancel: Option<Handler>, on_dismiss: Option<Handler>) -> Div {
+    let button = match props.state {
+        JobRowState::Running => on_cancel.map(|handler| ("cancel", "Cancel", handler)),
+        JobRowState::Failed(_) => on_dismiss.map(|handler| ("dismiss", "Dismiss", handler)),
+        JobRowState::Done | JobRowState::Cancelled => None,
+    };
+    div()
+        .w(px(72.))
+        .flex()
+        .justify_end()
+        .when_some(button, |slot, (id, text, handler)| {
+            slot.child(Button::new(id, text).on_click(move |_, window, cx| handler(window, cx)))
+        })
+}
+
 impl RenderOnce for JobRow {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
         let props = &self.props;
-        let is_running = props.state == JobRowState::Running;
-        let action = div().w(px(72.)).flex().justify_end().when_some(
-            self.on_cancel.filter(|_| is_running),
-            |slot, handler| {
-                slot.child(
-                    Button::new("cancel", "Cancel").on_click(move |_, window, cx| {
-                        handler(window, cx);
-                    }),
-                )
-            },
-        );
+        let action = action(props, self.on_cancel, self.on_dismiss);
         div()
             .id(self.id)
             .role(Role::ListItem)

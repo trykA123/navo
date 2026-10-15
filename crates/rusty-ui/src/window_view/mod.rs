@@ -112,6 +112,7 @@ impl FerriteWindow {
         if self.browser.poll() {
             cx.notify();
         }
+        self.linger_ended(cx);
     }
 
     fn handle(&mut self, pane: PaneId, cx: &mut Context<Self>) -> FocusHandle {

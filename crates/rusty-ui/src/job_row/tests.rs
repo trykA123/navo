@@ -28,19 +28,25 @@ fn with_state(state: JobRowState) -> JobRowProps {
 struct Harness {
     props: JobRowProps,
     cancels: usize,
+    dismissals: usize,
 }
 
 impl Render for Harness {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let this = cx.entity();
+        let (this, that) = (cx.entity(), cx.entity());
         let row = JobRow::new(ROW, self.props.clone())
-            .on_cancel(move |_, cx| this.update(cx, |this, _| this.cancels += 1));
+            .on_cancel(move |_, cx| this.update(cx, |this, _| this.cancels += 1))
+            .on_dismiss(move |_, cx| that.update(cx, |that, _| that.dismissals += 1));
         div().w_full().child(row)
     }
 }
 
 fn open_row(cx: &mut TestAppContext, props: JobRowProps) -> (AnyWindowHandle, Entity<Harness>) {
-    let (window, harness) = crate::test_window::open(cx, |_, _| Harness { props, cancels: 0 });
+    let (window, harness) = crate::test_window::open(cx, |_, _| Harness {
+        props,
+        cancels: 0,
+        dismissals: 0,
+    });
     cx.update_window(window, |_, window, cx| window.render_frame(cx))
         .expect("window");
     (window, harness)
@@ -173,4 +179,26 @@ fn the_row_reads_as_one_list_item(cx: &mut TestAppContext) {
         );
     })
     .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_failed_row_can_be_dismissed(cx: &mut TestAppContext) {
+    let (window, harness) = open_row(cx, with_state(JobRowState::Failed("Access denied".into())));
+    cx.update_window(window, |_, window, cx| {
+        window.within(ROW).click("dismiss", cx);
+    })
+    .expect("window");
+    assert_eq!(harness.read_with(cx, |harness, _| harness.dismissals), 1);
+}
+
+#[gpui_kit::test]
+fn only_a_failed_row_offers_dismiss(cx: &mut TestAppContext) {
+    for state in [
+        JobRowState::Running,
+        JobRowState::Done,
+        JobRowState::Cancelled,
+    ] {
+        let (window, _) = open_row(cx, with_state(state.clone()));
+        assert!(!has(window, "dismiss", cx), "{state:?}");
+    }
 }
