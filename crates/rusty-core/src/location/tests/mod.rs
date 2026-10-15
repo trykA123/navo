@@ -1,5 +1,14 @@
 use super::*;
 
+mod compare;
+mod path;
+mod props;
+mod text_form;
+
+fn loc(text: &str) -> Location {
+    Location::new(text).unwrap()
+}
+
 #[test]
 fn keeps_the_text_unchanged() {
     let text = "C:\\Users\\admin\\ \"quoted\" ünï 📁";
