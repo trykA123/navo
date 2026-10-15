@@ -134,7 +134,7 @@ fn the_title_bar_ends_with_minimise_maximise_and_close(cx: &mut TestAppContext) 
     let window = open(cx, Rc::default());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let mut controls = window.within("window-controls");
+        let controls = window.within("window-controls");
         let minimise = controls.find("minimize").bounds();
         let maximise = controls.find("maximize").bounds();
         let close = controls.find("close").bounds();
