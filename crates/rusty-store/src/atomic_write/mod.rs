@@ -17,6 +17,19 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_atomic_with(path, bytes, |_| Ok(()))
 }
 
+pub fn replace_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let payload = Payload {
+        bytes,
+        backup: false,
+    };
+    write_payload(path, &payload, &mut |_| Ok(()))
+}
+
+struct Payload<'a> {
+    bytes: &'a [u8],
+    backup: bool,
+}
+
 #[must_use]
 pub fn backup_path(path: &Path) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
@@ -29,6 +42,18 @@ pub(crate) fn write_atomic_with(
     bytes: &[u8],
     mut hook: impl FnMut(Stage) -> io::Result<()>,
 ) -> io::Result<()> {
+    let payload = Payload {
+        bytes,
+        backup: true,
+    };
+    write_payload(path, &payload, &mut hook)
+}
+
+fn write_payload(
+    path: &Path,
+    payload: &Payload<'_>,
+    hook: &mut impl FnMut(Stage) -> io::Result<()>,
+) -> io::Result<()> {
     let path = &resolve_symlink(path);
     if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
         return Err(io::Error::new(
@@ -37,7 +62,7 @@ pub(crate) fn write_atomic_with(
         ));
     }
     let temp = temp_path(path);
-    let result = replace(path, &temp, bytes, &mut hook);
+    let result = replace(path, &temp, payload, hook);
     if result.is_err() {
         let _ = fs::remove_file(&temp);
     }
@@ -47,16 +72,16 @@ pub(crate) fn write_atomic_with(
 fn replace(
     path: &Path,
     temp: &Path,
-    bytes: &[u8],
+    payload: &Payload<'_>,
     hook: &mut impl FnMut(Stage) -> io::Result<()>,
 ) -> io::Result<()> {
     let mut file = OpenOptions::new().write(true).create_new(true).open(temp)?;
-    file.write_all(bytes)?;
+    file.write_all(payload.bytes)?;
     hook(Stage::TempWritten)?;
     file.sync_all()?;
     drop(file);
     hook(Stage::TempSynced)?;
-    if fs::symlink_metadata(path).is_ok() {
+    if payload.backup && fs::symlink_metadata(path).is_ok() {
         make_backup(path);
         hook(Stage::BackupMade)?;
     }

@@ -13,6 +13,17 @@ const WINDOWS_CANDIDATES: [(&str, &str); 4] = [
     ("ProgramFiles", r"Notepad++\notepad++.exe"),
     ("SystemRoot", "notepad.exe"),
 ];
+const DEFAULT_EXTENSIONS: &str = ".COM;.EXE;.BAT;.CMD";
+
+pub struct Search {
+    pub path: String,
+    pub extensions: String,
+}
+
+pub fn clean(program: &str) -> String {
+    program.trim().trim_matches('"').trim().to_owned()
+}
+
 const UNIX_CANDIDATES: [&str; 3] = ["/usr/bin/code", "/usr/bin/nvim", "/usr/bin/vim"];
 
 pub fn hooks(settings: Option<&Path>, var: impl Fn(&str) -> Option<String>) -> EditorHooks {
@@ -20,12 +31,15 @@ pub fn hooks(settings: Option<&Path>, var: impl Fn(&str) -> Option<String>) -> E
     let chosen = store
         .as_ref()
         .and_then(|store| store.borrow().current().editor.path.clone());
-    let search = var("PATH").unwrap_or_default();
+    let search = Search {
+        path: var("PATH").unwrap_or_default(),
+        extensions: var("PATHEXT").unwrap_or_else(|| DEFAULT_EXTENSIONS.to_owned()),
+    };
     EditorHooks {
         chosen,
         suggestion: suggest(&var),
         remember: Rc::new(move |program| remember(store.as_ref(), program, &search)),
-        open: Rc::new(open),
+        open: Rc::new(|program, file| open(&clean(program), file)),
     }
 }
 
@@ -44,40 +58,62 @@ fn suggest(var: &impl Fn(&str) -> Option<String>) -> Option<String> {
     found.map(|path| path.to_string_lossy().into_owned())
 }
 
-pub fn resolves(program: &str, search: &str) -> bool {
+pub fn resolves(program: &str, search: &Search) -> bool {
     let path = Path::new(program);
+    if program.is_empty() {
+        return false;
+    }
     if path.is_file() {
         return true;
     }
-    path.components().count() == 1
-        && std::env::split_paths(search).any(|folder| folder.join(program).is_file())
+    if path.components().count() != 1 {
+        return false;
+    }
+    let names: Vec<String> = std::iter::once(program.to_owned())
+        .chain(
+            search
+                .extensions
+                .split(';')
+                .filter(|ext| !ext.is_empty())
+                .map(|ext| format!("{program}{}", ext.to_lowercase())),
+        )
+        .collect();
+    std::env::split_paths(&search.path)
+        .any(|folder| names.iter().any(|name| folder.join(name).is_file()))
 }
 
 fn remember(
     store: Option<&Rc<RefCell<SettingsStore>>>,
     program: &str,
-    search: &str,
+    search: &Search,
 ) -> Result<(), String> {
-    let program = program.trim();
-    if !resolves(program, search) {
+    let program = clean(program);
+    if !resolves(&program, search) {
         return Err("No program at that path.".to_owned());
     }
-    let Some(store) = store else {
-        return Ok(());
-    };
-    let mut settings = store.borrow().current().clone();
-    settings.editor.path = Some(program.to_owned());
-    store
-        .borrow_mut()
-        .save(settings)
-        .map_err(|error| format!("Could not save the choice: {error}"))
+    if let Some(store) = store {
+        save_choice(store, &program);
+    }
+    Ok(())
+}
+
+fn save_choice(store: &Rc<RefCell<SettingsStore>>, program: &str) {
+    for _ in 0..2 {
+        let mut settings = store.borrow().current().clone();
+        settings.editor.path = Some(program.to_owned());
+        let saved = store.borrow_mut().save(settings);
+        if !matches!(saved, Err(rusty_store::SettingsError::FileChanged)) {
+            return;
+        }
+        let _ = store.borrow_mut().reload();
+    }
 }
 
 fn open(program: &str, file: &Location) -> Result<(), String> {
     if !file.is_local() {
         return Err("Only local files open in an editor.".to_owned());
     }
-    Command::new(program.trim())
+    Command::new(program)
         .arg(file.as_str())
         .spawn()
         .map(|_| ())

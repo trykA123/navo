@@ -8,7 +8,7 @@ mod journal;
 mod session;
 mod settings;
 
-pub use atomic_write::{backup_path, write_atomic};
+pub use atomic_write::{backup_path, replace_atomic, write_atomic};
 pub use cache_db::{CacheDb, CacheError, CacheOpen};
 pub use db::{Db, DbError, OpenReport};
 pub use dirs::StoreDirs;

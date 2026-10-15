@@ -1,39 +1,85 @@
 use std::fs;
 
 use rusty_core::Location;
+use rusty_ui::window_view::{Save, SaveError};
 
-use super::{read, write};
+use super::{line_endings, read, write};
 
 fn at(path: &std::path::Path) -> Location {
     Location::new(path.to_string_lossy().into_owned()).unwrap()
 }
 
-#[test]
-fn text_reads_back_and_saves() {
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("notes.md");
-    fs::write(&file, "# hi\n").unwrap();
-    let text = read(&at(&file)).unwrap();
-    assert_eq!((text.text.as_str(), text.read_only), ("# hi\n", false));
-    write(&at(&file), "# bye\n").unwrap();
-    assert_eq!(fs::read_to_string(&file).unwrap(), "# bye\n");
+fn save(text: &str, crlf: bool, expected: Option<rusty_ui::window_view::FileStamp>) -> Save<'_> {
+    Save {
+        text,
+        crlf,
+        expected,
+    }
 }
 
 #[test]
-fn windows_line_endings_survive_a_save() {
+fn text_reads_back_and_saves_without_a_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("notes.md");
+    fs::write(&file, "# hi\n").unwrap();
+    fs::write(dir.path().join("notes.md.bak"), "mine").unwrap();
+    let text = read(&at(&file)).unwrap();
+    assert_eq!(
+        (text.text.as_str(), text.read_only, text.crlf),
+        ("# hi\n", false, false)
+    );
+    write(&at(&file), &save("# bye\n", text.crlf, text.stamp)).unwrap();
+    assert_eq!(fs::read_to_string(&file).unwrap(), "# bye\n");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("notes.md.bak")).unwrap(),
+        "mine"
+    );
+}
+
+#[test]
+fn crlf_files_stay_crlf_even_for_new_lines() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("a.txt");
     fs::write(&file, "one\r\ntwo\r\n").unwrap();
-    write(&at(&file), "one\ntwo\nthree\n").unwrap();
+    let text = read(&at(&file)).unwrap();
+    assert!(text.crlf);
+    let edited = format!("{}three\n", text.text);
+    write(&at(&file), &save(&edited, true, text.stamp)).unwrap();
     assert_eq!(fs::read(&file).unwrap(), b"one\r\ntwo\r\nthree\r\n");
 }
 
 #[test]
-fn binary_and_huge_files_are_refused() {
+fn pasted_crlf_in_an_lf_file_becomes_lf() {
+    assert_eq!(line_endings("a\r\nb\nc", false), "a\nb\nc");
+    assert_eq!(line_endings("a\r\nb\nc", true), "a\r\nb\r\nc");
+}
+
+#[test]
+fn a_file_changed_on_disk_is_not_overwritten_without_asking() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("a.txt");
+    fs::write(&file, "old").unwrap();
+    let text = read(&at(&file)).unwrap();
+    fs::write(&file, "changed elsewhere, longer").unwrap();
+    let refused = write(&at(&file), &save("mine", false, text.stamp));
+    assert_eq!(refused, Err(SaveError::Changed));
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        "changed elsewhere, longer"
+    );
+    write(&at(&file), &save("mine", false, None)).unwrap();
+    assert_eq!(fs::read_to_string(&file).unwrap(), "mine");
+}
+
+#[test]
+fn binary_utf16_and_huge_files_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let binary = dir.path().join("a.bin");
     fs::write(&binary, [1_u8, 0, 2]).unwrap();
     assert!(read(&at(&binary)).unwrap_err().contains("binary"));
+    let wide = dir.path().join("wide.txt");
+    fs::write(&wide, [0xFF_u8, 0xFE, b'a', 0]).unwrap();
+    assert!(read(&at(&wide)).unwrap_err().contains("UTF-16"));
     let huge = dir.path().join("huge.log");
     let file = fs::File::create(&huge).unwrap();
     file.set_len(17 * 1024 * 1024).unwrap();
@@ -45,8 +91,7 @@ fn text_that_is_not_utf8_opens_read_only() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("latin1.txt");
     fs::write(&file, [b'c', 0xE9, b'\n']).unwrap();
-    let text = read(&at(&file)).unwrap();
-    assert!(text.read_only);
+    assert!(read(&at(&file)).unwrap().read_only);
 }
 
 #[test]

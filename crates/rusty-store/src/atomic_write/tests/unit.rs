@@ -163,3 +163,24 @@ fn a_symlinked_target_keeps_its_link_and_updates_the_file() {
     );
     assert_eq!(fs::read(&real).unwrap(), b"new");
 }
+
+#[test]
+fn replace_atomic_leaves_no_backup_and_keeps_an_existing_one() {
+    let dir = tmp();
+    let target = dir.path().join("report.txt");
+    let backup = backup_path(&target);
+    fs::write(&target, b"old").unwrap();
+    fs::write(&backup, b"mine").unwrap();
+    replace_atomic(&target, b"new").unwrap();
+    assert_eq!(fs::read(&target).unwrap(), b"new");
+    assert_eq!(fs::read(&backup).unwrap(), b"mine");
+}
+
+#[test]
+fn replace_atomic_creates_no_backup_for_a_fresh_save() {
+    let dir = tmp();
+    let target = dir.path().join("notes.md");
+    fs::write(&target, b"old").unwrap();
+    replace_atomic(&target, b"new").unwrap();
+    assert!(!backup_path(&target).exists());
+}

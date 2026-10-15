@@ -471,6 +471,7 @@ fn shift_f4_lets_you_change_the_editor_and_folders_are_skipped(cx: &mut TestAppC
 fn viewer_window(
     cx: &mut TestAppContext,
     read: Result<&str, &str>,
+    changed_once: bool,
 ) -> (
     AnyWindowHandle,
     Entity<FerriteWindow>,
@@ -478,6 +479,7 @@ fn viewer_window(
 ) {
     let written = Rc::new(std::cell::RefCell::new(Vec::new()));
     let saved = written.clone();
+    let refuse = Rc::new(Cell::new(changed_once));
     let read = read.map(str::to_owned).map_err(str::to_owned);
     let fs = fake();
     let options = StartOptions {
@@ -491,13 +493,19 @@ fn viewer_window(
         files: super::FileHooks {
             read: Rc::new(move |_| {
                 read.clone().map(|text| super::FileText {
-                    text,
-                    read_only: false,
+                    stamp: Some(super::FileStamp {
+                        len: 6,
+                        modified_ms: 1,
+                    }),
+                    ..super::FileText::plain(text)
                 })
             }),
-            write: Rc::new(move |_, text| {
-                saved.borrow_mut().push(text.to_owned());
-                Ok(())
+            write: Rc::new(move |_, save| {
+                if save.expected.is_some() && refuse.replace(false) {
+                    return Err(super::SaveError::Changed);
+                }
+                saved.borrow_mut().push(save.text.to_owned());
+                Ok(None)
             }),
         },
         view: None,
@@ -512,7 +520,7 @@ fn viewer_open(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
 
 #[gpui_kit::test]
 fn f3_opens_the_file_and_escape_closes_it(cx: &mut TestAppContext) {
-    let (window, view, _) = viewer_window(cx, Ok("hello\n"));
+    let (window, view, _) = viewer_window(cx, Ok("hello\n"), false);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     assert!(viewer_open(cx, &view));
@@ -522,7 +530,7 @@ fn f3_opens_the_file_and_escape_closes_it(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn ctrl_s_saves_what_was_typed(cx: &mut TestAppContext) {
-    let (window, view, written) = viewer_window(cx, Ok("hello\n"));
+    let (window, view, written) = viewer_window(cx, Ok("hello\n"), false);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     type_in(cx, window, &view, "say ");
@@ -534,7 +542,7 @@ fn ctrl_s_saves_what_was_typed(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn unsaved_changes_need_a_second_escape(cx: &mut TestAppContext) {
-    let (window, view, written) = viewer_window(cx, Ok("hello\n"));
+    let (window, view, written) = viewer_window(cx, Ok("hello\n"), false);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     type_in(cx, window, &view, "x");
@@ -547,20 +555,25 @@ fn unsaved_changes_need_a_second_escape(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn a_file_that_cannot_be_read_says_why(cx: &mut TestAppContext) {
-    let (window, view, _) = viewer_window(cx, Err("This looks like a binary file."));
+    let (window, view, _) = viewer_window(cx, Err("This looks like a binary file."), false);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     cx.update_window(window, |_, window, _| {
         assert!(window.find("viewer-message").visible());
     })
     .expect("window");
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
 }
 
 #[test]
 fn extensions_pick_their_language() {
     use super::viewer::language_of;
     assert_eq!(language_of("main.rs"), "rust");
-    assert_eq!(language_of("App.TSX"), "TSX");
+    assert_eq!(language_of("App.TSX"), "tsx");
+    assert_eq!(language_of("Main.JAVA"), "java");
+    assert_eq!(language_of("Makefile"), "make");
+    assert_eq!(language_of("mix.exs"), "elixir");
     assert_eq!(language_of("notes.md"), "markdown");
     assert_eq!(language_of("config.yml"), "yaml");
     assert_eq!(language_of("Cargo.toml"), "toml");
@@ -568,4 +581,29 @@ fn extensions_pick_their_language() {
     assert_eq!(language_of("readme"), "text");
     assert_eq!(language_of(".bashrc"), "text");
     assert_eq!(language_of("app.log"), "text");
+}
+
+#[gpui_kit::test]
+fn a_file_changed_on_disk_needs_a_second_save(cx: &mut TestAppContext) {
+    let (window, view, written) = viewer_window(cx, Ok("hello\n"), true);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    type_in(cx, window, &view, "x");
+    press(cx, window, &view, "ctrl-s");
+    assert!(written.borrow().is_empty());
+    press(cx, window, &view, "ctrl-s");
+    assert_eq!(written.borrow().as_slice(), ["xhello\n"]);
+}
+
+#[gpui_kit::test]
+fn closing_the_window_with_unsaved_edits_warns_first(cx: &mut TestAppContext) {
+    let (window, view, _) = viewer_window(cx, Ok("hello\n"), false);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    type_in(cx, window, &view, "x");
+    let first = view.update(cx, |view, cx| view.close(cx));
+    assert!(!first);
+    assert!(viewer_open(cx, &view));
+    let second = view.update(cx, |view, cx| view.close(cx));
+    assert!(second);
 }

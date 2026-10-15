@@ -24,7 +24,7 @@ use crate::tokens::{self, Mode};
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use editor::EditorHooks;
-pub use viewer::{FileHooks, FileText};
+pub use viewer::{FileHooks, FileStamp, FileText, Save, SaveError};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
@@ -191,9 +191,13 @@ impl FerriteWindow {
         (self.on_save)(self.browser.state());
     }
 
-    fn close(&mut self) {
+    fn close(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.warn_unsaved(cx) {
+            return false;
+        }
         let _ = self.browser.shutdown(JOB_STOP_WAIT);
         self.save();
+        true
     }
 
     fn title_bar(cx: &mut Context<Self>) -> FerriteTitleBar {
@@ -201,17 +205,20 @@ impl FerriteWindow {
         FerriteTitleBar::new("Ferrite")
             .header(HeaderSearch::new())
             .on_close(move |_, cx| {
-                let _ = this.update(cx, |view, _| view.close());
-                cx.quit();
+                if this.update(cx, |view, cx| view.close(cx)).unwrap_or(true) {
+                    cx.quit();
+                }
             })
     }
 
     fn close_saves_and_quits(window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.weak_entity();
         window.on_window_should_close(cx, move |_, cx| {
-            let _ = this.update(cx, |view, _| view.close());
-            cx.quit();
-            true
+            let closing = this.update(cx, |view, cx| view.close(cx)).unwrap_or(true);
+            if closing {
+                cx.quit();
+            }
+            closing
         });
     }
 }
