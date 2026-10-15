@@ -69,17 +69,13 @@ impl FakeFs {
     }
 
     #[must_use]
-    #[expect(
-        clippy::expect_used,
-        reason = "the path is never empty and has no NUL, the only two errors"
-    )]
     pub fn location(&self, path: &str) -> Location {
         let path = match normalize(path) {
             "" => "/".to_owned(),
             rest => rest.replace('\0', "\u{fffd}"),
         };
         Location::with_provider(provider_id(), ProviderPath::from_text(&path))
-            .expect("a non-empty path without NUL is a valid location")
+            .unwrap_or_else(|_| Location::provider_root(provider_id()))
     }
 
     pub fn add_folder(&self, path: &str) {

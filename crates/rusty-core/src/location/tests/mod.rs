@@ -27,3 +27,18 @@ fn rejects_empty_text() {
 fn rejects_nul() {
     assert_eq!(Location::new("a\0b"), Err(LocationError::Nul));
 }
+
+#[test]
+fn provider_root_is_the_slash_path() {
+    let id = ProviderId::new("fake").unwrap();
+    let root = Location::provider_root(id.clone());
+    assert_eq!(
+        root,
+        Location::with_provider(id, ProviderPath::from_text("/")).unwrap()
+    );
+}
+
+#[test]
+fn local_provider_root_is_slash() {
+    assert_eq!(Location::provider_root(ProviderId::local()).as_str(), "/");
+}

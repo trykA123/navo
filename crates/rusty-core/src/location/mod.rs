@@ -51,6 +51,21 @@ impl Location {
     }
 
     #[must_use]
+    pub fn provider_root(provider: ProviderId) -> Self {
+        let path = ProviderPath::from_text("/");
+        let text = if provider.is_local() {
+            path.to_text()
+        } else {
+            format!("{}:///", provider.as_str())
+        };
+        Self {
+            provider,
+            path,
+            text,
+        }
+    }
+
+    #[must_use]
     pub fn provider(&self) -> &ProviderId {
         &self.provider
     }

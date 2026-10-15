@@ -36,7 +36,7 @@ fn windows_eq_needs_equal_lengths() {
 
 #[test]
 fn windows_eq_tells_different_letters_apart() {
-    assert!(!text("abc").windows_eq(&text("abd")));
+    assert!(!text("abc").windows_eq(&text("abx")));
 }
 
 #[test]
