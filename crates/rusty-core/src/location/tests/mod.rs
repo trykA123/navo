@@ -1,6 +1,7 @@
 use super::*;
 
 mod compare;
+mod join;
 mod path;
 mod props;
 mod text_form;

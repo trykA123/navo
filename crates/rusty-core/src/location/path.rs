@@ -127,6 +127,52 @@ impl ProviderPath {
         }
     }
 
+    pub(super) fn contains_ascii(&self, byte: u8) -> bool {
+        match &self.0 {
+            Repr::Text(text) => text.as_bytes().contains(&byte),
+            Repr::Wide(units) => units.contains(&u16::from(byte)),
+            Repr::Bytes(bytes) => bytes.contains(&byte),
+        }
+    }
+
+    pub(super) fn is_dot_name(&self) -> bool {
+        matches!(self.as_str(), Some("." | ".."))
+    }
+
+    pub(super) fn join(&self, separator: u8, name: &Self) -> Option<Self> {
+        let needs_separator = !self.ends_with_ascii(separator);
+        if let (Repr::Text(folder), Repr::Text(child)) = (&self.0, &name.0) {
+            let mut text = folder.clone();
+            if needs_separator {
+                text.push(char::from(separator));
+            }
+            text.push_str(child);
+            return Some(Self(Repr::Text(text)));
+        }
+        if matches!(self.0, Repr::Bytes(_)) || matches!(name.0, Repr::Bytes(_)) {
+            let mut bytes = self.to_bytes()?;
+            if needs_separator {
+                bytes.push(separator);
+            }
+            bytes.extend(name.to_bytes()?);
+            return Some(Self::from_bytes(&bytes));
+        }
+        let mut units = self.to_wide()?;
+        if needs_separator {
+            units.push(u16::from(separator));
+        }
+        units.extend(name.to_wide()?);
+        Some(Self::from_wide(&units))
+    }
+
+    fn ends_with_ascii(&self, byte: u8) -> bool {
+        match &self.0 {
+            Repr::Text(text) => text.as_bytes().last() == Some(&byte),
+            Repr::Wide(units) => units.last() == Some(&u16::from(byte)),
+            Repr::Bytes(bytes) => bytes.last() == Some(&byte),
+        }
+    }
+
     pub(super) fn has_nul(&self) -> bool {
         match &self.0 {
             Repr::Text(text) => text.contains('\0'),

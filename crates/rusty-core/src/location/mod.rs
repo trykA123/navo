@@ -19,6 +19,8 @@ pub enum LocationError {
     Nul,
     #[error("location names an invalid provider")]
     BadProvider,
+    #[error("location names an invalid path segment")]
+    BadSegment,
 }
 
 impl Location {
@@ -63,6 +65,29 @@ impl Location {
             path,
             text,
         }
+    }
+
+    pub fn join(&self, name: &ProviderPath) -> Result<Self, LocationError> {
+        if name.is_empty() {
+            return Err(LocationError::Empty);
+        }
+        if name.has_nul() {
+            return Err(LocationError::Nul);
+        }
+        let windows = self.is_local() && windows_style(&self.text);
+        let (separator, forbidden): (u8, &[u8]) = if windows {
+            (b'\\', b"\\/")
+        } else {
+            (b'/', b"/")
+        };
+        if name.is_dot_name() || forbidden.iter().any(|&byte| name.contains_ascii(byte)) {
+            return Err(LocationError::BadSegment);
+        }
+        let path = self
+            .path
+            .join(separator, name)
+            .ok_or(LocationError::BadSegment)?;
+        Self::with_provider(self.provider.clone(), path)
     }
 
     #[must_use]
