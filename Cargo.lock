@@ -390,6 +390,9 @@ dependencies = [
 [[package]]
 name = "rusty-diag"
 version = "0.0.1"
+dependencies = [
+ "proptest",
+]
 
 [[package]]
 name = "rusty-fork"
