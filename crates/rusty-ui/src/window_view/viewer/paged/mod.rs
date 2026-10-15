@@ -2,8 +2,11 @@ mod draw;
 mod find;
 mod jobs;
 mod lines;
+mod rows;
 mod scroll;
 mod view;
+
+use std::sync::Arc;
 
 use gpui_kit::{FocusHandle, Focusable, ScrollDelta, ScrollWheelEvent};
 use rusty_core::paging::{LineIndex, MAX_ROW};
@@ -15,6 +18,7 @@ use crate::prelude::*;
 use find::FindState;
 use jobs::{IndexMessage, Job};
 use lines::{end_top, row_start, step};
+use rows::RowCache;
 use scroll::ByteScroll;
 
 const WHEEL_ROWS: f32 = 3.;
@@ -36,7 +40,10 @@ pub struct PagedView {
     wheel: f32,
     changed: bool,
     note: Option<SharedString>,
-    index: Option<LineIndex>,
+    index: Option<Arc<LineIndex>>,
+    index_rev: u64,
+    source_rev: u64,
+    cache: RowCache,
     index_done: bool,
     index_failed: bool,
     line_count: Option<u64>,
@@ -68,6 +75,9 @@ impl PagedView {
             changed: false,
             note: None,
             index: None,
+            index_rev: 0,
+            source_rev: 0,
+            cache: RowCache::default(),
             index_done: false,
             index_failed: false,
             line_count: None,
@@ -86,10 +96,10 @@ impl PagedView {
 
     fn index_message(&mut self, message: IndexMessage, cx: &mut Context<Self>) {
         match message {
-            IndexMessage::Snapshot(snapshot) => self.index = Some(snapshot),
+            IndexMessage::Snapshot(snapshot) => self.index = Some(Arc::new(snapshot)),
             IndexMessage::Done(Ok(Some(index))) => {
                 self.line_count = index.line_count(&*self.source).ok();
-                self.index = Some(index);
+                self.index = Some(Arc::new(index));
                 self.index_done = true;
             }
             IndexMessage::Done(Ok(None)) => {}
@@ -98,6 +108,7 @@ impl PagedView {
                 self.note = Some(error.into());
             }
         }
+        self.index_rev += 1;
         cx.notify();
     }
 
@@ -204,6 +215,7 @@ impl PagedView {
             return;
         }
         self.changed = true;
+        self.source_rev += 1;
         let len = self.source.len();
         if self.top >= len {
             let top = row_start(&*self.source, self.kind, len);

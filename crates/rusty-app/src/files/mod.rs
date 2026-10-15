@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
 use rusty_core::Location;
@@ -15,10 +15,10 @@ const SNIFF: usize = 8 * 1024;
 
 pub fn hooks() -> FileHooks {
     FileHooks {
-        read: Rc::new(read),
-        write: Rc::new(write),
-        pick: Rc::new(paged::pick),
-        paged: Rc::new(paged::paged),
+        read: Arc::new(read),
+        write: Arc::new(write),
+        head: Arc::new(paged::head),
+        paged: Arc::new(paged::paged),
     }
 }
 

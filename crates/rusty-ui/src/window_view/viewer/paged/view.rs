@@ -45,31 +45,25 @@ impl PagedView {
         }
     }
 
-    pub(in crate::window_view) fn keys(&self) -> &'static [(&'static str, &'static str)] {
-        match (&self.find.bar, self.kind) {
-            (Some(bar), _) if bar.kind == BarKind::Find => &[
+    pub(in crate::window_view) fn bar_keys(
+        &self,
+    ) -> Option<&'static [(&'static str, &'static str)]> {
+        let bar = self.find.bar.as_ref()?;
+        Some(match bar.kind {
+            BarKind::Find => &[
                 ("Enter", "Next"),
                 ("Shift+Enter", "Previous"),
                 ("Alt+C", "Match case"),
                 ("Esc", "Close search"),
             ],
-            (Some(_), _) => &[("Enter", "Go there"), ("Esc", "Close")],
-            (None, PagedKind::Hex) => &[
-                ("Ctrl+F", "Find"),
-                ("Ctrl+G", "Go to offset"),
-                ("Alt+1", "Text"),
-                ("Ctrl+Home", "Start"),
-                ("Ctrl+End", "End"),
-                ("Esc", "Close"),
-            ],
-            (None, PagedKind::Text) => &[
-                ("Ctrl+F", "Find"),
-                ("Ctrl+G", "Go to line"),
-                ("Alt+3", "Hex"),
-                ("← →", "Scroll sideways"),
-                ("Ctrl+End", "End"),
-                ("Esc", "Close"),
-            ],
+            BarKind::GoTo => &[("Enter", "Go there"), ("Esc", "Close")],
+        })
+    }
+
+    pub(in crate::window_view) fn go_to_key(&self) -> (&'static str, &'static str) {
+        match self.kind {
+            PagedKind::Hex => ("Ctrl+G", "Go to offset"),
+            PagedKind::Text => ("Ctrl+G", "Go to line"),
         }
     }
 
@@ -236,9 +230,11 @@ impl Render for PagedView {
         self.row_height = t.typography.line_height + t.spacing.xxs;
         self.follow_drag();
         self.rows = self.fitting_rows(window);
-        let drawn = self.draw(usize::try_from(self.rows).unwrap_or(usize::MAX));
-        self.show_position(drawn.as_ref().ok());
         self.follow_changes(cx);
+        let want = self.want();
+        self.request_rows(want, cx);
+        let screen = self.cache.screen(want, self.source.len());
+        self.show_position(screen.end);
         let root = div()
             .id("paged")
             .key_context(PAGED_CONTEXT)
@@ -251,6 +247,6 @@ impl Render for PagedView {
             .size_full()
             .bg(t.colors.surface)
             .child(self.header(&t, cx))
-            .child(self.body(&t, drawn, cx))
+            .child(self.body(&t, &screen, cx))
     }
 }

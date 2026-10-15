@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -44,11 +43,10 @@ pub enum SaveError {
     Failed(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OpenAs {
-    Text,
-    Hex,
-    PagedText,
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Head {
+    pub bytes: Vec<u8>,
+    pub len: u64,
 }
 
 pub type SharedSource = Arc<dyn ByteSource + Send + Sync>;
@@ -67,15 +65,17 @@ pub struct Paged {
     pub editable: bool,
 }
 
-type Read = Rc<dyn Fn(&Location) -> Result<FileText, String>>;
-type Write = Rc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError>>;
-type Pick = Rc<dyn Fn(&Location) -> Result<OpenAs, String>>;
-type OpenPaged = Rc<dyn Fn(&Location) -> Result<Paged, String>>;
+type Read = Arc<dyn Fn(&Location) -> Result<FileText, String> + Send + Sync>;
+type Write =
+    Arc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError> + Send + Sync>;
+type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
+type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
 
+#[derive(Clone)]
 pub struct FileHooks {
     pub read: Read,
     pub write: Write,
-    pub pick: Pick,
+    pub head: ReadHead,
     pub paged: OpenPaged,
 }
 
@@ -83,10 +83,12 @@ impl FileHooks {
     #[must_use]
     pub fn none() -> Self {
         Self {
-            read: Rc::new(|_| Err("Files cannot be opened here.".to_owned())),
-            write: Rc::new(|_, _| Err(SaveError::Failed("Files cannot be saved here.".to_owned()))),
-            pick: Rc::new(|_| Err("Files cannot be opened here.".to_owned())),
-            paged: Rc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            read: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            write: Arc::new(|_, _| {
+                Err(SaveError::Failed("Files cannot be saved here.".to_owned()))
+            }),
+            head: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
         }
     }
 }

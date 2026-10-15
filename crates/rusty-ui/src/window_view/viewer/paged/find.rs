@@ -38,6 +38,7 @@ pub(super) struct FindState {
     pub hit: Option<Range<u64>>,
     pub anchor: Option<u64>,
     pub note: Option<SharedString>,
+    last: Option<String>,
     job: Option<Job>,
 }
 
@@ -48,6 +49,7 @@ impl FindState {
         self.hit = None;
         self.anchor = None;
         self.note = None;
+        self.last = None;
     }
 
     fn cancel(&mut self) {
@@ -165,11 +167,31 @@ impl PagedView {
         }
     }
 
+    pub(in crate::window_view::viewer) fn find_again(
+        &mut self,
+        backward: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let typed = self
+            .find
+            .bar
+            .as_ref()
+            .filter(|bar| bar.kind == BarKind::Find)
+            .map(|bar| bar.input.read(cx).value().to_string())
+            .filter(|text| !text.is_empty());
+        match typed.or_else(|| self.find.last.clone()) {
+            Some(text) => self.start_find(&text, backward, cx),
+            None => self.open_bar(BarKind::Find, window, cx),
+        }
+    }
+
     fn start_find(&mut self, text: &str, backward: bool, cx: &mut Context<Self>) {
         let needle = match self.needle(text) {
             Ok(needle) => needle,
             Err(error) => return self.set_bar_error(Some(error), cx),
         };
+        self.find.last = Some(text.to_owned());
         let from = match (self.find.anchor, backward) {
             (Some(anchor), false) => anchor + 1,
             (Some(anchor), true) => anchor,

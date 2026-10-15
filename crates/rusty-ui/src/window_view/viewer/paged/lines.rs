@@ -23,7 +23,6 @@ pub(super) struct TextLine {
 
 pub(super) struct Screen<L> {
     pub lines: Vec<L>,
-    pub end: u64,
 }
 
 fn byte_len(start: u64, end: u64) -> usize {
@@ -50,10 +49,7 @@ pub(super) fn hex_lines<S: ByteSource + ?Sized>(
             }
         })
         .collect();
-    Ok(Screen {
-        lines,
-        end: start + read as u64,
-    })
+    Ok(Screen { lines })
 }
 
 fn starts_line<S: ByteSource + ?Sized>(src: &S, offset: u64) -> Result<bool, String> {
@@ -102,7 +98,7 @@ pub(super) fn text_lines<S: ByteSource + ?Sized>(
         }
         at = row.next;
     }
-    Ok(Screen { lines, end: at })
+    Ok(Screen { lines })
 }
 
 pub(super) fn row_start<S: ByteSource + ?Sized>(

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use rusty_core::Location;
 use rusty_core::paging::{ByteSource, read_full};
 use rusty_fs::{PagedFile, index_lines};
-use rusty_ui::window_view::{OpenAs, Paged};
+use rusty_ui::window_view::{Head, Paged};
 
 use super::summary::{SUMMARY_HEAD, binary_summary};
 use super::{MAX_VIEW, SNIFF, path_of};
@@ -15,7 +15,7 @@ fn looks_binary(head: &[u8]) -> bool {
     head.starts_with(&[0xFF, 0xFE]) || head.starts_with(&[0xFE, 0xFF]) || head.contains(&0)
 }
 
-fn sniff(path: &Path) -> Result<(u64, bool), String> {
+fn sniff(path: &Path) -> Result<Head, String> {
     let mut file = File::open(path).map_err(|error| format!("Cannot open it: {error}"))?;
     let metadata = file
         .metadata()
@@ -28,18 +28,14 @@ fn sniff(path: &Path) -> Result<(u64, bool), String> {
         .take(SNIFF as u64)
         .read_to_end(&mut head)
         .map_err(|error| format!("Cannot read it: {error}"))?;
-    Ok((metadata.len(), looks_binary(&head)))
+    Ok(Head {
+        bytes: head,
+        len: metadata.len(),
+    })
 }
 
-pub fn pick(location: &Location) -> Result<OpenAs, String> {
-    let (len, binary) = sniff(&path_of(location)?)?;
-    Ok(if binary {
-        OpenAs::Hex
-    } else if len > MAX_VIEW {
-        OpenAs::PagedText
-    } else {
-        OpenAs::Text
-    })
+pub fn head(location: &Location) -> Result<Head, String> {
+    sniff(&path_of(location)?)
 }
 
 fn open_source(path: &Path) -> Result<Box<dyn ByteSource + Send>, String> {
@@ -48,7 +44,7 @@ fn open_source(path: &Path) -> Result<Box<dyn ByteSource + Send>, String> {
 
 pub fn paged(location: &Location) -> Result<Paged, String> {
     let path: PathBuf = path_of(location)?;
-    let (len, binary) = sniff(&path)?;
+    let sniffed = sniff(&path)?;
     let source = Arc::new(PagedFile::open(&path)?);
     let mut head = vec![0u8; SUMMARY_HEAD];
     let count = read_full(source.as_ref(), 0, &mut head)?;
@@ -59,7 +55,7 @@ pub fn paged(location: &Location) -> Result<Paged, String> {
         reopen: Arc::new(move || open_source(&reopen_path)),
         index: Arc::new(move |cancel, progress| index_lines(&path, cancel, progress)),
         summary: binary_summary(&head),
-        editable: !binary && len <= MAX_VIEW,
+        editable: !looks_binary(&sniffed.bytes) && sniffed.len <= MAX_VIEW,
     })
 }
 
