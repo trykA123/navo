@@ -160,16 +160,22 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::LayoutFocus => Command::LayoutFocus {
             direction: fields.required("direction", direction)?,
         },
-        Id::WindowOpen => Command::WindowOpen {
+        Id::WindowOpen | Id::WindowClose | Id::WindowFocus => window_command(&mut fields)?,
+        Id::AppSaveSession => Command::AppSaveSession,
+    })
+}
+
+fn window_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
+    Ok(match fields.command {
+        CommandId::WindowOpen => Command::WindowOpen {
             location: fields.optional("location", location)?,
         },
-        Id::WindowClose => Command::WindowClose {
+        CommandId::WindowClose => Command::WindowClose {
             window: fields.optional("window", unsigned::<u64>)?,
         },
-        Id::WindowFocus => Command::WindowFocus {
+        _ => Command::WindowFocus {
             window: fields.required("window", unsigned::<u64>)?,
         },
-        Id::AppSaveSession => Command::AppSaveSession,
     })
 }
 
