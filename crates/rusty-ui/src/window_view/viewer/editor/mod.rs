@@ -4,6 +4,7 @@ mod save;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::{Editor, EditorState, InputEvent};
 use gpui_kit::{Role, Subscription, Task};
+use rusty_core::encoding::TextEncoding;
 
 pub(super) use body::{EditorBody, EditorFile};
 
@@ -21,6 +22,7 @@ pub(super) struct EditorView {
     editing: bool,
     can_edit: bool,
     crlf: bool,
+    encoding: TextEncoding,
     stamp: Option<FileStamp>,
     dirty: bool,
     revision: u64,
@@ -52,6 +54,7 @@ impl EditorView {
             editing: false,
             can_edit: !file.read_only,
             crlf: file.crlf,
+            encoding: file.encoding,
             stamp: file.stamp,
             dirty: false,
             revision: 0,

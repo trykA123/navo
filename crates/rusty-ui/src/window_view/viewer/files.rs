@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
+use rusty_core::encoding::TextEncoding;
 use rusty_core::paging::{ByteSource, LineIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +17,7 @@ pub struct FileText {
     pub read_only: bool,
     pub crlf: bool,
     pub stamp: Option<FileStamp>,
+    pub encoding: TextEncoding,
 }
 
 impl FileText {
@@ -26,6 +28,7 @@ impl FileText {
             read_only: false,
             crlf: false,
             stamp: None,
+            encoding: TextEncoding::default(),
         }
     }
 }
@@ -35,6 +38,7 @@ pub struct Save<'a> {
     pub text: &'a str,
     pub crlf: bool,
     pub expected: Option<FileStamp>,
+    pub encoding: TextEncoding,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

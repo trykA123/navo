@@ -1,4 +1,5 @@
 use rusty_core::Location;
+use rusty_core::encoding::TextEncoding;
 
 use super::EditorView;
 use crate::prelude::*;
@@ -12,6 +13,7 @@ struct SaveJob {
     location: Location,
     text: String,
     crlf: bool,
+    encoding: TextEncoding,
     expected: Option<FileStamp>,
 }
 
@@ -21,6 +23,7 @@ impl SaveJob {
             text: &self.text,
             crlf: self.crlf,
             expected: self.expected,
+            encoding: self.encoding,
         };
         (hooks.write)(&self.location, &save)
     }
@@ -35,6 +38,7 @@ impl EditorView {
             location: self.host.location.clone(),
             text: self.editor.read(cx).value().to_string(),
             crlf: self.crlf,
+            encoding: self.encoding,
             expected: if self.overwrite { None } else { self.stamp },
         };
         let hooks = self.host.hooks.clone();

@@ -1,9 +1,12 @@
 use std::fs;
 
 use rusty_core::Location;
+use rusty_core::encoding::TextEncoding;
 use rusty_ui::window_view::{Save, SaveError};
 
 use super::{line_endings, mostly_crlf, read, write};
+
+mod encodings;
 
 fn at(path: &std::path::Path) -> Location {
     Location::new(path.to_string_lossy().into_owned()).unwrap()
@@ -14,6 +17,7 @@ fn save(text: &str, crlf: bool, expected: Option<rusty_ui::window_view::FileStam
         text,
         crlf,
         expected,
+        encoding: TextEncoding::default(),
     }
 }
 
@@ -72,14 +76,11 @@ fn a_file_changed_on_disk_is_not_overwritten_without_asking() {
 }
 
 #[test]
-fn binary_utf16_and_huge_files_are_refused() {
+fn binary_and_huge_files_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let binary = dir.path().join("a.bin");
     fs::write(&binary, [1_u8, 0, 2]).unwrap();
     assert!(read(&at(&binary)).unwrap_err().contains("binary"));
-    let wide = dir.path().join("wide.txt");
-    fs::write(&wide, [0xFF_u8, 0xFE, b'a', 0]).unwrap();
-    assert!(read(&at(&wide)).unwrap_err().contains("UTF-16"));
     let huge = dir.path().join("huge.log");
     let file = fs::File::create(&huge).unwrap();
     file.set_len(17 * 1024 * 1024).unwrap();
@@ -87,10 +88,10 @@ fn binary_utf16_and_huge_files_are_refused() {
 }
 
 #[test]
-fn text_that_is_not_utf8_opens_read_only() {
+fn text_that_is_not_valid_in_its_encoding_opens_read_only() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("latin1.txt");
-    fs::write(&file, [b'c', 0xE9, b'\n']).unwrap();
+    let file = dir.path().join("broken.txt");
+    fs::write(&file, [0xEF, 0xBB, 0xBF, b'c', 0xE9, b'\n']).unwrap();
     assert!(read(&at(&file)).unwrap().read_only);
 }
 

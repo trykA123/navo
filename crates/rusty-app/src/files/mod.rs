@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
 use rusty_core::Location;
+use rusty_core::encoding::TextEncoding;
 use rusty_store::replace_atomic;
 use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
 
@@ -71,6 +72,7 @@ pub fn read(location: &Location) -> Result<FileText, String> {
         read_only,
         crlf,
         stamp,
+        encoding: TextEncoding::default(),
     })
 }
 
