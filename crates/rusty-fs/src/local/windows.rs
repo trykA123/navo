@@ -29,6 +29,7 @@ pub(super) fn attributes(_name: &OsStr, metadata: &Metadata) -> Attributes {
         hidden: bits & HIDDEN != 0,
         system: bits & SYSTEM != 0,
         readonly: bits & READONLY != 0,
+        ..Attributes::default()
     }
 }
 

@@ -54,6 +54,7 @@ fn a_symlink_to_a_file_is_a_link_with_size_zero() {
     std::os::unix::fs::symlink(dir.path().join("target"), dir.path().join("link")).unwrap();
     let link = entry_named(&folder, "link");
     assert_eq!((link.kind, link.size), (EntryKind::Link, 0));
+    assert!(!link.attributes.link_to_folder);
 }
 
 #[cfg(unix)]
@@ -62,7 +63,9 @@ fn a_symlink_to_a_folder_is_a_link() {
     let (dir, folder) = temp();
     fs::create_dir(dir.path().join("target")).unwrap();
     std::os::unix::fs::symlink(dir.path().join("target"), dir.path().join("link")).unwrap();
-    assert_eq!(entry_named(&folder, "link").kind, EntryKind::Link);
+    let link = entry_named(&folder, "link");
+    assert_eq!(link.kind, EntryKind::Link);
+    assert!(link.attributes.link_to_folder);
 }
 
 #[cfg(unix)]
@@ -71,6 +74,7 @@ fn a_dangling_symlink_is_still_listed() {
     let (dir, folder) = temp();
     std::os::unix::fs::symlink(dir.path().join("gone"), dir.path().join("link")).unwrap();
     assert_eq!(sorted_names(&list_all(&folder).1), ["link"]);
+    assert!(!entry_named(&folder, "link").attributes.link_to_folder);
 }
 
 #[test]

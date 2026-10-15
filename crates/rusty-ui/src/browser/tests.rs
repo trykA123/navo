@@ -273,7 +273,10 @@ fn opening_a_link_row_enters_it() {
             kind: rusty_fs::EntryKind::Link,
             size: 0,
             modified_ms: None,
-            attributes: rusty_fs::Attributes::default(),
+            attributes: rusty_fs::Attributes {
+                link_to_folder: true,
+                ..rusty_fs::Attributes::default()
+            },
         },
     );
     let mut browser = browser_at(&fs, "home");
@@ -421,4 +424,23 @@ fn a_running_folder_size_does_not_hold_up_the_next_listing() {
     gated.open.store(true, std::sync::atomic::Ordering::Release);
     settle(&mut browser);
     assert!(listed);
+}
+
+#[test]
+fn a_link_to_a_file_is_not_opened_as_a_folder() {
+    let fs = fake();
+    fs.add_entry(
+        "home",
+        rusty_fs::FsEntry {
+            name: rusty_core::ProviderPath::from_text("aa-link"),
+            kind: rusty_fs::EntryKind::Link,
+            size: 0,
+            modified_ms: None,
+            attributes: rusty_fs::Attributes::default(),
+        },
+    );
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    assert!(browser.open_row(3));
+    assert_eq!(here(&browser), fs.location("home").as_str());
 }

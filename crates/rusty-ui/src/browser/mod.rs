@@ -123,7 +123,9 @@ impl Browser {
         let is_link = usize::try_from(row)
             .ok()
             .and_then(|index| self.details.get(&tab.id())?.get(index).cloned())
-            .is_some_and(|detail| detail.kind == EntryKind::Link);
+            .is_some_and(|detail| {
+                detail.kind == EntryKind::Link && detail.attributes.link_to_folder
+            });
         let Ok(location) = tab.location().join(&ProviderPath::from_text(&entry.name)) else {
             return false;
         };

@@ -20,6 +20,7 @@ pub struct Attributes {
     pub hidden: bool,
     pub system: bool,
     pub readonly: bool,
+    pub link_to_folder: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
