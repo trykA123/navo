@@ -1,6 +1,7 @@
 use gpui_kit::Stateful;
 use rusty_core::{Command, CursorMove};
 
+use super::kinds::{IMAGE_ID, is_image_name};
 use super::modes::Pick;
 use super::{
     EditFile, FindNext, FindOnEnter, FindPrevious, ListerHex, ListerRich, ListerText, NextFile,
@@ -85,11 +86,21 @@ impl FerriteWindow {
         }
     }
 
+    fn showing_image(&self) -> bool {
+        let kind = self.viewer.as_ref().and_then(|viewer| viewer.kind.as_ref());
+        kind.is_some_and(|kind| kind.id() == IMAGE_ID)
+    }
+
     fn next_file_row(&self, forward: bool) -> Option<u64> {
+        let images_only = self.showing_image();
         let tab = self.browser.state().active_tab();
         let cursor = tab.view().cursor;
         let listing = tab.listing()?;
-        let is_file = |row: &u64| listing.get(*row).is_some_and(|entry| !entry.is_folder);
+        let is_file = |row: &u64| {
+            listing.get(*row).is_some_and(|entry| {
+                !entry.is_folder && (!images_only || is_image_name(&entry.name))
+            })
+        };
         if forward {
             (cursor.saturating_add(1)..listing.len()).find(is_file)
         } else {

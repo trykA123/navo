@@ -1,4 +1,5 @@
 mod hex;
+mod image;
 mod text;
 
 use std::any::Any;
@@ -53,6 +54,8 @@ impl Sniff<'_> {
     }
 }
 
+pub(super) use image::{IMAGE_ID, is_image_name};
+
 pub type Loaded = Box<dyn Any + Send>;
 
 pub trait ViewerKind: Send + Sync {
@@ -90,7 +93,11 @@ pub struct Kinds(Vec<Kind>);
 impl Kinds {
     #[must_use]
     pub fn builtin() -> Self {
-        Self(vec![Arc::new(text::Text), Arc::new(hex::Hex)])
+        Self(vec![
+            Arc::new(text::Text),
+            Arc::new(hex::Hex),
+            Arc::new(image::Image),
+        ])
     }
 
     #[must_use]
