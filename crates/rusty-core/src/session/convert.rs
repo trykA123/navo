@@ -88,7 +88,12 @@ pub(super) fn restore(session: &SessionState) -> Result<AppState, String> {
     )
 }
 
+const MAX_NEXT_ID: u64 = 1 << 62;
+
 fn check_ids(session: &SessionState) -> Result<(), String> {
+    if session.next_id > MAX_NEXT_ID {
+        return Err(format!("next_id {} is implausibly large", session.next_id));
+    }
     let mut seen = HashSet::new();
     let ids = session.windows.iter().flat_map(|w| {
         std::iter::once(w.id).chain(

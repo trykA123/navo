@@ -83,3 +83,10 @@ fn next_id_not_above_every_id_is_invalid() {
     session.next_id = 6;
     assert_invalid(session);
 }
+
+#[test]
+fn an_implausibly_large_next_id_is_invalid() {
+    let mut session = home().to_session(100);
+    session.next_id = u64::MAX;
+    assert_invalid(session);
+}
