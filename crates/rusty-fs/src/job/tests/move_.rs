@@ -1,0 +1,88 @@
+use super::*;
+
+fn move_plan(fs: &FakeFs) -> OperationPlan {
+    plan(&request(fs, OpKind::Move, &["src/b"], "dst"))
+}
+
+fn with_link() -> FakeFs {
+    let fs = fixture(&[("src/b/c.txt", BIG), ("src/b/d.txt", 6_000)]);
+    add_link(&fs, "src/b", "l");
+    fs
+}
+
+fn failed_move() -> (FakeFs, Snapshot, JobOutcome) {
+    let fs = with_link();
+    let plan = move_plan(&fs);
+    let before = tree_of(&fs, "src");
+    let fault = Fault::FailAfterBytes {
+        kind: FsErrorKind::NetworkLost,
+        bytes: 5_000,
+    };
+    fs.fault("src/b/d.txt", FakeOp::Copy, 1, fault);
+    let (outcome, _) = run(&fs, &plan);
+    (fs, before, outcome)
+}
+
+#[test]
+fn a_move_that_fails_while_copying_removes_no_source() {
+    let (fs, before, _) = failed_move();
+    assert_eq!(tree_of(&fs, "src"), before);
+}
+
+#[test]
+fn a_move_that_fails_while_copying_fails_at_the_copy() {
+    let (_, _, outcome) = failed_move();
+    assert_eq!(failure(&outcome), Some((2, FsErrorKind::NetworkLost)));
+}
+
+#[test]
+fn a_move_that_fails_while_copying_leaves_no_partial_file() {
+    let (fs, _, _) = failed_move();
+    assert_eq!(
+        tree_of(&fs, "dst"),
+        [
+            entry("b", EntryKind::Folder, 0),
+            entry("b/c.txt", EntryKind::File, BIG),
+        ]
+    );
+}
+
+#[test]
+fn a_move_removes_every_source_and_keeps_links() {
+    let fs = with_link();
+    let plan = move_plan(&fs);
+    let _ = run(&fs, &plan);
+    assert_eq!(
+        tree_of(&fs, "src"),
+        [
+            entry("b", EntryKind::Folder, 0),
+            entry("b/l", EntryKind::Link, 0),
+        ]
+    );
+}
+
+#[test]
+fn a_move_copies_every_file() {
+    let fs = with_link();
+    let plan = move_plan(&fs);
+    let _ = run(&fs, &plan);
+    assert_eq!(
+        tree_of(&fs, "dst"),
+        [
+            entry("b", EntryKind::Folder, 0),
+            entry("b/c.txt", EntryKind::File, BIG),
+            entry("b/d.txt", EntryKind::File, 6_000),
+        ]
+    );
+}
+
+#[test]
+fn a_move_without_links_removes_the_source_folder() {
+    let fs = fixture(&[("src/b/c.txt", BIG)]);
+    let plan = move_plan(&fs);
+    let (outcome, _) = run(&fs, &plan);
+    assert_eq!(
+        (outcome, tree_of(&fs, "src")),
+        (JobOutcome::Done, Vec::new())
+    );
+}

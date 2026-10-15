@@ -1,8 +1,12 @@
+mod ops;
+
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusty_core::{FsError, Location, ProviderId, ProviderPath};
+
+pub use ops::ProviderOps;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {

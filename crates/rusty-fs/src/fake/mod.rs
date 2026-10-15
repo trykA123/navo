@@ -1,3 +1,4 @@
+mod ops;
 mod tree;
 
 use std::collections::HashMap;
@@ -12,12 +13,18 @@ use tree::Tree;
 pub enum FakeOp {
     List,
     Metadata,
+    Create,
+    Copy,
+    Rename,
+    Remove,
+    Recycle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fault {
     Fail(FsErrorKind),
     FailAfterEntries { kind: FsErrorKind, entries: usize },
+    FailAfterBytes { kind: FsErrorKind, bytes: u64 },
 }
 
 type CallKey = (String, FakeOp);
@@ -27,6 +34,7 @@ pub struct FakeFs {
     tree: Mutex<Tree>,
     faults: Mutex<HashMap<CallKey, Vec<(u32, Fault)>>>,
     calls: Mutex<HashMap<CallKey, u32>>,
+    recycled: Mutex<Vec<String>>,
     batch_size: usize,
 }
 
@@ -56,6 +64,7 @@ impl FakeFs {
             tree: Mutex::new(Tree::new()),
             faults: Mutex::new(HashMap::new()),
             calls: Mutex::new(HashMap::new()),
+            recycled: Mutex::new(Vec::new()),
             batch_size: DEFAULT_BATCH,
         }
     }
@@ -111,6 +120,11 @@ impl FakeFs {
             .get(&(normalize(path).to_owned(), op))
             .copied()
             .unwrap_or(0)
+    }
+
+    #[must_use]
+    pub fn recycled(&self) -> Vec<String> {
+        lock(&self.recycled).clone()
     }
 
     fn tree(&self) -> MutexGuard<'_, Tree> {
@@ -208,7 +222,9 @@ impl Provider for FakeFs {
             return Err(error(FsErrorKind::Cancelled, folder));
         }
         let (limit, failure) = match fault {
-            Some(Fault::Fail(kind)) => return Err(error(kind, folder)),
+            Some(Fault::Fail(kind) | Fault::FailAfterBytes { kind, .. }) => {
+                return Err(error(kind, folder));
+            }
             Some(Fault::FailAfterEntries { kind, entries }) => (entries, Some(kind)),
             None => (usize::MAX, None),
         };
@@ -231,9 +247,11 @@ impl Provider for FakeFs {
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
         let path = self.own_path(location)?;
         match self.record_call(&path, FakeOp::Metadata) {
-            Some(Fault::Fail(kind) | Fault::FailAfterEntries { kind, .. }) => {
-                Err(error(kind, location))
-            }
+            Some(
+                Fault::Fail(kind)
+                | Fault::FailAfterEntries { kind, .. }
+                | Fault::FailAfterBytes { kind, .. },
+            ) => Err(error(kind, location)),
             None => self
                 .tree()
                 .metadata(&path)

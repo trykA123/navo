@@ -57,7 +57,7 @@ fn segments(path: &str) -> impl Iterator<Item = ProviderPath> + '_ {
         .map(ProviderPath::from_text)
 }
 
-fn split_last(path: &str) -> Option<(&str, ProviderPath)> {
+pub(super) fn split_last(path: &str) -> Option<(&str, ProviderPath)> {
     let trimmed = path.trim_end_matches('/');
     let (parent, name) = trimmed.rsplit_once('/').unwrap_or(("", trimmed));
     (!name.is_empty()).then(|| (parent, ProviderPath::from_text(name)))
@@ -116,6 +116,39 @@ impl Tree {
         {
             node.children.retain(|c| c.entry.name != name);
         }
+    }
+
+    pub(super) fn is_folder(&self, path: &str) -> bool {
+        self.find(path)
+            .is_some_and(|node| node.entry.kind == EntryKind::Folder)
+    }
+
+    pub(super) fn has_children(&self, path: &str) -> bool {
+        self.find(path)
+            .is_some_and(|node| !node.children.is_empty())
+    }
+
+    pub(super) fn resize(&mut self, path: &str, size: u64) {
+        if let Some(node) = self.find_mut(path) {
+            node.entry.size = size;
+        }
+    }
+
+    pub(super) fn move_node(&mut self, from: &str, to: &str) {
+        let Some((parent, name)) = split_last(to) else {
+            return;
+        };
+        if let Some(mut node) = self.take(from) {
+            node.entry.name = name;
+            self.folder_mut(parent).children.push(node);
+        }
+    }
+
+    fn take(&mut self, path: &str) -> Option<Node> {
+        let (parent, name) = split_last(path)?;
+        let node = self.find_mut(parent)?;
+        let index = node.children.iter().position(|c| c.entry.name == name)?;
+        Some(node.children.remove(index))
     }
 
     pub(super) fn metadata(&self, path: &str) -> Option<FsEntry> {

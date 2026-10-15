@@ -8,6 +8,7 @@ use crate::{Attributes, CancelToken, EntryBatch, EntryKind, FsEntry, Provider};
 mod concurrency;
 mod faults;
 mod listing;
+mod ops;
 mod props;
 mod tree;
 
