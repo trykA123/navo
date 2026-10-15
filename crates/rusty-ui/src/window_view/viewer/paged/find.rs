@@ -2,11 +2,12 @@ use std::ops::Range;
 
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::{Focusable, Subscription};
-use rusty_core::paging::{Found, Needle, Search, hex_row_start, parse_hex};
+use rusty_core::paging::{Found, Needle, Search, parse_hex};
 
 use super::PagedView;
 use super::jobs::{Job, SearchMessage, start_search};
-use super::lines::{PagedKind, row_start};
+use super::lines::PagedKind;
+use super::moves::Move;
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
 
@@ -225,25 +226,24 @@ impl PagedView {
         match message {
             SearchMessage::Progress(done) => progress.done = done,
             SearchMessage::Done(result) => {
-                let (backward, width) = (progress.backward, progress.width);
-                self.find.progress = None;
-                self.found(result, backward, width);
+                if let Some(search) = self.find.progress.take() {
+                    self.found(result, search, cx);
+                }
             }
         }
         cx.notify();
     }
 
-    fn found(&mut self, result: Result<Found, String>, backward: bool, width: u64) {
+    fn found(&mut self, result: Result<Found, String>, search: Progress, cx: &mut Context<Self>) {
         match result {
-            Ok(Found::At(at)) => match row_start(&*self.source, self.kind, at) {
-                Ok(top) => {
-                    self.top = top;
-                    self.find.hit = Some(at..at + width);
-                    self.find.anchor = Some(at);
-                }
-                Err(error) => self.find.note = Some(error.into()),
-            },
-            Ok(Found::NotFound) if backward => self.find.note = Some("Not found above.".into()),
+            Ok(Found::At(at)) => {
+                self.queue_move(Move::Offset(at), cx);
+                self.find.hit = Some(at..at + search.width);
+                self.find.anchor = Some(at);
+            }
+            Ok(Found::NotFound) if search.backward => {
+                self.find.note = Some("Not found above.".into());
+            }
             Ok(Found::NotFound) => self.find.note = Some("Not found below.".into()),
             Ok(Found::Cancelled) => {}
             Err(error) => self.find.note = Some(error.into()),
@@ -251,31 +251,17 @@ impl PagedView {
     }
 
     fn go_to(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        match self.go_to_target(text) {
-            Ok(top) => {
-                self.top = top;
-                self.find.anchor = None;
+        let target = match self.kind {
+            PagedKind::Hex => parse_offset(text).map(Move::Offset),
+            PagedKind::Text => parse_line(text).map(Move::Line),
+        };
+        match target {
+            Ok(target) => {
+                self.note = None;
                 self.close_bar(window, cx);
+                self.user_move(target, cx);
             }
             Err(error) => self.set_bar_error(Some(error), cx),
-        }
-    }
-
-    fn go_to_target(&self, text: &str) -> Result<u64, String> {
-        let source = &*self.source;
-        if self.kind == PagedKind::Hex {
-            let offset = parse_offset(text)?;
-            return Ok(hex_row_start(offset.min(source.len().saturating_sub(1))));
-        }
-        let line = parse_line(text)?;
-        let found = match &self.index {
-            Some(index) => index.line_start(source, line)?,
-            None => None,
-        };
-        match found {
-            Some(start) => Ok(start),
-            None if self.index_done => Err(format!("There is no line {line}.")),
-            None => Err("Not indexed yet.".to_owned()),
         }
     }
 }

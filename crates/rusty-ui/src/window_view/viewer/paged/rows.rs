@@ -2,11 +2,13 @@ use rusty_core::paging::{ByteSource, HEX_WIDTH, LineIndex};
 
 use super::PagedView;
 use super::lines::{HexLine, PagedKind, Screen, TextLine, hex_lines, text_lines};
+use super::moves::{Frame, Move, apply_moves};
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Want {
     pub top: u64,
+    pub move_seq: u64,
     pub count: usize,
     pub kind: PagedKind,
     pub index_rev: u64,
@@ -20,6 +22,13 @@ enum Drawn {
 
 struct Filled {
     want: Want,
+    drawn: Result<Drawn, String>,
+}
+
+struct FillResult {
+    top: u64,
+    note: Option<String>,
+    consumed: usize,
     drawn: Result<Drawn, String>,
 }
 
@@ -126,11 +135,25 @@ impl RowCache {
 fn fill<S: ByteSource + ?Sized>(
     source: &S,
     want: Want,
+    moves: &[Move],
     index: Option<&LineIndex>,
-) -> Result<Drawn, String> {
-    match want.kind {
-        PagedKind::Hex => hex_lines(source, want.top, want.count).map(Drawn::Hex),
-        PagedKind::Text => text_lines(source, want.top, want.count, index).map(Drawn::Text),
+) -> FillResult {
+    let frame = Frame {
+        source,
+        kind: want.kind,
+        count: want.count as u64,
+        index,
+    };
+    let (top, note) = apply_moves(&frame, want.top, moves);
+    let drawn = match want.kind {
+        PagedKind::Hex => hex_lines(source, top, want.count).map(Drawn::Hex),
+        PagedKind::Text => text_lines(source, top, want.count, index).map(Drawn::Text),
+    };
+    FillResult {
+        top,
+        note,
+        consumed: moves.len(),
+        drawn,
     }
 }
 
@@ -138,6 +161,7 @@ impl PagedView {
     pub(super) fn want(&self) -> Want {
         Want {
             top: self.top,
+            move_seq: self.move_seq,
             count: usize::try_from(self.rows).unwrap_or(usize::MAX),
             kind: self.kind,
             index_rev: self.index_rev,
@@ -145,12 +169,13 @@ impl PagedView {
         }
     }
 
-    pub(super) fn request_rows(&mut self, want: Want, cx: &mut Context<Self>) {
+    pub(super) fn request_rows(&mut self, cx: &mut Context<Self>) {
+        let want = self.want();
         let cache = &self.cache;
         let is_filled = cache
             .filled
             .as_ref()
-            .is_some_and(|filled| filled.want == want);
+            .is_some_and(|filled| filled.want == want && self.moves.is_empty());
         let is_pending = cache
             .pending
             .as_ref()
@@ -160,25 +185,42 @@ impl PagedView {
         }
         let source = self.source.clone();
         let index = self.index.clone();
+        let moves = self.moves.clone();
         let task = cx.spawn(async move |this, cx| {
-            let drawn = cx
-                .background_spawn(async move { fill(&*source, want, index.as_deref()) })
+            let filled = cx
+                .background_spawn(async move { fill(&*source, want, &moves, index.as_deref()) })
                 .await;
-            let _ = this.update(cx, |view, cx| view.rows_filled(want, drawn, cx));
+            let _ = this.update(cx, |view, cx| view.rows_filled(want, filled, cx));
         });
         self.cache.pending = Some((want, task));
     }
 
-    fn rows_filled(&mut self, want: Want, drawn: Result<Drawn, String>, cx: &mut Context<Self>) {
-        if self
+    fn rows_filled(&mut self, want: Want, filled: FillResult, cx: &mut Context<Self>) {
+        let is_current = self
             .cache
             .pending
             .as_ref()
-            .is_some_and(|(wanted, _)| *wanted == want)
-        {
-            self.cache.pending = None;
+            .is_some_and(|(wanted, _)| *wanted == want);
+        if !is_current {
+            return;
         }
-        self.cache.filled = Some(Filled { want, drawn });
+        self.cache.pending = None;
+        self.top = filled.top;
+        self.moves.drain(..filled.consumed.min(self.moves.len()));
+        if let Some(note) = filled.note {
+            self.note = Some(note.into());
+        }
+        let want = Want {
+            top: filled.top,
+            ..want
+        };
+        self.cache.filled = Some(Filled {
+            want,
+            drawn: filled.drawn,
+        });
+        if !self.moves.is_empty() {
+            self.request_rows(cx);
+        }
         cx.notify();
     }
 }

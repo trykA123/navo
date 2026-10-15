@@ -1,53 +1,23 @@
-use gpui_kit::{FocusHandle, Focusable};
+use std::rc::Rc;
 
-use super::open::{Loaded, load, start};
-use super::{Kind, Paged, PagedKind, PagedView, Shape, Slot, Viewer, attach_editor};
+use gpui_kit::FocusHandle;
+use rusty_core::Command;
+
+use super::body::{Attach, Host};
+use super::open::start;
+use super::{Kind, Loaded, Slot, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
-
-impl Viewer {
-    pub(super) fn focus_target(&self, cx: &App) -> FocusHandle {
-        if let Some(paged) = &self.paged {
-            return paged.read(cx).focus_handle(cx);
-        }
-        match &self.editor {
-            Some(editor) => editor.read(cx).focus_handle(cx),
-            None => self.focus.clone(),
-        }
-    }
-
-    fn clear_body(&mut self) {
-        self.editor = None;
-        self.paged = None;
-        self._changes = None;
-        self.editing = false;
-        self.dirty = false;
-        self.leaving = false;
-        self.switching = None;
-        self.overwrite = false;
-        self.message = None;
-    }
-
-    fn switch_warning(&mut self, slot: Slot) -> bool {
-        if !self.dirty || self.switching == Some(slot) {
-            return false;
-        }
-        self.switching = Some(slot);
-        self.message = Some(
-            format!(
-                "Unsaved changes. Ctrl+S saves; {} again discards them.",
-                slot.alt_key()
-            )
-            .into(),
-        );
-        true
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Pick {
     pub slot: Slot,
     pub edit: bool,
+}
+
+struct Choice {
+    kind: Kind,
+    edit: bool,
 }
 
 pub(super) struct Shown {
@@ -56,100 +26,155 @@ pub(super) struct Shown {
     pub edit: bool,
 }
 
-fn attach_paged(
-    viewer: &mut Viewer,
-    paged: Paged,
-    kind: PagedKind,
-    cx: &mut Context<FerriteWindow>,
-) {
-    let title = viewer.title.clone();
-    viewer.clear_body();
-    viewer.paged = Some(cx.new(|cx| PagedView::new(title, paged, kind, cx)));
+impl Viewer {
+    pub(super) fn focus_target(&self, cx: &App) -> FocusHandle {
+        match &self.body {
+            Some(body) => body.focus_handle(cx),
+            None => self.focus.clone(),
+        }
+    }
+
+    fn is_shown(&self, kind: &Kind) -> bool {
+        self.body.is_some()
+            && self
+                .kind
+                .as_ref()
+                .is_some_and(|shown| shown.id() == kind.id())
+    }
+
+    fn switch_warning(&mut self, slot: Slot, cx: &mut App) -> bool {
+        let Some(revision) = self.unsaved(cx) else {
+            return false;
+        };
+        if self.switching == Some((slot, revision)) {
+            return false;
+        }
+        self.switching = Some((slot, revision));
+        let note = format!(
+            "Unsaved changes. Ctrl+S saves; {} again discards them.",
+            slot.alt_key()
+        );
+        self.say(note, cx);
+        true
+    }
+
+    fn clear_body(&mut self) {
+        self.body = None;
+        self.leaving = None;
+        self.switching = None;
+        self.message = None;
+    }
 }
 
 impl FerriteWindow {
+    fn host(&self, viewer: &Viewer, cx: &mut Context<Self>) -> Host {
+        let this = cx.weak_entity();
+        Host {
+            title: viewer.title.clone(),
+            location: viewer.location.clone(),
+            hooks: self.files.clone(),
+            on_saved: Rc::new(move |cx| {
+                let this = this.clone();
+                cx.defer(move |cx| {
+                    let _ = this.update(cx, Self::refresh_after_save);
+                });
+            }),
+        }
+    }
+
+    fn refresh_after_save(&mut self, cx: &mut Context<Self>) {
+        let _ = self.browser.command(&Command::PaneRefresh);
+        cx.notify();
+    }
+
     pub(super) fn show_loaded(
         &mut self,
         shown: Shown,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let Some(viewer) = &self.viewer else {
+            return;
+        };
+        let host = self.host(viewer, cx);
+        let attached = shown.loaded.and_then(|loaded| {
+            let attach = Attach {
+                loaded,
+                host,
+                edit: shown.edit,
+            };
+            shown.kind.attach(attach, window, cx)
+        });
         let Some(viewer) = &mut self.viewer else {
             return;
         };
         viewer.opening = None;
         viewer.kind = Some(shown.kind);
-        match shown.loaded {
-            Ok(Loaded::Text(file)) => {
-                viewer.clear_body();
-                attach_editor(viewer, file, window, cx);
-                if shown.edit {
-                    self.start_editing(cx);
-                }
-            }
-            Ok(Loaded::Paged(paged, kind)) => attach_paged(viewer, paged, kind, cx),
+        viewer.clear_body();
+        match attached {
+            Ok(body) => viewer.body = Some(body),
             Err(message) => viewer.message = Some(message.into()),
         }
-        if let Some(viewer) = &self.viewer {
-            window.focus(&viewer.focus_target(cx), cx);
-        }
-        cx.notify();
-    }
-
-    pub(super) fn start_editing(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.viewer.as_mut().filter(|viewer| viewer.can_edit) else {
-            return;
-        };
-        let Some(editor) = viewer.editor.clone() else {
-            return;
-        };
-        viewer.editing = true;
-        editor.update(cx, |state, cx| state.set_readonly(false, cx));
+        window.focus(&viewer.focus_target(cx), cx);
         cx.notify();
     }
 
     pub(super) fn show_slot(&mut self, pick: Pick, window: &mut Window, cx: &mut Context<Self>) {
-        let files = self.files.clone();
         let Some(viewer) = &mut self.viewer else {
             return;
         };
         let Some(kind) = viewer.kind_in(pick.slot) else {
             return;
         };
-        let shape = kind.shape(&viewer.sniff());
-        let is_shown = viewer
-            .kind
-            .as_ref()
-            .is_some_and(|shown| shown.id() == kind.id());
-        if is_shown && (viewer.editor.is_some() || viewer.paged.is_some()) {
-            return;
-        }
-        if shape != Shape::Editor && viewer.switch_warning(pick.slot) {
+        if viewer.is_shown(&kind) || viewer.switch_warning(pick.slot, cx) {
             cx.notify();
             return;
         }
-        if let (Shape::Paged(paged_kind), Some(paged)) = (shape, viewer.paged.clone()) {
+        let reused = match &viewer.body {
+            Some(body) => kind.reuse(body.as_ref(), &viewer.sniff(), cx),
+            None => false,
+        };
+        if reused {
             viewer.kind = Some(kind);
-            paged.update(cx, |paged, cx| paged.set_kind(paged_kind, cx));
-            window.focus(&paged.read(cx).focus_handle(cx), cx);
+            window.focus(&viewer.focus_target(cx), cx);
+            cx.notify();
             return;
         }
-        let location = viewer.location.clone();
-        viewer.clear_body();
-        viewer.opening = Some(start(
+        let choice = Choice {
+            kind,
+            edit: pick.edit,
+        };
+        self.load_kind(choice, window, cx);
+    }
+
+    fn load_kind(&mut self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
+        let Choice { kind, edit } = choice;
+        let Some(viewer) = &self.viewer else {
+            return;
+        };
+        let request = self.request(viewer);
+        let sniffed = (viewer.head.clone(), viewer.title.to_string());
+        let loader = kind.clone();
+        let opening = start(
             window,
             cx,
-            move || load(&files, &location, shape),
-            move |view: &mut Self, loaded, window, cx| {
-                let shown = Shown {
-                    kind,
-                    loaded,
-                    edit: pick.edit,
+            move || {
+                let sniff = super::Sniff {
+                    head: &sniffed.0.bytes,
+                    name: &sniffed.1,
+                    len: sniffed.0.len,
                 };
-                view.show_loaded(shown, window, cx);
+                loader.load(&request.hooks, &request.location, &sniff)
             },
-        ));
-        window.focus(&viewer.focus, cx);
+            move |view: &mut Self, loaded, window, cx| {
+                view.show_loaded(Shown { kind, loaded, edit }, window, cx);
+            },
+        );
+        if let Some(viewer) = &mut self.viewer {
+            viewer.clear_body();
+            viewer.opening = Some(opening);
+            window.focus(&viewer.focus, cx);
+        }
         cx.notify();
     }
 }

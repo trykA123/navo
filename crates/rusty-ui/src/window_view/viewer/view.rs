@@ -1,27 +1,10 @@
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::component::input::Editor;
 
 use super::{CONTEXT, CloseViewer, SaveFile, Viewer};
-use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::FerriteWindow;
-
-fn facts(t: &Theme, viewer: &Viewer) -> Div {
-    let mode = if viewer.editing {
-        "Editing"
-    } else {
-        "Text · read-only"
-    };
-    div()
-        .flex()
-        .gap(t.spacing.md)
-        .text_color(t.colors.muted)
-        .text_size(t.typography.small)
-        .when(viewer.editor.is_some(), |d| d.child(mode))
-        .children(viewer.stamp.map(|stamp| format::size(stamp.len)))
-}
 
 fn header(t: &Theme, viewer: &Viewer) -> Div {
     div()
@@ -40,10 +23,6 @@ fn header(t: &Theme, viewer: &Viewer) -> Div {
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(viewer.title.clone()),
         )
-        .child(facts(t, viewer))
-        .when(viewer.dirty, |d| {
-            d.child(div().text_color(t.colors.mark).child("●"))
-        })
         .child(div().flex_1())
         .when_some(viewer.message.clone(), |d, message| {
             d.child(
@@ -67,24 +46,16 @@ fn status(viewer: &Viewer) -> &'static str {
     }
 }
 
-fn body(t: &Theme, viewer: &Viewer) -> AnyElement {
-    match &viewer.editor {
-        Some(editor) => div()
-            .flex_1()
-            .min_h_0()
-            .child(Editor::new(editor).h_full().readonly(!viewer.editing))
-            .into_any_element(),
-        None => div()
-            .id("viewer-status")
-            .role(Role::Status)
-            .aria_label(status(viewer))
-            .test_support()
-            .flex_1()
-            .p(t.spacing.xxl)
-            .text_color(t.colors.muted)
-            .child(status(viewer))
-            .into_any_element(),
-    }
+fn waiting(t: &Theme, viewer: &Viewer) -> impl IntoElement {
+    div()
+        .id("viewer-status")
+        .role(Role::Status)
+        .aria_label(status(viewer))
+        .test_support()
+        .flex_1()
+        .p(t.spacing.xxl)
+        .text_color(t.colors.muted)
+        .child(status(viewer))
 }
 
 impl FerriteWindow {
@@ -105,10 +76,16 @@ impl FerriteWindow {
             .flex_1()
             .min_h_0()
             .bg(t.colors.surface);
-        let root = match &viewer.paged {
-            Some(paged) => root.child(paged.clone()),
-            None => root.child(header(&t, viewer)).child(body(&t, viewer)),
+        let root = match &viewer.body {
+            Some(body) => root.child(body.view()),
+            None => root.child(header(&t, viewer)).child(waiting(&t, viewer)),
         };
         Some(root.into_any_element())
+    }
+
+    fn save_viewer(&mut self, cx: &mut Context<Self>) {
+        if let Some(body) = self.viewer.as_ref().and_then(|viewer| viewer.body.as_ref()) {
+            body.save(cx);
+        }
     }
 }

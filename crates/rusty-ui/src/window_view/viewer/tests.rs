@@ -1,8 +1,11 @@
 mod find;
+mod kind;
 mod lister;
+mod moves;
 mod open;
+mod save;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
@@ -19,6 +22,7 @@ use crate::window_view::{FerriteWindow, StartOptions};
 pub(super) struct Memory {
     bytes: Arc<Vec<u8>>,
     changed: AtomicBool,
+    reads: Arc<AtomicUsize>,
 }
 
 impl ByteSource for Memory {
@@ -27,6 +31,7 @@ impl ByteSource for Memory {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
+        self.reads.fetch_add(1, Ordering::Relaxed);
         self.bytes.as_slice().read_at(offset, buf)
     }
 
@@ -64,6 +69,7 @@ impl Setup {
 pub(super) struct Log {
     pub heads: Arc<Mutex<Vec<String>>>,
     pub written: Arc<Mutex<Vec<String>>>,
+    pub reads: Arc<AtomicUsize>,
 }
 
 impl Log {
@@ -73,6 +79,10 @@ impl Log {
 
     pub(super) fn written(&self) -> Vec<String> {
         self.written.lock().expect("log").clone()
+    }
+
+    pub(super) fn reads(&self) -> usize {
+        self.reads.load(Ordering::Relaxed)
     }
 }
 
@@ -94,17 +104,19 @@ fn index_run(bytes: Arc<Vec<u8>>, fails: bool) -> super::IndexRun {
     })
 }
 
-fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup) -> Paged {
+fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, reads: &Arc<AtomicUsize>) -> Paged {
     let reopened = bytes.clone();
     Paged {
         source: Arc::new(Memory {
             bytes: bytes.clone(),
             changed: AtomicBool::new(setup.changed),
+            reads: reads.clone(),
         }),
         reopen: Arc::new(move || {
             Ok(Box::new(Memory {
                 bytes: reopened.clone(),
                 changed: AtomicBool::new(false),
+                reads: Arc::default(),
             }) as Box<dyn ByteSource + Send>)
         }),
         index: index_run(bytes.clone(), setup.index_fails),
@@ -120,7 +132,7 @@ fn hooks(setup: Setup, log: &Log) -> FileHooks {
         bytes: setup.bytes.iter().take(8 * 1024).copied().collect(),
         len: setup.len.unwrap_or(setup.bytes.len() as u64),
     };
-    let (heads, written) = (log.heads.clone(), log.written.clone());
+    let (heads, written, reads) = (log.heads.clone(), log.written.clone(), log.reads.clone());
     FileHooks {
         read: Arc::new(move |_| {
             Ok(FileText {
@@ -143,7 +155,7 @@ fn hooks(setup: Setup, log: &Log) -> FileHooks {
             heads.lock().expect("log").push(name);
             Ok(head.clone())
         }),
-        paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup))),
+        paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup, &reads))),
     }
 }
 
@@ -153,6 +165,16 @@ pub(super) fn window_on(
     setup: Setup,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>, Log) {
     let log = Log::default();
+    let files = hooks(setup, &log);
+    let (window, view) = window_with(cx, fs, files);
+    (window, view, log)
+}
+
+pub(super) fn window_with(
+    cx: &mut TestAppContext,
+    fs: Arc<FakeFs>,
+    files: FileHooks,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let options = StartOptions {
         state: home_beside_dest(&fs),
         provider: fs,
@@ -161,12 +183,11 @@ pub(super) fn window_on(
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: crate::window_view::EditorHooks::none(),
-        files: hooks(setup, &log),
+        files,
         drives: crate::window_view::DriveHooks::none(),
         view: None,
     };
-    let (window, view) = open_options(cx, options);
-    (window, view, log)
+    open_options(cx, options)
 }
 
 pub(super) fn paged_window(
@@ -194,11 +215,26 @@ pub(super) fn redraw(cx: &mut TestAppContext, window: AnyWindowHandle) {
     cx.run_until_parked();
 }
 
-pub(super) fn paged(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Entity<PagedView> {
+fn paged_body(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<Entity<PagedView>> {
     view.read_with(cx, |view, _| {
-        view.viewer.as_ref().and_then(|viewer| viewer.paged.clone())
+        let body = view.viewer.as_ref()?.body.as_ref()?;
+        super::paged::PagedBody::of(body.as_ref()).map(|paged| paged.0.clone())
     })
-    .expect("a paged view is open")
+}
+
+pub(super) fn editor_of(
+    cx: &mut TestAppContext,
+    view: &Entity<FerriteWindow>,
+) -> Option<Entity<gpui_kit::component::input::EditorState>> {
+    view.read_with(cx, |view, cx| {
+        let body = view.viewer.as_ref()?.body.as_ref()?;
+        let editor = body.as_any().downcast_ref::<super::editor::EditorBody>()?;
+        Some(editor.editor(cx))
+    })
+}
+
+pub(super) fn paged(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Entity<PagedView> {
+    paged_body(cx, view).expect("a paged view is open")
 }
 
 pub(super) fn top(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> u64 {
@@ -207,18 +243,12 @@ pub(super) fn top(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> u64 
 }
 
 pub(super) fn kind(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<PagedKind> {
-    let paged = view.read_with(cx, |view, _| {
-        view.viewer.as_ref().and_then(|viewer| viewer.paged.clone())
-    })?;
+    let paged = paged_body(cx, view)?;
     Some(paged.read_with(cx, |paged, _| paged.kind))
 }
 
 pub(super) fn has_editor(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
-    view.read_with(cx, |view, _| {
-        view.viewer
-            .as_ref()
-            .is_some_and(|viewer| viewer.editor.is_some())
-    })
+    editor_of(cx, view).is_some()
 }
 
 pub(super) fn label(
@@ -353,12 +383,6 @@ pub(super) fn text_of(
 }
 
 pub(super) fn editor_text(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> String {
-    let editor = view
-        .read_with(cx, |view, _| {
-            view.viewer
-                .as_ref()
-                .and_then(|viewer| viewer.editor.clone())
-        })
-        .expect("the text editor is open");
+    let editor = editor_of(cx, view).expect("the text editor is open");
     editor.read_with(cx, |state, _| state.value().to_string())
 }

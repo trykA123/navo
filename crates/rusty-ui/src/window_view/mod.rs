@@ -32,8 +32,9 @@ pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use keys::bind_keys;
 pub use viewer::{
-    EDIT_LIMIT, FileHooks, FileStamp, FileText, Head, IndexRun, Kind, Kinds, Paged, PagedKind,
-    PagedView, Reopen, Save, SaveError, Shape, SharedSource, Slot, Sniff, ViewerKind,
+    Attach, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp, FileText, Head, Host, IndexRun, Key, Kind,
+    Kinds, Loaded, Paged, PagedKind, PagedView, Reopen, Save, SaveError, SharedSource, Slot, Sniff,
+    ViewerBody, ViewerKind,
 };
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;

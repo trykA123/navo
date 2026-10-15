@@ -2,7 +2,7 @@ use std::fs;
 use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
-use rusty_ui::window_view::{Kinds, PagedKind, Shape, Sniff};
+use rusty_ui::window_view::{Kinds, Sniff};
 
 use super::{head, paged};
 
@@ -12,21 +12,22 @@ fn file(dir: &tempfile::TempDir, name: &str, bytes: &[u8]) -> Location {
     Location::new(path.to_string_lossy().into_owned()).unwrap()
 }
 
-fn opens_as(location: &Location) -> Shape {
+fn opens_as(location: &Location) -> (&'static str, bool) {
     let head = head(location).unwrap();
     let sniff = Sniff {
         head: &head.bytes,
         name: "",
         len: head.len,
     };
-    Kinds::builtin().choose(&sniff)[0].shape(&sniff)
+    let best = &Kinds::builtin().choose(&sniff)[0];
+    (best.id(), best.editable(&sniff))
 }
 
 #[test]
 fn small_text_opens_for_editing() {
     let dir = tempfile::tempdir().unwrap();
     let text = file(&dir, "notes.txt", b"hello\n");
-    assert_eq!(opens_as(&text), Shape::Editor);
+    assert_eq!(opens_as(&text), ("text", true));
     assert!(paged(&text).unwrap().editable);
 }
 
@@ -35,8 +36,8 @@ fn a_nul_byte_or_utf16_opens_as_hex() {
     let dir = tempfile::tempdir().unwrap();
     let binary = file(&dir, "tool.exe", b"MZ\x90\x00\x03");
     let utf16 = file(&dir, "wide.txt", &[0xFF, 0xFE, b'a', 0]);
-    assert_eq!(opens_as(&binary), Shape::Paged(PagedKind::Hex));
-    assert_eq!(opens_as(&utf16), Shape::Paged(PagedKind::Hex));
+    assert_eq!(opens_as(&binary), ("hex", false));
+    assert_eq!(opens_as(&utf16), ("hex", false));
     assert!(!paged(&binary).unwrap().editable);
 }
 
@@ -44,7 +45,7 @@ fn a_nul_byte_or_utf16_opens_as_hex() {
 fn text_over_16_mb_opens_paged() {
     let dir = tempfile::tempdir().unwrap();
     let big = file(&dir, "big.log", &b"line\n".repeat(3_400_000));
-    assert_eq!(opens_as(&big), Shape::Paged(PagedKind::Text));
+    assert_eq!(opens_as(&big), ("text", false));
     let sniffed = head(&big).unwrap();
     assert_eq!((sniffed.bytes.len(), sniffed.len), (8 * 1024, 17_000_000));
     let view = paged(&big).unwrap();

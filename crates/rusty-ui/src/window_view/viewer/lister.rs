@@ -1,57 +1,48 @@
 use gpui_kit::Stateful;
-use gpui_kit::component::input::EditorState;
 use rusty_core::{Command, CursorMove};
 
 use super::modes::Pick;
 use super::{
-    EditFile, FindNext, FindPrevious, ListerHex, ListerRich, ListerText, NextFile, PreviousFile,
-    Shape, ShowHex, ShowRich, ShowText, Slot, Viewer,
+    EditFile, FindNext, FindOnEnter, FindPrevious, ListerHex, ListerRich, ListerText, NextFile,
+    PreviousFile, ShowHex, ShowRich, ShowText, Slot, Viewer,
 };
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
-const TOO_BIG_TO_EDIT: &str = "Only text files up to 16 MB can be edited.";
+const CANNOT_EDIT: &str = "Only UTF-8 text files up to 16 MB can be edited.";
 
 impl Viewer {
     fn is_listing(&self, window: &Window, cx: &App) -> bool {
-        !self.editing && self.focus_target(cx).is_focused(window)
+        !self.is_editing(cx) && self.focus_target(cx).is_focused(window)
     }
 
-    pub(super) fn can_start_editing(&self) -> bool {
-        if self.editing {
+    fn can_switch_to_edit(&self) -> bool {
+        let Some(text) = self.kind_in(Slot::Text) else {
             return false;
-        }
-        match &self.editor {
-            Some(_) => self.can_edit,
-            None => self
-                .kind_in(Slot::Text)
-                .is_some_and(|kind| kind.shape(&self.sniff()) == Shape::Editor),
-        }
+        };
+        let shown = self.body.is_some()
+            && self
+                .kind
+                .as_ref()
+                .is_some_and(|kind| kind.id() == text.id());
+        !shown && text.editable(&self.sniff())
     }
-}
 
-fn find_in_editor(state: &mut EditorState, backward: bool, cx: &mut Context<EditorState>) {
-    let session = state.search_session();
-    if session.query.is_empty() {
-        state.open_search(false, cx);
-        return;
+    pub(super) fn can_start_editing(&self, cx: &App) -> bool {
+        let body = self.body.as_ref();
+        body.is_some_and(|body| body.can_start_editing(cx)) || self.can_switch_to_edit()
     }
-    let (query, case_insensitive) = (session.query.clone(), session.case_insensitive);
-    state.set_search_query(query, case_insensitive, cx);
-    let _ = if backward {
-        state.previous_search_match(cx)
-    } else {
-        state.next_search_match(cx)
-    };
 }
 
 impl FerriteWindow {
-    fn lister_slot(&mut self, slot: Slot, window: &mut Window, cx: &mut Context<Self>) {
-        let listing = self
-            .viewer
+    fn is_listing(&self, window: &Window, cx: &App) -> bool {
+        self.viewer
             .as_ref()
-            .is_some_and(|viewer| viewer.is_listing(window, cx));
-        if !listing {
+            .is_some_and(|viewer| viewer.is_listing(window, cx))
+    }
+
+    fn lister_slot(&mut self, slot: Slot, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.is_listing(window, cx) {
             cx.propagate();
             return;
         }
@@ -59,30 +50,38 @@ impl FerriteWindow {
     }
 
     fn edit_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(viewer) = &self.viewer else {
+        let Some(viewer) = &mut self.viewer else {
             return;
         };
-        if viewer.editor.is_some() {
-            self.start_editing(cx);
-        } else if viewer.can_start_editing() {
+        let started = viewer
+            .body
+            .as_ref()
+            .is_some_and(|body| body.start_editing(cx));
+        if started {
+            cx.notify();
+        } else if viewer.can_switch_to_edit() {
             let pick = Pick {
                 slot: Slot::Text,
                 edit: true,
             };
             self.show_slot(pick, window, cx);
-        } else if let Some(paged) = viewer.paged.clone() {
-            paged.update(cx, |paged, cx| paged.set_note(TOO_BIG_TO_EDIT, cx));
+        } else {
+            viewer.say(CANNOT_EDIT, cx);
+            cx.notify();
         }
     }
 
     fn find_next(&mut self, backward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(viewer) = &self.viewer else {
-            return;
-        };
-        if let Some(paged) = viewer.paged.clone() {
-            paged.update(cx, |paged, cx| paged.find_again(backward, window, cx));
-        } else if let Some(editor) = viewer.editor.clone() {
-            editor.update(cx, |state, cx| find_in_editor(state, backward, cx));
+        if let Some(body) = self.viewer.as_ref().and_then(|viewer| viewer.body.as_ref()) {
+            body.find_again(backward, window, cx);
+        }
+    }
+
+    fn find_on_enter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_listing(window, cx) {
+            self.find_next(false, window, cx);
+        } else {
+            cx.propagate();
         }
     }
 
@@ -99,11 +98,7 @@ impl FerriteWindow {
     }
 
     fn step_file(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let listing = self
-            .viewer
-            .as_ref()
-            .is_some_and(|viewer| viewer.is_listing(window, cx));
-        if !listing {
+        if !self.is_listing(window, cx) {
             cx.propagate();
             return;
         }
@@ -145,6 +140,9 @@ impl FerriteWindow {
             }))
             .on_action(cx.listener(|view, _: &FindPrevious, window, cx| {
                 view.find_next(true, window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &FindOnEnter, window, cx| {
+                view.find_on_enter(window, cx);
             }))
             .on_action(cx.listener(|view, _: &NextFile, window, cx| {
                 view.step_file(true, window, cx);

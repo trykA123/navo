@@ -4,7 +4,7 @@ use gpui_kit::Task;
 use rusty_core::Location;
 
 use super::modes::Shown;
-use super::{FileHooks, FileText, Head, Kind, Kinds, Paged, PagedKind, Shape, Sniff, Viewer};
+use super::{FileHooks, Head, Kind, Kinds, Loaded, Sniff, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
@@ -16,11 +16,6 @@ pub(super) struct Opening {
     _timer: Task<()>,
 }
 
-pub(super) enum Loaded {
-    Text(FileText),
-    Paged(Paged, PagedKind),
-}
-
 pub(super) struct Opened {
     head: Head,
     kinds: Vec<Kind>,
@@ -28,23 +23,17 @@ pub(super) struct Opened {
     loaded: Result<Loaded, String>,
 }
 
-pub(super) fn load(files: &FileHooks, location: &Location, shape: Shape) -> Result<Loaded, String> {
-    match shape {
-        Shape::Editor => (files.read)(location).map(Loaded::Text),
-        Shape::Paged(kind) => (files.paged)(location).map(|paged| Loaded::Paged(paged, kind)),
-    }
+pub(super) struct Request {
+    pub hooks: FileHooks,
+    pub location: Location,
+    pub name: String,
 }
 
-fn sniff_and_load(
-    files: &FileHooks,
-    kinds: &Kinds,
-    location: &Location,
-    name: &str,
-) -> Result<Opened, String> {
-    let head = (files.head)(location)?;
+fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
+    let head = (request.hooks.head)(&request.location)?;
     let sniff = Sniff {
         head: &head.bytes,
-        name,
+        name: &request.name,
         len: head.len,
     };
     let chosen = kinds.choose(&sniff);
@@ -52,7 +41,7 @@ fn sniff_and_load(
         .first()
         .cloned()
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
-    let loaded = load(files, location, kind.shape(&sniff));
+    let loaded = kind.load(&request.hooks, &request.location, &sniff);
     Ok(Opened {
         head,
         kinds: chosen,
@@ -90,20 +79,26 @@ pub(super) fn start<T: Send + 'static>(
 }
 
 impl FerriteWindow {
+    pub(super) fn request(&self, viewer: &Viewer) -> Request {
+        Request {
+            hooks: self.files.clone(),
+            location: viewer.location.clone(),
+            name: viewer.title.to_string(),
+        }
+    }
+
     pub(super) fn open_file(
         &self,
         viewer: &Viewer,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Opening {
-        let files = self.files.clone();
+        let request = self.request(viewer);
         let kinds = self.kinds.clone();
-        let location = viewer.location.clone();
-        let name = viewer.title.to_string();
         start(
             window,
             cx,
-            move || sniff_and_load(&files, &kinds, &location, &name),
+            move || sniff_and_load(&request, &kinds),
             Self::file_opened,
         )
     }

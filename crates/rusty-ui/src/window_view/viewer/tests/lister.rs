@@ -3,7 +3,8 @@ use rusty_core::paging::hex_row_start;
 
 use super::find::{bottom_keys, line_start, numbered_lines};
 use super::{
-    Setup, editor_text, has_editor, kind, mixed, paged_window, text_window, top, visible, window_on,
+    Setup, editor_of, editor_text, has_editor, kind, mixed, paged_window, text_window, top,
+    visible, window_on,
 };
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{fake, press, type_in};
@@ -95,13 +96,7 @@ fn f3_before_any_search_opens_find(cx: &mut TestAppContext) {
 }
 
 fn search_session(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> (bool, usize, usize) {
-    let editor = view
-        .read_with(cx, |view, _| {
-            view.viewer
-                .as_ref()
-                .and_then(|viewer| viewer.editor.clone())
-        })
-        .expect("the text editor is open");
+    let editor = editor_of(cx, view).expect("the text editor is open");
     editor.read_with(cx, |state, _| {
         let session = state.search_session();
         let current = session.matcher.current().unwrap_or(usize::MAX);
@@ -173,4 +168,33 @@ fn the_bottom_bar_shows_the_lister_keys_then_the_editing_keys(cx: &mut TestAppCo
     assert!(editing.contains(&"Ctrl+S Save".to_owned()));
     assert!(editing.contains(&"Alt+3 Hex".to_owned()));
     assert!(!editing.contains(&"N Next file".to_owned()));
+}
+
+#[gpui_kit::test]
+fn enter_finds_the_next_match_while_reading_paged_text(cx: &mut TestAppContext) {
+    let bytes = numbered_lines();
+    let (line_100, line_900) = (line_start(&bytes, 100), line_start(&bytes, 900));
+    let (window, view) = paged_window(cx, Setup::huge(bytes));
+    search(cx, window, &view);
+    assert_eq!(top(cx, &view), line_100);
+    press(cx, window, &view, "enter");
+    assert_eq!(top(cx, &view), line_900);
+}
+
+#[gpui_kit::test]
+fn enter_finds_next_in_the_read_only_editor_and_breaks_lines_while_editing(
+    cx: &mut TestAppContext,
+) {
+    let (window, view, _) = text_window(cx, Setup::new(b"one\ntwo\none\n".to_vec()));
+    press(cx, window, &view, "f3");
+    type_in(cx, window, &view, "one");
+    press(cx, window, &view, "escape");
+    press(cx, window, &view, "f3");
+    let first = search_session(cx, &view).2;
+    press(cx, window, &view, "enter");
+    assert_ne!(search_session(cx, &view).2, first);
+    assert_eq!(editor_text(cx, &view), "one\ntwo\none\n");
+    press(cx, window, &view, "ctrl-e");
+    press(cx, window, &view, "enter");
+    assert_ne!(editor_text(cx, &view), "one\ntwo\none\n");
 }

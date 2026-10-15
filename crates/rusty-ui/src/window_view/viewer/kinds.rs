@@ -1,9 +1,14 @@
 mod hex;
 mod text;
 
+use std::any::Any;
 use std::sync::Arc;
 
-use super::PagedKind;
+use rusty_core::Location;
+
+use super::FileHooks;
+use super::body::{Attach, ViewerBody};
+use crate::prelude::*;
 
 pub const EDIT_LIMIT: u64 = 16 * 1024 * 1024;
 
@@ -48,18 +53,33 @@ impl Sniff<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Shape {
-    Editor,
-    Paged(PagedKind),
-}
+pub type Loaded = Box<dyn Any + Send>;
 
 pub trait ViewerKind: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn slot(&self) -> Slot;
     fn score(&self, sniff: &Sniff<'_>) -> u8;
-    fn shape(&self, sniff: &Sniff<'_>) -> Shape;
+    fn load(
+        &self,
+        hooks: &FileHooks,
+        location: &Location,
+        sniff: &Sniff<'_>,
+    ) -> Result<Loaded, String>;
+    fn attach(
+        &self,
+        attach: Attach,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Result<Box<dyn ViewerBody>, String>;
+
+    fn editable(&self, _: &Sniff<'_>) -> bool {
+        false
+    }
+
+    fn reuse(&self, _: &dyn ViewerBody, _: &Sniff<'_>, _: &mut App) -> bool {
+        false
+    }
 }
 
 pub type Kind = Arc<dyn ViewerKind>;

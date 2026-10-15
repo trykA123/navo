@@ -1,3 +1,5 @@
+mod body;
+mod editor;
 mod files;
 mod keys_bar;
 mod kinds;
@@ -5,17 +7,16 @@ mod lister;
 mod modes;
 mod open;
 mod paged;
-mod save;
 mod view;
 
-use gpui_kit::component::input::{EditorState, InputEvent};
-use gpui_kit::{FocusHandle, KeyBinding, Subscription, Task};
+use gpui_kit::{FocusHandle, KeyBinding};
 use rusty_core::Location;
 
+pub use body::{Attach, BodyKeys, Host, Key, ViewerBody};
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
 };
-pub use kinds::{EDIT_LIMIT, Kind, Kinds, Shape, Slot, Sniff, ViewerKind};
+pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
 
 use super::FerriteWindow;
@@ -39,6 +40,7 @@ gpui_kit::actions!(
         ListerHex,
         ListerRich,
         FindNext,
+        FindOnEnter,
         FindPrevious,
         NextFile,
         PreviousFile,
@@ -71,6 +73,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("5", ListerRich, context),
         KeyBinding::new("f3", FindNext, context),
         KeyBinding::new("shift-f3", FindPrevious, context),
+        KeyBinding::new("enter", FindOnEnter, context),
         KeyBinding::new("n", NextFile, context),
         KeyBinding::new("p", PreviousFile, context),
         KeyBinding::new("up", RowUp, context),
@@ -91,25 +94,15 @@ pub fn bind_keys(cx: &mut App) {
 pub(super) struct Viewer {
     location: Location,
     title: SharedString,
-    editor: Option<Entity<EditorState>>,
-    paged: Option<Entity<PagedView>>,
     focus: FocusHandle,
     head: Head,
     kinds: Vec<Kind>,
     kind: Option<Kind>,
+    body: Option<Box<dyn ViewerBody>>,
     opening: Option<Opening>,
-    editing: bool,
-    can_edit: bool,
-    crlf: bool,
-    stamp: Option<FileStamp>,
-    dirty: bool,
-    revision: u64,
-    saving: Option<Task<()>>,
-    overwrite: bool,
-    leaving: bool,
-    switching: Option<Slot>,
+    leaving: Option<u64>,
+    switching: Option<(Slot, u64)>,
     message: Option<SharedString>,
-    _changes: Option<Subscription>,
 }
 
 impl Viewer {
@@ -121,25 +114,15 @@ impl Viewer {
         Self {
             location,
             title,
-            editor: None,
-            paged: None,
             focus,
             head: Head::default(),
             kinds: Vec::new(),
             kind: None,
+            body: None,
             opening: None,
-            editing: false,
-            can_edit: false,
-            crlf: false,
-            stamp: None,
-            dirty: false,
-            revision: 0,
-            saving: None,
-            overwrite: false,
-            leaving: false,
+            leaving: None,
             switching: None,
             message: None,
-            _changes: None,
         }
     }
 
@@ -153,6 +136,25 @@ impl Viewer {
 
     fn kind_in(&self, slot: Slot) -> Option<Kind> {
         self.kinds.iter().find(|kind| kind.slot() == slot).cloned()
+    }
+
+    fn is_editing(&self, cx: &App) -> bool {
+        self.body.as_ref().is_some_and(|body| body.is_editing(cx))
+    }
+
+    fn unsaved(&self, cx: &App) -> Option<u64> {
+        self.body
+            .as_ref()
+            .filter(|body| body.is_dirty(cx))
+            .map(|body| body.revision(cx))
+    }
+
+    fn say(&mut self, note: impl Into<SharedString>, cx: &mut App) {
+        let note = note.into();
+        match &self.body {
+            Some(body) => body.set_note(note, cx),
+            None => self.message = Some(note),
+        }
     }
 }
 
@@ -226,26 +228,18 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    fn text_changed(&mut self, cx: &mut Context<Self>) {
-        if let Some(viewer) = &mut self.viewer {
-            viewer.dirty = true;
-            viewer.revision += 1;
-            viewer.leaving = false;
-            viewer.switching = None;
-            viewer.overwrite = false;
-        }
-        cx.notify();
-    }
-
     pub(super) fn warn_unsaved(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(viewer) = self.viewer.as_mut().filter(|viewer| viewer.dirty) else {
+        let Some(viewer) = self.viewer.as_mut() else {
             return false;
         };
-        if viewer.leaving {
+        let Some(revision) = viewer.unsaved(cx) else {
+            return false;
+        };
+        if viewer.leaving == Some(revision) {
             return false;
         }
-        viewer.leaving = true;
-        viewer.message = Some(LEAVE_WARNING.into());
+        viewer.leaving = Some(revision);
+        viewer.say(LEAVE_WARNING, cx);
         cx.notify();
         true
     }
@@ -258,35 +252,6 @@ impl FerriteWindow {
         self.focus_core_pane(window, cx);
         cx.notify();
     }
-}
-
-fn attach_editor(
-    viewer: &mut Viewer,
-    file: FileText,
-    window: &mut Window,
-    cx: &mut Context<FerriteWindow>,
-) {
-    let language = language_of(&viewer.title);
-    let text = file.text;
-    let editor = cx.new(|cx| {
-        let mut state = EditorState::new(window, cx)
-            .language(language)
-            .default_value(text);
-        state.set_readonly(true, cx);
-        state
-    });
-    viewer._changes = Some(cx.subscribe(&editor, |view, _, event: &InputEvent, cx| {
-        if matches!(event, InputEvent::Change) {
-            view.text_changed(cx);
-        }
-    }));
-    viewer.editor = Some(editor);
-    viewer.can_edit = !file.read_only;
-    viewer.crlf = file.crlf;
-    viewer.stamp = file.stamp;
-    viewer.message = file
-        .read_only
-        .then(|| "Not valid UTF-8: opened read-only.".into());
 }
 
 #[cfg(test)]

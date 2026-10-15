@@ -5,6 +5,7 @@ use gpui_kit::{Stateful, Window};
 use super::PagedView;
 use super::find::{Bar, BarKind};
 use super::lines::PagedKind;
+use super::moves::Move;
 use crate::format;
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, TextField};
@@ -191,8 +192,10 @@ impl PagedView {
             .on_action(cx.listener(|view, _: &PageDown, _, cx| {
                 view.scroll_rows(view.page(), cx);
             }))
-            .on_action(cx.listener(|view, _: &GoStart, _, cx| view.move_to(Ok(0), cx)))
-            .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.go_end(cx)))
+            .on_action(cx.listener(|view, _: &GoStart, _, cx| {
+                view.user_move(Move::Offset(0), cx);
+            }))
+            .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.user_move(Move::End, cx)))
             .on_action(cx.listener(|view, _: &ScrollLeft, _, cx| view.shift_by(false, cx)))
             .on_action(cx.listener(|view, _: &ScrollRight, _, cx| view.shift_by(true, cx)))
     }
@@ -228,12 +231,11 @@ impl Render for PagedView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         self.row_height = t.typography.line_height + t.spacing.xxs;
-        self.follow_drag();
+        self.follow_drag(cx);
         self.rows = self.fitting_rows(window);
         self.follow_changes(cx);
-        let want = self.want();
-        self.request_rows(want, cx);
-        let screen = self.cache.screen(want, self.source.len());
+        self.request_rows(cx);
+        let screen = self.cache.screen(self.want(), self.source.len());
         self.show_position(screen.end);
         let root = div()
             .id("paged")

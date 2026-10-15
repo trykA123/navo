@@ -1,5 +1,9 @@
-use super::{EDIT_LIMIT, Kinds, Shape, Slot, Sniff, ViewerKind};
-use crate::window_view::viewer::PagedKind;
+use rusty_core::Location;
+
+use super::{EDIT_LIMIT, Kinds, Loaded, Slot, Sniff, ViewerKind};
+use crate::prelude::*;
+use crate::window_view::viewer::FileHooks;
+use crate::window_view::viewer::body::{Attach, ViewerBody};
 
 fn sniff(head: &[u8], len: u64) -> Sniff<'_> {
     Sniff {
@@ -9,31 +13,30 @@ fn sniff(head: &[u8], len: u64) -> Sniff<'_> {
     }
 }
 
-fn first(head: &[u8], len: u64) -> (&'static str, Shape) {
+fn first(head: &[u8], len: u64) -> (&'static str, bool) {
     let sniff = sniff(head, len);
     let chosen = Kinds::builtin().choose(&sniff);
     let best = chosen.first().expect("a kind accepts every file");
-    (best.id(), best.shape(&sniff))
+    (best.id(), best.editable(&sniff))
 }
 
 #[test]
 fn utf8_text_opens_in_the_text_editor() {
     let text = "naïve café\n".as_bytes();
-    assert_eq!(first(text, text.len() as u64), ("text", Shape::Editor));
+    assert_eq!(first(text, text.len() as u64), ("text", true));
 }
 
 #[test]
 fn a_nul_byte_or_a_utf16_bom_opens_as_hex() {
-    let hex = ("hex", Shape::Paged(PagedKind::Hex));
+    let hex = ("hex", false);
     assert_eq!(first(b"MZ\x90\x00\x03", 5), hex);
     assert_eq!(first(&[0xFF, 0xFE, b'a', b'b'], 4), hex);
 }
 
 #[test]
 fn text_over_16_mb_opens_as_paged_text() {
-    let paged = ("text", Shape::Paged(PagedKind::Text));
-    assert_eq!(first(b"line\n", EDIT_LIMIT + 1), paged);
-    assert_eq!(first(b"line\n", EDIT_LIMIT).1, Shape::Editor);
+    assert_eq!(first(b"line\n", EDIT_LIMIT + 1), ("text", false));
+    assert_eq!(first(b"line\n", EDIT_LIMIT), ("text", true));
 }
 
 #[test]
@@ -70,8 +73,17 @@ impl ViewerKind for Pictures {
         }
     }
 
-    fn shape(&self, _: &Sniff<'_>) -> Shape {
-        Shape::Paged(PagedKind::Hex)
+    fn load(&self, _: &FileHooks, _: &Location, _: &Sniff<'_>) -> Result<Loaded, String> {
+        Ok(Box::new(()))
+    }
+
+    fn attach(
+        &self,
+        _: Attach,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Result<Box<dyn ViewerBody>, String> {
+        Err("No picture view in this test.".to_owned())
     }
 }
 
