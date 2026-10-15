@@ -6,6 +6,8 @@ use unix as platform;
 mod windows;
 #[cfg(windows)]
 use windows as platform;
+#[cfg(any(windows, test))]
+mod verbatim;
 
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry, Metadata, ReadDir};

@@ -13,6 +13,7 @@ mod hostile;
 mod listing;
 mod metadata;
 mod perf;
+mod verbatim;
 #[cfg(windows)]
 mod windows;
 
