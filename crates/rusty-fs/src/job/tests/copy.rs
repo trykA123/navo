@@ -164,6 +164,6 @@ fn a_folder_made_after_planning_is_merged() {
     let (outcome, harness) = run(&fs, &plan);
     assert_eq!(
         (outcome, harness.logged().first().copied()),
-        (JobOutcome::Done, Some((0, StepOutcome::Done)))
+        (JobOutcome::Done, Some((0, StepOutcome::Skipped)))
     );
 }

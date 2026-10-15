@@ -1,3 +1,7 @@
+mod copy;
+mod run;
+mod undo;
+
 use rusty_core::{FsError, Location, OperationPlan};
 
 use crate::{CancelToken, ProviderOps};
@@ -39,21 +43,17 @@ pub struct JobContext<'a> {
 }
 
 #[must_use]
-pub fn run_job(_plan: &OperationPlan, _done: &[u32], _ctx: &mut JobContext<'_>) -> JobOutcome {
-    todo!()
+pub fn run_job(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
+    run::run(plan, done, ctx)
 }
 
 #[must_use]
-pub fn roll_back(_plan: &OperationPlan, _done: &[u32], _ctx: &mut JobContext<'_>) -> JobOutcome {
-    todo!()
+pub fn roll_back(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
+    undo::roll_back(plan, done, ctx)
 }
 
-pub fn clean_up(
-    _plan: &OperationPlan,
-    _done: &[u32],
-    _ops: &dyn ProviderOps,
-) -> Result<u32, FsError> {
-    todo!()
+pub fn clean_up(plan: &OperationPlan, done: &[u32], ops: &dyn ProviderOps) -> Result<u32, FsError> {
+    undo::clean_up(plan, done, ops)
 }
 
 #[cfg(test)]

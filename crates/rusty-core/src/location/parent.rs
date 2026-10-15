@@ -2,6 +2,14 @@ use super::{Location, ProviderPath, windows_style};
 
 impl Location {
     #[must_use]
+    pub fn name(&self) -> Option<ProviderPath> {
+        let parent = self.parent()?;
+        let rest = self.as_str().strip_prefix(parent.as_str())?;
+        let name = rest.trim_start_matches(['\\', '/']);
+        (!name.is_empty()).then(|| ProviderPath::from_text(name))
+    }
+
+    #[must_use]
     pub fn parent(&self) -> Option<Self> {
         let text = self.path.to_text();
         let windows = self.is_local() && windows_style(&self.text);

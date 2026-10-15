@@ -63,3 +63,26 @@ fn join_then_parent_returns_the_folder() {
         .unwrap();
     assert_eq!(child.parent(), Some(folder));
 }
+
+#[test]
+fn name_is_the_last_segment() {
+    assert_eq!(
+        loc(r"C:\Users\admin").name(),
+        Some(ProviderPath::from_text("admin"))
+    );
+    assert_eq!(loc("fake://a/b").name(), Some(ProviderPath::from_text("b")));
+    assert_eq!(loc("/home").name(), Some(ProviderPath::from_text("home")));
+}
+
+#[test]
+fn a_root_has_no_name() {
+    assert_eq!(loc(r"C:\").name(), None);
+    assert_eq!(loc("/").name(), None);
+}
+
+#[test]
+fn name_keeps_a_lone_surrogate() {
+    let odd = ProviderPath::from_wide(&[0x61, 0xD800]);
+    let child = loc(r"C:\d").join(&odd).unwrap();
+    assert_eq!(child.name(), Some(odd));
+}
