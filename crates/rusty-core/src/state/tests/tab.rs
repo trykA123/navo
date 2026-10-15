@@ -258,3 +258,26 @@ fn set_scroll_without_a_listing_is_not_clamped() {
     t.set_scroll(99);
     assert_eq!(t.view().scroll, 99);
 }
+
+#[test]
+fn new_tab_has_an_empty_selection() {
+    assert_eq!(tab(1, "/a").selection().len(), 0);
+}
+
+#[test]
+fn set_listing_gives_a_fresh_selection_of_its_length() {
+    let mut t = tab(1, "/a");
+    t.set_listing(listing(4));
+    t.selection_mut().toggle(2);
+    t.set_listing(listing(6));
+    assert_eq!((t.selection().len(), t.selection().count()), (6, 0));
+}
+
+#[test]
+fn navigate_clears_the_selection() {
+    let mut t = tab(1, "/a");
+    t.set_listing(listing(4));
+    t.selection_mut().toggle(1);
+    t.navigate(loc("/b"));
+    assert!(t.selection().is_empty());
+}
