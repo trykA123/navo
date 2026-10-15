@@ -58,7 +58,15 @@ fn open_with(
         mode: Mode::Light,
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
+        editor: super::EditorHooks::none(),
     };
+    open_options(cx, options)
+}
+
+fn open_options(
+    cx: &mut TestAppContext,
+    options: StartOptions,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let handle = cx.update(|cx| {
         gpui_kit::init(cx);
         tokens::apply(Mode::Light, cx);
@@ -365,4 +373,92 @@ fn ctrl_f6_sorts_the_pane_by_size(cx: &mut TestAppContext) {
     let tab = view.read_with(cx, |view, _| view.browser.state().active_tab().id());
     let key = view.read_with(cx, |view, _| view.browser.sort_key(tab));
     assert_eq!(key.by, SortBy::Size);
+}
+
+#[derive(Default)]
+struct EditorLog {
+    remembered: Vec<String>,
+    opened: Vec<(String, String)>,
+}
+
+fn editor_window(
+    cx: &mut TestAppContext,
+    chosen: Option<&str>,
+) -> (
+    AnyWindowHandle,
+    Entity<FerriteWindow>,
+    Rc<std::cell::RefCell<EditorLog>>,
+) {
+    let log = Rc::new(std::cell::RefCell::new(EditorLog::default()));
+    let (remembered, opened) = (log.clone(), log.clone());
+    let fs = fake();
+    let options = StartOptions {
+        state: home_beside_dest(&fs),
+        provider: fs,
+        on_save: Rc::new(|_| {}),
+        mode: Mode::Light,
+        operations: Operations::unlogged(),
+        launcher: Arc::new(|_| {}),
+        editor: super::EditorHooks {
+            chosen: chosen.map(str::to_owned),
+            suggestion: Some("code.exe".to_owned()),
+            remember: Rc::new(move |program| {
+                if program.ends_with(".exe") {
+                    remembered.borrow_mut().remembered.push(program.to_owned());
+                    Ok(())
+                } else {
+                    Err("No program at that path.".to_owned())
+                }
+            }),
+            open: Rc::new(move |program, file| {
+                let entry = (program.to_owned(), file.as_str().to_owned());
+                opened.borrow_mut().opened.push(entry);
+                Ok(())
+            }),
+        },
+    };
+    let (window, view) = open_options(cx, options);
+    (window, view, log)
+}
+
+#[gpui_kit::test]
+fn f4_without_an_editor_asks_once_then_opens_directly(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, None);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f4");
+    assert!(prompt_open(cx, &view));
+    press(cx, window, &view, "enter");
+    assert!(!prompt_open(cx, &view));
+    assert_eq!(log.borrow().remembered, ["code.exe"]);
+    press(cx, window, &view, "f4");
+    assert!(!prompt_open(cx, &view));
+    let opened = log.borrow().opened.clone();
+    assert_eq!(opened.len(), 2);
+    assert!(
+        opened
+            .iter()
+            .all(|(program, file)| program == "code.exe" && file.ends_with("a.txt"))
+    );
+}
+
+#[gpui_kit::test]
+fn a_program_that_is_not_there_keeps_the_prompt_open(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, None);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f4");
+    type_in(cx, window, &view, "nothing-here");
+    press(cx, window, &view, "enter");
+    assert!(prompt_open(cx, &view));
+    assert!(log.borrow().opened.is_empty());
+}
+
+#[gpui_kit::test]
+fn shift_f4_lets_you_change_the_editor_and_folders_are_skipped(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, Some("vim.exe"));
+    press(cx, window, &view, "f4");
+    assert!(!prompt_open(cx, &view));
+    assert!(log.borrow().opened.is_empty());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "shift-f4");
+    assert!(prompt_open(cx, &view));
 }

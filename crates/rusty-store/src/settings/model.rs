@@ -9,6 +9,7 @@ pub struct Settings {
     pub files: Files,
     pub selection: SelectionSettings,
     pub terminal: Terminal,
+    pub editor: Editor,
     pub experimental: BTreeMap<String, bool>,
 }
 
@@ -117,4 +118,11 @@ impl Default for Terminal {
             command: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct Editor {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }

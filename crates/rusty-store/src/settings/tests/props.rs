@@ -53,15 +53,24 @@ fn settings() -> impl Strategy<Value = Settings> {
     let terminal =
         (TEXT, option::of(TEXT)).prop_map(|(provider, command)| Terminal { provider, command });
     let experimental = btree_map(TEXT, any::<bool>(), 0..4);
-    (appearance(), files(), selection, terminal, experimental).prop_map(
-        |(appearance, files, selection, terminal, experimental)| Settings {
-            appearance,
-            files,
-            selection,
-            terminal,
-            experimental,
-        },
+    let editor = option::of(TEXT).prop_map(|path| Editor { path });
+    (
+        appearance(),
+        files(),
+        selection,
+        (terminal, editor),
+        experimental,
     )
+        .prop_map(
+            |(appearance, files, selection, (terminal, editor), experimental)| Settings {
+                appearance,
+                files,
+                selection,
+                terminal,
+                editor,
+                experimental,
+            },
+        )
 }
 
 proptest! {

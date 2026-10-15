@@ -4,15 +4,23 @@ use crate::prompt_dialog::{PromptDialog, PromptProps};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum PromptKind {
-    Rename { from: String },
+    Rename {
+        from: String,
+    },
     NewFolder,
-    Select { add: bool },
+    Select {
+        add: bool,
+    },
+    ChooseEditor {
+        target: rusty_core::Location,
+        program: String,
+    },
 }
 
 pub(super) struct Prompt {
     id: u64,
     kind: PromptKind,
-    error: Option<SharedString>,
+    pub(super) error: Option<SharedString>,
 }
 
 const NEW_FOLDER: &str = "New folder";
@@ -53,6 +61,14 @@ pub(super) fn prompt_props(kind: &PromptKind, error: Option<SharedString>) -> Pr
             confirm_label: if *add { "Select" } else { "Unselect" }.into(),
             error,
         },
+        PromptKind::ChooseEditor { program, .. } => PromptProps {
+            title: "Choose the program F4 opens files with".into(),
+            label: "Program".into(),
+            value: program.clone().into(),
+            select: 0..program.len(),
+            confirm_label: "Open".into(),
+            error,
+        },
     }
 }
 
@@ -78,7 +94,7 @@ impl FerriteWindow {
         self.open_prompt(PromptKind::NewFolder);
     }
 
-    fn open_prompt(&mut self, kind: PromptKind) {
+    pub(super) fn open_prompt(&mut self, kind: PromptKind) {
         self.next_prompt += 1;
         self.prompt = Some(Prompt {
             id: self.next_prompt,
@@ -128,6 +144,10 @@ impl FerriteWindow {
                 .new_folder(value)
                 .map_err(|p| Some(p.to_string())),
             PromptKind::Select { add } => self.mark_pattern(*add, value),
+            PromptKind::ChooseEditor { target, .. } => {
+                let target = target.clone();
+                self.choose_editor(value, &target)
+            }
         };
         match result {
             Ok(()) | Err(None) => self.close_prompt(window, cx),

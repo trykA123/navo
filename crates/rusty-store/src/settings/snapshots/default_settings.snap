@@ -24,4 +24,6 @@ patterns-select-folders = false
 [terminal]
 provider = "windows-terminal"
 
+[editor]
+
 [experimental]

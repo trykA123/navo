@@ -152,6 +152,7 @@ impl FerriteWindow {
                         FileListAction::Rename(row) => this.ask_rename(*row),
                         FileListAction::NewFolder => this.ask_new_folder(),
                         FileListAction::SelectPattern { add } => this.ask_pattern(*add),
+                        FileListAction::Edit { row, choose } => this.edit_row(*row, *choose),
                         FileListAction::Sort(by) => {
                             this.browser.sort_by(*by);
                         }

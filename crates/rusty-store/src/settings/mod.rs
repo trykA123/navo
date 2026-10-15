@@ -8,7 +8,7 @@ mod model;
 mod parse;
 
 pub use model::{
-    Appearance, Density, Files, SelectionSettings, Settings, SortKey, Terminal, ThemeMode,
+    Appearance, Density, Editor, Files, SelectionSettings, Settings, SortKey, Terminal, ThemeMode,
 };
 pub use parse::{parse, to_toml};
 

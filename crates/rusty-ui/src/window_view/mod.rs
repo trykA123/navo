@@ -1,3 +1,4 @@
+mod editor;
 mod operate;
 mod pane;
 mod prompt;
@@ -21,6 +22,8 @@ use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
+pub use editor::EditorHooks;
+
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
 pub struct StartOptions {
@@ -30,6 +33,7 @@ pub struct StartOptions {
     pub mode: Mode,
     pub operations: Operations,
     pub launcher: Launcher,
+    pub editor: EditorHooks,
 }
 
 pub fn run(options: StartOptions) {
@@ -59,6 +63,7 @@ pub struct FerriteWindow {
     split: Entity<SplitterState>,
     on_save: SaveSession,
     prompt: Option<prompt::Prompt>,
+    editor: EditorHooks,
     next_prompt: u64,
     _appearance: Subscription,
 }
@@ -82,6 +87,7 @@ impl FerriteWindow {
             split: cx.new(|_| SplitterState::new(0.5)),
             on_save: options.on_save,
             prompt: None,
+            editor: options.editor,
             next_prompt: 0,
             _appearance: cx.observe_window_appearance(window, |_, window, cx| {
                 tokens::apply(mode_of(window.appearance()), cx);

@@ -39,3 +39,18 @@ fn terminal_defaults() {
 fn experimental_defaults_to_empty() {
     assert!(Settings::default().experimental.is_empty());
 }
+
+#[test]
+fn no_editor_is_chosen_by_default() {
+    assert_eq!(Settings::default().editor.path, None);
+}
+
+#[test]
+fn a_chosen_editor_round_trips_through_toml() {
+    let mut settings = Settings::default();
+    settings.editor.path = Some(r"C:\Program Files\Notepad++\notepad++.exe".to_owned());
+    let text = crate::settings_to_toml(&settings);
+    let (back, unknown) = crate::parse_settings(&text).unwrap();
+    assert!(unknown.is_empty());
+    assert_eq!(back.editor, settings.editor);
+}

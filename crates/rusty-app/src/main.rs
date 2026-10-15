@@ -8,6 +8,7 @@
 mod cli;
 mod console;
 mod diag;
+mod editor;
 mod gui;
 mod jobs;
 mod launch;
