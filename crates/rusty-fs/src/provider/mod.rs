@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusty_core::{FsError, Location, ProviderId, ProviderPath};
 
@@ -49,16 +49,16 @@ pub struct CancelToken {
 impl CancelToken {
     #[must_use]
     pub fn new() -> Self {
-        todo!()
+        Self::default()
     }
 
     pub fn cancel(&self) {
-        todo!()
+        self.flag.store(true, Ordering::Release);
     }
 
     #[must_use]
     pub fn is_cancelled(&self) -> bool {
-        todo!()
+        self.flag.load(Ordering::Acquire)
     }
 }
 
