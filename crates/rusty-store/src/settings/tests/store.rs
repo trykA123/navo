@@ -174,3 +174,28 @@ fn save_then_load_returns_equal_settings() {
     assert_eq!(loaded.current(), &settings);
     assert_eq!(report, LoadReport::default());
 }
+
+#[test]
+fn load_of_an_unreadable_path_reports_an_io_error() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    fs::create_dir(&path).unwrap();
+    let (store, report) = SettingsStore::load(&path);
+    assert_eq!(store.current(), &Settings::default());
+    assert!(
+        matches!(report.error, Some(SettingsError::Io { .. })),
+        "{report:?}"
+    );
+}
+
+#[test]
+fn save_to_an_unreadable_path_is_an_io_error() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    fs::create_dir(&path).unwrap();
+    let (mut store, _) = SettingsStore::load(&path);
+    assert!(matches!(
+        store.save(Settings::default()),
+        Err(SettingsError::Io { .. })
+    ));
+}
