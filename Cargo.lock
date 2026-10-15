@@ -426,6 +426,11 @@ name = "rusty-app"
 version = "0.0.1"
 dependencies = [
  "embed-resource",
+ "rusty-diag",
+ "serde_json",
+ "tempfile",
+ "windows-sys",
+ "zip",
 ]
 
 [[package]]
