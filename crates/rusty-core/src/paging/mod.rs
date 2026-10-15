@@ -15,6 +15,10 @@ pub trait ByteSource {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    fn take_changed(&self) -> bool {
+        false
+    }
 }
 
 pub fn read_full<S: ByteSource + ?Sized>(

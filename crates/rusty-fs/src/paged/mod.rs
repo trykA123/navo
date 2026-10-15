@@ -62,11 +62,6 @@ impl PagedFile {
     }
 
     #[must_use]
-    pub fn take_changed(&self) -> bool {
-        std::mem::take(&mut self.cache().changed)
-    }
-
-    #[must_use]
     pub fn disk_reads(&self) -> u64 {
         self.cache().reads
     }
@@ -134,6 +129,10 @@ impl PagedFile {
 impl ByteSource for PagedFile {
     fn len(&self) -> u64 {
         self.cache().len
+    }
+
+    fn take_changed(&self) -> bool {
+        std::mem::take(&mut self.cache().changed)
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
