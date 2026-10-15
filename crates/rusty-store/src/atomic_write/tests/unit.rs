@@ -143,6 +143,7 @@ fn concurrent_writers_never_empty_the_target_or_the_backup() {
     }
     assert_eq!(fs::read(&target).unwrap().len(), 8);
     assert!(!fs::read(backup_path(&target)).unwrap().is_empty());
+    assert_eq!(temp_files(dir.path()), Vec::<String>::new());
 }
 
 #[cfg(unix)]

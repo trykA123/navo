@@ -146,3 +146,31 @@ fn writing_after_a_backup_load_keeps_the_good_backup() {
     write_session(&path, &session).unwrap();
     assert!(read_session_file(&crate::backup_path(&path)).is_ok());
 }
+
+#[test]
+fn a_newer_main_file_is_not_deleted_by_a_write() {
+    let dir = tmp();
+    let path = dir.path().join("session.bin");
+    let session =
+        rusty_core::AppState::new(rusty_core::Location::new("/home").unwrap()).to_session(10);
+    write_session(&path, &session).unwrap();
+    let mut bytes = std::fs::read(&path).unwrap();
+    bytes[16] = 2;
+    std::fs::write(&path, &bytes).unwrap();
+    write_session(&path, &session).unwrap();
+    assert_eq!(std::fs::read(crate::backup_path(&path)).unwrap(), bytes);
+}
+
+#[test]
+fn a_corrupt_main_file_is_kept_aside_when_writing() {
+    let dir = tmp();
+    let path = dir.path().join("session.bin");
+    let session =
+        rusty_core::AppState::new(rusty_core::Location::new("/home").unwrap()).to_session(10);
+    std::fs::write(&path, b"garbage").unwrap();
+    write_session(&path, &session).unwrap();
+    assert_eq!(
+        std::fs::read(dir.path().join("session.bin.corrupt")).unwrap(),
+        b"garbage"
+    );
+}

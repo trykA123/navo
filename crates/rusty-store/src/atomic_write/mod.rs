@@ -68,12 +68,8 @@ fn replace(
 fn make_backup(path: &Path) {
     let staged = temp_path(path);
     let linked = fs::hard_link(path, &staged).or_else(|_| fs::copy(path, &staged).map(|_| ()));
-    if linked
-        .and_then(|()| fs::rename(&staged, backup_path(path)))
-        .is_err()
-    {
-        let _ = fs::remove_file(&staged);
-    }
+    let _ = linked.and_then(|()| fs::rename(&staged, backup_path(path)));
+    let _ = fs::remove_file(&staged);
 }
 
 fn resolve_symlink(path: &Path) -> PathBuf {

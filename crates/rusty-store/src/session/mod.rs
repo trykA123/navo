@@ -33,8 +33,15 @@ const HEADER_LEN: usize = 16 + 2 + 4 + 4;
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
 pub fn write_session(path: &Path, session: &SessionState) -> Result<(), SessionFileError> {
-    if path.exists() && read_session_file(path).is_err() {
-        fs::remove_file(path)?;
+    if matches!(
+        usable(path),
+        Err(SessionFileError::BadMagic
+            | SessionFileError::BadChecksum
+            | SessionFileError::Decode(_))
+    ) {
+        let mut corrupt = path.as_os_str().to_owned();
+        corrupt.push(".corrupt");
+        let _ = fs::rename(path, corrupt);
     }
     let body =
         postcard::to_allocvec(session).map_err(|e| SessionFileError::Decode(e.to_string()))?;
