@@ -1,3 +1,72 @@
 #![forbid(unsafe_code)]
 
-fn main() {}
+mod gallery;
+mod options;
+mod screenshot;
+mod sections;
+
+#[cfg(test)]
+mod tests;
+
+use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use gallery::Gallery;
+use rusty_ui::prelude::*;
+use rusty_ui::tokens::Mode;
+
+#[allow(
+    clippy::print_stderr,
+    reason = "the gallery reports failures on the terminal"
+)]
+fn report(message: &str) {
+    eprintln!("{message}");
+}
+
+fn window_options(cx: &App) -> WindowOptions {
+    let bounds = Bounds::centered(None, size(px(1280.), px(720.)), cx);
+    WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        titlebar: Some(TitlebarOptions {
+            title: Some("Ferrite components".into()),
+            ..Default::default()
+        }),
+        app_id: Some("ferrite-gallery".into()),
+        ..Default::default()
+    }
+}
+
+fn main() -> ExitCode {
+    let options = match options::parse_args(std::env::args().skip(1)) {
+        Ok(options) => options,
+        Err(message) => {
+            report(&format!("{message}\n{}", options::USAGE));
+            return ExitCode::from(2);
+        }
+    };
+    let failed = Arc::new(AtomicBool::new(false));
+    let run_failed = failed.clone();
+    rusty_ui::application().run(move |cx| {
+        if let Err(error) = rusty_ui::init(Mode::Light, cx) {
+            report(&error.to_string());
+        }
+        let opened = rusty_ui::open_window(window_options(cx), cx, |_, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        });
+        match (opened, options.screenshot_dir) {
+            (Err(error), _) => {
+                report(&format!("could not open the gallery window: {error:#}"));
+                run_failed.store(true, Ordering::SeqCst);
+                cx.quit();
+            }
+            (Ok((_, gallery)), Some(dir)) => screenshot::capture(gallery, dir, run_failed, cx),
+            (Ok(_), None) => {}
+        }
+    });
+    if failed.load(Ordering::SeqCst) {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}

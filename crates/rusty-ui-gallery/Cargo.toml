@@ -6,6 +6,10 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+rusty-ui = { path = "../rusty-ui" }
+
+[dev-dependencies]
+gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 
 [lints]
 workspace = true
