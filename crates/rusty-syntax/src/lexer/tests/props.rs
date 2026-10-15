@@ -47,3 +47,48 @@ fn one_megabyte_line_lexes_in_under_a_second() {
     assert_eq!(found.len(), count * 5);
     assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
 }
+
+#[test]
+fn five_thousand_special_keywords_on_a_megabyte_line_lex_in_under_a_second() {
+    let group = |kind, prefix, words: Vec<String>| KeywordGroup {
+        kind,
+        words,
+        prefix,
+    };
+    let lang = Language {
+        keywords: vec![
+            group(
+                K::Function,
+                true,
+                (0..2500).map(|i| format!("kw{i:04}")).collect(),
+            ),
+            group(
+                K::Variable,
+                false,
+                (0..2500).map(|i| format!("$v{i}")).collect(),
+            ),
+        ],
+        ..sample()
+    };
+    let chunk = "kw0042x kw9999 abc $v7 $q ";
+    let count = (1 << 20) / chunk.len() + 1;
+    let line = chunk.repeat(count);
+    let started = Instant::now();
+    let (found, _) = lex_line(&lang, &line, LineState::Normal);
+    let elapsed = started.elapsed();
+    assert_eq!(
+        &found[..2],
+        [
+            Token {
+                range: 0..7,
+                kind: K::Function
+            },
+            Token {
+                range: 19..22,
+                kind: K::Variable
+            }
+        ]
+    );
+    assert_eq!(found.len(), count * 2);
+    assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+}

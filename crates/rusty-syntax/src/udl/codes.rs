@@ -10,7 +10,7 @@ const GROUP_KINDS: [TokenKind; 8] = [
     TokenKind::Property,
     TokenKind::Variable,
 ];
-const EOL: &str = "((EOL))";
+const EOL: &str = "EOL";
 
 #[derive(Default)]
 pub(super) struct Draft {
@@ -76,7 +76,7 @@ impl Draft {
             .zip(code(&self.comments, 4))
             .collect();
         let delimiters = (0..8)
-            .filter_map(|group| delimiter(&self.delimiters, group))
+            .flat_map(|group| delimiters(&self.delimiters, group))
             .collect();
         Ok(Language {
             name,
@@ -96,23 +96,32 @@ fn code(codes: &[Vec<String>], index: usize) -> Vec<String> {
     codes.get(index).cloned().unwrap_or_default()
 }
 
-fn delimiter(codes: &[Vec<String>], group: usize) -> Option<Delimiter> {
-    let open = code(codes, group * 3).into_iter().next()?;
+fn delimiters(codes: &[Vec<String>], group: usize) -> Vec<Delimiter> {
+    let opens = code(codes, group * 3);
     let escape = code(codes, group * 3 + 1)
         .first()
         .and_then(|value| value.chars().next());
-    let close = code(codes, group * 3 + 2)
+    let ends = code(codes, group * 3 + 2);
+    let to_eol = ends.iter().any(|end| end == EOL);
+    let closes: Vec<String> = ends.into_iter().filter(|end| end != EOL).collect();
+    let paired = closes.len() == opens.len();
+    opens
         .into_iter()
-        .next()
-        .unwrap_or_default();
-    let to_eol = close.is_empty() || close == EOL;
-    Some(Delimiter {
-        open,
-        close: if to_eol { String::new() } else { close },
-        escape,
-        multiline: !to_eol,
-        kind: TokenKind::String,
-    })
+        .enumerate()
+        .map(|(index, open)| {
+            let close = closes
+                .get(if paired { index } else { 0 })
+                .cloned()
+                .unwrap_or_default();
+            Delimiter {
+                open,
+                multiline: !close.is_empty() && !to_eol,
+                close,
+                escape,
+                kind: TokenKind::String,
+            }
+        })
+        .collect()
 }
 
 fn words(text: &str) -> Vec<String> {
@@ -133,22 +142,31 @@ fn words(text: &str) -> Vec<String> {
     words
 }
 
+fn code_of(word: &str, codes: usize) -> Option<usize> {
+    word.get(..2)
+        .filter(|digits| digits.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|digits| digits.parse::<usize>().ok())
+        .filter(|code| *code < codes)
+}
+
 fn coded(text: &str, codes: usize) -> Vec<Vec<String>> {
     let mut values = vec![Vec::new(); codes];
     let mut current = None;
+    let mut grouped = false;
     for word in text.split_whitespace() {
-        let code = word
-            .get(..2)
-            .filter(|digits| digits.bytes().all(|b| b.is_ascii_digit()))
-            .and_then(|digits| digits.parse::<usize>().ok())
-            .filter(|code| *code < codes);
-        let value = match code {
-            Some(code) => {
+        let mut value = word;
+        if !grouped {
+            if let Some(code) = code_of(word, codes) {
                 current = Some(code);
-                &word[2..]
+                value = &word[2..];
             }
-            None => word,
-        };
+            if let Some(inner) = value.strip_prefix("((") {
+                (grouped, value) = (true, inner);
+            }
+        }
+        if let Some(inner) = value.strip_suffix("))").filter(|_| grouped) {
+            (grouped, value) = (false, inner);
+        }
         if let Some(slot) = current.and_then(|code| values.get_mut(code))
             && !value.is_empty()
         {

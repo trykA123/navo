@@ -44,14 +44,13 @@ pub fn from_udl(xml: &str) -> Result<Vec<Language>, RulesError> {
                 depth += 1;
                 open(&tag, &mut draft)?;
             }
-            Event::Empty(tag) => open(&tag, &mut draft)?,
+            Event::Empty(tag) => {
+                open(&tag, &mut draft)?;
+                close(tag.name().as_ref(), &mut draft, &mut languages)?;
+            }
             Event::End(tag) => {
                 depth = depth.saturating_sub(1);
-                if tag.name().as_ref() == b"UserLang"
-                    && let Some(done) = draft.take()
-                {
-                    languages.push(done.finish()?);
-                }
+                close(tag.name().as_ref(), &mut draft, &mut languages)?;
             }
             Event::Eof => break,
             _ => {}
@@ -60,7 +59,23 @@ pub fn from_udl(xml: &str) -> Result<Vec<Language>, RulesError> {
     if depth > 0 || draft.is_some() {
         return Err(xml_error("the file ends before every element is closed"));
     }
+    if languages.is_empty() {
+        return Err(xml_error("no <UserLang> element"));
+    }
     Ok(languages)
+}
+
+fn close(
+    name: &[u8],
+    draft: &mut Option<Draft>,
+    languages: &mut Vec<Language>,
+) -> Result<(), RulesError> {
+    if name == b"UserLang"
+        && let Some(done) = draft.take()
+    {
+        languages.push(done.finish()?);
+    }
+    Ok(())
 }
 
 fn open(tag: &BytesStart<'_>, draft: &mut Option<Draft>) -> Result<(), RulesError> {

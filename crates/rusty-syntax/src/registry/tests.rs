@@ -47,6 +47,13 @@ fn for_name_finds_by_extension_ignoring_case() {
 }
 
 #[test]
+fn autoconf_files_are_not_lexed_as_m4() {
+    let registry = Registry::builtin();
+    assert_eq!(name_of(registry.for_name("configure.ac")), None);
+    assert_eq!(name_of(registry.for_name("macros.m4")), Some("m4"));
+}
+
+#[test]
 fn get_finds_a_builtin_by_name() {
     assert_eq!(name_of(Registry::builtin().get("m4")), Some("m4"));
 }

@@ -1,6 +1,6 @@
 [[language]]
 name = "m4"
-extensions = ["m4", "ac"]
+extensions = ["m4"]
 line_comments = ["dnl", "#"]
 operators = ["(", ")", ",", "$"]
 

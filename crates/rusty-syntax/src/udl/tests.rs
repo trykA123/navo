@@ -179,3 +179,107 @@ fn user_lang_without_a_name_is_an_error() {
         Err(RulesError::MissingName)
     );
 }
+
+fn with_codes(comments: &str, delimiters: &str) -> Option<Language> {
+    let xml = BOARD
+        .replace("00// /// 00# 01 02 03/* 04*/", comments)
+        .replace(
+            "00&quot; 01\\ 02&quot; 03&apos; 04 05&apos; 06 07 08 09[[ 10 11]] 12 13 14 15 16 17 18 19 20 21 22 23",
+            delimiters,
+        );
+    from_udl(&xml).ok()?.into_iter().next()
+}
+
+fn string(open: &str, close: &str, escape: Option<char>, multiline: bool) -> Delimiter {
+    Delimiter {
+        open: open.to_owned(),
+        close: close.to_owned(),
+        escape,
+        multiline,
+        kind: TokenKind::String,
+    }
+}
+
+#[test]
+fn grouped_comment_values_are_split_into_separate_openers() {
+    let lang = with_codes("00(( // ; )) 00((#)) 03/* 04*/", "");
+    assert_eq!(
+        lang.map(|l| l.line_comments),
+        Some(owned(&["//", ";", "#"]))
+    );
+}
+
+#[test]
+fn grouped_delimiter_close_with_eol_ends_at_the_line_end() {
+    let lang = with_codes("", "00&apos; 02((&apos; EOL)) 03&quot; 05((EOL))");
+    assert_eq!(
+        lang.map(|l| l.delimiters),
+        Some(vec![
+            string("'", "'", None, false),
+            string("\"", "", None, false),
+        ])
+    );
+}
+
+#[test]
+fn grouped_delimiter_opens_without_spaces_inside_the_parentheses() {
+    let lang = with_codes("", "00(($&amp;{ @{)) 02}");
+    assert_eq!(
+        lang.map(|l| l.delimiters),
+        Some(vec![
+            string("$&{", "}", None, true),
+            string("@{", "}", None, true),
+        ])
+    );
+}
+
+#[test]
+fn every_open_of_a_delimiter_group_becomes_a_delimiter_with_paired_closes() {
+    let lang = with_codes("", "06&quot; 06/ 06{ 07\\ 08&quot; 08/ 08}");
+    assert_eq!(
+        lang.map(|l| l.delimiters),
+        Some(vec![
+            string("\"", "\"", Some('\\'), true),
+            string("/", "/", Some('\\'), true),
+            string("{", "}", Some('\\'), true),
+        ])
+    );
+}
+
+#[test]
+fn delimiter_opens_share_the_first_close_when_counts_differ() {
+    let lang = with_codes("", "00&lt; 00[ 00( 02&gt; 02]");
+    assert_eq!(
+        lang.map(|l| l.delimiters),
+        Some(vec![
+            string("<", ">", None, true),
+            string("[", ">", None, true),
+            string("(", ">", None, true),
+        ])
+    );
+}
+
+#[test]
+fn text_without_a_user_lang_is_an_xml_error() {
+    let missing = Err(RulesError::Xml {
+        message: "no <UserLang> element".to_owned(),
+    });
+    assert_eq!(from_udl("hello").map(|l| l.len()), missing);
+    assert_eq!(
+        from_udl("<?xml version=\"1.0\"?><NotepadPlus><GUIConfigs/></NotepadPlus>")
+            .map(|l| l.len()),
+        missing
+    );
+}
+
+#[test]
+fn self_closing_user_lang_is_an_empty_language() {
+    let langs = from_udl("<NotepadPlus><UserLang name=\"a\" ext=\"x\"/></NotepadPlus>");
+    assert_eq!(
+        langs.map(|l| l
+            .into_iter()
+            .map(|l| (l.name, l.extensions, l.keywords.len()))
+            .collect::<Vec<_>>()),
+        Ok(vec![("a".to_owned(), owned(&["x"]), 0)])
+    );
+}

@@ -239,3 +239,30 @@ fn non_ascii_text_gives_char_boundary_ranges() {
         ]
     );
 }
+
+fn lilypond() -> Language {
+    Language {
+        line_comments: owned(&["%"]),
+        block_comments: vec![("%{".to_owned(), "%}".to_owned())],
+        ..sample()
+    }
+}
+
+#[test]
+fn longer_block_opener_beats_a_line_comment_it_starts_with() {
+    assert_eq!(
+        spans(&lilypond(), "a %{ b %} if % c", LineState::Normal),
+        (
+            vec![
+                ("%{ b %}", K::Comment),
+                ("if", K::Keyword),
+                ("% c", K::Comment)
+            ],
+            LineState::Normal
+        )
+    );
+    assert_eq!(
+        spans(&lilypond(), "x %{ open", LineState::Normal),
+        (vec![("%{ open", K::Comment)], LineState::Block(0))
+    );
+}
