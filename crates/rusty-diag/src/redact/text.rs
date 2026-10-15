@@ -110,7 +110,9 @@ impl Redactor {
 fn drive_follows(text: &str, before: Option<char>) -> bool {
     match before {
         Some(ch) if ch.is_alphanumeric() => {
-            ch.is_ascii_digit() || text.starts_with(|letter: char| letter.is_ascii_uppercase())
+            ch.is_ascii_digit()
+                || text.starts_with(|letter: char| letter.is_ascii_uppercase())
+                || text.as_bytes().get(2) == Some(&b'\\')
         }
         _ => true,
     }

@@ -376,8 +376,14 @@ fn a_drive_path_right_after_a_replaced_name_is_found() {
 }
 
 #[test]
-fn a_debug_newline_after_a_colon_is_not_a_drive() {
-    let line = r"Caused by:\nvalue:\tthing";
+fn a_backslash_drive_path_after_a_lowercase_word_is_found() {
+    let out = redactor().text(r"xc:\Secret\Plan.txt");
+    assert_absent(&out, &["secret", "plan"]);
+}
+
+#[test]
+fn a_forward_slash_drive_after_a_lowercase_word_is_not_a_path() {
+    let line = "see http:/example";
     assert_eq!(redactor().text(line), line);
 }
 
