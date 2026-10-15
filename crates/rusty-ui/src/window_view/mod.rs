@@ -1,9 +1,14 @@
+mod drive_menu;
+mod drives;
 mod editor;
+mod keys;
 mod operate;
 mod pane;
+mod path_edit;
 mod prompt;
 mod status;
 mod viewer;
+mod waiting;
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -23,7 +28,9 @@ use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
+pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
+pub use keys::bind_keys;
 pub use viewer::{
     FileHooks, FileStamp, FileText, IndexRun, OpenAs, Paged, PagedKind, PagedView, Reopen, Save,
     SaveError, SharedSource,
@@ -40,6 +47,7 @@ pub struct StartOptions {
     pub launcher: Launcher,
     pub editor: EditorHooks,
     pub files: FileHooks,
+    pub drives: DriveHooks,
     pub view: Option<rusty_core::Location>,
 }
 
@@ -50,6 +58,7 @@ pub fn run(options: StartOptions) {
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
         viewer::bind_keys(cx);
+        bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -75,7 +84,14 @@ pub struct FerriteWindow {
     files: FileHooks,
     viewer: Option<viewer::Viewer>,
     next_prompt: u64,
+    provider: Arc<dyn ProviderOps>,
+    drives: drives::Drives,
+    drive_menu: Option<drive_menu::MenuState>,
+    menu_focus: FocusHandle,
+    path_edit: Option<path_edit::PathEdit>,
+    waiting: waiting::Waiting,
     _appearance: Subscription,
+    _watch: Subscription,
 }
 
 fn mode_of(appearance: WindowAppearance) -> Mode {
@@ -87,6 +103,7 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let provider = options.provider.clone();
         let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
@@ -101,6 +118,13 @@ impl FerriteWindow {
             files: options.files,
             viewer: None,
             next_prompt: 0,
+            provider,
+            drives: drives::Drives::new(options.drives),
+            drive_menu: None,
+            menu_focus: cx.focus_handle(),
+            path_edit: None,
+            waiting: waiting::Waiting::default(),
+            _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, |_, window, cx| {
                 tokens::apply(mode_of(window.appearance()), cx);
                 cx.notify();
@@ -108,9 +132,11 @@ impl FerriteWindow {
         };
         tokens::apply(mode_of(window.appearance()), cx);
         Self::close_saves_and_quits(window, cx);
+        Self::poll_drives(cx);
         let start_view = options.view;
         cx.defer_in(window, move |view, window, cx| {
             view.focus_core_pane(window, cx);
+            view.watch_listings(cx);
             if let Some(location) = start_view {
                 view.view_location(location, window, cx);
             }

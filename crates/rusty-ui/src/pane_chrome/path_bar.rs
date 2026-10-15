@@ -13,6 +13,7 @@ use crate::primitives::{IconName, icon};
 use crate::tokens::{self, Theme};
 
 type NavigateHandler = Rc<dyn Fn(&Location, &mut Window, &mut App)>;
+type EditHandler = Rc<dyn Fn(&mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 pub struct PathBar {
@@ -20,6 +21,7 @@ pub struct PathBar {
     location: Location,
     is_active: bool,
     on_navigate: Option<NavigateHandler>,
+    on_edit: Option<EditHandler>,
 }
 
 impl PathBar {
@@ -29,6 +31,7 @@ impl PathBar {
             location,
             is_active: false,
             on_navigate: None,
+            on_edit: None,
         }
     }
 
@@ -42,6 +45,11 @@ impl PathBar {
         handler: impl Fn(&Location, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_navigate = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn on_edit(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_edit = Some(Rc::new(handler));
         self
     }
 }
@@ -101,6 +109,21 @@ fn drive_cell(t: &Theme, label: Option<&PathSegment>) -> Div {
         .children(label.map(|segment| segment.label.clone()))
 }
 
+fn edit_area(on_edit: Option<EditHandler>) -> impl IntoElement {
+    div()
+        .id("path-edit")
+        .role(Role::Button)
+        .aria_label("Type a path")
+        .test_support()
+        .flex_1()
+        .h_full()
+        .min_w(px(24.))
+        .cursor_text()
+        .when_some(on_edit, |d, handler| {
+            d.on_click(move |_, window, cx| handler(window, cx))
+        })
+}
+
 impl RenderOnce for PathBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
@@ -147,7 +170,8 @@ impl RenderOnce for PathBar {
                     .flex_1()
                     .min_w_0()
                     .overflow_hidden()
-                    .children(crumbs),
+                    .children(crumbs)
+                    .child(edit_area(self.on_edit)),
             )
     }
 }

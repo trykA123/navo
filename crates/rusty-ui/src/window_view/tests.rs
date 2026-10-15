@@ -13,6 +13,10 @@ use rusty_fs::FakeFs;
 use rusty_fs::Provider;
 
 use super::{FerriteWindow, StartOptions};
+
+mod drive_fs;
+mod drives;
+mod typed;
 use crate::browser::Operations;
 use crate::tokens::{self, Mode};
 
@@ -60,6 +64,7 @@ fn open_with(
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks::none(),
         files: super::FileHooks::none(),
+        drives: super::DriveHooks::none(),
         view: None,
     };
     open_options(cx, options)
@@ -76,6 +81,7 @@ pub(super) fn open_options(
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
         super::viewer::bind_keys(cx);
+        super::bind_keys(cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),
@@ -420,6 +426,7 @@ fn editor_window(
             }),
         },
         files: super::FileHooks::none(),
+        drives: super::DriveHooks::none(),
         view: None,
     };
     let (window, view) = open_options(cx, options);
@@ -510,6 +517,7 @@ fn viewer_window(
             pick: Rc::new(|_| Ok(super::OpenAs::Text)),
             paged: Rc::new(|_| Err("No paged view here.".to_owned())),
         },
+        drives: super::DriveHooks::none(),
         view: None,
     };
     let (window, view) = open_options(cx, options);

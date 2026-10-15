@@ -171,6 +171,18 @@ impl Browser {
         true
     }
 
+    pub fn open_at(&mut self, folder: Location, name: String) -> bool {
+        let id = self.state.active_tab().id();
+        if self
+            .command(&Command::PaneNavigate { location: folder })
+            .is_err()
+        {
+            return false;
+        }
+        self.focus_after_load.insert(id, name);
+        true
+    }
+
     pub fn poll(&mut self) -> bool {
         let mut changed = false;
         while let Ok(message) = self.receiver.try_recv() {

@@ -8,7 +8,7 @@ use gpui_kit::{
 };
 use rusty_core::{Command, Location};
 
-use super::{PaneTabs, PathBar, path_segments};
+use super::{DriveIcon, DriveInfo, PaneTabs, PathBar, current_drive, drive_for_key, path_segments};
 use crate::test_window::open;
 
 fn location(text: &str) -> Location {
@@ -92,4 +92,70 @@ fn a_path_segment_click_navigates_to_its_folder(cx: &mut TestAppContext) {
     .expect("window");
     let visited = chrome.read_with(cx, |chrome, _| chrome.visited.borrow().clone());
     assert_eq!(visited, [location("/home")]);
+}
+
+fn drive(letter: Option<char>, root: &str, space: Option<(u64, u64)>) -> DriveInfo {
+    DriveInfo {
+        root: location(root),
+        letter,
+        icon: DriveIcon::Fixed,
+        label: None,
+        remote: None,
+        connected: true,
+        space,
+    }
+}
+
+#[test]
+fn drives_are_named_by_letter_then_label_then_root() {
+    let mount = DriveInfo {
+        label: Some("data".to_owned()),
+        ..drive(None, "/mnt/data", None)
+    };
+    assert_eq!(drive(Some('C'), r"C:\", None).name(), "C");
+    assert_eq!(mount.name(), "data");
+    assert_eq!(drive(None, "/", None).name(), "/");
+}
+
+#[test]
+fn usage_turns_to_a_warning_above_ninety_percent() {
+    let gib = 1 << 30;
+    let roomy = drive(Some('C'), r"C:\", Some((100 * gib, 65 * gib)));
+    let full = drive(Some('D'), r"D:\", Some((100 * gib, 7 * gib)));
+    assert!((roomy.used().expect("space") - 0.35).abs() < 0.001);
+    assert!(!roomy.is_nearly_full());
+    assert!(full.is_nearly_full());
+    assert_eq!(drive(Some('E'), r"E:\", None).used(), None);
+    assert_eq!(
+        roomy.free_text().as_deref(),
+        Some("65.0 GB free of 100.0 GB")
+    );
+}
+
+#[test]
+fn a_disconnected_drive_names_its_share() {
+    let share = DriveInfo {
+        icon: DriveIcon::Network,
+        remote: Some(r"\\nas\share".to_owned()),
+        connected: false,
+        ..drive(Some('Z'), r"Z:\", None)
+    };
+    assert_eq!(share.status(), r"Disconnected · \\nas\share");
+    assert_eq!(
+        share.tooltip(),
+        r"Network drive · \\nas\share · Disconnected"
+    );
+}
+
+#[test]
+fn the_current_drive_holds_the_location_and_letters_pick_drives() {
+    let drives = [
+        drive(Some('C'), r"C:\", None),
+        drive(Some('D'), r"D:\", None),
+    ];
+    assert_eq!(current_drive(&drives, &location(r"d:\work\x")), Some(1));
+    assert_eq!(current_drive(&drives, &location(r"E:\")), None);
+    assert_eq!(drive_for_key(&drives, "d"), Some(1));
+    assert_eq!(drive_for_key(&drives, "x"), None);
+    assert_eq!(drive_for_key(&drives, "f1"), None);
 }

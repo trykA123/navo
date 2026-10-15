@@ -154,3 +154,39 @@ fn the_operate_page_shows_both_dialogs_and_every_job_state(cx: &mut TestAppConte
     })
     .expect("window");
 }
+
+#[gpui_kit::test]
+fn the_drive_pages_show_both_bars_the_menu_and_a_path_error(cx: &mut TestAppContext) {
+    let (window, _) = cx.update(|cx| {
+        rusty_ui::init(Mode::Light, cx).expect("bundled fonts load");
+        rusty_ui::file_list::bind_keys(cx);
+        rusty_ui::pane_chrome::bind_keys(cx);
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Point::default(),
+                size: size(px(1280.), px(720.)),
+            })),
+            ..Default::default()
+        };
+        rusty_ui::open_window(options, cx, |_, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        })
+        .expect("open the gallery window")
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("Drives", cx);
+        for side in 0..2usize {
+            let bar = window.within(("drives", side));
+            assert!(bar.find(("drive", 5usize)).visible(), "bar {side}");
+        }
+        let menu = window.within(("drive-menu", 0usize));
+        assert!(menu.find(("drive-row", 4usize)).visible());
+        assert_eq!(menu.find(("drive-row", 1usize)).selected(), Some(true));
+        window.click("Path", cx);
+        assert!(window.find("path-error").visible());
+        let twelve = window.within(("drives", 1usize));
+        assert!(twelve.try_find(("drive", 11usize)).is_some());
+    })
+    .expect("window");
+}

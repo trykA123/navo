@@ -6,6 +6,7 @@ use rusty_ui::tokens::{self, Mode, Theme};
 use rusty_ui::window_view::PagedView;
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
+use crate::drives_page::{DrivesPage, Shows};
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
@@ -18,15 +19,19 @@ pub enum Page {
     Operate,
     Hex,
     PagedText,
+    Drives,
+    TypedPath,
 }
 
 impl Page {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 7] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
         Self::Hex,
         Self::PagedText,
+        Self::Drives,
+        Self::TypedPath,
     ];
 
     pub fn label(self) -> &'static str {
@@ -36,6 +41,8 @@ impl Page {
             Self::Operate => "Operate",
             Self::Hex => "Hex",
             Self::PagedText => "Paged text",
+            Self::Drives => "Drives",
+            Self::TypedPath => "Path",
         }
     }
 }
@@ -47,6 +54,8 @@ pub struct Gallery {
     operate: Entity<OperatePage>,
     hex: Entity<PagedView>,
     paged_text: Entity<PagedView>,
+    drives: Entity<DrivesPage>,
+    typed_path: Entity<DrivesPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -62,6 +71,8 @@ impl Gallery {
             operate: cx.new(OperatePage::new),
             hex: viewer_sample::hex_view(cx),
             paged_text: viewer_sample::text_view(cx),
+            drives: cx.new(|cx| DrivesPage::new(Shows::Menu, cx)),
+            typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -163,6 +174,8 @@ impl Render for Gallery {
             Page::Operate => root.child(self.operate.clone()),
             Page::Hex => root.child(self.hex.clone()),
             Page::PagedText => root.child(self.paged_text.clone()),
+            Page::Drives => root.child(self.drives.clone()),
+            Page::TypedPath => root.child(self.typed_path.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }

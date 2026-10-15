@@ -124,6 +124,7 @@ pub(super) fn paged_window(
         launcher: Arc::new(|_| {}),
         editor: crate::window_view::EditorHooks::none(),
         files: hooks(setup),
+        drives: crate::window_view::DriveHooks::none(),
         view: None,
     };
     let (window, view) = open_options(cx, options);

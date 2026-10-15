@@ -1,4 +1,8 @@
+mod drive_bar;
+mod drive_menu;
+mod drives;
 mod path_bar;
+mod path_input;
 mod segments;
 
 #[cfg(test)]
@@ -9,10 +13,19 @@ use std::rc::Rc;
 use gpui_kit::{App, ElementId, IntoElement, RenderOnce, SharedString, Window};
 use rusty_core::Command;
 
+pub use drive_bar::DriveBar;
+pub use drive_menu::{DriveMenu, DriveMenuEvent, drive_for_key};
+pub use drives::{DriveIcon, DriveInfo, current_drive};
 pub use path_bar::PathBar;
+pub use path_input::PathInput;
 pub use segments::{PathSegment, path_segments};
 
 use crate::primitives::{IconName, Tab, Tabs};
+
+pub fn bind_keys(cx: &mut App) {
+    drive_menu::bind_keys(cx);
+    path_input::bind_keys(cx);
+}
 
 type CommandHandler = Rc<dyn Fn(&Command, &mut Window, &mut App)>;
 

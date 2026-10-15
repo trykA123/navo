@@ -1,0 +1,21 @@
+use gpui_kit::KeyBinding;
+
+use crate::prelude::*;
+
+pub(super) const PANE: &str = "FerritePane";
+pub(super) const WAITING: &str = "PaneWaiting";
+
+gpui_kit::actions!(
+    ferrite_window,
+    [DriveMenuFirst, DriveMenuSecond, EditPath, LeaveWaiting]
+);
+
+pub fn bind_keys(cx: &mut App) {
+    crate::pane_chrome::bind_keys(cx);
+    cx.bind_keys([
+        KeyBinding::new("alt-f1", DriveMenuFirst, Some(PANE)),
+        KeyBinding::new("alt-f2", DriveMenuSecond, Some(PANE)),
+        KeyBinding::new("ctrl-l", EditPath, Some(PANE)),
+        KeyBinding::new("escape", LeaveWaiting, Some(WAITING)),
+    ]);
+}

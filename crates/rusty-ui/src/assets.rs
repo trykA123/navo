@@ -31,6 +31,7 @@ icon_assets!(
         Columns2,
         Columns3,
         Copy,
+        Disc,
         FileArchive,
         FileCode,
         FileImage,
@@ -40,11 +41,15 @@ icon_assets!(
         HardDrive,
         Layers,
         LayoutGrid,
+        MemoryStick,
+        Network,
         PanelLeft,
         Pin,
         Plus,
+        RefreshCw,
         Search,
         SquarePlus,
+        Usb,
         X,
     ]
 );

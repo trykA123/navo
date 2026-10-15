@@ -31,6 +31,8 @@ fn file_name(page: Page, mode: Mode) -> String {
         Page::Operate => "p8-confirm",
         Page::Hex => "p13-hex",
         Page::PagedText => "p13-text",
+        Page::Drives => "p14-drives",
+        Page::TypedPath => "p14-path",
     };
     let mode = match mode {
         Mode::Light => "light",
