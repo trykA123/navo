@@ -69,9 +69,9 @@ fn a_lone_surrogate_name_joins_losslessly() {
 
 #[test]
 fn an_invalid_utf8_name_joins_losslessly() {
-    let odd = ProviderPath::from_bytes(b"caf\xe9");
+    let odd = ProviderPath::from_bytes(b"men\xfa");
     let joined = loc("/srv").join(&odd).unwrap();
-    assert_eq!(joined.path().to_bytes(), Some(b"/srv/caf\xe9".to_vec()));
+    assert_eq!(joined.path().to_bytes(), Some(b"/srv/men\xfa".to_vec()));
 }
 
 #[test]
