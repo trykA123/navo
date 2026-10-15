@@ -55,7 +55,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    needs: [gate-linux, gate-windows]
+    needs: [gate-windows]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
