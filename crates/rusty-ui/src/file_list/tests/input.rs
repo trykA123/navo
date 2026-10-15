@@ -376,3 +376,34 @@ fn a_header_click_sorts_by_that_column(cx: &mut TestAppContext) {
         ]
     );
 }
+
+fn label_left(cx: &mut TestAppContext, sort: crate::file_list::SortKey) -> gpui_kit::Pixels {
+    let props = crate::file_list::FileListProps {
+        sort,
+        ..props(sample_rows())
+    };
+    let (window, _) = open_list(cx, props);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .within("left")
+            .find(("sort-label", 2usize))
+            .bounds()
+            .left()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn sorting_by_a_right_aligned_column_does_not_move_its_label(cx: &mut TestAppContext) {
+    use crate::file_list::{SortBy, SortKey};
+    let unsorted = label_left(cx, SortKey::default());
+    let sorted = label_left(
+        cx,
+        SortKey {
+            by: SortBy::Size,
+            descending: true,
+        },
+    );
+    assert_eq!(unsorted, sorted);
+}

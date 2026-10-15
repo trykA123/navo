@@ -193,6 +193,13 @@ impl FerriteWindow {
         }
     }
 
+    fn fkeys(&self, cx: &App) -> Vec<(&'static str, &'static str)> {
+        match &self.viewer {
+            Some(viewer) => viewer.keys(cx),
+            None => status::FKEYS.to_vec(),
+        }
+    }
+
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
         let _ = self.browser.command(command);
         self.focus_core_pane(window, cx);
@@ -283,7 +290,7 @@ impl Render for FerriteWindow {
             .child(Self::title_bar(cx))
             .child(div().flex().flex_1().min_h_0().child(body))
             .children(jobs)
-            .child(FKeyBar::new("fkeys", status::FKEYS))
+            .child(FKeyBar::new("fkeys", self.fkeys(cx)))
             .children(dialog)
     }
 }

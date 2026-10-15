@@ -54,12 +54,6 @@ fn header(t: &Theme, viewer: &Viewer) -> Div {
                     .child(message),
             )
         })
-        .child(
-            div()
-                .text_color(t.colors.faint)
-                .text_size(t.typography.small)
-                .child("Alt+3 hex · Ctrl+F find · Ctrl+S save · Esc close"),
-        )
 }
 
 fn body(t: &Theme, viewer: &Viewer) -> Div {

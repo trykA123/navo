@@ -45,14 +45,31 @@ impl PagedView {
         }
     }
 
-    fn hints(&self) -> &'static str {
+    pub(in crate::window_view) fn keys(&self) -> &'static [(&'static str, &'static str)] {
         match (&self.find.bar, self.kind) {
-            (Some(bar), _) if bar.kind == BarKind::Find => {
-                "Enter next · Shift+Enter previous · Esc closes"
-            }
-            (Some(_), _) => "Enter goes there · Esc closes",
-            (None, PagedKind::Hex) => "Alt+1 text · Ctrl+F find · Ctrl+G offset · Esc close",
-            (None, PagedKind::Text) => "Alt+3 hex · Ctrl+F find · Ctrl+G line · Esc close",
+            (Some(bar), _) if bar.kind == BarKind::Find => &[
+                ("Enter", "Next"),
+                ("Shift+Enter", "Previous"),
+                ("Alt+C", "Match case"),
+                ("Esc", "Close search"),
+            ],
+            (Some(_), _) => &[("Enter", "Go there"), ("Esc", "Close")],
+            (None, PagedKind::Hex) => &[
+                ("Ctrl+F", "Find"),
+                ("Ctrl+G", "Go to offset"),
+                ("Alt+1", "Text"),
+                ("Ctrl+Home", "Start"),
+                ("Ctrl+End", "End"),
+                ("Esc", "Close"),
+            ],
+            (None, PagedKind::Text) => &[
+                ("Ctrl+F", "Find"),
+                ("Ctrl+G", "Go to line"),
+                ("Alt+3", "Hex"),
+                ("← →", "Scroll sideways"),
+                ("Ctrl+End", "End"),
+                ("Esc", "Close"),
+            ],
         }
     }
 
@@ -169,7 +186,6 @@ impl PagedView {
                     .map(|text| status(t, "paged-status", text)),
             )
             .children(self.find.bar.as_ref().map(|bar| self.bar_view(t, bar, cx)))
-            .child(small(t, t.colors.faint).child(self.hints()))
     }
 
     fn movement_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
