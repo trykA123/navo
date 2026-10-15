@@ -7,9 +7,11 @@ use std::env;
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=build.rs");
+    emit_commit();
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return Ok(());
     }
@@ -30,6 +32,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     fs::write(&rc, resource_script(&icon.display().to_string(), &version))?;
     embed_resource::compile(&rc, embed_resource::NONE).manifest_required()?;
     Ok(())
+}
+
+fn emit_commit() {
+    if let Some(dir) = git(&["rev-parse", "--absolute-git-dir"]) {
+        println!("cargo:rerun-if-changed={dir}/HEAD");
+        println!("cargo:rerun-if-changed={dir}/logs/HEAD");
+    }
+    let commit = git(&["rev-parse", "--short=12", "HEAD"]).unwrap_or_else(|| "unknown".to_owned());
+    println!("cargo:rustc-env=FERRITE_COMMIT={commit}");
+}
+
+fn git(args: &[&str]) -> Option<String> {
+    let output = Command::new("git").args(args).output().ok()?;
+    let text = String::from_utf8(output.stdout).ok()?;
+    Some(text.trim().to_owned()).filter(|text| output.status.success() && !text.is_empty())
 }
 
 fn resource_script(icon: &str, version: &str) -> String {

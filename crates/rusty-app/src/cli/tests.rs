@@ -1,0 +1,43 @@
+use super::*;
+
+fn parse_strs(args: &[&str]) -> Result<Command, &'static str> {
+    parse(args.iter().map(OsString::from))
+}
+
+#[test]
+fn no_arguments_print_the_version() {
+    assert_eq!(parse_strs(&[]), Ok(Command::Version));
+}
+
+#[test]
+fn version_flag_prints_the_version() {
+    assert_eq!(parse_strs(&["--version"]), Ok(Command::Version));
+}
+
+#[test]
+fn diag_report_takes_a_path() {
+    assert_eq!(
+        parse_strs(&["--diag-report", "out.zip"]),
+        Ok(Command::DiagReport(PathBuf::from("out.zip")))
+    );
+}
+
+#[test]
+fn diag_report_without_a_path_is_refused() {
+    assert_eq!(parse_strs(&["--diag-report"]), Err(USAGE));
+}
+
+#[test]
+fn an_empty_path_is_refused() {
+    assert_eq!(parse_strs(&["--diag-report", ""]), Err(USAGE));
+}
+
+#[test]
+fn unknown_flags_are_refused() {
+    assert_eq!(parse_strs(&["--help"]), Err(USAGE));
+}
+
+#[test]
+fn extra_arguments_are_refused() {
+    assert_eq!(parse_strs(&["--diag-report", "a.zip", "b"]), Err(USAGE));
+}
