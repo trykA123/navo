@@ -130,6 +130,29 @@ fn a_corrupt_viewer_memory_blob_reads_as_none() {
 }
 
 #[test]
+fn a_corrupt_bookmarks_blob_alone_reads_as_none() {
+    let db = saved();
+    assert!(db.viewer_memory(PATH, STAMP).unwrap().is_some());
+    db.connection()
+        .execute(
+            "UPDATE viewer_memory SET bookmarks = x'ffffffffffffffffffffff'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(db.viewer_memory(PATH, STAMP).unwrap(), None);
+}
+
+#[test]
+fn marks_that_decode_but_break_the_rules_read_as_none() {
+    let db = saved();
+    assert!(db.viewer_memory(PATH, STAMP).unwrap().is_some());
+    db.connection()
+        .execute("UPDATE viewer_memory SET marks = x'0100000009'", [])
+        .unwrap();
+    assert_eq!(db.viewer_memory(PATH, STAMP).unwrap(), None);
+}
+
+#[test]
 fn viewer_memory_survives_reopening_the_file() {
     let dir = tmp();
     let path = db_path(&dir);

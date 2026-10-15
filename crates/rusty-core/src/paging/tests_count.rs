@@ -237,3 +237,10 @@ proptest! {
         prop_assert_eq!(got, counted(&starts));
     }
 }
+
+#[test]
+fn count_carries_a_match_that_straddles_a_chunk_edge() {
+    let mut bytes = vec![b'a'; 2 * SEARCH_CHUNK + 3];
+    bytes[0] = b'b';
+    assert_eq!(exact(&bytes, "aa"), counted(&naive(&bytes, b"aa", true)));
+}

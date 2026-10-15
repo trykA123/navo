@@ -283,3 +283,32 @@ fn ticks_of_an_empty_file_or_track_are_empty() {
     assert!(ticks(&spans, 0, 4).is_empty());
     assert!(ticks(&spans, 100, 0).is_empty());
 }
+
+#[test]
+fn mark_set_rejects_decoded_marks_that_break_its_rules() {
+    let bad_colour = vec![Mark {
+        needle: text("error"),
+        colour: 9,
+    }];
+    let empty = vec![Mark {
+        needle: text(""),
+        colour: 1,
+    }];
+    let twice = vec![
+        Mark {
+            needle: text("error"),
+            colour: 1,
+        },
+        Mark {
+            needle: text("error"),
+            colour: 2,
+        },
+    ];
+    for marks in [bad_colour, empty, twice] {
+        let bytes = postcard::to_stdvec(&marks).unwrap();
+        assert!(
+            postcard::from_bytes::<MarkSet>(&bytes).is_err(),
+            "{marks:?}"
+        );
+    }
+}

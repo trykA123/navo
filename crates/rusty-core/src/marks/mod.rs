@@ -13,6 +13,8 @@ pub enum MarkError {
     Colour(u8),
     #[error("a file holds at most {MAX_MARKS} marks")]
     Full,
+    #[error("a saved mark is empty or repeated")]
+    Invalid,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,8 +24,30 @@ pub struct Mark {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<Mark>", into = "Vec<Mark>")]
 pub struct MarkSet {
     marks: Vec<Mark>,
+}
+
+impl TryFrom<Vec<Mark>> for MarkSet {
+    type Error = MarkError;
+
+    fn try_from(marks: Vec<Mark>) -> Result<Self, Self::Error> {
+        let mut set = Self::default();
+        for mark in marks {
+            if mark.needle.is_empty() || set.colour_of(&mark.needle).is_some() {
+                return Err(MarkError::Invalid);
+            }
+            set.set(mark.needle, mark.colour)?;
+        }
+        Ok(set)
+    }
+}
+
+impl From<MarkSet> for Vec<Mark> {
+    fn from(set: MarkSet) -> Self {
+        set.marks
+    }
 }
 
 impl MarkSet {
