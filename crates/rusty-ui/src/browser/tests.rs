@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use rusty_core::{AppState, Command, CursorMove, FsErrorKind, Location};
-use rusty_fs::{FakeFs, FakeOp, Fault};
+use rusty_fs::{CancelToken, FakeFs, FakeOp, Fault, Provider, ProviderOps};
 
 use super::*;
 
@@ -313,4 +313,106 @@ fn a_folder_marked_then_unmarked_keeps_its_size() {
     settle(&mut browser);
     let tab = browser.state().active_tab().id();
     assert_eq!(browser.details(tab)[0].size, 7);
+}
+
+struct Gated {
+    fs: Arc<FakeFs>,
+    open: std::sync::atomic::AtomicBool,
+}
+
+impl Provider for Gated {
+    fn id(&self) -> rusty_core::ProviderId {
+        self.fs.id()
+    }
+
+    fn capabilities(&self) -> rusty_fs::Capabilities {
+        self.fs.capabilities()
+    }
+
+    fn list(
+        &self,
+        folder: &Location,
+        sink: &mut dyn rusty_fs::ListSink,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while folder.as_str().ends_with("docs")
+            && !self.open.load(std::sync::atomic::Ordering::Acquire)
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        self.fs.list(folder, sink, cancel)
+    }
+
+    fn metadata(&self, location: &Location) -> Result<rusty_fs::FsEntry, FsError> {
+        self.fs.metadata(location)
+    }
+}
+
+impl ProviderOps for Gated {
+    fn create_folder(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.create_folder(location)
+    }
+
+    fn copy_file(
+        &self,
+        source: &Location,
+        target: &Location,
+        progress: &mut dyn FnMut(u64),
+        cancel: &CancelToken,
+    ) -> Result<u64, FsError> {
+        self.fs.copy_file(source, target, progress, cancel)
+    }
+
+    fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.fs.rename(source, target)
+    }
+
+    fn remove_file(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.remove_file(location)
+    }
+
+    fn remove_link(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.remove_link(location)
+    }
+
+    fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.remove_empty_folder(location)
+    }
+
+    fn recycle(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.recycle(location)
+    }
+}
+
+#[test]
+fn a_running_folder_size_does_not_hold_up_the_next_listing() {
+    let fs = fake();
+    let gated = Arc::new(Gated {
+        fs: fs.clone(),
+        open: std::sync::atomic::AtomicBool::new(false),
+    });
+    let provider: Arc<dyn ProviderOps> = gated.clone();
+    let mut browser = Browser::new(
+        AppState::new(fs.location("home")),
+        provider,
+        Arc::new(|| {}),
+    );
+    browser.start();
+    settle(&mut browser);
+    browser.command(&Command::SelectionToggle).unwrap();
+    let music = fs.location("home/music");
+    browser
+        .command(&Command::PaneNavigate { location: music })
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while browser.state().active_tab().listing().is_none() && Instant::now() < deadline {
+        browser.poll();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let listed = browser.state().active_tab().listing().is_some();
+    gated.open.store(true, std::sync::atomic::Ordering::Release);
+    settle(&mut browser);
+    assert!(listed);
 }

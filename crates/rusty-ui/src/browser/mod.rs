@@ -51,6 +51,8 @@ pub struct Browser {
     provider: Arc<dyn ProviderOps>,
     queue: IoQueue,
     owner: OwnerGuard,
+    sizes: IoQueue,
+    sizes_owner: OwnerGuard,
     sender: Sender<Message>,
     receiver: Receiver<Message>,
     wake: Waker,
@@ -69,12 +71,16 @@ impl Browser {
     pub fn new(state: AppState, provider: Arc<dyn ProviderOps>, wake: Waker) -> Self {
         let queue = IoQueue::new();
         let owner = queue.owner();
+        let sizes = IoQueue::new();
+        let sizes_owner = sizes.owner();
         let (sender, receiver) = mpsc::channel();
         Self {
             state,
             provider,
             queue,
             owner,
+            sizes,
+            sizes_owner,
             sender,
             receiver,
             wake,
@@ -252,11 +258,11 @@ impl Browser {
         );
         let slot = JobSlot {
             volume: volume_of(&target),
-            priority: Priority::Visible,
-            owner: self.owner.id(),
+            priority: Priority::Idle,
+            owner: self.sizes_owner.id(),
         };
         self.in_flight += 1;
-        self.queue.submit(
+        self.sizes.submit(
             slot,
             Box::new(move |cancel| {
                 let bytes = folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes);

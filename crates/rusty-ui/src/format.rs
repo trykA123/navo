@@ -12,7 +12,7 @@ pub fn bytes(count: u64) -> String {
     out
 }
 
-const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+const UNITS: [&str; 6] = ["KB", "MB", "GB", "TB", "PB", "EB"];
 
 pub fn size(count: u64) -> String {
     if count < 1024 {
@@ -81,7 +81,8 @@ mod tests {
         assert_eq!(size(1_024), "1.0 KB");
         assert_eq!(size(1_048_575), "1.0 MB");
         assert_eq!(size(1_288_490_189), "1.2 GB");
-        assert_eq!(size(3_650_722_202), "3.4 GB");
-        assert_eq!(size(u64::MAX), "16777216.0 TB");
+        assert_eq!(size(1_313_828_071_552), "1.2 TB");
+        assert_eq!(size(3 << 50), "3.0 PB");
+        assert_eq!(size(u64::MAX), "16.0 EB");
     }
 }

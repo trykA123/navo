@@ -102,7 +102,7 @@ pub(super) fn spacing() -> Spacing {
         rail_width: px(236.),
         rail_item_height: px(30.),
         drawer_height: px(220.),
-        size_column: px(70.),
+        size_column: px(80.),
         date_column: px(96.),
     }
 }

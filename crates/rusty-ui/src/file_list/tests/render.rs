@@ -134,5 +134,5 @@ fn a_measured_folder_shows_its_size_instead_of_dir() {
     let mut folder = super::entry("src", EntryKind::Folder, 0);
     assert_eq!(kind::size_text(&folder), "<DIR>");
     folder.size = 1_234_567;
-    assert_eq!(kind::size_text(&folder), "1,234,567");
+    assert_eq!(kind::size_text(&folder), "1.2 MB");
 }

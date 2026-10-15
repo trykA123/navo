@@ -22,25 +22,25 @@ impl StatusBarProps {
     fn marked_text(&self) -> Option<String> {
         (self.marked > 0).then(|| {
             format!(
-                "{} marked, {} B",
+                "{} marked, {}",
                 format::bytes(self.marked),
-                format::bytes(self.marked_bytes)
+                format::size(self.marked_bytes)
             )
         })
     }
 
     fn contents_text(&self) -> String {
         format!(
-            "{}, {} · {} B",
+            "{}, {} · {}",
             format::count(self.files, "file", "files"),
             format::count(self.folders, "folder", "folders"),
-            format::bytes(self.bytes)
+            format::size(self.bytes)
         )
     }
 
     fn free_text(&self) -> String {
         match self.free_bytes {
-            Some(free) => format!("{} B free", format::bytes(free)),
+            Some(free) => format!("{} free", format::size(free)),
             None => "– free".to_owned(),
         }
     }
@@ -151,7 +151,7 @@ mod tests {
         };
         assert_eq!(
             label(props, cx).as_deref(),
-            Some("2 marked, 15,148 B · 5 files, 1 folder · 37,412 B · 512,000,000 B free")
+            Some("2 marked, 14.8 KB · 5 files, 1 folder · 36.5 KB · 488.3 MB free")
         );
     }
 
