@@ -64,8 +64,21 @@ fn a_second_instance_leaves_the_first_ones_jobs_alone() {
     let dirs = store(&dir);
     let first = operations(Some(&dirs), &home(), &FakeFs::new());
     one_running_job(&dirs);
-    let (_, second) = operations(Some(&dirs), &home(), &FakeFs::new());
-    assert!(second.is_none());
+    let second = operations(Some(&dirs), &home(), &FakeFs::new());
     assert_eq!(running_jobs(&dirs), 1);
+    drop(second);
     drop(first);
+}
+
+#[test]
+fn a_later_instance_leaves_a_live_instances_jobs_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let dirs = store(&dir);
+    let first = operations(Some(&dirs), &home(), &FakeFs::new());
+    let second = operations(Some(&dirs), &home(), &FakeFs::new());
+    one_running_job(&dirs);
+    drop(first);
+    let _third = operations(Some(&dirs), &home(), &FakeFs::new());
+    assert_eq!(running_jobs(&dirs), 1);
+    drop(second);
 }

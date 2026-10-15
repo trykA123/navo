@@ -33,15 +33,39 @@ fn now_ms() -> i64 {
         })
 }
 
-pub fn claim(file: &Path) -> Option<File> {
+pub struct Instance {
+    file: File,
+    pub sole: bool,
+}
+
+impl Instance {
+    pub fn share(self) -> Option<File> {
+        if self.sole {
+            self.file.unlock().ok()?;
+            self.file.lock_shared().ok()?;
+        }
+        Some(self.file)
+    }
+}
+
+pub fn claim(file: &Path) -> Option<Instance> {
     let lock = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(false)
         .open(file)
         .ok()?;
-    lock.try_lock().ok()?;
-    Some(lock)
+    if lock.try_lock().is_ok() {
+        return Some(Instance {
+            file: lock,
+            sole: true,
+        });
+    }
+    lock.lock_shared().ok()?;
+    Some(Instance {
+        file: lock,
+        sole: false,
+    })
 }
 
 pub fn log_factory(journal: SharedJournal) -> LogFactory {

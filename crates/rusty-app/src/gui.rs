@@ -67,16 +67,16 @@ pub fn operations(
             protected,
             ..Operations::unlogged()
         };
-        return (unlogged, instance);
+        return (unlogged, instance.and_then(jobs::Instance::share));
     };
-    if instance.is_some() {
+    if instance.as_ref().is_some_and(|instance| instance.sole) {
         let _ = jobs::recover(&journal, ops);
     }
     let logged = Operations {
         log: jobs::log_factory(journal),
         protected,
     };
-    (logged, instance)
+    (logged, instance.and_then(jobs::Instance::share))
 }
 
 #[cfg(test)]

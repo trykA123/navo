@@ -146,3 +146,12 @@ fn a_copy_into_a_protected_folder_needs_no_typed_word() {
     assert!(props.typed.is_none());
     assert_eq!(props.summary, "3 files, 1 folder · 2.0 KB");
 }
+
+#[test]
+fn moving_a_protected_source_still_needs_the_typed_word() {
+    let mut risky = plan(OpKind::Move);
+    risky.risks.push(Risk::Protected(at("/home/a")));
+    let props = confirm_props(&pending(risky, Some(at("/dest"))));
+    assert!(props.danger);
+    assert_eq!(props.typed.as_deref(), Some("DELETE"));
+}

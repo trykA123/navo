@@ -124,12 +124,17 @@ fn the_journal_file_keeps_jobs_across_opens() {
 }
 
 #[test]
-fn only_one_process_can_claim_the_lock() {
+fn only_a_sole_instance_may_recover() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("ferrite.lock");
-    let first = super::claim(&file);
-    assert!(first.is_some());
-    assert!(super::claim(&file).is_none());
+    let first = super::claim(&file).unwrap();
+    assert!(first.sole);
+    let first = first.share().unwrap();
+    let second = super::claim(&file).unwrap();
+    assert!(!second.sole);
     drop(first);
-    assert!(super::claim(&file).is_some());
+    let third = super::claim(&file).unwrap();
+    assert!(!third.sole);
+    drop((second, third));
+    assert!(super::claim(&file).unwrap().sole);
 }

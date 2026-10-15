@@ -1,4 +1,4 @@
-use rusty_core::{OpKind, OperationPlan, Risk};
+use rusty_core::{Location, OpKind, OperationPlan, Risk};
 
 use super::FerriteWindow;
 use crate::browser::{JobStatus, JobView, PendingOp};
@@ -12,13 +12,13 @@ fn items(count: usize) -> String {
     format::count(u64::try_from(count).unwrap_or(u64::MAX), "item", "items")
 }
 
-fn is_protected(plan: &OperationPlan) -> bool {
+fn is_protected(plan: &OperationPlan, target: Option<&Location>) -> bool {
     plan.risks
         .iter()
-        .any(|risk| matches!(risk, Risk::Protected(_)))
+        .any(|risk| matches!(risk, Risk::Protected(place) if Some(place) != target))
 }
 
-fn target_text(target: Option<&rusty_core::Location>) -> &str {
+fn target_text(target: Option<&Location>) -> &str {
     target.map_or("", |target| target.as_str())
 }
 
@@ -31,8 +31,7 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         OpKind::Recycle => (format!("Move {count} to the Recycle Bin?"), "Recycle"),
         OpKind::Delete => (format!("Delete {count} permanently?"), "Delete permanently"),
     };
-    let protected = is_protected(&pending.plan)
-        && matches!(pending.plan.kind, OpKind::Recycle | OpKind::Delete);
+    let protected = is_protected(&pending.plan, pending.target.as_ref());
     ConfirmProps {
         title: title.into(),
         lines: pending
