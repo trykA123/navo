@@ -18,6 +18,8 @@ pub enum Command {
     PaneForward,
     PaneRefresh,
     PaneCursorMove { to: CursorMove },
+    PaneActivateTab { tab: u32 },
+    PaneScroll { to: u64 },
     SelectionToggle,
     SelectionToggleDown,
     SelectionRange { to: u64 },
@@ -29,6 +31,9 @@ pub enum Command {
     LayoutSplit { direction: Direction },
     LayoutClose,
     LayoutFocus { direction: Direction },
+    WindowOpen { location: Option<Location> },
+    WindowClose { window: Option<u64> },
+    WindowFocus { window: u64 },
     AppSaveSession,
 }
 
@@ -82,6 +87,8 @@ impl Command {
             Self::PaneForward => Id::PaneForward,
             Self::PaneRefresh => Id::PaneRefresh,
             Self::PaneCursorMove { .. } => Id::PaneCursorMove,
+            Self::PaneActivateTab { .. } => Id::PaneActivateTab,
+            Self::PaneScroll { .. } => Id::PaneScroll,
             Self::SelectionToggle => Id::SelectionToggle,
             Self::SelectionToggleDown => Id::SelectionToggleDown,
             Self::SelectionRange { .. } => Id::SelectionRange,
@@ -93,6 +100,9 @@ impl Command {
             Self::LayoutSplit { .. } => Id::LayoutSplit,
             Self::LayoutClose => Id::LayoutClose,
             Self::LayoutFocus { .. } => Id::LayoutFocus,
+            Self::WindowOpen { .. } => Id::WindowOpen,
+            Self::WindowClose { .. } => Id::WindowClose,
+            Self::WindowFocus { .. } => Id::WindowFocus,
             Self::AppSaveSession => Id::AppSaveSession,
         }
     }

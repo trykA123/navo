@@ -1,6 +1,7 @@
 mod layout;
 mod pane;
 mod select;
+mod window;
 
 use crate::{AppState, Command, Listing, Location, PaneId, PatternError, StateError, TabId};
 
@@ -54,6 +55,8 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::PaneForward => pane::forward(state),
         Command::PaneRefresh => Ok(list_active(state)),
         Command::PaneCursorMove { to } => pane::cursor_move(state, *to),
+        Command::PaneActivateTab { tab } => window::activate_tab(state, *tab),
+        Command::PaneScroll { to } => Ok(window::scroll(state, *to)),
         Command::SelectionToggle => select::toggle(state),
         Command::SelectionToggleDown => select::toggle_down(state),
         Command::SelectionRange { to } => select::range(state, *to),
@@ -65,6 +68,9 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::LayoutSplit { direction } => layout::split(state, *direction),
         Command::LayoutClose => layout::close(state),
         Command::LayoutFocus { direction } => layout::focus(state, *direction),
+        Command::WindowOpen { location } => Ok(window::open(state, location.as_ref())),
+        Command::WindowClose { window } => window::close(state, *window),
+        Command::WindowFocus { window } => window::focus(state, *window),
         Command::AppSaveSession => Ok(vec![Effect::SaveSession]),
     }
 }
@@ -89,6 +95,14 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
 pub fn list_unloaded(state: &mut AppState) -> Vec<Effect> {
     state
         .unloaded_active_tabs()
+        .into_iter()
+        .filter_map(|tab| list_tab(state, tab))
+        .collect()
+}
+
+pub fn list_missing(state: &mut AppState) -> Vec<Effect> {
+    state
+        .active_tabs_without_listing()
         .into_iter()
         .filter_map(|tab| list_tab(state, tab))
         .collect()

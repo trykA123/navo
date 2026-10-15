@@ -3,11 +3,18 @@ use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
+    Open,
     Version,
     DiagReport(PathBuf),
 }
 
 pub const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip>]";
+
+impl Command {
+    pub fn uses_console(&self) -> bool {
+        !matches!(self, Self::Open)
+    }
+}
 
 pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, &'static str> {
     let mut args = args.into_iter();
@@ -16,7 +23,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, &'stat
         return Err(USAGE);
     }
     match (first, second) {
-        (None, None) => Ok(Command::Version),
+        (None, None) => Ok(Command::Open),
         (Some(flag), None) if flag == "--version" => Ok(Command::Version),
         (Some(flag), Some(path)) if flag == "--diag-report" && !path.is_empty() => {
             Ok(Command::DiagReport(path.into()))

@@ -9,6 +9,8 @@ pub enum CommandId {
     PaneForward,
     PaneRefresh,
     PaneCursorMove,
+    PaneActivateTab,
+    PaneScroll,
     SelectionToggle,
     SelectionToggleDown,
     SelectionRange,
@@ -20,6 +22,9 @@ pub enum CommandId {
     LayoutSplit,
     LayoutClose,
     LayoutFocus,
+    WindowOpen,
+    WindowClose,
+    WindowFocus,
     AppSaveSession,
 }
 
@@ -32,6 +37,8 @@ impl CommandId {
         Self::PaneForward,
         Self::PaneRefresh,
         Self::PaneCursorMove,
+        Self::PaneActivateTab,
+        Self::PaneScroll,
         Self::SelectionToggle,
         Self::SelectionToggleDown,
         Self::SelectionRange,
@@ -43,6 +50,9 @@ impl CommandId {
         Self::LayoutSplit,
         Self::LayoutClose,
         Self::LayoutFocus,
+        Self::WindowOpen,
+        Self::WindowClose,
+        Self::WindowFocus,
         Self::AppSaveSession,
     ];
 
@@ -56,6 +66,8 @@ impl CommandId {
             Self::PaneForward => "pane.forward",
             Self::PaneRefresh => "pane.refresh",
             Self::PaneCursorMove => "pane.cursor-move",
+            Self::PaneActivateTab => "pane.activate-tab",
+            Self::PaneScroll => "pane.scroll",
             Self::SelectionToggle => "selection.toggle",
             Self::SelectionToggleDown => "selection.toggle-down",
             Self::SelectionRange => "selection.range",
@@ -67,6 +79,9 @@ impl CommandId {
             Self::LayoutSplit => "layout.split",
             Self::LayoutClose => "layout.close",
             Self::LayoutFocus => "layout.focus",
+            Self::WindowOpen => "window.open",
+            Self::WindowClose => "window.close",
+            Self::WindowFocus => "window.focus",
             Self::AppSaveSession => "app.save-session",
         }
     }

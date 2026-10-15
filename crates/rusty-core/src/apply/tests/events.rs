@@ -231,3 +231,21 @@ fn listing_loaded_produces_no_effects() {
         vec![]
     );
 }
+
+#[test]
+fn list_missing_also_relists_pending_tabs_at_start_up() {
+    let mut state = home();
+    run(
+        &mut state,
+        Command::LayoutSplit {
+            direction: Direction::Right,
+        },
+    );
+    assert_eq!(crate::list_missing(&mut state).len(), 2);
+}
+
+#[test]
+fn list_missing_skips_loaded_tabs() {
+    let mut state = at_work(files(3));
+    assert_eq!(crate::list_missing(&mut state), vec![]);
+}

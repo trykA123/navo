@@ -26,6 +26,7 @@ pub(super) fn toggle_down(state: &mut AppState) -> Result<Vec<Effect>, CommandEr
     let row = tab.view().cursor;
     tab.selection_mut().toggle(row);
     tab.set_cursor(row.saturating_add(1).min(last));
+    state.focused_pane_mut().reveal_cursor();
     Ok(Vec::new())
 }
 
@@ -34,6 +35,7 @@ pub(super) fn range(state: &mut AppState, to: u64) -> Result<Vec<Effect>, Comman
     let tab = state.active_tab_mut();
     tab.selection_mut().mark_range(to);
     tab.set_cursor(to.min(last));
+    state.focused_pane_mut().reveal_cursor();
     Ok(Vec::new())
 }
 

@@ -58,11 +58,13 @@ pub(super) fn cursor_move(
         CursorMove::Row(row) => row,
     };
     state.active_tab_mut().set_cursor(row.min(last));
+    state.focused_pane_mut().reveal_cursor();
     Ok(Vec::new())
 }
 
 pub(super) fn page_rows_changed(state: &mut AppState, pane: PaneId, rows: u64) {
     if let Some(pane) = state.pane_mut(pane) {
         pane.set_page_rows(rows);
+        pane.reveal_cursor();
     }
 }

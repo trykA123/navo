@@ -5,8 +5,8 @@ fn parse_strs(args: &[&str]) -> Result<Command, &'static str> {
 }
 
 #[test]
-fn no_arguments_print_the_version() {
-    assert_eq!(parse_strs(&[]), Ok(Command::Version));
+fn no_arguments_open_the_window() {
+    assert_eq!(parse_strs(&[]), Ok(Command::Open));
 }
 
 #[test]
@@ -40,4 +40,11 @@ fn unknown_flags_are_refused() {
 #[test]
 fn extra_arguments_are_refused() {
     assert_eq!(parse_strs(&["--diag-report", "a.zip", "b"]), Err(USAGE));
+}
+
+#[test]
+fn only_the_window_skips_the_console() {
+    assert!(!Command::Open.uses_console());
+    assert!(Command::Version.uses_console());
+    assert!(Command::DiagReport(PathBuf::from("a.zip")).uses_console());
 }

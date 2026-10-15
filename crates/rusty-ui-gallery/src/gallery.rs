@@ -1,0 +1,158 @@
+use rusty_ui::prelude::*;
+use rusty_ui::primitives::{
+    Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
+};
+use rusty_ui::tokens::{self, Mode, Theme};
+use rusty_ui::{FerriteTitleBar, HeaderSearch};
+
+use crate::pane_page::PanePage;
+use crate::sections;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Page {
+    Primitives,
+    Pane,
+}
+
+impl Page {
+    pub const ALL: [Self; 2] = [Self::Primitives, Self::Pane];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Primitives => "Primitives",
+            Self::Pane => "Pane",
+        }
+    }
+}
+
+pub struct Gallery {
+    mode: Mode,
+    page: Page,
+    pane: Entity<PanePage>,
+    tab: usize,
+    clicks: usize,
+    scroll: ListScroll,
+    split: Entity<SplitterState>,
+}
+
+impl Gallery {
+    pub fn new(mode: Mode, cx: &mut App) -> Self {
+        Self {
+            mode,
+            page: Page::Primitives,
+            pane: cx.new(PanePage::new),
+            tab: 1,
+            clicks: 0,
+            scroll: ListScroll::new(),
+            split: cx.new(|_| SplitterState::new(0.4)),
+        }
+    }
+
+    pub fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
+        self.mode = mode;
+        tokens::apply(mode, cx);
+        cx.notify();
+    }
+
+    pub fn set_page(&mut self, page: Page, cx: &mut Context<Self>) {
+        self.page = page;
+        cx.notify();
+    }
+
+    fn page_switch(&self, cx: &mut Context<Self>) -> impl Iterator<Item = Button> {
+        let current = self.page;
+        let pages: Vec<Button> = Page::ALL
+            .into_iter()
+            .map(|page| {
+                let variant = if page == current {
+                    ButtonVariant::Primary
+                } else {
+                    ButtonVariant::Ghost
+                };
+                Button::new(page.label(), page.label())
+                    .variant(variant)
+                    .on_click(cx.listener(move |this: &mut Self, _, _, cx| this.set_page(page, cx)))
+            })
+            .collect();
+        pages.into_iter()
+    }
+
+    fn header(&self, cx: &mut Context<Self>) -> FerriteTitleBar {
+        let (glyph, label) = match self.mode {
+            Mode::Light => (IconName::Moon, "Switch to the dark theme"),
+            Mode::Dark => (IconName::Sun, "Switch to the light theme"),
+        };
+        let toggle = IconButton::new("theme-toggle", glyph, label).on_click(
+            cx.listener(|this: &mut Self, _, _, cx| this.set_mode(this.mode.toggled(), cx)),
+        );
+        FerriteTitleBar::new("Ferrite")
+            .header(HeaderSearch::new())
+            .header(div().flex().gap(px(4.)).children(self.page_switch(cx)))
+            .header(toggle)
+    }
+
+    fn left_column(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let tab_listener = cx.listener(|this: &mut Self, index: &usize, _, cx| {
+            this.tab = *index;
+            cx.notify();
+        });
+        let click_listener = cx.listener(|this: &mut Self, _, _, cx| {
+            this.clicks += 1;
+            cx.notify();
+        });
+        column(t)
+            .child(sections::buttons(t, self.clicks, click_listener))
+            .child(sections::icon_buttons(t))
+            .child(sections::keys(t))
+            .child(sections::tooltips(t, window, cx))
+            .child(sections::tabs(t, self.tab, tab_listener))
+    }
+
+    fn right_column(&self, t: &Theme) -> Div {
+        column(t)
+            .child(sections::virtual_list(t, &self.scroll))
+            .child(sections::splitter(t, &self.split))
+    }
+}
+
+fn column(t: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(t.spacing.xxl)
+        .flex_1()
+        .min_w_0()
+}
+
+impl Render for Gallery {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = tokens::current(cx).clone();
+        let root = div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(t.colors.background)
+            .text_color(t.colors.text)
+            .font_family(t.typography.ui_font.clone())
+            .text_size(t.typography.body)
+            .line_height(t.typography.line_height)
+            .child(self.header(cx));
+        match self.page {
+            Page::Pane => root.child(self.pane.clone()),
+            Page::Primitives => root.child(self.primitives(&t, window, cx)),
+        }
+    }
+}
+
+impl Gallery {
+    fn primitives(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_1()
+            .min_h_0()
+            .gap(t.spacing.xxl * 2.)
+            .p(t.spacing.xxl)
+            .child(self.left_column(t, window, cx))
+            .child(self.right_column(t))
+    }
+}

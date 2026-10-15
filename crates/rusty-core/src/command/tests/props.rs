@@ -73,6 +73,11 @@ fn any_command() -> impl Strategy<Value = Command> {
         any_direction().prop_map(|direction| Command::LayoutSplit { direction }),
         Just(Command::LayoutClose),
         any_direction().prop_map(|direction| Command::LayoutFocus { direction }),
+        any::<u32>().prop_map(|tab| Command::PaneActivateTab { tab }),
+        any::<u64>().prop_map(|to| Command::PaneScroll { to }),
+        prop::option::of(any_location()).prop_map(|location| Command::WindowOpen { location }),
+        prop::option::of(any::<u64>()).prop_map(|window| Command::WindowClose { window }),
+        any::<u64>().prop_map(|window| Command::WindowFocus { window }),
         Just(Command::AppSaveSession),
     ]
 }
