@@ -1,26 +1,10 @@
+use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::component::input::Editor;
 
-use super::{CONTEXT, CloseViewer, SaveFile, ShowHex, ShowText, Viewer};
-use crate::format;
+use super::{CONTEXT, CloseViewer, SaveFile, Viewer};
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::FerriteWindow;
-
-fn facts(t: &Theme, viewer: &Viewer) -> Div {
-    let mode = if viewer.read_only {
-        "Text · read-only"
-    } else {
-        "Text"
-    };
-    div()
-        .flex()
-        .gap(t.spacing.md)
-        .text_color(t.colors.muted)
-        .text_size(t.typography.small)
-        .child(mode)
-        .children(viewer.stamp.map(|stamp| format::size(stamp.len)))
-}
 
 fn header(t: &Theme, viewer: &Viewer) -> Div {
     div()
@@ -39,15 +23,13 @@ fn header(t: &Theme, viewer: &Viewer) -> Div {
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(viewer.title.clone()),
         )
-        .child(facts(t, viewer))
-        .when(viewer.dirty, |d| {
-            d.child(div().text_color(t.colors.mark).child("●"))
-        })
         .child(div().flex_1())
         .when_some(viewer.message.clone(), |d, message| {
             d.child(
                 div()
                     .id("viewer-message")
+                    .role(Role::Status)
+                    .aria_label(message.clone())
                     .test_support()
                     .text_color(t.colors.muted)
                     .text_size(t.typography.small)
@@ -56,18 +38,24 @@ fn header(t: &Theme, viewer: &Viewer) -> Div {
         })
 }
 
-fn body(t: &Theme, viewer: &Viewer) -> Div {
-    match &viewer.editor {
-        Some(editor) => div()
-            .flex_1()
-            .min_h_0()
-            .child(Editor::new(editor).h_full().readonly(viewer.read_only)),
-        None => div()
-            .flex_1()
-            .p(t.spacing.xxl)
-            .text_color(t.colors.muted)
-            .child("Esc closes."),
+fn status(viewer: &Viewer) -> &'static str {
+    match &viewer.opening {
+        Some(opening) if opening.is_slow => "Opening… (Esc closes)",
+        Some(_) => "Opening…",
+        None => "Esc closes.",
     }
+}
+
+fn waiting(t: &Theme, viewer: &Viewer) -> impl IntoElement {
+    div()
+        .id("viewer-status")
+        .role(Role::Status)
+        .aria_label(status(viewer))
+        .test_support()
+        .flex_1()
+        .p(t.spacing.xxl)
+        .text_color(t.colors.muted)
+        .child(status(viewer))
 }
 
 impl FerriteWindow {
@@ -76,25 +64,28 @@ impl FerriteWindow {
         let t = tokens::current(cx).clone();
         let save = cx.listener(|view, _: &SaveFile, _, cx| view.save_viewer(cx));
         let close = cx.listener(|view, _: &CloseViewer, window, cx| view.close_viewer(window, cx));
-        let text = cx.listener(|view, _: &ShowText, window, cx| view.show_text(window, cx));
-        let hex = cx.listener(|view, _: &ShowHex, window, cx| view.show_hex(window, cx));
         let root = div()
             .id("viewer")
             .key_context(CONTEXT)
             .track_focus(&viewer.focus)
             .on_action(save)
-            .on_action(close)
-            .on_action(text)
-            .on_action(hex)
+            .on_action(close);
+        let root = Self::lister_actions(Self::slot_actions(root, cx), cx)
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
             .bg(t.colors.surface);
-        let root = match &viewer.paged {
-            Some(paged) => root.child(paged.clone()),
-            None => root.child(header(&t, viewer)).child(body(&t, viewer)),
+        let root = match &viewer.body {
+            Some(body) => root.child(body.view()),
+            None => root.child(header(&t, viewer)).child(waiting(&t, viewer)),
         };
         Some(root.into_any_element())
+    }
+
+    fn save_viewer(&mut self, cx: &mut Context<Self>) {
+        if let Some(body) = self.viewer.as_ref().and_then(|viewer| viewer.body.as_ref()) {
+            body.save(cx);
+        }
     }
 }

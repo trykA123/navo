@@ -1,14 +1,19 @@
 mod find;
+mod kind;
+mod lister;
+mod moves;
+mod open;
+mod save;
 
-use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, ScrollDelta, TestAppContext, point};
 use rusty_core::paging::{ByteSource, HEX_WIDTH, LineIndex, hex_row, hex_rows};
+use rusty_fs::FakeFs;
 
-use super::{FileHooks, FileStamp, FileText, OpenAs, Paged, PagedKind, PagedView};
+use super::{EDIT_LIMIT, FileHooks, FileStamp, FileText, Head, Paged, PagedKind, PagedView};
 use crate::browser::Operations;
 use crate::tokens::Mode;
 use crate::window_view::tests::{fake, home_beside_dest, open_options, press, viewer_open};
@@ -17,6 +22,7 @@ use crate::window_view::{FerriteWindow, StartOptions};
 pub(super) struct Memory {
     bytes: Arc<Vec<u8>>,
     changed: AtomicBool,
+    reads: Arc<AtomicUsize>,
 }
 
 impl ByteSource for Memory {
@@ -25,6 +31,7 @@ impl ByteSource for Memory {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
+        self.reads.fetch_add(1, Ordering::Relaxed);
         self.bytes.as_slice().read_at(offset, buf)
     }
 
@@ -34,22 +41,48 @@ impl ByteSource for Memory {
 }
 
 pub(super) struct Setup {
-    pub open_as: OpenAs,
     pub bytes: Vec<u8>,
-    pub editable: bool,
+    pub len: Option<u64>,
     pub changed: bool,
     pub index_fails: bool,
 }
 
 impl Setup {
-    pub(super) fn new(open_as: OpenAs, bytes: Vec<u8>) -> Self {
+    pub(super) fn new(bytes: Vec<u8>) -> Self {
         Self {
-            open_as,
             bytes,
-            editable: false,
+            len: None,
             changed: false,
             index_fails: false,
         }
+    }
+
+    pub(super) fn huge(bytes: Vec<u8>) -> Self {
+        Self {
+            len: Some(EDIT_LIMIT + 1),
+            ..Self::new(bytes)
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub(super) struct Log {
+    pub heads: Arc<Mutex<Vec<String>>>,
+    pub written: Arc<Mutex<Vec<String>>>,
+    pub reads: Arc<AtomicUsize>,
+}
+
+impl Log {
+    pub(super) fn heads(&self) -> Vec<String> {
+        self.heads.lock().expect("log").clone()
+    }
+
+    pub(super) fn written(&self) -> Vec<String> {
+        self.written.lock().expect("log").clone()
+    }
+
+    pub(super) fn reads(&self) -> usize {
+        self.reads.load(Ordering::Relaxed)
     }
 }
 
@@ -71,31 +104,37 @@ fn index_run(bytes: Arc<Vec<u8>>, fails: bool) -> super::IndexRun {
     })
 }
 
-fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup) -> Paged {
+fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, reads: &Arc<AtomicUsize>) -> Paged {
     let reopened = bytes.clone();
     Paged {
         source: Arc::new(Memory {
             bytes: bytes.clone(),
             changed: AtomicBool::new(setup.changed),
+            reads: reads.clone(),
         }),
         reopen: Arc::new(move || {
             Ok(Box::new(Memory {
                 bytes: reopened.clone(),
                 changed: AtomicBool::new(false),
+                reads: Arc::default(),
             }) as Box<dyn ByteSource + Send>)
         }),
         index: index_run(bytes.clone(), setup.index_fails),
         summary: None,
-        editable: setup.editable,
+        editable: false,
     }
 }
 
-fn hooks(setup: Setup) -> FileHooks {
+pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
     let bytes = Arc::new(setup.bytes.clone());
     let text = String::from_utf8_lossy(&setup.bytes).into_owned();
-    let open_as = setup.open_as;
+    let head = Head {
+        bytes: setup.bytes.iter().take(8 * 1024).copied().collect(),
+        len: setup.len.unwrap_or(setup.bytes.len() as u64),
+    };
+    let (heads, written, reads) = (log.heads.clone(), log.written.clone(), log.reads.clone());
     FileHooks {
-        read: Rc::new(move |_| {
+        read: Arc::new(move |_| {
             Ok(FileText {
                 stamp: Some(FileStamp {
                     len: text.len() as u64,
@@ -104,34 +143,72 @@ fn hooks(setup: Setup) -> FileHooks {
                 ..FileText::plain(text.clone())
             })
         }),
-        write: Rc::new(|_, _| Ok(None)),
-        pick: Rc::new(move |_| Ok(open_as)),
-        paged: Rc::new(move |_| Ok(paged_of(&bytes, &setup))),
+        write: Arc::new(move |_, save| {
+            written.lock().expect("log").push(save.text.to_owned());
+            Ok(None)
+        }),
+        head: Arc::new(move |location| {
+            let name = location
+                .name()
+                .map(|name| name.to_text())
+                .unwrap_or_default();
+            heads.lock().expect("log").push(name);
+            Ok(head.clone())
+        }),
+        paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup, &reads))),
     }
+}
+
+pub(super) fn window_on(
+    cx: &mut TestAppContext,
+    fs: Arc<FakeFs>,
+    setup: Setup,
+) -> (AnyWindowHandle, Entity<FerriteWindow>, Log) {
+    let log = Log::default();
+    let files = hooks(setup, &log);
+    let (window, view) = window_with(cx, fs, files, super::Kinds::builtin());
+    (window, view, log)
+}
+
+pub(super) fn window_with(
+    cx: &mut TestAppContext,
+    fs: Arc<FakeFs>,
+    files: FileHooks,
+    kinds: super::Kinds,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    let options = StartOptions {
+        state: home_beside_dest(&fs),
+        provider: fs,
+        on_save: std::rc::Rc::new(|_| {}),
+        mode: Mode::Light,
+        operations: Operations::unlogged(),
+        launcher: Arc::new(|_| {}),
+        editor: crate::window_view::EditorHooks::none(),
+        files,
+        kinds,
+        drives: crate::window_view::DriveHooks::none(),
+        view: None,
+    };
+    open_options(cx, options)
 }
 
 pub(super) fn paged_window(
     cx: &mut TestAppContext,
     setup: Setup,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
-    let fs = fake();
-    let options = StartOptions {
-        state: home_beside_dest(&fs),
-        provider: fs,
-        on_save: Rc::new(|_| {}),
-        mode: Mode::Light,
-        operations: Operations::unlogged(),
-        launcher: Arc::new(|_| {}),
-        editor: crate::window_view::EditorHooks::none(),
-        files: hooks(setup),
-        drives: crate::window_view::DriveHooks::none(),
-        view: None,
-    };
-    let (window, view) = open_options(cx, options);
+    let (window, view, _) = text_window(cx, setup);
+    (window, view)
+}
+
+pub(super) fn text_window(
+    cx: &mut TestAppContext,
+    setup: Setup,
+) -> (AnyWindowHandle, Entity<FerriteWindow>, Log) {
+    let (window, view, log) = window_on(cx, fake(), setup);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);
-    (window, view)
+    (window, view, log)
 }
 
 pub(super) fn redraw(cx: &mut TestAppContext, window: AnyWindowHandle) {
@@ -140,11 +217,26 @@ pub(super) fn redraw(cx: &mut TestAppContext, window: AnyWindowHandle) {
     cx.run_until_parked();
 }
 
-pub(super) fn paged(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Entity<PagedView> {
+fn paged_body(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<Entity<PagedView>> {
     view.read_with(cx, |view, _| {
-        view.viewer.as_ref().and_then(|viewer| viewer.paged.clone())
+        let body = view.viewer.as_ref()?.body.as_ref()?;
+        super::paged::PagedBody::of(body.as_ref()).map(|paged| paged.0.clone())
     })
-    .expect("a paged view is open")
+}
+
+pub(super) fn editor_of(
+    cx: &mut TestAppContext,
+    view: &Entity<FerriteWindow>,
+) -> Option<Entity<gpui_kit::component::input::EditorState>> {
+    view.read_with(cx, |view, cx| {
+        let body = view.viewer.as_ref()?.body.as_ref()?;
+        let editor = body.as_any().downcast_ref::<super::editor::EditorBody>()?;
+        Some(editor.editor(cx))
+    })
+}
+
+pub(super) fn paged(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Entity<PagedView> {
+    paged_body(cx, view).expect("a paged view is open")
 }
 
 pub(super) fn top(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> u64 {
@@ -152,19 +244,13 @@ pub(super) fn top(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> u64 
     paged.read_with(cx, |paged, _| paged.top)
 }
 
-fn kind(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<PagedKind> {
-    let paged = view.read_with(cx, |view, _| {
-        view.viewer.as_ref().and_then(|viewer| viewer.paged.clone())
-    })?;
+pub(super) fn kind(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<PagedKind> {
+    let paged = paged_body(cx, view)?;
     Some(paged.read_with(cx, |paged, _| paged.kind))
 }
 
-fn has_editor(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
-    view.read_with(cx, |view, _| {
-        view.viewer
-            .as_ref()
-            .is_some_and(|viewer| viewer.editor.is_some())
-    })
+pub(super) fn has_editor(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
+    editor_of(cx, view).is_some()
 }
 
 pub(super) fn label(
@@ -190,10 +276,10 @@ pub(super) fn mixed(len: usize) -> Vec<u8> {
 }
 
 #[gpui_kit::test]
-fn a_binary_pick_opens_the_hex_view_on_the_first_row(cx: &mut TestAppContext) {
+fn a_binary_file_opens_the_hex_view_on_the_first_row(cx: &mut TestAppContext) {
     let bytes = mixed(4096);
     let expected = hex_row(0, &bytes[..16], false);
-    let (window, view) = paged_window(cx, Setup::new(OpenAs::Hex, bytes));
+    let (window, view) = paged_window(cx, Setup::new(bytes));
     assert_eq!(kind(cx, &view), Some(PagedKind::Hex));
     assert_eq!(
         label(cx, window, ("paged-row", 0)),
@@ -205,7 +291,7 @@ fn a_binary_pick_opens_the_hex_view_on_the_first_row(cx: &mut TestAppContext) {
 fn ctrl_end_shows_the_last_screen_and_ctrl_home_the_first(cx: &mut TestAppContext) {
     let bytes = mixed(64 * 1024);
     let len = bytes.len() as u64;
-    let (window, view) = paged_window(cx, Setup::new(OpenAs::Hex, bytes));
+    let (window, view) = paged_window(cx, Setup::new(bytes));
     let rows = paged(cx, &view).read_with(cx, |paged, _| paged.rows);
     press(cx, window, &view, "ctrl-end");
     assert_eq!(top(cx, &view), (hex_rows(len) - rows) * HEX_WIDTH);
@@ -218,12 +304,10 @@ fn ctrl_end_shows_the_last_screen_and_ctrl_home_the_first(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn alt_1_from_hex_opens_text_edit_for_a_small_text_file(cx: &mut TestAppContext) {
-    let setup = Setup {
-        editable: true,
-        ..Setup::new(OpenAs::Hex, b"hello\n".to_vec())
-    };
-    let (window, view) = paged_window(cx, setup);
+fn alt_1_from_hex_opens_the_text_editor_for_a_small_text_file(cx: &mut TestAppContext) {
+    let (window, view) = paged_window(cx, Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "alt-3");
+    assert_eq!(kind(cx, &view), Some(PagedKind::Hex));
     press(cx, window, &view, "alt-1");
     assert_eq!(kind(cx, &view), None);
     assert!(has_editor(cx, &view));
@@ -233,7 +317,7 @@ fn alt_1_from_hex_opens_text_edit_for_a_small_text_file(cx: &mut TestAppContext)
 
 #[gpui_kit::test]
 fn alt_1_from_hex_opens_paged_text_when_text_edit_cannot(cx: &mut TestAppContext) {
-    let (window, view) = paged_window(cx, Setup::new(OpenAs::Hex, mixed(4096)));
+    let (window, view) = paged_window(cx, Setup::new(mixed(4096)));
     press(cx, window, &view, "alt-1");
     assert_eq!(kind(cx, &view), Some(PagedKind::Text));
     assert!(!has_editor(cx, &view));
@@ -243,7 +327,8 @@ fn alt_1_from_hex_opens_paged_text_when_text_edit_cannot(cx: &mut TestAppContext
 
 #[gpui_kit::test]
 fn alt_3_with_unsaved_edits_warns_before_switching(cx: &mut TestAppContext) {
-    let (window, view) = paged_window(cx, Setup::new(OpenAs::Text, b"hello\n".to_vec()));
+    let (window, view) = paged_window(cx, Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "ctrl-e");
     crate::window_view::tests::type_in(cx, window, &view, "x");
     press(cx, window, &view, "alt-3");
     assert_eq!(kind(cx, &view), None);
@@ -256,7 +341,7 @@ fn alt_3_with_unsaved_edits_warns_before_switching(cx: &mut TestAppContext) {
 fn a_source_changed_on_disk_says_so(cx: &mut TestAppContext) {
     let setup = Setup {
         changed: true,
-        ..Setup::new(OpenAs::Hex, mixed(4096))
+        ..Setup::new(mixed(4096))
     };
     let (window, view) = paged_window(cx, setup);
     press(cx, window, &view, "down");
@@ -267,11 +352,39 @@ fn a_source_changed_on_disk_says_so(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn one_wheel_notch_scrolls_three_rows(cx: &mut TestAppContext) {
-    let (window, view) = paged_window(cx, Setup::new(OpenAs::Hex, mixed(64 * 1024)));
+    let (window, view) = paged_window(cx, Setup::new(mixed(64 * 1024)));
     cx.update_window(window, |_, window, cx| {
         window.scroll("paged-body", ScrollDelta::Lines(point(0., -1.)), cx);
     })
     .expect("window");
     redraw(cx, window);
     assert_eq!(top(cx, &view), 3 * HEX_WIDTH);
+}
+
+pub(super) fn press_only(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.press(key, cx);
+    })
+    .expect("window");
+}
+
+pub(super) fn text_of(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    id: &'static str,
+) -> String {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .try_find(id)
+            .and_then(|found| found.label().map(str::to_owned))
+            .unwrap_or_default()
+    })
+    .expect("window")
+}
+
+pub(super) fn editor_text(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> String {
+    let editor = editor_of(cx, view).expect("the text editor is open");
+    editor.read_with(cx, |state, _| state.value().to_string())
 }

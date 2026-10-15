@@ -201,6 +201,7 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         launcher: Arc::new(|_| {}),
         editor: super::super::EditorHooks::none(),
         files: super::super::FileHooks::none(),
+        kinds: super::super::Kinds::builtin(),
         drives: DriveHooks {
             refresh: Arc::new(sample_drives),
             reconnect: Arc::new(move |letter, remote| {

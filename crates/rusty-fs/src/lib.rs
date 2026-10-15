@@ -20,7 +20,7 @@ pub use job::{
     JobContext, JobLog, JobOutcome, Progress, StepOutcome, TEMP_SUFFIX, clean_up, roll_back,
     run_job,
 };
-pub use local::LocalFs;
+pub use local::{LocalFs, os_path};
 pub use measure::{FolderSize, folder_size};
 pub use paged::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,

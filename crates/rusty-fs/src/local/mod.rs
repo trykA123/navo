@@ -112,7 +112,7 @@ impl Provider for LocalFs {
     }
 }
 
-pub(crate) fn os_path(location: &Location) -> Result<PathBuf, FsError> {
+pub fn os_path(location: &Location) -> Result<PathBuf, FsError> {
     if !location.is_local() {
         return Err(error(FsErrorKind::NameInvalid, location));
     }

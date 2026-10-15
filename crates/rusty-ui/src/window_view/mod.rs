@@ -32,8 +32,9 @@ pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use keys::bind_keys;
 pub use viewer::{
-    FileHooks, FileStamp, FileText, IndexRun, OpenAs, Paged, PagedKind, PagedView, Reopen, Save,
-    SaveError, SharedSource,
+    Attach, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp, FileText, Head, Host, IndexRun, Key, Kind,
+    Kinds, Loaded, Paged, PagedKind, PagedView, Reopen, Save, SaveError, SharedSource, Slot, Sniff,
+    ViewerBody, ViewerKind,
 };
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
@@ -47,6 +48,7 @@ pub struct StartOptions {
     pub launcher: Launcher,
     pub editor: EditorHooks,
     pub files: FileHooks,
+    pub kinds: Kinds,
     pub drives: DriveHooks,
     pub view: Option<rusty_core::Location>,
 }
@@ -82,6 +84,7 @@ pub struct FerriteWindow {
     prompt: Option<prompt::Prompt>,
     editor: EditorHooks,
     files: FileHooks,
+    kinds: viewer::Kinds,
     viewer: Option<viewer::Viewer>,
     next_prompt: u64,
     provider: Arc<dyn ProviderOps>,
@@ -116,6 +119,7 @@ impl FerriteWindow {
             prompt: None,
             editor: options.editor,
             files: options.files,
+            kinds: options.kinds,
             viewer: None,
             next_prompt: 0,
             provider,

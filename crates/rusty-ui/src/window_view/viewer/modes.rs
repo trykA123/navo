@@ -1,108 +1,185 @@
-use gpui_kit::{FocusHandle, Focusable};
+use std::rc::Rc;
 
-use super::{FileHooks, OpenAs, PagedKind, PagedView, Viewer, attach_editor};
+use gpui_kit::FocusHandle;
+use rusty_core::Command;
+
+use super::body::{Attach, Host};
+use super::open::start;
+use super::{Kind, Loaded, Slot, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
-const HEX_WARNING: &str = "Unsaved changes. Ctrl+S saves; Alt+3 again discards them.";
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Pick {
+    pub slot: Slot,
+    pub edit: bool,
+}
+
+struct Choice {
+    kind: Kind,
+    edit: bool,
+}
+
+pub(super) struct Shown {
+    pub kind: Kind,
+    pub loaded: Result<Loaded, String>,
+    pub edit: bool,
+}
 
 impl Viewer {
     pub(super) fn focus_target(&self, cx: &App) -> FocusHandle {
-        if let Some(paged) = &self.paged {
-            return paged.read(cx).focus_handle(cx);
-        }
-        match &self.editor {
-            Some(editor) => editor.read(cx).focus_handle(cx),
+        match &self.body {
+            Some(body) => body.focus_handle(cx),
             None => self.focus.clone(),
         }
     }
-}
 
-fn attach_paged(
-    files: &FileHooks,
-    viewer: &mut Viewer,
-    kind: PagedKind,
-    cx: &mut Context<FerriteWindow>,
-) -> Result<(), String> {
-    let paged = (files.paged)(&viewer.location)?;
-    let title = viewer.title.clone();
-    viewer.editable = paged.editable;
-    viewer.paged = Some(cx.new(|cx| PagedView::new(title, paged, kind, cx)));
-    viewer.editor = None;
-    viewer._changes = None;
-    viewer.dirty = false;
-    viewer.leaving = false;
-    viewer.to_hex = false;
-    viewer.overwrite = false;
-    viewer.message = None;
-    Ok(())
+    fn is_shown(&self, kind: &Kind) -> bool {
+        self.body.is_some()
+            && self
+                .kind
+                .as_ref()
+                .is_some_and(|shown| shown.id() == kind.id())
+    }
+
+    fn switch_warning(&mut self, slot: Slot, cx: &mut App) -> bool {
+        let Some(revision) = self.unsaved(cx) else {
+            return false;
+        };
+        if self.switching == Some((slot, revision)) {
+            return false;
+        }
+        self.switching = Some((slot, revision));
+        let note = format!(
+            "Unsaved changes. Ctrl+S saves; {} again discards them.",
+            slot.alt_key()
+        );
+        self.say(note, cx);
+        true
+    }
+
+    fn clear_body(&mut self) {
+        self.body = None;
+        self.leaving = None;
+        self.switching = None;
+        self.message = None;
+    }
 }
 
 impl FerriteWindow {
-    pub(super) fn open_first(
-        &mut self,
-        viewer: &mut Viewer,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        match (self.files.pick)(&viewer.location)? {
-            OpenAs::Text => {
-                let file = (self.files.read)(&viewer.location)?;
-                attach_editor(viewer, file, window, cx);
-                Ok(())
-            }
-            OpenAs::Hex => attach_paged(&self.files, viewer, PagedKind::Hex, cx),
-            OpenAs::PagedText => attach_paged(&self.files, viewer, PagedKind::Text, cx),
+    fn host(&self, viewer: &Viewer, cx: &mut Context<Self>) -> Host {
+        let this = cx.weak_entity();
+        Host {
+            title: viewer.title.clone(),
+            location: viewer.location.clone(),
+            hooks: self.files.clone(),
+            on_saved: Rc::new(move |cx| {
+                let this = this.clone();
+                cx.defer(move |cx| {
+                    let _ = this.update(cx, Self::refresh_after_save);
+                });
+            }),
         }
     }
 
-    pub(super) fn show_hex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(viewer) = &mut self.viewer else {
-            return;
-        };
-        if let Some(paged) = viewer.paged.clone() {
-            paged.update(cx, |paged, cx| paged.set_kind(PagedKind::Hex, cx));
-            window.focus(&paged.read(cx).focus_handle(cx), cx);
-            return;
-        }
-        if viewer.dirty && !viewer.to_hex {
-            viewer.to_hex = true;
-            viewer.message = Some(HEX_WARNING.into());
-            cx.notify();
-            return;
-        }
-        if let Err(message) = attach_paged(&self.files, viewer, PagedKind::Hex, cx) {
-            viewer.message = Some(message.into());
-        }
-        let focus = viewer.focus_target(cx);
-        window.focus(&focus, cx);
+    fn refresh_after_save(&mut self, cx: &mut Context<Self>) {
+        let _ = self.browser.command(&Command::PaneRefresh);
         cx.notify();
     }
 
-    pub(super) fn show_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn show_loaded(
+        &mut self,
+        shown: Shown,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(viewer) = &self.viewer else {
+            return;
+        };
+        let host = self.host(viewer, cx);
+        let attached = shown.loaded.and_then(|loaded| {
+            let attach = Attach {
+                loaded,
+                host,
+                edit: shown.edit,
+            };
+            shown.kind.attach(attach, window, cx)
+        });
         let Some(viewer) = &mut self.viewer else {
             return;
         };
-        let Some(paged) = viewer.paged.clone() else {
+        viewer.opening = None;
+        viewer.kind = Some(shown.kind);
+        viewer.clear_body();
+        match attached {
+            Ok(body) => viewer.body = Some(body),
+            Err(message) => viewer.message = Some(message.into()),
+        }
+        window.focus(&viewer.focus_target(cx), cx);
+        cx.notify();
+    }
+
+    pub(super) fn show_slot(&mut self, pick: Pick, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(viewer) = &mut self.viewer else {
             return;
         };
-        if !viewer.editable {
-            paged.update(cx, |paged, cx| paged.set_kind(PagedKind::Text, cx));
-            window.focus(&paged.read(cx).focus_handle(cx), cx);
+        let kind = if pick.edit {
+            viewer.editable_kind()
+        } else {
+            viewer.next_in(pick.slot)
+        };
+        let Some(kind) = kind else {
+            return;
+        };
+        if viewer.is_shown(&kind) || viewer.switch_warning(pick.slot, cx) {
+            cx.notify();
             return;
         }
-        match (self.files.read)(&viewer.location) {
-            Ok(file) => {
-                viewer.paged = None;
-                attach_editor(viewer, file, window, cx);
-            }
-            Err(message) => {
-                paged.update(cx, |paged, cx| paged.set_note(message, cx));
-                return;
-            }
+        let reused = match &viewer.body {
+            Some(body) => kind.reuse(body.as_ref(), &viewer.sniff(), cx),
+            None => false,
+        };
+        if reused {
+            viewer.kind = Some(kind);
+            window.focus(&viewer.focus_target(cx), cx);
+            cx.notify();
+            return;
         }
-        let focus = viewer.focus_target(cx);
-        window.focus(&focus, cx);
+        let choice = Choice {
+            kind,
+            edit: pick.edit,
+        };
+        self.load_kind(choice, window, cx);
+    }
+
+    fn load_kind(&mut self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
+        let Choice { kind, edit } = choice;
+        let Some(viewer) = &self.viewer else {
+            return;
+        };
+        let request = self.request(viewer);
+        let sniffed = (viewer.head.clone(), viewer.title.to_string());
+        let loader = kind.clone();
+        let opening = start(
+            window,
+            cx,
+            move || {
+                let sniff = super::Sniff {
+                    head: &sniffed.0.bytes,
+                    name: &sniffed.1,
+                    len: sniffed.0.len,
+                };
+                loader.load(&request.hooks, &request.location, &sniff)
+            },
+            move |view: &mut Self, loaded, window, cx| {
+                view.show_loaded(Shown { kind, loaded, edit }, window, cx);
+            },
+        );
+        if let Some(viewer) = &mut self.viewer {
+            viewer.clear_body();
+            viewer.opening = Some(opening);
+            window.focus(&viewer.focus, cx);
+        }
         cx.notify();
     }
 }

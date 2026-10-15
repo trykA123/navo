@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
 use rusty_core::Location;
@@ -15,19 +15,18 @@ const SNIFF: usize = 8 * 1024;
 
 pub fn hooks() -> FileHooks {
     FileHooks {
-        read: Rc::new(read),
-        write: Rc::new(write),
-        pick: Rc::new(paged::pick),
-        paged: Rc::new(paged::paged),
+        read: Arc::new(read),
+        write: Arc::new(write),
+        head: Arc::new(paged::head),
+        paged: Arc::new(paged::paged),
     }
 }
 
 fn path_of(location: &Location) -> Result<PathBuf, String> {
-    if location.is_local() {
-        Ok(PathBuf::from(location.as_str()))
-    } else {
-        Err("Only local files open here.".to_owned())
+    if !location.is_local() {
+        return Err("Only local files open here.".to_owned());
     }
+    rusty_fs::os_path(location).map_err(|error| error.message())
 }
 
 fn stamp_of(path: &std::path::Path) -> Option<FileStamp> {

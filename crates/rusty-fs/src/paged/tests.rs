@@ -224,3 +224,26 @@ fn reading_past_the_end_notices_a_grown_file_whose_tail_is_cached() {
     assert!(file.take_changed());
     assert_eq!(file.len(), 109);
 }
+
+#[test]
+fn length_and_change_flag_never_wait_for_a_page_read() {
+    let (_dir, path) = file_with(PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    let held = file.cache();
+    assert_eq!(file.len(), PAGE);
+    assert!(!file.take_changed());
+    drop(held);
+}
+
+#[test]
+fn an_older_stat_never_undoes_a_newer_one() {
+    let (_dir, path) = file_with(PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    let older = file.stat();
+    append(&path, b"later bytes");
+    let newer = file.stat();
+    assert!(file.apply(&mut file.cache(), newer));
+    assert_eq!(file.len(), PAGE + 11);
+    assert!(!file.apply(&mut file.cache(), older));
+    assert_eq!(file.len(), PAGE + 11);
+}

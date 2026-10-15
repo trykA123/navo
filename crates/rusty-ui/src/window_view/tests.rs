@@ -64,6 +64,7 @@ fn open_with(
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks::none(),
         files: super::FileHooks::none(),
+        kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
     };
@@ -426,6 +427,7 @@ fn editor_window(
             }),
         },
         files: super::FileHooks::none(),
+        kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
     };
@@ -475,18 +477,16 @@ fn shift_f4_lets_you_change_the_editor_and_folders_are_skipped(cx: &mut TestAppC
     assert!(prompt_open(cx, &view));
 }
 
+type Written = Arc<std::sync::Mutex<Vec<String>>>;
+
 fn viewer_window(
     cx: &mut TestAppContext,
     read: Result<&str, &str>,
     changed_once: bool,
-) -> (
-    AnyWindowHandle,
-    Entity<FerriteWindow>,
-    Rc<std::cell::RefCell<Vec<String>>>,
-) {
-    let written = Rc::new(std::cell::RefCell::new(Vec::new()));
+) -> (AnyWindowHandle, Entity<FerriteWindow>, Written) {
+    let written = Written::default();
     let saved = written.clone();
-    let refuse = Rc::new(Cell::new(changed_once));
+    let refuse = std::sync::atomic::AtomicBool::new(changed_once);
     let read = read.map(str::to_owned).map_err(str::to_owned);
     let fs = fake();
     let options = StartOptions {
@@ -498,7 +498,7 @@ fn viewer_window(
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks::none(),
         files: super::FileHooks {
-            read: Rc::new(move |_| {
+            read: Arc::new(move |_| {
                 read.clone().map(|text| super::FileText {
                     stamp: Some(super::FileStamp {
                         len: 6,
@@ -507,21 +507,33 @@ fn viewer_window(
                     ..super::FileText::plain(text)
                 })
             }),
-            write: Rc::new(move |_, save| {
-                if save.expected.is_some() && refuse.replace(false) {
+            write: Arc::new(move |_, save| {
+                if save.expected.is_some()
+                    && refuse.swap(false, std::sync::atomic::Ordering::Relaxed)
+                {
                     return Err(super::SaveError::Changed);
                 }
-                saved.borrow_mut().push(save.text.to_owned());
+                saved.lock().expect("log").push(save.text.to_owned());
                 Ok(None)
             }),
-            pick: Rc::new(|_| Ok(super::OpenAs::Text)),
-            paged: Rc::new(|_| Err("No paged view here.".to_owned())),
+            head: Arc::new(|_| {
+                Ok(super::Head {
+                    bytes: b"hello\n".to_vec(),
+                    len: 6,
+                })
+            }),
+            paged: Arc::new(|_| Err("No paged view here.".to_owned())),
         },
+        kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, written)
+}
+
+fn written(log: &Written) -> Vec<String> {
+    log.lock().expect("log").clone()
 }
 
 pub(super) fn viewer_open(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
@@ -540,27 +552,29 @@ fn f3_opens_the_file_and_escape_closes_it(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn ctrl_s_saves_what_was_typed(cx: &mut TestAppContext) {
-    let (window, view, written) = viewer_window(cx, Ok("hello\n"), false);
+    let (window, view, log) = viewer_window(cx, Ok("hello\n"), false);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
     type_in(cx, window, &view, "say ");
     press(cx, window, &view, "ctrl-s");
-    assert_eq!(written.borrow().as_slice(), ["say hello\n"]);
+    assert_eq!(written(&log), ["say hello\n"]);
     press(cx, window, &view, "escape");
     assert!(!viewer_open(cx, &view));
 }
 
 #[gpui_kit::test]
 fn unsaved_changes_need_a_second_escape(cx: &mut TestAppContext) {
-    let (window, view, written) = viewer_window(cx, Ok("hello\n"), false);
+    let (window, view, log) = viewer_window(cx, Ok("hello\n"), false);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
     type_in(cx, window, &view, "x");
     press(cx, window, &view, "escape");
     assert!(viewer_open(cx, &view));
     press(cx, window, &view, "escape");
     assert!(!viewer_open(cx, &view));
-    assert!(written.borrow().is_empty());
+    assert!(written(&log).is_empty());
 }
 
 #[gpui_kit::test]
@@ -595,14 +609,15 @@ fn extensions_pick_their_language() {
 
 #[gpui_kit::test]
 fn a_file_changed_on_disk_needs_a_second_save(cx: &mut TestAppContext) {
-    let (window, view, written) = viewer_window(cx, Ok("hello\n"), true);
+    let (window, view, log) = viewer_window(cx, Ok("hello\n"), true);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
     type_in(cx, window, &view, "x");
     press(cx, window, &view, "ctrl-s");
-    assert!(written.borrow().is_empty());
+    assert!(written(&log).is_empty());
     press(cx, window, &view, "ctrl-s");
-    assert_eq!(written.borrow().as_slice(), ["xhello\n"]);
+    assert_eq!(written(&log), ["xhello\n"]);
 }
 
 #[gpui_kit::test]
@@ -610,6 +625,7 @@ fn closing_the_window_with_unsaved_edits_warns_first(cx: &mut TestAppContext) {
     let (window, view, _) = viewer_window(cx, Ok("hello\n"), false);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
     type_in(cx, window, &view, "x");
     let first = view.update(cx, |view, cx| view.close(cx));
     assert!(!first);

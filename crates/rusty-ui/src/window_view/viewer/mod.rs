@@ -1,33 +1,49 @@
+mod body;
+mod editor;
 mod files;
 mod keys_bar;
+mod kinds;
+mod lister;
 mod modes;
+mod open;
 mod paged;
 mod view;
 
-use gpui_kit::component::input::{EditorState, InputEvent};
-use gpui_kit::{FocusHandle, KeyBinding, Subscription};
-use rusty_core::{Command, Location};
+use gpui_kit::{FocusHandle, KeyBinding};
+use rusty_core::Location;
 
+pub use body::{Attach, BodyKeys, Host, Key, ViewerBody};
 pub use files::{
-    FileHooks, FileStamp, FileText, IndexRun, OpenAs, Paged, Reopen, Save, SaveError, SharedSource,
+    FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
 };
+pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
 
 use super::FerriteWindow;
 use crate::prelude::*;
+use open::Opening;
 
 const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
-const CHANGED_WARNING: &str = "Changed on disk since it was opened. Ctrl+S again overwrites it.";
 
 gpui_kit::actions!(
     viewer,
     [
         SaveFile,
         CloseViewer,
+        EditFile,
         ShowText,
         ShowHex,
+        ShowRich,
+        ListerText,
+        ListerHex,
+        ListerRich,
+        FindNext,
+        FindOnEnter,
+        FindPrevious,
+        NextFile,
+        PreviousFile,
         RowUp,
         RowDown,
         PageUp,
@@ -48,9 +64,18 @@ pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("ctrl-s", SaveFile, context),
         KeyBinding::new("escape", CloseViewer, context),
-        KeyBinding::new("f3", CloseViewer, context),
+        KeyBinding::new("ctrl-e", EditFile, context),
         KeyBinding::new("alt-1", ShowText, context),
         KeyBinding::new("alt-3", ShowHex, context),
+        KeyBinding::new("alt-5", ShowRich, context),
+        KeyBinding::new("1", ListerText, context),
+        KeyBinding::new("3", ListerHex, context),
+        KeyBinding::new("5", ListerRich, context),
+        KeyBinding::new("f3", FindNext, context),
+        KeyBinding::new("shift-f3", FindPrevious, context),
+        KeyBinding::new("enter", FindOnEnter, context),
+        KeyBinding::new("n", NextFile, context),
+        KeyBinding::new("p", PreviousFile, context),
         KeyBinding::new("up", RowUp, context),
         KeyBinding::new("down", RowDown, context),
         KeyBinding::new("pageup", PageUp, context),
@@ -69,19 +94,84 @@ pub fn bind_keys(cx: &mut App) {
 pub(super) struct Viewer {
     location: Location,
     title: SharedString,
-    editor: Option<Entity<EditorState>>,
     focus: FocusHandle,
-    read_only: bool,
-    crlf: bool,
-    stamp: Option<FileStamp>,
-    dirty: bool,
-    overwrite: bool,
-    leaving: bool,
-    to_hex: bool,
-    editable: bool,
+    head: Head,
+    kinds: Vec<Kind>,
+    kind: Option<Kind>,
+    body: Option<Box<dyn ViewerBody>>,
+    opening: Option<Opening>,
+    leaving: Option<u64>,
+    switching: Option<(Slot, u64)>,
     message: Option<SharedString>,
-    paged: Option<Entity<PagedView>>,
-    _changes: Option<Subscription>,
+}
+
+impl Viewer {
+    fn new(location: Location, focus: FocusHandle) -> Self {
+        let title: SharedString = location
+            .name()
+            .map_or_else(|| location.as_str().to_owned(), |name| name.to_text())
+            .into();
+        Self {
+            location,
+            title,
+            focus,
+            head: Head::default(),
+            kinds: Vec::new(),
+            kind: None,
+            body: None,
+            opening: None,
+            leaving: None,
+            switching: None,
+            message: None,
+        }
+    }
+
+    fn sniff(&self) -> Sniff<'_> {
+        Sniff {
+            head: &self.head.bytes,
+            name: &self.title,
+            len: self.head.len,
+        }
+    }
+
+    fn editable_kind(&self) -> Option<Kind> {
+        let sniff = self.sniff();
+        self.kinds
+            .iter()
+            .find(|kind| kind.editable(&sniff))
+            .cloned()
+    }
+
+    fn next_in(&self, slot: Slot) -> Option<Kind> {
+        let in_slot: Vec<&Kind> = self
+            .kinds
+            .iter()
+            .filter(|kind| kind.slot() == slot)
+            .collect();
+        let shown = self.kind.as_ref().map(|kind| kind.id());
+        let at = in_slot.iter().position(|kind| Some(kind.id()) == shown);
+        let next = at.map_or(0, |at| (at + 1) % in_slot.len());
+        in_slot.get(next).map(|kind| Kind::clone(kind))
+    }
+
+    fn is_editing(&self, cx: &App) -> bool {
+        self.body.as_ref().is_some_and(|body| body.is_editing(cx))
+    }
+
+    fn unsaved(&self, cx: &App) -> Option<u64> {
+        self.body
+            .as_ref()
+            .filter(|body| body.is_dirty(cx))
+            .map(|body| body.revision(cx))
+    }
+
+    fn say(&mut self, note: impl Into<SharedString>, cx: &mut App) {
+        let note = note.into();
+        match &self.body {
+            Some(body) => body.set_note(note, cx),
+            None => self.message = Some(note),
+        }
+    }
 }
 
 const KNOWN: [&str; 26] = [
@@ -146,88 +236,26 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let title: SharedString = location
-            .name()
-            .map_or_else(|| location.as_str().to_owned(), |name| name.to_text())
-            .into();
-        let mut viewer = Viewer {
-            location,
-            title,
-            editor: None,
-            focus: cx.focus_handle(),
-            read_only: true,
-            crlf: false,
-            stamp: None,
-            dirty: false,
-            overwrite: false,
-            leaving: false,
-            to_hex: false,
-            editable: true,
-            message: None,
-            paged: None,
-            _changes: None,
-        };
-        if let Err(message) = self.open_first(&mut viewer, window, cx) {
-            viewer.message = Some(message.into());
-        }
-        let focus = viewer.focus_target(cx);
+        let mut viewer = Viewer::new(location, cx.focus_handle());
+        viewer.opening = Some(self.open_file(&viewer, window, cx));
+        let focus = viewer.focus.clone();
         window.defer(cx, move |window, cx| window.focus(&focus, cx));
         self.viewer = Some(viewer);
         cx.notify();
     }
 
-    fn text_changed(&mut self, cx: &mut Context<Self>) {
-        if let Some(viewer) = &mut self.viewer {
-            viewer.dirty = true;
-            viewer.leaving = false;
-            viewer.to_hex = false;
-            viewer.overwrite = false;
-        }
-        cx.notify();
-    }
-
-    fn save_viewer(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = &self.viewer else {
-            return;
-        };
-        let Some(editor) = viewer.editor.clone().filter(|_| !viewer.read_only) else {
-            return;
-        };
-        let text = editor.read(cx).value();
-        let save = Save {
-            text: &text,
-            crlf: viewer.crlf,
-            expected: if viewer.overwrite { None } else { viewer.stamp },
-        };
-        let result = (self.files.write)(&viewer.location, &save);
-        if let Some(viewer) = &mut self.viewer {
-            viewer.overwrite = false;
-            match result {
-                Ok(stamp) => {
-                    viewer.stamp = stamp;
-                    viewer.dirty = false;
-                    viewer.message = Some("Saved.".into());
-                }
-                Err(SaveError::Changed) => {
-                    viewer.overwrite = true;
-                    viewer.message = Some(CHANGED_WARNING.into());
-                }
-                Err(SaveError::Failed(error)) => viewer.message = Some(error.into()),
-            }
-        }
-        let _ = self.browser.command(&Command::PaneRefresh);
-        cx.notify();
-    }
-
     pub(super) fn warn_unsaved(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(viewer) = self.viewer.as_mut().filter(|viewer| viewer.dirty) else {
+        let Some(viewer) = self.viewer.as_mut() else {
             return false;
         };
-        if viewer.leaving {
+        let Some(revision) = viewer.unsaved(cx) else {
+            return false;
+        };
+        if viewer.leaving == Some(revision) {
             return false;
         }
-        viewer.leaving = true;
-        viewer.message = Some(LEAVE_WARNING.into());
+        viewer.leaving = Some(revision);
+        viewer.say(LEAVE_WARNING, cx);
         cx.notify();
         true
     }
@@ -240,33 +268,6 @@ impl FerriteWindow {
         self.focus_core_pane(window, cx);
         cx.notify();
     }
-}
-
-fn attach_editor(
-    viewer: &mut Viewer,
-    file: FileText,
-    window: &mut Window,
-    cx: &mut Context<FerriteWindow>,
-) {
-    let language = language_of(&viewer.title);
-    let text = file.text;
-    let editor = cx.new(|cx| {
-        EditorState::new(window, cx)
-            .language(language)
-            .default_value(text)
-    });
-    viewer._changes = Some(cx.subscribe(&editor, |view, _, event: &InputEvent, cx| {
-        if matches!(event, InputEvent::Change) {
-            view.text_changed(cx);
-        }
-    }));
-    viewer.editor = Some(editor);
-    viewer.read_only = file.read_only;
-    viewer.crlf = file.crlf;
-    viewer.stamp = file.stamp;
-    viewer.message = file
-        .read_only
-        .then(|| "Not valid UTF-8: opened read-only.".into());
 }
 
 #[cfg(test)]

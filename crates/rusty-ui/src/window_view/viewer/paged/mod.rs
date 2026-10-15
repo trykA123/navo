@@ -1,20 +1,27 @@
+mod body;
 mod draw;
 mod find;
 mod jobs;
 mod lines;
+mod moves;
+mod rows;
 mod scroll;
 mod view;
+
+use std::sync::Arc;
 
 use gpui_kit::{FocusHandle, Focusable, ScrollDelta, ScrollWheelEvent};
 use rusty_core::paging::{LineIndex, MAX_ROW};
 
+pub(super) use body::PagedBody;
 pub use lines::PagedKind;
 
 use super::files::{IndexRun, Paged, Reopen, SharedSource};
 use crate::prelude::*;
 use find::FindState;
-use jobs::{IndexMessage, Job};
-use lines::{end_top, row_start, step};
+use jobs::{IndexDone, IndexMessage, Job};
+use moves::{Move, MoveQueue};
+use rows::RowCache;
 use scroll::ByteScroll;
 
 const WHEEL_ROWS: f32 = 3.;
@@ -28,6 +35,7 @@ pub struct PagedView {
     index_run: IndexRun,
     pub(super) kind: PagedKind,
     pub(super) top: u64,
+    moves: MoveQueue,
     shift: usize,
     focus: FocusHandle,
     scroll: ByteScroll,
@@ -36,7 +44,10 @@ pub struct PagedView {
     wheel: f32,
     changed: bool,
     note: Option<SharedString>,
-    index: Option<LineIndex>,
+    index: Option<Arc<LineIndex>>,
+    index_rev: u64,
+    source_rev: u64,
+    cache: RowCache,
     index_done: bool,
     index_failed: bool,
     line_count: Option<u64>,
@@ -59,6 +70,7 @@ impl PagedView {
             index_run: paged.index,
             kind,
             top: 0,
+            moves: MoveQueue::default(),
             shift: 0,
             focus: cx.focus_handle(),
             scroll: ByteScroll::default(),
@@ -68,6 +80,9 @@ impl PagedView {
             changed: false,
             note: None,
             index: None,
+            index_rev: 0,
+            source_rev: 0,
+            cache: RowCache::default(),
             index_done: false,
             index_failed: false,
             line_count: None,
@@ -80,24 +95,33 @@ impl PagedView {
 
     fn start_index(&mut self, cx: &mut Context<Self>) {
         if self.kind == PagedKind::Text && self.index_job.is_none() {
-            self.index_job = Some(jobs::start_index(self.index_run.clone(), cx));
+            let source = self.source.clone();
+            self.index_job = Some(jobs::start_index(self.index_run.clone(), source, cx));
         }
     }
 
     fn index_message(&mut self, message: IndexMessage, cx: &mut Context<Self>) {
         match message {
-            IndexMessage::Snapshot(snapshot) => self.index = Some(snapshot),
-            IndexMessage::Done(Ok(Some(index))) => {
-                self.line_count = index.line_count(&*self.source).ok();
-                self.index = Some(index);
+            IndexMessage::Snapshot(snapshot) => self.index = Some(Arc::new(snapshot)),
+            IndexMessage::Done(IndexDone {
+                result: Ok(Some(index)),
+                line_count,
+            }) => {
+                self.line_count = line_count;
+                self.index = Some(Arc::new(index));
                 self.index_done = true;
             }
-            IndexMessage::Done(Ok(None)) => {}
-            IndexMessage::Done(Err(error)) => {
+            IndexMessage::Done(IndexDone {
+                result: Ok(None), ..
+            }) => {}
+            IndexMessage::Done(IndexDone {
+                result: Err(error), ..
+            }) => {
                 self.index_failed = true;
                 self.note = Some(error.into());
             }
         }
+        self.index_rev += 1;
         cx.notify();
     }
 
@@ -105,11 +129,10 @@ impl PagedView {
         if self.kind == kind {
             return;
         }
-        let top = row_start(&*self.source, kind, self.top);
         self.kind = kind;
         self.shift = 0;
         self.find.leave_kind();
-        self.move_to(top, cx);
+        self.queue_move(Move::Realign, cx);
         self.start_index(cx);
     }
 
@@ -118,39 +141,23 @@ impl PagedView {
         cx.notify();
     }
 
-    fn move_to(&mut self, top: Result<u64, String>, cx: &mut Context<Self>) {
-        match top {
-            Ok(top) => {
-                self.top = top;
-                self.find.anchor = None;
-            }
-            Err(error) => self.note = Some(error.into()),
-        }
+    fn queue_move(&mut self, to: Move, cx: &mut Context<Self>) {
+        self.moves.push(to);
+        self.request_rows(cx);
         cx.notify();
     }
 
-    fn last_top(&self) -> Result<u64, String> {
-        end_top(&*self.source, self.kind, self.rows)
+    fn user_move(&mut self, to: Move, cx: &mut Context<Self>) {
+        self.find.anchor = None;
+        self.queue_move(to, cx);
     }
 
     fn scroll_rows(&mut self, rows: i64, cx: &mut Context<Self>) {
-        let source = &*self.source;
-        let moved = step(source, self.kind, self.top, rows);
-        let top = if rows > 0 {
-            moved.and_then(|top| Ok(top.min(self.last_top()?).max(self.top)))
-        } else {
-            moved
-        };
-        self.move_to(top, cx);
+        self.user_move(Move::Rows(rows), cx);
     }
 
     fn page(&self) -> i64 {
         i64::try_from(self.rows).unwrap_or(i64::MAX)
-    }
-
-    fn go_end(&mut self, cx: &mut Context<Self>) {
-        let top = self.last_top();
-        self.move_to(top, cx);
     }
 
     fn shift_by(&mut self, right: bool, cx: &mut Context<Self>) {
@@ -182,20 +189,9 @@ impl PagedView {
         }
     }
 
-    fn follow_drag(&mut self) {
-        let Some(fraction) = self.scroll.take_drag() else {
-            return;
-        };
-        let source = &*self.source;
-        let target = (source.len() as f64 * fraction) as u64;
-        let top =
-            row_start(source, self.kind, target).and_then(|top| Ok(top.min(self.last_top()?)));
-        match top {
-            Ok(top) => {
-                self.top = top;
-                self.find.anchor = None;
-            }
-            Err(error) => self.note = Some(error.into()),
+    fn follow_drag(&mut self, cx: &mut Context<Self>) {
+        if let Some(fraction) = self.scroll.take_drag() {
+            self.user_move(Move::Fraction(fraction), cx);
         }
     }
 
@@ -204,12 +200,20 @@ impl PagedView {
             return;
         }
         self.changed = true;
+        self.source_rev += 1;
         let len = self.source.len();
         if self.top >= len {
-            let top = row_start(&*self.source, self.kind, len);
-            self.top = top.unwrap_or(0).min(self.top);
+            self.queue_move(Move::Offset(len), cx);
+        } else {
+            cx.notify();
         }
-        cx.notify();
+    }
+}
+
+#[cfg(test)]
+impl PagedView {
+    pub(super) fn fills(&self) -> u64 {
+        self.cache.fills
     }
 }
 
