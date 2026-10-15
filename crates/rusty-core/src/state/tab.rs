@@ -9,7 +9,6 @@ pub struct ViewState {
     pub scroll: u64,
 }
 
-#[allow(dead_code, reason = "stubs until the state is implemented")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tab {
     id: TabId,
@@ -20,62 +19,104 @@ pub struct Tab {
     views: HashMap<Location, ViewState>,
 }
 
-#[allow(
-    unused_variables,
-    dead_code,
-    reason = "stubs until the state is implemented"
-)]
 impl Tab {
     #[must_use]
     pub fn id(&self) -> TabId {
-        todo!()
+        self.id
     }
 
     #[must_use]
     pub fn location(&self) -> &Location {
-        todo!()
+        &self.location
     }
 
     #[must_use]
     pub fn view(&self) -> ViewState {
-        todo!()
+        self.view
     }
 
     #[must_use]
     pub fn listing(&self) -> Option<&Listing> {
-        todo!()
+        self.listing.as_ref()
     }
 
     #[must_use]
     pub fn history(&self) -> &History {
-        todo!()
+        &self.history
     }
 
     pub(crate) fn new(id: TabId, location: Location) -> Self {
-        todo!()
+        Self {
+            id,
+            location,
+            view: ViewState::default(),
+            listing: None,
+            history: History::default(),
+            views: HashMap::new(),
+        }
     }
 
     pub(crate) fn navigate(&mut self, location: Location) {
-        todo!()
+        let previous = self.leave(location);
+        self.history.push(previous);
+        self.arrive();
     }
 
     pub(crate) fn back(&mut self) -> Result<(), StateError> {
-        todo!()
+        let target = self
+            .history
+            .back()
+            .last()
+            .cloned()
+            .ok_or(StateError::NothingBack)?;
+        let previous = self.leave(target);
+        self.history.step_back(previous);
+        self.arrive();
+        Ok(())
     }
 
     pub(crate) fn forward(&mut self) -> Result<(), StateError> {
-        todo!()
+        let target = self
+            .history
+            .forward()
+            .first()
+            .cloned()
+            .ok_or(StateError::NothingForward)?;
+        let previous = self.leave(target);
+        self.history.step_forward(previous);
+        self.arrive();
+        Ok(())
     }
 
     pub(crate) fn set_listing(&mut self, listing: Listing) {
-        todo!()
+        self.listing = Some(listing);
+        self.view.cursor = self.clamp(self.view.cursor);
+        self.view.scroll = self.clamp(self.view.scroll);
     }
 
     pub(crate) fn set_cursor(&mut self, row: u64) {
-        todo!()
+        self.view.cursor = self.clamp(row);
     }
 
     pub(crate) fn set_scroll(&mut self, row: u64) {
-        todo!()
+        self.view.scroll = self.clamp(row);
+    }
+
+    fn leave(&mut self, target: Location) -> Location {
+        self.views.insert(self.location.clone(), self.view);
+        self.listing = None;
+        std::mem::replace(&mut self.location, target)
+    }
+
+    fn arrive(&mut self) {
+        self.view = self.views.get(&self.location).copied().unwrap_or_default();
+        let history = &self.history;
+        self.views.retain(|location, _| history.contains(location));
+    }
+
+    fn clamp(&self, row: u64) -> u64 {
+        self.listing
+            .as_ref()
+            .map_or(row, |listing| row.min(listing.len().saturating_sub(1)))
     }
 }

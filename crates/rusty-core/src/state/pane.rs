@@ -1,7 +1,7 @@
 use super::{StateError, Tab};
 use crate::PaneId;
 
-#[allow(dead_code, reason = "stubs until the state is implemented")]
+// Invariant: `tabs` is never empty and `active < tabs.len()`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pane {
     id: PaneId,
@@ -9,49 +9,63 @@ pub struct Pane {
     active: usize,
 }
 
-#[allow(
-    unused_variables,
-    dead_code,
-    reason = "stubs until the state is implemented"
-)]
 impl Pane {
     #[must_use]
     pub fn id(&self) -> PaneId {
-        todo!()
+        self.id
     }
 
     #[must_use]
     pub fn tabs(&self) -> &[Tab] {
-        todo!()
+        &self.tabs
     }
 
     #[must_use]
     pub fn active_index(&self) -> usize {
-        todo!()
+        self.active
     }
 
     #[must_use]
     pub fn active(&self) -> &Tab {
-        todo!()
+        &self.tabs[self.active]
     }
 
     pub(crate) fn new(id: PaneId, first: Tab) -> Self {
-        todo!()
+        Self {
+            id,
+            tabs: vec![first],
+            active: 0,
+        }
     }
 
     pub(crate) fn active_mut(&mut self) -> &mut Tab {
-        todo!()
+        &mut self.tabs[self.active]
     }
 
     pub(crate) fn open_tab(&mut self, tab: Tab) {
-        todo!()
+        self.active += 1;
+        self.tabs.insert(self.active, tab);
     }
 
     pub(crate) fn close_tab(&mut self, index: usize) -> Result<(), StateError> {
-        todo!()
+        if index >= self.tabs.len() {
+            return Err(StateError::NoSuchTab(index));
+        }
+        if self.tabs.len() == 1 {
+            return Err(StateError::LastTab);
+        }
+        self.tabs.remove(index);
+        if index < self.active || self.active == self.tabs.len() {
+            self.active -= 1;
+        }
+        Ok(())
     }
 
     pub(crate) fn activate(&mut self, index: usize) -> Result<(), StateError> {
-        todo!()
+        if index >= self.tabs.len() {
+            return Err(StateError::NoSuchTab(index));
+        }
+        self.active = index;
+        Ok(())
     }
 }

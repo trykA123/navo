@@ -1,29 +1,27 @@
+#![cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the mutators get their caller, apply(), in C10")
+)]
+
 mod history;
 mod listing;
 mod pane;
 mod tab;
+mod window;
 
 use std::collections::BTreeMap;
 
-use crate::{Direction, Layout, LayoutError, Location, PaneId, WindowId};
+use crate::{Direction, LayoutError, Location, PaneId, TabId, WindowId};
 pub use history::History;
 pub use listing::{Entry, Listing};
 pub use pane::Pane;
 pub use tab::{Tab, ViewState};
+pub use window::Window;
 
-#[allow(dead_code, reason = "stubs until the state is implemented")]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Window {
-    id: WindowId,
-    layout: Layout,
-    panes: BTreeMap<PaneId, Pane>,
-}
-
-#[allow(dead_code, reason = "stubs until the state is implemented")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppState {
-    windows: BTreeMap<WindowId, Window>,
-    focused: WindowId,
+    focused: Window,
+    others: BTreeMap<WindowId, Window>,
     next_id: u64,
 }
 
@@ -47,105 +45,139 @@ pub enum StateError {
     Layout(#[from] LayoutError),
 }
 
-#[allow(unused_variables, reason = "stubs until the state is implemented")]
-impl Window {
-    #[must_use]
-    pub fn id(&self) -> WindowId {
-        todo!()
-    }
-
-    #[must_use]
-    pub fn layout(&self) -> &Layout {
-        todo!()
-    }
-
-    #[must_use]
-    pub fn pane(&self, id: PaneId) -> Option<&Pane> {
-        todo!()
-    }
-
-    #[must_use]
-    pub fn panes(&self) -> Vec<&Pane> {
-        todo!()
-    }
-}
-
-#[allow(
-    unused_variables,
-    dead_code,
-    reason = "stubs until the state is implemented"
-)]
 impl AppState {
     #[must_use]
     pub fn new(home: Location) -> Self {
-        todo!()
+        let window = fresh_window(WindowId::new(1), PaneId::new(2), TabId::new(3), home);
+        Self {
+            focused: window,
+            others: BTreeMap::new(),
+            next_id: 4,
+        }
     }
 
     #[must_use]
     pub fn window_ids(&self) -> Vec<WindowId> {
-        todo!()
+        let mut ids: Vec<WindowId> = self.others.keys().copied().collect();
+        ids.push(self.focused.id());
+        ids.sort_unstable();
+        ids
     }
 
     #[must_use]
     pub fn focused_window(&self) -> WindowId {
-        todo!()
+        self.focused.id()
     }
 
     #[must_use]
     pub fn window(&self, id: WindowId) -> Option<&Window> {
-        todo!()
+        if self.focused.id() == id {
+            Some(&self.focused)
+        } else {
+            self.others.get(&id)
+        }
     }
 
     #[must_use]
     pub fn focused_pane(&self) -> PaneId {
-        todo!()
+        self.focused.focused_pane().id()
     }
 
     #[must_use]
     pub fn pane(&self, id: PaneId) -> Option<&Pane> {
-        todo!()
+        self.windows().find_map(|w| w.pane(id))
     }
 
     #[must_use]
     pub fn active_tab(&self) -> &Tab {
-        todo!()
+        self.focused.focused_pane().active()
     }
 
     pub(crate) fn active_tab_mut(&mut self) -> &mut Tab {
-        todo!()
+        self.focused.focused_pane_mut().active_mut()
     }
 
     pub(crate) fn focused_pane_mut(&mut self) -> &mut Pane {
-        todo!()
+        self.focused.focused_pane_mut()
     }
 
     pub(crate) fn new_tab(&mut self, location: Location) -> Tab {
-        todo!()
+        Tab::new(TabId::new(self.take_ids(1)), location)
     }
 
     pub(crate) fn split(&mut self, direction: Direction) -> Result<PaneId, StateError> {
-        todo!()
+        let pane_id = PaneId::new(self.next_id);
+        let tab = Tab::new(
+            TabId::new(self.next_id + 1),
+            self.active_tab().location().clone(),
+        );
+        self.focused.split(direction, Pane::new(pane_id, tab))?;
+        self.take_ids(2);
+        Ok(pane_id)
     }
 
     pub(crate) fn close_pane(&mut self, pane: PaneId) -> Result<(), StateError> {
-        todo!()
+        if self.focused.contains(pane) {
+            return self.focused.close(pane);
+        }
+        self.others
+            .values_mut()
+            .find(|w| w.contains(pane))
+            .ok_or(StateError::UnknownPane(pane))?
+            .close(pane)
     }
 
     pub(crate) fn focus_direction(&mut self, direction: Direction) -> Result<PaneId, StateError> {
-        todo!()
+        self.focused.focus_direction(direction)
     }
 
     pub(crate) fn open_window(&mut self, location: Location) -> WindowId {
-        todo!()
+        let first = self.take_ids(3);
+        let id = WindowId::new(first);
+        let window = fresh_window(id, PaneId::new(first + 1), TabId::new(first + 2), location);
+        let old = std::mem::replace(&mut self.focused, window);
+        self.others.insert(old.id(), old);
+        id
     }
 
     pub(crate) fn close_window(&mut self, id: WindowId) -> Result<(), StateError> {
-        todo!()
+        if self.window(id).is_none() {
+            return Err(StateError::UnknownWindow(id));
+        }
+        if id != self.focused.id() {
+            self.others.remove(&id);
+            return Ok(());
+        }
+        self.focused = self.others.pop_first().ok_or(StateError::LastWindow)?.1;
+        Ok(())
     }
 
     pub(crate) fn focus_window(&mut self, id: WindowId) -> Result<(), StateError> {
-        todo!()
+        if id == self.focused.id() {
+            return Ok(());
+        }
+        let window = self
+            .others
+            .remove(&id)
+            .ok_or(StateError::UnknownWindow(id))?;
+        let old = std::mem::replace(&mut self.focused, window);
+        self.others.insert(old.id(), old);
+        Ok(())
     }
+
+    fn windows(&self) -> impl Iterator<Item = &Window> {
+        std::iter::once(&self.focused).chain(self.others.values())
+    }
+
+    fn take_ids(&mut self, count: u64) -> u64 {
+        let first = self.next_id;
+        self.next_id += count;
+        first
+    }
+}
+
+fn fresh_window(id: WindowId, pane: PaneId, tab: TabId, location: Location) -> Window {
+    Window::new(id, Pane::new(pane, Tab::new(tab, location)))
 }
 
 #[cfg(test)]
