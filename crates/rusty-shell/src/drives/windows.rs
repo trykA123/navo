@@ -48,7 +48,9 @@ fn letters(mask: u32) -> impl Iterator<Item = char> {
 const ERROR_CONNECTION_UNAVAIL: u32 = 1201;
 const REMEMBERED_EVERY: Duration = Duration::from_secs(30);
 
-static REMEMBERED: Mutex<Option<(Instant, Vec<(char, String)>)>> = Mutex::new(None);
+type Remembered = Vec<(char, String)>;
+
+static REMEMBERED: Mutex<Option<(Instant, Remembered)>> = Mutex::new(None);
 
 fn connection(letter: char) -> Option<(String, bool)> {
     let local = wide(&format!("{letter}:"));
@@ -63,7 +65,7 @@ fn connection(letter: char) -> Option<(String, bool)> {
     }
 }
 
-fn remembered_cached() -> Vec<(char, String)> {
+fn remembered_cached() -> Remembered {
     let mut cached = REMEMBERED.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some((read_at, list)) = cached.as_ref()
         && read_at.elapsed() < REMEMBERED_EVERY
