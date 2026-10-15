@@ -18,7 +18,7 @@ impl Pattern {
             .split(';')
             .map(|item| item.trim_matches(' '))
             .filter(|item| !item.is_empty())
-            .map(|item| item.to_lowercase().chars().collect())
+            .map(fold)
             .collect();
         if items.is_empty() {
             return Err(PatternError::Empty);
@@ -31,7 +31,7 @@ impl Pattern {
 
     #[must_use]
     pub fn matches(&self, name: &str) -> bool {
-        let name: Vec<char> = name.to_lowercase().chars().collect();
+        let name = fold(name);
         self.items
             .iter()
             .any(|item| item.as_slice() == EVERY_NAME || wildcard(item, &name))
@@ -41,6 +41,10 @@ impl Pattern {
     pub fn as_str(&self) -> &str {
         &self.text
     }
+}
+
+fn fold(text: &str) -> Vec<char> {
+    text.chars().flat_map(char::to_lowercase).collect()
 }
 
 fn wildcard(pattern: &[char], name: &[char]) -> bool {

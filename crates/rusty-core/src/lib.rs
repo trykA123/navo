@@ -6,6 +6,7 @@ mod direction;
 mod id;
 mod layout;
 mod location;
+mod replay;
 mod selection;
 mod session;
 mod state;
@@ -16,6 +17,7 @@ pub use direction::Direction;
 pub use id::{PaneId, TabId, WindowId};
 pub use layout::{Layout, LayoutError, Rect};
 pub use location::{Location, LocationError};
+pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection};
 pub use session::{
     EntryState, LayoutState, PaneState, RowsState, SessionError, SessionState, TabState,

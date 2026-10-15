@@ -1,0 +1,35 @@
+---
+source: crates/rusty-core/src/replay/tests/text.rs
+expression: text
+---
+ferrite-log 1
+home "/home/admin"
++0 pane.navigate { location: "/home/admin/src" }
++12 !listing-loaded { tab: 3, location: "/home/admin/src", entries: 2 }
+  folder "lib"
+  file "main.rs"
++250 !page-rows { pane: 2, rows: 30 }
++40 selection.toggle
++5 pane.open-tab
++5 pane.open-tab { location: "C:\\Users\\admin \"q\"" }
++5 pane.close-tab
++5 pane.close-tab { tab: 1 }
++5 pane.back
++5 pane.forward
++5 pane.cursor-move { to: page-down }
++5 pane.cursor-move { to: 7 }
++5 selection.toggle-down
++5 selection.range { to: 3 }
++5 selection.add-pattern { pattern: "*.rs" }
++5 selection.remove-pattern { pattern: "m*" }
++5 selection.invert
++5 selection.all
++5 selection.clear
++5 layout.split { direction: right }
++5 layout.focus { direction: left }
++5 layout.close
++5 app.save-session
++0 !listing-loaded { tab: 9, location: "/tmp/é \"x\"\\y", entries: 0 }
++1000000 !listing-loaded { tab: 10, location: "/tmp", entries: 2 }
+  file "tab\there \"q\""
+  folder "中\u{1b}📁"
