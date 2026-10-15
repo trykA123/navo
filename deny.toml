@@ -1,5 +1,12 @@
 [advisories]
 yanked = "deny"
+ignore = [
+    { id = "RUSTSEC-2024-0384", reason = "instant: unmaintained, not vulnerable; transitive through gpui-kit 0.7.3; recheck on every gpui-kit update" },
+    { id = "RUSTSEC-2024-0436", reason = "paste: unmaintained, not vulnerable; transitive through gpui-kit 0.7.3; recheck on every gpui-kit update" },
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile: unmaintained, not vulnerable; transitive through gpui-kit 0.7.3; recheck on every gpui-kit update" },
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz: unmaintained, not vulnerable; transitive through gpui-kit 0.7.3; recheck on every gpui-kit update" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: unmaintained, not vulnerable; transitive through gpui-kit 0.7.3; recheck on every gpui-kit update" },
+]
 
 [licenses]
 allow = [
@@ -9,6 +16,7 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
+    "0BSD",
     "Zlib",
     "Unicode-3.0",
     "MPL-2.0",
