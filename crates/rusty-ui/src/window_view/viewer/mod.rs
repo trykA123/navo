@@ -1,4 +1,5 @@
 mod files;
+mod keys_bar;
 mod modes;
 mod paged;
 mod view;

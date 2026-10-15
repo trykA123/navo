@@ -144,3 +144,29 @@ fn a_failed_index_shows_its_error_instead_of_progress(cx: &mut TestAppContext) {
     assert!(!visible(cx, window, "paged-index"));
     assert!(status(cx, window).contains("gone"));
 }
+
+fn bottom_keys(cx: &mut TestAppContext, window: gpui_kit::AnyWindowHandle) -> Vec<String> {
+    (0usize..6)
+        .filter_map(|index| {
+            cx.update_window(window, |_, window, _| {
+                window
+                    .try_find(("fkey", index))
+                    .and_then(|found| found.label().map(str::to_owned))
+            })
+            .ok()
+            .flatten()
+        })
+        .collect()
+}
+
+#[gpui_kit::test]
+fn the_bottom_bar_shows_the_viewer_keys_in_each_mode(cx: &mut TestAppContext) {
+    let (window, view) = paged_window(cx, Setup::new(OpenAs::Hex, mixed(4096)));
+    assert!(bottom_keys(cx, window).contains(&"Ctrl+G Go to offset".to_owned()));
+    press(cx, window, &view, "alt-1");
+    let text = bottom_keys(cx, window);
+    assert!(text.contains(&"Ctrl+G Go to line".to_owned()));
+    assert!(text.contains(&"Alt+3 Hex".to_owned()));
+    press(cx, window, &view, "ctrl-f");
+    assert!(bottom_keys(cx, window).contains(&"Shift+Enter Previous".to_owned()));
+}

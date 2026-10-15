@@ -87,10 +87,15 @@ fn cell(t: &Theme, column: Column, sort: SortKey, ctx: &Rc<ListContext>) -> impl
         .when(right, |cell| cell.justify_end())
         .when(is_active, |cell| cell.text_color(t.colors.text))
         .on_click(move |_, window, cx| ctx.act(FileListAction::Sort(by), window, cx))
-        .child(column.label)
-        .when(is_active, |cell| {
-            cell.child(icon(arrow, px(10.), t.colors.accent_text))
-        })
+        .child(
+            div()
+                .id(("sort-label", column.index))
+                .test_support()
+                .child(column.label),
+        )
+        .child(div().flex_none().w(px(10.)).when(is_active, |slot| {
+            slot.child(icon(arrow, px(10.), t.colors.accent_text))
+        }))
 }
 
 pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {
