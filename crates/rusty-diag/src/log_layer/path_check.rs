@@ -65,11 +65,9 @@ fn is_hex4(text: &str) -> bool {
 }
 
 fn is_extension(text: &str) -> bool {
-    let Some(ext) = text.strip_prefix('.') else {
-        return false;
-    };
-    (1..=8).contains(&ext.len())
-        && ext
-            .bytes()
+    text.strip_prefix('.').is_some_and(|ext| {
+        ext.bytes()
             .all(|b| b.is_ascii_digit() || b.is_ascii_lowercase())
+            && crate::redact::is_allowed_extension(ext)
+    })
 }

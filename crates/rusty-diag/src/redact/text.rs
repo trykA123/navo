@@ -2,6 +2,10 @@ use super::names::replace;
 use super::path::extension;
 use super::{DriveKind, PathKind, Redactor};
 
+mod quoted;
+
+use quoted::hide_quoted;
+
 enum Piece<'a> {
     Text(&'a str),
     Path(String),
@@ -15,7 +19,9 @@ impl Redactor {
         let mut output = String::new();
         for piece in pieces {
             match piece {
-                Piece::Text(text) => output.push_str(&replace(text, &replacements)),
+                Piece::Text(text) => {
+                    output.push_str(&replace(&hide_quoted(text, &replacements), &replacements));
+                }
                 Piece::Path(path) => output.push_str(&path),
             }
         }
@@ -24,35 +30,44 @@ impl Redactor {
 
     fn scan_paths<'a>(&self, mut text: &'a str) -> Vec<Piece<'a>> {
         let mut pieces = Vec::new();
-        while let Some((start, _)) = text
-            .char_indices()
-            .find(|(index, _)| self.is_path_start(&text[*index..]))
-        {
+        let mut before = None;
+        while let Some(start) = self.find_path_start(text, before) {
             pieces.push(Piece::Text(&text[..start]));
             let path = &text[start..];
             let end = self.path_end(path);
             let redacted = self.path(&path[..end], PathKind::File, DriveKind::Unknown);
             pieces.push(Piece::Path(redacted.to_string()));
+            before = path[..end].chars().next_back();
             text = &path[end..];
         }
         pieces.push(Piece::Text(text));
         pieces
     }
 
-    fn is_path_start(&self, text: &str) -> bool {
-        if text.starts_with(r"\\") || drive_start(text) {
+    fn find_path_start(&self, text: &str, mut before: Option<char>) -> Option<usize> {
+        for (index, ch) in text.char_indices() {
+            if self.is_path_start(&text[index..], before) {
+                return Some(index);
+            }
+            before = Some(ch);
+        }
+        None
+    }
+
+    fn is_path_start(&self, text: &str, before: Option<char>) -> bool {
+        if text.starts_with(r"\\") {
             return true;
         }
-        self.identity
-            .profile
-            .as_deref()
-            .filter(|profile| profile.starts_with('/'))
-            .and_then(|profile| text.strip_prefix(profile))
-            .is_some_and(|rest| {
-                rest.chars()
-                    .next()
-                    .is_none_or(|ch| ch == '/' || ch.is_whitespace() || hard_boundary(ch))
-            })
+        let boundary = before.is_none_or(|ch| !ch.is_alphanumeric());
+        if boundary && drive_start(text) {
+            return true;
+        }
+        if !before.is_none_or(opens_path) {
+            return false;
+        }
+        text.strip_prefix('/')
+            .and_then(|rest| rest.chars().next())
+            .is_some_and(|next| !next.is_whitespace() && !hard_boundary(next))
     }
 
     fn path_end(&self, path: &str) -> usize {
@@ -60,7 +75,7 @@ impl Redactor {
             .char_indices()
             .find(|(index, ch)| {
                 hard_boundary(*ch)
-                    || (*ch == ' ' && self.is_path_start(&path[index + ch.len_utf8()..]))
+                    || (*ch == ' ' && self.is_path_start(&path[index + 1..], Some(' ')))
             })
             .map_or(path.len(), |(index, _)| index);
         let run = path[..end].trim_end_matches(' ');
@@ -82,20 +97,28 @@ fn drive_start(text: &str) -> bool {
     )
 }
 
+fn opens_path(ch: char) -> bool {
+    ch.is_whitespace() || matches!(ch, '=' | '\'' | '"' | '(' | '[' | '{' | ',' | ';' | '`')
+}
+
 fn hard_boundary(ch: char) -> bool {
     matches!(ch, '\'' | '"' | '<' | '>' | '|' | '\t' | '\n' | '\r')
 }
 
 fn file_end(segment: &str) -> usize {
     let mut word_start = 0;
+    let mut end = None;
     for (index, ch) in segment.char_indices() {
         if !ch.is_whitespace() {
             continue;
         }
         if extension(&segment[word_start..index]).is_some() {
-            return index;
+            end = Some(index);
         }
         word_start = index + ch.len_utf8();
     }
-    segment.len()
+    if extension(&segment[word_start..]).is_some() {
+        return segment.len();
+    }
+    end.unwrap_or(segment.len())
 }

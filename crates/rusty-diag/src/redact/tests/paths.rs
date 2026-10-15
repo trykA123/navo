@@ -67,8 +67,8 @@ fn folder_last_segment_is_a_folder_token_without_extension() {
 
 #[test]
 fn file_last_segment_is_a_file_token() {
-    let out = file(&plain(), r"C:\Projects\release.v2");
-    assert_eq!(shape(out.as_str()), r"C:\<d>\<f>.v2");
+    let out = file(&plain(), r"C:\Projects\release.zip");
+    assert_eq!(shape(out.as_str()), r"C:\<d>\<f>.zip");
 }
 
 #[test]
@@ -78,7 +78,8 @@ fn extension_rules() {
         (r"C:\a\photo.JPG", r"C:\<d>\<f>.jpg"),
         (r"C:\a\backup.tar.gz", r"C:\<d>\<f>.gz"),
         (r"C:\a\data.verylongext", r"C:\<d>\<f>"),
-        (r"C:\a\file.abcdefgh", r"C:\<d>\<f>.abcdefgh"),
+        (r"C:\a\file.abcdefgh", r"C:\<d>\<f>"),
+        (r"C:\a\release.v2", r"C:\<d>\<f>"),
         (r"C:\a\file.abcdefghi", r"C:\<d>\<f>"),
         ("C:\\a\\note.\u{e9}", r"C:\<d>\<f>"),
         (r"C:\a\note.t-t", r"C:\<d>\<f>"),

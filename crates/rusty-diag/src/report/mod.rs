@@ -65,8 +65,15 @@ pub fn write_report(
 ) -> io::Result<ReportSummary> {
     let report = serde_json::to_vec_pretty(&Document::new(input, redactor))?;
     let summary = summary_text(input);
+    if fs::symlink_metadata(path).is_ok() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "the report file already exists",
+        ));
+    }
     let temp = temp_path(path)?;
-    let written = write_zip(&temp, &report, summary.as_bytes())
+    let file = File::create_new(&temp)?;
+    let written = write_zip(file, &report, summary.as_bytes())
         .and_then(|()| fs::rename(&temp, path))
         .and_then(|()| fs::metadata(path));
     let bytes = match written {
@@ -93,9 +100,9 @@ fn temp_path(path: &Path) -> io::Result<PathBuf> {
     Ok(path.with_file_name(temp))
 }
 
-fn write_zip(temp: &Path, report: &[u8], summary: &[u8]) -> io::Result<()> {
+fn write_zip(file: File, report: &[u8], summary: &[u8]) -> io::Result<()> {
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-    let mut zip = ZipWriter::new(File::create_new(temp)?);
+    let mut zip = ZipWriter::new(file);
     zip.start_file("report.json", options)?;
     zip.write_all(report)?;
     zip.start_file("summary.txt", options)?;

@@ -67,7 +67,7 @@ fn parse_root(path: &str) -> (Root<'_>, &str) {
     {
         return (Root::Drive(letter.to_ascii_uppercase()), chars.as_str());
     }
-    let root = if path.starts_with(r"\\") {
+    let root = if path.starts_with(r"\\") || path.starts_with("//") {
         Root::Unc(None, None)
     } else if path.starts_with('/') {
         Root::Unix
@@ -131,6 +131,9 @@ impl Redactor {
     }
 
     fn render_segment(&self, segment: &str, file: bool) -> String {
+        if is_segment_token(segment) {
+            return segment.to_owned();
+        }
         let tag = if file { 'f' } else { 'd' };
         let mut output = format!("<{tag}:{}>", self.salt.token(segment));
         if file && let Some(extension) = extension(segment) {
@@ -141,10 +144,42 @@ impl Redactor {
     }
 }
 
+pub(crate) const ALLOWED_EXTENSIONS: &[&str] = &[
+    "txt", "pdf", "doc", "docx", "xls", "xlsx", "xlsm", "csv", "ppt", "pptx", "odt", "ods", "odp",
+    "rtf", "md", "log", "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "html", "htm", "css",
+    "js", "ts", "rs", "py", "ps1", "bat", "cmd", "sh", "sql", "db", "sqlite", "zip", "7z", "rar",
+    "tar", "gz", "iso", "exe", "dll", "msi", "lnk", "png", "jpg", "jpeg", "gif", "bmp", "svg",
+    "webp", "ico", "tif", "tiff", "mp3", "wav", "flac", "mp4", "mkv", "avi", "mov", "eml", "msg",
+    "pst", "ost", "tmp", "bak", "bin", "dat",
+];
+
+pub(crate) fn is_allowed_extension(extension: &str) -> bool {
+    ALLOWED_EXTENSIONS
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(extension))
+}
+
 pub(super) fn extension(segment: &str) -> Option<&str> {
     let (_, extension) = segment.rsplit_once('.')?;
-    ((1..=8).contains(&extension.len()) && extension.chars().all(|ch| ch.is_ascii_alphanumeric()))
-        .then_some(extension)
+    is_allowed_extension(extension).then_some(extension)
+}
+
+pub(super) fn is_segment_token(segment: &str) -> bool {
+    if segment == "<user>" {
+        return true;
+    }
+    let Some((head, rest)) = segment.split_once('>') else {
+        return false;
+    };
+    let Some((tag, hex)) = head.strip_prefix('<').and_then(|t| t.split_once(':')) else {
+        return false;
+    };
+    let extension_ok =
+        rest.is_empty() || (tag == "f" && rest.strip_prefix('.').is_some_and(is_allowed_extension));
+    matches!(tag, "d" | "f")
+        && hex.len() == 4
+        && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        && extension_ok
 }
 
 fn length_class(length: usize) -> LengthClass {

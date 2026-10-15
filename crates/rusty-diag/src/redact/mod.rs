@@ -7,6 +7,7 @@ mod salt;
 mod text;
 
 use names::NetworkNames;
+pub(crate) use path::is_allowed_extension;
 pub use salt::Salt;
 
 #[derive(Debug, Clone, Default)]

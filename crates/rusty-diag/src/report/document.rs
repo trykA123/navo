@@ -113,8 +113,28 @@ fn error(record: &ErrorRecord, redactor: &Redactor) -> ErrorRecord {
 }
 
 fn event(line: &str, redactor: &Redactor) -> Value {
-    let redacted = redactor.text(line);
-    serde_json::from_str(redacted.trim_end()).unwrap_or(Value::String(redacted))
+    match serde_json::from_str::<Value>(line.trim_end()) {
+        Ok(value) => redact_value(value, redactor),
+        Err(_) => Value::String(redactor.text(line)),
+    }
+}
+
+fn redact_value(value: Value, redactor: &Redactor) -> Value {
+    match value {
+        Value::String(text) => Value::String(redactor.text(&text)),
+        Value::Array(items) => Value::Array(
+            items
+                .into_iter()
+                .map(|item| redact_value(item, redactor))
+                .collect(),
+        ),
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(key, item)| (redactor.text(&key), redact_value(item, redactor)))
+                .collect(),
+        ),
+        other => other,
+    }
 }
 
 fn memory(report: &MemoryReport, redactor: &Redactor) -> Memory {

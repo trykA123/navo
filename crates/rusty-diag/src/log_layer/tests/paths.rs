@@ -102,8 +102,8 @@ fn is_redacted_path_accepts_redacted_shapes() {
         r"D:\<d:91bc>\<f:07e1>",
         r"C:\<user>",
         "/<user>/<d:abcd>/<f:0123>.md",
-        "/<d:abcd>/<f:0123>.tar9",
-        r"<user>\<f:07e1>.abcdefgh",
+        "/<d:abcd>/<f:0123>.7z",
+        r"<user>\<f:07e1>.sqlite",
         r"<d:3fa2>\<f:07e1>.jpg",
     ];
     let refused: Vec<&str> = accepted
@@ -123,6 +123,7 @@ fn is_redacted_path_rejects_everything_else() {
         r"C:\<d:3fa>\<f:07e1>.jpg",
         r"C:\<d:3fa2>\<f:07e1>.JPG",
         r"C:\<d:3fa2>\<f:07e1>.abcdefghi",
+        r"C:\<d:3fa2>\<f:07e1>.smith",
         r"C:\<d:3fa2>.jpg",
         r"C:\<f:07e1>.jpg extra",
         r"\\server\<share:1>\<d:0000>",

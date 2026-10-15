@@ -45,7 +45,11 @@ impl<'a> FieldVisitor<'a> {
 }
 
 fn is_path_field(name: &str) -> bool {
-    name == "path" || name.ends_with("_path")
+    const NAMES: [&str; 10] = [
+        "path", "file", "folder", "dir", "name", "src", "dst", "dest", "from", "to",
+    ];
+    const SUFFIXES: [&str; 4] = ["_path", "_file", "_dir", "_name"];
+    NAMES.contains(&name) || SUFFIXES.iter().any(|suffix| name.ends_with(suffix))
 }
 
 fn is_query_field(name: &str) -> bool {
@@ -58,6 +62,12 @@ impl Visit for FieldVisitor<'_> {
         if is_path_field(field.name()) && is_redacted_path(&text) {
             self.fields
                 .push((field.name().to_owned(), Value::String(text)));
+        } else if is_query_field(field.name()) {
+            let unquoted = text
+                .strip_prefix('"')
+                .and_then(|t| t.strip_suffix('"'))
+                .unwrap_or(&text);
+            self.push_text(field, unquoted);
         } else {
             self.push_text(field, &text);
         }
