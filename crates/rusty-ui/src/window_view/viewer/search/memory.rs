@@ -10,6 +10,7 @@ use super::jobs::run_detached;
 use super::marks::recount_marks;
 use super::{Marked, Marking};
 use crate::prelude::*;
+use crate::window_view::viewer::body::Carried;
 use crate::window_view::viewer::{FileHooks, FileStamp};
 
 const SAVE_AFTER: Duration = Duration::from_millis(800);
@@ -19,6 +20,7 @@ pub struct MemoryLink {
     pub hooks: FileHooks,
     pub location: Location,
     pub stamp: Option<FileStamp>,
+    pub carried: Option<Carried>,
 }
 
 #[derive(Default)]
@@ -40,7 +42,23 @@ fn recall(link: &MemoryLink) -> Remembered {
         history: (link.hooks.history)(),
         memory: link
             .stamp
+            .filter(|_| link.carried.is_none())
             .and_then(|stamp| (link.hooks.memory)(&link.location, stamp)),
+    }
+}
+
+fn merge_marks(into: &mut MarkSet, loaded: MarkSet) {
+    for mark in loaded.iter() {
+        if into.colour_of(&mark.needle).is_none() {
+            let _ = into.set(mark.needle.clone(), mark.colour);
+        }
+    }
+}
+
+fn merge_bookmarks(into: &mut Bookmarks, loaded: &Bookmarks) {
+    let current: Vec<u64> = into.iter().collect();
+    for at in loaded.iter().filter(|at| !current.contains(at)) {
+        into.toggle(at);
     }
 }
 
@@ -80,9 +98,15 @@ impl Marking {
 
 pub(in crate::window_view::viewer) fn attach_memory<V: Marked>(
     view: &mut V,
-    link: MemoryLink,
+    mut link: MemoryLink,
     cx: &mut Context<V>,
 ) {
+    if let Some(carried) = link.carried.clone() {
+        let marking = view.marking();
+        marking.marks.set = carried.marks;
+        marking.bookmarks = carried.bookmarks.unwrap_or_default();
+        recount_marks(view, cx);
+    }
     let (sender, receiver) = oneshot::channel();
     let worker = link.clone();
     run_detached(
@@ -97,6 +121,7 @@ pub(in crate::window_view::viewer) fn attach_memory<V: Marked>(
         }
     });
     let release = cx.on_release(|view: &mut V, cx| view.marking().save_now(cx));
+    link.carried = None;
     let memory = &mut view.marking().memory;
     memory.link = Some(link);
     memory.loading = Some(loading);
@@ -107,13 +132,28 @@ fn remembered_loaded<V: Marked>(view: &mut V, remembered: Remembered, cx: &mut C
     let marking = view.marking();
     marking.memory.loading = None;
     marking.history.merge_older(remembered.history);
-    if let Some((marks, bookmarks)) = remembered.memory.filter(|_| !marking.memory.is_dirty) {
-        marking.marks.set = marks;
-        marking.bookmarks = bookmarks;
+    if let Some((marks, bookmarks)) = remembered.memory {
+        merge_marks(&mut marking.marks.set, marks);
+        merge_bookmarks(&mut marking.bookmarks, &bookmarks);
         marking.rev += 1;
         recount_marks(view, cx);
     }
     cx.notify();
+}
+
+pub(in crate::window_view::viewer) fn restamp<V: Marked>(
+    view: &mut V,
+    stamp: FileStamp,
+    cx: &mut Context<V>,
+) {
+    let Some(link) = &mut view.marking().memory.link else {
+        return;
+    };
+    if link.stamp.is_none() {
+        return;
+    }
+    link.stamp = Some(stamp);
+    memory_changed(view, cx);
 }
 
 pub(in crate::window_view::viewer) fn memory_changed<V: Marked>(view: &mut V, cx: &mut Context<V>) {
@@ -126,4 +166,38 @@ pub(in crate::window_view::viewer) fn memory_changed<V: Marked>(view: &mut V, cx
         cx.background_executor().timer(SAVE_AFTER).await;
         let _ = this.update(cx, |view, cx| view.marking().save_now(cx));
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use rusty_core::marks::{Bookmarks, MarkSet};
+    use rusty_core::paging::Needle;
+
+    use super::{merge_bookmarks, merge_marks};
+
+    fn word(text: &str) -> Needle {
+        Needle::Text {
+            text: text.to_owned(),
+            match_case: false,
+        }
+    }
+
+    #[test]
+    fn late_memory_adds_to_what_was_set_meanwhile_and_keeps_its_colours() {
+        let mut current = MarkSet::default();
+        current.set(word("alpha"), 1).expect("room");
+        let mut loaded = MarkSet::default();
+        loaded.set(word("alpha"), 5).expect("room");
+        loaded.set(word("beta"), 2).expect("room");
+        merge_marks(&mut current, loaded);
+        assert_eq!(current.colour_of(&word("alpha")), Some(1));
+        assert_eq!(current.colour_of(&word("beta")), Some(2));
+        let mut marked = Bookmarks::default();
+        marked.toggle(10);
+        let mut remembered = Bookmarks::default();
+        remembered.toggle(10);
+        remembered.toggle(40);
+        merge_bookmarks(&mut marked, &remembered);
+        assert_eq!(marked.iter().collect::<Vec<_>>(), [10, 40]);
+    }
 }

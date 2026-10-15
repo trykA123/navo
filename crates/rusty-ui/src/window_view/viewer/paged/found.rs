@@ -9,6 +9,8 @@ use super::lines::PagedKind;
 use crate::prelude::*;
 use crate::window_view::viewer::search::find_all::{FoundRow, PanelRows, preview};
 
+const PREVIEW_CAP: usize = 4096;
+
 struct Probe<'a, S: ?Sized> {
     source: &'a S,
     kind: PagedKind,
@@ -102,11 +104,16 @@ impl PagedView {
                     rows
                 })
                 .await;
-            let _ = this.update(cx, |view, cx| {
-                view.preview_job = None;
-                view.previews.extend(rows);
-                cx.notify();
-            });
+            let _ = this.update(cx, |view, cx| view.previews_loaded(rows, cx));
         }));
+    }
+
+    fn previews_loaded(&mut self, rows: Vec<(u64, FoundRow)>, cx: &mut Context<Self>) {
+        self.preview_job = None;
+        if self.previews.len() + rows.len() > PREVIEW_CAP {
+            self.previews.clear();
+        }
+        self.previews.extend(rows);
+        cx.notify();
     }
 }

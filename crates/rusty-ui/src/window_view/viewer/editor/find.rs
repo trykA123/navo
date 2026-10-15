@@ -194,7 +194,7 @@ impl EditorView {
     }
 
     pub(super) fn count_text(&self) -> Option<SharedString> {
-        let counted = self.marking.count.as_ref().map(|run| &run.counted)?;
+        let counted = self.marking.counted()?;
         Some(count_label(counted, self.find.hit).into())
     }
 }

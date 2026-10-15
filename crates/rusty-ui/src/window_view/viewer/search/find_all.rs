@@ -6,7 +6,8 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{FocusHandle, HighlightStyle, Role, StyledText};
 use rusty_core::paging::Needle;
 
-use super::count::{KEEP, count_search, needle_width};
+use super::count::count_search;
+use super::scan::{KEEP, needle_width};
 use super::{Marked, Marking};
 use crate::format;
 use crate::prelude::*;
@@ -17,6 +18,7 @@ pub(in crate::window_view::viewer) struct FindAll {
     needle: Needle,
     width: u64,
     starts: Option<Arc<Vec<u64>>>,
+    generation: u64,
     pub selected: usize,
     scroll: ListScroll,
     pub focus: FocusHandle,
@@ -88,18 +90,16 @@ impl Marking {
     }
 
     pub(in crate::window_view::viewer) fn sync_find_all(&mut self) {
-        let counted = self
-            .count
-            .as_ref()
-            .filter(|run| run.counted.done)
-            .map(|run| (&run.needle, &run.counted.starts));
         let Some(panel) = &mut self.find_all else {
             return;
         };
-        if let Some((_, starts)) = counted.filter(|(needle, _)| **needle == panel.needle)
-            && panel.starts.is_none()
-        {
-            panel.starts = Some(Arc::new(starts.clone()));
+        let landed = self
+            .count
+            .as_ref()
+            .filter(|run| run.tally.counted.done && *run.needle() == panel.needle && !run.failed);
+        if let Some(run) = landed.filter(|run| run.generation != panel.generation) {
+            panel.starts = Some(Arc::new(run.tally.counted.starts.clone()));
+            panel.generation = run.generation;
         }
     }
 }
@@ -117,6 +117,7 @@ pub(in crate::window_view::viewer) fn open_find_all<V: Marked>(
         width: needle_width(&needle),
         needle,
         starts: None,
+        generation: 0,
         selected: 0,
         scroll: ListScroll::new(),
         focus,
@@ -256,6 +257,9 @@ fn list_rows(
 }
 
 fn panel_title(marking: &Marking) -> String {
+    if marking.count.as_ref().is_some_and(|run| run.failed) {
+        return "Find all · the file could not be read".to_owned();
+    }
     let Some(counted) = marking.counted().filter(|counted| counted.done) else {
         return "Find all · counting…".to_owned();
     };

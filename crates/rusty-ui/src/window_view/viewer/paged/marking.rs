@@ -24,6 +24,7 @@ impl Marked for PagedView {
 
     fn jump(&mut self, hit: Range<u64>, _: &mut Window, cx: &mut Context<Self>) {
         self.find.anchor = Some(hit.start);
+        self.follow_moved(Move::Offset(hit.start));
         self.queue_move(Move::Offset(hit.start), cx);
         self.find.hit = Some(hit);
     }

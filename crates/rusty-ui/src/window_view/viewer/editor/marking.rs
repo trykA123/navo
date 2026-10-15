@@ -19,6 +19,8 @@ use crate::window_view::viewer::search::overview::TickScale;
 use crate::window_view::viewer::search::{Marked, Marking, source_changed, toggle_bookmark};
 
 const SEARCH_FIRST: &str = "Search first; then Ctrl+1…8 marks it.";
+const EDIT_SEARCH: &str =
+    "Ctrl+1…8 cannot read the edit search. Mark it from the viewer search before editing.";
 const NO_BOOKMARKS: &str = "No bookmarks yet. Ctrl+F2 sets one.";
 const READ_ONLY: &str = "Line endings show while reading.";
 const NO_FOLLOW: &str = "Follow works in the paged view of large text files.";
@@ -91,6 +93,9 @@ impl EditorView {
     }
 
     fn mark(&mut self, colour: u8, cx: &mut Context<Self>) {
+        if self.editing {
+            return self.say(EDIT_SEARCH, cx);
+        }
         let Some(text) = self.typed(cx).or_else(|| self.find.last.clone()) else {
             return self.say(SEARCH_FIRST, cx);
         };
@@ -131,7 +136,7 @@ impl EditorView {
             let _ = this.update(cx, |view, cx| {
                 let text: Arc<str> = Arc::from(view.editor.read(cx).text().to_string());
                 view.marking.source = text_source(text);
-                source_changed(view, cx);
+                source_changed(view, None, cx);
             });
         }));
     }
@@ -201,11 +206,48 @@ impl EditorView {
     }
 }
 
+const BEFORE_HIT: usize = 256;
+const AFTER_HIT: usize = 512;
+
+fn char_floor(rope: &Rope, at: usize) -> usize {
+    rope.char_index_to_offset(rope.offset_to_char_index(at))
+}
+
+fn char_ceil(rope: &Rope, at: usize) -> usize {
+    let floor = char_floor(rope, at);
+    if floor == at {
+        return at;
+    }
+    rope.char_index_to_offset(rope.offset_to_char_index(at) + 1)
+}
+
 fn found_in(rope: &Rope, start: u64, width: u64) -> FoundRow {
     let offset = usize::try_from(start).unwrap_or(0).min(rope.len());
     let row = rope.offset_to_point(offset).row;
-    let hit = offset - rope.line_start_offset(row);
+    let (line_start, line_end) = (rope.line_start_offset(row), rope.line_end_offset(row));
     let width = usize::try_from(width).unwrap_or(0);
-    let line = rope.slice_line(row).to_string();
-    preview((row + 1).to_string(), &line, hit..hit + width)
+    let from = char_floor(rope, line_start.max(offset.saturating_sub(BEFORE_HIT)));
+    let to = char_ceil(rope, line_end.min(offset + width + AFTER_HIT)).max(from);
+    let window = rope.slice(from..to).to_string();
+    let hit = offset - from;
+    preview((row + 1).to_string(), &window, hit..hit + width)
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::base::input::Rope;
+
+    use super::found_in;
+
+    #[test]
+    fn a_hit_deep_in_a_long_line_shows_only_a_window_around_it() {
+        let mut line = "é".repeat(200_000);
+        line.push_str("needle");
+        line.push_str(&"x".repeat(100_000));
+        let rope = Rope::from(line.as_str());
+        let row = found_in(&rope, 400_000, 6);
+        assert!(row.text.len() < 1024, "{} bytes", row.text.len());
+        assert_eq!(&row.text[row.hit.clone()], "needle");
+        assert_eq!(row.place.as_ref(), "1");
+    }
 }

@@ -5,7 +5,7 @@ use gpui_kit::{AnyView, FocusHandle, Focusable};
 use super::EditorView;
 use crate::prelude::*;
 use crate::window_view::viewer::FileText;
-use crate::window_view::viewer::body::{BodyAct, BodyKeys, Host, Key, ViewerBody};
+use crate::window_view::viewer::body::{BodyAct, BodyKeys, Carried, Host, Key, ViewerBody};
 use crate::window_view::viewer::search::bar::{FIND_KEYS, LIST_KEYS, MARK_KEYS};
 
 pub(in crate::window_view::viewer) struct EditorFile {
@@ -69,6 +69,14 @@ impl ViewerBody for EditorBody {
 
     fn act(&self, act: BodyAct, _: &mut Window, cx: &mut App) {
         self.0.update(cx, |view, cx| view.act(act, cx));
+    }
+
+    fn carry(&self, cx: &App) -> Option<Carried> {
+        let view = self.0.read(cx);
+        Some(Carried {
+            marks: view.marking.marks.set.clone(),
+            bookmarks: view.persists.then(|| view.marking.bookmarks.clone()),
+        })
     }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {

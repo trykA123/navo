@@ -119,6 +119,10 @@ impl PagedView {
         attach_memory(self, link, cx);
     }
 
+    pub(super) fn marking_now(&self) -> &Marking {
+        &self.marking
+    }
+
     pub fn find_all(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.open_bar(BarKind::Find, window, cx);
         if let Some(bar) = &self.find.bar {
@@ -168,6 +172,7 @@ impl PagedView {
         self.shift = 0;
         self.find.leave_kind();
         self.marking.count = None;
+        self.marking.rev += 1;
         self.marking.find_all = None;
         self.previews.clear();
         if kind == PagedKind::Hex {
@@ -244,8 +249,9 @@ impl PagedView {
         self.changed = true;
         self.source_rev += 1;
         self.previews.clear();
-        source_changed(self, cx);
         let len = self.source.len();
+        let appended_to = self.is_following().then_some(len);
+        source_changed(self, appended_to, cx);
         if self.top >= len {
             self.queue_move(Move::Offset(len), cx);
         } else {

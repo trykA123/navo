@@ -13,11 +13,11 @@ use rusty_core::encoding::TextEncoding;
 
 pub(super) use body::{EditorBody, EditorFile};
 
-use super::FileStamp;
-use super::body::Host;
+use super::body::{Carried, Host};
 use super::search::Marking;
 use super::search::memory::{MemoryLink, attach_memory};
 use super::search::overview::Overview;
+use super::{FileStamp, FileText};
 use crate::prelude::*;
 use crate::tokens::Mode;
 use find::EditorFind;
@@ -33,6 +33,7 @@ pub(super) struct EditorView {
     crlf: bool,
     encoding: TextEncoding,
     stamp: Option<FileStamp>,
+    persists: bool,
     dirty: bool,
     revision: u64,
     overwrite: bool,
@@ -47,10 +48,27 @@ pub(super) struct EditorView {
     _changes: Subscription,
 }
 
+fn memory_link(file: &FileText, host: &Host) -> (bool, MemoryLink) {
+    let persists =
+        file.encoding.encoding.name() == "UTF-8" && !file.encoding.bom && !file.read_only;
+    let carried = host.carried.clone().map(|carried| Carried {
+        bookmarks: carried.bookmarks.filter(|_| persists),
+        ..carried
+    });
+    let link = MemoryLink {
+        hooks: host.hooks.clone(),
+        location: host.location.clone(),
+        stamp: file.stamp.filter(|_| persists),
+        carried,
+    };
+    (persists, link)
+}
+
 impl EditorView {
     fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let EditorFile { file, language } = opened;
         let shared: Arc<str> = Arc::from(file.text.as_str());
+        let (persists, link) = memory_link(&file, &host);
         let text = file.text;
         let editor = cx.new(|cx| {
             let mut state = EditorState::new(window, cx)
@@ -68,11 +86,6 @@ impl EditorView {
                 view.text_changed(cx);
             }
         });
-        let link = MemoryLink {
-            hooks: host.hooks.clone(),
-            location: host.location.clone(),
-            stamp: file.stamp,
-        };
         let mut view = Self {
             host,
             editor,
@@ -81,6 +94,7 @@ impl EditorView {
             crlf: file.crlf,
             encoding: file.encoding,
             stamp: file.stamp,
+            persists,
             dirty: false,
             revision: 0,
             overwrite: false,

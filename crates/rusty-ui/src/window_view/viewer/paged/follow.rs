@@ -75,6 +75,10 @@ impl PagedView {
         }
     }
 
+    pub(super) fn is_following(&self) -> bool {
+        self.follower.state != Follow::Off
+    }
+
     pub(super) fn stop_following(&mut self) {
         self.follower = Follower::default();
     }

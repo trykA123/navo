@@ -1,34 +1,16 @@
-use std::time::Duration;
+use rusty_core::paging::{Counted, Needle, ordinal};
 
-use rusty_core::paging::{Counted, Needle, count, ordinal};
-
-use super::jobs::{Job, Throttle, spawn_job};
+use super::jobs::Job;
+use super::scan::{ScanUpdate, Tally, start_scans};
 use super::{Marked, Marking};
 use crate::format;
 use crate::prelude::*;
-use crate::window_view::viewer::files::Reopen;
-
-pub(in crate::window_view::viewer) const KEEP: usize = 100_000;
-const COUNT_EVERY: Duration = Duration::from_millis(100);
-
-pub(in crate::window_view::viewer) enum CountUpdate {
-    Running(u64),
-    Done(Counted),
-    Failed,
-}
 
 pub(in crate::window_view::viewer) struct CountRun {
-    pub needle: Needle,
-    pub counted: Counted,
-    is_recount: bool,
-    _job: Job,
-}
-
-pub(in crate::window_view::viewer) fn needle_width(needle: &Needle) -> u64 {
-    match needle {
-        Needle::Text { text, .. } => text.len() as u64,
-        Needle::Bytes(bytes) => bytes.len() as u64,
-    }
+    pub tally: Tally,
+    pub failed: bool,
+    pub generation: u64,
+    job: Option<Job>,
 }
 
 pub(in crate::window_view::viewer) fn count_label(counted: &Counted, hit: Option<u64>) -> String {
@@ -45,52 +27,69 @@ pub(in crate::window_view::viewer) fn count_label(counted: &Counted, hit: Option
     }
 }
 
-pub(in crate::window_view::viewer) fn start_count<V: 'static>(
-    source: Reopen,
-    needle: Needle,
-    cx: &mut Context<V>,
-    apply: impl Fn(&mut V, CountUpdate, &mut Context<V>) + 'static,
-) -> Job {
-    spawn_job(
-        cx,
-        move |cancel, send| {
-            let mut throttle = Throttle::new(COUNT_EVERY);
-            let counted = source().and_then(|source| {
-                count(&*source, &needle, KEEP, cancel, &mut |_, total| {
-                    throttle.when_due(|| send(CountUpdate::Running(total)));
-                })
-            });
-            match counted {
-                Ok(counted) if counted.done => send(CountUpdate::Done(counted)),
-                Ok(_) => {}
-                Err(_) => send(CountUpdate::Failed),
-            }
-        },
-        apply,
-    )
+impl CountRun {
+    pub(in crate::window_view::viewer) fn needle(&self) -> &Needle {
+        &self.tally.needle
+    }
+
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn is_scanning(&self) -> bool {
+        self.job.is_some()
+    }
 }
 
 impl Marking {
     pub(in crate::window_view::viewer) fn counted(&self) -> Option<&Counted> {
-        self.count.as_ref().map(|run| &run.counted)
+        self.count
+            .as_ref()
+            .filter(|run| !run.failed)
+            .map(|run| &run.tally.counted)
     }
 
-    fn count_update(&mut self, update: CountUpdate) {
+    fn count_update(&mut self, update: ScanUpdate) -> bool {
         let Some(run) = &mut self.count else {
-            return;
+            return false;
         };
         match update {
-            CountUpdate::Running(_) if run.is_recount => {}
-            CountUpdate::Running(total) => run.counted.total = total,
-            CountUpdate::Done(counted) => {
-                run.counted = counted;
+            ScanUpdate::Running(total) if !run.tally.counted.done => {
+                run.tally.counted.total = total
+            }
+            ScanUpdate::Landed(scanned) if scanned.needle == run.tally.needle => {
+                run.tally.land(scanned);
+                run.generation += 1;
                 self.rev += 1;
             }
-            CountUpdate::Failed => {
-                self.count = None;
+            ScanUpdate::Failed(needle) if needle == run.tally.needle => {
+                run.failed = true;
                 self.rev += 1;
             }
+            ScanUpdate::Finished => {
+                run.job = None;
+                return true;
+            }
+            _ => {}
         }
+        false
+    }
+}
+
+fn start_search_scan<V: Marked>(view: &mut V, cx: &mut Context<V>) {
+    let marking = view.marking();
+    let source = marking.source.clone();
+    let Some(run) = marking.count.as_mut().filter(|run| run.job.is_none()) else {
+        return;
+    };
+    let Some(scan) = run.tally.take_scan() else {
+        return;
+    };
+    let job = start_scans(source, vec![scan], cx, |view: &mut V, update, cx| {
+        if view.marking().count_update(update) {
+            start_search_scan(view, cx);
+        }
+        cx.notify();
+    });
+    if let Some(run) = &mut view.marking().count {
+        run.job = Some(job);
     }
 }
 
@@ -103,36 +102,30 @@ pub(in crate::window_view::viewer) fn count_search<V: Marked>(
     if marking
         .count
         .as_ref()
-        .is_some_and(|run| run.needle == needle)
+        .is_some_and(|run| *run.needle() == needle)
     {
         return;
     }
-    restart_count(view, needle, cx);
-}
-
-pub(in crate::window_view::viewer) fn restart_count<V: Marked>(
-    view: &mut V,
-    needle: Needle,
-    cx: &mut Context<V>,
-) {
-    let source = view.marking().source.clone();
-    let job = start_count(source, needle.clone(), cx, |view: &mut V, update, cx| {
-        view.marking().count_update(update);
-        cx.notify();
-    });
-    let marking = view.marking();
-    let earlier = marking
-        .count
-        .take()
-        .filter(|run| run.needle == needle && run.counted.done)
-        .map(|run| run.counted);
     marking.count = Some(CountRun {
-        needle,
-        is_recount: earlier.is_some(),
-        counted: earlier.unwrap_or_default(),
-        _job: job,
+        tally: Tally::new(needle),
+        failed: false,
+        generation: 0,
+        job: None,
     });
     marking.rev += 1;
+    start_search_scan(view, cx);
+}
+
+pub(in crate::window_view::viewer) fn count_source_changed<V: Marked>(
+    view: &mut V,
+    appended_to: Option<u64>,
+    cx: &mut Context<V>,
+) {
+    if let Some(run) = &mut view.marking().count {
+        run.failed = false;
+        run.tally.source_changed(appended_to);
+    }
+    start_search_scan(view, cx);
 }
 
 #[cfg(test)]

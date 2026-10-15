@@ -4,26 +4,20 @@ use rusty_core::marks::{MarkError, MarkSet};
 use rusty_core::paging::Needle;
 
 use super::Marked;
-use super::count::{CountUpdate, needle_width, start_count};
 use super::jobs::Job;
+use super::scan::{ScanUpdate, Tally, start_scans};
 use crate::prelude::*;
-
-pub(in crate::window_view::viewer) struct MarkHits {
-    needle: Needle,
-    width: u64,
-    starts: Vec<u64>,
-    _job: Option<Job>,
-}
 
 #[derive(Default)]
 pub(in crate::window_view::viewer) struct MarkLayer {
     pub set: MarkSet,
     pub rev: u64,
-    hits: Vec<MarkHits>,
+    hits: Vec<Tally>,
+    job: Option<Job>,
 }
 
 impl MarkLayer {
-    fn colour_of(&self, hits: &MarkHits) -> Option<u8> {
+    fn colour_of(&self, hits: &Tally) -> Option<u8> {
         self.set.colour_of(&hits.needle)
     }
 
@@ -36,13 +30,12 @@ impl MarkLayer {
             let Some(colour) = self.colour_of(hits) else {
                 continue;
             };
-            let first = hits
-                .starts
-                .partition_point(|start| start + hits.width <= span.start);
-            let inside = hits.starts[first..]
+            let (starts, width) = (&hits.counted.starts, hits.width());
+            let first = starts.partition_point(|start| start + width <= span.start);
+            let inside = starts[first..]
                 .iter()
                 .take_while(|start| **start < span.end);
-            ranges.extend(inside.map(|start| (*start..start + hits.width, colour)));
+            ranges.extend(inside.map(|start| (*start..start + width, colour)));
         }
         ranges
     }
@@ -51,64 +44,98 @@ impl MarkLayer {
         self.hits
             .iter()
             .filter_map(|hits| Some((hits, self.colour_of(hits)?)))
-            .flat_map(|(hits, colour)| hits.starts.iter().map(move |start| (*start, colour)))
+            .flat_map(|(hits, colour)| {
+                hits.counted
+                    .starts
+                    .iter()
+                    .map(move |start| (*start, colour))
+            })
             .collect()
     }
 
-    fn landed(&mut self, needle: &Needle, update: CountUpdate) {
-        let Some(hits) = self.hits.iter_mut().find(|hits| hits.needle == *needle) else {
-            return;
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn is_scanning(&self) -> bool {
+        self.job.is_some()
+    }
+
+    fn landed(&mut self, update: ScanUpdate) -> bool {
+        let (needle, scanned) = match update {
+            ScanUpdate::Landed(scanned) => (scanned.needle.clone(), Some(scanned)),
+            ScanUpdate::Failed(needle) => (needle, None),
+            ScanUpdate::Running(_) | ScanUpdate::Finished => return false,
         };
-        match update {
-            CountUpdate::Done(counted) => hits.starts = counted.starts,
-            CountUpdate::Failed => hits.starts.clear(),
-            CountUpdate::Running(_) => return,
+        let Some(hits) = self.hits.iter_mut().find(|hits| hits.needle == needle) else {
+            return false;
+        };
+        match scanned {
+            Some(scanned) => hits.land(scanned),
+            None => hits.counted.starts.clear(),
         }
-        hits._job = None;
         self.rev += 1;
+        true
+    }
+
+    fn want(&mut self, needle: Needle) {
+        match self.hits.iter_mut().find(|hits| hits.needle == needle) {
+            Some(hits) => hits.source_changed(None),
+            None => self.hits.push(Tally::new(needle)),
+        }
     }
 }
 
-fn count_mark<V: Marked>(view: &mut V, needle: Needle, cx: &mut Context<V>) {
-    let source = view.marking().source.clone();
-    let key = needle.clone();
-    let job = start_count(
-        source,
-        needle.clone(),
-        cx,
-        move |view: &mut V, update, cx| {
-            let marking = view.marking();
-            marking.marks.landed(&key, update);
-            marking.rev += 1;
-            cx.notify();
-        },
-    );
-    let layer = &mut view.marking().marks;
-    match layer.hits.iter_mut().find(|hits| hits.needle == needle) {
-        Some(hits) => hits._job = Some(job),
-        None => layer.hits.push(MarkHits {
-            width: needle_width(&needle),
-            needle,
-            starts: Vec::new(),
-            _job: Some(job),
-        }),
+fn mark_update<V: Marked>(view: &mut V, update: ScanUpdate, cx: &mut Context<V>) {
+    let marking = view.marking();
+    if matches!(update, ScanUpdate::Finished) {
+        marking.marks.job = None;
+        return start_marks_scan(view, cx);
     }
+    if marking.marks.landed(update) {
+        marking.rev += 1;
+        cx.notify();
+    }
+}
+
+fn start_marks_scan<V: Marked>(view: &mut V, cx: &mut Context<V>) {
+    let marking = view.marking();
+    if marking.marks.job.is_some() {
+        return;
+    }
+    let scans: Vec<_> = marking
+        .marks
+        .hits
+        .iter_mut()
+        .filter_map(Tally::take_scan)
+        .collect();
+    if scans.is_empty() {
+        return;
+    }
+    let source = marking.source.clone();
+    let job = start_scans(source, scans, cx, mark_update::<V>);
+    view.marking().marks.job = Some(job);
 }
 
 pub(in crate::window_view::viewer) fn recount_marks<V: Marked>(view: &mut V, cx: &mut Context<V>) {
-    let needles: Vec<Needle> = view
-        .marking()
-        .marks
-        .set
-        .iter()
-        .map(|mark| mark.needle.clone())
-        .collect();
     let layer = &mut view.marking().marks;
+    let needles: Vec<Needle> = layer.set.iter().map(|mark| mark.needle.clone()).collect();
     layer.hits.retain(|hits| needles.contains(&hits.needle));
-    layer.rev += 1;
     for needle in needles {
-        count_mark(view, needle, cx);
+        layer.want(needle);
     }
+    layer.rev += 1;
+    start_marks_scan(view, cx);
+}
+
+pub(in crate::window_view::viewer) fn marks_source_changed<V: Marked>(
+    view: &mut V,
+    appended_to: Option<u64>,
+    cx: &mut Context<V>,
+) {
+    let layer = &mut view.marking().marks;
+    layer
+        .hits
+        .iter_mut()
+        .for_each(|hits| hits.source_changed(appended_to));
+    start_marks_scan(view, cx);
 }
 
 fn mark_error(error: &MarkError) -> String {
@@ -135,7 +162,8 @@ pub(in crate::window_view::viewer) fn toggle_mark<V: Marked>(
             .set(needle.clone(), colour)
             .map_err(|error| mark_error(&error))?;
         if is_new {
-            count_mark(view, needle, cx);
+            view.marking().marks.want(needle);
+            start_marks_scan(view, cx);
         }
     }
     marks_changed(view, cx);
@@ -146,6 +174,7 @@ pub(in crate::window_view::viewer) fn clear_marks<V: Marked>(view: &mut V, cx: &
     let layer = &mut view.marking().marks;
     layer.set.clear();
     layer.hits.clear();
+    layer.job = None;
     marks_changed(view, cx);
 }
 
@@ -155,4 +184,40 @@ pub(in crate::window_view::viewer) fn marks_changed<V: Marked>(view: &mut V, cx:
     marking.marks.rev += 1;
     super::memory::memory_changed(view, cx);
     cx.notify();
+}
+
+#[cfg(test)]
+mod tests {
+    use rusty_core::paging::{Counted, Needle};
+
+    use super::MarkLayer;
+    use crate::window_view::viewer::search::scan::{ScanUpdate, Scanned};
+
+    fn word() -> Needle {
+        Needle::Text {
+            text: "needle".to_owned(),
+            match_case: false,
+        }
+    }
+
+    #[test]
+    fn only_a_landed_scan_changes_the_layer() {
+        let mut layer = MarkLayer::default();
+        layer.want(word());
+        assert!(!layer.landed(ScanUpdate::Running(40)));
+        assert!(!layer.landed(ScanUpdate::Finished));
+        assert_eq!(layer.rev, 0);
+        let scanned = Scanned {
+            needle: word(),
+            from: 0,
+            len: 100,
+            counted: Counted {
+                total: 1,
+                starts: vec![7],
+                done: true,
+            },
+        };
+        assert!(layer.landed(ScanUpdate::Landed(scanned)));
+        assert_eq!(layer.rev, 1);
+    }
 }

@@ -10,10 +10,11 @@ use super::lines::PagedKind;
 use super::moves::Move;
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
-use crate::window_view::viewer::search::count::{count_search, needle_width};
+use crate::window_view::viewer::search::count::count_search;
 use crate::window_view::viewer::search::find_all::open_find_all;
 use crate::window_view::viewer::search::history::Recall;
 use crate::window_view::viewer::search::jobs::Job;
+use crate::window_view::viewer::search::scan::needle_width;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum BarKind {
@@ -248,6 +249,7 @@ impl PagedView {
     fn found(&mut self, result: Result<Found, String>, search: Progress, cx: &mut Context<Self>) {
         match result {
             Ok(Found::At(at)) => {
+                self.follow_moved(Move::Offset(at));
                 self.queue_move(Move::Offset(at), cx);
                 self.find.hit = Some(at..at + search.width);
                 self.find.anchor = Some(at);
@@ -297,6 +299,8 @@ impl PagedView {
                 self.set_bar_error(None, cx);
                 self.marking.remember_search(&needle, cx);
                 self.find.last = Some(text);
+                self.previews.clear();
+                self.preview_job = None;
                 open_find_all(self, needle, window, cx);
             }
             Err(error) => self.set_bar_error(Some(error), cx),

@@ -1,20 +1,24 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use rusty_core::paging::{ByteSource, LineIndex};
 
-use super::find::numbered_lines;
-use super::{EDIT_LIMIT, Setup, hooks, redraw, text_of, top, window_with};
+use super::find::{line_start, numbered_lines};
+use super::search::{paged_marking, search_for};
+use super::{EDIT_LIMIT, Setup, hooks, paged, redraw, text_of, top, window_with};
 use crate::window_view::FerriteWindow;
-use crate::window_view::tests::{fake, press, settle};
+use crate::window_view::tests::{fake, press, settle, type_in};
 use crate::window_view::viewer::{FileHooks, Head, Kinds, Paged};
 
 #[derive(Clone, Default)]
 struct Growing {
     bytes: Arc<Mutex<Vec<u8>>>,
     changed: Arc<AtomicBool>,
+    scanned: Arc<AtomicU64>,
+    is_scan: bool,
 }
 
 impl Growing {
@@ -26,6 +30,10 @@ impl Growing {
     fn snapshot(&self) -> Vec<u8> {
         self.bytes.lock().expect("bytes").clone()
     }
+
+    fn scanned_bytes(&self) -> u64 {
+        self.scanned.swap(0, Ordering::Relaxed)
+    }
 }
 
 impl ByteSource for Growing {
@@ -34,11 +42,16 @@ impl ByteSource for Growing {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
-        self.bytes
+        let read = self
+            .bytes
             .lock()
             .expect("bytes")
             .as_slice()
-            .read_at(offset, buf)
+            .read_at(offset, buf)?;
+        if self.is_scan {
+            self.scanned.fetch_add(read as u64, Ordering::Relaxed);
+        }
+        Ok(read)
     }
 
     fn take_changed(&self) -> bool {
@@ -46,8 +59,12 @@ impl ByteSource for Growing {
     }
 }
 
-fn paged(growing: &Growing) -> Paged {
-    let (reopened, indexed) = (growing.clone(), growing.clone());
+fn growing_paged(growing: &Growing) -> Paged {
+    let reopened = Growing {
+        is_scan: true,
+        ..growing.clone()
+    };
+    let indexed = growing.clone();
     Paged {
         source: Arc::new(growing.clone()),
         reopen: Arc::new(move || Ok(Box::new(reopened.clone()) as Box<dyn ByteSource + Send>)),
@@ -72,7 +89,7 @@ fn growing_hooks(growing: &Growing) -> FileHooks {
                 len: EDIT_LIMIT + 1,
             })
         }),
-        paged: Arc::new(move |_| Ok(paged(&source))),
+        paged: Arc::new(move |_| Ok(growing_paged(&source))),
         ..hooks(Setup::new(Vec::new()), &super::Log::default())
     }
 }
@@ -113,4 +130,133 @@ fn follow_keeps_the_view_on_the_end_until_a_scroll_up_pauses_it(cx: &mut TestApp
     growing.append(&more_lines(2201));
     tick(cx, window, &view);
     assert_eq!(top(cx, &view), paused);
+}
+
+fn needle_lines(from: usize) -> Vec<u8> {
+    (from..from + 200)
+        .map(|line| format!("line {line:05} needle\n"))
+        .collect::<String>()
+        .into_bytes()
+}
+
+fn scans(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> (usize, Option<u64>) {
+    paged_marking(cx, view, |marking| {
+        let total = marking.counted().filter(|counted| counted.done);
+        (marking.running_scans(), total.map(|counted| counted.total))
+    })
+}
+
+fn redraw_grown(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<FerriteWindow>,
+) -> usize {
+    paged(cx, view).update(cx, |_, cx| cx.notify());
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("window");
+    scans(cx, view).0
+}
+
+#[gpui_kit::test]
+fn growth_while_following_scans_only_the_new_bytes_with_two_scans_at_most(cx: &mut TestAppContext) {
+    let growing = Growing::default();
+    growing.append(&numbered_lines());
+    let original = growing.len();
+    growing.changed.store(false, Ordering::Relaxed);
+    let (window, view) = window_with(cx, fake(), growing_hooks(&growing), Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "alt-f");
+    for (text, mark) in [("line", "ctrl-1"), ("000", "ctrl-2"), ("needle", "ctrl-3")] {
+        search_for(cx, window, &view, text);
+        press(cx, window, &view, mark);
+        press(cx, window, &view, "escape");
+    }
+    assert_eq!(scans(cx, &view), (0, Some(2)));
+    let _ = growing.scanned_bytes();
+    for from in [2001, 2201] {
+        growing.append(&needle_lines(from));
+        let running = redraw_grown(cx, window, &view);
+        assert_eq!(running, 2);
+    }
+    while cx.executor().tick() {
+        let (running, _) = scans(cx, &view);
+        assert!(running <= 2, "{running} scans at once");
+    }
+    settle(cx, &view);
+    tick(cx, window, &view);
+    assert_eq!(scans(cx, &view), (0, Some(402)));
+    let line_marks = paged_marking(cx, &view, |marking| {
+        marking
+            .marks
+            .ranges_in(0..u64::MAX)
+            .iter()
+            .filter(|(_, colour)| *colour == 0)
+            .count()
+    });
+    assert_eq!(line_marks, 2400);
+    let grown = growing.len() - original;
+    let scanned = growing.scanned_bytes();
+    let four_tails = 4 * (grown + 8);
+    assert!(
+        scanned <= four_tails,
+        "scanned {scanned} bytes for {grown} new"
+    );
+}
+
+#[gpui_kit::test]
+fn a_find_jump_pauses_follow_and_the_view_stays_on_the_hit(cx: &mut TestAppContext) {
+    let growing = Growing::default();
+    growing.append(&numbered_lines());
+    growing.changed.store(false, Ordering::Relaxed);
+    let (window, view) = window_with(cx, fake(), growing_hooks(&growing), Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "alt-f");
+    assert_eq!(text_of(cx, window, "paged-follow"), "Following");
+    press(cx, window, &view, "ctrl-f");
+    type_in(cx, window, &view, "needle");
+    press(cx, window, &view, "shift-enter");
+    press(cx, window, &view, "escape");
+    let hit = line_start(&numbered_lines(), 900);
+    let on_hit = top(cx, &view);
+    assert!(on_hit <= hit, "{on_hit} is past the hit at {hit}");
+    assert!(text_of(cx, window, "paged-follow").starts_with("Paused"));
+    growing.append(&more_lines(2001));
+    tick(cx, window, &view);
+    assert_eq!(top(cx, &view), on_hit);
+}
+
+fn found_rows(cx: &mut TestAppContext, window: AnyWindowHandle) -> usize {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        (0..8_usize)
+            .take_while(|row| {
+                window
+                    .within("find-all-list")
+                    .try_find(("row", *row))
+                    .is_some()
+            })
+            .count()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn find_all_lists_matches_that_arrive_while_following(cx: &mut TestAppContext) {
+    let growing = Growing::default();
+    growing.append(&numbered_lines());
+    growing.changed.store(false, Ordering::Relaxed);
+    let (window, view) = window_with(cx, fake(), growing_hooks(&growing), Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "alt-f");
+    press(cx, window, &view, "ctrl-f");
+    type_in(cx, window, &view, "needle");
+    press(cx, window, &view, "alt-enter");
+    assert_eq!(found_rows(cx, window), 2);
+    growing.append(b"line 02001 needle\n");
+    tick(cx, window, &view);
+    tick(cx, window, &view);
+    assert_eq!(found_rows(cx, window), 3);
 }

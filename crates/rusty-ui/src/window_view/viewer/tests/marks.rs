@@ -5,7 +5,7 @@ use rusty_core::paging::Needle;
 
 use super::find::{line_start, numbered_lines};
 use super::search::{editor_view, paged_marking, search_for};
-use super::{Setup, label, redraw, text_window, top};
+use super::{Setup, label, redraw, text_of, text_window, top};
 use crate::window_view::tests::press;
 
 const NEEDLE_AT: u64 = 11;
@@ -82,6 +82,19 @@ fn ctrl_3_marks_the_search_in_the_text_editor(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn ctrl_1_while_editing_explains_that_the_edit_search_cannot_be_marked(cx: &mut TestAppContext) {
+    let (window, view, _) = text_window(cx, Setup::new(b"one two one\n".to_vec()));
+    search_for(cx, window, &view, "one");
+    press(cx, window, &view, "escape");
+    press(cx, window, &view, "ctrl-e");
+    press(cx, window, &view, "ctrl-1");
+    let editor = editor_view(cx, &view);
+    let marks = editor.read_with(cx, |view, _| view.marking_state().marks.set.is_empty());
+    assert!(marks);
+    assert!(text_of(cx, window, "viewer-message").contains("Ctrl+1"));
+}
+
+#[gpui_kit::test]
 fn the_overview_strip_shows_marks_and_hits_at_their_rows(cx: &mut TestAppContext) {
     let bytes = numbered_lines();
     let len = bytes.len() as u64;
@@ -98,6 +111,25 @@ fn the_overview_strip_shows_marks_and_hits_at_their_rows(cx: &mut TestAppContext
         .flat_map(|(range, _)| [(range.start, 2), (range.start, 8)])
         .collect();
     assert_eq!(shown, ticks(&spans, len, rows));
+}
+
+#[gpui_kit::test]
+fn switching_to_hex_clears_the_hit_ticks_of_the_text_search(cx: &mut TestAppContext) {
+    let (window, view, _) = text_window(cx, Setup::huge(numbered_lines()));
+    search_for(cx, window, &view, "needle");
+    press(cx, window, &view, "escape");
+    redraw(cx, window);
+    let hits = |marking: &crate::window_view::viewer::search::Marking| {
+        marking
+            .ticks()
+            .iter()
+            .filter(|(_, lane)| *lane == 8)
+            .count()
+    };
+    assert!(paged_marking(cx, &view, hits) > 0);
+    press(cx, window, &view, "alt-3");
+    redraw(cx, window);
+    assert_eq!(paged_marking(cx, &view, hits), 0);
 }
 
 #[gpui_kit::test]

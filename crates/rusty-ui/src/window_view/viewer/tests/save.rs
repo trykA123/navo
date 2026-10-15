@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use gpui_kit::TestAppContext;
 
+use super::search::search_for;
 use super::{editor_text, press_only, redraw, text_of, window_with};
 use crate::window_view::tests::{fake, press, settle, type_in};
 use crate::window_view::viewer::{FileHooks, FileStamp, FileText, Head, Kinds, SaveError};
@@ -97,4 +99,35 @@ fn a_save_that_lands_after_a_kind_switch_never_updates_the_new_editor(cx: &mut T
     assert!(text_of(cx, window, "viewer-message").starts_with("Changed on disk"));
     let disk = disk.lock().expect("disk");
     assert_eq!((disk.writes, disk.text.as_str()), (1, "xhello\n"));
+}
+
+#[gpui_kit::test]
+fn marks_save_again_under_the_new_stamp_after_ctrl_s(cx: &mut TestAppContext) {
+    let disk = Shared::new(Mutex::new(Disk {
+        text: "hello\n".to_owned(),
+        stamp: 1,
+        ..Disk::default()
+    }));
+    let stamps = Arc::new(Mutex::new(Vec::new()));
+    let saved = stamps.clone();
+    let files = FileHooks {
+        save_memory: Arc::new(move |_, stamp, _, _| {
+            saved.lock().expect("stamps").push(stamp.modified_ms);
+        }),
+        ..disk_hooks(&disk)
+    };
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    search_for(cx, window, &view, "hello");
+    press(cx, window, &view, "ctrl-3");
+    press(cx, window, &view, "escape");
+    cx.executor().advance_clock(Duration::from_secs(1));
+    settle(cx, &view);
+    press(cx, window, &view, "ctrl-e");
+    type_in(cx, window, &view, "x");
+    press(cx, window, &view, "ctrl-s");
+    cx.executor().advance_clock(Duration::from_secs(1));
+    settle(cx, &view);
+    assert_eq!(*stamps.lock().expect("stamps"), [1, 2]);
 }

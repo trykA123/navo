@@ -15,7 +15,7 @@ mod view;
 use gpui_kit::FocusHandle;
 use rusty_core::Location;
 
-pub use body::{Attach, BodyAct, BodyKeys, Host, Key, ViewerBody};
+pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, ViewerBody};
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
 };
@@ -45,6 +45,7 @@ pub(super) struct Viewer {
     leaving: Option<u64>,
     switching: Option<(Slot, u64)>,
     message: Option<SharedString>,
+    carried: Option<Carried>,
 }
 
 impl Viewer {
@@ -65,6 +66,7 @@ impl Viewer {
             leaving: None,
             switching: None,
             message: None,
+            carried: None,
         }
     }
 

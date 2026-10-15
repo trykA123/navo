@@ -6,6 +6,7 @@ pub(in crate::window_view::viewer) mod jobs;
 pub(in crate::window_view::viewer) mod marks;
 pub(in crate::window_view::viewer) mod memory;
 pub(in crate::window_view::viewer) mod overview;
+pub(in crate::window_view::viewer) mod scan;
 
 use std::ops::Range;
 
@@ -74,9 +75,22 @@ pub(in crate::window_view::viewer) fn toggle_bookmark<V: Marked>(
     marks::marks_changed(view, cx);
 }
 
-pub(in crate::window_view::viewer) fn source_changed<V: Marked>(view: &mut V, cx: &mut Context<V>) {
-    if let Some(needle) = view.marking().count.as_ref().map(|run| run.needle.clone()) {
-        count::restart_count(view, needle, cx);
+pub(in crate::window_view::viewer) fn source_changed<V: Marked>(
+    view: &mut V,
+    appended_to: Option<u64>,
+    cx: &mut Context<V>,
+) {
+    count::count_source_changed(view, appended_to, cx);
+    marks::marks_source_changed(view, appended_to, cx);
+}
+
+#[cfg(test)]
+impl Marking {
+    pub(in crate::window_view::viewer) fn running_scans(&self) -> usize {
+        usize::from(
+            self.count
+                .as_ref()
+                .is_some_and(count::CountRun::is_scanning),
+        ) + usize::from(self.marks.is_scanning())
     }
-    marks::recount_marks(view, cx);
 }

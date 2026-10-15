@@ -3,6 +3,7 @@ use rusty_core::encoding::TextEncoding;
 
 use super::EditorView;
 use crate::prelude::*;
+use crate::window_view::viewer::search::memory::restamp;
 use crate::window_view::viewer::{FileHooks, FileStamp, Save, SaveError};
 
 const SAVING: &str = "Saving…";
@@ -71,6 +72,9 @@ impl EditorView {
                 self.stamp = stamp;
                 self.dirty = self.revision != revision;
                 self.note = Some(SAVED.into());
+                if let Some(stamp) = stamp.filter(|_| self.persists) {
+                    restamp(self, stamp, cx);
+                }
             }
             Err(SaveError::Changed) => {
                 self.overwrite = true;

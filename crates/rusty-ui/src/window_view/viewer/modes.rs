@@ -73,6 +73,7 @@ impl FerriteWindow {
             title: viewer.title.clone(),
             location: viewer.location.clone(),
             hooks: self.files.clone(),
+            carried: viewer.carried.clone(),
             on_saved: Rc::new(move |cx| {
                 let this = this.clone();
                 cx.defer(move |cx| {
@@ -110,6 +111,7 @@ impl FerriteWindow {
         };
         viewer.opening = None;
         viewer.kind = Some(shown.kind);
+        viewer.carried = None;
         viewer.clear_body();
         match attached {
             Ok(body) => viewer.body = Some(body),
@@ -176,6 +178,7 @@ impl FerriteWindow {
             },
         );
         if let Some(viewer) = &mut self.viewer {
+            viewer.carried = viewer.body.as_ref().and_then(|body| body.carry(cx));
             viewer.clear_body();
             viewer.opening = Some(opening);
             window.focus(&viewer.focus, cx);
