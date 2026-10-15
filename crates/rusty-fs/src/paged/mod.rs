@@ -2,6 +2,7 @@ mod index;
 
 use std::fs::File;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -24,17 +25,22 @@ struct Page {
 }
 
 struct Cache {
-    len: u64,
     modified: Option<SystemTime>,
     pages: Vec<Page>,
     reads: u64,
-    changed: bool,
     end_checked: Option<Instant>,
 }
 
 pub struct PagedFile {
     file: File,
+    len: AtomicU64,
+    changed: AtomicBool,
     cache: Mutex<Cache>,
+}
+
+struct Stat {
+    len: u64,
+    modified: Option<SystemTime>,
 }
 
 impl PagedFile {
@@ -47,15 +53,15 @@ impl PagedFile {
             return Err("Only files open here.".to_owned());
         }
         let cache = Cache {
-            len: metadata.len(),
             modified: metadata.modified().ok(),
             pages: Vec::with_capacity(CACHE_PAGES),
             reads: 0,
-            changed: false,
             end_checked: None,
         };
         Ok(Self {
             file,
+            len: AtomicU64::new(metadata.len()),
+            changed: AtomicBool::new(false),
             cache: Mutex::new(cache),
         })
     }
@@ -74,77 +80,99 @@ impl PagedFile {
         self.cache().pages.len()
     }
 
-    fn check_change(&self, cache: &mut Cache) {
-        let Ok(metadata) = self.file.metadata() else {
+    fn stat(&self) -> Option<Stat> {
+        let metadata = self.file.metadata().ok()?;
+        Some(Stat {
+            len: metadata.len(),
+            modified: metadata.modified().ok(),
+        })
+    }
+
+    fn apply(&self, cache: &mut Cache, stat: Option<Stat>) {
+        let Some(stat) = stat else {
             return;
         };
-        let modified = metadata.modified().ok();
-        if metadata.len() != cache.len || modified != cache.modified {
-            cache.len = metadata.len();
-            cache.modified = modified;
+        if stat.len != self.len.load(Ordering::Acquire) || stat.modified != cache.modified {
+            self.len.store(stat.len, Ordering::Release);
+            cache.modified = stat.modified;
             cache.pages.clear();
-            cache.changed = true;
+            self.changed.store(true, Ordering::Release);
         }
     }
 
-    fn load(&self, cache: &mut Cache, number: u64) -> Result<(), String> {
-        self.check_change(cache);
-        let mut bytes = vec![0u8; PAGE_SIZE];
-        let count = read_file(&self.file, number * PAGE, &mut bytes)?;
-        bytes.truncate(count);
-        cache.reads += 1;
-        if cache.pages.len() >= CACHE_PAGES {
-            cache.pages.pop();
+    fn past_end(&self, offset: u64) -> bool {
+        if offset < self.len.load(Ordering::Acquire) {
+            return false;
         }
-        cache.pages.insert(0, Page { number, bytes });
-        Ok(())
-    }
-
-    fn copy_from_page(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
-        let mut cache = self.cache();
-        if offset >= cache.len {
+        let due = {
+            let mut cache = self.cache();
             let due = cache
                 .end_checked
                 .is_none_or(|checked| checked.elapsed() >= END_CHECK_EVERY);
             if due {
                 cache.end_checked = Some(Instant::now());
-                self.check_change(&mut cache);
             }
-            if offset >= cache.len {
-                return Ok(0);
-            }
+            due
+        };
+        if due {
+            let stat = self.stat();
+            self.apply(&mut self.cache(), stat);
+        }
+        offset >= self.len.load(Ordering::Acquire)
+    }
+
+    fn copy_cached(&self, number: u64, within: usize, buf: &mut [u8]) -> Option<usize> {
+        let mut cache = self.cache();
+        let at = cache
+            .pages
+            .iter()
+            .position(|page| page.number == number && page.bytes.len() > within)?;
+        let page = cache.pages.remove(at);
+        let count = copy_out(&page.bytes, within, buf);
+        cache.pages.insert(0, page);
+        Some(count)
+    }
+
+    fn copy_from_page(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
+        if self.past_end(offset) {
+            return Ok(0);
         }
         let number = offset / PAGE;
         let within = usize::try_from(offset % PAGE).unwrap_or(0);
-        let hit = cache
-            .pages
-            .iter()
-            .position(|page| page.number == number && page.bytes.len() > within);
-        match hit {
-            Some(at) => {
-                let page = cache.pages.remove(at);
-                cache.pages.insert(0, page);
-            }
-            None => {
-                cache.pages.retain(|page| page.number != number);
-                self.load(&mut cache, number)?;
-            }
+        if let Some(count) = self.copy_cached(number, within, buf) {
+            return Ok(count);
         }
-        let page = &cache.pages[0].bytes;
-        let available = page.get(within..).unwrap_or_default();
-        let count = available.len().min(buf.len());
-        buf[..count].copy_from_slice(&available[..count]);
+        let stat = self.stat();
+        let mut bytes = vec![0u8; PAGE_SIZE];
+        let read = read_file(&self.file, number * PAGE, &mut bytes)?;
+        bytes.truncate(read);
+        let count = copy_out(&bytes, within, buf);
+        let mut cache = self.cache();
+        self.apply(&mut cache, stat);
+        cache.reads += 1;
+        cache.pages.retain(|page| page.number != number);
+        if cache.pages.len() >= CACHE_PAGES {
+            cache.pages.pop();
+        }
+        cache.pages.insert(0, Page { number, bytes });
         Ok(count)
     }
 }
 
+fn copy_out(page: &[u8], within: usize, buf: &mut [u8]) -> usize {
+    let available = page.get(within..).unwrap_or_default();
+    let count = available.len().min(buf.len());
+    buf[..count].copy_from_slice(&available[..count]);
+    count
+}
+
 impl ByteSource for PagedFile {
     fn len(&self) -> u64 {
-        self.cache().len
+        self.len.load(Ordering::Acquire)
     }
 
     fn take_changed(&self) -> bool {
-        std::mem::take(&mut self.cache().changed)
+        self.changed.swap(false, Ordering::AcqRel)
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {

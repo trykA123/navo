@@ -61,3 +61,5 @@ pub fn paged(location: &Location) -> Result<Paged, String> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_paths;
