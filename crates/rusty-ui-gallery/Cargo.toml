@@ -6,6 +6,8 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+rusty-core = { path = "../rusty-core" }
+rusty-fs = { path = "../rusty-fs" }
 rusty-ui = { path = "../rusty-ui" }
 
 [dev-dependencies]

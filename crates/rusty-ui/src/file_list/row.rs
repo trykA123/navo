@@ -1,0 +1,166 @@
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::{
+    BoxShadow, Div, FontWeight, Hsla, ParentElement, Pixels, SharedString, Styled, div, point, px,
+};
+use rusty_fs::{EntryKind, FsEntry};
+
+use super::kind;
+use crate::primitives::{IconName, icon};
+use crate::tokens::Theme;
+
+const HIDDEN_ICON_OPACITY: f32 = 0.55;
+
+pub(super) struct RowLook<'a> {
+    pub theme: &'a Theme,
+    pub entry: &'a FsEntry,
+    pub index: usize,
+    pub is_cursor: bool,
+    pub is_marked: bool,
+    pub is_active_pane: bool,
+}
+
+fn ext_column(t: &Theme) -> Pixels {
+    t.spacing.xxl * 3.
+}
+
+fn date_column(t: &Theme) -> Pixels {
+    t.spacing.date_column + t.spacing.xl
+}
+
+fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
+    vec![BoxShadow {
+        color,
+        offset: point(px(0.), px(0.)),
+        blur_radius: px(0.),
+        spread_radius: px(1.),
+        inset: true,
+    }]
+}
+
+fn columns(t: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.md)
+        .w_full()
+        .pl(t.spacing.xl)
+        .pr(t.spacing.xxl)
+}
+
+fn right_cell(width: Pixels, text: impl Into<SharedString>) -> Div {
+    div()
+        .w(width)
+        .flex_none()
+        .flex()
+        .justify_end()
+        .overflow_hidden()
+        .child(text.into())
+}
+
+pub(super) fn header(t: &Theme) -> Div {
+    let c = &t.colors;
+    columns(t)
+        .flex_none()
+        .h(t.spacing.row_height)
+        .text_size(t.typography.tiny)
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(c.muted)
+        .bg(c.rail)
+        .border_t_1()
+        .border_b_1()
+        .border_color(c.line)
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(t.spacing.xs)
+                .flex_1()
+                .child("Name")
+                .child(icon(IconName::ArrowUp, px(10.), c.accent_text)),
+        )
+        .child(div().w(ext_column(t)).flex_none().child("Ext"))
+        .child(right_cell(t.spacing.size_column, "Size"))
+        .child(right_cell(date_column(t), "Date"))
+}
+
+fn name_cell(look: &RowLook, name: &str, extension: &str) -> Div {
+    let t = look.theme;
+    let c = &t.colors;
+    let entry = look.entry;
+    let (glyph, glyph_color) = kind::icon(entry.kind, extension, c);
+    let is_folder = entry.kind == EntryKind::Folder;
+    let text = if is_folder {
+        format!("[{name}]")
+    } else {
+        name.to_owned()
+    };
+    let glyph = div()
+        .flex_none()
+        .when(entry.attributes.hidden, |d| d.opacity(HIDDEN_ICON_OPACITY))
+        .child(icon(glyph, t.spacing.icon - px(1.), glyph_color));
+    div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.md)
+        .flex_1()
+        .min_w_0()
+        .child(glyph)
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .when(is_folder || look.is_marked, |d| {
+                    d.font_weight(FontWeight::SEMIBOLD)
+                })
+                .child(text),
+        )
+}
+
+fn name_color(look: &RowLook) -> Hsla {
+    let c = &look.theme.colors;
+    match (look.is_marked, look.entry.attributes.hidden) {
+        (true, _) => c.mark,
+        (false, true) => c.muted,
+        (false, false) => c.text,
+    }
+}
+
+pub(super) fn cells(look: &RowLook) -> Div {
+    let t = look.theme;
+    let c = &t.colors;
+    let entry = look.entry;
+    let display = entry.name.display();
+    let (name, extension) = kind::split_name(&display, entry.kind);
+    let number_color = if look.is_marked { c.mark } else { c.muted };
+    let numbers = div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.md)
+        .flex_none()
+        .font_family(t.typography.numbers_font.clone())
+        .text_size(t.typography.small)
+        .text_color(number_color)
+        .when(look.is_marked, |d| d.font_weight(FontWeight::BOLD))
+        .child(right_cell(t.spacing.size_column, kind::size_text(entry)))
+        .child(right_cell(date_column(t), kind::date_text(entry)));
+    let is_active_cursor = look.is_cursor && look.is_active_pane;
+    let is_idle_cursor = look.is_cursor && !look.is_active_pane;
+    columns(t)
+        .h_full()
+        .text_color(name_color(look))
+        .when(look.index % 2 == 1, |d| d.bg(c.zebra))
+        .when(is_active_cursor, |d| {
+            d.bg(c.selection).shadow(inset_ring(c.accent))
+        })
+        .when(is_idle_cursor, |d| d.shadow(inset_ring(c.line)))
+        .child(name_cell(look, name, extension))
+        .child(
+            div()
+                .w(ext_column(t))
+                .flex_none()
+                .truncate()
+                .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
+                .child(extension.to_owned()),
+        )
+        .child(numbers)
+}

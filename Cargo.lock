@@ -6164,6 +6164,7 @@ version = "0.0.1"
 name = "rusty-ui"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "futures",
  "gpui-kit",
  "rusty-core",
@@ -6175,6 +6176,8 @@ name = "rusty-ui-gallery"
 version = "0.0.1"
 dependencies = [
  "gpui-kit",
+ "rusty-core",
+ "rusty-fs",
  "rusty-ui",
 ]
 
