@@ -3,7 +3,7 @@ mod scheduler;
 
 use rusty_core::Location;
 
-pub use runner::{IoQueue, Job, OwnerGuard};
+pub use runner::{IoQueue, Job, JobSlot, OwnerGuard};
 pub use scheduler::{Cancelled, Scheduler};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

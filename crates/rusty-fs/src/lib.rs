@@ -8,8 +8,8 @@ mod provider;
 
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use io_queue::{
-    Cancelled, IoQueue, Job, JobId, OwnerGuard, OwnerId, Priority, Scheduler, VolumeId, VolumeKind,
-    volume_of,
+    Cancelled, IoQueue, Job, JobId, JobSlot, OwnerGuard, OwnerId, Priority, Scheduler, VolumeId,
+    VolumeKind, volume_of,
 };
 pub use local::LocalFs;
 pub use provider::{

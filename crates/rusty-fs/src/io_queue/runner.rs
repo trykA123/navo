@@ -9,6 +9,13 @@ use crate::provider::CancelToken;
 
 pub type Job = Box<dyn FnOnce(&CancelToken) + Send + 'static>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobSlot {
+    pub volume: VolumeId,
+    pub priority: Priority,
+    pub owner: OwnerId,
+}
+
 #[derive(Default)]
 struct State {
     scheduler: Scheduler,
@@ -131,11 +138,12 @@ impl IoQueue {
         }
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "signature fixed by the P6 F9 contract"
-    )]
-    pub fn submit(&self, volume: VolumeId, priority: Priority, owner: OwnerId, job: Job) -> JobId {
+    pub fn submit(&self, slot: JobSlot, job: Job) -> JobId {
+        let JobSlot {
+            volume,
+            priority,
+            owner,
+        } = slot;
         let mut state = self.shared.lock();
         let id = state.scheduler.push(volume.clone(), priority, owner);
         if state.closed {

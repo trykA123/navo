@@ -52,7 +52,12 @@ fn submit(
     owner: OwnerId,
     job: impl FnOnce(&CancelToken) + Send + 'static,
 ) -> JobId {
-    queue.submit(vol("V:"), priority, owner, Box::new(job))
+    let slot = JobSlot {
+        volume: vol("V:"),
+        priority,
+        owner,
+    };
+    queue.submit(slot, Box::new(job))
 }
 
 fn signal<T: Send + 'static>(
@@ -272,4 +277,77 @@ fn shutdown_drops_queued_jobs_unrun() {
     let (_, ran, returned) = shutdown_with_running_and_queued();
     collect(&returned, 1);
     assert!(!ran.load(Ordering::SeqCst));
+}
+
+#[test]
+fn a_job_submitted_as_the_last_worker_exits_still_runs() {
+    let queue = queue_with(VolumeKind::Hdd);
+    let (done, wait_done) = mpsc::channel();
+    for round in 0..200 {
+        submit(&queue, Priority::Visible, A, signal(&done, round));
+        assert_eq!(collect(&wait_done, 1), vec![round]);
+    }
+}
+
+#[test]
+fn dropping_the_queue_inside_a_job_does_not_deadlock() {
+    let holder: Arc<Mutex<Option<IoQueue>>> =
+        Arc::new(Mutex::new(Some(queue_with(VolumeKind::Ssd))));
+    let (done, wait_done) = mpsc::channel();
+    let inner = Arc::clone(&holder);
+    let job = move |_: &CancelToken| {
+        let queue = inner.lock().expect("holder lock").take();
+        drop(queue);
+        let _ = done.send(());
+    };
+    if let Some(queue) = holder.lock().expect("holder lock").as_ref() {
+        submit(queue, Priority::Visible, A, job);
+    }
+    assert!(wait_done.recv_timeout(WAIT).is_ok());
+}
+
+#[test]
+fn raising_the_limit_starts_queued_jobs() {
+    let queue = queue_with(VolumeKind::Hdd);
+    let release = blocker(&queue, A);
+    let (started, wait_started) = mpsc::channel();
+    for index in 0..3 {
+        submit(&queue, Priority::Visible, A, signal(&started, index));
+    }
+    queue.set_volume(vol("V:"), VolumeKind::Network);
+    let mut seen = collect(&wait_started, 3);
+    seen.sort_unstable();
+    release.open();
+    assert_eq!(seen, vec![0, 1, 2]);
+}
+
+#[test]
+fn lowering_the_limit_while_busy_limits_later_jobs() {
+    let queue = queue_with(VolumeKind::Ssd);
+    let releases: Vec<Arc<Gate>> = (0..3).map(|_| blocker(&queue, A)).collect();
+    queue.set_volume(vol("V:"), VolumeKind::Hdd);
+    releases.iter().for_each(|gate| gate.open());
+    let active = Arc::new(AtomicUsize::new(0));
+    let high = Arc::new(AtomicUsize::new(0));
+    let (done, wait_done) = mpsc::channel();
+    for _ in 0..4 {
+        let (active, high, done) = (active.clone(), high.clone(), done.clone());
+        submit(&queue, Priority::Visible, A, move |_| {
+            let now = active.fetch_add(1, Ordering::SeqCst) + 1;
+            high.fetch_max(now, Ordering::SeqCst);
+            thread::yield_now();
+            active.fetch_sub(1, Ordering::SeqCst);
+            let _ = done.send(());
+        });
+    }
+    collect(&wait_done, 4);
+    assert_eq!(high.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn an_owner_guard_outliving_its_queue_drops_cleanly() {
+    let queue = IoQueue::new();
+    let guard = queue.owner();
+    drop(queue);
+    drop(guard);
 }
