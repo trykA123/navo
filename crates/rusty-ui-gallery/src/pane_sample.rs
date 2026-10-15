@@ -35,7 +35,7 @@ pub fn rows() -> Rc<[FsEntry]> {
     let file = EntryKind::File;
     vec![
         entry("src", EntryKind::Folder, 0, 120),
-        entry("tests", EntryKind::Folder, 0, 300),
+        entry("tests", EntryKind::Folder, 2_722_951_735, 300),
         entry(".gitignore", file, 96, 40_000),
         entry("Cargo.lock", file, 41_233, 95),
         entry("Cargo.toml", file, 812, 95),
@@ -45,7 +45,7 @@ pub fn rows() -> Rc<[FsEntry]> {
         entry("logo.png", file, 48_211, 7_200),
         entry("pane.rs", file, 7_372, 240),
         entry("README.md", file, 2_048, 2_880),
-        entry("release-0.0.1.zip", file, 3_402_118, 4_320),
+        entry("release-0.0.1.zip", file, 1_313_828_071_552, 4_320),
         entry("workspace.rs", file, 9_830, 240),
     ]
     .into()
