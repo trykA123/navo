@@ -1,23 +1,29 @@
+mod acts;
 mod body;
 mod editor;
 mod files;
+mod keys;
 mod keys_bar;
 mod kinds;
 mod lister;
 mod modes;
 mod open;
 mod paged;
+mod search;
 mod view;
 
-use gpui_kit::{FocusHandle, KeyBinding};
+use gpui_kit::FocusHandle;
 use rusty_core::Location;
 
-pub use body::{Attach, BodyKeys, Host, Key, ViewerBody};
+pub use body::{Attach, BodyAct, BodyKeys, Host, Key, ViewerBody};
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
 };
+pub use keys::bind_keys;
+use keys::*;
 pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
+pub use search::memory::MemoryLink;
 
 use super::FerriteWindow;
 use crate::prelude::*;
@@ -26,70 +32,6 @@ use open::Opening;
 const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
-
-gpui_kit::actions!(
-    viewer,
-    [
-        SaveFile,
-        CloseViewer,
-        EditFile,
-        ShowText,
-        ShowHex,
-        ShowRich,
-        ListerText,
-        ListerHex,
-        ListerRich,
-        FindNext,
-        FindOnEnter,
-        FindPrevious,
-        NextFile,
-        PreviousFile,
-        RowUp,
-        RowDown,
-        PageUp,
-        PageDown,
-        GoStart,
-        GoEnd,
-        ScrollLeft,
-        ScrollRight,
-        OpenFind,
-        OpenGoTo,
-        MatchCase,
-        Back,
-    ]
-);
-
-pub fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("ctrl-s", SaveFile, context),
-        KeyBinding::new("escape", CloseViewer, context),
-        KeyBinding::new("ctrl-e", EditFile, context),
-        KeyBinding::new("alt-1", ShowText, context),
-        KeyBinding::new("alt-3", ShowHex, context),
-        KeyBinding::new("alt-5", ShowRich, context),
-        KeyBinding::new("1", ListerText, context),
-        KeyBinding::new("3", ListerHex, context),
-        KeyBinding::new("5", ListerRich, context),
-        KeyBinding::new("f3", FindNext, context),
-        KeyBinding::new("shift-f3", FindPrevious, context),
-        KeyBinding::new("enter", FindOnEnter, context),
-        KeyBinding::new("n", NextFile, context),
-        KeyBinding::new("p", PreviousFile, context),
-        KeyBinding::new("up", RowUp, context),
-        KeyBinding::new("down", RowDown, context),
-        KeyBinding::new("pageup", PageUp, context),
-        KeyBinding::new("pagedown", PageDown, context),
-        KeyBinding::new("ctrl-home", GoStart, context),
-        KeyBinding::new("ctrl-end", GoEnd, context),
-        KeyBinding::new("left", ScrollLeft, context),
-        KeyBinding::new("right", ScrollRight, context),
-        KeyBinding::new("ctrl-f", OpenFind, context),
-        KeyBinding::new("ctrl-g", OpenGoTo, context),
-        KeyBinding::new("alt-c", MatchCase, context),
-        KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
-    ]);
-}
 
 pub(super) struct Viewer {
     location: Location,

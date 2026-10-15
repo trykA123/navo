@@ -56,6 +56,7 @@ pub fn paged(location: &Location) -> Result<Paged, String> {
         index: Arc::new(move |cancel, progress| index_lines(&path, cancel, progress)),
         summary: binary_summary(&head),
         editable: !looks_binary(&sniffed.bytes) && sniffed.len <= MAX_VIEW,
+        stamp: None,
     })
 }
 

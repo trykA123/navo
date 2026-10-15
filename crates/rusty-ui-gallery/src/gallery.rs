@@ -21,10 +21,11 @@ pub enum Page {
     PagedText,
     Drives,
     TypedPath,
+    Marks,
 }
 
 impl Page {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -32,6 +33,7 @@ impl Page {
         Self::PagedText,
         Self::Drives,
         Self::TypedPath,
+        Self::Marks,
     ];
 
     pub fn label(self) -> &'static str {
@@ -43,6 +45,7 @@ impl Page {
             Self::PagedText => "Paged text",
             Self::Drives => "Drives",
             Self::TypedPath => "Path",
+            Self::Marks => "Marks",
         }
     }
 }
@@ -56,6 +59,7 @@ pub struct Gallery {
     paged_text: Entity<PagedView>,
     drives: Entity<DrivesPage>,
     typed_path: Entity<DrivesPage>,
+    marks: Option<Entity<PagedView>>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -73,6 +77,7 @@ impl Gallery {
             paged_text: viewer_sample::text_view(cx),
             drives: cx.new(|cx| DrivesPage::new(Shows::Menu, cx)),
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
+            marks: None,
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -95,6 +100,7 @@ impl Gallery {
         let current = self.page;
         let pages: Vec<Button> = Page::ALL
             .into_iter()
+            .filter(|page| *page != Page::Marks)
             .map(|page| {
                 let variant = if page == current {
                     ButtonVariant::Primary
@@ -176,12 +182,19 @@ impl Render for Gallery {
             Page::PagedText => root.child(self.paged_text.clone()),
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
+            Page::Marks => root.child(self.marks_page(window, cx)),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }
 }
 
 impl Gallery {
+    fn marks_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Entity<PagedView> {
+        self.marks
+            .get_or_insert_with(|| viewer_sample::marks_view(window, cx))
+            .clone()
+    }
+
     fn primitives(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
         div()
             .flex()

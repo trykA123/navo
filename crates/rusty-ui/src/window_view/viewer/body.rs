@@ -22,6 +22,16 @@ pub struct Host {
     pub on_saved: Rc<dyn Fn(&mut App)>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BodyAct {
+    Mark(u8),
+    ClearMarks,
+    ToggleBookmark,
+    StepBookmark { backward: bool },
+    LineEnds,
+    Follow,
+}
+
 pub struct Attach {
     pub loaded: Box<dyn Any + Send>,
     pub host: Host,
@@ -57,4 +67,6 @@ pub trait ViewerBody: Any {
     }
 
     fn save(&self, _: &mut App) {}
+
+    fn act(&self, _: BodyAct, _: &mut Window, _: &mut App) {}
 }

@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use rusty_core::paging::{ByteSource, LineIndex};
+use rusty_core::marks::{Bookmarks, MarkSet};
+use rusty_core::paging::{ByteSource, LineIndex, Needle};
+use rusty_core::{Location, ProviderId};
 use rusty_ui::prelude::*;
-use rusty_ui::window_view::{Paged, PagedKind, PagedView};
+use rusty_ui::window_view::{FileHooks, FileStamp, MemoryLink, Paged, PagedKind, PagedView};
 
 const HEX_LEN: usize = 300 * 1024;
 const LOG_LINES: usize = 6000;
@@ -83,6 +85,7 @@ fn paged(bytes: Vec<u8>, summary: Option<&str>) -> Paged {
         }),
         summary: summary.map(str::to_owned),
         editable: false,
+        stamp: None,
     }
 }
 
@@ -94,4 +97,44 @@ pub fn hex_view(cx: &mut App) -> Entity<PagedView> {
 pub fn text_view(cx: &mut App) -> Entity<PagedView> {
     let sample = paged(log_lines(), None);
     cx.new(|cx| PagedView::new("sync-2026-10-15.log", sample, PagedKind::Text, cx))
+}
+
+fn word(text: &str) -> Needle {
+    Needle::Text {
+        text: text.to_owned(),
+        match_case: true,
+    }
+}
+
+fn sample_memory() -> (MarkSet, Bookmarks) {
+    let mut marks = MarkSet::default();
+    for (text, colour) in [("ERROR", 0), ("WARN", 2), ("user=admin", 5)] {
+        let _ = marks.set(word(text), colour);
+    }
+    let mut bookmarks = Bookmarks::default();
+    bookmarks.toggle(0);
+    (marks, bookmarks)
+}
+
+pub fn marks_view(window: &mut Window, cx: &mut App) -> Entity<PagedView> {
+    let bytes = log_lines();
+    let stamp = FileStamp {
+        len: bytes.len() as u64,
+        modified_ms: 1,
+    };
+    let link = MemoryLink {
+        hooks: FileHooks {
+            memory: Arc::new(|_, _| Some(sample_memory())),
+            ..FileHooks::none()
+        },
+        location: Location::provider_root(ProviderId::local()),
+        stamp: Some(stamp),
+    };
+    let sample = paged(bytes, None);
+    cx.new(|cx| {
+        let mut view = PagedView::new("sync-2026-10-15.log", sample, PagedKind::Text, cx);
+        view.attach_memory(link, cx);
+        view.find_all("cache=miss", window, cx);
+        view
+    })
 }

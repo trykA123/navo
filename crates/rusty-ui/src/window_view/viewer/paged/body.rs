@@ -5,18 +5,28 @@ use gpui_kit::{AnyView, FocusHandle, Focusable};
 use super::{PagedKind, PagedView};
 use crate::prelude::*;
 use crate::window_view::viewer::Paged;
-use crate::window_view::viewer::body::{BodyKeys, ViewerBody};
+use crate::window_view::viewer::body::{BodyAct, BodyKeys, Host, ViewerBody};
+use crate::window_view::viewer::search::memory::MemoryLink;
 
 pub(in crate::window_view::viewer) struct PagedBody(pub Entity<PagedView>);
 
 impl PagedBody {
     pub(in crate::window_view::viewer) fn new(
-        title: SharedString,
+        host: Host,
         paged: Paged,
         kind: PagedKind,
         cx: &mut App,
     ) -> Self {
-        Self(cx.new(|cx| PagedView::new(title, paged, kind, cx)))
+        let link = MemoryLink {
+            hooks: host.hooks,
+            location: host.location,
+            stamp: paged.stamp,
+        };
+        Self(cx.new(|cx| {
+            let mut view = PagedView::new(host.title, paged, kind, cx);
+            view.attach_memory(link, cx);
+            view
+        }))
     }
 
     pub(in crate::window_view::viewer) fn of(body: &dyn ViewerBody) -> Option<&Self> {
@@ -41,7 +51,7 @@ impl ViewerBody for PagedBody {
         let paged = self.0.read(cx);
         match paged.bar_keys() {
             Some(keys) => BodyKeys::Modal(keys.to_vec()),
-            None => BodyKeys::Normal(vec![("Ctrl+F", "Find"), ("F3", "Next"), paged.go_to_key()]),
+            None => BodyKeys::Normal(paged.reading_keys()),
         }
     }
 
@@ -56,5 +66,9 @@ impl ViewerBody for PagedBody {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn act(&self, act: BodyAct, _: &mut Window, cx: &mut App) {
+        self.0.update(cx, |paged, cx| paged.act(act, cx));
     }
 }

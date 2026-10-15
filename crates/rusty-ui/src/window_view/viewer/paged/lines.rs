@@ -16,6 +16,7 @@ pub(super) struct HexLine {
 
 pub(super) struct TextLine {
     pub start: u64,
+    pub end: u64,
     pub next: u64,
     pub text: String,
     pub line: Option<u64>,
@@ -88,6 +89,7 @@ pub(super) fn text_lines<S: ByteSource + ?Sized>(
             .filter(|_| index.is_some_and(|index| counted(index, row.start)));
         lines.push(TextLine {
             start: row.start,
+            end: row.end,
             next: row.next,
             text: String::from_utf8_lossy(&bytes[..read]).into_owned(),
             line,

@@ -1,12 +1,12 @@
 use std::any::Any;
 
-use gpui_kit::component::input::EditorState;
 use gpui_kit::{AnyView, FocusHandle, Focusable};
 
 use super::EditorView;
 use crate::prelude::*;
 use crate::window_view::viewer::FileText;
-use crate::window_view::viewer::body::{BodyKeys, Host, ViewerBody};
+use crate::window_view::viewer::body::{BodyAct, BodyKeys, Host, Key, ViewerBody};
+use crate::window_view::viewer::search::bar::{FIND_KEYS, LIST_KEYS, MARK_KEYS};
 
 pub(in crate::window_view::viewer) struct EditorBody(pub Entity<EditorView>);
 
@@ -20,24 +20,13 @@ impl EditorBody {
         Self(cx.new(|cx| EditorView::new(file, host, window, cx)))
     }
 
-    pub(in crate::window_view::viewer) fn editor(&self, cx: &App) -> Entity<EditorState> {
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn editor(
+        &self,
+        cx: &App,
+    ) -> Entity<gpui_kit::component::input::EditorState> {
         self.0.read(cx).editor.clone()
     }
-}
-
-fn find_in_editor(state: &mut EditorState, backward: bool, cx: &mut Context<EditorState>) {
-    let session = state.search_session();
-    if session.query.is_empty() {
-        state.open_search(false, cx);
-        return;
-    }
-    let (query, case_insensitive) = (session.query.clone(), session.case_insensitive);
-    state.set_search_query(query, case_insensitive, cx);
-    let _ = if backward {
-        state.previous_search_match(cx)
-    } else {
-        state.next_search_match(cx)
-    };
 }
 
 impl ViewerBody for EditorBody {
@@ -50,16 +39,31 @@ impl ViewerBody for EditorBody {
     }
 
     fn keys(&self, cx: &App) -> BodyKeys {
-        let mut keys = vec![("Ctrl+F", "Find"), ("F3", "Next")];
-        if self.is_editing(cx) {
+        let view = self.0.read(cx);
+        if view.marking.find_all.is_some() {
+            return BodyKeys::Modal(LIST_KEYS.to_vec());
+        }
+        if view.find.bar.is_some() {
+            return BodyKeys::Modal(FIND_KEYS.to_vec());
+        }
+        let mut keys: Vec<Key> = vec![("Ctrl+F", "Find"), ("F3", "Next")];
+        if view.editing {
             keys.push(("Ctrl+S", "Save"));
+        }
+        keys.extend(MARK_KEYS);
+        if !view.editing {
+            keys.push(("Alt+L", "Line ends"));
         }
         BodyKeys::Normal(keys)
     }
 
-    fn find_again(&self, backward: bool, _: &mut Window, cx: &mut App) {
-        let editor = self.editor(cx);
-        editor.update(cx, |state, cx| find_in_editor(state, backward, cx));
+    fn find_again(&self, backward: bool, window: &mut Window, cx: &mut App) {
+        self.0
+            .update(cx, |view, cx| view.find_again(backward, window, cx));
+    }
+
+    fn act(&self, act: BodyAct, _: &mut Window, cx: &mut App) {
+        self.0.update(cx, |view, cx| view.act(act, cx));
     }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {

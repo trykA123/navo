@@ -48,7 +48,7 @@ impl ViewerKind for Hex {
             .downcast::<Paged>()
             .map_err(|_| "The hex view got data it cannot show.".to_owned())?;
         Ok(Box::new(PagedBody::new(
-            attach.host.title,
+            attach.host,
             *paged,
             PagedKind::Hex,
             cx,
