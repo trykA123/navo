@@ -40,6 +40,27 @@ impl Window {
             .collect()
     }
 
+    pub(crate) fn restore(id: WindowId, layout: Layout, panes: Vec<Pane>) -> Result<Self, String> {
+        let mut others: BTreeMap<PaneId, Pane> = panes.into_iter().map(|p| (p.id(), p)).collect();
+        let mut wanted = layout.panes();
+        wanted.sort_unstable();
+        if others.keys().copied().collect::<Vec<_>>() != wanted {
+            return Err(format!(
+                "window {} lists other panes than its layout",
+                id.get()
+            ));
+        }
+        let focused = others
+            .remove(&layout.focused())
+            .ok_or_else(|| format!("window {} has no focused pane", id.get()))?;
+        Ok(Self {
+            id,
+            layout,
+            focused,
+            others,
+        })
+    }
+
     pub(super) fn new(id: WindowId, pane: Pane) -> Self {
         Self {
             id,

@@ -1,3 +1,5 @@
+mod convert;
+
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -66,15 +68,14 @@ pub enum SessionError {
     Invalid(String),
 }
 
-#[allow(unused_variables, reason = "stub until the session is implemented")]
 impl AppState {
     #[must_use]
     pub fn to_session(&self, rows_per_pane: usize) -> SessionState {
-        todo!()
+        convert::save(self, rows_per_pane)
     }
 
     pub fn from_session(session: SessionState) -> Result<AppState, SessionError> {
-        todo!()
+        convert::restore(&session).map_err(SessionError::Invalid)
     }
 }
 
