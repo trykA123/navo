@@ -1,4 +1,8 @@
+mod geometry;
+mod tree;
+
 use crate::{Direction, PaneId};
+use tree::{Axis, Node, Side};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
@@ -28,80 +32,158 @@ pub enum LayoutError {
     NoSplitToResize(Direction),
 }
 
-#[allow(dead_code, reason = "stubs until the layout is implemented")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Axis {
-    SideBySide,
-    Stacked,
-}
+const UNIT: Rect = Rect {
+    x: 0.0,
+    y: 0.0,
+    width: 1.0,
+    height: 1.0,
+};
 
-#[allow(dead_code, reason = "stubs until the layout is implemented")]
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Node {
-    Leaf(PaneId),
-    Split {
-        axis: Axis,
-        ratio: u16,
-        first: Box<Node>,
-        second: Box<Node>,
-    },
-}
-
-#[allow(unused_variables, reason = "stubs until the layout is implemented")]
 impl Layout {
     #[must_use]
     pub fn new(pane: PaneId) -> Self {
-        todo!()
+        Self {
+            root: Node::Leaf(pane),
+            focused: pane,
+        }
     }
 
     #[must_use]
     pub fn focused(&self) -> PaneId {
-        todo!()
+        self.focused
     }
 
     #[must_use]
     pub fn panes(&self) -> Vec<PaneId> {
-        todo!()
+        let mut out = Vec::new();
+        self.root.leaves(&mut out);
+        out
     }
 
     #[must_use]
     pub fn contains(&self, pane: PaneId) -> bool {
-        todo!()
+        self.root.path_to(pane).is_some()
     }
 
     #[must_use]
     pub fn rects(&self) -> Vec<(PaneId, Rect)> {
-        todo!()
+        let mut out = Vec::new();
+        geometry::rects(&self.root, UNIT, &mut out);
+        out
     }
 
     pub fn split(&mut self, direction: Direction, new_pane: PaneId) -> Result<(), LayoutError> {
-        todo!()
+        if self.contains(new_pane) {
+            return Err(LayoutError::DuplicatePane(new_pane));
+        }
+        let path = self.path_to(self.focused)?;
+        let leaf = self
+            .root
+            .at_mut(&path)
+            .ok_or(LayoutError::UnknownPane(self.focused))?;
+        let side = if grows_first(direction) {
+            Side::Second
+        } else {
+            Side::First
+        };
+        leaf.split_leaf(axis_of(direction), side, new_pane);
+        self.focused = new_pane;
+        Ok(())
     }
 
     pub fn close(&mut self, pane: PaneId) -> Result<(), LayoutError> {
-        todo!()
+        let path = self.path_to(pane)?;
+        let Some((side, parent_path)) = path.split_last() else {
+            return Err(LayoutError::LastPane);
+        };
+        let parent = self
+            .root
+            .at_mut(parent_path)
+            .ok_or(LayoutError::UnknownPane(pane))?;
+        let keep = match side {
+            Side::First => Side::Second,
+            Side::Second => Side::First,
+        };
+        parent.replace_with_child(keep);
+        if self.focused == pane {
+            self.focused = parent.first_leaf();
+        }
+        Ok(())
     }
 
     pub fn focus(&mut self, pane: PaneId) -> Result<(), LayoutError> {
-        todo!()
+        self.path_to(pane)?;
+        self.focused = pane;
+        Ok(())
     }
 
     #[must_use]
     pub fn neighbour(&self, pane: PaneId, direction: Direction) -> Option<PaneId> {
-        todo!()
+        geometry::neighbour(&self.rects(), pane, direction)
     }
 
     pub fn focus_direction(&mut self, direction: Direction) -> Result<PaneId, LayoutError> {
-        todo!()
+        let next = self
+            .neighbour(self.focused, direction)
+            .ok_or(LayoutError::NoNeighbour(direction))?;
+        self.focused = next;
+        Ok(next)
     }
 
     pub fn swap(&mut self, direction: Direction) -> Result<(), LayoutError> {
-        todo!()
+        let other = self
+            .neighbour(self.focused, direction)
+            .ok_or(LayoutError::NoNeighbour(direction))?;
+        self.root.exchange(self.focused, other);
+        Ok(())
     }
 
     pub fn resize(&mut self, direction: Direction, delta: u16) -> Result<(), LayoutError> {
-        todo!()
+        let path = self.path_to(self.focused)?;
+        let axis = axis_of(direction);
+        let grow_side = if grows_first(direction) {
+            Side::First
+        } else {
+            Side::Second
+        };
+        let matching: Vec<_> = self
+            .root
+            .ancestors(&path)
+            .into_iter()
+            .filter(|(_, a, _)| *a == axis)
+            .collect();
+        let depth = matching
+            .iter()
+            .rev()
+            .find(|(_, _, side)| *side == grow_side)
+            .or_else(|| matching.last())
+            .map(|(depth, _, _)| *depth)
+            .ok_or(LayoutError::NoSplitToResize(direction))?;
+        let split = path
+            .get(..depth)
+            .and_then(|p| self.root.at_mut(p))
+            .ok_or(LayoutError::NoSplitToResize(direction))?;
+        split.shift_ratio(grows_first(direction), delta);
+        Ok(())
     }
+
+    fn path_to(&self, pane: PaneId) -> Result<Vec<Side>, LayoutError> {
+        self.root
+            .path_to(pane)
+            .ok_or(LayoutError::UnknownPane(pane))
+    }
+}
+
+fn axis_of(direction: Direction) -> Axis {
+    if direction.is_horizontal() {
+        Axis::SideBySide
+    } else {
+        Axis::Stacked
+    }
+}
+
+fn grows_first(direction: Direction) -> bool {
+    matches!(direction, Direction::Right | Direction::Down)
 }
 
 #[cfg(test)]
