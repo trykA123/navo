@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use futures::StreamExt;
 use futures::channel::mpsc;
-use gpui_kit::{FocusHandle, KeyDownEvent};
+use gpui_kit::FocusHandle;
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::Provider;
 
@@ -145,14 +145,6 @@ impl FerriteWindow {
             true
         });
     }
-
-    fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let keystroke = &event.keystroke;
-        if keystroke.key == "tab" && !keystroke.modifiers.modified() {
-            self.switch_pane(window, cx);
-            cx.stop_propagation();
-        }
-    }
 }
 
 impl Render for FerriteWindow {
@@ -179,7 +171,6 @@ impl Render for FerriteWindow {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .on_key_down(cx.listener(Self::on_key))
             .child(Self::title_bar())
             .child(div().flex().flex_1().min_h_0().child(body))
             .child(FKeyBar::new("fkeys", status::FKEYS))

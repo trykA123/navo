@@ -31,6 +31,7 @@ type PageRowsHandler = Rc<dyn Fn(&u64, &mut Window, &mut App)>;
 pub enum FileListAction {
     Open(u64),
     Up,
+    SwitchPane,
 }
 
 #[derive(Clone, Debug)]
@@ -94,7 +95,7 @@ impl FileList {
 #[derive(Default)]
 struct ListState {
     scroll: ListScroll,
-    followed_scroll: Option<u64>,
+    followed_scroll: Option<(u64, usize)>,
     page_rows: Option<u64>,
 }
 
@@ -210,13 +211,13 @@ fn render_rows(
 
 fn follow_scroll(
     state: &Entity<ListState>,
-    wanted: u64,
+    (wanted, len): (u64, usize),
     row_height: Pixels,
     cx: &mut App,
 ) -> ListScroll {
     state.update(cx, |state, _| {
-        if state.followed_scroll != Some(wanted) {
-            state.followed_scroll = Some(wanted);
+        if len > 0 && state.followed_scroll != Some((wanted, len)) {
+            state.followed_scroll = Some((wanted, len));
             if row_number(state.scroll.top_row(row_height)) != wanted {
                 state.scroll.scroll_to_top(row_index(wanted));
             }
@@ -276,7 +277,8 @@ impl RenderOnce for FileList {
         let t = tokens::current(cx).clone();
         let row_height = t.spacing.row_height;
         let state = window.use_keyed_state(self.id.clone(), cx, |_, _| ListState::default());
-        let scroll = follow_scroll(&state, self.props.view.scroll, row_height, cx);
+        let wanted = (self.props.view.scroll, self.props.rows.len());
+        let scroll = follow_scroll(&state, wanted, row_height, cx);
         let len = self.props.rows.len();
         let label = format!("{} files", self.props.folder);
         let ctx = Rc::new(ListContext {

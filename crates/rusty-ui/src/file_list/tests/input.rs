@@ -121,3 +121,11 @@ fn page_rows_follow_the_list_height(cx: &mut TestAppContext) {
     let pages = harness.read_with(cx, |harness, _| harness.page_rows.clone());
     assert_eq!(pages, [19, 10]);
 }
+
+#[gpui_kit::test]
+fn tab_asks_to_switch_panes(cx: &mut TestAppContext) {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| window.press("tab", cx))
+        .expect("window");
+    assert_eq!(actions(&harness, cx), [FileListAction::SwitchPane]);
+}

@@ -224,3 +224,55 @@ fn locations_from_other_providers_are_listed_by_the_given_provider() {
         Some(FsErrorKind::NotFound)
     );
 }
+
+#[test]
+fn details_are_empty_while_a_new_folder_loads() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    let docs = fs.location("home/docs");
+    browser
+        .command(&Command::PaneNavigate { location: docs })
+        .unwrap();
+    assert!(browser.details(tab).is_empty());
+}
+
+#[test]
+fn an_old_error_is_hidden_after_leaving_the_folder() {
+    let fs = fake();
+    fs.fault(
+        "home",
+        FakeOp::List,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    let docs = fs.location("home/docs");
+    browser
+        .command(&Command::PaneNavigate { location: docs })
+        .unwrap();
+    assert!(browser.error(tab).is_none());
+}
+
+#[test]
+fn opening_a_link_row_enters_it() {
+    let fs = fake();
+    fs.add_entry(
+        "home",
+        rusty_fs::FsEntry {
+            name: rusty_core::ProviderPath::from_text("aa-link"),
+            kind: rusty_fs::EntryKind::Link,
+            size: 0,
+            modified_ms: None,
+            attributes: rusty_fs::Attributes::default(),
+        },
+    );
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    assert_eq!(names(&browser), ["docs", "music", "a.txt", "aa-link"]);
+    assert!(browser.open_row(3));
+    assert_eq!(here(&browser), fs.location("home/aa-link").as_str());
+}

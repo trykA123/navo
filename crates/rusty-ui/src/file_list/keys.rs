@@ -20,6 +20,7 @@ gpui_kit::actions!(
         ToggleMarkDown,
         OpenRow,
         OpenParent,
+        SwitchPane,
     ]
 );
 
@@ -36,6 +37,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("insert", ToggleMarkDown, context),
         KeyBinding::new("enter", OpenRow, context),
         KeyBinding::new("backspace", OpenParent, context),
+        KeyBinding::new("tab", SwitchPane, context),
     ]);
 }
 
@@ -57,6 +59,7 @@ fn move_to<A: Action>(
 pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
     let open = ctx.clone();
     let up = ctx.clone();
+    let switch = ctx.clone();
     root.on_action(move_to::<CursorUp>(ctx, CursorMove::Up))
         .on_action(move_to::<CursorDown>(ctx, CursorMove::Down))
         .on_action(move_to::<PageUp>(ctx, CursorMove::PageUp))
@@ -67,4 +70,7 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
         .on_action(send::<ToggleMarkDown>(ctx, Command::SelectionToggleDown))
         .on_action(move |_: &OpenRow, window, cx| open.open_cursor(window, cx))
         .on_action(move |_: &OpenParent, window, cx| up.act(FileListAction::Up, window, cx))
+        .on_action(move |_: &SwitchPane, window, cx| {
+            switch.act(FileListAction::SwitchPane, window, cx);
+        })
 }

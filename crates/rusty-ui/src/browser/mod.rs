@@ -8,8 +8,8 @@ use rusty_core::{
     ProviderPath, TabId, apply, apply_event, list_missing,
 };
 use rusty_fs::{
-    FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, Provider, load_folder,
-    volume_of,
+    EntryKind, FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, Provider,
+    load_folder, volume_of,
 };
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -78,7 +78,11 @@ impl Browser {
         let Some(entry) = tab.listing().and_then(|l| l.get(row)) else {
             return false;
         };
-        if !entry.is_folder {
+        let is_link = usize::try_from(row)
+            .ok()
+            .and_then(|index| self.details.get(&tab.id())?.get(index).cloned())
+            .is_some_and(|detail| detail.kind == EntryKind::Link);
+        if !entry.is_folder && !is_link {
             return false;
         }
         let Ok(location) = tab.location().join(&ProviderPath::from_text(&entry.name)) else {
@@ -135,13 +139,18 @@ impl Browser {
     pub fn details(&self, tab: TabId) -> Rc<[FsEntry]> {
         self.details
             .get(&tab)
+            .filter(|_| self.is_loaded(tab))
             .cloned()
             .unwrap_or_else(|| Rc::from([]))
     }
 
     #[must_use]
     pub fn error(&self, tab: TabId) -> Option<&FsError> {
-        self.errors.get(&tab)
+        self.errors.get(&tab).filter(|_| self.is_loaded(tab))
+    }
+
+    fn is_loaded(&self, tab: TabId) -> bool {
+        self.state.tab(tab).is_some_and(|t| t.listing().is_some())
     }
 
     pub fn take_save_request(&mut self) -> bool {

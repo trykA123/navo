@@ -120,9 +120,14 @@ impl FerriteWindow {
                 move |this: &mut Self, action: &FileListAction, window, cx| {
                     this.focus_pane(pane);
                     match action {
-                        FileListAction::Open(row) => this.browser.open_row(*row),
-                        FileListAction::Up => this.browser.go_up(),
-                    };
+                        FileListAction::Open(row) => {
+                            this.browser.open_row(*row);
+                        }
+                        FileListAction::Up => {
+                            this.browser.go_up();
+                        }
+                        FileListAction::SwitchPane => this.switch_pane(window, cx),
+                    }
                     this.focus_core_pane(window, cx);
                     cx.notify();
                 },

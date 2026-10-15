@@ -104,3 +104,27 @@ fn names_split_into_name_and_extension_like_total_commander() {
     assert_eq!(kind::split_name("README", EntryKind::File), ("README", ""));
     assert_eq!(kind::split_name("v1.2", EntryKind::Folder), ("v1.2", ""));
 }
+
+#[gpui_kit::test]
+fn the_scroll_row_is_applied_once_the_rows_arrive(cx: &mut TestAppContext) {
+    let view = ViewState {
+        cursor: 500,
+        scroll: 500,
+    };
+    let mut empty = props(generated_rows(0));
+    empty.view = view;
+    let (window, harness) = open_list(cx, empty);
+    harness.update(cx, |harness, cx| {
+        let mut loaded = props(generated_rows(1_000));
+        loaded.view = view;
+        harness.props = loaded;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let left = window.within("left");
+        assert!(left.find(("row", 500usize)).visible());
+        assert!(left.try_find(("row", 0usize)).is_none());
+    })
+    .expect("window");
+}
