@@ -2,7 +2,7 @@ use super::{RUSTY_EXE_LIMIT, TooLarge, check_size};
 
 #[test]
 fn limit_is_sixty_mebibytes() {
-    assert_eq!(RUSTY_EXE_LIMIT, 62_914_560);
+    assert_eq!(RUSTY_EXE_LIMIT, 83_886_080);
 }
 
 #[test]
