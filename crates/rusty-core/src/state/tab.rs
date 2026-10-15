@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::{History, Listing, StateError};
-use crate::{Location, TabId};
+use crate::{Location, Selection, TabId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ViewState {
@@ -15,6 +15,7 @@ pub struct Tab {
     location: Location,
     view: ViewState,
     listing: Option<Listing>,
+    selection: Selection,
     history: History,
     views: HashMap<Location, ViewState>,
 }
@@ -41,6 +42,11 @@ impl Tab {
     }
 
     #[must_use]
+    pub fn selection(&self) -> &Selection {
+        &self.selection
+    }
+
+    #[must_use]
     pub fn history(&self) -> &History {
         &self.history
     }
@@ -51,6 +57,7 @@ impl Tab {
             location,
             view: ViewState::default(),
             listing: None,
+            selection: Selection::new(0),
             history: History::default(),
             views: HashMap::new(),
         }
@@ -88,7 +95,12 @@ impl Tab {
         Ok(())
     }
 
+    pub(crate) fn selection_mut(&mut self) -> &mut Selection {
+        &mut self.selection
+    }
+
     pub(crate) fn set_listing(&mut self, listing: Listing) {
+        self.selection = Selection::new(listing.len());
         self.listing = Some(listing);
         self.view.cursor = self.clamp(self.view.cursor);
         self.view.scroll = self.clamp(self.view.scroll);
@@ -105,6 +117,7 @@ impl Tab {
     fn leave(&mut self, target: Location) -> Location {
         self.views.insert(self.location.clone(), self.view);
         self.listing = None;
+        self.selection = Selection::new(0);
         std::mem::replace(&mut self.location, target)
     }
 
