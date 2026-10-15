@@ -77,7 +77,8 @@ fn a_dangling_symlink_is_still_listed() {
 fn dot_and_dot_dot_are_never_listed() {
     let (dir, folder) = temp();
     write_file(dir.path(), ".hidden", 1);
-    write_file(dir.path(), "...", 1);
+    let dots = os_path(&folder.join(&ProviderPath::from_text("...")).unwrap()).unwrap();
+    fs::write(dots, b"x").unwrap();
     assert_eq!(sorted_names(&list_all(&folder).1), ["...", ".hidden"]);
 }
 
