@@ -74,8 +74,8 @@ pub fn resolve(program: &str, search: &Search) -> Option<PathBuf> {
         .split(';')
         .filter(|ext| !ext.is_empty())
         .map(|ext| format!("{program}{}", ext.to_lowercase()));
-    let bare = (!cfg!(windows)).then(|| program.to_owned());
-    let names: Vec<String> = with_extensions.chain(bare).collect();
+    let bare = (!cfg!(windows) || path.extension().is_some()).then(|| program.to_owned());
+    let names: Vec<String> = bare.into_iter().chain(with_extensions).collect();
     std::env::split_paths(&search.path).find_map(|folder| {
         names
             .iter()
