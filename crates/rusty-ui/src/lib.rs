@@ -8,6 +8,7 @@ pub mod file_list;
 pub mod fkey_bar;
 mod format;
 pub mod job_row;
+pub mod languages;
 pub mod pane_chrome;
 pub mod prelude;
 pub mod primitives;
