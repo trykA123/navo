@@ -60,6 +60,7 @@ fn open_with(
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks::none(),
         files: super::FileHooks::none(),
+        view: None,
     };
     open_options(cx, options)
 }
@@ -419,6 +420,7 @@ fn editor_window(
             }),
         },
         files: super::FileHooks::none(),
+        view: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, log)
@@ -498,6 +500,7 @@ fn viewer_window(
                 Ok(())
             }),
         },
+        view: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, written)

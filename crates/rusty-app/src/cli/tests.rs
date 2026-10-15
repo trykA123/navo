@@ -48,3 +48,11 @@ fn only_the_window_skips_the_console() {
     assert!(Command::Version.uses_console());
     assert!(Command::DiagReport(PathBuf::from("a.zip")).uses_console());
 }
+
+#[test]
+fn view_takes_a_file_and_needs_no_console() {
+    let parsed = parse_strs(&["--view", "notes.md"]);
+    assert_eq!(parsed, Ok(Command::View(PathBuf::from("notes.md"))));
+    assert!(!Command::View(PathBuf::from("a")).uses_console());
+    assert_eq!(parse_strs(&["--view"]), Err(USAGE));
+}

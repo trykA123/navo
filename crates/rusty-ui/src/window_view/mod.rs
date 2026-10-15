@@ -37,6 +37,7 @@ pub struct StartOptions {
     pub launcher: Launcher,
     pub editor: EditorHooks,
     pub files: FileHooks,
+    pub view: Option<rusty_core::Location>,
 }
 
 pub fn run(options: StartOptions) {
@@ -104,7 +105,13 @@ impl FerriteWindow {
         };
         tokens::apply(mode_of(window.appearance()), cx);
         Self::close_saves_and_quits(window, cx);
-        cx.defer_in(window, |view, window, cx| view.focus_core_pane(window, cx));
+        let start_view = options.view;
+        cx.defer_in(window, move |view, window, cx| {
+            view.focus_core_pane(window, cx);
+            if let Some(location) = start_view {
+                view.view_location(location, window, cx);
+            }
+        });
         view
     }
 

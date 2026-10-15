@@ -100,9 +100,21 @@ impl FerriteWindow {
                     .ok()?;
                 Some((name, location))
             });
-        let Some((name, location)) = found else {
+        let Some((_, location)) = found else {
             return;
         };
+        self.view_location(location, window, cx);
+    }
+
+    pub(super) fn view_location(
+        &mut self,
+        location: Location,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let name = location
+            .name()
+            .map_or_else(|| location.as_str().to_owned(), |name| name.to_text());
         let viewer = match (self.files.read)(&location) {
             Ok(file) => {
                 let opened = Opened {
