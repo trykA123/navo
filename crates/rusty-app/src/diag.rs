@@ -60,6 +60,7 @@ pub fn report_input() -> ReportInput {
     }
 }
 
+#[cfg(any(not(windows), test))]
 pub fn parse_mem_total(meminfo: &str) -> Option<u64> {
     let line = meminfo.lines().find(|line| line.starts_with("MemTotal:"))?;
     let kilobytes = line.split_whitespace().nth(1)?.parse::<u64>().ok()?;
