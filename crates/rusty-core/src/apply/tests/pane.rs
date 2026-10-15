@@ -54,6 +54,7 @@ fn open_tab_lists_the_new_tab() {
         vec![Effect::ListFolder {
             tab: state.active_tab().id(),
             location: loc("/a"),
+            request: state.active_tab().pending_request().unwrap_or(0),
         }]
     );
 }
@@ -118,6 +119,7 @@ fn navigate_lists_the_new_location() {
         vec![Effect::ListFolder {
             tab,
             location: loc("/work"),
+            request: state.active_tab().pending_request().unwrap_or(0),
         }]
     );
 }
@@ -148,6 +150,7 @@ fn back_lists_the_previous_location() {
         vec![Effect::ListFolder {
             tab,
             location: loc("/home"),
+            request: state.active_tab().pending_request().unwrap_or(0),
         }]
     );
 }
@@ -191,6 +194,7 @@ fn forward_lists_the_next_location() {
         vec![Effect::ListFolder {
             tab,
             location: loc("/work"),
+            request: state.active_tab().pending_request().unwrap_or(0),
         }]
     );
 }

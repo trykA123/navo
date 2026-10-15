@@ -5,7 +5,7 @@ expression: text
 ferrite-log 1
 home "/home/admin"
 +0 pane.navigate { location: "/home/admin/src" }
-+12 !listing-loaded { tab: 3, location: "/home/admin/src", entries: 2 }
++12 !listing-loaded { tab: 3, request: 1, location: "/home/admin/src", entries: 2 }
   folder "lib"
   file "main.rs"
 +250 !page-rows { pane: 2, rows: 30 }
@@ -29,7 +29,7 @@ home "/home/admin"
 +5 layout.focus { direction: left }
 +5 layout.close
 +5 app.save-session
-+0 !listing-loaded { tab: 9, location: "/tmp/é \"x\"\\y", entries: 0 }
-+1000000 !listing-loaded { tab: 10, location: "/tmp", entries: 2 }
++0 !listing-loaded { tab: 9, request: 1, location: "/tmp/é \"x\"\\y", entries: 0 }
++1000000 !listing-loaded { tab: 10, request: 1, location: "/tmp", entries: 2 }
   file "tab\there \"q\""
   folder "中\u{1b}📁"

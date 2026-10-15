@@ -31,11 +31,12 @@ fn write_event(out: &mut String, event: &Event) {
         Event::ListingLoaded {
             tab,
             location,
+            request,
             listing,
         } => {
             let _ = writeln!(
                 out,
-                "!listing-loaded {{ tab: {}, location: {}, entries: {} }}",
+                "!listing-loaded {{ tab: {}, request: {request}, location: {}, entries: {} }}",
                 tab.get(),
                 quote(location.as_str()),
                 listing.len()
@@ -124,12 +125,13 @@ fn event_entry(text: &str, lines: &[&str], next: &mut usize) -> Result<LogEntry,
     let fields = fields(&mut lexer)?;
     let event = match name {
         "listing-loaded" => {
-            expect_fields(&fields, &["tab", "location", "entries"])?;
+            expect_fields(&fields, &["tab", "request", "location", "entries"])?;
             let count = int(&fields, "entries")?;
             let entries = entry_lines(lines, next, count)?;
             Event::ListingLoaded {
                 tab: TabId::new(int(&fields, "tab")?),
                 location: Location::new(string(&fields, "location")?).map_err(|e| e.to_string())?,
+                request: int(&fields, "request")?,
                 listing: Listing::new(entries),
             }
         }

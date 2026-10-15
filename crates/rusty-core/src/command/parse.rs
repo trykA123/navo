@@ -128,6 +128,7 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         },
         Id::PaneBack => Command::PaneBack,
         Id::PaneForward => Command::PaneForward,
+        Id::PaneRefresh => Command::PaneRefresh,
         Id::PaneCursorMove => Command::PaneCursorMove {
             to: fields.required("to", cursor_move)?,
         },

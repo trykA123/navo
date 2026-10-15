@@ -40,6 +40,7 @@ fn split_lists_the_new_pane_tab() {
         vec![Effect::ListFolder {
             tab: state.active_tab().id(),
             location: loc("/work"),
+            request: state.active_tab().pending_request().unwrap_or(0),
         }]
     );
 }

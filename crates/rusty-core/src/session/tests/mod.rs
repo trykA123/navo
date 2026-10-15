@@ -59,9 +59,13 @@ fn entries(rows: std::ops::Range<usize>) -> Vec<EntryState> {
 }
 
 fn load_tab(state: &mut AppState, tab: TabId, location: &str, listing: Listing) {
+    if let Some(found) = state.tab_mut(tab) {
+        found.expect_listing(77);
+    }
     let event = Event::ListingLoaded {
         tab,
         location: loc(location),
+        request: 77,
         listing,
     };
     apply_event(state, event);
