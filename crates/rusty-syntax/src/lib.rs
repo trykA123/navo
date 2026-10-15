@@ -12,7 +12,7 @@ mod udl;
 pub use builtin::builtin;
 pub use error::RulesError;
 pub use language::{Delimiter, KeywordGroup, Language};
-pub use lexer::lex_line;
+pub use lexer::{Lexer, lex_line};
 pub use registry::{LoadError, Registry};
 pub use rules::from_toml;
 pub use token::{LineState, Token, TokenKind};

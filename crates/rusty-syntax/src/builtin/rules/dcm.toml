@@ -1,0 +1,25 @@
+[[language]]
+name = "dcm"
+extensions = ["dcm"]
+line_comments = ["*", "!"]
+operators = ["@", ","]
+
+[[language.keywords]]
+kind = "keyword"
+words = [
+  "KONSERVIERUNG_FORMAT", "FUNKTIONEN", "FKT", "VARIANTENKODIERUNG", "KRITERIUM", "MODULKOPF",
+  "FESTWERT", "FESTWERTEBLOCK", "KENNLINIE", "KENNFELD", "FESTKENNLINIE", "FESTKENNFELD",
+  "GRUPPENKENNLINIE", "GRUPPENKENNFELD", "STUETZSTELLENVERTEILUNG", "TEXTSTRING", "END",
+]
+
+[[language.keywords]]
+kind = "property"
+words = [
+  "WERT", "TEXT", "LANGNAME", "DISPLAYNAME", "FUNKTION", "EINHEIT_W", "EINHEIT_X",
+  "EINHEIT_Y", "VAR", "ST/X", "ST/Y", "ST_TX/X", "ST_TX/Y",
+]
+
+[[language.delimiters]]
+open = '"'
+close = '"'
+kind = "string"

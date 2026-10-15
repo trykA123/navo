@@ -1,0 +1,45 @@
+[[language]]
+name = "oil"
+extensions = ["oil"]
+line_comments = ["//"]
+block_comments = [["/*", "*/"]]
+operators = ["=", ";", "{", "}", "[", "]", ",", ":", ".."]
+
+[[language.keywords]]
+kind = "keyword"
+words = [
+  "OIL_VERSION", "IMPLEMENTATION", "CPU", "OS", "APPMODE", "ISR", "RESOURCE", "TASK", "COUNTER",
+  "EVENT", "ALARM", "MESSAGE", "COM", "NM", "IPDU", "NETWORKMESSAGE", "SCHEDULETABLE",
+  "SPINLOCK", "APPLICATION", "IOC", "INCLUDE",
+]
+
+[[language.keywords]]
+kind = "type"
+words = [
+  "UINT32", "INT32", "UINT64", "INT64", "FLOAT", "ENUM", "STRING", "BOOLEAN", "OS_TYPE",
+  "APPMODE_TYPE", "ISR_TYPE", "RESOURCE_TYPE", "TASK_TYPE", "COUNTER_TYPE", "EVENT_TYPE",
+  "ALARM_TYPE", "MESSAGE_TYPE", "COM_TYPE", "NM_TYPE", "IPDU_TYPE",
+]
+
+[[language.keywords]]
+kind = "constant"
+words = [
+  "TRUE", "FALSE", "AUTO", "NO_DEFAULT", "WITH_AUTO", "FULL", "NON", "STANDARD", "EXTENDED",
+  "BCC1", "BCC2", "ECC1", "ECC2", "ACTIVATETASK", "SETEVENT", "ALARMCALLBACK",
+  "INCREMENTCOUNTER", "INTERNAL", "LINKED",
+]
+
+[[language.keywords]]
+kind = "property"
+words = [
+  "PRIORITY", "SCHEDULE", "ACTIVATION", "AUTOSTART", "STACKSIZE", "CATEGORY", "MASK",
+  "MAXALLOWEDVALUE", "TICKSPERBASE", "MINCYCLE", "ACTION", "STATUS", "STARTUPHOOK",
+  "ERRORHOOK", "SHUTDOWNHOOK", "PRETASKHOOK", "POSTTASKHOOK", "USEGETSERVICEID",
+  "USEPARAMETERACCESS", "USERESSCHEDULER", "RESOURCEPROPERTY", "ALARMTIME", "CYCLETIME",
+]
+
+[[language.delimiters]]
+open = '"'
+close = '"'
+escape = '\'
+kind = "string"
