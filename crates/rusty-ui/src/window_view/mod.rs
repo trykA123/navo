@@ -1,3 +1,4 @@
+mod operate;
 mod pane;
 mod status;
 
@@ -5,13 +6,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use futures::StreamExt;
-use futures::channel::mpsc;
 use gpui_kit::{FocusHandle, Subscription, WindowAppearance};
 use rusty_core::{AppState, Command, Direction, PaneId};
-use rusty_fs::Provider;
+use rusty_fs::ProviderOps;
 
-use crate::browser::{Browser, Waker};
+use crate::browser::{Browser, Operations, Waker};
 use crate::fkey_bar::FKeyBar;
 use crate::prelude::*;
 use crate::primitives::{Splitter, SplitterState};
@@ -22,15 +21,17 @@ pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
 pub struct StartOptions {
     pub state: AppState,
-    pub provider: Arc<dyn Provider>,
+    pub provider: Arc<dyn ProviderOps>,
     pub on_save: SaveSession,
     pub mode: Mode,
+    pub operations: Operations,
 }
 
 pub fn run(options: StartOptions) {
     crate::application().run(move |cx| {
         let _ = crate::init(options.mode, cx);
         crate::file_list::bind_keys(cx);
+        crate::confirm_dialog::bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -63,18 +64,9 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let (sender, mut receiver) = mpsc::unbounded::<()>();
-        let waker: Waker = Arc::new(move || {
-            let _ = sender.unbounded_send(());
-        });
-        let mut browser = Browser::new(options.state, options.provider, waker);
+        let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
+        browser.set_operations(options.operations);
         browser.start();
-        cx.spawn(
-            async move |this, cx| {
-                while receiver.next().await.is_some() && this.update(cx, Self::wake).is_ok() {}
-            },
-        )
-        .detach();
         let view = Self {
             browser,
             focus: HashMap::new(),
@@ -89,6 +81,26 @@ impl FerriteWindow {
         Self::close_saves_and_quits(window, cx);
         cx.defer_in(window, |view, window, cx| view.focus_core_pane(window, cx));
         view
+    }
+
+    #[cfg(not(test))]
+    fn waker(cx: &mut Context<Self>) -> Waker {
+        use futures::StreamExt;
+        let (sender, mut receiver) = futures::channel::mpsc::unbounded::<()>();
+        cx.spawn(
+            async move |this, cx| {
+                while receiver.next().await.is_some() && this.update(cx, Self::wake).is_ok() {}
+            },
+        )
+        .detach();
+        Arc::new(move || {
+            let _ = sender.unbounded_send(());
+        })
+    }
+
+    #[cfg(test)]
+    fn waker(_: &mut Context<Self>) -> Waker {
+        Arc::new(|| {})
     }
 
     fn wake(&mut self, cx: &mut Context<Self>) {
@@ -181,7 +193,10 @@ impl Render for FerriteWindow {
             (Some(only), None) => only,
             _ => div().into_any_element(),
         };
+        let jobs = self.job_strip(cx);
+        let dialog = self.dialog(cx);
         div()
+            .relative()
             .flex()
             .flex_col()
             .size_full()
@@ -192,7 +207,9 @@ impl Render for FerriteWindow {
             .line_height(t.typography.line_height)
             .child(Self::title_bar(cx))
             .child(div().flex().flex_1().min_h_0().child(body))
+            .children(jobs)
             .child(FKeyBar::new("fkeys", status::FKEYS))
+            .children(dialog)
     }
 }
 

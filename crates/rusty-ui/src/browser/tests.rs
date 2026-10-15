@@ -18,7 +18,7 @@ fn fake() -> Arc<FakeFs> {
 
 fn browser_at(fs: &Arc<FakeFs>, path: &str) -> Browser {
     let state = AppState::new(fs.location(path));
-    let provider: Arc<dyn Provider> = fs.clone();
+    let provider: Arc<dyn ProviderOps> = fs.clone();
     let mut browser = Browser::new(state, provider, Arc::new(|| {}));
     browser.start();
     browser
@@ -159,7 +159,7 @@ fn a_finished_load_wakes_the_ui() {
     let fs = fake();
     let woken = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&woken);
-    let provider: Arc<dyn Provider> = fs.clone();
+    let provider: Arc<dyn ProviderOps> = fs.clone();
     let mut browser = Browser::new(
         AppState::new(fs.location("home")),
         provider,

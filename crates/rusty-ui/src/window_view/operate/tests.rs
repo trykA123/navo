@@ -1,0 +1,138 @@
+use rusty_core::{AppState, Conflict, Location, OpKind, OperationPlan, Resolution, Risk, Totals};
+use rusty_fs::{CancelToken, Progress};
+
+use super::{confirm_props, job_props};
+use crate::browser::{JobStatus, JobView, PendingOp};
+use crate::job_row::JobRowState;
+
+fn at(path: &str) -> Location {
+    Location::new(path).unwrap()
+}
+
+fn plan(kind: OpKind) -> OperationPlan {
+    OperationPlan {
+        kind,
+        steps: Vec::new(),
+        totals: Totals {
+            files: 3,
+            folders: 1,
+            bytes: 2048,
+        },
+        conflicts: Vec::new(),
+        risks: Vec::new(),
+    }
+}
+
+fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
+    PendingOp {
+        id: 1,
+        sources: vec![at("/home/a"), at("/home/b.txt")],
+        target,
+        plan,
+        source_tab: AppState::new(at("/home")).active_tab().id(),
+    }
+}
+
+#[test]
+fn a_copy_asks_plainly_and_names_the_target() {
+    let props = confirm_props(&pending(plan(OpKind::Copy), Some(at("/dest"))));
+    assert_eq!(props.title, "Copy 2 items to /dest?");
+    assert_eq!(props.confirm_label, "Copy");
+    assert_eq!(props.lines, ["/home/a", "/home/b.txt"]);
+    assert_eq!(props.summary, "3 files, 1 folder · 2.0 KB");
+    assert!(!props.danger);
+    assert!(props.typed.is_none());
+}
+
+#[test]
+fn each_kind_has_its_own_title() {
+    let title = |kind| confirm_props(&pending(plan(kind), Some(at("/dest")))).title;
+    assert_eq!(title(OpKind::Move), "Move 2 items to /dest?");
+    assert_eq!(title(OpKind::Recycle), "Move 2 items to the Recycle Bin?");
+    assert_eq!(title(OpKind::Delete), "Delete 2 items permanently?");
+}
+
+#[test]
+fn a_permanent_delete_is_dangerous_without_a_typed_word() {
+    let props = confirm_props(&pending(plan(OpKind::Delete), None));
+    assert!(props.danger);
+    assert!(props.typed.is_none());
+    assert_eq!(props.confirm_label, "Delete permanently");
+}
+
+#[test]
+fn a_protected_location_needs_the_typed_word() {
+    let mut risky = plan(OpKind::Recycle);
+    risky.risks.push(Risk::Protected(at("/home")));
+    let props = confirm_props(&pending(risky, None));
+    assert!(props.danger);
+    assert_eq!(props.typed.as_deref(), Some("DELETE"));
+    assert!(props.summary.starts_with("This is a protected location · "));
+}
+
+#[test]
+fn conflicts_are_counted_in_the_summary() {
+    let mut clash = plan(OpKind::Copy);
+    clash.conflicts.push(Conflict {
+        source: at("/home/b.txt"),
+        target: at("/dest/b.txt"),
+        resolution: Resolution::Skip,
+    });
+    let props = confirm_props(&pending(clash, Some(at("/dest"))));
+    assert!(
+        props
+            .summary
+            .ends_with(" · 1 item already there will be skipped")
+    );
+}
+
+fn job(kind: OpKind, status: JobStatus) -> JobView {
+    JobView {
+        id: 7,
+        kind,
+        target: Some(at("/dest")),
+        sources: 1,
+        progress: Progress {
+            bytes_done: 10,
+            bytes_total: 20,
+            files_done: 1,
+            files_total: 2,
+            current: Some(at("/home/a")),
+        },
+        status,
+        cancel: CancelToken::new(),
+        source_tab: AppState::new(at("/home")).active_tab().id(),
+    }
+}
+
+#[test]
+fn a_job_row_carries_progress_and_state() {
+    let props = job_props(&job(OpKind::Copy, JobStatus::Running));
+    assert_eq!(props.title, "Copy 1 item to /dest");
+    assert_eq!(props.current.as_deref(), Some("/home/a"));
+    assert_eq!((props.bytes_done, props.bytes_total), (10, 20));
+    assert_eq!((props.files_done, props.files_total), (1, 2));
+    assert_eq!(props.state, JobRowState::Running);
+}
+
+#[test]
+fn every_job_status_maps_to_a_row_state() {
+    let state = |kind, status| job_props(&job(kind, status)).state;
+    assert_eq!(state(OpKind::Move, JobStatus::Done), JobRowState::Done);
+    assert_eq!(
+        state(OpKind::Recycle, JobStatus::Cancelled),
+        JobRowState::Cancelled
+    );
+    assert_eq!(
+        state(OpKind::Delete, JobStatus::Failed("denied".to_owned())),
+        JobRowState::Failed("denied".into())
+    );
+    assert_eq!(
+        job_props(&job(OpKind::Delete, JobStatus::Done)).title,
+        "Delete 1 item"
+    );
+    assert_eq!(
+        job_props(&job(OpKind::Recycle, JobStatus::Done)).title,
+        "Recycle 1 item"
+    );
+}

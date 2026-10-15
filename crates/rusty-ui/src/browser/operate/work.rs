@@ -1,0 +1,128 @@
+use rusty_core::{ConflictPolicy, FsError, Location, OperationPlan, PlanRequest, plan};
+use rusty_fs::{
+    CancelToken, JobContext, JobOutcome, Progress, Provider, ProviderOps, existing_at, run_job,
+    scan,
+};
+
+use std::sync::Arc;
+use std::sync::mpsc::Sender;
+use std::time::{Duration, Instant};
+
+use super::{JobUpdate, LogFactory, OpRequest};
+use crate::browser::{Message, Waker};
+
+const PROGRESS_EVERY: Duration = Duration::from_millis(50);
+
+pub(super) fn lands_inside(target: &Location, folder: &Location, sources: &[Location]) -> bool {
+    if target == folder {
+        return true;
+    }
+    let mut current = Some(target.clone());
+    while let Some(location) = current {
+        if sources.contains(&location) {
+            return true;
+        }
+        current = location.parent();
+    }
+    false
+}
+
+pub(super) fn start_progress(plan: &OperationPlan) -> Progress {
+    Progress {
+        bytes_done: 0,
+        bytes_total: plan.totals.bytes,
+        files_done: 0,
+        files_total: plan.totals.files,
+        current: None,
+    }
+}
+
+pub(super) fn plan_for(
+    provider: &dyn Provider,
+    request: &OpRequest,
+    cancel: &CancelToken,
+) -> Result<OperationPlan, FsError> {
+    let items = scan(provider, &request.sources, cancel)?;
+    let existing = match &request.target {
+        Some(target) => existing_at(provider, &items, target, cancel)?,
+        None => Vec::new(),
+    };
+    Ok(plan(&PlanRequest {
+        kind: request.kind,
+        items,
+        target: request.target.clone(),
+        existing,
+        policy: ConflictPolicy::Ask,
+        same_volume: request.same_volume,
+        protected: request.protected.clone(),
+    }))
+}
+
+pub(super) struct JobWork {
+    pub id: u64,
+    pub plan: OperationPlan,
+    pub ops: Arc<dyn ProviderOps>,
+    pub factory: LogFactory,
+    pub cancel: CancelToken,
+    pub sender: Sender<Message>,
+    pub wake: Waker,
+}
+
+struct Reporter<'a> {
+    id: u64,
+    sender: &'a Sender<Message>,
+    wake: &'a Waker,
+    sent: Instant,
+    last: Option<Progress>,
+}
+
+impl Reporter<'_> {
+    fn report(&mut self, progress: &Progress) {
+        self.last = Some(progress.clone());
+        if self.sent.elapsed() < PROGRESS_EVERY {
+            return;
+        }
+        self.sent = Instant::now();
+        let progress = progress.clone();
+        let id = self.id;
+        let _ = self
+            .sender
+            .send(Message::Job(JobUpdate::Progress { id, progress }));
+        (self.wake)();
+    }
+}
+
+impl JobWork {
+    pub(super) fn run(self) {
+        let mut reporter = Reporter {
+            id: self.id,
+            sender: &self.sender,
+            wake: &self.wake,
+            sent: Instant::now(),
+            last: None,
+        };
+        let outcome = self.execute(&mut |progress| reporter.report(progress));
+        let _ = self.sender.send(Message::Job(JobUpdate::Done {
+            id: self.id,
+            progress: reporter.last,
+            outcome,
+        }));
+        (self.wake)();
+    }
+
+    fn execute(&self, progress: &mut dyn FnMut(&Progress)) -> Result<JobOutcome, String> {
+        let mut log = (self.factory)(&self.plan)?;
+        let outcome = run_job(
+            &self.plan,
+            &[],
+            &mut JobContext {
+                ops: self.ops.as_ref(),
+                log: log.as_mut(),
+                cancel: &self.cancel,
+                progress,
+            },
+        );
+        log.finish(&outcome);
+        Ok(outcome)
+    }
+}

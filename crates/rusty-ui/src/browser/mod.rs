@@ -8,9 +8,12 @@ use rusty_core::{
     ProviderPath, TabId, apply, apply_event, list_missing,
 };
 use rusty_fs::{
-    EntryKind, FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, Provider,
+    EntryKind, FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps,
     folder_size, load_folder, volume_of,
 };
+
+use operate::JobUpdate;
+pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PendingOp};
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
 
@@ -31,11 +34,21 @@ struct Measured {
 enum Message {
     Loaded(Loaded),
     Measured(Measured),
+    Job(JobUpdate),
+}
+
+impl Message {
+    fn is_queued(&self) -> bool {
+        !matches!(
+            self,
+            Self::Job(JobUpdate::Progress { .. } | JobUpdate::Done { .. })
+        )
+    }
 }
 
 pub struct Browser {
     state: AppState,
-    provider: Arc<dyn Provider>,
+    provider: Arc<dyn ProviderOps>,
     queue: IoQueue,
     owner: OwnerGuard,
     sender: Sender<Message>,
@@ -46,10 +59,14 @@ pub struct Browser {
     focus_after_load: HashMap<TabId, String>,
     in_flight: usize,
     save_requested: bool,
+    operations: Operations,
+    pending: Option<PendingOp>,
+    jobs: Vec<JobView>,
+    next_op: u64,
 }
 
 impl Browser {
-    pub fn new(state: AppState, provider: Arc<dyn Provider>, wake: Waker) -> Self {
+    pub fn new(state: AppState, provider: Arc<dyn ProviderOps>, wake: Waker) -> Self {
         let queue = IoQueue::new();
         let owner = queue.owner();
         let (sender, receiver) = mpsc::channel();
@@ -66,6 +83,10 @@ impl Browser {
             focus_after_load: HashMap::new(),
             in_flight: 0,
             save_requested: false,
+            operations: Operations::unlogged(),
+            pending: None,
+            jobs: Vec::new(),
+            next_op: 0,
         }
     }
 
@@ -131,10 +152,13 @@ impl Browser {
     pub fn poll(&mut self) -> bool {
         let mut changed = false;
         while let Ok(message) = self.receiver.try_recv() {
-            self.in_flight = self.in_flight.saturating_sub(1);
+            if message.is_queued() {
+                self.in_flight = self.in_flight.saturating_sub(1);
+            }
             changed |= match message {
                 Message::Loaded(loaded) => self.accept(loaded),
                 Message::Measured(measured) => self.accept_size(&measured),
+                Message::Job(update) => self.accept_job(update),
             };
         }
         changed
@@ -325,5 +349,6 @@ impl Browser {
     }
 }
 
+mod operate;
 #[cfg(test)]
 mod tests;
