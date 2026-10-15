@@ -164,3 +164,25 @@ fn nul_in_byte_path_is_refused() {
     let path = ProviderPath::from_bytes(&[0x61, 0, 0xFF]);
     assert_eq!(Location::local(path), Err(LocationError::Nul));
 }
+
+#[test]
+fn a_local_path_that_reads_back_as_a_provider_is_refused() {
+    assert_eq!(
+        Location::local(ProviderPath::from_text("ab://x")),
+        Err(LocationError::BadProvider)
+    );
+}
+
+#[test]
+fn a_local_path_that_reads_back_as_local_scheme_is_refused() {
+    assert_eq!(
+        Location::local(ProviderPath::from_text("local://x")),
+        Err(LocationError::BadProvider)
+    );
+}
+
+#[test]
+fn a_local_path_with_a_non_provider_scheme_is_kept() {
+    let location = Location::local(ProviderPath::from_text("C://x")).unwrap();
+    assert_eq!(Location::new(location.as_str()), Ok(location));
+}

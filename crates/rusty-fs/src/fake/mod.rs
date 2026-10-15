@@ -162,11 +162,11 @@ fn stream(
     cancel: &CancelToken,
 ) -> Option<FsErrorKind> {
     for batch in batches {
-        if sink.batch(batch).is_break() {
-            return None;
-        }
         if cancel.is_cancelled() {
             return Some(FsErrorKind::Cancelled);
+        }
+        if sink.batch(batch).is_break() {
+            return None;
         }
     }
     failure

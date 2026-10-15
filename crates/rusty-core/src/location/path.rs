@@ -276,6 +276,9 @@ fn decode_bytes(pieces: &[Piece]) -> Vec<u8> {
 }
 
 fn upcase(unit: u16) -> u16 {
+    if let Some(upper) = iota_subscript_upcase(unit) {
+        return upper;
+    }
     let Some(c) = char::from_u32(u32::from(unit)) else {
         return unit;
     };
@@ -283,5 +286,13 @@ fn upcase(unit: u16) -> u16 {
     match (upper.next(), upper.next()) {
         (Some(u), None) => u16::try_from(u32::from(u)).unwrap_or(unit),
         _ => unit,
+    }
+}
+
+fn iota_subscript_upcase(unit: u16) -> Option<u16> {
+    match unit {
+        0x1F80..=0x1F87 | 0x1F90..=0x1F97 | 0x1FA0..=0x1FA7 => Some(unit + 8),
+        0x1FB3 | 0x1FC3 | 0x1FF3 => Some(unit + 9),
+        _ => None,
     }
 }

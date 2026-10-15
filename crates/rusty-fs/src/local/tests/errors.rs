@@ -95,3 +95,35 @@ fn metadata_of_a_wide_path_on_unix_is_name_invalid() {
         Some(FsErrorKind::NameInvalid)
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn entries_whose_stat_fails_are_still_listed() {
+    use std::os::unix::fs::PermissionsExt;
+    let (dir, folder) = temp();
+    if running_as_root(dir.path()) {
+        return;
+    }
+    let readable = dir.path().join("readable");
+    fs::create_dir(&readable).unwrap();
+    write_file(&readable, "a.txt", 3);
+    fs::create_dir(readable.join("sub")).unwrap();
+    fs::set_permissions(&readable, fs::Permissions::from_mode(0o444)).unwrap();
+    let location = folder.join(&ProviderPath::from_text("readable")).unwrap();
+    let result = std::panic::catch_unwind(|| list_all(&location));
+    fs::set_permissions(&readable, fs::Permissions::from_mode(0o700)).unwrap();
+    let (result, batches) = result.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+    assert_eq!(result, Ok(()));
+    let mut seen: Vec<(String, EntryKind)> = entries(&batches)
+        .into_iter()
+        .map(|e| (e.name.to_text(), e.kind))
+        .collect();
+    seen.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        seen,
+        [
+            ("a.txt".to_owned(), EntryKind::File),
+            ("sub".to_owned(), EntryKind::Folder)
+        ]
+    );
+}

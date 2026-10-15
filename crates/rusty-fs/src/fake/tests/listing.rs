@@ -155,3 +155,15 @@ fn cancel_in_the_sink_sends_no_further_batch() {
     });
     assert_eq!(count, 1);
 }
+
+#[test]
+fn cancel_during_the_last_batch_is_ok() {
+    let fs = with_files(2).with_batch_size(3);
+    let cancel = CancelToken::new();
+    let inner = cancel.clone();
+    let (result, count) = list_with(&fs, &cancel, || {
+        inner.cancel();
+        ControlFlow::Continue(())
+    });
+    assert_eq!((result, count), (Ok(()), 1));
+}

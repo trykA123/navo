@@ -41,10 +41,18 @@ proptest! {
 
     #[test]
     fn local_locations_survive_their_text_form(path in location_path()) {
-        // A local path that itself reads as `<id>://` is taken as a provider.
-        prop_assume!(!path.to_text().contains("://"));
-        let location = Location::local(path).unwrap();
-        prop_assert_eq!(Location::new(location.as_str()), Ok(location));
+        if let Ok(location) = Location::local(path) {
+            prop_assert_eq!(Location::new(location.as_str()), Ok(location));
+        }
+    }
+
+    #[test]
+    fn local_locations_are_refused_only_when_their_text_names_a_provider(
+        id in "[a-z][a-z0-9-]{1,8}",
+        rest in "[a-z]{1,8}",
+    ) {
+        let path = ProviderPath::from_text(&format!("{id}://{rest}"));
+        prop_assert_eq!(Location::local(path), Err(LocationError::BadProvider));
     }
 
     #[test]

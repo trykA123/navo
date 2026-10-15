@@ -8,7 +8,7 @@ mod windows;
 use windows as platform;
 
 use std::ffi::OsStr;
-use std::fs::{self, Metadata, ReadDir};
+use std::fs::{self, DirEntry, Metadata, ReadDir};
 use std::io;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
@@ -52,8 +52,10 @@ impl LocalFs {
             };
             let child = child.map_err(|e| io_error(&e, folder))?;
             let name = child.file_name();
-            if let Ok(metadata) = child.metadata() {
-                entries.push(entry(platform::entry_name(&name), &name, &metadata));
+            match child.metadata() {
+                Ok(metadata) => entries.push(entry(platform::entry_name(&name), &name, &metadata)),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(_) => entries.extend(bare_entry(&child, &name)),
             }
         }
         Ok(entries)
@@ -145,6 +147,24 @@ fn entry(name: ProviderPath, os_name: &OsStr, metadata: &Metadata) -> FsEntry {
         modified_ms: modified_ms(metadata),
         attributes: platform::attributes(os_name, metadata),
     }
+}
+
+fn bare_entry(child: &DirEntry, name: &OsStr) -> Option<FsEntry> {
+    let file_type = child.file_type().ok()?;
+    let kind = if file_type.is_symlink() {
+        EntryKind::Link
+    } else if file_type.is_dir() {
+        EntryKind::Folder
+    } else {
+        EntryKind::File
+    };
+    Some(FsEntry {
+        name: platform::entry_name(name),
+        kind,
+        size: 0,
+        modified_ms: None,
+        attributes: platform::name_attributes(name),
+    })
 }
 
 fn modified_ms(metadata: &Metadata) -> Option<i64> {

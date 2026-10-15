@@ -45,6 +45,9 @@ impl Location {
         } else {
             format!("{}://{}", provider.as_str(), path.to_text())
         };
+        if provider.is_local() && !split_text(&text).is_ok_and(|(id, _)| id.is_local()) {
+            return Err(LocationError::BadProvider);
+        }
         Ok(Self {
             provider,
             path,

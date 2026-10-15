@@ -27,6 +27,13 @@ pub(super) fn attributes(name: &OsStr, metadata: &Metadata) -> Attributes {
     }
 }
 
+pub(super) fn name_attributes(name: &OsStr) -> Attributes {
+    Attributes {
+        hidden: name.as_bytes().starts_with(b"."),
+        ..Attributes::default()
+    }
+}
+
 pub(super) fn error_kind(code: i32) -> FsErrorKind {
     FsErrorKind::from_errno(code)
 }

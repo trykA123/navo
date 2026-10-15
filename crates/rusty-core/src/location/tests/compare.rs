@@ -75,3 +75,17 @@ fn other_providers_compare_exactly() {
 fn different_providers_are_never_the_same_place() {
     assert!(!loc(r"archive://C:\a.zip").same_place(&loc(r"C:\a.zip")));
 }
+
+#[test]
+fn iota_subscript_letters_use_the_simple_upper_case() {
+    for (lower, upper) in [
+        ("\u{1F80}", "\u{1F88}"),
+        ("\u{1F97}", "\u{1F9F}"),
+        ("\u{1FA3}", "\u{1FAB}"),
+        ("\u{1FB3}", "\u{1FBC}"),
+        ("\u{1FC3}", "\u{1FCC}"),
+        ("\u{1FF3}", "\u{1FFC}"),
+    ] {
+        assert!(text(lower).windows_eq(&text(upper)), "{lower:?}");
+    }
+}

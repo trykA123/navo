@@ -83,6 +83,10 @@ pub(super) fn attributes(_name: &OsStr, metadata: &Metadata) -> Attributes {
     }
 }
 
+pub(super) fn name_attributes(_name: &OsStr) -> Attributes {
+    Attributes::default()
+}
+
 pub(super) fn error_kind(code: i32) -> FsErrorKind {
     FsErrorKind::from_windows_code(code.cast_unsigned())
 }
