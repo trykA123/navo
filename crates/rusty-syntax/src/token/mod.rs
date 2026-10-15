@@ -49,8 +49,8 @@ pub struct Token {
 pub enum LineState {
     #[default]
     Normal,
-    Block(u8),
-    Delimited(u8),
+    Block(u16),
+    Delimited(u16),
 }
 
 #[cfg(test)]

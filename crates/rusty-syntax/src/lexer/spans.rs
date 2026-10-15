@@ -29,7 +29,7 @@ impl<'a> Run<'a> {
         }
     }
 
-    pub(super) fn block(&mut self, opened: Range<usize>, close: &str, index: u8) -> Step {
+    pub(super) fn block(&mut self, opened: Range<usize>, close: &str, index: Option<u16>) -> Step {
         match find_from(self.line, opened.end, close) {
             Some(end) => {
                 self.push(opened.start, end, TokenKind::Comment);
@@ -37,7 +37,7 @@ impl<'a> Run<'a> {
             }
             None => {
                 self.push(opened.start, self.line.len(), TokenKind::Comment);
-                Step::Done(LineState::Block(index))
+                Step::Done(index.map_or(LineState::Normal, LineState::Block))
             }
         }
     }
@@ -46,7 +46,7 @@ impl<'a> Run<'a> {
         &mut self,
         opened: Range<usize>,
         delimiter: &Delimiter,
-        index: u8,
+        index: Option<u16>,
     ) -> Step {
         match close_of(self.line, opened.end, delimiter) {
             Some(end) => {
@@ -55,12 +55,8 @@ impl<'a> Run<'a> {
             }
             None => {
                 self.push(opened.start, self.line.len(), delimiter.kind);
-                let carried = delimiter.multiline && !delimiter.close.is_empty();
-                Step::Done(if carried {
-                    LineState::Delimited(index)
-                } else {
-                    LineState::Normal
-                })
+                let carried = index.filter(|_| delimiter.multiline && !delimiter.close.is_empty());
+                Step::Done(carried.map_or(LineState::Normal, LineState::Delimited))
             }
         }
     }

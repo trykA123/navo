@@ -266,3 +266,40 @@ fn longer_block_opener_beats_a_line_comment_it_starts_with() {
         (vec![("%{ open", K::Comment)], LineState::Block(0))
     );
 }
+
+fn many_delimiters(count: usize, multiline: usize) -> Language {
+    let delimiters = (0..count)
+        .map(|i| delimiter(&format!("<d{i}>"), "</d>", None, i == multiline))
+        .collect();
+    Language {
+        delimiters,
+        ..sample()
+    }
+}
+
+#[test]
+fn delimiter_past_index_255_carries_to_the_next_line() {
+    let lang = many_delimiters(300, 280);
+    let first = spans(&lang, "x <d280>open", LineState::Normal);
+    assert_eq!(
+        first,
+        (vec![("<d280>open", K::String)], LineState::Delimited(280))
+    );
+    assert_eq!(
+        spans(&lang, "still</d> if", first.1),
+        (
+            vec![("still</d>", K::String), ("if", K::Keyword)],
+            LineState::Normal
+        )
+    );
+}
+
+#[test]
+fn delimiter_past_the_u16_range_does_not_carry() {
+    let last = usize::from(u16::MAX) + 1;
+    let lang = many_delimiters(last + 1, last);
+    let line = format!("<d{last}>open");
+    let (found, next) = lex_line(&lang, &line, LineState::Normal);
+    assert_eq!(found.len(), 1);
+    assert_eq!(next, LineState::Normal);
+}

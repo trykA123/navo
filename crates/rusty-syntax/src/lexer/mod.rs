@@ -108,11 +108,11 @@ impl Lexer {
     fn resume(&self, run: &mut Run<'_>, state: LineState) -> Step {
         match state {
             LineState::Block(index) => match self.blocks.get(usize::from(index)) {
-                Some((_, close)) => run.block(0..0, close, index),
+                Some((_, close)) => run.block(0..0, close, Some(index)),
                 None => Step::At(0),
             },
             LineState::Delimited(index) => match self.delimiters.get(usize::from(index)) {
-                Some(delimiter) => run.delimited(0..0, delimiter, index),
+                Some(delimiter) => run.delimited(0..0, delimiter, Some(index)),
                 None => Step::At(0),
             },
             LineState::Normal => Step::At(0),
@@ -135,7 +135,7 @@ impl Lexer {
         let line = run.line;
         let rest = &line[at..];
         let boundary = !line[..at].chars().next_back().is_some_and(is_word);
-        let index = |i: usize| u8::try_from(i).unwrap_or(u8::MAX);
+        let index = |i: usize| u16::try_from(i).ok();
         match self.comment_at(rest, boundary) {
             Some(Opener::Line) => {
                 run.push(at, run.line.len(), TokenKind::Comment);
