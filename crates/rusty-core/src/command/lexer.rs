@@ -1,13 +1,13 @@
 use super::{ParseError, ParseErrorKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum Value<'a> {
+pub(crate) enum Value<'a> {
     Str(String),
     Int(&'a str),
     Word(&'a str),
 }
 
-pub(super) struct Lexer<'a> {
+pub(crate) struct Lexer<'a> {
     text: &'a str,
     pos: usize,
 }
@@ -15,15 +15,15 @@ pub(super) struct Lexer<'a> {
 const MAX_HEX_DIGITS: usize = 6;
 
 impl<'a> Lexer<'a> {
-    pub(super) fn new(text: &'a str) -> Self {
+    pub(crate) fn new(text: &'a str) -> Self {
         Self { text, pos: 0 }
     }
 
-    pub(super) fn pos(&self) -> usize {
+    pub(crate) fn pos(&self) -> usize {
         self.pos
     }
 
-    pub(super) fn peek(&self) -> Option<char> {
+    pub(crate) fn peek(&self) -> Option<char> {
         self.text
             .get(self.pos..)
             .and_then(|rest| rest.chars().next())
@@ -35,7 +35,7 @@ impl<'a> Lexer<'a> {
         Some(c)
     }
 
-    pub(super) fn skip_ws(&mut self) {
+    pub(crate) fn skip_ws(&mut self) {
         while self
             .peek()
             .is_some_and(|c| matches!(c, ' ' | '\t' | '\r' | '\n'))
@@ -44,21 +44,21 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn error(&self, kind: ParseErrorKind) -> ParseError {
+    pub(crate) fn error(&self, kind: ParseErrorKind) -> ParseError {
         ParseError {
             offset: self.pos,
             kind,
         }
     }
 
-    pub(super) fn unexpected(&self) -> ParseError {
+    pub(crate) fn unexpected(&self) -> ParseError {
         self.error(self.peek().map_or(
             ParseErrorKind::UnexpectedEnd,
             ParseErrorKind::UnexpectedChar,
         ))
     }
 
-    pub(super) fn eat(&mut self, expected: char) -> Result<(), ParseError> {
+    pub(crate) fn eat(&mut self, expected: char) -> Result<(), ParseError> {
         if self.peek() == Some(expected) {
             self.pos += expected.len_utf8();
             Ok(())
@@ -67,7 +67,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn word(&mut self) -> Result<&'a str, ParseError> {
+    pub(crate) fn word(&mut self) -> Result<&'a str, ParseError> {
         let start = self.pos;
         if !self.peek().is_some_and(|c| c.is_ascii_lowercase()) {
             return Err(self.unexpected());
@@ -81,7 +81,7 @@ impl<'a> Lexer<'a> {
         Ok(&self.text[start..self.pos])
     }
 
-    pub(super) fn value(&mut self) -> Result<Value<'a>, ParseError> {
+    pub(crate) fn value(&mut self) -> Result<Value<'a>, ParseError> {
         match self.peek() {
             Some('"') => self.string().map(Value::Str),
             Some(c) if c == '-' || c.is_ascii_digit() => self.integer().map(Value::Int),

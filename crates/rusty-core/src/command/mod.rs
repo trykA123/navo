@@ -1,8 +1,8 @@
 mod error;
 mod id;
-mod lexer;
+pub(crate) mod lexer;
 mod parse;
-mod print;
+pub(crate) mod print;
 
 pub use error::{ParseError, ParseErrorKind};
 pub use id::CommandId;

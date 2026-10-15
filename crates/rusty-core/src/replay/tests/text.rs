@@ -166,3 +166,99 @@ fn a_listing_with_missing_entries_names_the_line_that_announced_them() {
     );
     assert_eq!(error_line(&with_body(body)), Some(4));
 }
+
+#[test]
+fn a_huge_entry_count_is_an_error_not_a_crash() {
+    let body = "+3 !listing-loaded { tab: 3, location: \"/h\", entries: 18446744073709551615 }\n";
+    assert_eq!(error_line(&with_body(body)), Some(4));
+}
+
+#[test]
+fn a_missing_home_line_names_line_two() {
+    assert_eq!(error_line("ferrite-log 1\n"), Some(2));
+}
+
+#[test]
+fn a_bad_home_line_names_line_two() {
+    assert_eq!(error_line("ferrite-log 1\nhome 5\n"), Some(2));
+}
+
+#[test]
+fn an_empty_home_names_line_two() {
+    assert_eq!(error_line("ferrite-log 1\nhome \"\"\n"), Some(2));
+}
+
+#[test]
+fn a_version_below_one_is_a_bad_header() {
+    assert_eq!(CommandLog::parse(&header("0")), Err(LogError::BadHeader));
+}
+
+#[test]
+fn a_record_without_plus_names_its_line() {
+    assert_eq!(error_line(&with_body("3 pane.back\n")), Some(4));
+}
+
+#[test]
+fn a_record_without_a_space_names_its_line() {
+    assert_eq!(error_line(&with_body("+3\n")), Some(4));
+}
+
+#[test]
+fn a_bad_time_names_its_line() {
+    assert_eq!(error_line(&with_body("+x pane.back\n")), Some(4));
+}
+
+#[test]
+fn an_unknown_event_names_its_line() {
+    assert_eq!(error_line(&with_body("+1 !resized { pane: 2 }\n")), Some(4));
+}
+
+#[test]
+fn an_unknown_entry_kind_names_the_announcing_line() {
+    let body = "+1 !listing-loaded { tab: 3, location: \"/h\", entries: 1 }\n  link \"a\"\n";
+    assert_eq!(error_line(&with_body(body)), Some(4));
+}
+
+#[test]
+fn an_entry_line_without_indent_names_the_announcing_line() {
+    let body = "+1 !listing-loaded { tab: 3, location: \"/h\", entries: 1 }\nfile \"a\"\n";
+    assert_eq!(error_line(&with_body(body)), Some(4));
+}
+
+#[test]
+fn a_string_for_a_number_names_its_line() {
+    assert_eq!(
+        error_line(&with_body("+1 !page-rows { pane: \"2\", rows: 3 }\n")),
+        Some(4)
+    );
+}
+
+#[test]
+fn a_number_for_a_string_names_its_line() {
+    let body = "+1 !listing-loaded { tab: 3, location: 4, entries: 0 }\n";
+    assert_eq!(error_line(&with_body(body)), Some(4));
+}
+
+#[test]
+fn a_negative_number_names_its_line() {
+    assert_eq!(
+        error_line(&with_body("+1 !page-rows { pane: -2, rows: 3 }\n")),
+        Some(4)
+    );
+}
+
+#[test]
+fn text_after_an_event_names_its_line() {
+    assert_eq!(
+        error_line(&with_body("+1 !page-rows { pane: 2, rows: 3 } x\n")),
+        Some(4)
+    );
+}
+
+#[test]
+fn a_malformed_field_list_names_its_line() {
+    assert_eq!(
+        error_line(&with_body("+1 !page-rows { pane 2 }\n")),
+        Some(4)
+    );
+}

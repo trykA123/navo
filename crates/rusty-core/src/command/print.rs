@@ -1,4 +1,4 @@
-use std::fmt::{self, Write as _};
+use std::fmt;
 
 use super::{Command, CursorMove};
 
@@ -65,7 +65,13 @@ fn write_value(f: &mut fmt::Formatter<'_>, value: &Shown<'_>) -> fmt::Result {
     }
 }
 
-fn write_string(f: &mut fmt::Formatter<'_>, text: &str) -> fmt::Result {
+pub(crate) fn quote(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    let _ = write_string(&mut out, text);
+    out
+}
+
+fn write_string(f: &mut impl fmt::Write, text: &str) -> fmt::Result {
     f.write_char('"')?;
     for c in text.chars() {
         match c {
