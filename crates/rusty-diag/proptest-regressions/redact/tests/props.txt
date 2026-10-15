@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 932e7beea9d96b50c04f65c85cec825a93be539b93854797d57577c2f6416795 # shrinks to case = Case { root: Drive, segments: ["   "], extension: None, salt: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
 cc 8675eb938e43c6548e6eff8918d24866abefd899f6203d0550ad427127b0bdd5 # shrinks to input = "A:<:", file = false
+cc 91b4440d619ac883bd699e341229ecaa9bf1d6084a781b9236aedb63a56a11bd # shrinks to input = "'é\\\\a"

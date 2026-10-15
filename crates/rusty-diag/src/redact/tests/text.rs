@@ -394,3 +394,80 @@ fn long_text_with_many_quotes_is_redacted_quickly() {
     let _ = redactor().text(&line);
     assert!(started.elapsed() < std::time::Duration::from_secs(3));
 }
+
+fn quick(line: &str) {
+    let started = std::time::Instant::now();
+    let _ = redactor().text(line);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(3),
+        "{}",
+        line.len()
+    );
+}
+
+#[test]
+fn many_drive_shapes_are_redacted_quickly() {
+    quick(&"xa:/".repeat(80_000));
+}
+
+#[test]
+fn many_open_angle_brackets_are_redacted_quickly() {
+    quick(&"<".repeat(320_000));
+}
+
+#[test]
+fn a_forward_slash_drive_after_a_word_with_more_separators_is_found() {
+    for line in ["filec:/a/Secret.txt", "xc:/Secret/Plan.txt"] {
+        assert_absent(&redactor().text(line), &["secret", "plan"]);
+    }
+}
+
+#[test]
+fn an_unclosed_quote_before_a_name_with_a_trailing_apostrophe_leaks_nothing() {
+    for line in [
+        r"cannot rename 'D:\a\Owners' Meeting.pdf",
+        r"'\\fs01\fin\Owners' Meeting.pdf",
+    ] {
+        assert_absent(&redactor().text(line), &["owners", "meeting"]);
+    }
+}
+
+#[test]
+fn paths_after_a_colon_with_more_separators_are_found() {
+    for line in [
+        "path:/mnt/Secret/Plan.txt",
+        "error:/home/admin/Secret Plan.txt",
+        "backup@nas:/srv/Secret/Plan.txt",
+    ] {
+        assert_absent(&redactor().text(line), &["secret", "plan"]);
+    }
+}
+
+#[test]
+fn file_and_smb_urls_are_paths() {
+    for line in [
+        "file:///home/admin/Secret.txt",
+        "file://nas/finance/Secret.txt",
+        "smb://nas/finance/Secret.txt",
+    ] {
+        assert_absent(&redactor().text(line), &["finance", "secret"]);
+    }
+}
+
+#[test]
+fn home_and_relative_paths_are_found() {
+    for line in [
+        "open ~/Secret/Plan.txt",
+        "./Secret/Plan.txt",
+        "x ../Secret/Plan.txt",
+    ] {
+        assert_absent(&redactor().text(line), &["secret", "plan"]);
+    }
+}
+
+#[test]
+fn paths_after_markup_and_pipes_are_found() {
+    for line in ["<b>/mnt/Secret/Plan.txt", "a|/mnt/Secret/Plan.txt"] {
+        assert_absent(&redactor().text(line), &["secret", "plan"]);
+    }
+}

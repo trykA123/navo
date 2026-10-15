@@ -27,9 +27,14 @@ impl Redactor {
     }
 
     fn scan_paths<'a>(&self, mut text: &'a str) -> Vec<Piece<'a>> {
+        let names: Vec<String> = self
+            .replacements()
+            .iter()
+            .map(|r| r.name().to_owned())
+            .collect();
         let mut pieces = Vec::new();
         let mut before = None;
-        while let Some(start) = self.find_path_start(text, before) {
+        while let Some(start) = self.find_path_start(text, before, &names) {
             let opened_by = text[..start].chars().next_back().or(before);
             pieces.push(Piece::Text(&text[..start]));
             let path = &text[start..];
@@ -43,24 +48,23 @@ impl Redactor {
         pieces
     }
 
-    fn find_path_start(&self, text: &str, mut before: Option<char>) -> Option<usize> {
+    fn find_path_start(
+        &self,
+        text: &str,
+        mut before: Option<char>,
+        names: &[String],
+    ) -> Option<usize> {
         for (index, ch) in text.char_indices() {
             let rest = &text[index..];
             if self.is_path_start(rest, before)
-                || (drive_start(rest) && self.ends_with_name(&text[..index]))
+                || (drive_start(rest) && ends_with_name(&text[..index], names))
+                || url_path_start(&text[..index], rest)
             {
                 return Some(index);
             }
             before = Some(ch);
         }
         None
-    }
-
-    fn ends_with_name(&self, text: &str) -> bool {
-        let lower = text.to_lowercase();
-        self.replacements()
-            .iter()
-            .any(|replacement| lower.ends_with(replacement.name()))
     }
 
     fn is_path_start(&self, text: &str, before: Option<char>) -> bool {
@@ -70,8 +74,17 @@ impl Redactor {
         if drive_start(text) && drive_follows(text, before) {
             return true;
         }
+        if before == Some(':') && text.starts_with('/') && !text.starts_with("//") {
+            return has_second_separator(text);
+        }
         if !before.is_none_or(opens_path) {
             return false;
+        }
+        if ["~/", "./", "../"]
+            .iter()
+            .any(|start| text.starts_with(start))
+        {
+            return true;
         }
         if let Some(after) = text.strip_prefix("//") {
             return after
@@ -92,8 +105,8 @@ impl Redactor {
                     || (*ch == ' ' && self.is_path_start(&path[index + 1..], Some(' ')))
             })
             .map_or(path.len(), |(index, _)| index);
-        let end = match opened_by {
-            Some('\'') => path[..end].rfind('\'').unwrap_or(end),
+        let end = match (opened_by, path[..end].rfind('\'')) {
+            (Some('\''), Some(quote)) if !names_a_file(&path[quote + 1..end]) => quote,
             _ => end,
         };
         let run = path[..end].trim_end_matches(' ');
@@ -113,9 +126,47 @@ fn drive_follows(text: &str, before: Option<char>) -> bool {
             ch.is_ascii_digit()
                 || text.starts_with(|letter: char| letter.is_ascii_uppercase())
                 || text.as_bytes().get(2) == Some(&b'\\')
+                || (!text[2..].starts_with("//") && has_second_separator(&text[2..]))
         }
         _ => true,
     }
+}
+
+fn has_second_separator(text: &str) -> bool {
+    text.chars()
+        .skip(1)
+        .take_while(|ch| !ch.is_whitespace() && !hard_boundary(*ch))
+        .any(|ch| matches!(ch, '/' | '\\'))
+}
+
+fn names_a_file(tail: &str) -> bool {
+    !tail.contains(['/', '\\'])
+        && tail
+            .split_whitespace()
+            .any(|word| extension(word).is_some())
+}
+
+fn ends_with_name(text: &str, names: &[String]) -> bool {
+    names.iter().any(|name| {
+        let length = name.chars().count() + 2;
+        let start = text
+            .char_indices()
+            .rev()
+            .nth(length.saturating_sub(1))
+            .map_or(0, |(index, _)| index);
+        text[start..].to_lowercase().ends_with(name.as_str())
+    })
+}
+
+fn url_path_start(before: &str, rest: &str) -> bool {
+    rest.starts_with("//")
+        && ["file:", "smb:"].iter().any(|scheme| {
+            before
+                .len()
+                .checked_sub(scheme.len())
+                .and_then(|start| before.get(start..))
+                .is_some_and(|tail| tail.eq_ignore_ascii_case(scheme))
+        })
 }
 
 fn drive_start(text: &str) -> bool {
@@ -127,7 +178,22 @@ fn drive_start(text: &str) -> bool {
 }
 
 fn opens_path(ch: char) -> bool {
-    ch.is_whitespace() || matches!(ch, '=' | '\'' | '"' | '(' | '[' | '{' | ',' | ';' | '`')
+    ch.is_whitespace()
+        || matches!(
+            ch,
+            '=' | '\''
+                | '"'
+                | '('
+                | '['
+                | '{'
+                | ','
+                | ';'
+                | '`'
+                | '>'
+                | '|'
+                | '\u{2018}'
+                | '\u{201c}'
+        )
 }
 
 fn hard_boundary(ch: char) -> bool {

@@ -92,7 +92,12 @@ impl Redactor {
 }
 
 pub(super) fn token_len(text: &str) -> Option<usize> {
-    let end = text.strip_prefix('<')?.find('>')? + 2;
+    let close = text
+        .strip_prefix('<')?
+        .bytes()
+        .take(40)
+        .position(|b| b == b'>')?;
+    let end = close + 2;
     let inner = &text[1..end - 1];
     let valid = match inner.split_once(':') {
         None => matches!(inner, "user" | "computer" | "domain"),
