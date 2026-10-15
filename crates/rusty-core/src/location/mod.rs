@@ -1,6 +1,7 @@
 mod parent;
 mod path;
 mod provider;
+mod serde_impl;
 
 pub use path::ProviderPath;
 pub use provider::ProviderId;

@@ -6,6 +6,7 @@ mod join;
 mod parent;
 mod path;
 mod props;
+mod serde;
 mod text_form;
 
 fn loc(text: &str) -> Location {
