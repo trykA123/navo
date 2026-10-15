@@ -1,0 +1,30 @@
+[[language]]
+name = "m4"
+extensions = ["m4"]
+line_comments = ["dnl", "#"]
+operators = ["(", ")", ",", "$"]
+
+[[language.keywords]]
+kind = "keyword"
+words = [
+  "define", "undefine", "defn", "pushdef", "popdef", "indir", "builtin", "ifdef", "ifelse",
+  "shift", "dumpdef", "traceon", "traceoff", "debugmode", "debugfile", "changequote",
+  "changecom", "changeword", "m4wrap", "include", "sinclude", "divert", "undivert", "divnum",
+  "len", "index", "regexp", "substr", "translit", "patsubst", "format", "incr", "decr", "eval",
+  "syscmd", "esyscmd", "sysval", "mkstemp", "maketemp", "errprint", "m4exit",
+]
+
+[[language.keywords]]
+kind = "constant"
+words = ["__file__", "__line__", "__program__", "__gnu__", "__unix__", "__windows__"]
+
+[[language.keywords]]
+kind = "function"
+words = ["AC_", "AM_", "AS_", "AH_", "AU_", "LT_", "PKG_", "m4_"]
+prefix = true
+
+[[language.delimiters]]
+open = "`"
+close = "'"
+multiline = true
+kind = "string"

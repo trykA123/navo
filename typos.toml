@@ -4,6 +4,7 @@ extend-exclude = [
     "design/prototype/fonts/",
     "design/screens/",
     "vendor/",
+    "crates/rusty-syntax/src/builtin/rules/",
     "*.png",
     "*.ttf",
 ]
