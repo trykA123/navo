@@ -1,17 +1,18 @@
 use rusty_core::Location;
 
 use super::{EDIT_LIMIT, Loaded, Slot, Sniff, ViewerKind};
+use crate::languages::detect;
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
-use crate::window_view::viewer::editor::EditorBody;
+use crate::window_view::viewer::editor::{EditorBody, EditorFile};
 use crate::window_view::viewer::paged::PagedBody;
-use crate::window_view::viewer::{FileHooks, FileText, Paged, PagedKind};
+use crate::window_view::viewer::{FileHooks, Paged, PagedKind};
 
 const TEXT: u8 = 50;
 const BINARY: u8 = 1;
 
 enum TextLoad {
-    Editor(FileText),
+    Editor(EditorFile),
     Paged(Paged),
 }
 
@@ -45,7 +46,10 @@ impl ViewerKind for Text {
         sniff: &Sniff<'_>,
     ) -> Result<Loaded, String> {
         let loaded = if self.editable(sniff) {
-            TextLoad::Editor((hooks.read)(location)?)
+            TextLoad::Editor(EditorFile {
+                file: (hooks.read)(location)?,
+                language: detect(sniff.name, sniff.head),
+            })
         } else {
             TextLoad::Paged((hooks.paged)(location)?)
         };

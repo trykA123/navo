@@ -5,10 +5,10 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::{Editor, EditorState, InputEvent};
 use gpui_kit::{Role, Subscription, Task};
 
-pub(super) use body::EditorBody;
+pub(super) use body::{EditorBody, EditorFile};
 
+use super::FileStamp;
 use super::body::Host;
-use super::{FileStamp, FileText, language_of};
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
@@ -31,8 +31,8 @@ pub(super) struct EditorView {
 }
 
 impl EditorView {
-    fn new(file: FileText, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let language = language_of(&host.title);
+    fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let EditorFile { file, language } = opened;
         let text = file.text;
         let editor = cx.new(|cx| {
             let mut state = EditorState::new(window, cx)

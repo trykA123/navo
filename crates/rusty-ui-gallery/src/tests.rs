@@ -190,3 +190,13 @@ fn the_drive_pages_show_both_bars_the_menu_and_a_path_error(cx: &mut TestAppCont
     })
     .expect("window");
 }
+
+#[gpui_kit::test]
+fn init_registers_the_extra_grammars(cx: &mut TestAppContext) {
+    cx.update(|cx| rusty_ui::init(Mode::Light, cx).expect("bundled fonts load"));
+    let registry = gpui_kit::component::highlighter::LanguageRegistry::singleton();
+    for name in ["xml", "powershell", "sql", "ini"] {
+        let config = registry.language(name);
+        assert!(config.is_some_and(|config| config.has_grammar()), "{name}");
+    }
+}
