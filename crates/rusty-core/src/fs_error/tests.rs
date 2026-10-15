@@ -17,7 +17,7 @@ const ALL_KINDS: [FsErrorKind; 11] = [
     Unknown,
 ];
 
-const WINDOWS_CODES: [(u32, FsErrorKind); 21] = [
+const WINDOWS_CODES: [(u32, FsErrorKind); 22] = [
     (2, NotFound),
     (3, NotFound),
     (5, AccessDenied),
@@ -28,6 +28,7 @@ const WINDOWS_CODES: [(u32, FsErrorKind); 21] = [
     (111, PathTooLong),
     (206, PathTooLong),
     (123, NameInvalid),
+    (267, NameInvalid),
     (53, NetworkLost),
     (64, NetworkLost),
     (67, NetworkLost),
@@ -41,7 +42,7 @@ const WINDOWS_CODES: [(u32, FsErrorKind); 21] = [
     (1, Unknown),
 ];
 
-const ERRNO_CODES: [(i32, FsErrorKind); 20] = [
+const ERRNO_CODES: [(i32, FsErrorKind); 21] = [
     (2, NotFound),
     (1, AccessDenied),
     (13, AccessDenied),
@@ -51,6 +52,7 @@ const ERRNO_CODES: [(i32, FsErrorKind); 20] = [
     (36, PathTooLong),
     (22, NameInvalid),
     (84, NameInvalid),
+    (20, NameInvalid),
     (101, NetworkLost),
     (103, NetworkLost),
     (104, NetworkLost),
