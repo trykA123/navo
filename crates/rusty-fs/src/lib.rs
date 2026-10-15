@@ -5,6 +5,7 @@ pub mod hostile_names;
 mod io_queue;
 mod local;
 mod provider;
+mod snapshot;
 
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use io_queue::{
@@ -15,3 +16,4 @@ pub use local::LocalFs;
 pub use provider::{
     Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider,
 };
+pub use snapshot::{FolderSnapshot, load_folder};
