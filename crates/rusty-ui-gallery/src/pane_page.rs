@@ -81,7 +81,9 @@ impl PanePage {
                 .ok()
                 .and_then(|index| self.rows.get(index))
                 .and_then(|entry| tab.location().join(&entry.name).ok()),
-            FileListAction::SwitchPane | FileListAction::Operate(_) => None,
+            FileListAction::SwitchPane | FileListAction::Operate(_) | FileListAction::Filter(_) => {
+                None
+            }
         };
         if let Some(location) = target {
             self.run(&Command::PaneNavigate { location });
@@ -105,6 +107,7 @@ impl PanePage {
             view: tab.view(),
             marked: Rc::new(tab.selection().clone()),
             is_active: true,
+            filter: None,
         }
     }
 

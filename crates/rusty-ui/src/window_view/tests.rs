@@ -218,3 +218,29 @@ fn a_finished_job_row_goes_away_after_a_moment(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(view.read_with(cx, |view, _| view.browser.jobs().is_empty()));
 }
+
+fn shown(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Vec<String> {
+    view.read_with(cx, |view, _| {
+        view.browser
+            .state()
+            .active_tab()
+            .listing()
+            .map(|l| l.entries().iter().map(|e| e.name.clone()).collect())
+            .unwrap_or_default()
+    })
+}
+
+#[gpui_kit::test]
+fn typing_in_a_pane_filters_it_and_escape_brings_everything_back(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "d");
+    assert_eq!(shown(cx, &view), ["docs"]);
+    cx.update_window(window, |_, window, _| {
+        assert!(window.find("filter").visible());
+    })
+    .expect("window");
+    press(cx, window, &view, "escape");
+    assert_eq!(shown(cx, &view), ["docs", "a.txt"]);
+}

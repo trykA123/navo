@@ -30,6 +30,7 @@ gpui_kit::actions!(
         DeleteItems,
         GoBack,
         GoForward,
+        ClearFilter,
     ]
 );
 
@@ -55,6 +56,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-f8", DeleteItems, context),
         KeyBinding::new("alt-left", GoBack, context),
         KeyBinding::new("alt-right", GoForward, context),
+        KeyBinding::new("escape", ClearFilter, context),
     ]);
 }
 
@@ -94,7 +96,7 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
         .on_action(send::<ToggleMark>(ctx, Command::SelectionToggle))
         .on_action(send::<ToggleMarkDown>(ctx, Command::SelectionToggleDown))
         .on_action(move |_: &OpenRow, window, cx| open.open_cursor(window, cx))
-        .on_action(move |_: &OpenParent, window, cx| up.act(FileListAction::Up, window, cx))
+        .on_action(move |_: &OpenParent, window, cx| up.go_up_or_narrow(window, cx))
         .on_action(move |_: &SwitchPane, window, cx| {
             switch.act(FileListAction::SwitchPane, window, cx);
         })
@@ -102,6 +104,14 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
         .on_action(operate::<MoveItems>(ctx, OpKind::Move))
         .on_action(operate::<RecycleItems>(ctx, OpKind::Recycle))
         .on_action(operate::<DeleteItems>(ctx, OpKind::Delete))
+        .on_action({
+            let ctx = ctx.clone();
+            move |_: &ClearFilter, window, cx| ctx.clear_filter(window, cx)
+        })
+        .on_key_down({
+            let ctx = ctx.clone();
+            move |event, window, cx| ctx.type_key(event, window, cx)
+        })
         .on_action(send::<GoBack>(ctx, Command::PaneBack))
         .on_action(send::<GoForward>(ctx, Command::PaneForward))
         .on_mouse_down(side_button(NavigationDirection::Back), {

@@ -66,6 +66,8 @@ pub struct Browser {
     pending: Option<PendingOp>,
     jobs: Vec<JobView>,
     ended: Vec<u64>,
+    filters: HashMap<TabId, filter::Filter>,
+    full: HashMap<TabId, filter::Full>,
     next_op: u64,
     launcher: Launcher,
 }
@@ -96,6 +98,8 @@ impl Browser {
             pending: None,
             jobs: Vec::new(),
             ended: Vec::new(),
+            filters: HashMap::new(),
+            full: HashMap::new(),
             next_op: 0,
             launcher: Arc::new(|_| {}),
         }
@@ -311,6 +315,7 @@ impl Browser {
         };
         entry.size = measured.bytes;
         self.details.insert(measured.tab, rows.into());
+        self.remember_size(measured.tab, &measured.name, measured.bytes);
         true
     }
 
@@ -331,12 +336,18 @@ impl Browser {
         let listing = match result {
             Ok(snapshot) => {
                 self.errors.remove(&tab);
-                self.details.insert(tab, snapshot.details.into());
-                snapshot.listing
+                let full = filter::Full {
+                    listing: snapshot.listing,
+                    details: snapshot.details.into(),
+                };
+                let (listing, details) = self.narrow(tab, &location, full);
+                self.details.insert(tab, details);
+                listing
             }
             Err(error) => {
                 self.errors.insert(tab, error);
                 self.details.remove(&tab);
+                self.full.remove(&tab);
                 Listing::new(Vec::new())
             }
         };
@@ -367,6 +378,7 @@ impl Browser {
     }
 }
 
+mod filter;
 mod operate;
 #[cfg(test)]
 mod tests;

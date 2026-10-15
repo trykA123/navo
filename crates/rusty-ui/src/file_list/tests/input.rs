@@ -219,3 +219,61 @@ fn the_mouse_side_buttons_go_back_and_forward(cx: &mut TestAppContext) {
         [Command::PaneBack, Command::PaneForward]
     );
 }
+
+fn filtered(text: &str) -> crate::file_list::FileListProps {
+    crate::file_list::FileListProps {
+        filter: Some(text.to_owned().into()),
+        ..props(sample_rows())
+    }
+}
+
+#[gpui_kit::test]
+fn typed_letters_go_to_the_filter(cx: &mut TestAppContext) {
+    use crate::file_list::FilterEdit;
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        window.press("p", cx);
+        window.press("shift-a", cx);
+        window.press("ctrl-p", cx);
+    })
+    .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [
+            FileListAction::Filter(FilterEdit::Push('p')),
+            FileListAction::Filter(FilterEdit::Push('A')),
+        ]
+    );
+}
+
+#[gpui_kit::test]
+fn backspace_edits_an_active_filter_instead_of_going_up(cx: &mut TestAppContext) {
+    use crate::file_list::FilterEdit;
+    let (window, harness) = open_list(cx, filtered("pa"));
+    cx.update_window(window, |_, window, cx| window.press("backspace", cx))
+        .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [FileListAction::Filter(FilterEdit::Pop)]
+    );
+}
+
+#[gpui_kit::test]
+fn escape_clears_an_active_filter(cx: &mut TestAppContext) {
+    use crate::file_list::FilterEdit;
+    let (window, harness) = open_list(cx, filtered("pa"));
+    cx.update_window(window, |_, window, cx| window.press("escape", cx))
+        .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [FileListAction::Filter(FilterEdit::Clear)]
+    );
+}
+
+#[gpui_kit::test]
+fn escape_without_a_filter_does_nothing(cx: &mut TestAppContext) {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| window.press("escape", cx))
+        .expect("window");
+    assert_eq!(actions(&harness, cx), []);
+}

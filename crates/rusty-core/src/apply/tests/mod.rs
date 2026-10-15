@@ -5,6 +5,7 @@ use crate::{
 
 mod cursor;
 mod events;
+mod filtered;
 mod layout;
 mod pane;
 mod props;

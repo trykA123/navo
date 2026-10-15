@@ -11,8 +11,9 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, Styled, Window, div,
+    AnyElement, App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, Styled, Window,
+    div,
 };
 use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
@@ -28,11 +29,19 @@ type ActionHandler = Rc<dyn Fn(&FileListAction, &mut Window, &mut App)>;
 type PageRowsHandler = Rc<dyn Fn(&u64, &mut Window, &mut App)>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilterEdit {
+    Push(char),
+    Pop,
+    Clear,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileListAction {
     Open(u64),
     Up,
     SwitchPane,
     Operate(rusty_core::OpKind),
+    Filter(FilterEdit),
 }
 
 #[derive(Clone, Debug)]
@@ -42,6 +51,7 @@ pub struct FileListProps {
     pub view: ViewState,
     pub marked: Rc<Selection>,
     pub is_active: bool,
+    pub filter: Option<SharedString>,
 }
 
 #[derive(IntoElement)]
@@ -148,6 +158,38 @@ impl ListContext {
     fn right_click(&self, row: u64, window: &mut Window, cx: &mut App) {
         self.click(row, window, cx);
         self.send(Command::SelectionToggle, window, cx);
+    }
+
+    fn go_up_or_narrow(&self, window: &mut Window, cx: &mut App) {
+        let action = if self.props.filter.is_some() {
+            FileListAction::Filter(FilterEdit::Pop)
+        } else {
+            FileListAction::Up
+        };
+        self.act(action, window, cx);
+    }
+
+    fn clear_filter(&self, window: &mut Window, cx: &mut App) {
+        if self.props.filter.is_some() {
+            self.act(FileListAction::Filter(FilterEdit::Clear), window, cx);
+        }
+    }
+
+    fn type_key(&self, event: &KeyDownEvent, window: &mut Window, cx: &mut App) {
+        let modifiers = &event.keystroke.modifiers;
+        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+            return;
+        }
+        let Some(text) = event.keystroke.key_char.as_deref() else {
+            return;
+        };
+        let mut chars = text.chars();
+        let (Some(ch), None) = (chars.next(), chars.next()) else {
+            return;
+        };
+        if !ch.is_control() && !ch.is_whitespace() {
+            self.act(FileListAction::Filter(FilterEdit::Push(ch)), window, cx);
+        }
     }
 
     fn open_cursor(&self, window: &mut Window, cx: &mut App) {
@@ -314,6 +356,9 @@ impl RenderOnce for FileList {
             .min_h_0()
             .bg(t.colors.surface)
             .text_size(t.typography.body)
+            .when_some(ctx.props.filter.clone(), |list, text| {
+                list.child(row::filter_bar(&t, text, len))
+            })
             .child(row::header(&t))
             .child(area)
     }

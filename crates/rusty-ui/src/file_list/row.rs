@@ -1,6 +1,8 @@
+use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    BoxShadow, Div, FontWeight, Hsla, ParentElement, Pixels, SharedString, Styled, div, point, px,
+    BoxShadow, Div, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, Role,
+    SharedString, StatefulInteractiveElement, Styled, div, point, px,
 };
 use rusty_fs::{EntryKind, FsEntry};
 
@@ -163,4 +165,36 @@ pub(super) fn cells(look: &RowLook) -> Div {
                 .child(extension.to_owned()),
         )
         .child(numbers)
+}
+
+pub(super) fn filter_bar(t: &Theme, text: SharedString, shown: usize) -> impl IntoElement {
+    let c = &t.colors;
+    let count = crate::format::count(u64::try_from(shown).unwrap_or(u64::MAX), "item", "items");
+    let spoken: SharedString = format!("Filter {text}, {count}").into();
+    div()
+        .id("filter")
+        .role(Role::Status)
+        .aria_label(spoken)
+        .test_support()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(t.spacing.sm)
+        .h(t.spacing.row_height)
+        .px(t.spacing.xl)
+        .bg(c.accent.opacity(0.12))
+        .border_t_1()
+        .border_color(c.accent)
+        .text_size(t.typography.small)
+        .child(icon(IconName::Search, px(12.), c.accent_text))
+        .child(
+            div()
+                .font_family(t.typography.mono_font.clone())
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(c.text)
+                .child(text),
+        )
+        .child(div().text_color(c.muted).child(count))
+        .child(div().flex_1())
+        .child(div().text_color(c.faint).child("Esc clears"))
 }

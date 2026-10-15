@@ -133,6 +133,29 @@ impl Tab {
             return false;
         }
         self.pending = None;
+        self.keep_by_name(listing);
+        true
+    }
+
+    pub(crate) fn replace_listing(&mut self, location: &Location, listing: Listing) -> bool {
+        if self.pending.is_some() || &self.location != location || self.listing.is_none() {
+            return false;
+        }
+        let current = self
+            .listing
+            .as_ref()
+            .and_then(|old| old.get(self.view.cursor))
+            .map(|entry| entry.name.clone());
+        let cursor = current
+            .and_then(|name| listing.entries().iter().position(|e| e.name == name))
+            .unwrap_or(0);
+        self.keep_by_name(listing);
+        self.view.cursor = cursor as u64;
+        self.view.scroll = self.clamp(self.view.scroll.min(self.view.cursor));
+        true
+    }
+
+    fn keep_by_name(&mut self, listing: Listing) {
         let marked: HashSet<String> = self
             .listing
             .as_ref()
@@ -149,7 +172,6 @@ impl Tab {
             .collect();
         self.set_listing(listing);
         self.selection.mark_rows(keep);
-        true
     }
 
     pub(crate) fn set_listing(&mut self, listing: Listing) {

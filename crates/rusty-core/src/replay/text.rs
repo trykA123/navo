@@ -41,14 +41,32 @@ fn write_event(out: &mut String, event: &Event) {
                 quote(location.as_str()),
                 listing.len()
             );
-            for entry in listing.entries() {
-                let kind = if entry.is_folder { "folder" } else { "file" };
-                let _ = writeln!(out, "  {kind} {}", quote(&entry.name));
-            }
+            write_entries(out, listing);
+        }
+        Event::ListingFiltered {
+            tab,
+            location,
+            listing,
+        } => {
+            let _ = writeln!(
+                out,
+                "!listing-filtered {{ tab: {}, location: {}, entries: {} }}",
+                tab.get(),
+                quote(location.as_str()),
+                listing.len()
+            );
+            write_entries(out, listing);
         }
         Event::PageRowsChanged { pane, rows } => {
             let _ = writeln!(out, "!page-rows {{ pane: {}, rows: {rows} }}", pane.get());
         }
+    }
+}
+
+fn write_entries(out: &mut String, listing: &Listing) {
+    for entry in listing.entries() {
+        let kind = if entry.is_folder { "folder" } else { "file" };
+        let _ = writeln!(out, "  {kind} {}", quote(&entry.name));
     }
 }
 
@@ -132,6 +150,16 @@ fn event_entry(text: &str, lines: &[&str], next: &mut usize) -> Result<LogEntry,
                 tab: TabId::new(int(&fields, "tab")?),
                 location: Location::new(string(&fields, "location")?).map_err(|e| e.to_string())?,
                 request: int(&fields, "request")?,
+                listing: Listing::new(entries),
+            }
+        }
+        "listing-filtered" => {
+            expect_fields(&fields, &["tab", "location", "entries"])?;
+            let count = int(&fields, "entries")?;
+            let entries = entry_lines(lines, next, count)?;
+            Event::ListingFiltered {
+                tab: TabId::new(int(&fields, "tab")?),
+                location: Location::new(string(&fields, "location")?).map_err(|e| e.to_string())?,
                 listing: Listing::new(entries),
             }
         }

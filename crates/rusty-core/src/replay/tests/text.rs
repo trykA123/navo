@@ -288,3 +288,12 @@ fn a_bad_dropped_count_names_line_three() {
         Some(3)
     );
 }
+
+#[test]
+fn a_filtered_listing_round_trips_through_text() {
+    let text = with_body(
+        "+7 !listing-filtered { tab: 3, location: \"/h\", entries: 1 }\n  file \"pa.rs\"\n",
+    );
+    let log = CommandLog::parse(&text).unwrap();
+    assert_eq!(log.to_text(), text);
+}

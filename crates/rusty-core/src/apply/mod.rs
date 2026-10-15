@@ -32,6 +32,11 @@ pub enum Event {
         pane: PaneId,
         rows: u64,
     },
+    ListingFiltered {
+        tab: TabId,
+        location: Location,
+        listing: Listing,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -88,6 +93,15 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
             }
         }
         Event::PageRowsChanged { pane, rows } => pane::page_rows_changed(state, pane, rows),
+        Event::ListingFiltered {
+            tab,
+            location,
+            listing,
+        } => {
+            if let Some(tab) = state.tab_mut(tab) {
+                tab.replace_listing(&location, listing);
+            }
+        }
     }
     Vec::new()
 }

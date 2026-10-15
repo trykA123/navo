@@ -5,7 +5,7 @@ use rusty_core::{Command, Location, PaneId, Tab};
 use super::FerriteWindow;
 use super::status::status_of;
 use crate::FocusHandle;
-use crate::file_list::{FileList, FileListAction, FileListProps};
+use crate::file_list::{FileList, FileListAction, FileListProps, FilterEdit};
 use crate::pane_chrome::{PaneTabs, PathBar, path_segments};
 use crate::prelude::*;
 use crate::status_bar::StatusBar;
@@ -19,6 +19,14 @@ fn title_of(tab: &Tab) -> SharedString {
 }
 
 impl FerriteWindow {
+    fn filter(&mut self, edit: FilterEdit) {
+        let _ = match edit {
+            FilterEdit::Push(ch) => self.browser.filter_push(ch),
+            FilterEdit::Pop => self.browser.filter_pop(),
+            FilterEdit::Clear => self.browser.filter_clear(),
+        };
+    }
+
     pub(super) fn pane_view(
         &mut self,
         pane: PaneId,
@@ -44,6 +52,10 @@ impl FerriteWindow {
             view: tab.view(),
             marked: Rc::new(tab.selection().clone()),
             is_active,
+            filter: self
+                .browser
+                .filter_text(tab.id())
+                .map(|text| text.to_owned().into()),
         };
         let focus = self.handle(pane, cx);
         let _ = window;
@@ -129,6 +141,9 @@ impl FerriteWindow {
                         FileListAction::SwitchPane => this.switch_pane(window, cx),
                         FileListAction::Operate(kind) => {
                             this.browser.prepare(*kind);
+                        }
+                        FileListAction::Filter(edit) => {
+                            this.filter(*edit);
                         }
                     }
                     this.focus_core_pane(window, cx);

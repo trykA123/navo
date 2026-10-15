@@ -54,6 +54,7 @@ pub(super) fn props(rows: Rc<[FsEntry]>) -> FileListProps {
         view: ViewState::default(),
         marked: Rc::new(Selection::new(len)),
         is_active: true,
+        filter: None,
     }
 }
 
