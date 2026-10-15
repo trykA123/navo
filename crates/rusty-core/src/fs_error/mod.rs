@@ -37,24 +37,108 @@ pub struct FsError {
 impl FsErrorKind {
     #[must_use]
     pub fn from_windows_code(code: u32) -> Self {
-        todo!()
+        match code {
+            2 | 3 => Self::NotFound,
+            5 => Self::AccessDenied,
+            32 => Self::SharingViolation,
+            33 => Self::Locked,
+            39 | 112 => Self::DiskFull,
+            111 | 206 => Self::PathTooLong,
+            123 => Self::NameInvalid,
+            53 | 64 | 67 | 1231 => Self::NetworkLost,
+            121 | 1460 => Self::Timeout,
+            1223 => Self::Cancelled,
+            _ => Self::Unknown,
+        }
     }
 
     #[must_use]
     pub fn from_errno(code: i32) -> Self {
-        todo!()
+        match code {
+            2 => Self::NotFound,
+            1 | 13 => Self::AccessDenied,
+            26 => Self::SharingViolation,
+            16 => Self::Locked,
+            28 => Self::DiskFull,
+            36 => Self::PathTooLong,
+            22 | 84 => Self::NameInvalid,
+            101 | 103 | 104 | 112 | 113 => Self::NetworkLost,
+            110 => Self::Timeout,
+            125 => Self::Cancelled,
+            _ => Self::Unknown,
+        }
     }
 }
 
 impl FsError {
     #[must_use]
     pub fn message(&self) -> String {
-        todo!()
+        let base = match &self.location {
+            Some(location) => with_location(self.kind, &location.path().display()),
+            None => without_location(self.kind).to_owned(),
+        };
+        match (self.kind, self.os_code) {
+            (FsErrorKind::Unknown, Some(code)) => format!("{base} (error {code})"),
+            _ => base,
+        }
     }
 
     #[must_use]
     pub fn recovery(&self) -> &'static [RecoveryAction] {
-        todo!()
+        use RecoveryAction::{Cancel, Reconnect, Rename, Retry, RetryAsAdmin, Skip, SkipAll};
+        match self.kind {
+            FsErrorKind::NotFound => &[Skip, SkipAll, Cancel],
+            FsErrorKind::AccessDenied => &[RetryAsAdmin, Skip, SkipAll, Cancel],
+            FsErrorKind::SharingViolation | FsErrorKind::Locked => &[Retry, Skip, SkipAll, Cancel],
+            FsErrorKind::DiskFull => &[Retry, Cancel],
+            FsErrorKind::PathTooLong | FsErrorKind::NameInvalid => &[Rename, Skip, Cancel],
+            FsErrorKind::NetworkLost => &[Reconnect, Retry, Cancel],
+            FsErrorKind::Timeout => &[Retry, Cancel],
+            FsErrorKind::Cancelled => &[],
+            FsErrorKind::Unknown => &[Retry, Skip, Cancel],
+        }
+    }
+}
+
+fn with_location(kind: FsErrorKind, place: &str) -> String {
+    match kind {
+        FsErrorKind::NotFound => format!("\u{201c}{place}\u{201d} was not found."),
+        FsErrorKind::AccessDenied => {
+            format!("Ferrite is not allowed to open \u{201c}{place}\u{201d}.")
+        }
+        FsErrorKind::SharingViolation => {
+            format!("\u{201c}{place}\u{201d} is in use by another program.")
+        }
+        FsErrorKind::Locked => format!("\u{201c}{place}\u{201d} is locked."),
+        FsErrorKind::DiskFull => {
+            format!("There is not enough free space to write \u{201c}{place}\u{201d}.")
+        }
+        FsErrorKind::PathTooLong => format!("The path \u{201c}{place}\u{201d} is too long."),
+        FsErrorKind::NameInvalid => {
+            format!("\u{201c}{place}\u{201d} has a name that is not allowed here.")
+        }
+        FsErrorKind::NetworkLost => format!("The connection to \u{201c}{place}\u{201d} was lost."),
+        FsErrorKind::Timeout => format!("\u{201c}{place}\u{201d} did not answer in time."),
+        FsErrorKind::Cancelled => {
+            format!("The operation on \u{201c}{place}\u{201d} was cancelled.")
+        }
+        FsErrorKind::Unknown => format!("Something went wrong with \u{201c}{place}\u{201d}."),
+    }
+}
+
+fn without_location(kind: FsErrorKind) -> &'static str {
+    match kind {
+        FsErrorKind::NotFound => "The item was not found.",
+        FsErrorKind::AccessDenied => "Ferrite is not allowed to do this.",
+        FsErrorKind::SharingViolation => "The item is in use by another program.",
+        FsErrorKind::Locked => "The item is locked.",
+        FsErrorKind::DiskFull => "There is not enough free space on the drive.",
+        FsErrorKind::PathTooLong => "The path is too long.",
+        FsErrorKind::NameInvalid => "The name is not allowed here.",
+        FsErrorKind::NetworkLost => "The network connection was lost.",
+        FsErrorKind::Timeout => "The operation took too long.",
+        FsErrorKind::Cancelled => "The operation was cancelled.",
+        FsErrorKind::Unknown => "Something went wrong.",
     }
 }
 
