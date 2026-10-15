@@ -85,3 +85,5 @@ pub fn reconnect(letter: char, remote: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_platform;
