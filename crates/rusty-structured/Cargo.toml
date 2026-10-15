@@ -1,0 +1,19 @@
+[package]
+name = "rusty-structured"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+csv = "=1.4.0"
+quick-xml = "=0.41.0"
+saphyr-parser = "=0.2.2"
+serde = "=1.0.229"
+serde_json = "=1.0.154"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

@@ -24,6 +24,7 @@ icon_assets!(
     [
         ArrowRight,
         ArrowUp,
+        ChevronDown,
         ChevronLeft,
         ChevronRight,
         Clipboard,

@@ -1,12 +1,17 @@
+mod background;
 mod body;
 mod editor;
 mod files;
 mod keys_bar;
 mod kinds;
 mod lister;
+mod markdown;
 mod modes;
 mod open;
 mod paged;
+mod rich_header;
+mod table;
+mod tree;
 mod view;
 
 use gpui_kit::{FocusHandle, KeyBinding};
@@ -89,6 +94,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-c", MatchCase, context),
         KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
     ]);
+    tree::bind_keys(cx);
+    table::bind_keys(cx);
+    markdown::bind_keys(cx);
 }
 
 pub(super) struct Viewer {

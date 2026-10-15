@@ -8,6 +8,7 @@ mod pane_page;
 mod pane_sample;
 mod screenshot;
 mod sections;
+mod structured_sample;
 mod viewer_sample;
 
 #[cfg(test)]
@@ -54,8 +55,8 @@ fn main() -> ExitCode {
         }
         rusty_ui::confirm_dialog::bind_keys(cx);
         rusty_ui::pane_chrome::bind_keys(cx);
-        let opened = rusty_ui::open_window(window_options(cx), cx, |_, cx| {
-            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        let opened = rusty_ui::open_window(window_options(cx), cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         });
         match (opened, options.screenshot_dir) {
             (Err(error), _) => {
@@ -63,7 +64,14 @@ fn main() -> ExitCode {
                 run_failed.store(true, Ordering::SeqCst);
                 cx.quit();
             }
-            (Ok((_, gallery)), Some(dir)) => screenshot::capture(gallery, dir, run_failed, cx),
+            (Ok((window, gallery)), Some(dir)) => {
+                let shot = screenshot::Shot {
+                    window,
+                    gallery,
+                    dir,
+                };
+                screenshot::capture(shot, run_failed, cx);
+            }
             (Ok(_), None) => {}
         }
     });

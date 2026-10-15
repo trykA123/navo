@@ -5,6 +5,7 @@ mod lister;
 mod moves;
 mod open;
 mod save;
+mod structured;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -128,6 +129,8 @@ fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, reads: &Arc<AtomicUsize>) -> Pa
 
 pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
     let bytes = Arc::new(setup.bytes.clone());
+    let whole = bytes.clone();
+    let part = bytes.clone();
     let text = String::from_utf8_lossy(&setup.bytes).into_owned();
     let head = Head {
         bytes: setup.bytes.iter().take(8 * 1024).copied().collect(),
@@ -157,6 +160,13 @@ pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
             Ok(head.clone())
         }),
         paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup, &reads))),
+        bytes: Arc::new(move |_, _| Ok(whole.as_ref().clone())),
+        range: Arc::new(move |_, offset, len| {
+            let start = usize::try_from(offset)
+                .unwrap_or(usize::MAX)
+                .min(part.len());
+            Ok(part[start..(start + len).min(part.len())].to_vec())
+        }),
     }
 }
 

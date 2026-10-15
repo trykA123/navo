@@ -48,6 +48,7 @@ gpui-kit = { version = "=0.7.3", features = [
 ] }
 rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
+rusty-structured = { path = "../rusty-structured" }
 tree-sitter = "=0.26.13"
 tree-sitter-asm = "=0.24.0"
 tree-sitter-batch = "=0.11.1"

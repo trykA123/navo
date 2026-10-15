@@ -21,6 +21,7 @@ use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
 
 pub use keys::bind_keys;
+pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
 
 use crate::primitives::{ListScroll, RowSemantics, VirtualList};
@@ -232,7 +233,7 @@ impl ListContext {
     }
 }
 
-fn typed_char(keystroke: &Keystroke) -> Option<char> {
+pub(crate) fn typed_char(keystroke: &Keystroke) -> Option<char> {
     let modifiers = &keystroke.modifiers;
     let alt_gr = modifiers.control && modifiers.alt;
     let command = modifiers.control || modifiers.alt;

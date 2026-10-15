@@ -17,6 +17,9 @@ fn language_after_f3(cx: &mut TestAppContext, name: &str, text: &str) -> String 
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);
+    if editor_of(cx, &view).is_none() {
+        press(cx, window, &view, "1");
+    }
     let editor = editor_of(cx, &view).expect("the text editor is open");
     let language = editor.read_with(cx, |state, _| state.language_name().to_string());
     let config = LanguageRegistry::singleton().language(&language);

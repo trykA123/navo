@@ -3,14 +3,35 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::PagedView;
+use rusty_ui::window_view::{PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
+use crate::structured_sample::{
+    self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
+};
 use crate::viewer_sample;
+
+const TREE_STEPS: [&str; 9] = [
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::ScrollRight",
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::ScrollRight",
+    "viewer::RowDown",
+];
+const TABLE_STEPS: [&str; 4] = [
+    "viewer::ScrollRight",
+    "viewer::ScrollRight",
+    "viewer_table::SortColumn",
+    "viewer_table::SortColumn",
+];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {
@@ -21,10 +42,13 @@ pub enum Page {
     PagedText,
     Drives,
     TypedPath,
+    Tree,
+    Table,
+    Markdown,
 }
 
 impl Page {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 10] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -32,6 +56,9 @@ impl Page {
         Self::PagedText,
         Self::Drives,
         Self::TypedPath,
+        Self::Tree,
+        Self::Table,
+        Self::Markdown,
     ];
 
     pub fn label(self) -> &'static str {
@@ -43,6 +70,9 @@ impl Page {
             Self::PagedText => "Paged text",
             Self::Drives => "Drives",
             Self::TypedPath => "Path",
+            Self::Tree => "Tree",
+            Self::Table => "Table",
+            Self::Markdown => "Markdown",
         }
     }
 }
@@ -56,6 +86,9 @@ pub struct Gallery {
     paged_text: Entity<PagedView>,
     drives: Entity<DrivesPage>,
     typed_path: Entity<DrivesPage>,
+    tree: Option<Box<dyn ViewerBody>>,
+    table: Option<Box<dyn ViewerBody>>,
+    markdown: Option<Box<dyn ViewerBody>>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -63,7 +96,7 @@ pub struct Gallery {
 }
 
 impl Gallery {
-    pub fn new(mode: Mode, cx: &mut App) -> Self {
+    pub fn new(mode: Mode, window: &mut Window, cx: &mut App) -> Self {
         Self {
             mode,
             page: Page::Primitives,
@@ -73,6 +106,9 @@ impl Gallery {
             paged_text: viewer_sample::text_view(cx),
             drives: cx.new(|cx| DrivesPage::new(Shows::Menu, cx)),
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
+            tree: structured::body(TREE_NAME, TREE, window, cx),
+            table: structured::body(TABLE_NAME, TABLE, window, cx),
+            markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -89,6 +125,34 @@ impl Gallery {
     pub fn set_page(&mut self, page: Page, cx: &mut Context<Self>) {
         self.page = page;
         cx.notify();
+    }
+
+    fn sample(&self) -> Option<&dyn ViewerBody> {
+        match self.page {
+            Page::Tree => self.tree.as_deref(),
+            Page::Table => self.table.as_deref(),
+            Page::Markdown => self.markdown.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub fn focus_sample(&self, window: &mut Window, cx: &mut App) {
+        if let Some(body) = self.sample() {
+            window.focus(&body.focus_handle(cx), cx);
+        }
+    }
+
+    pub fn drive_sample(&self, window: &mut Window, cx: &mut App) {
+        let steps: &[&str] = match self.page {
+            Page::Tree => &TREE_STEPS,
+            Page::Table => &TABLE_STEPS,
+            _ => &[],
+        };
+        for name in steps {
+            if let Ok(action) = cx.build_action(name, None) {
+                window.dispatch_action(action, cx);
+            }
+        }
     }
 
     fn page_switch(&self, cx: &mut Context<Self>) -> impl Iterator<Item = Button> {
@@ -119,8 +183,21 @@ impl Gallery {
         );
         FerriteTitleBar::new("Ferrite")
             .header(HeaderSearch::new())
-            .header(div().flex().gap(px(4.)).children(self.page_switch(cx)))
             .header(toggle)
+    }
+
+    fn page_bar(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_wrap()
+            .flex_none()
+            .gap(px(4.))
+            .px(t.spacing.xl)
+            .py(t.spacing.xs)
+            .border_b_1()
+            .border_color(t.colors.line)
+            .bg(t.colors.rail)
+            .children(self.page_switch(cx))
     }
 
     fn left_column(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
@@ -168,7 +245,8 @@ impl Render for Gallery {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .child(self.header(cx));
+            .child(self.header(cx))
+            .child(self.page_bar(&t, cx));
         match self.page {
             Page::Pane => root.child(self.pane.clone()),
             Page::Operate => root.child(self.operate.clone()),
@@ -177,6 +255,10 @@ impl Render for Gallery {
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
+            Page::Tree | Page::Table | Page::Markdown => match self.sample() {
+                Some(body) => root.child(body.view()),
+                None => root.child("This sample did not load."),
+            },
         }
     }
 }

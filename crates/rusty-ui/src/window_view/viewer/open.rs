@@ -21,6 +21,7 @@ pub(super) struct Opened {
     kinds: Vec<Kind>,
     kind: Kind,
     loaded: Result<Loaded, String>,
+    note: Option<&'static str>,
 }
 
 pub(super) struct Request {
@@ -42,11 +43,13 @@ fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
         .cloned()
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
     let loaded = kind.load(&request.hooks, &request.location, &sniff);
+    let note = kinds.declined(&sniff);
     Ok(Opened {
         head,
         kinds: chosen,
         kind,
         loaded,
+        note,
     })
 }
 
@@ -133,6 +136,9 @@ impl FerriteWindow {
                     edit: false,
                 };
                 self.show_loaded(shown, window, cx);
+                if let (Some(note), Some(viewer)) = (opened.note, self.viewer.as_mut()) {
+                    viewer.say(note, cx);
+                }
             }
             Err(message) => {
                 viewer.opening = None;

@@ -43,8 +43,8 @@ fn the_gallery_opens_a_window_with_every_primitive(cx: &mut TestAppContext) {
             })),
             ..Default::default()
         };
-        rusty_ui::open_window(options, cx, |_, cx| {
-            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        rusty_ui::open_window(options, cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         })
         .expect("open the gallery window")
     });
@@ -90,8 +90,8 @@ fn the_pane_page_shows_one_pane_of_sample_rows(cx: &mut TestAppContext) {
             })),
             ..Default::default()
         };
-        rusty_ui::open_window(options, cx, |_, cx| {
-            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        rusty_ui::open_window(options, cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         })
         .expect("open the gallery window")
     });
@@ -133,8 +133,8 @@ fn the_operate_page_shows_both_dialogs_and_every_job_state(cx: &mut TestAppConte
             })),
             ..Default::default()
         };
-        rusty_ui::open_window(options, cx, |_, cx| {
-            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        rusty_ui::open_window(options, cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         })
         .expect("open the gallery window")
     });
@@ -168,8 +168,8 @@ fn the_drive_pages_show_both_bars_the_menu_and_a_path_error(cx: &mut TestAppCont
             })),
             ..Default::default()
         };
-        rusty_ui::open_window(options, cx, |_, cx| {
-            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        rusty_ui::open_window(options, cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         })
         .expect("open the gallery window")
     });

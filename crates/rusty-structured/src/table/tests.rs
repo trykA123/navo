@@ -1,0 +1,119 @@
+use std::sync::atomic::AtomicBool;
+
+use super::{
+    Dialect, STRIDE, column_name, column_widths, index_records, parse_table, read_rows, sniff,
+    sort_order,
+};
+use crate::Watch;
+
+#[test]
+fn sniffing_finds_comma_semicolon_tab_and_pipe_with_a_header() {
+    for delimiter in [',', ';', '\t', '|'] {
+        let text = format!(
+            "city{d}people{d}area\nCluj{d}286598{d}179.5\nIasi{d}271692{d}93.9\nBrasov{d}237589{d}267.3\n",
+            d = delimiter
+        );
+        let dialect = sniff(text.as_bytes());
+        assert_eq!(dialect.delimiter, delimiter as u8, "{delimiter:?}");
+        assert!(dialect.has_header, "{delimiter:?}");
+    }
+}
+
+#[test]
+fn quoted_fields_keep_delimiters_and_newlines() {
+    let text = "name;note\n\"Smith; J\";\"line one\nline two\"\nDoe;plain\nPopa;\"a \"\"b\"\"\"\n";
+    let dialect = sniff(text.as_bytes());
+    assert_eq!(
+        dialect,
+        Dialect {
+            delimiter: b';',
+            has_header: true
+        }
+    );
+    let table = parse_table(text.as_bytes(), dialect).unwrap();
+    assert_eq!(table.header, ["name", "note"]);
+    assert_eq!(table.rows.len(), 3);
+    assert_eq!(table.rows[0], ["Smith; J", "line one\nline two"]);
+    assert_eq!(table.rows[2][1], "a \"b\"");
+}
+
+#[test]
+fn a_numeric_first_row_is_data_and_columns_get_letters() {
+    let dialect = sniff(b"1,2,3\n4,5,6\n7,8,9\n");
+    assert!(!dialect.has_header);
+    let table = parse_table(b"1,2,3\n4,5\n", dialect).unwrap();
+    assert_eq!(table.header, ["A", "B", "C"]);
+    assert_eq!(table.rows.len(), 2);
+    assert_eq!(column_name(26), "AA");
+}
+
+#[test]
+fn numeric_columns_sort_by_value_and_text_without_case() {
+    let rows: Vec<Vec<String>> = [
+        ["10", "beta"],
+        ["9", "Alpha"],
+        ["", "gamma"],
+        ["100", "alpha2"],
+    ]
+    .iter()
+    .map(|row| row.iter().map(|cell| (*cell).to_owned()).collect())
+    .collect();
+    assert_eq!(sort_order(&rows, 0, false), [1, 0, 3, 2]);
+    assert_eq!(sort_order(&rows, 0, true), [3, 0, 1, 2]);
+    assert_eq!(sort_order(&rows, 1, false), [1, 3, 0, 2]);
+}
+
+#[test]
+fn widths_come_from_the_sample_and_are_clamped() {
+    let header = vec!["id".to_owned(), "x".to_owned()];
+    let rows = vec![vec!["1".to_owned(), "y".repeat(90)]];
+    assert_eq!(column_widths(&header, &rows, 2), [4, 40]);
+}
+
+#[test]
+fn the_record_index_reads_any_rows_on_demand() {
+    let mut text = String::from("id,note\n");
+    for row in 0..100 {
+        if row % 7 == 0 {
+            text.push_str(&format!("{row},\"multi\nline {row}\"\r\n"));
+        } else {
+            text.push_str(&format!("{row},plain {row}\n"));
+        }
+        if row % 30 == 0 {
+            text.push('\n');
+        }
+    }
+    let bytes = text.into_bytes();
+    let dialect = sniff(&bytes);
+    let table = parse_table(&bytes, dialect).unwrap();
+    let mut read = |offset: u64, len: usize| {
+        let start = offset as usize;
+        Ok(bytes[start..(start + len).min(bytes.len())].to_vec())
+    };
+    let cancel = AtomicBool::new(false);
+    let mut last = 0;
+    let mut progress = |done: u64| last = done;
+    let mut watch = Watch {
+        cancel: &cancel,
+        progress: &mut progress,
+    };
+    let index = index_records(&mut read, bytes.len() as u64, &mut watch)
+        .unwrap()
+        .unwrap();
+    assert_eq!(last, bytes.len() as u64);
+    assert_eq!(index.records, 101);
+    assert_eq!(index.starts.len() as u64, 101_u64.div_ceil(STRIDE));
+    for (start, end) in [(1, 3), (14, 20), (0, 101), (95, 140), (32, 33)] {
+        let rows = read_rows(&mut read, &index, dialect, start..end).unwrap();
+        let expected: Vec<Vec<String>> = (start..end.min(101))
+            .map(|record| {
+                if record == 0 {
+                    table.header.clone()
+                } else {
+                    table.rows[record as usize - 1].clone()
+                }
+            })
+            .collect();
+        assert_eq!(rows, expected, "{start}..{end}");
+    }
+}

@@ -158,3 +158,14 @@ fn a_trailing_dot_name_is_read_and_saved_as_itself() {
         "changed\n"
     );
 }
+
+#[test]
+fn range_reads_only_the_asked_bytes_and_stops_at_the_end() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("data.bin");
+    fs::write(&file, b"0123456789").unwrap();
+    assert_eq!(super::range(&at(&file), 3, 4).unwrap(), b"3456");
+    assert_eq!(super::range(&at(&file), 8, 10).unwrap(), b"89");
+    assert!(super::bytes(&at(&file), 5).is_err());
+    assert_eq!(super::bytes(&at(&file), 10).unwrap(), b"0123456789");
+}

@@ -1,5 +1,8 @@
 mod hex;
+mod markdown;
+mod table;
 mod text;
+mod tree;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -78,6 +81,10 @@ pub trait ViewerKind: Send + Sync {
     fn reuse(&self, _: &dyn ViewerBody, _: &Sniff<'_>, _: &mut App) -> bool {
         false
     }
+
+    fn declined(&self, _: &Sniff<'_>) -> Option<&'static str> {
+        None
+    }
 }
 
 pub type Kind = Arc<dyn ViewerKind>;
@@ -88,7 +95,13 @@ pub struct Kinds(Vec<Kind>);
 impl Kinds {
     #[must_use]
     pub fn builtin() -> Self {
-        Self(vec![Arc::new(text::Text), Arc::new(hex::Hex)])
+        Self(vec![
+            Arc::new(text::Text),
+            Arc::new(hex::Hex),
+            Arc::new(tree::TreeKind),
+            Arc::new(table::TableKind),
+            Arc::new(markdown::MarkdownKind),
+        ])
     }
 
     #[must_use]
@@ -108,6 +121,27 @@ impl Kinds {
         scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
         scored.into_iter().map(|(_, kind)| kind).collect()
     }
+
+    #[must_use]
+    pub fn declined(&self, sniff: &Sniff<'_>) -> Option<&'static str> {
+        self.0.iter().find_map(|kind| kind.declined(sniff))
+    }
+}
+
+pub(super) fn extension(name: &str) -> Option<String> {
+    let (_, extension) = name.rsplit_once('.')?;
+    Some(extension.to_ascii_lowercase())
+}
+
+pub(super) fn named(name: &str, list: &[&str]) -> bool {
+    extension(name).is_some_and(|extension| list.contains(&extension.as_str()))
+}
+
+pub(super) fn first_byte(head: &[u8]) -> Option<u8> {
+    let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
+    head.iter()
+        .copied()
+        .find(|byte| !byte.is_ascii_whitespace())
 }
 
 #[cfg(test)]

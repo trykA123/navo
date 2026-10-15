@@ -59,6 +59,8 @@ fn disk_hooks(disk: &Shared) -> FileHooks {
             Ok(Some(stamp_of(save.text, next)))
         }),
         paged: FileHooks::none().paged,
+        bytes: FileHooks::none().bytes,
+        range: FileHooks::none().range,
     }
 }
 

@@ -74,6 +74,8 @@ type Write =
     Arc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError> + Send + Sync>;
 type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
 type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
+pub type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
+pub type ReadRange = Arc<dyn Fn(&Location, u64, usize) -> Result<Vec<u8>, String> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FileHooks {
@@ -81,6 +83,8 @@ pub struct FileHooks {
     pub write: Write,
     pub head: ReadHead,
     pub paged: OpenPaged,
+    pub bytes: ReadBytes,
+    pub range: ReadRange,
 }
 
 impl FileHooks {
@@ -93,6 +97,8 @@ impl FileHooks {
             }),
             head: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            bytes: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
+            range: Arc::new(|_, _, _| Err("Files cannot be opened here.".to_owned())),
         }
     }
 }
