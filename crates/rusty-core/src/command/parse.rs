@@ -106,6 +106,7 @@ fn field<'a>(
 pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
     match command {
         CommandId::PaneOpenTab | CommandId::PaneNavigate | CommandId::WindowOpen => &["location"],
+        CommandId::PaneGoDrive => &["root"],
         CommandId::PaneCloseTab | CommandId::PaneActivateTab => &["tab"],
         CommandId::PaneCursorMove | CommandId::SelectionRange | CommandId::PaneScroll => &["to"],
         CommandId::WindowClose | CommandId::WindowFocus => &["window"],
@@ -126,6 +127,9 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         },
         Id::PaneNavigate => Command::PaneNavigate {
             location: fields.required("location", location)?,
+        },
+        Id::PaneGoDrive => Command::PaneGoDrive {
+            root: fields.required("root", location)?,
         },
         Id::PaneBack => Command::PaneBack,
         Id::PaneForward => Command::PaneForward,

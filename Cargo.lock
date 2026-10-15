@@ -6177,6 +6177,10 @@ version = "0.0.1"
 [[package]]
 name = "rusty-shell"
 version = "0.0.1"
+dependencies = [
+ "rustix",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "rusty-store"

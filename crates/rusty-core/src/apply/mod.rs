@@ -56,6 +56,7 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::PaneOpenTab { location } => Ok(pane::open_tab(state, location.as_ref())),
         Command::PaneCloseTab { tab } => pane::close_tab(state, *tab),
         Command::PaneNavigate { location } => Ok(pane::navigate(state, location)),
+        Command::PaneGoDrive { root } => Ok(pane::go_drive(state, root)),
         Command::PaneBack => pane::back(state),
         Command::PaneForward => pane::forward(state),
         Command::PaneRefresh => Ok(list_active(state)),

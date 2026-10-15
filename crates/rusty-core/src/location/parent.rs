@@ -10,6 +10,24 @@ impl Location {
     }
 
     #[must_use]
+    pub fn root(&self) -> Self {
+        if !self.is_local() {
+            return Self::provider_root(self.provider.clone());
+        }
+        let text = self.path.to_text();
+        let windows = windows_style(&self.text);
+        let mut root = text[..root_len(&text, windows)].to_owned();
+        if windows && !root.ends_with(['\\', '/']) {
+            root.push('\\');
+        }
+        if root.is_empty() {
+            root.push('/');
+        }
+        Self::with_provider(self.provider.clone(), ProviderPath::from_text(&root))
+            .unwrap_or_else(|_| self.clone())
+    }
+
+    #[must_use]
     pub fn parent(&self) -> Option<Self> {
         let text = self.path.to_text();
         let windows = self.is_local() && windows_style(&self.text);
@@ -38,7 +56,7 @@ impl Location {
     }
 }
 
-fn root_len(text: &str, windows: bool) -> usize {
+pub(super) fn root_len(text: &str, windows: bool) -> usize {
     if !windows {
         return usize::from(text.starts_with('/'));
     }

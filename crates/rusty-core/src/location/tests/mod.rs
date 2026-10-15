@@ -6,8 +6,10 @@ mod join;
 mod parent;
 mod path;
 mod props;
+mod root;
 mod serde;
 mod text_form;
+mod typed;
 
 fn loc(text: &str) -> Location {
     Location::new(text).unwrap()

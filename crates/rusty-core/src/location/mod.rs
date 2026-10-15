@@ -2,9 +2,11 @@ mod parent;
 mod path;
 mod provider;
 mod serde_impl;
+mod typed;
 
 pub use path::ProviderPath;
 pub use provider::ProviderId;
+pub use typed::typed_location;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Location {

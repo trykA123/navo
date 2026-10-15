@@ -27,6 +27,24 @@ pub(super) fn navigate(state: &mut AppState, location: &Location) -> Vec<Effect>
     list_active(state)
 }
 
+pub(super) fn go_drive(state: &mut AppState, root: &Location) -> Vec<Effect> {
+    let tab = state.active_tab();
+    let target = if tab.location().root().same_place(root) {
+        root.clone()
+    } else {
+        let history = tab.history();
+        history
+            .back()
+            .iter()
+            .rev()
+            .chain(history.forward())
+            .find(|visited| visited.root().same_place(root))
+            .cloned()
+            .unwrap_or_else(|| root.clone())
+    };
+    navigate(state, &target)
+}
+
 pub(super) fn back(state: &mut AppState) -> Result<Vec<Effect>, CommandError> {
     state.active_tab_mut().back()?;
     Ok(list_active(state))

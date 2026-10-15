@@ -5,6 +5,7 @@ expression: "lines.join(\"\\n\")"
 pane.open-tab { location: "C:\\Users\\admin" }
 pane.close-tab { tab: 2 }
 pane.navigate { location: "/home/admin" }
+pane.go-drive { root: "D:\\" }
 pane.back
 pane.forward
 pane.refresh

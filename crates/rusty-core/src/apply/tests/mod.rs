@@ -4,6 +4,7 @@ use crate::{
 };
 
 mod cursor;
+mod drive;
 mod events;
 mod filtered;
 mod layout;

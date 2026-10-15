@@ -27,6 +27,7 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     r#"pane.open-tab { location: "C:\\Users\\admin" }"#,
     "pane.close-tab { tab: 2 }",
     r#"pane.navigate { location: "/home/admin" }"#,
+    r#"pane.go-drive { root: "D:\\" }"#,
     "pane.back",
     "pane.forward",
     "pane.refresh",

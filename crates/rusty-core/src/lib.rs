@@ -23,7 +23,7 @@ pub use direction::Direction;
 pub use fs_error::{FsError, FsErrorKind, RecoveryAction};
 pub use id::{PaneId, TabId, WindowId};
 pub use layout::{Layout, LayoutError, Rect};
-pub use location::{Location, LocationError, ProviderId, ProviderPath};
+pub use location::{Location, LocationError, ProviderId, ProviderPath, typed_location};
 pub use name::{NameError, check_name};
 pub use op_plan::{
     Conflict, ConflictPolicy, ExistingItem, ItemKind, OpKind, OperationPlan, PlanRequest,

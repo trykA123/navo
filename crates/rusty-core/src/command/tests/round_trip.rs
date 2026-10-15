@@ -55,6 +55,15 @@ fn pane_navigate_round_trips() {
 }
 
 #[test]
+fn pane_go_drive_round_trips() {
+    let text = r#"pane.go-drive { root: "D:\\" }"#;
+    let command = Command::PaneGoDrive {
+        root: location(r"D:\"),
+    };
+    assert_eq!(round_trip(text), expect(command, text));
+}
+
+#[test]
 fn pane_back_round_trips() {
     assert_eq!(
         round_trip("pane.back"),
