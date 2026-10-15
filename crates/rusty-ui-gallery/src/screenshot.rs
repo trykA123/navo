@@ -26,14 +26,15 @@ fn grim(path: &Path) -> Result<(), String> {
 
 fn file_name(page: Page, mode: Mode) -> String {
     let page = match page {
-        Page::Primitives => "gallery",
-        Page::Pane => "pane",
+        Page::Primitives => "p7-gallery",
+        Page::Pane => "p7-pane",
+        Page::Operate => "p8-confirm",
     };
     let mode = match mode {
         Mode::Light => "light",
         Mode::Dark => "dark",
     };
-    format!("p7-{page}-{mode}.png")
+    format!("{page}-{mode}.png")
 }
 
 pub fn capture(gallery: Entity<Gallery>, dir: PathBuf, failed: Arc<AtomicBool>, cx: &mut App) {

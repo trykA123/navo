@@ -7,6 +7,7 @@ mod job;
 mod local;
 mod measure;
 mod provider;
+mod scan;
 mod snapshot;
 
 pub use fake::{FakeFs, FakeOp, Fault};
@@ -24,4 +25,5 @@ pub use provider::{
     Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider,
     ProviderOps,
 };
+pub use scan::{existing_at, scan};
 pub use snapshot::{FolderSnapshot, load_folder};

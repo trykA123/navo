@@ -3,9 +3,11 @@
 mod app;
 mod assets;
 pub mod browser;
+pub mod confirm_dialog;
 pub mod file_list;
 pub mod fkey_bar;
 mod format;
+pub mod job_row;
 pub mod pane_chrome;
 pub mod prelude;
 pub mod primitives;
