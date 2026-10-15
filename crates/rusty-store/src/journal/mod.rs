@@ -56,8 +56,11 @@ pub struct JobJournal {
 
 impl JobJournal {
     pub fn new(db: Db) -> Result<Self, JournalError> {
-        let _ = db;
-        todo!()
+        db.connection().execute_batch(
+            "PRAGMA synchronous = FULL;
+             PRAGMA foreign_keys = ON;",
+        )?;
+        Ok(Self { db })
     }
 
     #[expect(
@@ -71,8 +74,21 @@ impl JobJournal {
         steps: u32,
         created_at: i64,
     ) -> Result<JobId, JournalError> {
-        let _ = (kind, plan, steps, created_at);
-        todo!()
+        let transaction = self.db.connection().unchecked_transaction()?;
+        transaction.execute(
+            "INSERT INTO job (kind, state, created_at, plan) VALUES (?1, 'running', ?2, ?3)",
+            rusqlite::params![kind, created_at, plan],
+        )?;
+        let id = transaction.last_insert_rowid();
+        {
+            let mut insert = transaction
+                .prepare("INSERT INTO job_step (job_id, seq, state) VALUES (?1, ?2, 'pending')")?;
+            for seq in 0..steps {
+                insert.execute(rusqlite::params![id, seq])?;
+            }
+        }
+        transaction.commit()?;
+        Ok(JobId(id))
     }
 
     #[expect(
@@ -86,22 +102,129 @@ impl JobJournal {
         state: StepState,
         detail: Option<&[u8]>,
     ) -> Result<(), JournalError> {
-        let _ = (job, seq, state, detail);
-        todo!()
+        let transaction = self.db.connection().unchecked_transaction()?;
+        let changed = transaction.execute(
+            "UPDATE job_step SET state = ?3, detail = ?4 WHERE job_id = ?1 AND seq = ?2",
+            rusqlite::params![job.0, seq, step_text(state), detail],
+        )?;
+        if changed == 0 {
+            return Err(self.missing(job, seq)?);
+        }
+        transaction.commit()?;
+        Ok(())
     }
 
     pub fn finish(&mut self, job: JobId, state: JobState) -> Result<(), JournalError> {
-        let _ = (job, state);
-        todo!()
+        let changed = self.db.connection().execute(
+            "UPDATE job SET state = ?2 WHERE id = ?1",
+            rusqlite::params![job.0, job_text(state)],
+        )?;
+        if changed == 0 {
+            return Err(JournalError::UnknownJob(job));
+        }
+        Ok(())
     }
 
     pub fn unfinished(&self) -> Result<Vec<UnfinishedJob>, JournalError> {
-        todo!()
+        let mut jobs = self.db.connection().prepare(
+            "SELECT id, kind, plan, created_at FROM job WHERE state = 'running'
+             ORDER BY created_at, id",
+        )?;
+        let rows = jobs
+            .query_map([], |row| {
+                Ok(UnfinishedJob {
+                    id: JobId(row.get(0)?),
+                    kind: row.get(1)?,
+                    plan: row.get(2)?,
+                    created_at: row.get(3)?,
+                    steps: Vec::new(),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        rows.into_iter()
+            .map(|mut job| {
+                job.steps = self.steps(job.id)?;
+                Ok(job)
+            })
+            .collect()
     }
 
     pub fn prune(&mut self, keep_finished: u32) -> Result<u32, JournalError> {
-        let _ = keep_finished;
-        todo!()
+        let deleted = self.db.connection().execute(
+            "DELETE FROM job WHERE state != 'running' AND id NOT IN (
+                 SELECT id FROM job WHERE state != 'running'
+                 ORDER BY created_at DESC, id DESC LIMIT ?1
+             )",
+            [keep_finished],
+        )?;
+        Ok(u32::try_from(deleted).unwrap_or(u32::MAX))
+    }
+
+    fn steps(&self, job: JobId) -> Result<Vec<JournalStep>, JournalError> {
+        let mut statement = self
+            .db
+            .connection()
+            .prepare("SELECT seq, state, detail FROM job_step WHERE job_id = ?1 ORDER BY seq")?;
+        let raw = statement
+            .query_map([job.0], |row| {
+                Ok((
+                    row.get::<_, u32>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<Vec<u8>>>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        raw.into_iter()
+            .map(|(seq, state, detail)| {
+                Ok(JournalStep {
+                    seq,
+                    state: parse_step(&state)?,
+                    detail,
+                })
+            })
+            .collect()
+    }
+
+    fn missing(&self, job: JobId, seq: u32) -> Result<JournalError, JournalError> {
+        let exists: bool = self.db.connection().query_row(
+            "SELECT EXISTS (SELECT 1 FROM job WHERE id = ?1)",
+            [job.0],
+            |row| row.get(0),
+        )?;
+        Ok(if exists {
+            JournalError::UnknownStep { job, seq }
+        } else {
+            JournalError::UnknownJob(job)
+        })
+    }
+}
+
+fn step_text(state: StepState) -> &'static str {
+    match state {
+        StepState::Pending => "pending",
+        StepState::Done => "done",
+        StepState::Failed => "failed",
+        StepState::Skipped => "skipped",
+    }
+}
+
+fn parse_step(text: &str) -> Result<StepState, JournalError> {
+    match text {
+        "pending" => Ok(StepState::Pending),
+        "done" => Ok(StepState::Done),
+        "failed" => Ok(StepState::Failed),
+        "skipped" => Ok(StepState::Skipped),
+        other => Err(JournalError::BadState(other.to_owned())),
+    }
+}
+
+fn job_text(state: JobState) -> &'static str {
+    match state {
+        JobState::Running => "running",
+        JobState::Done => "done",
+        JobState::Failed => "failed",
+        JobState::Cancelled => "cancelled",
+        JobState::RolledBack => "rolled_back",
     }
 }
 
