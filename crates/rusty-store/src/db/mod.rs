@@ -21,6 +21,8 @@ pub enum DbError {
     TooNew { found: u32, supported: u32 },
     #[error("database integrity check failed: {0}")]
     Corrupt(String),
+    #[error("could not encode a value for the database: {0}")]
+    Encode(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

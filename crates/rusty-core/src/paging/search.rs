@@ -14,6 +14,16 @@ pub enum Needle {
     Bytes(Vec<u8>),
 }
 
+impl Needle {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Text { text, .. } => text.is_empty(),
+            Self::Bytes(bytes) => bytes.is_empty(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Search {
     pub needle: Needle,
@@ -45,13 +55,13 @@ pub fn parse_hex(input: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-enum Matcher {
+pub(super) enum Matcher {
     Exact(Vec<u8>),
     Fold(AhoCorasick),
 }
 
 impl Matcher {
-    fn new(needle: &Needle) -> Result<Option<(Self, usize)>, String> {
+    pub(super) fn new(needle: &Needle) -> Result<Option<(Self, usize)>, String> {
         let (bytes, fold) = match needle {
             Needle::Text { text, match_case } => (text.as_bytes(), !match_case),
             Needle::Bytes(bytes) => (bytes.as_slice(), false),
@@ -75,6 +85,16 @@ impl Matcher {
         match self {
             Self::Exact(needle) => memmem::find(hay, needle),
             Self::Fold(automaton) => automaton.find(hay).map(|found| found.start()),
+        }
+    }
+
+    pub(super) fn starts(&self, hay: &[u8]) -> Vec<usize> {
+        match self {
+            Self::Exact(needle) => memmem::find_iter(hay, needle).collect(),
+            Self::Fold(automaton) => automaton
+                .find_iter(hay)
+                .map(|found| found.start())
+                .collect(),
         }
     }
 
@@ -172,7 +192,7 @@ impl Scan<'_> {
     }
 }
 
-fn fill<'b, S: ByteSource + ?Sized>(
+pub(super) fn fill<'b, S: ByteSource + ?Sized>(
     src: &S,
     from: u64,
     to: u64,
