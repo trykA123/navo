@@ -9,56 +9,75 @@ const PAIRS: [(char, char); 4] = [
 ];
 
 pub(super) fn hide_quoted(text: &str, replacements: &[Replacement]) -> String {
+    let closers = Closers::new(text);
     let mut output = String::with_capacity(text.len());
     let mut before: Option<char> = None;
-    let mut rest = text;
-    while let Some(open) = rest.chars().next() {
-        let after_open = &rest[open.len_utf8()..];
-        let closing = PAIRS
+    let mut index = 0;
+    while let Some(open) = text[index..].chars().next() {
+        let body = index + open.len_utf8();
+        let close = PAIRS
             .iter()
-            .find(|(o, _)| *o == open)
-            .filter(|_| before.is_none_or(|ch| !ch.is_alphanumeric()))
-            .and_then(|(_, close)| closing_quote(after_open, *close).map(|end| (*close, end)));
-        match closing {
+            .position(|(o, _)| *o == open)
+            .filter(|_| before.is_none_or(|ch| !ch.is_alphanumeric()));
+        match close.and_then(|kind| closers.after(kind, body)) {
             Some((close, end)) => {
                 output.push(open);
-                output.push_str(&hidden(&after_open[..end], replacements));
+                output.push_str(&hidden(&text[body..end], replacements));
                 output.push(close);
                 before = Some(close);
-                rest = &after_open[end + close.len_utf8()..];
+                index = end + close.len_utf8();
             }
-            None if opens_unclosed(open, before, after_open) => {
+            None if opens_unclosed(open, before, &text[body..]) => {
                 output.push(open);
-                output.push_str(&hidden(after_open, replacements));
-                rest = "";
+                output.push_str(&hidden(&text[body..], replacements));
+                index = text.len();
             }
             None => {
                 output.push(open);
                 before = Some(open);
-                rest = after_open;
+                index = body;
             }
         }
     }
     output
 }
 
+struct Closers {
+    positions: Vec<Vec<usize>>,
+}
+
+impl Closers {
+    fn new(text: &str) -> Self {
+        let mut positions = vec![Vec::new(); PAIRS.len()];
+        for (index, ch) in text.char_indices() {
+            let followed_ok = text[index + ch.len_utf8()..]
+                .chars()
+                .next()
+                .is_none_or(|next| !next.is_alphanumeric());
+            if !followed_ok {
+                continue;
+            }
+            for (kind, (_, close)) in PAIRS.iter().enumerate() {
+                if *close == ch {
+                    positions[kind].push(index);
+                }
+            }
+        }
+        Self { positions }
+    }
+
+    fn after(&self, kind: usize, body: usize) -> Option<(char, usize)> {
+        let list = self.positions.get(kind)?;
+        let first = list.partition_point(|&position| position <= body);
+        let (_, close) = PAIRS.get(kind)?;
+        list.get(first).map(|&end| (*close, end))
+    }
+}
+
 fn opens_unclosed(open: char, before: Option<char>, after_open: &str) -> bool {
     PAIRS.iter().any(|(o, _)| *o == open)
         && before.is_none_or(|ch| ch.is_whitespace() || matches!(ch, '=' | ':'))
         && !after_open.trim().is_empty()
-}
-
-fn closing_quote(text: &str, close: char) -> Option<usize> {
-    text.char_indices()
-        .filter(|&(_, ch)| ch == close)
-        .map(|(index, _)| index)
-        .find(|&index| {
-            text[index + close.len_utf8()..]
-                .chars()
-                .next()
-                .is_none_or(|ch| !ch.is_alphanumeric())
-        })
-        .filter(|&index| index > 0)
 }
 
 fn hidden(fragment: &str, replacements: &[Replacement]) -> String {

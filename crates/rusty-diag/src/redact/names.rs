@@ -51,6 +51,12 @@ pub(super) struct Replacement {
     whole_word: bool,
 }
 
+impl Replacement {
+    pub(super) fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 impl Redactor {
     pub(super) fn replacements(&self) -> Vec<Replacement> {
         let identity = [
@@ -107,10 +113,7 @@ fn all_digits(text: &str) -> bool {
 pub(super) fn replace(text: &str, replacements: &[Replacement]) -> String {
     let mut output = String::new();
     let mut end = 0;
-    let mut before = None;
     for (index, ch) in text.char_indices() {
-        let at_word_start = before.is_none_or(|b: char| !b.is_alphanumeric());
-        before = Some(ch);
         if index < end {
             continue;
         }
@@ -119,10 +122,15 @@ pub(super) fn replace(text: &str, replacements: &[Replacement]) -> String {
             end = index + length;
             continue;
         }
+        let at_word_start = output
+            .chars()
+            .next_back()
+            .is_none_or(|b| !b.is_alphanumeric() || b == '>');
         let found = replacements.iter().find_map(|replacement| {
             prefix_length(&text[index..], &replacement.name)
                 .filter(|&length| {
-                    !replacement.whole_word || at_word_start && word_ends(text, index + length)
+                    !replacement.whole_word
+                        || at_word_start && word_ends(&text[index + length..], replacements)
                 })
                 .map(|length| (length, &replacement.token))
         });
@@ -136,11 +144,12 @@ pub(super) fn replace(text: &str, replacements: &[Replacement]) -> String {
     output
 }
 
-fn word_ends(text: &str, end: usize) -> bool {
-    text[end..]
-        .chars()
-        .next()
-        .is_none_or(|ch| !ch.is_alphanumeric())
+fn word_ends(rest: &str, replacements: &[Replacement]) -> bool {
+    rest.chars().next().is_none_or(|ch| !ch.is_alphanumeric())
+        || token_len(rest).is_some()
+        || replacements
+            .iter()
+            .any(|r| !r.whole_word && prefix_length(rest, &r.name).is_some())
 }
 
 fn prefix_length(text: &str, lowercase: &str) -> Option<usize> {

@@ -324,3 +324,67 @@ fn a_second_pass_keeps_tokens_even_when_a_share_name_matches_inside_them() {
     let once = r.text(r"\\nas\d\Plan.txt and D:\x\y.txt");
     assert_eq!(r.text(&once), once);
 }
+
+#[test]
+fn a_trailing_apostrophe_inside_a_file_name_does_not_end_the_path() {
+    let out = redactor().text(r"failed D:\Clients\Owners' Meeting.pdf");
+    assert_absent(&out, &["owners", "meeting"]);
+}
+
+#[test]
+fn a_trailing_apostrophe_in_a_folder_does_not_end_the_path() {
+    let out = redactor().text(r"failed D:\Clients\Smiths'\Secret Plan.pdf");
+    assert_absent(&out, &["smiths", "secret", "plan"]);
+}
+
+#[test]
+fn a_trailing_apostrophe_in_a_unix_folder_does_not_end_the_path() {
+    let out = redactor().text("open /mnt/data/Parents' Evening/Secret.pdf");
+    assert_absent(&out, &["parents", "evening", "secret"]);
+}
+
+#[test]
+fn a_quoted_path_ends_at_the_last_quote() {
+    let out = redactor().text(r"'C:\x\Owners' Meeting.pdf'");
+    assert_absent(&out, &["owners", "meeting"]);
+}
+
+#[test]
+fn two_quoted_paths_leak_nothing() {
+    let out = redactor().text(r"'D:\a\Secret.txt' and 'D:\b\Plan.txt'");
+    assert_absent(&out, &["secret", "plan"]);
+}
+
+#[test]
+fn a_triple_slash_path_is_found() {
+    let out = redactor().text("x ///srv/Secret Plan.pdf");
+    assert_absent(&out, &["srv", "secret", "plan"]);
+}
+
+#[test]
+fn a_share_name_next_to_a_replaced_name_is_stable() {
+    let r = redactor();
+    let _ = file(&r, r"\\fs01\plan\a.txt");
+    let once = r.text("Planadmin");
+    assert_eq!(r.text(&once), once);
+}
+
+#[test]
+fn a_drive_path_right_after_a_replaced_name_is_found() {
+    let out = redactor().text("adminc:/Secret/Plan.txt");
+    assert_absent(&out, &["secret", "plan"]);
+}
+
+#[test]
+fn a_debug_newline_after_a_colon_is_not_a_drive() {
+    let line = r"Caused by:\nvalue:\tthing";
+    assert_eq!(redactor().text(line), line);
+}
+
+#[test]
+fn long_text_with_many_quotes_is_redacted_quickly() {
+    let line = "('a".repeat(30_000);
+    let started = std::time::Instant::now();
+    let _ = redactor().text(&line);
+    assert!(started.elapsed() < std::time::Duration::from_millis(200));
+}
