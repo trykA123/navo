@@ -1,9 +1,54 @@
-const EXACT: [(&str, &str); 5] = [
+const HIGHLIGHT_NAMES: [&str; 41] = [
+    "attribute",
+    "boolean",
+    "comment",
+    "comment.doc",
+    "constant",
+    "constructor",
+    "embedded",
+    "emphasis",
+    "emphasis.strong",
+    "enum",
+    "function",
+    "hint",
+    "keyword",
+    "label",
+    "link_text",
+    "link_uri",
+    "number",
+    "operator",
+    "predictive",
+    "preproc",
+    "primary",
+    "property",
+    "punctuation",
+    "punctuation.bracket",
+    "punctuation.delimiter",
+    "punctuation.list_marker",
+    "punctuation.special",
+    "string",
+    "string.escape",
+    "string.regex",
+    "string.special",
+    "string.special.symbol",
+    "tag",
+    "tag.doctype",
+    "text.code.span",
+    "text.literal",
+    "title",
+    "type",
+    "variable",
+    "variable.special",
+    "variant",
+];
+
+const EXACT: [(&str, &str); 6] = [
     ("markup.heading", "title"),
     ("markup.link", "link_uri"),
     ("markup.raw", "text.literal"),
     ("text.uri", "link_uri"),
     ("delimiter", "punctuation.delimiter"),
+    ("text", "comment"),
 ];
 
 const FAMILIES: [(&str, &str); 12] = [
@@ -22,19 +67,29 @@ const FAMILIES: [(&str, &str); 12] = [
 ];
 
 pub(super) fn remap(query: &str) -> String {
+    let query = query.replace("#lua-match?", "#match?");
     let mut out = String::with_capacity(query.len());
-    let mut rest = query;
+    let mut rest = query.as_str();
     while let Some(at) = next_capture(rest) {
-        out.push_str(&rest[..=at]);
+        out.push_str(&rest[..at]);
         let tail = &rest[at + 1..];
         let end = tail
             .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')))
             .unwrap_or(tail.len());
-        out.push_str(&rename(&tail[..end]));
+        let name = rename(&tail[..end]);
+        if is_known(&name) {
+            out.push('@');
+            out.push_str(&name);
+        }
         rest = &tail[end..];
     }
     out.push_str(rest);
     out
+}
+
+pub(super) fn is_known(name: &str) -> bool {
+    let family = name.split_once('.').map_or(name, |(family, _)| family);
+    HIGHLIGHT_NAMES.contains(&name) || HIGHLIGHT_NAMES.contains(&family)
 }
 
 fn next_capture(text: &str) -> Option<usize> {

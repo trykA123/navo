@@ -3,7 +3,7 @@ use super::names;
 const BOM: &str = "\u{feff}";
 const HEAD_LIMIT: usize = 4096;
 
-const INTERPRETERS: [(&str, &str); 16] = [
+pub(super) const INTERPRETERS: [(&str, &str); 16] = [
     ("python", "python"),
     ("bash", "bash"),
     ("sh", "bash"),

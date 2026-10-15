@@ -1,6 +1,6 @@
 pub(super) const TEXT: &str = "text";
 
-pub(super) const EXTENSIONS: [(&str, &[&str]); 46] = [
+pub(super) const EXTENSIONS: [(&str, &[&str]); 47] = [
     ("astro", &["astro"]),
     ("asm", &["s", "asm"]),
     ("bash", &["sh", "zsh", "bash"]),
@@ -47,6 +47,7 @@ pub(super) const EXTENSIONS: [(&str, &[&str]); 46] = [
     ("typescript", &["ts", "mts", "cts"]),
     ("xml", XML),
     ("yaml", &["yml", "yaml"]),
+    ("zig", &["zig"]),
 ];
 
 const XML: &[&str] = &[
@@ -54,13 +55,13 @@ const XML: &[&str] = &[
     "resx", "nuspec", "xsd", "xsl", "xslt", "config", "arxml",
 ];
 
-const SPECIAL: [(&str, &str); 3] = [
+pub(super) const SPECIAL: [(&str, &str); 3] = [
     ("makefile", "make"),
     ("gnumakefile", "make"),
     ("cmakelists.txt", "cmake"),
 ];
 
-const ALIASES: [(&str, &str); 14] = [
+pub(super) const ALIASES: [(&str, &str); 14] = [
     ("shell", "bash"),
     ("cperl", "perl"),
     ("c++", "cpp"),

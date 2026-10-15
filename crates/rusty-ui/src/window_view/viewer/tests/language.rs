@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use gpui_kit::TestAppContext;
+use gpui_kit::component::highlighter::LanguageRegistry;
 use rusty_fs::FakeFs;
 
 use super::{Setup, editor_of, redraw, window_on};
@@ -17,7 +18,13 @@ fn language_after_f3(cx: &mut TestAppContext, name: &str, text: &str) -> String 
     press(cx, window, &view, "f3");
     redraw(cx, window);
     let editor = editor_of(cx, &view).expect("the text editor is open");
-    editor.read_with(cx, |state, _| state.language_name().to_string())
+    let language = editor.read_with(cx, |state, _| state.language_name().to_string());
+    let config = LanguageRegistry::singleton().language(&language);
+    assert!(
+        config.is_some_and(|config| config.has_grammar()),
+        "{language}"
+    );
+    language
 }
 
 #[gpui_kit::test]

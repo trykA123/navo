@@ -1,8 +1,9 @@
 use gpui_kit::component::Rope;
 use gpui_kit::component::highlighter::{HighlightTheme, LanguageRegistry, SyntaxHighlighter};
 
+use super::super::captures::is_known;
 use super::super::grammars::grammars;
-use super::super::{names, register_languages};
+use super::super::{ambiguous, names, register_languages, sniff};
 
 const SAMPLES: [(&str, &str); 13] = [
     (
@@ -49,17 +50,80 @@ fn sample(name: &str) -> &'static str {
         .unwrap_or_else(|| panic!("no sample for {name}"))
 }
 
+fn detectable() -> Vec<&'static str> {
+    let marked = ambiguous::MARKED
+        .iter()
+        .flat_map(|(_, marks)| marks.iter().map(|(_, language)| *language));
+    names::all()
+        .chain(sniff::INTERPRETERS.iter().map(|(_, language)| *language))
+        .chain(names::ALIASES.iter().map(|(_, language)| *language))
+        .chain(names::SPECIAL.iter().map(|(_, language)| *language))
+        .chain(marked)
+        .chain(ambiguous::CONF_LANGUAGES)
+        .chain(["xml", "dockerfile"])
+        .collect()
+}
+
+fn colours(language: &str, text: &str) -> Vec<(std::ops::Range<usize>, bool)> {
+    register_languages();
+    let mut highlighter = SyntaxHighlighter::new(language);
+    highlighter.update(None, &Rope::from(text), None);
+    let theme = HighlightTheme::default_dark();
+    highlighter
+        .styles(&(0..text.len()), &*theme)
+        .into_iter()
+        .map(|(range, style)| (range, style.color.is_some()))
+        .collect()
+}
+
 #[test]
 fn every_detected_language_has_a_grammar() {
     register_languages();
     let registry = LanguageRegistry::singleton();
-    for name in names::all() {
+    for name in detectable() {
         let config = registry.language(name);
         assert!(
             config.is_some_and(|config| config.has_grammar()),
             "{name} has no grammar"
         );
     }
+}
+
+#[test]
+fn every_remapped_capture_is_a_known_highlight_name() {
+    for grammar in grammars() {
+        let query = tree_sitter::Query::new(&grammar.language, &grammar.highlights)
+            .unwrap_or_else(|error| panic!("{}: {error}", grammar.name));
+        for name in query.capture_names() {
+            assert!(is_known(name), "{}: @{name} is unknown", grammar.name);
+        }
+    }
+}
+
+#[test]
+fn a_powershell_assignment_colours_its_value() {
+    let text = "$y = \"hi\"\n";
+    let start = text.find('"').expect("a quote");
+    let coloured = colours("powershell", text)
+        .into_iter()
+        .any(|(range, coloured)| coloured && range.contains(&start));
+    assert!(coloured);
+}
+
+#[test]
+fn a_perl_comment_on_the_first_line_is_a_comment() {
+    let text = "# note\nmy $x = 1;\n";
+    let theme = HighlightTheme::default_dark();
+    register_languages();
+    let mut highlighter = SyntaxHighlighter::new("perl");
+    highlighter.update(None, &Rope::from(text), None);
+    let comment = theme.style("comment").and_then(|style| style.color);
+    let first = highlighter
+        .styles(&(0..text.len()), &*theme)
+        .into_iter()
+        .find(|(range, _)| range.contains(&0))
+        .and_then(|(_, style)| style.color);
+    assert_eq!(first, comment);
 }
 
 #[test]

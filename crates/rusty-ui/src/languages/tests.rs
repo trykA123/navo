@@ -29,6 +29,7 @@ fn existing_extensions_keep_their_language() {
         ("app.mjs", "", "javascript"),
         ("Program.cs", "", "csharp"),
         ("page.htm", "", "html"),
+        ("main.zig", "", "zig"),
     ]);
 }
 

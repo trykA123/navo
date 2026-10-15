@@ -16,9 +16,9 @@ pub fn detect(name: &str, head: &[u8]) -> &'static str {
         .rsplit_once('.')
         .filter(|(stem, _)| !stem.is_empty())
         .map_or("", |(_, ext)| ext);
-    if let Some(resolve) = ambiguous::resolver(ext) {
+    if ambiguous::is_ambiguous(ext) {
         let text = sniff::head_text(head);
-        return resolve(&text)
+        return ambiguous::resolve(ext, &text)
             .or_else(|| sniff::content(&text))
             .unwrap_or(names::TEXT);
     }
