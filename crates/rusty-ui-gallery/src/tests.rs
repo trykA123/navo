@@ -150,6 +150,7 @@ fn the_operate_page_shows_both_dialogs_and_every_job_state(cx: &mut TestAppConte
         }
         assert!(window.within(("job", 0usize)).try_find("cancel").is_some());
         assert!(window.within(("job", 1usize)).try_find("cancel").is_none());
+        assert!(window.find("prompt-rename").visible());
     })
     .expect("window");
 }

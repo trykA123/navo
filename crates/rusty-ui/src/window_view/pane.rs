@@ -145,6 +145,8 @@ impl FerriteWindow {
                         FileListAction::Filter(edit) => {
                             this.filter(*edit);
                         }
+                        FileListAction::Rename(row) => this.ask_rename(*row),
+                        FileListAction::NewFolder => this.ask_new_folder(),
                     }
                     this.focus_core_pane(window, cx);
                     cx.notify();

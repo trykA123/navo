@@ -81,9 +81,11 @@ impl PanePage {
                 .ok()
                 .and_then(|index| self.rows.get(index))
                 .and_then(|entry| tab.location().join(&entry.name).ok()),
-            FileListAction::SwitchPane | FileListAction::Operate(_) | FileListAction::Filter(_) => {
-                None
-            }
+            FileListAction::SwitchPane
+            | FileListAction::Operate(_)
+            | FileListAction::Filter(_)
+            | FileListAction::Rename(_)
+            | FileListAction::NewFolder => None,
         };
         if let Some(location) = target {
             self.run(&Command::PaneNavigate { location });

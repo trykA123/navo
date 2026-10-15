@@ -64,6 +64,7 @@ fn open_with(
         tokens::apply(Mode::Light, cx);
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
+        crate::prompt_dialog::bind_keys(cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),
@@ -243,4 +244,72 @@ fn typing_in_a_pane_filters_it_and_escape_brings_everything_back(cx: &mut TestAp
     .expect("window");
     press(cx, window, &view, "escape");
     assert_eq!(shown(cx, &view), ["docs", "a.txt"]);
+}
+
+fn type_in(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<FerriteWindow>,
+    text: &str,
+) {
+    cx.update_window(window, |_, window, cx| window.input(text, cx))
+        .expect("window");
+    settle(cx, view);
+}
+
+fn prompt_open(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> bool {
+    view.read_with(cx, |view, _| view.prompt.is_some())
+}
+
+#[gpui_kit::test]
+fn f2_renames_the_cursor_row(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f2");
+    assert!(prompt_open(cx, &view));
+    type_in(cx, window, &view, "b");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert!(!prompt_open(cx, &view));
+    assert!(fs.metadata(&fs.location("home/b.txt")).is_ok());
+    assert!(fs.metadata(&fs.location("home/a.txt")).is_err());
+}
+
+#[gpui_kit::test]
+fn f7_creates_a_folder_named_by_default(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "f7");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert!(fs.metadata(&fs.location("home/New folder")).is_ok());
+}
+
+#[gpui_kit::test]
+fn a_bad_name_keeps_the_prompt_open_with_its_error(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "f7");
+    type_in(cx, window, &view, "docs");
+    press(cx, window, &view, "enter");
+    assert!(prompt_open(cx, &view));
+    cx.update_window(window, |_, window, _| {
+        assert!(window.find("error").visible());
+    })
+    .expect("window");
+    press(cx, window, &view, "escape");
+    assert!(!prompt_open(cx, &view));
+}
+
+#[test]
+fn the_rename_selection_stops_before_the_extension() {
+    use super::prompt::stem_end;
+    assert_eq!(stem_end("report.txt"), 6);
+    assert_eq!(stem_end("archive.tar.gz"), 11);
+    assert_eq!(stem_end(".gitignore"), 10);
+    assert_eq!(stem_end("Makefile"), 8);
 }

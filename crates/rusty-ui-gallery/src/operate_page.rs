@@ -1,6 +1,7 @@
 use rusty_ui::confirm_dialog::{ConfirmDialog, ConfirmProps};
 use rusty_ui::job_row::{JobRow, JobRowProps, JobRowState};
 use rusty_ui::prelude::*;
+use rusty_ui::prompt_dialog::{PromptDialog, PromptProps};
 use rusty_ui::tokens::{self, Theme};
 
 use crate::sections::section;
@@ -40,6 +41,20 @@ impl OperatePage {
         self.last = text.into();
         cx.notify();
     }
+}
+
+fn rename_prompt() -> PromptDialog {
+    PromptDialog::new(
+        "prompt-rename",
+        PromptProps {
+            title: "Rename report.txt".into(),
+            label: "New name".into(),
+            value: "report?.txt".into(),
+            select: 0..7,
+            confirm_label: "Rename".into(),
+            error: Some("A name cannot contain ?".into()),
+        },
+    )
 }
 
 fn permanent() -> ConfirmProps {
@@ -147,11 +162,18 @@ impl Render for OperatePage {
                 "PERMANENT DELETE",
                 self.answer("confirm-permanent", permanent(), cx),
             ))
-            .child(section(
-                &t,
-                "PROTECTED LOCATION",
-                self.answer("confirm-protected", protected(), cx),
-            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(t.spacing.xl)
+                    .child(section(
+                        &t,
+                        "PROTECTED LOCATION",
+                        self.answer("confirm-protected", protected(), cx),
+                    ))
+                    .child(section(&t, "RENAME", rename_prompt())),
+            )
             .child(section(
                 &t,
                 "LAST ANSWER",

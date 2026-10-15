@@ -1,5 +1,6 @@
 mod operate;
 mod pane;
+mod prompt;
 mod status;
 
 use std::collections::HashMap;
@@ -36,6 +37,7 @@ pub fn run(options: StartOptions) {
         let _ = crate::init(options.mode, cx);
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
+        crate::prompt_dialog::bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -56,6 +58,8 @@ pub struct FerriteWindow {
     focus: HashMap<PaneId, FocusHandle>,
     split: Entity<SplitterState>,
     on_save: SaveSession,
+    prompt: Option<prompt::Prompt>,
+    next_prompt: u64,
     _appearance: Subscription,
 }
 
@@ -77,6 +81,8 @@ impl FerriteWindow {
             focus: HashMap::new(),
             split: cx.new(|_| SplitterState::new(0.5)),
             on_save: options.on_save,
+            prompt: None,
+            next_prompt: 0,
             _appearance: cx.observe_window_appearance(window, |_, window, cx| {
                 tokens::apply(mode_of(window.appearance()), cx);
                 cx.notify();
@@ -205,7 +211,7 @@ impl Render for FerriteWindow {
             _ => div().into_any_element(),
         };
         let jobs = self.job_strip(cx);
-        let dialog = self.dialog(cx);
+        let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
         div()
             .relative()
             .flex()

@@ -42,6 +42,8 @@ pub enum FileListAction {
     SwitchPane,
     Operate(rusty_core::OpKind),
     Filter(FilterEdit),
+    Rename(u64),
+    NewFolder,
 }
 
 #[derive(Clone, Debug)]
@@ -178,6 +180,13 @@ impl ListContext {
     fn type_key(&self, event: &KeyDownEvent, window: &mut Window, cx: &mut App) {
         if let Some(ch) = typed_char(&event.keystroke) {
             self.act(FileListAction::Filter(FilterEdit::Push(ch)), window, cx);
+        }
+    }
+
+    fn rename_cursor(&self, window: &mut Window, cx: &mut App) {
+        let cursor = self.props.view.cursor;
+        if self.props.rows.get(row_index(cursor)).is_some() {
+            self.act(FileListAction::Rename(cursor), window, cx);
         }
     }
 

@@ -12,6 +12,7 @@ use rusty_fs::{
     folder_size, load_folder, volume_of,
 };
 
+pub use naming::NameProblem;
 use operate::JobUpdate;
 pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PendingOp};
 
@@ -36,6 +37,7 @@ enum Message {
     Loaded(Loaded),
     Measured(Measured),
     Job(JobUpdate),
+    Named(naming::Named),
 }
 
 impl Message {
@@ -182,6 +184,7 @@ impl Browser {
                 Message::Loaded(loaded) => self.accept(loaded),
                 Message::Measured(measured) => self.accept_size(&measured),
                 Message::Job(update) => self.accept_job(update),
+                Message::Named(named) => self.accept_named(named),
             };
         }
         changed
@@ -384,6 +387,7 @@ impl Browser {
 }
 
 mod filter;
+mod naming;
 mod operate;
 #[cfg(test)]
 mod tests;

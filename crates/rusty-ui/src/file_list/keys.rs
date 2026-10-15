@@ -31,6 +31,8 @@ gpui_kit::actions!(
         GoBack,
         GoForward,
         ClearFilter,
+        RenameItem,
+        NewFolder,
     ]
 );
 
@@ -57,6 +59,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-left", GoBack, context),
         KeyBinding::new("alt-right", GoForward, context),
         KeyBinding::new("escape", ClearFilter, context),
+        KeyBinding::new("f2", RenameItem, context),
+        KeyBinding::new("shift-f6", RenameItem, context),
+        KeyBinding::new("f7", NewFolder, context),
     ]);
 }
 
@@ -107,6 +112,14 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
         .on_action({
             let ctx = ctx.clone();
             move |_: &ClearFilter, window, cx| ctx.clear_filter(window, cx)
+        })
+        .on_action({
+            let ctx = ctx.clone();
+            move |_: &RenameItem, window, cx| ctx.rename_cursor(window, cx)
+        })
+        .on_action({
+            let ctx = ctx.clone();
+            move |_: &NewFolder, window, cx| ctx.act(FileListAction::NewFolder, window, cx)
         })
         .on_key_down({
             let ctx = ctx.clone();

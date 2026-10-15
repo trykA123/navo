@@ -7,6 +7,7 @@ mod fs_error;
 mod id;
 mod layout;
 mod location;
+mod name;
 mod op_plan;
 mod replay;
 mod selection;
@@ -22,6 +23,7 @@ pub use fs_error::{FsError, FsErrorKind, RecoveryAction};
 pub use id::{PaneId, TabId, WindowId};
 pub use layout::{Layout, LayoutError, Rect};
 pub use location::{Location, LocationError, ProviderId, ProviderPath};
+pub use name::{NameError, check_name};
 pub use op_plan::{
     Conflict, ConflictPolicy, ExistingItem, ItemKind, OpKind, OperationPlan, PlanRequest,
     Resolution, Risk, ScannedItem, Step, Totals, is_protected, plan,

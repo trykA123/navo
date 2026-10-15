@@ -277,3 +277,22 @@ fn escape_without_a_filter_does_nothing(cx: &mut TestAppContext) {
         .expect("window");
     assert_eq!(actions(&harness, cx), []);
 }
+
+#[gpui_kit::test]
+fn f2_and_shift_f6_ask_to_rename_the_cursor_row_and_f7_asks_for_a_folder(cx: &mut TestAppContext) {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        window.press("f2", cx);
+        window.press("shift-f6", cx);
+        window.press("f7", cx);
+    })
+    .expect("window");
+    assert_eq!(
+        actions(&harness, cx),
+        [
+            FileListAction::Rename(0),
+            FileListAction::Rename(0),
+            FileListAction::NewFolder,
+        ]
+    );
+}
