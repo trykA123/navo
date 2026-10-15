@@ -1,0 +1,27 @@
+---
+source: crates/rusty-store/src/settings/tests/snapshot.rs
+expression: to_toml(&Settings::default())
+---
+[appearance]
+mode = "system"
+light-theme = "Ferrite Light"
+dark-theme = "Ferrite Dark"
+font = "Inter"
+font-size = 13
+density = "normal"
+
+[files]
+show-hidden = false
+show-system = false
+folders-first = true
+sort = "name"
+sort-descending = false
+
+[selection]
+space-measures-folders = true
+patterns-select-folders = false
+
+[terminal]
+provider = "windows-terminal"
+
+[experimental]
