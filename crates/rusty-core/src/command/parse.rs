@@ -105,9 +105,10 @@ fn field<'a>(
 
 pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
     match command {
-        CommandId::PaneOpenTab | CommandId::PaneNavigate => &["location"],
-        CommandId::PaneCloseTab => &["tab"],
-        CommandId::PaneCursorMove | CommandId::SelectionRange => &["to"],
+        CommandId::PaneOpenTab | CommandId::PaneNavigate | CommandId::WindowOpen => &["location"],
+        CommandId::PaneCloseTab | CommandId::PaneActivateTab => &["tab"],
+        CommandId::PaneCursorMove | CommandId::SelectionRange | CommandId::PaneScroll => &["to"],
+        CommandId::WindowClose | CommandId::WindowFocus => &["window"],
         CommandId::SelectionAddPattern | CommandId::SelectionRemovePattern => &["pattern"],
         CommandId::LayoutSplit | CommandId::LayoutFocus => &["direction"],
         _ => &[],
@@ -132,6 +133,12 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::PaneCursorMove => Command::PaneCursorMove {
             to: fields.required("to", cursor_move)?,
         },
+        Id::PaneActivateTab => Command::PaneActivateTab {
+            tab: fields.required("tab", unsigned::<u32>)?,
+        },
+        Id::PaneScroll => Command::PaneScroll {
+            to: fields.required("to", unsigned::<u64>)?,
+        },
         Id::SelectionToggle => Command::SelectionToggle,
         Id::SelectionToggleDown => Command::SelectionToggleDown,
         Id::SelectionRange => Command::SelectionRange {
@@ -152,6 +159,15 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::LayoutClose => Command::LayoutClose,
         Id::LayoutFocus => Command::LayoutFocus {
             direction: fields.required("direction", direction)?,
+        },
+        Id::WindowOpen => Command::WindowOpen {
+            location: fields.optional("location", location)?,
+        },
+        Id::WindowClose => Command::WindowClose {
+            window: fields.optional("window", unsigned::<u64>)?,
+        },
+        Id::WindowFocus => Command::WindowFocus {
+            window: fields.required("window", unsigned::<u64>)?,
         },
         Id::AppSaveSession => Command::AppSaveSession,
     })

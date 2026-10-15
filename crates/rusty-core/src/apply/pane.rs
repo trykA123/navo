@@ -57,7 +57,15 @@ pub(super) fn cursor_move(
         CursorMove::Last => last,
         CursorMove::Row(row) => row,
     };
-    state.active_tab_mut().set_cursor(row.min(last));
+    let page = state.focused_pane_mut().page_rows().max(1);
+    let tab = state.active_tab_mut();
+    tab.set_cursor(row.min(last));
+    let (cursor, scroll) = (tab.view().cursor, tab.view().scroll);
+    if cursor < scroll {
+        tab.set_scroll(cursor);
+    } else if cursor >= scroll.saturating_add(page) {
+        tab.set_scroll(cursor + 1 - page);
+    }
     Ok(Vec::new())
 }
 

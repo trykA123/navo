@@ -31,6 +31,8 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     "pane.forward",
     "pane.refresh",
     "pane.cursor-move { to: page-down }",
+    "pane.activate-tab { tab: 1 }",
+    "pane.scroll { to: 120 }",
     "selection.toggle",
     "selection.toggle-down",
     "selection.range { to: 7 }",
@@ -42,6 +44,9 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     "layout.split { direction: right }",
     "layout.close",
     "layout.focus { direction: up }",
+    r#"window.open { location: "D:\\Work" }"#,
+    "window.close { window: 3 }",
+    "window.focus { window: 1 }",
     "app.save-session",
 ];
 

@@ -173,10 +173,6 @@ impl AppState {
         self.focused.focus_direction(direction)
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "window commands arrive with P7")
-    )]
     pub(crate) fn open_window(&mut self, location: Location) -> WindowId {
         let first = self.take_ids(3);
         let id = WindowId::new(first);
@@ -186,10 +182,6 @@ impl AppState {
         id
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "window commands arrive with P7")
-    )]
     pub(crate) fn close_window(&mut self, id: WindowId) -> Result<(), StateError> {
         if self.window(id).is_none() {
             return Err(StateError::UnknownWindow(id));
@@ -202,10 +194,6 @@ impl AppState {
         Ok(())
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "window commands arrive with P7")
-    )]
     pub(crate) fn focus_window(&mut self, id: WindowId) -> Result<(), StateError> {
         if id == self.focused.id() {
             return Ok(());

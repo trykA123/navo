@@ -29,7 +29,7 @@ impl fmt::Display for Command {
 
 fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
     match command {
-        Command::PaneOpenTab { location } => location
+        Command::PaneOpenTab { location } | Command::WindowOpen { location } => location
             .iter()
             .map(|l| ("location", Shown::Str(l.as_str())))
             .collect(),
@@ -39,7 +39,14 @@ fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
             .collect(),
         Command::PaneNavigate { location } => vec![("location", Shown::Str(location.as_str()))],
         Command::PaneCursorMove { to } => vec![("to", cursor_value(*to))],
-        Command::SelectionRange { to } => vec![("to", Shown::Int(*to))],
+        Command::SelectionRange { to } | Command::PaneScroll { to } => {
+            vec![("to", Shown::Int(*to))]
+        }
+        Command::PaneActivateTab { tab } => vec![("tab", Shown::Int(u64::from(*tab)))],
+        Command::WindowClose { window } => {
+            window.iter().map(|w| ("window", Shown::Int(*w))).collect()
+        }
+        Command::WindowFocus { window } => vec![("window", Shown::Int(*window))],
         Command::SelectionAddPattern { pattern } | Command::SelectionRemovePattern { pattern } => {
             vec![("pattern", Shown::Str(pattern))]
         }

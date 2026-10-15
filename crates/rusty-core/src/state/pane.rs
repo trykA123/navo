@@ -98,10 +98,6 @@ impl Pane {
         Ok(())
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the tab-activate command arrives with P7")
-    )]
     pub(crate) fn activate(&mut self, index: usize) -> Result<(), StateError> {
         if index >= self.tabs.len() {
             return Err(StateError::NoSuchTab(index));

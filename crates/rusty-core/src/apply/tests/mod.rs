@@ -9,6 +9,7 @@ mod layout;
 mod pane;
 mod props;
 mod select;
+mod window;
 
 fn loc(text: &str) -> Location {
     Location::new(text).unwrap()
