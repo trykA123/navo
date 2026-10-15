@@ -29,6 +29,7 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     r#"pane.navigate { location: "/home/admin" }"#,
     "pane.back",
     "pane.forward",
+    "pane.refresh",
     "pane.cursor-move { to: page-down }",
     "selection.toggle",
     "selection.toggle-down",

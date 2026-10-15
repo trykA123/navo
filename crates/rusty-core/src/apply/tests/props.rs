@@ -107,18 +107,19 @@ fn all_panes(state: &AppState) -> Vec<PaneId> {
         .collect()
 }
 
-fn event(state: &AppState, pending: &[(TabId, Location)], step: &Step) -> Option<Event> {
+fn event(state: &AppState, pending: &[(TabId, Location, u64)], step: &Step) -> Option<Event> {
     match step {
         Step::Run(_) => None,
         Step::Answer { pick, listing } => {
             let active = state.active_tab();
-            let (tab, location) = pending
+            let (tab, location, request) = pending
                 .get(pick % pending.len().max(1))
                 .cloned()
-                .unwrap_or_else(|| (active.id(), active.location().clone()));
+                .unwrap_or_else(|| (active.id(), active.location().clone(), 0));
             Some(Event::ListingLoaded {
                 tab,
                 location,
+                request,
                 listing: listing.clone(),
             })
         }
@@ -129,6 +130,7 @@ fn event(state: &AppState, pending: &[(TabId, Location)], step: &Step) -> Option
         } => Some(Event::ListingLoaded {
             tab: TabId::new(*tab),
             location: loc(POOL[*place]),
+            request: *tab,
             listing: listing.clone(),
         }),
         Step::PageRows { pick, rows } => {
@@ -205,7 +207,7 @@ fn check(state: &AppState) -> Result<(), TestCaseError> {
 
 fn check_effects(state: &AppState, effects: &[Effect]) -> Result<(), TestCaseError> {
     for effect in effects {
-        if let Effect::ListFolder { tab, location } = effect {
+        if let Effect::ListFolder { tab, location, .. } = effect {
             let found = find_tab(state, *tab)
                 .ok_or_else(|| TestCaseError::fail(format!("{effect:?} names no tab")))?;
             prop_assert_eq!(found.location(), location);
@@ -214,9 +216,13 @@ fn check_effects(state: &AppState, effects: &[Effect]) -> Result<(), TestCaseErr
     Ok(())
 }
 
-fn list_folders(effects: &[Effect]) -> impl Iterator<Item = (TabId, Location)> + '_ {
+fn list_folders(effects: &[Effect]) -> impl Iterator<Item = (TabId, Location, u64)> + '_ {
     effects.iter().filter_map(|effect| match effect {
-        Effect::ListFolder { tab, location } => Some((*tab, location.clone())),
+        Effect::ListFolder {
+            tab,
+            location,
+            request,
+        } => Some((*tab, location.clone(), *request)),
         _ => None,
     })
 }

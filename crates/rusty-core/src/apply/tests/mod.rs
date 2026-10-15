@@ -61,10 +61,14 @@ fn navigate(state: &mut AppState, location: &str) -> Vec<Effect> {
 }
 
 fn load(state: &mut AppState, listing: Listing) {
+    if state.active_tab().pending_request().is_none() {
+        run(state, Command::PaneRefresh);
+    }
     let tab = state.active_tab();
     let event = Event::ListingLoaded {
         tab: tab.id(),
         location: tab.location().clone(),
+        request: tab.pending_request().unwrap_or(0),
         listing,
     };
     assert_eq!(apply_event(state, event), vec![]);

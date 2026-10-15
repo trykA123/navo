@@ -3,7 +3,7 @@ use super::*;
 const SAMPLE: &str = r#"ferrite-log 1
 home "/home/admin"
 +0 pane.navigate { location: "/home/admin/src" }
-+12 !listing-loaded { tab: 3, location: "/home/admin/src", entries: 2 }
++12 !listing-loaded { tab: 3, request: 1, location: "/home/admin/src", entries: 2 }
   folder "lib"
   file "main.rs"
 +250 !page-rows { pane: 2, rows: 30 }
@@ -27,8 +27,8 @@ home "/home/admin"
 +5 layout.focus { direction: left }
 +5 layout.close
 +5 app.save-session
-+0 !listing-loaded { tab: 9, location: "/tmp/é \"x\"\\y", entries: 0 }
-+1000000 !listing-loaded { tab: 10, location: "/tmp", entries: 2 }
++0 !listing-loaded { tab: 9, request: 1, location: "/tmp/é \"x\"\\y", entries: 0 }
++1000000 !listing-loaded { tab: 10, request: 1, location: "/tmp", entries: 2 }
   file "tab\there \"q\""
   folder "中\u{1b}📁"
 "#;
@@ -159,7 +159,7 @@ fn a_bad_event_names_its_line() {
 #[test]
 fn a_listing_with_missing_entries_names_the_line_that_announced_them() {
     let body = concat!(
-        "+3 !listing-loaded { tab: 3, location: \"/h\", entries: 3 }\n",
+        "+3 !listing-loaded { tab: 3, request: 1, location: \"/h\", entries: 3 }\n",
         "  folder \"a\"\n",
         "  file \"b\"\n",
         "+1 selection.toggle\n",
@@ -169,7 +169,7 @@ fn a_listing_with_missing_entries_names_the_line_that_announced_them() {
 
 #[test]
 fn a_huge_entry_count_is_an_error_not_a_crash() {
-    let body = "+3 !listing-loaded { tab: 3, location: \"/h\", entries: 18446744073709551615 }\n";
+    let body = "+3 !listing-loaded { tab: 3, request: 1, location: \"/h\", entries: 18446744073709551615 }\n";
     assert_eq!(error_line(&with_body(body)), Some(4));
 }
 
@@ -215,13 +215,15 @@ fn an_unknown_event_names_its_line() {
 
 #[test]
 fn an_unknown_entry_kind_names_the_announcing_line() {
-    let body = "+1 !listing-loaded { tab: 3, location: \"/h\", entries: 1 }\n  link \"a\"\n";
+    let body =
+        "+1 !listing-loaded { tab: 3, request: 1, location: \"/h\", entries: 1 }\n  link \"a\"\n";
     assert_eq!(error_line(&with_body(body)), Some(4));
 }
 
 #[test]
 fn an_entry_line_without_indent_names_the_announcing_line() {
-    let body = "+1 !listing-loaded { tab: 3, location: \"/h\", entries: 1 }\nfile \"a\"\n";
+    let body =
+        "+1 !listing-loaded { tab: 3, request: 1, location: \"/h\", entries: 1 }\nfile \"a\"\n";
     assert_eq!(error_line(&with_body(body)), Some(4));
 }
 
@@ -235,7 +237,7 @@ fn a_string_for_a_number_names_its_line() {
 
 #[test]
 fn a_number_for_a_string_names_its_line() {
-    let body = "+1 !listing-loaded { tab: 3, location: 4, entries: 0 }\n";
+    let body = "+1 !listing-loaded { tab: 3, request: 1, location: 4, entries: 0 }\n";
     assert_eq!(error_line(&with_body(body)), Some(4));
 }
 

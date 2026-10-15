@@ -74,6 +74,7 @@ fn events_return_and_change_what_apply_event_does() {
         Event::ListingLoaded {
             tab: TabId::new(3),
             location: loc("/home"),
+            request: 1,
             listing: listing(&[("a", true), ("b", false)]),
         },
         Event::PageRowsChanged {

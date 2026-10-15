@@ -105,6 +105,12 @@ impl Selection {
         self.each_row(listing, folders, |_, marked| Some(!marked));
     }
 
+    pub fn mark_rows(&mut self, rows: impl IntoIterator<Item = u64>) {
+        for row in rows {
+            self.set(row, true);
+        }
+    }
+
     pub fn clear(&mut self) {
         self.bits.fill(0);
         self.anchor = None;

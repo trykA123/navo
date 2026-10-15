@@ -18,6 +18,7 @@ pub struct AppState {
     focused: Window,
     others: BTreeMap<WindowId, Window>,
     next_id: u64,
+    next_request: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -48,6 +49,7 @@ impl AppState {
             focused: window,
             others: BTreeMap::new(),
             next_id: 4,
+            next_request: 1,
         }
     }
 
@@ -110,7 +112,23 @@ impl AppState {
             focused,
             others,
             next_id,
+            next_request: 1,
         })
+    }
+
+    pub(crate) fn take_request(&mut self) -> u64 {
+        let request = self.next_request;
+        self.next_request = self.next_request.saturating_add(1);
+        request
+    }
+
+    pub(crate) fn unloaded_active_tabs(&self) -> Vec<TabId> {
+        self.windows()
+            .flat_map(Window::panes)
+            .map(Pane::active)
+            .filter(|t| t.listing().is_none() && t.pending_request().is_none())
+            .map(Tab::id)
+            .collect()
     }
 
     pub(crate) fn next_id(&self) -> u64 {

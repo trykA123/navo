@@ -9,6 +9,7 @@ pub enum Effect {
     ListFolder {
         tab: TabId,
         location: Location,
+        request: u64,
     },
     MeasureFolder {
         tab: TabId,
@@ -23,6 +24,7 @@ pub enum Event {
     ListingLoaded {
         tab: TabId,
         location: Location,
+        request: u64,
         listing: Listing,
     },
     PageRowsChanged {
@@ -50,6 +52,7 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::PaneNavigate { location } => Ok(pane::navigate(state, location)),
         Command::PaneBack => pane::back(state),
         Command::PaneForward => pane::forward(state),
+        Command::PaneRefresh => Ok(list_active(state)),
         Command::PaneCursorMove { to } => pane::cursor_move(state, *to),
         Command::SelectionToggle => select::toggle(state),
         Command::SelectionToggleDown => select::toggle_down(state),
@@ -71,19 +74,40 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
         Event::ListingLoaded {
             tab,
             location,
+            request,
             listing,
-        } => pane::listing_loaded(state, tab, &location, listing),
+        } => {
+            if let Some(tab) = state.tab_mut(tab) {
+                tab.accept_listing(request, &location, listing);
+            }
+        }
         Event::PageRowsChanged { pane, rows } => pane::page_rows_changed(state, pane, rows),
     }
     Vec::new()
 }
 
-fn list_active(state: &AppState) -> Vec<Effect> {
-    let tab = state.active_tab();
-    vec![Effect::ListFolder {
-        tab: tab.id(),
+pub fn list_unloaded(state: &mut AppState) -> Vec<Effect> {
+    state
+        .unloaded_active_tabs()
+        .into_iter()
+        .filter_map(|tab| list_tab(state, tab))
+        .collect()
+}
+
+fn list_tab(state: &mut AppState, id: TabId) -> Option<Effect> {
+    let request = state.take_request();
+    let tab = state.tab_mut(id)?;
+    tab.expect_listing(request);
+    Some(Effect::ListFolder {
+        tab: id,
         location: tab.location().clone(),
-    }]
+        request,
+    })
+}
+
+fn list_active(state: &mut AppState) -> Vec<Effect> {
+    let id = state.active_tab().id();
+    list_tab(state, id).into_iter().collect()
 }
 
 fn loaded_listing(state: &AppState) -> Result<Listing, CommandError> {

@@ -27,6 +27,7 @@ fn loaded(tab: u64, location: &str, entries: &[(&str, bool)]) -> LogEntry {
     LogEntry::Event(Event::ListingLoaded {
         tab: TabId::new(tab),
         location: loc(location),
+        request: 1,
         listing: listing(entries),
     })
 }
