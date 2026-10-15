@@ -3,6 +3,7 @@
 mod apply;
 mod command;
 mod direction;
+pub mod encoding;
 mod fs_error;
 mod id;
 mod layout;

@@ -8,6 +8,8 @@ publish.workspace = true
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 aho-corasick = "1.1.5"
+chardetng = "1.0.0"
+encoding_rs = "0.8.42"
 memchr = "2.8.3"
 thiserror = "2.0.21"
 

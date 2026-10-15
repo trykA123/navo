@@ -4,6 +4,7 @@ mod save;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::{Editor, EditorState, InputEvent};
 use gpui_kit::{Role, Subscription, Task};
+use rusty_core::encoding::TextEncoding;
 
 pub(super) use body::{EditorBody, EditorFile};
 
@@ -13,7 +14,7 @@ use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 
-const NOT_UTF8: &str = "Not valid UTF-8: opened read-only.";
+const NOT_LOSSLESS: &str = "Not valid in its encoding: opened read-only.";
 
 pub(super) struct EditorView {
     host: Host,
@@ -21,6 +22,7 @@ pub(super) struct EditorView {
     editing: bool,
     can_edit: bool,
     crlf: bool,
+    encoding: TextEncoding,
     stamp: Option<FileStamp>,
     dirty: bool,
     revision: u64,
@@ -52,12 +54,13 @@ impl EditorView {
             editing: false,
             can_edit: !file.read_only,
             crlf: file.crlf,
+            encoding: file.encoding,
             stamp: file.stamp,
             dirty: false,
             revision: 0,
             overwrite: false,
             saving: None,
-            note: file.read_only.then(|| NOT_UTF8.into()),
+            note: file.read_only.then(|| NOT_LOSSLESS.into()),
             _changes: changes,
         }
     }
@@ -112,7 +115,8 @@ impl EditorView {
                     .text_color(t.colors.muted)
                     .text_size(t.typography.small)
                     .child(mode)
-                    .children(self.stamp.map(|stamp| format::size(stamp.len))),
+                    .children(self.stamp.map(|stamp| format::size(stamp.len)))
+                    .child(self.encoding.label()),
             )
             .when(self.dirty, |d| {
                 d.child(div().text_color(t.colors.mark).child("●"))
