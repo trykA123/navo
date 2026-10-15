@@ -1,5 +1,6 @@
 mod detect;
 mod encode;
+mod utf16;
 
 use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE};
 
@@ -127,9 +128,10 @@ pub fn encode(text: &str, encoding: &TextEncoding) -> Result<Vec<u8>, EncodeErro
 
 #[must_use]
 pub fn looks_binary(head: &[u8]) -> bool {
-    let utf16 = detect::bom(head).is_some_and(|(found, _)| found == UTF_16LE || found == UTF_16BE)
-        || detect::utf16_by_pattern(head).is_some();
-    !utf16 && head.contains(&0)
+    if let Some((encoding, skip)) = detect::bom(head).filter(|(found, _)| utf16::is_utf16(found)) {
+        return !utf16::plausible(&head[skip..], encoding);
+    }
+    utf16::by_pattern(head).is_none() && head.contains(&0)
 }
 
 #[cfg(test)]

@@ -1,13 +1,18 @@
 use chardetng::{EncodingDetector, Iso2022JpDetection, Utf8Detection};
-use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
+use encoding_rs::{Encoding, REPLACEMENT, UTF_8};
 
-use super::{DetectedBy, TextEncoding};
+use super::{DetectedBy, TextEncoding, utf16};
 
 const DECLARATION_WINDOW: usize = 1024;
+const GUESS_WINDOW: usize = 64 * 1024;
 const MIN_NON_ASCII: usize = 4;
-const UTF16_SAMPLE: usize = 4096;
+const VALID_PER_INVALID: usize = 4;
+const HTML_STARTS: [&[u8]; 3] = [b"<!doctype html", b"<html", b"<head"];
 
 pub(super) fn bom(bytes: &[u8]) -> Option<(&'static Encoding, usize)> {
+    if utf16::is_utf32_le(bytes) {
+        return None;
+    }
     Encoding::for_bom(bytes)
 }
 
@@ -19,18 +24,22 @@ pub(super) fn detect(bytes: &[u8], fallback: &'static Encoding) -> TextEncoding 
     if let Some((encoding, _)) = bom(bytes) {
         return found(encoding, true, DetectedBy::Bom);
     }
-    if let Some(encoding) = utf16_by_pattern(bytes) {
+    if let Some(encoding) = utf16::by_pattern(bytes) {
         return found(encoding, false, DetectedBy::Guess);
     }
     if let Some(encoding) = declared(bytes) {
         return found(encoding, false, DetectedBy::Declaration);
     }
     if std::str::from_utf8(bytes).is_ok() {
-        return found(encoding_rs::UTF_8, false, DetectedBy::Utf8);
+        return found(UTF_8, false, DetectedBy::Utf8);
     }
-    if bytes.iter().filter(|byte| !byte.is_ascii()).count() >= MIN_NON_ASCII {
+    if mostly_utf8(bytes) {
+        return found(UTF_8, false, DetectedBy::Guess);
+    }
+    let window = &bytes[..bytes.len().min(GUESS_WINDOW)];
+    if window.iter().filter(|byte| !byte.is_ascii()).count() >= MIN_NON_ASCII {
         let mut detector = EncodingDetector::new(Iso2022JpDetection::Deny);
-        detector.feed(bytes, true);
+        detector.feed(window, true);
         return found(
             detector.guess(None, Utf8Detection::Deny),
             false,
@@ -46,10 +55,34 @@ fn declared(bytes: &[u8]) -> Option<&'static Encoding> {
     let label = if lower.starts_with(b"<?xml") {
         let end = find(&lower, b"?>").unwrap_or(lower.len());
         attribute(&head[..end], &lower[..end], b"encoding")
-    } else {
+    } else if is_html(&lower) {
         find(&lower, b"<meta").and_then(|at| attribute(&head[at..], &lower[at..], b"charset"))
+    } else {
+        None
     }?;
-    Encoding::for_label(label).filter(|encoding| *encoding != UTF_16LE && *encoding != UTF_16BE)
+    Encoding::for_label(label)
+        .filter(|encoding| *encoding != REPLACEMENT && !utf16::is_utf16(encoding))
+}
+
+fn is_html(lower: &[u8]) -> bool {
+    let start = lower.trim_ascii_start();
+    HTML_STARTS.iter().any(|tag| start.starts_with(tag))
+}
+
+fn mostly_utf8(bytes: &[u8]) -> bool {
+    let (mut rest, mut invalid, mut multi) = (bytes, 0_usize, 0_usize);
+    while let Err(error) = std::str::from_utf8(rest) {
+        let (valid, after) = rest.split_at(error.valid_up_to());
+        multi += lead_bytes(valid);
+        invalid += 1;
+        rest = error.error_len().map_or(&[], |len| &after[len..]);
+    }
+    multi += lead_bytes(rest);
+    multi > 0 && invalid * VALID_PER_INVALID <= multi
+}
+
+fn lead_bytes(valid: &[u8]) -> usize {
+    valid.iter().filter(|byte| **byte >= 0xC0).count()
 }
 
 fn attribute<'a>(head: &'a [u8], lower: &[u8], name: &[u8]) -> Option<&'a [u8]> {
@@ -76,30 +109,4 @@ fn attribute<'a>(head: &'a [u8], lower: &[u8], name: &[u8]) -> Option<&'a [u8]> 
 fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len())
         .position(|window| window == needle)
-}
-
-pub(super) fn utf16_by_pattern(bytes: &[u8]) -> Option<&'static Encoding> {
-    let sample = &bytes[..bytes.len().min(UTF16_SAMPLE) & !1];
-    let pairs = sample.len() / 2;
-    if pairs < 4 {
-        return None;
-    }
-    let zeros = |offset: usize| {
-        sample
-            .iter()
-            .skip(offset)
-            .step_by(2)
-            .filter(|b| **b == 0)
-            .count()
-    };
-    let (even, odd) = (zeros(0), zeros(1));
-    let mostly = |count: usize| count * 10 >= pairs * 7;
-    let rarely = |count: usize| count * 20 <= pairs;
-    if mostly(odd) && rarely(even) {
-        Some(UTF_16LE)
-    } else if mostly(even) && rarely(odd) {
-        Some(UTF_16BE)
-    } else {
-        None
-    }
 }

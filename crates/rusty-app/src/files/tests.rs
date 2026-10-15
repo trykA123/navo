@@ -88,11 +88,22 @@ fn binary_and_huge_files_are_refused() {
 }
 
 #[test]
-fn text_that_is_not_valid_in_its_encoding_opens_read_only() {
+fn invalid_utf8_opens_read_only_with_or_without_a_bom() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("broken.txt");
     fs::write(&file, [0xEF, 0xBB, 0xBF, b'c', 0xE9, b'\n']).unwrap();
     assert!(read(&at(&file)).unwrap().read_only);
+    let bare = dir.path().join("bare.txt");
+    let bytes = [
+        "café crème brûlée ".as_bytes(),
+        &[0xFF],
+        " déjà vu\n".as_bytes(),
+    ]
+    .concat();
+    fs::write(&bare, bytes).unwrap();
+    let opened = read(&at(&bare)).unwrap();
+    assert_eq!(opened.text, "café crème brûlée \u{FFFD} déjà vu\n");
+    assert!(opened.read_only);
 }
 
 #[test]

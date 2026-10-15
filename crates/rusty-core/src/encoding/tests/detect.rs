@@ -120,3 +120,81 @@ fn an_unknown_declared_label_is_ignored() {
         found(UTF_8, false, DetectedBy::Utf8)
     );
 }
+
+const GERMAN: &str = "Größere Änderungen für die Straße: Müller übernimmt die Prüfung, während Bäcker über Gebühren spricht.\n";
+const JAPANESE: &str = "日本語のテキストです。これは文字コードの判定を確認するための文章です。\n";
+
+#[test]
+fn utf8_cut_off_in_its_last_character_is_still_utf8() {
+    let bytes = [GERMAN.as_bytes(), &[0xC3]].concat();
+    assert_eq!(
+        detect(&bytes, FALLBACK),
+        found(UTF_8, false, DetectedBy::Guess)
+    );
+}
+
+#[test]
+fn utf8_with_one_stray_byte_is_still_utf8() {
+    let (start, end) = JAPANESE.split_at(JAPANESE.len() / 2 / 3 * 3);
+    let bytes = [start.as_bytes(), &[0xFF], end.as_bytes()].concat();
+    assert_eq!(
+        detect(&bytes, FALLBACK),
+        found(UTF_8, false, DetectedBy::Guess)
+    );
+}
+
+#[test]
+fn a_meta_tag_mentioned_outside_html_is_ignored() {
+    let text = "# Notes\n\nPut <meta charset=\"koi8-r\"> in the head. Привет, мир.\n";
+    assert_eq!(
+        detect(text.as_bytes(), FALLBACK),
+        found(UTF_8, false, DetectedBy::Utf8)
+    );
+}
+
+#[test]
+fn an_html_meta_after_leading_whitespace_counts() {
+    let text = "\n  <HTML><head><meta charset=windows-1251></head><body>Привет</body></html>\n";
+    assert_eq!(
+        detect(&bytes_in(WINDOWS_1251, text), FALLBACK),
+        found(WINDOWS_1251, false, DetectedBy::Declaration)
+    );
+}
+
+#[test]
+fn a_label_for_the_replacement_encoding_is_ignored() {
+    let text = "<?xml version=\"1.0\" encoding=\"ISO-2022-KR\"?>\n<menu>café</menu>\n";
+    assert_eq!(
+        detect(text.as_bytes(), FALLBACK),
+        found(UTF_8, false, DetectedBy::Utf8)
+    );
+}
+
+#[test]
+fn a_utf32_le_bom_is_not_taken_for_utf16() {
+    let utf32: Vec<u8> = "Some notes\n"
+        .chars()
+        .flat_map(|character| u32::from(character).to_le_bytes())
+        .collect();
+    let detected = detect(&with_bom(&[0xFF, 0xFE, 0, 0], &utf32), FALLBACK);
+    assert_ne!(detected.encoding, UTF_16LE);
+    assert_ne!(detected.by, DetectedBy::Bom);
+}
+
+#[test]
+fn a_table_of_small_numbers_is_not_guessed_as_utf16() {
+    let table: Vec<u8> = (0..400_u16)
+        .flat_map(|at| (at % 24 + 1).to_le_bytes())
+        .collect();
+    assert_ne!(detect(&table, FALLBACK).encoding, UTF_16LE);
+}
+
+#[test]
+fn only_the_first_64_kb_feed_the_guess() {
+    let ascii = "plain ascii line\n".repeat(64 * 1024 / 17 + 1);
+    let bytes = [ascii.as_bytes(), &bytes_in(WINDOWS_1252, GERMAN)].concat();
+    assert_eq!(
+        detect(&bytes, FALLBACK),
+        found(FALLBACK, false, DetectedBy::Fallback)
+    );
+}

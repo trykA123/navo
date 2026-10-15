@@ -26,11 +26,33 @@ fn utf8_text_opens_in_the_text_editor() {
     assert_eq!(first(text, text.len() as u64), ("text", true));
 }
 
+fn utf16(text: &str, little: bool, bom: bool) -> Vec<u8> {
+    let bom = if bom { Some('\u{FEFF}') } else { None };
+    bom.into_iter()
+        .chain(text.chars())
+        .collect::<String>()
+        .encode_utf16()
+        .flat_map(|unit| {
+            if little {
+                unit.to_le_bytes()
+            } else {
+                unit.to_be_bytes()
+            }
+        })
+        .collect()
+}
+
 #[test]
-fn a_nul_byte_or_a_utf16_bom_opens_as_hex() {
-    let hex = ("hex", false);
-    assert_eq!(first(b"MZ\x90\x00\x03", 5), hex);
-    assert_eq!(first(&[0xFF, 0xFE, b'a', b'b'], 4), hex);
+fn utf16_with_or_without_a_bom_opens_as_text_and_binary_as_hex() {
+    assert_eq!(first(b"MZ\x90\x00\x03", 5), ("hex", false));
+    for (little, bom) in [(true, true), (false, true), (true, false), (false, false)] {
+        let bytes = utf16("Some notes, written on Windows.\r\n", little, bom);
+        assert_eq!(
+            first(&bytes, bytes.len() as u64),
+            ("text", true),
+            "little {little}, bom {bom}"
+        );
+    }
 }
 
 #[test]

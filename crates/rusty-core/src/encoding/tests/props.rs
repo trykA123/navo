@@ -11,6 +11,7 @@ fn unicode() -> impl Strategy<Value = &'static Encoding> {
 proptest! {
     #[test]
     fn text_with_a_bom_survives_encode_then_decode(text in any::<String>(), encoding in unicode()) {
+        prop_assume!(!text.starts_with('\0'));
         let bytes = encode(&text, &found(encoding, true, DetectedBy::Bom)).unwrap();
         let decoded = decode(&bytes, FALLBACK);
         prop_assert_eq!(decoded.encoding, found(encoding, true, DetectedBy::Bom));
