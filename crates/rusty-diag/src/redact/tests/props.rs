@@ -125,6 +125,7 @@ fn leaked(case: &Case, output: &str) -> Option<String> {
         chars
             .windows(3)
             .map(|w| w.iter().collect::<String>().to_lowercase())
+            .filter(|w| !w.trim().is_empty())
             .find(|w| rest.contains(w.as_str()))
     })
 }

@@ -38,7 +38,7 @@ pub enum LengthClass {
     Long,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct RedactedPath {
     text: String,
     drive: DriveKind,
@@ -77,6 +77,12 @@ impl RedactedPath {
     #[must_use]
     pub fn has_non_ascii(&self) -> bool {
         self.non_ascii
+    }
+}
+
+impl fmt::Debug for RedactedPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

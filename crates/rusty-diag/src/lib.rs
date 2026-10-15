@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 
 mod event_ring;
+mod log_layer;
 mod memory;
 mod redact;
 
 pub use event_ring::{EventRing, RingStats};
+pub use log_layer::{LogConfig, LogLayer, RedactionMisses, is_redacted_path};
 pub use memory::{
     CacheHandle, CacheRegistry, CacheUsage, FakeProbe, MemoryProbe, MemoryReport, ProcessMemory,
     TaskCounters, TaskGuard, memory_report,
