@@ -85,6 +85,25 @@ impl Redactor {
     }
 }
 
+pub(super) fn token_len(text: &str) -> Option<usize> {
+    let end = text.strip_prefix('<')?.find('>')? + 2;
+    let inner = &text[1..end - 1];
+    let valid = match inner.split_once(':') {
+        None => matches!(inner, "user" | "computer" | "domain"),
+        Some(("d" | "f", hex)) => {
+            hex.len() == 4 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        }
+        Some(("server" | "share", digits)) => all_digits(digits),
+        Some(("text", count)) => count.strip_suffix(" chars").is_some_and(all_digits),
+        Some(_) => false,
+    };
+    valid.then_some(end)
+}
+
+fn all_digits(text: &str) -> bool {
+    !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit())
+}
+
 pub(super) fn replace(text: &str, replacements: &[Replacement]) -> String {
     let mut output = String::new();
     let mut end = 0;
@@ -93,6 +112,11 @@ pub(super) fn replace(text: &str, replacements: &[Replacement]) -> String {
         let at_word_start = before.is_none_or(|b: char| !b.is_alphanumeric());
         before = Some(ch);
         if index < end {
+            continue;
+        }
+        if let Some(length) = token_len(&text[index..]) {
+            output.push_str(&text[index..index + length]);
+            end = index + length;
             continue;
         }
         let found = replacements.iter().find_map(|replacement| {

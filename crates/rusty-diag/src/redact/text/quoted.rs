@@ -1,5 +1,5 @@
 use crate::is_redacted_path;
-use crate::redact::names::{Replacement, replace};
+use crate::redact::names::{Replacement, replace, token_len};
 
 const PAIRS: [(char, char); 4] = [
     ('\'', '\''),
@@ -27,6 +27,11 @@ pub(super) fn hide_quoted(text: &str, replacements: &[Replacement]) -> String {
                 before = Some(close);
                 rest = &after_open[end + close.len_utf8()..];
             }
+            None if opens_unclosed(open, before, after_open) => {
+                output.push(open);
+                output.push_str(&hidden(after_open, replacements));
+                rest = "";
+            }
             None => {
                 output.push(open);
                 before = Some(open);
@@ -35,6 +40,12 @@ pub(super) fn hide_quoted(text: &str, replacements: &[Replacement]) -> String {
         }
     }
     output
+}
+
+fn opens_unclosed(open: char, before: Option<char>, after_open: &str) -> bool {
+    PAIRS.iter().any(|(o, _)| *o == open)
+        && before.is_none_or(|ch| ch.is_whitespace() || matches!(ch, '=' | ':'))
+        && !after_open.trim().is_empty()
 }
 
 fn closing_quote(text: &str, close: char) -> Option<usize> {
@@ -60,13 +71,5 @@ fn hidden(fragment: &str, replacements: &[Replacement]) -> String {
 }
 
 fn is_plain_token(fragment: &str) -> bool {
-    fragment
-        .strip_prefix('<')
-        .and_then(|inner| inner.strip_suffix('>'))
-        .is_some_and(|inner| {
-            inner.starts_with(|ch: char| ch.is_ascii_lowercase())
-                && inner.chars().all(|ch| {
-                    ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, ':' | ' ')
-                })
-        })
+    token_len(fragment) == Some(fragment.len())
 }

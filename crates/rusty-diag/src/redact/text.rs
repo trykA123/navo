@@ -19,13 +19,11 @@ impl Redactor {
         let mut output = String::new();
         for piece in pieces {
             match piece {
-                Piece::Text(text) => {
-                    output.push_str(&replace(&hide_quoted(text, &replacements), &replacements));
-                }
+                Piece::Text(text) => output.push_str(&replace(text, &replacements)),
                 Piece::Path(path) => output.push_str(&path),
             }
         }
-        output
+        hide_quoted(&output, &replacements)
     }
 
     fn scan_paths<'a>(&self, mut text: &'a str) -> Vec<Piece<'a>> {
@@ -59,11 +57,17 @@ impl Redactor {
             return true;
         }
         let boundary = before.is_none_or(|ch| !ch.is_alphanumeric());
-        if boundary && drive_start(text) {
+        if drive_start(text) && (boundary || text.as_bytes().get(2) == Some(&b'\\')) {
             return true;
         }
         if !before.is_none_or(opens_path) {
             return false;
+        }
+        if let Some(after) = text.strip_prefix("//") {
+            return after
+                .chars()
+                .next()
+                .is_some_and(|next| !next.is_whitespace() && next != '/' && !hard_boundary(next));
         }
         text.strip_prefix('/')
             .and_then(|rest| rest.chars().next())
@@ -74,7 +78,7 @@ impl Redactor {
         let end = path
             .char_indices()
             .find(|(index, ch)| {
-                hard_boundary(*ch)
+                (hard_boundary(*ch) && !inner_apostrophe(path, *index, *ch))
                     || (*ch == ' ' && self.is_path_start(&path[index + 1..], Some(' ')))
             })
             .map_or(path.len(), |(index, _)| index);
@@ -87,6 +91,18 @@ impl Redactor {
             .unwrap_or(0);
         segment_start + file_end(&run[segment_start..])
     }
+}
+
+fn inner_apostrophe(text: &str, index: usize, ch: char) -> bool {
+    ch == '\''
+        && text[..index]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
+        && text[index + 1..]
+            .chars()
+            .next()
+            .is_some_and(char::is_alphanumeric)
 }
 
 fn drive_start(text: &str) -> bool {

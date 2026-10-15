@@ -269,3 +269,58 @@ fn slashes_inside_words_and_numbers_are_not_paths() {
     let line = "ratio a/b is 1/2 and/or more";
     assert_eq!(redactor().text(line), line);
 }
+
+#[test]
+fn a_quoted_fragment_holding_a_path_is_hidden_whole() {
+    let out = redactor().text(r"cannot copy 'Secret Plan C:\x\a.txt' now");
+    assert_absent(&out, &["secret", "plan"]);
+}
+
+#[test]
+fn a_double_quoted_fragment_holding_two_names_and_a_path_is_hidden_whole() {
+    let out = redactor().text(r#"cannot copy "Secret Plan.docx to D:\x\y.docx""#);
+    assert_absent(&out, &["secret", "plan"]);
+}
+
+#[test]
+fn an_apostrophe_inside_a_file_name_does_not_end_the_path() {
+    let out = redactor().text(r"failed D:\Clients\O'Brien Merger.pdf");
+    assert_eq!(shape(&out), r"failed D:\<d>\<f>.pdf");
+}
+
+#[test]
+fn a_possessive_apostrophe_inside_a_file_name_does_not_end_the_path() {
+    let out = redactor().text(r"failed D:\Clients\Bob's Plan.pdf");
+    assert_absent(&out, &["bob", "plan"]);
+}
+
+#[test]
+fn only_real_token_shapes_count_as_already_redacted() {
+    let out = redactor().text("error '<payroll q3>' and '<acme merger>'");
+    assert_absent(&out, &["payroll", "acme"]);
+}
+
+#[test]
+fn a_drive_path_right_after_a_word_is_still_found() {
+    let out = redactor().text(r"file1C:\Secret\a.txt");
+    assert_absent(&out, &["secret"]);
+}
+
+#[test]
+fn an_unclosed_quote_after_a_space_hides_the_rest() {
+    let out = redactor().text("rename 'Secret Plan.docx");
+    assert_eq!(out, "rename '<text:16 chars>");
+}
+
+#[test]
+fn a_double_slash_comment_is_not_a_unc_path() {
+    let line = "see // comment here";
+    assert_eq!(redactor().text(line), line);
+}
+
+#[test]
+fn a_second_pass_keeps_tokens_even_when_a_share_name_matches_inside_them() {
+    let r = redactor();
+    let once = r.text(r"\\nas\d\Plan.txt and D:\x\y.txt");
+    assert_eq!(r.text(&once), once);
+}

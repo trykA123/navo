@@ -74,21 +74,28 @@ pub fn write_report(
     let temp = temp_path(path)?;
     let file = File::create_new(&temp)?;
     let written = write_zip(file, &report, summary.as_bytes())
-        .and_then(|()| fs::rename(&temp, path))
+        .and_then(|()| publish(&temp, path))
         .and_then(|()| fs::metadata(path));
-    let bytes = match written {
-        Ok(metadata) => metadata.len(),
-        Err(error) => {
-            let _ = fs::remove_file(&temp);
-            return Err(error);
-        }
-    };
+    let _ = fs::remove_file(&temp);
+    let bytes = written?.len();
     Ok(ReportSummary {
         sections: SECTIONS.iter().map(|&s| s.to_owned()).collect(),
         events: input.events.len(),
         errors: input.errors.len(),
         bytes,
     })
+}
+
+fn publish(temp: &Path, path: &Path) -> io::Result<()> {
+    match fs::hard_link(temp, path) {
+        Err(error) if error.kind() != io::ErrorKind::AlreadyExists => {
+            if fs::symlink_metadata(path).is_ok() {
+                return Err(io::ErrorKind::AlreadyExists.into());
+            }
+            fs::rename(temp, path)
+        }
+        other => other,
+    }
 }
 
 fn temp_path(path: &Path) -> io::Result<PathBuf> {
