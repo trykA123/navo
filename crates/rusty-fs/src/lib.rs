@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod fake;
+pub mod hostile_names;
 mod io_queue;
 mod provider;
 

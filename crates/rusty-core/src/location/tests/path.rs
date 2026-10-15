@@ -140,12 +140,6 @@ fn mixed_escapes_stay_literal_text() {
 }
 
 #[test]
-fn mixed_escapes_keep_their_text_form() {
-    let mixed = "a\u{100000}\u{100880}";
-    assert_eq!(ProviderPath::from_text(mixed).to_text(), mixed);
-}
-
-#[test]
 fn empty_paths_of_every_kind_are_empty() {
     let empty = [
         ProviderPath::from_text(""),
