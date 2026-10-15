@@ -120,3 +120,29 @@ fn saving_keeps_the_file_permissions() {
     let mode = fs::metadata(&file).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
 }
+
+fn exact(path: &std::path::Path) -> std::path::PathBuf {
+    if cfg!(windows) {
+        std::path::PathBuf::from(format!(r"\\?\{}", path.display()))
+    } else {
+        path.to_owned()
+    }
+}
+
+#[test]
+fn a_trailing_dot_name_is_read_and_saved_as_itself() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(exact(&dir.path().join("report")), "plain\n").unwrap();
+    fs::write(exact(&dir.path().join("report.")), "dotted\n").unwrap();
+    let dotted = at(&dir.path().join("report."));
+    assert_eq!(read(&dotted).unwrap().text, "dotted\n");
+    write(&dotted, &save("changed\n", false, None)).unwrap();
+    assert_eq!(
+        fs::read_to_string(exact(&dir.path().join("report"))).unwrap(),
+        "plain\n"
+    );
+    assert_eq!(
+        fs::read_to_string(exact(&dir.path().join("report."))).unwrap(),
+        "changed\n"
+    );
+}

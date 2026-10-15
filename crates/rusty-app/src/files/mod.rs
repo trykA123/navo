@@ -23,11 +23,10 @@ pub fn hooks() -> FileHooks {
 }
 
 fn path_of(location: &Location) -> Result<PathBuf, String> {
-    if location.is_local() {
-        Ok(PathBuf::from(location.as_str()))
-    } else {
-        Err("Only local files open here.".to_owned())
+    if !location.is_local() {
+        return Err("Only local files open here.".to_owned());
     }
+    rusty_fs::os_path(location).map_err(|error| error.message())
 }
 
 fn stamp_of(path: &std::path::Path) -> Option<FileStamp> {
