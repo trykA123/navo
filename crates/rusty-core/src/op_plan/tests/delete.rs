@@ -40,6 +40,12 @@ fn recycle_counts_the_scanned_bytes() {
 }
 
 #[test]
+fn recycle_counts_the_scanned_items() {
+    let totals = recycle().totals;
+    assert_eq!((totals.files, totals.folders), (3, 2));
+}
+
+#[test]
 fn recycle_is_not_permanent() {
     assert!(!recycle().risks.contains(&Risk::Permanent));
 }

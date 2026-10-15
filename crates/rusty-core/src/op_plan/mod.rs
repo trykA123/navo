@@ -1,4 +1,11 @@
+mod build;
+mod names;
+mod protect;
+mod risks;
+
 use serde::{Deserialize, Serialize};
+
+pub use protect::is_protected;
 
 use crate::Location;
 
@@ -125,18 +132,46 @@ pub struct OperationPlan {
 impl OperationPlan {
     #[must_use]
     pub fn needs_confirmation(&self) -> bool {
-        todo!()
+        !self.risks.is_empty()
     }
 }
 
 #[must_use]
-pub fn plan(_request: &PlanRequest) -> OperationPlan {
-    todo!()
+pub fn plan(request: &PlanRequest) -> OperationPlan {
+    let mut walk = build::Walk::new(request);
+    match (&request.kind, &request.target) {
+        (OpKind::Copy, Some(target)) => walk.copy(target),
+        (OpKind::Move, Some(target)) if request.same_volume => walk.rename_tops(target),
+        (OpKind::Move, Some(target)) => {
+            walk.copy(target);
+            walk.remove_moved();
+        }
+        (OpKind::Recycle, _) => recycle(request, &mut walk),
+        (OpKind::Delete, _) => {
+            walk.steps = request.items.iter().rev().map(build::removal).collect();
+        }
+        (OpKind::Copy | OpKind::Move, None) => {}
+    }
+    let totals = risks::totals(request, &walk.steps, &walk.moved);
+    let risks = risks::risks(request, &walk, &totals);
+    OperationPlan {
+        kind: request.kind.clone(),
+        steps: walk.steps,
+        totals,
+        conflicts: walk.conflicts,
+        risks,
+    }
 }
 
-#[must_use]
-pub fn is_protected(_location: &Location, _extra: &[Location]) -> bool {
-    todo!()
+fn recycle(request: &PlanRequest, walk: &mut build::Walk<'_>) {
+    for (index, item) in request.items.iter().enumerate() {
+        if item.depth == 0 {
+            walk.steps.push(Step::Recycle {
+                location: item.location.clone(),
+            });
+            walk.moved[index] = true;
+        }
+    }
 }
 
 #[cfg(test)]

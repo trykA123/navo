@@ -74,8 +74,6 @@ fn random_plan() -> impl Strategy<Value = (Vec<ScannedItem>, OperationPlan)> {
 
 fn expected_totals(items: &[ScannedItem], plan: &OperationPlan) -> Totals {
     let count = |wanted: fn(&Step) -> bool| plan.steps.iter().filter(|s| wanted(s)).count() as u64;
-    let copied = count(|s| matches!(s, Step::CopyFile { .. }));
-    let made = count(|s| matches!(s, Step::MakeFolder { .. }));
     let copied_bytes = plan
         .steps
         .iter()
@@ -84,28 +82,63 @@ fn expected_totals(items: &[ScannedItem], plan: &OperationPlan) -> Totals {
             _ => 0,
         })
         .sum();
-    let scanned_bytes = items
+    let moved = moved_items(items, plan);
+    let scanned =
+        |wanted: fn(&ItemKind) -> bool| moved.iter().filter(|i| wanted(&i.kind)).count() as u64;
+    let scanned_bytes = moved
         .iter()
         .filter(|i| i.kind == ItemKind::File)
         .map(|i| i.size)
         .sum();
-    match plan.kind {
-        OpKind::Copy | OpKind::Move => Totals {
-            files: copied,
-            folders: made,
+    match (&plan.kind, renamed_or_recycled(plan)) {
+        (OpKind::Recycle, _) | (OpKind::Move, true) => Totals {
+            files: scanned(|k| *k == ItemKind::File),
+            folders: scanned(|k| *k == ItemKind::Folder),
+            bytes: scanned_bytes,
+        },
+        (OpKind::Copy | OpKind::Move, _) => Totals {
+            files: count(|s| matches!(s, Step::CopyFile { .. })),
+            folders: count(|s| matches!(s, Step::MakeFolder { .. })),
             bytes: copied_bytes,
         },
-        OpKind::Recycle => Totals {
-            files: 0,
-            folders: 0,
-            bytes: scanned_bytes,
-        },
-        OpKind::Delete => Totals {
+        (OpKind::Delete, _) => Totals {
             files: count(|s| matches!(s, Step::RemoveFile { .. })),
             folders: count(|s| matches!(s, Step::RemoveFolder { .. })),
-            bytes: scanned_bytes,
+            bytes: items
+                .iter()
+                .filter(|i| i.kind == ItemKind::File)
+                .map(|i| i.size)
+                .sum(),
         },
     }
+}
+
+fn renamed_or_recycled(plan: &OperationPlan) -> bool {
+    plan.steps
+        .iter()
+        .any(|s| matches!(s, Step::Rename { .. } | Step::Recycle { .. }))
+}
+
+fn moved_items<'a>(items: &'a [ScannedItem], plan: &OperationPlan) -> Vec<&'a ScannedItem> {
+    let tops: Vec<&Location> = plan
+        .steps
+        .iter()
+        .filter_map(|s| match s {
+            Step::Rename { source, .. } => Some(source),
+            Step::Recycle { location } => Some(location),
+            _ => None,
+        })
+        .collect();
+    let mut top: Option<&Location> = None;
+    items
+        .iter()
+        .filter(|item| {
+            if item.depth == 0 {
+                top = Some(&item.location);
+            }
+            top.is_some_and(|t| tops.iter().any(|planned| planned.same_place(t)))
+        })
+        .collect()
 }
 
 fn locations(step: &Step) -> Vec<&Location> {
