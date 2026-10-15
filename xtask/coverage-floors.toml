@@ -1,4 +1,5 @@
 [floors]
 rusty-core = 90
+rusty-fs = 80
 rusty-store = 85
 xtask = 85
