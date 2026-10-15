@@ -24,6 +24,7 @@ pub(super) fn attributes(name: &OsStr, metadata: &Metadata) -> Attributes {
         hidden: name.as_bytes().starts_with(b"."),
         system: false,
         readonly: metadata.permissions().mode() & OWNER_WRITE == 0,
+        ..Attributes::default()
     }
 }
 

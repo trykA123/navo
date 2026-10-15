@@ -45,6 +45,7 @@ fn a_symlink_is_a_link_and_not_followed() {
     std::os::unix::fs::symlink(dir.path().join("target"), dir.path().join("link")).unwrap();
     let entry = LocalFs::new().metadata(&child(&folder, "link")).unwrap();
     assert_eq!(entry.kind, EntryKind::Link);
+    assert!(entry.attributes.link_to_folder);
 }
 
 #[cfg(unix)]

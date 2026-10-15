@@ -54,11 +54,12 @@ impl LocalFs {
             };
             let child = child.map_err(|e| io_error(&e, folder))?;
             let name = child.file_name();
-            match child.metadata() {
-                Ok(metadata) => entries.push(entry(platform::entry_name(&name), &name, &metadata)),
-                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-                Err(_) => entries.extend(bare_entry(&child, &name)),
-            }
+            let found = match child.metadata() {
+                Ok(metadata) => Some(entry(platform::entry_name(&name), &name, &metadata)),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+                Err(_) => bare_entry(&child, &name),
+            };
+            entries.extend(found.map(|found| followed(found, &child.path())));
         }
         Ok(entries)
     }
@@ -106,7 +107,7 @@ impl Provider for LocalFs {
             Some(name) => entry(platform::entry_name(name), name, &metadata),
             None => entry(location.path().clone(), path.as_os_str(), &metadata),
         };
-        Ok(entry)
+        Ok(followed(entry, &path))
     }
 }
 
@@ -149,6 +150,13 @@ fn entry(name: ProviderPath, os_name: &OsStr, metadata: &Metadata) -> FsEntry {
         modified_ms: modified_ms(metadata),
         attributes: platform::attributes(os_name, metadata),
     }
+}
+
+fn followed(mut entry: FsEntry, path: &Path) -> FsEntry {
+    if entry.kind == EntryKind::Link {
+        entry.attributes.link_to_folder = fs::metadata(path).is_ok_and(|m| m.is_dir());
+    }
+    entry
 }
 
 fn bare_entry(child: &DirEntry, name: &OsStr) -> Option<FsEntry> {

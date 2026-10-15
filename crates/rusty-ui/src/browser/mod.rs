@@ -99,7 +99,9 @@ impl Browser {
         let is_link = usize::try_from(row)
             .ok()
             .and_then(|index| self.details.get(&tab.id())?.get(index).cloned())
-            .is_some_and(|detail| detail.kind == EntryKind::Link);
+            .is_some_and(|detail| {
+                detail.kind == EntryKind::Link && detail.attributes.link_to_folder
+            });
         if !entry.is_folder && !is_link {
             return false;
         }
