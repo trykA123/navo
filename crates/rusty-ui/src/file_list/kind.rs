@@ -17,7 +17,7 @@ const ARCHIVE: [&str; 11] = [
 ];
 const APP: [&str; 5] = ["exe", "msi", "appimage", "deb", "rpm"];
 
-pub(super) fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
+pub(crate) fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
     if kind == EntryKind::Folder {
         return (name, "");
     }
@@ -32,7 +32,7 @@ fn is_in(list: &[&str], extension: &str) -> bool {
         .any(|known| known.eq_ignore_ascii_case(extension))
 }
 
-pub(super) fn icon(kind: EntryKind, extension: &str, colors: &Colors) -> (IconName, Hsla) {
+pub(crate) fn icon(kind: EntryKind, extension: &str, colors: &Colors) -> (IconName, Hsla) {
     match kind {
         EntryKind::Folder => (IconName::Folder, colors.folder),
         EntryKind::Link => (IconName::ArrowRight, colors.muted),

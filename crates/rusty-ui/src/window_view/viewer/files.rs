@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
 use rusty_core::paging::{ByteSource, LineIndex};
+use rusty_fs::archive::ArchiveListing;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStamp {
@@ -70,6 +71,9 @@ type Write =
     Arc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError> + Send + Sync>;
 type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
 type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
+type ListArchive = Arc<dyn Fn(&Location) -> Result<ArchiveListing, String> + Send + Sync>;
+type ReadArchiveEntry = Arc<dyn Fn(&Location, usize) -> Result<Vec<u8>, String> + Send + Sync>;
+type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FileHooks {
@@ -77,6 +81,9 @@ pub struct FileHooks {
     pub write: Write,
     pub head: ReadHead,
     pub paged: OpenPaged,
+    pub archive: ListArchive,
+    pub archive_entry: ReadArchiveEntry,
+    pub bytes: ReadBytes,
 }
 
 impl FileHooks {
@@ -89,6 +96,9 @@ impl FileHooks {
             }),
             head: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            archive: Arc::new(|_| Err("Archives cannot be opened here.".to_owned())),
+            archive_entry: Arc::new(|_, _| Err("Archives cannot be opened here.".to_owned())),
+            bytes: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
         }
     }
 }

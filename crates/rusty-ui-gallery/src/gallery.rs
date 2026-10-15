@@ -3,14 +3,14 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::PagedView;
+use rusty_ui::window_view::{ArchiveView, FontView, PagedView};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
-use crate::viewer_sample;
+use crate::{rich_sample, viewer_sample};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {
@@ -21,10 +21,12 @@ pub enum Page {
     PagedText,
     Drives,
     TypedPath,
+    Archive,
+    Font,
 }
 
 impl Page {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 9] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -32,17 +34,21 @@ impl Page {
         Self::PagedText,
         Self::Drives,
         Self::TypedPath,
+        Self::Archive,
+        Self::Font,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Primitives => "Primitives",
+            Self::Primitives => "Kit",
             Self::Pane => "Pane",
             Self::Operate => "Operate",
             Self::Hex => "Hex",
-            Self::PagedText => "Paged text",
+            Self::PagedText => "Text",
             Self::Drives => "Drives",
             Self::TypedPath => "Path",
+            Self::Archive => "Zip",
+            Self::Font => "Font",
         }
     }
 }
@@ -56,6 +62,8 @@ pub struct Gallery {
     paged_text: Entity<PagedView>,
     drives: Entity<DrivesPage>,
     typed_path: Entity<DrivesPage>,
+    archive: Entity<ArchiveView>,
+    font: Option<Entity<FontView>>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -73,6 +81,8 @@ impl Gallery {
             paged_text: viewer_sample::text_view(cx),
             drives: cx.new(|cx| DrivesPage::new(Shows::Menu, cx)),
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
+            archive: rich_sample::archive_view(cx),
+            font: rich_sample::font_view(cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -176,6 +186,8 @@ impl Render for Gallery {
             Page::PagedText => root.child(self.paged_text.clone()),
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
+            Page::Archive => root.child(self.archive.clone()),
+            Page::Font => root.children(self.font.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }

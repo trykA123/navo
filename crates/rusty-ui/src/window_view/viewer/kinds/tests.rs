@@ -97,3 +97,69 @@ fn an_added_kind_with_a_higher_score_wins_and_others_still_accept() {
     let ids: Vec<_> = kinds.choose(&text).iter().map(|kind| kind.id()).collect();
     assert_eq!(ids, ["text", "hex"]);
 }
+
+const ARCHIVO: &[u8] = include_bytes!("../../../../fonts/Archivo-Regular.ttf");
+
+fn best(head: &[u8], name: &str) -> &'static str {
+    let sniff = Sniff {
+        head,
+        name,
+        len: head.len() as u64,
+    };
+    let chosen = Kinds::builtin().choose(&sniff);
+    chosen.first().expect("a kind accepts every file").id()
+}
+
+fn ustar() -> Vec<u8> {
+    let mut block = vec![0; 1024];
+    block[..9].copy_from_slice(b"notes.txt");
+    block[257..263].copy_from_slice(b"ustar\0");
+    block
+}
+
+fn gzip(bytes: &[u8]) -> Vec<u8> {
+    use std::io::Write as _;
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    encoder.write_all(bytes).expect("gzip");
+    encoder.finish().expect("gzip")
+}
+
+#[test]
+fn archive_magic_and_tar_names_pick_the_archive_view() {
+    let cases: [(&[u8], &str); 7] = [
+        (b"PK\x03\x04\x14\x00\x00\x00", "report.docx"),
+        (b"PK\x05\x06\x00\x00\x00\x00", "empty.zip"),
+        (b"7z\xBC\xAF\x27\x1C\x00\x04", "backup.7z"),
+        (&ustar(), "logs.tar"),
+        (&gzip(&ustar()), "logs.gz"),
+        (b"\xFD7zXZ\x00\x00\x04", "logs.tar.xz"),
+        (b"\x28\xB5\x2F\xFD\x00\x58", "logs.tzst"),
+    ];
+    for (head, name) in cases {
+        assert_eq!(best(head, name), "archive", "{name}");
+    }
+}
+
+#[test]
+fn font_magic_picks_the_font_view() {
+    let otf = b"OTTO\x00\x0A\x00\x80\x00\x03\x00\x20CFF \x00\x00\x00\x00";
+    let cases: [(&[u8], &str); 4] = [
+        (ARCHIVO, "Archivo-Regular.ttf"),
+        (otf, "Display.otf"),
+        (b"ttcf\x00\x01\x00\x00\x00\x00\x00\x02", "Family.ttc"),
+        (b"wOFF\x00\x01\x00\x00\x00\x00\x10\x00", "Web.woff"),
+    ];
+    for (head, name) in cases {
+        assert_eq!(best(head, name), "font", "{name}");
+    }
+}
+
+#[test]
+fn other_files_stay_with_text_or_hex() {
+    assert_eq!(best(b"plain words\n", "notes.txt"), "text");
+    assert_eq!(best(b"plain words\n", "notes.tar"), "text");
+    assert_eq!(best(b"\x89PNG\r\n\x1a\n\x00", "photo.png"), "hex");
+    assert_eq!(best(&gzip(b"just a log"), "app.log.gz"), "hex");
+    assert_eq!(best(b"wOF2\x00\x01\x00\x00", "Web.woff2"), "hex");
+    assert_eq!(best(b"\x00\x01\x00\x00\xFF\xFF", "data.bin"), "hex");
+}

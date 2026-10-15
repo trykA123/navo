@@ -146,3 +146,35 @@ fn a_trailing_dot_name_is_read_and_saved_as_itself() {
         "changed\n"
     );
 }
+
+#[test]
+fn the_hooks_list_a_zip_and_read_one_entry() {
+    use std::io::Write as _;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bundle.zip");
+    let mut writer = zip::ZipWriter::new(fs::File::create(&file).unwrap());
+    writer
+        .start_file("inner/notes.md", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    writer.write_all(b"# inside\n").unwrap();
+    writer.finish().unwrap();
+    let hooks = super::hooks();
+    let listing = (hooks.archive)(&at(&file)).unwrap();
+    assert_eq!(listing.entries[0].name, "inner/notes.md");
+    assert_eq!((hooks.archive_entry)(&at(&file), 0).unwrap(), b"# inside\n");
+    assert!((hooks.archive_entry)(&at(&file), 1).is_err());
+}
+
+#[test]
+fn whole_file_bytes_stop_at_the_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("face.ttf");
+    fs::write(&file, [7u8; 10]).unwrap();
+    let hooks = super::hooks();
+    assert_eq!((hooks.bytes)(&at(&file), 10).unwrap(), [7u8; 10]);
+    assert!(
+        (hooks.bytes)(&at(&file), 9)
+            .unwrap_err()
+            .contains("too large")
+    );
+}

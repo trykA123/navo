@@ -29,7 +29,7 @@ pub(super) fn date_column(t: &Theme) -> Pixels {
     t.spacing.date_column + t.spacing.xl
 }
 
-fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
+pub(crate) fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
     vec![BoxShadow {
         color,
         offset: point(px(0.), px(0.)),
@@ -141,7 +141,7 @@ pub(super) fn cells(look: &RowLook) -> Div {
         .child(numbers)
 }
 
-pub(super) fn filter_bar(t: &Theme, text: SharedString, shown: usize) -> impl IntoElement {
+pub(crate) fn filter_bar(t: &Theme, text: SharedString, shown: usize) -> impl IntoElement {
     let c = &t.colors;
     let count = crate::format::count(u64::try_from(shown).unwrap_or(u64::MAX), "item", "items");
     let spoken: SharedString = format!("Filter {text}, {count}").into();

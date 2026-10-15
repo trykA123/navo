@@ -33,6 +33,8 @@ fn file_name(page: Page, mode: Mode) -> String {
         Page::PagedText => "p13-text",
         Page::Drives => "p14-drives",
         Page::TypedPath => "p14-path",
+        Page::Archive => "p15-archive",
+        Page::Font => "p15-font",
     };
     let mode = match mode {
         Mode::Light => "light",

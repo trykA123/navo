@@ -1,3 +1,5 @@
+mod archive;
+mod font;
 mod hex;
 mod text;
 
@@ -90,7 +92,12 @@ pub struct Kinds(Vec<Kind>);
 impl Kinds {
     #[must_use]
     pub fn builtin() -> Self {
-        Self(vec![Arc::new(text::Text), Arc::new(hex::Hex)])
+        Self(vec![
+            Arc::new(text::Text),
+            Arc::new(hex::Hex),
+            Arc::new(archive::Archive),
+            Arc::new(font::Font),
+        ])
     }
 
     #[must_use]

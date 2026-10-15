@@ -524,6 +524,7 @@ fn viewer_window(
                 })
             }),
             paged: Arc::new(|_| Err("No paged view here.".to_owned())),
+            ..super::FileHooks::none()
         },
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),

@@ -6,12 +6,20 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+lzma-rust2 = { version = "=0.22.0", default-features = false, features = ["optimization", "std", "xz"] }
+ruzstd = { version = "=0.9.1", default-features = false, features = ["std"] }
 rusty-core = { path = "../rusty-core" }
+sevenz-rust2 = { version = "=0.24.0", default-features = false }
+tar = { version = "=0.4.46", default-features = false }
 thiserror = "2.0.21"
 trash = "5.2.9"
+zip = { version = "=9.0.3", default-features = false, features = ["deflate-flate2"] }
 
 [dev-dependencies]
+lzma-rust2 = { version = "=0.22.0", default-features = false, features = ["encoder", "std", "xz"] }
 proptest = "1.12.0"
+sevenz-rust2 = { version = "=0.24.0", default-features = false, features = ["compress"] }
 tempfile = "3.27.0"
 
 [lints]

@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
@@ -7,6 +8,7 @@ use rusty_core::Location;
 use rusty_store::replace_atomic;
 use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
 
+mod archive;
 mod paged;
 mod summary;
 
@@ -19,6 +21,9 @@ pub fn hooks() -> FileHooks {
         write: Arc::new(write),
         head: Arc::new(paged::head),
         paged: Arc::new(paged::paged),
+        archive: Arc::new(archive::archive),
+        archive_entry: Arc::new(archive::archive_entry),
+        bytes: Arc::new(bytes),
     }
 }
 
@@ -72,6 +77,22 @@ pub fn read(location: &Location) -> Result<FileText, String> {
         crlf,
         stamp,
     })
+}
+
+pub fn bytes(location: &Location, limit: u64) -> Result<Vec<u8>, String> {
+    let file =
+        fs::File::open(path_of(location)?).map_err(|error| format!("Cannot open it: {error}"))?;
+    let mut bytes = Vec::new();
+    file.take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Cannot open it: {error}"))?;
+    if bytes.len() as u64 > limit {
+        return Err(format!(
+            "Over {} MB: too large to preview here.",
+            limit / (1024 * 1024)
+        ));
+    }
+    Ok(bytes)
 }
 
 pub fn mostly_crlf(bytes: &[u8]) -> bool {

@@ -1,6 +1,8 @@
+mod archive;
 mod body;
 mod editor;
 mod files;
+mod font;
 mod keys_bar;
 mod kinds;
 mod lister;
@@ -12,10 +14,12 @@ mod view;
 use gpui_kit::{FocusHandle, KeyBinding};
 use rusty_core::Location;
 
+pub use archive::{ArchiveSource, ArchiveView};
 pub use body::{Attach, BodyKeys, Host, Key, ViewerBody};
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
 };
+pub use font::{FontFace, FontView};
 pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
 
@@ -88,6 +92,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-g", OpenGoTo, context),
         KeyBinding::new("alt-c", MatchCase, context),
         KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
+        KeyBinding::new("home", GoStart, Some(archive::CONTEXT)),
+        KeyBinding::new("end", GoEnd, Some(archive::CONTEXT)),
     ]);
 }
 

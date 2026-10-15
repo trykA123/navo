@@ -6,6 +6,7 @@ mod operate_page;
 mod options;
 mod pane_page;
 mod pane_sample;
+mod rich_sample;
 mod screenshot;
 mod sections;
 mod viewer_sample;

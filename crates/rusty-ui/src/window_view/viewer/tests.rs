@@ -1,4 +1,6 @@
+mod archive;
 mod find;
+mod font;
 mod kind;
 mod language;
 mod lister;
@@ -157,6 +159,7 @@ pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
             Ok(head.clone())
         }),
         paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup, &reads))),
+        ..FileHooks::none()
     }
 }
 
