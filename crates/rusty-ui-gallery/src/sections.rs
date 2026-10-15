@@ -11,7 +11,7 @@ const ROWS: usize = 100_000;
 const CURSOR_ROW: usize = 2;
 const MARKED_ROW: usize = 4;
 
-fn section(t: &Theme, title: &'static str, body: impl IntoElement) -> Div {
+pub fn section(t: &Theme, title: &'static str, body: impl IntoElement) -> Div {
     div()
         .flex()
         .flex_col()

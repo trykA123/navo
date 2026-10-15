@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod gallery;
+mod operate_page;
 mod options;
 mod pane_page;
 mod pane_sample;
@@ -49,6 +50,7 @@ fn main() -> ExitCode {
         if let Err(error) = rusty_ui::init(Mode::Light, cx) {
             report(&error.to_string());
         }
+        rusty_ui::confirm_dialog::bind_keys(cx);
         let opened = rusty_ui::open_window(window_options(cx), cx, |_, cx| {
             cx.new(|cx| Gallery::new(Mode::Light, cx))
         });

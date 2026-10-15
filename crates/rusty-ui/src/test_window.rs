@@ -13,6 +13,7 @@ pub(crate) fn open<V: Render>(
         gpui_kit::init(cx);
         tokens::apply(Mode::Light, cx);
         crate::file_list::bind_keys(cx);
+        crate::confirm_dialog::bind_keys(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),

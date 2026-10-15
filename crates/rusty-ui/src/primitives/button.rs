@@ -16,6 +16,7 @@ pub enum ButtonVariant {
     Secondary,
     Primary,
     Ghost,
+    Danger,
 }
 
 #[derive(IntoElement)]
@@ -77,6 +78,7 @@ impl RenderOnce for Button {
             ButtonVariant::Primary => button.primary(),
             ButtonVariant::Secondary => button.outline(),
             ButtonVariant::Ghost => button.ghost(),
+            ButtonVariant::Danger => button.danger(),
         };
         button
             .when_some(self.tooltip, KitButton::tooltip)

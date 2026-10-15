@@ -5,6 +5,7 @@ use rusty_ui::primitives::{
 use rusty_ui::tokens::{self, Mode, Theme};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
+use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
 
@@ -12,15 +13,17 @@ use crate::sections;
 pub enum Page {
     Primitives,
     Pane,
+    Operate,
 }
 
 impl Page {
-    pub const ALL: [Self; 2] = [Self::Primitives, Self::Pane];
+    pub const ALL: [Self; 3] = [Self::Primitives, Self::Pane, Self::Operate];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Primitives => "Primitives",
             Self::Pane => "Pane",
+            Self::Operate => "Operate",
         }
     }
 }
@@ -29,6 +32,7 @@ pub struct Gallery {
     mode: Mode,
     page: Page,
     pane: Entity<PanePage>,
+    operate: Entity<OperatePage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -41,6 +45,7 @@ impl Gallery {
             mode,
             page: Page::Primitives,
             pane: cx.new(PanePage::new),
+            operate: cx.new(OperatePage::new),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -139,6 +144,7 @@ impl Render for Gallery {
             .child(self.header(cx));
         match self.page {
             Page::Pane => root.child(self.pane.clone()),
+            Page::Operate => root.child(self.operate.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }
