@@ -43,10 +43,10 @@ enum Change {
 
 impl Browser {
     pub fn rename(&mut self, from: &str, to: &str) -> Result<(), NameProblem> {
-        check_name(to).map_err(NameProblem::Invalid)?;
         if from == to {
             return Err(NameProblem::Unchanged);
         }
+        check_name(to).map_err(NameProblem::Invalid)?;
         if self.taken(to, Some(from)) {
             return Err(NameProblem::Exists);
         }
@@ -83,18 +83,17 @@ impl Browser {
         } = named;
         let here = self.state.tab(tab).is_some_and(|t| t.location() == &folder);
         match result {
-            Ok(()) => {
-                if here {
-                    self.focus_after_load.insert(tab, name);
-                }
-                let effects = list_active_tabs(&mut self.state);
-                self.run(effects);
+            Ok(()) if here => {
+                self.reveal_name(tab, &name);
+                self.focus_after_load.insert(tab, name);
             }
             Err(error) if here => {
-                self.errors.insert(tab, error);
+                self.late_errors.insert(tab, error);
             }
-            Err(_) => {}
+            _ => {}
         }
+        let effects = list_active_tabs(&mut self.state);
+        self.run(effects);
         true
     }
 
@@ -175,9 +174,14 @@ fn rename_case(ops: &dyn ProviderOps, from: &Location, to: &Location) -> Result<
         return ops.rename(from, to);
     };
     ops.rename(from, &step)?;
-    ops.rename(&step, to).inspect_err(|_| {
-        let _ = ops.rename(&step, from);
-    })
+    ops.rename(&step, to)
+        .map_err(|error| match ops.rename(&step, from) {
+            Ok(()) => error,
+            Err(_) => FsError {
+                location: Some(step.clone()),
+                ..error
+            },
+        })
 }
 
 #[cfg(test)]

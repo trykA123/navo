@@ -50,3 +50,17 @@ fn every_error_reads_as_a_sentence() {
         "A name cannot contain ?"
     );
 }
+
+#[test]
+fn superscript_ports_and_console_names_are_reserved() {
+    for name in ["COM¹", "lpt³.txt", "CONIN$", "conout$", "CON .txt"] {
+        assert_eq!(check_name(name), Err(NameError::Reserved), "{name}");
+    }
+}
+
+#[test]
+fn a_name_longer_than_windows_allows_is_refused() {
+    assert_eq!(check_name(&"a".repeat(255)), Ok(()));
+    assert_eq!(check_name(&"a".repeat(256)), Err(NameError::TooLong));
+    assert_eq!(check_name(&"😀".repeat(128)), Err(NameError::TooLong));
+}

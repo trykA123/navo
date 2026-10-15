@@ -61,6 +61,7 @@ pub struct Browser {
     wake: Waker,
     details: HashMap<TabId, Rc<[FsEntry]>>,
     errors: HashMap<TabId, FsError>,
+    late_errors: HashMap<TabId, FsError>,
     focus_after_load: HashMap<TabId, String>,
     in_flight: usize,
     save_requested: bool,
@@ -93,6 +94,7 @@ impl Browser {
             wake,
             details: HashMap::new(),
             errors: HashMap::new(),
+            late_errors: HashMap::new(),
             focus_after_load: HashMap::new(),
             in_flight: 0,
             save_requested: false,
@@ -343,7 +345,10 @@ impl Browser {
         }
         let listing = match result {
             Ok(snapshot) => {
-                self.errors.remove(&tab);
+                match self.late_errors.remove(&tab) {
+                    Some(error) => self.errors.insert(tab, error),
+                    None => self.errors.remove(&tab),
+                };
                 let full = filter::Full {
                     listing: snapshot.listing,
                     details: snapshot.details.into(),

@@ -75,6 +75,15 @@ impl Browser {
         (shown.listing, shown.details)
     }
 
+    pub(super) fn reveal_name(&mut self, tab: TabId, name: &str) {
+        let hidden = self.filters.get(&tab).is_some_and(|filter| {
+            Pattern::parse(&format!("{}*", filter.text)).is_ok_and(|p| !p.matches(name))
+        });
+        if hidden {
+            self.filters.remove(&tab);
+        }
+    }
+
     pub(super) fn drop_stale_filters(&mut self) {
         let state = &self.state;
         self.filters.retain(|tab, filter| {

@@ -10,10 +10,16 @@ pub enum NameError {
     Trailing,
     #[error("Windows reserves this name.")]
     Reserved,
+    #[error("The name is too long.")]
+    TooLong,
 }
 
 const FORBIDDEN: [char; 9] = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-const DEVICES: [&str; 4] = ["con", "prn", "aux", "nul"];
+const DEVICES: [&str; 6] = ["con", "prn", "aux", "nul", "conin$", "conout$"];
+const PORT_DIGITS: [char; 13] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '¹', '²', '³',
+];
+const MAX_UTF16: usize = 255;
 
 pub fn check_name(name: &str) -> Result<(), NameError> {
     if name.trim().is_empty() {
@@ -34,17 +40,27 @@ pub fn check_name(name: &str) -> Result<(), NameError> {
     if is_device(name) {
         return Err(NameError::Reserved);
     }
+    if name.encode_utf16().count() > MAX_UTF16 {
+        return Err(NameError::TooLong);
+    }
     Ok(())
 }
 
 fn is_device(name: &str) -> bool {
-    let stem = name.split('.').next().unwrap_or(name).to_lowercase();
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or(name)
+        .trim_end()
+        .to_lowercase();
     if DEVICES.contains(&stem.as_str()) {
         return true;
     }
     let numbered = |prefix: &str| {
-        stem.strip_prefix(prefix)
-            .is_some_and(|digit| digit.len() == 1 && digit.chars().all(|c| c.is_ascii_digit()))
+        stem.strip_prefix(prefix).is_some_and(|rest| {
+            let mut chars = rest.chars();
+            matches!((chars.next(), chars.next()), (Some(digit), None) if PORT_DIGITS.contains(&digit))
+        })
     };
     numbered("com") || numbered("lpt")
 }

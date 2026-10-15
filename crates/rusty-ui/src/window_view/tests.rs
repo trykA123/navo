@@ -313,3 +313,15 @@ fn the_rename_selection_stops_before_the_extension() {
     assert_eq!(stem_end(".gitignore"), 10);
     assert_eq!(stem_end("Makefile"), 8);
 }
+
+#[gpui_kit::test]
+fn letters_do_not_filter_while_a_prompt_is_open(cx: &mut TestAppContext) {
+    use crate::file_list::FilterEdit;
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "f7");
+    view.update(cx, |view, _| view.filter(FilterEdit::Push('d')));
+    let tab = view.read_with(cx, |view, _| view.browser.state().active_tab().id());
+    assert!(view.read_with(cx, |view, _| view.browser.filter_text(tab).is_none()));
+}

@@ -144,3 +144,103 @@ fn every_problem_reads_as_a_sentence() {
         "Type a name."
     );
 }
+
+fn names(browser: &Browser) -> Vec<String> {
+    browser
+        .state()
+        .active_tab()
+        .listing()
+        .map(|l| l.entries().iter().map(|e| e.name.clone()).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_new_name_outside_the_filter_drops_the_filter_and_is_shown() {
+    let fs = fake();
+    fs.add_file("home/apple.txt", 1);
+    let mut browser = browser(&fs);
+    browser.filter_push('a');
+    assert_eq!(browser.rename("a.txt", "zebra.txt"), Ok(()));
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    assert_eq!(browser.filter_text(tab), None);
+    assert_eq!(cursor_name(&browser).as_deref(), Some("zebra.txt"));
+}
+
+#[test]
+fn a_new_name_inside_the_filter_keeps_it() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser.filter_push('a');
+    assert_eq!(browser.rename("a.txt", "a2.txt"), Ok(()));
+    settle(&mut browser);
+    assert_eq!(names(&browser), ["a2.txt"]);
+}
+
+#[test]
+fn a_name_hidden_by_the_filter_still_counts_as_taken() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser.filter_push('a');
+    assert_eq!(browser.rename("a.txt", "b.txt"), Err(NameProblem::Exists));
+}
+
+#[test]
+fn a_case_only_rename_that_cannot_finish_puts_the_name_back() {
+    use rusty_core::FsErrorKind;
+    use rusty_fs::{FakeOp, Fault};
+    let fs = fake();
+    let mut browser = browser(&fs);
+    let step = "home/a.txt.ferrite-rename";
+    fs.fault(
+        step,
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    assert_eq!(browser.rename("a.txt", "A.txt"), Ok(()));
+    settle(&mut browser);
+    assert!(exists(&fs, "home/a.txt"));
+    assert!(!exists(&fs, step));
+    let tab = browser.state().active_tab().id();
+    assert!(browser.error(tab).is_some());
+}
+
+#[test]
+fn a_stranded_case_step_is_listed_and_named_in_the_error() {
+    use rusty_core::FsErrorKind;
+    use rusty_fs::{FakeOp, Fault};
+    let fs = fake();
+    let mut browser = browser(&fs);
+    let step = "home/a.txt.ferrite-rename";
+    fs.fault(
+        step,
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    fs.fault(
+        step,
+        FakeOp::Rename,
+        2,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    assert_eq!(browser.rename("a.txt", "A.txt"), Ok(()));
+    settle(&mut browser);
+    assert!(exists(&fs, step));
+    assert!(names(&browser).contains(&"a.txt.ferrite-rename".to_owned()));
+    let tab = browser.state().active_tab().id();
+    let location = browser.error(tab).and_then(|e| e.location.clone());
+    assert_eq!(location, Some(fs.location(step)));
+}
+
+#[test]
+fn the_same_name_closes_even_when_the_old_name_breaks_the_rules() {
+    let fs = fake();
+    fs.add_file("home/notes.", 1);
+    let mut browser = browser(&fs);
+    assert_eq!(
+        browser.rename("notes.", "notes."),
+        Err(NameProblem::Unchanged)
+    );
+}
