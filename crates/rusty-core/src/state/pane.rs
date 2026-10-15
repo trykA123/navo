@@ -46,6 +46,26 @@ impl Pane {
         self.tabs.iter_mut().find(|t| t.id() == id)
     }
 
+    pub(crate) fn restore(
+        id: PaneId,
+        tabs: Vec<Tab>,
+        active: usize,
+        page_rows: u64,
+    ) -> Result<Self, String> {
+        if tabs.is_empty() {
+            return Err(format!("pane {} has no tabs", id.get()));
+        }
+        if active >= tabs.len() {
+            return Err(format!("pane {} has no tab at index {active}", id.get()));
+        }
+        Ok(Self {
+            id,
+            tabs,
+            active,
+            page_rows: page_rows.max(1),
+        })
+    }
+
     pub(crate) fn new(id: PaneId, first: Tab) -> Self {
         Self {
             id,

@@ -29,6 +29,7 @@ pub(crate) fn write_atomic_with(
     bytes: &[u8],
     mut hook: impl FnMut(Stage) -> io::Result<()>,
 ) -> io::Result<()> {
+    let path = &resolve_symlink(path);
     if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
         return Err(io::Error::new(
             io::ErrorKind::IsADirectory,
@@ -56,7 +57,7 @@ fn replace(
     drop(file);
     hook(Stage::TempSynced)?;
     if fs::symlink_metadata(path).is_ok() {
-        make_backup(path)?;
+        make_backup(path);
         hook(Stage::BackupMade)?;
     }
     fs::rename(temp, path)?;
@@ -64,16 +65,18 @@ fn replace(
     hook(Stage::Replaced)
 }
 
-fn make_backup(path: &Path) -> io::Result<()> {
-    let backup = backup_path(path);
-    match fs::remove_file(&backup) {
-        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
-        _ => {}
+fn make_backup(path: &Path) {
+    let staged = temp_path(path);
+    let linked = fs::hard_link(path, &staged).or_else(|_| fs::copy(path, &staged).map(|_| ()));
+    let _ = linked.and_then(|()| fs::rename(&staged, backup_path(path)));
+    let _ = fs::remove_file(&staged);
+}
+
+fn resolve_symlink(path: &Path) -> PathBuf {
+    match fs::read_link(path) {
+        Ok(target) => folder_of(path).join(target),
+        Err(_) => path.to_owned(),
     }
-    if fs::hard_link(path, &backup).is_err() {
-        fs::copy(path, &backup)?;
-    }
-    Ok(())
 }
 
 fn temp_path(path: &Path) -> PathBuf {
