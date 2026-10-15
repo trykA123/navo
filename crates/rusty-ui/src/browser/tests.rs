@@ -88,12 +88,18 @@ fn opening_a_folder_row_enters_it() {
 }
 
 #[test]
-fn opening_a_file_row_does_nothing() {
+fn opening_a_file_row_launches_it_and_stays() {
     let fs = fake();
+    let launched = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = Arc::clone(&launched);
     let mut browser = browser_at(&fs, "home");
+    browser.set_launcher(Arc::new(move |location: &Location| {
+        seen.lock().unwrap().push(location.clone());
+    }));
     settle(&mut browser);
-    assert!(!browser.open_row(2));
+    assert!(browser.open_row(2));
     assert_eq!(here(&browser), fs.location("home").as_str());
+    assert_eq!(*launched.lock().unwrap(), [fs.location("home/a.txt")]);
 }
 
 #[test]

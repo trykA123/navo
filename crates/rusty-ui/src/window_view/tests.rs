@@ -57,6 +57,7 @@ fn open_with(
         on_save: Rc::new(move |_| saves.set(saves.get() + 1)),
         mode: Mode::Light,
         operations: Operations::unlogged(),
+        launcher: Arc::new(|_| {}),
     };
     let handle = cx.update(|cx| {
         gpui_kit::init(cx);

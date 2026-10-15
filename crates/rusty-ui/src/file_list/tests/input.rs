@@ -88,7 +88,7 @@ fn enter_opens_a_folder(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn enter_on_a_file_sends_nothing(cx: &mut TestAppContext) {
+fn enter_on_a_file_opens_it(cx: &mut TestAppContext) {
     let mut on_file = props(sample_rows());
     on_file.view = ViewState {
         cursor: 2,
@@ -97,8 +97,18 @@ fn enter_on_a_file_sends_nothing(cx: &mut TestAppContext) {
     let (window, harness) = open_list(cx, on_file);
     cx.update_window(window, |_, window, cx| window.press("enter", cx))
         .expect("window");
-    assert_eq!(actions(&harness, cx), []);
-    assert_eq!(commands(&harness, cx), []);
+    assert_eq!(actions(&harness, cx), [FileListAction::Open(2)]);
+}
+
+#[gpui_kit::test]
+fn a_double_click_moves_the_cursor_and_opens_the_row(cx: &mut TestAppContext) {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    cx.update_window(window, |_, window, cx| {
+        window.within("left").double_click(("row", 3usize), cx);
+    })
+    .expect("window");
+    assert_eq!(actions(&harness, cx), [FileListAction::Open(3)]);
+    assert!(commands(&harness, cx).contains(&cursor(CursorMove::Row(3))));
 }
 
 #[gpui_kit::test]

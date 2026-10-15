@@ -11,7 +11,7 @@ use gpui_kit::{FocusHandle, Subscription, WindowAppearance};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
-use crate::browser::{Browser, Operations, Waker};
+use crate::browser::{Browser, Launcher, Operations, Waker};
 use crate::fkey_bar::FKeyBar;
 use crate::prelude::*;
 use crate::primitives::{Splitter, SplitterState};
@@ -28,6 +28,7 @@ pub struct StartOptions {
     pub on_save: SaveSession,
     pub mode: Mode,
     pub operations: Operations,
+    pub launcher: Launcher,
 }
 
 pub fn run(options: StartOptions) {
@@ -69,6 +70,7 @@ impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
         browser.set_operations(options.operations);
+        browser.set_launcher(options.launcher);
         browser.start();
         let view = Self {
             browser,

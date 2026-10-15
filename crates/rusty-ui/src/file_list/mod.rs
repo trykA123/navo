@@ -15,7 +15,7 @@ use gpui_kit::{
     ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, Styled, Window, div,
 };
 use rusty_core::{Command, Selection, ViewState};
-use rusty_fs::{EntryKind, FsEntry};
+use rusty_fs::FsEntry;
 
 pub use keys::bind_keys;
 
@@ -152,12 +152,7 @@ impl ListContext {
 
     fn open_cursor(&self, window: &mut Window, cx: &mut App) {
         let cursor = self.props.view.cursor;
-        let is_openable = self
-            .props
-            .rows
-            .get(row_index(cursor))
-            .is_some_and(|entry| entry.kind != EntryKind::File);
-        if is_openable {
+        if self.props.rows.get(row_index(cursor)).is_some() {
             self.act(FileListAction::Open(cursor), window, cx);
         }
     }
@@ -189,8 +184,11 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
     let left = ctx.clone();
     let right = ctx.clone();
     let element = row::cells(&look)
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+        .on_mouse_down(MouseButton::Left, move |event, window, cx| {
             left.click(row, window, cx);
+            if event.click_count >= 2 {
+                left.act(FileListAction::Open(row), window, cx);
+            }
         })
         .on_mouse_down(MouseButton::Right, move |_, window, cx| {
             right.right_click(row, window, cx);

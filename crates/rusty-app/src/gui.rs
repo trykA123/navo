@@ -9,8 +9,8 @@ use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
 use rusty_ui::window_view::{StartOptions, run};
 
-use crate::jobs;
 use crate::startup::{home_location, initial_state, save};
+use crate::{jobs, launch};
 
 pub fn open() {
     let dirs = StoreDirs::detect();
@@ -35,6 +35,7 @@ pub fn open() {
         on_save,
         mode: Mode::Light,
         operations,
+        launcher: launch::launcher(),
     });
 }
 

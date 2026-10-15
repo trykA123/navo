@@ -16,6 +16,7 @@ use operate::JobUpdate;
 pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PendingOp};
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
+pub type Launcher = Arc<dyn Fn(&Location) + Send + Sync>;
 
 struct Loaded {
     tab: TabId,
@@ -65,6 +66,7 @@ pub struct Browser {
     pending: Option<PendingOp>,
     jobs: Vec<JobView>,
     next_op: u64,
+    launcher: Launcher,
 }
 
 impl Browser {
@@ -93,6 +95,7 @@ impl Browser {
             pending: None,
             jobs: Vec::new(),
             next_op: 0,
+            launcher: Arc::new(|_| {}),
         }
     }
 
@@ -121,13 +124,18 @@ impl Browser {
             .ok()
             .and_then(|index| self.details.get(&tab.id())?.get(index).cloned())
             .is_some_and(|detail| detail.kind == EntryKind::Link);
-        if !entry.is_folder && !is_link {
-            return false;
-        }
         let Ok(location) = tab.location().join(&ProviderPath::from_text(&entry.name)) else {
             return false;
         };
+        if !entry.is_folder && !is_link {
+            (self.launcher)(&location);
+            return true;
+        }
         self.command(&Command::PaneNavigate { location }).is_ok()
+    }
+
+    pub fn set_launcher(&mut self, launcher: Launcher) {
+        self.launcher = launcher;
     }
 
     pub fn go_up(&mut self) -> bool {

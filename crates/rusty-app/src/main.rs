@@ -10,6 +10,7 @@ mod console;
 mod diag;
 mod gui;
 mod jobs;
+mod launch;
 mod startup;
 #[cfg(windows)]
 mod windows_memory;
