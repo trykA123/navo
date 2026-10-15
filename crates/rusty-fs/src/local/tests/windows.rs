@@ -76,3 +76,15 @@ fn the_drive_root_is_a_folder_named_by_its_whole_path() {
         (ProviderPath::from_text(r"C:\"), EntryKind::Folder)
     );
 }
+
+#[test]
+fn recycle_moves_a_file_out_of_its_folder() {
+    use crate::ProviderOps;
+    let (dir, root) = temp();
+    write_file(dir.path(), "recycle-me.txt", 3);
+    let location = root
+        .join(&ProviderPath::from_text("recycle-me.txt"))
+        .unwrap();
+    LocalFs::new().recycle(&location).unwrap();
+    assert!(!dir.path().join("recycle-me.txt").exists());
+}

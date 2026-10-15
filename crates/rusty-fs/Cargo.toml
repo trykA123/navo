@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 rusty-core = { path = "../rusty-core" }
 thiserror = "2.0.21"
+trash = "5.2.9"
 
 [dev-dependencies]
 proptest = "1.12.0"

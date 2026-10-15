@@ -6,6 +6,7 @@ use unix as platform;
 mod windows;
 #[cfg(windows)]
 use windows as platform;
+mod ops;
 #[cfg(any(windows, test))]
 mod verbatim;
 
