@@ -48,7 +48,8 @@ pub(super) fn icon(kind: EntryKind, extension: &str, colors: &Colors) -> (IconNa
 
 pub(super) fn size_text(entry: &FsEntry) -> String {
     match entry.kind {
-        EntryKind::Folder => "<DIR>".to_owned(),
+        EntryKind::Folder if entry.size == 0 => "<DIR>".to_owned(),
+        EntryKind::Folder => format::bytes(entry.size),
         EntryKind::Link => "<LNK>".to_owned(),
         EntryKind::File => format::bytes(entry.size),
     }

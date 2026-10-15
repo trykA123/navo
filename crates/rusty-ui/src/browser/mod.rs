@@ -9,7 +9,7 @@ use rusty_core::{
 };
 use rusty_fs::{
     EntryKind, FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, Provider,
-    load_folder, volume_of,
+    folder_size, load_folder, volume_of,
 };
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -21,13 +21,25 @@ struct Loaded {
     result: Result<FolderSnapshot, FsError>,
 }
 
+struct Measured {
+    tab: TabId,
+    folder: Location,
+    name: String,
+    bytes: u64,
+}
+
+enum Message {
+    Loaded(Loaded),
+    Measured(Measured),
+}
+
 pub struct Browser {
     state: AppState,
     provider: Arc<dyn Provider>,
     queue: IoQueue,
     owner: OwnerGuard,
-    sender: Sender<Loaded>,
-    receiver: Receiver<Loaded>,
+    sender: Sender<Message>,
+    receiver: Receiver<Message>,
     wake: Waker,
     details: HashMap<TabId, Rc<[FsEntry]>>,
     errors: HashMap<TabId, FsError>,
@@ -118,9 +130,12 @@ impl Browser {
 
     pub fn poll(&mut self) -> bool {
         let mut changed = false;
-        while let Ok(loaded) = self.receiver.try_recv() {
+        while let Ok(message) = self.receiver.try_recv() {
             self.in_flight = self.in_flight.saturating_sub(1);
-            changed |= self.accept(loaded);
+            changed |= match message {
+                Message::Loaded(loaded) => self.accept(loaded),
+                Message::Measured(measured) => self.accept_size(&measured),
+            };
         }
         changed
     }
@@ -166,7 +181,11 @@ impl Browser {
                     request,
                 } => self.list(tab, location, request),
                 Effect::SaveSession => self.save_requested = true,
-                Effect::MeasureFolder { .. } => {}
+                Effect::MeasureFolder {
+                    tab,
+                    location,
+                    name,
+                } => self.measure(tab, location, name),
             }
         }
     }
@@ -187,15 +206,70 @@ impl Browser {
             slot,
             Box::new(move |cancel| {
                 let result = load_folder(provider.as_ref(), &location, cancel);
-                let _ = sender.send(Loaded {
+                let _ = sender.send(Message::Loaded(Loaded {
                     tab,
                     location,
                     request,
                     result,
-                });
+                }));
                 wake();
             }),
         );
+    }
+
+    fn measure(&mut self, tab: TabId, folder: Location, name: String) {
+        let Ok(target) = folder.join(&ProviderPath::from_text(&name)) else {
+            return;
+        };
+        let (provider, sender, wake) = (
+            Arc::clone(&self.provider),
+            self.sender.clone(),
+            Arc::clone(&self.wake),
+        );
+        let slot = JobSlot {
+            volume: volume_of(&target),
+            priority: Priority::Visible,
+            owner: self.owner.id(),
+        };
+        self.in_flight += 1;
+        self.queue.submit(
+            slot,
+            Box::new(move |cancel| {
+                let bytes = folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes);
+                let _ = sender.send(Message::Measured(Measured {
+                    tab,
+                    folder,
+                    name,
+                    bytes,
+                }));
+                wake();
+            }),
+        );
+    }
+
+    fn accept_size(&mut self, measured: &Measured) -> bool {
+        let Some(tab) = self.state.tab(measured.tab) else {
+            return false;
+        };
+        if tab.location() != &measured.folder {
+            return false;
+        }
+        let Some(row) = tab
+            .listing()
+            .and_then(|l| l.entries().iter().position(|e| e.name == measured.name))
+        else {
+            return false;
+        };
+        let Some(details) = self.details.get(&measured.tab) else {
+            return false;
+        };
+        let mut rows = details.to_vec();
+        let Some(entry) = rows.get_mut(row) else {
+            return false;
+        };
+        entry.size = measured.bytes;
+        self.details.insert(measured.tab, rows.into());
+        true
     }
 
     fn accept(&mut self, loaded: Loaded) -> bool {

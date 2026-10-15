@@ -4,6 +4,7 @@ mod fake;
 pub mod hostile_names;
 mod io_queue;
 mod local;
+mod measure;
 mod provider;
 mod snapshot;
 
@@ -13,6 +14,7 @@ pub use io_queue::{
     VolumeKind, volume_of,
 };
 pub use local::LocalFs;
+pub use measure::{FolderSize, folder_size};
 pub use provider::{
     Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider,
 };

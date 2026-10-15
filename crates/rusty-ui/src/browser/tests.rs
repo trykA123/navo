@@ -276,3 +276,41 @@ fn opening_a_link_row_enters_it() {
     assert!(browser.open_row(3));
     assert_eq!(here(&browser), fs.location("home/aa-link").as_str());
 }
+
+#[test]
+fn marking_a_folder_measures_its_size() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    browser.command(&Command::SelectionToggle).unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    assert_eq!(browser.details(tab)[0].size, 7);
+}
+
+#[test]
+fn a_size_for_a_folder_left_behind_is_ignored() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    browser.command(&Command::SelectionToggle).unwrap();
+    let music = fs.location("home/music");
+    browser
+        .command(&Command::PaneNavigate { location: music })
+        .unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    assert!(browser.details(tab).is_empty());
+}
+
+#[test]
+fn a_folder_marked_then_unmarked_keeps_its_size() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    browser.command(&Command::SelectionToggle).unwrap();
+    browser.command(&Command::SelectionToggle).unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    assert_eq!(browser.details(tab)[0].size, 7);
+}
