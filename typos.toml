@@ -3,6 +3,10 @@ extend-exclude = [
     "target/",
     "design/prototype/fonts/",
     "design/screens/",
+    "spikes/gpui-b/vendor/",
     "*.png",
     "*.ttf",
 ]
+
+[default.extend-words]
+wdth = "wdth"
