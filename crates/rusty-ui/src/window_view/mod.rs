@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use futures::StreamExt;
 use futures::channel::mpsc;
-use gpui_kit::FocusHandle;
+use gpui_kit::{FocusHandle, Subscription, WindowAppearance};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::Provider;
 
@@ -51,6 +51,14 @@ pub struct FerriteWindow {
     focus: HashMap<PaneId, FocusHandle>,
     split: Entity<SplitterState>,
     on_save: SaveSession,
+    _appearance: Subscription,
+}
+
+fn mode_of(appearance: WindowAppearance) -> Mode {
+    match appearance {
+        WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
+        WindowAppearance::Light | WindowAppearance::VibrantLight => Mode::Light,
+    }
 }
 
 impl FerriteWindow {
@@ -72,7 +80,12 @@ impl FerriteWindow {
             focus: HashMap::new(),
             split: cx.new(|_| SplitterState::new(0.5)),
             on_save: options.on_save,
+            _appearance: cx.observe_window_appearance(window, |_, window, cx| {
+                tokens::apply(mode_of(window.appearance()), cx);
+                cx.notify();
+            }),
         };
+        tokens::apply(mode_of(window.appearance()), cx);
         Self::close_saves_and_quits(window, cx);
         cx.defer_in(window, |view, window, cx| view.focus_core_pane(window, cx));
         view
@@ -133,8 +146,14 @@ impl FerriteWindow {
         (self.on_save)(self.browser.state());
     }
 
-    fn title_bar() -> FerriteTitleBar {
-        FerriteTitleBar::new("Ferrite").header(HeaderSearch::new())
+    fn title_bar(cx: &mut Context<Self>) -> FerriteTitleBar {
+        let this = cx.weak_entity();
+        FerriteTitleBar::new("Ferrite")
+            .header(HeaderSearch::new())
+            .on_close(move |_, cx| {
+                let _ = this.update(cx, |view, _| view.save());
+                cx.quit();
+            })
     }
 
     fn close_saves_and_quits(window: &mut Window, cx: &mut Context<Self>) {
@@ -171,8 +190,11 @@ impl Render for FerriteWindow {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .child(Self::title_bar())
+            .child(Self::title_bar(cx))
             .child(div().flex().flex_1().min_h_0().child(body))
             .child(FKeyBar::new("fkeys", status::FKEYS))
     }
 }
+
+#[cfg(test)]
+mod tests;

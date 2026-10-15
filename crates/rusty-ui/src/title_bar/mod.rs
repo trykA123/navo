@@ -73,12 +73,6 @@ fn header_area(t: &Theme, header: Vec<AnyElement>) -> impl IntoElement {
 
 impl RenderOnce for FerriteTitleBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        if let Some(handler) = self.on_close.clone() {
-            window.on_window_should_close(cx, move |window, cx| {
-                handler(window, cx);
-                true
-            });
-        }
         let t = tokens::current(cx);
         TitleBar::new()
             .h(t.spacing.header_height)

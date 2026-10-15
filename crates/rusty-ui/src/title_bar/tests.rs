@@ -6,7 +6,7 @@ use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, Bounds, Context, IntoElement, ParentElement, Point, Render, Role, Styled,
-    TestAppContext, VisualTestContext, Window, WindowBounds, WindowOptions, div, px, size,
+    TestAppContext, Window, WindowBounds, WindowOptions, div, px, size,
 };
 
 use super::{FerriteTitleBar, HeaderSearch, window_options};
@@ -98,17 +98,6 @@ fn header_content_neither_moves_nor_zooms_the_window(cx: &mut TestAppContext) {
         assert!(window.find("title-bar-header").visible());
     })
     .expect("window");
-}
-
-#[gpui_kit::test]
-fn closing_the_window_runs_the_close_hook(cx: &mut TestAppContext) {
-    let closes = Rc::new(Cell::new(0));
-    let window = open(cx, closes.clone());
-    cx.update_window(window, |_, window, cx| window.render_frame(cx))
-        .expect("window");
-    let mut visual = VisualTestContext::from_window(window, cx);
-    assert!(visual.simulate_close());
-    assert_eq!(closes.get(), 1);
 }
 
 #[gpui_kit::test]
