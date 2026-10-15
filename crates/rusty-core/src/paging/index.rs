@@ -135,6 +135,9 @@ impl LineIndex {
         line: u64,
     ) -> Result<Option<u64>, String> {
         let wanted = line.saturating_sub(1);
+        if wanted > self.newlines {
+            return Ok(None);
+        }
         let at = self.starts.partition_point(|mark| mark.line <= wanted);
         let from = self
             .starts

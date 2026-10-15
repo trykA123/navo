@@ -120,8 +120,10 @@ fn line_count_includes_a_last_line_without_a_newline() {
 
 fn long_lines() -> impl Strategy<Value = Vec<u8>> {
     prop::collection::vec(
-        (0usize..3, 1usize..200_000).prop_map(|(kind, len)| match kind {
+        (0usize..4, 1usize..200_000).prop_map(|(kind, len)| match kind {
             0 => vec![b'y'; len % 300],
+            1 => "\u{e9}".repeat(len / 2).into_bytes(),
+            2 => "a\u{6f22}".repeat(len / 4).into_bytes(),
             _ => vec![b'z'; len],
         }),
         1..4,
@@ -153,4 +155,38 @@ proptest! {
         let last = *starts.last().unwrap();
         prop_assert_eq!(rows_up(src, last, bytes.len() as u64).unwrap(), 0);
     }
+}
+
+#[test]
+fn up_inside_a_long_line_of_wide_characters_moves_a_whole_row() {
+    let bytes = "\u{6f22}".repeat(100_000).into_bytes();
+    let src = bytes.as_slice();
+    let last = row_start_at(src, bytes.len() as u64).unwrap();
+    assert!(bytes.len() as u64 - last >= MAX_ROW - 3);
+    let up = previous_row(src, last).unwrap();
+    assert!(last - up >= MAX_ROW - 3);
+    assert_eq!(rows_down(src, up, 1).unwrap(), last);
+    assert!(last - rows_up(src, last, 30).unwrap() >= 30 * (MAX_ROW - 3));
+}
+
+#[test]
+fn a_tail_one_byte_over_a_row_is_cut() {
+    let bytes = vec![b'a'; 4097];
+    let row = row_at(bytes.as_slice(), 0).unwrap();
+    assert_eq!((row.end, row.next), (4096, 4096));
+}
+
+#[test]
+fn a_line_past_the_last_one_is_unknown_without_reading() {
+    let src = Counting {
+        bytes: vec![b'x'; 8 * 1024 * 1024],
+        read: Cell::new(0),
+    };
+    let mut index = LineIndex::new();
+    index.feed(&src.bytes[..6 * 1024 * 1024]);
+    assert_eq!(index.line_start(&src, 2).unwrap(), None);
+    index.feed(&src.bytes[6 * 1024 * 1024..]);
+    index.finish();
+    assert_eq!(index.line_start(&src, 2).unwrap(), None);
+    assert_eq!(src.read.get(), 0);
 }

@@ -3,7 +3,7 @@ mod index;
 use std::fs::File;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use rusty_core::paging::{ByteSource, LineIndex};
 
@@ -16,6 +16,7 @@ pub const CACHE_PAGES: usize = 32;
 pub const INDEX_PROGRESS_EVERY: u64 = 8 * 1024 * 1024;
 
 const PAGE: u64 = PAGE_SIZE as u64;
+const END_CHECK_EVERY: Duration = Duration::from_millis(250);
 
 struct Page {
     number: u64,
@@ -28,6 +29,7 @@ struct Cache {
     pages: Vec<Page>,
     reads: u64,
     changed: bool,
+    end_checked: Option<Instant>,
 }
 
 pub struct PagedFile {
@@ -50,6 +52,7 @@ impl PagedFile {
             pages: Vec::with_capacity(CACHE_PAGES),
             reads: 0,
             changed: false,
+            end_checked: None,
         };
         Ok(Self {
             file,
@@ -100,7 +103,13 @@ impl PagedFile {
     fn copy_from_page(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
         let mut cache = self.cache();
         if offset >= cache.len {
-            self.check_change(&mut cache);
+            let due = cache
+                .end_checked
+                .is_none_or(|checked| checked.elapsed() >= END_CHECK_EVERY);
+            if due {
+                cache.end_checked = Some(Instant::now());
+                self.check_change(&mut cache);
+            }
             if offset >= cache.len {
                 return Ok(0);
             }

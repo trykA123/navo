@@ -218,6 +218,8 @@ fn reading_past_the_end_notices_a_grown_file_whose_tail_is_cached() {
     let file = PagedFile::open(&path).unwrap();
     assert_eq!(read(&file, 0, 200), expected(0, 100));
     append(&path, b"new lines");
+    assert_eq!(read(&file, 100, 64), b"");
+    std::thread::sleep(Duration::from_millis(300));
     assert_eq!(read(&file, 100, 64), b"new lines");
     assert!(file.take_changed());
     assert_eq!(file.len(), 109);
