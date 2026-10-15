@@ -172,3 +172,59 @@ fn operations_act_on_the_shown_rows() {
     let sources = browser.pending().map(|p| p.sources.clone());
     assert_eq!(sources, Some(vec![fs.location("home/package-lock.json")]));
 }
+
+#[test]
+fn a_refresh_that_matches_nothing_drops_the_filter() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "pa");
+    fs.remove("home/package.json");
+    fs.remove("home/package-lock.json");
+    browser.command(&Command::PaneRefresh).unwrap();
+    settle(&mut browser);
+    assert_eq!(filter_text(&browser), None);
+    assert_eq!(names(&browser), ["prototype", "src", "app-icon.svg"]);
+}
+
+#[test]
+fn a_folder_that_fails_to_load_still_drops_the_filter() {
+    use rusty_core::FsErrorKind;
+    use rusty_fs::{FakeOp, Fault};
+    let fs = fake();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "s");
+    fs.fault(
+        "home/src",
+        FakeOp::List,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    browser
+        .command(&Command::PaneNavigate {
+            location: fs.location("home/src"),
+        })
+        .unwrap();
+    settle(&mut browser);
+    browser.command(&Command::PaneBack).unwrap();
+    settle(&mut browser);
+    assert_eq!(filter_text(&browser), None);
+    assert_eq!(names(&browser).len(), 5);
+}
+
+#[test]
+fn a_size_that_arrives_while_its_folder_is_hidden_is_kept() {
+    let fs = fake();
+    fs.add_file("home/prototype/big.bin", 9_000);
+    let mut browser = browser(&fs);
+    browser.command(&Command::SelectionToggle).unwrap();
+    typed(&mut browser, "pa");
+    settle(&mut browser);
+    browser.filter_clear();
+    let tab = browser.state().active_tab().id();
+    let prototype = browser
+        .details(tab)
+        .iter()
+        .find(|e| e.name.to_text() == "prototype")
+        .map(|e| e.size);
+    assert_eq!(prototype, Some(9_000));
+}

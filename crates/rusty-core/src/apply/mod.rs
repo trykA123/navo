@@ -98,8 +98,10 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
             location,
             listing,
         } => {
-            if let Some(tab) = state.tab_mut(tab) {
-                tab.replace_listing(&location, listing);
+            if let Some(found) = state.tab_mut(tab)
+                && found.replace_listing(&location, listing)
+            {
+                pane::reveal_tab(state, tab);
             }
         }
     }

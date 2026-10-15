@@ -112,6 +112,7 @@ impl Browser {
 
     pub fn command(&mut self, command: &Command) -> Result<(), CommandError> {
         let effects = apply(&mut self.state, command)?;
+        self.drop_stale_filters();
         self.run(effects);
         Ok(())
     }
@@ -294,12 +295,17 @@ impl Browser {
     }
 
     fn accept_size(&mut self, measured: &Measured) -> bool {
+        let here = self
+            .state
+            .tab(measured.tab)
+            .is_some_and(|tab| tab.location() == &measured.folder);
+        if !here {
+            return false;
+        }
+        self.remember_size(measured.tab, &measured.name, measured.bytes);
         let Some(tab) = self.state.tab(measured.tab) else {
             return false;
         };
-        if tab.location() != &measured.folder {
-            return false;
-        }
         let Some(row) = tab
             .listing()
             .and_then(|l| l.entries().iter().position(|e| e.name == measured.name))
@@ -315,7 +321,6 @@ impl Browser {
         };
         entry.size = measured.bytes;
         self.details.insert(measured.tab, rows.into());
-        self.remember_size(measured.tab, &measured.name, measured.bytes);
         true
     }
 

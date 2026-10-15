@@ -12,8 +12,8 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, Styled, Window,
-    div,
+    Keystroke, MouseButton, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
+    Styled, Window, div,
 };
 use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
@@ -176,18 +176,7 @@ impl ListContext {
     }
 
     fn type_key(&self, event: &KeyDownEvent, window: &mut Window, cx: &mut App) {
-        let modifiers = &event.keystroke.modifiers;
-        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
-            return;
-        }
-        let Some(text) = event.keystroke.key_char.as_deref() else {
-            return;
-        };
-        let mut chars = text.chars();
-        let (Some(ch), None) = (chars.next(), chars.next()) else {
-            return;
-        };
-        if !ch.is_control() && !ch.is_whitespace() {
+        if let Some(ch) = typed_char(&event.keystroke) {
             self.act(FileListAction::Filter(FilterEdit::Push(ch)), window, cx);
         }
     }
@@ -198,6 +187,20 @@ impl ListContext {
             self.act(FileListAction::Open(cursor), window, cx);
         }
     }
+}
+
+fn typed_char(keystroke: &Keystroke) -> Option<char> {
+    let modifiers = &keystroke.modifiers;
+    let alt_gr = modifiers.control && modifiers.alt;
+    let command = modifiers.control || modifiers.alt;
+    if modifiers.platform || modifiers.function || (command && !alt_gr) {
+        return None;
+    }
+    let mut chars = keystroke.key_char.as_deref()?.chars();
+    let (Some(ch), None) = (chars.next(), chars.next()) else {
+        return None;
+    };
+    (!ch.is_control() && !ch.is_whitespace()).then_some(ch)
 }
 
 fn row_semantics(props: &FileListProps, index: usize) -> RowSemantics {

@@ -62,17 +62,26 @@ impl Browser {
     ) -> (Listing, Rc<[FsEntry]>) {
         let shown = match self.filters.get(&tab) {
             Some(filter) if &filter.location == location => shown(&full, &filter.text),
-            _ => {
-                self.filters.remove(&tab);
-                None
-            }
+            _ => None,
         };
+        if shown.is_none() {
+            self.filters.remove(&tab);
+        }
         let shown = shown.unwrap_or_else(|| Shown {
             listing: full.listing.clone(),
             details: full.details.clone(),
         });
         self.full.insert(tab, full);
         (shown.listing, shown.details)
+    }
+
+    pub(super) fn drop_stale_filters(&mut self) {
+        let state = &self.state;
+        self.filters.retain(|tab, filter| {
+            state
+                .tab(*tab)
+                .is_some_and(|tab| tab.location() == &filter.location)
+        });
     }
 
     pub(super) fn remember_size(&mut self, tab: TabId, name: &str, bytes: u64) {

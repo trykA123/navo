@@ -136,3 +136,27 @@ fn a_measured_folder_shows_its_size_instead_of_dir() {
     folder.size = 1_234_567;
     assert_eq!(kind::size_text(&folder), "1.2 MB");
 }
+
+fn keystroke(control: bool, alt: bool, key_char: Option<&str>) -> gpui_kit::Keystroke {
+    gpui_kit::Keystroke {
+        modifiers: gpui_kit::Modifiers {
+            control,
+            alt,
+            ..gpui_kit::Modifiers::default()
+        },
+        key: "s".to_owned(),
+        key_char: key_char.map(str::to_owned),
+    }
+}
+
+#[test]
+fn alt_gr_letters_reach_the_filter_but_shortcuts_do_not() {
+    use super::super::typed_char;
+    assert_eq!(typed_char(&keystroke(true, true, Some("ș"))), Some('ș'));
+    assert_eq!(typed_char(&keystroke(false, false, Some("s"))), Some('s'));
+    assert_eq!(typed_char(&keystroke(true, false, Some("s"))), None);
+    assert_eq!(typed_char(&keystroke(false, true, Some("s"))), None);
+    assert_eq!(typed_char(&keystroke(true, true, None)), None);
+    assert_eq!(typed_char(&keystroke(false, false, Some("ab"))), None);
+    assert_eq!(typed_char(&keystroke(false, false, Some("\t"))), None);
+}

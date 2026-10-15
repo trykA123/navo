@@ -1,5 +1,5 @@
 use super::{CommandError, Effect, last_row, list_active};
-use crate::{AppState, CursorMove, Location, PaneId};
+use crate::{AppState, CursorMove, Location, PaneId, TabId};
 
 pub(super) fn open_tab(state: &mut AppState, location: Option<&Location>) -> Vec<Effect> {
     let location = location
@@ -60,6 +60,22 @@ pub(super) fn cursor_move(
     state.active_tab_mut().set_cursor(row.min(last));
     state.focused_pane_mut().reveal_cursor();
     Ok(Vec::new())
+}
+
+pub(super) fn reveal_tab(state: &mut AppState, tab: TabId) {
+    let panes: Vec<PaneId> = state
+        .window_ids()
+        .into_iter()
+        .filter_map(|window| state.window(window))
+        .flat_map(|window| window.panes())
+        .filter(|pane| pane.active().id() == tab)
+        .map(|pane| pane.id())
+        .collect();
+    for pane in panes {
+        if let Some(pane) = state.pane_mut(pane) {
+            pane.reveal_cursor();
+        }
+    }
 }
 
 pub(super) fn page_rows_changed(state: &mut AppState, pane: PaneId, rows: u64) {

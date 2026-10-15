@@ -79,3 +79,22 @@ fn a_filtered_listing_while_a_load_is_pending_is_ignored() {
     filter(&mut state, "/work", only(&["a.rs"]));
     assert_eq!(names(&state).len(), 5);
 }
+
+#[test]
+fn widening_the_filter_keeps_the_cursor_on_screen() {
+    let all = super::files(500);
+    let mut state = at_work(all.clone());
+    super::page_rows(&mut state, 20);
+    let picked = Listing::new(
+        [10_u64, 300, 450]
+            .iter()
+            .filter_map(|row| all.get(*row).cloned())
+            .collect(),
+    );
+    filter(&mut state, "/work", picked);
+    move_cursor(&mut state, CursorMove::Row(2));
+    filter(&mut state, "/work", all);
+    let view = state.active_tab().view();
+    assert_eq!(view.cursor, 450);
+    assert!(view.scroll <= 450 && 450 < view.scroll + 20);
+}
