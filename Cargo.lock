@@ -6164,7 +6164,10 @@ version = "0.0.1"
 name = "rusty-ui"
 version = "0.0.1"
 dependencies = [
+ "futures",
  "gpui-kit",
+ "rusty-core",
+ "rusty-fs",
 ]
 
 [[package]]

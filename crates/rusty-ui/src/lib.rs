@@ -2,6 +2,7 @@
 
 mod app;
 mod assets;
+pub mod browser;
 pub mod prelude;
 pub mod primitives;
 pub mod title_bar;

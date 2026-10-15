@@ -5,7 +5,6 @@
     reason = "a command-line entry point reports to the terminal"
 )]
 
-mod browse;
 mod cli;
 mod console;
 mod diag;
