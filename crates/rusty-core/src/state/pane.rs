@@ -75,6 +75,17 @@ impl Pane {
         }
     }
 
+    pub(crate) fn reveal_cursor(&mut self) {
+        let page = self.page_rows.max(1);
+        let tab = self.active_mut();
+        let (cursor, scroll) = (tab.view().cursor, tab.view().scroll);
+        if cursor < scroll {
+            tab.set_scroll(cursor);
+        } else if cursor >= scroll.saturating_add(page) {
+            tab.set_scroll(cursor + 1 - page);
+        }
+    }
+
     pub(crate) fn active_mut(&mut self) -> &mut Tab {
         &mut self.tabs[self.active]
     }

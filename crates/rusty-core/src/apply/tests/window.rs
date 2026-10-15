@@ -240,3 +240,35 @@ fn loading_keeps_working_after_window_commands() {
     load(&mut state, files(2));
     assert_eq!(state.active_tab().listing().map(|l| l.len()), Some(2));
 }
+
+#[test]
+fn holding_insert_scrolls_the_cursor_into_view() {
+    let mut state = at_work(files(100));
+    page_rows(&mut state, 10);
+    for _ in 0..15 {
+        run(&mut state, Command::SelectionToggleDown);
+    }
+    assert_eq!(scrolled_to(&state), 6);
+}
+
+#[test]
+fn a_range_selection_scrolls_its_end_into_view() {
+    let mut state = at_work(files(100));
+    page_rows(&mut state, 10);
+    run(&mut state, Command::SelectionRange { to: 40 });
+    assert_eq!(scrolled_to(&state), 31);
+}
+
+#[test]
+fn shrinking_the_page_keeps_the_cursor_visible() {
+    let mut state = at_work(files(100));
+    page_rows(&mut state, 30);
+    run(
+        &mut state,
+        Command::PaneCursorMove {
+            to: CursorMove::Row(25),
+        },
+    );
+    page_rows(&mut state, 10);
+    assert_eq!(scrolled_to(&state), 16);
+}
