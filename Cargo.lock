@@ -422,6 +422,10 @@ version = "0.0.1"
 [[package]]
 name = "rusty-store"
 version = "0.0.1"
+dependencies = [
+ "proptest",
+ "tempfile",
+]
 
 [[package]]
 name = "rusty-term"
