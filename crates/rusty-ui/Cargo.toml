@@ -8,5 +8,8 @@ publish.workspace = true
 [dependencies]
 gpui-kit = "=0.7.3"
 
+[dev-dependencies]
+gpui-kit = { version = "=0.7.3", features = ["test-support"] }
+
 [lints]
 workspace = true

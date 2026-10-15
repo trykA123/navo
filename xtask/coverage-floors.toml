@@ -2,4 +2,5 @@
 rusty-core = 90
 rusty-fs = 80
 rusty-store = 85
+rusty-ui = 60
 xtask = 85
