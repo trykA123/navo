@@ -1,4 +1,7 @@
-use encoding_rs::{Encoding, UTF_8};
+mod detect;
+mod encode;
+
+use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DetectedBy {
@@ -30,7 +33,19 @@ impl Default for TextEncoding {
 impl TextEncoding {
     #[must_use]
     pub fn label(&self) -> String {
-        self.encoding.name().to_owned()
+        let name = match self.encoding {
+            e if e == UTF_16LE => "UTF-16 LE".to_owned(),
+            e if e == UTF_16BE => "UTF-16 BE".to_owned(),
+            e => e
+                .name()
+                .strip_prefix("windows-")
+                .map_or_else(|| e.name().to_owned(), |code| format!("Windows-{code}")),
+        };
+        if self.bom {
+            format!("{name} BOM")
+        } else {
+            name
+        }
     }
 }
 
@@ -73,35 +88,48 @@ pub const PICKER: &[&str] = &[
 ];
 
 #[must_use]
-pub fn detect(_bytes: &[u8], _fallback: &'static Encoding) -> TextEncoding {
-    TextEncoding {
-        encoding: UTF_8,
-        bom: false,
-        by: DetectedBy::Fallback,
-    }
+pub fn detect(bytes: &[u8], fallback: &'static Encoding) -> TextEncoding {
+    detect::detect(bytes, fallback)
 }
 
 #[must_use]
 pub fn decode(bytes: &[u8], fallback: &'static Encoding) -> Decoded {
-    Decoded {
-        text: String::from_utf8_lossy(bytes).into_owned(),
-        encoding: detect(bytes, fallback),
-        lossless: true,
-    }
+    let encoding = detect(bytes, fallback);
+    decode_with(bytes, encoding)
 }
 
 #[must_use]
-pub fn decode_as(bytes: &[u8], _encoding: &'static Encoding) -> Decoded {
-    decode(bytes, UTF_8)
+pub fn decode_as(bytes: &[u8], encoding: &'static Encoding) -> Decoded {
+    let bom = detect::bom(bytes).is_some_and(|(found, _)| found == encoding);
+    decode_with(bytes, detect::found(encoding, bom, DetectedBy::Chosen))
 }
 
-pub fn encode(text: &str, _encoding: &TextEncoding) -> Result<Vec<u8>, EncodeError> {
-    Ok(text.as_bytes().to_vec())
+fn decode_with(bytes: &[u8], encoding: TextEncoding) -> Decoded {
+    let skip = if encoding.bom {
+        detect::bom(bytes).map_or(0, |(_, len)| len)
+    } else {
+        0
+    };
+    let body = &bytes[skip..];
+    let (text, malformed) = encoding.encoding.decode_without_bom_handling(body);
+    let text = text.into_owned();
+    let lossless = !malformed && encode(&text, &encoding).is_ok_and(|again| again == bytes);
+    Decoded {
+        text,
+        encoding,
+        lossless,
+    }
+}
+
+pub fn encode(text: &str, encoding: &TextEncoding) -> Result<Vec<u8>, EncodeError> {
+    encode::encode(text, encoding)
 }
 
 #[must_use]
 pub fn looks_binary(head: &[u8]) -> bool {
-    head.contains(&0)
+    let utf16 = detect::bom(head).is_some_and(|(found, _)| found == UTF_16LE || found == UTF_16BE)
+        || detect::utf16_by_pattern(head).is_some();
+    !utf16 && head.contains(&0)
 }
 
 #[cfg(test)]

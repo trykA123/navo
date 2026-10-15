@@ -4,10 +4,11 @@ use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
 use rusty_core::Location;
-use rusty_core::encoding::TextEncoding;
+use rusty_core::encoding::{decode, encode, looks_binary};
 use rusty_store::replace_atomic;
 use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
 
+mod code_page;
 mod paged;
 mod summary;
 
@@ -53,26 +54,17 @@ pub fn read(location: &Location) -> Result<FileText, String> {
         return Err("Too large to open here (over 16 MB). F4 opens it in your editor.".to_owned());
     }
     let bytes = fs::read(&path).map_err(|error| format!("Cannot open it: {error}"))?;
-    if bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
-        return Err(
-            "UTF-16 text cannot be opened here yet. F4 opens it in your editor.".to_owned(),
-        );
-    }
-    if bytes.iter().take(SNIFF).any(|byte| *byte == 0) {
+    if looks_binary(&bytes[..bytes.len().min(SNIFF)]) {
         return Err("This looks like a binary file. F4 opens it in your editor.".to_owned());
     }
-    let crlf = mostly_crlf(&bytes);
     let stamp = stamp_of(&path);
-    let (text, read_only) = match String::from_utf8(bytes) {
-        Ok(text) => (text, false),
-        Err(error) => (String::from_utf8_lossy(error.as_bytes()).into_owned(), true),
-    };
+    let decoded = decode(&bytes, code_page::ansi());
     Ok(FileText {
-        text,
-        read_only,
-        crlf,
+        crlf: mostly_crlf(decoded.text.as_bytes()),
+        read_only: !decoded.lossless,
+        text: decoded.text,
         stamp,
-        encoding: TextEncoding::default(),
+        encoding: decoded.encoding,
     })
 }
 
@@ -99,7 +91,9 @@ pub fn write(location: &Location, save: &Save<'_>) -> Result<Option<FileStamp>, 
         return Err(SaveError::Changed);
     }
     let text = line_endings(save.text, save.crlf);
-    replace_atomic(&path, text.as_bytes())
+    let bytes = encode(&text, &save.encoding)
+        .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
+    replace_atomic(&path, &bytes)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
     Ok(stamp_of(&path))
 }

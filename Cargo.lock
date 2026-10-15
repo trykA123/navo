@@ -6124,6 +6124,7 @@ name = "rusty-app"
 version = "0.0.1"
 dependencies = [
  "embed-resource",
+ "encoding_rs",
  "rusty-core",
  "rusty-diag",
  "rusty-fs",
