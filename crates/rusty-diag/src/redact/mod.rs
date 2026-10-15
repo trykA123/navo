@@ -1,27 +1,13 @@
-use std::collections::HashMap;
 use std::fmt;
 use std::sync::Mutex;
 
-#[derive(Clone)]
-pub struct Salt([u8; 16]);
+mod names;
+mod path;
+mod salt;
+mod text;
 
-impl Salt {
-    #[must_use]
-    pub fn random() -> Self {
-        todo!()
-    }
-
-    #[must_use]
-    pub fn from_bytes(bytes: [u8; 16]) -> Self {
-        todo!()
-    }
-}
-
-impl fmt::Debug for Salt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Salt(..)")
-    }
-}
+use names::NetworkNames;
+pub use salt::Salt;
 
 #[derive(Debug, Clone, Default)]
 pub struct Identity {
@@ -65,32 +51,32 @@ pub struct RedactedPath {
 impl RedactedPath {
     #[must_use]
     pub fn as_str(&self) -> &str {
-        todo!()
+        &self.text
     }
 
     #[must_use]
     pub fn drive(&self) -> DriveKind {
-        todo!()
+        self.drive
     }
 
     #[must_use]
     pub fn depth(&self) -> usize {
-        todo!()
+        self.depth
     }
 
     #[must_use]
     pub fn length_class(&self) -> LengthClass {
-        todo!()
+        self.length_class
     }
 
     #[must_use]
     pub fn is_long(&self) -> bool {
-        todo!()
+        self.long
     }
 
     #[must_use]
     pub fn has_non_ascii(&self) -> bool {
-        todo!()
+        self.non_ascii
     }
 }
 
@@ -103,23 +89,17 @@ impl fmt::Display for RedactedPath {
 pub struct Redactor {
     salt: Salt,
     identity: Identity,
-    servers: Mutex<HashMap<String, usize>>,
+    servers: Mutex<NetworkNames>,
 }
 
 impl Redactor {
     #[must_use]
     pub fn new(salt: Salt, identity: Identity) -> Self {
-        todo!()
-    }
-
-    #[must_use]
-    pub fn path(&self, path: &str, kind: PathKind, drive: DriveKind) -> RedactedPath {
-        todo!()
-    }
-
-    #[must_use]
-    pub fn text(&self, text: &str) -> String {
-        todo!()
+        Self {
+            salt,
+            identity,
+            servers: Mutex::new(NetworkNames::default()),
+        }
     }
 }
 

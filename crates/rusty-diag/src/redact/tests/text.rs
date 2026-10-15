@@ -168,4 +168,3 @@ fn a_second_path_in_the_same_run_starts_a_new_path() {
     let out = redactor().text(r"copy C:\a\x.txt to D:\b\y.txt done");
     assert_eq!(shape(&out), r"copy C:\<d>\<f>.txt to D:\<d>\<f>.txt done");
 }
-
