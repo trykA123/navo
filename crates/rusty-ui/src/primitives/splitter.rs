@@ -5,6 +5,7 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Window, div, px, relative, transparent_black,
 };
 
+use super::Tooltip;
 use crate::tokens;
 
 const MIN_RATIO: f32 = 0.1;
@@ -35,6 +36,10 @@ impl SplitterState {
 
     pub fn set_ratio(&mut self, ratio: f32) {
         self.ratio = clamp_ratio(ratio);
+    }
+
+    pub fn reset(&mut self) {
+        self.ratio = 0.5;
     }
 
     fn drag_to(&mut self, x: Pixels, bounds: Bounds<Pixels>) {
@@ -91,6 +96,7 @@ impl Splitter {
 
 struct HandleLook {
     ratio: f32,
+    state: Entity<SplitterState>,
     owner: EntityId,
     is_line_on_hover: bool,
 }
@@ -98,6 +104,7 @@ struct HandleLook {
 fn handle(look: HandleLook, cx: &App) -> impl IntoElement {
     let HandleLook {
         ratio,
+        state,
         owner,
         is_line_on_hover,
     } = look;
@@ -123,6 +130,15 @@ fn handle(look: HandleLook, cx: &App) -> impl IntoElement {
         .flex()
         .justify_center()
         .cursor_col_resize()
+        .tooltip(|window, cx| Tooltip::new("Double-click to centre").build(window, cx))
+        .on_click(move |event, _, cx| {
+            if event.click_count() >= 2 {
+                state.update(cx, |state, cx| {
+                    state.reset();
+                    cx.notify();
+                });
+            }
+        })
         .on_drag(DraggedSplitter(owner), |_, _, _, cx| cx.new(|_| DragGhost))
         .child(
             div()
@@ -138,6 +154,7 @@ impl RenderOnce for Splitter {
         let ratio = self.state.read(cx).ratio();
         let owner = self.state.entity_id();
         let state = self.state;
+        let handle_state = state.clone();
         div()
             .id(self.id)
             .test_support()
@@ -176,6 +193,7 @@ impl RenderOnce for Splitter {
             .child(handle(
                 HandleLook {
                     ratio,
+                    state: handle_state,
                     owner,
                     is_line_on_hover: self.is_line_on_hover,
                 },

@@ -83,3 +83,37 @@ fn dragging_past_either_edge_keeps_the_ratio_in_range(cx: &mut TestAppContext) {
     assert!((drag_handle_to(0., &opened, cx) - 0.1).abs() < 1e-6);
     assert!((drag_handle_to(799., &opened, cx) - 0.9).abs() < 1e-6);
 }
+
+fn click_handle(window: AnyWindowHandle, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("split").click("handle", cx);
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_double_click_on_the_handle_resets_to_the_middle(cx: &mut TestAppContext) {
+    let opened = open(cx, split(0.5));
+    assert!((drag_handle_to(240., &opened, cx) - 0.3).abs() < 0.01);
+    cx.update_window(opened.0, |_, window, cx| {
+        window.render_frame(cx);
+        window.within("split").double_click("handle", cx);
+    })
+    .expect("window");
+    assert_eq!(ratio(&opened.1, cx), 0.5);
+}
+
+#[gpui_kit::test]
+fn a_single_click_keeps_the_ratio(cx: &mut TestAppContext) {
+    let opened = open(cx, split(0.3));
+    click_handle(opened.0, cx);
+    assert_eq!(ratio(&opened.1, cx), 0.3);
+}
+
+#[test]
+fn reset_puts_the_ratio_back_to_the_middle() {
+    let mut state = SplitterState::new(0.2);
+    state.reset();
+    assert_eq!(state.ratio(), 0.5);
+}
