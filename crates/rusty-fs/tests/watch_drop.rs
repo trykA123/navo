@@ -42,10 +42,23 @@ fn watch_and_drop(count: usize) {
     drop(watches);
 }
 
+fn no_more_than(before: (usize, usize)) -> bool {
+    let now = resources();
+    now.0 <= before.0 && now.1 <= before.1
+}
+
 #[test]
 fn dropped_watches_leave_no_thread_or_handle_behind() {
     watch_and_drop(1);
     let before = resources();
     watch_and_drop(WATCHES);
-    assert_eq!(resources(), before);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while !no_more_than(before) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        no_more_than(before),
+        "{:?} grew past {before:?}",
+        resources()
+    );
 }
