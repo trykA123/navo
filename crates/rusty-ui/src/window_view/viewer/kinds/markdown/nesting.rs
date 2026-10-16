@@ -1,26 +1,37 @@
 const MAX_RUN: usize = 1_000;
 const MAX_RUNS: usize = 10_000;
 const MAX_PREFIX: usize = 256;
+const MAX_BRACKETS: usize = 20_000;
+const MAX_OPEN_BRACKETS: usize = 1_000;
 const TAB: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Fence {
+pub(super) struct Fence {
     byte: u8,
     len: usize,
+}
+
+pub(super) struct Prefix<'a> {
+    pub width: usize,
+    pub has_quote: bool,
+    pub has_marker: bool,
+    pub rest: &'a str,
 }
 
 #[derive(Default)]
 struct Scan {
     fence: Option<Fence>,
     runs: usize,
+    brackets: usize,
+    open_brackets: usize,
     fails: bool,
 }
 
-fn without_quotes(line: &str) -> &str {
+pub(super) fn without_quotes(line: &str) -> &str {
     line.trim_start_matches([' ', '\t', '>'])
 }
 
-fn fence_at(text: &str) -> Option<Fence> {
+pub(super) fn fence_at(text: &str) -> Option<Fence> {
     let byte = *text.as_bytes().first()?;
     if !matches!(byte, b'`' | b'~') {
         return None;
@@ -30,7 +41,7 @@ fn fence_at(text: &str) -> Option<Fence> {
     (len >= 3 && !(byte == b'`' && info.contains('`'))).then_some(Fence { byte, len })
 }
 
-fn closes(fence: Fence, line: &str) -> bool {
+pub(super) fn closes(fence: Fence, line: &str) -> bool {
     let text = without_quotes(line);
     let len = text.bytes().take_while(|at| *at == fence.byte).count();
     len >= fence.len && text.get(len..).is_some_and(|rest| rest.trim().is_empty())
@@ -46,32 +57,39 @@ fn marker_len(rest: &[u8]) -> Option<usize> {
     matches!(rest.get(marker), Some(b' ' | b'\t')).then_some(marker)
 }
 
-fn container_prefix(line: &str) -> (usize, bool, &str) {
+pub(super) fn container_prefix(line: &str) -> Prefix<'_> {
     let bytes = line.as_bytes();
-    let (mut at, mut width, mut opens) = (0, 0, false);
+    let mut prefix = Prefix {
+        width: 0,
+        has_quote: false,
+        has_marker: false,
+        rest: line,
+    };
+    let mut at = 0;
     while let Some(byte) = bytes.get(at) {
         let step = match byte {
             b' ' => 1,
             b'\t' => {
-                width += TAB - 1;
+                prefix.width += TAB - 1;
                 1
             }
             b'>' => {
-                opens = true;
+                prefix.has_quote = true;
                 1
             }
             _ => match marker_len(&bytes[at..]) {
                 Some(len) => {
-                    opens = true;
+                    prefix.has_marker = true;
                     len
                 }
                 None => break,
             },
         };
-        width += step;
+        prefix.width += step;
         at += step;
     }
-    (width, opens, line.get(at..).unwrap_or_default())
+    prefix.rest = line.get(at..).unwrap_or_default();
+    prefix
 }
 
 fn is_flanking(before: Option<u8>, run: u8, after: Option<u8>) -> bool {
@@ -89,13 +107,36 @@ impl Scan {
             }
             return;
         }
-        let (width, opens, rest) = container_prefix(line);
-        if opens && width > MAX_PREFIX {
+        if without_quotes(line).trim().is_empty() {
+            self.open_brackets = 0;
+        }
+        let prefix = container_prefix(line);
+        let opens = prefix.has_quote || prefix.has_marker;
+        if opens && prefix.width > MAX_PREFIX {
             self.fails = true;
         }
-        match fence_at(rest) {
+        match fence_at(prefix.rest) {
             Some(fence) => self.fence = Some(fence),
-            None => self.emphasis(rest),
+            None => {
+                self.emphasis(prefix.rest);
+                self.brackets(prefix.rest);
+            }
+        }
+    }
+
+    fn brackets(&mut self, text: &str) {
+        for byte in text.bytes() {
+            match byte {
+                b'[' => {
+                    self.brackets += 1;
+                    self.open_brackets += 1;
+                }
+                b']' => self.open_brackets = self.open_brackets.saturating_sub(1),
+                _ => {}
+            }
+        }
+        if self.brackets > MAX_BRACKETS || self.open_brackets > MAX_OPEN_BRACKETS {
+            self.fails = true;
         }
     }
 

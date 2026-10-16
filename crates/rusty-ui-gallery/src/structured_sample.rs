@@ -103,11 +103,7 @@ pub fn body(
         name,
         len: text.len() as u64,
     };
-    let kind = Kinds::builtin()
-        .with_markdown()
-        .choose(&sniff)
-        .into_iter()
-        .next()?;
+    let kind = Kinds::builtin().choose(&sniff).into_iter().next()?;
     let hooks = hooks(text);
     let cancel = AtomicBool::new(false);
     let loaded = kind

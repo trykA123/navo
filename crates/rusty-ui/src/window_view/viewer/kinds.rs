@@ -140,14 +140,10 @@ impl Kinds {
             Arc::new(image::Image),
             Arc::new(tree::TreeKind),
             Arc::new(table::TableKind),
+            Arc::new(markdown::MarkdownKind),
             Arc::new(archive::Archive),
             Arc::new(font::Font),
         ])
-    }
-
-    #[must_use]
-    pub fn with_markdown(self) -> Self {
-        self.with(markdown::MarkdownKind)
     }
 
     #[must_use]

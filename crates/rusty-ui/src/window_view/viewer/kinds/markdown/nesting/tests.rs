@@ -25,6 +25,11 @@ fn long_emphasis_runs_and_wide_container_prefixes_fail_fast() {
         wide_list(2_000),
         format!("{}x\n", ">".repeat(257)),
         format!("{}- x\n", " ".repeat(300)),
+        format!("{}x\n", "[".repeat(1_001)),
+        "[a] ".repeat(20_001),
+        (0..30)
+            .map(|_| format!("{}x{}\n\n", "[".repeat(900), "]".repeat(900)))
+            .collect(),
     ];
     for text in cases {
         let started = Instant::now();
@@ -44,6 +49,9 @@ fn ordinary_documents_and_code_pass_to_the_parser() {
         "*a* ".repeat(4_000),
         format!("```\n{}```\n", quote_list(3_000)),
         format!("{}let x = 1;\n", " ".repeat(400)),
+        "[a] ".repeat(20_000),
+        format!("{}x\n\n{}x\n", "[".repeat(1_000), "[".repeat(1_000)),
+        format!("```\n{}\n```\n", "[".repeat(30_000)),
     ];
     for text in fine {
         assert!(!fails_fast(&text), "{:?}", &text[..12]);

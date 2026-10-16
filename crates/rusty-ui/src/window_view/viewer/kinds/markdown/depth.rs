@@ -3,11 +3,6 @@ use markdown::{ParseOptions, to_mdast};
 
 pub(super) const MAX_NESTING: usize = 32;
 const PARSE_STACK: usize = 16 * 1024 * 1024;
-const VOID_TAGS: [&str; 14] = [
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
-    "track", "wbr",
-];
-
 fn options() -> ParseOptions {
     let mut options = ParseOptions::gfm();
     options.constructs.math_text = true;
@@ -33,75 +28,50 @@ fn step(node: &Node) -> usize {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct Tags {
-    deepest: usize,
-    net: isize,
+pub(super) struct Shape {
+    pub depth: usize,
+    pub has_raw: bool,
 }
 
-fn tag_at(html: &str) -> Option<(bool, &str, &str)> {
-    let rest = html.strip_prefix('<')?;
-    let (closing, rest) = match rest.strip_prefix('/') {
-        Some(rest) => (true, rest),
-        None => (false, rest),
-    };
-    let name_len = rest.bytes().take_while(u8::is_ascii_alphanumeric).count();
-    let name = rest.get(..name_len).filter(|name| !name.is_empty())?;
-    let tail = rest.get(name_len..)?;
-    Some((closing, name, tail.split('>').next().unwrap_or_default()))
-}
-
-fn tags_of(html: &str) -> Tags {
-    let mut tags = Tags::default();
-    let mut depth: isize = 0;
-    for (at, _) in html.match_indices('<') {
-        let Some((closing, name, attrs)) = html.get(at..).and_then(tag_at) else {
-            continue;
-        };
-        if closing {
-            depth -= 1;
-        } else if !attrs.ends_with('/')
-            && !VOID_TAGS.iter().any(|tag| tag.eq_ignore_ascii_case(name))
-        {
-            depth += 1;
-            tags.deepest = tags.deepest.max(usize::try_from(depth).unwrap_or(0));
-        }
+impl Shape {
+    pub(super) fn is_safe(self) -> bool {
+        !self.has_raw && self.depth <= MAX_NESTING
     }
-    tags.net = depth;
-    tags
 }
 
-pub(super) fn deepest_in(root: &Node) -> usize {
-    let mut deepest = 0;
+fn is_raw(node: &Node) -> bool {
+    matches!(node, Node::Html(_) | Node::InlineMath(_) | Node::Math(_))
+}
+
+pub(super) fn shape_of(root: &Node) -> Shape {
+    let mut shape = Shape::default();
     let mut stack = vec![(root, 0usize)];
     while let Some((node, depth)) = stack.pop() {
         let depth = depth + step(node);
-        deepest = deepest.max(depth);
-        if let Node::Html(html) = node {
-            deepest = deepest.max(depth + tags_of(&html.value).deepest);
-        }
-        let mut open: isize = 0;
-        for child in node.children().into_iter().flatten() {
-            stack.push((child, depth + usize::try_from(open).unwrap_or(0)));
-            if let Node::Html(html) = child {
-                open = (open + tags_of(&html.value).net).max(0);
-            }
-        }
+        shape.depth = shape.depth.max(depth);
+        shape.has_raw |= is_raw(node);
+        stack.extend(
+            node.children()
+                .into_iter()
+                .flatten()
+                .map(|child| (child, depth)),
+        );
     }
-    deepest
+    shape
 }
 
-fn parse_depth(text: &str) -> Result<usize, String> {
+fn parse_shape(text: &str) -> Result<Shape, String> {
     let tree = to_mdast(text, &options()).map_err(|error| error.to_string())?;
-    Ok(deepest_in(&tree))
+    Ok(shape_of(&tree))
 }
 
-pub(super) fn measure(text: String) -> (String, Result<usize, String>) {
+pub(super) fn measure(text: String) -> (String, Result<Shape, String>) {
     let parser = std::thread::Builder::new()
         .name("markdown-depth".to_owned())
         .stack_size(PARSE_STACK)
         .spawn(move || {
-            let depth = parse_depth(&text);
-            (text, depth)
+            let shape = parse_shape(&text);
+            (text, shape)
         });
     match parser.map(std::thread::JoinHandle::join) {
         Ok(Ok(measured)) => measured,

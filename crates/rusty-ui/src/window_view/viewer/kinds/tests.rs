@@ -153,8 +153,8 @@ fn structured_files_open_as_tree_table_or_markdown() {
         ("info.plist", b"<?xml version=\"1.0\"?><plist/>", "tree"),
         ("fruit.csv", b"name,qty\nPear,1\n", "table"),
         ("fruit.tsv", b"name\tqty\nPear\t1\n", "table"),
-        ("notes.md", b"# Title\n", "text"),
-        ("notes.markdown", b"Text\n", "text"),
+        ("notes.md", b"# Title\n", "markdown"),
+        ("notes.markdown", b"Text\n", "markdown"),
     ];
     for (name, head, kind) in cases {
         assert_eq!(best_named(name, head, head.len() as u64), kind, "{name}");
@@ -175,6 +175,10 @@ fn plain_text_and_content_that_does_not_fit_stay_text() {
     assert_eq!(best_named("ci.yaml", b"a: 1\n", huge), "text");
     assert_eq!(best_named("model.arxml", b"<AUTOSAR>", huge), "tree");
     assert_eq!(best_named("notes.md", b"# Title\n", EDIT_LIMIT + 1), "text");
+    assert_eq!(
+        best_named("notes.md", b"# Title\n", 1024 * 1024 + 1),
+        "text"
+    );
     let sniff = Sniff {
         head: b"{\"a\": 1}",
         name: "shop.json",
