@@ -166,7 +166,7 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, mpsc};
 
-    use super::{Link, MenuError, Request};
+    use super::{InvokeOptions, Link, MenuError, Request};
 
     #[test]
     fn a_retired_link_answers_stopped_without_sending() {
@@ -176,8 +176,11 @@ mod tests {
             window: 0,
             retired: Arc::new(AtomicBool::new(true)),
         };
-        let pending = link.ask(|reply| Request::Open {
-            paths: Vec::new(),
+        let pending = link.ask(|reply| Request::Invoke {
+            session: 1,
+            command: 1,
+            verb: None,
+            options: InvokeOptions::default(),
             reply,
         });
         assert_eq!(pending.wait(), Err(MenuError::Stopped));
