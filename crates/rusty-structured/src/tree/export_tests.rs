@@ -131,3 +131,36 @@ fn a_branch_that_is_not_loaded_is_reported() {
     tree.set_lazy(root, crate::Lazy { span, count: 3 });
     assert!(tree.export(root, Syntax::Xml, MIB).is_partial);
 }
+
+#[test]
+fn a_large_array_stops_the_walk_at_the_cap() {
+    let items = vec!["1"; 100_000].join(",");
+    let tree = parse_json(format!("[{items}]").as_bytes()).unwrap();
+    let (exported, visited) = tree.export_counted(tree.root().unwrap(), Syntax::Json, 1000);
+    assert!(exported.is_cut);
+    assert!(exported.text.len() <= 1000);
+    assert!(exported.text.starts_with("[1,1,1"));
+    assert!(
+        visited < 1000,
+        "visited {visited} nodes for a 1000-byte cap"
+    );
+}
+
+#[test]
+fn a_large_xml_element_stops_the_walk_at_the_cap() {
+    let source = format!("<r>{}</r>", "<a/>".repeat(100_000));
+    let tree = parse_xml(source.as_bytes()).unwrap();
+    let (exported, visited) = tree.export_counted(tree.root().unwrap(), Syntax::Xml, 1000);
+    assert!(exported.is_cut);
+    assert!(
+        visited < 1000,
+        "visited {visited} nodes for a 1000-byte cap"
+    );
+}
+
+#[test]
+fn a_yaml_sequence_keeps_its_separators_with_the_cursor() {
+    let tree = parse_yaml(b"- a\n- b\n- c\n").unwrap();
+    let exported = tree.export(tree.root().unwrap(), Syntax::Yaml, MIB);
+    assert_eq!(exported.text, "[a, b, c]");
+}

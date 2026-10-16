@@ -17,7 +17,16 @@ pub struct Exported {
 }
 
 enum Task {
-    Node { id: NodeId, keyed: bool },
+    Node {
+        id: NodeId,
+        keyed: bool,
+    },
+    Siblings {
+        at: NodeId,
+        keyed: bool,
+        before: &'static str,
+        between: &'static str,
+    },
     Text(&'static str),
     Close(NodeId),
 }
@@ -27,6 +36,7 @@ struct Writer<'t> {
     syntax: Syntax,
     out: Exported,
     stack: Vec<Task>,
+    visited: usize,
 }
 
 const YAML_INSIDE: &[char] = &['{', '}', '[', ']', ',', '"', '\''];
@@ -105,27 +115,46 @@ impl Writer<'_> {
         self.out.is_clipped |= is_clipped(self.tree.value(id)) || is_clipped(self.tree.attrs(id));
     }
 
-    fn push_children(&mut self, id: NodeId, keyed: bool) {
-        let separator = if self.syntax == Syntax::Json {
-            ","
-        } else {
-            ", "
-        };
-        let children: Vec<NodeId> = self.tree.children(id).collect();
-        for (at, child) in children.into_iter().enumerate().rev() {
-            self.stack.push(Task::Node { id: child, keyed });
-            if at > 0 {
-                self.stack.push(Task::Text(separator));
-            }
+    fn push_children(&mut self, id: NodeId, keyed: bool, between: &'static str) {
+        if let Some(first) = self.tree.children(id).next() {
+            self.stack.push(Task::Siblings {
+                at: first,
+                keyed,
+                before: "",
+                between,
+            });
         }
+    }
+
+    fn sibling(
+        &mut self,
+        (at, keyed): (NodeId, bool),
+        (before, between): (&'static str, &'static str),
+    ) {
+        self.out.text.push_str(before);
+        if let Some(next) = self.tree.next_sibling(at) {
+            self.stack.push(Task::Siblings {
+                at: next,
+                keyed,
+                before: between,
+                between,
+            });
+        }
+        self.visited += 1;
+        self.stack.push(Task::Node { id: at, keyed });
     }
 
     fn container(&mut self, id: NodeId) {
         let is_object = self.tree.kind(id) == NodeKind::Object;
         let (open, close) = if is_object { ("{", "}") } else { ("[", "]") };
         self.out.text.push_str(open);
+        let between = if self.syntax == Syntax::Json {
+            ","
+        } else {
+            ", "
+        };
         self.stack.push(Task::Text(close));
-        self.push_children(id, is_object);
+        self.push_children(id, is_object, between);
     }
 
     fn element(&mut self, id: NodeId) {
@@ -149,13 +178,7 @@ impl Writer<'_> {
         out.push('>');
         out.push_str(&xml_escaped(value));
         self.stack.push(Task::Close(id));
-        let children: Vec<NodeId> = self.tree.children(id).collect();
-        self.stack.extend(
-            children
-                .into_iter()
-                .rev()
-                .map(|id| Task::Node { id, keyed: false }),
-        );
+        self.push_children(id, false, "");
     }
 
     fn node(&mut self, id: NodeId, keyed: bool) {
@@ -182,10 +205,16 @@ impl Writer<'_> {
         }
     }
 
-    fn run(mut self, cap: usize) -> Exported {
+    fn run(mut self, cap: usize) -> (Exported, usize) {
         while let Some(task) = self.stack.pop() {
             match task {
                 Task::Node { id, keyed } => self.node(id, keyed),
+                Task::Siblings {
+                    at,
+                    keyed,
+                    before,
+                    between,
+                } => self.sibling((at, keyed), (before, between)),
                 Task::Text(text) => self.out.text.push_str(text),
                 Task::Close(id) => self.close_tag(id),
             }
@@ -193,7 +222,7 @@ impl Writer<'_> {
                 break;
             }
         }
-        cut(self.out, cap)
+        (cut(self.out, cap), self.visited)
     }
 }
 
@@ -209,6 +238,15 @@ fn cut(mut out: Exported, cap: usize) -> Exported {
 impl Tree {
     #[must_use]
     pub fn export(&self, id: NodeId, syntax: Syntax, cap: usize) -> Exported {
+        self.export_counted(id, syntax, cap).0
+    }
+
+    pub(super) fn export_counted(
+        &self,
+        id: NodeId,
+        syntax: Syntax,
+        cap: usize,
+    ) -> (Exported, usize) {
         let is_leaf = self.children(id).next().is_none() && self.lazy(id).is_none();
         let is_bare = match self.kind(id) {
             NodeKind::Object | NodeKind::Array => false,
@@ -227,13 +265,14 @@ impl Tree {
                 is_clipped: is_clipped(value),
                 ..Exported::default()
             };
-            return cut(out, cap);
+            return (cut(out, cap), 1);
         }
         let writer = Writer {
             tree: self,
             syntax,
             out: Exported::default(),
             stack: vec![Task::Node { id, keyed: false }],
+            visited: 1,
         };
         writer.run(cap)
     }
