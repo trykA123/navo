@@ -19,6 +19,8 @@ pub(in crate::window_view::viewer) const LIST_KEYS: [Key; 3] = [
     ("Enter", "Go there"),
     ("Esc", "Close list"),
 ];
+pub(in crate::window_view::viewer) const GO_TO_KEYS: [Key; 2] =
+    [("Enter", "Go there"), ("Esc", "Close")];
 pub(in crate::window_view::viewer) const MARK_KEYS: [Key; 3] = [
     ("Ctrl+1…8", "Mark"),
     ("Ctrl+F2", "Bookmark"),
@@ -35,6 +37,15 @@ pub(in crate::window_view::viewer) struct BarLook<'a> {
     pub match_case: Option<bool>,
     pub count: Option<SharedString>,
     pub error: Option<SharedString>,
+}
+
+pub(in crate::window_view::viewer) fn parse_line(text: &str) -> Result<u64, String> {
+    let trimmed = text.trim();
+    trimmed
+        .parse::<u64>()
+        .ok()
+        .filter(|line| *line > 0)
+        .ok_or_else(|| format!("Not a line number: {trimmed}"))
 }
 
 fn small(t: &Theme, color: Hsla) -> Div {

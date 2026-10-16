@@ -1,3 +1,4 @@
+mod copy;
 mod decode;
 mod draw;
 mod exif;
@@ -9,7 +10,7 @@ use std::any::Any;
 use std::cell::Cell;
 use std::rc::Rc;
 
-use gpui_kit::{AnyView, FocusHandle, Focusable, point};
+use gpui_kit::{AnyView, FocusHandle, Focusable, Task, point};
 
 pub use decode::{IMAGE_LIMIT, Picture, decode_image};
 pub use exif::ExifEntry;
@@ -38,6 +39,7 @@ pub struct ImageView {
     note: Option<SharedString>,
     drag: Option<Point<Pixels>>,
     focus: FocusHandle,
+    copying: Option<Task<()>>,
 }
 
 impl ImageView {
@@ -56,6 +58,7 @@ impl ImageView {
             note: None,
             drag: None,
             focus: cx.focus_handle(),
+            copying: None,
         }
     }
 
@@ -155,6 +158,9 @@ impl ViewerBody for ImageBody {
 
     fn menu(&self, _: bool, _: &mut App) -> Vec<MenuEntry> {
         vec![
+            MenuEntry::Run("Copy image", Box::new(super::CopyImage)),
+            MenuEntry::Run("Copy path", Box::new(super::CopyFilePath)),
+            MenuEntry::Break,
             MenuEntry::Run("Fit", Box::new(super::FitImage)),
             MenuEntry::Run("100 %", Box::new(super::ActualSize)),
         ]

@@ -8,8 +8,8 @@ use crate::prelude::*;
 use crate::primitives::{IconButton, IconName};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::{
-    ActualSize, FitImage, IMAGE_CONTEXT, RowDown, RowUp, ScrollLeft, ScrollRight, ToggleInfo,
-    ZoomIn, ZoomOut,
+    ActualSize, CopyImage, FitImage, IMAGE_CONTEXT, RowDown, RowUp, ScrollLeft, ScrollRight,
+    ToggleInfo, ZoomIn, ZoomOut,
 };
 
 const NO_EXIF: &str = "No EXIF data in this file.";
@@ -127,6 +127,7 @@ impl ImageView {
 
     fn view_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &FitImage, _, cx| view.fit(cx)))
+            .on_action(cx.listener(|view, _: &CopyImage, _, cx| view.copy_image(cx)))
             .on_action(cx.listener(|view, _: &ActualSize, _, cx| view.actual_size(cx)))
             .on_action(cx.listener(|view, _: &ZoomIn, _, cx| view.zoom_step(true, None, cx)))
             .on_action(cx.listener(|view, _: &ZoomOut, _, cx| view.zoom_step(false, None, cx)))

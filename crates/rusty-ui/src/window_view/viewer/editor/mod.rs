@@ -1,5 +1,6 @@
 mod body;
 mod find;
+mod lines;
 mod marking;
 mod overlay;
 mod save;
@@ -41,6 +42,7 @@ pub(super) struct EditorView {
     saving: Option<Task<()>>,
     note: Option<SharedString>,
     find: EditorFind,
+    go_to: Option<lines::GoToBar>,
     marking: Marking,
     decorations: RangeDecorationCollection,
     decorated: Option<(u64, Mode)>,
@@ -104,6 +106,7 @@ impl EditorView {
             saving: None,
             note: file.read_only.then(|| NOT_LOSSLESS.into()),
             find: EditorFind::default(),
+            go_to: None,
             marking: Marking::new(text_source(shared)),
             decorations,
             decorated: None,

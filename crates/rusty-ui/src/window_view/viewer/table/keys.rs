@@ -4,14 +4,16 @@ use super::TableView;
 use crate::prelude::*;
 use crate::window_view::viewer::body::MenuEntry;
 use crate::window_view::viewer::{
-    GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ScrollLeft, ScrollRight,
+    GoEnd, GoStart, LINE_BREAK, PageDown, PageUp, RowDown, RowUp, ScrollLeft, ScrollRight,
 };
 
 pub(super) const CONTEXT: &str = "Table";
 
 gpui_kit::actions!(
     viewer_table,
-    [CellFirst, CellLast, CopyCell, CopyRow, SortColumn]
+    [
+        CellFirst, CellLast, CopyCell, CopyRow, CopyColumn, SortColumn
+    ]
 );
 
 pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
@@ -29,6 +31,7 @@ pub(super) fn menu_entries() -> Vec<MenuEntry> {
     vec![
         MenuEntry::Run("Copy cell", Box::new(CopyCell)),
         MenuEntry::Run("Copy row", Box::new(CopyRow)),
+        MenuEntry::Run("Copy column", Box::new(CopyColumn)),
         MenuEntry::Break,
         MenuEntry::Run("Sort by this column", Box::new(SortColumn)),
     ]
@@ -89,6 +92,27 @@ impl TableView {
         }
     }
 
+    fn copy_column(&mut self, cx: &mut Context<Self>) {
+        let column = self.cursor.1;
+        let Some(header) = self.header.get(column) else {
+            return;
+        };
+        let total = self.rows.len();
+        let mut lines = vec![header.as_str()];
+        lines.extend((0..total).filter_map(|row| {
+            let (_, cells) = self.rows.get(row)?;
+            Some(cells.get(column).map_or("", String::as_str))
+        }));
+        let copied = lines.len() - 1;
+        cx.write_to_clipboard(ClipboardItem::new_string(lines.join(LINE_BREAK)));
+        let note = if copied < total {
+            format!("Copied the {copied} loaded rows of {total}.")
+        } else {
+            format!("Copied the {header} column.")
+        };
+        self.set_note(note, cx);
+    }
+
     pub(super) fn keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &RowUp, _, cx| view.move_by(-1, 0, cx)))
             .on_action(cx.listener(|view, _: &RowDown, _, cx| view.move_by(1, 0, cx)))
@@ -114,6 +138,7 @@ impl TableView {
             }))
             .on_action(cx.listener(|view, _: &CopyCell, _, cx| view.copy(false, cx)))
             .on_action(cx.listener(|view, _: &CopyRow, _, cx| view.copy(true, cx)))
+            .on_action(cx.listener(|view, _: &CopyColumn, _, cx| view.copy_column(cx)))
             .on_action(cx.listener(|view, _: &SortColumn, _, cx| {
                 view.sort_by(view.cursor.1, cx);
             }))

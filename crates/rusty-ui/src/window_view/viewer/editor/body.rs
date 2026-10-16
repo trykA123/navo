@@ -10,8 +10,8 @@ use crate::window_view::viewer::body::{
     BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody,
 };
 use crate::window_view::viewer::menu::marking_entries;
-use crate::window_view::viewer::search::bar::{FIND_KEYS, LIST_KEYS, MARK_KEYS};
-use crate::window_view::viewer::{ShowHex, ToggleFollow};
+use crate::window_view::viewer::search::bar::{FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS};
+use crate::window_view::viewer::{CopyPathLine, FindSelection, OpenGoTo, ShowHex, ToggleFollow};
 
 pub(in crate::window_view::viewer) struct EditorFile {
     pub file: FileText,
@@ -37,6 +37,11 @@ impl EditorBody {
     ) -> Entity<gpui_kit::component::input::EditorState> {
         self.0.read(cx).editor.clone()
     }
+
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn find_text(&self, cx: &App) -> Option<String> {
+        self.0.read(cx).typed(cx)
+    }
 }
 
 impl ViewerBody for EditorBody {
@@ -52,6 +57,9 @@ impl ViewerBody for EditorBody {
         let view = self.0.read(cx);
         if view.marking.find_all.is_some() {
             return BodyKeys::Modal(LIST_KEYS.to_vec());
+        }
+        if view.go_to.is_some() {
+            return BodyKeys::Modal(GO_TO_KEYS.to_vec());
         }
         if view.find.bar.is_some() {
             return BodyKeys::Modal(FIND_KEYS.to_vec());
@@ -99,8 +107,12 @@ impl ViewerBody for EditorBody {
         }
         entries.push(MenuEntry::Run("Select all", Box::new(SelectAll)));
         entries.push(MenuEntry::Break);
+        entries.push(MenuEntry::Run("Find selection", Box::new(FindSelection)));
+        entries.push(MenuEntry::Run("Copy path:line", Box::new(CopyPathLine)));
+        entries.push(MenuEntry::Break);
         entries.extend(marking_entries());
         entries.push(MenuEntry::Break);
+        entries.push(MenuEntry::Run("Go to line", Box::new(OpenGoTo)));
         if !editing {
             entries.push(MenuEntry::Run("Follow", Box::new(ToggleFollow)));
         }

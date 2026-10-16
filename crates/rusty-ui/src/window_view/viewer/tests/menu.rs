@@ -121,7 +121,11 @@ fn body_has_focus(
         .expect("window")
 }
 
-fn hint(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, text: &str) -> Option<String> {
+pub(super) fn hint(
+    cx: &mut TestAppContext,
+    view: &Entity<FerriteWindow>,
+    text: &str,
+) -> Option<String> {
     view.read_with(cx, |view, cx| {
         let (menu, _) = view.viewer.as_ref()?.menu.as_ref()?;
         let items = &menu.read(cx).menu().items;
@@ -130,7 +134,7 @@ fn hint(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, text: &str) -> Op
     })
 }
 
-fn clipboard(cx: &mut TestAppContext) -> Option<String> {
+pub(super) fn clipboard(cx: &mut TestAppContext) -> Option<String> {
     cx.read_from_clipboard().and_then(|item| item.text())
 }
 
@@ -237,7 +241,10 @@ fn a_right_click_on_a_markdown_link_offers_open_link(cx: &mut TestAppContext) {
         .expect("window");
     let at = block.center();
     right_click(cx, window, at);
-    assert_eq!(rows(cx, window), ["# Ferrite", "Open link"]);
+    assert_eq!(
+        rows(cx, window),
+        ["# Ferrite", "Copy", "-", "Open link", "Copy link"]
+    );
 }
 
 #[gpui_kit::test]

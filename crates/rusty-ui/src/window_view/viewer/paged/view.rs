@@ -10,7 +10,9 @@ use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::body::Key;
-use crate::window_view::viewer::search::bar::{BarLook, FIND_KEYS, LIST_KEYS, MARK_KEYS, bar_row};
+use crate::window_view::viewer::search::bar::{
+    BarLook, FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS, bar_row,
+};
 use crate::window_view::viewer::search::count::count_label;
 use crate::window_view::viewer::search::find_all::{
     close_find_all, find_all_panel, go_to_found, move_in_find_all,
@@ -20,8 +22,6 @@ use crate::window_view::viewer::{
     OlderSearch, OpenFind, OpenGoTo, PAGED_CONTEXT, PageDown, PageUp, RowDown, RowUp, ScrollLeft,
     ScrollRight,
 };
-
-const GO_TO_KEYS: [Key; 2] = [("Enter", "Go there"), ("Esc", "Close")];
 
 fn small(t: &Theme, color: Hsla) -> Div {
     div()

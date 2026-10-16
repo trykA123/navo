@@ -98,6 +98,8 @@ pub trait ViewerBody: Any {
         Vec::new()
     }
 
+    fn menu_closed(&self, _: &mut App) {}
+
     fn menu_anchor(&self, _: &App) -> Option<Point<Pixels>> {
         None
     }

@@ -49,6 +49,21 @@ fn left_click(
     click_with(cx, window, (MouseButton::Left, at), false);
 }
 
+fn expected(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "editor F3" | "editor F4" => &[
+            "viewer::FindSelection",
+            "viewer::CopyPathLine",
+            "viewer::OpenGoTo",
+        ],
+        "tree" => &["viewer_tree::CopyValue", "viewer_tree::CopyKey"],
+        "table" => &["viewer_table::CopyColumn"],
+        "markdown" => &["viewer_markdown::CopyBlock", "viewer_markdown::CopyLink"],
+        "image" => &["viewer::CopyImage", "viewer::CopyFilePath"],
+        _ => &[],
+    }
+}
+
 #[gpui_kit::test]
 fn every_menu_item_of_every_kind_names_a_registered_action(cx: &mut TestAppContext) {
     let mut names = Vec::new();
@@ -74,6 +89,14 @@ fn every_menu_item_of_every_kind_names_a_registered_action(cx: &mut TestAppConte
     let image = rig(cx, &[], &[("a.txt", encoded(ImageFormat::Png, 300, 200))]);
     open_first(cx, &image);
     names.push(("image", menu_actions(cx, &image.1)));
+    for (kind, actions) in &names {
+        for wanted in expected(kind) {
+            assert!(
+                actions.contains(wanted),
+                "{kind} offers {wanted}: {actions:?}"
+            );
+        }
+    }
     for (kind, actions) in names {
         assert!(!actions.is_empty(), "{kind} has items");
         for name in actions {
@@ -102,7 +125,10 @@ fn the_image_menu_runs_100_percent(cx: &mut TestAppContext) {
     assert_ne!(text_of(cx, window, "image-zoom"), "100 %");
     let at = middle(cx, window);
     right_click(cx, window, at);
-    assert_eq!(rows(cx, window), ["# Ferrite", "Fit", "100 %"]);
+    assert_eq!(
+        rows(cx, window),
+        ["# Ferrite", "Copy image", "Copy path", "-", "Fit", "100 %"]
+    );
     run_item(cx, window, "100");
     assert_eq!(text_of(cx, window, "image-zoom"), "100 %");
     assert!(image_view(cx, &image.1).is_some());
