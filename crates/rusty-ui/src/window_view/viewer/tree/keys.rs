@@ -1,4 +1,5 @@
-use gpui_kit::{ClipboardItem, KeyBinding, KeyDownEvent, Stateful};
+use gpui_kit::{Action, ClipboardItem, KeyBinding, KeyDownEvent, Stateful};
+use rusty_structured::{Outline, Step, Tree};
 
 use super::{TreeState, TreeView};
 use crate::file_list::typed_char;
@@ -21,6 +22,19 @@ gpui_kit::actions!(
         TypeOne,
         TypeThree,
         TypeFive,
+        OpenSubtree,
+        CloseSubtree,
+        OpenAll,
+        CloseAll,
+        FoldDepth1,
+        FoldDepth2,
+        FoldDepth3,
+        FoldDepth4,
+        FoldDepth5,
+        FoldDepth6,
+        FoldDepth7,
+        FoldDepth8,
+        FoldDepth9,
     ]
 );
 
@@ -39,7 +53,44 @@ pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
         KeyBinding::new("1", TypeOne, context),
         KeyBinding::new("3", TypeThree, context),
         KeyBinding::new("5", TypeFive, context),
+        KeyBinding::new("alt-right", OpenSubtree, context),
+        KeyBinding::new("alt-left", CloseSubtree, context),
+        KeyBinding::new("ctrl-shift-right", OpenAll, context),
+        KeyBinding::new("ctrl-shift-left", CloseAll, context),
+        KeyBinding::new("ctrl-1", FoldDepth1, context),
+        KeyBinding::new("ctrl-2", FoldDepth2, context),
+        KeyBinding::new("ctrl-3", FoldDepth3, context),
+        KeyBinding::new("ctrl-4", FoldDepth4, context),
+        KeyBinding::new("ctrl-5", FoldDepth5, context),
+        KeyBinding::new("ctrl-6", FoldDepth6, context),
+        KeyBinding::new("ctrl-7", FoldDepth7, context),
+        KeyBinding::new("ctrl-8", FoldDepth8, context),
+        KeyBinding::new("ctrl-9", FoldDepth9, context),
     ]);
+}
+
+fn reshape_on<A: Action>(
+    root: Stateful<Div>,
+    change: fn(&mut Outline, &Tree) -> Step,
+    cx: &mut Context<TreeView>,
+) -> Stateful<Div> {
+    root.on_action(cx.listener(move |view, _: &A, _, cx| view.reshape(change, cx)))
+}
+
+fn depth_on<A: Action>(
+    root: Stateful<Div>,
+    depth: u16,
+    cx: &mut Context<TreeView>,
+) -> Stateful<Div> {
+    root.on_action(cx.listener(move |view, _: &A, _, cx| {
+        view.reshape(
+            move |outline, tree| {
+                outline.fold_to_depth(tree, depth);
+                Step::Done
+            },
+            cx,
+        );
+    }))
 }
 
 impl TreeView {
@@ -101,6 +152,20 @@ impl TreeView {
         }
     }
 
+    fn reshape(
+        &mut self,
+        change: impl FnOnce(&mut Outline, &Tree) -> Step,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_filtering() {
+            return;
+        }
+        if let Some(ready) = self.ready_mut() {
+            let step = change(&mut ready.outline, &ready.tree);
+            self.follow(step, cx);
+        }
+    }
+
     fn back(&mut self, cx: &mut Context<Self>) {
         if self.is_filtering() {
             self.clear_filter(cx);
@@ -153,5 +218,42 @@ impl TreeView {
             .on_action(cx.listener(|view, _: &TypeThree, _, cx| view.type_or_pass('3', cx)))
             .on_action(cx.listener(|view, _: &TypeFive, _, cx| view.type_or_pass('5', cx)))
             .on_key_down(cx.listener(|view, event, _, cx| view.type_key(event, cx)))
+    }
+
+    pub(super) fn folds(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        let root = reshape_on::<OpenSubtree>(root, Outline::expand_subtree, cx);
+        let root = reshape_on::<CloseSubtree>(
+            root,
+            |outline, tree| {
+                outline.close_subtree(tree);
+                Step::Done
+            },
+            cx,
+        );
+        let root = reshape_on::<OpenAll>(
+            root,
+            |outline, tree| {
+                outline.expand_all(tree);
+                Step::Done
+            },
+            cx,
+        );
+        let root = reshape_on::<CloseAll>(
+            root,
+            |outline, tree| {
+                outline.collapse_all(tree);
+                Step::Done
+            },
+            cx,
+        );
+        let root = depth_on::<FoldDepth1>(root, 1, cx);
+        let root = depth_on::<FoldDepth2>(root, 2, cx);
+        let root = depth_on::<FoldDepth3>(root, 3, cx);
+        let root = depth_on::<FoldDepth4>(root, 4, cx);
+        let root = depth_on::<FoldDepth5>(root, 5, cx);
+        let root = depth_on::<FoldDepth6>(root, 6, cx);
+        let root = depth_on::<FoldDepth7>(root, 7, cx);
+        let root = depth_on::<FoldDepth8>(root, 8, cx);
+        depth_on::<FoldDepth9>(root, 9, cx)
     }
 }

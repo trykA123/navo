@@ -198,7 +198,7 @@ impl Render for TreeView {
             .id("tree")
             .key_context(CONTEXT)
             .track_focus(&self.focus);
-        let root = Self::commands(Self::moves(root, cx), cx);
+        let root = Self::folds(Self::commands(Self::moves(root, cx), cx), cx);
         root.flex()
             .flex_col()
             .flex_1()

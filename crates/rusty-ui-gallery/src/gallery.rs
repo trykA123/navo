@@ -4,7 +4,7 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::{ArchiveView, FontView, ImageView, PagedView, ViewerBody};
+use rusty_ui::window_view::{ArchiveView, BodyKeys, FontView, ImageView, PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
@@ -309,6 +309,18 @@ fn image_keys() -> FKeyBar {
     FKeyBar::new("image-keys", ImageView::KEYS.into_iter().chain(kinds))
 }
 
+fn sample_keys(body: &dyn ViewerBody, cx: &App) -> FKeyBar {
+    let (BodyKeys::Modal(keys) | BodyKeys::Normal(keys)) = body.keys(cx);
+    let viewer = [
+        ("1", "Text"),
+        ("3", "Hex"),
+        ("N", "Next file"),
+        ("P", "Previous file"),
+        ("Esc", "Close"),
+    ];
+    FKeyBar::new("sample-keys", keys.into_iter().chain(viewer))
+}
+
 fn column(t: &Theme) -> Div {
     div()
         .flex()
@@ -358,7 +370,11 @@ impl Render for Gallery {
             }
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree | Page::Table | Page::Markdown => match self.sample() {
-                Some(body) => root.child(body.view()),
+                Some(body) => root
+                    .child(body.view())
+                    .when(self.page == Page::Tree, |root| {
+                        root.child(sample_keys(body, cx))
+                    }),
                 None => root.child("This sample did not load."),
             },
             Page::Tokens => root.child(tokens_page::render(&t)),

@@ -201,8 +201,9 @@ impl ViewerBody for TreeBody {
         BodyKeys::Normal(match &self.0.read(cx).state {
             TreeState::Ready(_) => vec![
                 ("←/→", "Fold"),
-                ("*", "Expand all"),
-                ("-", "Collapse all"),
+                ("Alt+←/→", "Fold branch"),
+                ("Ctrl+Shift+←/→", "Fold all"),
+                ("Ctrl+1–9", "Depth"),
                 ("Ctrl+Shift+C", "Copy path"),
             ],
             TreeState::Indexing(_) => vec![("Esc", "Stop indexing")],
