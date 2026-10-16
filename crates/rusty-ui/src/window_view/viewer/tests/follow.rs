@@ -17,6 +17,7 @@ use crate::window_view::viewer::{FileHooks, Head, Kinds, Paged};
 struct Growing {
     bytes: Arc<Mutex<Vec<u8>>>,
     changed: Arc<AtomicBool>,
+    rewritten: Arc<AtomicBool>,
     scanned: Arc<AtomicU64>,
     is_scan: bool,
 }
@@ -24,6 +25,12 @@ struct Growing {
 impl Growing {
     fn append(&self, more: &[u8]) {
         self.bytes.lock().expect("bytes").extend_from_slice(more);
+        self.changed.store(true, Ordering::Relaxed);
+    }
+
+    fn rewrite(&self, bytes: &[u8], is_reported: bool) {
+        *self.bytes.lock().expect("bytes") = bytes.to_vec();
+        self.rewritten.store(is_reported, Ordering::Relaxed);
         self.changed.store(true, Ordering::Relaxed);
     }
 
@@ -56,6 +63,10 @@ impl ByteSource for Growing {
 
     fn take_changed(&self) -> bool {
         self.changed.swap(false, Ordering::Relaxed)
+    }
+
+    fn take_rewritten(&self) -> bool {
+        self.rewritten.swap(false, Ordering::Relaxed)
     }
 }
 
@@ -259,4 +270,69 @@ fn find_all_lists_matches_that_arrive_while_following(cx: &mut TestAppContext) {
     tick(cx, window, &view);
     tick(cx, window, &view);
     assert_eq!(found_rows(cx, window), 3);
+}
+
+fn total(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<u64> {
+    paged_marking(cx, view, |marking| {
+        marking
+            .counted()
+            .filter(|counted| counted.done)
+            .map(|counted| counted.total)
+    })
+}
+
+fn follow_and_count_needles(
+    cx: &mut TestAppContext,
+    growing: &Growing,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    growing.append(&numbered_lines());
+    growing.changed.store(false, Ordering::Relaxed);
+    let (window, view) = window_with(cx, fake(), growing_hooks(growing), Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "alt-f");
+    search_for(cx, window, &view, "needle");
+    press(cx, window, &view, "escape");
+    assert_eq!(total(cx, &view), Some(2));
+    (window, view)
+}
+
+#[gpui_kit::test]
+fn a_followed_file_truncated_and_regrown_is_counted_again_from_the_start(cx: &mut TestAppContext) {
+    let growing = Growing::default();
+    let (window, view) = follow_and_count_needles(cx, &growing);
+    let keys = super::find::bottom_keys(cx, window);
+    assert!(
+        keys.contains(&"Alt+F Stop following".to_owned()),
+        "{keys:?}"
+    );
+    growing.rewrite(b"fresh start needle\n", false);
+    tick(cx, window, &view);
+    assert_eq!(total(cx, &view), Some(1));
+    assert_eq!(text_of(cx, window, "paged-follow"), "Following");
+    growing.append(&needle_lines(1));
+    tick(cx, window, &view);
+    assert_eq!(total(cx, &view), Some(201));
+}
+
+#[gpui_kit::test]
+fn a_followed_file_rewritten_longer_between_polls_is_counted_again_from_the_start(
+    cx: &mut TestAppContext,
+) {
+    let growing = Growing::default();
+    let (window, view) = follow_and_count_needles(cx, &growing);
+    let mut replacement = more_lines(1);
+    replacement.extend(numbered_lines());
+    growing.rewrite(&replacement, true);
+    tick(cx, window, &view);
+    assert_eq!(total(cx, &view), Some(2));
+    let hit_rows = paged_marking(cx, &view, |marking| {
+        marking.counted().map(|counted| counted.starts.clone())
+    });
+    let offset = more_lines(1).len() as u64;
+    let expected: Vec<u64> = [100, 900]
+        .iter()
+        .map(|line| offset + line_start(&numbered_lines(), *line) + 11)
+        .collect();
+    assert_eq!(hit_rows, Some(expected));
 }

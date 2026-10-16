@@ -247,3 +247,58 @@ fn an_older_stat_never_undoes_a_newer_one() {
     assert!(!file.apply(&mut file.cache(), older));
     assert_eq!(file.len(), PAGE + 11);
 }
+
+fn replace_by_rename(dir: &TempDir, path: &Path, bytes: &[u8]) {
+    let fresh = dir.path().join("fresh.tmp");
+    fs::write(&fresh, bytes).unwrap();
+    fs::rename(&fresh, path).unwrap();
+}
+
+#[test]
+fn a_file_replaced_by_rename_is_reopened_and_reported() {
+    let (dir, path) = file_with(PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    assert_eq!(read(&file, 0, 4), expected(0, 4));
+    replace_by_rename(&dir, &path, b"a fresh log line\n");
+    std::thread::sleep(Duration::from_millis(300));
+    let _ = read(&file, file.len(), 1);
+    assert!(file.take_changed());
+    assert!(file.take_rewritten());
+    assert_eq!(file.len(), 17);
+    assert_eq!(read(&file, 0, 64), b"a fresh log line\n");
+    assert!(!file.take_rewritten());
+}
+
+#[test]
+fn growth_in_place_is_not_a_rewrite() {
+    let (_dir, path) = file_with(100);
+    let file = PagedFile::open(&path).unwrap();
+    let _ = read(&file, 0, 100);
+    append(&path, b"new lines");
+    std::thread::sleep(Duration::from_millis(300));
+    let _ = read(&file, 100, 64);
+    assert!(file.take_changed());
+    assert!(!file.take_rewritten());
+}
+
+#[test]
+fn a_file_rewritten_in_place_and_grown_is_reported() {
+    let (_dir, path) = file_with(100);
+    let file = PagedFile::open(&path).unwrap();
+    let _ = read(&file, 0, 100);
+    let mut rewritten = vec![b'x'; 100];
+    rewritten.extend_from_slice(b"new lines");
+    fs::write(&path, &rewritten).unwrap();
+    let later = SystemTime::now() + Duration::from_secs(60);
+    OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    let _ = read(&file, 100, 64);
+    assert!(file.take_changed());
+    assert!(file.take_rewritten());
+    assert_eq!(read(&file, 0, 4), b"xxxx");
+}

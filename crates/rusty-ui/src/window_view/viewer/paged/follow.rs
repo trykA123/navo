@@ -1,14 +1,17 @@
 use std::time::Duration;
 
-use gpui_kit::{AsyncApp, Task, WeakEntity};
+use gpui_kit::base::TestSupportExt;
+use gpui_kit::{AsyncApp, Role, Task, WeakEntity};
 
 use super::PagedView;
 use super::lines::PagedKind;
 use super::moves::Move;
 use crate::prelude::*;
+use crate::tokens::Theme;
 use crate::window_view::viewer::files::SharedSource;
 
 const POLL_EVERY: Duration = Duration::from_secs(1);
+const DOT: f32 = 6.;
 const TEXT_ONLY: &str = "Follow works in the text view. 1 switches to it.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -89,5 +92,37 @@ impl PagedView {
             Follow::Following => Some("Following"),
             Follow::Paused => Some("Paused · Ctrl+End resumes"),
         }
+    }
+
+    pub(super) fn follow_badge(&self, t: &Theme) -> Option<impl IntoElement> {
+        let label = self.follow_label()?;
+        let is_live = self.follower.state == Follow::Following;
+        let (text, fill, dot) = if is_live {
+            (t.colors.accent_text, t.colors.selection, t.colors.accent)
+        } else {
+            (t.colors.muted, t.colors.rail, t.colors.faint)
+        };
+        Some(
+            div()
+                .id("paged-follow")
+                .role(Role::Status)
+                .aria_label(label)
+                .test_support()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(t.spacing.xs)
+                .px(t.spacing.sm)
+                .py(t.spacing.xxs)
+                .rounded(t.radii.sm)
+                .border_1()
+                .border_color(t.colors.line)
+                .bg(fill)
+                .text_size(t.typography.small)
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(text)
+                .child(div().size(px(DOT)).rounded_full().bg(dot))
+                .child(label),
+        )
     }
 }
