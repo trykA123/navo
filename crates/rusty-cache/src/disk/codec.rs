@@ -6,7 +6,7 @@ use rusty_fs::{Attributes, EntryKind, FsEntry};
 use crate::{CacheKey, CachedListing};
 
 const MAGIC: &[u8; 2] = b"FL";
-pub(crate) const FORMAT: u8 = 1;
+pub(crate) const FORMAT: u8 = 2;
 #[cfg(test)]
 pub(crate) const FORMAT_AT: usize = MAGIC.len();
 // No listing that fits a 32 MB cache inflates past this; a larger length is damage.
@@ -73,16 +73,32 @@ impl Body {
     }
 
     pub(crate) fn pack(&self) -> Vec<u8> {
-        let packed = lz4_flex::block::compress(&self.plain);
         let plain_len = u32::try_from(self.plain.len()).unwrap_or(u32::MAX);
-        let mut out = Vec::with_capacity(MAGIC.len() + 9 + packed.len());
-        out.extend_from_slice(MAGIC);
-        out.push(FORMAT);
-        out.extend_from_slice(&plain_len.to_le_bytes());
-        out.extend_from_slice(&crc32fast::hash(&packed).to_le_bytes());
-        out.extend_from_slice(&packed);
-        out
+        frame(plain_len, &lz4_flex::block::compress(&self.plain))
     }
+
+    #[cfg(test)]
+    pub(crate) fn plain(&self) -> &[u8] {
+        &self.plain
+    }
+}
+
+pub(crate) fn frame(plain_len: u32, packed: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(MAGIC.len() + 9 + packed.len());
+    out.extend_from_slice(MAGIC);
+    out.push(FORMAT);
+    out.extend_from_slice(&plain_len.to_le_bytes());
+    out.extend_from_slice(&checksum(plain_len, packed).to_le_bytes());
+    out.extend_from_slice(packed);
+    out
+}
+
+fn checksum(plain_len: u32, packed: &[u8]) -> u32 {
+    let mut hasher = crc32fast::Hasher::new();
+    hasher.update(&[FORMAT]);
+    hasher.update(&plain_len.to_le_bytes());
+    hasher.update(packed);
+    hasher.finalize()
 }
 
 #[cfg(test)]
@@ -103,12 +119,14 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<CachedListing, DecodeError> {
     let plain_len = header.u32().map_err(|_| DecodeError::Header)?;
     let checksum = header.u32().map_err(|_| DecodeError::Header)?;
     let packed = header.0;
-    if crc32fast::hash(packed) != checksum {
+    if self::checksum(plain_len, packed) != checksum {
         return Err(DecodeError::Checksum);
     }
+    // lz4 inflates at most 255 times plus a small tail.
+    let most = MAX_PLAIN.min(packed.len().saturating_mul(255).saturating_add(16));
     let plain_len = usize::try_from(plain_len)
         .ok()
-        .filter(|len| *len <= MAX_PLAIN)
+        .filter(|len| *len <= most)
         .ok_or(DecodeError::Header)?;
     let plain =
         lz4_flex::block::decompress(packed, plain_len).map_err(|_| DecodeError::Decompress)?;

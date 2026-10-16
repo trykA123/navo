@@ -177,3 +177,94 @@ proptest! {
         let _ = codec::decode(&value);
     }
 }
+
+fn reframed(plain: &[u8]) -> Vec<u8> {
+    let len = u32::try_from(plain.len()).unwrap();
+    codec::frame(len, &lz4_flex::block::compress(plain))
+}
+
+#[test]
+fn the_format_is_2() {
+    assert_eq!(FORMAT, 2);
+}
+
+#[test]
+fn the_checksum_covers_the_length() {
+    let mut value = codec::encode(&rich());
+    value[codec::FORMAT_AT + 1] ^= 0x01;
+    assert_eq!(codec::decode(&value), Err(codec::DecodeError::Checksum));
+}
+
+#[test]
+fn a_length_beyond_what_the_packed_bytes_can_hold_is_refused() {
+    let packed = lz4_flex::block::compress(b"tiny");
+    let value = codec::frame(10_000, &packed);
+    assert_eq!(codec::decode(&value), Err(codec::DecodeError::Header));
+}
+
+fn any_name() -> impl Strategy<Value = ProviderPath> {
+    prop_oneof![
+        any::<String>().prop_map(|text| ProviderPath::from_bytes(text.as_bytes())),
+        proptest::collection::vec(any::<u16>(), 0..12)
+            .prop_map(|units| ProviderPath::from_wide(&units)),
+        proptest::collection::vec(any::<u8>(), 0..12)
+            .prop_map(|bytes| ProviderPath::from_bytes(&bytes)),
+    ]
+}
+
+fn any_row() -> impl Strategy<Value = FsEntry> {
+    (
+        any_name(),
+        prop_oneof![
+            Just(EntryKind::File),
+            Just(EntryKind::Folder),
+            Just(EntryKind::Link)
+        ],
+        any::<u64>(),
+        any::<Option<i64>>(),
+        any::<[bool; 4]>(),
+    )
+        .prop_map(|(name, kind, size, modified_ms, bits)| FsEntry {
+            name,
+            kind,
+            size,
+            modified_ms,
+            attributes: Attributes {
+                hidden: bits[0],
+                system: bits[1],
+                readonly: bits[2],
+                link_to_folder: bits[3],
+            },
+        })
+}
+
+proptest! {
+    #[test]
+    fn decoding_any_framed_body_never_panics(plain in proptest::collection::vec(any::<u8>(), 0..512)) {
+        let _ = codec::decode(&reframed(&plain));
+    }
+
+    #[test]
+    fn decoding_a_damaged_body_in_a_valid_frame_never_panics(at in 0usize..4096, flip in 1u8..=255) {
+        let mut plain = codec::Body::new(&rich()).plain().to_vec();
+        let at = at % plain.len();
+        plain[at] ^= flip;
+        let _ = codec::decode(&reframed(&plain));
+    }
+
+    #[test]
+    fn any_rows_round_trip(
+        rows in proptest::collection::vec(any_row(), 0..24),
+        read_ms in 0u64..4_000_000_000_000,
+        changed_ms in any::<Option<u32>>(),
+        complete in any::<bool>(),
+    ) {
+        let listing = CachedListing {
+            rows: rows.into(),
+            read_at: at(0) + std::time::Duration::from_millis(read_ms),
+            folder_changed: changed_ms.map(|ms| at(0) + std::time::Duration::from_millis(u64::from(ms))),
+            complete,
+        };
+        prop_assert_eq!(codec::decode(&codec::encode(&listing)), Ok(listing));
+    }
+}
