@@ -21,6 +21,10 @@ pub trait ByteSource {
     fn take_changed(&self) -> bool {
         false
     }
+
+    fn take_rewritten(&self) -> bool {
+        false
+    }
 }
 
 pub fn read_full<S: ByteSource + ?Sized>(

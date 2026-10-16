@@ -59,6 +59,7 @@ pub struct PagedView {
     index: Option<Arc<LineIndex>>,
     index_rev: u64,
     source_rev: u64,
+    seen_len: u64,
     cache: RowCache,
     index_done: bool,
     index_failed: bool,
@@ -82,6 +83,7 @@ impl PagedView {
         let mut view = Self {
             title: title.into(),
             summary: paged.summary.map(SharedString::from),
+            seen_len: paged.source.len(),
             source: paged.source,
             marking: Marking::new(paged.reopen.clone()),
             reopen: paged.reopen,
@@ -139,6 +141,16 @@ impl PagedView {
         }
     }
 
+    fn restart_index(&mut self, cx: &mut Context<Self>) {
+        self.index = None;
+        self.index_done = false;
+        self.index_failed = false;
+        self.line_count = None;
+        self.index_job = None;
+        self.index_rev += 1;
+        self.start_index(cx);
+    }
+
     fn index_message(&mut self, message: IndexMessage, cx: &mut Context<Self>) {
         match message {
             IndexMessage::Snapshot(snapshot) => self.index = Some(Arc::new(snapshot)),
@@ -149,6 +161,7 @@ impl PagedView {
                 self.line_count = line_count;
                 self.index = Some(Arc::new(index));
                 self.index_done = true;
+                self.follow_indexed(cx);
             }
             IndexMessage::Done(IndexDone {
                 result: Ok(None), ..
@@ -250,7 +263,14 @@ impl PagedView {
         self.source_rev += 1;
         self.previews.clear();
         let len = self.source.len();
-        let appended_to = self.is_following().then_some(len);
+        let rewritten = self.source.take_rewritten() || len < self.seen_len;
+        self.seen_len = len;
+        if rewritten {
+            self.find.hit = None;
+            self.find.anchor = None;
+            self.restart_index(cx);
+        }
+        let appended_to = (self.is_following() && !rewritten).then_some(len);
         source_changed(self, appended_to, cx);
         if self.top >= len {
             self.queue_move(Move::Offset(len), cx);

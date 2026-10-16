@@ -1,9 +1,10 @@
+mod identity;
 mod index;
 
-use std::fs::File;
-use std::path::Path;
+use std::fs::{File, Metadata};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 
 use rusty_core::paging::{ByteSource, LineIndex};
@@ -18,6 +19,7 @@ pub const INDEX_PROGRESS_EVERY: u64 = 8 * 1024 * 1024;
 
 const PAGE: u64 = PAGE_SIZE as u64;
 const END_CHECK_EVERY: Duration = Duration::from_millis(250);
+const TAIL_CHECK: u64 = 64;
 
 struct Page {
     number: u64,
@@ -33,9 +35,12 @@ struct Cache {
 }
 
 pub struct PagedFile {
-    file: File,
+    path: PathBuf,
+    file: RwLock<Arc<File>>,
     len: AtomicU64,
     changed: AtomicBool,
+    rewritten: AtomicBool,
+    path_opens: AtomicU64,
     stats: AtomicU64,
     cache: Mutex<Cache>,
 }
@@ -44,6 +49,7 @@ struct Stat {
     seq: u64,
     len: u64,
     modified: Option<SystemTime>,
+    replacement: Option<File>,
 }
 
 impl PagedFile {
@@ -63,12 +69,31 @@ impl PagedFile {
             end_checked: None,
         };
         Ok(Self {
-            file,
+            path: path.to_owned(),
+            file: RwLock::new(Arc::new(file)),
             len: AtomicU64::new(metadata.len()),
             changed: AtomicBool::new(false),
+            rewritten: AtomicBool::new(false),
+            path_opens: AtomicU64::new(0),
             stats: AtomicU64::new(1),
             cache: Mutex::new(cache),
         })
+    }
+
+    fn handle(&self) -> Arc<File> {
+        self.file
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    fn replacement(&self, held: &File, held_metadata: &Metadata) -> Option<(File, Metadata)> {
+        self.path_opens.fetch_add(1, Ordering::Relaxed);
+        let file = File::open(&self.path).ok()?;
+        let metadata = file.metadata().ok()?;
+        let same = identity::same_identity(held, &file);
+        let is_replaced = identity::is_replaced(same, held_metadata, &metadata);
+        (metadata.is_file() && is_replaced).then_some((file, metadata))
     }
 
     fn cache(&self) -> MutexGuard<'_, Cache> {
@@ -81,18 +106,54 @@ impl PagedFile {
     }
 
     #[must_use]
+    pub fn path_opens(&self) -> u64 {
+        self.path_opens.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
     pub fn cached_pages(&self) -> usize {
         self.cache().pages.len()
     }
 
-    fn stat(&self) -> Option<Stat> {
+    fn stat(&self, probes_path: bool) -> Option<Stat> {
         let seq = self.stats.fetch_add(1, Ordering::AcqRel);
-        let metadata = self.file.metadata().ok()?;
+        let file = self.handle();
+        let held = file.metadata().ok()?;
+        let found = probes_path
+            .then(|| self.replacement(&file, &held))
+            .flatten();
+        let (metadata, replacement) = match found {
+            Some((file, metadata)) => (metadata, Some(file)),
+            None => (held, None),
+        };
         Some(Stat {
             seq,
             len: metadata.len(),
             modified: metadata.modified().ok(),
+            replacement,
         })
+    }
+
+    fn tail_changed(&self, cache: &Cache, old_len: u64, new_len: u64) -> bool {
+        if new_len < old_len {
+            return true;
+        }
+        let Some(last) = old_len.checked_sub(1) else {
+            return false;
+        };
+        let number = last / PAGE;
+        let from = old_len.saturating_sub(TAIL_CHECK).max(number * PAGE);
+        let span = |at: u64| usize::try_from(at - number * PAGE).unwrap_or(usize::MAX);
+        let kept = cache
+            .pages
+            .iter()
+            .find(|page| page.number == number)
+            .and_then(|page| page.bytes.get(span(from)..span(old_len)));
+        let Some(kept) = kept else {
+            return false;
+        };
+        let mut now = vec![0u8; kept.len()];
+        read_file(&self.handle(), from, &mut now).is_ok_and(|read| now[..read] != *kept)
     }
 
     fn apply(&self, cache: &mut Cache, stat: Option<Stat>) -> bool {
@@ -103,7 +164,19 @@ impl PagedFile {
             return false;
         }
         cache.applied = stat.seq;
-        if stat.len != self.len.load(Ordering::Acquire) || stat.modified != cache.modified {
+        let old_len = self.len.load(Ordering::Acquire);
+        let is_rewrite = match stat.replacement {
+            Some(file) => {
+                *self.file.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(file);
+                cache.modified = None;
+                true
+            }
+            None => false,
+        };
+        if stat.len != old_len || stat.modified != cache.modified {
+            if is_rewrite || self.tail_changed(cache, old_len, stat.len) {
+                self.rewritten.store(true, Ordering::Release);
+            }
             self.len.store(stat.len, Ordering::Release);
             cache.modified = stat.modified;
             cache.pages.clear();
@@ -127,7 +200,7 @@ impl PagedFile {
             due
         };
         if due {
-            let stat = self.stat();
+            let stat = self.stat(true);
             let _ = self.apply(&mut self.cache(), stat);
         }
         offset >= self.len.load(Ordering::Acquire)
@@ -154,9 +227,9 @@ impl PagedFile {
         if let Some(count) = self.copy_cached(number, within, buf) {
             return Ok(count);
         }
-        let stat = self.stat();
+        let stat = self.stat(false);
         let mut bytes = vec![0u8; PAGE_SIZE];
-        let read = read_file(&self.file, number * PAGE, &mut bytes)?;
+        let read = read_file(&self.handle(), number * PAGE, &mut bytes)?;
         bytes.truncate(read);
         let count = copy_out(&bytes, within, buf);
         let mut cache = self.cache();
@@ -187,6 +260,10 @@ impl ByteSource for PagedFile {
 
     fn take_changed(&self) -> bool {
         self.changed.swap(false, Ordering::AcqRel)
+    }
+
+    fn take_rewritten(&self) -> bool {
+        self.rewritten.swap(false, Ordering::AcqRel)
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {

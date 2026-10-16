@@ -129,19 +129,21 @@ impl Viewer {
 
 impl FerriteWindow {
     pub(super) fn view_row(&mut self, row: u64, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(location) = self.row_location(row) {
+            self.view_location(location, window, cx);
+        }
+    }
+
+    fn row_location(&self, row: u64) -> Option<Location> {
         let tab = self.browser.state().active_tab();
-        let location = tab
-            .listing()
+        tab.listing()
             .and_then(|listing| listing.get(row))
             .filter(|entry| !entry.is_folder)
             .and_then(|entry| {
                 tab.location()
                     .join(&rusty_core::ProviderPath::from_text(&entry.name))
                     .ok()
-            });
-        if let Some(location) = location {
-            self.view_location(location, window, cx);
-        }
+            })
     }
 
     pub(super) fn view_location(
@@ -152,6 +154,24 @@ impl FerriteWindow {
     ) {
         let mut viewer = Viewer::new(location, cx.focus_handle());
         viewer.opening = Some(self.open_file(&viewer, window, cx));
+        self.show_viewer(viewer, window, cx);
+    }
+
+    fn step_to(&mut self, location: Location, window: &mut Window, cx: &mut Context<Self>) {
+        let in_flight = self
+            .viewer
+            .as_mut()
+            .and_then(|viewer| viewer.opening.take());
+        let Some(mut opening) = in_flight else {
+            return self.view_location(location, window, cx);
+        };
+        opening.supersede();
+        let mut viewer = Viewer::new(location, cx.focus_handle());
+        viewer.opening = Some(opening);
+        self.show_viewer(viewer, window, cx);
+    }
+
+    fn show_viewer(&mut self, viewer: Viewer, window: &mut Window, cx: &mut Context<Self>) {
         let focus = viewer.focus.clone();
         window.defer(cx, move |window, cx| window.focus(&focus, cx));
         self.viewer = Some(viewer);

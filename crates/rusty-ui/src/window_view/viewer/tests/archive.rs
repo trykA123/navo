@@ -1,7 +1,8 @@
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
-use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use rusty_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveListing, ENCRYPTED, Stamp};
 
 use super::find::bottom_keys;
@@ -218,4 +219,96 @@ fn esc_while_an_entry_is_read_sets_its_cancel_flag(cx: &mut TestAppContext) {
     assert!(!flag.load(Ordering::Relaxed));
     press_only(cx, window, "escape");
     assert!(flag.load(Ordering::Relaxed));
+}
+
+fn listing_of(names: &[&str]) -> ArchiveListing {
+    ArchiveListing {
+        entries: names.iter().map(|name| entry(name, 12)).collect(),
+        ..listing()
+    }
+}
+
+const XLSX: [&str; 5] = [
+    "[Content_Types].xml",
+    "_rels/.rels",
+    "docProps/app.xml",
+    "xl/workbook.xml",
+    "xl/worksheets/sheet1.xml",
+];
+
+#[gpui_kit::test]
+fn enter_on_a_file_of_an_xlsx_like_zip_reads_that_file(cx: &mut TestAppContext) {
+    let (window, view, reads_log) = open_zip(cx, Ok(listing_of(&XLSX)));
+    for _ in 0..3 {
+        press(cx, window, &view, "down");
+    }
+    press(cx, window, &view, "enter");
+    assert_eq!(reads(&reads_log), [3]);
+    assert!(!text_of(cx, window, "archive-status").starts_with("A folder"));
+}
+
+#[gpui_kit::test]
+fn a_clicked_file_row_opens_on_enter_and_a_folder_row_shows_the_note(cx: &mut TestAppContext) {
+    let names = [
+        "xl/",
+        "xl/workbook.xml",
+        "xl/_rels/",
+        "xl/_rels/workbook.xml.rels",
+    ];
+    let (window, view, reads_log) = open_zip(cx, Ok(listing_of(&names)));
+    cx.update_window(window, |_, window, cx| window.click(("row", 3usize), cx))
+        .expect("window");
+    press(cx, window, &view, "enter");
+    assert_eq!(reads(&reads_log), [3]);
+    press(cx, window, &view, "up");
+    press(cx, window, &view, "enter");
+    assert!(text_of(cx, window, "archive-status").starts_with("A folder"));
+    assert_eq!(reads(&reads_log), [3]);
+}
+
+fn open_zip_on_row(
+    cx: &mut TestAppContext,
+    downs: usize,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    let fs = fake();
+    fs.add_file("home/b.txt", 4);
+    let files = archive_hooks(Ok(listing()), &Reads::default());
+    let (window, view) = window_with(cx, fs, files, Kinds::builtin());
+    for _ in 0..downs {
+        press(cx, window, &view, "down");
+    }
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+    (window, view)
+}
+
+fn viewer_title(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> String {
+    view.read_with(cx, |view, _| {
+        view.viewer
+            .as_ref()
+            .map(|viewer| viewer.title.to_string())
+            .unwrap_or_default()
+    })
+}
+
+#[gpui_kit::test]
+fn held_backspace_past_an_empty_filter_stays_in_the_archive(cx: &mut TestAppContext) {
+    let (window, view) = open_zip_on_row(cx, 2);
+    assert_eq!(viewer_title(cx, &view), "b.txt");
+    press(cx, window, &view, "d");
+    for _ in 0..4 {
+        press(cx, window, &view, "backspace");
+    }
+    assert_eq!(viewer_title(cx, &view), "b.txt");
+    assert!(visible(cx, window, "archive-list"));
+    assert!(row(cx, window, 0).starts_with("docs, folder"));
+}
+
+#[gpui_kit::test]
+fn space_in_the_archive_list_does_not_open_the_next_file(cx: &mut TestAppContext) {
+    let (window, view) = open_zip_on_row(cx, 1);
+    assert_eq!(viewer_title(cx, &view), "a.txt");
+    press(cx, window, &view, "space");
+    assert_eq!(viewer_title(cx, &view), "a.txt");
+    assert!(visible(cx, window, "archive-list"));
 }

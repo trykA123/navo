@@ -72,7 +72,12 @@ impl PagedView {
         let mut keys = vec![("Ctrl+F", "Find"), ("F3", "Next"), go_to];
         keys.extend(MARK_KEYS);
         if self.kind == PagedKind::Text {
-            keys.extend([("Alt+L", "Line ends"), ("Alt+F", "Follow")]);
+            let follow = if self.is_following() {
+                "Stop following"
+            } else {
+                "Follow"
+            };
+            keys.extend([("Alt+L", "Line ends"), ("Alt+F", follow)]);
         }
         keys
     }
@@ -163,9 +168,7 @@ impl PagedView {
                     status(t, "paged-changed", "Changed on disk".into()).text_color(t.colors.warn),
                 )
             })
-            .children(self.follow_label().map(|label| {
-                status(t, "paged-follow", label.into()).text_color(t.colors.accent_text)
-            }))
+            .children(self.follow_badge(t))
             .child(div().flex_1())
             .children(
                 self.index_status()

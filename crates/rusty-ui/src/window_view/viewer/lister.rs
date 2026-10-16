@@ -4,8 +4,8 @@ use rusty_core::{Command, CursorMove};
 use super::kinds::{IMAGE_ID, is_image_name};
 use super::modes::Pick;
 use super::{
-    EditFile, FindNext, FindOnEnter, FindPrevious, ListerHex, ListerRich, ListerText, NextFile,
-    PreviousFile, ShowHex, ShowRich, ShowText, Slot, Viewer,
+    BackspaceKey, EditFile, FindNext, FindOnEnter, FindPrevious, ListerHex, ListerRich, ListerText,
+    NextFile, PageDown, PreviousFile, ShowHex, ShowRich, ShowText, Slot, SpaceKey, Viewer,
 };
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
@@ -124,7 +124,29 @@ impl FerriteWindow {
         let _ = self.browser.command(&Command::PaneCursorMove {
             to: CursorMove::Row(row),
         });
-        self.view_row(row, window, cx);
+        if let Some(location) = self.row_location(row) {
+            self.step_to(location, window, cx);
+        }
+    }
+
+    fn space_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.is_listing(window, cx) {
+            return cx.propagate();
+        }
+        if self.showing_image() {
+            self.step_file(true, window, cx);
+        } else {
+            window.dispatch_action(Box::new(PageDown), cx);
+        }
+    }
+
+    fn backspace_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.is_listing(window, cx) {
+            return cx.propagate();
+        }
+        if self.showing_image() {
+            self.step_file(false, window, cx);
+        }
     }
 
     pub(super) fn slot_actions(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -165,6 +187,10 @@ impl FerriteWindow {
             }))
             .on_action(cx.listener(|view, _: &PreviousFile, window, cx| {
                 view.step_file(false, window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &SpaceKey, window, cx| view.space_key(window, cx)))
+            .on_action(cx.listener(|view, _: &BackspaceKey, window, cx| {
+                view.backspace_key(window, cx);
             }))
     }
 }

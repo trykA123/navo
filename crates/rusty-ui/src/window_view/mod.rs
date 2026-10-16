@@ -296,7 +296,10 @@ impl Render for FerriteWindow {
             .child(Self::title_bar(cx))
             .child(div().flex().flex_1().min_h_0().child(body))
             .children(jobs)
-            .child(FKeyBar::new("fkeys", self.fkeys(cx)))
+            .child(
+                FKeyBar::new("fkeys", self.fkeys(cx))
+                    .when(self.viewer.is_some(), FKeyBar::sized_to_keys),
+            )
             .children(dialog)
     }
 }

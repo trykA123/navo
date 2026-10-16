@@ -1,5 +1,5 @@
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::component::input::Editor;
+use gpui_kit::component::input::{Editor, MovePageDown};
 use gpui_kit::{Role, Stateful};
 
 use super::EditorView;
@@ -14,7 +14,7 @@ use crate::window_view::viewer::search::find_all::{
 use crate::window_view::viewer::search::overview::StripLook;
 use crate::window_view::viewer::{
     Back, FindAll, ListClose, ListDown, ListGo, ListUp, MatchCase, NewerSearch, OlderSearch,
-    OpenFind,
+    OpenFind, PageDown,
 };
 
 impl EditorView {
@@ -93,6 +93,9 @@ impl EditorView {
             .on_action(cx.listener(|view, _: &FindAll, window, cx| {
                 view.find_all_in_bar(window, cx);
             }))
+            .on_action(|_: &PageDown, window, cx| {
+                window.dispatch_action(Box::new(MovePageDown), cx);
+            })
     }
 
     fn list_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {

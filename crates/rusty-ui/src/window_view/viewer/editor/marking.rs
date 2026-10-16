@@ -87,6 +87,11 @@ impl EditorView {
         cx.notify();
     }
 
+    pub(in crate::window_view::viewer) fn cursor_row(&self, cx: &App) -> u64 {
+        let state = self.editor.read(cx);
+        state.text().offset_to_point(state.cursor()).row as u64
+    }
+
     fn cursor_line(&self, cx: &App) -> u64 {
         let state = self.editor.read(cx);
         line_start_at(state.text(), state.cursor())

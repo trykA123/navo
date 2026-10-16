@@ -14,11 +14,20 @@ use gpui_kit::{AnyView, FocusHandle, Focusable, point};
 pub use decode::{IMAGE_LIMIT, Picture, decode_image};
 pub use exif::ExifEntry;
 
-use super::body::{BodyKeys, ViewerBody};
+use super::body::{BodyKeys, Key, ViewerBody};
+use super::keys_bar::NEXT_PREVIOUS;
 use crate::prelude::*;
 use zoom::{STEP, Viewport, Zoom};
 
 const PAN_STEP: f32 = 64.;
+const IMAGE_KEYS: [Key; 6] = [
+    ("0", "Fit"),
+    ("1", "100 %"),
+    ("+/−", "Zoom"),
+    ("Arrows/Drag", "Pan"),
+    NEXT_PREVIOUS,
+    ("I", "Info"),
+];
 
 pub struct ImageView {
     title: SharedString,
@@ -32,6 +41,8 @@ pub struct ImageView {
 }
 
 impl ImageView {
+    pub const KEYS: [Key; 6] = IMAGE_KEYS;
+
     pub fn new(title: impl Into<SharedString>, picture: Picture, cx: &mut Context<Self>) -> Self {
         cx.on_release(|view: &mut Self, cx| cx.drop_image(view.picture.pixels.clone(), None))
             .detach();
@@ -137,13 +148,7 @@ impl ViewerBody for ImageBody {
     }
 
     fn keys(&self, _: &App) -> BodyKeys {
-        BodyKeys::Normal(vec![
-            ("0", "Fit"),
-            ("1", "100 %"),
-            ("+/-", "Zoom"),
-            ("I", "Info"),
-            ("Space", "Next image"),
-        ])
+        BodyKeys::Normal(IMAGE_KEYS.to_vec())
     }
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}

@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use gpui_kit::component::input::InputEvent;
-use gpui_kit::{Focusable, Subscription};
+use gpui_kit::{Focusable, Subscription, Task};
 use rusty_core::paging::{Found, Needle, Search, parse_hex};
 
 use super::PagedView;
@@ -10,7 +10,7 @@ use super::lines::PagedKind;
 use super::moves::Move;
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
-use crate::window_view::viewer::search::count::count_search;
+use crate::window_view::viewer::search::count::{count_after_pause, count_search};
 use crate::window_view::viewer::search::find_all::open_find_all;
 use crate::window_view::viewer::search::history::Recall;
 use crate::window_view::viewer::search::jobs::Job;
@@ -47,6 +47,7 @@ pub(super) struct FindState {
     pub last: Option<String>,
     parked: Option<(String, bool)>,
     job: Option<Job>,
+    counting: Option<Task<()>>,
 }
 
 impl FindState {
@@ -58,6 +59,7 @@ impl FindState {
         self.note = None;
         self.last = None;
         self.parked = None;
+        self.counting = None;
     }
 
     fn cancel(&mut self) {
@@ -101,11 +103,16 @@ impl PagedView {
             return;
         }
         let input = text_field_state(placeholder(kind, self.kind), window, cx);
-        let enter = cx.subscribe_in(&input, window, |view, _, event: &InputEvent, window, cx| {
-            if let InputEvent::PressEnter { shift, .. } = event {
-                view.submit_bar(*shift, window, cx);
-            }
-        });
+        let enter =
+            cx.subscribe_in(
+                &input,
+                window,
+                |view, _, event: &InputEvent, window, cx| match event {
+                    InputEvent::PressEnter { shift, .. } => view.submit_bar(*shift, window, cx),
+                    InputEvent::Change => view.count_while_typing(cx),
+                    _ => {}
+                },
+            );
         let focus = input.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
         self.find.bar = Some(Bar {
@@ -119,6 +126,7 @@ impl PagedView {
 
     fn close_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.find.bar = None;
+        self.find.counting = None;
         window.focus(&self.focus, cx);
         cx.notify();
     }
@@ -157,6 +165,22 @@ impl PagedView {
         }
     }
 
+    fn count_while_typing(&mut self, cx: &mut Context<Self>) {
+        if self
+            .find
+            .bar
+            .as_ref()
+            .is_some_and(|bar| bar.kind == BarKind::Find)
+        {
+            self.find.counting = Some(count_after_pause(Self::typed_needle, cx));
+        }
+    }
+
+    fn typed_needle(&self, cx: &App) -> Option<Needle> {
+        let bar = self.find.bar.as_ref()?;
+        self.needle(&bar.input.read(cx).value()).ok()
+    }
+
     pub(super) fn needle(&self, text: &str) -> Result<Needle, String> {
         match self.kind {
             PagedKind::Hex => parse_hex(text).map(Needle::Bytes),
@@ -193,6 +217,7 @@ impl PagedView {
             Err(error) => return self.set_bar_error(Some(error), cx),
         };
         self.find.last = Some(text.to_owned());
+        self.find.counting = None;
         count_search(self, needle.clone(), cx);
         self.marking.remember_search(&needle, cx);
         if !self.moves.is_empty() {
