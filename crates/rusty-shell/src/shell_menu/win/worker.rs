@@ -43,6 +43,12 @@ pub(super) enum Request {
     Shutdown,
 }
 
+impl Request {
+    fn can_hang(&self) -> bool {
+        !matches!(self, Self::Invoke { .. } | Self::Classic { .. })
+    }
+}
+
 pub(super) type BusySince = Arc<Mutex<Option<Instant>>>;
 
 pub(super) fn spawn(busy: BusySince) -> Result<Link, MenuError> {
@@ -75,11 +81,11 @@ fn run(
     let link = Link {
         sender,
         window: window.hwnd().0 as isize,
+        retired: Arc::default(),
     };
     let _ = ready.send(Ok(link.clone()));
     let mut worker = Worker {
         link,
-        owner: window.hwnd(),
         sessions: HashMap::new(),
         next_session: 1,
     };
@@ -88,7 +94,8 @@ fn run(
     mark(busy, false);
     loop {
         while let Ok(request) = receiver.try_recv() {
-            mark(busy, true);
+            let can_hang = request.can_hang();
+            mark(busy, can_hang);
             let keep_running = worker.handle(request);
             mark(busy, false);
             if !keep_running {
@@ -107,14 +114,13 @@ fn mark(busy: &BusySince, is_busy: bool) {
 
 struct Worker {
     link: Link,
-    owner: HWND,
     sessions: HashMap<u64, LoadedMenu>,
     next_session: u64,
 }
 
 impl Worker {
     fn warm(&self) {
-        let _ = LoadedMenu::query(&[std::env::temp_dir()], self.owner);
+        let _ = LoadedMenu::query(&[std::env::temp_dir()], HWND::default());
     }
 
     fn handle(&mut self, request: Request) -> bool {
@@ -136,14 +142,13 @@ impl Worker {
                 options,
                 reply,
             } => {
-                let owner = self.owner;
                 let target = Target {
                     command,
                     verb: verb.as_deref(),
                 };
                 let result = self
                     .session(session)
-                    .and_then(|menu| invoke::invoke(menu, &target, options, owner));
+                    .and_then(|menu| invoke::invoke(menu, &target, options));
                 let _ = reply.send(result);
             }
             Request::Classic {
@@ -166,7 +171,7 @@ impl Worker {
     }
 
     fn open(&mut self, paths: &[PathBuf]) -> Result<MenuSession, MenuError> {
-        let mut loaded = LoadedMenu::query(paths, self.owner)?;
+        let mut loaded = LoadedMenu::query(paths, HWND::default())?;
         let menu = loaded.walk();
         let id = self.next_session;
         self.next_session += 1;

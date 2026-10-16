@@ -7,8 +7,9 @@ mod sta;
 mod worker;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use rusty_core::shell_menu::Submenu;
@@ -34,6 +35,7 @@ fn hwnd_of(handle: WindowHandle) -> HWND {
 struct Link {
     sender: Sender<Request>,
     window: isize,
+    retired: Arc<AtomicBool>,
 }
 
 impl Link {
@@ -42,6 +44,9 @@ impl Link {
     }
 
     fn ask<T>(&self, make: impl FnOnce(super::pending::Reply<T>) -> Request) -> Pending<T> {
+        if self.retired.load(Ordering::Acquire) {
+            return Pending::ready(Err(MenuError::Stopped));
+        }
         let (reply, pending) = Pending::channel();
         if self.send(make(reply)) {
             pending
@@ -85,6 +90,7 @@ impl Service {
             && let Ok(fresh) = Worker::spawn()
         {
             let stale = std::mem::replace(&mut *worker, fresh);
+            stale.link.retired.store(true, Ordering::Release);
             stale.link.send(Request::Shutdown);
         }
         worker.link.ask(|reply| Request::Open { paths, reply })
@@ -143,5 +149,30 @@ impl SessionHandle {
 impl Drop for SessionHandle {
     fn drop(&mut self) {
         self.link.send(Request::Close { session: self.id });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::{Arc, mpsc};
+
+    use super::{Link, MenuError, Request};
+
+    #[test]
+    fn a_retired_link_answers_stopped_without_sending() {
+        let (sender, receiver) = mpsc::channel();
+        let link = Link {
+            sender,
+            window: 0,
+            retired: Arc::new(AtomicBool::new(true)),
+        };
+        let pending = link.ask(|reply| Request::Fill {
+            session: 1,
+            path: vec![0],
+            reply,
+        });
+        assert_eq!(pending.wait(), Err(MenuError::Stopped));
+        assert!(receiver.try_recv().is_err());
     }
 }

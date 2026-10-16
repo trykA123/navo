@@ -1,5 +1,16 @@
 use rusty_core::shell_menu::Icon;
 
+const MAX_ICON_SIDE: i32 = 256;
+
+pub(super) fn icon_size(width: i32, height: i32) -> Option<(u32, u32)> {
+    let side = |value: i32| {
+        (1..=MAX_ICON_SIDE)
+            .contains(&value)
+            .then(|| value.unsigned_abs())
+    };
+    Some((side(width)?, side(height)?))
+}
+
 pub(super) fn icon_from_bgra(width: u32, height: u32, mut data: Vec<u8>) -> Option<Icon> {
     let expected = usize::try_from(u64::from(width) * u64::from(height) * 4).ok()?;
     if width == 0 || height == 0 || data.len() != expected {
@@ -64,6 +75,24 @@ mod tests {
     fn straight_alpha_is_left_alone() {
         let icon = icon_from_bgra(1, 1, vec![0, 0, 200, 128]);
         assert_eq!(icon.map(|i| i.rgba), Some(vec![200, 0, 0, 128]));
+    }
+
+    #[test]
+    fn menu_sized_bitmaps_are_accepted() {
+        assert_eq!(icon_size(16, 16), Some((16, 16)));
+        assert_eq!(icon_size(256, 256), Some((256, 256)));
+    }
+
+    #[test]
+    fn bitmaps_over_256_pixels_are_skipped() {
+        assert_eq!(icon_size(257, 16), None);
+        assert_eq!(icon_size(16, 4096), None);
+    }
+
+    #[test]
+    fn zero_or_negative_sizes_are_skipped() {
+        assert_eq!(icon_size(0, 16), None);
+        assert_eq!(icon_size(16, -16), None);
     }
 
     #[test]

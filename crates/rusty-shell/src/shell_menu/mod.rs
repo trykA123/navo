@@ -7,6 +7,8 @@ mod pixels;
 mod selection;
 #[cfg(not(windows))]
 mod stub;
+#[cfg(any(windows, test))]
+mod verb_fallback;
 #[cfg(windows)]
 mod win;
 
@@ -82,6 +84,7 @@ impl MenuSession {
         self.handle.fill(path.to_vec())
     }
 
+    /// Poll with `wait_timeout`, never block: dialogs owned by the UI window call into it.
     #[must_use]
     pub fn invoke(&self, id: &ItemId, options: InvokeOptions) -> Pending<()> {
         match id {
@@ -90,6 +93,7 @@ impl MenuSession {
         }
     }
 
+    /// Poll with `wait_timeout`, never block: the menu and its dialogs call into the UI window.
     #[must_use]
     pub fn classic(&self, hwnd: WindowHandle, point: ScreenPoint) -> Pending<Option<u32>> {
         self.handle.classic(hwnd, point)

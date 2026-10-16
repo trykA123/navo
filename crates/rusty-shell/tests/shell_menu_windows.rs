@@ -245,6 +245,23 @@ fn invoking_copy_puts_a_file_drop_on_the_clipboard() {
 }
 
 #[test]
+fn an_unknown_verb_without_an_id_fails_without_a_retry() {
+    let fixture = Fixture::new();
+    let service = ShellMenuService::start().unwrap();
+    let session = open(&service, vec![fixture.file("notes.txt")]);
+    let unknown = ItemId::Shell {
+        command: 0,
+        verb: Some("ferrite-no-such-verb".to_owned()),
+    };
+    let result = session
+        .invoke(&unknown, InvokeOptions::default())
+        .wait_timeout(ANSWER)
+        .unwrap();
+    eprintln!("unknown verb: {result:?}");
+    assert!(matches!(result, Err(MenuError::Shell { .. })), "{result:?}");
+}
+
+#[test]
 fn items_in_two_folders_give_different_folders() {
     let (first, second) = (Fixture::new(), Fixture::new());
     let service = ShellMenuService::start().unwrap();

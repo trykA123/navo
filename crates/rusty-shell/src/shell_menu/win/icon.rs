@@ -5,7 +5,7 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::MENUITEMINFOW;
 
-use crate::shell_menu::pixels::icon_from_bgra;
+use crate::shell_menu::pixels::{icon_from_bgra, icon_size};
 
 pub(super) fn of_item(item: &MENUITEMINFOW) -> Option<Icon> {
     [item.hbmpItem, item.hbmpUnchecked]
@@ -25,7 +25,7 @@ fn to_icon(bitmap: HBITMAP) -> Option<Icon> {
     if unsafe { GetObjectW(bitmap.into(), size, Some((&raw mut bm).cast())) } == 0 {
         return None;
     }
-    let (width, height) = (u32::try_from(bm.bmWidth).ok()?, bm.bmHeight.unsigned_abs());
+    let (width, height) = icon_size(bm.bmWidth, bm.bmHeight)?;
     let mut info = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: u32::try_from(size_of::<BITMAPINFOHEADER>()).ok()?,
