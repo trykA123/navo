@@ -4,7 +4,7 @@ use rusty_core::Location;
 use rusty_core::shell_menu::ShellMenu;
 use rusty_ui::window_view::{Reply, ScreenSpot};
 
-use super::provider;
+use super::{provider, shell_form};
 
 fn answer<T>(reply: &Reply<T>) -> Result<T, String> {
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -25,6 +25,34 @@ fn a_file_outside_the_local_disk_gets_an_empty_menu_without_the_shell() {
     assert_eq!(*session.menu(), ShellMenu::default());
     let error = answer(&session.classic(ScreenSpot::default())).unwrap_err();
     assert_eq!(error, "the Windows menu works only on local files");
+}
+
+#[test]
+fn the_shell_gets_a_drive_path_without_the_verbatim_prefix() {
+    let path = std::path::PathBuf::from(r"\\?\C:\WORK_STUFF\paperwing");
+    assert_eq!(shell_form(path), Ok(r"C:\WORK_STUFF\paperwing".into()));
+}
+
+#[test]
+fn the_shell_gets_a_share_path_without_the_verbatim_prefix() {
+    let path = std::path::PathBuf::from(r"\\?\UNC\server\share\a.txt");
+    assert_eq!(shell_form(path), Ok(r"\\server\share\a.txt".into()));
+}
+
+#[test]
+fn a_plain_path_reaches_the_shell_unchanged() {
+    let path = std::path::PathBuf::from("/home/admin/notes.txt");
+    assert_eq!(shell_form(path.clone()), Ok(path));
+}
+
+#[test]
+fn a_path_past_the_shell_limit_is_refused() {
+    let long = format!(r"\\?\C:\{}", "a".repeat(300));
+    let error = shell_form(std::path::PathBuf::from(long)).unwrap_err();
+    assert_eq!(
+        error,
+        "the Windows menu cannot open paths longer than 259 characters"
+    );
 }
 
 #[cfg(not(windows))]
@@ -55,4 +83,15 @@ mod linux {
         let error = answer(&session().invoke(&id, ScreenSpot::default())).unwrap_err();
         assert_eq!(error, "shell menus are not supported on this platform");
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn a_local_folder_opens_a_windows_menu() {
+    let folder = std::env::temp_dir().join("ferrite-shell-path");
+    std::fs::create_dir_all(&folder).expect("temp folder");
+    let location = Location::new(folder.to_str().expect("utf-8")).expect("location");
+    let provider = provider().expect("the menu service starts");
+    let session = answer(&provider.open(&[location])).expect("a Windows menu");
+    assert!(!session.menu().items.is_empty(), "no Windows items");
 }
