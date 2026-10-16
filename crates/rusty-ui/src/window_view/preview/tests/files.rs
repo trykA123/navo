@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
+use gpui_kit::AppContext as _;
 use gpui_kit::TestAppContext;
 use image::{ImageFormat, Rgba, RgbaImage};
 use rusty_core::Location;
@@ -137,14 +138,18 @@ fn disk_hooks(files: &Arc<HashMap<String, Vec<u8>>>) -> FileHooks {
 }
 
 fn open_samples(cx: &mut TestAppContext) -> Rig {
-    let fs = FakeFs::new();
+    open_samples_on(cx, FakeFs::new()).0
+}
+
+fn open_samples_on(cx: &mut TestAppContext, fs: FakeFs) -> (Rig, Arc<FakeFs>) {
     let mut stored = HashMap::new();
     for (name, bytes) in samples() {
         fs.add_file(&format!("home/{name}"), bytes.len() as u64);
         stored.insert(name.to_owned(), bytes);
     }
     let fs = Arc::new(fs);
-    open_on(cx, &fs, fs.clone(), disk_hooks(&Arc::new(stored)))
+    let rig = open_on(cx, &fs, fs.clone(), disk_hooks(&Arc::new(stored)));
+    (rig, fs)
 }
 
 fn shown_kind(cx: &mut TestAppContext, rig: &Rig) -> Option<(&'static str, bool)> {
@@ -223,4 +228,66 @@ fn the_preview_hooks_refuse_to_write() {
     (guarded.save_memory)(&location, stamp, &MarkSet::default(), &Bookmarks::default());
     (guarded.remember)(&Needle::Bytes(vec![1]));
     assert_eq!(writes.load(std::sync::atomic::Ordering::Relaxed), 0);
+}
+
+fn body_has_focus(cx: &mut TestAppContext, rig: &Rig) -> bool {
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        let view = view.read(cx);
+        match view.preview.shown() {
+            Some(Shown::File(file)) => file
+                .body
+                .as_ref()
+                .is_some_and(|body| body.focus_handle(cx).is_focused(window)),
+            _ => false,
+        }
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn browsing_a_file_preview_gives_focus_to_its_body(cx: &mut TestAppContext) {
+    let rig = open_samples(cx);
+    rig.open(cx);
+    rig.key(cx, "down");
+    rig.key(cx, "down");
+    rig.rest(cx);
+    assert_eq!(shown_kind(cx, &rig), Some(("tree", true)));
+    rig.key(cx, "ctrl-shift-q");
+    assert!(body_has_focus(cx, &rig));
+    assert!(!rig.list_has_focus(cx));
+    assert_eq!(
+        rig.label(cx, "preview-browsing").as_deref(),
+        Some("Browsing")
+    );
+    rig.key(cx, "down");
+    assert!(body_has_focus(cx, &rig));
+    rig.rest(cx);
+    assert_eq!(rig.shown_name(cx).as_deref(), Some("config.yaml"));
+    rig.key(cx, "escape");
+    assert!(rig.list_has_focus(cx));
+}
+
+#[gpui_kit::test]
+fn a_reloaded_file_preview_keeps_focus_in_its_new_body(cx: &mut TestAppContext) {
+    let (rig, fs) = open_samples_on(cx, FakeFs::new().with_watch());
+    rig.open(cx);
+    rig.key(cx, "down");
+    rig.key(cx, "down");
+    rig.rest(cx);
+    assert!(rig.wait_until(cx, |view| matches!(
+        view.preview.shown(),
+        Some(Shown::File(file)) if file.body.is_some()
+    )));
+    rig.key(cx, "ctrl-shift-q");
+    assert!(body_has_focus(cx, &rig));
+    let loads = rig.loads(cx);
+    fs.add_file("home/config.yaml", 4_096);
+    assert!(rig.rest_until(cx, |view| view.preview.loads() > loads));
+    assert!(rig.wait_until(cx, |view| matches!(
+        view.preview.shown(),
+        Some(Shown::File(file)) if file.body.is_some()
+    )));
+    assert!(body_has_focus(cx, &rig));
+    assert!(!rig.list_has_focus(cx));
 }

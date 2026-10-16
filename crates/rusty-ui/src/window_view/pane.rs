@@ -6,7 +6,8 @@ use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
 use super::keys::{
-    DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit, TogglePreview,
+    BrowsePreview, DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit,
+    TogglePreview,
 };
 use super::status::status_of;
 use crate::FocusHandle;
@@ -58,7 +59,7 @@ impl FerriteWindow {
     pub(super) fn pane_view(
         &mut self,
         pane: PaneId,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let t = tokens::current(cx).clone();
@@ -71,7 +72,8 @@ impl FerriteWindow {
         let waiting = self.waiting.is_waiting(tab).then(|| tab.clone());
         let is_active = state.focused_pane() == pane;
         let error = self.pane_error(pane, tab);
-        let props = self.list_props(tab, is_active);
+        let has_cursor = is_active && !self.preview.is_browsing(window, cx);
+        let props = self.list_props(tab, has_cursor);
         let status = StatusBarProps {
             free_bytes: self.free_on_drive(pane),
             is_cached: self.browser.is_cached(tab.id()),
@@ -184,6 +186,11 @@ impl FerriteWindow {
             .on_action(
                 cx.listener(|this: &mut Self, _: &TogglePreview, window, cx| {
                     this.toggle_preview(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this: &mut Self, _: &BrowsePreview, window, cx| {
+                    this.browse_preview(window, cx);
                 }),
             )
             .on_action(cx.listener(|this: &mut Self, _: &ClearFilter, _, cx| {

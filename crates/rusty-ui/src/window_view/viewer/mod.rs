@@ -45,7 +45,7 @@ use crate::prelude::*;
 use open::Opening;
 pub(super) use open::{Opened, Picked, Request, Turn, sniff_and_load};
 
-const CONTEXT: &str = "Viewer";
+pub(in crate::window_view) const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";
 const IMAGE_CONTEXT: &str = "Image";
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
@@ -211,6 +211,13 @@ impl FerriteWindow {
         self.viewer = None;
         self.focus_core_pane(window, cx);
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+impl FerriteWindow {
+    pub(in crate::window_view) fn viewer_location(&self) -> Option<&Location> {
+        self.viewer.as_ref().map(|viewer| &viewer.location)
     }
 }
 
