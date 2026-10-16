@@ -393,6 +393,22 @@ fn a_short_name_lists_the_folder_again_instead_of_patching() {
 }
 
 #[test]
+fn office_temp_files_and_backups_are_patched_not_relisted() {
+    for name in [
+        "~$report.docx",
+        "notes.txt~",
+        "a~b.txt",
+        "LONGNAME~1234567.TXT",
+    ] {
+        let change = WatchChange::Created(ProviderPath::from_text(name));
+        assert!(
+            matches!(Refresh::of(vec![change]), Refresh::Patch(_)),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn a_folder_with_a_queued_refresh_is_listed_even_when_its_change_time_is_unchanged() {
     let fs = fake();
     fs.add_entry(

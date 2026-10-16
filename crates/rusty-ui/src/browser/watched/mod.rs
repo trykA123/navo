@@ -19,11 +19,22 @@ enum Refresh {
     Full,
 }
 
+fn is_short_name(name: &str) -> bool {
+    let (stem, ext) = name.rsplit_once('.').unwrap_or((name, ""));
+    let Some((head, digits)) = stem.split_once('~') else {
+        return false;
+    };
+    stem.len() <= 8
+        && ext.len() <= 3
+        && !head.is_empty()
+        && !digits.is_empty()
+        && digits.bytes().all(|b| b.is_ascii_digit())
+}
+
 impl Refresh {
     fn of(changes: Vec<WatchChange>) -> Self {
         let names: HashSet<&ProviderPath> = changes.iter().flat_map(names_of).collect();
-        // Windows may report an 8.3 short name; only a full listing shows the long one.
-        let has_short_name = names.iter().any(|name| name.to_text().contains('~'));
+        let has_short_name = names.iter().any(|name| is_short_name(&name.to_text()));
         if names.len() > PATCH_LIMIT || has_short_name {
             Self::Full
         } else {
