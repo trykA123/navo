@@ -4,6 +4,7 @@ mod app;
 mod assets;
 pub mod browser;
 pub mod confirm_dialog;
+pub mod context_menu;
 pub mod file_list;
 pub mod fkey_bar;
 mod format;

@@ -20,6 +20,13 @@ impl Selection {
     }
 
     #[must_use]
+    pub fn pick(rows: &[Row], index: usize) -> Option<Self> {
+        rows.get(index)?
+            .is_selectable(true)
+            .then(|| Self::at(rows, Some(index)))
+    }
+
+    #[must_use]
     pub fn index(&self) -> Option<usize> {
         self.index
     }

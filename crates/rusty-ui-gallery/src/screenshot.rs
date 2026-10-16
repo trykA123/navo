@@ -7,7 +7,7 @@ use std::time::Duration;
 use rusty_ui::prelude::*;
 use rusty_ui::tokens::Mode;
 
-use crate::gallery::{Gallery, Page};
+use crate::gallery::{Gallery, PAGES, Page};
 use crate::report;
 
 const SETTLE: Duration = Duration::from_millis(1500);
@@ -25,19 +25,7 @@ fn grim(path: &Path) -> Result<(), String> {
 }
 
 fn file_name(page: Page, mode: Mode) -> String {
-    let page = match page {
-        Page::Primitives => "p7-gallery",
-        Page::Pane => "p7-pane",
-        Page::Operate => "p8-confirm",
-        Page::Hex => "p13-hex",
-        Page::PagedText => "p13-text",
-        Page::Drives => "p14-drives",
-        Page::TypedPath => "p14-path",
-        Page::Archive => "p15-archive",
-        Page::Font => "p15-font",
-        Page::Marks => "p15-marks",
-        Page::Image => "p15-image",
-    };
+    let page = page.info().stem;
     let mode = match mode {
         Mode::Light => "light",
         Mode::Dark => "dark",
@@ -48,9 +36,9 @@ fn file_name(page: Page, mode: Mode) -> String {
 pub fn capture(gallery: Entity<Gallery>, dir: PathBuf, failed: Arc<AtomicBool>, cx: &mut App) {
     cx.spawn(async move |cx| {
         let mut errors = Vec::new();
-        for (page, mode) in Page::ALL
-            .into_iter()
-            .flat_map(|page| [Mode::Light, Mode::Dark].map(|mode| (page, mode)))
+        for (page, mode) in PAGES
+            .iter()
+            .flat_map(|info| [Mode::Light, Mode::Dark].map(|mode| (info.page, mode)))
         {
             gallery.update(cx, |gallery, cx| {
                 gallery.set_page(page, cx);
