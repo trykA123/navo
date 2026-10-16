@@ -24,7 +24,11 @@ fn other_value(spec: &rusty_ui::settings::FieldSpec, now: &Value) -> Value {
 }
 
 fn save(settings: &SettingsHooks, change: Change) -> Result<Values, String> {
-    (settings.save)(&[change])
+    let report = (settings.save)(&[change]);
+    match report.error {
+        Some(message) => Err(message),
+        None => Ok(report.values),
+    }
 }
 
 #[test]
@@ -61,7 +65,7 @@ fn the_menu_choices_reach_the_file() {
         Change::density(Density::Compact),
         Change::show_hidden(false),
     ];
-    let stored = (settings.save)(&changes).unwrap();
+    let stored = (settings.save)(&changes).values;
     assert_eq!(stored.theme(), ThemeChoice::Dark);
     let (store, _) = SettingsStore::load(&file);
     assert_eq!(store.current().appearance.mode, ThemeMode::Dark);
@@ -169,4 +173,22 @@ fn the_line_of_a_key_is_read_from_the_file() {
     let location = settings.file.expect("a settings file");
     let name = Path::new(location.as_str()).file_name();
     assert_eq!(name.and_then(|name| name.to_str()), Some("ferrite.toml"));
+}
+
+#[test]
+fn a_failed_change_does_not_stop_the_rest_of_the_batch() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    let settings = hooks(Some(&file));
+    let broken = Change::text(Field::FontSize, "big");
+    let report = (settings.save)(&[broken, Change::theme(ThemeChoice::Dark)]);
+    assert_eq!(report.failed, [Field::FontSize]);
+    assert!(
+        report
+            .error
+            .is_some_and(|message| message.contains("ferrite.toml"))
+    );
+    assert_eq!(report.values.theme(), ThemeChoice::Dark);
+    assert_eq!(report.values.get(Field::FontSize), &Value::Number(13));
+    assert_eq!(hooks(Some(&file)).values.theme(), ThemeChoice::Dark);
 }

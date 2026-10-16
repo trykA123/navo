@@ -87,12 +87,13 @@ fn error_lines(
 }
 
 #[gpui_kit::test]
-fn a_failed_save_is_shown_and_the_choice_stays_for_the_session(cx: &mut TestAppContext) {
+fn a_failed_save_is_shown_and_the_value_returns_to_the_stored_one(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: disk full".to_owned());
     rig.press(cx, "f10");
     rig.click(cx, ("app-menu-tile", 1usize));
-    assert_eq!(quick(cx, &rig).density, Density::Comfortable);
+    assert_eq!(quick(cx, &rig).density, Density::Normal);
+    assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Normal);
     let (menu, line) = error_lines(cx, &rig);
     assert_eq!(menu.as_deref(), Some("ferrite.toml: disk full"));
     assert_eq!(line.as_deref(), Some("ferrite.toml: disk full"));
@@ -121,4 +122,38 @@ fn a_good_save_clears_the_error(cx: &mut TestAppContext) {
     *rig.store.failure.lock().expect("failure") = None;
     rig.click(cx, ("app-menu-tile", 1usize));
     assert_eq!(error_lines(cx, &rig), (None, None));
+}
+
+#[gpui_kit::test]
+fn a_failed_theme_keeps_its_error_after_density_saves(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: locked".to_owned());
+    *rig.store.failing_field.lock().expect("failing") = Some(crate::settings::Field::Theme);
+    rig.press(cx, "f10");
+    rig.click(cx, ("app-menu-tile", 0usize));
+    rig.click(cx, ("app-menu-tile", 1usize));
+    let now = quick(cx, &rig);
+    assert_eq!(now.theme, ThemeChoice::System);
+    assert_eq!(now.density, Density::Comfortable);
+    let (menu, _) = error_lines(cx, &rig);
+    assert_eq!(menu.as_deref(), Some("ferrite.toml: locked"));
+}
+
+#[gpui_kit::test]
+fn every_change_in_a_batch_is_tried_when_one_fails(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: locked".to_owned());
+    *rig.store.failing_field.lock().expect("failing") = Some(crate::settings::Field::Theme);
+    rig.press(cx, "f10");
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click(("app-menu-tile", 0usize), cx);
+        window.click(("app-menu-tile", 1usize), cx);
+        window.click(("app-menu-tile", 2usize), cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    let now = quick(cx, &rig);
+    assert_eq!(now.theme, ThemeChoice::System);
+    assert_eq!(now.density, Density::Comfortable);
+    assert!(!now.show_hidden);
 }

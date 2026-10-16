@@ -272,7 +272,7 @@ fn a_failed_save_shows_a_line_in_the_sheet(cx: &mut TestAppContext) {
         label(cx, &rig, "settings-error").as_deref(),
         Some("ferrite.toml: disk full")
     );
-    assert_eq!(density(cx), Density::Comfortable);
+    assert_eq!(density(cx), Density::Normal);
 }
 
 #[gpui_kit::test]

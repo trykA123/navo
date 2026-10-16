@@ -3,13 +3,32 @@ use std::sync::Arc;
 use super::FerriteWindow;
 use crate::app_menu::Setting;
 use crate::prelude::*;
-use crate::settings::{Change, Values};
+use crate::settings::{Change, Field, Values};
 
-pub type SaveSettings = Arc<dyn Fn(&[Change]) -> Result<Values, String> + Send + Sync>;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SaveReport {
+    pub values: Values,
+    pub failed: Vec<Field>,
+    pub error: Option<String>,
+}
+
+impl SaveReport {
+    pub fn saved(values: Values) -> Self {
+        Self {
+            values,
+            failed: Vec::new(),
+            error: None,
+        }
+    }
+}
+
+pub type SaveSettings = Arc<dyn Fn(&[Change]) -> SaveReport + Send + Sync>;
 
 pub(super) struct Saver {
     save: SaveSettings,
     pending: Vec<Change>,
+    in_flight: Vec<Field>,
+    failed: Vec<Field>,
     is_saving: bool,
     pub(super) error: Option<SharedString>,
 }
@@ -19,6 +38,8 @@ impl Saver {
         Self {
             save,
             pending: Vec::new(),
+            in_flight: Vec::new(),
+            failed: Vec::new(),
             is_saving: false,
             error,
         }
@@ -27,6 +48,22 @@ impl Saver {
     fn queue(&mut self, change: Change) {
         self.pending.retain(|older| older.field != change.field);
         self.pending.push(change);
+    }
+
+    fn settle(&mut self, report: &SaveReport) {
+        let in_flight = std::mem::take(&mut self.in_flight);
+        self.failed
+            .retain(|field| !in_flight.contains(field) || report.failed.contains(field));
+        for field in &report.failed {
+            if !self.failed.contains(field) {
+                self.failed.push(*field);
+            }
+        }
+        match &report.error {
+            Some(message) => self.error = Some(message.clone().into()),
+            None if self.failed.is_empty() => self.error = None,
+            None => {}
+        }
     }
 }
 
@@ -67,6 +104,7 @@ impl FerriteWindow {
             return;
         }
         let changes = std::mem::take(&mut self.saver.pending);
+        self.saver.in_flight = changes.iter().map(|change| change.field).collect();
         self.saver.is_saving = true;
         let save = self.saver.save.clone();
         let task = cx
@@ -79,25 +117,15 @@ impl FerriteWindow {
         .detach();
     }
 
-    fn saved(
-        &mut self,
-        outcome: Result<Values, String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn saved(&mut self, report: SaveReport, window: &mut Window, cx: &mut Context<Self>) {
         self.saver.is_saving = false;
-        match outcome {
-            Ok(stored) => {
-                self.saver.error = None;
-                let fresh = self
-                    .saver
-                    .pending
-                    .iter()
-                    .fold(stored, |values, change| values.with(change));
-                self.set_values(fresh, window, cx);
-            }
-            Err(message) => self.saver.error = Some(message.into()),
-        }
+        self.saver.settle(&report);
+        let fresh = self
+            .saver
+            .pending
+            .iter()
+            .fold(report.values, |values, change| values.with(change));
+        self.set_values(fresh, window, cx);
         self.start_save(window, cx);
         cx.notify();
     }

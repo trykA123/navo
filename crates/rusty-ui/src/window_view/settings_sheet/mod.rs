@@ -7,7 +7,7 @@ use gpui_kit::{FocusHandle, ScrollHandle};
 use rusty_core::Location;
 
 use super::FerriteWindow;
-use super::settings_save::{SaveSettings, Saver};
+use super::settings_save::{SaveReport, SaveSettings, Saver};
 use crate::prelude::*;
 use crate::settings::{Change, FIELDS, SettingsBody, SheetEvent, Values, rows_in, section_of};
 use crate::side_sheet::SheetState;
@@ -34,7 +34,7 @@ impl SettingsHooks {
                 *values = changes
                     .iter()
                     .fold(values.clone(), |all, one| all.with(one));
-                Ok(values.clone())
+                SaveReport::saved(values.clone())
             }),
             file: None,
             line_of: Arc::new(|_| None),

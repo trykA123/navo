@@ -8,9 +8,9 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_panes};
 use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::browser::Operations;
-use crate::settings::{Change, Values};
+use crate::settings::{Change, Field, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
-use crate::window_view::{AppMenuHooks, SettingsHooks};
+use crate::window_view::{AppMenuHooks, SaveReport, SettingsHooks};
 
 pub(super) fn values_of(settings: QuickSettings) -> Values {
     Values::default()
@@ -25,23 +25,35 @@ pub(super) struct FakeStore {
     pub changes: Mutex<Vec<Change>>,
     pub results: Mutex<Vec<QuickSettings>>,
     pub failure: Mutex<Option<String>>,
+    pub failing_field: Mutex<Option<Field>>,
 }
 
 impl FakeStore {
-    fn save(&self, changes: &[Change]) -> Result<Values, String> {
+    fn save(&self, changes: &[Change]) -> SaveReport {
         self.changes
             .lock()
             .expect("changes")
             .extend_from_slice(changes);
-        if let Some(message) = self.failure.lock().expect("failure").clone() {
-            return Err(message);
-        }
+        let message = self.failure.lock().expect("failure").clone();
+        let only = *self.failing_field.lock().expect("failing");
+        let fails = |change: &Change| message.is_some() && only.is_none_or(|f| f == change.field);
         let mut stored = self.stored.lock().expect("stored");
-        *stored = changes
-            .iter()
-            .fold(stored.clone(), |all, one| all.with(one));
-        self.results.lock().expect("results").push(stored.quick());
-        Ok(stored.clone())
+        let mut failed = Vec::new();
+        for change in changes {
+            if fails(change) {
+                failed.push(change.field);
+            } else {
+                *stored = stored.with(change);
+            }
+        }
+        if failed.len() < changes.len() {
+            self.results.lock().expect("results").push(stored.quick());
+        }
+        SaveReport {
+            values: stored.clone(),
+            error: (!failed.is_empty()).then(|| message.unwrap_or_default()),
+            failed,
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use rusty_core::Location;
 use rusty_store::{SettingValue, Settings, SettingsError, SettingsStore, settings_key_line};
 use rusty_ui::settings::{Change, Control, FieldSpec, Value, Values};
-use rusty_ui::window_view::{FindLine, SettingsHooks};
+use rusty_ui::window_view::{FindLine, SaveReport, SettingsHooks};
 
 const FILE: &str = "ferrite.toml";
 
@@ -29,9 +29,9 @@ pub fn hooks(path: Option<&Path>) -> SettingsHooks {
         save: Arc::new(move |changes| {
             let saved = match &store {
                 Some(store) => save(store, changes),
-                None => Ok(remember(&session, changes)),
+                None => SaveReport::saved(remember(&session, changes)),
             };
-            if let Err(message) = &saved {
+            if let Some(message) = &saved.error {
                 report(message);
             }
             saved
@@ -41,14 +41,21 @@ pub fn hooks(path: Option<&Path>) -> SettingsHooks {
     }
 }
 
-fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> Result<Values, String> {
+fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> SaveReport {
     let mut store = store.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut failed = Vec::new();
+    let mut error = None;
     for change in changes {
-        store
-            .save(change.key(), stored_value(change))
-            .map_err(|error| describe(&error))?;
+        if let Err(problem) = store.save(change.key(), stored_value(change)) {
+            failed.push(change.field);
+            error = Some(describe(&problem));
+        }
     }
-    Ok(values_of(store.current()))
+    SaveReport {
+        values: values_of(store.current()),
+        failed,
+        error,
+    }
 }
 
 fn remember(session: &Mutex<Values>, changes: &[Change]) -> Values {

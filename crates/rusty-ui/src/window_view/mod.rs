@@ -45,7 +45,7 @@ pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
 pub use keys::bind_keys;
-pub use settings_save::SaveSettings;
+pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 pub use viewer::{
