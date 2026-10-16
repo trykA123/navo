@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use rusty_core::Location;
 
@@ -11,10 +11,13 @@ use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::tokens;
 
+const SAMPLE_EVERY: Duration = Duration::from_millis(500);
+
 #[derive(Default)]
 pub(super) struct JobUi {
     pub(super) is_pill: bool,
     pub(super) meter: SpeedMeter,
+    is_sampling: bool,
 }
 
 fn name_of(location: &Location) -> Option<SharedString> {
@@ -50,8 +53,32 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
 }
 
 impl FerriteWindow {
-    pub(super) fn sample_job_speeds(&mut self) {
-        let now = Instant::now();
+    pub(super) fn jobs_woke(&mut self, cx: &mut Context<Self>) {
+        self.sample_job_speeds(cx.background_executor().now());
+        if self.job_ui.is_sampling || !self.browser.running() {
+            return;
+        }
+        self.job_ui.is_sampling = true;
+        cx.spawn(async move |this, cx| {
+            let mut is_running = true;
+            while is_running {
+                cx.background_executor().timer(SAMPLE_EVERY).await;
+                is_running = this
+                    .update(cx, |view, cx| view.sample_while_running(cx))
+                    .unwrap_or(false);
+            }
+        })
+        .detach();
+    }
+
+    fn sample_while_running(&mut self, cx: &mut Context<Self>) -> bool {
+        self.sample_job_speeds(cx.background_executor().now());
+        cx.notify();
+        self.job_ui.is_sampling = self.browser.running();
+        self.job_ui.is_sampling
+    }
+
+    fn sample_job_speeds(&mut self, now: Instant) {
         let meter = &mut self.job_ui.meter;
         let jobs = self.browser.jobs();
         for job in jobs.iter().filter(|job| job.status == JobStatus::Running) {
@@ -66,7 +93,17 @@ impl FerriteWindow {
         }
     }
 
-    pub(super) fn toggle_jobs(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn jobs_key(&mut self, cx: &mut Context<Self>) {
+        let is_busy =
+            self.prompt.is_some() || self.browser.pending().is_some() || self.app_menu.is_some();
+        if is_busy || self.browser.jobs().is_empty() {
+            cx.propagate();
+            return;
+        }
+        self.toggle_jobs(cx);
+    }
+
+    fn toggle_jobs(&mut self, cx: &mut Context<Self>) {
         if !self.browser.jobs().is_empty() {
             self.job_ui.is_pill = !self.job_ui.is_pill;
             cx.notify();

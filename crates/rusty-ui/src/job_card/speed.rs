@@ -3,12 +3,14 @@ use std::time::{Duration, Instant};
 
 const MIN_GAP: Duration = Duration::from_millis(250);
 const SMOOTHING: f64 = 0.3;
+const STALLED_BELOW: f64 = 0.05;
 
 #[derive(Clone, Copy)]
 struct Sample {
     at: Instant,
     bytes: u64,
     speed: Option<f64>,
+    peak: f64,
 }
 
 #[derive(Default)]
@@ -19,14 +21,13 @@ pub struct SpeedMeter {
 impl SpeedMeter {
     pub fn observe(&mut self, id: u64, bytes: u64, now: Instant) {
         let Some(last) = self.samples.get(&id).copied() else {
-            self.samples.insert(
-                id,
-                Sample {
-                    at: now,
-                    bytes,
-                    speed: None,
-                },
-            );
+            let first = Sample {
+                at: now,
+                bytes,
+                speed: None,
+                peak: 0.,
+            };
+            self.samples.insert(id, first);
             return;
         };
         let elapsed = now.saturating_duration_since(last.at);
@@ -37,18 +38,21 @@ impl SpeedMeter {
         let speed = last
             .speed
             .map_or(rate, |speed| speed + SMOOTHING * (rate - speed));
-        self.samples.insert(
-            id,
-            Sample {
-                at: now,
-                bytes,
-                speed: Some(speed),
-            },
-        );
+        let next = Sample {
+            at: now,
+            bytes,
+            speed: Some(speed),
+            peak: last.peak.max(speed),
+        };
+        self.samples.insert(id, next);
     }
 
     pub fn speed(&self, id: u64) -> Option<u64> {
-        let speed = self.samples.get(&id)?.speed?;
+        let sample = self.samples.get(&id)?;
+        let speed = sample.speed?;
+        if speed <= sample.peak * STALLED_BELOW {
+            return None;
+        }
         Some(speed.round() as u64)
     }
 

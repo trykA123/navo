@@ -41,7 +41,7 @@ fn running(id: u64, done: u64) -> Fake {
 fn add(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, job: Fake) {
     view.update(cx, |view, cx| {
         let source_tab = view.browser.state().active_tab().id();
-        view.browser.push_job(JobView {
+        view.browser.jobs_mut().push(JobView {
             id: job.id,
             kind: job.kind,
             from: Some(at("/home/commander")),
@@ -292,4 +292,124 @@ fn an_error_stays_until_it_is_dismissed(cx: &mut TestAppContext) {
     click(cx, window, ("job-dismiss", 1u64));
     assert!(shown(cx, window).card.is_none());
     assert!(view.read_with(cx, |view, _| view.browser.jobs().is_empty()));
+}
+
+fn card_visible(cx: &mut TestAppContext, window: AnyWindowHandle, id: &'static str) -> bool {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.try_find(id).is_some_and(|found| found.visible())
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn with_reduced_motion_an_ended_job_stays_visible_until_it_leaves(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    add(
+        cx,
+        &view,
+        Fake {
+            status: JobStatus::Done,
+            ..running(1, 400 * MB)
+        },
+    );
+    assert!(card_visible(cx, window, "job-card"));
+    key(cx, window, "ctrl-j");
+    assert!(card_visible(cx, window, "job-pill"));
+}
+
+fn set_done(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, bytes: u64) {
+    view.update(cx, |view, _| {
+        view.browser.jobs_mut()[0].progress.bytes_done = bytes
+    });
+}
+
+fn tick(cx: &mut TestAppContext) {
+    cx.executor().advance_clock(Duration::from_millis(500));
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn a_stalled_job_drops_its_speed_and_time_left(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    add(cx, &view, running(1, 0));
+    view.update(cx, |view, cx| view.wake(cx));
+    for step in 1..=4 {
+        set_done(cx, &view, step * 10 * MB);
+        tick(cx);
+    }
+    let moving = label(cx, window, ("job-status", 1u64));
+    assert!(moving.ends_with(" left"), "{moving}");
+    let speeds: Vec<Option<u64>> = (0..12)
+        .map(|_| {
+            tick(cx);
+            view.read_with(cx, |view, _| view.job_ui.meter.speed(1))
+        })
+        .collect();
+    assert!(speeds[1] < speeds[0], "{speeds:?}");
+    assert_eq!(speeds.last(), Some(&None), "{speeds:?}");
+    let stalled = label(cx, window, ("job-status", 1u64));
+    assert_eq!(stalled, "10% · 1 of 12 files");
+}
+
+#[gpui_kit::test]
+fn ctrl_j_is_left_alone_while_a_dialog_is_open(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "f5");
+    assert!(view.read_with(cx, |view, _| view.browser.pending().is_some()));
+    add(cx, &view, running(99, 100 * MB));
+    key(cx, window, "ctrl-j");
+    let now = shown(cx, window);
+    assert!(now.card.is_some());
+    assert!(now.pill.is_none());
+}
+
+#[gpui_kit::test]
+fn a_done_job_leaves_while_a_failed_job_stays(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    add(
+        cx,
+        &view,
+        Fake {
+            status: JobStatus::Failed("Access denied".to_owned()),
+            ..running(99, 100 * MB)
+        },
+    );
+    press(cx, window, &view, "f5");
+    press(cx, window, &view, "enter");
+    assert_eq!(view.read_with(cx, |view, _| view.browser.jobs().len()), 2);
+    cx.executor().advance_clock(Duration::from_millis(2500));
+    cx.run_until_parked();
+    let left = view.read_with(cx, |view, _| {
+        view.browser
+            .jobs()
+            .iter()
+            .map(|job| (job.id, job.status.clone()))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(left, [(99, JobStatus::Failed("Access denied".to_owned()))]);
+    assert_eq!(label(cx, window, ("job-message", 99u64)), "Access denied");
+}
+
+#[gpui_kit::test]
+fn the_narrowest_pill_shows_an_ended_state_as_a_glyph_only(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 900.);
+    add(
+        cx,
+        &view,
+        Fake {
+            status: JobStatus::Failed("Access denied".to_owned()),
+            ..running(1, 100 * MB)
+        },
+    );
+    key(cx, window, "ctrl-j");
+    let small = shown(cx, window);
+    assert_eq!(small.pill_parts, [false, false, false]);
+    let pill = small.pill.expect("a pill");
+    assert!(pill.starts_with("Copy 4 items, Failed"), "{pill}");
 }

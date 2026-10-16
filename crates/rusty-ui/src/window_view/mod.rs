@@ -237,7 +237,7 @@ impl FerriteWindow {
 
     fn wake(&mut self, cx: &mut Context<Self>) {
         let polled = self.browser.poll();
-        self.sample_job_speeds();
+        self.jobs_woke(cx);
         if self.poll_preview() || polled {
             cx.notify();
         }
@@ -415,7 +415,7 @@ impl Render for FerriteWindow {
             .on_action(cx.listener(|view, _: &ToggleAppMenu, window, cx| {
                 view.toggle_app_menu(window, cx);
             }))
-            .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.toggle_jobs(cx)))
+            .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.jobs_key(cx)))
             .child(self.fkey_bar(window, cx))
             .children(jobs)
             .children(dialog)

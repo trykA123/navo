@@ -6,10 +6,10 @@ use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::{Animation, AnimationExt, RenderOnce, Role};
 
 use super::summary::{JobInfo, JobsSummary, speed_text, time_text};
-use super::{Handler, fade_opacity, kind_icon, part};
+use super::{Handler, fade_out, kind_icon, part};
 use crate::prelude::*;
 use crate::primitives::{IconName, Tooltip, icon};
-use crate::tokens::{self, Motion, Theme};
+use crate::tokens::{self, Theme};
 
 const NAME_FROM: f32 = 1100.;
 const LEFT_FROM: f32 = 960.;
@@ -89,6 +89,7 @@ fn badge(t: &Theme, summary: &JobsSummary, single: Option<rusty_core::OpKind>) -
     let content = match (summary.word(), single) {
         (Some("Failed"), _) => glyph(IconName::TriangleAlert, t.colors.warn),
         (Some("Done"), _) => glyph(IconName::Check, t.colors.ok),
+        (Some(_), _) => glyph(IconName::X, t.colors.muted),
         (_, Some(kind)) => glyph(kind_icon(kind), t.colors.accent_text),
         (_, None) => div()
             .text_size(t.typography.tiny)
@@ -168,6 +169,7 @@ fn frame(t: &Theme) -> Div {
 impl JobPill {
     fn parts(&self, t: &Theme) -> Vec<AnyElement> {
         let s = &self.summary;
+        let is_glyph_only = self.fit == PillFit::Bare && s.word().is_some();
         let status = s.word().map_or_else(|| s.percent_text(), str::to_owned);
         let left = s
             .left
@@ -180,13 +182,15 @@ impl JobPill {
                 .max_w(px(NAME_WIDTH))
                 .truncate()
         });
-        let status = part("job-pill-status", status)
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(t.surfaces.pill_label);
+        let status = (!is_glyph_only).then(|| {
+            part("job-pill-status", status)
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t.surfaces.pill_label)
+        });
         let left = left.map(|left| part("job-pill-left", left).text_color(t.colors.muted));
         let mut parts = vec![badge(t, s, self.single).into_any_element()];
         parts.extend(name.map(IntoElement::into_any_element));
-        parts.push(status.into_any_element());
+        parts.extend(status.map(IntoElement::into_any_element));
         parts.extend(left.map(IntoElement::into_any_element));
         parts.push(bar(t, s.fraction).into_any_element());
         parts
@@ -207,17 +211,13 @@ impl RenderOnce for JobPill {
             .when_some(self.on_click, |pill, handler| {
                 pill.on_click(move |_, window, cx| handler(window, cx))
             });
-        let pill = match self.fade {
-            Some(over) => pill
-                .with_animation("job-pill-fade", Animation::new(over), |pill, delta| {
-                    pill.opacity(fade_opacity(delta))
-                })
-                .into_any_element(),
-            None => {
-                let slide = Motion::travel(px(SLIDE), cx.reduce_motion()) / px(1.);
+        let pill = match (self.fade, cx.reduce_motion()) {
+            (_, true) => pill.into_any_element(),
+            (Some(over), false) => fade_out(pill, "job-pill-fade", over, |pill| pill),
+            (None, false) => {
                 let enter = Animation::new(t.motion.base).with_easing(ease_out_cubic);
-                pill.with_animation("job-pill-enter", enter, move |pill, delta| {
-                    pill.left(px(-slide * (1. - delta))).opacity(delta)
+                pill.with_animation("job-pill-enter", enter, |pill, delta| {
+                    pill.left(px(-SLIDE * (1. - delta))).opacity(delta)
                 })
                 .into_any_element()
             }

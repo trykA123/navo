@@ -72,7 +72,8 @@ impl Browser {
         let Some(pending) = self.pending.take() else {
             return false;
         };
-        self.jobs.retain(|job| job.status == JobStatus::Running);
+        self.jobs
+            .retain(|job| matches!(job.status, JobStatus::Running | JobStatus::Failed(_)));
         let cancel = CancelToken::new();
         let mut view = JobView {
             id: pending.id,
@@ -108,8 +109,8 @@ impl Browser {
     }
 
     #[cfg(test)]
-    pub(crate) fn push_job(&mut self, job: JobView) {
-        self.jobs.push(job);
+    pub(crate) fn jobs_mut(&mut self) -> &mut Vec<JobView> {
+        &mut self.jobs
     }
 
     pub fn take_ended(&mut self) -> Vec<u64> {

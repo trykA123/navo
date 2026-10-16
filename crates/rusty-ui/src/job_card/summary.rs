@@ -154,9 +154,13 @@ pub struct JobsSummary {
 
 impl JobsSummary {
     pub fn of(jobs: &[JobInfo]) -> Self {
-        let (done, total) = jobs.iter().fold((0, 0), |(done, total), job| {
+        let bytes = jobs.iter().fold((0, 0), |(done, total), job| {
             (done + job.bytes_done, total + job.bytes_total)
         });
+        let files = jobs.iter().fold((0, 0), |(done, total), job| {
+            (done + job.files_done, total + job.files_total)
+        });
+        let (done, total) = if bytes.1 == 0 { files } else { bytes };
         let running = || jobs.iter().filter(|job| job.is_running());
         let speeds: Vec<u64> = running().filter_map(|job| job.speed).collect();
         let name = match jobs {
@@ -166,9 +170,8 @@ impl JobsSummary {
         Self {
             count: jobs.len(),
             name,
-            fraction: match (jobs, total) {
-                ([only], _) => only.fraction(),
-                (_, 0) => 0.,
+            fraction: match jobs {
+                [only] => only.fraction(),
                 _ => fraction_of(done, total),
             },
             left: running().filter_map(JobInfo::left).max(),

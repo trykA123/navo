@@ -6,11 +6,11 @@ use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::{Animation, AnimationExt, RenderOnce, Role};
 
 use super::summary::{JobInfo, JobsSummary, speed_text};
-use super::{Handler, JobHandler, fade_opacity, kind_icon, part};
+use super::{Handler, JobHandler, fade_out, kind_icon, part};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::primitives::{Button, IconButton, IconName, Kbd, icon};
-use crate::tokens::{self, Motion, Theme};
+use crate::tokens::{self, Theme};
 
 const CARD_WIDTH: f32 = 400.;
 const BAR_HEIGHT: f32 = 6.;
@@ -312,20 +312,15 @@ impl RenderOnce for JobCard {
             .shadow(t.shadows.job_card.clone())
             .text_size(t.typography.body)
             .text_color(t.colors.text)
-            .occlude()
             .child(self.head(&t, &summary))
             .children(content);
-        match self.fade {
-            Some(over) => card
-                .with_animation("job-card-fade", Animation::new(over), |card, delta| {
-                    card.opacity(fade_opacity(delta))
-                })
-                .into_any_element(),
-            None => {
-                let rise = Motion::travel(px(RISE), cx.reduce_motion()) / px(1.);
+        match (self.fade, cx.reduce_motion()) {
+            (_, true) => card.occlude().into_any_element(),
+            (Some(over), false) => fade_out(card, "job-card-fade", over, |card| card.occlude()),
+            (None, false) => {
                 let enter = Animation::new(t.motion.base).with_easing(ease_out_cubic);
-                card.with_animation("job-card-enter", enter, move |card, delta| {
-                    card.top(px(rise * (1. - delta))).opacity(delta)
+                card.with_animation("job-card-enter", enter, |card, delta| {
+                    card.occlude().top(px(RISE * (1. - delta))).opacity(delta)
                 })
                 .into_any_element()
             }

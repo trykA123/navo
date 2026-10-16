@@ -1,10 +1,14 @@
 use std::time::{Duration, Instant};
 
-use gpui_kit::px;
+use gpui_kit::base::TestSupportExt;
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AppContext as _, TestAppContext};
 use rusty_core::OpKind;
 
-use super::{JobInfo, JobsSummary, PillFit, SpeedMeter, time_text};
+use super::{JobCard, JobInfo, JobsSummary, PillFit, SpeedMeter, time_text};
 use crate::job_row::JobRowState;
+use crate::prelude::*;
+use crate::test_window::open;
 
 const MB: u64 = 1024 * 1024;
 
@@ -196,4 +200,89 @@ fn the_meter_forgets_jobs_that_are_gone() {
     meter.observe(1, MB, start + Duration::from_secs(1));
     meter.retain(&[2]);
     assert_eq!(meter.speed(1), None);
+}
+
+#[test]
+fn several_jobs_without_bytes_combine_their_files() {
+    let no_bytes = |id, files_done| JobInfo {
+        id,
+        kind: OpKind::Delete,
+        bytes_done: 0,
+        bytes_total: 0,
+        files_done,
+        files_total: 12,
+        ..copy()
+    };
+    let summary = JobsSummary::of(&[no_bytes(1, 3), no_bytes(2, 0)]);
+    assert_eq!(summary.percent_text(), "12%");
+}
+
+#[test]
+fn a_stall_decays_the_speed_and_then_hides_it() {
+    let start = Instant::now();
+    let at = |half_seconds: u32| start + Duration::from_millis(500) * half_seconds;
+    let mut meter = SpeedMeter::default();
+    meter.observe(1, 0, at(0));
+    meter.observe(1, 10 * MB, at(1));
+    let mut last = meter.speed(1).unwrap_or_default();
+    for tick in 2..6 {
+        meter.observe(1, 10 * MB, at(tick));
+        let speed = meter.speed(1).unwrap_or_default();
+        assert!(speed < last, "{speed} after {last}");
+        last = speed;
+    }
+    for tick in 6..20 {
+        meter.observe(1, 10 * MB, at(tick));
+    }
+    assert_eq!(meter.speed(1), None);
+}
+
+struct Under {
+    clicks: usize,
+}
+
+impl Render for Under {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let done = JobInfo {
+            state: JobRowState::Done,
+            ..copy()
+        };
+        let card = JobCard::new(vec![done]).fade_out(Duration::from_millis(1));
+        div()
+            .relative()
+            .size_full()
+            .child(
+                div()
+                    .id("under")
+                    .test_support()
+                    .absolute()
+                    .inset_0()
+                    .on_click(cx.listener(|this, _, _, _| this.clicks += 1)),
+            )
+            .child(div().absolute().left_0().top_0().child(card))
+    }
+}
+
+#[gpui_kit::test]
+fn a_faded_card_neither_shows_nor_takes_clicks(cx: &mut TestAppContext) {
+    let (window, under) = open(cx, |_, _| Under { clicks: 0 });
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let card = loop {
+        let card = cx
+            .update_window(window, |_, window, cx| {
+                window.render_frame(cx);
+                window.find("job-card")
+            })
+            .expect("window");
+        if !card.visible() || Instant::now() > deadline {
+            break card;
+        }
+    };
+    assert!(!card.visible());
+    let middle = card.bounds().center();
+    cx.update_window(window, |_, window, cx| {
+        window.click_at("under", middle, cx);
+    })
+    .expect("window");
+    assert_eq!(under.read_with(cx, |under, _| under.clicks), 1);
 }

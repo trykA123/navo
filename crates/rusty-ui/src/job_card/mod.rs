@@ -7,9 +7,10 @@ mod summary;
 mod tests;
 
 use std::rc::Rc;
+use std::time::Duration;
 
 use gpui_kit::base::{ObservedElement, TestSupportExt};
-use gpui_kit::{Role, Stateful};
+use gpui_kit::{Animation, AnimationExt, Role, Stateful};
 use rusty_core::OpKind;
 
 use crate::prelude::*;
@@ -35,6 +36,23 @@ fn kind_icon(kind: OpKind) -> IconName {
 
 fn fade_opacity(delta: f32) -> f32 {
     1. - ((delta - FADE_FROM) / (1. - FADE_FROM)).clamp(0., 1.)
+}
+
+fn fade_out<E: IntoElement + Styled + 'static>(
+    element: E,
+    id: &'static str,
+    over: Duration,
+    live: fn(E) -> E,
+) -> AnyElement {
+    element
+        .with_animation(id, Animation::new(over), move |element, delta| {
+            if delta >= 1. {
+                element.invisible()
+            } else {
+                live(element).opacity(fade_opacity(delta))
+            }
+        })
+        .into_any_element()
 }
 
 fn part(id: impl Into<ElementId>, text: impl Into<SharedString>) -> ObservedElement<Stateful<Div>> {
