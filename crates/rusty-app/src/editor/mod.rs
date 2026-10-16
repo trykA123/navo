@@ -1,10 +1,8 @@
-use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 
 use rusty_core::Location;
-use rusty_store::SettingsStore;
 use rusty_ui::window_view::EditorHooks;
 
 const WINDOWS_CANDIDATES: [(&str, &str); 4] = [
@@ -26,19 +24,14 @@ pub fn clean(program: &str) -> String {
 
 const UNIX_CANDIDATES: [&str; 3] = ["/usr/bin/code", "/usr/bin/nvim", "/usr/bin/vim"];
 
-pub fn hooks(settings: Option<&Path>, var: impl Fn(&str) -> Option<String>) -> EditorHooks {
-    let store = settings.map(|file| Rc::new(RefCell::new(SettingsStore::load(file).0)));
-    let chosen = store
-        .as_ref()
-        .and_then(|store| store.borrow().current().editor.path.clone());
+pub fn hooks(var: impl Fn(&str) -> Option<String>) -> EditorHooks {
     let search = Search {
         path: var("PATH").unwrap_or_default(),
         extensions: var("PATHEXT").unwrap_or_else(|| DEFAULT_EXTENSIONS.to_owned()),
     };
     EditorHooks {
-        chosen,
         suggestion: suggest(&var),
-        remember: Rc::new(move |program| remember(store.as_ref(), program, &search)),
+        resolve: Rc::new(move |program| found(program, &search)),
         open: Rc::new(|program, file| open(&clean(program), file)),
     }
 }
@@ -84,31 +77,10 @@ pub fn resolve(program: &str, search: &Search) -> Option<PathBuf> {
     })
 }
 
-fn remember(
-    store: Option<&Rc<RefCell<SettingsStore>>>,
-    program: &str,
-    search: &Search,
-) -> Result<String, String> {
-    let Some(found) = resolve(&clean(program), search) else {
-        return Err("No program at that path.".to_owned());
-    };
-    let found = found.to_string_lossy().into_owned();
-    if let Some(store) = store {
-        save_choice(store, &found);
-    }
-    Ok(found)
-}
-
-fn save_choice(store: &Rc<RefCell<SettingsStore>>, program: &str) {
-    for _ in 0..2 {
-        let mut settings = store.borrow().current().clone();
-        settings.editor.path = Some(program.to_owned());
-        let saved = store.borrow_mut().save(settings);
-        if !matches!(saved, Err(rusty_store::SettingsError::FileChanged)) {
-            return;
-        }
-        let _ = store.borrow_mut().reload();
-    }
+fn found(program: &str, search: &Search) -> Result<String, String> {
+    resolve(&clean(program), search)
+        .map(|found| found.to_string_lossy().into_owned())
+        .ok_or_else(|| "No program at that path.".to_owned())
 }
 
 fn open(program: &str, file: &Location) -> Result<(), String> {

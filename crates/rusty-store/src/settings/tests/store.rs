@@ -102,20 +102,107 @@ fn reload_after_an_invalid_edit_reports_the_error() {
 }
 
 #[test]
-fn save_creates_a_missing_file() {
+fn save_creates_a_missing_file_with_only_the_changed_key() {
     let dir = tmp();
     let path = settings_file(&dir);
     let (mut store, _) = SettingsStore::load(&path);
-    store.save(dark_mode()).unwrap();
-    assert_eq!(fs::read_to_string(&path).unwrap(), to_toml(&dark_mode()));
+    store.save(MODE, Some(text("dark"))).unwrap();
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        "[appearance]\nmode = \"dark\"\n"
+    );
 }
 
 #[test]
 fn save_updates_current() {
     let dir = tmp();
     let (mut store, _) = SettingsStore::load(&settings_file(&dir));
-    store.save(dark_mode()).unwrap();
+    store.save(MODE, Some(text("dark"))).unwrap();
     assert_eq!(store.current(), &dark_mode());
+}
+
+#[test]
+fn save_keeps_comments() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "# mine\n[appearance]\n# the look\nmode = \"light\" # bright\n",
+    );
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        "# mine\n[appearance]\n# the look\nmode = \"dark\" # bright\n"
+    );
+}
+
+#[test]
+fn save_keeps_unknown_keys() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[appearance]\nzoom = 2\n\n[plugins]\ngit = true\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    let after = fs::read_to_string(&path).unwrap();
+    assert!(after.contains("zoom = 2\n"), "{after}");
+    assert!(after.contains("[plugins]\ngit = true\n"), "{after}");
+    let (_, report) = SettingsStore::load(&path);
+    assert_eq!(report.unknown_keys, ["appearance.zoom", "plugins"]);
+}
+
+#[test]
+fn save_keeps_the_key_order() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let before = "[files]\nsort = \"size\"\nfolders-first = false\n\n[appearance]\nfont-size = 15\nmode = \"light\"\ndensity = \"compact\"\n";
+    write(&path, before);
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        before.replace("\"light\"", "\"dark\"")
+    );
+}
+
+#[test]
+fn save_adds_a_new_key_to_its_existing_table() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[files]\nsort = \"size\"\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    store
+        .save("files.folders-first", Some(SettingValue::Bool(false)))
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        "[files]\nsort = \"size\"\nfolders-first = false\n"
+    );
+}
+
+#[test]
+fn save_without_a_value_removes_the_key() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[editor]\npath = \"code\"\n# keep\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save("editor.path", None).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "[editor]\n# keep\n");
+    assert_eq!(store.current().editor.path, None);
+}
+
+#[test]
+fn undo_writes_the_old_value_back_and_restores_the_file() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let before = "# mine\n[appearance]\nmode = \"light\"\nfont-size = 15\n";
+    write(&path, before);
+    let (mut store, _) = SettingsStore::load(&path);
+    let old = store.current().appearance.mode;
+    store.save(MODE, Some(text("dark"))).unwrap();
+    store.save(MODE, Some(text("light"))).unwrap();
+    assert_eq!(store.current().appearance.mode, old);
+    assert_eq!(fs::read_to_string(&path).unwrap(), before);
 }
 
 #[test]
@@ -125,7 +212,7 @@ fn save_keeps_a_backup_of_the_old_file() {
     let old = "# mine\n[files]\nshow-hidden = true\n";
     write(&path, old);
     let (mut store, _) = SettingsStore::load(&path);
-    store.save(dark_mode()).unwrap();
+    store.save(MODE, Some(text("dark"))).unwrap();
     assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), old);
 }
 
@@ -135,18 +222,35 @@ fn save_refuses_when_the_file_on_disk_is_invalid() {
     let path = settings_file(&dir);
     write(&path, "[appearance]\nfont-size = \"big\"\n");
     let (mut store, _) = SettingsStore::load(&path);
-    assert_eq!(store.save(dark_mode()), Err(SettingsError::FileInvalid));
+    assert_eq!(
+        store.save(MODE, Some(text("dark"))),
+        Err(SettingsError::FileInvalid)
+    );
+}
+
+#[test]
+fn save_refuses_a_file_that_is_not_toml() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let text_on_disk = "[appearance\nmode = \"dark\"\n";
+    write(&path, text_on_disk);
+    let (mut store, _) = SettingsStore::load(&path);
+    assert_eq!(
+        store.save(MODE, Some(text("light"))),
+        Err(SettingsError::FileInvalid)
+    );
+    assert_eq!(fs::read_to_string(&path).unwrap(), text_on_disk);
 }
 
 #[test]
 fn refused_save_leaves_the_invalid_file_untouched() {
     let dir = tmp();
     let path = settings_file(&dir);
-    let text = "[appearance]\nfont-size = \"big\"\n";
-    write(&path, text);
+    let text_on_disk = "[appearance]\nfont-size = \"big\"\n";
+    write(&path, text_on_disk);
     let (mut store, _) = SettingsStore::load(&path);
-    let _ = store.save(dark_mode());
-    assert_eq!(fs::read(&path).unwrap(), text.as_bytes());
+    let _ = store.save(MODE, Some(text("dark")));
+    assert_eq!(fs::read(&path).unwrap(), text_on_disk.as_bytes());
     assert!(!backup_path(&path).exists());
 }
 
@@ -157,21 +261,40 @@ fn refused_save_keeps_current() {
     write(&path, "");
     let (mut store, _) = SettingsStore::load(&path);
     write(&path, "[appearance]\nfont-size = \"big\"\n");
-    let _ = store.save(dark_mode());
+    let _ = store.save(MODE, Some(text("dark")));
     assert_eq!(store.current(), &Settings::default());
+}
+
+#[test]
+fn save_refuses_a_value_of_the_wrong_type_and_writes_nothing() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let text_on_disk = "[appearance]\nfont-size = 15\n";
+    write(&path, text_on_disk);
+    let (mut store, _) = SettingsStore::load(&path);
+    let refused = store.save("appearance.font-size", Some(text("big")));
+    assert!(
+        matches!(refused, Err(SettingsError::Invalid { .. })),
+        "{refused:?}"
+    );
+    assert_eq!(fs::read_to_string(&path).unwrap(), text_on_disk);
 }
 
 #[test]
 fn save_then_load_returns_equal_settings() {
     let dir = tmp();
     let path = settings_file(&dir);
-    let mut settings = dark_mode();
-    settings.terminal.command = Some("wezterm start --cwd {path}".to_owned());
-    settings.experimental.insert("new-grid".to_owned(), true);
     let (mut store, _) = SettingsStore::load(&path);
-    store.save(settings.clone()).unwrap();
+    store.save(MODE, Some(text("dark"))).unwrap();
+    store
+        .save("terminal.command", Some(text("wezterm start --cwd {path}")))
+        .unwrap();
+    store
+        .save("appearance.font-size", Some(SettingValue::Integer(15)))
+        .unwrap();
     let (loaded, report) = SettingsStore::load(&path);
-    assert_eq!(loaded.current(), &settings);
+    assert_eq!(loaded.current(), store.current());
+    assert_eq!(loaded.current().appearance.font_size, 15);
     assert_eq!(report, LoadReport::default());
 }
 
@@ -195,39 +318,65 @@ fn save_to_an_unreadable_path_is_an_io_error() {
     fs::create_dir(&path).unwrap();
     let (mut store, _) = SettingsStore::load(&path);
     assert!(matches!(
-        store.save(Settings::default()),
+        store.save(MODE, Some(text("dark"))),
         Err(SettingsError::Io { .. })
     ));
 }
 
 #[test]
-fn save_refuses_a_valid_edit_made_after_the_load() {
+fn save_after_an_outside_edit_keeps_the_edit() {
     let dir = tmp();
     let path = settings_file(&dir);
     let (mut store, _) = SettingsStore::load(&path);
-    let edit = "# my comment\n[appearance]\nfont-size = 15\n";
-    write(&path, edit);
-    assert_eq!(store.save(dark_mode()), Err(SettingsError::FileChanged));
-    assert_eq!(fs::read_to_string(&path).unwrap(), edit);
+    write(&path, "# my comment\n[appearance]\nfont-size = 15\n");
+    store.save(MODE, Some(text("dark"))).unwrap();
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        "# my comment\n[appearance]\nfont-size = 15\nmode = \"dark\"\n"
+    );
+    assert_eq!(store.current().appearance.font_size, 15);
 }
 
 #[test]
-fn save_after_reloading_the_edit_succeeds() {
+fn consecutive_saves_both_land() {
     let dir = tmp();
     let path = settings_file(&dir);
     let (mut store, _) = SettingsStore::load(&path);
-    write(&path, "[appearance]\nfont-size = 15\n");
-    store.reload();
-    assert_eq!(store.save(dark_mode()), Ok(()));
+    store.save(MODE, Some(text("dark"))).unwrap();
+    store
+        .save("files.hidden-files", Some(text("hidden")))
+        .unwrap();
+    let (loaded, _) = SettingsStore::load(&path);
+    assert_eq!(loaded.current().appearance.mode, ThemeMode::Dark);
+    assert_eq!(loaded.current().files.hidden_files, HiddenFiles::Hidden);
 }
 
 #[test]
-fn consecutive_saves_do_not_count_as_edits() {
-    let dir = tmp();
-    let path = settings_file(&dir);
-    let (mut store, _) = SettingsStore::load(&path);
-    store.save(dark_mode()).unwrap();
-    assert_eq!(store.save(Settings::default()), Ok(()));
+fn the_line_of_a_key_is_found_in_the_file() {
+    let text_on_disk = "# mine\n[files]\nsort = \"size\"\n\n[appearance]\nmode = \"dark\"\n";
+    assert_eq!(key_line(text_on_disk, MODE), Some(6));
+    assert_eq!(key_line(text_on_disk, "files.sort"), Some(3));
+}
+
+#[test]
+fn the_line_of_a_dotted_or_inline_key_is_found() {
+    let text_on_disk = "appearance.mode = \"dark\"\nfiles = { sort = \"size\" }\n";
+    assert_eq!(key_line(text_on_disk, MODE), Some(1));
+    assert_eq!(key_line(text_on_disk, "files.sort"), Some(2));
+}
+
+#[test]
+fn the_line_of_a_key_ignores_a_bom_and_crlf() {
+    assert_eq!(
+        key_line("\u{feff}# mine\r\n[appearance]\r\nmode = 1\r\n", MODE),
+        Some(3)
+    );
+}
+
+#[test]
+fn a_missing_key_or_broken_file_has_no_line() {
+    assert_eq!(key_line("[files]\nsort = \"size\"\n", MODE), None);
+    assert_eq!(key_line("[appearance\n", MODE), None);
 }
 
 #[test]
@@ -245,4 +394,100 @@ fn an_old_editor_written_file_loads_valid_with_hidden_files_shown() {
         store.current().editor.path.as_deref(),
         Some(r"C:\Tools\code.exe")
     );
+}
+
+#[test]
+fn a_setting_is_read_by_its_key() {
+    let mut settings = dark_mode();
+    settings.appearance.font_size = 15;
+    assert_eq!(settings.value_at(MODE), Some(text("dark")));
+    assert_eq!(
+        settings.value_at("appearance.font-size"),
+        Some(SettingValue::Integer(15))
+    );
+    assert_eq!(
+        settings.value_at("files.folders-first"),
+        Some(SettingValue::Bool(true))
+    );
+    assert_eq!(settings.value_at("editor.path"), None);
+    assert_eq!(settings.value_at("appearance.zoom"), None);
+}
+
+fn changed_lines(before: &str, after: &str) -> usize {
+    let (before, after): (Vec<&str>, Vec<&str>) =
+        (before.split('\n').collect(), after.split('\n').collect());
+    assert_eq!(before.len(), after.len());
+    before.iter().zip(&after).filter(|(a, b)| a != b).count()
+}
+
+#[test]
+fn a_crlf_file_keeps_its_line_endings_and_undo_gives_back_the_bytes() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let before = "# mine\r\n[appearance]\r\nmode = \"light\"\r\nfont-size = 15\r\n";
+    write(&path, before);
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    let after = fs::read_to_string(&path).unwrap();
+    assert_eq!(changed_lines(before, &after), 1, "{after:?}");
+    assert_eq!(after.matches("\r\n").count(), after.matches('\n').count());
+    store.save(MODE, Some(text("light"))).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
+}
+
+#[test]
+fn a_crlf_file_gets_crlf_on_a_new_key() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[files]\r\nsort = \"size\"\r\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    let after = fs::read_to_string(&path).unwrap();
+    assert!(!after.replace("\r\n", "").contains('\n'), "{after:?}");
+}
+
+#[test]
+fn a_bom_file_keeps_its_bom_and_undo_gives_back_the_bytes() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let before = "\u{feff}# mine\r\n[appearance]\r\nmode = \"light\"\r\n";
+    write(&path, before);
+    let (mut store, report) = SettingsStore::load(&path);
+    assert_eq!(report, LoadReport::default());
+    store.save(MODE, Some(text("dark"))).unwrap();
+    let after = fs::read_to_string(&path).unwrap();
+    assert!(after.starts_with('\u{feff}'), "{after:?}");
+    assert_eq!(changed_lines(before, &after), 1, "{after:?}");
+    assert_eq!(store.current().appearance.mode, ThemeMode::Dark);
+    store.save(MODE, Some(text("light"))).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
+}
+
+#[test]
+fn the_backup_keeps_the_file_from_before_this_session() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let old = "# before\n[appearance]\nmode = \"light\"\n";
+    write(&path, old);
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    store
+        .save("files.hidden-files", Some(text("hidden")))
+        .unwrap();
+    assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), old);
+    let session_two = fs::read_to_string(&path).unwrap();
+    let (mut next, _) = SettingsStore::load(&path);
+    next.save(MODE, Some(text("light"))).unwrap();
+    assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), session_two);
+}
+
+#[test]
+fn save_reports_whether_the_key_was_in_the_file() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let (mut store, _) = SettingsStore::load(&path);
+    let first = store.save(MODE, Some(text("dark"))).unwrap();
+    assert!(!first.was_present);
+    let second = store.save(MODE, Some(text("light"))).unwrap();
+    assert!(second.was_present);
 }

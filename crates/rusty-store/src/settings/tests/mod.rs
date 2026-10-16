@@ -24,6 +24,12 @@ fn write(path: &Path, text: &str) {
     fs::write(path, text).unwrap();
 }
 
+const MODE: &str = "appearance.mode";
+
+fn text(value: &str) -> SettingValue {
+    SettingValue::Text(value.to_owned())
+}
+
 fn dark_mode() -> Settings {
     let mut settings = Settings::default();
     settings.appearance.mode = ThemeMode::Dark;

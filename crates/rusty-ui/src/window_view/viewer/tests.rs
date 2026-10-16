@@ -1,4 +1,5 @@
 mod archive;
+mod at_line;
 mod find;
 mod find_all;
 mod follow;
@@ -221,6 +222,7 @@ pub(super) fn window_with(
         kinds,
         drives: crate::window_view::DriveHooks::none(),
         app_menu: crate::window_view::AppMenuHooks::none(),
+        settings: crate::window_view::SettingsHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),

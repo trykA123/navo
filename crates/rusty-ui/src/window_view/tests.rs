@@ -16,6 +16,7 @@ use super::{FerriteWindow, StartOptions};
 
 mod app_menu;
 mod app_menu_save;
+mod applied;
 mod cached;
 mod cards;
 mod disk_start;
@@ -23,6 +24,7 @@ mod drive_fs;
 mod drives;
 mod fkeys;
 mod jobs;
+mod settings_sheet;
 mod shell_menu;
 mod tabs;
 mod typed;
@@ -85,6 +87,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
+        settings: super::SettingsHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -123,6 +126,7 @@ pub(super) fn open_unsettled(
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
         crate::app_menu::bind_keys(cx);
+        crate::settings::bind_keys(cx);
         crate::context_menu::bind_keys(cx);
         super::viewer::bind_keys(cx);
         super::bind_keys(cx);
@@ -462,9 +466,8 @@ fn editor_window(
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks {
-            chosen: chosen.map(str::to_owned),
             suggestion: Some("code.exe".to_owned()),
-            remember: Rc::new(move |program| {
+            resolve: Rc::new(move |program| {
                 if program.ends_with(".exe") {
                     remembered.borrow_mut().remembered.push(program.to_owned());
                     Ok(program.to_owned())
@@ -482,6 +485,15 @@ fn editor_window(
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
+        settings: super::SettingsHooks {
+            values: chosen.map_or_else(crate::settings::Values::default, |program| {
+                crate::settings::Values::default().with(&crate::settings::Change::text(
+                    crate::settings::Field::EditorPath,
+                    program.to_owned(),
+                ))
+            }),
+            ..super::SettingsHooks::none()
+        },
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -509,6 +521,26 @@ fn f4_without_an_editor_asks_once_then_opens_directly(cx: &mut TestAppContext) {
             .iter()
             .all(|(program, file)| program == "code.exe" && file.ends_with("a.txt"))
     );
+}
+
+#[gpui_kit::test]
+fn f4_uses_the_editor_set_in_settings(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, Some("code.exe"));
+    press(cx, window, &view, "ctrl-,");
+    for _ in 0..4 {
+        press(cx, window, &view, "tab");
+    }
+    press(cx, window, &view, "enter");
+    press(cx, window, &view, "ctrl-a");
+    type_in(cx, window, &view, "vim.exe");
+    press(cx, window, &view, "enter");
+    press(cx, window, &view, "escape");
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f4");
+    assert!(!prompt_open(cx, &view));
+    let opened = log.borrow().opened.clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, "vim.exe");
 }
 
 #[gpui_kit::test]
@@ -586,6 +618,7 @@ fn viewer_window(
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
+        settings: super::SettingsHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),

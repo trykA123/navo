@@ -3,6 +3,7 @@ use rusty_ui::prelude::*;
 use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
+use rusty_ui::settings::Field;
 use rusty_ui::side_sheet::Side;
 use rusty_ui::tokens::{self, Mode, Theme};
 use rusty_ui::window_view::{ArchiveView, BodyKeys, FontView, ImageView, PagedView, ViewerBody};
@@ -20,7 +21,9 @@ use crate::structured_sample::{
 };
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
-use crate::window_page::{JobsShown, NARROW, SheetShows, WIDE, WindowPage, window_element};
+use crate::window_page::{
+    JobsShown, NARROW, SETTINGS, SheetShows, WIDE, WindowPage, window_element,
+};
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -71,7 +74,7 @@ pub struct Gallery {
     alt_window: Entity<WindowPage>,
     job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
-    sheet_windows: [Entity<WindowPage>; 3],
+    sheet_windows: [Entity<WindowPage>; 5],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -257,25 +260,28 @@ fn job_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
     })
 }
 
-fn sheet_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
+fn sheet_windows(cx: &mut App) -> [Entity<WindowPage>; 5] {
     let shows = [
-        (Side::Left, WIDE, false),
-        (Side::Right, WIDE, true),
-        (Side::Left, NARROW, false),
+        (Side::Left, WIDE, false, None),
+        (Side::Right, WIDE, true, None),
+        (Side::Left, NARROW, false, None),
+        (Side::Left, SETTINGS, false, Some(Field::Density)),
+        (Side::Left, SETTINGS, false, Some(Field::HiddenFiles)),
     ];
-    shows.map(|(active, window_width, is_ringed)| {
+    shows.map(|(active, window_width, is_ringed, settings)| {
         let shows = SheetShows {
             active,
             window_width,
             is_ringed,
+            settings,
         };
         cx.new(|cx| WindowPage::with_sheet(shows, cx))
     })
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 11] {
-        let [sheet, sheet_left, sheet_narrow] = &self.sheet_windows;
+    fn windows(&self) -> [&Entity<WindowPage>; 13] {
+        let [sheet, sheet_left, sheet_narrow, settings, settings_files] = &self.sheet_windows;
         let [job, job_pill, two, two_pill] = &self.job_windows;
         [
             &self.main_window,
@@ -285,6 +291,8 @@ impl Gallery {
             sheet,
             sheet_left,
             sheet_narrow,
+            settings,
+            settings_files,
             job,
             job_pill,
             two,
@@ -350,7 +358,9 @@ impl Render for Gallery {
             | Page::AppMenu
             | Page::Sheet
             | Page::SheetLeft
-            | Page::SheetNarrow => root,
+            | Page::SheetNarrow
+            | Page::Settings
+            | Page::SettingsFiles => root,
         }
     }
 }

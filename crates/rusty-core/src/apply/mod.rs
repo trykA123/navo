@@ -4,6 +4,7 @@ mod select;
 mod window;
 
 use crate::{AppState, Command, Listing, Location, PaneId, PatternError, StateError, TabId};
+use select::Marking;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
@@ -77,8 +78,22 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::SelectionToggle => select::toggle(state),
         Command::SelectionToggleDown => select::toggle_down(state),
         Command::SelectionRange { to } => select::range(state, *to),
-        Command::SelectionAddPattern { pattern } => select::pattern(state, pattern, true),
-        Command::SelectionRemovePattern { pattern } => select::pattern(state, pattern, false),
+        Command::SelectionAddPattern { pattern, folders } => select::pattern(
+            state,
+            pattern,
+            Marking {
+                mark: true,
+                folders: *folders,
+            },
+        ),
+        Command::SelectionRemovePattern { pattern, folders } => select::pattern(
+            state,
+            pattern,
+            Marking {
+                mark: false,
+                folders: *folders,
+            },
+        ),
         Command::SelectionInvert => select::invert(state),
         Command::SelectionAll => select::all(state),
         Command::SelectionClear => Ok(select::clear(state)),

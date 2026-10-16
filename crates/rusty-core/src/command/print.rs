@@ -48,8 +48,13 @@ fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
             window.iter().map(|w| ("window", Shown::Int(*w))).collect()
         }
         Command::WindowFocus { window } => vec![("window", Shown::Int(*window))],
-        Command::SelectionAddPattern { pattern } | Command::SelectionRemovePattern { pattern } => {
-            vec![("pattern", Shown::Str(pattern))]
+        Command::SelectionAddPattern { pattern, folders }
+        | Command::SelectionRemovePattern { pattern, folders } => {
+            let mut shown = vec![("pattern", Shown::Str(pattern))];
+            if *folders {
+                shown.push(("folders", Shown::Word("true")));
+            }
+            shown
         }
         Command::LayoutSplit { direction } | Command::LayoutFocus { direction } => {
             vec![("direction", Shown::Word(direction.keyword()))]

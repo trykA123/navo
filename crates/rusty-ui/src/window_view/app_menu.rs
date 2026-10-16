@@ -1,19 +1,12 @@
-use std::sync::Arc;
-
 use gpui_kit::FocusHandle;
 
 use super::{FerriteWindow, mode_of};
-use crate::app_menu::{AppMenu, AppMenuEvent, Identity, Install, MenuCommand, QuickSettings};
+use crate::app_menu::{AppMenu, AppMenuEvent, Identity, Install, MenuCommand};
 use crate::prelude::*;
 use crate::tokens;
 
-pub use super::settings_save::SaveSettings;
-
 pub struct AppMenuHooks {
     pub identity: Identity,
-    pub settings: QuickSettings,
-    pub load_error: Option<SharedString>,
-    pub save: SaveSettings,
 }
 
 impl AppMenuHooks {
@@ -24,18 +17,6 @@ impl AppMenuHooks {
                 install: Install::Installed,
                 folder: SharedString::default(),
             },
-            settings: QuickSettings {
-                show_hidden: true,
-                ..QuickSettings::default()
-            },
-            load_error: None,
-            save: Arc::new(|change| {
-                let values = QuickSettings {
-                    show_hidden: true,
-                    ..QuickSettings::default()
-                };
-                Ok(change.applied_to(values))
-            }),
         }
     }
 }
@@ -47,8 +28,8 @@ pub(super) struct OpenMenu {
 
 impl FerriteWindow {
     pub(super) fn apply_theme(&self, window: &Window, cx: &mut App) {
-        let mode = self.quick.theme.resolve(mode_of(window.appearance()));
-        tokens::apply_with(mode, self.quick.density, cx);
+        let mode = self.values.theme().resolve(mode_of(window.appearance()));
+        tokens::apply_with(mode, self.values.density(), cx);
     }
 
     pub(super) fn toggle_app_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -67,7 +48,7 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    fn close_app_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn close_app_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let restore = self.app_menu.take().and_then(|menu| menu.restore);
         match restore {
             Some(handle) => window.focus(&handle, cx),
@@ -86,23 +67,30 @@ impl FerriteWindow {
             AppMenuEvent::Toggle(setting) => self.toggle_setting(setting, window, cx),
             AppMenuEvent::Run(command) => {
                 self.close_app_menu(window, cx);
-                self.run_menu_command(command, cx);
+                self.run_menu_command(command, window, cx);
             }
             AppMenuEvent::Close => self.close_app_menu(window, cx),
         }
         cx.notify();
     }
 
-    fn run_menu_command(&mut self, command: MenuCommand, cx: &mut Context<Self>) {
-        if command == MenuCommand::Quit && self.close(cx) {
-            cx.quit();
+    fn run_menu_command(
+        &mut self,
+        command: MenuCommand,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match command {
+            MenuCommand::Quit if self.close(cx) => cx.quit(),
+            MenuCommand::AllSettings => self.open_settings(window, cx),
+            _ => {}
         }
     }
 
     pub(super) fn app_menu_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let menu = self.app_menu.as_ref()?;
         let t = tokens::current(cx).clone();
-        let view = AppMenu::new("app-menu", self.identity.clone(), self.quick)
+        let view = AppMenu::new("app-menu", self.identity.clone(), self.values.quick())
             .selected(menu.selected)
             .error(self.saver.error.clone())
             .track_focus(&self.app_menu_focus)

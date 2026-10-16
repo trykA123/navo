@@ -141,6 +141,17 @@ fn selection_add_pattern_round_trips() {
     let text = r#"selection.add-pattern { pattern: "*.rs" }"#;
     let command = Command::SelectionAddPattern {
         pattern: "*.rs".to_owned(),
+        folders: false,
+    };
+    assert_eq!(round_trip(text), expect(command, text));
+}
+
+#[test]
+fn selection_add_pattern_with_folders_round_trips() {
+    let text = r#"selection.add-pattern { pattern: "*.rs", folders: true }"#;
+    let command = Command::SelectionAddPattern {
+        pattern: "*.rs".to_owned(),
+        folders: true,
     };
     assert_eq!(round_trip(text), expect(command, text));
 }
@@ -150,6 +161,7 @@ fn selection_remove_pattern_round_trips() {
     let text = r#"selection.remove-pattern { pattern: "?.txt" }"#;
     let command = Command::SelectionRemovePattern {
         pattern: "?.txt".to_owned(),
+        folders: false,
     };
     assert_eq!(round_trip(text), expect(command, text));
 }

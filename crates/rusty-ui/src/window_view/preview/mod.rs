@@ -115,7 +115,11 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    fn open_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::window_view) fn open_preview(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.preview.is_open = true;
         self.preview.sheet.update(cx, |sheet, cx| sheet.open(cx));
         self.preview.shown = None;
@@ -123,7 +127,7 @@ impl FerriteWindow {
         self.show_target(window, cx);
     }
 
-    fn close_preview(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::window_view) fn close_preview(&mut self, cx: &mut Context<Self>) {
         self.preview.is_open = false;
         self.preview.sheet.update(cx, |sheet, cx| sheet.close(cx));
         self.preview.wait = None;

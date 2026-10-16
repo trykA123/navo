@@ -33,6 +33,8 @@ pub enum Page {
     Sheet,
     SheetLeft,
     SheetNarrow,
+    Settings,
+    SettingsFiles,
 }
 
 pub struct PageInfo {
@@ -51,7 +53,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 33] = [
+pub const PAGES: [PageInfo; 35] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -123,6 +125,13 @@ pub const PAGES: [PageInfo; 33] = [
         Page::SheetNarrow,
         "Side sheet at 1100 px",
         "p21-sheet-1100",
+        false,
+    ),
+    info(Page::Settings, "Settings", "p19-settings", false),
+    info(
+        Page::SettingsFiles,
+        "Settings, files",
+        "p19-settings-files",
         false,
     ),
 ];

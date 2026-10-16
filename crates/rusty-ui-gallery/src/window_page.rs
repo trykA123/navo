@@ -11,6 +11,7 @@ use rusty_ui::pane_chrome::{
 };
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
+use rusty_ui::settings::Field;
 use rusty_ui::side_sheet::{SheetFrame, SheetState, Side as PaneSide};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens::{self, Density, Mode, Theme, ThemeChoice};
@@ -22,6 +23,7 @@ use crate::gallery::Page;
 use crate::job_sample;
 use crate::pane_page::status_of;
 use crate::pane_sample;
+use crate::settings_sample;
 use crate::sheet_sample;
 
 struct Side {
@@ -50,6 +52,7 @@ pub struct SheetShows {
     pub active: PaneSide,
     pub window_width: f32,
     pub is_ringed: bool,
+    pub settings: Option<Field>,
 }
 
 #[derive(Clone, Copy)]
@@ -160,13 +163,17 @@ impl WindowPage {
         let body = px(sheet.shows.window_width) - t.spacing.md * 2.;
         let passive_card = (body - t.spacing.md) / 2.;
         let frame = SheetFrame::new(body, passive_card, sheet.shows.active);
+        let shown = match sheet.shows.settings {
+            Some(field) => settings_sample::sheet(t, &sheet.state, frame, field),
+            None => sheet_sample::sheet(t, &sheet.state, frame),
+        };
         let layer = div()
             .absolute()
             .top(t.spacing.xs)
             .bottom(t.spacing.xs)
             .left(t.spacing.md)
             .right(t.spacing.md)
-            .child(sheet_sample::sheet(t, &sheet.state, frame).accent_ring(sheet.shows.is_ringed));
+            .child(shown.accent_ring(sheet.shows.is_ringed));
         Some(layer)
     }
 
@@ -279,6 +286,7 @@ impl Render for WindowPage {
 
 pub const NARROW: f32 = 1100.;
 pub const WIDE: f32 = 1440.;
+pub const SETTINGS: f32 = 1280.;
 
 fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
     div()
@@ -289,7 +297,7 @@ fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 11]) -> Option<AnyElement> {
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 13]) -> Option<AnyElement> {
     let [
         main,
         shift,
@@ -298,6 +306,8 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 11]) -> Option<
         sheet,
         sheet_left,
         sheet_narrow,
+        settings,
+        settings_files,
         jobs @ ..,
     ] = windows;
     let [job, job_pill, two, two_pill] = jobs;
@@ -314,6 +324,8 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 11]) -> Option<
         Page::Sheet => return Some(fixed(WIDE, sheet)),
         Page::SheetLeft => return Some(fixed(WIDE, sheet_left)),
         Page::SheetNarrow => return Some(fixed(NARROW, sheet_narrow)),
+        Page::Settings => return Some(fixed(SETTINGS, settings)),
+        Page::SettingsFiles => return Some(fixed(SETTINGS, settings_files)),
         _ => return None,
     };
     Some(shown.clone().into_any_element())

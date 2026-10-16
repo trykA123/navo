@@ -16,12 +16,14 @@ fn unloaded() -> AppState {
 fn add(pattern: &str) -> Command {
     Command::SelectionAddPattern {
         pattern: pattern.to_owned(),
+        folders: false,
     }
 }
 
 fn remove(pattern: &str) -> Command {
     Command::SelectionRemovePattern {
         pattern: pattern.to_owned(),
+        folders: false,
     }
 }
 
@@ -184,6 +186,30 @@ fn add_pattern_marks_matching_files_only() {
     let mut state = at_work(mixed());
     run(&mut state, add("*.rs"));
     assert_eq!(marked(&state), vec![1, 4]);
+}
+
+#[test]
+fn add_pattern_with_folders_marks_matching_folders_too() {
+    let mut state = at_work(mixed());
+    let command = Command::SelectionAddPattern {
+        pattern: "*.rs".to_owned(),
+        folders: true,
+    };
+    run(&mut state, command);
+    assert_eq!(marked(&state), vec![1, 3, 4]);
+}
+
+#[test]
+fn remove_pattern_with_folders_unmarks_matching_folders_too() {
+    let mut state = at_row(mixed(), 3);
+    run(&mut state, Command::SelectionToggle);
+    run(&mut state, Command::SelectionAll);
+    let command = Command::SelectionRemovePattern {
+        pattern: "*.rs".to_owned(),
+        folders: true,
+    };
+    run(&mut state, command);
+    assert_eq!(marked(&state), vec![2]);
 }
 
 #[test]

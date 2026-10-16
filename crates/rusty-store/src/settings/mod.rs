@@ -2,10 +2,13 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::write_atomic;
+use crate::{replace_atomic, write_atomic};
 
+mod edit;
 mod model;
 mod parse;
+
+pub use edit::{SettingValue, key_line};
 
 pub use model::{
     Appearance, Density, Editor, Files, HiddenFiles, SelectionSettings, Settings, SortKey,
@@ -28,8 +31,6 @@ pub enum SettingsError {
     },
     #[error("the settings file on disk is invalid; fix it before saving")]
     FileInvalid,
-    #[error("the settings file changed on disk; reload it before saving")]
-    FileChanged,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -38,11 +39,16 @@ pub struct LoadReport {
     pub error: Option<SettingsError>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Saved {
+    pub was_present: bool,
+}
+
 #[derive(Debug)]
 pub struct SettingsStore {
     path: PathBuf,
     current: Settings,
-    on_disk: Option<String>,
+    is_backed_up: bool,
 }
 
 impl SettingsStore {
@@ -50,7 +56,7 @@ impl SettingsStore {
         let mut store = Self {
             path: path.to_owned(),
             current: Settings::default(),
-            on_disk: None,
+            is_backed_up: false,
         };
         let report = store.reload();
         (store, report)
@@ -67,13 +73,11 @@ impl SettingsStore {
             Err(error) => return failed(error),
         };
         let Some(text) = text else {
-            self.on_disk = None;
             return LoadReport::default();
         };
         match parse(&text) {
             Ok((settings, unknown_keys)) => {
                 self.current = settings;
-                self.on_disk = Some(text);
                 LoadReport {
                     unknown_keys,
                     error: None,
@@ -83,21 +87,32 @@ impl SettingsStore {
         }
     }
 
-    pub fn save(&mut self, settings: Settings) -> Result<(), SettingsError> {
-        if let Some(text) = read(&self.path)? {
-            parse(&text).map_err(|_| SettingsError::FileInvalid)?;
-            if self.on_disk.as_deref() != Some(text.as_str()) {
-                return Err(SettingsError::FileChanged);
-            }
+    pub fn save(&mut self, key: &str, value: Option<SettingValue>) -> Result<Saved, SettingsError> {
+        let text = read(&self.path)?;
+        if let Some(text) = &text {
+            parse(text).map_err(|_| SettingsError::FileInvalid)?;
         }
-        let text = parse::try_to_toml(&settings).map_err(|e| SettingsError::Io {
-            kind: io::ErrorKind::InvalidData,
-            message: e.to_string(),
-        })?;
-        write_atomic(&self.path, text.as_bytes()).map_err(io_error)?;
+        let text = text.unwrap_or_default();
+        let was_present = key_line(&text, key).is_some();
+        let patched = edit::patch(&text, key, value)?;
+        let (settings, _) = parse(&patched)?;
+        if patched != text {
+            self.write(&patched)?;
+        }
         self.current = settings;
-        self.on_disk = Some(text);
-        Ok(())
+        Ok(Saved { was_present })
+    }
+}
+
+impl SettingsStore {
+    fn write(&mut self, text: &str) -> Result<(), SettingsError> {
+        if self.is_backed_up {
+            replace_atomic(&self.path, text.as_bytes()).map_err(io_error)
+        } else {
+            write_atomic(&self.path, text.as_bytes()).map_err(io_error)?;
+            self.is_backed_up = true;
+            Ok(())
+        }
     }
 }
 

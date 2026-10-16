@@ -176,7 +176,7 @@ impl FerriteWindow {
             load,
             node,
             location,
-            show_hidden: self.quick.show_hidden,
+            show_hidden: self.values.show_hidden(),
         };
         self.preview.read(self.provider_for_preview(), request)
     }

@@ -27,11 +27,33 @@ impl Browser {
         self.show_hidden
     }
 
+    #[must_use]
+    pub fn shows_system(&self) -> bool {
+        self.show_system
+    }
+
     pub fn set_show_hidden(&mut self, show: bool) {
-        if self.show_hidden == show {
-            return;
+        if self.show_hidden != show {
+            self.show_hidden = show;
+            self.reshow_all();
         }
-        self.show_hidden = show;
+    }
+
+    pub fn set_show_system(&mut self, show: bool) {
+        if self.show_system != show {
+            self.show_system = show;
+            self.reshow_all();
+        }
+    }
+
+    fn visibility(&self) -> Visibility {
+        Visibility {
+            hidden: self.show_hidden,
+            system: self.show_system,
+        }
+    }
+
+    fn reshow_all(&mut self) {
         let tabs: Vec<TabId> = self.full.keys().copied().collect();
         for tab in tabs {
             self.reshow(tab);
@@ -42,13 +64,14 @@ impl Browser {
         let Some(location) = self.state.tab(tab).map(|t| t.location().clone()) else {
             return;
         };
+        let shows = self.visibility();
         let Some(full) = self.full.get(&tab) else {
             return;
         };
         let text = self.filter_text(tab).unwrap_or_default();
-        let shown = shown(full, text, self.show_hidden).or_else(|| {
+        let shown = shown(full, text, shows).or_else(|| {
             self.filters.remove(&tab);
-            shown(full, "", self.show_hidden)
+            shown(full, "", shows)
         });
         let Some(shown) = shown else {
             return;
@@ -102,7 +125,7 @@ impl Browser {
     ) -> (Listing, Rc<[FsEntry]>) {
         let shown = match self.filters.get(&tab) {
             Some(filter) if &filter.location == location => {
-                shown(&full, &filter.text, self.show_hidden)
+                shown(&full, &filter.text, self.visibility())
             }
             _ => None,
         };
@@ -110,7 +133,7 @@ impl Browser {
             self.filters.remove(&tab);
         }
         let shown = shown
-            .or_else(|| self::shown(&full, "", self.show_hidden))
+            .or_else(|| self::shown(&full, "", self.visibility()))
             .unwrap_or_else(|| Shown {
                 listing: full.listing.clone(),
                 details: full.details.clone(),
@@ -164,7 +187,7 @@ impl Browser {
         let Some(full) = self.full.get(&tab) else {
             return false;
         };
-        let Some(shown) = shown(full, &text, self.show_hidden) else {
+        let Some(shown) = shown(full, &text, self.visibility()) else {
             return false;
         };
         if text.is_empty() {
@@ -183,12 +206,22 @@ impl Browser {
     }
 }
 
-fn is_visible(entry: Option<&FsEntry>, show_hidden: bool) -> bool {
-    show_hidden || entry.is_none_or(|e| !e.attributes.hidden && !e.attributes.system)
+#[derive(Clone, Copy)]
+struct Visibility {
+    hidden: bool,
+    system: bool,
 }
 
-fn shown(full: &Full, text: &str, show_hidden: bool) -> Option<Shown> {
-    if text.is_empty() && show_hidden {
+fn is_visible(entry: Option<&FsEntry>, shows: Visibility) -> bool {
+    entry.is_none_or(|e| {
+        let is_hidden = e.attributes.hidden || e.attributes.system;
+        let is_system = e.attributes.system;
+        (shows.hidden || !is_hidden) && (shows.system || !is_system)
+    })
+}
+
+fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
+    if text.is_empty() && shows.hidden && shows.system {
         return Some(Shown {
             listing: full.listing.clone(),
             details: full.details.clone(),
@@ -204,7 +237,7 @@ fn shown(full: &Full, text: &str, show_hidden: bool) -> Option<Shown> {
         .entries()
         .iter()
         .enumerate()
-        .filter(|(index, _)| is_visible(full.details.get(*index), show_hidden))
+        .filter(|(index, _)| is_visible(full.details.get(*index), shows))
         .filter(|(_, entry)| pattern.as_ref().is_none_or(|p| p.matches(&entry.name)))
         .map(|(index, _)| index)
         .collect();
