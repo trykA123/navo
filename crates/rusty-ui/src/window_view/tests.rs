@@ -23,6 +23,7 @@ mod drives;
 mod fkeys;
 mod tabs;
 mod typed;
+mod watched;
 use crate::browser::Operations;
 use crate::tokens::{self, Mode};
 

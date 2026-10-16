@@ -60,6 +60,21 @@ impl CacheKeys {
     }
 
     #[must_use]
+    pub fn is_network(&self, location: &Location) -> bool {
+        if !location.is_local() {
+            return false;
+        }
+        let volume = volume_of(location);
+        match drive_letter(volume.as_str()) {
+            Some(letter) => matches!(
+                self.drive(letter.to_ascii_uppercase()),
+                Some(DriveIdentity::Remote(_))
+            ),
+            None => volume.as_str().starts_with(r"\\"),
+        }
+    }
+
+    #[must_use]
     pub fn probes_started(&self) -> usize {
         lock(&self.drives).started
     }

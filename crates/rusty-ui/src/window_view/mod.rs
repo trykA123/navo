@@ -160,6 +160,9 @@ impl FerriteWindow {
             saver: settings_save::Saver::new(options.app_menu.save, options.app_menu.load_error),
             _activation: cx.observe_window_activation(window, |view, window, cx| {
                 view.track_modifiers(window.modifiers(), window, cx);
+                if window.is_window_active() && view.browser.revalidate_unwatched() {
+                    cx.notify();
+                }
             }),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, |view, window, cx| {
