@@ -202,8 +202,8 @@ fn the_tokens_page_renders_in_both_themes(cx: &mut TestAppContext) {
             })),
             ..Default::default()
         };
-        rusty_ui::open_window(options, cx, |_, cx| {
-            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        rusty_ui::open_window(options, cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         })
         .expect("open the gallery window")
     });
