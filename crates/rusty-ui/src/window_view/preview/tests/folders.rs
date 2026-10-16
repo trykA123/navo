@@ -9,6 +9,8 @@ use super::gate::Gate;
 use super::{Rig, open_fake, open_on};
 use crate::window_view::FerriteWindow;
 use crate::window_view::FileHooks;
+use crate::window_view::preview::contents::{CHILD_LIMIT, RowKind};
+use rusty_fs::{FolderProfile, ProfileState, Tally};
 
 fn project() -> FakeFs {
     let fs = FakeFs::new();
@@ -18,6 +20,17 @@ fn project() -> FakeFs {
     fs.add_file("home/proj/readme.md", 40);
     fs.add_file("home/zz.txt", 1);
     fs
+}
+
+fn done_profile() -> FolderProfile {
+    FolderProfile {
+        totals: Default::default(),
+        newest_ms: None,
+        kinds: Vec::new(),
+        other: Tally::default(),
+        largest: Vec::new(),
+        state: ProfileState::Done,
+    }
 }
 
 fn is_done(view: &FerriteWindow) -> bool {
@@ -201,6 +214,52 @@ fn a_watch_event_drops_the_cached_profile(cx: &mut TestAppContext) {
     rig.rest(cx);
     assert!(rig.wait_until(cx, is_done));
     assert_eq!(fs.calls("home/proj/target", FakeOp::List), walked + 1);
+}
+
+#[gpui_kit::test]
+fn a_watch_change_drops_the_profiles_of_the_changed_folder_and_its_parents(
+    cx: &mut TestAppContext,
+) {
+    let (rig, fs) = opened(cx, project().with_watch());
+    rig.key(cx, "enter");
+    rig.rest(cx);
+    rig.key(cx, "down");
+    rig.rest(cx);
+    rig.key(cx, "enter");
+    rig.rest(cx);
+    let [proj, target, src] =
+        ["home/proj", "home/proj/target", "home/proj/src"].map(|path| fs.location(path));
+    rig.read(cx, |view| {
+        for at in [&proj, &target, &src] {
+            view.browser.profiles().put(at.clone(), 1, done_profile());
+        }
+    });
+    fs.add_file("home/proj/target/new.txt", 1);
+    assert!(rig.wait_until(cx, |view| view.browser.profiles().get(&target, 1).is_none()));
+    rig.read(cx, |view| {
+        assert!(view.browser.profiles().get(&proj, 1).is_none());
+        assert!(view.browser.profiles().get(&src, 1).is_some());
+    });
+}
+
+#[gpui_kit::test]
+fn a_huge_folder_reaches_the_ui_already_cut_to_the_limit(cx: &mut TestAppContext) {
+    let fs = FakeFs::new();
+    for index in 0..CHILD_LIMIT + 500 {
+        fs.add_file(&format!("home/big/f{index:05}"), 1);
+    }
+    let (rig, _) = opened(cx, fs);
+    let rows = rig.read(cx, |view| {
+        let contents = &view.preview.folder().expect("folder").contents;
+        let last = contents.len() - 1;
+        (
+            contents.len(),
+            contents
+                .row(last)
+                .map(|(kind, _)| matches!(kind, RowKind::More(500))),
+        )
+    });
+    assert_eq!(rows, (CHILD_LIMIT + 1, Some(true)));
 }
 
 #[gpui_kit::test]

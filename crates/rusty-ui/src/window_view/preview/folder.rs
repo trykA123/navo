@@ -8,7 +8,7 @@ use rusty_fs::{
 };
 use rusty_structured::NodeId;
 
-use super::contents::Contents;
+use super::contents::{CHILD_LIMIT, Contents};
 use super::follow::Target;
 use super::inbox::Arrival;
 use super::scan::{Scan, Snapshots};
@@ -97,11 +97,14 @@ impl Preview {
             Box::new(move |cancel| {
                 let listed = load_folder(provider.as_ref(), &location, cancel)
                     .map(|snapshot| {
-                        snapshot
+                        let mut entries: Vec<FsEntry> = snapshot
                             .details
                             .into_iter()
                             .filter(|entry| show_hidden || !entry.attributes.hidden)
-                            .collect()
+                            .collect();
+                        let hidden = entries.len().saturating_sub(CHILD_LIMIT);
+                        entries.truncate(CHILD_LIMIT);
+                        (entries, hidden)
                     })
                     .map_err(|error| error.message());
                 if send.send(Arrival::Read { load, node, listed }).is_ok() {
@@ -190,7 +193,7 @@ impl FerriteWindow {
         &mut self,
         load: u64,
         node: NodeId,
-        listed: Result<Vec<FsEntry>, String>,
+        listed: Result<(Vec<FsEntry>, usize), String>,
     ) -> bool {
         let Some(folder) = self
             .preview

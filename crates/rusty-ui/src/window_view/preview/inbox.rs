@@ -9,7 +9,7 @@ pub(super) enum Arrival {
     Read {
         load: u64,
         node: NodeId,
-        listed: Result<Vec<FsEntry>, String>,
+        listed: Result<(Vec<FsEntry>, usize), String>,
     },
     Snapshot {
         load: u64,

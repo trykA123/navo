@@ -5,7 +5,8 @@ use std::sync::Arc;
 use gpui_kit::TestAppContext;
 use image::{ImageFormat, Rgba, RgbaImage};
 use rusty_core::Location;
-use rusty_core::paging::{ByteSource, LineIndex};
+use rusty_core::marks::{Bookmarks, MarkSet};
+use rusty_core::paging::{ByteSource, LineIndex, Needle};
 use rusty_fs::FakeFs;
 use rusty_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveListing};
 
@@ -14,7 +15,7 @@ use rusty_core::encoding::TextEncoding;
 
 use crate::window_view::preview::Shown;
 use crate::window_view::preview::file::read_only;
-use crate::window_view::{FileHooks, FileText, Head, Paged, Save};
+use crate::window_view::{FileHooks, FileStamp, FileText, Head, Paged, Save};
 
 const ARCHIVO: &[u8] = include_bytes!("../../../../fonts/Archivo-Regular.ttf");
 const ZIP_HEAD: &[u8] = b"PK\x03\x04\x14\x00\x00\x00\x08\x00";
@@ -192,10 +193,17 @@ fn a_file_header_shows_the_name_the_size_and_the_kind_chip(cx: &mut TestAppConte
 fn the_preview_hooks_refuse_to_write() {
     let writes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let counted = writes.clone();
+    let (saved, remembered) = (writes.clone(), writes.clone());
     let hooks = FileHooks {
         write: Arc::new(move |_, _| {
             counted.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             Ok(None)
+        }),
+        save_memory: Arc::new(move |_, _, _, _| {
+            saved.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }),
+        remember: Arc::new(move |_| {
+            remembered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }),
         ..FileHooks::none()
     };
@@ -206,6 +214,13 @@ fn the_preview_hooks_refuse_to_write() {
         encoding: TextEncoding::default(),
     };
     let location = Location::new("/tmp/notes.txt").unwrap();
-    assert!((read_only(&hooks).write)(&location, &save).is_err());
+    let guarded = read_only(&hooks);
+    assert!((guarded.write)(&location, &save).is_err());
+    let stamp = FileStamp {
+        len: 0,
+        modified_ms: 0,
+    };
+    (guarded.save_memory)(&location, stamp, &MarkSet::default(), &Bookmarks::default());
+    (guarded.remember)(&Needle::Bytes(vec![1]));
     assert_eq!(writes.load(std::sync::atomic::Ordering::Relaxed), 0);
 }

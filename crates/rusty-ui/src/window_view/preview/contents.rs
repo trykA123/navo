@@ -131,13 +131,13 @@ impl Contents {
         }
     }
 
-    pub(super) fn attach(&mut self, parent: NodeId, listed: Result<Vec<FsEntry>, String>) {
+    pub(super) fn attach(&mut self, parent: NodeId, listed: Result<(Vec<FsEntry>, usize), String>) {
         let is_root = self.tree.root() == Some(parent);
         if self.tree.take_lazy(parent).is_none() {
             return;
         }
         match listed {
-            Ok(entries) => self.push_children(parent, entries),
+            Ok((entries, hidden)) => self.push_children(parent, entries, hidden),
             Err(message) if is_root => self.failure = Some(message),
             Err(_) => {}
         }
@@ -145,12 +145,11 @@ impl Contents {
         self.outline.loaded(&self.tree, parent);
     }
 
-    fn push_children(&mut self, parent: NodeId, entries: Vec<FsEntry>) {
+    fn push_children(&mut self, parent: NodeId, entries: Vec<FsEntry>, hidden: usize) {
         let Some(at) = self.folders.get(&parent).cloned() else {
             return;
         };
-        let hidden = entries.len().saturating_sub(CHILD_LIMIT);
-        for entry in entries.into_iter().take(CHILD_LIMIT) {
+        for entry in entries {
             let name = entry.name.to_text();
             let is_folder = entry.kind == EntryKind::Folder;
             let kind = if is_folder {

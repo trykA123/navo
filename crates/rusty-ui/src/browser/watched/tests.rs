@@ -4,10 +4,13 @@ use std::time::{Duration, Instant};
 
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, CursorMove, Direction, FsErrorKind, ProviderPath, apply};
-use rusty_fs::{Attributes, EntryKind, FakeFs, FakeOp, Fault, FsEntry, WatchChange};
+use rusty_fs::{
+    Attributes, EntryKind, FakeFs, FakeOp, Fault, FolderProfile, FsEntry, ProfileState, Tally,
+    WatchChange, WatchEvent,
+};
 
 use super::recheck::Recheck;
-use super::{Folder, Refresh};
+use super::{Folder, PATCH_LIMIT, Refresh};
 use crate::browser::{Browser, Message};
 
 const WITHIN: Duration = Duration::from_secs(5);
@@ -452,4 +455,32 @@ fn a_recheck_skips_a_tab_whose_listing_is_still_pending() {
     browser.accept_recheck(&home);
     settle(&mut browser);
     assert_eq!(fs.calls("home", FakeOp::List), listed + 1);
+}
+
+fn done_profile() -> FolderProfile {
+    FolderProfile {
+        totals: Default::default(),
+        newest_ms: None,
+        kinds: Vec::new(),
+        other: Tally::default(),
+        largest: Vec::new(),
+        state: ProfileState::Done,
+    }
+}
+
+#[test]
+fn a_batch_over_the_patch_limit_drops_the_folder_profile_and_its_children() {
+    let fs = fake();
+    let browser = browser(&fs);
+    let home = fs.location("home");
+    let child = home.join(&ProviderPath::from_text("docs")).unwrap();
+    browser.profiles().put(child, 1, done_profile());
+    let created =
+        |index: usize| WatchChange::Created(ProviderPath::from_text(&format!("f{index}")));
+    let small = WatchEvent::Changed((0..PATCH_LIMIT).map(created).collect());
+    browser.forget_profiles(&home, &small);
+    assert_eq!(browser.profiles().len(), 1);
+    let big = WatchEvent::Changed((0..=PATCH_LIMIT).map(created).collect());
+    browser.forget_profiles(&home, &big);
+    assert!(browser.profiles().is_empty());
 }

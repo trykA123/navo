@@ -181,6 +181,10 @@ impl Browser {
             self.profiles.invalidate(location);
             return;
         };
+        if changes.len() > PATCH_LIMIT {
+            self.profiles.invalidate(location);
+            return;
+        }
         for name in changes.iter().flat_map(names_of) {
             match location.join(name) {
                 Ok(changed) => self.profiles.invalidate(&changed),

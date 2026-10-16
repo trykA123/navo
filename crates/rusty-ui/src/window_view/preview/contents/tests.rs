@@ -21,10 +21,13 @@ fn read_root(contents: &mut Contents) {
     let (node, _) = contents.root().unwrap();
     contents.attach(
         node,
-        Ok(vec![
-            entry("src", EntryKind::Folder),
-            entry("notes.txt", EntryKind::File),
-        ]),
+        Ok((
+            vec![
+                entry("src", EntryKind::Folder),
+                entry("notes.txt", EntryKind::File),
+            ],
+            0,
+        )),
     );
 }
 
@@ -54,7 +57,7 @@ fn a_subfolder_can_open_but_its_children_wait_until_it_does() {
     let (node, location) = contents.toggle(0).expect("src needs a read");
     assert_eq!(location.as_str(), "/work/src");
     assert_eq!(names(&contents), ["src", "notes.txt"]);
-    contents.attach(node, Ok(vec![entry("main.rs", EntryKind::File)]));
+    contents.attach(node, Ok((vec![entry("main.rs", EntryKind::File)], 0)));
     assert_eq!(names(&contents), ["src", "main.rs", "notes.txt"]);
     assert_eq!(contents.row(1).unwrap().1.depth, 1);
 }
@@ -64,7 +67,7 @@ fn closing_and_reopening_a_read_folder_needs_no_second_read() {
     let mut contents = Contents::new(root());
     read_root(&mut contents);
     let (node, _) = contents.toggle(0).unwrap();
-    contents.attach(node, Ok(vec![entry("main.rs", EntryKind::File)]));
+    contents.attach(node, Ok((vec![entry("main.rs", EntryKind::File)], 0)));
     assert!(contents.toggle(0).is_none());
     assert_eq!(names(&contents), ["src", "notes.txt"]);
     assert!(contents.toggle(0).is_none());
@@ -75,10 +78,10 @@ fn closing_and_reopening_a_read_folder_needs_no_second_read() {
 fn a_huge_folder_shows_the_first_part_and_a_count_of_the_rest() {
     let mut contents = Contents::new(root());
     let (node, _) = contents.root().unwrap();
-    let many = (0..CHILD_LIMIT + 5)
+    let many = (0..CHILD_LIMIT)
         .map(|index| entry(&format!("f{index}"), EntryKind::File))
         .collect();
-    contents.attach(node, Ok(many));
+    contents.attach(node, Ok((many, 5)));
     assert_eq!(contents.len(), CHILD_LIMIT + 1);
     assert_eq!(names(&contents).last().map(String::as_str), Some("+5"));
 }
