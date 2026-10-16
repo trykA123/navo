@@ -17,6 +17,7 @@ pub enum FerriteAction {
     Compare,
     OpenInOtherPane,
     Properties,
+    ClassicMenu,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -146,6 +147,28 @@ impl ShellMenu {
             item = item.children()?.get(*index)?;
         }
         Some(item)
+    }
+
+    pub fn item_mut(&mut self, path: &[usize]) -> Option<&mut MenuItem> {
+        let (first, rest) = path.split_first()?;
+        let mut item = self.items.get_mut(*first)?;
+        for index in rest {
+            item = match &mut item.kind {
+                ItemKind::Submenu(Submenu::Filled(children)) => children.get_mut(*index)?,
+                _ => return None,
+            };
+        }
+        Some(item)
+    }
+
+    pub fn set_submenu(&mut self, path: &[usize], submenu: Submenu) -> bool {
+        match self.item_mut(path) {
+            Some(item) if item.is_submenu() => {
+                item.kind = ItemKind::Submenu(submenu);
+                true
+            }
+            _ => false,
+        }
     }
 }
 

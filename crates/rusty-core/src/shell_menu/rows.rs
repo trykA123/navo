@@ -94,7 +94,7 @@ pub fn rare_rows(menu: &ShellMenu) -> Vec<Row> {
 fn overview(menu: &ShellMenu) -> Vec<Row> {
     let mut out = Vec::new();
     let ferrite: Vec<Row> = top_level(menu)
-        .filter(|(_, item)| item.is_ferrite() && !item.hidden && !item.is_separator())
+        .filter(|(_, item)| item.is_ferrite() && !item.hidden && !item.text.is_empty())
         .map(|(path, item)| Row::Item(ItemRow::new(path, item)))
         .collect();
     if !ferrite.is_empty() {
@@ -137,6 +137,9 @@ fn with_separators<'a>(items: impl Iterator<Item = (Vec<usize>, &'a MenuItem)>) 
     for (path, item) in items {
         if item.is_separator() {
             pending = true;
+            continue;
+        }
+        if item.text.is_empty() {
             continue;
         }
         if last_group.is_some_and(|group| group != item.group) {

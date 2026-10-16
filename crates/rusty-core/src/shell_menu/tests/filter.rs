@@ -103,3 +103,24 @@ fn match_range_survives_wider_lowercase() {
     };
     assert_eq!(&row.text[row.matched.clone().unwrap()], "Öff");
 }
+
+#[test]
+fn children_of_disabled_submenus_are_disabled() {
+    let menu = ShellMenu {
+        items: vec![MenuItem {
+            enabled: false,
+            ..submenu(
+                1,
+                "Git",
+                Group::Extensions,
+                vec![shell(10, "Pull", Group::Extensions)],
+            )
+        }],
+    };
+    let rows = rows(&menu, "pull");
+    let Some(Row::Item(pull)) = rows.first() else {
+        panic!("Pull not found");
+    };
+    assert!(!pull.enabled);
+    assert_eq!(Selection::first(&rows).enter(&rows), None);
+}

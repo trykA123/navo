@@ -21,6 +21,7 @@ pub fn clean_text(raw: &str) -> CleanText {
         }
         match chars.next() {
             Some('&') => text.push('&'),
+            Some(next) if next.is_whitespace() => text.push(next),
             Some(next) => {
                 access_key = access_key.or_else(|| next.to_uppercase().next());
                 text.push(next);
@@ -29,7 +30,7 @@ pub fn clean_text(raw: &str) -> CleanText {
         }
     }
     CleanText {
-        text,
+        text: text.trim().to_owned(),
         access_key,
         accelerator: accelerator.map(str::to_owned),
     }

@@ -9,10 +9,25 @@ pub(super) fn matches(menu: &ShellMenu, query: &str) -> Vec<Row> {
         crumb: Vec::new(),
         hits: Vec::new(),
     };
-    walk.visit(&menu.items, false);
+    walk.visit(&menu.items, Inherited::default());
     let mut hits = walk.hits;
     hits.sort_by_key(|(is_ferrite, row)| (!row.enabled, !is_ferrite));
     hits.into_iter().map(|(_, row)| Row::Item(row)).collect()
+}
+
+#[derive(Clone, Copy)]
+struct Inherited {
+    hidden: bool,
+    enabled: bool,
+}
+
+impl Default for Inherited {
+    fn default() -> Self {
+        Self {
+            hidden: false,
+            enabled: true,
+        }
+    }
 }
 
 struct Walk {
@@ -23,25 +38,29 @@ struct Walk {
 }
 
 impl Walk {
-    fn visit(&mut self, items: &[MenuItem], parent_hidden: bool) {
+    fn visit(&mut self, items: &[MenuItem], parent: Inherited) {
         for (index, item) in items.iter().enumerate() {
             if item.is_separator() {
                 continue;
             }
             self.path.push(index);
-            let hidden = parent_hidden || item.hidden;
+            let state = Inherited {
+                hidden: parent.hidden || item.hidden,
+                enabled: parent.enabled && item.enabled,
+            };
             if let Some(range) = find(&item.text, &self.needle) {
                 let row = ItemRow {
                     crumb: self.crumb.clone(),
                     matched: Some(range),
-                    hidden,
+                    hidden: state.hidden,
+                    enabled: state.enabled,
                     ..ItemRow::new(self.path.clone(), item)
                 };
                 self.hits.push((item.is_ferrite(), row));
             }
             if let Some(children) = item.children() {
                 self.crumb.push(item.text.clone());
-                self.visit(children, hidden);
+                self.visit(children, state);
                 self.crumb.pop();
             }
             self.path.pop();

@@ -29,6 +29,7 @@ fn single_selection_lists_six_actions_in_order() {
             FerriteAction::Compare,
             FerriteAction::OpenInOtherPane,
             FerriteAction::Properties,
+            FerriteAction::ClassicMenu,
         ]
         .map(ItemId::Ferrite)
     );
@@ -90,5 +91,14 @@ fn actions_carry_access_keys() {
         .into_iter()
         .map(|item| item.access_key)
         .collect();
-    assert_eq!(keys, ['P', 'N', 'R', 'M', 'O', 'I'].map(Some));
+    assert_eq!(keys, ['P', 'N', 'R', 'M', 'O', 'I', 'C'].map(Some));
+}
+
+#[test]
+fn classic_menu_comes_last_with_its_key() {
+    let items = ferrite_actions(context(1, false));
+    let classic = items.last().unwrap();
+    assert_eq!(classic.id, ItemId::Ferrite(FerriteAction::ClassicMenu));
+    assert_eq!(classic.text, "Classic menu");
+    assert_eq!(classic.accelerator.as_deref(), Some("Shift+F10"));
 }

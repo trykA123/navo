@@ -30,6 +30,11 @@ pub fn ferrite_actions(context: ActionContext) -> Vec<MenuItem> {
             'O',
         ),
         (FerriteAction::Properties, "Properties".to_owned(), 'I'),
+        (
+            FerriteAction::ClassicMenu,
+            "Classic menu\tShift+F10".to_owned(),
+            'C',
+        ),
     ]
     .into_iter()
     .map(|(action, text, key)| MenuItem {

@@ -30,8 +30,20 @@ fn plain_text_has_no_key_or_accelerator() {
 }
 
 #[test]
-fn trailing_ampersand_is_dropped() {
-    assert_eq!(clean_text("Save &").text, "Save ");
+fn trailing_ampersand_is_dropped_and_text_trimmed() {
+    assert_eq!(clean_text("Save &").text, "Save");
+}
+
+#[test]
+fn surrounding_whitespace_is_trimmed() {
+    assert_eq!(clean_text("  Open  \tEnter").text, "Open");
+}
+
+#[test]
+fn ampersand_before_whitespace_gives_no_access_key() {
+    let clean = clean_text("Tom & Jerry");
+    assert_eq!(clean.text, "Tom  Jerry");
+    assert_eq!(clean.access_key, None);
 }
 
 #[test]

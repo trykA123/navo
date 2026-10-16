@@ -37,7 +37,7 @@ fn previous_skips_the_windows_header() {
     while selection.index() != Some(open) {
         selection = selection.next(&rows);
     }
-    assert_eq!(selection.previous(&rows).index(), Some(6));
+    assert_eq!(selection.previous(&rows).index(), Some(7));
 }
 
 #[test]
@@ -53,8 +53,8 @@ fn enter_runs_a_command() {
 fn enter_and_right_open_a_submenu() {
     let rows = rows(&zip_menu(), "7-zip");
     let selection = Selection::first(&rows);
-    assert_eq!(selection.enter(&rows), Some(Choice::OpenSubmenu(vec![8])));
-    assert_eq!(selection.open_submenu(&rows), Some(vec![8]));
+    assert_eq!(selection.enter(&rows), Some(Choice::OpenSubmenu(vec![9])));
+    assert_eq!(selection.open_submenu(&rows), Some(vec![9]));
 }
 
 #[test]
@@ -102,4 +102,49 @@ fn stale_index_restarts_from_the_top() {
     let short = rows(&zip_menu(), "copy");
     let stale = Selection::first(&long).previous(&long);
     assert_eq!(stale.next(&short).index(), Some(0));
+}
+
+#[test]
+fn keep_follows_the_command_when_a_lazy_submenu_fills() {
+    let mut menu = ShellMenu {
+        items: vec![
+            lazy(1, "Send to", Group::Share),
+            shell(2, "Delete", Group::Edit),
+        ],
+    };
+    let old = rows(&menu, "de");
+    let delete = Selection::first(&old);
+    assert_eq!(delete.index(), Some(0));
+    menu.set_submenu(
+        &[0],
+        Submenu::Filled(vec![shell(10, "Desktop", Group::Share)]),
+    );
+    let new = rows(&menu, "de");
+    let kept = delete.keep(&old, &new);
+    assert_eq!(kept.index(), Some(1));
+    assert_eq!(
+        kept.enter(&new),
+        Some(Choice::Run(ItemId::Shell {
+            command: 2,
+            verb: None
+        }))
+    );
+}
+
+#[test]
+fn keep_falls_back_to_first_when_the_command_is_gone() {
+    let menu = zip_menu();
+    let old = rows(&menu, "");
+    let rename = Selection::first(&old).next(&old).next(&old);
+    let new = rows(&menu, "copy");
+    assert_eq!(rename.keep(&old, &new), Selection::first(&new));
+}
+
+#[test]
+fn keep_stays_on_more() {
+    let menu = zip_menu();
+    let old = rows(&menu, "");
+    let more = Selection::first(&old).previous(&old);
+    let kept = more.keep(&old, &old);
+    assert_eq!(kept.enter(&old), Some(Choice::ShowMore));
 }
