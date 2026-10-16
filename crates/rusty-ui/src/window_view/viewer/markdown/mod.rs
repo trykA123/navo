@@ -6,10 +6,10 @@ mod table;
 use std::any::Any;
 use std::rc::Rc;
 
-use gpui_kit::base::{Scrollbar, ScrollbarMode};
+use gpui_kit::base::{Scrollbar, ScrollbarMode, TestSupportExt};
 use gpui_kit::{
-    AnyView, FocusHandle, KeyBinding, ListAlignment, ListOffset, ListState, MouseButton, Stateful,
-    list,
+    AnyView, FocusHandle, KeyBinding, ListAlignment, ListOffset, ListState, MouseButton,
+    MouseDownEvent, Stateful, list,
 };
 use rusty_core::Location;
 use rusty_structured::markdown::Document;
@@ -199,6 +199,14 @@ impl MarkdownView {
             .on_action(cx.listener(|view, _: &PreviousLink, _, cx| view.step_link(true, cx)))
     }
 
+    fn forget_pointed(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        root.capture_any_mouse_down(cx.listener(|view, event: &MouseDownEvent, _, _| {
+            if event.button == MouseButton::Right {
+                view.pointed = None;
+            }
+        }))
+    }
+
     fn blocks(&self, page: Page) -> impl IntoElement {
         #[cfg(test)]
         let drawn = self.drawn.clone();
@@ -234,12 +242,8 @@ impl Render for MarkdownView {
         let root = div()
             .id("markdown")
             .key_context(CONTEXT)
-            .track_focus(&self.focus)
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(|view, _, _, _| view.pointed = None),
-            );
-        Self::keys(root, cx)
+            .track_focus(&self.focus);
+        Self::keys(Self::forget_pointed(root, cx), cx)
             .flex()
             .flex_col()
             .flex_1()
@@ -253,6 +257,7 @@ impl Render for MarkdownView {
             .child(
                 div()
                     .id("markdown-body")
+                    .test_support()
                     .relative()
                     .flex_1()
                     .min_h_0()

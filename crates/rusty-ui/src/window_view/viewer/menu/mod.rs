@@ -11,6 +11,8 @@ use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
+const UNKNOWN_ACTION: &str = "This menu item has no command";
+
 impl FerriteWindow {
     pub(in crate::window_view::viewer) fn menu_opening(
         root: Stateful<Div>,
@@ -84,11 +86,21 @@ impl FerriteWindow {
         let ContextMenuEvent::Chosen(ItemId::Action(name)) = event else {
             return;
         };
-        let (Some(body), Ok(action)) = (viewer.body.as_ref(), cx.build_action(name, None)) else {
+        let Some(body) = viewer.body.as_ref() else {
             return;
         };
-        body.focus_handle(cx)
-            .dispatch_action(action.as_ref(), window, cx);
+        let action = match cx.build_action(name, None) {
+            Ok(action) => action,
+            Err(error) => {
+                debug_assert!(false, "menu item {name}: {error}");
+                body.set_note(format!("{UNKNOWN_ACTION} ({name})").into(), cx);
+                return;
+            }
+        };
+        let focus = body.focus_handle(cx);
+        window.defer(cx, move |window, cx| {
+            focus.dispatch_action(action.as_ref(), window, cx);
+        });
     }
 
     pub(in crate::window_view) fn viewer_menu_view(&self) -> Option<Entity<ContextMenu>> {

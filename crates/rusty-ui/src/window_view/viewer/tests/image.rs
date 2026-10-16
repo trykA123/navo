@@ -16,7 +16,7 @@ use crate::window_view::viewer::image::fixtures::{encoded, photo};
 use crate::window_view::viewer::{FileHooks, FileText, Head, Kinds};
 
 #[derive(Clone, Default)]
-struct Disk {
+pub(super) struct Disk {
     files: Arc<Mutex<HashMap<String, Vec<u8>>>>,
     loads: Arc<AtomicUsize>,
     log: Log,
@@ -77,9 +77,9 @@ impl Disk {
     }
 }
 
-type Rig = (AnyWindowHandle, Entity<FerriteWindow>, Disk);
+pub(super) type Rig = (AnyWindowHandle, Entity<FerriteWindow>, Disk);
 
-fn rig(cx: &mut TestAppContext, extra: &[&str], files: &[(&str, Vec<u8>)]) -> Rig {
+pub(super) fn rig(cx: &mut TestAppContext, extra: &[&str], files: &[(&str, Vec<u8>)]) -> Rig {
     let fs = fake();
     for name in extra {
         fs.add_file(&format!("home/{name}"), 4);
@@ -89,14 +89,14 @@ fn rig(cx: &mut TestAppContext, extra: &[&str], files: &[(&str, Vec<u8>)]) -> Ri
     (window, view, disk)
 }
 
-fn open_first(cx: &mut TestAppContext, rig: &Rig) {
+pub(super) fn open_first(cx: &mut TestAppContext, rig: &Rig) {
     let (window, view, _) = rig;
     press(cx, *window, view, "down");
     press(cx, *window, view, "f3");
     redraw(cx, *window);
 }
 
-fn image_view(
+pub(super) fn image_view(
     cx: &mut TestAppContext,
     view: &Entity<FerriteWindow>,
 ) -> Option<Entity<crate::window_view::viewer::ImageView>> {

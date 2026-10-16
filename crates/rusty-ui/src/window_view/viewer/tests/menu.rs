@@ -9,16 +9,21 @@ use super::{Setup, editor_of, redraw, text_window};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, viewer_open};
 
-const LINK: &str = "a link whose words run on and on so that it fills every line of the \
+pub(super) const LINK: &str = "a link whose words run on and on so that it fills every line of the \
     paragraph from the left edge to the right edge and keeps going for a while longer, \
     long enough to wrap several times across the reading column in any window size";
 
-fn dispatch(cx: &mut TestAppContext, window: AnyWindowHandle, at: Point<Pixels>, down: bool) {
+pub(super) fn click_with(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    (button, at): (MouseButton, Point<Pixels>),
+    down: bool,
+) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let event = if down {
             MouseDownEvent {
-                button: MouseButton::Right,
+                button,
                 position: at,
                 modifiers: Default::default(),
                 click_count: 1,
@@ -27,7 +32,7 @@ fn dispatch(cx: &mut TestAppContext, window: AnyWindowHandle, at: Point<Pixels>,
             .to_platform_input()
         } else {
             MouseUpEvent {
-                button: MouseButton::Right,
+                button,
                 position: at,
                 modifiers: Default::default(),
                 click_count: 1,
@@ -40,13 +45,13 @@ fn dispatch(cx: &mut TestAppContext, window: AnyWindowHandle, at: Point<Pixels>,
     cx.run_until_parked();
 }
 
-fn right_click(cx: &mut TestAppContext, window: AnyWindowHandle, at: Point<Pixels>) {
-    dispatch(cx, window, at, true);
-    dispatch(cx, window, at, false);
+pub(super) fn right_click(cx: &mut TestAppContext, window: AnyWindowHandle, at: Point<Pixels>) {
+    click_with(cx, window, (MouseButton::Right, at), true);
+    click_with(cx, window, (MouseButton::Right, at), false);
     redraw(cx, window);
 }
 
-fn middle(cx: &mut TestAppContext, window: AnyWindowHandle) -> Point<Pixels> {
+pub(super) fn middle(cx: &mut TestAppContext, window: AnyWindowHandle) -> Point<Pixels> {
     cx.update_window(window, |_, window, _| {
         let size = window.viewport_size();
         point(size.width / 2., size.height / 2.)
@@ -54,7 +59,7 @@ fn middle(cx: &mut TestAppContext, window: AnyWindowHandle) -> Point<Pixels> {
     .expect("window")
 }
 
-fn rows(cx: &mut TestAppContext, window: AnyWindowHandle) -> Vec<String> {
+pub(super) fn rows(cx: &mut TestAppContext, window: AnyWindowHandle) -> Vec<String> {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         if window.try_find("context-menu").is_none() {
@@ -83,14 +88,14 @@ fn menu_bounds(cx: &mut TestAppContext, window: AnyWindowHandle) -> Bounds<Pixel
     .expect("window")
 }
 
-fn run_item(cx: &mut TestAppContext, window: AnyWindowHandle, text: &str) {
+pub(super) fn run_item(cx: &mut TestAppContext, window: AnyWindowHandle, text: &str) {
     cx.update_window(window, |_, window, cx| window.input(text, cx))
         .expect("window");
     cx.run_until_parked();
     press_key(cx, window, "enter");
 }
 
-fn press_key(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
+pub(super) fn press_key(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.press(key, cx);
@@ -129,7 +134,7 @@ fn clipboard(cx: &mut TestAppContext) -> Option<String> {
     cx.read_from_clipboard().and_then(|item| item.text())
 }
 
-fn has(rows: &[String], text: &str) -> bool {
+pub(super) fn has(rows: &[String], text: &str) -> bool {
     rows.iter().any(|row| row == text)
 }
 
