@@ -130,6 +130,53 @@ impl Contents {
         self.folders.get(&row.node)
     }
 
+    pub(super) fn node_at(&self, index: usize) -> Option<NodeId> {
+        self.shown_rows().get(index).map(|row| row.node)
+    }
+
+    pub(super) fn index_of(&self, node: NodeId) -> Option<usize> {
+        let rows = self.shown_rows();
+        let mut at = Some(node);
+        while let Some(node) = at {
+            if let Some(index) = rows.iter().position(|row| row.node == node) {
+                return Some(index);
+            }
+            at = self.tree.parent(node);
+        }
+        None
+    }
+
+    pub(super) fn path_of(&self, node: NodeId) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut at = Some(node);
+        while let Some(node) = at {
+            if let Some(entry) = self.entries.get(&node) {
+                names.push(entry.name.to_text());
+            }
+            at = self.tree.parent(node);
+        }
+        names.reverse();
+        names
+    }
+
+    pub(super) fn find(&self, path: &[String]) -> Option<NodeId> {
+        let mut found = None;
+        let mut at = self.tree.root()?;
+        for name in path {
+            let child = self.tree.children(at).find(|child| {
+                self.entries
+                    .get(child)
+                    .is_some_and(|entry| entry.name.to_text() == *name)
+            });
+            let Some(child) = child else {
+                break;
+            };
+            found = Some(child);
+            at = child;
+        }
+        found
+    }
+
     pub(super) fn place(&self, index: usize) -> Option<Place> {
         let row = self.shown_rows().get(index)?;
         let entry = self.entries.get(&row.node)?;

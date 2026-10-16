@@ -9,6 +9,7 @@ mod header;
 mod inbox;
 mod scan;
 mod sheet;
+mod spot;
 mod stats;
 mod summary;
 
@@ -159,10 +160,21 @@ impl FerriteWindow {
             return;
         }
         self.preview.is_stale = false;
+        let was_browsing = self.preview.is_browsing(window, cx);
+        let carried = self.preview.folder().and_then(|folder| {
+            let is_same_folder = target
+                .as_ref()
+                .is_some_and(|target| target.location == folder.target.location);
+            is_same_folder.then(|| folder.carry()).flatten()
+        });
         let shown = match target {
             None => Shown::Empty,
             Some(target) if target.is_folder() => {
-                Shown::Folder(Box::new(self.start_folder(target)))
+                let mut folder = self.start_folder(target);
+                if let Some(carry) = carried {
+                    folder.adopt(carry);
+                }
+                Shown::Folder(Box::new(folder))
             }
             Some(target) => Shown::File(Box::new(self.start_file(target, window, cx))),
         };
@@ -170,6 +182,10 @@ impl FerriteWindow {
             self.preview.loads += 1;
         }
         self.preview.shown = Some(shown);
+        if was_browsing {
+            let target = self.preview.browse_target(cx);
+            window.focus(&target, cx);
+        }
         cx.notify();
     }
 }

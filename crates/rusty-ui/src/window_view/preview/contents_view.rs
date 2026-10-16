@@ -3,8 +3,9 @@ use gpui_kit::{MouseButton, MouseDownEvent, WeakEntity};
 use rusty_cache::ProfileCache;
 use rusty_fs::{EntryKind, FsEntry};
 
-use super::browse::Spot;
+use super::browse::Pick;
 use super::contents::{Contents, RowKind, Shape};
+use super::spot::Spot;
 use super::summary::heading;
 use crate::file_list::kind;
 use crate::file_list::row::{cursor_bar, inset_ring};
@@ -67,16 +68,23 @@ pub(super) fn pick(
     let view = view.clone();
     move |event, window, cx| {
         let _ = view.update(cx, |view, cx| {
-            view.pick_spot((spot, event.click_count), window, cx);
+            let pick = Pick {
+                spot,
+                clicks: event.click_count,
+            };
+            view.pick_spot(pick, window, cx);
         });
     }
 }
 
-fn chevron(
-    t: &Theme,
-    (index, shape): (usize, Shape),
-    view: &WeakEntity<FerriteWindow>,
-) -> impl IntoElement + use<> {
+#[derive(Clone, Copy)]
+struct Slot {
+    index: usize,
+    shape: Shape,
+}
+
+fn chevron(t: &Theme, slot: Slot, view: &WeakEntity<FerriteWindow>) -> impl IntoElement + use<> {
+    let Slot { index, shape } = slot;
     let glyph = if shape.is_open {
         IconName::ChevronDown
     } else {
@@ -153,7 +161,7 @@ struct Source<'a> {
     t: &'a Theme,
     contents: &'a Contents,
     cache: &'a ProfileCache,
-    spot: Option<Spot>,
+    spot_row: Option<usize>,
     is_browsing: bool,
 }
 
@@ -174,7 +182,7 @@ fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>)
         RowKind::More(hidden) => more_row(t, *hidden),
     };
     let hover = t.colors.hover;
-    let is_spot = source.spot == Some(Spot::Tree(index));
+    let is_spot = source.spot_row == Some(index);
     let row = div()
         .id(("preview-node", index))
         .aria_label(spoken(&kind))
@@ -194,9 +202,11 @@ fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>)
         .whitespace_nowrap()
         .hover(move |row| row.bg(hover))
         .cursor_pointer()
-        .on_mouse_down(MouseButton::Left, pick(view, Spot::Tree(index)))
+        .when_some(source.contents.node_at(index), |row, node| {
+            row.on_mouse_down(MouseButton::Left, pick(view, Spot::Tree(node)))
+        })
         .child(guides(t, shape.depth))
-        .child(chevron(t, (index, shape), view))
+        .child(chevron(t, Slot { index, shape }, view))
         .children(cells);
     Mark::of(is_spot, source.is_browsing)
         .paint(row, t)
@@ -220,7 +230,7 @@ fn visible_rows(
         t: tokens::current(cx),
         contents: &folder.contents,
         cache: shown.browser.profiles(),
-        spot: folder.spot,
+        spot_row: folder.spot_row(),
         is_browsing: shown.preview.is_browsing(window, cx),
     };
     range.map(|index| tree_row(view, index, &source)).collect()

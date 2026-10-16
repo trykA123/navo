@@ -3,11 +3,13 @@ use std::sync::Arc;
 
 use gpui_kit::TestAppContext;
 use gpui_kit::test::TestWindowExt;
-use rusty_fs::FakeFs;
+use rusty_core::ProviderPath;
+use rusty_fs::{Attributes, EntryKind, FakeFs, FsEntry};
 
 use super::{Rig, open_fake};
 use crate::window_view::FerriteWindow;
-use crate::window_view::preview::browse::Spot;
+use crate::window_view::preview::contents::RowKind;
+use crate::window_view::preview::spot::Spot;
 
 fn project() -> FakeFs {
     let fs = FakeFs::new();
@@ -34,10 +36,21 @@ fn browsing(cx: &mut TestAppContext) -> (Rig, Arc<FakeFs>) {
     (rig, fs)
 }
 
-fn spot(cx: &mut TestAppContext, rig: &Rig) -> Option<Spot> {
+fn spot(cx: &mut TestAppContext, rig: &Rig) -> Option<String> {
     rig.read(cx, |view| {
-        view.preview.folder().and_then(|folder| folder.spot)
+        let folder = view.preview.folder()?;
+        match folder.spot? {
+            Spot::Largest(rank) => Some(format!("largest {rank}")),
+            Spot::Tree(_) => match folder.contents.row(folder.spot_row()?)?.0 {
+                RowKind::Entry(entry) => Some(entry.name.to_text()),
+                RowKind::More(_) => None,
+            },
+        }
     })
+}
+
+fn seen(name: &str) -> Option<String> {
+    Some(name.to_owned())
 }
 
 fn tree_len(cx: &mut TestAppContext, rig: &Rig) -> usize {
@@ -119,7 +132,7 @@ fn ctrl_shift_q_focuses_the_sheet_with_a_chip_a_ring_and_a_passive_list_cursor(
     );
     assert_eq!(is_ringed(cx, &rig), Some(true));
     assert!(!list_cursor_bar(cx, &rig));
-    assert_eq!(spot(cx, &rig), Some(Spot::Tree(0)));
+    assert_eq!(spot(cx, &rig), seen("src"));
     assert_eq!(
         hints(cx, &rig),
         ["Move", "Fold", "Go to", "View", "Back to list"]
@@ -133,15 +146,15 @@ fn arrows_cross_from_the_tree_rows_to_the_largest_rows(cx: &mut TestAppContext) 
     for _ in 0..3 {
         rig.key(cx, "down");
     }
-    assert_eq!(spot(cx, &rig), Some(Spot::Largest(0)));
+    assert_eq!(spot(cx, &rig), seen("largest 0"));
     for _ in 0..10 {
         rig.key(cx, "down");
     }
-    assert_eq!(spot(cx, &rig), Some(Spot::Largest(3)));
+    assert_eq!(spot(cx, &rig), seen("largest 3"));
     for _ in 0..4 {
         rig.key(cx, "up");
     }
-    assert_eq!(spot(cx, &rig), Some(Spot::Tree(2)));
+    assert_eq!(spot(cx, &rig), seen("readme.md"));
     assert!(sheet_has_focus(cx, &rig));
 }
 
@@ -153,12 +166,12 @@ fn left_and_right_fold_the_tree(cx: &mut TestAppContext) {
         view.preview.folder().is_some_and(|f| f.contents.len() == 5)
     }));
     rig.key(cx, "right");
-    assert_eq!(spot(cx, &rig), Some(Spot::Tree(1)));
+    assert_eq!(spot(cx, &rig), seen("lib.rs"));
     rig.key(cx, "left");
-    assert_eq!(spot(cx, &rig), Some(Spot::Tree(0)));
+    assert_eq!(spot(cx, &rig), seen("src"));
     rig.key(cx, "left");
     assert_eq!(tree_len(cx, &rig), 3);
-    assert_eq!(spot(cx, &rig), Some(Spot::Tree(0)));
+    assert_eq!(spot(cx, &rig), seen("src"));
 }
 
 #[gpui_kit::test]
@@ -206,7 +219,7 @@ fn a_click_selects_and_browses_and_a_double_click_goes_to(cx: &mut TestAppContex
     assert!(rig.wait_until(cx, is_done));
     rig.click(cx, ("preview-node", 2usize));
     assert!(sheet_has_focus(cx, &rig));
-    assert_eq!(spot(cx, &rig), Some(Spot::Tree(2)));
+    assert_eq!(spot(cx, &rig), seen("readme.md"));
     assert_eq!(tree_len(cx, &rig), 3);
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
@@ -247,4 +260,57 @@ fn ctrl_q_closes_the_sheet_and_leaves_browse_mode(cx: &mut TestAppContext) {
     rig.key(cx, "ctrl-q");
     assert!(!rig.read(cx, |view| view.preview.is_open()));
     assert!(rig.list_has_focus(cx));
+}
+
+#[gpui_kit::test]
+fn ctrl_shift_q_on_a_closed_sheet_selects_the_first_row_once_the_tree_arrives(
+    cx: &mut TestAppContext,
+) {
+    let fs = Arc::new(project());
+    let rig = open_fake(cx, &fs);
+    rig.key(cx, "ctrl-shift-q");
+    rig.settle_motion(cx);
+    assert!(rig.wait_until(cx, is_done));
+    assert!(sheet_has_focus(cx, &rig));
+    assert_eq!(spot(cx, &rig), seen("src"));
+}
+
+#[gpui_kit::test]
+fn the_spot_stays_on_its_node_when_a_fold_above_it_moves_the_rows(cx: &mut TestAppContext) {
+    let (rig, _) = browsing(cx);
+    rig.key(cx, "down");
+    rig.key(cx, "down");
+    assert_eq!(spot(cx, &rig), seen("readme.md"));
+    rig.click(cx, ("preview-chevron", 0usize));
+    assert!(rig.wait_until(cx, |view| {
+        view.preview.folder().is_some_and(|f| f.contents.len() == 5)
+    }));
+    assert_eq!(spot(cx, &rig), seen("readme.md"));
+    rig.key(cx, "up");
+    assert_eq!(spot(cx, &rig), seen("target"));
+}
+
+#[gpui_kit::test]
+fn a_folder_reload_keeps_focus_and_the_spot_on_the_same_node(cx: &mut TestAppContext) {
+    let fs = Arc::new(project().with_watch());
+    let rig = open_fake(cx, &fs);
+    rig.open(cx);
+    assert!(rig.wait_until(cx, is_done));
+    rig.key(cx, "ctrl-shift-q");
+    rig.key(cx, "down");
+    assert_eq!(spot(cx, &rig), seen("target"));
+    let loads = rig.loads(cx);
+    fs.add_entry(
+        "home",
+        FsEntry {
+            name: ProviderPath::from_text("proj"),
+            kind: EntryKind::Folder,
+            size: 0,
+            modified_ms: Some(7_000),
+            attributes: Attributes::default(),
+        },
+    );
+    assert!(rig.rest_until(cx, |view| view.preview.loads() > loads && is_done(view)));
+    assert!(sheet_has_focus(cx, &rig));
+    assert_eq!(spot(cx, &rig), seen("target"));
 }
