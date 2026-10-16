@@ -48,6 +48,7 @@ pub(super) use open::{Opened, Picked, Request, Turn, sniff_and_load};
 pub(in crate::window_view) const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";
 const IMAGE_CONTEXT: &str = "Image";
+pub(super) const LINE_BREAK: &str = if cfg!(windows) { "\r\n" } else { "\n" };
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
 
 pub(super) struct Viewer {
@@ -64,6 +65,10 @@ pub(super) struct Viewer {
     message: Option<SharedString>,
     carried: Option<Carried>,
     menu: Option<(Entity<crate::context_menu::ContextMenu>, Subscription)>,
+}
+
+fn platform_lines(text: &str) -> String {
+    text.replace('\n', LINE_BREAK)
 }
 
 impl Viewer {

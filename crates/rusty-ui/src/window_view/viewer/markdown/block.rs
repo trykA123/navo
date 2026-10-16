@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{InteractiveText, StyledText, WeakEntity};
+use gpui_kit::{InteractiveText, MouseButton, StyledText, WeakEntity};
 use rusty_structured::markdown::{Block, BlockKind, Document, Marker};
 
 use super::MarkdownView;
@@ -239,9 +239,13 @@ pub(super) fn draw_block(page: &Page, index: usize) -> AnyElement {
         .children(marker)
         .child(div().flex_1().min_w_0().child(content(page, &block, index)));
     let is_end = index + 1 == page.doc.blocks().len();
+    let view = page.view.clone();
     div()
         .id(("md-block", index))
         .test_support()
+        .on_mouse_down(MouseButton::Right, move |_, _, cx| {
+            let _ = view.update(cx, |view, _| view.point_block(index));
+        })
         .w_full()
         .flex()
         .justify_center()

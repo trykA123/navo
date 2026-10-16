@@ -1,3 +1,4 @@
+mod copy;
 mod draw;
 mod filter;
 mod jobs;
@@ -204,6 +205,7 @@ impl ViewerBody for TreeBody {
                 ("Alt+←/→", "Fold branch"),
                 ("Ctrl+Shift+←/→", "Fold all"),
                 ("Ctrl+1–9", "Depth"),
+                ("Ctrl+C", "Copy value"),
                 ("Ctrl+Shift+C", "Copy path"),
             ],
             TreeState::Indexing(_) => vec![("Esc", "Stop indexing")],

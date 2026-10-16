@@ -1,3 +1,6 @@
+use std::ops::Range;
+
+use gpui_kit::base::input::RopeExt;
 use gpui_kit::component::input::{EditorState, InputEvent};
 use gpui_kit::{Focusable, Subscription, Task};
 use rusty_core::paging::Needle;
@@ -61,11 +64,49 @@ fn step_search(
     state.next_search_match(cx)
 }
 
+fn word_at_cursor(state: &EditorState) -> Option<Range<usize>> {
+    let text = state.text();
+    let cursor = state.cursor();
+    text.word_range(cursor)
+        .or_else(|| cursor.checked_sub(1).and_then(|at| text.word_range(at)))
+}
+
+fn selection_or_word(state: &EditorState) -> String {
+    let selected = state.selected_text().to_string();
+    if !selected.is_empty() {
+        return selected.lines().next().unwrap_or_default().to_owned();
+    }
+    word_at_cursor(state)
+        .map(|range| state.text().slice(range).to_string())
+        .unwrap_or_default()
+}
+
+fn search_selection(state: &mut EditorState, cx: &mut Context<EditorState>) {
+    let word = word_at_cursor(state).filter(|_| state.selected_range().is_empty());
+    if let Some(word) = word {
+        state.set_selected_range(word, cx);
+    }
+    state.open_search(false, cx);
+}
+
 impl EditorView {
+    pub(super) fn find_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.editing {
+            return self.editor.update(cx, search_selection);
+        }
+        let text = selection_or_word(self.editor.read(cx));
+        self.open_find(window, cx);
+        if let Some(bar) = &self.find.bar {
+            bar.input
+                .update(cx, |input, cx| input.set_value(text, window, cx));
+        }
+    }
+
     pub(super) fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.editing {
             return cx.propagate();
         }
+        self.go_to = None;
         if let Some(bar) = &self.find.bar {
             let focus = bar.input.read(cx).focus_handle(cx);
             return window.focus(&focus, cx);
@@ -103,6 +144,9 @@ impl EditorView {
     }
 
     pub(super) fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.close_go_to(window, cx) {
+            return;
+        }
         if self.find.bar.is_some() {
             self.close_find(window, cx);
         } else {

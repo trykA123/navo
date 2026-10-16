@@ -11,6 +11,7 @@ mod markdown;
 mod marks;
 mod memory;
 mod menu;
+mod menu_copy;
 mod menu_kinds;
 mod moves;
 mod open;

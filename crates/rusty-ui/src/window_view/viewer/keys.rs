@@ -1,6 +1,6 @@
 use gpui_kit::KeyBinding;
 
-use super::search::{FIND_ALL_CONTEXT, FIND_CONTEXT};
+use super::search::{FIND_ALL_CONTEXT, FIND_CONTEXT, GO_TO_CONTEXT};
 use super::{CONTEXT, IMAGE_CONTEXT, PAGED_CONTEXT, archive, markdown, table, tree};
 use crate::prelude::*;
 
@@ -62,6 +62,10 @@ gpui_kit::actions!(
         ZoomOut,
         ToggleInfo,
         ShowMenu,
+        FindSelection,
+        CopyPathLine,
+        CopyFilePath,
+        CopyImage,
     ]
 );
 
@@ -97,6 +101,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-c", MatchCase, context),
         KeyBinding::new("menu", ShowMenu, context),
         KeyBinding::new("shift-f10", ShowMenu, context),
+        KeyBinding::new("ctrl-f3", FindSelection, context),
+        KeyBinding::new("ctrl-shift-c", CopyPathLine, context),
+        KeyBinding::new("escape", Back, Some(GO_TO_CONTEXT)),
         KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
         KeyBinding::new("home", GoStart, Some(archive::CONTEXT)),
         KeyBinding::new("end", GoEnd, Some(archive::CONTEXT)),
@@ -119,6 +126,8 @@ fn bind_image_keys(cx: &mut App) {
         KeyBinding::new("shift-=", ZoomIn, context),
         KeyBinding::new("-", ZoomOut, context),
         KeyBinding::new("i", ToggleInfo, context),
+        KeyBinding::new("ctrl-c", CopyImage, context),
+        KeyBinding::new("ctrl-shift-c", CopyFilePath, context),
     ]);
 }
 

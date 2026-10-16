@@ -1,9 +1,11 @@
+mod export;
 mod filter;
 mod outline;
 mod path;
 
 use std::collections::HashMap;
 
+pub use export::{Exported, Syntax};
 pub use filter::Filtered;
 pub use outline::{Outline, Row, Step};
 
@@ -290,5 +292,7 @@ impl Tree {
     }
 }
 
+#[cfg(test)]
+mod export_tests;
 #[cfg(test)]
 mod tests;

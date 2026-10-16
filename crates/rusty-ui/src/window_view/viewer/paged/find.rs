@@ -10,6 +10,7 @@ use super::lines::PagedKind;
 use super::moves::Move;
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
+use crate::window_view::viewer::search::bar::parse_line;
 use crate::window_view::viewer::search::count::{count_after_pause, count_search};
 use crate::window_view::viewer::search::find_all::open_find_all;
 use crate::window_view::viewer::search::history::Recall;
@@ -84,15 +85,6 @@ fn parse_offset(text: &str) -> Result<u64, String> {
         .or_else(|| trimmed.strip_prefix("0X"))
         .unwrap_or(trimmed);
     u64::from_str_radix(digits, 16).map_err(|_| format!("Not a hex offset: {trimmed}"))
-}
-
-fn parse_line(text: &str) -> Result<u64, String> {
-    let trimmed = text.trim();
-    trimmed
-        .parse::<u64>()
-        .ok()
-        .filter(|line| *line > 0)
-        .ok_or_else(|| format!("Not a line number: {trimmed}"))
 }
 
 impl PagedView {

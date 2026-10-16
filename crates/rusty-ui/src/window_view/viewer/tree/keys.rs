@@ -17,6 +17,8 @@ gpui_kit::actions!(
         ExpandSubtree,
         CollapseAll,
         CopyPath,
+        CopyValue,
+        CopyKey,
         FilterBack,
         TypeN,
         TypeP,
@@ -44,6 +46,7 @@ pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("*", ExpandSubtree, context),
         KeyBinding::new("-", CollapseAll, context),
+        KeyBinding::new("ctrl-c", CopyValue, context),
         KeyBinding::new("ctrl-shift-c", CopyPath, context),
         KeyBinding::new("backspace", FilterBack, context),
         KeyBinding::new("escape", Back, context),
@@ -83,6 +86,8 @@ pub(super) fn menu_entries() -> Vec<MenuEntry> {
         MenuEntry::Run("9", Box::new(FoldDepth9)),
     ];
     vec![
+        MenuEntry::Run("Copy value", Box::new(CopyValue)),
+        MenuEntry::Run("Copy key", Box::new(CopyKey)),
         MenuEntry::Run("Copy path", Box::new(CopyPath)),
         MenuEntry::Break,
         MenuEntry::Run("Fold branch", Box::new(CloseSubtree)),
@@ -232,6 +237,8 @@ impl TreeView {
         root.on_action(cx.listener(|view, _: &ExpandSubtree, _, cx| view.expand_subtree(cx)))
             .on_action(cx.listener(|view, _: &CollapseAll, _, cx| view.collapse_all(cx)))
             .on_action(cx.listener(|view, _: &CopyPath, _, cx| view.copy_path(cx)))
+            .on_action(cx.listener(|view, _: &CopyValue, _, cx| view.copy_value(cx)))
+            .on_action(cx.listener(|view, _: &CopyKey, _, cx| view.copy_key(cx)))
             .on_action(cx.listener(|view, _: &FilterBack, _, cx| view.filter_back(cx)))
             .on_action(cx.listener(|view, _: &Back, _, cx| view.back(cx)))
             .on_action(cx.listener(|view, _: &TypeN, _, cx| view.type_or_pass('n', cx)))

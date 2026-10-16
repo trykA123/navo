@@ -24,6 +24,7 @@ use overview::Ticks;
 
 pub(in crate::window_view::viewer) const FIND_CONTEXT: &str = "ViewerFind";
 pub(in crate::window_view::viewer) const FIND_ALL_CONTEXT: &str = "FindAll";
+pub(in crate::window_view::viewer) const GO_TO_CONTEXT: &str = "ViewerGoTo";
 
 pub(in crate::window_view::viewer) struct Marking {
     pub source: Reopen,

@@ -7,18 +7,44 @@ use super::overlay::{OverlayLook, overlay};
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
+use crate::window_view::viewer::search::GO_TO_CONTEXT;
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
 use crate::window_view::viewer::search::find_all::{
     close_find_all, find_all_panel, go_to_found, move_in_find_all,
 };
 use crate::window_view::viewer::search::overview::StripLook;
 use crate::window_view::viewer::{
-    Back, FindAll, ListClose, ListDown, ListGo, ListUp, MatchCase, NewerSearch, OlderSearch,
-    OpenFind, PageDown,
+    Back, CopyPathLine, FindAll, FindSelection, ListClose, ListDown, ListGo, ListUp, MatchCase,
+    NewerSearch, OlderSearch, OpenFind, OpenGoTo, PageDown,
 };
 
 impl EditorView {
+    fn go_to_bar(&self, t: &Theme) -> Option<AnyElement> {
+        let bar = self.go_to.as_ref()?;
+        let look = BarLook {
+            id: "editor-go-to",
+            input_id: "editor-go-to-input",
+            error_id: "editor-go-to-error",
+            label: "Go to line",
+            input: &bar.input,
+            is_find: false,
+            match_case: None,
+            count: None,
+            error: bar.error.clone(),
+        };
+        let row = bar_row(t, look, |_, _, _| {});
+        Some(
+            div()
+                .key_context(GO_TO_CONTEXT)
+                .child(row)
+                .into_any_element(),
+        )
+    }
+
     fn bar(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if let Some(go_to) = self.go_to_bar(t) {
+            return Some(go_to);
+        }
         let bar = self.find.bar.as_ref()?;
         let look = BarLook {
             id: "editor-bar",
@@ -93,6 +119,11 @@ impl EditorView {
             .on_action(cx.listener(|view, _: &FindAll, window, cx| {
                 view.find_all_in_bar(window, cx);
             }))
+            .on_action(cx.listener(|view, _: &FindSelection, window, cx| {
+                view.find_selection(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &OpenGoTo, window, cx| view.open_go_to(window, cx)))
+            .on_action(cx.listener(|view, _: &CopyPathLine, _, cx| view.copy_path_line(cx)))
             .on_action(|_: &PageDown, window, cx| {
                 window.dispatch_action(Box::new(MovePageDown), cx);
             })

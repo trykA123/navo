@@ -1,4 +1,5 @@
 mod block;
+mod copy;
 mod links;
 mod runs;
 mod table;
@@ -27,7 +28,10 @@ const LINE_STEP: f32 = 3.;
 const OVERDRAW: f32 = 200.;
 const MAX_SHOWN_TARGET: usize = 200;
 
-gpui_kit::actions!(viewer_markdown, [OpenLink, NextLink, PreviousLink]);
+gpui_kit::actions!(
+    viewer_markdown,
+    [OpenLink, NextLink, PreviousLink, CopyBlock, CopyLink]
+);
 
 pub(super) fn bind_keys(cx: &mut App) {
     let context = Some(CONTEXT);
@@ -35,6 +39,7 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", OpenLink, context),
         KeyBinding::new("tab", NextLink, context),
         KeyBinding::new("shift-tab", PreviousLink, context),
+        KeyBinding::new("ctrl-c", CopyBlock, context),
     ]);
 }
 
@@ -59,6 +64,8 @@ pub(super) struct MarkdownView {
     list: ListState,
     picked: Option<u32>,
     pointed: Option<u32>,
+    pointed_block: Option<usize>,
+    menu_block: Option<usize>,
     note: Option<SharedString>,
     checking: Option<Job>,
     #[cfg(test)]
@@ -79,6 +86,8 @@ impl MarkdownView {
             list: ListState::new(count, ListAlignment::Top, px(OVERDRAW)),
             picked: None,
             pointed: None,
+            pointed_block: None,
+            menu_block: None,
             note,
             checking: None,
             #[cfg(test)]
@@ -197,12 +206,15 @@ impl MarkdownView {
             .on_action(cx.listener(|view, _: &OpenLink, _, cx| view.follow_picked(cx)))
             .on_action(cx.listener(|view, _: &NextLink, _, cx| view.step_link(false, cx)))
             .on_action(cx.listener(|view, _: &PreviousLink, _, cx| view.step_link(true, cx)))
+            .on_action(cx.listener(|view, _: &CopyBlock, _, cx| view.copy_block(cx)))
+            .on_action(cx.listener(|view, _: &CopyLink, _, cx| view.copy_link(cx)))
     }
 
     fn forget_pointed(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.capture_any_mouse_down(cx.listener(|view, event: &MouseDownEvent, _, _| {
             if event.button == MouseButton::Right {
                 view.pointed = None;
+                view.pointed_block = None;
             }
         }))
     }
@@ -311,13 +323,7 @@ impl ViewerBody for MarkdownBody {
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
 
     fn menu(&self, by_pointer: bool, cx: &mut App) -> Vec<MenuEntry> {
-        let link = self.0.update(cx, |view, _| {
-            let pointed = view.pointed.take();
-            if by_pointer { pointed } else { view.picked }
-        });
-        link.map(|_| MenuEntry::Run("Open link", Box::new(OpenLink)))
-            .into_iter()
-            .collect()
+        self.0.update(cx, |view, _| view.menu_entries(by_pointer))
     }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {
