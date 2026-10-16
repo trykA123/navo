@@ -3,23 +3,30 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusty_cache::{CacheKey, CacheKeys, CachedListing, ListingCache};
-use rusty_core::{Event, FsError, Location, TabId};
+use rusty_core::{Event, FsError, Listing, Location, TabId};
 use rusty_fs::{CancelToken, FsEntry, ProviderOps, load_folder};
 
 use super::Browser;
+use super::filter::Full;
+use crate::file_list::SortKey;
 
-const FRESH_FOR: Duration = Duration::from_secs(2);
+const KEEP_SORTED: usize = 2;
+
+pub(super) enum Fresh {
+    Rows(Arc<[FsEntry]>),
+    Unchanged,
+}
 
 pub(super) struct Fetch {
     pub(super) provider: Arc<dyn ProviderOps>,
     pub(super) cache: ListingCache,
-    pub(super) key: CacheKey,
+    pub(super) keys: CacheKeys,
     pub(super) location: Location,
     pub(super) shown: Option<Arc<CachedListing>>,
 }
 
 impl Fetch {
-    pub(super) fn run(self, cancel: &CancelToken) -> Result<Arc<[FsEntry]>, FsError> {
+    pub(super) fn run(self, cancel: &CancelToken) -> Result<Fresh, FsError> {
         let read_at = SystemTime::now();
         let folder_changed = self
             .provider
@@ -28,38 +35,32 @@ impl Fetch {
             .and_then(|folder| folder.modified_ms)
             .and_then(|ms| u64::try_from(ms).ok())
             .map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
-        if let Some(shown) = self
-            .shown
-            .filter(|shown| is_unchanged(shown, folder_changed, read_at))
-        {
-            return Ok(Arc::clone(&shown.rows));
-        }
         let snapshot = load_folder(self.provider.as_ref(), &self.location, cancel)?;
         let rows: Arc<[FsEntry]> = snapshot.details.into();
-        let listing = CachedListing {
-            rows: Arc::clone(&rows),
-            read_at,
-            folder_changed,
-            complete: true,
-        };
-        self.cache.put(self.key, listing);
-        Ok(rows)
+        let unchanged = self
+            .shown
+            .filter(|shown| shown.rows[..] == rows[..])
+            .map(|shown| Arc::clone(&shown.rows));
+        if let Some(key) = self.keys.key(&self.location) {
+            let listing = CachedListing {
+                rows: unchanged.clone().unwrap_or_else(|| Arc::clone(&rows)),
+                read_at,
+                folder_changed,
+                complete: true,
+            };
+            self.cache.put(key, listing);
+        }
+        Ok(match unchanged {
+            Some(_) => Fresh::Unchanged,
+            None => Fresh::Rows(rows),
+        })
     }
 }
 
-fn is_unchanged(shown: &CachedListing, changed: Option<SystemTime>, now: SystemTime) -> bool {
-    shown.complete
-        && changed.is_some()
-        && shown.folder_changed == changed
-        && now
-            .duration_since(shown.read_at)
-            .is_ok_and(|age| age < FRESH_FOR)
-}
-
-#[derive(Default)]
-pub(super) struct Pins {
-    keys: HashSet<CacheKey>,
-    shown: Vec<Location>,
+pub(super) struct Sorted {
+    source: Arc<[FsEntry]>,
+    key: SortKey,
+    full: Full,
 }
 
 impl Browser {
@@ -80,26 +81,73 @@ impl Browser {
     }
 
     pub(super) fn fetch(&mut self, tab: TabId, location: &Location, request: u64) -> Fetch {
-        let key = self.keys.key(location);
         let is_arriving = self.state.tab(tab).is_some_and(|t| t.listing().is_none());
         let shown = is_arriving
-            .then(|| self.cache.get(&key))
+            .then(|| self.keys.key(location))
             .flatten()
+            .and_then(|key| self.cache.get(&key))
             .filter(|cached| self.show_cached(tab, request, &cached.rows));
         Fetch {
             provider: Arc::clone(&self.provider),
             cache: self.cache.clone(),
-            key,
+            keys: self.keys.clone(),
             location: location.clone(),
             shown,
         }
     }
 
-    fn show_cached(&mut self, tab: TabId, request: u64, rows: &[FsEntry]) -> bool {
+    pub(super) fn fresh_listing(
+        &mut self,
+        tab: TabId,
+        location: &Location,
+        fresh: Fresh,
+    ) -> Listing {
+        match fresh {
+            Fresh::Rows(rows) => {
+                let full = self.sorted_full(tab, &rows);
+                let (listing, details) = self.narrow(tab, location, full);
+                self.details.insert(tab, details);
+                listing
+            }
+            Fresh::Unchanged => self
+                .state
+                .tab(tab)
+                .and_then(|t| t.listing().cloned())
+                .unwrap_or_else(|| Listing::new(Vec::new())),
+        }
+    }
+
+    fn sorted_full(&mut self, tab: TabId, rows: &Arc<[FsEntry]>) -> Full {
+        let key = self.sort_key(tab);
+        let memo = self.sorted.entry(tab).or_default();
+        if let Some(at) = memo
+            .iter()
+            .position(|sorted| sorted.key == key && Arc::ptr_eq(&sorted.source, rows))
+        {
+            let hit = memo.remove(at);
+            let full = hit.full.clone();
+            memo.insert(0, hit);
+            return full;
+        }
+        let full = self.full_of(tab, rows);
+        let memo = self.sorted.entry(tab).or_default();
+        memo.insert(
+            0,
+            Sorted {
+                source: Arc::clone(rows),
+                key,
+                full: full.clone(),
+            },
+        );
+        memo.truncate(KEEP_SORTED);
+        full
+    }
+
+    fn show_cached(&mut self, tab: TabId, request: u64, rows: &Arc<[FsEntry]>) -> bool {
         let Some(location) = self.state.tab(tab).map(|t| t.location().clone()) else {
             return false;
         };
-        let full = self.full_of(tab, rows);
+        let full = self.sorted_full(tab, rows);
         let (listing, details) = self.narrow(tab, &location, full);
         self.details.insert(tab, details);
         self.errors.remove(&tab);
@@ -118,38 +166,31 @@ impl Browser {
     }
 
     pub(super) fn sync_pins(&mut self) {
-        let shown: Vec<Location> = self
+        let wanted: HashSet<CacheKey> = self
             .state
             .window_ids()
             .into_iter()
             .filter_map(|window| self.state.window(window))
             .flat_map(|window| window.panes())
-            .map(|pane| pane.active().location().clone())
+            .map(|pane| pane.active().location())
+            .flat_map(|location| std::iter::once(location.clone()).chain(location.parent()))
+            .filter_map(|location| self.keys.key(&location))
             .collect();
-        if shown == self.pins.shown {
+        if wanted == self.pins {
             return;
         }
-        let wanted: HashSet<CacheKey> = shown
-            .iter()
-            .flat_map(|location| std::iter::once(location.clone()).chain(location.parent()))
-            .map(|location| self.keys.key(&location))
-            .collect();
         wanted
-            .difference(&self.pins.keys)
+            .difference(&self.pins)
             .for_each(|key| self.cache.pin(key));
         self.pins
-            .keys
             .difference(&wanted)
             .for_each(|key| self.cache.unpin(key));
-        self.pins = Pins {
-            keys: wanted,
-            shown,
-        };
+        self.pins = wanted;
     }
 
     pub(super) fn release_pins(&mut self) {
         let pins = std::mem::take(&mut self.pins);
-        pins.keys.iter().for_each(|key| self.cache.unpin(key));
+        pins.iter().for_each(|key| self.cache.unpin(key));
     }
 }
 

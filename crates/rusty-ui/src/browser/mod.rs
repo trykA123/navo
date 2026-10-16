@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -23,7 +23,7 @@ struct Loaded {
     tab: TabId,
     location: Location,
     request: u64,
-    result: Result<Arc<[FsEntry]>, FsError>,
+    result: Result<cached::Fresh, FsError>,
 }
 
 enum Message {
@@ -70,7 +70,8 @@ pub struct Browser {
     cache: ListingCache,
     keys: CacheKeys,
     cached: HashMap<TabId, u64>,
-    pins: cached::Pins,
+    pins: HashSet<rusty_cache::CacheKey>,
+    sorted: HashMap<TabId, Vec<cached::Sorted>>,
 }
 
 impl Browser {
@@ -108,7 +109,8 @@ impl Browser {
             cache: ListingCache::default(),
             keys: CacheKeys::default(),
             cached: HashMap::new(),
-            pins: cached::Pins::default(),
+            pins: HashSet::new(),
+            sorted: HashMap::new(),
         }
     }
 
@@ -297,15 +299,12 @@ impl Browser {
             return false;
         }
         let listing = match result {
-            Ok(rows) => {
+            Ok(fresh) => {
                 match self.late_errors.remove(&tab) {
                     Some(error) => self.errors.insert(tab, error),
                     None => self.errors.remove(&tab),
                 };
-                let full = self.full_of(tab, &rows);
-                let (listing, details) = self.narrow(tab, &location, full);
-                self.details.insert(tab, details);
-                listing
+                self.fresh_listing(tab, &location, fresh)
             }
             Err(error) => {
                 self.errors.insert(tab, error);

@@ -10,6 +10,7 @@ pub(super) struct Filter {
     text: String,
 }
 
+#[derive(Clone)]
 pub(super) struct Full {
     pub(super) listing: Listing,
     pub(super) details: Rc<[FsEntry]>,
@@ -91,6 +92,11 @@ impl Browser {
                 .tab(*tab)
                 .is_some_and(|tab| tab.location() == &filter.location)
         });
+        let is_open = |tab: &TabId| state.tab(*tab).is_some();
+        self.cached.retain(|tab, _| is_open(tab));
+        self.full.retain(|tab, _| is_open(tab));
+        self.details.retain(|tab, _| is_open(tab));
+        self.sorted.retain(|tab, _| is_open(tab));
     }
 
     pub(super) fn remember_size(&mut self, tab: TabId, name: &str, bytes: u64) {
@@ -108,7 +114,7 @@ impl Browser {
         let Some(t) = self.state.tab(tab) else {
             return false;
         };
-        if t.pending_request().is_some() {
+        if t.listing().is_none() {
             return false;
         }
         let location = t.location().clone();

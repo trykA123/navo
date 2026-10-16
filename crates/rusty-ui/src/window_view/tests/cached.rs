@@ -83,7 +83,10 @@ fn visit_sub_while_big_grows(
     let location = fs.location("big/sub");
     command(cx, view, &Command::PaneNavigate { location });
     settle(cx, view);
-    cache.put(CacheKeys::default().key(&fs.location("big")), big_listing());
+    cache.put(
+        CacheKeys::default().key(&fs.location("big")).unwrap(),
+        big_listing(),
+    );
 }
 
 #[gpui_kit::test]

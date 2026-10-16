@@ -14,7 +14,6 @@ mod files;
 mod gui;
 mod jobs;
 mod launch;
-mod listing_keys;
 mod startup;
 #[cfg(windows)]
 mod windows_memory;

@@ -184,7 +184,7 @@ impl Tab {
     }
 
     pub(crate) fn replace_listing(&mut self, location: &Location, listing: Listing) -> bool {
-        if self.pending.is_some() || &self.location != location || self.listing.is_none() {
+        if &self.location != location || self.listing.is_none() {
             return false;
         }
         let current = self

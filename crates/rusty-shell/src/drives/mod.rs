@@ -79,20 +79,13 @@ pub fn drive_details(root: &str, timeout: Duration) -> Option<(Option<String>, O
 
 #[cfg(windows)]
 #[must_use]
-pub fn volume_identity(letter: char, timeout: Duration) -> Option<VolumeIdentity> {
-    let (sender, receiver) = mpsc::channel();
-    std::thread::Builder::new()
-        .name("volume-probe".to_owned())
-        .spawn(move || {
-            let _ = sender.send(windows::identity(letter));
-        })
-        .ok()?;
-    receiver.recv_timeout(timeout).ok().flatten()
+pub fn volume_identity(letter: char) -> Option<VolumeIdentity> {
+    windows::identity(letter)
 }
 
 #[cfg(unix)]
 #[must_use]
-pub fn volume_identity(_letter: char, _timeout: Duration) -> Option<VolumeIdentity> {
+pub fn volume_identity(_letter: char) -> Option<VolumeIdentity> {
     None
 }
 
