@@ -379,6 +379,17 @@ fn undo_while_a_save_is_in_flight_writes_the_old_value(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
+fn ctrl_comma_closes_the_open_app_menu_and_opens_settings(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "f10");
+    assert!(rig.is_open(cx));
+    open(cx, &rig);
+    assert!(!rig.is_open(cx));
+    assert!(is_open(cx, &rig));
+    assert!(sheet_has_focus(cx, &rig));
+}
+
+#[gpui_kit::test]
 fn ctrl_comma_closes_the_drive_menu(cx: &mut TestAppContext) {
     let rig = drive_window(cx, Setup::default());
     press(cx, rig.window, &rig.view, "alt-f1");
