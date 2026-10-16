@@ -48,6 +48,7 @@ jobs:
             "folder"         = @("$env:SM_ROOT/folder")
             "three-files"    = @("$env:SM_ROOT/three/a.txt", "$env:SM_ROOT/three/b.txt", "$env:SM_ROOT/three/c.txt")
             "zip-explorer"   = @("--explorer-commands", "$env:SM_ROOT/zipdir/archive.zip")
+            "folder-explorer" = @("--explorer-commands", "$env:SM_ROOT/folder")
             "invoke-copy"    = @("--invoke", "copy", "$env:SM_ROOT/note.txt")
             "invoke-extract" = @("--invoke", "Extract Here", "$env:SM_ROOT/zipdir/archive.zip")
           }
@@ -73,7 +74,7 @@ jobs:
               if ($n.default) { $extra += "default" }
               if ($n.owner_drawn) { $extra += "ownerdraw" }
               if ($n.icon) { $extra += "icon=$($n.icon.source) $($n.icon.width)x$($n.icon.height)" }
-              if ($n.submenu) { $extra += "sub before=$($n.submenu.items_before_init) init=$($n.submenu.init_ms)ms by=$($n.submenu.init_by)" }
+              if ($n.submenu) { $s = $n.submenu; $extra += "sub before=$($s.before_init.items)/$($s.before_init.blank) init=$($s.after_init.items)/$($s.after_init.blank) settled=$($s.settled.items)/$($s.settled.blank) init=$($s.init_ms)ms last_change=$($s.last_change_ms)ms by=$($s.init_by)" }
               Write-Host ("  " * $depth + "$($n.text) [$($extra -join ', ')]")
               if ($n.submenu) { Walk $n.submenu.children ($depth + 1) }
             }
