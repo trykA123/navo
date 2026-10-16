@@ -118,6 +118,8 @@ impl FerriteWindow {
         if self.app_menu.is_some() {
             self.close_app_menu(window, cx);
         }
+        self.drive_menu = None;
+        self.path_edit = None;
         if self.preview.is_open() {
             self.close_preview(cx);
             self.settings.restore_preview = true;

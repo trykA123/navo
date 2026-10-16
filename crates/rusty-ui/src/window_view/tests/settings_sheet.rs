@@ -4,6 +4,8 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, TestAppContext};
 
 use super::app_menu::{Rig, rig};
+use super::drive_fs::{Setup, drive_window};
+use super::press;
 use crate::app_menu::{Item, MenuCommand, index_of};
 use crate::settings::{Change, FIELDS, Field, Value};
 use crate::tokens::{self, Density, ThemeChoice};
@@ -374,4 +376,25 @@ fn undo_while_a_save_is_in_flight_writes_the_old_value(cx: &mut TestAppContext) 
         .view
         .read_with(cx, |view, _| view.values.get(Field::ShowSystem).clone());
     assert_eq!(shown, Value::Flag(false));
+}
+
+#[gpui_kit::test]
+fn ctrl_comma_closes_the_drive_menu(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    press(cx, rig.window, &rig.view, "alt-f1");
+    assert!(rig.view.read_with(cx, |view, _| view.drive_menu.is_some()));
+    press(cx, rig.window, &rig.view, "ctrl-,");
+    assert!(rig.view.read_with(cx, |view, _| view.drive_menu.is_none()));
+    assert!(rig.view.read_with(cx, |view, _| view.settings.is_open()));
+}
+
+#[gpui_kit::test]
+fn ctrl_comma_closes_the_path_editor(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "ctrl-l");
+    assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_some()));
+    open(cx, &rig);
+    assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_none()));
+    assert!(is_open(cx, &rig));
+    assert!(sheet_has_focus(cx, &rig));
 }
