@@ -15,8 +15,10 @@ use std::time::Duration;
 use rusty_core::shell_menu::Submenu;
 use windows::Win32::Foundation::HWND;
 
+use super::fill::Fills;
+use super::station::BusySince;
 use super::{InvokeOptions, MenuError, MenuSession, Pending, ScreenPoint, WindowHandle};
-use worker::{BusySince, Request};
+use worker::Request;
 
 const HUNG_AFTER: Duration = Duration::from_secs(2);
 
@@ -43,12 +45,16 @@ impl Link {
         self.sender.send(request).is_ok() && sta::wake(self.window)
     }
 
-    fn ask<T>(&self, make: impl FnOnce(super::pending::Reply<T>) -> Request) -> Pending<T> {
-        if self.retired.load(Ordering::Acquire) {
-            return Pending::ready(Err(MenuError::Stopped));
-        }
+    fn post(&self, request: Request) -> bool {
+        !self.retired.load(Ordering::Acquire) && self.send(request)
+    }
+
+    fn ask<T: Send + 'static>(
+        &self,
+        make: impl FnOnce(super::pending::Reply<T>) -> Request,
+    ) -> Pending<T> {
         let (reply, pending) = Pending::channel();
-        if self.send(make(reply)) {
+        if self.post(make(reply)) {
             pending
         } else {
             Pending::ready(Err(MenuError::Stopped))
@@ -107,15 +113,18 @@ impl Drop for Service {
 pub(super) struct SessionHandle {
     id: u64,
     link: Link,
+    fills: Fills,
 }
 
 impl SessionHandle {
     pub(super) fn fill(&self, path: Vec<usize>) -> Pending<Submenu> {
         let session = self.id;
-        self.link.ask(|reply| Request::Fill {
-            session,
-            path,
-            reply,
+        self.fills.ask(path, |path, reply| {
+            self.link.post(Request::Fill {
+                session,
+                path,
+                reply,
+            });
         })
     }
 
@@ -167,9 +176,8 @@ mod tests {
             window: 0,
             retired: Arc::new(AtomicBool::new(true)),
         };
-        let pending = link.ask(|reply| Request::Fill {
-            session: 1,
-            path: vec![0],
+        let pending = link.ask(|reply| Request::Open {
+            paths: Vec::new(),
             reply,
         });
         assert_eq!(pending.wait(), Err(MenuError::Stopped));

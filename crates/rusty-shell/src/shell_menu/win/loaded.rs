@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
 
 use rusty_core::shell_menu::{Group, MenuItem, ShellMenu, Submenu};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -13,13 +12,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::Interface;
 
 use super::read::{Entry, ID_FIRST, ID_LAST, Verbs, has_named_item, read_level};
-use super::sta::{self, MenuHandler};
+use super::sta::MenuHandler;
 use super::{selection, shell_error};
+use crate::shell_menu::MenuError;
 use crate::shell_menu::classify::{guess_group, is_unfilled, to_menu_item};
-use crate::shell_menu::{FILL_BUDGET, MenuError};
 
 const MAX_DEPTH: usize = 4;
-const POLL: Duration = Duration::from_millis(10);
 
 #[derive(Clone, Copy)]
 struct SubmenuRef {
@@ -83,24 +81,36 @@ impl LoadedMenu {
     }
 
     pub(super) fn fill(&mut self, path: &[usize]) -> Result<Submenu, MenuError> {
-        let target = *self
-            .submenus
-            .get(path)
-            .ok_or_else(|| MenuError::NoSubmenu(path.to_vec()))?;
-        let deadline = Instant::now() + FILL_BUDGET;
+        let target = self.target(path)?;
         let initialised = self.init_popup(target);
-        while !has_named_item(target.hmenu) && Instant::now() < deadline {
-            sta::pump_until(deadline.min(Instant::now() + POLL));
+        let unfilled = if initialised {
+            Submenu::Loading
+        } else {
+            Submenu::Failed
+        };
+        Ok(self.read_filled(target, path).unwrap_or(unfilled))
+    }
+
+    pub(super) fn poll_fill(&mut self, path: &[usize]) -> Option<Result<Submenu, MenuError>> {
+        match self.target(path) {
+            Ok(target) => self.read_filled(target, path).map(Ok),
+            Err(error) => Some(Err(error)),
         }
+    }
+
+    fn target(&self, path: &[usize]) -> Result<SubmenuRef, MenuError> {
+        self.submenus
+            .get(path)
+            .copied()
+            .ok_or_else(|| MenuError::NoSubmenu(path.to_vec()))
+    }
+
+    fn read_filled(&mut self, target: SubmenuRef, path: &[usize]) -> Option<Submenu> {
         if !has_named_item(target.hmenu) {
-            return Ok(if initialised {
-                Submenu::Loading
-            } else {
-                Submenu::Failed
-            });
+            return None;
         }
         let level = read_level(target.hmenu, &self.verbs());
-        Ok(Submenu::Filled(self.build(level, path, Some(target.group))))
+        Some(Submenu::Filled(self.build(level, path, Some(target.group))))
     }
 
     fn build(&mut self, level: Vec<Entry>, path: &[usize], parent: Option<Group>) -> Vec<MenuItem> {

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use rusty_core::shell_menu::Submenu;
 use windows::Win32::Foundation::HWND;
@@ -11,7 +11,9 @@ use super::invoke::{self, Target};
 use super::loaded::LoadedMenu;
 use super::sta::{self, Ole, Window};
 use super::{Link, SessionHandle};
+use crate::shell_menu::fill::{self, Background, FillReply, Fills};
 use crate::shell_menu::pending::Reply;
+use crate::shell_menu::station::{self, BusySince, Station};
 use crate::shell_menu::{InvokeOptions, MenuError, MenuSession, ScreenPoint, WindowHandle};
 
 pub(super) enum Request {
@@ -22,7 +24,7 @@ pub(super) enum Request {
     Fill {
         session: u64,
         path: Vec<usize>,
-        reply: Reply<Submenu>,
+        reply: FillReply,
     },
     Invoke {
         session: u64,
@@ -48,8 +50,6 @@ impl Request {
         !matches!(self, Self::Invoke { .. } | Self::Classic { .. })
     }
 }
-
-pub(super) type BusySince = Arc<Mutex<Option<Instant>>>;
 
 pub(super) fn spawn(busy: BusySince) -> Result<Link, MenuError> {
     let (sender, receiver) = mpsc::channel();
@@ -88,34 +88,53 @@ fn run(
         link,
         sessions: HashMap::new(),
         next_session: 1,
+        background: Vec::new(),
     };
-    mark(busy, true);
+    station::mark(busy, true);
     worker.warm();
-    mark(busy, false);
-    loop {
-        while let Ok(request) = receiver.try_recv() {
-            let can_hang = request.can_hang();
-            mark(busy, can_hang);
-            let keep_running = worker.handle(request);
-            mark(busy, false);
-            if !keep_running {
-                return;
-            }
-        }
-        if !sta::wait_message() {
-            return;
-        }
-    }
-}
-
-fn mark(busy: &BusySince, is_busy: bool) {
-    *busy.lock().unwrap_or_else(PoisonError::into_inner) = is_busy.then(Instant::now);
+    station::mark(busy, false);
+    station::serve(&mut worker, receiver, busy);
 }
 
 struct Worker {
     link: Link,
     sessions: HashMap<u64, LoadedMenu>,
     next_session: u64,
+    background: Vec<Background>,
+}
+
+impl Station for Worker {
+    type Request = Request;
+
+    fn can_hang(request: &Request) -> bool {
+        request.can_hang()
+    }
+
+    fn handle(&mut self, request: Request) -> bool {
+        self.serve_request(request)
+    }
+
+    fn settle_fills(&mut self) -> Option<Duration> {
+        let sessions = &mut self.sessions;
+        fill::settle(
+            &mut self.background,
+            Instant::now(),
+            |session, path| match sessions.get_mut(&session) {
+                Some(menu) => menu.poll_fill(path),
+                None => Some(Err(MenuError::Closed)),
+            },
+        )
+    }
+
+    fn pump(&mut self, timeout: Option<Duration>) -> bool {
+        match timeout {
+            Some(timeout) => {
+                sta::pump_until(Instant::now() + timeout);
+                true
+            }
+            None => sta::wait_message(),
+        }
+    }
 }
 
 impl Worker {
@@ -123,7 +142,7 @@ impl Worker {
         let _ = LoadedMenu::query(&[std::env::temp_dir()], HWND::default());
     }
 
-    fn handle(&mut self, request: Request) -> bool {
+    fn serve_request(&mut self, request: Request) -> bool {
         match request {
             Request::Open { paths, reply } => {
                 let _ = reply.send(self.open(&paths));
@@ -132,9 +151,7 @@ impl Worker {
                 session,
                 path,
                 reply,
-            } => {
-                let _ = reply.send(self.session(session).and_then(|menu| menu.fill(&path)));
-            }
+            } => self.fill(session, path, reply),
             Request::Invoke {
                 session,
                 command,
@@ -170,6 +187,16 @@ impl Worker {
         true
     }
 
+    fn fill(&mut self, session: u64, path: Vec<usize>, reply: FillReply) {
+        match self.session(session).and_then(|menu| menu.fill(&path)) {
+            Ok(Submenu::Loading) => {
+                let fill = Background::new(session, path, reply, Instant::now());
+                self.background.push(fill);
+            }
+            result => reply.send(result),
+        }
+    }
+
     fn open(&mut self, paths: &[PathBuf]) -> Result<MenuSession, MenuError> {
         let mut loaded = LoadedMenu::query(paths, HWND::default())?;
         let menu = loaded.walk();
@@ -181,6 +208,7 @@ impl Worker {
             handle: SessionHandle {
                 id,
                 link: self.link.clone(),
+                fills: Fills::default(),
             },
         })
     }
