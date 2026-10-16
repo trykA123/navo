@@ -1,0 +1,232 @@
+mod edit;
+mod locate;
+
+use std::sync::{Arc, Mutex, PoisonError};
+
+use gpui_kit::{FocusHandle, ScrollHandle};
+use rusty_core::Location;
+
+use super::FerriteWindow;
+use super::settings_save::{SaveSettings, Saver};
+use crate::prelude::*;
+use crate::settings::{Change, FIELDS, SettingsBody, SheetEvent, Values, rows_in, section_of};
+use crate::side_sheet::{SheetState, SideSheet};
+use crate::tokens;
+
+pub type FindLine = Arc<dyn Fn(&str) -> Option<u64> + Send + Sync>;
+
+pub struct SettingsHooks {
+    pub values: Values,
+    pub load_error: Option<SharedString>,
+    pub save: SaveSettings,
+    pub file: Option<Location>,
+    pub line_of: FindLine,
+}
+
+impl SettingsHooks {
+    pub fn none() -> Self {
+        let session = Arc::new(Mutex::new(Values::default()));
+        Self {
+            values: Values::default(),
+            load_error: None,
+            save: Arc::new(move |changes| {
+                let mut values = session.lock().unwrap_or_else(PoisonError::into_inner);
+                *values = changes
+                    .iter()
+                    .fold(values.clone(), |all, one| all.with(one));
+                Ok(values.clone())
+            }),
+            file: None,
+            line_of: Arc::new(|_| None),
+        }
+    }
+}
+
+pub(super) struct SettingsPanel {
+    sheet: Entity<SheetState>,
+    focus: FocusHandle,
+    scroll: ScrollHandle,
+    is_open: bool,
+    row: usize,
+    undo: Vec<Change>,
+    edit: Option<edit::TextEdit>,
+    restore_preview: bool,
+    notice: Option<SharedString>,
+    file: Option<Location>,
+    line_of: FindLine,
+}
+
+impl SettingsPanel {
+    pub(super) fn split(hooks: SettingsHooks, cx: &mut App) -> (Values, Saver, Self) {
+        let saver = Saver::new(hooks.save, hooks.load_error);
+        (
+            hooks.values,
+            saver,
+            Self::new(hooks.file, hooks.line_of, cx),
+        )
+    }
+
+    fn new(file: Option<Location>, line_of: FindLine, cx: &mut App) -> Self {
+        Self {
+            sheet: cx.new(|_| SheetState::new()),
+            focus: cx.focus_handle(),
+            scroll: ScrollHandle::new(),
+            is_open: false,
+            row: 0,
+            undo: Vec::new(),
+            edit: None,
+            restore_preview: false,
+            notice: None,
+            file,
+            line_of,
+        }
+    }
+
+    pub(super) fn is_open(&self) -> bool {
+        self.is_open
+    }
+}
+
+impl FerriteWindow {
+    pub(super) fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.is_open {
+            self.close_settings(window, cx);
+        } else {
+            self.open_settings(window, cx);
+        }
+    }
+
+    pub(super) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let is_busy = self.prompt.is_some() || self.browser.pending().is_some();
+        if self.settings.is_open || is_busy || self.viewer.is_some() {
+            return;
+        }
+        if self.app_menu.is_some() {
+            self.close_app_menu(window, cx);
+        }
+        if self.preview.is_open() {
+            self.close_preview(cx);
+            self.settings.restore_preview = true;
+        }
+        self.settings.is_open = true;
+        self.settings.undo.clear();
+        self.settings.notice = None;
+        self.settings.sheet.update(cx, |sheet, cx| sheet.open(cx));
+        window.focus(&self.settings.focus, cx);
+        cx.notify();
+    }
+
+    fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.settings.is_open = false;
+        self.settings.edit = None;
+        self.settings.undo.clear();
+        self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
+        if std::mem::take(&mut self.settings.restore_preview) {
+            self.open_preview(window, cx);
+        }
+        self.focus_core_pane(window, cx);
+        cx.notify();
+    }
+
+    pub(super) fn focus_settings(&self, window: &mut Window, cx: &mut App) {
+        window.focus(&self.settings.focus, cx);
+    }
+
+    fn settings_event(&mut self, event: SheetEvent, window: &mut Window, cx: &mut Context<Self>) {
+        match event {
+            SheetEvent::Select(row) => self.select_setting(row, window, cx),
+            SheetEvent::Set(change) => self.set_from_sheet(change, window, cx),
+            SheetEvent::Edit(field) => self.start_edit(field, window, cx),
+            SheetEvent::Locate(field) => self.open_settings_file(field, window, cx),
+            SheetEvent::Undo => self.undo_setting(window, cx),
+            SheetEvent::Close => self.close_settings(window, cx),
+        }
+        cx.notify();
+    }
+
+    fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.settings.row = row.min(FIELDS.len() - 1);
+        self.settings.notice = None;
+        let at = rows_in(section_of(row)).position(|(index, _)| index == row);
+        if let Some(at) = at {
+            self.settings.scroll.scroll_to_item(at + 1);
+        }
+        if self.settings.edit.is_none() {
+            self.focus_settings(window, cx);
+        }
+    }
+
+    fn set_from_sheet(&mut self, change: Change, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(row) = FIELDS.iter().position(|spec| spec.field == change.field) {
+            self.select_setting(row, window, cx);
+        }
+        let old = self.values.change_of(change.field);
+        if old == change {
+            return;
+        }
+        self.settings.undo.push(old);
+        self.change_setting(change, window, cx);
+    }
+
+    fn undo_setting(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(old) = self.settings.undo.pop() else {
+            return;
+        };
+        if let Some(row) = FIELDS.iter().position(|spec| spec.field == old.field) {
+            self.select_setting(row, window, cx);
+        }
+        self.change_setting(old, window, cx);
+    }
+
+    pub(super) fn settings_layer(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if self.viewer.is_some() || !self.settings.sheet.read(cx).is_shown(cx) {
+            return None;
+        }
+        let t = tokens::current(cx).clone();
+        let frame = self.sheet_frame(&t, window, cx);
+        let this = cx.weak_entity();
+        let error = self.saver.error.clone().or(self.settings.notice.clone());
+        let body = SettingsBody::new(self.values.clone(), self.settings.row)
+            .error(error)
+            .editor(self.edit_bar(&t, cx))
+            .track_focus(&self.settings.focus)
+            .track_scroll(&self.settings.scroll)
+            .on_event(cx.listener(|view, event: &SheetEvent, window, cx| {
+                view.settings_event(event.clone(), window, cx);
+            }));
+        let title = div().font_weight(FontWeight::SEMIBOLD).child("Settings");
+        let sheet = SideSheet::new("settings-sheet", &self.settings.sheet, frame)
+            .label("Settings")
+            .header(title)
+            .close("escape", move |window, cx| {
+                let _ = this.update(cx, |view, cx| view.close_settings(window, cx));
+            })
+            .body(body)
+            .hint(&["↑", "↓"], "Move")
+            .hint(&["←", "→"], "Change")
+            .hint(&["tab"], "Section")
+            .hint(&["f3"], "TOML line")
+            .hint(&["ctrl-z"], "Undo");
+        Some(
+            div()
+                .absolute()
+                .top(t.spacing.xs)
+                .bottom(t.spacing.xs)
+                .left(t.spacing.md)
+                .right(t.spacing.md)
+                .child(sheet)
+                .into_any_element(),
+        )
+    }
+}
+
+#[cfg(test)]
+impl FerriteWindow {
+    pub(in crate::window_view) fn settings_row(&self) -> usize {
+        self.settings.row
+    }
+}

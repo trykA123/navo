@@ -387,3 +387,20 @@ fn an_old_editor_written_file_loads_valid_with_hidden_files_shown() {
         Some(r"C:\Tools\code.exe")
     );
 }
+
+#[test]
+fn a_setting_is_read_by_its_key() {
+    let mut settings = dark_mode();
+    settings.appearance.font_size = 15;
+    assert_eq!(settings.value_at(MODE), Some(text("dark")));
+    assert_eq!(
+        settings.value_at("appearance.font-size"),
+        Some(SettingValue::Integer(15))
+    );
+    assert_eq!(
+        settings.value_at("files.folders-first"),
+        Some(SettingValue::Bool(true))
+    );
+    assert_eq!(settings.value_at("editor.path"), None);
+    assert_eq!(settings.value_at("appearance.zoom"), None);
+}

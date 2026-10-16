@@ -54,16 +54,20 @@ impl EditorView {
         match parse_line(&text) {
             Ok(line) => {
                 self.close_go_to(window, cx);
-                let row = u32::try_from(line - 1).unwrap_or(u32::MAX);
-                self.editor.update(cx, |state, cx| {
-                    state.set_cursor_position(Position::new(row, 0), window, cx);
-                });
+                self.go_to_line(line, window, cx);
             }
             Err(error) => {
                 bar.error = Some(error.into());
                 cx.notify();
             }
         }
+    }
+
+    pub(super) fn go_to_line(&mut self, line: u64, window: &mut Window, cx: &mut Context<Self>) {
+        let row = u32::try_from(line.saturating_sub(1)).unwrap_or(u32::MAX);
+        self.editor.update(cx, |state, cx| {
+            state.set_cursor_position(Position::new(row, 0), window, cx);
+        });
     }
 
     pub(super) fn copy_path_line(&mut self, cx: &mut Context<Self>) {

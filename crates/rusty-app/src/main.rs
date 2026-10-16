@@ -15,6 +15,7 @@ mod files;
 mod gui;
 mod jobs;
 mod launch;
+mod settings;
 mod shell_menu;
 mod startup;
 #[cfg(windows)]

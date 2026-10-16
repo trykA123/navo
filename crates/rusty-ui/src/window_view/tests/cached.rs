@@ -61,6 +61,7 @@ fn open_big(
         kinds: super::super::Kinds::builtin(),
         drives: super::super::DriveHooks::none(),
         app_menu: crate::window_view::AppMenuHooks::none(),
+        settings: crate::window_view::SettingsHooks::none(),
         view: None,
         listing_cache: cache.clone(),
         cache_keys: CacheKeys::default(),

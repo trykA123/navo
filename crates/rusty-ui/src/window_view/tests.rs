@@ -22,6 +22,7 @@ mod drive_fs;
 mod drives;
 mod fkeys;
 mod jobs;
+mod settings_sheet;
 mod shell_menu;
 mod tabs;
 mod typed;
@@ -84,6 +85,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
+        settings: super::SettingsHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -111,6 +113,7 @@ pub(super) fn open_options_sized(
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
         crate::app_menu::bind_keys(cx);
+        crate::settings::bind_keys(cx);
         crate::context_menu::bind_keys(cx);
         super::viewer::bind_keys(cx);
         super::bind_keys(cx);
@@ -441,9 +444,8 @@ fn editor_window(
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks {
-            chosen: chosen.map(str::to_owned),
             suggestion: Some("code.exe".to_owned()),
-            remember: Rc::new(move |program| {
+            resolve: Rc::new(move |program| {
                 if program.ends_with(".exe") {
                     remembered.borrow_mut().remembered.push(program.to_owned());
                     Ok(program.to_owned())
@@ -461,6 +463,15 @@ fn editor_window(
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
+        settings: super::SettingsHooks {
+            values: chosen.map_or_else(crate::settings::Values::default, |program| {
+                crate::settings::Values::default().with(&crate::settings::Change::text(
+                    crate::settings::Field::EditorPath,
+                    program.to_owned(),
+                ))
+            }),
+            ..super::SettingsHooks::none()
+        },
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -565,6 +576,7 @@ fn viewer_window(
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
+        settings: super::SettingsHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),

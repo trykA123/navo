@@ -4,7 +4,12 @@ use crate::tokens::Theme;
 use crate::window_view::FerriteWindow;
 
 impl FerriteWindow {
-    pub(super) fn sheet_frame(&self, t: &Theme, window: &Window, cx: &App) -> SheetFrame {
+    pub(in crate::window_view) fn sheet_frame(
+        &self,
+        t: &Theme,
+        window: &Window,
+        cx: &App,
+    ) -> SheetFrame {
         let viewport = window.viewport_size().width;
         let body = viewport - t.spacing.md * 2.;
         let split = viewport - t.spacing.xs * 2.;

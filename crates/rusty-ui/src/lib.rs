@@ -16,6 +16,7 @@ pub mod pane_chrome;
 pub mod prelude;
 pub mod primitives;
 pub mod prompt_dialog;
+pub mod settings;
 pub mod side_sheet;
 pub mod status_bar;
 pub mod title_bar;

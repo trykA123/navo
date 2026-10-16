@@ -146,7 +146,7 @@ impl FerriteWindow {
             PromptKind::Select { add } => self.mark_pattern(*add, value),
             PromptKind::ChooseEditor { target, .. } => {
                 let target = target.clone();
-                self.choose_editor(value, &target)
+                self.choose_editor((value, &target), window, cx)
             }
         };
         match result {

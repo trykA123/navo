@@ -212,6 +212,7 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
             }),
         },
         app_menu: crate::window_view::AppMenuHooks::none(),
+        settings: crate::window_view::SettingsHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),

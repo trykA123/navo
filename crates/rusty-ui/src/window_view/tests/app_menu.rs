@@ -6,29 +6,42 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_panes};
-use crate::app_menu::{Identity, Install, QuickChange, QuickSettings};
+use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::browser::Operations;
+use crate::settings::{Change, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
-use crate::window_view::AppMenuHooks;
+use crate::window_view::{AppMenuHooks, SettingsHooks};
+
+pub(super) fn values_of(settings: QuickSettings) -> Values {
+    Values::default()
+        .with(&Change::theme(settings.theme))
+        .with(&Change::density(settings.density))
+        .with(&Change::show_hidden(settings.show_hidden))
+}
 
 #[derive(Default)]
 pub(super) struct FakeStore {
-    pub stored: Mutex<QuickSettings>,
-    pub changes: Mutex<Vec<QuickChange>>,
+    pub stored: Mutex<Values>,
+    pub changes: Mutex<Vec<Change>>,
     pub results: Mutex<Vec<QuickSettings>>,
     pub failure: Mutex<Option<String>>,
 }
 
 impl FakeStore {
-    fn save(&self, change: &QuickChange) -> Result<QuickSettings, String> {
-        self.changes.lock().expect("changes").push(*change);
+    fn save(&self, changes: &[Change]) -> Result<Values, String> {
+        self.changes
+            .lock()
+            .expect("changes")
+            .extend_from_slice(changes);
         if let Some(message) = self.failure.lock().expect("failure").clone() {
             return Err(message);
         }
         let mut stored = self.stored.lock().expect("stored");
-        *stored = change.applied_to(*stored);
-        self.results.lock().expect("results").push(*stored);
-        Ok(*stored)
+        *stored = changes
+            .iter()
+            .fold(stored.clone(), |all, one| all.with(one));
+        self.results.lock().expect("results").push(stored.quick());
+        Ok(stored.clone())
     }
 }
 
@@ -74,7 +87,7 @@ pub(super) fn rig_full(
     fs.add_entry("home", hidden_file("b-secret.txt"));
     let state = two_panes(&fs);
     let store = Arc::new(FakeStore {
-        stored: Mutex::new(settings),
+        stored: Mutex::new(values_of(settings)),
         ..FakeStore::default()
     });
     let sessions: Rc<Cell<usize>> = Rc::default();
@@ -96,9 +109,12 @@ pub(super) fn rig_full(
                 install: Install::Installed,
                 folder: r"C:\Ferrite".into(),
             },
-            settings,
+        },
+        settings: SettingsHooks {
+            values: values_of(settings),
             load_error: load_error.map(Into::into),
-            save: Arc::new(move |change| fake_store.save(change)),
+            save: Arc::new(move |changes| fake_store.save(changes)),
+            ..SettingsHooks::none()
         },
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
@@ -262,7 +278,7 @@ fn the_saved_theme_applies_at_start(cx: &mut TestAppContext) {
 fn unavailable_rows_neither_act_nor_close_the_menu(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "f10");
-    for key in ["c", "n", "w", "h", "a"] {
+    for key in ["c", "n", "w", "h"] {
         rig.press(cx, key);
         rig.press(cx, "enter");
         assert!(rig.is_open(cx), "{key} closed the menu");

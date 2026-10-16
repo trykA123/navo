@@ -2,11 +2,12 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 
 use super::app_menu::{rig, rig_full};
-use crate::app_menu::{QuickChange, QuickSettings};
+use crate::app_menu::QuickSettings;
+use crate::settings::Change;
 use crate::tokens::{self, Density, ThemeChoice};
 
 fn quick(cx: &mut TestAppContext, rig: &super::app_menu::Rig) -> QuickSettings {
-    rig.view.read_with(cx, |view, _| view.quick)
+    rig.view.read_with(cx, |view, _| view.values.quick())
 }
 
 #[gpui_kit::test]
@@ -15,13 +16,7 @@ fn a_tile_saves_only_its_own_setting(cx: &mut TestAppContext) {
     rig.press(cx, "f10");
     rig.click(cx, ("app-menu-tile", 1usize));
     let changes = rig.store.changes.lock().expect("changes").clone();
-    assert_eq!(
-        changes,
-        [QuickChange {
-            density: Some(Density::Comfortable),
-            ..QuickChange::default()
-        }]
-    );
+    assert_eq!(changes, [Change::density(Density::Comfortable)]);
 }
 
 #[gpui_kit::test]
@@ -51,15 +46,18 @@ fn rapid_clicks_coalesce_and_the_latest_value_wins(cx: &mut TestAppContext) {
     cx.run_until_parked();
     let writes = rig.store.changes.lock().expect("changes").len();
     assert!((1..=2).contains(&writes), "{writes} writes");
-    let stored = *rig.store.stored.lock().expect("stored");
-    assert_eq!(stored.theme, ThemeChoice::Light);
+    let stored = rig.store.stored.lock().expect("stored").clone();
+    assert_eq!(stored.theme(), ThemeChoice::Light);
     assert_eq!(quick(cx, &rig).theme, ThemeChoice::Light);
 }
 
 #[gpui_kit::test]
 fn values_reloaded_from_the_store_replace_the_quick_values(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    rig.store.stored.lock().expect("stored").density = Density::Compact;
+    {
+        let mut stored = rig.store.stored.lock().expect("stored");
+        *stored = stored.with(&Change::density(Density::Compact));
+    }
     rig.press(cx, "f10");
     rig.click(cx, ("app-menu-tile", 0usize));
     let now = quick(cx, &rig);
@@ -123,30 +121,4 @@ fn a_good_save_clears_the_error(cx: &mut TestAppContext) {
     *rig.store.failure.lock().expect("failure") = None;
     rig.click(cx, ("app-menu-tile", 1usize));
     assert_eq!(error_lines(cx, &rig), (None, None));
-}
-
-#[test]
-fn changes_merge_with_the_newer_value_winning() {
-    let older = QuickChange {
-        theme: Some(ThemeChoice::Light),
-        density: Some(Density::Compact),
-        ..QuickChange::default()
-    };
-    let newer = QuickChange {
-        theme: Some(ThemeChoice::Dark),
-        show_hidden: Some(false),
-        ..QuickChange::default()
-    };
-    let merged = older.merged(newer);
-    assert_eq!(merged.theme, Some(ThemeChoice::Dark));
-    assert_eq!(merged.density, Some(Density::Compact));
-    assert_eq!(merged.show_hidden, Some(false));
-    let start = QuickSettings {
-        show_hidden: true,
-        ..QuickSettings::default()
-    };
-    let applied = merged.applied_to(start);
-    assert_eq!(applied.theme, ThemeChoice::Dark);
-    assert_eq!(applied.density, Density::Compact);
-    assert!(!applied.show_hidden);
 }

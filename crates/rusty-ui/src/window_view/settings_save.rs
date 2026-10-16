@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use super::FerriteWindow;
-use crate::app_menu::{QuickChange, QuickSettings, Setting};
+use crate::app_menu::Setting;
 use crate::prelude::*;
+use crate::settings::{Change, Values};
 
-pub type SaveSettings = Arc<dyn Fn(&QuickChange) -> Result<QuickSettings, String> + Send + Sync>;
+pub type SaveSettings = Arc<dyn Fn(&[Change]) -> Result<Values, String> + Send + Sync>;
 
 pub(super) struct Saver {
     save: SaveSettings,
-    pending: Option<QuickChange>,
+    pending: Vec<Change>,
     is_saving: bool,
     pub(super) error: Option<SharedString>,
 }
@@ -17,21 +18,26 @@ impl Saver {
     pub(super) fn new(save: SaveSettings, error: Option<SharedString>) -> Self {
         Self {
             save,
-            pending: None,
+            pending: Vec::new(),
             is_saving: false,
             error,
         }
     }
+
+    fn queue(&mut self, change: Change) {
+        self.pending.retain(|older| older.field != change.field);
+        self.pending.push(change);
+    }
 }
 
 impl FerriteWindow {
-    pub(super) fn set_quick(&mut self, values: QuickSettings, window: &Window, cx: &mut App) {
-        let old = std::mem::replace(&mut self.quick, values);
-        if old.theme != values.theme || old.density != values.density {
+    pub(super) fn set_values(&mut self, values: Values, window: &Window, cx: &mut App) {
+        let old = std::mem::replace(&mut self.values, values);
+        if old.theme() != self.values.theme() || old.density() != self.values.density() {
             self.apply_theme(window, cx);
         }
-        if old.show_hidden != values.show_hidden {
-            self.browser.set_show_hidden(values.show_hidden);
+        if old.show_hidden() != self.values.show_hidden() {
+            self.browser.set_show_hidden(self.values.show_hidden());
         }
     }
 
@@ -41,25 +47,31 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.set_quick(self.quick.toggled(setting), window, cx);
-        let change = QuickChange::of(setting, self.quick);
-        self.saver.pending = Some(match self.saver.pending.take() {
-            Some(older) => older.merged(change),
-            None => change,
-        });
+        let change = self.values.toggled(setting);
+        self.change_setting(change, window, cx);
+    }
+
+    pub(super) fn change_setting(
+        &mut self,
+        change: Change,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_values(self.values.with(&change), window, cx);
+        self.saver.queue(change);
         self.start_save(window, cx);
     }
 
     fn start_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.saver.is_saving {
+        if self.saver.is_saving || self.saver.pending.is_empty() {
             return;
         }
-        let Some(change) = self.saver.pending.take() else {
-            return;
-        };
+        let changes = std::mem::take(&mut self.saver.pending);
         self.saver.is_saving = true;
         let save = self.saver.save.clone();
-        let task = cx.background_executor().spawn(async move { save(&change) });
+        let task = cx
+            .background_executor()
+            .spawn(async move { save(&changes) });
         cx.spawn_in(window, async move |this, cx| {
             let outcome = task.await;
             let _ = this.update_in(cx, |view, window, cx| view.saved(outcome, window, cx));
@@ -69,7 +81,7 @@ impl FerriteWindow {
 
     fn saved(
         &mut self,
-        outcome: Result<QuickSettings, String>,
+        outcome: Result<Values, String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -80,8 +92,9 @@ impl FerriteWindow {
                 let fresh = self
                     .saver
                     .pending
-                    .map_or(stored, |pending| pending.applied_to(stored));
-                self.set_quick(fresh, window, cx);
+                    .iter()
+                    .fold(stored, |values, change| values.with(change));
+                self.set_values(fresh, window, cx);
             }
             Err(message) => self.saver.error = Some(message.into()),
         }

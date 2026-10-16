@@ -16,9 +16,7 @@ use gpui_kit::{
 };
 
 pub use focus::{Ring, Step, jump};
-pub use items::{
-    ITEM_COUNT, Item, MenuCommand, QuickChange, QuickSettings, Setting, index_of, item_at,
-};
+pub use items::{ITEM_COUNT, Item, MenuCommand, QuickSettings, Setting, index_of, item_at};
 
 use crate::tokens::{self, Theme};
 

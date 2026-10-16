@@ -65,6 +65,7 @@ pub(super) struct Viewer {
     message: Option<SharedString>,
     carried: Option<Carried>,
     menu: Option<(Entity<crate::context_menu::ContextMenu>, Subscription)>,
+    start_line: Option<u64>,
 }
 
 fn platform_lines(text: &str) -> String {
@@ -91,6 +92,7 @@ impl Viewer {
             message: None,
             carried: None,
             menu: None,
+            start_line: None,
         }
     }
 
@@ -161,7 +163,7 @@ impl FerriteWindow {
             })
     }
 
-    pub(super) fn view_location(
+    pub(in crate::window_view) fn view_location(
         &mut self,
         location: Location,
         window: &mut Window,
@@ -170,6 +172,12 @@ impl FerriteWindow {
         let mut viewer = Viewer::new(location, cx.focus_handle());
         viewer.opening = Some(self.open_file(&viewer, window, cx));
         self.show_viewer(viewer, window, cx);
+    }
+
+    pub(in crate::window_view) fn open_viewer_at_line(&mut self, line: Option<u64>) {
+        if let Some(viewer) = &mut self.viewer {
+            viewer.start_line = line;
+        }
     }
 
     fn step_to(&mut self, location: Location, window: &mut Window, cx: &mut Context<Self>) {
@@ -214,7 +222,11 @@ impl FerriteWindow {
             return;
         }
         self.viewer = None;
-        self.focus_core_pane(window, cx);
+        if self.settings.is_open() {
+            self.focus_settings(window, cx);
+        } else {
+            self.focus_core_pane(window, cx);
+        }
         cx.notify();
     }
 }

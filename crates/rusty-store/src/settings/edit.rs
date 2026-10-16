@@ -74,3 +74,19 @@ pub fn key_line(text: &str, key: &str) -> Option<usize> {
     let start = table.key(name)?.span()?.start;
     Some(text.get(..start)?.matches('\n').count() + 1)
 }
+
+impl super::Settings {
+    #[must_use]
+    pub fn value_at(&self, key: &str) -> Option<SettingValue> {
+        let root = toml::Value::try_from(self).ok()?;
+        let found = key
+            .split('.')
+            .try_fold(&root, |table, part| table.get(part))?;
+        match found {
+            toml::Value::Boolean(flag) => Some(SettingValue::Bool(*flag)),
+            toml::Value::Integer(number) => Some(SettingValue::Integer(*number)),
+            toml::Value::String(text) => Some(SettingValue::Text(text.clone())),
+            _ => None,
+        }
+    }
+}
