@@ -29,6 +29,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::w;
 
 const ANSWER: Duration = Duration::from_secs(30);
+const POLL: Duration = Duration::from_millis(10);
 
 struct Fixture {
     dir: TempDir,
@@ -188,6 +189,10 @@ fn send_to_answers_within_the_budget() {
         other => format!("{other:?}"),
     };
     eprintln!("send to first answer: {kind} in {} ms", elapsed.as_millis());
+    let reopened = Instant::now();
+    drop(open(&service, vec![fixture.file("again.txt")]));
+    let round_trip = reopened.elapsed();
+    eprintln!("open after the fill: {} ms", round_trip.as_millis());
     assert!(
         matches!(submenu, Submenu::Filled(_) | Submenu::Loading),
         "{submenu:?}"
@@ -195,6 +200,10 @@ fn send_to_answers_within_the_budget() {
     assert!(
         elapsed < FILL_BUDGET * 4,
         "the first answer took {elapsed:?}"
+    );
+    assert!(
+        round_trip < Duration::from_secs(10),
+        "the next open took {round_trip:?}"
     );
 }
 
@@ -209,7 +218,7 @@ fn a_loading_submenu_fills_later() {
     let children = loop {
         match session.fill(&[position]).wait_timeout(ANSWER).unwrap() {
             Ok(Submenu::Filled(children)) => break children,
-            Ok(Submenu::Loading) if Instant::now() < deadline => std::thread::yield_now(),
+            Ok(Submenu::Loading) if Instant::now() < deadline => std::thread::sleep(POLL),
             other => panic!("Send to did not fill: {other:?}"),
         }
     };

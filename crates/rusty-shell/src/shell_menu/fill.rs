@@ -26,23 +26,6 @@ impl Slot {
             self.done.notify_all();
         }
     }
-
-    fn answer(&self, deadline: Instant, timeout: Duration) -> Option<FillResult> {
-        let now = Instant::now();
-        let until = now
-            .checked_add(timeout)
-            .map_or(deadline, |at| at.min(deadline));
-        let slot = self.result.lock().unwrap_or_else(PoisonError::into_inner);
-        let wait = until.saturating_duration_since(now);
-        let (slot, _) = self
-            .done
-            .wait_timeout_while(slot, wait, |result| result.is_none())
-            .unwrap_or_else(PoisonError::into_inner);
-        match slot.as_ref() {
-            Some(result) => Some(result.clone()),
-            None => (Instant::now() >= deadline).then_some(Ok(Submenu::Loading)),
-        }
-    }
 }
 
 pub(super) struct FillReply(Arc<Slot>);
@@ -63,31 +46,77 @@ impl Drop for FillReply {
 struct Asked {
     slot: Arc<Slot>,
     deadline: Instant,
+    give_up: Instant,
 }
 
 impl Asked {
+    fn answer(&self, timeout: Duration) -> Option<FillResult> {
+        let deadline = self.deadline;
+        let now = Instant::now();
+        let until = now
+            .checked_add(timeout)
+            .map_or(deadline, |at| at.min(deadline));
+        let slot = self
+            .slot
+            .result
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let wait = until.saturating_duration_since(now);
+        let (slot, _) = self
+            .slot
+            .done
+            .wait_timeout_while(slot, wait, |result| result.is_none())
+            .unwrap_or_else(PoisonError::into_inner);
+        match slot.as_ref() {
+            Some(result) => Some(result.clone()),
+            None if Instant::now() >= self.give_up => Some(Ok(Submenu::Failed)),
+            None => (Instant::now() >= deadline).then_some(Ok(Submenu::Loading)),
+        }
+    }
+
     fn pending(self) -> Pending<Submenu> {
-        Pending::polled(move |timeout| self.slot.answer(self.deadline, timeout))
+        Pending::polled(move |timeout| self.answer(timeout))
     }
 }
 
-#[derive(Default)]
-pub(super) struct Fills(Mutex<HashMap<Vec<usize>, Asked>>);
+pub(super) struct Fills {
+    asked: Mutex<HashMap<Vec<usize>, Asked>>,
+    limit: Duration,
+}
+
+impl Default for Fills {
+    fn default() -> Self {
+        Self {
+            asked: Mutex::default(),
+            limit: BACKGROUND_LIMIT,
+        }
+    }
+}
 
 impl Fills {
+    #[cfg(test)]
+    fn with_limit(limit: Duration) -> Self {
+        Self {
+            asked: Mutex::default(),
+            limit,
+        }
+    }
+
     pub(super) fn ask(
         &self,
         path: Vec<usize>,
         send: impl FnOnce(Vec<usize>, FillReply),
     ) -> Pending<Submenu> {
-        let mut asked = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut asked = self.asked.lock().unwrap_or_else(PoisonError::into_inner);
         let entry = match asked.entry(path) {
             Entry::Occupied(entry) => entry.get().clone(),
             Entry::Vacant(entry) => {
                 let path = entry.key().clone();
+                let deadline = Instant::now() + FILL_BUDGET;
                 let fresh = Asked {
                     slot: Arc::default(),
-                    deadline: Instant::now() + FILL_BUDGET,
+                    deadline,
+                    give_up: deadline + self.limit,
                 };
                 entry.insert(fresh.clone());
                 send(path, FillReply(fresh.slot.clone()));

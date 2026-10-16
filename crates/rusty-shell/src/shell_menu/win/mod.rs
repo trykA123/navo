@@ -10,17 +10,15 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
+use std::time::Instant;
 
 use rusty_core::shell_menu::Submenu;
 use windows::Win32::Foundation::HWND;
 
 use super::fill::Fills;
-use super::station::BusySince;
+use super::station::{self, BusySince};
 use super::{InvokeOptions, MenuError, MenuSession, Pending, ScreenPoint, WindowHandle};
 use worker::Request;
-
-const HUNG_AFTER: Duration = Duration::from_secs(2);
 
 fn shell_error(context: &'static str) -> impl Fn(windows::core::Error) -> MenuError {
     move |error| MenuError::Shell {
@@ -74,8 +72,7 @@ impl Worker {
     }
 
     fn is_hung(&self) -> bool {
-        let busy = self.busy.lock().unwrap_or_else(PoisonError::into_inner);
-        busy.is_some_and(|since| since.elapsed() > HUNG_AFTER)
+        station::is_hung(&self.busy, Instant::now())
     }
 }
 

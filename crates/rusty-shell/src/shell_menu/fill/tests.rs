@@ -124,3 +124,47 @@ fn a_dropped_background_fill_answers_stopped() {
     let answer = fills.ask(vec![2], |_, _| {}).wait_timeout(Duration::ZERO);
     assert_eq!(answer, Some(Err(MenuError::Stopped)));
 }
+
+fn poll_until_settled(
+    pending: &crate::shell_menu::Pending<Submenu>,
+    within: Duration,
+) -> Option<Result<Submenu, MenuError>> {
+    let stop = Instant::now() + within;
+    loop {
+        let answer = pending.wait_timeout(Duration::ZERO);
+        if !matches!(answer, None | Some(Ok(Submenu::Loading))) || Instant::now() >= stop {
+            return answer;
+        }
+        std::thread::sleep(POLL);
+    }
+}
+
+#[test]
+fn a_fill_the_worker_never_answers_fails_after_the_limit() {
+    let (fills, kept) = (
+        Fills::with_limit(Duration::from_millis(50)),
+        Mutex::default(),
+    );
+    let pending = ask_and_keep(&fills, &kept);
+    assert_eq!(
+        pending.wait_timeout(FILL_BUDGET * 4),
+        Some(Ok(Submenu::Loading))
+    );
+    assert_eq!(
+        poll_until_settled(&pending, Duration::from_secs(2)),
+        Some(Ok(Submenu::Failed))
+    );
+    assert_eq!(kept.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_late_answer_still_wins_over_the_backstop() {
+    let (fills, kept) = (Fills::with_limit(Duration::ZERO), Mutex::default());
+    assert_eq!(ask_and_keep(&fills, &kept).wait(), Ok(Submenu::Failed));
+    kept.lock().unwrap()[0].send(Ok(Submenu::Filled(Vec::new())));
+    let again = fills.ask(vec![2], |_, _| panic!("the fill was sent twice"));
+    assert_eq!(
+        again.wait_timeout(Duration::ZERO),
+        Some(Ok(Submenu::Filled(Vec::new())))
+    );
+}
