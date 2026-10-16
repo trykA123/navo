@@ -6174,6 +6174,11 @@ dependencies = [
 [[package]]
 name = "rusty-cache"
 version = "0.0.1"
+dependencies = [
+ "proptest",
+ "rusty-core",
+ "rusty-fs",
+]
 
 [[package]]
 name = "rusty-core"
