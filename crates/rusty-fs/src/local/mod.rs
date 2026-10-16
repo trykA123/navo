@@ -9,9 +9,11 @@ use windows as platform;
 mod ops;
 #[cfg(any(windows, test))]
 mod verbatim;
+#[cfg(windows)]
+mod win_list;
 
 use std::ffi::OsStr;
-use std::fs::{self, DirEntry, Metadata, ReadDir};
+use std::fs::{self, DirEntry, Metadata};
 use std::io;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
@@ -23,9 +25,13 @@ use crate::{CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink,
 
 const DEFAULT_BATCH: usize = 512;
 
+type Children<'a> = Box<dyn Iterator<Item = Result<FsEntry, FsError>> + 'a>;
+
 #[derive(Debug, Clone)]
 pub struct LocalFs {
     batch_size: usize,
+    #[cfg(windows)]
+    std_listing: bool,
 }
 
 impl LocalFs {
@@ -33,36 +39,42 @@ impl LocalFs {
     pub fn new() -> Self {
         Self {
             batch_size: DEFAULT_BATCH,
+            #[cfg(windows)]
+            std_listing: false,
         }
     }
 
     #[must_use]
-    pub fn with_batch_size(self, size: usize) -> Self {
+    pub fn with_batch_size(mut self, size: usize) -> Self {
+        self.batch_size = size.max(1);
+        self
+    }
+
+    #[must_use]
+    pub fn with_std_listing(self) -> Self {
         Self {
-            batch_size: size.max(1),
+            #[cfg(windows)]
+            std_listing: true,
+            ..self
         }
     }
 
-    fn read_batch(
-        &self,
-        children: &mut Peekable<ReadDir>,
-        folder: &Location,
-    ) -> Result<Vec<FsEntry>, FsError> {
-        let mut entries = Vec::with_capacity(self.batch_size.min(DEFAULT_BATCH));
-        while entries.len() < self.batch_size {
-            let Some(child) = children.next() else {
-                break;
-            };
-            let child = child.map_err(|e| io_error(&e, folder))?;
-            let name = child.file_name();
-            let found = match child.metadata() {
-                Ok(metadata) => Some(entry(platform::entry_name(&name), &name, &metadata)),
-                Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-                Err(_) => bare_entry(&child, &name),
-            };
-            entries.extend(found.map(|found| followed(found, &child.path())));
+    fn children<'a>(&self, path: &Path, folder: &'a Location) -> Result<Children<'a>, FsError> {
+        #[cfg(windows)]
+        if !self.std_listing {
+            let children = win_list::open(path).map_err(|e| open_failure(&e, path, folder))?;
+            return Ok(Box::new(
+                children.map(move |child| child.map_err(|e| io_error(&e, folder))),
+            ));
         }
-        Ok(entries)
+        let children = fs::read_dir(path).map_err(|e| open_failure(&e, path, folder))?;
+        Ok(Box::new(
+            children.filter_map(move |child| std_entry(child, folder)),
+        ))
+    }
+
+    fn read_batch(&self, children: &mut Peekable<Children<'_>>) -> Result<Vec<FsEntry>, FsError> {
+        children.by_ref().take(self.batch_size).collect()
     }
 }
 
@@ -88,9 +100,9 @@ impl Provider for LocalFs {
         cancel: &CancelToken,
     ) -> Result<(), FsError> {
         let path = os_path(folder)?;
-        let mut children = open_dir(&path, folder)?.peekable();
+        let mut children = self.children(&path, folder)?.peekable();
         loop {
-            let entries = self.read_batch(&mut children, folder)?;
+            let entries = self.read_batch(&mut children)?;
             let last = children.peek().is_none();
             if cancel.is_cancelled() {
                 return Err(error(FsErrorKind::Cancelled, folder));
@@ -119,16 +131,28 @@ pub fn os_path(location: &Location) -> Result<PathBuf, FsError> {
     platform::os_path(location.path()).ok_or_else(|| error(FsErrorKind::NameInvalid, location))
 }
 
-fn open_dir(path: &Path, folder: &Location) -> Result<ReadDir, FsError> {
-    fs::read_dir(path).map_err(|e| {
-        let mut failure = io_error(&e, folder);
-        if failure.kind == FsErrorKind::NotFound
-            && fs::symlink_metadata(path).is_ok_and(|m| m.is_file())
-        {
-            failure.kind = FsErrorKind::NameInvalid;
-        }
-        failure
-    })
+fn open_failure(failure: &io::Error, path: &Path, folder: &Location) -> FsError {
+    let mut failure = io_error(failure, folder);
+    if failure.kind == FsErrorKind::NotFound
+        && fs::symlink_metadata(path).is_ok_and(|m| m.is_file())
+    {
+        failure.kind = FsErrorKind::NameInvalid;
+    }
+    failure
+}
+
+fn std_entry(child: io::Result<DirEntry>, folder: &Location) -> Option<Result<FsEntry, FsError>> {
+    let child = match child {
+        Ok(child) => child,
+        Err(e) => return Some(Err(io_error(&e, folder))),
+    };
+    let name = child.file_name();
+    let found = match child.metadata() {
+        Ok(metadata) => entry(platform::entry_name(&name), &name, &metadata),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return None,
+        Err(_) => bare_entry(&child, &name)?,
+    };
+    Some(Ok(followed(found, &child.path())))
 }
 
 fn entry(name: ProviderPath, os_name: &OsStr, metadata: &Metadata) -> FsEntry {

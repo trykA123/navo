@@ -17,6 +17,9 @@ thiserror = "2.0.21"
 trash = "5.2.9"
 zip = { version = "=9.0.3", default-features = false, features = ["deflate-flate2"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 lzma-rust2 = { version = "=0.22.0", default-features = false, features = ["encoder", "std", "xz"] }
 proptest = "1.12.0"

@@ -7,7 +7,7 @@ fn os_path_of(text: &str) -> PathBuf {
     os_path(&Location::new(text).unwrap()).unwrap()
 }
 
-fn attrib(flag: &str, path: &Path) {
+pub(super) fn attrib(flag: &str, path: &Path) {
     let status = Command::new("attrib").arg(flag).arg(path).status().unwrap();
     assert!(status.success(), "attrib {flag} failed");
 }
