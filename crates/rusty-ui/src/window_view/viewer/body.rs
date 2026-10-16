@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use gpui_kit::{AnyView, FocusHandle};
+use gpui_kit::{Action, AnyView, FocusHandle};
 use rusty_core::Location;
 use rusty_core::marks::{Bookmarks, MarkSet};
 
@@ -40,6 +40,12 @@ pub enum BodyAct {
     StepBookmark { backward: bool },
     LineEnds,
     Follow,
+}
+
+pub enum MenuEntry {
+    Run(&'static str, Box<dyn Action>),
+    Submenu(&'static str, Vec<MenuEntry>),
+    Break,
 }
 
 pub struct Attach {
@@ -85,6 +91,14 @@ pub trait ViewerBody: Any {
     fn act(&self, _: BodyAct, _: &mut Window, _: &mut App) {}
 
     fn carry(&self, _: &App) -> Option<Carried> {
+        None
+    }
+
+    fn menu(&self, _by_pointer: bool, _: &mut App) -> Vec<MenuEntry> {
+        Vec::new()
+    }
+
+    fn menu_anchor(&self, _: &App) -> Option<Point<Pixels>> {
         None
     }
 }

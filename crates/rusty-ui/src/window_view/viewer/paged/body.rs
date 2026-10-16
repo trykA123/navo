@@ -5,8 +5,10 @@ use gpui_kit::{AnyView, FocusHandle, Focusable};
 use super::{PagedKind, PagedView};
 use crate::prelude::*;
 use crate::window_view::viewer::Paged;
-use crate::window_view::viewer::body::{BodyAct, BodyKeys, Carried, Host, ViewerBody};
+use crate::window_view::viewer::body::{BodyAct, BodyKeys, Carried, Host, MenuEntry, ViewerBody};
+use crate::window_view::viewer::menu::marking_entries;
 use crate::window_view::viewer::search::memory::MemoryLink;
+use crate::window_view::viewer::{OpenGoTo, ShowHex, ToggleFollow};
 
 pub(in crate::window_view::viewer) struct PagedBody(pub Entity<PagedView>);
 
@@ -60,6 +62,20 @@ impl ViewerBody for PagedBody {
     fn find_again(&self, backward: bool, window: &mut Window, cx: &mut App) {
         self.0
             .update(cx, |paged, cx| paged.find_again(backward, window, cx));
+    }
+
+    fn menu(&self, _: bool, cx: &mut App) -> Vec<MenuEntry> {
+        let is_text = self.0.read(cx).kind == PagedKind::Text;
+        let mut entries = marking_entries();
+        entries.push(MenuEntry::Break);
+        if is_text {
+            entries.push(MenuEntry::Run("Go to line", Box::new(OpenGoTo)));
+        }
+        entries.push(MenuEntry::Run("Follow", Box::new(ToggleFollow)));
+        if is_text {
+            entries.push(MenuEntry::Run("Open as Hex", Box::new(ShowHex)));
+        }
+        entries
     }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {

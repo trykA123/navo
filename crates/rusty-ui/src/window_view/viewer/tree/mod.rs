@@ -14,7 +14,7 @@ use rusty_structured::{NodeId, Outline, ParseError, Step, Tree};
 pub(super) use keys::bind_keys;
 
 use super::background::Job;
-use super::body::{BodyKeys, Host, ViewerBody};
+use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
 
@@ -212,6 +212,13 @@ impl ViewerBody for TreeBody {
     }
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
+
+    fn menu(&self, _: bool, cx: &mut App) -> Vec<MenuEntry> {
+        match self.0.read(cx).state {
+            TreeState::Ready(_) => keys::menu_entries(),
+            _ => Vec::new(),
+        }
+    }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {
         self.0.update(cx, |view, cx| view.set_note(note, cx));

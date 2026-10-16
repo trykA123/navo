@@ -19,6 +19,7 @@ use crate::structured_sample::{
     self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
 };
 use crate::tokens_page;
+use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::{NARROW, SheetShows, WIDE, WindowPage, window_element};
 use crate::{rich_sample, viewer_sample};
 
@@ -64,6 +65,7 @@ pub struct Gallery {
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
     menus: [(Page, Entity<MenuPage>); 4],
+    viewer_menus: [Entity<ViewerMenuPage>; 2],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     alt_window: Entity<WindowPage>,
@@ -95,6 +97,8 @@ impl Gallery {
             marks: None,
             image: image_sample::image_view(cx).ok(),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
+            viewer_menus: [ViewerMenuShows::Text, ViewerMenuShows::Tree]
+                .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
             main_window: cx.new(|cx| WindowPage::new(None, false, cx)),
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), false, cx)),
             alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), false, cx)),
@@ -310,6 +314,7 @@ impl Render for Gallery {
             Page::Menu | Page::MenuSubmenu | Page::MenuFilter | Page::MenuFiles => {
                 root.children(self.menu_page(self.page))
             }
+            Page::ViewerMenuText | Page::ViewerMenuTree => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree | Page::Table | Page::Markdown => match self.sample() {
                 Some(body) => root
@@ -334,6 +339,14 @@ impl Render for Gallery {
 }
 
 impl Gallery {
+    fn viewer_menu(&self) -> Option<Entity<ViewerMenuPage>> {
+        match self.page {
+            Page::ViewerMenuText => Some(self.viewer_menus[0].clone()),
+            Page::ViewerMenuTree => Some(self.viewer_menus[1].clone()),
+            _ => None,
+        }
+    }
+
     fn menu_page(&self, page: Page) -> Option<Entity<MenuPage>> {
         self.menus
             .iter()

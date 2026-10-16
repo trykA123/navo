@@ -4,6 +4,7 @@ use rusty_structured::{Outline, Step, Tree};
 use super::{TreeState, TreeView};
 use crate::file_list::typed_char;
 use crate::prelude::*;
+use crate::window_view::viewer::body::MenuEntry;
 use crate::window_view::viewer::{
     Back, GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ScrollLeft, ScrollRight,
 };
@@ -67,6 +68,27 @@ pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-8", FoldDepth8, context),
         KeyBinding::new("ctrl-9", FoldDepth9, context),
     ]);
+}
+
+pub(super) fn menu_entries() -> Vec<MenuEntry> {
+    let depths: Vec<MenuEntry> = vec![
+        MenuEntry::Run("1", Box::new(FoldDepth1)),
+        MenuEntry::Run("2", Box::new(FoldDepth2)),
+        MenuEntry::Run("3", Box::new(FoldDepth3)),
+        MenuEntry::Run("4", Box::new(FoldDepth4)),
+        MenuEntry::Run("5", Box::new(FoldDepth5)),
+        MenuEntry::Run("6", Box::new(FoldDepth6)),
+        MenuEntry::Run("7", Box::new(FoldDepth7)),
+        MenuEntry::Run("8", Box::new(FoldDepth8)),
+        MenuEntry::Run("9", Box::new(FoldDepth9)),
+    ];
+    vec![
+        MenuEntry::Run("Copy path", Box::new(CopyPath)),
+        MenuEntry::Break,
+        MenuEntry::Run("Fold branch", Box::new(CloseSubtree)),
+        MenuEntry::Run("Fold all", Box::new(CloseAll)),
+        MenuEntry::Submenu("Depth", depths),
+    ]
 }
 
 fn reshape_on<A: Action>(

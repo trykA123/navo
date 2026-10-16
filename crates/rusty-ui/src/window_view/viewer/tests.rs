@@ -10,6 +10,7 @@ mod lister;
 mod markdown;
 mod marks;
 mod memory;
+mod menu;
 mod moves;
 mod open;
 mod save;

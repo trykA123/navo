@@ -244,7 +244,7 @@ impl ContextMenu {
 
     fn footer(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
         let text = hint(&self.state);
-        let classic = (!self.state.is_filtering()).then(|| {
+        let classic = (self.has_classic && !self.state.is_filtering()).then(|| {
             div()
                 .id("menu-classic")
                 .role(Role::Button)

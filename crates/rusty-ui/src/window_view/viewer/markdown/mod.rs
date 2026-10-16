@@ -8,13 +8,14 @@ use std::rc::Rc;
 
 use gpui_kit::base::{Scrollbar, ScrollbarMode};
 use gpui_kit::{
-    AnyView, FocusHandle, KeyBinding, ListAlignment, ListOffset, ListState, Stateful, list,
+    AnyView, FocusHandle, KeyBinding, ListAlignment, ListOffset, ListState, MouseButton, Stateful,
+    list,
 };
 use rusty_core::Location;
 use rusty_structured::markdown::Document;
 
 use super::background::{Job, spawn_job};
-use super::body::{BodyKeys, Host, ViewerBody};
+use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
 use super::rich_header::{HeaderParts, header};
 use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
 use crate::prelude::*;
@@ -57,6 +58,7 @@ pub(super) struct MarkdownView {
     doc: Rc<Document>,
     list: ListState,
     picked: Option<u32>,
+    pointed: Option<u32>,
     note: Option<SharedString>,
     checking: Option<Job>,
     #[cfg(test)]
@@ -76,6 +78,7 @@ impl MarkdownView {
             doc: Rc::new(file.doc),
             list: ListState::new(count, ListAlignment::Top, px(OVERDRAW)),
             picked: None,
+            pointed: None,
             note,
             checking: None,
             #[cfg(test)]
@@ -95,6 +98,7 @@ impl MarkdownView {
 
     pub(super) fn click_link(&mut self, link: u32, opens: bool, cx: &mut Context<Self>) {
         self.picked = Some(link);
+        self.pointed = Some(link);
         if opens {
             self.follow_picked(cx);
         } else {
@@ -230,7 +234,11 @@ impl Render for MarkdownView {
         let root = div()
             .id("markdown")
             .key_context(CONTEXT)
-            .track_focus(&self.focus);
+            .track_focus(&self.focus)
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|view, _, _, _| view.pointed = None),
+            );
         Self::keys(root, cx)
             .flex()
             .flex_col()
@@ -296,6 +304,16 @@ impl ViewerBody for MarkdownBody {
     }
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
+
+    fn menu(&self, by_pointer: bool, cx: &mut App) -> Vec<MenuEntry> {
+        let link = self.0.update(cx, |view, _| {
+            let pointed = view.pointed.take();
+            if by_pointer { pointed } else { view.picked }
+        });
+        link.map(|_| MenuEntry::Run("Open link", Box::new(OpenLink)))
+            .into_iter()
+            .collect()
+    }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {
         self.0.update(cx, |view, cx| view.say(note, cx));

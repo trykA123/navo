@@ -12,7 +12,7 @@ use rusty_structured::table::{Dialect, MAX_COLUMNS, Table, column_widths};
 pub(super) use keys::bind_keys;
 
 use super::background::Job;
-use super::body::{BodyKeys, Host, ViewerBody};
+use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
 use rows::{Indexed, Rows};
@@ -151,6 +151,10 @@ impl ViewerBody for TableBody {
     }
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
+
+    fn menu(&self, _: bool, _: &mut App) -> Vec<MenuEntry> {
+        keys::menu_entries()
+    }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {
         self.0.update(cx, |view, cx| view.set_note(note, cx));

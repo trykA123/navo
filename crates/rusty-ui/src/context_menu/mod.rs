@@ -57,6 +57,7 @@ pub struct ContextMenu {
     opened: Instant,
     origin: Point<Pixels>,
     grow: Option<Grow>,
+    has_classic: bool,
     _field: Subscription,
     _release: Subscription,
 }
@@ -94,6 +95,7 @@ impl ContextMenu {
             opened: cx.background_executor().now(),
             origin,
             grow: None,
+            has_classic: true,
             context: input.context,
             bounds: input.bounds,
             field,
@@ -109,6 +111,11 @@ impl ContextMenu {
 
     pub fn menu(&self) -> &ShellMenu {
         self.state.menu()
+    }
+
+    pub fn hide_classic(&mut self, cx: &mut Context<Self>) {
+        self.has_classic = false;
+        cx.notify();
     }
 
     pub fn query(&self, cx: &App) -> SharedString {

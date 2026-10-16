@@ -78,6 +78,7 @@ impl EditorView {
                 .default_value(text);
             state.set_readonly(true, cx);
             state.set_searchable(false, cx);
+            state.set_context_menu_enabled(false);
             state
         });
         let decorations = editor.update(cx, |state, cx| {

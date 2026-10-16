@@ -17,6 +17,7 @@ mod sheet_sample;
 mod structured_sample;
 mod tokens_page;
 mod tokens_sample;
+mod viewer_menu_page;
 mod viewer_sample;
 mod window_page;
 
@@ -65,6 +66,7 @@ fn main() -> ExitCode {
         rusty_ui::confirm_dialog::bind_keys(cx);
         rusty_ui::context_menu::bind_keys(cx);
         rusty_ui::pane_chrome::bind_keys(cx);
+        rusty_ui::window_view::bind_viewer_keys(cx);
         let opened = rusty_ui::open_window(window_options(cx), cx, |window, cx| {
             cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         });

@@ -94,7 +94,9 @@ impl MenuSession {
     pub fn invoke(&self, id: &ItemId, options: InvokeOptions) -> Pending<()> {
         match id {
             ItemId::Shell { command, verb } => self.handle.invoke(*command, verb.clone(), options),
-            ItemId::Ferrite(_) => Pending::ready(Err(MenuError::NotShellCommand)),
+            ItemId::Ferrite(_) | ItemId::Action(_) => {
+                Pending::ready(Err(MenuError::NotShellCommand))
+            }
         }
     }
 

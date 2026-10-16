@@ -61,6 +61,7 @@ gpui_kit::actions!(
         ZoomIn,
         ZoomOut,
         ToggleInfo,
+        ShowMenu,
     ]
 );
 
@@ -94,6 +95,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-f", OpenFind, context),
         KeyBinding::new("ctrl-g", OpenGoTo, context),
         KeyBinding::new("alt-c", MatchCase, context),
+        KeyBinding::new("menu", ShowMenu, context),
+        KeyBinding::new("shift-f10", ShowMenu, context),
         KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
         KeyBinding::new("home", GoStart, Some(archive::CONTEXT)),
         KeyBinding::new("end", GoEnd, Some(archive::CONTEXT)),

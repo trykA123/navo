@@ -2,6 +2,7 @@ use gpui_kit::{ClipboardItem, KeyBinding, Stateful};
 
 use super::TableView;
 use crate::prelude::*;
+use crate::window_view::viewer::body::MenuEntry;
 use crate::window_view::viewer::{
     GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ScrollLeft, ScrollRight,
 };
@@ -22,6 +23,15 @@ pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-c", CopyRow, context),
         KeyBinding::new("ctrl-f3", SortColumn, context),
     ]);
+}
+
+pub(super) fn menu_entries() -> Vec<MenuEntry> {
+    vec![
+        MenuEntry::Run("Copy cell", Box::new(CopyCell)),
+        MenuEntry::Run("Copy row", Box::new(CopyRow)),
+        MenuEntry::Break,
+        MenuEntry::Run("Sort by this column", Box::new(SortColumn)),
+    ]
 }
 
 fn step(at: usize, by: i64, len: usize) -> usize {

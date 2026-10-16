@@ -1,12 +1,17 @@
 use std::any::Any;
 
+use gpui_kit::component::input::{Copy, Cut, Paste, SelectAll};
 use gpui_kit::{AnyView, FocusHandle, Focusable};
 
 use super::EditorView;
 use crate::prelude::*;
 use crate::window_view::viewer::FileText;
-use crate::window_view::viewer::body::{BodyAct, BodyKeys, Carried, Host, Key, ViewerBody};
+use crate::window_view::viewer::body::{
+    BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody,
+};
+use crate::window_view::viewer::menu::marking_entries;
 use crate::window_view::viewer::search::bar::{FIND_KEYS, LIST_KEYS, MARK_KEYS};
+use crate::window_view::viewer::{ShowHex, ToggleFollow};
 
 pub(in crate::window_view::viewer) struct EditorFile {
     pub file: FileText,
@@ -80,6 +85,34 @@ impl ViewerBody for EditorBody {
                 .then(|| view.marking.carried_bookmarks())
                 .flatten(),
         })
+    }
+
+    fn menu(&self, _: bool, cx: &mut App) -> Vec<MenuEntry> {
+        let editing = self.0.read(cx).editing;
+        let mut entries = Vec::new();
+        if editing {
+            entries.push(MenuEntry::Run("Cut", Box::new(Cut)));
+        }
+        entries.push(MenuEntry::Run("Copy", Box::new(Copy)));
+        if editing {
+            entries.push(MenuEntry::Run("Paste", Box::new(Paste)));
+        }
+        entries.push(MenuEntry::Run("Select all", Box::new(SelectAll)));
+        entries.push(MenuEntry::Break);
+        entries.extend(marking_entries());
+        entries.push(MenuEntry::Break);
+        if !editing {
+            entries.push(MenuEntry::Run("Follow", Box::new(ToggleFollow)));
+        }
+        entries.push(MenuEntry::Run("Open as Hex", Box::new(ShowHex)));
+        entries
+    }
+
+    fn menu_anchor(&self, cx: &App) -> Option<Point<Pixels>> {
+        let state = self.0.read(cx).editor.read(cx);
+        let cursor = state.cursor();
+        let bounds = state.range_to_bounds(&(cursor..cursor))?;
+        Some(bounds.bottom_left())
     }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {
