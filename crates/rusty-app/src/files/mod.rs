@@ -23,6 +23,7 @@ pub fn hooks() -> FileHooks {
         head: Arc::new(paged::head),
         paged: Arc::new(paged::paged),
         bytes: Arc::new(bytes),
+        ..FileHooks::none()
     }
 }
 

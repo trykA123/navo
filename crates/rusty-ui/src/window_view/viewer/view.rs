@@ -70,7 +70,8 @@ impl FerriteWindow {
             .track_focus(&viewer.focus)
             .on_action(save)
             .on_action(close);
-        let root = Self::lister_actions(Self::slot_actions(root, cx), cx)
+        let root = Self::lister_actions(Self::slot_actions(root, cx), cx);
+        let root = Self::marking_actions(root, cx)
             .flex()
             .flex_col()
             .flex_1()

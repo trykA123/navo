@@ -1,0 +1,200 @@
+use gpui_kit::component::input::{EditorState, InputEvent};
+use gpui_kit::{Focusable, Subscription};
+use rusty_core::paging::Needle;
+
+use super::EditorView;
+use crate::prelude::*;
+use crate::primitives::{TextFieldState, text_field_state};
+use crate::window_view::viewer::search::count::{count_label, count_search};
+use crate::window_view::viewer::search::find_all::open_find_all;
+use crate::window_view::viewer::search::history::{NeedleKind, Recall};
+
+const TYPE_FIRST: &str = "Type the text to find.";
+const NOT_FOUND: &str = "Not found.";
+
+pub(super) struct FindBar {
+    pub input: Entity<TextFieldState>,
+    pub error: Option<SharedString>,
+    _enter: Subscription,
+}
+
+#[derive(Default)]
+pub(super) struct EditorFind {
+    pub bar: Option<FindBar>,
+    pub last: Option<String>,
+    pub match_case: bool,
+    pub hit: Option<u64>,
+}
+
+fn find_in_editor(state: &mut EditorState, backward: bool, cx: &mut Context<EditorState>) {
+    let session = state.search_session();
+    if session.query.is_empty() {
+        state.open_search(false, cx);
+        return;
+    }
+    let (query, case_insensitive) = (session.query.clone(), session.case_insensitive);
+    state.set_search_query(query, case_insensitive, cx);
+    let _ = if backward {
+        state.previous_search_match(cx)
+    } else {
+        state.next_search_match(cx)
+    };
+}
+
+fn step_search(
+    state: &mut EditorState,
+    query: (String, bool),
+    backward: bool,
+    cx: &mut Context<EditorState>,
+) -> Option<std::ops::Range<usize>> {
+    let (text, case_insensitive) = query;
+    let session = state.search_session();
+    let is_new = session.query != text || session.case_insensitive != case_insensitive;
+    state.set_search_query(text, case_insensitive, cx);
+    if backward {
+        return state.previous_search_match(cx);
+    }
+    if is_new {
+        let _ = state.previous_search_match(cx);
+    }
+    state.next_search_match(cx)
+}
+
+impl EditorView {
+    pub(super) fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.editing {
+            return cx.propagate();
+        }
+        if let Some(bar) = &self.find.bar {
+            let focus = bar.input.read(cx).focus_handle(cx);
+            return window.focus(&focus, cx);
+        }
+        let input = text_field_state("Text to find", window, cx);
+        let enter = cx.subscribe_in(&input, window, |view, _, event: &InputEvent, _, cx| {
+            if let InputEvent::PressEnter { shift, .. } = event {
+                view.submit_find(*shift, cx);
+            }
+        });
+        window.focus(&input.read(cx).focus_handle(cx), cx);
+        self.find.bar = Some(FindBar {
+            input,
+            error: None,
+            _enter: enter,
+        });
+        cx.notify();
+    }
+
+    pub(super) fn close_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(text) = self.typed(cx) {
+            self.find.last = Some(text);
+        }
+        self.find.bar = None;
+        let focus = self.editor.read(cx).focus_handle(cx);
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub(super) fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.find.bar.is_some() {
+            self.close_find(window, cx);
+        } else {
+            cx.propagate();
+        }
+    }
+
+    pub(super) fn typed(&self, cx: &App) -> Option<String> {
+        self.find
+            .bar
+            .as_ref()
+            .map(|bar| bar.input.read(cx).value().to_string())
+            .filter(|text| !text.is_empty())
+    }
+
+    pub(super) fn needle(&self, text: &str) -> Needle {
+        Needle::Text {
+            text: text.to_owned(),
+            match_case: self.find.match_case,
+        }
+    }
+
+    fn set_find_error(&mut self, error: Option<&str>, cx: &mut Context<Self>) {
+        if let Some(bar) = &mut self.find.bar {
+            bar.error = error.map(|error| SharedString::from(error.to_owned()));
+        }
+        cx.notify();
+    }
+
+    fn submit_find(&mut self, backward: bool, cx: &mut Context<Self>) {
+        match self.typed(cx) {
+            Some(text) => self.run_search(text, backward, cx),
+            None => self.set_find_error(Some(TYPE_FIRST), cx),
+        }
+    }
+
+    fn run_search(&mut self, text: String, backward: bool, cx: &mut Context<Self>) {
+        let needle = self.needle(&text);
+        self.find.last = Some(text.clone());
+        count_search(self, needle.clone(), cx);
+        self.marking.remember_search(&needle, cx);
+        let case_insensitive = !self.find.match_case;
+        let hit = self.editor.update(cx, |state, cx| {
+            step_search(state, (text, case_insensitive), backward, cx)
+        });
+        self.find.hit = hit.as_ref().map(|range| range.start as u64);
+        self.set_find_error(hit.is_none().then_some(NOT_FOUND), cx);
+    }
+
+    pub(super) fn find_again(
+        &mut self,
+        backward: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.editing {
+            return self
+                .editor
+                .update(cx, |state, cx| find_in_editor(state, backward, cx));
+        }
+        match self.typed(cx).or_else(|| self.find.last.clone()) {
+            Some(text) => self.run_search(text, backward, cx),
+            None => self.open_find(window, cx),
+        }
+    }
+
+    pub(super) fn toggle_case(&mut self, cx: &mut Context<Self>) {
+        self.find.match_case = !self.find.match_case;
+        cx.notify();
+    }
+
+    pub(super) fn recall(&mut self, older: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(input) = self.find.bar.as_ref().map(|bar| bar.input.clone()) else {
+            return;
+        };
+        let recall = Recall {
+            older,
+            kind: NeedleKind::Text,
+            input: &input,
+        };
+        let recalled = self.marking.history.recall_into(recall, window, cx);
+        if let Some(Some(match_case)) = recalled {
+            self.find.match_case = match_case;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn find_all_in_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(text) = self.typed(cx) else {
+            return self.set_find_error(Some(TYPE_FIRST), cx);
+        };
+        let needle = self.needle(&text);
+        self.find.last = Some(text);
+        self.marking.remember_search(&needle, cx);
+        self.set_find_error(None, cx);
+        open_find_all(self, needle, window, cx);
+    }
+
+    pub(super) fn count_text(&self) -> Option<SharedString> {
+        let counted = self.marking.counted()?;
+        Some(count_label(counted, self.find.hit).into())
+    }
+}

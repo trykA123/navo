@@ -3,7 +3,8 @@ use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
 use rusty_core::encoding::TextEncoding;
-use rusty_core::paging::{ByteSource, LineIndex};
+use rusty_core::marks::{Bookmarks, MarkSet, SearchHistory};
+use rusty_core::paging::{ByteSource, LineIndex, Needle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStamp {
@@ -67,6 +68,7 @@ pub struct Paged {
     pub index: IndexRun,
     pub summary: Option<String>,
     pub editable: bool,
+    pub stamp: Option<FileStamp>,
 }
 
 type Read = Arc<dyn Fn(&Location) -> Result<FileText, String> + Send + Sync>;
@@ -74,6 +76,10 @@ type Write =
     Arc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError> + Send + Sync>;
 type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
 type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
+type LoadMemory = Arc<dyn Fn(&Location, FileStamp) -> Option<(MarkSet, Bookmarks)> + Send + Sync>;
+type SaveMemory = Arc<dyn Fn(&Location, FileStamp, &MarkSet, &Bookmarks) + Send + Sync>;
+type LoadHistory = Arc<dyn Fn() -> SearchHistory + Send + Sync>;
+type Remember = Arc<dyn Fn(&Needle) + Send + Sync>;
 pub type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
 
 #[derive(Clone)]
@@ -82,6 +88,10 @@ pub struct FileHooks {
     pub write: Write,
     pub head: ReadHead,
     pub paged: OpenPaged,
+    pub memory: LoadMemory,
+    pub save_memory: SaveMemory,
+    pub history: LoadHistory,
+    pub remember: Remember,
     pub bytes: ReadBytes,
 }
 
@@ -95,6 +105,10 @@ impl FileHooks {
             }),
             head: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            memory: Arc::new(|_, _| None),
+            save_memory: Arc::new(|_, _, _, _| {}),
+            history: Arc::new(SearchHistory::default),
+            remember: Arc::new(|_| {}),
             bytes: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
         }
     }

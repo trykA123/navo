@@ -1,81 +1,14 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use futures::StreamExt;
-use gpui_kit::Task;
 use rusty_core::paging::{Found, LineIndex, Search, find};
 
 use super::PagedView;
 use crate::prelude::*;
 use crate::window_view::viewer::files::{IndexRun, Reopen, SharedSource};
+use crate::window_view::viewer::search::jobs::{Job, Throttle, spawn_job};
 
 const SEARCH_EVERY: Duration = Duration::from_millis(100);
 const INDEX_EVERY: Duration = Duration::from_millis(250);
-
-struct Cancel(Arc<AtomicBool>);
-
-impl Drop for Cancel {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-}
-
-pub(super) struct Job {
-    _cancel: Cancel,
-    _task: Task<()>,
-}
-
-struct Throttle {
-    last: Instant,
-    every: Duration,
-}
-
-impl Throttle {
-    fn new(every: Duration) -> Self {
-        Self {
-            last: Instant::now(),
-            every,
-        }
-    }
-
-    fn when_due(&mut self, action: impl FnOnce()) {
-        if self.last.elapsed() >= self.every {
-            self.last = Instant::now();
-            action();
-        }
-    }
-}
-
-fn spawn_job<M: Send + 'static>(
-    cx: &mut Context<PagedView>,
-    work: impl FnOnce(&AtomicBool, &dyn Fn(M)) + Send + 'static,
-    apply: impl Fn(&mut PagedView, M, &mut Context<PagedView>) + 'static,
-) -> Job {
-    let flag = Arc::new(AtomicBool::new(false));
-    let (sender, mut receiver) = futures::channel::mpsc::unbounded::<M>();
-    let worker_flag = flag.clone();
-    cx.background_spawn(async move {
-        work(&worker_flag, &|message| {
-            let _ = sender.unbounded_send(message);
-        });
-    })
-    .detach();
-    let task = cx.spawn(async move |this, cx| {
-        while let Some(message) = receiver.next().await {
-            if this
-                .update(cx, |view, cx| apply(view, message, cx))
-                .is_err()
-            {
-                break;
-            }
-        }
-    });
-    Job {
-        _cancel: Cancel(flag),
-        _task: task,
-    }
-}
 
 pub(super) struct IndexDone {
     pub result: Result<Option<LineIndex>, String>,
