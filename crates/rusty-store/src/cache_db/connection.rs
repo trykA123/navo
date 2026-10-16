@@ -31,7 +31,7 @@ pub(super) fn open(path: &Path) -> Result<(Connection, CacheOpen), CacheError> {
 fn open_checked(path: &Path) -> Result<Connection, rusqlite::Error> {
     let conn = Connection::open(path)?;
     conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true)?;
-    check_integrity(&conn)?;
+    read_header(&conn)?;
     conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, false)?;
     Ok(conn)
 }
@@ -43,18 +43,9 @@ fn is_corruption(error: &rusqlite::Error) -> bool {
     )
 }
 
-fn check_integrity(conn: &Connection) -> Result<(), rusqlite::Error> {
-    let mut statement = conn.prepare("PRAGMA quick_check")?;
-    let messages = statement
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
-    match messages.as_slice() {
-        [message] if message == "ok" => Ok(()),
-        _ => Err(rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
-            Some(messages.join("\n")),
-        )),
-    }
+fn read_header(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))
+        .map(drop)
 }
 
 fn quarantine(path: &Path) -> Result<PathBuf, io::Error> {

@@ -82,6 +82,7 @@ ttf-parser = { version = "=0.25.1", default-features = false, features = ["std"]
 
 [dev-dependencies]
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }
+tempfile = "3.27.0"
 
 [lints]
 workspace = true

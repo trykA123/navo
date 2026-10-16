@@ -1,8 +1,10 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::SystemTime;
 
+use rusty_core::Location;
+
 use crate::store::{SizedListing, Store, Swap};
-use crate::{CacheKey, CachedListing, Change};
+use crate::{CacheKey, CachedListing, Change, DiskListings};
 
 pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
 
@@ -19,6 +21,7 @@ pub struct CacheStats {
 #[derive(Clone)]
 pub struct ListingCache {
     store: Arc<Mutex<Store>>,
+    disk: Option<DiskListings>,
 }
 
 impl Default for ListingCache {
@@ -32,6 +35,7 @@ impl ListingCache {
     pub fn new(budget: usize) -> Self {
         Self {
             store: Arc::new(Mutex::new(Store::new(budget))),
+            disk: None,
         }
     }
 
@@ -65,6 +69,37 @@ impl ListingCache {
             }
         }
         self.lock().invalidate(key);
+    }
+
+    #[must_use]
+    pub fn with_disk(self, disk: DiskListings) -> Self {
+        Self {
+            disk: Some(disk),
+            ..self
+        }
+    }
+
+    pub(crate) fn put_absent(&self, key: CacheKey, listing: CachedListing) {
+        let entry = SizedListing::new(&key, listing);
+        let mut store = self.lock();
+        if store.peek(&key).is_none() {
+            store.put(key, entry);
+        }
+    }
+
+    pub fn keep_on_disk<'a>(&self, folders: impl IntoIterator<Item = &'a Location>) {
+        if let Some(disk) = &self.disk {
+            disk.keep_open(folders);
+        }
+    }
+
+    pub fn persist(&self, key: &CacheKey) {
+        let Some(disk) = &self.disk else {
+            return;
+        };
+        if let Some(listing) = self.lock().peek(key) {
+            disk.save_open(key, listing);
+        }
     }
 
     pub fn invalidate(&self, key: &CacheKey) {

@@ -4135,6 +4135,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4_flex"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecbdfe44b1bd960b68170b417450a628c43f7cf56bb3c5317e61cb230ee7f226"
+
+[[package]]
 name = "lzma-rust2"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6219,9 +6225,15 @@ dependencies = [
 name = "rusty-cache"
 version = "0.0.1"
 dependencies = [
+ "crc32fast",
+ "lz4_flex",
  "proptest",
  "rusty-core",
  "rusty-fs",
+ "rusty-store",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]
@@ -6372,6 +6384,7 @@ dependencies = [
  "rusty-core",
  "rusty-fs",
  "rusty-structured",
+ "tempfile",
  "tree-sitter",
  "tree-sitter-asm",
  "tree-sitter-batch",

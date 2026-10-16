@@ -62,3 +62,22 @@ fn home_falls_back_to_home_then_root() {
     let fallback = home_location(|_| None);
     assert!(fallback.as_str() == r"C:\" || fallback.as_str() == "/");
 }
+
+#[test]
+fn session_folders_are_every_tab_of_every_pane_once() {
+    let mut state = AppState::new(home());
+    let work = Location::new("/srv/work").unwrap();
+    let open = |location: &Location| Command::PaneOpenTab {
+        location: Some(location.clone()),
+    };
+    rusty_core::apply(&mut state, &open(&work)).unwrap();
+    rusty_core::apply(&mut state, &open(&home())).unwrap();
+    rusty_core::apply(
+        &mut state,
+        &Command::LayoutSplit {
+            direction: rusty_core::Direction::Right,
+        },
+    )
+    .unwrap();
+    assert_eq!(session_folders(&state), [home(), work]);
+}
