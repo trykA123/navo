@@ -94,7 +94,7 @@ fn all_items(items: &[MenuItem]) -> Vec<&MenuItem> {
 fn verb_of(item: &MenuItem) -> Option<&str> {
     match &item.id {
         ItemId::Shell { verb, .. } => verb.as_deref(),
-        ItemId::Ferrite(_) => None,
+        ItemId::Ferrite(_) | ItemId::Action(_) => None,
     }
 }
 
