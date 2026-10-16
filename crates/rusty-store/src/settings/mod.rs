@@ -39,6 +39,11 @@ pub struct LoadReport {
     pub error: Option<SettingsError>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Saved {
+    pub was_present: bool,
+}
+
 #[derive(Debug)]
 pub struct SettingsStore {
     path: PathBuf,
@@ -82,19 +87,20 @@ impl SettingsStore {
         }
     }
 
-    pub fn save(&mut self, key: &str, value: Option<SettingValue>) -> Result<(), SettingsError> {
+    pub fn save(&mut self, key: &str, value: Option<SettingValue>) -> Result<Saved, SettingsError> {
         let text = read(&self.path)?;
         if let Some(text) = &text {
             parse(text).map_err(|_| SettingsError::FileInvalid)?;
         }
         let text = text.unwrap_or_default();
+        let was_present = key_line(&text, key).is_some();
         let patched = edit::patch(&text, key, value)?;
         let (settings, _) = parse(&patched)?;
         if patched != text {
             self.write(&patched)?;
         }
         self.current = settings;
-        Ok(())
+        Ok(Saved { was_present })
     }
 }
 

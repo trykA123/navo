@@ -192,3 +192,20 @@ fn a_failed_change_does_not_stop_the_rest_of_the_batch() {
     assert_eq!(report.values.get(Field::FontSize), &Value::Number(13));
     assert_eq!(hooks(Some(&file)).values.theme(), ThemeChoice::Dark);
 }
+
+#[test]
+fn undo_of_a_key_that_was_not_in_the_file_removes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    let settings = hooks(Some(&file));
+    let report = (settings.save)(&[Change::theme(ThemeChoice::Dark)]);
+    assert_eq!(report.was_absent, [Field::Theme]);
+    let undo = Change {
+        field: Field::Theme,
+        value: Value::Unset,
+    };
+    let report = (settings.save)(&[undo]);
+    assert_eq!(report.values.theme(), ThemeChoice::System);
+    let text = fs::read_to_string(&file).unwrap();
+    assert!(!text.contains("mode"), "{text}");
+}

@@ -43,19 +43,19 @@ pub fn hooks(path: Option<&Path>) -> SettingsHooks {
 
 fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> SaveReport {
     let mut store = store.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut failed = Vec::new();
-    let mut error = None;
+    let mut report = SaveReport::saved(Values::default());
     for change in changes {
-        if let Err(problem) = store.save(change.key(), stored_value(change)) {
-            failed.push(change.field);
-            error = Some(describe(&problem));
+        match store.save(change.key(), stored_value(change)) {
+            Ok(saved) if !saved.was_present => report.was_absent.push(change.field),
+            Ok(_) => {}
+            Err(problem) => {
+                report.failed.push(change.field);
+                report.error = Some(describe(&problem));
+            }
         }
     }
-    SaveReport {
-        values: values_of(store.current()),
-        failed,
-        error,
-    }
+    report.values = values_of(store.current());
+    report
 }
 
 fn remember(session: &Mutex<Values>, changes: &[Change]) -> Values {
@@ -98,7 +98,7 @@ fn stored_value(change: &Change) -> Option<SettingValue> {
         (Value::Pick(at), Control::Choices(options, _)) => options
             .get(*at)
             .map(|option| SettingValue::Text(option.toml.to_owned())),
-        (Value::Pick(_), _) => None,
+        (Value::Pick(_) | Value::Unset, _) => None,
     }
 }
 

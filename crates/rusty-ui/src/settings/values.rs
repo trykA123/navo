@@ -15,6 +15,7 @@ pub enum Value {
     Pick(usize),
     Text(SharedString),
     Number(i64),
+    Unset,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -103,7 +104,10 @@ impl Values {
     #[must_use]
     pub fn with(&self, change: &Change) -> Self {
         let mut values = self.clone();
-        values.values[change.field.index()] = change.value.clone();
+        values.values[change.field.index()] = match &change.value {
+            Value::Unset => default_of(change.field.spec()),
+            value => value.clone(),
+        };
         values
     }
 

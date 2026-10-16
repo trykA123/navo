@@ -10,6 +10,7 @@ pub struct SaveReport {
     pub values: Values,
     pub failed: Vec<Field>,
     pub error: Option<String>,
+    pub was_absent: Vec<Field>,
 }
 
 impl SaveReport {
@@ -18,6 +19,7 @@ impl SaveReport {
             values,
             failed: Vec::new(),
             error: None,
+            was_absent: Vec::new(),
         }
     }
 }
@@ -50,8 +52,7 @@ impl Saver {
         self.pending.push(change);
     }
 
-    fn settle(&mut self, report: &SaveReport) {
-        let in_flight = std::mem::take(&mut self.in_flight);
+    fn settle(&mut self, report: &SaveReport, in_flight: &[Field]) {
         self.failed
             .retain(|field| !in_flight.contains(field) || report.failed.contains(field));
         for field in &report.failed {
@@ -105,6 +106,7 @@ impl FerriteWindow {
         }
         let changes = std::mem::take(&mut self.saver.pending);
         self.saver.in_flight = changes.iter().map(|change| change.field).collect();
+        self.settings.undo_sent(&self.saver.in_flight);
         self.saver.is_saving = true;
         let save = self.saver.save.clone();
         let task = cx
@@ -119,7 +121,9 @@ impl FerriteWindow {
 
     fn saved(&mut self, report: SaveReport, window: &mut Window, cx: &mut Context<Self>) {
         self.saver.is_saving = false;
-        self.saver.settle(&report);
+        let sent = std::mem::take(&mut self.saver.in_flight);
+        self.saver.settle(&report, &sent);
+        self.settings.undo_learned(&report, &sent);
         let fresh = self
             .saver
             .pending

@@ -1,5 +1,6 @@
 mod edit;
 mod locate;
+mod undo;
 
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -9,7 +10,9 @@ use rusty_core::Location;
 use super::FerriteWindow;
 use super::settings_save::{SaveReport, SaveSettings, Saver};
 use crate::prelude::*;
-use crate::settings::{Change, FIELDS, SettingsBody, SheetEvent, Values, rows_in, section_of};
+use crate::settings::{
+    Change, FIELDS, Field, SettingsBody, SheetEvent, Values, rows_in, section_of,
+};
 use crate::side_sheet::SheetState;
 use crate::tokens;
 
@@ -48,7 +51,7 @@ pub(super) struct SettingsPanel {
     scroll: ScrollHandle,
     is_open: bool,
     row: usize,
-    undo: Vec<Change>,
+    undo: undo::UndoStack,
     edit: Option<edit::TextEdit>,
     restore_preview: bool,
     notice: Option<SharedString>,
@@ -73,7 +76,7 @@ impl SettingsPanel {
             scroll: ScrollHandle::new(),
             is_open: false,
             row: 0,
-            undo: Vec::new(),
+            undo: undo::UndoStack::default(),
             edit: None,
             restore_preview: false,
             notice: None,
@@ -84,6 +87,14 @@ impl SettingsPanel {
 
     pub(super) fn is_open(&self) -> bool {
         self.is_open
+    }
+
+    pub(super) fn undo_sent(&mut self, fields: &[Field]) {
+        self.undo.sent(fields);
+    }
+
+    pub(super) fn undo_learned(&mut self, report: &SaveReport, sent: &[Field]) {
+        self.undo.learned(report, sent);
     }
 }
 

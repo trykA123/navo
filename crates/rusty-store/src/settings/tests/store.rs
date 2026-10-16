@@ -480,3 +480,14 @@ fn the_backup_keeps_the_file_from_before_this_session() {
     next.save(MODE, Some(text("light"))).unwrap();
     assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), session_two);
 }
+
+#[test]
+fn save_reports_whether_the_key_was_in_the_file() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let (mut store, _) = SettingsStore::load(&path);
+    let first = store.save(MODE, Some(text("dark"))).unwrap();
+    assert!(!first.was_present);
+    let second = store.save(MODE, Some(text("light"))).unwrap();
+    assert!(second.was_present);
+}

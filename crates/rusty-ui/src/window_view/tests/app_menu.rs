@@ -8,7 +8,7 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_panes};
 use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::browser::Operations;
-use crate::settings::{Change, Field, Values};
+use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
 use crate::window_view::{AppMenuHooks, SaveReport, SettingsHooks};
 
@@ -26,6 +26,7 @@ pub(super) struct FakeStore {
     pub results: Mutex<Vec<QuickSettings>>,
     pub failure: Mutex<Option<String>>,
     pub failing_field: Mutex<Option<Field>>,
+    pub present: Mutex<Vec<Field>>,
 }
 
 impl FakeStore {
@@ -39,11 +40,20 @@ impl FakeStore {
         let fails = |change: &Change| message.is_some() && only.is_none_or(|f| f == change.field);
         let mut stored = self.stored.lock().expect("stored");
         let mut failed = Vec::new();
+        let mut was_absent = Vec::new();
+        let mut present = self.present.lock().expect("present");
         for change in changes {
             if fails(change) {
                 failed.push(change.field);
-            } else {
-                *stored = stored.with(change);
+                continue;
+            }
+            *stored = stored.with(change);
+            if !present.contains(&change.field) {
+                was_absent.push(change.field);
+            }
+            present.retain(|field| *field != change.field);
+            if change.value != Value::Unset {
+                present.push(change.field);
             }
         }
         if failed.len() < changes.len() {
@@ -53,6 +63,7 @@ impl FakeStore {
             values: stored.clone(),
             error: (!failed.is_empty()).then(|| message.unwrap_or_default()),
             failed,
+            was_absent,
         }
     }
 }

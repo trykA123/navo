@@ -20,7 +20,7 @@ pub use session::{
     read_session_file, write_session,
 };
 pub use settings::{
-    Appearance, Density, Editor, Files, HiddenFiles, LoadReport, SelectionSettings, SettingValue,
-    Settings, SettingsError, SettingsStore, SortKey, Terminal, ThemeMode,
+    Appearance, Density, Editor, Files, HiddenFiles, LoadReport, Saved, SelectionSettings,
+    SettingValue, Settings, SettingsError, SettingsStore, SortKey, Terminal, ThemeMode,
     key_line as settings_key_line, parse as parse_settings, to_toml as settings_to_toml,
 };

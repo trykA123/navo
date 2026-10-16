@@ -219,6 +219,11 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
 #[gpui_kit::test]
 fn ctrl_z_undoes_the_last_change_and_saves_the_old_value(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
+    rig.store
+        .present
+        .lock()
+        .expect("present")
+        .push(Field::Density);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
     rig.press(cx, "left");
@@ -328,4 +333,45 @@ fn clicking_a_picture_picks_that_theme(cx: &mut TestAppContext) {
     rig.click(cx, ("settings-theme", 2usize));
     assert_eq!(last_change(&rig), Some(Change::theme(ThemeChoice::Dark)));
     assert_eq!(rig.mode(cx), tokens::Mode::Dark);
+}
+
+#[gpui_kit::test]
+fn undo_of_a_key_that_was_not_in_the_file_unsets_it(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::Density);
+    rig.press(cx, "left");
+    rig.press(cx, "right");
+    rig.press(cx, "ctrl-z");
+    let undo_once = Change::density(Density::Compact);
+    assert_eq!(last_change(&rig), Some(undo_once));
+    rig.press(cx, "ctrl-z");
+    let unset = Change {
+        field: Field::Density,
+        value: Value::Unset,
+    };
+    assert_eq!(last_change(&rig), Some(unset));
+    assert_eq!(density(cx), Density::Normal);
+}
+
+#[gpui_kit::test]
+fn undo_while_a_save_is_in_flight_writes_the_old_value(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::ShowSystem);
+    cx.update_window(rig.window, |_, window, cx| {
+        window.press("space", cx);
+        window.press("ctrl-z", cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    let off = Change {
+        field: Field::ShowSystem,
+        value: Value::Flag(false),
+    };
+    assert_eq!(last_change(&rig), Some(off));
+    let shown = rig
+        .view
+        .read_with(cx, |view, _| view.values.get(Field::ShowSystem).clone());
+    assert_eq!(shown, Value::Flag(false));
 }
