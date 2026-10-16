@@ -1,4 +1,4 @@
-use super::{at_work, cursor, entry, loc, marked, mixed, move_cursor, run};
+use super::{at_work, cursor, entry, loc, marked, mixed, move_cursor, navigate, run};
 use crate::{AppState, Command, CursorMove, Event, Listing, apply_event};
 
 fn names(state: &AppState) -> Vec<String> {
@@ -73,11 +73,20 @@ fn a_filtered_listing_for_another_folder_is_ignored() {
 }
 
 #[test]
-fn a_filtered_listing_while_a_load_is_pending_is_ignored() {
+fn a_filtered_listing_applies_to_rows_shown_while_a_load_is_pending() {
     let mut state = at_work(mixed());
     run(&mut state, Command::PaneRefresh);
     filter(&mut state, "/work", only(&["a.rs"]));
-    assert_eq!(names(&state).len(), 5);
+    assert_eq!(names(&state), ["a.rs"]);
+    assert!(state.active_tab().pending_request().is_some());
+}
+
+#[test]
+fn a_filtered_listing_before_any_rows_arrive_is_ignored() {
+    let mut state = at_work(mixed());
+    navigate(&mut state, "/work/docs");
+    filter(&mut state, "/work/docs", only(&["a.rs"]));
+    assert!(state.active_tab().listing().is_none());
 }
 
 #[test]

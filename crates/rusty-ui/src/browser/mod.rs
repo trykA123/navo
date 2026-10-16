@@ -1,15 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
+use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{
     AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location,
     ProviderPath, TabId, apply, apply_event, list_missing,
 };
 use rusty_fs::{
-    EntryKind, FolderSnapshot, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps,
-    load_folder, volume_of,
+    EntryKind, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps, volume_of,
 };
 
 pub use naming::NameProblem;
@@ -23,7 +23,7 @@ struct Loaded {
     tab: TabId,
     location: Location,
     request: u64,
-    result: Result<FolderSnapshot, FsError>,
+    result: Result<cached::Fresh, FsError>,
 }
 
 enum Message {
@@ -67,6 +67,11 @@ pub struct Browser {
     sorts: HashMap<TabId, crate::file_list::SortKey>,
     next_op: u64,
     launcher: Launcher,
+    cache: ListingCache,
+    keys: CacheKeys,
+    cached: HashMap<TabId, u64>,
+    pins: HashSet<rusty_cache::CacheKey>,
+    sorted: HashMap<TabId, Vec<cached::Sorted>>,
 }
 
 impl Browser {
@@ -101,6 +106,11 @@ impl Browser {
             sorts: HashMap::new(),
             next_op: 0,
             launcher: Arc::new(|_| {}),
+            cache: ListingCache::default(),
+            keys: CacheKeys::default(),
+            cached: HashMap::new(),
+            pins: HashSet::new(),
+            sorted: HashMap::new(),
         }
     }
 
@@ -247,14 +257,12 @@ impl Browser {
                 } => self.measure(tab, location, name),
             }
         }
+        self.sync_pins();
     }
 
     fn list(&mut self, tab: TabId, location: Location, request: u64) {
-        let (provider, sender, wake) = (
-            Arc::clone(&self.provider),
-            self.sender.clone(),
-            Arc::clone(&self.wake),
-        );
+        let fetch = self.fetch(tab, &location, request);
+        let (sender, wake) = (self.sender.clone(), Arc::clone(&self.wake));
         let slot = JobSlot {
             volume: volume_of(&location),
             priority: Priority::Visible,
@@ -264,7 +272,7 @@ impl Browser {
         self.queue.submit(
             slot,
             Box::new(move |cancel| {
-                let result = load_folder(provider.as_ref(), &location, cancel);
+                let result = fetch.run(cancel);
                 let _ = sender.send(Message::Loaded(Loaded {
                     tab,
                     location,
@@ -291,19 +299,12 @@ impl Browser {
             return false;
         }
         let listing = match result {
-            Ok(snapshot) => {
+            Ok(fresh) => {
                 match self.late_errors.remove(&tab) {
                     Some(error) => self.errors.insert(tab, error),
                     None => self.errors.remove(&tab),
                 };
-                let full = filter::Full {
-                    listing: snapshot.listing,
-                    details: snapshot.details.into(),
-                };
-                let full = self.sort_full(tab, full);
-                let (listing, details) = self.narrow(tab, &location, full);
-                self.details.insert(tab, details);
-                listing
+                self.fresh_listing(tab, &location, fresh)
             }
             Err(error) => {
                 self.errors.insert(tab, error);
@@ -318,6 +319,7 @@ impl Browser {
             request,
             listing,
         });
+        self.cached.remove(&tab);
         self.restore_focus(tab);
         true
     }
@@ -339,6 +341,7 @@ impl Browser {
     }
 }
 
+mod cached;
 mod filter;
 mod measure;
 mod naming;

@@ -12,6 +12,12 @@ use std::time::Duration;
 
 static PROBING: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VolumeIdentity {
+    Serial(u32),
+    Remote(String),
+}
+
 #[cfg(windows)]
 #[must_use]
 pub fn list_drives() -> Vec<Drive> {
@@ -69,6 +75,18 @@ pub fn drive_details(root: &str, timeout: Duration) -> Option<(Option<String>, O
         return None;
     }
     receiver.recv_timeout(timeout).ok()
+}
+
+#[cfg(windows)]
+#[must_use]
+pub fn volume_identity(letter: char) -> Option<VolumeIdentity> {
+    windows::identity(letter)
+}
+
+#[cfg(unix)]
+#[must_use]
+pub fn volume_identity(_letter: char) -> Option<VolumeIdentity> {
+    None
 }
 
 #[cfg(windows)]

@@ -11,6 +11,7 @@ use windows_sys::Win32::Storage::FileSystem::{
     GetDiskFreeSpaceExW, GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
 };
 
+use super::VolumeIdentity;
 use super::model::{DriveKind, RawDrives, Space};
 
 const NAME_LEN: usize = 261;
@@ -209,6 +210,29 @@ pub fn details(root: &str) -> (Option<String>, Option<Space>) {
     };
     let space = (sized != 0).then_some(Space { total, free });
     (label, space)
+}
+
+pub fn identity(letter: char) -> Option<VolumeIdentity> {
+    let root = wide(&format!("{letter}:\\"));
+    // SAFETY: `root` is a NUL-terminated drive root.
+    if kind_of(unsafe { GetDriveTypeW(root.as_ptr()) }) == DriveKind::Network {
+        return connection(letter).map(|(remote, _)| VolumeIdentity::Remote(remote));
+    }
+    let mut serial = 0u32;
+    // SAFETY: `root` is NUL-terminated and `serial` points to a live u32; other outputs are unused.
+    let read = unsafe {
+        GetVolumeInformationW(
+            root.as_ptr(),
+            ptr::null_mut(),
+            0,
+            &raw mut serial,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            0,
+        )
+    };
+    (read != 0).then_some(VolumeIdentity::Serial(serial))
 }
 
 pub fn connect(letter: char, remote: &str) -> Result<(), String> {

@@ -2,8 +2,10 @@ use std::fs::File;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use rusty_cache::DriveIdentity;
 use rusty_core::{AppState, Location};
 use rusty_fs::{LocalFs, ProviderOps};
+use rusty_shell::VolumeIdentity;
 use rusty_store::StoreDirs;
 use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
@@ -46,7 +48,16 @@ pub fn open(view: Option<std::path::PathBuf>) {
         kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
         view: view.and_then(|path| view_location(&path)),
+        listing_cache: rusty_cache::ListingCache::default(),
+        cache_keys: rusty_cache::CacheKeys::new(Arc::new(drive_identity)),
     });
+}
+
+fn drive_identity(letter: char) -> Option<DriveIdentity> {
+    rusty_shell::volume_identity(letter).map(|identity| match identity {
+        VolumeIdentity::Serial(serial) => DriveIdentity::Serial(serial),
+        VolumeIdentity::Remote(remote) => DriveIdentity::Remote(remote),
+    })
 }
 
 fn view_location(path: &std::path::Path) -> Option<Location> {

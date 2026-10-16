@@ -14,6 +14,7 @@ use rusty_fs::Provider;
 
 use super::{FerriteWindow, StartOptions};
 
+mod cached;
 mod drive_fs;
 mod drives;
 mod typed;
@@ -67,6 +68,8 @@ fn open_with(
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
+        listing_cache: rusty_cache::ListingCache::default(),
+        cache_keys: rusty_cache::CacheKeys::default(),
     };
     open_options(cx, options)
 }
@@ -431,6 +434,8 @@ fn editor_window(
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
+        listing_cache: rusty_cache::ListingCache::default(),
+        cache_keys: rusty_cache::CacheKeys::default(),
     };
     let (window, view) = open_options(cx, options);
     (window, view, log)
@@ -529,6 +534,8 @@ fn viewer_window(
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         view: None,
+        listing_cache: rusty_cache::ListingCache::default(),
+        cache_keys: rusty_cache::CacheKeys::default(),
     };
     let (window, view) = open_options(cx, options);
     (window, view, written)

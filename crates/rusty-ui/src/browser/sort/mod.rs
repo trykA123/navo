@@ -29,8 +29,8 @@ impl Browser {
         self.set_filter(tab, text)
     }
 
-    pub(super) fn sort_full(&self, tab: TabId, full: Full) -> Full {
-        sorted(full, self.sort_key(tab))
+    pub(super) fn full_of(&self, tab: TabId, rows: &[FsEntry]) -> Full {
+        sorted_rows(rows, self.sort_key(tab))
     }
 }
 
@@ -57,7 +57,11 @@ fn keyed(entry: FsEntry) -> Keyed {
 }
 
 fn sorted(full: Full, key: SortKey) -> Full {
-    let mut rows: Vec<Keyed> = full.details.iter().cloned().map(keyed).collect();
+    sorted_rows(&full.details, key)
+}
+
+fn sorted_rows(rows: &[FsEntry], key: SortKey) -> Full {
+    let mut rows: Vec<Keyed> = rows.iter().cloned().map(keyed).collect();
     rows.sort_by(|a, b| compare(a, b, key));
     let rows: Vec<FsEntry> = rows.into_iter().map(|row| row.entry).collect();
     let listing = Listing::new(

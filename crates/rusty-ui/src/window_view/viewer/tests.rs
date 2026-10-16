@@ -217,6 +217,8 @@ pub(super) fn window_with(
         kinds,
         drives: crate::window_view::DriveHooks::none(),
         view: None,
+        listing_cache: rusty_cache::ListingCache::default(),
+        cache_keys: rusty_cache::CacheKeys::default(),
     };
     open_options(cx, options)
 }
