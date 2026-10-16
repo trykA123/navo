@@ -1,3 +1,9 @@
+#[cfg(target_os = "linux")]
+mod linux_watch;
+#[cfg(target_os = "linux")]
+use linux_watch as platform_watch;
+#[cfg(any(windows, test))]
+mod notify_info;
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
@@ -11,6 +17,10 @@ mod ops;
 mod verbatim;
 #[cfg(windows)]
 mod win_list;
+#[cfg(windows)]
+mod win_watch;
+#[cfg(windows)]
+use win_watch as platform_watch;
 
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry, Metadata};
@@ -22,6 +32,8 @@ use std::time::UNIX_EPOCH;
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 use crate::{CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider};
+#[cfg(any(windows, target_os = "linux"))]
+use crate::{Watch, WatchSink};
 
 const DEFAULT_BATCH: usize = 512;
 
@@ -90,7 +102,10 @@ impl Provider for LocalFs {
     }
 
     fn capabilities(&self) -> Capabilities {
-        Capabilities::default()
+        Capabilities {
+            watch: cfg!(any(windows, target_os = "linux")),
+            ..Capabilities::default()
+        }
     }
 
     fn list(
@@ -121,6 +136,14 @@ impl Provider for LocalFs {
             None => entry(location.path().clone(), path.as_os_str(), &metadata),
         };
         Ok(followed(entry, &path))
+    }
+
+    #[cfg(any(windows, target_os = "linux"))]
+    fn watch(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
+        let path = os_path(folder)?;
+        Watch::start(folder, sink, |raw| {
+            platform_watch::start(&path, folder, raw).map_err(|e| io_error(&e, folder))
+        })
     }
 }
 

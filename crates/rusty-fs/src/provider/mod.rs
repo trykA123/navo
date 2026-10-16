@@ -4,9 +4,11 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use rusty_core::{FsError, Location, ProviderId, ProviderPath};
+use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 pub use ops::ProviderOps;
+
+use crate::{Watch, WatchSink};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -87,4 +89,11 @@ pub trait Provider: Send + Sync {
         cancel: &CancelToken,
     ) -> Result<(), FsError>;
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError>;
+    fn watch(&self, folder: &Location, _sink: WatchSink) -> Result<Watch, FsError> {
+        Err(FsError {
+            kind: FsErrorKind::Unknown,
+            location: Some(folder.clone()),
+            os_code: None,
+        })
+    }
 }
