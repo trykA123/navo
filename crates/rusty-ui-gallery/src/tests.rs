@@ -5,7 +5,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{Bounds, Point, Role, TestAppContext, WindowBounds, WindowOptions, px, size};
 use rusty_ui::tokens::{self, Mode};
 
-use crate::gallery::Gallery;
+use crate::gallery::{Gallery, Page};
 use crate::options::{Options, parse_args};
 
 fn args(list: &[&str]) -> Vec<String> {
@@ -189,6 +189,41 @@ fn the_drive_pages_show_both_bars_the_menu_and_a_path_error(cx: &mut TestAppCont
         assert!(twelve.try_find(("drive", 11usize)).is_some());
     })
     .expect("window");
+}
+
+#[gpui_kit::test]
+fn the_tokens_page_renders_in_both_themes(cx: &mut TestAppContext) {
+    let (window, gallery) = cx.update(|cx| {
+        rusty_ui::init(Mode::Light, cx).expect("bundled fonts load");
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Point::default(),
+                size: size(px(1280.), px(720.)),
+            })),
+            ..Default::default()
+        };
+        rusty_ui::open_window(options, cx, |_, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, cx))
+        })
+        .expect("open the gallery window")
+    });
+    for mode in [Mode::Light, Mode::Dark] {
+        cx.update(|cx| {
+            gallery.update(cx, |gallery, cx| {
+                gallery.set_page(Page::Tokens, cx);
+                gallery.set_mode(mode, cx);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("copy").is_none(),
+                "{mode:?}: still on Parts"
+            );
+        })
+        .expect("window");
+        cx.update(|cx| assert_eq!(tokens::current(cx).mode, mode));
+    }
 }
 
 #[gpui_kit::test]

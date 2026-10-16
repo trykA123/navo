@@ -3,7 +3,7 @@ use gpui_kit::{Hsla, px};
 
 use super::{Colors, Mode, Radii, Spacing, Typography};
 
-fn ok(lightness_pct: f32, chroma: f32, hue: f32) -> Hsla {
+pub(super) fn ok(lightness_pct: f32, chroma: f32, hue: f32) -> Hsla {
     oklch(lightness_pct / 100.0, chroma, hue)
 }
 
@@ -113,5 +113,10 @@ pub(super) fn radii() -> Radii {
         sm: px(4.),
         md: px(6.),
         lg: px(7.),
+        card: px(8.),
+        pill: px(15.),
+        keycap: px(6.),
+        sheet: px(12.),
+        job_card: px(12.),
     }
 }
