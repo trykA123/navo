@@ -37,7 +37,7 @@ impl TreeView {
         self.follow(Step::Done, cx);
     }
 
-    fn schedule_filter(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn schedule_filter(&mut self, cx: &mut Context<Self>) {
         self.filter_job = None;
         self.filter_wait = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(FILTER_DELAY).await;
@@ -54,7 +54,11 @@ impl TreeView {
         let text = self.filter.clone();
         self.filter_job = Some(spawn_job(
             cx,
-            move |_, send| send(Outline::filtered(&tree, &text)),
+            move |_, send| {
+                let filtered = Outline::filtered(&tree, &text);
+                drop(tree);
+                send(filtered);
+            },
             Self::filter_done,
         ));
     }

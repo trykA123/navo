@@ -90,38 +90,39 @@ impl XmlIndex {
         let mut tree = Tree::new(Flavor::Xml);
         let label = self.root.label();
         if let Some(root) = tree.push(None, element(&label)) {
-            push_entries(&mut tree, root, &self.top);
+            let _ = push_entries(&mut tree, root, &self.top);
         }
         tree
     }
 }
 
-fn push_entries(tree: &mut Tree, parent: NodeId, children: &Children) {
+fn push_entries(tree: &mut Tree, parent: NodeId, children: &Children) -> bool {
     for entry in &children.entries {
         let label = entry.label();
-        if let Some(id) = tree.push(Some(parent), element(&label)) {
-            tree.set_lazy(
-                id,
-                Lazy {
-                    span: entry.span,
-                    count: entry.children,
-                },
-            );
-        }
-    }
-    if children.more > 0 {
-        let label = Label {
-            name: format!("… {} more", children.more),
-            ..Label::default()
+        let Some(id) = tree.push(Some(parent), element(&label)) else {
+            return false;
         };
-        tree.push(Some(parent), element(&label));
+        tree.set_lazy(
+            id,
+            Lazy {
+                span: entry.span,
+                count: entry.children,
+            },
+        );
     }
+    if children.more == 0 {
+        return true;
+    }
+    let label = Label {
+        name: format!("… {} more", children.more),
+        ..Label::default()
+    };
+    tree.push(Some(parent), element(&label)).is_some()
 }
 
-pub fn attach_children(tree: &mut Tree, parent: NodeId, children: &Children) {
-    if tree.take_lazy(parent).is_some() {
-        push_entries(tree, parent, children);
-    }
+#[must_use]
+pub fn attach_children(tree: &mut Tree, parent: NodeId, children: &Children) -> bool {
+    tree.take_lazy(parent).is_none() || push_entries(tree, parent, children)
 }
 
 struct Scanned {

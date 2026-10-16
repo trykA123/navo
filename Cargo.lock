@@ -6293,6 +6293,7 @@ name = "rusty-structured"
 version = "0.0.1"
 dependencies = [
  "csv",
+ "csv-core",
  "quick-xml",
  "saphyr-parser",
  "serde",
@@ -6328,6 +6329,7 @@ dependencies = [
  "gpui-kit",
  "image",
  "kamadak-exif",
+ "markdown",
  "resvg 0.46.0",
  "rusty-core",
  "rusty-fs",

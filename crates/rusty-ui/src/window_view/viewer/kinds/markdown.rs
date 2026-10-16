@@ -1,3 +1,4 @@
+mod depth;
 mod nesting;
 
 use super::{Declined, EDIT_LIMIT, Load, Loaded, Slot, Sniff, ViewerKind, named};
@@ -51,11 +52,17 @@ impl ViewerKind for MarkdownKind {
             ..
         } = load;
         let file = (hooks.read)(location)?;
-        if nesting::is_too_deep(&file.text) {
+        load.ensure_open()?;
+        if nesting::fails_fast(&file.text) {
+            return Ok(Box::new(Declined(TOO_DEEP)));
+        }
+        let (text, depth) = depth::measure(file.text);
+        load.ensure_open()?;
+        if !depth.is_ok_and(|depth| depth <= depth::MAX_NESTING) {
             return Ok(Box::new(Declined(TOO_DEEP)));
         }
         Ok(Box::new(MarkdownFile {
-            text: file.text,
+            text,
             len: sniff.len,
         }))
     }

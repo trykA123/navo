@@ -87,7 +87,7 @@ impl ViewerKind for TreeKind {
             ..
         } = load;
         let format = format_of(sniff.name).ok_or_else(|| "Not a tree file.".to_owned())?;
-        let load = if format == Format::Xml && sniff.len > SMALL_LIMIT {
+        let tree = if format == Format::Xml && sniff.len > SMALL_LIMIT {
             TreeLoad::Index
         } else {
             let limit = if format == Format::Xml {
@@ -95,12 +95,14 @@ impl ViewerKind for TreeKind {
             } else {
                 TREE_LIMIT
             };
-            parse(format, &(hooks.bytes)(location, limit)?)
+            let bytes = (hooks.bytes)(location, limit)?;
+            load.ensure_open()?;
+            parse(format, &bytes)
         };
         Ok(Box::new(TreeFile {
             format,
             len: sniff.len,
-            load,
+            load: tree,
         }))
     }
 

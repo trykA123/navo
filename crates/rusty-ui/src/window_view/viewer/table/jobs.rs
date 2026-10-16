@@ -8,7 +8,7 @@ use rusty_structured::table::{
     read_rows, sort_order,
 };
 
-use super::rows::{Fetched, Rows};
+use super::rows::Rows;
 use super::{SortKey, TableView};
 use crate::prelude::*;
 use crate::window_view::viewer::background::{Throttle, ranged, spawn_job};
@@ -87,7 +87,10 @@ impl TableView {
             return;
         };
         let skip = indexed.skip;
-        let range = top.saturating_sub(FETCH_MARGIN / 2)..(wanted.end + FETCH_MARGIN).min(len);
+        let start = indexed
+            .continues_at(&wanted)
+            .unwrap_or_else(|| top.saturating_sub(FETCH_MARGIN / 2));
+        let range = start..(wanted.end + FETCH_MARGIN).min(len);
         let dialect = self.dialect;
         let mut read = ranged(&self.host.hooks, &self.host.location);
         let records = (range.start + skip)..(range.end + skip);
@@ -116,11 +119,7 @@ impl TableView {
         match fetch.result {
             Ok(slice) => {
                 let is_first = indexed.fetched.is_none();
-                indexed.fetched = Some(Fetched {
-                    start: fetch.range.start,
-                    end: fetch.range.end,
-                    rows: slice.rows,
-                });
+                indexed.store(fetch.range, slice.rows, slice.is_cut);
                 self.widen(slice.widest, is_first);
             }
             Err(error) => self.note = Some(error.into()),

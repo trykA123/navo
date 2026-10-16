@@ -10,6 +10,8 @@ use crate::window_view::viewer::background::{Job, Throttle, ranged, spawn_job};
 use crate::window_view::viewer::body::Host;
 
 const INDEX_EVERY: Duration = Duration::from_millis(100);
+const ATTACH_RETRY: Duration = Duration::from_millis(20);
+const TOO_MANY: &str = "Too many values to show: some children are hidden.";
 
 pub(super) enum IndexMessage {
     Progress(u64),
@@ -80,16 +82,50 @@ impl TreeView {
         self.loads.retain(|(node, _)| *node != loaded.node);
         match loaded.result {
             Ok(Some(children)) => {
-                if let Some(ready) = self.ready_mut() {
-                    attach_children(Arc::make_mut(&mut ready.tree), loaded.node, &children);
-                    ready.outline.loaded(&ready.tree, loaded.node);
-                }
-                self.sync_path();
+                self.filter_job = None;
+                self.pending.push((loaded.node, children));
+                self.attach_pending(cx);
             }
             Ok(None) => {}
             Err(error) => self.note = Some(error.to_string().into()),
         }
         cx.notify();
+    }
+
+    fn attach_pending(&mut self, cx: &mut Context<Self>) {
+        let TreeState::Ready(ready) = &mut self.state else {
+            return;
+        };
+        let Some(tree) = Arc::get_mut(&mut ready.tree) else {
+            self.retry_attach(cx);
+            return;
+        };
+        let mut is_complete = true;
+        for (node, children) in self.pending.drain(..) {
+            is_complete &= attach_children(tree, node, &children);
+            ready.outline.loaded(tree, node);
+        }
+        self.sync_path();
+        if !is_complete {
+            self.note = Some(TOO_MANY.into());
+        }
+        if self.is_filtering() {
+            self.schedule_filter(cx);
+        }
+        cx.notify();
+    }
+
+    fn retry_attach(&mut self, cx: &mut Context<Self>) {
+        if self.attach_wait.is_some() {
+            return;
+        }
+        self.attach_wait = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(ATTACH_RETRY).await;
+            let _ = this.update(cx, |view, cx| {
+                view.attach_wait = None;
+                view.attach_pending(cx);
+            });
+        }));
     }
 
     pub(super) fn stop_indexing(&mut self, cx: &mut Context<Self>) -> bool {

@@ -55,17 +55,18 @@ impl ViewerKind for TableKind {
             sniff,
             ..
         } = load;
-        let load = if sniff.len > SMALL_LIMIT {
+        let table = if sniff.len > SMALL_LIMIT {
             big(sniff.head)
         } else {
             let bytes = (hooks.bytes)(location, SMALL_LIMIT)?;
+            load.ensure_open()?;
             let dialect = dialect_of(bytes.get(..SNIFF_BYTES).unwrap_or(&bytes));
             let table = parse_table(&bytes, dialect).map_err(|error| error.to_string())?;
             TableLoad::Memory { table, dialect }
         };
         Ok(Box::new(TableFile {
             len: sniff.len,
-            load,
+            load: table,
         }))
     }
 

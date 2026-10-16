@@ -11,12 +11,12 @@ use crate::window_view::tests::{press, settle};
 use crate::window_view::viewer::{FileHooks, Kinds, PagedKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Read {
+pub(in crate::window_view::viewer) enum Read {
     Bytes(u64),
     Range(u64, usize),
 }
 
-type Reads = Arc<Mutex<Vec<Read>>>;
+pub(in crate::window_view::viewer) type Reads = Arc<Mutex<Vec<Read>>>;
 
 fn reads(log: &Reads) -> Vec<Read> {
     log.lock().expect("reads").clone()
@@ -54,7 +54,7 @@ fn fake_with(name: &str, len: u64) -> Arc<FakeFs> {
     Arc::new(fs)
 }
 
-fn open_named(
+pub(in crate::window_view::viewer) fn open_named(
     cx: &mut TestAppContext,
     name: &str,
     setup: Setup,
@@ -149,7 +149,7 @@ fn json_over_64_mb_opens_as_paged_text_and_the_header_says_why(cx: &mut TestAppC
     assert!(status.contains("64 MB"), "{status}");
 }
 
-fn big_xml() -> Vec<u8> {
+pub(in crate::window_view::viewer) fn big_xml() -> Vec<u8> {
     let mut text = String::from("<?xml version=\"1.0\"?>\n<AUTOSAR>\n");
     for package in 0..3 {
         text.push_str(&format!("<AR-PACKAGE N=\"{package}\">\n"));
@@ -362,6 +362,7 @@ fn a_short_row_fetch_is_not_asked_again_on_every_frame(cx: &mut TestAppContext) 
         ..Setup::new(bytes)
     };
     let (window, view, log) = open_named(cx, "huge-row.csv", setup);
+    assert_eq!(label(cx, window, ("table-row", 1)), "2: Fig, 2");
     log.lock().expect("reads").clear();
     for _ in 0..3 {
         redraw(cx, window);
@@ -405,19 +406,52 @@ const RENDER_STACK: usize = if cfg!(debug_assertions) {
     1024 * 1024
 };
 
+fn quote_list(levels: usize) -> String {
+    (0..levels)
+        .map(|depth| format!("> {}- x\n", "  ".repeat(depth)))
+        .collect()
+}
+
+fn wide_list(levels: usize) -> String {
+    (0..levels)
+        .map(|depth| format!("{}-    x\n", " ".repeat(6 * depth)))
+        .collect()
+}
+
+fn tags(name: &str, levels: usize) -> String {
+    format!("<{name}>").repeat(levels) + "x"
+}
+
 #[test]
-fn markdown_32_quotes_deep_renders_on_a_small_stack() {
+fn the_reviewer_probes_open_as_text_on_a_small_stack() {
     on_a_small_stack(RENDER_STACK, |cx| {
-        renders_as_markdown(cx, "quotes.md", format!("{}x\n", ">".repeat(32)));
+        let probes = [
+            quote_list(3_000),
+            wide_list(2_000),
+            tags("div", 20_000),
+            tags("details", 20_000),
+        ];
+        for (at, probe) in probes.into_iter().enumerate() {
+            opens_as_text_with_a_depth_note(cx, &format!("probe{at}.md"), probe.into_bytes());
+        }
     });
 }
 
 #[test]
-fn a_markdown_list_32_levels_deep_renders_on_a_small_stack() {
+fn markdown_32_levels_deep_of_each_shape_renders_on_a_small_stack() {
     on_a_small_stack(RENDER_STACK, |cx| {
-        let list = (0..32)
-            .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
-            .collect();
-        renders_as_markdown(cx, "list.md", list);
+        let shapes = [
+            format!("{}x\n", ">".repeat(32)),
+            quote_list(31),
+            wide_list(32),
+            (0..32)
+                .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
+                .collect(),
+            tags("div", 32),
+            tags("details", 32),
+        ];
+        for (at, shape) in shapes.into_iter().enumerate() {
+            renders_as_markdown(cx, &format!("shape{at}.md"), shape);
+        }
     });
 }

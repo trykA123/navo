@@ -1,7 +1,7 @@
-pub(super) const MAX_NESTING: usize = 32;
 const MAX_RUN: usize = 1_000;
 const MAX_RUNS: usize = 10_000;
-const CODE_INDENT: usize = 4;
+const MAX_PREFIX: usize = 256;
+const TAB: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Fence {
@@ -12,17 +12,8 @@ struct Fence {
 #[derive(Default)]
 struct Scan {
     fence: Option<Fence>,
-    items: Vec<usize>,
-    brackets: usize,
     runs: usize,
-    is_too_deep: bool,
-}
-
-fn indent_of(line: &str) -> usize {
-    line.bytes()
-        .take_while(|byte| matches!(byte, b' ' | b'\t'))
-        .map(|byte| if byte == b'\t' { CODE_INDENT } else { 1 })
-        .sum()
+    fails: bool,
 }
 
 fn without_quotes(line: &str) -> &str {
@@ -55,6 +46,34 @@ fn marker_len(rest: &[u8]) -> Option<usize> {
     matches!(rest.get(marker), Some(b' ' | b'\t')).then_some(marker)
 }
 
+fn container_prefix(line: &str) -> (usize, bool, &str) {
+    let bytes = line.as_bytes();
+    let (mut at, mut width, mut opens) = (0, 0, false);
+    while let Some(byte) = bytes.get(at) {
+        let step = match byte {
+            b' ' => 1,
+            b'\t' => {
+                width += TAB - 1;
+                1
+            }
+            b'>' => {
+                opens = true;
+                1
+            }
+            _ => match marker_len(&bytes[at..]) {
+                Some(len) => {
+                    opens = true;
+                    len
+                }
+                None => break,
+            },
+        };
+        width += step;
+        at += step;
+    }
+    (width, opens, line.get(at..).unwrap_or_default())
+}
+
 fn is_flanking(before: Option<u8>, run: u8, after: Option<u8>) -> bool {
     let is_word = |byte: Option<u8>| byte.is_some_and(|byte| byte.is_ascii_alphanumeric());
     let is_text = |byte: Option<u8>| byte.is_some_and(|byte| !byte.is_ascii_whitespace());
@@ -70,57 +89,21 @@ impl Scan {
             }
             return;
         }
-        if without_quotes(line).trim().is_empty() {
-            self.brackets = 0;
-            return;
-        }
-        let indent = indent_of(line);
-        while self.items.last().is_some_and(|content| *content > indent) {
-            self.items.pop();
-        }
-        if indent >= self.items.last().copied().unwrap_or(0) + CODE_INDENT {
-            return;
-        }
-        let (quotes, rest) = self.prefix(line);
-        if quotes + self.items.len() > MAX_NESTING {
-            self.is_too_deep = true;
+        let (width, opens, rest) = container_prefix(line);
+        if opens && width > MAX_PREFIX {
+            self.fails = true;
         }
         match fence_at(rest) {
             Some(fence) => self.fence = Some(fence),
-            None => self.inline(rest),
+            None => self.emphasis(rest),
         }
     }
 
-    fn prefix<'a>(&mut self, line: &'a str) -> (usize, &'a str) {
-        let bytes = line.as_bytes();
-        let (mut at, mut column, mut quotes) = (0, 0, 0);
-        while let Some(byte) = bytes.get(at) {
-            let step = match byte {
-                b' ' | b'\t' => 1,
-                b'>' => {
-                    quotes += 1;
-                    1
-                }
-                _ => match marker_len(&bytes[at..]) {
-                    Some(len) => {
-                        self.items.push(column + len + 1);
-                        len
-                    }
-                    None => break,
-                },
-            };
-            column += if *byte == b'\t' { CODE_INDENT } else { step };
-            at += step;
-        }
-        (quotes, line.get(at..).unwrap_or_default())
-    }
-
-    fn inline(&mut self, text: &str) {
+    fn emphasis(&mut self, text: &str) {
         let bytes = text.as_bytes();
         let mut at = 0;
         while let Some(&byte) = bytes.get(at) {
             if !matches!(byte, b'*' | b'_' | b'~') {
-                self.bracket(byte);
                 at += 1;
                 continue;
             }
@@ -130,31 +113,18 @@ impl Scan {
                 self.runs += 1;
             }
             if len > MAX_RUN || self.runs > MAX_RUNS {
-                self.is_too_deep = true;
+                self.fails = true;
             }
             at += len;
         }
     }
-
-    fn bracket(&mut self, byte: u8) {
-        match byte {
-            b'[' => {
-                self.brackets += 1;
-                if self.brackets > MAX_NESTING {
-                    self.is_too_deep = true;
-                }
-            }
-            b']' => self.brackets = self.brackets.saturating_sub(1),
-            _ => {}
-        }
-    }
 }
 
-pub(super) fn is_too_deep(text: &str) -> bool {
+pub(super) fn fails_fast(text: &str) -> bool {
     let mut scan = Scan::default();
     for line in text.lines() {
         scan.line(line);
-        if scan.is_too_deep {
+        if scan.fails {
             return true;
         }
     }

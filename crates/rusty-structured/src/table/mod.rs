@@ -1,6 +1,7 @@
 mod records;
 mod sniff;
 mod sort;
+mod stream;
 
 pub use records::{ROWS_BYTES, RecordIndex, RowSlice, STRIDE, index_records, read_rows};
 pub use sniff::{Dialect, sniff};

@@ -1,78 +1,53 @@
 use std::time::{Duration, Instant};
 
-use super::{MAX_NESTING, is_too_deep};
+use super::fails_fast;
 
-fn nested(prefix: &str, levels: usize, body: &str) -> String {
-    format!("{}{body}\n", prefix.repeat(levels))
+fn quote_list(levels: usize) -> String {
+    (0..levels)
+        .map(|depth| format!("> {}- x\n", "  ".repeat(depth)))
+        .collect()
 }
 
-fn list(levels: usize, indent: &str) -> String {
+fn wide_list(levels: usize) -> String {
     (0..levels)
-        .map(|depth| format!("{}- x\n", indent.repeat(depth)))
+        .map(|depth| format!("{}-    x\n", " ".repeat(6 * depth)))
         .collect()
 }
 
 #[test]
-fn nesting_over_32_levels_is_too_deep() {
-    let over = MAX_NESTING + 1;
+fn long_emphasis_runs_and_wide_container_prefixes_fail_fast() {
     let cases = [
-        nested(">", over, "x"),
-        nested("> ", over, "x"),
-        nested("[", over, "x"),
-        nested("- ", over, "x"),
-        nested("1. ", over, "x"),
-        nested("- > ", over / 2 + 1, "x"),
-        list(over, "  "),
-        list(over, "    "),
-        list(over, "\t"),
         format!("{}x{}", "*".repeat(1_001), "*".repeat(1_001)),
-        format!("{}x", "_".repeat(1_001)),
+        format!("x{}x", "_".repeat(1_001)),
         format!("x{}x", "~".repeat(1_001)),
+        "*a ".repeat(50_000),
+        quote_list(3_000),
+        wide_list(2_000),
+        format!("{}x\n", ">".repeat(257)),
+        format!("{}- x\n", " ".repeat(300)),
     ];
     for text in cases {
-        assert!(is_too_deep(&text), "{:?}", &text[..12]);
+        let started = Instant::now();
+        assert!(fails_fast(&text), "{:?}", &text[..12]);
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 }
 
 #[test]
-fn exactly_32_levels_and_ordinary_documents_are_rendered() {
+fn ordinary_documents_and_code_pass_to_the_parser() {
     let fine = [
-        "# Notes\n\n- one\n  - two\n    - three\n\n> quoted **bold** [link](x)\n".to_owned(),
-        nested(">", MAX_NESTING, "x"),
-        list(MAX_NESTING, "  "),
-        list(MAX_NESTING, "    "),
-        format!("{}\n\n{}", "[".repeat(30), "[".repeat(30)),
+        "# Notes\n\n- one\n  - two\n\n> quoted **bold** [link](x)\n".to_owned(),
+        quote_list(31),
+        wide_list(32),
         "***\n---\n- - -\n".repeat(5_000),
         "snake_case_name and a * b\n".repeat(20_000),
+        "*a* ".repeat(4_000),
+        format!("```\n{}```\n", quote_list(3_000)),
+        format!("{}let x = 1;\n", " ".repeat(400)),
     ];
     for text in fine {
-        assert!(!is_too_deep(&text), "{:?}", &text[..12]);
+        assert!(!fails_fast(&text), "{:?}", &text[..12]);
     }
-}
-
-#[test]
-fn code_blocks_never_count_as_nesting() {
-    let deep = nested(">", 200, "x") + &list(200, "  ") + &nested("[", 200, "x");
-    let fenced = [
-        format!("```rust\n{deep}```\n"),
-        format!("~~~~ text\n{deep}~~~~\n"),
-        format!("> ```\n{deep}> ```\n"),
-    ];
-    for text in fenced {
-        assert!(!is_too_deep(&text), "{:?}", &text[..12]);
-    }
-    let indented: String = deep.lines().map(|line| format!("    {line}\n")).collect();
-    assert!(!is_too_deep(&format!("Code:\n\n{indented}")));
-    assert!(is_too_deep(&format!("```\ncode\n```\n{deep}")));
-}
-
-#[test]
-fn over_10_000_emphasis_runs_are_too_deep_and_found_quickly() {
-    let text = "*a ".repeat(50_000);
-    let started = Instant::now();
-    assert!(is_too_deep(&text));
-    assert!(started.elapsed() < Duration::from_secs(1));
-    assert!(!is_too_deep(&"*a* ".repeat(4_000)));
 }
 
 #[test]
@@ -80,7 +55,7 @@ fn the_scan_of_hostile_input_fits_a_1_mib_stack() {
     let text = format!("{}x{}", "*".repeat(50_000), "*".repeat(50_000));
     let worker = std::thread::Builder::new()
         .stack_size(1024 * 1024)
-        .spawn(move || is_too_deep(&text))
+        .spawn(move || fails_fast(&text))
         .expect("a 1 MiB thread starts");
     assert!(worker.join().expect("the scan does not overflow"));
 }

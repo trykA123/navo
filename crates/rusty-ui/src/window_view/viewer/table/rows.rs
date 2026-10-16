@@ -5,10 +5,13 @@ use rusty_structured::table::{RecordIndex, Table};
 
 use crate::window_view::viewer::background::Job;
 
+const WINDOW_BYTES: usize = 32 * 1024 * 1024;
+
 pub(super) struct Fetched {
     pub start: u64,
     pub end: u64,
     pub rows: Vec<Vec<String>>,
+    bytes: usize,
 }
 
 #[derive(Default)]
@@ -19,6 +22,55 @@ pub(super) struct Indexed {
     pub fetched: Option<Fetched>,
     pub fetching: Option<(Range<u64>, Job)>,
     pub skip: u64,
+}
+
+fn size_of(rows: &[Vec<String>]) -> usize {
+    rows.iter().flatten().map(String::len).sum()
+}
+
+impl Indexed {
+    pub(super) fn continues_at(&self, wanted: &Range<u64>) -> Option<u64> {
+        let fetched = self.fetched.as_ref()?;
+        (fetched.start <= wanted.start && wanted.start < fetched.end).then_some(fetched.end)
+    }
+
+    fn covered_until(&self, wanted: &Range<u64>) -> u64 {
+        let mut until = self.continues_at(wanted).unwrap_or(wanted.start);
+        if let Some((range, _)) = &self.fetching
+            && range.start <= until
+            && until < range.end
+        {
+            until = range.end;
+        }
+        until
+    }
+
+    pub(super) fn store(&mut self, asked: Range<u64>, rows: Vec<Vec<String>>, is_cut: bool) {
+        let end = if is_cut {
+            asked.start + rows.len() as u64
+        } else {
+            asked.end
+        };
+        let bytes = size_of(&rows);
+        match &mut self.fetched {
+            Some(fetched)
+                if fetched.end == asked.start && fetched.bytes + bytes <= WINDOW_BYTES =>
+            {
+                fetched.rows.extend(rows);
+                fetched.end = end;
+                fetched.bytes += bytes;
+            }
+            Some(fetched) if fetched.end == asked.start => fetched.end = asked.end,
+            _ => {
+                self.fetched = Some(Fetched {
+                    start: asked.start,
+                    end,
+                    rows,
+                    bytes,
+                });
+            }
+        }
+    }
 }
 
 pub(super) enum Rows {
@@ -65,14 +117,6 @@ impl Rows {
         if indexed.index.is_none() || wanted.is_empty() {
             return false;
         }
-        let covered = indexed
-            .fetched
-            .as_ref()
-            .is_some_and(|fetched| fetched.start <= wanted.start && fetched.end >= wanted.end);
-        let asked = indexed
-            .fetching
-            .as_ref()
-            .is_some_and(|(range, _)| range.start <= wanted.start && range.end >= wanted.end);
-        !covered && !asked
+        indexed.covered_until(wanted) < wanted.end
     }
 }

@@ -194,8 +194,9 @@ fn a_single_20_mb_row_is_indexed_and_reading_rows_stays_under_the_byte_cap() {
     };
     let slice = read_rows(&mut read, &index, dialect, 0..3).unwrap();
     assert!(largest <= ROWS_BYTES, "{largest}");
-    assert_eq!(slice.rows.len(), 1, "a cut row is dropped");
+    assert!(slice.is_cut);
     assert_eq!(slice.rows[0], ["a", "b"]);
+    assert!(slice.rows[1][0].len() <= ROWS_BYTES);
 }
 
 #[test]
@@ -213,4 +214,28 @@ fn rows_wider_than_4096_columns_are_cut_and_the_true_width_is_kept() {
     let index = index_of(text.as_bytes(), dialect);
     let slice = read_rows(&mut memory(text.as_bytes()), &index, dialect, 0..2).unwrap();
     assert_eq!((slice.rows[0].len(), slice.widest), (MAX_COLUMNS, 5000));
+}
+
+#[test]
+fn rows_after_an_8_mb_row_in_the_same_stride_are_reachable() {
+    let mut bytes = b"a,b\n".to_vec();
+    bytes.resize(bytes.len() + 9 * 1024 * 1024, b'x');
+    bytes.extend_from_slice(b",y\n1,2\n3,4\n");
+    let dialect = Dialect {
+        delimiter: b',',
+        has_header: true,
+    };
+    let index = index_of(&bytes, dialect);
+    assert_eq!(index.records, 4);
+    let after = read_rows(&mut memory(&bytes), &index, dialect, 2..4).unwrap();
+    assert_eq!(after.rows, [["1", "2"], ["3", "4"]]);
+    assert!(!after.is_cut);
+    let all = read_rows(&mut memory(&bytes), &index, dialect, 0..4).unwrap();
+    assert!(all.is_cut);
+    assert_eq!(
+        all.rows.len(),
+        2,
+        "the first kept rows come back, the huge one clipped"
+    );
+    assert_eq!(all.rows[0], ["a", "b"]);
 }

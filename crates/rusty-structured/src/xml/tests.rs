@@ -184,7 +184,7 @@ fn expand_the_second_package(
     assert_eq!(entries.entries[3].attrs, "N=\"3\"");
     assert_eq!(entries.entries[3].children, 2);
 
-    attach_children(&mut tree, second, &entries);
+    assert!(attach_children(&mut tree, second, &entries));
     assert!(tree.lazy(second).is_none());
     let fourth = tree.children(second).nth(3).unwrap();
     assert_eq!(tree.path(fourth), "/AUTOSAR/AR-PACKAGE[2]/ELEMENT[4]");
@@ -220,7 +220,7 @@ fn lazy_nodes_ask_to_load_when_expanded() {
     let entries = scan_children(&mut read, lazy.span, &AtomicBool::new(false))
         .unwrap()
         .unwrap();
-    attach_children(&mut tree, node, &entries);
+    assert!(attach_children(&mut tree, node, &entries));
     outline.loaded(&tree, node);
     assert_eq!(outline.rows().len(), 5);
     assert_eq!(tree.path(outline.rows()[4].node), "/root/group/item");
@@ -328,4 +328,28 @@ fn a_text_node_over_16_mb_stops_the_index_with_an_error() {
     let mut read = memory(&bytes);
     let error = index_with(&mut read, bytes.len() as u64, false).unwrap_err();
     assert!(error.message.contains("16 MB"), "{error}");
+}
+
+#[test]
+fn children_past_the_node_cap_are_reported_not_dropped_silently() {
+    let bytes = b"<r><g><a/><b/></g></r>".to_vec();
+    let mut read = memory(&bytes);
+    let index = index_with(&mut read, bytes.len() as u64, false)
+        .unwrap()
+        .unwrap();
+    let mut tree = index.tree();
+    let root = tree.root().unwrap();
+    let group = tree.children(root).next().unwrap();
+    let filler = crate::tree::NewNode {
+        kind: NodeKind::Null,
+        key: Key::Index(0),
+        value: "",
+        attrs: "",
+    };
+    while tree.push(Some(root), filler).is_some() {}
+    let lazy = tree.lazy(group).unwrap();
+    let children = scan_children(&mut read, lazy.span, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
+    assert!(!attach_children(&mut tree, group, &children));
 }

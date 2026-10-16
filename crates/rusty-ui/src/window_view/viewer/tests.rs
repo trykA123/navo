@@ -13,7 +13,7 @@ mod moves;
 mod open;
 mod save;
 mod search;
-mod structured;
+pub(in crate::window_view::viewer) mod structured;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

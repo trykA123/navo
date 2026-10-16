@@ -8,6 +8,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use gpui_kit::{AnyView, FocusHandle, Task};
+use rusty_structured::xml::Children;
 use rusty_structured::{NodeId, Outline, ParseError, Step, Tree};
 
 pub(super) use keys::bind_keys;
@@ -96,6 +97,8 @@ pub(in crate::window_view::viewer) struct TreeView {
     filter: String,
     filter_wait: Option<Task<()>>,
     filter_job: Option<Job>,
+    pending: Vec<(NodeId, Children)>,
+    attach_wait: Option<Task<()>>,
 }
 
 impl TreeView {
@@ -121,6 +124,8 @@ impl TreeView {
             filter: String::new(),
             filter_wait: None,
             filter_job: None,
+            pending: Vec::new(),
+            attach_wait: None,
         };
         if matches!(view.state, TreeState::Indexing(_)) {
             view.index_job = Some(jobs::start_index(&view.host, view.len, cx));
@@ -215,3 +220,6 @@ impl ViewerBody for TreeBody {
         self
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -9,7 +9,7 @@ mod tree;
 
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusty_core::Location;
 
@@ -64,6 +64,8 @@ pub type Loaded = Box<dyn Any + Send>;
 
 pub struct Declined(pub &'static str);
 
+const CANCELLED: &str = "The viewer closed before the file opened.";
+
 #[derive(Clone, Copy)]
 #[non_exhaustive]
 pub struct Load<'a> {
@@ -86,6 +88,14 @@ impl<'a> Load<'a> {
             location,
             sniff,
             cancel,
+        }
+    }
+
+    pub(super) fn ensure_open(&self) -> Result<(), String> {
+        if self.cancel.load(Ordering::Relaxed) {
+            Err(CANCELLED.to_owned())
+        } else {
+            Ok(())
         }
     }
 }
