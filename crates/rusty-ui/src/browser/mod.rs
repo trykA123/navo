@@ -280,6 +280,7 @@ impl Browser {
             }
         }
         self.sync_pins();
+        self.sync_disk_folders();
         self.sync_watches();
     }
 

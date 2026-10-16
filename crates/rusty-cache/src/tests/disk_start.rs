@@ -37,9 +37,17 @@ fn warm(cache: &ListingCache, keys: &CacheKeys, folders: Vec<Location>) -> Warm 
 }
 
 fn seed(path: &Path, keys: &CacheKeys, location: &Location, stored: CachedListing) {
+    let cache = ListingCache::default();
+    cache.put(settled(keys, location), stored);
     let disk = DiskListings::open(path, warm(&ListingCache::default(), keys, Vec::new()));
-    disk.save(settled(keys, location), Arc::new(stored));
+    disk.save_folders(&cache, keys, std::slice::from_ref(location));
     assert!(disk.flush(PATIENT));
+}
+
+fn stored_on_disk(path: &Path, keys: &CacheKeys, folders: &[Location]) -> ListingCache {
+    let reread = ListingCache::default();
+    let _disk = DiskListings::open(path, warm(&reread, keys, folders.to_vec()));
+    reread
 }
 
 #[test]
@@ -125,8 +133,14 @@ fn an_unreadable_cache_file_still_opens() {
     let keys = serial_keys(42);
     let work = folder(r"C:\work");
     let disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
-    disk.save(settled(&keys, &work), Arc::new(listing(&["a"])));
+    cache.put(settled(&keys, &work), listing(&["a"]));
+    disk.save_folders(&cache, &keys, std::slice::from_ref(&work));
     assert!(disk.flush(PATIENT));
+    drop(disk);
+    assert_eq!(
+        stored_on_disk(&db_in(&dir), &keys, &[work]).stats().entries,
+        1
+    );
 }
 
 #[test]
@@ -136,6 +150,7 @@ fn persist_writes_the_cached_listing_to_disk() {
     let keys = serial_keys(42);
     let disk = DiskListings::open(&db_in(&dir), warm(&ListingCache::default(), &keys, vec![]));
     let cache = ListingCache::default().with_disk(disk.clone());
+    cache.keep_on_disk([&work]);
     let key = settled(&keys, &work);
     cache.put(key.clone(), listing(&["fresh.txt"]));
     cache.persist(&key);
@@ -235,4 +250,115 @@ fn a_warm_up_load_past_the_deadline_is_not_put() {
     assert!(cache.get(&key).is_none());
     crate::disk::admit(&mut table, &cache, key.clone(), Instant::now() + PATIENT);
     assert!(cache.get(&key).is_some());
+}
+
+fn writing_cache(path: &Path, keys: &CacheKeys) -> (ListingCache, DiskListings) {
+    let disk = DiskListings::open(path, warm(&ListingCache::default(), keys, vec![]));
+    (ListingCache::default().with_disk(disk.clone()), disk)
+}
+
+fn put_and_persist(cache: &ListingCache, key: &CacheKey, stored: CachedListing) {
+    cache.put(key.clone(), stored);
+    cache.persist(key);
+}
+
+#[test]
+fn persist_skips_a_folder_that_is_not_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = folder(r"C:\work");
+    let keys = serial_keys(42);
+    let (cache, disk) = writing_cache(&db_in(&dir), &keys);
+    cache.keep_on_disk([&folder(r"C:\other")]);
+    put_and_persist(&cache, &settled(&keys, &work), listing(&["a"]));
+    assert!(disk.flush(PATIENT));
+    let stored = stored_on_disk(&db_in(&dir), &keys, &[work]);
+    assert_eq!(stored.stats().entries, 0);
+}
+
+#[test]
+fn a_folder_closed_before_its_write_is_not_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = folder(r"C:\work");
+    let keys = serial_keys(42);
+    let (cache, disk) = writing_cache(&db_in(&dir), &keys);
+    cache.keep_on_disk([&work]);
+    let release = disk.stall();
+    put_and_persist(&cache, &settled(&keys, &work), listing(&["a"]));
+    cache.keep_on_disk([]);
+    release.send(()).unwrap();
+    assert!(disk.flush(PATIENT));
+    let stored = stored_on_disk(&db_in(&dir), &keys, &[work]);
+    assert_eq!(stored.stats().entries, 0);
+}
+
+#[test]
+fn reopening_a_closed_folder_writes_it_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (work, other) = (folder(r"C:\work"), folder(r"C:\other"));
+    let keys = serial_keys(42);
+    let (cache, disk) = writing_cache(&db_in(&dir), &keys);
+    let key = settled(&keys, &work);
+    cache.keep_on_disk([&work]);
+    put_and_persist(&cache, &key, listing(&["a"]));
+    cache.keep_on_disk([&other]);
+    put_and_persist(&cache, &settled(&keys, &other), listing(&["b"]));
+    cache.keep_on_disk([&work]);
+    let mut again = listing(&["a"]);
+    again.read_at = at(2_000);
+    put_and_persist(&cache, &key, again);
+    assert!(disk.flush(PATIENT));
+    drop((cache, disk));
+    let stored = stored_on_disk(&db_in(&dir), &keys, &[work]);
+    assert_eq!(stored.get(&key).unwrap().read_at, at(2_000));
+}
+
+#[test]
+fn a_full_queue_drops_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = serial_keys(42);
+    let folders: Vec<Location> = (0..40).map(|i| folder(&format!(r"C:\f{i}"))).collect();
+    let cache = ListingCache::default();
+    folders
+        .iter()
+        .for_each(|location| cache.put(settled(&keys, location), listing(&["x"])));
+    let disk = DiskListings::open(&db_in(&dir), warm(&ListingCache::default(), &keys, vec![]));
+    let release = disk.stall();
+    disk.save_folders(&cache, &keys, &folders);
+    release.send(()).unwrap();
+    assert!(disk.flush(PATIENT));
+    drop(disk);
+    let stored = stored_on_disk(&db_in(&dir), &keys, &folders)
+        .stats()
+        .entries;
+    assert!((1..=16).contains(&stored), "{stored} rows were written");
+}
+
+#[test]
+fn exit_flush_gives_up_on_a_stuck_writer_and_writes_once_it_frees() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = folder(r"C:\work");
+    let keys = serial_keys(42);
+    let cache = ListingCache::default();
+    cache.put(settled(&keys, &work), listing(&["a"]));
+    let disk = DiskListings::open(&db_in(&dir), warm(&ListingCache::default(), &keys, vec![]));
+    let release = disk.stall();
+    disk.save_folders(&cache, &keys, std::slice::from_ref(&work));
+    let started = Instant::now();
+    assert!(!disk.flush(Duration::from_millis(50)));
+    assert!(started.elapsed() < PATIENT);
+    release.send(()).unwrap();
+    assert!(disk.flush(PATIENT));
+    drop(disk);
+    assert_eq!(
+        stored_on_disk(&db_in(&dir), &keys, &[work]).stats().entries,
+        1
+    );
+}
+
+#[test]
+fn flush_reports_a_writer_that_could_not_open_its_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = serial_keys(42);
+    let disk = DiskListings::open(dir.path(), warm(&ListingCache::default(), &keys, vec![]));
+    assert!(!disk.flush(PATIENT));
 }

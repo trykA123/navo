@@ -50,8 +50,9 @@ fn seed_last_session(db: &Path, folder: &Location) {
         folder_changed: None,
         complete: true,
     };
-    let key = CacheKeys::default().key(folder).unwrap();
-    disk.save(key, Arc::new(listing));
+    let cache = ListingCache::default();
+    cache.put(CacheKeys::default().key(folder).unwrap(), listing);
+    disk.save_folders(&cache, &CacheKeys::default(), std::slice::from_ref(folder));
     assert!(disk.flush(PATIENT));
 }
 

@@ -243,6 +243,17 @@ impl Browser {
         self.pins = wanted;
     }
 
+    pub(super) fn sync_disk_folders(&self) {
+        let state = &self.state;
+        let tabs = state
+            .window_ids()
+            .into_iter()
+            .filter_map(|window| state.window(window))
+            .flat_map(|window| window.panes())
+            .flat_map(|pane| pane.tabs());
+        self.cache.keep_on_disk(tabs.map(|tab| tab.location()));
+    }
+
     pub(super) fn release_pins(&mut self) {
         let pins = std::mem::take(&mut self.pins);
         pins.iter().for_each(|key| self.cache.unpin(key));

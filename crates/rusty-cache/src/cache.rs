@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::SystemTime;
 
+use rusty_core::Location;
+
 use crate::store::{SizedListing, Store, Swap};
 use crate::{CacheKey, CachedListing, Change, DiskListings};
 
@@ -85,12 +87,18 @@ impl ListingCache {
         }
     }
 
+    pub fn keep_on_disk<'a>(&self, folders: impl IntoIterator<Item = &'a Location>) {
+        if let Some(disk) = &self.disk {
+            disk.keep_open(folders);
+        }
+    }
+
     pub fn persist(&self, key: &CacheKey) {
         let Some(disk) = &self.disk else {
             return;
         };
         if let Some(listing) = self.lock().peek(key) {
-            disk.save(key.clone(), listing);
+            disk.save_open(key, listing);
         }
     }
 
