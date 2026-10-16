@@ -1,3 +1,4 @@
+mod browse;
 mod files;
 mod folders;
 mod follow;
@@ -157,6 +158,22 @@ impl Rig {
             Shown::Folder(folder) => Some(folder.target.name()),
             Shown::Empty => None,
         })
+    }
+
+    pub fn rest_until(
+        &self,
+        cx: &mut TestAppContext,
+        done: impl Fn(&FerriteWindow) -> bool,
+    ) -> bool {
+        let deadline = Instant::now() + WITHIN;
+        while Instant::now() < deadline {
+            self.rest(cx);
+            if self.read(cx, &done) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        false
     }
 
     pub fn loads(&self, cx: &mut TestAppContext) -> u64 {

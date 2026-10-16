@@ -1,3 +1,4 @@
+mod browse;
 mod contents;
 mod contents_view;
 mod file;
@@ -8,12 +9,13 @@ mod header;
 mod inbox;
 mod scan;
 mod sheet;
+mod spot;
 mod stats;
 mod summary;
 
 use std::time::Duration;
 
-use gpui_kit::Task;
+use gpui_kit::{FocusHandle, Task};
 use rusty_fs::{IoQueue, PROGRESS_EVERY};
 
 use crate::browser::Waker;
@@ -21,6 +23,7 @@ use crate::browser::Waker;
 use super::FerriteWindow;
 use crate::prelude::*;
 use crate::side_sheet::SheetState;
+pub(in crate::window_view) use browse::bind_keys;
 use file::FilePreview;
 use folder::FolderPreview;
 use follow::{Key, Target};
@@ -53,6 +56,7 @@ impl Shown {
 
 pub(in crate::window_view) struct Preview {
     sheet: Entity<SheetState>,
+    browse: FocusHandle,
     is_open: bool,
     seen: Option<Key>,
     is_stale: bool,
@@ -70,6 +74,7 @@ impl Preview {
     pub(super) fn new(wake: Waker, cx: &mut App) -> Self {
         Self {
             sheet: cx.new(|_| SheetState::new()),
+            browse: cx.focus_handle(),
             is_open: false,
             seen: None,
             is_stale: false,
@@ -155,10 +160,21 @@ impl FerriteWindow {
             return;
         }
         self.preview.is_stale = false;
+        let was_browsing = self.preview.is_browsing(window, cx);
+        let carried = self.preview.folder().and_then(|folder| {
+            let is_same_folder = target
+                .as_ref()
+                .is_some_and(|target| target.location == folder.target.location);
+            is_same_folder.then(|| folder.carry()).flatten()
+        });
         let shown = match target {
             None => Shown::Empty,
             Some(target) if target.is_folder() => {
-                Shown::Folder(Box::new(self.start_folder(target)))
+                let mut folder = self.start_folder(target);
+                if let Some(carry) = carried {
+                    folder.adopt(carry);
+                }
+                Shown::Folder(Box::new(folder))
             }
             Some(target) => Shown::File(Box::new(self.start_file(target, window, cx))),
         };
@@ -166,6 +182,10 @@ impl FerriteWindow {
             self.preview.loads += 1;
         }
         self.preview.shown = Some(shown);
+        if was_browsing {
+            let target = self.preview.browse_target(cx);
+            window.focus(&target, cx);
+        }
         cx.notify();
     }
 }
