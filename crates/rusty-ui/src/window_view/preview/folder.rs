@@ -8,11 +8,11 @@ use rusty_fs::{
 };
 use rusty_structured::NodeId;
 
-use super::browse::Spot;
 use super::contents::{CHILD_LIMIT, Contents};
 use super::follow::Target;
 use super::inbox::Arrival;
 use super::scan::{Scan, Snapshots};
+use super::spot::{Restore, Spot};
 use super::{Preview, Shown};
 use crate::browser::Measured;
 use crate::prelude::*;
@@ -31,6 +31,7 @@ pub(in crate::window_view) struct FolderPreview {
     pub tree_scroll: ListScroll,
     pub summary_scroll: ScrollHandle,
     pub spot: Option<Spot>,
+    pub restore: Option<Restore>,
     load: u64,
     reads: Vec<Read>,
 }
@@ -164,6 +165,7 @@ impl FerriteWindow {
             tree_scroll: ListScroll::new(),
             summary_scroll: ScrollHandle::new(),
             spot: None,
+            restore: None,
             load,
             reads,
         }
@@ -209,6 +211,7 @@ impl FerriteWindow {
             return false;
         }
         folder.contents.attach(node, listed);
+        folder.settle_spot();
         folder.reads.retain(|read| read.node != node);
         true
     }

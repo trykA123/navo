@@ -2,8 +2,8 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{MouseButton, Role, ScrollHandle, Stateful, WeakEntity};
 use rusty_fs::{EntryKind, FolderProfile, LargeFile, Tally};
 
-use super::browse::Spot;
 use super::contents_view::{Mark, pick};
+use super::spot::Spot;
 use crate::file_list::kind;
 use crate::file_list::row::inset_ring;
 use crate::format;

@@ -13,6 +13,12 @@ use crate::window_view::FerriteWindow;
 use crate::window_view::viewer::CONTEXT as VIEWER;
 
 const WIDE_SHEET: f32 = 760.;
+
+#[derive(Clone, Copy)]
+struct BodyLook {
+    frame: SheetFrame,
+    is_browsing: bool,
+}
 const ROW_STATS: f32 = 500.;
 const SUMMARY_SHARE: f32 = 0.42;
 
@@ -87,7 +93,7 @@ impl FerriteWindow {
         let shown = self.preview.shown.as_ref();
         let is_folder = matches!(shown, Some(Shown::Folder(_)));
         let is_browsing = self.preview.is_browsing(window, cx);
-        let body = self.preview_body(&t, (frame, is_browsing), cx);
+        let body = self.preview_body(&t, BodyLook { frame, is_browsing }, cx);
         let sheet = SideSheet::new("preview-sheet", &self.preview.sheet, frame)
             .label("Preview")
             .header(title_view(&t, title_of(&t, shown), is_browsing))
@@ -130,12 +136,7 @@ impl FerriteWindow {
             .hint(&["enter", "f3"], "Open")
     }
 
-    fn preview_body(
-        &self,
-        t: &Theme,
-        look: (SheetFrame, bool),
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn preview_body(&self, t: &Theme, look: BodyLook, cx: &mut Context<Self>) -> AnyElement {
         match self.preview.shown.as_ref() {
             Some(Shown::File(file)) => file_body(t, file),
             Some(Shown::Folder(_)) => self.folder_body(t, look, cx),
@@ -148,7 +149,7 @@ impl FerriteWindow {
     fn folder_body(
         &self,
         t: &Theme,
-        (frame, is_browsing): (SheetFrame, bool),
+        BodyLook { frame, is_browsing }: BodyLook,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let width = self.preview.sheet.read(cx).width(&frame);

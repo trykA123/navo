@@ -138,14 +138,18 @@ fn disk_hooks(files: &Arc<HashMap<String, Vec<u8>>>) -> FileHooks {
 }
 
 fn open_samples(cx: &mut TestAppContext) -> Rig {
-    let fs = FakeFs::new();
+    open_samples_on(cx, FakeFs::new()).0
+}
+
+fn open_samples_on(cx: &mut TestAppContext, fs: FakeFs) -> (Rig, Arc<FakeFs>) {
     let mut stored = HashMap::new();
     for (name, bytes) in samples() {
         fs.add_file(&format!("home/{name}"), bytes.len() as u64);
         stored.insert(name.to_owned(), bytes);
     }
     let fs = Arc::new(fs);
-    open_on(cx, &fs, fs.clone(), disk_hooks(&Arc::new(stored)))
+    let rig = open_on(cx, &fs, fs.clone(), disk_hooks(&Arc::new(stored)));
+    (rig, fs)
 }
 
 fn shown_kind(cx: &mut TestAppContext, rig: &Rig) -> Option<(&'static str, bool)> {
@@ -262,4 +266,28 @@ fn browsing_a_file_preview_gives_focus_to_its_body(cx: &mut TestAppContext) {
     assert_eq!(rig.shown_name(cx).as_deref(), Some("config.yaml"));
     rig.key(cx, "escape");
     assert!(rig.list_has_focus(cx));
+}
+
+#[gpui_kit::test]
+fn a_reloaded_file_preview_keeps_focus_in_its_new_body(cx: &mut TestAppContext) {
+    let (rig, fs) = open_samples_on(cx, FakeFs::new().with_watch());
+    rig.open(cx);
+    rig.key(cx, "down");
+    rig.key(cx, "down");
+    rig.rest(cx);
+    assert!(rig.wait_until(cx, |view| matches!(
+        view.preview.shown(),
+        Some(Shown::File(file)) if file.body.is_some()
+    )));
+    rig.key(cx, "ctrl-shift-q");
+    assert!(body_has_focus(cx, &rig));
+    let loads = rig.loads(cx);
+    fs.add_file("home/config.yaml", 4_096);
+    assert!(rig.rest_until(cx, |view| view.preview.loads() > loads));
+    assert!(rig.wait_until(cx, |view| matches!(
+        view.preview.shown(),
+        Some(Shown::File(file)) if file.body.is_some()
+    )));
+    assert!(body_has_focus(cx, &rig));
+    assert!(!rig.list_has_focus(cx));
 }
