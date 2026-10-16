@@ -62,7 +62,12 @@ pub(in crate::window_view::viewer) fn open_named(
     let log = Reads::default();
     let len = setup.len.unwrap_or(setup.bytes.len() as u64);
     let files = logged(setup, &log);
-    let (window, view) = super::window_with(cx, fake_with(name, len), files, Kinds::builtin());
+    let (window, view) = super::window_with(
+        cx,
+        fake_with(name, len),
+        files,
+        Kinds::builtin().with_markdown(),
+    );
     press(cx, window, &view, "down");
     press_only(cx, window, "f3");
     assert!(reads(&log).is_empty(), "nothing is read on the UI thread");

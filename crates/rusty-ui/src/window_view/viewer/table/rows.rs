@@ -60,7 +60,6 @@ impl Indexed {
                 fetched.end = end;
                 fetched.bytes += bytes;
             }
-            Some(fetched) if fetched.end == asked.start => fetched.end = asked.end,
             _ => {
                 self.fetched = Some(Fetched {
                     start: asked.start,
@@ -118,5 +117,26 @@ impl Rows {
             return false;
         }
         indexed.covered_until(wanted) < wanted.end
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Indexed, Rows, WINDOW_BYTES};
+
+    #[test]
+    fn a_full_window_is_replaced_and_every_fetched_row_stays_readable() {
+        let mut indexed = Indexed::default();
+        let big = "x".repeat(WINDOW_BYTES / 3 + 1);
+        for row in 0..8u64 {
+            indexed.store(row..row + 4, vec![vec![big.clone()]], true);
+            let rows = Rows::Indexed(Box::new(indexed));
+            let (number, cells) = rows.get(row as usize).expect("the new row is readable");
+            assert_eq!((number, cells[0].len()), (row + 1, big.len()));
+            let Rows::Indexed(back) = rows else {
+                unreachable!("built as indexed above")
+            };
+            indexed = *back;
+        }
     }
 }
