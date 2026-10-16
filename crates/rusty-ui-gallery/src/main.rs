@@ -2,6 +2,7 @@
 
 mod drives_page;
 mod gallery;
+mod image_sample;
 mod operate_page;
 mod options;
 mod pane_page;

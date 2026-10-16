@@ -2,6 +2,7 @@ mod background;
 mod body;
 mod editor;
 mod files;
+mod image;
 mod keys_bar;
 mod kinds;
 mod lister;
@@ -19,8 +20,10 @@ use rusty_core::Location;
 
 pub use body::{Attach, BodyKeys, Host, Key, ViewerBody};
 pub use files::{
-    FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
+    FileHooks, FileStamp, FileText, Head, IndexRun, Paged, ReadBytes, Reopen, Save, SaveError,
+    SharedSource,
 };
+pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
 pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
 
@@ -30,6 +33,7 @@ use open::Opening;
 
 const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";
+const IMAGE_CONTEXT: &str = "Image";
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
 
 gpui_kit::actions!(
@@ -61,6 +65,11 @@ gpui_kit::actions!(
         OpenGoTo,
         MatchCase,
         Back,
+        FitImage,
+        ActualSize,
+        ZoomIn,
+        ZoomOut,
+        ToggleInfo,
     ]
 );
 
@@ -81,6 +90,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", FindOnEnter, context),
         KeyBinding::new("n", NextFile, context),
         KeyBinding::new("p", PreviousFile, context),
+        KeyBinding::new("space", NextFile, context),
+        KeyBinding::new("backspace", PreviousFile, context),
         KeyBinding::new("up", RowUp, context),
         KeyBinding::new("down", RowDown, context),
         KeyBinding::new("pageup", PageUp, context),
@@ -97,6 +108,21 @@ pub fn bind_keys(cx: &mut App) {
     tree::bind_keys(cx);
     table::bind_keys(cx);
     markdown::bind_keys(cx);
+    bind_image_keys(cx);
+}
+
+fn bind_image_keys(cx: &mut App) {
+    let context = Some(IMAGE_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("0", FitImage, context),
+        KeyBinding::new("ctrl-0", FitImage, context),
+        KeyBinding::new("1", ActualSize, context),
+        KeyBinding::new("+", ZoomIn, context),
+        KeyBinding::new("=", ZoomIn, context),
+        KeyBinding::new("shift-=", ZoomIn, context),
+        KeyBinding::new("-", ZoomOut, context),
+        KeyBinding::new("i", ToggleInfo, context),
+    ]);
 }
 
 pub(super) struct Viewer {

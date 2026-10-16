@@ -4,7 +4,7 @@ use rusty_core::Location;
 use rusty_core::encoding::TextEncoding;
 use rusty_ui::window_view::{Save, SaveError};
 
-use super::{line_endings, mostly_crlf, read, write};
+use super::{bytes, line_endings, mostly_crlf, read, write};
 
 mod encodings;
 
@@ -168,4 +168,14 @@ fn range_reads_only_the_asked_bytes_and_stops_at_the_end() {
     assert_eq!(super::range(&at(&file), 8, 10).unwrap(), b"89");
     assert!(super::bytes(&at(&file), 5).is_err());
     assert_eq!(super::bytes(&at(&file), 10).unwrap(), b"0123456789");
+}
+
+#[test]
+fn bytes_reads_a_whole_file_up_to_the_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("dot.png");
+    fs::write(&file, [0x89, b'P', b'N', b'G']).unwrap();
+    assert_eq!(bytes(&at(&file), 4).unwrap(), [0x89, b'P', b'N', b'G']);
+    let error = bytes(&at(&file), 3).unwrap_err();
+    assert!(error.starts_with("Too large"), "{error}");
 }

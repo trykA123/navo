@@ -102,7 +102,7 @@ impl ViewerKind for Pictures {
 
     fn score(&self, sniff: &Sniff<'_>) -> u8 {
         if sniff.head.starts_with(b"\x89PNG") {
-            90
+            95
         } else {
             0
         }
@@ -127,7 +127,7 @@ fn an_added_kind_with_a_higher_score_wins_and_others_still_accept() {
     let kinds = Kinds::builtin().with(Pictures);
     let png = sniff(b"\x89PNG\r\n\x1a\n\x00", 9);
     let ids: Vec<_> = kinds.choose(&png).iter().map(|kind| kind.id()).collect();
-    assert_eq!(ids, ["pictures", "hex", "text"]);
+    assert_eq!(ids, ["pictures", "image", "hex", "text"]);
     let text = sniff(b"hello", 5);
     let ids: Vec<_> = kinds.choose(&text).iter().map(|kind| kind.id()).collect();
     assert_eq!(ids, ["text", "hex"]);
@@ -144,7 +144,7 @@ fn best_named(name: &str, head: &[u8], len: u64) -> &'static str {
 
 #[test]
 fn structured_files_open_as_tree_table_or_markdown() {
-    let cases: [(&str, &[u8], &str); 14] = [
+    let cases: [(&str, &[u8], &str); 13] = [
         ("shop.json", b" {\"a\": 1}", "tree"),
         ("list.json", b"\xEF\xBB\xBF[1, 2]", "tree"),
         ("settings.jsonc", b"// note\n{}", "tree"),
@@ -154,7 +154,6 @@ fn structured_files_open_as_tree_table_or_markdown() {
         ("model.arxml", b"<?xml version=\"1.0\"?><AUTOSAR/>", "tree"),
         ("app.csproj", b"<Project Sdk=\"x\"/>", "tree"),
         ("info.plist", b"<?xml version=\"1.0\"?><plist/>", "tree"),
-        ("icon.svg", b"<svg xmlns=\"x\"/>", "tree"),
         ("fruit.csv", b"name,qty\nPear,1\n", "table"),
         ("fruit.tsv", b"name\tqty\nPear\t1\n", "table"),
         ("notes.md", b"# Title\n", "markdown"),
@@ -190,42 +189,9 @@ fn plain_text_and_content_that_does_not_fit_stay_text() {
     assert!(note.contains("64 MB"), "{note}");
 }
 
-struct Vector;
-
-impl ViewerKind for Vector {
-    fn id(&self) -> &'static str {
-        "image"
-    }
-
-    fn name(&self) -> &'static str {
-        "Image"
-    }
-
-    fn slot(&self) -> Slot {
-        Slot::Rich
-    }
-
-    fn score(&self, sniff: &Sniff<'_>) -> u8 {
-        if sniff.name.ends_with(".svg") { 90 } else { 0 }
-    }
-
-    fn load(&self, _: &FileHooks, _: &Location, _: &Sniff<'_>) -> Result<Loaded, String> {
-        Ok(Box::new(()))
-    }
-
-    fn attach(
-        &self,
-        _: Attach,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Result<Box<dyn ViewerBody>, String> {
-        Err("No image view in this test.".to_owned())
-    }
-}
-
 #[test]
 fn svg_stays_an_image_when_the_image_kind_exists() {
-    let kinds = Kinds::builtin().with(Vector);
+    let kinds = Kinds::builtin();
     let sniff = Sniff {
         head: b"<svg xmlns=\"x\"/>",
         name: "icon.svg",
@@ -234,4 +200,69 @@ fn svg_stays_an_image_when_the_image_kind_exists() {
     let ids: Vec<_> = kinds.choose(&sniff).iter().map(|kind| kind.id()).collect();
     assert_eq!(ids.first(), Some(&"image"));
     assert!(ids.contains(&"tree"));
+}
+
+fn best(head: &[u8], name: &str) -> &'static str {
+    let sniff = Sniff {
+        head,
+        name,
+        len: head.len() as u64,
+    };
+    let chosen = Kinds::builtin().choose(&sniff);
+    chosen.first().expect("a kind accepts every file").id()
+}
+
+#[test]
+fn every_image_format_opens_as_an_image_by_content_or_name() {
+    let heads: [&[u8]; 9] = [
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR",
+        b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00",
+        b"GIF89a\x01\x00\x01\x00",
+        b"GIF87a\x01\x00\x01\x00",
+        b"RIFF\x24\x00\x00\x00WEBPVP8L",
+        b"BM\x46\x00\x00\x00\x00\x00",
+        b"\x00\x00\x01\x00\x01\x00\x10\x10",
+        b"II*\x00\x08\x00\x00\x00",
+        b"MM\x00*\x00\x00\x00\x08",
+    ];
+    for head in heads {
+        assert_eq!(best(head, "file.bin"), "image", "{head:?}");
+    }
+    let svg = b"<?xml version=\"1.0\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\"/>";
+    assert_eq!(best(svg, "logo.svg"), "image");
+    assert_eq!(best(svg, "logo.SVGZ"), "image");
+    assert_eq!(best(b"\x00\x01\x02\x03", "scan.tif"), "image");
+}
+
+#[test]
+fn text_and_other_binaries_do_not_open_as_images() {
+    assert_eq!(best(b"BMW 320d, blue\n", "cars.txt"), "text");
+    assert_eq!(best(b"plain words\n", "named.png"), "text");
+    assert_eq!(best(b"<p>an <svg> tag in prose</p>\n", "page.html"), "text");
+    assert_eq!(best(b"MZ\x90\x00\x03", "setup.exe"), "hex");
+    assert_eq!(best(b"\x00\x00\x01\x00\x00\x00", "data.bin"), "hex");
+}
+
+#[test]
+fn an_svg_inside_a_text_file_can_still_be_shown_as_an_image() {
+    let head = b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n";
+    let sniff = Sniff {
+        head,
+        name: "drawing.xml",
+        len: head.len() as u64,
+    };
+    let ids: Vec<_> = Kinds::builtin()
+        .choose(&sniff)
+        .iter()
+        .map(|kind| (kind.id(), kind.slot()))
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            ("tree", Slot::Rich),
+            ("text", Slot::Text),
+            ("image", Slot::Rich),
+            ("hex", Slot::Hex)
+        ]
+    );
 }

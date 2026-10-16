@@ -1,4 +1,5 @@
 mod hex;
+mod image;
 mod markdown;
 mod table;
 mod text;
@@ -54,6 +55,8 @@ impl Sniff<'_> {
     }
 }
 
+pub(super) use image::{IMAGE_ID, is_image_name};
+
 pub type Loaded = Box<dyn Any + Send>;
 
 pub trait ViewerKind: Send + Sync {
@@ -98,6 +101,7 @@ impl Kinds {
         Self(vec![
             Arc::new(text::Text),
             Arc::new(hex::Hex),
+            Arc::new(image::Image),
             Arc::new(tree::TreeKind),
             Arc::new(table::TableKind),
             Arc::new(markdown::MarkdownKind),

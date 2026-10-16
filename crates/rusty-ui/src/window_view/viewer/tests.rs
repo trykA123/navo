@@ -1,4 +1,5 @@
 mod find;
+mod image;
 mod kind;
 mod language;
 mod lister;

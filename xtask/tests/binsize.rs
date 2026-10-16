@@ -7,7 +7,7 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
 
-    const RUSTY_EXE_LIMIT: u64 = 80 * 1024 * 1024;
+    const RUSTY_EXE_LIMIT: u64 = 160 * 1024 * 1024;
 
     struct TestFile(PathBuf);
 

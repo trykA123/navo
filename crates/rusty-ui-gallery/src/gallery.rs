@@ -3,10 +3,11 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::{PagedView, ViewerBody};
+use rusty_ui::window_view::{ImageView, PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
+use crate::image_sample;
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
@@ -45,10 +46,11 @@ pub enum Page {
     Tree,
     Table,
     Markdown,
+    Image,
 }
 
 impl Page {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -59,20 +61,22 @@ impl Page {
         Self::Tree,
         Self::Table,
         Self::Markdown,
+        Self::Image,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Primitives => "Primitives",
+            Self::Primitives => "Parts",
             Self::Pane => "Pane",
             Self::Operate => "Operate",
             Self::Hex => "Hex",
-            Self::PagedText => "Paged text",
+            Self::PagedText => "Text",
             Self::Drives => "Drives",
             Self::TypedPath => "Path",
             Self::Tree => "Tree",
             Self::Table => "Table",
             Self::Markdown => "Markdown",
+            Self::Image => "Image",
         }
     }
 }
@@ -89,6 +93,7 @@ pub struct Gallery {
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
+    image: Option<Entity<ImageView>>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -109,6 +114,7 @@ impl Gallery {
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
+            image: image_sample::image_view(cx).ok(),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -119,6 +125,9 @@ impl Gallery {
     pub fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
         self.mode = mode;
         tokens::apply(mode, cx);
+        if let Some(image) = &self.image {
+            image.update(cx, |image, cx| image.show_info(mode == Mode::Dark, cx));
+        }
         cx.notify();
     }
 
@@ -254,6 +263,7 @@ impl Render for Gallery {
             Page::PagedText => root.child(self.paged_text.clone()),
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
+            Page::Image => root.children(self.image.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree | Page::Table | Page::Markdown => match self.sample() {
                 Some(body) => root.child(body.view()),

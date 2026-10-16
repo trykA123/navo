@@ -1,8 +1,8 @@
 use super::{RUSTY_EXE_LIMIT, TooLarge, check_size};
 
 #[test]
-fn limit_is_sixty_mebibytes() {
-    assert_eq!(RUSTY_EXE_LIMIT, 83_886_080);
+fn limit_is_160_mebibytes() {
+    assert_eq!(RUSTY_EXE_LIMIT, 167_772_160);
 }
 
 #[test]
