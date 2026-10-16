@@ -73,6 +73,16 @@ fn classic_menu_asks_for_the_native_menu(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn a_menu_without_classic_hides_it_and_ignores_shift_f10(cx: &mut TestAppContext) {
+    let menu = open_default(cx);
+    menu.menu.update(cx, |menu, cx| menu.hide_classic(cx));
+    menu.frame(cx);
+    assert!(!menu.has_classic(cx));
+    menu.press(&["shift-f10"], cx);
+    assert!(menu.events().is_empty());
+}
+
+#[gpui_kit::test]
 fn disabled_rows_never_emit(cx: &mut TestAppContext) {
     let menu = open_default(cx);
     menu.click(0, 4, cx);

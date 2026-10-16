@@ -93,10 +93,8 @@ pub fn rare_rows(menu: &ShellMenu) -> Vec<Row> {
 
 fn overview(menu: &ShellMenu) -> Vec<Row> {
     let mut out = Vec::new();
-    let ferrite: Vec<Row> = top_level(menu)
-        .filter(|(_, item)| item.is_ferrite() && !item.hidden && !item.text.is_empty())
-        .map(|(path, item)| Row::Item(ItemRow::new(path, item)))
-        .collect();
+    let ferrite =
+        with_separators(top_level(menu).filter(|(_, item)| item.is_ferrite() && !item.hidden));
     if !ferrite.is_empty() {
         out.push(Row::Header(Section::Ferrite));
         out.extend(ferrite);

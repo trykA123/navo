@@ -14,7 +14,7 @@ use gpui_kit::{AnyView, FocusHandle, Focusable, point};
 pub use decode::{IMAGE_LIMIT, Picture, decode_image};
 pub use exif::ExifEntry;
 
-use super::body::{BodyKeys, Key, ViewerBody};
+use super::body::{BodyKeys, Key, MenuEntry, ViewerBody};
 use super::keys_bar::NEXT_PREVIOUS;
 use crate::prelude::*;
 use zoom::{STEP, Viewport, Zoom};
@@ -152,6 +152,13 @@ impl ViewerBody for ImageBody {
     }
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
+
+    fn menu(&self, _: bool, _: &mut App) -> Vec<MenuEntry> {
+        vec![
+            MenuEntry::Run("Fit", Box::new(super::FitImage)),
+            MenuEntry::Run("100 %", Box::new(super::ActualSize)),
+        ]
+    }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {
         self.0.update(cx, |view, cx| view.set_note(note, cx));

@@ -71,7 +71,7 @@ impl FerriteWindow {
             .on_action(save)
             .on_action(close);
         let root = Self::lister_actions(Self::slot_actions(root, cx), cx);
-        let root = Self::marking_actions(root, cx)
+        let root = Self::marking_actions(Self::menu_opening(root, cx), cx)
             .flex()
             .flex_col()
             .flex_1()

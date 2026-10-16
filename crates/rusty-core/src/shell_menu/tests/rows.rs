@@ -48,6 +48,24 @@ fn ferrite_only_menu_has_no_windows_header() {
 }
 
 #[test]
+fn separators_split_the_ferrite_section_into_groups() {
+    let action = |name: &'static str| MenuItem::new(ItemId::Action(name), name, Group::Ferrite);
+    let menu = ShellMenu {
+        items: vec![
+            MenuItem::separator(Group::Ferrite),
+            action("Copy"),
+            action("Select all"),
+            MenuItem::separator(Group::Ferrite),
+            action("Bookmark"),
+        ],
+    };
+    assert_eq!(
+        item_texts(&rows(&menu, "")),
+        ["# Ferrite", "Copy", "Select all", "-", "Bookmark"]
+    );
+}
+
+#[test]
 fn rare_only_shell_items_show_more_without_separator() {
     let menu = ShellMenu {
         items: vec![MenuItem {

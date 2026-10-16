@@ -109,6 +109,9 @@ impl ContextMenu {
     }
 
     fn on_classic(&mut self, _: &MenuClassic, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.has_classic {
+            return;
+        }
         self.conclude(Some(ContextMenuEvent::ShowClassic), window, cx);
     }
 

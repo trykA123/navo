@@ -27,6 +27,7 @@ pub enum FerriteAction {
 pub enum ItemId {
     Ferrite(FerriteAction),
     Shell { command: u32, verb: Option<String> },
+    Action(&'static str),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

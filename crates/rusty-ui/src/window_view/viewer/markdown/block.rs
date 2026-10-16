@@ -241,6 +241,7 @@ pub(super) fn draw_block(page: &Page, index: usize) -> AnyElement {
     let is_end = index + 1 == page.doc.blocks().len();
     div()
         .id(("md-block", index))
+        .test_support()
         .w_full()
         .flex()
         .justify_center()

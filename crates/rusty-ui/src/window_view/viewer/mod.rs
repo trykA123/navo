@@ -12,6 +12,7 @@ mod keys_bar;
 mod kinds;
 mod lister;
 mod markdown;
+mod menu;
 mod modes;
 mod open;
 mod paged;
@@ -21,11 +22,11 @@ mod table;
 mod tree;
 mod view;
 
-use gpui_kit::FocusHandle;
+use gpui_kit::{FocusHandle, Subscription};
 use rusty_core::Location;
 
 pub use archive::{ArchiveSource, ArchiveView};
-pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, ViewerBody};
+pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody};
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, ReadBytes, Reopen, Save, SaveError,
     SharedSource,
@@ -35,6 +36,7 @@ pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
 pub use keys::bind_keys;
 use keys::*;
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
+pub use menu::viewer_menu;
 pub use paged::{PagedKind, PagedView};
 pub use search::memory::MemoryLink;
 
@@ -61,6 +63,7 @@ pub(super) struct Viewer {
     switching: Option<(Slot, u64)>,
     message: Option<SharedString>,
     carried: Option<Carried>,
+    menu: Option<(Entity<crate::context_menu::ContextMenu>, Subscription)>,
 }
 
 impl Viewer {
@@ -82,6 +85,7 @@ impl Viewer {
             switching: None,
             message: None,
             carried: None,
+            menu: None,
         }
     }
 

@@ -254,6 +254,10 @@ impl Opened {
         })
     }
 
+    pub fn has_classic(&self, cx: &mut TestAppContext) -> bool {
+        self.with_root(cx, |window| window.try_find("menu-classic").is_some())
+    }
+
     pub fn has_level(&self, depth: usize, cx: &mut TestAppContext) -> bool {
         self.with_root(cx, |window| {
             window.try_find(("menu-level", depth)).is_some()

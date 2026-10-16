@@ -49,7 +49,8 @@ pub use viewer::{
     Paged, PagedKind, PagedView, Reopen, Save, SaveError, SharedSource, Slot, Sniff, ViewerBody,
     ViewerKind,
 };
-pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, ReadBytes, decode_image};
+pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, MenuEntry, Picture, ReadBytes, decode_image};
+pub use viewer::{bind_keys as bind_viewer_keys, viewer_menu};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
@@ -420,7 +421,8 @@ impl Render for FerriteWindow {
             .child(self.fkey_bar(cx))
             .children(dialog)
             .children(menu)
-            .children(self.shell_menu_view());
+            .children(self.shell_menu_view())
+            .children(self.viewer_menu_view());
         self.preview_keys(root, window, cx)
     }
 }
