@@ -6,6 +6,7 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement, Styled, div, img, px,
 };
 
+use crate::primitives::{IconName, icon as chevron};
 use crate::tokens::Theme;
 
 macro_rules! brand_svg {
@@ -35,7 +36,6 @@ fn icon_for(scale_factor: f32) -> Arc<Image> {
 }
 
 pub(super) fn brand(t: &Theme, title: SharedString, scale_factor: f32) -> impl IntoElement {
-    let width = t.spacing.rail_width - t.spacing.xl - t.spacing.xxl;
     let icon = div()
         .id("title-bar-icon")
         .test_support()
@@ -49,10 +49,18 @@ pub(super) fn brand(t: &Theme, title: SharedString, scale_factor: f32) -> impl I
         .test_support()
         .flex()
         .items_center()
-        .gap(t.spacing.md)
+        .gap(t.spacing.sm)
         .flex_none()
-        .w(width)
-        .font_weight(FontWeight::BOLD)
+        .py(t.spacing.xs)
+        .pl(t.spacing.xs)
+        .pr(t.spacing.md)
+        .rounded(t.radii.card)
+        .font_weight(FontWeight::SEMIBOLD)
         .child(icon)
         .child(title)
+        .child(chevron(
+            IconName::ChevronDown,
+            t.spacing.icon - px(1.),
+            t.colors.muted,
+        ))
 }

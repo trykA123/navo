@@ -66,17 +66,29 @@ impl FerriteTitleBar {
 }
 
 fn header_area(t: &Theme, header: Vec<AnyElement>) -> impl IntoElement {
+    let mut items = header.into_iter();
+    let centre = items.next();
+    let held = |item: AnyElement| div().flex().min_w_0().occlude().child(item);
     div()
         .id("title-bar-header")
         .flex()
+        .flex_1()
         .items_center()
         .gap(t.spacing.md)
         .min_w_0()
-        .flex_shrink(1.)
         .mr(t.spacing.md)
-        .occlude()
         .test_support()
-        .children(header)
+        .child(div().flex_1())
+        .children(centre.map(held))
+        .child(
+            div()
+                .flex()
+                .flex_1()
+                .justify_end()
+                .items_center()
+                .gap(t.spacing.md)
+                .children(items.map(held)),
+        )
 }
 
 impl RenderOnce for FerriteTitleBar {
@@ -84,7 +96,7 @@ impl RenderOnce for FerriteTitleBar {
         let t = tokens::current(cx);
         TitleBar::new()
             .h(t.spacing.header_height)
-            .pl(t.spacing.xl)
+            .pl(t.spacing.md)
             .bg(t.colors.background)
             .border_color(t.colors.line)
             .text_color(t.colors.text)

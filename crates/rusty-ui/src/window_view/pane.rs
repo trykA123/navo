@@ -125,8 +125,7 @@ impl FerriteWindow {
         let tabs = Self::tabs(pane, titles, active_index, cx).highlighted(is_active);
         card_header(&t)
             .child(div().flex_1().min_w_0().child(tabs))
-            .child(self.drive_bar(pane, cx))
-            .children(self.drive_menu_view(pane, cx))
+            .child(self.drive_pill(pane, cx))
     }
 
     fn card_label(&self, pane: PaneId) -> &'static str {

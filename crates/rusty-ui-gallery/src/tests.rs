@@ -156,7 +156,7 @@ fn the_operate_page_shows_both_dialogs_and_every_job_state(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn the_drive_pages_show_both_bars_the_menu_and_a_path_error(cx: &mut TestAppContext) {
+fn the_drive_pages_show_both_pills_the_menu_and_a_path_error(cx: &mut TestAppContext) {
     let (window, _) = cx.update(|cx| {
         rusty_ui::init(Mode::Light, cx).expect("bundled fonts load");
         rusty_ui::file_list::bind_keys(cx);
@@ -177,16 +177,15 @@ fn the_drive_pages_show_both_bars_the_menu_and_a_path_error(cx: &mut TestAppCont
         window.render_frame(cx);
         window.click("Drives", cx);
         for side in 0..2usize {
-            let bar = window.within(("drives", side));
-            assert!(bar.find(("drive", 5usize)).visible(), "bar {side}");
+            assert!(window.find(("drive-pill", side)).visible(), "pill {side}");
         }
+        assert_eq!(window.find(("drive-pill", 0usize)).label(), Some("C"));
         let menu = window.within(("drive-menu", 0usize));
         assert!(menu.find(("drive-row", 4usize)).visible());
         assert_eq!(menu.find(("drive-row", 1usize)).selected(), Some(true));
         window.click("Path", cx);
         assert!(window.find("path-error").visible());
-        let twelve = window.within(("drives", 1usize));
-        assert!(twelve.try_find(("drive", 11usize)).is_some());
+        assert_eq!(window.find(("drive-pill", 1usize)).label(), Some("D"));
     })
     .expect("window");
 }

@@ -45,7 +45,7 @@ fn holding_shift_lights_its_cap_and_shows_the_shift_layer(cx: &mut TestAppContex
         },
     );
     let (shift, lit) = key_labels(cx, window);
-    assert_eq!(shift[3], "F4 Edit with…");
+    assert_eq!(shift[3], "F4 Edit with");
     assert_eq!(shift[7], "F8 Delete for good");
     assert_eq!(lit, [Some(true), Some(false), Some(false)]);
     hold(cx, window, Modifiers::default());

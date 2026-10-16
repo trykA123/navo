@@ -5,7 +5,7 @@ use rusty_fs::FsEntry;
 use rusty_ui::FocusHandle;
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::pane_chrome::{
-    DriveBar, DriveIcon, DriveInfo, DriveMenu, PathBar, PathInput, current_drive,
+    DriveIcon, DriveInfo, DriveMenu, DrivePill, PathBar, PathInput, current_drive,
 };
 use rusty_ui::prelude::*;
 use rusty_ui::status_bar::{StatusBar, StatusBarProps};
@@ -135,17 +135,18 @@ impl DrivesPage {
     fn pane(&self, side: usize, drives: Rc<[DriveInfo]>, path: &str) -> Div {
         let here = location(path);
         let current = current_drive(&drives, &here);
-        let bar = div()
+        let is_open = side == 0 && self.shows == Shows::Menu;
+        let drive = current.and_then(|index| drives.get(index).cloned());
+        let pill = div()
             .relative()
-            .flex()
-            .flex_col()
-            .child(DriveBar::new(("drives", side), drives.clone()).current(current))
-            .when(side == 0 && self.shows == Shows::Menu, |d| {
+            .child(DrivePill::new(("drive-pill", side), drive).open(is_open))
+            .when(is_open, |d| {
                 let menu = DriveMenu::new(("drive-menu", side), drives, 1)
                     .current(current)
                     .track_focus(&self.menu_focus);
-                d.child(menu.into_popover(px(6.)))
+                d.child(menu.into_popover(px(0.)))
             });
+        let bar = div().flex().justify_end().px(px(8.)).py(px(6.)).child(pill);
         let path_row = if side == 0 && self.shows == Shows::PathError {
             PathInput::new(("path-input", side), r"%PROJECTS%\commander")
                 .error(Some("Unknown variable %PROJECTS%.".into()))

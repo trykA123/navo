@@ -89,3 +89,30 @@ fn the_cards_are_named_left_and_right(cx: &mut TestAppContext) {
     })
     .expect("window");
 }
+
+#[gpui_kit::test]
+fn the_plus_button_opens_a_new_tab_in_its_pane(cx: &mut TestAppContext) {
+    let (window, view) = open(cx, Rc::default());
+    let panes = view.read_with(cx, |view, _| view.panes());
+    let tabs = |cx: &mut TestAppContext| {
+        view.read_with(cx, |view, _| {
+            panes
+                .iter()
+                .map(|pane| {
+                    view.browser
+                        .state()
+                        .pane(*pane)
+                        .map_or(0, |p| p.tabs().len())
+                })
+                .collect::<Vec<_>>()
+        })
+    };
+    let before = tabs(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within(("pane", panes[1].get())).click("new-tab", cx);
+    })
+    .expect("window");
+    super::settle(cx, &view);
+    assert_eq!(tabs(cx), [before[0], before[1] + 1]);
+}

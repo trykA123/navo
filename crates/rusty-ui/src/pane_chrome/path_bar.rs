@@ -12,6 +12,8 @@ use super::segments::{PathSegment, path_segments};
 use crate::primitives::{IconName, icon};
 use crate::tokens::{self, Theme};
 
+const CRUMB_HEIGHT: f32 = 30.;
+
 type NavigateHandler = Rc<dyn Fn(&Location, &mut Window, &mut App)>;
 type EditHandler = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -121,7 +123,7 @@ impl RenderOnce for PathBar {
             .flex_none()
             .mx(t.spacing.md)
             .mb(t.spacing.sm)
-            .h(t.spacing.path_height)
+            .h(px(CRUMB_HEIGHT))
             .px(t.spacing.xs)
             .rounded(t.radii.md)
             .text_color(c.muted)

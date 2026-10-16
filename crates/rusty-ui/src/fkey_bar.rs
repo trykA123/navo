@@ -7,12 +7,15 @@ use gpui_kit::{
 };
 
 use crate::FluentBuilder as _;
+use crate::primitives::{IconName, Tooltip, icon};
 use crate::tokens::{self, Motion, Theme};
 
-const CAP_HEIGHT: f32 = 22.;
 const KEY_HEIGHT: f32 = 30.;
+const CHIP_HEIGHT: f32 = 24.;
+const CHIP_WIDTH: f32 = 28.;
 const LABEL_RISE: f32 = 4.;
 const PILL_SLOT: f32 = 220.;
+const DIMMED: f32 = 0.45;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum KeyLayer {
@@ -51,28 +54,14 @@ impl KeyLayer {
 pub struct FKeyBar {
     id: ElementId,
     keys: Vec<(SharedString, SharedString)>,
-    is_sized_to_keys: bool,
     layers: Option<Layers>,
+    warning: Option<(usize, SharedString)>,
     is_pill_reserved: bool,
 }
 
 struct Layers {
     held: Option<KeyLayer>,
-    sizes: Vec<KeySize>,
-}
-
-#[derive(Clone, Default)]
-struct KeySize {
-    base: SharedString,
-    grow: f32,
-}
-
-fn key_size(labels: [SharedString; 4]) -> KeySize {
-    let length = |label: &SharedString| label.chars().count() as f32;
-    let widest = labels.iter().map(length).fold(0., f32::max);
-    let [base, ..] = labels;
-    let grow = widest - length(&base) + 1.;
-    KeySize { base, grow }
+    base: Vec<SharedString>,
 }
 
 impl FKeyBar {
@@ -86,16 +75,10 @@ impl FKeyBar {
                 .into_iter()
                 .map(|(key, label)| (key.into(), label.into()))
                 .collect(),
-            is_sized_to_keys: false,
             layers: None,
+            warning: None,
             is_pill_reserved: false,
         }
-    }
-
-    #[must_use]
-    pub fn sized_to_keys(mut self) -> Self {
-        self.is_sized_to_keys = true;
-        self
     }
 
     #[must_use]
@@ -104,11 +87,14 @@ impl FKeyBar {
         held: Option<KeyLayer>,
         labels: impl IntoIterator<Item = [L; 4]>,
     ) -> Self {
-        let sizes = labels
-            .into_iter()
-            .map(|key| key_size(key.map(Into::into)))
-            .collect();
-        self.layers = Some(Layers { held, sizes });
+        let base = labels.into_iter().map(|[base, ..]| base.into()).collect();
+        self.layers = Some(Layers { held, base });
+        self
+    }
+
+    #[must_use]
+    pub fn warn(mut self, index: usize, spoken: impl Into<SharedString>) -> Self {
+        self.warning = Some((index, spoken.into()));
         self
     }
 
@@ -119,94 +105,91 @@ impl FKeyBar {
     }
 }
 
-fn cap(t: &Theme, key: SharedString, is_lit: bool) -> Div {
-    let s = &t.surfaces;
-    let base = div()
-        .flex()
-        .flex_none()
-        .items_center()
-        .justify_center()
-        .h(px(CAP_HEIGHT))
-        .min_w(px(CAP_HEIGHT))
-        .px(t.spacing.xs)
-        .rounded(t.radii.sm)
-        .font_family(t.typography.mono_font.clone())
-        .text_size(t.typography.key)
-        .font_weight(FontWeight::MEDIUM)
-        .border_1();
-    if is_lit {
-        base.bg(s.keycap_lit)
-            .border_color(s.keycap_lit)
-            .text_color(s.keycap_lit_label)
-    } else {
-        base.bg(s.keycap_face)
-            .text_color(s.keycap_label)
-            .border_color(s.card_edge)
-            .shadow(t.shadows.keycap.clone())
-    }
-    .child(key)
-}
-
-fn modifier_caps(t: &Theme, held: Option<KeyLayer>) -> impl IntoElement {
+fn pill(t: &Theme) -> Div {
     div()
         .flex()
         .flex_none()
         .items_center()
-        .gap(t.spacing.xs)
-        .pr(t.spacing.md)
-        .border_r_1()
+        .h(px(KEY_HEIGHT))
+        .rounded(t.radii.pill)
+        .bg(t.surfaces.card)
+        .border_1()
         .border_color(t.surfaces.card_edge)
-        .children(KeyLayer::ALL.into_iter().enumerate().map(|(index, layer)| {
+        .whitespace_nowrap()
+}
+
+fn chip(t: &Theme, key: SharedString) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .h(px(CHIP_HEIGHT))
+        .min_w(px(CHIP_WIDTH))
+        .px(t.spacing.xs)
+        .rounded(px(CHIP_HEIGHT / 2.))
+        .bg(t.surfaces.field)
+        .font_family(t.typography.mono_font.clone())
+        .text_size(t.typography.small)
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(t.colors.accent_text)
+        .child(key)
+}
+
+fn modifier_pills(t: &Theme, held: Option<KeyLayer>) -> Vec<AnyElement> {
+    let s = &t.surfaces;
+    KeyLayer::ALL
+        .into_iter()
+        .enumerate()
+        .map(|(index, layer)| {
             let is_lit = held == Some(layer);
-            div()
+            pill(t)
                 .id(("fkey-mod", index))
                 .role(Role::Label)
                 .aria_label(layer.name())
                 .aria_selected(is_lit)
                 .test_support()
-                .child(cap(t, layer.name().into(), is_lit))
-        }))
+                .px(t.spacing.lg)
+                .when(is_lit, |pill| {
+                    pill.bg(s.keycap_lit)
+                        .border_color(s.keycap_lit)
+                        .text_color(s.keycap_lit_label)
+                        .font_weight(FontWeight::SEMIBOLD)
+                })
+                .child(layer.name())
+                .into_any_element()
+        })
+        .collect()
 }
 
 struct Cell {
     index: usize,
     key: SharedString,
     label: SharedString,
-    is_sized: bool,
-    look: Option<LabelLook>,
+    fallback: Option<SharedString>,
+    warning: Option<SharedString>,
+    motion: Option<LabelMotion>,
 }
 
-#[derive(Clone)]
-struct LabelLook {
+#[derive(Clone, Copy)]
+struct LabelMotion {
     layer: Option<KeyLayer>,
     rise: f32,
-    size: KeySize,
 }
 
-fn label_view(t: &Theme, label: SharedString, index: usize, look: Option<LabelLook>) -> AnyElement {
-    let Some(LabelLook { layer, rise, size }) = look else {
-        return div().min_w_0().truncate().child(label).into_any_element();
+fn label_view(text: Div, index: usize, motion: Option<LabelMotion>, t: &Theme) -> AnyElement {
+    let Some(LabelMotion { layer, rise }) = motion else {
+        return text.into_any_element();
     };
     let id = SharedString::from(format!(
         "fkey-label-{}-{index}",
         layer.map_or("base", KeyLayer::name)
     ));
     let animation = Animation::new(t.motion.fast).with_easing(ease_out_cubic);
-    let shown = div()
-        .absolute()
-        .left_0()
-        .right_0()
-        .truncate()
-        .child(label)
+    text.relative()
         .with_animation(id, animation, move |text, delta| {
             text.top(px(rise * (1. - delta))).opacity(delta)
-        });
-    div()
-        .relative()
-        .flex_1()
-        .min_w_0()
-        .child(div().min_w_0().truncate().opacity(0.).child(size.base))
-        .child(shown)
+        })
         .into_any_element()
 }
 
@@ -215,34 +198,44 @@ fn cell(t: &Theme, cell: Cell) -> impl IntoElement {
         index,
         key,
         label,
-        is_sized,
-        look,
+        fallback,
+        warning,
+        motion,
     } = cell;
-    let grow = look.as_ref().map(|look| look.size.grow);
-    let spoken = if label.is_empty() {
-        key.clone()
-    } else {
-        format!("{key} {label}").into()
+    let is_dimmed = label.is_empty();
+    let spoken: SharedString = match (&warning, is_dimmed) {
+        (Some(warning), _) => format!("{key} {warning}").into(),
+        (None, true) => key.clone(),
+        (None, false) => format!("{key} {label}").into(),
     };
-    div()
+    let shown = if is_dimmed {
+        fallback.unwrap_or_default()
+    } else {
+        label
+    };
+    let text = div().flex().items_center().gap(t.spacing.xs).child(shown);
+    let text = match &warning {
+        Some(_) => text.child(icon(
+            IconName::Trash,
+            t.spacing.icon - px(2.),
+            t.colors.mark,
+        )),
+        None => text,
+    };
+    pill(t)
         .id(("fkey", index))
         .role(Role::Label)
         .aria_label(spoken)
         .test_support()
-        .flex()
-        .items_center()
-        .gap(t.spacing.xs)
-        .map(|cell| match (grow, is_sized) {
-            (Some(grow), _) => cell.flex_auto().flex_grow(grow),
-            (None, true) => cell.flex_auto(),
-            (None, false) => cell.flex_1(),
+        .gap(t.spacing.sm)
+        .pl(t.spacing.xxs)
+        .pr(t.spacing.md)
+        .when(is_dimmed, |pill| pill.opacity(DIMMED))
+        .when_some(warning, |pill, warning| {
+            pill.tooltip(move |window, cx| Tooltip::new(warning.clone()).build(window, cx))
         })
-        .min_w_0()
-        .h(px(KEY_HEIGHT))
-        .px(t.spacing.xs)
-        .rounded(t.radii.keycap)
-        .child(cap(t, key, false))
-        .child(label_view(t, label, index, look))
+        .child(chip(t, key))
+        .child(label_view(text, index, motion, t))
 }
 
 fn pill_slot() -> impl IntoElement {
@@ -254,46 +247,32 @@ fn pill_slot() -> impl IntoElement {
         .h(px(KEY_HEIGHT))
 }
 
-fn key_row(t: &Theme, is_tinted: bool) -> Div {
-    div()
-        .flex()
-        .flex_1()
-        .min_w_0()
-        .items_center()
-        .gap(t.spacing.xxs)
-        .px(t.spacing.xxs)
-        .rounded(t.radii.md)
-        .when(is_tinted, |keys| keys.bg(t.surfaces.layer_tint))
-}
-
 impl RenderOnce for FKeyBar {
     fn render(self, _: &mut Window, cx: &mut gpui_kit::App) -> impl IntoElement {
         let t = tokens::current(cx);
         let rise = Motion::travel(px(LABEL_RISE), cx.reduce_motion()) / px(1.);
         let held = self.layers.as_ref().and_then(|layers| layers.held);
         let is_layered = self.layers.is_some();
-        let sizes = self.layers.map(|layers| layers.sizes).unwrap_or_default();
-        let is_sized = self.is_sized_to_keys;
+        let base = self.layers.map(|layers| layers.base).unwrap_or_default();
+        let warning = self.warning;
         let cells = self
             .keys
             .into_iter()
             .enumerate()
             .map(|(index, (key, label))| {
-                let look = is_layered.then(|| LabelLook {
-                    layer: held,
-                    rise,
-                    size: sizes.get(index).cloned().unwrap_or_default(),
-                });
                 let props = Cell {
                     index,
                     key,
                     label,
-                    is_sized,
-                    look,
+                    fallback: base.get(index).cloned().filter(|_| held.is_some()),
+                    warning: warning
+                        .clone()
+                        .filter(|(at, _)| *at == index)
+                        .map(|(_, spoken)| spoken),
+                    motion: is_layered.then_some(LabelMotion { layer: held, rise }),
                 };
                 cell(t, props)
             });
-        let keys = key_row(t, held.is_some()).children(cells);
         div()
             .id(self.id)
             .role(Role::Group)
@@ -302,13 +281,14 @@ impl RenderOnce for FKeyBar {
             .flex()
             .flex_none()
             .items_center()
-            .gap(t.spacing.md)
+            .justify_center()
+            .gap(t.spacing.sm)
             .h(t.spacing.fkey_height)
             .px(t.spacing.md)
-            .text_size(t.typography.small)
+            .text_size(t.typography.body)
             .text_color(t.colors.text)
-            .when(is_layered, |bar| bar.child(modifier_caps(t, held)))
-            .child(keys)
+            .when(is_layered, |bar| bar.children(modifier_pills(t, held)))
+            .children(cells)
             .when(self.is_pill_reserved, |bar| bar.child(pill_slot()))
     }
 }

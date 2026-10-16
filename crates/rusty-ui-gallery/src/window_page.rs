@@ -5,13 +5,13 @@ use rusty_fs::FsEntry;
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::pane_chrome::{
-    DriveBar, DriveInfo, PaneTabs, PathBar, card_header, current_drive, pane_card,
+    DriveInfo, DrivePill, PaneTabs, PathBar, card_header, current_drive, pane_card,
 };
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens;
-use rusty_ui::window_view::{key_labels, layer_keys};
+use rusty_ui::window_view::{key_labels, key_warning, layer_keys};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
@@ -88,10 +88,11 @@ impl WindowPage {
             PaneTabs::new(("tabs", index), side.tabs.iter().copied(), 0).highlighted(is_active);
         let header = card_header(tokens::current(cx))
             .child(div().flex_1().min_w_0().child(tabs))
-            .child(
-                DriveBar::new(("drives", index), self.drives.clone())
-                    .current(current_drive(&self.drives, &here)),
-            );
+            .child(DrivePill::new(
+                ("drive-pill", index),
+                current_drive(&self.drives, &here)
+                    .and_then(|drive| self.drives.get(drive).cloned()),
+            ));
         let label = if is_active { "Left pane" } else { "Right pane" };
         let card = pane_card(("pane", index), label, is_active, cx)
             .child(header)
@@ -134,6 +135,9 @@ impl Render for WindowPage {
             .child(
                 FKeyBar::new("fkeys", layer_keys(self.held))
                     .layers(self.held, key_labels())
+                    .when_some(key_warning(self.held), |bar, (index, spoken)| {
+                        bar.warn(index, spoken)
+                    })
                     .reserve_pill(),
             )
     }

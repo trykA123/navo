@@ -289,7 +289,7 @@ impl Gallery {
 
 fn image_keys() -> FKeyBar {
     let kinds = [("Alt+1", "Text"), ("3", "Hex"), ("Esc", "Close")];
-    FKeyBar::new("image-keys", ImageView::KEYS.into_iter().chain(kinds)).sized_to_keys()
+    FKeyBar::new("image-keys", ImageView::KEYS.into_iter().chain(kinds))
 }
 
 fn column(t: &Theme) -> Div {

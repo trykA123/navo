@@ -109,7 +109,7 @@ fn holding_a_modifier_lights_only_its_cap(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_held_layer_shows_its_labels_in_the_same_places(cx: &mut TestAppContext) {
+fn a_held_layer_shows_its_labels_and_dims_keys_without_one(cx: &mut TestAppContext) {
     let (window, view) = open(cx, |_, _| Layered(None));
     let base = shown(cx, window);
     view.update(cx, |view, cx| {
@@ -119,7 +119,30 @@ fn a_held_layer_shows_its_labels_in_the_same_places(cx: &mut TestAppContext) {
     let shift = shown(cx, window);
     assert_eq!(base.labels, ["F1", "F3 View", "F8 Delete"]);
     assert_eq!(shift.labels, ["F1", "F3", "F8 Delete for good"]);
-    assert_eq!(base.places, shift.places);
+    assert_eq!(base.places.len(), shift.places.len());
+}
+
+struct Warned;
+
+impl Render for Warned {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        FKeyBar::new("fkeys", [("F7", ""), ("F8", "Delete")]).warn(1, "Delete for good")
+    }
+}
+
+#[gpui_kit::test]
+fn a_warned_key_speaks_its_full_meaning(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, |_, _| Warned);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let keys = window.within("fkeys");
+        assert_eq!(keys.find(("fkey", 0usize)).label(), Some("F7"));
+        assert_eq!(
+            keys.find(("fkey", 1usize)).label(),
+            Some("F8 Delete for good")
+        );
+    })
+    .expect("window");
 }
 
 #[gpui_kit::test]

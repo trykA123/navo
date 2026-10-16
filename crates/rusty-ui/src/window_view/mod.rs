@@ -32,7 +32,7 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
-pub use fkeys::{FKey, key_labels, layer_keys};
+pub use fkeys::{FKey, key_labels, key_warning, layer_keys};
 pub use keys::bind_keys;
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -207,11 +207,14 @@ impl FerriteWindow {
 
     fn fkey_bar(&self, window: &Window, cx: &App) -> FKeyBar {
         match &self.viewer {
-            Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)).sized_to_keys(),
+            Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
             None => {
                 let held = KeyLayer::held(&window.modifiers());
                 FKeyBar::new("fkeys", layer_keys(held))
                     .layers(held, key_labels())
+                    .when_some(key_warning(held), |bar, (index, spoken)| {
+                        bar.warn(index, spoken)
+                    })
                     .reserve_pill()
             }
         }

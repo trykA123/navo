@@ -19,11 +19,11 @@ const SHIFT: [FKey; 10] = [
     ("F1", ""),
     ("F2", ""),
     ("F3", ""),
-    ("F4", "Edit with…"),
+    ("F4", "Edit with"),
     ("F5", ""),
     ("F6", "Rename"),
     ("F7", ""),
-    ("F8", "Delete for good"),
+    ("F8", "Delete"),
     ("F9", ""),
     ("F10", ""),
 ];
@@ -67,4 +67,9 @@ pub fn layer_keys(layer: Option<KeyLayer>) -> [FKey; 10] {
 #[must_use]
 pub fn key_labels() -> [[&'static str; 4]; 10] {
     std::array::from_fn(|index| [BASE, SHIFT, CTRL, ALT].map(|layer| layer[index].1))
+}
+
+#[must_use]
+pub fn key_warning(layer: Option<KeyLayer>) -> Option<(usize, &'static str)> {
+    (layer == Some(KeyLayer::Shift)).then_some((7, "Delete for good"))
 }
