@@ -10,6 +10,10 @@ use rusty_shell::{
 use rusty_ui::window_view::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 
 const NOT_LOCAL: &str = "the Windows menu works only on local files";
+const TOO_LONG: &str = "the Windows menu cannot open paths longer than 259 characters";
+const SHELL_MAX: usize = 259;
+const VERBATIM: &str = r"\\?\";
+const VERBATIM_UNC: &str = r"\\?\UNC\";
 
 pub fn provider() -> Option<Rc<dyn ShellMenuProvider>> {
     let service = ShellMenuService::start().ok()?;
@@ -29,7 +33,25 @@ fn path_of(location: &Location) -> Result<PathBuf, String> {
     if !location.is_local() {
         return Err(NOT_LOCAL.to_owned());
     }
-    rusty_fs::os_path(location).map_err(|error| error.message())
+    rusty_fs::os_path(location)
+        .map_err(|error| error.message())
+        .and_then(shell_form)
+}
+
+fn shell_form(path: PathBuf) -> Result<PathBuf, String> {
+    let Some(text) = path.to_str() else {
+        return Ok(path);
+    };
+    let plain = match text.get(..VERBATIM_UNC.len()) {
+        Some(head) if head.eq_ignore_ascii_case(VERBATIM_UNC) => {
+            format!(r"\\{}", &text[VERBATIM_UNC.len()..])
+        }
+        _ => text.strip_prefix(VERBATIM).unwrap_or(text).to_owned(),
+    };
+    if plain.encode_utf16().count() > SHELL_MAX {
+        return Err(TOO_LONG.to_owned());
+    }
+    Ok(PathBuf::from(plain))
 }
 
 fn reply<T: 'static, U>(pending: Pending<T>, map: impl Fn(T) -> U + 'static) -> Reply<U> {
