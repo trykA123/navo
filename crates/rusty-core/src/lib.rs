@@ -15,6 +15,7 @@ pub mod paging;
 mod replay;
 mod selection;
 mod session;
+pub mod shell_menu;
 mod state;
 
 pub use apply::{
