@@ -40,6 +40,7 @@ pub struct ContextMenuInput {
     pub context: SharedString,
     pub anchor: Point<Pixels>,
     pub bounds: Bounds<Pixels>,
+    pub restore: Option<FocusHandle>,
 }
 
 pub struct ContextMenu {
@@ -51,7 +52,9 @@ pub struct ContextMenu {
     scrolls: Vec<(Vec<usize>, ScrollHandle)>,
     icons: ShellIcons,
     hover: Option<Task<()>>,
+    restore: Option<FocusHandle>,
     _field: Subscription,
+    _release: Subscription,
 }
 
 impl EventEmitter<ContextMenuEvent> for ContextMenu {}
@@ -71,6 +74,11 @@ impl ContextMenu {
             }
         });
         window.focus(&field.focus_handle(cx), cx);
+        let release = cx.on_release(|menu: &mut Self, cx| {
+            for image in menu.icons.drain() {
+                cx.drop_image(image, None);
+            }
+        });
         let mut menu = Self {
             icons: ShellIcons::build(&input.menu),
             state: MenuState::new(input.menu),
@@ -80,7 +88,9 @@ impl ContextMenu {
             field,
             scrolls: Vec::new(),
             hover: None,
+            restore: input.restore,
             _field: subscription,
+            _release: release,
         };
         menu.sync_scrolls();
         menu
@@ -106,7 +116,9 @@ impl ContextMenu {
     ) -> bool {
         let changed = self.state.set_submenu(path, submenu);
         if changed {
-            self.icons = ShellIcons::build(self.state.menu());
+            for image in self.icons.refill(self.state.menu(), path) {
+                cx.drop_image(image, None);
+            }
             self.finish(None, cx);
         }
         changed
@@ -132,6 +144,26 @@ impl ContextMenu {
         cx.notify();
     }
 
+    fn conclude(
+        &mut self,
+        event: Option<ContextMenuEvent>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let closes = matches!(
+            event,
+            Some(
+                ContextMenuEvent::Chosen(_)
+                    | ContextMenuEvent::Dismissed
+                    | ContextMenuEvent::ShowClassic
+            )
+        );
+        if let (true, Some(restore)) = (closes, &self.restore) {
+            window.focus(restore, cx);
+        }
+        self.finish(event, cx);
+    }
+
     fn hovered(&mut self, depth: usize, row: usize, cx: &mut Context<Self>) {
         if !self.state.hover(depth, row) {
             return;
@@ -147,10 +179,15 @@ impl ContextMenu {
         cx.notify();
     }
 
-    fn clicked(&mut self, depth: usize, row: usize, cx: &mut Context<Self>) {
+    fn clicked(
+        &mut self,
+        (depth, row): (usize, usize),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.hover = None;
         let event = self.state.click(depth, row);
-        self.finish(event, cx);
+        self.conclude(event, window, cx);
     }
 
     fn retried(&mut self, depth: usize, cx: &mut Context<Self>) {
@@ -158,8 +195,8 @@ impl ContextMenu {
         self.finish(event, cx);
     }
 
-    fn dismiss_click(&mut self, _: &MouseDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        self.finish(Some(ContextMenuEvent::Dismissed), cx);
+    fn dismiss_click(&mut self, _: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        self.conclude(Some(ContextMenuEvent::Dismissed), window, cx);
     }
 
     fn sync_scrolls(&mut self) {
@@ -197,6 +234,7 @@ impl ContextMenu {
             parent: above.bounds,
             list_top: above.bounds.origin.y + px(BORDER + PAD + chrome),
             scroll: self.scroll(parent).offset().y,
+            side: above.side,
         }
     }
 

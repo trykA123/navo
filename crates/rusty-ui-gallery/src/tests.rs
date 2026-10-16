@@ -200,3 +200,10 @@ fn init_registers_the_extra_grammars(cx: &mut TestAppContext) {
         assert!(config.is_some_and(|config| config.has_grammar()), "{name}");
     }
 }
+
+#[test]
+fn the_page_table_follows_the_page_order() {
+    for (index, info) in crate::gallery::PAGES.iter().enumerate() {
+        assert_eq!(info.page as usize, index, "{}", info.label);
+    }
+}

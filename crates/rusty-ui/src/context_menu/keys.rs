@@ -85,9 +85,9 @@ impl ContextMenu {
         self.step(Step::PageDown(self.page_rows()), cx);
     }
 
-    fn on_enter(&mut self, _: &MenuEnter, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_enter(&mut self, _: &MenuEnter, window: &mut Window, cx: &mut Context<Self>) {
         let event = self.state.enter();
-        self.finish(event, cx);
+        self.conclude(event, window, cx);
     }
 
     fn on_right(&mut self, _: &MenuRight, _: &mut Window, cx: &mut Context<Self>) {
@@ -104,12 +104,12 @@ impl ContextMenu {
         match self.state.escape() {
             Escape::ClosedSubmenu => self.finish(None, cx),
             Escape::ClearedQuery => self.set_query("", window, cx),
-            Escape::Dismiss => self.finish(Some(ContextMenuEvent::Dismissed), cx),
+            Escape::Dismiss => self.conclude(Some(ContextMenuEvent::Dismissed), window, cx),
         }
     }
 
-    fn on_classic(&mut self, _: &MenuClassic, _: &mut Window, cx: &mut Context<Self>) {
-        self.finish(Some(ContextMenuEvent::ShowClassic), cx);
+    fn on_classic(&mut self, _: &MenuClassic, window: &mut Window, cx: &mut Context<Self>) {
+        self.conclude(Some(ContextMenuEvent::ShowClassic), window, cx);
     }
 
     fn step(&mut self, step: Step, cx: &mut Context<Self>) {

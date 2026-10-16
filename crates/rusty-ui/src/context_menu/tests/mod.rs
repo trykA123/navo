@@ -4,8 +4,9 @@ use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Bounds, Context, Entity, IntoElement, ParentElement, Pixels,
-    Point, Render, Role, Styled, TestAppContext, Window, div, point, px, size,
+    AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle, InteractiveElement,
+    IntoElement, ParentElement, Pixels, Point, Render, Role, Styled, TestAppContext, Window, div,
+    point, px, size,
 };
 use rusty_core::shell_menu::{
     ActionContext, Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
@@ -103,11 +104,15 @@ pub(super) fn window_bounds() -> Bounds<Pixels> {
 
 struct Harness {
     menu: Entity<ContextMenu>,
+    restore: FocusHandle,
 }
 
 impl Render for Harness {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(self.menu.clone())
+        div()
+            .size_full()
+            .child(div().size_full().track_focus(&self.restore))
+            .child(self.menu.clone())
     }
 }
 
@@ -115,30 +120,36 @@ pub(super) struct Opened {
     pub window: AnyWindowHandle,
     pub menu: Entity<ContextMenu>,
     pub events: Rc<RefCell<Vec<ContextMenuEvent>>>,
+    restore: FocusHandle,
 }
 
 pub(super) fn open_menu(cx: &mut TestAppContext, anchor: Point<Pixels>) -> Opened {
     let events: Rc<RefCell<Vec<ContextMenuEvent>>> = Rc::default();
     let sink = events.clone();
     let (window, harness) = open(cx, move |window, cx| {
+        let restore = cx.focus_handle();
         let input = ContextMenuInput {
             menu: zip_menu(),
             context: "ferrite-0.4.2-win64.zip · 6.8 MB".into(),
             anchor,
             bounds: window_bounds(),
+            restore: Some(restore.clone()),
         };
         let menu = cx.new(|cx| ContextMenu::new(input, window, cx));
         cx.subscribe(&menu, move |_, event: &ContextMenuEvent, _| {
             sink.borrow_mut().push(event.clone());
         })
         .detach();
-        Harness { menu }
+        Harness { menu, restore }
     });
-    let menu = harness.read_with(cx, |harness, _| harness.menu.clone());
+    let (menu, restore) = harness.read_with(cx, |harness, _| {
+        (harness.menu.clone(), harness.restore.clone())
+    });
     let opened = Opened {
         window,
         menu,
         events,
+        restore,
     };
     opened.frame(cx);
     opened
@@ -195,6 +206,11 @@ impl Opened {
         cx.executor().advance_clock(Duration::from_millis(millis));
         cx.run_until_parked();
         self.frame(cx);
+    }
+
+    pub fn restore_is_focused(&self, cx: &mut TestAppContext) -> bool {
+        cx.update_window(self.window, |_, window, _| self.restore.is_focused(window))
+            .expect("window")
     }
 
     pub fn events(&self) -> Vec<ContextMenuEvent> {

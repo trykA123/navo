@@ -78,6 +78,7 @@ impl MenuPage {
             context: context.into(),
             anchor,
             bounds: Bounds::new(Point::default(), window.viewport_size()),
+            restore: Some(self.focus.clone()),
         };
         let shows = self.shows;
         cx.new(|cx| {
@@ -92,17 +93,21 @@ impl MenuPage {
     }
 }
 
+impl MenuPage {
+    fn open_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.menu.is_none() {
+            self.menu = Some(self.build(window, cx));
+            cx.notify();
+        }
+    }
+}
+
 impl Render for MenuPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let menu = match &self.menu {
-            Some(menu) => menu.clone(),
-            None => {
-                let menu = self.build(window, cx);
-                self.menu = Some(menu.clone());
-                menu
-            }
-        };
+        if self.menu.is_none() {
+            cx.defer_in(window, Self::open_menu);
+        }
         div()
             .flex()
             .flex_col()
@@ -110,6 +115,6 @@ impl Render for MenuPage {
             .min_h_0()
             .bg(t.colors.surface)
             .child(self.list())
-            .child(menu)
+            .children(self.menu.clone())
     }
 }

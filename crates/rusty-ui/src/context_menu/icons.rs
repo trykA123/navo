@@ -29,6 +29,27 @@ impl ShellIcons {
         icons
     }
 
+    pub fn refill(&mut self, menu: &ShellMenu, path: &[usize]) -> Vec<Arc<RenderImage>> {
+        let stale = self
+            .0
+            .extract_if(|key, _| key.len() > path.len() && key.starts_with(path))
+            .map(|(_, image)| image)
+            .collect();
+        if let Some(children) = menu.item(path).and_then(MenuItem::children) {
+            self.collect(children, &mut path.to_vec());
+        }
+        stale
+    }
+
+    pub fn drain(&mut self) -> impl Iterator<Item = Arc<RenderImage>> + '_ {
+        self.0.drain().map(|(_, image)| image)
+    }
+
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
     pub fn get(&self, path: &[usize]) -> Option<Arc<RenderImage>> {
         self.0.get(path).cloned()
     }

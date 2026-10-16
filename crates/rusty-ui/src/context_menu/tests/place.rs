@@ -1,7 +1,7 @@
 use gpui_kit::{Bounds, TestAppContext, point, px, size};
 
 use super::{open_menu, window_bounds};
-use crate::context_menu::place::{place_root, place_submenu};
+use crate::context_menu::place::{Cascade, Side, place_root, place_submenu};
 
 #[test]
 fn the_menu_opens_right_and_down_from_the_anchor_when_it_fits() {
@@ -35,16 +35,24 @@ fn a_menu_taller_than_the_room_above_stays_inside_the_window() {
 
 #[test]
 fn a_submenu_opens_to_the_right_aligned_to_its_row() {
-    let parent = Bounds::new(point(px(100.), px(50.)), size(px(316.), px(400.)));
-    let origin = place_submenu(parent, px(120.), size(px(300.), px(200.)), window_bounds());
-    assert_eq!(origin, point(px(418.), px(115.)));
+    let cascade = Cascade {
+        parent: Bounds::new(point(px(100.), px(50.)), size(px(316.), px(400.))),
+        row_top: px(120.),
+        side: Side::Right,
+    };
+    let placed = place_submenu(cascade, size(px(300.), px(200.)), window_bounds());
+    assert_eq!(placed, (point(px(418.), px(115.)), Side::Right));
 }
 
 #[test]
 fn a_submenu_flips_left_when_the_right_side_has_no_room() {
-    let parent = Bounds::new(point(px(400.), px(50.)), size(px(316.), px(400.)));
-    let origin = place_submenu(parent, px(500.), size(px(300.), px(200.)), window_bounds());
-    assert_eq!(origin, point(px(98.), px(392.)));
+    let cascade = Cascade {
+        parent: Bounds::new(point(px(400.), px(50.)), size(px(316.), px(400.))),
+        row_top: px(500.),
+        side: Side::Right,
+    };
+    let placed = place_submenu(cascade, size(px(300.), px(200.)), window_bounds());
+    assert_eq!(placed, (point(px(98.), px(392.)), Side::Left));
 }
 
 #[gpui_kit::test]
@@ -55,4 +63,28 @@ fn the_rendered_menu_flips_near_the_window_edge(cx: &mut TestAppContext) {
     assert!(bounds.top() >= px(0.), "{bounds:?}");
     assert!(bounds.bottom() <= px(600.), "{bounds:?}");
     assert_eq!(bounds.size.width, px(316.));
+}
+
+#[test]
+fn a_deeper_cascade_keeps_the_side_it_inherited() {
+    let area = Bounds::new(point(px(0.), px(0.)), size(px(1280.), px(720.)));
+    let root = Bounds::new(point(px(950.), px(50.)), size(px(316.), px(400.)));
+    let sub = size(px(300.), px(200.));
+    let first = Cascade {
+        parent: root,
+        row_top: px(100.),
+        side: Side::Right,
+    };
+    let (one, one_side) = place_submenu(first, sub, area);
+    assert_eq!(one_side, Side::Left);
+    let level_one = Bounds::new(one, sub);
+    let second = Cascade {
+        parent: level_one,
+        row_top: px(120.),
+        side: one_side,
+    };
+    let (two, two_side) = place_submenu(second, sub, area);
+    assert_eq!(two_side, Side::Left);
+    assert!(two.x + sub.width <= level_one.left(), "{two:?}");
+    assert!(!Bounds::new(two, sub).intersects(&root));
 }

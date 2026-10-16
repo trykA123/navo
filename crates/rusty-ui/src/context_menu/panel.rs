@@ -95,8 +95,8 @@ fn interactive(
                 this.hovered(depth, index, cx);
             }
         }))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-            this.clicked(depth, index, cx);
+        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+            this.clicked((depth, index), window, cx);
         }))
 }
 
@@ -248,8 +248,8 @@ impl ContextMenu {
                 .cursor_pointer()
                 .text_color(t.colors.text)
                 .hover(|style| style.bg(t.colors.hover))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.finish(Some(ContextMenuEvent::ShowClassic), cx);
+                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                    this.conclude(Some(ContextMenuEvent::ShowClassic), window, cx);
                 }))
                 .child("Classic menu")
                 .children(Kbd::new("menu-classic-key", "shift-f10"))

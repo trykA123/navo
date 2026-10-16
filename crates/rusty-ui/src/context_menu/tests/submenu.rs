@@ -88,3 +88,46 @@ fn hovering_a_submenu_row_opens_it_after_a_pause(cx: &mut TestAppContext) {
     menu.wait(200, cx);
     assert_eq!(menu.rows(1, cx)[0], "Open archive");
 }
+
+#[gpui_kit::test]
+fn a_lazy_submenu_is_requested_once_while_it_loads(cx: &mut TestAppContext) {
+    let menu = open_default(cx);
+    menu.type_text("send", cx);
+    menu.press(&["right", "left", "right"], cx);
+    assert_eq!(
+        menu.events(),
+        [ContextMenuEvent::OpenSubmenu(vec![SEND_TO])]
+    );
+    assert_eq!(menu.rows(1, cx), ["Loading…"]);
+}
+
+fn with_icons() -> Submenu {
+    let icon = rusty_core::shell_menu::Icon {
+        width: 2,
+        height: 2,
+        rgba: vec![255; 16],
+    };
+    Submenu::Filled(
+        (0..3)
+            .map(|index| rusty_core::shell_menu::MenuItem {
+                icon: Some(icon.clone()),
+                ..shell(60 + index, &format!("Target {index}"), Group::Share)
+            })
+            .collect(),
+    )
+}
+
+#[gpui_kit::test]
+fn icons_stay_bounded_when_a_submenu_is_filled_again(cx: &mut TestAppContext) {
+    let menu = open_default(cx);
+    for _ in 0..4 {
+        menu.menu.update(cx, |menu, cx| {
+            menu.set_submenu(&[SEND_TO], with_icons(), cx);
+        });
+    }
+    assert_eq!(menu.menu.read_with(cx, |menu, _| menu.icons.len()), 3);
+    menu.menu.update(cx, |menu, cx| {
+        menu.set_submenu(&[SEND_TO], Submenu::Failed, cx);
+    });
+    assert_eq!(menu.menu.read_with(cx, |menu, _| menu.icons.len()), 0);
+}

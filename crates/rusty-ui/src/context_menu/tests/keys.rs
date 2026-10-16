@@ -63,14 +63,13 @@ fn enter_on_a_shell_verb_emits_its_command(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn classic_menu_asks_for_the_native_menu(cx: &mut TestAppContext) {
-    let menu = open_default(cx);
-    menu.press(&["shift-f10"], cx);
-    menu.type_text("classic", cx);
-    menu.press(&["enter"], cx);
-    assert_eq!(
-        menu.events(),
-        [ContextMenuEvent::ShowClassic, ContextMenuEvent::ShowClassic]
-    );
+    let by_key = open_default(cx);
+    by_key.press(&["shift-f10"], cx);
+    assert_eq!(by_key.events(), [ContextMenuEvent::ShowClassic]);
+    let by_row = open_default(cx);
+    by_row.type_text("classic", cx);
+    by_row.press(&["enter"], cx);
+    assert_eq!(by_row.events(), [ContextMenuEvent::ShowClassic]);
 }
 
 #[gpui_kit::test]
@@ -90,4 +89,15 @@ fn a_click_runs_the_row(cx: &mut TestAppContext) {
     let menu = open_default(cx);
     menu.click(0, 9, cx);
     assert_eq!(menu.events(), [shell(1)]);
+}
+
+#[gpui_kit::test]
+fn closing_the_menu_gives_focus_back(cx: &mut TestAppContext) {
+    for keys in [&["escape"][..], &["enter"], &["shift-f10"]] {
+        let menu = open_default(cx);
+        assert!(!menu.restore_is_focused(cx));
+        menu.press(keys, cx);
+        assert_eq!(menu.events().len(), 1);
+        assert!(menu.restore_is_focused(cx), "{keys:?}");
+    }
 }

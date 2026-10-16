@@ -16,10 +16,25 @@ pub(super) const BORDER: f32 = 1.;
 const MARGIN: f32 = 8.;
 const GAP: f32 = 2.;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Side {
+    #[default]
+    Right,
+    Left,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cascade {
+    pub parent: Bounds<Pixels>,
+    pub row_top: Pixels,
+    pub side: Side,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct Frame {
     pub bounds: Bounds<Pixels>,
     pub list_height: Pixels,
+    pub side: Side,
 }
 
 pub(super) fn row_height(row: &Row) -> f32 {
@@ -80,23 +95,31 @@ pub fn place_root(
 }
 
 pub fn place_submenu(
-    parent: Bounds<Pixels>,
-    row_top: Pixels,
+    cascade: Cascade,
     size: Size<Pixels>,
     area: Bounds<Pixels>,
-) -> Point<Pixels> {
+) -> (Point<Pixels>, Side) {
     let margin = px(MARGIN);
     let gap = px(GAP);
-    let x = if parent.right() + gap + size.width <= area.right() - margin {
-        parent.right() + gap
-    } else {
-        parent.left() - gap - size.width
+    let right = cascade.parent.right() + gap;
+    let left = cascade.parent.left() - gap - size.width;
+    let fits_right = right + size.width <= area.right() - margin;
+    let fits_left = left >= area.left() + margin;
+    let side = match cascade.side {
+        Side::Right if !fits_right && fits_left => Side::Left,
+        Side::Left if !fits_left && fits_right => Side::Right,
+        inherited => inherited,
     };
-    let y = row_top - px(PAD + BORDER);
-    point(
+    let x = match side {
+        Side::Right => right,
+        Side::Left => left,
+    };
+    let y = cascade.row_top - px(PAD + BORDER);
+    let origin = point(
         clamp(x, area.left() + margin, area.right() - margin - size.width),
         clamp(y, area.top() + margin, area.bottom() - margin - size.height),
-    )
+    );
+    (origin, side)
 }
 
 pub(super) fn root_frame(level: &Level, anchor: Point<Pixels>, area: Bounds<Pixels>) -> Frame {
@@ -106,6 +129,7 @@ pub(super) fn root_frame(level: &Level, anchor: Point<Pixels>, area: Bounds<Pixe
     Frame {
         bounds: Bounds::new(place_root(anchor, size, area), size),
         list_height,
+        side: Side::Right,
     }
 }
 
@@ -113,6 +137,7 @@ pub(super) struct SubmenuSpot {
     pub parent: Bounds<Pixels>,
     pub list_top: Pixels,
     pub scroll: Pixels,
+    pub side: Side,
 }
 
 pub(super) fn submenu_frame(
@@ -124,9 +149,15 @@ pub(super) fn submenu_frame(
     let chrome = px((PAD + BORDER) * 2.);
     let list_height = px(list_height(level)).min(room(area) - chrome);
     let size = Size::new(px(SUBMENU_WIDTH), list_height + chrome);
-    let row = spot.list_top + px(row_top(parent_rows, level.parent_row)) + spot.scroll;
+    let cascade = Cascade {
+        parent: spot.parent,
+        row_top: spot.list_top + px(row_top(parent_rows, level.parent_row)) + spot.scroll,
+        side: spot.side,
+    };
+    let (origin, side) = place_submenu(cascade, size, area);
     Frame {
-        bounds: Bounds::new(place_submenu(spot.parent, row, size, area), size),
+        bounds: Bounds::new(origin, size),
         list_height,
+        side,
     }
 }

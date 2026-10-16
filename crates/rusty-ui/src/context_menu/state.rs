@@ -50,6 +50,8 @@ pub(super) struct MenuState {
     show_rare: bool,
     levels: Vec<Level>,
     active: usize,
+    hidden: usize,
+    rare: usize,
 }
 
 impl MenuState {
@@ -63,6 +65,8 @@ impl MenuState {
             status: LevelStatus::Ready,
         };
         Self {
+            hidden: hidden_count(&menu),
+            rare: rare_count(&menu),
             menu,
             query: String::new(),
             show_rare: false,
@@ -102,6 +106,8 @@ impl MenuState {
     pub fn set_submenu(&mut self, path: &[usize], submenu: Submenu) -> bool {
         let changed = self.menu.set_submenu(path, submenu);
         if changed {
+            self.hidden = hidden_count(&self.menu);
+            self.rare = rare_count(&self.menu);
             self.refresh();
         }
         changed
@@ -221,14 +227,11 @@ impl MenuState {
     }
 
     pub fn hidden_count(&self) -> usize {
-        count(&self.menu.items, &|item| item.hidden)
+        self.hidden
     }
 
     pub fn rare_count(&self) -> usize {
-        rare_rows(&self.menu)
-            .iter()
-            .filter(|row| matches!(row, Row::Item(_)))
-            .count()
+        self.rare
     }
 
     fn root_rows(&self) -> Vec<Row> {
@@ -269,11 +272,14 @@ impl MenuState {
             .rows
             .iter()
             .position(|row| is_item_at(row, &path))?;
-        let (rows, status) = self.submenu_level(&path)?;
         let is_lazy = matches!(
             self.menu.item(&path).map(|item| &item.kind),
             Some(ItemKind::Submenu(Submenu::Lazy))
         );
+        if is_lazy {
+            self.menu.set_submenu(&path, Submenu::Loading);
+        }
+        let (rows, status) = self.submenu_level(&path)?;
         self.levels.truncate(from + 1);
         self.levels.push(Level {
             path: path.clone(),
@@ -367,14 +373,22 @@ fn page(selection: &Selection, rows: &[Row], count: usize, forward: bool) -> Sel
     current
 }
 
-fn count(items: &[MenuItem], wanted: &dyn Fn(&MenuItem) -> bool) -> usize {
-    items
+fn hidden_count(menu: &ShellMenu) -> usize {
+    fn count(items: &[MenuItem]) -> usize {
+        items
+            .iter()
+            .map(|item| {
+                let own = !item.is_separator() && !item.text.is_empty() && item.hidden;
+                usize::from(own) + item.children().map_or(0, count)
+            })
+            .sum()
+    }
+    count(&menu.items)
+}
+
+fn rare_count(menu: &ShellMenu) -> usize {
+    rare_rows(menu)
         .iter()
-        .map(|item| {
-            let own = usize::from(!item.is_separator() && !item.text.is_empty() && wanted(item));
-            own + item
-                .children()
-                .map_or(0, |children| count(children, wanted))
-        })
-        .sum()
+        .filter(|row| matches!(row, Row::Item(_)))
+        .count()
 }
