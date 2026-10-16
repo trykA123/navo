@@ -12,11 +12,20 @@ fn report(doing: &str, error: &DbError) {
     eprintln!("ferrite: viewer memory: {doing}: {error}");
 }
 
+const KEEP_MEMORIES: usize = 10_000;
+
 pub fn open(file: &Path) -> Option<SharedDb> {
-    Db::open(file, false)
-        .map(|(db, _)| Arc::new(Mutex::new(db)))
+    open_keeping(file, KEEP_MEMORIES)
+}
+
+fn open_keeping(file: &Path, keep: usize) -> Option<SharedDb> {
+    let (db, _) = Db::open(file, false)
         .inspect_err(|error| report(&format!("opening {}", file.display()), error))
-        .ok()
+        .ok()?;
+    let _ = db
+        .prune_viewer_memory(keep)
+        .inspect_err(|error| report("pruning", error));
+    Some(Arc::new(Mutex::new(db)))
 }
 
 fn lock(db: &SharedDb) -> MutexGuard<'_, Db> {

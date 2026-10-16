@@ -6,7 +6,7 @@ use rusty_core::marks::{Bookmarks, MarkSet};
 use rusty_core::paging::Needle;
 use rusty_ui::window_view::{FileHooks, FileStamp};
 
-use super::{attach, open};
+use super::{attach, open, open_keeping};
 
 const STAMP: FileStamp = FileStamp {
     len: 120,
@@ -94,4 +94,21 @@ fn a_failing_db_yields_no_memory_and_no_panic() {
 fn a_db_that_cannot_open_gives_no_handle() {
     let dir = tempfile::tempdir().unwrap();
     assert!(open(dir.path()).is_none());
+}
+
+#[test]
+fn opening_keeps_only_the_newest_file_memories() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("ferrite.db");
+    let (marks, bookmarks) = remembered();
+    let paths = ["/logs/a.log", "/logs/b.log", "/logs/c.log"];
+    for path in paths {
+        let hooks = hooks_on(&file);
+        (hooks.save_memory)(&Location::new(path).unwrap(), STAMP, &marks, &bookmarks);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let hooks = attach(FileHooks::none(), open_keeping(&file, 2).unwrap());
+    let kept = |path: &str| (hooks.memory)(&Location::new(path).unwrap(), STAMP).is_some();
+    assert!(!kept(paths[0]));
+    assert!(kept(paths[1]) && kept(paths[2]));
 }
