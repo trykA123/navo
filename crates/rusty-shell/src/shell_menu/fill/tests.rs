@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use rusty_core::shell_menu::Submenu;
 
 use super::{BACKGROUND_LIMIT, Background, FillReply, Fills, POLL, settle};
-use crate::shell_menu::{FILL_BUDGET, MenuError};
+use crate::shell_menu::{FILL_BUDGET, MenuError, Pending};
 
 fn ask_and_keep(
     fills: &Fills,
@@ -75,18 +75,18 @@ fn the_first_answer_wins() {
     assert_eq!(pending.wait(), Ok(Submenu::Failed));
 }
 
-fn background(fills: &Fills, now: Instant) -> Vec<Background> {
+fn background(fills: &Fills, now: Instant) -> (Vec<Background>, Pending<Submenu>) {
     let mut started = Vec::new();
-    let _pending = fills.ask(vec![2], |path, reply| {
+    let pending = fills.ask(vec![2], |path, reply| {
         started.push(Background::new(7, path, reply, now));
     });
-    started
+    (started, pending)
 }
 
 #[test]
 fn a_background_fill_that_fills_is_settled_as_filled() {
     let (fills, now) = (Fills::default(), Instant::now());
-    let mut running = background(&fills, now);
+    let (mut running, _pending) = background(&fills, now);
     let wait = settle(&mut running, now, |session, path| {
         assert_eq!((session, path), (7, &[2][..]));
         Some(Ok(Submenu::Filled(Vec::new())))
@@ -100,7 +100,7 @@ fn a_background_fill_that_fills_is_settled_as_filled() {
 #[test]
 fn a_background_fill_still_loading_keeps_the_loop_polling() {
     let (fills, now) = (Fills::default(), Instant::now());
-    let mut running = background(&fills, now);
+    let (mut running, _pending) = background(&fills, now);
     let wait = settle(&mut running, now, |_, _| None);
     assert_eq!(running.len(), 1);
     assert_eq!(wait, Some(POLL));
@@ -109,19 +109,20 @@ fn a_background_fill_still_loading_keeps_the_loop_polling() {
 #[test]
 fn a_background_fill_past_its_limit_fails() {
     let (fills, now) = (Fills::default(), Instant::now());
-    let mut running = background(&fills, now);
+    let (mut running, pending) = background(&fills, now);
     let wait = settle(&mut running, now + BACKGROUND_LIMIT, |_, _| None);
     assert!(running.is_empty());
     assert_eq!(wait, None);
-    let answer = fills.ask(vec![2], |_, _| {}).wait_timeout(Duration::ZERO);
+    let answer = pending.wait_timeout(Duration::ZERO);
     assert_eq!(answer, Some(Ok(Submenu::Failed)));
 }
 
 #[test]
 fn a_dropped_background_fill_answers_stopped() {
     let (fills, now) = (Fills::default(), Instant::now());
-    drop(background(&fills, now));
-    let answer = fills.ask(vec![2], |_, _| {}).wait_timeout(Duration::ZERO);
+    let (running, pending) = background(&fills, now);
+    drop(running);
+    let answer = pending.wait_timeout(Duration::ZERO);
     assert_eq!(answer, Some(Err(MenuError::Stopped)));
 }
 
@@ -166,5 +167,54 @@ fn a_late_answer_still_wins_over_the_backstop() {
     assert_eq!(
         again.wait_timeout(Duration::ZERO),
         Some(Ok(Submenu::Filled(Vec::new())))
+    );
+}
+
+fn ask_again_counting(fills: &Fills, sent: &Mutex<usize>) -> Option<Result<Submenu, MenuError>> {
+    let again = fills.ask(vec![2], |_, reply| {
+        *sent.lock().unwrap() += 1;
+        reply.send(Ok(Submenu::Filled(Vec::new())));
+    });
+    again.wait_timeout(Duration::ZERO)
+}
+
+#[test]
+fn asking_again_after_a_failed_fill_sends_it_again() {
+    let (fills, sent) = (Fills::default(), Mutex::new(0));
+    let first = fills.ask(vec![2], |_, reply| reply.send(Ok(Submenu::Failed)));
+    assert_eq!(first.wait(), Ok(Submenu::Failed));
+    let answer = ask_again_counting(&fills, &sent);
+    assert_eq!(answer, Some(Ok(Submenu::Filled(Vec::new()))));
+    assert_eq!(*sent.lock().unwrap(), 1);
+}
+
+#[test]
+fn asking_again_after_an_error_sends_it_again() {
+    let (fills, sent) = (Fills::default(), Mutex::new(0));
+    let first = fills.ask(vec![2], |_, reply| drop(reply));
+    assert_eq!(first.wait(), Err(MenuError::Stopped));
+    let answer = ask_again_counting(&fills, &sent);
+    assert_eq!(answer, Some(Ok(Submenu::Filled(Vec::new()))));
+    assert_eq!(*sent.lock().unwrap(), 1);
+}
+
+#[test]
+fn asking_again_after_the_backstop_failed_sends_it_again() {
+    let (fills, kept) = (Fills::with_limit(Duration::ZERO), Mutex::default());
+    assert_eq!(ask_and_keep(&fills, &kept).wait(), Ok(Submenu::Failed));
+    let sent = Mutex::new(0);
+    let answer = ask_again_counting(&fills, &sent);
+    assert_eq!(answer, Some(Ok(Submenu::Filled(Vec::new()))));
+    assert_eq!(*sent.lock().unwrap(), 1);
+}
+
+#[test]
+fn asking_again_while_loading_does_not_send_it_again() {
+    let (fills, kept) = (Fills::default(), Mutex::default());
+    assert_eq!(ask_and_keep(&fills, &kept).wait(), Ok(Submenu::Loading));
+    let again = fills.ask(vec![2], |_, _| panic!("the fill was sent twice"));
+    assert_eq!(
+        again.wait_timeout(Duration::ZERO),
+        Some(Ok(Submenu::Loading))
     );
 }
