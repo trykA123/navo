@@ -1,8 +1,9 @@
 use gpui_kit::AppContext as _;
+use gpui_kit::base::TestSupportExt;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, Bounds, Context, IntoElement, Modifiers, Pixels, Render, Role, TestAppContext,
-    Window, px,
+    AnyWindowHandle, Bounds, Context, InteractiveElement, IntoElement, Modifiers, Pixels, Render,
+    Role, Styled, TestAppContext, Window, px,
 };
 
 use super::{FKeyBar, KeyLayer};
@@ -401,4 +402,35 @@ fn with_a_job_the_area_appears_and_keys_keep_their_width_when_there_is_room(
     let busy = laid(cx, px(1920.), Some(px(220.)), false);
     assert_eq!(widths(&free.keys), widths(&busy.keys));
     assert!(busy.right.size.width >= px(220.));
+}
+
+struct WithPill;
+
+impl Render for WithPill {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let pill = gpui_kit::div()
+            .id("pill")
+            .test_support()
+            .w(px(120.))
+            .h(px(20.));
+        FKeyBar::new("fkeys", layer_keys(None))
+            .reserve_pill()
+            .right_slot(pill)
+    }
+}
+
+#[gpui_kit::test]
+fn right_slot_content_sits_in_the_reserved_pill_area(cx: &mut TestAppContext) {
+    let (window, _) = open_sized(cx, px(1280.), |_, _| WithPill);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let bar = window.within("fkeys");
+        let (area, pill) = (
+            bar.find("fkey-pill-slot").bounds(),
+            bar.find("pill").bounds(),
+        );
+        assert_eq!(pill.left(), area.left());
+        assert!(pill.right() <= area.right());
+    })
+    .expect("window");
 }

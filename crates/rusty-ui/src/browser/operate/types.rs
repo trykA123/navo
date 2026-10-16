@@ -58,6 +58,7 @@ pub enum JobStatus {
 pub struct JobView {
     pub id: u64,
     pub kind: OpKind,
+    pub from: Option<Location>,
     pub target: Option<Location>,
     pub sources: usize,
     pub progress: Progress,

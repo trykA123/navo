@@ -21,6 +21,7 @@ mod cards;
 mod drive_fs;
 mod drives;
 mod fkeys;
+mod jobs;
 mod shell_menu;
 mod tabs;
 mod typed;
@@ -94,6 +95,14 @@ pub(super) fn open_options(
     cx: &mut TestAppContext,
     options: StartOptions,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    open_options_sized(cx, options, px(1000.))
+}
+
+pub(super) fn open_options_sized(
+    cx: &mut TestAppContext,
+    options: StartOptions,
+    width: gpui_kit::Pixels,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let handle = cx.update(|cx| {
         gpui_kit::init(cx);
         crate::languages::register_languages();
@@ -108,7 +117,7 @@ pub(super) fn open_options(
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),
-                size: size(px(1000.), px(600.)),
+                size: size(width, px(600.)),
             })),
             ..Default::default()
         };

@@ -1,8 +1,8 @@
-use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
+use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{
     Animation, AnimationExt, AnyElement, Div, ElementId, FontWeight, InteractiveElement,
-    IntoElement, Modifiers, ParentElement, Pixels, RenderOnce, Role, SharedString,
+    IntoElement, Modifiers, ParentElement, Pixels, RenderOnce, Role, SharedString, Stateful,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
@@ -316,7 +316,7 @@ fn cell(t: &Theme, cell: Cell) -> impl IntoElement {
         .child(area)
 }
 
-fn pill_area(width: Pixels) -> impl IntoElement {
+fn pill_area(width: Pixels) -> ObservedElement<Stateful<Div>> {
     div()
         .id("fkey-pill-slot")
         .test_support()
@@ -330,7 +330,7 @@ fn side_slot(
     content: Option<AnyElement>,
     min_width: Option<Pixels>,
 ) -> impl IntoElement {
-    div()
+    let slot = div()
         .id(id)
         .test_support()
         .flex()
@@ -338,11 +338,11 @@ fn side_slot(
         .flex_basis(px(0.))
         .min_w_0()
         .items_center()
-        .overflow_hidden()
-        .when_some(min_width, |slot, width| {
-            slot.min_w(width).child(pill_area(width))
-        })
-        .children(content)
+        .overflow_hidden();
+    match min_width {
+        Some(width) => slot.min_w(width).child(pill_area(width).children(content)),
+        None => slot.children(content),
+    }
 }
 
 struct Frame {

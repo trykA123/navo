@@ -51,6 +51,7 @@ icon_assets!(
         Layers,
         Lock,
         LayoutGrid,
+        List,
         MemoryStick,
         Network,
         PanelLeft,

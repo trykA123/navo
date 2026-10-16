@@ -77,6 +77,7 @@ impl Browser {
         let mut view = JobView {
             id: pending.id,
             kind: pending.plan.kind,
+            from: pending.sources.first().and_then(Location::parent),
             target: pending.target.clone(),
             sources: pending.sources.len(),
             progress: start_progress(&pending.plan),
@@ -104,6 +105,11 @@ impl Browser {
         }
         self.poll();
         !self.running()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn push_job(&mut self, job: JobView) {
+        self.jobs.push(job);
     }
 
     pub fn take_ended(&mut self) -> Vec<u64> {
@@ -213,6 +219,7 @@ impl Browser {
             Err(error) => self.jobs.push(JobView {
                 id: request.id,
                 kind: request.kind,
+                from: request.sources.first().and_then(Location::parent),
                 target: request.target,
                 sources: request.sources.len(),
                 progress: Progress {

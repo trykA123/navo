@@ -14,6 +14,7 @@ gpui_kit::actions!(
         LeaveWaiting,
         NewTab,
         ResetSplit,
+        ToggleJobs,
         TogglePreview
     ]
 );
@@ -29,6 +30,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-t", NewTab, Some(PANE)),
         KeyBinding::new("ctrl-shift-0", ResetSplit, Some(PANE)),
         KeyBinding::new("ctrl-q", TogglePreview, Some(PANE)),
+        KeyBinding::new("ctrl-j", ToggleJobs, None),
         KeyBinding::new("escape", LeaveWaiting, Some(WAITING)),
     ]);
 }
