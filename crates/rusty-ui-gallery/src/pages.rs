@@ -26,6 +26,9 @@ pub enum Page {
     WindowAlt,
     WindowNarrow,
     WindowJob,
+    WindowJobPill,
+    WindowJobs,
+    WindowJobsPill,
     AppMenu,
     Sheet,
     SheetLeft,
@@ -48,7 +51,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 30] = [
+pub const PAGES: [PageInfo; 33] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -98,6 +101,19 @@ pub const PAGES: [PageInfo; 30] = [
         Page::WindowJob,
         "Window, copy running",
         "p19-window-job",
+        false,
+    ),
+    info(
+        Page::WindowJobPill,
+        "Window, copy pill",
+        "p19-job-pill",
+        false,
+    ),
+    info(Page::WindowJobs, "Window, two jobs", "p19-jobs-card", false),
+    info(
+        Page::WindowJobsPill,
+        "Window, two jobs pill",
+        "p19-jobs-pill",
         false,
     ),
     info(Page::AppMenu, "App menu", "p19-app-menu", false),

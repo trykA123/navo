@@ -20,7 +20,7 @@ use crate::structured_sample::{
 };
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
-use crate::window_page::{NARROW, SheetShows, WIDE, WindowPage, window_element};
+use crate::window_page::{JobsShown, NARROW, SheetShows, WIDE, WindowPage, window_element};
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -69,7 +69,7 @@ pub struct Gallery {
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     alt_window: Entity<WindowPage>,
-    job_window: Entity<WindowPage>,
+    job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 3],
     tab: usize,
@@ -99,10 +99,10 @@ impl Gallery {
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
             viewer_menus: [ViewerMenuShows::Text, ViewerMenuShows::Tree]
                 .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
-            main_window: cx.new(|cx| WindowPage::new(None, false, cx)),
-            shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), false, cx)),
-            alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), false, cx)),
-            job_window: cx.new(|cx| WindowPage::new(None, true, cx)),
+            main_window: cx.new(|cx| WindowPage::new(None, cx)),
+            shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
+            alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), cx)),
+            job_windows: job_windows(cx),
             menu_window: cx.new(WindowPage::with_menu),
             sheet_windows: sheet_windows(cx),
             tab: 1,
@@ -251,6 +251,12 @@ fn column(t: &Theme) -> Div {
         .min_w_0()
 }
 
+fn job_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
+    [(1, false), (1, true), (2, false), (2, true)].map(|(count, is_pill)| {
+        cx.new(|cx| WindowPage::with_jobs(JobsShown { count, is_pill }, cx))
+    })
+}
+
 fn sheet_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
     let shows = [
         (Side::Left, WIDE, false),
@@ -268,33 +274,41 @@ fn sheet_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 8] {
+    fn windows(&self) -> [&Entity<WindowPage>; 11] {
         let [sheet, sheet_left, sheet_narrow] = &self.sheet_windows;
+        let [job, job_pill, two, two_pill] = &self.job_windows;
         [
             &self.main_window,
             &self.shift_window,
             &self.alt_window,
-            &self.job_window,
             &self.menu_window,
             sheet,
             sheet_left,
             sheet_narrow,
+            job,
+            job_pill,
+            two,
+            two_pill,
         ]
     }
+}
+
+fn root(t: &Theme) -> Div {
+    div()
+        .size_full()
+        .flex()
+        .flex_col()
+        .bg(t.colors.background)
+        .text_color(t.colors.text)
+        .font_family(t.typography.ui_font.clone())
+        .text_size(t.typography.body)
+        .line_height(t.typography.line_height)
 }
 
 impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let root = div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .bg(t.colors.background)
-            .text_color(t.colors.text)
-            .font_family(t.typography.ui_font.clone())
-            .text_size(t.typography.body)
-            .line_height(t.typography.line_height);
+        let root = root(&t);
         if let Some(page) = window_element(self.page, self.windows()) {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
@@ -330,6 +344,9 @@ impl Render for Gallery {
             | Page::WindowAlt
             | Page::WindowNarrow
             | Page::WindowJob
+            | Page::WindowJobPill
+            | Page::WindowJobs
+            | Page::WindowJobsPill
             | Page::AppMenu
             | Page::Sheet
             | Page::SheetLeft

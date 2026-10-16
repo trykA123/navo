@@ -1,7 +1,8 @@
 use rusty_core::{AppState, Conflict, Location, OpKind, OperationPlan, Resolution, Risk, Totals};
 use rusty_fs::{CancelToken, Progress};
 
-use super::{confirm_props, job_props};
+use super::super::jobs::job_info;
+use super::confirm_props;
 use crate::browser::{JobStatus, JobView, PendingOp};
 use crate::job_row::JobRowState;
 
@@ -90,6 +91,7 @@ fn job(kind: OpKind, status: JobStatus) -> JobView {
     JobView {
         id: 7,
         kind,
+        from: Some(at("/home")),
         target: Some(at("/dest")),
         sources: 1,
         progress: Progress {
@@ -106,18 +108,20 @@ fn job(kind: OpKind, status: JobStatus) -> JobView {
 }
 
 #[test]
-fn a_job_row_carries_progress_and_state() {
-    let props = job_props(&job(OpKind::Copy, JobStatus::Running));
-    assert_eq!(props.title, "Copy 1 item to /dest");
-    assert_eq!(props.current.as_deref(), Some("/home/a"));
-    assert_eq!((props.bytes_done, props.bytes_total), (10, 20));
-    assert_eq!((props.files_done, props.files_total), (1, 2));
-    assert_eq!(props.state, JobRowState::Running);
+fn a_job_card_carries_progress_and_state() {
+    let info = job_info(&job(OpKind::Copy, JobStatus::Running), Some(5));
+    assert_eq!(info.name(), "Copy 1 item");
+    assert_eq!(info.route().as_deref(), Some("home → /dest"));
+    assert_eq!(info.current.as_deref(), Some("a"));
+    assert_eq!((info.bytes_done, info.bytes_total), (10, 20));
+    assert_eq!((info.files_done, info.files_total), (1, 2));
+    assert_eq!(info.state, JobRowState::Running);
+    assert_eq!(info.speed, Some(5));
 }
 
 #[test]
-fn every_job_status_maps_to_a_row_state() {
-    let state = |kind, status| job_props(&job(kind, status)).state;
+fn every_job_status_maps_to_a_card_state() {
+    let state = |kind, status| job_info(&job(kind, status), None).state;
     assert_eq!(state(OpKind::Move, JobStatus::Done), JobRowState::Done);
     assert_eq!(
         state(OpKind::Recycle, JobStatus::Cancelled),
@@ -128,11 +132,11 @@ fn every_job_status_maps_to_a_row_state() {
         JobRowState::Failed("denied".into())
     );
     assert_eq!(
-        job_props(&job(OpKind::Delete, JobStatus::Done)).title,
+        job_info(&job(OpKind::Delete, JobStatus::Done), None).name(),
         "Delete 1 item"
     );
     assert_eq!(
-        job_props(&job(OpKind::Recycle, JobStatus::Done)).title,
+        job_info(&job(OpKind::Recycle, JobStatus::Done), None).name(),
         "Recycle 1 item"
     );
 }

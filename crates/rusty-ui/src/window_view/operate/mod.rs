@@ -3,14 +3,12 @@ use std::time::Duration;
 use rusty_core::{Location, OpKind, OperationPlan, Risk};
 
 use super::FerriteWindow;
-use crate::browser::{JobStatus, JobView, PendingOp};
+use crate::browser::PendingOp;
 use crate::confirm_dialog::{ConfirmDialog, ConfirmProps};
 use crate::format;
-use crate::job_row::{JobRow, JobRowProps, JobRowState};
 use crate::prelude::*;
-use crate::tokens;
 
-const JOB_LINGER: Duration = Duration::from_secs(4);
+pub(super) const JOB_LINGER: Duration = Duration::from_secs(2);
 
 fn items(count: usize) -> String {
     format::count(u64::try_from(count).unwrap_or(u64::MAX), "item", "items")
@@ -70,35 +68,6 @@ fn summary(plan: &OperationPlan, protected: bool) -> String {
     parts.join(" · ")
 }
 
-pub(super) fn job_props(job: &JobView) -> JobRowProps {
-    let count = items(job.sources);
-    let target = target_text(job.target.as_ref());
-    let title = match job.kind {
-        OpKind::Copy => format!("Copy {count} to {target}"),
-        OpKind::Move => format!("Move {count} to {target}"),
-        OpKind::Recycle => format!("Recycle {count}"),
-        OpKind::Delete => format!("Delete {count}"),
-    };
-    let progress = &job.progress;
-    JobRowProps {
-        title: title.into(),
-        current: progress
-            .current
-            .as_ref()
-            .map(|current| current.as_str().to_owned().into()),
-        bytes_done: progress.bytes_done,
-        bytes_total: progress.bytes_total,
-        files_done: progress.files_done,
-        files_total: progress.files_total,
-        state: match &job.status {
-            JobStatus::Running => JobRowState::Running,
-            JobStatus::Done => JobRowState::Done,
-            JobStatus::Cancelled => JobRowState::Cancelled,
-            JobStatus::Failed(message) => JobRowState::Failed(message.clone().into()),
-        },
-    }
-}
-
 impl FerriteWindow {
     pub(super) fn dialog(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let pending = self.browser.pending()?;
@@ -136,17 +105,6 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    fn job_row(job: &JobView, cx: &mut Context<Self>) -> JobRow {
-        let (id, this, that) = (job.id, cx.weak_entity(), cx.weak_entity());
-        JobRow::new(("job", id), job_props(job))
-            .on_cancel(move |_, cx| {
-                let _ = this.update(cx, |view, cx| view.cancel_job(id, cx));
-            })
-            .on_dismiss(move |_, cx| {
-                let _ = that.update(cx, |view, cx| view.dismiss_job(id, cx));
-            })
-    }
-
     pub(super) fn linger_ended(&mut self, cx: &mut Context<Self>) {
         let ended = self.browser.take_ended();
         if ended.is_empty() {
@@ -161,37 +119,21 @@ impl FerriteWindow {
 
     fn forget_jobs(&mut self, ids: &[u64], cx: &mut Context<Self>) {
         if self.browser.forget_jobs(ids) {
+            self.jobs_changed();
             cx.notify();
         }
     }
 
-    fn dismiss_job(&mut self, id: u64, cx: &mut Context<Self>) {
+    pub(super) fn dismiss_job(&mut self, id: u64, cx: &mut Context<Self>) {
         if self.browser.dismiss_job(id) {
+            self.jobs_changed();
             cx.notify();
         }
     }
 
-    fn cancel_job(&mut self, id: u64, cx: &mut Context<Self>) {
+    pub(super) fn cancel_job(&mut self, id: u64, cx: &mut Context<Self>) {
         self.browser.cancel_job(id);
         cx.notify();
-    }
-
-    pub(super) fn job_strip(&self, cx: &mut Context<Self>) -> Option<Div> {
-        let jobs = self.browser.jobs();
-        if jobs.is_empty() {
-            return None;
-        }
-        let t = tokens::current(cx).clone();
-        let rows: Vec<JobRow> = jobs.iter().map(|job| Self::job_row(job, cx)).collect();
-        Some(
-            div()
-                .flex()
-                .flex_col()
-                .border_t_1()
-                .border_color(t.colors.line)
-                .bg(t.colors.rail)
-                .children(rows),
-        )
     }
 }
 

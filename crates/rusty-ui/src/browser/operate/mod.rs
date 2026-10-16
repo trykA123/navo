@@ -72,11 +72,13 @@ impl Browser {
         let Some(pending) = self.pending.take() else {
             return false;
         };
-        self.jobs.retain(|job| job.status == JobStatus::Running);
+        self.jobs
+            .retain(|job| matches!(job.status, JobStatus::Running | JobStatus::Failed(_)));
         let cancel = CancelToken::new();
         let mut view = JobView {
             id: pending.id,
             kind: pending.plan.kind,
+            from: pending.sources.first().and_then(Location::parent),
             target: pending.target.clone(),
             sources: pending.sources.len(),
             progress: start_progress(&pending.plan),
@@ -104,6 +106,11 @@ impl Browser {
         }
         self.poll();
         !self.running()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn jobs_mut(&mut self) -> &mut Vec<JobView> {
+        &mut self.jobs
     }
 
     pub fn take_ended(&mut self) -> Vec<u64> {
@@ -213,6 +220,7 @@ impl Browser {
             Err(error) => self.jobs.push(JobView {
                 id: request.id,
                 kind: request.kind,
+                from: request.sources.first().and_then(Location::parent),
                 target: request.target,
                 sources: request.sources.len(),
                 progress: Progress {

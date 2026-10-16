@@ -432,3 +432,28 @@ fn a_running_job_is_never_forgotten() {
     gate.store(true, Ordering::Release);
     settle(&mut browser);
 }
+
+#[test]
+fn a_new_job_keeps_failed_jobs_until_they_are_dismissed() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    fs.fault(
+        "home/docs",
+        FakeOp::Metadata,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.confirm();
+    settle(&mut browser);
+    let statuses: Vec<bool> = browser
+        .jobs()
+        .iter()
+        .map(|job| matches!(job.status, JobStatus::Failed(_)))
+        .collect();
+    assert_eq!(statuses, [true, false]);
+    assert_eq!(browser.jobs()[1].status, JobStatus::Done);
+}

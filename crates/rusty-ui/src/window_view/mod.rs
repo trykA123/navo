@@ -3,6 +3,7 @@ mod drive_menu;
 mod drives;
 mod editor;
 mod fkeys;
+mod jobs;
 mod keys;
 mod operate;
 mod pane;
@@ -125,6 +126,7 @@ pub struct FerriteWindow {
     prefetch: Option<shell_menu::Prefetch>,
     menu_runs: u64,
     preview: preview::Preview,
+    job_ui: jobs::JobUi,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -175,6 +177,7 @@ impl FerriteWindow {
             prefetch: None,
             menu_runs: 0,
             preview: preview::Preview::new(Self::waker(cx), cx),
+            job_ui: jobs::JobUi::default(),
             _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
                 view.follow_cursor(window, cx);
             }),
@@ -186,8 +189,6 @@ impl FerriteWindow {
             }),
         };
         view.apply_theme(window, cx);
-        Self::close_saves_and_quits(window, cx);
-        Self::poll_drives(cx);
         Self::after_open(options.view, window, cx);
         view
     }
@@ -204,6 +205,8 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        Self::close_saves_and_quits(window, cx);
+        Self::poll_drives(cx);
         cx.defer_in(window, move |view, window, cx| {
             view.focus_core_pane(window, cx);
             view.watch_listings(cx);
@@ -235,6 +238,7 @@ impl FerriteWindow {
 
     fn wake(&mut self, cx: &mut Context<Self>) {
         let polled = self.browser.poll();
+        self.jobs_woke(cx);
         if self.poll_preview() || polled {
             cx.notify();
         }
@@ -271,20 +275,15 @@ impl FerriteWindow {
         }
     }
 
-    fn fkey_bar(&self, cx: &App) -> FKeyBar {
-        if let Some(viewer) = &self.viewer {
-            return FKeyBar::new("fkeys", viewer.keys(cx));
-        }
-        let held = self.held_layer;
-        let (layer, index, spoken) = KEY_WARNING;
-        let bar = FKeyBar::new("fkeys", layer_keys(held))
-            .layers(held, key_labels())
-            .warn(layer, index, spoken);
-        if self.browser.jobs().is_empty() {
-            bar
-        } else {
-            bar.reserve_pill()
-        }
+    fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
+        let (held, (layer, index, spoken)) = (self.held_layer, KEY_WARNING);
+        let bar = match &self.viewer {
+            Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
+            None => FKeyBar::new("fkeys", layer_keys(held))
+                .layers(held, key_labels())
+                .warn(layer, index, spoken),
+        };
+        self.with_job_pill(bar, window, cx)
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
@@ -394,7 +393,7 @@ impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let body = self.body_area(window, cx);
-        let jobs = self.job_strip(cx);
+        let jobs = self.job_card_layer(cx);
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
         let menu = self.app_menu_view(cx);
         let root = div()
@@ -409,7 +408,6 @@ impl Render for FerriteWindow {
             .line_height(t.typography.line_height)
             .child(self.title_bar(cx))
             .child(body)
-            .children(jobs)
             .on_modifiers_changed(
                 cx.listener(|view, event: &ModifiersChangedEvent, window, cx| {
                     view.track_modifiers(event.modifiers, window, cx);
@@ -418,7 +416,9 @@ impl Render for FerriteWindow {
             .on_action(cx.listener(|view, _: &ToggleAppMenu, window, cx| {
                 view.toggle_app_menu(window, cx);
             }))
-            .child(self.fkey_bar(cx))
+            .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.jobs_key(cx)))
+            .child(self.fkey_bar(window, cx))
+            .children(jobs)
             .children(dialog)
             .children(menu)
             .children(self.shell_menu_view())
