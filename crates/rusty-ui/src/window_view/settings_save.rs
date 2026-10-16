@@ -47,6 +47,10 @@ impl Saver {
         }
     }
 
+    pub(super) fn is_busy(&self) -> bool {
+        self.is_saving || !self.pending.is_empty()
+    }
+
     fn queue(&mut self, change: Change) {
         self.pending.retain(|older| older.field != change.field);
         self.pending.push(change);
@@ -131,6 +135,7 @@ impl FerriteWindow {
             .fold(report.values, |values, change| values.with(change));
         self.set_values(fresh, window, cx);
         self.start_save(window, cx);
+        self.locate_after_save(window, cx);
         cx.notify();
     }
 }

@@ -55,6 +55,7 @@ pub(super) struct SettingsPanel {
     edit: Option<edit::TextEdit>,
     restore_preview: bool,
     notice: Option<SharedString>,
+    waiting_locate: Option<Field>,
     file: Option<Location>,
     line_of: FindLine,
 }
@@ -80,6 +81,7 @@ impl SettingsPanel {
             edit: None,
             restore_preview: false,
             notice: None,
+            waiting_locate: None,
             file,
             line_of,
         }
@@ -135,6 +137,7 @@ impl FerriteWindow {
     fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settings.is_open = false;
         self.settings.edit = None;
+        self.settings.waiting_locate = None;
         self.settings.undo.clear();
         self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
         if std::mem::take(&mut self.settings.restore_preview) {

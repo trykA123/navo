@@ -4,8 +4,9 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{Log, Setup, editor_of, hooks, redraw};
+use crate::settings::{Field, Values};
 use crate::window_view::tests::{fake, home_beside_dest, open_options, options_for, press, settle};
-use crate::window_view::{FerriteWindow, SettingsHooks, StartOptions};
+use crate::window_view::{FerriteWindow, SaveReport, SettingsHooks, StartOptions};
 
 const TOML: &[u8] = b"# mine\n[appearance]\nmode = \"dark\"\ndensity = \"compact\"\n";
 
@@ -103,4 +104,66 @@ fn ctrl_comma_in_the_viewer_leaves_settings_and_focus_alone(cx: &mut TestAppCont
     assert!(view.read_with(cx, |view, _| view.settings.is_open()));
     assert!(view.read_with(cx, |view, _| view.viewer.is_some()));
     assert_eq!(focused(cx), before);
+}
+
+type Calls = Arc<std::sync::Mutex<Vec<&'static str>>>;
+
+fn waiting_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>, Calls) {
+    let fs = fake();
+    let file = fs.location("home/ferrite.toml");
+    let disk = Arc::new(std::sync::Mutex::new(
+        "# mine\n[appearance]\nmode = \"dark\"\n".to_owned(),
+    ));
+    let log = Calls::default();
+    let (saving, finding) = (log.clone(), log.clone());
+    let written = disk.clone();
+    let options = StartOptions {
+        files: hooks(Setup::new(TOML.to_vec()), &super::Log::default()),
+        settings: SettingsHooks {
+            file: Some(file),
+            save: Arc::new(move |changes| {
+                saving.lock().expect("log").push("save");
+                if changes.iter().any(|change| change.field == Field::Density) {
+                    written
+                        .lock()
+                        .expect("disk")
+                        .push_str("density = \"compact\"\n");
+                }
+                let values = changes
+                    .iter()
+                    .fold(Values::default(), |all, one| all.with(one));
+                SaveReport::saved(values)
+            }),
+            line_of: Arc::new(move |key| {
+                finding.lock().expect("log").push("line");
+                line_in(&disk.lock().expect("disk"), key)
+            }),
+            ..SettingsHooks::none()
+        },
+        ..options_for(fs.clone(), home_beside_dest(&fs))
+    };
+    let (window, view) = open_options(cx, options);
+    (window, view, log)
+}
+
+#[gpui_kit::test(iterations = 24)]
+fn f3_right_after_a_change_waits_for_its_save(cx: &mut TestAppContext) {
+    let (window, view, log) = waiting_window(cx);
+    press(cx, window, &view, "ctrl-,");
+    press(cx, window, &view, "down");
+    cx.update_window(window, |_, window, cx| {
+        window.press("left", cx);
+        window.press("f3", cx);
+    })
+    .expect("window");
+    for _ in 0..50 {
+        cx.run_until_parked();
+        settle(cx, &view);
+        if editor_of(cx, &view).is_some() {
+            break;
+        }
+    }
+    redraw(cx, window);
+    assert_eq!(*log.lock().expect("log"), ["save", "line"]);
+    assert_eq!(cursor_line(cx, &view), Some(3));
 }

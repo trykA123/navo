@@ -11,6 +11,10 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.saver.is_busy() {
+            self.settings.waiting_locate = Some(field);
+            return;
+        }
         let Some(file) = self.settings.file.clone() else {
             self.settings.notice = Some(NO_FILE.into());
             return;
@@ -26,5 +30,18 @@ impl FerriteWindow {
             });
         })
         .detach();
+    }
+
+    pub(in crate::window_view) fn locate_after_save(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.saver.is_busy() || !self.settings.is_open() {
+            return;
+        }
+        if let Some(field) = self.settings.waiting_locate.take() {
+            self.open_settings_file(field, window, cx);
+        }
     }
 }
