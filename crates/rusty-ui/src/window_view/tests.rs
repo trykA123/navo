@@ -23,6 +23,7 @@ mod drive_fs;
 mod drives;
 mod fkeys;
 mod jobs;
+mod offline;
 mod shell_menu;
 mod tabs;
 mod typed;

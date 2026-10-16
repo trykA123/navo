@@ -4,8 +4,12 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
-use rusty_core::{AppState, Command, Direction, FsError, Location, PaneId, ProviderId, apply};
-use rusty_fs::{CancelToken, Capabilities, FakeFs, FsEntry, ListSink, Provider, ProviderOps};
+use rusty_core::{
+    AppState, Command, Direction, FsError, FsErrorKind, Location, PaneId, ProviderId, apply,
+};
+use rusty_fs::{
+    CancelToken, Capabilities, FakeFs, FakeOp, Fault, FsEntry, ListSink, Provider, ProviderOps,
+};
 
 use super::super::{DriveHooks, DriveIcon, DriveInfo, FerriteWindow, StartOptions};
 use super::open_options;
@@ -38,6 +42,10 @@ impl DriveFs {
             released: Mutex::new(false),
             gate: Condvar::new(),
         }
+    }
+
+    pub(super) fn fail_list(&self, path: &str, call: u32, kind: FsErrorKind) {
+        self.fake.fault(path, FakeOp::List, call, Fault::Fail(kind));
     }
 
     pub(super) fn release(&self) {

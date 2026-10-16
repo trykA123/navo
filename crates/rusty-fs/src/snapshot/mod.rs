@@ -16,8 +16,18 @@ pub fn load_folder(
     folder: &Location,
     cancel: &CancelToken,
 ) -> Result<FolderSnapshot, FsError> {
+    load_folder_reporting(provider, folder, cancel, &mut || {})
+}
+
+pub fn load_folder_reporting(
+    provider: &dyn Provider,
+    folder: &Location,
+    cancel: &CancelToken,
+    on_batch: &mut dyn FnMut(),
+) -> Result<FolderSnapshot, FsError> {
     let mut details = Vec::new();
     let mut sink = |batch: EntryBatch| {
+        on_batch();
         details.extend(batch.entries);
         ControlFlow::Continue(())
     };

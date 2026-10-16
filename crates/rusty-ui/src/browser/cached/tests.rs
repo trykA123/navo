@@ -6,11 +6,13 @@ use rusty_cache::{CacheKeys, CachedListing, ListingCache};
 use rusty_core::{AppState, Command, CursorMove, ProviderPath};
 use rusty_fs::{Attributes, CancelToken, EntryKind, FakeFs, FakeOp, FsEntry, ProviderOps};
 
-use super::{Fetch, Fresh};
+use super::{Fetch, Fresh, Progress};
 use crate::browser::Browser;
 use crate::file_list::SortBy;
 
 mod gated;
+mod offline;
+mod stalled;
 
 fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();
@@ -180,6 +182,7 @@ fn a_slower_stale_revalidation_never_overwrites_a_newer_one() {
         shown: None,
         touched: None,
         is_watched: false,
+        progress: Progress::default(),
     };
     let slow = fetch(gate.clone());
     let older = std::thread::spawn(move || slow.run(&CancelToken::new()));

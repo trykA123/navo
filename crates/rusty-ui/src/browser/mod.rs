@@ -14,6 +14,7 @@ use rusty_fs::{
 
 pub(crate) use measure::Measured;
 pub use naming::NameProblem;
+pub use offline::Offline;
 use operate::JobUpdate;
 pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PendingOp};
 
@@ -80,6 +81,7 @@ pub struct Browser {
     sorted: HashMap<TabId, Vec<cached::Sorted>>,
     watching: watched::Watching,
     profiles: ProfileCache,
+    stalls: offline::Stalls,
 }
 
 impl Browser {
@@ -122,6 +124,7 @@ impl Browser {
             sorted: HashMap::new(),
             watching: watched::Watching::default(),
             profiles: ProfileCache::default(),
+            stalls: offline::Stalls::default(),
         }
     }
 
@@ -285,6 +288,11 @@ impl Browser {
     }
 
     fn list(&mut self, tab: TabId, location: Location, request: u64) {
+        self.stalls.begin(tab, request);
+        self.submit(tab, location, request);
+    }
+
+    fn submit(&mut self, tab: TabId, location: Location, request: u64) {
         let fetch = self.fetch(tab, &location, request);
         let (sender, wake) = (self.sender.clone(), Arc::clone(&self.wake));
         let slot = JobSlot {
@@ -319,7 +327,7 @@ impl Browser {
             .state
             .tab(tab)
             .is_some_and(|t| t.pending_request() == Some(request));
-        if !current {
+        if !current || self.keeps_offline(tab, request, &result) {
             return false;
         }
         let listing = match result {
@@ -370,6 +378,7 @@ mod cached;
 mod filter;
 mod measure;
 mod naming;
+mod offline;
 mod operate;
 mod sort;
 #[cfg(test)]

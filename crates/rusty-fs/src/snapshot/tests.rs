@@ -125,3 +125,18 @@ fn a_link_sorts_with_files() {
     );
     assert_eq!(names(&load(&fs, "d")), ["zz", "aa"]);
 }
+
+#[test]
+fn every_batch_is_reported_as_it_arrives() {
+    let fs = FakeFs::new().with_batch_size(2);
+    for name in ["a", "b", "c", "d", "e"] {
+        fs.add_file(&format!("d/{name}.txt"), 1);
+    }
+    let mut batches = 0;
+    let snapshot = load_folder_reporting(&fs, &fs.location("d"), &CancelToken::new(), &mut || {
+        batches += 1
+    })
+    .unwrap();
+    assert_eq!(batches, 3);
+    assert_eq!(snapshot.details.len(), 5);
+}

@@ -37,5 +37,5 @@ pub use provider::{
     ProviderOps,
 };
 pub use scan::{existing_at, scan};
-pub use snapshot::{FolderSnapshot, load_folder};
+pub use snapshot::{FolderSnapshot, load_folder, load_folder_reporting};
 pub use watch::{WATCH_MAX_DELAY, WATCH_QUIET, Watch, WatchChange, WatchEvent, WatchSink};

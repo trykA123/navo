@@ -69,20 +69,20 @@ impl FerriteWindow {
             return div().into_any_element();
         };
         let tab = core_pane.active();
-        let waiting = self.waiting.is_waiting(tab).then(|| tab.clone());
+        let waited = self.waited(pane, tab);
         let is_active = state.focused_pane() == pane;
         let error = self.pane_error(pane, tab);
         let has_cursor = is_active && !self.preview.is_browsing(window, cx);
         let props = self.list_props(tab, has_cursor);
         let status = StatusBarProps {
             free_bytes: self.free_on_drive(pane),
-            is_cached: self.browser.is_cached(tab.id()),
+            mark: self.listing_mark(tab),
             ..status_of(&props.rows, tab.selection())
         };
         let focus = self.handle(pane, cx);
         let path = self.path_row(pane, cx);
-        let list = match waiting {
-            Some(tab) => Self::waiting_view(pane, &tab, &focus, cx),
+        let list = match waited {
+            Some(waited) => Self::waiting_view(&waited, &focus, cx),
             None => Self::file_list(pane, props, &focus, cx).into_any_element(),
         };
         let header = self.pane_header(pane, is_active, cx);

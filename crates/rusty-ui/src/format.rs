@@ -39,6 +39,18 @@ where
     Some(moment.format("%Y-%m-%d %H:%M").to_string())
 }
 
+pub fn clock(at_ms: i64) -> String {
+    clock_in(at_ms, &Local).unwrap_or_default()
+}
+
+pub fn clock_in<Zone: TimeZone>(at_ms: i64, zone: &Zone) -> Option<String>
+where
+    Zone::Offset: std::fmt::Display,
+{
+    let moment = zone.timestamp_millis_opt(at_ms).single()?;
+    Some(moment.format("%H:%M").to_string())
+}
+
 pub fn count(amount: u64, one: &str, many: &str) -> String {
     let noun = if amount == 1 { one } else { many };
     format!("{} {noun}", bytes(amount))
@@ -48,7 +60,7 @@ pub fn count(amount: u64, one: &str, many: &str) -> String {
 mod tests {
     use chrono::{FixedOffset, Utc};
 
-    use super::{bytes, count, date_in, size};
+    use super::{bytes, clock_in, count, date_in, size};
 
     #[test]
     fn bytes_group_thousands_with_commas() {
@@ -65,6 +77,14 @@ mod tests {
         assert_eq!(date_in(ms, &Utc).as_deref(), Some("2026-10-13 19:40"));
         let bucharest = FixedOffset::east_opt(3 * 3600).expect("valid offset");
         assert_eq!(date_in(ms, &bucharest).as_deref(), Some("2026-10-13 22:40"));
+    }
+
+    #[test]
+    fn clocks_read_hour_and_minute_in_the_given_zone() {
+        let ms = 1_791_920_400_000;
+        assert_eq!(clock_in(ms, &Utc).as_deref(), Some("19:40"));
+        let bucharest = FixedOffset::east_opt(3 * 3600).expect("valid offset");
+        assert_eq!(clock_in(ms, &bucharest).as_deref(), Some("22:40"));
     }
 
     #[test]

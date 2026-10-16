@@ -137,6 +137,7 @@ impl Browser {
         });
         let is_open = |tab: &TabId| state.tab(*tab).is_some();
         self.cached.retain(|tab, _| is_open(tab));
+        self.stalls.retain(is_open);
         self.full.retain(|tab, _| is_open(tab));
         self.details.retain(|tab, _| is_open(tab));
         self.sorted.retain(|tab, _| is_open(tab));
