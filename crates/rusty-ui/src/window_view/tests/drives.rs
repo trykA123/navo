@@ -5,8 +5,18 @@ use rusty_core::{Command, PaneId};
 use super::drive_fs::{Rig, Setup, drive_window, local};
 use super::press;
 
-fn bar(pane: PaneId) -> (&'static str, u64) {
-    ("drives", pane.get())
+fn pill(pane: PaneId) -> (&'static str, u64) {
+    ("drive-pill", pane.get())
+}
+
+fn open_list(rig: &Rig, cx: &mut TestAppContext, pane: PaneId) {
+    rig.frame(cx, |window, cx| window.click(pill(pane), cx));
+    super::settle(cx, &rig.view);
+}
+
+fn pick(rig: &Rig, cx: &mut TestAppContext, pane: PaneId, index: usize) {
+    open_list(rig, cx, pane);
+    rig.click(cx, ("drive-menu", pane.get()), ("drive-row", index));
 }
 
 fn first_pane(rig: &Rig, cx: &mut TestAppContext) -> PaneId {
@@ -14,19 +24,33 @@ fn first_pane(rig: &Rig, cx: &mut TestAppContext) -> PaneId {
 }
 
 #[gpui_kit::test]
-fn the_drive_bar_shows_every_drive_and_marks_the_current_one(cx: &mut TestAppContext) {
+fn the_drive_pill_names_the_current_drive_and_lists_every_drive(cx: &mut TestAppContext) {
     let rig = drive_window(cx, Setup::default());
     let pane = first_pane(&rig, cx);
     rig.frame(cx, |window, _| {
-        let drives = window.within(bar(pane));
+        let current = window.find(pill(pane));
+        assert_eq!(current.label(), Some("Drive C:"));
+        assert_eq!(current.value(), Some("connected"));
+        assert_eq!(current.expanded(), Some(false));
+    });
+    open_list(&rig, cx, pane);
+    rig.frame(cx, |window, _| {
+        assert_eq!(window.find(pill(pane)).expanded(), Some(true));
+        let drives = window.within(("drive-menu", pane.get()));
         for (index, name) in ["C", "D", "Z"].into_iter().enumerate() {
-            assert_eq!(drives.find(("drive", index)).label(), Some(name));
+            assert_eq!(drives.find(("drive-row", index)).label(), Some(name));
         }
-        assert!(drives.try_find(("drive", 3usize)).is_none());
-        assert_eq!(drives.find(("drive", 0usize)).selected(), Some(true));
-        assert_eq!(drives.find(("drive", 1usize)).selected(), Some(false));
-        assert_eq!(drives.find(("drive", 0usize)).value(), Some("connected"));
-        assert_eq!(drives.find(("drive", 2usize)).value(), Some("disconnected"));
+        assert!(drives.try_find(("drive-row", 3usize)).is_none());
+        assert_eq!(drives.find(("drive-row", 0usize)).selected(), Some(true));
+        assert_eq!(drives.find(("drive-row", 1usize)).selected(), Some(false));
+        assert_eq!(
+            drives.find(("drive-row", 0usize)).value(),
+            Some("connected")
+        );
+        assert_eq!(
+            drives.find(("drive-row", 2usize)).value(),
+            Some("disconnected")
+        );
     });
 }
 
@@ -34,20 +58,19 @@ fn the_drive_bar_shows_every_drive_and_marks_the_current_one(cx: &mut TestAppCon
 fn a_drive_click_opens_its_root_then_its_last_folder(cx: &mut TestAppContext) {
     let rig = drive_window(cx, Setup::default());
     let pane = first_pane(&rig, cx);
-    rig.click(cx, bar(pane), ("drive", 1));
+    pick(&rig, cx, pane, 1);
     assert_eq!(rig.location(cx, pane), local(r"D:\"));
     rig.view.update(cx, |view, _| {
         let location = local(r"D:\work");
         let _ = view.browser.command(&Command::PaneNavigate { location });
     });
     super::settle(cx, &rig.view);
-    rig.click(cx, bar(pane), ("drive", 0));
+    pick(&rig, cx, pane, 0);
     assert_eq!(rig.location(cx, pane), local(r"C:\home"));
-    rig.click(cx, bar(pane), ("drive", 1));
+    pick(&rig, cx, pane, 1);
     assert_eq!(rig.location(cx, pane), local(r"D:\work"));
     rig.frame(cx, |window, _| {
-        let drives = window.within(bar(pane));
-        assert_eq!(drives.find(("drive", 1usize)).selected(), Some(true));
+        assert_eq!(window.find(pill(pane)).label(), Some("Drive D:"));
     });
 }
 
@@ -55,7 +78,7 @@ fn a_drive_click_opens_its_root_then_its_last_folder(cx: &mut TestAppContext) {
 fn a_disconnected_drive_reconnects_once_then_opens(cx: &mut TestAppContext) {
     let rig = drive_window(cx, Setup::default());
     let pane = first_pane(&rig, cx);
-    rig.click(cx, bar(pane), ("drive", 2));
+    pick(&rig, cx, pane, 2);
     let calls = rig.calls.lock().expect("calls").clone();
     assert_eq!(calls, [('Z', r"\\nas\share".to_owned())]);
     assert_eq!(rig.location(cx, pane), local(r"Z:\"));
@@ -69,7 +92,7 @@ fn a_failed_reconnect_shows_its_message_in_the_pane(cx: &mut TestAppContext) {
     };
     let rig = drive_window(cx, setup);
     let pane = first_pane(&rig, cx);
-    rig.click(cx, bar(pane), ("drive", 2));
+    pick(&rig, cx, pane, 2);
     assert_eq!(rig.calls.lock().expect("calls").len(), 1);
     assert_eq!(rig.location(cx, pane), local(r"C:\home"));
     rig.frame(cx, |window, _| {
@@ -122,11 +145,23 @@ fn a_reconnect_error_is_gone_after_leaving_and_coming_back(cx: &mut TestAppConte
     };
     let rig = drive_window(cx, setup);
     let pane = first_pane(&rig, cx);
-    rig.click(cx, bar(pane), ("drive", 2));
-    rig.click(cx, bar(pane), ("drive", 1));
-    rig.click(cx, bar(pane), ("drive", 0));
+    pick(&rig, cx, pane, 2);
+    pick(&rig, cx, pane, 1);
+    pick(&rig, cx, pane, 0);
     assert_eq!(rig.location(cx, pane), local(r"C:\home"));
     rig.frame(cx, |window, _| {
         assert!(window.try_find(("pane-error", pane.get())).is_none());
     });
+}
+
+#[gpui_kit::test]
+fn clicking_the_pill_of_an_open_list_closes_it(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let pane = first_pane(&rig, cx);
+    open_list(&rig, cx, pane);
+    assert_eq!(menu_pane(&rig, cx), Some(pane));
+    open_list(&rig, cx, pane);
+    assert_eq!(menu_pane(&rig, cx), None);
+    open_list(&rig, cx, pane);
+    assert_eq!(menu_pane(&rig, cx), Some(pane));
 }

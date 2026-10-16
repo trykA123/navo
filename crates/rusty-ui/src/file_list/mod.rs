@@ -265,7 +265,6 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
     let look = RowLook {
         theme,
         entry,
-        index,
         is_cursor: ctx.props.view.cursor == row,
         is_marked: ctx.props.marked.is_marked(row),
         is_active_pane: ctx.props.is_active,
@@ -401,7 +400,7 @@ impl RenderOnce for FileList {
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .bg(t.colors.surface)
+            .bg(t.surfaces.card)
             .text_size(t.typography.body)
             .when_some(ctx.props.filter.clone(), |list, text| {
                 list.child(row::filter_bar(&t, text, len))

@@ -93,15 +93,14 @@ impl RenderOnce for StatusBar {
             .px(t.spacing.xl)
             .text_size(t.typography.small)
             .text_color(c.muted)
-            .bg(c.rail)
             .border_t_1()
-            .border_color(c.line)
+            .border_color(t.surfaces.card_edge)
             .when_some(props.marked_text(), |d, marked| {
                 d.child(
                     div()
                         .flex_none()
                         .text_color(c.mark)
-                        .font_weight(FontWeight::BOLD)
+                        .font_weight(FontWeight::SEMIBOLD)
                         .child(format!("{marked} ·")),
                 )
             })

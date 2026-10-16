@@ -1,6 +1,7 @@
 mod drive_menu;
 mod drives;
 mod editor;
+mod fkeys;
 mod keys;
 mod operate;
 mod pane;
@@ -15,13 +16,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui_kit::{FocusHandle, Subscription, WindowAppearance};
+use gpui_kit::{FocusHandle, Modifiers, ModifiersChangedEvent, Subscription, WindowAppearance};
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
 use crate::browser::{Browser, Launcher, Operations, Waker};
-use crate::fkey_bar::FKeyBar;
+use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
 use crate::primitives::{Splitter, SplitterState};
 use crate::title_bar::{FerriteTitleBar, HeaderSearch};
@@ -31,6 +32,7 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
+pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
 pub use keys::bind_keys;
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -98,6 +100,8 @@ pub struct FerriteWindow {
     menu_focus: FocusHandle,
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
+    held_layer: Option<KeyLayer>,
+    _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
 }
@@ -134,6 +138,10 @@ impl FerriteWindow {
             menu_focus: cx.focus_handle(),
             path_edit: None,
             waiting: waiting::Waiting::default(),
+            held_layer: None,
+            _activation: cx.observe_window_activation(window, |view, window, cx| {
+                view.track_modifiers(window.modifiers(), window, cx);
+            }),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, |_, window, cx| {
                 tokens::apply(mode_of(window.appearance()), cx);
@@ -203,11 +211,24 @@ impl FerriteWindow {
         }
     }
 
-    fn fkeys(&self, cx: &App) -> Vec<(&'static str, &'static str)> {
-        match &self.viewer {
-            Some(viewer) => viewer.keys(cx),
-            None => status::FKEYS.to_vec(),
+    fn track_modifiers(&mut self, modifiers: Modifiers, window: &Window, cx: &mut Context<Self>) {
+        let held = KeyLayer::held(&modifiers).filter(|_| window.is_window_active());
+        if held != self.held_layer {
+            self.held_layer = held;
+            cx.notify();
         }
+    }
+
+    fn fkey_bar(&self, cx: &App) -> FKeyBar {
+        if let Some(viewer) = &self.viewer {
+            return FKeyBar::new("fkeys", viewer.keys(cx));
+        }
+        let held = self.held_layer;
+        let (layer, index, spoken) = KEY_WARNING;
+        FKeyBar::new("fkeys", layer_keys(held))
+            .layers(held, key_labels())
+            .warn(layer, index, spoken)
+            .reserve_pill()
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
@@ -249,6 +270,7 @@ impl FerriteWindow {
     fn title_bar(cx: &mut Context<Self>) -> FerriteTitleBar {
         let this = cx.weak_entity();
         FerriteTitleBar::new("Ferrite")
+            .on_mica()
             .header(HeaderSearch::new())
             .on_close(move |_, cx| {
                 if this.update(cx, |view, cx| view.close(cx)).unwrap_or(true) {
@@ -275,12 +297,19 @@ impl Render for FerriteWindow {
         let panes = self.panes();
         let mut views: Vec<AnyElement> = panes
             .iter()
-            .map(|pane| self.pane_view(*pane, window, cx).into_any_element())
+            .map(|pane| {
+                let card = self.pane_view(*pane, window, cx);
+                div()
+                    .size_full()
+                    .p(t.spacing.xs)
+                    .child(card)
+                    .into_any_element()
+            })
             .collect();
         let body = match (views.pop(), views.pop()) {
-            (Some(second), Some(first)) => {
-                Splitter::new("panes", &self.split, first, second).into_any_element()
-            }
+            (Some(second), Some(first)) => Splitter::new("panes", &self.split, first, second)
+                .line_on_hover()
+                .into_any_element(),
             (Some(only), None) => only,
             _ => div().into_any_element(),
         };
@@ -292,18 +321,20 @@ impl Render for FerriteWindow {
             .flex()
             .flex_col()
             .size_full()
-            .bg(t.colors.surface)
+            .bg(t.surfaces.mica())
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
             .child(Self::title_bar(cx))
-            .child(div().flex().flex_1().min_h_0().child(body))
+            .child(div().flex().flex_1().min_h_0().px(t.spacing.xs).child(body))
             .children(jobs)
-            .child(
-                FKeyBar::new("fkeys", self.fkeys(cx))
-                    .when(self.viewer.is_some(), FKeyBar::sized_to_keys),
+            .on_modifiers_changed(
+                cx.listener(|view, event: &ModifiersChangedEvent, window, cx| {
+                    view.track_modifiers(event.modifiers, window, cx);
+                }),
             )
+            .child(self.fkey_bar(cx))
             .children(dialog)
     }
 }

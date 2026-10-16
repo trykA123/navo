@@ -17,15 +17,3 @@ pub(super) fn status_of(rows: &[FsEntry], marked: &Selection) -> StatusBarProps 
     }
     status
 }
-
-pub(super) const FKEYS: [(&str, &str); 9] = [
-    ("F2", "Rename"),
-    ("F3", "View"),
-    ("F4", "Edit"),
-    ("F5", "Copy"),
-    ("F6", "Move"),
-    ("F7", "New folder"),
-    ("F8", "Delete"),
-    ("F9", "Drawer"),
-    ("F10", "Palette"),
-];

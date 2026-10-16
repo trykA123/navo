@@ -8,7 +8,7 @@ use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens;
 
 const WIDTH: f32 = 520.;
-const HEIGHT: f32 = 30.;
+const HEIGHT: f32 = 32.;
 
 #[derive(IntoElement)]
 pub struct HeaderSearch {
@@ -48,8 +48,9 @@ impl RenderOnce for HeaderSearch {
             .pl(t.spacing.xl)
             .pr(t.spacing.sm)
             .border_1()
-            .border_color(t.colors.line)
-            .rounded(t.radii.lg)
+            .border_color(t.surfaces.card_edge)
+            .rounded(t.radii.full)
+            .bg(t.surfaces.card)
             .text_color(t.colors.muted)
             .child(icon(IconName::Search, t.spacing.icon, t.colors.muted))
             .child(

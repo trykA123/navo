@@ -7,7 +7,7 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, div, px,
 };
 
-use super::row::{columns, date_column, ext_column};
+use super::row::{check_column, columns, date_column, ext_column};
 use super::{FileListAction, ListContext, SortBy, SortKey};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
@@ -85,7 +85,10 @@ fn cell(t: &Theme, column: Column, sort: SortKey, ctx: &Rc<ListContext>) -> impl
             None => cell.flex_1(),
         })
         .when(right, |cell| cell.justify_end())
-        .when(is_active, |cell| cell.text_color(t.colors.text))
+        .when(is_active, |cell| {
+            cell.text_color(t.colors.text)
+                .font_weight(FontWeight::SEMIBOLD)
+        })
         .on_click(move |_, window, cx| ctx.act(FileListAction::Sort(by), window, cx))
         .child(
             div()
@@ -103,13 +106,9 @@ pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {
     columns(t)
         .flex_none()
         .h(t.spacing.row_height)
-        .text_size(t.typography.tiny)
-        .font_weight(FontWeight::SEMIBOLD)
+        .text_size(t.typography.small)
         .text_color(c.muted)
-        .bg(c.rail)
-        .border_t_1()
-        .border_b_1()
-        .border_color(c.line)
+        .child(div().w(check_column(t)).flex_none())
         .children(
             columns_of(t)
                 .into_iter()

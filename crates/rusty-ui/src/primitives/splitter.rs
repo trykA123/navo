@@ -2,7 +2,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{
     AnyElement, App, AppContext, Bounds, Context, DragMoveEvent, ElementId, Empty, Entity,
     EntityId, InteractiveElement, IntoElement, ParentElement, Pixels, Render, RenderOnce, Role,
-    StatefulInteractiveElement, Styled, Window, div, px, relative,
+    StatefulInteractiveElement, Styled, Window, div, px, relative, transparent_black,
 };
 
 use crate::tokens;
@@ -63,6 +63,7 @@ pub struct Splitter {
     state: Entity<SplitterState>,
     first: AnyElement,
     second: AnyElement,
+    is_line_on_hover: bool,
 }
 
 impl Splitter {
@@ -77,13 +78,36 @@ impl Splitter {
             state: state.clone(),
             first: first.into_any_element(),
             second: second.into_any_element(),
+            is_line_on_hover: false,
         }
+    }
+
+    #[must_use]
+    pub fn line_on_hover(mut self) -> Self {
+        self.is_line_on_hover = true;
+        self
     }
 }
 
-fn handle(ratio: f32, owner: EntityId, cx: &App) -> impl IntoElement {
+struct HandleLook {
+    ratio: f32,
+    owner: EntityId,
+    is_line_on_hover: bool,
+}
+
+fn handle(look: HandleLook, cx: &App) -> impl IntoElement {
+    let HandleLook {
+        ratio,
+        owner,
+        is_line_on_hover,
+    } = look;
     let t = tokens::current(cx);
-    let (line, accent) = (t.colors.line, t.colors.accent);
+    let accent = t.colors.accent;
+    let line = if is_line_on_hover {
+        transparent_black()
+    } else {
+        t.colors.line
+    };
     div()
         .id("handle")
         .role(Role::Splitter)
@@ -149,6 +173,13 @@ impl RenderOnce for Splitter {
                     .overflow_hidden()
                     .child(self.second),
             )
-            .child(handle(ratio, owner, cx))
+            .child(handle(
+                HandleLook {
+                    ratio,
+                    owner,
+                    is_line_on_hover: self.is_line_on_hover,
+                },
+                cx,
+            ))
     }
 }

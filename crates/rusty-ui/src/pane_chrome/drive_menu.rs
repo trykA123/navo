@@ -8,7 +8,7 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Window, deferred, div, point, px,
 };
 
-use super::drive_bar::{status_value, usage_bar};
+use super::drive_pill::{status_value, usage_bar};
 use super::drives::DriveInfo;
 use crate::primitives::icon;
 use crate::tokens::{self, Theme};
@@ -44,6 +44,7 @@ pub struct DriveMenu {
     drives: Rc<[DriveInfo]>,
     selected: usize,
     current: Option<usize>,
+    busy: Vec<char>,
     focus: Option<FocusHandle>,
     on_event: Option<EventHandler>,
 }
@@ -55,6 +56,7 @@ impl DriveMenu {
             drives,
             selected,
             current: None,
+            busy: Vec::new(),
             focus: None,
             on_event: None,
         }
@@ -62,6 +64,12 @@ impl DriveMenu {
 
     pub fn current(mut self, index: Option<usize>) -> Self {
         self.current = index;
+        self
+    }
+
+    #[must_use]
+    pub fn busy(mut self, letters: Vec<char>) -> Self {
+        self.busy = letters;
         self
     }
 
@@ -78,8 +86,13 @@ impl DriveMenu {
         self
     }
 
-    pub fn into_popover(self, left: Pixels) -> AnyElement {
-        let anchored = div().absolute().top_full().left(left).child(self);
+    pub fn into_popover(self, right: Pixels) -> AnyElement {
+        let anchored = div()
+            .absolute()
+            .top_full()
+            .right(right)
+            .mt(px(4.))
+            .child(self);
         deferred(anchored).with_priority(1).into_any_element()
     }
 }
@@ -111,6 +124,7 @@ struct RowProps<'a> {
     index: usize,
     is_selected: bool,
     is_current: bool,
+    is_busy: bool,
     send: Option<EventHandler>,
 }
 
@@ -126,7 +140,7 @@ fn row(drive: &DriveInfo, props: RowProps) -> AnyElement {
         .role(Role::MenuItem)
         .aria_label(drive.name())
         .aria_selected(props.is_selected)
-        .aria_value(status_value(drive, false))
+        .aria_value(status_value(drive, props.is_busy))
         .test_support()
         .flex()
         .items_center()
@@ -247,6 +261,7 @@ impl RenderOnce for DriveMenu {
                     index,
                     is_selected: index == self.selected,
                     is_current: self.current == Some(index),
+                    is_busy: drive.letter.is_some_and(|l| self.busy.contains(&l)),
                     send: self.on_event.clone(),
                 };
                 row(drive, props)

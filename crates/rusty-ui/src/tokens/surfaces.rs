@@ -97,18 +97,14 @@ impl Surfaces {
 }
 
 fn light(c: &Colors) -> Surfaces {
-    let (surface, line, accent) = (
-        ok(99.3, 0.002, 250.),
-        ok(88., 0.01, 250.),
-        ok(50., 0.17, 252.),
-    );
+    let (surface, line, accent) = (ok(99.3, 0.002, 250.), ok(88., 0.01, 250.), c.accent);
     Surfaces {
         mica_from: ok(93.8, 0.012, 245.),
         mica_to: ok(94.5, 0.014, 60.),
         card: surface,
         card_edge: line,
         card_ring: accent,
-        current: ok(91.5, 0.045, 252.),
+        current: ok(91.5, 0.045, 262.),
         field: ok(96.5, 0.006, 250.),
         keycap_face: ok(99.8, 0.001, 260.),
         keycap_edge: ok(84., 0.01, 260.),
@@ -118,7 +114,7 @@ fn light(c: &Colors) -> Surfaces {
         layer_tint: ok(94.5, 0.03, 262.),
         pill: surface,
         pill_ring: accent,
-        pill_label: ok(48., 0.17, 252.),
+        pill_label: c.accent_text,
         progress_track: line,
         progress_fill: accent,
         job_card: ok(98.6, 0.004, 250.),
@@ -130,18 +126,14 @@ fn light(c: &Colors) -> Surfaces {
 }
 
 fn dark(c: &Colors) -> Surfaces {
-    let (surface, line, accent) = (
-        ok(20.5, 0.01, 250.),
-        ok(29., 0.012, 250.),
-        ok(78., 0.11, 248.),
-    );
+    let (surface, line, accent) = (ok(20.5, 0.01, 250.), ok(29., 0.012, 250.), c.accent);
     Surfaces {
         mica_from: ok(15.5, 0.014, 250.),
         mica_to: ok(17., 0.014, 280.),
         card: surface,
         card_edge: line,
         card_ring: accent,
-        current: ok(32., 0.07, 252.),
+        current: ok(32., 0.07, 262.),
         field: ok(17.5, 0.01, 250.),
         keycap_face: ok(24., 0.012, 260.),
         keycap_edge: ok(11., 0.008, 260.),
@@ -151,7 +143,7 @@ fn dark(c: &Colors) -> Surfaces {
         layer_tint: ok(23., 0.05, 262.),
         pill: surface,
         pill_ring: accent,
-        pill_label: ok(80., 0.1, 248.),
+        pill_label: c.accent_text,
         progress_track: line,
         progress_fill: accent,
         job_card: ok(23., 0.012, 250.),

@@ -7,7 +7,7 @@ use gpui_kit::{AsyncApp, WeakEntity};
 use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
-use crate::pane_chrome::{DriveBar, current_drive};
+use crate::pane_chrome::{DrivePill, current_drive};
 use crate::prelude::*;
 
 pub use crate::pane_chrome::{DriveIcon, DriveInfo};
@@ -35,7 +35,7 @@ impl DriveHooks {
 pub(super) struct Drives {
     hooks: DriveHooks,
     pub(super) list: Rc<[DriveInfo]>,
-    reconnecting: Vec<char>,
+    pub(super) reconnecting: Vec<char>,
     errors: HashMap<PaneId, (Location, usize, SharedString)>,
 }
 
@@ -166,17 +166,32 @@ impl FerriteWindow {
         self.drives.errors.insert(pane, (location, depth, message));
     }
 
-    pub(super) fn drive_bar(&self, pane: PaneId, cx: &mut Context<Self>) -> DriveBar {
-        DriveBar::new(("drives", pane.get()), self.drives.list.clone())
-            .current(self.current_drive(pane))
-            .busy(self.drives.reconnecting.clone())
-            .on_pick(
-                cx.listener(move |this: &mut Self, index: &usize, window, cx| {
-                    this.close_drive_menu();
-                    this.path_edit = None;
-                    this.focus_pane(pane);
-                    this.pick_drive(*index, window, cx);
-                }),
-            )
+    pub(super) fn drive_pill(&self, pane: PaneId, cx: &mut Context<Self>) -> Div {
+        let drive = self
+            .current_drive(pane)
+            .and_then(|index| self.drives.list.get(index).cloned());
+        let is_busy = drive
+            .as_ref()
+            .and_then(|drive| drive.letter)
+            .is_some_and(|letter| self.drives.reconnecting.contains(&letter));
+        let is_open = self
+            .drive_menu
+            .as_ref()
+            .is_some_and(|menu| menu.pane == pane);
+        let this = cx.weak_entity();
+        let pill = DrivePill::new(("drive-pill", pane.get()), drive)
+            .busy(is_busy)
+            .open(is_open)
+            .on_open(move |window, cx| {
+                let _ = this.update(cx, |view, cx| {
+                    view.focus_pane(pane);
+                    view.open_drive_menu_for(pane, window, cx);
+                });
+            });
+        div()
+            .relative()
+            .flex_none()
+            .child(pill)
+            .children(self.drive_menu_view(pane, cx))
     }
 }

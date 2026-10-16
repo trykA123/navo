@@ -5,11 +5,11 @@ use gpui_kit::base::TestSupportExt;
 use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
-use super::keys::{DriveMenuFirst, DriveMenuSecond, EditPath, PANE};
+use super::keys::{DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE};
 use super::status::status_of;
 use crate::FocusHandle;
 use crate::file_list::{FileList, FileListAction, FileListProps, FilterEdit};
-use crate::pane_chrome::{PaneTabs, PathBar, path_segments};
+use crate::pane_chrome::{PaneTabs, PathBar, card_header, pane_card, path_segments};
 use crate::prelude::*;
 use crate::status_bar::{StatusBar, StatusBarProps};
 use crate::tokens;
@@ -56,27 +56,53 @@ impl FerriteWindow {
         pane: PaneId,
         _window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Div {
+    ) -> AnyElement {
         let t = tokens::current(cx).clone();
+        let label = self.card_label(pane);
         let state = self.browser.state();
         let Some(core_pane) = state.pane(pane) else {
-            return div();
+            return div().into_any_element();
         };
         let tab = core_pane.active();
         let waiting = self.waiting.is_waiting(tab).then(|| tab.clone());
-        let titles: Vec<SharedString> = core_pane.tabs().iter().map(title_of).collect();
-        let active_index = core_pane.active_index();
         let is_active = state.focused_pane() == pane;
-        let rows = self.browser.details(tab.id());
         let error = self.pane_error(pane, tab);
+        let props = self.list_props(tab, is_active);
         let status = StatusBarProps {
             free_bytes: self.free_on_drive(pane),
             is_cached: self.browser.is_cached(tab.id()),
-            ..status_of(&rows, tab.selection())
+            ..status_of(&props.rows, tab.selection())
         };
-        let props = FileListProps {
+        let focus = self.handle(pane, cx);
+        let path = self.path_row(pane, cx);
+        let list = match waiting {
+            Some(tab) => Self::waiting_view(pane, &tab, &focus, cx),
+            None => Self::file_list(pane, props, &focus, cx).into_any_element(),
+        };
+        let header = self.pane_header(pane, is_active, cx);
+        let body = Self::pane_keys(div().key_context(PANE), cx)
+            .flex()
+            .flex_col()
+            .flex_1()
+            .size_full()
+            .min_w_0()
+            .min_h_0()
+            .child(header)
+            .child(path)
+            .when_some(error, |this, message| {
+                this.child(error_line(&t, pane, message))
+            })
+            .child(list)
+            .child(StatusBar::new(("status", pane.get()), status));
+        pane_card(("pane", pane.get()), label, is_active, cx)
+            .child(body)
+            .into_any_element()
+    }
+
+    fn list_props(&self, tab: &Tab, is_active: bool) -> FileListProps {
+        FileListProps {
             folder: title_of(tab),
-            rows,
+            rows: self.browser.details(tab.id()),
             view: tab.view(),
             marked: Rc::new(tab.selection().clone()),
             is_active,
@@ -85,37 +111,30 @@ impl FerriteWindow {
                 .filter_text(tab.id())
                 .map(|text| text.to_owned().into()),
             sort: self.browser.sort_key(tab.id()),
-        };
-        let focus = self.handle(pane, cx);
-        let path = self.path_row(pane, cx);
-        let list = match waiting {
-            Some(tab) => Self::waiting_view(pane, &tab, &focus, cx),
-            None => Self::file_list(pane, props, &focus, cx).into_any_element(),
-        };
-        Self::pane_keys(div().key_context(PANE), cx)
-            .flex()
-            .flex_col()
-            .flex_1()
-            .size_full()
-            .min_w_0()
-            .min_h_0()
-            .child(Self::tabs(pane, titles, active_index, cx))
-            .child(self.drive_row(pane, cx))
-            .child(path)
-            .when_some(error, |this, message| {
-                this.child(error_line(&t, pane, message))
-            })
-            .child(list)
-            .child(StatusBar::new(("status", pane.get()), status))
+        }
     }
 
-    fn drive_row(&self, pane: PaneId, cx: &mut Context<Self>) -> Div {
-        div()
-            .relative()
-            .flex()
-            .flex_col()
-            .child(self.drive_bar(pane, cx))
-            .children(self.drive_menu_view(pane, cx))
+    fn pane_header(&self, pane: PaneId, is_active: bool, cx: &mut Context<Self>) -> Div {
+        let t = tokens::current(cx).clone();
+        let (titles, active_index) = self
+            .browser
+            .state()
+            .pane(pane)
+            .map(|p| (p.tabs().iter().map(title_of).collect(), p.active_index()))
+            .unwrap_or_default();
+        let tabs = Self::tabs(pane, titles, active_index, cx).highlighted(is_active);
+        card_header(&t)
+            .child(div().flex_1().min_w_0().child(tabs))
+            .child(self.drive_pill(pane, cx))
+    }
+
+    fn card_label(&self, pane: PaneId) -> &'static str {
+        let panes = self.panes();
+        match (panes.len(), panes.iter().position(|p| *p == pane)) {
+            (2, Some(0)) => "Left pane",
+            (2, Some(1)) => "Right pane",
+            _ => "Pane",
+        }
     }
 
     fn path_row(&self, pane: PaneId, cx: &mut Context<Self>) -> AnyElement {
@@ -123,12 +142,11 @@ impl FerriteWindow {
             return input.into_any_element();
         }
         let state = self.browser.state();
-        let is_active = state.focused_pane() == pane;
         let location = state
             .pane(pane)
             .map(|p| p.active().location().clone())
             .unwrap_or_else(|| state.active_tab().location().clone());
-        Self::path_bar(pane, location, is_active, cx).into_any_element()
+        Self::path_bar(pane, location, cx).into_any_element()
     }
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
@@ -142,6 +160,9 @@ impl FerriteWindow {
                 this.open_drive_menu(1, window, cx);
             }),
         )
+        .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
+            this.apply(&Command::PaneOpenTab { location: None }, window, cx);
+        }))
         .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
             let pane = this.browser.state().focused_pane();
             this.open_path_edit(pane, cx);
@@ -162,15 +183,9 @@ impl FerriteWindow {
         ))
     }
 
-    fn path_bar(
-        pane: PaneId,
-        location: Location,
-        is_active: bool,
-        cx: &mut Context<Self>,
-    ) -> PathBar {
+    fn path_bar(pane: PaneId, location: Location, cx: &mut Context<Self>) -> PathBar {
         let edit = cx.weak_entity();
         PathBar::new(("path", pane.get()), location)
-            .active(is_active)
             .on_navigate(
                 cx.listener(move |this: &mut Self, location: &Location, window, cx| {
                     let command = Command::PaneNavigate {
