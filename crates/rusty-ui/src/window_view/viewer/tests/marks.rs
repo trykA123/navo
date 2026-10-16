@@ -268,3 +268,27 @@ fn an_edit_drops_the_running_scans_of_the_old_text(cx: &mut TestAppContext) {
     assert_eq!(marked, [(3..9, 2)]);
     assert_eq!(counted, Some(vec![3]));
 }
+
+#[gpui_kit::test]
+fn ctrl_number_marks_in_the_viewer_and_does_not_switch_tabs(cx: &mut TestAppContext) {
+    let (window, view, _) = text_window(cx, Setup::huge(numbered_lines()));
+    view.update(cx, |view, _| {
+        let _ = view
+            .browser
+            .command(&rusty_core::Command::PaneOpenTab { location: None });
+    });
+    let active = |cx: &mut TestAppContext| {
+        view.read_with(cx, |view, _| {
+            let state = view.browser.state();
+            state
+                .pane(state.focused_pane())
+                .map(|p| (p.tabs().len(), p.active_index()))
+        })
+    };
+    let before = active(cx);
+    search_for(cx, window, &view, "needle");
+    press(cx, window, &view, "ctrl-2");
+    assert_eq!(active(cx), before);
+    let colour = paged_marking(cx, &view, |marking| marking.marks.set.colour_of(&needle()));
+    assert_eq!(colour, Some(1));
+}
