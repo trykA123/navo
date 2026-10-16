@@ -146,7 +146,7 @@ impl Browser {
             location: location.clone(),
             shown,
             touched: self.take_patch(tab),
-            is_watched: self.is_watched(location),
+            is_watched: self.is_settled(location),
         }
     }
 

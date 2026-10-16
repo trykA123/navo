@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use rusty_core::{Location, TabId, relist_tab};
+use rusty_core::{Location, ProviderPath, TabId, relist_tab};
 use rusty_fs::{Watch, WatchChange, WatchEvent, WatchSink};
 
 use super::{Browser, Message};
@@ -21,17 +21,24 @@ enum Refresh {
 
 impl Refresh {
     fn of(changes: Vec<WatchChange>) -> Self {
-        if changes.len() <= PATCH_LIMIT {
-            Self::Patch(changes)
-        } else {
+        let names: HashSet<&ProviderPath> = changes.iter().flat_map(names_of).collect();
+        // Windows may report an 8.3 short name; only a full listing shows the long one.
+        let has_short_name = names.iter().any(|name| name.to_text().contains('~'));
+        if names.len() > PATCH_LIMIT || has_short_name {
             Self::Full
+        } else {
+            Self::Patch(changes)
         }
     }
 
     fn merge(self, next: Self) -> Self {
         match (self, next) {
             (Self::Patch(mut first), Self::Patch(then)) => {
-                first.extend(then);
+                let fresh: Vec<WatchChange> = then
+                    .into_iter()
+                    .filter(|change| !first.contains(change))
+                    .collect();
+                first.extend(fresh);
                 Self::of(first)
             }
             _ => Self::Full,
@@ -39,8 +46,17 @@ impl Refresh {
     }
 }
 
+fn names_of(change: &WatchChange) -> Vec<&ProviderPath> {
+    match change {
+        WatchChange::Created(name) | WatchChange::Removed(name) | WatchChange::Modified(name) => {
+            vec![name]
+        }
+        WatchChange::Renamed { from, to } => vec![from, to],
+    }
+}
+
 enum Folder {
-    Live { _watch: Watch },
+    Live { watch: Watch },
     Fallback { _recheck: Option<Recheck> },
 }
 
@@ -56,8 +72,17 @@ impl Browser {
     pub fn is_watched(&self, location: &Location) -> bool {
         matches!(
             self.watching.folders.get(location),
-            Some(Folder::Live { .. })
+            Some(Folder::Live { watch }) if watch.is_live()
         )
+    }
+
+    pub(super) fn is_settled(&self, location: &Location) -> bool {
+        self.is_watched(location)
+            && !self
+                .watching
+                .queued
+                .values()
+                .any(|(queued, _)| queued == location)
     }
 
     pub fn revalidate_unwatched(&mut self) -> bool {
@@ -109,11 +134,17 @@ impl Browser {
             .map(|(_, folder)| folder)
             .collect();
         release(closed);
-        for location in wanted {
-            if !self.watching.folders.contains_key(&location) {
-                let folder = self.start_folder(&location);
-                self.watching.folders.insert(location, folder);
-            }
+        let started: Vec<Location> = wanted
+            .into_iter()
+            .filter(|location| !self.watching.folders.contains_key(location))
+            .collect();
+        for location in &started {
+            let folder = self.start_folder(location);
+            self.watching.folders.insert(location.clone(), folder);
+        }
+        for location in &started {
+            let idle = self.idle_tabs_at(location);
+            self.refresh_tabs(idle, location, &Refresh::Full);
         }
     }
 
@@ -138,15 +169,15 @@ impl Browser {
             self.watching.folders.get(location),
             Some(Folder::Fallback { .. })
         );
-        is_fallback && self.refresh_folder(location, &Refresh::Full)
+        if !is_fallback {
+            return false;
+        }
+        let idle = self.idle_tabs_at(location);
+        self.refresh_tabs(idle, location, &Refresh::Full)
     }
 
     pub(super) fn drain_refresh(&mut self, tab: TabId) -> bool {
-        let is_idle = self
-            .state
-            .tab(tab)
-            .is_some_and(|t| t.pending_request().is_none() && t.listing().is_some());
-        if !is_idle {
+        if !self.is_idle(tab) {
             return false;
         }
         let Some((_, refresh)) = self.watching.queued.remove(&tab) else {
@@ -161,13 +192,32 @@ impl Browser {
         true
     }
 
-    fn refresh_folder(&mut self, location: &Location, refresh: &Refresh) -> bool {
-        let tabs: Vec<TabId> = self
-            .open_tabs()
+    fn is_idle(&self, tab: TabId) -> bool {
+        self.state
+            .tab(tab)
+            .is_some_and(|t| t.pending_request().is_none() && t.listing().is_some())
+    }
+
+    fn tabs_at(&self, location: &Location) -> Vec<TabId> {
+        self.open_tabs()
             .into_iter()
             .filter(|(_, open)| open == location)
             .map(|(tab, _)| tab)
-            .collect();
+            .collect()
+    }
+
+    fn idle_tabs_at(&self, location: &Location) -> Vec<TabId> {
+        let mut tabs = self.tabs_at(location);
+        tabs.retain(|tab| self.is_idle(*tab));
+        tabs
+    }
+
+    fn refresh_folder(&mut self, location: &Location, refresh: &Refresh) -> bool {
+        let tabs = self.tabs_at(location);
+        self.refresh_tabs(tabs, location, refresh)
+    }
+
+    fn refresh_tabs(&mut self, tabs: Vec<TabId>, location: &Location, refresh: &Refresh) -> bool {
         for tab in &tabs {
             let merged = match self.watching.queued.remove(tab) {
                 Some((at, queued)) if at == *location => queued.merge(refresh.clone()),
@@ -205,7 +255,7 @@ impl Browser {
             wake();
         });
         match self.provider.watch(location, sink) {
-            Ok(watch) => Folder::Live { _watch: watch },
+            Ok(watch) => Folder::Live { watch },
             Err(_) => self.fallback(location),
         }
     }

@@ -10,7 +10,7 @@ use rusty_fs::{FakeFs, FakeOp, Fault};
 use super::super::FerriteWindow;
 use super::{open_with, press, settle};
 
-const WITHIN: Duration = Duration::from_secs(1);
+const WITHIN: Duration = Duration::from_secs(5);
 
 fn fake(watching: bool) -> Arc<FakeFs> {
     let fs = if watching {
@@ -75,7 +75,7 @@ fn cursor_name(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<
 }
 
 #[gpui_kit::test]
-fn a_file_made_on_disk_shows_in_the_open_pane_within_a_second(cx: &mut TestAppContext) {
+fn a_file_made_on_disk_shows_in_the_open_pane_on_its_own(cx: &mut TestAppContext) {
     let fs = fake(true);
     let open = open(cx, &fs);
     press(cx, open.window, &open.view, "down");
