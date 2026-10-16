@@ -3,6 +3,8 @@ use gpui_kit::{Hsla, Pixels, Rgba, TestAppContext, px};
 
 use super::{Mode, Radii, Spacing, Theme, apply, current};
 
+mod surfaces;
+
 const MODES: [Mode; 2] = [Mode::Light, Mode::Dark];
 
 fn is_opaque_srgb(color: Hsla) -> bool {
@@ -59,12 +61,25 @@ fn spacing_sizes(spacing: Spacing) -> Vec<(&'static str, Pixels)> {
 }
 
 fn radius_sizes(radii: Radii) -> Vec<(&'static str, Pixels)> {
-    let Radii { xs, sm, md, lg } = radii;
+    let Radii {
+        xs,
+        sm,
+        md,
+        lg,
+        card,
+        pill,
+        keycap,
+        sheet,
+    } = radii;
     vec![
         ("radius_xs", xs),
         ("radius_sm", sm),
         ("radius_md", md),
         ("radius_lg", lg),
+        ("radius_card", card),
+        ("radius_pill", pill),
+        ("radius_keycap", keycap),
+        ("radius_sheet", sheet),
     ]
 }
 

@@ -13,6 +13,7 @@ use crate::menu_page::{MenuPage, Shows as MenuShows};
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
+use crate::tokens_page;
 use crate::{rich_sample, viewer_sample};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -32,6 +33,7 @@ pub enum Page {
     MenuSubmenu,
     MenuFilter,
     MenuFiles,
+    Tokens,
 }
 
 pub struct PageInfo {
@@ -50,7 +52,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 15] = [
+pub const PAGES: [PageInfo; 16] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -66,6 +68,7 @@ pub const PAGES: [PageInfo; 15] = [
     info(Page::MenuSubmenu, "Menu 7-Zip", "p17-menu-7zip", false),
     info(Page::MenuFilter, "Menu filter", "p17-menu-filter", false),
     info(Page::MenuFiles, "Menu files", "p17-menu-files", false),
+    info(Page::Tokens, "Tokens", "p19-tokens", false),
 ];
 
 impl Page {
@@ -238,6 +241,7 @@ impl Render for Gallery {
                 root.children(self.menu_page(self.page))
             }
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
+            Page::Tokens => root.child(tokens_page::render(&t)),
         }
     }
 }

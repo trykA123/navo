@@ -2,6 +2,9 @@ mod contrast;
 mod design_b;
 mod kit;
 mod marks;
+mod motion;
+mod shadows;
+mod surfaces;
 
 #[cfg(test)]
 mod tests;
@@ -13,6 +16,9 @@ use gpui_kit::{App, Global, Hsla, Pixels, SharedString};
 pub use contrast::{contrast_ratio, relative_luminance};
 pub use kit::apply;
 pub use marks::MarkColors;
+pub use motion::Motion;
+pub use shadows::Shadows;
+pub use surfaces::Surfaces;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Mode {
@@ -102,6 +108,10 @@ pub struct Radii {
     pub sm: Pixels,
     pub md: Pixels,
     pub lg: Pixels,
+    pub card: Pixels,
+    pub pill: Pixels,
+    pub keycap: Pixels,
+    pub sheet: Pixels,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -112,19 +122,26 @@ pub struct Theme {
     pub spacing: Spacing,
     pub radii: Radii,
     pub marks: MarkColors,
+    pub surfaces: Surfaces,
+    pub shadows: Shadows,
+    pub motion: Motion,
 }
 
 impl Global for Theme {}
 
 impl Theme {
     pub fn new(mode: Mode) -> Self {
+        let colors = design_b::colors(mode);
         Self {
             mode,
-            colors: design_b::colors(mode),
+            colors,
             typography: design_b::typography(),
             spacing: design_b::spacing(),
             radii: design_b::radii(),
             marks: marks::mark_colors(mode),
+            surfaces: surfaces::surfaces(mode, &colors),
+            shadows: shadows::shadows(mode),
+            motion: motion::motion(),
         }
     }
 }

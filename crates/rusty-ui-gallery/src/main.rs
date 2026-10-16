@@ -12,6 +12,8 @@ mod pane_sample;
 mod rich_sample;
 mod screenshot;
 mod sections;
+mod tokens_page;
+mod tokens_sample;
 mod viewer_sample;
 
 #[cfg(test)]
