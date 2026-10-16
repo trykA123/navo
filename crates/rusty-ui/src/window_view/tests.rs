@@ -256,6 +256,18 @@ fn shift_delete_asks_with_danger_and_escape_deletes_nothing(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn tab_in_the_delete_dialog_moves_focus_to_the_delete_button(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "shift-delete");
+    press(cx, window, &view, "tab");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert!(fs.metadata(&fs.location("home/docs")).is_err());
+}
+
+#[gpui_kit::test]
 fn a_finished_job_row_goes_away_after_a_moment(cx: &mut TestAppContext) {
     let fs = fake();
     let state = home_beside_dest(&fs);

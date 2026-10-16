@@ -10,11 +10,12 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight, InteractiveElement,
     IntoElement, ParentElement, RenderOnce, Role, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, px, transparent_black,
+    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
 };
 
 pub use keys::bind_keys;
 
+use crate::dialog_focus::{Stop, focus_ring};
 use crate::primitives::{
     Button, ButtonVariant, IconName, TextField, TextFieldState, icon, text_field_state,
 };
@@ -78,6 +79,7 @@ impl ConfirmDialog {
 }
 
 struct DialogState {
+    root: FocusHandle,
     confirm: FocusHandle,
     cancel: FocusHandle,
     field: Option<Entity<TextFieldState>>,
@@ -97,6 +99,7 @@ impl DialogState {
             .as_ref()
             .map(|field| cx.observe(field, |_, _, cx| cx.notify()));
         Self {
+            root: cx.focus_handle(),
             confirm: cx.focus_handle(),
             cancel: cx.focus_handle(),
             field,
@@ -144,14 +147,15 @@ fn start_focus(
 
 fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &App) -> Keys {
     let confirm = can_confirm.then(|| state.confirm.clone());
+    let buttons: Vec<FocusHandle> = confirm.into_iter().chain([state.cancel.clone()]).collect();
     let stops = state
         .field_focus(cx)
         .into_iter()
-        .chain(confirm)
-        .chain([state.cancel.clone()])
+        .chain(buttons.clone())
         .collect();
     Keys {
         stops,
+        buttons,
         confirm: state.confirm.clone(),
         can_confirm,
         cancel: state.cancel.clone(),
@@ -212,29 +216,6 @@ fn paths(t: &Theme, props: &ConfirmProps) -> Div {
         })
 }
 
-struct Stop<'a> {
-    id: &'static str,
-    handle: &'a FocusHandle,
-    button: Button,
-}
-
-fn focus_ring(t: &Theme, stop: Stop<'_>, window: &Window) -> impl IntoElement {
-    let ring = if stop.handle.is_focused(window) {
-        t.colors.accent
-    } else {
-        transparent_black()
-    };
-    div()
-        .id(stop.id)
-        .test_support()
-        .track_focus(stop.handle)
-        .p(px(2.))
-        .rounded(t.radii.lg)
-        .border_1()
-        .border_color(ring)
-        .child(stop.button)
-}
-
 fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) -> Div {
     let variant = if props.danger {
         ButtonVariant::Danger
@@ -257,6 +238,7 @@ fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) ->
             t,
             Stop {
                 id: "confirm",
+                context: keys::BUTTON,
                 handle: &keys.confirm,
                 button: confirm_button,
             },
@@ -266,6 +248,7 @@ fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) ->
             t,
             Stop {
                 id: "cancel",
+                context: keys::BUTTON,
                 handle: &keys.cancel,
                 button: cancel_button,
             },
@@ -285,8 +268,9 @@ impl RenderOnce for ConfirmDialog {
         let current = state.read(cx);
         let can_confirm = is_typed_ok(&props, current, cx);
         let field = current.field.clone();
+        let root = current.root.clone();
         let keys = Rc::new(keys_for(self, current, can_confirm, cx));
-        keys::register(div().id(id), &keys)
+        keys::register(div().id(id).track_focus(&root), &keys)
             .role(Role::AlertDialog)
             .aria_label(props.title.clone())
             .test_support()

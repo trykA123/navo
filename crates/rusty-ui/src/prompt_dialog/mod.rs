@@ -1,3 +1,5 @@
+mod keys;
+
 #[cfg(test)]
 mod tests;
 
@@ -9,21 +11,17 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    App, AppContext, Context, ElementId, Entity, Focusable, FontWeight, InteractiveElement,
-    IntoElement, KeyBinding, ParentElement, RenderOnce, Role, SharedString,
+    App, AppContext, Context, ElementId, Entity, FocusHandle, Focusable, FontWeight,
+    InteractiveElement, IntoElement, ParentElement, RenderOnce, Role, SharedString,
     StatefulInteractiveElement, Styled, Subscription, Window, div, px,
 };
 
+use crate::dialog_focus::{Stop, focus_ring};
 use crate::primitives::{Button, ButtonVariant, TextField, TextFieldState};
 use crate::tokens;
+use keys::Keys;
 
-const CONTEXT: &str = "PromptDialog";
-
-gpui_kit::actions!(prompt_dialog, [Dismiss]);
-
-pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("escape", Dismiss, Some(CONTEXT))]);
-}
+pub use keys::bind_keys;
 
 type Submit = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 type Cancel = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -71,6 +69,9 @@ impl PromptDialog {
 }
 
 struct PromptState {
+    root: FocusHandle,
+    confirm: FocusHandle,
+    cancel: FocusHandle,
     field: Entity<TextFieldState>,
     submit: Rc<RefCell<Option<Submit>>>,
     has_started: bool,
@@ -89,6 +90,9 @@ impl PromptState {
             }
         });
         Self {
+            root: cx.focus_handle(),
+            confirm: cx.focus_handle(),
+            cancel: cx.focus_handle(),
             field,
             submit,
             has_started: false,
@@ -130,30 +134,41 @@ fn start(state: &Entity<PromptState>, select: Range<usize>, window: &mut Window,
 }
 
 fn buttons(
+    t: &tokens::Theme,
     props: &PromptProps,
-    submit: Option<Submit>,
-    cancel: Option<Cancel>,
-    field: Entity<TextFieldState>,
+    keys: &Rc<Keys>,
+    window: &Window,
 ) -> impl IntoElement {
+    let (submit, cancel) = (keys.clone(), keys.clone());
     let confirm = Button::new("confirm-button", props.confirm_label.clone())
         .variant(ButtonVariant::Primary)
-        .on_click(move |_, window, cx| {
-            let value = field.read(cx).value();
-            if let Some(handler) = &submit {
-                handler(&value, window, cx);
-            }
-        });
-    let dismiss = Button::new("cancel-button", "Cancel").on_click(move |_, window, cx| {
-        if let Some(handler) = &cancel {
-            handler(window, cx);
-        }
-    });
+        .on_click(move |_, window, cx| submit.submit(window, cx));
+    let dismiss = Button::new("cancel-button", "Cancel")
+        .on_click(move |_, window, cx| cancel.cancel(window, cx));
     div()
         .flex()
         .justify_end()
         .gap(px(6.))
-        .child(confirm)
-        .child(dismiss)
+        .child(focus_ring(
+            t,
+            Stop {
+                id: "confirm",
+                context: keys::BUTTON,
+                handle: &keys.confirm,
+                button: confirm,
+            },
+            window,
+        ))
+        .child(focus_ring(
+            t,
+            Stop {
+                id: "cancel",
+                context: keys::BUTTON,
+                handle: &keys.cancel,
+                button: dismiss,
+            },
+            window,
+        ))
 }
 
 impl RenderOnce for PromptDialog {
@@ -164,18 +179,19 @@ impl RenderOnce for PromptDialog {
             PromptState::new(value, window, cx)
         });
         start(&state, self.props.select.clone(), window, cx);
-        let field = state.read(cx).field.clone();
-        *state.read(cx).submit.borrow_mut() = self.on_submit.clone();
-        let cancel = self.on_cancel.clone();
+        let current = state.read(cx);
+        let root = current.root.clone();
+        let keys = Rc::new(Keys {
+            field: current.field.clone(),
+            field_focus: current.field.read(cx).focus_handle(cx),
+            confirm: current.confirm.clone(),
+            cancel: current.cancel.clone(),
+            on_submit: self.on_submit.clone(),
+            on_cancel: self.on_cancel,
+        });
+        *current.submit.borrow_mut() = self.on_submit;
         let props = self.props;
-        div()
-            .id(self.id)
-            .key_context(CONTEXT)
-            .on_action(move |_: &Dismiss, window, cx| {
-                if let Some(handler) = &cancel {
-                    handler(window, cx);
-                }
-            })
+        keys::register(div().id(self.id).track_focus(&root), &keys)
             .role(Role::Dialog)
             .aria_label(props.title.clone())
             .test_support()
@@ -196,10 +212,10 @@ impl RenderOnce for PromptDialog {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(props.title.clone()),
             )
-            .child(TextField::new("field", &field, props.label.clone()))
+            .child(TextField::new("field", &keys.field, props.label.clone()))
             .when_some(props.error.clone(), |dialog, error| {
                 dialog.child(error_line(&t, error))
             })
-            .child(buttons(&props, self.on_submit, self.on_cancel, field))
+            .child(buttons(&t, &props, &keys, window))
     }
 }

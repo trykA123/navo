@@ -239,3 +239,97 @@ fn hidden_counts_the_cut_lines_and_the_rest() {
     assert_eq!(props(5, 0).hidden(), 0);
     assert_eq!(props(2, 4).hidden(), 4);
 }
+
+fn focused(window: AnyWindowHandle, cx: &mut TestAppContext) -> Vec<&'static str> {
+    cx.update_window(window, |_, window, _| {
+        ["typed", "confirm", "cancel"]
+            .into_iter()
+            .filter(|id| {
+                window
+                    .within(DIALOG)
+                    .try_find(*id)
+                    .and_then(|found| found.focused())
+                    == Some(true)
+            })
+            .collect()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn a_safe_dialog_opens_with_confirm_focused(cx: &mut TestAppContext) {
+    let mut safe = props(1, 0);
+    safe.danger = false;
+    let (window, _) = open_dialog(cx, safe);
+    assert_eq!(focused(window, cx), ["confirm"]);
+}
+
+#[gpui_kit::test]
+fn a_danger_dialog_opens_with_cancel_focused(cx: &mut TestAppContext) {
+    let (window, _) = open_dialog(cx, props(1, 0));
+    assert_eq!(focused(window, cx), ["cancel"]);
+}
+
+#[gpui_kit::test]
+fn tab_wraps_forward_and_shift_tab_wraps_back(cx: &mut TestAppContext) {
+    let (window, _) = open_dialog(cx, props(1, 0));
+    press(window, &["tab"], cx);
+    assert_eq!(focused(window, cx), ["confirm"]);
+    press(window, &["tab"], cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+    press(window, &["shift-tab"], cx);
+    assert_eq!(focused(window, cx), ["confirm"]);
+    press(window, &["shift-tab"], cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+}
+
+#[gpui_kit::test]
+fn the_arrow_keys_move_between_the_buttons_and_wrap(cx: &mut TestAppContext) {
+    let (window, _) = open_dialog(cx, props(1, 0));
+    press(window, &["left"], cx);
+    assert_eq!(focused(window, cx), ["confirm"]);
+    press(window, &["left"], cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+    press(window, &["right"], cx);
+    assert_eq!(focused(window, cx), ["confirm"]);
+    press(window, &["right"], cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+}
+
+#[gpui_kit::test]
+fn space_activates_the_focused_button(cx: &mut TestAppContext) {
+    let (window, harness) = open_dialog(cx, props(1, 0));
+    press(window, &["space"], cx);
+    assert_eq!(counts(&harness, cx), (0, 1));
+    press(window, &["tab", "space"], cx);
+    assert_eq!(counts(&harness, cx), (1, 1));
+}
+
+#[gpui_kit::test]
+fn focus_stays_inside_the_dialog(cx: &mut TestAppContext) {
+    let (window, _) = open_dialog(cx, props(1, 0));
+    for _ in 0..5 {
+        press(window, &["tab"], cx);
+        assert_eq!(focused(window, cx).len(), 1);
+    }
+}
+
+#[gpui_kit::test]
+fn a_typed_dialog_tabs_field_confirm_cancel_and_wraps(cx: &mut TestAppContext) {
+    let (window, _) = open_dialog(cx, typed());
+    type_text(window, "DELETE", cx);
+    for expected in ["confirm", "cancel", "typed", "confirm"] {
+        press(window, &["tab"], cx);
+        assert_eq!(focused(window, cx), [expected]);
+    }
+    press(window, &["shift-tab", "shift-tab"], cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+}
+
+#[gpui_kit::test]
+fn space_and_arrows_still_type_in_the_field(cx: &mut TestAppContext) {
+    let (window, harness) = open_dialog(cx, typed());
+    press(window, &["left", "right", "space"], cx);
+    assert_eq!(focused(window, cx), ["typed"]);
+    assert_eq!(counts(&harness, cx), (0, 0));
+}

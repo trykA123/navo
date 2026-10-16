@@ -65,6 +65,7 @@ fn main() -> ExitCode {
             report(&error.to_string());
         }
         rusty_ui::confirm_dialog::bind_keys(cx);
+        rusty_ui::prompt_dialog::bind_keys(cx);
         rusty_ui::context_menu::bind_keys(cx);
         rusty_ui::pane_chrome::bind_keys(cx);
         rusty_ui::window_view::bind_viewer_keys(cx);
