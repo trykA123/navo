@@ -9,6 +9,7 @@ mod pane;
 mod path_edit;
 mod prompt;
 mod settings_save;
+mod shell_menu;
 mod status;
 mod tab_keys;
 mod viewer;
@@ -40,6 +41,7 @@ pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
 pub use keys::bind_keys;
+pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
     FileText, FontFace, FontView, Head, Host, IndexRun, Key, Kind, Kinds, Load, Loaded, MemoryLink,
@@ -65,6 +67,7 @@ pub struct StartOptions {
     pub view: Option<rusty_core::Location>,
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
+    pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
 }
 
 pub fn run(options: StartOptions) {
@@ -74,6 +77,7 @@ pub fn run(options: StartOptions) {
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
         crate::app_menu::bind_keys(cx);
+        crate::context_menu::bind_keys(cx);
         viewer::bind_keys(cx);
         bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
@@ -114,6 +118,10 @@ pub struct FerriteWindow {
     quick: QuickSettings,
     identity: Identity,
     saver: settings_save::Saver,
+    shell_menus: Option<Rc<dyn ShellMenuProvider>>,
+    menu_run: Option<shell_menu::MenuRun>,
+    prefetch: Option<shell_menu::Prefetch>,
+    menu_runs: u64,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -158,12 +166,11 @@ impl FerriteWindow {
             quick: options.app_menu.settings,
             identity: options.app_menu.identity,
             saver: settings_save::Saver::new(options.app_menu.save, options.app_menu.load_error),
-            _activation: cx.observe_window_activation(window, |view, window, cx| {
-                view.track_modifiers(window.modifiers(), window, cx);
-                if window.is_window_active() && view.browser.revalidate_unwatched() {
-                    cx.notify();
-                }
-            }),
+            shell_menus: options.shell_menu,
+            menu_run: None,
+            prefetch: None,
+            menu_runs: 0,
+            _activation: cx.observe_window_activation(window, Self::activation_changed),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, |view, window, cx| {
                 view.apply_theme(window, cx);
@@ -175,6 +182,13 @@ impl FerriteWindow {
         Self::poll_drives(cx);
         Self::after_open(options.view, window, cx);
         view
+    }
+
+    fn activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.track_modifiers(window.modifiers(), window, cx);
+        if window.is_window_active() && self.browser.revalidate_unwatched() {
+            cx.notify();
+        }
     }
 
     fn after_open(
@@ -254,10 +268,14 @@ impl FerriteWindow {
         }
         let held = self.held_layer;
         let (layer, index, spoken) = KEY_WARNING;
-        FKeyBar::new("fkeys", layer_keys(held))
+        let bar = FKeyBar::new("fkeys", layer_keys(held))
             .layers(held, key_labels())
-            .warn(layer, index, spoken)
-            .reserve_pill()
+            .warn(layer, index, spoken);
+        if self.browser.jobs().is_empty() {
+            bar
+        } else {
+            bar.reserve_pill()
+        }
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
@@ -374,6 +392,7 @@ impl Render for FerriteWindow {
             .child(self.fkey_bar(cx))
             .children(dialog)
             .children(menu)
+            .children(self.shell_menu_view())
     }
 }
 

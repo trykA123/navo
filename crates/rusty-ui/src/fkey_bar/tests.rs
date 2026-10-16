@@ -242,3 +242,163 @@ fn the_main_bar_keeps_every_key_in_place_across_layers(cx: &mut TestAppContext) 
         }
     }
 }
+
+struct Sized {
+    pill: Option<Pixels>,
+    long: bool,
+}
+
+impl Render for Sized {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let (layer, index, spoken) = KEY_WARNING;
+        let long = self.long;
+        let keys =
+            layer_keys(None)
+                .into_iter()
+                .map(|(key, label)| match long && !label.is_empty() {
+                    true => (key, "A very long label that cannot possibly fit"),
+                    false => (key, label),
+                });
+        let bar = FKeyBar::new("fkeys", keys)
+            .layers(None, key_labels())
+            .warn(layer, index, spoken);
+        match self.pill {
+            Some(width) => bar.reserve_pill_width(width),
+            None => bar,
+        }
+    }
+}
+
+struct Laid {
+    keys: Vec<Bounds<Pixels>>,
+    left: Bounds<Pixels>,
+    right: Bounds<Pixels>,
+    bar: Bounds<Pixels>,
+    mods: Vec<Bounds<Pixels>>,
+}
+
+fn laid(cx: &mut TestAppContext, width: Pixels, pill: Option<Pixels>, long: bool) -> Laid {
+    let (window, _) = open_sized(cx, width, move |_, _| Sized { pill, long });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let bar = window.find("fkeys").bounds();
+        let found = window.within("fkeys");
+        Laid {
+            keys: (0..10usize)
+                .map(|i| found.find(("fkey", i)).bounds())
+                .collect(),
+            left: found.find("fkey-slot-left").bounds(),
+            right: found.find("fkey-slot-right").bounds(),
+            mods: (0..3usize)
+                .map(|i| found.find(("fkey-mod", i)).bounds())
+                .collect(),
+            bar,
+        }
+    })
+    .expect("window")
+}
+
+fn widths(bounds: &[Bounds<Pixels>]) -> Vec<Pixels> {
+    bounds.iter().map(|b| b.size.width).collect()
+}
+
+#[gpui_kit::test]
+fn keys_keep_their_natural_width_and_stay_centred(cx: &mut TestAppContext) {
+    let narrow = laid(cx, px(1920.), None, false);
+    let wide = laid(cx, px(2560.), None, false);
+    assert_eq!(widths(&narrow.keys), widths(&wide.keys));
+    assert_eq!(widths(&narrow.mods), widths(&wide.mods));
+    let first = wide.mods[0].left();
+    let last = wide.keys[9].right();
+    let gap = (first - wide.bar.left()) - (wide.bar.right() - last);
+    assert!(gap.abs() < px(1.), "{gap:?}");
+}
+
+#[gpui_kit::test]
+fn the_slots_share_the_remaining_width(cx: &mut TestAppContext) {
+    for width in [px(1920.), px(2560.)] {
+        let bar = laid(cx, width, None, false);
+        assert!(bar.left.size.width > px(0.));
+        assert!((bar.left.size.width - bar.right.size.width).abs() < px(1.));
+        assert!(bar.left.right() <= bar.mods[0].left());
+        assert!(bar.right.left() >= bar.keys[9].right());
+    }
+}
+
+#[gpui_kit::test]
+fn the_copy_pill_area_takes_from_the_right_slot_before_the_keys_shrink(cx: &mut TestAppContext) {
+    let free = laid(cx, px(2560.), None, false);
+    let taken = laid(cx, px(2560.), Some(px(220.)), false);
+    assert_eq!(widths(&free.keys), widths(&taken.keys));
+    assert!(taken.right.size.width >= px(220.));
+    let slot = {
+        let (window, _) = open_sized(cx, px(2560.), |_, _| Sized {
+            pill: Some(px(220.)),
+            long: false,
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.within("fkeys").find("fkey-pill-slot").bounds()
+        })
+        .expect("window")
+    };
+    assert!(slot.left() >= taken.keys[9].right());
+    assert_eq!(slot.size.width, px(220.));
+}
+
+#[gpui_kit::test]
+fn a_wide_copy_pill_area_shrinks_the_keys_once_the_right_slot_is_empty(cx: &mut TestAppContext) {
+    let free = laid(cx, px(1280.), None, false);
+    let taken = laid(cx, px(1280.), Some(px(700.)), false);
+    let natural: Pixels = widths(&free.keys).into_iter().sum();
+    let shrunk: Pixels = widths(&taken.keys).into_iter().sum();
+    assert!(shrunk < natural, "{shrunk:?} {natural:?}");
+    assert!(taken.right.right() <= px(1280.));
+    assert!(taken.keys[9].right() <= taken.right.left());
+}
+
+#[gpui_kit::test]
+fn long_labels_truncate_instead_of_overflowing(cx: &mut TestAppContext) {
+    for width in [px(900.), px(1280.), px(2560.)] {
+        let bar = laid(cx, width, Some(px(220.)), true);
+        for part in bar.keys.iter().chain(&bar.mods) {
+            assert!(
+                part.left() >= px(0.) && part.right() <= width,
+                "{width:?} {part:?}"
+            );
+        }
+        for pair in bar.keys.windows(2) {
+            assert!(pair[0].right() <= pair[1].left(), "{width:?} {pair:?}");
+        }
+    }
+}
+
+#[gpui_kit::test]
+fn an_empty_key_keeps_its_place(cx: &mut TestAppContext) {
+    let bar = laid(cx, px(1280.), None, false);
+    assert!(bar.keys[0].size.width > px(0.));
+    assert!(bar.keys[0].right() <= bar.keys[1].left());
+    let (window, _) = open(cx, |_, _| Layered(None));
+    assert_eq!(shown(cx, window).labels[0], "F1");
+}
+
+#[gpui_kit::test]
+fn with_no_job_the_1280_px_bar_shows_every_label_in_full_and_centred(cx: &mut TestAppContext) {
+    let at_1280 = laid(cx, px(1280.), None, false);
+    let natural = laid(cx, px(2560.), None, false);
+    assert_eq!(widths(&at_1280.keys), widths(&natural.keys));
+    assert_eq!(at_1280.right.size.width, at_1280.left.size.width);
+    let gap = (at_1280.mods[0].left() - at_1280.bar.left())
+        - (at_1280.bar.right() - at_1280.keys[9].right());
+    assert!(gap.abs() < px(1.), "{gap:?}");
+}
+
+#[gpui_kit::test]
+fn with_a_job_the_area_appears_and_keys_keep_their_width_when_there_is_room(
+    cx: &mut TestAppContext,
+) {
+    let free = laid(cx, px(1920.), None, false);
+    let busy = laid(cx, px(1920.), Some(px(220.)), false);
+    assert_eq!(widths(&free.keys), widths(&busy.keys));
+    assert!(busy.right.size.width >= px(220.));
+}

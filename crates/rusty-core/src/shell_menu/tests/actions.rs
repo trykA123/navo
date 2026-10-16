@@ -1,12 +1,5 @@
 use super::*;
 
-fn context(count: usize, one_per_pane: bool) -> ActionContext {
-    ActionContext {
-        count,
-        one_per_pane,
-    }
-}
-
 fn action(items: &[MenuItem], action: FerriteAction) -> &MenuItem {
     items
         .iter()
@@ -15,19 +8,19 @@ fn action(items: &[MenuItem], action: FerriteAction) -> &MenuItem {
 }
 
 #[test]
-fn single_selection_lists_six_actions_in_order() {
-    let ids: Vec<ItemId> = ferrite_actions(context(1, false))
-        .into_iter()
-        .map(|item| item.id)
-        .collect();
+fn lists_the_file_actions_in_order() {
+    let ids: Vec<ItemId> = ferrite_actions().into_iter().map(|item| item.id).collect();
     assert_eq!(
         ids,
         [
-            FerriteAction::CopyPath,
-            FerriteAction::CopyName,
+            FerriteAction::Open,
+            FerriteAction::View,
+            FerriteAction::Edit,
+            FerriteAction::Copy,
+            FerriteAction::Move,
             FerriteAction::Rename,
-            FerriteAction::Compare,
-            FerriteAction::OpenInOtherPane,
+            FerriteAction::Delete,
+            FerriteAction::CopyPath,
             FerriteAction::Properties,
             FerriteAction::ClassicMenu,
         ]
@@ -37,66 +30,57 @@ fn single_selection_lists_six_actions_in_order() {
 
 #[test]
 fn actions_sit_in_the_ferrite_group() {
-    assert!(
-        ferrite_actions(context(1, false))
-            .iter()
-            .all(MenuItem::is_ferrite)
-    );
+    assert!(ferrite_actions().iter().all(MenuItem::is_ferrite));
 }
 
 #[test]
-fn single_rename_keeps_its_key() {
-    let items = ferrite_actions(context(1, false));
-    let rename = action(&items, FerriteAction::Rename);
-    assert_eq!(rename.text, "Rename");
-    assert_eq!(rename.accelerator.as_deref(), Some("F2"));
+fn actions_show_their_function_keys() {
+    let items = ferrite_actions();
+    let keys = [
+        (FerriteAction::Open, "Enter"),
+        (FerriteAction::View, "F3"),
+        (FerriteAction::Edit, "F4"),
+        (FerriteAction::Copy, "F5"),
+        (FerriteAction::Move, "F6"),
+        (FerriteAction::Rename, "F2"),
+        (FerriteAction::Delete, "F8"),
+    ];
+    for (id, key) in keys {
+        assert_eq!(
+            action(&items, id).accelerator.as_deref(),
+            Some(key),
+            "{id:?}"
+        );
+    }
 }
 
 #[test]
-fn multi_selection_turns_rename_into_multi_rename() {
-    let items = ferrite_actions(context(3, false));
-    assert_eq!(
-        action(&items, FerriteAction::Rename).text,
-        "Multi-rename 3 files…"
-    );
+fn rename_keeps_its_plain_text() {
+    let items = ferrite_actions();
+    assert_eq!(action(&items, FerriteAction::Rename).text, "Rename");
 }
 
 #[test]
-fn compare_is_disabled_for_one_item() {
-    let items = ferrite_actions(context(1, false));
-    assert!(!action(&items, FerriteAction::Compare).enabled);
+fn every_action_is_enabled() {
+    assert!(ferrite_actions().iter().all(|item| item.enabled));
 }
 
 #[test]
-fn compare_is_enabled_for_exactly_two() {
-    let items = ferrite_actions(context(2, false));
-    assert!(action(&items, FerriteAction::Compare).enabled);
-}
-
-#[test]
-fn compare_is_disabled_for_three() {
-    let items = ferrite_actions(context(3, false));
-    assert!(!action(&items, FerriteAction::Compare).enabled);
-}
-
-#[test]
-fn compare_is_enabled_with_one_item_per_pane() {
-    let items = ferrite_actions(context(1, true));
-    assert!(action(&items, FerriteAction::Compare).enabled);
-}
-
-#[test]
-fn actions_carry_access_keys() {
-    let keys: Vec<Option<char>> = ferrite_actions(context(1, false))
+fn access_keys_are_unique() {
+    let mut keys: Vec<char> = ferrite_actions()
         .into_iter()
-        .map(|item| item.access_key)
+        .filter_map(|item| item.access_key)
         .collect();
-    assert_eq!(keys, ['P', 'N', 'R', 'M', 'O', 'I', 'C'].map(Some));
+    let count = keys.len();
+    keys.sort_unstable();
+    keys.dedup();
+    assert_eq!(keys.len(), count);
+    assert_eq!(count, 10);
 }
 
 #[test]
 fn classic_menu_comes_last_with_its_key() {
-    let items = ferrite_actions(context(1, false));
+    let items = ferrite_actions();
     let classic = items.last().unwrap();
     assert_eq!(classic.id, ItemId::Ferrite(FerriteAction::ClassicMenu));
     assert_eq!(classic.text, "Classic menu");

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Modifiers, TestAppContext, VisualTestContext};
 
-use super::open;
+use super::{fake, home_beside_dest, open, open_with, press};
 
 fn key_labels(
     cx: &mut TestAppContext,
@@ -88,8 +88,24 @@ fn ctrl_and_alt_show_the_sort_and_drive_keys(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn the_main_window_keeps_the_pill_slot_after_f10(cx: &mut TestAppContext) {
+fn the_main_window_reserves_no_pill_area_without_a_job(cx: &mut TestAppContext) {
     let (window, _) = open(cx, Rc::default());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let bar = window.within("fkeys");
+        assert!(bar.try_find("fkey-pill-slot").is_none());
+        assert!(bar.try_find(("fkey", 10usize)).is_none());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_copy_job_reserves_the_pill_area_after_f10(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "f5");
+    press(cx, window, &view, "enter");
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let bar = window.within("fkeys");
@@ -97,7 +113,6 @@ fn the_main_window_keeps_the_pill_slot_after_f10(cx: &mut TestAppContext) {
         let slot = bar.find("fkey-pill-slot");
         assert_eq!(f10.label(), Some("F10 Menu"));
         assert!(slot.bounds().left() >= f10.bounds().right());
-        assert!(bar.try_find(("fkey", 10usize)).is_none());
     })
     .expect("window");
 }

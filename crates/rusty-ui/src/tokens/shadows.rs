@@ -109,13 +109,13 @@ pub(super) fn shadows(mode: Mode, s: &Surfaces) -> Shadows {
     };
     Shadows {
         card: shadow([ring(s.card_edge, 1.)]),
-        card_active: shadow(d.card.into_iter().chain([ring(s.card_ring, 1.5)])),
+        card_active: shadow(d.card.into_iter().chain([ring(s.card_ring, 1.)])),
         job_card: shadow([d.pop, ring(s.card_edge, 1.)]),
         pill: shadow([ring(s.pill_ring, 1.5)]),
         keycap: shadow([drop(s.keycap_edge, 1., 0., 0.)]),
         menu: shadow(d.menu),
         chip: shadow(d.chip),
         sheet: shadow([sheet]),
-        focus: shadow([ring(s.card_ring, 2.)]),
+        focus: shadow([ring(s.pill_ring, 2.)]),
     }
 }

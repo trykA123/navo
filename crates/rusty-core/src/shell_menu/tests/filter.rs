@@ -44,7 +44,7 @@ fn children_of_hidden_submenus_are_marked_hidden() {
 #[test]
 fn ferrite_actions_come_first() {
     let texts: Vec<String> = hits("copy").into_iter().map(|row| row.text).collect();
-    assert_eq!(texts, ["Copy path", "Copy name", "Copy as path", "Copy"]);
+    assert_eq!(texts, ["Copy", "Copy path", "Copy as path", "Copy"]);
 }
 
 #[test]

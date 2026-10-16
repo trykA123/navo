@@ -44,6 +44,7 @@ gpui_kit::actions!(
         ChooseEditor,
         ViewItem,
         Refresh,
+        OpenMenu,
     ]
 );
 
@@ -84,6 +85,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("f4", EditItem, context),
         KeyBinding::new("shift-f4", ChooseEditor, context),
         KeyBinding::new("ctrl-r", Refresh, context),
+        KeyBinding::new("menu", OpenMenu, context),
+        KeyBinding::new("shift-f10", OpenMenu, context),
     ]);
 }
 
@@ -175,6 +178,10 @@ fn register_more(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
     .on_action({
         let ctx = ctx.clone();
         move |_: &ChooseEditor, window, cx| ctx.edit_cursor(true, window, cx)
+    })
+    .on_action({
+        let ctx = ctx.clone();
+        move |_: &OpenMenu, window, cx| ctx.menu_at_cursor(window, cx)
     })
     .on_action(sort::<SortName>(ctx, SortBy::Name))
     .on_action(sort::<SortExt>(ctx, SortBy::Ext))

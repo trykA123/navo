@@ -9,7 +9,7 @@ use gpui_kit::{
     point, px, size,
 };
 use rusty_core::shell_menu::{
-    ActionContext, Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
+    Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
 };
 
 use super::{ContextMenu, ContextMenuEvent, ContextMenuInput};
@@ -17,6 +17,7 @@ use crate::test_window::open;
 
 mod filter;
 mod keys;
+mod motion;
 mod place;
 mod submenu;
 
@@ -58,10 +59,8 @@ fn seven_zip() -> MenuItem {
 }
 
 pub(super) fn zip_menu() -> ShellMenu {
-    let mut items = ferrite_actions(ActionContext {
-        count: 1,
-        one_per_pane: false,
-    });
+    let mut items = ferrite_actions();
+    items[3].enabled = false;
     items.extend([
         MenuItem {
             default: true,
@@ -93,7 +92,7 @@ pub(super) fn zip_menu() -> ShellMenu {
     ShellMenu { items }
 }
 
-pub(super) const SEND_TO: usize = 11;
+pub(super) const SEND_TO: usize = 14;
 
 pub(super) fn window_bounds() -> Bounds<Pixels> {
     Bounds {
@@ -124,12 +123,20 @@ pub(super) struct Opened {
 }
 
 pub(super) fn open_menu(cx: &mut TestAppContext, anchor: Point<Pixels>) -> Opened {
+    open_menu_with(cx, anchor, zip_menu())
+}
+
+pub(super) fn open_menu_with(
+    cx: &mut TestAppContext,
+    anchor: Point<Pixels>,
+    menu: ShellMenu,
+) -> Opened {
     let events: Rc<RefCell<Vec<ContextMenuEvent>>> = Rc::default();
     let sink = events.clone();
     let (window, harness) = open(cx, move |window, cx| {
         let restore = cx.focus_handle();
         let input = ContextMenuInput {
-            menu: zip_menu(),
+            menu,
             context: "ferrite-0.4.2-win64.zip · 6.8 MB".into(),
             anchor,
             bounds: window_bounds(),
@@ -251,6 +258,10 @@ impl Opened {
         self.with_root(cx, |window| {
             window.try_find(("menu-level", depth)).is_some()
         })
+    }
+
+    pub fn row_bounds(&self, row: usize, cx: &mut TestAppContext) -> Bounds<Pixels> {
+        self.with_level(0, cx, |window| window.find(("menu-row", row)).bounds())
     }
 
     pub fn level_bounds(&self, depth: usize, cx: &mut TestAppContext) -> Bounds<Pixels> {

@@ -2,7 +2,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::{
     Animation, AnimationExt, AnyElement, Div, ElementId, FontWeight, InteractiveElement,
-    IntoElement, Modifiers, ParentElement, RenderOnce, Role, SharedString,
+    IntoElement, Modifiers, ParentElement, Pixels, RenderOnce, Role, SharedString,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
@@ -10,14 +10,12 @@ use crate::FluentBuilder as _;
 use crate::primitives::{IconName, Tooltip, icon};
 use crate::tokens::{self, Motion, Theme};
 
-const KEY_HEIGHT: f32 = 30.;
-const CHIP_HEIGHT: f32 = 24.;
-const CHIP_WIDTH: f32 = 28.;
+const KEY_HEIGHT: f32 = 24.;
+const CHIP_HEIGHT: f32 = 18.;
+const CHIP_WIDTH: f32 = 24.;
 const LABEL_RISE: f32 = 4.;
 const PILL_SLOT: f32 = 220.;
 const DIMMED: f32 = 0.45;
-// The empty pill slot gives up its width long before any label shrinks.
-const SLOT_YIELD: f32 = 1000.;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum KeyLayer {
@@ -58,7 +56,9 @@ pub struct FKeyBar {
     keys: Vec<(SharedString, SharedString)>,
     layers: Option<Layers>,
     warning: Option<Warning>,
-    is_pill_reserved: bool,
+    pill_width: Option<Pixels>,
+    left: Option<AnyElement>,
+    right: Option<AnyElement>,
 }
 
 struct Layers {
@@ -86,7 +86,9 @@ impl FKeyBar {
                 .collect(),
             layers: None,
             warning: None,
-            is_pill_reserved: false,
+            pill_width: None,
+            left: None,
+            right: None,
         }
     }
 
@@ -112,8 +114,25 @@ impl FKeyBar {
     }
 
     #[must_use]
-    pub fn reserve_pill(mut self) -> Self {
-        self.is_pill_reserved = true;
+    pub fn reserve_pill(self) -> Self {
+        self.reserve_pill_width(px(PILL_SLOT))
+    }
+
+    #[must_use]
+    pub fn reserve_pill_width(mut self, width: Pixels) -> Self {
+        self.pill_width = Some(width);
+        self
+    }
+
+    #[must_use]
+    pub fn left_slot(mut self, content: impl IntoElement) -> Self {
+        self.left = Some(content.into_any_element());
+        self
+    }
+
+    #[must_use]
+    pub fn right_slot(mut self, content: impl IntoElement) -> Self {
+        self.right = Some(content.into_any_element());
         self
     }
 }
@@ -162,7 +181,8 @@ fn modifier_pills(t: &Theme, held: Option<KeyLayer>) -> Vec<AnyElement> {
                 .aria_selected(is_lit)
                 .test_support()
                 .flex_none()
-                .px(t.spacing.lg)
+                .px(t.spacing.md)
+                .text_size(t.typography.small)
                 .when(is_lit, |pill| {
                     pill.bg(s.keycap_lit)
                         .border_color(s.keycap_lit)
@@ -287,7 +307,7 @@ fn cell(t: &Theme, cell: Cell) -> impl IntoElement {
         .min_w_0()
         .gap(t.spacing.sm)
         .pl(t.spacing.xxs)
-        .pr(t.spacing.md)
+        .pr(t.spacing.sm)
         .when(is_dimmed, |pill| pill.opacity(DIMMED))
         .when_some(cell.warning, |pill, warning| {
             pill.tooltip(move |window, cx| Tooltip::new(warning.clone()).build(window, cx))
@@ -296,15 +316,33 @@ fn cell(t: &Theme, cell: Cell) -> impl IntoElement {
         .child(area)
 }
 
-fn pill_slot() -> impl IntoElement {
+fn pill_area(width: Pixels) -> impl IntoElement {
     div()
         .id("fkey-pill-slot")
         .test_support()
-        .flex_initial()
-        .flex_shrink(SLOT_YIELD)
-        .min_w_0()
-        .w(px(PILL_SLOT))
+        .flex_none()
+        .w(width)
         .h(px(KEY_HEIGHT))
+}
+
+fn side_slot(
+    id: &'static str,
+    content: Option<AnyElement>,
+    min_width: Option<Pixels>,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .test_support()
+        .flex()
+        .flex_1()
+        .flex_basis(px(0.))
+        .min_w_0()
+        .items_center()
+        .overflow_hidden()
+        .when_some(min_width, |slot, width| {
+            slot.min_w(width).child(pill_area(width))
+        })
+        .children(content)
 }
 
 struct Frame {
@@ -365,6 +403,14 @@ impl RenderOnce for FKeyBar {
             .into_iter()
             .enumerate()
             .map(|(index, (key, label))| cell(t, frame.cell(index, key, label)));
+        let group = div()
+            .flex()
+            .flex_shrink(1.)
+            .min_w_0()
+            .items_center()
+            .gap(t.spacing.xs)
+            .when(is_layered, |group| group.children(modifier_pills(t, held)))
+            .children(cells);
         div()
             .id(self.id)
             .role(Role::Group)
@@ -373,16 +419,14 @@ impl RenderOnce for FKeyBar {
             .flex()
             .flex_none()
             .items_center()
-            .justify_center()
             .overflow_hidden()
-            .gap(t.spacing.sm)
             .h(t.spacing.fkey_height)
             .px(t.spacing.md)
             .text_size(t.typography.body)
             .text_color(t.colors.text)
-            .when(is_layered, |bar| bar.children(modifier_pills(t, held)))
-            .children(cells)
-            .when(self.is_pill_reserved, |bar| bar.child(pill_slot()))
+            .child(side_slot("fkey-slot-left", self.left, None))
+            .child(group)
+            .child(side_slot("fkey-slot-right", self.right, self.pill_width))
     }
 }
 

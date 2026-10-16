@@ -1,9 +1,9 @@
 use rusty_core::shell_menu::{
-    ActionContext, Group, Icon, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
+    Group, Icon, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
 };
 use rusty_ui::Hsla;
 
-pub const SEVEN_ZIP: usize = 9;
+pub const SEVEN_ZIP: usize = 12;
 const ICON_SIDE: u32 = 16;
 
 fn shell(command: u32, raw: &str, group: Group) -> MenuItem {
@@ -103,19 +103,13 @@ fn windows_items(target: &str, icon: Icon) -> Vec<MenuItem> {
 }
 
 pub fn zip_menu(icon_color: Hsla) -> ShellMenu {
-    let mut items = ferrite_actions(ActionContext {
-        count: 1,
-        one_per_pane: false,
-    });
+    let mut items = ferrite_actions();
     items.extend(windows_items("ferrite-0.4.2-win64", badge(icon_color)));
     ShellMenu { items }
 }
 
 pub fn files_menu(icon_color: Hsla) -> ShellMenu {
-    let mut items = ferrite_actions(ActionContext {
-        count: 3,
-        one_per_pane: false,
-    });
+    let mut items = ferrite_actions();
     items.extend(windows_items("commander", badge(icon_color)));
     ShellMenu { items }
 }

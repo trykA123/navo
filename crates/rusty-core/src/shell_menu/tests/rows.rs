@@ -6,11 +6,14 @@ fn empty_query_shows_sections_groups_and_more() {
         item_texts(&rows(&zip_menu(), "")),
         [
             "# Ferrite",
-            "Copy path",
-            "Copy name",
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
             "Rename",
-            "Compare with other pane",
-            "Open in other pane",
+            "Delete",
+            "Copy path",
             "Properties",
             "Classic menu",
             "# Windows",
@@ -37,14 +40,11 @@ fn whitespace_query_counts_as_empty() {
 #[test]
 fn ferrite_only_menu_has_no_windows_header() {
     let menu = ShellMenu {
-        items: ferrite_actions(ActionContext {
-            count: 1,
-            one_per_pane: false,
-        }),
+        items: ferrite_actions(),
     };
     let rows = rows(&menu, "");
     assert!(!rows.contains(&Row::Header(Section::Windows)));
-    assert_eq!(rows.len(), 8);
+    assert_eq!(rows.len(), 11);
 }
 
 #[test]
@@ -93,14 +93,14 @@ fn item_row_carries_its_path_and_submenu_flag() {
 fn submenu_rows_list_children_with_separators() {
     let menu = zip_menu();
     assert_eq!(
-        item_texts(&submenu_rows(&menu, &[9])),
+        item_texts(&submenu_rows(&menu, &[12])),
         ["Open archive", "Extract Here", "-", "Extract to \"dist\\\""]
     );
 }
 
 #[test]
 fn submenu_rows_of_a_lazy_submenu_are_empty() {
-    assert!(submenu_rows(&zip_menu(), &[8]).is_empty());
+    assert!(submenu_rows(&zip_menu(), &[11]).is_empty());
 }
 
 #[test]
@@ -114,8 +114,8 @@ fn rare_rows_list_the_folded_items() {
 #[test]
 fn item_lookup_follows_nested_paths() {
     let menu = zip_menu();
-    assert_eq!(menu.item(&[9, 1]).unwrap().text, "Extract Here");
-    assert!(menu.item(&[9, 9]).is_none());
+    assert_eq!(menu.item(&[12, 1]).unwrap().text, "Extract Here");
+    assert!(menu.item(&[12, 9]).is_none());
     assert!(menu.item(&[]).is_none());
 }
 
@@ -144,18 +144,18 @@ fn items_without_text_are_skipped() {
 fn filled_lazy_submenu_shows_its_children() {
     let mut menu = zip_menu();
     assert!(menu.set_submenu(
-        &[12],
+        &[15],
         Submenu::Filled(vec![shell(50, "Documents", Group::Share)])
     ));
     assert_eq!(item_texts(&rows(&menu, "docu")), ["Send to › Documents"]);
-    assert_eq!(item_texts(&submenu_rows(&menu, &[12])), ["Documents"]);
+    assert_eq!(item_texts(&submenu_rows(&menu, &[15])), ["Documents"]);
 }
 
 #[test]
 fn set_submenu_refuses_commands_and_bad_paths() {
     let mut menu = zip_menu();
-    assert!(!menu.set_submenu(&[7], Submenu::Loading));
-    assert!(!menu.set_submenu(&[99], Submenu::Loading));
-    assert!(menu.set_submenu(&[9], Submenu::Failed));
-    assert!(submenu_rows(&menu, &[9]).is_empty());
+    assert!(!menu.set_submenu(&[10], Submenu::Loading));
+    assert!(!menu.set_submenu(&[129], Submenu::Loading));
+    assert!(menu.set_submenu(&[12], Submenu::Failed));
+    assert!(submenu_rows(&menu, &[12]).is_empty());
 }

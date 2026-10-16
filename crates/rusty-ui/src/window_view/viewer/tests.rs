@@ -221,6 +221,7 @@ pub(super) fn window_with(
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
+        shell_menu: None,
     };
     open_options(cx, options)
 }

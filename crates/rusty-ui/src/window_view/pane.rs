@@ -5,7 +5,7 @@ use gpui_kit::base::TestSupportExt;
 use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
-use super::keys::{DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE};
+use super::keys::{DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit};
 use super::status::status_of;
 use crate::FocusHandle;
 use crate::file_list::{FileList, FileListAction, FileListProps, FilterEdit};
@@ -166,6 +166,12 @@ impl FerriteWindow {
             .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
                 this.apply(&Command::PaneOpenTab { location: None }, window, cx);
             }))
+            .on_action(cx.listener(|this: &mut Self, _: &ResetSplit, _, cx| {
+                this.split.update(cx, |split, cx| {
+                    split.reset();
+                    cx.notify();
+                });
+            }))
             .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
                 let pane = this.browser.state().focused_pane();
                 this.open_path_edit(pane, cx);
@@ -223,6 +229,9 @@ impl FerriteWindow {
             .on_list_action(cx.listener(
                 move |this: &mut Self, action: &FileListAction, window, cx| {
                     this.focus_pane(pane);
+                    if this.route_menu_action((pane, action), window, cx) {
+                        return;
+                    }
                     match action {
                         FileListAction::Open(row) => {
                             this.browser.open_row(*row);
@@ -245,6 +254,9 @@ impl FerriteWindow {
                         FileListAction::Sort(by) => {
                             this.browser.sort_by(*by);
                         }
+                        FileListAction::ContextMenu(_)
+                        | FileListAction::MenuPrefetch { .. }
+                        | FileListAction::MenuCancel => {}
                     }
                     this.focus_core_pane(window, cx);
                     cx.notify();

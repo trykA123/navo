@@ -50,10 +50,7 @@ fn seven_zip() -> MenuItem {
 }
 
 fn zip_menu() -> ShellMenu {
-    let mut items = ferrite_actions(ActionContext {
-        count: 1,
-        one_per_pane: false,
-    });
+    let mut items = ferrite_actions();
     items.extend([
         MenuItem {
             default: true,

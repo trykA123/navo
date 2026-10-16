@@ -1,7 +1,7 @@
 use gpui_kit::TestAppContext;
 use rusty_core::shell_menu::{Group, Submenu};
 
-use super::{ContextMenuEvent, SEND_TO, open_default, shell};
+use super::{ContextMenuEvent, SEND_TO, open_default, shell, zip_menu};
 
 fn send_targets() -> Submenu {
     Submenu::Filled(vec![
@@ -82,7 +82,7 @@ fn left_closes_the_submenu_and_keeps_the_parent_selected(cx: &mut TestAppContext
 #[gpui_kit::test]
 fn hovering_a_submenu_row_opens_it_after_a_pause(cx: &mut TestAppContext) {
     let menu = open_default(cx);
-    menu.hover(0, 12, cx);
+    menu.hover(0, 15, cx);
     assert_eq!(menu.selected(0, cx).as_deref(), Some("7-Zip"));
     assert!(!menu.has_level(1, cx));
     menu.wait(200, cx);
@@ -130,4 +130,16 @@ fn icons_stay_bounded_when_a_submenu_is_filled_again(cx: &mut TestAppContext) {
         menu.set_submenu(&[SEND_TO], Submenu::Failed, cx);
     });
     assert_eq!(menu.menu.read_with(cx, |menu, _| menu.icons.len()), 0);
+}
+
+#[gpui_kit::test]
+fn a_new_menu_merges_in_and_keeps_the_selected_row(cx: &mut TestAppContext) {
+    let menu = open_default(cx);
+    menu.press(&["down"], cx);
+    let mut bigger = zip_menu();
+    bigger.items.push(shell(99, "Pin to Start", Group::Open));
+    menu.menu.update(cx, |menu, cx| menu.set_menu(bigger, cx));
+    menu.frame(cx);
+    assert_eq!(menu.selected(0, cx).as_deref(), Some("View"));
+    assert!(menu.rows(0, cx).iter().any(|row| row == "Pin to Start"));
 }

@@ -12,7 +12,8 @@ gpui_kit::actions!(
         DriveMenuSecond,
         EditPath,
         LeaveWaiting,
-        NewTab
+        NewTab,
+        ResetSplit
     ]
 );
 
@@ -24,6 +25,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-f2", DriveMenuSecond, Some(PANE)),
         KeyBinding::new("ctrl-l", EditPath, Some(PANE)),
         KeyBinding::new("ctrl-t", NewTab, Some(PANE)),
+        KeyBinding::new("ctrl-shift-0", ResetSplit, Some(PANE)),
         KeyBinding::new("escape", LeaveWaiting, Some(WAITING)),
     ]);
 }
