@@ -1,11 +1,40 @@
 use gpui_kit::SharedString;
 
 use crate::primitives::IconName;
-use crate::tokens::ThemeChoice;
+use crate::tokens::{Density, ThemeChoice};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Setting {
     Theme,
+    Density,
+    HiddenFiles,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct QuickSettings {
+    pub theme: ThemeChoice,
+    pub density: Density,
+    pub show_hidden: bool,
+}
+
+impl QuickSettings {
+    #[must_use]
+    pub fn toggled(self, setting: Setting) -> Self {
+        match setting {
+            Setting::Theme => Self {
+                theme: self.theme.next(),
+                ..self
+            },
+            Setting::Density => Self {
+                density: self.density.next(),
+                ..self
+            },
+            Setting::HiddenFiles => Self {
+                show_hidden: !self.show_hidden,
+                ..self
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -36,7 +65,7 @@ pub(super) struct RowSpec {
     pub trailing: Trailing,
 }
 
-pub(super) const TILES: [Setting; 1] = [Setting::Theme];
+pub(super) const TILES: [Setting; 3] = [Setting::Theme, Setting::Density, Setting::HiddenFiles];
 pub(super) const COLUMNS: usize = 3;
 
 pub(super) const ROWS: [RowSpec; 6] = [
@@ -95,13 +124,30 @@ pub(super) struct TileFace {
     pub is_on: bool,
 }
 
-pub(super) fn tile_face(setting: Setting, theme: ThemeChoice) -> TileFace {
+pub(super) fn tile_face(setting: Setting, settings: QuickSettings) -> TileFace {
     match setting {
         Setting::Theme => TileFace {
             icon: IconName::Contrast,
             label: "Theme",
-            value: theme.label().into(),
-            is_on: theme != ThemeChoice::System,
+            value: settings.theme.label().into(),
+            is_on: settings.theme != ThemeChoice::System,
+        },
+        Setting::Density => TileFace {
+            icon: IconName::Rows3,
+            label: "Density",
+            value: settings.density.label().into(),
+            is_on: settings.density != Density::Normal,
+        },
+        Setting::HiddenFiles => TileFace {
+            icon: IconName::EyeOff,
+            label: "Hidden files",
+            value: if settings.show_hidden {
+                "Shown"
+            } else {
+                "Hidden"
+            }
+            .into(),
+            is_on: settings.show_hidden,
         },
     }
 }

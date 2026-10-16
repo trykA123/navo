@@ -9,11 +9,11 @@ use gpui_kit::{
 };
 
 use super::{
-    AppMenu, AppMenuEvent, ITEM_COUNT, Identity, Install, Item, MenuCommand, Ring, Setting, Step,
-    index_of, item_at, jump,
+    AppMenu, AppMenuEvent, ITEM_COUNT, Identity, Install, Item, MenuCommand, QuickSettings, Ring,
+    Setting, Step, index_of, item_at, jump,
 };
 use crate::test_window;
-use crate::tokens::{self, ThemeChoice};
+use crate::tokens::{self, Density, ThemeChoice};
 
 const RING: Ring = Ring {
     tiles: 5,
@@ -76,13 +76,15 @@ fn a_letter_jumps_to_the_next_row_starting_with_it() {
 #[test]
 fn the_tiles_come_first_then_the_six_rows() {
     assert_eq!(item_at(0), Some(Item::Tile(Setting::Theme)));
-    assert_eq!(item_at(1), Some(Item::Row(MenuCommand::CommandPalette)));
+    assert_eq!(item_at(1), Some(Item::Tile(Setting::Density)));
+    assert_eq!(item_at(2), Some(Item::Tile(Setting::HiddenFiles)));
+    assert_eq!(item_at(3), Some(Item::Row(MenuCommand::CommandPalette)));
     assert_eq!(
         item_at(ITEM_COUNT - 1),
         Some(Item::Row(MenuCommand::AllSettings))
     );
     assert_eq!(item_at(ITEM_COUNT), None);
-    assert_eq!(index_of(Item::Row(MenuCommand::Quit)), Some(5));
+    assert_eq!(index_of(Item::Row(MenuCommand::Quit)), Some(7));
 }
 
 #[test]
@@ -98,7 +100,7 @@ fn only_quit_runs_today() {
 }
 
 struct Shell {
-    theme: ThemeChoice,
+    settings: QuickSettings,
     selected: usize,
     focus: FocusHandle,
     events: Rc<RefCell<Vec<AppMenuEvent>>>,
@@ -115,7 +117,7 @@ fn identity() -> Identity {
 impl Render for Shell {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let menu = AppMenu::new("app-menu", identity(), self.theme)
+        let menu = AppMenu::new("app-menu", identity(), self.settings)
             .selected(self.selected)
             .track_focus(&self.focus)
             .on_event(
@@ -124,8 +126,8 @@ impl Render for Shell {
                     if let AppMenuEvent::Select(index) = event {
                         shell.selected = *index;
                     }
-                    if *event == AppMenuEvent::Toggle(Setting::Theme) {
-                        shell.theme = shell.theme.next();
+                    if let AppMenuEvent::Toggle(setting) = event {
+                        shell.settings = shell.settings.toggled(*setting);
                     }
                     cx.notify();
                 }),
@@ -152,7 +154,10 @@ fn open(cx: &mut TestAppContext) -> Rig {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         Shell {
-            theme: ThemeChoice::System,
+            settings: QuickSettings {
+                show_hidden: true,
+                ..QuickSettings::default()
+            },
             selected: 0,
             focus,
             events: log,
@@ -190,7 +195,7 @@ impl Rig {
 }
 
 #[gpui_kit::test]
-fn the_menu_shows_the_identity_the_theme_tile_and_six_rows(cx: &mut TestAppContext) {
+fn the_menu_shows_the_identity_three_tiles_and_six_rows(cx: &mut TestAppContext) {
     let rig = open(cx);
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
@@ -204,7 +209,7 @@ fn the_menu_shows_the_identity_the_theme_tile_and_six_rows(cx: &mut TestAppConte
         assert_eq!(tile.label(), Some("Theme"));
         assert_eq!(tile.value(), Some("System"));
         assert_eq!(tile.selected(), Some(true));
-        let labels: Vec<String> = (1..ITEM_COUNT)
+        let labels: Vec<String> = (3..ITEM_COUNT)
             .map(|index| {
                 let row = window.find(("app-menu-row", index));
                 row.label().unwrap_or_default().to_owned()
@@ -221,7 +226,15 @@ fn the_menu_shows_the_identity_the_theme_tile_and_six_rows(cx: &mut TestAppConte
                 "All settings"
             ]
         );
-        assert!(window.try_find(("app-menu-tile", 1usize)).is_none());
+        assert_eq!(
+            window.find(("app-menu-tile", 1usize)).value(),
+            Some("Normal")
+        );
+        assert_eq!(
+            window.find(("app-menu-tile", 2usize)).value(),
+            Some("Shown")
+        );
+        assert!(window.try_find(("app-menu-tile", 3usize)).is_none());
     })
     .expect("window");
 }
@@ -231,10 +244,10 @@ fn unavailable_rows_are_shown_and_marked(cx: &mut TestAppContext) {
     let rig = open(cx);
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
-        for index in 1..ITEM_COUNT {
+        for index in 3..ITEM_COUNT {
             let row = window.find(("app-menu-row", index));
             assert!(row.visible(), "row {index} is hidden");
-            let expected = (index != 5).then_some("Not available yet");
+            let expected = (index != 7).then_some("Not available yet");
             assert_eq!(row.value(), expected, "row {index}");
         }
     })
@@ -256,17 +269,22 @@ fn the_menu_sits_under_the_title_bar_on_the_left(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn arrows_move_one_focus_through_the_tile_and_the_rows(cx: &mut TestAppContext) {
+fn arrows_move_one_focus_through_the_tiles_and_the_rows(cx: &mut TestAppContext) {
     let rig = open(cx);
+    rig.press(cx, "right");
+    rig.press(cx, "right");
+    assert_eq!(rig.selected(cx), 2);
     rig.press(cx, "down");
-    assert_eq!(rig.selected(cx), 1);
+    assert_eq!(rig.selected(cx), 3);
     rig.press(cx, "down");
     rig.press(cx, "right");
-    assert_eq!(rig.selected(cx), 3);
+    assert_eq!(rig.selected(cx), 5);
     rig.press(cx, "up");
     rig.press(cx, "up");
     rig.press(cx, "up");
-    assert_eq!(rig.selected(cx), 0);
+    assert_eq!(rig.selected(cx), 2);
+    rig.press(cx, "left");
+    rig.press(cx, "left");
     rig.press(cx, "left");
     assert_eq!(rig.selected(cx), ITEM_COUNT - 1);
     cx.update_window(rig.window, |_, window, cx| {
@@ -310,7 +328,7 @@ fn clicking_the_tile_toggles_it(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn unavailable_rows_do_nothing_when_activated(cx: &mut TestAppContext) {
     let rig = open(cx);
-    for index in [1usize, 2, 3, 4, 6] {
+    for index in [3usize, 4, 5, 6, 8] {
         rig.click(cx, ("app-menu-row", index));
         rig.press(cx, "enter");
     }
@@ -326,9 +344,9 @@ fn unavailable_rows_do_nothing_when_activated(cx: &mut TestAppContext) {
 fn quit_runs_from_enter_and_from_a_click(cx: &mut TestAppContext) {
     let rig = open(cx);
     rig.press(cx, "q");
-    assert_eq!(rig.selected(cx), 5);
+    assert_eq!(rig.selected(cx), 7);
     rig.press(cx, "enter");
-    rig.click(cx, ("app-menu-row", 5));
+    rig.click(cx, ("app-menu-row", 7));
     let runs = rig
         .take()
         .into_iter()
@@ -341,11 +359,11 @@ fn quit_runs_from_enter_and_from_a_click(cx: &mut TestAppContext) {
 fn a_letter_jumps_to_its_row(cx: &mut TestAppContext) {
     let rig = open(cx);
     rig.press(cx, "h");
-    assert_eq!(rig.selected(cx), 4);
+    assert_eq!(rig.selected(cx), 6);
     rig.press(cx, "a");
-    assert_eq!(rig.selected(cx), 6);
+    assert_eq!(rig.selected(cx), 8);
     rig.press(cx, "x");
-    assert_eq!(rig.selected(cx), 6);
+    assert_eq!(rig.selected(cx), 8);
 }
 
 #[gpui_kit::test]
@@ -368,4 +386,54 @@ fn a_click_inside_the_menu_does_not_close_it(cx: &mut TestAppContext) {
     })
     .expect("window");
     assert!(!rig.take().contains(&AppMenuEvent::Close));
+}
+
+#[gpui_kit::test]
+fn the_density_and_hidden_tiles_toggle_their_settings(cx: &mut TestAppContext) {
+    let rig = open(cx);
+    rig.click(cx, ("app-menu-tile", 1));
+    rig.click(cx, ("app-menu-tile", 2));
+    let toggles: Vec<AppMenuEvent> = rig
+        .take()
+        .into_iter()
+        .filter(|event| matches!(event, AppMenuEvent::Toggle(_)))
+        .collect();
+    assert_eq!(
+        toggles,
+        [
+            AppMenuEvent::Toggle(Setting::Density),
+            AppMenuEvent::Toggle(Setting::HiddenFiles)
+        ]
+    );
+    let settings = rig.shell.read_with(cx, |shell, _| shell.settings);
+    assert_eq!(settings.density, Density::Comfortable);
+    assert!(!settings.show_hidden);
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find(("app-menu-tile", 1usize)).value(),
+            Some("Comfortable")
+        );
+        assert_eq!(
+            window.find(("app-menu-tile", 2usize)).value(),
+            Some("Hidden")
+        );
+    })
+    .expect("window");
+}
+
+#[test]
+fn quick_settings_toggle_one_field_each() {
+    let start = QuickSettings {
+        theme: ThemeChoice::System,
+        density: Density::Normal,
+        show_hidden: true,
+    };
+    assert_eq!(start.toggled(Setting::Theme).theme, ThemeChoice::Light);
+    assert_eq!(
+        start.toggled(Setting::Density).density,
+        Density::Comfortable
+    );
+    assert!(!start.toggled(Setting::HiddenFiles).show_hidden);
+    assert_eq!(start.toggled(Setting::Theme).density, Density::Normal);
 }

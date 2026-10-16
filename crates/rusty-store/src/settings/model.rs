@@ -68,7 +68,7 @@ pub struct Files {
 impl Default for Files {
     fn default() -> Self {
         Self {
-            show_hidden: false,
+            show_hidden: true,
             show_system: false,
             folders_first: true,
             sort: SortKey::default(),

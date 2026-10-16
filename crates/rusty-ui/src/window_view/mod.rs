@@ -22,17 +22,18 @@ use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
+use crate::app_menu::QuickSettings;
 use crate::app_menu::{Identity, ToggleAppMenu};
 use crate::browser::{Browser, Launcher, Operations, Waker};
 use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
 use crate::primitives::{Splitter, SplitterState};
 use crate::title_bar::{FerriteTitleBar, HeaderSearch};
-use crate::tokens::{self, Mode, ThemeChoice};
+use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
-pub use app_menu::{AppMenuHooks, SaveTheme};
+pub use app_menu::{AppMenuHooks, SaveSettings};
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
@@ -108,9 +109,9 @@ pub struct FerriteWindow {
     held_layer: Option<KeyLayer>,
     app_menu: Option<app_menu::OpenMenu>,
     app_menu_focus: FocusHandle,
-    theme: ThemeChoice,
+    quick: QuickSettings,
     identity: Identity,
-    save_theme: SaveTheme,
+    save_settings: SaveSettings,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -130,6 +131,7 @@ impl FerriteWindow {
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
+        browser.set_show_hidden(options.app_menu.settings.show_hidden);
         browser.start();
         let view = Self {
             browser,
@@ -151,9 +153,9 @@ impl FerriteWindow {
             held_layer: None,
             app_menu: None,
             app_menu_focus: cx.focus_handle(),
-            theme: options.app_menu.theme,
+            quick: options.app_menu.settings,
             identity: options.app_menu.identity,
-            save_theme: options.app_menu.save_theme,
+            save_settings: options.app_menu.save,
             _activation: cx.observe_window_activation(window, |view, window, cx| {
                 view.track_modifiers(window.modifiers(), window, cx);
             }),
@@ -166,7 +168,15 @@ impl FerriteWindow {
         view.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);
         Self::poll_drives(cx);
-        let start_view = options.view;
+        Self::after_open(options.view, window, cx);
+        view
+    }
+
+    fn after_open(
+        start_view: Option<rusty_core::Location>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.defer_in(window, move |view, window, cx| {
             view.focus_core_pane(window, cx);
             view.watch_listings(cx);
@@ -174,7 +184,6 @@ impl FerriteWindow {
                 view.view_location(location, window, cx);
             }
         });
-        view
     }
 
     #[cfg(not(test))]

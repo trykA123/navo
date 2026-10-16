@@ -16,9 +16,9 @@ use gpui_kit::{
 };
 
 pub use focus::{Ring, Step, jump};
-pub use items::{ITEM_COUNT, Item, MenuCommand, Setting, index_of, item_at};
+pub use items::{ITEM_COUNT, Item, MenuCommand, QuickSettings, Setting, index_of, item_at};
 
-use crate::tokens::{self, Theme, ThemeChoice};
+use crate::tokens::{self, Theme};
 
 const CONTEXT: &str = "AppMenu";
 
@@ -38,7 +38,7 @@ gpui_kit::actions!(
 pub fn bind_keys(cx: &mut App) {
     let context = Some(CONTEXT);
     cx.bind_keys([
-        KeyBinding::new("alt-space", ToggleAppMenu, None),
+        KeyBinding::new("f10", ToggleAppMenu, None),
         KeyBinding::new("left", FocusLeft, context),
         KeyBinding::new("right", FocusRight, context),
         KeyBinding::new("up", FocusUp, context),
@@ -90,7 +90,7 @@ type EventHandler = Rc<dyn Fn(&AppMenuEvent, &mut Window, &mut App)>;
 pub struct AppMenu {
     id: ElementId,
     identity: Identity,
-    theme: ThemeChoice,
+    settings: QuickSettings,
     selected: usize,
     focus: Option<FocusHandle>,
     on_event: Option<EventHandler>,
@@ -106,11 +106,11 @@ pub fn event_for(item: Item) -> Option<AppMenuEvent> {
 }
 
 impl AppMenu {
-    pub fn new(id: impl Into<ElementId>, identity: Identity, theme: ThemeChoice) -> Self {
+    pub fn new(id: impl Into<ElementId>, identity: Identity, settings: QuickSettings) -> Self {
         Self {
             id: id.into(),
             identity,
-            theme,
+            settings,
             selected: 0,
             focus: None,
             on_event: None,
@@ -226,7 +226,7 @@ impl RenderOnce for AppMenu {
             send: self.on_event.clone(),
         };
         let header = view::header(t, &self.identity, window.scale_factor());
-        let tiles = view::tiles(&look, self.theme);
+        let tiles = view::tiles(&look, self.settings);
         let rows = view::rows(&look);
         let panel = register(div().id(self.id), self.selected, self.on_event)
             .key_context(CONTEXT)

@@ -23,6 +23,45 @@ struct Shown {
 
 impl Browser {
     #[must_use]
+    pub fn shows_hidden(&self) -> bool {
+        self.show_hidden
+    }
+
+    pub fn set_show_hidden(&mut self, show: bool) {
+        if self.show_hidden == show {
+            return;
+        }
+        self.show_hidden = show;
+        let tabs: Vec<TabId> = self.full.keys().copied().collect();
+        for tab in tabs {
+            self.reshow(tab);
+        }
+    }
+
+    fn reshow(&mut self, tab: TabId) {
+        let Some(location) = self.state.tab(tab).map(|t| t.location().clone()) else {
+            return;
+        };
+        let Some(full) = self.full.get(&tab) else {
+            return;
+        };
+        let text = self.filter_text(tab).unwrap_or_default();
+        let shown = shown(full, text, self.show_hidden).or_else(|| {
+            self.filters.remove(&tab);
+            shown(full, "", self.show_hidden)
+        });
+        let Some(shown) = shown else {
+            return;
+        };
+        self.details.insert(tab, shown.details);
+        self.event(Event::ListingFiltered {
+            tab,
+            location,
+            listing: shown.listing,
+        });
+    }
+
+    #[must_use]
     pub fn filter_text(&self, tab: TabId) -> Option<&str> {
         let location = self.state.tab(tab)?.location();
         self.filters
@@ -62,16 +101,20 @@ impl Browser {
         full: Full,
     ) -> (Listing, Rc<[FsEntry]>) {
         let shown = match self.filters.get(&tab) {
-            Some(filter) if &filter.location == location => shown(&full, &filter.text),
+            Some(filter) if &filter.location == location => {
+                shown(&full, &filter.text, self.show_hidden)
+            }
             _ => None,
         };
         if shown.is_none() {
             self.filters.remove(&tab);
         }
-        let shown = shown.unwrap_or_else(|| Shown {
-            listing: full.listing.clone(),
-            details: full.details.clone(),
-        });
+        let shown = shown
+            .or_else(|| self::shown(&full, "", self.show_hidden))
+            .unwrap_or_else(|| Shown {
+                listing: full.listing.clone(),
+                details: full.details.clone(),
+            });
         self.full.insert(tab, full);
         (shown.listing, shown.details)
     }
@@ -121,7 +164,7 @@ impl Browser {
         let Some(full) = self.full.get(&tab) else {
             return false;
         };
-        let Some(shown) = shown(full, &text) else {
+        let Some(shown) = shown(full, &text, self.show_hidden) else {
             return false;
         };
         if text.is_empty() {
@@ -140,23 +183,32 @@ impl Browser {
     }
 }
 
-fn shown(full: &Full, text: &str) -> Option<Shown> {
-    if text.is_empty() {
+fn is_visible(entry: Option<&FsEntry>, show_hidden: bool) -> bool {
+    show_hidden || entry.is_none_or(|e| !e.attributes.hidden && !e.attributes.system)
+}
+
+fn shown(full: &Full, text: &str, show_hidden: bool) -> Option<Shown> {
+    if text.is_empty() && show_hidden {
         return Some(Shown {
             listing: full.listing.clone(),
             details: full.details.clone(),
         });
     }
-    let pattern = Pattern::parse(&format!("{text}*")).ok()?;
+    let pattern = if text.is_empty() {
+        None
+    } else {
+        Some(Pattern::parse(&format!("{text}*")).ok()?)
+    };
     let keep: Vec<usize> = full
         .listing
         .entries()
         .iter()
         .enumerate()
-        .filter(|(_, entry)| pattern.matches(&entry.name))
+        .filter(|(index, _)| is_visible(full.details.get(*index), show_hidden))
+        .filter(|(_, entry)| pattern.as_ref().is_none_or(|p| p.matches(&entry.name)))
         .map(|(index, _)| index)
         .collect();
-    if keep.is_empty() {
+    if keep.is_empty() && pattern.is_some() {
         return None;
     }
     let entries = keep
@@ -173,5 +225,7 @@ fn shown(full: &Full, text: &str) -> Option<Shown> {
     })
 }
 
+#[cfg(test)]
+mod hidden_tests;
 #[cfg(test)]
 mod tests;

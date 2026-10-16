@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use rusty_core::{Location, ProviderId, Selection, ViewState};
 use rusty_fs::FsEntry;
-use rusty_ui::app_menu::{AppMenu, Identity, Install};
+use rusty_ui::app_menu::{AppMenu, Identity, Install, QuickSettings};
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::pane_chrome::{
@@ -11,7 +11,7 @@ use rusty_ui::pane_chrome::{
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
 use rusty_ui::status_bar::StatusBar;
-use rusty_ui::tokens::{self, Mode, Theme, ThemeChoice};
+use rusty_ui::tokens::{self, Density, Mode, Theme, ThemeChoice};
 use rusty_ui::window_view::{KEY_WARNING, key_labels, layer_keys};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
@@ -72,9 +72,14 @@ impl WindowPage {
     }
 
     fn menu(&self, t: &Theme) -> Option<AnyElement> {
-        let choice = match t.mode {
+        let theme = match t.mode {
             Mode::Light => ThemeChoice::Light,
             Mode::Dark => ThemeChoice::Dark,
+        };
+        let settings = QuickSettings {
+            theme,
+            density: Density::Normal,
+            show_hidden: true,
         };
         let identity = Identity {
             version: "0.0.1".into(),
@@ -82,7 +87,7 @@ impl WindowPage {
             folder: r"D:\Apps\Ferrite".into(),
         };
         self.is_menu_open
-            .then(|| AppMenu::new("app-menu", identity, choice).into_overlay(t))
+            .then(|| AppMenu::new("app-menu", identity, settings).into_overlay(t))
     }
 
     fn list(&self, index: usize, side: &Side, marked: Rc<Selection>) -> FileList {

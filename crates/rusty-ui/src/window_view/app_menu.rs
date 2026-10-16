@@ -3,16 +3,18 @@ use std::rc::Rc;
 use gpui_kit::FocusHandle;
 
 use super::{FerriteWindow, mode_of};
-use crate::app_menu::{AppMenu, AppMenuEvent, Identity, Install, MenuCommand, Setting};
+use crate::app_menu::{
+    AppMenu, AppMenuEvent, Identity, Install, MenuCommand, QuickSettings, Setting,
+};
 use crate::prelude::*;
-use crate::tokens::{self, ThemeChoice};
+use crate::tokens;
 
-pub type SaveTheme = Rc<dyn Fn(ThemeChoice)>;
+pub type SaveSettings = Rc<dyn Fn(&QuickSettings)>;
 
 pub struct AppMenuHooks {
     pub identity: Identity,
-    pub theme: ThemeChoice,
-    pub save_theme: SaveTheme,
+    pub settings: QuickSettings,
+    pub save: SaveSettings,
 }
 
 impl AppMenuHooks {
@@ -23,8 +25,11 @@ impl AppMenuHooks {
                 install: Install::Installed,
                 folder: SharedString::default(),
             },
-            theme: ThemeChoice::System,
-            save_theme: Rc::new(|_| {}),
+            settings: QuickSettings {
+                show_hidden: true,
+                ..QuickSettings::default()
+            },
+            save: Rc::new(|_| {}),
         }
     }
 }
@@ -36,12 +41,16 @@ pub(super) struct OpenMenu {
 
 impl FerriteWindow {
     pub(super) fn apply_theme(&self, window: &Window, cx: &mut App) {
-        tokens::apply(self.theme.resolve(mode_of(window.appearance())), cx);
+        let mode = self.quick.theme.resolve(mode_of(window.appearance()));
+        tokens::apply_with(mode, self.quick.density, cx);
     }
 
     pub(super) fn toggle_app_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.app_menu.is_some() {
             self.close_app_menu(window, cx);
+            return;
+        }
+        if self.prompt.is_some() || self.browser.pending().is_some() {
             return;
         }
         self.app_menu = Some(OpenMenu {
@@ -68,10 +77,13 @@ impl FerriteWindow {
                     menu.selected = index;
                 }
             }
-            AppMenuEvent::Toggle(Setting::Theme) => {
-                self.theme = self.theme.next();
-                (self.save_theme)(self.theme);
-                self.apply_theme(window, cx);
+            AppMenuEvent::Toggle(setting) => {
+                self.quick = self.quick.toggled(setting);
+                (self.save_settings)(&self.quick);
+                match setting {
+                    Setting::Theme | Setting::Density => self.apply_theme(window, cx),
+                    Setting::HiddenFiles => self.browser.set_show_hidden(self.quick.show_hidden),
+                }
             }
             AppMenuEvent::Run(command) => {
                 self.close_app_menu(window, cx);
@@ -91,7 +103,7 @@ impl FerriteWindow {
     pub(super) fn app_menu_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let menu = self.app_menu.as_ref()?;
         let t = tokens::current(cx).clone();
-        let view = AppMenu::new("app-menu", self.identity.clone(), self.theme)
+        let view = AppMenu::new("app-menu", self.identity.clone(), self.quick)
             .selected(menu.selected)
             .track_focus(&self.app_menu_focus)
             .on_event(

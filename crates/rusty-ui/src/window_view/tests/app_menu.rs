@@ -6,22 +6,45 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_panes};
-use crate::app_menu::{Identity, Install};
+use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::browser::Operations;
-use crate::tokens::{self, Mode, ThemeChoice};
+use crate::tokens::{self, Density, Mode, ThemeChoice};
 use crate::window_view::AppMenuHooks;
 
 struct Rig {
     window: AnyWindowHandle,
     view: Entity<FerriteWindow>,
-    saved: Rc<RefCell<Vec<ThemeChoice>>>,
+    saved: Rc<RefCell<Vec<QuickSettings>>>,
     sessions: Rc<Cell<usize>>,
 }
 
 fn rig(cx: &mut TestAppContext, theme: ThemeChoice) -> Rig {
+    let settings = QuickSettings {
+        theme,
+        density: Density::Normal,
+        show_hidden: true,
+    };
+    rig_with(cx, settings)
+}
+
+fn hidden_file(name: &str) -> rusty_fs::FsEntry {
+    rusty_fs::FsEntry {
+        name: rusty_core::ProviderPath::from_text(name),
+        kind: rusty_fs::EntryKind::File,
+        size: 1,
+        modified_ms: None,
+        attributes: rusty_fs::Attributes {
+            hidden: true,
+            ..rusty_fs::Attributes::default()
+        },
+    }
+}
+
+fn rig_with(cx: &mut TestAppContext, settings: QuickSettings) -> Rig {
     let fs = fake();
+    fs.add_entry("home", hidden_file("b-secret.txt"));
     let state = two_panes(&fs);
-    let saved: Rc<RefCell<Vec<ThemeChoice>>> = Rc::default();
+    let saved: Rc<RefCell<Vec<QuickSettings>>> = Rc::default();
     let sessions: Rc<Cell<usize>> = Rc::default();
     let (log, count) = (saved.clone(), sessions.clone());
     let options = StartOptions {
@@ -41,8 +64,8 @@ fn rig(cx: &mut TestAppContext, theme: ThemeChoice) -> Rig {
                 install: Install::Installed,
                 folder: r"C:\Ferrite".into(),
             },
-            theme,
-            save_theme: Rc::new(move |choice| log.borrow_mut().push(choice)),
+            settings,
+            save: Rc::new(move |saved| log.borrow_mut().push(*saved)),
         },
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
@@ -84,6 +107,22 @@ impl Rig {
         .expect("window")
     }
 
+    fn pane_names(&self, cx: &mut TestAppContext) -> Vec<Vec<String>> {
+        self.view.read_with(cx, |view, _| {
+            let state = view.browser.state();
+            view.panes()
+                .into_iter()
+                .filter_map(|pane| state.pane(pane))
+                .map(|pane| {
+                    let listing = pane.active().listing();
+                    listing
+                        .map(|l| l.entries().iter().map(|e| e.name.clone()).collect())
+                        .unwrap_or_default()
+                })
+                .collect()
+        })
+    }
+
     fn mode(&self, cx: &mut TestAppContext) -> Mode {
         cx.read(|cx| tokens::current(cx).mode)
     }
@@ -117,11 +156,11 @@ fn the_app_button_opens_the_menu_and_takes_focus(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn alt_space_opens_and_closes_the_menu(cx: &mut TestAppContext) {
+fn f10_opens_and_closes_the_menu(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    rig.press(cx, "alt-space");
+    rig.press(cx, "f10");
     assert!(rig.is_open(cx));
-    rig.press(cx, "alt-space");
+    rig.press(cx, "f10");
     assert!(!rig.is_open(cx));
     assert!(rig.pane_has_focus(cx));
 }
@@ -130,7 +169,7 @@ fn alt_space_opens_and_closes_the_menu(cx: &mut TestAppContext) {
 fn escape_closes_the_menu_and_gives_focus_back_to_the_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     assert!(rig.pane_has_focus(cx));
-    rig.press(cx, "alt-space");
+    rig.press(cx, "f10");
     assert!(rig.is_open(cx));
     rig.press(cx, "down");
     rig.press(cx, "escape");
@@ -151,15 +190,16 @@ fn a_click_outside_closes_the_menu_and_restores_focus(cx: &mut TestAppContext) {
 fn the_theme_tile_applies_and_saves_each_choice(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     assert_eq!(rig.mode(cx), Mode::Light);
-    rig.press(cx, "alt-space");
+    rig.press(cx, "f10");
     rig.press(cx, "enter");
     assert_eq!(rig.mode(cx), Mode::Light);
     rig.press(cx, "enter");
     assert_eq!(rig.mode(cx), Mode::Dark);
     rig.click(cx, ("app-menu-tile", 0usize));
     assert_eq!(rig.mode(cx), Mode::Light);
+    let themes: Vec<ThemeChoice> = rig.saved.borrow().iter().map(|s| s.theme).collect();
     assert_eq!(
-        *rig.saved.borrow(),
+        themes,
         [ThemeChoice::Light, ThemeChoice::Dark, ThemeChoice::System]
     );
     assert!(rig.is_open(cx), "a tile keeps the menu open");
@@ -183,13 +223,13 @@ fn the_saved_theme_applies_at_start(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn unavailable_rows_neither_act_nor_close_the_menu(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    rig.press(cx, "alt-space");
+    rig.press(cx, "f10");
     for key in ["c", "n", "w", "h", "a"] {
         rig.press(cx, key);
         rig.press(cx, "enter");
         assert!(rig.is_open(cx), "{key} closed the menu");
     }
-    rig.click(cx, ("app-menu-row", 1usize));
+    rig.click(cx, ("app-menu-row", 3usize));
     assert!(rig.is_open(cx));
     assert!(rig.saved.borrow().is_empty());
     assert_eq!(rig.sessions.get(), 0);
@@ -198,8 +238,128 @@ fn unavailable_rows_neither_act_nor_close_the_menu(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn quit_saves_the_session(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    rig.press(cx, "alt-space");
+    rig.press(cx, "f10");
     rig.press(cx, "q");
     rig.press(cx, "enter");
     assert_eq!(rig.sessions.get(), 1);
+}
+
+#[gpui_kit::test]
+fn alt_space_is_left_to_the_system_menu(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "alt-space");
+    assert!(!rig.is_open(cx));
+}
+
+#[gpui_kit::test]
+fn f10_does_nothing_while_a_prompt_is_open(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "f7");
+    assert!(rig.view.read_with(cx, |view, _| view.prompt.is_some()));
+    rig.press(cx, "f10");
+    assert!(!rig.is_open(cx));
+}
+
+#[gpui_kit::test]
+fn f10_does_nothing_while_a_confirm_dialog_is_open(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "down");
+    rig.press(cx, "f8");
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.browser.pending().is_some())
+    );
+    rig.press(cx, "f10");
+    assert!(!rig.is_open(cx));
+}
+
+#[test]
+fn the_f10_cap_reads_menu_and_f9_stays_the_drawer() {
+    let keys = crate::window_view::layer_keys(None);
+    assert_eq!(keys[8], ("F9", "Drawer"));
+    assert_eq!(keys[9], ("F10", "Menu"));
+}
+
+#[gpui_kit::test]
+fn the_menu_shows_theme_density_and_hidden_tiles(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "f10");
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        let tiles: Vec<(String, String)> = (0..3usize)
+            .map(|index| {
+                let tile = window.find(("app-menu-tile", index));
+                (
+                    tile.label().unwrap_or_default().to_owned(),
+                    tile.value().unwrap_or_default().to_owned(),
+                )
+            })
+            .collect();
+        let expected = [
+            ("Theme", "System"),
+            ("Density", "Normal"),
+            ("Hidden files", "Shown"),
+        ]
+        .map(|(label, value)| (label.to_owned(), value.to_owned()));
+        assert_eq!(tiles, expected);
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn the_density_tile_changes_the_rows_and_saves(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "f10");
+    rig.click(cx, ("app-menu-tile", 1usize));
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).density),
+        Density::Comfortable
+    );
+    rig.click(cx, ("app-menu-tile", 1usize));
+    assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Compact);
+    let saved: Vec<Density> = rig.saved.borrow().iter().map(|s| s.density).collect();
+    assert_eq!(saved, [Density::Comfortable, Density::Compact]);
+    assert_eq!(rig.mode(cx), Mode::Light, "density keeps the theme");
+}
+
+#[gpui_kit::test]
+fn the_hidden_tile_hides_hidden_files_in_both_panes_and_saves(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    assert!(
+        rig.pane_names(cx)
+            .iter()
+            .all(|names| names.contains(&"b-secret.txt".to_owned()))
+    );
+    rig.press(cx, "f10");
+    rig.click(cx, ("app-menu-tile", 2usize));
+    let panes = rig.pane_names(cx);
+    assert_eq!(panes.len(), 2);
+    assert!(
+        panes
+            .iter()
+            .all(|names| !names.contains(&"b-secret.txt".to_owned()))
+    );
+    assert!(
+        panes
+            .iter()
+            .all(|names| names.contains(&"a.txt".to_owned()))
+    );
+    let saved = rig.saved.borrow().last().map(|s| s.show_hidden);
+    assert_eq!(saved, Some(false));
+}
+
+#[gpui_kit::test]
+fn saved_density_and_hidden_choices_apply_at_start(cx: &mut TestAppContext) {
+    let settings = QuickSettings {
+        theme: ThemeChoice::System,
+        density: Density::Compact,
+        show_hidden: false,
+    };
+    let rig = rig_with(cx, settings);
+    assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Compact);
+    assert!(
+        rig.pane_names(cx)
+            .iter()
+            .all(|names| !names.contains(&"b-secret.txt".to_owned()))
+    );
 }

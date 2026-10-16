@@ -362,7 +362,7 @@ fn report_page_rows(
 impl RenderOnce for FileList {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let row_height = t.spacing.row_height;
+        let row_height = t.rows.height;
         let state = window.use_keyed_state(self.id.clone(), cx, |_, _| ListState::default());
         let wanted = (self.props.view.scroll, self.props.rows.len());
         let scroll = follow_scroll(&state, wanted, row_height, cx);
@@ -376,6 +376,7 @@ impl RenderOnce for FileList {
         });
         let semantics = ctx.clone();
         let list = VirtualList::new("list", len, &scroll, render_rows(&ctx))
+            .row_height(row_height)
             .label(label)
             .describe_rows(move |index| row_semantics(&semantics.props, index))
             .when_some(ctx.focus.clone(), |list, focus| list.track_focus(&focus));

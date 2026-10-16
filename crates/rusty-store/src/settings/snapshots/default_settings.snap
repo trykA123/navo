@@ -11,7 +11,7 @@ font-size = 13
 density = "normal"
 
 [files]
-show-hidden = false
+show-hidden = true
 show-system = false
 folders-first = true
 sort = "name"

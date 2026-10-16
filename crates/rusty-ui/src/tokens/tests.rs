@@ -1,7 +1,7 @@
 use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::{Hsla, Pixels, Rgba, TestAppContext, px};
 
-use super::{Mode, Radii, Spacing, Theme, ThemeChoice, apply, current};
+use super::{Density, Mode, Radii, Spacing, Theme, ThemeChoice, apply, apply_with, current};
 
 mod surfaces;
 
@@ -249,4 +249,45 @@ fn mark_ticks_stand_out_three_to_one_from_the_surfaces() {
             }
         }
     }
+}
+
+#[test]
+fn normal_density_keeps_todays_rows() {
+    let theme = Theme::new(Mode::Light);
+    assert_eq!(theme.density, Density::Normal);
+    assert_eq!(theme.rows.height, theme.spacing.row_height);
+    assert_eq!(theme.rows.height, px(24.));
+    assert_eq!(theme.rows.inset, theme.spacing.lg);
+}
+
+#[test]
+fn compact_rows_are_shorter_and_comfortable_rows_taller() {
+    let rows = |density| Theme::with_density(Mode::Dark, density).rows;
+    let (compact, normal, comfortable) = (
+        rows(Density::Compact),
+        rows(Density::Normal),
+        rows(Density::Comfortable),
+    );
+    assert!(compact.height < normal.height && normal.height < comfortable.height);
+    assert!(compact.inset < normal.inset && normal.inset < comfortable.inset);
+}
+
+#[test]
+fn density_cycles_compact_normal_comfortable() {
+    assert_eq!(Density::Compact.next(), Density::Normal);
+    assert_eq!(Density::Normal.next(), Density::Comfortable);
+    assert_eq!(Density::Comfortable.next(), Density::Compact);
+    assert_eq!(Density::Comfortable.label(), "Comfortable");
+}
+
+#[gpui_kit::test]
+fn changing_the_mode_keeps_the_density(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        apply_with(Mode::Light, Density::Compact, cx);
+        apply(Mode::Dark, cx);
+        let theme = current(cx);
+        assert_eq!(theme.mode, Mode::Dark);
+        assert_eq!(theme.density, Density::Compact);
+    });
 }

@@ -15,10 +15,10 @@ fn empty_text_gives_defaults() {
 
 #[test]
 fn partial_file_keeps_defaults_for_the_rest() {
-    let text = "[appearance]\nfont-size = 15\n\n[files]\nshow-hidden = true\n";
+    let text = "[appearance]\nfont-size = 15\n\n[files]\nshow-hidden = false\n";
     let mut expected = Settings::default();
     expected.appearance.font_size = 15;
-    expected.files.show_hidden = true;
+    expected.files.show_hidden = false;
     assert_eq!(parsed(text), expected);
 }
 

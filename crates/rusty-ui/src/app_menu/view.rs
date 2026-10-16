@@ -9,11 +9,12 @@ use gpui_kit::{
     img, px,
 };
 
+use super::items::QuickSettings;
 use super::items::{self, RowSpec, TileFace, Trailing, tile_face};
 use super::{AppMenuEvent, Identity, event_for, item_at};
 use crate::primitives::{IconName, icon};
 use crate::title_bar::logo;
-use crate::tokens::{Motion, Theme, ThemeChoice};
+use crate::tokens::{Motion, Theme};
 
 const WIDTH: f32 = 380.;
 const LOGO: f32 = 36.;
@@ -173,11 +174,11 @@ fn tile(look: &Look, face: TileFace, index: usize) -> AnyElement {
     hover_and_click(tile, index, look.send.clone()).into_any_element()
 }
 
-pub(super) fn tiles(look: &Look, theme: ThemeChoice) -> Div {
+pub(super) fn tiles(look: &Look, settings: QuickSettings) -> Div {
     let tiles = items::TILES
         .iter()
         .enumerate()
-        .map(|(index, setting)| tile(look, tile_face(*setting, theme), index));
+        .map(|(index, setting)| tile(look, tile_face(*setting, settings), index));
     div()
         .grid()
         .grid_cols(items::COLUMNS as u16)

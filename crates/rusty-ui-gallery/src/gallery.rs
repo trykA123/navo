@@ -342,16 +342,12 @@ impl Render for Gallery {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height);
-        match self.page {
-            Page::Window => return root.child(self.main_window.clone()),
-            Page::WindowShift => return root.child(self.shift_window.clone()),
-            Page::WindowAlt => return root.child(self.alt_window.clone()),
-            Page::AppMenu => return root.child(self.menu_window.clone()),
-            Page::WindowNarrow => {
-                let narrow = div().w(px(NARROW)).h_full().child(self.main_window.clone());
-                return root.bg(t.colors.line).child(narrow);
-            }
-            _ => {}
+        if let Some(page) = self.window_page() {
+            return root.child(page);
+        }
+        if self.page == Page::WindowNarrow {
+            let narrow = div().w(px(NARROW)).h_full().child(self.main_window.clone());
+            return root.bg(t.colors.line).child(narrow);
         }
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
         match self.page {
@@ -388,6 +384,16 @@ impl Render for Gallery {
 }
 
 impl Gallery {
+    fn window_page(&self) -> Option<Entity<WindowPage>> {
+        match self.page {
+            Page::Window => Some(self.main_window.clone()),
+            Page::WindowShift => Some(self.shift_window.clone()),
+            Page::WindowAlt => Some(self.alt_window.clone()),
+            Page::AppMenu => Some(self.menu_window.clone()),
+            _ => None,
+        }
+    }
+
     fn menu_page(&self, page: Page) -> Option<Entity<MenuPage>> {
         self.menus
             .iter()

@@ -95,7 +95,7 @@ fn the_main_window_keeps_the_pill_slot_after_f10(cx: &mut TestAppContext) {
         let bar = window.within("fkeys");
         let f10 = bar.find(("fkey", 9usize));
         let slot = bar.find("fkey-pill-slot");
-        assert_eq!(f10.label(), Some("F10 Palette"));
+        assert_eq!(f10.label(), Some("F10 Menu"));
         assert!(slot.bounds().left() >= f10.bounds().right());
         assert!(bar.try_find(("fkey", 10usize)).is_none());
     })

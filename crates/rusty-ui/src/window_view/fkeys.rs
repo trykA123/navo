@@ -12,7 +12,7 @@ const BASE: [FKey; 10] = [
     ("F7", "New folder"),
     ("F8", "Delete"),
     ("F9", "Drawer"),
-    ("F10", "Palette"),
+    ("F10", "Menu"),
 ];
 
 const SHIFT: [FKey; 10] = [
