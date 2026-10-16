@@ -29,7 +29,7 @@ fn the_drive_pill_names_the_current_drive_and_lists_every_drive(cx: &mut TestApp
     let pane = first_pane(&rig, cx);
     rig.frame(cx, |window, _| {
         let current = window.find(pill(pane));
-        assert_eq!(current.label(), Some("C"));
+        assert_eq!(current.label(), Some("Drive C:"));
         assert_eq!(current.value(), Some("connected"));
         assert_eq!(current.expanded(), Some(false));
     });
@@ -70,7 +70,7 @@ fn a_drive_click_opens_its_root_then_its_last_folder(cx: &mut TestAppContext) {
     pick(&rig, cx, pane, 1);
     assert_eq!(rig.location(cx, pane), local(r"D:\work"));
     rig.frame(cx, |window, _| {
-        assert_eq!(window.find(pill(pane)).label(), Some("D"));
+        assert_eq!(window.find(pill(pane)).label(), Some("Drive D:"));
     });
 }
 
@@ -152,4 +152,16 @@ fn a_reconnect_error_is_gone_after_leaving_and_coming_back(cx: &mut TestAppConte
     rig.frame(cx, |window, _| {
         assert!(window.try_find(("pane-error", pane.get())).is_none());
     });
+}
+
+#[gpui_kit::test]
+fn clicking_the_pill_of_an_open_list_closes_it(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let pane = first_pane(&rig, cx);
+    open_list(&rig, cx, pane);
+    assert_eq!(menu_pane(&rig, cx), Some(pane));
+    open_list(&rig, cx, pane);
+    assert_eq!(menu_pane(&rig, cx), None);
+    open_list(&rig, cx, pane);
+    assert_eq!(menu_pane(&rig, cx), Some(pane));
 }

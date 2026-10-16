@@ -11,7 +11,7 @@ use gpui_kit::component::TitleBar;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    Styled, TitlebarOptions, Window, WindowOptions, div, transparent_black,
+    Styled, TitlebarOptions, Window, WindowOptions, div, px, transparent_black,
 };
 
 use crate::tokens::{self, Theme};
@@ -65,35 +65,46 @@ impl FerriteTitleBar {
     }
 }
 
-fn header_area(t: &Theme, header: Vec<AnyElement>) -> impl IntoElement {
-    let mut items = header.into_iter();
-    let centre = items.next();
-    let held = |item: AnyElement| div().flex().min_w_0().occlude().child(item);
+const CENTRE_INSET: f32 = 180.;
+
+fn held(item: AnyElement) -> impl IntoElement {
+    div().flex().min_w_0().occlude().child(item)
+}
+
+fn centre_area(t: &Theme, item: AnyElement) -> impl IntoElement {
     div()
         .id("title-bar-header")
+        .test_support()
+        .absolute()
+        .top_0()
+        .bottom_0()
+        .left_0()
+        .right_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .px(px(CENTRE_INSET))
+        .gap(t.spacing.md)
+        .child(held(item))
+}
+
+fn header_area(t: &Theme, items: impl Iterator<Item = AnyElement>) -> impl IntoElement {
+    div()
         .flex()
         .flex_1()
+        .justify_end()
         .items_center()
         .gap(t.spacing.md)
         .min_w_0()
         .mr(t.spacing.md)
-        .test_support()
-        .child(div().flex_1())
-        .children(centre.map(held))
-        .child(
-            div()
-                .flex()
-                .flex_1()
-                .justify_end()
-                .items_center()
-                .gap(t.spacing.md)
-                .children(items.map(held)),
-        )
+        .children(items.map(held))
 }
 
 impl RenderOnce for FerriteTitleBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
+        let mut items = self.header.into_iter();
+        let centre = items.next();
         TitleBar::new()
             .h(t.spacing.header_height)
             .pl(t.spacing.md)
@@ -106,10 +117,10 @@ impl RenderOnce for FerriteTitleBar {
                 bar.bg(transparent_black())
                     .border_color(transparent_black())
             })
+            .relative()
             .child(brand::brand(t, self.title, window.scale_factor()))
-            .when(!self.header.is_empty(), |bar| {
-                bar.child(header_area(t, self.header))
-            })
+            .children(centre.map(|item| centre_area(t, item)))
+            .child(header_area(t, items))
             .when_some(self.on_close, |bar, handler| {
                 bar.on_close_window(move |_, window, cx| {
                     handler(window, cx);

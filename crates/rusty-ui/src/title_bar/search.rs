@@ -49,7 +49,7 @@ impl RenderOnce for HeaderSearch {
             .pr(t.spacing.sm)
             .border_1()
             .border_color(t.surfaces.card_edge)
-            .rounded(px(HEIGHT / 2.))
+            .rounded(t.radii.full)
             .bg(t.surfaces.card)
             .text_color(t.colors.muted)
             .child(icon(IconName::Search, t.spacing.icon, t.colors.muted))

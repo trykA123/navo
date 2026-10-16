@@ -11,7 +11,7 @@ use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens;
-use rusty_ui::window_view::{key_labels, key_warning, layer_keys};
+use rusty_ui::window_view::{KEY_WARNING, key_labels, layer_keys};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
@@ -135,9 +135,7 @@ impl Render for WindowPage {
             .child(
                 FKeyBar::new("fkeys", layer_keys(self.held))
                     .layers(self.held, key_labels())
-                    .when_some(key_warning(self.held), |bar, (index, spoken)| {
-                        bar.warn(index, spoken)
-                    })
+                    .warn(KEY_WARNING.0, KEY_WARNING.1, KEY_WARNING.2)
                     .reserve_pill(),
             )
     }

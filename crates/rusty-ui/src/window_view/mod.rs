@@ -16,7 +16,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui_kit::{FocusHandle, ModifiersChangedEvent, Subscription, WindowAppearance};
+use gpui_kit::{FocusHandle, Modifiers, ModifiersChangedEvent, Subscription, WindowAppearance};
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
@@ -32,7 +32,7 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
-pub use fkeys::{FKey, key_labels, key_warning, layer_keys};
+pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
 pub use keys::bind_keys;
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -100,6 +100,8 @@ pub struct FerriteWindow {
     menu_focus: FocusHandle,
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
+    held_layer: Option<KeyLayer>,
+    _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
 }
@@ -136,6 +138,10 @@ impl FerriteWindow {
             menu_focus: cx.focus_handle(),
             path_edit: None,
             waiting: waiting::Waiting::default(),
+            held_layer: None,
+            _activation: cx.observe_window_activation(window, |view, window, cx| {
+                view.track_modifiers(window.modifiers(), window, cx);
+            }),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, |_, window, cx| {
                 tokens::apply(mode_of(window.appearance()), cx);
@@ -205,19 +211,24 @@ impl FerriteWindow {
         }
     }
 
-    fn fkey_bar(&self, window: &Window, cx: &App) -> FKeyBar {
-        match &self.viewer {
-            Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
-            None => {
-                let held = KeyLayer::held(&window.modifiers());
-                FKeyBar::new("fkeys", layer_keys(held))
-                    .layers(held, key_labels())
-                    .when_some(key_warning(held), |bar, (index, spoken)| {
-                        bar.warn(index, spoken)
-                    })
-                    .reserve_pill()
-            }
+    fn track_modifiers(&mut self, modifiers: Modifiers, window: &Window, cx: &mut Context<Self>) {
+        let held = KeyLayer::held(&modifiers).filter(|_| window.is_window_active());
+        if held != self.held_layer {
+            self.held_layer = held;
+            cx.notify();
         }
+    }
+
+    fn fkey_bar(&self, cx: &App) -> FKeyBar {
+        if let Some(viewer) = &self.viewer {
+            return FKeyBar::new("fkeys", viewer.keys(cx));
+        }
+        let held = self.held_layer;
+        let (layer, index, spoken) = KEY_WARNING;
+        FKeyBar::new("fkeys", layer_keys(held))
+            .layers(held, key_labels())
+            .warn(layer, index, spoken)
+            .reserve_pill()
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
@@ -318,8 +329,12 @@ impl Render for FerriteWindow {
             .child(Self::title_bar(cx))
             .child(div().flex().flex_1().min_h_0().px(t.spacing.xs).child(body))
             .children(jobs)
-            .on_modifiers_changed(cx.listener(|_, _: &ModifiersChangedEvent, _, cx| cx.notify()))
-            .child(self.fkey_bar(window, cx))
+            .on_modifiers_changed(
+                cx.listener(|view, event: &ModifiersChangedEvent, window, cx| {
+                    view.track_modifiers(event.modifiers, window, cx);
+                }),
+            )
+            .child(self.fkey_bar(cx))
             .children(dialog)
     }
 }

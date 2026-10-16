@@ -5,7 +5,7 @@ use gpui_kit::base::TestSupportExt;
 use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
-use super::keys::{DriveMenuFirst, DriveMenuSecond, EditPath, PANE};
+use super::keys::{DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE};
 use super::status::status_of;
 use crate::FocusHandle;
 use crate::file_list::{FileList, FileListAction, FileListProps, FilterEdit};
@@ -160,6 +160,9 @@ impl FerriteWindow {
                 this.open_drive_menu(1, window, cx);
             }),
         )
+        .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
+            this.apply(&Command::PaneOpenTab { location: None }, window, cx);
+        }))
         .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
             let pane = this.browser.state().focused_pane();
             this.open_path_edit(pane, cx);

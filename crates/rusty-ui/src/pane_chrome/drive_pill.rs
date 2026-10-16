@@ -115,12 +115,26 @@ fn face(t: &Theme, drive: Option<&DriveInfo>, is_busy: bool) -> Div {
         .child(icon(IconName::ChevronDown, px(GLYPH), c.muted))
 }
 
+fn spoken_name(drive: &DriveInfo) -> SharedString {
+    let name = match drive.letter {
+        Some(_) => format!("{}:", drive.name()),
+        None => drive.name().to_string(),
+    };
+    match &drive.label {
+        Some(label) if drive.letter.is_some() => format!("Drive {name} {label}").into(),
+        _ => format!("Drive {name}").into(),
+    }
+}
+
 impl RenderOnce for DrivePill {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let was_open = window.use_keyed_state(self.id.clone(), cx, |_, _| false);
+        let pressed = was_open.clone();
+        let is_open = self.is_open;
         let t = tokens::current(cx);
         let c = &t.colors;
         let drive = self.drive.as_ref();
-        let name = drive.map_or_else(|| "Drives".into(), DriveInfo::name);
+        let name = drive.map_or_else(|| "Drives".into(), spoken_name);
         let tip: Option<SharedString> = drive.map(|drive| drive.tooltip().into());
         let is_dimmed = self.is_busy || drive.is_some_and(|drive| !drive.connected);
         div()
@@ -146,8 +160,14 @@ impl RenderOnce for DrivePill {
             .when_some(tip, |d, tip| {
                 d.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
             })
+            .capture_any_mouse_down(move |_, _, cx| {
+                pressed.update(cx, |state, _| *state = is_open);
+            })
             .when_some(self.on_open, |d, handler| {
-                d.on_click(move |_, window, cx| handler(window, cx))
+                d.on_click(move |_, window, cx| {
+                    let was_open = *was_open.read(cx);
+                    (!was_open).then(|| handler(window, cx));
+                })
             })
             .child(face(t, drive, self.is_busy))
     }

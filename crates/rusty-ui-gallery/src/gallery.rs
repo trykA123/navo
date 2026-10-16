@@ -20,6 +20,8 @@ use crate::tokens_page;
 use crate::window_page::WindowPage;
 use crate::{rich_sample, viewer_sample};
 
+const NARROW: f32 = 1100.;
+
 const TREE_STEPS: [&str; 9] = [
     "viewer::RowDown",
     "viewer::RowDown",
@@ -61,6 +63,8 @@ pub enum Page {
     Tokens,
     Window,
     WindowShift,
+    WindowAlt,
+    WindowNarrow,
 }
 
 pub struct PageInfo {
@@ -79,7 +83,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 21] = [
+pub const PAGES: [PageInfo; 23] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -104,6 +108,13 @@ pub const PAGES: [PageInfo; 21] = [
         Page::WindowShift,
         "Window, Shift held",
         "p19-fkeys-shift",
+        false,
+    ),
+    info(Page::WindowAlt, "Window, Alt held", "p19-fkeys-alt", false),
+    info(
+        Page::WindowNarrow,
+        "Window at 1100 px",
+        "p19-window-1100",
         false,
     ),
 ];
@@ -140,6 +151,7 @@ pub struct Gallery {
     menus: [(Page, Entity<MenuPage>); 4],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
+    alt_window: Entity<WindowPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -167,6 +179,7 @@ impl Gallery {
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
+            alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), cx)),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -316,6 +329,11 @@ impl Render for Gallery {
         match self.page {
             Page::Window => return root.child(self.main_window.clone()),
             Page::WindowShift => return root.child(self.shift_window.clone()),
+            Page::WindowAlt => return root.child(self.alt_window.clone()),
+            Page::WindowNarrow => {
+                let narrow = div().w(px(NARROW)).h_full().child(self.main_window.clone());
+                return root.bg(t.colors.line).child(narrow);
+            }
             _ => {}
         }
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
@@ -339,7 +357,7 @@ impl Render for Gallery {
                 None => root.child("This sample did not load."),
             },
             Page::Tokens => root.child(tokens_page::render(&t)),
-            Page::Window | Page::WindowShift => root,
+            Page::Window | Page::WindowShift | Page::WindowAlt | Page::WindowNarrow => root,
         }
     }
 }

@@ -179,13 +179,19 @@ fn the_drive_pages_show_both_pills_the_menu_and_a_path_error(cx: &mut TestAppCon
         for side in 0..2usize {
             assert!(window.find(("drive-pill", side)).visible(), "pill {side}");
         }
-        assert_eq!(window.find(("drive-pill", 0usize)).label(), Some("C"));
+        assert_eq!(
+            window.find(("drive-pill", 0usize)).label(),
+            Some("Drive C: System")
+        );
         let menu = window.within(("drive-menu", 0usize));
         assert!(menu.find(("drive-row", 4usize)).visible());
         assert_eq!(menu.find(("drive-row", 1usize)).selected(), Some(true));
         window.click("Path", cx);
         assert!(window.find("path-error").visible());
-        assert_eq!(window.find(("drive-pill", 1usize)).label(), Some("D"));
+        assert_eq!(
+            window.find(("drive-pill", 1usize)).label(),
+            Some("Drive D: Work")
+        );
     })
     .expect("window");
 }

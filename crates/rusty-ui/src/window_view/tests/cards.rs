@@ -116,3 +116,19 @@ fn the_plus_button_opens_a_new_tab_in_its_pane(cx: &mut TestAppContext) {
     super::settle(cx, &view);
     assert_eq!(tabs(cx), [before[0], before[1] + 1]);
 }
+
+#[gpui_kit::test]
+fn ctrl_t_opens_a_new_tab_in_the_focused_pane(cx: &mut TestAppContext) {
+    let (window, view) = open(cx, Rc::default());
+    let count = |cx: &mut TestAppContext| {
+        view.read_with(cx, |view, _| {
+            let state = view.browser.state();
+            state
+                .pane(state.focused_pane())
+                .map_or(0, |p| p.tabs().len())
+        })
+    };
+    let before = count(cx);
+    press(cx, window, &view, "ctrl-t");
+    assert_eq!(count(cx), before + 1);
+}

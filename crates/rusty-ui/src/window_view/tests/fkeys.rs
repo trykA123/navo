@@ -25,6 +25,11 @@ fn key_labels(
 
 fn hold(cx: &mut TestAppContext, window: AnyWindowHandle, modifiers: Modifiers) {
     let mut visual = VisualTestContext::from_window(window, cx);
+    if !visual.update(|window, _| window.is_window_active()) {
+        visual.deactivate_window();
+        visual.update(|window, _| window.activate_window());
+        visual.run_until_parked();
+    }
     visual.simulate_modifiers_change(modifiers);
     visual.run_until_parked();
 }
@@ -95,4 +100,24 @@ fn the_main_window_keeps_the_pill_slot_after_f10(cx: &mut TestAppContext) {
         assert!(bar.try_find(("fkey", 10usize)).is_none());
     })
     .expect("window");
+}
+
+#[gpui_kit::test]
+fn leaving_the_window_with_alt_held_shows_the_base_layer(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, Rc::default());
+    let (base, _) = key_labels(cx, window);
+    hold(
+        cx,
+        window,
+        Modifiers {
+            alt: true,
+            ..Modifiers::default()
+        },
+    );
+    assert_eq!(key_labels(cx, window).0[0], "F1 Left drive");
+    let mut visual = VisualTestContext::from_window(window, cx);
+    visual.deactivate_window();
+    let (labels, lit) = key_labels(cx, window);
+    assert_eq!(labels, base);
+    assert_eq!(lit, [Some(false); 3]);
 }

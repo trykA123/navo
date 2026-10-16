@@ -69,7 +69,4 @@ pub fn key_labels() -> [[&'static str; 4]; 10] {
     std::array::from_fn(|index| [BASE, SHIFT, CTRL, ALT].map(|layer| layer[index].1))
 }
 
-#[must_use]
-pub fn key_warning(layer: Option<KeyLayer>) -> Option<(usize, &'static str)> {
-    (layer == Some(KeyLayer::Shift)).then_some((7, "Delete for good"))
-}
+pub const KEY_WARNING: (KeyLayer, usize, &str) = (KeyLayer::Shift, 7, "Delete for good");

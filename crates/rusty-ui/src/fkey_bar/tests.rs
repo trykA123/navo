@@ -2,11 +2,12 @@ use gpui_kit::AppContext as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, Bounds, Context, IntoElement, Modifiers, Pixels, Render, Role, TestAppContext,
-    Window,
+    Window, px,
 };
 
 use super::{FKeyBar, KeyLayer};
-use crate::test_window::open;
+use crate::test_window::{open, open_sized};
+use crate::window_view::{KEY_WARNING, key_labels, layer_keys};
 
 struct Keys;
 
@@ -119,14 +120,19 @@ fn a_held_layer_shows_its_labels_and_dims_keys_without_one(cx: &mut TestAppConte
     let shift = shown(cx, window);
     assert_eq!(base.labels, ["F1", "F3 View", "F8 Delete"]);
     assert_eq!(shift.labels, ["F1", "F3", "F8 Delete for good"]);
-    assert_eq!(base.places.len(), shift.places.len());
+    assert_eq!(base.places, shift.places);
 }
 
 struct Warned;
 
 impl Render for Warned {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        FKeyBar::new("fkeys", [("F7", ""), ("F8", "Delete")]).warn(1, "Delete for good")
+        FKeyBar::new("fkeys", [("F7", ""), ("F8", "Delete")])
+            .layers(
+                Some(KeyLayer::Shift),
+                [["", "", "", ""], ["Delete", "Delete", "", ""]],
+            )
+            .warn(KeyLayer::Shift, 1, "Delete for good")
     }
 }
 
@@ -170,4 +176,69 @@ fn only_one_held_modifier_picks_a_layer() {
     assert_eq!(held(false, false, true), Some(KeyLayer::Alt));
     assert_eq!(held(false, true, true), None);
     assert_eq!(held(true, true, false), None);
+}
+
+struct MainBar(Option<KeyLayer>);
+
+impl Render for MainBar {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let (layer, index, spoken) = KEY_WARNING;
+        FKeyBar::new("fkeys", layer_keys(self.0))
+            .layers(self.0, key_labels())
+            .warn(layer, index, spoken)
+            .reserve_pill()
+    }
+}
+
+fn main_bar_bounds(
+    cx: &mut TestAppContext,
+    width: Pixels,
+    held: Option<KeyLayer>,
+) -> Vec<Bounds<Pixels>> {
+    let (window, _) = open_sized(cx, width, move |_, _| MainBar(held));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let bar = window.within("fkeys");
+        let keys = (0..10usize).map(|i| bar.find(("fkey", i)).bounds());
+        let mods = (0..3usize).map(|i| bar.find(("fkey-mod", i)).bounds());
+        keys.chain(mods)
+            .chain([bar.find("fkey-pill-slot").bounds()])
+            .collect()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn the_main_bar_fits_at_1100_and_1280_px_in_every_layer(cx: &mut TestAppContext) {
+    let layers = [
+        None,
+        Some(KeyLayer::Shift),
+        Some(KeyLayer::Ctrl),
+        Some(KeyLayer::Alt),
+    ];
+    for width in [px(1100.), px(1280.)] {
+        for held in layers {
+            for part in main_bar_bounds(cx, width, held) {
+                assert!(part.left() >= px(0.), "{width:?} {held:?}: {part:?}");
+                assert!(part.right() <= width, "{width:?} {held:?}: {part:?}");
+            }
+        }
+    }
+}
+
+#[gpui_kit::test]
+fn the_main_bar_keeps_every_key_in_place_across_layers(cx: &mut TestAppContext) {
+    for width in [px(1100.), px(1280.)] {
+        let base: Vec<Pixels> = main_bar_bounds(cx, width, None)[..10]
+            .iter()
+            .map(|key| key.left())
+            .collect();
+        for held in KeyLayer::ALL.map(Some) {
+            let shown: Vec<Pixels> = main_bar_bounds(cx, width, held)[..10]
+                .iter()
+                .map(|key| key.left())
+                .collect();
+            assert_eq!(shown, base, "{width:?} {held:?}");
+        }
+    }
 }
