@@ -79,3 +79,7 @@ fn cancelling_stops_the_walk() {
         Some(FsErrorKind::Cancelled)
     );
 }
+
+mod profile;
+mod props;
+mod runner;

@@ -3,6 +3,7 @@ mod support;
 mod budget;
 mod keys;
 mod patch;
+mod profiles;
 mod props;
 mod race;
 

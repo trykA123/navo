@@ -25,7 +25,10 @@ pub use job::{
     run_job,
 };
 pub use local::{LocalFs, os_path};
-pub use measure::{FolderSize, folder_size};
+pub use measure::{
+    FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LargeFile, PROGRESS_EVERY, ProfileHandle,
+    ProfileSink, ProfileState, Tally, folder_profile, folder_size, spawn_profile,
+};
 pub use paged::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
 };
