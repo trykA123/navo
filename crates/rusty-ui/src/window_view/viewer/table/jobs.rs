@@ -3,7 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rusty_structured::Watch;
-use rusty_structured::table::{RecordIndex, column_widths, index_records, read_rows, sort_order};
+use rusty_structured::table::{
+    Dialect, MAX_COLUMNS, RecordIndex, RowSlice, column_name, column_widths, index_records,
+    read_rows, sort_order,
+};
 
 use super::rows::{Fetched, Rows};
 use super::{SortKey, TableView};
@@ -22,12 +25,13 @@ pub(super) enum IndexMessage {
 
 pub(super) struct Fetch {
     range: Range<u64>,
-    result: Result<Vec<Vec<String>>, String>,
+    result: Result<RowSlice, String>,
 }
 
 pub(super) fn start_index(
     host: &Host,
     len: u64,
+    dialect: Dialect,
     cx: &mut Context<TableView>,
 ) -> crate::window_view::viewer::background::Job {
     let mut read = ranged(&host.hooks, &host.location);
@@ -43,7 +47,7 @@ pub(super) fn start_index(
                 progress: &mut progress,
             };
             send(IndexMessage::Done(index_records(
-                &mut read, len, &mut watch,
+                &mut read, len, dialect, &mut watch,
             )));
         },
         TableView::index_message,
@@ -110,19 +114,41 @@ impl TableView {
         };
         indexed.fetching = None;
         match fetch.result {
-            Ok(rows) => {
-                if indexed.fetched.is_none() {
-                    let columns = self.header.len();
-                    self.widths = column_widths(&self.header, &rows, columns);
-                }
+            Ok(slice) => {
+                let is_first = indexed.fetched.is_none();
                 indexed.fetched = Some(Fetched {
                     start: fetch.range.start,
-                    rows,
+                    end: fetch.range.end,
+                    rows: slice.rows,
                 });
+                self.widen(slice.widest, is_first);
             }
             Err(error) => self.note = Some(error.into()),
         }
         cx.notify();
+    }
+
+    fn widen(&mut self, widest: usize, is_first: bool) {
+        let columns = widest.min(MAX_COLUMNS);
+        let is_wider = columns > self.header.len();
+        if is_wider {
+            let start = self.header.len();
+            self.header.extend((start..columns).map(column_name));
+        }
+        if widest > MAX_COLUMNS {
+            self.note = Some(super::too_wide(widest));
+        }
+        if !(is_first || is_wider) {
+            return;
+        }
+        let Rows::Indexed(indexed) = &self.rows else {
+            return;
+        };
+        let rows = indexed
+            .fetched
+            .as_ref()
+            .map_or(&[][..], |fetched| &fetched.rows);
+        self.widths = Arc::new(column_widths(&self.header, rows, self.header.len()));
     }
 
     pub(super) fn sort_by(&mut self, column: usize, cx: &mut Context<Self>) {

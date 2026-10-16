@@ -10,6 +10,9 @@ use crate::source::{RangeSource, ReadAt, Watch, line_column_at};
 use crate::tree::{Flavor, Lazy, NodeId, Span, Tree};
 
 const PROGRESS_EVERY: u64 = 8192;
+pub const MAX_ENTRIES: usize = 100_000;
+const MAX_EVENT_BYTES: u64 = 16 * 1024 * 1024;
+const EVENT_TOO_LARGE: &str = "an XML node is over 16 MB, too large to show as a tree";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -44,12 +47,28 @@ impl Entry {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Children {
+    pub entries: Vec<Entry>,
+    pub more: u64,
+}
+
+impl Children {
+    fn push(&mut self, entry: Entry) {
+        if self.entries.len() < MAX_ENTRIES {
+            self.entries.push(entry);
+        } else {
+            self.more += 1;
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct XmlIndex {
     pub len: u64,
     pub elements: u64,
     pub root: Entry,
-    pub top: Vec<Entry>,
+    pub top: Children,
 }
 
 impl XmlIndex {
@@ -57,8 +76,13 @@ impl XmlIndex {
     pub fn size_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
             + self.root.heap_bytes()
-            + self.top.capacity() * std::mem::size_of::<Entry>()
-            + self.top.iter().map(Entry::heap_bytes).sum::<usize>()
+            + self.top.entries.capacity() * std::mem::size_of::<Entry>()
+            + self
+                .top
+                .entries
+                .iter()
+                .map(Entry::heap_bytes)
+                .sum::<usize>()
     }
 
     #[must_use]
@@ -72,8 +96,8 @@ impl XmlIndex {
     }
 }
 
-fn push_entries(tree: &mut Tree, parent: NodeId, entries: &[Entry]) {
-    for entry in entries {
+fn push_entries(tree: &mut Tree, parent: NodeId, children: &Children) {
+    for entry in &children.entries {
         let label = entry.label();
         if let Some(id) = tree.push(Some(parent), element(&label)) {
             tree.set_lazy(
@@ -85,17 +109,24 @@ fn push_entries(tree: &mut Tree, parent: NodeId, entries: &[Entry]) {
             );
         }
     }
+    if children.more > 0 {
+        let label = Label {
+            name: format!("… {} more", children.more),
+            ..Label::default()
+        };
+        tree.push(Some(parent), element(&label));
+    }
 }
 
-pub fn attach_children(tree: &mut Tree, parent: NodeId, entries: &[Entry]) {
+pub fn attach_children(tree: &mut Tree, parent: NodeId, children: &Children) {
     if tree.take_lazy(parent).is_some() {
-        push_entries(tree, parent, entries);
+        push_entries(tree, parent, children);
     }
 }
 
 struct Scanned {
     root: Entry,
-    children: Vec<Entry>,
+    children: Children,
     elements: u64,
 }
 
@@ -104,7 +135,7 @@ struct Scanner {
     depth: u32,
     root: Option<Entry>,
     child: Option<Entry>,
-    children: Vec<Entry>,
+    children: Children,
     elements: u64,
 }
 
@@ -226,7 +257,13 @@ fn run(
     let mut buf = Vec::new();
     let mut next_report = PROGRESS_EVERY;
     loop {
+        if watch.cancel.load(Ordering::Relaxed) {
+            return Ended::Cancelled;
+        }
         let start = span.start + reader.buffer_position();
+        reader
+            .get_mut()
+            .limit_from_here(MAX_EVENT_BYTES, EVENT_TOO_LARGE);
         let event = match reader.read_event_into(&mut buf) {
             Ok(event) => event,
             Err(error) => {
@@ -243,14 +280,10 @@ fn run(
             }
         }
         buf.clear();
-        if scanner.elements < next_report {
-            continue;
+        if scanner.elements >= next_report {
+            next_report = scanner.elements + PROGRESS_EVERY;
+            (watch.progress)(scanner.elements);
         }
-        next_report = scanner.elements + PROGRESS_EVERY;
-        if watch.cancel.load(Ordering::Relaxed) {
-            return Ended::Cancelled;
-        }
-        (watch.progress)(scanner.elements);
     }
 }
 
@@ -303,14 +336,15 @@ pub fn build_index(
     }))
 }
 
-pub fn scan_children(read: &mut ReadAt<'_>, span: Span) -> Result<Vec<Entry>, ParseError> {
-    let cancel = AtomicBool::new(false);
+pub fn scan_children(
+    read: &mut ReadAt<'_>,
+    span: Span,
+    cancel: &AtomicBool,
+) -> Result<Option<Children>, ParseError> {
     let mut ignore = |_: u64| {};
     let mut watch = Watch {
-        cancel: &cancel,
+        cancel,
         progress: &mut ignore,
     };
-    Ok(scan(read, span, &mut watch)?
-        .map(|scanned| scanned.children)
-        .unwrap_or_default())
+    Ok(scan(read, span, &mut watch)?.map(|scanned| scanned.children))
 }

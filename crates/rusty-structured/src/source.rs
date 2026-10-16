@@ -16,6 +16,7 @@ pub(crate) struct RangeSource<'r, 'f> {
     end: u64,
     chunk: Vec<u8>,
     at: usize,
+    stop: Option<(u64, &'static str)>,
 }
 
 impl<'r, 'f> RangeSource<'r, 'f> {
@@ -26,12 +27,26 @@ impl<'r, 'f> RangeSource<'r, 'f> {
             end,
             chunk: Vec::new(),
             at: 0,
+            stop: None,
         }
+    }
+
+    fn position(&self) -> u64 {
+        self.next - (self.chunk.len() - self.at) as u64
+    }
+
+    pub(crate) fn limit_from_here(&mut self, bytes: u64, message: &'static str) {
+        self.stop = Some((self.position().saturating_add(bytes), message));
     }
 }
 
 impl BufRead for RangeSource<'_, '_> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if let Some((stop, message)) = self.stop
+            && self.position() > stop
+        {
+            return Err(io::Error::other(message));
+        }
         if self.at >= self.chunk.len() && self.next < self.end {
             let len = usize::try_from(CHUNK.min(self.end - self.next)).unwrap_or(usize::MAX);
             self.chunk = (self.read)(self.next, len).map_err(io::Error::other)?;

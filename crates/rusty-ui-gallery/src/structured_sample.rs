@@ -110,6 +110,7 @@ pub fn body(
         location,
         hooks,
         on_saved: Rc::new(|_| {}),
+        open: Rc::new(|_, _| {}),
     };
     let attach = Attach {
         loaded,

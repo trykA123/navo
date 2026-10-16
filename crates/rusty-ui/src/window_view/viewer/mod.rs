@@ -24,7 +24,7 @@ pub use files::{
     SharedSource,
 };
 pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
-pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
+pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
 
 use super::FerriteWindow;

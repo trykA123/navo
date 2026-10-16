@@ -5,7 +5,7 @@ use super::{Loaded, Slot, Sniff, ViewerKind, extension, first_byte};
 use crate::prelude::*;
 use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
-use crate::window_view::viewer::tree::{Format, TreeBody, TreeFile, TreeLoad};
+use crate::window_view::viewer::tree::{Format, Ready, TreeBody, TreeFile, TreeLoad};
 
 const STRUCTURED: u8 = 70;
 const TOO_LARGE: &str = "Over 64 MB: shown as text, not as a tree.";
@@ -42,7 +42,7 @@ fn parse(format: Format, bytes: &[u8]) -> TreeLoad {
         Format::Xml => xml::parse_xml(bytes),
     };
     match parsed {
-        Ok(tree) => TreeLoad::Parsed(tree),
+        Ok(tree) => TreeLoad::Parsed(Box::new(Ready::new(tree, None))),
         Err(error) => TreeLoad::Failed(error),
     }
 }

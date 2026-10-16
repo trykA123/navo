@@ -2,7 +2,7 @@ mod records;
 mod sniff;
 mod sort;
 
-pub use records::{RecordIndex, STRIDE, index_records, read_rows};
+pub use records::{ROWS_BYTES, RecordIndex, RowSlice, STRIDE, index_records, read_rows};
 pub use sniff::{Dialect, sniff};
 pub use sort::{is_numeric_column, sort_order};
 
@@ -11,25 +11,28 @@ use crate::ParseError;
 const MIN_WIDTH: usize = 3;
 const MAX_WIDTH: usize = 40;
 const SORT_MARK: usize = 2;
+pub const MAX_COLUMNS: usize = 4096;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Table {
     pub header: Vec<String>,
     pub rows: Vec<Vec<String>>,
     pub columns: usize,
+    pub widest: usize,
 }
 
-pub(crate) fn reader(dialect: Dialect, bytes: &[u8]) -> csv::Reader<&[u8]> {
+pub(crate) fn reader<R: std::io::Read>(dialect: Dialect, source: R) -> csv::Reader<R> {
     csv::ReaderBuilder::new()
         .delimiter(dialect.delimiter)
         .has_headers(false)
         .flexible(true)
-        .from_reader(bytes)
+        .from_reader(source)
 }
 
 pub(crate) fn record_cells(record: &csv::ByteRecord) -> Vec<String> {
     record
         .iter()
+        .take(MAX_COLUMNS)
         .map(|cell| String::from_utf8_lossy(cell).into_owned())
         .collect()
 }
@@ -74,15 +77,17 @@ pub fn first_record(head: &[u8], dialect: Dialect) -> Vec<String> {
 pub fn parse_table(bytes: &[u8], dialect: Dialect) -> Result<Table, ParseError> {
     let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
     let mut rows = Vec::new();
+    let mut widest = 0;
     let mut record = csv::ByteRecord::new();
     let mut reader = reader(dialect, bytes);
     while reader
         .read_byte_record(&mut record)
         .map_err(|error| csv_error(&error))?
     {
+        widest = widest.max(record.len());
         rows.push(record_cells(&record));
     }
-    let columns = rows.iter().map(Vec::len).max().unwrap_or(0);
+    let columns = widest.min(MAX_COLUMNS);
     let first = if dialect.has_header && !rows.is_empty() {
         Some(rows.remove(0))
     } else {
@@ -92,6 +97,7 @@ pub fn parse_table(bytes: &[u8], dialect: Dialect) -> Result<Table, ParseError> 
         header: header_of(first, columns),
         rows,
         columns,
+        widest,
     })
 }
 

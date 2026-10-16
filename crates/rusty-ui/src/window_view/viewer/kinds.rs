@@ -59,6 +59,8 @@ pub(super) use image::{IMAGE_ID, is_image_name};
 
 pub type Loaded = Box<dyn Any + Send>;
 
+pub struct Declined(pub &'static str);
+
 pub trait ViewerKind: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;

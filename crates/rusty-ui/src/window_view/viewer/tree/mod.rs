@@ -1,11 +1,13 @@
 mod draw;
+mod filter;
 mod jobs;
 mod keys;
 mod row;
 
 use std::any::Any;
+use std::sync::Arc;
 
-use gpui_kit::{AnyView, FocusHandle};
+use gpui_kit::{AnyView, FocusHandle, Task};
 use rusty_structured::{NodeId, Outline, ParseError, Step, Tree};
 
 pub(super) use keys::bind_keys;
@@ -44,7 +46,7 @@ impl Format {
 }
 
 pub(in crate::window_view::viewer) enum TreeLoad {
-    Parsed(Tree),
+    Parsed(Box<Ready>),
     Failed(ParseError),
     Index,
 }
@@ -55,10 +57,20 @@ pub(in crate::window_view::viewer) struct TreeFile {
     pub load: TreeLoad,
 }
 
-struct Ready {
-    tree: Tree,
+pub(in crate::window_view::viewer) struct Ready {
+    tree: Arc<Tree>,
     outline: Outline,
     elements: Option<u64>,
+}
+
+impl Ready {
+    pub(in crate::window_view::viewer) fn new(tree: Tree, elements: Option<u64>) -> Self {
+        Self {
+            outline: Outline::new(&tree),
+            tree: Arc::new(tree),
+            elements,
+        }
+    }
 }
 
 enum TreeState {
@@ -80,16 +92,16 @@ pub(in crate::window_view::viewer) struct TreeView {
     index_job: Option<Job>,
     loads: Vec<(NodeId, Job)>,
     page: usize,
+    path: Option<SharedString>,
+    filter: String,
+    filter_wait: Option<Task<()>>,
+    filter_job: Option<Job>,
 }
 
 impl TreeView {
     fn new(file: TreeFile, host: Host, cx: &mut Context<Self>) -> Self {
         let state = match file.load {
-            TreeLoad::Parsed(tree) => TreeState::Ready(Box::new(Ready {
-                outline: Outline::new(&tree),
-                tree,
-                elements: None,
-            })),
+            TreeLoad::Parsed(ready) => TreeState::Ready(ready),
             TreeLoad::Failed(error) => TreeState::Failed(error),
             TreeLoad::Index => TreeState::Indexing(0),
         };
@@ -105,10 +117,15 @@ impl TreeView {
             index_job: None,
             loads: Vec::new(),
             page: 1,
+            path: None,
+            filter: String::new(),
+            filter_wait: None,
+            filter_job: None,
         };
         if matches!(view.state, TreeState::Indexing(_)) {
             view.index_job = Some(jobs::start_index(&view.host, view.len, cx));
         }
+        view.sync_path();
         view
     }
 
@@ -126,10 +143,11 @@ impl TreeView {
         }
     }
 
-    fn selected_path(&self) -> Option<SharedString> {
-        let ready = self.ready()?;
-        let node = ready.outline.selected()?;
-        Some(ready.tree.path(node).into())
+    fn sync_path(&mut self) {
+        self.path = self.ready().and_then(|ready| {
+            let node = ready.outline.selected()?;
+            Some(ready.tree.path(node).into())
+        });
     }
 
     fn follow(&mut self, step: Step, cx: &mut Context<Self>) {
@@ -142,6 +160,7 @@ impl TreeView {
         if let Some(ready) = self.ready() {
             self.scroll.scroll_to(ready.outline.cursor());
         }
+        self.sync_path();
         self.note = None;
         cx.notify();
     }
@@ -152,8 +171,7 @@ impl TreeView {
     }
 
     fn is_filtering(&self) -> bool {
-        self.ready()
-            .is_some_and(|ready| !ready.outline.filter().is_empty())
+        !self.filter.is_empty()
     }
 }
 

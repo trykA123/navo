@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
-use gpui_kit::FocusHandle;
-use rusty_core::Command;
+use gpui_kit::{AnyWindowHandle, FocusHandle, WeakEntity};
+use rusty_core::{Command, Location};
 
-use super::body::{Attach, Host};
-use super::open::{load_while_alive, start};
-use super::{Kind, Loaded, Slot, Viewer};
+use super::body::{Attach, Host, OpenFile};
+use super::open::{Picked, load_or_text, start};
+use super::{Kind, Slot, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
@@ -21,8 +21,7 @@ struct Choice {
 }
 
 pub(super) struct Shown {
-    pub kind: Kind,
-    pub loaded: Result<Loaded, String>,
+    pub picked: Picked,
     pub edit: bool,
 }
 
@@ -67,8 +66,9 @@ impl Viewer {
 }
 
 impl FerriteWindow {
-    fn host(&self, viewer: &Viewer, cx: &mut Context<Self>) -> Host {
+    fn host(&self, viewer: &Viewer, window: &Window, cx: &mut Context<Self>) -> Host {
         let this = cx.weak_entity();
+        let open = Self::open_later(this.clone(), window.window_handle());
         Host {
             title: viewer.title.clone(),
             location: viewer.location.clone(),
@@ -79,7 +79,21 @@ impl FerriteWindow {
                     let _ = this.update(cx, Self::refresh_after_save);
                 });
             }),
+            open,
         }
+    }
+
+    fn open_later(this: WeakEntity<Self>, handle: AnyWindowHandle) -> OpenFile {
+        Rc::new(move |location, cx| {
+            let this = this.clone();
+            cx.defer(move |cx| Self::open_in(&this, handle, location, cx));
+        })
+    }
+
+    fn open_in(this: &WeakEntity<Self>, handle: AnyWindowHandle, location: Location, cx: &mut App) {
+        let _ = cx.update_window(handle, |_, window, cx| {
+            this.update(cx, |view, cx| view.view_location(location, window, cx))
+        });
     }
 
     fn refresh_after_save(&mut self, cx: &mut Context<Self>) {
@@ -96,24 +110,28 @@ impl FerriteWindow {
         let Some(viewer) = &self.viewer else {
             return;
         };
-        let host = self.host(viewer, cx);
-        let attached = shown.loaded.and_then(|loaded| {
+        let host = self.host(viewer, window, cx);
+        let Picked { kind, loaded, note } = shown.picked;
+        let attached = loaded.and_then(|loaded| {
             let attach = Attach {
                 loaded,
                 host,
                 edit: shown.edit,
             };
-            shown.kind.attach(attach, window, cx)
+            kind.attach(attach, window, cx)
         });
         let Some(viewer) = &mut self.viewer else {
             return;
         };
         viewer.opening = None;
-        viewer.kind = Some(shown.kind);
+        viewer.kind = Some(kind);
         viewer.clear_body();
         match attached {
             Ok(body) => viewer.body = Some(body),
             Err(message) => viewer.message = Some(message.into()),
+        }
+        if let Some(note) = note {
+            viewer.say(note, cx);
         }
         window.focus(&viewer.focus_target(cx), cx);
         cx.notify();
@@ -159,7 +177,7 @@ impl FerriteWindow {
         };
         let request = self.request(viewer);
         let sniffed = (viewer.head.clone(), viewer.title.to_string());
-        let loader = kind.clone();
+        let kinds = viewer.kinds.clone();
         let opening = start(
             window,
             cx,
@@ -169,12 +187,10 @@ impl FerriteWindow {
                     name: &sniffed.1,
                     len: sniffed.0.len,
                 };
-                load_while_alive(alive, &loader, || {
-                    loader.load(&request.hooks, &request.location, &sniff)
-                })
+                load_or_text(&kinds, kind, request.loader(&sniff, alive))
             },
-            move |view: &mut Self, loaded, window, cx| {
-                view.show_loaded(Shown { kind, loaded, edit }, window, cx);
+            move |view: &mut Self, picked, window, cx| {
+                view.show_loaded(Shown { picked, edit }, window, cx);
             },
         );
         if let Some(viewer) = &mut self.viewer {

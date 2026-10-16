@@ -74,6 +74,7 @@ impl TreeView {
         window.focus(&self.focus, cx);
         if let Some(ready) = self.ready_mut() {
             ready.outline.move_to(index);
+            self.sync_path();
             self.note = None;
             cx.notify();
         }
@@ -169,12 +170,11 @@ impl TreeView {
 
     fn filter_view(&self, t: &Theme) -> Option<impl IntoElement> {
         let ready = self.ready()?;
-        let filter = ready.outline.filter();
-        if filter.is_empty() {
+        if self.filter.is_empty() {
             return None;
         }
-        let matches = ready.outline.matching(&ready.tree);
-        Some(filter_bar(t, filter.to_owned().into(), matches))
+        let matches = ready.outline.matching();
+        Some(filter_bar(t, self.filter.clone().into(), matches))
     }
 }
 
@@ -191,7 +191,7 @@ impl Render for TreeView {
             title: self.title.clone(),
             mode: self.format.label().into(),
             len: self.len,
-            detail: self.selected_path().map(|path| ("tree-path", path)),
+            detail: self.path.clone().map(|path| ("tree-path", path)),
             status: self.status(),
         };
         let root = div()

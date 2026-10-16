@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{BoxShadow, ClickEvent, Role, WeakEntity, point};
@@ -281,7 +282,7 @@ impl TableView {
 
     fn list(&self, columns: Range<usize>, number: Pixels, cx: &mut Context<Self>) -> VirtualList {
         let view = cx.weak_entity();
-        let widths = self.widths.clone();
+        let widths = Arc::clone(&self.widths);
         VirtualList::new(
             "table-list",
             self.rows.len(),

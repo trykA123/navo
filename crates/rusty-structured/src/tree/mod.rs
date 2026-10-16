@@ -1,14 +1,17 @@
+mod filter;
 mod outline;
 mod path;
 
 use std::collections::HashMap;
 
+pub use filter::Filtered;
 pub use outline::{Outline, Row, Step};
 
 use crate::preview::{KEY_CHARS, PREVIEW_CHARS, clip, one_line};
 
 pub type NodeId = u32;
 const NONE: NodeId = NodeId::MAX;
+pub const MAX_NODES: usize = 4_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeKind {
@@ -144,9 +147,10 @@ impl Tree {
     }
 
     pub fn push(&mut self, parent: Option<NodeId>, new: NewNode<'_>) -> Option<NodeId> {
-        let id = NodeId::try_from(self.nodes.len())
-            .ok()
-            .filter(|id| *id != NONE)?;
+        if self.nodes.len() >= MAX_NODES {
+            return None;
+        }
+        let id = NodeId::try_from(self.nodes.len()).ok()?;
         let key = match new.key {
             Key::Root => KeyRef::Root,
             Key::Index(index) => KeyRef::Index(index),

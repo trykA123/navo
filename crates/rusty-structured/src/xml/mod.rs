@@ -3,7 +3,9 @@ mod index;
 use quick_xml::events::{BytesRef, BytesStart, Event};
 use quick_xml::{Reader, XmlVersion};
 
-pub use index::{Entry, XmlIndex, attach_children, build_index, scan_children};
+pub use index::{
+    Children, Entry, MAX_ENTRIES, XmlIndex, attach_children, build_index, scan_children,
+};
 
 use crate::ParseError;
 use crate::preview::{PREVIEW_CHARS, squeeze_into};

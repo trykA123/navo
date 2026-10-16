@@ -106,7 +106,7 @@ pub fn range(location: &Location, offset: u64, len: usize) -> Result<Vec<u8>, St
     file.seek(SeekFrom::Start(offset))
         .map_err(|error| format!("Cannot read it: {error}"))?;
     let mut bytes = Vec::with_capacity(len.min(MAX_RANGE));
-    file.take(len as u64)
+    file.take(len.min(MAX_RANGE) as u64)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("Cannot read it: {error}"))?;
     Ok(bytes)

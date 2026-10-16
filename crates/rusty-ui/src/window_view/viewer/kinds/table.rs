@@ -21,6 +21,7 @@ fn big(head: &[u8]) -> TableLoad {
             header,
             rows: Vec::new(),
             columns,
+            widest: columns,
         },
         dialect,
     }

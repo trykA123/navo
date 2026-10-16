@@ -7,7 +7,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use gpui_kit::{AnyView, FocusHandle};
-use rusty_structured::table::{Dialect, Table, column_widths};
+use rusty_structured::table::{Dialect, MAX_COLUMNS, Table, column_widths};
 
 pub(super) use keys::bind_keys;
 
@@ -42,7 +42,7 @@ pub(in crate::window_view::viewer) struct TableView {
     focus: FocusHandle,
     scroll: ListScroll,
     header: Vec<String>,
-    widths: Vec<usize>,
+    widths: Arc<Vec<usize>>,
     dialect: Dialect,
     rows: Rows,
     cursor: (usize, usize),
@@ -64,6 +64,7 @@ impl TableView {
         let sample = table.rows.get(..table.rows.len().min(WIDTH_SAMPLE));
         let widths = column_widths(&table.header, sample.unwrap_or_default(), table.columns);
         let header = table.header.clone();
+        let note = (table.widest > table.columns).then(|| too_wide(table.widest));
         let rows = if is_indexed {
             Rows::Indexed(Box::new(Indexed {
                 skip: u64::from(dialect.has_header),
@@ -82,20 +83,20 @@ impl TableView {
             focus: cx.focus_handle(),
             scroll: ListScroll::new(),
             header,
-            widths,
+            widths: Arc::new(widths),
             dialect,
             rows,
             cursor: (0, 0),
             left: 0,
             sort: None,
             sorting: None,
-            note: None,
+            note,
             page: 1,
             available: None,
             padding: px(0.),
         };
         if let Rows::Indexed(indexed) = &mut view.rows {
-            indexed.job = Some(jobs::start_index(&view.host, view.len, cx));
+            indexed.job = Some(jobs::start_index(&view.host, view.len, view.dialect, cx));
         }
         view
     }
@@ -113,6 +114,15 @@ impl TableView {
         self.note = Some(note.into());
         cx.notify();
     }
+}
+
+fn too_wide(widest: usize) -> SharedString {
+    format!(
+        "Showing {} of {}.",
+        crate::format::bytes(MAX_COLUMNS as u64),
+        crate::format::count(widest as u64, "column", "columns")
+    )
+    .into()
 }
 
 pub(in crate::window_view::viewer) struct TableBody(pub Entity<TableView>);

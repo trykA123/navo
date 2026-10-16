@@ -1,9 +1,13 @@
+mod links;
+
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::component::text::{TextView, TextViewState};
-use gpui_kit::{AnyView, ClickEvent, FocusHandle, KeyBinding, ListOffset, Stateful};
+use gpui_kit::{AnyView, ClickEvent, FocusHandle, KeyBinding, ListOffset, Stateful, WeakEntity};
+use rusty_core::Location;
 
+use super::background::{Job, spawn_job};
 use super::body::{BodyKeys, Host, ViewerBody};
 use super::rich_header::{HeaderParts, header};
 use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
@@ -29,20 +33,25 @@ type Picked = Arc<Mutex<Option<SharedString>>>;
 pub(super) struct MarkdownView {
     title: SharedString,
     len: u64,
+    host: Host,
     focus: FocusHandle,
     state: Entity<TextViewState>,
     picked: Picked,
     note: Option<SharedString>,
+    checking: Option<Job>,
 }
 
 fn picked_link(picked: &Picked) -> Option<SharedString> {
     picked.lock().ok().and_then(|link| link.clone())
 }
 
-fn on_link(picked: Picked) -> impl Fn(&SharedString, &ClickEvent, &mut Window, &mut App) {
+fn on_link(
+    view: WeakEntity<MarkdownView>,
+    picked: Picked,
+) -> impl Fn(&SharedString, &ClickEvent, &mut Window, &mut App) {
     move |url, event, window, cx| {
         if event.is_keyboard() || event.modifiers().secondary() {
-            cx.open_url(url);
+            let _ = view.update(cx, |view, cx| view.follow_link(url, cx));
             return;
         }
         if let Ok(mut link) = picked.lock() {
@@ -53,15 +62,57 @@ fn on_link(picked: Picked) -> impl Fn(&SharedString, &ClickEvent, &mut Window, &
 }
 
 impl MarkdownView {
-    fn new(file: MarkdownFile, host: &Host, cx: &mut Context<Self>) -> Self {
+    fn new(file: MarkdownFile, host: Host, cx: &mut Context<Self>) -> Self {
         Self {
             title: host.title.clone(),
             len: file.len,
+            host,
             focus: cx.focus_handle(),
             state: cx.new(|cx| TextViewState::markdown(&file.text, cx)),
             picked: Picked::default(),
             note: None,
+            checking: None,
         }
+    }
+
+    fn say(&mut self, note: impl Into<SharedString>, cx: &mut Context<Self>) {
+        self.note = Some(note.into());
+        cx.notify();
+    }
+
+    fn follow_link(&mut self, url: &SharedString, cx: &mut Context<Self>) {
+        match links::classify(url) {
+            links::Link::Web => {
+                cx.open_url(url);
+                self.say(format!("Opened {url}"), cx);
+            }
+            links::Link::Local(segments) => match links::resolve(&self.host.location, &segments) {
+                Some(target) => self.open_if_found(target, cx),
+                None => self.say(format!("Cannot open {url}: not a file name."), cx),
+            },
+            links::Link::Refused => {
+                self.say(format!("Not opened: {url} is not a web or file link."), cx)
+            }
+        }
+    }
+
+    fn open_if_found(&mut self, target: Location, cx: &mut Context<Self>) {
+        let head = self.host.hooks.head.clone();
+        self.checking = Some(spawn_job(
+            cx,
+            move |_, send| {
+                let found = head(&target).is_ok();
+                send((target, found));
+            },
+            |view: &mut Self, (target, found): (Location, bool), cx| {
+                view.checking = None;
+                if found {
+                    (view.host.open)(target, cx);
+                } else {
+                    view.say(format!("Not found: {}", target.as_str()), cx);
+                }
+            },
+        ));
     }
 
     fn line(cx: &App) -> Pixels {
@@ -89,11 +140,7 @@ impl MarkdownView {
 
     fn open_link(&mut self, cx: &mut Context<Self>) {
         match picked_link(&self.picked) {
-            Some(url) => {
-                cx.open_url(&url);
-                self.note = Some(format!("Opened {url}").into());
-                cx.notify();
-            }
+            Some(url) => self.follow_link(&url, cx),
             None => cx.propagate(),
         }
     }
@@ -130,7 +177,7 @@ impl Render for MarkdownView {
         };
         let text = TextView::new(&self.state)
             .scrollable(true)
-            .on_link_click(on_link(self.picked.clone()));
+            .on_link_click(on_link(cx.weak_entity(), self.picked.clone()));
         let root = div()
             .id("markdown")
             .key_context(CONTEXT)
@@ -168,7 +215,7 @@ pub(super) struct MarkdownBody(pub Entity<MarkdownView>);
 
 impl MarkdownBody {
     pub(super) fn new(file: MarkdownFile, host: Host, cx: &mut App) -> Self {
-        Self(cx.new(|cx| MarkdownView::new(file, &host, cx)))
+        Self(cx.new(|cx| MarkdownView::new(file, host, cx)))
     }
 
     #[cfg(test)]

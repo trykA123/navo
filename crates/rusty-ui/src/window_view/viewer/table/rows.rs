@@ -7,6 +7,7 @@ use crate::window_view::viewer::background::Job;
 
 pub(super) struct Fetched {
     pub start: u64,
+    pub end: u64,
     pub rows: Vec<Vec<String>>,
 }
 
@@ -64,9 +65,10 @@ impl Rows {
         if indexed.index.is_none() || wanted.is_empty() {
             return false;
         }
-        let covered = indexed.fetched.as_ref().is_some_and(|fetched| {
-            fetched.start <= wanted.start && fetched.start + fetched.rows.len() as u64 >= wanted.end
-        });
+        let covered = indexed
+            .fetched
+            .as_ref()
+            .is_some_and(|fetched| fetched.start <= wanted.start && fetched.end >= wanted.end);
         let asked = indexed
             .fetching
             .as_ref()

@@ -136,7 +136,12 @@ fn a_50_mb_xml_index_stays_small_and_expanding_reads_only_that_range() {
     assert!(seen.len() > 10 && seen.windows(2).all(|pair| pair[0] < pair[1]));
     assert!(index.size_bytes() < 16 * 1024, "{}", index.size_bytes());
     assert_eq!(index.root.name, "AUTOSAR");
-    let children: Vec<u32> = index.top.iter().map(|entry| entry.children).collect();
+    let children: Vec<u32> = index
+        .top
+        .entries
+        .iter()
+        .map(|entry| entry.children)
+        .collect();
     assert_eq!(children, counts);
     assert!(
         reads
@@ -164,24 +169,30 @@ fn expand_the_second_package(
     assert_eq!(lazy.count, counts[1]);
 
     reads.lock().unwrap().clear();
-    let entries = scan_children(read, lazy.span).unwrap();
+    let entries = scan_children(read, lazy.span, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
     let reads_seen = reads.lock().unwrap().clone();
     assert!(!reads_seen.is_empty());
     for (offset, len) in reads_seen {
         assert!(offset >= lazy.span.start && offset + len as u64 <= lazy.span.end);
     }
-    assert_eq!(entries.len(), counts[1] as usize);
-    assert_eq!(entries[3].name, "ELEMENT");
-    assert_eq!(entries[3].attrs, "N=\"3\"");
-    assert_eq!(entries[3].children, 2);
+    let kept = (counts[1] as usize).min(super::MAX_ENTRIES);
+    assert_eq!(entries.entries.len(), kept);
+    assert_eq!(entries.more, u64::from(counts[1]) - kept as u64);
+    assert_eq!(entries.entries[3].name, "ELEMENT");
+    assert_eq!(entries.entries[3].attrs, "N=\"3\"");
+    assert_eq!(entries.entries[3].children, 2);
 
     attach_children(&mut tree, second, &entries);
     assert!(tree.lazy(second).is_none());
     let fourth = tree.children(second).nth(3).unwrap();
     assert_eq!(tree.path(fourth), "/AUTOSAR/AR-PACKAGE[2]/ELEMENT[4]");
     let short = tree.lazy(fourth).unwrap();
-    let names = scan_children(read, short.span).unwrap();
-    assert_eq!(names[0].text, "Signal3");
+    let names = scan_children(read, short.span, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
+    assert_eq!(names.entries[0].text, "Signal3");
 }
 
 #[test]
@@ -206,7 +217,9 @@ fn lazy_nodes_ask_to_load_when_expanded() {
     let Step::Load(node, lazy) = outline.right(&tree) else {
         panic!("a lazy group asks to load");
     };
-    let entries = scan_children(&mut read, lazy.span).unwrap();
+    let entries = scan_children(&mut read, lazy.span, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
     attach_children(&mut tree, node, &entries);
     outline.loaded(&tree, node);
     assert_eq!(outline.rows().len(), 5);
@@ -245,4 +258,74 @@ fn a_cancelled_index_returns_nothing_and_bad_xml_reports_its_line() {
     let error = build_index(&mut read, 15, &mut watch).unwrap_err();
     assert_eq!(error.line, 3, "{error}");
     let _ = Span { start: 0, end: 0 };
+}
+
+fn memory(bytes: &[u8]) -> impl FnMut(u64, usize) -> Result<Vec<u8>, String> + '_ {
+    move |offset, len| {
+        let start = usize::try_from(offset).unwrap().min(bytes.len());
+        Ok(bytes[start..(start + len).min(bytes.len())].to_vec())
+    }
+}
+
+fn index_with(
+    read: &mut dyn FnMut(u64, usize) -> Result<Vec<u8>, String>,
+    len: u64,
+    cancel: bool,
+) -> Result<Option<super::XmlIndex>, crate::ParseError> {
+    let cancel = AtomicBool::new(cancel);
+    let mut progress = |_: u64| {};
+    let mut watch = Watch {
+        cancel: &cancel,
+        progress: &mut progress,
+    };
+    build_index(read, len, &mut watch)
+}
+
+#[test]
+fn a_wide_file_keeps_100_000_entries_per_scan_and_one_more_node() {
+    let mut text = String::from("<r>");
+    text.push_str(&"<b/>".repeat(100_005));
+    text.push_str("</r>");
+    let bytes = text.into_bytes();
+    let mut read = memory(&bytes);
+    let index = index_with(&mut read, bytes.len() as u64, false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(index.root.children, 100_005);
+    assert_eq!(index.top.entries.len(), 100_000);
+    assert_eq!(index.top.more, 5);
+    let tree = index.tree();
+    let root = tree.root().unwrap();
+    assert_eq!(tree.children(root).count(), 100_001);
+    let last = tree.children(root).last().unwrap();
+    assert_eq!(tree.key(last), Key::Name("… 5 more"));
+    let span = Span {
+        start: 0,
+        end: bytes.len() as u64,
+    };
+    let scanned = scan_children(&mut read, span, &AtomicBool::new(false))
+        .unwrap()
+        .unwrap();
+    assert_eq!((scanned.entries.len(), scanned.more), (100_000, 5));
+}
+
+#[test]
+fn cancel_is_seen_on_every_event_in_index_and_child_scans() {
+    let bytes = b"<r><b/><b/><b/></r>".to_vec();
+    let mut read = memory(&bytes);
+    let len = bytes.len() as u64;
+    assert!(index_with(&mut read, len, true).unwrap().is_none());
+    let span = Span { start: 0, end: len };
+    let scanned = scan_children(&mut read, span, &AtomicBool::new(true)).unwrap();
+    assert!(scanned.is_none());
+}
+
+#[test]
+fn a_text_node_over_16_mb_stops_the_index_with_an_error() {
+    let mut bytes = b"<r><b>".to_vec();
+    bytes.resize(bytes.len() + 17 * 1024 * 1024, b'x');
+    bytes.extend_from_slice(b"</b></r>");
+    let mut read = memory(&bytes);
+    let error = index_with(&mut read, bytes.len() as u64, false).unwrap_err();
+    assert!(error.message.contains("16 MB"), "{error}");
 }

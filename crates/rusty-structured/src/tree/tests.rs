@@ -196,6 +196,7 @@ fn a_filter_shows_matching_keys_with_their_parents_and_clearing_reveals_the_pick
     let tree = parse_json(STORE.as_bytes()).unwrap();
     let mut outline = Outline::new(&tree);
     outline.set_filter(&tree, "PRICE");
+    assert_eq!(outline.matching(), 2);
     assert_eq!(
         shown(&tree, &outline),
         [
@@ -229,4 +230,34 @@ fn moves_stay_inside_the_rows() {
     assert_eq!(outline.cursor(), 0);
     outline.move_by(50);
     assert_eq!(outline.cursor(), 2);
+}
+
+#[test]
+fn a_json_array_over_four_million_values_is_refused_as_too_many() {
+    let mut text = String::with_capacity(8_000_010);
+    text.push('[');
+    text.push_str(&"0,".repeat(4_000_000));
+    text.push_str("0]");
+    let error = parse_json(text.as_bytes()).unwrap_err();
+    assert!(error.message.contains("too many values"), "{error}");
+}
+
+#[test]
+fn a_filter_built_apart_from_the_outline_shows_its_rows_count_and_first_match() {
+    let tree = parse_json(STORE.as_bytes()).unwrap();
+    let mut outline = Outline::new(&tree);
+    outline.show_filtered(Outline::filtered(&tree, "title"));
+    assert_eq!(outline.filter(), "title");
+    assert_eq!(outline.matching(), 2);
+    assert_eq!(
+        tree.path(outline.selected().unwrap()),
+        "$.store.book[0].title"
+    );
+}
+
+#[test]
+fn an_xml_path_numbers_only_repeated_names() {
+    let tree = crate::xml::parse_xml(b"<r><a/><b/><a/><c/></r>").unwrap();
+    let paths: Vec<String> = tree.ids().map(|id| tree.path(id)).collect();
+    assert_eq!(paths, ["/r", "/r/a[1]", "/r/b", "/r/a[2]", "/r/c"]);
 }

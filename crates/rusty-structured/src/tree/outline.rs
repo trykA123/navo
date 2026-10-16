@@ -1,4 +1,5 @@
-use super::{Key, Lazy, NodeId, Tree};
+use super::filter::Filtered;
+use super::{Lazy, NodeId, Tree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Row {
@@ -18,20 +19,7 @@ pub struct Outline {
     open: Vec<bool>,
     cursor: usize,
     filter: String,
-}
-
-fn matches(key: Key<'_>, needle: &str) -> bool {
-    let Key::Name(name) = key else {
-        return false;
-    };
-    if needle.is_ascii() {
-        let (hay, needle) = (name.as_bytes(), needle.as_bytes());
-        return needle.is_empty()
-            || hay
-                .windows(needle.len())
-                .any(|window| window.eq_ignore_ascii_case(needle));
-    }
-    name.to_lowercase().contains(&needle.to_lowercase())
+    matching: usize,
 }
 
 impl Outline {
@@ -305,33 +293,35 @@ impl Outline {
     }
 
     pub fn set_filter(&mut self, tree: &Tree, text: &str) {
-        let keep = self.selected();
-        self.filter = text.to_owned();
-        if self.filter.is_empty() {
-            if let Some(node) = keep {
-                self.reveal(tree, node);
-            }
-            self.rebuild(tree);
-            self.cursor = keep.and_then(|node| self.row_of(node)).unwrap_or(0);
+        if !text.is_empty() {
+            self.show_filtered(Self::filtered(tree, text));
             return;
         }
-        self.rows = filtered_rows(tree, &self.filter);
-        self.cursor = self
-            .rows
-            .iter()
-            .position(|row| matches(tree.key(row.node), &self.filter))
-            .unwrap_or(0);
+        let keep = self.selected();
+        self.filter.clear();
+        self.matching = 0;
+        if let Some(node) = keep {
+            self.reveal(tree, node);
+        }
+        self.rebuild(tree);
+        self.cursor = keep.and_then(|node| self.row_of(node)).unwrap_or(0);
     }
 
     #[must_use]
-    pub fn matching(&self, tree: &Tree) -> usize {
-        if self.filter.is_empty() {
-            return 0;
-        }
-        self.rows
-            .iter()
-            .filter(|row| matches(tree.key(row.node), &self.filter))
-            .count()
+    pub fn filtered(tree: &Tree, text: &str) -> Filtered {
+        Filtered::new(tree, text)
+    }
+
+    pub fn show_filtered(&mut self, filtered: Filtered) {
+        self.filter = filtered.filter;
+        self.rows = filtered.rows;
+        self.cursor = filtered.cursor;
+        self.matching = filtered.matching;
+    }
+
+    #[must_use]
+    pub fn matching(&self) -> usize {
+        self.matching
     }
 
     fn reveal(&mut self, tree: &Tree, node: NodeId) {
@@ -341,44 +331,4 @@ impl Outline {
             at = parent;
         }
     }
-}
-
-fn filtered_rows(tree: &Tree, filter: &str) -> Vec<Row> {
-    let mut keep = vec![false; tree.len()];
-    for id in tree.ids() {
-        if !matches(tree.key(id), filter) {
-            continue;
-        }
-        let mut at = Some(id);
-        while let Some(node) = at {
-            let Some(slot) = keep.get_mut(node as usize) else {
-                break;
-            };
-            if *slot {
-                break;
-            }
-            *slot = true;
-            at = tree.parent(node);
-        }
-    }
-    let Some(root) = tree.root() else {
-        return Vec::new();
-    };
-    let is_kept = |id: NodeId| keep.get(id as usize).copied().unwrap_or(false);
-    let mut rows = Vec::new();
-    let mut stack = vec![(root, 0u16)];
-    while let Some((at, depth)) = stack.pop() {
-        if !is_kept(at) {
-            continue;
-        }
-        rows.push(Row { node: at, depth });
-        let children: Vec<NodeId> = tree.children(at).filter(|id| is_kept(*id)).collect();
-        stack.extend(
-            children
-                .into_iter()
-                .rev()
-                .map(|child| (child, depth.saturating_add(1))),
-        );
-    }
-    rows
 }

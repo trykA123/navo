@@ -8,6 +8,7 @@ use super::FileHooks;
 use crate::prelude::*;
 
 pub type Key = (&'static str, &'static str);
+pub type OpenFile = Rc<dyn Fn(Location, &mut App)>;
 
 pub enum BodyKeys {
     Modal(Vec<Key>),
@@ -20,6 +21,7 @@ pub struct Host {
     pub location: Location,
     pub hooks: FileHooks,
     pub on_saved: Rc<dyn Fn(&mut App)>,
+    pub open: OpenFile,
 }
 
 pub struct Attach {

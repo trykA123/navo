@@ -29,16 +29,22 @@ fn json_segment(out: &mut String, key: Key<'_>) {
 
 fn xml_position(tree: &Tree, id: NodeId, name: &str) -> Option<usize> {
     let parent = tree.parent(id)?;
-    let same: Vec<NodeId> = tree
-        .children(parent)
-        .filter(|sibling| tree.key(*sibling) == Key::Name(name))
-        .collect();
-    if same.len() < 2 {
-        return None;
+    let mut before = 0;
+    let mut passed = false;
+    for sibling in tree.children(parent) {
+        if sibling == id {
+            passed = true;
+            if before > 0 {
+                break;
+            }
+        } else if tree.key(sibling) == Key::Name(name) {
+            if passed {
+                return Some(1);
+            }
+            before += 1;
+        }
     }
-    same.iter()
-        .position(|sibling| *sibling == id)
-        .map(|at| at + 1)
+    (before > 0).then_some(before + 1)
 }
 
 fn xml_segment(out: &mut String, tree: &Tree, id: NodeId) {

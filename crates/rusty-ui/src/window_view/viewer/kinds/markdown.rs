@@ -1,6 +1,8 @@
+mod nesting;
+
 use rusty_core::Location;
 
-use super::{EDIT_LIMIT, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Declined, EDIT_LIMIT, Loaded, Slot, Sniff, ViewerKind, named};
 use crate::prelude::*;
 use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
@@ -9,6 +11,7 @@ use crate::window_view::viewer::markdown::{MarkdownBody, MarkdownFile};
 const MARKDOWN: u8 = 70;
 const EXTENSIONS: [&str; 2] = ["md", "markdown"];
 const TOO_LARGE: &str = "Over 16 MB: shown as text, not rendered.";
+const TOO_DEEP: &str = "Nested over 1,000 levels deep: shown as text, not rendered.";
 
 pub(super) struct MarkdownKind;
 
@@ -50,6 +53,9 @@ impl ViewerKind for MarkdownKind {
         sniff: &Sniff<'_>,
     ) -> Result<Loaded, String> {
         let file = (hooks.read)(location)?;
+        if nesting::is_too_deep(&file.text) {
+            return Ok(Box::new(Declined(TOO_DEEP)));
+        }
         Ok(Box::new(MarkdownFile {
             text: file.text,
             len: sniff.len,

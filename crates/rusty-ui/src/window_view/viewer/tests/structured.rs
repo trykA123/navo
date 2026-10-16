@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
@@ -70,6 +71,12 @@ fn open_named(
     (window, view, log)
 }
 
+fn wait_for_filter(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<FerriteWindow>) {
+    cx.executor().advance_clock(Duration::from_secs(1));
+    settle(cx, view);
+    redraw(cx, window);
+}
+
 const STORE: &[u8] =
     br#"{"store": {"book": [{"title": "Sayings"}, {"title": "Sword"}]}, "name": "shop"}"#;
 
@@ -104,11 +111,14 @@ fn star_minus_and_typing_filter_the_tree_and_escape_steps_back(cx: &mut TestAppC
     for key in ["t", "i", "t"] {
         press(cx, window, &view, key);
     }
+    wait_for_filter(cx, window, &view);
     assert_eq!(text_of(cx, window, "filter"), "Filter tit, 2 items");
     assert_eq!(text_of(cx, window, "tree-path"), "$.store.book[0].title");
     press(cx, window, &view, "n");
+    wait_for_filter(cx, window, &view);
     assert_eq!(text_of(cx, window, "filter"), "Filter titn, 0 items");
     press(cx, window, &view, "backspace");
+    wait_for_filter(cx, window, &view);
     press(cx, window, &view, "escape");
     assert_eq!(text_of(cx, window, "tree-path"), "$.store.book[0].title");
     assert!(super::super::super::tests::viewer_open(cx, &view));
@@ -259,4 +269,77 @@ fn f3_on_markdown_renders_the_heading_and_1_shows_the_source(cx: &mut TestAppCon
     press(cx, window, &view, "1");
     assert!(has_editor(cx, &view));
     assert!(editor_text(cx, &view).starts_with("# Release notes"));
+}
+
+#[gpui_kit::test]
+fn typing_a_filter_waits_before_filtering_the_tree(cx: &mut TestAppContext) {
+    let (window, view, _) = open_named(cx, "shop.json", Setup::new(STORE.to_vec()));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "*");
+    press(cx, window, &view, "t");
+    assert_eq!(text_of(cx, window, "filter"), "Filter t, 0 items");
+    wait_for_filter(cx, window, &view);
+    assert_eq!(text_of(cx, window, "filter"), "Filter t, 3 items");
+}
+
+fn opens_as_text_with_a_depth_note(cx: &mut TestAppContext, name: &str, source: Vec<u8>) {
+    let (window, view, _) = open_named(cx, name, Setup::new(source));
+    assert!(has_editor(cx, &view), "{name} opens in the text view");
+    let note = text_of(cx, window, "viewer-message");
+    assert!(note.contains("1,000 levels"), "{note}");
+}
+
+#[gpui_kit::test]
+fn markdown_with_50_000_stars_around_a_word_opens_as_text(cx: &mut TestAppContext) {
+    let source = format!("{}x{}\n", "*".repeat(50_000), "*".repeat(50_000));
+    opens_as_text_with_a_depth_note(cx, "stars.md", source.into_bytes());
+}
+
+#[gpui_kit::test]
+fn markdown_with_a_1_500_level_list_opens_as_text(cx: &mut TestAppContext) {
+    let source: String = (0..1_500)
+        .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
+        .collect();
+    opens_as_text_with_a_depth_note(cx, "list.md", source.into_bytes());
+}
+
+#[gpui_kit::test]
+fn a_csv_wider_than_4096_columns_says_how_many_are_shown(cx: &mut TestAppContext) {
+    let line = vec!["1"; 5000].join(",");
+    let source = format!("{line}\n{line}\n");
+    let (window, _, _) = open_named(cx, "wide.csv", Setup::new(source.into_bytes()));
+    let status = text_of(cx, window, "table-status");
+    assert!(status.contains("4,096 of 5,000 columns"), "{status}");
+}
+
+#[gpui_kit::test]
+fn indexed_rows_wider_than_the_first_record_widen_the_header(cx: &mut TestAppContext) {
+    let setup = Setup {
+        len: Some(rusty_structured::SMALL_LIMIT + 1),
+        ..Setup::new(b"name,qty\nPear,10,ripe,green,local\n".to_vec())
+    };
+    let (window, _, _) = open_named(cx, "wide.csv", setup);
+    assert_eq!(label(cx, window, ("table-head", 4)), "E");
+    assert_eq!(
+        label(cx, window, ("table-row", 0)),
+        "1: Pear, 10, ripe, green, local"
+    );
+}
+
+#[gpui_kit::test]
+fn a_short_row_fetch_is_not_asked_again_on_every_frame(cx: &mut TestAppContext) {
+    let mut bytes = b"name,qty\n".to_vec();
+    bytes.resize(bytes.len() + 9 * 1024 * 1024, b'x');
+    bytes.extend_from_slice(b",1\nFig,2\n");
+    let setup = Setup {
+        len: Some(rusty_structured::SMALL_LIMIT + 1),
+        ..Setup::new(bytes)
+    };
+    let (window, view, log) = open_named(cx, "huge-row.csv", setup);
+    log.lock().expect("reads").clear();
+    for _ in 0..3 {
+        redraw(cx, window);
+        settle(cx, &view);
+    }
+    assert!(reads(&log).is_empty(), "{:?}", reads(&log));
 }

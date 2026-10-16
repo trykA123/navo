@@ -6,7 +6,7 @@ use rusty_core::Location;
 
 use super::kinds::IMAGE_ID;
 use super::modes::Shown;
-use super::{FileHooks, Head, Kind, Kinds, Loaded, Sniff, Viewer};
+use super::{Declined, FileHooks, Head, Kind, Kinds, Loaded, Slot, Sniff, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
@@ -29,6 +29,43 @@ pub(super) fn load_while_alive(
     load()
 }
 
+pub(super) struct Picked {
+    pub kind: Kind,
+    pub loaded: Result<Loaded, String>,
+    pub note: Option<&'static str>,
+}
+
+pub(super) fn load_or_text(
+    kinds: &[Kind],
+    kind: Kind,
+    load: impl Fn(&Kind) -> Result<Loaded, String>,
+) -> Picked {
+    let loaded = load(&kind);
+    let declined = match &loaded {
+        Ok(loaded) => loaded.downcast_ref::<Declined>().map(|declined| declined.0),
+        Err(_) => None,
+    };
+    let Some(note) = declined else {
+        return Picked {
+            kind,
+            loaded,
+            note: None,
+        };
+    };
+    match kinds.iter().find(|kind| kind.slot() == Slot::Text) {
+        Some(text) => Picked {
+            kind: text.clone(),
+            loaded: load(text),
+            note: Some(note),
+        },
+        None => Picked {
+            kind,
+            loaded: Err(note.to_owned()),
+            note: None,
+        },
+    }
+}
+
 pub(super) struct Opening {
     pub is_slow: bool,
     _alive: Arc<()>,
@@ -39,15 +76,27 @@ pub(super) struct Opening {
 pub(super) struct Opened {
     head: Head,
     kinds: Vec<Kind>,
-    kind: Kind,
-    loaded: Result<Loaded, String>,
-    note: Option<&'static str>,
+    picked: Picked,
 }
 
 pub(super) struct Request {
     pub hooks: FileHooks,
     pub location: Location,
     pub name: String,
+}
+
+impl Request {
+    pub(super) fn loader<'a>(
+        &'a self,
+        sniff: &'a Sniff<'_>,
+        alive: &'a Weak<()>,
+    ) -> impl Fn(&Kind) -> Result<Loaded, String> + 'a {
+        move |kind| {
+            load_while_alive(alive, kind, || {
+                kind.load(&self.hooks, &self.location, sniff)
+            })
+        }
+    }
 }
 
 fn sniff_and_load(request: &Request, kinds: &Kinds, alive: &Weak<()>) -> Result<Opened, String> {
@@ -62,16 +111,12 @@ fn sniff_and_load(request: &Request, kinds: &Kinds, alive: &Weak<()>) -> Result<
         .first()
         .cloned()
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
-    let loaded = load_while_alive(alive, &kind, || {
-        kind.load(&request.hooks, &request.location, &sniff)
-    });
-    let note = kinds.declined(&sniff);
+    let mut picked = load_or_text(&chosen, kind, request.loader(&sniff, alive));
+    picked.note = picked.note.or_else(|| kinds.declined(&sniff));
     Ok(Opened {
         head,
         kinds: chosen,
-        kind,
-        loaded,
-        note,
+        picked,
     })
 }
 
@@ -156,14 +201,10 @@ impl FerriteWindow {
                 viewer.head = opened.head;
                 viewer.kinds = opened.kinds;
                 let shown = Shown {
-                    kind: opened.kind,
-                    loaded: opened.loaded,
+                    picked: opened.picked,
                     edit: false,
                 };
                 self.show_loaded(shown, window, cx);
-                if let (Some(note), Some(viewer)) = (opened.note, self.viewer.as_mut()) {
-                    viewer.say(note, cx);
-                }
             }
             Err(message) => {
                 viewer.opening = None;

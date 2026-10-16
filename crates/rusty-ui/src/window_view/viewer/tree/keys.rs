@@ -75,17 +75,6 @@ impl TreeView {
         self.follow(step, cx);
     }
 
-    fn type_char(&mut self, ch: char, cx: &mut Context<Self>) {
-        let Some(ready) = self.ready_mut() else {
-            return;
-        };
-        let mut filter = ready.outline.filter().to_owned();
-        filter.push(ch);
-        ready.outline.set_filter(&ready.tree, &filter);
-        self.scroll.scroll_to_top(0);
-        self.follow(rusty_structured::Step::Done, cx);
-    }
-
     fn type_or_pass(&mut self, ch: char, cx: &mut Context<Self>) {
         if self.is_filtering() {
             self.type_char(ch, cx);
@@ -112,34 +101,16 @@ impl TreeView {
         }
     }
 
-    fn filter_back(&mut self, cx: &mut Context<Self>) {
-        let Some(ready) = self
-            .ready_mut()
-            .filter(|ready| !ready.outline.filter().is_empty())
-        else {
-            cx.propagate();
-            return;
-        };
-        let mut filter = ready.outline.filter().to_owned();
-        filter.pop();
-        ready.outline.set_filter(&ready.tree, &filter);
-        self.follow(rusty_structured::Step::Done, cx);
-    }
-
     fn back(&mut self, cx: &mut Context<Self>) {
-        if let Some(ready) = self
-            .ready_mut()
-            .filter(|ready| !ready.outline.filter().is_empty())
-        {
-            ready.outline.set_filter(&ready.tree, "");
-            self.follow(rusty_structured::Step::Done, cx);
+        if self.is_filtering() {
+            self.clear_filter(cx);
         } else if !self.stop_indexing(cx) {
             cx.propagate();
         }
     }
 
     fn copy_path(&mut self, cx: &mut Context<Self>) {
-        if let Some(path) = self.selected_path() {
+        if let Some(path) = self.path.clone() {
             cx.write_to_clipboard(ClipboardItem::new_string(path.to_string()));
             self.set_note(format!("Copied {path}"), cx);
         }

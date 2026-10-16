@@ -179,3 +179,14 @@ fn bytes_reads_a_whole_file_up_to_the_limit() {
     let error = bytes(&at(&file), 3).unwrap_err();
     assert!(error.starts_with("Too large"), "{error}");
 }
+
+#[test]
+fn range_never_reads_more_than_its_cap_whatever_length_is_asked() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("sparse.bin");
+    let handle = fs::File::create(&file).unwrap();
+    handle.set_len(super::MAX_RANGE as u64 + 4096).unwrap();
+    drop(handle);
+    let bytes = super::range(&at(&file), 0, usize::MAX).unwrap();
+    assert_eq!(bytes.len(), super::MAX_RANGE);
+}
