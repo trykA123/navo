@@ -3,3 +3,7 @@ fail-fast = false
 
 [profile.ci.junit]
 path = "junit.xml"
+
+[[profile.ci.overrides]]
+filter = "binary(shell_menu_windows)"
+success-output = "final"
