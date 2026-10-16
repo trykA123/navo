@@ -4,7 +4,7 @@ use rusty_core::Location;
 use rusty_core::encoding::TextEncoding;
 use rusty_ui::window_view::{Save, SaveError};
 
-use super::{line_endings, mostly_crlf, read, write};
+use super::{bytes, line_endings, mostly_crlf, read, write};
 
 mod encodings;
 
@@ -157,4 +157,14 @@ fn a_trailing_dot_name_is_read_and_saved_as_itself() {
         fs::read_to_string(exact(&dir.path().join("report."))).unwrap(),
         "changed\n"
     );
+}
+
+#[test]
+fn bytes_reads_a_whole_file_up_to_the_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("dot.png");
+    fs::write(&file, [0x89, b'P', b'N', b'G']).unwrap();
+    assert_eq!(bytes(&at(&file), 4).unwrap(), [0x89, b'P', b'N', b'G']);
+    let error = bytes(&at(&file), 3).unwrap_err();
+    assert!(error.starts_with("Too large"), "{error}");
 }

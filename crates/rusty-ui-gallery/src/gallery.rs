@@ -3,10 +3,11 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::PagedView;
+use rusty_ui::window_view::{ImageView, PagedView};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
+use crate::image_sample;
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
@@ -22,10 +23,11 @@ pub enum Page {
     Drives,
     TypedPath,
     Marks,
+    Image,
 }
 
 impl Page {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -34,18 +36,20 @@ impl Page {
         Self::Drives,
         Self::TypedPath,
         Self::Marks,
+        Self::Image,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Primitives => "Primitives",
+            Self::Primitives => "Parts",
             Self::Pane => "Pane",
             Self::Operate => "Operate",
             Self::Hex => "Hex",
-            Self::PagedText => "Paged text",
+            Self::PagedText => "Text",
             Self::Drives => "Drives",
             Self::TypedPath => "Path",
             Self::Marks => "Marks",
+            Self::Image => "Image",
         }
     }
 }
@@ -60,6 +64,7 @@ pub struct Gallery {
     drives: Entity<DrivesPage>,
     typed_path: Entity<DrivesPage>,
     marks: Option<Entity<PagedView>>,
+    image: Option<Entity<ImageView>>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -78,6 +83,7 @@ impl Gallery {
             drives: cx.new(|cx| DrivesPage::new(Shows::Menu, cx)),
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             marks: None,
+            image: image_sample::image_view(cx).ok(),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -88,6 +94,9 @@ impl Gallery {
     pub fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
         self.mode = mode;
         tokens::apply(mode, cx);
+        if let Some(image) = &self.image {
+            image.update(cx, |image, cx| image.show_info(mode == Mode::Dark, cx));
+        }
         cx.notify();
     }
 
@@ -183,6 +192,7 @@ impl Render for Gallery {
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
+            Page::Image => root.children(self.image.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }

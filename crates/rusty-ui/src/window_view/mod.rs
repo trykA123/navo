@@ -36,6 +36,7 @@ pub use viewer::{
     Key, Kind, Kinds, Loaded, MemoryLink, Paged, PagedKind, PagedView, Reopen, Save, SaveError,
     SharedSource, Slot, Sniff, ViewerBody, ViewerKind,
 };
+pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, ReadBytes, decode_image};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 

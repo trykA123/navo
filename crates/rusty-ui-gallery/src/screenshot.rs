@@ -34,6 +34,7 @@ fn file_name(page: Page, mode: Mode) -> String {
         Page::Drives => "p14-drives",
         Page::TypedPath => "p14-path",
         Page::Marks => "p15-marks",
+        Page::Image => "p15-image",
     };
     let mode = match mode {
         Mode::Light => "light",

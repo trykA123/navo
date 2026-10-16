@@ -1,7 +1,7 @@
 use gpui_kit::KeyBinding;
 
 use super::search::{FIND_ALL_CONTEXT, FIND_CONTEXT};
-use super::{CONTEXT, PAGED_CONTEXT};
+use super::{CONTEXT, IMAGE_CONTEXT, PAGED_CONTEXT};
 use crate::prelude::*;
 
 gpui_kit::actions!(
@@ -54,6 +54,11 @@ gpui_kit::actions!(
         ListDown,
         ListGo,
         ListClose,
+        FitImage,
+        ActualSize,
+        ZoomIn,
+        ZoomOut,
+        ToggleInfo,
     ]
 );
 
@@ -74,6 +79,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", FindOnEnter, context),
         KeyBinding::new("n", NextFile, context),
         KeyBinding::new("p", PreviousFile, context),
+        KeyBinding::new("space", NextFile, context),
+        KeyBinding::new("backspace", PreviousFile, context),
         KeyBinding::new("up", RowUp, context),
         KeyBinding::new("down", RowDown, context),
         KeyBinding::new("pageup", PageUp, context),
@@ -88,6 +95,21 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
     ]);
     bind_marking_keys(cx);
+    bind_image_keys(cx);
+}
+
+fn bind_image_keys(cx: &mut App) {
+    let context = Some(IMAGE_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("0", FitImage, context),
+        KeyBinding::new("ctrl-0", FitImage, context),
+        KeyBinding::new("1", ActualSize, context),
+        KeyBinding::new("+", ZoomIn, context),
+        KeyBinding::new("=", ZoomIn, context),
+        KeyBinding::new("shift-=", ZoomIn, context),
+        KeyBinding::new("-", ZoomOut, context),
+        KeyBinding::new("i", ToggleInfo, context),
+    ]);
 }
 
 fn bind_marking_keys(cx: &mut App) {

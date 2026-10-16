@@ -2,6 +2,7 @@ mod acts;
 mod body;
 mod editor;
 mod files;
+mod image;
 mod keys;
 mod keys_bar;
 mod kinds;
@@ -17,8 +18,10 @@ use rusty_core::Location;
 
 pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, ViewerBody};
 pub use files::{
-    FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
+    FileHooks, FileStamp, FileText, Head, IndexRun, Paged, ReadBytes, Reopen, Save, SaveError,
+    SharedSource,
 };
+pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
 pub use keys::bind_keys;
 use keys::*;
 pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
@@ -31,6 +34,7 @@ use open::Opening;
 
 const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";
+const IMAGE_CONTEXT: &str = "Image";
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
 
 pub(super) struct Viewer {

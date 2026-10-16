@@ -1,6 +1,7 @@
 mod find;
 mod find_all;
 mod follow;
+mod image;
 mod kind;
 mod language;
 mod lister;
@@ -142,6 +143,7 @@ fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, log: &Log) -> Paged {
 
 pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
     let bytes = Arc::new(setup.bytes.clone());
+    let whole = bytes.clone();
     let text = String::from_utf8_lossy(&setup.bytes).into_owned();
     let head = Head {
         bytes: setup.bytes.iter().take(8 * 1024).copied().collect(),
@@ -171,6 +173,7 @@ pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
             Ok(head.clone())
         }),
         paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup, &counters))),
+        bytes: Arc::new(move |_, _| Ok(whole.as_ref().clone())),
         ..FileHooks::none()
     }
 }

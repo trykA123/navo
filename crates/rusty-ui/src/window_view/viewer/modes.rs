@@ -4,7 +4,7 @@ use gpui_kit::FocusHandle;
 use rusty_core::Command;
 
 use super::body::{Attach, Host};
-use super::open::start;
+use super::open::{load_while_alive, start};
 use super::{Kind, Loaded, Slot, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
@@ -165,13 +165,15 @@ impl FerriteWindow {
         let opening = start(
             window,
             cx,
-            move || {
+            move |alive| {
                 let sniff = super::Sniff {
                     head: &sniffed.0.bytes,
                     name: &sniffed.1,
                     len: sniffed.0.len,
                 };
-                loader.load(&request.hooks, &request.location, &sniff)
+                load_while_alive(alive, &loader, || {
+                    loader.load(&request.hooks, &request.location, &sniff)
+                })
             },
             move |view: &mut Self, loaded, window, cx| {
                 view.show_loaded(Shown { kind, loaded, edit }, window, cx);

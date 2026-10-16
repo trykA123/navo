@@ -7,15 +7,20 @@ const FILES: [Key; 2] = [("N", "Next file"), ("P", "Previous file")];
 const SLOTS: [Slot; 3] = [Slot::Text, Slot::Hex, Slot::Rich];
 
 impl Viewer {
-    fn slot_keys(&self, alt: bool) -> Vec<Key> {
+    fn slot_keys(&self, alt: bool, taken: &[Key]) -> Vec<Key> {
         let shown = self.kind.as_ref().map(|kind| kind.id());
+        let is_taken = |key: &str| taken.iter().any(|(used, _)| *used == key);
         SLOTS
             .iter()
             .filter_map(|slot| self.next_in(*slot))
             .filter(|kind| Some(kind.id()) != shown)
             .map(|kind| {
                 let slot = kind.slot();
-                let key = if alt { slot.alt_key() } else { slot.key() };
+                let key = if alt || is_taken(slot.key()) {
+                    slot.alt_key()
+                } else {
+                    slot.key()
+                };
                 (key, kind.name())
             })
             .collect()
@@ -31,7 +36,8 @@ impl Viewer {
         if self.can_start_editing(cx) {
             keys.push(("Ctrl+E", "Edit"));
         }
-        keys.extend(self.slot_keys(editing));
+        let slots = self.slot_keys(editing, &keys);
+        keys.extend(slots);
         if !editing {
             keys.extend(FILES);
         }

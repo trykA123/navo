@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
@@ -21,6 +22,7 @@ pub fn hooks() -> FileHooks {
         write: Arc::new(write),
         head: Arc::new(paged::head),
         paged: Arc::new(paged::paged),
+        bytes: Arc::new(bytes),
         ..FileHooks::none()
     }
 }
@@ -68,6 +70,33 @@ pub fn read(location: &Location) -> Result<FileText, String> {
         stamp,
         encoding: decoded.encoding,
     })
+}
+
+fn too_large(limit: u64) -> String {
+    format!(
+        "Too large to open here (over {} MB).",
+        limit / (1024 * 1024)
+    )
+}
+
+pub fn bytes(location: &Location, limit: u64) -> Result<Vec<u8>, String> {
+    let path = path_of(location)?;
+    let file = File::open(&path).map_err(|error| format!("Cannot open it: {error}"))?;
+    let size = file
+        .metadata()
+        .map_err(|error| format!("Cannot open it: {error}"))?
+        .len();
+    if size > limit {
+        return Err(too_large(limit));
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
+    file.take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Cannot read it: {error}"))?;
+    if bytes.len() as u64 > limit {
+        return Err(too_large(limit));
+    }
+    Ok(bytes)
 }
 
 pub fn mostly_crlf(bytes: &[u8]) -> bool {
