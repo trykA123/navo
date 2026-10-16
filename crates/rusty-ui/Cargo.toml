@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 codebook-tree-sitter-latex = "=0.6.1"
+flate2 = "=1.1.10"
 futures = "0.3.34"
 gpui-kit = { version = "=0.7.3", features = [
   "tree-sitter-astro",
@@ -46,6 +47,17 @@ gpui-kit = { version = "=0.7.3", features = [
   "tree-sitter-yaml",
   "tree-sitter-zig",
 ] }
+image = { version = "=0.25.10", default-features = false, features = [
+  "bmp",
+  "gif",
+  "ico",
+  "jpeg",
+  "png",
+  "tiff",
+  "webp",
+] }
+kamadak-exif = "=0.6.1"
+resvg = "=0.46.0"
 rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
 tree-sitter = "=0.26.13"
