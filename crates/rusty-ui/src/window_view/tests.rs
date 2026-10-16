@@ -19,11 +19,12 @@ mod cards;
 mod drive_fs;
 mod drives;
 mod fkeys;
+mod shell_menu;
 mod typed;
 use crate::browser::Operations;
 use crate::tokens::{self, Mode};
 
-fn two_panes(fs: &FakeFs) -> AppState {
+pub(super) fn two_panes(fs: &FakeFs) -> AppState {
     let mut state = AppState::new(fs.location("home"));
     let _ = apply(
         &mut state,
@@ -59,9 +60,17 @@ fn open_with(
     saves: Rc<Cell<usize>>,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let options = StartOptions {
+        on_save: Rc::new(move |_| saves.set(saves.get() + 1)),
+        ..options_for(fs, state)
+    };
+    open_options(cx, options)
+}
+
+pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
+    StartOptions {
         state,
         provider: fs,
-        on_save: Rc::new(move |_| saves.set(saves.get() + 1)),
+        on_save: Rc::new(|_| {}),
         mode: Mode::Light,
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
@@ -72,8 +81,8 @@ fn open_with(
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
-    };
-    open_options(cx, options)
+        shell_menu: None,
+    }
 }
 
 pub(super) fn open_options(
@@ -87,6 +96,7 @@ pub(super) fn open_options(
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
+        crate::context_menu::bind_keys(cx);
         super::viewer::bind_keys(cx);
         super::bind_keys(cx);
         let window_options = WindowOptions {
@@ -438,6 +448,7 @@ fn editor_window(
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
+        shell_menu: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, log)
@@ -538,6 +549,7 @@ fn viewer_window(
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
+        shell_menu: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, written)

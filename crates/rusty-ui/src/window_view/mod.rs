@@ -7,6 +7,7 @@ mod operate;
 mod pane;
 mod path_edit;
 mod prompt;
+mod shell_menu;
 mod status;
 mod viewer;
 mod waiting;
@@ -34,6 +35,7 @@ pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
 pub use keys::bind_keys;
+pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
     FileText, FontFace, FontView, Head, Host, IndexRun, Key, Kind, Kinds, Load, Loaded, MemoryLink,
@@ -58,6 +60,7 @@ pub struct StartOptions {
     pub view: Option<rusty_core::Location>,
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
+    pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
 }
 
 pub fn run(options: StartOptions) {
@@ -66,6 +69,7 @@ pub fn run(options: StartOptions) {
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
+        crate::context_menu::bind_keys(cx);
         viewer::bind_keys(cx);
         bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
@@ -101,6 +105,9 @@ pub struct FerriteWindow {
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
     held_layer: Option<KeyLayer>,
+    shell_menus: Option<Rc<dyn ShellMenuProvider>>,
+    menu_run: Option<shell_menu::MenuRun>,
+    menu_runs: u64,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -139,6 +146,9 @@ impl FerriteWindow {
             path_edit: None,
             waiting: waiting::Waiting::default(),
             held_layer: None,
+            shell_menus: options.shell_menu,
+            menu_run: None,
+            menu_runs: 0,
             _activation: cx.observe_window_activation(window, |view, window, cx| {
                 view.track_modifiers(window.modifiers(), window, cx);
             }),
@@ -336,6 +346,7 @@ impl Render for FerriteWindow {
             )
             .child(self.fkey_bar(cx))
             .children(dialog)
+            .children(self.shell_menu_view())
     }
 }
 

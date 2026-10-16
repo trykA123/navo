@@ -116,7 +116,7 @@ impl FerriteWindow {
     fn reconnect(&mut self, drive: DriveInfo, window: &mut Window, cx: &mut Context<Self>) {
         let pane = self.browser.state().focused_pane();
         let (Some(letter), Some(remote)) = (drive.letter, drive.remote) else {
-            self.drive_error(pane, "This drive is not connected.".into());
+            self.report_pane_error(pane, "This drive is not connected.".into());
             cx.notify();
             return;
         };
@@ -151,12 +151,12 @@ impl FerriteWindow {
                 self.focus_pane(done.pane);
                 self.apply(&Command::PaneGoDrive { root: done.root }, window, cx);
             }
-            Err(message) => self.drive_error(done.pane, message.into()),
+            Err(message) => self.report_pane_error(done.pane, message.into()),
         }
         cx.notify();
     }
 
-    fn drive_error(&mut self, pane: PaneId, message: SharedString) {
+    pub(super) fn report_pane_error(&mut self, pane: PaneId, message: SharedString) {
         let Some((location, depth)) = self.browser.state().pane(pane).map(|p| {
             let tab = p.active();
             (tab.location().clone(), tab.history().back().len())

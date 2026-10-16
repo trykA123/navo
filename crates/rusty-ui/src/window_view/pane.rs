@@ -220,6 +220,10 @@ impl FerriteWindow {
             .on_list_action(cx.listener(
                 move |this: &mut Self, action: &FileListAction, window, cx| {
                     this.focus_pane(pane);
+                    if let FileListAction::ContextMenu(anchor) = action {
+                        this.open_shell_menu((pane, *anchor), window, cx);
+                        return;
+                    }
                     match action {
                         FileListAction::Open(row) => {
                             this.browser.open_row(*row);
@@ -242,6 +246,7 @@ impl FerriteWindow {
                         FileListAction::Sort(by) => {
                             this.browser.sort_by(*by);
                         }
+                        FileListAction::ContextMenu(_) => {}
                     }
                     this.focus_core_pane(window, cx);
                     cx.notify();

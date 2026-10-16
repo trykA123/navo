@@ -58,6 +58,7 @@ image = { version = "=0.25.10", default-features = false, features = [
 ] }
 kamadak-exif = "=0.6.1"
 markdown = "=1.0.0"
+raw-window-handle = "0.6.2"
 resvg = "=0.46.0"
 rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }

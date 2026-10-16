@@ -96,6 +96,10 @@ impl ContextMenu {
         menu
     }
 
+    pub fn menu(&self) -> &ShellMenu {
+        self.state.menu()
+    }
+
     pub fn query(&self, cx: &App) -> SharedString {
         self.field.read(cx).value()
     }
@@ -105,6 +109,16 @@ impl ContextMenu {
         self.field
             .update(cx, |field, cx| field.set_value(text, window, cx));
         self.state.set_query(query);
+        self.finish(None, cx);
+    }
+
+    pub fn set_menu(&mut self, menu: ShellMenu, cx: &mut Context<Self>) {
+        let stale: Vec<_> = self.icons.drain().collect();
+        for image in stale {
+            cx.drop_image(image, None);
+        }
+        self.icons = ShellIcons::build(&menu);
+        self.state.set_menu(menu);
         self.finish(None, cx);
     }
 

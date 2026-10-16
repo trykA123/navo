@@ -214,6 +214,7 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
+        shell_menu: None,
     };
     let (window, view) = open_options(cx, options);
     Rig {

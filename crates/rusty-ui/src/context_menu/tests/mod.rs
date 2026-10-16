@@ -9,7 +9,7 @@ use gpui_kit::{
     point, px, size,
 };
 use rusty_core::shell_menu::{
-    ActionContext, Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
+    Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
 };
 
 use super::{ContextMenu, ContextMenuEvent, ContextMenuInput};
@@ -58,10 +58,8 @@ fn seven_zip() -> MenuItem {
 }
 
 pub(super) fn zip_menu() -> ShellMenu {
-    let mut items = ferrite_actions(ActionContext {
-        count: 1,
-        one_per_pane: false,
-    });
+    let mut items = ferrite_actions();
+    items[3].enabled = false;
     items.extend([
         MenuItem {
             default: true,
@@ -93,7 +91,7 @@ pub(super) fn zip_menu() -> ShellMenu {
     ShellMenu { items }
 }
 
-pub(super) const SEND_TO: usize = 11;
+pub(super) const SEND_TO: usize = 14;
 
 pub(super) fn window_bounds() -> Bounds<Pixels> {
     Bounds {
