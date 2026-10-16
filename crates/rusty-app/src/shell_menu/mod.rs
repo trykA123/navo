@@ -1,3 +1,4 @@
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
@@ -11,6 +12,8 @@ use rusty_ui::window_view::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSessi
 
 const NOT_LOCAL: &str = "the Windows menu works only on local files";
 const TOO_LONG: &str = "the Windows menu cannot open paths longer than 259 characters";
+const RENAMED: &str = "the Windows menu cannot open names that Windows would change: \
+     a trailing dot or space, or a device name such as NUL";
 const SHELL_MAX: usize = 259;
 const VERBATIM: &str = r"\\?\";
 const VERBATIM_UNC: &str = r"\\?\UNC\";
@@ -39,19 +42,49 @@ fn path_of(location: &Location) -> Result<PathBuf, String> {
 }
 
 fn shell_form(path: PathBuf) -> Result<PathBuf, String> {
-    let Some(text) = path.to_str() else {
-        return Ok(path);
-    };
-    let plain = match text.get(..VERBATIM_UNC.len()) {
-        Some(head) if head.eq_ignore_ascii_case(VERBATIM_UNC) => {
-            format!(r"\\{}", &text[VERBATIM_UNC.len()..])
-        }
-        _ => text.strip_prefix(VERBATIM).unwrap_or(text).to_owned(),
-    };
-    if plain.encode_utf16().count() > SHELL_MAX {
+    let plain = without_verbatim(path.into_os_string());
+    let text = plain.to_string_lossy();
+    if text.encode_utf16().count() > SHELL_MAX {
         return Err(TOO_LONG.to_owned());
     }
+    if text.split(['\\', '/']).any(is_renamed_by_win32) {
+        return Err(RENAMED.to_owned());
+    }
     Ok(PathBuf::from(plain))
+}
+
+fn without_verbatim(path: OsString) -> OsString {
+    let bytes = path.as_encoded_bytes();
+    let starts_with = |head: &str| {
+        bytes
+            .get(..head.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(head.as_bytes()))
+    };
+    let (keep, cut) = if starts_with(VERBATIM_UNC) {
+        (r"\\", VERBATIM_UNC.len())
+    } else if starts_with(VERBATIM) {
+        ("", VERBATIM.len())
+    } else {
+        return path;
+    };
+    // SAFETY: the cut falls right after an ASCII prefix of bytes from `as_encoded_bytes`.
+    let rest = unsafe { OsStr::from_encoded_bytes_unchecked(&bytes[cut..]) };
+    let mut plain = OsString::from(keep);
+    plain.push(rest);
+    plain
+}
+
+fn is_renamed_by_win32(part: &str) -> bool {
+    if part.ends_with(['.', ' ']) {
+        return true;
+    }
+    let stem = part.split('.').next().unwrap_or(part).trim_end_matches(' ');
+    let upper = stem.to_ascii_uppercase();
+    match upper.as_bytes() {
+        b"CON" | b"PRN" | b"AUX" | b"NUL" => true,
+        [b'C', b'O', b'M', digit] | [b'L', b'P', b'T', digit] => (b'1'..=b'9').contains(digit),
+        _ => false,
+    }
 }
 
 fn reply<T: 'static, U>(pending: Pending<T>, map: impl Fn(T) -> U + 'static) -> Reply<U> {
