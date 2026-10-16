@@ -150,23 +150,24 @@ impl FerriteWindow {
     }
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
-        root.on_action(
-            cx.listener(|this: &mut Self, _: &DriveMenuFirst, window, cx| {
-                this.open_drive_menu(0, window, cx);
-            }),
-        )
-        .on_action(
-            cx.listener(|this: &mut Self, _: &DriveMenuSecond, window, cx| {
-                this.open_drive_menu(1, window, cx);
-            }),
-        )
-        .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
-            this.apply(&Command::PaneOpenTab { location: None }, window, cx);
-        }))
-        .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
-            let pane = this.browser.state().focused_pane();
-            this.open_path_edit(pane, cx);
-        }))
+        super::tab_keys::tab_keys(root, cx)
+            .on_action(
+                cx.listener(|this: &mut Self, _: &DriveMenuFirst, window, cx| {
+                    this.open_drive_menu(0, window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this: &mut Self, _: &DriveMenuSecond, window, cx| {
+                    this.open_drive_menu(1, window, cx);
+                }),
+            )
+            .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
+                this.apply(&Command::PaneOpenTab { location: None }, window, cx);
+            }))
+            .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
+                let pane = this.browser.state().focused_pane();
+                this.open_path_edit(pane, cx);
+            }))
     }
 
     fn tabs(

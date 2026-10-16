@@ -9,6 +9,7 @@ mod pane;
 mod path_edit;
 mod prompt;
 mod status;
+mod tab_keys;
 mod viewer;
 mod waiting;
 

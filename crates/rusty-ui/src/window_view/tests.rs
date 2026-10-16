@@ -20,6 +20,7 @@ mod cards;
 mod drive_fs;
 mod drives;
 mod fkeys;
+mod tabs;
 mod typed;
 use crate::browser::Operations;
 use crate::tokens::{self, Mode};
