@@ -1,6 +1,6 @@
 use super::{Settings, SettingsError};
 
-// Keys older builds wrote; they still load, are ignored and drop out on the next save.
+// Keys older builds wrote; they still load and are ignored, and saves leave them in the file.
 const LEGACY_KEYS: [&str; 1] = ["files.show-hidden"];
 
 pub fn parse(text: &str) -> Result<(Settings, Vec<String>), SettingsError> {
