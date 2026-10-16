@@ -57,6 +57,9 @@ impl FerriteWindow {
             return;
         };
         let count = pane.tabs().len();
+        if count == 0 {
+            return;
+        }
         let index = match target {
             Target::Step(step) => {
                 let at = pane.active_index() as isize;
