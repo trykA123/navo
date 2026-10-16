@@ -130,3 +130,67 @@ fn escape_after_enter_cancels(cx: &mut TestAppContext) {
     press(window, "escape", cx);
     assert_eq!(harness.read_with(cx, |h, _| h.cancelled), 1);
 }
+
+fn focused(window: AnyWindowHandle, cx: &mut TestAppContext) -> Vec<&'static str> {
+    cx.update_window(window, |_, window, _| {
+        ["field", "confirm", "cancel"]
+            .into_iter()
+            .filter(|id| {
+                window
+                    .within(DIALOG)
+                    .try_find(*id)
+                    .and_then(|found| found.focused())
+                    == Some(true)
+            })
+            .collect()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn tab_order_is_field_confirm_cancel_and_wraps(cx: &mut TestAppContext) {
+    let (window, _) = open_prompt(cx, rename());
+    for expected in ["confirm", "cancel", "field", "confirm"] {
+        press(window, "tab", cx);
+        assert_eq!(focused(window, cx), [expected]);
+    }
+    press(window, "shift-tab", cx);
+    assert_eq!(focused(window, cx), ["field"]);
+    press(window, "shift-tab", cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+}
+
+#[gpui_kit::test]
+fn the_arrow_keys_move_between_the_buttons(cx: &mut TestAppContext) {
+    let (window, _) = open_prompt(cx, rename());
+    press(window, "tab", cx);
+    press(window, "right", cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+    press(window, "right", cx);
+    assert_eq!(focused(window, cx), ["confirm"]);
+    press(window, "left", cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
+}
+
+#[gpui_kit::test]
+fn enter_and_space_activate_the_focused_button(cx: &mut TestAppContext) {
+    let (window, harness) = open_prompt(cx, rename());
+    press(window, "tab", cx);
+    press(window, "space", cx);
+    assert_eq!(submitted(&harness, cx), ["report.txt"]);
+    press(window, "tab", cx);
+    press(window, "enter", cx);
+    assert_eq!(harness.read_with(cx, |h, _| h.cancelled), 1);
+    press(window, "space", cx);
+    assert_eq!(harness.read_with(cx, |h, _| h.cancelled), 2);
+}
+
+#[gpui_kit::test]
+fn space_and_arrows_still_edit_the_field(cx: &mut TestAppContext) {
+    let (window, harness) = open_prompt(cx, rename());
+    press(window, "left", cx);
+    press(window, "right", cx);
+    press(window, "space", cx);
+    assert_eq!(focused(window, cx), ["field"]);
+    assert!(submitted(&harness, cx).is_empty());
+}

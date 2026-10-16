@@ -6,6 +6,7 @@ mod assets;
 pub mod browser;
 pub mod confirm_dialog;
 pub mod context_menu;
+mod dialog_focus;
 pub mod file_list;
 pub mod fkey_bar;
 mod format;

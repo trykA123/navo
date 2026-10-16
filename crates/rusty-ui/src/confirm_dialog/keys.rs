@@ -3,26 +3,28 @@ use std::rc::Rc;
 use gpui_kit::{App, Div, FocusHandle, InteractiveElement, KeyBinding, Stateful, Window};
 
 use super::Handler;
+use crate::dialog_focus::{self, Contexts, Next, NextButton, Press, Previous, PreviousButton};
 
 pub(super) const CONTEXT: &str = "ConfirmDialog";
 
-gpui_kit::actions!(
-    confirm_dialog,
-    [Dismiss, Activate, FocusNext, FocusPrevious]
-);
+pub(super) const BUTTON: &str = "ConfirmButton";
+
+gpui_kit::actions!(confirm_dialog, [Dismiss]);
 
 pub fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("escape", Dismiss, context),
-        KeyBinding::new("enter", Activate, context),
-        KeyBinding::new("tab", FocusNext, context),
-        KeyBinding::new("shift-tab", FocusPrevious, context),
-    ]);
+    dialog_focus::bind_keys(
+        &Contexts {
+            dialog: CONTEXT,
+            button: BUTTON,
+        },
+        cx,
+    );
+    cx.bind_keys([KeyBinding::new("escape", Dismiss, Some(CONTEXT))]);
 }
 
 pub(super) struct Keys {
     pub stops: Vec<FocusHandle>,
+    pub buttons: Vec<FocusHandle>,
     pub confirm: FocusHandle,
     pub can_confirm: bool,
     pub cancel: FocusHandle,
@@ -50,19 +52,6 @@ impl Keys {
             self.confirm(window, cx);
         }
     }
-
-    fn cycle(&self, forward: bool, window: &mut Window, cx: &mut App) {
-        let count = self.stops.len();
-        let current = self.stops.iter().position(|stop| stop.is_focused(window));
-        let next = match (current, forward) {
-            (Some(index), true) => (index + 1) % count,
-            (Some(index), false) => (index + count - 1) % count,
-            (None, _) => 0,
-        };
-        if let Some(stop) = self.stops.get(next) {
-            window.focus(stop, cx);
-        }
-    }
 }
 
 pub(super) fn register(root: Stateful<Div>, keys: &Rc<Keys>) -> Stateful<Div> {
@@ -70,9 +59,19 @@ pub(super) fn register(root: Stateful<Div>, keys: &Rc<Keys>) -> Stateful<Div> {
     let activate = keys.clone();
     let next = keys.clone();
     let previous = keys.clone();
+    let next_button = keys.clone();
+    let previous_button = keys.clone();
     root.key_context(CONTEXT)
         .on_action(move |_: &Dismiss, window, cx| dismiss.cancel(window, cx))
-        .on_action(move |_: &Activate, window, cx| activate.activate(window, cx))
-        .on_action(move |_: &FocusNext, window, cx| next.cycle(true, window, cx))
-        .on_action(move |_: &FocusPrevious, window, cx| previous.cycle(false, window, cx))
+        .on_action(move |_: &Press, window, cx| activate.activate(window, cx))
+        .on_action(move |_: &Next, window, cx| dialog_focus::cycle(&next.stops, true, window, cx))
+        .on_action(move |_: &Previous, window, cx| {
+            dialog_focus::cycle(&previous.stops, false, window, cx);
+        })
+        .on_action(move |_: &NextButton, window, cx| {
+            dialog_focus::cycle(&next_button.buttons, true, window, cx);
+        })
+        .on_action(move |_: &PreviousButton, window, cx| {
+            dialog_focus::cycle(&previous_button.buttons, false, window, cx);
+        })
 }
