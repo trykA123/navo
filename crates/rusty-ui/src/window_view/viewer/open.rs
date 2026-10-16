@@ -4,6 +4,7 @@ use std::time::Duration;
 use gpui_kit::Task;
 use rusty_core::Location;
 
+use super::kinds::IMAGE_ID;
 use super::modes::Shown;
 use super::{FileHooks, Head, Kind, Kinds, Loaded, Sniff, Viewer};
 use crate::prelude::*;
@@ -13,13 +14,15 @@ const SLOW_OPEN: Duration = Duration::from_secs(2);
 
 const CLOSED: &str = "The viewer closed before the file opened.";
 
-static LOADING: Mutex<()> = Mutex::new(());
+static IMAGE_LOADING: Mutex<()> = Mutex::new(());
 
 pub(super) fn load_while_alive(
     alive: &Weak<()>,
+    kind: &Kind,
     load: impl FnOnce() -> Result<Loaded, String>,
 ) -> Result<Loaded, String> {
-    let _turn = LOADING.lock().unwrap_or_else(PoisonError::into_inner);
+    let _turn = (kind.id() == IMAGE_ID)
+        .then(|| IMAGE_LOADING.lock().unwrap_or_else(PoisonError::into_inner));
     if alive.strong_count() == 0 {
         return Err(CLOSED.to_owned());
     }
@@ -58,7 +61,7 @@ fn sniff_and_load(request: &Request, kinds: &Kinds, alive: &Weak<()>) -> Result<
         .first()
         .cloned()
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
-    let loaded = load_while_alive(alive, || {
+    let loaded = load_while_alive(alive, &kind, || {
         kind.load(&request.hooks, &request.location, &sniff)
     });
     Ok(Opened {

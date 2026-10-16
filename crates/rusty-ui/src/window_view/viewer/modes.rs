@@ -169,7 +169,7 @@ impl FerriteWindow {
                     name: &sniffed.1,
                     len: sniffed.0.len,
                 };
-                load_while_alive(alive, || {
+                load_while_alive(alive, &loader, || {
                     loader.load(&request.hooks, &request.location, &sniff)
                 })
             },
