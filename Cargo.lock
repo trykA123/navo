@@ -6250,6 +6250,7 @@ version = "0.0.1"
 dependencies = [
  "chrono",
  "codebook-tree-sitter-latex",
+ "flate2",
  "futures",
  "gpui-kit",
  "image",

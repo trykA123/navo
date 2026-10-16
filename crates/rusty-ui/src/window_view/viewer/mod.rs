@@ -85,6 +85,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", FindOnEnter, context),
         KeyBinding::new("n", NextFile, context),
         KeyBinding::new("p", PreviousFile, context),
+        KeyBinding::new("space", NextFile, context),
+        KeyBinding::new("backspace", PreviousFile, context),
         KeyBinding::new("up", RowUp, context),
         KeyBinding::new("down", RowDown, context),
         KeyBinding::new("pageup", PageUp, context),
@@ -112,8 +114,6 @@ fn bind_image_keys(cx: &mut App) {
         KeyBinding::new("shift-=", ZoomIn, context),
         KeyBinding::new("-", ZoomOut, context),
         KeyBinding::new("i", ToggleInfo, context),
-        KeyBinding::new("space", NextFile, context),
-        KeyBinding::new("backspace", PreviousFile, context),
     ]);
 }
 

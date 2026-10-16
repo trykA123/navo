@@ -69,3 +69,45 @@ fn saving_runs_in_the_background_and_editing_goes_on(cx: &mut TestAppContext) {
     press(cx, window, &view, "escape");
     assert!(viewer_open(cx, &view));
 }
+
+#[test]
+fn loads_run_one_at_a_time_and_skip_viewers_that_closed() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Arc, Weak};
+    use std::time::Duration;
+
+    use crate::window_view::viewer::Loaded;
+    use crate::window_view::viewer::open::load_while_alive;
+
+    let alive = Arc::new(());
+    let running = Arc::new(AtomicUsize::new(0));
+    let most = Arc::new(AtomicUsize::new(0));
+    let threads: Vec<_> = (0..4)
+        .map(|_| {
+            let weak = Arc::downgrade(&alive);
+            let (running, most) = (running.clone(), most.clone());
+            std::thread::spawn(move || {
+                load_while_alive(&weak, || {
+                    let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+                    most.fetch_max(now, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(20));
+                    running.fetch_sub(1, Ordering::SeqCst);
+                    Ok(Box::new(()) as Loaded)
+                })
+                .is_ok()
+            })
+        })
+        .collect();
+    for thread in threads {
+        assert!(thread.join().expect("thread"));
+    }
+    assert_eq!(most.load(Ordering::SeqCst), 1);
+    let closed: Weak<()> = Arc::downgrade(&Arc::new(()));
+    let called = AtomicBool::new(false);
+    let result = load_while_alive(&closed, || {
+        called.store(true, Ordering::SeqCst);
+        Ok(Box::new(()) as Loaded)
+    });
+    assert!(result.is_err());
+    assert!(!called.load(Ordering::SeqCst));
+}

@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::Duration;
 
 use gpui_kit::Task;
@@ -10,8 +11,24 @@ use crate::window_view::FerriteWindow;
 
 const SLOW_OPEN: Duration = Duration::from_secs(2);
 
+const CLOSED: &str = "The viewer closed before the file opened.";
+
+static LOADING: Mutex<()> = Mutex::new(());
+
+pub(super) fn load_while_alive(
+    alive: &Weak<()>,
+    load: impl FnOnce() -> Result<Loaded, String>,
+) -> Result<Loaded, String> {
+    let _turn = LOADING.lock().unwrap_or_else(PoisonError::into_inner);
+    if alive.strong_count() == 0 {
+        return Err(CLOSED.to_owned());
+    }
+    load()
+}
+
 pub(super) struct Opening {
     pub is_slow: bool,
+    _alive: Arc<()>,
     _task: Task<()>,
     _timer: Task<()>,
 }
@@ -29,7 +46,7 @@ pub(super) struct Request {
     pub name: String,
 }
 
-fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
+fn sniff_and_load(request: &Request, kinds: &Kinds, alive: &Weak<()>) -> Result<Opened, String> {
     let head = (request.hooks.head)(&request.location)?;
     let sniff = Sniff {
         head: &head.bytes,
@@ -41,7 +58,9 @@ fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
         .first()
         .cloned()
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
-    let loaded = kind.load(&request.hooks, &request.location, &sniff);
+    let loaded = load_while_alive(alive, || {
+        kind.load(&request.hooks, &request.location, &sniff)
+    });
     Ok(Opened {
         head,
         kinds: chosen,
@@ -53,12 +72,14 @@ fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
 pub(super) fn start<T: Send + 'static>(
     window: &mut Window,
     cx: &mut Context<FerriteWindow>,
-    work: impl FnOnce() -> T + Send + 'static,
+    work: impl FnOnce(&Weak<()>) -> T + Send + 'static,
     done: impl FnOnce(&mut FerriteWindow, T, &mut Window, &mut Context<FerriteWindow>) + 'static,
 ) -> Opening {
     let (sender, receiver) = futures::channel::oneshot::channel();
+    let alive = Arc::new(());
+    let weak = Arc::downgrade(&alive);
     cx.background_spawn(async move {
-        let _ = sender.send(work());
+        let _ = sender.send(work(&weak));
     })
     .detach();
     let task = cx.spawn_in(window, async move |this, cx| {
@@ -73,6 +94,7 @@ pub(super) fn start<T: Send + 'static>(
     });
     Opening {
         is_slow: false,
+        _alive: alive,
         _task: task,
         _timer: timer,
     }
@@ -98,7 +120,7 @@ impl FerriteWindow {
         start(
             window,
             cx,
-            move || sniff_and_load(&request, &kinds),
+            move |alive| sniff_and_load(&request, &kinds, alive),
             Self::file_opened,
         )
     }

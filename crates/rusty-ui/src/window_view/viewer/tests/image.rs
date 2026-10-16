@@ -7,10 +7,10 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, Point, TestAppContext};
 use image::ImageFormat;
 
 use super::find::bottom_keys;
-use super::{Log, press_only, redraw, text_of, visible, window_with};
+use super::{Log, editor_text, press_only, redraw, text_of, visible, window_with};
 use crate::format;
 use crate::window_view::FerriteWindow;
-use crate::window_view::tests::{fake, press, settle};
+use crate::window_view::tests::{fake, press, settle, type_in};
 use crate::window_view::viewer::image::ImageBody;
 use crate::window_view::viewer::image::fixtures::{encoded, photo};
 use crate::window_view::viewer::{FileHooks, FileText, Head, Kinds};
@@ -279,4 +279,108 @@ fn a_damaged_image_shows_a_message_and_hex_still_opens(cx: &mut TestAppContext) 
     assert!(message.starts_with("Cannot show this image"), "{message}");
     assert!(image_view(cx, view).is_none());
     assert!(bottom_keys(cx, *window).contains(&"3 Hex".to_owned()));
+}
+
+fn pictures(names: &[&'static str]) -> Vec<(&'static str, Vec<u8>)> {
+    names
+        .iter()
+        .map(|name| match name.rsplit_once('.') {
+            Some((_, "png")) => (*name, encoded(ImageFormat::Png, 8, 8)),
+            _ => (*name, b"hello\n".to_vec()),
+        })
+        .collect()
+}
+
+fn open_named(cx: &mut TestAppContext, rig: &Rig, name: &str) {
+    open_first(cx, rig);
+    for _ in 0..8 {
+        if title(cx, &rig.1) == name {
+            return;
+        }
+        press(cx, rig.0, &rig.1, "n");
+    }
+    panic!("{name} never opened");
+}
+
+#[gpui_kit::test]
+fn pressing_n_quickly_loads_only_the_image_that_ends_up_shown(cx: &mut TestAppContext) {
+    let names = ["a.txt", "b.png", "c.png", "d.png", "e.png"];
+    let rig = rig(cx, &names[1..], &pictures(&names));
+    open_named(cx, &rig, "b.png");
+    let before = rig.2.loads();
+    for _ in 0..3 {
+        press_only(cx, rig.0, "n");
+    }
+    settle(cx, &rig.1);
+    redraw(cx, rig.0);
+    assert_eq!(title(cx, &rig.1), "e.png");
+    assert!(image_view(cx, &rig.1).is_some());
+    assert_eq!(rig.2.loads() - before, 1);
+}
+
+#[gpui_kit::test]
+fn while_an_image_opens_n_and_p_still_skip_files_that_are_not_images(cx: &mut TestAppContext) {
+    let names = ["a.txt", "b.png", "c.txt", "d.png"];
+    let rig = rig(cx, &names[1..], &pictures(&names));
+    open_named(cx, &rig, "b.png");
+    press_only(cx, rig.0, "n");
+    assert_eq!(title(cx, &rig.1), "d.png");
+    press_only(cx, rig.0, "p");
+    assert_eq!(title(cx, &rig.1), "b.png");
+}
+
+#[gpui_kit::test]
+fn space_steps_images_while_one_opens_and_types_while_editing(cx: &mut TestAppContext) {
+    let names = ["a.txt", "b.png", "c.txt", "d.png", "e.txt", "f.png"];
+    let rig = rig(cx, &names[1..], &pictures(&names));
+    open_named(cx, &rig, "b.png");
+    press_only(cx, rig.0, "space");
+    assert_eq!(title(cx, &rig.1), "d.png");
+    press_only(cx, rig.0, "space");
+    assert_eq!(title(cx, &rig.1), "f.png");
+    press_only(cx, rig.0, "backspace");
+    settle(cx, &rig.1);
+    redraw(cx, rig.0);
+    assert_eq!(title(cx, &rig.1), "d.png");
+    press(cx, rig.0, &rig.1, "escape");
+    press(cx, rig.0, &rig.1, "home");
+    open_first(cx, &rig);
+    assert_eq!(title(cx, &rig.1), "a.txt");
+    press(cx, rig.0, &rig.1, "ctrl-e");
+    type_in(cx, rig.0, &rig.1, " ");
+    press(cx, rig.0, &rig.1, "space");
+    assert_eq!(editor_text(cx, &rig.1), "  hello\n");
+}
+
+fn pixels_of(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Arc<gpui_kit::RenderImage> {
+    let image = image_view(cx, view).expect("an image is open");
+    image.read_with(cx, |image, _| image.pixels())
+}
+
+fn in_atlas(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    pixels: &gpui_kit::RenderImage,
+) -> bool {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.has_image_atlas_entry(pixels)
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn the_atlas_copy_is_freed_after_n_and_after_closing(cx: &mut TestAppContext) {
+    let names = ["a.txt", "b.png", "c.png"];
+    let rig = rig(cx, &names[1..], &pictures(&names));
+    open_named(cx, &rig, "b.png");
+    let first = pixels_of(cx, &rig.1);
+    assert!(in_atlas(cx, rig.0, &first));
+    press(cx, rig.0, &rig.1, "n");
+    redraw(cx, rig.0);
+    let second = pixels_of(cx, &rig.1);
+    assert!(in_atlas(cx, rig.0, &second));
+    assert!(!in_atlas(cx, rig.0, &first));
+    press(cx, rig.0, &rig.1, "escape");
+    assert!(!in_atlas(cx, rig.0, &second));
 }

@@ -1,6 +1,7 @@
 mod decode;
 mod draw;
 mod exif;
+mod svg;
 mod view;
 mod zoom;
 
@@ -104,6 +105,10 @@ impl ImageView {
 impl ImageView {
     pub(super) fn pan(&self) -> Point<f32> {
         self.zoom.pan
+    }
+
+    pub(super) fn pixels(&self) -> std::sync::Arc<gpui_kit::RenderImage> {
+        self.picture.pixels.clone()
     }
 }
 

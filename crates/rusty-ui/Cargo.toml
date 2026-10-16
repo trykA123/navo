@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 codebook-tree-sitter-latex = "=0.6.1"
+flate2 = "=1.1.10"
 futures = "0.3.34"
 gpui-kit = { version = "=0.7.3", features = [
   "tree-sitter-astro",

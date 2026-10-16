@@ -2,7 +2,10 @@ use gpui_kit::{point, size};
 use image::ImageFormat;
 
 use super::decode::{Picture, decode_image};
-use super::fixtures::{BADGE_SVG, BLUE, RED, encoded, photo};
+use super::fixtures::{
+    BADGE_SVG, BLUE, CORNERS, RED, corners_png, encoded, gzip, nested_svg, photo, png_claiming,
+};
+use super::svg::unzipped;
 use super::zoom::{Viewport, Zoom};
 
 fn pixel(picture: &Picture, x: u32, y: u32) -> [u8; 3] {
@@ -170,4 +173,75 @@ fn panning_stops_at_the_edges_and_a_small_side_stays_centred() {
     zoom.fit();
     zoom.pan_by(point(50., 50.), &room);
     assert_eq!(zoom.pan, point(0., 0.));
+}
+
+#[test]
+fn a_gzipped_svg_that_inflates_past_the_limit_is_refused() {
+    let head: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><!--"#;
+    let bomb = gzip(&[head, &[b'a'; 1024], b"--></svg>"], 2048);
+    let error = unzipped(&bomb, 1024 * 1024).expect_err("refused");
+    assert!(error.starts_with("This SVG is too large"), "{error}");
+    let plain = unzipped(&bomb, 4 * 1024 * 1024).expect("fits");
+    assert!(plain.starts_with(b"<svg"));
+    let twice = gzip(&[&gzip(&[BADGE_SVG.as_bytes()], 1)], 1);
+    assert!(unzipped(&twice, 1024 * 1024).is_err());
+    let zipped = gzip(&[BADGE_SVG.as_bytes()], 1);
+    let picture = decode_image(&zipped, "badge.svgz").expect("svgz");
+    assert_eq!((picture.width, picture.height), (24, 12));
+}
+
+#[test]
+fn a_deeply_nested_svg_gives_a_message_even_on_a_small_stack() {
+    let deep = nested_svg(1000);
+    let outcome = std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(move || decode_image(&deep, "deep.svg").err())
+        .expect("thread")
+        .join()
+        .expect("no overflow");
+    let error = outcome.expect("refused");
+    assert!(error.contains("nested too deeply"), "{error}");
+    assert!(decode_image(&nested_svg(8), "fine.svg").is_ok());
+}
+
+#[test]
+fn a_raster_needing_more_than_the_decode_budget_is_refused() {
+    let error = decode_image(&png_claiming(9000, 9000), "wide.png")
+        .err()
+        .expect("refused");
+    assert_eq!(error, "This image is too large to show here.");
+}
+
+#[test]
+fn every_exif_orientation_puts_the_corners_in_place() {
+    let [r, g, b, w] = CORNERS;
+    let table = [
+        (1, [r, g, b, w]),
+        (2, [g, r, w, b]),
+        (3, [w, b, g, r]),
+        (4, [b, w, r, g]),
+        (5, [r, b, g, w]),
+        (6, [b, r, w, g]),
+        (7, [w, g, b, r]),
+        (8, [g, w, r, b]),
+    ];
+    for (turn, wanted) in table {
+        let picture = decode_image(&corners_png(turn), "corners.png").expect("png");
+        let (width, height) = if turn >= 5 { (8, 16) } else { (16, 8) };
+        assert_eq!((picture.width, picture.height), (width, height), "{turn}");
+        let found = [
+            pixel(&picture, 0, 0),
+            pixel(&picture, width - 1, 0),
+            pixel(&picture, 0, height - 1),
+            pixel(&picture, width - 1, height - 1),
+        ];
+        assert_eq!(found, wanted, "orientation {turn}");
+    }
+}
+
+#[test]
+fn angle_brackets_inside_cdata_do_not_count_as_nesting() {
+    let style = format!("<style><![CDATA[{}]]></style>", "a<b>".repeat(300));
+    let svg = BADGE_SVG.replace("<rect", &format!("{style}<rect"));
+    assert!(decode_image(svg.as_bytes(), "styled.svg").is_ok());
 }

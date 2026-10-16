@@ -1,17 +1,9 @@
-use std::io::Cursor;
-
 use exif::{Exif, Field, In, Rational, Tag, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExifEntry {
     pub label: &'static str,
     pub value: String,
-}
-
-#[derive(Debug, Default)]
-pub(super) struct PhotoInfo {
-    pub entries: Vec<ExifEntry>,
-    pub orientation: Option<u8>,
 }
 
 const TURNS: [&str; 8] = [
@@ -129,13 +121,9 @@ fn entries(exif: &Exif, turn: Option<u8>) -> Vec<ExifEntry> {
     .collect()
 }
 
-pub(super) fn read(bytes: &[u8]) -> PhotoInfo {
-    let Ok(exif) = exif::Reader::new().read_from_container(&mut Cursor::new(bytes)) else {
-        return PhotoInfo::default();
+pub(super) fn listed(raw: Vec<u8>) -> Vec<ExifEntry> {
+    let Ok(exif) = exif::Reader::new().read_raw(raw) else {
+        return Vec::new();
     };
-    let orientation = orientation(&exif);
-    PhotoInfo {
-        entries: entries(&exif, orientation),
-        orientation,
-    }
+    entries(&exif, orientation(&exif))
 }
