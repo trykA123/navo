@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod archive;
 mod code_page;
 mod fake;
 pub mod hostile_names;

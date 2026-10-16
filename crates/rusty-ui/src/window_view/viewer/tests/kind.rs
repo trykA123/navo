@@ -2,14 +2,13 @@ use std::any::Any;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{AnyView, FocusHandle, TestAppContext};
-use rusty_core::Location;
 
 use super::find::bottom_keys;
 use super::{Log, Setup, has_editor, hooks, redraw, text_of, window_with};
 use crate::prelude::*;
 use crate::window_view::tests::{fake, press};
 use crate::window_view::viewer::{
-    Attach, BodyKeys, FileHooks, Kinds, Loaded, Slot, Sniff, ViewerBody, ViewerKind,
+    Attach, BodyKeys, Kinds, Load, Loaded, Slot, Sniff, ViewerBody, ViewerKind,
 };
 
 struct NotesView {
@@ -92,13 +91,8 @@ impl ViewerKind for Notes {
         }
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        _: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
-        let file = (hooks.read)(location)?;
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        let file = (load.hooks.read)(load.location)?;
         Ok(Box::new(format!("{}: {}", self.id, file.text.trim_end())))
     }
 

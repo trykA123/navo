@@ -41,6 +41,7 @@ icon_assets!(
         Folder,
         HardDrive,
         Layers,
+        Lock,
         LayoutGrid,
         MemoryStick,
         Network,

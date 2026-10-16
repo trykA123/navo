@@ -5,11 +5,16 @@ use gpui_kit::{Focusable, Subscription};
 use rusty_core::paging::{Found, Needle, Search, parse_hex};
 
 use super::PagedView;
-use super::jobs::{Job, SearchMessage, start_search};
+use super::jobs::{SearchMessage, start_search};
 use super::lines::PagedKind;
 use super::moves::Move;
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
+use crate::window_view::viewer::search::count::count_search;
+use crate::window_view::viewer::search::find_all::open_find_all;
+use crate::window_view::viewer::search::history::Recall;
+use crate::window_view::viewer::search::jobs::Job;
+use crate::window_view::viewer::search::scan::needle_width;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum BarKind {
@@ -39,7 +44,7 @@ pub(super) struct FindState {
     pub hit: Option<Range<u64>>,
     pub anchor: Option<u64>,
     pub note: Option<SharedString>,
-    last: Option<String>,
+    pub last: Option<String>,
     parked: Option<(String, bool)>,
     job: Option<Job>,
 }
@@ -86,13 +91,6 @@ fn parse_line(text: &str) -> Result<u64, String> {
         .ok()
         .filter(|line| *line > 0)
         .ok_or_else(|| format!("Not a line number: {trimmed}"))
-}
-
-fn needle_width(needle: &Needle) -> u64 {
-    match needle {
-        Needle::Text { text, .. } => text.len() as u64,
-        Needle::Bytes(bytes) => bytes.len() as u64,
-    }
 }
 
 impl PagedView {
@@ -159,7 +157,7 @@ impl PagedView {
         }
     }
 
-    fn needle(&self, text: &str) -> Result<Needle, String> {
+    pub(super) fn needle(&self, text: &str) -> Result<Needle, String> {
         match self.kind {
             PagedKind::Hex => parse_hex(text).map(Needle::Bytes),
             PagedKind::Text if text.is_empty() => Err("Type the text to find.".to_owned()),
@@ -195,6 +193,8 @@ impl PagedView {
             Err(error) => return self.set_bar_error(Some(error), cx),
         };
         self.find.last = Some(text.to_owned());
+        count_search(self, needle.clone(), cx);
+        self.marking.remember_search(&needle, cx);
         if !self.moves.is_empty() {
             self.find.parked = Some((text.to_owned(), backward));
             return self.set_bar_error(None, cx);
@@ -249,6 +249,7 @@ impl PagedView {
     fn found(&mut self, result: Result<Found, String>, search: Progress, cx: &mut Context<Self>) {
         match result {
             Ok(Found::At(at)) => {
+                self.follow_moved(Move::Offset(at));
                 self.queue_move(Move::Offset(at), cx);
                 self.find.hit = Some(at..at + search.width);
                 self.find.anchor = Some(at);
@@ -259,6 +260,50 @@ impl PagedView {
             Ok(Found::NotFound) => self.find.note = Some("Not found below.".into()),
             Ok(Found::Cancelled) => {}
             Err(error) => self.find.note = Some(error.into()),
+        }
+    }
+
+    pub(super) fn recall(&mut self, older: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(bar) = self
+            .find
+            .bar
+            .as_ref()
+            .filter(|bar| bar.kind == BarKind::Find)
+        else {
+            return;
+        };
+        let input = bar.input.clone();
+        let recall = Recall {
+            older,
+            kind: self.needle_kind(),
+            input: &input,
+        };
+        if let Some(Some(match_case)) = self.marking.history.recall_into(recall, window, cx) {
+            self.find.match_case = match_case;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn find_all_in_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(bar) = self
+            .find
+            .bar
+            .as_ref()
+            .filter(|bar| bar.kind == BarKind::Find)
+        else {
+            return;
+        };
+        let text = bar.input.read(cx).value().to_string();
+        match self.needle(&text) {
+            Ok(needle) => {
+                self.set_bar_error(None, cx);
+                self.marking.remember_search(&needle, cx);
+                self.find.last = Some(text);
+                self.previews.clear();
+                self.preview_job = None;
+                open_find_all(self, needle, window, cx);
+            }
+            Err(error) => self.set_bar_error(Some(error), cx),
         }
     }
 

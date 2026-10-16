@@ -1,3 +1,5 @@
+mod archive;
+mod font;
 mod hex;
 mod image;
 mod markdown;
@@ -7,6 +9,7 @@ mod tree;
 
 use std::any::Any;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
 
@@ -61,17 +64,38 @@ pub type Loaded = Box<dyn Any + Send>;
 
 pub struct Declined(pub &'static str);
 
+#[derive(Clone, Copy)]
+#[non_exhaustive]
+pub struct Load<'a> {
+    pub hooks: &'a FileHooks,
+    pub location: &'a Location,
+    pub sniff: &'a Sniff<'a>,
+    pub cancel: &'a AtomicBool,
+}
+
+impl<'a> Load<'a> {
+    #[must_use]
+    pub fn new(
+        hooks: &'a FileHooks,
+        location: &'a Location,
+        sniff: &'a Sniff<'a>,
+        cancel: &'a AtomicBool,
+    ) -> Self {
+        Self {
+            hooks,
+            location,
+            sniff,
+            cancel,
+        }
+    }
+}
+
 pub trait ViewerKind: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn slot(&self) -> Slot;
     fn score(&self, sniff: &Sniff<'_>) -> u8;
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        sniff: &Sniff<'_>,
-    ) -> Result<Loaded, String>;
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String>;
     fn attach(
         &self,
         attach: Attach,
@@ -107,6 +131,8 @@ impl Kinds {
             Arc::new(tree::TreeKind),
             Arc::new(table::TableKind),
             Arc::new(markdown::MarkdownKind),
+            Arc::new(archive::Archive),
+            Arc::new(font::Font),
         ])
     }
 

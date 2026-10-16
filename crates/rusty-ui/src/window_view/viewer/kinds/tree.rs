@@ -1,9 +1,7 @@
-use rusty_core::Location;
 use rusty_structured::{SMALL_LIMIT, TREE_LIMIT, json, xml, yaml};
 
-use super::{Loaded, Slot, Sniff, ViewerKind, extension, first_byte};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, extension, first_byte};
 use crate::prelude::*;
-use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::tree::{Format, Ready, TreeBody, TreeFile, TreeLoad};
 
@@ -81,12 +79,13 @@ impl ViewerKind for TreeKind {
         (fits && is_too_large(format, sniff.len)).then_some(TOO_LARGE)
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        sniff: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        let Load {
+            hooks,
+            location,
+            sniff,
+            ..
+        } = load;
         let format = format_of(sniff.name).ok_or_else(|| "Not a tree file.".to_owned())?;
         let load = if format == Format::Xml && sniff.len > SMALL_LIMIT {
             TreeLoad::Index

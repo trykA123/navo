@@ -1,7 +1,7 @@
 mod header;
 mod keys;
-mod kind;
-mod row;
+pub(crate) mod kind;
+pub(crate) mod row;
 mod sort;
 
 #[cfg(test)]

@@ -171,6 +171,27 @@ fn range_reads_only_the_asked_bytes_and_stops_at_the_end() {
 }
 
 #[test]
+fn the_hooks_list_a_zip_and_read_one_entry() {
+    use std::io::Write as _;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bundle.zip");
+    let mut writer = zip::ZipWriter::new(fs::File::create(&file).unwrap());
+    writer
+        .start_file("inner/notes.md", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    writer.write_all(b"# inside\n").unwrap();
+    writer.finish().unwrap();
+    let hooks = super::hooks(None);
+    let keep = std::sync::atomic::AtomicBool::new(false);
+    let listing = (hooks.archive)(&at(&file), &keep).unwrap();
+    assert_eq!(listing.entries[0].name, "inner/notes.md");
+    assert!(!listing.truncated);
+    let entry = (hooks.archive_entry)(&at(&file), 0, &keep);
+    assert_eq!(entry.unwrap(), b"# inside\n");
+    assert!((hooks.archive_entry)(&at(&file), 1, &keep).is_err());
+}
+
+#[test]
 fn bytes_reads_a_whole_file_up_to_the_limit() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("dot.png");

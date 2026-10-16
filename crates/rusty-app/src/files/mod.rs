@@ -9,7 +9,9 @@ use rusty_core::encoding::{decode, encode, looks_binary};
 use rusty_store::replace_atomic;
 use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
 
+mod archive;
 mod code_page;
+mod memory;
 mod paged;
 mod summary;
 
@@ -17,14 +19,23 @@ const MAX_VIEW: u64 = 16 * 1024 * 1024;
 const SNIFF: usize = 8 * 1024;
 const MAX_RANGE: usize = 64 * 1024 * 1024;
 
-pub fn hooks() -> FileHooks {
-    FileHooks {
+pub use memory::{SharedDb, open as open_memory};
+
+pub fn hooks(db: Option<SharedDb>) -> FileHooks {
+    let hooks = FileHooks {
         read: Arc::new(read),
         write: Arc::new(write),
         head: Arc::new(paged::head),
         paged: Arc::new(paged::paged),
+        archive: Arc::new(archive::archive),
+        archive_entry: Arc::new(archive::archive_entry),
         bytes: Arc::new(bytes),
         range: Arc::new(range),
+        ..FileHooks::none()
+    };
+    match db {
+        Some(db) => memory::attach(hooks, db),
+        None => hooks,
     }
 }
 

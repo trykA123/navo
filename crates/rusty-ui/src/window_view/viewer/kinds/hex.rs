@@ -1,10 +1,8 @@
-use rusty_core::Location;
-
-use super::{Loaded, Slot, Sniff, ViewerKind};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::paged::PagedBody;
-use crate::window_view::viewer::{FileHooks, Paged, PagedKind};
+use crate::window_view::viewer::{Paged, PagedKind};
 
 const BINARY: u8 = 60;
 const TEXT: u8 = 10;
@@ -28,13 +26,8 @@ impl ViewerKind for Hex {
         if sniff.looks_binary() { BINARY } else { TEXT }
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        _: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
-        Ok(Box::new((hooks.paged)(location)?))
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        Ok(Box::new((load.hooks.paged)(load.location)?))
     }
 
     fn attach(
@@ -48,7 +41,7 @@ impl ViewerKind for Hex {
             .downcast::<Paged>()
             .map_err(|_| "The hex view got data it cannot show.".to_owned())?;
         Ok(Box::new(PagedBody::new(
-            attach.host.title,
+            attach.host,
             *paged,
             PagedKind::Hex,
             cx,

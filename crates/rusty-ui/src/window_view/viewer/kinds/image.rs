@@ -1,8 +1,5 @@
-use rusty_core::Location;
-
-use super::{Loaded, Slot, Sniff, ViewerKind};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::prelude::*;
-use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::image::{IMAGE_LIMIT, ImageBody, ImageView, Picture, decode_image};
 
@@ -76,14 +73,9 @@ impl ViewerKind for Image {
         }
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        sniff: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
-        let bytes = (hooks.bytes)(location, IMAGE_LIMIT)?;
-        Ok(Box::new(decode_image(&bytes, sniff.name)?))
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        let bytes = (load.hooks.bytes)(load.location, IMAGE_LIMIT)?;
+        Ok(Box::new(decode_image(&bytes, load.sniff.name)?))
     }
 
     fn attach(

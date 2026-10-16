@@ -29,7 +29,7 @@ pub(super) fn date_column(t: &Theme) -> Pixels {
     t.spacing.date_column + t.spacing.xl
 }
 
-fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
+pub(crate) fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
     vec![BoxShadow {
         color,
         offset: point(px(0.), px(0.)),

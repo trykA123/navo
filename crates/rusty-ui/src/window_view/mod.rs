@@ -32,9 +32,10 @@ pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use keys::bind_keys;
 pub use viewer::{
-    Attach, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp, FileText, Head, Host, IndexRun, Key, Kind,
-    Kinds, Loaded, Paged, PagedKind, PagedView, Reopen, Save, SaveError, SharedSource, Slot, Sniff,
-    ViewerBody, ViewerKind,
+    ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
+    FileText, FontFace, FontView, Head, Host, IndexRun, Key, Kind, Kinds, Load, Loaded, MemoryLink,
+    Paged, PagedKind, PagedView, Reopen, Save, SaveError, SharedSource, Slot, Sniff, ViewerBody,
+    ViewerKind,
 };
 pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, ReadBytes, decode_image};
 

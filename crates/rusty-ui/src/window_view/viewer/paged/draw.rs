@@ -1,125 +1,20 @@
-use std::ops::Range;
-
 use gpui_kit::base::{ObservedElement, Scrollbar, ScrollbarMode, TestSupportExt};
-use gpui_kit::{HighlightStyle, Role, ScrollWheelEvent, Stateful, StyledText, canvas};
-use rusty_core::paging::HEX_WIDTH;
+use gpui_kit::{Role, ScrollWheelEvent, Stateful, canvas};
 
 use super::PagedView;
-use super::lines::{HexLine, TextLine};
+use super::moves::Move;
+use super::row_view::{RowLook, TextLook, hex_row, missing_row, text_row};
 use super::rows::{Screenful, Shown};
+use super::spans::Painted;
 use crate::prelude::*;
 use crate::tokens::Theme;
+use crate::window_view::viewer::search::overview::{StripLook, TickScale};
 
-const SHOWN_CHARS: usize = 1000;
 const MIN_DIGITS: usize = 4;
 
-struct RowLook<'a> {
-    t: &'a Theme,
-    height: Pixels,
-    hit: Option<Range<u64>>,
-}
-
-fn row_frame(look: &RowLook<'_>, index: usize, label: String) -> ObservedElement<Stateful<Div>> {
-    div()
-        .id(("paged-row", index))
-        .aria_label(label)
-        .test_support()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(look.t.spacing.xl)
-        .h(look.height)
-        .px(look.t.spacing.xl)
-        .whitespace_nowrap()
-        .overflow_hidden()
-}
-
-fn marked(look: &RowLook<'_>) -> HighlightStyle {
-    HighlightStyle {
-        background_color: Some(look.t.colors.selection),
-        color: Some(look.t.colors.accent_text),
-        ..HighlightStyle::default()
-    }
-}
-
-fn hex_marks(look: &RowLook<'_>, start: u64) -> (Vec<Range<usize>>, Vec<Range<usize>>) {
-    let Some(hit) = &look.hit else {
-        return (Vec::new(), Vec::new());
-    };
-    (0..HEX_WIDTH)
-        .filter(|slot| hit.contains(&(start + slot)))
-        .map(|slot| {
-            let slot = usize::try_from(slot).unwrap_or(0);
-            let at = slot * 3 + usize::from(slot >= 8);
-            (at..at + 2, slot..slot + 1)
-        })
-        .unzip()
-}
-
-fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyElement {
-    let (hex_marks, ascii_marks) = hex_marks(look, line.start);
-    let style = marked(look);
-    let row = &line.row;
-    let label = format!("{}  {}  {}", row.offset, row.hex, row.ascii);
-    row_frame(look, index, label)
-        .child(
-            div()
-                .text_color(look.t.colors.muted)
-                .child(row.offset.clone()),
-        )
-        .child(
-            StyledText::new(row.hex.clone())
-                .with_highlights(hex_marks.into_iter().map(|range| (range, style))),
-        )
-        .child(
-            div().text_color(look.t.colors.muted).child(
-                StyledText::new(row.ascii.clone())
-                    .with_highlights(ascii_marks.into_iter().map(|range| (range, style))),
-            ),
-        )
-        .into_any_element()
-}
-
-struct TextLook {
-    digits: usize,
-    shift: usize,
-}
-
-fn text_row(look: &RowLook<'_>, text: &TextLook, index: usize, line: &TextLine) -> AnyElement {
-    let number = line
-        .line
-        .map(|number| number.to_string())
-        .unwrap_or_default();
-    let shown: String = line
-        .text
-        .chars()
-        .skip(text.shift)
-        .take(SHOWN_CHARS)
-        .map(|ch| if ch.is_control() { ' ' } else { ch })
-        .collect();
-    let is_hit = look
-        .hit
-        .as_ref()
-        .is_some_and(|hit| (line.start..line.next.max(line.start + 1)).contains(&hit.start));
-    row_frame(look, index, line.text.clone())
-        .when(is_hit, |row| row.bg(look.t.colors.selection))
-        .child(
-            div()
-                .id(("paged-line", index))
-                .aria_label(number.clone())
-                .test_support()
-                .flex_none()
-                .text_color(look.t.colors.muted)
-                .child(format!("{number:>width$}", width = text.digits)),
-        )
-        .child(shown)
-        .into_any_element()
-}
-
-fn missing_row(look: &RowLook<'_>, index: usize) -> AnyElement {
-    row_frame(look, index, String::new())
-        .text_color(look.t.colors.muted)
-        .into_any_element()
+struct ScreenMarks {
+    marks: Vec<(std::ops::Range<u64>, u8)>,
+    bookmarks: Vec<u64>,
 }
 
 impl PagedView {
@@ -128,13 +23,33 @@ impl PagedView {
         lines.to_string().len().max(MIN_DIGITS)
     }
 
-    fn rows(&self, t: &Theme, shown: &Shown<'_>, missing: usize) -> Vec<AnyElement> {
+    fn screen_marks(&self, end: u64) -> ScreenMarks {
+        let span = self.top..end.max(self.top + 1);
+        let bookmarks = self
+            .marking
+            .bookmarks
+            .iter()
+            .filter(|at| span.contains(at))
+            .collect();
+        ScreenMarks {
+            marks: self.marking.marks.ranges_in(span),
+            bookmarks,
+        }
+    }
+
+    fn rows(&self, t: &Theme, screen: &Screenful<'_>) -> Vec<AnyElement> {
+        let marks = self.screen_marks(screen.end);
         let look = RowLook {
             t,
             height: self.row_height,
-            hit: self.find.hit.clone(),
+            painted: Painted {
+                hit: self.find.hit.as_ref(),
+                marks: &marks.marks,
+            },
+            bookmarks: &marks.bookmarks,
+            line_ends: self.marking.line_ends,
         };
-        let mut rows: Vec<AnyElement> = match shown {
+        let mut rows: Vec<AnyElement> = match &screen.shown {
             Shown::Hex(lines) => lines
                 .iter()
                 .enumerate()
@@ -154,7 +69,7 @@ impl PagedView {
             Shown::Failed(_) => Vec::new(),
         };
         let first = rows.len();
-        rows.extend((first..first + missing).map(|index| missing_row(&look, index)));
+        rows.extend((first..first + screen.missing).map(|index| missing_row(&look, index)));
         rows
     }
 
@@ -167,6 +82,60 @@ impl PagedView {
         }
         self.scroll
             .show(self.top as f64 / len as f64, len as f64 / shown as f64);
+    }
+
+    pub(super) fn update_overview(&mut self, t: &Theme) {
+        let scale = TickScale {
+            len: self.source.len(),
+            rows: self.overview.rows(t),
+            place: &|offset| offset,
+        };
+        self.marking.update_ticks(&scale);
+    }
+
+    fn overview_click(&mut self, y: Pixels, t: &Theme, cx: &mut Context<Self>) {
+        let rows = self.overview.rows(t);
+        if rows == 0 {
+            return;
+        }
+        let row = self.overview.row_at(t, y);
+        let to = match self.marking.tick_target(row) {
+            Some(offset) => Move::Offset(offset),
+            None => Move::Fraction(f64::from(row) / f64::from(rows)),
+        };
+        self.user_move(to, cx);
+    }
+
+    fn overview(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
+        let this = cx.entity().downgrade();
+        let theme = t.clone();
+        let look = StripLook {
+            t,
+            shown: self.marking.ticks(),
+            entity: cx.entity_id(),
+        };
+        self.overview.element(look, move |y, _, cx| {
+            let _ = this.update(cx, |view, cx| view.overview_click(y, &theme, cx));
+        })
+    }
+
+    fn content(&self, t: &Theme, screen: &Screenful<'_>) -> AnyElement {
+        match screen.shown {
+            Shown::Failed(error) => div()
+                .id("paged-error")
+                .role(Role::Alert)
+                .aria_label(error.to_owned())
+                .test_support()
+                .p(t.spacing.xxl)
+                .text_color(t.colors.mark)
+                .child(SharedString::from(error.to_owned()))
+                .into_any_element(),
+            _ => div()
+                .flex()
+                .flex_col()
+                .children(self.rows(t, screen))
+                .into_any_element(),
+        }
     }
 
     pub(super) fn body(
@@ -187,22 +156,6 @@ impl PagedView {
         )
         .absolute()
         .size_full();
-        let content = match screen.shown {
-            Shown::Failed(error) => div()
-                .id("paged-error")
-                .role(Role::Alert)
-                .aria_label(error.to_owned())
-                .test_support()
-                .p(t.spacing.xxl)
-                .text_color(t.colors.mark)
-                .child(SharedString::from(error.to_owned()))
-                .into_any_element(),
-            _ => div()
-                .flex()
-                .flex_col()
-                .children(self.rows(t, &screen.shown, screen.missing))
-                .into_any_element(),
-        };
         div()
             .id("paged-body")
             .test_support()
@@ -216,7 +169,7 @@ impl PagedView {
                 view.scroll_wheel(event, cx);
             }))
             .child(measure)
-            .child(content)
+            .child(self.content(t, screen))
             .child(
                 div().absolute().top_0().left_0().size_full().child(
                     Scrollbar::vertical(&self.scroll)
@@ -225,5 +178,6 @@ impl PagedView {
                         .viewport_from_layout(),
                 ),
             )
+            .child(self.overview(t, cx))
     }
 }

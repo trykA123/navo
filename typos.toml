@@ -12,3 +12,7 @@ extend-exclude = [
 [default.extend-words]
 wdth = "wdth"
 flate = "flate"
+recomandation = "recomandation"
+
+[default.extend-identifiers]
+flate2 = "flate2"

@@ -1,10 +1,7 @@
 mod nesting;
 
-use rusty_core::Location;
-
-use super::{Declined, EDIT_LIMIT, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Declined, EDIT_LIMIT, Load, Loaded, Slot, Sniff, ViewerKind, named};
 use crate::prelude::*;
-use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::markdown::{MarkdownBody, MarkdownFile};
 
@@ -46,12 +43,13 @@ impl ViewerKind for MarkdownKind {
         (Self::is_markdown(sniff) && sniff.len > EDIT_LIMIT).then_some(TOO_LARGE)
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        sniff: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        let Load {
+            hooks,
+            location,
+            sniff,
+            ..
+        } = load;
         let file = (hooks.read)(location)?;
         if nesting::is_too_deep(&file.text) {
             return Ok(Box::new(Declined(TOO_DEEP)));

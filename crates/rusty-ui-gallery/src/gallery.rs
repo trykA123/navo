@@ -3,7 +3,7 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::{ImageView, PagedView, ViewerBody};
+use rusty_ui::window_view::{ArchiveView, FontView, ImageView, PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
@@ -14,7 +14,7 @@ use crate::sections;
 use crate::structured_sample::{
     self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
 };
-use crate::viewer_sample;
+use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
     "viewer::RowDown",
@@ -46,11 +46,14 @@ pub enum Page {
     Tree,
     Table,
     Markdown,
+    Archive,
+    Font,
+    Marks,
     Image,
 }
 
 impl Page {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 14] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -61,6 +64,9 @@ impl Page {
         Self::Tree,
         Self::Table,
         Self::Markdown,
+        Self::Archive,
+        Self::Font,
+        Self::Marks,
         Self::Image,
     ];
 
@@ -76,6 +82,9 @@ impl Page {
             Self::Tree => "Tree",
             Self::Table => "Table",
             Self::Markdown => "Markdown",
+            Self::Archive => "Zip",
+            Self::Font => "Font",
+            Self::Marks => "Marks",
             Self::Image => "Image",
         }
     }
@@ -93,6 +102,9 @@ pub struct Gallery {
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
+    archive: Entity<ArchiveView>,
+    font: Option<Entity<FontView>>,
+    marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
     tab: usize,
     clicks: usize,
@@ -114,6 +126,9 @@ impl Gallery {
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
+            archive: rich_sample::archive_view(cx),
+            font: rich_sample::font_view(cx),
+            marks: None,
             image: image_sample::image_view(cx).ok(),
             tab: 1,
             clicks: 0,
@@ -168,6 +183,7 @@ impl Gallery {
         let current = self.page;
         let pages: Vec<Button> = Page::ALL
             .into_iter()
+            .filter(|page| !matches!(page, Page::Marks | Page::Archive | Page::Font))
             .map(|page| {
                 let variant = if page == current {
                     ButtonVariant::Primary
@@ -263,6 +279,9 @@ impl Render for Gallery {
             Page::PagedText => root.child(self.paged_text.clone()),
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
+            Page::Archive => root.child(self.archive.clone()),
+            Page::Font => root.children(self.font.clone()),
+            Page::Marks => root.child(self.marks_page(window, cx)),
             Page::Image => root.children(self.image.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree | Page::Table | Page::Markdown => match self.sample() {
@@ -274,6 +293,12 @@ impl Render for Gallery {
 }
 
 impl Gallery {
+    fn marks_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Entity<PagedView> {
+        self.marks
+            .get_or_insert_with(|| viewer_sample::marks_view(window, cx))
+            .clone()
+    }
+
     fn primitives(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
         div()
             .flex()

@@ -21,6 +21,10 @@ pub fn open(view: Option<std::path::PathBuf>) {
         || initial_state(std::path::Path::new(""), home.clone()),
         |file| initial_state(file, home.clone()),
     );
+    let memory = dirs
+        .as_ref()
+        .filter(|dirs| dirs.ensure().is_ok())
+        .and_then(|dirs| files::open_memory(&dirs.data.join("ferrite.db")));
     let local = Arc::new(LocalFs::new());
     let (operations, _instance) = operations(dirs.as_ref(), &home, local.as_ref());
     let on_save = Rc::new(move |state: &AppState| {
@@ -38,7 +42,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
         operations,
         launcher: launch::launcher(),
         editor: editor::hooks(settings.as_deref(), |name| std::env::var(name).ok()),
-        files: files::hooks(),
+        files: files::hooks(memory),
         kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
         view: view.and_then(|path| view_location(&path)),

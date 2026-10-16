@@ -1,10 +1,8 @@
-use rusty_core::Location;
 use rusty_structured::SMALL_LIMIT;
 use rusty_structured::table::{Table, first_record, header_of, parse_table, sniff as dialect_of};
 
-use super::{Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, named};
 use crate::prelude::*;
-use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::table::{TableBody, TableFile, TableLoad};
 
@@ -50,12 +48,13 @@ impl ViewerKind for TableKind {
         }
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        sniff: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        let Load {
+            hooks,
+            location,
+            sniff,
+            ..
+        } = load;
         let load = if sniff.len > SMALL_LIMIT {
             big(sniff.head)
         } else {

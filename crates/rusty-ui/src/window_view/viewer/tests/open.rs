@@ -156,6 +156,39 @@ fn image_loads_run_one_at_a_time_and_skip_viewers_that_closed() {
     assert!(!called.load(Ordering::SeqCst));
 }
 
+fn open_in_thread(
+    name: &'static str,
+    head: Vec<u8>,
+    hooks: crate::window_view::viewer::FileHooks,
+) -> std::thread::JoinHandle<bool> {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    use crate::window_view::viewer::open::load_while_alive;
+    use crate::window_view::viewer::{Load, Sniff};
+
+    std::thread::spawn(move || {
+        let alive = Arc::new(());
+        let sniff = Sniff {
+            head: &head,
+            name,
+            len: head.len() as u64,
+        };
+        let kind = kind_for(name, &head);
+        let location = rusty_core::Location::new(format!("/home/{name}")).expect("location");
+        let cancel = AtomicBool::new(false);
+        load_while_alive(&Arc::downgrade(&alive), &kind, || {
+            kind.load(Load {
+                hooks: &hooks,
+                location: &location,
+                sniff: &sniff,
+                cancel: &cancel,
+            })
+        })
+        .is_ok()
+    })
+}
+
 #[test]
 fn a_text_open_finishes_while_an_image_load_holds_the_lock() {
     use std::sync::mpsc::channel;
@@ -165,8 +198,7 @@ fn a_text_open_finishes_while_an_image_load_holds_the_lock() {
     use image::ImageFormat;
 
     use crate::window_view::viewer::image::fixtures::encoded;
-    use crate::window_view::viewer::open::load_while_alive;
-    use crate::window_view::viewer::{FileHooks, FileText, Sniff};
+    use crate::window_view::viewer::{FileHooks, FileText};
 
     let png = encoded(ImageFormat::Png, 4, 4);
     let (entered, has_entered) = channel();
@@ -181,28 +213,12 @@ fn a_text_open_finishes_while_an_image_load_holds_the_lock() {
         }),
         ..FileHooks::none()
     };
-    let open = move |name: &'static str, head: Vec<u8>, hooks: FileHooks| {
-        std::thread::spawn(move || {
-            let alive = Arc::new(());
-            let sniff = Sniff {
-                head: &head,
-                name,
-                len: head.len() as u64,
-            };
-            let kind = kind_for(name, &head);
-            let location = rusty_core::Location::new(format!("/home/{name}")).expect("location");
-            load_while_alive(&Arc::downgrade(&alive), &kind, || {
-                kind.load(&hooks, &location, &sniff)
-            })
-            .is_ok()
-        })
-    };
-    let image = open("b.png", encoded(ImageFormat::Png, 4, 4), hooks.clone());
+    let image = open_in_thread("b.png", encoded(ImageFormat::Png, 4, 4), hooks.clone());
     has_entered
         .recv_timeout(Duration::from_secs(5))
         .expect("the image load started");
     let (done, finished) = channel();
-    let text = open("a.txt", b"hello\n".to_vec(), hooks);
+    let text = open_in_thread("a.txt", b"hello\n".to_vec(), hooks);
     std::thread::spawn(move || {
         let _ = done.send(text.join().expect("text thread"));
     });
@@ -210,4 +226,45 @@ fn a_text_open_finishes_while_an_image_load_holds_the_lock() {
     release.send(()).expect("release");
     assert!(image.join().expect("image thread"));
     assert_eq!(text_opened, Ok(true));
+}
+
+fn opening_flag(
+    cx: &mut TestAppContext,
+    view: &gpui_kit::Entity<crate::window_view::FerriteWindow>,
+) -> Arc<std::sync::atomic::AtomicBool> {
+    view.read_with(cx, |view, _| {
+        let opening = view.viewer.as_ref()?.opening.as_ref()?;
+        Some(opening.cancel_flag())
+    })
+    .expect("an open in progress")
+}
+
+#[gpui_kit::test]
+fn closing_the_viewer_while_it_opens_sets_the_cancel_flag(cx: &mut TestAppContext) {
+    use std::sync::atomic::Ordering;
+
+    let (window, view, _) = window_on(cx, fake(), Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "down");
+    press_only(cx, window, "f3");
+    let flag = opening_flag(cx, &view);
+    assert!(!flag.load(Ordering::Relaxed));
+    press_only(cx, window, "escape");
+    assert!(!viewer_open(cx, &view));
+    assert!(flag.load(Ordering::Relaxed));
+}
+
+#[gpui_kit::test]
+fn switching_the_view_while_it_loads_cancels_the_earlier_load(cx: &mut TestAppContext) {
+    use std::sync::atomic::Ordering;
+
+    let (window, view, _) = window_on(cx, fake(), Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    settle(cx, &view);
+    press_only(cx, window, "3");
+    let first = opening_flag(cx, &view);
+    assert!(!first.load(Ordering::Relaxed));
+    press_only(cx, window, "1");
+    assert!(viewer_open(cx, &view));
+    assert!(first.load(Ordering::Relaxed));
 }

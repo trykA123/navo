@@ -36,6 +36,9 @@ fn file_name(page: Page, mode: Mode) -> String {
         Page::Tree => "p15-tree",
         Page::Table => "p15-table",
         Page::Markdown => "p15-markdown",
+        Page::Archive => "p15-archive",
+        Page::Font => "p15-font",
+        Page::Marks => "p15-marks",
         Page::Image => "p15-image",
     };
     let mode = match mode {

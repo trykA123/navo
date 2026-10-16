@@ -1,9 +1,10 @@
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
 use rusty_ui::prelude::*;
-use rusty_ui::window_view::{Attach, FileHooks, FileText, Host, Kinds, Sniff, ViewerBody};
+use rusty_ui::window_view::{Attach, FileHooks, FileText, Host, Kinds, Load, Sniff, ViewerBody};
 
 pub const TREE_NAME: &str = "ferrite.json";
 pub const TABLE_NAME: &str = "cities.csv";
@@ -104,11 +105,15 @@ pub fn body(
     };
     let kind = Kinds::builtin().choose(&sniff).into_iter().next()?;
     let hooks = hooks(text);
-    let loaded = kind.load(&hooks, &location, &sniff).ok()?;
+    let cancel = AtomicBool::new(false);
+    let loaded = kind
+        .load(Load::new(&hooks, &location, &sniff, &cancel))
+        .ok()?;
     let host = Host {
         title: name.into(),
         location,
         hooks,
+        carried: None,
         on_saved: Rc::new(|_| {}),
         open: Rc::new(|_, _| {}),
     };

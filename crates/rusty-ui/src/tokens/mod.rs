@@ -1,6 +1,7 @@
 mod contrast;
 mod design_b;
 mod kit;
+mod marks;
 
 #[cfg(test)]
 mod tests;
@@ -11,6 +12,7 @@ use gpui_kit::{App, Global, Hsla, Pixels, SharedString};
 
 pub use contrast::{contrast_ratio, relative_luminance};
 pub use kit::apply;
+pub use marks::MarkColors;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Mode {
@@ -109,6 +111,7 @@ pub struct Theme {
     pub typography: Typography,
     pub spacing: Spacing,
     pub radii: Radii,
+    pub marks: MarkColors,
 }
 
 impl Global for Theme {}
@@ -121,6 +124,7 @@ impl Theme {
             typography: design_b::typography(),
             spacing: design_b::spacing(),
             radii: design_b::radii(),
+            marks: marks::mark_colors(mode),
         }
     }
 }

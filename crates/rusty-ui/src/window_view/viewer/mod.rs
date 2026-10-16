@@ -1,8 +1,13 @@
+mod acts;
+mod archive;
 mod background;
 mod body;
+mod cancel;
 mod editor;
 mod files;
+mod font;
 mod image;
+mod keys;
 mod keys_bar;
 mod kinds;
 mod lister;
@@ -11,21 +16,27 @@ mod modes;
 mod open;
 mod paged;
 mod rich_header;
+mod search;
 mod table;
 mod tree;
 mod view;
 
-use gpui_kit::{FocusHandle, KeyBinding};
+use gpui_kit::FocusHandle;
 use rusty_core::Location;
 
-pub use body::{Attach, BodyKeys, Host, Key, ViewerBody};
+pub use archive::{ArchiveSource, ArchiveView};
+pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, ViewerBody};
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, ReadBytes, Reopen, Save, SaveError,
     SharedSource,
 };
+pub use font::{FontFace, FontView};
 pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
-pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
+pub use keys::bind_keys;
+use keys::*;
+pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
+pub use search::memory::MemoryLink;
 
 use super::FerriteWindow;
 use crate::prelude::*;
@@ -35,95 +46,6 @@ const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";
 const IMAGE_CONTEXT: &str = "Image";
 const LEAVE_WARNING: &str = "Unsaved changes. Ctrl+S saves; Esc again discards them.";
-
-gpui_kit::actions!(
-    viewer,
-    [
-        SaveFile,
-        CloseViewer,
-        EditFile,
-        ShowText,
-        ShowHex,
-        ShowRich,
-        ListerText,
-        ListerHex,
-        ListerRich,
-        FindNext,
-        FindOnEnter,
-        FindPrevious,
-        NextFile,
-        PreviousFile,
-        RowUp,
-        RowDown,
-        PageUp,
-        PageDown,
-        GoStart,
-        GoEnd,
-        ScrollLeft,
-        ScrollRight,
-        OpenFind,
-        OpenGoTo,
-        MatchCase,
-        Back,
-        FitImage,
-        ActualSize,
-        ZoomIn,
-        ZoomOut,
-        ToggleInfo,
-    ]
-);
-
-pub fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("ctrl-s", SaveFile, context),
-        KeyBinding::new("escape", CloseViewer, context),
-        KeyBinding::new("ctrl-e", EditFile, context),
-        KeyBinding::new("alt-1", ShowText, context),
-        KeyBinding::new("alt-3", ShowHex, context),
-        KeyBinding::new("alt-5", ShowRich, context),
-        KeyBinding::new("1", ListerText, context),
-        KeyBinding::new("3", ListerHex, context),
-        KeyBinding::new("5", ListerRich, context),
-        KeyBinding::new("f3", FindNext, context),
-        KeyBinding::new("shift-f3", FindPrevious, context),
-        KeyBinding::new("enter", FindOnEnter, context),
-        KeyBinding::new("n", NextFile, context),
-        KeyBinding::new("p", PreviousFile, context),
-        KeyBinding::new("space", NextFile, context),
-        KeyBinding::new("backspace", PreviousFile, context),
-        KeyBinding::new("up", RowUp, context),
-        KeyBinding::new("down", RowDown, context),
-        KeyBinding::new("pageup", PageUp, context),
-        KeyBinding::new("pagedown", PageDown, context),
-        KeyBinding::new("ctrl-home", GoStart, context),
-        KeyBinding::new("ctrl-end", GoEnd, context),
-        KeyBinding::new("left", ScrollLeft, context),
-        KeyBinding::new("right", ScrollRight, context),
-        KeyBinding::new("ctrl-f", OpenFind, context),
-        KeyBinding::new("ctrl-g", OpenGoTo, context),
-        KeyBinding::new("alt-c", MatchCase, context),
-        KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
-    ]);
-    tree::bind_keys(cx);
-    table::bind_keys(cx);
-    markdown::bind_keys(cx);
-    bind_image_keys(cx);
-}
-
-fn bind_image_keys(cx: &mut App) {
-    let context = Some(IMAGE_CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("0", FitImage, context),
-        KeyBinding::new("ctrl-0", FitImage, context),
-        KeyBinding::new("1", ActualSize, context),
-        KeyBinding::new("+", ZoomIn, context),
-        KeyBinding::new("=", ZoomIn, context),
-        KeyBinding::new("shift-=", ZoomIn, context),
-        KeyBinding::new("-", ZoomOut, context),
-        KeyBinding::new("i", ToggleInfo, context),
-    ]);
-}
 
 pub(super) struct Viewer {
     location: Location,
@@ -137,6 +59,7 @@ pub(super) struct Viewer {
     leaving: Option<u64>,
     switching: Option<(Slot, u64)>,
     message: Option<SharedString>,
+    carried: Option<Carried>,
 }
 
 impl Viewer {
@@ -157,6 +80,7 @@ impl Viewer {
             leaving: None,
             switching: None,
             message: None,
+            carried: None,
         }
     }
 

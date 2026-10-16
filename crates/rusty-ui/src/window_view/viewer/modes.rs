@@ -73,6 +73,7 @@ impl FerriteWindow {
             title: viewer.title.clone(),
             location: viewer.location.clone(),
             hooks: self.files.clone(),
+            carried: viewer.carried.clone(),
             on_saved: Rc::new(move |cx| {
                 let this = this.clone();
                 cx.defer(move |cx| {
@@ -125,6 +126,7 @@ impl FerriteWindow {
         };
         viewer.opening = None;
         viewer.kind = Some(kind);
+        viewer.carried = None;
         viewer.clear_body();
         match attached {
             Ok(body) => viewer.body = Some(body),
@@ -181,19 +183,22 @@ impl FerriteWindow {
         let opening = start(
             window,
             cx,
-            move |alive| {
+            move |turn| {
                 let sniff = super::Sniff {
                     head: &sniffed.0.bytes,
                     name: &sniffed.1,
                     len: sniffed.0.len,
                 };
-                load_or_text(&kinds, kind, request.loader(&sniff, alive))
+                load_or_text(&kinds, kind, request.loader(&sniff, turn))
             },
             move |view: &mut Self, picked, window, cx| {
                 view.show_loaded(Shown { picked, edit }, window, cx);
             },
         );
         if let Some(viewer) = &mut self.viewer {
+            if let Some(carried) = viewer.body.as_ref().and_then(|body| body.carry(cx)) {
+                viewer.carried = Some(carried);
+            }
             viewer.clear_body();
             viewer.opening = Some(opening);
             window.focus(&viewer.focus, cx);

@@ -1,12 +1,14 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::Duration;
 
 use gpui_kit::Task;
 use rusty_core::Location;
 
+use super::cancel::Cancel;
 use super::kinds::IMAGE_ID;
 use super::modes::Shown;
-use super::{Declined, FileHooks, Head, Kind, Kinds, Loaded, Slot, Sniff, Viewer};
+use super::{Declined, FileHooks, Head, Kind, Kinds, Load, Loaded, Slot, Sniff, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
@@ -71,6 +73,14 @@ pub(super) struct Opening {
     _alive: Arc<()>,
     _task: Task<()>,
     _timer: Task<()>,
+    _cancel: Cancel,
+}
+
+#[cfg(test)]
+impl Opening {
+    pub(super) fn cancel_flag(&self) -> Arc<std::sync::atomic::AtomicBool> {
+        self._cancel.flag()
+    }
 }
 
 pub(super) struct Opened {
@@ -85,21 +95,32 @@ pub(super) struct Request {
     pub name: String,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Turn<'a> {
+    pub alive: &'a Weak<()>,
+    pub cancel: &'a AtomicBool,
+}
+
 impl Request {
     pub(super) fn loader<'a>(
         &'a self,
         sniff: &'a Sniff<'_>,
-        alive: &'a Weak<()>,
+        turn: Turn<'a>,
     ) -> impl Fn(&Kind) -> Result<Loaded, String> + 'a {
         move |kind| {
-            load_while_alive(alive, kind, || {
-                kind.load(&self.hooks, &self.location, sniff)
+            load_while_alive(turn.alive, kind, || {
+                kind.load(Load {
+                    hooks: &self.hooks,
+                    location: &self.location,
+                    sniff,
+                    cancel: turn.cancel,
+                })
             })
         }
     }
 }
 
-fn sniff_and_load(request: &Request, kinds: &Kinds, alive: &Weak<()>) -> Result<Opened, String> {
+fn sniff_and_load(request: &Request, kinds: &Kinds, turn: Turn<'_>) -> Result<Opened, String> {
     let head = (request.hooks.head)(&request.location)?;
     let sniff = Sniff {
         head: &head.bytes,
@@ -111,7 +132,7 @@ fn sniff_and_load(request: &Request, kinds: &Kinds, alive: &Weak<()>) -> Result<
         .first()
         .cloned()
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
-    let mut picked = load_or_text(&chosen, kind, request.loader(&sniff, alive));
+    let mut picked = load_or_text(&chosen, kind, request.loader(&sniff, turn));
     picked.note = picked.note.or_else(|| kinds.declined(&sniff));
     Ok(Opened {
         head,
@@ -123,14 +144,20 @@ fn sniff_and_load(request: &Request, kinds: &Kinds, alive: &Weak<()>) -> Result<
 pub(super) fn start<T: Send + 'static>(
     window: &mut Window,
     cx: &mut Context<FerriteWindow>,
-    work: impl FnOnce(&Weak<()>) -> T + Send + 'static,
+    work: impl FnOnce(Turn<'_>) -> T + Send + 'static,
     done: impl FnOnce(&mut FerriteWindow, T, &mut Window, &mut Context<FerriteWindow>) + 'static,
 ) -> Opening {
+    let cancel = Cancel::new();
+    let flag = cancel.flag();
     let (sender, receiver) = futures::channel::oneshot::channel();
     let alive = Arc::new(());
     let weak = Arc::downgrade(&alive);
     cx.background_spawn(async move {
-        let _ = sender.send(work(&weak));
+        let turn = Turn {
+            alive: &weak,
+            cancel: &flag,
+        };
+        let _ = sender.send(work(turn));
     })
     .detach();
     let task = cx.spawn_in(window, async move |this, cx| {
@@ -148,6 +175,7 @@ pub(super) fn start<T: Send + 'static>(
         _alive: alive,
         _task: task,
         _timer: timer,
+        _cancel: cancel,
     }
 }
 
@@ -171,7 +199,7 @@ impl FerriteWindow {
         start(
             window,
             cx,
-            move |alive| sniff_and_load(&request, &kinds, alive),
+            move |turn| sniff_and_load(&request, &kinds, turn),
             Self::file_opened,
         )
     }

@@ -14,7 +14,8 @@ const CANNOT_EDIT: &str = "Only UTF-8 text files up to 16 MB can be edited.";
 
 impl Viewer {
     fn is_listing(&self, window: &Window, cx: &App) -> bool {
-        !self.is_editing(cx) && self.focus_target(cx).is_focused(window)
+        let is_typing = self.body.as_ref().is_some_and(|body| body.is_typing(cx));
+        !self.is_editing(cx) && !is_typing && self.focus_target(cx).is_focused(window)
     }
 
     fn can_switch_to_edit(&self) -> bool {
