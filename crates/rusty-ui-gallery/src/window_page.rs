@@ -5,6 +5,7 @@ use rusty_fs::FsEntry;
 use rusty_ui::app_menu::{AppMenu, Identity, Install, QuickSettings};
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
+use rusty_ui::job_card::{JobCard, JobPill, PillFit};
 use rusty_ui::pane_chrome::{
     DriveInfo, DrivePill, PaneTabs, PathBar, card_header, current_drive, pane_card,
 };
@@ -18,6 +19,7 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
 use crate::gallery::Page;
+use crate::job_sample;
 use crate::pane_page::status_of;
 use crate::pane_sample;
 use crate::sheet_sample;
@@ -50,6 +52,12 @@ pub struct SheetShows {
     pub is_ringed: bool,
 }
 
+#[derive(Clone, Copy)]
+pub struct JobsShown {
+    pub count: usize,
+    pub is_pill: bool,
+}
+
 struct Sheet {
     shows: SheetShows,
     state: Entity<SheetState>,
@@ -57,7 +65,7 @@ struct Sheet {
 
 pub struct WindowPage {
     held: Option<KeyLayer>,
-    has_job: bool,
+    jobs: Option<JobsShown>,
     is_menu_open: bool,
     sheet: Option<Sheet>,
     rows: Rc<[FsEntry]>,
@@ -70,10 +78,10 @@ fn location(text: &str) -> Location {
 }
 
 impl WindowPage {
-    pub fn new(held: Option<KeyLayer>, has_job: bool, cx: &mut Context<Self>) -> Self {
+    pub fn new(held: Option<KeyLayer>, cx: &mut Context<Self>) -> Self {
         Self {
             held,
-            has_job,
+            jobs: None,
             is_menu_open: false,
             sheet: None,
             rows: pane_sample::rows(),
@@ -82,21 +90,47 @@ impl WindowPage {
         }
     }
 
-    fn fkey_bar(&self) -> FKeyBar {
+    fn fkey_bar(&self, window: &Window) -> FKeyBar {
         let bar = FKeyBar::new("fkeys", layer_keys(self.held))
             .layers(self.held, key_labels())
             .warn(KEY_WARNING.0, KEY_WARNING.1, KEY_WARNING.2);
-        if self.has_job {
-            bar.reserve_pill()
+        let Some(shown) = self.jobs else {
+            return bar;
+        };
+        let fit = PillFit::for_width(window.viewport_size().width);
+        let bar = bar.reserve_pill_width(fit.slot_width());
+        if shown.is_pill {
+            bar.right_slot(JobPill::new(&job_sample::jobs(shown.count), fit))
         } else {
             bar
+        }
+    }
+
+    fn job_card(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
+        let shown = self.jobs.filter(|shown| !shown.is_pill)?;
+        let card = JobCard::new(job_sample::jobs(shown.count))
+            .on_shrink(|_, _| {})
+            .on_cancel(|_, _, _| {});
+        Some(
+            div()
+                .absolute()
+                .right(t.spacing.xxl)
+                .bottom(t.spacing.fkey_height + t.spacing.md)
+                .child(card),
+        )
+    }
+
+    pub fn with_jobs(shown: JobsShown, cx: &mut Context<Self>) -> Self {
+        Self {
+            jobs: Some(shown),
+            ..Self::new(None, cx)
         }
     }
 
     pub fn with_menu(cx: &mut Context<Self>) -> Self {
         Self {
             is_menu_open: true,
-            ..Self::new(None, false, cx)
+            ..Self::new(None, cx)
         }
     }
 
@@ -108,7 +142,7 @@ impl WindowPage {
         });
         Self {
             sheet: Some(Sheet { shows, state }),
-            ..Self::new(None, false, cx)
+            ..Self::new(None, cx)
         }
     }
 
@@ -206,7 +240,7 @@ impl WindowPage {
 }
 
 impl Render for WindowPage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let panes =
             Splitter::new("panes", &self.split, self.card(0, cx), self.card(1, cx)).line_on_hover();
@@ -235,7 +269,8 @@ impl Render for WindowPage {
                     .child(panes)
                     .children(sheet),
             )
-            .child(self.fkey_bar())
+            .child(self.fkey_bar(window))
+            .children(self.job_card(&t))
             .children(menu)
     }
 }
@@ -252,13 +287,26 @@ fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 8]) -> Option<AnyElement> {
-    let [main, shift, alt, job, menu, sheet, sheet_left, sheet_narrow] = windows;
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 11]) -> Option<AnyElement> {
+    let [
+        main,
+        shift,
+        alt,
+        menu,
+        sheet,
+        sheet_left,
+        sheet_narrow,
+        jobs @ ..,
+    ] = windows;
+    let [job, job_pill, two, two_pill] = jobs;
     let shown = match page {
         Page::Window => main,
         Page::WindowShift => shift,
         Page::WindowAlt => alt,
         Page::WindowJob => job,
+        Page::WindowJobPill => job_pill,
+        Page::WindowJobs => two,
+        Page::WindowJobsPill => two_pill,
         Page::AppMenu => menu,
         Page::WindowNarrow => return Some(fixed(NARROW, main)),
         Page::Sheet => return Some(fixed(WIDE, sheet)),
