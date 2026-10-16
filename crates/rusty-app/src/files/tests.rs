@@ -4,7 +4,7 @@ use rusty_core::Location;
 use rusty_core::encoding::TextEncoding;
 use rusty_ui::window_view::{Save, SaveError};
 
-use super::{line_endings, mostly_crlf, read, write};
+use super::{bytes, line_endings, mostly_crlf, read, write};
 
 mod encodings;
 
@@ -170,7 +170,7 @@ fn the_hooks_list_a_zip_and_read_one_entry() {
         .unwrap();
     writer.write_all(b"# inside\n").unwrap();
     writer.finish().unwrap();
-    let hooks = super::hooks();
+    let hooks = super::hooks(None);
     let keep = std::sync::atomic::AtomicBool::new(false);
     let listing = (hooks.archive)(&at(&file), &keep).unwrap();
     assert_eq!(listing.entries[0].name, "inner/notes.md");
@@ -181,15 +181,11 @@ fn the_hooks_list_a_zip_and_read_one_entry() {
 }
 
 #[test]
-fn whole_file_bytes_stop_at_the_limit() {
+fn bytes_reads_a_whole_file_up_to_the_limit() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("face.ttf");
-    fs::write(&file, [7u8; 10]).unwrap();
-    let hooks = super::hooks();
-    assert_eq!((hooks.bytes)(&at(&file), 10).unwrap(), [7u8; 10]);
-    assert!(
-        (hooks.bytes)(&at(&file), 9)
-            .unwrap_err()
-            .contains("too large")
-    );
+    let file = dir.path().join("dot.png");
+    fs::write(&file, [0x89, b'P', b'N', b'G']).unwrap();
+    assert_eq!(bytes(&at(&file), 4).unwrap(), [0x89, b'P', b'N', b'G']);
+    let error = bytes(&at(&file), 3).unwrap_err();
+    assert!(error.starts_with("Too large"), "{error}");
 }

@@ -108,7 +108,7 @@ fn search_session(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> (boo
 fn f3_in_the_text_editor_opens_its_search_then_steps_through_matches(cx: &mut TestAppContext) {
     let (window, view, _) = text_window(cx, Setup::new(b"one\ntwo\none\n".to_vec()));
     press(cx, window, &view, "f3");
-    assert!(search_session(cx, &view).0);
+    assert!(visible(cx, window, "editor-bar"));
     type_in(cx, window, &view, "one");
     press(cx, window, &view, "escape");
     press(cx, window, &view, "f3");

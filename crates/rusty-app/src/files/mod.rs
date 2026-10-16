@@ -1,4 +1,4 @@
-use std::fs;
+use std::fs::{self, File};
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,14 +11,17 @@ use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
 
 mod archive;
 mod code_page;
+mod memory;
 mod paged;
 mod summary;
 
 const MAX_VIEW: u64 = 16 * 1024 * 1024;
 const SNIFF: usize = 8 * 1024;
 
-pub fn hooks() -> FileHooks {
-    FileHooks {
+pub use memory::{SharedDb, open as open_memory};
+
+pub fn hooks(db: Option<SharedDb>) -> FileHooks {
+    let hooks = FileHooks {
         read: Arc::new(read),
         write: Arc::new(write),
         head: Arc::new(paged::head),
@@ -26,6 +29,11 @@ pub fn hooks() -> FileHooks {
         archive: Arc::new(archive::archive),
         archive_entry: Arc::new(archive::archive_entry),
         bytes: Arc::new(bytes),
+        ..FileHooks::none()
+    };
+    match db {
+        Some(db) => memory::attach(hooks, db),
+        None => hooks,
     }
 }
 
@@ -74,18 +82,29 @@ pub fn read(location: &Location) -> Result<FileText, String> {
     })
 }
 
+fn too_large(limit: u64) -> String {
+    format!(
+        "Too large to open here (over {} MB).",
+        limit / (1024 * 1024)
+    )
+}
+
 pub fn bytes(location: &Location, limit: u64) -> Result<Vec<u8>, String> {
-    let file =
-        fs::File::open(path_of(location)?).map_err(|error| format!("Cannot open it: {error}"))?;
-    let mut bytes = Vec::new();
+    let path = path_of(location)?;
+    let file = File::open(&path).map_err(|error| format!("Cannot open it: {error}"))?;
+    let size = file
+        .metadata()
+        .map_err(|error| format!("Cannot open it: {error}"))?
+        .len();
+    if size > limit {
+        return Err(too_large(limit));
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
     file.take(limit.saturating_add(1))
         .read_to_end(&mut bytes)
-        .map_err(|error| format!("Cannot open it: {error}"))?;
+        .map_err(|error| format!("Cannot read it: {error}"))?;
     if bytes.len() as u64 > limit {
-        return Err(format!(
-            "Over {} MB: too large to preview here.",
-            limit / (1024 * 1024)
-        ));
+        return Err(too_large(limit));
     }
     Ok(bytes)
 }

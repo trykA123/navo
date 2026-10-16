@@ -5,7 +5,7 @@ use rusty_core::paging::{ByteSource, LineIndex};
 
 use crate::prelude::*;
 use crate::window_view::viewer::paged::PagedBody;
-use crate::window_view::viewer::{Paged, PagedKind, Sniff};
+use crate::window_view::viewer::{Paged, PagedKind, PagedView, Sniff};
 
 const INDEX_CHUNK: usize = 64 * 1024;
 const SNIFF: usize = 8 * 1024;
@@ -43,6 +43,7 @@ fn paged(bytes: Arc<Vec<u8>>) -> Paged {
         }),
         summary: None,
         editable: false,
+        stamp: None,
     }
 }
 
@@ -63,5 +64,6 @@ pub(super) fn open(entry: Entry, cx: &mut App) -> PagedBody {
     } else {
         PagedKind::Text
     };
-    PagedBody::new(entry.title, paged(Arc::new(entry.bytes)), kind, cx)
+    let paged = paged(Arc::new(entry.bytes));
+    PagedBody(cx.new(|cx| PagedView::new(entry.title, paged, kind, cx)))
 }

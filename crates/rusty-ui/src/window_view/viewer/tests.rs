@@ -1,12 +1,18 @@
 mod archive;
 mod find;
+mod find_all;
+mod follow;
 mod font;
+mod image;
 mod kind;
 mod language;
 mod lister;
+mod marks;
+mod memory;
 mod moves;
 mod open;
 mod save;
+mod search;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -73,6 +79,7 @@ pub(super) struct Log {
     pub heads: Arc<Mutex<Vec<String>>>,
     pub written: Arc<Mutex<Vec<String>>>,
     pub reads: Arc<AtomicUsize>,
+    pub reopened: Arc<AtomicUsize>,
 }
 
 impl Log {
@@ -86,6 +93,10 @@ impl Log {
 
     pub(super) fn reads(&self) -> usize {
         self.reads.load(Ordering::Relaxed)
+    }
+
+    pub(super) fn reopened_reads(&self) -> usize {
+        self.reopened.load(Ordering::Relaxed)
     }
 }
 
@@ -107,35 +118,40 @@ fn index_run(bytes: Arc<Vec<u8>>, fails: bool) -> super::IndexRun {
     })
 }
 
-fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, reads: &Arc<AtomicUsize>) -> Paged {
-    let reopened = bytes.clone();
+fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, log: &Log) -> Paged {
+    let (reopened, reopened_reads) = (bytes.clone(), log.reopened.clone());
     Paged {
         source: Arc::new(Memory {
             bytes: bytes.clone(),
             changed: AtomicBool::new(setup.changed),
-            reads: reads.clone(),
+            reads: log.reads.clone(),
         }),
         reopen: Arc::new(move || {
             Ok(Box::new(Memory {
                 bytes: reopened.clone(),
                 changed: AtomicBool::new(false),
-                reads: Arc::default(),
+                reads: reopened_reads.clone(),
             }) as Box<dyn ByteSource + Send>)
         }),
         index: index_run(bytes.clone(), setup.index_fails),
         summary: None,
         editable: false,
+        stamp: Some(FileStamp {
+            len: bytes.len() as u64,
+            modified_ms: 1,
+        }),
     }
 }
 
 pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
     let bytes = Arc::new(setup.bytes.clone());
+    let whole = bytes.clone();
     let text = String::from_utf8_lossy(&setup.bytes).into_owned();
     let head = Head {
         bytes: setup.bytes.iter().take(8 * 1024).copied().collect(),
         len: setup.len.unwrap_or(setup.bytes.len() as u64),
     };
-    let (heads, written, reads) = (log.heads.clone(), log.written.clone(), log.reads.clone());
+    let (heads, written, counters) = (log.heads.clone(), log.written.clone(), log.clone());
     FileHooks {
         read: Arc::new(move |_| {
             Ok(FileText {
@@ -158,7 +174,8 @@ pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
             heads.lock().expect("log").push(name);
             Ok(head.clone())
         }),
-        paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup, &reads))),
+        paged: Arc::new(move |_| Ok(paged_of(&bytes, &setup, &counters))),
+        bytes: Arc::new(move |_, _| Ok(whole.as_ref().clone())),
         ..FileHooks::none()
     }
 }

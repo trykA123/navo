@@ -8,12 +8,20 @@ use super::lines::PagedKind;
 use super::moves::Move;
 use crate::format;
 use crate::prelude::*;
-use crate::primitives::{Button, ButtonVariant, TextField};
 use crate::tokens::{self, Theme};
-use crate::window_view::viewer::{
-    Back, GoEnd, GoStart, MatchCase, OpenFind, OpenGoTo, PAGED_CONTEXT, PageDown, PageUp, RowDown,
-    RowUp, ScrollLeft, ScrollRight,
+use crate::window_view::viewer::body::Key;
+use crate::window_view::viewer::search::bar::{BarLook, FIND_KEYS, LIST_KEYS, MARK_KEYS, bar_row};
+use crate::window_view::viewer::search::count::count_label;
+use crate::window_view::viewer::search::find_all::{
+    close_find_all, find_all_panel, go_to_found, move_in_find_all,
 };
+use crate::window_view::viewer::{
+    Back, FindAll, GoEnd, GoStart, ListClose, ListDown, ListGo, ListUp, MatchCase, NewerSearch,
+    OlderSearch, OpenFind, OpenGoTo, PAGED_CONTEXT, PageDown, PageUp, RowDown, RowUp, ScrollLeft,
+    ScrollRight,
+};
+
+const GO_TO_KEYS: [Key; 2] = [("Enter", "Go there"), ("Esc", "Close")];
 
 fn small(t: &Theme, color: Hsla) -> Div {
     div()
@@ -46,26 +54,27 @@ impl PagedView {
         }
     }
 
-    pub(in crate::window_view) fn bar_keys(
-        &self,
-    ) -> Option<&'static [(&'static str, &'static str)]> {
-        let bar = self.find.bar.as_ref()?;
-        Some(match bar.kind {
-            BarKind::Find => &[
-                ("Enter", "Next"),
-                ("Shift+Enter", "Previous"),
-                ("Alt+C", "Match case"),
-                ("Esc", "Close search"),
-            ],
-            BarKind::GoTo => &[("Enter", "Go there"), ("Esc", "Close")],
+    pub(in crate::window_view) fn bar_keys(&self) -> Option<&'static [Key]> {
+        if self.marking.find_all.is_some() {
+            return Some(&LIST_KEYS);
+        }
+        Some(match self.find.bar.as_ref()?.kind {
+            BarKind::Find => &FIND_KEYS,
+            BarKind::GoTo => &GO_TO_KEYS,
         })
     }
 
-    pub(in crate::window_view) fn go_to_key(&self) -> (&'static str, &'static str) {
-        match self.kind {
+    pub(in crate::window_view) fn reading_keys(&self) -> Vec<Key> {
+        let go_to = match self.kind {
             PagedKind::Hex => ("Ctrl+G", "Go to offset"),
             PagedKind::Text => ("Ctrl+G", "Go to line"),
+        };
+        let mut keys = vec![("Ctrl+F", "Find"), ("F3", "Next"), go_to];
+        keys.extend(MARK_KEYS);
+        if self.kind == PagedKind::Text {
+            keys.extend([("Alt+L", "Line ends"), ("Alt+F", "Follow")]);
         }
+        keys
     }
 
     fn index_status(&self) -> Option<SharedString> {
@@ -90,6 +99,12 @@ impl PagedView {
         self.find.note.clone().or_else(|| self.note.clone())
     }
 
+    fn count_text(&self) -> Option<SharedString> {
+        let counted = self.marking.counted()?;
+        let hit = self.find.hit.as_ref().map(|hit| hit.start);
+        Some(count_label(counted, hit).into())
+    }
+
     fn bar_view(
         &self,
         t: &Theme,
@@ -101,43 +116,20 @@ impl PagedView {
             (BarKind::GoTo, PagedKind::Hex) => "Go to offset",
             (BarKind::GoTo, PagedKind::Text) => "Go to line",
         };
-        let is_text_find = bar.kind == BarKind::Find && self.kind == PagedKind::Text;
-        let case_variant = if self.find.match_case {
-            ButtonVariant::Primary
-        } else {
-            ButtonVariant::Ghost
+        let is_find = bar.kind == BarKind::Find;
+        let is_text_find = is_find && self.kind == PagedKind::Text;
+        let look = BarLook {
+            id: "paged-bar",
+            input_id: "paged-input",
+            error_id: "paged-bar-error",
+            label,
+            input: &bar.input,
+            is_find,
+            match_case: is_text_find.then_some(self.find.match_case),
+            count: self.count_text().filter(|_| is_find),
+            error: bar.error.clone(),
         };
-        div()
-            .id("paged-bar")
-            .test_support()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(t.spacing.sm)
-            .child(small(t, t.colors.muted).child(label))
-            .child(div().w(t.spacing.rail_width).child(TextField::new(
-                "paged-input",
-                &bar.input,
-                label,
-            )))
-            .when(is_text_find, |row| {
-                row.child(
-                    Button::new("match-case", "Match case")
-                        .variant(case_variant)
-                        .tooltip("Alt+C")
-                        .on_click(cx.listener(|view, _, _, cx| view.toggle_case(cx))),
-                )
-            })
-            .when_some(bar.error.clone(), |row, error| {
-                row.child(
-                    small(t, t.colors.mark)
-                        .id("paged-bar-error")
-                        .role(Role::Alert)
-                        .aria_label(error.clone())
-                        .test_support()
-                        .child(error),
-                )
-            })
+        bar_row(t, look, cx.listener(|view, _, _, cx| view.toggle_case(cx)))
     }
 
     fn header(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
@@ -166,11 +158,14 @@ impl PagedView {
             .when_some(summary, |row, summary| {
                 row.child(small(t, t.colors.muted).child(summary))
             })
-            .when(self.changed, |row| {
+            .when(self.changed && self.follow_label().is_none(), |row| {
                 row.child(
                     status(t, "paged-changed", "Changed on disk".into()).text_color(t.colors.warn),
                 )
             })
+            .children(self.follow_label().map(|label| {
+                status(t, "paged-follow", label.into()).text_color(t.colors.accent_text)
+            }))
             .child(div().flex_1())
             .children(
                 self.index_status()
@@ -179,6 +174,11 @@ impl PagedView {
             .children(
                 self.find_status()
                     .map(|text| status(t, "paged-status", text)),
+            )
+            .children(
+                self.count_text()
+                    .filter(|_| self.find.bar.is_none())
+                    .map(|text| status(t, "find-count", text)),
             )
             .children(self.find.bar.as_ref().map(|bar| self.bar_view(t, bar, cx)))
     }
@@ -209,6 +209,24 @@ impl PagedView {
         }))
         .on_action(cx.listener(|view, _: &MatchCase, _, cx| view.toggle_case(cx)))
         .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
+        .on_action(cx.listener(|view, _: &OlderSearch, window, cx| {
+            view.recall(true, window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &NewerSearch, window, cx| {
+            view.recall(false, window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &FindAll, window, cx| {
+            view.find_all_in_bar(window, cx);
+        }))
+    }
+
+    fn list_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        root.on_action(cx.listener(|view, _: &ListUp, _, cx| move_in_find_all(view, false, cx)))
+            .on_action(cx.listener(|view, _: &ListDown, _, cx| move_in_find_all(view, true, cx)))
+            .on_action(cx.listener(|view, _: &ListGo, window, cx| go_to_found(view, window, cx)))
+            .on_action(cx.listener(|view, _: &ListClose, window, cx| {
+                close_find_all(view, window, cx);
+            }))
     }
 
     fn fitting_rows(&self, window: &Window) -> u64 {
@@ -235,6 +253,10 @@ impl Render for PagedView {
         self.rows = self.fitting_rows(window);
         self.follow_changes(cx);
         self.request_rows(cx);
+        self.update_overview(&t);
+        self.marking.sync_find_all();
+        let rows = self.found_rows(cx);
+        let panel = find_all_panel(&t, &self.marking, rows);
         let screen = self.cache.screen(self.want(), self.source.len());
         self.show_position(screen.end);
         let root = div()
@@ -242,7 +264,8 @@ impl Render for PagedView {
             .key_context(PAGED_CONTEXT)
             .track_focus(&self.focus);
         let root = Self::find_keys(Self::movement_keys(root, cx), cx);
-        root.flex()
+        Self::list_keys(root, cx)
+            .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
@@ -250,5 +273,6 @@ impl Render for PagedView {
             .bg(t.colors.surface)
             .child(self.header(&t, cx))
             .child(self.body(&t, &screen, cx))
+            .children(panel)
     }
 }

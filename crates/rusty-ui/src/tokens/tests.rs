@@ -189,3 +189,27 @@ fn applying_a_theme_maps_our_colours_onto_the_kit(cx: &mut TestAppContext) {
 fn current_falls_back_to_light_before_any_theme_is_applied(cx: &mut TestAppContext) {
     cx.update(|cx| assert_eq!(current(cx).mode, Mode::Light));
 }
+
+#[test]
+fn text_reads_at_four_and_a_half_to_one_over_every_mark_fill() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        for (at, fill) in theme.marks.fills.iter().enumerate() {
+            let ratio = super::contrast_ratio(theme.colors.text, *fill);
+            assert!(ratio >= 4.5, "{mode:?}: text on mark {at} is {ratio:.2}:1");
+        }
+    }
+}
+
+#[test]
+fn mark_ticks_stand_out_three_to_one_from_the_surfaces() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        for (at, tick) in theme.marks.ticks.iter().enumerate() {
+            for surface in [theme.colors.surface, theme.colors.rail] {
+                let ratio = super::contrast_ratio(*tick, surface);
+                assert!(ratio >= 3.0, "{mode:?}: tick {at} is {ratio:.2}:1");
+            }
+        }
+    }
+}

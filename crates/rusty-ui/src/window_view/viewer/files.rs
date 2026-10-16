@@ -3,7 +3,8 @@ use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
 use rusty_core::encoding::TextEncoding;
-use rusty_core::paging::{ByteSource, LineIndex};
+use rusty_core::marks::{Bookmarks, MarkSet, SearchHistory};
+use rusty_core::paging::{ByteSource, LineIndex, Needle};
 use rusty_fs::archive::ArchiveListing;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +69,7 @@ pub struct Paged {
     pub index: IndexRun,
     pub summary: Option<String>,
     pub editable: bool,
+    pub stamp: Option<FileStamp>,
 }
 
 type Read = Arc<dyn Fn(&Location) -> Result<FileText, String> + Send + Sync>;
@@ -79,7 +81,11 @@ type ListArchive =
     Arc<dyn Fn(&Location, &AtomicBool) -> Result<ArchiveListing, String> + Send + Sync>;
 type ReadArchiveEntry =
     Arc<dyn Fn(&Location, usize, &AtomicBool) -> Result<Vec<u8>, String> + Send + Sync>;
-type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
+type LoadMemory = Arc<dyn Fn(&Location, FileStamp) -> Option<(MarkSet, Bookmarks)> + Send + Sync>;
+type SaveMemory = Arc<dyn Fn(&Location, FileStamp, &MarkSet, &Bookmarks) + Send + Sync>;
+type LoadHistory = Arc<dyn Fn() -> SearchHistory + Send + Sync>;
+type Remember = Arc<dyn Fn(&Needle) + Send + Sync>;
+pub type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FileHooks {
@@ -89,6 +95,10 @@ pub struct FileHooks {
     pub paged: OpenPaged,
     pub archive: ListArchive,
     pub archive_entry: ReadArchiveEntry,
+    pub memory: LoadMemory,
+    pub save_memory: SaveMemory,
+    pub history: LoadHistory,
+    pub remember: Remember,
     pub bytes: ReadBytes,
 }
 
@@ -104,6 +114,10 @@ impl FileHooks {
             paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             archive: Arc::new(|_, _| Err("Archives cannot be opened here.".to_owned())),
             archive_entry: Arc::new(|_, _, _| Err("Archives cannot be opened here.".to_owned())),
+            memory: Arc::new(|_, _| None),
+            save_memory: Arc::new(|_, _, _, _| {}),
+            history: Arc::new(SearchHistory::default),
+            remember: Arc::new(|_| {}),
             bytes: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
         }
     }

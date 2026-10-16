@@ -3,10 +3,11 @@ use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::{ArchiveView, FontView, PagedView};
+use rusty_ui::window_view::{ArchiveView, FontView, ImageView, PagedView};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
+use crate::image_sample;
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
@@ -23,10 +24,12 @@ pub enum Page {
     TypedPath,
     Archive,
     Font,
+    Marks,
+    Image,
 }
 
 impl Page {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 11] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -36,11 +39,13 @@ impl Page {
         Self::TypedPath,
         Self::Archive,
         Self::Font,
+        Self::Marks,
+        Self::Image,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Primitives => "Kit",
+            Self::Primitives => "Parts",
             Self::Pane => "Pane",
             Self::Operate => "Operate",
             Self::Hex => "Hex",
@@ -49,6 +54,8 @@ impl Page {
             Self::TypedPath => "Path",
             Self::Archive => "Zip",
             Self::Font => "Font",
+            Self::Marks => "Marks",
+            Self::Image => "Image",
         }
     }
 }
@@ -64,6 +71,8 @@ pub struct Gallery {
     typed_path: Entity<DrivesPage>,
     archive: Entity<ArchiveView>,
     font: Option<Entity<FontView>>,
+    marks: Option<Entity<PagedView>>,
+    image: Option<Entity<ImageView>>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -83,6 +92,8 @@ impl Gallery {
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             archive: rich_sample::archive_view(cx),
             font: rich_sample::font_view(cx),
+            marks: None,
+            image: image_sample::image_view(cx).ok(),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -93,6 +104,9 @@ impl Gallery {
     pub fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
         self.mode = mode;
         tokens::apply(mode, cx);
+        if let Some(image) = &self.image {
+            image.update(cx, |image, cx| image.show_info(mode == Mode::Dark, cx));
+        }
         cx.notify();
     }
 
@@ -105,6 +119,7 @@ impl Gallery {
         let current = self.page;
         let pages: Vec<Button> = Page::ALL
             .into_iter()
+            .filter(|page| !matches!(page, Page::Marks | Page::Archive | Page::Font))
             .map(|page| {
                 let variant = if page == current {
                     ButtonVariant::Primary
@@ -188,12 +203,20 @@ impl Render for Gallery {
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
+            Page::Marks => root.child(self.marks_page(window, cx)),
+            Page::Image => root.children(self.image.clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }
 }
 
 impl Gallery {
+    fn marks_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Entity<PagedView> {
+        self.marks
+            .get_or_insert_with(|| viewer_sample::marks_view(window, cx))
+            .clone()
+    }
+
     fn primitives(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Div {
         div()
             .flex()

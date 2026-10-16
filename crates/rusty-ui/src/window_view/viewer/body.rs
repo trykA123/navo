@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use gpui_kit::{AnyView, FocusHandle};
 use rusty_core::Location;
+use rusty_core::marks::{Bookmarks, MarkSet};
 
 use super::FileHooks;
 use crate::prelude::*;
@@ -20,6 +21,23 @@ pub struct Host {
     pub location: Location,
     pub hooks: FileHooks,
     pub on_saved: Rc<dyn Fn(&mut App)>,
+    pub carried: Option<Carried>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Carried {
+    pub marks: MarkSet,
+    pub bookmarks: Option<Bookmarks>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BodyAct {
+    Mark(u8),
+    ClearMarks,
+    ToggleBookmark,
+    StepBookmark { backward: bool },
+    LineEnds,
+    Follow,
 }
 
 pub struct Attach {
@@ -61,4 +79,10 @@ pub trait ViewerBody: Any {
     }
 
     fn save(&self, _: &mut App) {}
+
+    fn act(&self, _: BodyAct, _: &mut Window, _: &mut App) {}
+
+    fn carry(&self, _: &App) -> Option<Carried> {
+        None
+    }
 }

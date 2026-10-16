@@ -78,12 +78,9 @@ impl ViewerKind for Text {
                 }
                 Box::new(body)
             }
-            TextLoad::Paged(paged) => Box::new(PagedBody::new(
-                attach.host.title,
-                paged,
-                PagedKind::Text,
-                cx,
-            )),
+            TextLoad::Paged(paged) => {
+                Box::new(PagedBody::new(attach.host, paged, PagedKind::Text, cx))
+            }
         })
     }
 

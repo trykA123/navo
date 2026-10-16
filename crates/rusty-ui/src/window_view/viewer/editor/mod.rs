@@ -1,18 +1,28 @@
 mod body;
+mod find;
+mod marking;
+mod overlay;
 mod save;
+mod view;
 
-use gpui_kit::base::TestSupportExt;
-use gpui_kit::component::input::{Editor, EditorState, InputEvent};
-use gpui_kit::{Role, Subscription, Task};
+use std::sync::Arc;
+
+use gpui_kit::component::input::{EditorState, InputEvent, RangeDecorationCollection};
+use gpui_kit::{Subscription, Task};
 use rusty_core::encoding::TextEncoding;
 
 pub(super) use body::{EditorBody, EditorFile};
 
-use super::FileStamp;
-use super::body::Host;
-use crate::format;
+use super::body::{Carried, Host};
+use super::search::Marking;
+use super::search::crlf::CrlfOffsets;
+use super::search::memory::{MemoryLink, attach_memory};
+use super::search::overview::Overview;
+use super::{FileStamp, FileText};
 use crate::prelude::*;
-use crate::tokens::{self, Theme};
+use crate::tokens::Mode;
+use find::EditorFind;
+use marking::text_source;
 
 const NOT_LOSSLESS: &str = "Not valid in its encoding: opened read-only.";
 
@@ -24,31 +34,61 @@ pub(super) struct EditorView {
     crlf: bool,
     encoding: TextEncoding,
     stamp: Option<FileStamp>,
+    persists: bool,
     dirty: bool,
     revision: u64,
     overwrite: bool,
     saving: Option<Task<()>>,
     note: Option<SharedString>,
+    find: EditorFind,
+    marking: Marking,
+    decorations: RangeDecorationCollection,
+    decorated: Option<(u64, Mode)>,
+    overview: Overview,
+    recount: Option<Task<()>>,
     _changes: Subscription,
+}
+
+fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLink) {
+    let persists =
+        file.encoding.encoding.name() == "UTF-8" && !file.encoding.bom && !file.read_only;
+    let carried = host.carried.clone().map(|carried| Carried {
+        bookmarks: carried.bookmarks.filter(|_| persists),
+        ..carried
+    });
+    let link = MemoryLink {
+        hooks: host.hooks.clone(),
+        location: host.location.clone(),
+        stamp: file.stamp.filter(|_| persists),
+        carried,
+        crlf: file.crlf.then(|| CrlfOffsets(text.clone())),
+    };
+    (persists, link)
 }
 
 impl EditorView {
     fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let EditorFile { file, language } = opened;
+        let shared: Arc<str> = Arc::from(file.text.as_str());
+        let (persists, link) = memory_link(&file, &shared, &host);
         let text = file.text;
         let editor = cx.new(|cx| {
             let mut state = EditorState::new(window, cx)
                 .language(language)
                 .default_value(text);
             state.set_readonly(true, cx);
+            state.set_searchable(false, cx);
             state
+        });
+        let decorations = editor.update(cx, |state, cx| {
+            state.create_range_decorations_collection(Vec::new(), cx)
         });
         let changes = cx.subscribe(&editor, |view, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 view.text_changed(cx);
             }
         });
-        Self {
+        let mut view = Self {
             host,
             editor,
             editing: false,
@@ -56,19 +96,45 @@ impl EditorView {
             crlf: file.crlf,
             encoding: file.encoding,
             stamp: file.stamp,
+            persists,
             dirty: false,
             revision: 0,
             overwrite: false,
             saving: None,
             note: file.read_only.then(|| NOT_LOSSLESS.into()),
+            find: EditorFind::default(),
+            marking: Marking::new(text_source(shared)),
+            decorations,
+            decorated: None,
+            overview: Overview::default(),
+            recount: None,
             _changes: changes,
-        }
+        };
+        attach_memory(&mut view, link, cx);
+        view
+    }
+
+    #[cfg(test)]
+    pub(super) fn marking_state(&self) -> &Marking {
+        &self.marking
+    }
+
+    #[cfg(test)]
+    pub(super) fn selected(&self, cx: &App) -> std::ops::Range<usize> {
+        self.editor.read(cx).selected_range()
+    }
+
+    #[cfg(test)]
+    pub(super) fn decorated_ranges(&self, cx: &App) -> Vec<std::ops::Range<usize>> {
+        self.decorations.get_ranges(cx)
     }
 
     fn text_changed(&mut self, cx: &mut Context<Self>) {
         self.dirty = true;
         self.revision += 1;
+        self.marking.freeze_bookmarks();
         self.overwrite = false;
+        self.text_edited(cx);
         cx.notify();
     }
 
@@ -78,80 +144,15 @@ impl EditorView {
         }
         if !self.editing {
             self.editing = true;
-            self.editor
-                .update(cx, |state, cx| state.set_readonly(false, cx));
+            self.find.bar = None;
+            self.marking.find_all = None;
+            self.marking.line_ends = false;
+            self.editor.update(cx, |state, cx| {
+                state.set_readonly(false, cx);
+                state.set_searchable(true, cx);
+            });
             cx.notify();
         }
         true
-    }
-
-    fn header(&self, t: &Theme) -> Div {
-        let mode = if self.editing {
-            "Editing"
-        } else {
-            "Text · read-only"
-        };
-        div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(t.spacing.md)
-            .px(t.spacing.xl)
-            .h(t.spacing.path_height)
-            .border_b_1()
-            .border_color(t.colors.line)
-            .bg(t.colors.rail)
-            .child(
-                div()
-                    .id("viewer-title")
-                    .test_support()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(self.host.title.clone()),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap(t.spacing.md)
-                    .text_color(t.colors.muted)
-                    .text_size(t.typography.small)
-                    .child(mode)
-                    .children(self.stamp.map(|stamp| format::size(stamp.len)))
-                    .child(self.encoding.label()),
-            )
-            .when(self.dirty, |d| {
-                d.child(div().text_color(t.colors.mark).child("●"))
-            })
-            .child(div().flex_1())
-            .when_some(self.note.clone(), |d, note| {
-                d.child(
-                    div()
-                        .id("viewer-message")
-                        .role(Role::Status)
-                        .aria_label(note.clone())
-                        .test_support()
-                        .text_color(t.colors.muted)
-                        .text_size(t.typography.small)
-                        .child(note),
-                )
-            })
-    }
-}
-
-impl Render for EditorView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = tokens::current(cx).clone();
-        div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h_0()
-            .size_full()
-            .child(self.header(&t))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(Editor::new(&self.editor).h_full().readonly(!self.editing)),
-            )
     }
 }
