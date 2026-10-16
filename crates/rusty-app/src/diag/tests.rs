@@ -4,7 +4,32 @@ use std::io::Read;
 
 use serde_json::Value;
 
+use std::sync::Arc;
+
+use rusty_diag::EventRing;
+use tracing_subscriber::Registry;
+use tracing_subscriber::layer::SubscriberExt;
+
 use super::*;
+use crate::logging::{Diagnostics, Opened, log_config, open};
+
+fn diagnostics(opened: Opened) -> Diagnostics {
+    Diagnostics {
+        redactor: Arc::new(redactor()),
+        ring: Arc::new(EventRing::new(EventRing::DEFAULT_BUDGET)),
+        misses: opened.misses(),
+    }
+}
+
+fn read_report(path: &Path) -> Value {
+    let mut zip = zip::ZipArchive::new(File::open(path).unwrap()).unwrap();
+    let mut text = String::new();
+    zip.by_name("report.json")
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    serde_json::from_str(&text).unwrap()
+}
 
 fn env_of(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
     let map: HashMap<String, String> = pairs
@@ -79,7 +104,7 @@ fn the_input_names_this_build() {
 fn the_report_holds_build_system_memory_and_timing() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("report.zip");
-    write(&path, Instant::now()).unwrap();
+    write(&path, Instant::now(), &diagnostics(Opened::default())).unwrap();
     let mut zip = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
     let mut text = String::new();
     zip.by_name("report.json")
@@ -91,4 +116,21 @@ fn the_report_holds_build_system_memory_and_timing() {
     assert!(report["system"]["cpu_count"].as_u64() > Some(0));
     assert!(report["memory"].is_object());
     assert!(report["performance"].is_object());
+}
+
+#[test]
+fn the_report_carries_the_recent_events_and_the_miss_count() {
+    let mut diagnostics = diagnostics(Opened::default());
+    let opened = open(log_config(None), &diagnostics.redactor, &diagnostics.ring);
+    diagnostics.misses = opened.misses();
+    let subscriber = Registry::default().with(opened.layer);
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(path = "/home/admin/secret.txt", "copied");
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("report.zip");
+    write(&path, Instant::now(), &diagnostics).unwrap();
+    let report = read_report(&path);
+    assert_eq!(report["recent_events"][0]["msg"], "copied");
+    assert_eq!(report["redaction_misses"], 1);
 }

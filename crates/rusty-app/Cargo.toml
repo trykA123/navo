@@ -19,6 +19,8 @@ rusty-shell = { path = "../rusty-shell" }
 rusty-store = { path = "../rusty-store" }
 rusty-ui = { path = "../rusty-ui" }
 serde_json = "1.0.154"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["env-filter", "registry", "std"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [

@@ -36,6 +36,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
             let _ = save(state, file);
         }
     });
+    tracing::info!(viewer = view.is_some(), "window opening");
     run(StartOptions {
         state,
         provider: local,

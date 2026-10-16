@@ -15,6 +15,7 @@ mod files;
 mod gui;
 mod jobs;
 mod launch;
+mod logging;
 mod shell_menu;
 mod startup;
 #[cfg(windows)]
@@ -24,6 +25,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use cli::Command;
+use rusty_store::StoreDirs;
 
 fn main() -> ExitCode {
     let started = Instant::now();
@@ -31,6 +33,9 @@ fn main() -> ExitCode {
     if parsed.as_ref().map_or(true, Command::uses_console) {
         console::attach();
     }
+    let diagnostics =
+        logging::install(StoreDirs::detect().as_ref().map(|dirs| dirs.data.as_path()));
+    logging::log_start();
     match parsed {
         Ok(Command::Open) => {
             gui::open(None);
@@ -44,7 +49,7 @@ fn main() -> ExitCode {
             println!("ferrite {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        Ok(Command::DiagReport(path)) => match diag::write(&path, started) {
+        Ok(Command::DiagReport(path)) => match diag::write(&path, started, &diagnostics) {
             Ok(summary) => {
                 println!(
                     "ferrite: wrote {} ({} bytes)",

@@ -8,15 +8,18 @@ use rusty_diag::{
     SystemInfo, TaskCounters, memory_report, write_report,
 };
 
+use crate::logging::Diagnostics;
+
 const NO_WINDOW: &str = "unknown (no window)";
 
-pub fn write(path: &Path, started: Instant) -> io::Result<ReportSummary> {
-    let mut identity = identity(|name| std::env::var(name).ok());
-    if identity.computer.is_none() {
-        identity.computer = host_name();
-    }
-    let redactor = Redactor::new(Salt::random(), identity);
+pub fn write(
+    path: &Path,
+    started: Instant,
+    diagnostics: &Diagnostics,
+) -> io::Result<ReportSummary> {
     let mut input = report_input();
+    input.events = diagnostics.ring.snapshot();
+    input.redaction_misses = diagnostics.misses.count();
     input.memory = Some(memory_report(
         probe().as_ref(),
         &CacheRegistry::default(),
@@ -26,7 +29,15 @@ pub fn write(path: &Path, started: Instant) -> io::Result<ReportSummary> {
         "report".to_owned(),
         started.elapsed().as_secs_f64() * 1000.0,
     )];
-    write_report(path, &input, &redactor)
+    write_report(path, &input, &diagnostics.redactor)
+}
+
+pub fn redactor() -> Redactor {
+    let mut identity = identity(|name| std::env::var(name).ok());
+    if identity.computer.is_none() {
+        identity.computer = host_name();
+    }
+    Redactor::new(Salt::random(), identity)
 }
 
 pub fn identity(var: impl Fn(&str) -> Option<String>) -> Identity {
