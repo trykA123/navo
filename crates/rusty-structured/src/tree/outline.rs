@@ -1,3 +1,5 @@
+mod fold;
+
 use super::filter::Filtered;
 use super::{Lazy, NodeId, Tree};
 
@@ -230,13 +232,7 @@ impl Outline {
             self.set_open(node, true);
             return Step::Load(node, lazy);
         }
-        let mut stack = vec![node];
-        while let Some(at) = stack.pop() {
-            if tree.lazy(at).is_none() && tree.child_count(at) > 0 {
-                self.set_open(at, true);
-                stack.extend(tree.children(at));
-            }
-        }
+        self.open_loaded_below(tree, node);
         self.rebuild_keeping(tree, node);
         Step::Done
     }
