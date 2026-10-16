@@ -247,3 +247,49 @@ fn the_page_table_follows_the_page_order() {
         assert_eq!(info.page as usize, index, "{}", info.label);
     }
 }
+
+#[gpui_kit::test]
+fn the_sheet_pages_cover_the_passive_pane_on_each_side(cx: &mut TestAppContext) {
+    let (window, gallery) = cx.update(|cx| {
+        rusty_ui::init(Mode::Light, cx).expect("bundled fonts load");
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Point::default(),
+                size: size(px(1440.), px(720.)),
+            })),
+            ..Default::default()
+        };
+        rusty_ui::open_window(options, cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
+        })
+        .expect("open the gallery window")
+    });
+    for (page, is_right, is_ringed) in [
+        (Page::Sheet, true, false),
+        (Page::SheetLeft, false, true),
+        (Page::SheetNarrow, true, false),
+    ] {
+        cx.update(|cx| gallery.update(cx, |gallery, cx| gallery.set_page(page, cx)));
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let sheet = window.find("preview-sheet");
+            assert_eq!(sheet.label(), Some("Preview"), "{page:?}");
+            assert_eq!(sheet.selected(), Some(is_ringed), "{page:?}");
+            let passive = window.find(("pane", usize::from(is_right))).bounds();
+            assert_eq!(sheet.bounds().size.height, passive.size.height, "{page:?}");
+            let close = window.within("preview-sheet").find("side-sheet-close");
+            assert!(close.visible(), "{page:?}");
+        })
+        .expect("window");
+    }
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(400));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let sheet = window.find("preview-sheet").bounds();
+        let passive = window.find(("pane", 1usize)).bounds();
+        assert_eq!(sheet.left(), passive.left());
+        assert_eq!(sheet.right(), passive.right());
+    })
+    .expect("window");
+}

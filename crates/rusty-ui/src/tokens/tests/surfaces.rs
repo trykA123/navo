@@ -153,6 +153,7 @@ fn every_shadow_token_has_visible_layers() {
             ("menu", &shadows.menu),
             ("chip", &shadows.chip),
             ("sheet", &shadows.sheet),
+            ("sheet_ring", &shadows.sheet_ring),
             ("focus", &shadows.focus),
         ] {
             assert!(!layers.is_empty(), "{mode:?}: {name} has no shadow");
@@ -160,6 +161,32 @@ fn every_shadow_token_has_visible_layers() {
                 assert!(layer.color.a > 0.0, "{mode:?}: a {name} layer is invisible");
             }
         }
+    }
+}
+
+#[test]
+fn the_sheet_shadow_falls_straight_down_so_it_works_on_either_side() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        for layer in theme.shadows.sheet.iter().chain(&theme.shadows.sheet_ring) {
+            assert_eq!(layer.offset.x, px(0.), "{mode:?}");
+        }
+        let edge = theme.shadows.sheet.last().map(|layer| layer.color);
+        assert_eq!(edge, Some(theme.surfaces.card_edge));
+    }
+}
+
+#[test]
+fn the_sheet_accent_ring_is_one_and_a_half_pixels_on_top() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        let ring = theme.shadows.sheet_ring.last().expect("ring");
+        assert_eq!(ring.color, theme.colors.accent);
+        assert_eq!(ring.spread_radius, px(1.5));
+        assert_eq!(
+            theme.shadows.sheet_ring[..theme.shadows.sheet.len()],
+            theme.shadows.sheet[..]
+        );
     }
 }
 

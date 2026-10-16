@@ -10,6 +10,7 @@ use rusty_ui::pane_chrome::{
 };
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
+use rusty_ui::side_sheet::{SheetFrame, SheetState, Side as PaneSide};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens::{self, Density, Mode, Theme, ThemeChoice};
 use rusty_ui::window_view::{KEY_WARNING, key_labels, layer_keys};
@@ -19,6 +20,7 @@ use crate::drives_page::six_drives;
 use crate::gallery::Page;
 use crate::pane_page::status_of;
 use crate::pane_sample;
+use crate::sheet_sample;
 
 struct Side {
     tabs: &'static [&'static str],
@@ -42,10 +44,22 @@ const SIDES: [Side; 2] = [
     },
 ];
 
+pub struct SheetShows {
+    pub active: PaneSide,
+    pub window_width: f32,
+    pub is_ringed: bool,
+}
+
+struct Sheet {
+    shows: SheetShows,
+    state: Entity<SheetState>,
+}
+
 pub struct WindowPage {
     held: Option<KeyLayer>,
     has_job: bool,
     is_menu_open: bool,
+    sheet: Option<Sheet>,
     rows: Rc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
     split: Entity<SplitterState>,
@@ -61,6 +75,7 @@ impl WindowPage {
             held,
             has_job,
             is_menu_open: false,
+            sheet: None,
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
             split: cx.new(|_| SplitterState::new(0.5)),
@@ -83,6 +98,40 @@ impl WindowPage {
             is_menu_open: true,
             ..Self::new(None, false, cx)
         }
+    }
+
+    pub fn with_sheet(shows: SheetShows, cx: &mut Context<Self>) -> Self {
+        let state = cx.new(|cx| {
+            let mut state = SheetState::new();
+            state.open(cx);
+            state
+        });
+        Self {
+            sheet: Some(Sheet { shows, state }),
+            ..Self::new(None, false, cx)
+        }
+    }
+
+    fn active_index(&self) -> usize {
+        match self.sheet.as_ref().map(|sheet| sheet.shows.active) {
+            Some(PaneSide::Right) => 1,
+            _ => 0,
+        }
+    }
+
+    fn sheet_layer(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
+        let sheet = self.sheet.as_ref()?;
+        let body = px(sheet.shows.window_width) - t.spacing.md * 2.;
+        let passive_card = (body - t.spacing.md) / 2.;
+        let frame = SheetFrame::new(body, passive_card, sheet.shows.active);
+        let layer = div()
+            .absolute()
+            .top(t.spacing.xs)
+            .bottom(t.spacing.xs)
+            .left(t.spacing.md)
+            .right(t.spacing.md)
+            .child(sheet_sample::sheet(t, &sheet.state, frame).accent_ring(sheet.shows.is_ringed));
+        Some(layer)
     }
 
     fn menu(&self, t: &Theme) -> Option<AnyElement> {
@@ -114,7 +163,7 @@ impl WindowPage {
                 scroll: 0,
             },
             marked,
-            is_active: index == 0,
+            is_active: index == self.active_index(),
             filter: None,
             sort: SortKey::default(),
         };
@@ -123,7 +172,7 @@ impl WindowPage {
 
     fn card(&self, index: usize, cx: &App) -> impl IntoElement {
         let side = &SIDES[index];
-        let is_active = index == 0;
+        let is_active = index == self.active_index();
         let here = location(side.path);
         let mut marked = Selection::new(self.rows.len() as u64);
         marked.mark_rows(side.marked.iter().copied());
@@ -136,7 +185,11 @@ impl WindowPage {
                 current_drive(&self.drives, &here)
                     .and_then(|drive| self.drives.get(drive).cloned()),
             ));
-        let label = if is_active { "Left pane" } else { "Right pane" };
+        let label = if index == 0 {
+            "Left pane"
+        } else {
+            "Right pane"
+        };
         let card = pane_card(("pane", index), label, is_active, cx)
             .child(header)
             .child(PathBar::new(("path", index), here))
@@ -159,6 +212,7 @@ impl Render for WindowPage {
             Splitter::new("panes", &self.split, self.card(0, cx), self.card(1, cx)).line_on_hover();
         let is_open = self.is_menu_open;
         let menu = self.menu(&t);
+        let sheet = self.sheet_layer(&t);
         div()
             .relative()
             .size_full()
@@ -173,31 +227,43 @@ impl Render for WindowPage {
             )
             .child(
                 div()
+                    .relative()
                     .flex()
                     .flex_1()
                     .min_h_0()
                     .px(t.spacing.xs)
-                    .child(panes),
+                    .child(panes)
+                    .children(sheet),
             )
             .child(self.fkey_bar())
             .children(menu)
     }
 }
 
-const NARROW: f32 = 1100.;
+pub const NARROW: f32 = 1100.;
+pub const WIDE: f32 = 1440.;
 
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 5]) -> Option<AnyElement> {
-    let [main, shift, alt, job, menu] = windows;
+fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
+    div()
+        .w(px(width))
+        .h_full()
+        .flex_none()
+        .child(window.clone())
+        .into_any_element()
+}
+
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 8]) -> Option<AnyElement> {
+    let [main, shift, alt, job, menu, sheet, sheet_left, sheet_narrow] = windows;
     let shown = match page {
         Page::Window => main,
         Page::WindowShift => shift,
         Page::WindowAlt => alt,
         Page::WindowJob => job,
         Page::AppMenu => menu,
-        Page::WindowNarrow => {
-            let narrow = div().w(px(NARROW)).h_full().child(main.clone());
-            return Some(narrow.into_any_element());
-        }
+        Page::WindowNarrow => return Some(fixed(NARROW, main)),
+        Page::Sheet => return Some(fixed(WIDE, sheet)),
+        Page::SheetLeft => return Some(fixed(WIDE, sheet_left)),
+        Page::SheetNarrow => return Some(fixed(NARROW, sheet_narrow)),
         _ => return None,
     };
     Some(shown.clone().into_any_element())
