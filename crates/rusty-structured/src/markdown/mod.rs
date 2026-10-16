@@ -1,16 +1,19 @@
 mod block;
 mod build;
+mod scan;
 mod text;
 
 use std::fmt;
 use std::ops::Range;
 
-pub const MAX_SOURCE: usize = 4 * 1024 * 1024;
+pub const MAX_SOURCE: usize = 1024 * 1024;
 pub const MAX_BLOCKS: usize = 200_000;
 pub const MAX_SPANS: usize = 2_000_000;
 pub const MAX_BLOCK_TEXT: usize = 4 * 1024;
 pub const MAX_COLUMNS: usize = 64;
 pub const MAX_DEPTH: u8 = 8;
+pub const TABLES_AS_TEXT: &str = "Tables shown as text: too many cells";
+pub const FOOTNOTES_AS_TEXT: &str = "Footnotes shown as text: too many definitions";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
@@ -22,7 +25,7 @@ pub enum Refusal {
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::TooLarge => "Markdown over 4 MB",
+            Self::TooLarge => "Markdown over 1 MB",
             Self::TooManyBlocks => "Markdown with over 200,000 blocks",
             Self::TooManySpans => "Markdown with over 2,000,000 styled runs",
         })
@@ -171,6 +174,7 @@ pub struct Document {
     links: Vec<Link>,
     tables: Vec<Table>,
     labels: Vec<Box<str>>,
+    notes: Vec<&'static str>,
 }
 
 fn range((start, end): (u32, u32)) -> Range<usize> {
@@ -219,6 +223,11 @@ impl Document {
     }
 
     #[must_use]
+    pub fn notes(&self) -> &[&'static str] {
+        &self.notes
+    }
+
+    #[must_use]
     pub fn heap_bytes(&self) -> usize {
         let links: usize = self.links.iter().map(|link| link.target.len()).sum();
         let tables: usize = self
@@ -243,7 +252,11 @@ pub fn parse(source: &str) -> Result<Document, Refusal> {
     if source.len() > MAX_SOURCE {
         return Err(Refusal::TooLarge);
     }
-    build::Builder::run(&text::normalise_line_ends(source))
+    let source = text::normalise_line_ends(source);
+    let plan = scan::plan(&source);
+    let mut doc = build::Builder::run(&plan.source, plan.options)?;
+    doc.notes = plan.notes;
+    Ok(doc)
 }
 
 #[cfg(test)]

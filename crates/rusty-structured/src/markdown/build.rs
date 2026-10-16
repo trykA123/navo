@@ -10,13 +10,6 @@ const ELLIPSIS: &str = "…";
 const MAX_CELL_WIDTH: usize = 40;
 const MAX_LAST_COLUMN: u8 = (MAX_COLUMNS - 1) as u8;
 
-fn options() -> Options {
-    Options::ENABLE_TABLES
-        | Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_FOOTNOTES
-}
-
 fn clamp(depth: usize) -> u8 {
     u8::try_from(depth).unwrap_or(u8::MAX).min(MAX_DEPTH)
 }
@@ -93,9 +86,9 @@ pub(super) struct Builder {
 }
 
 impl Builder {
-    pub(super) fn run(source: &str) -> Result<Document, Refusal> {
+    pub(super) fn run(source: &str, options: Options) -> Result<Document, Refusal> {
         let mut builder = Self::default();
-        for event in Parser::new_ext(source, options()) {
+        for event in Parser::new_ext(source, options) {
             builder.event(event)?;
         }
         builder.finish()?;
@@ -143,21 +136,38 @@ impl Builder {
                 self.finish()
             }
             Tag::List(first) => {
+                self.flush_pending()?;
                 self.lists.push(first);
-                self.finish()
+                Ok(())
             }
             Tag::Item => self.start_item(),
             Tag::FootnoteDefinition(label) => {
-                self.finish()?;
+                self.flush_pending()?;
                 self.pending = self.label(Some(&label)).map(Marker::Footnote);
                 Ok(())
             }
-            Tag::Table(alignments) => self.start_table(&alignments),
-            Tag::TableHead | Tag::TableRow => self.start_row(matches!(tag, Tag::TableHead)),
-            Tag::TableCell => {
+            Tag::Table(_) | Tag::TableHead | Tag::TableRow | Tag::TableCell => {
+                self.start_table_tag(&tag)
+            }
+            Tag::Link { .. } | Tag::Image { .. } => self.start_inline(tag),
+            _ => Ok(()),
+        }
+    }
+
+    fn start_table_tag(&mut self, tag: &Tag<'_>) -> Result<(), Refusal> {
+        match tag {
+            Tag::Table(alignments) => self.start_table(alignments),
+            Tag::TableHead => self.start_row(true),
+            Tag::TableRow => self.start_row(false),
+            _ => {
                 self.start_cell();
                 Ok(())
             }
+        }
+    }
+
+    fn start_inline(&mut self, tag: Tag<'_>) -> Result<(), Refusal> {
+        match tag {
             Tag::Link {
                 link_type,
                 dest_url,
@@ -173,6 +183,13 @@ impl Builder {
             }
             _ => Ok(()),
         }
+    }
+
+    fn flush_pending(&mut self) -> Result<(), Refusal> {
+        if self.pending.is_some() {
+            self.begin(BlockKind::Paragraph)?;
+        }
+        self.finish()
     }
 
     fn start_code(&mut self, kind: &CodeBlockKind<'_>) -> Result<(), Refusal> {
@@ -258,7 +275,7 @@ impl Builder {
     }
 
     fn start_item(&mut self) -> Result<(), Refusal> {
-        self.finish()?;
+        self.flush_pending()?;
         self.pending = Some(match self.lists.last_mut() {
             Some(Some(next)) => {
                 let number = *next;

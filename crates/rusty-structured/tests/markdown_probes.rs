@@ -47,9 +47,45 @@ fn references(count: usize) -> String {
     uses + "\n\n" + &defs
 }
 
-fn probes() -> Vec<(&'static str, String)> {
-    let n = 200_000;
+fn padded_tables() -> String {
+    let one = "|a".repeat(362) + "|\n" + &"|-".repeat(362) + "|\n" + &"x\n".repeat(724) + "\n";
+    one.repeat((MAX_SOURCE - 1024) / one.len())
+}
+
+fn distinct_footnote_definitions() -> String {
+    let mut out = String::new();
+    for at in 0.. {
+        let line = format!("[^{at}]: b\n");
+        if out.len() + line.len() > MAX_SOURCE - 1024 {
+            break;
+        }
+        out.push_str(&line);
+    }
+    out
+}
+
+fn full_rows() -> String {
+    let row = "|a".repeat(64) + "|\n";
+    row.clone() + &"|-".repeat(64) + "|\n" + &fill(&row)
+}
+
+fn table_and_definition_probes() -> Vec<(&'static str, String)> {
     vec![
+        ("padded tables", padded_tables()),
+        ("full rows", full_rows()),
+        ("footnote definitions", fill("[^a]: b\n")),
+        (
+            "distinct footnote definitions",
+            distinct_footnote_definitions(),
+        ),
+        ("reference definitions", fill("[a]: b\n")),
+    ]
+}
+
+fn probes() -> Vec<(&'static str, String)> {
+    let n = 90_000;
+    let mut probes = table_and_definition_probes();
+    probes.extend([
         (
             "padded table",
             "|a".repeat(100) + "|\n" + &"|-".repeat(100) + "|\n" + &fill("x\n"),
@@ -73,8 +109,8 @@ fn probes() -> Vec<(&'static str, String)> {
         ("math runs", fill("$x$ $$y$$ ")),
         ("display math", fill("$$\nx\n$$\n")),
         ("nested quotes", ">".repeat(100_000) + " x\n"),
-        ("quote list", quote_list(1_400)),
-        ("wide list", wide_list(1_100)),
+        ("quote list", quote_list(700)),
+        ("wide list", wide_list(550)),
         ("open brackets", fill("[")),
         ("open images", fill("![")),
         ("inline code", "`a` ".repeat(70_000)),
@@ -88,11 +124,12 @@ fn probes() -> Vec<(&'static str, String)> {
         ("emphasis openers", "*a ".repeat(50_000)),
         (
             "deep list",
-            (0..1_500)
+            (0..1_000)
                 .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
                 .collect(),
         ),
-    ]
+    ]);
+    probes
 }
 
 fn limit() -> Duration {

@@ -1,6 +1,6 @@
 use super::{
-    Align, Block, BlockKind, Document, MAX_BLOCK_TEXT, MAX_BLOCKS, MAX_DEPTH, MAX_SOURCE, Marker,
-    Refusal, Style, parse,
+    Align, Block, BlockKind, Document, FOOTNOTES_AS_TEXT, MAX_BLOCK_TEXT, MAX_BLOCKS, MAX_DEPTH,
+    MAX_SOURCE, Marker, Refusal, Style, TABLES_AS_TEXT, parse,
 };
 
 fn doc(source: &str) -> Document {
@@ -264,7 +264,8 @@ fn tabs_and_control_characters_never_reach_the_text() {
 }
 
 #[test]
-fn files_over_4_mib_are_refused() {
+fn files_over_1_mib_are_refused() {
+    assert_eq!(MAX_SOURCE, 1024 * 1024);
     let big = "a".repeat(MAX_SOURCE + 1);
     assert_eq!(parse(&big).err(), Some(Refusal::TooLarge));
 }
@@ -279,4 +280,68 @@ fn too_many_blocks_are_refused() {
 fn a_block_and_a_span_stay_small() {
     assert!(std::mem::size_of::<Block>() <= 40);
     assert!(std::mem::size_of::<super::Span>() <= 12);
+}
+
+fn padded_tables(count: usize) -> String {
+    let one = "|a".repeat(362) + "|\n" + &"|-".repeat(362) + "|\n" + &"x\n".repeat(724) + "\n";
+    one.repeat(count)
+}
+
+#[test]
+fn tables_over_a_million_cells_in_the_document_show_as_text() {
+    let cut = doc(&padded_tables(4));
+    assert_eq!(cut.notes(), [TABLES_AS_TEXT]);
+    assert!(
+        cut.blocks()
+            .iter()
+            .all(|block| !matches!(block.kind, BlockKind::Row { .. }))
+    );
+    assert!(doc(&padded_tables(3)).notes().is_empty());
+}
+
+#[test]
+fn quoted_tables_count_towards_the_cell_total() {
+    let quoted: String = padded_tables(4)
+        .lines()
+        .map(|line| format!("> {line}\n"))
+        .collect();
+    assert_eq!(doc(&quoted).notes(), [TABLES_AS_TEXT]);
+}
+
+#[test]
+fn over_2_000_footnote_definitions_show_as_text() {
+    let many = "[^a]: b\n".repeat(2_001);
+    let cut = doc(&many);
+    assert_eq!(cut.notes(), [FOOTNOTES_AS_TEXT]);
+    assert!(texts(&cut).concat().starts_with("[^a]: b [^a]: b"));
+    assert!(
+        cut.blocks()
+            .iter()
+            .all(|block| !matches!(block.marker, Some(Marker::Footnote(_))))
+    );
+    let quoted = " > [^a]: b\n".repeat(2_001);
+    assert_eq!(
+        super::parse(&quoted).map(|doc| doc.notes().to_vec()),
+        Ok(vec![FOOTNOTES_AS_TEXT])
+    );
+    assert!(super::parse(&"[^a]: b\n".repeat(2_000)).is_ok_and(|doc| doc.notes().is_empty()));
+}
+
+#[test]
+fn an_item_that_opens_with_a_list_keeps_both_markers() {
+    let doc = doc("- - a\n1. - b\n");
+    let items: Vec<(&str, u8, Option<Marker>)> = doc
+        .blocks()
+        .iter()
+        .map(|block| (doc.text(block), block.list, block.marker))
+        .collect();
+    assert_eq!(
+        items,
+        [
+            ("", 1, Some(Marker::Bullet)),
+            ("a", 2, Some(Marker::Bullet)),
+            ("", 1, Some(Marker::Number(1))),
+            ("b", 2, Some(Marker::Bullet)),
+        ]
+    );
 }
