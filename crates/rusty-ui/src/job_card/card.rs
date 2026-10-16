@@ -5,11 +5,12 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::{Animation, AnimationExt, RenderOnce, Role};
 
+use super::actions::{Actions, job_actions};
 use super::summary::{JobInfo, JobsSummary, speed_text};
 use super::{Handler, JobHandler, fade_out, kind_icon, part};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
-use crate::primitives::{Button, IconButton, IconName, Kbd, icon};
+use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::{self, Theme};
 
 const CARD_WIDTH: f32 = 400.;
@@ -22,6 +23,8 @@ pub struct JobCard {
     jobs: Vec<JobInfo>,
     fade: Option<Duration>,
     on_shrink: Option<Handler>,
+    on_pause: Option<JobHandler>,
+    on_resume: Option<JobHandler>,
     on_cancel: Option<JobHandler>,
     on_dismiss: Option<JobHandler>,
 }
@@ -32,6 +35,8 @@ impl JobCard {
             jobs,
             fade: None,
             on_shrink: None,
+            on_pause: None,
+            on_resume: None,
             on_cancel: None,
             on_dismiss: None,
         }
@@ -50,6 +55,18 @@ impl JobCard {
     }
 
     #[must_use]
+    pub fn on_pause(mut self, handler: impl Fn(u64, &mut Window, &mut App) + 'static) -> Self {
+        self.on_pause = Some(Rc::new(handler));
+        self
+    }
+
+    #[must_use]
+    pub fn on_resume(mut self, handler: impl Fn(u64, &mut Window, &mut App) + 'static) -> Self {
+        self.on_resume = Some(Rc::new(handler));
+        self
+    }
+
+    #[must_use]
     pub fn on_cancel(mut self, handler: impl Fn(u64, &mut Window, &mut App) + 'static) -> Self {
         self.on_cancel = Some(Rc::new(handler));
         self
@@ -60,13 +77,6 @@ impl JobCard {
         self.on_dismiss = Some(Rc::new(handler));
         self
     }
-}
-
-#[derive(Clone)]
-struct Actions {
-    cancel: Option<JobHandler>,
-    dismiss: Option<JobHandler>,
-    is_compact: bool,
 }
 
 fn row(t: &Theme) -> Div {
@@ -173,29 +183,6 @@ fn detail(t: &Theme, job: &JobInfo) -> Option<Div> {
     }
 }
 
-fn action(job: &JobInfo, actions: &Actions) -> Option<AnyElement> {
-    let id = job.id;
-    let (name, label, handler) = match job.state {
-        JobRowState::Running => ("job-cancel", "Cancel", actions.cancel.clone()?),
-        JobRowState::Failed(_) => ("job-dismiss", "Dismiss", actions.dismiss.clone()?),
-        JobRowState::Done | JobRowState::Cancelled => return None,
-    };
-    let click = move |_: &ClickEvent, window: &mut Window, cx: &mut App| handler(id, window, cx);
-    if actions.is_compact {
-        let spoken = format!("{label} {}", job.name());
-        return Some(
-            IconButton::new((name, id), IconName::X, spoken)
-                .on_click(click)
-                .into_any_element(),
-        );
-    }
-    Some(
-        Button::new((name, id), label)
-            .on_click(click)
-            .into_any_element(),
-    )
-}
-
 fn foot(t: &Theme, job: &JobInfo, actions: &Actions) -> Div {
     let color = match job.state {
         JobRowState::Done => t.colors.ok,
@@ -210,7 +197,7 @@ fn foot(t: &Theme, job: &JobInfo, actions: &Actions) -> Div {
                 .truncate()
                 .text_color(color),
         )
-        .children(action(job, actions))
+        .children(job_actions(job, actions))
 }
 
 fn body(t: &Theme, job: &JobInfo, actions: &Actions) -> Div {
@@ -284,6 +271,8 @@ impl RenderOnce for JobCard {
         let t = tokens::current(cx).clone();
         let summary = JobsSummary::of(&self.jobs);
         let actions = Actions {
+            pause: self.on_pause.clone(),
+            resume: self.on_resume.clone(),
             cancel: self.on_cancel.clone(),
             dismiss: self.on_dismiss.clone(),
             is_compact: self.jobs.len() > 1,

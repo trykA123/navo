@@ -90,6 +90,11 @@ fn badge(t: &Theme, summary: &JobsSummary, single: Option<rusty_core::OpKind>) -
         (Some("Failed"), _) => glyph(IconName::TriangleAlert, t.colors.warn),
         (Some("Done"), _) => glyph(IconName::Check, t.colors.ok),
         (Some(_), _) => glyph(IconName::X, t.colors.muted),
+        (None, _) if summary.is_paused => div()
+            .id("job-pill-paused")
+            .test_support()
+            .child(glyph(IconName::Pause, t.colors.accent_text))
+            .into_any_element(),
         (_, Some(kind)) => glyph(kind_icon(kind), t.colors.accent_text),
         (_, None) => div()
             .text_size(t.typography.tiny)
@@ -130,7 +135,11 @@ fn bar(t: &Theme, fraction: f32) -> Div {
 impl JobPill {
     fn spoken(&self) -> String {
         let s = &self.summary;
-        let status = s.word().map_or_else(|| s.percent_text(), str::to_owned);
+        let status = match (s.word(), s.is_paused) {
+            (Some(word), _) => word.to_owned(),
+            (None, true) => format!("Paused, {}", s.percent_text()),
+            (None, false) => s.percent_text(),
+        };
         let left = s.left.map(|left| format!(", {} left", time_text(left)));
         format!(
             "{}, {status}{}. Show the job card (Ctrl+J)",

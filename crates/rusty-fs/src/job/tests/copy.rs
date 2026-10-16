@@ -92,6 +92,7 @@ fn the_last_progress_is_the_totals() {
             files_done: plan.totals.files,
             files_total: plan.totals.files,
             current: Some(fs.location("src/three.txt")),
+            paused: false,
         })
     );
 }

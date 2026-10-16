@@ -1,3 +1,4 @@
+mod actions;
 mod card;
 mod pill;
 mod speed;
@@ -19,7 +20,7 @@ use crate::primitives::IconName;
 pub use card::JobCard;
 pub use pill::{JobPill, PillFit};
 pub use speed::SpeedMeter;
-pub use summary::{JobInfo, JobsSummary, speed_text, time_text};
+pub use summary::{JobInfo, JobsSummary, Pause, speed_text, time_text};
 
 type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
 type JobHandler = Rc<dyn Fn(u64, &mut Window, &mut App)>;

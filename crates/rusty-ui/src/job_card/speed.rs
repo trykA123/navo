@@ -47,6 +47,13 @@ impl SpeedMeter {
         self.samples.insert(id, next);
     }
 
+    pub fn hold(&mut self, id: u64, bytes: u64, now: Instant) {
+        if let Some(sample) = self.samples.get_mut(&id) {
+            sample.at = now;
+            sample.bytes = bytes;
+        }
+    }
+
     pub fn speed(&self, id: u64) -> Option<u64> {
         let sample = self.samples.get(&id)?;
         let speed = sample.speed?;

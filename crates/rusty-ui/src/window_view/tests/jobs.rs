@@ -53,6 +53,7 @@ fn add(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, job: Fake) {
                 files_done: 1,
                 files_total: 12,
                 current: Some(at("/home/commander/Sinaia.7z")),
+                paused: false,
             },
             status: job.status,
             cancel: CancelToken::new(),
@@ -412,4 +413,97 @@ fn the_narrowest_pill_shows_an_ended_state_as_a_glyph_only(cx: &mut TestAppConte
     assert_eq!(small.pill_parts, [false, false, false]);
     let pill = small.pill.expect("a pill");
     assert!(pill.starts_with("Copy 4 items, Failed"), "{pill}");
+}
+
+fn engine_pauses(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, is_paused: bool) {
+    view.update(cx, |view, cx| {
+        view.browser.jobs_mut()[0].progress.paused = is_paused;
+        cx.notify();
+    });
+}
+
+fn pause_asked(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Vec<bool> {
+    view.read_with(cx, |view, _| {
+        view.browser
+            .jobs()
+            .iter()
+            .map(|job| job.cancel.is_paused())
+            .collect()
+    })
+}
+
+#[gpui_kit::test]
+fn the_pause_button_pauses_only_its_job(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    add(cx, &view, running(1, 100 * MB));
+    add(cx, &view, running(2, 0));
+    click(cx, window, ("job-pause", 2u64));
+    assert_eq!(pause_asked(cx, &view), [false, true]);
+}
+
+#[gpui_kit::test]
+fn a_paused_job_reads_paused_and_resume_continues_it(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    add(cx, &view, running(1, 100 * MB));
+    give_speed(cx, &view, 1, 10 * MB);
+    click(cx, window, ("job-pause", 1u64));
+    let asked = label(cx, window, ("job-status", 1u64));
+    assert_eq!(asked, "25% · 1 of 12 files · Pausing…");
+    engine_pauses(cx, &view, true);
+    let paused = label(cx, window, ("job-status", 1u64));
+    assert_eq!(paused, "25% · 1 of 12 files · Paused");
+    click(cx, window, ("job-resume", 1u64));
+    assert_eq!(pause_asked(cx, &view), [false]);
+    let resumed = label(cx, window, ("job-status", 1u64));
+    assert!(resumed.ends_with(" left"), "{resumed}");
+}
+
+#[gpui_kit::test]
+fn the_pill_shows_a_pause_glyph_while_paused(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "ctrl-j");
+    let glyph = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.within("fkeys").try_find("job-pill-paused").is_some()
+        })
+        .expect("window")
+    };
+    assert!(!glyph(cx));
+    view.update(cx, |view, _| view.browser.jobs()[0].cancel.pause());
+    engine_pauses(cx, &view, true);
+    assert!(glyph(cx));
+    let pill = shown(cx, window).pill.expect("a pill");
+    assert!(pill.starts_with("Copy 4 items, Paused, 25%"), "{pill}");
+}
+
+#[gpui_kit::test]
+fn the_speed_survives_a_pause_without_decaying(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    add(cx, &view, running(1, 0));
+    view.update(cx, |view, cx| view.wake(cx));
+    for step in 1..=4 {
+        set_done(cx, &view, step * 10 * MB);
+        tick(cx);
+    }
+    let before = view.read_with(cx, |view, _| view.job_ui.meter.speed(1));
+    assert!(before.is_some());
+    view.update(cx, |view, _| view.browser.jobs()[0].cancel.pause());
+    engine_pauses(cx, &view, true);
+    for _ in 0..12 {
+        tick(cx);
+    }
+    let held = view.read_with(cx, |view, _| view.job_ui.meter.speed(1));
+    assert_eq!(held, before);
+    assert_eq!(
+        label(cx, window, ("job-status", 1u64)),
+        "10% · 1 of 12 files · Paused"
+    );
+    view.update(cx, |view, _| view.browser.jobs()[0].cancel.resume());
+    engine_pauses(cx, &view, false);
+    set_done(cx, &view, 50 * MB);
+    tick(cx);
+    let after = view.read_with(cx, |view, _| view.job_ui.meter.speed(1));
+    assert_eq!(after, before);
 }

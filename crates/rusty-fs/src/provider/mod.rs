@@ -1,11 +1,11 @@
+mod cancel;
 mod ops;
 
 use std::ops::ControlFlow;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
+pub use cancel::CancelToken;
 pub use ops::ProviderOps;
 
 use crate::{Watch, WatchSink};
@@ -46,27 +46,6 @@ pub struct Capabilities {
     pub watch: bool,
     pub recycle: bool,
     pub rename: bool,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct CancelToken {
-    flag: Arc<AtomicBool>,
-}
-
-impl CancelToken {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn cancel(&self) {
-        self.flag.store(true, Ordering::Release);
-    }
-
-    #[must_use]
-    pub fn is_cancelled(&self) -> bool {
-        self.flag.load(Ordering::Acquire)
-    }
 }
 
 pub trait ListSink {

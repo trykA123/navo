@@ -110,6 +110,8 @@ impl WindowPage {
         let shown = self.jobs.filter(|shown| !shown.is_pill)?;
         let card = JobCard::new(job_sample::jobs(shown.count))
             .on_shrink(|_, _| {})
+            .on_pause(|_, _, _| {})
+            .on_resume(|_, _, _| {})
             .on_cancel(|_, _, _| {});
         Some(
             div()

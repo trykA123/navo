@@ -100,6 +100,7 @@ fn job(kind: OpKind, status: JobStatus) -> JobView {
             files_done: 1,
             files_total: 2,
             current: Some(at("/home/a")),
+            paused: false,
         },
         status,
         cancel: CancelToken::new(),

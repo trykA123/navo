@@ -1,6 +1,7 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
 use super::copy::{CopyStep, copy};
+use super::hold::hold;
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
 pub(super) fn current_of(step: &Step) -> Location {
@@ -29,6 +30,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
         files_done: 0,
         files_total: plan.totals.files,
         current: None,
+        paused: false,
     };
     let mut kept = Vec::new();
     for (seq, step) in (0_u32..).zip(&plan.steps) {
@@ -36,6 +38,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
             advance(&mut progress, step);
             continue;
         }
+        hold(ctx.cancel, &mut progress, ctx.progress);
         if ctx.cancel.is_cancelled() {
             return JobOutcome::Cancelled;
         }

@@ -1,5 +1,6 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution};
 
+use super::hold::hold;
 use super::{JobContext, Progress, StepOutcome, TEMP_SUFFIX};
 use crate::ProviderOps;
 
@@ -53,21 +54,21 @@ fn write_and_place(
 ) -> Result<(), FsError> {
     let Placement { step, temp, exists } = *placement;
     let base = progress.bytes_done;
-    let report = &mut *ctx.progress;
+    let (cancel, report) = (ctx.cancel, &mut *ctx.progress);
     let mut on_bytes = |bytes: u64| {
         progress.bytes_done = base + bytes;
         report(progress);
+        hold(cancel, progress, report);
     };
     let written = ctx
         .ops
-        .copy_file(step.source, temp, &mut on_bytes, ctx.cancel)?;
+        .copy_file(step.source, temp, &mut on_bytes, cancel)?;
+    if cancel.is_cancelled() {
+        return Err(failure(FsErrorKind::Cancelled, step.target));
+    }
     let on_disk = ctx.ops.metadata(temp)?.size;
     if written != step.size || on_disk != written {
-        return Err(FsError {
-            kind: FsErrorKind::Unknown,
-            location: Some(step.target.clone()),
-            os_code: None,
-        });
+        return Err(failure(FsErrorKind::Unknown, step.target));
     }
     if exists {
         ctx.ops.remove_file(step.target)?;
@@ -91,10 +92,14 @@ pub(super) fn remove_if_present(
     ops.remove_file(location).map(|()| true)
 }
 
-fn invalid(location: &Location) -> FsError {
+fn failure(kind: FsErrorKind, location: &Location) -> FsError {
     FsError {
-        kind: FsErrorKind::NameInvalid,
+        kind,
         location: Some(location.clone()),
         os_code: None,
     }
+}
+
+fn invalid(location: &Location) -> FsError {
+    failure(FsErrorKind::NameInvalid, location)
 }
