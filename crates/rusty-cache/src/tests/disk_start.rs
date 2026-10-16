@@ -164,3 +164,75 @@ fn save_folders_writes_each_cached_session_folder() {
     let _disk = DiskListings::open(&db_in(&dir), warm(&reread, &keys, vec![one, two]));
     assert_eq!(reread.stats().entries, 2);
 }
+
+fn stalled_x_drive() -> (CacheKeys, mpsc::Sender<()>) {
+    let (release, gate) = mpsc::channel::<()>();
+    let gate = Mutex::new(gate);
+    let keys = CacheKeys::new(Arc::new(move |letter| {
+        if letter == 'X' {
+            let _ = gate.lock().unwrap().recv();
+        }
+        Some(DriveIdentity::Serial(42))
+    }));
+    (keys, release)
+}
+
+#[test]
+fn key_within_does_not_restart_a_probe_that_found_nothing() {
+    let keys = CacheKeys::new(Arc::new(|_| None));
+    let key = keys.key_within(&folder(r"C:\work"), Instant::now() + PATIENT);
+    assert!(key.is_none());
+    assert_eq!(keys.probes_started(), 1);
+}
+
+#[test]
+fn one_stalled_drive_does_not_starve_the_others() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = folder(r"C:\work");
+    seed(&db_in(&dir), &serial_keys(42), &work, listing(&["a"]));
+
+    let cache = ListingCache::default();
+    let (keys, _release) = stalled_x_drive();
+    let start = Warm {
+        deadline: Instant::now() + Duration::from_secs(1),
+        ..warm(&cache, &keys, vec![folder(r"X:\offline"), work.clone()])
+    };
+    let _disk = DiskListings::open(&db_in(&dir), start);
+    assert!(cache.get(&settled(&keys, &work)).is_some());
+}
+
+#[test]
+fn warm_up_keeps_a_listing_already_in_memory() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = folder(r"C:\work");
+    let mut old = listing(&["from-disk"]);
+    old.read_at = at(1_000);
+    seed(&db_in(&dir), &serial_keys(42), &work, old);
+
+    let cache = ListingCache::default();
+    let keys = serial_keys(42);
+    let mut fresh = listing(&["in-memory"]);
+    fresh.read_at = at(1);
+    cache.put(settled(&keys, &work), fresh);
+    let _disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
+    assert_eq!(
+        names(&cache.get(&settled(&keys, &work)).unwrap()),
+        ["in-memory"]
+    );
+}
+
+#[test]
+fn a_warm_up_load_past_the_deadline_is_not_put() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = folder(r"C:\work");
+    let keys = serial_keys(42);
+    seed(&db_in(&dir), &keys, &work, listing(&["a"]));
+    let (db, _) = rusty_store::CacheDb::open(&db_in(&dir)).unwrap();
+    let mut table = crate::disk::ListingTable::new(db, crate::DISK_BUDGET);
+    let cache = ListingCache::default();
+    let key = settled(&keys, &work);
+    crate::disk::admit(&mut table, &cache, key.clone(), Instant::now());
+    assert!(cache.get(&key).is_none());
+    crate::disk::admit(&mut table, &cache, key.clone(), Instant::now() + PATIENT);
+    assert!(cache.get(&key).is_some());
+}

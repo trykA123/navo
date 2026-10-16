@@ -22,6 +22,13 @@ struct Drives {
     known: HashMap<char, (Instant, DriveIdentity)>,
     probing: HashSet<char>,
     started: usize,
+    answers: u64,
+}
+
+pub(crate) enum Lookup {
+    Found(CacheKey),
+    Probing,
+    Missing,
 }
 
 #[derive(Default)]
@@ -56,10 +63,7 @@ impl CacheKeys {
         let volume = volume_of(location);
         let root = volume.as_str();
         let serial = match drive_letter(root) {
-            Some(letter) => match self.drive(letter.to_ascii_uppercase())? {
-                DriveIdentity::Serial(serial) => u64::from(serial),
-                DriveIdentity::Remote(remote) => fnv1a(&remote.to_lowercase()),
-            },
+            Some(letter) => serial_of(&self.drive(letter.to_ascii_uppercase())?),
             None => fnv1a(root),
         };
         Some(CacheKey::new(location.clone(), Some(serial)))
@@ -67,26 +71,54 @@ impl CacheKeys {
 
     #[must_use]
     pub fn key_within(&self, location: &Location, deadline: Instant) -> Option<CacheKey> {
+        if let Some(key) = self.key(location) {
+            return Some(key);
+        }
         loop {
-            if let Some(key) = self.key(location) {
-                return Some(key);
-            }
-            let drives = self.lock();
-            if drives.probing.is_empty() {
-                drop(drives);
-                return self.key(location);
-            }
-            let left = deadline.checked_duration_since(Instant::now())?;
-            let (drives, waited) = self
-                .shared
-                .answered
-                .wait_timeout(drives, left)
-                .unwrap_or_else(PoisonError::into_inner);
-            drop(drives);
-            if waited.timed_out() {
-                return self.key(location);
+            let answers = self.answers();
+            match self.lookup(location) {
+                Lookup::Found(key) => return Some(key),
+                Lookup::Missing => return None,
+                Lookup::Probing if !self.wait_for_answer(answers, deadline) => return None,
+                Lookup::Probing => {}
             }
         }
+    }
+
+    pub(crate) fn lookup(&self, location: &Location) -> Lookup {
+        let volume = volume_of(location);
+        let Some(letter) = drive_letter(volume.as_str()) else {
+            return Lookup::Found(CacheKey::new(
+                location.clone(),
+                Some(fnv1a(volume.as_str())),
+            ));
+        };
+        let letter = letter.to_ascii_uppercase();
+        let drives = self.lock();
+        match drives.known.get(&letter) {
+            Some((_, identity)) => {
+                Lookup::Found(CacheKey::new(location.clone(), Some(serial_of(identity))))
+            }
+            None if drives.probing.contains(&letter) => Lookup::Probing,
+            None => Lookup::Missing,
+        }
+    }
+
+    pub(crate) fn answers(&self) -> u64 {
+        self.lock().answers
+    }
+
+    pub(crate) fn wait_for_answer(&self, seen: u64, deadline: Instant) -> bool {
+        let drives = self.lock();
+        let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+            return false;
+        };
+        let (drives, _) = self
+            .shared
+            .answered
+            .wait_timeout_while(drives, left, |drives| drives.answers == seen)
+            .unwrap_or_else(PoisonError::into_inner);
+        drives.answers != seen
     }
 
     #[must_use]
@@ -137,6 +169,7 @@ impl CacheKeys {
                 let identity = probe(letter);
                 let mut drives = lock(&shared.drives);
                 drives.probing.remove(&letter);
+                drives.answers += 1;
                 if let Some(identity) = identity {
                     drives.known.insert(letter, (Instant::now(), identity));
                 }
@@ -150,6 +183,13 @@ impl CacheKeys {
 
 fn lock(drives: &Mutex<Drives>) -> MutexGuard<'_, Drives> {
     drives.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn serial_of(identity: &DriveIdentity) -> u64 {
+    match identity {
+        DriveIdentity::Serial(serial) => u64::from(*serial),
+        DriveIdentity::Remote(remote) => fnv1a(&remote.to_lowercase()),
+    }
 }
 
 fn drive_letter(root: &str) -> Option<char> {

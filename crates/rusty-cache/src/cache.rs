@@ -77,6 +77,14 @@ impl ListingCache {
         }
     }
 
+    pub(crate) fn put_absent(&self, key: CacheKey, listing: CachedListing) {
+        let entry = SizedListing::new(&key, listing);
+        let mut store = self.lock();
+        if store.peek(&key).is_none() {
+            store.put(key, entry);
+        }
+    }
+
     pub fn persist(&self, key: &CacheKey) {
         let Some(disk) = &self.disk else {
             return;

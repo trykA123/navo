@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use rusty_core::Location;
 use rusty_store::{CacheDb, CacheOpen};
 
+use crate::keys::Lookup;
 use crate::{CacheKey, CacheKeys, CachedListing, ListingCache};
 use codec::Body;
 #[cfg(test)]
@@ -48,7 +49,7 @@ impl DiskListings {
         let path = path.to_path_buf();
         let spawned = std::thread::Builder::new()
             .name("listing-disk".to_owned())
-            .spawn(move || run(&path, &warm, &loaded, inbox));
+            .spawn(move || run(&path, warm, &loaded, inbox));
         match spawned {
             Ok(_) => {
                 let _ = ready.recv_timeout(deadline.saturating_duration_since(Instant::now()));
@@ -88,7 +89,7 @@ impl DiskListings {
     }
 }
 
-fn run(path: &Path, warm: &Warm, loaded: &Sender<()>, inbox: Receiver<Job>) {
+fn run(path: &Path, warm: Warm, loaded: &Sender<()>, inbox: Receiver<Job>) {
     let table = open_table(path).map(|table| warm_up(table, warm));
     let _ = loaded.send(());
     let Some(table) = table else {
@@ -127,20 +128,48 @@ fn open_table(path: &Path) -> Option<ListingTable> {
     }
 }
 
-fn warm_up(mut table: ListingTable, warm: &Warm) -> ListingTable {
-    for location in &warm.folders {
-        if Instant::now() >= warm.deadline {
-            break;
-        }
-        let Some(key) = warm.keys.key_within(location, warm.deadline) else {
-            continue;
-        };
-        if let Some(mut listing) = table.load(&key) {
-            listing.folder_changed = None;
-            warm.cache.put(key, listing);
+fn warm_up(mut table: ListingTable, warm: Warm) -> ListingTable {
+    let Warm {
+        cache,
+        keys,
+        mut folders,
+        deadline,
+    } = warm;
+    for location in &folders {
+        let _ = keys.key(location);
+    }
+    loop {
+        let answers = keys.answers();
+        folders.retain(|location| match keys.lookup(location) {
+            Lookup::Found(key) => {
+                admit(&mut table, &cache, key, deadline);
+                false
+            }
+            Lookup::Probing => true,
+            Lookup::Missing => false,
+        });
+        if folders.is_empty() || !keys.wait_for_answer(answers, deadline) {
+            return table;
         }
     }
-    table
+}
+
+pub(crate) fn admit(
+    table: &mut ListingTable,
+    cache: &ListingCache,
+    key: CacheKey,
+    deadline: Instant,
+) {
+    if Instant::now() >= deadline {
+        return;
+    }
+    let Some(mut listing) = table.load(&key) else {
+        return;
+    };
+    listing.folder_changed = None;
+    if Instant::now() < deadline {
+        cache.put_absent(key, listing);
+    }
 }
 
 struct Writer {
