@@ -100,6 +100,22 @@ fn every_column_is_at_least_as_wide_as_its_longest_word(cx: &mut TestAppContext)
     );
 }
 
+#[gpui_kit::test]
+fn columns_line_up_across_rows(cx: &mut TestAppContext) {
+    let (window, _, _) = open_named(cx, "tiers.md", Setup::new(TIERS.as_bytes().to_vec()));
+    for column in 0..4 {
+        let head = cell(cx, window, 0, column);
+        for block in 1..3 {
+            let shown = cell(cx, window, block, column);
+            assert_eq!(
+                (shown.origin.x, shown.size.width),
+                (head.origin.x, head.size.width),
+                "column {column} in row {block}"
+            );
+        }
+    }
+}
+
 fn wide_table() -> String {
     let word = "w".repeat(30);
     let head = format!("|{}\n", format!(" {word} |").repeat(12));

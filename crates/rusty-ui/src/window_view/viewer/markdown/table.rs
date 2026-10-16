@@ -116,6 +116,7 @@ fn cells(page: &Page, block: &Block, table_id: u32, window: &Window) -> (Vec<Any
                     .id(("md-col", column))
                     .test_support()
                     .flex_basis(basis)
+                    .min_w(basis)
                     .flex_grow(f32::from(*width))
                     .flex_shrink_0()
                     .px(t.spacing.md)
