@@ -59,6 +59,43 @@ pub(super) fn middle(cx: &mut TestAppContext, window: AnyWindowHandle) -> Point<
     .expect("window")
 }
 
+pub(super) fn tree_row_at(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    row: usize,
+) -> Point<Pixels> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.find(("tree-row", row)).bounds().center()
+    })
+    .expect("window")
+}
+
+pub(super) fn table_cell_at(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    (row, column): (usize, usize),
+) -> Point<Pixels> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let line = window.within(("table-row", row));
+        line.find(("table-cell", column)).bounds().center()
+    })
+    .expect("window")
+}
+
+pub(super) fn table_head_at(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    column: usize,
+) -> Point<Pixels> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.find(("table-head", column)).bounds().center()
+    })
+    .expect("window")
+}
+
 pub(super) fn rows(cx: &mut TestAppContext, window: AnyWindowHandle) -> Vec<String> {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
@@ -203,14 +240,14 @@ fn copy_path_in_the_tree_menu_copies_the_node_path(cx: &mut TestAppContext) {
     let source = br#"{"store": {"book": []}, "name": "shop"}"#;
     let (window, view, _) = open_named(cx, "shop.json", Setup::new(source.to_vec()));
     press(cx, window, &view, "down");
-    let at = middle(cx, window);
+    let at = tree_row_at(cx, window, 2);
     right_click(cx, window, at);
     let shown = rows(cx, window);
     for item in ["Copy path", "Fold branch", "Fold all", "Depth"] {
         assert!(has(&shown, item), "{item} in {shown:?}");
     }
     run_item(cx, window, "copy path");
-    assert_eq!(clipboard(cx).as_deref(), Some("$.store"));
+    assert_eq!(clipboard(cx).as_deref(), Some("$.name"));
     assert!(rows(cx, window).is_empty());
 }
 
@@ -219,14 +256,14 @@ fn copy_cell_in_the_table_menu_copies_the_cell(cx: &mut TestAppContext) {
     let source = b"name,qty\nPear,10\nApple,9\n";
     let (window, view, _) = open_named(cx, "fruit.csv", Setup::new(source.to_vec()));
     press(cx, window, &view, "right");
-    let at = middle(cx, window);
+    let at = table_cell_at(cx, window, (1, 0));
     right_click(cx, window, at);
     let shown = rows(cx, window);
     for item in ["Copy cell", "Copy row", "Sort by this column"] {
         assert!(has(&shown, item), "{item} in {shown:?}");
     }
     run_item(cx, window, "copy cell");
-    assert_eq!(clipboard(cx).as_deref(), Some("10"));
+    assert_eq!(clipboard(cx).as_deref(), Some("Apple"));
 }
 
 #[gpui_kit::test]

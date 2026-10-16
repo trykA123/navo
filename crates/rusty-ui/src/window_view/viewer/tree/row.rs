@@ -1,5 +1,5 @@
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{BoxShadow, ClickEvent, WeakEntity, point};
+use gpui_kit::{BoxShadow, ClickEvent, MouseButton, MouseDownEvent, WeakEntity, point};
 use rusty_structured::{Flavor, Key, NodeId, NodeKind, Row, Tree};
 
 use super::TreeView;
@@ -171,6 +171,15 @@ fn select_row(
     }
 }
 
+fn point_row(
+    view: WeakEntity<TreeView>,
+    index: usize,
+) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static {
+    move |_, window, cx| {
+        let _ = view.update(cx, |view, cx| view.click_row(index, window, cx));
+    }
+}
+
 fn key_view(look: &RowLook<'_>) -> Div {
     let t = look.t;
     let node = look.row.node;
@@ -224,6 +233,7 @@ pub(super) fn tree_row(look: &RowLook<'_>, view: &WeakEntity<TreeView>) -> AnyEl
             row.bg(c.selection).shadow(inset_ring(c.accent))
         })
         .on_click(select_row(view.clone(), look.index))
+        .on_mouse_down(MouseButton::Right, point_row(view.clone(), look.index))
         .child(guides(look))
         .child(chevron(look, view))
         .child(key_view(look))
