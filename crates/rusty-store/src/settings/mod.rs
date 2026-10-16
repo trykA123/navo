@@ -2,7 +2,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::write_atomic;
+use crate::{replace_atomic, write_atomic};
 
 mod edit;
 mod model;
@@ -43,6 +43,7 @@ pub struct LoadReport {
 pub struct SettingsStore {
     path: PathBuf,
     current: Settings,
+    is_backed_up: bool,
 }
 
 impl SettingsStore {
@@ -50,6 +51,7 @@ impl SettingsStore {
         let mut store = Self {
             path: path.to_owned(),
             current: Settings::default(),
+            is_backed_up: false,
         };
         let report = store.reload();
         (store, report)
@@ -89,10 +91,22 @@ impl SettingsStore {
         let patched = edit::patch(&text, key, value)?;
         let (settings, _) = parse(&patched)?;
         if patched != text {
-            write_atomic(&self.path, patched.as_bytes()).map_err(io_error)?;
+            self.write(&patched)?;
         }
         self.current = settings;
         Ok(())
+    }
+}
+
+impl SettingsStore {
+    fn write(&mut self, text: &str) -> Result<(), SettingsError> {
+        if self.is_backed_up {
+            replace_atomic(&self.path, text.as_bytes()).map_err(io_error)
+        } else {
+            write_atomic(&self.path, text.as_bytes()).map_err(io_error)?;
+            self.is_backed_up = true;
+            Ok(())
+        }
     }
 }
 

@@ -462,3 +462,21 @@ fn a_bom_file_keeps_its_bom_and_undo_gives_back_the_bytes() {
     store.save(MODE, Some(text("light"))).unwrap();
     assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
 }
+
+#[test]
+fn the_backup_keeps_the_file_from_before_this_session() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let old = "# before\n[appearance]\nmode = \"light\"\n";
+    write(&path, old);
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    store
+        .save("files.hidden-files", Some(text("hidden")))
+        .unwrap();
+    assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), old);
+    let session_two = fs::read_to_string(&path).unwrap();
+    let (mut next, _) = SettingsStore::load(&path);
+    next.save(MODE, Some(text("light"))).unwrap();
+    assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), session_two);
+}
