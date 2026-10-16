@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -25,13 +26,12 @@ impl CachedListing {
         size_of::<Self>() + self.rows.iter().map(row_bytes).sum::<usize>()
     }
 
-    pub(crate) fn patched(&self, changes: impl IntoIterator<Item = Change>) -> Self {
-        let mut rows = self.rows.to_vec();
-        changes
-            .into_iter()
-            .for_each(|change| apply(&mut rows, change));
+    pub(crate) fn patched(&self, changes: &[Change], changed_at: SystemTime) -> Self {
+        let mut rows = IndexedRows::new(&self.rows);
+        changes.iter().for_each(|change| rows.apply(change));
         Self {
-            rows: rows.into(),
+            rows: rows.into_rows(),
+            read_at: changed_at.max(self.read_at),
             ..self.clone()
         }
     }
@@ -42,27 +42,64 @@ fn row_bytes(row: &FsEntry) -> usize {
     size_of::<FsEntry>() + row.name.display().len()
 }
 
-fn apply(rows: &mut Vec<FsEntry>, change: Change) {
-    match change {
-        Change::Added(entry) | Change::Modified(entry) => upsert(rows, entry),
-        Change::Removed(name) => rows.retain(|row| row.name != name),
-        Change::Renamed { from, to } => rename(rows, &from, to),
-    }
+struct IndexedRows {
+    rows: Vec<Option<FsEntry>>,
+    index: HashMap<ProviderPath, usize>,
 }
 
-fn upsert(rows: &mut Vec<FsEntry>, entry: FsEntry) {
-    match rows.iter_mut().find(|row| row.name == entry.name) {
-        Some(row) => *row = entry,
-        None => rows.push(entry),
+impl IndexedRows {
+    fn new(rows: &[FsEntry]) -> Self {
+        let index = rows
+            .iter()
+            .enumerate()
+            .map(|(at, row)| (row.name.clone(), at))
+            .collect();
+        Self {
+            rows: rows.iter().cloned().map(Some).collect(),
+            index,
+        }
     }
-}
 
-fn rename(rows: &mut Vec<FsEntry>, from: &ProviderPath, to: FsEntry) {
-    if *from != to.name {
-        rows.retain(|row| row.name != to.name);
+    fn apply(&mut self, change: &Change) {
+        match change {
+            Change::Added(entry) | Change::Modified(entry) => self.upsert(entry.clone()),
+            Change::Removed(name) => self.remove(name),
+            Change::Renamed { from, to } => self.rename(from, to.clone()),
+        }
     }
-    match rows.iter_mut().find(|row| row.name == *from) {
-        Some(row) => *row = to,
-        None => rows.push(to),
+
+    fn upsert(&mut self, entry: FsEntry) {
+        match self.index.get(&entry.name) {
+            Some(&at) => self.rows[at] = Some(entry),
+            None => self.push(entry),
+        }
+    }
+
+    fn push(&mut self, entry: FsEntry) {
+        self.index.insert(entry.name.clone(), self.rows.len());
+        self.rows.push(Some(entry));
+    }
+
+    fn remove(&mut self, name: &ProviderPath) {
+        if let Some(at) = self.index.remove(name) {
+            self.rows[at] = None;
+        }
+    }
+
+    fn rename(&mut self, from: &ProviderPath, to: FsEntry) {
+        if *from != to.name {
+            self.remove(&to.name);
+        }
+        match self.index.remove(from) {
+            Some(at) => {
+                self.index.insert(to.name.clone(), at);
+                self.rows[at] = Some(to);
+            }
+            None => self.push(to),
+        }
+    }
+
+    fn into_rows(self) -> Arc<[FsEntry]> {
+        self.rows.into_iter().flatten().collect()
     }
 }

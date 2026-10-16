@@ -1,13 +1,13 @@
 use rusty_core::ProviderPath;
 
 use super::support::entry_sized;
-use super::{entry, key, listing, names};
+use super::{at, entry, key, listing, names};
 use crate::{Change, ListingCache};
 
 fn patched(start: &[&str], changes: Vec<Change>) -> crate::CachedListing {
     let cache = ListingCache::new(1 << 20);
     cache.put(key("a"), listing(start));
-    cache.patch(&key("a"), changes);
+    cache.patch(&key("a"), at(1), changes);
     cache.get(&key("a")).unwrap().as_ref().clone()
 }
 
@@ -90,7 +90,7 @@ fn modified_entry_replaces_the_row() {
 #[test]
 fn patch_of_a_missing_key_is_ignored() {
     let cache = ListingCache::new(1 << 20);
-    cache.patch(&key("a"), [Change::Added(entry("x"))]);
+    cache.patch(&key("a"), at(1), [Change::Added(entry("x"))]);
     assert!(cache.get(&key("a")).is_none());
 }
 
@@ -100,7 +100,7 @@ fn patch_keeps_the_listing_metadata() {
     start.complete = false;
     let cache = ListingCache::new(1 << 20);
     cache.put(key("a"), start.clone());
-    cache.patch(&key("a"), [Change::Added(entry("b"))]);
+    cache.patch(&key("a"), at(1), [Change::Added(entry("b"))]);
     let out = cache.get(&key("a")).unwrap();
-    assert_eq!((out.read_at, out.complete), (start.read_at, false));
+    assert_eq!((out.read_at, out.complete), (at(1), false));
 }

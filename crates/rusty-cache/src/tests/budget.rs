@@ -1,4 +1,4 @@
-use super::{cost, key, listing};
+use super::{at, cost, key, listing};
 use crate::ListingCache;
 
 fn three_slot_cache() -> ListingCache {
@@ -128,7 +128,7 @@ fn growing_patch_evicts_older_entries() {
     ["a", "b", "c"]
         .iter()
         .for_each(|name| cache.put(key(name), listing(&["x"])));
-    cache.patch(&key("c"), [crate::Change::Added(super::entry("y"))]);
+    cache.patch(&key("c"), at(1), [crate::Change::Added(super::entry("y"))]);
     assert!(cache.get(&key("a")).is_none());
     assert!(cache.get(&key("c")).is_some());
 }
@@ -137,7 +137,7 @@ fn growing_patch_evicts_older_entries() {
 fn patch_past_the_budget_drops_the_entry() {
     let cache = ListingCache::new(cost(&key("a"), &listing(&["x"])));
     cache.put(key("a"), listing(&["x"]));
-    cache.patch(&key("a"), [crate::Change::Added(super::entry("y"))]);
+    cache.patch(&key("a"), at(1), [crate::Change::Added(super::entry("y"))]);
     assert!(cache.get(&key("a")).is_none());
     assert_eq!(cache.stats().bytes, 0);
 }

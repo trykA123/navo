@@ -1,12 +1,34 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use crate::{CacheKey, CacheStats, CachedListing, Change};
+use crate::{CacheKey, CacheStats, CachedListing};
 
 struct Slot {
     listing: Arc<CachedListing>,
     bytes: usize,
     tick: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Swap {
+    Done,
+    Missing,
+    Stale,
+}
+
+pub(crate) struct SizedListing {
+    pub(crate) listing: Arc<CachedListing>,
+    pub(crate) bytes: usize,
+}
+
+impl SizedListing {
+    pub(crate) fn new(key: &CacheKey, listing: CachedListing) -> Self {
+        let bytes = key.estimated_bytes() + listing.estimated_bytes();
+        Self {
+            listing: Arc::new(listing),
+            bytes,
+        }
+    }
 }
 
 pub(crate) struct Store {
@@ -15,6 +37,7 @@ pub(crate) struct Store {
     order: BTreeMap<u64, CacheKey>,
     pins: HashMap<CacheKey, usize>,
     bytes: usize,
+    pinned_bytes: usize,
     tick: u64,
     hits: u64,
     misses: u64,
@@ -29,6 +52,7 @@ impl Store {
             order: BTreeMap::new(),
             pins: HashMap::new(),
             bytes: 0,
+            pinned_bytes: 0,
             tick: 0,
             hits: 0,
             misses: 0,
@@ -49,40 +73,49 @@ impl Store {
         Some(Arc::clone(&slot.listing))
     }
 
-    pub(crate) fn put(&mut self, key: CacheKey, listing: CachedListing) {
+    pub(crate) fn peek(&self, key: &CacheKey) -> Option<Arc<CachedListing>> {
+        self.slots.get(key).map(|slot| Arc::clone(&slot.listing))
+    }
+
+    pub(crate) fn put(&mut self, key: CacheKey, entry: SizedListing) {
+        if self
+            .slots
+            .get(&key)
+            .is_some_and(|slot| entry.listing.read_at < slot.listing.read_at)
+        {
+            return;
+        }
         self.remove(&key);
-        let bytes = key.estimated_bytes() + listing.estimated_bytes();
-        if bytes > self.budget {
+        if entry.bytes > self.budget {
             return;
         }
-        if !self.is_pinned(&key) && self.pinned_bytes() + bytes > self.budget {
+        if !self.is_pinned(&key) && self.pinned_bytes + entry.bytes > self.budget {
             return;
         }
-        self.insert(key, Arc::new(listing), bytes);
+        let tick = self.next_tick();
+        self.insert(key, entry, tick);
         self.evict_to_budget();
     }
 
-    pub(crate) fn patch(&mut self, key: &CacheKey, changes: impl IntoIterator<Item = Change>) {
+    pub(crate) fn swap(
+        &mut self,
+        key: &CacheKey,
+        seen: &Arc<CachedListing>,
+        entry: SizedListing,
+    ) -> Swap {
         let Some(slot) = self.slots.get(key) else {
-            return;
+            return Swap::Missing;
         };
-        let listing = slot.listing.patched(changes);
+        if !Arc::ptr_eq(&slot.listing, seen) {
+            return Swap::Stale;
+        }
         let tick = slot.tick;
         self.remove(key);
-        let bytes = key.estimated_bytes() + listing.estimated_bytes();
-        if bytes > self.budget {
-            return;
+        if entry.bytes <= self.budget {
+            self.insert(key.clone(), entry, tick);
+            self.evict_to_budget();
         }
-        let listing = Arc::new(listing);
-        self.insert_at(
-            key.clone(),
-            Slot {
-                listing,
-                bytes,
-                tick,
-            },
-        );
-        self.evict_to_budget();
+        Swap::Done
     }
 
     pub(crate) fn invalidate(&mut self, key: &CacheKey) {
@@ -90,7 +123,11 @@ impl Store {
     }
 
     pub(crate) fn pin(&mut self, key: &CacheKey) {
-        *self.pins.entry(key.clone()).or_default() += 1;
+        let count = self.pins.entry(key.clone()).or_default();
+        *count += 1;
+        if *count == 1 {
+            self.pinned_bytes += self.slots.get(key).map_or(0, |slot| slot.bytes);
+        }
     }
 
     pub(crate) fn unpin(&mut self, key: &CacheKey) {
@@ -100,6 +137,7 @@ impl Store {
         *count -= 1;
         if *count == 0 {
             self.pins.remove(key);
+            self.pinned_bytes -= self.slots.get(key).map_or(0, |slot| slot.bytes);
             self.evict_to_budget();
         }
     }
@@ -116,6 +154,11 @@ impl Store {
     }
 
     pub(crate) fn pinned_bytes(&self) -> usize {
+        self.pinned_bytes
+    }
+
+    #[cfg(test)]
+    pub(crate) fn scanned_pinned_bytes(&self) -> usize {
         self.slots
             .iter()
             .filter(|(key, _)| self.is_pinned(key))
@@ -132,9 +175,14 @@ impl Store {
         self.tick
     }
 
-    fn insert(&mut self, key: CacheKey, listing: Arc<CachedListing>, bytes: usize) {
-        let tick = self.next_tick();
-        self.insert_at(
+    fn insert(&mut self, key: CacheKey, entry: SizedListing, tick: u64) {
+        self.order.insert(tick, key.clone());
+        self.bytes += entry.bytes;
+        if self.is_pinned(&key) {
+            self.pinned_bytes += entry.bytes;
+        }
+        let SizedListing { listing, bytes } = entry;
+        self.slots.insert(
             key,
             Slot {
                 listing,
@@ -144,18 +192,15 @@ impl Store {
         );
     }
 
-    fn insert_at(&mut self, key: CacheKey, slot: Slot) {
-        self.order.insert(slot.tick, key.clone());
-        self.bytes += slot.bytes;
-        self.slots.insert(key, slot);
-    }
-
     fn remove(&mut self, key: &CacheKey) -> bool {
         let Some(slot) = self.slots.remove(key) else {
             return false;
         };
         self.order.remove(&slot.tick);
         self.bytes -= slot.bytes;
+        if self.is_pinned(key) {
+            self.pinned_bytes -= slot.bytes;
+        }
         true
     }
 

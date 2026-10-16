@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use proptest::prelude::*;
 use rusty_core::ProviderPath;
 
-use super::{cost, entry, key, listing, names};
+use super::{at, cost, entry, key, listing, names};
 use crate::{Change, ListingCache};
 
 #[derive(Debug, Clone)]
@@ -47,7 +47,7 @@ fn run(cache: &ListingCache, op: &Op) {
         Op::Invalidate(i) => cache.invalidate(&k(*i)),
         Op::Pin(i) => cache.pin(&k(*i)),
         Op::Unpin(i) => cache.unpin(&k(*i)),
-        Op::Patch(i, n) => cache.patch(&k(*i), [Change::Added(entry(&format!("new-{n}")))]),
+        Op::Patch(i, n) => cache.patch(&k(*i), at(1), [Change::Added(entry(&format!("new-{n}")))]),
     }
 }
 
@@ -62,6 +62,18 @@ proptest! {
             run(&cache, op);
             let stats = cache.stats();
             prop_assert!(stats.bytes <= budget || stats.bytes == cache.pinned_bytes());
+        }
+    }
+
+    #[test]
+    fn pinned_byte_counter_matches_a_scan(
+        budget in 0usize..4000,
+        ops in prop::collection::vec(op(), 0..60),
+    ) {
+        let cache = ListingCache::new(budget);
+        for op in &ops {
+            run(&cache, op);
+            prop_assert_eq!(cache.pinned_bytes(), cache.scanned_pinned_bytes());
         }
     }
 
@@ -129,7 +141,7 @@ proptest! {
         let cache = ListingCache::new(1 << 20);
         cache.put(k(0), listing_of(count));
         let changes: Vec<Change> = edits.iter().map(|(kind, a, b)| change(*kind, *a, *b)).collect();
-        cache.patch(&k(0), changes);
+        cache.patch(&k(0), at(1), changes);
         let after = names(&cache.get(&k(0)).unwrap_or_else(|| unreachable!()));
         let unique: BTreeSet<&String> = after.iter().collect();
         prop_assert_eq!(unique.len(), after.len());

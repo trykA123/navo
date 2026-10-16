@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::SystemTime;
 
-use crate::store::Store;
+use crate::store::{SizedListing, Store, Swap};
 use crate::{CacheKey, CachedListing, Change};
 
 pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
@@ -40,11 +41,30 @@ impl ListingCache {
     }
 
     pub fn put(&self, key: CacheKey, listing: CachedListing) {
-        self.lock().put(key, listing);
+        let entry = SizedListing::new(&key, listing);
+        self.lock().put(key, entry);
     }
 
-    pub fn patch(&self, key: &CacheKey, changes: impl IntoIterator<Item = Change>) {
-        self.lock().patch(key, changes);
+    pub fn patch(
+        &self,
+        key: &CacheKey,
+        changed_at: SystemTime,
+        changes: impl IntoIterator<Item = Change>,
+    ) {
+        let changes: Vec<Change> = changes.into_iter().collect();
+        for _ in 0..2 {
+            let Some(seen) = self.lock().peek(key) else {
+                return;
+            };
+            if seen.read_at > changed_at {
+                return;
+            }
+            let entry = SizedListing::new(key, seen.patched(&changes, changed_at));
+            if self.lock().swap(key, &seen, entry) != Swap::Stale {
+                return;
+            }
+        }
+        self.lock().invalidate(key);
     }
 
     pub fn invalidate(&self, key: &CacheKey) {
@@ -69,7 +89,12 @@ impl ListingCache {
         self.lock().pinned_bytes()
     }
 
-    fn lock(&self) -> MutexGuard<'_, Store> {
+    #[cfg(test)]
+    pub(crate) fn scanned_pinned_bytes(&self) -> usize {
+        self.lock().scanned_pinned_bytes()
+    }
+
+    pub(crate) fn lock(&self) -> MutexGuard<'_, Store> {
         self.store.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }

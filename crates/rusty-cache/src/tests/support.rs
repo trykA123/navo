@@ -45,3 +45,7 @@ pub fn cost(key: &CacheKey, listing: &CachedListing) -> usize {
     probe.put(key.clone(), listing.clone());
     probe.stats().bytes
 }
+
+pub fn at(seconds: u64) -> SystemTime {
+    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds)
+}

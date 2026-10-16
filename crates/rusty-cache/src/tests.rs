@@ -3,8 +3,9 @@ mod support;
 mod budget;
 mod patch;
 mod props;
+mod race;
 
-use support::{cost, entry, key, listing, names};
+use support::{at, cost, entry, key, listing, names};
 
 use crate::{DEFAULT_BUDGET, ListingCache};
 
@@ -87,6 +88,6 @@ fn readers_keep_their_snapshot_after_a_patch() {
     let cache = ListingCache::new(1 << 20);
     cache.put(key("a"), listing(&["x"]));
     let before = cache.get(&key("a")).unwrap();
-    cache.patch(&key("a"), [crate::Change::Added(entry("y"))]);
+    cache.patch(&key("a"), at(1), [crate::Change::Added(entry("y"))]);
     assert_eq!(names(&before), ["x"]);
 }
