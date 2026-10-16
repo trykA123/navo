@@ -91,8 +91,8 @@ fn opens_as_text_with(cx: &mut TestAppContext, name: &str, source: String, note:
 }
 
 #[gpui_kit::test]
-fn markdown_over_4_mib_opens_as_text_with_a_note(cx: &mut TestAppContext) {
-    let source = "a line\n".repeat(600_000);
+fn markdown_over_1_mib_opens_as_text_with_a_note(cx: &mut TestAppContext) {
+    let source = "a line\n".repeat(160_000);
     opens_as_text_with(cx, "big.md", source, "Large Markdown: shown as text.");
 }
 
@@ -105,7 +105,7 @@ fn markdown_with_too_many_blocks_opens_as_text_with_a_note(cx: &mut TestAppConte
 
 #[gpui_kit::test]
 fn a_100_000_block_file_lays_out_only_the_visible_blocks(cx: &mut TestAppContext) {
-    let source = "Paragraph text.\n\n".repeat(100_000);
+    let source = "p\n\n".repeat(100_000);
     let (window, view) = open(cx, "long.md", &source);
     assert!(!has_editor(cx, &view));
     let drawn = |cx: &mut TestAppContext| with_body(cx, &view, MarkdownBody::drawn);
@@ -176,6 +176,30 @@ fn a_long_code_line_scrolls_sideways_inside_its_block(cx: &mut TestAppContext) {
     assert!(!has_editor(cx, &view));
 }
 
+#[gpui_kit::test]
+fn too_many_table_cells_show_tables_as_text_with_a_status_note(cx: &mut TestAppContext) {
+    let one = "|a".repeat(362) + "|\n" + &"|-".repeat(362) + "|\n" + &"x\n".repeat(724) + "\n";
+    let (window, view) = open(cx, "tables.md", &one.repeat(4));
+    assert!(!has_editor(cx, &view));
+    assert_eq!(
+        text_of(cx, window, "markdown-status"),
+        "Tables shown as text: too many cells"
+    );
+}
+
+#[gpui_kit::test]
+fn long_link_targets_are_cut_to_200_characters(cx: &mut TestAppContext) {
+    let target = format!("https://example.com/{}", "a".repeat(300));
+    let (window, view) = open(cx, "long.md", &format!("[x]({target})\n"));
+    press(cx, window, &view, "tab");
+    let detail = text_of(cx, window, "markdown-link");
+    assert_eq!(detail.chars().count(), "Enter opens ".len() + 201);
+    assert!(detail.ends_with('…'), "{detail}");
+    press(cx, window, &view, "enter");
+    let status = text_of(cx, window, "markdown-status");
+    assert_eq!(status, format!("Opened {}…", &target[..200]));
+}
+
 fn on_a_small_stack(stack: usize, test: fn(&mut TestAppContext)) {
     std::thread::Builder::new()
         .stack_size(stack)
@@ -211,7 +235,7 @@ fn probes() -> Vec<String> {
     vec![
         "*".repeat(50_000) + "x" + &"*".repeat(50_000) + "\n",
         "*a ".repeat(50_000) + "x",
-        (0..1_500)
+        (0..1_000)
             .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
             .collect(),
         (0..1_000)

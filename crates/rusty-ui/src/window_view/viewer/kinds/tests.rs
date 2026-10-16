@@ -176,11 +176,11 @@ fn plain_text_and_content_that_does_not_fit_stay_text() {
     assert_eq!(best_named("model.arxml", b"<AUTOSAR>", huge), "tree");
     assert_eq!(best_named("notes.md", b"# Title\n", EDIT_LIMIT + 1), "text");
     assert_eq!(
-        best_named("notes.md", b"# Title\n", 4 * 1024 * 1024),
+        best_named("notes.md", b"# Title\n", 1024 * 1024),
         "markdown"
     );
     assert_eq!(
-        best_named("notes.md", b"# Title\n", 4 * 1024 * 1024 + 1),
+        best_named("notes.md", b"# Title\n", 1024 * 1024 + 1),
         "text"
     );
     let sniff = Sniff {

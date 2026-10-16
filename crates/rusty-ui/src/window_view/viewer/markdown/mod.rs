@@ -24,6 +24,7 @@ use block::{Page, draw_block};
 const CONTEXT: &str = "Markdown";
 const LINE_STEP: f32 = 3.;
 const OVERDRAW: f32 = 200.;
+const MAX_SHOWN_TARGET: usize = 200;
 
 gpui_kit::actions!(viewer_markdown, [OpenLink, NextLink, PreviousLink]);
 
@@ -34,6 +35,13 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("tab", NextLink, context),
         KeyBinding::new("shift-tab", PreviousLink, context),
     ]);
+}
+
+fn shown(target: &str) -> String {
+    match target.char_indices().nth(MAX_SHOWN_TARGET) {
+        Some((at, _)) => format!("{}…", &target[..at]),
+        None => target.to_owned(),
+    }
 }
 
 pub(super) struct MarkdownFile {
@@ -58,6 +66,8 @@ pub(super) struct MarkdownView {
 impl MarkdownView {
     fn new(file: MarkdownFile, host: Host, cx: &mut Context<Self>) -> Self {
         let count = file.doc.blocks().len();
+        let notes = file.doc.notes();
+        let note = (!notes.is_empty()).then(|| SharedString::from(notes.join(" · ")));
         Self {
             title: host.title.clone(),
             len: file.len,
@@ -66,7 +76,7 @@ impl MarkdownView {
             doc: Rc::new(file.doc),
             list: ListState::new(count, ListAlignment::Top, px(OVERDRAW)),
             picked: None,
-            note: None,
+            note,
             checking: None,
             #[cfg(test)]
             drawn: Rc::default(),
@@ -97,17 +107,21 @@ impl MarkdownView {
             cx.propagate();
             return;
         };
+        let label = shown(&url);
         match links::classify(&url) {
             links::Link::Web => {
                 cx.open_url(&url);
-                self.say(format!("Opened {url}"), cx);
+                self.say(format!("Opened {label}"), cx);
             }
             links::Link::Local(segments) => match links::resolve(&self.host.location, &segments) {
                 Some(target) => self.open_if_found(target, cx),
-                None => self.say(format!("Cannot open {url}: not a file name."), cx),
+                None => self.say(format!("Cannot open {label}: not a file name."), cx),
             },
             links::Link::Refused => {
-                self.say(format!("Not opened: {url} is not a web or file link."), cx);
+                self.say(
+                    format!("Not opened: {label} is not a web or file link."),
+                    cx,
+                );
             }
         }
     }
@@ -125,7 +139,7 @@ impl MarkdownView {
                 if found {
                     (view.host.open)(target, cx);
                 } else {
-                    view.say(format!("Not found: {}", target.as_str()), cx);
+                    view.say(format!("Not found: {}", shown(target.as_str())), cx);
                 }
             },
         ));
@@ -201,7 +215,10 @@ impl Render for MarkdownView {
             title: self.title.clone(),
             mode: "Markdown".into(),
             len: self.len,
-            detail: picked.map(|url| ("markdown-link", format!("Enter opens {url}").into())),
+            detail: picked.map(|url| {
+                let label = shown(&url);
+                ("markdown-link", format!("Enter opens {label}").into())
+            }),
             status: self.note.clone().map(|note| ("markdown-status", note)),
         };
         let page = Page {
