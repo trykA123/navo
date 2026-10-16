@@ -174,7 +174,9 @@ impl FerriteWindow {
                 request.load(&loader, &sniff, turn)
             },
             move |view: &mut Self, loaded, window, cx| {
-                view.show_loaded(Shown { kind, loaded, edit }, window, cx);
+                if !view.restart_if_superseded(window, cx) {
+                    view.show_loaded(Shown { kind, loaded, edit }, window, cx);
+                }
             },
         );
         if let Some(viewer) = &mut self.viewer {
