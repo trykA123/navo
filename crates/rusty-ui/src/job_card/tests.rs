@@ -5,7 +5,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 use rusty_core::OpKind;
 
-use super::{JobCard, JobInfo, JobsSummary, PillFit, SpeedMeter, time_text};
+use super::{JobCard, JobInfo, JobsSummary, Pause, PillFit, SpeedMeter, time_text};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::test_window::open;
@@ -26,6 +26,7 @@ fn copy() -> JobInfo {
         files_total: 12,
         state: JobRowState::Running,
         speed: Some(10 * MB),
+        pause: Pause::Off,
     }
 }
 
@@ -235,6 +236,63 @@ fn a_stall_decays_the_speed_and_then_hides_it() {
         meter.observe(1, 10 * MB, at(tick));
     }
     assert_eq!(meter.speed(1), None);
+}
+
+fn paused(pause: Pause) -> JobInfo {
+    JobInfo { pause, ..copy() }
+}
+
+#[test]
+fn a_paused_job_says_paused_instead_of_speed_and_time_left() {
+    let job = paused(Pause::On);
+    assert_eq!(job.status_text(), "25% · 1 of 12 files · Paused");
+    assert_eq!(job.left(), None);
+}
+
+#[test]
+fn a_job_asked_to_pause_says_pausing() {
+    assert_eq!(
+        paused(Pause::Asked).status_text(),
+        "25% · 1 of 12 files · Pausing…"
+    );
+}
+
+#[test]
+fn a_paused_job_adds_no_speed_or_time_left_to_the_summary() {
+    let summary = JobsSummary::of(&[
+        copy(),
+        JobInfo {
+            pause: Pause::On,
+            ..second()
+        },
+    ]);
+    assert_eq!(summary.speed, Some(10 * MB));
+    assert_eq!(summary.left, Some(Duration::from_secs(30)));
+    assert!(summary.is_running);
+    assert!(!summary.is_paused);
+}
+
+#[test]
+fn a_summary_is_paused_when_every_running_job_is_paused() {
+    let summary = JobsSummary::of(&[paused(Pause::On), with_state(JobRowState::Done)]);
+    assert!(summary.is_paused);
+    assert!(!summary.is_ended());
+    assert!(!JobsSummary::of(&[paused(Pause::Asked)]).is_paused);
+}
+
+#[test]
+fn holding_keeps_the_speed_and_skips_the_paused_time() {
+    let start = Instant::now();
+    let at = |seconds: u64| start + Duration::from_secs(seconds);
+    let mut meter = SpeedMeter::default();
+    meter.observe(1, 0, at(0));
+    meter.observe(1, 10 * MB, at(1));
+    for second in 2..30 {
+        meter.hold(1, 10 * MB, at(second));
+    }
+    assert_eq!(meter.speed(1), Some(10 * MB));
+    meter.observe(1, 20 * MB, at(30));
+    assert_eq!(meter.speed(1), Some(10 * MB));
 }
 
 struct Under {

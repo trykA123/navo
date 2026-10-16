@@ -6,6 +6,13 @@ use rusty_core::OpKind;
 use crate::format;
 use crate::job_row::JobRowState;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pause {
+    Off,
+    Asked,
+    On,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobInfo {
     pub id: u64,
@@ -20,6 +27,7 @@ pub struct JobInfo {
     pub files_total: u64,
     pub state: JobRowState,
     pub speed: Option<u64>,
+    pub pause: Pause,
 }
 
 fn verbs(kind: OpKind) -> [&'static str; 3] {
@@ -120,8 +128,16 @@ impl JobInfo {
         )
     }
 
+    pub fn is_paused(&self) -> bool {
+        self.is_running() && self.pause == Pause::On
+    }
+
+    fn live_speed(&self) -> Option<u64> {
+        self.speed.filter(|_| self.pause == Pause::Off)
+    }
+
     pub fn left(&self) -> Option<Duration> {
-        let speed = self.speed.filter(|speed| *speed > 0)?;
+        let speed = self.live_speed().filter(|speed| *speed > 0)?;
         let remaining = self.bytes_total.saturating_sub(self.bytes_done);
         Some(Duration::from_secs(remaining.div_ceil(speed)))
     }
@@ -134,8 +150,14 @@ impl JobInfo {
             JobRowState::Failed(_) => return "Failed".to_owned(),
         }
         let mut parts = vec![self.percent_text(), self.files_text()];
-        parts.extend(self.speed.map(speed_text));
-        parts.extend(self.left().map(|left| format!("{} left", time_text(left))));
+        match self.pause {
+            Pause::Off => {
+                parts.extend(self.speed.map(speed_text));
+                parts.extend(self.left().map(|left| format!("{} left", time_text(left))));
+            }
+            Pause::Asked => parts.push("Pausing…".to_owned()),
+            Pause::On => parts.push("Paused".to_owned()),
+        }
         parts.join(" · ")
     }
 }
@@ -149,6 +171,7 @@ pub struct JobsSummary {
     pub speed: Option<u64>,
     pub has_failed: bool,
     pub is_running: bool,
+    pub is_paused: bool,
     pub is_cancelled: bool,
 }
 
@@ -162,7 +185,7 @@ impl JobsSummary {
         });
         let (done, total) = if bytes.1 == 0 { files } else { bytes };
         let running = || jobs.iter().filter(|job| job.is_running());
-        let speeds: Vec<u64> = running().filter_map(|job| job.speed).collect();
+        let speeds: Vec<u64> = running().filter_map(JobInfo::live_speed).collect();
         let name = match jobs {
             [only] => only.name(),
             _ => format!("{} jobs", jobs.len()),
@@ -180,6 +203,7 @@ impl JobsSummary {
                 .iter()
                 .any(|job| matches!(job.state, JobRowState::Failed(_))),
             is_running: running().next().is_some(),
+            is_paused: running().next().is_some() && running().all(JobInfo::is_paused),
             is_cancelled: jobs.iter().all(|job| job.state == JobRowState::Cancelled),
         }
     }

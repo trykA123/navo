@@ -6,7 +6,7 @@ use super::FerriteWindow;
 use super::operate::JOB_LINGER;
 use crate::browser::{JobStatus, JobView};
 use crate::fkey_bar::FKeyBar;
-use crate::job_card::{JobCard, JobInfo, JobPill, JobsSummary, PillFit, SpeedMeter};
+use crate::job_card::{JobCard, JobInfo, JobPill, JobsSummary, Pause, PillFit, SpeedMeter};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::tokens;
@@ -49,6 +49,11 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
             JobStatus::Failed(message) => JobRowState::Failed(message.clone().into()),
         },
         speed,
+        pause: match (job.cancel.is_paused(), progress.paused) {
+            (false, _) => Pause::Off,
+            (true, false) => Pause::Asked,
+            (true, true) => Pause::On,
+        },
     }
 }
 
@@ -82,7 +87,12 @@ impl FerriteWindow {
         let meter = &mut self.job_ui.meter;
         let jobs = self.browser.jobs();
         for job in jobs.iter().filter(|job| job.status == JobStatus::Running) {
-            meter.observe(job.id, job.progress.bytes_done, now);
+            let bytes = job.progress.bytes_done;
+            if job.progress.paused {
+                meter.hold(job.id, bytes, now);
+            } else {
+                meter.observe(job.id, bytes, now);
+            }
         }
         meter.retain(&jobs.iter().map(|job| job.id).collect::<Vec<_>>());
     }
@@ -152,11 +162,18 @@ impl FerriteWindow {
         }
         let t = tokens::current(cx).clone();
         let is_ended = JobsSummary::of(&jobs).is_ended();
-        let (shrink, cancel, dismiss) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
+        let (shrink, pause, resume) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
+        let (cancel, dismiss) = (cx.weak_entity(), cx.weak_entity());
         let card = JobCard::new(jobs)
             .when(is_ended, |card| card.fade_out(JOB_LINGER))
             .on_shrink(move |_, cx| {
                 let _ = shrink.update(cx, |view, cx| view.toggle_jobs(cx));
+            })
+            .on_pause(move |id, _, cx| {
+                let _ = pause.update(cx, |view, cx| view.pause_job(id, cx));
+            })
+            .on_resume(move |id, _, cx| {
+                let _ = resume.update(cx, |view, cx| view.resume_job(id, cx));
             })
             .on_cancel(move |id, _, cx| {
                 let _ = cancel.update(cx, |view, cx| view.cancel_job(id, cx));

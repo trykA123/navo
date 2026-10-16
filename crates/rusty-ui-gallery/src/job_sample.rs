@@ -1,5 +1,5 @@
 use rusty_core::OpKind;
-use rusty_ui::job_card::JobInfo;
+use rusty_ui::job_card::{JobInfo, Pause};
 use rusty_ui::job_row::JobRowState;
 
 const MB: u64 = 1024 * 1024;
@@ -18,6 +18,7 @@ fn copy() -> JobInfo {
         files_total: 37,
         state: JobRowState::Running,
         speed: Some(112 * MB),
+        pause: Pause::Off,
     }
 }
 
@@ -35,6 +36,7 @@ fn move_to_stick() -> JobInfo {
         files_total: 1,
         state: JobRowState::Running,
         speed: Some(38 * MB),
+        pause: Pause::Off,
     }
 }
 

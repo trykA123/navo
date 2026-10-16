@@ -1,4 +1,5 @@
 mod copy;
+mod hold;
 mod run;
 mod undo;
 
@@ -26,6 +27,7 @@ pub struct Progress {
     pub files_done: u64,
     pub files_total: u64,
     pub current: Option<Location>,
+    pub paused: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

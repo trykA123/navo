@@ -16,6 +16,7 @@ mod metadata;
 mod native;
 mod notify_info;
 mod ops;
+mod pause;
 mod perf;
 mod verbatim;
 #[cfg(windows)]

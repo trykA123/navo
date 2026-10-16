@@ -35,6 +35,7 @@ pub(super) fn start_progress(plan: &OperationPlan) -> Progress {
         files_done: 0,
         files_total: plan.totals.files,
         current: None,
+        paused: false,
     }
 }
 
@@ -79,8 +80,9 @@ struct Reporter<'a> {
 
 impl Reporter<'_> {
     fn report(&mut self, progress: &Progress) {
+        let was_paused = self.last.as_ref().is_some_and(|last| last.paused);
         self.last = Some(progress.clone());
-        if self.sent.elapsed() < PROGRESS_EVERY {
+        if progress.paused == was_paused && self.sent.elapsed() < PROGRESS_EVERY {
             return;
         }
         self.sent = Instant::now();

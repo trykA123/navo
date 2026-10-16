@@ -131,6 +131,18 @@ impl FerriteWindow {
         }
     }
 
+    pub(super) fn pause_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        if self.browser.pause_job(id) {
+            cx.notify();
+        }
+    }
+
+    pub(super) fn resume_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        if self.browser.resume_job(id) {
+            cx.notify();
+        }
+    }
+
     pub(super) fn cancel_job(&mut self, id: u64, cx: &mut Context<Self>) {
         self.browser.cancel_job(id);
         cx.notify();

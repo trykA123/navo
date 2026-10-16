@@ -136,6 +136,22 @@ impl Browser {
         true
     }
 
+    pub fn pause_job(&mut self, id: u64) -> bool {
+        self.steer_running(id, CancelToken::pause)
+    }
+
+    pub fn resume_job(&mut self, id: u64) -> bool {
+        self.steer_running(id, CancelToken::resume)
+    }
+
+    fn steer_running(&self, id: u64, steer: fn(&CancelToken)) -> bool {
+        let running = self
+            .jobs
+            .iter()
+            .find(|job| job.id == id && job.status == JobStatus::Running);
+        running.map(|job| steer(&job.cancel)).is_some()
+    }
+
     pub(super) fn accept_job(&mut self, update: JobUpdate) -> bool {
         match update {
             JobUpdate::Planned { request, result } => self.accept_plan(request, result),
@@ -229,6 +245,7 @@ impl Browser {
                     files_done: 0,
                     files_total: 0,
                     current: None,
+                    paused: false,
                 },
                 status: JobStatus::Failed(error.message()),
                 cancel: CancelToken::new(),

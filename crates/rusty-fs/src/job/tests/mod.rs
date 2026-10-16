@@ -19,6 +19,7 @@ mod crashing;
 mod faults;
 mod journal;
 mod move_;
+mod pause;
 mod roll_back;
 
 const BIG: u64 = 10_000;

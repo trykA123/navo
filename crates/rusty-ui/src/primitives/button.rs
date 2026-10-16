@@ -23,6 +23,7 @@ pub enum ButtonVariant {
 pub struct Button {
     id: ElementId,
     label: SharedString,
+    icon: Option<IconName>,
     variant: ButtonVariant,
     is_disabled: bool,
     tooltip: Option<SharedString>,
@@ -34,6 +35,7 @@ impl Button {
         Self {
             id: id.into(),
             label: label.into(),
+            icon: None,
             variant: ButtonVariant::default(),
             is_disabled: false,
             tooltip: None,
@@ -43,6 +45,11 @@ impl Button {
 
     pub fn variant(mut self, variant: ButtonVariant) -> Self {
         self.variant = variant;
+        self
+    }
+
+    pub fn icon(mut self, icon: IconName) -> Self {
+        self.icon = Some(icon);
         self
     }
 
@@ -73,7 +80,10 @@ impl RenderOnce for Button {
             .small()
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.small)
-            .disabled(self.is_disabled);
+            .disabled(self.is_disabled)
+            .when_some(self.icon, |button, icon| {
+                button.icon(Icon::new(icon).size(t.spacing.icon))
+            });
         let button = match self.variant {
             ButtonVariant::Primary => button.primary(),
             ButtonVariant::Secondary => button.outline(),

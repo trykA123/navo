@@ -1,7 +1,8 @@
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use rusty_core::{ConflictPolicy, OpKind, OperationPlan, PlanRequest, plan};
-use rusty_fs::{CancelToken, FakeFs, JobContext, JobOutcome, Provider, run_job, scan};
+use rusty_fs::{CancelToken, FakeFs, JobContext, JobOutcome, Progress, Provider, run_job, scan};
 use rusty_store::{Db, JobJournal, StepState};
 
 use super::{SharedJournal, lock, log_factory, open, recover};
@@ -137,4 +138,57 @@ fn only_a_sole_instance_may_recover() {
     assert!(!third.sole);
     drop((second, third));
     assert!(super::claim(&file).unwrap().sole);
+}
+
+fn run_pausing(
+    fs: &FakeFs,
+    plan: &OperationPlan,
+    journal: &SharedJournal,
+    report: Sender<Progress>,
+) -> (CancelToken, impl FnOnce() -> JobOutcome) {
+    let token = CancelToken::new();
+    let cancel = token.clone();
+    let mut log = log_factory(Arc::clone(journal))(plan).unwrap();
+    let run = move || {
+        let mut on_progress = |progress: &Progress| {
+            if progress.bytes_done > 0 && !progress.paused {
+                cancel.pause();
+            }
+            let _ = report.send(progress.clone());
+        };
+        run_job(
+            plan,
+            &[],
+            &mut JobContext {
+                ops: fs,
+                log: log.as_mut(),
+                cancel: &cancel,
+                progress: &mut on_progress,
+            },
+        )
+    };
+    (token, run)
+}
+
+#[test]
+fn a_crash_while_paused_mid_copy_is_rolled_back_at_start() {
+    let fs = fake();
+    fs.add_file("home/docs/video.bin", 10_000);
+    let journal = journal();
+    let plan = copy_plan(&fs);
+    let (sender, seen) = channel();
+    let (token, run) = run_pausing(&fs, &plan, &journal, sender);
+    let (paused, recovered) = std::thread::scope(|s| {
+        let job = s.spawn(run);
+        let paused = seen.iter().any(|progress| progress.paused);
+        let recovered = recover(&journal, &fs);
+        token.cancel();
+        let _ = job.join();
+        (paused, recovered)
+    });
+    assert!(paused);
+    assert_eq!(recovered.unwrap(), 1);
+    assert!(!exists(&fs, "dest/docs"));
+    assert!(exists(&fs, "home/docs/video.bin"));
+    assert!(lock(&journal).unfinished().unwrap().is_empty());
 }
