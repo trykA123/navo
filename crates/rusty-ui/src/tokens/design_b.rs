@@ -98,7 +98,7 @@ pub(super) fn spacing() -> Spacing {
         path_height: px(28.),
         header_height: px(46.),
         status_height: px(30.),
-        fkey_height: px(48.),
+        fkey_height: px(34.),
         rail_width: px(236.),
         rail_item_height: px(30.),
         drawer_height: px(220.),
