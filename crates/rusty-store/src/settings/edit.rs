@@ -19,7 +19,29 @@ impl From<SettingValue> for Value {
     }
 }
 
+const BOM: char = '\u{feff}';
+
 pub(super) fn patch(
+    text: &str,
+    key: &str,
+    value: Option<SettingValue>,
+) -> Result<String, SettingsError> {
+    let body = text.strip_prefix(BOM);
+    let is_crlf = text.contains("\r\n");
+    let plain = body.unwrap_or(text).replace("\r\n", "\n");
+    let patched = patch_plain(&plain, key, value)?;
+    let patched = if is_crlf {
+        patched.replace('\n', "\r\n")
+    } else {
+        patched
+    };
+    Ok(match body {
+        Some(_) => format!("{BOM}{patched}"),
+        None => patched,
+    })
+}
+
+fn patch_plain(
     text: &str,
     key: &str,
     value: Option<SettingValue>,
@@ -64,6 +86,7 @@ fn set(table: &mut dyn TableLike, name: &str, value: Option<SettingValue>) {
 
 #[must_use]
 pub fn key_line(text: &str, key: &str) -> Option<usize> {
+    let text = text.strip_prefix(BOM).unwrap_or(text);
     let document = toml_edit::Document::parse(text).ok()?;
     let mut parts: Vec<&str> = key.split('.').collect();
     let name = parts.pop()?;

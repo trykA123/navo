@@ -366,6 +366,14 @@ fn the_line_of_a_dotted_or_inline_key_is_found() {
 }
 
 #[test]
+fn the_line_of_a_key_ignores_a_bom_and_crlf() {
+    assert_eq!(
+        key_line("\u{feff}# mine\r\n[appearance]\r\nmode = 1\r\n", MODE),
+        Some(3)
+    );
+}
+
+#[test]
 fn a_missing_key_or_broken_file_has_no_line() {
     assert_eq!(key_line("[files]\nsort = \"size\"\n", MODE), None);
     assert_eq!(key_line("[appearance\n", MODE), None);
@@ -403,4 +411,54 @@ fn a_setting_is_read_by_its_key() {
     );
     assert_eq!(settings.value_at("editor.path"), None);
     assert_eq!(settings.value_at("appearance.zoom"), None);
+}
+
+fn changed_lines(before: &str, after: &str) -> usize {
+    let (before, after): (Vec<&str>, Vec<&str>) =
+        (before.split('\n').collect(), after.split('\n').collect());
+    assert_eq!(before.len(), after.len());
+    before.iter().zip(&after).filter(|(a, b)| a != b).count()
+}
+
+#[test]
+fn a_crlf_file_keeps_its_line_endings_and_undo_gives_back_the_bytes() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let before = "# mine\r\n[appearance]\r\nmode = \"light\"\r\nfont-size = 15\r\n";
+    write(&path, before);
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    let after = fs::read_to_string(&path).unwrap();
+    assert_eq!(changed_lines(before, &after), 1, "{after:?}");
+    assert_eq!(after.matches("\r\n").count(), after.matches('\n').count());
+    store.save(MODE, Some(text("light"))).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
+}
+
+#[test]
+fn a_crlf_file_gets_crlf_on_a_new_key() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[files]\r\nsort = \"size\"\r\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    store.save(MODE, Some(text("dark"))).unwrap();
+    let after = fs::read_to_string(&path).unwrap();
+    assert!(!after.replace("\r\n", "").contains('\n'), "{after:?}");
+}
+
+#[test]
+fn a_bom_file_keeps_its_bom_and_undo_gives_back_the_bytes() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let before = "\u{feff}# mine\r\n[appearance]\r\nmode = \"light\"\r\n";
+    write(&path, before);
+    let (mut store, report) = SettingsStore::load(&path);
+    assert_eq!(report, LoadReport::default());
+    store.save(MODE, Some(text("dark"))).unwrap();
+    let after = fs::read_to_string(&path).unwrap();
+    assert!(after.starts_with('\u{feff}'), "{after:?}");
+    assert_eq!(changed_lines(before, &after), 1, "{after:?}");
+    assert_eq!(store.current().appearance.mode, ThemeMode::Dark);
+    store.save(MODE, Some(text("light"))).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
 }
