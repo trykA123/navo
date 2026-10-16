@@ -225,10 +225,14 @@ impl FerriteWindow {
         }
         let held = self.held_layer;
         let (layer, index, spoken) = KEY_WARNING;
-        FKeyBar::new("fkeys", layer_keys(held))
+        let bar = FKeyBar::new("fkeys", layer_keys(held))
             .layers(held, key_labels())
-            .warn(layer, index, spoken)
-            .reserve_pill()
+            .warn(layer, index, spoken);
+        if self.browser.jobs().is_empty() {
+            bar
+        } else {
+            bar.reserve_pill()
+        }
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {

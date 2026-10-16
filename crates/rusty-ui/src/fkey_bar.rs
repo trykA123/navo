@@ -307,7 +307,7 @@ fn cell(t: &Theme, cell: Cell) -> impl IntoElement {
         .min_w_0()
         .gap(t.spacing.sm)
         .pl(t.spacing.xxs)
-        .pr(t.spacing.md)
+        .pr(t.spacing.sm)
         .when(is_dimmed, |pill| pill.opacity(DIMMED))
         .when_some(cell.warning, |pill, warning| {
             pill.tooltip(move |window, cx| Tooltip::new(warning.clone()).build(window, cx))
@@ -408,7 +408,7 @@ impl RenderOnce for FKeyBar {
             .flex_shrink(1.)
             .min_w_0()
             .items_center()
-            .gap(t.spacing.sm)
+            .gap(t.spacing.xs)
             .when(is_layered, |group| group.children(modifier_pills(t, held)))
             .children(cells);
         div()

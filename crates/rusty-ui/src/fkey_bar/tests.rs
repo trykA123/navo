@@ -381,3 +381,24 @@ fn an_empty_key_keeps_its_place(cx: &mut TestAppContext) {
     let (window, _) = open(cx, |_, _| Layered(None));
     assert_eq!(shown(cx, window).labels[0], "F1");
 }
+
+#[gpui_kit::test]
+fn with_no_job_the_1280_px_bar_shows_every_label_in_full_and_centred(cx: &mut TestAppContext) {
+    let at_1280 = laid(cx, px(1280.), None, false);
+    let natural = laid(cx, px(2560.), None, false);
+    assert_eq!(widths(&at_1280.keys), widths(&natural.keys));
+    assert_eq!(at_1280.right.size.width, at_1280.left.size.width);
+    let gap = (at_1280.mods[0].left() - at_1280.bar.left())
+        - (at_1280.bar.right() - at_1280.keys[9].right());
+    assert!(gap.abs() < px(1.), "{gap:?}");
+}
+
+#[gpui_kit::test]
+fn with_a_job_the_area_appears_and_keys_keep_their_width_when_there_is_room(
+    cx: &mut TestAppContext,
+) {
+    let free = laid(cx, px(1920.), None, false);
+    let busy = laid(cx, px(1920.), Some(px(220.)), false);
+    assert_eq!(widths(&free.keys), widths(&busy.keys));
+    assert!(busy.right.size.width >= px(220.));
+}
