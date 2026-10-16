@@ -274,6 +274,12 @@ impl ArchiveView {
 
 #[cfg(test)]
 impl ArchiveView {
+    pub(in crate::window_view::viewer) fn reading_flag(
+        &self,
+    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+        self.reading.as_ref().map(|reading| reading._cancel.flag())
+    }
+
     pub(in crate::window_view::viewer) fn nested_kind(&self, cx: &App) -> Option<super::PagedKind> {
         self.nested.as_ref().map(|nested| nested.0.read(cx).kind)
     }

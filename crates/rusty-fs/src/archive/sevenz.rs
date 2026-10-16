@@ -6,12 +6,39 @@ use sevenz_rust2::{
 
 use super::source::{Fail, Meter, Metered};
 use super::{
-    ArchiveEntry, ENCRYPTED, EntryAt, Limits, Listed, Stamp, UNSUPPORTED_METHOD, damaged, missing,
-    read_capped,
+    ArchiveEntry, ENCRYPTED, EntryAt, Limits, Listed, Stamp, UNPACK_BUDGET, UNSUPPORTED_METHOD,
+    damaged, missing, read_capped,
 };
 
 const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
 const TICKS_PER_MS: u64 = 10_000;
+const LZMA2_LARGEST: u8 = 40;
+pub(super) const TOO_MUCH_MEMORY: &str = "Needs over 2 GB of memory to unpack: not shown.";
+
+pub(super) fn dictionary_size(method: &[u8], properties: &[u8]) -> u64 {
+    if method == EncoderMethod::ID_LZMA {
+        properties.get(1..5).map_or(0, |bytes| {
+            u64::from(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+        })
+    } else if method == EncoderMethod::ID_LZMA2 {
+        match properties.first().copied() {
+            Some(LZMA2_LARGEST) => u64::from(u32::MAX),
+            Some(bits) if bits < LZMA2_LARGEST => (2 | u64::from(bits & 1)) << (bits / 2 + 11),
+            Some(_) => u64::MAX,
+            None => 0,
+        }
+    } else {
+        0
+    }
+}
+
+fn needs_too_much_memory(archive: &Archive, block: usize) -> bool {
+    archive.blocks.get(block).is_some_and(|block| {
+        block.coders.iter().any(|coder| {
+            dictionary_size(coder.encoder_method_id(), coder.properties()) > UNPACK_BUDGET
+        })
+    })
+}
 
 pub(super) fn failed(error: Error) -> String {
     match error {
@@ -82,6 +109,9 @@ pub(super) fn read<R: Read + Seek>(
     let Some(block) = block.copied().flatten() else {
         return Ok(Vec::new());
     };
+    if needs_too_much_memory(&archive, block) {
+        return Err(TOO_MUCH_MEMORY.to_owned());
+    }
     let password = Password::empty();
     let decoder = BlockDecoder::new(1, block, &archive, &password, &mut reader);
     let mut meter = Meter::new(limits.budget, limits.cancel);

@@ -32,7 +32,7 @@ impl ViewerKind for Font {
 
     fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
         let bytes = (load.hooks.bytes)(load.location, FONT_LIMIT)?;
-        Ok(Box::new(FontFace::parse(bytes)?))
+        Ok(Box::new(FontFace::parse(bytes, load.cancel)?))
     }
 
     fn attach(

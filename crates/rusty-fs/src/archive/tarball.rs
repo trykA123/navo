@@ -5,7 +5,7 @@ use lzma_rust2::XzReader;
 use ruzstd::decoding::StreamingDecoder;
 
 use super::source::{Fail, Meter, Seekable, Source, Stream};
-use super::tar_headers::{Found, next};
+use super::tar_headers::{Found, Sparse, next};
 use super::{ArchiveFormat, EntryAt, Limits, Listed, damaged, missing, read_capped};
 
 const XZ_MEMORY_KB: u32 = 256 * 1024;
@@ -23,7 +23,7 @@ pub(super) fn decompress<'a>(
 }
 
 fn walk(source: &mut impl Source, listed: &mut Listed<'_>) -> Result<(), Fail> {
-    while let Some(found) = next(source)? {
+    while let Some(found) = next(source, Sparse::Skip)? {
         let skip = found.padded();
         if !listed.push(found.entry) {
             break;
@@ -48,7 +48,7 @@ pub(super) fn list<R: Read + Seek>(
     limits: Limits<'_>,
 ) -> Result<Listed<'_>, String> {
     if format == ArchiveFormat::Tar {
-        return list_from(&mut Seekable::new(reader)?, limits);
+        return list_from(&mut Seekable::new(reader, limits.cancel)?, limits);
     }
     let meter = Meter::new(limits.budget, limits.cancel);
     list_from(&mut Stream::new(decompress(format, reader)?, meter), limits)
@@ -71,7 +71,7 @@ fn read_found(found: Found, source: &mut impl Source, at: EntryAt) -> Result<Vec
 
 fn read_from(source: &mut impl Source, at: EntryAt) -> Result<Vec<u8>, Fail> {
     let mut index = 0;
-    while let Some(found) = next(source)? {
+    while let Some(found) = next(source, Sparse::Keep)? {
         if index == at.index {
             return read_found(found, source, at);
         }
@@ -88,7 +88,7 @@ pub(super) fn read<R: Read + Seek>(
     limits: Limits<'_>,
 ) -> Result<Vec<u8>, String> {
     let read = if format == ArchiveFormat::Tar {
-        read_from(&mut Seekable::new(reader)?, at)
+        read_from(&mut Seekable::new(reader, limits.cancel)?, at)
     } else {
         let meter = Meter::new(limits.budget, limits.cancel);
         read_from(&mut Stream::new(decompress(format, reader)?, meter), at)

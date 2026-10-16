@@ -6,8 +6,8 @@ use zip::write::SimpleFileOptions;
 
 use super::{NEVER, gz, index_of, read_archive_entry, sample_tar, seven_bytes, tar_bytes, write};
 use crate::archive::{
-    ArchiveFormat, CANCELLED, ENTRY_LIMIT, EntryAt, Limits, OVER_BUDGET, UNSUPPORTED_METHOD,
-    list_with, read_with, sevenz, tarball,
+    ArchiveFormat, CANCELLED, ENTRY_LIMIT, EntryAt, Limits, OVER_BUDGET, UNPACK_BUDGET,
+    UNSUPPORTED_METHOD, list_with, read_with, sevenz, tarball,
 };
 
 const ZEROS: usize = 1024 * 1024;
@@ -117,13 +117,15 @@ fn a_cancelled_listing_or_read_stops() {
             path.display()
         );
     }
-    let path = write(&dir, "a.tgz", &gz(&sample_tar()));
     let at = EntryAt {
         index: 1,
         limit: ENTRY_LIMIT,
     };
-    let read = read_with(&path, at, limits(10, u64::MAX, &cancel));
-    assert_eq!(read.unwrap_err(), CANCELLED);
+    for (name, bytes) in [("a.tgz", gz(&sample_tar())), ("a.tar", sample_tar())] {
+        let path = write(&dir, name, &bytes);
+        let read = read_with(&path, at, limits(10, u64::MAX, &cancel));
+        assert_eq!(read.unwrap_err(), CANCELLED, "{name}");
+    }
 }
 
 #[test]
@@ -233,4 +235,83 @@ fn unsupported_compression_methods_say_so() {
     );
     let bcj2 = sevenz_rust2::Error::UnsupportedCompressionMethod("BCJ2".to_owned());
     assert_eq!(sevenz::failed(bcj2), UNSUPPORTED_METHOD);
+}
+
+fn sparse_header(chunks: &[(u64, u64)], stored: u64, real: u64, is_extended: bool) -> Vec<u8> {
+    let mut header = Header::new_gnu();
+    header.set_entry_type(EntryType::GNUSparse);
+    header.set_size(stored);
+    header.set_mode(0o644);
+    header.as_gnu_mut().unwrap().name[..10].copy_from_slice(b"sparse.bin");
+    let gnu = header.as_gnu_mut().unwrap();
+    for (slot, (offset, length)) in gnu.sparse.iter_mut().zip(chunks) {
+        slot.set_offset(*offset);
+        slot.set_length(*length);
+    }
+    gnu.set_real_size(real);
+    gnu.set_is_extended(is_extended);
+    header.set_cksum();
+    header.as_bytes().to_vec()
+}
+
+fn extension(chunks: &[(u64, u64)], is_extended: bool) -> Vec<u8> {
+    let mut block = tar::GnuExtSparseHeader::new();
+    for (slot, (offset, length)) in block.sparse_mut().iter_mut().zip(chunks) {
+        slot.set_offset(*offset);
+        slot.set_length(*length);
+    }
+    block.set_is_extended(is_extended);
+    block.as_bytes().to_vec()
+}
+
+#[test]
+fn a_gnu_sparse_entry_with_an_extended_block_is_listed_and_read() {
+    let mut bytes = sparse_header(&[(0, 512), (1024, 512)], 1536, 2560, true);
+    bytes.extend(extension(&[(2048, 512)], false));
+    for fill in *b"abc" {
+        bytes.extend([fill; 512]);
+    }
+    bytes.extend([0; 1024]);
+    let dir = tempfile::tempdir().unwrap();
+    let path = write(&dir, "sparse.tar", &bytes);
+    let listing = super::list_archive(&path).unwrap();
+    assert_eq!(listing.entries.len(), 1);
+    assert_eq!(
+        (listing.entries[0].name.as_str(), listing.entries[0].size),
+        ("sparse.bin", 2560)
+    );
+    let read = read_archive_entry(&path, 0, ENTRY_LIMIT).unwrap();
+    let mut expected = vec![0; 2560];
+    expected[..512].fill(b'a');
+    expected[1024..1536].fill(b'b');
+    expected[2048..2560].fill(b'c');
+    assert_eq!(read, expected);
+}
+
+#[test]
+fn an_endless_sparse_header_chain_is_refused() {
+    let mut bytes = sparse_header(&[(0, 1)], 1, 1, true);
+    for _ in 0..3_000 {
+        bytes.extend(extension(&[], true));
+    }
+    let dir = tempfile::tempdir().unwrap();
+    for (name, archive) in [("chain.tar", bytes.clone()), ("chain.tgz", gz(&bytes))] {
+        let path = write(&dir, name, &archive);
+        let error = super::list_archive(&path).unwrap_err();
+        assert!(
+            error.contains("sparse header chain is too long"),
+            "{name}: {error}"
+        );
+    }
+}
+
+#[test]
+fn a_7z_dictionary_over_the_budget_is_refused() {
+    let lzma2 = sevenz_rust2::EncoderMethod::ID_LZMA2;
+    let lzma = sevenz_rust2::EncoderMethod::ID_LZMA;
+    assert_eq!(sevenz::dictionary_size(lzma2, &[0]), 4096);
+    assert_eq!(sevenz::dictionary_size(lzma2, &[40]), u64::from(u32::MAX));
+    assert!(sevenz::dictionary_size(lzma2, &[39]) > UNPACK_BUDGET);
+    assert_eq!(sevenz::dictionary_size(lzma, &[0x5D, 0, 0, 0, 1]), 1 << 24);
+    assert_eq!(sevenz::dictionary_size(b"\x04\x01\x08", &[]), 0);
 }

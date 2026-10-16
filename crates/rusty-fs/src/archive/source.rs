@@ -90,27 +90,31 @@ pub(crate) trait Source: Read {
     }
 }
 
-pub(crate) struct Seekable<R> {
+pub(crate) struct Seekable<'a, R> {
     inner: R,
     len: u64,
+    cancel: &'a AtomicBool,
 }
 
-impl<R: Read + Seek> Seekable<R> {
-    pub(crate) fn new(mut inner: R) -> Result<Self, String> {
+impl<'a, R: Read + Seek> Seekable<'a, R> {
+    pub(crate) fn new(mut inner: R, cancel: &'a AtomicBool) -> Result<Self, String> {
         let len = inner.seek(SeekFrom::End(0)).map_err(damaged)?;
         inner.rewind().map_err(damaged)?;
-        Ok(Self { inner, len })
+        Ok(Self { inner, len, cancel })
     }
 }
 
-impl<R: Read> Read for Seekable<R> {
+impl<R: Read> Read for Seekable<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf)
     }
 }
 
-impl<R: Read + Seek> Source for Seekable<R> {
+impl<R: Read + Seek> Source for Seekable<'_, R> {
     fn skip(&mut self, bytes: u64) -> Result<(), Fail> {
+        if let Some(stop) = self.stopped() {
+            return Err(Fail::Stop(stop));
+        }
         let at = self.inner.stream_position().map_err(damaged)?;
         let to = at.saturating_add(bytes).min(self.len);
         self.inner.seek(SeekFrom::Start(to)).map_err(damaged)?;
@@ -118,7 +122,9 @@ impl<R: Read + Seek> Source for Seekable<R> {
     }
 
     fn stopped(&self) -> Option<Stop> {
-        None
+        self.cancel
+            .load(Ordering::Relaxed)
+            .then_some(Stop::Cancelled)
     }
 }
 

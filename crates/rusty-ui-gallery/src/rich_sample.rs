@@ -57,7 +57,7 @@ pub fn font_view(cx: &mut App) -> Option<Entity<FontView>> {
     let bytes = std::env::var_os(FONT_ENV)
         .and_then(|path| std::fs::read(path).ok())
         .unwrap_or_else(|| ARCHIVO.to_vec());
-    let face = FontFace::parse(bytes).ok()?;
+    let face = FontFace::parse(bytes, &std::sync::atomic::AtomicBool::new(false)).ok()?;
     let title = format!("{}.ttf", face.family.replace(' ', ""));
     Some(cx.new(|cx| FontView::new(title, face, cx)))
 }

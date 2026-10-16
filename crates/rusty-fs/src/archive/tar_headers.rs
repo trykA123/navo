@@ -9,6 +9,13 @@ const BLOCK: usize = 512;
 const EXTENSION_LIMIT: u64 = 64 * 1024;
 const CHECKSUM: std::ops::Range<usize> = 148..156;
 const EXTENDED_SPARSE_FLAG: usize = 504;
+const MAX_SPARSE_BLOCKS: usize = 2_048;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Sparse {
+    Skip,
+    Keep,
+}
 
 pub(super) struct Found {
     pub entry: ArchiveEntry,
@@ -99,14 +106,25 @@ fn read_pax(body: &[u8], pending: &mut Pending) {
     }
 }
 
-fn sparse_head(source: &mut impl Source, block: &[u8; BLOCK]) -> Result<Vec<u8>, Fail> {
-    let mut head = block.to_vec();
+fn sparse_head(
+    source: &mut impl Source,
+    block: &[u8; BLOCK],
+    sparse: Sparse,
+) -> Result<Option<Vec<u8>>, Fail> {
+    let mut head = (sparse == Sparse::Keep).then(|| block.to_vec());
     let header = Header::from_byte_slice(block);
     let mut is_extended = header.as_gnu().is_some_and(tar::GnuHeader::is_extended);
+    let mut blocks = 0;
     while is_extended {
+        blocks += 1;
+        if blocks > MAX_SPARSE_BLOCKS {
+            return Err(Fail::Damaged(damaged("a sparse header chain is too long")));
+        }
         let next = read_block(source)?.ok_or_else(|| damaged("a sparse header is cut short"))?;
         is_extended = next[EXTENDED_SPARSE_FLAG] == 1;
-        head.extend_from_slice(&next);
+        if let Some(head) = head.as_mut() {
+            head.extend_from_slice(&next);
+        }
     }
     Ok(head)
 }
@@ -135,7 +153,7 @@ fn describe(header: &Header, pending: Pending, stored: u64) -> ArchiveEntry {
     }
 }
 
-pub(super) fn next(source: &mut impl Source) -> Result<Option<Found>, Fail> {
+pub(super) fn next(source: &mut impl Source, sparse: Sparse) -> Result<Option<Found>, Fail> {
     let mut pending = Pending::default();
     loop {
         let Some(block) = read_block(source)? else {
@@ -162,7 +180,7 @@ pub(super) fn next(source: &mut impl Source) -> Result<Option<Found>, Fail> {
             EntryType::XGlobalHeader => source.skip(padded(declared))?,
             kind => {
                 let sparse_head = if kind.is_gnu_sparse() {
-                    Some(sparse_head(source, &block)?)
+                    sparse_head(source, &block, sparse)?
                 } else {
                     None
                 };

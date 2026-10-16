@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 use std::io::Write as _;
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
 
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
@@ -12,6 +14,11 @@ use super::sfnt::{self, Table};
 
 const ARCHIVO: &[u8] = include_bytes!("../../../../fonts/Archivo-Regular.ttf");
 const NAME_IDS: [u16; 5] = [1, 4, 6, 16, 21];
+static KEEP: AtomicBool = AtomicBool::new(false);
+
+fn parse(bytes: Vec<u8>) -> Result<FontFace, String> {
+    FontFace::parse(bytes, &KEEP)
+}
 
 fn be16(bytes: &[u8], at: usize) -> usize {
     usize::from(u16::from_be_bytes([bytes[at], bytes[at + 1]]))
@@ -111,7 +118,7 @@ fn family_names(sfnt: &[u8]) -> Vec<(u16, String)> {
 
 #[test]
 fn a_ttf_reads_family_style_glyphs_and_characters() {
-    let face = FontFace::parse(ARCHIVO.to_vec()).unwrap();
+    let face = parse(ARCHIVO.to_vec()).unwrap();
     assert_eq!(face.family, "Archivo");
     assert_eq!(face.style, "Regular");
     assert_eq!(face.format, FontFormat::TrueType);
@@ -122,8 +129,8 @@ fn a_ttf_reads_family_style_glyphs_and_characters() {
 
 #[test]
 fn a_woff_font_unpacks_to_the_same_face() {
-    let ttf = FontFace::parse(ARCHIVO.to_vec()).unwrap();
-    let woff = FontFace::parse(woff_of(ARCHIVO)).unwrap();
+    let ttf = parse(ARCHIVO.to_vec()).unwrap();
+    let woff = parse(woff_of(ARCHIVO)).unwrap();
     assert_eq!(woff.format, FontFormat::Woff);
     assert_eq!((woff.family, woff.glyphs), (ttf.family, ttf.glyphs));
 }
@@ -132,11 +139,8 @@ fn a_woff_font_unpacks_to_the_same_face() {
 fn damaged_or_unknown_fonts_explain_themselves() {
     let mut woff = woff_of(ARCHIVO);
     woff.truncate(200);
-    assert_eq!(
-        FontFace::parse(woff).unwrap_err(),
-        "This WOFF font looks damaged."
-    );
-    assert!(FontFace::parse(ARCHIVO[..300].to_vec()).is_err());
+    assert_eq!(parse(woff).unwrap_err(), "This WOFF font looks damaged.");
+    assert!(parse(ARCHIVO[..300].to_vec()).is_err());
     assert_eq!(font_format(b"wOF2\x00\x01"), None);
     assert_eq!(font_format(b"\x00\x01\x00\x00\x00\x00"), None);
 }
@@ -154,10 +158,7 @@ fn a_woff_with_too_many_tables_is_refused() {
         .collect();
     tables.extend(copies);
     let woff = woff_from(&ARCHIVO[..4], &tables);
-    assert_eq!(
-        FontFace::parse(woff).unwrap_err(),
-        "This WOFF font looks damaged."
-    );
+    assert_eq!(parse(woff).unwrap_err(), "This WOFF font looks damaged.");
 }
 
 #[test]
@@ -165,7 +166,7 @@ fn a_woff_declaring_over_64_mb_is_refused_before_inflating() {
     let mut oversized = woff_of(ARCHIVO);
     oversized[16..20].copy_from_slice(&(100u32 << 20).to_be_bytes());
     assert_eq!(
-        FontFace::parse(oversized).unwrap_err(),
+        parse(oversized).unwrap_err(),
         "This WOFF font looks damaged."
     );
     let length = 33 << 20;
@@ -179,7 +180,7 @@ fn a_woff_declaring_over_64_mb_is_refused_before_inflating() {
         });
     }
     assert_eq!(
-        FontFace::parse(woff_from(&ARCHIVO[..4], &tables)).unwrap_err(),
+        parse(woff_from(&ARCHIVO[..4], &tables)).unwrap_err(),
         "This WOFF font looks damaged."
     );
 }
@@ -201,14 +202,72 @@ fn cmap_mapping_everything() -> Vec<u8> {
 #[test]
 fn a_cmap_group_spanning_every_code_point_stops_at_the_grid_size() {
     let font = with_table(ARCHIVO, b"cmap", cmap_mapping_everything());
-    let face = FontFace::parse(font).unwrap();
+    let face = parse(font).unwrap();
     assert_eq!(face.chars.len(), 256);
     assert_eq!(face.chars[0], '!');
 }
 
+fn cmap_of(records: u16, subtable: &[u8]) -> Vec<u8> {
+    let mut cmap = Vec::new();
+    cmap.extend_from_slice(&0u16.to_be_bytes());
+    cmap.extend_from_slice(&records.to_be_bytes());
+    let offset = 4 + 8 * u32::from(records);
+    for _ in 0..records {
+        cmap.extend_from_slice(&3u16.to_be_bytes());
+        cmap.extend_from_slice(&10u16.to_be_bytes());
+        cmap.extend_from_slice(&offset.to_be_bytes());
+    }
+    cmap.extend_from_slice(subtable);
+    cmap
+}
+
+fn groups_subtable(format: u16, groups: &[[u32; 3]]) -> Vec<u8> {
+    let count = u32::try_from(groups.len()).unwrap();
+    let mut subtable = Vec::new();
+    subtable.extend_from_slice(&format.to_be_bytes());
+    subtable.extend_from_slice(&0u16.to_be_bytes());
+    subtable.extend_from_slice(&(16 + 12 * count).to_be_bytes());
+    subtable.extend_from_slice(&0u32.to_be_bytes());
+    subtable.extend_from_slice(&count.to_be_bytes());
+    for value in groups.iter().flatten() {
+        subtable.extend_from_slice(&value.to_be_bytes());
+    }
+    subtable
+}
+
+fn format_13_at_the_last_code_point(groups: usize) -> Vec<u8> {
+    groups_subtable(13, &vec![[0x10_FFFF, 0x10_FFFF, 1]; groups])
+}
+
+#[test]
+fn a_hostile_cmap_is_walked_once_and_quickly() {
+    let subtable = format_13_at_the_last_code_point(2_000);
+    for records in [1, u16::MAX] {
+        let font = with_table(ARCHIVO, b"cmap", cmap_of(records, &subtable));
+        let started = Instant::now();
+        let face = parse(font).unwrap();
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{records} records"
+        );
+        assert_eq!(face.chars, ['\u{10FFFF}']);
+    }
+}
+
+#[test]
+fn a_cancelled_parse_stops_walking_the_cmap() {
+    let mut groups = vec![[0xD800, 0xDFFF, 1]; 500];
+    groups.push([0x41, 0x5A, 1]);
+    let cmap = cmap_of(1, &groups_subtable(12, &groups));
+    let font = with_table(ARCHIVO, b"cmap", cmap);
+    assert_eq!(parse(font.clone()).unwrap().chars.len(), 26);
+    let cancelled = AtomicBool::new(true);
+    assert!(FontFace::parse(font, &cancelled).unwrap().chars.is_empty());
+}
+
 #[test]
 fn the_preview_registers_under_a_private_family_and_keeps_the_real_name() {
-    let face = FontFace::parse(ARCHIVO.to_vec()).unwrap();
+    let face = parse(ARCHIVO.to_vec()).unwrap();
     assert_eq!(face.family, "Archivo");
     let preview = face.preview.unwrap();
     assert!(preview.family.starts_with("Ferrite Preview "));
@@ -234,8 +293,8 @@ fn different_fonts_get_different_private_families() {
     let mut other = ARCHIVO.to_vec();
     let last = other.len() - 1;
     other[last] ^= 1;
-    let first = FontFace::parse(ARCHIVO.to_vec()).unwrap().preview.unwrap();
-    let second = FontFace::parse(other).unwrap().preview.unwrap();
+    let first = parse(ARCHIVO.to_vec()).unwrap().preview.unwrap();
+    let second = parse(other).unwrap().preview.unwrap();
     assert_ne!(first.family, second.family);
 }
 
@@ -249,15 +308,15 @@ fn a_name_table_that_cannot_be_rewritten_leaves_no_preview() {
         .find(|at| !NAME_IDS.contains(&(be16(&name, at + 6) as u16)))
         .unwrap();
     name[record + 8..record + 10].copy_from_slice(&u16::MAX.to_be_bytes());
-    let face = FontFace::parse(with_table(ARCHIVO, b"name", name)).unwrap();
+    let face = parse(with_table(ARCHIVO, b"name", name)).unwrap();
     assert_eq!(face.family, "Archivo");
     assert!(face.preview.is_none());
 }
 
 #[gpui_kit::test]
 fn viewing_the_same_font_again_does_not_register_it_again(cx: &mut TestAppContext) {
-    let first = FontFace::parse(ARCHIVO.to_vec()).unwrap().preview.unwrap();
-    let again = FontFace::parse(ARCHIVO.to_vec()).unwrap().preview.unwrap();
+    let first = parse(ARCHIVO.to_vec()).unwrap().preview.unwrap();
+    let again = parse(ARCHIVO.to_vec()).unwrap().preview.unwrap();
     cx.update(|cx| {
         assert_eq!(register(first, cx), Ok(true));
         assert_eq!(register(again, cx), Ok(false));

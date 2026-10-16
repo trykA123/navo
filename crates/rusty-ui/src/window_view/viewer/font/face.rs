@@ -1,13 +1,12 @@
 use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::atomic::AtomicBool;
 
-use ttf_parser::{Face, name_id};
+use ttf_parser::{Face, Tag, name_id};
 
 use super::sfnt::{self, MAX_TABLES, usize_at};
-use super::{names, woff};
+use super::{cmap, names, woff};
 
-const GRID_CHARS: usize = 256;
-const FIRST_GRID_CHAR: u32 = 0x21;
 const MIN_TABLES: u16 = 1;
 const NAME: u32 = u32::from_be_bytes(*b"name");
 const COLLECTION_FIRST_FACE: usize = 12;
@@ -85,15 +84,6 @@ fn name(face: &Face<'_>, ids: &[u16]) -> Option<String> {
     })
 }
 
-fn grid_chars(face: &Face<'_>) -> Vec<char> {
-    (FIRST_GRID_CHAR..=u32::from(char::MAX))
-        .filter_map(char::from_u32)
-        .filter(|ch| !ch.is_control() && !ch.is_whitespace())
-        .filter(|ch| face.glyph_index(*ch).is_some_and(|glyph| glyph.0 != 0))
-        .take(GRID_CHARS)
-        .collect()
-}
-
 fn hash_of(bytes: &[u8]) -> u64 {
     let mut hasher = DefaultHasher::new();
     bytes.hash(&mut hasher);
@@ -121,7 +111,7 @@ fn preview(sfnt: &[u8], format: FontFormat) -> Option<Preview> {
 }
 
 impl FontFace {
-    pub fn parse(bytes: Vec<u8>) -> Result<Self, String> {
+    pub fn parse(bytes: Vec<u8>, cancel: &AtomicBool) -> Result<Self, String> {
         let format = font_format(&bytes).ok_or("This is not a font Ferrite can show.")?;
         let sfnt = match format {
             FontFormat::Woff => woff::to_sfnt(&bytes).ok_or("This WOFF font looks damaged.")?,
@@ -140,7 +130,11 @@ impl FontFace {
             glyphs: face.number_of_glyphs(),
             weight: face.weight().to_number(),
             is_italic: face.is_italic(),
-            chars: grid_chars(&face),
+            chars: face
+                .raw_face()
+                .table(Tag::from_bytes(b"cmap"))
+                .map(|table| cmap::grid_chars(table, cancel))
+                .unwrap_or_default(),
             preview: preview(&sfnt, format),
         })
     }

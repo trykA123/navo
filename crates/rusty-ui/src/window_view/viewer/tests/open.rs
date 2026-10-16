@@ -227,3 +227,44 @@ fn a_text_open_finishes_while_an_image_load_holds_the_lock() {
     assert!(image.join().expect("image thread"));
     assert_eq!(text_opened, Ok(true));
 }
+
+fn opening_flag(
+    cx: &mut TestAppContext,
+    view: &gpui_kit::Entity<crate::window_view::FerriteWindow>,
+) -> Arc<std::sync::atomic::AtomicBool> {
+    view.read_with(cx, |view, _| {
+        let opening = view.viewer.as_ref()?.opening.as_ref()?;
+        Some(opening.cancel_flag())
+    })
+    .expect("an open in progress")
+}
+
+#[gpui_kit::test]
+fn closing_the_viewer_while_it_opens_sets_the_cancel_flag(cx: &mut TestAppContext) {
+    use std::sync::atomic::Ordering;
+
+    let (window, view, _) = window_on(cx, fake(), Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "down");
+    press_only(cx, window, "f3");
+    let flag = opening_flag(cx, &view);
+    assert!(!flag.load(Ordering::Relaxed));
+    press_only(cx, window, "escape");
+    assert!(!viewer_open(cx, &view));
+    assert!(flag.load(Ordering::Relaxed));
+}
+
+#[gpui_kit::test]
+fn switching_the_view_while_it_loads_cancels_the_earlier_load(cx: &mut TestAppContext) {
+    use std::sync::atomic::Ordering;
+
+    let (window, view, _) = window_on(cx, fake(), Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    settle(cx, &view);
+    press_only(cx, window, "3");
+    let first = opening_flag(cx, &view);
+    assert!(!first.load(Ordering::Relaxed));
+    press_only(cx, window, "1");
+    assert!(viewer_open(cx, &view));
+    assert!(first.load(Ordering::Relaxed));
+}

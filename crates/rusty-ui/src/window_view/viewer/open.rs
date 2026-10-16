@@ -39,6 +39,13 @@ pub(super) struct Opening {
     _cancel: Cancel,
 }
 
+#[cfg(test)]
+impl Opening {
+    pub(super) fn cancel_flag(&self) -> Arc<std::sync::atomic::AtomicBool> {
+        self._cancel.flag()
+    }
+}
+
 pub(super) struct Opened {
     head: Head,
     kinds: Vec<Kind>,

@@ -60,6 +60,7 @@ pub(super) use image::{IMAGE_ID, is_image_name};
 pub type Loaded = Box<dyn Any + Send>;
 
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub struct Load<'a> {
     pub hooks: &'a FileHooks,
     pub location: &'a Location,
