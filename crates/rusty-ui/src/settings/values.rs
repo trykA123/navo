@@ -2,10 +2,12 @@ use gpui_kit::SharedString;
 
 use super::fields::{Control, FIELDS, Field, FieldSpec};
 use crate::app_menu::{QuickSettings, Setting};
+use crate::file_list::{SortBy, SortKey};
 use crate::tokens::{Density, ThemeChoice};
 
 const THEME_ORDER: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
 const DENSITY_ORDER: [Density; 3] = [Density::Compact, Density::Normal, Density::Comfortable];
+const SORT_ORDER: [SortBy; 4] = [SortBy::Name, SortBy::Size, SortBy::Date, SortBy::Ext];
 const SHOWN: usize = 0;
 const HIDDEN: usize = 1;
 
@@ -141,6 +143,36 @@ impl Values {
 
     pub fn show_hidden(&self) -> bool {
         self.pick(Field::HiddenFiles) == SHOWN
+    }
+
+    fn flag(&self, field: Field) -> bool {
+        matches!(self.get(field), Value::Flag(true))
+    }
+
+    pub fn show_system(&self) -> bool {
+        self.flag(Field::ShowSystem)
+    }
+
+    pub fn folders_first(&self) -> bool {
+        self.flag(Field::FoldersFirst)
+    }
+
+    pub fn sort_key(&self) -> SortKey {
+        SortKey {
+            by: SORT_ORDER
+                .get(self.pick(Field::Sort))
+                .copied()
+                .unwrap_or_default(),
+            descending: self.flag(Field::SortDescending),
+        }
+    }
+
+    pub fn space_measures_folders(&self) -> bool {
+        self.flag(Field::SpaceMeasuresFolders)
+    }
+
+    pub fn patterns_select_folders(&self) -> bool {
+        self.flag(Field::PatternsSelectFolders)
     }
 
     pub fn editor_path(&self) -> Option<String> {

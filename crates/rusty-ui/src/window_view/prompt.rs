@@ -162,10 +162,11 @@ impl FerriteWindow {
 
     fn mark_pattern(&mut self, add: bool, pattern: &str) -> Result<(), Option<String>> {
         let pattern = pattern.to_owned();
+        let folders = self.values.patterns_select_folders();
         let command = if add {
-            rusty_core::Command::SelectionAddPattern { pattern }
+            rusty_core::Command::SelectionAddPattern { pattern, folders }
         } else {
-            rusty_core::Command::SelectionRemovePattern { pattern }
+            rusty_core::Command::SelectionRemovePattern { pattern, folders }
         };
         match self.browser.command(&command) {
             Err(rusty_core::CommandError::Pattern(_)) => {

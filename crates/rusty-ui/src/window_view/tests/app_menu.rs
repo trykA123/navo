@@ -84,16 +84,13 @@ pub(super) fn rig(cx: &mut TestAppContext, theme: ThemeChoice) -> Rig {
     rig_with(cx, settings)
 }
 
-fn hidden_file(name: &str) -> rusty_fs::FsEntry {
+fn marked_file(name: &str, attributes: rusty_fs::Attributes) -> rusty_fs::FsEntry {
     rusty_fs::FsEntry {
         name: rusty_core::ProviderPath::from_text(name),
         kind: rusty_fs::EntryKind::File,
         size: 1,
         modified_ms: None,
-        attributes: rusty_fs::Attributes {
-            hidden: true,
-            ..rusty_fs::Attributes::default()
-        },
+        attributes,
     }
 }
 
@@ -106,11 +103,29 @@ pub(super) fn rig_full(
     settings: QuickSettings,
     load_error: Option<&str>,
 ) -> Rig {
+    rig_on(cx, values_of(settings), load_error)
+}
+
+fn rig_fs() -> Arc<rusty_fs::FakeFs> {
     let fs = fake();
-    fs.add_entry("home", hidden_file("b-secret.txt"));
+    let hidden = rusty_fs::Attributes {
+        hidden: true,
+        ..rusty_fs::Attributes::default()
+    };
+    let system = rusty_fs::Attributes {
+        system: true,
+        ..rusty_fs::Attributes::default()
+    };
+    fs.add_entry("home", marked_file("b-secret.txt", hidden));
+    fs.add_entry("home", marked_file("c-boot.ini", system));
+    fs
+}
+
+pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option<&str>) -> Rig {
+    let fs = rig_fs();
     let state = two_panes(&fs);
     let store = Arc::new(FakeStore {
-        stored: Mutex::new(values_of(settings)),
+        stored: Mutex::new(values.clone()),
         ..FakeStore::default()
     });
     let sessions: Rc<Cell<usize>> = Rc::default();
@@ -134,7 +149,7 @@ pub(super) fn rig_full(
             },
         },
         settings: SettingsHooks {
-            values: values_of(settings),
+            values,
             load_error: load_error.map(Into::into),
             save: Arc::new(move |changes| fake_store.save(changes)),
             ..SettingsHooks::none()

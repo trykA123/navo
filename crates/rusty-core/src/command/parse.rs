@@ -110,7 +110,9 @@ pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
         CommandId::PaneCloseTab | CommandId::PaneActivateTab => &["tab"],
         CommandId::PaneCursorMove | CommandId::SelectionRange | CommandId::PaneScroll => &["to"],
         CommandId::WindowClose | CommandId::WindowFocus => &["window"],
-        CommandId::SelectionAddPattern | CommandId::SelectionRemovePattern => &["pattern"],
+        CommandId::SelectionAddPattern | CommandId::SelectionRemovePattern => {
+            &["pattern", "folders"]
+        }
         CommandId::LayoutSplit | CommandId::LayoutFocus => &["direction"],
         _ => &[],
     }
@@ -148,12 +150,7 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::SelectionRange => Command::SelectionRange {
             to: fields.required("to", unsigned::<u64>)?,
         },
-        Id::SelectionAddPattern => Command::SelectionAddPattern {
-            pattern: fields.required("pattern", string)?,
-        },
-        Id::SelectionRemovePattern => Command::SelectionRemovePattern {
-            pattern: fields.required("pattern", string)?,
-        },
+        Id::SelectionAddPattern | Id::SelectionRemovePattern => pattern_command(&mut fields)?,
         Id::SelectionInvert => Command::SelectionInvert,
         Id::SelectionAll => Command::SelectionAll,
         Id::SelectionClear => Command::SelectionClear,
@@ -166,6 +163,15 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         },
         Id::WindowOpen | Id::WindowClose | Id::WindowFocus => window_command(&mut fields)?,
         Id::AppSaveSession => Command::AppSaveSession,
+    })
+}
+
+fn pattern_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
+    let pattern = fields.required("pattern", string)?;
+    let folders = fields.optional("folders", flag)?.unwrap_or(false);
+    Ok(match fields.command {
+        CommandId::SelectionAddPattern => Command::SelectionAddPattern { pattern, folders },
+        _ => Command::SelectionRemovePattern { pattern, folders },
     })
 }
 
@@ -232,6 +238,15 @@ fn string(value: Value<'_>) -> Result<String, Problem> {
     match value {
         Value::Str(text) => Ok(text),
         _ => Err(Problem::WrongType("string")),
+    }
+}
+
+fn flag(value: Value<'_>) -> Result<bool, Problem> {
+    match value {
+        Value::Word("true") => Ok(true),
+        Value::Word("false") => Ok(false),
+        Value::Word(_) => Err(Problem::Invalid("expected true or false".to_owned())),
+        _ => Err(Problem::WrongType("keyword")),
     }
 }
 

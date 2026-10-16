@@ -155,7 +155,7 @@ impl FerriteWindow {
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
-        browser.set_show_hidden(values.show_hidden());
+        settings_save::steer_browser(&values, &mut browser);
         browser.start();
         let view = Self {
             browser,

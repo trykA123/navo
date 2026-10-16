@@ -65,8 +65,10 @@ fn command() -> impl Strategy<Value = Command> {
         3 => Just(Command::SelectionToggle),
         3 => Just(Command::SelectionToggleDown),
         2 => (0..60_u64).prop_map(|to| Command::SelectionRange { to }),
-        2 => pattern().prop_map(|pattern| Command::SelectionAddPattern { pattern }),
-        2 => pattern().prop_map(|pattern| Command::SelectionRemovePattern { pattern }),
+        2 => (pattern(), any::<bool>())
+            .prop_map(|(pattern, folders)| Command::SelectionAddPattern { pattern, folders }),
+        2 => (pattern(), any::<bool>())
+            .prop_map(|(pattern, folders)| Command::SelectionRemovePattern { pattern, folders }),
         1 => Just(Command::SelectionInvert),
         1 => Just(Command::SelectionAll),
         1 => Just(Command::SelectionClear),

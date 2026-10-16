@@ -238,4 +238,16 @@ impl Field {
     pub fn index(self) -> usize {
         self as usize
     }
+
+    pub fn is_applied(self) -> bool {
+        !matches!(
+            self,
+            Self::LightTheme
+                | Self::DarkTheme
+                | Self::Font
+                | Self::FontSize
+                | Self::TerminalProvider
+                | Self::TerminalCommand
+        )
+    }
 }

@@ -14,6 +14,7 @@ const NAV_WIDTH: f32 = 148.;
 const NAV_ITEM: f32 = 30.;
 const MARKER: (f32, f32) = (3., 14.);
 const ROW_MIN: f32 = 48.;
+const NOT_APPLIED: &str = "Not applied yet";
 
 pub(super) struct Look<'a> {
     pub theme: &'a Theme,
@@ -176,6 +177,16 @@ fn title(t: &Theme, spec: &FieldSpec, is_current: bool) -> Div {
             .text_color(t.colors.accent_text)
             .child(spec.key)
     });
+    let pending = (!spec.field.is_applied()).then(|| {
+        div()
+            .id("settings-not-applied")
+            .role(Role::Note)
+            .aria_label(NOT_APPLIED)
+            .test_support()
+            .text_size(t.typography.small)
+            .text_color(t.colors.muted)
+            .child(NOT_APPLIED)
+    });
     div()
         .flex()
         .flex_col()
@@ -188,6 +199,7 @@ fn title(t: &Theme, spec: &FieldSpec, is_current: bool) -> Div {
                 .text_color(t.colors.muted)
                 .child(spec.help),
         )
+        .children(pending)
         .children(key)
 }
 
@@ -210,6 +222,7 @@ fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .test_support()
         .flex()
         .flex_col()
+        .flex_none()
         .min_h(px(ROW_MIN))
         .px(t.spacing.xl)
         .py(t.spacing.md)
@@ -233,6 +246,7 @@ pub(super) fn content(
 ) -> impl IntoElement + use<> {
     let t = look.theme;
     let heading = div()
+        .flex_none()
         .px(t.spacing.xl)
         .pt(t.spacing.lg)
         .pb(t.spacing.xs)

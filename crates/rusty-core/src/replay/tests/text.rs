@@ -53,9 +53,11 @@ fn every_command_kind() -> Vec<Command> {
         Command::SelectionRange { to: 3 },
         Command::SelectionAddPattern {
             pattern: "*.rs".to_owned(),
+            folders: false,
         },
         Command::SelectionRemovePattern {
             pattern: "m*".to_owned(),
+            folders: false,
         },
         Command::SelectionInvert,
         Command::SelectionAll,

@@ -3,6 +3,7 @@ use super::*;
 fn pattern(text: &str) -> Command {
     Command::SelectionAddPattern {
         pattern: text.to_owned(),
+        folders: false,
     }
 }
 

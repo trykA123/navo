@@ -298,6 +298,18 @@ fn marking_a_folder_measures_its_size() {
 }
 
 #[test]
+fn marking_a_folder_does_not_measure_it_when_measuring_is_off() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    browser.set_space_measures_folders(false);
+    browser.command(&Command::SelectionToggle).unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    assert_ne!(browser.details(tab)[0].size, 7);
+}
+
+#[test]
 fn a_size_for_a_folder_left_behind_is_ignored() {
     let fs = fake();
     let mut browser = browser_at(&fs, "home");

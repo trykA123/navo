@@ -39,18 +39,23 @@ pub(super) fn range(state: &mut AppState, to: u64) -> Result<Vec<Effect>, Comman
     Ok(Vec::new())
 }
 
+pub(super) struct Marking {
+    pub mark: bool,
+    pub folders: bool,
+}
+
 pub(super) fn pattern(
     state: &mut AppState,
     text: &str,
-    mark: bool,
+    marking: Marking,
 ) -> Result<Vec<Effect>, CommandError> {
     let pattern = Pattern::parse(text)?;
     let listing = loaded_listing(state)?;
     let selection = state.active_tab_mut().selection_mut();
-    if mark {
-        selection.mark_pattern(&listing, &pattern, false);
+    if marking.mark {
+        selection.mark_pattern(&listing, &pattern, marking.folders);
     } else {
-        selection.unmark_pattern(&listing, &pattern, false);
+        selection.unmark_pattern(&listing, &pattern, marking.folders);
     }
     Ok(Vec::new())
 }

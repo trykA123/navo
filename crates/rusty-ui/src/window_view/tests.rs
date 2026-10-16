@@ -16,6 +16,7 @@ use super::{FerriteWindow, StartOptions};
 
 mod app_menu;
 mod app_menu_save;
+mod applied;
 mod cached;
 mod cards;
 mod drive_fs;
@@ -499,6 +500,26 @@ fn f4_without_an_editor_asks_once_then_opens_directly(cx: &mut TestAppContext) {
             .iter()
             .all(|(program, file)| program == "code.exe" && file.ends_with("a.txt"))
     );
+}
+
+#[gpui_kit::test]
+fn f4_uses_the_editor_set_in_settings(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, Some("code.exe"));
+    press(cx, window, &view, "ctrl-,");
+    for _ in 0..4 {
+        press(cx, window, &view, "tab");
+    }
+    press(cx, window, &view, "enter");
+    press(cx, window, &view, "ctrl-a");
+    type_in(cx, window, &view, "vim.exe");
+    press(cx, window, &view, "enter");
+    press(cx, window, &view, "escape");
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f4");
+    assert!(!prompt_open(cx, &view));
+    let opened = log.borrow().opened.clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, "vim.exe");
 }
 
 #[gpui_kit::test]

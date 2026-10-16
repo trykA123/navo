@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::FerriteWindow;
 use crate::app_menu::Setting;
+use crate::browser::Browser;
 use crate::prelude::*;
 use crate::settings::{Change, Field, Values};
 
@@ -72,15 +73,20 @@ impl Saver {
     }
 }
 
+pub(super) fn steer_browser(values: &Values, browser: &mut Browser) {
+    browser.set_show_hidden(values.show_hidden());
+    browser.set_show_system(values.show_system());
+    browser.set_default_sort(values.sort_key(), values.folders_first());
+    browser.set_space_measures_folders(values.space_measures_folders());
+}
+
 impl FerriteWindow {
     pub(super) fn set_values(&mut self, values: Values, window: &Window, cx: &mut App) {
         let old = std::mem::replace(&mut self.values, values);
         if old.theme() != self.values.theme() || old.density() != self.values.density() {
             self.apply_theme(window, cx);
         }
-        if old.show_hidden() != self.values.show_hidden() {
-            self.browser.set_show_hidden(self.values.show_hidden());
-        }
+        steer_browser(&self.values, &mut self.browser);
     }
 
     pub(super) fn toggle_setting(
