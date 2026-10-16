@@ -90,7 +90,10 @@ impl FerriteWindow {
         }
     }
 
-    fn open_later(this: WeakEntity<Self>, handle: AnyWindowHandle) -> OpenFile {
+    pub(in crate::window_view) fn open_later(
+        this: WeakEntity<Self>,
+        handle: AnyWindowHandle,
+    ) -> OpenFile {
         Rc::new(move |location, cx| {
             let this = this.clone();
             cx.defer(move |cx| Self::open_in(&this, handle, location, cx));

@@ -31,7 +31,7 @@ pub(super) fn load_while_alive(
     load()
 }
 
-pub(super) struct Picked {
+pub(in crate::window_view) struct Picked {
     pub kind: Kind,
     pub loaded: Result<Loaded, String>,
     pub note: Option<&'static str>,
@@ -94,20 +94,20 @@ impl Opening {
     }
 }
 
-pub(super) struct Opened {
-    head: Head,
-    kinds: Vec<Kind>,
-    picked: Picked,
+pub(in crate::window_view) struct Opened {
+    pub head: Head,
+    pub kinds: Vec<Kind>,
+    pub picked: Picked,
 }
 
-pub(super) struct Request {
+pub(in crate::window_view) struct Request {
     pub hooks: FileHooks,
     pub location: Location,
     pub name: String,
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct Turn<'a> {
+pub(in crate::window_view) struct Turn<'a> {
     pub alive: &'a Weak<()>,
     pub cancel: &'a AtomicBool,
 }
@@ -131,7 +131,11 @@ impl Request {
     }
 }
 
-fn sniff_and_load(request: &Request, kinds: &Kinds, turn: Turn<'_>) -> Result<Opened, String> {
+pub(in crate::window_view) fn sniff_and_load(
+    request: &Request,
+    kinds: &Kinds,
+    turn: Turn<'_>,
+) -> Result<Opened, String> {
     let head = (request.hooks.head)(&request.location)?;
     let sniff = Sniff {
         head: &head.bytes,

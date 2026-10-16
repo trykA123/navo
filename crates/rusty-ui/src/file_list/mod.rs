@@ -23,7 +23,7 @@ use rusty_fs::FsEntry;
 
 pub use keys::bind_keys;
 pub(crate) use keys::{
-    CopyItems, EditItem, MoveItems, OpenRow, RecycleItems, RenameItem, ViewItem,
+    ClearFilter, CopyItems, EditItem, MoveItems, OpenRow, RecycleItems, RenameItem, ViewItem,
 };
 pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
@@ -188,6 +188,8 @@ impl ListContext {
     fn clear_filter(&self, window: &mut Window, cx: &mut App) {
         if self.props.filter.is_some() {
             self.act(FileListAction::Filter(FilterEdit::Clear), window, cx);
+        } else {
+            cx.propagate();
         }
     }
 

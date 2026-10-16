@@ -7,6 +7,7 @@ mod keys;
 mod operate;
 mod pane;
 mod path_edit;
+mod preview;
 mod prompt;
 mod settings_save;
 mod shell_menu;
@@ -122,9 +123,11 @@ pub struct FerriteWindow {
     menu_run: Option<shell_menu::MenuRun>,
     prefetch: Option<shell_menu::Prefetch>,
     menu_runs: u64,
+    preview: preview::Preview,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
+    _follow: Subscription,
 }
 
 fn mode_of(appearance: WindowAppearance) -> Mode {
@@ -170,6 +173,10 @@ impl FerriteWindow {
             menu_run: None,
             prefetch: None,
             menu_runs: 0,
+            preview: preview::Preview::new(Self::waker(cx), cx),
+            _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
+                view.follow_cursor(window, cx);
+            }),
             _activation: cx.observe_window_activation(window, Self::activation_changed),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, |view, window, cx| {
@@ -226,7 +233,8 @@ impl FerriteWindow {
     }
 
     fn wake(&mut self, cx: &mut Context<Self>) {
-        if self.browser.poll() {
+        let polled = self.browser.poll();
+        if self.poll_preview() || polled {
             cx.notify();
         }
         self.linger_ended(cx);
@@ -342,8 +350,8 @@ impl FerriteWindow {
     }
 }
 
-impl Render for FerriteWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+impl FerriteWindow {
+    fn panes_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let t = tokens::current(cx).clone();
         let panes = self.panes();
         let mut views: Vec<AnyElement> = panes
@@ -364,11 +372,31 @@ impl Render for FerriteWindow {
             (Some(only), None) => only,
             _ => div().into_any_element(),
         };
-        let body = self.viewer_view(cx).unwrap_or(body);
+        self.viewer_view(cx).unwrap_or(body)
+    }
+
+    fn body_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let t = tokens::current(cx).clone();
+        let body = self.panes_view(window, cx);
+        div()
+            .relative()
+            .flex()
+            .flex_1()
+            .min_h_0()
+            .px(t.spacing.xs)
+            .child(body)
+            .children(self.preview_layer(window, cx))
+    }
+}
+
+impl Render for FerriteWindow {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = tokens::current(cx).clone();
+        let body = self.body_area(window, cx);
         let jobs = self.job_strip(cx);
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
         let menu = self.app_menu_view(cx);
-        div()
+        let root = div()
             .relative()
             .flex()
             .flex_col()
@@ -379,7 +407,7 @@ impl Render for FerriteWindow {
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
             .child(self.title_bar(cx))
-            .child(div().flex().flex_1().min_h_0().px(t.spacing.xs).child(body))
+            .child(body)
             .children(jobs)
             .on_modifiers_changed(
                 cx.listener(|view, event: &ModifiersChangedEvent, window, cx| {
@@ -392,7 +420,8 @@ impl Render for FerriteWindow {
             .child(self.fkey_bar(cx))
             .children(dialog)
             .children(menu)
-            .children(self.shell_menu_view())
+            .children(self.shell_menu_view());
+        self.preview_keys(root, window, cx)
     }
 }
 

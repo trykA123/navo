@@ -5,11 +5,11 @@ use rusty_fs::{JobSlot, Priority, folder_size, volume_of};
 
 use super::{Browser, Message};
 
-pub(super) struct Measured {
-    pub(super) tab: TabId,
-    pub(super) folder: Location,
-    pub(super) name: String,
-    pub(super) bytes: u64,
+pub(crate) struct Measured {
+    pub(crate) tab: TabId,
+    pub(crate) folder: Location,
+    pub(crate) name: String,
+    pub(crate) bytes: u64,
 }
 
 impl Browser {
@@ -43,7 +43,7 @@ impl Browser {
         );
     }
 
-    pub(super) fn accept_size(&mut self, measured: &Measured) -> bool {
+    pub(crate) fn show_folder_size(&mut self, measured: &Measured) -> bool {
         let here = self
             .state
             .tab(measured.tab)

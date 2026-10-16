@@ -163,6 +163,7 @@ impl Browser {
         if !self.watching.folders.contains_key(location) {
             return false;
         }
+        self.forget_profiles(location, &event);
         let refresh = match event {
             WatchEvent::Changed(changes) => Refresh::of(changes),
             WatchEvent::Overflow => Refresh::Full,
@@ -173,6 +174,19 @@ impl Browser {
             }
         };
         self.refresh_folder(location, &refresh)
+    }
+
+    fn forget_profiles(&self, location: &Location, event: &WatchEvent) {
+        let WatchEvent::Changed(changes) = event else {
+            self.profiles.invalidate(location);
+            return;
+        };
+        for name in changes.iter().flat_map(names_of) {
+            match location.join(name) {
+                Ok(changed) => self.profiles.invalidate(&changed),
+                Err(_) => self.profiles.invalidate(location),
+            }
+        }
     }
 
     pub(super) fn accept_recheck(&mut self, location: &Location) -> bool {

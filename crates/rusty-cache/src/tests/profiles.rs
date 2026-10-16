@@ -77,3 +77,17 @@ fn clones_share_one_cache() {
     assert!(hit.is_some());
     assert_eq!(ProfileCache::default().capacity(), 256);
 }
+
+#[test]
+fn invalidating_a_folder_drops_it_its_parents_and_everything_inside() {
+    let cache = ProfileCache::default();
+    for path in ["/w", "/w/d", "/w/d/inner", "/w/other", "/x"] {
+        cache.put(at(path), 1, profile(1, ProfileState::Done));
+    }
+    cache.invalidate(&at("/w/d"));
+    let kept: Vec<bool> = ["/w", "/w/d", "/w/d/inner", "/w/other", "/x"]
+        .iter()
+        .map(|path| cache.get(&at(path), 1).is_some())
+        .collect();
+    assert_eq!(kept, [false, false, false, true, true]);
+}

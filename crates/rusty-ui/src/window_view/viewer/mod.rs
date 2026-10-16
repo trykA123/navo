@@ -41,6 +41,7 @@ pub use search::memory::MemoryLink;
 use super::FerriteWindow;
 use crate::prelude::*;
 use open::Opening;
+pub(super) use open::{Opened, Picked, Request, Turn, sniff_and_load};
 
 const CONTEXT: &str = "Viewer";
 const PAGED_CONTEXT: &str = "Paged";

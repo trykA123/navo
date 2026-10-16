@@ -5,10 +5,12 @@ use gpui_kit::base::TestSupportExt;
 use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
-use super::keys::{DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit};
+use super::keys::{
+    DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit, TogglePreview,
+};
 use super::status::status_of;
 use crate::FocusHandle;
-use crate::file_list::{FileList, FileListAction, FileListProps, FilterEdit};
+use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
 use crate::pane_chrome::{PaneTabs, PathBar, card_header, pane_card, path_segments};
 use crate::prelude::*;
 use crate::status_bar::{StatusBar, StatusBarProps};
@@ -127,6 +129,9 @@ impl FerriteWindow {
         let tabs = Self::tabs(pane, titles, active_index, cx).highlighted(is_active);
         card_header(&t)
             .child(div().flex_1().min_w_0().child(tabs))
+            .when(is_active, |header| {
+                header.child(self.preview_button(pane, cx))
+            })
             .child(self.drive_pill(pane, cx))
     }
 
@@ -175,6 +180,14 @@ impl FerriteWindow {
             .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
                 let pane = this.browser.state().focused_pane();
                 this.open_path_edit(pane, cx);
+            }))
+            .on_action(
+                cx.listener(|this: &mut Self, _: &TogglePreview, window, cx| {
+                    this.toggle_preview(window, cx);
+                }),
+            )
+            .on_action(cx.listener(|this: &mut Self, _: &ClearFilter, _, cx| {
+                this.stop_scan(cx);
             }))
     }
 

@@ -207,7 +207,7 @@ impl Tree {
         }
     }
 
-    pub(crate) fn take_lazy(&mut self, id: NodeId) -> Option<Lazy> {
+    pub fn take_lazy(&mut self, id: NodeId) -> Option<Lazy> {
         self.lazy.remove(&id)
     }
 

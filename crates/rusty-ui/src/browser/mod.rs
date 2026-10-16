@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use rusty_cache::{CacheKeys, ListingCache};
+use rusty_cache::{CacheKeys, ListingCache, ProfileCache};
 use rusty_core::{
     AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location,
     ProviderPath, TabId, apply, apply_event, list_missing,
@@ -12,6 +12,7 @@ use rusty_fs::{
     EntryKind, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps, WatchEvent, volume_of,
 };
 
+pub(crate) use measure::Measured;
 pub use naming::NameProblem;
 use operate::JobUpdate;
 pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PendingOp};
@@ -78,6 +79,7 @@ pub struct Browser {
     pins: HashSet<rusty_cache::CacheKey>,
     sorted: HashMap<TabId, Vec<cached::Sorted>>,
     watching: watched::Watching,
+    profiles: ProfileCache,
 }
 
 impl Browser {
@@ -119,6 +121,7 @@ impl Browser {
             pins: HashSet::new(),
             sorted: HashMap::new(),
             watching: watched::Watching::default(),
+            profiles: ProfileCache::default(),
         }
     }
 
@@ -213,7 +216,7 @@ impl Browser {
             }
             changed |= match message {
                 Message::Loaded(loaded) => self.accept(loaded),
-                Message::Measured(measured) => self.accept_size(&measured),
+                Message::Measured(measured) => self.show_folder_size(&measured),
                 Message::Job(update) => self.accept_job(update),
                 Message::Named(named) => self.accept_named(named),
                 Message::Watched(location, event) => self.accept_watched(&location, event),
@@ -221,6 +224,11 @@ impl Browser {
             };
         }
         changed
+    }
+
+    #[must_use]
+    pub fn profiles(&self) -> &ProfileCache {
+        &self.profiles
     }
 
     #[must_use]

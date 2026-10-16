@@ -71,6 +71,12 @@ impl ProfileCache {
         }
     }
 
+    pub fn invalidate(&self, changed: &Location) {
+        self.lock()
+            .slots
+            .retain(|folder, _| !is_within(folder, changed) && !is_within(changed, folder));
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.lock().slots.len()
@@ -89,6 +95,10 @@ impl ProfileCache {
     fn lock(&self) -> MutexGuard<'_, Profiles> {
         self.profiles.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+fn is_within(inner: &Location, outer: &Location) -> bool {
+    std::iter::successors(Some(inner.clone()), Location::parent).any(|at| at == *outer)
 }
 
 impl Profiles {

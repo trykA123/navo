@@ -1,0 +1,243 @@
+use gpui_kit::base::{ObservedElement, TestSupportExt};
+use gpui_kit::{Role, ScrollHandle, Stateful};
+use rusty_fs::{EntryKind, FolderProfile, LargeFile, Tally};
+
+use crate::file_list::kind;
+use crate::file_list::row::inset_ring;
+use crate::format;
+use crate::prelude::*;
+use crate::tokens::Theme;
+
+const HEADING_HEIGHT: f32 = 28.;
+const ROW_HEIGHT: f32 = 24.;
+const BAR_HEIGHT: f32 = 8.;
+const SWATCH: f32 = 8.;
+const TYPES_AT: usize = 2;
+const LARGEST_AT: usize = 4;
+
+pub(super) fn heading(
+    t: &Theme,
+    id: &'static str,
+    label: &str,
+    count: String,
+) -> ObservedElement<Stateful<Div>> {
+    div()
+        .id(id)
+        .role(Role::Heading)
+        .aria_label(label.to_owned())
+        .test_support()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(t.spacing.md)
+        .h(px(HEADING_HEIGHT))
+        .bg(t.surfaces.sheet)
+        .border_b_1()
+        .border_color(t.colors.line)
+        .text_size(t.typography.small)
+        .text_color(t.colors.muted)
+        .child(
+            div()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(label.to_owned()),
+        )
+        .child(div().flex_1())
+        .child(count)
+}
+
+fn swatch_color(t: &Theme, extension: &str) -> Hsla {
+    kind::icon(EntryKind::File, extension, &t.colors).1
+}
+
+fn type_name(t: &Theme, color: Hsla, name: String) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(t.spacing.sm)
+        .w(px(76.))
+        .font_family(t.typography.mono_font.clone())
+        .child(div().size(px(SWATCH)).rounded(px(2.)).bg(color))
+        .child(div().truncate().child(name))
+}
+
+fn type_row(t: &Theme, (extension, tally): (&str, Tally), most: u64) -> Div {
+    let color = swatch_color(t, extension);
+    let share = if most == 0 {
+        0.
+    } else {
+        tally.bytes as f32 / most as f32
+    };
+    let name = if extension.is_empty() {
+        "(none)".to_owned()
+    } else {
+        format!(".{extension}")
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.lg)
+        .h(px(ROW_HEIGHT))
+        .text_size(t.typography.small)
+        .child(type_name(t, color, name))
+        .child(
+            div()
+                .flex_none()
+                .w(px(56.))
+                .text_right()
+                .text_color(t.colors.muted)
+                .child(format::bytes(tally.files)),
+        )
+        .child(
+            div()
+                .flex_none()
+                .w(px(72.))
+                .text_right()
+                .child(format::size(tally.bytes)),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(40.))
+                .h(px(BAR_HEIGHT))
+                .rounded(t.radii.full)
+                .bg(t.surfaces.field)
+                .shadow(inset_ring(t.colors.line))
+                .overflow_hidden()
+                .child(div().h_full().w(relative(share)).bg(color)),
+        )
+}
+
+fn types(t: &Theme, profile: Option<&FolderProfile>) -> impl IntoElement + use<> {
+    let mut rows: Vec<(&str, Tally)> = profile
+        .map(|profile| {
+            profile
+                .kinds
+                .iter()
+                .map(|(extension, tally)| (extension.as_str(), *tally))
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(other) = profile.map(|profile| profile.other).filter(|o| o.files > 0) {
+        rows.push(("other", other));
+    }
+    let most = rows.iter().map(|(_, tally)| tally.bytes).max().unwrap_or(0);
+    div()
+        .id("preview-types")
+        .test_support()
+        .flex()
+        .flex_col()
+        .py(t.spacing.xs)
+        .children(rows.into_iter().map(|row| type_row(t, row, most)))
+}
+
+fn type_count(profile: Option<&FolderProfile>) -> String {
+    let count = profile.map_or(0, |profile| {
+        profile.kinds.len() + usize::from(profile.other.files > 0)
+    });
+    format::count(count as u64, "kind", "kinds")
+}
+
+fn largest_row(t: &Theme, rank: usize, file: &LargeFile) -> impl IntoElement {
+    let cut = file.path.rfind(['\\', '/']).map_or(0, |at| at + 1);
+    let (folder, name) = file.path.split_at(cut);
+    div()
+        .id(("preview-largest", rank))
+        .aria_label(file.path.clone())
+        .test_support()
+        .flex()
+        .items_center()
+        .gap(t.spacing.lg)
+        .h(px(ROW_HEIGHT))
+        .text_size(t.typography.small)
+        .child(
+            div()
+                .flex_none()
+                .w(px(18.))
+                .text_right()
+                .text_color(t.colors.muted)
+                .child((rank + 1).to_string()),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .child(
+                    div()
+                        .flex_shrink(1.)
+                        .min_w_0()
+                        .truncate()
+                        .text_color(t.colors.muted)
+                        .child(folder.to_owned()),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(name.to_owned()),
+                ),
+        )
+        .child(div().flex_none().child(format::size(file.bytes)))
+}
+
+fn largest(t: &Theme, profile: Option<&FolderProfile>) -> impl IntoElement + use<> {
+    let files = profile
+        .map(|profile| profile.largest.as_slice())
+        .unwrap_or_default();
+    div().flex().flex_col().py(t.spacing.xs).children(
+        files
+            .iter()
+            .enumerate()
+            .map(|(rank, file)| largest_row(t, rank, file)),
+    )
+}
+
+pub(in crate::window_view) struct Sections {
+    pub stats: Div,
+    pub profile: Option<FolderProfile>,
+    pub scroll: ScrollHandle,
+}
+
+pub(super) fn summary(t: &Theme, sections: Sections) -> impl IntoElement + use<> {
+    let profile = sections.profile.as_ref();
+    let types_heading = |id| heading(t, id, "By type", type_count(profile));
+    let largest_heading = |id| heading(t, id, "Largest files", "top 10".to_owned());
+    let pinned = match sections.scroll.top_item() {
+        TYPES_AT => Some(types_heading("preview-pinned-heading")),
+        top if top >= LARGEST_AT => Some(largest_heading("preview-pinned-heading")),
+        _ => None,
+    };
+    let column = div()
+        .id("preview-summary")
+        .test_support()
+        .size_full()
+        .overflow_y_scroll()
+        .track_scroll(&sections.scroll)
+        .flex()
+        .flex_col()
+        .px(t.spacing.xxl)
+        .pb(t.spacing.xxl)
+        .child(sections.stats.pt(t.spacing.xl).pb(t.spacing.md))
+        .child(types_heading("preview-types-heading"))
+        .child(types(t, profile))
+        .child(largest_heading("preview-largest-heading"))
+        .child(largest(t, profile));
+    div()
+        .relative()
+        .size_full()
+        .min_h_0()
+        .child(column)
+        .children(pinned.map(|heading| {
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .px(t.spacing.xxl)
+                .bg(t.surfaces.sheet)
+                .child(heading)
+        }))
+}
