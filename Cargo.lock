@@ -6247,7 +6247,12 @@ name = "rusty-shell"
 version = "0.0.1"
 dependencies = [
  "rustix",
+ "rusty-core",
+ "tempfile",
+ "thiserror 2.0.21",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
+ "zip",
 ]
 
 [[package]]
