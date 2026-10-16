@@ -112,6 +112,7 @@ pub struct Radii {
     pub pill: Pixels,
     pub keycap: Pixels,
     pub sheet: Pixels,
+    pub job_card: Pixels,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -132,6 +133,7 @@ impl Global for Theme {}
 impl Theme {
     pub fn new(mode: Mode) -> Self {
         let colors = design_b::colors(mode);
+        let surfaces = surfaces::surfaces(mode, &colors);
         Self {
             mode,
             colors,
@@ -139,8 +141,8 @@ impl Theme {
             spacing: design_b::spacing(),
             radii: design_b::radii(),
             marks: marks::mark_colors(mode),
-            surfaces: surfaces::surfaces(mode, &colors),
-            shadows: shadows::shadows(mode),
+            shadows: shadows::shadows(mode, &surfaces),
+            surfaces,
             motion: motion::motion(),
         }
     }

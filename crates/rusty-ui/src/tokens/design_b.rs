@@ -117,5 +117,6 @@ pub(super) fn radii() -> Radii {
         pill: px(15.),
         keycap: px(6.),
         sheet: px(12.),
+        job_card: px(12.),
     }
 }

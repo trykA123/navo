@@ -13,25 +13,32 @@ fn named(surfaces: &Surfaces, name: &str) -> Hsla {
         .unwrap_or_else(|| panic!("no surface token {name}"))
 }
 
-const BEHIND_TEXT: [&str; 9] = [
+const BEHIND_TEXT: [&str; 11] = [
     "mica_from",
     "mica_to",
     "card",
+    "current",
     "field",
     "keycap_face",
+    "layer_tint",
     "pill",
     "job_card",
     "sheet",
     "tile",
 ];
 
-const UI_PARTS: [(&str, &str); 6] = [
+const UI_PARTS: [(&str, &str); 11] = [
+    ("pill_label", "current"),
     ("card_ring", "mica_from"),
     ("card_ring", "mica_to"),
     ("card_ring", "card"),
+    ("pill_ring", "mica_from"),
+    ("pill_ring", "mica_to"),
     ("progress_fill", "progress_track"),
     ("progress_fill", "pill"),
+    ("progress_fill", "job_card"),
     ("keycap_lit", "keycap_face"),
+    ("keycap_lit", "layer_tint"),
 ];
 
 #[test]
@@ -79,15 +86,16 @@ fn text_and_muted_text_read_at_four_and_a_half_to_one_on_every_new_surface() {
 }
 
 #[test]
-fn keycap_labels_read_at_four_and_a_half_to_one_lit_and_unlit() {
+fn keycap_and_pill_labels_read_at_four_and_a_half_to_one() {
     for mode in MODES {
         let s = Theme::new(mode).surfaces;
         for (label, face) in [
             (s.keycap_label, s.keycap_face),
             (s.keycap_lit_label, s.keycap_lit),
+            (s.pill_label, s.pill),
         ] {
             let ratio = contrast_ratio(label, face);
-            assert!(ratio >= 4.5, "{mode:?}: a keycap label is {ratio:.2}:1");
+            assert!(ratio >= 4.5, "{mode:?}: a label is {ratio:.2}:1");
         }
     }
 }
@@ -107,12 +115,10 @@ fn rings_progress_and_lit_keycaps_stand_out_three_to_one() {
 }
 
 #[test]
-fn accent_parts_reuse_the_existing_colour_tokens() {
+fn keycaps_reuse_the_existing_colour_tokens() {
     for mode in MODES {
         let theme = Theme::new(mode);
         let (s, c) = (theme.surfaces, theme.colors);
-        assert_eq!(s.card_ring, c.accent);
-        assert_eq!(s.progress_fill, c.accent);
         assert_eq!(s.keycap_lit, c.accent);
         assert_eq!(s.keycap_lit_label, c.background);
         assert_eq!(s.keycap_label, c.text);
@@ -120,28 +126,59 @@ fn accent_parts_reuse_the_existing_colour_tokens() {
 }
 
 #[test]
-fn card_and_job_card_shadows_are_translucent_layers() {
+fn card_ring_pill_ring_and_progress_share_the_window_accent() {
+    for mode in MODES {
+        let s = Theme::new(mode).surfaces;
+        assert_eq!(s.pill_ring, s.card_ring);
+        assert_eq!(s.progress_fill, s.card_ring);
+        assert_eq!(s.progress_track, s.card_edge);
+        assert_eq!(s.pill, s.card);
+    }
+}
+
+#[test]
+fn every_shadow_token_has_visible_layers() {
     for mode in MODES {
         let shadows = Theme::new(mode).shadows;
-        for (name, layers) in [("card", &shadows.card), ("job_card", &shadows.job_card)] {
+        for (name, layers) in [
+            ("card", &shadows.card),
+            ("card_active", &shadows.card_active),
+            ("job_card", &shadows.job_card),
+            ("pill", &shadows.pill),
+            ("keycap", &shadows.keycap),
+            ("menu", &shadows.menu),
+            ("chip", &shadows.chip),
+            ("sheet", &shadows.sheet),
+        ] {
             assert!(!layers.is_empty(), "{mode:?}: {name} has no shadow");
             for layer in layers {
-                assert!(
-                    layer.color.a > 0.0 && layer.color.a < 1.0,
-                    "{mode:?}: {name} shadow alpha is {}",
-                    layer.color.a
-                );
+                assert!(layer.color.a > 0.0, "{mode:?}: a {name} layer is invisible");
             }
         }
     }
 }
 
 #[test]
-fn new_radii_are_card_8_pill_15_keycap_6_sheet_12() {
+fn the_active_card_ring_is_painted_last_so_it_sits_on_top() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        let ring = theme.shadows.card_active.last().map(|layer| layer.color);
+        assert_eq!(ring, Some(theme.surfaces.card_ring));
+    }
+}
+
+#[test]
+fn new_radii_are_card_8_pill_15_keycap_6_sheet_and_job_card_12() {
     let radii = Theme::new(MODES[0]).radii;
     assert_eq!(
-        [radii.card, radii.pill, radii.keycap, radii.sheet],
-        [px(8.), px(15.), px(6.), px(12.)]
+        [
+            radii.card,
+            radii.pill,
+            radii.keycap,
+            radii.sheet,
+            radii.job_card
+        ],
+        [px(8.), px(15.), px(6.), px(12.), px(12.)]
     );
 }
 

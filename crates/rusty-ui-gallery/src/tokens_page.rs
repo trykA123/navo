@@ -58,11 +58,12 @@ fn sizes(t: &Theme) -> Div {
         .child(figure(
             t,
             format!(
-                "radius card {} · pill {} · keycap {} · sheet {}",
+                "radius card {} · pill {} · keycap {} · sheet {} · job card {}",
                 f32::from(r.card),
                 f32::from(r.pill),
                 f32::from(r.keycap),
-                f32::from(r.sheet)
+                f32::from(r.sheet),
+                f32::from(r.job_card)
             ),
         ))
         .child(figure(
@@ -77,11 +78,7 @@ fn sizes(t: &Theme) -> Div {
         .child(figure(t, "reduced motion: fade only, no travel".to_owned()))
         .child(figure(
             t,
-            format!(
-                "shadow layers card {} · job card {}",
-                t.shadows.card.len(),
-                t.shadows.job_card.len()
-            ),
+            "shadows card, card_active, job_card, pill, keycap, menu, chip, sheet".to_owned(),
         ));
     section(t, "RADII, MOTION, SHADOWS", body)
 }

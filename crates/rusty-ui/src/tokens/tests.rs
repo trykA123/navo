@@ -70,6 +70,7 @@ fn radius_sizes(radii: Radii) -> Vec<(&'static str, Pixels)> {
         pill,
         keycap,
         sheet,
+        job_card,
     } = radii;
     vec![
         ("radius_xs", xs),
@@ -80,6 +81,7 @@ fn radius_sizes(radii: Radii) -> Vec<(&'static str, Pixels)> {
         ("radius_pill", pill),
         ("radius_keycap", keycap),
         ("radius_sheet", sheet),
+        ("radius_job_card", job_card),
     ]
 }
 

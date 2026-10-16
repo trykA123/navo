@@ -5,10 +5,13 @@ use rusty_ui::tokens::Theme;
 use crate::sections::section;
 
 const CARD_HEIGHT: f32 = 150.;
-const KEYCAP_HEIGHT: f32 = 30.;
+const KEY_HEIGHT: f32 = 30.;
+const CAP_HEIGHT: f32 = 20.;
+const PILL_ICON: f32 = 24.;
 const PILL_TRACK: f32 = 72.;
-const JOB_CARD_WIDTH: f32 = 300.;
-const TILE_WIDTH: f32 = 84.;
+const JOB_CARD_WIDTH: f32 = 280.;
+const TILE_WIDTH: f32 = 80.;
+const TILE_HEIGHT: f32 = 70.;
 const SHEET_SAMPLE_WIDTH: f32 = 232.;
 
 fn text(color: Hsla, label: &'static str) -> Div {
@@ -47,6 +50,11 @@ fn field(t: &Theme) -> Div {
 
 fn card(t: &Theme, is_active: bool, path: &'static str) -> Div {
     let rows = ["Cargo.toml", "README.md", "src"];
+    let shadow = if is_active {
+        &t.shadows.card_active
+    } else {
+        &t.shadows.card
+    };
     div()
         .flex()
         .flex_col()
@@ -56,49 +64,44 @@ fn card(t: &Theme, is_active: bool, path: &'static str) -> Div {
         .p(t.spacing.xl)
         .rounded(t.radii.card)
         .bg(t.surfaces.card)
-        .shadow(t.shadows.card.clone())
-        .border_2()
-        .border_color(if is_active {
-            t.surfaces.card_ring
-        } else {
-            t.surfaces.card
-        })
+        .shadow(shadow.clone())
         .child(text(t.colors.muted, path))
         .child(field(t))
         .children(rows.map(|row| text(t.colors.text, row)))
 }
 
-fn keycap(t: &Theme, key: &'static str, label: &'static str, is_lit: bool) -> Div {
+fn cap(t: &Theme, key: &'static str, is_lit: bool) -> Div {
     let s = &t.surfaces;
-    let (face, edge, ink, key_ink) = if is_lit {
-        (
-            s.keycap_lit,
-            s.keycap_lit,
-            s.keycap_lit_label,
-            s.keycap_lit_label,
-        )
+    let base = div()
+        .flex()
+        .items_center()
+        .h(px(CAP_HEIGHT))
+        .px(t.spacing.xs)
+        .rounded(t.radii.sm)
+        .font_family(t.typography.mono_font.clone())
+        .text_size(t.typography.key);
+    if is_lit {
+        base.bg(s.keycap_lit).text_color(s.keycap_lit_label)
     } else {
-        (s.keycap_face, s.keycap_edge, s.keycap_label, t.colors.muted)
-    };
+        base.bg(s.keycap_face)
+            .text_color(s.keycap_label)
+            .border_1()
+            .border_color(t.colors.line)
+            .shadow(t.shadows.keycap.clone())
+    }
+    .child(key)
+}
+
+fn key(t: &Theme, key: &'static str, label: &'static str) -> Div {
     div()
         .flex()
         .items_center()
-        .gap(t.spacing.sm)
-        .h(px(KEYCAP_HEIGHT))
-        .px(t.spacing.lg)
+        .gap(t.spacing.xs)
+        .h(px(KEY_HEIGHT))
+        .px(t.spacing.xs)
         .rounded(t.radii.keycap)
-        .bg(face)
-        .border_1()
-        .border_b_2()
-        .border_color(edge)
-        .child(
-            div()
-                .font_family(t.typography.mono_font.clone())
-                .text_size(t.typography.key)
-                .text_color(key_ink)
-                .child(key),
-        )
-        .child(text(ink, label))
+        .child(cap(t, key, false))
+        .child(text(t.colors.text, label))
 }
 
 fn pill(t: &Theme) -> Div {
@@ -106,45 +109,69 @@ fn pill(t: &Theme) -> Div {
     div()
         .flex()
         .items_center()
-        .gap(t.spacing.md)
-        .h(px(KEYCAP_HEIGHT))
-        .px(t.spacing.xl)
+        .gap(t.spacing.sm)
+        .h(px(KEY_HEIGHT))
+        .pl(t.spacing.xxs)
+        .pr(t.spacing.lg)
         .rounded(t.radii.pill)
         .bg(s.pill)
-        .border_1()
-        .border_color(s.pill_ring)
-        .child(icon(IconName::Copy, t.spacing.xl, t.colors.accent_text))
-        .child(text(t.colors.text, "Copying photos"))
+        .shadow(t.shadows.pill.clone())
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(PILL_ICON))
+                .rounded(t.radii.pill)
+                .bg(s.current)
+                .child(icon(IconName::Copy, t.spacing.xl, s.pill_label)),
+        )
+        .child(text(t.colors.text, "photos"))
         .child(progress(t, px(PILL_TRACK), 0.42))
-        .child(text(t.colors.muted, "42 % · 1 min"))
+        .child(
+            div()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(s.pill_label)
+                .child("42 %"),
+        )
 }
 
 fn key_row(t: &Theme) -> Div {
     let keys = [
-        ("", "Shift", true),
-        ("F3", "View", false),
-        ("F4", "Edit", false),
-        ("F5", "Copy", false),
-        ("F6", "Move", false),
-        ("F10", "Quit", false),
+        ("F3", "View"),
+        ("F4", "Edit"),
+        ("F5", "Copy"),
+        ("F6", "Move"),
+        ("F10", "Quit"),
     ];
+    let layer = div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.xxs)
+        .px(t.spacing.xxs)
+        .rounded(t.radii.md)
+        .bg(t.surfaces.layer_tint)
+        .children(keys.map(|(cap, label)| key(t, cap, label)));
     let body = div()
         .flex()
         .items_center()
-        .gap(t.spacing.sm)
-        .children(keys.map(|(key, label, is_lit)| keycap(t, key, label, is_lit)))
+        .gap(t.spacing.md)
+        .child(cap(t, "Shift", true))
+        .child(cap(t, "Ctrl", false))
+        .child(layer)
         .child(pill(t));
-    section(t, "KEYCAPS, LIT AND UNLIT, AND THE COPY PILL", body)
+    section(t, "KEYCAPS, A LIT LAYER, AND THE COPY PILL", body)
 }
 
 fn job_card(t: &Theme) -> Div {
     div()
         .flex()
         .flex_col()
-        .gap(t.spacing.md)
+        .gap(t.spacing.sm)
         .w(px(JOB_CARD_WIDTH))
-        .p(t.spacing.xxl)
-        .rounded(t.radii.card)
+        .py(t.spacing.xl)
+        .px(t.spacing.xxl)
+        .rounded(t.radii.job_card)
         .bg(t.surfaces.job_card)
         .shadow(t.shadows.job_card.clone())
         .child(
@@ -153,32 +180,55 @@ fn job_card(t: &Theme) -> Div {
                 .items_center()
                 .justify_between()
                 .font_weight(FontWeight::SEMIBOLD)
-                .child("Copying 128 files to D:\\Backup")
+                .child("Copying 128 files")
                 .child(icon(IconName::ChevronDown, t.spacing.xxl, t.colors.muted)),
         )
-        .child(text(
-            t.colors.muted,
-            "34 of 128 · 1.2 of 3.4 GB · 2 min left",
-        ))
+        .child(text(t.colors.muted, "IMG_0412.jpg · 34 of 128"))
         .child(progress(t, px(JOB_CARD_WIDTH) - t.spacing.xxl * 2., 0.35))
+        .child(text(t.colors.muted, "1.2 of 3.4 GB · 2 min left"))
 }
 
 fn tile(t: &Theme, glyph: IconName, label: &'static str, is_on: bool) -> Div {
-    let (face, ink) = if is_on {
-        (t.colors.selection, t.colors.accent_text)
+    let s = &t.surfaces;
+    let (face, edge, ink) = if is_on {
+        (s.layer_tint, t.colors.accent, t.colors.accent_text)
     } else {
-        (t.surfaces.tile, t.colors.muted)
+        (s.tile, s.tile_edge, t.colors.muted)
     };
     div()
         .flex()
         .flex_col()
-        .gap(t.spacing.sm)
+        .gap(t.spacing.xxs)
         .w(px(TILE_WIDTH))
-        .p(t.spacing.lg)
+        .h(px(TILE_HEIGHT))
+        .py(t.spacing.md)
+        .px(t.spacing.lg)
         .rounded(t.radii.card)
+        .border_1()
+        .border_color(edge)
         .bg(face)
         .child(icon(glyph, t.spacing.xxl, ink))
-        .child(text(t.colors.text, label))
+        .child(
+            div()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(if is_on { ink } else { t.colors.text })
+                .child(label),
+        )
+}
+
+fn menu(t: &Theme) -> Div {
+    div()
+        .flex()
+        .gap(t.spacing.md)
+        .p(t.spacing.md)
+        .rounded(t.radii.card)
+        .border_1()
+        .border_color(t.colors.line)
+        .bg(t.surfaces.sheet)
+        .shadow(t.shadows.menu.clone())
+        .child(tile(t, IconName::Moon, "Dark", true))
+        .child(tile(t, IconName::Layers, "Panes", false))
+        .child(tile(t, IconName::PanelRight, "Preview", false))
 }
 
 fn sheet(t: &Theme) -> Div {
@@ -188,17 +238,37 @@ fn sheet(t: &Theme) -> Div {
         .top_0()
         .bottom_0()
         .right_0()
-        .w(relative(0.62))
+        .w(relative(0.64))
         .flex()
         .flex_col()
         .gap(t.spacing.sm)
         .p(t.spacing.xl)
-        .rounded_l(t.radii.sheet)
+        .border_l_1()
+        .border_color(t.colors.line)
         .bg(s.sheet)
-        .shadow(t.shadows.job_card.clone())
+        .shadow(t.shadows.sheet.clone())
         .child(div().font_weight(FontWeight::SEMIBOLD).child("Settings"))
         .child(text(t.colors.muted, "Theme · Dark"))
-        .child(text(t.colors.muted, "Density · Compact"));
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(t.spacing.xs)
+                .px(t.spacing.md)
+                .rounded(t.radii.pill)
+                .border_1()
+                .border_color(t.colors.line)
+                .bg(s.sheet)
+                .shadow(t.shadows.chip.clone())
+                .text_size(t.typography.tiny)
+                .child(
+                    div()
+                        .size(t.spacing.sm)
+                        .rounded(t.radii.pill)
+                        .bg(t.colors.ok),
+                )
+                .child("Live"),
+        );
     div()
         .relative()
         .w(px(SHEET_SAMPLE_WIDTH))
@@ -213,18 +283,12 @@ fn sheet(t: &Theme) -> Div {
 }
 
 fn overlays(t: &Theme) -> Div {
-    let tiles = div()
-        .flex()
-        .gap(t.spacing.sm)
-        .child(tile(t, IconName::Moon, "Dark", true))
-        .child(tile(t, IconName::Layers, "Panes", false))
-        .child(tile(t, IconName::PanelRight, "Preview", false));
     div()
         .flex()
         .items_start()
-        .gap(t.spacing.xxl * 1.5)
+        .gap(t.spacing.xxl)
         .child(section(t, "JOB CARD", job_card(t)))
-        .child(section(t, "TILES", tiles))
+        .child(section(t, "MENU TILES", menu(t)))
         .child(section(t, "SHEET ON SCRIM", sheet(t)))
 }
 
