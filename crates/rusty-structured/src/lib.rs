@@ -2,6 +2,7 @@
 
 mod error;
 pub mod json;
+pub mod markdown;
 mod preview;
 mod source;
 pub mod table;

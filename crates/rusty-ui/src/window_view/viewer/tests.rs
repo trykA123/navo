@@ -7,6 +7,7 @@ mod image;
 mod kind;
 mod language;
 mod lister;
+mod markdown;
 mod marks;
 mod memory;
 mod moves;
