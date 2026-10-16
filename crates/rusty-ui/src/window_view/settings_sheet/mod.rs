@@ -10,7 +10,7 @@ use super::FerriteWindow;
 use super::settings_save::{SaveSettings, Saver};
 use crate::prelude::*;
 use crate::settings::{Change, FIELDS, SettingsBody, SheetEvent, Values, rows_in, section_of};
-use crate::side_sheet::{SheetState, SideSheet};
+use crate::side_sheet::SheetState;
 use crate::tokens;
 
 pub type FindLine = Arc<dyn Fn(&str) -> Option<u64> + Send + Sync>;
@@ -198,19 +198,12 @@ impl FerriteWindow {
             .on_event(cx.listener(|view, event: &SheetEvent, window, cx| {
                 view.settings_event(event.clone(), window, cx);
             }));
-        let title = div().font_weight(FontWeight::SEMIBOLD).child("Settings");
-        let sheet = SideSheet::new("settings-sheet", &self.settings.sheet, frame)
-            .label("Settings")
-            .header(title)
-            .close("escape", move |window, cx| {
+        let sheet = crate::settings::sheet(&self.settings.sheet, frame, body).close(
+            "escape",
+            move |window, cx| {
                 let _ = this.update(cx, |view, cx| view.close_settings(window, cx));
-            })
-            .body(body)
-            .hint(&["↑", "↓"], "Move")
-            .hint(&["←", "→"], "Change")
-            .hint(&["tab"], "Section")
-            .hint(&["f3"], "TOML line")
-            .hint(&["ctrl-z"], "Undo");
+            },
+        );
         Some(
             div()
                 .absolute()

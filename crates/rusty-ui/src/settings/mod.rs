@@ -19,6 +19,7 @@ pub use steps::{Nudge, first_row, moved, next_section, nudged, rows_in, section_
 pub use values::{Change, Value, Values};
 
 use crate::prelude::*;
+use crate::side_sheet::{SheetFrame, SheetState, SideSheet};
 use crate::tokens;
 
 pub const CONTEXT: &str = "SettingsSheet";
@@ -74,6 +75,19 @@ pub enum SheetEvent {
 }
 
 type Handler = Rc<dyn Fn(&SheetEvent, &mut Window, &mut App)>;
+
+pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) -> SideSheet {
+    let title = div().font_weight(FontWeight::SEMIBOLD).child("Settings");
+    SideSheet::new("settings-sheet", state, frame)
+        .label("Settings")
+        .header(title)
+        .body(body)
+        .hint(&["↑", "↓"], "Move")
+        .hint(&["←", "→"], "Change")
+        .hint(&["tab"], "Section")
+        .hint(&["f3"], "TOML line")
+        .hint(&["ctrl-z"], "Undo")
+}
 
 #[derive(IntoElement)]
 pub struct SettingsBody {

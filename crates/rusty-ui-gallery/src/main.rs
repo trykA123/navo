@@ -14,6 +14,7 @@ mod pane_sample;
 mod rich_sample;
 mod screenshot;
 mod sections;
+mod settings_sample;
 mod sheet_sample;
 mod structured_sample;
 mod tokens_page;
