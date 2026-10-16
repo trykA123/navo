@@ -111,13 +111,10 @@ fn second_corruption_keeps_the_first_moved_file() {
 }
 
 #[test]
-fn file_failing_quick_check_is_recreated() {
+fn a_damaged_page_is_not_scanned_for_at_open() {
     let dir = tmp();
     write_sqlite_with_damaged_page(&cache_path(&dir));
-    let want = CacheOpen::Recreated {
-        moved_to: corrupt_path(&dir, 1),
-    };
-    assert_eq!(open_report(&dir), want);
+    assert_eq!(open_report(&dir), CacheOpen::Opened);
 }
 
 #[test]
