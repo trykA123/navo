@@ -16,6 +16,7 @@ use rusty_ui::window_view::{KEY_WARNING, key_labels, layer_keys};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
+use crate::gallery::Page;
 use crate::pane_page::status_of;
 use crate::pane_sample;
 
@@ -43,6 +44,7 @@ const SIDES: [Side; 2] = [
 
 pub struct WindowPage {
     held: Option<KeyLayer>,
+    has_job: bool,
     is_menu_open: bool,
     rows: Rc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
@@ -54,9 +56,10 @@ fn location(text: &str) -> Location {
 }
 
 impl WindowPage {
-    pub fn new(held: Option<KeyLayer>, cx: &mut Context<Self>) -> Self {
+    pub fn new(held: Option<KeyLayer>, has_job: bool, cx: &mut Context<Self>) -> Self {
         Self {
             held,
+            has_job,
             is_menu_open: false,
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
@@ -64,10 +67,21 @@ impl WindowPage {
         }
     }
 
+    fn fkey_bar(&self) -> FKeyBar {
+        let bar = FKeyBar::new("fkeys", layer_keys(self.held))
+            .layers(self.held, key_labels())
+            .warn(KEY_WARNING.0, KEY_WARNING.1, KEY_WARNING.2);
+        if self.has_job {
+            bar.reserve_pill()
+        } else {
+            bar
+        }
+    }
+
     pub fn with_menu(cx: &mut Context<Self>) -> Self {
         Self {
             is_menu_open: true,
-            ..Self::new(None, cx)
+            ..Self::new(None, false, cx)
         }
     }
 
@@ -165,12 +179,26 @@ impl Render for WindowPage {
                     .px(t.spacing.xs)
                     .child(panes),
             )
-            .child(
-                FKeyBar::new("fkeys", layer_keys(self.held))
-                    .layers(self.held, key_labels())
-                    .warn(KEY_WARNING.0, KEY_WARNING.1, KEY_WARNING.2)
-                    .reserve_pill(),
-            )
+            .child(self.fkey_bar())
             .children(menu)
     }
+}
+
+const NARROW: f32 = 1100.;
+
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 5]) -> Option<AnyElement> {
+    let [main, shift, alt, job, menu] = windows;
+    let shown = match page {
+        Page::Window => main,
+        Page::WindowShift => shift,
+        Page::WindowAlt => alt,
+        Page::WindowJob => job,
+        Page::AppMenu => menu,
+        Page::WindowNarrow => {
+            let narrow = div().w(px(NARROW)).h_full().child(main.clone());
+            return Some(narrow.into_any_element());
+        }
+        _ => return None,
+    };
+    Some(shown.clone().into_any_element())
 }

@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui_kit::{Hsla, px};
 
 use super::MODES;
-use crate::tokens::{Motion, Surfaces, Theme, contrast_ratio};
+use crate::tokens::{Mode, Motion, Surfaces, Theme, contrast_ratio};
 
 fn named(surfaces: &Surfaces, name: &str) -> Hsla {
     surfaces
@@ -125,12 +125,16 @@ fn keycaps_reuse_the_existing_colour_tokens() {
     }
 }
 
+fn theme_accent(mode: Mode) -> Hsla {
+    Theme::new(mode).colors.accent
+}
+
 #[test]
-fn card_ring_pill_ring_and_progress_share_the_window_accent() {
+fn pill_ring_and_progress_share_the_window_accent() {
     for mode in MODES {
         let s = Theme::new(mode).surfaces;
-        assert_eq!(s.pill_ring, s.card_ring);
-        assert_eq!(s.progress_fill, s.card_ring);
+        assert_eq!(s.pill_ring, theme_accent(mode));
+        assert_eq!(s.progress_fill, s.pill_ring);
         assert_eq!(s.progress_track, s.card_edge);
         assert_eq!(s.pill, s.card);
     }
@@ -169,6 +173,14 @@ fn the_active_card_ring_is_painted_last_so_it_sits_on_top() {
 }
 
 #[test]
+fn the_active_card_ring_is_one_pixel_wide() {
+    for mode in MODES {
+        let ring = Theme::new(mode).shadows.card_active.pop().expect("ring");
+        assert_eq!(ring.spread_radius, px(1.));
+    }
+}
+
+#[test]
 fn new_radii_are_card_8_pill_15_keycap_6_sheet_and_job_card_12() {
     let radii = Theme::new(MODES[0]).radii;
     assert_eq!(
@@ -199,10 +211,11 @@ fn reduced_motion_keeps_the_fade_but_drops_the_travel() {
 }
 
 #[test]
-fn the_card_ring_and_pill_label_use_the_app_accent() {
+fn the_pill_label_uses_the_app_accent_and_the_card_ring_is_a_dimmer_accent() {
     for mode in MODES {
         let theme = Theme::new(mode);
-        assert_eq!(theme.surfaces.card_ring, theme.colors.accent);
+        assert_ne!(theme.surfaces.card_ring, theme.colors.accent);
+        assert_ne!(theme.surfaces.card_ring, theme.surfaces.card_edge);
         assert_eq!(theme.surfaces.pill_label, theme.colors.accent_text);
     }
 }
