@@ -3,6 +3,7 @@ use rusty_ui::prelude::*;
 use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
+use rusty_ui::side_sheet::Side;
 use rusty_ui::tokens::{self, Mode, Theme};
 use rusty_ui::window_view::{ArchiveView, BodyKeys, FontView, ImageView, PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
@@ -11,13 +12,14 @@ use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::menu_page::{MenuPage, Shows as MenuShows};
 use crate::operate_page::OperatePage;
+pub use crate::pages::{PAGES, Page};
 use crate::pane_page::PanePage;
 use crate::sections;
 use crate::structured_sample::{
     self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
 };
 use crate::tokens_page;
-use crate::window_page::{WindowPage, window_element};
+use crate::window_page::{NARROW, SheetShows, WIDE, WindowPage, window_element};
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -37,100 +39,6 @@ const TABLE_STEPS: [&str; 4] = [
     "viewer_table::SortColumn",
     "viewer_table::SortColumn",
 ];
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Page {
-    Primitives,
-    Pane,
-    Operate,
-    Hex,
-    PagedText,
-    Drives,
-    TypedPath,
-    Tree,
-    Table,
-    Markdown,
-    Archive,
-    Font,
-    Marks,
-    Image,
-    Menu,
-    MenuSubmenu,
-    MenuFilter,
-    MenuFiles,
-    Tokens,
-    Window,
-    WindowShift,
-    WindowAlt,
-    WindowNarrow,
-    WindowJob,
-    AppMenu,
-}
-
-pub struct PageInfo {
-    pub page: Page,
-    pub label: &'static str,
-    pub stem: &'static str,
-    pub in_switch: bool,
-}
-
-const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bool) -> PageInfo {
-    PageInfo {
-        page,
-        label,
-        stem,
-        in_switch,
-    }
-}
-
-pub const PAGES: [PageInfo; 25] = [
-    info(Page::Primitives, "Parts", "p7-gallery", true),
-    info(Page::Pane, "Pane", "p7-pane", true),
-    info(Page::Operate, "Operate", "p8-confirm", true),
-    info(Page::Hex, "Hex", "p13-hex", true),
-    info(Page::PagedText, "Text", "p13-text", true),
-    info(Page::Drives, "Drives", "p14-drives", true),
-    info(Page::TypedPath, "Path", "p14-path", true),
-    info(Page::Tree, "Tree", "p15-tree", false),
-    info(Page::Table, "Table", "p15-table", false),
-    info(Page::Markdown, "Markdown", "p15-markdown", false),
-    info(Page::Archive, "Zip", "p15-archive", false),
-    info(Page::Font, "Font", "p15-font", false),
-    info(Page::Marks, "Marks", "p15-marks", false),
-    info(Page::Image, "Image", "p15-image", true),
-    info(Page::Menu, "Menu", "p17-menu", false),
-    info(Page::MenuSubmenu, "Menu 7-Zip", "p17-menu-7zip", false),
-    info(Page::MenuFilter, "Menu filter", "p17-menu-filter", false),
-    info(Page::MenuFiles, "Menu files", "p17-menu-files", false),
-    info(Page::Tokens, "Tokens", "p19-tokens", false),
-    info(Page::Window, "Window", "p19-window", false),
-    info(
-        Page::WindowShift,
-        "Window, Shift held",
-        "p19-fkeys-shift",
-        false,
-    ),
-    info(Page::WindowAlt, "Window, Alt held", "p19-fkeys-alt", false),
-    info(
-        Page::WindowNarrow,
-        "Window at 1100 px",
-        "p19-window-1100",
-        false,
-    ),
-    info(
-        Page::WindowJob,
-        "Window, copy running",
-        "p19-window-job",
-        false,
-    ),
-    info(Page::AppMenu, "App menu", "p19-app-menu", false),
-];
-
-impl Page {
-    pub fn info(self) -> &'static PageInfo {
-        &PAGES[self as usize]
-    }
-}
 
 const MENU_PAGES: [(Page, MenuShows); 4] = [
     (Page::Menu, MenuShows::Root),
@@ -161,6 +69,7 @@ pub struct Gallery {
     alt_window: Entity<WindowPage>,
     job_window: Entity<WindowPage>,
     menu_window: Entity<WindowPage>,
+    sheet_windows: [Entity<WindowPage>; 3],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -191,6 +100,7 @@ impl Gallery {
             alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), false, cx)),
             job_window: cx.new(|cx| WindowPage::new(None, true, cx)),
             menu_window: cx.new(WindowPage::with_menu),
+            sheet_windows: sheet_windows(cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -337,14 +247,34 @@ fn column(t: &Theme) -> Div {
         .min_w_0()
 }
 
+fn sheet_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
+    let shows = [
+        (Side::Left, WIDE, false),
+        (Side::Right, WIDE, true),
+        (Side::Left, NARROW, false),
+    ];
+    shows.map(|(active, window_width, is_ringed)| {
+        let shows = SheetShows {
+            active,
+            window_width,
+            is_ringed,
+        };
+        cx.new(|cx| WindowPage::with_sheet(shows, cx))
+    })
+}
+
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 5] {
+    fn windows(&self) -> [&Entity<WindowPage>; 8] {
+        let [sheet, sheet_left, sheet_narrow] = &self.sheet_windows;
         [
             &self.main_window,
             &self.shift_window,
             &self.alt_window,
             &self.job_window,
             &self.menu_window,
+            sheet,
+            sheet_left,
+            sheet_narrow,
         ]
     }
 }
@@ -362,7 +292,7 @@ impl Render for Gallery {
             .text_size(t.typography.body)
             .line_height(t.typography.line_height);
         if let Some(page) = window_element(self.page, self.windows()) {
-            let is_narrow = self.page == Page::WindowNarrow;
+            let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
         }
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
@@ -395,7 +325,10 @@ impl Render for Gallery {
             | Page::WindowAlt
             | Page::WindowNarrow
             | Page::WindowJob
-            | Page::AppMenu => root,
+            | Page::AppMenu
+            | Page::Sheet
+            | Page::SheetLeft
+            | Page::SheetNarrow => root,
         }
     }
 }

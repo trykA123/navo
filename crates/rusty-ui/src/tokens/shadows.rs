@@ -13,13 +13,13 @@ pub struct Shadows {
     pub menu: Vec<BoxShadow>,
     pub chip: Vec<BoxShadow>,
     pub sheet: Vec<BoxShadow>,
+    pub sheet_ring: Vec<BoxShadow>,
     pub focus: Vec<BoxShadow>,
 }
 
 #[derive(Clone, Copy)]
 struct Layer {
     color: Hsla,
-    x: f32,
     y: f32,
     blur: f32,
     spread: f32,
@@ -28,7 +28,6 @@ struct Layer {
 fn drop(color: Hsla, y: f32, blur: f32, spread: f32) -> Layer {
     Layer {
         color,
-        x: 0.,
         y,
         blur,
         spread,
@@ -44,7 +43,7 @@ fn shadow(layers: impl IntoIterator<Item = Layer>) -> Vec<BoxShadow> {
         .into_iter()
         .map(|layer| BoxShadow {
             color: layer.color,
-            offset: point(px(layer.x), px(layer.y)),
+            offset: point(px(0.), px(layer.y)),
             // GPUI blurs by the Gaussian sigma (CSS blur is twice that) and paints later layers on top.
             blur_radius: px(layer.blur / 2.),
             spread_radius: px(layer.spread),
@@ -58,6 +57,7 @@ struct Depth {
     pop: Layer,
     menu: [Layer; 2],
     chip: [Layer; 2],
+    sheet: Layer,
 }
 
 fn depth(mode: Mode) -> Depth {
@@ -78,6 +78,7 @@ fn depth(mode: Mode) -> Depth {
                     drop(ui.opacity(0.08), 2., 6., 0.),
                     drop(ui.opacity(0.2), 8., 20., -10.),
                 ],
+                sheet: drop(ink.opacity(0.42), 28., 60., -20.),
             }
         }
         Mode::Dark => {
@@ -96,6 +97,7 @@ fn depth(mode: Mode) -> Depth {
                     drop(black.opacity(0.35), 2., 6., 0.),
                     drop(black.opacity(0.6), 10., 24., -10.),
                 ],
+                sheet: drop(black.opacity(0.85), 28., 60., -20.),
             }
         }
     }
@@ -103,10 +105,7 @@ fn depth(mode: Mode) -> Depth {
 
 pub(super) fn shadows(mode: Mode, s: &Surfaces) -> Shadows {
     let d = depth(mode);
-    let sheet = Layer {
-        x: -18.,
-        ..drop(ok(0., 0., 0.).opacity(0.35), 0., 40., -24.)
-    };
+    let sheet = [d.sheet, ring(s.card_edge, 1.)];
     Shadows {
         card: shadow([ring(s.card_edge, 1.)]),
         card_active: shadow(d.card.into_iter().chain([ring(s.card_ring, 1.)])),
@@ -115,7 +114,8 @@ pub(super) fn shadows(mode: Mode, s: &Surfaces) -> Shadows {
         keycap: shadow([drop(s.keycap_edge, 1., 0., 0.)]),
         menu: shadow(d.menu),
         chip: shadow(d.chip),
-        sheet: shadow([sheet]),
+        sheet: shadow(sheet),
+        sheet_ring: shadow(sheet.into_iter().chain([ring(s.pill_ring, 1.5)])),
         focus: shadow([ring(s.pill_ring, 2.)]),
     }
 }
