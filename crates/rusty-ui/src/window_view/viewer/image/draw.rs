@@ -12,7 +12,6 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 
 const CHECK: f32 = 8.;
-const WHEEL_PAN: f32 = 48.;
 const WHEEL_ZOOM_PIXELS: f32 = 120.;
 
 #[derive(Clone, Copy)]
@@ -74,14 +73,6 @@ fn paint_picture(
 
 impl ImageView {
     fn wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
-        let delta = match event.delta {
-            ScrollDelta::Lines(lines) => point(lines.x * WHEEL_PAN, lines.y * WHEEL_PAN),
-            ScrollDelta::Pixels(pixels) => point(f32::from(pixels.x), f32::from(pixels.y)),
-        };
-        if !event.modifiers.secondary() {
-            self.pan_by(delta, cx);
-            return;
-        }
         let viewport = self.viewport();
         let notches = match event.delta {
             ScrollDelta::Lines(lines) => lines.y,

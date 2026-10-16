@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, Point, TestAppContext};
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, Point, ScrollDelta, TestAppContext};
 use image::ImageFormat;
 
 use super::find::bottom_keys;
@@ -141,17 +141,61 @@ fn a_png_decodes_in_the_background_then_shows_its_size_and_format(cx: &mut TestA
     assert_eq!(disk.loads(), 1);
     assert_eq!(text_of(cx, *window, "image-meta"), meta);
     assert_eq!(text_of(cx, *window, "image-zoom"), "Fit · 100 %");
-    let keys = bottom_keys(cx, *window);
-    for key in [
-        "0 Fit",
-        "1 100 %",
-        "I Info",
-        "Alt+1 Text",
-        "3 Hex",
-        "N Next file",
-    ] {
-        assert!(keys.contains(&key.to_owned()), "{key} in {keys:?}");
-    }
+}
+
+#[gpui_kit::test]
+fn the_bottom_bar_leads_with_the_image_keys_and_lists_the_kind_keys_after(cx: &mut TestAppContext) {
+    let rig = rig(cx, &[], &[("a.txt", encoded(ImageFormat::Png, 300, 200))]);
+    open_first(cx, &rig);
+    let keys = bottom_keys(cx, rig.0);
+    assert_eq!(
+        keys,
+        [
+            "0 Fit",
+            "1 100 %",
+            "+/− Zoom",
+            "Arrows/Drag Pan",
+            "N/P Space/Bksp Next/Prev",
+            "I Info",
+            "Alt+1 Text",
+            "3 Hex",
+            "Esc Close",
+        ]
+    );
+}
+
+fn stage_centre(cx: &mut TestAppContext, window: AnyWindowHandle) -> Point<gpui_kit::Pixels> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.find("image-stage").bounds().center()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn the_wheel_zooms_without_ctrl_and_a_left_drag_pans(cx: &mut TestAppContext) {
+    let rig = rig(cx, &[], &[("a.txt", encoded(ImageFormat::Png, 3000, 2000))]);
+    open_first(cx, &rig);
+    let (window, view, _) = &rig;
+    press(cx, *window, view, "1");
+    cx.update_window(*window, |_, window, cx| {
+        window.scroll(
+            "image-stage",
+            ScrollDelta::Lines(gpui_kit::point(0., 1.)),
+            cx,
+        );
+    })
+    .expect("window");
+    redraw(cx, *window);
+    assert_eq!(text_of(cx, *window, "image-zoom"), "125 %");
+    let before = pan(cx, view);
+    let from = stage_centre(cx, *window);
+    let to = gpui_kit::point(from.x + gpui_kit::px(40.), from.y + gpui_kit::px(30.));
+    cx.update_window(*window, |_, window, cx| window.drag(from, to, cx))
+        .expect("window");
+    redraw(cx, *window);
+    let after = pan(cx, view);
+    assert_eq!((after.x - before.x, after.y - before.y), (40., 30.));
 }
 
 #[gpui_kit::test]

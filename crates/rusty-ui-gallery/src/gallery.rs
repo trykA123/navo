@@ -1,3 +1,4 @@
+use rusty_ui::fkey_bar::FKeyBar;
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
@@ -172,6 +173,11 @@ impl Gallery {
     }
 }
 
+fn image_keys() -> FKeyBar {
+    let kinds = [("Alt+1", "Text"), ("3", "Hex"), ("Esc", "Close")];
+    FKeyBar::new("image-keys", ImageView::KEYS.into_iter().chain(kinds)).sized_to_keys()
+}
+
 fn column(t: &Theme) -> Div {
     div()
         .flex()
@@ -204,7 +210,7 @@ impl Render for Gallery {
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
-            Page::Image => root.children(self.image.clone()),
+            Page::Image => root.children(self.image.clone()).child(image_keys()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }
