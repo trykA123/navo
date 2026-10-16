@@ -6,6 +6,7 @@ use rusty_core::Location;
 use rusty_core::marks::{Bookmarks, MarkSet, SearchHistory};
 use rusty_core::paging::Needle;
 
+use super::crlf::CrlfOffsets;
 use super::jobs::run_detached;
 use super::marks::recount_marks;
 use super::{Marked, Marking};
@@ -21,6 +22,23 @@ pub struct MemoryLink {
     pub location: Location,
     pub stamp: Option<FileStamp>,
     pub carried: Option<Carried>,
+    pub crlf: Option<CrlfOffsets>,
+}
+
+impl MemoryLink {
+    fn to_disk(&self, bookmarks: &Bookmarks) -> Bookmarks {
+        match &self.crlf {
+            Some(crlf) => crlf.to_disk(bookmarks),
+            None => bookmarks.clone(),
+        }
+    }
+
+    fn to_buffer(&self, bookmarks: &Bookmarks) -> Bookmarks {
+        match &self.crlf {
+            Some(crlf) => crlf.to_buffer(bookmarks),
+            None => bookmarks.clone(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -29,6 +47,7 @@ pub(in crate::window_view::viewer) struct Memory {
     is_dirty: bool,
     pending: Option<Task<()>>,
     loading: Option<Task<()>>,
+    frozen: Option<Bookmarks>,
     _release: Option<Subscription>,
 }
 
@@ -38,13 +57,17 @@ struct Remembered {
 }
 
 fn recall(link: &MemoryLink) -> Remembered {
-    Remembered {
-        history: (link.hooks.history)(),
-        memory: link
-            .stamp
-            .filter(|_| link.carried.is_none())
-            .and_then(|stamp| (link.hooks.memory)(&link.location, stamp)),
-    }
+    let history = (link.hooks.history)();
+    let carried = link.carried.as_ref();
+    let memory = link
+        .stamp
+        .filter(|_| carried.is_none_or(|carried| carried.bookmarks.is_none()))
+        .and_then(|stamp| (link.hooks.memory)(&link.location, stamp))
+        .map(|(marks, bookmarks)| match carried {
+            Some(_) => (MarkSet::default(), bookmarks),
+            None => (marks, bookmarks),
+        });
+    Remembered { history, memory }
 }
 
 fn merge_marks(into: &mut MarkSet, loaded: MarkSet) {
@@ -77,7 +100,11 @@ impl Marking {
         else {
             return;
         };
-        let (marks, bookmarks) = (self.marks.set.clone(), self.bookmarks.clone());
+        let marks = self.marks.set.clone();
+        let bookmarks = memory
+            .frozen
+            .clone()
+            .unwrap_or_else(|| link.to_disk(&self.bookmarks));
         run_detached(
             move || (link.hooks.save_memory)(&link.location, stamp, &marks, &bookmarks),
             cx,
@@ -94,6 +121,23 @@ impl Marking {
         let needle = needle.clone();
         run_detached(move || (link.hooks.remember)(&needle), cx);
     }
+
+    pub(in crate::window_view::viewer) fn carried_bookmarks(&self) -> Option<Bookmarks> {
+        if self.memory.frozen.is_some() {
+            return None;
+        }
+        let link = self.memory.link.as_ref()?;
+        Some(link.to_disk(&self.bookmarks))
+    }
+
+    pub(in crate::window_view::viewer) fn freeze_bookmarks(&mut self) {
+        if self.memory.frozen.is_some() {
+            return;
+        }
+        let link = self.memory.link.as_ref();
+        self.memory.frozen =
+            Some(link.map_or_else(Bookmarks::default, |link| link.to_disk(&self.bookmarks)));
+    }
 }
 
 pub(in crate::window_view::viewer) fn attach_memory<V: Marked>(
@@ -104,7 +148,10 @@ pub(in crate::window_view::viewer) fn attach_memory<V: Marked>(
     if let Some(carried) = link.carried.clone() {
         let marking = view.marking();
         marking.marks.set = carried.marks;
-        marking.bookmarks = carried.bookmarks.unwrap_or_default();
+        marking.bookmarks = carried
+            .bookmarks
+            .map(|bookmarks| link.to_buffer(&bookmarks))
+            .unwrap_or_default();
         recount_marks(view, cx);
     }
     let (sender, receiver) = oneshot::channel();
@@ -134,7 +181,13 @@ fn remembered_loaded<V: Marked>(view: &mut V, remembered: Remembered, cx: &mut C
     marking.history.merge_older(remembered.history);
     if let Some((marks, bookmarks)) = remembered.memory {
         merge_marks(&mut marking.marks.set, marks);
-        merge_bookmarks(&mut marking.bookmarks, &bookmarks);
+        match (&mut marking.memory.frozen, &marking.memory.link) {
+            (Some(frozen), _) => merge_bookmarks(frozen, &bookmarks),
+            (None, Some(link)) => {
+                merge_bookmarks(&mut marking.bookmarks, &link.to_buffer(&bookmarks));
+            }
+            (None, None) => {}
+        }
         marking.rev += 1;
         recount_marks(view, cx);
     }
@@ -146,7 +199,8 @@ pub(in crate::window_view::viewer) fn restamp<V: Marked>(
     stamp: FileStamp,
     cx: &mut Context<V>,
 ) {
-    let Some(link) = &mut view.marking().memory.link else {
+    let memory = &mut view.marking().memory;
+    let Some(link) = memory.link.as_mut().filter(|_| memory.frozen.is_none()) else {
         return;
     };
     if link.stamp.is_none() {

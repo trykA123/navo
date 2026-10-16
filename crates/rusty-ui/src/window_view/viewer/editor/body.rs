@@ -75,7 +75,10 @@ impl ViewerBody for EditorBody {
         let view = self.0.read(cx);
         Some(Carried {
             marks: view.marking.marks.set.clone(),
-            bookmarks: view.persists.then(|| view.marking.bookmarks.clone()),
+            bookmarks: view
+                .persists
+                .then(|| view.marking.carried_bookmarks())
+                .flatten(),
         })
     }
 

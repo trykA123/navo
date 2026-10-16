@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use rusty_core::marks::{MarkError, MarkSet};
-use rusty_core::paging::Needle;
+use rusty_core::paging::{Counted, Needle};
 
 use super::Marked;
 use super::jobs::Job;
@@ -69,7 +69,10 @@ impl MarkLayer {
         };
         match scanned {
             Some(scanned) => hits.land(scanned),
-            None => hits.counted.starts.clear(),
+            None => {
+                hits.counted = Counted::default();
+                hits.scanned = 0;
+            }
         }
         self.rev += 1;
         true
@@ -131,6 +134,9 @@ pub(in crate::window_view::viewer) fn marks_source_changed<V: Marked>(
     cx: &mut Context<V>,
 ) {
     let layer = &mut view.marking().marks;
+    if appended_to.is_none() {
+        layer.job = None;
+    }
     layer
         .hits
         .iter_mut()
@@ -219,5 +225,26 @@ mod tests {
         };
         assert!(layer.landed(ScanUpdate::Landed(scanned)));
         assert_eq!(layer.rev, 1);
+    }
+
+    #[test]
+    fn a_failed_scan_makes_the_next_one_start_from_zero() {
+        let mut layer = MarkLayer::default();
+        layer.want(word());
+        let _ = layer.hits[0].take_scan();
+        let scanned = Scanned {
+            needle: word(),
+            from: 0,
+            len: 100,
+            counted: Counted {
+                total: 1,
+                starts: vec![7],
+                done: true,
+            },
+        };
+        assert!(layer.landed(ScanUpdate::Landed(scanned)));
+        assert!(layer.landed(ScanUpdate::Failed(word())));
+        layer.hits[0].source_changed(Some(150));
+        assert_eq!(layer.hits[0].take_scan().map(|scan| scan.from), Some(0));
     }
 }

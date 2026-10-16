@@ -192,3 +192,112 @@ fn editor_marks_stay_in_the_session_when_its_text_is_not_the_file_bytes(cx: &mut
         "{calls:?}"
     );
 }
+
+fn bookmarks(starts: &[u64]) -> Bookmarks {
+    let mut bookmarks = Bookmarks::default();
+    starts.iter().for_each(|at| {
+        bookmarks.toggle(*at);
+    });
+    bookmarks
+}
+
+fn paged_bookmarks(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Vec<u64> {
+    paged_marking(cx, view, |marking| marking.bookmarks.iter().collect())
+}
+
+fn editor_bookmarks(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Vec<u64> {
+    let editor = editor_view(cx, view);
+    editor.read_with(cx, |editor, _| {
+        editor.marking_state().bookmarks.iter().collect()
+    })
+}
+
+fn stored_bookmarks(recorder: &Recorder) -> Vec<u64> {
+    let stored = recorder.stored.lock().expect("log").clone();
+    stored.map_or_else(Vec::new, |(_, bookmarks)| bookmarks.iter().collect())
+}
+
+fn read_as(recorder: &Recorder, setup: impl Fn() -> Setup, file: FileText) -> FileHooks {
+    let stamp = recorder.hooks(setup()).read;
+    FileHooks {
+        read: Arc::new(move |location| {
+            Ok(FileText {
+                stamp: stamp(location)?.stamp,
+                ..file.clone()
+            })
+        }),
+        ..recorder.hooks(setup())
+    }
+}
+
+#[gpui_kit::test]
+fn bookmarks_survive_a_trip_through_an_editor_that_cannot_keep_them(cx: &mut TestAppContext) {
+    let recorder = Recorder::default();
+    *recorder.stored.lock().expect("log") = Some((MarkSet::default(), bookmarks(&[16])));
+    let text = b"one needle\ntwo\nthree\nfour\n".to_vec();
+    let bom = FileText {
+        encoding: TextEncoding {
+            bom: true,
+            ..TextEncoding::default()
+        },
+        ..FileText::plain(String::from_utf8_lossy(&text).into_owned())
+    };
+    let files = read_as(&recorder, || Setup::new(text.clone()), bom);
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "alt-3");
+    settle(cx, &view);
+    press(cx, window, &view, "alt-1");
+    press(cx, window, &view, "alt-3");
+    settle(cx, &view);
+    assert_eq!(paged_bookmarks(cx, &view), [16]);
+    press(cx, window, &view, "ctrl-f2");
+    cx.executor().advance_clock(Duration::from_secs(1));
+    settle(cx, &view);
+    assert_eq!(stored_bookmarks(&recorder), [0, 16]);
+}
+
+#[gpui_kit::test]
+fn crlf_editor_bookmarks_are_stored_and_reloaded_at_file_offsets(cx: &mut TestAppContext) {
+    let recorder = Recorder::default();
+    let disk = b"one\r\ntwo\r\nthree\r\n".to_vec();
+    let file = FileText {
+        crlf: true,
+        ..FileText::plain("one\ntwo\nthree\n")
+    };
+    let files = read_as(&recorder, || Setup::new(disk.clone()), file);
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    let editor = super::editor_of(cx, &view).expect("the text editor is open");
+    editor.update(cx, |state, cx| state.set_selected_range(8..8, cx));
+    press(cx, window, &view, "ctrl-f2");
+    cx.executor().advance_clock(Duration::from_secs(1));
+    settle(cx, &view);
+    assert_eq!(stored_bookmarks(&recorder), [10]);
+    press(cx, window, &view, "alt-3");
+    settle(cx, &view);
+    assert_eq!(paged_bookmarks(cx, &view), [10]);
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+    press(cx, window, &view, "f3");
+    settle(cx, &view);
+    assert_eq!(editor_bookmarks(cx, &view), [8]);
+}
+
+#[gpui_kit::test]
+fn a_second_kind_switch_during_a_load_keeps_the_handed_marks(cx: &mut TestAppContext) {
+    let (window, view, _) = super::text_window(cx, Setup::new(b"one needle\ntwo\n".to_vec()));
+    search_for(cx, window, &view, "needle");
+    press(cx, window, &view, "ctrl-3");
+    press(cx, window, &view, "escape");
+    press_only(cx, window, "alt-3");
+    press_only(cx, window, "alt-1");
+    settle(cx, &view);
+    let editor = editor_view(cx, &view);
+    let colour = editor.read_with(cx, |editor, _| {
+        editor.marking_state().marks.set.colour_of(&needle())
+    });
+    assert_eq!(colour, Some(2));
+}

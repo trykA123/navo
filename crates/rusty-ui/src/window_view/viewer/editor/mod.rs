@@ -15,6 +15,7 @@ pub(super) use body::{EditorBody, EditorFile};
 
 use super::body::{Carried, Host};
 use super::search::Marking;
+use super::search::crlf::CrlfOffsets;
 use super::search::memory::{MemoryLink, attach_memory};
 use super::search::overview::Overview;
 use super::{FileStamp, FileText};
@@ -48,7 +49,7 @@ pub(super) struct EditorView {
     _changes: Subscription,
 }
 
-fn memory_link(file: &FileText, host: &Host) -> (bool, MemoryLink) {
+fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLink) {
     let persists =
         file.encoding.encoding.name() == "UTF-8" && !file.encoding.bom && !file.read_only;
     let carried = host.carried.clone().map(|carried| Carried {
@@ -60,6 +61,7 @@ fn memory_link(file: &FileText, host: &Host) -> (bool, MemoryLink) {
         location: host.location.clone(),
         stamp: file.stamp.filter(|_| persists),
         carried,
+        crlf: file.crlf.then(|| CrlfOffsets(text.clone())),
     };
     (persists, link)
 }
@@ -68,7 +70,7 @@ impl EditorView {
     fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let EditorFile { file, language } = opened;
         let shared: Arc<str> = Arc::from(file.text.as_str());
-        let (persists, link) = memory_link(&file, &host);
+        let (persists, link) = memory_link(&file, &shared, &host);
         let text = file.text;
         let editor = cx.new(|cx| {
             let mut state = EditorState::new(window, cx)
@@ -130,6 +132,7 @@ impl EditorView {
     fn text_changed(&mut self, cx: &mut Context<Self>) {
         self.dirty = true;
         self.revision += 1;
+        self.marking.freeze_bookmarks();
         self.overwrite = false;
         self.text_edited(cx);
         cx.notify();

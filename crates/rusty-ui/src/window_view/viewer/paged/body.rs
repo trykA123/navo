@@ -22,6 +22,7 @@ impl PagedBody {
             location: host.location,
             stamp: paged.stamp,
             carried: host.carried,
+            crlf: None,
         };
         Self(cx.new(|cx| {
             let mut view = PagedView::new(host.title, paged, kind, cx);

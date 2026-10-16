@@ -130,6 +130,7 @@ pub fn marks_view(window: &mut Window, cx: &mut App) -> Entity<PagedView> {
         location: Location::provider_root(ProviderId::local()),
         stamp: Some(stamp),
         carried: None,
+        crlf: None,
     };
     let sample = paged(bytes, None);
     cx.new(|cx| {

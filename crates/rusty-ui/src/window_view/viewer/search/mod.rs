@@ -1,5 +1,6 @@
 pub(in crate::window_view::viewer) mod bar;
 pub(in crate::window_view::viewer) mod count;
+pub(in crate::window_view::viewer) mod crlf;
 pub(in crate::window_view::viewer) mod find_all;
 pub(in crate::window_view::viewer) mod history;
 pub(in crate::window_view::viewer) mod jobs;

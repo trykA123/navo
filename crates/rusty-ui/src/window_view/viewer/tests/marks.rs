@@ -1,7 +1,17 @@
+use std::ops::Range;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, TestAppContext};
+use gpui_kit::{AnyWindowHandle, TestAppContext};
 use rusty_core::marks::ticks;
-use rusty_core::paging::Needle;
+use rusty_core::paging::{ByteSource, Needle};
+
+use crate::prelude::*;
+use crate::window_view::viewer::files::Reopen;
+use crate::window_view::viewer::search::count::count_search;
+use crate::window_view::viewer::search::marks::toggle_mark;
+use crate::window_view::viewer::search::{Marked, Marking, source_changed};
 
 use super::find::{line_start, numbered_lines};
 use super::search::{editor_view, paged_marking, search_for};
@@ -214,4 +224,47 @@ fn the_keys_bar_lists_the_mark_bookmark_and_follow_keys(cx: &mut TestAppContext)
     let finding = super::find::bottom_keys(cx, window);
     assert!(finding.contains(&"Alt+Enter Find all".to_owned()));
     assert!(finding.contains(&"Up History".to_owned()));
+}
+
+struct Probe(Marking);
+
+impl Marked for Probe {
+    fn marking(&mut self) -> &mut Marking {
+        &mut self.0
+    }
+
+    fn jump(&mut self, _: Range<u64>, _: &mut Window, _: &mut Context<Self>) {}
+
+    fn refocus(&mut self, _: &mut Window, _: &mut Context<Self>) {}
+}
+
+fn counted_source(text: &str, reads: &Arc<AtomicUsize>) -> Reopen {
+    let (bytes, reads) = (Arc::new(text.as_bytes().to_vec()), reads.clone());
+    Arc::new(move || {
+        Ok(Box::new(super::Memory {
+            bytes: bytes.clone(),
+            changed: AtomicBool::new(false),
+            reads: reads.clone(),
+        }) as Box<dyn ByteSource + Send>)
+    })
+}
+
+#[gpui_kit::test]
+fn an_edit_drops_the_running_scans_of_the_old_text(cx: &mut TestAppContext) {
+    let (old_reads, new_reads) = (Arc::default(), Arc::default());
+    let probe = cx.new(|_| Probe(Marking::new(counted_source("needle\n", &old_reads))));
+    probe.update(cx, |probe, cx| {
+        toggle_mark(probe, needle(), 2, cx).expect("room");
+        count_search(probe, needle(), cx);
+        probe.0.source = counted_source("an needle\n", &new_reads);
+        source_changed(probe, None, cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(old_reads.load(Ordering::Relaxed), 0);
+    let (marked, counted) = probe.read_with(cx, |probe, _| {
+        let counted = probe.0.counted().map(|counted| counted.starts.clone());
+        (probe.0.marks.ranges_in(0..u64::MAX), counted)
+    });
+    assert_eq!(marked, [(3..9, 2)]);
+    assert_eq!(counted, Some(vec![3]));
 }

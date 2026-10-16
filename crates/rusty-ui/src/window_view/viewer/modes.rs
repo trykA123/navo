@@ -178,7 +178,9 @@ impl FerriteWindow {
             },
         );
         if let Some(viewer) = &mut self.viewer {
-            viewer.carried = viewer.body.as_ref().and_then(|body| body.carry(cx));
+            if let Some(carried) = viewer.body.as_ref().and_then(|body| body.carry(cx)) {
+                viewer.carried = Some(carried);
+            }
             viewer.clear_body();
             viewer.opening = Some(opening);
             window.focus(&viewer.focus, cx);

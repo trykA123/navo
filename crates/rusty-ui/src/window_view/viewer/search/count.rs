@@ -123,6 +123,9 @@ pub(in crate::window_view::viewer) fn count_source_changed<V: Marked>(
 ) {
     if let Some(run) = &mut view.marking().count {
         run.failed = false;
+        if appended_to.is_none() {
+            run.job = None;
+        }
         run.tally.source_changed(appended_to);
     }
     start_search_scan(view, cx);
