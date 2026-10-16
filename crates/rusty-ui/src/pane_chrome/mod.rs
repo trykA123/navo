@@ -1,3 +1,4 @@
+mod card;
 mod drive_bar;
 mod drive_menu;
 mod drives;
@@ -13,6 +14,7 @@ use std::rc::Rc;
 use gpui_kit::{App, ElementId, IntoElement, RenderOnce, SharedString, Window};
 use rusty_core::Command;
 
+pub use card::{card_header, card_shadow, pane_card};
 pub use drive_bar::DriveBar;
 pub use drive_menu::{DriveMenu, DriveMenuEvent, drive_for_key};
 pub use drives::{DriveIcon, DriveInfo, current_drive};
@@ -34,6 +36,7 @@ pub struct PaneTabs {
     id: ElementId,
     titles: Vec<SharedString>,
     active: usize,
+    is_highlighted: bool,
     on_command: Option<CommandHandler>,
 }
 
@@ -47,8 +50,14 @@ impl PaneTabs {
             id: id.into(),
             titles: titles.into_iter().map(Into::into).collect(),
             active,
+            is_highlighted: false,
             on_command: None,
         }
+    }
+
+    pub fn highlighted(mut self, is_highlighted: bool) -> Self {
+        self.is_highlighted = is_highlighted;
+        self
     }
 
     pub fn on_command(
@@ -66,7 +75,9 @@ impl RenderOnce for PaneTabs {
             .titles
             .into_iter()
             .map(|title| Tab::new(title).icon(IconName::Folder));
-        let tabs = Tabs::new(self.id, tabs).selected(self.active);
+        let tabs = Tabs::new(self.id, tabs)
+            .selected(self.active)
+            .highlighted(self.is_highlighted);
         match self.on_command {
             Some(handler) => tabs.on_select(move |index, window, cx| {
                 if let Ok(tab) = u32::try_from(*index) {

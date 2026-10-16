@@ -8,14 +8,15 @@ use gpui_kit::{
 };
 
 use super::drives::DriveInfo;
+use crate::file_list::row::inset_ring;
 use crate::primitives::{IconName, Tooltip, icon};
 use crate::tokens::{self, Theme};
 
 pub type PickHandler = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
 
 const USAGE_HEIGHT: f32 = 2.;
-const BAR_HEIGHT: f32 = 30.;
 const DIMMED: f32 = 0.55;
+const LABEL_WIDTH: f32 = 96.;
 
 #[derive(IntoElement)]
 pub struct DriveBar {
@@ -78,13 +79,31 @@ pub(super) fn status_value(drive: &DriveInfo, is_busy: bool) -> &'static str {
     }
 }
 
-fn face(t: &Theme, glyph: impl IntoElement, name: SharedString) -> Div {
+fn face(t: &Theme, glyph: impl IntoElement, drive: &DriveInfo, is_current: bool) -> Div {
+    let name = drive.name();
+    let letter = match drive.letter {
+        Some(_) => SharedString::from(format!("{name}:")),
+        None => name,
+    };
+    let label = drive
+        .label
+        .clone()
+        .filter(|_| is_current && drive.letter.is_some());
     div()
         .flex()
         .items_center()
-        .gap(t.spacing.xs)
+        .gap(t.spacing.sm)
         .child(glyph)
-        .child(name)
+        .child(div().font_weight(FontWeight::SEMIBOLD).child(letter))
+        .when_some(label, |face, label| {
+            face.child(
+                div()
+                    .max_w(px(LABEL_WIDTH))
+                    .truncate()
+                    .text_color(t.colors.muted)
+                    .child(label),
+            )
+        })
 }
 
 struct ButtonProps<'a> {
@@ -105,16 +124,12 @@ fn drive_button(drive: &DriveInfo, props: ButtonProps) -> AnyElement {
     } else {
         drive.icon.glyph()
     };
-    let color = if props.is_current {
-        c.accent_text
-    } else {
-        c.muted
-    };
+    let color = if props.is_current { c.text } else { c.muted };
     let index = props.index;
     div()
         .id(("drive", index))
         .role(Role::Button)
-        .aria_label(name.clone())
+        .aria_label(name)
         .aria_selected(props.is_current)
         .aria_value(status_value(drive, props.is_busy))
         .test_support()
@@ -123,13 +138,13 @@ fn drive_button(drive: &DriveInfo, props: ButtonProps) -> AnyElement {
         .flex_none()
         .justify_center()
         .gap(px(1.))
-        .h(px(BAR_HEIGHT - 6.))
-        .px(t.spacing.sm)
-        .rounded(t.radii.xs)
+        .h(t.spacing.tab_height)
+        .px(t.spacing.md)
+        .rounded(t.radii.md)
         .cursor_pointer()
-        .text_color(if props.is_current { c.text } else { c.muted })
+        .text_color(color)
         .when(props.is_current, |d| {
-            d.bg(c.selection).font_weight(FontWeight::SEMIBOLD)
+            d.shadow(inset_ring(t.surfaces.card_edge))
         })
         .when(!props.is_current, |d| d.hover(|style| style.bg(c.hover)))
         .when(!drive.connected || props.is_busy, |d| d.opacity(DIMMED))
@@ -137,7 +152,12 @@ fn drive_button(drive: &DriveInfo, props: ButtonProps) -> AnyElement {
         .when_some(props.on_pick, |d, handler| {
             d.on_click(move |_, window, cx| handler(&index, window, cx))
         })
-        .child(face(t, icon(glyph, px(13.), color), name))
+        .child(face(
+            t,
+            icon(glyph, px(14.), color),
+            drive,
+            props.is_current,
+        ))
         .child(usage_bar(t, drive))
         .into_any_element()
 }
@@ -169,11 +189,9 @@ impl RenderOnce for DriveBar {
             .flex_none()
             .items_center()
             .gap(t.spacing.xxs)
-            .h(px(BAR_HEIGHT))
-            .px(t.spacing.sm)
+            .h(t.spacing.tab_height)
             .min_w_0()
             .overflow_x_scroll()
-            .text_size(t.typography.small)
             .children(buttons)
     }
 }

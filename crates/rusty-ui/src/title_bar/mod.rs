@@ -11,7 +11,7 @@ use gpui_kit::component::TitleBar;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    Styled, TitlebarOptions, Window, WindowOptions, div,
+    Styled, TitlebarOptions, Window, WindowOptions, div, transparent_black,
 };
 
 use crate::tokens::{self, Theme};
@@ -34,6 +34,7 @@ pub fn window_options(title: impl Into<SharedString>) -> WindowOptions {
 pub struct FerriteTitleBar {
     title: SharedString,
     header: Vec<AnyElement>,
+    is_on_mica: bool,
     on_close: Option<CloseHandler>,
 }
 
@@ -42,12 +43,19 @@ impl FerriteTitleBar {
         Self {
             title: title.into(),
             header: Vec::new(),
+            is_on_mica: false,
             on_close: None,
         }
     }
 
     pub fn header(mut self, content: impl IntoElement) -> Self {
         self.header.push(content.into_any_element());
+        self
+    }
+
+    #[must_use]
+    pub fn on_mica(mut self) -> Self {
+        self.is_on_mica = true;
         self
     }
 
@@ -82,6 +90,10 @@ impl RenderOnce for FerriteTitleBar {
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
+            .when(self.is_on_mica, |bar| {
+                bar.bg(transparent_black())
+                    .border_color(transparent_black())
+            })
             .child(brand::brand(t, self.title, window.scale_factor()))
             .when(!self.header.is_empty(), |bar| {
                 bar.child(header_area(t, self.header))

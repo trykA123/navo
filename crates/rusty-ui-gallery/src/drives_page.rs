@@ -151,9 +151,7 @@ impl DrivesPage {
                 .error(Some("Unknown variable %PROJECTS%.".into()))
                 .into_any_element()
         } else {
-            PathBar::new(("path", side), here.clone())
-                .active(side == 0)
-                .into_any_element()
+            PathBar::new(("path", side), here.clone()).into_any_element()
         };
         let status = StatusBarProps {
             files: 11,

@@ -17,6 +17,7 @@ use crate::structured_sample::{
     self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
 };
 use crate::tokens_page;
+use crate::window_page::WindowPage;
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -58,6 +59,7 @@ pub enum Page {
     MenuFilter,
     MenuFiles,
     Tokens,
+    Window,
 }
 
 pub struct PageInfo {
@@ -76,7 +78,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 19] = [
+pub const PAGES: [PageInfo; 20] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -96,6 +98,7 @@ pub const PAGES: [PageInfo; 19] = [
     info(Page::MenuFilter, "Menu filter", "p17-menu-filter", false),
     info(Page::MenuFiles, "Menu files", "p17-menu-files", false),
     info(Page::Tokens, "Tokens", "p19-tokens", false),
+    info(Page::Window, "Window", "p19-window", false),
 ];
 
 impl Page {
@@ -128,6 +131,7 @@ pub struct Gallery {
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
     menus: [(Page, Entity<MenuPage>); 4],
+    main_window: Entity<WindowPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -153,6 +157,7 @@ impl Gallery {
             marks: None,
             image: image_sample::image_view(cx).ok(),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
+            main_window: cx.new(WindowPage::new),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -298,9 +303,11 @@ impl Render for Gallery {
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
-            .line_height(t.typography.line_height)
-            .child(self.header(cx))
-            .child(self.page_bar(&t, cx));
+            .line_height(t.typography.line_height);
+        if self.page == Page::Window {
+            return root.child(self.main_window.clone());
+        }
+        let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
         match self.page {
             Page::Pane => root.child(self.pane.clone()),
             Page::Operate => root.child(self.operate.clone()),
@@ -321,6 +328,7 @@ impl Render for Gallery {
                 None => root.child("This sample did not load."),
             },
             Page::Tokens => root.child(tokens_page::render(&t)),
+            Page::Window => root,
         }
     }
 }

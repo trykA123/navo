@@ -249,6 +249,7 @@ impl FerriteWindow {
     fn title_bar(cx: &mut Context<Self>) -> FerriteTitleBar {
         let this = cx.weak_entity();
         FerriteTitleBar::new("Ferrite")
+            .on_mica()
             .header(HeaderSearch::new())
             .on_close(move |_, cx| {
                 if this.update(cx, |view, cx| view.close(cx)).unwrap_or(true) {
@@ -275,12 +276,19 @@ impl Render for FerriteWindow {
         let panes = self.panes();
         let mut views: Vec<AnyElement> = panes
             .iter()
-            .map(|pane| self.pane_view(*pane, window, cx).into_any_element())
+            .map(|pane| {
+                let card = self.pane_view(*pane, window, cx);
+                div()
+                    .size_full()
+                    .p(t.spacing.xs)
+                    .child(card)
+                    .into_any_element()
+            })
             .collect();
         let body = match (views.pop(), views.pop()) {
-            (Some(second), Some(first)) => {
-                Splitter::new("panes", &self.split, first, second).into_any_element()
-            }
+            (Some(second), Some(first)) => Splitter::new("panes", &self.split, first, second)
+                .line_on_hover()
+                .into_any_element(),
             (Some(only), None) => only,
             _ => div().into_any_element(),
         };
@@ -292,13 +300,13 @@ impl Render for FerriteWindow {
             .flex()
             .flex_col()
             .size_full()
-            .bg(t.colors.surface)
+            .bg(t.surfaces.mica())
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
             .child(Self::title_bar(cx))
-            .child(div().flex().flex_1().min_h_0().child(body))
+            .child(div().flex().flex_1().min_h_0().px(t.spacing.xs).child(body))
             .children(jobs)
             .child(
                 FKeyBar::new("fkeys", self.fkeys(cx))
