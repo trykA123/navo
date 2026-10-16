@@ -261,3 +261,14 @@ fn an_xml_path_numbers_only_repeated_names() {
     let paths: Vec<String> = tree.ids().map(|id| tree.path(id)).collect();
     assert_eq!(paths, ["/r", "/r/a[1]", "/r/b", "/r/a[2]", "/r/c"]);
 }
+
+#[test]
+fn clearing_a_filter_with_no_matches_returns_to_the_last_pick() {
+    let tree = parse_json(STORE.as_bytes()).unwrap();
+    let mut outline = Outline::new(&tree);
+    outline.move_by(1);
+    outline.set_filter(&tree, "nothing-matches");
+    assert_eq!(outline.selected(), None);
+    outline.set_filter(&tree, "");
+    assert_eq!(tree.path(outline.selected().unwrap()), "$.store");
+}

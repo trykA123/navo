@@ -20,6 +20,7 @@ pub struct Outline {
     cursor: usize,
     filter: String,
     matching: usize,
+    last_pick: Option<NodeId>,
 }
 
 impl Outline {
@@ -297,7 +298,7 @@ impl Outline {
             self.show_filtered(Self::filtered(tree, text));
             return;
         }
-        let keep = self.selected();
+        let keep = self.selected().or(self.last_pick.take());
         self.filter.clear();
         self.matching = 0;
         if let Some(node) = keep {
@@ -313,6 +314,7 @@ impl Outline {
     }
 
     pub fn show_filtered(&mut self, filtered: Filtered) {
+        self.last_pick = self.selected().or(self.last_pick);
         self.filter = filtered.filter;
         self.rows = filtered.rows;
         self.cursor = filtered.cursor;

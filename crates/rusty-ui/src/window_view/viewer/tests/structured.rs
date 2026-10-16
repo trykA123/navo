@@ -286,7 +286,7 @@ fn opens_as_text_with_a_depth_note(cx: &mut TestAppContext, name: &str, source: 
     let (window, view, _) = open_named(cx, name, Setup::new(source));
     assert!(has_editor(cx, &view), "{name} opens in the text view");
     let note = text_of(cx, window, "viewer-message");
-    assert!(note.contains("1,000 levels"), "{note}");
+    assert!(note.contains("Nested too deeply"), "{note}");
 }
 
 #[gpui_kit::test]
@@ -301,6 +301,32 @@ fn markdown_with_a_1_500_level_list_opens_as_text(cx: &mut TestAppContext) {
         .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
         .collect();
     opens_as_text_with_a_depth_note(cx, "list.md", source.into_bytes());
+}
+
+#[gpui_kit::test]
+fn markdown_with_50_000_emphasis_openers_opens_as_text_quickly(cx: &mut TestAppContext) {
+    let started = std::time::Instant::now();
+    opens_as_text_with_a_depth_note(cx, "openers.md", "*a ".repeat(50_000).into_bytes());
+    assert!(started.elapsed() < Duration::from_secs(10));
+}
+
+#[gpui_kit::test]
+fn escape_before_a_pending_filter_applies_keeps_the_cursor(cx: &mut TestAppContext) {
+    let (window, view, _) = open_named(cx, "shop.json", Setup::new(STORE.to_vec()));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "x");
+    press(cx, window, &view, "escape");
+    assert_eq!(text_of(cx, window, "tree-path"), "$.store");
+    press(cx, window, &view, "*");
+    for key in ["t", "i", "t"] {
+        press(cx, window, &view, key);
+    }
+    wait_for_filter(cx, window, &view);
+    press(cx, window, &view, "n");
+    wait_for_filter(cx, window, &view);
+    press(cx, window, &view, "backspace");
+    press(cx, window, &view, "escape");
+    assert_eq!(text_of(cx, window, "tree-path"), "$.store.book[0].title");
 }
 
 #[gpui_kit::test]
@@ -342,4 +368,56 @@ fn a_short_row_fetch_is_not_asked_again_on_every_frame(cx: &mut TestAppContext) 
         settle(cx, &view);
     }
     assert!(reads(&log).is_empty(), "{:?}", reads(&log));
+}
+
+fn on_a_small_stack(stack: usize, test: fn(&mut TestAppContext)) {
+    std::thread::Builder::new()
+        .stack_size(stack)
+        .spawn(move || {
+            gpui_kit::run_test_once(
+                0,
+                Box::new(move |dispatcher| {
+                    let mut cx = TestAppContext::build(dispatcher, Some("small_stack"));
+                    test(&mut cx);
+                    cx.run_until_parked();
+                    cx.update(|cx| cx.quit());
+                    cx.run_until_parked();
+                }),
+            );
+        })
+        .expect("the test thread starts")
+        .join()
+        .expect("the render finishes");
+}
+
+fn renders_as_markdown(cx: &mut TestAppContext, name: &str, source: String) {
+    let (_, view, _) = open_named(cx, name, Setup::new(source.into_bytes()));
+    assert!(!has_editor(cx, &view), "{name} renders as markdown");
+    assert!(
+        markdown_text(cx, &view).contains('x'),
+        "{name} shows its text"
+    );
+}
+
+const RENDER_STACK: usize = if cfg!(debug_assertions) {
+    6 * 1024 * 1024
+} else {
+    1024 * 1024
+};
+
+#[test]
+fn markdown_32_quotes_deep_renders_on_a_small_stack() {
+    on_a_small_stack(RENDER_STACK, |cx| {
+        renders_as_markdown(cx, "quotes.md", format!("{}x\n", ">".repeat(32)));
+    });
+}
+
+#[test]
+fn a_markdown_list_32_levels_deep_renders_on_a_small_stack() {
+    on_a_small_stack(RENDER_STACK, |cx| {
+        let list = (0..32)
+            .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
+            .collect();
+        renders_as_markdown(cx, "list.md", list);
+    });
 }

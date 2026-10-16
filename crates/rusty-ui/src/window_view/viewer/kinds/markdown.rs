@@ -11,7 +11,7 @@ use crate::window_view::viewer::markdown::{MarkdownBody, MarkdownFile};
 const MARKDOWN: u8 = 70;
 const EXTENSIONS: [&str; 2] = ["md", "markdown"];
 const TOO_LARGE: &str = "Over 16 MB: shown as text, not rendered.";
-const TOO_DEEP: &str = "Nested over 1,000 levels deep: shown as text, not rendered.";
+const TOO_DEEP: &str = "Nested too deeply to render safely: shown as text.";
 
 pub(super) struct MarkdownKind;
 

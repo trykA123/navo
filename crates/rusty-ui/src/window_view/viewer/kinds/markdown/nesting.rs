@@ -1,38 +1,48 @@
-pub(super) const MAX_NESTING: usize = 1_000;
+pub(super) const MAX_NESTING: usize = 32;
+const MAX_RUN: usize = 1_000;
+const MAX_RUNS: usize = 10_000;
+const CODE_INDENT: usize = 4;
 
-fn emphasis_run(text: &str) -> usize {
-    let mut longest = 0;
-    let mut run = 0;
-    for byte in text.bytes() {
-        if matches!(byte, b'*' | b'_' | b'~') {
-            run += 1;
-            longest = longest.max(run);
-        } else {
-            run = 0;
-        }
-    }
-    longest
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Fence {
+    byte: u8,
+    len: usize,
 }
 
-fn bracket_depth(text: &str) -> usize {
-    let mut deepest = 0;
-    let mut depth = 0usize;
-    for line in text.lines() {
-        if line.trim().is_empty() {
-            depth = 0;
-        }
-        for byte in line.bytes() {
-            match byte {
-                b'[' => {
-                    depth += 1;
-                    deepest = deepest.max(depth);
-                }
-                b']' => depth = depth.saturating_sub(1),
-                _ => {}
-            }
-        }
+#[derive(Default)]
+struct Scan {
+    fence: Option<Fence>,
+    items: Vec<usize>,
+    brackets: usize,
+    runs: usize,
+    is_too_deep: bool,
+}
+
+fn indent_of(line: &str) -> usize {
+    line.bytes()
+        .take_while(|byte| matches!(byte, b' ' | b'\t'))
+        .map(|byte| if byte == b'\t' { CODE_INDENT } else { 1 })
+        .sum()
+}
+
+fn without_quotes(line: &str) -> &str {
+    line.trim_start_matches([' ', '\t', '>'])
+}
+
+fn fence_at(text: &str) -> Option<Fence> {
+    let byte = *text.as_bytes().first()?;
+    if !matches!(byte, b'`' | b'~') {
+        return None;
     }
-    deepest
+    let len = text.bytes().take_while(|at| *at == byte).count();
+    let info = text.get(len..).unwrap_or_default();
+    (len >= 3 && !(byte == b'`' && info.contains('`'))).then_some(Fence { byte, len })
+}
+
+fn closes(fence: Fence, line: &str) -> bool {
+    let text = without_quotes(line);
+    let len = text.bytes().take_while(|at| *at == fence.byte).count();
+    len >= fence.len && text.get(len..).is_some_and(|rest| rest.trim().is_empty())
 }
 
 fn marker_len(rest: &[u8]) -> Option<usize> {
@@ -45,79 +55,111 @@ fn marker_len(rest: &[u8]) -> Option<usize> {
     matches!(rest.get(marker), Some(b' ' | b'\t')).then_some(marker)
 }
 
-fn container_width(line: &str) -> usize {
-    let bytes = line.as_bytes();
-    let mut at = 0;
-    let mut width = 0;
-    while let Some(byte) = bytes.get(at) {
-        let step = match byte {
-            b' ' | b'>' => 1,
-            b'\t' => 4,
-            _ => match marker_len(&bytes[at..]) {
-                Some(len) => len,
-                None => break,
-            },
-        };
-        width += step;
-        at += if *byte == b'\t' { 1 } else { step };
+fn is_flanking(before: Option<u8>, run: u8, after: Option<u8>) -> bool {
+    let is_word = |byte: Option<u8>| byte.is_some_and(|byte| byte.is_ascii_alphanumeric());
+    let is_text = |byte: Option<u8>| byte.is_some_and(|byte| !byte.is_ascii_whitespace());
+    let is_intraword = run == b'_' && is_word(before) && is_word(after);
+    !is_intraword && (is_text(before) || is_text(after))
+}
+
+impl Scan {
+    fn line(&mut self, line: &str) {
+        if let Some(fence) = self.fence {
+            if closes(fence, line) {
+                self.fence = None;
+            }
+            return;
+        }
+        if without_quotes(line).trim().is_empty() {
+            self.brackets = 0;
+            return;
+        }
+        let indent = indent_of(line);
+        while self.items.last().is_some_and(|content| *content > indent) {
+            self.items.pop();
+        }
+        if indent >= self.items.last().copied().unwrap_or(0) + CODE_INDENT {
+            return;
+        }
+        let (quotes, rest) = self.prefix(line);
+        if quotes + self.items.len() > MAX_NESTING {
+            self.is_too_deep = true;
+        }
+        match fence_at(rest) {
+            Some(fence) => self.fence = Some(fence),
+            None => self.inline(rest),
+        }
     }
-    width
+
+    fn prefix<'a>(&mut self, line: &'a str) -> (usize, &'a str) {
+        let bytes = line.as_bytes();
+        let (mut at, mut column, mut quotes) = (0, 0, 0);
+        while let Some(byte) = bytes.get(at) {
+            let step = match byte {
+                b' ' | b'\t' => 1,
+                b'>' => {
+                    quotes += 1;
+                    1
+                }
+                _ => match marker_len(&bytes[at..]) {
+                    Some(len) => {
+                        self.items.push(column + len + 1);
+                        len
+                    }
+                    None => break,
+                },
+            };
+            column += if *byte == b'\t' { CODE_INDENT } else { step };
+            at += step;
+        }
+        (quotes, line.get(at..).unwrap_or_default())
+    }
+
+    fn inline(&mut self, text: &str) {
+        let bytes = text.as_bytes();
+        let mut at = 0;
+        while let Some(&byte) = bytes.get(at) {
+            if !matches!(byte, b'*' | b'_' | b'~') {
+                self.bracket(byte);
+                at += 1;
+                continue;
+            }
+            let len = bytes[at..].iter().take_while(|next| **next == byte).count();
+            let before = at.checked_sub(1).and_then(|back| bytes.get(back).copied());
+            if is_flanking(before, byte, bytes.get(at + len).copied()) {
+                self.runs += 1;
+            }
+            if len > MAX_RUN || self.runs > MAX_RUNS {
+                self.is_too_deep = true;
+            }
+            at += len;
+        }
+    }
+
+    fn bracket(&mut self, byte: u8) {
+        match byte {
+            b'[' => {
+                self.brackets += 1;
+                if self.brackets > MAX_NESTING {
+                    self.is_too_deep = true;
+                }
+            }
+            b']' => self.brackets = self.brackets.saturating_sub(1),
+            _ => {}
+        }
+    }
 }
 
 pub(super) fn is_too_deep(text: &str) -> bool {
-    emphasis_run(text) > MAX_NESTING
-        || bracket_depth(text) > MAX_NESTING
-        || text.lines().any(|line| container_width(line) > MAX_NESTING)
+    let mut scan = Scan::default();
+    for line in text.lines() {
+        scan.line(line);
+        if scan.is_too_deep {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{MAX_NESTING, is_too_deep};
-
-    fn nested(prefix: &str, levels: usize, body: &str) -> String {
-        format!("{}{body}\n", prefix.repeat(levels))
-    }
-
-    #[test]
-    fn each_kind_of_nesting_over_1_000_levels_is_too_deep() {
-        let over = MAX_NESTING + 1;
-        let cases = [
-            format!("{}x{}", "*".repeat(over), "*".repeat(over)),
-            format!("{}x", "_".repeat(over)),
-            format!("{}x", "~".repeat(over)),
-            nested(">", over, "x"),
-            nested("> ", over, "x"),
-            nested("[", over, "x"),
-            nested("- ", over, "x"),
-            nested("1. ", over, "x"),
-            nested(" ", over, "- x"),
-            nested("\t", over / 4 + 1, "- x"),
-        ];
-        for text in cases {
-            assert!(is_too_deep(&text), "{:?}", &text[..12]);
-        }
-    }
-
-    #[test]
-    fn ordinary_documents_and_1_000_levels_are_rendered() {
-        let fine = [
-            "# Notes\n\n- one\n  - two\n    - three\n\n> quoted **bold** [link](x)\n".to_owned(),
-            nested(">", MAX_NESTING, "x"),
-            format!("{}\n\n{}", "[".repeat(900), "[".repeat(900)),
-            "***\n---\n".repeat(5_000),
-        ];
-        for text in fine {
-            assert!(!is_too_deep(&text), "{:?}", &text[..12]);
-        }
-    }
-
-    #[test]
-    fn the_scan_of_hostile_input_fits_a_1_mib_stack() {
-        let text = format!("{}x{}", "*".repeat(50_000), "*".repeat(50_000));
-        let worker = std::thread::Builder::new()
-            .stack_size(1024 * 1024)
-            .spawn(move || is_too_deep(&text))
-            .expect("a 1 MiB thread starts");
-        assert!(worker.join().expect("the scan does not overflow"));
-    }
-}
+mod tests;
