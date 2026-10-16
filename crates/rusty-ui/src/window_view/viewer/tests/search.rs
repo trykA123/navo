@@ -187,3 +187,43 @@ fn an_executed_search_is_remembered_through_the_hooks(cx: &mut TestAppContext) {
     let line = line_start(&numbered_lines(), 700);
     assert_eq!(super::top(cx, &view), line);
 }
+
+fn pause(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<FerriteWindow>, ms: u64) {
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(ms));
+    settle(cx, view);
+    redraw(cx, window);
+}
+
+#[gpui_kit::test]
+fn the_paged_count_follows_the_typed_text_after_a_short_pause(cx: &mut TestAppContext) {
+    let (window, view, _) = text_window(cx, Setup::huge(numbered_lines()));
+    press(cx, window, &view, "ctrl-f");
+    type_in(cx, window, &view, "need");
+    pause(cx, window, &view, 100);
+    type_in(cx, window, &view, "le");
+    pause(cx, window, &view, 100);
+    assert_eq!(text_of(cx, window, "find-count"), "");
+    pause(cx, window, &view, 60);
+    assert_eq!(text_of(cx, window, "find-count"), "of 2");
+    type_in(cx, window, &view, "x");
+    pause(cx, window, &view, 160);
+    assert_eq!(text_of(cx, window, "find-count"), "No matches");
+    press(cx, window, &view, "backspace");
+    press(cx, window, &view, "enter");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 2");
+}
+
+#[gpui_kit::test]
+fn the_editor_count_follows_the_typed_text_and_clears_when_empty(cx: &mut TestAppContext) {
+    let (window, view, _) = text_window(cx, Setup::new(b"one two one\nthree one\n".to_vec()));
+    press(cx, window, &view, "ctrl-f");
+    type_in(cx, window, &view, "one");
+    pause(cx, window, &view, 160);
+    assert_eq!(text_of(cx, window, "find-count"), "of 3");
+    for _ in 0..3 {
+        press(cx, window, &view, "backspace");
+    }
+    pause(cx, window, &view, 160);
+    assert_eq!(text_of(cx, window, "find-count"), "");
+}
