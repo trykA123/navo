@@ -46,6 +46,8 @@ pub fn open(view: Option<std::path::PathBuf>) {
         kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
         view: view.and_then(|path| view_location(&path)),
+        listing_cache: rusty_cache::ListingCache::default(),
+        cache_keys: crate::listing_keys::cache_keys(),
     });
 }
 

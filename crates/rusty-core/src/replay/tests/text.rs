@@ -297,3 +297,16 @@ fn a_filtered_listing_round_trips_through_text() {
     let log = CommandLog::parse(&text).unwrap();
     assert_eq!(log.to_text(), text);
 }
+
+#[test]
+fn a_cached_listing_round_trips_through_text() {
+    let text = with_body(
+        "+3 !listing-cached { tab: 3, request: 4, location: \"/h\", entries: 1 }\n  folder \"src\"\n",
+    );
+    let log = CommandLog::parse(&text).unwrap();
+    assert!(matches!(
+        log.records().last().map(|record| &record.entry),
+        Some(LogEntry::Event(Event::ListingCached { request: 4, .. }))
+    ));
+    assert_eq!(log.to_text(), text);
+}

@@ -20,8 +20,10 @@ pub(super) struct Waiting {
 
 impl Waiting {
     pub(super) fn is_waiting(&self, tab: &Tab) -> bool {
-        tab.pending_request()
-            .is_some_and(|request| self.late.get(&tab.id()) == Some(&request))
+        tab.listing().is_none()
+            && tab
+                .pending_request()
+                .is_some_and(|request| self.late.get(&tab.id()) == Some(&request))
     }
 }
 

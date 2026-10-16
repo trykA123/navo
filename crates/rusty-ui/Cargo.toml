@@ -58,6 +58,7 @@ image = { version = "=0.25.10", default-features = false, features = [
 ] }
 kamadak-exif = "=0.6.1"
 resvg = "=0.46.0"
+rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
 tree-sitter = "=0.26.13"

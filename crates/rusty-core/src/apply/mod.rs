@@ -28,6 +28,12 @@ pub enum Event {
         request: u64,
         listing: Listing,
     },
+    ListingCached {
+        tab: TabId,
+        location: Location,
+        request: u64,
+        listing: Listing,
+    },
     PageRowsChanged {
         pane: PaneId,
         rows: u64,
@@ -91,6 +97,16 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
         } => {
             if let Some(tab) = state.tab_mut(tab) {
                 tab.accept_listing(request, &location, listing);
+            }
+        }
+        Event::ListingCached {
+            tab,
+            location,
+            request,
+            listing,
+        } => {
+            if let Some(tab) = state.tab_mut(tab) {
+                tab.show_cached(request, &location, listing);
             }
         }
         Event::PageRowsChanged { pane, rows } => pane::page_rows_changed(state, pane, rows),

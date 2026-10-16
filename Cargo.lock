@@ -6159,6 +6159,7 @@ version = "0.0.1"
 dependencies = [
  "embed-resource",
  "encoding_rs",
+ "rusty-cache",
  "rusty-core",
  "rusty-diag",
  "rusty-fs",
@@ -6301,6 +6302,7 @@ dependencies = [
  "image",
  "kamadak-exif",
  "resvg 0.46.0",
+ "rusty-cache",
  "rusty-core",
  "rusty-fs",
  "tree-sitter",

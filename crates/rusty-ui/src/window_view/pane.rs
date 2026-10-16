@@ -71,6 +71,7 @@ impl FerriteWindow {
         let error = self.pane_error(pane, tab);
         let status = StatusBarProps {
             free_bytes: self.free_on_drive(pane),
+            is_cached: self.browser.is_cached(tab.id()),
             ..status_of(&rows, tab.selection())
         };
         let props = FileListProps {

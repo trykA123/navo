@@ -19,6 +19,8 @@ pub struct Tab {
     selection: Selection,
     history: History,
     views: HashMap<Location, ViewState>,
+    names: HashMap<Location, String>,
+    restore: Option<String>,
 }
 
 impl Tab {
@@ -62,6 +64,8 @@ impl Tab {
             selection: Selection::new(0),
             history: History::default(),
             views: HashMap::new(),
+            names: HashMap::new(),
+            restore: None,
         }
     }
 
@@ -133,8 +137,50 @@ impl Tab {
             return false;
         }
         self.pending = None;
-        self.keep_by_name(listing);
+        let followed = self
+            .listing
+            .as_ref()
+            .map(|old| old.follow(self.view.cursor, &listing));
+        match followed {
+            Some(row) => {
+                let offset = self.cursor_offset();
+                self.keep_by_name(listing);
+                self.place_cursor(row, offset);
+            }
+            None => self.arrive_listing(listing),
+        }
         true
+    }
+
+    pub(crate) fn show_cached(
+        &mut self,
+        request: u64,
+        location: &Location,
+        listing: Listing,
+    ) -> bool {
+        if self.pending != Some(request) || &self.location != location || self.listing.is_some() {
+            return false;
+        }
+        self.arrive_listing(listing);
+        true
+    }
+
+    fn arrive_listing(&mut self, listing: Listing) {
+        let offset = self.cursor_offset();
+        let row = self.restore.take().and_then(|name| listing.position(&name));
+        self.set_listing(listing);
+        if let Some(row) = row {
+            self.place_cursor(row, offset);
+        }
+    }
+
+    fn cursor_offset(&self) -> u64 {
+        self.view.cursor.saturating_sub(self.view.scroll)
+    }
+
+    fn place_cursor(&mut self, row: u64, offset: u64) {
+        self.view.cursor = self.clamp(row);
+        self.view.scroll = self.clamp(self.view.cursor.saturating_sub(offset));
     }
 
     pub(crate) fn replace_listing(&mut self, location: &Location, listing: Listing) -> bool {
@@ -191,6 +237,9 @@ impl Tab {
 
     fn leave(&mut self, target: Location) -> Location {
         self.views.insert(self.location.clone(), self.view);
+        if let Some(entry) = self.listing.as_ref().and_then(|l| l.get(self.view.cursor)) {
+            self.names.insert(self.location.clone(), entry.name.clone());
+        }
         self.listing = None;
         self.pending = None;
         self.selection = Selection::new(0);
@@ -199,8 +248,10 @@ impl Tab {
 
     fn arrive(&mut self) {
         self.view = self.views.get(&self.location).copied().unwrap_or_default();
+        self.restore = self.names.get(&self.location).cloned();
         let history = &self.history;
         self.views.retain(|location, _| history.contains(location));
+        self.names.retain(|location, _| history.contains(location));
     }
 
     fn clamp(&self, row: u64) -> u64 {

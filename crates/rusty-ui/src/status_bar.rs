@@ -16,6 +16,7 @@ pub struct StatusBarProps {
     pub marked: u64,
     pub marked_bytes: u64,
     pub free_bytes: Option<u64>,
+    pub is_cached: bool,
 }
 
 impl StatusBarProps {
@@ -46,7 +47,11 @@ impl StatusBarProps {
     }
 
     pub fn text(&self) -> String {
-        let parts = [Some(self.contents_text()), Some(self.free_text())];
+        let parts = [
+            Some(self.contents_text()),
+            self.is_cached.then(|| "cached".to_owned()),
+            Some(self.free_text()),
+        ];
         self.marked_text()
             .into_iter()
             .chain(parts.into_iter().flatten())
@@ -107,6 +112,9 @@ impl RenderOnce for StatusBar {
                     .truncate()
                     .child(props.contents_text()),
             )
+            .when(props.is_cached, |d| {
+                d.child(div().flex_none().child("cached"))
+            })
             .child(div().flex_none().child(props.free_text()))
     }
 }
@@ -148,6 +156,7 @@ mod tests {
             marked: 2,
             marked_bytes: 15_148,
             free_bytes: Some(512_000_000),
+            is_cached: false,
         };
         assert_eq!(
             label(props, cx).as_deref(),
@@ -166,6 +175,19 @@ mod tests {
         assert_eq!(
             label(props, cx).as_deref(),
             Some("1 file, 0 folders · 812 B · – free")
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_cached_listing_says_so_in_the_status(cx: &mut TestAppContext) {
+        let props = StatusBarProps {
+            files: 2,
+            is_cached: true,
+            ..StatusBarProps::default()
+        };
+        assert_eq!(
+            label(props, cx).as_deref(),
+            Some("2 files, 0 folders · 0 B · cached · – free")
         );
     }
 }

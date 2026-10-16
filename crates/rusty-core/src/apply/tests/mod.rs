@@ -3,6 +3,7 @@ use crate::{
     TabId, apply, apply_event,
 };
 
+mod cached;
 mod cursor;
 mod drive;
 mod events;

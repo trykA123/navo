@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{FocusHandle, Subscription, WindowAppearance};
+use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
@@ -53,6 +54,8 @@ pub struct StartOptions {
     pub kinds: Kinds,
     pub drives: DriveHooks,
     pub view: Option<rusty_core::Location>,
+    pub listing_cache: ListingCache,
+    pub cache_keys: CacheKeys,
 }
 
 pub fn run(options: StartOptions) {
@@ -112,6 +115,7 @@ impl FerriteWindow {
         let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
+        browser.set_listing_cache(options.listing_cache, options.cache_keys);
         browser.start();
         let view = Self {
             browser,
