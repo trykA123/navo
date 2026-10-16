@@ -39,7 +39,7 @@ fn next_changes(events: &Receiver<WatchEvent>) -> Vec<WatchChange> {
 }
 
 #[test]
-fn test_helpers_report_what_they_change() {
+fn test_helpers_report_the_latest_change_of_each_name() {
     let fs = fake();
     let (_watch, events) = watch(&fs, "home");
     fs.add_file("home/b.txt", 1);
@@ -50,9 +50,8 @@ fn test_helpers_report_what_they_change() {
     assert_eq!(
         next_changes(&events),
         [
-            WatchChange::Created(name("b.txt")),
-            WatchChange::Modified(name("a.txt")),
             WatchChange::Removed(name("b.txt")),
+            WatchChange::Modified(name("a.txt")),
             WatchChange::Renamed {
                 from: name("a.txt"),
                 to: name("c.txt")

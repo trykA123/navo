@@ -185,6 +185,7 @@ impl Reader {
         if started == 0 {
             return Outcome::Failed(io::Error::last_os_error());
         }
+        self.raw.mark_live();
         let events = [changed, self.stop.as_raw_handle()];
         // SAFETY: both handles are live events owned by this reader or its watch.
         let woke = unsafe { WaitForMultipleObjects(2, events.as_ptr(), 0, INFINITE) };

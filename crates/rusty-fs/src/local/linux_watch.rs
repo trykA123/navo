@@ -100,6 +100,7 @@ impl Reader {
         }
         *registered = Some((watches, descriptor));
         drop(registered);
+        raw.mark_live();
         Some(Self {
             inotify,
             raw,

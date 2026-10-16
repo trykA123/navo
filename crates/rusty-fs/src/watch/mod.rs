@@ -1,6 +1,8 @@
 mod batch;
 mod translate;
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -41,24 +43,33 @@ pub(crate) enum Raw {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct RawSender(Sender<Raw>);
+pub(crate) struct RawSender {
+    sender: Sender<Raw>,
+    live: Arc<AtomicBool>,
+}
 
 impl RawSender {
+    pub(crate) fn mark_live(&self) {
+        self.live.store(true, Ordering::Release);
+    }
+
     pub(crate) fn change(&self, change: WatchChange) -> bool {
-        self.0.send(Raw::Change(change)).is_ok()
+        self.sender.send(Raw::Change(change)).is_ok()
     }
 
     pub(crate) fn overflow(&self) -> bool {
-        self.0.send(Raw::Overflow).is_ok()
+        self.sender.send(Raw::Overflow).is_ok()
     }
 
     pub(crate) fn failed(&self, error: FsError) {
-        let _ = self.0.send(Raw::Failed(error));
+        self.live.store(false, Ordering::Release);
+        let _ = self.sender.send(Raw::Failed(error));
     }
 }
 
 pub struct Watch {
     raw: Sender<Raw>,
+    live: Arc<AtomicBool>,
     backend: Option<Box<dyn Send>>,
     debouncer: Option<JoinHandle<()>>,
 }
@@ -74,7 +85,11 @@ impl Watch {
         F: FnOnce(RawSender) -> Result<B, FsError>,
     {
         let (raw, events) = mpsc::channel();
-        let backend = backend(RawSender(raw.clone()))?;
+        let live = Arc::new(AtomicBool::new(false));
+        let backend = backend(RawSender {
+            sender: raw.clone(),
+            live: Arc::clone(&live),
+        })?;
         let debouncer = std::thread::Builder::new()
             .name("folder-watch".to_owned())
             .spawn(move || debounce(&events, sink))
@@ -85,9 +100,17 @@ impl Watch {
             })?;
         Ok(Self {
             raw,
+            live,
             backend: Some(Box::new(backend)),
             debouncer: Some(debouncer),
         })
+    }
+}
+
+impl Watch {
+    #[must_use]
+    pub fn is_live(&self) -> bool {
+        self.live.load(Ordering::Acquire)
     }
 }
 

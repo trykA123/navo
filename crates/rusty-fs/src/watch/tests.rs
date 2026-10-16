@@ -156,3 +156,69 @@ fn dropping_the_watch_stops_the_thread_and_drops_the_sink() {
         assert!(matches!(event, WatchEvent::Changed(_)));
     }
 }
+
+fn modified(text: &str) -> WatchChange {
+    WatchChange::Modified(name(text))
+}
+
+#[test]
+fn a_thousand_modifies_of_one_file_are_one_change() {
+    let start = Instant::now();
+    let mut batch = Batch::default();
+    for _ in 0..1_000 {
+        batch.push(modified("download.part"), start);
+    }
+    assert_eq!(
+        batch.take(),
+        Some(WatchEvent::Changed(vec![modified("download.part")]))
+    );
+}
+
+#[test]
+fn a_created_file_that_is_then_written_stays_created() {
+    let start = Instant::now();
+    let mut batch = Batch::default();
+    batch.push(created("new.txt"), start);
+    batch.push(modified("new.txt"), start);
+    assert_eq!(
+        batch.take(),
+        Some(WatchEvent::Changed(vec![created("new.txt")]))
+    );
+}
+
+#[test]
+fn the_latest_kind_of_a_name_wins() {
+    let start = Instant::now();
+    let mut batch = Batch::default();
+    batch.push(created("short.txt"), start);
+    batch.push(WatchChange::Removed(name("short.txt")), start);
+    batch.push(modified("other.txt"), start);
+    assert_eq!(
+        batch.take(),
+        Some(WatchEvent::Changed(vec![
+            WatchChange::Removed(name("short.txt")),
+            modified("other.txt"),
+        ]))
+    );
+}
+
+#[test]
+fn a_write_after_a_rename_keeps_the_rename() {
+    let start = Instant::now();
+    let mut batch = Batch::default();
+    let rename = WatchChange::Renamed {
+        from: name("a"),
+        to: name("b"),
+    };
+    batch.push(rename.clone(), start);
+    batch.push(modified("b"), start);
+    assert_eq!(batch.take(), Some(WatchEvent::Changed(vec![rename])));
+}
+
+#[test]
+fn a_watch_is_live_only_once_its_backend_says_so() {
+    let (watch, raw, _events, _) = manual_watch();
+    assert!(!watch.is_live());
+    raw.mark_live();
+    assert!(watch.is_live());
+}

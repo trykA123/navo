@@ -92,7 +92,10 @@ impl FakeFs {
         {
             return Err(error(kind, folder));
         }
-        Watch::start(folder, sink, |raw| Ok(self.watchers.register(path, raw)))
+        Watch::start(folder, sink, |raw| {
+            raw.mark_live();
+            Ok(self.watchers.register(path, raw))
+        })
     }
 
     pub(super) fn changed(&self, path: &str, change: fn(ProviderPath) -> WatchChange) {
