@@ -116,3 +116,18 @@ fn deep_nesting_exports_without_recursion() {
     let inner = "<a>".repeat(depth - 1) + "<a/>" + &"</a>".repeat(depth - 1);
     assert_eq!(exported.text, inner);
 }
+
+#[test]
+fn a_branch_that_is_not_loaded_is_reported() {
+    let mut tree = Tree::new(crate::Flavor::Xml);
+    let new = crate::tree::NewNode {
+        kind: crate::NodeKind::Element,
+        key: crate::Key::Name("big"),
+        value: "",
+        attrs: "",
+    };
+    let root = tree.push(None, new).unwrap();
+    let span = crate::Span { start: 0, end: 10 };
+    tree.set_lazy(root, crate::Lazy { span, count: 3 });
+    assert!(tree.export(root, Syntax::Xml, MIB).is_partial);
+}

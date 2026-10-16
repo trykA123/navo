@@ -83,24 +83,32 @@ impl FerriteWindow {
         }
         viewer.menu = None;
         cx.notify();
-        let ContextMenuEvent::Chosen(ItemId::Action(name)) = event else {
-            return;
-        };
         let Some(body) = viewer.body.as_ref() else {
             return;
+        };
+        let ContextMenuEvent::Chosen(ItemId::Action(name)) = event else {
+            return body.menu_closed(cx);
         };
         let action = match cx.build_action(name, None) {
             Ok(action) => action,
             Err(error) => {
                 debug_assert!(false, "menu item {name}: {error}");
                 body.set_note(format!("{UNKNOWN_ACTION} ({name})").into(), cx);
-                return;
+                return body.menu_closed(cx);
             }
         };
         let focus = body.focus_handle(cx);
+        let this = cx.weak_entity();
         window.defer(cx, move |window, cx| {
             focus.dispatch_action(action.as_ref(), window, cx);
+            let _ = this.update(cx, |view, cx| view.viewer_menu_done(cx));
         });
+    }
+
+    fn viewer_menu_done(&self, cx: &mut App) {
+        if let Some(body) = self.viewer.as_ref().and_then(|viewer| viewer.body.as_ref()) {
+            body.menu_closed(cx);
+        }
     }
 
     pub(in crate::window_view) fn viewer_menu_view(&self) -> Option<Entity<ContextMenu>> {

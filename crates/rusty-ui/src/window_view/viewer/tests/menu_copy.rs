@@ -6,13 +6,15 @@ use image::ImageFormat;
 use super::image::{open_first, rig};
 use super::menu::{clipboard, has, hint, middle, press_key, right_click, rows, run_item};
 use super::structured::open_named;
-use super::{Setup, editor_of, text_window};
+use super::{Setup, editor_of, text_of, text_window};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::press;
 use crate::window_view::viewer::LINE_BREAK;
 use crate::window_view::viewer::editor::EditorBody;
 use crate::window_view::viewer::image::fixtures::encoded;
 
+const SHORTENED: &str =
+    "This value is shortened in the tree. Press 1 to view the text and copy it from there.";
 const LINES: &[u8] = b"hello world\nsecond line\nthird\nfourth\nfifth\n";
 
 fn location(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> String {
@@ -217,4 +219,33 @@ fn copy_image_puts_a_png_of_the_image_on_the_clipboard(cx: &mut TestAppContext) 
     let decoded =
         image::load_from_memory_with_format(&copied.bytes, ImageFormat::Png).expect("a valid PNG");
     assert_eq!((decoded.width(), decoded.height()), (300, 200));
+}
+
+#[gpui_kit::test]
+fn copy_value_refuses_a_value_the_tree_shortened(cx: &mut TestAppContext) {
+    let source = format!("{{\"long\": \"{}\", \"short\": \"x\"}}", "a".repeat(400));
+    let (window, view, _) = open_named(cx, "long.json", Setup::new(source.into_bytes()));
+    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string("before".to_owned()));
+    press(cx, window, &view, "down");
+    open_menu(cx, window);
+    run_item(cx, window, "copy value");
+    assert_eq!(clipboard(cx).as_deref(), Some("before"));
+    assert_eq!(text_of(cx, window, "tree-status"), SHORTENED);
+    press(cx, window, &view, "down");
+    open_menu(cx, window);
+    run_item(cx, window, "copy value");
+    assert_eq!(clipboard(cx).as_deref(), Some("x"));
+}
+
+#[gpui_kit::test]
+fn ctrl_c_after_an_escaped_markdown_menu_copies_the_top_block(cx: &mut TestAppContext) {
+    let source = b"# Title\n\nFirst paragraph.\n\nSecond paragraph.\n".to_vec();
+    let (window, _, _) = open_named(cx, "notes.md", Setup::new(source));
+    let at = md_block(cx, window, 1);
+    right_click(cx, window, at);
+    assert!(has(&rows(cx, window), "Copy"));
+    press_key(cx, window, "escape");
+    assert!(rows(cx, window).is_empty());
+    press_key(cx, window, "ctrl-c");
+    assert_eq!(clipboard(cx).as_deref(), Some("Title"));
 }

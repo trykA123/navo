@@ -326,6 +326,10 @@ impl ViewerBody for MarkdownBody {
         self.0.update(cx, |view, _| view.menu_entries(by_pointer))
     }
 
+    fn menu_closed(&self, cx: &mut App) {
+        self.0.update(cx, |view, _| view.menu_block = None);
+    }
+
     fn set_note(&self, note: SharedString, cx: &mut App) {
         self.0.update(cx, |view, cx| view.say(note, cx));
     }

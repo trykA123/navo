@@ -6,8 +6,8 @@ use crate::prelude::*;
 
 const COPY_CAP: usize = 1024 * 1024;
 const CUT: &str = "Copied the first 1 MiB of this value.";
-const CLIPPED: &str = "Copied. Values over 160 characters are shortened in the tree.";
-const PARTIAL: &str = "Copied. Branches not opened yet are left out.";
+const SHORTENED: &str =
+    "This value is shortened in the tree. Press 1 to view the text and copy it from there.";
 const NO_KEY: &str = "The root has no key.";
 
 fn syntax(format: Format) -> Syntax {
@@ -27,12 +27,11 @@ impl TreeView {
             return;
         };
         let exported = ready.tree.export(node, syntax(self.format), COPY_CAP);
+        if exported.is_clipped || exported.is_partial {
+            return self.set_note(SHORTENED, cx);
+        }
         let note = if exported.is_cut {
             CUT
-        } else if exported.is_partial {
-            PARTIAL
-        } else if exported.is_clipped {
-            CLIPPED
         } else {
             "Copied the value."
         };
