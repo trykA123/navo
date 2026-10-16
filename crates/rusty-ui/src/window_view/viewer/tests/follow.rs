@@ -11,7 +11,7 @@ use super::search::{paged_marking, search_for};
 use super::{EDIT_LIMIT, Setup, hooks, paged, redraw, text_of, top, window_with};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{fake, press, settle, type_in};
-use crate::window_view::viewer::{FileHooks, Head, Kinds, Paged};
+use crate::window_view::viewer::{FileHooks, Head, Kinds, Paged, PagedKind};
 
 #[derive(Clone, Default)]
 struct Growing {
@@ -335,4 +335,34 @@ fn a_followed_file_rewritten_longer_between_polls_is_counted_again_from_the_star
         .map(|line| offset + line_start(&numbered_lines(), *line) + 11)
         .collect();
     assert_eq!(hit_rows, Some(expected));
+}
+
+#[gpui_kit::test]
+fn alt_f_in_the_read_only_editor_follows_in_paged_text_from_the_cursor_line(
+    cx: &mut TestAppContext,
+) {
+    let bytes = numbered_lines();
+    let (window, view, _) = super::text_window(cx, super::Setup::new(bytes.clone()));
+    assert!(super::has_editor(cx, &view));
+    let keys = super::find::bottom_keys(cx, window);
+    assert!(keys.contains(&"Alt+F Follow".to_owned()), "{keys:?}");
+    for _ in 0..3 {
+        press(cx, window, &view, "down");
+    }
+    press(cx, window, &view, "alt-f");
+    redraw(cx, window);
+    assert_eq!(super::kind(cx, &view), Some(PagedKind::Text));
+    assert_eq!(text_of(cx, window, "paged-follow"), "Following");
+    assert_eq!(top(cx, &view), line_start(&bytes, 4));
+}
+
+#[gpui_kit::test]
+fn alt_f_with_unsaved_edits_only_shows_the_note(cx: &mut TestAppContext) {
+    let (window, view, _) = super::text_window(cx, super::Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "ctrl-e");
+    type_in(cx, window, &view, "x");
+    press(cx, window, &view, "alt-f");
+    assert!(super::has_editor(cx, &view));
+    assert_eq!(super::editor_text(cx, &view), "xhello\n");
+    assert!(text_of(cx, window, "viewer-message").starts_with("Follow works"));
 }

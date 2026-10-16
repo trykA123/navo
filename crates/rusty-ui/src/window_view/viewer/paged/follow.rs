@@ -25,6 +25,7 @@ pub(super) enum Follow {
 #[derive(Default)]
 pub(super) struct Follower {
     pub state: Follow,
+    start_line: Option<u64>,
     _poll: Option<Task<()>>,
 }
 
@@ -49,6 +50,7 @@ impl PagedView {
         if self.follower.state == Follow::Off {
             self.follower = Follower {
                 state: Follow::Following,
+                start_line: None,
                 _poll: Some(self.poll_task(cx)),
             };
             self.queue_move(Move::End, cx);
@@ -56,6 +58,30 @@ impl PagedView {
             self.follower = Follower::default();
         }
         cx.notify();
+    }
+
+    pub(in crate::window_view::viewer) fn follow_from_line(
+        &mut self,
+        line: u64,
+        cx: &mut Context<Self>,
+    ) {
+        if self.kind != PagedKind::Text {
+            return;
+        }
+        self.follower = Follower {
+            state: Follow::Following,
+            start_line: Some(line),
+            _poll: Some(self.poll_task(cx)),
+        };
+        if self.index_done {
+            self.follow_indexed(cx);
+        }
+    }
+
+    pub(super) fn follow_indexed(&mut self, cx: &mut Context<Self>) {
+        if let Some(line) = self.follower.start_line.take() {
+            self.queue_move(Move::Line(line), cx);
+        }
     }
 
     fn poll_task(&self, cx: &mut Context<Self>) -> Task<()> {

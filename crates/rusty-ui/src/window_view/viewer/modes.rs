@@ -4,7 +4,10 @@ use gpui_kit::FocusHandle;
 use rusty_core::Command;
 
 use super::body::{Attach, Host};
-use super::open::start;
+use super::editor::EditorBody;
+use super::kinds::paged_text;
+use super::open::{load_while_alive, start};
+use super::paged::PagedBody;
 use super::{Kind, Loaded, Slot, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
@@ -18,6 +21,7 @@ pub(super) struct Pick {
 struct Choice {
     kind: Kind,
     edit: bool,
+    follow_from: Option<u64>,
 }
 
 pub(super) struct Shown {
@@ -150,12 +154,17 @@ impl FerriteWindow {
         let choice = Choice {
             kind,
             edit: pick.edit,
+            follow_from: None,
         };
         self.load_kind(choice, window, cx);
     }
 
     fn load_kind(&mut self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
-        let Choice { kind, edit } = choice;
+        let Choice {
+            kind,
+            edit,
+            follow_from,
+        } = choice;
         let Some(viewer) = &self.viewer else {
             return;
         };
@@ -171,11 +180,20 @@ impl FerriteWindow {
                     name: &sniffed.1,
                     len: sniffed.0.len,
                 };
-                request.load(&loader, &sniff, turn)
+                match follow_from {
+                    Some(_) => load_while_alive(turn.alive, &loader, || {
+                        (request.hooks.paged)(&request.location).map(paged_text)
+                    }),
+                    None => request.load(&loader, &sniff, turn),
+                }
             },
             move |view: &mut Self, loaded, window, cx| {
-                if !view.restart_if_superseded(window, cx) {
-                    view.show_loaded(Shown { kind, loaded, edit }, window, cx);
+                if view.restart_if_superseded(window, cx) {
+                    return;
+                }
+                view.show_loaded(Shown { kind, loaded, edit }, window, cx);
+                if let Some(line) = follow_from {
+                    view.follow_shown_from(line, cx);
                 }
             },
         );
@@ -188,5 +206,43 @@ impl FerriteWindow {
             window.focus(&viewer.focus, cx);
         }
         cx.notify();
+    }
+
+    pub(super) fn follow_from_editor(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(viewer) = &self.viewer else {
+            return false;
+        };
+        let editor = viewer
+            .body
+            .as_ref()
+            .and_then(|body| body.as_any().downcast_ref::<EditorBody>())
+            .filter(|editor| !editor.0.read(cx).is_dirty());
+        let (Some(editor), Some(kind)) = (editor, viewer.kind.clone()) else {
+            return false;
+        };
+        let line = editor.0.read(cx).cursor_row(cx) + 1;
+        let choice = Choice {
+            kind,
+            edit: false,
+            follow_from: Some(line),
+        };
+        self.load_kind(choice, window, cx);
+        true
+    }
+
+    fn follow_shown_from(&mut self, line: u64, cx: &mut Context<Self>) {
+        let paged = self
+            .viewer
+            .as_ref()
+            .and_then(|viewer| viewer.body.as_ref())
+            .and_then(|body| PagedBody::of(body.as_ref()))
+            .map(|paged| paged.0.clone());
+        if let Some(paged) = paged {
+            paged.update(cx, |paged, cx| paged.follow_from_line(line, cx));
+        }
     }
 }

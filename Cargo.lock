@@ -6226,6 +6226,7 @@ dependencies = [
  "proptest",
  "rusty-core",
  "ruzstd",
+ "same-file",
  "sevenz-rust2",
  "tar",
  "tempfile",

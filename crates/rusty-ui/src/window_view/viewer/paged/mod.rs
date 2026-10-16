@@ -161,6 +161,7 @@ impl PagedView {
                 self.line_count = line_count;
                 self.index = Some(Arc::new(index));
                 self.index_done = true;
+                self.follow_indexed(cx);
             }
             IndexMessage::Done(IndexDone {
                 result: Ok(None), ..

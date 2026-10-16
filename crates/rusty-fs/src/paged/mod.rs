@@ -1,3 +1,4 @@
+mod identity;
 mod index;
 
 use std::fs::{File, Metadata};
@@ -50,17 +51,6 @@ struct Stat {
     replacement: Option<File>,
 }
 
-#[cfg(unix)]
-fn same_file(held: &Metadata, named: &Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    held.dev() == named.dev() && held.ino() == named.ino()
-}
-
-#[cfg(not(unix))]
-fn same_file(held: &Metadata, named: &Metadata) -> bool {
-    held.len() == named.len() && held.modified().ok() == named.modified().ok()
-}
-
 impl PagedFile {
     pub fn open(path: &Path) -> Result<Self, String> {
         let file = File::open(path).map_err(|error| format!("Cannot open it: {error}"))?;
@@ -95,14 +85,12 @@ impl PagedFile {
             .clone()
     }
 
-    fn replacement(&self, held: &Metadata) -> Option<(File, Metadata)> {
-        let named = std::fs::metadata(&self.path).ok()?;
-        if !named.is_file() || same_file(held, &named) {
-            return None;
-        }
+    fn replacement(&self, held: &File, held_metadata: &Metadata) -> Option<(File, Metadata)> {
         let file = File::open(&self.path).ok()?;
         let metadata = file.metadata().ok()?;
-        Some((file, metadata))
+        let same = identity::same_identity(held, &file);
+        let is_replaced = identity::is_replaced(same, held_metadata, &metadata);
+        (metadata.is_file() && is_replaced).then_some((file, metadata))
     }
 
     fn cache(&self) -> MutexGuard<'_, Cache> {
@@ -121,8 +109,9 @@ impl PagedFile {
 
     fn stat(&self) -> Option<Stat> {
         let seq = self.stats.fetch_add(1, Ordering::AcqRel);
-        let held = self.handle().metadata().ok()?;
-        let (metadata, replacement) = match self.replacement(&held) {
+        let file = self.handle();
+        let held = file.metadata().ok()?;
+        let (metadata, replacement) = match self.replacement(&file, &held) {
             Some((file, metadata)) => (metadata, Some(file)),
             None => (held, None),
         };

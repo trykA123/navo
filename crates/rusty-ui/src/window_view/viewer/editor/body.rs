@@ -57,7 +57,7 @@ impl ViewerBody for EditorBody {
         }
         keys.extend(MARK_KEYS);
         if !view.editing {
-            keys.push(("Alt+L", "Line ends"));
+            keys.extend([("Alt+L", "Line ends"), ("Alt+F", "Follow")]);
         }
         BodyKeys::Normal(keys)
     }
