@@ -1,6 +1,7 @@
 mod block;
 mod copy;
 mod links;
+mod preview;
 mod runs;
 mod table;
 
@@ -70,6 +71,7 @@ pub(super) struct MarkdownView {
     note: Option<SharedString>,
     checking: Option<Job>,
     tables: Rc<TableScrolls>,
+    is_preview: bool,
     #[cfg(test)]
     drawn: Rc<std::cell::Cell<usize>>,
 }
@@ -93,6 +95,7 @@ impl MarkdownView {
             note,
             checking: None,
             tables: Rc::default(),
+            is_preview: false,
             #[cfg(test)]
             drawn: Rc::default(),
         }
@@ -269,7 +272,7 @@ impl Render for MarkdownView {
             .text_color(t.colors.text)
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .child(header(&t, parts))
+            .when(!self.is_preview, |root| root.child(header(&t, parts)))
             .child(
                 div()
                     .id("markdown-body")
@@ -296,9 +299,7 @@ impl MarkdownBody {
 
     #[cfg(test)]
     pub(super) fn rendered(&self, cx: &App) -> String {
-        let doc = &self.0.read(cx).doc;
-        let texts: Vec<&str> = doc.blocks().iter().map(|block| doc.text(block)).collect();
-        texts.join("\n")
+        self.0.read(cx).rendered()
     }
 
     #[cfg(test)]

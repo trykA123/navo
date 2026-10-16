@@ -1,6 +1,6 @@
 use rusty_structured::markdown::{self, MAX_SOURCE, Refusal};
 
-use super::{Declined, Load, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Declined, Load, Loaded, Slot, Sniff, ViewerKind, extension, named};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::markdown::{MarkdownBody, MarkdownFile};
@@ -13,6 +13,10 @@ const TOO_MANY_SPANS: &str = "Markdown with over 2,000,000 styled runs: shown as
 const TOO_MANY_FOOTNOTES: &str = "Markdown with over 2,000 footnote lines: shown as text.";
 
 pub(super) struct MarkdownKind;
+
+pub(super) fn markdown_extension(name: &str) -> Option<String> {
+    extension(name).filter(|found| EXTENSIONS.contains(&found.as_str()))
+}
 
 impl MarkdownKind {
     fn is_markdown(sniff: &Sniff<'_>) -> bool {

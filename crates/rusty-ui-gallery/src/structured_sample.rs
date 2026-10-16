@@ -70,6 +70,14 @@ A fast, **keyboard-first** file manager with *structured views* in F3. ~~Beta~~ 
 | `Ctrl+Shift+C` | Copies the node path | 0.0.1 |
 | `Ctrl+F3` | Sorts by the cursor column | 0.0.1 |
 
+## Tiers
+
+| Tier | Model | Roles | Used for |
+| --- | --- | --- | --- |
+| **T1** | Opus 5.5, `medium` | `patcher`, `infra-builder` | Moves, exact edits, small config, scaffolds |
+| **T2** | Opus 5.5, `medium` | `ui-builder`, `checker` | UI work, medium implementation, writing the failing tests, CI |
+| **T4** | Opus 5.5, `high` | orchestrator, `ui-builder-high` | The core and the hardest atoms: everything that can lose user data, the pane view, hard refactors |
+
 ```rust
 let tree = parse_json(bytes)?; // a long line scrolls inside its block when it does not fit the width of the view
 ```
@@ -109,13 +117,34 @@ pub fn body(
     window: &mut Window,
     cx: &mut App,
 ) -> Option<Box<dyn ViewerBody>> {
+    body_in((name, text), None, window, cx)
+}
+
+pub fn editing(
+    name: &'static str,
+    text: &'static str,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Box<dyn ViewerBody>> {
+    body_in((name, text), Some("text"), window, cx)
+}
+
+fn body_in(
+    (name, text): (&'static str, &'static str),
+    edit_kind: Option<&str>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Box<dyn ViewerBody>> {
     let location = Location::new(format!("/samples/{name}")).ok()?;
     let sniff = Sniff {
         head: text.as_bytes(),
         name,
         len: text.len() as u64,
     };
-    let kind = Kinds::builtin().choose(&sniff).into_iter().next()?;
+    let kind = Kinds::builtin()
+        .choose(&sniff)
+        .into_iter()
+        .find(|kind| edit_kind.is_none_or(|id| kind.id() == id))?;
     let hooks = hooks(text);
     let cancel = AtomicBool::new(false);
     let loaded = kind
@@ -132,7 +161,7 @@ pub fn body(
     let attach = Attach {
         loaded,
         host,
-        edit: false,
+        edit: edit_kind.is_some(),
     };
     kind.attach(attach, window, cx).ok()
 }

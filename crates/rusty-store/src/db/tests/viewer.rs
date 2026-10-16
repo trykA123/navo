@@ -258,3 +258,15 @@ fn a_fresh_in_memory_db_saves_and_reads_viewer_state() {
     assert_eq!(db.viewer_memory(PATH, STAMP).unwrap(), Some(memory()));
     assert_eq!(history(&db), vec![text("error")]);
 }
+
+#[test]
+fn the_markdown_split_choice_is_kept_per_extension() {
+    let db = memory_db();
+    assert_eq!(db.markdown_split("md").unwrap(), None);
+    db.save_markdown_split("md", false).unwrap();
+    db.save_markdown_split("markdown", true).unwrap();
+    assert_eq!(db.markdown_split("md").unwrap(), Some(false));
+    assert_eq!(db.markdown_split("markdown").unwrap(), Some(true));
+    db.save_markdown_split("md", true).unwrap();
+    assert_eq!(db.markdown_split("md").unwrap(), Some(true));
+}

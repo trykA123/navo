@@ -3,7 +3,7 @@ use std::any::Any;
 use gpui_kit::component::input::{Copy, Cut, Paste, SelectAll};
 use gpui_kit::{AnyView, FocusHandle, Focusable};
 
-use super::EditorView;
+use super::{EditorView, SplitChoice};
 use crate::prelude::*;
 use crate::window_view::viewer::FileText;
 use crate::window_view::viewer::body::{
@@ -16,6 +16,7 @@ use crate::window_view::viewer::{CopyPathLine, FindSelection, OpenGoTo, ShowHex,
 pub(in crate::window_view::viewer) struct EditorFile {
     pub file: FileText,
     pub language: &'static str,
+    pub split: Option<SplitChoice>,
 }
 
 pub(in crate::window_view::viewer) struct EditorBody(pub Entity<EditorView>);
@@ -42,6 +43,37 @@ impl EditorBody {
     pub(in crate::window_view::viewer) fn find_text(&self, cx: &App) -> Option<String> {
         self.0.read(cx).typed(cx)
     }
+
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn preview_renders(&self, cx: &App) -> usize {
+        self.0
+            .read(cx)
+            .split
+            .as_ref()
+            .map_or(0, |split| split.renders)
+    }
+
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn preview_text(&self, cx: &App) -> Option<String> {
+        let split = self.0.read(cx).split.as_ref()?;
+        Some(split.view().read(cx).rendered())
+    }
+
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn focused_side(
+        &self,
+        window: &Window,
+        cx: &App,
+    ) -> Option<&'static str> {
+        let view = self.0.read(cx);
+        if view.is_preview_focused(window, cx) {
+            Some("preview")
+        } else if self.focus_handle(cx).is_focused(window) {
+            Some("source")
+        } else {
+            None
+        }
+    }
 }
 
 impl ViewerBody for EditorBody {
@@ -67,6 +99,12 @@ impl ViewerBody for EditorBody {
         let mut keys: Vec<Key> = vec![("Ctrl+F", "Find"), ("F3", "Next")];
         if view.editing {
             keys.push(("Ctrl+S", "Save"));
+        }
+        if view.editing && view.has_split() {
+            keys.push(("Ctrl+Shift+V", "Preview"));
+        }
+        if view.is_split() {
+            keys.push(("F6", "Focus preview"));
         }
         keys.extend(MARK_KEYS);
         if !view.editing {

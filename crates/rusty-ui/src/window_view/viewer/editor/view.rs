@@ -99,9 +99,10 @@ impl EditorView {
                 d.child(div().text_color(t.colors.mark).child("●"))
             })
             .child(div().flex_1())
-            .when_some(self.note.clone(), |d, note| {
-                d.child(status(t, "viewer-message", note))
-            })
+            .when_some(
+                self.note.clone().or_else(|| self.preview_status(cx)),
+                |d, note| d.child(status(t, "viewer-message", note)),
+            )
             .when_some(count, |d, count| d.child(status(t, "find-count", count)))
             .children(self.bar(t, cx))
     }
@@ -156,6 +157,7 @@ impl EditorView {
             .relative()
             .flex_1()
             .min_h_0()
+            .min_w_0()
             .overflow_hidden()
             .child(Editor::new(&self.editor).h_full().readonly(!self.editing))
             .child(overlay(self.editor.clone(), look))
@@ -174,8 +176,24 @@ fn status(t: &Theme, id: &'static str, text: SharedString) -> impl IntoElement {
         .child(text)
 }
 
+impl EditorView {
+    fn body_row(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let text = self.text_area(t, cx).into_any_element();
+        match self.split_pane(t, window, cx) {
+            Some(pane) => div()
+                .flex()
+                .flex_1()
+                .min_h_0()
+                .child(text)
+                .child(pane)
+                .into_any_element(),
+            None => text,
+        }
+    }
+}
+
 impl Render for EditorView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         self.sync_decorations(&t, cx);
         self.update_overview(&t, cx);
@@ -183,14 +201,14 @@ impl Render for EditorView {
         let rows = self.found_rows(cx);
         let panel = find_all_panel(&t, &self.marking, rows);
         let root = div().id("editor-view");
-        Self::list_keys(Self::find_keys(root, cx), cx)
+        Self::preview_keys(Self::list_keys(Self::find_keys(root, cx), cx), cx)
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
             .size_full()
             .child(self.header(&t, cx))
-            .child(self.text_area(&t, cx))
+            .child(self.body_row(&t, window, cx))
             .children(panel)
     }
 }

@@ -10,6 +10,7 @@ pub enum Page {
     Tree,
     Table,
     Markdown,
+    MarkdownPreview,
     Archive,
     Font,
     Marks,
@@ -51,7 +52,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 33] = [
+pub const PAGES: [PageInfo; 34] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -62,6 +63,12 @@ pub const PAGES: [PageInfo; 33] = [
     info(Page::Tree, "Tree", "p15-tree", false),
     info(Page::Table, "Table", "p15-table", false),
     info(Page::Markdown, "Markdown", "p15-markdown", false),
+    info(
+        Page::MarkdownPreview,
+        "Markdown preview",
+        "p15-markdown-preview",
+        false,
+    ),
     info(Page::Archive, "Zip", "p15-archive", false),
     info(Page::Font, "Font", "p15-font", false),
     info(Page::Marks, "Marks", "p15-marks", false),

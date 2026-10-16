@@ -3,6 +3,7 @@ mod find;
 mod lines;
 mod marking;
 mod overlay;
+mod preview;
 mod save;
 mod view;
 
@@ -13,6 +14,7 @@ use gpui_kit::{Subscription, Task};
 use rusty_core::encoding::TextEncoding;
 
 pub(super) use body::{EditorBody, EditorFile};
+pub(super) use preview::{PREVIEW_CONTEXT, SplitChoice};
 
 use super::body::{Carried, Host};
 use super::search::Marking;
@@ -24,6 +26,7 @@ use crate::prelude::*;
 use crate::tokens::Mode;
 use find::EditorFind;
 use marking::text_source;
+use preview::Split;
 
 const NOT_LOSSLESS: &str = "Not valid in its encoding: opened read-only.";
 
@@ -48,6 +51,7 @@ pub(super) struct EditorView {
     decorated: Option<(u64, Mode)>,
     overview: Overview,
     recount: Option<Task<()>>,
+    split: Option<Split>,
     _changes: Subscription,
 }
 
@@ -68,24 +72,35 @@ fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLi
     (persists, link)
 }
 
+fn read_only_state(
+    text: String,
+    language: &'static str,
+    window: &mut Window,
+    cx: &mut Context<EditorState>,
+) -> EditorState {
+    let mut state = EditorState::new(window, cx)
+        .language(language)
+        .default_value(text);
+    state.set_readonly(true, cx);
+    state.set_searchable(false, cx);
+    state.set_context_menu_enabled(false);
+    state
+}
+
 impl EditorView {
     fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let EditorFile { file, language } = opened;
+        let EditorFile {
+            file,
+            language,
+            split,
+        } = opened;
         let shared: Arc<str> = Arc::from(file.text.as_str());
         let (persists, link) = memory_link(&file, &shared, &host);
-        let text = file.text;
-        let editor = cx.new(|cx| {
-            let mut state = EditorState::new(window, cx)
-                .language(language)
-                .default_value(text);
-            state.set_readonly(true, cx);
-            state.set_searchable(false, cx);
-            state.set_context_menu_enabled(false);
-            state
-        });
+        let editor = cx.new(|cx| read_only_state(file.text, language, window, cx));
         let decorations = editor.update(cx, |state, cx| {
             state.create_range_decorations_collection(Vec::new(), cx)
         });
+        let split = split.map(|choice| Split::new(choice, host.clone(), &editor, cx));
         let changes = cx.subscribe(&editor, |view, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 view.text_changed(cx);
@@ -112,6 +127,7 @@ impl EditorView {
             decorated: None,
             overview: Overview::default(),
             recount: None,
+            split,
             _changes: changes,
         };
         attach_memory(&mut view, link, cx);
@@ -139,6 +155,7 @@ impl EditorView {
         self.marking.freeze_bookmarks();
         self.overwrite = false;
         self.text_edited(cx);
+        self.preview_edited(cx);
         cx.notify();
     }
 
@@ -155,6 +172,7 @@ impl EditorView {
                 state.set_readonly(false, cx);
                 state.set_searchable(true, cx);
             });
+            self.refresh_preview(cx);
             cx.notify();
         }
         true
