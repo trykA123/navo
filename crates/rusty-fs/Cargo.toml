@@ -19,6 +19,7 @@ zip = { version = "=9.0.3", default-features = false, features = ["deflate-flate
 
 [target.'cfg(windows)'.dependencies]
 same-file = "1.0.6"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 lzma-rust2 = { version = "=0.22.0", default-features = false, features = ["encoder", "std", "xz"] }

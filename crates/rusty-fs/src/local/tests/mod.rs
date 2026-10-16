@@ -12,6 +12,8 @@ mod errors;
 mod hostile;
 mod listing;
 mod metadata;
+#[cfg(windows)]
+mod native;
 mod ops;
 mod perf;
 mod verbatim;

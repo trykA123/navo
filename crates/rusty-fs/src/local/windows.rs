@@ -24,7 +24,10 @@ pub(super) fn entry_name(name: &OsStr) -> ProviderPath {
 }
 
 pub(super) fn attributes(_name: &OsStr, metadata: &Metadata) -> Attributes {
-    let bits = metadata.file_attributes();
+    file_attributes(metadata.file_attributes())
+}
+
+pub(super) fn file_attributes(bits: u32) -> Attributes {
     Attributes {
         hidden: bits & HIDDEN != 0,
         system: bits & SYSTEM != 0,
