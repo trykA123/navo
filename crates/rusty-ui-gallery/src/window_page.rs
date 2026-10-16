@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use rusty_core::{Location, ProviderId, Selection, ViewState};
 use rusty_fs::FsEntry;
+use rusty_ui::app_menu::{AppMenu, Identity, Install};
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::pane_chrome::{
@@ -10,7 +11,7 @@ use rusty_ui::pane_chrome::{
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
 use rusty_ui::status_bar::StatusBar;
-use rusty_ui::tokens;
+use rusty_ui::tokens::{self, Mode, Theme, ThemeChoice};
 use rusty_ui::window_view::{KEY_WARNING, key_labels, layer_keys};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
@@ -42,6 +43,7 @@ const SIDES: [Side; 2] = [
 
 pub struct WindowPage {
     held: Option<KeyLayer>,
+    is_menu_open: bool,
     rows: Rc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
     split: Entity<SplitterState>,
@@ -55,10 +57,32 @@ impl WindowPage {
     pub fn new(held: Option<KeyLayer>, cx: &mut Context<Self>) -> Self {
         Self {
             held,
+            is_menu_open: false,
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
             split: cx.new(|_| SplitterState::new(0.5)),
         }
+    }
+
+    pub fn with_menu(cx: &mut Context<Self>) -> Self {
+        Self {
+            is_menu_open: true,
+            ..Self::new(None, cx)
+        }
+    }
+
+    fn menu(&self, t: &Theme) -> Option<AnyElement> {
+        let choice = match t.mode {
+            Mode::Light => ThemeChoice::Light,
+            Mode::Dark => ThemeChoice::Dark,
+        };
+        let identity = Identity {
+            version: "0.0.1".into(),
+            install: Install::Portable,
+            folder: r"D:\Apps\Ferrite".into(),
+        };
+        self.is_menu_open
+            .then(|| AppMenu::new("app-menu", identity, choice).into_overlay(t))
     }
 
     fn list(&self, index: usize, side: &Side, marked: Rc<Selection>) -> FileList {
@@ -114,7 +138,10 @@ impl Render for WindowPage {
         let t = tokens::current(cx).clone();
         let panes =
             Splitter::new("panes", &self.split, self.card(0, cx), self.card(1, cx)).line_on_hover();
+        let is_open = self.is_menu_open;
+        let menu = self.menu(&t);
         div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -122,6 +149,7 @@ impl Render for WindowPage {
             .child(
                 FerriteTitleBar::new("Ferrite")
                     .on_mica()
+                    .app_button(is_open, |_, _, _| {})
                     .header(HeaderSearch::new()),
             )
             .child(
@@ -138,5 +166,6 @@ impl Render for WindowPage {
                     .warn(KEY_WARNING.0, KEY_WARNING.1, KEY_WARNING.2)
                     .reserve_pill(),
             )
+            .children(menu)
     }
 }

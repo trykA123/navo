@@ -1,7 +1,7 @@
 use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::{Hsla, Pixels, Rgba, TestAppContext, px};
 
-use super::{Mode, Radii, Spacing, Theme, apply, current};
+use super::{Mode, Radii, Spacing, Theme, ThemeChoice, apply, current};
 
 mod surfaces;
 
@@ -174,6 +174,24 @@ fn mode_toggles_between_light_and_dark() {
     assert_eq!(Mode::Dark.toggled(), Mode::Light);
     assert!(Mode::Dark.is_dark());
     assert!(!Mode::Light.is_dark());
+}
+
+#[test]
+fn the_theme_choice_cycles_system_light_dark() {
+    let order = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
+    for (index, choice) in order.iter().enumerate() {
+        assert_eq!(choice.next(), order[(index + 1) % order.len()]);
+    }
+    assert_eq!(ThemeChoice::default(), ThemeChoice::System);
+}
+
+#[test]
+fn system_follows_the_window_and_the_others_fix_the_mode() {
+    for system in [Mode::Light, Mode::Dark] {
+        assert_eq!(ThemeChoice::System.resolve(system), system);
+        assert_eq!(ThemeChoice::Light.resolve(system), Mode::Light);
+        assert_eq!(ThemeChoice::Dark.resolve(system), Mode::Dark);
+    }
 }
 
 #[gpui_kit::test]

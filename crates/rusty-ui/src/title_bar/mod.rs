@@ -10,15 +10,17 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::TitleBar;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    Styled, TitlebarOptions, Window, WindowOptions, div, px, transparent_black,
+    AnyElement, App, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, Styled, TitlebarOptions, Window, WindowOptions, div, px, transparent_black,
 };
 
 use crate::tokens::{self, Theme};
 
+pub(crate) use brand::icon_for as logo;
 pub use search::HeaderSearch;
 
 type CloseHandler = Rc<dyn Fn(&mut Window, &mut App)>;
+pub(crate) type AppButtonHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
 pub fn window_options(title: impl Into<SharedString>) -> WindowOptions {
     WindowOptions {
@@ -36,6 +38,7 @@ pub struct FerriteTitleBar {
     header: Vec<AnyElement>,
     is_on_mica: bool,
     on_close: Option<CloseHandler>,
+    app_button: Option<(bool, AppButtonHandler)>,
 }
 
 impl FerriteTitleBar {
@@ -45,6 +48,7 @@ impl FerriteTitleBar {
             header: Vec::new(),
             is_on_mica: false,
             on_close: None,
+            app_button: None,
         }
     }
 
@@ -56,6 +60,15 @@ impl FerriteTitleBar {
     #[must_use]
     pub fn on_mica(mut self) -> Self {
         self.is_on_mica = true;
+        self
+    }
+
+    pub fn app_button(
+        mut self,
+        is_open: bool,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.app_button = Some((is_open, Rc::new(handler)));
         self
     }
 
@@ -118,7 +131,12 @@ impl RenderOnce for FerriteTitleBar {
                     .border_color(transparent_black())
             })
             .relative()
-            .child(brand::brand(t, self.title, window.scale_factor()))
+            .child(brand::brand(
+                t,
+                self.title,
+                window.scale_factor(),
+                self.app_button,
+            ))
             .children(centre.map(|item| centre_area(t, item)))
             .child(header_area(t, items))
             .when_some(self.on_close, |bar, handler| {

@@ -149,6 +149,7 @@ fn every_shadow_token_has_visible_layers() {
             ("menu", &shadows.menu),
             ("chip", &shadows.chip),
             ("sheet", &shadows.sheet),
+            ("focus", &shadows.focus),
         ] {
             assert!(!layers.is_empty(), "{mode:?}: {name} has no shadow");
             for layer in layers {
@@ -203,5 +204,54 @@ fn the_card_ring_and_pill_label_use_the_app_accent() {
         let theme = Theme::new(mode);
         assert_eq!(theme.surfaces.card_ring, theme.colors.accent);
         assert_eq!(theme.surfaces.pill_label, theme.colors.accent_text);
+    }
+}
+
+#[test]
+fn the_focus_ring_is_two_pixels_of_the_accent() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        let ring = &theme.shadows.focus;
+        assert_eq!(ring.len(), 1);
+        assert_eq!(ring[0].color, theme.colors.accent);
+        assert_eq!(ring[0].spread_radius, px(2.));
+        assert_eq!(ring[0].blur_radius, px(0.));
+    }
+}
+
+#[test]
+fn app_menu_text_reads_at_four_and_a_half_to_one() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        let (c, s) = (theme.colors, theme.surfaces);
+        for (label, foreground, background) in [
+            ("text on sheet", c.text, s.sheet),
+            ("muted on sheet", c.muted, s.sheet),
+            ("text on tile", c.text, s.tile),
+            ("muted on tile", c.muted, s.tile),
+            ("accent text on lit tile", c.accent_text, s.layer_tint),
+            ("text on focused row", c.text, c.selection),
+            ("accent text on focused row", c.accent_text, c.selection),
+            ("primary row label", c.background, c.accent),
+        ] {
+            let ratio = contrast_ratio(foreground, background);
+            assert!(ratio >= 4.5, "{mode:?}: {label} is {ratio:.2}:1");
+        }
+    }
+}
+
+#[test]
+fn the_focus_ring_and_lit_tile_edge_stand_out_three_to_one() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        let s = theme.surfaces;
+        for (label, background) in [
+            ("sheet", s.sheet),
+            ("tile", s.tile),
+            ("lit tile", s.layer_tint),
+        ] {
+            let ratio = contrast_ratio(theme.colors.accent, background);
+            assert!(ratio >= 3.0, "{mode:?}: accent on {label} is {ratio:.2}:1");
+        }
     }
 }

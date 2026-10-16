@@ -216,6 +216,7 @@ pub(super) fn window_with(
         files,
         kinds,
         drives: crate::window_view::DriveHooks::none(),
+        app_menu: crate::window_view::AppMenuHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),

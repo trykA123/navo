@@ -40,6 +40,41 @@ impl Mode {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ThemeChoice {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemeChoice {
+    #[must_use]
+    pub fn next(self) -> Self {
+        match self {
+            Self::System => Self::Light,
+            Self::Light => Self::Dark,
+            Self::Dark => Self::System,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::Light => "Light",
+            Self::Dark => "Dark",
+        }
+    }
+
+    pub fn resolve(self, system: Mode) -> Mode {
+        match self {
+            Self::System => system,
+            Self::Light => Mode::Light,
+            Self::Dark => Mode::Dark,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Colors {
     pub background: Hsla,
