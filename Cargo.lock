@@ -6354,6 +6354,7 @@ dependencies = [
  "gpui-kit",
  "image",
  "kamadak-exif",
+ "raw-window-handle",
  "resvg 0.46.0",
  "rusty-cache",
  "rusty-core",

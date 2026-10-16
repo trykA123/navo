@@ -1,6 +1,7 @@
 mod header;
 mod keys;
 pub(crate) mod kind;
+mod press;
 pub(crate) mod row;
 mod sort;
 
@@ -14,13 +15,16 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
-    Keystroke, MouseButton, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
-    Styled, Window, div,
+    Keystroke, MouseButton, ParentElement, Pixels, Point, RenderOnce, ScrollWheelEvent,
+    SharedString, Styled, Window, div,
 };
 use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
 
 pub use keys::bind_keys;
+pub(crate) use keys::{
+    CopyItems, EditItem, MoveItems, OpenRow, RecycleItems, RenameItem, ViewItem,
+};
 pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
 
@@ -52,6 +56,9 @@ pub enum FileListAction {
     Sort(SortBy),
     Edit { row: u64, choose: bool },
     View(u64),
+    ContextMenu(Point<Pixels>),
+    MenuPrefetch { adds_cursor: bool },
+    MenuCancel,
 }
 
 #[derive(Clone, Debug)]
@@ -119,10 +126,13 @@ struct ListState {
     scroll: ListScroll,
     followed_scroll: Option<(u64, usize, Pixels)>,
     page_rows: Option<u64>,
+    list_bounds: Option<Bounds<Pixels>>,
+    press: press::Press,
 }
 
 struct ListContext {
     props: FileListProps,
+    state: Entity<ListState>,
     focus: Option<FocusHandle>,
     on_command: Option<CommandHandler>,
     on_list_action: Option<ActionHandler>,
@@ -164,11 +174,6 @@ impl ListContext {
             window,
             cx,
         );
-    }
-
-    fn right_click(&self, row: u64, window: &mut Window, cx: &mut App) {
-        self.click(row, window, cx);
-        self.send(Command::SelectionToggle, window, cx);
     }
 
     fn go_up_or_narrow(&self, window: &mut Window, cx: &mut App) {
@@ -278,9 +283,10 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
                 left.act(FileListAction::Open(row), window, cx);
             }
         })
-        .on_mouse_down(MouseButton::Right, move |_, window, cx| {
-            right.right_click(row, window, cx);
-        });
+        .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+            right.right_down((row, event.position), window, cx);
+        })
+        .on_mouse_move(press::drag_over(ctx, row));
     Some(element.into_any_element())
 }
 
@@ -352,6 +358,7 @@ fn report_page_rows(
         let is_new = watch.state.update(cx, |state, _| {
             let is_new = state.page_rows != Some(rows);
             state.page_rows = Some(rows);
+            state.list_bounds = Some(*list);
             is_new
         });
         if let (true, Some(handler)) = (is_new, handler.clone()) {
@@ -371,6 +378,7 @@ impl RenderOnce for FileList {
         let label = format!("{} files", self.props.folder);
         let ctx = Rc::new(ListContext {
             props: self.props,
+            state: state.clone(),
             focus: self.focus,
             on_command: self.on_command,
             on_list_action: self.on_list_action,
@@ -394,7 +402,7 @@ impl RenderOnce for FileList {
             .on_children_prepainted(report_page_rows(self.on_page_rows, page_watch))
             .on_scroll_wheel(report_scroll(&ctx, scroll_watch))
             .child(list);
-        keys::register(div().id(self.id), &ctx)
+        press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
             .key_context(keys::CONTEXT)
             .flex()

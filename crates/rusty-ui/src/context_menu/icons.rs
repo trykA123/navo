@@ -9,11 +9,14 @@ use crate::primitives::IconName;
 
 pub(super) fn ferrite_icon(action: FerriteAction) -> IconName {
     match action {
-        FerriteAction::CopyPath => IconName::Copy,
-        FerriteAction::CopyName => IconName::Type,
+        FerriteAction::Open => IconName::ExternalLink,
+        FerriteAction::View => IconName::Eye,
+        FerriteAction::Edit => IconName::FilePen,
+        FerriteAction::Copy => IconName::Files,
+        FerriteAction::Move => IconName::FolderInput,
         FerriteAction::Rename => IconName::Pencil,
-        FerriteAction::Compare => IconName::GitCompare,
-        FerriteAction::OpenInOtherPane => IconName::PanelRight,
+        FerriteAction::Delete => IconName::Trash,
+        FerriteAction::CopyPath => IconName::Copy,
         FerriteAction::Properties => IconName::Info,
         FerriteAction::ClassicMenu => IconName::SquareMenu,
     }

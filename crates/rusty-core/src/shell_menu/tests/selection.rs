@@ -12,10 +12,12 @@ fn first_skips_the_header() {
 
 #[test]
 fn next_skips_disabled_and_separators() {
-    let rows = rows(&zip_menu(), "");
-    let rename = Selection::first(&rows).next(&rows).next(&rows);
-    assert_eq!(rename.index(), Some(3));
-    assert_eq!(rename.next(&rows).index(), Some(5));
+    let mut menu = zip_menu();
+    menu.items[3].enabled = false;
+    let rows = rows(&menu, "");
+    let edit = Selection::first(&rows).next(&rows).next(&rows);
+    assert_eq!(edit.index(), Some(3));
+    assert_eq!(edit.next(&rows).index(), Some(5));
 }
 
 #[test]
@@ -31,13 +33,15 @@ fn previous_skips_the_windows_header() {
     let rows = rows(&zip_menu(), "");
     let open = rows
         .iter()
-        .position(|row| matches!(row, Row::Item(item) if item.text == "Open"))
+        .position(|row| {
+            matches!(row, Row::Item(item) if item.text == "Open" && item.id != ItemId::Ferrite(FerriteAction::Open))
+        })
         .unwrap();
     let mut selection = Selection::first(&rows);
     while selection.index() != Some(open) {
         selection = selection.next(&rows);
     }
-    assert_eq!(selection.previous(&rows).index(), Some(7));
+    assert_eq!(selection.previous(&rows).index(), Some(10));
 }
 
 #[test]
@@ -45,7 +49,7 @@ fn enter_runs_a_command() {
     let rows = rows(&zip_menu(), "");
     assert_eq!(
         Selection::first(&rows).enter(&rows),
-        Some(Choice::Run(ItemId::Ferrite(FerriteAction::CopyPath)))
+        Some(Choice::Run(ItemId::Ferrite(FerriteAction::Open)))
     );
 }
 
@@ -53,8 +57,8 @@ fn enter_runs_a_command() {
 fn enter_and_right_open_a_submenu() {
     let rows = rows(&zip_menu(), "7-zip");
     let selection = Selection::first(&rows);
-    assert_eq!(selection.enter(&rows), Some(Choice::OpenSubmenu(vec![9])));
-    assert_eq!(selection.open_submenu(&rows), Some(vec![9]));
+    assert_eq!(selection.enter(&rows), Some(Choice::OpenSubmenu(vec![12])));
+    assert_eq!(selection.open_submenu(&rows), Some(vec![12]));
 }
 
 #[test]

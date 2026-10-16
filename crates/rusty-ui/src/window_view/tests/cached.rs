@@ -64,6 +64,7 @@ fn open_big(
         view: None,
         listing_cache: cache.clone(),
         cache_keys: CacheKeys::default(),
+        shell_menu: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, fs)

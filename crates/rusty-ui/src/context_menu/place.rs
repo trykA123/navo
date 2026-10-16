@@ -133,6 +133,21 @@ pub(super) fn root_frame(level: &Level, anchor: Point<Pixels>, area: Bounds<Pixe
     }
 }
 
+pub(super) fn pinned_root_frame(
+    level: &Level,
+    origin: Point<Pixels>,
+    area: Bounds<Pixels>,
+) -> Frame {
+    let chrome = px(root_chrome());
+    let below = area.bottom() - px(MARGIN) - origin.y - chrome;
+    let list_height = px(list_height(level)).min(below.max(px(ROW)));
+    Frame {
+        bounds: Bounds::new(origin, Size::new(px(ROOT_WIDTH), list_height + chrome)),
+        list_height,
+        side: Side::Right,
+    }
+}
+
 pub(super) struct SubmenuSpot {
     pub parent: Bounds<Pixels>,
     pub list_top: Pixels,

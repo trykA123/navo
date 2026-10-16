@@ -103,6 +103,7 @@ pub(super) fn rig_full(
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
+        shell_menu: None,
     };
     let (window, view) = open_options(cx, options);
     Rig {

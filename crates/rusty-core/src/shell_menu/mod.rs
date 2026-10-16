@@ -4,18 +4,21 @@ mod rows;
 mod selection;
 mod text;
 
-pub use actions::{ActionContext, ferrite_actions};
+pub use actions::ferrite_actions;
 pub use rows::{ItemRow, Row, Section, rare_rows, rows, submenu_rows};
 pub use selection::{Choice, Selection};
 pub use text::{CleanText, clean_text};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FerriteAction {
-    CopyPath,
-    CopyName,
+    Open,
+    View,
+    Edit,
+    Copy,
+    Move,
     Rename,
-    Compare,
-    OpenInOtherPane,
+    Delete,
+    CopyPath,
     Properties,
     ClassicMenu,
 }

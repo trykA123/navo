@@ -12,6 +12,7 @@ use gpui_kit::{
 use rusty_core::shell_menu::Row;
 
 use super::ContextMenu;
+use super::motion::RootMotion;
 use super::place::{CONTEXT_LINE, FIELD, FOOTER, Frame, PAD, ROW};
 use super::row::{self, RowElement, RowLook};
 use super::state::{ContextMenuEvent, LevelStatus};
@@ -78,6 +79,7 @@ pub(super) struct PanelLook<'a> {
     pub frame: Frame,
     pub theme: &'a Theme,
     pub reduce_motion: bool,
+    pub root: Option<RootMotion<'a>>,
 }
 
 fn interactive(
@@ -123,7 +125,9 @@ impl ContextMenu {
             frame,
             theme: t,
             reduce_motion,
+            root,
         } = look;
+        let fresh = root.as_ref().and_then(|root| root.fresh);
         let level = &self.state.levels()[depth];
         let list = div()
             .id("menu-list")
@@ -133,7 +137,7 @@ impl ContextMenu {
             .h(frame.list_height)
             .overflow_y_scroll()
             .track_scroll(&self.scroll(depth))
-            .children(self.rows(depth, t, cx));
+            .children(self.rows((depth, fresh), t, cx));
         let panel = chrome(t, depth)
             .left(frame.bounds.origin.x - self.bounds.origin.x)
             .w(frame.bounds.size.width)
@@ -143,24 +147,28 @@ impl ContextMenu {
             })
             .child(list)
             .when(depth == 0, |panel| panel.child(self.footer(t, cx)));
-        let (duration, id) = if depth == 0 {
-            (150, SharedString::from("menu-enter"))
-        } else {
-            (
-                180,
-                SharedString::from(format!("menu-enter-{:?}", level.path)),
-            )
-        };
+        let top = frame.bounds.origin.y - self.bounds.origin.y;
+        if let Some(root) = root {
+            return panel
+                .top(top + root.rise)
+                .opacity(root.opacity)
+                .into_any_element();
+        }
         let motion = Motion {
-            id,
-            top: frame.bounds.origin.y - self.bounds.origin.y,
-            duration: Duration::from_millis(duration),
+            id: SharedString::from(format!("menu-enter-{:?}", level.path)),
+            top,
+            duration: Duration::from_millis(180),
             rise: if reduce_motion { 0. } else { RISE },
         };
         enter(panel, motion)
     }
 
-    fn rows(&self, depth: usize, t: &Theme, cx: &mut Context<Self>) -> Vec<RowElement> {
+    fn rows(
+        &self,
+        (depth, fresh): (usize, Option<(&[Row], f32)>),
+        t: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Vec<RowElement> {
         let level = &self.state.levels()[depth];
         let is_active = self.state.active() == depth;
         match level.status {
@@ -193,6 +201,10 @@ impl ContextMenu {
                     .enumerate()
                     .map(|(index, row)| {
                         let element = row::render(&look, row, index, selected == Some(index));
+                        let element = match fresh {
+                            Some((old, shown)) if !old.contains(row) => element.opacity(shown),
+                            _ => element,
+                        };
                         interactive(element, row, (depth, index), cx)
                     })
                     .collect()

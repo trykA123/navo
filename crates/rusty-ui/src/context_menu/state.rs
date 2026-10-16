@@ -103,6 +103,13 @@ impl MenuState {
         self.levels[0].rows = rows;
     }
 
+    pub fn set_menu(&mut self, menu: ShellMenu) {
+        self.menu = menu;
+        self.hidden = hidden_count(&self.menu);
+        self.rare = rare_count(&self.menu);
+        self.refresh();
+    }
+
     pub fn set_submenu(&mut self, path: &[usize], submenu: Submenu) -> bool {
         let changed = self.menu.set_submenu(path, submenu);
         if changed {
