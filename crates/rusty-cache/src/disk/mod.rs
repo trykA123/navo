@@ -159,12 +159,11 @@ impl Drop for Gone<'_> {
 
 fn run(path: &Path, warm: Warm, inbox: Receiver<Job>, shared: &Shared) {
     let _gone = Gone(shared);
-    let table = open_table(path).map(|table| warm::warm_up(table, warm));
-    lock(&shared.progress).is_loaded = true;
-    shared.moved.notify_all();
-    let Some(table) = table else {
+    let Some(table) = open_table(path).map(|table| warm::warm_up(table, warm)) else {
         return;
     };
+    lock(&shared.progress).is_loaded = true;
+    shared.moved.notify_all();
     let mut writer = Writer::new(table);
     for job in inbox {
         match job {
