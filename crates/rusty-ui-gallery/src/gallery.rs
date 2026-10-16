@@ -8,6 +8,7 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
+use crate::menu_page::{MenuPage, Shows as MenuShows};
 use crate::operate_page::OperatePage;
 use crate::pane_page::PanePage;
 use crate::sections;
@@ -26,10 +27,14 @@ pub enum Page {
     Font,
     Marks,
     Image,
+    Menu,
+    MenuSubmenu,
+    MenuFilter,
+    MenuFiles,
 }
 
 impl Page {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 15] = [
         Self::Primitives,
         Self::Pane,
         Self::Operate,
@@ -41,6 +46,10 @@ impl Page {
         Self::Font,
         Self::Marks,
         Self::Image,
+        Self::Menu,
+        Self::MenuSubmenu,
+        Self::MenuFilter,
+        Self::MenuFiles,
     ];
 
     pub fn label(self) -> &'static str {
@@ -56,6 +65,10 @@ impl Page {
             Self::Font => "Font",
             Self::Marks => "Marks",
             Self::Image => "Image",
+            Self::Menu => "Menu",
+            Self::MenuSubmenu => "Menu 7-Zip",
+            Self::MenuFilter => "Menu filter",
+            Self::MenuFiles => "Menu files",
         }
     }
 }
@@ -73,6 +86,7 @@ pub struct Gallery {
     font: Option<Entity<FontView>>,
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
+    menus: [Entity<MenuPage>; 4],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -94,6 +108,13 @@ impl Gallery {
             font: rich_sample::font_view(cx),
             marks: None,
             image: image_sample::image_view(cx).ok(),
+            menus: [
+                MenuShows::Root,
+                MenuShows::SevenZip,
+                MenuShows::Filter,
+                MenuShows::Files,
+            ]
+            .map(|shows| cx.new(|cx| MenuPage::new(shows, cx))),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -119,7 +140,18 @@ impl Gallery {
         let current = self.page;
         let pages: Vec<Button> = Page::ALL
             .into_iter()
-            .filter(|page| !matches!(page, Page::Marks | Page::Archive | Page::Font))
+            .filter(|page| {
+                !matches!(
+                    page,
+                    Page::Marks
+                        | Page::Archive
+                        | Page::Font
+                        | Page::Menu
+                        | Page::MenuSubmenu
+                        | Page::MenuFilter
+                        | Page::MenuFiles
+                )
+            })
             .map(|page| {
                 let variant = if page == current {
                     ButtonVariant::Primary
@@ -205,6 +237,10 @@ impl Render for Gallery {
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
             Page::Image => root.children(self.image.clone()),
+            Page::Menu => root.child(self.menus[0].clone()),
+            Page::MenuSubmenu => root.child(self.menus[1].clone()),
+            Page::MenuFilter => root.child(self.menus[2].clone()),
+            Page::MenuFiles => root.child(self.menus[3].clone()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
         }
     }

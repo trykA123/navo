@@ -14,6 +14,7 @@ pub(crate) fn open<V: Render>(
         tokens::apply(Mode::Light, cx);
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
+        crate::context_menu::bind_keys(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),

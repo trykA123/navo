@@ -37,6 +37,10 @@ fn file_name(page: Page, mode: Mode) -> String {
         Page::Font => "p15-font",
         Page::Marks => "p15-marks",
         Page::Image => "p15-image",
+        Page::Menu => "p17-menu",
+        Page::MenuSubmenu => "p17-menu-7zip",
+        Page::MenuFilter => "p17-menu-filter",
+        Page::MenuFiles => "p17-menu-files",
     };
     let mode = match mode {
         Mode::Light => "light",
