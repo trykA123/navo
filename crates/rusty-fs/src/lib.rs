@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod archive;
+mod code_page;
 mod fake;
 pub mod hostile_names;
 mod io_queue;
@@ -12,6 +13,7 @@ mod provider;
 mod scan;
 mod snapshot;
 
+pub use code_page::{ansi_code_page, encoding_for_code_page};
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use io_queue::{
     Cancelled, IoQueue, Job, JobId, JobSlot, OwnerGuard, OwnerId, Priority, Scheduler, VolumeId,

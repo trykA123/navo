@@ -58,7 +58,7 @@ pub(super) fn open(entry: Entry, cx: &mut App) -> PagedBody {
         name: &entry.name,
         len: entry.bytes.len() as u64,
     };
-    let kind = if sniff.looks_binary() {
+    let kind = if sniff.looks_binary() || rusty_core::encoding::is_utf16(sniff.head) {
         PagedKind::Hex
     } else {
         PagedKind::Text

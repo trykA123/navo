@@ -1,7 +1,14 @@
-use gpui_kit::TestAppContext;
+use std::sync::Arc;
 
-use super::{Setup, editor_text, has_editor, press_only, redraw, text_of, text_window, window_on};
+use gpui_kit::TestAppContext;
+use rusty_core::encoding::{TextEncoding, decode};
+
+use super::{
+    Log, Setup, editor_text, has_editor, hooks, press_only, redraw, text_of, text_window,
+    window_on, window_with,
+};
 use crate::window_view::tests::{fake, press, settle, type_in, viewer_open};
+use crate::window_view::viewer::{FileHooks, FileText, Kinds};
 
 #[gpui_kit::test]
 fn opening_shows_a_note_until_the_background_read_is_done(cx: &mut TestAppContext) {
@@ -68,4 +75,28 @@ fn saving_runs_in_the_background_and_editing_goes_on(cx: &mut TestAppContext) {
     assert_eq!(editor_text(cx, &view), "xyhello\n");
     press(cx, window, &view, "escape");
     assert!(viewer_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn f3_on_a_utf16_file_opens_the_text_editor_with_the_decoded_text(cx: &mut TestAppContext) {
+    let bytes: Vec<u8> = "\u{FEFF}héllo wide world\n"
+        .encode_utf16()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    let files = hooks(Setup::new(bytes.clone()), &Log::default());
+    let read = Arc::new(move |_: &rusty_core::Location| {
+        let decoded = decode(&bytes, TextEncoding::default().encoding);
+        Ok(FileText {
+            read_only: !decoded.lossless,
+            encoding: decoded.encoding,
+            ..FileText::plain(decoded.text)
+        })
+    });
+    let files = FileHooks { read, ..files };
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+    assert!(has_editor(cx, &view));
+    assert_eq!(editor_text(cx, &view), "héllo wide world\n");
 }

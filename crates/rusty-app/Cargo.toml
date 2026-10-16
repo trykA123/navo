@@ -10,6 +10,7 @@ name = "ferrite"
 path = "src/main.rs"
 
 [dependencies]
+encoding_rs = "0.8.42"
 rusty-core = { path = "../rusty-core" }
 rusty-diag = { path = "../rusty-diag" }
 rusty-fs = { path = "../rusty-fs" }
@@ -20,6 +21,7 @@ serde_json = "1.0.154"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
+  "Win32_Globalization",
   "Win32_System_Console",
   "Win32_System_ProcessStatus",
   "Win32_System_SystemInformation",

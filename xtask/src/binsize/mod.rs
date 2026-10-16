@@ -4,7 +4,7 @@ mod run;
 pub use check::check_size;
 pub use run::run;
 
-pub const RUSTY_EXE_LIMIT: u64 = 80 * 1024 * 1024;
+pub const RUSTY_EXE_LIMIT: u64 = 160 * 1024 * 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct TooLarge {

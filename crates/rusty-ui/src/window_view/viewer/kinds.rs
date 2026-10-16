@@ -49,9 +49,7 @@ pub struct Sniff<'a> {
 impl Sniff<'_> {
     #[must_use]
     pub fn looks_binary(&self) -> bool {
-        self.head.starts_with(&[0xFF, 0xFE])
-            || self.head.starts_with(&[0xFE, 0xFF])
-            || self.head.contains(&0)
+        rusty_core::encoding::looks_binary(self.head)
     }
 }
 

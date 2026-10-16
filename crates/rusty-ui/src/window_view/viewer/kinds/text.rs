@@ -32,7 +32,12 @@ impl ViewerKind for Text {
     }
 
     fn score(&self, sniff: &Sniff<'_>) -> u8 {
-        if sniff.looks_binary() { BINARY } else { TEXT }
+        let paged_utf16 = sniff.len > EDIT_LIMIT && rusty_core::encoding::is_utf16(sniff.head);
+        if sniff.looks_binary() || paged_utf16 {
+            BINARY
+        } else {
+            TEXT
+        }
     }
 
     fn editable(&self, sniff: &Sniff<'_>) -> bool {
