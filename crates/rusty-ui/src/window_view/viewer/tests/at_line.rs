@@ -87,3 +87,20 @@ fn closing_the_viewer_returns_to_the_open_sheet(cx: &mut TestAppContext) {
     })
     .expect("window");
 }
+
+#[gpui_kit::test]
+fn ctrl_comma_in_the_viewer_leaves_settings_and_focus_alone(cx: &mut TestAppContext) {
+    let (window, view) = settings_window(cx);
+    press(cx, window, &view, "ctrl-,");
+    open_at_key(cx, window, &view);
+    let focused = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| window.focused(cx))
+            .expect("window")
+    };
+    let before = focused(cx);
+    assert!(before.is_some());
+    press(cx, window, &view, "ctrl-,");
+    assert!(view.read_with(cx, |view, _| view.settings.is_open()));
+    assert!(view.read_with(cx, |view, _| view.viewer.is_some()));
+    assert_eq!(focused(cx), before);
+}

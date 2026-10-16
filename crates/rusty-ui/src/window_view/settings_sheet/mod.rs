@@ -100,6 +100,9 @@ impl SettingsPanel {
 
 impl FerriteWindow {
     pub(super) fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.viewer.is_some() {
+            return;
+        }
         if self.settings.is_open {
             self.close_settings(window, cx);
         } else {
