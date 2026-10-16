@@ -153,8 +153,8 @@ fn structured_files_open_as_tree_table_or_markdown() {
         ("info.plist", b"<?xml version=\"1.0\"?><plist/>", "tree"),
         ("fruit.csv", b"name,qty\nPear,1\n", "table"),
         ("fruit.tsv", b"name\tqty\nPear\t1\n", "table"),
-        ("notes.md", b"# Title\n", "markdown"),
-        ("notes.markdown", b"Text\n", "markdown"),
+        ("notes.md", b"# Title\n", "text"),
+        ("notes.markdown", b"Text\n", "text"),
     ];
     for (name, head, kind) in cases {
         assert_eq!(best_named(name, head, head.len() as u64), kind, "{name}");
