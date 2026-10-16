@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -74,6 +73,18 @@ impl Asked {
         }
     }
 
+    fn has_failed(&self) -> bool {
+        let slot = self
+            .slot
+            .result
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match slot.as_ref() {
+            Some(result) => matches!(result, Ok(Submenu::Failed) | Err(_)),
+            None => Instant::now() >= self.give_up,
+        }
+    }
+
     fn pending(self) -> Pending<Submenu> {
         Pending::polled(move |timeout| self.answer(timeout))
     }
@@ -108,22 +119,18 @@ impl Fills {
         send: impl FnOnce(Vec<usize>, FillReply),
     ) -> Pending<Submenu> {
         let mut asked = self.asked.lock().unwrap_or_else(PoisonError::into_inner);
-        let entry = match asked.entry(path) {
-            Entry::Occupied(entry) => entry.get().clone(),
-            Entry::Vacant(entry) => {
-                let path = entry.key().clone();
-                let deadline = Instant::now() + FILL_BUDGET;
-                let fresh = Asked {
-                    slot: Arc::default(),
-                    deadline,
-                    give_up: deadline + self.limit,
-                };
-                entry.insert(fresh.clone());
-                send(path, FillReply(fresh.slot.clone()));
-                fresh
-            }
+        if let Some(earlier) = asked.get(&path).filter(|earlier| !earlier.has_failed()) {
+            return earlier.clone().pending();
+        }
+        let deadline = Instant::now() + FILL_BUDGET;
+        let fresh = Asked {
+            slot: Arc::default(),
+            deadline,
+            give_up: deadline + self.limit,
         };
-        entry.pending()
+        asked.insert(path.clone(), fresh.clone());
+        send(path, FillReply(fresh.slot.clone()));
+        fresh.pending()
     }
 }
 

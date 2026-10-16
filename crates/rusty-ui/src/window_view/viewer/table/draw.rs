@@ -2,7 +2,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{BoxShadow, ClickEvent, Role, WeakEntity, point};
+use gpui_kit::{BoxShadow, ClickEvent, MouseButton, MouseDownEvent, Role, WeakEntity, point};
 
 use super::keys::CONTEXT;
 use super::rows::Rows;
@@ -57,10 +57,10 @@ fn sort_arrow(sort: SortKey, color: Hsla) -> impl IntoElement {
     icon(arrow, px(10.), color)
 }
 
-fn select_cell(
+fn select_cell<E>(
     view: WeakEntity<TableView>,
     cell: (usize, usize),
-) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+) -> impl Fn(&E, &mut Window, &mut App) + 'static {
     move |_, window, cx| {
         let _ = view.update(cx, |view, cx| view.click_cell(cell, window, cx));
     }
@@ -172,6 +172,12 @@ impl TableView {
                     window.focus(&view.focus, cx);
                     view.sort_by(column, cx);
                 }))
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |view, _: &MouseDownEvent, window, cx| {
+                        view.click_cell((view.cursor.0, column), window, cx);
+                    }),
+                )
                 .child(div().min_w_0().truncate().child(name))
                 .children(sorted.map(|sort| sort_arrow(sort, c.accent_text)))
         });
@@ -222,7 +228,12 @@ impl TableView {
             .children(frame.columns.clone().zip(cells).map(|(at, text)| {
                 cell_view(frame, at, text, index == row && at == column)
                     .id(("table-cell", at))
-                    .on_click(select_cell(view.clone(), (index, at)))
+                    .test_support()
+                    .on_click(select_cell::<ClickEvent>(view.clone(), (index, at)))
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        select_cell::<MouseDownEvent>(view.clone(), (index, at)),
+                    )
             }))
             .into_any_element()
     }

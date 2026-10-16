@@ -96,7 +96,17 @@ impl Service {
             stale.link.retired.store(true, Ordering::Release);
             stale.link.send(Request::Shutdown);
         }
-        worker.link.ask(|reply| Request::Open { paths, reply })
+        let (reply, cancel, pending) = Pending::cancellable();
+        let request = Request::Open {
+            paths,
+            reply,
+            cancel,
+        };
+        if worker.link.post(request) {
+            pending
+        } else {
+            Pending::ready(Err(MenuError::Stopped))
+        }
     }
 }
 

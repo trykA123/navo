@@ -12,7 +12,7 @@ use super::loaded::LoadedMenu;
 use super::sta::{self, Ole, Window};
 use super::{Link, SessionHandle};
 use crate::shell_menu::fill::{self, Background, FillReply, Fills};
-use crate::shell_menu::pending::Reply;
+use crate::shell_menu::pending::{Cancel, Reply, answer_unless_cancelled};
 use crate::shell_menu::station::{self, BusySince, Station};
 use crate::shell_menu::{InvokeOptions, MenuError, MenuSession, ScreenPoint, WindowHandle};
 
@@ -20,6 +20,7 @@ pub(super) enum Request {
     Open {
         paths: Vec<PathBuf>,
         reply: Reply<MenuSession>,
+        cancel: Cancel,
     },
     Fill {
         session: u64,
@@ -144,9 +145,11 @@ impl Worker {
 
     fn serve_request(&mut self, request: Request) -> bool {
         match request {
-            Request::Open { paths, reply } => {
-                let _ = reply.send(self.open(&paths));
-            }
+            Request::Open {
+                paths,
+                reply,
+                cancel,
+            } => answer_unless_cancelled(&cancel, &reply, || self.open(&paths)),
             Request::Fill {
                 session,
                 path,

@@ -46,6 +46,7 @@ pub(super) struct PendingView {
     pub context: SharedString,
     pub restore: FocusHandle,
     pub until: Instant,
+    pub has_classic: bool,
 }
 
 pub(super) struct MenuOpen {

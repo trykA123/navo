@@ -107,6 +107,8 @@ impl ListContext {
         let Some(row) = self.state.update(cx, |state, _| state.press.fire(press)) else {
             return;
         };
+        let to = rusty_core::CursorMove::Row(row);
+        self.send(Command::PaneCursorMove { to }, window, cx);
         if self.adds_pressed_row(row) {
             self.send(Command::SelectionToggle, window, cx);
         }

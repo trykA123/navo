@@ -10,7 +10,7 @@ use gpui_kit::{
     MouseMoveEvent, MouseUpEvent, Pixels, Point, Role, TestAppContext, point, px,
 };
 use rusty_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
-use rusty_core::{Location, PaneId};
+use rusty_core::{Location, OpKind, PaneId};
 use rusty_fs::FakeFs;
 
 use super::super::shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
@@ -134,11 +134,19 @@ struct Rig {
 }
 
 fn rig(cx: &mut TestAppContext) -> Rig {
+    rig_with(cx, true, &[])
+}
+
+fn rig_with(cx: &mut TestAppContext, has_shell: bool, files: &[&str]) -> Rig {
     let fs = fake();
+    for file in files {
+        fs.add_file(file, 1);
+    }
     let state = two_panes(&fs);
     let shell = Rc::new(Shell::default());
+    let provider: Rc<dyn ShellMenuProvider> = Rc::new(FakeProvider(shell.clone()));
     let options = StartOptions {
-        shell_menu: Some(Rc::new(FakeProvider(shell.clone()))),
+        shell_menu: has_shell.then_some(provider),
         ..super::options_for(fs.clone(), state)
     };
     let (window, view) = open_options(cx, options);
@@ -279,13 +287,17 @@ impl Rig {
     }
 
     fn rows(&self, cx: &mut TestAppContext) -> Vec<String> {
+        self.level_rows(cx, 0)
+    }
+
+    fn level_rows(&self, cx: &mut TestAppContext, depth: usize) -> Vec<String> {
         cx.update_window(self.window, |_, window, cx| {
             window.render_frame(cx);
             if window.try_find("context-menu").is_none() {
                 return Vec::new();
             }
             let mut root = window.within("context-menu");
-            let level = root.within(("menu-level", 0usize));
+            let level = root.within(("menu-level", depth));
             (0usize..)
                 .map_while(|index| level.try_find(("menu-row", index)))
                 .map(|row| match (row.role(), row.label()) {
@@ -421,6 +433,44 @@ fn ferrite_actions_show_before_the_provider_answers(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn without_a_windows_menu_only_working_ferrite_actions_show(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, false, &[]);
+    rig.press(cx, "down");
+    rig.press(cx, "menu");
+    rig.wait(cx, 160);
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "# Ferrite",
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+        ]
+    );
+    let has_footer = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .within("context-menu")
+                .try_find("menu-classic")
+                .is_some()
+        })
+        .expect("window");
+    assert!(
+        !has_footer,
+        "the Classic menu button shows without a Windows menu"
+    );
+    rig.press(cx, "shift-f10");
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.pane_error(cx), None);
+}
+
+#[gpui_kit::test]
 fn provider_items_merge_in_when_they_arrive(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
     rig.press(cx, "down");
@@ -454,6 +504,24 @@ fn a_loading_submenu_fills_when_the_shell_answers(cx: &mut TestAppContext) {
     rig.shell.fills.borrow_mut().insert(send_to, documents);
     rig.wait(cx, 50);
     assert_eq!(rig.rows(cx), ["Send to › Documents"]);
+}
+
+#[gpui_kit::test]
+fn retry_shows_the_items_of_a_submenu_that_failed_once(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    rig.shell
+        .fills
+        .borrow_mut()
+        .insert(vec![2], Submenu::Failed);
+    rig.answer(cx, Ok(windows_menu()));
+    rig.type_text(cx, "send");
+    rig.press(cx, "right");
+    assert_eq!(rig.level_rows(cx, 1), ["Could not load", "Retry"]);
+    let documents = Submenu::Filled(vec![shell_item(50, "Documents", Group::Share)]);
+    rig.shell.fills.borrow_mut().insert(vec![2], documents);
+    rig.press(cx, "enter");
+    rig.wait(cx, 50);
+    assert_eq!(rig.level_rows(cx, 1), ["Documents"]);
 }
 
 #[gpui_kit::test]
@@ -508,6 +576,33 @@ fn a_ferrite_action_runs_the_existing_command(cx: &mut TestAppContext) {
     assert!(!rig.is_open(cx));
     let renaming = rig.view.read_with(cx, |view, _| view.prompt.is_some());
     assert!(renaming);
+}
+
+#[gpui_kit::test]
+fn delete_asks_to_move_the_items_to_the_recycle_bin(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    rig.type_text(cx, "delete");
+    rig.press(cx, "enter");
+    settle(cx, &rig.view);
+    rig.frame(cx);
+    assert!(!rig.is_open(cx));
+    let pending = rig.view.read_with(cx, |view, _| {
+        view.browser
+            .pending()
+            .map(|pending| (pending.id, pending.plan.kind, pending.sources.clone()))
+    });
+    let (id, kind, sources) = pending.expect("a pending operation");
+    assert_eq!(kind, OpKind::Recycle);
+    assert_eq!(sources, [rig.location("home/a.txt")]);
+    let title = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .try_find(("confirm", id))
+                .and_then(|found| found.label().map(str::to_owned))
+        })
+        .expect("window");
+    assert_eq!(title.as_deref(), Some("Move 1 item to the Recycle Bin?"));
 }
 
 #[gpui_kit::test]
@@ -634,6 +729,34 @@ fn a_long_press_on_an_unmarked_row_adds_it_to_the_marked_rows(cx: &mut TestAppCo
     assert_eq!(rig.marked(cx), [0, 1]);
     let both = vec![rig.location("home/docs"), rig.location("home/a.txt")];
     assert_eq!(*rig.shell.opened.borrow(), [both]);
+}
+
+const MORE_FILES: [&str; 3] = ["home/b.txt", "home/c.txt", "home/d.txt"];
+
+#[gpui_kit::test]
+fn a_long_press_marks_the_pressed_row_when_the_cursor_moves_during_the_hold(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig_with(cx, true, &MORE_FILES);
+    rig.press(cx, "insert");
+    *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
+    rig.right_button(cx, 3, true);
+    rig.press(cx, "down");
+    rig.wait(cx, 450);
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.marked(cx), [0, 3]);
+}
+
+#[gpui_kit::test]
+fn a_long_press_opens_the_menu_for_the_pressed_row_after_the_cursor_moved(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, true, &MORE_FILES);
+    *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
+    rig.right_button(cx, 3, true);
+    rig.press(cx, "down");
+    rig.wait(cx, 450);
+    assert!(rig.is_open(cx));
+    let opened = rig.shell.opened.borrow().last().cloned();
+    assert_eq!(opened, Some(vec![rig.location("home/c.txt")]));
 }
 
 #[gpui_kit::test]

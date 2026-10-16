@@ -256,10 +256,14 @@ impl Tree {
     pub fn children(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
         let first = self.node(id).map_or(NONE, |node| node.first);
         std::iter::successors((first != NONE).then_some(first), |at| {
-            self.node(*at)
-                .map(|node| node.next)
-                .filter(|next| *next != NONE)
+            self.next_sibling(*at)
         })
+    }
+
+    fn next_sibling(&self, id: NodeId) -> Option<NodeId> {
+        self.node(id)
+            .map(|node| node.next)
+            .filter(|next| *next != NONE)
     }
 
     #[must_use]

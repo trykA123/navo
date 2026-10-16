@@ -4,11 +4,14 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, ClipboardEntry, Entity, TestApp
 use image::ImageFormat;
 
 use super::image::{open_first, rig};
-use super::menu::{clipboard, has, hint, middle, press_key, right_click, rows, run_item};
+use super::menu::{
+    clipboard, has, hint, middle, press_key, right_click, rows, run_item, table_cell_at,
+    table_head_at, tree_row_at,
+};
 use super::structured::open_named;
-use super::{Setup, editor_of, text_of, text_window};
+use super::{Setup, editor_of, label, redraw, text_of, text_window};
 use crate::window_view::FerriteWindow;
-use crate::window_view::tests::press;
+use crate::window_view::tests::{press, settle};
 use crate::window_view::viewer::LINE_BREAK;
 use crate::window_view::viewer::editor::EditorBody;
 use crate::window_view::viewer::image::fixtures::encoded;
@@ -248,4 +251,60 @@ fn ctrl_c_after_an_escaped_markdown_menu_copies_the_top_block(cx: &mut TestAppCo
     assert!(rows(cx, window).is_empty());
     press_key(cx, window, "ctrl-c");
     assert_eq!(clipboard(cx).as_deref(), Some("Title"));
+}
+
+const LETTERS: &[u8] = br#"{"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6, "g": 7, "h": 8}"#;
+const PRICES: &[u8] = b"name,qty,price\nPear,10,3\nApple,9,2\nPlum,4,7\n";
+
+#[gpui_kit::test]
+fn tree_copy_value_and_key_act_on_the_right_clicked_row(cx: &mut TestAppContext) {
+    let (window, view, _) = open_named(cx, "letters.json", Setup::new(LETTERS.to_vec()));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "down");
+    let at = tree_row_at(cx, window, 7);
+    right_click(cx, window, at);
+    run_item(cx, window, "copy value");
+    assert_eq!(clipboard(cx).as_deref(), Some("7"));
+    let at = tree_row_at(cx, window, 5);
+    right_click(cx, window, at);
+    run_item(cx, window, "copy key");
+    assert_eq!(clipboard(cx).as_deref(), Some("e"));
+}
+
+#[gpui_kit::test]
+fn table_copy_cell_and_column_act_on_the_right_clicked_cell(cx: &mut TestAppContext) {
+    let (window, view, _) = open_named(cx, "prices.csv", Setup::new(PRICES.to_vec()));
+    press(cx, window, &view, "right");
+    let at = table_cell_at(cx, window, (2, 2));
+    right_click(cx, window, at);
+    run_item(cx, window, "copy cell");
+    assert_eq!(clipboard(cx).as_deref(), Some("7"));
+    let at = table_cell_at(cx, window, (1, 0));
+    right_click(cx, window, at);
+    run_item(cx, window, "copy column");
+    let expected = ["name", "Pear", "Apple", "Plum"].join(LINE_BREAK);
+    assert_eq!(clipboard(cx), Some(expected));
+}
+
+#[gpui_kit::test]
+fn sort_by_this_column_sorts_the_right_clicked_column(cx: &mut TestAppContext) {
+    let (window, view, _) = open_named(cx, "prices.csv", Setup::new(PRICES.to_vec()));
+    press(cx, window, &view, "right");
+    let at = table_cell_at(cx, window, (0, 2));
+    right_click(cx, window, at);
+    run_item(cx, window, "sort by this column");
+    settle(cx, &view);
+    redraw(cx, window);
+    assert_eq!(label(cx, window, ("table-row", 0)), "2: Apple, 9, 2");
+}
+
+#[gpui_kit::test]
+fn sort_by_this_column_from_a_header_sorts_that_column(cx: &mut TestAppContext) {
+    let (window, view, _) = open_named(cx, "prices.csv", Setup::new(PRICES.to_vec()));
+    let at = table_head_at(cx, window, 1);
+    right_click(cx, window, at);
+    run_item(cx, window, "sort by this column");
+    settle(cx, &view);
+    redraw(cx, window);
+    assert_eq!(label(cx, window, ("table-row", 0)), "3: Plum, 4, 7");
 }
