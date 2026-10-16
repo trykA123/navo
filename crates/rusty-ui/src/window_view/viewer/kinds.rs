@@ -5,6 +5,7 @@ mod text;
 
 use std::any::Any;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
 
@@ -55,17 +56,20 @@ impl Sniff<'_> {
 
 pub type Loaded = Box<dyn Any + Send>;
 
+#[derive(Clone, Copy)]
+pub struct Load<'a> {
+    pub hooks: &'a FileHooks,
+    pub location: &'a Location,
+    pub sniff: &'a Sniff<'a>,
+    pub cancel: &'a AtomicBool,
+}
+
 pub trait ViewerKind: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn slot(&self) -> Slot;
     fn score(&self, sniff: &Sniff<'_>) -> u8;
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        sniff: &Sniff<'_>,
-    ) -> Result<Loaded, String>;
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String>;
     fn attach(
         &self,
         attach: Attach,

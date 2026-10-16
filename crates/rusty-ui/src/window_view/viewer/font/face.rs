@@ -1,13 +1,16 @@
+use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::Arc;
 
 use ttf_parser::{Face, name_id};
 
-use super::woff;
+use super::sfnt::{self, MAX_TABLES, usize_at};
+use super::{names, woff};
 
 const GRID_CHARS: usize = 256;
+const FIRST_GRID_CHAR: u32 = 0x21;
 const MIN_TABLES: u16 = 1;
-const MAX_TABLES: u16 = 128;
+const NAME: u32 = u32::from_be_bytes(*b"name");
+const COLLECTION_FIRST_FACE: usize = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontFormat {
@@ -53,6 +56,13 @@ pub fn font_format(head: &[u8]) -> Option<FontFormat> {
 }
 
 #[derive(Debug, Clone)]
+pub(super) struct Preview {
+    pub family: String,
+    pub bytes: Vec<u8>,
+    pub hash: u64,
+}
+
+#[derive(Debug, Clone)]
 pub struct FontFace {
     pub family: String,
     pub style: String,
@@ -62,8 +72,7 @@ pub struct FontFace {
     pub weight: u16,
     pub is_italic: bool,
     pub chars: Vec<char>,
-    pub(super) sfnt: Arc<Vec<u8>>,
-    pub(super) hash: u64,
+    pub(super) preview: Option<Preview>,
 }
 
 fn name(face: &Face<'_>, ids: &[u16]) -> Option<String> {
@@ -77,25 +86,38 @@ fn name(face: &Face<'_>, ids: &[u16]) -> Option<String> {
 }
 
 fn grid_chars(face: &Face<'_>) -> Vec<char> {
-    let mut points = Vec::new();
-    for subtable in face
-        .tables()
-        .cmap
-        .into_iter()
-        .flat_map(|cmap| cmap.subtables)
-    {
-        if subtable.is_unicode() {
-            subtable.codepoints(|point| points.push(point));
-        }
-    }
-    points.sort_unstable();
-    points.dedup();
-    points
-        .into_iter()
+    (FIRST_GRID_CHAR..=u32::from(char::MAX))
         .filter_map(char::from_u32)
         .filter(|ch| !ch.is_control() && !ch.is_whitespace())
+        .filter(|ch| face.glyph_index(*ch).is_some_and(|glyph| glyph.0 != 0))
         .take(GRID_CHARS)
         .collect()
+}
+
+fn hash_of(bytes: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn preview(sfnt: &[u8], format: FontFormat) -> Option<Preview> {
+    let hash = hash_of(sfnt);
+    let family = format!("Ferrite Preview {hash:016x}");
+    let postscript = format!("FerritePreview-{hash:016x}");
+    let directory = match format {
+        FontFormat::Collection => usize_at(sfnt, COLLECTION_FIRST_FACE)?,
+        _ => 0,
+    };
+    let (flavor, mut tables) = sfnt::tables(sfnt, directory)?;
+    let name = tables.iter_mut().find(|table| table.tag == NAME)?;
+    name.data = Cow::Owned(names::rename(&name.data, &family, &postscript)?);
+    let bytes = sfnt::write(flavor, tables)?;
+    Face::parse(&bytes, 0).ok()?;
+    Some(Preview {
+        family,
+        bytes,
+        hash,
+    })
 }
 
 impl FontFace {
@@ -109,7 +131,7 @@ impl FontFace {
             Face::parse(&sfnt, 0).map_err(|error| format!("This font looks damaged: {error}"))?;
         let family = name(&face, &[name_id::TYPOGRAPHIC_FAMILY, name_id::FAMILY])
             .ok_or("This font has no family name.")?;
-        let parsed = Self {
+        Ok(Self {
             family,
             style: name(&face, &[name_id::TYPOGRAPHIC_SUBFAMILY, name_id::SUBFAMILY])
                 .unwrap_or_else(|| "Regular".to_owned()),
@@ -119,15 +141,7 @@ impl FontFace {
             weight: face.weight().to_number(),
             is_italic: face.is_italic(),
             chars: grid_chars(&face),
-            sfnt: Arc::default(),
-            hash: 0,
-        };
-        let mut hasher = DefaultHasher::new();
-        sfnt.hash(&mut hasher);
-        Ok(Self {
-            hash: hasher.finish(),
-            sfnt: Arc::new(sfnt),
-            ..parsed
+            preview: preview(&sfnt, format),
         })
     }
 }

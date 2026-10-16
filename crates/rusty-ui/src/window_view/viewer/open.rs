@@ -1,10 +1,12 @@
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use gpui_kit::Task;
 use rusty_core::Location;
 
+use super::cancel::Cancel;
 use super::modes::Shown;
-use super::{FileHooks, Head, Kind, Kinds, Loaded, Sniff, Viewer};
+use super::{FileHooks, Head, Kind, Kinds, Load, Loaded, Sniff, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
@@ -14,6 +16,7 @@ pub(super) struct Opening {
     pub is_slow: bool,
     _task: Task<()>,
     _timer: Task<()>,
+    _cancel: Cancel,
 }
 
 pub(super) struct Opened {
@@ -29,7 +32,23 @@ pub(super) struct Request {
     pub name: String,
 }
 
-fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
+impl Request {
+    pub(super) fn load(
+        &self,
+        kind: &Kind,
+        sniff: &Sniff<'_>,
+        cancel: &AtomicBool,
+    ) -> Result<Loaded, String> {
+        kind.load(Load {
+            hooks: &self.hooks,
+            location: &self.location,
+            sniff,
+            cancel,
+        })
+    }
+}
+
+fn sniff_and_load(request: &Request, kinds: &Kinds, cancel: &AtomicBool) -> Result<Opened, String> {
     let head = (request.hooks.head)(&request.location)?;
     let sniff = Sniff {
         head: &head.bytes,
@@ -41,7 +60,7 @@ fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
         .first()
         .cloned()
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
-    let loaded = kind.load(&request.hooks, &request.location, &sniff);
+    let loaded = request.load(&kind, &sniff, cancel);
     Ok(Opened {
         head,
         kinds: chosen,
@@ -53,12 +72,14 @@ fn sniff_and_load(request: &Request, kinds: &Kinds) -> Result<Opened, String> {
 pub(super) fn start<T: Send + 'static>(
     window: &mut Window,
     cx: &mut Context<FerriteWindow>,
-    work: impl FnOnce() -> T + Send + 'static,
+    work: impl FnOnce(&AtomicBool) -> T + Send + 'static,
     done: impl FnOnce(&mut FerriteWindow, T, &mut Window, &mut Context<FerriteWindow>) + 'static,
 ) -> Opening {
+    let cancel = Cancel::new();
+    let flag = cancel.flag();
     let (sender, receiver) = futures::channel::oneshot::channel();
     cx.background_spawn(async move {
-        let _ = sender.send(work());
+        let _ = sender.send(work(&flag));
     })
     .detach();
     let task = cx.spawn_in(window, async move |this, cx| {
@@ -75,6 +96,7 @@ pub(super) fn start<T: Send + 'static>(
         is_slow: false,
         _task: task,
         _timer: timer,
+        _cancel: cancel,
     }
 }
 
@@ -98,7 +120,7 @@ impl FerriteWindow {
         start(
             window,
             cx,
-            move || sniff_and_load(&request, &kinds),
+            move |cancel| sniff_and_load(&request, &kinds, cancel),
             Self::file_opened,
         )
     }

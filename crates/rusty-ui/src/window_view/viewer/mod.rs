@@ -1,5 +1,6 @@
 mod archive;
 mod body;
+mod cancel;
 mod editor;
 mod files;
 mod font;
@@ -20,7 +21,7 @@ pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, Reopen, Save, SaveError, SharedSource,
 };
 pub use font::{FontFace, FontView};
-pub use kinds::{EDIT_LIMIT, Kind, Kinds, Loaded, Slot, Sniff, ViewerKind};
+pub use kinds::{EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use paged::{PagedKind, PagedView};
 
 use super::FerriteWindow;

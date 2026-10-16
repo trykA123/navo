@@ -44,6 +44,7 @@ pub fn archive_view(cx: &mut App) -> Entity<ArchiveView> {
     let listing = ArchiveListing {
         format: ArchiveFormat::Zip,
         entries: ENTRIES.into_iter().map(entry).collect(),
+        truncated: false,
     };
     let source = ArchiveSource {
         location: Location::provider_root(ProviderId::local()),

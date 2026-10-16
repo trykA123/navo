@@ -1,8 +1,5 @@
-use rusty_core::Location;
-
-use super::{Loaded, Slot, Sniff, ViewerKind};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::prelude::*;
-use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::font::{FontBody, FontFace, FontView, font_format};
 
@@ -33,13 +30,8 @@ impl ViewerKind for Font {
         }
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        _: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
-        let bytes = (hooks.bytes)(location, FONT_LIMIT)?;
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        let bytes = (load.hooks.bytes)(load.location, FONT_LIMIT)?;
         Ok(Box::new(FontFace::parse(bytes)?))
     }
 

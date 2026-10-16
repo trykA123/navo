@@ -163,13 +163,13 @@ impl FerriteWindow {
         let opening = start(
             window,
             cx,
-            move || {
+            move |cancel| {
                 let sniff = super::Sniff {
                     head: &sniffed.0.bytes,
                     name: &sniffed.1,
                     len: sniffed.0.len,
                 };
-                loader.load(&request.hooks, &request.location, &sniff)
+                request.load(&loader, &sniff, cancel)
             },
             move |view: &mut Self, loaded, window, cx| {
                 view.show_loaded(Shown { kind, loaded, edit }, window, cx);

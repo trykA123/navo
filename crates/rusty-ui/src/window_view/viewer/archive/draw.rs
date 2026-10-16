@@ -78,16 +78,22 @@ impl Rows {
 
 impl ArchiveView {
     fn status_text(&self) -> Option<SharedString> {
-        if let Some((name, _)) = &self.reading {
-            return Some(format!("Reading {name}…").into());
+        if let Some(reading) = &self.reading {
+            return Some(format!("Reading {}…", reading.name).into());
         }
-        self.note.clone()
+        self.note.clone().or_else(|| self.truncated_note())
+    }
+
+    fn truncated_note(&self) -> Option<SharedString> {
+        let shown = self.listing.entries.len() as u64;
+        self.listing.truncated.then(|| {
+            let count = format::count(shown, "entry", "entries");
+            format!("Showing the first {count}.").into()
+        })
     }
 
     fn header(&self, t: &Theme) -> Div {
-        let entries = &self.listing.entries;
-        let total: u64 = entries.iter().map(|entry| entry.size).sum();
-        let count = format::count(entries.len() as u64, "item", "items");
+        let count = format::count(self.listing.entries.len() as u64, "item", "items");
         div()
             .flex()
             .flex_none()
@@ -109,7 +115,7 @@ impl ArchiveView {
             )
             .child(small(t).child(self.listing.format.label()))
             .child(small(t).child(count))
-            .child(small(t).child(format::size(total)))
+            .child(small(t).child(format::size(self.totals.size)))
             .child(div().flex_1())
             .children(self.status_text().map(|text| status(t, text)))
     }
@@ -198,11 +204,7 @@ impl ArchiveView {
         } else {
             1
         };
-        let has_packed = self
-            .listing
-            .entries
-            .iter()
-            .any(|entry| entry.packed.is_some());
+        let has_packed = self.totals.has_packed;
         let body = div().flex().flex_col().flex_1().min_h_0();
         let body = if self.shown.is_empty() {
             body.child(self.empty(t))

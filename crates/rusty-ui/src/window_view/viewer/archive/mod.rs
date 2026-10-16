@@ -12,6 +12,7 @@ use rusty_fs::archive::{ArchiveEntry, ArchiveListing, ENCRYPTED, ENTRY_LIMIT};
 pub(super) use body::ArchiveBody;
 
 use super::FileHooks;
+use super::cancel::Cancel;
 use super::paged::PagedBody;
 use crate::file_list::typed_char;
 use crate::prelude::*;
@@ -36,10 +37,34 @@ struct Read {
     result: Result<Vec<u8>, String>,
 }
 
+struct Reading {
+    name: SharedString,
+    _task: Task<()>,
+    _cancel: Cancel,
+}
+
+struct Totals {
+    size: u64,
+    has_packed: bool,
+}
+
+impl Totals {
+    fn of(entries: &[ArchiveEntry]) -> Self {
+        Self {
+            size: entries
+                .iter()
+                .fold(0, |total, entry| total.saturating_add(entry.size)),
+            has_packed: entries.iter().any(|entry| entry.packed.is_some()),
+        }
+    }
+}
+
 pub struct ArchiveView {
     title: SharedString,
     source: ArchiveSource,
     listing: Rc<ArchiveListing>,
+    totals: Totals,
+    lowered: Vec<String>,
     shown: Rc<Vec<usize>>,
     filter: String,
     cursor: usize,
@@ -47,7 +72,7 @@ pub struct ArchiveView {
     scroll: ListScroll,
     focus: FocusHandle,
     note: Option<SharedString>,
-    reading: Option<(SharedString, Task<()>)>,
+    reading: Option<Reading>,
     nested: Option<PagedBody>,
 }
 
@@ -59,9 +84,16 @@ impl ArchiveView {
         cx: &mut Context<Self>,
     ) -> Self {
         let shown = Rc::new((0..listing.entries.len()).collect());
+        let lowered = listing
+            .entries
+            .iter()
+            .map(|entry| entry.name.to_lowercase())
+            .collect();
         Self {
             title: title.into(),
             source,
+            totals: Totals::of(&listing.entries),
+            lowered,
             listing: Rc::new(listing),
             shown,
             filter: String::new(),
@@ -111,11 +143,10 @@ impl ArchiveView {
     fn refilter(&mut self, cx: &mut Context<Self>) {
         let needle = self.filter.to_lowercase();
         let shown = self
-            .listing
-            .entries
+            .lowered
             .iter()
             .enumerate()
-            .filter(|(_, entry)| entry.name.to_lowercase().contains(&needle))
+            .filter(|(_, name)| name.contains(&needle))
             .map(|(index, _)| index)
             .collect();
         self.shown = Rc::new(shown);
@@ -197,16 +228,20 @@ impl ArchiveView {
         let source = self.source.clone();
         let Wanted { index, name } = wanted;
         let shown: SharedString = name.clone().into();
+        let cancel = Cancel::new();
+        let flag = cancel.flag();
         let task = cx.spawn_in(window, async move |this, cx| {
-            let result = cx
-                .background_executor()
-                .spawn(async move { (source.hooks.archive_entry)(&source.location, index) })
-                .await;
+            let read = async move { (source.hooks.archive_entry)(&source.location, index, &flag) };
+            let result = cx.background_executor().spawn(read).await;
             let _ = this.update_in(cx, |view, window, cx| {
                 view.entry_read(Read { name, result }, window, cx);
             });
         });
-        self.reading = Some((shown, task));
+        self.reading = Some(Reading {
+            name: shown,
+            _task: task,
+            _cancel: cancel,
+        });
         self.note = None;
         cx.notify();
     }

@@ -38,6 +38,7 @@ fn listing() -> ArchiveListing {
                 ..entry("secret.txt", 9)
             },
         ],
+        truncated: false,
     }
 }
 
@@ -45,8 +46,8 @@ fn archive_hooks(listed: Result<ArchiveListing, String>, reads: &Reads) -> FileH
     let contents = [Vec::new(), README.to_vec(), b"\x00\x01\x02bin".to_vec()];
     let reads = reads.clone();
     FileHooks {
-        archive: Arc::new(move |_| listed.clone()),
-        archive_entry: Arc::new(move |_, index| {
+        archive: Arc::new(move |_, _| listed.clone()),
+        archive_entry: Arc::new(move |_, index, _| {
             reads.lock().expect("reads").push(index);
             contents
                 .get(index)
@@ -181,5 +182,18 @@ fn a_corrupt_archive_shows_its_message(cx: &mut TestAppContext) {
     assert_eq!(
         text_of(cx, window, "viewer-message"),
         "This archive looks damaged: bad header"
+    );
+}
+
+#[gpui_kit::test]
+fn a_truncated_listing_says_how_many_entries_it_shows(cx: &mut TestAppContext) {
+    let truncated = ArchiveListing {
+        truncated: true,
+        ..listing()
+    };
+    let (window, _, _) = open_zip(cx, Ok(truncated));
+    assert_eq!(
+        text_of(cx, window, "archive-status"),
+        "Showing the first 4 entries."
     );
 }

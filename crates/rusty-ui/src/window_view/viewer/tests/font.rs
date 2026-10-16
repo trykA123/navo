@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use gpui_kit::TestAppContext;
 
-use super::{Log, Setup, hooks, label, press_only, redraw, text_of, window_with};
+use super::{Log, Setup, hooks, label, press_only, redraw, text_of, visible, window_with};
 use crate::window_view::tests::{fake, press, settle, viewer_open};
 use crate::window_view::viewer::font::{SAMPLE, SIZES};
 use crate::window_view::viewer::{FileHooks, Kinds};
@@ -55,4 +55,39 @@ fn a_damaged_font_shows_a_message(cx: &mut TestAppContext) {
     press(cx, window, &view, "f3");
     redraw(cx, window);
     assert!(text_of(cx, window, "viewer-message").starts_with("This font looks damaged"));
+}
+
+fn be(bytes: &[u8], at: usize, width: usize) -> usize {
+    bytes[at..at + width]
+        .iter()
+        .fold(0, |value, byte| (value << 8) | usize::from(*byte))
+}
+
+fn with_unreadable_last_name() -> &'static [u8] {
+    let mut font = ARCHIVO.to_vec();
+    let tables = be(&font, 4, 2);
+    let name = (0..tables)
+        .map(|index| 12 + 16 * index)
+        .find(|record| &font[*record..*record + 4] == b"name")
+        .map(|record| be(&font, record + 8, 4))
+        .expect("a name table");
+    let last = name + 6 + 12 * (be(&font, name + 2, 2) - 1);
+    font[last + 8..last + 10].copy_from_slice(&u16::MAX.to_be_bytes());
+    Box::leak(font.into_boxed_slice())
+}
+
+#[gpui_kit::test]
+fn a_font_whose_names_cannot_be_rewritten_shows_facts_without_a_preview(cx: &mut TestAppContext) {
+    let limits = Limits::default();
+    let files = font_hooks(with_unreadable_last_name(), &limits);
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+    assert_eq!(text_of(cx, window, "font-family"), "Archivo");
+    assert_eq!(
+        text_of(cx, window, "font-note"),
+        "Preview not available for this font."
+    );
+    assert!(!visible(cx, window, "font-glyphs"));
 }

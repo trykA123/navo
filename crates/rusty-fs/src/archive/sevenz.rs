@@ -4,14 +4,19 @@ use sevenz_rust2::{
     Archive, ArchiveEntry as SevenEntry, BlockDecoder, EncoderMethod, Error, Password,
 };
 
-use super::{ArchiveEntry, ENCRYPTED, Entry, Stamp, damaged, missing, read_capped};
+use super::source::{Fail, Meter, Metered};
+use super::{
+    ArchiveEntry, ENCRYPTED, EntryAt, Limits, Listed, Stamp, UNSUPPORTED_METHOD, damaged, missing,
+    read_capped,
+};
 
 const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
 const TICKS_PER_MS: u64 = 10_000;
 
-fn failed(error: Error) -> String {
+pub(super) fn failed(error: Error) -> String {
     match error {
         Error::PasswordRequired | Error::MaybeBadPassword(_) => ENCRYPTED.to_owned(),
+        Error::UnsupportedCompressionMethod(_) => UNSUPPORTED_METHOD.to_owned(),
         other => damaged(other),
     }
 }
@@ -51,17 +56,25 @@ fn describe(archive: &Archive, index: usize, entry: &SevenEntry) -> ArchiveEntry
     }
 }
 
-pub(super) fn list<R: Read + Seek>(mut reader: R) -> Result<Vec<ArchiveEntry>, String> {
+pub(super) fn list<R: Read + Seek>(
+    mut reader: R,
+    limits: Limits<'_>,
+) -> Result<Listed<'_>, String> {
     let archive = Archive::read(&mut reader, &Password::empty()).map_err(failed)?;
-    Ok(archive
-        .files
-        .iter()
-        .enumerate()
-        .map(|(index, entry)| describe(&archive, index, entry))
-        .collect())
+    let mut listed = Listed::new(limits);
+    for (index, entry) in archive.files.iter().enumerate() {
+        if !listed.push(describe(&archive, index, entry)) {
+            break;
+        }
+    }
+    Ok(listed)
 }
 
-pub(super) fn read<R: Read + Seek>(mut reader: R, at: Entry) -> Result<Vec<u8>, String> {
+pub(super) fn read<R: Read + Seek>(
+    mut reader: R,
+    at: EntryAt,
+    limits: Limits<'_>,
+) -> Result<Vec<u8>, String> {
     let archive = Archive::read(&mut reader, &Password::empty()).map_err(failed)?;
     let entry = archive.files.get(at.index).ok_or_else(missing)?;
     at.check(&describe(&archive, at.index, entry))?;
@@ -71,16 +84,25 @@ pub(super) fn read<R: Read + Seek>(mut reader: R, at: Entry) -> Result<Vec<u8>, 
     };
     let password = Password::empty();
     let decoder = BlockDecoder::new(1, block, &archive, &password, &mut reader);
+    let mut meter = Meter::new(limits.budget, limits.cancel);
     let mut found = None;
-    decoder
-        .for_each_entries(&mut |file, data| {
-            if !std::ptr::eq(file, entry) {
-                std::io::copy(data, &mut std::io::sink())?;
-                return Ok(true);
-            }
-            found = Some(read_capped(data, at.limit));
-            Ok(false)
-        })
-        .map_err(failed)?;
+    let decoded = decoder.for_each_entries(&mut |file, data| {
+        if !std::ptr::eq(file, entry) {
+            let mut skipped = Metered {
+                inner: data,
+                meter: &mut meter,
+            };
+            std::io::copy(&mut skipped, &mut std::io::sink())?;
+            return Ok(true);
+        }
+        found = Some(read_capped(data, at.limit));
+        Ok(false)
+    });
+    if let Err(error) = decoded {
+        return Err(match meter.stopped() {
+            Some(stop) => Fail::Stop(stop).into_read_error(),
+            None => failed(error),
+        });
+    }
     found.ok_or_else(missing)?
 }

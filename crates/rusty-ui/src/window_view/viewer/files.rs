@@ -75,8 +75,10 @@ type Write =
     Arc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError> + Send + Sync>;
 type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
 type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
-type ListArchive = Arc<dyn Fn(&Location) -> Result<ArchiveListing, String> + Send + Sync>;
-type ReadArchiveEntry = Arc<dyn Fn(&Location, usize) -> Result<Vec<u8>, String> + Send + Sync>;
+type ListArchive =
+    Arc<dyn Fn(&Location, &AtomicBool) -> Result<ArchiveListing, String> + Send + Sync>;
+type ReadArchiveEntry =
+    Arc<dyn Fn(&Location, usize, &AtomicBool) -> Result<Vec<u8>, String> + Send + Sync>;
 type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
 
 #[derive(Clone)]
@@ -100,8 +102,8 @@ impl FileHooks {
             }),
             head: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
-            archive: Arc::new(|_| Err("Archives cannot be opened here.".to_owned())),
-            archive_entry: Arc::new(|_, _| Err("Archives cannot be opened here.".to_owned())),
+            archive: Arc::new(|_, _| Err("Archives cannot be opened here.".to_owned())),
+            archive_entry: Arc::new(|_, _, _| Err("Archives cannot be opened here.".to_owned())),
             bytes: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
         }
     }

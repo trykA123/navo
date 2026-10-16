@@ -1,6 +1,8 @@
 mod body;
 mod draw;
 mod face;
+mod names;
+mod sfnt;
 mod woff;
 
 use std::borrow::Cow;
@@ -11,11 +13,13 @@ use gpui_kit::{FocusHandle, Global, ScrollHandle, point};
 pub(super) use body::FontBody;
 #[cfg(test)]
 pub(super) use draw::{SAMPLE, SIZES};
+use face::Preview;
 pub use face::{FontFace, font_format};
 
 use crate::prelude::*;
 
 const LINE_STEP: f32 = 40.;
+const NO_PREVIEW: &str = "Preview not available for this font.";
 
 #[derive(Default)]
 struct Registered(HashSet<u64>);
@@ -25,29 +29,40 @@ impl Global for Registered {}
 pub struct FontView {
     title: SharedString,
     face: FontFace,
+    family: Option<SharedString>,
     focus: FocusHandle,
     scroll: ScrollHandle,
     note: Option<SharedString>,
 }
 
-fn register(face: &FontFace, cx: &mut App) -> Result<(), String> {
-    if cx.default_global::<Registered>().0.contains(&face.hash) {
-        return Ok(());
+fn register(preview: Preview, cx: &mut App) -> Result<bool, String> {
+    if cx.default_global::<Registered>().0.contains(&preview.hash) {
+        return Ok(false);
     }
-    let bytes = Cow::Owned(face.sfnt.as_ref().clone());
     cx.text_system()
-        .add_fonts(vec![bytes])
+        .add_fonts(vec![Cow::Owned(preview.bytes)])
         .map_err(|error| format!("Cannot render this font: {error:#}"))?;
-    cx.default_global::<Registered>().0.insert(face.hash);
-    Ok(())
+    cx.default_global::<Registered>().0.insert(preview.hash);
+    Ok(true)
+}
+
+fn preview_family(face: &mut FontFace, cx: &mut App) -> Result<SharedString, String> {
+    let preview = face.preview.take().ok_or(NO_PREVIEW)?;
+    let family = preview.family.clone().into();
+    register(preview, cx)?;
+    Ok(family)
 }
 
 impl FontView {
-    pub fn new(title: impl Into<SharedString>, face: FontFace, cx: &mut Context<Self>) -> Self {
-        let note = register(&face, cx).err().map(SharedString::from);
+    pub fn new(title: impl Into<SharedString>, mut face: FontFace, cx: &mut Context<Self>) -> Self {
+        let (family, note) = match preview_family(&mut face, cx) {
+            Ok(family) => (Some(family), None),
+            Err(note) => (None, Some(note.into())),
+        };
         Self {
             title: title.into(),
             face,
+            family,
             focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
             note,

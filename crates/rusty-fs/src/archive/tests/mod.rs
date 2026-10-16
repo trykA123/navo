@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 use flate2::Compression;
 use flate2::write::GzEncoder;
@@ -9,9 +10,20 @@ use tempfile::TempDir;
 use zip::write::SimpleFileOptions;
 
 use super::{
-    ArchiveEntry, ArchiveFormat, ENCRYPTED, ENTRY_LIMIT, Stamp, detect, list_archive,
-    read_archive_entry,
+    ArchiveEntry, ArchiveFormat, ArchiveListing, ENCRYPTED, ENTRY_LIMIT, EntryAt, Stamp, detect,
 };
+
+mod limits;
+
+static NEVER: AtomicBool = AtomicBool::new(false);
+
+fn list_archive(path: &Path) -> Result<ArchiveListing, String> {
+    super::list_archive(path, &NEVER)
+}
+
+fn read_archive_entry(path: &Path, index: usize, limit: u64) -> Result<Vec<u8>, String> {
+    super::read_archive_entry(path, EntryAt { index, limit }, &NEVER)
+}
 
 const README: &[u8] = b"Ferrite reads archives.\n";
 const DATA: &[u8] = b"\x00\x01\x02 binary payload \xFF";

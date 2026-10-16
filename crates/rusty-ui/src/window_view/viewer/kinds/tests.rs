@@ -1,8 +1,5 @@
-use rusty_core::Location;
-
-use super::{EDIT_LIMIT, Kinds, Loaded, Slot, Sniff, ViewerKind};
+use super::{EDIT_LIMIT, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::prelude::*;
-use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 
 fn sniff(head: &[u8], len: u64) -> Sniff<'_> {
@@ -108,7 +105,7 @@ impl ViewerKind for Pictures {
         }
     }
 
-    fn load(&self, _: &FileHooks, _: &Location, _: &Sniff<'_>) -> Result<Loaded, String> {
+    fn load(&self, _: Load<'_>) -> Result<Loaded, String> {
         Ok(Box::new(()))
     }
 

@@ -171,10 +171,13 @@ fn the_hooks_list_a_zip_and_read_one_entry() {
     writer.write_all(b"# inside\n").unwrap();
     writer.finish().unwrap();
     let hooks = super::hooks();
-    let listing = (hooks.archive)(&at(&file)).unwrap();
+    let keep = std::sync::atomic::AtomicBool::new(false);
+    let listing = (hooks.archive)(&at(&file), &keep).unwrap();
     assert_eq!(listing.entries[0].name, "inner/notes.md");
-    assert_eq!((hooks.archive_entry)(&at(&file), 0).unwrap(), b"# inside\n");
-    assert!((hooks.archive_entry)(&at(&file), 1).is_err());
+    assert!(!listing.truncated);
+    let entry = (hooks.archive_entry)(&at(&file), 0, &keep);
+    assert_eq!(entry.unwrap(), b"# inside\n");
+    assert!((hooks.archive_entry)(&at(&file), 1, &keep).is_err());
 }
 
 #[test]

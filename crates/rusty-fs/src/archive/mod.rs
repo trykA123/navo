@@ -1,15 +1,20 @@
 mod detect;
 mod sevenz;
+mod source;
+mod tar_headers;
 mod tarball;
 mod zipped;
 
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use detect::detect;
 
 pub const ENTRY_LIMIT: u64 = 64 * 1024 * 1024;
+pub const MAX_ENTRIES: usize = 200_000;
+const UNPACK_BUDGET: u64 = 2 * 1024 * 1024 * 1024;
 const HEAD: u64 = 8 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,9 +70,62 @@ pub struct ArchiveEntry {
 pub struct ArchiveListing {
     pub format: ArchiveFormat,
     pub entries: Vec<ArchiveEntry>,
+    pub truncated: bool,
 }
 
 pub const ENCRYPTED: &str = "Encrypted: not supported yet.";
+pub const UNSUPPORTED_METHOD: &str = "Compression method not supported yet.";
+pub(crate) const OVER_BUDGET: &str =
+    "Over 2 GB to unpack before this entry: too much to view from the archive.";
+pub(crate) const CANCELLED: &str = "Stopped.";
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Limits<'a> {
+    pub entries: usize,
+    pub budget: u64,
+    pub cancel: &'a AtomicBool,
+}
+
+impl<'a> Limits<'a> {
+    fn new(cancel: &'a AtomicBool) -> Self {
+        Self {
+            entries: MAX_ENTRIES,
+            budget: UNPACK_BUDGET,
+            cancel,
+        }
+    }
+}
+
+pub(crate) struct Listed<'a> {
+    entries: Vec<ArchiveEntry>,
+    truncated: bool,
+    limits: Limits<'a>,
+}
+
+impl<'a> Listed<'a> {
+    pub(crate) fn new(limits: Limits<'a>) -> Self {
+        Self {
+            entries: Vec::new(),
+            truncated: false,
+            limits,
+        }
+    }
+
+    pub(crate) fn push(&mut self, entry: ArchiveEntry) -> bool {
+        let limits = self.limits;
+        if self.entries.len() >= limits.entries || limits.cancel.load(Ordering::Relaxed) {
+            self.truncated = true;
+            return false;
+        }
+        self.entries.push(entry);
+        true
+    }
+
+    pub(crate) fn cut(mut self) -> Self {
+        self.truncated = true;
+        self
+    }
+}
 
 pub(crate) fn damaged(error: impl std::fmt::Display) -> String {
     format!("This archive looks damaged: {error}")
@@ -90,33 +148,50 @@ fn open(path: &Path) -> Result<(File, ArchiveFormat), String> {
     Ok((file, format))
 }
 
-pub fn list_archive(path: &Path) -> Result<ArchiveListing, String> {
+pub(crate) fn list_with(path: &Path, limits: Limits<'_>) -> Result<ArchiveListing, String> {
     let (file, format) = open(path)?;
-    let entries = match format {
-        ArchiveFormat::Zip => zipped::list(BufReader::new(file))?,
-        ArchiveFormat::SevenZip => sevenz::list(BufReader::new(file))?,
-        _ => tarball::list(format, BufReader::new(file))?,
+    let reader = BufReader::new(file);
+    let listed = match format {
+        ArchiveFormat::Zip => zipped::list(reader, limits)?,
+        ArchiveFormat::SevenZip => sevenz::list(reader, limits)?,
+        _ => tarball::list(format, reader, limits)?,
     };
-    Ok(ArchiveListing { format, entries })
+    Ok(ArchiveListing {
+        format,
+        entries: listed.entries,
+        truncated: listed.truncated,
+    })
 }
 
-pub fn read_archive_entry(path: &Path, index: usize, limit: u64) -> Result<Vec<u8>, String> {
+pub fn list_archive(path: &Path, cancel: &AtomicBool) -> Result<ArchiveListing, String> {
+    list_with(path, Limits::new(cancel))
+}
+
+pub(crate) fn read_with(path: &Path, at: EntryAt, limits: Limits<'_>) -> Result<Vec<u8>, String> {
     let (file, format) = open(path)?;
-    let at = Entry { index, limit };
+    let reader = BufReader::new(file);
     match format {
-        ArchiveFormat::Zip => zipped::read(BufReader::new(file), at),
-        ArchiveFormat::SevenZip => sevenz::read(BufReader::new(file), at),
-        _ => tarball::read(format, BufReader::new(file), at),
+        ArchiveFormat::Zip => zipped::read(reader, at),
+        ArchiveFormat::SevenZip => sevenz::read(reader, at, limits),
+        _ => tarball::read(format, reader, at, limits),
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Entry {
+pub fn read_archive_entry(
+    path: &Path,
+    at: EntryAt,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>, String> {
+    read_with(path, at, Limits::new(cancel))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntryAt {
     pub index: usize,
     pub limit: u64,
 }
 
-impl Entry {
+impl EntryAt {
     pub(crate) fn check(self, entry: &ArchiveEntry) -> Result<(), String> {
         if entry.is_folder {
             return Err("This is a folder.".to_owned());

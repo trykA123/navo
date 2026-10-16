@@ -1,9 +1,7 @@
-use rusty_core::Location;
 use rusty_fs::archive::{ArchiveListing, detect};
 
-use super::{Loaded, Slot, Sniff, ViewerKind};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::prelude::*;
-use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::archive::{ArchiveBody, ArchiveSource, ArchiveView};
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 
@@ -33,13 +31,8 @@ impl ViewerKind for Archive {
         }
     }
 
-    fn load(
-        &self,
-        hooks: &FileHooks,
-        location: &Location,
-        _: &Sniff<'_>,
-    ) -> Result<Loaded, String> {
-        Ok(Box::new((hooks.archive)(location)?))
+    fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
+        Ok(Box::new((load.hooks.archive)(load.location, load.cancel)?))
     }
 
     fn attach(

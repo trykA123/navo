@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use futures::StreamExt;
@@ -8,18 +7,11 @@ use rusty_core::paging::{Found, LineIndex, Search, find};
 
 use super::PagedView;
 use crate::prelude::*;
+use crate::window_view::viewer::cancel::Cancel;
 use crate::window_view::viewer::files::{IndexRun, Reopen, SharedSource};
 
 const SEARCH_EVERY: Duration = Duration::from_millis(100);
 const INDEX_EVERY: Duration = Duration::from_millis(250);
-
-struct Cancel(Arc<AtomicBool>);
-
-impl Drop for Cancel {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-}
 
 pub(super) struct Job {
     _cancel: Cancel,
@@ -52,9 +44,9 @@ fn spawn_job<M: Send + 'static>(
     work: impl FnOnce(&AtomicBool, &dyn Fn(M)) + Send + 'static,
     apply: impl Fn(&mut PagedView, M, &mut Context<PagedView>) + 'static,
 ) -> Job {
-    let flag = Arc::new(AtomicBool::new(false));
+    let cancel = Cancel::new();
     let (sender, mut receiver) = futures::channel::mpsc::unbounded::<M>();
-    let worker_flag = flag.clone();
+    let worker_flag = cancel.flag();
     cx.background_spawn(async move {
         work(&worker_flag, &|message| {
             let _ = sender.unbounded_send(message);
@@ -72,7 +64,7 @@ fn spawn_job<M: Send + 'static>(
         }
     });
     Job {
-        _cancel: Cancel(flag),
+        _cancel: cancel,
         _task: task,
     }
 }

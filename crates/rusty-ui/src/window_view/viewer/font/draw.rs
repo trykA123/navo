@@ -29,9 +29,9 @@ fn heading(t: &Theme, text: &'static str) -> Div {
 }
 
 impl FontView {
-    fn styled(&self, element: Div) -> Div {
+    fn styled(&self, element: Div, family: &SharedString) -> Div {
         element
-            .font_family(SharedString::from(self.face.family.clone()))
+            .font_family(family.clone())
             .font_weight(FontWeight(f32::from(self.face.weight)))
             .when(self.face.is_italic, Styled::italic)
     }
@@ -93,10 +93,10 @@ impl FontView {
             .child(small(t).child(format!("{} · {glyphs}", self.face.style)))
     }
 
-    fn samples(&self, t: &Theme) -> Div {
+    fn samples(&self, t: &Theme, family: &SharedString) -> Div {
         let lines = SIZES.iter().enumerate().map(|(index, size)| {
             let sample = self
-                .styled(div())
+                .styled(div(), family)
                 .text_size(px(*size))
                 .line_height(px(size * LINE_RATIO))
                 .whitespace_nowrap()
@@ -122,9 +122,9 @@ impl FontView {
         div().flex().flex_col().gap(t.spacing.md).children(lines)
     }
 
-    fn grid(&self, t: &Theme) -> impl IntoElement {
+    fn grid(&self, t: &Theme, family: &SharedString) -> impl IntoElement {
         let cells = self.face.chars.iter().map(|ch| {
-            self.styled(div())
+            self.styled(div(), family)
                 .flex()
                 .items_center()
                 .justify_center()
@@ -177,10 +177,12 @@ impl Render for FontView {
                     .flex_col()
                     .gap(t.spacing.xxl)
                     .child(self.facts(&t))
-                    .child(heading(&t, "Sample"))
-                    .child(self.samples(&t))
-                    .child(heading(&t, "Characters"))
-                    .child(self.grid(&t)),
+                    .when_some(self.family.as_ref(), |d, family| {
+                        d.child(heading(&t, "Sample"))
+                            .child(self.samples(&t, family))
+                            .child(heading(&t, "Characters"))
+                            .child(self.grid(&t, family))
+                    }),
             );
         let root = div().id("font").track_focus(&self.focus);
         Self::moves(root, cx)
