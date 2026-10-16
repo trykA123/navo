@@ -8,8 +8,12 @@ use gpui_kit::{
 };
 use rusty_core::{Command, Location};
 
-use super::{DriveIcon, DriveInfo, PaneTabs, PathBar, current_drive, drive_for_key, path_segments};
+use super::{
+    DriveIcon, DriveInfo, PaneTabs, PathBar, card_shadow, current_drive, drive_for_key,
+    path_segments,
+};
 use crate::test_window::open;
+use crate::tokens::{Mode, Theme};
 
 fn location(text: &str) -> Location {
     Location::new(text).expect("valid location")
@@ -60,7 +64,6 @@ impl Render for Chrome {
             )
             .child(
                 PathBar::new("path", location("/home/admin/work"))
-                    .active(true)
                     .on_navigate(move |target, _, _| visited.borrow_mut().push(target.clone())),
             )
     }
@@ -174,4 +177,20 @@ fn the_deepest_mount_holding_the_location_is_the_current_drive() {
     assert_eq!(current_drive(&drives, &location("/mnt/data")), Some(1));
     assert_eq!(current_drive(&drives, &location("/mnt/database")), Some(0));
     assert_eq!(current_drive(&drives, &location("/home/admin")), Some(0));
+}
+
+#[test]
+fn only_the_active_card_wears_the_accent_ring() {
+    for mode in [Mode::Light, Mode::Dark] {
+        let t = Theme::new(mode);
+        let ring = t.surfaces.card_ring;
+        let active = card_shadow(&t, true);
+        let idle = card_shadow(&t, false);
+        assert_eq!(active.last().map(|layer| layer.color), Some(ring));
+        assert!(idle.iter().all(|layer| layer.color != ring), "{mode:?}");
+        assert_eq!(
+            idle.last().map(|layer| layer.color),
+            Some(t.surfaces.card_edge)
+        );
+    }
 }

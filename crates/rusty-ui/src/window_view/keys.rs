@@ -7,7 +7,13 @@ pub(super) const WAITING: &str = "PaneWaiting";
 
 gpui_kit::actions!(
     ferrite_window,
-    [DriveMenuFirst, DriveMenuSecond, EditPath, LeaveWaiting]
+    [
+        DriveMenuFirst,
+        DriveMenuSecond,
+        EditPath,
+        LeaveWaiting,
+        NewTab
+    ]
 );
 
 pub fn bind_keys(cx: &mut App) {
@@ -16,6 +22,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-f1", DriveMenuFirst, Some(PANE)),
         KeyBinding::new("alt-f2", DriveMenuSecond, Some(PANE)),
         KeyBinding::new("ctrl-l", EditPath, Some(PANE)),
+        KeyBinding::new("ctrl-t", NewTab, Some(PANE)),
         KeyBinding::new("escape", LeaveWaiting, Some(WAITING)),
     ]);
 }

@@ -1,12 +1,20 @@
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext, Bounds, Entity, Point, Render, TestAppContext, Window,
-    WindowBounds, WindowOptions, px, size,
+    AnyWindowHandle, App, AppContext, Bounds, Entity, Pixels, Point, Render, TestAppContext,
+    Window, WindowBounds, WindowOptions, px, size,
 };
 
 use crate::tokens::{self, Mode};
 
 pub(crate) fn open<V: Render>(
     cx: &mut TestAppContext,
+    build: impl FnOnce(&mut Window, &mut App) -> V,
+) -> (AnyWindowHandle, Entity<V>) {
+    open_sized(cx, px(800.), build)
+}
+
+pub(crate) fn open_sized<V: Render>(
+    cx: &mut TestAppContext,
+    width: Pixels,
     build: impl FnOnce(&mut Window, &mut App) -> V,
 ) -> (AnyWindowHandle, Entity<V>) {
     cx.update(|cx| {
@@ -18,7 +26,7 @@ pub(crate) fn open<V: Render>(
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),
-                size: size(px(800.), px(600.)),
+                size: size(width, px(600.)),
             })),
             ..Default::default()
         };

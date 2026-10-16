@@ -1,4 +1,4 @@
-use rusty_ui::fkey_bar::FKeyBar;
+use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
@@ -17,7 +17,10 @@ use crate::structured_sample::{
     self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
 };
 use crate::tokens_page;
+use crate::window_page::WindowPage;
 use crate::{rich_sample, viewer_sample};
+
+const NARROW: f32 = 1100.;
 
 const TREE_STEPS: [&str; 9] = [
     "viewer::RowDown",
@@ -58,6 +61,10 @@ pub enum Page {
     MenuFilter,
     MenuFiles,
     Tokens,
+    Window,
+    WindowShift,
+    WindowAlt,
+    WindowNarrow,
 }
 
 pub struct PageInfo {
@@ -76,7 +83,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 19] = [
+pub const PAGES: [PageInfo; 23] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -96,6 +103,20 @@ pub const PAGES: [PageInfo; 19] = [
     info(Page::MenuFilter, "Menu filter", "p17-menu-filter", false),
     info(Page::MenuFiles, "Menu files", "p17-menu-files", false),
     info(Page::Tokens, "Tokens", "p19-tokens", false),
+    info(Page::Window, "Window", "p19-window", false),
+    info(
+        Page::WindowShift,
+        "Window, Shift held",
+        "p19-fkeys-shift",
+        false,
+    ),
+    info(Page::WindowAlt, "Window, Alt held", "p19-fkeys-alt", false),
+    info(
+        Page::WindowNarrow,
+        "Window at 1100 px",
+        "p19-window-1100",
+        false,
+    ),
 ];
 
 impl Page {
@@ -128,6 +149,9 @@ pub struct Gallery {
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
     menus: [(Page, Entity<MenuPage>); 4],
+    main_window: Entity<WindowPage>,
+    shift_window: Entity<WindowPage>,
+    alt_window: Entity<WindowPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -153,6 +177,9 @@ impl Gallery {
             marks: None,
             image: image_sample::image_view(cx).ok(),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
+            main_window: cx.new(|cx| WindowPage::new(None, cx)),
+            shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
+            alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), cx)),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -275,7 +302,7 @@ impl Gallery {
 
 fn image_keys() -> FKeyBar {
     let kinds = [("Alt+1", "Text"), ("3", "Hex"), ("Esc", "Close")];
-    FKeyBar::new("image-keys", ImageView::KEYS.into_iter().chain(kinds)).sized_to_keys()
+    FKeyBar::new("image-keys", ImageView::KEYS.into_iter().chain(kinds))
 }
 
 fn column(t: &Theme) -> Div {
@@ -298,9 +325,18 @@ impl Render for Gallery {
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
-            .line_height(t.typography.line_height)
-            .child(self.header(cx))
-            .child(self.page_bar(&t, cx));
+            .line_height(t.typography.line_height);
+        match self.page {
+            Page::Window => return root.child(self.main_window.clone()),
+            Page::WindowShift => return root.child(self.shift_window.clone()),
+            Page::WindowAlt => return root.child(self.alt_window.clone()),
+            Page::WindowNarrow => {
+                let narrow = div().w(px(NARROW)).h_full().child(self.main_window.clone());
+                return root.bg(t.colors.line).child(narrow);
+            }
+            _ => {}
+        }
+        let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
         match self.page {
             Page::Pane => root.child(self.pane.clone()),
             Page::Operate => root.child(self.operate.clone()),
@@ -321,6 +357,7 @@ impl Render for Gallery {
                 None => root.child("This sample did not load."),
             },
             Page::Tokens => root.child(tokens_page::render(&t)),
+            Page::Window | Page::WindowShift | Page::WindowAlt | Page::WindowNarrow => root,
         }
     }
 }

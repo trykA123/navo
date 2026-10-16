@@ -134,7 +134,8 @@ impl RenderOnce for PathInput {
             .flex()
             .flex_col()
             .flex_none()
-            .m(t.spacing.sm)
+            .mx(t.spacing.md)
+            .mb(t.spacing.sm)
             .gap(t.spacing.xs)
             .child(
                 div().h(t.spacing.path_height).flex().items_center().child(

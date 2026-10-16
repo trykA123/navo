@@ -110,6 +110,7 @@ pub struct Radii {
     pub lg: Pixels,
     pub card: Pixels,
     pub pill: Pixels,
+    pub full: Pixels,
     pub keycap: Pixels,
     pub sheet: Pixels,
     pub job_card: Pixels,

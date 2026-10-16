@@ -9,6 +9,7 @@ use gpui_kit::{
 };
 
 use super::icon;
+use crate::file_list::row::inset_ring;
 use crate::tokens::{self, Theme};
 
 type SelectHandler = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
@@ -37,6 +38,7 @@ pub struct Tabs {
     id: ElementId,
     tabs: Vec<Tab>,
     selected: usize,
+    is_highlighted: bool,
     on_select: Option<SelectHandler>,
 }
 
@@ -46,12 +48,18 @@ impl Tabs {
             id: id.into(),
             tabs: tabs.into_iter().collect(),
             selected: 0,
+            is_highlighted: false,
             on_select: None,
         }
     }
 
     pub fn selected(mut self, index: usize) -> Self {
         self.selected = index;
+        self
+    }
+
+    pub fn highlighted(mut self, is_highlighted: bool) -> Self {
+        self.is_highlighted = is_highlighted;
         self
     }
 
@@ -66,6 +74,7 @@ struct TabProps<'a> {
     index: usize,
     count: usize,
     is_selected: bool,
+    is_highlighted: bool,
     on_select: Option<SelectHandler>,
 }
 
@@ -73,6 +82,7 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
     let t = props.theme;
     let index = props.index;
     let c = &t.colors;
+    let color = if props.is_selected { c.text } else { c.muted };
     let base = BaseTab::new(index)
         .selected(props.is_selected)
         .set_position(index + 1, props.count)
@@ -81,25 +91,25 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
         .h(t.spacing.tab_height)
         .px(t.spacing.lg)
         .flex_none()
-        .text_size(t.typography.small)
-        .text_color(c.muted)
+        .rounded(t.radii.pill)
+        .text_color(color)
         .when_some(tab.icon, |base, name| {
-            base.child(icon(name, t.typography.body, c.folder))
+            base.child(icon(name, t.spacing.icon - px(1.), color))
         })
         .child(tab.label)
         .when_some(props.on_select, |base, handler| {
             base.on_click(move |_, window, cx| handler(&index, window, cx))
         });
-    if !props.is_selected {
-        return base;
+    match (props.is_selected, props.is_highlighted) {
+        (false, _) => base.hover(|style| style.bg(c.hover)),
+        (true, true) => base
+            .font_weight(FontWeight::SEMIBOLD)
+            .bg(t.surfaces.current),
+        (true, false) => base
+            .font_weight(FontWeight::SEMIBOLD)
+            .bg(t.surfaces.field)
+            .shadow(inset_ring(t.surfaces.card_edge)),
     }
-    base.text_color(c.text)
-        .font_weight(FontWeight::SEMIBOLD)
-        .mb(px(-1.))
-        .rounded_t(t.radii.md)
-        .border_1()
-        .border_color(c.line)
-        .bg(c.surface)
 }
 
 impl RenderOnce for Tabs {
@@ -107,6 +117,7 @@ impl RenderOnce for Tabs {
         let t = tokens::current(cx);
         let count = self.tabs.len();
         let selected = self.selected;
+        let is_highlighted = self.is_highlighted;
         let on_select = self.on_select;
         let tabs = self.tabs.into_iter().enumerate().map(|(index, tab)| {
             let props = TabProps {
@@ -114,6 +125,7 @@ impl RenderOnce for Tabs {
                 index,
                 count,
                 is_selected: index == selected,
+                is_highlighted,
                 on_select: on_select.clone(),
             };
             render_tab(tab, props)
@@ -123,15 +135,10 @@ impl RenderOnce for Tabs {
             .role(Role::TabList)
             .test_support()
             .flex()
-            .items_end()
-            .flex_none()
+            .items_center()
+            .gap(t.spacing.sm)
             .min_w_0()
             .overflow_hidden()
-            .px(t.spacing.sm)
-            .pt(t.spacing.sm)
-            .bg(t.colors.rail)
-            .border_b_1()
-            .border_color(t.colors.line)
             .children(tabs)
     }
 }

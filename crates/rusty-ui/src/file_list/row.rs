@@ -15,7 +15,6 @@ const HIDDEN_ICON_OPACITY: f32 = 0.55;
 pub(super) struct RowLook<'a> {
     pub theme: &'a Theme,
     pub entry: &'a FsEntry,
-    pub index: usize,
     pub is_cursor: bool,
     pub is_marked: bool,
     pub is_active_pane: bool,
@@ -27,6 +26,10 @@ pub(super) fn ext_column(t: &Theme) -> Pixels {
 
 pub(super) fn date_column(t: &Theme) -> Pixels {
     t.spacing.date_column + t.spacing.xl
+}
+
+pub(super) fn check_column(t: &Theme) -> Pixels {
+    t.spacing.xxl + t.spacing.xs
 }
 
 pub(crate) fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
@@ -44,9 +47,38 @@ pub(super) fn columns(t: &Theme) -> Div {
         .flex()
         .items_center()
         .gap(t.spacing.md)
-        .w_full()
-        .pl(t.spacing.xl)
+        .mx(t.spacing.xs)
+        .pl(t.spacing.lg)
         .pr(t.spacing.xxl)
+}
+
+fn check_cell(look: &RowLook) -> Div {
+    let t = look.theme;
+    div()
+        .w(check_column(t))
+        .flex_none()
+        .flex()
+        .justify_center()
+        .when(look.is_marked, |d| {
+            d.child(icon(
+                IconName::CircleCheck,
+                t.spacing.icon - px(1.),
+                t.colors.mark,
+            ))
+        })
+}
+
+fn cursor_bar(t: &Theme) -> impl IntoElement {
+    div()
+        .id("cursor-bar")
+        .test_support()
+        .absolute()
+        .left_0()
+        .top(t.spacing.xs)
+        .bottom(t.spacing.xs)
+        .w(px(3.))
+        .rounded(t.radii.xs)
+        .bg(t.surfaces.card_ring)
 }
 
 fn right_cell(width: Pixels, text: impl Into<SharedString>) -> Div {
@@ -116,19 +148,22 @@ pub(super) fn cells(look: &RowLook) -> Div {
         .font_family(t.typography.numbers_font.clone())
         .text_size(t.typography.small)
         .text_color(number_color)
-        .when(look.is_marked, |d| d.font_weight(FontWeight::BOLD))
+        .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
         .child(right_cell(t.spacing.size_column, kind::size_text(entry)))
         .child(right_cell(date_column(t), kind::date_text(entry)));
     let is_active_cursor = look.is_cursor && look.is_active_pane;
     let is_idle_cursor = look.is_cursor && !look.is_active_pane;
     columns(t)
+        .relative()
+        .flex_1()
         .h_full()
+        .rounded(t.radii.md)
         .text_color(name_color(look))
-        .when(look.index % 2 == 1, |d| d.bg(c.zebra))
         .when(is_active_cursor, |d| {
-            d.bg(c.selection).shadow(inset_ring(c.accent))
+            d.bg(t.surfaces.current).child(cursor_bar(t))
         })
         .when(is_idle_cursor, |d| d.shadow(inset_ring(c.line)))
+        .child(check_cell(look))
         .child(name_cell(look, name, extension))
         .child(
             div()

@@ -137,7 +137,7 @@ impl PanePage {
     }
 }
 
-fn status_of(rows: &[FsEntry], marked: &Selection) -> StatusBarProps {
+pub fn status_of(rows: &[FsEntry], marked: &Selection) -> StatusBarProps {
     let mut status = StatusBarProps {
         free_bytes: Some(FREE_BYTES),
         ..StatusBarProps::default()
@@ -176,14 +176,14 @@ impl PanePage {
 
     fn path_bar(&self, cx: &mut Context<Self>) -> PathBar {
         let location = self.state.active_tab().location().clone();
-        PathBar::new("pane-path", location)
-            .active(true)
-            .on_navigate(cx.listener(|this: &mut Self, location: &Location, _, cx| {
+        PathBar::new("pane-path", location).on_navigate(cx.listener(
+            |this: &mut Self, location: &Location, _, cx| {
                 this.run(&Command::PaneNavigate {
                     location: location.clone(),
                 });
                 cx.notify();
-            }))
+            },
+        ))
     }
 }
 

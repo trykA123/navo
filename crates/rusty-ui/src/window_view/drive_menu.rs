@@ -3,7 +3,6 @@ use rusty_core::PaneId;
 use super::FerriteWindow;
 use crate::pane_chrome::{DriveMenu, DriveMenuEvent};
 use crate::prelude::*;
-use crate::tokens;
 
 pub(super) struct MenuState {
     pub(super) pane: PaneId,
@@ -18,9 +17,17 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         let panes = self.panes();
-        let Some(pane) = panes.get(order).or_else(|| panes.last()).copied() else {
-            return;
-        };
+        if let Some(pane) = panes.get(order).or_else(|| panes.last()).copied() {
+            self.open_drive_menu_for(pane, window, cx);
+        }
+    }
+
+    pub(super) fn open_drive_menu_for(
+        &mut self,
+        pane: PaneId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.drives.list.is_empty() {
             return;
         }
@@ -29,10 +36,6 @@ impl FerriteWindow {
         self.drive_menu = Some(MenuState { pane, selected });
         window.focus(&self.menu_focus, cx);
         cx.notify();
-    }
-
-    pub(super) fn close_drive_menu(&mut self) {
-        self.drive_menu = None;
     }
 
     fn menu_event(&mut self, event: DriveMenuEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -62,16 +65,16 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let menu = self.drive_menu.as_ref().filter(|menu| menu.pane == pane)?;
-        let t = tokens::current(cx).clone();
         let list = self.drives.list.clone();
         let view = DriveMenu::new(("drive-menu", pane.get()), list, menu.selected)
             .current(self.current_drive(pane))
+            .busy(self.drives.reconnecting.clone())
             .track_focus(&self.menu_focus)
             .on_event(
                 cx.listener(|this: &mut Self, event: &DriveMenuEvent, window, cx| {
                     this.menu_event(*event, window, cx);
                 }),
             );
-        Some(view.into_popover(t.spacing.sm))
+        Some(view.into_popover(px(0.)))
     }
 }

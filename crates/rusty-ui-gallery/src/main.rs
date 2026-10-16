@@ -16,6 +16,7 @@ mod structured_sample;
 mod tokens_page;
 mod tokens_sample;
 mod viewer_sample;
+mod window_page;
 
 #[cfg(test)]
 mod tests;

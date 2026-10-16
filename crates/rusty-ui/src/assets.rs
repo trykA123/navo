@@ -54,6 +54,7 @@ icon_assets!(
         Search,
         SquareMenu,
         SquarePlus,
+        Trash,
         Type,
         Usb,
         X,

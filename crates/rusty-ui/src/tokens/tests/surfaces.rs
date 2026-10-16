@@ -196,3 +196,12 @@ fn reduced_motion_keeps_the_fade_but_drops_the_travel() {
     assert_eq!(Motion::travel(px(6.), false), px(6.));
     assert_eq!(Motion::travel(px(6.), true), px(0.));
 }
+
+#[test]
+fn the_card_ring_and_pill_label_use_the_app_accent() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        assert_eq!(theme.surfaces.card_ring, theme.colors.accent);
+        assert_eq!(theme.surfaces.pill_label, theme.colors.accent_text);
+    }
+}
