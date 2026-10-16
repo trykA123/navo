@@ -8,6 +8,7 @@ mod operate;
 mod pane;
 mod path_edit;
 mod prompt;
+mod settings_save;
 mod status;
 mod tab_keys;
 mod viewer;
@@ -112,7 +113,7 @@ pub struct FerriteWindow {
     app_menu_focus: FocusHandle,
     quick: QuickSettings,
     identity: Identity,
-    save_settings: SaveSettings,
+    saver: settings_save::Saver,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -156,7 +157,7 @@ impl FerriteWindow {
             app_menu_focus: cx.focus_handle(),
             quick: options.app_menu.settings,
             identity: options.app_menu.identity,
-            save_settings: options.app_menu.save,
+            saver: settings_save::Saver::new(options.app_menu.save, options.app_menu.load_error),
             _activation: cx.observe_window_activation(window, |view, window, cx| {
                 view.track_modifiers(window.modifiers(), window, cx);
             }),

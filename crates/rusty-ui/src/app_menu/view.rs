@@ -5,8 +5,8 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     Animation, AnimationExt, AnyElement, App, Div, FontWeight, Hsla, InteractiveElement,
-    IntoElement, ParentElement, Role, Stateful, StatefulInteractiveElement, Styled, Window, div,
-    img, px,
+    IntoElement, ParentElement, Role, SharedString, Stateful, StatefulInteractiveElement, Styled,
+    Window, div, img, px,
 };
 
 use super::items::QuickSettings;
@@ -101,6 +101,19 @@ pub(super) fn header(t: &Theme, identity: &Identity, scale_factor: f32) -> Div {
         .pb(t.spacing.lg)
         .child(mark)
         .child(text)
+}
+
+pub(super) fn error_line(t: &Theme, message: SharedString) -> impl IntoElement {
+    div()
+        .id("app-menu-error")
+        .role(Role::Alert)
+        .aria_label(message.clone())
+        .test_support()
+        .px(t.spacing.xs)
+        .pb(t.spacing.lg)
+        .text_size(t.typography.small)
+        .text_color(t.colors.mark)
+        .child(message)
 }
 
 fn hover_and_click<E: StatefulInteractiveElement>(

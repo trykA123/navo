@@ -117,7 +117,7 @@ impl FileList {
 #[derive(Default)]
 struct ListState {
     scroll: ListScroll,
-    followed_scroll: Option<(u64, usize)>,
+    followed_scroll: Option<(u64, usize, Pixels)>,
     page_rows: Option<u64>,
 }
 
@@ -303,8 +303,9 @@ fn follow_scroll(
     cx: &mut App,
 ) -> ListScroll {
     state.update(cx, |state, _| {
-        if len > 0 && state.followed_scroll != Some((wanted, len)) {
-            state.followed_scroll = Some((wanted, len));
+        let key = (wanted, len, row_height);
+        if len > 0 && state.followed_scroll != Some(key) {
+            state.followed_scroll = Some(key);
             if row_number(state.scroll.top_row(row_height)) != wanted {
                 state.scroll.scroll_to_top(row_index(wanted));
             }

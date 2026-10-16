@@ -1,19 +1,18 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::FocusHandle;
 
 use super::{FerriteWindow, mode_of};
-use crate::app_menu::{
-    AppMenu, AppMenuEvent, Identity, Install, MenuCommand, QuickSettings, Setting,
-};
+use crate::app_menu::{AppMenu, AppMenuEvent, Identity, Install, MenuCommand, QuickSettings};
 use crate::prelude::*;
 use crate::tokens;
 
-pub type SaveSettings = Rc<dyn Fn(&QuickSettings)>;
+pub use super::settings_save::SaveSettings;
 
 pub struct AppMenuHooks {
     pub identity: Identity,
     pub settings: QuickSettings,
+    pub load_error: Option<SharedString>,
     pub save: SaveSettings,
 }
 
@@ -29,7 +28,14 @@ impl AppMenuHooks {
                 show_hidden: true,
                 ..QuickSettings::default()
             },
-            save: Rc::new(|_| {}),
+            load_error: None,
+            save: Arc::new(|change| {
+                let values = QuickSettings {
+                    show_hidden: true,
+                    ..QuickSettings::default()
+                };
+                Ok(change.applied_to(values))
+            }),
         }
     }
 }
@@ -77,14 +83,7 @@ impl FerriteWindow {
                     menu.selected = index;
                 }
             }
-            AppMenuEvent::Toggle(setting) => {
-                self.quick = self.quick.toggled(setting);
-                (self.save_settings)(&self.quick);
-                match setting {
-                    Setting::Theme | Setting::Density => self.apply_theme(window, cx),
-                    Setting::HiddenFiles => self.browser.set_show_hidden(self.quick.show_hidden),
-                }
-            }
+            AppMenuEvent::Toggle(setting) => self.toggle_setting(setting, window, cx),
             AppMenuEvent::Run(command) => {
                 self.close_app_menu(window, cx);
                 self.run_menu_command(command, cx);
@@ -105,6 +104,7 @@ impl FerriteWindow {
         let t = tokens::current(cx).clone();
         let view = AppMenu::new("app-menu", self.identity.clone(), self.quick)
             .selected(menu.selected)
+            .error(self.saver.error.clone())
             .track_focus(&self.app_menu_focus)
             .on_event(
                 cx.listener(|this: &mut Self, event: &AppMenuEvent, window, cx| {

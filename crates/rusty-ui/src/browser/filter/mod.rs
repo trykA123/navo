@@ -54,7 +54,7 @@ impl Browser {
             return;
         };
         self.details.insert(tab, shown.details);
-        self.event(Event::ListingFiltered {
+        self.event(Event::ListingRefiltered {
             tab,
             location,
             listing: shown.listing,

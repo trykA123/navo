@@ -46,9 +46,11 @@ impl FerriteWindow {
     }
 
     fn pane_error(&self, pane: PaneId, tab: &Tab) -> Option<SharedString> {
+        let is_focused = self.browser.state().focused_pane() == pane;
         self.drives
             .error(pane, tab)
             .or_else(|| self.browser.error(tab.id()).map(|e| e.message().into()))
+            .or_else(|| self.saver.error.clone().filter(|_| is_focused))
     }
 
     pub(super) fn pane_view(

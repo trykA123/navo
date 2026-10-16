@@ -16,7 +16,9 @@ use gpui_kit::{
 };
 
 pub use focus::{Ring, Step, jump};
-pub use items::{ITEM_COUNT, Item, MenuCommand, QuickSettings, Setting, index_of, item_at};
+pub use items::{
+    ITEM_COUNT, Item, MenuCommand, QuickChange, QuickSettings, Setting, index_of, item_at,
+};
 
 use crate::tokens::{self, Theme};
 
@@ -91,6 +93,7 @@ pub struct AppMenu {
     id: ElementId,
     identity: Identity,
     settings: QuickSettings,
+    error: Option<SharedString>,
     selected: usize,
     focus: Option<FocusHandle>,
     on_event: Option<EventHandler>,
@@ -111,6 +114,7 @@ impl AppMenu {
             id: id.into(),
             identity,
             settings,
+            error: None,
             selected: 0,
             focus: None,
             on_event: None,
@@ -120,6 +124,12 @@ impl AppMenu {
     #[must_use]
     pub fn selected(mut self, index: usize) -> Self {
         self.selected = index.min(ITEM_COUNT - 1);
+        self
+    }
+
+    #[must_use]
+    pub fn error(mut self, message: Option<SharedString>) -> Self {
+        self.error = message;
         self
     }
 
@@ -236,6 +246,7 @@ impl RenderOnce for AppMenu {
             .when_some(self.focus.as_ref(), |d, focus| d.track_focus(focus));
         let panel = view::panel(t, panel)
             .child(header)
+            .children(self.error.map(|message| view::error_line(t, message)))
             .child(tiles)
             .children(rows);
         view::enter(panel, t, cx.reduce_motion())

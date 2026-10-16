@@ -1,24 +1,45 @@
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_panes};
-use crate::app_menu::{Identity, Install, QuickSettings};
+use crate::app_menu::{Identity, Install, QuickChange, QuickSettings};
 use crate::browser::Operations;
 use crate::tokens::{self, Density, Mode, ThemeChoice};
 use crate::window_view::AppMenuHooks;
 
-struct Rig {
-    window: AnyWindowHandle,
-    view: Entity<FerriteWindow>,
-    saved: Rc<RefCell<Vec<QuickSettings>>>,
+#[derive(Default)]
+pub(super) struct FakeStore {
+    pub stored: Mutex<QuickSettings>,
+    pub changes: Mutex<Vec<QuickChange>>,
+    pub results: Mutex<Vec<QuickSettings>>,
+    pub failure: Mutex<Option<String>>,
+}
+
+impl FakeStore {
+    fn save(&self, change: &QuickChange) -> Result<QuickSettings, String> {
+        self.changes.lock().expect("changes").push(*change);
+        if let Some(message) = self.failure.lock().expect("failure").clone() {
+            return Err(message);
+        }
+        let mut stored = self.stored.lock().expect("stored");
+        *stored = change.applied_to(*stored);
+        self.results.lock().expect("results").push(*stored);
+        Ok(*stored)
+    }
+}
+
+pub(super) struct Rig {
+    pub window: AnyWindowHandle,
+    pub view: Entity<FerriteWindow>,
+    pub store: Arc<FakeStore>,
     sessions: Rc<Cell<usize>>,
 }
 
-fn rig(cx: &mut TestAppContext, theme: ThemeChoice) -> Rig {
+pub(super) fn rig(cx: &mut TestAppContext, theme: ThemeChoice) -> Rig {
     let settings = QuickSettings {
         theme,
         density: Density::Normal,
@@ -40,13 +61,24 @@ fn hidden_file(name: &str) -> rusty_fs::FsEntry {
     }
 }
 
-fn rig_with(cx: &mut TestAppContext, settings: QuickSettings) -> Rig {
+pub(super) fn rig_with(cx: &mut TestAppContext, settings: QuickSettings) -> Rig {
+    rig_full(cx, settings, None)
+}
+
+pub(super) fn rig_full(
+    cx: &mut TestAppContext,
+    settings: QuickSettings,
+    load_error: Option<&str>,
+) -> Rig {
     let fs = fake();
     fs.add_entry("home", hidden_file("b-secret.txt"));
     let state = two_panes(&fs);
-    let saved: Rc<RefCell<Vec<QuickSettings>>> = Rc::default();
+    let store = Arc::new(FakeStore {
+        stored: Mutex::new(settings),
+        ..FakeStore::default()
+    });
     let sessions: Rc<Cell<usize>> = Rc::default();
-    let (log, count) = (saved.clone(), sessions.clone());
+    let (fake_store, count) = (store.clone(), sessions.clone());
     let options = StartOptions {
         state,
         provider: fs,
@@ -65,7 +97,8 @@ fn rig_with(cx: &mut TestAppContext, settings: QuickSettings) -> Rig {
                 folder: r"C:\Ferrite".into(),
             },
             settings,
-            save: Rc::new(move |saved| log.borrow_mut().push(*saved)),
+            load_error: load_error.map(Into::into),
+            save: Arc::new(move |change| fake_store.save(change)),
         },
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
@@ -75,28 +108,32 @@ fn rig_with(cx: &mut TestAppContext, settings: QuickSettings) -> Rig {
     Rig {
         window,
         view,
-        saved,
+        store,
         sessions,
     }
 }
 
 impl Rig {
-    fn is_open(&self, cx: &mut TestAppContext) -> bool {
+    pub fn saved(&self) -> Vec<QuickSettings> {
+        self.store.results.lock().expect("results").clone()
+    }
+
+    pub fn is_open(&self, cx: &mut TestAppContext) -> bool {
         self.view.read_with(cx, |view, _| view.app_menu.is_some())
     }
 
-    fn press(&self, cx: &mut TestAppContext, key: &str) {
+    pub fn press(&self, cx: &mut TestAppContext, key: &str) {
         press(cx, self.window, &self.view, key);
     }
 
-    fn click(&self, cx: &mut TestAppContext, id: impl Into<gpui_kit::ElementId>) {
+    pub fn click(&self, cx: &mut TestAppContext, id: impl Into<gpui_kit::ElementId>) {
         let id = id.into();
         cx.update_window(self.window, |_, window, cx| window.click(id, cx))
             .expect("window");
         settle(cx, &self.view);
     }
 
-    fn pane_has_focus(&self, cx: &mut TestAppContext) -> bool {
+    pub fn pane_has_focus(&self, cx: &mut TestAppContext) -> bool {
         let view = self.view.clone();
         cx.update_window(self.window, |_, window, cx| {
             view.update(cx, |view, cx| {
@@ -107,7 +144,7 @@ impl Rig {
         .expect("window")
     }
 
-    fn pane_names(&self, cx: &mut TestAppContext) -> Vec<Vec<String>> {
+    pub fn pane_names(&self, cx: &mut TestAppContext) -> Vec<Vec<String>> {
         self.view.read_with(cx, |view, _| {
             let state = view.browser.state();
             view.panes()
@@ -123,7 +160,7 @@ impl Rig {
         })
     }
 
-    fn mode(&self, cx: &mut TestAppContext) -> Mode {
+    pub fn mode(&self, cx: &mut TestAppContext) -> Mode {
         cx.read(|cx| tokens::current(cx).mode)
     }
 
@@ -197,7 +234,7 @@ fn the_theme_tile_applies_and_saves_each_choice(cx: &mut TestAppContext) {
     assert_eq!(rig.mode(cx), Mode::Dark);
     rig.click(cx, ("app-menu-tile", 0usize));
     assert_eq!(rig.mode(cx), Mode::Light);
-    let themes: Vec<ThemeChoice> = rig.saved.borrow().iter().map(|s| s.theme).collect();
+    let themes: Vec<ThemeChoice> = rig.saved().iter().map(|s| s.theme).collect();
     assert_eq!(
         themes,
         [ThemeChoice::Light, ThemeChoice::Dark, ThemeChoice::System]
@@ -217,7 +254,7 @@ fn the_theme_tile_applies_and_saves_each_choice(cx: &mut TestAppContext) {
 fn the_saved_theme_applies_at_start(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::Dark);
     assert_eq!(rig.mode(cx), Mode::Dark);
-    assert!(rig.saved.borrow().is_empty());
+    assert!(rig.saved().is_empty());
 }
 
 #[gpui_kit::test]
@@ -231,7 +268,7 @@ fn unavailable_rows_neither_act_nor_close_the_menu(cx: &mut TestAppContext) {
     }
     rig.click(cx, ("app-menu-row", 3usize));
     assert!(rig.is_open(cx));
-    assert!(rig.saved.borrow().is_empty());
+    assert!(rig.saved().is_empty());
     assert_eq!(rig.sessions.get(), 0);
 }
 
@@ -317,7 +354,7 @@ fn the_density_tile_changes_the_rows_and_saves(cx: &mut TestAppContext) {
     );
     rig.click(cx, ("app-menu-tile", 1usize));
     assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Compact);
-    let saved: Vec<Density> = rig.saved.borrow().iter().map(|s| s.density).collect();
+    let saved: Vec<Density> = rig.saved().iter().map(|s| s.density).collect();
     assert_eq!(saved, [Density::Comfortable, Density::Compact]);
     assert_eq!(rig.mode(cx), Mode::Light, "density keeps the theme");
 }
@@ -344,7 +381,7 @@ fn the_hidden_tile_hides_hidden_files_in_both_panes_and_saves(cx: &mut TestAppCo
             .iter()
             .all(|names| names.contains(&"a.txt".to_owned()))
     );
-    let saved = rig.saved.borrow().last().map(|s| s.show_hidden);
+    let saved = rig.saved().last().map(|s| s.show_hidden);
     assert_eq!(saved, Some(false));
 }
 

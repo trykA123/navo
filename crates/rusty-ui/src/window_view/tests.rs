@@ -15,6 +15,7 @@ use rusty_fs::Provider;
 use super::{FerriteWindow, StartOptions};
 
 mod app_menu;
+mod app_menu_save;
 mod cached;
 mod cards;
 mod drive_fs;

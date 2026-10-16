@@ -163,3 +163,34 @@ fn type_to_filter_works_on_the_visible_rows_only() {
     browser.set_show_hidden(true);
     assert_eq!(names(&browser), ["docs", "d.txt"]);
 }
+
+#[test]
+fn hiding_the_cursor_entry_moves_to_the_next_visible_entry_not_the_top() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser
+        .command(&Command::PaneCursorMove {
+            to: CursorMove::Row(2),
+        })
+        .expect("cursor");
+    assert_eq!(cursor_name(&browser).as_deref(), Some("b-secret.txt"));
+    browser.set_show_hidden(false);
+    assert_eq!(cursor_name(&browser).as_deref(), Some("d.txt"));
+}
+
+#[test]
+fn hiding_the_last_entry_moves_back_to_the_previous_visible_entry() {
+    let fs = FakeFs::new();
+    fs.add_folder("home/docs");
+    fs.add_file("home/a.txt", 1);
+    fs.add_entry("home", entry("z-hidden.txt", hidden()));
+    let fs = Arc::new(fs);
+    let mut browser = browser(&fs);
+    browser
+        .command(&Command::PaneCursorMove {
+            to: CursorMove::Row(2),
+        })
+        .expect("cursor");
+    browser.set_show_hidden(false);
+    assert_eq!(cursor_name(&browser).as_deref(), Some("a.txt"));
+}
