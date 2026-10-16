@@ -106,7 +106,7 @@ fn markdown_with_too_many_blocks_opens_as_text_with_a_note(cx: &mut TestAppConte
 #[gpui_kit::test]
 fn markdown_with_too_many_footnotes_opens_as_text_with_a_note(cx: &mut TestAppContext) {
     let source = "[^a]: b\n".repeat(2_001);
-    let note = "Too many footnotes for the rendered view";
+    let note = "Markdown with over 2,000 footnote lines: shown as text.";
     opens_as_text_with(cx, "notes.md", source, note);
 }
 

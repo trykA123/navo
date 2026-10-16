@@ -28,7 +28,7 @@ impl fmt::Display for Refusal {
             Self::TooLarge => "Markdown over 1 MB",
             Self::TooManyBlocks => "Markdown with over 200,000 blocks",
             Self::TooManySpans => "Markdown with over 2,000,000 styled runs",
-            Self::TooManyFootnotes => "Too many footnotes for the rendered view",
+            Self::TooManyFootnotes => "Markdown with over 2,000 footnote lines",
         })
     }
 }
