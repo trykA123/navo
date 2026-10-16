@@ -16,11 +16,7 @@ pub fn parse(text: &str) -> Result<(Settings, Vec<String>), SettingsError> {
 
 #[must_use]
 pub fn to_toml(settings: &Settings) -> String {
-    try_to_toml(settings).unwrap_or_default()
-}
-
-pub(super) fn try_to_toml(settings: &Settings) -> Result<String, toml::ser::Error> {
-    toml::to_string(settings)
+    toml::to_string(settings).unwrap_or_default()
 }
 
 fn invalid(text: &str, error: &toml::de::Error) -> SettingsError {

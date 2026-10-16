@@ -119,3 +119,16 @@ fn the_identity_names_the_version_and_the_exe_folder() {
     let folder = PathBuf::from("apps").join("Ferrite");
     assert_eq!(menu.identity.folder.as_ref(), folder.to_string_lossy());
 }
+
+#[test]
+fn a_save_keeps_comments_and_unknown_keys_in_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("ferrite.toml");
+    fs::write(&file, "# mine\n[appearance]\nzoom = 2\n").unwrap();
+    let menu = hooks(Some(&file), None);
+    (menu.save)(&change_theme(ThemeChoice::Dark)).unwrap();
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        "# mine\n[appearance]\nzoom = 2\nmode = \"dark\"\n"
+    );
+}

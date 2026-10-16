@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use rusty_store::{
-    Density as StoredDensity, HiddenFiles, Settings, SettingsError, SettingsStore, ThemeMode,
+    Density as StoredDensity, HiddenFiles, SettingValue, Settings, SettingsError, SettingsStore,
+    ThemeMode,
 };
 use rusty_ui::app_menu::{Identity, Install, QuickChange, QuickSettings};
 use rusty_ui::tokens::{Density, ThemeChoice};
@@ -61,18 +62,8 @@ impl Target {
 }
 
 fn save(store: &mut SettingsStore, change: &QuickChange) -> Result<QuickSettings, SettingsError> {
-    let mut settings = store.current().clone();
-    store_into(&mut settings, change);
-    match store.save(settings) {
-        Err(SettingsError::FileChanged) => {
-            if let Some(error) = store.reload().error {
-                return Err(error);
-            }
-            let mut settings = store.current().clone();
-            store_into(&mut settings, change);
-            store.save(settings)?;
-        }
-        other => other?,
+    for (key, value) in fields(change) {
+        store.save(key, Some(SettingValue::Text(value.to_owned())))?;
     }
     Ok(quick(store.current()))
 }
@@ -119,28 +110,28 @@ fn quick(settings: &Settings) -> QuickSettings {
     }
 }
 
-fn store_into(settings: &mut Settings, change: &QuickChange) {
-    if let Some(theme) = change.theme {
-        settings.appearance.mode = match theme {
-            ThemeChoice::System => ThemeMode::System,
-            ThemeChoice::Light => ThemeMode::Light,
-            ThemeChoice::Dark => ThemeMode::Dark,
-        };
-    }
-    if let Some(density) = change.density {
-        settings.appearance.density = match density {
-            Density::Compact => StoredDensity::Compact,
-            Density::Normal => StoredDensity::Normal,
-            Density::Comfortable => StoredDensity::Comfortable,
-        };
-    }
-    if let Some(shown) = change.show_hidden {
-        settings.files.hidden_files = if shown {
-            HiddenFiles::Shown
-        } else {
-            HiddenFiles::Hidden
-        };
-    }
+fn fields(change: &QuickChange) -> Vec<(&'static str, &'static str)> {
+    let theme = change.theme.map(|theme| match theme {
+        ThemeChoice::System => "system",
+        ThemeChoice::Light => "light",
+        ThemeChoice::Dark => "dark",
+    });
+    let density = change.density.map(|density| match density {
+        Density::Compact => "compact",
+        Density::Normal => "normal",
+        Density::Comfortable => "comfortable",
+    });
+    let hidden = change
+        .show_hidden
+        .map(|shown| if shown { "shown" } else { "hidden" });
+    [
+        ("appearance.mode", theme),
+        ("appearance.density", density),
+        ("files.hidden-files", hidden),
+    ]
+    .into_iter()
+    .filter_map(|(key, value)| Some((key, value?)))
+    .collect()
 }
 
 #[cfg(test)]

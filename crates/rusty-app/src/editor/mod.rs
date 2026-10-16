@@ -100,15 +100,8 @@ fn remember(
 }
 
 fn save_choice(store: &Rc<RefCell<SettingsStore>>, program: &str) {
-    for _ in 0..2 {
-        let mut settings = store.borrow().current().clone();
-        settings.editor.path = Some(program.to_owned());
-        let saved = store.borrow_mut().save(settings);
-        if !matches!(saved, Err(rusty_store::SettingsError::FileChanged)) {
-            return;
-        }
-        let _ = store.borrow_mut().reload();
-    }
+    let value = rusty_store::SettingValue::Text(program.to_owned());
+    let _ = store.borrow_mut().save("editor.path", Some(value));
 }
 
 fn open(program: &str, file: &Location) -> Result<(), String> {
