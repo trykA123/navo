@@ -211,3 +211,69 @@ fn a_search_waits_for_queued_moves_before_it_starts(cx: &mut TestAppContext) {
     super::redraw(cx, window);
     assert_eq!(top(cx, &view), line_900);
 }
+
+fn text_files(
+    cx: &mut TestAppContext,
+    bytes: Vec<u8>,
+) -> (AnyWindowHandle, Entity<FerriteWindow>, super::Log) {
+    let fs = fake();
+    for name in ["b.txt", "c.txt", "d.txt"] {
+        fs.add_file(&format!("home/{name}"), 4);
+    }
+    let (window, view, log) = window_on(cx, fs, Setup::new(bytes));
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    (window, view, log)
+}
+
+#[gpui_kit::test]
+fn space_pages_down_and_backspace_stays_in_the_hex_view(cx: &mut TestAppContext) {
+    let (window, view, _) = text_files(cx, mixed(64 * 1024));
+    press(cx, window, &view, "n");
+    assert_eq!(title(cx, &view), "b.txt");
+    let rows = super::paged(cx, &view).read_with(cx, |paged, _| paged.rows);
+    press(cx, window, &view, "space");
+    assert_eq!(title(cx, &view), "b.txt");
+    assert_eq!(top(cx, &view), rows * rusty_core::paging::HEX_WIDTH);
+    press(cx, window, &view, "backspace");
+    assert_eq!(title(cx, &view), "b.txt");
+}
+
+#[gpui_kit::test]
+fn space_pages_down_in_the_read_only_editor_instead_of_stepping(cx: &mut TestAppContext) {
+    let text: String = (0..400).map(|line| format!("line {line}\n")).collect();
+    let (window, view, _) = text_files(cx, text.into_bytes());
+    assert!(has_editor(cx, &view));
+    press(cx, window, &view, "space");
+    press(cx, window, &view, "backspace");
+    assert_eq!(title(cx, &view), "a.txt");
+    let editor = editor_of(cx, &view).expect("the text editor is open");
+    let cursor = editor.read_with(cx, |state, _| state.selected_range().start);
+    assert!(cursor > 0, "space left the cursor at {cursor}");
+}
+
+#[gpui_kit::test]
+fn n_pressed_while_a_file_opens_starts_only_the_newest_load(cx: &mut TestAppContext) {
+    let (window, view, log) = text_files(cx, b"hello\n".to_vec());
+    let before = log.heads().len();
+    for _ in 0..3 {
+        press_only(cx, window, "n");
+    }
+    crate::window_view::tests::settle(cx, &view);
+    super::redraw(cx, window);
+    assert_eq!(title(cx, &view), "d.txt");
+    assert!(has_editor(cx, &view));
+    assert_eq!(log.heads()[before..], ["b.txt", "d.txt"]);
+}
+
+#[gpui_kit::test]
+fn n_then_p_while_a_file_opens_shows_the_first_file_again(cx: &mut TestAppContext) {
+    let (window, view, _) = text_files(cx, b"hello\n".to_vec());
+    press(cx, window, &view, "n");
+    press_only(cx, window, "n");
+    press_only(cx, window, "p");
+    crate::window_view::tests::settle(cx, &view);
+    super::redraw(cx, window);
+    assert_eq!(title(cx, &view), "b.txt");
+    assert!(has_editor(cx, &view));
+}

@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use gpui_kit::Task;
 use rusty_core::paging::{Counted, Needle, ordinal};
 
 use super::jobs::Job;
@@ -5,6 +8,8 @@ use super::scan::{ScanUpdate, Tally, start_scans};
 use super::{Marked, Marking};
 use crate::format;
 use crate::prelude::*;
+
+const TYPING_PAUSE: Duration = Duration::from_millis(150);
 
 pub(in crate::window_view::viewer) struct CountRun {
     pub tally: Tally,
@@ -114,6 +119,26 @@ pub(in crate::window_view::viewer) fn count_search<V: Marked>(
     });
     marking.rev += 1;
     start_search_scan(view, cx);
+}
+
+pub(in crate::window_view::viewer) fn count_after_pause<V: Marked>(
+    needle_of: fn(&V, &App) -> Option<Needle>,
+    cx: &mut Context<V>,
+) -> Task<()> {
+    cx.spawn(async move |this, cx| {
+        cx.background_executor().timer(TYPING_PAUSE).await;
+        let _ = this.update(cx, |view, cx| {
+            match needle_of(view, cx) {
+                Some(needle) => count_search(view, needle, cx),
+                None => {
+                    let marking = view.marking();
+                    marking.count = None;
+                    marking.rev += 1;
+                }
+            }
+            cx.notify();
+        });
+    })
 }
 
 pub(in crate::window_view::viewer) fn count_source_changed<V: Marked>(

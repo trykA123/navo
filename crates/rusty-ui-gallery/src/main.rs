@@ -3,6 +3,8 @@
 mod drives_page;
 mod gallery;
 mod image_sample;
+mod menu_page;
+mod menu_sample;
 mod operate_page;
 mod options;
 mod pane_page;
@@ -56,6 +58,7 @@ fn main() -> ExitCode {
             report(&error.to_string());
         }
         rusty_ui::confirm_dialog::bind_keys(cx);
+        rusty_ui::context_menu::bind_keys(cx);
         rusty_ui::pane_chrome::bind_keys(cx);
         let opened = rusty_ui::open_window(window_options(cx), cx, |window, cx| {
             cx.new(|cx| Gallery::new(Mode::Light, window, cx))

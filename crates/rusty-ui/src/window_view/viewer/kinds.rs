@@ -59,6 +59,7 @@ impl Sniff<'_> {
 }
 
 pub(super) use image::{IMAGE_ID, is_image_name};
+pub(super) use text::paged_text;
 
 pub type Loaded = Box<dyn Any + Send>;
 

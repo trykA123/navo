@@ -1,0 +1,225 @@
+use gpui_kit::base::{ObservedElement, TestSupportExt};
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::{
+    Div, FontWeight, Hsla, ImageSource, InteractiveElement, IntoElement, ParentElement, Role,
+    SharedString, Stateful, StatefulInteractiveElement, Styled, div, img, px,
+};
+use rusty_core::shell_menu::{ItemId, ItemRow, MenuItem, Row, Section, ShellMenu};
+
+use super::icons::{ShellIcons, ferrite_icon};
+use super::place::{HEADER, ROW, SEPARATOR};
+use crate::primitives::{IconName, icon};
+use crate::tokens::Theme;
+
+const ICON_COLUMN: f32 = 20.;
+const SHELL_ICON: f32 = 16.;
+
+pub(super) type RowElement = ObservedElement<Stateful<Div>>;
+
+pub(super) struct RowLook<'a> {
+    pub theme: &'a Theme,
+    pub menu: &'a ShellMenu,
+    pub icons: &'a ShellIcons,
+    pub is_active: bool,
+}
+
+fn base(index: usize) -> RowElement {
+    div()
+        .id(("menu-row", index))
+        .test_support()
+        .flex()
+        .flex_none()
+        .items_center()
+}
+
+fn line(t: &Theme, index: usize, is_selected: bool, is_active: bool) -> RowElement {
+    let highlight = if is_active {
+        t.colors.selection
+    } else {
+        t.colors.hover
+    };
+    base(index)
+        .role(Role::MenuItem)
+        .aria_selected(is_selected)
+        .gap(t.spacing.md)
+        .h(px(ROW))
+        .px(t.spacing.sm)
+        .rounded(t.radii.md)
+        .when(is_selected, |row| row.bg(highlight))
+}
+
+fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
+    div()
+        .w(px(ICON_COLUMN))
+        .flex_none()
+        .flex()
+        .justify_center()
+        .children(child)
+}
+
+pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool) -> RowElement {
+    let t = look.theme;
+    match row {
+        Row::Header(section) => header(t, *section, index),
+        Row::Separator => base(index)
+            .h(px(SEPARATOR))
+            .px(t.spacing.sm)
+            .child(div().h(px(1.)).w_full().bg(t.colors.line)),
+        Row::Item(item) => item_row(look, item, index, is_selected),
+        Row::More { count } => line(t, index, is_selected, look.is_active)
+            .aria_label(format!("More ({count})"))
+            .cursor_pointer()
+            .child(icon_cell(Some(
+                icon(IconName::Ellipsis, t.spacing.icon, t.colors.muted).into_any_element(),
+            )))
+            .child(div().flex_1().child("More"))
+            .child(trailing_text(t, format!("{count} rare")))
+            .child(icon(IconName::ChevronDown, t.spacing.icon, t.colors.muted)),
+    }
+}
+
+fn header(t: &Theme, section: Section, index: usize) -> RowElement {
+    let label = match section {
+        Section::Ferrite => "Ferrite",
+        Section::Windows => "Windows",
+    };
+    base(index)
+        .role(Role::Heading)
+        .aria_label(label)
+        .items_end()
+        .h(px(HEADER))
+        .px(t.spacing.md)
+        .pb(t.spacing.xs)
+        .text_size(t.typography.tiny)
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(t.colors.muted)
+        .child(label)
+}
+
+fn item_row(look: &RowLook, item: &ItemRow, index: usize, is_selected: bool) -> RowElement {
+    let t = look.theme;
+    let source = look.menu.item(&item.path);
+    let color = if item.enabled {
+        t.colors.text
+    } else {
+        t.colors.faint
+    };
+    let accelerator = source.and_then(|item| item.accelerator.clone());
+    line(t, index, is_selected, look.is_active)
+        .aria_label(item.breadcrumb())
+        .text_color(color)
+        .when(item.enabled, |row| row.cursor_pointer())
+        .child(icon_cell(item_icon(look, item, source)))
+        .child(label(
+            t,
+            item,
+            index,
+            source.is_some_and(|item| item.default),
+        ))
+        .when_some(accelerator.filter(|_| !item.opens_submenu), |row, keys| {
+            row.child(trailing_text(t, keys))
+        })
+        .when(item.opens_submenu, |row| {
+            row.child(icon(IconName::ChevronRight, t.spacing.icon, t.colors.muted))
+        })
+}
+
+fn item_icon(
+    look: &RowLook,
+    item: &ItemRow,
+    source: Option<&MenuItem>,
+) -> Option<gpui_kit::AnyElement> {
+    let t = look.theme;
+    if let ItemId::Ferrite(action) = item.id {
+        let color = if item.enabled {
+            t.colors.accent
+        } else {
+            t.colors.faint
+        };
+        return Some(icon(ferrite_icon(action), t.spacing.icon, color).into_any_element());
+    }
+    if let Some(image) = look.icons.get(&item.path) {
+        let image = img(ImageSource::Render(image)).size(px(SHELL_ICON));
+        return Some(image.into_any_element());
+    }
+    source
+        .filter(|item| item.checked)
+        .map(|_| icon(IconName::Check, t.spacing.icon, t.colors.muted).into_any_element())
+}
+
+fn label(t: &Theme, item: &ItemRow, index: usize, is_default: bool) -> Div {
+    let text = item.text.as_str();
+    let cell = div()
+        .flex()
+        .flex_1()
+        .min_w_0()
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .when(is_default, |cell| cell.font_weight(FontWeight::BOLD))
+        .when(!item.crumb.is_empty(), |cell| {
+            let crumb = format!("{} › ", item.crumb.join(" › "));
+            cell.child(div().flex_none().text_color(t.colors.muted).child(crumb))
+        });
+    let parts = item.matched.clone().and_then(|range| {
+        Some((
+            text.get(..range.start)?,
+            text.get(range.clone())?,
+            text.get(range.end..)?,
+        ))
+    });
+    match parts {
+        Some((before, found, after)) => cell
+            .child(span(before))
+            .child(found_span(t, index, found))
+            .child(span(after).min_w_0().text_ellipsis()),
+        None => cell.child(span(text).min_w_0().text_ellipsis()),
+    }
+}
+
+fn span(text: &str) -> Div {
+    div().flex_none().child(SharedString::from(text.to_owned()))
+}
+
+fn found_span(t: &Theme, index: usize, found: &str) -> RowElement {
+    div()
+        .id(("menu-match", index))
+        .test_support()
+        .aria_label(found.to_owned())
+        .flex_none()
+        .text_color(t.colors.accent_text)
+        .font_weight(FontWeight::BOLD)
+        .underline()
+        .child(found.to_owned())
+}
+
+fn trailing_text(t: &Theme, text: impl Into<SharedString>) -> Div {
+    div()
+        .flex_none()
+        .text_size(t.typography.tiny)
+        .font_family(t.typography.numbers_font.clone())
+        .text_color(t.colors.muted)
+        .child(text.into())
+}
+
+pub(super) fn status_row(t: &Theme, index: usize, text: &'static str, color: Hsla) -> RowElement {
+    base(index)
+        .role(Role::MenuItem)
+        .aria_label(text)
+        .gap(t.spacing.md)
+        .h(px(ROW))
+        .px(t.spacing.sm)
+        .text_color(color)
+        .child(icon_cell(None))
+        .child(div().flex_1().child(text))
+}
+
+pub(super) fn retry_row(t: &Theme, index: usize, is_selected: bool) -> RowElement {
+    line(t, index, is_selected, true)
+        .aria_label("Retry")
+        .cursor_pointer()
+        .text_color(t.colors.text)
+        .child(icon_cell(Some(
+            icon(IconName::RotateCw, t.spacing.icon, t.colors.accent).into_any_element(),
+        )))
+        .child(div().flex_1().child("Retry"))
+}

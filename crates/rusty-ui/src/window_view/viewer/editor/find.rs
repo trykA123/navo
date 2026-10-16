@@ -1,11 +1,11 @@
 use gpui_kit::component::input::{EditorState, InputEvent};
-use gpui_kit::{Focusable, Subscription};
+use gpui_kit::{Focusable, Subscription, Task};
 use rusty_core::paging::Needle;
 
 use super::EditorView;
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
-use crate::window_view::viewer::search::count::{count_label, count_search};
+use crate::window_view::viewer::search::count::{count_after_pause, count_label, count_search};
 use crate::window_view::viewer::search::find_all::open_find_all;
 use crate::window_view::viewer::search::history::{NeedleKind, Recall};
 
@@ -24,6 +24,7 @@ pub(super) struct EditorFind {
     pub last: Option<String>,
     pub match_case: bool,
     pub hit: Option<u64>,
+    counting: Option<Task<()>>,
 }
 
 fn find_in_editor(state: &mut EditorState, backward: bool, cx: &mut Context<EditorState>) {
@@ -70,11 +71,17 @@ impl EditorView {
             return window.focus(&focus, cx);
         }
         let input = text_field_state("Text to find", window, cx);
-        let enter = cx.subscribe_in(&input, window, |view, _, event: &InputEvent, _, cx| {
-            if let InputEvent::PressEnter { shift, .. } = event {
-                view.submit_find(*shift, cx);
-            }
-        });
+        let enter = cx.subscribe_in(
+            &input,
+            window,
+            |view, _, event: &InputEvent, _, cx| match event {
+                InputEvent::PressEnter { shift, .. } => view.submit_find(*shift, cx),
+                InputEvent::Change => {
+                    view.find.counting = Some(count_after_pause(Self::typed_needle, cx));
+                }
+                _ => {}
+            },
+        );
         window.focus(&input.read(cx).focus_handle(cx), cx);
         self.find.bar = Some(FindBar {
             input,
@@ -89,6 +96,7 @@ impl EditorView {
             self.find.last = Some(text);
         }
         self.find.bar = None;
+        self.find.counting = None;
         let focus = self.editor.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
         cx.notify();
@@ -108,6 +116,10 @@ impl EditorView {
             .as_ref()
             .map(|bar| bar.input.read(cx).value().to_string())
             .filter(|text| !text.is_empty())
+    }
+
+    fn typed_needle(&self, cx: &App) -> Option<Needle> {
+        self.typed(cx).map(|text| self.needle(&text))
     }
 
     pub(super) fn needle(&self, text: &str) -> Needle {
@@ -134,6 +146,7 @@ impl EditorView {
     fn run_search(&mut self, text: String, backward: bool, cx: &mut Context<Self>) {
         let needle = self.needle(&text);
         self.find.last = Some(text.clone());
+        self.find.counting = None;
         count_search(self, needle.clone(), cx);
         self.marking.remember_search(&needle, cx);
         let case_insensitive = !self.find.match_case;

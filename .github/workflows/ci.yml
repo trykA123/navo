@@ -88,6 +88,22 @@ jobs:
         with:
           name: ferrite-windows-x64-${{ github.sha }}
           path: target/release/ferrite.exe
+      - name: listing benchmark, read_dir vs native, 50k files
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'list-bench'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          for ($i = 0; $i -lt 50000; $i++) { [IO.File]::Create("$dir\f$i.txt").Dispose() }
+          cargo run --release -p rusty-fs --example list_bench -- $dir 7
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $unc = '\\localhost\' + ($dir -replace '^([A-Za-z]):', '$1$')
+          if (Test-Path -LiteralPath $unc) {
+            cargo run --release -p rusty-fs --example list_bench -- $unc 7
+          } else {
+            Write-Output "share $unc is not reachable, UNC timing skipped"
+          }
 
   build-linux:
     if: github.event_name == 'workflow_dispatch'

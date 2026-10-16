@@ -70,16 +70,27 @@ pub(super) fn load_or_text(
 
 pub(super) struct Opening {
     pub is_slow: bool,
-    _alive: Arc<()>,
+    alive: Option<Arc<()>>,
     _task: Task<()>,
     _timer: Task<()>,
-    _cancel: Cancel,
+    cancel: Cancel,
+}
+
+impl Opening {
+    pub(super) fn supersede(&mut self) {
+        self.alive = None;
+        self.cancel.cancel();
+    }
+
+    fn is_superseded(&self) -> bool {
+        self.alive.is_none()
+    }
 }
 
 #[cfg(test)]
 impl Opening {
     pub(super) fn cancel_flag(&self) -> Arc<std::sync::atomic::AtomicBool> {
-        self._cancel.flag()
+        self.cancel.flag()
     }
 }
 
@@ -172,10 +183,10 @@ pub(super) fn start<T: Send + 'static>(
     });
     Opening {
         is_slow: false,
-        _alive: alive,
+        alive: Some(alive),
         _task: task,
         _timer: timer,
-        _cancel: cancel,
+        cancel,
     }
 }
 
@@ -215,12 +226,35 @@ impl FerriteWindow {
         }
     }
 
+    pub(super) fn restart_if_superseded(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(viewer) = self
+            .viewer
+            .as_ref()
+            .filter(|viewer| viewer.opening.as_ref().is_some_and(Opening::is_superseded))
+        else {
+            return false;
+        };
+        let opening = self.open_file(viewer, window, cx);
+        if let Some(viewer) = &mut self.viewer {
+            viewer.opening = Some(opening);
+        }
+        cx.notify();
+        true
+    }
+
     fn file_opened(
         &mut self,
         opened: Result<Opened, String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.restart_if_superseded(window, cx) {
+            return;
+        }
         let Some(viewer) = &mut self.viewer else {
             return;
         };

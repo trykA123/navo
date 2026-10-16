@@ -4,6 +4,7 @@ use crate::prelude::*;
 
 const CLOSE: Key = ("Esc", "Close");
 const FILES: [Key; 2] = [("N", "Next file"), ("P", "Previous file")];
+pub(super) const NEXT_PREVIOUS: Key = ("N/P Space/Bksp", "Next/Prev");
 const SLOTS: [Slot; 3] = [Slot::Text, Slot::Hex, Slot::Rich];
 
 impl Viewer {
@@ -38,7 +39,7 @@ impl Viewer {
         }
         let slots = self.slot_keys(editing, &keys);
         keys.extend(slots);
-        if !editing {
+        if !editing && !keys.contains(&NEXT_PREVIOUS) {
             keys.extend(FILES);
         }
         keys.push(CLOSE);

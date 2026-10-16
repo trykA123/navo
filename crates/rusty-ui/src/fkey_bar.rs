@@ -4,12 +4,14 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
+use crate::FluentBuilder as _;
 use crate::tokens::{self, Theme};
 
 #[derive(IntoElement)]
 pub struct FKeyBar {
     id: ElementId,
     keys: Vec<(SharedString, SharedString)>,
+    is_sized_to_keys: bool,
 }
 
 impl FKeyBar {
@@ -23,11 +25,31 @@ impl FKeyBar {
                 .into_iter()
                 .map(|(key, label)| (key.into(), label.into()))
                 .collect(),
+            is_sized_to_keys: false,
         }
+    }
+
+    #[must_use]
+    pub fn sized_to_keys(mut self) -> Self {
+        self.is_sized_to_keys = true;
+        self
     }
 }
 
-fn cell(t: &Theme, index: usize, key: SharedString, label: SharedString) -> impl IntoElement {
+struct Cell {
+    index: usize,
+    key: SharedString,
+    label: SharedString,
+    is_sized: bool,
+}
+
+fn cell(t: &Theme, cell: Cell) -> impl IntoElement {
+    let Cell {
+        index,
+        key,
+        label,
+        is_sized,
+    } = cell;
     div()
         .id(("fkey", index))
         .role(Role::Label)
@@ -37,7 +59,13 @@ fn cell(t: &Theme, index: usize, key: SharedString, label: SharedString) -> impl
         .items_center()
         .justify_center()
         .gap(t.spacing.md)
-        .flex_1()
+        .map(|cell| {
+            if is_sized {
+                cell.flex_auto()
+            } else {
+                cell.flex_1()
+            }
+        })
         .min_w_0()
         .text_size(t.typography.small)
         .font_weight(FontWeight::MEDIUM)
@@ -73,7 +101,18 @@ impl RenderOnce for FKeyBar {
                 self.keys
                     .into_iter()
                     .enumerate()
-                    .map(|(index, (key, label))| cell(t, index, key, label)),
+                    .map(|(index, (key, label))| {
+                        let is_sized = self.is_sized_to_keys;
+                        cell(
+                            t,
+                            Cell {
+                                index,
+                                key,
+                                label,
+                                is_sized,
+                            },
+                        )
+                    }),
             )
     }
 }

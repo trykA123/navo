@@ -11,10 +11,14 @@ impl Cancel {
     pub(super) fn flag(&self) -> Arc<AtomicBool> {
         self.0.clone()
     }
+
+    pub(super) fn cancel(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
 }
 
 impl Drop for Cancel {
     fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
+        self.cancel();
     }
 }

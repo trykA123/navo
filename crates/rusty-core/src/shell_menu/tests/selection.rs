@@ -148,3 +148,14 @@ fn keep_stays_on_more() {
     let kept = more.keep(&old, &old);
     assert_eq!(kept.enter(&old), Some(Choice::ShowMore));
 }
+
+#[test]
+fn pick_selects_an_item_and_refuses_a_header() {
+    let rows = rows(&zip_menu(), "");
+    assert_eq!(Selection::pick(&rows, 3).and_then(|s| s.index()), Some(3));
+    assert_eq!(
+        Selection::pick(&rows, 3).and_then(|s| s.path().map(<[usize]>::to_vec)),
+        Some(vec![2])
+    );
+    assert_eq!(Selection::pick(&rows, 0), None);
+}

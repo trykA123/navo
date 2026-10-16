@@ -18,6 +18,9 @@ fn act_on<A: Action>(
 
 impl FerriteWindow {
     fn body_act(&mut self, act: BodyAct, window: &mut Window, cx: &mut Context<Self>) {
+        if act == BodyAct::Follow && self.follow_from_editor(window, cx) {
+            return;
+        }
         if let Some(body) = self.viewer.as_ref().and_then(|viewer| viewer.body.as_ref()) {
             body.act(act, window, cx);
         }

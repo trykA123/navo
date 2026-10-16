@@ -6195,6 +6195,11 @@ dependencies = [
 [[package]]
 name = "rusty-cache"
 version = "0.0.1"
+dependencies = [
+ "proptest",
+ "rusty-core",
+ "rusty-fs",
+]
 
 [[package]]
 name = "rusty-core"
@@ -6247,11 +6252,13 @@ dependencies = [
  "proptest",
  "rusty-core",
  "ruzstd",
+ "same-file",
  "sevenz-rust2",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
  "trash",
+ "windows-sys 0.61.2",
  "zip",
 ]
 
@@ -6268,7 +6275,12 @@ name = "rusty-shell"
 version = "0.0.1"
 dependencies = [
  "rustix",
+ "rusty-core",
+ "tempfile",
+ "thiserror 2.0.21",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
+ "zip",
 ]
 
 [[package]]

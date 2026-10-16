@@ -16,6 +16,10 @@ enum TextLoad {
 
 pub(super) struct Text;
 
+pub(in crate::window_view::viewer) fn paged_text(paged: Paged) -> Loaded {
+    Box::new(TextLoad::Paged(paged))
+}
+
 impl ViewerKind for Text {
     fn id(&self) -> &'static str {
         "text"
