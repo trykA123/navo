@@ -1,6 +1,8 @@
 mod support;
 
 mod budget;
+mod disk;
+mod disk_start;
 mod keys;
 mod patch;
 mod profiles;

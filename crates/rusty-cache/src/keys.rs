@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use rusty_core::Location;
@@ -24,10 +24,16 @@ struct Drives {
     started: usize,
 }
 
+#[derive(Default)]
+struct Shared {
+    drives: Mutex<Drives>,
+    answered: Condvar,
+}
+
 #[derive(Clone)]
 pub struct CacheKeys {
     probe: DriveProbe,
-    drives: Arc<Mutex<Drives>>,
+    shared: Arc<Shared>,
 }
 
 impl Default for CacheKeys {
@@ -41,7 +47,7 @@ impl CacheKeys {
     pub fn new(probe: DriveProbe) -> Self {
         Self {
             probe,
-            drives: Arc::default(),
+            shared: Arc::default(),
         }
     }
 
@@ -57,6 +63,30 @@ impl CacheKeys {
             None => fnv1a(root),
         };
         Some(CacheKey::new(location.clone(), Some(serial)))
+    }
+
+    #[must_use]
+    pub fn key_within(&self, location: &Location, deadline: Instant) -> Option<CacheKey> {
+        loop {
+            if let Some(key) = self.key(location) {
+                return Some(key);
+            }
+            let drives = self.lock();
+            if drives.probing.is_empty() {
+                drop(drives);
+                return self.key(location);
+            }
+            let left = deadline.checked_duration_since(Instant::now())?;
+            let (drives, waited) = self
+                .shared
+                .answered
+                .wait_timeout(drives, left)
+                .unwrap_or_else(PoisonError::into_inner);
+            drop(drives);
+            if waited.timed_out() {
+                return self.key(location);
+            }
+        }
     }
 
     #[must_use]
@@ -76,11 +106,11 @@ impl CacheKeys {
 
     #[must_use]
     pub fn probes_started(&self) -> usize {
-        lock(&self.drives).started
+        self.lock().started
     }
 
     fn drive(&self, letter: char) -> Option<DriveIdentity> {
-        let mut drives = lock(&self.drives);
+        let mut drives = self.lock();
         let known = drives.known.get(&letter).cloned();
         if known
             .as_ref()
@@ -91,21 +121,26 @@ impl CacheKeys {
         known.map(|(_, identity)| identity)
     }
 
+    fn lock(&self) -> MutexGuard<'_, Drives> {
+        lock(&self.shared.drives)
+    }
+
     fn start_probe(&self, drives: &mut Drives, letter: char) {
         if !drives.probing.insert(letter) {
             return;
         }
         drives.started += 1;
-        let (probe, shared) = (Arc::clone(&self.probe), Arc::clone(&self.drives));
+        let (probe, shared) = (Arc::clone(&self.probe), Arc::clone(&self.shared));
         let spawned = std::thread::Builder::new()
             .name("volume-probe".to_owned())
             .spawn(move || {
                 let identity = probe(letter);
-                let mut drives = lock(&shared);
+                let mut drives = lock(&shared.drives);
                 drives.probing.remove(&letter);
                 if let Some(identity) = identity {
                     drives.known.insert(letter, (Instant::now(), identity));
                 }
+                shared.answered.notify_all();
             });
         if spawned.is_err() {
             drives.probing.remove(&letter);

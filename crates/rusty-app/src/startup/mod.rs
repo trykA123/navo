@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 
 use rusty_core::{AppState, Command, Direction, Location, apply};
@@ -14,6 +15,20 @@ pub fn initial_state(session_file: &Path, home: Location) -> AppState {
 
 pub fn save(state: &AppState, session_file: &Path) -> Result<(), SessionFileError> {
     write_session(session_file, &state.to_session(ROWS_PER_PANE))
+}
+
+pub fn session_folders(state: &AppState) -> Vec<Location> {
+    let mut seen = HashSet::new();
+    state
+        .window_ids()
+        .into_iter()
+        .filter_map(|id| state.window(id))
+        .flat_map(|window| window.panes())
+        .flat_map(|pane| pane.tabs())
+        .map(|tab| tab.location())
+        .filter(|location| seen.insert(*location))
+        .cloned()
+        .collect()
 }
 
 pub fn home_location(var: impl Fn(&str) -> Option<String>) -> Location {

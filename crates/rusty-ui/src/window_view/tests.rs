@@ -18,6 +18,7 @@ mod app_menu;
 mod app_menu_save;
 mod cached;
 mod cards;
+mod disk_start;
 mod drive_fs;
 mod drives;
 mod fkeys;
@@ -103,7 +104,18 @@ pub(super) fn open_options_sized(
     options: StartOptions,
     width: gpui_kit::Pixels,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
-    let handle = cx.update(|cx| {
+    let handle = open_unsettled(cx, options, width);
+    let view = handle.1.clone();
+    settle(cx, &view);
+    handle
+}
+
+pub(super) fn open_unsettled(
+    cx: &mut TestAppContext,
+    options: StartOptions,
+    width: gpui_kit::Pixels,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    cx.update(|cx| {
         gpui_kit::init(cx);
         crate::languages::register_languages();
         tokens::apply(Mode::Light, cx);
@@ -125,10 +137,7 @@ pub(super) fn open_options_sized(
             cx.new(|cx| FerriteWindow::new(options, window, cx))
         })
         .expect("open window")
-    });
-    let view = handle.1.clone();
-    settle(cx, &view);
-    handle
+    })
 }
 
 pub(super) fn settle(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) {

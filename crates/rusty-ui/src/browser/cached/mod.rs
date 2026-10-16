@@ -66,7 +66,8 @@ impl Fetch {
                 folder_changed,
                 complete: true,
             };
-            self.cache.put(key, listing);
+            self.cache.put(key.clone(), listing);
+            self.cache.persist(&key);
         }
         Ok(match unchanged {
             Some(_) => Fresh::Unchanged,
