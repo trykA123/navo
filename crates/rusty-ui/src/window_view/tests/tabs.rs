@@ -96,3 +96,14 @@ fn the_passive_pane_keeps_its_tabs(cx: &mut TestAppContext) {
     press(cx, window, &view, "ctrl-w");
     assert_eq!(shape(cx, &view)[1], passive);
 }
+
+#[gpui_kit::test]
+fn ctrl_shift_zero_centres_the_splitter(cx: &mut TestAppContext) {
+    let (window, view) = open(cx, Rc::default());
+    view.update(cx, |view, cx| {
+        view.split.update(cx, |split, _| split.set_ratio(0.3));
+    });
+    press(cx, window, &view, "ctrl-shift-0");
+    let ratio = view.read_with(cx, |view, cx| view.split.read(cx).ratio());
+    assert_eq!(ratio, 0.5);
+}
