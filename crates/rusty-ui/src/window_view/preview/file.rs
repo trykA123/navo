@@ -158,6 +158,10 @@ impl FerriteWindow {
             Err(message) => file.message = Some(message.into()),
         }
         file.kind = Some(kind);
+        if self.preview.browse.is_focused(window) {
+            let target = self.preview.browse_target(cx);
+            window.focus(&target, cx);
+        }
         cx.notify();
     }
 }

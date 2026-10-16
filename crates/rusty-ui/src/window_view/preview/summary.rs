@@ -1,19 +1,22 @@
 use gpui_kit::base::{ObservedElement, TestSupportExt};
-use gpui_kit::{Role, ScrollHandle, Stateful};
+use gpui_kit::{MouseButton, Role, ScrollHandle, Stateful, WeakEntity};
 use rusty_fs::{EntryKind, FolderProfile, LargeFile, Tally};
 
+use super::browse::Spot;
+use super::contents_view::{Mark, pick};
 use crate::file_list::kind;
 use crate::file_list::row::inset_ring;
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::Theme;
+use crate::window_view::FerriteWindow;
 
 const HEADING_HEIGHT: f32 = 28.;
 const ROW_HEIGHT: f32 = 24.;
 const BAR_HEIGHT: f32 = 8.;
 const SWATCH: f32 = 8.;
 const TYPES_AT: usize = 2;
-const LARGEST_AT: usize = 4;
+pub(super) const LARGEST_AT: usize = 4;
 
 pub(super) fn heading(
     t: &Theme,
@@ -138,13 +141,26 @@ fn type_count(profile: Option<&FolderProfile>) -> String {
     format::count(count as u64, "kind", "kinds")
 }
 
-fn largest_row(t: &Theme, rank: usize, file: &LargeFile) -> impl IntoElement {
+pub(in crate::window_view) struct Picks {
+    pub view: WeakEntity<FerriteWindow>,
+    pub spot: Option<Spot>,
+    pub is_browsing: bool,
+}
+
+fn largest_row(t: &Theme, (rank, file): (usize, &LargeFile), picks: &Picks) -> impl IntoElement {
     let cut = file.path.rfind(['\\', '/']).map_or(0, |at| at + 1);
     let (folder, name) = file.path.split_at(cut);
-    div()
+    let is_spot = picks.spot == Some(Spot::Largest(rank));
+    let row = div()
         .id(("preview-largest", rank))
         .aria_label(file.path.clone())
+        .aria_selected(is_spot)
         .test_support()
+        .relative()
+        .pr(t.spacing.xs)
+        .rounded(t.radii.md)
+        .cursor_pointer()
+        .on_mouse_down(MouseButton::Left, pick(&picks.view, Spot::Largest(rank)))
         .flex()
         .items_center()
         .gap(t.spacing.lg)
@@ -180,10 +196,11 @@ fn largest_row(t: &Theme, rank: usize, file: &LargeFile) -> impl IntoElement {
                         .child(name.to_owned()),
                 ),
         )
-        .child(div().flex_none().child(format::size(file.bytes)))
+        .child(div().flex_none().child(format::size(file.bytes)));
+    Mark::of(is_spot, picks.is_browsing).paint(row, t)
 }
 
-fn largest(t: &Theme, profile: Option<&FolderProfile>) -> impl IntoElement + use<> {
+fn largest(t: &Theme, profile: Option<&FolderProfile>, picks: &Picks) -> impl IntoElement + use<> {
     let files = profile
         .map(|profile| profile.largest.as_slice())
         .unwrap_or_default();
@@ -191,7 +208,7 @@ fn largest(t: &Theme, profile: Option<&FolderProfile>) -> impl IntoElement + use
         files
             .iter()
             .enumerate()
-            .map(|(rank, file)| largest_row(t, rank, file)),
+            .map(|row| largest_row(t, row, picks)),
     )
 }
 
@@ -199,6 +216,7 @@ pub(in crate::window_view) struct Sections {
     pub stats: Div,
     pub profile: Option<FolderProfile>,
     pub scroll: ScrollHandle,
+    pub picks: Picks,
 }
 
 pub(super) fn summary(t: &Theme, sections: Sections) -> impl IntoElement + use<> {
@@ -224,7 +242,7 @@ pub(super) fn summary(t: &Theme, sections: Sections) -> impl IntoElement + use<>
         .child(types_heading("preview-types-heading"))
         .child(types(t, profile))
         .child(largest_heading("preview-largest-heading"))
-        .child(largest(t, profile));
+        .child(largest(t, profile, &sections.picks));
     div()
         .relative()
         .size_full()

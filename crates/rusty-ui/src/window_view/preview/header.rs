@@ -99,7 +99,22 @@ fn chip(t: &Theme, text: SharedString) -> impl IntoElement {
         .child(text)
 }
 
-pub(super) fn title_view(t: &Theme, title: Title) -> Div {
+fn browsing_chip(t: &Theme) -> impl IntoElement {
+    div()
+        .id("preview-browsing")
+        .aria_label("Browsing")
+        .test_support()
+        .flex_none()
+        .px(t.spacing.md)
+        .rounded(t.radii.pill)
+        .bg(t.surfaces.current)
+        .text_size(t.typography.small)
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(t.colors.accent_text)
+        .child("Browsing")
+}
+
+pub(super) fn title_view(t: &Theme, title: Title, is_browsing: bool) -> Div {
     let text = div()
         .flex()
         .flex_col()
@@ -133,5 +148,6 @@ pub(super) fn title_view(t: &Theme, title: Title) -> Div {
         .child(mark(t, title.glyph))
         .child(text)
         .when(!title.chip.is_empty(), |row| row.child(chip(t, title.chip)))
+        .when(is_browsing, |row| row.child(browsing_chip(t)))
         .child(div().flex_1())
 }

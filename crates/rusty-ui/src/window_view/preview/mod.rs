@@ -1,3 +1,4 @@
+mod browse;
 mod contents;
 mod contents_view;
 mod file;
@@ -13,7 +14,7 @@ mod summary;
 
 use std::time::Duration;
 
-use gpui_kit::Task;
+use gpui_kit::{FocusHandle, Task};
 use rusty_fs::{IoQueue, PROGRESS_EVERY};
 
 use crate::browser::Waker;
@@ -21,6 +22,7 @@ use crate::browser::Waker;
 use super::FerriteWindow;
 use crate::prelude::*;
 use crate::side_sheet::SheetState;
+pub(in crate::window_view) use browse::bind_keys;
 use file::FilePreview;
 use folder::FolderPreview;
 use follow::{Key, Target};
@@ -53,6 +55,7 @@ impl Shown {
 
 pub(in crate::window_view) struct Preview {
     sheet: Entity<SheetState>,
+    browse: FocusHandle,
     is_open: bool,
     seen: Option<Key>,
     is_stale: bool,
@@ -70,6 +73,7 @@ impl Preview {
     pub(super) fn new(wake: Waker, cx: &mut App) -> Self {
         Self {
             sheet: cx.new(|_| SheetState::new()),
+            browse: cx.focus_handle(),
             is_open: false,
             seen: None,
             is_stale: false,

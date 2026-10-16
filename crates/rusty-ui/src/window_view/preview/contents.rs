@@ -24,6 +24,12 @@ pub(in crate::window_view) struct Shape {
     pub can_open: bool,
 }
 
+pub(in crate::window_view) struct Place {
+    pub folder: Location,
+    pub name: String,
+    pub is_folder: bool,
+}
+
 pub(in crate::window_view) struct Contents {
     tree: Tree,
     outline: Outline,
@@ -122,6 +128,23 @@ impl Contents {
     pub(super) fn location(&self, index: usize) -> Option<&Location> {
         let row = self.shown_rows().get(index)?;
         self.folders.get(&row.node)
+    }
+
+    pub(super) fn place(&self, index: usize) -> Option<Place> {
+        let row = self.shown_rows().get(index)?;
+        let entry = self.entries.get(&row.node)?;
+        let parent = self.tree.parent(row.node)?;
+        Some(Place {
+            folder: self.folders.get(&parent)?.clone(),
+            name: entry.name.to_text(),
+            is_folder: self.folders.contains_key(&row.node),
+        })
+    }
+
+    pub(super) fn parent_row(&self, index: usize) -> Option<usize> {
+        let rows = self.shown_rows();
+        let depth = rows.get(index)?.depth;
+        rows.get(..index)?.iter().rposition(|row| row.depth < depth)
     }
 
     pub(super) fn toggle(&mut self, index: usize) -> Option<(NodeId, Location)> {

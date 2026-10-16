@@ -68,7 +68,7 @@ fn check_cell(look: &RowLook) -> Div {
         })
 }
 
-fn cursor_bar(t: &Theme) -> impl IntoElement {
+pub(crate) fn cursor_bar(t: &Theme) -> impl IntoElement + use<> {
     div()
         .id("cursor-bar")
         .test_support()

@@ -1,11 +1,13 @@
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{ClickEvent, WeakEntity};
+use gpui_kit::{MouseButton, MouseDownEvent, WeakEntity};
 use rusty_cache::ProfileCache;
 use rusty_fs::{EntryKind, FsEntry};
 
+use super::browse::Spot;
 use super::contents::{Contents, RowKind, Shape};
 use super::summary::heading;
 use crate::file_list::kind;
+use crate::file_list::row::{cursor_bar, inset_ring};
 use crate::format;
 use crate::prelude::*;
 use crate::primitives::{IconName, VirtualList, icon};
@@ -33,13 +35,57 @@ fn guides(t: &Theme, depth: u16) -> impl IntoElement + use<> {
         }))
 }
 
-fn chevron(t: &Theme, shape: Shape) -> impl IntoElement + use<> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Mark {
+    Plain,
+    Passive,
+    Active,
+}
+
+impl Mark {
+    pub(super) fn of(is_spot: bool, is_browsing: bool) -> Self {
+        match (is_spot, is_browsing) {
+            (false, _) => Self::Plain,
+            (true, false) => Self::Passive,
+            (true, true) => Self::Active,
+        }
+    }
+
+    pub(super) fn paint<E: Styled + ParentElement>(self, row: E, t: &Theme) -> E {
+        match self {
+            Self::Plain => row,
+            Self::Passive => row.shadow(inset_ring(t.colors.line)),
+            Self::Active => row.bg(t.surfaces.current).child(cursor_bar(t)),
+        }
+    }
+}
+
+pub(super) fn pick(
+    view: &WeakEntity<FerriteWindow>,
+    spot: Spot,
+) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static {
+    let view = view.clone();
+    move |event, window, cx| {
+        let _ = view.update(cx, |view, cx| {
+            view.pick_spot((spot, event.click_count), window, cx);
+        });
+    }
+}
+
+fn chevron(
+    t: &Theme,
+    (index, shape): (usize, Shape),
+    view: &WeakEntity<FerriteWindow>,
+) -> impl IntoElement + use<> {
     let glyph = if shape.is_open {
         IconName::ChevronDown
     } else {
         IconName::ChevronRight
     };
+    let view = view.clone();
     div()
+        .id(("preview-chevron", index))
+        .test_support()
         .flex()
         .flex_none()
         .items_center()
@@ -48,6 +94,10 @@ fn chevron(t: &Theme, shape: Shape) -> impl IntoElement + use<> {
         .h_full()
         .when(shape.can_open, |slot| {
             slot.child(icon(glyph, px(CHEVRON), t.colors.muted))
+                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                    cx.stop_propagation();
+                    let _ = view.update(cx, |view, cx| view.toggle_contents(index, cx));
+                })
         })
 }
 
@@ -103,6 +153,8 @@ struct Source<'a> {
     t: &'a Theme,
     contents: &'a Contents,
     cache: &'a ProfileCache,
+    spot: Option<Spot>,
+    is_browsing: bool,
 }
 
 fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>) -> AnyElement {
@@ -122,12 +174,14 @@ fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>)
         RowKind::More(hidden) => more_row(t, *hidden),
     };
     let hover = t.colors.hover;
-    let view = view.clone();
-    div()
+    let is_spot = source.spot == Some(Spot::Tree(index));
+    let row = div()
         .id(("preview-node", index))
         .aria_label(spoken(&kind))
+        .aria_selected(is_spot)
         .when(shape.can_open, |row| row.aria_expanded(shape.is_open))
         .test_support()
+        .relative()
         .flex()
         .items_center()
         .gap(t.spacing.sm)
@@ -139,20 +193,20 @@ fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>)
         .overflow_hidden()
         .whitespace_nowrap()
         .hover(move |row| row.bg(hover))
-        .when(shape.can_open, |row| {
-            row.cursor_pointer().on_click(move |_: &ClickEvent, _, cx| {
-                let _ = view.update(cx, |view, cx| view.toggle_contents(index, cx));
-            })
-        })
+        .cursor_pointer()
+        .on_mouse_down(MouseButton::Left, pick(view, Spot::Tree(index)))
         .child(guides(t, shape.depth))
-        .child(chevron(t, shape))
-        .children(cells)
+        .child(chevron(t, (index, shape), view))
+        .children(cells);
+    Mark::of(is_spot, source.is_browsing)
+        .paint(row, t)
         .into_any_element()
 }
 
 fn visible_rows(
     view: &WeakEntity<FerriteWindow>,
     range: std::ops::Range<usize>,
+    window: &Window,
     cx: &App,
 ) -> Vec<AnyElement> {
     let Some(this) = view.upgrade() else {
@@ -166,6 +220,8 @@ fn visible_rows(
         t: tokens::current(cx),
         contents: &folder.contents,
         cache: shown.browser.profiles(),
+        spot: folder.spot,
+        is_browsing: shown.preview.is_browsing(window, cx),
     };
     range.map(|index| tree_row(view, index, &source)).collect()
 }
@@ -184,7 +240,7 @@ impl FerriteWindow {
             "preview-tree",
             contents.len(),
             &folder.tree_scroll,
-            move |range, _, cx| visible_rows(&view, range, cx),
+            move |range, window, cx| visible_rows(&view, range, window, cx),
         )
         .row_height(px(ROW_HEIGHT))
         .label("Contents");

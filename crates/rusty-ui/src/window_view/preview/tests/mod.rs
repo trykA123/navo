@@ -1,3 +1,4 @@
+mod browse;
 mod files;
 mod folders;
 mod follow;

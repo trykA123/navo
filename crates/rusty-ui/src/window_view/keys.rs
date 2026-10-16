@@ -8,6 +8,7 @@ pub(super) const WAITING: &str = "PaneWaiting";
 gpui_kit::actions!(
     ferrite_window,
     [
+        BrowsePreview,
         DriveMenuFirst,
         DriveMenuSecond,
         EditPath,
@@ -22,6 +23,7 @@ pub fn bind_keys(cx: &mut App) {
     crate::pane_chrome::bind_keys(cx);
     super::tab_keys::bind_keys(cx);
     crate::side_sheet::bind_keys(cx);
+    super::preview::bind_keys(cx);
     cx.bind_keys([
         KeyBinding::new("alt-f1", DriveMenuFirst, Some(PANE)),
         KeyBinding::new("alt-f2", DriveMenuSecond, Some(PANE)),
@@ -29,6 +31,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-t", NewTab, Some(PANE)),
         KeyBinding::new("ctrl-shift-0", ResetSplit, Some(PANE)),
         KeyBinding::new("ctrl-q", TogglePreview, Some(PANE)),
+        KeyBinding::new("ctrl-shift-q", BrowsePreview, Some(PANE)),
         KeyBinding::new("escape", LeaveWaiting, Some(WAITING)),
     ]);
 }

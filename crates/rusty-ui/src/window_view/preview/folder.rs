@@ -8,6 +8,7 @@ use rusty_fs::{
 };
 use rusty_structured::NodeId;
 
+use super::browse::Spot;
 use super::contents::{CHILD_LIMIT, Contents};
 use super::follow::Target;
 use super::inbox::Arrival;
@@ -29,6 +30,7 @@ pub(in crate::window_view) struct FolderPreview {
     pub scan: Scan,
     pub tree_scroll: ListScroll,
     pub summary_scroll: ScrollHandle,
+    pub spot: Option<Spot>,
     load: u64,
     reads: Vec<Read>,
 }
@@ -161,6 +163,7 @@ impl FerriteWindow {
             scan,
             tree_scroll: ListScroll::new(),
             summary_scroll: ScrollHandle::new(),
+            spot: None,
             load,
             reads,
         }

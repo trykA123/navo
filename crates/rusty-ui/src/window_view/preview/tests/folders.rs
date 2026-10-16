@@ -101,7 +101,7 @@ fn opening_a_node_reads_its_children_then(cx: &mut TestAppContext) {
         Some(3)
     );
     let walked = fs.calls("home/proj/src", FakeOp::List);
-    rig.click(cx, ("preview-node", 0usize));
+    rig.click(cx, ("preview-chevron", 0usize));
     assert!(rig.wait_until(cx, |view| {
         view.preview.folder().is_some_and(|f| f.contents.len() == 5)
     }));
