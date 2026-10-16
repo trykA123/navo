@@ -1,6 +1,4 @@
-mod depth;
-mod escape;
-mod nesting;
+use rusty_structured::markdown::{self, MAX_SOURCE, Refusal};
 
 use super::{Declined, Load, Loaded, Slot, Sniff, ViewerKind, named};
 use crate::prelude::*;
@@ -9,16 +7,27 @@ use crate::window_view::viewer::markdown::{MarkdownBody, MarkdownFile};
 
 const MARKDOWN: u8 = 70;
 const EXTENSIONS: [&str; 2] = ["md", "markdown"];
-const RENDER_LIMIT: u64 = 1024 * 1024;
 const TOO_LARGE: &str = "Large Markdown: shown as text.";
-const TOO_DEEP: &str = "Nested too deeply to render safely: shown as text.";
-const UNSAFE: &str = "Markdown that cannot be shown safely: shown as text.";
+const TOO_MANY_BLOCKS: &str = "Markdown with over 200,000 blocks: shown as text.";
+const TOO_MANY_SPANS: &str = "Markdown with over 2,000,000 styled runs: shown as text.";
 
 pub(super) struct MarkdownKind;
 
 impl MarkdownKind {
     fn is_markdown(sniff: &Sniff<'_>) -> bool {
         named(sniff.name, &EXTENSIONS) && !sniff.looks_binary()
+    }
+
+    fn fits(sniff: &Sniff<'_>) -> bool {
+        sniff.len <= MAX_SOURCE as u64
+    }
+}
+
+fn note(refusal: Refusal) -> &'static str {
+    match refusal {
+        Refusal::TooLarge => TOO_LARGE,
+        Refusal::TooManyBlocks => TOO_MANY_BLOCKS,
+        Refusal::TooManySpans => TOO_MANY_SPANS,
     }
 }
 
@@ -36,7 +45,7 @@ impl ViewerKind for MarkdownKind {
     }
 
     fn score(&self, sniff: &Sniff<'_>) -> u8 {
-        if Self::is_markdown(sniff) && sniff.len <= RENDER_LIMIT {
+        if Self::is_markdown(sniff) && Self::fits(sniff) {
             MARKDOWN
         } else {
             0
@@ -44,7 +53,7 @@ impl ViewerKind for MarkdownKind {
     }
 
     fn declined(&self, sniff: &Sniff<'_>) -> Option<&'static str> {
-        (Self::is_markdown(sniff) && sniff.len > RENDER_LIMIT).then_some(TOO_LARGE)
+        (Self::is_markdown(sniff) && !Self::fits(sniff)).then_some(TOO_LARGE)
     }
 
     fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
@@ -56,21 +65,13 @@ impl ViewerKind for MarkdownKind {
         } = load;
         let file = (hooks.read)(location)?;
         load.ensure_open()?;
-        if file.text.len() as u64 > RENDER_LIMIT {
-            return Ok(Box::new(Declined(TOO_LARGE)));
-        }
-        if nesting::fails_fast(&file.text) {
-            return Ok(Box::new(Declined(TOO_DEEP)));
-        }
-        let (text, shape) = depth::measure(escape::escape_raw(&file.text));
+        let doc = match markdown::parse(&file.text) {
+            Ok(doc) => doc,
+            Err(refusal) => return Ok(Box::new(Declined(note(refusal)))),
+        };
         load.ensure_open()?;
-        match shape {
-            Ok(shape) if shape.is_safe() => {}
-            Ok(shape) if shape.has_raw => return Ok(Box::new(Declined(UNSAFE))),
-            _ => return Ok(Box::new(Declined(TOO_DEEP))),
-        }
         Ok(Box::new(MarkdownFile {
-            text,
+            doc,
             len: sniff.len,
         }))
     }

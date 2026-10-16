@@ -49,28 +49,40 @@ Buzau;Buzau;100230;81.3;1431;
 
 pub const MARKDOWN: &str = "# Ferrite 0.0.1
 
-A fast, keyboard-first file manager. This release adds **structured views** to F3.
+A fast, **keyboard-first** file manager with *structured views* in F3. ~~Beta~~ Alpha, see the [project page](https://example.com/ferrite) and [setup notes](docs/setup.md)[^1].
+
+> Large ARXML files are indexed while you read.
+>
+> > The tree opens before the scan ends.
 
 ## What is new
 
-- **Tree** for JSON, YAML and XML, with the path of the selected node in the header.
-- **Table** for CSV and TSV, with a sticky header and numeric sorting.
-- **Markdown**, rendered. Press `1` to see the source.
+- **Tree** for JSON, YAML and XML
+  - with the path of the selected node
+- **Table** for CSV and TSV
+1. Press `1` for the source
+2. Press `5` for this view
+- [x] Rendered Markdown
+- [ ] PDF pages
 
-> Large ARXML files are indexed while you read: the tree opens before the scan ends.
-
-## Keys
-
-| Key | Does |
-| --- | --- |
-| `Ctrl+Shift+C` | Copies the path of the node |
-| `Ctrl+F3` | Sorts by the cursor column |
+| Key | Does | Since |
+| :-- | :--: | ----: |
+| `Ctrl+Shift+C` | Copies the node path | 0.0.1 |
+| `Ctrl+F3` | Sorts by the cursor column | 0.0.1 |
 
 ```rust
-let tree = parse_json(bytes)?;
+let tree = parse_json(bytes)?; // a long line scrolls inside its block when it does not fit the width of the view
 ```
 
-Links open on Ctrl+click: [project page](https://example.com/ferrite).
+---
+
+![Ferrite logo](assets/logo.png) and raw <kbd>HTML</kbd> stay literal.
+
+<details>
+<summary>Raw HTML block</summary>
+</details>
+
+[^1]: Links open with Tab and Enter, or Ctrl+click.
 ";
 
 fn hooks(bytes: &'static str) -> FileHooks {
@@ -103,11 +115,7 @@ pub fn body(
         name,
         len: text.len() as u64,
     };
-    let kind = Kinds::builtin()
-        .with_markdown()
-        .choose(&sniff)
-        .into_iter()
-        .next()?;
+    let kind = Kinds::builtin().choose(&sniff).into_iter().next()?;
     let hooks = hooks(text);
     let cancel = AtomicBool::new(false);
     let loaded = kind

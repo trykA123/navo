@@ -62,12 +62,7 @@ pub(in crate::window_view::viewer) fn open_named(
     let log = Reads::default();
     let len = setup.len.unwrap_or(setup.bytes.len() as u64);
     let files = logged(setup, &log);
-    let (window, view) = super::window_with(
-        cx,
-        fake_with(name, len),
-        files,
-        Kinds::builtin().with_markdown(),
-    );
+    let (window, view) = super::window_with(cx, fake_with(name, len), files, Kinds::builtin());
     press(cx, window, &view, "down");
     press_only(cx, window, "f3");
     assert!(reads(&log).is_empty(), "nothing is read on the UI thread");
@@ -249,33 +244,6 @@ fn csv_over_16_mb_reads_rows_on_demand_and_says_sort_is_off(cx: &mut TestAppCont
     assert_eq!(label(cx, window, ("table-row", 0)), "1: Pear, 10");
 }
 
-fn markdown_text(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> String {
-    view.read_with(cx, |view, cx| {
-        let body = view.viewer.as_ref()?.body.as_ref()?;
-        let markdown = body
-            .as_any()
-            .downcast_ref::<crate::window_view::viewer::markdown::MarkdownBody>()?;
-        Some(markdown.rendered(cx))
-    })
-    .expect("a markdown view is open")
-}
-
-#[gpui_kit::test]
-fn f3_on_markdown_renders_the_heading_and_1_shows_the_source(cx: &mut TestAppContext) {
-    let source = b"# Release notes\n\nSome *quiet* text and a [link](https://example.com).\n";
-    let (window, view, _) = open_named(cx, "notes.md", Setup::new(source.to_vec()));
-    let rendered = markdown_text(cx, &view);
-    assert!(rendered.starts_with("Release notes"), "{rendered}");
-    assert!(
-        !rendered.contains('#') && !rendered.contains('*'),
-        "{rendered}"
-    );
-    assert_eq!(text_of(cx, window, "viewer-title"), "notes.md");
-    press(cx, window, &view, "1");
-    assert!(has_editor(cx, &view));
-    assert!(editor_text(cx, &view).starts_with("# Release notes"));
-}
-
 #[gpui_kit::test]
 fn typing_a_filter_waits_before_filtering_the_tree(cx: &mut TestAppContext) {
     let (window, view, _) = open_named(cx, "shop.json", Setup::new(STORE.to_vec()));
@@ -285,34 +253,6 @@ fn typing_a_filter_waits_before_filtering_the_tree(cx: &mut TestAppContext) {
     assert_eq!(text_of(cx, window, "filter"), "Filter t, 0 items");
     wait_for_filter(cx, window, &view);
     assert_eq!(text_of(cx, window, "filter"), "Filter t, 3 items");
-}
-
-fn opens_as_text_with_a_depth_note(cx: &mut TestAppContext, name: &str, source: Vec<u8>) {
-    let (window, view, _) = open_named(cx, name, Setup::new(source));
-    assert!(has_editor(cx, &view), "{name} opens in the text view");
-    let note = text_of(cx, window, "viewer-message");
-    assert!(note.ends_with("shown as text."), "{note}");
-}
-
-#[gpui_kit::test]
-fn markdown_with_50_000_stars_around_a_word_opens_as_text(cx: &mut TestAppContext) {
-    let source = format!("{}x{}\n", "*".repeat(50_000), "*".repeat(50_000));
-    opens_as_text_with_a_depth_note(cx, "stars.md", source.into_bytes());
-}
-
-#[gpui_kit::test]
-fn markdown_with_a_1_500_level_list_opens_as_text(cx: &mut TestAppContext) {
-    let source: String = (0..1_500)
-        .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
-        .collect();
-    opens_as_text_with_a_depth_note(cx, "list.md", source.into_bytes());
-}
-
-#[gpui_kit::test]
-fn markdown_with_50_000_emphasis_openers_opens_as_text_quickly(cx: &mut TestAppContext) {
-    let started = std::time::Instant::now();
-    opens_as_text_with_a_depth_note(cx, "openers.md", "*a ".repeat(50_000).into_bytes());
-    assert!(started.elapsed() < Duration::from_secs(10));
 }
 
 #[gpui_kit::test]
@@ -374,145 +314,4 @@ fn a_short_row_fetch_is_not_asked_again_on_every_frame(cx: &mut TestAppContext) 
         settle(cx, &view);
     }
     assert!(reads(&log).is_empty(), "{:?}", reads(&log));
-}
-
-fn on_a_small_stack(stack: usize, test: fn(&mut TestAppContext)) {
-    std::thread::Builder::new()
-        .stack_size(stack)
-        .spawn(move || {
-            gpui_kit::run_test_once(
-                0,
-                Box::new(move |dispatcher| {
-                    let mut cx = TestAppContext::build(dispatcher, Some("small_stack"));
-                    test(&mut cx);
-                    cx.run_until_parked();
-                    cx.update(|cx| cx.quit());
-                    cx.run_until_parked();
-                }),
-            );
-        })
-        .expect("the test thread starts")
-        .join()
-        .expect("the render finishes");
-}
-
-fn renders_as_markdown(cx: &mut TestAppContext, name: &str, source: String) {
-    let (_, view, _) = open_named(cx, name, Setup::new(source.into_bytes()));
-    assert!(!has_editor(cx, &view), "{name} renders as markdown");
-    assert!(
-        markdown_text(cx, &view).contains('x'),
-        "{name} shows its text"
-    );
-}
-
-const RENDER_STACK: usize = if cfg!(debug_assertions) {
-    6 * 1024 * 1024
-} else {
-    1024 * 1024
-};
-
-fn quote_list(levels: usize) -> String {
-    (0..levels)
-        .map(|depth| format!("> {}- x\n", "  ".repeat(depth)))
-        .collect()
-}
-
-fn wide_list(levels: usize) -> String {
-    (0..levels)
-        .map(|depth| format!("{}-    x\n", " ".repeat(6 * depth)))
-        .collect()
-}
-
-fn tags(name: &str, levels: usize) -> String {
-    format!("<{name}>").repeat(levels) + "x"
-}
-
-#[test]
-fn the_reviewer_probes_open_as_text_on_a_small_stack() {
-    on_a_small_stack(RENDER_STACK, |cx| {
-        let probes = [quote_list(3_000), wide_list(2_000)];
-        for (at, probe) in probes.into_iter().enumerate() {
-            opens_as_text_with_a_depth_note(cx, &format!("probe{at}.md"), probe.into_bytes());
-        }
-    });
-}
-
-fn html_probes() -> [String; 5] {
-    let n = 5_000;
-    [
-        "<b></i>".repeat(n) + "x" + &"</b>".repeat(n),
-        "<div></x>".repeat(n) + "x",
-        "a $".to_owned() + &"<b>".repeat(n) + "x" + &"</b>".repeat(n) + "$",
-        tags("div", 20_000),
-        tags("details", 20_000),
-    ]
-}
-
-#[test]
-fn html_and_math_probes_render_as_literal_text_on_a_small_stack() {
-    on_a_small_stack(RENDER_STACK, |cx| {
-        for (at, probe) in html_probes().into_iter().enumerate() {
-            let (_, view, _) =
-                open_named(cx, &format!("html{at}.md"), Setup::new(probe.into_bytes()));
-            assert!(!has_editor(cx, &view), "probe {at} renders");
-            let rendered = markdown_text(cx, &view);
-            assert!(
-                rendered.contains("<b>")
-                    || rendered.contains("<div>")
-                    || rendered.contains("<details>"),
-                "probe {at}"
-            );
-            assert!(!rendered.contains('\\'), "probe {at} shows no escapes");
-        }
-    });
-}
-
-#[gpui_kit::test]
-fn a_normal_readme_renders_tables_lists_links_code_and_images(cx: &mut TestAppContext) {
-    let readme = "# Ferrite\n\nA *fast* [file manager](https://example.com) for $0.\n\n\
-        - one\n- two\n  1. nested\n\n| name | size |\n|------|------|\n| a.txt | 3 |\n\n\
-        Use `a < b` inline.\n\n```rust\nif a < b { x > y }\n```\n\n![logo](logo.png)\n";
-    let (_, view, _) = open_named(cx, "README.md", Setup::new(readme.as_bytes().to_vec()));
-    assert!(!has_editor(cx, &view));
-    let rendered = markdown_text(cx, &view);
-    for part in [
-        "Ferrite",
-        "file manager",
-        "for $0.",
-        "nested",
-        "a.txt",
-        "a < b",
-        "if a < b { x > y }",
-    ] {
-        assert!(rendered.contains(part), "{part:?} in {rendered:?}");
-    }
-    assert!(!rendered.contains('\\'), "{rendered:?}");
-}
-
-#[gpui_kit::test]
-fn markdown_over_1_mib_opens_as_text_with_a_note(cx: &mut TestAppContext) {
-    let source = "a line\n".repeat(150_000).into_bytes();
-    let (window, view, _) = open_named(cx, "big.md", Setup::new(source));
-    assert!(has_editor(cx, &view));
-    let note = text_of(cx, window, "viewer-message");
-    assert_eq!(note, "Large Markdown: shown as text.");
-}
-
-#[test]
-fn markdown_32_levels_deep_of_each_shape_renders_on_a_small_stack() {
-    on_a_small_stack(RENDER_STACK, |cx| {
-        let shapes = [
-            format!("{}x\n", ">".repeat(32)),
-            quote_list(31),
-            wide_list(32),
-            (0..32)
-                .map(|depth| format!("{}- x\n", "  ".repeat(depth)))
-                .collect(),
-            tags("div", 32),
-            tags("details", 32),
-        ];
-        for (at, shape) in shapes.into_iter().enumerate() {
-            renders_as_markdown(cx, &format!("shape{at}.md"), shape);
-        }
-    });
 }
