@@ -8,7 +8,7 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use super::icon;
+use super::{Tooltip, icon};
 use crate::file_list::row::inset_ring;
 use crate::tokens::{self, Theme};
 
@@ -97,6 +97,11 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
             base.child(icon(name, t.spacing.icon - px(1.), color))
         })
         .child(tab.label)
+        .when(index < 8, |base| {
+            base.tooltip(move |window, cx| {
+                Tooltip::new(format!("Ctrl+{}", index + 1)).build(window, cx)
+            })
+        })
         .when_some(props.on_select, |base, handler| {
             base.on_click(move |_, window, cx| handler(&index, window, cx))
         });

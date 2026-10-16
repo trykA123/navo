@@ -18,6 +18,7 @@ gpui_kit::actions!(
 
 pub fn bind_keys(cx: &mut App) {
     crate::pane_chrome::bind_keys(cx);
+    super::tab_keys::bind_keys(cx);
     cx.bind_keys([
         KeyBinding::new("alt-f1", DriveMenuFirst, Some(PANE)),
         KeyBinding::new("alt-f2", DriveMenuSecond, Some(PANE)),
