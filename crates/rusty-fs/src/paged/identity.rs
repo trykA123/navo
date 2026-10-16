@@ -19,7 +19,7 @@ pub(super) fn same_identity(held: &File, named: &File) -> Option<bool> {
     use same_file::Handle;
     let held = Handle::from_file(held.try_clone().ok()?).ok()?;
     let named = Handle::from_file(named.try_clone().ok()?).ok()?;
-    (held == named).then_some(true)
+    Some(held == named)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -55,12 +55,20 @@ mod tests {
     }
 
     #[test]
-    fn a_known_identity_decides_over_size_and_time() {
+    fn a_different_file_with_the_same_size_and_time_is_replaced() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("one.log");
         fs::write(&path, b"first").unwrap();
         let held = fs::metadata(&path).unwrap();
         assert!(is_replaced(Some(false), &held, &held));
+    }
+
+    #[test]
+    fn the_same_file_grown_in_place_is_not_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("one.log");
+        fs::write(&path, b"first").unwrap();
+        let held = fs::metadata(&path).unwrap();
         fs::write(&path, b"first and more").unwrap();
         assert!(!is_replaced(
             Some(true),

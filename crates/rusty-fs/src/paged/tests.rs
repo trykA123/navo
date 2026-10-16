@@ -239,9 +239,9 @@ fn length_and_change_flag_never_wait_for_a_page_read() {
 fn an_older_stat_never_undoes_a_newer_one() {
     let (_dir, path) = file_with(PAGE);
     let file = PagedFile::open(&path).unwrap();
-    let older = file.stat();
+    let older = file.stat(false);
     append(&path, b"later bytes");
-    let newer = file.stat();
+    let newer = file.stat(false);
     assert!(file.apply(&mut file.cache(), newer));
     assert_eq!(file.len(), PAGE + 11);
     assert!(!file.apply(&mut file.cache(), older));
@@ -301,4 +301,18 @@ fn a_file_rewritten_in_place_and_grown_is_reported() {
     assert!(file.take_changed());
     assert!(file.take_rewritten());
     assert_eq!(read(&file, 0, 4), b"xxxx");
+}
+
+#[test]
+fn page_misses_never_open_the_path_and_end_probes_are_throttled() {
+    let (_dir, path) = file_with(40 * PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    for page in 0..40 {
+        let _ = read(&file, page * PAGE, 16);
+    }
+    assert_eq!(file.path_opens(), 0);
+    for _ in 0..20 {
+        let _ = read(&file, file.len(), 1);
+    }
+    assert_eq!(file.path_opens(), 1);
 }

@@ -364,5 +364,17 @@ fn alt_f_with_unsaved_edits_only_shows_the_note(cx: &mut TestAppContext) {
     press(cx, window, &view, "alt-f");
     assert!(super::has_editor(cx, &view));
     assert_eq!(super::editor_text(cx, &view), "xhello\n");
-    assert!(text_of(cx, window, "viewer-message").starts_with("Follow works"));
+    assert_eq!(
+        text_of(cx, window, "viewer-message"),
+        "Save or discard your edits to follow this file."
+    );
+}
+
+#[gpui_kit::test]
+fn alt_f_while_editing_without_edits_stays_in_the_editor(cx: &mut TestAppContext) {
+    let (window, view, _) = super::text_window(cx, super::Setup::new(b"hello\n".to_vec()));
+    press(cx, window, &view, "ctrl-e");
+    press(cx, window, &view, "alt-f");
+    assert!(super::has_editor(cx, &view));
+    assert_eq!(super::kind(cx, &view), None);
 }

@@ -40,6 +40,7 @@ pub struct PagedFile {
     len: AtomicU64,
     changed: AtomicBool,
     rewritten: AtomicBool,
+    path_opens: AtomicU64,
     stats: AtomicU64,
     cache: Mutex<Cache>,
 }
@@ -73,6 +74,7 @@ impl PagedFile {
             len: AtomicU64::new(metadata.len()),
             changed: AtomicBool::new(false),
             rewritten: AtomicBool::new(false),
+            path_opens: AtomicU64::new(0),
             stats: AtomicU64::new(1),
             cache: Mutex::new(cache),
         })
@@ -86,6 +88,7 @@ impl PagedFile {
     }
 
     fn replacement(&self, held: &File, held_metadata: &Metadata) -> Option<(File, Metadata)> {
+        self.path_opens.fetch_add(1, Ordering::Relaxed);
         let file = File::open(&self.path).ok()?;
         let metadata = file.metadata().ok()?;
         let same = identity::same_identity(held, &file);
@@ -103,15 +106,23 @@ impl PagedFile {
     }
 
     #[must_use]
+    pub fn path_opens(&self) -> u64 {
+        self.path_opens.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
     pub fn cached_pages(&self) -> usize {
         self.cache().pages.len()
     }
 
-    fn stat(&self) -> Option<Stat> {
+    fn stat(&self, probes_path: bool) -> Option<Stat> {
         let seq = self.stats.fetch_add(1, Ordering::AcqRel);
         let file = self.handle();
         let held = file.metadata().ok()?;
-        let (metadata, replacement) = match self.replacement(&file, &held) {
+        let found = probes_path
+            .then(|| self.replacement(&file, &held))
+            .flatten();
+        let (metadata, replacement) = match found {
             Some((file, metadata)) => (metadata, Some(file)),
             None => (held, None),
         };
@@ -189,7 +200,7 @@ impl PagedFile {
             due
         };
         if due {
-            let stat = self.stat();
+            let stat = self.stat(true);
             let _ = self.apply(&mut self.cache(), stat);
         }
         offset >= self.len.load(Ordering::Acquire)
@@ -216,10 +227,7 @@ impl PagedFile {
         if let Some(count) = self.copy_cached(number, within, buf) {
             return Ok(count);
         }
-        let mut stat = self.stat();
-        if let Some(replaced) = stat.take_if(|stat| stat.replacement.is_some()) {
-            let _ = self.apply(&mut self.cache(), Some(replaced));
-        }
+        let stat = self.stat(false);
         let mut bytes = vec![0u8; PAGE_SIZE];
         let read = read_file(&self.handle(), number * PAGE, &mut bytes)?;
         bytes.truncate(read);

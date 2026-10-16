@@ -92,10 +92,6 @@ impl EditorView {
         state.text().offset_to_point(state.cursor()).row as u64
     }
 
-    pub(in crate::window_view::viewer) fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-
     fn cursor_line(&self, cx: &App) -> u64 {
         let state = self.editor.read(cx);
         line_start_at(state.text(), state.cursor())

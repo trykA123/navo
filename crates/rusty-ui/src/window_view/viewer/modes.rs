@@ -12,6 +12,8 @@ use super::{Kind, Loaded, Slot, Viewer};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 
+const SAVE_TO_FOLLOW: &str = "Save or discard your edits to follow this file.";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Pick {
     pub slot: Slot,
@@ -213,14 +215,21 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(viewer) = &self.viewer else {
+        let Some(viewer) = &mut self.viewer else {
             return false;
         };
-        let editor = viewer
-            .body
-            .as_ref()
-            .and_then(|body| body.as_any().downcast_ref::<EditorBody>())
-            .filter(|editor| !editor.0.read(cx).is_dirty());
+        let Some(body) = viewer.body.as_ref() else {
+            return false;
+        };
+        if body.is_dirty(cx) {
+            viewer.say(SAVE_TO_FOLLOW, cx);
+            cx.notify();
+            return true;
+        }
+        let editor = body
+            .as_any()
+            .downcast_ref::<EditorBody>()
+            .filter(|_| !body.is_editing(cx));
         let (Some(editor), Some(kind)) = (editor, viewer.kind.clone()) else {
             return false;
         };
