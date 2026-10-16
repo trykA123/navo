@@ -1,4 +1,4 @@
-use rusty_ui::fkey_bar::FKeyBar;
+use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
@@ -60,6 +60,7 @@ pub enum Page {
     MenuFiles,
     Tokens,
     Window,
+    WindowShift,
 }
 
 pub struct PageInfo {
@@ -78,7 +79,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 20] = [
+pub const PAGES: [PageInfo; 21] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -99,6 +100,12 @@ pub const PAGES: [PageInfo; 20] = [
     info(Page::MenuFiles, "Menu files", "p17-menu-files", false),
     info(Page::Tokens, "Tokens", "p19-tokens", false),
     info(Page::Window, "Window", "p19-window", false),
+    info(
+        Page::WindowShift,
+        "Window, Shift held",
+        "p19-fkeys-shift",
+        false,
+    ),
 ];
 
 impl Page {
@@ -132,6 +139,7 @@ pub struct Gallery {
     image: Option<Entity<ImageView>>,
     menus: [(Page, Entity<MenuPage>); 4],
     main_window: Entity<WindowPage>,
+    shift_window: Entity<WindowPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -157,7 +165,8 @@ impl Gallery {
             marks: None,
             image: image_sample::image_view(cx).ok(),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
-            main_window: cx.new(WindowPage::new),
+            main_window: cx.new(|cx| WindowPage::new(None, cx)),
+            shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -304,8 +313,10 @@ impl Render for Gallery {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height);
-        if self.page == Page::Window {
-            return root.child(self.main_window.clone());
+        match self.page {
+            Page::Window => return root.child(self.main_window.clone()),
+            Page::WindowShift => return root.child(self.shift_window.clone()),
+            _ => {}
         }
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
         match self.page {
@@ -328,7 +339,7 @@ impl Render for Gallery {
                 None => root.child("This sample did not load."),
             },
             Page::Tokens => root.child(tokens_page::render(&t)),
-            Page::Window => root,
+            Page::Window | Page::WindowShift => root,
         }
     }
 }

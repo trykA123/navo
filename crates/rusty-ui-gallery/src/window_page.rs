@@ -3,7 +3,7 @@ use std::rc::Rc;
 use rusty_core::{Location, ProviderId, Selection, ViewState};
 use rusty_fs::FsEntry;
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
-use rusty_ui::fkey_bar::FKeyBar;
+use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::pane_chrome::{
     DriveBar, DriveInfo, PaneTabs, PathBar, card_header, current_drive, pane_card,
 };
@@ -11,11 +11,12 @@ use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens;
+use rusty_ui::window_view::{key_labels, layer_keys};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
 use crate::pane_page::status_of;
-use crate::pane_sample::{self, FKEYS};
+use crate::pane_sample;
 
 struct Side {
     tabs: &'static [&'static str],
@@ -40,6 +41,7 @@ const SIDES: [Side; 2] = [
 ];
 
 pub struct WindowPage {
+    held: Option<KeyLayer>,
     rows: Rc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
     split: Entity<SplitterState>,
@@ -50,8 +52,9 @@ fn location(text: &str) -> Location {
 }
 
 impl WindowPage {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(held: Option<KeyLayer>, cx: &mut Context<Self>) -> Self {
         Self {
+            held,
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
             split: cx.new(|_| SplitterState::new(0.5)),
@@ -128,6 +131,10 @@ impl Render for WindowPage {
                     .px(t.spacing.xs)
                     .child(panes),
             )
-            .child(FKeyBar::new("fkeys", FKEYS))
+            .child(
+                FKeyBar::new("fkeys", layer_keys(self.held))
+                    .layers(self.held, key_labels())
+                    .reserve_pill(),
+            )
     }
 }

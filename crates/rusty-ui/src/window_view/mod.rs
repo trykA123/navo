@@ -1,6 +1,7 @@
 mod drive_menu;
 mod drives;
 mod editor;
+mod fkeys;
 mod keys;
 mod operate;
 mod pane;
@@ -15,13 +16,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui_kit::{FocusHandle, Subscription, WindowAppearance};
+use gpui_kit::{FocusHandle, ModifiersChangedEvent, Subscription, WindowAppearance};
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
 use crate::browser::{Browser, Launcher, Operations, Waker};
-use crate::fkey_bar::FKeyBar;
+use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
 use crate::primitives::{Splitter, SplitterState};
 use crate::title_bar::{FerriteTitleBar, HeaderSearch};
@@ -31,6 +32,7 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
+pub use fkeys::{FKey, key_labels, layer_keys};
 pub use keys::bind_keys;
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -203,10 +205,15 @@ impl FerriteWindow {
         }
     }
 
-    fn fkeys(&self, cx: &App) -> Vec<(&'static str, &'static str)> {
+    fn fkey_bar(&self, window: &Window, cx: &App) -> FKeyBar {
         match &self.viewer {
-            Some(viewer) => viewer.keys(cx),
-            None => status::FKEYS.to_vec(),
+            Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)).sized_to_keys(),
+            None => {
+                let held = KeyLayer::held(&window.modifiers());
+                FKeyBar::new("fkeys", layer_keys(held))
+                    .layers(held, key_labels())
+                    .reserve_pill()
+            }
         }
     }
 
@@ -308,10 +315,8 @@ impl Render for FerriteWindow {
             .child(Self::title_bar(cx))
             .child(div().flex().flex_1().min_h_0().px(t.spacing.xs).child(body))
             .children(jobs)
-            .child(
-                FKeyBar::new("fkeys", self.fkeys(cx))
-                    .when(self.viewer.is_some(), FKeyBar::sized_to_keys),
-            )
+            .on_modifiers_changed(cx.listener(|_, _: &ModifiersChangedEvent, _, cx| cx.notify()))
+            .child(self.fkey_bar(window, cx))
             .children(dialog)
     }
 }
