@@ -98,8 +98,8 @@ impl FerriteWindow {
             .accent_ring(is_browsing);
         let sheet = match (is_browsing, is_folder) {
             (true, true) => sheet
-                .hint(&["up", "down"], "Move")
-                .hint(&["left", "right"], "Fold")
+                .hint(&["↑", "↓"], "Move")
+                .hint(&["←", "→"], "Fold")
                 .hint(&["enter"], "Go to")
                 .hint(&["f3"], "View")
                 .hint(&["escape"], "Back to list"),
