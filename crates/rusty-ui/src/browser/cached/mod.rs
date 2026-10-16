@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use rusty_cache::{CacheKey, CacheKeys, CachedListing, ListingCache};
-use rusty_core::{Event, FsError, Listing, Location, TabId};
-use rusty_fs::{CancelToken, FsEntry, ProviderOps, load_folder};
+use rusty_cache::{CacheKey, CacheKeys, CachedListing, Change, ListingCache};
+use rusty_core::{Event, FsError, FsErrorKind, Listing, Location, ProviderPath, TabId};
+use rusty_fs::{CancelToken, FsEntry, ProviderOps, WatchChange, load_folder};
 
 use super::Browser;
 use super::filter::Full;
@@ -23,6 +23,8 @@ pub(super) struct Fetch {
     pub(super) keys: CacheKeys,
     pub(super) location: Location,
     pub(super) shown: Option<Arc<CachedListing>>,
+    pub(super) touched: Option<Vec<WatchChange>>,
+    pub(super) is_watched: bool,
 }
 
 impl Fetch {
@@ -35,6 +37,22 @@ impl Fetch {
             .and_then(|folder| folder.modified_ms)
             .and_then(|ms| u64::try_from(ms).ok())
             .map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
+        if self.is_watched
+            && folder_changed.is_some()
+            && self
+                .shown
+                .as_ref()
+                .is_some_and(|shown| shown.folder_changed == folder_changed)
+        {
+            return Ok(Fresh::Unchanged);
+        }
+        if let Some(rows) = self
+            .touched
+            .as_deref()
+            .and_then(|changes| self.patched(changes))
+        {
+            return Ok(Fresh::Rows(rows));
+        }
         let snapshot = load_folder(self.provider.as_ref(), &self.location, cancel)?;
         let rows: Arc<[FsEntry]> = snapshot.details.into();
         let unchanged = self
@@ -54,6 +72,40 @@ impl Fetch {
             Some(_) => Fresh::Unchanged,
             None => Fresh::Rows(rows),
         })
+    }
+
+    fn patched(&self, changes: &[WatchChange]) -> Option<Arc<[FsEntry]>> {
+        let key = self.keys.key(&self.location)?;
+        self.cache.get(&key)?;
+        let changed_at = SystemTime::now();
+        let mut patch = Vec::with_capacity(changes.len());
+        for change in changes {
+            match change {
+                WatchChange::Removed(name) => patch.push(Change::Removed(name.clone())),
+                WatchChange::Renamed { from, to } => {
+                    patch.push(Change::Removed(from.clone()));
+                    patch.push(self.stat(to)?);
+                }
+                WatchChange::Created(name) | WatchChange::Modified(name) => {
+                    patch.push(self.stat(name)?);
+                }
+            }
+        }
+        self.cache.patch(&key, changed_at, patch);
+        self.cache
+            .get(&key)
+            .map(|listing| Arc::clone(&listing.rows))
+    }
+
+    fn stat(&self, name: &ProviderPath) -> Option<Change> {
+        let location = self.location.join(name).ok()?;
+        match self.provider.metadata(&location) {
+            Ok(entry) => Some(Change::Modified(entry)),
+            Err(error) if error.kind == FsErrorKind::NotFound => {
+                Some(Change::Removed(name.clone()))
+            }
+            Err(_) => None,
+        }
     }
 }
 
@@ -93,6 +145,8 @@ impl Browser {
             keys: self.keys.clone(),
             location: location.clone(),
             shown,
+            touched: self.take_patch(tab),
+            is_watched: self.is_settled(location),
         }
     }
 
@@ -197,6 +251,7 @@ impl Browser {
 impl Drop for Browser {
     fn drop(&mut self) {
         self.release_pins();
+        self.release_watches();
     }
 }
 

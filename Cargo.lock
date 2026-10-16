@@ -6260,6 +6260,7 @@ version = "0.0.1"
 dependencies = [
  "encoding_rs",
  "flate2",
+ "inotify",
  "lzma-rust2",
  "proptest",
  "rusty-core",

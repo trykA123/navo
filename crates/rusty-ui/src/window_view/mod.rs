@@ -170,9 +170,7 @@ impl FerriteWindow {
             menu_run: None,
             prefetch: None,
             menu_runs: 0,
-            _activation: cx.observe_window_activation(window, |view, window, cx| {
-                view.track_modifiers(window.modifiers(), window, cx);
-            }),
+            _activation: cx.observe_window_activation(window, Self::activation_changed),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, |view, window, cx| {
                 view.apply_theme(window, cx);
@@ -184,6 +182,13 @@ impl FerriteWindow {
         Self::poll_drives(cx);
         Self::after_open(options.view, window, cx);
         view
+    }
+
+    fn activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.track_modifiers(window.modifiers(), window, cx);
+        if window.is_window_active() && self.browser.revalidate_unwatched() {
+            cx.notify();
+        }
     }
 
     fn after_open(

@@ -9,7 +9,7 @@ use rusty_core::{
     ProviderPath, TabId, apply, apply_event, list_missing,
 };
 use rusty_fs::{
-    EntryKind, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps, volume_of,
+    EntryKind, FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps, WatchEvent, volume_of,
 };
 
 pub use naming::NameProblem;
@@ -31,6 +31,8 @@ enum Message {
     Measured(measure::Measured),
     Job(JobUpdate),
     Named(naming::Named),
+    Watched(Location, WatchEvent),
+    Recheck(Location),
 }
 
 impl Message {
@@ -38,6 +40,8 @@ impl Message {
         !matches!(
             self,
             Self::Job(JobUpdate::Progress { .. } | JobUpdate::Done { .. })
+                | Self::Watched(..)
+                | Self::Recheck(_)
         )
     }
 }
@@ -73,6 +77,7 @@ pub struct Browser {
     cached: HashMap<TabId, u64>,
     pins: HashSet<rusty_cache::CacheKey>,
     sorted: HashMap<TabId, Vec<cached::Sorted>>,
+    watching: watched::Watching,
 }
 
 impl Browser {
@@ -113,6 +118,7 @@ impl Browser {
             cached: HashMap::new(),
             pins: HashSet::new(),
             sorted: HashMap::new(),
+            watching: watched::Watching::default(),
         }
     }
 
@@ -122,9 +128,13 @@ impl Browser {
     }
 
     pub fn command(&mut self, command: &Command) -> Result<(), CommandError> {
+        let focused = self.state.focused_pane();
         let effects = apply(&mut self.state, command)?;
         self.drop_stale_filters();
         self.run(effects);
+        if self.state.focused_pane() != focused {
+            self.revalidate_focused();
+        }
         Ok(())
     }
 
@@ -206,6 +216,8 @@ impl Browser {
                 Message::Measured(measured) => self.accept_size(&measured),
                 Message::Job(update) => self.accept_job(update),
                 Message::Named(named) => self.accept_named(named),
+                Message::Watched(location, event) => self.accept_watched(&location, event),
+                Message::Recheck(location) => self.accept_recheck(&location),
             };
         }
         changed
@@ -260,6 +272,7 @@ impl Browser {
             }
         }
         self.sync_pins();
+        self.sync_watches();
     }
 
     fn list(&mut self, tab: TabId, location: Location, request: u64) {
@@ -323,6 +336,7 @@ impl Browser {
         });
         self.cached.remove(&tab);
         self.restore_focus(tab);
+        self.drain_refresh(tab);
         true
     }
 
@@ -351,3 +365,4 @@ mod operate;
 mod sort;
 #[cfg(test)]
 mod tests;
+mod watched;

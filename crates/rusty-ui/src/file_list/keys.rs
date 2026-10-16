@@ -43,6 +43,7 @@ gpui_kit::actions!(
         EditItem,
         ChooseEditor,
         ViewItem,
+        Refresh,
         OpenMenu,
     ]
 );
@@ -83,6 +84,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("f3", ViewItem, context),
         KeyBinding::new("f4", EditItem, context),
         KeyBinding::new("shift-f4", ChooseEditor, context),
+        KeyBinding::new("ctrl-r", Refresh, context),
         KeyBinding::new("menu", OpenMenu, context),
         KeyBinding::new("shift-f10", OpenMenu, context),
     ]);
@@ -192,6 +194,7 @@ fn register_more(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
         let ctx = ctx.clone();
         move |event, window, cx| ctx.type_key(event, window, cx)
     })
+    .on_action(send::<Refresh>(ctx, Command::PaneRefresh))
     .on_action(send::<GoBack>(ctx, Command::PaneBack))
     .on_action(send::<GoForward>(ctx, Command::PaneForward))
     .on_mouse_down(side_button(NavigationDirection::Back), {

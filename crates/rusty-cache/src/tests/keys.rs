@@ -106,3 +106,26 @@ fn an_unreadable_drive_is_probed_again_next_time() {
     }
     assert!(keys.probes_started() >= 2);
 }
+
+fn settled_network(keys: &CacheKeys, location: &Location) -> bool {
+    let _ = settled_key(keys, location);
+    keys.is_network(location)
+}
+
+#[test]
+fn a_unc_location_is_on_the_network() {
+    assert!(CacheKeys::default().is_network(&local(r"\\srv\share\docs")));
+}
+
+#[test]
+fn a_mapped_drive_is_on_the_network_once_probed() {
+    let keys = probing(DriveIdentity::Remote(r"\\srv\share".to_owned()));
+    assert!(settled_network(&keys, &local(r"Z:\docs")));
+}
+
+#[test]
+fn a_local_drive_and_a_fake_location_are_not_on_the_network() {
+    let keys = probing(DriveIdentity::Serial(7));
+    assert!(!settled_network(&keys, &local(r"C:\docs")));
+    assert!(!keys.is_network(&FakeFs::new().location("home")));
+}

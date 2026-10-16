@@ -11,6 +11,7 @@ mod listing;
 mod ops;
 mod props;
 mod tree;
+mod watch;
 
 fn list_all(fs: &FakeFs, path: &str) -> (Result<(), FsError>, Vec<EntryBatch>) {
     list_at(fs, &fs.location(path))
@@ -71,14 +72,19 @@ fn provider_id_is_fake() {
 }
 
 #[test]
-fn every_capability_is_on() {
+fn every_capability_but_watching_is_on() {
     let all = Capabilities {
         write: true,
-        watch: true,
+        watch: false,
         recycle: true,
         rename: true,
     };
     assert_eq!(FakeFs::new().capabilities(), all);
+}
+
+#[test]
+fn watching_is_on_when_asked_for() {
+    assert!(FakeFs::new().with_watch().capabilities().watch);
 }
 
 #[test]

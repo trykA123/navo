@@ -2,7 +2,7 @@ use rusty_core::{FsError, FsErrorKind, Location};
 
 use super::tree::{Tree, split_last};
 use super::{FakeFs, FakeOp, Fault, error, lock};
-use crate::{CancelToken, EntryKind, FsEntry, ProviderOps};
+use crate::{CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange};
 
 const CHUNK: u64 = 4096;
 
@@ -53,6 +53,8 @@ impl FakeFs {
             return Err(error(FsErrorKind::Unknown, location));
         }
         tree.remove(&path);
+        drop(tree);
+        self.changed(&path, WatchChange::Removed);
         Ok(())
     }
 
@@ -78,6 +80,8 @@ impl FakeFs {
                 ..entry
             },
         );
+        drop(tree);
+        self.changed(&to, WatchChange::Created);
         Ok((to, size))
     }
 }
@@ -88,6 +92,8 @@ impl ProviderOps for FakeFs {
         let mut tree = self.tree();
         vacant(&tree, &path).map_err(|k| error(k, location))?;
         tree.add_folder(&path);
+        drop(tree);
+        self.changed(&path, WatchChange::Created);
         Ok(())
     }
 
@@ -121,6 +127,7 @@ impl ProviderOps for FakeFs {
             self.tree().resize(&to, written);
             progress(written);
         }
+        self.changed(&to, WatchChange::Modified);
         match limit {
             Some((kind, _)) => Err(error(kind, target)),
             None => Ok(written),
@@ -137,6 +144,8 @@ impl ProviderOps for FakeFs {
             return Err(error(FsErrorKind::NameInvalid, target));
         }
         tree.move_node(&from, &to);
+        drop(tree);
+        self.moved(&from, &to);
         Ok(())
     }
 
@@ -157,6 +166,8 @@ impl ProviderOps for FakeFs {
         let mut tree = self.tree();
         existing_kind(&tree, &path).map_err(|k| error(k, location))?;
         tree.remove(&path);
+        drop(tree);
+        self.changed(&path, WatchChange::Removed);
         lock(&self.recycled).push(path);
         Ok(())
     }

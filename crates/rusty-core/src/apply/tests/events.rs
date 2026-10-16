@@ -261,3 +261,23 @@ fn list_active_tabs_relists_every_pane_after_an_operation() {
     );
     assert_eq!(crate::list_active_tabs(&mut state).len(), 2);
 }
+
+#[test]
+fn relist_tab_asks_for_that_tab_again_with_a_new_request() {
+    let mut state = at_work(files(3));
+    let tab = state.active_tab().id();
+    let effects = crate::relist_tab(&mut state, tab);
+    let [
+        Effect::ListFolder {
+            tab: listed,
+            request,
+            ..
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("one listing is asked for");
+    };
+    assert_eq!(*listed, tab);
+    assert_eq!(state.active_tab().pending_request(), Some(*request));
+    assert!(state.active_tab().listing().is_some());
+}

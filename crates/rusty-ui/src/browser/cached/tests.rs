@@ -178,6 +178,8 @@ fn a_slower_stale_revalidation_never_overwrites_a_newer_one() {
         keys: keys.clone(),
         location: fs.location("home"),
         shown: None,
+        touched: None,
+        is_watched: false,
     };
     let slow = fetch(gate.clone());
     let older = std::thread::spawn(move || slow.run(&CancelToken::new()));

@@ -1,13 +1,18 @@
 mod ops;
 mod tree;
+mod watch;
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
-use crate::{CancelToken, Capabilities, EntryBatch, FsEntry, ListSink, Provider};
+use crate::{
+    CancelToken, Capabilities, EntryBatch, FsEntry, ListSink, Provider, Watch, WatchChange,
+    WatchSink,
+};
 use tree::Tree;
+use watch::Watchers;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FakeOp {
@@ -18,6 +23,7 @@ pub enum FakeOp {
     Rename,
     Remove,
     Recycle,
+    Watch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +42,8 @@ pub struct FakeFs {
     calls: Mutex<HashMap<CallKey, u32>>,
     recycled: Mutex<Vec<String>>,
     batch_size: usize,
+    watchable: bool,
+    watchers: Watchers,
 }
 
 const DEFAULT_BATCH: usize = 512;
@@ -66,6 +74,8 @@ impl FakeFs {
             calls: Mutex::new(HashMap::new()),
             recycled: Mutex::new(Vec::new()),
             batch_size: DEFAULT_BATCH,
+            watchable: false,
+            watchers: Watchers::default(),
         }
     }
 
@@ -88,19 +98,45 @@ impl FakeFs {
     }
 
     pub fn add_folder(&self, path: &str) {
+        let existed = self.exists(path);
         self.tree().add_folder(path);
+        self.added(path, existed);
     }
 
     pub fn add_file(&self, path: &str, size: u64) {
+        let existed = self.exists(path);
         self.tree().add_file(path, size);
+        self.added(path, existed);
     }
 
     pub fn add_entry(&self, folder: &str, entry: FsEntry) {
+        let path = format!("{}/{}", normalize(folder), entry.name.to_text());
+        let existed = self.exists(&path);
         self.tree().insert(folder, entry);
+        self.added(&path, existed);
     }
 
     pub fn remove(&self, path: &str) {
         self.tree().remove(path);
+        self.changed(path, WatchChange::Removed);
+    }
+
+    pub fn rename_entry(&self, from: &str, to: &str) {
+        self.tree().move_node(normalize(from), normalize(to));
+        self.moved(from, to);
+    }
+
+    fn exists(&self, path: &str) -> bool {
+        self.tree().metadata(normalize(path)).is_some()
+    }
+
+    fn added(&self, path: &str, existed: bool) {
+        let change = if existed {
+            WatchChange::Modified
+        } else {
+            WatchChange::Created
+        };
+        self.changed(path, change);
     }
 
     #[expect(
@@ -204,7 +240,7 @@ impl Provider for FakeFs {
     fn capabilities(&self) -> Capabilities {
         Capabilities {
             write: true,
-            watch: true,
+            watch: self.watchable,
             recycle: true,
             rename: true,
         }
@@ -257,6 +293,10 @@ impl Provider for FakeFs {
                 .metadata(&path)
                 .ok_or_else(|| error(FsErrorKind::NotFound, location)),
         }
+    }
+
+    fn watch(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
+        self.start_watch(folder, sink)
     }
 }
 

@@ -14,6 +14,7 @@ mod listing;
 mod metadata;
 #[cfg(windows)]
 mod native;
+mod notify_info;
 mod ops;
 mod perf;
 mod verbatim;
@@ -102,8 +103,15 @@ fn id_is_local() {
 }
 
 #[test]
-fn every_capability_is_off_for_now() {
-    assert_eq!(LocalFs::new().capabilities(), Capabilities::default());
+fn only_watching_is_on_where_a_watcher_exists() {
+    let watch = cfg!(any(windows, target_os = "linux"));
+    assert_eq!(
+        LocalFs::new().capabilities(),
+        Capabilities {
+            watch,
+            ..Capabilities::default()
+        }
+    );
 }
 
 #[cfg(unix)]

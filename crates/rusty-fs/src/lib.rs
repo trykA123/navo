@@ -12,6 +12,7 @@ mod paged;
 mod provider;
 mod scan;
 mod snapshot;
+mod watch;
 
 pub use code_page::{ansi_code_page, encoding_for_code_page};
 pub use fake::{FakeFs, FakeOp, Fault};
@@ -34,3 +35,4 @@ pub use provider::{
 };
 pub use scan::{existing_at, scan};
 pub use snapshot::{FolderSnapshot, load_folder};
+pub use watch::{WATCH_MAX_DELAY, WATCH_QUIET, Watch, WatchChange, WatchEvent, WatchSink};

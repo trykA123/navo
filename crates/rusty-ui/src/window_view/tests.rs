@@ -24,6 +24,7 @@ mod fkeys;
 mod shell_menu;
 mod tabs;
 mod typed;
+mod watched;
 use crate::browser::Operations;
 use crate::tokens::{self, Mode};
 

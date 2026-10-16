@@ -20,6 +20,7 @@ mod state;
 
 pub use apply::{
     CommandError, Effect, Event, apply, apply_event, list_active_tabs, list_missing, list_unloaded,
+    relist_tab,
 };
 pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
 pub use direction::Direction;

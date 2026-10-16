@@ -165,6 +165,10 @@ pub fn list_missing(state: &mut AppState) -> Vec<Effect> {
         .collect()
 }
 
+pub fn relist_tab(state: &mut AppState, id: TabId) -> Vec<Effect> {
+    list_tab(state, id).into_iter().collect()
+}
+
 fn list_tab(state: &mut AppState, id: TabId) -> Option<Effect> {
     let request = state.take_request();
     let tab = state.tab_mut(id)?;
