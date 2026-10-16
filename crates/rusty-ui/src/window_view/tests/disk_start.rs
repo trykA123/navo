@@ -170,3 +170,27 @@ fn the_fresh_listing_replaces_the_disk_rows_and_keeps_the_cursor(cx: &mut TestAp
         ["sub", "a-new.txt", "f00000.txt", REMEMBERED]
     );
 }
+
+#[gpui_kit::test]
+fn the_selection_made_on_disk_rows_survives_the_fresh_diff(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("cache.db");
+    let fs = big_folder_now();
+    seed_last_session(&db, &fs.location("big"));
+    let (_window, view, _disk) = open_from_disk(cx, &fs, &db);
+    let to = CursorMove::Row(2);
+    view.update(cx, |view, _| {
+        view.browser
+            .command(&Command::PaneCursorMove { to })
+            .unwrap();
+        view.browser.command(&Command::SelectionToggle).unwrap();
+        let tab = view.browser.state().active_tab();
+        assert!(view.browser.is_cached(tab.id()));
+        assert_eq!(tab.selection().marked(), [2]);
+    });
+    settle(cx, &view);
+    let marked = view.read_with(cx, |view, _| {
+        view.browser.state().active_tab().selection().marked()
+    });
+    assert_eq!(marked, [3]);
+}
