@@ -33,7 +33,14 @@ impl FerriteWindow {
             bounds: Bounds::new(Point::default(), window.viewport_size()),
             restore: Some(show.restore),
         };
-        let view = cx.new(|cx| ContextMenu::new(input, window, cx));
+        let has_classic = show.has_classic;
+        let view = cx.new(|cx| {
+            let mut menu = ContextMenu::new(input, window, cx);
+            if !has_classic {
+                menu.hide_classic(cx);
+            }
+            menu
+        });
         let events = cx.subscribe_in(&view, window, |this, _, event, window, cx| {
             this.shell_menu_event(event, window, cx);
         });

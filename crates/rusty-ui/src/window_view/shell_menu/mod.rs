@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use gpui_kit::Point;
 use rusty_core::PaneId;
-use rusty_core::shell_menu::{ItemId, MenuItem, ShellMenu, ferrite_actions};
+use rusty_core::shell_menu::{FerriteAction, ItemId, MenuItem, ShellMenu, ferrite_actions};
 
 pub use provider::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 
@@ -36,6 +36,7 @@ impl FerriteWindow {
         let Some(found) = self.menu_targets(pane) else {
             return;
         };
+        let has_shell = self.shell_menus.is_some();
         let session = match self.shell_menus.clone() {
             Some(provider) => Session::Opening(
                 self.take_prefetch(pane, &found.items)
@@ -51,11 +52,12 @@ impl FerriteWindow {
                 context: found.context.into(),
                 restore: self.handle(pane, cx),
                 until: cx.background_executor().now() + WAIT_FOR_SHELL,
+                has_classic: has_shell,
             },
             pane,
             items: found.items,
             spot: targets::screen_spot(window, anchor),
-            ferrite: ferrite_actions(),
+            ferrite: ferrite_items(has_shell),
             session,
         };
         self.menu_run = Some(MenuRun::new(open));
@@ -205,6 +207,19 @@ impl FerriteWindow {
             self.menu_run = None;
         }
     }
+}
+
+fn ferrite_items(has_shell: bool) -> Vec<MenuItem> {
+    let mut items = ferrite_actions();
+    if !has_shell {
+        items.retain(|item| {
+            !matches!(
+                item.id,
+                ItemId::Ferrite(FerriteAction::Properties | FerriteAction::ClassicMenu)
+            )
+        });
+    }
+    items
 }
 
 fn label_of(menu: &ShellMenu, id: &ItemId) -> Option<String> {

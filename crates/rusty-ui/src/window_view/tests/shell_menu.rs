@@ -134,11 +134,16 @@ struct Rig {
 }
 
 fn rig(cx: &mut TestAppContext) -> Rig {
+    rig_with(cx, true)
+}
+
+fn rig_with(cx: &mut TestAppContext, has_shell: bool) -> Rig {
     let fs = fake();
     let state = two_panes(&fs);
     let shell = Rc::new(Shell::default());
+    let provider: Rc<dyn ShellMenuProvider> = Rc::new(FakeProvider(shell.clone()));
     let options = StartOptions {
-        shell_menu: Some(Rc::new(FakeProvider(shell.clone()))),
+        shell_menu: has_shell.then_some(provider),
         ..super::options_for(fs.clone(), state)
     };
     let (window, view) = open_options(cx, options);
@@ -422,6 +427,44 @@ fn ferrite_actions_show_before_the_provider_answers(cx: &mut TestAppContext) {
             "Loading Windows items…",
         ]
     );
+}
+
+#[gpui_kit::test]
+fn without_a_windows_menu_only_working_ferrite_actions_show(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, false);
+    rig.press(cx, "down");
+    rig.press(cx, "menu");
+    rig.wait(cx, 160);
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "# Ferrite",
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+        ]
+    );
+    let has_footer = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .within("context-menu")
+                .try_find("menu-classic")
+                .is_some()
+        })
+        .expect("window");
+    assert!(
+        !has_footer,
+        "the Classic menu button shows without a Windows menu"
+    );
+    rig.press(cx, "shift-f10");
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.pane_error(cx), None);
 }
 
 #[gpui_kit::test]

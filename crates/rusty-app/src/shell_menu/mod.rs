@@ -19,6 +19,13 @@ const VERBATIM: &str = r"\\?\";
 const VERBATIM_UNC: &str = r"\\?\UNC\";
 
 pub fn provider() -> Option<Rc<dyn ShellMenuProvider>> {
+    if !cfg!(windows) {
+        return None;
+    }
+    started()
+}
+
+fn started() -> Option<Rc<dyn ShellMenuProvider>> {
     let service = ShellMenuService::start().ok()?;
     Some(Rc::new(Provider(service)))
 }
