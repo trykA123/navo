@@ -1,0 +1,97 @@
+name: spike-shell-menu
+
+on:
+  push:
+    branches: [p17-m1]
+    paths: ["spikes/shell-menu/**", ".github/workflows/spike-shell-menu.yml"]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: spikes/shell-menu
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: 1.99.0
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: spikes/shell-menu
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+      - name: Create test items
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "sm"
+          New-Item -ItemType Directory -Force "$root/folder", "$root/zipdir", "$root/three" | Out-Null
+          Set-Content "$root/folder/inner.txt" "inner"
+          Set-Content "$root/zipdir/payload.txt" "payload"
+          Compress-Archive -Path "$root/zipdir/payload.txt" -DestinationPath "$root/zipdir/archive.zip"
+          Remove-Item "$root/zipdir/payload.txt"
+          Set-Content "$root/note.txt" "note"
+          "a", "b", "c" | ForEach-Object { Set-Content "$root/three/$_.txt" $_ }
+          "SM_ROOT=$root" | Out-File -Append $env:GITHUB_ENV
+          Get-ChildItem -Recurse $root | Select-Object FullName, Length
+          Get-ItemProperty "HKLM:/SOFTWARE/7-Zip" -ErrorAction SilentlyContinue | Select-Object Path, Path64
+          Get-ChildItem "Registry::HKEY_CLASSES_ROOT/*/shellex/ContextMenuHandlers" | Select-Object PSChildName
+      - name: Probe menus
+        run: |
+          $exe = (Resolve-Path "target/release/shell-menu.exe").Path
+          New-Item -ItemType Directory -Force out | Out-Null
+          $runs = [ordered]@{
+            "zip"            = @("$env:SM_ROOT/zipdir/archive.zip")
+            "folder"         = @("$env:SM_ROOT/folder")
+            "three-files"    = @("$env:SM_ROOT/three/a.txt", "$env:SM_ROOT/three/b.txt", "$env:SM_ROOT/three/c.txt")
+            "zip-explorer"   = @("--explorer-commands", "$env:SM_ROOT/zipdir/archive.zip")
+            "invoke-copy"    = @("--invoke", "copy", "$env:SM_ROOT/note.txt")
+            "invoke-extract" = @("--invoke", "Extract Here", "$env:SM_ROOT/zipdir/archive.zip")
+          }
+          $failed = 0
+          foreach ($name in $runs.Keys) {
+            Write-Host "::group::$name"
+            & $exe @($runs[$name]) > "out/$name.json"
+            if ($LASTEXITCODE -ne 0) { Write-Host "exit $LASTEXITCODE"; $failed++ }
+            Get-Content "out/$name.json"
+            Write-Host "::endgroup::"
+          }
+          Start-Sleep -Seconds 5
+          Write-Host "extracted payload exists: $(Test-Path "$env:SM_ROOT/zipdir/payload.txt")"
+          if ($failed) { exit 1 }
+      - name: Summary
+        run: |
+          function Walk($nodes, $depth) {
+            foreach ($n in $nodes) {
+              if ($n.kind -eq "separator") { Write-Host ("  " * $depth + "----"); continue }
+              $extra = @()
+              if ($n.verb) { $extra += "verb=$($n.verb)" }
+              if (-not $n.enabled) { $extra += "disabled" }
+              if ($n.default) { $extra += "default" }
+              if ($n.owner_drawn) { $extra += "ownerdraw" }
+              if ($n.icon) { $extra += "icon=$($n.icon.source) $($n.icon.width)x$($n.icon.height)" }
+              if ($n.submenu) { $extra += "sub before=$($n.submenu.items_before_init) init=$($n.submenu.init_ms)ms by=$($n.submenu.init_by)" }
+              Write-Host ("  " * $depth + "$($n.text) [$($extra -join ', ')]")
+              if ($n.submenu) { Walk $n.submenu.children ($depth + 1) }
+            }
+          }
+          foreach ($file in Get-ChildItem out/*.json) {
+            $r = Get-Content $file | ConvertFrom-Json
+            foreach ($p in $r.passes) {
+              Write-Host "== $($file.BaseName) $($p.flags) query=$($p.query_ms)ms walk=$($p.walk_ms)ms count=$($p.command_count)"
+              Write-Host ($p.stats | ConvertTo-Json -Compress)
+              if ($p.flags -like "CMF_NORMAL*") { Walk $p.menu 1 }
+            }
+            if ($r.invoke) { Write-Host "invoke: $($r.invoke | ConvertTo-Json -Compress -Depth 5)" }
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: shell-menu-spike
+          path: |
+            spikes/shell-menu/out/*.json
+            spikes/shell-menu/target/release/shell-menu.exe
+          if-no-files-found: warn
