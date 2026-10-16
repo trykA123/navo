@@ -79,6 +79,7 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
         Ok(Box::new(JournalLog {
             journal: Arc::clone(&journal),
             job,
+            kind,
         }) as Box<dyn OpLog>)
     })
 }
@@ -86,6 +87,7 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
 struct JournalLog {
     journal: SharedJournal,
     job: JobId,
+    kind: String,
 }
 
 impl JobLog for JournalLog {
@@ -112,6 +114,22 @@ impl OpLog for JournalLog {
             JobOutcome::Cancelled => JobState::Cancelled,
             JobOutcome::Failed { .. } => JobState::Failed,
         };
+        if let JobOutcome::Failed { seq, error } = outcome {
+            tracing::warn!(
+                job = self.job.0,
+                kind = self.kind,
+                step = seq,
+                error = ?error.kind,
+                "job failed"
+            );
+        } else {
+            tracing::info!(
+                job = self.job.0,
+                kind = self.kind,
+                state = ?state,
+                "job finished"
+            );
+        }
         let _ = lock(&self.journal).finish(self.job, state);
     }
 }
@@ -164,3 +182,6 @@ fn undo(job: &UnfinishedJob, ops: &dyn ProviderOps) -> JobState {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod events_tests;
