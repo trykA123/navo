@@ -85,3 +85,12 @@ fn an_elf_file_gets_a_summary() {
     let summary = paged(&elf).unwrap().summary;
     assert_eq!(summary.as_deref(), Some("ELF 64-bit · x86-64 · program"));
 }
+
+#[test]
+fn a_paged_file_carries_the_same_stamp_as_a_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = file(&dir, "big.log", b"line one\nline two\n");
+    let stamp = paged(&text).unwrap().stamp;
+    assert_eq!(stamp.map(|stamp| stamp.len), Some(18));
+    assert_eq!(stamp, crate::files::read(&text).unwrap().stamp);
+}

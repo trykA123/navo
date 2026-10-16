@@ -10,7 +10,7 @@ use rusty_fs::{PagedFile, index_lines};
 use rusty_ui::window_view::{Head, Paged};
 
 use super::summary::{SUMMARY_HEAD, binary_summary};
-use super::{MAX_VIEW, SNIFF, path_of};
+use super::{MAX_VIEW, SNIFF, path_of, stamp_of};
 
 fn sniff(path: &Path) -> Result<Head, String> {
     let mut file = File::open(path).map_err(|error| format!("Cannot open it: {error}"))?;
@@ -42,6 +42,7 @@ fn open_source(path: &Path) -> Result<Box<dyn ByteSource + Send>, String> {
 pub fn paged(location: &Location) -> Result<Paged, String> {
     let path: PathBuf = path_of(location)?;
     let sniffed = sniff(&path)?;
+    let stamp = stamp_of(&path);
     let source = Arc::new(PagedFile::open(&path)?);
     let mut head = vec![0u8; SUMMARY_HEAD];
     let count = read_full(source.as_ref(), 0, &mut head)?;
@@ -53,7 +54,7 @@ pub fn paged(location: &Location) -> Result<Paged, String> {
         index: Arc::new(move |cancel, progress| index_lines(&path, cancel, progress)),
         summary: binary_summary(&head),
         editable: !looks_binary(&sniffed.bytes) && sniffed.len <= MAX_VIEW,
-        stamp: None,
+        stamp,
     })
 }
 

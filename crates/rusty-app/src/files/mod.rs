@@ -10,20 +10,27 @@ use rusty_store::replace_atomic;
 use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
 
 mod code_page;
+mod memory;
 mod paged;
 mod summary;
 
 const MAX_VIEW: u64 = 16 * 1024 * 1024;
 const SNIFF: usize = 8 * 1024;
 
-pub fn hooks() -> FileHooks {
-    FileHooks {
+pub use memory::{SharedDb, open as open_memory};
+
+pub fn hooks(db: Option<SharedDb>) -> FileHooks {
+    let hooks = FileHooks {
         read: Arc::new(read),
         write: Arc::new(write),
         head: Arc::new(paged::head),
         paged: Arc::new(paged::paged),
         bytes: Arc::new(bytes),
         ..FileHooks::none()
+    };
+    match db {
+        Some(db) => memory::attach(hooks, db),
+        None => hooks,
     }
 }
 
