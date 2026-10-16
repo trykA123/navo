@@ -104,6 +104,13 @@ fn markdown_with_too_many_blocks_opens_as_text_with_a_note(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn markdown_with_too_many_footnotes_opens_as_text_with_a_note(cx: &mut TestAppContext) {
+    let source = "[^a]: b\n".repeat(2_001);
+    let note = "Too many footnotes for the rendered view";
+    opens_as_text_with(cx, "notes.md", source, note);
+}
+
+#[gpui_kit::test]
 fn a_100_000_block_file_lays_out_only_the_visible_blocks(cx: &mut TestAppContext) {
     let source = "p\n\n".repeat(100_000);
     let (window, view) = open(cx, "long.md", &source);

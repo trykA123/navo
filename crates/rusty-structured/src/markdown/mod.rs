@@ -13,13 +13,13 @@ pub const MAX_BLOCK_TEXT: usize = 4 * 1024;
 pub const MAX_COLUMNS: usize = 64;
 pub const MAX_DEPTH: u8 = 8;
 pub const TABLES_AS_TEXT: &str = "Tables shown as text: too many cells";
-pub const FOOTNOTES_AS_TEXT: &str = "Footnotes shown as text: too many definitions";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
     TooLarge,
     TooManyBlocks,
     TooManySpans,
+    TooManyFootnotes,
 }
 
 impl fmt::Display for Refusal {
@@ -28,6 +28,7 @@ impl fmt::Display for Refusal {
             Self::TooLarge => "Markdown over 1 MB",
             Self::TooManyBlocks => "Markdown with over 200,000 blocks",
             Self::TooManySpans => "Markdown with over 2,000,000 styled runs",
+            Self::TooManyFootnotes => "Too many footnotes for the rendered view",
         })
     }
 }
@@ -253,8 +254,8 @@ pub fn parse(source: &str) -> Result<Document, Refusal> {
         return Err(Refusal::TooLarge);
     }
     let source = text::normalise_line_ends(source);
-    let plan = scan::plan(&source);
-    let mut doc = build::Builder::run(&plan.source, plan.options)?;
+    let plan = scan::plan(&source)?;
+    let mut doc = build::Builder::run(&source, plan.options)?;
     doc.notes = plan.notes;
     Ok(doc)
 }

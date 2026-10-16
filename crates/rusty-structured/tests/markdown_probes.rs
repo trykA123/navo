@@ -69,8 +69,35 @@ fn full_rows() -> String {
     row.clone() + &"|-".repeat(64) + "|\n" + &fill(&row)
 }
 
+fn repeat_to_fill(head: &str, one: &str) -> String {
+    head.to_owned() + &one.repeat((MAX_SOURCE - 1024 - head.len()) / one.len())
+}
+
+fn chained_tables(head: &str) -> String {
+    let one = "# h\n".to_owned()
+        + &"|a".repeat(362)
+        + "|\n"
+        + &"|-".repeat(362)
+        + "|\n"
+        + &"x\n".repeat(724);
+    repeat_to_fill(head, &one)
+}
+
+fn non_breaking_rows() -> String {
+    let one = "|a".repeat(443) + "|\n" + &"|-".repeat(443) + "|\n" + &"\u{a0}\n".repeat(591) + "\n";
+    repeat_to_fill("", &one)
+}
+
 fn table_and_definition_probes() -> Vec<(&'static str, String)> {
     vec![
+        ("chained tables", chained_tables("|a|\n|-|\nx\n")),
+        ("fenced fake delimiter", chained_tables("```\n|-|\n```\n")),
+        ("non-breaking rows", non_breaking_rows()),
+        (
+            "fenced footnotes",
+            "```\n".to_owned() + &"[^a]: b\n".repeat(2_001) + "```\n",
+        ),
+        ("listed footnotes", fill("- [^a]: b\n")),
         ("padded tables", padded_tables()),
         ("full rows", full_rows()),
         ("footnote definitions", fill("[^a]: b\n")),
@@ -153,7 +180,10 @@ fn check(name: &str, source: &str) {
             assert!(doc.heap_bytes() <= MAX_HEAP, "{name}: {}", doc.heap_bytes());
         }
         Err(refusal) => assert!(
-            matches!(refusal, Refusal::TooManyBlocks | Refusal::TooManySpans),
+            matches!(
+                refusal,
+                Refusal::TooManyBlocks | Refusal::TooManySpans | Refusal::TooManyFootnotes
+            ),
             "{name}: {refusal:?}"
         ),
     }

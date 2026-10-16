@@ -1,8 +1,6 @@
-use std::borrow::Cow;
-
 use pulldown_cmark::Options;
 
-use super::{FOOTNOTES_AS_TEXT, TABLES_AS_TEXT};
+use super::{Refusal, TABLES_AS_TEXT};
 
 const MAX_TABLE_CELLS: usize = 1_000_000;
 const MAX_FOOTNOTE_LINES: usize = 2_000;
@@ -13,70 +11,79 @@ struct Counts {
     footnotes: usize,
 }
 
+fn is_container(ch: char) -> bool {
+    matches!(ch, ' ' | '\t' | '>' | '-' | '+' | '*' | '.' | ')') || ch.is_ascii_digit()
+}
+
+fn is_delimiter_char(ch: char) -> bool {
+    matches!(ch, '|' | ':' | '-' | ' ' | '\t')
+}
+
+fn is_blank(line: &str) -> bool {
+    line.trim_end_matches([' ', '\t']).is_empty()
+}
+
 fn delimiter_columns(line: &str) -> Option<usize> {
-    let is_delimiter = line.contains('|')
-        && line.contains('-')
-        && line
-            .chars()
-            .all(|ch| matches!(ch, '|' | '-' | ':' | ' ' | '\t'));
-    is_delimiter.then(|| {
-        line.split('|')
-            .filter(|cell| !cell.trim().is_empty())
-            .count()
-    })
+    let start = line
+        .char_indices()
+        .rev()
+        .take_while(|(_, ch)| is_delimiter_char(*ch))
+        .last()
+        .map_or(line.len(), |(at, _)| at);
+    let (prefix, rest) = line.split_at(start);
+    let is_delimiter = rest.contains('-') && prefix.chars().all(is_container);
+    is_delimiter.then(|| rest.matches('|').count() + 1)
 }
 
-fn without_prefix(line: &str) -> &str {
-    line.trim_start_matches([' ', '\t', '>'])
+fn is_footnote_line(line: &str) -> bool {
+    line.trim_start_matches(is_container).starts_with("[^")
 }
 
-fn escape_footnote_lines(source: &str) -> String {
-    let mut out = String::with_capacity(source.len() + source.len() / 8);
-    for line in source.split_inclusive('\n') {
-        let rest = without_prefix(line);
-        if rest.starts_with("[^") {
-            out.push_str(&line[..line.len() - rest.len()]);
-            out.push('\\');
-            out.push_str(rest);
-        } else {
-            out.push_str(line);
-        }
+#[derive(Default)]
+struct Run {
+    lines: usize,
+    columns: Option<usize>,
+}
+
+impl Run {
+    fn cells(&self) -> usize {
+        self.columns
+            .map_or(0, |columns| self.lines.saturating_mul(columns))
     }
-    out
 }
 
 fn count(source: &str) -> Counts {
     let mut counts = Counts::default();
-    let mut columns: Option<usize> = None;
+    let mut run = Run::default();
     for line in source.lines() {
-        let line = without_prefix(line).trim_end();
-        if line.is_empty() {
-            columns = None;
+        if is_blank(line) {
+            counts.cells = counts.cells.saturating_add(run.cells());
+            run = Run::default();
             continue;
         }
-        if line.starts_with("[^") {
+        if is_footnote_line(line) {
             counts.footnotes += 1;
         }
-        if columns.is_none() {
-            columns = delimiter_columns(line).filter(|columns| *columns > 0);
-            let header = columns.unwrap_or(0);
-            counts.cells = counts.cells.saturating_add(header);
+        run.lines += 1;
+        if let Some(columns) = delimiter_columns(line) {
+            run.columns = Some(run.columns.map_or(columns, |widest| widest.max(columns)));
         }
-        counts.cells = counts.cells.saturating_add(columns.unwrap_or(0));
     }
+    counts.cells = counts.cells.saturating_add(run.cells());
     counts
 }
 
-pub(super) struct Plan<'a> {
-    pub source: Cow<'a, str>,
+pub(super) struct Plan {
     pub options: Options,
     pub notes: Vec<&'static str>,
 }
 
-pub(super) fn plan(source: &str) -> Plan<'_> {
+pub(super) fn plan(source: &str) -> Result<Plan, Refusal> {
     let counts = count(source);
+    if counts.footnotes > MAX_FOOTNOTE_LINES {
+        return Err(Refusal::TooManyFootnotes);
+    }
     let mut plan = Plan {
-        source: Cow::Borrowed(source),
         options: Options::ENABLE_TABLES
             | Options::ENABLE_STRIKETHROUGH
             | Options::ENABLE_TASKLISTS
@@ -87,45 +94,42 @@ pub(super) fn plan(source: &str) -> Plan<'_> {
         plan.options.remove(Options::ENABLE_TABLES);
         plan.notes.push(TABLES_AS_TEXT);
     }
-    if counts.footnotes > MAX_FOOTNOTE_LINES {
-        plan.options.remove(Options::ENABLE_FOOTNOTES);
-        plan.source = Cow::Owned(escape_footnote_lines(source));
-        plan.notes.push(FOOTNOTES_AS_TEXT);
-    }
-    plan
+    Ok(plan)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Counts, count, escape_footnote_lines};
+    use super::{Counts, count};
 
     #[test]
-    fn cells_count_header_delimiter_and_rows_until_a_blank_line() {
+    fn a_run_counts_its_lines_times_its_widest_delimiter() {
         let table = "| a | b |\n|---|:-:|\n| 1 |\nx\n\nafter\n";
         assert_eq!(
             count(table),
             Counts {
-                cells: 8,
+                cells: 16,
                 footnotes: 0
             }
         );
     }
 
     #[test]
-    fn rules_and_setext_lines_are_not_tables() {
-        assert_eq!(count("a\n---\n\n***\n- - -\n").cells, 0);
+    fn delimiters_are_found_behind_any_container_prefix() {
+        assert_eq!(count("a\n> - 1. |-|-|\n").cells, 8);
+        assert_eq!(count("a\n-:\n").cells, 2);
     }
 
     #[test]
-    fn footnote_lines_count_after_spaces_and_quotes() {
-        assert_eq!(count("[^a]: b\n > [^b]: c\nx [^c]\n").footnotes, 2);
+    fn only_ascii_space_and_tab_make_a_blank_line() {
+        assert_eq!(count("|-|\n \t\n|-|\n").cells, 6);
+        assert_eq!(count("|-|\n\u{a0}\n|-|\n").cells, 9);
     }
 
     #[test]
-    fn footnote_lines_are_escaped_so_they_stay_visible() {
+    fn footnote_lines_count_behind_any_container_prefix() {
         assert_eq!(
-            escape_footnote_lines("[^a]: b\n > [^c]: d\nx [^e]"),
-            "\\[^a]: b\n > \\[^c]: d\nx [^e]"
+            count("[^a]: b\n > [^b]: c\n- 1. [^c]\nx [^d]\n").footnotes,
+            3
         );
     }
 }

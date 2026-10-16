@@ -10,6 +10,7 @@ const EXTENSIONS: [&str; 2] = ["md", "markdown"];
 const TOO_LARGE: &str = "Large Markdown: shown as text.";
 const TOO_MANY_BLOCKS: &str = "Markdown with over 200,000 blocks: shown as text.";
 const TOO_MANY_SPANS: &str = "Markdown with over 2,000,000 styled runs: shown as text.";
+const TOO_MANY_FOOTNOTES: &str = "Too many footnotes for the rendered view";
 
 pub(super) struct MarkdownKind;
 
@@ -28,6 +29,7 @@ fn note(refusal: Refusal) -> &'static str {
         Refusal::TooLarge => TOO_LARGE,
         Refusal::TooManyBlocks => TOO_MANY_BLOCKS,
         Refusal::TooManySpans => TOO_MANY_SPANS,
+        Refusal::TooManyFootnotes => TOO_MANY_FOOTNOTES,
     }
 }
 

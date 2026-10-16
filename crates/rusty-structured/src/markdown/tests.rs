@@ -1,6 +1,6 @@
 use super::{
-    Align, Block, BlockKind, Document, FOOTNOTES_AS_TEXT, MAX_BLOCK_TEXT, MAX_BLOCKS, MAX_DEPTH,
-    MAX_SOURCE, Marker, Refusal, Style, TABLES_AS_TEXT, parse,
+    Align, Block, BlockKind, Document, MAX_BLOCK_TEXT, MAX_BLOCKS, MAX_DEPTH, MAX_SOURCE, Marker,
+    Refusal, Style, TABLES_AS_TEXT, parse,
 };
 
 fn doc(source: &str) -> Document {
@@ -309,22 +309,72 @@ fn quoted_tables_count_towards_the_cell_total() {
 }
 
 #[test]
-fn over_2_000_footnote_definitions_show_as_text() {
-    let many = "[^a]: b\n".repeat(2_001);
-    let cut = doc(&many);
-    assert_eq!(cut.notes(), [FOOTNOTES_AS_TEXT]);
-    assert!(texts(&cut).concat().starts_with("[^a]: b [^a]: b"));
-    assert!(
-        cut.blocks()
-            .iter()
-            .all(|block| !matches!(block.marker, Some(Marker::Footnote(_))))
-    );
-    let quoted = " > [^a]: b\n".repeat(2_001);
+fn over_2_000_footnote_lines_are_refused_wherever_they_sit() {
+    let shapes = [
+        "[^a]: b\n".repeat(2_001),
+        " > [^a]: b\n".repeat(2_001),
+        "- [^a]: b\n".repeat(2_001),
+        "1. [^a]: b\n".repeat(2_001),
+        "```\n".to_owned() + &"[^a]: b\n".repeat(2_001) + "```\n",
+    ];
+    for shape in shapes {
+        assert_eq!(
+            parse(&shape).err(),
+            Some(Refusal::TooManyFootnotes),
+            "{:?}",
+            &shape[..12]
+        );
+    }
+    assert!(parse(&"[^a]: b\n".repeat(2_000)).is_ok());
+}
+
+fn chained_tables(count: usize, head: &str) -> String {
+    let one = "# h\n".to_owned()
+        + &"|a".repeat(362)
+        + "|\n"
+        + &"|-".repeat(362)
+        + "|\n"
+        + &"x\n".repeat(724);
+    head.to_owned() + &one.repeat(count)
+}
+
+#[test]
+fn tables_joined_without_blank_lines_count_as_one_run() {
     assert_eq!(
-        super::parse(&quoted).map(|doc| doc.notes().to_vec()),
-        Ok(vec![FOOTNOTES_AS_TEXT])
+        doc(&chained_tables(4, "|a|\n|-|\nx\n")).notes(),
+        [TABLES_AS_TEXT]
     );
-    assert!(super::parse(&"[^a]: b\n".repeat(2_000)).is_ok_and(|doc| doc.notes().is_empty()));
+    assert_eq!(
+        doc(&chained_tables(4, "```\n|-|\n```\n")).notes(),
+        [TABLES_AS_TEXT]
+    );
+}
+
+#[test]
+fn rows_of_non_breaking_spaces_are_not_blank() {
+    let one = "|a".repeat(443) + "|\n" + &"|-".repeat(443) + "|\n" + &"\u{a0}\n".repeat(591) + "\n";
+    assert_eq!(doc(&one.repeat(4)).notes(), [TABLES_AS_TEXT]);
+}
+
+fn large_readme() -> String {
+    let section =
+        "## Section\n\nSome prose with **bold** text and a [link](https://example.com).\n\n\
+        | Name | Size | Date | Note |\n|:-----|-----:|:----:|------|\n"
+            .to_owned()
+            + &"| a.txt | 3 | 2026-10-16 | fine |\n".repeat(20)
+            + "\n- one\n- two\n\n```rust\nlet x = 1;\n```\n\n---\n\n";
+    section.repeat((MAX_SOURCE - 1024) / section.len())
+}
+
+#[test]
+fn a_large_readme_with_many_small_tables_keeps_tables_on() {
+    let doc = doc(&large_readme());
+    assert!(doc.notes().is_empty(), "{:?}", doc.notes());
+    assert!(
+        doc.blocks()
+            .iter()
+            .any(|block| matches!(block.kind, BlockKind::Row { .. }))
+    );
 }
 
 #[test]
