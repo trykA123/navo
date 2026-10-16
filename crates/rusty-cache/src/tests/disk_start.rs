@@ -300,8 +300,10 @@ fn reopening_a_closed_folder_writes_it_again() {
     let key = settled(&keys, &work);
     cache.keep_on_disk([&work]);
     put_and_persist(&cache, &key, listing(&["a"]));
+    assert!(disk.flush(PATIENT));
     cache.keep_on_disk([&other]);
     put_and_persist(&cache, &settled(&keys, &other), listing(&["b"]));
+    assert!(disk.flush(PATIENT));
     cache.keep_on_disk([&work]);
     let mut again = listing(&["a"]);
     again.read_at = at(2_000);
