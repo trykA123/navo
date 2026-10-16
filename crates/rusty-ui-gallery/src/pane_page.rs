@@ -90,7 +90,9 @@ impl PanePage {
             | FileListAction::Sort(_)
             | FileListAction::Edit { .. }
             | FileListAction::View(_)
-            | FileListAction::ContextMenu(_) => None,
+            | FileListAction::ContextMenu(_)
+            | FileListAction::MenuPrefetch { .. }
+            | FileListAction::MenuCancel => None,
         };
         if let Some(location) = target {
             self.run(&Command::PaneNavigate { location });

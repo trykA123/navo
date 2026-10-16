@@ -9,6 +9,8 @@ use rusty_shell::{
 };
 use rusty_ui::window_view::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 
+const NOT_LOCAL: &str = "the Windows menu works only on local files";
+
 pub fn provider() -> Option<Rc<dyn ShellMenuProvider>> {
     let service = ShellMenuService::start().ok()?;
     Some(Rc::new(Provider(service)))
@@ -17,6 +19,18 @@ pub fn provider() -> Option<Rc<dyn ShellMenuProvider>> {
 struct Provider(ShellMenuService);
 
 struct Session(MenuSession);
+
+struct Unavailable {
+    menu: ShellMenu,
+    reason: String,
+}
+
+fn path_of(location: &Location) -> Result<PathBuf, String> {
+    if !location.is_local() {
+        return Err(NOT_LOCAL.to_owned());
+    }
+    rusty_fs::os_path(location).map_err(|error| error.message())
+}
 
 fn reply<T: 'static, U>(pending: Pending<T>, map: impl Fn(T) -> U + 'static) -> Reply<U> {
     Box::new(move || {
@@ -35,13 +49,19 @@ fn options(at: ScreenSpot) -> InvokeOptions {
 
 impl ShellMenuProvider for Provider {
     fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>> {
-        let paths = items
-            .iter()
-            .map(|item| PathBuf::from(item.as_str()))
-            .collect();
-        reply(self.0.open(paths), |session| {
-            Box::new(Session(session)) as Box<dyn ShellMenuSession>
-        })
+        let paths: Result<Vec<PathBuf>, String> = items.iter().map(path_of).collect();
+        match paths {
+            Ok(paths) => reply(self.0.open(paths), |session| {
+                Box::new(Session(session)) as Box<dyn ShellMenuSession>
+            }),
+            Err(reason) => Box::new(move || {
+                let unavailable = Unavailable {
+                    menu: ShellMenu::default(),
+                    reason: reason.clone(),
+                };
+                Some(Ok(Box::new(unavailable) as Box<dyn ShellMenuSession>))
+            }),
+        }
     }
 }
 
@@ -62,6 +82,31 @@ impl ShellMenuSession for Session {
         let window = WindowHandle(at.window.unwrap_or_default());
         let point = ScreenPoint { x: at.x, y: at.y };
         reply(self.0.classic(window, point), |_| ())
+    }
+}
+
+impl ShellMenuSession for Unavailable {
+    fn menu(&self) -> &ShellMenu {
+        &self.menu
+    }
+
+    fn fill(&self, _: &[usize]) -> Reply<Submenu> {
+        self.refuse()
+    }
+
+    fn invoke(&self, _: &ItemId, _: ScreenSpot) -> Reply<()> {
+        self.refuse()
+    }
+
+    fn classic(&self, _: ScreenSpot) -> Reply<()> {
+        self.refuse()
+    }
+}
+
+impl Unavailable {
+    fn refuse<T>(&self) -> Reply<T> {
+        let reason = self.reason.clone();
+        Box::new(move || Some(Err(reason.clone())))
     }
 }
 

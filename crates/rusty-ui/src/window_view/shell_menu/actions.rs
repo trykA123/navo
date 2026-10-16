@@ -36,6 +36,7 @@ impl FerriteWindow {
             return;
         };
         let text: Vec<&str> = run.items.iter().map(Location::as_str).collect();
-        cx.write_to_clipboard(ClipboardItem::new_string(text.join("\n")));
+        let line_break = if cfg!(windows) { "\r\n" } else { "\n" };
+        cx.write_to_clipboard(ClipboardItem::new_string(text.join(line_break)));
     }
 }

@@ -107,6 +107,7 @@ pub struct FerriteWindow {
     held_layer: Option<KeyLayer>,
     shell_menus: Option<Rc<dyn ShellMenuProvider>>,
     menu_run: Option<shell_menu::MenuRun>,
+    prefetch: Option<shell_menu::Prefetch>,
     menu_runs: u64,
     _activation: Subscription,
     _appearance: Subscription,
@@ -148,6 +149,7 @@ impl FerriteWindow {
             held_layer: None,
             shell_menus: options.shell_menu,
             menu_run: None,
+            prefetch: None,
             menu_runs: 0,
             _activation: cx.observe_window_activation(window, |view, window, cx| {
                 view.track_modifiers(window.modifiers(), window, cx);

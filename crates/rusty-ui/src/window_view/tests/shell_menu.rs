@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Entity, InputEvent as _, MouseButton, MouseDownEvent,
-    MouseUpEvent, Role, TestAppContext,
+    AnyWindowHandle, AppContext as _, Bounds, Entity, InputEvent as _, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Point, Role, TestAppContext, point, px,
 };
 use rusty_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
 use rusty_core::{Location, PaneId};
@@ -26,6 +26,20 @@ struct Shell {
     invoked: RefCell<Vec<ItemId>>,
     invoke_error: RefCell<Option<String>>,
     classic: Cell<usize>,
+    live: Cell<usize>,
+}
+
+impl Shell {
+    fn session(self: &Rc<Self>) -> Option<Result<FakeSession, String>> {
+        let answer = self.answer.borrow().clone()?;
+        Some(answer.map(|menu| {
+            self.live.set(self.live.get() + 1);
+            FakeSession {
+                menu,
+                shell: self.clone(),
+            }
+        }))
+    }
 }
 
 struct FakeProvider(Rc<Shell>);
@@ -39,16 +53,17 @@ impl ShellMenuProvider for FakeProvider {
     fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>> {
         self.0.opened.borrow_mut().push(items.to_vec());
         let shell = self.0.clone();
+        let ready = RefCell::new(shell.session());
         Box::new(move || {
-            let answer = shell.answer.borrow().clone()?;
-            Some(answer.map(|menu| {
-                let session = FakeSession {
-                    menu,
-                    shell: shell.clone(),
-                };
-                Box::new(session) as Box<dyn ShellMenuSession>
-            }))
+            let answer = ready.borrow_mut().take().or_else(|| shell.session())?;
+            Some(answer.map(|session| Box::new(session) as Box<dyn ShellMenuSession>))
         })
+    }
+}
+
+impl Drop for FakeSession {
+    fn drop(&mut self) {
+        self.shell.live.set(self.shell.live.get() - 1);
     }
 }
 
@@ -201,6 +216,68 @@ impl Rig {
         self.frame(cx);
     }
 
+    fn right_drag_to(&self, cx: &mut TestAppContext, row: usize) {
+        let pane = self.pane;
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            let bounds = window
+                .within(("list", pane.get()))
+                .find(("row", row))
+                .bounds();
+            let event = MouseMoveEvent {
+                position: bounds.center(),
+                pressed_button: Some(MouseButton::Right),
+                modifiers: Default::default(),
+            };
+            window.dispatch_event(event.to_platform_input(), cx);
+        })
+        .expect("window");
+        cx.run_until_parked();
+        self.frame(cx);
+    }
+
+    fn right_up_at(&self, cx: &mut TestAppContext, position: Point<Pixels>) {
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            let event = MouseUpEvent {
+                button: MouseButton::Right,
+                position,
+                modifiers: Default::default(),
+                click_count: 1,
+            };
+            window.dispatch_event(event.to_platform_input(), cx);
+        })
+        .expect("window");
+        cx.run_until_parked();
+        self.frame(cx);
+    }
+
+    fn context_line(&self, cx: &mut TestAppContext) -> Option<String> {
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            let root = window.within("context-menu");
+            root.try_find(("menu-context", 0usize))
+                .and_then(|found| found.label().map(str::to_owned))
+        })
+        .expect("window")
+    }
+
+    fn marked(&self, cx: &mut TestAppContext) -> Vec<u64> {
+        self.view.read_with(cx, |view, _| {
+            view.browser.state().active_tab().selection().marked()
+        })
+    }
+
+    fn menu_row_bounds(&self, cx: &mut TestAppContext, row: usize) -> Bounds<Pixels> {
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            let mut root = window.within("context-menu");
+            let level = root.within(("menu-level", 0usize));
+            level.find(("menu-row", row)).bounds()
+        })
+        .expect("window")
+    }
+
     fn rows(&self, cx: &mut TestAppContext) -> Vec<String> {
         cx.update_window(self.window, |_, window, cx| {
             window.render_frame(cx);
@@ -257,7 +334,12 @@ fn open_by_key(cx: &mut TestAppContext) -> Rig {
     let rig = rig(cx);
     rig.press(cx, "down");
     rig.press(cx, "menu");
+    rig.wait(cx, 160);
     rig
+}
+
+fn reduce_motion(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
 }
 
 #[gpui_kit::test]
@@ -265,7 +347,7 @@ fn a_long_right_press_opens_the_menu_for_the_row(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.right_button(cx, 1, true);
     assert!(!rig.is_open(cx));
-    rig.wait(cx, 450);
+    rig.wait(cx, 560);
     assert!(rig.is_open(cx));
     assert_eq!(
         *rig.shell.opened.borrow(),
@@ -309,6 +391,7 @@ fn shift_f10_opens_the_menu_for_the_marked_rows(cx: &mut TestAppContext) {
     rig.press(cx, "insert");
     rig.press(cx, "insert");
     rig.press(cx, "shift-f10");
+    rig.wait(cx, 160);
     assert!(rig.is_open(cx));
     let expected = vec![rig.location("home/docs"), rig.location("home/a.txt")];
     assert_eq!(*rig.shell.opened.borrow(), [expected]);
@@ -460,4 +543,144 @@ fn a_menu_the_shell_cannot_read_keeps_the_ferrite_actions(cx: &mut TestAppContex
         rig.pane_error(cx).as_deref(),
         Some("Windows menu: The device is not ready.")
     );
+}
+
+#[gpui_kit::test]
+fn a_right_press_asks_the_shell_before_the_hold_completes(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.right_button(cx, 1, true);
+    assert_eq!(
+        *rig.shell.opened.borrow(),
+        [vec![rig.location("home/a.txt")]]
+    );
+    assert!(!rig.is_open(cx));
+    rig.wait(cx, 560);
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.shell.opened.borrow().len(), 1);
+}
+
+#[gpui_kit::test]
+fn a_short_click_drops_the_prefetch_and_its_session(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
+    rig.right_button(cx, 1, true);
+    assert_eq!(rig.shell.live.get(), 1);
+    rig.right_button(cx, 1, false);
+    rig.wait(cx, 500);
+    assert_eq!(rig.shell.live.get(), 0);
+    assert!(!rig.is_open(cx));
+}
+
+#[gpui_kit::test]
+fn a_prefetched_long_press_opens_in_one_piece(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
+    rig.right_button(cx, 1, true);
+    rig.wait(cx, 400);
+    let rows = rig.rows(cx);
+    assert!(rows.iter().any(|row| row == "7-Zip"), "{rows:?}");
+    assert!(!rows.iter().any(|row| row == "Loading Windows items…"));
+}
+
+#[gpui_kit::test]
+fn items_in_time_open_the_menu_complete_with_no_loading_row(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "down");
+    rig.press(cx, "menu");
+    assert!(!rig.is_open(cx));
+    rig.wait(cx, 80);
+    assert!(!rig.is_open(cx));
+    rig.answer(cx, Ok(windows_menu()));
+    let rows = rig.rows(cx);
+    assert!(rows.iter().any(|row| row == "7-Zip"), "{rows:?}");
+    assert!(!rows.iter().any(|row| row == "Loading Windows items…"));
+}
+
+#[gpui_kit::test]
+fn late_items_merge_without_moving_the_ferrite_rows(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    reduce_motion(cx);
+    assert!(
+        rig.rows(cx)
+            .iter()
+            .any(|row| row == "Loading Windows items…")
+    );
+    let before: Vec<_> = (1..=10).map(|row| rig.menu_row_bounds(cx, row)).collect();
+    rig.answer(cx, Ok(windows_menu()));
+    assert!(rig.rows(cx).iter().any(|row| row == "7-Zip"));
+    let after: Vec<_> = (1..=10).map(|row| rig.menu_row_bounds(cx, row)).collect();
+    assert_eq!(after, before);
+}
+
+#[gpui_kit::test]
+fn a_drag_to_another_row_drops_the_prefetch_and_opens_no_menu(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
+    rig.right_button(cx, 1, true);
+    rig.right_drag_to(cx, 0);
+    rig.wait(cx, 500);
+    assert!(!rig.is_open(cx));
+    assert_eq!(rig.shell.live.get(), 0);
+}
+
+#[gpui_kit::test]
+fn a_long_press_on_an_unmarked_row_adds_it_to_the_marked_rows(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "insert");
+    *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
+    rig.right_button(cx, 1, true);
+    rig.wait(cx, 450);
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.marked(cx), [0, 1]);
+    let both = vec![rig.location("home/docs"), rig.location("home/a.txt")];
+    assert_eq!(*rig.shell.opened.borrow(), [both]);
+}
+
+#[gpui_kit::test]
+fn an_answer_after_escape_is_dropped(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    rig.press(cx, "escape");
+    rig.answer(cx, Ok(windows_menu()));
+    assert!(!rig.is_open(cx));
+    assert_eq!(rig.shell.live.get(), 0);
+    let has_run = rig.view.read_with(cx, |view, _| view.menu_run.is_some());
+    assert!(!has_run);
+}
+
+#[gpui_kit::test]
+fn only_the_latest_menu_takes_the_answer(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "down");
+    rig.press(cx, "menu");
+    rig.press(cx, "up");
+    rig.press(cx, "menu");
+    rig.answer(cx, Ok(windows_menu()));
+    assert_eq!(rig.shell.opened.borrow().len(), 2);
+    assert_eq!(rig.shell.live.get(), 1);
+    let context = rig.context_line(cx).unwrap_or_default();
+    assert!(context.starts_with("docs"), "{context}");
+}
+
+#[gpui_kit::test]
+fn properties_asks_the_shell_for_its_properties_verb(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    rig.answer(cx, Ok(windows_menu()));
+    rig.type_text(cx, "properties");
+    rig.press(cx, "enter");
+    rig.wait(cx, 50);
+    let properties = ItemId::Shell {
+        command: 0,
+        verb: Some("properties".to_owned()),
+    };
+    assert_eq!(*rig.shell.invoked.borrow(), [properties]);
+}
+
+#[gpui_kit::test]
+fn a_right_release_outside_the_list_toggles_once(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.right_button(cx, 1, true);
+    rig.right_up_at(cx, point(px(2.), px(2.)));
+    rig.wait(cx, 500);
+    assert_eq!(rig.marked(cx), [1]);
+    assert!(!rig.is_open(cx));
 }

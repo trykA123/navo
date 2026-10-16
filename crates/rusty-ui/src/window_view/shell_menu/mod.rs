@@ -1,73 +1,85 @@
 mod actions;
+mod prefetch;
 mod provider;
 mod run;
+mod show;
 mod targets;
 
 use std::time::Duration;
 
-use gpui_kit::{Bounds, Point};
+use gpui_kit::Point;
 use rusty_core::PaneId;
 use rusty_core::shell_menu::{ItemId, MenuItem, ShellMenu, ferrite_actions};
 
 pub use provider::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 
 use super::FerriteWindow;
-use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
+use crate::context_menu::{ContextMenu, ContextMenuEvent};
+use crate::file_list::FileListAction;
 use crate::prelude::*;
+pub(super) use prefetch::Prefetch;
 pub(super) use run::MenuRun;
-use run::{MenuOpen, Session, ShellCall, Step};
+use run::{MenuOpen, PendingView, Session, ShellCall, Step};
 
 const POLL_EVERY: Duration = Duration::from_millis(16);
+const WAIT_FOR_SHELL: Duration = Duration::from_millis(150);
 const NO_SHELL: &str = "the Windows menu is not available";
 const UNNAMED: &str = "Windows menu";
 
 impl FerriteWindow {
-    pub(super) fn open_shell_menu(
+    fn open_shell_menu(
         &mut self,
         (pane, anchor): (PaneId, Point<Pixels>),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.browser.state().pane(pane).map(|p| p.active().clone()) else {
+        let Some(found) = self.menu_targets(pane) else {
             return;
         };
-        let found = targets::targets(&tab, &self.browser.details(tab.id()));
-        if found.items.is_empty() {
-            return;
-        }
-        let ferrite = ferrite_actions();
-        let mut items = ferrite.clone();
-        let session = match &self.shell_menus {
-            Some(provider) => {
-                items.push(targets::loading_item());
-                Session::Opening(provider.open(&found.items))
-            }
+        let session = match self.shell_menus.clone() {
+            Some(provider) => Session::Opening(
+                self.take_prefetch(pane, &found.items)
+                    .unwrap_or_else(|| provider.open(&found.items)),
+            ),
             None => Session::Missing(NO_SHELL.to_owned()),
         };
-        let input = ContextMenuInput {
-            menu: ShellMenu { items },
-            context: found.context.into(),
-            anchor,
-            bounds: Bounds::new(Point::default(), window.viewport_size()),
-            restore: Some(self.handle(pane, cx)),
-        };
-        let view = cx.new(|cx| ContextMenu::new(input, window, cx));
-        let events = cx.subscribe_in(&view, window, |this, _, event, window, cx| {
-            this.shell_menu_event(event, window, cx);
-        });
         self.menu_runs += 1;
         let open = MenuOpen {
             id: self.menu_runs,
+            show: PendingView {
+                anchor,
+                context: found.context.into(),
+                restore: self.handle(pane, cx),
+                until: cx.background_executor().now() + WAIT_FOR_SHELL,
+            },
             pane,
             items: found.items,
             spot: targets::screen_spot(window, anchor),
-            ferrite,
+            ferrite: ferrite_actions(),
             session,
         };
-        self.menu_run = Some(MenuRun::new(open, (view, events)));
-        self.poll_shell_menu(self.menu_runs, cx);
-        self.keep_polling(cx);
-        cx.notify();
+        self.menu_run = Some(MenuRun::new(open));
+        self.poll_shell_menu(self.menu_runs, window, cx);
+        self.keep_polling(window, cx);
+    }
+
+    pub(in crate::window_view) fn route_menu_action(
+        &mut self,
+        (pane, action): (PaneId, &FileListAction),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match action {
+            FileListAction::ContextMenu(anchor) => {
+                self.open_shell_menu((pane, *anchor), window, cx)
+            }
+            FileListAction::MenuPrefetch { adds_cursor } => {
+                self.prefetch_shell_menu(pane, *adds_cursor);
+            }
+            FileListAction::MenuCancel => self.drop_prefetch(),
+            _ => return false,
+        }
+        true
     }
 
     pub(super) fn shell_menu_view(&self) -> Option<Entity<ContextMenu>> {
@@ -106,7 +118,7 @@ impl FerriteWindow {
                 self.start_shell_call(ShellCall::Invoke { id, label });
             }
         }
-        self.keep_polling(cx);
+        self.keep_polling(window, cx);
         self.drop_finished_run();
         cx.notify();
     }
@@ -127,7 +139,7 @@ impl FerriteWindow {
         }
     }
 
-    fn keep_polling(&mut self, cx: &mut Context<Self>) {
+    fn keep_polling(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(run) = self.menu_run.as_mut() else {
             return;
         };
@@ -136,24 +148,29 @@ impl FerriteWindow {
         }
         run.polling = true;
         let id = run.id;
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let mut more = true;
             while more {
                 cx.background_executor().timer(POLL_EVERY).await;
                 more = this
-                    .update(cx, |view, cx| view.poll_shell_menu(id, cx))
+                    .update_in(cx, |view, window, cx| view.poll_shell_menu(id, window, cx))
                     .unwrap_or(false);
             }
         })
         .detach();
     }
 
-    fn poll_shell_menu(&mut self, id: u64, cx: &mut Context<Self>) -> bool {
+    fn poll_shell_menu(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Some(run) = self.menu_run.as_mut().filter(|run| run.id == id) else {
             return false;
         };
-        let step = run.poll();
+        let mut step = run.poll();
         let pane = run.pane;
+        let now = cx.background_executor().now();
+        self.show_when_ready((id, &mut step, now), window, cx);
+        let Some(run) = self.menu_run.as_mut().filter(|run| run.id == id) else {
+            return false;
+        };
         let view = run.view.as_ref().map(|(view, _)| view.clone());
         let pending = run.is_pending();
         run.polling &= pending;

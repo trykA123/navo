@@ -1,13 +1,16 @@
 use std::mem;
 
-use gpui_kit::{Entity, Subscription};
-use rusty_core::shell_menu::{ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
+use std::time::Instant;
+
+use gpui_kit::{Entity, FocusHandle, Pixels, Point, SharedString, Subscription};
+use rusty_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
 use rusty_core::{Location, PaneId};
 
 use super::provider::{Reply, ScreenSpot, ShellMenuSession};
 use crate::context_menu::ContextMenu;
 
 const PROPERTIES_VERB: &str = "properties";
+const LOADING: &str = "Loading Windows items…";
 
 pub(super) enum Session {
     Opening(Reply<Box<dyn ShellMenuSession>>),
@@ -38,8 +41,16 @@ pub(super) struct Step {
     pub errors: Vec<String>,
 }
 
+pub(super) struct PendingView {
+    pub anchor: Point<Pixels>,
+    pub context: SharedString,
+    pub restore: FocusHandle,
+    pub until: Instant,
+}
+
 pub(super) struct MenuOpen {
     pub id: u64,
+    pub show: PendingView,
     pub pane: PaneId,
     pub items: Vec<Location>,
     pub spot: ScreenSpot,
@@ -52,6 +63,7 @@ pub(in crate::window_view) struct MenuRun {
     pub(super) pane: PaneId,
     pub(super) items: Vec<Location>,
     pub(super) view: Option<(Entity<ContextMenu>, Subscription)>,
+    pub(super) show: Option<PendingView>,
     pub(super) polling: bool,
     spot: ScreenSpot,
     ferrite: Vec<MenuItem>,
@@ -62,12 +74,13 @@ pub(in crate::window_view) struct MenuRun {
 }
 
 impl MenuRun {
-    pub(super) fn new(open: MenuOpen, view: (Entity<ContextMenu>, Subscription)) -> Self {
+    pub(super) fn new(open: MenuOpen) -> Self {
         Self {
             id: open.id,
             pane: open.pane,
             items: open.items,
-            view: Some(view),
+            view: None,
+            show: Some(open.show),
             polling: false,
             spot: open.spot,
             ferrite: open.ferrite,
@@ -79,13 +92,17 @@ impl MenuRun {
     }
 
     pub(super) fn is_pending(&self) -> bool {
-        matches!(self.session, Session::Opening(_))
+        self.show.is_some()
+            || matches!(self.session, Session::Opening(_))
             || !self.fills.is_empty()
             || !self.calls.is_empty()
     }
 
     pub(super) fn is_done(&self) -> bool {
-        self.view.is_none() && self.calls.is_empty() && self.waiting.is_empty()
+        self.view.is_none()
+            && self.show.is_none()
+            && self.calls.is_empty()
+            && self.waiting.is_empty()
     }
 
     pub(super) fn start(&mut self, call: ShellCall) -> Option<String> {
@@ -103,6 +120,18 @@ impl MenuRun {
         };
         self.calls.push((call.label().to_owned(), reply));
         None
+    }
+
+    pub(super) fn is_opening(&self) -> bool {
+        matches!(self.session, Session::Opening(_))
+    }
+
+    pub(super) fn first_menu(&self) -> ShellMenu {
+        let mut items = self.ferrite.clone();
+        if self.is_opening() {
+            items.push(loading_item());
+        }
+        ShellMenu { items }
     }
 
     pub(super) fn fill(&mut self, path: &[usize]) {
@@ -177,6 +206,17 @@ impl MenuRun {
         for path in lazy {
             self.fill(&path);
         }
+    }
+}
+
+fn loading_item() -> MenuItem {
+    let id = ItemId::Shell {
+        command: 0,
+        verb: None,
+    };
+    MenuItem {
+        enabled: false,
+        ..MenuItem::new(id, LOADING, Group::Other)
     }
 }
 

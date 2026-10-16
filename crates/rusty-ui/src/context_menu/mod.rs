@@ -1,5 +1,6 @@
 mod icons;
 mod keys;
+mod motion;
 mod panel;
 mod place;
 mod row;
@@ -8,7 +9,7 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::InputEvent;
@@ -26,6 +27,7 @@ pub use state::ContextMenuEvent;
 use crate::primitives::{TextFieldState, text_field_state};
 use crate::tokens;
 use icons::ShellIcons;
+use motion::{GROW, Grow, RootMotion};
 use panel::PanelLook;
 use place::{BORDER, CONTEXT_LINE, FIELD, Frame, PAD, SubmenuSpot};
 use state::MenuState;
@@ -46,13 +48,15 @@ pub struct ContextMenuInput {
 pub struct ContextMenu {
     state: MenuState,
     context: SharedString,
-    anchor: Point<Pixels>,
     bounds: Bounds<Pixels>,
     field: Entity<TextFieldState>,
     scrolls: Vec<(Vec<usize>, ScrollHandle)>,
     icons: ShellIcons,
     hover: Option<Task<()>>,
     restore: Option<FocusHandle>,
+    opened: Instant,
+    origin: Point<Pixels>,
+    grow: Option<Grow>,
     _field: Subscription,
     _release: Subscription,
 }
@@ -79,11 +83,18 @@ impl ContextMenu {
                 cx.drop_image(image, None);
             }
         });
+        let icons = ShellIcons::build(&input.menu);
+        let state = MenuState::new(input.menu);
+        let origin = place::root_frame(&state.levels()[0], input.anchor, input.bounds)
+            .bounds
+            .origin;
         let mut menu = Self {
-            icons: ShellIcons::build(&input.menu),
-            state: MenuState::new(input.menu),
+            icons,
+            state,
+            opened: cx.background_executor().now(),
+            origin,
+            grow: None,
             context: input.context,
-            anchor: input.anchor,
             bounds: input.bounds,
             field,
             scrolls: Vec::new(),
@@ -118,7 +129,15 @@ impl ContextMenu {
             cx.drop_image(image, None);
         }
         self.icons = ShellIcons::build(&menu);
+        let now = cx.background_executor().now();
+        let from = self.root_list_height(now);
+        let rows = self.state.levels()[0].rows.clone();
         self.state.set_menu(menu);
+        self.grow = (!cx.reduce_motion()).then_some(Grow {
+            from,
+            rows,
+            started: now,
+        });
         self.finish(None, cx);
     }
 
@@ -252,6 +271,38 @@ impl ContextMenu {
         }
     }
 
+    fn grow_done(&self, now: Instant) -> f32 {
+        self.grow
+            .as_ref()
+            .map_or(1., |grow| motion::progress(grow.started, now, GROW))
+    }
+
+    fn root_list_height(&self, now: Instant) -> Pixels {
+        let to = self
+            .frames()
+            .first()
+            .map_or(px(0.), |frame| frame.list_height);
+        match &self.grow {
+            Some(grow) => grow.height(to, self.grow_done(now)),
+            None => to,
+        }
+    }
+
+    fn root_look<'a>(&'a self, frame: &mut Frame, now: Instant, cx: &App) -> RootMotion<'a> {
+        let entered = motion::progress(self.opened, now, tokens::current(cx).motion.fast);
+        let done = self.grow_done(now);
+        if let Some(grow) = &self.grow {
+            let height = grow.height(frame.list_height, done);
+            frame.bounds.size.height += height - frame.list_height;
+            frame.list_height = height;
+        }
+        RootMotion {
+            rise: motion::rise(entered, cx.reduce_motion()),
+            opacity: entered,
+            fresh: self.grow.as_ref().map(|grow| (grow.rows.as_slice(), done)),
+        }
+    }
+
     fn frames(&self) -> Vec<Frame> {
         let levels = self.state.levels();
         let mut frames: Vec<Frame> = Vec::with_capacity(levels.len());
@@ -261,7 +312,7 @@ impl ContextMenu {
                     let spot = self.submenu_spot(parent, above);
                     place::submenu_frame(level, &levels[parent].rows, spot, self.bounds)
                 }
-                _ => place::root_frame(level, self.anchor, self.bounds),
+                _ => place::pinned_root_frame(level, self.origin, self.bounds),
             };
             frames.push(frame);
         }
@@ -270,18 +321,27 @@ impl ContextMenu {
 }
 
 impl Render for ContextMenu {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let reduce_motion = cx.reduce_motion();
+        let now = cx.background_executor().now();
+        if reduce_motion || self.grow_done(now) >= 1. {
+            self.grow = None;
+        }
+        if self.grow.is_some() || now.saturating_duration_since(self.opened) < t.motion.fast {
+            window.request_animation_frame();
+        }
         let panels: Vec<_> = self
             .frames()
             .into_iter()
             .enumerate()
-            .map(|(depth, frame)| {
+            .map(|(depth, mut frame)| {
+                let root = (depth == 0).then(|| self.root_look(&mut frame, now, cx));
                 let look = PanelLook {
                     frame,
                     theme: &t,
                     reduce_motion,
+                    root,
                 };
                 self.panel(depth, look, cx)
             })

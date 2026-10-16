@@ -57,6 +57,8 @@ pub enum FileListAction {
     Edit { row: u64, choose: bool },
     View(u64),
     ContextMenu(Point<Pixels>),
+    MenuPrefetch { adds_cursor: bool },
+    MenuCancel,
 }
 
 #[derive(Clone, Debug)]
@@ -283,7 +285,8 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
         })
         .on_mouse_down(MouseButton::Right, move |event, window, cx| {
             right.right_down((row, event.position), window, cx);
-        });
+        })
+        .on_mouse_move(press::drag_over(ctx, row));
     Some(element.into_any_element())
 }
 

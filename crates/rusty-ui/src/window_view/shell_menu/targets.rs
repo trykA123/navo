@@ -1,26 +1,23 @@
 use gpui_kit::{Pixels, Point, Window};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use rusty_core::shell_menu::{Group, ItemId, MenuItem};
 use rusty_core::{Location, Tab};
 use rusty_fs::FsEntry;
 
 use super::provider::ScreenSpot;
 use crate::format;
 
-pub(super) const LOADING: &str = "Loading Windows items…";
-
 pub(super) struct Targets {
     pub items: Vec<Location>,
     pub context: String,
 }
 
-pub(super) fn targets(tab: &Tab, details: &[FsEntry]) -> Targets {
-    let marked = tab.selection().marked();
-    let rows = if marked.is_empty() {
-        vec![tab.view().cursor]
-    } else {
-        marked
-    };
+pub(super) fn targets(tab: &Tab, details: &[FsEntry], adds_cursor: bool) -> Targets {
+    let mut rows = tab.selection().marked();
+    if rows.is_empty() || adds_cursor {
+        rows.push(tab.view().cursor);
+        rows.sort_unstable();
+        rows.dedup();
+    }
     let chosen: Vec<(Location, &FsEntry)> = rows
         .into_iter()
         .filter_map(|row| {
@@ -41,17 +38,6 @@ pub(super) fn targets(tab: &Tab, details: &[FsEntry]) -> Targets {
     Targets {
         items: chosen.into_iter().map(|(location, _)| location).collect(),
         context,
-    }
-}
-
-pub(super) fn loading_item() -> MenuItem {
-    let id = ItemId::Shell {
-        command: 0,
-        verb: None,
-    };
-    MenuItem {
-        enabled: false,
-        ..MenuItem::new(id, LOADING, Group::Other)
     }
 }
 
