@@ -14,6 +14,7 @@ extend-exclude = [
 wdth = "wdth"
 flate = "flate"
 recomandation = "recomandation"
+alege = "alege"
 
 [default.extend-identifiers]
 flate2 = "flate2"

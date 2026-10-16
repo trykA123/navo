@@ -10,15 +10,15 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
+use std::time::Instant;
 
 use rusty_core::shell_menu::Submenu;
 use windows::Win32::Foundation::HWND;
 
+use super::fill::Fills;
+use super::station::{self, BusySince};
 use super::{InvokeOptions, MenuError, MenuSession, Pending, ScreenPoint, WindowHandle};
-use worker::{BusySince, Request};
-
-const HUNG_AFTER: Duration = Duration::from_secs(2);
+use worker::Request;
 
 fn shell_error(context: &'static str) -> impl Fn(windows::core::Error) -> MenuError {
     move |error| MenuError::Shell {
@@ -43,12 +43,16 @@ impl Link {
         self.sender.send(request).is_ok() && sta::wake(self.window)
     }
 
-    fn ask<T>(&self, make: impl FnOnce(super::pending::Reply<T>) -> Request) -> Pending<T> {
-        if self.retired.load(Ordering::Acquire) {
-            return Pending::ready(Err(MenuError::Stopped));
-        }
+    fn post(&self, request: Request) -> bool {
+        !self.retired.load(Ordering::Acquire) && self.send(request)
+    }
+
+    fn ask<T: Send + 'static>(
+        &self,
+        make: impl FnOnce(super::pending::Reply<T>) -> Request,
+    ) -> Pending<T> {
         let (reply, pending) = Pending::channel();
-        if self.send(make(reply)) {
+        if self.post(make(reply)) {
             pending
         } else {
             Pending::ready(Err(MenuError::Stopped))
@@ -68,8 +72,7 @@ impl Worker {
     }
 
     fn is_hung(&self) -> bool {
-        let busy = self.busy.lock().unwrap_or_else(PoisonError::into_inner);
-        busy.is_some_and(|since| since.elapsed() > HUNG_AFTER)
+        station::is_hung(&self.busy, Instant::now())
     }
 }
 
@@ -107,15 +110,18 @@ impl Drop for Service {
 pub(super) struct SessionHandle {
     id: u64,
     link: Link,
+    fills: Fills,
 }
 
 impl SessionHandle {
     pub(super) fn fill(&self, path: Vec<usize>) -> Pending<Submenu> {
         let session = self.id;
-        self.link.ask(|reply| Request::Fill {
-            session,
-            path,
-            reply,
+        self.fills.ask(path, |path, reply| {
+            self.link.post(Request::Fill {
+                session,
+                path,
+                reply,
+            });
         })
     }
 
@@ -157,7 +163,7 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, mpsc};
 
-    use super::{Link, MenuError, Request};
+    use super::{InvokeOptions, Link, MenuError, Request};
 
     #[test]
     fn a_retired_link_answers_stopped_without_sending() {
@@ -167,9 +173,11 @@ mod tests {
             window: 0,
             retired: Arc::new(AtomicBool::new(true)),
         };
-        let pending = link.ask(|reply| Request::Fill {
+        let pending = link.ask(|reply| Request::Invoke {
             session: 1,
-            path: vec![0],
+            command: 1,
+            verb: None,
+            options: InvokeOptions::default(),
             reply,
         });
         assert_eq!(pending.wait(), Err(MenuError::Stopped));

@@ -1,10 +1,14 @@
 #[cfg(any(windows, test))]
 mod classify;
 mod error;
+#[cfg(any(windows, test))]
+mod fill;
 mod pending;
 #[cfg(any(windows, test))]
 mod pixels;
 mod selection;
+#[cfg(any(windows, test))]
+mod station;
 #[cfg(not(windows))]
 mod stub;
 #[cfg(any(windows, test))]
@@ -79,6 +83,7 @@ impl MenuSession {
         &self.menu
     }
 
+    /// Answers within `FILL_BUDGET`, `Filled` or `Loading`; ask again later for the current state.
     #[must_use]
     pub fn fill(&self, path: &[usize]) -> Pending<Submenu> {
         self.handle.fill(path.to_vec())

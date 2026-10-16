@@ -29,6 +29,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::w;
 
 const ANSWER: Duration = Duration::from_secs(30);
+const POLL: Duration = Duration::from_millis(10);
 
 struct Fixture {
     dir: TempDir,
@@ -156,11 +157,7 @@ fn some_items_carry_rgba_icons() {
     }
 }
 
-#[test]
-fn send_to_fills_within_the_budget() {
-    let fixture = Fixture::new();
-    let service = ShellMenuService::start().unwrap();
-    let session = open(&service, vec![fixture.file("notes.txt")]);
+fn send_to_position(session: &MenuSession) -> usize {
     let position = session
         .menu()
         .items
@@ -171,6 +168,15 @@ fn send_to_fills_within_the_budget() {
         "send to before fill: {:?}",
         session.menu().items[position].kind
     );
+    position
+}
+
+#[test]
+fn send_to_answers_within_the_budget() {
+    let fixture = Fixture::new();
+    let service = ShellMenuService::start().unwrap();
+    let session = open(&service, vec![fixture.file("notes.txt")]);
+    let position = send_to_position(&session);
     let started = Instant::now();
     let submenu = session
         .fill(&[position])
@@ -178,17 +184,51 @@ fn send_to_fills_within_the_budget() {
         .unwrap()
         .unwrap();
     let elapsed = started.elapsed();
-    let Submenu::Filled(children) = submenu else {
-        panic!("Send to did not fill within {FILL_BUDGET:?}: {submenu:?}");
+    let kind = match &submenu {
+        Submenu::Filled(children) => format!("filled with {}", children.len()),
+        other => format!("{other:?}"),
+    };
+    eprintln!("send to first answer: {kind} in {} ms", elapsed.as_millis());
+    let reopened = Instant::now();
+    drop(open(&service, vec![fixture.file("again.txt")]));
+    let round_trip = reopened.elapsed();
+    eprintln!("open after the fill: {} ms", round_trip.as_millis());
+    assert!(
+        matches!(submenu, Submenu::Filled(_) | Submenu::Loading),
+        "{submenu:?}"
+    );
+    assert!(
+        elapsed < FILL_BUDGET * 4,
+        "the first answer took {elapsed:?}"
+    );
+    assert!(
+        round_trip < Duration::from_secs(10),
+        "the next open took {round_trip:?}"
+    );
+}
+
+#[test]
+fn a_loading_submenu_fills_later() {
+    let fixture = Fixture::new();
+    let service = ShellMenuService::start().unwrap();
+    let session = open(&service, vec![fixture.file("notes.txt")]);
+    let position = send_to_position(&session);
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(15);
+    let children = loop {
+        match session.fill(&[position]).wait_timeout(ANSWER).unwrap() {
+            Ok(Submenu::Filled(children)) => break children,
+            Ok(Submenu::Loading) if Instant::now() < deadline => std::thread::sleep(POLL),
+            other => panic!("Send to did not fill: {other:?}"),
+        }
     };
     let names: Vec<_> = children.iter().map(|child| child.text.as_str()).collect();
     eprintln!(
         "send to: {} items in {} ms: {names:?}",
         children.len(),
-        elapsed.as_millis()
+        started.elapsed().as_millis()
     );
     assert!(children.iter().any(|child| !child.text.is_empty()));
-    assert!(elapsed < FILL_BUDGET * 4, "fill took {elapsed:?}");
 }
 
 #[test]
