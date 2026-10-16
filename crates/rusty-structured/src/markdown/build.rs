@@ -1,26 +1,11 @@
 use pulldown_cmark::{CodeBlockKind, Event, LinkType, Options, Parser, Tag, TagEnd};
 
 use super::block::{Open, Piece};
-use super::{
-    Align, BlockKind, Document, Link, MAX_COLUMNS, MAX_DEPTH, Marker, NO_LINK, Refusal, Style,
-    Table,
-};
-
-const ELLIPSIS: &str = "…";
-const MAX_CELL_WIDTH: usize = 40;
-const MAX_LAST_COLUMN: u8 = (MAX_COLUMNS - 1) as u8;
+use super::table::TableState;
+use super::{BlockKind, Document, Link, MAX_DEPTH, Marker, NO_LINK, Refusal, Style};
 
 fn clamp(depth: usize) -> u8 {
     u8::try_from(depth).unwrap_or(u8::MAX).min(MAX_DEPTH)
-}
-
-fn align(align: pulldown_cmark::Alignment) -> Align {
-    match align {
-        pulldown_cmark::Alignment::None => Align::None,
-        pulldown_cmark::Alignment::Left => Align::Left,
-        pulldown_cmark::Alignment::Center => Align::Center,
-        pulldown_cmark::Alignment::Right => Align::Right,
-    }
 }
 
 const STYLES: [Style; 3] = [Style::BOLD, Style::ITALIC, Style::STRIKE];
@@ -67,14 +52,6 @@ fn flag_of(tag: TagEnd) -> Option<Style> {
 }
 
 #[derive(Default)]
-struct TableState {
-    id: u32,
-    cell: usize,
-    cell_start: usize,
-    is_cut: bool,
-}
-
-#[derive(Default)]
 pub(super) struct Builder {
     pub(super) doc: Document,
     pub(super) open: Option<Open>,
@@ -82,13 +59,23 @@ pub(super) struct Builder {
     lists: Vec<Option<u64>>,
     pending: Option<Marker>,
     inline: Inline,
-    table: Option<TableState>,
+    line: u32,
+    pub(super) table: Option<TableState>,
 }
 
 impl Builder {
     pub(super) fn run(source: &str, options: Options) -> Result<Document, Refusal> {
         let mut builder = Self::default();
-        for event in Parser::new_ext(source, options) {
+        let mut counted = 0;
+        for (event, at) in Parser::new_ext(source, options).into_offset_iter() {
+            if at.start > counted {
+                let skipped = source.as_bytes().get(counted..at.start).unwrap_or_default();
+                let breaks = skipped.iter().filter(|byte| **byte == b'\n').count();
+                builder.line = builder
+                    .line
+                    .saturating_add(u32::try_from(breaks).unwrap_or(u32::MAX));
+                counted = at.start;
+            }
             builder.event(event)?;
         }
         builder.finish()?;
@@ -295,88 +282,6 @@ impl Builder {
         }
     }
 
-    fn start_table(&mut self, alignments: &[pulldown_cmark::Alignment]) -> Result<(), Refusal> {
-        self.finish()?;
-        let alignments: Vec<Align> = alignments
-            .iter()
-            .take(MAX_COLUMNS)
-            .map(|a| align(*a))
-            .collect();
-        let id = u32::try_from(self.doc.tables.len()).unwrap_or(u32::MAX);
-        self.doc.tables.push(Table {
-            widths: vec![1; alignments.len()],
-            alignments,
-        });
-        self.table = Some(TableState {
-            id,
-            ..TableState::default()
-        });
-        Ok(())
-    }
-
-    fn start_row(&mut self, is_head: bool) -> Result<(), Refusal> {
-        let Some(table) = self.table.as_mut() else {
-            return Ok(());
-        };
-        let id = table.id;
-        table.cell = usize::MAX;
-        table.is_cut = false;
-        self.begin(BlockKind::Row { table: id, is_head })
-    }
-
-    fn start_cell(&mut self) {
-        let text_len = self.doc.text.len();
-        let Some(table) = self.table.as_mut() else {
-            return;
-        };
-        table.cell = table.cell.wrapping_add(1);
-        table.cell_start = text_len;
-    }
-
-    fn mark_cut_row(&mut self) -> Result<(), Refusal> {
-        let Some(table) = self.table.as_mut() else {
-            return Ok(());
-        };
-        if table.is_cut {
-            return Ok(());
-        }
-        table.is_cut = true;
-        let piece = Piece {
-            style: Style::PLAIN,
-            link: NO_LINK,
-            cell: MAX_LAST_COLUMN,
-        };
-        self.push_text(ELLIPSIS, &piece)
-    }
-
-    fn end_cell(&mut self) {
-        let Some(table) = self.table.as_ref() else {
-            return;
-        };
-        if table.cell >= MAX_COLUMNS {
-            return;
-        }
-        let shown = self.doc.text.get(table.cell_start..).unwrap_or_default();
-        let width = u16::try_from(shown.chars().take(MAX_CELL_WIDTH).count()).unwrap_or(1);
-        let widths = self
-            .doc
-            .tables
-            .get_mut(table.id as usize)
-            .and_then(|found| found.widths.get_mut(table.cell));
-        if let Some(column) = widths {
-            *column = (*column).max(width);
-        }
-    }
-
-    fn cell(&self) -> Option<u8> {
-        match &self.table {
-            Some(table) if self.open.is_some_and(|open| open.is_row()) => u8::try_from(table.cell)
-                .ok()
-                .filter(|cell| usize::from(*cell) < MAX_COLUMNS),
-            _ => Some(0),
-        }
-    }
-
     fn inline_text(&mut self, text: &str, extra: Style) -> Result<(), Refusal> {
         if self.open.is_none() {
             self.begin(BlockKind::Paragraph)?;
@@ -399,7 +304,7 @@ impl Builder {
             kind,
             self.pending.take(),
             (clamp(self.quote), clamp(self.lists.len())),
-            (self.doc.text.len(), self.doc.spans.len()),
+            (self.doc.text.len(), self.doc.spans.len(), self.line),
         ));
         Ok(())
     }

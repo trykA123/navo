@@ -22,6 +22,7 @@ use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
 use crate::prelude::*;
 use crate::tokens;
 use block::{Page, draw_block};
+use table::TableScrolls;
 
 const CONTEXT: &str = "Markdown";
 const LINE_STEP: f32 = 3.;
@@ -68,6 +69,7 @@ pub(super) struct MarkdownView {
     menu_block: Option<usize>,
     note: Option<SharedString>,
     checking: Option<Job>,
+    tables: Rc<TableScrolls>,
     #[cfg(test)]
     drawn: Rc<std::cell::Cell<usize>>,
 }
@@ -90,6 +92,7 @@ impl MarkdownView {
             menu_block: None,
             note,
             checking: None,
+            tables: Rc::default(),
             #[cfg(test)]
             drawn: Rc::default(),
         }
@@ -222,10 +225,10 @@ impl MarkdownView {
     fn blocks(&self, page: Page) -> impl IntoElement {
         #[cfg(test)]
         let drawn = self.drawn.clone();
-        list(self.list.clone(), move |index, _, _| {
+        list(self.list.clone(), move |index, window, _| {
             #[cfg(test)]
             drawn.set(drawn.get() + 1);
-            draw_block(&page, index)
+            draw_block(&page, index, window)
         })
         .size_full()
     }
@@ -250,6 +253,7 @@ impl Render for MarkdownView {
             doc: self.doc.clone(),
             picked: self.picked,
             view: cx.weak_entity(),
+            tables: self.tables.clone(),
         };
         let root = div()
             .id("markdown")
