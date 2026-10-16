@@ -229,3 +229,20 @@ fn consecutive_saves_do_not_count_as_edits() {
     store.save(dark_mode()).unwrap();
     assert_eq!(store.save(Settings::default()), Ok(()));
 }
+
+#[test]
+fn an_old_editor_written_file_loads_valid_with_hidden_files_shown() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "[files]\nshow-hidden = false\n\n[editor]\npath = \"C:\\\\Tools\\\\code.exe\"\n",
+    );
+    let (store, report) = SettingsStore::load(&path);
+    assert_eq!(report, LoadReport::default());
+    assert_eq!(store.current().files.hidden_files, HiddenFiles::Shown);
+    assert_eq!(
+        store.current().editor.path.as_deref(),
+        Some(r"C:\Tools\code.exe")
+    );
+}

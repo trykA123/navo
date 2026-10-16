@@ -64,6 +64,7 @@ pub enum Page {
     WindowAlt,
     WindowNarrow,
     WindowJob,
+    AppMenu,
 }
 
 pub struct PageInfo {
@@ -82,7 +83,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 24] = [
+pub const PAGES: [PageInfo; 25] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -122,6 +123,7 @@ pub const PAGES: [PageInfo; 24] = [
         "p19-window-job",
         false,
     ),
+    info(Page::AppMenu, "App menu", "p19-app-menu", false),
 ];
 
 impl Page {
@@ -158,6 +160,7 @@ pub struct Gallery {
     shift_window: Entity<WindowPage>,
     alt_window: Entity<WindowPage>,
     job_window: Entity<WindowPage>,
+    menu_window: Entity<WindowPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -187,6 +190,7 @@ impl Gallery {
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), false, cx)),
             alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), false, cx)),
             job_window: cx.new(|cx| WindowPage::new(None, true, cx)),
+            menu_window: cx.new(WindowPage::with_menu),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -334,12 +338,13 @@ fn column(t: &Theme) -> Div {
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 4] {
+    fn windows(&self) -> [&Entity<WindowPage>; 5] {
         [
             &self.main_window,
             &self.shift_window,
             &self.alt_window,
             &self.job_window,
+            &self.menu_window,
         ]
     }
 }
@@ -358,9 +363,7 @@ impl Render for Gallery {
             .line_height(t.typography.line_height);
         if let Some(page) = window_element(self.page, self.windows()) {
             let is_narrow = self.page == Page::WindowNarrow;
-            return root
-                .when(is_narrow, |root| root.bg(t.colors.line))
-                .child(page);
+            return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
         }
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
         match self.page {
@@ -391,7 +394,8 @@ impl Render for Gallery {
             | Page::WindowShift
             | Page::WindowAlt
             | Page::WindowNarrow
-            | Page::WindowJob => root,
+            | Page::WindowJob
+            | Page::AppMenu => root,
         }
     }
 }

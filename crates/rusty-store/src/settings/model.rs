@@ -58,7 +58,7 @@ pub enum Density {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Files {
-    pub show_hidden: bool,
+    pub hidden_files: HiddenFiles,
     pub show_system: bool,
     pub folders_first: bool,
     pub sort: SortKey,
@@ -68,13 +68,21 @@ pub struct Files {
 impl Default for Files {
     fn default() -> Self {
         Self {
-            show_hidden: false,
+            hidden_files: HiddenFiles::default(),
             show_system: false,
             folders_first: true,
             sort: SortKey::default(),
             sort_descending: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HiddenFiles {
+    #[default]
+    Shown,
+    Hidden,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

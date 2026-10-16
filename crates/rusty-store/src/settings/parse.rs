@@ -1,10 +1,14 @@
 use super::{Settings, SettingsError};
 
+// Keys older builds wrote; they still load, are ignored and drop out on the next save.
+const LEGACY_KEYS: [&str; 1] = ["files.show-hidden"];
+
 pub fn parse(text: &str) -> Result<(Settings, Vec<String>), SettingsError> {
     let mut unknown = Vec::new();
     let settings = toml::de::Deserializer::parse(text)
         .and_then(|de| serde_ignored::deserialize(de, |path| unknown.push(path.to_string())))
         .map_err(|e| invalid(text, &e))?;
+    unknown.retain(|key| !LEGACY_KEYS.contains(&key.as_str()));
     let order = key_positions(text);
     unknown.sort_by_key(|key| order.iter().position(|k| k == key).unwrap_or(usize::MAX));
     Ok((settings, unknown))

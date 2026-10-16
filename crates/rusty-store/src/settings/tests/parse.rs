@@ -15,10 +15,10 @@ fn empty_text_gives_defaults() {
 
 #[test]
 fn partial_file_keeps_defaults_for_the_rest() {
-    let text = "[appearance]\nfont-size = 15\n\n[files]\nshow-hidden = true\n";
+    let text = "[appearance]\nfont-size = 15\n\n[files]\nhidden-files = \"hidden\"\n";
     let mut expected = Settings::default();
     expected.appearance.font_size = 15;
-    expected.files.show_hidden = true;
+    expected.files.hidden_files = HiddenFiles::Hidden;
     assert_eq!(parsed(text), expected);
 }
 
@@ -104,4 +104,24 @@ fn unknown_enum_value_reports_line_and_column() {
 fn default_toml_round_trips_without_unknown_keys() {
     let text = to_toml(&Settings::default());
     assert_eq!(parse(&text).unwrap(), (Settings::default(), Vec::new()));
+}
+
+#[test]
+fn both_hidden_files_values_parse() {
+    for (text, value) in [
+        ("shown", HiddenFiles::Shown),
+        ("hidden", HiddenFiles::Hidden),
+    ] {
+        let file = format!("[files]\nhidden-files = \"{text}\"\n");
+        assert_eq!(parsed(&file).files.hidden_files, value);
+    }
+}
+
+#[test]
+fn the_legacy_show_hidden_key_is_ignored_quietly() {
+    let old = "[files]\nshow-hidden = false\n\n[editor]\npath = \"code\"\n";
+    let (settings, unknown) = parse(old).unwrap();
+    assert_eq!(settings.files.hidden_files, HiddenFiles::Shown);
+    assert_eq!(settings.editor.path.as_deref(), Some("code"));
+    assert!(unknown.is_empty(), "{unknown:?}");
 }

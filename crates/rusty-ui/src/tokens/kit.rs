@@ -1,7 +1,7 @@
 use gpui_kit::App;
 use gpui_kit::component::theme::{Theme as KitTheme, ThemeColor, ThemeMode};
 
-use super::{Colors, Mode, Theme};
+use super::{Colors, Density, Mode, Theme};
 
 fn map_colors(c: &Colors, k: &mut ThemeColor) {
     k.background = c.background;
@@ -51,7 +51,12 @@ fn map_colors(c: &Colors, k: &mut ThemeColor) {
 }
 
 pub fn apply(mode: Mode, cx: &mut App) {
-    let theme = Theme::new(mode);
+    let density = cx.try_global::<Theme>().map(|theme| theme.density);
+    apply_with(mode, density.unwrap_or_default(), cx);
+}
+
+pub fn apply_with(mode: Mode, density: Density, cx: &mut App) {
+    let theme = Theme::with_density(mode, density);
     cx.set_global(theme.clone());
     let kit_mode = if mode.is_dark() {
         ThemeMode::Dark

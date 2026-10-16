@@ -46,9 +46,11 @@ impl FerriteWindow {
     }
 
     fn pane_error(&self, pane: PaneId, tab: &Tab) -> Option<SharedString> {
+        let is_focused = self.browser.state().focused_pane() == pane;
         self.drives
             .error(pane, tab)
             .or_else(|| self.browser.error(tab.id()).map(|e| e.message().into()))
+            .or_else(|| self.saver.error.clone().filter(|_| is_focused))
     }
 
     pub(super) fn pane_view(
@@ -150,23 +152,24 @@ impl FerriteWindow {
     }
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
-        root.on_action(
-            cx.listener(|this: &mut Self, _: &DriveMenuFirst, window, cx| {
-                this.open_drive_menu(0, window, cx);
-            }),
-        )
-        .on_action(
-            cx.listener(|this: &mut Self, _: &DriveMenuSecond, window, cx| {
-                this.open_drive_menu(1, window, cx);
-            }),
-        )
-        .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
-            this.apply(&Command::PaneOpenTab { location: None }, window, cx);
-        }))
-        .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
-            let pane = this.browser.state().focused_pane();
-            this.open_path_edit(pane, cx);
-        }))
+        super::tab_keys::tab_keys(root, cx)
+            .on_action(
+                cx.listener(|this: &mut Self, _: &DriveMenuFirst, window, cx| {
+                    this.open_drive_menu(0, window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this: &mut Self, _: &DriveMenuSecond, window, cx| {
+                    this.open_drive_menu(1, window, cx);
+                }),
+            )
+            .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
+                this.apply(&Command::PaneOpenTab { location: None }, window, cx);
+            }))
+            .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
+                let pane = this.browser.state().focused_pane();
+                this.open_path_edit(pane, cx);
+            }))
     }
 
     fn tabs(

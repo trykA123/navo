@@ -37,7 +37,11 @@ fn files() -> impl Strategy<Value = Files> {
         Just(SortKey::Kind)
     ];
     (any::<[bool; 4]>(), sort).prop_map(|([hidden, system, folders, descending], sort)| Files {
-        show_hidden: hidden,
+        hidden_files: if hidden {
+            HiddenFiles::Hidden
+        } else {
+            HiddenFiles::Shown
+        },
         show_system: system,
         folders_first: folders,
         sort,

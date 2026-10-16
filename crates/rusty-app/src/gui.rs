@@ -12,7 +12,7 @@ use rusty_ui::tokens::Mode;
 use rusty_ui::window_view::{StartOptions, run};
 
 use crate::startup::{home_location, initial_state, save};
-use crate::{drives, editor, files, jobs, launch};
+use crate::{app_menu, drives, editor, files, jobs, launch};
 
 pub fn open(view: Option<std::path::PathBuf>) {
     let dirs = StoreDirs::detect();
@@ -47,6 +47,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
         files: files::hooks(memory),
         kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
+        app_menu: app_menu::hooks(settings.as_deref(), std::env::current_exe().ok()),
         view: view.and_then(|path| view_location(&path)),
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::new(Arc::new(drive_identity)),

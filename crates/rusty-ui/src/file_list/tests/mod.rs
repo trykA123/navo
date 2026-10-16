@@ -1,3 +1,4 @@
+mod density;
 mod input;
 mod render;
 

@@ -43,6 +43,11 @@ pub enum Event {
         location: Location,
         listing: Listing,
     },
+    ListingRefiltered {
+        tab: TabId,
+        location: Location,
+        listing: Listing,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -117,6 +122,17 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
         } => {
             if let Some(found) = state.tab_mut(tab)
                 && found.replace_listing(&location, listing)
+            {
+                pane::reveal_tab(state, tab);
+            }
+        }
+        Event::ListingRefiltered {
+            tab,
+            location,
+            listing,
+        } => {
+            if let Some(found) = state.tab_mut(tab)
+                && found.replace_listing_near(&location, listing)
             {
                 pane::reveal_tab(state, tab);
             }

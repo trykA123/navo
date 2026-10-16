@@ -48,7 +48,7 @@ pub(super) fn columns(t: &Theme) -> Div {
         .items_center()
         .gap(t.spacing.md)
         .mx(t.spacing.xs)
-        .pl(t.spacing.lg)
+        .pl(t.rows.inset)
         .pr(t.spacing.xxl)
 }
 

@@ -57,20 +57,38 @@ fn write_event(out: &mut String, event: &Event) {
             tab,
             location,
             listing,
+        }
+        | Event::ListingRefiltered {
+            tab,
+            location,
+            listing,
         } => {
-            let _ = writeln!(
-                out,
-                "!listing-filtered {{ tab: {}, location: {}, entries: {} }}",
-                tab.get(),
-                quote(location.as_str()),
-                listing.len()
-            );
-            write_entries(out, listing);
+            let name = match event {
+                Event::ListingRefiltered { .. } => "listing-refiltered",
+                _ => "listing-filtered",
+            };
+            write_filtered(out, name, (*tab, location), listing);
         }
         Event::PageRowsChanged { pane, rows } => {
             let _ = writeln!(out, "!page-rows {{ pane: {}, rows: {rows} }}", pane.get());
         }
     }
+}
+
+fn write_filtered(
+    out: &mut String,
+    name: &str,
+    (tab, location): (TabId, &Location),
+    listing: &Listing,
+) {
+    let _ = writeln!(
+        out,
+        "!{name} {{ tab: {}, location: {}, entries: {} }}",
+        tab.get(),
+        quote(location.as_str()),
+        listing.len()
+    );
+    write_entries(out, listing);
 }
 
 fn write_entries(out: &mut String, listing: &Listing) {
@@ -176,16 +194,7 @@ fn event_entry(text: &str, lines: &[&str], next: &mut usize) -> Result<LogEntry,
                 },
             }
         }
-        "listing-filtered" => {
-            expect_fields(&fields, &["tab", "location", "entries"])?;
-            let count = int(&fields, "entries")?;
-            let entries = entry_lines(lines, next, count)?;
-            Event::ListingFiltered {
-                tab: TabId::new(int(&fields, "tab")?),
-                location: Location::new(string(&fields, "location")?).map_err(|e| e.to_string())?,
-                listing: Listing::new(entries),
-            }
-        }
+        "listing-filtered" | "listing-refiltered" => read_filtered(name, &fields, lines, next)?,
         "page-rows" => {
             expect_fields(&fields, &["pane", "rows"])?;
             Event::PageRowsChanged {
@@ -196,6 +205,33 @@ fn event_entry(text: &str, lines: &[&str], next: &mut usize) -> Result<LogEntry,
         other => return Err(format!("unknown event {other:?}")),
     };
     Ok(LogEntry::Event(event))
+}
+
+fn read_filtered(
+    name: &str,
+    fields: &Fields<'_>,
+    lines: &[&str],
+    next: &mut usize,
+) -> Result<Event, String> {
+    expect_fields(fields, &["tab", "location", "entries"])?;
+    let count = int(fields, "entries")?;
+    let entries = entry_lines(lines, next, count)?;
+    let tab = TabId::new(int(fields, "tab")?);
+    let location = Location::new(string(fields, "location")?).map_err(|e| e.to_string())?;
+    let listing = Listing::new(entries);
+    Ok(if name == "listing-refiltered" {
+        Event::ListingRefiltered {
+            tab,
+            location,
+            listing,
+        }
+    } else {
+        Event::ListingFiltered {
+            tab,
+            location,
+            listing,
+        }
+    })
 }
 
 fn entry_lines(lines: &[&str], next: &mut usize, count: u64) -> Result<Vec<Entry>, String> {

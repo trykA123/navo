@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod app;
+pub mod app_menu;
 mod assets;
 pub mod browser;
 pub mod confirm_dialog;

@@ -1,3 +1,4 @@
+mod app_menu;
 mod drive_menu;
 mod drives;
 mod editor;
@@ -7,7 +8,9 @@ mod operate;
 mod pane;
 mod path_edit;
 mod prompt;
+mod settings_save;
 mod status;
+mod tab_keys;
 mod viewer;
 mod waiting;
 
@@ -21,6 +24,8 @@ use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
+use crate::app_menu::QuickSettings;
+use crate::app_menu::{Identity, ToggleAppMenu};
 use crate::browser::{Browser, Launcher, Operations, Waker};
 use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
@@ -30,6 +35,7 @@ use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
+pub use app_menu::{AppMenuHooks, SaveSettings};
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
@@ -55,6 +61,7 @@ pub struct StartOptions {
     pub files: FileHooks,
     pub kinds: Kinds,
     pub drives: DriveHooks,
+    pub app_menu: AppMenuHooks,
     pub view: Option<rusty_core::Location>,
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
@@ -66,6 +73,7 @@ pub fn run(options: StartOptions) {
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
+        crate::app_menu::bind_keys(cx);
         viewer::bind_keys(cx);
         bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
@@ -101,6 +109,11 @@ pub struct FerriteWindow {
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
     held_layer: Option<KeyLayer>,
+    app_menu: Option<app_menu::OpenMenu>,
+    app_menu_focus: FocusHandle,
+    quick: QuickSettings,
+    identity: Identity,
+    saver: settings_save::Saver,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -120,6 +133,7 @@ impl FerriteWindow {
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
+        browser.set_show_hidden(options.app_menu.settings.show_hidden);
         browser.start();
         let view = Self {
             browser,
@@ -139,19 +153,32 @@ impl FerriteWindow {
             path_edit: None,
             waiting: waiting::Waiting::default(),
             held_layer: None,
+            app_menu: None,
+            app_menu_focus: cx.focus_handle(),
+            quick: options.app_menu.settings,
+            identity: options.app_menu.identity,
+            saver: settings_save::Saver::new(options.app_menu.save, options.app_menu.load_error),
             _activation: cx.observe_window_activation(window, |view, window, cx| {
                 view.track_modifiers(window.modifiers(), window, cx);
             }),
             _watch: cx.observe_self(Self::watch_listings),
-            _appearance: cx.observe_window_appearance(window, |_, window, cx| {
-                tokens::apply(mode_of(window.appearance()), cx);
+            _appearance: cx.observe_window_appearance(window, |view, window, cx| {
+                view.apply_theme(window, cx);
                 cx.notify();
             }),
         };
-        tokens::apply(mode_of(window.appearance()), cx);
+        view.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);
         Self::poll_drives(cx);
-        let start_view = options.view;
+        Self::after_open(options.view, window, cx);
+        view
+    }
+
+    fn after_open(
+        start_view: Option<rusty_core::Location>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.defer_in(window, move |view, window, cx| {
             view.focus_core_pane(window, cx);
             view.watch_listings(cx);
@@ -159,7 +186,6 @@ impl FerriteWindow {
                 view.view_location(location, window, cx);
             }
         });
-        view
     }
 
     #[cfg(not(test))]
@@ -271,10 +297,14 @@ impl FerriteWindow {
         true
     }
 
-    fn title_bar(cx: &mut Context<Self>) -> FerriteTitleBar {
+    fn title_bar(&self, cx: &mut Context<Self>) -> FerriteTitleBar {
         let this = cx.weak_entity();
+        let toggle = cx.listener(|view: &mut Self, _: &ClickEvent, window, cx| {
+            view.toggle_app_menu(window, cx);
+        });
         FerriteTitleBar::new("Ferrite")
             .on_mica()
+            .app_button(self.app_menu.is_some(), toggle)
             .header(HeaderSearch::new())
             .on_close(move |_, cx| {
                 if this.update(cx, |view, cx| view.close(cx)).unwrap_or(true) {
@@ -320,6 +350,7 @@ impl Render for FerriteWindow {
         let body = self.viewer_view(cx).unwrap_or(body);
         let jobs = self.job_strip(cx);
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
+        let menu = self.app_menu_view(cx);
         div()
             .relative()
             .flex()
@@ -330,7 +361,7 @@ impl Render for FerriteWindow {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .child(Self::title_bar(cx))
+            .child(self.title_bar(cx))
             .child(div().flex().flex_1().min_h_0().px(t.spacing.xs).child(body))
             .children(jobs)
             .on_modifiers_changed(
@@ -338,8 +369,12 @@ impl Render for FerriteWindow {
                     view.track_modifiers(event.modifiers, window, cx);
                 }),
             )
+            .on_action(cx.listener(|view, _: &ToggleAppMenu, window, cx| {
+                view.toggle_app_menu(window, cx);
+            }))
             .child(self.fkey_bar(cx))
             .children(dialog)
+            .children(menu)
     }
 }
 

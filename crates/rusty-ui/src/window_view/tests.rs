@@ -14,16 +14,19 @@ use rusty_fs::Provider;
 
 use super::{FerriteWindow, StartOptions};
 
+mod app_menu;
+mod app_menu_save;
 mod cached;
 mod cards;
 mod drive_fs;
 mod drives;
 mod fkeys;
+mod tabs;
 mod typed;
 use crate::browser::Operations;
 use crate::tokens::{self, Mode};
 
-fn two_panes(fs: &FakeFs) -> AppState {
+pub(super) fn two_panes(fs: &FakeFs) -> AppState {
     let mut state = AppState::new(fs.location("home"));
     let _ = apply(
         &mut state,
@@ -69,6 +72,7 @@ fn open_with(
         files: super::FileHooks::none(),
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
+        app_menu: super::AppMenuHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -87,6 +91,7 @@ pub(super) fn open_options(
         crate::file_list::bind_keys(cx);
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
+        crate::app_menu::bind_keys(cx);
         super::viewer::bind_keys(cx);
         super::bind_keys(cx);
         let window_options = WindowOptions {
@@ -435,6 +440,7 @@ fn editor_window(
         files: super::FileHooks::none(),
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
+        app_menu: super::AppMenuHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -535,6 +541,7 @@ fn viewer_window(
         },
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
+        app_menu: super::AppMenuHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),

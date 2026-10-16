@@ -15,7 +15,7 @@ pub const FKEYS: [(&str, &str); 9] = [
     ("F7", "New folder"),
     ("F8", "Delete"),
     ("F9", "Drawer"),
-    ("F10", "Palette"),
+    ("F10", "Menu"),
 ];
 
 fn entry(name: &str, kind: EntryKind, size: u64, minutes_ago: i64) -> FsEntry {

@@ -1,4 +1,5 @@
 mod contrast;
+mod density;
 mod design_b;
 mod kit;
 mod marks;
@@ -14,7 +15,8 @@ use std::sync::LazyLock;
 use gpui_kit::{App, Global, Hsla, Pixels, SharedString};
 
 pub use contrast::{contrast_ratio, relative_luminance};
-pub use kit::apply;
+pub use density::{Density, Rows};
+pub use kit::{apply, apply_with};
 pub use marks::MarkColors;
 pub use motion::Motion;
 pub use shadows::Shadows;
@@ -37,6 +39,41 @@ impl Mode {
 
     pub fn is_dark(self) -> bool {
         self == Self::Dark
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ThemeChoice {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemeChoice {
+    #[must_use]
+    pub fn next(self) -> Self {
+        match self {
+            Self::System => Self::Light,
+            Self::Light => Self::Dark,
+            Self::Dark => Self::System,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::Light => "Light",
+            Self::Dark => "Dark",
+        }
+    }
+
+    pub fn resolve(self, system: Mode) -> Mode {
+        match self {
+            Self::System => system,
+            Self::Light => Mode::Light,
+            Self::Dark => Mode::Dark,
+        }
     }
 }
 
@@ -127,19 +164,28 @@ pub struct Theme {
     pub surfaces: Surfaces,
     pub shadows: Shadows,
     pub motion: Motion,
+    pub density: Density,
+    pub rows: Rows,
 }
 
 impl Global for Theme {}
 
 impl Theme {
     pub fn new(mode: Mode) -> Self {
+        Self::with_density(mode, Density::Normal)
+    }
+
+    pub fn with_density(mode: Mode, density: Density) -> Self {
         let colors = design_b::colors(mode);
         let surfaces = surfaces::surfaces(mode, &colors);
+        let spacing = design_b::spacing();
         Self {
             mode,
             colors,
             typography: design_b::typography(),
-            spacing: design_b::spacing(),
+            rows: density::rows(density, &spacing),
+            density,
+            spacing,
             radii: design_b::radii(),
             marks: marks::mark_colors(mode),
             shadows: shadows::shadows(mode, &surfaces),

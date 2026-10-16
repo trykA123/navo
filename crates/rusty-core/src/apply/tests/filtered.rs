@@ -107,3 +107,54 @@ fn widening_the_filter_keeps_the_cursor_on_screen() {
     assert_eq!(view.cursor, 450);
     assert!(view.scroll <= 450 && 450 < view.scroll + 20);
 }
+
+fn hide(state: &mut AppState, listing: Listing) {
+    let tab = state.active_tab().id();
+    let event = Event::ListingRefiltered {
+        tab,
+        location: loc("/work"),
+        listing,
+    };
+    assert_eq!(apply_event(state, event), vec![]);
+}
+
+#[test]
+fn hiding_the_cursor_entry_moves_to_the_next_shown_entry() {
+    let mut state = at_work(mixed());
+    let all = names(&state);
+    move_cursor(&mut state, CursorMove::Row(2));
+    let kept: Vec<&str> = all
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != 2)
+        .map(|(_, name)| name.as_str())
+        .collect();
+    hide(&mut state, only(&kept));
+    assert_eq!(names(&state)[cursor(&state) as usize], all[3]);
+}
+
+#[test]
+fn hiding_the_last_entries_moves_back_to_the_previous_shown_entry() {
+    let mut state = at_work(mixed());
+    let all = names(&state);
+    let last = all.len() - 1;
+    move_cursor(&mut state, CursorMove::Row(last as u64));
+    let kept: Vec<&str> = all[..last - 1].iter().map(String::as_str).collect();
+    hide(&mut state, only(&kept));
+    assert_eq!(names(&state)[cursor(&state) as usize], all[last - 2]);
+}
+
+#[test]
+fn a_still_shown_cursor_entry_keeps_the_cursor_after_hiding() {
+    let mut state = at_work(mixed());
+    let all = names(&state);
+    move_cursor(&mut state, CursorMove::Row(4));
+    let kept: Vec<&str> = all
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != 1)
+        .map(|(_, name)| name.as_str())
+        .collect();
+    hide(&mut state, only(&kept));
+    assert_eq!(names(&state)[cursor(&state) as usize], all[4]);
+}

@@ -14,7 +14,7 @@ fn appearance_defaults() {
 #[test]
 fn files_defaults() {
     let f = Settings::default().files;
-    assert!(!f.show_hidden);
+    assert_eq!(f.hidden_files, HiddenFiles::Shown);
     assert!(!f.show_system);
     assert!(f.folders_first);
     assert_eq!(f.sort, SortKey::Name);

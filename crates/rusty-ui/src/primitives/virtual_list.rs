@@ -60,6 +60,7 @@ pub struct VirtualList {
     focus: Option<FocusHandle>,
     render_rows: RowRenderer,
     describe_rows: Option<RowDescriber>,
+    row_height: Option<Pixels>,
 }
 
 impl VirtualList {
@@ -77,7 +78,14 @@ impl VirtualList {
             focus: None,
             render_rows: Rc::new(render_rows),
             describe_rows: None,
+            row_height: None,
         }
+    }
+
+    #[must_use]
+    pub fn row_height(mut self, height: Pixels) -> Self {
+        self.row_height = Some(height);
+        self
     }
 
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
@@ -138,7 +146,9 @@ fn wrap_rows(rows: Vec<AnyElement>, frame: &RowFrame) -> Vec<AnyElement> {
 
 impl RenderOnce for VirtualList {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let row_height = tokens::current(cx).spacing.row_height;
+        let row_height = self
+            .row_height
+            .unwrap_or(tokens::current(cx).spacing.row_height);
         let len = self.len;
         let render_rows = self.render_rows;
         let describe = self.describe_rows;

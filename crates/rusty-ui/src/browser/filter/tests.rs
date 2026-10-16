@@ -26,7 +26,7 @@ fn browser(fs: &Arc<FakeFs>) -> Browser {
     browser
 }
 
-fn settle(browser: &mut Browser) {
+pub(super) fn settle(browser: &mut Browser) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while (browser.loading() || browser.running()) && Instant::now() < deadline {
         browser.poll();
@@ -35,7 +35,7 @@ fn settle(browser: &mut Browser) {
     browser.poll();
 }
 
-fn names(browser: &Browser) -> Vec<String> {
+pub(super) fn names(browser: &Browser) -> Vec<String> {
     browser
         .state()
         .active_tab()

@@ -201,6 +201,22 @@ impl Tab {
         true
     }
 
+    pub(crate) fn replace_listing_near(&mut self, location: &Location, listing: Listing) -> bool {
+        let Some(old) = self.listing.as_ref().filter(|_| &self.location == location) else {
+            return false;
+        };
+        let names: Vec<&str> = old.entries().iter().map(|e| e.name.as_str()).collect();
+        let at = (self.view.cursor as usize).min(names.len().saturating_sub(1));
+        let position = |name: &str| listing.entries().iter().position(|e| e.name == name);
+        let after = names.iter().skip(at).find_map(|name| position(name));
+        let before = names.iter().take(at).rev().find_map(|name| position(name));
+        let cursor = after.or(before).unwrap_or(0);
+        self.keep_by_name(listing);
+        self.view.cursor = cursor as u64;
+        self.view.scroll = self.clamp(self.view.scroll.min(self.view.cursor));
+        true
+    }
+
     fn keep_by_name(&mut self, listing: Listing) {
         let marked: HashSet<String> = self
             .listing

@@ -13,6 +13,7 @@ pub struct Shadows {
     pub menu: Vec<BoxShadow>,
     pub chip: Vec<BoxShadow>,
     pub sheet: Vec<BoxShadow>,
+    pub focus: Vec<BoxShadow>,
 }
 
 #[derive(Clone, Copy)]
@@ -115,5 +116,6 @@ pub(super) fn shadows(mode: Mode, s: &Surfaces) -> Shadows {
         menu: shadow(d.menu),
         chip: shadow(d.chip),
         sheet: shadow([sheet]),
+        focus: shadow([ring(s.pill_ring, 2.)]),
     }
 }

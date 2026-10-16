@@ -310,3 +310,16 @@ fn a_cached_listing_round_trips_through_text() {
     ));
     assert_eq!(log.to_text(), text);
 }
+
+#[test]
+fn a_refiltered_listing_round_trips_through_text() {
+    let text = with_body(
+        "+7 !listing-refiltered { tab: 3, location: \"/h\", entries: 1 }\n  file \"pa.rs\"\n",
+    );
+    let log = CommandLog::parse(&text).unwrap();
+    assert!(matches!(
+        log.records().last().map(|record| &record.entry),
+        Some(LogEntry::Event(Event::ListingRefiltered { .. }))
+    ));
+    assert_eq!(log.to_text(), text);
+}
