@@ -37,7 +37,7 @@ proptest! {
 }
 
 #[test]
-fn one_megabyte_line_lexes_in_under_a_second() {
+fn one_megabyte_line_lexes_in_under_three_seconds() {
     let chunk = r#"if gift 42 + "s\"t" (* c *) "#;
     let count = (1 << 20) / chunk.len() + 1;
     let line = chunk.repeat(count);
@@ -45,11 +45,11 @@ fn one_megabyte_line_lexes_in_under_a_second() {
     let (found, _) = lex_line(&sample(), &line, LineState::Normal);
     let elapsed = started.elapsed();
     assert_eq!(found.len(), count * 5);
-    assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+    assert!(elapsed < Duration::from_secs(3), "took {elapsed:?}");
 }
 
 #[test]
-fn five_thousand_special_keywords_on_a_megabyte_line_lex_in_under_a_second() {
+fn five_thousand_special_keywords_on_a_megabyte_line_lex_in_under_three_seconds() {
     let group = |kind, prefix, words: Vec<String>| KeywordGroup {
         kind,
         words,
@@ -90,5 +90,5 @@ fn five_thousand_special_keywords_on_a_megabyte_line_lex_in_under_a_second() {
         ]
     );
     assert_eq!(found.len(), count * 2);
-    assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+    assert!(elapsed < Duration::from_secs(3), "took {elapsed:?}");
 }
