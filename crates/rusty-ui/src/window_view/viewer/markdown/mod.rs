@@ -10,8 +10,8 @@ use std::rc::Rc;
 
 use gpui_kit::base::{Scrollbar, ScrollbarMode, TestSupportExt};
 use gpui_kit::{
-    AnyView, FocusHandle, KeyBinding, ListAlignment, ListOffset, ListState, MouseButton,
-    MouseDownEvent, Stateful, list,
+    AnyView, FocusHandle, ListAlignment, ListOffset, ListState, MouseButton, MouseDownEvent,
+    Stateful, list,
 };
 use rusty_core::Location;
 use rusty_structured::markdown::Document;
@@ -36,13 +36,7 @@ gpui_kit::actions!(
 );
 
 pub(super) fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("enter", OpenLink, context),
-        KeyBinding::new("tab", NextLink, context),
-        KeyBinding::new("shift-tab", PreviousLink, context),
-        KeyBinding::new("ctrl-c", CopyBlock, context),
-    ]);
+    crate::commands::bind_namespace(cx, "viewer_markdown");
 }
 
 fn shown(target: &str) -> String {

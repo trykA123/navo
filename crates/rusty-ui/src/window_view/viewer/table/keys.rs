@@ -1,4 +1,4 @@
-use gpui_kit::{ClipboardItem, KeyBinding, Stateful};
+use gpui_kit::{ClipboardItem, Stateful};
 
 use super::TableView;
 use crate::prelude::*;
@@ -17,14 +17,7 @@ gpui_kit::actions!(
 );
 
 pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("home", CellFirst, context),
-        KeyBinding::new("end", CellLast, context),
-        KeyBinding::new("ctrl-c", CopyCell, context),
-        KeyBinding::new("ctrl-shift-c", CopyRow, context),
-        KeyBinding::new("ctrl-f3", SortColumn, context),
-    ]);
+    crate::commands::bind_namespace(cx, "viewer_table");
 }
 
 pub(super) fn menu_entries() -> Vec<MenuEntry> {

@@ -1,4 +1,4 @@
-use gpui_kit::{Action, ClipboardItem, KeyBinding, KeyDownEvent, Stateful};
+use gpui_kit::{Action, ClipboardItem, KeyDownEvent, Stateful};
 use rusty_structured::{Outline, Step, Tree};
 
 use super::{TreeState, TreeView};
@@ -42,35 +42,7 @@ gpui_kit::actions!(
 );
 
 pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("*", ExpandSubtree, context),
-        KeyBinding::new("-", CollapseAll, context),
-        KeyBinding::new("ctrl-c", CopyValue, context),
-        KeyBinding::new("ctrl-shift-c", CopyPath, context),
-        KeyBinding::new("backspace", FilterBack, context),
-        KeyBinding::new("escape", Back, context),
-        KeyBinding::new("home", GoStart, context),
-        KeyBinding::new("end", GoEnd, context),
-        KeyBinding::new("n", TypeN, context),
-        KeyBinding::new("p", TypeP, context),
-        KeyBinding::new("1", TypeOne, context),
-        KeyBinding::new("3", TypeThree, context),
-        KeyBinding::new("5", TypeFive, context),
-        KeyBinding::new("alt-right", OpenSubtree, context),
-        KeyBinding::new("alt-left", CloseSubtree, context),
-        KeyBinding::new("ctrl-shift-right", OpenAll, context),
-        KeyBinding::new("ctrl-shift-left", CloseAll, context),
-        KeyBinding::new("ctrl-1", FoldDepth1, context),
-        KeyBinding::new("ctrl-2", FoldDepth2, context),
-        KeyBinding::new("ctrl-3", FoldDepth3, context),
-        KeyBinding::new("ctrl-4", FoldDepth4, context),
-        KeyBinding::new("ctrl-5", FoldDepth5, context),
-        KeyBinding::new("ctrl-6", FoldDepth6, context),
-        KeyBinding::new("ctrl-7", FoldDepth7, context),
-        KeyBinding::new("ctrl-8", FoldDepth8, context),
-        KeyBinding::new("ctrl-9", FoldDepth9, context),
-    ]);
+    crate::commands::bind_namespace(cx, "viewer_tree");
 }
 
 pub(super) fn menu_entries() -> Vec<MenuEntry> {

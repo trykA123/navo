@@ -1,4 +1,4 @@
-use gpui_kit::{FocusHandle, KeyBinding};
+use gpui_kit::FocusHandle;
 use rusty_core::Command;
 
 use super::folder::FolderPreview;
@@ -25,18 +25,7 @@ gpui_kit::actions!(
 );
 
 pub(in crate::window_view) fn bind_keys(cx: &mut App) {
-    let context = Some(BROWSE);
-    cx.bind_keys([
-        KeyBinding::new("up", BrowseUp, context),
-        KeyBinding::new("down", BrowseDown, context),
-        KeyBinding::new("left", BrowseFold, context),
-        KeyBinding::new("right", BrowseUnfold, context),
-        KeyBinding::new("enter", BrowseOpen, context),
-        KeyBinding::new("f3", BrowseView, context),
-        KeyBinding::new("escape", LeaveBrowse, context),
-        KeyBinding::new("tab", LeaveAndSwitch, context),
-        KeyBinding::new("ctrl-q", TogglePreview, context),
-    ]);
+    crate::commands::bind_namespace(cx, "preview");
 }
 
 pub(in crate::window_view) struct Pick {

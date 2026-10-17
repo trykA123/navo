@@ -1,6 +1,6 @@
 use gpui_kit::SharedString;
 
-use crate::commands::Keymap;
+use crate::commands::{Keymap, for_menu, shown};
 use crate::primitives::IconName;
 use crate::tokens::{Density, ThemeChoice};
 
@@ -170,8 +170,7 @@ pub fn index_of(item: Item) -> Option<usize> {
 
 #[must_use]
 pub(super) fn row_keys(keymap: &Keymap, command: MenuCommand) -> Option<String> {
-    let _ = (keymap, command);
-    todo!()
+    keymap.keys_of(for_menu(command)).find_map(shown)
 }
 
 pub(super) fn row_labels() -> [&'static str; ROWS.len()] {

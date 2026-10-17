@@ -1,7 +1,7 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{
-    App, FocusHandle, InteractiveElement, IntoElement, KeyBinding, ParentElement, Styled, Window,
-    div, px, transparent_black,
+    App, FocusHandle, InteractiveElement, IntoElement, ParentElement, Styled, Window, div, px,
+    transparent_black,
 };
 
 use crate::primitives::Button;
@@ -12,19 +12,8 @@ gpui_kit::actions!(
     [Next, Previous, NextButton, PreviousButton, Press]
 );
 
-const DIALOG: &str = "Dialog";
-const BUTTON: &str = "DialogButton";
-
 pub(crate) fn bind_keys(cx: &mut App) {
-    let (dialog, button) = (Some(DIALOG), Some(BUTTON));
-    cx.bind_keys([
-        KeyBinding::new("tab", Next, dialog),
-        KeyBinding::new("shift-tab", Previous, dialog),
-        KeyBinding::new("right", NextButton, button),
-        KeyBinding::new("left", PreviousButton, button),
-        KeyBinding::new("enter", Press, button),
-        KeyBinding::new("space", Press, button),
-    ]);
+    crate::commands::bind_namespace(cx, "dialog_focus");
 }
 
 pub(crate) fn cycle(stops: &[FocusHandle], forward: bool, window: &mut Window, cx: &mut App) {

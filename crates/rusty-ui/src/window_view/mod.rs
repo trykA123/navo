@@ -284,9 +284,12 @@ impl FerriteWindow {
         let (held, (layer, index, spoken)) = (self.held_layer, KEY_WARNING);
         let bar = match &self.viewer {
             Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
-            None => FKeyBar::new("fkeys", layer_keys(held))
-                .layers(held, key_labels())
-                .warn(layer, index, spoken),
+            None => {
+                let keymap = crate::commands::active(cx);
+                FKeyBar::new("fkeys", layer_keys_in(keymap, held))
+                    .layers(held, key_labels_in(keymap))
+                    .warn(layer, index, spoken)
+            }
         };
         self.with_job_pill(bar, window, cx)
     }

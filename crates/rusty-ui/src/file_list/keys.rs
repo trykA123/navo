@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    Action, App, Div, InteractiveElement, KeyBinding, MouseButton, NavigationDirection, Stateful,
-    Window,
+    Action, App, Div, InteractiveElement, MouseButton, NavigationDirection, Stateful, Window,
 };
 use rusty_core::{Command, CursorMove, OpKind};
 
@@ -49,45 +48,7 @@ gpui_kit::actions!(
 );
 
 pub fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("up", CursorUp, context),
-        KeyBinding::new("down", CursorDown, context),
-        KeyBinding::new("pageup", PageUp, context),
-        KeyBinding::new("pagedown", PageDown, context),
-        KeyBinding::new("home", CursorFirst, context),
-        KeyBinding::new("end", CursorLast, context),
-        KeyBinding::new("space", ToggleMark, context),
-        KeyBinding::new("insert", ToggleMarkDown, context),
-        KeyBinding::new("enter", OpenRow, context),
-        KeyBinding::new("backspace", OpenParent, context),
-        KeyBinding::new("tab", SwitchPane, context),
-        KeyBinding::new("f5", CopyItems, context),
-        KeyBinding::new("f6", MoveItems, context),
-        KeyBinding::new("f8", RecycleItems, context),
-        KeyBinding::new("delete", RecycleItems, context),
-        KeyBinding::new("shift-delete", DeleteItems, context),
-        KeyBinding::new("shift-f8", DeleteItems, context),
-        KeyBinding::new("alt-left", GoBack, context),
-        KeyBinding::new("alt-right", GoForward, context),
-        KeyBinding::new("escape", ClearFilter, context),
-        KeyBinding::new("f2", RenameItem, context),
-        KeyBinding::new("shift-f6", RenameItem, context),
-        KeyBinding::new("f7", NewFolder, context),
-        KeyBinding::new("+", MarkPattern, context),
-        KeyBinding::new("-", UnmarkPattern, context),
-        KeyBinding::new("*", InvertMarks, context),
-        KeyBinding::new("ctrl-f3", SortName, context),
-        KeyBinding::new("ctrl-f4", SortExt, context),
-        KeyBinding::new("ctrl-f5", SortDate, context),
-        KeyBinding::new("ctrl-f6", SortSize, context),
-        KeyBinding::new("f3", ViewItem, context),
-        KeyBinding::new("f4", EditItem, context),
-        KeyBinding::new("shift-f4", ChooseEditor, context),
-        KeyBinding::new("ctrl-r", Refresh, context),
-        KeyBinding::new("menu", OpenMenu, context),
-        KeyBinding::new("shift-f10", OpenMenu, context),
-    ]);
+    crate::commands::bind_namespace(cx, "file_list");
 }
 
 fn send<A: Action>(

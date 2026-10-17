@@ -4,9 +4,11 @@ mod shown;
 #[cfg(test)]
 mod tests;
 
+use std::sync::OnceLock;
+
 use super::CommandSpec;
 
-pub use parse::KeymapError;
+pub use parse::{KeymapError, normal as normal_key};
 pub use shown::shown;
 
 const BUILTIN: &str = include_str!("../keymap.toml");
@@ -25,13 +27,13 @@ pub struct Keymap {
 
 impl Keymap {
     pub fn parse(text: &str) -> Result<Self, KeymapError> {
-        let _ = text;
-        todo!()
+        parse::parse(text).map(|binds| Self { binds })
     }
 
     #[must_use]
     pub fn builtin() -> &'static Self {
-        todo!()
+        static PARSED: OnceLock<Keymap> = OnceLock::new();
+        PARSED.get_or_init(|| Self::parse(BUILTIN).unwrap_or_default())
     }
 
     #[must_use]
@@ -40,7 +42,18 @@ impl Keymap {
     }
 
     pub fn keys_of<'a>(&'a self, command: &'a str) -> impl Iterator<Item = &'a str> {
-        let _ = command;
-        std::iter::empty::<&str>().chain(std::iter::once(todo!()))
+        self.binds
+            .iter()
+            .filter(move |bind| bind.spec.name == command)
+            .flat_map(|bind| bind.keys.iter().map(String::as_str))
+    }
+
+    #[must_use]
+    pub fn has_key(&self, command: &str, key: &str) -> bool {
+        let wanted = parse::normal(key);
+        wanted.is_some()
+            && self
+                .keys_of(command)
+                .any(|bound| parse::normal(bound) == wanted)
     }
 }

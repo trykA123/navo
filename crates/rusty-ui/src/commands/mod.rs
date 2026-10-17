@@ -13,9 +13,11 @@ use gpui_kit::App;
 
 use crate::app_menu::MenuCommand;
 
-pub(crate) use bind::key_bindings;
+pub(crate) use bind::bind_namespace;
+#[cfg(test)]
+use bind::key_bindings;
 pub use contexts::{GLOBAL, is_within};
-pub use keymap::{Bind, Keymap, KeymapError, shown};
+pub use keymap::{Bind, Keymap, KeymapError, normal_key, shown};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CommandSpec {

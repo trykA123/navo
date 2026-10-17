@@ -10,7 +10,7 @@ mod tests;
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{FocusHandle, KeyBinding, RenderOnce, Role, ScrollHandle};
+use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle};
 
 pub use fields::{
     Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, Look, SORTS, Section, THEMES,
@@ -45,23 +45,7 @@ gpui_kit::actions!(
 );
 
 pub fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("ctrl-,", ToggleSettings, None),
-        KeyBinding::new("up", RowUp, context),
-        KeyBinding::new("down", RowDown, context),
-        KeyBinding::new("left", ValueBack, context),
-        KeyBinding::new("right", ValueForward, context),
-        KeyBinding::new("space", ValueFlip, context),
-        KeyBinding::new("tab", NextSection, context),
-        KeyBinding::new("shift-tab", PreviousSection, context),
-        KeyBinding::new("enter", EditValue, context),
-        KeyBinding::new("f2", EditValue, context),
-        KeyBinding::new("f3", OpenKey, context),
-        KeyBinding::new("ctrl-z", UndoChange, context),
-        KeyBinding::new("escape", CloseSettings, context),
-        KeyBinding::new("escape", CancelEdit, Some(FIELD_CONTEXT)),
-    ]);
+    crate::commands::bind_namespace(cx, "settings_sheet");
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

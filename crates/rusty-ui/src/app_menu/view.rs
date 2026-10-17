@@ -238,15 +238,18 @@ fn row_fill(t: &Theme, spec: &RowSpec, is_selected: bool) -> Option<Hsla> {
     }
 }
 
-fn trailing(t: &Theme, keys: Option<String>, color: Hsla) -> AnyElement {
-    match keys {
-        Some(keys) => div()
+fn trailing(t: &Theme, spec: &RowSpec, keys: Option<String>, color: Hsla) -> AnyElement {
+    match (&spec.trailing, keys) {
+        (Trailing::Keys, Some(keys)) => div()
             .font_family(t.typography.mono_font.clone())
             .text_size(t.typography.small)
             .text_color(color)
             .child(keys)
             .into_any_element(),
-        None => icon(IconName::ChevronRight, t.spacing.icon, color).into_any_element(),
+        (Trailing::Keys, None) => div().into_any_element(),
+        (Trailing::Submenu, _) => {
+            icon(IconName::ChevronRight, t.spacing.icon, color).into_any_element()
+        }
     }
 }
 
@@ -286,7 +289,7 @@ fn row(look: &Look, spec: &RowSpec, index: usize) -> AnyElement {
             colors.icon,
         )))
         .child(div().flex_1().min_w_0().truncate().child(spec.label))
-        .child(trailing(t, keys, colors.trailing));
+        .child(trailing(t, spec, keys, colors.trailing));
     hover_and_click(element, index, look.send.clone()).into_any_element()
 }
 

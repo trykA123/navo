@@ -1,9 +1,7 @@
 use gpui_kit::Div;
-use gpui_kit::KeyBinding;
 use rusty_core::Command;
 
 use super::FerriteWindow;
-use super::keys::PANE;
 use crate::prelude::*;
 
 gpui_kit::actions!(
@@ -25,23 +23,7 @@ gpui_kit::actions!(
 );
 
 pub(super) fn bind_keys(cx: &mut App) {
-    let pane = Some(PANE);
-    cx.bind_keys([
-        KeyBinding::new("ctrl-tab", NextTab, pane),
-        KeyBinding::new("ctrl-pagedown", NextTab, pane),
-        KeyBinding::new("ctrl-shift-tab", PreviousTab, pane),
-        KeyBinding::new("ctrl-pageup", PreviousTab, pane),
-        KeyBinding::new("ctrl-w", CloseTab, pane),
-        KeyBinding::new("ctrl-1", GoToTab1, pane),
-        KeyBinding::new("ctrl-2", GoToTab2, pane),
-        KeyBinding::new("ctrl-3", GoToTab3, pane),
-        KeyBinding::new("ctrl-4", GoToTab4, pane),
-        KeyBinding::new("ctrl-5", GoToTab5, pane),
-        KeyBinding::new("ctrl-6", GoToTab6, pane),
-        KeyBinding::new("ctrl-7", GoToTab7, pane),
-        KeyBinding::new("ctrl-8", GoToTab8, pane),
-        KeyBinding::new("ctrl-9", GoToLastTab, pane),
-    ]);
+    crate::commands::bind_namespace(cx, "ferrite_tabs");
 }
 
 enum Target {
