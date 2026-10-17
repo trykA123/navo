@@ -48,7 +48,7 @@ fn thinned(text: &str, keep: &[bool], note: bool) -> String {
 }
 
 fn add_unknown(table: &mut dyn TableLike) {
-    table.insert("zoom-level", toml_edit::value(2));
+    table.insert("zoom-level", toml_edit::value(true));
 }
 
 proptest! {

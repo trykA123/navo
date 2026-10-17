@@ -21,7 +21,7 @@ const EXIT_WRITE: Duration = Duration::from_millis(300);
 pub fn open(view: Option<std::path::PathBuf>) {
     let dirs = StoreDirs::detect();
     let session = dirs.as_ref().map(StoreDirs::session_file);
-    let settings_file = dirs.as_ref().map(StoreDirs::settings_file);
+    let settings_start = settings::start_from(dirs.as_ref());
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let no_session = std::path::Path::new("");
@@ -48,6 +48,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
             }
         }
     });
+    let started = settings_start.finish();
     tracing::info!(viewer = view.is_some(), "window opening");
     run(StartOptions {
         state,
@@ -61,7 +62,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
         kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
         app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
-        settings: settings::hooks(settings_file.as_deref().map(settings::Loaded::load)),
+        settings: settings::hooks(started.loaded),
         keymap,
         view: view.and_then(|path| view_location(&path)),
         listing_cache: cache,

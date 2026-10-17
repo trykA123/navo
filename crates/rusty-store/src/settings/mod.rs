@@ -1,8 +1,9 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{Db, replace_atomic, write_atomic};
+use crate::{Db, DbError, replace_atomic, write_atomic};
 
 mod complete;
 mod edit;
@@ -10,9 +11,7 @@ mod model;
 mod parse;
 
 pub use complete::DefaultChange;
-pub(crate) use complete::{
-    Ledger, Reconciled, UNUSED_NOTE, complete_text, mark_unused, reconcile, upgrade_text,
-};
+use complete::reconcile;
 pub use edit::{SettingValue, key_line};
 
 pub use model::{
@@ -38,6 +37,8 @@ pub enum SettingsError {
     FileInvalid,
     #[error("settings defaults ledger: {0}")]
     Ledger(String),
+    #[error("completing the settings file would change a value; it was left as it is")]
+    Refused,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -121,8 +122,22 @@ impl SettingsStore {
         ledger: &Db,
         defaults: &Settings,
     ) -> Result<Completion, SettingsError> {
-        let _ = (ledger, defaults);
-        todo!()
+        let text = read(&self.path)?;
+        let recorded = ledger.settings_defaults().map_err(ledger_error)?;
+        let done = reconcile(text.as_deref().unwrap_or_default(), &recorded, defaults)?;
+        let written = text.as_deref() != Some(done.text.as_str());
+        if written {
+            let (settings, _) = parse(&done.text)?;
+            self.write(&done.text)?;
+            self.current = settings;
+        }
+        ledger
+            .record_settings_defaults(&done.written, now())
+            .map_err(ledger_error)?;
+        Ok(Completion {
+            changes: done.changes,
+            written,
+        })
     }
 }
 
@@ -151,6 +166,18 @@ fn read(path: &Path) -> Result<Option<String>, SettingsError> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(io_error(e)),
     }
+}
+
+fn ledger_error(error: DbError) -> SettingsError {
+    SettingsError::Ledger(error.to_string())
+}
+
+fn now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
+        })
 }
 
 fn io_error(error: io::Error) -> SettingsError {

@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
+use super::complete::{
+    Ledger, Reconciled, UNUSED_NOTE, complete_text, mark_unused, reconcile, upgrade_text,
+};
 use super::*;
 use crate::backup_path;
 

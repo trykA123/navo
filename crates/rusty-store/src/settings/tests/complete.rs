@@ -304,10 +304,11 @@ fn reconcile_updates_following_keys_and_adds_missing_ones_together() {
     let ledger = ledger_of(&DEFAULT_KEYS);
     let before = FULL.replace("font-size = 13\n", "");
     let done = reconcile(&before, &ledger, &sorted_by_date()).unwrap();
-    assert_eq!(
-        done.text,
-        FULL.replace("sort = \"name\"", "sort = \"date\"")
+    let expected = FULL.replace("sort = \"name\"", "sort = \"date\"").replace(
+        "font-size = 13\ndensity = \"normal\"\n",
+        "density = \"normal\"\nfont-size = 13\n",
     );
+    assert_eq!(done.text, expected);
     assert_eq!(
         done.written,
         pairs(&[("files.sort", "\"date\""), ("appearance.font-size", "13")])
@@ -409,4 +410,29 @@ fn reconcile_keeps_the_user_values_parsed_settings() {
     assert_eq!(settings.appearance.font_size, 16);
     assert_eq!(settings.files.sort, SortKey::Kind);
     assert_eq!(done.changes, []);
+}
+
+#[test]
+fn a_file_of_only_comments_keeps_them_on_top() {
+    for comment in ["# my settings\n", "# my settings"] {
+        let done = reconcile(comment, &Ledger::new(), &Settings::default()).unwrap();
+        assert_eq!(done.text, format!("# my settings\n{FULL}"));
+    }
+}
+
+#[test]
+fn a_removed_nested_section_is_noted_at_its_own_header() {
+    let before = "[plugins.git]\non = true\n";
+    assert_eq!(
+        mark_unused(before).unwrap(),
+        format!("{UNUSED_NOTE}\n[plugins.git]\non = true\n")
+    );
+}
+
+#[test]
+fn a_trailing_comment_stays_last() {
+    let before = "[files]\nsort = \"size\"\n# the end\n";
+    let after = completed(before);
+    assert!(after.starts_with("[files]\nsort = \"size\"\n"), "{after}");
+    assert!(after.ends_with("\n# the end\n"), "{after}");
 }

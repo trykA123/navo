@@ -1,4 +1,4 @@
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3];
 
 const V1: &str = "
 CREATE TABLE history (
@@ -57,5 +57,13 @@ CREATE INDEX viewer_memory_saved_at ON viewer_memory (saved_at);
 CREATE TABLE search_history (
     needle BLOB PRIMARY KEY,
     used_at INTEGER NOT NULL
+);
+";
+
+const V3: &str = "
+CREATE TABLE settings_defaults (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    written_at INTEGER NOT NULL
 );
 ";

@@ -9,7 +9,9 @@ use rusty_ui::window_view::{FindLine, SaveReport, SettingsHooks};
 
 mod start;
 
-pub use start::{Loaded, Started, Starting, start, start_in_background};
+pub use start::{Loaded, start_from};
+#[cfg(test)]
+use start::{start, start_in_background};
 
 const FILE: &str = "ferrite.toml";
 
