@@ -20,7 +20,8 @@ gpui_kit::actions!(
         BrowseView,
         LeaveBrowse,
         LeaveAndSwitch,
-        TogglePreview
+        TogglePreview,
+        Recount
     ]
 );
 
@@ -159,6 +160,7 @@ impl FerriteWindow {
             .on_action(cx.listener(|this, _: &TogglePreview, window, cx| {
                 this.toggle_preview(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &Recount, _, cx| this.recount_folder(cx)))
             .child(body)
             .into_any_element()
     }

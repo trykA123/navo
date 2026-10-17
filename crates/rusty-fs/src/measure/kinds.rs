@@ -14,6 +14,11 @@ impl Tally {
         self.bytes = self.bytes.saturating_add(other.bytes);
         self.files = self.files.saturating_add(other.files);
     }
+
+    fn take(&mut self, other: Self) {
+        self.bytes = self.bytes.saturating_sub(other.bytes);
+        self.files = self.files.saturating_sub(other.files);
+    }
 }
 
 #[derive(Debug, Default)]
@@ -62,9 +67,45 @@ impl Kinds {
     }
 }
 
-fn extension_of(name: &str) -> String {
+pub(super) fn extension_of(name: &str) -> String {
     match name.rsplit_once('.') {
         Some((stem, extension)) if !stem.is_empty() => extension.to_lowercase(),
         _ => String::new(),
     }
+}
+
+pub(super) fn add_kind(
+    kinds: &mut Vec<(String, Tally)>,
+    other: &mut Tally,
+    name: &str,
+    tally: Tally,
+) {
+    let extension = extension_of(name);
+    if let Some((_, kept)) = kinds.iter_mut().find(|(kind, _)| *kind == extension) {
+        kept.add(tally);
+    } else if kinds.len() < KIND_LIMIT {
+        kinds.push((extension, tally));
+    } else {
+        other.add(tally);
+    }
+}
+
+pub(super) fn take_kind(
+    kinds: &mut Vec<(String, Tally)>,
+    other: &mut Tally,
+    name: &str,
+    tally: Tally,
+) {
+    let extension = extension_of(name);
+    let Some(at) = kinds.iter().position(|(kind, _)| *kind == extension) else {
+        return other.take(tally);
+    };
+    kinds[at].1.take(tally);
+    if kinds[at].1.files == 0 {
+        kinds.remove(at);
+    }
+}
+
+pub(super) fn sort_kinds(kinds: &mut [(String, Tally)]) {
+    kinds.sort_by(|a, b| b.1.bytes.cmp(&a.1.bytes).then_with(|| a.0.cmp(&b.0)));
 }

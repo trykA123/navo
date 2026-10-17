@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use rusty_fs::WatchChange;
-use support::{name, wait_for_change, watch_path, watched_with};
+use support::{name, wait_for_change, watch_path, watch_tree_path, watched_with};
 
 #[test]
 fn hiding_a_file_is_reported_as_a_modification() {
@@ -49,4 +49,16 @@ fn a_folder_on_an_smb_share_is_watched() {
     let (_watch, events) = watch_path(&share);
     fs::write(dir.path().join("remote.txt"), b"x").unwrap();
     wait_for_change(&events, &WatchChange::Created(name("remote.txt")));
+}
+
+#[test]
+fn a_tree_watch_reports_a_write_three_levels_deep_by_its_relative_path() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(r"one\two\three")).unwrap();
+    let (_watch, events) = watch_tree_path(dir.path());
+    fs::write(dir.path().join(r"one\two\three\deep.bin"), b"x").unwrap();
+    wait_for_change(
+        &events,
+        &WatchChange::Created(name(r"one\two\three\deep.bin")),
+    );
 }

@@ -74,6 +74,12 @@ pub struct Watch {
     debouncer: Option<JoinHandle<()>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Depth {
+    Folder,
+    Subtree,
+}
+
 impl Watch {
     pub(crate) fn start<B, F>(
         folder: &Location,
@@ -84,6 +90,35 @@ impl Watch {
         B: Send + 'static,
         F: FnOnce(RawSender) -> Result<B, FsError>,
     {
+        Self::start_at(Depth::Folder, folder, sink, backend)
+    }
+
+    pub(crate) fn start_tree<B, F>(
+        folder: &Location,
+        sink: WatchSink,
+        backend: F,
+    ) -> Result<Self, FsError>
+    where
+        B: Send + 'static,
+        F: FnOnce(RawSender) -> Result<B, FsError>,
+    {
+        Self::start_at(Depth::Subtree, folder, sink, backend)
+    }
+
+    fn start_at<B, F>(
+        depth: Depth,
+        folder: &Location,
+        sink: WatchSink,
+        backend: F,
+    ) -> Result<Self, FsError>
+    where
+        B: Send + 'static,
+        F: FnOnce(RawSender) -> Result<B, FsError>,
+    {
+        let batch = match depth {
+            Depth::Folder => Batch::default(),
+            Depth::Subtree => Batch::for_tree(),
+        };
         let (raw, events) = mpsc::channel();
         let live = Arc::new(AtomicBool::new(false));
         let backend = backend(RawSender {
@@ -92,7 +127,7 @@ impl Watch {
         })?;
         let debouncer = std::thread::Builder::new()
             .name("folder-watch".to_owned())
-            .spawn(move || debounce(&events, sink))
+            .spawn(move || debounce(&events, sink, batch))
             .map_err(|_| FsError {
                 kind: FsErrorKind::Unknown,
                 location: Some(folder.clone()),
@@ -124,8 +159,7 @@ impl Drop for Watch {
     }
 }
 
-fn debounce(events: &Receiver<Raw>, mut sink: WatchSink) {
-    let mut batch = Batch::default();
+fn debounce(events: &Receiver<Raw>, mut sink: WatchSink, mut batch: Batch) {
     loop {
         let next = match batch.deadline() {
             Some(at) => events.recv_timeout(at.saturating_duration_since(Instant::now())),

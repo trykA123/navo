@@ -149,6 +149,10 @@ keys = ["tab"]
 command = "preview.toggle"
 keys = ["ctrl-q"]
 
+[[bind]]
+command = "preview.recount"
+keys = ["ctrl-r"]
+
 # FileList
 
 [[bind]]

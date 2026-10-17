@@ -1,6 +1,6 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use rusty_fs::{FolderProfile, FsEntry};
+use rusty_fs::{FsEntry, LiveSnapshot};
 use rusty_structured::NodeId;
 
 use crate::browser::Waker;
@@ -12,9 +12,8 @@ pub(super) enum Arrival {
         listed: Result<(Vec<FsEntry>, usize), String>,
     },
     Snapshot {
-        load: u64,
         run: u64,
-        profile: FolderProfile,
+        snapshot: LiveSnapshot,
     },
 }
 

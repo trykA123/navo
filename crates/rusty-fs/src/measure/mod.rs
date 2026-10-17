@@ -5,6 +5,8 @@ mod profile;
 mod runner;
 mod walk;
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use rusty_core::{FsError, Location};
 
 use crate::{CancelToken, FsEntry, Provider};
@@ -15,6 +17,14 @@ pub use largest::{LARGEST_LIMIT, LargeFile, RANKING_LIMIT, Ranking};
 pub use live::{LIVE_EVERY, LiveHandle, LiveRequest, LiveSink, LiveSnapshot, spawn_live};
 pub use profile::{FolderProfile, PROGRESS_EVERY, ProfileSink, ProfileState, folder_profile};
 pub use runner::{ProfileHandle, spawn_profile};
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|since| i64::try_from(since.as_millis()).ok())
+        .unwrap_or_default()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FolderSize {

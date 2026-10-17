@@ -21,6 +21,12 @@ pub(in crate::window_view) struct Target {
     pub entry: FsEntry,
 }
 
+impl Key {
+    pub(super) fn same_place(&self, other: &Self) -> bool {
+        (self.pane, &self.location, self.kind) == (other.pane, &other.location, other.kind)
+    }
+}
+
 impl Target {
     pub(super) fn key(&self) -> Key {
         Key {

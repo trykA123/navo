@@ -144,6 +144,7 @@ preview.fold | left | PreviewBrowse
 preview.leave | escape | PreviewBrowse
 preview.leave_and_switch | tab | PreviewBrowse
 preview.open | enter | PreviewBrowse
+preview.recount | ctrl-r | PreviewBrowse
 preview.toggle | ctrl-q | PreviewBrowse
 preview.unfold | right | PreviewBrowse
 preview.view | f3 | PreviewBrowse

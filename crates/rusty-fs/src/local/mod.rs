@@ -31,6 +31,8 @@ use std::time::UNIX_EPOCH;
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
+#[cfg(any(windows, target_os = "linux"))]
+use crate::watch::Depth;
 use crate::{CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider};
 #[cfg(any(windows, target_os = "linux"))]
 use crate::{Watch, WatchSink};
@@ -142,7 +144,17 @@ impl Provider for LocalFs {
     fn watch(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
         let path = os_path(folder)?;
         Watch::start(folder, sink, |raw| {
-            platform_watch::start(&path, folder, raw).map_err(|e| io_error(&e, folder))
+            platform_watch::start(&path, folder, raw, Depth::Folder)
+                .map_err(|e| io_error(&e, folder))
+        })
+    }
+
+    #[cfg(any(windows, target_os = "linux"))]
+    fn watch_tree(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
+        let path = os_path(folder)?;
+        Watch::start_tree(folder, sink, |raw| {
+            platform_watch::start(&path, folder, raw, Depth::Subtree)
+                .map_err(|e| io_error(&e, folder))
         })
     }
 }

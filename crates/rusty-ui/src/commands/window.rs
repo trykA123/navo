@@ -107,6 +107,7 @@ pub(super) const GROUPS: [Group; 7] = [
                 "preview.toggle",
                 "Show or hide preview",
             ),
+            ("preview::Recount", "preview.recount", "Recount folder"),
         ],
     },
     Group {

@@ -11,7 +11,7 @@ use rusty_core::{FsErrorKind, Location};
 
 use super::{error, io_error, platform};
 use crate::WatchChange;
-use crate::watch::{RawKind, RawSender, Translate};
+use crate::watch::{Depth, RawKind, RawSender, Translate};
 
 const BUFFER: usize = 16 * 1024;
 
@@ -57,7 +57,13 @@ impl Drop for FolderWatch {
     }
 }
 
-pub(super) fn start(path: &Path, folder: &Location, raw: RawSender) -> io::Result<FolderWatch> {
+// inotify has no subtree mode; a subtree watch covers the folder itself until a recursive backend lands.
+pub(super) fn start(
+    path: &Path,
+    folder: &Location,
+    raw: RawSender,
+    _depth: Depth,
+) -> io::Result<FolderWatch> {
     let shared = Arc::new(Shared::default());
     let (path, folder, opener) = (path.to_owned(), folder.clone(), Arc::clone(&shared));
     let reader = std::thread::Builder::new()

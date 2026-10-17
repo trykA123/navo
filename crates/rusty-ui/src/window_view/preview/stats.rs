@@ -3,7 +3,7 @@ use gpui_kit::{ClickEvent, Role, Stateful};
 use rusty_fs::FolderProfile;
 
 use super::folder::FolderPreview;
-use super::scan::Phase;
+use super::scan::{Phase, Scan};
 use crate::file_list::row::inset_ring;
 use crate::format;
 use crate::prelude::*;
@@ -77,8 +77,9 @@ fn seconds(took: std::time::Duration) -> String {
     format!("{:.1} s", took.as_secs_f64())
 }
 
-fn scan_words(phase: &Phase) -> String {
-    match phase {
+fn scan_words(scan: &Scan) -> String {
+    match &scan.phase {
+        Phase::Done { .. } if scan.is_recounting => "Recounting".to_owned(),
         Phase::Counting { .. } => "Counting".to_owned(),
         Phase::Done { took: Some(took) } => format!("Done in {} · cached", seconds(*took)),
         Phase::Done { took: None } => "Done · cached".to_owned(),
@@ -87,10 +88,52 @@ fn scan_words(phase: &Phase) -> String {
     }
 }
 
+fn live_marks(t: &Theme, scan: &Scan) -> Option<Div> {
+    if !matches!(scan.phase, Phase::Done { .. }) {
+        return None;
+    }
+    let counted_ms = scan.profile.as_ref()?.counted_ms?;
+    let counted = format!("Counted at {}", format::clock_seconds(counted_ms));
+    let live = scan.is_live().then(|| {
+        div()
+            .id("preview-live")
+            .aria_label("Live")
+            .test_support()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(t.spacing.xs)
+            .text_color(t.colors.ok)
+            .child(div().size(px(6.)).rounded(t.radii.full).bg(t.colors.ok))
+            .child("Live")
+    });
+    let line = div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.md)
+        .min_h(px(MINI_HEIGHT))
+        .text_size(t.typography.small)
+        .text_color(t.colors.muted)
+        .child(
+            div()
+                .id("preview-counted")
+                .aria_label(counted.clone())
+                .test_support()
+                .truncate()
+                .child(counted),
+        )
+        .children(live);
+    Some(line)
+}
+
 impl FerriteWindow {
-    fn scan_line(t: &Theme, phase: &Phase, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let words = scan_words(phase);
+    fn scan_line(t: &Theme, scan: &Scan, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let words = scan_words(scan);
+        let phase = &scan.phase;
         let (glyph, color) = match phase {
+            Phase::Done { .. } if scan.is_recounting => {
+                (IconName::LoaderCircle, t.colors.accent_text)
+            }
             Phase::Done { .. } => (IconName::Check, t.colors.ok),
             Phase::Counting { .. } => (IconName::LoaderCircle, t.colors.accent_text),
             Phase::Stopped | Phase::Failed => (IconName::CircleAlert, t.colors.muted),
@@ -148,7 +191,8 @@ impl FerriteWindow {
             .aria_label(format::bytes(totals.bytes))
             .test_support()
             .text_size(t.typography.body * 1.5)
-            .child(Self::scan_line(t, &folder.scan.phase, cx));
+            .child(Self::scan_line(t, &folder.scan, cx))
+            .children(live_marks(t, &folder.scan));
         let mut folders_sub = format!("{} at top", folder.contents.top_folders());
         if totals.skipped > 0 {
             folders_sub.push_str(&format!(" · {} skipped", format::bytes(totals.skipped)));

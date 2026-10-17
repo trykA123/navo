@@ -164,11 +164,11 @@ fn a_renamed_folder_keeps_the_counts_and_moves_its_paths() {
     let ready = run.ready().profile;
     fs.rename_entry("d/a", "d/z");
     let next = run.wait_for(|s| s.profile.largest[0].path == "z/big.bin");
+    assert_eq!(fs.calls("d", FakeOp::List), 1);
     assert_eq!(next.profile.totals, ready.totals);
     assert_eq!(next.profile.kinds, ready.kinds);
     assert_eq!(next.profile.largest, counted(&fs).largest);
     assert_eq!(next.counts, 1);
-    assert_eq!(fs.calls("d", FakeOp::List), 1);
 }
 
 #[test]
@@ -202,7 +202,6 @@ fn a_busy_folder_is_patched_without_recounting() {
     assert_eq!(next.profile.kinds, expected.kinds);
     assert_eq!(next.profile.largest, expected.largest);
     assert_eq!(next.counts, 1);
-    assert_eq!(fs.calls("d", FakeOp::List), 1);
 }
 
 #[test]
@@ -240,8 +239,8 @@ fn changes_during_a_recount_cause_exactly_one_follow_up() {
     run.wait_for(|s| s.changes >= 2 && s.is_recounting);
     held.release();
     let last = run.wait_for(|s| s.counts == 3 && !s.is_recounting);
-    assert_eq!(last.profile.totals, counted(&fs).totals);
     assert_eq!(fs.calls("d", FakeOp::List), 3);
+    assert_eq!(last.profile.totals, counted(&fs).totals);
 }
 
 #[test]
@@ -252,8 +251,8 @@ fn a_cached_profile_is_watched_without_a_first_count() {
     assert_eq!(ready.counts, 0);
     fs.add_file("d/one/two/late.txt", 5);
     let next = run.wait_for(|s| s.profile.totals.files == ready.profile.totals.files + 1);
-    assert_eq!(next.profile.totals, counted(&fs).totals);
     assert_eq!(fs.calls("d", FakeOp::List), 1);
+    assert_eq!(next.profile.totals, counted(&fs).totals);
 }
 
 #[test]

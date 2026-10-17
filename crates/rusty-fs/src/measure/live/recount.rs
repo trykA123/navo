@@ -1,21 +1,39 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Run {
+    First,
+    FollowUp,
+}
+
 #[derive(Debug, Default)]
-pub(super) struct Recounts {}
+pub(super) struct Recounts {
+    running: Option<Run>,
+    is_dirty: bool,
+}
 
 impl Recounts {
     pub(super) fn request(&mut self) -> bool {
-        todo!()
+        if self.running.is_some() {
+            self.is_dirty = true;
+            return false;
+        }
+        self.running = Some(Run::First);
+        true
     }
 
     pub(super) fn note_change(&mut self) {
-        todo!()
+        if self.running == Some(Run::First) {
+            self.is_dirty = true;
+        }
     }
 
     pub(super) fn finish(&mut self) -> bool {
-        todo!()
+        let is_dirty = std::mem::take(&mut self.is_dirty);
+        self.running = is_dirty.then_some(Run::FollowUp);
+        is_dirty
     }
 
     pub(super) fn is_running(&self) -> bool {
-        todo!()
+        self.running.is_some()
     }
 }
 
