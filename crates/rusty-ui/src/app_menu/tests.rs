@@ -12,6 +12,7 @@ use super::{
     AppMenu, AppMenuEvent, ITEM_COUNT, Identity, Install, Item, MenuCommand, QuickSettings, Ring,
     Setting, Step, index_of, item_at, jump,
 };
+use crate::commands::Keymap;
 use crate::test_window;
 use crate::tokens::{self, Density, ThemeChoice};
 
@@ -440,15 +441,19 @@ fn quick_settings_toggle_one_field_each() {
 
 #[test]
 fn the_menu_rows_keep_their_commands_labels_and_keys() {
+    let keys: Vec<String> = super::items::ROWS
+        .iter()
+        .map(|row| match row.trailing {
+            super::items::Trailing::Keys => {
+                super::items::row_keys(Keymap::builtin(), row.command).unwrap_or_default()
+            }
+            super::items::Trailing::Submenu => "submenu".to_owned(),
+        })
+        .collect();
     let rows: Vec<(MenuCommand, &str, &str)> = super::items::ROWS
         .iter()
-        .map(|row| {
-            let keys = match row.trailing {
-                super::items::Trailing::Keys(keys) => keys,
-                super::items::Trailing::Submenu => "submenu",
-            };
-            (row.command, row.label, keys)
-        })
+        .zip(&keys)
+        .map(|(row, keys)| (row.command, row.label, keys.as_str()))
         .collect();
     assert_eq!(
         rows,
@@ -461,4 +466,13 @@ fn the_menu_rows_keep_their_commands_labels_and_keys() {
             (MenuCommand::AllSettings, "All settings", "Ctrl+,"),
         ]
     );
+}
+
+#[test]
+fn the_menu_row_keys_follow_the_keymap() {
+    let text = "[[bind]]\ncommand = \"app.quit\"\nkeys = [\"ctrl-shift-q\"]\n";
+    let keymap = Keymap::parse(text).expect("keymap");
+    let quit = super::items::row_keys(&keymap, MenuCommand::Quit);
+    let help = super::items::row_keys(&keymap, MenuCommand::Help);
+    assert_eq!((quit.as_deref(), help), (Some("Ctrl+Shift+Q"), None));
 }

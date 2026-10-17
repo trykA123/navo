@@ -230,6 +230,7 @@ impl RenderOnce for AppMenu {
         let t = tokens::current(cx);
         let look = view::Look {
             theme: t,
+            keymap: crate::commands::active(cx),
             selected: self.selected,
             send: self.on_event.clone(),
         };

@@ -1,0 +1,967 @@
+# Ferrite's built-in keymap. One [[bind]] per command and context.
+# keys use GPUI keystroke syntax; context defaults to the command's home context.
+
+# global
+
+[[bind]]
+command = "app_menu.toggle"
+keys = ["f10"]
+
+[[bind]]
+command = "settings.toggle"
+keys = ["ctrl-,"]
+
+[[bind]]
+command = "jobs.toggle"
+keys = ["ctrl-j"]
+
+[[bind]]
+command = "sheet.narrower"
+keys = ["ctrl-["]
+
+[[bind]]
+command = "sheet.wider"
+keys = ["ctrl-]"]
+
+# FerritePane
+
+[[bind]]
+command = "tab.next"
+keys = ["ctrl-tab", "ctrl-pagedown"]
+
+[[bind]]
+command = "tab.previous"
+keys = ["ctrl-shift-tab", "ctrl-pageup"]
+
+[[bind]]
+command = "tab.close"
+keys = ["ctrl-w"]
+
+[[bind]]
+command = "tab.go_to_first"
+keys = ["ctrl-1"]
+
+[[bind]]
+command = "tab.go_to_second"
+keys = ["ctrl-2"]
+
+[[bind]]
+command = "tab.go_to_third"
+keys = ["ctrl-3"]
+
+[[bind]]
+command = "tab.go_to_fourth"
+keys = ["ctrl-4"]
+
+[[bind]]
+command = "tab.go_to_fifth"
+keys = ["ctrl-5"]
+
+[[bind]]
+command = "tab.go_to_sixth"
+keys = ["ctrl-6"]
+
+[[bind]]
+command = "tab.go_to_seventh"
+keys = ["ctrl-7"]
+
+[[bind]]
+command = "tab.go_to_eighth"
+keys = ["ctrl-8"]
+
+[[bind]]
+command = "tab.go_to_last"
+keys = ["ctrl-9"]
+
+[[bind]]
+command = "tab.new"
+keys = ["ctrl-t"]
+
+[[bind]]
+command = "pane.drive_menu_first"
+keys = ["alt-f1"]
+
+[[bind]]
+command = "pane.drive_menu_second"
+keys = ["alt-f2"]
+
+[[bind]]
+command = "pane.edit_path"
+keys = ["ctrl-l"]
+
+[[bind]]
+command = "pane.reset_split"
+keys = ["ctrl-shift-0"]
+
+[[bind]]
+command = "pane.toggle_preview"
+keys = ["ctrl-q"]
+
+[[bind]]
+command = "preview.browse"
+keys = ["ctrl-shift-q"]
+
+# PaneWaiting
+
+[[bind]]
+command = "pane.leave_waiting"
+keys = ["escape", "backspace"]
+
+[[bind]]
+command = "pane.retry_listing"
+keys = ["enter"]
+
+# PreviewBrowse
+
+[[bind]]
+command = "preview.cursor_up"
+keys = ["up"]
+
+[[bind]]
+command = "preview.cursor_down"
+keys = ["down"]
+
+[[bind]]
+command = "preview.fold"
+keys = ["left"]
+
+[[bind]]
+command = "preview.unfold"
+keys = ["right"]
+
+[[bind]]
+command = "preview.open"
+keys = ["enter"]
+
+[[bind]]
+command = "preview.view"
+keys = ["f3"]
+
+[[bind]]
+command = "preview.leave"
+keys = ["escape"]
+
+[[bind]]
+command = "preview.leave_and_switch"
+keys = ["tab"]
+
+[[bind]]
+command = "preview.toggle"
+keys = ["ctrl-q"]
+
+# FileList
+
+[[bind]]
+command = "files.cursor_up"
+keys = ["up"]
+
+[[bind]]
+command = "files.cursor_down"
+keys = ["down"]
+
+[[bind]]
+command = "files.page_up"
+keys = ["pageup"]
+
+[[bind]]
+command = "files.page_down"
+keys = ["pagedown"]
+
+[[bind]]
+command = "files.cursor_first"
+keys = ["home"]
+
+[[bind]]
+command = "files.cursor_last"
+keys = ["end"]
+
+[[bind]]
+command = "files.toggle_mark"
+keys = ["space"]
+
+[[bind]]
+command = "files.toggle_mark_down"
+keys = ["insert"]
+
+[[bind]]
+command = "files.open"
+keys = ["enter"]
+
+[[bind]]
+command = "files.open_parent"
+keys = ["backspace"]
+
+[[bind]]
+command = "pane.switch"
+keys = ["tab"]
+
+[[bind]]
+command = "files.copy"
+keys = ["f5"]
+
+[[bind]]
+command = "files.move"
+keys = ["f6"]
+
+[[bind]]
+command = "files.recycle"
+keys = ["f8", "delete"]
+
+[[bind]]
+command = "files.delete"
+keys = ["shift-delete", "shift-f8"]
+
+[[bind]]
+command = "pane.go_back"
+keys = ["alt-left"]
+
+[[bind]]
+command = "pane.go_forward"
+keys = ["alt-right"]
+
+[[bind]]
+command = "files.clear_filter"
+keys = ["escape"]
+
+[[bind]]
+command = "files.rename"
+keys = ["f2", "shift-f6"]
+
+[[bind]]
+command = "files.new_folder"
+keys = ["f7"]
+
+[[bind]]
+command = "files.mark_pattern"
+keys = ["+"]
+
+[[bind]]
+command = "files.unmark_pattern"
+keys = ["-"]
+
+[[bind]]
+command = "files.invert_marks"
+keys = ["*"]
+
+[[bind]]
+command = "files.sort_by_name"
+keys = ["ctrl-f3"]
+
+[[bind]]
+command = "files.sort_by_extension"
+keys = ["ctrl-f4"]
+
+[[bind]]
+command = "files.sort_by_date"
+keys = ["ctrl-f5"]
+
+[[bind]]
+command = "files.sort_by_size"
+keys = ["ctrl-f6"]
+
+[[bind]]
+command = "files.edit"
+keys = ["f4"]
+
+[[bind]]
+command = "files.edit_with"
+keys = ["shift-f4"]
+
+[[bind]]
+command = "files.view"
+keys = ["f3"]
+
+[[bind]]
+command = "files.refresh"
+keys = ["ctrl-r"]
+
+[[bind]]
+command = "files.context_menu"
+keys = ["menu", "shift-f10"]
+
+# PathInput
+
+[[bind]]
+command = "path_input.cancel"
+keys = ["escape"]
+
+# DriveMenu
+
+[[bind]]
+command = "drive_menu.up"
+keys = ["up"]
+
+[[bind]]
+command = "drive_menu.down"
+keys = ["down"]
+
+[[bind]]
+command = "drive_menu.open"
+keys = ["enter"]
+
+[[bind]]
+command = "drive_menu.close"
+keys = ["escape"]
+
+# ContextMenu
+
+[[bind]]
+command = "context_menu.up"
+keys = ["up"]
+
+[[bind]]
+command = "context_menu.up"
+keys = ["up"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.down"
+keys = ["down"]
+
+[[bind]]
+command = "context_menu.down"
+keys = ["down"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.first"
+keys = ["home"]
+
+[[bind]]
+command = "context_menu.first"
+keys = ["home"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.last"
+keys = ["end"]
+
+[[bind]]
+command = "context_menu.last"
+keys = ["end"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.page_up"
+keys = ["pageup"]
+
+[[bind]]
+command = "context_menu.page_up"
+keys = ["pageup"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.page_down"
+keys = ["pagedown"]
+
+[[bind]]
+command = "context_menu.page_down"
+keys = ["pagedown"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.choose"
+keys = ["enter"]
+
+[[bind]]
+command = "context_menu.choose"
+keys = ["enter"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.open_submenu"
+keys = ["right"]
+
+[[bind]]
+command = "context_menu.open_submenu"
+keys = ["right"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.close_submenu"
+keys = ["left"]
+
+[[bind]]
+command = "context_menu.close_submenu"
+keys = ["left"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.back"
+keys = ["escape"]
+
+[[bind]]
+command = "context_menu.back"
+keys = ["escape"]
+context = "ContextMenu > Input"
+
+[[bind]]
+command = "context_menu.show_classic"
+keys = ["shift-f10"]
+
+[[bind]]
+command = "context_menu.show_classic"
+keys = ["shift-f10"]
+context = "ContextMenu > Input"
+
+# AppMenu
+
+[[bind]]
+command = "app_menu.focus_left"
+keys = ["left"]
+
+[[bind]]
+command = "app_menu.focus_right"
+keys = ["right"]
+
+[[bind]]
+command = "app_menu.focus_up"
+keys = ["up"]
+
+[[bind]]
+command = "app_menu.focus_down"
+keys = ["down"]
+
+[[bind]]
+command = "app_menu.activate"
+keys = ["enter", "space"]
+
+[[bind]]
+command = "app_menu.close"
+keys = ["escape"]
+
+# SettingsSheet
+
+[[bind]]
+command = "settings.row_up"
+keys = ["up"]
+
+[[bind]]
+command = "settings.row_down"
+keys = ["down"]
+
+[[bind]]
+command = "settings.previous_value"
+keys = ["left"]
+
+[[bind]]
+command = "settings.next_value"
+keys = ["right"]
+
+[[bind]]
+command = "settings.flip_value"
+keys = ["space"]
+
+[[bind]]
+command = "settings.next_section"
+keys = ["tab"]
+
+[[bind]]
+command = "settings.previous_section"
+keys = ["shift-tab"]
+
+[[bind]]
+command = "settings.edit_value"
+keys = ["enter", "f2"]
+
+[[bind]]
+command = "settings.show_in_file"
+keys = ["f3"]
+
+[[bind]]
+command = "settings.undo"
+keys = ["ctrl-z"]
+
+[[bind]]
+command = "settings.close"
+keys = ["escape"]
+
+# SettingsField
+
+[[bind]]
+command = "settings.cancel_edit"
+keys = ["escape"]
+
+# Dialog
+
+[[bind]]
+command = "dialog.next_field"
+keys = ["tab"]
+
+[[bind]]
+command = "dialog.previous_field"
+keys = ["shift-tab"]
+
+# DialogButton
+
+[[bind]]
+command = "dialog.next_button"
+keys = ["right"]
+
+[[bind]]
+command = "dialog.previous_button"
+keys = ["left"]
+
+[[bind]]
+command = "dialog.press"
+keys = ["enter", "space"]
+
+# ConfirmDialog
+
+[[bind]]
+command = "confirm.cancel"
+keys = ["escape"]
+
+# PromptDialog
+
+[[bind]]
+command = "prompt.cancel"
+keys = ["escape"]
+
+# Viewer
+
+[[bind]]
+command = "viewer.save"
+keys = ["ctrl-s"]
+
+[[bind]]
+command = "viewer.close"
+keys = ["escape"]
+
+[[bind]]
+command = "viewer.edit"
+keys = ["ctrl-e"]
+
+[[bind]]
+command = "viewer.show_text"
+keys = ["alt-1"]
+
+[[bind]]
+command = "viewer.show_hex"
+keys = ["alt-3"]
+
+[[bind]]
+command = "viewer.show_rich"
+keys = ["alt-5"]
+
+[[bind]]
+command = "lister.show_text"
+keys = ["1"]
+
+[[bind]]
+command = "lister.show_hex"
+keys = ["3"]
+
+[[bind]]
+command = "lister.show_rich"
+keys = ["5"]
+
+[[bind]]
+command = "lister.find_next"
+keys = ["enter"]
+
+[[bind]]
+command = "lister.page_or_next_image"
+keys = ["space"]
+
+[[bind]]
+command = "lister.previous_image"
+keys = ["backspace"]
+
+[[bind]]
+command = "viewer.next_file"
+keys = ["n"]
+
+[[bind]]
+command = "viewer.previous_file"
+keys = ["p"]
+
+[[bind]]
+command = "viewer.line_up"
+keys = ["up"]
+
+[[bind]]
+command = "viewer.line_down"
+keys = ["down"]
+
+[[bind]]
+command = "viewer.page_up"
+keys = ["pageup"]
+
+[[bind]]
+command = "viewer.page_down"
+keys = ["pagedown"]
+
+[[bind]]
+command = "viewer.go_to_start"
+keys = ["ctrl-home"]
+
+[[bind]]
+command = "viewer.go_to_start"
+keys = ["home"]
+context = "Archive"
+
+[[bind]]
+command = "viewer.go_to_start"
+keys = ["home"]
+context = "Tree"
+
+[[bind]]
+command = "viewer.go_to_end"
+keys = ["ctrl-end"]
+
+[[bind]]
+command = "viewer.go_to_end"
+keys = ["end"]
+context = "Archive"
+
+[[bind]]
+command = "viewer.go_to_end"
+keys = ["end"]
+context = "Tree"
+
+[[bind]]
+command = "viewer.scroll_left"
+keys = ["left"]
+
+[[bind]]
+command = "viewer.scroll_right"
+keys = ["right"]
+
+[[bind]]
+command = "viewer.go_to_line"
+keys = ["ctrl-g"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "ViewerGoTo"
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Paged"
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "ViewerFind"
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Tree"
+
+[[bind]]
+command = "viewer.show_line_ends"
+keys = ["alt-l"]
+
+[[bind]]
+command = "viewer.follow"
+keys = ["alt-f"]
+
+[[bind]]
+command = "viewer.context_menu"
+keys = ["menu", "shift-f10"]
+
+[[bind]]
+command = "viewer.copy_path_line"
+keys = ["ctrl-shift-c"]
+
+[[bind]]
+command = "find.open"
+keys = ["ctrl-f"]
+
+[[bind]]
+command = "find.next"
+keys = ["f3"]
+
+[[bind]]
+command = "find.previous"
+keys = ["shift-f3"]
+
+[[bind]]
+command = "find.selection"
+keys = ["ctrl-f3"]
+
+[[bind]]
+command = "find.match_case"
+keys = ["alt-c"]
+
+[[bind]]
+command = "mark.colour_one"
+keys = ["ctrl-1"]
+
+[[bind]]
+command = "mark.colour_two"
+keys = ["ctrl-2"]
+
+[[bind]]
+command = "mark.colour_three"
+keys = ["ctrl-3"]
+
+[[bind]]
+command = "mark.colour_four"
+keys = ["ctrl-4"]
+
+[[bind]]
+command = "mark.colour_five"
+keys = ["ctrl-5"]
+
+[[bind]]
+command = "mark.colour_six"
+keys = ["ctrl-6"]
+
+[[bind]]
+command = "mark.colour_seven"
+keys = ["ctrl-7"]
+
+[[bind]]
+command = "mark.colour_eight"
+keys = ["ctrl-8"]
+
+[[bind]]
+command = "mark.clear"
+keys = ["ctrl-0"]
+
+[[bind]]
+command = "bookmark.toggle"
+keys = ["ctrl-f2"]
+
+[[bind]]
+command = "bookmark.next"
+keys = ["f2"]
+
+[[bind]]
+command = "bookmark.previous"
+keys = ["shift-f2"]
+
+[[bind]]
+command = "editor.toggle_preview"
+keys = ["ctrl-shift-v"]
+
+[[bind]]
+command = "editor.focus_preview"
+keys = ["f6"]
+
+# MarkdownPreview
+
+[[bind]]
+command = "editor.leave_preview"
+keys = ["escape", "f6"]
+
+# ViewerFind
+
+[[bind]]
+command = "find.older_search"
+keys = ["up"]
+context = "ViewerFind > Input"
+
+[[bind]]
+command = "find.newer_search"
+keys = ["down"]
+context = "ViewerFind > Input"
+
+[[bind]]
+command = "find.all"
+keys = ["alt-enter"]
+
+# FindAll
+
+[[bind]]
+command = "find.result_up"
+keys = ["up"]
+
+[[bind]]
+command = "find.result_down"
+keys = ["down"]
+
+[[bind]]
+command = "find.go_to_result"
+keys = ["enter"]
+
+[[bind]]
+command = "find.close_results"
+keys = ["escape"]
+
+# Image
+
+[[bind]]
+command = "image.fit"
+keys = ["0", "ctrl-0"]
+
+[[bind]]
+command = "image.actual_size"
+keys = ["1"]
+
+[[bind]]
+command = "image.zoom_in"
+keys = ["+", "=", "shift-="]
+
+[[bind]]
+command = "image.zoom_out"
+keys = ["-"]
+
+[[bind]]
+command = "image.toggle_info"
+keys = ["i"]
+
+[[bind]]
+command = "image.copy"
+keys = ["ctrl-c"]
+
+[[bind]]
+command = "image.copy_path"
+keys = ["ctrl-shift-c"]
+
+# Tree
+
+[[bind]]
+command = "tree.expand_branch"
+keys = ["alt-right"]
+
+[[bind]]
+command = "tree.collapse_branch"
+keys = ["alt-left"]
+
+[[bind]]
+command = "tree.expand_all"
+keys = ["ctrl-shift-right"]
+
+[[bind]]
+command = "tree.collapse_all"
+keys = ["ctrl-shift-left"]
+
+[[bind]]
+command = "tree.expand_branch_or_type"
+keys = ["*"]
+
+[[bind]]
+command = "tree.collapse_all_or_type"
+keys = ["-"]
+
+[[bind]]
+command = "tree.show_depth_one"
+keys = ["ctrl-1"]
+
+[[bind]]
+command = "tree.show_depth_two"
+keys = ["ctrl-2"]
+
+[[bind]]
+command = "tree.show_depth_three"
+keys = ["ctrl-3"]
+
+[[bind]]
+command = "tree.show_depth_four"
+keys = ["ctrl-4"]
+
+[[bind]]
+command = "tree.show_depth_five"
+keys = ["ctrl-5"]
+
+[[bind]]
+command = "tree.show_depth_six"
+keys = ["ctrl-6"]
+
+[[bind]]
+command = "tree.show_depth_seven"
+keys = ["ctrl-7"]
+
+[[bind]]
+command = "tree.show_depth_eight"
+keys = ["ctrl-8"]
+
+[[bind]]
+command = "tree.show_depth_nine"
+keys = ["ctrl-9"]
+
+[[bind]]
+command = "tree.copy_value"
+keys = ["ctrl-c"]
+
+[[bind]]
+command = "tree.copy_path"
+keys = ["ctrl-shift-c"]
+
+[[bind]]
+command = "tree.filter_backspace"
+keys = ["backspace"]
+
+[[bind]]
+command = "tree.type_n"
+keys = ["n"]
+
+[[bind]]
+command = "tree.type_p"
+keys = ["p"]
+
+[[bind]]
+command = "tree.type_one"
+keys = ["1"]
+
+[[bind]]
+command = "tree.type_three"
+keys = ["3"]
+
+[[bind]]
+command = "tree.type_five"
+keys = ["5"]
+
+# Table
+
+[[bind]]
+command = "table.first_cell"
+keys = ["home"]
+
+[[bind]]
+command = "table.last_cell"
+keys = ["end"]
+
+[[bind]]
+command = "table.copy_cell"
+keys = ["ctrl-c"]
+
+[[bind]]
+command = "table.copy_row"
+keys = ["ctrl-shift-c"]
+
+[[bind]]
+command = "table.sort_by_column"
+keys = ["ctrl-f3"]
+
+# Markdown
+
+[[bind]]
+command = "markdown.open_link"
+keys = ["enter"]
+
+[[bind]]
+command = "markdown.next_link"
+keys = ["tab"]
+
+[[bind]]
+command = "markdown.previous_link"
+keys = ["shift-tab"]
+
+[[bind]]
+command = "markdown.copy_block"
+keys = ["ctrl-c"]
+
+# App menu rows without an action yet; shown in the menu, not bound
+
+[[bind]]
+command = "app.command_palette"
+keys = ["ctrl-k"]
+
+[[bind]]
+command = "window.new"
+keys = ["ctrl-n"]
+
+[[bind]]
+command = "help.key_map"
+keys = ["f1"]
+
+[[bind]]
+command = "app.quit"
+keys = ["alt-f4"]

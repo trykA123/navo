@@ -1,3 +1,4 @@
+use crate::commands::Keymap;
 use crate::fkey_bar::KeyLayer;
 
 pub type FKey = (&'static str, &'static str);
@@ -70,3 +71,15 @@ pub fn key_labels() -> [[&'static str; 4]; 10] {
 }
 
 pub const KEY_WARNING: (KeyLayer, usize, &str) = (KeyLayer::Shift, 7, "Delete for good");
+
+#[must_use]
+pub fn layer_keys_in(keymap: &Keymap, layer: Option<KeyLayer>) -> [FKey; 10] {
+    let _ = (keymap, layer);
+    todo!()
+}
+
+#[must_use]
+pub fn key_labels_in(keymap: &Keymap) -> [[&'static str; 4]; 10] {
+    let _ = keymap;
+    todo!()
+}

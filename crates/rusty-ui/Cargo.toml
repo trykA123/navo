@@ -63,6 +63,8 @@ rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
 rusty-structured = { path = "../rusty-structured" }
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8"
 tree-sitter = "=0.26.13"
 tree-sitter-asm = "=0.24.0"
 tree-sitter-batch = "=0.11.1"

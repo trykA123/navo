@@ -43,7 +43,7 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 pub use app_menu::AppMenuHooks;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
-pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
+pub use fkeys::{FKey, KEY_WARNING, key_labels, key_labels_in, layer_keys, layer_keys_in};
 pub(crate) use keys::bind_app_keys;
 pub use keys::bind_keys;
 pub use settings_save::{SaveReport, SaveSettings};
