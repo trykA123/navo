@@ -160,7 +160,7 @@ fn escape_stops_the_scan_and_resume_counts_again(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn escape_clears_a_filter_before_it_stops_a_scan(cx: &mut TestAppContext) {
+fn escape_clears_a_filter_then_stops_a_scan_then_closes_the_sheet(cx: &mut TestAppContext) {
     let (rig, gate) = gated(cx);
     rig.key(cx, "p");
     let filtered = rig.read(cx, |view| {
@@ -184,6 +184,10 @@ fn escape_clears_a_filter_before_it_stops_a_scan(cx: &mut TestAppContext) {
     );
     gate.release();
     assert!(gate.wait_until_done());
+    assert!(rig.read(cx, |view| view.preview.is_open()));
+    rig.key(cx, "escape");
+    assert!(!rig.read(cx, |view| view.preview.is_open()));
+    assert!(rig.list_has_focus(cx));
 }
 
 #[gpui_kit::test]

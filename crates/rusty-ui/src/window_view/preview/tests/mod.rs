@@ -3,6 +3,7 @@ mod files;
 mod folders;
 mod follow;
 mod gate;
+mod keys;
 mod live;
 mod toggle;
 

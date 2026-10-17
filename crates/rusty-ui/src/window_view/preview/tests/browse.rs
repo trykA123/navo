@@ -90,7 +90,7 @@ fn list_cursor_bar(cx: &mut TestAppContext, rig: &Rig) -> bool {
 }
 
 fn hints(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
-    (0..6usize)
+    (0..7usize)
         .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
         .collect()
 }
@@ -135,7 +135,7 @@ fn ctrl_shift_q_focuses_the_sheet_with_a_chip_a_ring_and_a_passive_list_cursor(
     assert_eq!(spot(cx, &rig), seen("src"));
     assert_eq!(
         hints(cx, &rig),
-        ["Move", "Fold", "Go to", "View", "Back to list"]
+        ["Move", "Fold", "Go to", "View", "Recount", "Close"]
     );
 }
 
@@ -232,16 +232,13 @@ fn a_click_selects_and_browses_and_a_double_click_goes_to(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn escape_returns_focus_to_the_list_and_restores_the_cursor(cx: &mut TestAppContext) {
+fn escape_closes_the_sheet_and_restores_the_list_cursor(cx: &mut TestAppContext) {
     let (rig, _) = browsing(cx);
     rig.key(cx, "escape");
     assert!(rig.list_has_focus(cx));
     assert!(!sheet_has_focus(cx, &rig));
-    assert!(!rig.shows(cx, "preview-browsing"));
-    assert_eq!(is_ringed(cx, &rig), Some(false));
     assert!(list_cursor_bar(cx, &rig));
-    assert!(rig.read(cx, |view| view.preview.is_open()));
-    assert_eq!(hints(cx, &rig)[0], "Browse");
+    assert!(!rig.read(cx, |view| view.preview.is_open()));
 }
 
 #[gpui_kit::test]
