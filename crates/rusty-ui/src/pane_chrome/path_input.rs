@@ -6,7 +6,7 @@ use gpui_kit::component::input::InputEvent;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, AppContext, Context, ElementId, Entity, Focusable, InteractiveElement, IntoElement,
-    KeyBinding, ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
+    ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
     Subscription, Window, div,
 };
 
@@ -18,7 +18,7 @@ const CONTEXT: &str = "PathInput";
 gpui_kit::actions!(path_input, [CancelPath]);
 
 pub(super) fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("escape", CancelPath, Some(CONTEXT))]);
+    crate::commands::bind_namespace(cx, "path_input");
 }
 
 type Submit = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;

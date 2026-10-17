@@ -1,4 +1,6 @@
+mod bind;
 mod contexts;
+mod keymap;
 mod overlays;
 mod structured;
 mod viewer;
@@ -7,9 +9,15 @@ mod window;
 #[cfg(test)]
 mod tests;
 
+use gpui_kit::App;
+
 use crate::app_menu::MenuCommand;
 
+pub(crate) use bind::bind_namespace;
+#[cfg(test)]
+use bind::key_bindings;
 pub use contexts::{GLOBAL, is_within};
+pub use keymap::{Bind, Keymap, KeymapError, normal_key, shown};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CommandSpec {
@@ -79,4 +87,9 @@ pub fn for_menu(command: MenuCommand) -> &'static str {
         MenuCommand::Quit => "app.quit",
         MenuCommand::AllSettings => "settings.toggle",
     }
+}
+
+#[must_use]
+pub fn active(_: &App) -> &Keymap {
+    Keymap::builtin()
 }

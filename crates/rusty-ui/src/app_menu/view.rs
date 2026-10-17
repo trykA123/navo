@@ -12,6 +12,7 @@ use gpui_kit::{
 use super::items::QuickSettings;
 use super::items::{self, RowSpec, TileFace, Trailing, tile_face};
 use super::{AppMenuEvent, Identity, event_for, item_at};
+use crate::commands::Keymap;
 use crate::primitives::{IconName, icon};
 use crate::title_bar::logo;
 use crate::tokens::{Motion, Theme};
@@ -27,6 +28,7 @@ type Handler = Rc<dyn Fn(&AppMenuEvent, &mut Window, &mut App)>;
 
 pub(super) struct Look<'a> {
     pub theme: &'a Theme,
+    pub keymap: &'a Keymap,
     pub selected: usize,
     pub send: Option<Handler>,
 }
@@ -236,15 +238,18 @@ fn row_fill(t: &Theme, spec: &RowSpec, is_selected: bool) -> Option<Hsla> {
     }
 }
 
-fn trailing(t: &Theme, spec: &RowSpec, color: Hsla) -> AnyElement {
-    match spec.trailing {
-        Trailing::Keys(keys) => div()
+fn trailing(t: &Theme, spec: &RowSpec, keys: Option<String>, color: Hsla) -> AnyElement {
+    match (&spec.trailing, keys) {
+        (Trailing::Keys, Some(keys)) => div()
             .font_family(t.typography.mono_font.clone())
             .text_size(t.typography.small)
             .text_color(color)
             .child(keys)
             .into_any_element(),
-        Trailing::Submenu => icon(IconName::ChevronRight, t.spacing.icon, color).into_any_element(),
+        (Trailing::Keys, None) => div().into_any_element(),
+        (Trailing::Submenu, _) => {
+            icon(IconName::ChevronRight, t.spacing.icon, color).into_any_element()
+        }
     }
 }
 
@@ -254,7 +259,7 @@ fn row(look: &Look, spec: &RowSpec, index: usize) -> AnyElement {
     let is_available = spec.command.is_available();
     let colors = row_colors(t, spec, is_selected);
     let keys = match spec.trailing {
-        Trailing::Keys(keys) => Some(keys),
+        Trailing::Keys => items::row_keys(look.keymap, spec.command),
         Trailing::Submenu => None,
     };
     let element = div()
@@ -263,7 +268,7 @@ fn row(look: &Look, spec: &RowSpec, index: usize) -> AnyElement {
         .role(Role::MenuItem)
         .aria_label(spec.label)
         .aria_selected(is_selected)
-        .when_some(keys, |row, keys| row.aria_keyshortcuts(keys))
+        .when_some(keys.clone(), |row, keys| row.aria_keyshortcuts(keys))
         .when(!is_available, |row| row.aria_value("Not available yet"))
         .flex()
         .flex_none()
@@ -284,7 +289,7 @@ fn row(look: &Look, spec: &RowSpec, index: usize) -> AnyElement {
             colors.icon,
         )))
         .child(div().flex_1().min_w_0().truncate().child(spec.label))
-        .child(trailing(t, spec, colors.trailing));
+        .child(trailing(t, spec, keys, colors.trailing));
     hover_and_click(element, index, look.send.clone()).into_any_element()
 }
 

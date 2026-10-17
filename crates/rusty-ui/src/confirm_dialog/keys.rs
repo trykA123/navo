@@ -1,11 +1,10 @@
 use std::rc::Rc;
 
-use gpui_kit::{App, Div, FocusHandle, InteractiveElement, KeyBinding, Stateful, Window};
+use gpui_kit::{App, Div, FocusHandle, InteractiveElement, Stateful, Window};
 
 use super::Handler;
 use crate::dialog_focus::{self, Next, NextButton, Press, Previous, PreviousButton};
 
-pub(super) const CONTEXT: &str = "ConfirmDialog";
 const KEY_CONTEXT: &str = "ConfirmDialog Dialog";
 
 pub(super) const BUTTON: &str = "ConfirmButton DialogButton";
@@ -14,7 +13,7 @@ gpui_kit::actions!(confirm_dialog, [Dismiss]);
 
 pub fn bind_keys(cx: &mut App) {
     dialog_focus::bind_keys(cx);
-    cx.bind_keys([KeyBinding::new("escape", Dismiss, Some(CONTEXT))]);
+    crate::commands::bind_namespace(cx, "confirm_dialog");
 }
 
 pub(super) struct Keys {

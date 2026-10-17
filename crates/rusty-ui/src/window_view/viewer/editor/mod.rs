@@ -14,7 +14,7 @@ use gpui_kit::{Subscription, Task};
 use rusty_core::encoding::TextEncoding;
 
 pub(super) use body::{EditorBody, EditorFile};
-pub(super) use preview::{PREVIEW_CONTEXT, SplitChoice};
+pub(super) use preview::SplitChoice;
 
 use super::body::{Carried, Host};
 use super::search::Marking;

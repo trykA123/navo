@@ -1,12 +1,11 @@
 use std::rc::Rc;
 
-use gpui_kit::{App, Div, Entity, FocusHandle, InteractiveElement, KeyBinding, Stateful, Window};
+use gpui_kit::{App, Div, Entity, FocusHandle, InteractiveElement, Stateful, Window};
 
 use super::{Cancel, Submit};
 use crate::dialog_focus::{self, Next, NextButton, Press, Previous, PreviousButton};
 use crate::primitives::TextFieldState;
 
-pub(super) const CONTEXT: &str = "PromptDialog";
 const KEY_CONTEXT: &str = "PromptDialog Dialog";
 pub(super) const BUTTON: &str = "PromptButton DialogButton";
 
@@ -14,7 +13,7 @@ gpui_kit::actions!(prompt_dialog, [Dismiss]);
 
 pub fn bind_keys(cx: &mut App) {
     dialog_focus::bind_keys(cx);
-    cx.bind_keys([KeyBinding::new("escape", Dismiss, Some(CONTEXT))]);
+    crate::commands::bind_namespace(cx, "prompt_dialog");
 }
 
 pub(super) struct Keys {

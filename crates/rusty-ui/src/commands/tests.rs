@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use gpui_kit::{App, TestAppContext};
 
-use super::{CommandSpec, GLOBAL, all, by_name, for_action, for_menu, is_within};
+use super::{
+    CommandSpec, GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings,
+};
 use crate::app_menu::MenuCommand;
 
 const NAMESPACES: [&str; 17] = [
@@ -45,6 +47,32 @@ fn bound(cx: &mut TestAppContext) -> Vec<Bound> {
             })
             .collect()
     })
+}
+
+fn triples(cx: &mut TestAppContext, bind: impl FnOnce(&mut App)) -> Vec<String> {
+    let mut lines: Vec<String> = cx.update(|cx: &mut App| {
+        bind(cx);
+        let keymap = cx.key_bindings();
+        let keymap = keymap.borrow();
+        keymap
+            .bindings()
+            .map(|binding| {
+                let name = for_action(binding.action().name()).map_or("?", |spec| spec.name);
+                let keys: Vec<String> = binding
+                    .keystrokes()
+                    .iter()
+                    .map(|key| key.inner().unparse())
+                    .collect();
+                let context = binding
+                    .predicate()
+                    .map_or_else(|| GLOBAL.to_owned(), |predicate| predicate.to_string());
+                format!("{name} | {} | {context}", keys.join(" "))
+            })
+            .collect()
+    });
+    lines.sort();
+    lines.dedup();
+    lines
 }
 
 fn ours(cx: &mut TestAppContext) -> Vec<&'static str> {
@@ -217,4 +245,55 @@ fn the_command_list_matches_the_snapshot() {
     insta::with_settings!({ prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!("command_registry", lines.join("\n"));
     });
+}
+
+#[gpui_kit::test]
+fn the_bound_keys_match_the_snapshot(cx: &mut TestAppContext) {
+    let lines = triples(cx, crate::window_view::bind_app_keys);
+    insta::with_settings!({ prepend_module_to_snapshot => false }, {
+        insta::assert_snapshot!("bound_keys", lines.join("\n"));
+    });
+}
+
+#[gpui_kit::test]
+fn the_built_in_keymap_builds_the_snapshot_set(cx: &mut TestAppContext) {
+    let lines = triples(cx, |cx| {
+        let bindings = key_bindings(Keymap::builtin(), cx, None);
+        cx.bind_keys(bindings);
+    });
+    insta::with_settings!({ prepend_module_to_snapshot => false }, {
+        insta::assert_snapshot!("bound_keys", lines.join("\n"));
+    });
+}
+
+#[gpui_kit::test]
+fn a_module_binds_only_its_own_commands(cx: &mut TestAppContext) {
+    let actions: Vec<&'static str> = cx.update(|cx: &mut App| {
+        crate::file_list::bind_keys(cx);
+        let keymap = cx.key_bindings();
+        let keymap = keymap.borrow();
+        keymap
+            .bindings()
+            .map(|binding| binding.action().name())
+            .collect()
+    });
+    let foreign: Vec<&str> = actions
+        .iter()
+        .copied()
+        .filter(|action| !action.starts_with("file_list::"))
+        .collect();
+    assert_eq!((actions.len(), foreign), (36, Vec::<&str>::new()));
+}
+
+#[gpui_kit::test]
+fn every_keymap_command_with_an_action_builds(cx: &mut TestAppContext) {
+    let broken: Vec<&str> = cx.update(|cx: &mut App| {
+        Keymap::builtin()
+            .binds()
+            .iter()
+            .filter_map(|bind| bind.spec.action)
+            .filter(|action| cx.build_action(action, None).is_err())
+            .collect()
+    });
+    assert_eq!(broken, Vec::<&str>::new());
 }

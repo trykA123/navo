@@ -1,9 +1,9 @@
 use gpui_kit::base::ObservedElement;
-use gpui_kit::{App, Context, Div, InteractiveElement, KeyBinding, Stateful, Window};
+use gpui_kit::{App, Context, Div, InteractiveElement, Stateful, Window};
 
+use super::ContextMenu;
 use super::place::ROW;
 use super::state::{ContextMenuEvent, Escape, Step};
-use super::{CONTEXT, ContextMenu};
 
 gpui_kit::actions!(
     context_menu,
@@ -23,23 +23,7 @@ gpui_kit::actions!(
 );
 
 pub fn bind_keys(cx: &mut App) {
-    let field = format!("{CONTEXT} > Input");
-    for context in [CONTEXT, field.as_str()] {
-        let context = Some(context);
-        cx.bind_keys([
-            KeyBinding::new("up", MenuUp, context),
-            KeyBinding::new("down", MenuDown, context),
-            KeyBinding::new("home", MenuHome, context),
-            KeyBinding::new("end", MenuEnd, context),
-            KeyBinding::new("pageup", MenuPageUp, context),
-            KeyBinding::new("pagedown", MenuPageDown, context),
-            KeyBinding::new("enter", MenuEnter, context),
-            KeyBinding::new("right", MenuRight, context),
-            KeyBinding::new("left", MenuLeft, context),
-            KeyBinding::new("escape", MenuEscape, context),
-            KeyBinding::new("shift-f10", MenuClassic, context),
-        ]);
-    }
+    crate::commands::bind_namespace(cx, "context_menu");
 }
 
 pub(super) fn register(

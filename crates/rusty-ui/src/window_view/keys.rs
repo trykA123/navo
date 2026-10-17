@@ -1,5 +1,3 @@
-use gpui_kit::KeyBinding;
-
 use crate::prelude::*;
 
 pub(super) const PANE: &str = "FerritePane";
@@ -37,17 +35,5 @@ pub fn bind_keys(cx: &mut App) {
     super::tab_keys::bind_keys(cx);
     crate::side_sheet::bind_keys(cx);
     super::preview::bind_keys(cx);
-    cx.bind_keys([
-        KeyBinding::new("alt-f1", DriveMenuFirst, Some(PANE)),
-        KeyBinding::new("alt-f2", DriveMenuSecond, Some(PANE)),
-        KeyBinding::new("ctrl-l", EditPath, Some(PANE)),
-        KeyBinding::new("ctrl-t", NewTab, Some(PANE)),
-        KeyBinding::new("ctrl-shift-0", ResetSplit, Some(PANE)),
-        KeyBinding::new("ctrl-q", TogglePreview, Some(PANE)),
-        KeyBinding::new("ctrl-shift-q", BrowsePreview, Some(PANE)),
-        KeyBinding::new("ctrl-j", ToggleJobs, None),
-        KeyBinding::new("escape", LeaveWaiting, Some(WAITING)),
-        KeyBinding::new("backspace", LeaveWaiting, Some(WAITING)),
-        KeyBinding::new("enter", RetryListing, Some(WAITING)),
-    ]);
+    crate::commands::bind_namespace(cx, "ferrite_window");
 }

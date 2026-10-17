@@ -14,7 +14,7 @@ use crate::window_view::viewer::markdown::MarkdownView;
 use crate::window_view::viewer::search::jobs::run_detached;
 use crate::window_view::viewer::{FocusPreview, LeavePreview, TogglePreview};
 
-pub(in crate::window_view::viewer) const PREVIEW_CONTEXT: &str = "MarkdownPreview";
+const PREVIEW_CONTEXT: &str = "MarkdownPreview";
 const PREVIEW_AFTER: Duration = Duration::from_millis(150);
 const INLINE_LIMIT: usize = 200 * 1024;
 const SAVE_FIRST: &str = "Save or discard your edits before opening another file.";

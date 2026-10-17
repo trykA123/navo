@@ -4,7 +4,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, BoxShadow, Div, ElementId, FocusHandle, FontWeight, InteractiveElement,
-    IntoElement, KeyBinding, KeyDownEvent, ParentElement, Pixels, RenderOnce, Role, Stateful,
+    IntoElement, KeyDownEvent, ParentElement, Pixels, RenderOnce, Role, Stateful,
     StatefulInteractiveElement, Styled, Window, deferred, div, point, px,
 };
 
@@ -20,13 +20,7 @@ const BAR_WIDTH: f32 = 56.;
 gpui_kit::actions!(drive_menu, [MenuUp, MenuDown, MenuOpen, MenuClose]);
 
 pub(super) fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("up", MenuUp, context),
-        KeyBinding::new("down", MenuDown, context),
-        KeyBinding::new("enter", MenuOpen, context),
-        KeyBinding::new("escape", MenuClose, context),
-    ]);
+    crate::commands::bind_namespace(cx, "drive_menu");
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{
-    AnyElement, App, DragMoveEvent, ElementId, Entity, InteractiveElement, IntoElement, KeyBinding,
+    AnyElement, App, DragMoveEvent, ElementId, Entity, InteractiveElement, IntoElement,
     ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
@@ -28,10 +28,7 @@ use crate::tokens::{self, Theme};
 gpui_kit::actions!(side_sheet, [Narrower, Wider]);
 
 pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([
-        KeyBinding::new("ctrl-[", Narrower, None),
-        KeyBinding::new("ctrl-]", Wider, None),
-    ]);
+    crate::commands::bind_namespace(cx, "side_sheet");
 }
 
 pub fn on_resize_keys<E: InteractiveElement>(

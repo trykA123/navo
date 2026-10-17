@@ -1,5 +1,6 @@
 use gpui_kit::SharedString;
 
+use crate::commands::{Keymap, for_menu, shown};
 use crate::primitives::IconName;
 use crate::tokens::{Density, ThemeChoice};
 
@@ -54,7 +55,7 @@ pub enum Item {
 }
 
 pub(super) enum Trailing {
-    Keys(&'static str),
+    Keys,
     Submenu,
 }
 
@@ -73,13 +74,13 @@ pub(super) const ROWS: [RowSpec; 6] = [
         command: MenuCommand::CommandPalette,
         icon: IconName::Command,
         label: "Command palette",
-        trailing: Trailing::Keys("Ctrl+K"),
+        trailing: Trailing::Keys,
     },
     RowSpec {
         command: MenuCommand::NewWindow,
         icon: IconName::AppWindow,
         label: "New window",
-        trailing: Trailing::Keys("Ctrl+N"),
+        trailing: Trailing::Keys,
     },
     RowSpec {
         command: MenuCommand::Workspaces,
@@ -91,19 +92,19 @@ pub(super) const ROWS: [RowSpec; 6] = [
         command: MenuCommand::Help,
         icon: IconName::CircleQuestionMark,
         label: "Help and key map",
-        trailing: Trailing::Keys("F1"),
+        trailing: Trailing::Keys,
     },
     RowSpec {
         command: MenuCommand::Quit,
         icon: IconName::Power,
         label: "Quit",
-        trailing: Trailing::Keys("Alt+F4"),
+        trailing: Trailing::Keys,
     },
     RowSpec {
         command: MenuCommand::AllSettings,
         icon: IconName::SlidersHorizontal,
         label: "All settings",
-        trailing: Trailing::Keys("Ctrl+,"),
+        trailing: Trailing::Keys,
     },
 ];
 
@@ -165,6 +166,11 @@ pub fn item_at(index: usize) -> Option<Item> {
 #[must_use]
 pub fn index_of(item: Item) -> Option<usize> {
     (0..ITEM_COUNT).find(|index| item_at(*index) == Some(item))
+}
+
+#[must_use]
+pub(super) fn row_keys(keymap: &Keymap, command: MenuCommand) -> Option<String> {
+    keymap.keys_of(for_menu(command)).find_map(shown)
 }
 
 pub(super) fn row_labels() -> [&'static str; ROWS.len()] {

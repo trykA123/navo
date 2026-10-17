@@ -10,9 +10,9 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, Div, ElementId, FocusHandle, InteractiveElement, IntoElement, KeyBinding,
-    KeyDownEvent, ParentElement, RenderOnce, Role, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Window, deferred, div,
+    AnyElement, App, Div, ElementId, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
+    ParentElement, RenderOnce, Role, SharedString, Stateful, StatefulInteractiveElement, Styled,
+    Window, deferred, div,
 };
 
 pub use focus::{Ring, Step, jump};
@@ -36,17 +36,7 @@ gpui_kit::actions!(
 );
 
 pub fn bind_keys(cx: &mut App) {
-    let context = Some(CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("f10", ToggleAppMenu, None),
-        KeyBinding::new("left", FocusLeft, context),
-        KeyBinding::new("right", FocusRight, context),
-        KeyBinding::new("up", FocusUp, context),
-        KeyBinding::new("down", FocusDown, context),
-        KeyBinding::new("enter", Activate, context),
-        KeyBinding::new("space", Activate, context),
-        KeyBinding::new("escape", CloseMenu, context),
-    ]);
+    crate::commands::bind_namespace(cx, "app_menu");
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -230,6 +220,7 @@ impl RenderOnce for AppMenu {
         let t = tokens::current(cx);
         let look = view::Look {
             theme: t,
+            keymap: crate::commands::active(cx),
             selected: self.selected,
             send: self.on_event.clone(),
         };

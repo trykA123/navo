@@ -43,7 +43,7 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 pub use app_menu::AppMenuHooks;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
-pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
+pub use fkeys::{FKey, KEY_WARNING, key_labels, key_labels_in, layer_keys, layer_keys_in};
 pub(crate) use keys::bind_app_keys;
 pub use keys::bind_keys;
 pub use settings_save::{SaveReport, SaveSettings};
@@ -284,9 +284,12 @@ impl FerriteWindow {
         let (held, (layer, index, spoken)) = (self.held_layer, KEY_WARNING);
         let bar = match &self.viewer {
             Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
-            None => FKeyBar::new("fkeys", layer_keys(held))
-                .layers(held, key_labels())
-                .warn(layer, index, spoken),
+            None => {
+                let keymap = crate::commands::active(cx);
+                FKeyBar::new("fkeys", layer_keys_in(keymap, held))
+                    .layers(held, key_labels_in(keymap))
+                    .warn(layer, index, spoken)
+            }
         };
         self.with_job_pill(bar, window, cx)
     }

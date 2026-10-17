@@ -4,6 +4,9 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Modifiers, TestAppContext, VisualTestContext};
 
 use super::{fake, home_beside_dest, open, open_with, press};
+use crate::commands::Keymap;
+use crate::fkey_bar::KeyLayer;
+use crate::window_view::{key_labels_in, layer_keys_in};
 
 fn key_labels(
     cx: &mut TestAppContext,
@@ -135,4 +138,45 @@ fn leaving_the_window_with_alt_held_shows_the_base_layer(cx: &mut TestAppContext
     let (labels, lit) = key_labels(cx, window);
     assert_eq!(labels, base);
     assert_eq!(lit, [Some(false); 3]);
+}
+
+#[test]
+fn the_f_key_labels_follow_the_keymap() {
+    let text = "[[bind]]\ncommand = \"files.view\"\nkeys = [\"f9\"]\n\n\
+                [[bind]]\ncommand = \"files.rename\"\nkeys = [\"ctrl-f2\"]\n";
+    let keymap = Keymap::parse(text).expect("keymap");
+    let base = layer_keys_in(&keymap, None);
+    let ctrl = layer_keys_in(&keymap, Some(KeyLayer::Ctrl));
+    assert_eq!(
+        (base[1], base[2], base[8]),
+        (("F2", ""), ("F3", ""), ("F9", "View"))
+    );
+    assert_eq!((ctrl[1], ctrl[2]), (("F2", "Rename"), ("F3", "")));
+    assert_eq!(key_labels_in(&keymap)[1], ["", "", "Rename", ""]);
+}
+
+#[test]
+fn the_built_in_keymap_gives_the_known_f_key_bar() {
+    let labels = |layer| layer_keys_in(Keymap::builtin(), layer).map(|(_, label)| label);
+    let base = [
+        "",
+        "Rename",
+        "View",
+        "Edit",
+        "Copy",
+        "Move",
+        "New folder",
+        "Delete",
+        "Drawer",
+        "Menu",
+    ];
+    let shift = ["", "", "", "Edit with", "", "Rename", "", "Delete", "", ""];
+    let ctrl = [
+        "", "", "By name", "By ext", "By date", "By size", "", "", "", "",
+    ];
+    let alt = ["Left drive", "Right drive", "", "", "", "", "", "", "", ""];
+    assert_eq!(labels(None), base);
+    assert_eq!(labels(Some(KeyLayer::Shift)), shift);
+    assert_eq!(labels(Some(KeyLayer::Ctrl)), ctrl);
+    assert_eq!(labels(Some(KeyLayer::Alt)), alt);
 }
