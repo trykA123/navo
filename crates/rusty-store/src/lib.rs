@@ -8,6 +8,7 @@ mod journal;
 mod keymap_file;
 mod session;
 mod settings;
+mod text_layout;
 
 pub use atomic_write::{backup_path, replace_atomic, write_atomic};
 pub use cache_db::{CacheDb, CacheError, CacheOpen};

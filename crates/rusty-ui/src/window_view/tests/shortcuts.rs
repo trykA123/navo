@@ -14,9 +14,11 @@ use crate::window_view::{KeymapHooks, KeymapNews, KeymapSender};
 const ERROR: &str = "keymap.toml, line 2: unknown command `files.teleport`";
 const SIZE_ON_ALT_F9: &str = "[[bind]]\ncommand = \"files.sort_by_size\"\nkeys = [\"alt-f9\"]\n";
 
+type Entry = (&'static str, Option<String>, Vec<String>);
+
 #[derive(Default)]
 struct FakeKeymap {
-    entries: Mutex<Vec<(&'static str, Option<String>, Vec<String>)>>,
+    entries: Mutex<Vec<Entry>>,
     saves: Mutex<Vec<Vec<Edit>>>,
     failure: Mutex<Option<String>>,
 }
@@ -310,6 +312,20 @@ fn a_recorded_key_is_saved_and_works_at_once(cx: &mut TestAppContext) {
     rig.press(cx, "alt-f9");
     let files = rig.files(cx);
     assert_eq!(files.get(1).map(String::as_str), Some("a.txt"), "{files:?}");
+}
+
+#[gpui_kit::test]
+fn a_click_on_a_row_records_too(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.open_page(cx);
+    rig.search(cx, "files.sort_by_size");
+    rig.click(cx, ElementId::Name("shortcut-files.sort_by_size".into()));
+    assert!(rig.is_recording(cx));
+    rig.press(cx, "alt-f9");
+    assert_eq!(
+        rig.keymap.saves(),
+        [vec![set("files.sort_by_size", &["alt-f9"])]]
+    );
 }
 
 #[gpui_kit::test]

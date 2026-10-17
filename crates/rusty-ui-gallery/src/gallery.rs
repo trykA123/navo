@@ -16,6 +16,7 @@ use crate::operate_page::OperatePage;
 pub use crate::pages::{PAGES, Page};
 use crate::pane_page::PanePage;
 use crate::sections;
+use crate::shortcuts_sample::{self, Shows as ShortcutsShows};
 use crate::structured_sample::{
     self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
 };
@@ -75,7 +76,7 @@ pub struct Gallery {
     alt_window: Entity<WindowPage>,
     job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
-    sheet_windows: [Entity<WindowPage>; 5],
+    sheet_windows: [Entity<WindowPage>; 9],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -84,6 +85,7 @@ pub struct Gallery {
 
 impl Gallery {
     pub fn new(mode: Mode, window: &mut Window, cx: &mut App) -> Self {
+        shortcuts_sample::use_user_keymap(cx);
         Self {
             mode,
             page: Page::Primitives,
@@ -109,7 +111,7 @@ impl Gallery {
             alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), cx)),
             job_windows: job_windows(cx),
             menu_window: cx.new(WindowPage::with_menu),
-            sheet_windows: sheet_windows(cx),
+            sheet_windows: sheet_windows(window, cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -263,28 +265,51 @@ fn job_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
     })
 }
 
-fn sheet_windows(cx: &mut App) -> [Entity<WindowPage>; 5] {
+fn sheet_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 9] {
+    let shortcuts = [
+        ShortcutsShows::Normal,
+        ShortcutsShows::Recording,
+        ShortcutsShows::Conflict,
+        ShortcutsShows::Invalid,
+    ]
+    .map(|shows| Some(shortcuts_sample::page(shows, window, cx)));
+    let [normal, recording, conflict, invalid] = shortcuts;
     let shows = [
-        (Side::Left, WIDE, false, None),
-        (Side::Right, WIDE, true, None),
-        (Side::Left, NARROW, false, None),
-        (Side::Left, SETTINGS, false, Some(Field::Density)),
-        (Side::Left, SETTINGS, false, Some(Field::HiddenFiles)),
+        (Side::Left, WIDE, false, None, None),
+        (Side::Right, WIDE, true, None, None),
+        (Side::Left, NARROW, false, None, None),
+        (Side::Left, SETTINGS, false, Some(Field::Density), None),
+        (Side::Left, SETTINGS, false, Some(Field::HiddenFiles), None),
+        (Side::Left, SETTINGS, false, None, normal),
+        (Side::Left, SETTINGS, false, None, recording),
+        (Side::Left, SETTINGS, false, None, conflict),
+        (Side::Left, SETTINGS, false, None, invalid),
     ];
-    shows.map(|(active, window_width, is_ringed, settings)| {
+    shows.map(|(active, window_width, is_ringed, settings, shortcuts)| {
         let shows = SheetShows {
             active,
             window_width,
             is_ringed,
             settings,
+            shortcuts,
         };
         cx.new(|cx| WindowPage::with_sheet(shows, cx))
     })
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 13] {
-        let [sheet, sheet_left, sheet_narrow, settings, settings_files] = &self.sheet_windows;
+    fn windows(&self) -> [&Entity<WindowPage>; 17] {
+        let [
+            sheet,
+            sheet_left,
+            sheet_narrow,
+            settings,
+            settings_files,
+            shortcuts,
+            recording,
+            conflict,
+            invalid,
+        ] = &self.sheet_windows;
         let [job, job_pill, two, two_pill] = &self.job_windows;
         [
             &self.main_window,
@@ -296,6 +321,10 @@ impl Gallery {
             sheet_narrow,
             settings,
             settings_files,
+            shortcuts,
+            recording,
+            conflict,
+            invalid,
             job,
             job_pill,
             two,
@@ -352,20 +381,7 @@ impl Render for Gallery {
                 }
             }
             Page::Tokens => root.child(tokens_page::render(&t)),
-            Page::Window
-            | Page::WindowShift
-            | Page::WindowAlt
-            | Page::WindowNarrow
-            | Page::WindowJob
-            | Page::WindowJobPill
-            | Page::WindowJobs
-            | Page::WindowJobsPill
-            | Page::AppMenu
-            | Page::Sheet
-            | Page::SheetLeft
-            | Page::SheetNarrow
-            | Page::Settings
-            | Page::SettingsFiles => root,
+            _ => root,
         }
     }
 }

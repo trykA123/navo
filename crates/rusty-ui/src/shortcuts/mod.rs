@@ -1,6 +1,8 @@
 mod model;
+mod notice;
 mod page;
 mod proposal;
+mod view;
 
 #[cfg(test)]
 mod tests;

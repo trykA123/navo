@@ -70,7 +70,10 @@ pub(super) fn overlay(base: &Keymap, text: &str) -> Result<Overlaid, UserKeymapE
     Ok(Overlaid {
         keymap: Keymap {
             binds,
-            user: Vec::new(),
+            user: user
+                .iter()
+                .map(|entry| (entry.bind.spec.name, entry.bind.context.clone()))
+                .collect(),
         },
         warnings,
     })

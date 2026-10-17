@@ -103,6 +103,11 @@ settings.show_in_file | Show in settings file | SettingsSheet
 settings.undo | Undo change | SettingsSheet
 settings.close | Close settings | SettingsSheet
 settings.cancel_edit | Cancel edit | SettingsField
+shortcuts.previous_row | Previous shortcut | Shortcuts
+shortcuts.next_row | Next shortcut | Shortcuts
+shortcuts.record | Record a new key | Shortcuts
+shortcuts.cancel | Cancel the new key | Shortcuts
+shortcuts.reset | Reset to the default key | Shortcuts
 dialog.next_field | Next field | Dialog
 dialog.previous_field | Previous field | Dialog
 dialog.next_button | Next button | DialogButton

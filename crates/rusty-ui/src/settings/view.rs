@@ -7,7 +7,7 @@ use super::steps::{first_row, rows_in};
 use super::values::{Value, Values};
 use super::{Handler, SheetEvent};
 use crate::prelude::*;
-use crate::primitives::icon;
+use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
 const NAV_WIDTH: f32 = 148.;
@@ -15,6 +15,7 @@ const NAV_ITEM: f32 = 30.;
 const MARKER: (f32, f32) = (3., 14.);
 const ROW_MIN: f32 = 48.;
 const NOT_APPLIED: &str = "Not applied yet";
+const SHORTCUTS: &str = "Shortcuts";
 
 pub(super) struct Look<'a> {
     pub theme: &'a Theme,
@@ -23,18 +24,34 @@ pub(super) struct Look<'a> {
     pub send: Option<Handler>,
 }
 
+fn send_on_click<E: StatefulInteractiveElement>(
+    element: E,
+    send: Option<&Handler>,
+    event: SheetEvent,
+) -> E {
+    let Some(send) = send.cloned() else {
+        return element;
+    };
+    element.on_click(move |_, window, cx| send(&event, window, cx))
+}
+
 fn select_on_click<E: StatefulInteractiveElement>(
     element: E,
     send: Option<&Handler>,
     row: usize,
 ) -> E {
-    let Some(send) = send.cloned() else {
-        return element;
-    };
-    element.on_click(move |_, window, cx| send(&SheetEvent::Select(row), window, cx))
+    send_on_click(element, send, SheetEvent::Select(row))
 }
 
-fn nav_item(look: &Look, index: usize, section: Section, is_on: bool) -> AnyElement {
+struct NavItem {
+    index: usize,
+    label: &'static str,
+    glyph: IconName,
+    is_on: bool,
+    event: SheetEvent,
+}
+
+fn nav_item(look: &Look, item: NavItem) -> AnyElement {
     let t = look.theme;
     let marker = div()
         .absolute()
@@ -44,16 +61,16 @@ fn nav_item(look: &Look, index: usize, section: Section, is_on: bool) -> AnyElem
         .h(px(MARKER.1))
         .rounded(t.radii.full)
         .bg(t.colors.accent);
-    let tint = if is_on {
+    let tint = if item.is_on {
         t.colors.accent_text
     } else {
         t.colors.muted
     };
-    let item = div()
-        .id(("settings-section", index))
+    let element = div()
+        .id(("settings-section", item.index))
         .role(Role::Tab)
-        .aria_label(section.label())
-        .aria_selected(is_on)
+        .aria_label(item.label)
+        .aria_selected(item.is_on)
         .test_support()
         .relative()
         .flex()
@@ -64,23 +81,38 @@ fn nav_item(look: &Look, index: usize, section: Section, is_on: bool) -> AnyElem
         .rounded(t.radii.md)
         .cursor_pointer()
         .whitespace_nowrap()
-        .hover(|item| item.bg(t.colors.hover))
-        .when(is_on, |item| {
-            item.bg(t.colors.selection)
+        .hover(|element| element.bg(t.colors.hover))
+        .when(item.is_on, |element| {
+            element
+                .bg(t.colors.selection)
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(marker)
         })
-        .child(icon(section.icon(), t.spacing.icon, tint))
-        .child(section.label());
-    select_on_click(item, look.send.as_ref(), first_row(section)).into_any_element()
+        .child(icon(item.glyph, t.spacing.icon, tint))
+        .child(item.label);
+    send_on_click(element, look.send.as_ref(), item.event).into_any_element()
 }
 
-pub(super) fn nav(look: &Look, current: Section) -> impl IntoElement + use<> {
+pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + use<> {
     let t = look.theme;
-    let items = Section::ALL
+    let sections = Section::ALL
         .iter()
         .enumerate()
-        .map(|(index, section)| nav_item(look, index, *section, *section == current));
+        .map(|(index, section)| NavItem {
+            index,
+            label: section.label(),
+            glyph: section.icon(),
+            is_on: current == Some(*section),
+            event: SheetEvent::Select(first_row(*section)),
+        });
+    let shortcuts = NavItem {
+        index: Section::ALL.len(),
+        label: SHORTCUTS,
+        glyph: IconName::Keyboard,
+        is_on: current.is_none(),
+        event: SheetEvent::Shortcuts,
+    };
+    let items = sections.chain([shortcuts]).map(|item| nav_item(look, item));
     div()
         .id("settings-nav")
         .role(Role::TabList)

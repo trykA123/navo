@@ -62,14 +62,14 @@ impl Keymap {
 
     #[must_use]
     pub fn is_user(&self, command: &str, context: &str) -> bool {
-        let _ = (command, context, &self.user);
-        todo!()
+        self.user
+            .iter()
+            .any(|(name, at)| *name == command && at == context)
     }
 
     #[must_use]
     pub fn is_changed(&self, command: &str) -> bool {
-        let _ = command;
-        todo!()
+        self.user.iter().any(|(name, _)| *name == command)
     }
 
     #[must_use]

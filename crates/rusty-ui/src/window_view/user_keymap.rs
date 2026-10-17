@@ -1,14 +1,14 @@
+use std::sync::Arc;
+
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
-
-use std::sync::Arc;
 
 use rusty_core::Location;
 
 use super::{FerriteWindow, rebind_app_keys};
-use crate::commands::Keymap;
+use crate::commands::{Keymap, active};
 use crate::prelude::*;
-use crate::shortcuts::{SaveKeymap, ShortcutsPage};
+use crate::shortcuts::SaveKeymap;
 use crate::status_bar::StatusNotice;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,6 +42,28 @@ fn no_file() -> SaveKeymap {
     Arc::new(|_| Err(NO_FILE.to_owned()))
 }
 
+pub(super) struct KeymapState {
+    notice: Option<StatusNotice>,
+    pub(super) problem: Option<SharedString>,
+    pub(super) save: SaveKeymap,
+    pub(super) file: Option<Location>,
+    #[cfg(test)]
+    applies: usize,
+}
+
+impl Default for KeymapState {
+    fn default() -> Self {
+        Self {
+            notice: None,
+            problem: None,
+            save: no_file(),
+            file: None,
+            #[cfg(test)]
+            applies: 0,
+        }
+    }
+}
+
 impl KeymapHooks {
     #[must_use]
     pub fn none() -> Self {
@@ -73,6 +95,8 @@ impl KeymapHooks {
 
 impl FerriteWindow {
     pub(super) fn listen_keymap(&mut self, hooks: KeymapHooks, cx: &mut Context<Self>) {
+        self.keymap.save = hooks.save;
+        self.keymap.file = hooks.file;
         if let Some(news) = hooks.start {
             self.take_keymap(news, cx);
         }
@@ -89,35 +113,50 @@ impl FerriteWindow {
         .detach();
     }
 
-    fn take_keymap(&mut self, news: KeymapNews, cx: &mut Context<Self>) {
-        self.keymap_notice = match news {
+    pub(super) fn take_keymap(&mut self, news: KeymapNews, cx: &mut Context<Self>) {
+        let (notice, problem) = match news {
             KeymapNews::Applied { keymap, warnings } => {
-                rebind_app_keys(keymap, cx);
-                (!warnings.is_empty()).then(|| StatusNotice {
+                self.apply_keymap(keymap, cx);
+                let notice = (!warnings.is_empty()).then(|| StatusNotice {
                     text: warnings.join(" · ").into(),
                     is_error: false,
-                })
+                });
+                (notice, None)
             }
-            KeymapNews::Invalid(message) => Some(StatusNotice {
-                text: message.into(),
-                is_error: true,
-            }),
+            KeymapNews::Invalid(message) => {
+                let message = SharedString::from(message);
+                let notice = StatusNotice {
+                    text: message.clone(),
+                    is_error: true,
+                };
+                (Some(notice), Some(message))
+            }
         };
+        self.keymap.notice = notice;
+        self.keymap.problem.clone_from(&problem);
+        self.tell_shortcuts(problem, cx);
         cx.notify();
     }
 
+    fn apply_keymap(&mut self, keymap: Keymap, cx: &mut App) {
+        if active(cx) == &keymap {
+            return;
+        }
+        rebind_app_keys(keymap, cx);
+        #[cfg(test)]
+        {
+            self.keymap.applies += 1;
+        }
+    }
+
     pub(super) fn keymap_notice(&self) -> Option<StatusNotice> {
-        self.keymap_notice.clone()
+        self.keymap.notice.clone()
     }
 }
 
 #[cfg(test)]
 impl FerriteWindow {
-    pub(super) fn shortcuts_page(&self) -> Option<Entity<ShortcutsPage>> {
-        None
-    }
-
     pub(super) fn keymap_applies(&self) -> usize {
-        0
+        self.keymap.applies
     }
 }

@@ -164,6 +164,15 @@ settings.toggle | ctrl-, | global
 settings.undo | ctrl-z | SettingsSheet
 sheet.narrower | ctrl-[ | global
 sheet.wider | ctrl-] | global
+shortcuts.cancel | escape | Shortcuts
+shortcuts.cancel | escape | Shortcuts > Input
+shortcuts.next_row | down | Shortcuts
+shortcuts.next_row | down | Shortcuts > Input
+shortcuts.previous_row | up | Shortcuts
+shortcuts.previous_row | up | Shortcuts > Input
+shortcuts.record | enter | Shortcuts
+shortcuts.record | enter | Shortcuts > Input
+shortcuts.reset | ctrl-r | Shortcuts
 tab.close | ctrl-w | FerritePane
 tab.go_to_eighth | ctrl-8 | FerritePane
 tab.go_to_fifth | ctrl-5 | FerritePane
