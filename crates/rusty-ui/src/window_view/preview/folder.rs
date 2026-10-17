@@ -3,8 +3,8 @@ use std::sync::Arc;
 use gpui_kit::ScrollHandle;
 use rusty_core::Location;
 use rusty_fs::{
-    FolderProfile, FsEntry, JobSlot, OwnerGuard, Priority, ProfileHandle, ProfileState, Provider,
-    load_folder, spawn_profile, volume_of,
+    FolderProfile, FsEntry, JobSlot, LiveHandle, LiveRequest, LiveSnapshot, OwnerGuard, Priority,
+    ProfileState, Provider, load_folder, spawn_live, volume_of,
 };
 use rusty_structured::NodeId;
 
@@ -40,7 +40,7 @@ impl FolderPreview {
     pub(super) fn stop(&mut self) -> bool {
         let had_reads = !self.reads.is_empty();
         self.reads.clear();
-        self.scan.stop() || had_reads
+        self.scan.end() || had_reads
     }
 }
 
@@ -64,21 +64,14 @@ impl Preview {
         self.ids
     }
 
-    fn scan(
-        &self,
-        provider: Arc<dyn Provider>,
-        folder: &Location,
-        ids: (u64, u64),
-    ) -> ProfileHandle {
-        let (load, run) = ids;
+    fn scan(&self, request: LiveRequest, run: u64) -> LiveHandle {
         let sink = Snapshots {
             send: self.inbox.send.clone(),
             wake: Arc::clone(&self.inbox.wake),
-            load,
             run,
             every: self.every,
         };
-        spawn_profile(&self.scans, provider, folder.clone(), sink)
+        spawn_live(&self.scans, request, sink)
     }
 
     fn read(&self, provider: Arc<dyn Provider>, request: ReadRequest) -> Read {
@@ -134,25 +127,10 @@ impl FerriteWindow {
         self.provider.clone()
     }
 
-    pub(super) fn start_folder(&mut self, target: Target) -> FolderPreview {
+    pub(super) fn start_folder(&mut self, target: Target, carried: Option<Scan>) -> FolderPreview {
         let load = self.preview.next_id();
         let contents = Contents::new(target.location.clone());
-        let cached = self
-            .browser
-            .profiles()
-            .get(&target.location, target.changed_ms());
-        let scan = match cached {
-            Some(profile) => {
-                self.show_size(&target, profile.totals.bytes);
-                Scan::cached(FolderProfile::clone(&profile))
-            }
-            None => {
-                let run = self.preview.next_id();
-                let provider = self.provider_for_preview();
-                let handle = self.preview.scan(provider, &target.location, (load, run));
-                Scan::counting(handle, run)
-            }
-        };
+        let scan = carried.unwrap_or_else(|| self.start_scan(&target));
         let reads = contents
             .root()
             .map(|(node, location)| self.read_folder(load, node, location))
@@ -171,6 +149,28 @@ impl FerriteWindow {
         }
     }
 
+    fn start_scan(&mut self, target: &Target) -> Scan {
+        let cached = self
+            .browser
+            .profiles()
+            .get(&target.location, target.changed_ms());
+        if let Some(profile) = &cached {
+            self.show_size(target, profile.totals.bytes);
+        }
+        let base = cached.map(|profile| FolderProfile::clone(&profile));
+        let run = self.preview.next_id();
+        let request = LiveRequest {
+            provider: self.provider_for_preview(),
+            folder: target.location.clone(),
+            base: base.clone(),
+        };
+        let handle = self.preview.scan(request, run);
+        match base {
+            Some(profile) => Scan::cached(profile, handle, run),
+            None => Scan::counting(handle, run),
+        }
+    }
+
     fn read_folder(&self, load: u64, node: NodeId, location: Location) -> Read {
         let request = ReadRequest {
             load,
@@ -186,9 +186,7 @@ impl FerriteWindow {
         for arrival in self.preview.inbox.take() {
             changed |= match arrival {
                 Arrival::Read { load, node, listed } => self.folder_read(load, node, listed),
-                Arrival::Snapshot { load, run, profile } => {
-                    self.profile_arrived(load, run, profile)
-                }
+                Arrival::Snapshot { run, snapshot } => self.profile_arrived(run, snapshot),
             };
         }
         changed
@@ -216,25 +214,27 @@ impl FerriteWindow {
         true
     }
 
-    fn profile_arrived(&mut self, load: u64, run: u64, profile: FolderProfile) -> bool {
-        let Some(folder) = self
-            .preview
-            .folder_mut()
-            .filter(|folder| folder.load == load)
-        else {
+    fn profile_arrived(&mut self, run: u64, snapshot: LiveSnapshot) -> bool {
+        let Some(folder) = self.preview.folder_mut() else {
             return false;
         };
-        let is_done = profile.state == ProfileState::Done;
-        if !folder.scan.accept(run, profile) {
+        let is_done = snapshot.profile.state == ProfileState::Done;
+        let is_recounting = snapshot.is_recounting;
+        if !folder.scan.accept(run, snapshot) {
             return false;
         }
         if is_done && let Some(profile) = folder.scan.profile.clone() {
             let target = folder.target.clone();
-            self.browser.profiles().put(
-                target.location.clone(),
-                target.changed_ms(),
-                profile.clone(),
-            );
+            let profiles = self.browser.profiles();
+            if is_recounting {
+                profiles.invalidate(&target.location);
+            } else {
+                profiles.put(
+                    target.location.clone(),
+                    target.changed_ms(),
+                    profile.clone(),
+                );
+            }
             self.show_size(&target, profile.totals.bytes);
         }
         true
@@ -262,22 +262,35 @@ impl FerriteWindow {
     }
 
     pub(super) fn resume_scan(&mut self, cx: &mut Context<Self>) {
-        let Some((load, location)) = self
+        let Some(location) = self
             .preview
             .folder()
             .filter(|folder| !folder.scan.is_counting())
-            .map(|folder| (folder.load, folder.target.location.clone()))
+            .map(|folder| folder.target.location.clone())
         else {
             return;
         };
         let run = self.preview.next_id();
-        let handle = self
-            .preview
-            .scan(self.provider_for_preview(), &location, (load, run));
+        let request = LiveRequest {
+            provider: self.provider_for_preview(),
+            folder: location,
+            base: None,
+        };
+        let handle = self.preview.scan(request, run);
         if let Some(folder) = self.preview.folder_mut() {
             folder.scan.resume(handle, run);
         }
         cx.notify();
+    }
+
+    pub(super) fn recount_folder(&mut self, cx: &mut Context<Self>) {
+        let is_asked = self
+            .preview
+            .folder()
+            .is_some_and(|folder| folder.scan.recount());
+        if !is_asked {
+            self.resume_scan(cx);
+        }
     }
 
     pub(super) fn toggle_contents(&mut self, index: usize, cx: &mut Context<Self>) {

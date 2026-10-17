@@ -46,6 +46,20 @@ pub fn watch_path(path: &Path) -> (Watch, Receiver<WatchEvent>) {
     (watch, events)
 }
 
+pub fn watch_tree_path(path: &Path) -> (Watch, Receiver<WatchEvent>) {
+    let (sender, events) = mpsc::channel();
+    let watch = LocalFs::new()
+        .watch_tree(
+            &location_of(path),
+            Box::new(move |event| {
+                let _ = sender.send(event);
+            }),
+        )
+        .unwrap();
+    wait_until_live(path, &events);
+    (watch, events)
+}
+
 pub fn wait_until_live(path: &Path, events: &Receiver<WatchEvent>) {
     let deadline = Instant::now() + PATIENCE;
     while Instant::now() < deadline {

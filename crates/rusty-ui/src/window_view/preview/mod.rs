@@ -13,6 +13,7 @@ mod spot;
 mod stats;
 mod summary;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{FocusHandle, Task};
@@ -63,7 +64,7 @@ pub(in crate::window_view) struct Preview {
     wait: Option<Task<()>>,
     shown: Option<Shown>,
     reads: IoQueue,
-    scans: IoQueue,
+    scans: Arc<IoQueue>,
     inbox: inbox::Inbox,
     every: Duration,
     ids: u64,
@@ -81,7 +82,7 @@ impl Preview {
             wait: None,
             shown: None,
             reads: IoQueue::new(),
-            scans: IoQueue::new(),
+            scans: Arc::new(IoQueue::new()),
             inbox: inbox::Inbox::new(wake),
             every: PROGRESS_EVERY,
             ids: 0,
@@ -147,8 +148,14 @@ impl FerriteWindow {
         if key == self.preview.seen {
             return;
         }
+        let is_same_place = matches!(
+            (&key, &self.preview.seen),
+            (Some(next), Some(seen)) if next.same_place(seen)
+        );
         self.preview.seen = key;
-        self.preview.stop_loading();
+        if !is_same_place {
+            self.preview.stop_loading();
+        }
         self.preview.wait = Some(cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(FOLLOW_AFTER).await;
             let _ = this.update_in(cx, |view, window, cx| view.show_target(window, cx));
@@ -165,16 +172,18 @@ impl FerriteWindow {
         }
         self.preview.is_stale = false;
         let was_browsing = self.preview.is_browsing(window, cx);
-        let carried = self.preview.folder().and_then(|folder| {
-            let is_same_folder = target
+        let same_folder = self.preview.folder_mut().filter(|folder| {
+            target
                 .as_ref()
-                .is_some_and(|target| target.location == folder.target.location);
-            is_same_folder.then(|| folder.carry()).flatten()
+                .is_some_and(|target| target.location == folder.target.location)
+        });
+        let (carried, scan) = same_folder.map_or((None, None), |folder| {
+            (folder.carry(), folder.scan.take_session())
         });
         let shown = match target {
             None => Shown::Empty,
             Some(target) if target.is_folder() => {
-                let mut folder = self.start_folder(target);
+                let mut folder = self.start_folder(target, scan);
                 if let Some(carry) = carried {
                     folder.adopt(carry);
                 }

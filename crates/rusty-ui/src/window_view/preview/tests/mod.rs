@@ -3,6 +3,7 @@ mod files;
 mod folders;
 mod follow;
 mod gate;
+mod live;
 mod toggle;
 
 use std::sync::Arc;

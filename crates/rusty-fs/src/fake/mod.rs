@@ -7,6 +7,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
+use crate::watch::Depth;
 use crate::{
     CancelToken, Capabilities, EntryBatch, FsEntry, ListSink, Provider, Watch, WatchChange,
     WatchSink,
@@ -98,21 +99,24 @@ impl FakeFs {
     }
 
     pub fn add_folder(&self, path: &str) {
-        let existed = self.exists(path);
+        let (existed, missing) = (self.exists(path), self.missing_folders(path));
         self.tree().add_folder(path);
+        self.announce(&missing);
         self.added(path, existed);
     }
 
     pub fn add_file(&self, path: &str, size: u64) {
-        let existed = self.exists(path);
+        let (existed, missing) = (self.exists(path), self.missing_folders(path));
         self.tree().add_file(path, size);
+        self.announce(&missing);
         self.added(path, existed);
     }
 
     pub fn add_entry(&self, folder: &str, entry: FsEntry) {
         let path = format!("{}/{}", normalize(folder), entry.name.to_text());
-        let existed = self.exists(&path);
+        let (existed, missing) = (self.exists(&path), self.missing_folders(&path));
         self.tree().insert(folder, entry);
+        self.announce(&missing);
         self.added(&path, existed);
     }
 
@@ -296,7 +300,11 @@ impl Provider for FakeFs {
     }
 
     fn watch(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
-        self.start_watch(folder, sink)
+        self.start_watch(folder, sink, Depth::Folder)
+    }
+
+    fn watch_tree(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
+        self.start_watch(folder, sink, Depth::Subtree)
     }
 }
 

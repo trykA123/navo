@@ -27,7 +27,7 @@ use windows_sys::Win32::System::Threading::{
 };
 
 use super::{io_error, notify_info};
-use crate::watch::{RawSender, Translate};
+use crate::watch::{Depth, RawSender, Translate};
 
 // Network shares reject change buffers above 64 KiB.
 const BUFFER_BYTES: u32 = 64 * 1024;
@@ -53,14 +53,20 @@ impl Drop for FolderWatch {
     }
 }
 
-pub(super) fn start(path: &Path, folder: &Location, raw: RawSender) -> io::Result<FolderWatch> {
+pub(super) fn start(
+    path: &Path,
+    folder: &Location,
+    raw: RawSender,
+    depth: Depth,
+) -> io::Result<FolderWatch> {
     let stop = Arc::new(new_event()?);
     let (path, folder, stopper) = (path.to_owned(), folder.clone(), Arc::clone(&stop));
+    let subtree = i32::from(depth == Depth::Subtree);
     let reader = std::thread::Builder::new()
         .name("folder-watch-rdcw".to_owned())
         .spawn(move || {
             if let Some(reader) = Reader::open(&path, folder, raw, stopper) {
-                reader.run();
+                reader.run(subtree);
             }
         })?;
     Ok(FolderWatch {
@@ -141,10 +147,10 @@ impl Reader {
         }
     }
 
-    fn run(self) {
+    fn run(self, subtree: i32) {
         let mut buffer = vec![0u32; BUFFER_WORDS];
         loop {
-            let delivered = match self.wait_for_changes(&mut buffer) {
+            let delivered = match self.wait_for_changes(&mut buffer, subtree) {
                 Outcome::Filled(0) | Outcome::Overflow => self.raw.overflow(),
                 Outcome::Filled(bytes) => self.send(&buffer, bytes),
                 Outcome::Stopped => return,
@@ -158,7 +164,7 @@ impl Reader {
         }
     }
 
-    fn wait_for_changes(&self, buffer: &mut [u32]) -> Outcome {
+    fn wait_for_changes(&self, buffer: &mut [u32], subtree: i32) -> Outcome {
         let directory = self.directory.as_raw_handle();
         let changed = self.changed.as_raw_handle();
         let mut overlapped = OVERLAPPED {
@@ -175,7 +181,7 @@ impl Reader {
                 directory,
                 buffer.as_mut_ptr().cast(),
                 BUFFER_BYTES,
-                0,
+                subtree,
                 FILTER,
                 ptr::null_mut(),
                 request,

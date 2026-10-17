@@ -10,7 +10,7 @@ use super::{Rig, open_fake, open_on};
 use crate::window_view::FerriteWindow;
 use crate::window_view::FileHooks;
 use crate::window_view::preview::contents::{CHILD_LIMIT, RowKind};
-use rusty_fs::{FolderProfile, ProfileState, Tally};
+use rusty_fs::{FolderProfile, ProfileState, Ranking, Tally};
 
 fn project() -> FakeFs {
     let fs = FakeFs::new();
@@ -29,6 +29,8 @@ fn done_profile() -> FolderProfile {
         kinds: Vec::new(),
         other: Tally::default(),
         largest: Vec::new(),
+        ranking: Ranking::default(),
+        counted_ms: None,
         state: ProfileState::Done,
     }
 }

@@ -8,6 +8,7 @@ use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, Provider};
 pub(super) trait Visit {
     fn file(&mut self, folder: &Location, entry: &FsEntry);
     fn batch_end(&mut self, totals: &FolderSize);
+    fn folder(&mut self, _parent: &Location, _entry: &FsEntry) {}
 }
 
 pub(super) struct Walk<'a> {
@@ -78,6 +79,7 @@ impl Folder<'_> {
         for entry in &batch.entries {
             if entry.kind == EntryKind::Folder {
                 self.totals.folders += 1;
+                self.visit.folder(self.location, entry);
                 self.children.extend(self.location.join(&entry.name).ok());
             } else {
                 self.totals.files += 1;

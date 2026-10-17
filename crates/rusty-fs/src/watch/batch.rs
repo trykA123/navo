@@ -7,14 +7,22 @@ use super::{WATCH_MAX_DELAY, WATCH_QUIET, WatchChange, WatchEvent};
 
 #[derive(Default)]
 pub(super) struct Batch {
-    changes: Vec<WatchChange>,
+    changes: Vec<Option<WatchChange>>,
     latest: HashMap<ProviderPath, usize>,
+    drops_passing: bool,
     overflowed: bool,
     first: Option<Instant>,
     last: Option<Instant>,
 }
 
 impl Batch {
+    pub(super) fn for_tree() -> Self {
+        Self {
+            drops_passing: true,
+            ..Self::default()
+        }
+    }
+
     pub(super) fn push(&mut self, change: WatchChange, now: Instant) {
         self.touch(now);
         if self.overflowed {
@@ -23,26 +31,29 @@ impl Batch {
         let Some(&at) = self.latest.get(name_of(&change)) else {
             return self.append(change);
         };
-        let earlier = &self.changes[at];
-        let is_write = matches!(change, WatchChange::Modified(_));
-        if is_write
-            && matches!(
-                earlier,
-                WatchChange::Created(_) | WatchChange::Renamed { .. }
-            )
-        {
+        let Some(earlier) = &self.changes[at] else {
+            return self.append(change);
+        };
+        let is_new = matches!(earlier, WatchChange::Created(_));
+        let was_renamed = matches!(earlier, WatchChange::Renamed { .. });
+        if matches!(change, WatchChange::Modified(_)) && (is_new || was_renamed) {
             return;
         }
-        if matches!(earlier, WatchChange::Renamed { .. }) {
+        if self.drops_passing && is_new && matches!(change, WatchChange::Removed(_)) {
+            self.latest.remove(name_of(&change));
+            self.changes[at] = None;
+            return;
+        }
+        if was_renamed {
             return self.append(change);
         }
-        self.changes[at] = change;
+        self.changes[at] = Some(change);
     }
 
     fn append(&mut self, change: WatchChange) {
         self.latest
             .insert(name_of(&change).clone(), self.changes.len());
-        self.changes.push(change);
+        self.changes.push(Some(change));
     }
 
     pub(super) fn overflow(&mut self, now: Instant) {
@@ -65,11 +76,15 @@ impl Batch {
 
     pub(super) fn take(&mut self) -> Option<WatchEvent> {
         self.first?;
-        let batch = std::mem::take(self);
+        let fresh = Self {
+            drops_passing: self.drops_passing,
+            ..Self::default()
+        };
+        let batch = std::mem::replace(self, fresh);
         Some(if batch.overflowed {
             WatchEvent::Overflow
         } else {
-            WatchEvent::Changed(batch.changes)
+            WatchEvent::Changed(batch.changes.into_iter().flatten().collect())
         })
     }
 

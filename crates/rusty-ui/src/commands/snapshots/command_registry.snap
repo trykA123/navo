@@ -37,6 +37,7 @@ preview.view | View file | PreviewBrowse
 preview.leave | Leave preview | PreviewBrowse
 preview.leave_and_switch | Leave preview, switch pane | PreviewBrowse
 preview.toggle | Show or hide preview | PreviewBrowse
+preview.recount | Recount folder | PreviewBrowse
 files.cursor_up | Up | FileList
 files.cursor_down | Down | FileList
 files.page_up | Page up | FileList

@@ -222,3 +222,34 @@ fn a_watch_is_live_only_once_its_backend_says_so() {
     raw.mark_live();
     assert!(watch.is_live());
 }
+
+#[test]
+fn a_tree_batch_drops_a_file_created_and_removed_inside_it() {
+    let start = Instant::now();
+    let mut batch = Batch::for_tree();
+    batch.push(created(r"tmp\~$report.docx"), start);
+    batch.push(modified("keep.txt"), start);
+    batch.push(modified(r"tmp\~$report.docx"), start);
+    batch.push(WatchChange::Removed(name(r"tmp\~$report.docx")), start);
+    batch.push(WatchChange::Removed(name("old.txt")), start);
+    assert_eq!(
+        batch.take(),
+        Some(WatchEvent::Changed(vec![
+            modified("keep.txt"),
+            WatchChange::Removed(name("old.txt")),
+        ]))
+    );
+}
+
+#[test]
+fn a_tree_batch_keeps_a_name_created_again_after_its_removal() {
+    let start = Instant::now();
+    let mut batch = Batch::for_tree();
+    batch.push(created("a.tmp"), start);
+    batch.push(WatchChange::Removed(name("a.tmp")), start);
+    batch.push(created("a.tmp"), start);
+    assert_eq!(
+        batch.take(),
+        Some(WatchEvent::Changed(vec![created("a.tmp")]))
+    );
+}

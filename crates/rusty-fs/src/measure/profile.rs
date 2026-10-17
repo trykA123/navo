@@ -4,7 +4,8 @@ use rusty_core::{FsErrorKind, Location};
 
 use super::FolderSize;
 use super::kinds::{Kinds, Tally};
-use super::largest::{LargeFile, Largest};
+use super::largest::{LargeFile, Largest, Ranking};
+use super::now_ms;
 use super::walk::{Visit, Walk};
 use crate::{CancelToken, FsEntry, Provider};
 
@@ -32,6 +33,8 @@ pub struct FolderProfile {
     pub kinds: Vec<(String, Tally)>,
     pub other: Tally,
     pub largest: Vec<LargeFile>,
+    pub ranking: Ranking,
+    pub counted_ms: Option<i64>,
     pub state: ProfileState,
 }
 
@@ -61,29 +64,17 @@ struct Profiler<'a> {
 impl Profiler<'_> {
     fn profile(&self, totals: FolderSize, state: ProfileState) -> FolderProfile {
         let (kinds, other) = self.kinds.snapshot();
+        let ranking = self.largest.snapshot();
         FolderProfile {
             totals,
             newest_ms: self.newest_ms,
             kinds,
             other,
-            largest: self.largest.snapshot(),
+            largest: ranking.top(),
+            ranking,
+            counted_ms: state.is_final().then(now_ms),
             state,
         }
-    }
-
-    fn relative(&self, folder: &Location, entry: &FsEntry) -> String {
-        let name = entry.name.to_text();
-        let below = folder.as_str().strip_prefix(self.root).unwrap_or_default();
-        let below = below.trim_start_matches(['\\', '/']);
-        if below.is_empty() {
-            return name;
-        }
-        let separator = if below.contains('\\') || self.root.contains('\\') {
-            '\\'
-        } else {
-            '/'
-        };
-        format!("{below}{separator}{name}")
     }
 }
 
@@ -92,7 +83,7 @@ impl Visit for Profiler<'_> {
         self.newest_ms = self.newest_ms.max(entry.modified_ms);
         self.kinds.add(&entry.name.to_text(), entry.size);
         if self.largest.admits(entry.size) {
-            let path = self.relative(folder, entry);
+            let path = relative(self.root, folder, &entry.name.to_text());
             self.largest.offer(LargeFile {
                 path,
                 bytes: entry.size,
@@ -108,6 +99,20 @@ impl Visit for Profiler<'_> {
         self.sink.snapshot(&profile);
         self.last_sent = Instant::now();
     }
+}
+
+pub(super) fn relative(root: &str, folder: &Location, name: &str) -> String {
+    let below = folder.as_str().strip_prefix(root).unwrap_or_default();
+    let below = below.trim_start_matches(['\\', '/']);
+    if below.is_empty() {
+        return name.to_owned();
+    }
+    let separator = if below.contains('\\') || root.contains('\\') {
+        '\\'
+    } else {
+        '/'
+    };
+    format!("{below}{separator}{name}")
 }
 
 pub fn folder_profile(

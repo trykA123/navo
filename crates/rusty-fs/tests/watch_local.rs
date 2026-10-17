@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use rusty_core::FsErrorKind;
 use rusty_fs::{WatchChange, WatchEvent};
-use support::{name, wait_for, wait_for_change, watched, watched_with};
+use support::{name, wait_for, wait_for_change, watch_tree_path, watched, watched_with};
 
 const BURST: usize = 2_000;
 
@@ -132,4 +132,12 @@ fn removing_the_watched_folder_fails_the_watch() {
     assert!(
         matches!(failed, Some(WatchEvent::Failed(error)) if error.kind == FsErrorKind::NotFound)
     );
+}
+
+#[test]
+fn a_tree_watch_reports_a_file_made_in_its_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_watch, events) = watch_tree_path(dir.path());
+    fs::write(dir.path().join("top.txt"), b"x").unwrap();
+    wait_for_change(&events, &WatchChange::Created(name("top.txt")));
 }

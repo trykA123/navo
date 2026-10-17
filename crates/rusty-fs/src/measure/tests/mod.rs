@@ -82,4 +82,5 @@ fn cancelling_stops_the_walk() {
 
 mod profile;
 mod props;
+mod ranking;
 mod runner;

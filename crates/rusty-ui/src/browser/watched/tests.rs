@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, CursorMove, Direction, FsErrorKind, ProviderPath, apply};
 use rusty_fs::{
-    Attributes, EntryKind, FakeFs, FakeOp, Fault, FolderProfile, FsEntry, ProfileState, Tally,
-    WatchChange, WatchEvent,
+    Attributes, EntryKind, FakeFs, FakeOp, Fault, FolderProfile, FsEntry, ProfileState, Ranking,
+    Tally, WatchChange, WatchEvent,
 };
 
 use super::recheck::Recheck;
@@ -464,6 +464,8 @@ fn done_profile() -> FolderProfile {
         kinds: Vec::new(),
         other: Tally::default(),
         largest: Vec::new(),
+        ranking: Ranking::default(),
+        counted_ms: None,
         state: ProfileState::Done,
     }
 }
