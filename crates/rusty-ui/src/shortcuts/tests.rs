@@ -149,6 +149,7 @@ fn a_key_used_in_the_same_context_is_a_conflict() {
         key: "ctrl-f5".to_owned(),
         other: spec("files.sort_by_date"),
         context: "FileList".to_owned(),
+        reach: Reach::Same,
     };
     assert_eq!(found, Some(expected));
     assert_eq!(
@@ -169,6 +170,140 @@ fn a_key_of_another_context_or_of_the_command_itself_is_free() {
         None
     );
     assert_eq!(conflict(keymap, &proposal("files.sort_by_size", &[])), None);
+}
+
+fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
+    Edit::Set {
+        command,
+        context: context.map(str::to_owned),
+        keys: keys(list),
+    }
+}
+
+const BACK_CONTEXTS: [&str; 4] = ["ViewerGoTo", "Paged", "ViewerFind", "Tree"];
+
+#[test]
+fn a_command_bound_in_several_contexts_is_recorded_in_each() {
+    let edits = edits(Keymap::builtin(), &proposal("viewer.back", &["f8"]));
+    let expected: Vec<Edit> = BACK_CONTEXTS
+        .iter()
+        .map(|&context| set_in("viewer.back", Some(context), &["f8"]))
+        .collect();
+    assert_eq!(edits, expected);
+}
+
+#[test]
+fn an_unbind_clears_every_context_of_the_command() {
+    let edits = edits(Keymap::builtin(), &proposal("viewer.back", &[]));
+    let expected: Vec<Edit> = BACK_CONTEXTS
+        .iter()
+        .map(|&context| set_in("viewer.back", Some(context), &[]))
+        .collect();
+    assert_eq!(edits, expected);
+}
+
+#[test]
+fn the_home_context_is_written_without_a_context() {
+    let edits = edits(Keymap::builtin(), &proposal("viewer.go_to_start", &["f8"]));
+    let expected = [
+        set_in("viewer.go_to_start", None, &["f8"]),
+        set_in("viewer.go_to_start", Some("Archive"), &["f8"]),
+        set_in("viewer.go_to_start", Some("Tree"), &["f8"]),
+    ];
+    assert_eq!(edits, expected);
+}
+
+#[test]
+fn a_command_bound_nowhere_is_set_in_its_home_context() {
+    let keymap = Keymap::parse("").expect("an empty keymap");
+    let edits = edits(&keymap, &proposal("viewer.back", &["f8"]));
+    assert_eq!(edits, [set_in("viewer.back", None, &["f8"])]);
+}
+
+#[test]
+fn a_key_of_any_context_the_command_is_bound_in_is_a_conflict() {
+    let found = conflict(Keymap::builtin(), &proposal("viewer.back", &["alt-left"]));
+    let expected = Conflict {
+        key: "alt-left".to_owned(),
+        other: spec("tree.collapse_branch"),
+        context: "Tree".to_owned(),
+        reach: Reach::Same,
+    };
+    assert_eq!(found, Some(expected));
+}
+
+#[test]
+fn a_key_of_an_enclosing_context_is_a_conflict_the_new_key_would_hide() {
+    let found = conflict(Keymap::builtin(), &proposal("files.sort_by_size", &["f10"]));
+    let expected = Conflict {
+        key: "f10".to_owned(),
+        other: spec("app_menu.toggle"),
+        context: "global".to_owned(),
+        reach: Reach::Outer,
+    };
+    assert_eq!(found.as_ref(), Some(&expected));
+    assert_eq!(
+        expected.message(),
+        "F10 is used by App menu — your key would hide it here. Replace?"
+    );
+    let found = conflict(
+        Keymap::builtin(),
+        &proposal("settings.toggle", &["ctrl-f5"]),
+    );
+    let reach = found.map(|found| (found.other.name, found.reach));
+    assert_eq!(reach, Some(("files.sort_by_date", Reach::Outer)));
+}
+
+#[test]
+fn a_key_of_a_nested_context_is_a_conflict_that_would_hide_the_new_key() {
+    let found = conflict(
+        Keymap::builtin(),
+        &proposal("lister.show_text", &["alt-left"]),
+    );
+    let expected = Conflict {
+        key: "alt-left".to_owned(),
+        other: spec("tree.collapse_branch"),
+        context: "Tree".to_owned(),
+        reach: Reach::Inner,
+    };
+    assert_eq!(found.as_ref(), Some(&expected));
+    assert_eq!(
+        expected.message(),
+        "Alt+Left is used by Fold branch — it would hide your key there. Replace?"
+    );
+}
+
+#[test]
+fn replacing_a_key_of_a_nested_context_takes_it_from_there() {
+    let edits = edits(
+        Keymap::builtin(),
+        &proposal("lister.show_text", &["alt-left"]),
+    );
+    let expected = [
+        set_in("lister.show_text", None, &["alt-left"]),
+        set_in("tree.collapse_branch", None, &[]),
+    ];
+    assert_eq!(edits, expected);
+}
+
+#[test]
+fn replacing_a_key_of_an_enclosing_context_leaves_it_there() {
+    let edits = edits(Keymap::builtin(), &proposal("files.sort_by_size", &["f10"]));
+    assert_eq!(edits, [set_in("files.sort_by_size", None, &["f10"])]);
+    let global = proposal("settings.toggle", &["ctrl-f5"]);
+    assert_eq!(
+        super::edits(Keymap::builtin(), &global),
+        [set_in("settings.toggle", None, &["ctrl-f5"])]
+    );
+}
+
+#[test]
+fn a_user_entry_with_the_default_keys_is_no_change() {
+    let keymap = user("[[bind]]\ncommand = \"files.copy\"\nkeys = [\"f5\"]\n");
+    assert!(!row(&rows(&keymap), "files.copy").is_changed);
+    let keymap =
+        user("[[bind]]\ncommand = \"files.copy\"\nkeys = [\"f5\"]\ncontext = \"FileList\"\n");
+    assert!(!row(&rows(&keymap), "files.copy").is_changed);
 }
 
 #[test]

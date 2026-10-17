@@ -29,7 +29,7 @@ mod offline;
 mod settings_news;
 mod settings_sheet;
 mod shell_menu;
-mod shortcuts;
+pub(in crate::window_view) mod shortcuts;
 mod tabs;
 mod typed;
 mod watched;

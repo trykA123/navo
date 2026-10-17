@@ -1,0 +1,273 @@
+---
+source: crates/rusty-ui/src/commands/tests.rs
+expression: "lines.join(\"\\n\")"
+---
+[file_list]
+files.cursor_up | up | FileList
+files.cursor_down | down | FileList
+files.page_up | pageup | FileList
+files.page_down | pagedown | FileList
+files.cursor_first | home | FileList
+files.cursor_last | end | FileList
+files.toggle_mark | space | FileList
+files.toggle_mark_down | insert | FileList
+files.open | enter | FileList
+files.open_parent | backspace | FileList
+pane.switch | tab | FileList
+files.copy | f5 | FileList
+files.move | f6 | FileList
+files.recycle | f8 | FileList
+files.recycle | delete | FileList
+files.delete | shift-delete | FileList
+files.delete | shift-f8 | FileList
+pane.go_back | alt-left | FileList
+pane.go_forward | alt-right | FileList
+files.clear_filter | escape | FileList
+files.rename | f2 | FileList
+files.rename | shift-f6 | FileList
+files.new_folder | f7 | FileList
+files.mark_pattern | + | FileList
+files.unmark_pattern | - | FileList
+files.invert_marks | * | FileList
+files.sort_by_name | ctrl-f3 | FileList
+files.sort_by_extension | ctrl-f4 | FileList
+files.sort_by_date | ctrl-f5 | FileList
+files.sort_by_size | ctrl-f6 | FileList
+files.edit | f4 | FileList
+files.edit_with | shift-f4 | FileList
+files.view | f3 | FileList
+files.refresh | ctrl-r | FileList
+files.context_menu | menu | FileList
+files.context_menu | shift-f10 | FileList
+[dialog_focus]
+dialog.next_field | tab | Dialog
+dialog.previous_field | shift-tab | Dialog
+dialog.next_button | right | DialogButton
+dialog.previous_button | left | DialogButton
+dialog.press | enter | DialogButton
+dialog.press | space | DialogButton
+dialog.next_field | tab | Dialog
+dialog.previous_field | shift-tab | Dialog
+dialog.next_button | right | DialogButton
+dialog.previous_button | left | DialogButton
+dialog.press | enter | DialogButton
+dialog.press | space | DialogButton
+[confirm_dialog]
+confirm.cancel | escape | ConfirmDialog
+[prompt_dialog]
+prompt.cancel | escape | PromptDialog
+[app_menu]
+app_menu.toggle | f10 | global
+app_menu.focus_left | left | AppMenu
+app_menu.focus_right | right | AppMenu
+app_menu.focus_up | up | AppMenu
+app_menu.focus_down | down | AppMenu
+app_menu.activate | enter | AppMenu
+app_menu.activate | space | AppMenu
+app_menu.close | escape | AppMenu
+[settings_sheet]
+settings.toggle | ctrl-, | global
+settings.row_up | up | SettingsSheet
+settings.row_down | down | SettingsSheet
+settings.previous_value | left | SettingsSheet
+settings.next_value | right | SettingsSheet
+settings.flip_value | space | SettingsSheet
+settings.next_section | tab | SettingsSheet
+settings.previous_section | shift-tab | SettingsSheet
+settings.edit_value | enter | SettingsSheet
+settings.edit_value | f2 | SettingsSheet
+settings.show_in_file | f3 | SettingsSheet
+settings.undo | ctrl-z | SettingsSheet
+settings.close | escape | SettingsSheet
+settings.cancel_edit | escape | SettingsField
+[shortcuts]
+shortcuts.previous_row | up | Shortcuts
+shortcuts.previous_row | up | Shortcuts > Input
+shortcuts.next_row | down | Shortcuts
+shortcuts.next_row | down | Shortcuts > Input
+shortcuts.record | enter | Shortcuts
+shortcuts.record | enter | Shortcuts > Input
+shortcuts.cancel | escape | Shortcuts
+shortcuts.cancel | escape | Shortcuts > Input
+shortcuts.reset | ctrl-r | Shortcuts
+[context_menu]
+context_menu.up | up | ContextMenu
+context_menu.up | up | ContextMenu > Input
+context_menu.down | down | ContextMenu
+context_menu.down | down | ContextMenu > Input
+context_menu.first | home | ContextMenu
+context_menu.first | home | ContextMenu > Input
+context_menu.last | end | ContextMenu
+context_menu.last | end | ContextMenu > Input
+context_menu.page_up | pageup | ContextMenu
+context_menu.page_up | pageup | ContextMenu > Input
+context_menu.page_down | pagedown | ContextMenu
+context_menu.page_down | pagedown | ContextMenu > Input
+context_menu.choose | enter | ContextMenu
+context_menu.choose | enter | ContextMenu > Input
+context_menu.open_submenu | right | ContextMenu
+context_menu.open_submenu | right | ContextMenu > Input
+context_menu.close_submenu | left | ContextMenu
+context_menu.close_submenu | left | ContextMenu > Input
+context_menu.back | escape | ContextMenu
+context_menu.back | escape | ContextMenu > Input
+context_menu.show_classic | shift-f10 | ContextMenu
+context_menu.show_classic | shift-f10 | ContextMenu > Input
+[viewer]
+viewer.save | ctrl-s | Viewer
+viewer.close | escape | Viewer
+viewer.edit | ctrl-e | Viewer
+viewer.show_text | alt-1 | Viewer
+viewer.show_hex | alt-3 | Viewer
+viewer.show_rich | alt-5 | Viewer
+lister.show_text | 1 | Viewer
+lister.show_hex | 3 | Viewer
+lister.show_rich | 5 | Viewer
+lister.find_next | enter | Viewer
+lister.page_or_next_image | space | Viewer
+lister.previous_image | backspace | Viewer
+viewer.next_file | n | Viewer
+viewer.previous_file | p | Viewer
+viewer.line_up | up | Viewer
+viewer.line_down | down | Viewer
+viewer.page_up | pageup | Viewer
+viewer.page_down | pagedown | Viewer
+viewer.go_to_start | ctrl-home | Viewer
+viewer.go_to_start | home | Archive
+viewer.go_to_start | home | Tree
+viewer.go_to_end | ctrl-end | Viewer
+viewer.go_to_end | end | Archive
+viewer.go_to_end | end | Tree
+viewer.scroll_left | left | Viewer
+viewer.scroll_right | right | Viewer
+viewer.go_to_line | ctrl-g | Viewer
+viewer.back | escape | ViewerGoTo
+viewer.back | escape | Paged
+viewer.back | escape | ViewerFind
+viewer.back | escape | Tree
+viewer.show_line_ends | alt-l | Viewer
+viewer.follow | alt-f | Viewer
+viewer.context_menu | menu | Viewer
+viewer.context_menu | shift-f10 | Viewer
+viewer.copy_path_line | ctrl-shift-c | Viewer
+find.open | ctrl-f | Viewer
+find.next | f3 | Viewer
+find.previous | shift-f3 | Viewer
+find.selection | ctrl-f3 | Viewer
+find.match_case | alt-c | Viewer
+mark.colour_one | ctrl-1 | Viewer
+mark.colour_two | ctrl-2 | Viewer
+mark.colour_three | ctrl-3 | Viewer
+mark.colour_four | ctrl-4 | Viewer
+mark.colour_five | ctrl-5 | Viewer
+mark.colour_six | ctrl-6 | Viewer
+mark.colour_seven | ctrl-7 | Viewer
+mark.colour_eight | ctrl-8 | Viewer
+mark.clear | ctrl-0 | Viewer
+bookmark.toggle | ctrl-f2 | Viewer
+bookmark.next | f2 | Viewer
+bookmark.previous | shift-f2 | Viewer
+editor.toggle_preview | ctrl-shift-v | Viewer
+editor.focus_preview | f6 | Viewer
+editor.leave_preview | escape | MarkdownPreview
+editor.leave_preview | f6 | MarkdownPreview
+find.older_search | up | ViewerFind > Input
+find.newer_search | down | ViewerFind > Input
+find.all | alt-enter | ViewerFind
+find.result_up | up | FindAll
+find.result_down | down | FindAll
+find.go_to_result | enter | FindAll
+find.close_results | escape | FindAll
+image.fit | 0 | Image
+image.fit | ctrl-0 | Image
+image.actual_size | 1 | Image
+image.zoom_in | + | Image
+image.zoom_in | = | Image
+image.zoom_in | shift-= | Image
+image.zoom_out | - | Image
+image.toggle_info | i | Image
+image.copy | ctrl-c | Image
+image.copy_path | ctrl-shift-c | Image
+[viewer_tree]
+tree.expand_branch | alt-right | Tree
+tree.collapse_branch | alt-left | Tree
+tree.expand_all | ctrl-shift-right | Tree
+tree.collapse_all | ctrl-shift-left | Tree
+tree.expand_branch_or_type | * | Tree
+tree.collapse_all_or_type | - | Tree
+tree.show_depth_one | ctrl-1 | Tree
+tree.show_depth_two | ctrl-2 | Tree
+tree.show_depth_three | ctrl-3 | Tree
+tree.show_depth_four | ctrl-4 | Tree
+tree.show_depth_five | ctrl-5 | Tree
+tree.show_depth_six | ctrl-6 | Tree
+tree.show_depth_seven | ctrl-7 | Tree
+tree.show_depth_eight | ctrl-8 | Tree
+tree.show_depth_nine | ctrl-9 | Tree
+tree.copy_value | ctrl-c | Tree
+tree.copy_path | ctrl-shift-c | Tree
+tree.filter_backspace | backspace | Tree
+tree.type_n | n | Tree
+tree.type_p | p | Tree
+tree.type_one | 1 | Tree
+tree.type_three | 3 | Tree
+tree.type_five | 5 | Tree
+[viewer_table]
+table.first_cell | home | Table
+table.last_cell | end | Table
+table.copy_cell | ctrl-c | Table
+table.copy_row | ctrl-shift-c | Table
+table.sort_by_column | ctrl-f3 | Table
+[viewer_markdown]
+markdown.open_link | enter | Markdown
+markdown.next_link | tab | Markdown
+markdown.previous_link | shift-tab | Markdown
+markdown.copy_block | ctrl-c | Markdown
+[drive_menu]
+drive_menu.up | up | DriveMenu
+drive_menu.down | down | DriveMenu
+drive_menu.open | enter | DriveMenu
+drive_menu.close | escape | DriveMenu
+[path_input]
+path_input.cancel | escape | PathInput
+[ferrite_tabs]
+tab.next | ctrl-tab | FerritePane
+tab.next | ctrl-pagedown | FerritePane
+tab.previous | ctrl-shift-tab | FerritePane
+tab.previous | ctrl-pageup | FerritePane
+tab.close | ctrl-w | FerritePane
+tab.go_to_first | ctrl-1 | FerritePane
+tab.go_to_second | ctrl-2 | FerritePane
+tab.go_to_third | ctrl-3 | FerritePane
+tab.go_to_fourth | ctrl-4 | FerritePane
+tab.go_to_fifth | ctrl-5 | FerritePane
+tab.go_to_sixth | ctrl-6 | FerritePane
+tab.go_to_seventh | ctrl-7 | FerritePane
+tab.go_to_eighth | ctrl-8 | FerritePane
+tab.go_to_last | ctrl-9 | FerritePane
+[side_sheet]
+sheet.narrower | ctrl-[ | global
+sheet.wider | ctrl-] | global
+[preview]
+preview.cursor_up | up | PreviewBrowse
+preview.cursor_down | down | PreviewBrowse
+preview.fold | left | PreviewBrowse
+preview.unfold | right | PreviewBrowse
+preview.open | enter | PreviewBrowse
+preview.view | f3 | PreviewBrowse
+preview.leave | escape | PreviewBrowse
+preview.leave_and_switch | tab | PreviewBrowse
+preview.toggle | ctrl-q | PreviewBrowse
+preview.recount | ctrl-r | PreviewBrowse
+[ferrite_window]
+jobs.toggle | ctrl-j | global
+tab.new | ctrl-t | FerritePane
+pane.drive_menu_first | alt-f1 | FerritePane
+pane.drive_menu_second | alt-f2 | FerritePane
+pane.edit_path | ctrl-l | FerritePane
+pane.reset_split | ctrl-shift-0 | FerritePane
+pane.toggle_preview | ctrl-q | FerritePane
+preview.browse | ctrl-shift-q | FerritePane
+pane.leave_waiting | escape | PaneWaiting
+pane.leave_waiting | backspace | PaneWaiting
+pane.retry_listing | enter | PaneWaiting

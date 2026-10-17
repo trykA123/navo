@@ -18,6 +18,7 @@ mod menu_copy;
 mod menu_kinds;
 mod moves;
 mod open;
+mod rebound;
 mod save;
 mod search;
 pub(in crate::window_view::viewer) mod structured;
@@ -212,7 +213,11 @@ pub(super) fn window_with(
     files: FileHooks,
     kinds: super::Kinds,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
-    let options = StartOptions {
+    open_options(cx, options_with(fs, files, kinds))
+}
+
+pub(super) fn options_with(fs: Arc<FakeFs>, files: FileHooks, kinds: super::Kinds) -> StartOptions {
+    StartOptions {
         state: home_beside_dest(&fs),
         provider: fs,
         on_save: std::rc::Rc::new(|_| {}),
@@ -230,8 +235,7 @@ pub(super) fn window_with(
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
-    };
-    open_options(cx, options)
+    }
 }
 
 pub(super) fn paged_window(

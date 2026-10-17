@@ -67,6 +67,11 @@ pub(super) fn overlay(base: &Keymap, text: &str) -> Result<Overlaid, UserKeymapE
         }
     }
     warnings.sort_by_key(|warning| warning.line);
+    let changed = user
+        .iter()
+        .filter(|entry| is_change(base, &entry.bind))
+        .map(|entry| entry.bind.spec.name)
+        .collect();
     Ok(Overlaid {
         keymap: Keymap {
             binds,
@@ -74,9 +79,26 @@ pub(super) fn overlay(base: &Keymap, text: &str) -> Result<Overlaid, UserKeymapE
                 .iter()
                 .map(|entry| (entry.bind.spec.name, entry.bind.context.clone()))
                 .collect(),
+            changed,
         },
         warnings,
     })
+}
+
+fn key_set(keys: &[String]) -> Vec<String> {
+    let mut set: Vec<String> = keys.iter().filter_map(|key| normal(key)).collect();
+    set.sort();
+    set.dedup();
+    set
+}
+
+fn is_change(base: &Keymap, mine: &Bind) -> bool {
+    let before = base
+        .binds
+        .iter()
+        .find(|bind| same_slot(bind, mine))
+        .map_or_else(Vec::new, |bind| key_set(&bind.keys));
+    before != key_set(&mine.keys)
 }
 
 fn validated(text: &str) -> Result<Vec<Entry>, UserKeymapError> {

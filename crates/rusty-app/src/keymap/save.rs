@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use rusty_store::{KeymapEdit, KeymapFile, KeymapFileError};
+use rusty_ui::commands::{GLOBAL, by_name};
 use rusty_ui::shortcuts::{Edit, SaveKeymap};
 
 use super::{FILE, checked};
@@ -31,6 +32,9 @@ fn change_of(edit: &Edit) -> KeymapEdit {
         } => KeymapEdit::Set {
             command: (*command).to_owned(),
             context: context.clone(),
+            home: by_name(command)
+                .map_or(GLOBAL, |spec| spec.context)
+                .to_owned(),
             keys: keys.clone(),
         },
         Edit::Reset { command } => KeymapEdit::Reset {
