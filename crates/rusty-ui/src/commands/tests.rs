@@ -47,6 +47,32 @@ fn bound(cx: &mut TestAppContext) -> Vec<Bound> {
     })
 }
 
+fn triples(cx: &mut TestAppContext) -> Vec<String> {
+    let mut lines: Vec<String> = cx.update(|cx: &mut App| {
+        crate::window_view::bind_app_keys(cx);
+        let keymap = cx.key_bindings();
+        let keymap = keymap.borrow();
+        keymap
+            .bindings()
+            .map(|binding| {
+                let name = for_action(binding.action().name()).map_or("?", |spec| spec.name);
+                let keys: Vec<String> = binding
+                    .keystrokes()
+                    .iter()
+                    .map(|key| key.inner().unparse())
+                    .collect();
+                let context = binding
+                    .predicate()
+                    .map_or_else(|| GLOBAL.to_owned(), |predicate| predicate.to_string());
+                format!("{name} | {} | {context}", keys.join(" "))
+            })
+            .collect()
+    });
+    lines.sort();
+    lines.dedup();
+    lines
+}
+
 fn ours(cx: &mut TestAppContext) -> Vec<&'static str> {
     cx.update(|cx: &mut App| {
         cx.all_action_names()
@@ -216,5 +242,13 @@ fn the_command_list_matches_the_snapshot() {
         .collect();
     insta::with_settings!({ prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!("command_registry", lines.join("\n"));
+    });
+}
+
+#[gpui_kit::test]
+fn the_bound_keys_match_the_snapshot(cx: &mut TestAppContext) {
+    let lines = triples(cx);
+    insta::with_settings!({ prepend_module_to_snapshot => false }, {
+        insta::assert_snapshot!("bound_keys", lines.join("\n"));
     });
 }
