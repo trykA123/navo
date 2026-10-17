@@ -16,6 +16,7 @@ pub(super) struct Open {
     is_cut: bool,
     text_start: usize,
     span_start: usize,
+    line: u32,
 }
 
 impl Open {
@@ -23,7 +24,7 @@ impl Open {
         kind: BlockKind,
         marker: Option<Marker>,
         (quote, list): (u8, u8),
-        (text_start, span_start): (usize, usize),
+        (text_start, span_start, line): (usize, usize, u32),
     ) -> Self {
         Self {
             kind,
@@ -34,6 +35,7 @@ impl Open {
             is_cut: false,
             text_start,
             span_start,
+            line,
         }
     }
 
@@ -173,6 +175,7 @@ impl Builder {
             text: (offset(open.text_start), offset(self.doc.text.len())),
             spans: (offset(open.span_start), offset(self.doc.spans.len())),
         });
+        self.doc.lines.push(open.line);
         Ok(())
     }
 }

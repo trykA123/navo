@@ -395,3 +395,87 @@ fn an_item_that_opens_with_a_list_keeps_both_markers() {
         ]
     );
 }
+
+type Words = [(String, bool); 2];
+
+fn column_words(doc: &Document) -> Vec<Words> {
+    (0..doc.table(0).expect("a table").widths().len())
+        .map(|column| {
+            let words = doc.column_words(0, column).expect("the words");
+            words.map(|word| (word.text.to_owned(), word.is_mono))
+        })
+        .collect()
+}
+
+fn plain(text: &str) -> Words {
+    [(text.to_owned(), false), (String::new(), true)]
+}
+
+#[test]
+fn each_table_column_knows_its_longest_plain_and_code_word() {
+    let source = "| Tier | Used for |\n| --- | --- |\n| **T1** | Moves, `formatted` edits |\n";
+    assert_eq!(
+        column_words(&doc(source)),
+        [
+            plain("Tier"),
+            [("Moves,".to_owned(), false), ("formatted".to_owned(), true)]
+        ]
+    );
+}
+
+#[test]
+fn a_short_code_word_is_kept_beside_a_longer_plain_word() {
+    let source = "| a |\n| - |\n| plainwords `mmmmmmm` |\n| `mm` x |\n";
+    assert_eq!(
+        column_words(&doc(source)),
+        [[
+            ("plainwords".to_owned(), false),
+            ("mmmmmmm".to_owned(), true)
+        ]]
+    );
+}
+
+#[test]
+fn a_column_word_is_cut_to_40_characters() {
+    let long = "x".repeat(100);
+    let source = format!("| a |\n| - |\n| {long} |\n");
+    assert_eq!(column_words(&doc(&source)), [plain(&"x".repeat(40))]);
+}
+
+#[test]
+fn an_empty_column_has_empty_words() {
+    assert_eq!(
+        column_words(&doc("| a | |\n| - | - |\n")),
+        [plain("a"), plain("")]
+    );
+}
+
+#[test]
+fn every_block_knows_the_source_line_it_starts_on() {
+    let source = "# A\n\npara\nline two\n\n- item\n\n| a |\n|---|\n| b |\n\n```\ncode\n```\n";
+    let doc = doc(source);
+    let lines: Vec<Option<u32>> = (0..doc.blocks().len()).map(|at| doc.line(at)).collect();
+    assert_eq!(
+        lines,
+        [Some(0), Some(2), Some(5), Some(7), Some(9), Some(11)]
+    );
+}
+
+#[test]
+fn a_source_line_maps_to_the_block_that_holds_it() {
+    let doc = doc("# A\r\n\r\npara\r\nline two\r\n\r\n- item\r\n");
+    let found: Vec<Option<usize>> = (0..7).map(|line| doc.block_at_line(line)).collect();
+    assert_eq!(
+        found,
+        [
+            Some(0),
+            Some(0),
+            Some(1),
+            Some(1),
+            Some(1),
+            Some(2),
+            Some(2)
+        ]
+    );
+    assert_eq!(super::parse("").expect("empty").block_at_line(3), None);
+}

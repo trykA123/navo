@@ -1,6 +1,7 @@
 mod block;
 mod copy;
 mod links;
+mod preview;
 mod runs;
 mod table;
 
@@ -18,10 +19,11 @@ use rusty_structured::markdown::Document;
 use super::background::{Job, spawn_job};
 use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
 use super::rich_header::{HeaderParts, header};
-use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
+use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ScrollLeft, ScrollRight};
 use crate::prelude::*;
 use crate::tokens;
 use block::{Page, draw_block};
+use table::TableScrolls;
 
 const CONTEXT: &str = "Markdown";
 const LINE_STEP: f32 = 3.;
@@ -68,6 +70,8 @@ pub(super) struct MarkdownView {
     menu_block: Option<usize>,
     note: Option<SharedString>,
     checking: Option<Job>,
+    tables: Rc<TableScrolls>,
+    is_preview: bool,
     #[cfg(test)]
     drawn: Rc<std::cell::Cell<usize>>,
 }
@@ -90,6 +94,8 @@ impl MarkdownView {
             menu_block: None,
             note,
             checking: None,
+            tables: Rc::default(),
+            is_preview: false,
             #[cfg(test)]
             drawn: Rc::default(),
         }
@@ -105,8 +111,15 @@ impl MarkdownView {
         Some(SharedString::from(target.to_owned()))
     }
 
-    pub(super) fn click_link(&mut self, link: u32, opens: bool, cx: &mut Context<Self>) {
+    fn pick(&mut self, link: u32) {
         self.picked = Some(link);
+        if self.is_preview {
+            self.note = None;
+        }
+    }
+
+    pub(super) fn click_link(&mut self, link: u32, opens: bool, cx: &mut Context<Self>) {
+        self.pick(link);
         self.pointed = Some(link);
         if opens {
             self.follow_picked(cx);
@@ -170,7 +183,7 @@ impl MarkdownView {
             (Some(at), false) => (at + 1) % count,
             (Some(at), true) => at.checked_sub(1).unwrap_or(count - 1),
         };
-        self.picked = Some(next);
+        self.pick(next);
         if let Some(link) = self.doc.link(next) {
             self.list.scroll_to_reveal_item(link.block());
         }
@@ -179,6 +192,11 @@ impl MarkdownView {
 
     fn scroll_by(&mut self, distance: Pixels, cx: &mut Context<Self>) {
         self.list.scroll_by(distance);
+        cx.notify();
+    }
+
+    fn scroll_tables(&mut self, distance: Pixels, cx: &mut Context<Self>) {
+        self.tables.scroll_by(distance);
         cx.notify();
     }
 
@@ -201,6 +219,12 @@ impl MarkdownView {
             .on_action(cx.listener(|view, _: &PageDown, window, cx| {
                 view.scroll_by(window.viewport_size().height * 0.8, cx);
             }))
+            .on_action(cx.listener(move |view, _: &ScrollLeft, _, cx| {
+                view.scroll_tables(-line, cx);
+            }))
+            .on_action(cx.listener(move |view, _: &ScrollRight, _, cx| {
+                view.scroll_tables(line, cx);
+            }))
             .on_action(cx.listener(|view, _: &GoStart, _, cx| view.scroll_to(false, cx)))
             .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.scroll_to(true, cx)))
             .on_action(cx.listener(|view, _: &OpenLink, _, cx| view.follow_picked(cx)))
@@ -222,10 +246,10 @@ impl MarkdownView {
     fn blocks(&self, page: Page) -> impl IntoElement {
         #[cfg(test)]
         let drawn = self.drawn.clone();
-        list(self.list.clone(), move |index, _, _| {
+        list(self.list.clone(), move |index, window, _| {
             #[cfg(test)]
             drawn.set(drawn.get() + 1);
-            draw_block(&page, index)
+            draw_block(&page, index, window)
         })
         .size_full()
     }
@@ -250,6 +274,7 @@ impl Render for MarkdownView {
             doc: self.doc.clone(),
             picked: self.picked,
             view: cx.weak_entity(),
+            tables: self.tables.clone(),
         };
         let root = div()
             .id("markdown")
@@ -265,7 +290,7 @@ impl Render for MarkdownView {
             .text_color(t.colors.text)
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
-            .child(header(&t, parts))
+            .when(!self.is_preview, |root| root.child(header(&t, parts)))
             .child(
                 div()
                     .id("markdown-body")
@@ -292,9 +317,7 @@ impl MarkdownBody {
 
     #[cfg(test)]
     pub(super) fn rendered(&self, cx: &App) -> String {
-        let doc = &self.0.read(cx).doc;
-        let texts: Vec<&str> = doc.blocks().iter().map(|block| doc.text(block)).collect();
-        texts.join("\n")
+        self.0.read(cx).rendered()
     }
 
     #[cfg(test)]

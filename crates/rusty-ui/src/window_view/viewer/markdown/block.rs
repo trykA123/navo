@@ -7,13 +7,18 @@ use rusty_structured::markdown::{Block, BlockKind, Document, Marker};
 
 use super::MarkdownView;
 use super::runs::{RunLook, Runs, runs};
-use super::table::table_row;
+use super::table::{TableScrolls, table_row};
 use crate::prelude::*;
 use crate::primitives::icon;
 use crate::tokens::Theme;
 
 const HEADING_SCALE: [f32; 6] = [1.75, 1.45, 1.2, 1.05, 1., 1.];
 const RULE_HEIGHT: f32 = 1.;
+const TEXT_COLUMN: f32 = 3.5;
+
+pub(super) fn text_column(t: &Theme) -> Pixels {
+    t.spacing.rail_width * TEXT_COLUMN
+}
 
 #[derive(Clone)]
 pub(super) struct Page {
@@ -21,6 +26,7 @@ pub(super) struct Page {
     pub doc: Rc<Document>,
     pub picked: Option<u32>,
     pub view: WeakEntity<MarkdownView>,
+    pub tables: Rc<TableScrolls>,
 }
 
 pub(super) fn text_element(page: &Page, id: (&'static str, usize), shown: Runs) -> AnyElement {
@@ -135,11 +141,13 @@ fn heading(page: &Page, block: &Block, level: u8, index: usize) -> AnyElement {
         .into_any_element()
 }
 
-fn content(page: &Page, block: &Block, index: usize) -> AnyElement {
+fn content(page: &Page, block: &Block, (index, window): (usize, &Window)) -> AnyElement {
     match block.kind {
         BlockKind::Heading(level) => heading(page, block, level, index),
         BlockKind::Code { .. } | BlockKind::Html => code(page, block, index),
-        BlockKind::Row { table, is_head } => table_row(page, block, (table, is_head), index),
+        BlockKind::Row { table, is_head } => {
+            table_row(page, block, (table, is_head), (index, window))
+        }
         BlockKind::Rule => div()
             .w_full()
             .my(page.t.spacing.md)
@@ -220,7 +228,7 @@ fn gap(t: &Theme, doc: &Document, index: usize, block: &Block) -> Pixels {
     }
 }
 
-pub(super) fn draw_block(page: &Page, index: usize) -> AnyElement {
+pub(super) fn draw_block(page: &Page, index: usize, window: &Window) -> AnyElement {
     let Some(block) = page.doc.blocks().get(index).copied() else {
         return div().into_any_element();
     };
@@ -237,7 +245,12 @@ pub(super) fn draw_block(page: &Page, index: usize) -> AnyElement {
         .w_full()
         .pl(indent.max(px(0.)))
         .children(marker)
-        .child(div().flex_1().min_w_0().child(content(page, &block, index)));
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(content(page, &block, (index, window))),
+        );
     let is_end = index + 1 == page.doc.blocks().len();
     let view = page.view.clone();
     div()
@@ -254,7 +267,9 @@ pub(super) fn draw_block(page: &Page, index: usize) -> AnyElement {
         .child(
             div()
                 .w_full()
-                .max_w(t.spacing.rail_width * 3.5)
+                .when(!matches!(block.kind, BlockKind::Row { .. }), |column| {
+                    column.max_w(text_column(t))
+                })
                 .px(t.spacing.xxl)
                 .child(quoted(t, block.quote, body)),
         )

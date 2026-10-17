@@ -1,8 +1,9 @@
+use super::markdown::markdown_extension;
 use super::{EDIT_LIMIT, Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::languages::detect;
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
-use crate::window_view::viewer::editor::{EditorBody, EditorFile};
+use crate::window_view::viewer::editor::{EditorBody, EditorFile, SplitChoice};
 use crate::window_view::viewer::paged::PagedBody;
 use crate::window_view::viewer::{Paged, PagedKind};
 
@@ -57,6 +58,10 @@ impl ViewerKind for Text {
             TextLoad::Editor(EditorFile {
                 file: (hooks.read)(location)?,
                 language: detect(sniff.name, sniff.head),
+                split: markdown_extension(sniff.name).map(|extension| SplitChoice {
+                    is_shown: (hooks.split)(&extension).unwrap_or(true),
+                    extension,
+                }),
             })
         } else {
             TextLoad::Paged((hooks.paged)(location)?)

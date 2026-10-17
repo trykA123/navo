@@ -46,7 +46,7 @@ fn logged(setup: Setup, log: &Reads) -> FileHooks {
     }
 }
 
-fn fake_with(name: &str, len: u64) -> Arc<FakeFs> {
+pub(in crate::window_view::viewer) fn fake_with(name: &str, len: u64) -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home/docs");
     fs.add_file(&format!("home/{name}"), len);

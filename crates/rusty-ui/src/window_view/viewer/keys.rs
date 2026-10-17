@@ -1,5 +1,6 @@
 use gpui_kit::KeyBinding;
 
+use super::editor::PREVIEW_CONTEXT;
 use super::search::{FIND_ALL_CONTEXT, FIND_CONTEXT, GO_TO_CONTEXT};
 use super::{CONTEXT, IMAGE_CONTEXT, PAGED_CONTEXT, archive, markdown, table, tree};
 use crate::prelude::*;
@@ -66,6 +67,9 @@ gpui_kit::actions!(
         CopyPathLine,
         CopyFilePath,
         CopyImage,
+        TogglePreview,
+        FocusPreview,
+        LeavePreview,
     ]
 );
 
@@ -103,6 +107,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-f10", ShowMenu, context),
         KeyBinding::new("ctrl-f3", FindSelection, context),
         KeyBinding::new("ctrl-shift-c", CopyPathLine, context),
+        KeyBinding::new("ctrl-shift-v", TogglePreview, context),
+        KeyBinding::new("f6", FocusPreview, context),
+        KeyBinding::new("escape", LeavePreview, Some(PREVIEW_CONTEXT)),
+        KeyBinding::new("f6", LeavePreview, Some(PREVIEW_CONTEXT)),
         KeyBinding::new("escape", Back, Some(GO_TO_CONTEXT)),
         KeyBinding::new("escape", Back, Some(PAGED_CONTEXT)),
         KeyBinding::new("home", GoStart, Some(archive::CONTEXT)),

@@ -9,6 +9,8 @@ mod kind;
 mod language;
 mod lister;
 mod markdown;
+mod markdown_split;
+mod markdown_table;
 mod marks;
 mod memory;
 mod menu;

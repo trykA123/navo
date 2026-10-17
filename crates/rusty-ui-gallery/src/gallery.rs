@@ -63,6 +63,7 @@ pub struct Gallery {
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
+    markdown_preview: Option<Box<dyn ViewerBody>>,
     archive: Entity<ArchiveView>,
     font: Option<Entity<FontView>>,
     marks: Option<Entity<PagedView>>,
@@ -95,6 +96,7 @@ impl Gallery {
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
+            markdown_preview: structured::editing(MARKDOWN_NAME, MARKDOWN, window, cx),
             archive: rich_sample::archive_view(cx),
             font: rich_sample::font_view(cx),
             marks: None,
@@ -134,6 +136,7 @@ impl Gallery {
             Page::Tree => self.tree.as_deref(),
             Page::Table => self.table.as_deref(),
             Page::Markdown => self.markdown.as_deref(),
+            Page::MarkdownPreview => self.markdown_preview.as_deref(),
             _ => None,
         }
     }
@@ -338,14 +341,16 @@ impl Render for Gallery {
             }
             Page::ViewerMenuText | Page::ViewerMenuTree => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
-            Page::Tree | Page::Table | Page::Markdown => match self.sample() {
-                Some(body) => root
-                    .child(body.view())
-                    .when(self.page == Page::Tree, |root| {
-                        root.child(sample_keys(body, cx))
-                    }),
-                None => root.child("This sample did not load."),
-            },
+            Page::Tree | Page::Table | Page::Markdown | Page::MarkdownPreview => {
+                match self.sample() {
+                    Some(body) => root
+                        .child(body.view())
+                        .when(self.page == Page::Tree, |root| {
+                            root.child(sample_keys(body, cx))
+                        }),
+                    None => root.child("This sample did not load."),
+                }
+            }
             Page::Tokens => root.child(tokens_page::render(&t)),
             Page::Window
             | Page::WindowShift

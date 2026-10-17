@@ -1,6 +1,7 @@
 mod block;
 mod build;
 mod scan;
+mod table;
 mod text;
 
 use std::fmt;
@@ -131,10 +132,23 @@ pub enum Align {
     Right,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct WordSpot {
+    text: (u32, u32),
+    chars: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColumnWord<'a> {
+    pub text: &'a str,
+    pub is_mono: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Table {
     alignments: Vec<Align>,
     widths: Vec<u16>,
+    words: Vec<[WordSpot; 2]>,
 }
 
 impl Table {
@@ -176,6 +190,7 @@ pub struct Document {
     tables: Vec<Table>,
     labels: Vec<Box<str>>,
     notes: Vec<&'static str>,
+    lines: Vec<u32>,
 }
 
 fn range((start, end): (u32, u32)) -> Range<usize> {
@@ -219,6 +234,32 @@ impl Document {
     }
 
     #[must_use]
+    pub fn table_count(&self) -> usize {
+        self.tables.len()
+    }
+
+    #[must_use]
+    pub fn column_words(&self, table: u32, column: usize) -> Option<[ColumnWord<'_>; 2]> {
+        let [plain, code] = self.table(table)?.words.get(column)?;
+        let word = |spot: &WordSpot, is_mono| ColumnWord {
+            text: self.text.get(range(spot.text)).unwrap_or_default(),
+            is_mono,
+        };
+        Some([word(plain, false), word(code, true)])
+    }
+
+    #[must_use]
+    pub fn line(&self, block: usize) -> Option<u32> {
+        self.lines.get(block).copied()
+    }
+
+    #[must_use]
+    pub fn block_at_line(&self, line: u32) -> Option<usize> {
+        let after = self.lines.partition_point(|start| *start <= line);
+        (!self.lines.is_empty()).then(|| after.saturating_sub(1))
+    }
+
+    #[must_use]
     pub fn label(&self, id: u32) -> Option<&str> {
         self.labels.get(id as usize).map(AsRef::as_ref)
     }
@@ -234,7 +275,11 @@ impl Document {
         let tables: usize = self
             .tables
             .iter()
-            .map(|table| table.alignments.capacity() + table.widths.capacity() * 2)
+            .map(|table| {
+                table.alignments.capacity()
+                    + table.widths.capacity() * 2
+                    + table.words.capacity() * size_of::<[WordSpot; 2]>()
+            })
             .sum();
         let labels: usize = self.labels.iter().map(|label| label.len()).sum();
         self.text.capacity()
@@ -243,6 +288,7 @@ impl Document {
             + self.links.capacity() * size_of::<Link>()
             + self.tables.capacity() * size_of::<Table>()
             + self.labels.capacity() * size_of::<Box<str>>()
+            + self.lines.capacity() * size_of::<u32>()
             + links
             + tables
             + labels
