@@ -7,7 +7,7 @@ const NAMES: [&str; 10] = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9",
 
 const PREFIXES: [&str; 4] = ["", "shift-", "ctrl-", "alt-"];
 
-const SLOTS: [(&str, &str); 16] = [
+const SLOTS: [(&str, &str); 17] = [
     ("files.rename", "Rename"),
     ("files.view", "View"),
     ("files.edit", "Edit"),
@@ -24,12 +24,16 @@ const SLOTS: [(&str, &str); 16] = [
     ("files.sort_by_size", "By size"),
     ("pane.drive_menu_first", "Left drive"),
     ("pane.drive_menu_second", "Right drive"),
+    ("files.context_menu", "Context"),
 ];
 
-// F9 has no command yet; its cap is reserved for the drawer.
-const RESERVED: [(&str, &str); 1] = [("f9", "Drawer")];
+const SETTINGS_SLOTS: [(&str, &str); 3] = [
+    ("settings.edit_value", "Edit value"),
+    ("settings.show_in_file", "TOML line"),
+    ("app_menu.toggle", "Menu"),
+];
 
-type Labels = [[&'static str; 4]; 10];
+pub type Labels = [[&'static str; 4]; 10];
 
 fn cell_of(key: &str) -> Option<(usize, usize)> {
     let normal = normal_key(key)?;
@@ -61,25 +65,35 @@ fn layer_slot(layer: Option<KeyLayer>) -> usize {
     }
 }
 
-#[must_use]
-pub fn key_labels_in(keymap: &Keymap) -> Labels {
+fn labels_of(keymap: &Keymap, slots: &[(&str, &'static str)]) -> Labels {
     let mut labels = [[""; 4]; 10];
-    for (command, label) in SLOTS {
+    for &(command, label) in slots {
         for key in keymap.keys_of(command) {
             place(&mut labels, key, label);
         }
-    }
-    for (key, label) in RESERVED {
-        place(&mut labels, key, label);
     }
     labels
 }
 
 #[must_use]
-pub fn layer_keys_in(keymap: &Keymap, layer: Option<KeyLayer>) -> [FKey; 10] {
-    let labels = key_labels_in(keymap);
+pub fn key_labels_in(keymap: &Keymap) -> Labels {
+    labels_of(keymap, &SLOTS)
+}
+
+#[must_use]
+pub fn settings_labels_in(keymap: &Keymap) -> Labels {
+    labels_of(keymap, &SETTINGS_SLOTS)
+}
+
+#[must_use]
+pub fn keys_in_layer(labels: &Labels, layer: Option<KeyLayer>) -> [FKey; 10] {
     let slot = layer_slot(layer);
     std::array::from_fn(|index| (NAMES[index], labels[index][slot]))
+}
+
+#[must_use]
+pub fn layer_keys_in(keymap: &Keymap, layer: Option<KeyLayer>) -> [FKey; 10] {
+    keys_in_layer(&key_labels_in(keymap), layer)
 }
 
 #[must_use]

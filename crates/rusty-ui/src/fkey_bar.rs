@@ -7,6 +7,7 @@ use gpui_kit::{
 };
 
 use crate::FluentBuilder as _;
+use crate::job_card::PillFit;
 use crate::primitives::{IconName, Tooltip, icon};
 use crate::tokens::{self, Motion, Theme};
 
@@ -14,7 +15,6 @@ const KEY_HEIGHT: f32 = 24.;
 const CHIP_HEIGHT: f32 = 18.;
 const CHIP_WIDTH: f32 = 24.;
 const LABEL_RISE: f32 = 4.;
-const PILL_SLOT: f32 = 220.;
 const DIMMED: f32 = 0.45;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -115,7 +115,7 @@ impl FKeyBar {
 
     #[must_use]
     pub fn reserve_pill(self) -> Self {
-        self.reserve_pill_width(px(PILL_SLOT))
+        self.reserve_pill_width(PillFit::Full.slot_width())
     }
 
     #[must_use]

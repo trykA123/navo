@@ -45,6 +45,17 @@ fn at_1100_px_and_below_the_sheet_takes_the_passive_card_width() {
 }
 
 #[test]
+fn a_sheet_covering_the_passive_card_takes_its_width_and_still_resizes() {
+    let covering = SheetFrame::new(px(1264.), px(620.), Side::Left).covering_passive_card();
+    assert!(!covering.is_narrow());
+    let mut state = SheetState::new();
+    assert_eq!(state.width(&covering), px(620.));
+    state.step(Step::Narrower, &covering);
+    assert_eq!(state.width(&covering), px(572.));
+    assert_eq!(covering.width(px(5000.)), px(1264. - 360.));
+}
+
+#[test]
 fn keyboard_steps_move_48_px_and_stop_at_the_clamps() {
     let wide = frame(1440., Side::Left);
     let mut state = SheetState::new();

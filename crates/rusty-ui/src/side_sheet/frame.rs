@@ -27,6 +27,7 @@ pub struct SheetFrame {
     pub body: Pixels,
     pub passive_card: Pixels,
     pub active: Side,
+    pub covers_passive_card: bool,
 }
 
 impl SheetFrame {
@@ -35,6 +36,15 @@ impl SheetFrame {
             body,
             passive_card,
             active,
+            covers_passive_card: false,
+        }
+    }
+
+    #[must_use]
+    pub fn covering_passive_card(self) -> Self {
+        Self {
+            covers_passive_card: true,
+            ..self
         }
     }
 
@@ -47,7 +57,7 @@ impl SheetFrame {
     }
 
     pub fn base_width(&self) -> Pixels {
-        if self.is_narrow() {
+        if self.is_narrow() || self.covers_passive_card {
             self.passive_card
         } else {
             (self.body * SHARE).round()

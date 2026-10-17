@@ -38,6 +38,7 @@ impl FerriteWindow {
             .min_h_0()
             .px(t.spacing.xs)
             .child(body)
+            .children(self.job_card_layer(cx))
             .children(self.preview_layer(window, cx))
             .children(self.settings_layer(window, cx))
     }

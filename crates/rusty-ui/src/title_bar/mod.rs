@@ -11,7 +11,8 @@ use gpui_kit::component::TitleBar;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, ClickEvent, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, TitlebarOptions, Window, WindowOptions, div, px, transparent_black,
+    SharedString, Styled, TitlebarOptions, Window, WindowBackgroundAppearance, WindowOptions, div,
+    px, transparent_black,
 };
 
 use crate::tokens::{self, Theme};
@@ -29,6 +30,21 @@ pub fn window_options(title: impl Into<SharedString>) -> WindowOptions {
             ..TitleBar::title_bar_options()
         }),
         ..TitleBar::window_options()
+    }
+}
+
+#[cfg(windows)]
+const BACKDROP: WindowBackgroundAppearance = WindowBackgroundAppearance::MicaBackdrop;
+#[cfg(not(windows))]
+const BACKDROP: WindowBackgroundAppearance = WindowBackgroundAppearance::Opaque;
+
+pub(crate) const HAS_SYSTEM_MICA: bool =
+    matches!(BACKDROP, WindowBackgroundAppearance::MicaBackdrop);
+
+pub(crate) fn main_window_options(title: impl Into<SharedString>) -> WindowOptions {
+    WindowOptions {
+        window_background: BACKDROP,
+        ..window_options(title)
     }
 }
 

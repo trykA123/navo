@@ -26,6 +26,7 @@ mod fkeys;
 mod jobs;
 mod keymap;
 mod offline;
+mod settings_layer;
 mod settings_news;
 mod settings_sheet;
 mod shell_menu;

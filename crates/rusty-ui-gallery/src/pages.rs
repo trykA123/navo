@@ -24,6 +24,7 @@ pub enum Page {
     Tokens,
     Window,
     WindowShift,
+    WindowCtrl,
     WindowAlt,
     WindowNarrow,
     WindowJob,
@@ -58,7 +59,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 40] = [
+pub const PAGES: [PageInfo; 41] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -101,6 +102,12 @@ pub const PAGES: [PageInfo; 40] = [
         Page::WindowShift,
         "Window, Shift held",
         "p19-fkeys-shift",
+        false,
+    ),
+    info(
+        Page::WindowCtrl,
+        "Window, Ctrl held",
+        "p19-fkeys-ctrl",
         false,
     ),
     info(Page::WindowAlt, "Window, Alt held", "p19-fkeys-alt", false),
