@@ -101,7 +101,7 @@ impl FerriteWindow {
             .child(list)
             .child(
                 StatusBar::new(("status", pane.get()), status)
-                    .notice(self.keymap_notice().filter(|_| is_active)),
+                    .notice(self.status_notice().filter(|_| is_active)),
             );
         pane_card(("pane", pane.get()), label, is_active, cx)
             .child(body)

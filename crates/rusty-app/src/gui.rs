@@ -48,7 +48,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
             }
         }
     });
-    let started = settings_start.finish();
+    let (settings, _settings_watch) = settings::live(settings_start.finish().loaded);
     tracing::info!(viewer = view.is_some(), "window opening");
     run(StartOptions {
         state,
@@ -62,7 +62,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
         kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
         app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
-        settings: settings::hooks(started.loaded),
+        settings,
         keymap,
         view: view.and_then(|path| view_location(&path)),
         listing_cache: cache,

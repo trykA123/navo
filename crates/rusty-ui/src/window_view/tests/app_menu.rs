@@ -10,7 +10,7 @@ use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::browser::Operations;
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
-use crate::window_view::{AppMenuHooks, SaveReport, SettingsHooks};
+use crate::window_view::{AppMenuHooks, SaveReport, SettingsHooks, SettingsSender};
 
 pub(super) fn values_of(settings: QuickSettings) -> Values {
     Values::default()
@@ -72,6 +72,7 @@ pub(super) struct Rig {
     pub window: AnyWindowHandle,
     pub view: Entity<FerriteWindow>,
     pub store: Arc<FakeStore>,
+    pub news: SettingsSender,
     sessions: Rc<Cell<usize>>,
 }
 
@@ -130,6 +131,13 @@ pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option
     });
     let sessions: Rc<Cell<usize>> = Rc::default();
     let (fake_store, count) = (store.clone(), sessions.clone());
+    let (settings, news) = SettingsHooks {
+        values,
+        load_error: load_error.map(Into::into),
+        save: Arc::new(move |changes| fake_store.save(changes)),
+        ..SettingsHooks::none()
+    }
+    .channel();
     let options = StartOptions {
         state,
         provider: fs,
@@ -148,12 +156,7 @@ pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option
                 folder: r"C:\Ferrite".into(),
             },
         },
-        settings: SettingsHooks {
-            values,
-            load_error: load_error.map(Into::into),
-            save: Arc::new(move |changes| fake_store.save(changes)),
-            ..SettingsHooks::none()
-        },
+        settings,
         keymap: crate::window_view::KeymapHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
@@ -165,6 +168,7 @@ pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option
         window,
         view,
         store,
+        news,
         sessions,
     }
 }

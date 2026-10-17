@@ -11,6 +11,7 @@ mod pane;
 mod path_edit;
 mod preview;
 mod prompt;
+mod settings_news;
 mod settings_save;
 mod settings_sheet;
 mod shell_menu;
@@ -49,6 +50,7 @@ pub use fkeys::{
 };
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
+pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
@@ -196,7 +198,7 @@ impl FerriteWindow {
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
         view.apply_theme(window, cx);
-        view.listen_keymap(options.keymap, cx);
+        view.listen_files(options.keymap, window, cx);
         Self::after_open(options.view, window, cx);
         view
     }
