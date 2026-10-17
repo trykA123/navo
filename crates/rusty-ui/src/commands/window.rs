@@ -96,7 +96,7 @@ pub(super) const GROUPS: [Group; 7] = [
             ("preview::BrowseUnfold", "preview.unfold", "Unfold folder"),
             ("preview::BrowseOpen", "preview.open", "Open"),
             ("preview::BrowseView", "preview.view", "View file"),
-            ("preview::LeaveBrowse", "preview.leave", "Leave preview"),
+            ("preview::LeaveBrowse", "preview.leave", "Close preview"),
             (
                 "preview::LeaveAndSwitch",
                 "preview.leave_and_switch",

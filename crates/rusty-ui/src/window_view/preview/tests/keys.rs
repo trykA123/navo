@@ -2,7 +2,6 @@ use gpui_kit::AppContext as _;
 use std::sync::Arc;
 
 use gpui_kit::TestAppContext;
-use gpui_kit::test::TestWindowExt;
 use rusty_fs::FakeFs;
 
 use super::{Rig, open_fake};
@@ -112,9 +111,7 @@ fn f3_without_a_row_under_the_cursor_does_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn escape_in_browse_mode_closes_the_sheet_and_returns_focus_to_the_list(
-    cx: &mut TestAppContext,
-) {
+fn escape_in_browse_mode_closes_the_sheet_and_returns_focus_to_the_list(cx: &mut TestAppContext) {
     let (rig, _) = rig_on(cx, project());
     rig.open(cx);
     assert!(rig.wait_until(cx, is_done));

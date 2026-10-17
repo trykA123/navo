@@ -60,6 +60,36 @@ impl FerriteWindow {
         self.enter_browse(window, cx);
     }
 
+    pub(in crate::window_view) fn view_or_preview(
+        &mut self,
+        row: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self
+            .cursor_target()
+            .is_some_and(|target| target.is_folder())
+        {
+            self.view_row(row, window, cx);
+            return true;
+        }
+        if !self.preview.is_open {
+            self.open_preview(window, cx);
+            return true;
+        }
+        self.show_target(window, cx);
+        self.enter_browse(window, cx);
+        false
+    }
+
+    pub(in crate::window_view) fn escape_preview(&mut self, cx: &mut Context<Self>) {
+        if self.stop_scan(cx) || !self.preview.is_open {
+            return;
+        }
+        self.close_preview(cx);
+        cx.notify();
+    }
+
     fn enter_browse(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(folder) = self.preview.folder_mut() {
             folder.want_spot();
@@ -151,6 +181,7 @@ impl FerriteWindow {
                 this.browse_view(window, cx);
             }))
             .on_action(cx.listener(|this, _: &LeaveBrowse, window, cx| {
+                this.close_preview(cx);
                 this.leave_browse(window, cx);
             }))
             .on_action(cx.listener(|this, _: &LeaveAndSwitch, window, cx| {
