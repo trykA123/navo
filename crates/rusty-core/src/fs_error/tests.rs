@@ -17,7 +17,7 @@ const ALL_KINDS: [FsErrorKind; 11] = [
     Unknown,
 ];
 
-const WINDOWS_CODES: [(u32, FsErrorKind); 22] = [
+const WINDOWS_CODES: [(u32, FsErrorKind); 27] = [
     (2, NotFound),
     (3, NotFound),
     (5, AccessDenied),
@@ -33,6 +33,11 @@ const WINDOWS_CODES: [(u32, FsErrorKind); 22] = [
     (64, NetworkLost),
     (67, NetworkLost),
     (1231, NetworkLost),
+    (55, NetworkLost),
+    (59, NetworkLost),
+    (1232, NetworkLost),
+    (1236, NetworkLost),
+    (2250, NetworkLost),
     (121, Timeout),
     (1460, Timeout),
     (1223, Cancelled),
