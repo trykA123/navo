@@ -22,6 +22,7 @@ const FILE: &str = "ferrite.toml";
 
 type Shared = Arc<Mutex<SettingsStore>>;
 
+#[cfg(test)]
 #[must_use]
 pub fn hooks(loaded: Option<Loaded>) -> SettingsHooks {
     parts(loaded).0

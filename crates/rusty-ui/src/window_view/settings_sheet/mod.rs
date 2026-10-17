@@ -64,20 +64,19 @@ pub(super) struct SettingsPanel {
     line_of: FindLine,
     shortcuts: Option<shortcuts::ShortcutsPanel>,
     is_shortcuts: bool,
+    pub(super) news: Option<SettingsInbox>,
 }
 
 impl SettingsPanel {
-    pub(super) fn split(
-        mut hooks: SettingsHooks,
-        cx: &mut App,
-    ) -> (Values, Saver, Self, Option<SettingsInbox>) {
-        let news = hooks.news.take();
+    pub(super) fn split(hooks: SettingsHooks, cx: &mut App) -> (Values, Saver, Self) {
         let saver = Saver::new(hooks.save, hooks.load_error);
         (
             hooks.values,
             saver,
-            Self::new(hooks.file, hooks.line_of, cx),
-            news,
+            Self {
+                news: hooks.news,
+                ..Self::new(hooks.file, hooks.line_of, cx)
+            },
         )
     }
 
@@ -97,6 +96,7 @@ impl SettingsPanel {
             line_of,
             shortcuts: None,
             is_shortcuts: false,
+            news: None,
         }
     }
 

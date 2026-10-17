@@ -1,7 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use rusty_store::SettingsStore;
 use rusty_ui::window_view::SettingsNews;
+
+use super::{describe, report, values_of};
 
 pub struct Reloader {
     store: Arc<Mutex<SettingsStore>>,
@@ -15,7 +17,19 @@ impl Reloader {
     }
 
     pub fn reload(&mut self) -> Option<SettingsNews> {
-        let _ = (&self.store, &self.problem);
-        todo!()
+        let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        let before = store.current().clone();
+        if let Some(error) = store.reload().error {
+            let message = describe(&error);
+            if self.problem.as_ref() == Some(&message) {
+                return None;
+            }
+            report(&message);
+            self.problem = Some(message.clone());
+            return Some(SettingsNews::Invalid(message));
+        }
+        let was_broken = self.problem.take().is_some();
+        let is_same = store.current() == &before;
+        (was_broken || !is_same).then(|| SettingsNews::Applied(values_of(store.current())))
     }
 }

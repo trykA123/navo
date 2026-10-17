@@ -152,8 +152,7 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let provider = options.provider.clone();
-        let (values, saver, settings, news) =
-            settings_sheet::SettingsPanel::split(options.settings, cx);
+        let (values, saver, settings) = settings_sheet::SettingsPanel::split(options.settings, cx);
         let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
@@ -199,8 +198,7 @@ impl FerriteWindow {
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
         view.apply_theme(window, cx);
-        view.listen_keymap(options.keymap, cx);
-        view.listen_settings(news, window, cx);
+        view.listen_files(options.keymap, window, cx);
         Self::after_open(options.view, window, cx);
         view
     }

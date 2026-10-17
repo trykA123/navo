@@ -1,8 +1,8 @@
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 
-use super::FerriteWindow;
 use super::settings_sheet::SettingsHooks;
+use super::{FerriteWindow, KeymapHooks};
 use crate::prelude::*;
 use crate::settings::Values;
 use crate::status_bar::StatusNotice;
@@ -37,13 +37,14 @@ impl SettingsHooks {
 }
 
 impl FerriteWindow {
-    pub(super) fn listen_settings(
+    pub(super) fn listen_files(
         &mut self,
-        inbox: Option<SettingsInbox>,
+        keymap: KeymapHooks,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(SettingsInbox(mut receiver)) = inbox else {
+        self.listen_keymap(keymap, cx);
+        let Some(SettingsInbox(mut receiver)) = self.settings.news.take() else {
             return;
         };
         cx.spawn_in(window, async move |this, cx| {

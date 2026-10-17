@@ -55,17 +55,20 @@ impl Saver {
     }
 
     pub(super) fn disk_valid(&mut self) {
-        todo!()
+        self.problem = None;
+        self.error = None;
+        self.failed.clear();
     }
 
     pub(super) fn disk_invalid(&mut self, message: SharedString) {
-        let _ = message;
-        todo!()
+        self.error = Some(message.clone());
+        self.problem = Some(message);
     }
 
     pub(super) fn over_pending(&self, values: Values) -> Values {
-        let _ = values;
-        todo!()
+        self.pending
+            .iter()
+            .fold(values, |values, change| values.with(change))
     }
 
     #[allow(clippy::unused_self, reason = "counts only in tests")]
