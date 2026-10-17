@@ -16,6 +16,7 @@ mod settings_sheet;
 mod shell_menu;
 mod status;
 mod tab_keys;
+mod user_keymap;
 mod viewer;
 mod waiting;
 
@@ -35,6 +36,7 @@ use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
 use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
+use crate::status_bar::StatusNotice;
 use crate::title_bar::{FerriteTitleBar, HeaderSearch};
 use crate::tokens::{self, Mode};
 
@@ -43,12 +45,15 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 pub use app_menu::AppMenuHooks;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
-pub use fkeys::{FKey, KEY_WARNING, key_labels, key_labels_in, layer_keys, layer_keys_in};
-pub(crate) use keys::bind_app_keys;
+pub use fkeys::{
+    DELETE_WARNING, FKey, delete_warning_in, key_labels, key_labels_in, layer_keys, layer_keys_in,
+};
 pub use keys::bind_keys;
+pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
     FileText, FontFace, FontView, Head, Host, IndexRun, Key, Kind, Kinds, Load, Loaded, MemoryLink,
@@ -73,6 +78,7 @@ pub struct StartOptions {
     pub drives: DriveHooks,
     pub app_menu: AppMenuHooks,
     pub settings: SettingsHooks,
+    pub keymap: KeymapHooks,
     pub view: Option<rusty_core::Location>,
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
@@ -128,6 +134,7 @@ pub struct FerriteWindow {
     menu_runs: u64,
     preview: preview::Preview,
     job_ui: jobs::JobUi,
+    keymap_notice: Option<StatusNotice>,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -151,7 +158,7 @@ impl FerriteWindow {
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
         settings_save::steer_browser(&values, &mut browser);
         browser.start();
-        let view = Self {
+        let mut view = Self {
             browser,
             focus: HashMap::new(),
             split: cx.new(|_| SplitterState::new(0.5)),
@@ -181,6 +188,7 @@ impl FerriteWindow {
             menu_runs: 0,
             preview: preview::Preview::new(Self::waker(cx), cx),
             job_ui: jobs::JobUi::default(),
+            keymap_notice: None,
             _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
                 view.follow_cursor(window, cx);
             }),
@@ -189,6 +197,7 @@ impl FerriteWindow {
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
         view.apply_theme(window, cx);
+        view.listen_keymap(options.keymap, cx);
         Self::after_open(options.view, window, cx);
         view
     }
@@ -281,14 +290,17 @@ impl FerriteWindow {
     }
 
     fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
-        let (held, (layer, index, spoken)) = (self.held_layer, KEY_WARNING);
+        let held = self.held_layer;
         let bar = match &self.viewer {
             Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
             None => {
                 let keymap = crate::commands::active(cx);
-                FKeyBar::new("fkeys", layer_keys_in(keymap, held))
-                    .layers(held, key_labels_in(keymap))
-                    .warn(layer, index, spoken)
+                let bar = FKeyBar::new("fkeys", layer_keys_in(keymap, held))
+                    .layers(held, key_labels_in(keymap));
+                match delete_warning_in(keymap) {
+                    Some((layer, index)) => bar.warn(layer, index, DELETE_WARNING),
+                    None => bar,
+                }
             }
         };
         self.with_job_pill(bar, window, cx)

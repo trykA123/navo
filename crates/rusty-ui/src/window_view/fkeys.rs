@@ -92,4 +92,16 @@ pub fn key_labels() -> Labels {
     key_labels_in(Keymap::builtin())
 }
 
-pub const KEY_WARNING: (KeyLayer, usize, &str) = (KeyLayer::Shift, 7, "Delete for good");
+pub const DELETE_WARNING: &str = "Delete for good";
+
+#[must_use]
+pub fn delete_warning_in(keymap: &Keymap) -> Option<(Option<KeyLayer>, usize)> {
+    let (index, layer) = keymap.keys_of("files.delete").find_map(cell_of)?;
+    let layer = match layer {
+        0 => None,
+        1 => Some(KeyLayer::Shift),
+        2 => Some(KeyLayer::Ctrl),
+        _ => Some(KeyLayer::Alt),
+    };
+    Some((layer, index))
+}

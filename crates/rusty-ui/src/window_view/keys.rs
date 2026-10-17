@@ -1,3 +1,6 @@
+use gpui_kit::KeyBinding;
+
+use crate::commands::{Keymap, for_action, set_active};
 use crate::prelude::*;
 
 pub(super) const PANE: &str = "FerritePane";
@@ -18,6 +21,20 @@ gpui_kit::actions!(
         TogglePreview
     ]
 );
+
+pub(crate) fn rebind_app_keys(keymap: Keymap, cx: &mut App) {
+    let others: Vec<KeyBinding> = cx
+        .key_bindings()
+        .borrow()
+        .bindings()
+        .filter(|binding| for_action(binding.action().name()).is_none())
+        .cloned()
+        .collect();
+    set_active(cx, keymap);
+    cx.clear_key_bindings();
+    cx.bind_keys(others);
+    bind_app_keys(cx);
+}
 
 pub(crate) fn bind_app_keys(cx: &mut App) {
     crate::file_list::bind_keys(cx);

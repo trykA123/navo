@@ -90,6 +90,7 @@ fn open_from_disk(
         drives: super::super::DriveHooks::none(),
         app_menu: crate::window_view::AppMenuHooks::none(),
         settings: super::super::SettingsHooks::none(),
+        keymap: crate::window_view::KeymapHooks::none(),
         view: None,
         listing_cache: cache.with_disk(disk.clone()),
         cache_keys: CacheKeys::default(),

@@ -9,7 +9,7 @@ mod window;
 #[cfg(test)]
 mod tests;
 
-use gpui_kit::App;
+use gpui_kit::{App, Global};
 
 use crate::app_menu::MenuCommand;
 
@@ -17,7 +17,9 @@ pub(crate) use bind::bind_namespace;
 #[cfg(test)]
 use bind::key_bindings;
 pub use contexts::{GLOBAL, is_within};
-pub use keymap::{Bind, Keymap, KeymapError, normal_key, shown};
+pub use keymap::{
+    Bind, Keymap, KeymapError, KeymapWarning, Overlaid, UserKeymapError, normal_key, shown,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CommandSpec {
@@ -89,7 +91,16 @@ pub fn for_menu(command: MenuCommand) -> &'static str {
     }
 }
 
+struct Active(Keymap);
+
+impl Global for Active {}
+
 #[must_use]
-pub fn active(_: &App) -> &Keymap {
-    Keymap::builtin()
+pub fn active(cx: &App) -> &Keymap {
+    cx.try_global::<Active>()
+        .map_or_else(|| Keymap::builtin(), |active| &active.0)
+}
+
+pub(crate) fn set_active(cx: &mut App, keymap: Keymap) {
+    cx.set_global(Active(keymap));
 }

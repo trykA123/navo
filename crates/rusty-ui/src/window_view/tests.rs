@@ -24,6 +24,7 @@ mod drive_fs;
 mod drives;
 mod fkeys;
 mod jobs;
+mod keymap;
 mod offline;
 mod settings_sheet;
 mod shell_menu;
@@ -89,6 +90,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
         settings: super::SettingsHooks::none(),
+        keymap: crate::window_view::KeymapHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -488,6 +490,7 @@ fn editor_window(
             }),
             ..super::SettingsHooks::none()
         },
+        keymap: crate::window_view::KeymapHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
@@ -613,6 +616,7 @@ fn viewer_window(
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
         settings: super::SettingsHooks::none(),
+        keymap: crate::window_view::KeymapHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),

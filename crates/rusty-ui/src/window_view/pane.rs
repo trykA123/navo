@@ -99,7 +99,10 @@ impl FerriteWindow {
                 this.child(error_line(&t, pane, message))
             })
             .child(list)
-            .child(StatusBar::new(("status", pane.get()), status));
+            .child(
+                StatusBar::new(("status", pane.get()), status)
+                    .notice(self.keymap_notice().filter(|_| is_active)),
+            );
         pane_card(("pane", pane.get()), label, is_active, cx)
             .child(body)
             .into_any_element()

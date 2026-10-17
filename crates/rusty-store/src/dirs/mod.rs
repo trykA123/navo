@@ -40,6 +40,11 @@ impl StoreDirs {
     }
 
     #[must_use]
+    pub fn keymap_file(&self) -> PathBuf {
+        self.config.join("keymap.toml")
+    }
+
+    #[must_use]
     pub fn session_file(&self) -> PathBuf {
         self.data.join("session.bin")
     }
