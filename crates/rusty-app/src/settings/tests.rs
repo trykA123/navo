@@ -1,12 +1,13 @@
 use std::fs;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
-use rusty_store::{Settings, SettingsStore, ThemeMode};
+use rusty_store::{Settings, SettingsError, SettingsStore, ThemeMode};
 use rusty_ui::settings::{Change, Control, FIELDS, Field, Value, Values};
 use rusty_ui::tokens::{Density, ThemeChoice};
-use rusty_ui::window_view::SettingsHooks;
+use rusty_ui::window_view::{SettingsHooks, SettingsNews};
 
-use super::{Loaded, values_of};
+use super::{Loaded, Reloader, values_of};
 
 fn hooks(path: Option<&Path>) -> SettingsHooks {
     super::hooks(path.map(Loaded::load))
@@ -212,4 +213,70 @@ fn undo_of_a_key_that_was_not_in_the_file_removes_it() {
     assert_eq!(report.values.theme(), ThemeChoice::System);
     let text = fs::read_to_string(&file).unwrap();
     assert!(!text.contains("mode"), "{text}");
+}
+
+#[test]
+fn a_save_that_meets_a_hand_edit_is_tried_once_more() {
+    let mut calls = 0;
+    let done = super::retried(|| {
+        calls += 1;
+        if calls == 1 {
+            Err(SettingsError::ChangedOnDisk)
+        } else {
+            Ok(calls)
+        }
+    });
+    assert_eq!(done, Ok(2));
+    let mut calls = 0;
+    let busy = super::retried(|| -> Result<(), _> {
+        calls += 1;
+        Err(SettingsError::ChangedOnDisk)
+    });
+    assert_eq!((busy, calls), (Err(SettingsError::ChangedOnDisk), 2));
+    let mut calls = 0;
+    let broken = super::retried(|| -> Result<(), _> {
+        calls += 1;
+        Err(SettingsError::FileInvalid)
+    });
+    assert_eq!((broken, calls), (Err(SettingsError::FileInvalid), 1));
+}
+
+#[test]
+fn saves_and_reloads_carry_a_rising_generation() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(&file, "[appearance]\nmode = \"light\"\n").unwrap();
+    let (store, _) = SettingsStore::load(&file);
+    let store = Arc::new(Mutex::new(store));
+    let mut reloader = Reloader::new(store.clone(), None);
+    let first = super::save(&store, &[Change::theme(ThemeChoice::Dark)]);
+    fs::write(&file, "[appearance]\nmode = \"light\"\n").unwrap();
+    let Some(SettingsNews::Applied { generation, .. }) = reloader.reload() else {
+        panic!("the hand edit applies");
+    };
+    assert!(generation > first.generation);
+    let second = super::save(&store, &[Change::density(Density::Compact)]);
+    assert!(second.generation > generation);
+}
+
+#[test]
+fn a_sheet_save_is_refused_while_the_file_on_disk_is_broken() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(&file, "[appearance]\ndensity = \"compact\"\n").unwrap();
+    let settings = hooks(Some(&file));
+    let broken = "[appearance]\ndensity = \n";
+    fs::write(&file, broken).unwrap();
+    let report = (settings.save)(&[Change::theme(ThemeChoice::Dark)]);
+    assert_eq!(report.failed, [Field::Theme]);
+    let message = report.error.unwrap();
+    assert!(message.contains("invalid"), "{message}");
+    assert_eq!(report.values.density(), Density::Compact);
+    assert_eq!(report.values.theme(), ThemeChoice::System);
+    assert_eq!(fs::read_to_string(&file).unwrap(), broken);
+    assert!(!rusty_store::backup_path(&file).exists());
+    fs::write(&file, "[appearance]\ndensity = \"compact\"\n").unwrap();
+    let fixed = (settings.save)(&[Change::theme(ThemeChoice::Dark)]);
+    assert_eq!(fixed.error, None);
+    assert_eq!(fixed.values.theme(), ThemeChoice::Dark);
 }

@@ -16,7 +16,7 @@ mod start;
 pub use reload::Reloader;
 pub use start::{Loaded, start_from};
 #[cfg(test)]
-use start::{start, start_in_background};
+use start::{follow_defaults, spawn, start, start_in_background, start_sharing};
 
 const FILE: &str = "ferrite.toml";
 
@@ -102,7 +102,8 @@ fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> SaveReport {
     let mut store = store.lock().unwrap_or_else(PoisonError::into_inner);
     let mut report = SaveReport::saved(Values::default());
     for change in changes {
-        match store.save(change.key(), stored_value(change)) {
+        let value = stored_value(change);
+        match retried(|| store.save(change.key(), value.clone())) {
             Ok(saved) if !saved.was_present => report.was_absent.push(change.field),
             Ok(_) => {}
             Err(problem) => {
@@ -112,7 +113,15 @@ fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> SaveReport {
         }
     }
     report.values = values_of(store.current());
+    report.generation = store.generation();
     report
+}
+
+fn retried<T>(mut save: impl FnMut() -> Result<T, SettingsError>) -> Result<T, SettingsError> {
+    match save() {
+        Err(SettingsError::ChangedOnDisk) => save(),
+        done => done,
+    }
 }
 
 fn remember(session: &Mutex<Values>, changes: &[Change]) -> Values {

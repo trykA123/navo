@@ -27,6 +27,7 @@ pub(super) struct FakeStore {
     pub failure: Mutex<Option<String>>,
     pub failing_field: Mutex<Option<Field>>,
     pub present: Mutex<Vec<Field>>,
+    pub generation: Mutex<u64>,
 }
 
 impl FakeStore {
@@ -59,11 +60,14 @@ impl FakeStore {
         if failed.len() < changes.len() {
             self.results.lock().expect("results").push(stored.quick());
         }
+        let mut generation = self.generation.lock().expect("generation");
+        *generation += 1;
         SaveReport {
             values: stored.clone(),
             error: (!failed.is_empty()).then(|| message.unwrap_or_default()),
             failed,
             was_absent,
+            generation: *generation,
         }
     }
 }

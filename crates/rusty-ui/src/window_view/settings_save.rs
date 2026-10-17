@@ -12,6 +12,7 @@ pub struct SaveReport {
     pub failed: Vec<Field>,
     pub error: Option<String>,
     pub was_absent: Vec<Field>,
+    pub generation: u64,
 }
 
 impl SaveReport {
@@ -21,6 +22,7 @@ impl SaveReport {
             failed: Vec::new(),
             error: None,
             was_absent: Vec::new(),
+            generation: 0,
         }
     }
 }
@@ -30,8 +32,10 @@ pub type SaveSettings = Arc<dyn Fn(&[Change]) -> SaveReport + Send + Sync>;
 pub(super) struct Saver {
     save: SaveSettings,
     pending: Vec<Change>,
-    in_flight: Vec<Field>,
+    in_flight: Vec<Change>,
     failed: Vec<Field>,
+    disk: Values,
+    generation: u64,
     is_saving: bool,
     pub(super) error: Option<SharedString>,
     pub(super) problem: Option<SharedString>,
@@ -40,12 +44,14 @@ pub(super) struct Saver {
 }
 
 impl Saver {
-    pub(super) fn new(save: SaveSettings, error: Option<SharedString>) -> Self {
+    pub(super) fn new(save: SaveSettings, error: Option<SharedString>, disk: Values) -> Self {
         Self {
             save,
             pending: Vec::new(),
             in_flight: Vec::new(),
             failed: Vec::new(),
+            disk,
+            generation: 0,
             is_saving: false,
             error,
             problem: None,
@@ -65,9 +71,22 @@ impl Saver {
         self.problem = Some(message);
     }
 
-    pub(super) fn over_pending(&self, values: Values) -> Values {
-        self.pending
+    pub(super) fn is_stale(&self, generation: u64) -> bool {
+        generation < self.generation
+    }
+
+    pub(super) fn on_disk(&mut self, values: Values, generation: u64) -> Values {
+        if !self.is_stale(generation) {
+            self.disk = values;
+            self.generation = generation;
+        }
+        self.over_pending(self.disk.clone())
+    }
+
+    fn over_pending(&self, values: Values) -> Values {
+        self.in_flight
             .iter()
+            .chain(&self.pending)
             .fold(values, |values, change| values.with(change))
     }
 
@@ -102,6 +121,10 @@ impl Saver {
             None => {}
         }
     }
+}
+
+fn fields_of(changes: &[Change]) -> Vec<Field> {
+    changes.iter().map(|change| change.field).collect()
 }
 
 pub(super) fn steer_browser(values: &Values, browser: &mut Browser) {
@@ -146,8 +169,8 @@ impl FerriteWindow {
             return;
         }
         let changes = std::mem::take(&mut self.saver.pending);
-        self.saver.in_flight = changes.iter().map(|change| change.field).collect();
-        self.settings.undo_sent(&self.saver.in_flight);
+        self.saver.in_flight.clone_from(&changes);
+        self.settings.undo_sent(&fields_of(&changes));
         self.saver.is_saving = true;
         let save = self.saver.save.clone();
         let task = cx
@@ -162,14 +185,10 @@ impl FerriteWindow {
 
     fn saved(&mut self, report: SaveReport, window: &mut Window, cx: &mut Context<Self>) {
         self.saver.is_saving = false;
-        let sent = std::mem::take(&mut self.saver.in_flight);
+        let sent = fields_of(&std::mem::take(&mut self.saver.in_flight));
         self.saver.settle(&report, &sent);
         self.settings.undo_learned(&report, &sent);
-        let fresh = self
-            .saver
-            .pending
-            .iter()
-            .fold(report.values, |values, change| values.with(change));
+        let fresh = self.saver.on_disk(report.values, report.generation);
         self.set_values(fresh, window, cx);
         self.start_save(window, cx);
         self.locate_after_save(window, cx);

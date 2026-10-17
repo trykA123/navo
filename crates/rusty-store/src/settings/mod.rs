@@ -1,9 +1,12 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{Db, DbError, replace_atomic, write_atomic};
+use crate::atomic_write::write_checked;
+use crate::{Db, DbError};
 
 mod complete;
 mod edit;
@@ -39,6 +42,10 @@ pub enum SettingsError {
     Ledger(String),
     #[error("completing the settings file would change a value; it was left as it is")]
     Refused,
+    #[error("the file changed on disk while saving; nothing was written")]
+    ChangedOnDisk,
+    #[error("the file is read-only; Ferrite does not change it")]
+    ReadOnly,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -51,6 +58,7 @@ pub struct LoadReport {
 pub struct Completion {
     pub changes: Vec<DefaultChange>,
     pub written: bool,
+    pub ledger_error: Option<SettingsError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,19 +66,38 @@ pub struct Saved {
     pub was_present: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SessionBackup(Arc<AtomicBool>);
+
+impl SessionBackup {
+    fn is_made(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+
+    fn made(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
 #[derive(Debug)]
 pub struct SettingsStore {
     path: PathBuf,
     current: Settings,
-    is_backed_up: bool,
+    generation: u64,
+    backup: SessionBackup,
 }
 
 impl SettingsStore {
     pub fn load(path: &Path) -> (Self, LoadReport) {
+        Self::load_sharing(path, SessionBackup::default())
+    }
+
+    pub fn load_sharing(path: &Path, backup: SessionBackup) -> (Self, LoadReport) {
         let mut store = Self {
             path: path.to_owned(),
             current: Settings::default(),
-            is_backed_up: false,
+            generation: 0,
+            backup,
         };
         let report = store.reload();
         (store, report)
@@ -79,6 +106,11 @@ impl SettingsStore {
     #[must_use]
     pub fn current(&self) -> &Settings {
         &self.current
+    }
+
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     pub fn reload(&mut self) -> LoadReport {
@@ -91,7 +123,7 @@ impl SettingsStore {
         };
         match parse(&text) {
             Ok((settings, unknown_keys)) => {
-                self.current = settings;
+                self.take(settings);
                 LoadReport {
                     unknown_keys,
                     error: None,
@@ -106,14 +138,15 @@ impl SettingsStore {
         if let Some(text) = &text {
             parse(text).map_err(|_| SettingsError::FileInvalid)?;
         }
-        let text = text.unwrap_or_default();
-        let was_present = key_line(&text, key).is_some();
-        let patched = edit::patch(&text, key, value)?;
+        let base = text.as_deref();
+        let text = base.unwrap_or_default();
+        let was_present = key_line(text, key).is_some();
+        let patched = edit::patch(text, key, value)?;
         let (settings, _) = parse(&patched)?;
         if patched != text {
-            self.write(&patched)?;
+            self.write(&patched, base)?;
         }
-        self.current = settings;
+        self.take(settings);
         Ok(Saved { was_present })
     }
 
@@ -122,33 +155,59 @@ impl SettingsStore {
         ledger: &Db,
         defaults: &Settings,
     ) -> Result<Completion, SettingsError> {
+        if is_read_only(&self.path) {
+            return Err(SettingsError::ReadOnly);
+        }
         let text = read(&self.path)?;
         let recorded = ledger.settings_defaults().map_err(ledger_error)?;
         let done = reconcile(text.as_deref().unwrap_or_default(), &recorded, defaults)?;
         let written = text.as_deref() != Some(done.text.as_str());
         if written {
             let (settings, _) = parse(&done.text)?;
-            self.write(&done.text)?;
-            self.current = settings;
+            self.write(&done.text, text.as_deref())?;
+            self.take(settings);
         }
-        ledger
+        let ledger_error = ledger
             .record_settings_defaults(&done.written, now())
-            .map_err(ledger_error)?;
+            .map_err(ledger_error)
+            .err();
         Ok(Completion {
             changes: done.changes,
             written,
+            ledger_error,
         })
     }
 }
 
 impl SettingsStore {
-    fn write(&mut self, text: &str) -> Result<(), SettingsError> {
-        if self.is_backed_up {
-            replace_atomic(&self.path, text.as_bytes()).map_err(io_error)
-        } else {
-            write_atomic(&self.path, text.as_bytes()).map_err(io_error)?;
-            self.is_backed_up = true;
-            Ok(())
+    fn take(&mut self, settings: Settings) {
+        self.current = settings;
+        self.generation += 1;
+    }
+
+    fn write(&self, text: &str, base: Option<&str>) -> Result<(), SettingsError> {
+        if is_read_only(&self.path) {
+            return Err(SettingsError::ReadOnly);
+        }
+        #[cfg(test)]
+        tests::before_write(&self.path);
+        let mut is_changed = false;
+        let check = || match unchanged(&self.path, base) {
+            Ok(true) => Ok(()),
+            Ok(false) => {
+                is_changed = true;
+                Err(io::Error::other("the file changed on disk"))
+            }
+            Err(error) => Err(error),
+        };
+        let backup = !self.backup.is_made();
+        match write_checked(&self.path, text.as_bytes(), backup, check) {
+            Ok(()) => {
+                self.backup.made();
+                Ok(())
+            }
+            Err(_) if is_changed => Err(SettingsError::ChangedOnDisk),
+            Err(error) => Err(io_error(error)),
         }
     }
 }
@@ -166,6 +225,18 @@ fn read(path: &Path) -> Result<Option<String>, SettingsError> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(io_error(e)),
     }
+}
+
+fn unchanged(path: &Path, base: Option<&str>) -> io::Result<bool> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(base.is_some_and(|base| base.as_bytes() == bytes)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(base.is_none()),
+        Err(e) => Err(e),
+    }
+}
+
+fn is_read_only(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|meta| meta.permissions().readonly())
 }
 
 fn ledger_error(error: DbError) -> SettingsError {

@@ -37,6 +37,19 @@ pub fn backup_path(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
+pub(crate) fn write_checked(
+    path: &Path,
+    bytes: &[u8],
+    backup: bool,
+    mut check: impl FnMut() -> io::Result<()>,
+) -> io::Result<()> {
+    let payload = Payload { bytes, backup };
+    write_payload(path, &payload, &mut |stage| match stage {
+        Stage::TempSynced => check(),
+        _ => Ok(()),
+    })
+}
+
 pub(crate) fn write_atomic_with(
     path: &Path,
     bytes: &[u8],
@@ -77,9 +90,7 @@ fn replace(
 ) -> io::Result<()> {
     let mut file = OpenOptions::new().write(true).create_new(true).open(temp)?;
     file.write_all(payload.bytes)?;
-    if !payload.backup
-        && let Ok(old) = fs::metadata(path)
-    {
+    if let Ok(old) = fs::metadata(path) {
         fs::set_permissions(temp, old.permissions())?;
     }
     hook(Stage::TempWritten)?;

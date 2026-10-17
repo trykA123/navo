@@ -15,11 +15,14 @@ pub fn complete_text(text: &str, defaults: &Settings) -> Result<Reconciled, Sett
         if !missing.is_empty() {
             keep_lone_comments_on_top(document);
         }
-        missing
+        let sections: Vec<String> = document.iter().map(|(key, _)| key.to_owned()).collect();
+        let written = missing
             .into_iter()
             .filter(|entry| insert(document, entry))
             .map(|entry| (entry.key.clone(), entry.canonical.clone()))
-            .collect()
+            .collect();
+        keep_trailing_under_its_section(document, &sections);
+        written
     })?;
     Ok(Reconciled {
         text,
@@ -75,6 +78,7 @@ fn follow(entry: &Entry, ledger: &Ledger, source: &Source) -> Follow {
             Follow::Upgrade(current)
         }
         None if current == entry.canonical => Follow::Adopt,
+        Some(recorded) if *recorded != current && current == entry.canonical => Follow::Adopt,
         _ => Follow::Leave,
     }
 }
@@ -88,6 +92,41 @@ fn keep_lone_comments_on_top(document: &mut DocumentMut) {
         document.decor_mut().set_prefix(trailing);
         document.set_trailing("");
     }
+}
+
+fn keep_trailing_under_its_section(document: &mut DocumentMut, sections: &[String]) {
+    let mut trailing = document.trailing().as_str().unwrap_or_default().to_owned();
+    if trailing.is_empty() {
+        return;
+    }
+    if !trailing.ends_with('\n') {
+        trailing.push('\n');
+    }
+    let mut position = last_position(document.as_table());
+    let mut prefix = Some(format!("{trailing}\n"));
+    let added = document
+        .iter_mut()
+        .filter(|(key, _)| !sections.iter().any(|known| known == key.get()))
+        .filter_map(|(_, item)| item.as_table_mut());
+    for section in added {
+        position += 1;
+        section.set_position(Some(position));
+        if let Some(prefix) = prefix.take() {
+            section.decor_mut().set_prefix(prefix);
+        }
+    }
+    if prefix.is_none() {
+        document.set_trailing("");
+    }
+}
+
+fn last_position(table: &Table) -> isize {
+    table
+        .iter()
+        .filter_map(|(_, item)| item.as_table())
+        .map(|inner| inner.position().unwrap_or(0).max(last_position(inner)))
+        .max()
+        .unwrap_or(0)
 }
 
 fn insert(document: &mut DocumentMut, entry: &Entry) -> bool {
