@@ -49,7 +49,7 @@ fn files() -> impl Strategy<Value = Files> {
     })
 }
 
-fn settings() -> impl Strategy<Value = Settings> {
+pub(super) fn settings() -> impl Strategy<Value = Settings> {
     let selection = any::<[bool; 2]>().prop_map(|[space, patterns]| SelectionSettings {
         space_measures_folders: space,
         patterns_select_folders: patterns,

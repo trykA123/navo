@@ -6,7 +6,11 @@ use rusty_ui::settings::{Change, Control, FIELDS, Field, Value, Values};
 use rusty_ui::tokens::{Density, ThemeChoice};
 use rusty_ui::window_view::SettingsHooks;
 
-use super::{hooks, values_of};
+use super::{Loaded, values_of};
+
+fn hooks(path: Option<&Path>) -> SettingsHooks {
+    super::hooks(path.map(Loaded::load))
+}
 
 const OLD_EDITOR_FILE: &str = "[files]\nshow-hidden = false\n\n[editor]\npath = \"code\"\n";
 

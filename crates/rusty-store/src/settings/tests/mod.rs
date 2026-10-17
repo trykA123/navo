@@ -6,6 +6,9 @@ use tempfile::TempDir;
 use super::*;
 use crate::backup_path;
 
+mod complete;
+mod complete_props;
+mod complete_store;
 mod model;
 mod parse;
 mod props;

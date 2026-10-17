@@ -8,6 +8,7 @@ use rusqlite::{Connection, TransactionBehavior};
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 mod migrations;
+mod settings_defaults;
 mod viewer;
 
 use migrations::MIGRATIONS;

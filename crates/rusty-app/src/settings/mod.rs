@@ -7,21 +7,25 @@ use rusty_store::{SettingValue, Settings, SettingsError, SettingsStore, settings
 use rusty_ui::settings::{Change, Control, FieldSpec, Value, Values};
 use rusty_ui::window_view::{FindLine, SaveReport, SettingsHooks};
 
+mod start;
+
+pub use start::{Loaded, Started, Starting, start, start_in_background};
+
 const FILE: &str = "ferrite.toml";
 
-pub fn hooks(path: Option<&Path>) -> SettingsHooks {
-    let loaded = path.map(SettingsStore::load);
+pub fn hooks(loaded: Option<Loaded>) -> SettingsHooks {
+    let path = loaded.as_ref().map(|loaded| loaded.path.clone());
     let load_error = loaded
         .as_ref()
-        .and_then(|(_, report)| report.error.as_ref())
+        .and_then(|loaded| loaded.report.error.as_ref())
         .map(describe);
     if let Some(message) = &load_error {
         report(message);
     }
     let values = loaded
         .as_ref()
-        .map_or_else(Values::default, |(store, _)| values_of(store.current()));
-    let store = loaded.map(|(store, _)| Arc::new(Mutex::new(store)));
+        .map_or_else(Values::default, |loaded| values_of(loaded.store.current()));
+    let store = loaded.map(|loaded| Arc::new(Mutex::new(loaded.store)));
     let session = Arc::new(Mutex::new(values.clone()));
     SettingsHooks {
         values,
@@ -36,8 +40,8 @@ pub fn hooks(path: Option<&Path>) -> SettingsHooks {
             }
             saved
         }),
-        file: path.and_then(location_of),
-        line_of: line_finder(path.map(Path::to_owned)),
+        file: path.as_deref().and_then(location_of),
+        line_of: line_finder(path),
     }
 }
 
@@ -124,5 +128,7 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
     }
 }
 
+#[cfg(test)]
+mod start_tests;
 #[cfg(test)]
 mod tests;

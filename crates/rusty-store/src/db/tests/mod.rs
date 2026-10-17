@@ -12,6 +12,7 @@ mod guards;
 mod memory;
 mod migrations;
 mod props;
+mod settings_defaults;
 mod viewer;
 
 const V1_TABLES: [&str; 7] = [
@@ -24,13 +25,14 @@ const V1_TABLES: [&str; 7] = [
     "undo",
 ];
 
-const TABLES: [&str; 9] = [
+const TABLES: [&str; 10] = [
     "frecency",
     "history",
     "job",
     "job_step",
     "module_kv",
     "search_history",
+    "settings_defaults",
     "tags",
     "undo",
     "viewer_memory",
@@ -38,6 +40,7 @@ const TABLES: [&str; 9] = [
 
 const V0_SQL: &str = include_str!("../../../tests/fixtures/db/v0.sql");
 const V1_SQL: &str = include_str!("../../../tests/fixtures/db/v1.sql");
+const V2_SQL: &str = include_str!("../../../tests/fixtures/db/v2.sql");
 
 fn tmp() -> TempDir {
     TempDir::new().unwrap()

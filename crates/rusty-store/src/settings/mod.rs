@@ -2,12 +2,17 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::{replace_atomic, write_atomic};
+use crate::{Db, replace_atomic, write_atomic};
 
+mod complete;
 mod edit;
 mod model;
 mod parse;
 
+pub use complete::DefaultChange;
+pub(crate) use complete::{
+    Ledger, Reconciled, UNUSED_NOTE, complete_text, mark_unused, reconcile, upgrade_text,
+};
 pub use edit::{SettingValue, key_line};
 
 pub use model::{
@@ -31,12 +36,20 @@ pub enum SettingsError {
     },
     #[error("the settings file on disk is invalid; fix it before saving")]
     FileInvalid,
+    #[error("settings defaults ledger: {0}")]
+    Ledger(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LoadReport {
     pub unknown_keys: Vec<String>,
     pub error: Option<SettingsError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Completion {
+    pub changes: Vec<DefaultChange>,
+    pub written: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,6 +114,15 @@ impl SettingsStore {
         }
         self.current = settings;
         Ok(Saved { was_present })
+    }
+
+    pub fn complete(
+        &mut self,
+        ledger: &Db,
+        defaults: &Settings,
+    ) -> Result<Completion, SettingsError> {
+        let _ = (ledger, defaults);
+        todo!()
     }
 }
 

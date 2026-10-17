@@ -1,0 +1,412 @@
+use super::*;
+
+const FULL: &str = "[appearance]
+mode = \"system\"
+light-theme = \"Ferrite Light\"
+dark-theme = \"Ferrite Dark\"
+font = \"Inter\"
+font-size = 13
+density = \"normal\"
+
+[files]
+hidden-files = \"shown\"
+show-system = false
+folders-first = true
+sort = \"name\"
+sort-descending = false
+
+[selection]
+space-measures-folders = true
+patterns-select-folders = false
+
+[terminal]
+provider = \"windows-terminal\"
+";
+
+const DEFAULT_KEYS: [(&str, &str); 14] = [
+    ("appearance.mode", "\"system\""),
+    ("appearance.light-theme", "\"Ferrite Light\""),
+    ("appearance.dark-theme", "\"Ferrite Dark\""),
+    ("appearance.font", "\"Inter\""),
+    ("appearance.font-size", "13"),
+    ("appearance.density", "\"normal\""),
+    ("files.hidden-files", "\"shown\""),
+    ("files.show-system", "false"),
+    ("files.folders-first", "true"),
+    ("files.sort", "\"name\""),
+    ("files.sort-descending", "false"),
+    ("selection.space-measures-folders", "true"),
+    ("selection.patterns-select-folders", "false"),
+    ("terminal.provider", "\"windows-terminal\""),
+];
+
+fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
+    list.iter()
+        .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+        .collect()
+}
+
+fn ledger_of(list: &[(&str, &str)]) -> Ledger {
+    pairs(list).into_iter().collect()
+}
+
+fn sorted_by_date() -> Settings {
+    let mut settings = Settings::default();
+    settings.files.sort = SortKey::Date;
+    settings
+}
+
+fn completed(text: &str) -> String {
+    complete_text(text, &Settings::default()).unwrap().text
+}
+
+fn unchanged_by_reconcile(text: &str) {
+    let ledger = ledger_of(&DEFAULT_KEYS);
+    let done = reconcile(text, &ledger, &Settings::default()).unwrap();
+    assert_eq!(done.text.as_bytes(), text.as_bytes());
+    assert_eq!(done.written, []);
+    assert_eq!(done.changes, []);
+}
+
+#[test]
+fn an_empty_file_gets_every_key_in_model_order() {
+    let done = complete_text("", &Settings::default()).unwrap();
+    assert_eq!(done.text, FULL);
+    assert_eq!(done.written, pairs(&DEFAULT_KEYS));
+    assert_eq!(done.changes, []);
+}
+
+#[test]
+fn a_complete_file_is_left_as_it_is() {
+    let done = complete_text(FULL, &Settings::default()).unwrap();
+    assert_eq!(done.text, FULL);
+    assert_eq!(done.written, []);
+}
+
+#[test]
+fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
+    let before =
+        "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n";
+    assert_eq!(completed(before), after);
+}
+
+#[test]
+fn only_the_missing_keys_are_reported_as_written() {
+    let before = FULL
+        .replace("font-size = 13\n", "")
+        .replace("sort = \"name\"\n", "");
+    let done = complete_text(&before, &Settings::default()).unwrap();
+    assert_eq!(
+        done.written,
+        pairs(&[("appearance.font-size", "13"), ("files.sort", "\"name\"")])
+    );
+}
+
+#[test]
+fn existing_values_are_never_changed_even_when_they_differ_from_the_default() {
+    let before = "[appearance]\nfont-size = 15\nmode = 'dark'\n";
+    let after = completed(before);
+    assert!(
+        after.starts_with("[appearance]\nfont-size = 15\nmode = 'dark'\n"),
+        "{after}"
+    );
+    let settings = parse(&after).unwrap().0;
+    assert_eq!(settings.appearance.font_size, 15);
+    assert_eq!(settings.appearance.mode, ThemeMode::Dark);
+}
+
+#[test]
+fn comments_blank_lines_odd_spacing_and_unknown_keys_survive() {
+    let before = "# top\n\n[appearance]\n  mode=\"dark\"   # night\n\n\n# between\nzoom = 2\n\n[plugins]\ngit = true # keep\n";
+    let after = completed(before);
+    for line in before.lines() {
+        assert!(after.lines().any(|l| l == line), "lost {line:?} in {after}");
+    }
+    let kept: Vec<&str> = after
+        .lines()
+        .filter(|l| before.lines().any(|b| b == *l))
+        .collect();
+    let order: Vec<&str> = before.lines().collect();
+    assert_eq!(
+        kept.iter().filter(|l| !l.is_empty()).collect::<Vec<_>>(),
+        order.iter().filter(|l| !l.is_empty()).collect::<Vec<_>>()
+    );
+    assert!(after.contains("[plugins]\ngit = true # keep\n"), "{after}");
+}
+
+#[test]
+fn a_crlf_file_stays_crlf_and_keeps_its_lines() {
+    let before = "# mine\r\n[files]\r\nsort = \"size\"\r\n";
+    let after = completed(before);
+    assert!(
+        after.starts_with("# mine\r\n[files]\r\nsort = \"size\"\r\n"),
+        "{after:?}"
+    );
+    assert_eq!(
+        after.matches("\r\n").count(),
+        after.matches('\n').count(),
+        "{after:?}"
+    );
+}
+
+#[test]
+fn a_bom_file_keeps_its_bom() {
+    let before = "\u{feff}[files]\nsort = \"size\"\n";
+    let after = completed(before);
+    assert!(
+        after.starts_with("\u{feff}[files]\nsort = \"size\"\n"),
+        "{after:?}"
+    );
+    assert_eq!(after.matches('\u{feff}').count(), 1);
+}
+
+#[test]
+fn dotted_and_inline_sections_keep_their_values() {
+    for before in [
+        "appearance.mode = \"dark\"\n",
+        "files = { sort = \"size\" }\n",
+    ] {
+        let after = completed(before);
+        let settings = parse(&after).unwrap().0;
+        assert_eq!(
+            complete_text(&after, &Settings::default()).unwrap().written,
+            [],
+            "{after}"
+        );
+        let mut expected = Settings::default();
+        if before.starts_with("appearance") {
+            expected.appearance.mode = ThemeMode::Dark;
+        } else {
+            expected.files.sort = SortKey::Size;
+        }
+        assert_eq!(settings, expected, "{after}");
+    }
+}
+
+#[test]
+fn optional_and_experimental_keys_are_kept_and_not_added() {
+    let before = "[terminal]\ncommand = \"wezterm\"\n\n[editor]\npath = \"code\"\n\n[experimental]\nfast-copy = true\n";
+    let after = completed(before);
+    assert!(after.contains("command = \"wezterm\"\n"), "{after}");
+    assert!(after.contains("[editor]\npath = \"code\"\n"), "{after}");
+    assert!(
+        after.contains("[experimental]\nfast-copy = true\n"),
+        "{after}"
+    );
+    assert!(!after.contains(UNUSED_NOTE), "{after}");
+}
+
+#[test]
+fn a_file_that_does_not_parse_is_refused() {
+    for broken in [
+        "[appearance\nmode = \"dark\"\n",
+        "[appearance]\nfont-size = \"big\"\n",
+    ] {
+        assert_eq!(
+            complete_text(broken, &Settings::default()),
+            Err(SettingsError::FileInvalid)
+        );
+        assert_eq!(
+            reconcile(broken, &Ledger::new(), &Settings::default()),
+            Err(SettingsError::FileInvalid)
+        );
+    }
+}
+
+#[test]
+fn a_following_key_moves_to_the_new_default() {
+    let ledger = ledger_of(&[("files.sort", "\"name\"")]);
+    let before = "[files]\nsort = \"name\" # mine\n";
+    let done = upgrade_text(before, &ledger, &sorted_by_date()).unwrap();
+    assert_eq!(done.text, "[files]\nsort = \"date\" # mine\n");
+    assert_eq!(done.written, pairs(&[("files.sort", "\"date\"")]));
+    assert_eq!(
+        done.changes,
+        [DefaultChange {
+            key: "files.sort".to_owned(),
+            old: "\"name\"".to_owned(),
+            new: "\"date\"".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn a_key_the_user_changed_is_never_touched() {
+    let ledger = ledger_of(&[("files.sort", "\"name\"")]);
+    let before = "[files]\nsort = \"size\"\n";
+    let done = upgrade_text(before, &ledger, &sorted_by_date()).unwrap();
+    assert_eq!(done.text, before);
+    assert_eq!(done.written, []);
+    assert_eq!(done.changes, []);
+}
+
+#[test]
+fn the_default_typed_by_hand_counts_as_following() {
+    let ledger = ledger_of(&[("files.sort", "\"name\"")]);
+    let before = "[files]\nsort = 'name'\n";
+    let done = upgrade_text(before, &ledger, &sorted_by_date()).unwrap();
+    assert_eq!(parse(&done.text).unwrap().0.files.sort, SortKey::Date);
+    assert_eq!(done.changes.len(), 1);
+}
+
+#[test]
+fn without_a_ledger_row_a_value_equal_to_the_default_is_recorded_as_following() {
+    let before = "[files]\nsort = \"name\"\n";
+    let done = upgrade_text(before, &Ledger::new(), &Settings::default()).unwrap();
+    assert_eq!(done.text, before);
+    assert_eq!(done.written, pairs(&[("files.sort", "\"name\"")]));
+    assert_eq!(done.changes, []);
+}
+
+#[test]
+fn without_a_ledger_row_an_old_default_typed_by_hand_is_the_users() {
+    let before = "[files]\nsort = \"name\"\n";
+    let done = upgrade_text(before, &Ledger::new(), &sorted_by_date()).unwrap();
+    assert_eq!(done.text, before);
+    assert_eq!(done.written, []);
+    assert_eq!(done.changes, []);
+}
+
+#[test]
+fn an_unchanged_default_rewrites_nothing() {
+    let ledger = ledger_of(&DEFAULT_KEYS);
+    let done = upgrade_text(FULL, &ledger, &Settings::default()).unwrap();
+    assert_eq!(
+        done,
+        Reconciled {
+            text: FULL.to_owned(),
+            ..Reconciled::default()
+        }
+    );
+}
+
+#[test]
+fn an_upgrade_keeps_crlf_and_bom() {
+    let ledger = ledger_of(&[("files.sort", "\"name\"")]);
+    let before = "\u{feff}# mine\r\n[files]\r\nsort = \"name\"\r\n";
+    let done = upgrade_text(before, &ledger, &sorted_by_date()).unwrap();
+    assert_eq!(
+        done.text,
+        "\u{feff}# mine\r\n[files]\r\nsort = \"date\"\r\n"
+    );
+}
+
+#[test]
+fn reconcile_of_an_empty_file_writes_and_records_every_default() {
+    let done = reconcile("", &Ledger::new(), &Settings::default()).unwrap();
+    assert_eq!(done.text, FULL);
+    assert_eq!(done.written, pairs(&DEFAULT_KEYS));
+}
+
+#[test]
+fn reconcile_updates_following_keys_and_adds_missing_ones_together() {
+    let ledger = ledger_of(&DEFAULT_KEYS);
+    let before = FULL.replace("font-size = 13\n", "");
+    let done = reconcile(&before, &ledger, &sorted_by_date()).unwrap();
+    assert_eq!(
+        done.text,
+        FULL.replace("sort = \"name\"", "sort = \"date\"")
+    );
+    assert_eq!(
+        done.written,
+        pairs(&[("files.sort", "\"date\""), ("appearance.font-size", "13")])
+    );
+    assert_eq!(done.changes.len(), 1);
+}
+
+#[test]
+fn reconcile_of_a_complete_followed_file_is_byte_for_byte_the_same() {
+    unchanged_by_reconcile(FULL);
+    unchanged_by_reconcile(&FULL.replace('\n', "\r\n"));
+    unchanged_by_reconcile(&format!("\u{feff}{}", FULL.replace('\n', "\r\n")));
+    unchanged_by_reconcile(&format!(
+        "# my settings\n\n{}\n\n# end\n",
+        FULL.replace("mode = \"system\"", "mode=\"system\"   # comment")
+    ));
+}
+
+#[test]
+fn reconcile_twice_changes_nothing_the_second_time() {
+    let first = reconcile(
+        "[appearance]\nzoom = 2\n",
+        &Ledger::new(),
+        &sorted_by_date(),
+    )
+    .unwrap();
+    let ledger: Ledger = first.written.iter().cloned().collect();
+    let second = reconcile(&first.text, &ledger, &sorted_by_date()).unwrap();
+    assert_eq!(second.text, first.text);
+    assert_eq!(second.written, []);
+    assert_eq!(second.changes, []);
+}
+
+#[test]
+fn a_removed_key_gets_one_note_above_it() {
+    let before = "[appearance]\nmode = \"dark\"\n# my zoom\nzoom = 2\n";
+    let after = mark_unused(before).unwrap();
+    assert_eq!(
+        after,
+        format!("[appearance]\nmode = \"dark\"\n# my zoom\n{UNUSED_NOTE}\nzoom = 2\n")
+    );
+    assert_eq!(mark_unused(&after).unwrap(), after);
+}
+
+#[test]
+fn a_removed_section_gets_one_note_above_its_header() {
+    let before = "[files]\nsort = \"size\"\n\n[plugins]\ngit = true\n";
+    let after = mark_unused(before).unwrap();
+    assert_eq!(
+        after,
+        format!("[files]\nsort = \"size\"\n\n{UNUSED_NOTE}\n[plugins]\ngit = true\n")
+    );
+    assert_eq!(mark_unused(&after).unwrap(), after);
+}
+
+#[test]
+fn the_old_show_hidden_key_is_noted_as_unused() {
+    let before = "[files]\nshow-hidden = false\n";
+    assert_eq!(
+        mark_unused(before).unwrap(),
+        format!("[files]\n{UNUSED_NOTE}\nshow-hidden = false\n")
+    );
+}
+
+#[test]
+fn the_note_keeps_the_key_indent_and_line_endings() {
+    let before = "[appearance]\r\n    zoom = 2\r\n";
+    assert_eq!(
+        mark_unused(before).unwrap(),
+        format!("[appearance]\r\n    {UNUSED_NOTE}\r\n    zoom = 2\r\n")
+    );
+}
+
+#[test]
+fn known_keys_get_no_note() {
+    assert_eq!(mark_unused(FULL).unwrap(), FULL);
+}
+
+#[test]
+fn reconcile_notes_a_removed_key_once_across_runs() {
+    let first = reconcile(
+        "[appearance]\nzoom = 2\n",
+        &Ledger::new(),
+        &Settings::default(),
+    )
+    .unwrap();
+    assert_eq!(first.text.matches(UNUSED_NOTE).count(), 1, "{}", first.text);
+    let ledger: Ledger = first.written.iter().cloned().collect();
+    let second = reconcile(&first.text, &ledger, &Settings::default()).unwrap();
+    assert_eq!(second.text, first.text);
+}
+
+#[test]
+fn reconcile_keeps_the_user_values_parsed_settings() {
+    let before = "[appearance]\nfont-size = 16\n[files]\nsort = \"kind\"\n";
+    let ledger = ledger_of(&DEFAULT_KEYS);
+    let done = reconcile(before, &ledger, &sorted_by_date()).unwrap();
+    let settings = parse(&done.text).unwrap().0;
+    assert_eq!(settings.appearance.font_size, 16);
+    assert_eq!(settings.files.sort, SortKey::Kind);
+    assert_eq!(done.changes, []);
+}
