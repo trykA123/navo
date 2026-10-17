@@ -1,11 +1,20 @@
 use std::ops::ControlFlow;
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rusty_core::{FsError, Location, ProviderId};
 use rusty_fs::{
     CancelToken, Capabilities, EntryBatch, FakeFs, FsEntry, ListSink, Provider, ProviderOps,
 };
+
+const HOLD_LIMIT: Duration = Duration::from_secs(10);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Holds {
+    Everything,
+    AfterOpening,
+    AfterFirstBatch,
+}
 
 struct Share {
     is_answering: bool,
@@ -15,25 +24,29 @@ struct Share {
 pub struct Stalled {
     inner: Arc<FakeFs>,
     folder: Location,
-    sends_first_batch: bool,
+    holds: Holds,
     share: Mutex<Share>,
     changed: Condvar,
 }
 
 impl Stalled {
     pub fn new(inner: &Arc<FakeFs>, folder: &str) -> Arc<Self> {
-        Self::build(inner, folder, false)
+        Self::build(inner, folder, Holds::Everything)
+    }
+
+    pub fn opening(inner: &Arc<FakeFs>, folder: &str) -> Arc<Self> {
+        Self::build(inner, folder, Holds::AfterOpening)
     }
 
     pub fn trickling(inner: &Arc<FakeFs>, folder: &str) -> Arc<Self> {
-        Self::build(inner, folder, true)
+        Self::build(inner, folder, Holds::AfterFirstBatch)
     }
 
-    fn build(inner: &Arc<FakeFs>, folder: &str, sends_first_batch: bool) -> Arc<Self> {
+    fn build(inner: &Arc<FakeFs>, folder: &str, holds: Holds) -> Arc<Self> {
         Arc::new(Self {
             inner: Arc::clone(inner),
             folder: inner.location(folder),
-            sends_first_batch,
+            holds,
             share: Mutex::new(Share {
                 is_answering: true,
                 held: 0,
@@ -67,7 +80,8 @@ impl Stalled {
         }
         share.held += 1;
         self.changed.notify_all();
-        while !share.is_answering && !cancel.is_cancelled() {
+        let deadline = Instant::now() + HOLD_LIMIT;
+        while !share.is_answering && !cancel.is_cancelled() && Instant::now() < deadline {
             share = self
                 .changed
                 .wait_timeout(share, Duration::from_millis(20))
@@ -95,7 +109,7 @@ impl Provider for Stalled {
         if folder != &self.folder {
             return self.inner.list(folder, sink, cancel);
         }
-        if self.sends_first_batch {
+        if self.holds == Holds::AfterFirstBatch {
             let _ = sink.batch(EntryBatch {
                 entries: Vec::new(),
                 last: false,
@@ -119,6 +133,9 @@ impl Provider for Stalled {
     }
 
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        if location == &self.folder && self.holds == Holds::Everything {
+            self.hold(&CancelToken::new());
+        }
         self.inner.metadata(location)
     }
 }

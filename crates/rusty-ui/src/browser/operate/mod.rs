@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rusty_core::{
-    Command, FsError, Location, OpKind, OperationPlan, ProviderPath, list_active_tabs,
-};
+use rusty_core::{Command, FsError, Location, OpKind, OperationPlan, ProviderPath};
 use rusty_fs::{CancelToken, JobOutcome, JobSlot, Priority, Progress, volume_of};
 
 use super::{Browser, Message};
@@ -307,8 +305,7 @@ impl Browser {
         if is_done && source_tab == Some(self.state.active_tab().id()) {
             let _ = self.command(&Command::SelectionClear);
         }
-        let effects = list_active_tabs(&mut self.state);
-        self.run(effects);
+        self.relist_answering();
         true
     }
 }

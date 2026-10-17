@@ -9,7 +9,7 @@ use super::{browser_with, cursor_name, fake, into_docs_and_back, is_cached, name
 use crate::browser::offline::retry_delay;
 use crate::browser::{Browser, Offline};
 
-fn pending(browser: &Browser) -> (TabId, u64) {
+pub(super) fn pending(browser: &Browser) -> (TabId, u64) {
     let tab = browser.state().active_tab();
     (
         tab.id(),
@@ -17,7 +17,7 @@ fn pending(browser: &Browser) -> (TabId, u64) {
     )
 }
 
-fn poll_until(browser: &mut Browser, done: impl Fn(&Browser) -> bool) {
+pub(super) fn poll_until(browser: &mut Browser, done: impl Fn(&Browser) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while !done(browser) && Instant::now() < deadline {
         browser.poll();
@@ -26,11 +26,11 @@ fn poll_until(browser: &mut Browser, done: impl Fn(&Browser) -> bool) {
     assert!(done(browser), "condition not met in time");
 }
 
-fn is_idle(browser: &Browser) -> bool {
+pub(super) fn is_idle(browser: &Browser) -> bool {
     !browser.loading()
 }
 
-fn has_loaded(browser: &Browser) -> bool {
+pub(super) fn has_loaded(browser: &Browser) -> bool {
     browser.state().active_tab().pending_request().is_none()
 }
 
@@ -43,7 +43,7 @@ fn marked_names(browser: &Browser) -> Vec<String> {
         .collect()
 }
 
-fn into_stalled_docs(browser: &mut Browser, share: &Stalled, fs: &rusty_fs::FakeFs) {
+pub(super) fn into_stalled_docs(browser: &mut Browser, share: &Stalled, fs: &rusty_fs::FakeFs) {
     share.stop_answering();
     let location = fs.location("home/docs");
     browser

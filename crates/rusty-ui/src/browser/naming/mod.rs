@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use rusty_core::{FsError, Location, NameError, ProviderPath, TabId, check_name, list_active_tabs};
+use rusty_core::{FsError, Location, NameError, ProviderPath, TabId, check_name};
 use rusty_fs::{JobSlot, Priority, ProviderOps, volume_of};
 
 use super::{Browser, Message};
@@ -92,8 +92,7 @@ impl Browser {
             }
             _ => {}
         }
-        let effects = list_active_tabs(&mut self.state);
-        self.run(effects);
+        self.relist_answering();
         true
     }
 

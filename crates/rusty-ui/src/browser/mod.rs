@@ -134,6 +134,9 @@ impl Browser {
     }
 
     pub fn command(&mut self, command: &Command) -> Result<(), CommandError> {
+        if matches!(command, Command::PaneRefresh) && self.retries_instead() {
+            return Ok(());
+        }
         let focused = self.state.focused_pane();
         let effects = apply(&mut self.state, command)?;
         self.drop_stale_filters();
@@ -327,8 +330,11 @@ impl Browser {
             .state
             .tab(tab)
             .is_some_and(|t| t.pending_request() == Some(request));
-        if !current || self.keeps_offline(tab, request, &result) {
+        if !current {
             return false;
+        }
+        if self.keeps_offline(tab, request, &result) {
+            return true;
         }
         let listing = match result {
             Ok(fresh) => {

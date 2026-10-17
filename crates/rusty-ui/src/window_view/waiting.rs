@@ -85,6 +85,9 @@ impl FerriteWindow {
             })
             .detach();
         }
+        for (tab, request, first) in self.browser.take_new_offline() {
+            Self::keep_retrying(tab, request, first, cx);
+        }
     }
 
     fn mark_late(&mut self, tab: TabId, request: u64, cx: &mut Context<Self>) {

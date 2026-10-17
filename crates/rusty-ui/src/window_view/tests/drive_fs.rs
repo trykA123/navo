@@ -17,6 +17,7 @@ use crate::browser::Operations;
 use crate::tokens::Mode;
 
 const GIB: u64 = 1 << 30;
+const HOLD_LIMIT: Duration = Duration::from_secs(10);
 
 pub(super) struct DriveFs {
     fake: FakeFs,
@@ -68,7 +69,8 @@ impl DriveFs {
             return;
         }
         let mut released = self.released.lock().expect("gate");
-        while !*released && !cancel.is_cancelled() {
+        let deadline = Instant::now() + HOLD_LIMIT;
+        while !*released && !cancel.is_cancelled() && Instant::now() < deadline {
             released = self
                 .gate
                 .wait_timeout(released, Duration::from_millis(20))
@@ -98,6 +100,7 @@ impl Provider for DriveFs {
     }
 
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        self.wait_if_slow(location, &CancelToken::new());
         self.fake.metadata(&self.fake(location))
     }
 }

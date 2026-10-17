@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
-use rusty_core::{FsError, FsErrorKind, TabId};
+use rusty_core::{FsError, FsErrorKind, TabId, relist_tab};
 
 use super::Browser;
 use super::cached::Fresh;
@@ -24,11 +24,11 @@ pub(super) fn retry_delay(retries: usize) -> Duration {
 pub(super) struct Progress(Arc<AtomicBool>);
 
 impl Progress {
-    pub(super) fn batch_arrived(&self) {
+    pub(super) fn answered(&self) {
         self.0.store(true, Ordering::Release);
     }
 
-    fn has_batches(&self) -> bool {
+    fn has_answered(&self) -> bool {
         self.0.load(Ordering::Acquire)
     }
 }
@@ -43,7 +43,18 @@ struct Stall {
     progress: Progress,
     offline: Option<Offline>,
     is_attempting: bool,
+    is_retrying: bool,
     retries: usize,
+}
+
+impl Stall {
+    fn keeps_on(&self, error: &FsError) -> bool {
+        if self.offline.is_some() {
+            !ends_offline(error)
+        } else {
+            is_unreachable(error)
+        }
+    }
 }
 
 #[derive(Default)]
@@ -56,6 +67,7 @@ impl Stalls {
             progress: Progress::default(),
             offline: None,
             is_attempting: true,
+            is_retrying: false,
             retries: 0,
         };
         self.0.insert(tab, stall);
@@ -83,6 +95,16 @@ fn is_unreachable(error: &FsError) -> bool {
     matches!(error.kind, FsErrorKind::NetworkLost | FsErrorKind::Timeout)
 }
 
+fn ends_offline(error: &FsError) -> bool {
+    matches!(
+        error.kind,
+        FsErrorKind::NotFound
+            | FsErrorKind::AccessDenied
+            | FsErrorKind::NameInvalid
+            | FsErrorKind::PathTooLong
+    )
+}
+
 impl Browser {
     #[must_use]
     pub fn offline(&self, tab: TabId) -> Option<Offline> {
@@ -98,12 +120,33 @@ impl Browser {
             .stalls
             .0
             .get_mut(&tab)
-            .filter(|stall| stall.request == request && stall.offline.is_none())?;
-        if stall.progress.has_batches() {
+            .filter(|stall| stall.request == request && !stall.is_retrying)?;
+        if stall.offline.is_none() && stall.progress.has_answered() {
             return None;
         }
-        stall.offline = Some(Offline { cached_at });
+        stall.offline.get_or_insert(Offline { cached_at });
+        stall.is_retrying = true;
         Some(retry_delay(0))
+    }
+
+    pub fn take_new_offline(&mut self) -> Vec<(TabId, u64, Duration)> {
+        let pending: Vec<(TabId, u64)> = self
+            .stalls
+            .0
+            .iter()
+            .filter(|(_, stall)| stall.offline.is_some() && !stall.is_retrying)
+            .map(|(tab, stall)| (*tab, stall.request))
+            .filter(|(tab, request)| self.is_pending(*tab, *request))
+            .collect();
+        for (tab, _) in &pending {
+            if let Some(stall) = self.stalls.0.get_mut(tab) {
+                stall.is_retrying = true;
+            }
+        }
+        pending
+            .into_iter()
+            .map(|(tab, request)| (tab, request, retry_delay(0)))
+            .collect()
     }
 
     pub fn retry_offline(&mut self, tab: TabId, request: u64) -> Option<Duration> {
@@ -133,17 +176,44 @@ impl Browser {
         request: u64,
         result: &Result<Fresh, FsError>,
     ) -> bool {
-        let is_unanswered = result.as_ref().err().is_some_and(is_unreachable);
-        match self.stalls.offline_mut(tab, request) {
-            Some(stall) if is_unanswered => {
-                stall.is_attempting = false;
-                true
-            }
-            _ => {
-                self.stalls.0.remove(&tab);
-                false
-            }
+        let cached_at = self.cached_at(tab);
+        let error = result.as_ref().err();
+        if let Some(stall) = self
+            .stalls
+            .0
+            .get_mut(&tab)
+            .filter(|stall| stall.request == request)
+            && error.is_some_and(|error| stall.keeps_on(error))
+        {
+            stall.offline.get_or_insert(Offline { cached_at });
+            stall.is_attempting = false;
+            return true;
         }
+        self.stalls.0.remove(&tab);
+        false
+    }
+
+    pub(super) fn relist_answering(&mut self) {
+        let tabs: Vec<TabId> = self
+            .open_tabs()
+            .into_iter()
+            .map(|(tab, _)| tab)
+            .filter(|tab| self.offline(*tab).is_none())
+            .collect();
+        let effects = tabs
+            .into_iter()
+            .flat_map(|tab| relist_tab(&mut self.state, tab))
+            .collect();
+        self.run(effects);
+    }
+
+    pub(super) fn retries_instead(&mut self) -> bool {
+        let tab = self.state.active_tab().id();
+        if self.offline(tab).is_none() {
+            return false;
+        }
+        self.retry_listing(tab);
+        true
     }
 
     fn attempt(&mut self, tab: TabId, request: u64) -> bool {

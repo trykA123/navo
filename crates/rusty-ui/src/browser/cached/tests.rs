@@ -11,6 +11,7 @@ use crate::browser::Browser;
 use crate::file_list::SortBy;
 
 mod gated;
+mod kept;
 mod offline;
 mod stalled;
 

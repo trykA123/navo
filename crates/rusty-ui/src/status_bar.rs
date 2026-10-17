@@ -27,7 +27,7 @@ impl ListingMark {
                 cached_at_ms: Some(ms),
             } => Some(format!(
                 "Offline · showing cached from {}",
-                format::clock(ms)
+                format::read_time(ms)
             )),
             Self::Offline { cached_at_ms: None } => Some("Offline · showing cached".to_owned()),
         }
@@ -229,7 +229,7 @@ mod tests {
         };
         let expected = format!(
             "2 files, 0 folders · 0 B · Offline · showing cached from {} · – free",
-            format::clock(ms)
+            format::date(ms)
         );
         assert_eq!(label(props, cx), Some(expected));
     }

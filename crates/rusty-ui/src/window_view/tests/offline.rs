@@ -22,13 +22,17 @@ fn stalled(cx: &mut TestAppContext) -> (Rig, PaneId) {
     (rig, pane)
 }
 
-fn enter_slow(rig: &Rig, cx: &mut TestAppContext) {
+fn enter(rig: &Rig, cx: &mut TestAppContext, path: &str) {
     rig.view.update(cx, |view, cx| {
-        let location = local(r"D:\slow");
+        let location = local(path);
         let _ = view.browser.command(&Command::PaneNavigate { location });
         cx.notify();
     });
     cx.run_until_parked();
+}
+
+fn enter_slow(rig: &Rig, cx: &mut TestAppContext) {
+    enter(rig, cx, r"D:\slow");
 }
 
 fn wait(cx: &mut TestAppContext, seconds: u64) {
@@ -131,7 +135,7 @@ fn a_cached_folder_that_stalls_says_offline_with_the_read_time(cx: &mut TestAppC
     wait(cx, 2);
     let offline = format!(
         "Offline · showing cached from {}",
-        format::clock(READ_AT_MS)
+        format::read_time(READ_AT_MS)
     );
     assert!(status(&rig, cx, pane).contains(&offline));
     assert!(rig.frame(cx, |window, _| {
@@ -160,4 +164,20 @@ fn backspace_leaves_a_folder_that_is_not_answering(cx: &mut TestAppContext) {
     });
     assert_eq!(rig.location(cx, pane), local(r"C:\home"));
     rig.fs.release();
+}
+
+#[gpui_kit::test]
+fn a_network_error_at_once_goes_offline_and_retries(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let pane = rig.focused(cx);
+    rig.fs.fail_list("D/work", 1, FsErrorKind::NetworkLost);
+    enter(&rig, cx, r"D:\work");
+    rig.settle_until(cx, |view| !view.browser.loading());
+    assert!(is_offline(&rig, cx, pane));
+    wait(cx, 2);
+    rig.settle_until(cx, |view| {
+        view.browser.state().active_tab().listing().is_some()
+    });
+    assert!(!is_offline(&rig, cx, pane));
+    assert_eq!(rig.location(cx, pane), local(r"D:\work"));
 }
