@@ -14,6 +14,11 @@ use crate::tokens::Theme;
 
 const HEADING_SCALE: [f32; 6] = [1.75, 1.45, 1.2, 1.05, 1., 1.];
 const RULE_HEIGHT: f32 = 1.;
+const TEXT_COLUMN: f32 = 3.5;
+
+pub(super) fn text_column(t: &Theme) -> Pixels {
+    t.spacing.rail_width * TEXT_COLUMN
+}
 
 #[derive(Clone)]
 pub(super) struct Page {
@@ -262,7 +267,9 @@ pub(super) fn draw_block(page: &Page, index: usize, window: &Window) -> AnyEleme
         .child(
             div()
                 .w_full()
-                .max_w(t.spacing.rail_width * 3.5)
+                .when(!matches!(block.kind, BlockKind::Row { .. }), |column| {
+                    column.max_w(text_column(t))
+                })
                 .px(t.spacing.xxl)
                 .child(quoted(t, block.quote, body)),
         )

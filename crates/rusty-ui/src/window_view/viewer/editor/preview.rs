@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::EditorState;
-use gpui_kit::{BackgroundExecutor, Focusable, Stateful, Subscription, Task, WeakEntity};
+use gpui_kit::{BackgroundExecutor, Focusable, Role, Stateful, Subscription, Task, WeakEntity};
 use rusty_structured::markdown::{self, Document, MAX_SOURCE, Refusal};
 
 use super::EditorView;
@@ -74,10 +74,14 @@ fn guarded(host: Host, editor: WeakEntity<EditorView>) -> Host {
             if !is_dirty {
                 return open(location, cx);
             }
-            let _ = editor.update(cx, |view, cx| {
-                view.note = Some(SAVE_FIRST.into());
-                cx.notify();
+            let preview = editor.read_with(cx, |view, _| {
+                view.split.as_ref().map(|split| split.view.downgrade())
             });
+            if let Ok(Some(preview)) = preview {
+                cx.defer(move |cx| {
+                    let _ = preview.update(cx, |view, cx| view.tell(SAVE_FIRST, cx));
+                });
+            }
         }),
         ..host
     }
@@ -248,15 +252,18 @@ impl EditorView {
     pub(super) fn split_pane(&self, t: &Theme, window: &Window, cx: &App) -> Option<AnyElement> {
         let split = self.split.as_ref().filter(|_| self.is_split())?;
         let is_focused = split.view.read(cx).focus().is_focused(window);
-        let body = match &split.refusal {
-            Some(note) => div()
-                .flex_1()
-                .p(t.spacing.xxl)
+        let note = split.refusal.clone().map(|note| {
+            div()
+                .id("editor-preview-note")
+                .role(Role::Status)
+                .aria_label(note.clone())
+                .test_support()
+                .flex_none()
+                .px(t.spacing.xxl)
+                .py(t.spacing.md)
                 .text_color(t.colors.muted)
-                .child(note.clone())
-                .into_any_element(),
-            None => split.view.clone().into_any_element(),
-        };
+                .child(note)
+        });
         let pane = div()
             .id("editor-preview")
             .test_support()
@@ -272,7 +279,8 @@ impl EditorView {
             } else {
                 t.colors.line
             })
-            .child(body);
+            .children(note)
+            .child(split.view.clone());
         Some(pane.into_any_element())
     }
 

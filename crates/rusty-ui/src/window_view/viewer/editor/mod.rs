@@ -154,6 +154,7 @@ impl EditorView {
         self.revision += 1;
         self.marking.freeze_bookmarks();
         self.overwrite = false;
+        self.note = None;
         self.text_edited(cx);
         self.preview_edited(cx);
         cx.notify();

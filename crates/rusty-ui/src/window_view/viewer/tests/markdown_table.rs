@@ -7,6 +7,7 @@ use gpui_kit::{
 use super::structured::open_named;
 use super::{Setup, has_editor, redraw};
 use crate::tokens;
+use crate::window_view::tests::press;
 
 const TIERS: &str = "| Tier | Model | Roles | Used for |\n| --- | --- | --- | --- |\n\
     | **T1** | Opus 5.5, `medium` | `patcher`, `infra-builder` | Moves, exact edits, small \
@@ -161,4 +162,50 @@ fn a_wide_table_shows_a_horizontal_scrollbar_under_its_last_row(cx: &mut TestApp
     let last = bounds_of(cx, window, ("md-table", 2usize));
     assert!(bar.size.width > px(0.));
     assert!(bar.origin.y >= last.origin.y, "{bar:?} under {last:?}");
+}
+
+#[gpui_kit::test]
+fn a_wide_table_uses_the_room_beyond_the_text_column(cx: &mut TestAppContext) {
+    let (window, _, _) = open_named(cx, "wide.md", Setup::new(wide_table().into_bytes()));
+    let column = cx.update(|cx| tokens::current(cx).spacing.rail_width * 3.5);
+    let body = bounds_of(cx, window, "markdown-body");
+    assert!(body.size.width > column + px(100.), "{body:?}");
+    let frame = bounds_of(cx, window, ("md-table", 1usize));
+    assert!(frame.size.width > column, "{frame:?} wider than {column:?}");
+    assert!(frame.size.width <= body.size.width, "{frame:?} in {body:?}");
+}
+
+#[gpui_kit::test]
+fn left_and_right_scroll_a_wide_table_sideways(cx: &mut TestAppContext) {
+    let (window, view, _) = open_named(cx, "wide.md", Setup::new(wide_table().into_bytes()));
+    let row = bounds_of(cx, window, ("md-row", 1usize));
+    press(cx, window, &view, "right");
+    redraw(cx, window);
+    let moved = bounds_of(cx, window, ("md-row", 1usize));
+    assert!(moved.origin.x < row.origin.x, "{moved:?} after {row:?}");
+    assert_eq!(
+        bounds_of(cx, window, ("md-row", 0usize)).origin.x,
+        moved.origin.x
+    );
+    press(cx, window, &view, "left");
+    redraw(cx, window);
+    assert_eq!(bounds_of(cx, window, ("md-row", 1usize)).origin, row.origin);
+    press(cx, window, &view, "left");
+    redraw(cx, window);
+    assert_eq!(
+        bounds_of(cx, window, ("md-row", 1usize)).origin,
+        row.origin,
+        "left stops at the first column"
+    );
+}
+
+#[gpui_kit::test]
+fn a_table_that_fits_stays_in_the_text_column(cx: &mut TestAppContext) {
+    let (window, _, _) = open_named(cx, "tiers.md", Setup::new(TIERS.as_bytes().to_vec()));
+    let column = cx.update(|cx| tokens::current(cx).spacing.rail_width * 3.5);
+    let body = bounds_of(cx, window, "markdown-body");
+    let frame = bounds_of(cx, window, ("md-table", 0usize));
+    assert!(frame.size.width <= column, "{frame:?} within {column:?}");
+    let centre = body.center().x - frame.center().x;
+    assert!(centre.abs() < px(8.), "{frame:?} centred in {body:?}");
 }

@@ -396,21 +396,42 @@ fn an_item_that_opens_with_a_list_keeps_both_markers() {
     );
 }
 
-fn column_words(doc: &Document) -> Vec<(String, bool)> {
+type Words = [(String, bool); 2];
+
+fn column_words(doc: &Document) -> Vec<Words> {
     (0..doc.table(0).expect("a table").widths().len())
         .map(|column| {
-            let word = doc.column_word(0, column).expect("a word");
-            (word.text.to_owned(), word.is_mono)
+            let words = doc.column_words(0, column).expect("the words");
+            words.map(|word| (word.text.to_owned(), word.is_mono))
         })
         .collect()
 }
 
+fn plain(text: &str) -> Words {
+    [(text.to_owned(), false), (String::new(), true)]
+}
+
 #[test]
-fn each_table_column_knows_its_longest_word() {
+fn each_table_column_knows_its_longest_plain_and_code_word() {
     let source = "| Tier | Used for |\n| --- | --- |\n| **T1** | Moves, `formatted` edits |\n";
     assert_eq!(
         column_words(&doc(source)),
-        [("Tier".to_owned(), false), ("formatted".to_owned(), true)]
+        [
+            plain("Tier"),
+            [("Moves,".to_owned(), false), ("formatted".to_owned(), true)]
+        ]
+    );
+}
+
+#[test]
+fn a_short_code_word_is_kept_beside_a_longer_plain_word() {
+    let source = "| a |\n| - |\n| plainwords `mmmmmmm` |\n| `mm` x |\n";
+    assert_eq!(
+        column_words(&doc(source)),
+        [[
+            ("plainwords".to_owned(), false),
+            ("mmmmmmm".to_owned(), true)
+        ]]
     );
 }
 
@@ -418,14 +439,14 @@ fn each_table_column_knows_its_longest_word() {
 fn a_column_word_is_cut_to_40_characters() {
     let long = "x".repeat(100);
     let source = format!("| a |\n| - |\n| {long} |\n");
-    assert_eq!(column_words(&doc(&source)), [("x".repeat(40), false)]);
+    assert_eq!(column_words(&doc(&source)), [plain(&"x".repeat(40))]);
 }
 
 #[test]
-fn an_empty_column_has_an_empty_word() {
+fn an_empty_column_has_empty_words() {
     assert_eq!(
         column_words(&doc("| a | |\n| - | - |\n")),
-        [("a".to_owned(), false), (String::new(), false)]
+        [plain("a"), plain("")]
     );
 }
 

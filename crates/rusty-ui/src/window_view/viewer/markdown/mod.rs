@@ -19,7 +19,7 @@ use rusty_structured::markdown::Document;
 use super::background::{Job, spawn_job};
 use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
 use super::rich_header::{HeaderParts, header};
-use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
+use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ScrollLeft, ScrollRight};
 use crate::prelude::*;
 use crate::tokens;
 use block::{Page, draw_block};
@@ -111,8 +111,15 @@ impl MarkdownView {
         Some(SharedString::from(target.to_owned()))
     }
 
-    pub(super) fn click_link(&mut self, link: u32, opens: bool, cx: &mut Context<Self>) {
+    fn pick(&mut self, link: u32) {
         self.picked = Some(link);
+        if self.is_preview {
+            self.note = None;
+        }
+    }
+
+    pub(super) fn click_link(&mut self, link: u32, opens: bool, cx: &mut Context<Self>) {
+        self.pick(link);
         self.pointed = Some(link);
         if opens {
             self.follow_picked(cx);
@@ -176,7 +183,7 @@ impl MarkdownView {
             (Some(at), false) => (at + 1) % count,
             (Some(at), true) => at.checked_sub(1).unwrap_or(count - 1),
         };
-        self.picked = Some(next);
+        self.pick(next);
         if let Some(link) = self.doc.link(next) {
             self.list.scroll_to_reveal_item(link.block());
         }
@@ -185,6 +192,11 @@ impl MarkdownView {
 
     fn scroll_by(&mut self, distance: Pixels, cx: &mut Context<Self>) {
         self.list.scroll_by(distance);
+        cx.notify();
+    }
+
+    fn scroll_tables(&mut self, distance: Pixels, cx: &mut Context<Self>) {
+        self.tables.scroll_by(distance);
         cx.notify();
     }
 
@@ -206,6 +218,12 @@ impl MarkdownView {
             }))
             .on_action(cx.listener(|view, _: &PageDown, window, cx| {
                 view.scroll_by(window.viewport_size().height * 0.8, cx);
+            }))
+            .on_action(cx.listener(move |view, _: &ScrollLeft, _, cx| {
+                view.scroll_tables(-line, cx);
+            }))
+            .on_action(cx.listener(move |view, _: &ScrollRight, _, cx| {
+                view.scroll_tables(line, cx);
             }))
             .on_action(cx.listener(|view, _: &GoStart, _, cx| view.scroll_to(false, cx)))
             .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.scroll_to(true, cx)))

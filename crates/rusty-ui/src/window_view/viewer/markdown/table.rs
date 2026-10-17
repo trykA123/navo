@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use gpui_kit::base::{Scrollbar, ScrollbarMode, TestSupportExt};
-use gpui_kit::{ScrollHandle, TextRun, font};
-use rusty_structured::markdown::{Align, Block, BlockKind, MAX_COLUMNS};
+use gpui_kit::{ScrollHandle, TextRun, font, point};
+use rusty_structured::markdown::{Align, Block, BlockKind, ColumnWord, MAX_COLUMNS};
 
-use super::block::{Page, text_element};
+use super::block::{Page, text_column, text_element};
 use super::runs::{RunLook, runs};
 use crate::prelude::*;
 
@@ -17,6 +17,16 @@ pub(super) struct TableScrolls(RefCell<HashMap<u32, ScrollHandle>>);
 impl TableScrolls {
     fn handle(&self, table: u32) -> ScrollHandle {
         self.0.borrow_mut().entry(table).or_default().clone()
+    }
+
+    pub(super) fn scroll_by(&self, distance: Pixels) {
+        for handle in self.0.borrow().values() {
+            let offset = handle.offset();
+            let x = (offset.x - distance)
+                .max(-handle.max_offset().x)
+                .min(px(0.));
+            handle.set_offset(point(x, offset.y));
+        }
     }
 }
 
@@ -42,11 +52,8 @@ fn row_look(page: &Page, is_head: bool) -> RunLook<'_> {
     }
 }
 
-fn word_width(page: &Page, (table, column): (u32, usize), window: &Window) -> Pixels {
+fn word_width(page: &Page, word: ColumnWord<'_>, window: &Window) -> Pixels {
     let t = &page.t;
-    let Some(word) = page.doc.column_word(table, column) else {
-        return px(0.);
-    };
     let mut face = font(if word.is_mono {
         t.typography.mono_font.clone()
     } else {
@@ -65,6 +72,18 @@ fn word_width(page: &Page, (table, column): (u32, usize), window: &Window) -> Pi
         .text_system()
         .layout_line(word.text, t.typography.small, &[run], None);
     line.width.ceil() + px(SLACK)
+}
+
+fn widest<'a>(words: [ColumnWord<'a>; 2], measure: impl Fn(ColumnWord<'a>) -> Pixels) -> Pixels {
+    words.into_iter().map(measure).fold(px(0.), Pixels::max)
+}
+
+fn column_width(page: &Page, (table, column): (u32, usize), window: &Window) -> Pixels {
+    page.doc
+        .column_words(table, column)
+        .map_or(px(0.), |words| {
+            widest(words, |word| word_width(page, word, window))
+        })
 }
 
 fn is_last_row(page: &Page, index: usize, table: u32) -> bool {
@@ -108,7 +127,7 @@ fn cells(page: &Page, block: &Block, table_id: u32, window: &Window) -> (Vec<Any
         .take(MAX_COLUMNS)
         .enumerate()
         .map(|(column, (width, align))| {
-            let basis = word_width(page, (table_id, column), window) + t.spacing.md * 2.;
+            let basis = column_width(page, (table_id, column), window) + t.spacing.md * 2.;
             total += basis;
             let shown = runs(&page.doc, block, u8::try_from(column).ok(), &look);
             aligned(
@@ -167,11 +186,40 @@ pub(super) fn table_row(
     let bar = is_last_row(page, index, table_id)
         .then(|| scrollbar(page, table_id, &handle))
         .flatten();
+    let room = text_column(t) - t.spacing.xxl * 2.;
     div()
         .w_full()
+        .max_w(room.max(total))
+        .mx_auto()
         .flex()
         .flex_col()
         .child(scroller)
         .children(bar)
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::px;
+    use rusty_structured::markdown::ColumnWord;
+
+    use super::widest;
+
+    #[test]
+    fn a_code_word_wider_than_a_longer_plain_word_sets_the_width() {
+        let plain = ColumnWord {
+            text: "illillillill",
+            is_mono: false,
+        };
+        let code = ColumnWord {
+            text: "MMMMMMMMMM",
+            is_mono: true,
+        };
+        let measure = |word: ColumnWord<'_>| {
+            let per_char = if word.is_mono { 9. } else { 4. };
+            px(per_char * word.text.len() as f32)
+        };
+        assert_eq!(widest([plain, code], measure), px(90.));
+        assert_eq!(widest([code, plain], measure), px(90.));
+    }
 }

@@ -61,7 +61,14 @@ impl EditorView {
         Some(row.into_any_element())
     }
 
-    fn header(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
+    fn message(&self, window: &Window, cx: &App) -> Option<SharedString> {
+        if self.is_preview_focused(window, cx) {
+            return self.preview_status(cx).or_else(|| self.note.clone());
+        }
+        self.note.clone().or_else(|| self.preview_status(cx))
+    }
+
+    fn header(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Div {
         let mode = if self.editing {
             "Editing"
         } else {
@@ -99,10 +106,9 @@ impl EditorView {
                 d.child(div().text_color(t.colors.mark).child("●"))
             })
             .child(div().flex_1())
-            .when_some(
-                self.note.clone().or_else(|| self.preview_status(cx)),
-                |d, note| d.child(status(t, "viewer-message", note)),
-            )
+            .when_some(self.message(window, cx), |d, note| {
+                d.child(status(t, "viewer-message", note))
+            })
             .when_some(count, |d, count| d.child(status(t, "find-count", count)))
             .children(self.bar(t, cx))
     }
@@ -207,7 +213,7 @@ impl Render for EditorView {
             .flex_1()
             .min_h_0()
             .size_full()
-            .child(self.header(&t, cx))
+            .child(self.header(&t, window, cx))
             .child(self.body_row(&t, window, cx))
             .children(panel)
     }

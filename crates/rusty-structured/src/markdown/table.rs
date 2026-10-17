@@ -40,26 +40,26 @@ fn is_mono_at(spans: &[Span], at: usize) -> bool {
     false
 }
 
-fn longest_word(cell: &str, cell_start: usize, spans: &[Span]) -> WordSpot {
-    let mut best = (0, 0, 0);
+fn longest_words(cell: &str, cell_start: usize, spans: &[Span]) -> [WordSpot; 2] {
+    let mut best = [WordSpot::default(); 2];
     let mut at = 0;
     for word in cell.split([' ', '\n']) {
         let chars = word.chars().take(MAX_WORD).count();
-        if chars > best.2 {
+        let is_mono = chars > 0 && is_mono_at(spans, at);
+        let slot = &mut best[usize::from(is_mono)];
+        if chars > usize::from(slot.chars) {
             let end = word
                 .char_indices()
                 .nth(MAX_WORD)
                 .map_or(word.len(), |(cut, _)| cut);
-            best = (at, at + end, chars);
+            *slot = WordSpot {
+                text: (offset(cell_start + at), offset(cell_start + at + end)),
+                chars: u16::try_from(chars).unwrap_or(u16::MAX),
+            };
         }
         at += word.len() + 1;
     }
-    let (start, end, chars) = best;
-    WordSpot {
-        text: (offset(cell_start + start), offset(cell_start + end)),
-        chars: u16::try_from(chars).unwrap_or(u16::MAX),
-        is_mono: chars > 0 && is_mono_at(spans, start),
-    }
+    best
 }
 
 impl Builder {
@@ -76,7 +76,7 @@ impl Builder {
         let id = u32::try_from(self.doc.tables.len()).unwrap_or(u32::MAX);
         self.doc.tables.push(Table {
             widths: vec![1; alignments.len()],
-            words: vec![WordSpot::default(); alignments.len()],
+            words: vec![[WordSpot::default(); 2]; alignments.len()],
             alignments,
         });
         self.table = Some(TableState {
@@ -132,17 +132,20 @@ impl Builder {
         let shown = self.doc.text.get(table.cell_start..).unwrap_or_default();
         let width = u16::try_from(shown.chars().take(MAX_CELL_WIDTH).count()).unwrap_or(1);
         let spans = self.doc.spans.get(table.span_start..).unwrap_or_default();
-        let word = longest_word(shown, table.cell_start, spans);
+        let words = longest_words(shown, table.cell_start, spans);
         let Some(found) = self.doc.tables.get_mut(table.id as usize) else {
             return;
         };
         if let Some(column) = found.widths.get_mut(table.cell) {
             *column = (*column).max(width);
         }
-        if let Some(longest) = found.words.get_mut(table.cell)
-            && word.chars > longest.chars
-        {
-            *longest = word;
+        let Some(longest) = found.words.get_mut(table.cell) else {
+            return;
+        };
+        for (longest, word) in longest.iter_mut().zip(words) {
+            if word.chars > longest.chars {
+                *longest = word;
+            }
         }
     }
 

@@ -15,7 +15,7 @@ fn same_table(old: &Document, (was, is): (u32, u32), new: &Document) -> bool {
     before.widths() == after.widths()
         && before.alignments() == after.alignments()
         && (0..before.widths().len())
-            .all(|column| old.column_word(was, column) == new.column_word(is, column))
+            .all(|column| old.column_words(was, column) == new.column_words(is, column))
 }
 
 fn same_block(old: &Document, was: &Block, new: &Document, is: &Block) -> bool {
@@ -93,6 +93,9 @@ impl MarkdownView {
                 offset_in_item: top.offset_in_item,
             });
         }
+        if doc.table_count() != self.doc.table_count() {
+            self.tables = Rc::default();
+        }
         self.doc = Rc::new(doc);
         self.picked = None;
         self.pointed = None;
@@ -120,6 +123,10 @@ impl MarkdownView {
             }),
         }
         cx.notify();
+    }
+
+    pub(in crate::window_view::viewer) fn tell(&mut self, note: &str, cx: &mut Context<Self>) {
+        self.say(note.to_owned(), cx);
     }
 
     pub(in crate::window_view::viewer) fn status(&self) -> Option<SharedString> {

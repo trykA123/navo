@@ -136,7 +136,6 @@ pub enum Align {
 struct WordSpot {
     text: (u32, u32),
     chars: u16,
-    is_mono: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,7 +148,7 @@ pub struct ColumnWord<'a> {
 pub struct Table {
     alignments: Vec<Align>,
     widths: Vec<u16>,
-    words: Vec<WordSpot>,
+    words: Vec<[WordSpot; 2]>,
 }
 
 impl Table {
@@ -235,12 +234,18 @@ impl Document {
     }
 
     #[must_use]
-    pub fn column_word(&self, table: u32, column: usize) -> Option<ColumnWord<'_>> {
-        let spot = self.table(table)?.words.get(column)?;
-        Some(ColumnWord {
+    pub fn table_count(&self) -> usize {
+        self.tables.len()
+    }
+
+    #[must_use]
+    pub fn column_words(&self, table: u32, column: usize) -> Option<[ColumnWord<'_>; 2]> {
+        let [plain, code] = self.table(table)?.words.get(column)?;
+        let word = |spot: &WordSpot, is_mono| ColumnWord {
             text: self.text.get(range(spot.text)).unwrap_or_default(),
-            is_mono: spot.is_mono,
-        })
+            is_mono,
+        };
+        Some([word(plain, false), word(code, true)])
     }
 
     #[must_use]
@@ -273,7 +278,7 @@ impl Document {
             .map(|table| {
                 table.alignments.capacity()
                     + table.widths.capacity() * 2
-                    + table.words.capacity() * size_of::<WordSpot>()
+                    + table.words.capacity() * size_of::<[WordSpot; 2]>()
             })
             .sum();
         let labels: usize = self.labels.iter().map(|label| label.len()).sum();
