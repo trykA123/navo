@@ -108,8 +108,9 @@ impl FerriteWindow {
                 .hint(&["←", "→"], "Fold")
                 .hint(&["enter"], "Go to")
                 .hint(&["f3"], "View")
-                .hint(&["escape"], "Back to list"),
-            (true, false) => sheet.hint(&["escape"], "Back to list"),
+                .hint(&["ctrl-r"], "Recount")
+                .hint(&["escape"], "Close"),
+            (true, false) => sheet.hint(&["escape"], "Close"),
             (false, true) => Self::list_hints(sheet).hint(&["escape"], "Stop scan"),
             (false, false) => Self::list_hints(sheet),
         };

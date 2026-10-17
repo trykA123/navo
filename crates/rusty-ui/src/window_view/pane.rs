@@ -197,7 +197,7 @@ impl FerriteWindow {
                 }),
             )
             .on_action(cx.listener(|this: &mut Self, _: &ClearFilter, _, cx| {
-                this.stop_scan(cx);
+                this.escape_preview(cx);
             }))
     }
 
@@ -235,6 +235,41 @@ impl FerriteWindow {
             })
     }
 
+    fn list_action(
+        &mut self,
+        action: &FileListAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match action {
+            FileListAction::Open(row) => {
+                self.browser.open_row(*row);
+            }
+            FileListAction::Up => {
+                self.browser.go_up();
+            }
+            FileListAction::SwitchPane => self.switch_pane(window, cx),
+            FileListAction::Operate(kind) => {
+                self.browser.prepare(*kind);
+            }
+            FileListAction::Filter(edit) => {
+                self.filter(*edit);
+            }
+            FileListAction::Rename(row) => self.ask_rename(*row),
+            FileListAction::NewFolder => self.ask_new_folder(),
+            FileListAction::SelectPattern { add } => self.ask_pattern(*add),
+            FileListAction::Edit { row, choose } => self.edit_row(*row, *choose),
+            FileListAction::View(row) => return self.view_or_preview(*row, window, cx),
+            FileListAction::Sort(by) => {
+                self.browser.sort_by(*by);
+            }
+            FileListAction::ContextMenu(_)
+            | FileListAction::MenuPrefetch { .. }
+            | FileListAction::MenuCancel => {}
+        }
+        true
+    }
+
     fn file_list(
         pane: PaneId,
         props: FileListProps,
@@ -255,33 +290,9 @@ impl FerriteWindow {
                     if this.route_menu_action((pane, action), window, cx) {
                         return;
                     }
-                    match action {
-                        FileListAction::Open(row) => {
-                            this.browser.open_row(*row);
-                        }
-                        FileListAction::Up => {
-                            this.browser.go_up();
-                        }
-                        FileListAction::SwitchPane => this.switch_pane(window, cx),
-                        FileListAction::Operate(kind) => {
-                            this.browser.prepare(*kind);
-                        }
-                        FileListAction::Filter(edit) => {
-                            this.filter(*edit);
-                        }
-                        FileListAction::Rename(row) => this.ask_rename(*row),
-                        FileListAction::NewFolder => this.ask_new_folder(),
-                        FileListAction::SelectPattern { add } => this.ask_pattern(*add),
-                        FileListAction::Edit { row, choose } => this.edit_row(*row, *choose),
-                        FileListAction::View(row) => this.view_row(*row, window, cx),
-                        FileListAction::Sort(by) => {
-                            this.browser.sort_by(*by);
-                        }
-                        FileListAction::ContextMenu(_)
-                        | FileListAction::MenuPrefetch { .. }
-                        | FileListAction::MenuCancel => {}
+                    if this.list_action(action, window, cx) {
+                        this.focus_core_pane(window, cx);
                     }
-                    this.focus_core_pane(window, cx);
                     cx.notify();
                 },
             ))
