@@ -41,7 +41,7 @@ impl StoreDirs {
 
     #[must_use]
     pub fn keymap_file(&self) -> PathBuf {
-        todo!("P20 K4")
+        self.config.join("keymap.toml")
     }
 
     #[must_use]

@@ -104,21 +104,11 @@ impl FKeyBar {
     }
 
     #[must_use]
-    pub fn warn(self, layer: KeyLayer, index: usize, spoken: impl Into<SharedString>) -> Self {
-        self.warn_at(Some(layer), index, spoken)
-    }
-
-    #[must_use]
-    pub fn warn_at(
-        mut self,
-        layer: Option<KeyLayer>,
-        index: usize,
-        spoken: impl Into<SharedString>,
-    ) -> Self {
+    pub fn warn(mut self, layer: impl Into<Option<KeyLayer>>, index: usize, spoken: &str) -> Self {
         self.warning = Some(Warning {
-            layer,
+            layer: layer.into(),
             index,
-            spoken: spoken.into(),
+            spoken: spoken.to_owned().into(),
         });
         self
     }

@@ -115,15 +115,33 @@ impl StatusBar {
     }
 }
 
+fn notice_text(t: &tokens::Theme, notice: StatusNotice) -> impl IntoElement {
+    let color = if notice.is_error {
+        t.colors.mark
+    } else {
+        t.colors.warn
+    };
+    div()
+        .flex_shrink(1.)
+        .min_w_0()
+        .truncate()
+        .text_color(color)
+        .child(notice.text)
+}
+
 impl RenderOnce for StatusBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
         let c = &t.colors;
         let props = self.props;
+        let label = match &self.notice {
+            Some(notice) => format!("{} · {}", notice.text, props.text()),
+            None => props.text(),
+        };
         div()
             .id(self.id)
             .role(Role::Status)
-            .aria_label(props.text())
+            .aria_label(label)
             .test_support()
             .flex()
             .items_center()
@@ -135,6 +153,7 @@ impl RenderOnce for StatusBar {
             .text_color(c.muted)
             .border_t_1()
             .border_color(t.surfaces.card_edge)
+            .when_some(self.notice, |d, notice| d.child(notice_text(t, notice)))
             .when_some(props.marked_text(), |d, marked| {
                 d.child(
                     div()

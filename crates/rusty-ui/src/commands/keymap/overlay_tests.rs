@@ -34,13 +34,10 @@ fn an_empty_user_file_changes_nothing() {
 
 #[test]
 fn a_user_entry_replaces_the_built_in_keys_of_that_command() {
-    let result = overlaid(&one("files.copy", "\"ctrl-f5\", \"alt-c\"", None));
-    assert_eq!(keys(&result.keymap, "files.copy"), ["ctrl-f5", "alt-c"]);
+    let result = overlaid(&one("files.copy", "\"alt-f5\", \"alt-c\"", None));
+    assert_eq!(keys(&result.keymap, "files.copy"), ["alt-f5", "alt-c"]);
     assert_eq!(keys(&result.keymap, "files.move"), ["f6"]);
-    assert_eq!(
-        result.keymap.binds().len(),
-        Keymap::builtin().binds().len()
-    );
+    assert_eq!(result.keymap.binds().len(), Keymap::builtin().binds().len());
     assert_eq!(result.warnings, []);
 }
 

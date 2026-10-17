@@ -28,6 +28,15 @@ fn invalid(news: KeymapNews) -> String {
     }
 }
 
+fn wait_live(watching: Option<&rusty_fs::Watch>) {
+    let watching = watching.expect("the settings folder is watched");
+    let deadline = std::time::Instant::now() + NEWS_WAIT;
+    while !watching.is_live() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(watching.is_live());
+}
+
 fn entries(dir: &tempfile::TempDir) -> Vec<String> {
     let mut names: Vec<String> = fs::read_dir(dir.path())
         .expect("dir")
@@ -50,10 +59,10 @@ fn a_missing_file_means_the_built_in_keymap() {
 #[test]
 fn a_valid_file_overrides_the_built_in_keys() {
     let dir = tempfile::tempdir().expect("dir");
-    let text = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"ctrl-f5\"]\n";
+    let text = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"alt-f5\"]\n";
     fs::write(file_in(&dir), text).expect("write");
     let (keymap, warnings) = applied(load(&file_in(&dir)));
-    assert!(keymap.has_key("files.copy", "ctrl-f5"));
+    assert!(keymap.has_key("files.copy", "alt-f5"));
     assert!(!keymap.has_key("files.copy", "f5"));
     assert_eq!(warnings, Vec::<String>::new());
     assert_eq!(fs::read_to_string(file_in(&dir)).expect("read"), text);
@@ -108,12 +117,12 @@ fn a_change_on_disk_is_read_validated_and_sent() {
     let watching = watch(&path, start, move |news| {
         let _ = sender.send(news);
     });
-    assert!(watching.is_some(), "the settings folder is watched");
+    wait_live(watching.as_ref());
     fs::write(dir.path().join("ferrite.toml"), "").expect("write settings");
-    let text = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"ctrl-f5\"]\n";
+    let text = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"alt-f5\"]\n";
     fs::write(&path, text).expect("write keymap");
     let (keymap, _) = applied(news.recv_timeout(NEWS_WAIT).expect("news"));
-    assert!(keymap.has_key("files.copy", "ctrl-f5"));
+    assert!(keymap.has_key("files.copy", "alt-f5"));
     let broken = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"F5\"]\n";
     fs::write(&path, broken).expect("write keymap");
     let message = invalid(news.recv_timeout(NEWS_WAIT).expect("news"));
@@ -129,12 +138,13 @@ fn a_change_on_disk_is_read_validated_and_sent() {
 fn the_same_content_is_not_sent_twice() {
     let dir = tempfile::tempdir().expect("dir");
     let path = file_in(&dir);
-    let text = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"ctrl-f5\"]\n";
+    let text = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"alt-f5\"]\n";
     fs::write(&path, text).expect("write keymap");
     let (sender, news) = mpsc::channel();
-    let _watching = watch(&path, load(&path), move |news| {
+    let watching = watch(&path, load(&path), move |news| {
         let _ = sender.send(news);
     });
+    wait_live(watching.as_ref());
     fs::write(&path, text).expect("write keymap");
     assert!(news.recv_timeout(Duration::from_secs(2)).is_err());
 }

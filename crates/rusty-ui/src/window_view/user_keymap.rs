@@ -1,6 +1,7 @@
+use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 
-use super::FerriteWindow;
+use super::{FerriteWindow, rebind_app_keys};
 use crate::commands::Keymap;
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
@@ -49,9 +50,41 @@ impl KeymapHooks {
 }
 
 impl FerriteWindow {
-    pub(super) fn listen_keymap(_hooks: KeymapHooks, _cx: &mut Context<Self>) {}
+    pub(super) fn listen_keymap(&mut self, hooks: KeymapHooks, cx: &mut Context<Self>) {
+        if let Some(news) = hooks.start {
+            self.take_keymap(news, cx);
+        }
+        let Some(mut receiver) = hooks.news else {
+            return;
+        };
+        cx.spawn(async move |this, cx| {
+            while let Some(news) = receiver.next().await
+                && this
+                    .update(cx, |view, cx| view.take_keymap(news, cx))
+                    .is_ok()
+            {}
+        })
+        .detach();
+    }
+
+    fn take_keymap(&mut self, news: KeymapNews, cx: &mut Context<Self>) {
+        self.keymap_notice = match news {
+            KeymapNews::Applied { keymap, warnings } => {
+                rebind_app_keys(keymap, cx);
+                (!warnings.is_empty()).then(|| StatusNotice {
+                    text: warnings.join(" · ").into(),
+                    is_error: false,
+                })
+            }
+            KeymapNews::Invalid(message) => Some(StatusNotice {
+                text: message.into(),
+                is_error: true,
+            }),
+        };
+        cx.notify();
+    }
 
     pub(super) fn keymap_notice(&self) -> Option<StatusNotice> {
-        None
+        self.keymap_notice.clone()
     }
 }

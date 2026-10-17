@@ -188,7 +188,10 @@ fn the_delete_warning_sits_on_the_key_of_files_delete() {
         Some((Some(KeyLayer::Shift), 7))
     );
     let cases = [
-        ("\"shift-delete\", \"alt-f2\"", Some((Some(KeyLayer::Alt), 1))),
+        (
+            "\"shift-delete\", \"alt-f2\"",
+            Some((Some(KeyLayer::Alt), 1)),
+        ),
         ("\"f4\"", Some((None, 3))),
         ("\"shift-delete\"", None),
         ("", None),
