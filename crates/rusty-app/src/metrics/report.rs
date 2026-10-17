@@ -36,9 +36,12 @@ pub struct Build {
 impl Build {
     pub fn current() -> Self {
         Self {
-            version: String::new(),
-            commit: String::new(),
-            exe_bytes: None,
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            commit: env!("FERRITE_COMMIT").to_owned(),
+            exe_bytes: std::env::current_exe()
+                .and_then(std::fs::metadata)
+                .ok()
+                .map(|meta| meta.len()),
         }
     }
 }
@@ -53,27 +56,33 @@ pub struct Measured {
 
 impl Report {
     pub fn new(build: Build, clock: &ProcessClock, measured: Measured) -> Self {
-        let _ = (clock, measured);
+        let memory = measured.memory;
         Self {
             version: build.version,
             commit: build.commit,
             exe_bytes: build.exe_bytes,
-            renderer: String::new(),
-            first_frame_ms: 0.0,
-            first_usable_ms: 0.0,
-            marks: Vec::new(),
-            idle_private_bytes: None,
-            idle_working_set_bytes: None,
-            peak_working_set_bytes: None,
+            renderer: measured.renderer.unwrap_or_else(|| "unknown".to_owned()),
+            first_frame_ms: clock.ms(measured.first_frame),
+            first_usable_ms: clock.ms(measured.first_usable),
+            marks: measured
+                .marks
+                .into_iter()
+                .map(|(name, at)| Mark {
+                    name: name.to_owned(),
+                    ms: clock.ms(at),
+                })
+                .collect(),
+            idle_private_bytes: memory.private_bytes,
+            idle_working_set_bytes: memory.working_set_bytes,
+            peak_working_set_bytes: memory.peak_working_set_bytes,
         }
     }
 
     pub fn to_json(&self) -> String {
-        String::new()
+        serde_json::to_string_pretty(self).unwrap_or_default()
     }
 
     pub fn write(&self, path: &Path) -> io::Result<()> {
-        let _ = path;
-        Ok(())
+        std::fs::write(path, self.to_json() + "\n")
     }
 }

@@ -16,8 +16,8 @@ impl StoreDirs {
     #[must_use]
     pub fn in_profile(root: &Path) -> Self {
         Self {
-            config: root.to_path_buf(),
-            data: root.to_path_buf(),
+            config: root.join("config"),
+            data: root.join("data"),
         }
     }
 

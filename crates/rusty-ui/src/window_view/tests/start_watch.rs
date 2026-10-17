@@ -69,10 +69,10 @@ fn the_watch_reports_once_after_the_listed_frame_and_the_idle_wait(cx: &mut Test
     let reports = Reports::default();
     let (window, view) = open_options(cx, watched(&reports));
     draw(cx, window);
+    draw(cx, window);
     assert!(reports.borrow().is_empty(), "reported before the idle wait");
     cx.executor().advance_clock(IDLE);
     cx.run_until_parked();
-    draw(cx, window);
     let reports = reports.borrow();
     assert_eq!(reports.len(), 1);
     let report = &reports[0];

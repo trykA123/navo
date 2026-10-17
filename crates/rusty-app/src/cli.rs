@@ -19,21 +19,80 @@ pub struct Start {
 
 pub const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>]]";
 
+const STANDALONE: [&str; 2] = ["--version", "--diag-report"];
+const WINDOW_FLAGS: [&str; 5] = ["--view", "--profile", "--metrics", "--left", "--right"];
+
 impl Command {
     pub fn uses_console(&self) -> bool {
-        false
+        !matches!(self, Self::Open(start) if !start.is_metrics())
     }
 }
 
 impl Start {
     pub fn is_metrics(&self) -> bool {
-        false
+        self.metrics.is_some()
+    }
+
+    fn slot(&mut self, flag: &str) -> Option<&mut Option<PathBuf>> {
+        match flag {
+            "--view" => Some(&mut self.view),
+            "--profile" => Some(&mut self.profile),
+            "--metrics" => Some(&mut self.metrics),
+            "--left" => Some(&mut self.left),
+            "--right" => Some(&mut self.right),
+            _ => None,
+        }
     }
 }
 
 pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
-    let _ = args.into_iter();
-    Err(USAGE.to_owned())
+    read(args.into_iter()).map_err(|problem| format!("ferrite: {problem}\n{USAGE}"))
+}
+
+fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
+    let mut start = Start::default();
+    let mut is_first = true;
+    while let Some(arg) = args.next() {
+        let flag = arg.to_string_lossy();
+        if STANDALONE.contains(&flag.as_ref()) {
+            if !is_first {
+                return Err(format!("{flag} stands alone"));
+            }
+            return standalone(&flag, args);
+        }
+        is_first = false;
+        let slot = start
+            .slot(&flag)
+            .ok_or_else(|| format!("unknown argument {flag}"))?;
+        if slot.is_some() {
+            return Err(format!("{flag} given twice"));
+        }
+        *slot = Some(value(&flag, args.next())?);
+    }
+    Ok(Command::Open(start))
+}
+
+fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Command, String> {
+    let command = if flag == "--version" {
+        Command::Version
+    } else {
+        Command::DiagReport(value(flag, rest.next())?)
+    };
+    let Some(extra) = rest.next() else {
+        return Ok(command);
+    };
+    let extra = extra.to_string_lossy();
+    if STANDALONE.contains(&extra.as_ref()) || WINDOW_FLAGS.contains(&extra.as_ref()) {
+        Err(format!("{flag} stands alone"))
+    } else {
+        Err(format!("unknown argument {extra}"))
+    }
+}
+
+fn value(flag: &str, next: Option<OsString>) -> Result<PathBuf, String> {
+    next.filter(|value| !value.is_empty() && !value.to_string_lossy().starts_with("--"))
+        .map(PathBuf::from)
+        .ok_or_else(|| format!("{flag} needs a value"))
 }
 
 #[cfg(test)]

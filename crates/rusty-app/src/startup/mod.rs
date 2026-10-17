@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use rusty_core::{AppState, Command, Direction, Location, apply};
+use rusty_core::{AppState, Command, Direction, Location, PaneId, apply};
 use rusty_store::{SessionFileError, load_session, write_session};
 
 const ROWS_PER_PANE: usize = 200;
@@ -40,12 +40,37 @@ pub fn home_location(var: impl Fn(&str) -> Option<String>) -> Location {
 }
 
 pub fn place_panes(state: &mut AppState, folders: [Option<Location>; 2]) {
-    let _ = (state, folders);
+    let panes = pane_ids(state);
+    for (pane, folder) in panes.iter().zip(folders) {
+        if let Some(location) = folder {
+            focus(state, *pane);
+            let _ = apply(state, &Command::PaneNavigate { location });
+        }
+    }
+    if let Some(first) = panes.first() {
+        focus(state, *first);
+    }
 }
 
 pub fn path_location(path: &Path) -> Option<Location> {
-    let _ = path;
-    None
+    let path = std::path::absolute(path).ok()?;
+    Location::new(path.to_str()?).ok()
+}
+
+fn pane_ids(state: &AppState) -> Vec<PaneId> {
+    state
+        .window(state.focused_window())
+        .map(|window| window.panes().iter().map(|pane| pane.id()).collect())
+        .unwrap_or_default()
+}
+
+fn focus(state: &mut AppState, pane: PaneId) {
+    for direction in Direction::ALL {
+        if state.focused_pane() == pane {
+            return;
+        }
+        let _ = apply(state, &Command::LayoutFocus { direction });
+    }
 }
 
 fn fresh(home: Location) -> AppState {

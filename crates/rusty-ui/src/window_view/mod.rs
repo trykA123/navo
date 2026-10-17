@@ -158,9 +158,8 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let provider = options.provider.clone();
         let (values, saver, settings) = settings_sheet::SettingsPanel::split(options.settings, cx);
-        let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
+        let mut browser = Browser::new(options.state, options.provider.clone(), Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
@@ -177,7 +176,7 @@ impl FerriteWindow {
             kinds: options.kinds,
             viewer: None,
             next_prompt: 0,
-            provider,
+            provider: options.provider,
             drives: drives::Drives::new(options.drives),
             drive_menu: None,
             menu_focus: cx.focus_handle(),
@@ -197,7 +196,7 @@ impl FerriteWindow {
             preview: preview::Preview::new(Self::waker(cx), cx),
             job_ui: jobs::JobUi::default(),
             keymap: user_keymap::KeymapState::default(),
-            start: options.start_watch.map(start_watch::Watching::new),
+            start: options.start_watch.map(start_watch::Watching::built),
             _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
                 view.follow_cursor(window, cx);
             }),
@@ -205,7 +204,6 @@ impl FerriteWindow {
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
-        view.mark_start("window built");
         view.apply_theme(window, cx);
         view.listen_files(options.keymap, window, cx);
         Self::after_open(options.view, window, cx);

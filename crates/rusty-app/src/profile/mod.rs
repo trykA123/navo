@@ -21,8 +21,20 @@ impl Profile {
 }
 
 pub fn choose(start: &Start, detect: impl FnOnce() -> Option<StoreDirs>) -> io::Result<Profile> {
-    let _ = start;
-    Ok(Profile::User(detect()))
+    if let Some(root) = &start.profile {
+        return Ok(Profile::Folder(StoreDirs::in_profile(root)));
+    }
+    if !start.is_metrics() {
+        return Ok(Profile::User(detect()));
+    }
+    let folder = tempfile::Builder::new()
+        .prefix("ferrite-metrics-")
+        .tempdir()?;
+    let dirs = StoreDirs::in_profile(folder.path());
+    Ok(Profile::Temporary {
+        dirs,
+        _folder: folder,
+    })
 }
 
 #[cfg(test)]

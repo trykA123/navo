@@ -92,11 +92,15 @@ fn the_process_started_before_main() {
     let main_started = Instant::now();
     let clock = ProcessClock::detect(main_started);
     assert!(clock.start() <= main_started);
-    if cfg!(any(target_os = "linux", windows)) {
-        let age = main_started.duration_since(clock.start());
-        assert!(age > Duration::ZERO, "the OS start time was not used");
-        assert!(age < Duration::from_secs(600), "{age:?}");
-    }
+    let age = main_started.duration_since(clock.start());
+    assert!(age < Duration::from_secs(600), "{age:?}");
+}
+
+#[cfg(any(target_os = "linux", windows))]
+#[test]
+fn the_os_knows_when_this_process_started() {
+    let age = super::clock::process_age().expect("the OS start time");
+    assert!(age < Duration::from_secs(600), "{age:?}");
 }
 
 #[test]
