@@ -256,6 +256,59 @@ fn the_bound_keys_match_the_snapshot(cx: &mut TestAppContext) {
     });
 }
 
+fn in_bound_order(cx: &mut TestAppContext) -> Vec<String> {
+    let bound: Vec<(String, String)> = cx.update(|cx: &mut App| {
+        crate::window_view::bind_app_keys(cx);
+        let keymap = cx.key_bindings();
+        let keymap = keymap.borrow();
+        keymap
+            .bindings()
+            .map(|binding| {
+                let action = binding.action().name();
+                let space = action.split_once("::").map_or(action, |(space, _)| space);
+                let name = for_action(action).map_or("?", |spec| spec.name);
+                let keys: Vec<String> = binding
+                    .keystrokes()
+                    .iter()
+                    .map(|key| key.inner().unparse())
+                    .collect();
+                let context = binding
+                    .predicate()
+                    .map_or_else(|| GLOBAL.to_owned(), |predicate| predicate.to_string());
+                (
+                    space.to_owned(),
+                    format!("{name} | {} | {context}", keys.join(" ")),
+                )
+            })
+            .collect()
+    });
+    let mut spaces: Vec<&str> = Vec::new();
+    for (space, _) in &bound {
+        if !spaces.contains(&space.as_str()) {
+            spaces.push(space);
+        }
+    }
+    let mut lines = Vec::new();
+    for space in spaces {
+        lines.push(format!("[{space}]"));
+        lines.extend(
+            bound
+                .iter()
+                .filter(|(of, _)| of == space)
+                .map(|(_, line)| line.clone()),
+        );
+    }
+    lines
+}
+
+#[gpui_kit::test]
+fn the_bound_keys_keep_their_order(cx: &mut TestAppContext) {
+    let lines = in_bound_order(cx);
+    insta::with_settings!({ prepend_module_to_snapshot => false }, {
+        insta::assert_snapshot!("bound_order", lines.join("\n"));
+    });
+}
+
 #[gpui_kit::test]
 fn the_built_in_keymap_builds_the_snapshot_set(cx: &mut TestAppContext) {
     let lines = triples(cx, |cx| {

@@ -2,7 +2,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, ElementId, Entity, TestAppContext};
+use gpui_kit::{
+    AnyWindowHandle, AppContext as _, ElementId, Entity, Focusable as _, TestAppContext,
+    VisualTestContext,
+};
+use rusty_core::Location;
 
 use super::{
     FerriteWindow, StartOptions, fake, open_options, options_for, press, settle, two_panes,
@@ -83,9 +87,9 @@ impl FakeKeymap {
     }
 }
 
-struct Rig {
-    window: AnyWindowHandle,
-    view: Entity<FerriteWindow>,
+pub(in crate::window_view) struct Rig {
+    pub(in crate::window_view) window: AnyWindowHandle,
+    pub(in crate::window_view) view: Entity<FerriteWindow>,
     sender: KeymapSender,
     keymap: Arc<FakeKeymap>,
 }
@@ -105,6 +109,23 @@ fn rig_with(cx: &mut TestAppContext, start: KeymapNews) -> Rig {
     fs.add_file("home/keymap.toml", 40);
     let file = fs.location("home/keymap.toml");
     let state = two_panes(&fs);
+    rig_in(cx, start, options_for(fs, state), file)
+}
+
+pub(in crate::window_view) fn rig_on(
+    cx: &mut TestAppContext,
+    options: StartOptions,
+    file: Location,
+) -> Rig {
+    rig_in(cx, applied(""), options, file)
+}
+
+fn rig_in(
+    cx: &mut TestAppContext,
+    start: KeymapNews,
+    options: StartOptions,
+    file: Location,
+) -> Rig {
     let keymap = Arc::new(FakeKeymap::default());
     let fake_keymap = keymap.clone();
     let (hooks, sender) = KeymapHooks::channel(Some(start));
@@ -114,7 +135,7 @@ fn rig_with(cx: &mut TestAppContext, start: KeymapNews) -> Rig {
     );
     let options = StartOptions {
         keymap: hooks,
-        ..options_for(fs, state)
+        ..options
     };
     let (window, view) = open_options(cx, options);
     Rig {
@@ -140,7 +161,7 @@ fn rig_from(cx: &mut TestAppContext, text: &str) -> Rig {
 }
 
 impl Rig {
-    fn press(&self, cx: &mut TestAppContext, key: &str) {
+    pub(in crate::window_view) fn press(&self, cx: &mut TestAppContext, key: &str) {
         press(cx, self.window, &self.view, key);
     }
 
@@ -167,7 +188,7 @@ impl Rig {
             .expect("window");
     }
 
-    fn open_page(&self, cx: &mut TestAppContext) {
+    pub(in crate::window_view) fn open_page(&self, cx: &mut TestAppContext) {
         self.press(cx, "ctrl-,");
         self.settle_motion(cx);
         self.click(cx, ("settings-section", 5usize));
@@ -179,7 +200,7 @@ impl Rig {
             .expect("the shortcuts page exists")
     }
 
-    fn search(&self, cx: &mut TestAppContext, query: &str) {
+    pub(in crate::window_view) fn search(&self, cx: &mut TestAppContext, query: &str) {
         let page = self.page(cx);
         cx.update_window(self.window, |_, window, cx| {
             page.update(cx, |page, cx| page.set_query(query, window, cx));
@@ -192,7 +213,7 @@ impl Rig {
         self.page(cx).read_with(cx, |page, _| page.visible())
     }
 
-    fn is_recording(&self, cx: &mut TestAppContext) -> bool {
+    pub(in crate::window_view) fn is_recording(&self, cx: &mut TestAppContext) -> bool {
         self.page(cx).read_with(cx, |page, _| page.is_recording())
     }
 
@@ -200,7 +221,11 @@ impl Rig {
         self.view.read_with(cx, |view, _| view.settings.is_open())
     }
 
-    fn label(&self, cx: &mut TestAppContext, id: impl Into<ElementId>) -> Option<String> {
+    pub(in crate::window_view) fn label(
+        &self,
+        cx: &mut TestAppContext,
+        id: impl Into<ElementId>,
+    ) -> Option<String> {
         let id = id.into();
         cx.update_window(self.window, |_, window, cx| {
             window.render_frame(cx);
@@ -247,7 +272,12 @@ impl Rig {
         })
     }
 
-    fn record_on(&self, cx: &mut TestAppContext, command: &str, key: &str) {
+    pub(in crate::window_view) fn record_on(
+        &self,
+        cx: &mut TestAppContext,
+        command: &str,
+        key: &str,
+    ) {
         self.search(cx, command);
         self.press(cx, "enter");
         assert!(self.is_recording(cx), "recording {command}");
@@ -329,16 +359,29 @@ fn a_click_on_a_row_records_too(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_global_key_is_recorded_instead_of_run(cx: &mut TestAppContext) {
+fn a_global_key_is_recorded_instead_of_run_and_asks_before_hiding_it(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_page(cx);
     rig.record_on(cx, "files.sort_by_size", "f10");
     let menu_open = rig.view.read_with(cx, |view, _| view.app_menu.is_some());
     assert!(!menu_open);
     assert_eq!(
+        rig.label(cx, "shortcuts-prompt").as_deref(),
+        Some("F10 is used by App menu — your key would hide it here. Replace?")
+    );
+    assert!(rig.keymap.saves().is_empty());
+    rig.press(cx, "enter");
+    assert_eq!(
         rig.keymap.saves(),
         [vec![set("files.sort_by_size", &["f10"])]]
     );
+    assert!(rig.has_key(cx, "app_menu.toggle", "f10"));
+    rig.press(cx, "escape");
+    rig.press(cx, "f10");
+    let menu_open = rig.view.read_with(cx, |view, _| view.app_menu.is_some());
+    assert!(!menu_open);
+    let files = rig.files(cx);
+    assert_eq!(files.get(1).map(String::as_str), Some("a.txt"), "{files:?}");
 }
 
 #[gpui_kit::test]
@@ -381,6 +424,45 @@ fn escape_on_a_conflict_saves_nothing(cx: &mut TestAppContext) {
     assert!(rig.settings_open(cx));
     assert!(rig.keymap.saves().is_empty());
     assert!(rig.has_key(cx, "files.sort_by_date", "ctrl-f5"));
+}
+
+fn move_focus(rig: &Rig, cx: &mut TestAppContext, to_search: bool) {
+    let page = rig.page(cx);
+    cx.update_window(rig.window, |_, window, cx| {
+        if to_search {
+            let search = page.read(cx).focus_handle(cx);
+            window.focus(&search, cx);
+        } else {
+            window.blur(cx);
+        }
+        window.render_frame(cx);
+    })
+    .expect("window");
+    settle(cx, &rig.view);
+}
+
+#[gpui_kit::test]
+fn leaving_the_search_field_stops_recording(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let mut visual = VisualTestContext::from_window(rig.window, cx);
+    visual.deactivate_window();
+    visual.update(|window, _| window.activate_window());
+    visual.run_until_parked();
+    rig.open_page(cx);
+    rig.search(cx, "files.sort_by_size");
+    rig.press(cx, "enter");
+    assert!(rig.is_recording(cx));
+    move_focus(&rig, cx, false);
+    assert!(!rig.is_recording(cx));
+    move_focus(&rig, cx, true);
+    rig.press(cx, "alt-f9");
+    assert!(!rig.is_recording(cx));
+    assert!(rig.keymap.saves().is_empty());
+    assert!(!rig.has_key(cx, "files.sort_by_size", "alt-f9"));
+    rig.click(cx, ElementId::Name("shortcut-files.sort_by_size".into()));
+    assert!(rig.is_recording(cx));
+    rig.press(cx, "alt-f9");
+    assert!(rig.has_key(cx, "files.sort_by_size", "alt-f9"));
 }
 
 #[gpui_kit::test]

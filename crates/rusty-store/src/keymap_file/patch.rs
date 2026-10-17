@@ -11,6 +11,7 @@ pub enum KeymapEdit {
     Set {
         command: String,
         context: Option<String>,
+        home: String,
         keys: Vec<String>,
     },
     Reset {
@@ -32,11 +33,13 @@ fn patch_plain(text: &str, edits: &[KeymapEdit]) -> Result<String, KeymapFileErr
             KeymapEdit::Set {
                 command,
                 context,
+                home,
                 keys,
             } => {
                 let slot = Slot {
                     command,
                     context: context.as_deref(),
+                    home,
                     is_blank,
                 };
                 set(&mut document, &slot, keys)?;
@@ -50,6 +53,7 @@ fn patch_plain(text: &str, edits: &[KeymapEdit]) -> Result<String, KeymapFileErr
 struct Slot<'a> {
     command: &'a str,
     context: Option<&'a str>,
+    home: &'a str,
     is_blank: bool,
 }
 
@@ -58,7 +62,8 @@ fn text_of<'a>(table: &'a Table, name: &str) -> Option<&'a str> {
 }
 
 fn is_slot(table: &Table, slot: &Slot) -> bool {
-    text_of(table, "command") == Some(slot.command) && text_of(table, "context") == slot.context
+    let context = text_of(table, "context").unwrap_or(slot.home);
+    text_of(table, "command") == Some(slot.command) && context == slot.context.unwrap_or(slot.home)
 }
 
 fn key_list(keys: &[String]) -> Value {

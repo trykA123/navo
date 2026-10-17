@@ -188,6 +188,20 @@ fn a_replaced_built_in_key_comes_back_with_its_warning() {
 }
 
 #[test]
+fn a_save_over_an_entry_naming_the_home_context_edits_that_entry() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = file_in(&dir);
+    let named = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"alt-f5\"]\ncontext = \"FileList\"\n";
+    fs::write(&path, named).expect("write");
+    let saved = saver(&path)(&[copy_on(&["alt-f9"])]).expect("saved");
+    assert!(saved.keymap.has_key("files.copy", "alt-f9"));
+    assert_eq!(
+        fs::read_to_string(&path).expect("read"),
+        named.replace("alt-f5", "alt-f9")
+    );
+}
+
+#[test]
 fn a_save_never_overwrites_an_invalid_file() {
     let dir = tempfile::tempdir().expect("dir");
     let path = file_in(&dir);

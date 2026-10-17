@@ -13,9 +13,9 @@ use gpui_kit::{App, Global};
 
 use crate::app_menu::MenuCommand;
 
-pub(crate) use bind::bind_namespace;
 #[cfg(test)]
 use bind::key_bindings;
+pub(crate) use bind::{bind_namespace, bind_user_keys};
 pub use contexts::{GLOBAL, is_within};
 pub use keymap::{
     Bind, Keymap, KeymapError, KeymapWarning, Overlaid, UserKeymapError, normal_key, shown,

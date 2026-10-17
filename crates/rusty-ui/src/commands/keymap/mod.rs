@@ -28,13 +28,14 @@ pub struct Bind {
 pub struct Keymap {
     binds: Vec<Bind>,
     user: Vec<(&'static str, String)>,
+    changed: Vec<&'static str>,
 }
 
 impl Keymap {
     pub fn parse(text: &str) -> Result<Self, KeymapError> {
         parse::parse(text).map(|binds| Self {
             binds,
-            user: Vec::new(),
+            ..Self::default()
         })
     }
 
@@ -69,7 +70,7 @@ impl Keymap {
 
     #[must_use]
     pub fn is_changed(&self, command: &str) -> bool {
-        self.user.iter().any(|(name, _)| *name == command)
+        self.changed.contains(&command)
     }
 
     #[must_use]

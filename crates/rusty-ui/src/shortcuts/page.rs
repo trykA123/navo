@@ -59,6 +59,7 @@ pub struct ShortcutsPage {
     pub(super) problem: Option<SharedString>,
     _search: Subscription,
     _keys: Subscription,
+    _blur: Subscription,
 }
 
 impl EventEmitter<ShortcutsEvent> for ShortcutsPage {}
@@ -87,6 +88,10 @@ impl ShortcutsPage {
                 cx.stop_propagation();
             }
         });
+        let search_focus = search.focus_handle(cx);
+        let on_blur = cx.on_blur(&search_focus, window, |page: &mut Self, _, cx| {
+            page.stop_recording(cx);
+        });
         let mut page = Self {
             save,
             search,
@@ -100,6 +105,7 @@ impl ShortcutsPage {
             problem: None,
             _search: on_search,
             _keys: on_keys,
+            _blur: on_blur,
         };
         page.refresh(cx);
         page
@@ -119,6 +125,13 @@ impl ShortcutsPage {
             self.stage = Stage::Browse;
         }
         cx.notify();
+    }
+
+    fn stop_recording(&mut self, cx: &mut Context<Self>) {
+        if self.is_recording() {
+            self.stage = Stage::Browse;
+            cx.notify();
+        }
     }
 
     pub fn set_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {

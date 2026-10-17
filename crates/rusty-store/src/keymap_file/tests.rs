@@ -24,10 +24,19 @@ command = \"files.sort_by_size\"
 keys = [\"ctrl-f6\"]
 ";
 
+fn home_of(command: &str) -> &'static str {
+    if command.starts_with("viewer.") {
+        "Viewer"
+    } else {
+        "FileList"
+    }
+}
+
 fn set(command: &str, keys: &[&str]) -> KeymapEdit {
     KeymapEdit::Set {
         command: command.to_owned(),
         context: None,
+        home: home_of(command).to_owned(),
         keys: keys.iter().map(|&key| key.to_owned()).collect(),
     }
 }
@@ -85,6 +94,7 @@ fn a_new_entry_outside_the_home_context_names_its_context() {
     let edit = KeymapEdit::Set {
         command: "viewer.go_to_start".to_owned(),
         context: Some("Archive".to_owned()),
+        home: "Viewer".to_owned(),
         keys: vec!["ctrl-home".to_owned()],
     };
     let edited = patched(USER, &[edit]);
@@ -98,6 +108,23 @@ fn a_set_matches_only_the_entry_of_the_same_context() {
     let edited = patched(USER, &[set("viewer.back", &["escape"])]);
     assert!(edited.starts_with(USER), "{edited}");
     assert!(edited.ends_with("command = \"viewer.back\"\nkeys = [\"escape\"]\n"));
+}
+
+#[test]
+fn an_entry_that_names_the_home_context_is_the_home_slot() {
+    let named = "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"alt-f5\"]\ncontext = \"FileList\"\n";
+    let edited = patched(named, &[set("files.copy", &["f9"])]);
+    assert_eq!(edited, named.replace("alt-f5", "f9"));
+    let edit = KeymapEdit::Set {
+        command: "files.copy".to_owned(),
+        context: Some("FileList".to_owned()),
+        home: "FileList".to_owned(),
+        keys: vec!["f9".to_owned()],
+    };
+    assert_eq!(
+        patched(USER, &[edit]),
+        USER.replace("[\"alt-f5\"]", "[\"f9\"]")
+    );
 }
 
 #[test]
