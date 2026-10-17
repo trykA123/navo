@@ -4,10 +4,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusty_cache::{CacheKey, CacheKeys, CachedListing, Change, ListingCache};
 use rusty_core::{Event, FsError, FsErrorKind, Listing, Location, ProviderPath, TabId};
-use rusty_fs::{CancelToken, FsEntry, ProviderOps, WatchChange, load_folder};
+use rusty_fs::{CancelToken, FsEntry, ProviderOps, WatchChange, load_folder_reporting};
 
 use super::Browser;
 use super::filter::Full;
+use super::offline::Progress;
 use crate::file_list::SortKey;
 
 const KEEP_SORTED: usize = 2;
@@ -25,15 +26,17 @@ pub(super) struct Fetch {
     pub(super) shown: Option<Arc<CachedListing>>,
     pub(super) touched: Option<Vec<WatchChange>>,
     pub(super) is_watched: bool,
+    pub(super) progress: Progress,
 }
 
 impl Fetch {
     pub(super) fn run(self, cancel: &CancelToken) -> Result<Fresh, FsError> {
         let read_at = SystemTime::now();
-        let folder_changed = self
-            .provider
-            .metadata(&self.location)
-            .ok()
+        let folder = self.provider.metadata(&self.location).ok();
+        if folder.is_some() {
+            self.progress.answered();
+        }
+        let folder_changed = folder
             .and_then(|folder| folder.modified_ms)
             .and_then(|ms| u64::try_from(ms).ok())
             .map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
@@ -53,7 +56,11 @@ impl Fetch {
         {
             return Ok(Fresh::Rows(rows));
         }
-        let snapshot = load_folder(self.provider.as_ref(), &self.location, cancel)?;
+        let progress = &self.progress;
+        let snapshot =
+            load_folder_reporting(self.provider.as_ref(), &self.location, cancel, &mut || {
+                progress.answered()
+            })?;
         let rows: Arc<[FsEntry]> = snapshot.details.into();
         let unchanged = self
             .shown
@@ -148,6 +155,7 @@ impl Browser {
             shown,
             touched: self.take_patch(tab),
             is_watched: self.is_settled(location),
+            progress: self.stalls.progress(tab),
         }
     }
 

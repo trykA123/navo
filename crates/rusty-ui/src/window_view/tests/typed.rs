@@ -85,7 +85,7 @@ fn a_missing_path_says_not_found(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_slow_folder_shows_the_waiting_line_and_escape_goes_back(cx: &mut TestAppContext) {
+fn a_stalled_folder_says_it_is_not_answering_and_escape_goes_back(cx: &mut TestAppContext) {
     let setup = Setup {
         slow: Some("D/slow"),
         ..Setup::default()
@@ -103,7 +103,11 @@ fn a_slow_folder_shows_the_waiting_line_and_escape_goes_back(cx: &mut TestAppCon
     cx.executor().advance_clock(Duration::from_secs(2));
     cx.run_until_parked();
     rig.frame(cx, |window, cx| {
-        assert_eq!(window.find(waiting).label(), Some(r"Waiting for D:\slow"));
+        assert_eq!(
+            window.find(waiting).label(),
+            Some(r"D:\slow is not answering · retrying")
+        );
+        assert!(window.try_find(("retry", pane.get())).is_some());
         window.press("escape", cx);
     });
     rig.settle_until(cx, |view| {

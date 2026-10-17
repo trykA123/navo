@@ -4,8 +4,12 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
-use rusty_core::{AppState, Command, Direction, FsError, Location, PaneId, ProviderId, apply};
-use rusty_fs::{CancelToken, Capabilities, FakeFs, FsEntry, ListSink, Provider, ProviderOps};
+use rusty_core::{
+    AppState, Command, Direction, FsError, FsErrorKind, Location, PaneId, ProviderId, apply,
+};
+use rusty_fs::{
+    CancelToken, Capabilities, FakeFs, FakeOp, Fault, FsEntry, ListSink, Provider, ProviderOps,
+};
 
 use super::super::{DriveHooks, DriveIcon, DriveInfo, FerriteWindow, StartOptions};
 use super::open_options;
@@ -13,6 +17,7 @@ use crate::browser::Operations;
 use crate::tokens::Mode;
 
 const GIB: u64 = 1 << 30;
+const HOLD_LIMIT: Duration = Duration::from_secs(10);
 
 pub(super) struct DriveFs {
     fake: FakeFs,
@@ -40,6 +45,10 @@ impl DriveFs {
         }
     }
 
+    pub(super) fn fail_list(&self, path: &str, call: u32, kind: FsErrorKind) {
+        self.fake.fault(path, FakeOp::List, call, Fault::Fail(kind));
+    }
+
     pub(super) fn release(&self) {
         *self.released.lock().expect("gate") = true;
         self.gate.notify_all();
@@ -60,7 +69,8 @@ impl DriveFs {
             return;
         }
         let mut released = self.released.lock().expect("gate");
-        while !*released && !cancel.is_cancelled() {
+        let deadline = Instant::now() + HOLD_LIMIT;
+        while !*released && !cancel.is_cancelled() && Instant::now() < deadline {
             released = self
                 .gate
                 .wait_timeout(released, Duration::from_millis(20))
@@ -90,6 +100,7 @@ impl Provider for DriveFs {
     }
 
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        self.wait_if_slow(location, &CancelToken::new());
         self.fake.metadata(&self.fake(location))
     }
 }

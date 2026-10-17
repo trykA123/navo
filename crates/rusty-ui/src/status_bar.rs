@@ -9,6 +9,32 @@ use crate::format;
 use crate::tokens;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ListingMark {
+    #[default]
+    Fresh,
+    Cached,
+    Offline {
+        cached_at_ms: Option<i64>,
+    },
+}
+
+impl ListingMark {
+    fn text(self) -> Option<String> {
+        match self {
+            Self::Fresh => None,
+            Self::Cached => Some("cached".to_owned()),
+            Self::Offline {
+                cached_at_ms: Some(ms),
+            } => Some(format!(
+                "Offline · showing cached from {}",
+                format::read_time(ms)
+            )),
+            Self::Offline { cached_at_ms: None } => Some("Offline · showing cached".to_owned()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct StatusBarProps {
     pub files: u64,
     pub folders: u64,
@@ -16,7 +42,7 @@ pub struct StatusBarProps {
     pub marked: u64,
     pub marked_bytes: u64,
     pub free_bytes: Option<u64>,
-    pub is_cached: bool,
+    pub mark: ListingMark,
 }
 
 impl StatusBarProps {
@@ -49,7 +75,7 @@ impl StatusBarProps {
     pub fn text(&self) -> String {
         let parts = [
             Some(self.contents_text()),
-            self.is_cached.then(|| "cached".to_owned()),
+            self.mark.text(),
             Some(self.free_text()),
         ];
         self.marked_text()
@@ -111,8 +137,8 @@ impl RenderOnce for StatusBar {
                     .truncate()
                     .child(props.contents_text()),
             )
-            .when(props.is_cached, |d| {
-                d.child(div().flex_none().child("cached"))
+            .when_some(props.mark.text(), |d, mark| {
+                d.child(div().flex_none().child(mark))
             })
             .child(div().flex_none().child(props.free_text()))
     }
@@ -124,7 +150,8 @@ mod tests {
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{Context, IntoElement, Render, Role, TestAppContext, Window};
 
-    use super::{StatusBar, StatusBarProps};
+    use super::{ListingMark, StatusBar, StatusBarProps};
+    use crate::format;
     use crate::test_window::open;
 
     struct Status(StatusBarProps);
@@ -155,7 +182,7 @@ mod tests {
             marked: 2,
             marked_bytes: 15_148,
             free_bytes: Some(512_000_000),
-            is_cached: false,
+            mark: ListingMark::Fresh,
         };
         assert_eq!(
             label(props, cx).as_deref(),
@@ -181,12 +208,29 @@ mod tests {
     fn a_cached_listing_says_so_in_the_status(cx: &mut TestAppContext) {
         let props = StatusBarProps {
             files: 2,
-            is_cached: true,
+            mark: ListingMark::Cached,
             ..StatusBarProps::default()
         };
         assert_eq!(
             label(props, cx).as_deref(),
             Some("2 files, 0 folders · 0 B · cached · – free")
         );
+    }
+
+    #[gpui_kit::test]
+    fn an_offline_listing_says_when_its_rows_were_read(cx: &mut TestAppContext) {
+        let ms = 1_791_920_400_000;
+        let props = StatusBarProps {
+            files: 2,
+            mark: ListingMark::Offline {
+                cached_at_ms: Some(ms),
+            },
+            ..StatusBarProps::default()
+        };
+        let expected = format!(
+            "2 files, 0 folders · 0 B · Offline · showing cached from {} · – free",
+            format::date(ms)
+        );
+        assert_eq!(label(props, cx), Some(expected));
     }
 }

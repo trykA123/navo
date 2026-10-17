@@ -263,7 +263,7 @@ impl Browser {
         relisted
     }
 
-    fn open_tabs(&self) -> Vec<(TabId, Location)> {
+    pub(super) fn open_tabs(&self) -> Vec<(TabId, Location)> {
         self.state
             .window_ids()
             .into_iter()

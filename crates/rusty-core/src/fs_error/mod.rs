@@ -45,7 +45,7 @@ impl FsErrorKind {
             39 | 112 => Self::DiskFull,
             111 | 206 => Self::PathTooLong,
             123 | 267 => Self::NameInvalid,
-            53 | 64 | 67 | 1231 => Self::NetworkLost,
+            53 | 55 | 59 | 64 | 67 | 1231 | 1232 | 1236 | 2250 => Self::NetworkLost,
             121 | 1460 => Self::Timeout,
             1223 => Self::Cancelled,
             _ => Self::Unknown,
