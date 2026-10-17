@@ -5,12 +5,14 @@ mod editor;
 mod fkeys;
 mod jobs;
 mod keys;
+mod layout;
 mod operate;
 mod pane;
 mod path_edit;
 mod preview;
 mod prompt;
 mod settings_save;
+mod settings_sheet;
 mod shell_menu;
 mod status;
 mod tab_keys;
@@ -27,22 +29,24 @@ use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
-use crate::app_menu::QuickSettings;
 use crate::app_menu::{Identity, ToggleAppMenu};
 use crate::browser::{Browser, Launcher, Operations, Waker};
 use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
-use crate::primitives::{Splitter, SplitterState};
+use crate::primitives::SplitterState;
+use crate::settings::{ToggleSettings, Values};
 use crate::title_bar::{FerriteTitleBar, HeaderSearch};
 use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
-pub use app_menu::{AppMenuHooks, SaveSettings};
+pub use app_menu::AppMenuHooks;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
 pub use keys::bind_keys;
+pub use settings_save::{SaveReport, SaveSettings};
+pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -67,6 +71,7 @@ pub struct StartOptions {
     pub kinds: Kinds,
     pub drives: DriveHooks,
     pub app_menu: AppMenuHooks,
+    pub settings: SettingsHooks,
     pub view: Option<rusty_core::Location>,
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
@@ -80,6 +85,7 @@ pub fn run(options: StartOptions) {
         crate::confirm_dialog::bind_keys(cx);
         crate::prompt_dialog::bind_keys(cx);
         crate::app_menu::bind_keys(cx);
+        crate::settings::bind_keys(cx);
         crate::context_menu::bind_keys(cx);
         viewer::bind_keys(cx);
         bind_keys(cx);
@@ -118,9 +124,10 @@ pub struct FerriteWindow {
     held_layer: Option<KeyLayer>,
     app_menu: Option<app_menu::OpenMenu>,
     app_menu_focus: FocusHandle,
-    quick: QuickSettings,
+    values: Values,
     identity: Identity,
     saver: settings_save::Saver,
+    settings: settings_sheet::SettingsPanel,
     shell_menus: Option<Rc<dyn ShellMenuProvider>>,
     menu_run: Option<shell_menu::MenuRun>,
     prefetch: Option<shell_menu::Prefetch>,
@@ -143,11 +150,12 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let provider = options.provider.clone();
+        let (values, saver, settings) = settings_sheet::SettingsPanel::split(options.settings, cx);
         let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
-        browser.set_show_hidden(options.app_menu.settings.show_hidden);
+        settings_save::steer_browser(&values, &mut browser);
         browser.start();
         let view = Self {
             browser,
@@ -169,9 +177,10 @@ impl FerriteWindow {
             held_layer: None,
             app_menu: None,
             app_menu_focus: cx.focus_handle(),
-            quick: options.app_menu.settings,
+            values,
             identity: options.app_menu.identity,
-            saver: settings_save::Saver::new(options.app_menu.save, options.app_menu.load_error),
+            saver,
+            settings,
             shell_menus: options.shell_menu,
             menu_run: None,
             prefetch: None,
@@ -183,14 +192,16 @@ impl FerriteWindow {
             }),
             _activation: cx.observe_window_activation(window, Self::activation_changed),
             _watch: cx.observe_self(Self::watch_listings),
-            _appearance: cx.observe_window_appearance(window, |view, window, cx| {
-                view.apply_theme(window, cx);
-                cx.notify();
-            }),
+            _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
         view.apply_theme(window, cx);
         Self::after_open(options.view, window, cx);
         view
+    }
+
+    fn appearance_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.apply_theme(window, cx);
+        cx.notify();
     }
 
     fn activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -350,45 +361,6 @@ impl FerriteWindow {
     }
 }
 
-impl FerriteWindow {
-    fn panes_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let t = tokens::current(cx).clone();
-        let panes = self.panes();
-        let mut views: Vec<AnyElement> = panes
-            .iter()
-            .map(|pane| {
-                let card = self.pane_view(*pane, window, cx);
-                div()
-                    .size_full()
-                    .p(t.spacing.xs)
-                    .child(card)
-                    .into_any_element()
-            })
-            .collect();
-        let body = match (views.pop(), views.pop()) {
-            (Some(second), Some(first)) => Splitter::new("panes", &self.split, first, second)
-                .line_on_hover()
-                .into_any_element(),
-            (Some(only), None) => only,
-            _ => div().into_any_element(),
-        };
-        self.viewer_view(cx).unwrap_or(body)
-    }
-
-    fn body_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let t = tokens::current(cx).clone();
-        let body = self.panes_view(window, cx);
-        div()
-            .relative()
-            .flex()
-            .flex_1()
-            .min_h_0()
-            .px(t.spacing.xs)
-            .child(body)
-            .children(self.preview_layer(window, cx))
-    }
-}
-
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
@@ -415,6 +387,9 @@ impl Render for FerriteWindow {
             )
             .on_action(cx.listener(|view, _: &ToggleAppMenu, window, cx| {
                 view.toggle_app_menu(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &ToggleSettings, window, cx| {
+                view.toggle_settings(window, cx);
             }))
             .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.jobs_key(cx)))
             .child(self.fkey_bar(window, cx))

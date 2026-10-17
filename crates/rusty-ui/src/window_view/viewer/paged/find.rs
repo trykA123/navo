@@ -324,6 +324,12 @@ impl PagedView {
         }
     }
 
+    pub(in crate::window_view::viewer) fn go_to_line(&mut self, line: u64, cx: &mut Context<Self>) {
+        if self.kind == PagedKind::Text {
+            self.user_move(Move::Line(line), cx);
+        }
+    }
+
     fn go_to(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         let target = match self.kind {
             PagedKind::Hex => parse_offset(text).map(Move::Offset),

@@ -6,29 +6,65 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_panes};
-use crate::app_menu::{Identity, Install, QuickChange, QuickSettings};
+use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::browser::Operations;
+use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
-use crate::window_view::AppMenuHooks;
+use crate::window_view::{AppMenuHooks, SaveReport, SettingsHooks};
+
+pub(super) fn values_of(settings: QuickSettings) -> Values {
+    Values::default()
+        .with(&Change::theme(settings.theme))
+        .with(&Change::density(settings.density))
+        .with(&Change::show_hidden(settings.show_hidden))
+}
 
 #[derive(Default)]
 pub(super) struct FakeStore {
-    pub stored: Mutex<QuickSettings>,
-    pub changes: Mutex<Vec<QuickChange>>,
+    pub stored: Mutex<Values>,
+    pub changes: Mutex<Vec<Change>>,
     pub results: Mutex<Vec<QuickSettings>>,
     pub failure: Mutex<Option<String>>,
+    pub failing_field: Mutex<Option<Field>>,
+    pub present: Mutex<Vec<Field>>,
 }
 
 impl FakeStore {
-    fn save(&self, change: &QuickChange) -> Result<QuickSettings, String> {
-        self.changes.lock().expect("changes").push(*change);
-        if let Some(message) = self.failure.lock().expect("failure").clone() {
-            return Err(message);
-        }
+    fn save(&self, changes: &[Change]) -> SaveReport {
+        self.changes
+            .lock()
+            .expect("changes")
+            .extend_from_slice(changes);
+        let message = self.failure.lock().expect("failure").clone();
+        let only = *self.failing_field.lock().expect("failing");
+        let fails = |change: &Change| message.is_some() && only.is_none_or(|f| f == change.field);
         let mut stored = self.stored.lock().expect("stored");
-        *stored = change.applied_to(*stored);
-        self.results.lock().expect("results").push(*stored);
-        Ok(*stored)
+        let mut failed = Vec::new();
+        let mut was_absent = Vec::new();
+        let mut present = self.present.lock().expect("present");
+        for change in changes {
+            if fails(change) {
+                failed.push(change.field);
+                continue;
+            }
+            *stored = stored.with(change);
+            if !present.contains(&change.field) {
+                was_absent.push(change.field);
+            }
+            present.retain(|field| *field != change.field);
+            if change.value != Value::Unset {
+                present.push(change.field);
+            }
+        }
+        if failed.len() < changes.len() {
+            self.results.lock().expect("results").push(stored.quick());
+        }
+        SaveReport {
+            values: stored.clone(),
+            error: (!failed.is_empty()).then(|| message.unwrap_or_default()),
+            failed,
+            was_absent,
+        }
     }
 }
 
@@ -48,16 +84,13 @@ pub(super) fn rig(cx: &mut TestAppContext, theme: ThemeChoice) -> Rig {
     rig_with(cx, settings)
 }
 
-fn hidden_file(name: &str) -> rusty_fs::FsEntry {
+fn marked_file(name: &str, attributes: rusty_fs::Attributes) -> rusty_fs::FsEntry {
     rusty_fs::FsEntry {
         name: rusty_core::ProviderPath::from_text(name),
         kind: rusty_fs::EntryKind::File,
         size: 1,
         modified_ms: None,
-        attributes: rusty_fs::Attributes {
-            hidden: true,
-            ..rusty_fs::Attributes::default()
-        },
+        attributes,
     }
 }
 
@@ -70,11 +103,29 @@ pub(super) fn rig_full(
     settings: QuickSettings,
     load_error: Option<&str>,
 ) -> Rig {
+    rig_on(cx, values_of(settings), load_error)
+}
+
+fn rig_fs() -> Arc<rusty_fs::FakeFs> {
     let fs = fake();
-    fs.add_entry("home", hidden_file("b-secret.txt"));
+    let hidden = rusty_fs::Attributes {
+        hidden: true,
+        ..rusty_fs::Attributes::default()
+    };
+    let system = rusty_fs::Attributes {
+        system: true,
+        ..rusty_fs::Attributes::default()
+    };
+    fs.add_entry("home", marked_file("b-secret.txt", hidden));
+    fs.add_entry("home", marked_file("c-boot.ini", system));
+    fs
+}
+
+pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option<&str>) -> Rig {
+    let fs = rig_fs();
     let state = two_panes(&fs);
     let store = Arc::new(FakeStore {
-        stored: Mutex::new(settings),
+        stored: Mutex::new(values.clone()),
         ..FakeStore::default()
     });
     let sessions: Rc<Cell<usize>> = Rc::default();
@@ -96,9 +147,12 @@ pub(super) fn rig_full(
                 install: Install::Installed,
                 folder: r"C:\Ferrite".into(),
             },
-            settings,
+        },
+        settings: SettingsHooks {
+            values,
             load_error: load_error.map(Into::into),
-            save: Arc::new(move |change| fake_store.save(change)),
+            save: Arc::new(move |changes| fake_store.save(changes)),
+            ..SettingsHooks::none()
         },
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
@@ -262,7 +316,7 @@ fn the_saved_theme_applies_at_start(cx: &mut TestAppContext) {
 fn unavailable_rows_neither_act_nor_close_the_menu(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "f10");
-    for key in ["c", "n", "w", "h", "a"] {
+    for key in ["c", "n", "w", "h"] {
         rig.press(cx, key);
         rig.press(cx, "enter");
         assert!(rig.is_open(cx), "{key} closed the menu");

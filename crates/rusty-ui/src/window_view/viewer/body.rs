@@ -90,6 +90,8 @@ pub trait ViewerBody: Any {
 
     fn act(&self, _: BodyAct, _: &mut Window, _: &mut App) {}
 
+    fn go_to_line(&self, _line: u64, _: &mut Window, _: &mut App) {}
+
     fn carry(&self, _: &App) -> Option<Carried> {
         None
     }

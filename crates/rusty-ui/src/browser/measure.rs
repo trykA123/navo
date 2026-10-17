@@ -13,6 +13,10 @@ pub(crate) struct Measured {
 }
 
 impl Browser {
+    pub fn set_space_measures_folders(&mut self, measures: bool) {
+        self.measures_folders = measures;
+    }
+
     pub(super) fn measure(&mut self, tab: TabId, folder: Location, name: String) {
         let Ok(target) = folder.join(&ProviderPath::from_text(&name)) else {
             return;

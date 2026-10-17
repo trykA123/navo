@@ -194,3 +194,17 @@ fn hiding_the_last_entry_moves_back_to_the_previous_visible_entry() {
     browser.set_show_hidden(false);
     assert_eq!(cursor_name(&browser).as_deref(), Some("a.txt"));
 }
+
+#[test]
+fn system_files_hide_when_system_is_off_even_with_hidden_shown() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser.set_show_system(false);
+    assert!(!browser.shows_system());
+    assert_eq!(names(&browser), ["docs", "a.txt", "b-secret.txt", "d.txt"]);
+    browser.set_show_system(true);
+    assert_eq!(
+        names(&browser),
+        ["docs", "a.txt", "b-secret.txt", "c-boot.ini", "d.txt"]
+    );
+}

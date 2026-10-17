@@ -53,51 +53,6 @@ pub enum Item {
     Row(MenuCommand),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub struct QuickChange {
-    pub theme: Option<ThemeChoice>,
-    pub density: Option<Density>,
-    pub show_hidden: Option<bool>,
-}
-
-impl QuickChange {
-    #[must_use]
-    pub fn of(setting: Setting, values: QuickSettings) -> Self {
-        match setting {
-            Setting::Theme => Self {
-                theme: Some(values.theme),
-                ..Self::default()
-            },
-            Setting::Density => Self {
-                density: Some(values.density),
-                ..Self::default()
-            },
-            Setting::HiddenFiles => Self {
-                show_hidden: Some(values.show_hidden),
-                ..Self::default()
-            },
-        }
-    }
-
-    #[must_use]
-    pub fn merged(self, newer: Self) -> Self {
-        Self {
-            theme: newer.theme.or(self.theme),
-            density: newer.density.or(self.density),
-            show_hidden: newer.show_hidden.or(self.show_hidden),
-        }
-    }
-
-    #[must_use]
-    pub fn applied_to(self, values: QuickSettings) -> QuickSettings {
-        QuickSettings {
-            theme: self.theme.unwrap_or(values.theme),
-            density: self.density.unwrap_or(values.density),
-            show_hidden: self.show_hidden.unwrap_or(values.show_hidden),
-        }
-    }
-}
-
 pub(super) enum Trailing {
     Keys(&'static str),
     Submenu,
@@ -154,7 +109,7 @@ pub(super) const ROWS: [RowSpec; 6] = [
 
 impl MenuCommand {
     pub fn is_available(self) -> bool {
-        matches!(self, Self::Quit)
+        matches!(self, Self::Quit | Self::AllSettings)
     }
 
     pub(super) fn is_primary(self) -> bool {

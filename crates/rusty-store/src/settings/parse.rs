@@ -1,6 +1,6 @@
 use super::{Settings, SettingsError};
 
-// Keys older builds wrote; they still load, are ignored and drop out on the next save.
+// Keys older builds wrote; they still load and are ignored, and saves leave them in the file.
 const LEGACY_KEYS: [&str; 1] = ["files.show-hidden"];
 
 pub fn parse(text: &str) -> Result<(Settings, Vec<String>), SettingsError> {
@@ -16,11 +16,7 @@ pub fn parse(text: &str) -> Result<(Settings, Vec<String>), SettingsError> {
 
 #[must_use]
 pub fn to_toml(settings: &Settings) -> String {
-    try_to_toml(settings).unwrap_or_default()
-}
-
-pub(super) fn try_to_toml(settings: &Settings) -> Result<String, toml::ser::Error> {
-    toml::to_string(settings)
+    toml::to_string(settings).unwrap_or_default()
 }
 
 fn invalid(text: &str, error: &toml::de::Error) -> SettingsError {

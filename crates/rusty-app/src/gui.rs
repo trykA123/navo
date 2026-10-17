@@ -13,7 +13,7 @@ use rusty_ui::tokens::Mode;
 use rusty_ui::window_view::{StartOptions, run};
 
 use crate::startup::{home_location, initial_state, save, session_folders};
-use crate::{app_menu, drives, editor, files, jobs, launch, shell_menu};
+use crate::{app_menu, drives, editor, files, jobs, launch, settings, shell_menu};
 
 const START_READ: Duration = Duration::from_millis(50);
 const EXIT_WRITE: Duration = Duration::from_millis(300);
@@ -21,7 +21,7 @@ const EXIT_WRITE: Duration = Duration::from_millis(300);
 pub fn open(view: Option<std::path::PathBuf>) {
     let dirs = StoreDirs::detect();
     let session = dirs.as_ref().map(StoreDirs::session_file);
-    let settings = dirs.as_ref().map(StoreDirs::settings_file);
+    let settings_file = dirs.as_ref().map(StoreDirs::settings_file);
     let home = home_location(|name| std::env::var(name).ok());
     let state = session.as_deref().map_or_else(
         || initial_state(std::path::Path::new(""), home.clone()),
@@ -57,11 +57,12 @@ pub fn open(view: Option<std::path::PathBuf>) {
         mode: Mode::Light,
         operations,
         launcher: launch::launcher(),
-        editor: editor::hooks(settings.as_deref(), |name| std::env::var(name).ok()),
+        editor: editor::hooks(|name| std::env::var(name).ok()),
         files: files::hooks(memory),
         kinds: rusty_ui::window_view::Kinds::builtin(),
         drives: drives::hooks(),
-        app_menu: app_menu::hooks(settings.as_deref(), std::env::current_exe().ok()),
+        app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
+        settings: settings::hooks(settings_file.as_deref()),
         view: view.and_then(|path| view_location(&path)),
         listing_cache: cache,
         cache_keys: keys,

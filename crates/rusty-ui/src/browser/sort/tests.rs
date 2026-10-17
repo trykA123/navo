@@ -191,3 +191,64 @@ fn a_folder_measured_after_a_sort_gets_its_own_size() {
         .map(|e| e.size);
     assert_eq!(zeta, Some(9_000));
 }
+
+#[test]
+fn the_default_sort_orders_tabs_without_their_own() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    let by_size = SortKey {
+        by: SortBy::Size,
+        descending: true,
+    };
+    browser.set_default_sort(by_size, true);
+    assert_eq!(names(&browser), ["alpha", "zeta", "b.txt", "C.md", "a.rs"]);
+    let tab = browser.state().active_tab().id();
+    assert_eq!(browser.sort_key(tab), by_size);
+}
+
+#[test]
+fn a_tab_sorted_by_hand_keeps_its_sort() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser.sort_by(SortBy::Date);
+    let before = names(&browser);
+    browser.set_default_sort(
+        SortKey {
+            by: SortBy::Size,
+            descending: true,
+        },
+        true,
+    );
+    assert_eq!(names(&browser), before);
+}
+
+#[test]
+fn folders_first_off_mixes_folders_with_files() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    browser.set_default_sort(SortKey::default(), false);
+    assert_eq!(names(&browser), ["a.rs", "alpha", "b.txt", "C.md", "zeta"]);
+    browser.set_default_sort(SortKey::default(), true);
+    assert_eq!(names(&browser), ["alpha", "zeta", "a.rs", "b.txt", "C.md"]);
+}
+
+#[test]
+fn a_default_sort_set_before_start_orders_the_first_listing() {
+    let fs = fake();
+    let provider: Arc<dyn ProviderOps> = fs.clone();
+    let mut browser = Browser::new(
+        AppState::new(fs.location("home")),
+        provider,
+        Arc::new(|| {}),
+    );
+    browser.set_default_sort(
+        SortKey {
+            by: SortBy::Ext,
+            descending: false,
+        },
+        false,
+    );
+    browser.start();
+    settle(&mut browser);
+    assert_eq!(names(&browser), ["alpha", "zeta", "C.md", "a.rs", "b.txt"]);
+}

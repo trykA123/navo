@@ -70,6 +70,10 @@ pub struct Browser {
     filters: HashMap<TabId, filter::Filter>,
     full: HashMap<TabId, filter::Full>,
     show_hidden: bool,
+    show_system: bool,
+    measures_folders: bool,
+    default_sort: crate::file_list::SortKey,
+    folders_first: bool,
     sorts: HashMap<TabId, crate::file_list::SortKey>,
     next_op: u64,
     launcher: Launcher,
@@ -112,6 +116,10 @@ impl Browser {
             filters: HashMap::new(),
             full: HashMap::new(),
             show_hidden: true,
+            show_system: true,
+            measures_folders: true,
+            default_sort: crate::file_list::SortKey::default(),
+            folders_first: true,
             sorts: HashMap::new(),
             next_op: 0,
             launcher: Arc::new(|_| {}),
@@ -276,7 +284,8 @@ impl Browser {
                     tab,
                     location,
                     name,
-                } => self.measure(tab, location, name),
+                } if self.measures_folders => self.measure(tab, location, name),
+                Effect::MeasureFolder { .. } => {}
             }
         }
         self.sync_pins();

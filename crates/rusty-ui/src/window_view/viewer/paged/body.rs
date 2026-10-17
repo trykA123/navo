@@ -90,6 +90,10 @@ impl ViewerBody for PagedBody {
         self.0.update(cx, |paged, cx| paged.act(act, cx));
     }
 
+    fn go_to_line(&self, line: u64, _: &mut Window, cx: &mut App) {
+        self.0.update(cx, |paged, cx| paged.go_to_line(line, cx));
+    }
+
     fn carry(&self, cx: &App) -> Option<Carried> {
         let marking = self.0.read(cx).marking_now();
         Some(Carried {

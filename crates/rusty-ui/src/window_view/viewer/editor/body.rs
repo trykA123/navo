@@ -122,6 +122,11 @@ impl ViewerBody for EditorBody {
         self.0.update(cx, |view, cx| view.act(act, cx));
     }
 
+    fn go_to_line(&self, line: u64, window: &mut Window, cx: &mut App) {
+        self.0
+            .update(cx, |view, cx| view.go_to_line(line, window, cx));
+    }
+
     fn carry(&self, cx: &App) -> Option<Carried> {
         let view = self.0.read(cx);
         Some(Carried {
