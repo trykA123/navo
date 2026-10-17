@@ -12,13 +12,11 @@ gpui_kit::actions!(
     [Next, Previous, NextButton, PreviousButton, Press]
 );
 
-pub(crate) struct Contexts {
-    pub dialog: &'static str,
-    pub button: &'static str,
-}
+const DIALOG: &str = "Dialog";
+const BUTTON: &str = "DialogButton";
 
-pub(crate) fn bind_keys(contexts: &Contexts, cx: &mut App) {
-    let (dialog, button) = (Some(contexts.dialog), Some(contexts.button));
+pub(crate) fn bind_keys(cx: &mut App) {
+    let (dialog, button) = (Some(DIALOG), Some(BUTTON));
     cx.bind_keys([
         KeyBinding::new("tab", Next, dialog),
         KeyBinding::new("shift-tab", Previous, dialog),

@@ -3,22 +3,17 @@ use std::rc::Rc;
 use gpui_kit::{App, Div, FocusHandle, InteractiveElement, KeyBinding, Stateful, Window};
 
 use super::Handler;
-use crate::dialog_focus::{self, Contexts, Next, NextButton, Press, Previous, PreviousButton};
+use crate::dialog_focus::{self, Next, NextButton, Press, Previous, PreviousButton};
 
 pub(super) const CONTEXT: &str = "ConfirmDialog";
+const KEY_CONTEXT: &str = "ConfirmDialog Dialog";
 
-pub(super) const BUTTON: &str = "ConfirmButton";
+pub(super) const BUTTON: &str = "ConfirmButton DialogButton";
 
 gpui_kit::actions!(confirm_dialog, [Dismiss]);
 
 pub fn bind_keys(cx: &mut App) {
-    dialog_focus::bind_keys(
-        &Contexts {
-            dialog: CONTEXT,
-            button: BUTTON,
-        },
-        cx,
-    );
+    dialog_focus::bind_keys(cx);
     cx.bind_keys([KeyBinding::new("escape", Dismiss, Some(CONTEXT))]);
 }
 
@@ -61,7 +56,7 @@ pub(super) fn register(root: Stateful<Div>, keys: &Rc<Keys>) -> Stateful<Div> {
     let previous = keys.clone();
     let next_button = keys.clone();
     let previous_button = keys.clone();
-    root.key_context(CONTEXT)
+    root.key_context(KEY_CONTEXT)
         .on_action(move |_: &Dismiss, window, cx| dismiss.cancel(window, cx))
         .on_action(move |_: &Press, window, cx| activate.activate(window, cx))
         .on_action(move |_: &Next, window, cx| dialog_focus::cycle(&next.stops, true, window, cx))

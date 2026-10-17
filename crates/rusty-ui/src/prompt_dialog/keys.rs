@@ -3,22 +3,17 @@ use std::rc::Rc;
 use gpui_kit::{App, Div, Entity, FocusHandle, InteractiveElement, KeyBinding, Stateful, Window};
 
 use super::{Cancel, Submit};
-use crate::dialog_focus::{self, Contexts, Next, NextButton, Press, Previous, PreviousButton};
+use crate::dialog_focus::{self, Next, NextButton, Press, Previous, PreviousButton};
 use crate::primitives::TextFieldState;
 
 pub(super) const CONTEXT: &str = "PromptDialog";
-pub(super) const BUTTON: &str = "PromptButton";
+const KEY_CONTEXT: &str = "PromptDialog Dialog";
+pub(super) const BUTTON: &str = "PromptButton DialogButton";
 
 gpui_kit::actions!(prompt_dialog, [Dismiss]);
 
 pub fn bind_keys(cx: &mut App) {
-    dialog_focus::bind_keys(
-        &Contexts {
-            dialog: CONTEXT,
-            button: BUTTON,
-        },
-        cx,
-    );
+    dialog_focus::bind_keys(cx);
     cx.bind_keys([KeyBinding::new("escape", Dismiss, Some(CONTEXT))]);
 }
 
@@ -70,7 +65,7 @@ pub(super) fn register(root: Stateful<Div>, keys: &Rc<Keys>) -> Stateful<Div> {
     let (dismiss, press) = (keys.clone(), keys.clone());
     let (next, previous) = (keys.clone(), keys.clone());
     let (next_button, previous_button) = (keys.clone(), keys.clone());
-    root.key_context(CONTEXT)
+    root.key_context(KEY_CONTEXT)
         .on_action(move |_: &Dismiss, window, cx| dismiss.cancel(window, cx))
         .on_action(move |_: &Press, window, cx| press.press(window, cx))
         .on_action(move |_: &Next, window, cx| {

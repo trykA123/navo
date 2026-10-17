@@ -6,7 +6,6 @@ use super::spot::{Fold, Spot};
 use super::{Preview, Shown};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
-use crate::window_view::keys::TogglePreview;
 
 const BROWSE: &str = "PreviewBrowse";
 
@@ -20,7 +19,8 @@ gpui_kit::actions!(
         BrowseOpen,
         BrowseView,
         LeaveBrowse,
-        LeaveAndSwitch
+        LeaveAndSwitch,
+        TogglePreview
     ]
 );
 
