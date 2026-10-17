@@ -26,8 +26,9 @@ pub use job::{
 };
 pub use local::{LocalFs, os_path};
 pub use measure::{
-    FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LargeFile, PROGRESS_EVERY, ProfileHandle,
-    ProfileSink, ProfileState, Tally, folder_profile, folder_size, spawn_profile,
+    FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LIVE_EVERY, LargeFile, LiveHandle,
+    LiveRequest, LiveSink, LiveSnapshot, PROGRESS_EVERY, ProfileHandle, ProfileSink, ProfileState,
+    RANKING_LIMIT, Ranking, Tally, folder_profile, folder_size, spawn_live, spawn_profile,
 };
 pub use paged::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,

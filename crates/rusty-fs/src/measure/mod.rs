@@ -1,5 +1,6 @@
 mod kinds;
 mod largest;
+mod live;
 mod profile;
 mod runner;
 mod walk;
@@ -10,7 +11,8 @@ use crate::{CancelToken, FsEntry, Provider};
 use walk::{Visit, Walk};
 
 pub use kinds::{KIND_LIMIT, Tally};
-pub use largest::{LARGEST_LIMIT, LargeFile};
+pub use largest::{LARGEST_LIMIT, LargeFile, RANKING_LIMIT, Ranking};
+pub use live::{LIVE_EVERY, LiveHandle, LiveRequest, LiveSink, LiveSnapshot, spawn_live};
 pub use profile::{FolderProfile, PROGRESS_EVERY, ProfileSink, ProfileState, folder_profile};
 pub use runner::{ProfileHandle, spawn_profile};
 

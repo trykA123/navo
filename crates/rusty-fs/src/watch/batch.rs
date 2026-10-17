@@ -15,6 +15,10 @@ pub(super) struct Batch {
 }
 
 impl Batch {
+    pub(super) fn for_tree() -> Self {
+        todo!()
+    }
+
     pub(super) fn push(&mut self, change: WatchChange, now: Instant) {
         self.touch(now);
         if self.overflowed {

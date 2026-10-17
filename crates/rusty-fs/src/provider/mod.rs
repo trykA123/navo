@@ -75,4 +75,7 @@ pub trait Provider: Send + Sync {
             os_code: None,
         })
     }
+    fn watch_tree(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
+        self.watch(folder, sink)
+    }
 }

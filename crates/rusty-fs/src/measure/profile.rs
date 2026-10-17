@@ -4,7 +4,7 @@ use rusty_core::{FsErrorKind, Location};
 
 use super::FolderSize;
 use super::kinds::{Kinds, Tally};
-use super::largest::{LargeFile, Largest};
+use super::largest::{LargeFile, Largest, Ranking};
 use super::walk::{Visit, Walk};
 use crate::{CancelToken, FsEntry, Provider};
 
@@ -32,6 +32,8 @@ pub struct FolderProfile {
     pub kinds: Vec<(String, Tally)>,
     pub other: Tally,
     pub largest: Vec<LargeFile>,
+    pub ranking: Ranking,
+    pub counted_ms: Option<i64>,
     pub state: ProfileState,
 }
 
@@ -67,6 +69,8 @@ impl Profiler<'_> {
             kinds,
             other,
             largest: self.largest.snapshot(),
+            ranking: Ranking::default(),
+            counted_ms: None,
             state,
         }
     }

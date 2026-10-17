@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use rusty_core::Location;
-use rusty_fs::{FolderProfile, FolderSize, ProfileState, Tally};
+use rusty_fs::{FolderProfile, FolderSize, ProfileState, Ranking, Tally};
 
 use crate::ProfileCache;
 
@@ -19,6 +19,8 @@ fn profile(bytes: u64, state: ProfileState) -> FolderProfile {
         kinds: Vec::new(),
         other: Tally::default(),
         largest: Vec::new(),
+        ranking: Ranking::default(),
+        counted_ms: None,
         state,
     }
 }

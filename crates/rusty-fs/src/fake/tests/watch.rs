@@ -130,3 +130,49 @@ fn a_watch_fault_fails_the_start() {
     );
     assert_eq!(fs.calls("home", FakeOp::Watch), 1);
 }
+
+fn watch_tree(fs: &FakeFs, folder: &str) -> (Watch, Receiver<WatchEvent>) {
+    let (sender, events) = mpsc::channel();
+    let watch = fs
+        .watch_tree(
+            &fs.location(folder),
+            Box::new(move |event| {
+                let _ = sender.send(event);
+            }),
+        )
+        .unwrap();
+    (watch, events)
+}
+
+#[test]
+fn a_tree_watch_reports_deep_changes_by_their_path_below_the_folder() {
+    let fs = fake();
+    let (_watch, events) = watch_tree(&fs, "home");
+    assert_eq!(fs.watchers("home"), 1);
+    fs.add_file("home/sub/deep/x.bin", 3);
+    fs.rename_entry("home/sub/deep/x.bin", "home/sub/deep/y.bin");
+    fs.remove("home/a.txt");
+    assert_eq!(
+        next_changes(&events),
+        [
+            WatchChange::Created(name("sub/deep")),
+            WatchChange::Created(name("sub/deep/x.bin")),
+            WatchChange::Renamed {
+                from: name("sub/deep/x.bin"),
+                to: name("sub/deep/y.bin")
+            },
+            WatchChange::Removed(name("a.txt")),
+        ]
+    );
+}
+
+#[test]
+fn a_tree_watch_ignores_changes_outside_its_folder() {
+    let fs = fake();
+    fs.add_folder("other");
+    let (_watch, events) = watch_tree(&fs, "home/sub");
+    fs.add_file("home/b.txt", 1);
+    fs.add_file("other/c.txt", 1);
+    fs.add_file("home/sub/d.txt", 1);
+    assert_eq!(next_changes(&events), [WatchChange::Created(name("d.txt"))]);
+}

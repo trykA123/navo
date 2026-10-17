@@ -298,6 +298,10 @@ impl Provider for FakeFs {
     fn watch(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
         self.start_watch(folder, sink)
     }
+
+    fn watch_tree(&self, _folder: &Location, _sink: WatchSink) -> Result<Watch, FsError> {
+        todo!()
+    }
 }
 
 #[cfg(test)]

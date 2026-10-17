@@ -2,6 +2,7 @@ use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 
 pub const LARGEST_LIMIT: usize = 10;
+pub const RANKING_LIMIT: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LargeFile {
@@ -20,6 +21,44 @@ impl Ord for LargeFile {
 impl PartialOrd for LargeFile {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Ranking {
+    files: Vec<LargeFile>,
+    floor: Option<u64>,
+}
+
+impl Ranking {
+    #[must_use]
+    pub fn files(&self) -> &[LargeFile] {
+        todo!()
+    }
+
+    #[must_use]
+    pub fn is_short(&self) -> bool {
+        todo!()
+    }
+
+    pub(super) fn top(&self) -> Vec<LargeFile> {
+        todo!()
+    }
+
+    pub(super) fn size_of(&self, _path: &str) -> Option<u64> {
+        todo!()
+    }
+
+    pub(super) fn offer(&mut self, _file: LargeFile) {
+        todo!()
+    }
+
+    pub(super) fn remove(&mut self, _path: &str) -> Option<u64> {
+        todo!()
+    }
+
+    pub(super) fn rename(&mut self, _from: &str, _to: &str, _separator: char) {
+        todo!()
     }
 }
 
