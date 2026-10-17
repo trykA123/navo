@@ -9,6 +9,7 @@ use gpui_kit::{FocusHandle, Focusable, ScrollHandle};
 use rusty_core::Location;
 
 use super::FerriteWindow;
+use super::settings_news::SettingsInbox;
 use super::settings_save::{SaveReport, SaveSettings, Saver};
 use crate::prelude::*;
 use crate::settings::{
@@ -25,6 +26,7 @@ pub struct SettingsHooks {
     pub save: SaveSettings,
     pub file: Option<Location>,
     pub line_of: FindLine,
+    pub news: Option<SettingsInbox>,
 }
 
 impl SettingsHooks {
@@ -42,6 +44,7 @@ impl SettingsHooks {
             }),
             file: None,
             line_of: Arc::new(|_| None),
+            news: None,
         }
     }
 }
@@ -64,12 +67,17 @@ pub(super) struct SettingsPanel {
 }
 
 impl SettingsPanel {
-    pub(super) fn split(hooks: SettingsHooks, cx: &mut App) -> (Values, Saver, Self) {
+    pub(super) fn split(
+        mut hooks: SettingsHooks,
+        cx: &mut App,
+    ) -> (Values, Saver, Self, Option<SettingsInbox>) {
+        let news = hooks.news.take();
         let saver = Saver::new(hooks.save, hooks.load_error);
         (
             hooks.values,
             saver,
             Self::new(hooks.file, hooks.line_of, cx),
+            news,
         )
     }
 

@@ -11,6 +11,7 @@ mod pane;
 mod path_edit;
 mod preview;
 mod prompt;
+mod settings_news;
 mod settings_save;
 mod settings_sheet;
 mod shell_menu;
@@ -49,6 +50,7 @@ pub use fkeys::{
 };
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
+pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
@@ -150,7 +152,8 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let provider = options.provider.clone();
-        let (values, saver, settings) = settings_sheet::SettingsPanel::split(options.settings, cx);
+        let (values, saver, settings, news) =
+            settings_sheet::SettingsPanel::split(options.settings, cx);
         let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
@@ -197,6 +200,7 @@ impl FerriteWindow {
         };
         view.apply_theme(window, cx);
         view.listen_keymap(options.keymap, cx);
+        view.listen_settings(news, window, cx);
         Self::after_open(options.view, window, cx);
         view
     }

@@ -1,0 +1,86 @@
+use futures::StreamExt;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
+
+use super::FerriteWindow;
+use super::settings_sheet::SettingsHooks;
+use crate::prelude::*;
+use crate::settings::Values;
+use crate::status_bar::StatusNotice;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SettingsNews {
+    Applied(Values),
+    Invalid(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct SettingsSender(UnboundedSender<SettingsNews>);
+
+impl SettingsSender {
+    pub fn send(&self, news: SettingsNews) -> bool {
+        self.0.unbounded_send(news).is_ok()
+    }
+}
+
+pub struct SettingsInbox(UnboundedReceiver<SettingsNews>);
+
+impl SettingsHooks {
+    #[must_use]
+    pub fn channel(self) -> (Self, SettingsSender) {
+        let (sender, receiver) = unbounded();
+        let hooks = Self {
+            news: Some(SettingsInbox(receiver)),
+            ..self
+        };
+        (hooks, SettingsSender(sender))
+    }
+}
+
+impl FerriteWindow {
+    pub(super) fn listen_settings(
+        &mut self,
+        inbox: Option<SettingsInbox>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(SettingsInbox(mut receiver)) = inbox else {
+            return;
+        };
+        cx.spawn_in(window, async move |this, cx| {
+            while let Some(news) = receiver.next().await
+                && this
+                    .update_in(cx, |view, window, cx| view.take_settings(news, window, cx))
+                    .is_ok()
+            {}
+        })
+        .detach();
+    }
+
+    pub(super) fn take_settings(
+        &mut self,
+        news: SettingsNews,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match news {
+            SettingsNews::Applied(values) => {
+                self.saver.disk_valid();
+                let fresh = self.saver.over_pending(values);
+                if fresh != self.values {
+                    self.set_values(fresh, window, cx);
+                    self.saver.count_disk_apply();
+                }
+            }
+            SettingsNews::Invalid(message) => self.saver.disk_invalid(message.into()),
+        }
+        cx.notify();
+    }
+
+    pub(super) fn status_notice(&self) -> Option<StatusNotice> {
+        let problem = self.saver.problem.clone().map(|text| StatusNotice {
+            text,
+            is_error: true,
+        });
+        problem.or_else(|| self.keymap_notice())
+    }
+}

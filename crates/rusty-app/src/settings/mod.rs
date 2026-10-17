@@ -3,19 +3,66 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use rusty_core::Location;
+use rusty_fs::Watch;
 use rusty_store::{SettingValue, Settings, SettingsError, SettingsStore, settings_key_line};
 use rusty_ui::settings::{Change, Control, FieldSpec, Value, Values};
-use rusty_ui::window_view::{FindLine, SaveReport, SettingsHooks};
+use rusty_ui::window_view::{FindLine, SaveReport, SettingsHooks, SettingsNews};
 
+use crate::watch_file::watch_file;
+
+mod reload;
 mod start;
 
+pub use reload::Reloader;
 pub use start::{Loaded, start_from};
 #[cfg(test)]
 use start::{start, start_in_background};
 
 const FILE: &str = "ferrite.toml";
 
+type Shared = Arc<Mutex<SettingsStore>>;
+
+#[must_use]
 pub fn hooks(loaded: Option<Loaded>) -> SettingsHooks {
+    parts(loaded).0
+}
+
+pub fn live(loaded: Option<Loaded>) -> (SettingsHooks, Option<Watch>) {
+    let (carrier, sender) = SettingsHooks::none().channel();
+    let (hooks, watching) = watched(loaded, move |news| {
+        let _ = sender.send(news);
+    });
+    let hooks = SettingsHooks {
+        news: carrier.news,
+        ..hooks
+    };
+    (hooks, watching)
+}
+
+pub fn watched(
+    loaded: Option<Loaded>,
+    mut on_news: impl FnMut(SettingsNews) + Send + 'static,
+) -> (SettingsHooks, Option<Watch>) {
+    let (hooks, shared) = parts(loaded);
+    let Some((path, store)) = shared else {
+        return (hooks, None);
+    };
+    let problem = hooks.load_error.as_ref().map(ToString::to_string);
+    let mut reloader = Reloader::new(store, problem);
+    let watching = watch_file(&path, move || {
+        if let Some(news) = reloader.reload() {
+            on_news(news);
+        }
+    });
+    if watching.is_none() {
+        tracing::warn!(
+            "the settings folder is not watched; ferrite.toml changes apply at the next start"
+        );
+    }
+    (hooks, watching)
+}
+
+fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
     let path = loaded.as_ref().map(|loaded| loaded.path.clone());
     let load_error = loaded
         .as_ref()
@@ -28,8 +75,9 @@ pub fn hooks(loaded: Option<Loaded>) -> SettingsHooks {
         .as_ref()
         .map_or_else(Values::default, |loaded| values_of(loaded.store.current()));
     let store = loaded.map(|loaded| Arc::new(Mutex::new(loaded.store)));
+    let shared = path.clone().zip(store.clone());
     let session = Arc::new(Mutex::new(values.clone()));
-    SettingsHooks {
+    let hooks = SettingsHooks {
         values,
         load_error: load_error.map(Into::into),
         save: Arc::new(move |changes| {
@@ -44,7 +92,9 @@ pub fn hooks(loaded: Option<Loaded>) -> SettingsHooks {
         }),
         file: path.as_deref().and_then(location_of),
         line_of: line_finder(path),
-    }
+        news: None,
+    };
+    (hooks, shared)
 }
 
 fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> SaveReport {
@@ -130,6 +180,8 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
     }
 }
 
+#[cfg(test)]
+mod live_tests;
 #[cfg(test)]
 mod start_tests;
 #[cfg(test)]

@@ -34,6 +34,9 @@ pub(super) struct Saver {
     failed: Vec<Field>,
     is_saving: bool,
     pub(super) error: Option<SharedString>,
+    pub(super) problem: Option<SharedString>,
+    #[cfg(test)]
+    pub(super) disk_applies: usize,
 }
 
 impl Saver {
@@ -45,6 +48,31 @@ impl Saver {
             failed: Vec::new(),
             is_saving: false,
             error,
+            problem: None,
+            #[cfg(test)]
+            disk_applies: 0,
+        }
+    }
+
+    pub(super) fn disk_valid(&mut self) {
+        todo!()
+    }
+
+    pub(super) fn disk_invalid(&mut self, message: SharedString) {
+        let _ = message;
+        todo!()
+    }
+
+    pub(super) fn over_pending(&self, values: Values) -> Values {
+        let _ = values;
+        todo!()
+    }
+
+    #[allow(clippy::unused_self, reason = "counts only in tests")]
+    pub(super) fn count_disk_apply(&mut self) {
+        #[cfg(test)]
+        {
+            self.disk_applies += 1;
         }
     }
 

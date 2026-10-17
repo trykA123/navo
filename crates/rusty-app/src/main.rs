@@ -20,6 +20,7 @@ mod logging;
 mod settings;
 mod shell_menu;
 mod startup;
+mod watch_file;
 #[cfg(windows)]
 mod windows_memory;
 

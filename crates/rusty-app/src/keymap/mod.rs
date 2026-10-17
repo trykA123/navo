@@ -2,12 +2,14 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use rusty_core::{Location, ProviderPath};
-use rusty_fs::{LocalFs, Provider, Watch, WatchChange, WatchEvent};
+use rusty_core::Location;
+use rusty_fs::Watch;
 use rusty_store::StoreDirs;
 use rusty_ui::commands::Keymap;
 use rusty_ui::shortcuts::Saved;
 use rusty_ui::window_view::{KeymapHooks, KeymapNews};
+
+use crate::watch_file::watch_file;
 
 mod save;
 
@@ -85,43 +87,20 @@ pub fn watch(
     start: KeymapNews,
     mut on_news: impl FnMut(KeymapNews) + Send + 'static,
 ) -> Option<Watch> {
-    let folder = Location::new(path.parent()?.to_str()?).ok()?;
-    let name = path.file_name()?.to_str()?.to_owned();
-    let path = path.to_owned();
+    let file = path.to_owned();
     let mut last = start;
-    let sink = Box::new(move |event: WatchEvent| {
-        if !touches(&event, &name) {
-            return;
-        }
-        let news = load(&path);
+    watch_file(path, move || {
+        let news = load(&file);
         if news != last {
             report(&news);
             last = news.clone();
             on_news(news);
         }
-    });
-    LocalFs::new().watch(&folder, sink).ok()
+    })
 }
 
 fn location_of(path: &Path) -> Option<Location> {
     Location::new(path.to_str()?).ok()
-}
-
-fn touches(event: &WatchEvent, name: &str) -> bool {
-    let is_it = |path: &ProviderPath| {
-        path.as_str()
-            .is_some_and(|it| it.eq_ignore_ascii_case(name))
-    };
-    match event {
-        WatchEvent::Changed(changes) => changes.iter().any(|change| match change {
-            WatchChange::Created(path)
-            | WatchChange::Removed(path)
-            | WatchChange::Modified(path) => is_it(path),
-            WatchChange::Renamed { from, to } => is_it(from) || is_it(to),
-        }),
-        WatchEvent::Overflow => true,
-        WatchEvent::Failed(_) => false,
-    }
 }
 
 #[cfg(test)]
