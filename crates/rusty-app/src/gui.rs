@@ -63,6 +63,7 @@ pub fn open(view: Option<std::path::PathBuf>) {
         drives: drives::hooks(),
         app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
         settings: settings::hooks(settings_file.as_deref()),
+        keymap: rusty_ui::window_view::KeymapHooks::none(),
         view: view.and_then(|path| view_location(&path)),
         listing_cache: cache,
         cache_keys: keys,

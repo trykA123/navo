@@ -1,6 +1,9 @@
+mod overlay;
 mod parse;
 mod shown;
 
+#[cfg(test)]
+mod overlay_tests;
 #[cfg(test)]
 mod tests;
 
@@ -8,6 +11,7 @@ use std::sync::OnceLock;
 
 use super::CommandSpec;
 
+pub use overlay::{KeymapWarning, Overlaid, UserKeymapError};
 pub use parse::{KeymapError, normal as normal_key};
 pub use shown::shown;
 
@@ -34,6 +38,10 @@ impl Keymap {
     pub fn builtin() -> &'static Self {
         static PARSED: OnceLock<Keymap> = OnceLock::new();
         PARSED.get_or_init(|| Self::parse(BUILTIN).unwrap_or_default())
+    }
+
+    pub fn overlay(&self, user: &str) -> Result<Overlaid, UserKeymapError> {
+        overlay::overlay(self, user)
     }
 
     #[must_use]

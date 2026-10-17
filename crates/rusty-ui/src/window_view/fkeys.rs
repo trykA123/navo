@@ -92,4 +92,9 @@ pub fn key_labels() -> Labels {
     key_labels_in(Keymap::builtin())
 }
 
-pub const KEY_WARNING: (KeyLayer, usize, &str) = (KeyLayer::Shift, 7, "Delete for good");
+pub const DELETE_WARNING: &str = "Delete for good";
+
+#[must_use]
+pub fn delete_warning_in(_keymap: &Keymap) -> Option<(Option<KeyLayer>, usize)> {
+    Some((Some(KeyLayer::Shift), 7))
+}

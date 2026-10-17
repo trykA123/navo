@@ -8,7 +8,7 @@ use gpui_kit::{
 
 use super::{FKeyBar, KeyLayer};
 use crate::test_window::{open, open_sized};
-use crate::window_view::{KEY_WARNING, key_labels, layer_keys};
+use crate::window_view::{key_labels, layer_keys};
 
 struct Keys;
 
@@ -183,7 +183,7 @@ struct MainBar(Option<KeyLayer>);
 
 impl Render for MainBar {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let (layer, index, spoken) = KEY_WARNING;
+        let (layer, index, spoken) = (KeyLayer::Shift, 7, "Delete for good");
         FKeyBar::new("fkeys", layer_keys(self.0))
             .layers(self.0, key_labels())
             .warn(layer, index, spoken)
@@ -251,7 +251,7 @@ struct Sized {
 
 impl Render for Sized {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let (layer, index, spoken) = KEY_WARNING;
+        let (layer, index, spoken) = (KeyLayer::Shift, 7, "Delete for good");
         let long = self.long;
         let keys =
             layer_keys(None)

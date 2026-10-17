@@ -74,6 +74,16 @@ fn files_have_fixed_names() {
 }
 
 #[test]
+fn the_user_keymap_sits_beside_the_settings_file() {
+    let dirs = StoreDirs {
+        config: PathBuf::from("/c"),
+        data: PathBuf::from("/d"),
+    };
+    assert_eq!(dirs.keymap_file(), PathBuf::from("/c/keymap.toml"));
+    assert_eq!(dirs.keymap_file().parent(), dirs.settings_file().parent());
+}
+
+#[test]
 fn ensure_creates_both_dirs() {
     let root = tempfile::tempdir().unwrap();
     let dirs = StoreDirs {

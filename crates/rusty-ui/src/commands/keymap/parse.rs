@@ -15,6 +15,13 @@ pub enum KeymapError {
     ContextNotAllowed { command: String, context: String },
     DuplicateKey { key: String, context: String },
     DuplicateEntry { command: String, context: String },
+    UppercaseKey { command: String, key: String },
+    KeyConflict {
+        key: String,
+        context: String,
+        first: String,
+        second: String,
+    },
 }
 
 impl fmt::Display for KeymapError {
@@ -34,6 +41,20 @@ impl fmt::Display for KeymapError {
             Self::DuplicateEntry { command, context } => {
                 write!(formatter, "`{command}` has two entries for `{context}`")
             }
+            Self::UppercaseKey { command, key } => write!(
+                formatter,
+                "`{key}` must be lower case, like `{}` (command `{command}`)",
+                key.to_lowercase()
+            ),
+            Self::KeyConflict {
+                key,
+                context,
+                first,
+                second,
+            } => write!(
+                formatter,
+                "`{key}` is given to both `{first}` and `{second}` in `{context}`"
+            ),
         }
     }
 }

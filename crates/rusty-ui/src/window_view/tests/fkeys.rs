@@ -6,9 +6,9 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Modifiers, TestAppContext, Visu
 use super::{fake, home_beside_dest, open, open_with, press};
 use crate::commands::Keymap;
 use crate::fkey_bar::KeyLayer;
-use crate::window_view::{key_labels_in, layer_keys_in};
+use crate::window_view::{delete_warning_in, key_labels_in, layer_keys_in};
 
-fn key_labels(
+pub(super) fn key_labels(
     cx: &mut TestAppContext,
     window: AnyWindowHandle,
 ) -> (Vec<String>, Vec<Option<bool>>) {
@@ -26,7 +26,7 @@ fn key_labels(
     .expect("window")
 }
 
-fn hold(cx: &mut TestAppContext, window: AnyWindowHandle, modifiers: Modifiers) {
+pub(super) fn hold(cx: &mut TestAppContext, window: AnyWindowHandle, modifiers: Modifiers) {
     let mut visual = VisualTestContext::from_window(window, cx);
     if !visual.update(|window, _| window.is_window_active()) {
         visual.deactivate_window();
@@ -179,4 +179,23 @@ fn the_built_in_keymap_gives_the_known_f_key_bar() {
     assert_eq!(labels(Some(KeyLayer::Shift)), shift);
     assert_eq!(labels(Some(KeyLayer::Ctrl)), ctrl);
     assert_eq!(labels(Some(KeyLayer::Alt)), alt);
+}
+
+#[test]
+fn the_delete_warning_sits_on_the_key_of_files_delete() {
+    assert_eq!(
+        delete_warning_in(Keymap::builtin()),
+        Some((Some(KeyLayer::Shift), 7))
+    );
+    let cases = [
+        ("\"shift-delete\", \"alt-f2\"", Some((Some(KeyLayer::Alt), 1))),
+        ("\"f4\"", Some((None, 3))),
+        ("\"shift-delete\"", None),
+        ("", None),
+    ];
+    for (keys, expected) in cases {
+        let text = format!("[[bind]]\ncommand = \"files.delete\"\nkeys = [{keys}]\n");
+        let keymap = Keymap::parse(&text).expect("keymap");
+        assert_eq!(delete_warning_in(&keymap), expected, "{keys}");
+    }
 }

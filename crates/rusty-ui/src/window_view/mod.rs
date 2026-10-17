@@ -16,6 +16,7 @@ mod settings_sheet;
 mod shell_menu;
 mod status;
 mod tab_keys;
+mod user_keymap;
 mod viewer;
 mod waiting;
 
@@ -43,11 +44,14 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 pub use app_menu::AppMenuHooks;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
-pub use fkeys::{FKey, KEY_WARNING, key_labels, key_labels_in, layer_keys, layer_keys_in};
+pub use fkeys::{
+    DELETE_WARNING, FKey, delete_warning_in, key_labels, key_labels_in, layer_keys, layer_keys_in,
+};
 pub(crate) use keys::bind_app_keys;
 pub use keys::bind_keys;
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
+pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -73,6 +77,7 @@ pub struct StartOptions {
     pub drives: DriveHooks,
     pub app_menu: AppMenuHooks,
     pub settings: SettingsHooks,
+    pub keymap: KeymapHooks,
     pub view: Option<rusty_core::Location>,
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
@@ -189,6 +194,7 @@ impl FerriteWindow {
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
         view.apply_theme(window, cx);
+        Self::listen_keymap(options.keymap, cx);
         Self::after_open(options.view, window, cx);
         view
     }
@@ -281,14 +287,17 @@ impl FerriteWindow {
     }
 
     fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
-        let (held, (layer, index, spoken)) = (self.held_layer, KEY_WARNING);
+        let held = self.held_layer;
         let bar = match &self.viewer {
             Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
             None => {
                 let keymap = crate::commands::active(cx);
-                FKeyBar::new("fkeys", layer_keys_in(keymap, held))
-                    .layers(held, key_labels_in(keymap))
-                    .warn(layer, index, spoken)
+                let bar = FKeyBar::new("fkeys", layer_keys_in(keymap, held))
+                    .layers(held, key_labels_in(keymap));
+                match delete_warning_in(keymap) {
+                    Some((layer, index)) => bar.warn_at(layer, index, DELETE_WARNING),
+                    None => bar,
+                }
             }
         };
         self.with_job_pill(bar, window, cx)

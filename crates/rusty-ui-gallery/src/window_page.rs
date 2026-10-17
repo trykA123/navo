@@ -15,7 +15,8 @@ use rusty_ui::settings::Field;
 use rusty_ui::side_sheet::{SheetFrame, SheetState, Side as PaneSide};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens::{self, Density, Mode, Theme, ThemeChoice};
-use rusty_ui::window_view::{KEY_WARNING, key_labels, layer_keys};
+use rusty_ui::commands::Keymap;
+use rusty_ui::window_view::{DELETE_WARNING, delete_warning_in, key_labels, layer_keys};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
@@ -94,9 +95,11 @@ impl WindowPage {
     }
 
     fn fkey_bar(&self, window: &Window) -> FKeyBar {
-        let bar = FKeyBar::new("fkeys", layer_keys(self.held))
-            .layers(self.held, key_labels())
-            .warn(KEY_WARNING.0, KEY_WARNING.1, KEY_WARNING.2);
+        let bar = FKeyBar::new("fkeys", layer_keys(self.held)).layers(self.held, key_labels());
+        let bar = match delete_warning_in(Keymap::builtin()) {
+            Some((layer, index)) => bar.warn_at(layer, index, DELETE_WARNING),
+            None => bar,
+        };
         let Some(shown) = self.jobs else {
             return bar;
         };

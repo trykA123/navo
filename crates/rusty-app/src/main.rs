@@ -14,6 +14,7 @@ mod editor;
 mod files;
 mod gui;
 mod jobs;
+mod keymap;
 mod launch;
 mod logging;
 mod settings;

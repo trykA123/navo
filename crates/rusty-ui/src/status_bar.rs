@@ -2,7 +2,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
-    StatefulInteractiveElement, Styled, Window, div,
+    SharedString, StatefulInteractiveElement, Styled, Window, div,
 };
 
 use crate::format;
@@ -86,10 +86,17 @@ impl StatusBarProps {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StatusNotice {
+    pub text: SharedString,
+    pub is_error: bool,
+}
+
 #[derive(IntoElement)]
 pub struct StatusBar {
     id: ElementId,
     props: StatusBarProps,
+    notice: Option<StatusNotice>,
 }
 
 impl StatusBar {
@@ -97,7 +104,14 @@ impl StatusBar {
         Self {
             id: id.into(),
             props,
+            notice: None,
         }
+    }
+
+    #[must_use]
+    pub fn notice(mut self, notice: Option<StatusNotice>) -> Self {
+        self.notice = notice;
+        self
     }
 }
 
@@ -150,20 +164,28 @@ mod tests {
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{Context, IntoElement, Render, Role, TestAppContext, Window};
 
-    use super::{ListingMark, StatusBar, StatusBarProps};
+    use super::{ListingMark, StatusBar, StatusBarProps, StatusNotice};
     use crate::format;
     use crate::test_window::open;
 
-    struct Status(StatusBarProps);
+    struct Status(StatusBarProps, Option<StatusNotice>);
 
     impl Render for Status {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            StatusBar::new("status", self.0)
+            StatusBar::new("status", self.0).notice(self.1.clone())
         }
     }
 
     fn label(props: StatusBarProps, cx: &mut TestAppContext) -> Option<String> {
-        let (window, _) = open(cx, |_, _| Status(props));
+        label_with(props, None, cx)
+    }
+
+    fn label_with(
+        props: StatusBarProps,
+        notice: Option<StatusNotice>,
+        cx: &mut TestAppContext,
+    ) -> Option<String> {
+        let (window, _) = open(cx, move |_, _| Status(props, notice));
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
             let status = window.find("status");
@@ -232,5 +254,21 @@ mod tests {
             format::date(ms)
         );
         assert_eq!(label(props, cx), Some(expected));
+    }
+
+    #[gpui_kit::test]
+    fn a_notice_leads_the_status(cx: &mut TestAppContext) {
+        let props = StatusBarProps {
+            files: 1,
+            ..StatusBarProps::default()
+        };
+        let notice = StatusNotice {
+            text: "keymap.toml, line 3: unknown command `x`".into(),
+            is_error: true,
+        };
+        assert_eq!(
+            label_with(props, Some(notice), cx).as_deref(),
+            Some("keymap.toml, line 3: unknown command `x` · 1 file, 0 folders · 0 B · – free")
+        );
     }
 }

@@ -68,7 +68,7 @@ struct Layers {
 
 #[derive(Clone)]
 struct Warning {
-    layer: KeyLayer,
+    layer: Option<KeyLayer>,
     index: usize,
     spoken: SharedString,
 }
@@ -104,7 +104,17 @@ impl FKeyBar {
     }
 
     #[must_use]
-    pub fn warn(mut self, layer: KeyLayer, index: usize, spoken: impl Into<SharedString>) -> Self {
+    pub fn warn(self, layer: KeyLayer, index: usize, spoken: impl Into<SharedString>) -> Self {
+        self.warn_at(Some(layer), index, spoken)
+    }
+
+    #[must_use]
+    pub fn warn_at(
+        mut self,
+        layer: Option<KeyLayer>,
+        index: usize,
+        spoken: impl Into<SharedString>,
+    ) -> Self {
         self.warning = Some(Warning {
             layer,
             index,
@@ -367,9 +377,9 @@ impl Frame {
                 .filter(|_| held.is_some()),
             sizers: labels.map(|labels| Sizers {
                 labels,
-                icon_in: warning.as_ref().map(|w| layer_slot(Some(w.layer))),
+                icon_in: warning.as_ref().map(|w| layer_slot(w.layer)),
             }),
-            warning: warning.filter(|w| held == Some(w.layer)).map(|w| w.spoken),
+            warning: warning.filter(|w| held == w.layer).map(|w| w.spoken),
             motion: self.labels.is_some().then_some(LabelMotion {
                 layer: held,
                 rise: self.rise,

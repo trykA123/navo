@@ -154,6 +154,7 @@ pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option
             save: Arc::new(move |changes| fake_store.save(changes)),
             ..SettingsHooks::none()
         },
+        keymap: crate::window_view::KeymapHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
