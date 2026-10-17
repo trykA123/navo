@@ -81,3 +81,62 @@ fn session_folders_are_every_tab_of_every_pane_once() {
     .unwrap();
     assert_eq!(session_folders(&state), [home(), work]);
 }
+
+fn pane_locations(state: &AppState) -> Vec<Location> {
+    state
+        .window(state.focused_window())
+        .map(|w| {
+            w.panes()
+                .iter()
+                .map(|p| p.active().location().clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn fresh_state() -> AppState {
+    let dir = tempfile::tempdir().unwrap();
+    initial_state(&dir.path().join("session.bin"), home())
+}
+
+#[test]
+fn given_folders_open_in_the_left_and_right_panes() {
+    let mut state = fresh_state();
+    let left = Location::new("/fixture/flat").unwrap();
+    let right = Location::new("/fixture/nested").unwrap();
+    let first = pane_locations(&state);
+    assert_eq!(first.len(), 2);
+    place_panes(&mut state, [Some(left.clone()), Some(right.clone())]);
+    assert_eq!(pane_locations(&state), [left.clone(), right]);
+    assert_eq!(state.active_tab().location(), &left);
+}
+
+#[test]
+fn only_the_given_side_moves() {
+    let mut state = fresh_state();
+    let right = Location::new("/fixture/nested").unwrap();
+    place_panes(&mut state, [None, Some(right.clone())]);
+    assert_eq!(pane_locations(&state), [home(), right]);
+}
+
+#[test]
+fn placed_panes_are_listed_at_start() {
+    let mut state = fresh_state();
+    let left = Location::new("/fixture/flat").unwrap();
+    place_panes(&mut state, [Some(left.clone()), None]);
+    let listed: Vec<Location> = rusty_core::list_missing(&mut state)
+        .into_iter()
+        .filter_map(|effect| match effect {
+            rusty_core::Effect::ListFolder { location, .. } => Some(location),
+            _ => None,
+        })
+        .collect();
+    assert!(listed.contains(&left), "{listed:?}");
+}
+
+#[test]
+fn a_relative_folder_becomes_absolute() {
+    let location = path_location(std::path::Path::new("fixture")).unwrap();
+    let expected = std::env::current_dir().unwrap().join("fixture");
+    assert_eq!(location.as_str(), expected.to_str().unwrap());
+}

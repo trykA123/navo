@@ -39,6 +39,15 @@ pub fn home_location(var: impl Fn(&str) -> Option<String>) -> Location {
         .unwrap_or_else(default_root)
 }
 
+pub fn place_panes(state: &mut AppState, folders: [Option<Location>; 2]) {
+    let _ = (state, folders);
+}
+
+pub fn path_location(path: &Path) -> Option<Location> {
+    let _ = path;
+    None
+}
+
 fn fresh(home: Location) -> AppState {
     let mut state = AppState::new(home);
     let _ = apply(

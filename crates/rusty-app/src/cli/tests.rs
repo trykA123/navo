@@ -1,12 +1,23 @@
 use super::*;
 
-fn parse_strs(args: &[&str]) -> Result<Command, &'static str> {
+fn parse_strs(args: &[&str]) -> Result<Command, String> {
     parse(args.iter().map(OsString::from))
+}
+
+fn start(args: &[&str]) -> Start {
+    match parse_strs(args) {
+        Ok(Command::Open(start)) => start,
+        other => panic!("expected a window start, got {other:?}"),
+    }
+}
+
+fn refusal(args: &[&str]) -> String {
+    parse_strs(args).expect_err("the arguments should be refused")
 }
 
 #[test]
 fn no_arguments_open_the_window() {
-    assert_eq!(parse_strs(&[]), Ok(Command::Open));
+    assert_eq!(parse_strs(&[]), Ok(Command::Open(Start::default())));
 }
 
 #[test]
@@ -24,35 +35,132 @@ fn diag_report_takes_a_path() {
 
 #[test]
 fn diag_report_without_a_path_is_refused() {
-    assert_eq!(parse_strs(&["--diag-report"]), Err(USAGE));
+    assert!(refusal(&["--diag-report"]).contains("--diag-report needs a value"));
 }
 
 #[test]
 fn an_empty_path_is_refused() {
-    assert_eq!(parse_strs(&["--diag-report", ""]), Err(USAGE));
+    assert!(refusal(&["--diag-report", ""]).contains("--diag-report needs a value"));
 }
 
 #[test]
 fn unknown_flags_are_refused() {
-    assert_eq!(parse_strs(&["--help"]), Err(USAGE));
+    assert!(refusal(&["--help"]).contains("unknown argument --help"));
 }
 
 #[test]
 fn extra_arguments_are_refused() {
-    assert_eq!(parse_strs(&["--diag-report", "a.zip", "b"]), Err(USAGE));
+    assert!(refusal(&["--diag-report", "a.zip", "b"]).contains("unknown argument b"));
+}
+
+#[test]
+fn every_refusal_ends_with_the_usage() {
+    for args in [
+        &["--help"][..],
+        &["--metrics"],
+        &["--left", "a", "--left", "b"],
+        &["--version", "--metrics", "m.json"],
+    ] {
+        assert!(refusal(args).ends_with(USAGE), "{args:?}");
+    }
 }
 
 #[test]
 fn only_the_window_skips_the_console() {
-    assert!(!Command::Open.uses_console());
+    assert!(!Command::Open(Start::default()).uses_console());
     assert!(Command::Version.uses_console());
     assert!(Command::DiagReport(PathBuf::from("a.zip")).uses_console());
 }
 
 #[test]
 fn view_takes_a_file_and_needs_no_console() {
-    let parsed = parse_strs(&["--view", "notes.md"]);
-    assert_eq!(parsed, Ok(Command::View(PathBuf::from("notes.md"))));
-    assert!(!Command::View(PathBuf::from("a")).uses_console());
-    assert_eq!(parse_strs(&["--view"]), Err(USAGE));
+    let parsed = start(&["--view", "notes.md"]);
+    assert_eq!(parsed.view, Some(PathBuf::from("notes.md")));
+    assert!(!Command::Open(parsed).uses_console());
+    assert!(refusal(&["--view"]).contains("--view needs a value"));
+}
+
+#[test]
+fn every_window_flag_is_read_in_any_order() {
+    let parsed = start(&[
+        "--right",
+        "fixture/nested",
+        "--metrics",
+        "m.json",
+        "--profile",
+        "p",
+        "--left",
+        "fixture/flat",
+    ]);
+    assert_eq!(
+        parsed,
+        Start {
+            view: None,
+            profile: Some(PathBuf::from("p")),
+            metrics: Some(PathBuf::from("m.json")),
+            left: Some(PathBuf::from("fixture/flat")),
+            right: Some(PathBuf::from("fixture/nested")),
+        }
+    );
+}
+
+#[test]
+fn metrics_mode_reports_to_the_console() {
+    let parsed = start(&["--metrics", "m.json"]);
+    assert!(parsed.is_metrics());
+    assert!(Command::Open(parsed).uses_console());
+}
+
+#[test]
+fn a_profile_alone_opens_the_window_there() {
+    let parsed = start(&["--profile", "p"]);
+    assert_eq!(parsed.profile, Some(PathBuf::from("p")));
+    assert!(!parsed.is_metrics());
+}
+
+#[test]
+fn a_window_flag_without_a_value_is_refused() {
+    for flag in ["--metrics", "--profile", "--left", "--right"] {
+        let needs = format!("{flag} needs a value");
+        assert!(refusal(&[flag]).contains(&needs), "{flag}");
+        assert!(refusal(&[flag, ""]).contains(&needs), "{flag}");
+    }
+}
+
+#[test]
+fn a_flag_is_not_taken_as_a_value() {
+    assert!(refusal(&["--metrics", "--left", "a"]).contains("--metrics needs a value"));
+}
+
+#[test]
+fn a_flag_given_twice_is_refused() {
+    let message = refusal(&["--metrics", "a.json", "--metrics", "b.json"]);
+    assert!(message.contains("--metrics given twice"));
+}
+
+#[test]
+fn version_and_diag_report_stand_alone() {
+    assert!(refusal(&["--version", "--left", "a"]).contains("--version stands alone"));
+    let message = refusal(&["--left", "a", "--diag-report", "r.zip"]);
+    assert!(message.contains("--diag-report stands alone"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_path_that_is_not_unicode_is_kept() {
+    use std::os::unix::ffi::OsStringExt;
+    let odd = OsString::from_vec(vec![b'f', 0xff]);
+    let parsed = parse([OsString::from("--left"), odd.clone()]);
+    let Ok(Command::Open(start)) = parsed else {
+        panic!("expected a window start");
+    };
+    assert_eq!(start.left, Some(PathBuf::from(odd)));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_flag_that_is_not_unicode_is_refused_without_a_panic() {
+    use std::os::unix::ffi::OsStringExt;
+    let odd = OsString::from_vec(vec![b'-', b'-', 0xff]);
+    assert!(parse([odd]).is_err());
 }

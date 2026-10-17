@@ -1,0 +1,37 @@
+---
+source: crates/rusty-app/src/metrics/tests.rs
+expression: sample_report().to_json()
+---
+{
+  "version": "0.4.0",
+  "commit": "abc123def456",
+  "exe_bytes": 31457280,
+  "renderer": "Microsoft Basic Render Driver",
+  "first_frame_ms": 212.0,
+  "first_usable_ms": 260.0,
+  "marks": [
+    {
+      "name": "main",
+      "ms": 8.0
+    },
+    {
+      "name": "profile ready",
+      "ms": 11.0
+    },
+    {
+      "name": "window opening",
+      "ms": 95.0
+    },
+    {
+      "name": "first frame",
+      "ms": 212.0
+    },
+    {
+      "name": "first usable",
+      "ms": 260.0
+    }
+  ],
+  "idle_private_bytes": 52428800,
+  "idle_working_set_bytes": 73400320,
+  "peak_working_set_bytes": 80000000
+}

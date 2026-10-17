@@ -1,5 +1,5 @@
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoreDirs {
@@ -11,6 +11,14 @@ impl StoreDirs {
     #[must_use]
     pub fn detect() -> Option<Self> {
         Self::resolve(cfg!(windows), |name| std::env::var(name).ok())
+    }
+
+    #[must_use]
+    pub fn in_profile(root: &Path) -> Self {
+        Self {
+            config: root.to_path_buf(),
+            data: root.to_path_buf(),
+        }
     }
 
     pub fn resolve(windows: bool, var: impl Fn(&str) -> Option<String>) -> Option<Self> {

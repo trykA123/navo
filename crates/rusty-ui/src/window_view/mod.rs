@@ -15,6 +15,7 @@ mod settings_news;
 mod settings_save;
 mod settings_sheet;
 mod shell_menu;
+mod start_watch;
 mod status;
 mod tab_keys;
 mod user_keymap;
@@ -54,6 +55,7 @@ pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use start_watch::{StartReport, StartWatch};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -84,10 +86,14 @@ pub struct StartOptions {
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
     pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
+    pub start_watch: Option<StartWatch>,
 }
 
-pub fn run(options: StartOptions) {
+pub fn run(mut options: StartOptions) {
     crate::application().run(move |cx| {
+        if let Some(watch) = options.start_watch.as_mut() {
+            watch.mark("app running");
+        }
         let _ = crate::init(options.mode, cx);
         bind_app_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
@@ -136,6 +142,7 @@ pub struct FerriteWindow {
     preview: preview::Preview,
     job_ui: jobs::JobUi,
     keymap: user_keymap::KeymapState,
+    start: Option<start_watch::Watching>,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -190,6 +197,7 @@ impl FerriteWindow {
             preview: preview::Preview::new(Self::waker(cx), cx),
             job_ui: jobs::JobUi::default(),
             keymap: user_keymap::KeymapState::default(),
+            start: options.start_watch.map(start_watch::Watching::new),
             _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
                 view.follow_cursor(window, cx);
             }),
@@ -197,6 +205,7 @@ impl FerriteWindow {
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
+        view.mark_start("window built");
         view.apply_theme(window, cx);
         view.listen_files(options.keymap, window, cx);
         Self::after_open(options.view, window, cx);
@@ -373,6 +382,7 @@ impl FerriteWindow {
 
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.watch_start(window, cx);
         let t = tokens::current(cx).clone();
         let body = self.body_area(window, cx);
         let jobs = self.job_card_layer(cx);

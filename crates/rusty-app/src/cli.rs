@@ -3,37 +3,37 @@ use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
-    Open,
-    View(PathBuf),
+    Open(Start),
     Version,
     DiagReport(PathBuf),
 }
 
-pub const USAGE: &str = "usage: ferrite [--version | --view <file> | --diag-report <file.zip>]";
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Start {
+    pub view: Option<PathBuf>,
+    pub profile: Option<PathBuf>,
+    pub metrics: Option<PathBuf>,
+    pub left: Option<PathBuf>,
+    pub right: Option<PathBuf>,
+}
+
+pub const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>]]";
 
 impl Command {
     pub fn uses_console(&self) -> bool {
-        !matches!(self, Self::Open | Self::View(_))
+        false
     }
 }
 
-pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, &'static str> {
-    let mut args = args.into_iter();
-    let (first, second) = (args.next(), args.next());
-    if args.next().is_some() {
-        return Err(USAGE);
+impl Start {
+    pub fn is_metrics(&self) -> bool {
+        false
     }
-    match (first, second) {
-        (None, None) => Ok(Command::Open),
-        (Some(flag), None) if flag == "--version" => Ok(Command::Version),
-        (Some(flag), Some(path)) if flag == "--diag-report" && !path.is_empty() => {
-            Ok(Command::DiagReport(path.into()))
-        }
-        (Some(flag), Some(path)) if flag == "--view" && !path.is_empty() => {
-            Ok(Command::View(path.into()))
-        }
-        _ => Err(USAGE),
-    }
+}
+
+pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
+    let _ = args.into_iter();
+    Err(USAGE.to_owned())
 }
 
 #[cfg(test)]
