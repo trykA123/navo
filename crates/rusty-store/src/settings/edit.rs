@@ -1,6 +1,7 @@
 use toml_edit::{DocumentMut, Item, TableLike, Value};
 
 use super::SettingsError;
+use crate::text_layout::{BOM, keep_layout};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SettingValue {
@@ -19,26 +20,12 @@ impl From<SettingValue> for Value {
     }
 }
 
-const BOM: char = '\u{feff}';
-
 pub(super) fn patch(
     text: &str,
     key: &str,
     value: Option<SettingValue>,
 ) -> Result<String, SettingsError> {
-    let body = text.strip_prefix(BOM);
-    let is_crlf = text.contains("\r\n");
-    let plain = body.unwrap_or(text).replace("\r\n", "\n");
-    let patched = patch_plain(&plain, key, value)?;
-    let patched = if is_crlf {
-        patched.replace('\n', "\r\n")
-    } else {
-        patched
-    };
-    Ok(match body {
-        Some(_) => format!("{BOM}{patched}"),
-        None => patched,
-    })
+    keep_layout(text, |plain| patch_plain(plain, key, value))
 }
 
 fn patch_plain(

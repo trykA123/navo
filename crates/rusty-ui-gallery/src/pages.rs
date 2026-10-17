@@ -36,6 +36,10 @@ pub enum Page {
     SheetNarrow,
     Settings,
     SettingsFiles,
+    Shortcuts,
+    ShortcutsRecording,
+    ShortcutsConflict,
+    ShortcutsInvalid,
 }
 
 pub struct PageInfo {
@@ -54,7 +58,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 36] = [
+pub const PAGES: [PageInfo; 40] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -139,6 +143,25 @@ pub const PAGES: [PageInfo; 36] = [
         Page::SettingsFiles,
         "Settings, files",
         "p19-settings-files",
+        false,
+    ),
+    info(Page::Shortcuts, "Shortcuts", "p20-shortcuts", false),
+    info(
+        Page::ShortcutsRecording,
+        "Shortcuts, recording",
+        "p20-shortcuts-recording",
+        false,
+    ),
+    info(
+        Page::ShortcutsConflict,
+        "Shortcuts, conflict",
+        "p20-shortcuts-conflict",
+        false,
+    ),
+    info(
+        Page::ShortcutsInvalid,
+        "Shortcuts, invalid file",
+        "p20-shortcuts-invalid",
         false,
     ),
 ];

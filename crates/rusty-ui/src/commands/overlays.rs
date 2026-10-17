@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 8] = [
+pub(super) const GROUPS: [Group; 9] = [
     Group {
         context: "ContextMenu",
         commands: &[
@@ -111,6 +111,28 @@ pub(super) const GROUPS: [Group; 8] = [
             "settings.cancel_edit",
             "Cancel edit",
         )],
+    },
+    Group {
+        context: "Shortcuts",
+        commands: &[
+            (
+                "shortcuts::PreviousRow",
+                "shortcuts.previous_row",
+                "Previous shortcut",
+            ),
+            ("shortcuts::NextRow", "shortcuts.next_row", "Next shortcut"),
+            ("shortcuts::Record", "shortcuts.record", "Record a new key"),
+            (
+                "shortcuts::Cancel",
+                "shortcuts.cancel",
+                "Cancel the new key",
+            ),
+            (
+                "shortcuts::Reset",
+                "shortcuts.reset",
+                "Reset to the default key",
+            ),
+        ],
     },
     Group {
         context: "Dialog",

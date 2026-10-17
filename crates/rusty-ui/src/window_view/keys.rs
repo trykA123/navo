@@ -42,6 +42,7 @@ pub(crate) fn bind_app_keys(cx: &mut App) {
     crate::prompt_dialog::bind_keys(cx);
     crate::app_menu::bind_keys(cx);
     crate::settings::bind_keys(cx);
+    crate::shortcuts::bind_keys(cx);
     crate::context_menu::bind_keys(cx);
     super::viewer::bind_keys(cx);
     bind_keys(cx);

@@ -6,7 +6,12 @@ use rusty_core::{Location, ProviderPath};
 use rusty_fs::{LocalFs, Provider, Watch, WatchChange, WatchEvent};
 use rusty_store::StoreDirs;
 use rusty_ui::commands::Keymap;
+use rusty_ui::shortcuts::Saved;
 use rusty_ui::window_view::{KeymapHooks, KeymapNews};
+
+mod save;
+
+pub use save::saver;
 
 pub const FILE: &str = "keymap.toml";
 
@@ -17,17 +22,27 @@ pub fn load(path: &Path) -> KeymapNews {
         Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
         Err(error) => return KeymapNews::Invalid(format!("{FILE}: {error}")),
     };
-    match Keymap::builtin().overlay(&text) {
-        Ok(overlaid) => KeymapNews::Applied {
+    match checked(&text) {
+        Ok(saved) => KeymapNews::Applied {
+            keymap: saved.keymap,
+            warnings: saved.warnings,
+        },
+        Err(message) => KeymapNews::Invalid(message),
+    }
+}
+
+fn checked(text: &str) -> Result<Saved, String> {
+    match Keymap::builtin().overlay(text) {
+        Ok(overlaid) => Ok(Saved {
             keymap: overlaid.keymap,
             warnings: overlaid
                 .warnings
                 .iter()
                 .map(|warning| format!("{FILE}, {warning}"))
                 .collect(),
-        },
-        Err(error) if error.line.is_some() => KeymapNews::Invalid(format!("{FILE}, {error}")),
-        Err(error) => KeymapNews::Invalid(format!("{FILE}: {error}")),
+        }),
+        Err(error) if error.line.is_some() => Err(format!("{FILE}, {error}")),
+        Err(error) => Err(format!("{FILE}: {error}")),
     }
 }
 
@@ -40,6 +55,7 @@ pub fn hooks(dirs: Option<&StoreDirs>) -> (KeymapHooks, Option<Watch>) {
     let start = load(path);
     report(&start);
     let (hooks, sender) = KeymapHooks::channel(Some(start.clone()));
+    let hooks = hooks.with_file(location_of(path), saver(path));
     let watching = watch(path, start, move |news| {
         let _ = sender.send(news);
     });
@@ -85,6 +101,10 @@ pub fn watch(
         }
     });
     LocalFs::new().watch(&folder, sink).ok()
+}
+
+fn location_of(path: &Path) -> Option<Location> {
+    Location::new(path.to_str()?).ok()
 }
 
 fn touches(event: &WatchEvent, name: &str) -> bool {

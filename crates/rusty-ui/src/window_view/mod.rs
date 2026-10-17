@@ -36,7 +36,6 @@ use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
 use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
-use crate::status_bar::StatusNotice;
 use crate::title_bar::{FerriteTitleBar, HeaderSearch};
 use crate::tokens::{self, Mode};
 
@@ -134,7 +133,7 @@ pub struct FerriteWindow {
     menu_runs: u64,
     preview: preview::Preview,
     job_ui: jobs::JobUi,
-    keymap_notice: Option<StatusNotice>,
+    keymap: user_keymap::KeymapState,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -188,7 +187,7 @@ impl FerriteWindow {
             menu_runs: 0,
             preview: preview::Preview::new(Self::waker(cx), cx),
             job_ui: jobs::JobUi::default(),
-            keymap_notice: None,
+            keymap: user_keymap::KeymapState::default(),
             _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
                 view.follow_cursor(window, cx);
             }),

@@ -13,6 +13,7 @@ use rusty_ui::pane_chrome::{
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{Splitter, SplitterState};
 use rusty_ui::settings::Field;
+use rusty_ui::shortcuts::ShortcutsPage;
 use rusty_ui::side_sheet::{SheetFrame, SheetState, Side as PaneSide};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens::{self, Density, Mode, Theme, ThemeChoice};
@@ -26,6 +27,7 @@ use crate::pane_page::status_of;
 use crate::pane_sample;
 use crate::settings_sample;
 use crate::sheet_sample;
+use crate::shortcuts_sample;
 
 struct Side {
     tabs: &'static [&'static str],
@@ -54,6 +56,7 @@ pub struct SheetShows {
     pub window_width: f32,
     pub is_ringed: bool,
     pub settings: Option<Field>,
+    pub shortcuts: Option<Entity<ShortcutsPage>>,
 }
 
 #[derive(Clone, Copy)]
@@ -166,9 +169,10 @@ impl WindowPage {
         let body = px(sheet.shows.window_width) - t.spacing.md * 2.;
         let passive_card = (body - t.spacing.md) / 2.;
         let frame = SheetFrame::new(body, passive_card, sheet.shows.active);
-        let shown = match sheet.shows.settings {
-            Some(field) => settings_sample::sheet(t, &sheet.state, frame, field),
-            None => sheet_sample::sheet(t, &sheet.state, frame),
+        let shown = match (&sheet.shows.shortcuts, sheet.shows.settings) {
+            (Some(page), _) => shortcuts_sample::sheet(&sheet.state, frame, page),
+            (None, Some(field)) => settings_sample::sheet(t, &sheet.state, frame, field),
+            (None, None) => sheet_sample::sheet(t, &sheet.state, frame),
         };
         let layer = div()
             .absolute()
@@ -300,7 +304,7 @@ fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 13]) -> Option<AnyElement> {
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 17]) -> Option<AnyElement> {
     let [
         main,
         shift,
@@ -311,6 +315,10 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 13]) -> Option<
         sheet_narrow,
         settings,
         settings_files,
+        shortcuts,
+        recording,
+        conflict,
+        invalid,
         jobs @ ..,
     ] = windows;
     let [job, job_pill, two, two_pill] = jobs;
@@ -329,6 +337,10 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 13]) -> Option<
         Page::SheetNarrow => return Some(fixed(NARROW, sheet_narrow)),
         Page::Settings => return Some(fixed(SETTINGS, settings)),
         Page::SettingsFiles => return Some(fixed(SETTINGS, settings_files)),
+        Page::Shortcuts => return Some(fixed(SETTINGS, shortcuts)),
+        Page::ShortcutsRecording => return Some(fixed(SETTINGS, recording)),
+        Page::ShortcutsConflict => return Some(fixed(SETTINGS, conflict)),
+        Page::ShortcutsInvalid => return Some(fixed(SETTINGS, invalid)),
         _ => return None,
     };
     Some(shown.clone().into_any_element())

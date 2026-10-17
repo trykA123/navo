@@ -1,10 +1,11 @@
 mod edit;
 mod locate;
+mod shortcuts;
 mod undo;
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use gpui_kit::{FocusHandle, ScrollHandle};
+use gpui_kit::{FocusHandle, Focusable, ScrollHandle};
 use rusty_core::Location;
 
 use super::FerriteWindow;
@@ -58,6 +59,8 @@ pub(super) struct SettingsPanel {
     waiting_locate: Option<Field>,
     file: Option<Location>,
     line_of: FindLine,
+    shortcuts: Option<shortcuts::ShortcutsPanel>,
+    is_shortcuts: bool,
 }
 
 impl SettingsPanel {
@@ -84,6 +87,8 @@ impl SettingsPanel {
             waiting_locate: None,
             file,
             line_of,
+            shortcuts: None,
+            is_shortcuts: false,
         }
     }
 
@@ -130,7 +135,7 @@ impl FerriteWindow {
         self.settings.undo.clear();
         self.settings.notice = None;
         self.settings.sheet.update(cx, |sheet, cx| sheet.open(cx));
-        window.focus(&self.settings.focus, cx);
+        self.focus_settings(window, cx);
         cx.notify();
     }
 
@@ -139,6 +144,7 @@ impl FerriteWindow {
         self.settings.edit = None;
         self.settings.waiting_locate = None;
         self.settings.undo.clear();
+        self.pause_shortcuts(cx);
         self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
         if std::mem::take(&mut self.settings.restore_preview) {
             self.open_preview(window, cx);
@@ -148,12 +154,19 @@ impl FerriteWindow {
     }
 
     pub(super) fn focus_settings(&self, window: &mut Window, cx: &mut App) {
-        window.focus(&self.settings.focus, cx);
+        match self.shown_shortcuts() {
+            Some(page) => {
+                let focus = page.read(cx).focus_handle(cx);
+                window.focus(&focus, cx);
+            }
+            None => window.focus(&self.settings.focus, cx),
+        }
     }
 
     fn settings_event(&mut self, event: SheetEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event {
             SheetEvent::Select(row) => self.select_setting(row, window, cx),
+            SheetEvent::Shortcuts => self.show_shortcuts(window, cx),
             SheetEvent::Set(change) => self.set_from_sheet(change, window, cx),
             SheetEvent::Edit(field) => self.start_edit(field, window, cx),
             SheetEvent::Locate(field) => self.open_settings_file(field, window, cx),
@@ -166,6 +179,9 @@ impl FerriteWindow {
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.settings.row = row.min(FIELDS.len() - 1);
         self.settings.notice = None;
+        if std::mem::take(&mut self.settings.is_shortcuts) {
+            self.pause_shortcuts(cx);
+        }
         let at = rows_in(section_of(row)).position(|(index, _)| index == row);
         if let Some(at) = at {
             self.settings.scroll.scroll_to_item(at + 1);
@@ -212,6 +228,10 @@ impl FerriteWindow {
         let body = SettingsBody::new(self.values.clone(), self.settings.row)
             .error(error)
             .editor(self.edit_bar(&t, cx))
+            .shortcuts(
+                self.shown_shortcuts()
+                    .map(|page| page.clone().into_any_element()),
+            )
             .track_focus(&self.settings.focus)
             .track_scroll(&self.settings.scroll)
             .on_event(cx.listener(|view, event: &SheetEvent, window, cx| {

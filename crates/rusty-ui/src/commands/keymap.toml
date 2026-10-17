@@ -482,6 +482,48 @@ keys = ["escape"]
 command = "settings.cancel_edit"
 keys = ["escape"]
 
+# Shortcuts
+
+[[bind]]
+command = "shortcuts.previous_row"
+keys = ["up"]
+
+[[bind]]
+command = "shortcuts.previous_row"
+keys = ["up"]
+context = "Shortcuts > Input"
+
+[[bind]]
+command = "shortcuts.next_row"
+keys = ["down"]
+
+[[bind]]
+command = "shortcuts.next_row"
+keys = ["down"]
+context = "Shortcuts > Input"
+
+[[bind]]
+command = "shortcuts.record"
+keys = ["enter"]
+
+[[bind]]
+command = "shortcuts.record"
+keys = ["enter"]
+context = "Shortcuts > Input"
+
+[[bind]]
+command = "shortcuts.cancel"
+keys = ["escape"]
+
+[[bind]]
+command = "shortcuts.cancel"
+keys = ["escape"]
+context = "Shortcuts > Input"
+
+[[bind]]
+command = "shortcuts.reset"
+keys = ["ctrl-r"]
+
 # Dialog
 
 [[bind]]

@@ -101,6 +101,6 @@ pub fn active(cx: &App) -> &Keymap {
         .map_or_else(|| Keymap::builtin(), |active| &active.0)
 }
 
-pub(crate) fn set_active(cx: &mut App, keymap: Keymap) {
+pub fn set_active(cx: &mut App, keymap: Keymap) {
     cx.set_global(Active(keymap));
 }

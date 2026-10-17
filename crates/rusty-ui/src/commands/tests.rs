@@ -7,7 +7,7 @@ use super::{
 };
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 17] = [
+const NAMESPACES: [&str; 18] = [
     "app_menu",
     "confirm_dialog",
     "context_menu",
@@ -20,6 +20,7 @@ const NAMESPACES: [&str; 17] = [
     "preview",
     "prompt_dialog",
     "settings_sheet",
+    "shortcuts",
     "side_sheet",
     "viewer",
     "viewer_markdown",

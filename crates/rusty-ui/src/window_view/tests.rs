@@ -28,6 +28,7 @@ mod keymap;
 mod offline;
 mod settings_sheet;
 mod shell_menu;
+mod shortcuts;
 mod tabs;
 mod typed;
 mod watched;

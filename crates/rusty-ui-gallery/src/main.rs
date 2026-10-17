@@ -16,6 +16,7 @@ mod screenshot;
 mod sections;
 mod settings_sample;
 mod sheet_sample;
+mod shortcuts_sample;
 mod structured_sample;
 mod tokens_page;
 mod tokens_sample;
