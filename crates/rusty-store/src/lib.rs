@@ -5,6 +5,7 @@ mod cache_db;
 mod db;
 mod dirs;
 mod journal;
+mod keymap_file;
 mod session;
 mod settings;
 
@@ -15,6 +16,7 @@ pub use dirs::StoreDirs;
 pub use journal::{
     JobId, JobJournal, JobState, JournalError, JournalStep, StepState, UnfinishedJob,
 };
+pub use keymap_file::{KeymapEdit, KeymapFile, KeymapFileError, patch_keymap};
 pub use session::{
     SESSION_MAGIC, SESSION_VERSION, SessionFileError, SessionSource, load_session,
     read_session_file, write_session,

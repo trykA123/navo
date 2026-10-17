@@ -8,6 +8,10 @@ use rusty_store::StoreDirs;
 use rusty_ui::commands::Keymap;
 use rusty_ui::window_view::{KeymapHooks, KeymapNews};
 
+mod save;
+
+pub use save::saver;
+
 pub const FILE: &str = "keymap.toml";
 
 #[must_use]

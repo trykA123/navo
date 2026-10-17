@@ -6,7 +6,9 @@ use std::time::Duration;
 use rusty_ui::commands::Keymap;
 use rusty_ui::window_view::KeymapNews;
 
-use super::{FILE, load, watch};
+use rusty_ui::shortcuts::Edit;
+
+use super::{FILE, load, saver, watch};
 
 const NEWS_WAIT: Duration = Duration::from_secs(10);
 
@@ -147,4 +149,76 @@ fn the_same_content_is_not_sent_twice() {
     wait_live(watching.as_ref());
     fs::write(&path, text).expect("write keymap");
     assert!(news.recv_timeout(Duration::from_secs(2)).is_err());
+}
+
+fn copy_on(keys: &[&str]) -> Edit {
+    Edit::Set {
+        command: "files.copy",
+        context: None,
+        keys: keys.iter().map(|&key| key.to_owned()).collect(),
+    }
+}
+
+#[test]
+fn a_saved_key_is_written_and_reads_back_the_same() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = file_in(&dir);
+    let save = saver(&path);
+    let saved = save(&[copy_on(&["alt-f5"])]).expect("saved");
+    assert!(saved.keymap.has_key("files.copy", "alt-f5"));
+    let text = fs::read_to_string(&path).expect("read");
+    assert!(text.contains("command = \"files.copy\""), "{text}");
+    let (keymap, warnings) = applied(load(&path));
+    assert_eq!((keymap, warnings), (saved.keymap, saved.warnings));
+}
+
+#[test]
+fn a_replaced_built_in_key_comes_back_with_its_warning() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = file_in(&dir);
+    let edit = Edit::Set {
+        command: "files.sort_by_size",
+        context: None,
+        keys: vec!["ctrl-f5".to_owned()],
+    };
+    let saved = saver(&path)(&[edit]).expect("saved");
+    assert_eq!(saved.warnings.len(), 1);
+    assert!(saved.warnings[0].starts_with(FILE), "{:?}", saved.warnings);
+    assert_eq!(applied(load(&path)).1, saved.warnings);
+}
+
+#[test]
+fn a_save_never_overwrites_an_invalid_file() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = file_in(&dir);
+    let broken = "[[bind]]\ncommand = \"files.teleport\"\nkeys = [\"f5\"]\n";
+    fs::write(&path, broken).expect("write");
+    let error = saver(&path)(&[copy_on(&["alt-f5"])]).expect_err("refused");
+    assert!(
+        error.contains(FILE) && error.contains("files.teleport"),
+        "{error}"
+    );
+    assert_eq!(fs::read_to_string(&path).expect("read"), broken);
+    assert_eq!(entries(&dir), [FILE]);
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn the_watcher_echo_of_a_save_carries_the_saved_keymap() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = file_in(&dir);
+    let (sender, news) = mpsc::channel();
+    let watching = watch(&path, load(&path), move |news| {
+        let _ = sender.send(news);
+    });
+    wait_live(watching.as_ref());
+    let saved = saver(&path)(&[copy_on(&["alt-f5"])]).expect("saved");
+    let echo = news.recv_timeout(NEWS_WAIT).expect("news");
+    assert_eq!(
+        echo,
+        KeymapNews::Applied {
+            keymap: saved.keymap,
+            warnings: saved.warnings
+        }
+    );
 }

@@ -227,3 +227,26 @@ fn the_built_in_keymap_has_no_upper_case_key() {
         .collect();
     assert_eq!(upper, Vec::<&str>::new());
 }
+
+#[test]
+fn the_overlay_remembers_which_slots_the_user_set() {
+    let text = format!(
+        "{}{}",
+        one("files.copy", "\"alt-f5\"", None),
+        one("viewer.back", "\"backspace\"", Some("Tree"))
+    );
+    let keymap = overlaid(&text).keymap;
+    assert!(keymap.is_user("files.copy", "FileList"));
+    assert!(keymap.is_user("viewer.back", "Tree"));
+    assert!(!keymap.is_user("viewer.back", "Paged"));
+    assert!(!keymap.is_user("files.move", "FileList"));
+    assert!(keymap.is_changed("viewer.back"));
+    assert!(!keymap.is_changed("files.move"));
+}
+
+#[test]
+fn the_built_in_keymap_has_no_user_slots() {
+    let keymap = Keymap::builtin();
+    assert!(!keymap.is_changed("files.copy"));
+    assert!(!keymap.is_user("files.copy", "FileList"));
+}

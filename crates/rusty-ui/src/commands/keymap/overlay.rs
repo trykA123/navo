@@ -68,7 +68,10 @@ pub(super) fn overlay(base: &Keymap, text: &str) -> Result<Overlaid, UserKeymapE
     }
     warnings.sort_by_key(|warning| warning.line);
     Ok(Overlaid {
-        keymap: Keymap { binds },
+        keymap: Keymap {
+            binds,
+            user: Vec::new(),
+        },
         warnings,
     })
 }

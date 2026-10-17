@@ -27,11 +27,15 @@ pub struct Bind {
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Keymap {
     binds: Vec<Bind>,
+    user: Vec<(&'static str, String)>,
 }
 
 impl Keymap {
     pub fn parse(text: &str) -> Result<Self, KeymapError> {
-        parse::parse(text).map(|binds| Self { binds })
+        parse::parse(text).map(|binds| Self {
+            binds,
+            user: Vec::new(),
+        })
     }
 
     #[must_use]
@@ -54,6 +58,18 @@ impl Keymap {
             .iter()
             .filter(move |bind| bind.spec.name == command)
             .flat_map(|bind| bind.keys.iter().map(String::as_str))
+    }
+
+    #[must_use]
+    pub fn is_user(&self, command: &str, context: &str) -> bool {
+        let _ = (command, context, &self.user);
+        todo!()
+    }
+
+    #[must_use]
+    pub fn is_changed(&self, command: &str) -> bool {
+        let _ = command;
+        todo!()
     }
 
     #[must_use]
