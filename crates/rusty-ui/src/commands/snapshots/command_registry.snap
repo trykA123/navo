@@ -1,0 +1,214 @@
+---
+source: crates/rusty-ui/src/commands/tests.rs
+expression: "lines.join(\"\\n\")"
+---
+app_menu.toggle | App menu | global
+settings.toggle | All settings | global
+jobs.toggle | Show or hide jobs | global
+sheet.narrower | Narrower side sheet | global
+sheet.wider | Wider side sheet | global
+tab.next | Next tab | FerritePane
+tab.previous | Previous tab | FerritePane
+tab.close | Close tab | FerritePane
+tab.go_to_first | Go to tab 1 | FerritePane
+tab.go_to_second | Go to tab 2 | FerritePane
+tab.go_to_third | Go to tab 3 | FerritePane
+tab.go_to_fourth | Go to tab 4 | FerritePane
+tab.go_to_fifth | Go to tab 5 | FerritePane
+tab.go_to_sixth | Go to tab 6 | FerritePane
+tab.go_to_seventh | Go to tab 7 | FerritePane
+tab.go_to_eighth | Go to tab 8 | FerritePane
+tab.go_to_last | Go to last tab | FerritePane
+tab.new | New tab | FerritePane
+pane.drive_menu_first | Drives of pane 1 | FerritePane
+pane.drive_menu_second | Drives of pane 2 | FerritePane
+pane.edit_path | Edit path | FerritePane
+pane.reset_split | Reset pane split | FerritePane
+pane.toggle_preview | Show or hide preview | FerritePane
+preview.browse | Browse in preview | FerritePane
+pane.leave_waiting | Stop waiting | PaneWaiting
+pane.retry_listing | Retry listing | PaneWaiting
+preview.cursor_up | Up | PreviewBrowse
+preview.cursor_down | Down | PreviewBrowse
+preview.fold | Fold folder | PreviewBrowse
+preview.unfold | Unfold folder | PreviewBrowse
+preview.open | Open | PreviewBrowse
+preview.view | View file | PreviewBrowse
+preview.leave | Leave preview | PreviewBrowse
+preview.leave_and_switch | Leave preview, switch pane | PreviewBrowse
+preview.toggle | Show or hide preview | PreviewBrowse
+files.cursor_up | Up | FileList
+files.cursor_down | Down | FileList
+files.page_up | Page up | FileList
+files.page_down | Page down | FileList
+files.cursor_first | First row | FileList
+files.cursor_last | Last row | FileList
+files.toggle_mark | Mark | FileList
+files.toggle_mark_down | Mark and move down | FileList
+files.open | Open | FileList
+files.open_parent | Open parent folder | FileList
+pane.switch | Switch pane | FileList
+files.copy | Copy | FileList
+files.move | Move | FileList
+files.recycle | Move to Recycle Bin | FileList
+files.delete | Delete permanently | FileList
+pane.go_back | Back | FileList
+pane.go_forward | Forward | FileList
+files.clear_filter | Clear filter | FileList
+files.rename | Rename | FileList
+files.new_folder | New folder | FileList
+files.mark_pattern | Mark by pattern | FileList
+files.unmark_pattern | Unmark by pattern | FileList
+files.invert_marks | Invert marks | FileList
+files.sort_by_name | Sort by name | FileList
+files.sort_by_extension | Sort by extension | FileList
+files.sort_by_date | Sort by date | FileList
+files.sort_by_size | Sort by size | FileList
+files.edit | Edit | FileList
+files.edit_with | Edit with | FileList
+files.view | View | FileList
+files.refresh | Refresh | FileList
+files.context_menu | Context menu | FileList
+path_input.cancel | Cancel path edit | PathInput
+drive_menu.up | Up | DriveMenu
+drive_menu.down | Down | DriveMenu
+drive_menu.open | Open drive | DriveMenu
+drive_menu.close | Close drive menu | DriveMenu
+context_menu.up | Up | ContextMenu
+context_menu.down | Down | ContextMenu
+context_menu.first | First item | ContextMenu
+context_menu.last | Last item | ContextMenu
+context_menu.page_up | Page up | ContextMenu
+context_menu.page_down | Page down | ContextMenu
+context_menu.choose | Choose item | ContextMenu
+context_menu.open_submenu | Open submenu | ContextMenu
+context_menu.close_submenu | Close submenu | ContextMenu
+context_menu.back | Back or close | ContextMenu
+context_menu.show_classic | Classic menu | ContextMenu
+app_menu.focus_left | Left | AppMenu
+app_menu.focus_right | Right | AppMenu
+app_menu.focus_up | Up | AppMenu
+app_menu.focus_down | Down | AppMenu
+app_menu.activate | Choose item | AppMenu
+app_menu.close | Close app menu | AppMenu
+settings.row_up | Up | SettingsSheet
+settings.row_down | Down | SettingsSheet
+settings.previous_value | Previous value | SettingsSheet
+settings.next_value | Next value | SettingsSheet
+settings.flip_value | Turn on or off | SettingsSheet
+settings.next_section | Next section | SettingsSheet
+settings.previous_section | Previous section | SettingsSheet
+settings.edit_value | Edit value | SettingsSheet
+settings.show_in_file | Show in settings file | SettingsSheet
+settings.undo | Undo change | SettingsSheet
+settings.close | Close settings | SettingsSheet
+settings.cancel_edit | Cancel edit | SettingsField
+dialog.next_field | Next field | Dialog
+dialog.previous_field | Previous field | Dialog
+dialog.next_button | Next button | DialogButton
+dialog.previous_button | Previous button | DialogButton
+dialog.press | Press button | DialogButton
+confirm.cancel | Cancel | ConfirmDialog
+prompt.cancel | Cancel | PromptDialog
+viewer.save | Save | Viewer
+viewer.close | Close viewer | Viewer
+viewer.edit | Edit file | Viewer
+viewer.show_text | Show as text | Viewer
+viewer.show_hex | Show as hex | Viewer
+viewer.show_rich | Show rich view | Viewer
+lister.show_text | Show as text (Lister) | Viewer
+lister.show_hex | Show as hex (Lister) | Viewer
+lister.show_rich | Show rich view (Lister) | Viewer
+lister.find_next | Find next (Lister) | Viewer
+lister.page_or_next_image | Page down or next image | Viewer
+lister.previous_image | Previous image | Viewer
+viewer.next_file | Next file | Viewer
+viewer.previous_file | Previous file | Viewer
+viewer.line_up | Line up | Viewer
+viewer.line_down | Line down | Viewer
+viewer.page_up | Page up | Viewer
+viewer.page_down | Page down | Viewer
+viewer.go_to_start | Go to start | Viewer
+viewer.go_to_end | Go to end | Viewer
+viewer.scroll_left | Scroll left | Viewer
+viewer.scroll_right | Scroll right | Viewer
+viewer.go_to_line | Go to line | Viewer
+viewer.back | Back | Viewer
+viewer.show_line_ends | Show line ends | Viewer
+viewer.follow | Follow the end of the file | Viewer
+viewer.context_menu | Context menu | Viewer
+viewer.copy_path_line | Copy path:line | Viewer
+find.open | Find | Viewer
+find.next | Find next | Viewer
+find.previous | Find previous | Viewer
+find.selection | Find selection | Viewer
+find.match_case | Match case | Viewer
+mark.colour_one | Mark 1 | Viewer
+mark.colour_two | Mark 2 | Viewer
+mark.colour_three | Mark 3 | Viewer
+mark.colour_four | Mark 4 | Viewer
+mark.colour_five | Mark 5 | Viewer
+mark.colour_six | Mark 6 | Viewer
+mark.colour_seven | Mark 7 | Viewer
+mark.colour_eight | Mark 8 | Viewer
+mark.clear | Clear marks | Viewer
+bookmark.toggle | Bookmark | Viewer
+bookmark.next | Next bookmark | Viewer
+bookmark.previous | Previous bookmark | Viewer
+editor.toggle_preview | Show or hide Markdown preview | Viewer
+editor.focus_preview | Focus Markdown preview | Viewer
+editor.leave_preview | Leave Markdown preview | MarkdownPreview
+find.older_search | Older search | ViewerFind
+find.newer_search | Newer search | ViewerFind
+find.all | Find all | ViewerFind
+find.result_up | Previous result | FindAll
+find.result_down | Next result | FindAll
+find.go_to_result | Go to result | FindAll
+find.close_results | Close results | FindAll
+image.fit | Fit to window | Image
+image.actual_size | Actual size | Image
+image.zoom_in | Zoom in | Image
+image.zoom_out | Zoom out | Image
+image.toggle_info | Show or hide image info | Image
+image.copy | Copy image | Image
+image.copy_path | Copy path | Image
+tree.expand_branch | Open branch | Tree
+tree.collapse_branch | Fold branch | Tree
+tree.expand_all | Open all | Tree
+tree.collapse_all | Fold all | Tree
+tree.expand_branch_or_type | Open branch or type * | Tree
+tree.collapse_all_or_type | Fold all or type - | Tree
+tree.show_depth_one | Show depth 1 | Tree
+tree.show_depth_two | Show depth 2 | Tree
+tree.show_depth_three | Show depth 3 | Tree
+tree.show_depth_four | Show depth 4 | Tree
+tree.show_depth_five | Show depth 5 | Tree
+tree.show_depth_six | Show depth 6 | Tree
+tree.show_depth_seven | Show depth 7 | Tree
+tree.show_depth_eight | Show depth 8 | Tree
+tree.show_depth_nine | Show depth 9 | Tree
+tree.copy_value | Copy value | Tree
+tree.copy_key | Copy key | Tree
+tree.copy_path | Copy path | Tree
+tree.filter_backspace | Delete last filter character | Tree
+tree.type_n | Type n while filtering | Tree
+tree.type_p | Type p while filtering | Tree
+tree.type_one | Type 1 while filtering | Tree
+tree.type_three | Type 3 while filtering | Tree
+tree.type_five | Type 5 while filtering | Tree
+table.first_cell | First cell in row | Table
+table.last_cell | Last cell in row | Table
+table.copy_cell | Copy cell | Table
+table.copy_row | Copy row | Table
+table.copy_column | Copy column | Table
+table.sort_by_column | Sort by this column | Table
+markdown.open_link | Open link | Markdown
+markdown.next_link | Next link | Markdown
+markdown.previous_link | Previous link | Markdown
+markdown.copy_block | Copy block | Markdown
+markdown.copy_link | Copy link | Markdown
+app.command_palette | Command palette | global
+window.new | New window | global
+workspace.list | Workspaces | global
+help.key_map | Help and key map | global
+app.quit | Quit | global

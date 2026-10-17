@@ -437,3 +437,28 @@ fn quick_settings_toggle_one_field_each() {
     assert!(!start.toggled(Setting::HiddenFiles).show_hidden);
     assert_eq!(start.toggled(Setting::Theme).density, Density::Normal);
 }
+
+#[test]
+fn the_menu_rows_keep_their_commands_labels_and_keys() {
+    let rows: Vec<(MenuCommand, &str, &str)> = super::items::ROWS
+        .iter()
+        .map(|row| {
+            let keys = match row.trailing {
+                super::items::Trailing::Keys(keys) => keys,
+                super::items::Trailing::Submenu => "submenu",
+            };
+            (row.command, row.label, keys)
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (MenuCommand::CommandPalette, "Command palette", "Ctrl+K"),
+            (MenuCommand::NewWindow, "New window", "Ctrl+N"),
+            (MenuCommand::Workspaces, "Workspaces", "submenu"),
+            (MenuCommand::Help, "Help and key map", "F1"),
+            (MenuCommand::Quit, "Quit", "Alt+F4"),
+            (MenuCommand::AllSettings, "All settings", "Ctrl+,"),
+        ]
+    );
+}

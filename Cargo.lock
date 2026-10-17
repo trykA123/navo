@@ -6378,6 +6378,7 @@ dependencies = [
  "futures",
  "gpui-kit",
  "image",
+ "insta",
  "kamadak-exif",
  "raw-window-handle",
  "resvg 0.46.0",

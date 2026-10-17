@@ -4,6 +4,7 @@ mod app;
 pub mod app_menu;
 mod assets;
 pub mod browser;
+pub mod commands;
 pub mod confirm_dialog;
 pub mod context_menu;
 mod dialog_focus;

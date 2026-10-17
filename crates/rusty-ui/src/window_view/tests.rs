@@ -123,14 +123,7 @@ pub(super) fn open_unsettled(
         gpui_kit::init(cx);
         crate::languages::register_languages();
         tokens::apply(Mode::Light, cx);
-        crate::file_list::bind_keys(cx);
-        crate::confirm_dialog::bind_keys(cx);
-        crate::prompt_dialog::bind_keys(cx);
-        crate::app_menu::bind_keys(cx);
-        crate::settings::bind_keys(cx);
-        crate::context_menu::bind_keys(cx);
-        super::viewer::bind_keys(cx);
-        super::bind_keys(cx);
+        super::bind_app_keys(cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),

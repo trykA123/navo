@@ -44,6 +44,7 @@ pub use app_menu::AppMenuHooks;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{FKey, KEY_WARNING, key_labels, layer_keys};
+pub(crate) use keys::bind_app_keys;
 pub use keys::bind_keys;
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
@@ -81,14 +82,7 @@ pub struct StartOptions {
 pub fn run(options: StartOptions) {
     crate::application().run(move |cx| {
         let _ = crate::init(options.mode, cx);
-        crate::file_list::bind_keys(cx);
-        crate::confirm_dialog::bind_keys(cx);
-        crate::prompt_dialog::bind_keys(cx);
-        crate::app_menu::bind_keys(cx);
-        crate::settings::bind_keys(cx);
-        crate::context_menu::bind_keys(cx);
-        viewer::bind_keys(cx);
-        bind_keys(cx);
+        bind_app_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
