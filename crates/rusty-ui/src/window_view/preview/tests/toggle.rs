@@ -1,63 +1,67 @@
 use gpui_kit::AppContext as _;
 use gpui_kit::TestAppContext;
+
 use gpui_kit::test::TestWindowExt;
 
 use super::{Rig, open_fake};
+use crate::primitives::Kbd;
+use crate::window_view::preview::Shown;
 use crate::window_view::tests::fake;
 
 fn is_open(cx: &mut TestAppContext, rig: &Rig) -> bool {
     rig.read(cx, |view| view.preview.is_open())
 }
 
-fn button_pressed(cx: &mut TestAppContext, rig: &Rig) -> Option<bool> {
-    let pane = rig.active_pane(cx);
-    cx.update_window(rig.window, |_, window, cx| {
-        window.render_frame(cx);
-        window.find(("preview-button", pane)).selected()
-    })
-    .expect("window")
+#[gpui_kit::test]
+fn ctrl_q_neither_opens_nor_closes_the_preview(cx: &mut TestAppContext) {
+    let rig = open_fake(cx, &fake());
+    rig.key(cx, "ctrl-q");
+    assert!(!is_open(cx, &rig));
+    rig.key(cx, "f3");
+    assert!(is_open(cx, &rig));
+    rig.key(cx, "ctrl-q");
+    assert!(is_open(cx, &rig));
+    assert!(rig.list_has_focus(cx));
 }
 
 #[gpui_kit::test]
-fn ctrl_q_opens_and_closes_the_preview_and_the_list_keeps_focus(cx: &mut TestAppContext) {
+fn f3_opens_the_preview_and_it_follows_the_cursor_onto_a_file(cx: &mut TestAppContext) {
     let rig = open_fake(cx, &fake());
-    assert!(!is_open(cx, &rig));
-    assert!(!rig.shows(cx, "preview-sheet"));
-    rig.key(cx, "ctrl-q");
+    rig.key(cx, "f3");
     assert!(is_open(cx, &rig));
     rig.settle_motion(cx);
     assert!(rig.shows(cx, "preview-sheet"));
-    assert!(rig.list_has_focus(cx));
-    rig.key(cx, "ctrl-q");
-    assert!(!is_open(cx, &rig));
+    assert_eq!(rig.shown_name(cx).as_deref(), Some("docs"));
+    rig.key(cx, "down");
+    assert!(rig.rest_until(cx, |view| {
+        matches!(view.preview.shown(), Some(Shown::File(file)) if file.target.name() == "a.txt")
+    }));
     assert!(rig.list_has_focus(cx));
 }
 
 #[gpui_kit::test]
-fn the_preview_button_in_the_active_card_toggles_the_sheet(cx: &mut TestAppContext) {
+fn escape_closes_the_preview_opened_with_f3(cx: &mut TestAppContext) {
     let rig = open_fake(cx, &fake());
-    let pane = rig.active_pane(cx);
-    assert_eq!(button_pressed(cx, &rig), Some(false));
-    rig.click(cx, ("preview-button", pane));
-    assert!(is_open(cx, &rig));
-    assert_eq!(button_pressed(cx, &rig), Some(true));
-    assert!(rig.list_has_focus(cx));
-    rig.click(cx, ("preview-button", pane));
+    rig.key(cx, "f3");
+    rig.settle_motion(cx);
+    rig.key(cx, "escape");
     assert!(!is_open(cx, &rig));
+    rig.settle_motion(cx);
+    assert!(!rig.shows(cx, "preview-sheet"));
+    assert!(rig.list_has_focus(cx));
 }
 
 #[gpui_kit::test]
-fn only_the_active_card_has_a_preview_button(cx: &mut TestAppContext) {
+fn no_card_has_a_preview_button(cx: &mut TestAppContext) {
     let rig = open_fake(cx, &fake());
-    let active = rig.active_pane(cx);
     let panes = rig.read(cx, |view| view.panes());
-    let passive = panes
-        .iter()
-        .map(|pane| pane.get())
-        .find(|pane| *pane != active)
-        .expect("two panes");
-    assert!(rig.shows(cx, ("preview-button", active)));
-    assert!(!rig.shows(cx, ("preview-button", passive)));
+    for pane in panes {
+        assert!(!rig.shows(cx, ("preview-button", pane.get())));
+    }
+    rig.key(cx, "f3");
+    rig.settle_motion(cx);
+    let active = rig.active_pane(cx);
+    assert!(!rig.shows(cx, ("preview-button", active)));
 }
 
 #[gpui_kit::test]
@@ -83,4 +87,19 @@ fn the_footer_names_every_preview_key(cx: &mut TestAppContext) {
         .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
         .collect();
     assert_eq!(hints, ["Browse", "Open", "Stop scan", "[ ]", "Close"]);
+    let escape = Kbd::new("escape", "escape").map(|kbd| kbd.text());
+    let close_keys = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            let hint = window
+                .within(("side-sheet-hint", 4usize))
+                .find(("key", 0usize));
+            let button = window.find("side-sheet-close-key");
+            [
+                hint.label().map(str::to_owned),
+                button.label().map(str::to_owned),
+            ]
+        })
+        .expect("window");
+    assert_eq!(close_keys, [escape.clone(), escape]);
 }

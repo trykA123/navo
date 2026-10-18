@@ -257,7 +257,6 @@ preview.open | enter | PreviewBrowse
 preview.view | f3 | PreviewBrowse
 preview.leave | escape | PreviewBrowse
 preview.leave_and_switch | tab | PreviewBrowse
-preview.toggle | ctrl-q | PreviewBrowse
 preview.recount | ctrl-r | PreviewBrowse
 [ferrite_window]
 jobs.toggle | ctrl-j | global
@@ -266,7 +265,6 @@ pane.drive_menu_first | alt-f1 | FerritePane
 pane.drive_menu_second | alt-f2 | FerritePane
 pane.edit_path | ctrl-l | FerritePane
 pane.reset_split | ctrl-shift-0 | FerritePane
-pane.toggle_preview | ctrl-q | FerritePane
 preview.browse | ctrl-shift-q | FerritePane
 pane.leave_waiting | escape | PaneWaiting
 pane.leave_waiting | backspace | PaneWaiting

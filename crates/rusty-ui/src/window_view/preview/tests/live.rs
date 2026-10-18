@@ -86,7 +86,7 @@ fn a_file_written_deep_inside_updates_the_total(cx: &mut TestAppContext) {
 fn closing_the_sheet_stops_the_watch(cx: &mut TestAppContext) {
     let (rig, fs) = opened_live(cx);
     assert_eq!(fs.watchers("home/proj"), 1);
-    rig.key(cx, "ctrl-q");
+    rig.key(cx, "escape");
     rig.settle_motion(cx);
     let deadline = Instant::now() + PATIENCE;
     while fs.watchers("home/proj") > 0 && Instant::now() < deadline {

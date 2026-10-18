@@ -17,8 +17,7 @@ gpui_kit::actions!(
         NewTab,
         ResetSplit,
         RetryListing,
-        ToggleJobs,
-        TogglePreview
+        ToggleJobs
     ]
 );
 

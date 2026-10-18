@@ -94,10 +94,6 @@ command = "pane.reset_split"
 keys = ["ctrl-shift-0"]
 
 [[bind]]
-command = "pane.toggle_preview"
-keys = ["ctrl-q"]
-
-[[bind]]
 command = "preview.browse"
 keys = ["ctrl-shift-q"]
 
@@ -144,10 +140,6 @@ keys = ["escape"]
 [[bind]]
 command = "preview.leave_and_switch"
 keys = ["tab"]
-
-[[bind]]
-command = "preview.toggle"
-keys = ["ctrl-q"]
 
 [[bind]]
 command = "preview.recount"

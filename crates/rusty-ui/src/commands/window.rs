@@ -61,11 +61,6 @@ pub(super) const GROUPS: [Group; 7] = [
                 "Reset pane split",
             ),
             (
-                "ferrite_window::TogglePreview",
-                "pane.toggle_preview",
-                "Show or hide preview",
-            ),
-            (
                 "ferrite_window::BrowsePreview",
                 "preview.browse",
                 "Browse in preview",
@@ -101,11 +96,6 @@ pub(super) const GROUPS: [Group; 7] = [
                 "preview::LeaveAndSwitch",
                 "preview.leave_and_switch",
                 "Leave preview, switch pane",
-            ),
-            (
-                "preview::TogglePreview",
-                "preview.toggle",
-                "Show or hide preview",
             ),
             ("preview::Recount", "preview.recount", "Recount folder"),
         ],

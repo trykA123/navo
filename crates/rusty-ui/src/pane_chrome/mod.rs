@@ -4,7 +4,6 @@ mod drive_pill;
 mod drives;
 mod path_bar;
 mod path_input;
-mod preview_button;
 mod segments;
 
 #[cfg(test)]
@@ -26,7 +25,6 @@ pub use drive_pill::DrivePill;
 pub use drives::{DriveIcon, DriveInfo, current_drive};
 pub use path_bar::PathBar;
 pub use path_input::PathInput;
-pub use preview_button::PreviewButton;
 pub use segments::{PathSegment, path_segments};
 
 use crate::primitives::{IconName, Tab, Tabs, icon};

@@ -183,6 +183,21 @@ fn an_unknown_command_is_an_error_on_its_line() {
 }
 
 #[test]
+fn a_user_entry_for_a_removed_preview_toggle_is_an_unknown_command() {
+    for command in ["pane.toggle_preview", "preview.toggle"] {
+        assert_eq!(
+            error_of(&one(command, "\"ctrl-q\"", None)),
+            Some(UserKeymapError {
+                line: Some(1),
+                error: KeymapError::UnknownCommand {
+                    command: command.to_owned()
+                },
+            })
+        );
+    }
+}
+
+#[test]
 fn a_context_outside_the_home_context_is_an_error() {
     assert_eq!(
         error_of(&one("tab.next", "\"f12\"", Some("Tree"))),

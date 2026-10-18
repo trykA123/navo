@@ -24,7 +24,6 @@ pane.drive_menu_first | Drives of pane 1 | FerritePane
 pane.drive_menu_second | Drives of pane 2 | FerritePane
 pane.edit_path | Edit path | FerritePane
 pane.reset_split | Reset pane split | FerritePane
-pane.toggle_preview | Show or hide preview | FerritePane
 preview.browse | Browse in preview | FerritePane
 pane.leave_waiting | Stop waiting | PaneWaiting
 pane.retry_listing | Retry listing | PaneWaiting
@@ -36,7 +35,6 @@ preview.open | Open | PreviewBrowse
 preview.view | View file | PreviewBrowse
 preview.leave | Close preview | PreviewBrowse
 preview.leave_and_switch | Leave preview, switch pane | PreviewBrowse
-preview.toggle | Show or hide preview | PreviewBrowse
 preview.recount | Recount folder | PreviewBrowse
 files.cursor_up | Up | FileList
 files.cursor_down | Down | FileList

@@ -54,7 +54,14 @@ impl Rig {
     }
 
     pub fn open(&self, cx: &mut TestAppContext) {
-        self.key(cx, "ctrl-q");
+        let view = self.view.clone();
+        cx.update_window(self.window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.open_preview(window, cx);
+                cx.notify();
+            });
+        })
+        .expect("window");
         self.settle_motion(cx);
     }
 
