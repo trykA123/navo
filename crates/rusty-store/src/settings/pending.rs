@@ -34,8 +34,17 @@ pub(super) fn recover(file: &Path, ledger: &Db) -> Result<Option<SettingsError>,
     let Some(text) = read(&path(file))? else {
         return Ok(None);
     };
-    let mut pending: Pending =
-        toml::from_str(&text).map_err(|error| SettingsError::Ledger(error.to_string()))?;
+    let mut pending: Pending = match toml::from_str(&text) {
+        Ok(pending) => pending,
+        Err(error) => {
+            let bad = path(file).with_extension("defaults-pending.bad");
+            std::fs::rename(path(file), &bad).map_err(io_error)?;
+            return Ok(Some(SettingsError::Ledger(format!(
+                "invalid pending settings file moved to {}: {error}",
+                bad.display()
+            ))));
+        }
+    };
     if pending.stage == Stage::Prepared {
         let current = read(file)?;
         if current.as_deref() != Some(pending.written.as_str()) {
@@ -78,8 +87,9 @@ pub(super) fn prepare(
 
 pub(super) fn commit(file: &Path, ledger: &Db, mut pending: Pending) -> Result<(), SettingsError> {
     pending.stage = Stage::Committed;
-    save(file, &pending)?;
-    finish(file, ledger, &pending.rows)
+    let marked = save(file, &pending);
+    finish(file, ledger, &pending.rows)?;
+    marked
 }
 
 fn save(file: &Path, pending: &Pending) -> Result<(), SettingsError> {

@@ -8,7 +8,15 @@ fn a_retry_refuses_a_hand_edit_to_the_target_key() {
     write(&path, "[appearance]\nmode = \"light\"\n");
     let (mut store, _) = SettingsStore::load(&path);
     let mine = "[appearance]\nmode = \"system\"\n";
-    on_next_write(move |path| write(path, mine));
+    let mut edit = Some(mine);
+    on_stage(move |path, stage| {
+        if stage == Stage::TempWritten
+            && let Some(mine) = edit.take()
+        {
+            write(path, mine);
+        }
+        Ok(())
+    });
     let error = store
         .save_preserving_edits(MODE, Some(text("dark")))
         .unwrap_err();
@@ -26,7 +34,15 @@ fn a_retry_can_patch_an_unrelated_hand_edit() {
     let path = settings_file(&dir);
     write(&path, "[appearance]\nmode = \"light\"\n");
     let (mut store, _) = SettingsStore::load(&path);
-    on_next_write(move |path| write(path, "[appearance]\nmode = \"light\"\nfont-size = 20\n"));
+    let mut edit = Some("[appearance]\nmode = \"light\"\nfont-size = 20\n");
+    on_stage(move |path, stage| {
+        if stage == Stage::TempWritten
+            && let Some(mine) = edit.take()
+        {
+            write(path, mine);
+        }
+        Ok(())
+    });
     store
         .save_preserving_edits(MODE, Some(text("dark")))
         .unwrap();

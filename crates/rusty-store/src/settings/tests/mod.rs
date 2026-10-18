@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -47,20 +46,4 @@ fn dark_mode() -> Settings {
 
 fn invalid_at(line: usize, column: usize) -> impl Fn(&SettingsError) -> bool {
     move |error| matches!(error, SettingsError::Invalid { line: l, column: c, .. } if *l == line && *c == column)
-}
-
-type Meddle = Box<dyn FnOnce(&Path)>;
-
-thread_local! {
-    static BEFORE_WRITE: RefCell<Option<Meddle>> = const { RefCell::new(None) };
-}
-
-pub(super) fn before_write(path: &Path) {
-    if let Some(action) = BEFORE_WRITE.with(|hook| hook.borrow_mut().take()) {
-        action(path);
-    }
-}
-
-fn on_next_write(action: impl FnOnce(&Path) + 'static) {
-    BEFORE_WRITE.with(|hook| *hook.borrow_mut() = Some(Box::new(action)));
 }

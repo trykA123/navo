@@ -11,7 +11,12 @@ struct Attempt<'a> {
 }
 
 impl SettingsStore {
-    pub fn save(&mut self, key: &str, value: Option<SettingValue>) -> Result<Saved, SettingsError> {
+    #[cfg(test)]
+    pub(crate) fn save(
+        &mut self,
+        key: &str,
+        value: Option<SettingValue>,
+    ) -> Result<Saved, SettingsError> {
         let session = self.backup.clone();
         let mut backup = session.0.lock().unwrap_or_else(PoisonError::into_inner);
         let mut attempt = Attempt {

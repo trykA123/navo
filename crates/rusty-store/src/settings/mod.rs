@@ -146,21 +146,24 @@ impl SettingsStore {
         let done = reconcile(text.as_deref().unwrap_or_default(), &recorded, defaults)?;
         let written = text.as_deref() != Some(done.text.as_str());
         let mut durability_error = None;
-        let prepared = pending::prepare(&self.path, text.as_deref(), &done)?;
-        if written {
+        let recorded = if written {
             let (settings, _) = parse(&done.text)?;
+            let prepared = pending::prepare(&self.path, text.as_deref(), &done)?;
             durability_error = match self.write(&done.text, text.as_deref(), &mut backup) {
                 Ok(error) => error,
                 Err(error) => {
-                    pending::discard(&self.path)?;
+                    let _ = pending::discard(&self.path);
                     return Err(error);
                 }
             };
             self.take(settings);
-        }
-        let ledger_error = pending::commit(&self.path, ledger, prepared)
-            .err()
-            .or(recovery_error);
+            pending::commit(&self.path, ledger, prepared)
+        } else {
+            ledger
+                .record_settings_defaults(&done.written, now())
+                .map_err(ledger_error)
+        };
+        let ledger_error = recorded.err().or(recovery_error);
         Ok(Completion {
             changes: done.changes,
             written,
@@ -185,8 +188,6 @@ impl SettingsStore {
         if is_read_only(&self.path) {
             return Err(SettingsError::ReadOnly);
         }
-        #[cfg(test)]
-        tests::before_write(&self.path);
         let mut is_changed = false;
         let check = || match unchanged(&self.path, base) {
             Ok(true) => Ok(()),

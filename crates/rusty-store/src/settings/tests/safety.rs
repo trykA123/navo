@@ -101,6 +101,114 @@ fn a_crash_after_the_rename_before_the_committed_mark_records_the_write() {
 }
 
 #[test]
+fn a_failed_committed_mark_keeps_keys_following_after_a_sheet_save() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    store.complete(&db, &Settings::default()).unwrap();
+    let mut pending_writes = 0;
+    on_stage(move |path, stage| {
+        if path.file_name().unwrap() == "ferrite.toml.defaults-pending"
+            && stage == Stage::TempWritten
+        {
+            pending_writes += 1;
+            if pending_writes == 2 {
+                return Err(io::Error::other("injected committed mark failure"));
+            }
+        }
+        Ok(())
+    });
+    let done = store.complete(&db, &sorted_by(SortKey::Date)).unwrap();
+    on_stage(|_, _| Ok(()));
+    assert!(matches!(done.ledger_error, Some(SettingsError::Io { .. })));
+    store
+        .save_preserving_edits(MODE, Some(text("dark")))
+        .unwrap();
+    let (mut next, _) = SettingsStore::load(&path);
+    next.complete(&db, &sorted_by(SortKey::Size)).unwrap();
+    assert_eq!(next.current().files.sort, SortKey::Size);
+    assert_eq!(recorded_sort(&db).as_deref(), Some("\"size\""));
+    assert!(!pending_file(&path).exists());
+}
+
+#[test]
+fn an_unparsable_pending_file_is_quarantined_and_completion_continues() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let pending = pending_file(&path);
+    let garbage = "not valid [ pending TOML";
+    write(&pending, garbage);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    let done = store.complete(&db, &Settings::default()).unwrap();
+    assert!(done.written);
+    assert!(matches!(
+        done.ledger_error,
+        Some(SettingsError::Ledger(ref message)) if message.contains(".defaults-pending.bad")
+    ));
+    assert!(!pending.exists());
+    assert_eq!(
+        fs::read_to_string(pending.with_extension("defaults-pending.bad")).unwrap(),
+        garbage
+    );
+    let (mut next, _) = SettingsStore::load(&path);
+    let done = next.complete(&db, &sorted_by(SortKey::Date)).unwrap();
+    assert!(done.ledger_error.is_none());
+    assert_eq!(next.current().files.sort, SortKey::Date);
+}
+
+#[test]
+fn a_noop_completion_records_defaults_without_writing_a_pending_file() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let before = complete_text("", &Settings::default()).unwrap().text;
+    write(&path, &before);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    on_stage(|_, _| Err(io::Error::other("unexpected file write")));
+    let done = store.complete(&db, &Settings::default());
+    on_stage(|_, _| Ok(()));
+    assert_eq!(done.unwrap(), Completion::default());
+    assert_eq!(db.settings_defaults().unwrap().len(), 14);
+    assert_eq!(fs::read_to_string(&path).unwrap(), before);
+    assert!(!pending_file(&path).exists());
+}
+
+#[test]
+fn a_failed_pending_discard_keeps_the_original_write_error() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, HAND_EDIT);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    on_stage(|path, stage| {
+        if path.file_name().unwrap() == "ferrite.toml" && stage == Stage::TempWritten {
+            let pending = pending_file(path);
+            fs::remove_file(&pending).unwrap();
+            fs::create_dir(&pending).unwrap();
+            return Err(io::Error::new(
+                io::ErrorKind::ConnectionAborted,
+                "write failed",
+            ));
+        }
+        Ok(())
+    });
+    let error = store.complete(&db, &Settings::default()).unwrap_err();
+    on_stage(|_, _| Ok(()));
+    assert_eq!(
+        error,
+        SettingsError::Io {
+            kind: io::ErrorKind::ConnectionAborted,
+            message: "write failed".to_owned(),
+        }
+    );
+    assert!(pending_file(&path).is_dir());
+    assert_eq!(fs::read_to_string(&path).unwrap(), HAND_EDIT);
+    assert!(db.settings_defaults().unwrap().is_empty());
+}
+
+#[test]
 fn ambiguous_prepared_recovery_keeps_every_pending_key_as_the_owners() {
     for (sort, font_size) in [
         (SortKey::Name, 13),
@@ -290,7 +398,12 @@ fn a_hand_edit_during_a_sheet_save_is_kept_and_the_save_fails() {
     let path = settings_file(&dir);
     write(&path, "[appearance]\nmode = \"light\"\n");
     let (mut store, _) = SettingsStore::load(&path);
-    on_next_write(|path| write(path, HAND_EDIT));
+    on_stage(|path, stage| {
+        if stage == Stage::TempWritten {
+            write(path, HAND_EDIT);
+        }
+        Ok(())
+    });
     assert_eq!(
         store.save(MODE, Some(text("dark"))),
         Err(SettingsError::ChangedOnDisk)
@@ -302,6 +415,7 @@ fn a_hand_edit_during_a_sheet_save_is_kept_and_the_save_fails() {
         .map(|entry| entry.unwrap().file_name())
         .collect();
     assert_eq!(left, ["ferrite.toml"]);
+    on_stage(|_, _| Ok(()));
     store.save(MODE, Some(text("dark"))).unwrap();
     assert_eq!(
         fs::read_to_string(&path).unwrap(),
@@ -316,7 +430,12 @@ fn a_hand_edit_during_completion_is_kept_and_nothing_is_recorded() {
     write(&path, "[appearance]\nmode = \"light\"\n");
     let db = ledger();
     let (mut store, _) = SettingsStore::load(&path);
-    on_next_write(|path| write(path, HAND_EDIT));
+    on_stage(|path, stage| {
+        if path.file_name().unwrap() == "ferrite.toml" && stage == Stage::TempWritten {
+            write(path, HAND_EDIT);
+        }
+        Ok(())
+    });
     assert_eq!(
         store.complete(&db, &Settings::default()),
         Err(SettingsError::ChangedOnDisk)
@@ -330,7 +449,12 @@ fn a_file_created_during_a_save_is_kept() {
     let dir = tmp();
     let path = settings_file(&dir);
     let (mut store, _) = SettingsStore::load(&path);
-    on_next_write(|path| write(path, HAND_EDIT));
+    on_stage(|path, stage| {
+        if stage == Stage::TempWritten {
+            write(path, HAND_EDIT);
+        }
+        Ok(())
+    });
     assert_eq!(
         store.save(MODE, Some(text("dark"))),
         Err(SettingsError::ChangedOnDisk)
@@ -405,6 +529,25 @@ mod unix {
 
     fn set_mode(path: &Path, mode: u32) {
         fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+    }
+
+    #[test]
+    fn a_noop_completion_succeeds_in_a_read_only_folder() {
+        let dir = tmp();
+        let path = settings_file(&dir);
+        let before = complete_text("", &Settings::default()).unwrap().text;
+        write(&path, &before);
+        set_mode(&path, 0o644);
+        let db = ledger();
+        let (mut store, _) = SettingsStore::load(&path);
+        set_mode(dir.path(), 0o555);
+        let done = store.complete(&db, &Settings::default());
+        set_mode(dir.path(), 0o755);
+        assert_eq!(done.unwrap(), Completion::default());
+        assert_eq!(db.settings_defaults().unwrap().len(), 14);
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
+        assert_eq!(mode_of(&path), 0o644);
+        assert!(!pending_file(&path).exists());
     }
 
     #[test]
