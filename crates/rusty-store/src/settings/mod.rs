@@ -140,13 +140,13 @@ impl SettingsStore {
         if is_read_only(&self.path) {
             return Err(SettingsError::ReadOnly);
         }
-        pending::recover(&self.path, ledger)?;
+        let recovery_error = pending::recover(&self.path, ledger)?;
         let text = read(&self.path)?;
         let recorded = ledger.settings_defaults().map_err(ledger_error)?;
         let done = reconcile(text.as_deref().unwrap_or_default(), &recorded, defaults)?;
         let written = text.as_deref() != Some(done.text.as_str());
         let mut durability_error = None;
-        pending::prepare(&self.path, &done.written)?;
+        let prepared = pending::prepare(&self.path, text.as_deref(), &done)?;
         if written {
             let (settings, _) = parse(&done.text)?;
             durability_error = match self.write(&done.text, text.as_deref(), &mut backup) {
@@ -158,7 +158,9 @@ impl SettingsStore {
             };
             self.take(settings);
         }
-        let ledger_error = pending::finish(&self.path, ledger, &done.written).err();
+        let ledger_error = pending::commit(&self.path, ledger, prepared)
+            .err()
+            .or(recovery_error);
         Ok(Completion {
             changes: done.changes,
             written,

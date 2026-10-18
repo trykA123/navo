@@ -1,4 +1,5 @@
 use crate::Db;
+use crate::atomic_write::{Stage, tests::on_stage};
 
 use super::*;
 
@@ -33,6 +34,157 @@ fn mend_ledger_writes(db: &Db) {
     db.connection()
         .execute_batch("DROP TRIGGER no_insert; DROP TRIGGER no_update;")
         .unwrap();
+}
+
+fn pending_file(path: &Path) -> PathBuf {
+    path.with_extension("toml.defaults-pending")
+}
+
+fn crash_completion(store: &mut SettingsStore, db: &Db, defaults: &Settings, stage: Stage) {
+    on_stage(move |path, reached| {
+        if path.file_name().unwrap() == "ferrite.toml" && reached == stage {
+            panic!("injected crash at {stage:?}");
+        }
+        Ok(())
+    });
+    let stopped = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        store.complete(db, defaults)
+    }));
+    on_stage(|_, _| Ok(()));
+    assert!(stopped.is_err());
+}
+
+#[test]
+fn a_crash_before_the_rename_records_nothing_and_keeps_keys_following() {
+    for present in [false, true] {
+        let dir = tmp();
+        let path = settings_file(&dir);
+        let db = ledger();
+        let (mut store, _) = SettingsStore::load(&path);
+        if present {
+            store.complete(&db, &Settings::default()).unwrap();
+        }
+        let before = fs::read_to_string(&path).ok();
+        let recorded = db.settings_defaults().unwrap();
+        crash_completion(
+            &mut store,
+            &db,
+            &sorted_by(SortKey::Date),
+            Stage::BeforeRename,
+        );
+        assert_eq!(fs::read_to_string(&path).ok(), before);
+        pending::recover(&path, &db).unwrap();
+        assert_eq!(db.settings_defaults().unwrap(), recorded);
+        assert!(!pending_file(&path).exists());
+        let (mut next, _) = SettingsStore::load(&path);
+        next.complete(&db, &sorted_by(SortKey::Size)).unwrap();
+        assert_eq!(next.current().files.sort, SortKey::Size);
+        assert_eq!(recorded_sort(&db).as_deref(), Some("\"size\""));
+    }
+}
+
+#[test]
+fn a_crash_after_the_rename_before_the_committed_mark_records_the_write() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    store.complete(&db, &Settings::default()).unwrap();
+    crash_completion(&mut store, &db, &sorted_by(SortKey::Date), Stage::Replaced);
+    assert_eq!(recorded_sort(&db).as_deref(), Some("\"name\""));
+    pending::recover(&path, &db).unwrap();
+    assert_eq!(recorded_sort(&db).as_deref(), Some("\"date\""));
+    assert!(!pending_file(&path).exists());
+    let (mut next, _) = SettingsStore::load(&path);
+    next.complete(&db, &sorted_by(SortKey::Size)).unwrap();
+    assert_eq!(next.current().files.sort, SortKey::Size);
+}
+
+#[test]
+fn ambiguous_prepared_recovery_keeps_every_pending_key_as_the_owners() {
+    for (sort, font_size) in [
+        (SortKey::Name, 13),
+        (SortKey::Date, 18),
+        (SortKey::Size, 20),
+    ] {
+        let dir = tmp();
+        let path = settings_file(&dir);
+        let db = ledger();
+        let (mut store, _) = SettingsStore::load(&path);
+        store.complete(&db, &Settings::default()).unwrap();
+        let mut defaults = sorted_by(SortKey::Date);
+        defaults.appearance.font_size = 18;
+        crash_completion(&mut store, &db, &defaults, Stage::BeforeRename);
+        let mut mine = sorted_by(sort);
+        mine.appearance.font_size = font_size;
+        let hand_edit = format!("# mine\n{}", complete_text("", &mine).unwrap().text);
+        write(&path, &hand_edit);
+        let (mut next, _) = SettingsStore::load(&path);
+        let done = next.complete(&db, &mine).unwrap();
+        assert!(
+            matches!(done.ledger_error, Some(SettingsError::Ledger(ref message)) if message.contains("ambiguous"))
+        );
+        assert!(!pending_file(&path).exists());
+        assert_eq!(fs::read_to_string(&path).unwrap(), hand_edit);
+        defaults.files.sort = SortKey::Kind;
+        defaults.appearance.font_size = 19;
+        let (mut later, _) = SettingsStore::load(&path);
+        let done = later.complete(&db, &defaults).unwrap();
+        assert!(done.changes.is_empty());
+        assert_eq!(later.current().files.sort, sort);
+        assert_eq!(later.current().appearance.font_size, font_size);
+        assert_eq!(fs::read_to_string(&path).unwrap(), hand_edit);
+    }
+}
+
+#[test]
+fn failed_pending_cleanup_replays_committed_rows_idempotently() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    store.complete(&db, &Settings::default()).unwrap();
+    let before = fs::read_to_string(&path).unwrap();
+    on_stage(|path, stage| {
+        if path.file_name().unwrap() == "ferrite.toml.defaults-pending" && stage == Stage::Replaced
+        {
+            let pending: toml::Value = toml::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+            if pending.get("stage").and_then(toml::Value::as_str) == Some("committed") {
+                fs::rename(path, path.with_extension("held")).unwrap();
+                fs::create_dir(path).unwrap();
+            }
+        }
+        Ok(())
+    });
+    let done = store.complete(&db, &sorted_by(SortKey::Date)).unwrap();
+    on_stage(|_, _| Ok(()));
+    assert!(matches!(done.ledger_error, Some(SettingsError::Io { .. })));
+    assert_eq!(recorded_sort(&db).as_deref(), Some("\"date\""));
+    let pending = pending_file(&path);
+    assert!(pending.is_dir());
+    fs::remove_dir(&pending).unwrap();
+    fs::rename(pending.with_extension("held"), &pending).unwrap();
+    db.connection()
+        .execute("UPDATE settings_defaults SET written_at = 7", [])
+        .unwrap();
+    let recorded = db.settings_defaults().unwrap();
+    break_ledger_writes(&db);
+    write(&path, &before);
+    let (mut next, _) = SettingsStore::load(&path);
+    next.complete(&db, &sorted_by(SortKey::Date)).unwrap();
+    assert_eq!(db.settings_defaults().unwrap(), recorded);
+    let changed: i64 = db
+        .connection()
+        .query_row(
+            "SELECT count(*) FROM settings_defaults WHERE written_at != 7",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(changed, 0);
+    assert!(!pending.exists());
+    next.complete(&db, &sorted_by(SortKey::Size)).unwrap();
+    assert_eq!(next.current().files.sort, SortKey::Name);
 }
 
 #[test]

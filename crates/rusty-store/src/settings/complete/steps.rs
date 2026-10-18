@@ -74,6 +74,7 @@ fn follow(entry: &Entry, ledger: &Ledger, source: &Source) -> Follow {
         return Follow::Leave;
     };
     match ledger.get(&entry.key) {
+        Some(recorded) if recorded.is_empty() => Follow::Leave,
         Some(recorded) if *recorded == current && current != entry.canonical => {
             Follow::Upgrade(current)
         }
