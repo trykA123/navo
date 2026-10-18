@@ -102,20 +102,6 @@ impl Preview {
 }
 
 impl FerriteWindow {
-    pub(in crate::window_view) fn toggle_preview(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.preview.is_open {
-            self.close_preview(cx);
-        } else {
-            self.open_preview(window, cx);
-        }
-        self.focus_core_pane(window, cx);
-        cx.notify();
-    }
-
     pub(in crate::window_view) fn open_preview(
         &mut self,
         window: &mut Window,

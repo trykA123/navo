@@ -1,11 +1,10 @@
+use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{ClickEvent, Role};
 
 use super::Shown;
 use super::file::FilePreview;
 use super::header::{title_of, title_view};
 use super::summary::{Picks, Sections, summary};
-use crate::pane_chrome::PreviewButton;
 use crate::prelude::*;
 use crate::side_sheet::{SheetFrame, SideSheet, on_resize_keys};
 use crate::tokens::{self, Theme};
@@ -69,16 +68,6 @@ impl FerriteWindow {
         on_resize_keys(root, &self.preview.sheet, frame)
     }
 
-    pub(in crate::window_view) fn preview_button(
-        &self,
-        pane: rusty_core::PaneId,
-        cx: &mut Context<Self>,
-    ) -> PreviewButton {
-        PreviewButton::new(("preview-button", pane.get()), self.preview.is_open()).on_click(
-            cx.listener(|this, _: &ClickEvent, window, cx| this.toggle_preview(window, cx)),
-        )
-    }
-
     pub(in crate::window_view) fn preview_layer(
         &self,
         window: &Window,
@@ -97,8 +86,12 @@ impl FerriteWindow {
         let sheet = SideSheet::new("preview-sheet", &self.preview.sheet, frame)
             .label("Preview")
             .header(title_view(&t, title_of(&t, shown), is_browsing))
-            .close("ctrl-q", move |window, cx| {
-                let _ = this.update(cx, |view, cx| view.toggle_preview(window, cx));
+            .close("escape", move |window, cx| {
+                let _ = this.update(cx, |view, cx| {
+                    view.close_preview(cx);
+                    view.focus_core_pane(window, cx);
+                    cx.notify();
+                });
             })
             .body(self.browse_frame(body, cx))
             .accent_ring(is_browsing);
@@ -117,7 +110,7 @@ impl FerriteWindow {
         let sheet = if is_browsing {
             sheet
         } else {
-            sheet.hint(&["[", "]"], "").hint(&["ctrl-q"], "Close")
+            sheet.hint(&["[", "]"], "").hint(&["escape"], "Close")
         };
         Some(
             div()

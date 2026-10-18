@@ -264,7 +264,7 @@ fn undo_lasts_only_while_the_sheet_is_open(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn settings_replace_the_preview_drawer_until_they_close(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    rig.press(cx, "ctrl-q");
+    rig.press(cx, "f3");
     assert!(rig.view.read_with(cx, |view, _| view.preview.is_open()));
     open(cx, &rig);
     assert!(is_open(cx, &rig));

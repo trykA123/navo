@@ -2,9 +2,7 @@ use std::collections::HashSet;
 
 use gpui_kit::{App, TestAppContext};
 
-use super::{
-    CommandSpec, GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings,
-};
+use super::{GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
 const NAMESPACES: [&str; 18] = [
@@ -230,12 +228,10 @@ fn all_settings_shares_the_toggle_settings_command() {
 }
 
 #[test]
-fn the_preview_toggles_are_two_commands() {
-    let pane = for_action("ferrite_window::TogglePreview");
-    let browse = for_action("preview::TogglePreview");
-    let pick = |spec: Option<CommandSpec>| spec.map(|spec| (spec.name, spec.context));
-    assert_eq!(pick(pane), Some(("pane.toggle_preview", "FerritePane")));
-    assert_eq!(pick(browse), Some(("preview.toggle", "PreviewBrowse")));
+fn no_command_toggles_the_preview() {
+    let names: Vec<&str> = all().map(|spec| spec.name).collect();
+    assert!(!names.contains(&"pane.toggle_preview"));
+    assert!(!names.contains(&"preview.toggle"));
 }
 
 #[test]

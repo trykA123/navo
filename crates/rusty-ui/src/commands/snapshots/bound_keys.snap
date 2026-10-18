@@ -135,7 +135,6 @@ pane.leave_waiting | escape | PaneWaiting
 pane.reset_split | ctrl-shift-0 | FerritePane
 pane.retry_listing | enter | PaneWaiting
 pane.switch | tab | FileList
-pane.toggle_preview | ctrl-q | FerritePane
 path_input.cancel | escape | PathInput
 preview.browse | ctrl-shift-q | FerritePane
 preview.cursor_down | down | PreviewBrowse
@@ -145,7 +144,6 @@ preview.leave | escape | PreviewBrowse
 preview.leave_and_switch | tab | PreviewBrowse
 preview.open | enter | PreviewBrowse
 preview.recount | ctrl-r | PreviewBrowse
-preview.toggle | ctrl-q | PreviewBrowse
 preview.unfold | right | PreviewBrowse
 preview.view | f3 | PreviewBrowse
 prompt.cancel | escape | PromptDialog

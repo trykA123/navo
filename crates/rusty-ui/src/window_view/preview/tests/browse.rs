@@ -252,9 +252,9 @@ fn tab_leaves_browse_mode_then_switches_panes(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn ctrl_q_closes_the_sheet_and_leaves_browse_mode(cx: &mut TestAppContext) {
+fn the_close_button_closes_the_sheet_and_leaves_browse_mode(cx: &mut TestAppContext) {
     let (rig, _) = browsing(cx);
-    rig.key(cx, "ctrl-q");
+    rig.click(cx, "side-sheet-close");
     assert!(!rig.read(cx, |view| view.preview.is_open()));
     assert!(rig.list_has_focus(cx));
 }

@@ -137,7 +137,7 @@ pub fn sheet(t: &Theme, state: &Entity<SheetState>, frame: SheetFrame) -> SideSh
     SideSheet::new("preview-sheet", state, frame)
         .label("Preview")
         .header(title(t))
-        .close("ctrl-q", |_, _| {})
+        .close("escape", |_, _| {})
         .body(body(t))
         .hint(&["ctrl-shift-q"], "Browse")
         .hint(&["enter", "f3"], "Open")
