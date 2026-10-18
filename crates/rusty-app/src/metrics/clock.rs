@@ -21,6 +21,7 @@ impl ProcessClock {
         Self::starting_at(start)
     }
 
+    #[cfg(test)]
     pub fn start(&self) -> Instant {
         self.start
     }
@@ -42,7 +43,7 @@ pub fn age_from_proc(stat: &str, uptime: &str) -> Option<Duration> {
 }
 
 #[cfg(any(windows, test))]
-pub fn age_from_filetimes(created: u64, now: u64) -> Option<Duration> {
+pub fn age_from_file_times(created: u64, now: u64) -> Option<Duration> {
     let steps = now.checked_sub(created)?;
     Some(Duration::from_nanos(steps.saturating_mul(100)))
 }
@@ -82,7 +83,7 @@ pub fn process_age() -> Option<Duration> {
     unsafe { GetSystemTimePreciseAsFileTime(&raw mut now) };
     let steps =
         |time: FILETIME| (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
-    age_from_filetimes(steps(created), steps(now))
+    age_from_file_times(steps(created), steps(now))
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]

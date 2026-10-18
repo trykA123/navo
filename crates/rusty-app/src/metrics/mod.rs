@@ -6,8 +6,6 @@ mod run;
 
 pub use clock::ProcessClock;
 pub use marks::mark;
-pub use memory::Memory;
-pub use report::{Build, Measured, Report};
 pub use run::Run;
 
 #[cfg(test)]

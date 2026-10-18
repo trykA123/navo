@@ -2,9 +2,10 @@ use std::time::{Duration, Instant};
 
 use rusty_ui::window_view::StartReport;
 
-use super::clock::{age_from_filetimes, age_from_proc};
-use super::memory::parse_peak;
-use super::{Build, Measured, Memory, ProcessClock, Report, Run, mark, marks};
+use super::clock::{age_from_file_times, age_from_proc};
+use super::memory::{Memory, parse_peak};
+use super::report::{Build, Measured, Report};
+use super::{ProcessClock, Run, mark, marks};
 
 const STATUS: &str = "Name:\tferrite\nVmPeak:\t  900000 kB\nVmHWM:\t   81920 kB\nVmRSS:\t   61440 kB\nRssAnon:\t   40960 kB\n";
 
@@ -113,14 +114,14 @@ fn proc_stat_gives_the_age_even_with_odd_process_names() {
 }
 
 #[test]
-fn filetimes_give_the_age_in_hundred_nanosecond_steps() {
+fn file_times_give_the_age_in_hundred_nanosecond_steps() {
     let created = 133_000_000_000_000_000;
     let now = created + 2_125_000;
     assert_eq!(
-        age_from_filetimes(created, now),
+        age_from_file_times(created, now),
         Some(Duration::from_micros(212_500))
     );
-    assert_eq!(age_from_filetimes(now, created), None);
+    assert_eq!(age_from_file_times(now, created), None);
 }
 
 #[test]
