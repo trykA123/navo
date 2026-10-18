@@ -1,3 +1,10 @@
+[test-groups]
+clipboard = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "binary(clipboard_windows) | binary(shell_menu_windows)"
+test-group = "clipboard"
+
 [profile.ci]
 fail-fast = false
 
