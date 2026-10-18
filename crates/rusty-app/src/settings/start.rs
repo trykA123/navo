@@ -16,6 +16,7 @@ pub struct Loaded {
     pub path: PathBuf,
     pub store: SettingsStore,
     pub report: LoadReport,
+    pub(super) late: Option<Receiver<Started>>,
 }
 
 impl Loaded {
@@ -31,6 +32,7 @@ impl Loaded {
             path: path.to_owned(),
             store,
             report,
+            late: None,
         }
     }
 }
@@ -55,11 +57,11 @@ impl Starting {
             Ok(started) => started,
             Err(RecvTimeoutError::Timeout) => {
                 tracing::warn!("settings completion is slow; loading the file as it is");
-                self.as_it_is()
+                self.into_fallback(true)
             }
             Err(RecvTimeoutError::Disconnected) => {
                 tracing::warn!("settings start failed; loading the file as it is");
-                self.as_it_is()
+                self.into_fallback(false)
             }
         };
         tracing::info!(
@@ -69,12 +71,16 @@ impl Starting {
         started
     }
 
-    fn as_it_is(&self) -> Started {
+    fn into_fallback(self, pending: bool) -> Started {
+        let mut loaded = self
+            .file
+            .as_deref()
+            .map(|file| Loaded::load_sharing(file, self.backup.clone()));
+        if let Some(loaded) = &mut loaded {
+            loaded.late = pending.then_some(self.receiver);
+        }
         Started {
-            loaded: self
-                .file
-                .as_deref()
-                .map(|file| Loaded::load_sharing(file, self.backup.clone())),
+            loaded,
             default_changes: Vec::new(),
         }
     }
@@ -160,6 +166,9 @@ pub(super) fn follow_defaults(
     };
     match store.complete(&db, defaults) {
         Ok(done) => {
+            if let Some(error) = &done.durability_error {
+                report(&describe(error));
+            }
             if let Some(error) = &done.ledger_error {
                 report(&describe(error));
             }

@@ -1,9 +1,44 @@
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use rusty_store::SettingsStore;
 use rusty_ui::window_view::SettingsNews;
 
+use super::start::Started;
 use super::{describe, report, values_of};
+
+pub(super) struct Delivery {
+    reloader: Reloader,
+    on_news: Box<dyn FnMut(SettingsNews) + Send>,
+}
+
+impl Delivery {
+    pub(super) fn new(
+        reloader: Reloader,
+        on_news: impl FnMut(SettingsNews) + Send + 'static,
+    ) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
+            reloader,
+            on_news: Box::new(on_news),
+        }))
+    }
+}
+
+pub(super) fn deliver(delivery: &Mutex<Delivery>) {
+    let mut delivery = delivery.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(news) = delivery.reloader.reload() {
+        (delivery.on_news)(news);
+    }
+}
+
+pub(super) fn receive_late(receiver: Option<Receiver<Started>>, delivery: Arc<Mutex<Delivery>>) {
+    let Some(receiver) = receiver else { return };
+    std::thread::spawn(move || {
+        if receiver.recv().is_ok() {
+            deliver(&delivery);
+        }
+    });
+}
 
 pub struct Reloader {
     store: Arc<Mutex<SettingsStore>>,

@@ -1,18 +1,18 @@
-use std::borrow::Cow;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::atomic_write::write_checked;
+use crate::atomic_write::{WriteOutcome, write_checked};
 use crate::{Db, DbError};
 
 mod complete;
 mod edit;
 mod model;
 mod parse;
+mod pending;
+mod saving;
 
 pub use complete::DefaultChange;
 use complete::reconcile;
@@ -45,8 +45,12 @@ pub enum SettingsError {
     Refused,
     #[error("the file changed on disk while saving; nothing was written")]
     ChangedOnDisk,
+    #[error("the setting changed in ferrite.toml while saving; the hand edit was kept")]
+    FieldChangedOnDisk,
     #[error("the file is read-only; Ferrite does not change it")]
     ReadOnly,
+    #[error("settings were saved, but durability could not be confirmed: {0}")]
+    Durability(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -60,25 +64,17 @@ pub struct Completion {
     pub changes: Vec<DefaultChange>,
     pub written: bool,
     pub ledger_error: Option<SettingsError>,
+    pub durability_error: Option<SettingsError>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Saved {
     pub was_present: bool,
+    pub durability_error: Option<SettingsError>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct SessionBackup(Arc<AtomicBool>);
-
-impl SessionBackup {
-    fn is_made(&self) -> bool {
-        self.0.load(Ordering::SeqCst)
-    }
-
-    fn made(&self) {
-        self.0.store(true, Ordering::SeqCst);
-    }
-}
+pub struct SessionBackup(Arc<Mutex<bool>>);
 
 #[derive(Debug)]
 pub struct SettingsStore {
@@ -134,51 +130,40 @@ impl SettingsStore {
         }
     }
 
-    pub fn save(&mut self, key: &str, value: Option<SettingValue>) -> Result<Saved, SettingsError> {
-        let text = read(&self.path)?;
-        if let Some(text) = &text {
-            parse(text).map_err(|_| SettingsError::FileInvalid)?;
-        }
-        let base = text.as_deref();
-        let was_present = base.is_some_and(|text| key_line(text, key).is_some());
-        let source = match base {
-            Some(text) => Cow::Borrowed(text),
-            None => Cow::Owned(complete::complete_text("", &self.current)?.text),
-        };
-        let patched = edit::patch(&source, key, value)?;
-        let (settings, _) = parse(&patched)?;
-        if base != Some(patched.as_str()) {
-            self.write(&patched, base)?;
-        }
-        self.take(settings);
-        Ok(Saved { was_present })
-    }
-
     pub fn complete(
         &mut self,
         ledger: &Db,
         defaults: &Settings,
     ) -> Result<Completion, SettingsError> {
+        let session = self.backup.clone();
+        let mut backup = session.0.lock().unwrap_or_else(PoisonError::into_inner);
         if is_read_only(&self.path) {
             return Err(SettingsError::ReadOnly);
         }
+        pending::recover(&self.path, ledger)?;
         let text = read(&self.path)?;
         let recorded = ledger.settings_defaults().map_err(ledger_error)?;
         let done = reconcile(text.as_deref().unwrap_or_default(), &recorded, defaults)?;
         let written = text.as_deref() != Some(done.text.as_str());
+        let mut durability_error = None;
+        pending::prepare(&self.path, &done.written)?;
         if written {
             let (settings, _) = parse(&done.text)?;
-            self.write(&done.text, text.as_deref())?;
+            durability_error = match self.write(&done.text, text.as_deref(), &mut backup) {
+                Ok(error) => error,
+                Err(error) => {
+                    pending::discard(&self.path)?;
+                    return Err(error);
+                }
+            };
             self.take(settings);
         }
-        let ledger_error = ledger
-            .record_settings_defaults(&done.written, now())
-            .map_err(ledger_error)
-            .err();
+        let ledger_error = pending::finish(&self.path, ledger, &done.written).err();
         Ok(Completion {
             changes: done.changes,
             written,
             ledger_error,
+            durability_error,
         })
     }
 }
@@ -189,7 +174,12 @@ impl SettingsStore {
         self.generation += 1;
     }
 
-    fn write(&self, text: &str, base: Option<&str>) -> Result<(), SettingsError> {
+    fn write(
+        &self,
+        text: &str,
+        base: Option<&str>,
+        backup: &mut bool,
+    ) -> Result<Option<SettingsError>, SettingsError> {
         if is_read_only(&self.path) {
             return Err(SettingsError::ReadOnly);
         }
@@ -204,11 +194,15 @@ impl SettingsStore {
             }
             Err(error) => Err(error),
         };
-        let backup = !self.backup.is_made();
-        match write_checked(&self.path, text.as_bytes(), backup, check) {
-            Ok(()) => {
-                self.backup.made();
-                Ok(())
+        match write_checked(&self.path, text.as_bytes(), !*backup, check) {
+            Ok(outcome) => {
+                *backup = true;
+                Ok(match outcome {
+                    WriteOutcome::Durable => None,
+                    WriteOutcome::Committed(error) => {
+                        Some(SettingsError::Durability(error.to_string()))
+                    }
+                })
             }
             Err(_) if is_changed => Err(SettingsError::ChangedOnDisk),
             Err(error) => Err(io_error(error)),

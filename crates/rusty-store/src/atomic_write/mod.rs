@@ -8,7 +8,22 @@ pub(crate) enum Stage {
     TempWritten,
     TempSynced,
     BackupMade,
+    BeforeRename,
     Replaced,
+}
+
+pub(crate) enum WriteOutcome {
+    Durable,
+    Committed(io::Error),
+}
+
+impl WriteOutcome {
+    fn into_result(self) -> io::Result<()> {
+        match self {
+            Self::Durable => Ok(()),
+            Self::Committed(error) => Err(error),
+        }
+    }
 }
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -22,7 +37,7 @@ pub fn replace_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
         bytes,
         backup: false,
     };
-    write_payload(path, &payload, &mut |_| Ok(()))
+    write_payload(path, &payload, &mut |_| Ok(())).and_then(WriteOutcome::into_result)
 }
 
 struct Payload<'a> {
@@ -42,10 +57,10 @@ pub(crate) fn write_checked(
     bytes: &[u8],
     backup: bool,
     mut check: impl FnMut() -> io::Result<()>,
-) -> io::Result<()> {
+) -> io::Result<WriteOutcome> {
     let payload = Payload { bytes, backup };
     write_payload(path, &payload, &mut |stage| match stage {
-        Stage::TempSynced => check(),
+        Stage::TempSynced | Stage::BeforeRename => check(),
         _ => Ok(()),
     })
 }
@@ -59,14 +74,14 @@ pub(crate) fn write_atomic_with(
         bytes,
         backup: true,
     };
-    write_payload(path, &payload, &mut hook)
+    write_payload(path, &payload, &mut hook).and_then(WriteOutcome::into_result)
 }
 
 fn write_payload(
     path: &Path,
     payload: &Payload<'_>,
     hook: &mut impl FnMut(Stage) -> io::Result<()>,
-) -> io::Result<()> {
+) -> io::Result<WriteOutcome> {
     let path = &resolve_symlink(path);
     if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
         return Err(io::Error::new(
@@ -75,7 +90,11 @@ fn write_payload(
         ));
     }
     let temp = temp_path(path);
-    let result = replace(path, &temp, payload, hook);
+    let result = replace(path, &temp, payload, &mut |stage| {
+        #[cfg(test)]
+        tests::at_stage(path, stage)?;
+        hook(stage)
+    });
     if result.is_err() {
         let _ = fs::remove_file(&temp);
     }
@@ -87,7 +106,7 @@ fn replace(
     temp: &Path,
     payload: &Payload<'_>,
     hook: &mut impl FnMut(Stage) -> io::Result<()>,
-) -> io::Result<()> {
+) -> io::Result<WriteOutcome> {
     let mut file = OpenOptions::new().write(true).create_new(true).open(temp)?;
     file.write_all(payload.bytes)?;
     if let Ok(old) = fs::metadata(path) {
@@ -101,9 +120,14 @@ fn replace(
         make_backup(path);
         hook(Stage::BackupMade)?;
     }
+    hook(Stage::BeforeRename)?;
     fs::rename(temp, path)?;
-    sync_folder(folder_of(path))?;
-    hook(Stage::Replaced)
+    Ok(
+        match hook(Stage::Replaced).and_then(|()| sync_folder(folder_of(path))) {
+            Ok(()) => WriteOutcome::Durable,
+            Err(error) => WriteOutcome::Committed(error),
+        },
+    )
 }
 
 fn make_backup(path: &Path) {
@@ -144,4 +168,4 @@ fn sync_folder(_folder: &Path) -> io::Result<()> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

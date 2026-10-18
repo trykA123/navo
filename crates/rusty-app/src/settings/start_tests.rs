@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Barrier};
+use std::time::Duration;
 
 use rusty_store::{Db, backup_path};
 use rusty_ui::settings::{Change, Values};
@@ -174,28 +175,31 @@ fn a_slow_completion_does_not_hold_up_the_start_or_lose_a_later_save() {
     let at = paths();
     let old = "# old\n[appearance]\nmode = \"light\"\n";
     fs::write(&at.file, old).unwrap();
-    let (release, gate) = mpsc::channel::<()>();
+    let read = Arc::new(Barrier::new(2));
+    let release = Arc::new(Barrier::new(2));
+    let (read_worker, gate) = (read.clone(), release.clone());
     let (done, finished) = mpsc::channel::<()>();
     let (file, ledger) = (at.file.clone(), at.ledger.clone());
-    let begun = Instant::now();
-    let starting = spawn(
-        Some(at.file.clone()),
-        Duration::from_millis(50),
-        move |backup| {
-            let _ = gate.recv();
-            let started = start_sharing(Some(&file), Some(&ledger), backup);
-            let _ = done.send(());
-            started
-        },
-    );
+    let starting = spawn(Some(at.file.clone()), Duration::ZERO, move |backup| {
+        let mut started = start_sharing(Some(&file), None, backup);
+        read_worker.wait();
+        gate.wait();
+        started.default_changes = follow_defaults(
+            &mut started.loaded.as_mut().unwrap().store,
+            &ledger,
+            &rusty_store::Settings::default(),
+        );
+        let _ = done.send(());
+        started
+    });
+    read.wait();
     let started = starting.finish();
-    assert!(begun.elapsed() < Duration::from_secs(2));
     assert_eq!(fs::read_to_string(&at.file).unwrap(), old);
     assert_eq!(started.default_changes, []);
     let settings = hooks(started.loaded);
     let report = (settings.save)(&[Change::theme(ThemeChoice::Dark)]);
     assert!(report.error.is_none(), "{:?}", report.error);
-    release.send(()).unwrap();
+    release.wait();
     finished.recv_timeout(Duration::from_secs(10)).unwrap();
     let text = fs::read_to_string(&at.file).unwrap();
     assert!(
@@ -218,4 +222,94 @@ fn a_start_that_fails_loads_the_file_as_it_is() {
     let settings = hooks(started.loaded);
     assert_eq!(settings.values.theme(), ThemeChoice::Dark);
     assert_eq!(fs::read_to_string(&at.file).unwrap(), mine);
+}
+
+#[test]
+fn late_completion_before_watcher_registration_reaches_the_live_store() {
+    use rusty_ui::window_view::SettingsNews;
+    let at = paths();
+    let _ = start(Some(&at.file), Some(&at.ledger));
+    let read = Arc::new(Barrier::new(2));
+    let replace = Arc::new(Barrier::new(2));
+    let committed = Arc::new(Barrier::new(2));
+    let (read_worker, replace_worker, committed_worker) =
+        (read.clone(), replace.clone(), committed.clone());
+    let (file, ledger) = (at.file.clone(), at.ledger.clone());
+    let starting = spawn(Some(at.file.clone()), Duration::ZERO, move |backup| {
+        let mut started = start_sharing(Some(&file), None, backup);
+        read_worker.wait();
+        replace_worker.wait();
+        let loaded = started.loaded.as_mut().unwrap();
+        let mut defaults = rusty_store::Settings::default();
+        defaults.appearance.font_size = 18;
+        started.default_changes = follow_defaults(&mut loaded.store, &ledger, &defaults);
+        committed_worker.wait();
+        started
+    });
+    read.wait();
+    let started = starting.finish();
+    let loaded = started.loaded.unwrap();
+    assert_eq!(loaded.store.current().appearance.font_size, 13);
+    replace.wait();
+    committed.wait();
+    let (send, news) = mpsc::channel();
+    let (settings, _watch) = super::watched(Some(loaded), move |event| {
+        let _ = send.send(event);
+    });
+    let SettingsNews::Applied { values, generation } =
+        news.recv_timeout(Duration::from_secs(10)).unwrap()
+    else {
+        panic!("completion applies");
+    };
+    assert_eq!(
+        values.get(rusty_ui::settings::Field::FontSize),
+        &rusty_ui::settings::Value::Number(18)
+    );
+    let saved = (settings.save)(&[Change::theme(ThemeChoice::Dark)]);
+    assert!(saved.generation > generation);
+    assert_eq!(
+        saved.values.get(rusty_ui::settings::Field::FontSize),
+        &rusty_ui::settings::Value::Number(18)
+    );
+}
+
+#[test]
+fn late_completion_reaches_the_live_store_without_a_watch_event() {
+    use std::sync::Mutex;
+    let at = paths();
+    let _ = start(Some(&at.file), Some(&at.ledger));
+    let read = Arc::new(Barrier::new(2));
+    let release = Arc::new(Barrier::new(2));
+    let (read_worker, gate) = (read.clone(), release.clone());
+    let (file, ledger) = (at.file.clone(), at.ledger.clone());
+    let starting = spawn(Some(at.file.clone()), Duration::ZERO, move |backup| {
+        let mut started = start_sharing(Some(&file), None, backup);
+        read_worker.wait();
+        gate.wait();
+        let mut defaults = rusty_store::Settings::default();
+        defaults.appearance.font_size = 18;
+        started.default_changes = follow_defaults(
+            &mut started.loaded.as_mut().unwrap().store,
+            &ledger,
+            &defaults,
+        );
+        started
+    });
+    read.wait();
+    let mut loaded = starting.finish().loaded.unwrap();
+    let receiver = loaded.late.take();
+    let store = Arc::new(Mutex::new(loaded.store));
+    let (send, news) = mpsc::channel();
+    let delivery =
+        super::reload::Delivery::new(super::Reloader::new(store.clone(), None), move |event| {
+            let _ = send.send(event);
+        });
+    super::reload::receive_late(receiver, delivery);
+    release.wait();
+    let event = news.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert!(matches!(
+        event,
+        rusty_ui::window_view::SettingsNews::Applied { .. }
+    ));
+    assert_eq!(store.lock().unwrap().current().appearance.font_size, 18);
 }

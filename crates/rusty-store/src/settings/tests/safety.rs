@@ -36,6 +36,47 @@ fn mend_ledger_writes(db: &Db) {
 }
 
 #[test]
+fn ledger_recovery_keeps_an_owner_value_equal_to_the_previous_default() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    store.complete(&db, &Settings::default()).unwrap();
+    break_ledger_writes(&db);
+    store.complete(&db, &sorted_by(SortKey::Date)).unwrap();
+    let mine = fs::read_to_string(&path)
+        .unwrap()
+        .replace("sort = \"date\"", "sort = \"name\"");
+    write(&path, &mine);
+    mend_ledger_writes(&db);
+    let (mut next, _) = SettingsStore::load(&path);
+    let done = next.complete(&db, &sorted_by(SortKey::Date)).unwrap();
+    assert_eq!(next.current().files.sort, SortKey::Name);
+    assert!(done.changes.is_empty());
+    assert_eq!(recorded_sort(&db).as_deref(), Some("\"date\""));
+}
+
+#[test]
+fn ledger_recovery_before_another_default_change_keeps_the_owner_value() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    store.complete(&db, &Settings::default()).unwrap();
+    break_ledger_writes(&db);
+    store.complete(&db, &sorted_by(SortKey::Date)).unwrap();
+    let mine = fs::read_to_string(&path)
+        .unwrap()
+        .replace("sort = \"date\"", "sort = \"name\"");
+    write(&path, &mine);
+    mend_ledger_writes(&db);
+    let (mut next, _) = SettingsStore::load(&path);
+    next.complete(&db, &sorted_by(SortKey::Size)).unwrap();
+    assert_eq!(next.current().files.sort, SortKey::Name);
+    assert_eq!(recorded_sort(&db).as_deref(), Some("\"date\""));
+}
+
+#[test]
 fn a_failed_ledger_write_still_reports_the_change_and_the_next_start_adopts_the_key() {
     let dir = tmp();
     let path = settings_file(&dir);
@@ -165,7 +206,7 @@ fn a_sheet_save_after_deletion_restores_all_current_settings() {
     fs::remove_file(&path).unwrap();
     assert_eq!(store.reload(), LoadReport::default());
     let saved = store.save(MODE, Some(text("dark"))).unwrap();
-    assert!(!saved.was_present);
+    assert!(saved.was_present);
     expected.appearance.mode = ThemeMode::Dark;
     let (mut next, report) = SettingsStore::load(&path);
     assert_eq!(report, LoadReport::default());

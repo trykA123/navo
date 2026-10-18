@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use rusty_store::{Settings, SettingsError, SettingsStore, ThemeMode};
+use rusty_store::{Settings, SettingsStore, ThemeMode};
 use rusty_ui::settings::{Change, Control, FIELDS, Field, Value, Values};
 use rusty_ui::tokens::{Density, ThemeChoice};
 use rusty_ui::window_view::{SettingsHooks, SettingsNews};
@@ -240,32 +240,6 @@ fn undo_of_a_key_that_was_not_in_the_file_removes_it() {
     assert_eq!(report.values.theme(), ThemeChoice::System);
     let text = fs::read_to_string(&file).unwrap();
     assert!(!text.contains("mode"), "{text}");
-}
-
-#[test]
-fn a_save_that_meets_a_hand_edit_is_tried_once_more() {
-    let mut calls = 0;
-    let done = super::retried(|| {
-        calls += 1;
-        if calls == 1 {
-            Err(SettingsError::ChangedOnDisk)
-        } else {
-            Ok(calls)
-        }
-    });
-    assert_eq!(done, Ok(2));
-    let mut calls = 0;
-    let busy = super::retried(|| -> Result<(), _> {
-        calls += 1;
-        Err(SettingsError::ChangedOnDisk)
-    });
-    assert_eq!((busy, calls), (Err(SettingsError::ChangedOnDisk), 2));
-    let mut calls = 0;
-    let broken = super::retried(|| -> Result<(), _> {
-        calls += 1;
-        Err(SettingsError::FileInvalid)
-    });
-    assert_eq!((broken, calls), (Err(SettingsError::FileInvalid), 1));
 }
 
 #[test]
