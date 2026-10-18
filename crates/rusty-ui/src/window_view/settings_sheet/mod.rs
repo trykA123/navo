@@ -230,7 +230,7 @@ impl FerriteWindow {
             return None;
         }
         let t = tokens::current(cx).clone();
-        let frame = self.sheet_frame(&t, window, cx);
+        let frame = self.sheet_frame(&t, window, cx).covering_passive_card();
         let this = cx.weak_entity();
         let error = self.saver.error.clone().or(self.settings.notice.clone());
         let body = SettingsBody::new(self.values.clone(), self.settings.row)

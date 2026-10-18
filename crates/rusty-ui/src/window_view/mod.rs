@@ -15,6 +15,7 @@ mod settings_news;
 mod settings_save;
 mod settings_sheet;
 mod shell_menu;
+mod start;
 mod start_watch;
 mod status;
 mod tab_keys;
@@ -38,7 +39,7 @@ use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
 use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
-use crate::title_bar::{FerriteTitleBar, HeaderSearch};
+use crate::title_bar::{FerriteTitleBar, GradientLayer, HeaderSearch, system_backdrop};
 use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
@@ -47,7 +48,8 @@ pub use app_menu::AppMenuHooks;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{
-    DELETE_WARNING, FKey, delete_warning_in, key_labels, key_labels_in, layer_keys, layer_keys_in,
+    DELETE_WARNING, FKey, Labels, delete_warning_in, key_labels, key_labels_in, keys_in_layer,
+    layer_keys, layer_keys_in, settings_labels_in,
 };
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
@@ -55,6 +57,7 @@ pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use start::run;
 pub use start_watch::{StartReport, StartWatch};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
@@ -87,33 +90,6 @@ pub struct StartOptions {
     pub cache_keys: CacheKeys,
     pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
     pub start_watch: Option<StartWatch>,
-}
-
-pub fn run(mut options: StartOptions, on_quit: Rc<dyn Fn()>) {
-    crate::application().run(move |cx| {
-        cx.on_app_quit(move |_| {
-            let on_quit = on_quit.clone();
-            async move { on_quit() }
-        })
-        .detach();
-        if let Some(watch) = options.start_watch.as_mut() {
-            watch.mark("app running");
-        }
-        let _ = crate::init(options.mode, cx);
-        bind_app_keys(cx);
-        let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
-        let window_options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            app_id: Some("ferrite".into()),
-            ..crate::window_options("Ferrite")
-        };
-        let opened = crate::open_window(window_options, cx, move |window, cx| {
-            cx.new(|cx| FerriteWindow::new(options, window, cx))
-        });
-        if opened.is_err() {
-            cx.quit();
-        }
-    });
 }
 
 pub struct FerriteWindow {
@@ -306,6 +282,10 @@ impl FerriteWindow {
         let held = self.held_layer;
         let bar = match &self.viewer {
             Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
+            None if self.settings.is_open() => {
+                let labels = settings_labels_in(crate::commands::active(cx));
+                FKeyBar::new("fkeys", keys_in_layer(&labels, held)).layers(held, labels)
+            }
             None => {
                 let keymap = crate::commands::active(cx);
                 let bar = FKeyBar::new("fkeys", layer_keys_in(keymap, held))
@@ -387,8 +367,17 @@ impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.watch_start(window, cx);
         let t = tokens::current(cx).clone();
-        let body = self.body_area(window, cx);
-        let jobs = self.job_card_layer(cx);
+        let gradient = system_backdrop().gradient;
+        let below_title_bar = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .when(gradient == GradientLayer::BelowTitleBar, |below| {
+                below.bg(t.surfaces.mica())
+            })
+            .child(self.body_area(window, cx))
+            .child(self.fkey_bar(window, cx));
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
         let menu = self.app_menu_view(cx);
         let root = div()
@@ -396,13 +385,15 @@ impl Render for FerriteWindow {
             .flex()
             .flex_col()
             .size_full()
-            .bg(t.surfaces.mica())
+            .when(gradient == GradientLayer::Root, |root| {
+                root.bg(t.surfaces.mica())
+            })
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
             .child(self.title_bar(cx))
-            .child(body)
+            .child(below_title_bar)
             .on_modifiers_changed(
                 cx.listener(|view, event: &ModifiersChangedEvent, window, cx| {
                     view.track_modifiers(event.modifiers, window, cx);
@@ -415,8 +406,6 @@ impl Render for FerriteWindow {
                 view.toggle_settings(window, cx);
             }))
             .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.jobs_key(cx)))
-            .child(self.fkey_bar(window, cx))
-            .children(jobs)
             .children(dialog)
             .children(menu)
             .children(self.shell_menu_view())

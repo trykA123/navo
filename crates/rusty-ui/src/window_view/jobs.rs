@@ -185,7 +185,7 @@ impl FerriteWindow {
             div()
                 .absolute()
                 .right(t.spacing.xxl)
-                .bottom(t.spacing.fkey_height + t.spacing.md)
+                .bottom(t.spacing.md)
                 .child(card)
                 .into_any_element(),
         )

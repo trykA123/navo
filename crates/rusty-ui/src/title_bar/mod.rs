@@ -1,3 +1,4 @@
+mod backdrop;
 mod brand;
 mod search;
 
@@ -16,6 +17,7 @@ use gpui_kit::{
 
 use crate::tokens::{self, Theme};
 
+pub(crate) use backdrop::{GradientLayer, system_backdrop};
 pub(crate) use brand::icon_for as logo;
 pub use search::HeaderSearch;
 
@@ -29,6 +31,13 @@ pub fn window_options(title: impl Into<SharedString>) -> WindowOptions {
             ..TitleBar::title_bar_options()
         }),
         ..TitleBar::window_options()
+    }
+}
+
+pub(crate) fn main_window_options(title: impl Into<SharedString>) -> WindowOptions {
+    WindowOptions {
+        window_background: system_backdrop().window,
+        ..window_options(title)
     }
 }
 

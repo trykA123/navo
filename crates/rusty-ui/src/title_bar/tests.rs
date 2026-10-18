@@ -6,10 +6,10 @@ use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, Bounds, Context, IntoElement, ParentElement, Point, Render, Role, Styled,
-    TestAppContext, Window, WindowBounds, WindowOptions, div, px, size,
+    TestAppContext, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions, div, px, size,
 };
 
-use super::{FerriteTitleBar, HeaderSearch, window_options};
+use super::{FerriteTitleBar, HeaderSearch, main_window_options, system_backdrop, window_options};
 use crate::tokens::{self, Mode};
 
 const WIDTH: f32 = 1000.;
@@ -57,6 +57,22 @@ fn window_options_hide_the_native_caption_and_keep_the_title() {
     assert_eq!(titlebar.title.as_deref(), Some("Ferrite"));
     assert!(titlebar.appears_transparent);
     assert!(options.app_owns_titlebar_drag);
+}
+
+#[test]
+fn the_main_window_asks_for_the_system_backdrop() {
+    let options = main_window_options("Ferrite");
+    assert_eq!(options.window_background, system_backdrop().window);
+    if cfg!(not(windows)) {
+        assert_eq!(
+            options.window_background,
+            WindowBackgroundAppearance::Opaque
+        );
+    }
+    assert_eq!(
+        window_options("Ferrite").window_background,
+        WindowBackgroundAppearance::Opaque
+    );
 }
 
 #[gpui_kit::test]

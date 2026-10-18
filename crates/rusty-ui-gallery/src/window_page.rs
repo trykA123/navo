@@ -17,7 +17,9 @@ use rusty_ui::shortcuts::ShortcutsPage;
 use rusty_ui::side_sheet::{SheetFrame, SheetState, Side as PaneSide};
 use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens::{self, Density, Mode, Theme, ThemeChoice};
-use rusty_ui::window_view::{DELETE_WARNING, delete_warning_in, key_labels, layer_keys};
+use rusty_ui::window_view::{
+    DELETE_WARNING, delete_warning_in, key_labels, keys_in_layer, layer_keys, settings_labels_in,
+};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
@@ -53,7 +55,7 @@ const SIDES: [Side; 2] = [
 
 pub struct SheetShows {
     pub active: PaneSide,
-    pub window_width: f32,
+    pub window_width: Option<f32>,
     pub is_ringed: bool,
     pub settings: Option<Field>,
     pub shortcuts: Option<Entity<ShortcutsPage>>,
@@ -97,7 +99,18 @@ impl WindowPage {
         }
     }
 
+    fn shows_settings(&self) -> bool {
+        self.sheet
+            .as_ref()
+            .is_some_and(|sheet| sheet.shows.settings.is_some() || sheet.shows.shortcuts.is_some())
+    }
+
     fn fkey_bar(&self, window: &Window) -> FKeyBar {
+        if self.shows_settings() {
+            let labels = settings_labels_in(Keymap::builtin());
+            return FKeyBar::new("fkeys", keys_in_layer(&labels, self.held))
+                .layers(self.held, labels);
+        }
         let bar = FKeyBar::new("fkeys", layer_keys(self.held)).layers(self.held, key_labels());
         let bar = match delete_warning_in(Keymap::builtin()) {
             Some((layer, index)) => bar.warn(layer, index, DELETE_WARNING),
@@ -126,7 +139,7 @@ impl WindowPage {
             div()
                 .absolute()
                 .right(t.spacing.xxl)
-                .bottom(t.spacing.fkey_height + t.spacing.md)
+                .bottom(t.spacing.md)
                 .child(card),
         )
     }
@@ -164,11 +177,20 @@ impl WindowPage {
         }
     }
 
-    fn sheet_layer(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
+    fn sheet_layer(&self, t: &Theme, window: &Window) -> Option<impl IntoElement + use<>> {
         let sheet = self.sheet.as_ref()?;
-        let body = px(sheet.shows.window_width) - t.spacing.md * 2.;
+        let width = sheet
+            .shows
+            .window_width
+            .map_or(window.viewport_size().width, px);
+        let body = width - t.spacing.md * 2.;
         let passive_card = (body - t.spacing.md) / 2.;
         let frame = SheetFrame::new(body, passive_card, sheet.shows.active);
+        let frame = if self.shows_settings() {
+            frame.covering_passive_card()
+        } else {
+            frame
+        };
         let shown = match (&sheet.shows.shortcuts, sheet.shows.settings) {
             (Some(page), _) => shortcuts_sample::sheet(&sheet.state, frame, page),
             (None, Some(field)) => settings_sample::sheet(t, &sheet.state, frame, field),
@@ -262,7 +284,7 @@ impl Render for WindowPage {
             Splitter::new("panes", &self.split, self.card(0, cx), self.card(1, cx)).line_on_hover();
         let is_open = self.is_menu_open;
         let menu = self.menu(&t);
-        let sheet = self.sheet_layer(&t);
+        let sheet = self.sheet_layer(&t, window);
         div()
             .relative()
             .size_full()
@@ -283,17 +305,16 @@ impl Render for WindowPage {
                     .min_h_0()
                     .px(t.spacing.xs)
                     .child(panes)
+                    .children(self.job_card(&t))
                     .children(sheet),
             )
             .child(self.fkey_bar(window))
-            .children(self.job_card(&t))
             .children(menu)
     }
 }
 
 pub const NARROW: f32 = 1100.;
 pub const WIDE: f32 = 1440.;
-pub const SETTINGS: f32 = 1280.;
 
 fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
     div()
@@ -304,10 +325,11 @@ fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 17]) -> Option<AnyElement> {
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 18]) -> Option<AnyElement> {
     let [
         main,
         shift,
+        ctrl,
         alt,
         menu,
         sheet,
@@ -325,6 +347,7 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 17]) -> Option<
     let shown = match page {
         Page::Window => main,
         Page::WindowShift => shift,
+        Page::WindowCtrl => ctrl,
         Page::WindowAlt => alt,
         Page::WindowJob => job,
         Page::WindowJobPill => job_pill,
@@ -335,12 +358,12 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 17]) -> Option<
         Page::Sheet => return Some(fixed(WIDE, sheet)),
         Page::SheetLeft => return Some(fixed(WIDE, sheet_left)),
         Page::SheetNarrow => return Some(fixed(NARROW, sheet_narrow)),
-        Page::Settings => return Some(fixed(SETTINGS, settings)),
-        Page::SettingsFiles => return Some(fixed(SETTINGS, settings_files)),
-        Page::Shortcuts => return Some(fixed(SETTINGS, shortcuts)),
-        Page::ShortcutsRecording => return Some(fixed(SETTINGS, recording)),
-        Page::ShortcutsConflict => return Some(fixed(SETTINGS, conflict)),
-        Page::ShortcutsInvalid => return Some(fixed(SETTINGS, invalid)),
+        Page::Settings => settings,
+        Page::SettingsFiles => settings_files,
+        Page::Shortcuts => shortcuts,
+        Page::ShortcutsRecording => recording,
+        Page::ShortcutsConflict => conflict,
+        Page::ShortcutsInvalid => invalid,
         _ => return None,
     };
     Some(shown.clone().into_any_element())

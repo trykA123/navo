@@ -6,7 +6,9 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Modifiers, TestAppContext, Visu
 use super::{fake, home_beside_dest, open, open_with, press};
 use crate::commands::Keymap;
 use crate::fkey_bar::KeyLayer;
-use crate::window_view::{delete_warning_in, key_labels_in, layer_keys_in};
+use crate::window_view::{
+    delete_warning_in, key_labels_in, keys_in_layer, layer_keys_in, settings_labels_in,
+};
 
 pub(super) fn key_labels(
     cx: &mut TestAppContext,
@@ -167,10 +169,21 @@ fn the_built_in_keymap_gives_the_known_f_key_bar() {
         "Move",
         "New folder",
         "Delete",
-        "Drawer",
+        "",
         "Menu",
     ];
-    let shift = ["", "", "", "Edit with", "", "Rename", "", "Delete", "", ""];
+    let shift = [
+        "",
+        "",
+        "",
+        "Edit with",
+        "",
+        "Rename",
+        "",
+        "Delete",
+        "",
+        "Context",
+    ];
     let ctrl = [
         "", "", "By name", "By ext", "By date", "By size", "", "", "", "",
     ];
@@ -201,4 +214,50 @@ fn the_delete_warning_sits_on_the_key_of_files_delete() {
         let keymap = Keymap::parse(&text).expect("keymap");
         assert_eq!(delete_warning_in(&keymap), expected, "{keys}");
     }
+}
+
+#[gpui_kit::test]
+fn f9_has_no_command_so_its_cap_is_dimmed_like_f1(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, Rc::default());
+    let (base, _) = key_labels(cx, window);
+    assert_eq!((base[0].as_str(), base[8].as_str()), ("F1", "F9"));
+}
+
+#[gpui_kit::test]
+fn the_shift_layer_shows_the_context_menu_on_f10(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, Rc::default());
+    hold(
+        cx,
+        window,
+        Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        },
+    );
+    assert_eq!(key_labels(cx, window).0[9], "F10 Context");
+}
+
+#[test]
+fn the_settings_layer_comes_from_the_settings_commands_in_the_keymap() {
+    let labels =
+        |keymap: &Keymap| keys_in_layer(&settings_labels_in(keymap), None).map(|(_, label)| label);
+    assert_eq!(
+        labels(Keymap::builtin()),
+        [
+            "",
+            "Edit value",
+            "TOML line",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Menu"
+        ]
+    );
+    let text = "[[bind]]\ncommand = \"settings.show_in_file\"\nkeys = [\"f7\"]\n\n\
+                [[bind]]\ncommand = \"files.view\"\nkeys = [\"f3\"]\n";
+    let moved = labels(&Keymap::parse(text).expect("keymap"));
+    assert_eq!((moved[2], moved[6]), ("", "TOML line"));
 }

@@ -22,9 +22,7 @@ use crate::structured_sample::{
 };
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
-use crate::window_page::{
-    JobsShown, NARROW, SETTINGS, SheetShows, WIDE, WindowPage, window_element,
-};
+use crate::window_page::{JobsShown, NARROW, SheetShows, WIDE, WindowPage, window_element};
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -73,6 +71,7 @@ pub struct Gallery {
     viewer_menus: [Entity<ViewerMenuPage>; 2],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
+    ctrl_window: Entity<WindowPage>,
     alt_window: Entity<WindowPage>,
     job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
@@ -108,6 +107,7 @@ impl Gallery {
                 .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
+            ctrl_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Ctrl), cx)),
             alt_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Alt), cx)),
             job_windows: job_windows(cx),
             menu_window: cx.new(WindowPage::with_menu),
@@ -275,15 +275,15 @@ fn sheet_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 9] {
     .map(|shows| Some(shortcuts_sample::page(shows, window, cx)));
     let [normal, recording, conflict, invalid] = shortcuts;
     let shows = [
-        (Side::Left, WIDE, false, None, None),
-        (Side::Right, WIDE, true, None, None),
-        (Side::Left, NARROW, false, None, None),
-        (Side::Left, SETTINGS, false, Some(Field::Density), None),
-        (Side::Left, SETTINGS, false, Some(Field::HiddenFiles), None),
-        (Side::Left, SETTINGS, false, None, normal),
-        (Side::Left, SETTINGS, false, None, recording),
-        (Side::Left, SETTINGS, false, None, conflict),
-        (Side::Left, SETTINGS, false, None, invalid),
+        (Side::Left, Some(WIDE), false, None, None),
+        (Side::Right, Some(WIDE), true, None, None),
+        (Side::Left, Some(NARROW), false, None, None),
+        (Side::Left, None, false, Some(Field::Density), None),
+        (Side::Left, None, false, Some(Field::HiddenFiles), None),
+        (Side::Left, None, false, None, normal),
+        (Side::Left, None, false, None, recording),
+        (Side::Left, None, false, None, conflict),
+        (Side::Left, None, false, None, invalid),
     ];
     shows.map(|(active, window_width, is_ringed, settings, shortcuts)| {
         let shows = SheetShows {
@@ -298,7 +298,7 @@ fn sheet_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 9] {
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 17] {
+    fn windows(&self) -> [&Entity<WindowPage>; 18] {
         let [
             sheet,
             sheet_left,
@@ -314,6 +314,7 @@ impl Gallery {
         [
             &self.main_window,
             &self.shift_window,
+            &self.ctrl_window,
             &self.alt_window,
             &self.menu_window,
             sheet,
