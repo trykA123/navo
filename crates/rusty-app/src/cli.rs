@@ -2,34 +2,34 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Command {
+pub(crate) enum Command {
     Open(Start),
     Version,
     DiagReport(PathBuf),
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct Start {
-    pub view: Option<PathBuf>,
-    pub profile: Option<PathBuf>,
-    pub metrics: Option<PathBuf>,
-    pub left: Option<PathBuf>,
-    pub right: Option<PathBuf>,
+pub(crate) struct Start {
+    pub(crate) view: Option<PathBuf>,
+    pub(crate) profile: Option<PathBuf>,
+    pub(crate) metrics: Option<PathBuf>,
+    pub(crate) left: Option<PathBuf>,
+    pub(crate) right: Option<PathBuf>,
 }
 
-pub const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>]]";
+pub(crate) const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>]]";
 
 const STANDALONE: [&str; 2] = ["--version", "--diag-report"];
 const WINDOW_FLAGS: [&str; 5] = ["--view", "--profile", "--metrics", "--left", "--right"];
 
 impl Command {
-    pub fn uses_console(&self) -> bool {
+    pub(crate) fn uses_console(&self) -> bool {
         !matches!(self, Self::Open(start) if !start.is_metrics())
     }
 }
 
 impl Start {
-    pub fn is_metrics(&self) -> bool {
+    pub(crate) fn is_metrics(&self) -> bool {
         self.metrics.is_some()
     }
 
@@ -45,7 +45,7 @@ impl Start {
     }
 }
 
-pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
+pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
     read(args.into_iter()).map_err(|problem| format!("ferrite: {problem}\n{USAGE}"))
 }
 

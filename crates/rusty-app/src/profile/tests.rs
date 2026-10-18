@@ -76,3 +76,28 @@ fn without_flags_the_user_folders_are_used() {
     let profile = choose(&Start::default(), move || Some(user)).unwrap();
     assert_eq!(profile.dirs(), Some(&expected));
 }
+
+#[test]
+fn explicit_cleanup_removes_the_profile_without_dropping_it() {
+    let profile = choose(&metrics(), never_detect).unwrap();
+    let dirs = profile.dirs().cloned().unwrap();
+    dirs.ensure().unwrap();
+    std::fs::write(dirs.settings_file(), "").unwrap();
+    profile.cleanup().run().unwrap();
+    assert!(!dirs.config.exists() && !dirs.data.exists());
+    profile.cleanup().run().unwrap();
+}
+
+#[test]
+fn explicit_cleanup_keeps_a_given_profile() {
+    let root = tempfile::tempdir().unwrap();
+    let start = Start {
+        profile: Some(root.path().to_owned()),
+        ..metrics()
+    };
+    let profile = choose(&start, never_detect).unwrap();
+    let dirs = profile.dirs().cloned().unwrap();
+    dirs.ensure().unwrap();
+    profile.cleanup().run().unwrap();
+    assert!(dirs.config.exists() && dirs.data.exists());
+}

@@ -8,33 +8,33 @@ use super::clock::ProcessClock;
 use super::memory::Memory;
 
 #[derive(Debug, Serialize, PartialEq)]
-pub struct Report {
-    pub version: String,
-    pub commit: String,
-    pub exe_bytes: Option<u64>,
-    pub renderer: String,
-    pub first_frame_ms: f64,
-    pub first_usable_ms: f64,
-    pub marks: Vec<Mark>,
-    pub idle_private_bytes: Option<u64>,
-    pub idle_working_set_bytes: Option<u64>,
-    pub peak_working_set_bytes: Option<u64>,
+pub(super) struct Report {
+    pub(super) version: String,
+    pub(super) commit: String,
+    pub(super) exe_bytes: Option<u64>,
+    pub(super) renderer: String,
+    pub(super) first_frame_ms: f64,
+    pub(super) first_usable_ms: f64,
+    pub(super) marks: Vec<Mark>,
+    pub(super) idle_private_bytes: Option<u64>,
+    pub(super) idle_working_set_bytes: Option<u64>,
+    pub(super) peak_working_set_bytes: Option<u64>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
-pub struct Mark {
-    pub name: String,
-    pub ms: f64,
+pub(super) struct Mark {
+    pub(super) name: String,
+    pub(super) ms: f64,
 }
 
-pub struct Build {
-    pub version: String,
-    pub commit: String,
-    pub exe_bytes: Option<u64>,
+pub(super) struct Build {
+    pub(super) version: String,
+    pub(super) commit: String,
+    pub(super) exe_bytes: Option<u64>,
 }
 
 impl Build {
-    pub fn current() -> Self {
+    pub(super) fn current() -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             commit: env!("FERRITE_COMMIT").to_owned(),
@@ -46,16 +46,16 @@ impl Build {
     }
 }
 
-pub struct Measured {
-    pub renderer: Option<String>,
-    pub first_frame: Instant,
-    pub first_usable: Instant,
-    pub marks: Vec<(&'static str, Instant)>,
-    pub memory: Memory,
+pub(super) struct Measured {
+    pub(super) renderer: Option<String>,
+    pub(super) first_frame: Instant,
+    pub(super) first_usable: Instant,
+    pub(super) marks: Vec<(&'static str, Instant)>,
+    pub(super) memory: Memory,
 }
 
 impl Report {
-    pub fn new(build: Build, clock: &ProcessClock, measured: Measured) -> Self {
+    pub(super) fn new(build: Build, clock: &ProcessClock, measured: Measured) -> Self {
         let memory = measured.memory;
         Self {
             version: build.version,
@@ -78,11 +78,11 @@ impl Report {
         }
     }
 
-    pub fn to_json(&self) -> String {
+    pub(super) fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).unwrap_or_default()
     }
 
-    pub fn write(&self, path: &Path) -> io::Result<()> {
+    pub(super) fn write(&self, path: &Path) -> io::Result<()> {
         std::fs::write(path, self.to_json() + "\n")
     }
 }

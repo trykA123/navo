@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use super::FerriteWindow;
 use crate::prelude::*;
 
-pub type Mark = (&'static str, Instant);
+pub(crate) type Mark = (&'static str, Instant);
 
 pub struct StartReport {
     pub first_frame: Instant,
@@ -15,11 +15,14 @@ pub struct StartReport {
 pub struct StartWatch {
     idle: Duration,
     marks: Vec<Mark>,
-    on_report: Box<dyn FnOnce(StartReport)>,
+    on_report: Box<dyn FnOnce(Result<StartReport, String>)>,
 }
 
 impl StartWatch {
-    pub fn new(idle: Duration, on_report: impl FnOnce(StartReport) + 'static) -> Self {
+    pub fn new(
+        idle: Duration,
+        on_report: impl FnOnce(Result<StartReport, String>) + 'static,
+    ) -> Self {
         Self {
             idle,
             marks: Vec::new(),
@@ -70,7 +73,7 @@ struct Frame {
     is_listed: bool,
 }
 
-type Reported = (StartReport, Box<dyn FnOnce(StartReport)>);
+type Reported = (StartReport, Box<dyn FnOnce(Result<StartReport, String>)>);
 
 impl Watching {
     pub(super) fn built(mut watch: StartWatch) -> Self {
@@ -96,6 +99,13 @@ impl Watching {
 
 impl FerriteWindow {
     pub(super) fn watch_start(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.start.is_none() {
+            return;
+        }
+        if let Some(error) = self.startup_error() {
+            self.fail_start(error, cx);
+            return;
+        }
         let is_listed = self.panes_listed();
         let Some(start) = self.start.as_mut() else {
             return;
@@ -139,11 +149,35 @@ impl FerriteWindow {
         .detach();
     }
 
+    fn fail_start(&mut self, error: String, cx: &mut Context<Self>) {
+        if let Some(start) = self.start.take() {
+            (start.watch.on_report)(Err(error));
+            cx.quit();
+        }
+    }
+
+    fn startup_error(&self) -> Option<String> {
+        self.panes().into_iter().find_map(|pane| {
+            let tab = self.browser.state().pane(pane)?.active();
+            self.browser.error(tab.id()).map(|error| {
+                format!(
+                    "cannot list {}: {}",
+                    tab.location().as_str(),
+                    error.message()
+                )
+            })
+        })
+    }
+
     fn report_start(&mut self, cx: &mut Context<Self>) {
+        if let Some(error) = self.startup_error() {
+            self.fail_start(error, cx);
+            return;
+        }
         let Some((report, on_report)) = self.start.take().and_then(Watching::into_report) else {
             return;
         };
-        on_report(report);
+        on_report(Ok(report));
         cx.quit();
     }
 

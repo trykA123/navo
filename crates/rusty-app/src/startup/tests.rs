@@ -140,3 +140,17 @@ fn a_relative_folder_becomes_absolute() {
     let expected = std::env::current_dir().unwrap().join("fixture");
     assert_eq!(location.as_str(), expected.to_str().unwrap());
 }
+
+#[test]
+fn no_folder_overrides_keep_the_restored_focused_pane() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("session.bin");
+    let mut state = initial_state(&file, home());
+    let right = pane_ids(&state)[1];
+    focus(&mut state, right);
+    save(&state, &file).unwrap();
+    let mut restored = initial_state(&file, home());
+    assert_eq!(restored.focused_pane(), right);
+    place_panes(&mut restored, [None, None]);
+    assert_eq!(restored.focused_pane(), right);
+}

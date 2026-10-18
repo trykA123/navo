@@ -89,8 +89,13 @@ pub struct StartOptions {
     pub start_watch: Option<StartWatch>,
 }
 
-pub fn run(mut options: StartOptions) {
+pub fn run(mut options: StartOptions, on_quit: Rc<dyn Fn()>) {
     crate::application().run(move |cx| {
+        cx.on_app_quit(move |_| {
+            let on_quit = on_quit.clone();
+            async move { on_quit() }
+        })
+        .detach();
         if let Some(watch) = options.start_watch.as_mut() {
             watch.mark("app running");
         }

@@ -39,7 +39,10 @@ pub fn home_location(var: impl Fn(&str) -> Option<String>) -> Location {
         .unwrap_or_else(default_root)
 }
 
-pub fn place_panes(state: &mut AppState, folders: [Option<Location>; 2]) {
+pub(crate) fn place_panes(state: &mut AppState, folders: [Option<Location>; 2]) {
+    if folders.iter().all(Option::is_none) {
+        return;
+    }
     let panes = pane_ids(state);
     for (pane, folder) in panes.iter().zip(folders) {
         if let Some(location) = folder {
@@ -52,7 +55,7 @@ pub fn place_panes(state: &mut AppState, folders: [Option<Location>; 2]) {
     }
 }
 
-pub fn path_location(path: &Path) -> Option<Location> {
+pub(crate) fn path_location(path: &Path) -> Option<Location> {
     let path = std::path::absolute(path).ok()?;
     Location::new(path.to_str()?).ok()
 }

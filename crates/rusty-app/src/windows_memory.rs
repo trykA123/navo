@@ -20,7 +20,7 @@ impl MemoryProbe for WindowsProbe {
     }
 }
 
-pub fn peak_working_set() -> Option<u64> {
+pub(crate) fn peak_working_set() -> Option<u64> {
     counters()
         .ok()
         .map(|counters| counters.PeakWorkingSetSize as u64)

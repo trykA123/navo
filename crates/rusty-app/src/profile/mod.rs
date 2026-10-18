@@ -1,18 +1,47 @@
 use std::io;
+use std::rc::Rc;
 
 use rusty_store::StoreDirs;
 use tempfile::TempDir;
 
 use crate::cli::Start;
 
-pub enum Profile {
+pub(crate) enum Profile {
     User(Option<StoreDirs>),
     Folder(StoreDirs),
-    Temporary { dirs: StoreDirs, _folder: TempDir },
+    Temporary { dirs: StoreDirs, cleanup: Cleanup },
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct Cleanup(Option<Rc<TempDir>>);
+
+impl Cleanup {
+    pub(crate) fn on_quit(&self) {
+        if let Err(error) = self.run() {
+            eprintln!("ferrite: cannot remove the temporary profile: {error}");
+        }
+    }
+
+    pub(crate) fn run(&self) -> io::Result<()> {
+        let Some(folder) = &self.0 else {
+            return Ok(());
+        };
+        match std::fs::remove_dir_all(folder.path()) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
 }
 
 impl Profile {
-    pub fn dirs(&self) -> Option<&StoreDirs> {
+    pub(crate) fn cleanup(&self) -> Cleanup {
+        match self {
+            Self::Temporary { cleanup, .. } => cleanup.clone(),
+            _ => Cleanup::default(),
+        }
+    }
+
+    pub(crate) fn dirs(&self) -> Option<&StoreDirs> {
         match self {
             Self::User(dirs) => dirs.as_ref(),
             Self::Folder(dirs) | Self::Temporary { dirs, .. } => Some(dirs),
@@ -20,7 +49,10 @@ impl Profile {
     }
 }
 
-pub fn choose(start: &Start, detect: impl FnOnce() -> Option<StoreDirs>) -> io::Result<Profile> {
+pub(crate) fn choose(
+    start: &Start,
+    detect: impl FnOnce() -> Option<StoreDirs>,
+) -> io::Result<Profile> {
     if let Some(root) = &start.profile {
         return Ok(Profile::Folder(StoreDirs::in_profile(root)));
     }
@@ -33,7 +65,7 @@ pub fn choose(start: &Start, detect: impl FnOnce() -> Option<StoreDirs>) -> io::
     let dirs = StoreDirs::in_profile(folder.path());
     Ok(Profile::Temporary {
         dirs,
-        _folder: folder,
+        cleanup: Cleanup(Some(Rc::new(folder))),
     })
 }
 

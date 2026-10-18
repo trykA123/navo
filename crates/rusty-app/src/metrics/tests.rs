@@ -2,9 +2,10 @@ use std::time::{Duration, Instant};
 
 use rusty_ui::window_view::StartReport;
 
-use super::clock::{age_from_file_times, age_from_proc};
-use super::memory::{Memory, parse_peak};
+use super::memory::Memory;
 use super::report::{Build, Measured, Report};
+use super::unix::{age_from_proc, parse_peak};
+use super::windows::age_from_file_times;
 use super::{ProcessClock, Run, mark, marks};
 
 const STATUS: &str = "Name:\tferrite\nVmPeak:\t  900000 kB\nVmHWM:\t   81920 kB\nVmRSS:\t   61440 kB\nRssAnon:\t   40960 kB\n";
@@ -89,18 +90,30 @@ fn the_build_names_this_version_and_executable() {
 }
 
 #[test]
-fn the_process_started_before_main() {
+fn the_process_origin_uses_the_os_age() {
     let main_started = Instant::now();
-    let clock = ProcessClock::detect(main_started);
-    assert!(clock.start() <= main_started);
-    let age = main_started.duration_since(clock.start());
-    assert!(age < Duration::from_secs(600), "{age:?}");
+    let called = std::cell::Cell::new(false);
+    let clock = ProcessClock::detect(main_started, || {
+        called.set(true);
+        Some(Duration::from_secs(2))
+    });
+    assert!(called.get(), "the OS process age was ignored");
+    let latest = Instant::now() - Duration::from_secs(2);
+    assert!(clock.start() >= main_started - Duration::from_secs(2));
+    assert!(clock.start() <= latest);
+}
+
+#[test]
+fn an_unavailable_os_age_falls_back_to_main() {
+    let main_started = Instant::now();
+    let clock = ProcessClock::detect(main_started, || None);
+    assert_eq!(clock.start(), main_started);
 }
 
 #[cfg(any(target_os = "linux", windows))]
 #[test]
 fn the_os_knows_when_this_process_started() {
-    let age = super::clock::process_age().expect("the OS start time");
+    let age = super::process_age().expect("the OS start time");
     assert!(age < Duration::from_secs(600), "{age:?}");
 }
 
@@ -171,7 +184,7 @@ fn a_finished_run_writes_the_report_and_exits_cleanly() {
     let run = Run::new(path.clone(), ProcessClock::starting_at(start));
     assert!(!run.is_written());
     assert_eq!(run.exit_code(), std::process::ExitCode::FAILURE);
-    run.finish(ui_report(start));
+    run.finish(Ok(ui_report(start)));
     assert!(run.is_written());
     assert_eq!(run.exit_code(), std::process::ExitCode::SUCCESS);
     let value: serde_json::Value =
@@ -193,7 +206,18 @@ fn a_report_that_cannot_be_written_fails_the_exit_code() {
     let path = dir.path().join("missing").join("metrics.json");
     let start = Instant::now();
     let run = Run::new(path, ProcessClock::starting_at(start));
-    run.finish(ui_report(start));
+    run.finish(Ok(ui_report(start)));
     assert!(!run.is_written());
     assert_eq!(run.exit_code(), std::process::ExitCode::FAILURE);
+}
+
+#[test]
+fn a_listing_failure_never_writes_a_successful_report() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("metrics.json");
+    let run = Run::new(path.clone(), ProcessClock::starting_at(Instant::now()));
+    run.finish(Err("cannot list folder: access denied".to_owned()));
+    assert_eq!(run.exit_code(), std::process::ExitCode::FAILURE);
+    assert!(!run.is_written());
+    assert!(!path.exists());
 }

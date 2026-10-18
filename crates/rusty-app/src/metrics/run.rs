@@ -11,17 +11,17 @@ use super::marks;
 use super::memory::Memory;
 use super::report::{Build, Measured, Report};
 
-pub const IDLE: Duration = Duration::from_secs(5);
+const IDLE: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
-pub struct Run {
+pub(crate) struct Run {
     destination: PathBuf,
     clock: ProcessClock,
     written: Rc<Cell<bool>>,
 }
 
 impl Run {
-    pub fn new(destination: PathBuf, clock: ProcessClock) -> Self {
+    pub(crate) fn new(destination: PathBuf, clock: ProcessClock) -> Self {
         Self {
             destination,
             clock,
@@ -29,12 +29,19 @@ impl Run {
         }
     }
 
-    pub fn watch(&self) -> StartWatch {
+    pub(crate) fn watch(&self) -> StartWatch {
         let run = self.clone();
         StartWatch::new(IDLE, move |ui| run.finish(ui))
     }
 
-    pub fn finish(&self, ui: StartReport) {
+    pub(super) fn finish(&self, ui: Result<StartReport, String>) {
+        let ui = match ui {
+            Ok(ui) => ui,
+            Err(error) => {
+                eprintln!("ferrite: start-up metrics failed: {error}");
+                return;
+            }
+        };
         let mut all = marks::all();
         all.extend(ui.marks);
         all.push(("first frame", ui.first_frame));
@@ -57,7 +64,7 @@ impl Run {
         }
     }
 
-    pub fn exit_code(&self) -> ExitCode {
+    pub(crate) fn exit_code(&self) -> ExitCode {
         if self.is_written() {
             ExitCode::SUCCESS
         } else {
@@ -65,7 +72,7 @@ impl Run {
         }
     }
 
-    pub fn is_written(&self) -> bool {
+    pub(super) fn is_written(&self) -> bool {
         self.written.get()
     }
 }
