@@ -93,3 +93,13 @@ fn ensure_creates_both_dirs() {
     dirs.ensure().unwrap();
     assert!(dirs.config.is_dir() && dirs.data.is_dir());
 }
+
+#[test]
+fn a_profile_folder_holds_both_dirs() {
+    let root = PathBuf::from("/profile");
+    let dirs = StoreDirs::in_profile(&root);
+    assert_eq!(dirs.config, root.join("config"));
+    assert_eq!(dirs.data, root.join("data"));
+    assert!(dirs.settings_file().starts_with(&root));
+    assert!(dirs.session_file().starts_with(&root));
+}

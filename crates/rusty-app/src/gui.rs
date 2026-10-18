@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,65 +11,121 @@ use rusty_shell::VolumeIdentity;
 use rusty_store::StoreDirs;
 use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
-use rusty_ui::window_view::{StartOptions, run};
+use rusty_ui::window_view::{SaveSession, StartOptions, StartWatch, run};
 
-use crate::startup::{home_location, initial_state, save, session_folders};
-use crate::{app_menu, drives, editor, files, jobs, keymap, launch, settings, shell_menu};
+use crate::cli::Start;
+use crate::startup::{
+    home_location, initial_state, path_location, place_panes, save, session_folders,
+};
+use crate::{app_menu, drives, editor, files, jobs, keymap, launch, metrics, settings, shell_menu};
 
 const START_READ: Duration = Duration::from_millis(50);
 const EXIT_WRITE: Duration = Duration::from_millis(300);
 
-pub fn open(view: Option<std::path::PathBuf>) {
-    let dirs = StoreDirs::detect();
-    let session = dirs.as_ref().map(StoreDirs::session_file);
+pub(crate) struct Launch {
+    pub(crate) view: Option<PathBuf>,
+    pub(crate) panes: [Option<Location>; 2],
+    pub(crate) dirs: Option<StoreDirs>,
+    pub(crate) cleanup: crate::profile::Cleanup,
+    pub(crate) start_watch: Option<StartWatch>,
+}
+
+pub(crate) fn pane_folders(start: &Start) -> Result<[Option<Location>; 2], String> {
+    let folder = |path: &Option<PathBuf>, flag: &str| match path {
+        None => Ok(None),
+        Some(path) if path.is_dir() => path_location(path)
+            .map(Some)
+            .ok_or_else(|| format!("{flag} {} is not a usable folder path", path.display())),
+        Some(path) => Err(format!(
+            "{flag} {} does not exist or is not a folder",
+            path.display()
+        )),
+    };
+    Ok([
+        folder(&start.left, "--left")?,
+        folder(&start.right, "--right")?,
+    ])
+}
+
+pub(crate) fn open(launch: Launch) {
+    let dirs = launch.dirs;
     let settings_start = settings::start_from(dirs.as_ref());
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
-    let no_session = std::path::Path::new("");
-    let state = initial_state(session.as_deref().unwrap_or(no_session), home.clone());
+    let session = dirs.as_ref().map(StoreDirs::session_file);
+    let no_session = Path::new("");
+    let mut state = initial_state(session.as_deref().unwrap_or(no_session), home.clone());
+    place_panes(&mut state, launch.panes);
+    metrics::mark("session read");
     let memory = dirs
         .as_ref()
         .filter(|dirs| dirs.ensure().is_ok())
         .and_then(|dirs| files::open_memory(&dirs.data.join("ferrite.db")));
     let local = Arc::new(LocalFs::new());
     let (operations, _instance) = operations(dirs.as_ref(), &home, local.as_ref());
+    metrics::mark("databases opened");
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
-    let (exit_cache, exit_keys) = (cache.clone(), keys.clone());
-    let on_save = Rc::new(move |state: &AppState| {
-        if let (Some(dirs), Some(file)) = (dirs.as_ref(), session.as_deref())
+    metrics::mark("listing cache read");
+    let on_save = session_saver(dirs, disk, cache.clone(), keys.clone());
+    let (settings, _settings_watch) = finish_settings(|| settings_start.finish().loaded);
+    tracing::info!(viewer = launch.view.is_some(), "window opening");
+    metrics::mark("window opening");
+    run(
+        StartOptions {
+            state,
+            provider: local,
+            on_save,
+            mode: Mode::Light,
+            operations,
+            launcher: launch::launcher(),
+            editor: editor::hooks(|name| std::env::var(name).ok()),
+            files: files::hooks(memory),
+            kinds: rusty_ui::window_view::Kinds::builtin(),
+            drives: drives::hooks(),
+            app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
+            settings,
+            keymap,
+            view: launch.view.and_then(|path| path_location(&path)),
+            listing_cache: cache,
+            cache_keys: keys,
+            shell_menu: shell_menu::provider(),
+            start_watch: launch.start_watch,
+        },
+        Rc::new(move || launch.cleanup.on_quit()),
+    );
+}
+
+fn finish_settings(
+    load: impl FnOnce() -> Option<settings::Loaded>,
+) -> (
+    rusty_ui::window_view::SettingsHooks,
+    Option<rusty_fs::Watch>,
+) {
+    let loaded = load();
+    metrics::mark("settings read");
+    settings::live(loaded)
+}
+
+fn session_saver(
+    dirs: Option<StoreDirs>,
+    disk: Option<DiskListings>,
+    cache: ListingCache,
+    keys: CacheKeys,
+) -> SaveSession {
+    Rc::new(move |state: &AppState| {
+        if let Some(dirs) = dirs.as_ref()
             && dirs.ensure().is_ok()
         {
-            let _ = save(state, file);
+            let _ = save(state, &dirs.session_file());
         }
         if let Some(disk) = &disk {
-            disk.save_folders(&exit_cache, &exit_keys, &session_folders(state));
+            disk.save_folders(&cache, &keys, &session_folders(state));
             if !disk.flush(EXIT_WRITE) {
                 tracing::warn!("listing cache writes skipped at exit");
             }
         }
-    });
-    let (settings, _settings_watch) = settings::live(settings_start.finish().loaded);
-    tracing::info!(viewer = view.is_some(), "window opening");
-    run(StartOptions {
-        state,
-        provider: local,
-        on_save,
-        mode: Mode::Light,
-        operations,
-        launcher: launch::launcher(),
-        editor: editor::hooks(|name| std::env::var(name).ok()),
-        files: files::hooks(memory),
-        kinds: rusty_ui::window_view::Kinds::builtin(),
-        drives: drives::hooks(),
-        app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
-        settings,
-        keymap,
-        view: view.and_then(|path| view_location(&path)),
-        listing_cache: cache,
-        cache_keys: keys,
-        shell_menu: shell_menu::provider(),
-    });
+    })
 }
 
 fn listing_cache(
@@ -97,12 +154,7 @@ fn drive_identity(letter: char) -> Option<DriveIdentity> {
     })
 }
 
-fn view_location(path: &std::path::Path) -> Option<Location> {
-    let path = std::path::absolute(path).ok()?;
-    Location::new(path.to_str()?).ok()
-}
-
-pub fn operations(
+pub(crate) fn operations(
     dirs: Option<&StoreDirs>,
     home: &Location,
     ops: &dyn ProviderOps,

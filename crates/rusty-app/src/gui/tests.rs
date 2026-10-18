@@ -82,3 +82,51 @@ fn a_later_instance_leaves_a_live_instances_jobs_alone() {
     assert_eq!(running_jobs(&dirs), 1);
     drop(second);
 }
+
+#[test]
+fn pane_folders_refuse_missing_folders() {
+    let root = tempfile::tempdir().unwrap();
+    let missing = root.path().join("missing");
+    for side in ["--left", "--right"] {
+        let start = crate::cli::Start {
+            left: (side == "--left").then(|| missing.clone()),
+            right: (side == "--right").then(|| missing.clone()),
+            ..Default::default()
+        };
+        let error = super::pane_folders(&start).unwrap_err();
+        assert!(error.contains(side) && error.contains("folder"), "{error}");
+    }
+}
+
+#[test]
+fn pane_folders_refuse_files() {
+    let root = tempfile::tempdir().unwrap();
+    let file = root.path().join("file.txt");
+    std::fs::write(&file, "text").unwrap();
+    let start = crate::cli::Start {
+        left: Some(file),
+        ..Default::default()
+    };
+    let error = super::pane_folders(&start).unwrap_err();
+    assert!(
+        error.contains("--left") && error.contains("folder"),
+        "{error}"
+    );
+}
+
+#[test]
+fn settings_read_is_marked_after_loading_finishes() {
+    let mut completed = None;
+    let _settings = super::finish_settings(|| {
+        completed = Some(std::time::Instant::now());
+        None
+    });
+    let at = crate::metrics::all()
+        .into_iter()
+        .find_map(|(name, at)| (name == "settings read").then_some(at))
+        .unwrap();
+    assert!(
+        at >= completed.unwrap(),
+        "settings marked before completion"
+    );
+}

@@ -6206,6 +6206,7 @@ version = "0.0.1"
 dependencies = [
  "embed-resource",
  "encoding_rs",
+ "insta",
  "rusty-cache",
  "rusty-core",
  "rusty-diag",
@@ -6213,6 +6214,7 @@ dependencies = [
  "rusty-shell",
  "rusty-store",
  "rusty-ui",
+ "serde",
  "serde_json",
  "tempfile",
  "tracing",

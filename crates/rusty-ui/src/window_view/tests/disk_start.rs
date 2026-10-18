@@ -95,6 +95,7 @@ fn open_from_disk(
         listing_cache: cache.with_disk(disk.clone()),
         cache_keys: CacheKeys::default(),
         shell_menu: None,
+        start_watch: None,
     };
     let (window, view) = open_unsettled(cx, options, gpui_kit::px(1000.));
     (window, view, disk)

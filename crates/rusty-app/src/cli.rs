@@ -2,38 +2,97 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Command {
-    Open,
-    View(PathBuf),
+pub(crate) enum Command {
+    Open(Start),
     Version,
     DiagReport(PathBuf),
 }
 
-pub const USAGE: &str = "usage: ferrite [--version | --view <file> | --diag-report <file.zip>]";
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct Start {
+    pub(crate) view: Option<PathBuf>,
+    pub(crate) profile: Option<PathBuf>,
+    pub(crate) metrics: Option<PathBuf>,
+    pub(crate) left: Option<PathBuf>,
+    pub(crate) right: Option<PathBuf>,
+}
+
+pub(crate) const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>]]";
+
+const STANDALONE: [&str; 2] = ["--version", "--diag-report"];
+const WINDOW_FLAGS: [&str; 5] = ["--view", "--profile", "--metrics", "--left", "--right"];
 
 impl Command {
-    pub fn uses_console(&self) -> bool {
-        !matches!(self, Self::Open | Self::View(_))
+    pub(crate) fn uses_console(&self) -> bool {
+        !matches!(self, Self::Open(start) if !start.is_metrics())
     }
 }
 
-pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, &'static str> {
-    let mut args = args.into_iter();
-    let (first, second) = (args.next(), args.next());
-    if args.next().is_some() {
-        return Err(USAGE);
+impl Start {
+    pub(crate) fn is_metrics(&self) -> bool {
+        self.metrics.is_some()
     }
-    match (first, second) {
-        (None, None) => Ok(Command::Open),
-        (Some(flag), None) if flag == "--version" => Ok(Command::Version),
-        (Some(flag), Some(path)) if flag == "--diag-report" && !path.is_empty() => {
-            Ok(Command::DiagReport(path.into()))
+
+    fn slot(&mut self, flag: &str) -> Option<&mut Option<PathBuf>> {
+        match flag {
+            "--view" => Some(&mut self.view),
+            "--profile" => Some(&mut self.profile),
+            "--metrics" => Some(&mut self.metrics),
+            "--left" => Some(&mut self.left),
+            "--right" => Some(&mut self.right),
+            _ => None,
         }
-        (Some(flag), Some(path)) if flag == "--view" && !path.is_empty() => {
-            Ok(Command::View(path.into()))
-        }
-        _ => Err(USAGE),
     }
+}
+
+pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
+    read(args.into_iter()).map_err(|problem| format!("ferrite: {problem}\n{USAGE}"))
+}
+
+fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
+    let mut start = Start::default();
+    let mut is_first = true;
+    while let Some(arg) = args.next() {
+        let flag = arg.to_string_lossy();
+        if STANDALONE.contains(&flag.as_ref()) {
+            if !is_first {
+                return Err(format!("{flag} stands alone"));
+            }
+            return standalone(&flag, args);
+        }
+        is_first = false;
+        let slot = start
+            .slot(&flag)
+            .ok_or_else(|| format!("unknown argument {flag}"))?;
+        if slot.is_some() {
+            return Err(format!("{flag} given twice"));
+        }
+        *slot = Some(value(&flag, args.next())?);
+    }
+    Ok(Command::Open(start))
+}
+
+fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Command, String> {
+    let command = if flag == "--version" {
+        Command::Version
+    } else {
+        Command::DiagReport(value(flag, rest.next())?)
+    };
+    let Some(extra) = rest.next() else {
+        return Ok(command);
+    };
+    let extra = extra.to_string_lossy();
+    if STANDALONE.contains(&extra.as_ref()) || WINDOW_FLAGS.contains(&extra.as_ref()) {
+        Err(format!("{flag} stands alone"))
+    } else {
+        Err(format!("unknown argument {extra}"))
+    }
+}
+
+fn value(flag: &str, next: Option<OsString>) -> Result<PathBuf, String> {
+    next.filter(|value| !value.is_empty() && !value.to_string_lossy().starts_with("--"))
+        .map(PathBuf::from)
+        .ok_or_else(|| format!("{flag} needs a value"))
 }
 
 #[cfg(test)]
