@@ -146,6 +146,47 @@ fn a_file_created_during_a_save_is_kept() {
 }
 
 #[test]
+fn a_sheet_save_after_deletion_restores_all_current_settings() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let db = ledger();
+    let (mut store, _) = SettingsStore::load(&path);
+    store.complete(&db, &Settings::default()).unwrap();
+    let recorded = db.settings_defaults().unwrap();
+    let mut expected = sorted_by(SortKey::Size);
+    expected.appearance.density = Density::Compact;
+    expected.files.hidden_files = HiddenFiles::Hidden;
+    expected.selection.patterns_select_folders = true;
+    expected.terminal.command = Some("terminal --cwd {path}".to_owned());
+    expected.editor.path = Some("editor".to_owned());
+    expected.experimental.insert("preview".to_owned(), true);
+    write(&path, &to_toml(&expected));
+    assert_eq!(store.reload(), LoadReport::default());
+    fs::remove_file(&path).unwrap();
+    assert_eq!(store.reload(), LoadReport::default());
+    let saved = store.save(MODE, Some(text("dark"))).unwrap();
+    assert!(!saved.was_present);
+    expected.appearance.mode = ThemeMode::Dark;
+    let (mut next, report) = SettingsStore::load(&path);
+    assert_eq!(report, LoadReport::default());
+    assert_eq!(next.current(), &expected);
+    assert_eq!(store.current(), &expected);
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        complete_text("", &expected).unwrap().text
+    );
+    assert_eq!(db.settings_defaults().unwrap(), recorded);
+    let mut upgraded = sorted_by(SortKey::Date);
+    upgraded.appearance.font_size = 16;
+    let done = next.complete(&db, &upgraded).unwrap();
+    assert!(done.ledger_error.is_none());
+    assert_eq!(done.changes.len(), 1);
+    assert_eq!(done.changes[0].key, "appearance.font-size");
+    expected.appearance.font_size = 16;
+    assert_eq!(next.current(), &expected);
+}
+
+#[test]
 fn a_sheet_save_on_a_mixed_file_keeps_each_line_ending() {
     let dir = tmp();
     let path = settings_file(&dir);

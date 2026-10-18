@@ -19,6 +19,7 @@ pub struct Loaded {
 }
 
 impl Loaded {
+    #[cfg(test)]
     #[must_use]
     pub fn load(path: &Path) -> Self {
         Self::load_sharing(path, SessionBackup::default())
@@ -79,6 +80,7 @@ impl Starting {
     }
 }
 
+#[cfg(test)]
 #[must_use]
 pub fn start(file: Option<&Path>, ledger: Option<&Path>) -> Started {
     start_sharing(file, ledger, SessionBackup::default())

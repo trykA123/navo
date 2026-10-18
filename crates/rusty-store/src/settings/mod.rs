@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -139,11 +140,14 @@ impl SettingsStore {
             parse(text).map_err(|_| SettingsError::FileInvalid)?;
         }
         let base = text.as_deref();
-        let text = base.unwrap_or_default();
-        let was_present = key_line(text, key).is_some();
-        let patched = edit::patch(text, key, value)?;
+        let was_present = base.is_some_and(|text| key_line(text, key).is_some());
+        let source = match base {
+            Some(text) => Cow::Borrowed(text),
+            None => Cow::Owned(complete::complete_text("", &self.current)?.text),
+        };
+        let patched = edit::patch(&source, key, value)?;
         let (settings, _) = parse(&patched)?;
-        if patched != text {
+        if base != Some(patched.as_str()) {
             self.write(&patched, base)?;
         }
         self.take(settings);

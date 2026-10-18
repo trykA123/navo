@@ -61,6 +61,33 @@ fn every_field_reaches_the_file_and_the_next_start() {
 }
 
 #[test]
+fn a_sheet_save_after_deletion_restores_all_current_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    let settings = hooks(Some(&file));
+    let changes: Vec<_> = FIELDS
+        .iter()
+        .map(|spec| Change {
+            field: spec.field,
+            value: other_value(spec, settings.values.get(spec.field)),
+        })
+        .collect();
+    let report = (settings.save)(&changes);
+    assert_eq!(report.error, None);
+    let change = Change::theme(ThemeChoice::Dark);
+    let expected = report.values.with(&change);
+    fs::remove_file(&file).unwrap();
+    let stored = save(&settings, change).unwrap();
+    let again = hooks(Some(&file));
+    assert!(again.load_error.is_none());
+    assert_eq!(again.values, expected);
+    assert_eq!(stored, expected);
+    for spec in &FIELDS {
+        assert!((again.line_of)(spec.key).is_some(), "{}", spec.key);
+    }
+}
+
+#[test]
 fn the_menu_choices_reach_the_file() {
     let dir = tempfile::tempdir().unwrap();
     let file = file_in(&dir);
