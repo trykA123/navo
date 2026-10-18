@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rusty_core::Location;
@@ -53,8 +54,13 @@ struct Shared {
 
 #[derive(Clone)]
 pub struct DiskListings {
-    jobs: SyncSender<Job>,
+    worker: Arc<Mutex<Worker>>,
     shared: Arc<Shared>,
+}
+
+struct Worker {
+    jobs: Option<SyncSender<Job>>,
+    thread: Option<JoinHandle<()>>,
 }
 
 impl DiskListings {
@@ -67,8 +73,8 @@ impl DiskListings {
         let spawned = std::thread::Builder::new()
             .name("listing-disk".to_owned())
             .spawn(move || run(&path, warm, inbox, &writer_shared));
-        match spawned {
-            Ok(_) => {
+        let thread = match spawned {
+            Ok(thread) => {
                 let left = deadline.saturating_duration_since(Instant::now());
                 let progress = lock(&shared.progress);
                 let _ = shared
@@ -77,13 +83,21 @@ impl DiskListings {
                         !progress.is_loaded && !progress.is_gone
                     })
                     .unwrap_or_else(PoisonError::into_inner);
+                Some(thread)
             }
             Err(error) => {
                 tracing::warn!(%error, "listing cache writer did not start");
                 lock(&shared.progress).is_gone = true;
+                None
             }
+        };
+        Self {
+            worker: Arc::new(Mutex::new(Worker {
+                jobs: Some(jobs),
+                thread,
+            })),
+            shared,
         }
-        Self { jobs, shared }
     }
 
     pub fn save_folders(&self, cache: &ListingCache, keys: &CacheKeys, folders: &[Location]) {
@@ -115,6 +129,27 @@ impl DiskListings {
         !progress.is_gone && progress.finished >= target
     }
 
+    #[must_use]
+    pub fn close(&self, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        let mut worker = lock(&self.worker);
+        worker.jobs.take();
+        let Some(thread) = worker.thread.as_ref() else {
+            return true;
+        };
+        while !thread.is_finished() {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return false;
+            }
+            std::thread::sleep(left.min(Duration::from_millis(5)));
+        }
+        worker
+            .thread
+            .take()
+            .is_none_or(|thread| thread.join().is_ok())
+    }
+
     pub(crate) fn save_open(&self, key: &CacheKey, listing: Arc<CachedListing>) {
         if lock(&self.shared.open).contains(&key.location) {
             self.send(Job::Save {
@@ -141,8 +176,13 @@ impl DiskListings {
     }
 
     fn send(&self, job: Job) {
+        let worker = lock(&self.worker);
         let mut progress = lock(&self.shared.progress);
-        if self.jobs.try_send(job).is_ok() {
+        if worker
+            .jobs
+            .as_ref()
+            .is_some_and(|jobs| jobs.try_send(job).is_ok())
+        {
             progress.accepted += 1;
         }
     }

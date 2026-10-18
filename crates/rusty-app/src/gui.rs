@@ -21,6 +21,7 @@ use crate::{app_menu, drives, editor, files, jobs, keymap, launch, metrics, sett
 
 const START_READ: Duration = Duration::from_millis(50);
 const EXIT_WRITE: Duration = Duration::from_millis(300);
+const EXIT_CLOSE: Duration = Duration::from_secs(1);
 
 pub(crate) struct Launch {
     pub(crate) view: Option<PathBuf>,
@@ -67,7 +68,6 @@ pub(crate) fn open(launch: Launch) {
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
     metrics::mark("listing cache read");
-    let on_save = session_saver(dirs, disk, cache.clone(), keys.clone());
     let (settings, _settings_watch) = finish_settings(|| settings_start.finish().loaded);
     tracing::info!(viewer = launch.view.is_some(), "window opening");
     metrics::mark("window opening");
@@ -75,7 +75,7 @@ pub(crate) fn open(launch: Launch) {
         StartOptions {
             state,
             provider: local,
-            on_save,
+            on_save: session_saver(dirs, disk.clone(), cache.clone(), keys.clone()),
             mode: Mode::Light,
             operations,
             launcher: launch::launcher(),
@@ -92,7 +92,12 @@ pub(crate) fn open(launch: Launch) {
             shell_menu: shell_menu::provider(),
             start_watch: launch.start_watch,
         },
-        Rc::new(move || launch.cleanup.on_quit()),
+        Rc::new(move || {
+            if let Some(disk) = &disk {
+                let _ = disk.close(EXIT_CLOSE);
+            }
+            launch.cleanup.on_quit();
+        }),
     );
 }
 
