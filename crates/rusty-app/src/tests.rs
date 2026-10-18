@@ -16,6 +16,12 @@ fn a_refused_command_never_detects_or_writes_user_folders() {
     assert_eq!(status, ExitCode::from(2));
     assert!(!detected.get(), "a refused command detected user folders");
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    let missing = root.path().join("missing");
+    let status = super::execute([OsString::from("--left"), missing.into_os_string()], || {
+        panic!("a refused pane detected user folders")
+    });
+    assert_eq!(status, ExitCode::from(2));
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
 }
 
 #[test]

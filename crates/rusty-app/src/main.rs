@@ -32,6 +32,7 @@ use std::time::Instant;
 use cli::{Command, Start};
 use metrics::ProcessClock;
 use profile::Profile;
+use rusty_core::Location;
 use rusty_store::StoreDirs;
 
 fn main() -> ExitCode {
@@ -43,7 +44,6 @@ fn execute(
     detect: impl FnOnce() -> Option<StoreDirs>,
 ) -> ExitCode {
     let started = Instant::now();
-    let clock = ProcessClock::detect(started, metrics::process_age);
     metrics::mark("main");
     let parsed = cli::parse(args);
     if parsed.as_ref().map_or(true, Command::uses_console) {
@@ -56,15 +56,27 @@ fn execute(
             return ExitCode::from(2);
         }
     };
-    execute_command(command, started, clock, detect)
+    let panes = match &command {
+        Command::Open(start) => match gui::pane_folders(start) {
+            Ok(panes) => panes,
+            Err(message) => {
+                console::attach();
+                eprintln!("ferrite: {message}\n{}", cli::USAGE);
+                return ExitCode::from(2);
+            }
+        },
+        _ => [None, None],
+    };
+    execute_command(command, panes, started, detect)
 }
 
 fn execute_command(
     command: Command,
+    panes: [Option<Location>; 2],
     started: Instant,
-    clock: ProcessClock,
     detect: impl FnOnce() -> Option<StoreDirs>,
 ) -> ExitCode {
+    let clock = ProcessClock::detect(started, metrics::process_age);
     let profile = match &command {
         Command::Open(start) => profile::choose(start, detect),
         _ => Ok(Profile::User(detect())),
@@ -80,7 +92,7 @@ fn execute_command(
     logging::log_start();
     metrics::mark("logging ready");
     match command {
-        Command::Open(start) => open_window(start, &profile, clock),
+        Command::Open(start) => open_window(start, panes, &profile, clock),
         Command::Version => {
             println!("ferrite {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
@@ -102,14 +114,12 @@ fn execute_command(
     }
 }
 
-fn open_window(start: Start, profile: &Profile, clock: ProcessClock) -> ExitCode {
-    let panes = match gui::pane_folders(&start) {
-        Ok(panes) => panes,
-        Err(message) => {
-            eprintln!("ferrite: {message}\n{}", cli::USAGE);
-            return ExitCode::from(2);
-        }
-    };
+fn open_window(
+    start: Start,
+    panes: [Option<Location>; 2],
+    profile: &Profile,
+    clock: ProcessClock,
+) -> ExitCode {
     let run = start
         .metrics
         .clone()

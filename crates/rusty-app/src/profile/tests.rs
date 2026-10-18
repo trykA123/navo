@@ -101,3 +101,23 @@ fn explicit_cleanup_keeps_a_given_profile() {
     profile.cleanup().run().unwrap();
     assert!(dirs.config.exists() && dirs.data.exists());
 }
+
+#[test]
+fn cleanup_retries_after_a_transient_removal_failure() {
+    let profile = choose(&metrics(), never_detect).unwrap();
+    let dirs = profile.dirs().cloned().unwrap();
+    dirs.ensure().unwrap();
+    let mut attempts = 0;
+    profile
+        .cleanup()
+        .run_with(|path| {
+            attempts += 1;
+            if attempts == 1 {
+                return Err(std::io::ErrorKind::PermissionDenied.into());
+            }
+            std::fs::remove_dir_all(path)
+        })
+        .unwrap();
+    assert_eq!(attempts, 2);
+    assert!(!dirs.config.exists() && !dirs.data.exists());
+}

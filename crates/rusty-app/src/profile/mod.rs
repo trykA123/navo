@@ -1,5 +1,6 @@
 use std::io;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use rusty_store::StoreDirs;
 use tempfile::TempDir;
@@ -17,18 +18,32 @@ pub(crate) struct Cleanup(Option<Rc<TempDir>>);
 
 impl Cleanup {
     pub(crate) fn on_quit(&self) {
-        if let Err(error) = self.run() {
-            eprintln!("ferrite: cannot remove the temporary profile: {error}");
-        }
+        let _ = self.run();
     }
 
     pub(crate) fn run(&self) -> io::Result<()> {
+        self.run_with(|path| std::fs::remove_dir_all(path))
+    }
+
+    fn run_with(
+        &self,
+        mut remove: impl FnMut(&std::path::Path) -> io::Result<()>,
+    ) -> io::Result<()> {
         let Some(folder) = &self.0 else {
             return Ok(());
         };
-        match std::fs::remove_dir_all(folder.path()) {
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            result => result,
+        let deadline = Instant::now() + Duration::from_secs(1);
+        loop {
+            let error = match remove(folder.path()) {
+                Ok(()) => return Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+                Err(error) => error,
+            };
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(error);
+            }
+            std::thread::sleep(left.min(Duration::from_millis(25)));
         }
     }
 }
