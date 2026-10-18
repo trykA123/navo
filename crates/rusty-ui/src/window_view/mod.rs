@@ -15,6 +15,7 @@ mod settings_news;
 mod settings_save;
 mod settings_sheet;
 mod shell_menu;
+mod start_watch;
 mod status;
 mod tab_keys;
 mod user_keymap;
@@ -55,6 +56,7 @@ pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use start_watch::{StartReport, StartWatch};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -85,10 +87,19 @@ pub struct StartOptions {
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
     pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
+    pub start_watch: Option<StartWatch>,
 }
 
-pub fn run(options: StartOptions) {
+pub fn run(mut options: StartOptions, on_quit: Rc<dyn Fn()>) {
     crate::application().run(move |cx| {
+        cx.on_app_quit(move |_| {
+            let on_quit = on_quit.clone();
+            async move { on_quit() }
+        })
+        .detach();
+        if let Some(watch) = options.start_watch.as_mut() {
+            watch.mark("app running");
+        }
         let _ = crate::init(options.mode, cx);
         bind_app_keys(cx);
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
@@ -137,6 +148,7 @@ pub struct FerriteWindow {
     preview: preview::Preview,
     job_ui: jobs::JobUi,
     keymap: user_keymap::KeymapState,
+    start: Option<start_watch::Watching>,
     _activation: Subscription,
     _appearance: Subscription,
     _watch: Subscription,
@@ -152,9 +164,8 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let provider = options.provider.clone();
         let (values, saver, settings) = settings_sheet::SettingsPanel::split(options.settings, cx);
-        let mut browser = Browser::new(options.state, options.provider, Self::waker(cx));
+        let mut browser = Browser::new(options.state, options.provider.clone(), Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
@@ -171,7 +182,7 @@ impl FerriteWindow {
             kinds: options.kinds,
             viewer: None,
             next_prompt: 0,
-            provider,
+            provider: options.provider,
             drives: drives::Drives::new(options.drives),
             drive_menu: None,
             menu_focus: cx.focus_handle(),
@@ -191,6 +202,7 @@ impl FerriteWindow {
             preview: preview::Preview::new(Self::waker(cx), cx),
             job_ui: jobs::JobUi::default(),
             keymap: user_keymap::KeymapState::default(),
+            start: options.start_watch.map(start_watch::Watching::built),
             _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
                 view.follow_cursor(window, cx);
             }),
@@ -378,6 +390,7 @@ impl FerriteWindow {
 
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.watch_start(window, cx);
         let t = tokens::current(cx).clone();
         let gradient = system_backdrop().gradient;
         let below_title_bar = div()

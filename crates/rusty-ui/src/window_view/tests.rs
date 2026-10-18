@@ -19,6 +19,7 @@ mod app_menu_save;
 mod applied;
 mod cached;
 mod cards;
+mod delete_dialog;
 mod disk_start;
 mod drive_fs;
 mod drives;
@@ -31,6 +32,7 @@ mod settings_news;
 mod settings_sheet;
 mod shell_menu;
 pub(in crate::window_view) mod shortcuts;
+mod start_watch;
 mod tabs;
 mod typed;
 mod watched;
@@ -98,6 +100,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
+        start_watch: None,
     }
 }
 
@@ -498,6 +501,7 @@ fn editor_window(
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
+        start_watch: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, log)
@@ -624,6 +628,7 @@ fn viewer_window(
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
+        start_watch: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, written)

@@ -134,6 +134,17 @@ fn search_finds_the_command_bound_to_a_key() {
 }
 
 #[test]
+fn a_key_search_takes_modifiers_in_any_order_and_spaces() {
+    let rows = rows(Keymap::builtin());
+    for typed in ["f5 ctrl", "F5+CTRL", "ctrl - f5", "ctrl f5", " f5-ctrl "] {
+        assert_eq!(shown(&rows, typed), ["files.sort_by_date"], "{typed}");
+    }
+    let tab = ["tab.previous"];
+    assert_eq!(shown(&rows, "shift+ctrl+tab"), tab);
+    assert_eq!(shown(&rows, "tab shift ctrl"), tab);
+}
+
+#[test]
 fn areas_read_as_words() {
     assert_eq!(area_label("app_menu"), "App menu");
     assert_eq!(area_label("files"), "Files");

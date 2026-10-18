@@ -69,7 +69,7 @@ pub(super) struct SettingsPanel {
 
 impl SettingsPanel {
     pub(super) fn split(hooks: SettingsHooks, cx: &mut App) -> (Values, Saver, Self) {
-        let saver = Saver::new(hooks.save, hooks.load_error);
+        let saver = Saver::new(hooks.save, hooks.load_error, hooks.values.clone());
         (
             hooks.values,
             saver,

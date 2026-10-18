@@ -100,3 +100,17 @@ impl super::Settings {
         }
     }
 }
+
+pub(super) fn key_source(text: &str, key: &str) -> Result<Option<(String, String)>, SettingsError> {
+    let plain = text.strip_prefix(BOM).unwrap_or(text);
+    let document: DocumentMut = plain.parse().map_err(|_| SettingsError::FileInvalid)?;
+    let item = key
+        .split('.')
+        .try_fold(document.as_item(), |item, name| item.get(name));
+    Ok(item.map(|item| {
+        let line = key_line(text, key)
+            .and_then(|line| text.lines().nth(line - 1))
+            .unwrap_or_default();
+        (line.to_owned(), item.to_string())
+    }))
+}
