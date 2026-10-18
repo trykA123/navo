@@ -77,7 +77,7 @@ struct Query {
 impl Query {
     fn new(text: &str) -> Self {
         let text = text.trim().to_lowercase();
-        let key = normal_key(&text.replace('+', "-"));
+        let key = chord(&text).or_else(|| normal_key(&text.replace('+', "-")));
         Self { text, key }
     }
 
@@ -97,6 +97,30 @@ impl Query {
         }
         shown(key).is_some_and(|text| text.to_lowercase() == self.text)
     }
+}
+
+const MODIFIERS: [&str; 8] = [
+    "ctrl",
+    "alt",
+    "shift",
+    "fn",
+    "cmd",
+    "super",
+    "win",
+    "secondary",
+];
+
+fn chord(text: &str) -> Option<String> {
+    let (modifiers, keys): (Vec<&str>, Vec<&str>) = text
+        .split(|c: char| c == '+' || c == '-' || c.is_whitespace())
+        .filter(|part| !part.is_empty())
+        .partition(|part| MODIFIERS.contains(part));
+    let [key] = keys.as_slice() else {
+        return None;
+    };
+    let mut parts = modifiers;
+    parts.push(key);
+    normal_key(&parts.join("-"))
 }
 
 #[must_use]
