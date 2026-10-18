@@ -1,27 +1,38 @@
 use std::path::{Path, PathBuf};
-use std::thread::JoinHandle;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::time::Duration;
 
-use rusty_store::{Db, DefaultChange, LoadReport, Settings, SettingsStore, StoreDirs};
+use rusty_store::{
+    Db, DefaultChange, LoadReport, SessionBackup, Settings, SettingsStore, StoreDirs,
+};
 
 use super::{describe, report};
 
 const LEDGER: &str = "ferrite.db";
+const WAIT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
 pub struct Loaded {
     pub path: PathBuf,
     pub store: SettingsStore,
     pub report: LoadReport,
+    pub(super) late: Option<Receiver<Started>>,
 }
 
 impl Loaded {
+    #[cfg(test)]
     #[must_use]
     pub fn load(path: &Path) -> Self {
-        let (store, report) = SettingsStore::load(path);
+        Self::load_sharing(path, SessionBackup::default())
+    }
+
+    fn load_sharing(path: &Path, backup: SessionBackup) -> Self {
+        let (store, report) = SettingsStore::load_sharing(path, backup);
         Self {
             path: path.to_owned(),
             store,
             report,
+            late: None,
         }
     }
 }
@@ -33,36 +44,67 @@ pub struct Started {
 }
 
 pub struct Starting {
-    handle: JoinHandle<Started>,
+    receiver: Receiver<Started>,
     file: Option<PathBuf>,
+    backup: SessionBackup,
+    wait: Duration,
 }
 
 impl Starting {
     #[must_use]
     pub fn finish(self) -> Started {
-        let started = self.handle.join().unwrap_or_else(|_| {
-            tracing::warn!("settings start failed; loading the file as it is");
-            Started {
-                loaded: self.file.as_deref().map(Loaded::load),
-                default_changes: Vec::new(),
+        let started = match self.receiver.recv_timeout(self.wait) {
+            Ok(started) => started,
+            Err(RecvTimeoutError::Timeout) => {
+                tracing::warn!("settings completion is slow; loading the file as it is");
+                self.into_fallback(true)
             }
-        });
+            Err(RecvTimeoutError::Disconnected) => {
+                tracing::warn!("settings start failed; loading the file as it is");
+                self.into_fallback(false)
+            }
+        };
         tracing::info!(
             followed = started.default_changes.len(),
             "settings defaults checked"
         );
         started
     }
+
+    fn into_fallback(self, pending: bool) -> Started {
+        let mut loaded = self
+            .file
+            .as_deref()
+            .map(|file| Loaded::load_sharing(file, self.backup.clone()));
+        if let Some(loaded) = &mut loaded {
+            loaded.late = pending.then_some(self.receiver);
+        }
+        Started {
+            loaded,
+            default_changes: Vec::new(),
+        }
+    }
 }
 
+#[cfg(test)]
 #[must_use]
 pub fn start(file: Option<&Path>, ledger: Option<&Path>) -> Started {
+    start_sharing(file, ledger, SessionBackup::default())
+}
+
+pub(super) fn start_sharing(
+    file: Option<&Path>,
+    ledger: Option<&Path>,
+    backup: SessionBackup,
+) -> Started {
     let Some(file) = file else {
         return Started::default();
     };
-    let mut loaded = Loaded::load(file);
+    let mut loaded = Loaded::load_sharing(file, backup);
     let default_changes = match ledger {
-        Some(ledger) if loaded.report.error.is_none() => complete(&mut loaded.store, ledger),
+        Some(ledger) if loaded.report.error.is_none() => {
+            follow_defaults(&mut loaded.store, ledger, &Settings::default())
+        }
         _ => Vec::new(),
     };
     Started {
@@ -82,11 +124,39 @@ pub fn start_from(dirs: Option<&StoreDirs>) -> Starting {
 #[must_use]
 pub fn start_in_background(file: Option<PathBuf>, ledger: Option<PathBuf>) -> Starting {
     let worker_file = file.clone();
-    let handle = std::thread::spawn(move || start(worker_file.as_deref(), ledger.as_deref()));
-    Starting { handle, file }
+    spawn(file, WAIT, move |backup| {
+        start_sharing(worker_file.as_deref(), ledger.as_deref(), backup)
+    })
 }
 
-fn complete(store: &mut SettingsStore, ledger: &Path) -> Vec<DefaultChange> {
+pub(super) fn spawn(
+    file: Option<PathBuf>,
+    wait: Duration,
+    work: impl FnOnce(SessionBackup) -> Started + Send + 'static,
+) -> Starting {
+    let backup = SessionBackup::default();
+    let shared = backup.clone();
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let started = work(shared);
+        let followed = started.default_changes.len();
+        if sender.send(started).is_err() {
+            tracing::info!(followed, "settings completion finished after the start");
+        }
+    });
+    Starting {
+        receiver,
+        file,
+        backup,
+        wait,
+    }
+}
+
+pub(super) fn follow_defaults(
+    store: &mut SettingsStore,
+    ledger: &Path,
+    defaults: &Settings,
+) -> Vec<DefaultChange> {
     let db = match Db::open(ledger, false) {
         Ok((db, _)) => db,
         Err(error) => {
@@ -94,8 +164,16 @@ fn complete(store: &mut SettingsStore, ledger: &Path) -> Vec<DefaultChange> {
             return Vec::new();
         }
     };
-    match store.complete(&db, &Settings::default()) {
-        Ok(done) => done.changes,
+    match store.complete(&db, defaults) {
+        Ok(done) => {
+            if let Some(error) = &done.durability_error {
+                report(&describe(error));
+            }
+            if let Some(error) = &done.ledger_error {
+                report(&describe(error));
+            }
+            done.changes
+        }
         Err(error) => {
             report(&describe(&error));
             Vec::new()

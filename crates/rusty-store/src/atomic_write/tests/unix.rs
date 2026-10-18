@@ -42,3 +42,16 @@ fn read_only_folder_keeps_the_target_unchanged() {
     let _ = write_atomic(&target, b"new");
     assert_eq!(fs::read(&target).unwrap(), b"old");
 }
+
+#[test]
+fn every_write_keeps_the_file_mode() {
+    let dir = tmp();
+    let target = dir.path().join("settings.toml");
+    fs::write(&target, b"old").unwrap();
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+    write_atomic(&target, b"new").unwrap();
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&target), 0o600);
+    replace_atomic(&target, b"newer").unwrap();
+    assert_eq!(mode(&target), 0o600);
+}

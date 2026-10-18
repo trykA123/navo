@@ -79,17 +79,17 @@ pub fn parse_mem_total(meminfo: &str) -> Option<u64> {
 }
 
 #[cfg(target_os = "linux")]
-fn probe() -> Box<dyn MemoryProbe> {
+pub fn probe() -> Box<dyn MemoryProbe> {
     Box::new(rusty_diag::ProcStatusProbe)
 }
 
 #[cfg(windows)]
-fn probe() -> Box<dyn MemoryProbe> {
+pub fn probe() -> Box<dyn MemoryProbe> {
     Box::new(crate::windows_memory::WindowsProbe)
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
-fn probe() -> Box<dyn MemoryProbe> {
+pub fn probe() -> Box<dyn MemoryProbe> {
     Box::new(rusty_diag::FakeProbe(
         Err(io::ErrorKind::Unsupported.into()),
     ))

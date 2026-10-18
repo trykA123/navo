@@ -1,12 +1,13 @@
 use std::fs;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use rusty_store::{Settings, SettingsStore, ThemeMode};
 use rusty_ui::settings::{Change, Control, FIELDS, Field, Value, Values};
 use rusty_ui::tokens::{Density, ThemeChoice};
-use rusty_ui::window_view::SettingsHooks;
+use rusty_ui::window_view::{SettingsHooks, SettingsNews};
 
-use super::{Loaded, values_of};
+use super::{Loaded, Reloader, values_of};
 
 fn hooks(path: Option<&Path>) -> SettingsHooks {
     super::hooks(path.map(Loaded::load))
@@ -56,6 +57,33 @@ fn every_field_reaches_the_file_and_the_next_start() {
         let again = hooks(Some(&file));
         assert_eq!(again.values.get(spec.field), &value, "{}", spec.key);
         assert!(again.load_error.is_none(), "{}", spec.key);
+    }
+}
+
+#[test]
+fn a_sheet_save_after_deletion_restores_all_current_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    let settings = hooks(Some(&file));
+    let changes: Vec<_> = FIELDS
+        .iter()
+        .map(|spec| Change {
+            field: spec.field,
+            value: other_value(spec, settings.values.get(spec.field)),
+        })
+        .collect();
+    let report = (settings.save)(&changes);
+    assert_eq!(report.error, None);
+    let change = Change::theme(ThemeChoice::Dark);
+    let expected = report.values.with(&change);
+    fs::remove_file(&file).unwrap();
+    let stored = save(&settings, change).unwrap();
+    let again = hooks(Some(&file));
+    assert!(again.load_error.is_none());
+    assert_eq!(again.values, expected);
+    assert_eq!(stored, expected);
+    for spec in &FIELDS {
+        assert!((again.line_of)(spec.key).is_some(), "{}", spec.key);
     }
 }
 
@@ -212,4 +240,44 @@ fn undo_of_a_key_that_was_not_in_the_file_removes_it() {
     assert_eq!(report.values.theme(), ThemeChoice::System);
     let text = fs::read_to_string(&file).unwrap();
     assert!(!text.contains("mode"), "{text}");
+}
+
+#[test]
+fn saves_and_reloads_carry_a_rising_generation() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(&file, "[appearance]\nmode = \"light\"\n").unwrap();
+    let (store, _) = SettingsStore::load(&file);
+    let store = Arc::new(Mutex::new(store));
+    let mut reloader = Reloader::new(store.clone(), None);
+    let first = super::save(&store, &[Change::theme(ThemeChoice::Dark)]);
+    fs::write(&file, "[appearance]\nmode = \"light\"\n").unwrap();
+    let Some(SettingsNews::Applied { generation, .. }) = reloader.reload() else {
+        panic!("the hand edit applies");
+    };
+    assert!(generation > first.generation);
+    let second = super::save(&store, &[Change::density(Density::Compact)]);
+    assert!(second.generation > generation);
+}
+
+#[test]
+fn a_sheet_save_is_refused_while_the_file_on_disk_is_broken() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(&file, "[appearance]\ndensity = \"compact\"\n").unwrap();
+    let settings = hooks(Some(&file));
+    let broken = "[appearance]\ndensity = \n";
+    fs::write(&file, broken).unwrap();
+    let report = (settings.save)(&[Change::theme(ThemeChoice::Dark)]);
+    assert_eq!(report.failed, [Field::Theme]);
+    let message = report.error.unwrap();
+    assert!(message.contains("invalid"), "{message}");
+    assert_eq!(report.values.density(), Density::Compact);
+    assert_eq!(report.values.theme(), ThemeChoice::System);
+    assert_eq!(fs::read_to_string(&file).unwrap(), broken);
+    assert!(!rusty_store::backup_path(&file).exists());
+    fs::write(&file, "[appearance]\ndensity = \"compact\"\n").unwrap();
+    let fixed = (settings.save)(&[Change::theme(ThemeChoice::Dark)]);
+    assert_eq!(fixed.error, None);
+    assert_eq!(fixed.values.theme(), ThemeChoice::Dark);
 }

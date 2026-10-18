@@ -364,3 +364,35 @@ fn flush_reports_a_writer_that_could_not_open_its_file() {
     let disk = DiskListings::open(dir.path(), warm(&ListingCache::default(), &keys, vec![]));
     assert!(!disk.flush(PATIENT));
 }
+
+#[test]
+fn close_joins_the_writer_and_releases_its_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = db_in(&dir);
+    let keys = serial_keys(42);
+    let (cache, disk) = writing_cache(&path, &keys);
+    let other = disk.clone();
+    let work = folder(r"C:\work");
+    cache.keep_on_disk([&work]);
+    put_and_persist(&cache, &settled(&keys, &work), listing(&["a"]));
+    assert!(disk.close(Duration::from_secs(1)));
+    assert!(other.close(Duration::ZERO));
+    let renamed = dir.path().join("closed.db");
+    std::fs::rename(&path, &renamed).unwrap();
+    std::fs::remove_file(&renamed).unwrap();
+    cache.persist(&settled(&keys, &work));
+    assert!(!path.exists());
+}
+
+#[test]
+fn close_is_bounded_and_can_finish_after_a_stalled_writer_is_released() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = serial_keys(42);
+    let disk = DiskListings::open(&db_in(&dir), warm(&ListingCache::default(), &keys, vec![]));
+    let release = disk.stall();
+    let started = Instant::now();
+    assert!(!disk.close(Duration::from_millis(30)));
+    assert!(started.elapsed() < Duration::from_secs(1));
+    release.send(()).unwrap();
+    assert!(disk.close(Duration::from_secs(1)));
+}
