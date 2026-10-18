@@ -105,6 +105,57 @@ jobs:
             Write-Output "share $unc is not reachable, UNC timing skipped"
           }
 
+  perf-windows:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: build-windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ferrite-windows-x64-${{ github.sha }}
+          path: ${{ runner.temp }}/ferrite-perf/bin
+      - name: Generate fixed two-pane fixture
+        run: |
+          $perfRoot = Join-Path $env:RUNNER_TEMP 'ferrite-perf'
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "PERF_ROOT=$perfRoot"
+          New-Item -ItemType Directory -Force -Path "$perfRoot/reports" | Out-Null
+          cargo xtask perf-fixture "$perfRoot/fixture"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: First launch
+        timeout-minutes: 2
+        run: |
+          & "$env:PERF_ROOT/bin/ferrite.exe" --metrics "$env:PERF_ROOT/reports/first.json" --left "$env:PERF_ROOT/fixture/A" --right "$env:PERF_ROOT/fixture/B" --profile "$env:PERF_ROOT/profiles/first" | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path -LiteralPath "$env:PERF_ROOT/reports/first.json")) { throw 'first report missing' }
+      - name: Five warm launches
+        timeout-minutes: 3
+        run: |
+          foreach ($i in 1..5) {
+            & "$env:PERF_ROOT/bin/ferrite.exe" --metrics "$env:PERF_ROOT/reports/warm-$i.json" --left "$env:PERF_ROOT/fixture/A" --right "$env:PERF_ROOT/fixture/B" --profile "$env:PERF_ROOT/profiles/warm-$i" | Out-Host
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (!(Test-Path -LiteralPath "$env:PERF_ROOT/reports/warm-$i.json")) { throw "warm-$i report missing" }
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: ferrite-perf-windows-${{ github.sha }}
+          path: ${{ runner.temp }}/ferrite-perf/reports/*.json
+          if-no-files-found: error
+      - name: Performance summary and regression guard
+        if: always()
+        run: |
+          cargo xtask perf-summary "$env:PERF_ROOT/reports" "$env:GITHUB_STEP_SUMMARY"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   build-linux:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

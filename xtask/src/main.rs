@@ -8,6 +8,7 @@
 mod binsize;
 mod coverage;
 mod gate;
+mod perf;
 mod size;
 
 use std::process::ExitCode;
@@ -20,8 +21,12 @@ fn main() -> ExitCode {
         Some("coverage") => coverage::run(rest),
         Some("binsize") => binsize::run(rest),
         Some("gate") => gate::run(rest),
+        Some("perf-fixture") => perf::fixture(rest),
+        Some("perf-summary") => perf::summary(rest),
         _ => {
-            eprintln!("usage: cargo xtask <size | coverage | binsize <path> | gate [--coverage]>");
+            eprintln!(
+                "usage: cargo xtask <size | coverage | binsize <path> | gate [--coverage] | perf-fixture <dir> | perf-summary <reports-dir> <summary-file>>"
+            );
             ExitCode::from(2)
         }
     }
