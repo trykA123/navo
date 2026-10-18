@@ -40,9 +40,9 @@ impl Keys {
     }
 
     fn activate(&self, window: &mut Window, cx: &mut App) {
-        if self.cancel.is_focused(window) {
+        if self.cancel.contains_focused(window, cx) {
             self.cancel(window, cx);
-        } else if self.can_confirm && self.confirm.is_focused(window) {
+        } else if self.can_confirm && self.confirm.contains_focused(window, cx) {
             self.confirm(window, cx);
         }
     }

@@ -19,6 +19,7 @@ mod app_menu_save;
 mod applied;
 mod cached;
 mod cards;
+mod delete_dialog;
 mod disk_start;
 mod drive_fs;
 mod drives;
