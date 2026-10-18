@@ -368,6 +368,10 @@ impl ShortcutsPage {
 
 #[cfg(test)]
 impl ShortcutsPage {
+    pub(crate) fn query(&self) -> &str {
+        &self.query
+    }
+
     pub(crate) fn visible(&self) -> Vec<&'static str> {
         self.named_lines()
             .into_iter()

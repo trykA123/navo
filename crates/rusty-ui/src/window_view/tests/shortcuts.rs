@@ -171,6 +171,25 @@ impl Rig {
         settle(cx, &self.view);
     }
 
+    fn type_keys(&self, cx: &mut TestAppContext, text: &str) {
+        for character in text.chars() {
+            let key = match character {
+                '+' => "shift-=->+".to_owned(),
+                ' ' => "space".to_owned(),
+                upper if upper.is_ascii_uppercase() => {
+                    format!("shift-{}", upper.to_ascii_lowercase())
+                }
+                other => other.to_string(),
+            };
+            self.press(cx, &key);
+        }
+    }
+
+    fn query(&self, cx: &mut TestAppContext) -> String {
+        self.page(cx)
+            .read_with(cx, |page, _| page.query().to_owned())
+    }
+
     fn click(&self, cx: &mut TestAppContext, id: impl Into<ElementId>) {
         let id = id.into();
         cx.update_window(self.window, |_, window, cx| {
@@ -323,6 +342,30 @@ fn search_finds_the_command_bound_to_a_typed_key(cx: &mut TestAppContext) {
     rig.open_page(cx);
     rig.type_text(cx, "ctrl+f5");
     assert_eq!(rig.visible(cx), ["files.sort_by_date"]);
+}
+
+#[gpui_kit::test]
+fn keys_typed_as_on_a_keyboard_land_in_the_search(cx: &mut TestAppContext) {
+    for typed in ["ctrl+f5", "Ctrl+F5", "f5 ctrl", "ctrl - f5", "F5+CTRL"] {
+        let rig = rig(cx);
+        rig.open_page(cx);
+        rig.type_keys(cx, typed);
+        assert_eq!(rig.query(cx), typed);
+        assert_eq!(rig.visible(cx), ["files.sort_by_date"], "{typed}");
+    }
+}
+
+#[gpui_kit::test]
+fn a_plus_typed_in_the_search_leaves_the_pane_alone(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.open_page(cx);
+    rig.type_keys(cx, "+-*");
+    assert_eq!(rig.query(cx), "+-*");
+    assert!(!rig.view.read_with(cx, |view, _| view.prompt.is_some()));
+    let marked = rig.view.read_with(cx, |view, _| {
+        view.browser.state().active_tab().selection().marked()
+    });
+    assert!(marked.is_empty());
 }
 
 #[gpui_kit::test]
