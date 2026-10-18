@@ -6405,6 +6405,7 @@ dependencies = [
  "tree-sitter-xml",
  "ts-parser-perl",
  "ttf-parser",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

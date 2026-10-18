@@ -37,7 +37,7 @@ use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::prelude::*;
 use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
-use crate::title_bar::{FerriteTitleBar, HAS_SYSTEM_MICA, HeaderSearch};
+use crate::title_bar::{FerriteTitleBar, GradientLayer, HeaderSearch, system_backdrop};
 use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
@@ -379,12 +379,13 @@ impl FerriteWindow {
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
+        let gradient = system_backdrop().gradient;
         let below_title_bar = div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
-            .when(HAS_SYSTEM_MICA, |below| below.bg(t.surfaces.mica()))
+            .when(gradient == GradientLayer::BelowTitleBar, |below| below.bg(t.surfaces.mica()))
             .child(self.body_area(window, cx))
             .child(self.fkey_bar(window, cx));
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
@@ -394,7 +395,7 @@ impl Render for FerriteWindow {
             .flex()
             .flex_col()
             .size_full()
-            .when(!HAS_SYSTEM_MICA, |root| root.bg(t.surfaces.mica()))
+            .when(gradient == GradientLayer::Root, |root| root.bg(t.surfaces.mica()))
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
