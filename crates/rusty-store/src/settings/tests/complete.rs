@@ -429,10 +429,83 @@ fn a_removed_nested_section_is_noted_at_its_own_header() {
     );
 }
 
+fn header_above<'a>(text: &'a str, line: &str) -> &'a str {
+    let at = text
+        .find(line)
+        .unwrap_or_else(|| panic!("{line:?} missing from {text}"));
+    text[..at]
+        .lines()
+        .rev()
+        .find(|l| l.starts_with('['))
+        .unwrap_or_default()
+}
+
+fn line_after<'a>(text: &'a str, line: &str) -> Option<&'a str> {
+    let at = text.find(line)? + line.len();
+    text[at..].lines().nth(1)
+}
+
 #[test]
-fn a_trailing_comment_stays_last() {
-    let before = "[files]\nsort = \"size\"\n# the end\n";
+fn a_trailing_comment_stays_under_its_own_section() {
+    for (before, comment) in [
+        ("[files]\nsort = \"size\"\n# the end\n", "# the end"),
+        ("[files]\nsort = \"size\"\n# the end", "# the end"),
+        (
+            "[files]\nsort = \"size\"\n# sort-descending = true\n",
+            "# sort-descending = true",
+        ),
+        (
+            "[files]\nsort = \"size\"\n\n# folders-first = false\n# old\n",
+            "# folders-first = false\n# old",
+        ),
+    ] {
+        let after = completed(before);
+        assert!(after.starts_with("[files]\nsort = \"size\"\n"), "{after}");
+        assert_eq!(header_above(&after, comment), "[files]", "{after}");
+        let next = line_after(&after, comment);
+        assert!(next.is_none_or(str::is_empty), "{after}");
+        assert_eq!(after.matches(comment).count(), 1, "{after}");
+        assert!(parse(&after).is_ok(), "{after}");
+    }
+}
+
+#[test]
+fn a_trailing_comment_under_the_last_section_stays_last_when_no_section_is_added() {
+    let before = format!(
+        "{}# the end\n",
+        FULL.replace("sort-descending = false\n", "")
+    );
+    let after = completed(&before);
+    assert!(after.contains("sort-descending = false\n"), "{after}");
+    assert!(
+        after.ends_with("provider = \"windows-terminal\"\n# the end\n"),
+        "{after}"
+    );
+}
+
+#[test]
+fn a_mixed_file_keeps_each_line_ending_and_new_lines_take_the_first_one() {
+    let before = "# mine\n[files]\r\nsort = \"size\"\r\n";
     let after = completed(before);
-    assert!(after.starts_with("[files]\nsort = \"size\"\n"), "{after}");
-    assert!(after.ends_with("\n# the end\n"), "{after}");
+    assert!(after.starts_with(before), "{after:?}");
+    let added = &after[before.len()..];
+    assert!(!added.is_empty());
+    assert!(!added.contains('\r'), "{after:?}");
+    let crlf_first = "# mine\r\n[files]\nsort = \"size\"\n";
+    let after = completed(crlf_first);
+    assert!(after.starts_with(crlf_first), "{after:?}");
+    let added = &after[crlf_first.len()..];
+    assert_eq!(
+        added.matches("\r\n").count(),
+        added.matches('\n').count(),
+        "{after:?}"
+    );
+}
+
+#[test]
+fn an_upgrade_in_a_mixed_file_keeps_the_line_ending_of_the_changed_line() {
+    let ledger = ledger_of(&[("files.sort", "\"name\"")]);
+    let before = "# mine\n[files]\r\nsort = \"name\"\r\n";
+    let done = upgrade_text(before, &ledger, &sorted_by_date()).unwrap();
+    assert_eq!(done.text, "# mine\n[files]\r\nsort = \"date\"\r\n");
 }

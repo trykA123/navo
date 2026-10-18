@@ -9,7 +9,7 @@ use crate::status_bar::StatusNotice;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SettingsNews {
-    Applied(Values),
+    Applied { values: Values, generation: u64 },
     Invalid(String),
 }
 
@@ -64,9 +64,12 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         match news {
-            SettingsNews::Applied(values) => {
+            SettingsNews::Applied { values, generation } => {
+                if self.saver.is_stale(generation) {
+                    return;
+                }
                 self.saver.disk_valid();
-                let fresh = self.saver.over_pending(values);
+                let fresh = self.saver.on_disk(values, generation);
                 if fresh != self.values {
                     self.set_values(fresh, window, cx);
                     self.saver.count_disk_apply();

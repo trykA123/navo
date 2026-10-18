@@ -16,7 +16,7 @@ mod start;
 pub use reload::Reloader;
 pub use start::{Loaded, start_from};
 #[cfg(test)]
-use start::{start, start_in_background};
+use start::{follow_defaults, spawn, start, start_in_background, start_sharing};
 
 const FILE: &str = "ferrite.toml";
 
@@ -41,20 +41,22 @@ pub fn live(loaded: Option<Loaded>) -> (SettingsHooks, Option<Watch>) {
 }
 
 pub fn watched(
-    loaded: Option<Loaded>,
-    mut on_news: impl FnMut(SettingsNews) + Send + 'static,
+    mut loaded: Option<Loaded>,
+    on_news: impl FnMut(SettingsNews) + Send + 'static,
 ) -> (SettingsHooks, Option<Watch>) {
+    let late = loaded.as_mut().and_then(|loaded| loaded.late.take());
     let (hooks, shared) = parts(loaded);
     let Some((path, store)) = shared else {
         return (hooks, None);
     };
     let problem = hooks.load_error.as_ref().map(ToString::to_string);
-    let mut reloader = Reloader::new(store, problem);
+    let reloader = reload::Delivery::new(Reloader::new(store, problem), on_news);
+    let watched = reloader.clone();
     let watching = watch_file(&path, move || {
-        if let Some(news) = reloader.reload() {
-            on_news(news);
-        }
+        reload::deliver(&watched);
     });
+    reload::deliver(&reloader);
+    reload::receive_late(late, reloader);
     if watching.is_none() {
         tracing::warn!(
             "the settings folder is not watched; ferrite.toml changes apply at the next start"
@@ -102,9 +104,16 @@ fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> SaveReport {
     let mut store = store.lock().unwrap_or_else(PoisonError::into_inner);
     let mut report = SaveReport::saved(Values::default());
     for change in changes {
-        match store.save(change.key(), stored_value(change)) {
-            Ok(saved) if !saved.was_present => report.was_absent.push(change.field),
-            Ok(_) => {}
+        let value = stored_value(change);
+        match store.save_preserving_edits(change.key(), value) {
+            Ok(saved) => {
+                if !saved.was_present {
+                    report.was_absent.push(change.field);
+                }
+                if let Some(error) = saved.durability_error {
+                    report.error = Some(describe(&error));
+                }
+            }
             Err(problem) => {
                 report.failed.push(change.field);
                 report.error = Some(describe(&problem));
@@ -112,6 +121,7 @@ fn save(store: &Mutex<SettingsStore>, changes: &[Change]) -> SaveReport {
         }
     }
     report.values = values_of(store.current());
+    report.generation = store.generation();
     report
 }
 

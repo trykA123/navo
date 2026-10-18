@@ -2,8 +2,7 @@ use serde_ignored::Path as Ignored;
 use toml_edit::DocumentMut;
 
 use super::super::{Settings, SettingsError};
-
-const BOM: char = '\u{feff}';
+use crate::text_layout::{plain_text, restore_layout};
 
 pub(super) struct Source {
     pub file: toml::Table,
@@ -11,15 +10,13 @@ pub(super) struct Source {
 }
 
 pub(super) fn without_bom(text: &str) -> String {
-    text.strip_prefix(BOM).unwrap_or(text).replace("\r\n", "\n")
+    plain_text(text)
 }
 
 pub(super) fn edit<T>(
     text: &str,
     change: impl FnOnce(&mut DocumentMut, &Source) -> T,
 ) -> Result<(String, T), SettingsError> {
-    let has_bom = text.starts_with(BOM);
-    let is_crlf = text.contains("\r\n");
     let plain = without_bom(text);
     let source = source(&plain)?;
     let mut document: DocumentMut = plain.parse().map_err(|_| SettingsError::FileInvalid)?;
@@ -29,17 +26,7 @@ pub(super) fn edit<T>(
     if edited == untouched {
         return Ok((text.to_owned(), result));
     }
-    let edited = if is_crlf {
-        edited.replace('\n', "\r\n")
-    } else {
-        edited
-    };
-    let edited = if has_bom {
-        format!("{BOM}{edited}")
-    } else {
-        edited
-    };
-    Ok((edited, result))
+    Ok((restore_layout(text, &edited), result))
 }
 
 fn source(plain: &str) -> Result<Source, SettingsError> {

@@ -24,6 +24,7 @@ pub use session::{
 };
 pub use settings::{
     Appearance, Completion, DefaultChange, Density, Editor, Files, HiddenFiles, LoadReport, Saved,
-    SelectionSettings, SettingValue, Settings, SettingsError, SettingsStore, SortKey, Terminal,
-    ThemeMode, key_line as settings_key_line, parse as parse_settings, to_toml as settings_to_toml,
+    SelectionSettings, SessionBackup, SettingValue, Settings, SettingsError, SettingsStore,
+    SortKey, Terminal, ThemeMode, key_line as settings_key_line, parse as parse_settings,
+    to_toml as settings_to_toml,
 };

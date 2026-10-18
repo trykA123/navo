@@ -102,14 +102,14 @@ fn reload_after_an_invalid_edit_reports_the_error() {
 }
 
 #[test]
-fn save_creates_a_missing_file_with_only_the_changed_key() {
+fn save_creates_a_complete_missing_file_with_the_changed_key() {
     let dir = tmp();
     let path = settings_file(&dir);
     let (mut store, _) = SettingsStore::load(&path);
     store.save(MODE, Some(text("dark"))).unwrap();
     assert_eq!(
         fs::read_to_string(&path).unwrap(),
-        "[appearance]\nmode = \"dark\"\n"
+        complete_text("", &dark_mode()).unwrap().text
     );
 }
 

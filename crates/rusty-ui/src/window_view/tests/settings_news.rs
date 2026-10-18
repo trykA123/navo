@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, TestAppContext};
+use gpui_kit::{AppContext as _, Context, TestAppContext, Window};
 
 use super::app_menu::{Rig, rig};
 use crate::app_menu::QuickSettings;
 use crate::settings::{Change, FIELDS, Field, Values};
 use crate::tokens::{self, Density, ThemeChoice};
-use crate::window_view::SettingsNews;
+use crate::window_view::{FerriteWindow, SettingsNews};
 
 const BROKEN: &str = "ferrite.toml: invalid settings at line 3, column 9: expected a value";
 
@@ -24,7 +24,11 @@ fn send(cx: &mut TestAppContext, rig: &Rig, news: SettingsNews) {
 }
 
 fn on_disk(density: Density) -> SettingsNews {
-    SettingsNews::Applied(at_start().with(&Change::density(density)))
+    applied(at_start().with(&Change::density(density)), 1)
+}
+
+fn applied(values: Values, generation: u64) -> SettingsNews {
+    SettingsNews::Applied { values, generation }
 }
 
 fn at_start() -> Values {
@@ -114,4 +118,64 @@ fn the_echo_of_a_sheet_change_applies_nothing(cx: &mut TestAppContext) {
     send(cx, &rig, on_disk(Density::Comfortable));
     assert_eq!(applies(cx, &rig), 0);
     assert_eq!(rig.store.changes.lock().expect("changes").len(), 1);
+}
+
+fn act(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    work: impl FnOnce(&mut FerriteWindow, &mut Window, &mut Context<FerriteWindow>),
+) {
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, cx| work(view, window, cx));
+    })
+    .expect("window");
+}
+
+fn shown(cx: &mut TestAppContext, rig: &Rig) -> Values {
+    rig.view.read_with(cx, |view, _| view.values.clone())
+}
+
+#[gpui_kit::test]
+fn a_reload_while_a_save_is_in_flight_never_undoes_the_change_on_screen(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    act(cx, &rig, |view, window, cx| {
+        view.change_setting(Change::theme(ThemeChoice::Dark), window, cx);
+        view.take_settings(applied(at_start(), 1), window, cx);
+        assert_eq!(view.values.theme(), ThemeChoice::Dark);
+    });
+    assert_eq!(applies(cx, &rig), 0);
+    cx.run_until_parked();
+    assert_eq!(shown(cx, &rig).theme(), ThemeChoice::Dark);
+    assert_eq!(rig.store.changes.lock().expect("changes").len(), 1);
+}
+
+#[gpui_kit::test]
+fn a_reload_older_than_a_finished_save_is_dropped(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    act(cx, &rig, |view, window, cx| {
+        view.change_setting(Change::theme(ThemeChoice::Dark), window, cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(shown(cx, &rig).theme(), ThemeChoice::Dark);
+    send(cx, &rig, applied(at_start(), 0));
+    assert_eq!(shown(cx, &rig).theme(), ThemeChoice::Dark);
+    assert_eq!(applies(cx, &rig), 0);
+}
+
+#[gpui_kit::test]
+fn a_hand_edit_newer_than_a_save_report_stays_on_screen(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    let edited = at_start()
+        .with(&Change::theme(ThemeChoice::Dark))
+        .with(&Change::density(Density::Compact));
+    act(cx, &rig, |view, window, cx| {
+        view.change_setting(Change::theme(ThemeChoice::Dark), window, cx);
+        view.take_settings(applied(edited.clone(), 7), window, cx);
+    });
+    cx.run_until_parked();
+    let values = shown(cx, &rig);
+    assert_eq!(values.theme(), ThemeChoice::Dark);
+    assert_eq!(values.density(), Density::Compact);
+    assert_eq!(density(cx), Density::Compact);
 }

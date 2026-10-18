@@ -63,7 +63,7 @@ impl Live {
 
 fn applied(news: SettingsNews) -> Values {
     match news {
-        SettingsNews::Applied(values) => values,
+        SettingsNews::Applied { values, .. } => values,
         SettingsNews::Invalid(message) => panic!("expected values, got: {message}"),
     }
 }
@@ -71,7 +71,7 @@ fn applied(news: SettingsNews) -> Values {
 fn invalid(news: SettingsNews) -> String {
     match news {
         SettingsNews::Invalid(message) => message,
-        SettingsNews::Applied(_) => panic!("expected an error"),
+        SettingsNews::Applied { .. } => panic!("expected an error"),
     }
 }
 
@@ -181,4 +181,15 @@ fn a_key_deleted_by_hand_stays_deleted_and_its_default_applies() {
     );
     assert!(live.is_quiet());
     assert_eq!(fs::read_to_string(&live.path).expect("read"), "[files]\n");
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn deleting_the_file_keeps_the_current_settings() {
+    let live = live_on(COMPACT);
+    assert_eq!(live.hooks.values.density(), Density::Compact);
+    fs::remove_file(&live.path).expect("remove");
+    assert!(live.is_quiet());
+    live.write(NORMAL);
+    assert_eq!(applied(live.next()).density(), Density::Normal);
 }
