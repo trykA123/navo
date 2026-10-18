@@ -9,9 +9,7 @@ use gpui_kit::{
     TestAppContext, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions, div, px, size,
 };
 
-use super::{
-    FerriteTitleBar, HeaderSearch, main_window_options, system_backdrop, window_options,
-};
+use super::{FerriteTitleBar, HeaderSearch, main_window_options, system_backdrop, window_options};
 use crate::tokens::{self, Mode};
 
 const WIDTH: f32 = 1000.;
@@ -66,7 +64,10 @@ fn the_main_window_asks_for_the_system_backdrop() {
     let options = main_window_options("Ferrite");
     assert_eq!(options.window_background, system_backdrop().window);
     if cfg!(not(windows)) {
-        assert_eq!(options.window_background, WindowBackgroundAppearance::Opaque);
+        assert_eq!(
+            options.window_background,
+            WindowBackgroundAppearance::Opaque
+        );
     }
     assert_eq!(
         window_options("Ferrite").window_background,

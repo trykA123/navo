@@ -15,6 +15,7 @@ mod settings_news;
 mod settings_save;
 mod settings_sheet;
 mod shell_menu;
+mod start;
 mod start_watch;
 mod status;
 mod tab_keys;
@@ -56,6 +57,7 @@ pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, SettingsHooks};
 pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use start::run;
 pub use start_watch::{StartReport, StartWatch};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
@@ -88,33 +90,6 @@ pub struct StartOptions {
     pub cache_keys: CacheKeys,
     pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
     pub start_watch: Option<StartWatch>,
-}
-
-pub fn run(mut options: StartOptions, on_quit: Rc<dyn Fn()>) {
-    crate::application().run(move |cx| {
-        cx.on_app_quit(move |_| {
-            let on_quit = on_quit.clone();
-            async move { on_quit() }
-        })
-        .detach();
-        if let Some(watch) = options.start_watch.as_mut() {
-            watch.mark("app running");
-        }
-        let _ = crate::init(options.mode, cx);
-        bind_app_keys(cx);
-        let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
-        let window_options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            app_id: Some("ferrite".into()),
-            ..crate::title_bar::main_window_options("Ferrite")
-        };
-        let opened = crate::open_window(window_options, cx, move |window, cx| {
-            cx.new(|cx| FerriteWindow::new(options, window, cx))
-        });
-        if opened.is_err() {
-            cx.quit();
-        }
-    });
 }
 
 pub struct FerriteWindow {
@@ -398,7 +373,9 @@ impl Render for FerriteWindow {
             .flex_col()
             .flex_1()
             .min_h_0()
-            .when(gradient == GradientLayer::BelowTitleBar, |below| below.bg(t.surfaces.mica()))
+            .when(gradient == GradientLayer::BelowTitleBar, |below| {
+                below.bg(t.surfaces.mica())
+            })
             .child(self.body_area(window, cx))
             .child(self.fkey_bar(window, cx));
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
@@ -408,7 +385,9 @@ impl Render for FerriteWindow {
             .flex()
             .flex_col()
             .size_full()
-            .when(gradient == GradientLayer::Root, |root| root.bg(t.surfaces.mica()))
+            .when(gradient == GradientLayer::Root, |root| {
+                root.bg(t.surfaces.mica())
+            })
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
