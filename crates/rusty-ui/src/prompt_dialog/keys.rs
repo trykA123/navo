@@ -40,9 +40,9 @@ impl Keys {
     }
 
     fn press(&self, window: &mut Window, cx: &mut App) {
-        if self.confirm.is_focused(window) {
+        if self.confirm.contains_focused(window, cx) {
             self.submit(window, cx);
-        } else if self.cancel.is_focused(window) {
+        } else if self.cancel.contains_focused(window, cx) {
             self.cancel(window, cx);
         }
     }
