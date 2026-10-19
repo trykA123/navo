@@ -9,7 +9,7 @@ use rusty_automotive::map::index_map;
 #[test]
 fn fifty_megabytes_with_two_hundred_thousand_symbols_are_indexed() {
     let mut text = String::with_capacity(55_000_000);
-    text.push_str("* Symbols (sorted on name)\n| Name | Address | Space |\n");
+    text.push_str("TASKING VX\n* Symbols (sorted on name)\n| Name | Address | Space |\n");
     for i in 0..200_000u32 {
         writeln!(
             text,

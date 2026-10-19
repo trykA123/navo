@@ -28,6 +28,7 @@ pub struct Contribution {
     pub section: String,
     pub size: u64,
     pub address: Option<u64>,
+    pub region: Option<String>,
     pub output_section: String,
     pub offset: u64,
 }

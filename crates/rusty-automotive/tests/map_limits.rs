@@ -5,7 +5,7 @@ use std::{
 
 use rusty_automotive::map::{MAX_MAP_ENTRIES, MAX_MAP_PROBLEMS, MapError, MapProblem, index_map};
 
-const HEADER: &str = "* Symbols (sorted on name)\n| Name | Address |\n";
+const HEADER: &str = "TASKING VX\n* Symbols (sorted on name)\n| Name | Address |\n";
 
 #[allow(clippy::unwrap_used, reason = "synthetic test fixtures must parse")]
 fn parse(text: &str) -> rusty_automotive::map::MapModel {
@@ -43,7 +43,7 @@ fn read_failures_are_propagated() {
 }
 
 #[test]
-fn entries_are_capped_across_the_model_and_input_is_fully_scanned() {
+fn symbols_are_capped_independently_and_input_is_fully_scanned() {
     let text = format!(
         "{HEADER}{}",
         "| invented | 1 |\n".repeat(MAX_MAP_ENTRIES + 2)
@@ -53,7 +53,7 @@ fn entries_are_capped_across_the_model_and_input_is_fully_scanned() {
     assert_eq!(end, text.len() as u64);
     assert_eq!(model.symbols.len(), 1);
     assert!(
-        matches!(model.problems.as_slice(), [MapProblem::CapReached { line, limit: "retained entries" }] if *line == MAX_MAP_ENTRIES as u64 + 3)
+        matches!(model.problems.as_slice(), [MapProblem::CapReached { line, limit: "retained entries" }] if *line == MAX_MAP_ENTRIES as u64 + 4)
     );
 }
 
@@ -91,21 +91,22 @@ fn a_four_kibibyte_line_is_accepted_and_one_more_byte_is_rejected() {
     assert_eq!(model.symbols.len(), 2);
     assert!(matches!(
         model.problems.as_slice(),
-        [MapProblem::Malformed { line: 4, .. }]
+        [MapProblem::Malformed { line: 5, .. }]
     ));
 }
 
 #[test]
 fn overflowing_ranges_and_inconsistent_memory_totals_are_problems() {
-    let text = "* Locate Result\n| Section | Size (MAU) | Space addr |\n| .overflow | 2 | 0xffffffffffffffff |\n* Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n| flash | 1 | 2 | 3 | 4 | 5 |\n| flash | 1 | 2 | 3 | 7 | 6 |\n";
+    let text = "TASKING VX\n* Locate Result\n| Section | Size (MAU) | Space addr |\n| .overflow | 2 | 0xffffffffffffffff |\n* Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n| flash | 1 | 2 | 3 | 4 | 5 |\n| flash | 1 | 2 | 3 | 7 | 6 |\n";
     let model = parse(text);
     assert_eq!(model.problems.len(), 3);
-    assert!(model.sections.is_empty() && model.regions.is_empty());
+    assert!(model.sections.is_empty());
+    assert_eq!(model.regions.len(), 1);
 }
 
 #[test]
 fn non_byte_address_spaces_are_reported_and_skipped() {
-    let text = "* Locate Result\n+ Space chip:wide (MAU = 16bit)\n| Section | Size (MAU) | Space addr |\n| .wide | 2 | 0x10 |\n+ Space chip:byte (MAU = 8bit)\n| Section | Size (MAU) | Space addr |\n| .byte | 2 | 0x10 |\n";
+    let text = "TASKING VX\n* Locate Result\n+ Space chip:wide (MAU = 16bit)\n| Section | Size (MAU) | Space addr |\n| .wide | 2 | 0x10 |\n+ Space chip:byte (MAU = 8bit)\n| Section | Size (MAU) | Space addr |\n| .byte | 2 | 0x10 |\n";
     let model = parse(text);
     assert_eq!(model.problems.len(), 1);
     assert_eq!(model.sections.len(), 1);
@@ -115,8 +116,65 @@ fn non_byte_address_spaces_are_reported_and_skipped() {
 #[test]
 fn lower_case_headers_and_optional_origin_are_supported() {
     let model = parse(
-        "* Tool and Invocation\n* Memory usage in bytes\n| total | free | data | reserved | memory | code | origin |\n| 256 | 192 | 16 | 16 | flash | 32 | 0x8000 |\n",
+        "TASKING VX\n* Tool and Invocation\n* Memory usage in bytes\n| total | free | data | reserved | memory | code | origin |\n| 256 | 192 | 16 | 16 | flash | 32 | 0x8000 |\n",
     );
     assert!(model.problems.is_empty());
     assert_eq!(model.regions[0].origin, Some(0x8000));
+}
+
+#[test]
+fn regions_and_sections_have_separate_caps() {
+    use rusty_automotive::map::{MAX_MAP_REGIONS, MAX_MAP_SECTIONS};
+
+    let text = format!(
+        "TASKING VX\n* Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n{}* Locate Result\n| Section | Address | Size |\n{}* Symbols (sorted on name)\n| Name | Address |\n| orbit | 1 |\n",
+        "| orbit_ram | 1 | 0 | 0 | 1 | 2 |\n".repeat(MAX_MAP_REGIONS + 1),
+        "| .orbit | 16 | 4 |\n".repeat(MAX_MAP_SECTIONS + 1)
+    );
+    let model = parse(&text);
+    assert_eq!(model.regions.len(), MAX_MAP_REGIONS);
+    assert_eq!(model.sections.len(), MAX_MAP_SECTIONS);
+    assert_eq!(model.symbols.len(), 1);
+    assert_eq!(model.problems.len(), 2);
+}
+
+#[test]
+fn symbol_text_caps_leave_room_for_other_record_kinds() {
+    let text = format!(
+        "{HEADER}{}* Locate Result\n| Section | Address | Size |\n| .orbit | 16 | 4 |\n* Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n| orbit_ram | 1 | 0 | 0 | 1 | 2 |\n",
+        format!("| {} | 1 |\n", "x".repeat(4000)).repeat(8500)
+    );
+    let model = parse(&text);
+    assert_eq!(model.sections.len(), 1);
+    assert_eq!(model.regions.len(), 1);
+    assert_eq!(model.problems.len(), 1);
+}
+
+#[test]
+fn resolved_region_names_obey_the_text_cap() {
+    let region = "r".repeat(3900);
+    let text = format!(
+        "TASKING VX\n* Link Result\n| File | Section | Size | Offset | Section | Size |\n{}* Locate Result\n| Section | Address | Size | Chip |\n| .orbit | 16 | 4 | {region} |\n",
+        "| orbit.o | .one | 4 | 0 | .orbit | 4 |\n".repeat(9000)
+    );
+    let model = parse(&text);
+    let retained: usize = model
+        .contributions
+        .iter()
+        .map(|part| {
+            part.object_file.len()
+                + part.section.len()
+                + part.output_section.len()
+                + part.region.as_ref().map_or(0, String::len)
+        })
+        .sum();
+    assert!(retained <= rusty_automotive::map::MAX_MAP_TEXT_BYTES);
+    assert_eq!(model.contributions.len(), 9000);
+    assert!(model.contributions.last().unwrap().region.is_none());
+    assert!(
+        model
+            .problems
+            .iter()
+            .any(|problem| matches!(problem, MapProblem::CapReached { .. }))
+    );
 }
