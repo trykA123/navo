@@ -90,7 +90,7 @@ fn serve_connections(
                 protocol::serve(&mut stream, handler, stop);
             }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                std::thread::park_timeout(protocol::POLL);
+                std::thread::park_timeout(protocol::IDLE_POLL);
             }
             Err(error) if error.kind() == io::ErrorKind::Interrupted => (),
             Err(error) => {
@@ -123,12 +123,7 @@ impl Client {
             })?;
         match replies.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(reply) => reply,
-            Err(mpsc::RecvTimeoutError::Timeout) => Err(Error::Timeout),
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(io::Error::new(
-                io::ErrorKind::BrokenPipe,
-                "instance client stopped before replying",
-            )
-            .into()),
+            Err(_) => Err(Error::Timeout),
         }
     }
 }
@@ -145,11 +140,11 @@ fn send_to(socket: &Path, request: &Request, deadline: Instant) -> Result<Reply,
                         | io::ErrorKind::Interrupted
                 ) =>
             {
-                protocol::pause(deadline, &AtomicBool::new(false))?;
+                protocol::wait_for_connection(deadline)?;
             }
             Err(error) => return Err(error.into()),
         }
     };
-    stream.set_nonblocking(true)?;
+    stream.set_nonblocking(true).map_err(|_| Error::Timeout)?;
     protocol::exchange(&mut stream, request, deadline)
 }

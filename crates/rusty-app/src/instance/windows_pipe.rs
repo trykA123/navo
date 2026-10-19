@@ -17,13 +17,15 @@ use windows_sys::Win32::System::Pipes::{
 };
 
 use super::super::protocol;
-use super::owned;
+use super::{owned, security::PipeSecurity};
 
 pub(super) struct Pipe(OwnedHandle);
 
 impl Pipe {
     pub(super) fn create(name: &[u16]) -> io::Result<Self> {
-        // SAFETY: name is NUL-terminated, null security selects defaults, and all sizes and flags are valid for a byte pipe.
+        let security = PipeSecurity::current_user()?;
+        let attributes = security.attributes();
+        // SAFETY: name is NUL-terminated, attributes and its descriptor live through the call, and the byte-pipe flags are valid.
         let raw = unsafe {
             CreateNamedPipeW(
                 name.as_ptr(),
@@ -33,7 +35,7 @@ impl Pipe {
                 65536,
                 65536,
                 0,
-                null(),
+                &attributes,
             )
         };
         owned(raw).map(Self)
@@ -52,21 +54,24 @@ impl Pipe {
                 null_mut(),
             )
         };
-        let pipe = Self(owned(raw)?);
+        owned(raw).map(Self)
+    }
+
+    pub(super) fn set_nonblocking(&self) -> io::Result<()> {
         let mode = PIPE_NOWAIT;
         // SAFETY: the pipe handle is live and mode points to a valid wait-mode flag; other settings are unchanged.
-        let ok = unsafe { SetNamedPipeHandleState(pipe.0.as_raw_handle(), &mode, null(), null()) };
+        let ok = unsafe { SetNamedPipeHandleState(self.0.as_raw_handle(), &mode, null(), null()) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
-        Ok(pipe)
+        Ok(())
     }
 
     pub(super) fn connect(&mut self) -> io::Result<bool> {
         // SAFETY: this live pipe uses nonblocking synchronous mode, so no OVERLAPPED pointer is needed.
         let ok = unsafe { ConnectNamedPipe(self.0.as_raw_handle(), null_mut()) };
         if ok != 0 {
-            return Ok(true);
+            return Ok(false);
         }
         let error = io::Error::last_os_error();
         match error.raw_os_error() {

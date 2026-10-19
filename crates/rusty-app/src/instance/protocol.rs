@@ -5,12 +5,21 @@ use std::time::{Duration, Instant};
 use super::{Error, Reply, Request};
 
 pub(super) const TIMEOUT: Duration = Duration::from_secs(2);
-pub(super) const POLL: Duration = Duration::from_millis(5);
+pub(super) const IDLE_POLL: Duration = Duration::from_millis(200);
+pub(super) const IO_POLL: Duration = Duration::from_millis(5);
 const MAX_LINE: usize = 1024 * 1024;
 
 pub(super) fn pause(deadline: Instant, stop: &AtomicBool) -> Result<(), Error> {
+    pause_for(deadline, stop, IO_POLL)
+}
+
+pub(super) fn wait_for_connection(deadline: Instant) -> Result<(), Error> {
+    pause_for(deadline, &AtomicBool::new(false), IDLE_POLL)
+}
+
+fn pause_for(deadline: Instant, stop: &AtomicBool, poll: Duration) -> Result<(), Error> {
     check(deadline, stop)?;
-    std::thread::park_timeout(POLL.min(deadline.saturating_duration_since(Instant::now())));
+    std::thread::park_timeout(poll.min(deadline.saturating_duration_since(Instant::now())));
     check(deadline, stop)
 }
 
@@ -71,11 +80,21 @@ pub(super) fn exchange(
     deadline: Instant,
 ) -> Result<Reply, Error> {
     let stop = AtomicBool::new(false);
-    write_line(stream, request.to_line()?.as_bytes(), deadline, &stop)?;
-    match read_line(stream, deadline, &stop)?.as_str() {
+    write_line(stream, request.to_line()?.as_bytes(), deadline, &stop).map_err(unanswered)?;
+    match read_line(stream, deadline, &stop)
+        .map_err(unanswered)?
+        .as_str()
+    {
         "ok\n" => Ok(Reply::Ok),
         "error\n" => Ok(Reply::Error),
         _ => Err(Error::InvalidRequest),
+    }
+}
+
+fn unanswered(error: Error) -> Error {
+    match error {
+        Error::Io(_) => Error::Timeout,
+        error => error,
     }
 }
 

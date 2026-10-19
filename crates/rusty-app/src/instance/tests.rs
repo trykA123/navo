@@ -185,6 +185,128 @@ fn dropping_the_guard_releases_the_lock() {
     let _replacement = first(root.path(), root.path());
 }
 
+#[test]
+fn a_profile_without_dirs_continues_without_an_instance_guard() {
+    let (sender, _) = mpsc::channel();
+    let result = crate::prepare_instance(
+        &crate::cli::Start::default(),
+        &crate::profile::Profile::User(None),
+        sender,
+    );
+    assert!(matches!(result, Ok(std::ops::ControlFlow::Continue(None))));
+}
+
+#[test]
+fn dropping_the_guard_stops_an_idle_server_within_250_ms() {
+    let root = tempfile::tempdir().unwrap();
+    let mut guard = first(root.path(), root.path());
+    guard.serve(|_| Reply::Ok).unwrap();
+    assert_eq!(
+        second(root.path(), root.path())
+            .send(&request(), Duration::from_secs(2))
+            .unwrap(),
+        Reply::Ok
+    );
+    let started = Instant::now();
+    drop(guard);
+    assert!(started.elapsed() < Duration::from_millis(250));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_connected_server_closing_without_a_reply_is_a_timeout() {
+    use std::io::{BufRead, BufReader};
+    use std::os::unix::net::UnixListener;
+    let root = tempfile::tempdir().unwrap();
+    let guard = first(root.path(), root.path());
+    let address = socket(root.path());
+    let client = second(root.path(), root.path());
+    drop(guard);
+    let listener = UnixListener::bind(address).unwrap();
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut line = String::new();
+        BufReader::new(stream).read_line(&mut line).unwrap();
+        assert_eq!(Request::parse(&line).unwrap(), request());
+    });
+    let result = client.send(&request(), Duration::from_secs(2));
+    server.join().unwrap();
+    assert!(matches!(result, Err(super::Error::Timeout)), "{result:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn the_fallback_runtime_is_a_private_per_user_folder() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let root = tempfile::tempdir().unwrap();
+    let uid = std::fs::metadata(root.path()).unwrap().uid();
+    let fallback = root.path().join(format!("ferrite-{uid}"));
+    let acquired = super::acquire_with_runtime(root.path(), None, root.path()).unwrap();
+    assert!(matches!(acquired, Some(Acquired::First(_))));
+    let metadata = std::fs::symlink_metadata(&fallback).unwrap();
+    assert!(metadata.is_dir());
+    assert_eq!(metadata.uid(), uid);
+    assert_eq!(metadata.permissions().mode() & 0o777, 0o700);
+    let address = socket(&fallback);
+    assert_eq!(std::fs::metadata(address).unwrap().mode() & 0o777, 0o600);
+    let lock = std::fs::read_dir(fallback)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "lock"))
+        .unwrap();
+    assert_eq!(std::fs::metadata(lock).unwrap().mode() & 0o777, 0o600);
+    assert!(matches!(
+        super::acquire_with_runtime(root.path(), None, root.path()).unwrap(),
+        Some(Acquired::Second(_))
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_fallback_runtime_owned_by_another_uid_is_refused() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let root = tempfile::tempdir().unwrap();
+    let other_uid = std::fs::metadata(root.path())
+        .unwrap()
+        .uid()
+        .wrapping_add(1);
+    let folder = root.path().join(format!("ferrite-{other_uid}"));
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        super::runtime::fallback(root.path(), other_uid)
+            .unwrap_err()
+            .kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unsafe_fallback_runtime_continues_without_a_lock() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+    for kind in ["shared", "file", "symlink"] {
+        let root = tempfile::tempdir().unwrap();
+        let uid = std::fs::metadata(root.path()).unwrap().uid();
+        let fallback = root.path().join(format!("ferrite-{uid}"));
+        match kind {
+            "shared" => {
+                std::fs::create_dir(&fallback).unwrap();
+                std::fs::set_permissions(&fallback, std::fs::Permissions::from_mode(0o750))
+                    .unwrap();
+            }
+            "file" => std::fs::write(&fallback, b"keep").unwrap(),
+            _ => symlink(root.path(), &fallback).unwrap(),
+        }
+        let acquired = super::acquire_with_runtime(root.path(), None, root.path()).unwrap();
+        assert!(acquired.is_none(), "{kind}");
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+}
+
 #[cfg(windows)]
 #[test]
 fn a_unique_windows_mutex_and_pipe_round_trip() {
@@ -193,6 +315,13 @@ fn a_unique_windows_mutex_and_pipe_round_trip() {
     let mut guard = first(&profile, root.path());
     guard.serve(|_| Reply::Ok).unwrap();
     let client = second(&profile, root.path());
+    for _ in 0..2 {
+        assert_eq!(
+            client.send(&request(), Duration::from_secs(2)).unwrap(),
+            Reply::Ok
+        );
+    }
+    super::platform::connect_and_close(&profile);
     assert_eq!(
         client.send(&request(), Duration::from_secs(2)).unwrap(),
         Reply::Ok

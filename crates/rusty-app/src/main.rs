@@ -173,13 +173,13 @@ fn prepare_instance(
     if start.is_metrics() {
         return Ok(ControlFlow::Continue(None));
     }
-    let dirs = profile.dirs().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "cannot determine the profile data folder",
-        )
-    })?;
-    match instance::acquire(&dirs.data)? {
+    let Some(dirs) = profile.dirs() else {
+        return Ok(ControlFlow::Continue(None));
+    };
+    let Some(acquired) = instance::acquire(&dirs.data)? else {
+        return Ok(ControlFlow::Continue(None));
+    };
+    match acquired {
         instance::Acquired::First(mut guard) => {
             guard.serve(move |request| gui::on_instance_request(&sender, request))?;
             Ok(ControlFlow::Continue(Some(guard)))
