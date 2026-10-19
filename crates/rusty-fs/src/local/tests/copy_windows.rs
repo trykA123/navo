@@ -154,7 +154,7 @@ fn rolling_back_a_job_removes_a_copy_of_a_readonly_source() {
     };
     assert_eq!(run_job(&plan, &[], &mut ctx), JobOutcome::Done);
     assert!(
-        ops.metadata(&child(&root, "dst/source.bin"))
+        ops.metadata(&child(&child(&root, "dst"), "source.bin"))
             .unwrap()
             .attributes
             .readonly

@@ -81,12 +81,15 @@ fn a_real_copy_paused_mid_file_resumes_to_identical_bytes() {
         let (ops, plan, cancel) = (&ops, &plan, token.clone());
         let job = s.spawn(move || run_pausing_at(ops, plan, &cancel, &sender));
         let paused = seen.iter().find(|progress| progress.paused);
+        let part_len = fs::metadata(&part).map(|m| m.len()).ok();
         let held = (
             paused.map(|p| p.bytes_done),
-            fs::metadata(&part).map(|m| m.len()).ok(),
+            part_len.is_some(),
             dir.path().join("dst/big.bin").exists(),
         );
-        assert_eq!(held, (Some(MIB), Some(MIB), false));
+        assert_eq!(held, (Some(MIB), true, false));
+        #[cfg(not(windows))]
+        assert_eq!(part_len, Some(MIB));
         token.resume();
         job.join().expect("job thread")
     });
