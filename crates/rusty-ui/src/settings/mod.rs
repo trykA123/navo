@@ -1,5 +1,6 @@
 mod controls;
 mod fields;
+mod row_state;
 mod steps;
 mod values;
 mod view;
@@ -63,10 +64,9 @@ pub enum SheetEvent {
 type Handler = Rc<dyn Fn(&SheetEvent, &mut Window, &mut App)>;
 
 pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) -> SideSheet {
-    let title = div().font_weight(FontWeight::SEMIBOLD).child("Settings");
     let sheet = SideSheet::new("settings-sheet", state, frame)
         .label("Settings")
-        .header(title);
+        .header(SheetTitle);
     if body.shortcuts.is_some() {
         return sheet
             .body(body)
@@ -82,6 +82,21 @@ pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) 
         .hint(&["tab"], "Section")
         .hint(&["f3"], "TOML line")
         .hint(&["ctrl-z"], "Undo")
+}
+
+#[derive(IntoElement)]
+struct SheetTitle;
+
+impl RenderOnce for SheetTitle {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = tokens::current(cx);
+        div()
+            .flex()
+            .items_center()
+            .gap(t.spacing.lg)
+            .child(div().font_weight(FontWeight::SEMIBOLD).child("Settings"))
+            .child(row_state::live_chip(t))
+    }
 }
 
 #[derive(IntoElement)]
@@ -248,6 +263,7 @@ impl RenderOnce for SettingsBody {
             send: self.on_event.clone(),
         };
         let shown = self.shortcuts.is_none().then_some(section);
+        let footer = shown.map(|_| row_state::footer(&t, &self.values));
         let content = match self.shortcuts {
             Some(page) => page,
             None => view::content(&look, section, self.scroll.as_ref()).into_any_element(),
@@ -271,7 +287,8 @@ impl RenderOnce for SettingsBody {
                     .min_w_0()
                     .min_h_0()
                     .children(self.error.map(|message| view::error_line(&t, message)))
-                    .child(content),
+                    .child(content)
+                    .children(footer),
             );
         div()
             .flex()

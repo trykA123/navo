@@ -4,6 +4,10 @@ use crate::window_view::FerriteWindow;
 
 const NO_FILE: &str = "There is no settings file in this session.";
 
+fn missing_note(key: &str) -> SharedString {
+    format!("{key} is not in ferrite.toml; the default applies.").into()
+}
+
 impl FerriteWindow {
     pub(super) fn open_settings_file(
         &mut self,
@@ -23,10 +27,13 @@ impl FerriteWindow {
         let key = field.spec().key;
         let task = cx.background_executor().spawn(async move { line_of(key) });
         cx.spawn_in(window, async move |this, cx| {
-            let line = task.await;
+            let found = task.await;
+            let note = found
+                .filter(|found| found.is_missing)
+                .map(|_| missing_note(key));
             let _ = this.update_in(cx, |view, window, cx| {
                 view.view_location(file, window, cx);
-                view.open_viewer_at_line(line);
+                view.open_viewer_at_line(found.map(|found| found.line), note);
             });
         })
         .detach();

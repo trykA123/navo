@@ -144,6 +144,9 @@ impl FerriteWindow {
         if let (Some(line), Some(body)) = (viewer.start_line.take(), &viewer.body) {
             body.go_to_line(line, window, cx);
         }
+        if let Some(note) = viewer.start_note.take() {
+            viewer.say(note, cx);
+        }
         if let Some(note) = note {
             viewer.say(note, cx);
         }

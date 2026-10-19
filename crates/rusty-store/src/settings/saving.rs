@@ -78,6 +78,7 @@ impl SettingsStore {
         Ok(Saved {
             was_present,
             durability_error,
+            ledger_error: None,
         })
     }
 }

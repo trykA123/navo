@@ -3,6 +3,7 @@ use gpui_kit::{Role, ScrollHandle};
 
 use super::controls::{self, Picks};
 use super::fields::{Control, FieldSpec, Look as ChoiceLook, Section};
+use super::row_state;
 use super::steps::{first_row, rows_in};
 use super::values::{Value, Values};
 use super::{Handler, SheetEvent};
@@ -197,18 +198,26 @@ fn pictures(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
     Some(controls::pictures(&picks, choice_look).into_any_element())
 }
 
-fn title(t: &Theme, spec: &FieldSpec, is_current: bool) -> Div {
-    let key = is_current.then(|| {
-        div()
-            .id("settings-key")
-            .role(Role::Label)
-            .aria_label(spec.key)
-            .test_support()
-            .font_family(t.typography.mono_font.clone())
-            .text_size(t.typography.small)
-            .text_color(t.colors.accent_text)
-            .child(spec.key)
-    });
+fn key_line(t: &Theme, spec: &FieldSpec, is_current: bool) -> impl IntoElement + use<> {
+    let line = div()
+        .font_family(t.typography.mono_font.clone())
+        .text_size(t.typography.small)
+        .child(spec.key);
+    if !is_current {
+        return line
+            .text_color(gpui_kit::transparent_black())
+            .into_any_element();
+    }
+    line.id("settings-key")
+        .role(Role::Label)
+        .aria_label(spec.key)
+        .test_support()
+        .text_color(t.colors.accent_text)
+        .into_any_element()
+}
+
+fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
+    let t = look.theme;
     let pending = (!spec.field.is_applied()).then(|| {
         div()
             .id("settings-not-applied")
@@ -219,12 +228,18 @@ fn title(t: &Theme, spec: &FieldSpec, is_current: bool) -> Div {
             .text_color(t.colors.muted)
             .child(NOT_APPLIED)
     });
+    let name = div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.md)
+        .child(div().font_weight(FontWeight::MEDIUM).child(spec.label))
+        .child(row_state::tag(t, index, look.values.is_changed(spec.field)));
     div()
         .flex()
         .flex_col()
         .flex_1()
         .min_w_0()
-        .child(div().font_weight(FontWeight::MEDIUM).child(spec.label))
+        .child(name)
         .child(
             div()
                 .text_size(t.typography.small)
@@ -232,18 +247,23 @@ fn title(t: &Theme, spec: &FieldSpec, is_current: bool) -> Div {
                 .child(spec.help),
         )
         .children(pending)
-        .children(key)
+        .child(key_line(t, spec, index == look.row))
 }
 
 fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     let t = look.theme;
     let is_current = index == look.row;
     let value = look.values.get(spec.field);
+    let reset = look
+        .values
+        .is_changed(spec.field)
+        .then(|| row_state::reset(index, spec.field, look.send.as_ref()));
     let line = div()
         .flex()
         .items_center()
         .gap(t.spacing.xl)
-        .child(title(t, spec, is_current))
+        .child(title(look, index, spec))
+        .children(reset)
         .children(control(look, spec));
     let row = div()
         .id(("settings-row", index))

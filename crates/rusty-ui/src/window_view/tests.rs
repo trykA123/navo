@@ -34,6 +34,7 @@ mod offline;
 mod settings_layer;
 mod settings_news;
 mod settings_sheet;
+mod settings_state;
 mod shell_menu;
 pub(in crate::window_view) mod shortcuts;
 mod start_watch;
