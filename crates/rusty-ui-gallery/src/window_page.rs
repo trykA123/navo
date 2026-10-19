@@ -8,7 +8,7 @@ use rusty_ui::crash_notice::{CrashKeys, CrashNotice};
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::job_card::{JobCard, JobPill, PillFit};
-use rusty_ui::modifier_hints::{Combo, Cover, HintsDrawer, drawer_height, layer_in};
+use rusty_ui::modifier_hints::{Combo, Cover, HintsDrawer, Layer, drawer_height, layer_where};
 use rusty_ui::pane_chrome::{
     DriveInfo, DrivePill, PaneTabs, PathBar, card_header, current_drive, pane_card,
 };
@@ -169,10 +169,16 @@ impl WindowPage {
         }
     }
 
+    fn hint_layer(&self, combo: Combo) -> Layer {
+        let has_crash = self.has_crash;
+        layer_where(Keymap::builtin(), combo, &|spec| {
+            spec.action.is_some() && (has_crash || spec.name != "crash_notice.focus")
+        })
+    }
+
     fn hints_layer(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
         let shown = self.hints?;
-        let drawer =
-            HintsDrawer::new(layer_in(Keymap::builtin(), shown.combo)).settings_key(Some("ctrl-,"));
+        let drawer = HintsDrawer::new(self.hint_layer(shown.combo)).settings_key(Some("ctrl-,"));
         Some(
             div()
                 .absolute()
@@ -186,7 +192,7 @@ impl WindowPage {
     fn cover(&self, index: usize, window: &Window, cx: &App) -> Option<Cover> {
         let shown = self.hints.filter(|_| index == self.active_index())?;
         let t = tokens::current(cx);
-        let layer = layer_in(Keymap::builtin(), shown.combo);
+        let layer = self.hint_layer(shown.combo);
         let bottom = window.viewport_size().height - t.spacing.fkey_height;
         Some(Cover {
             top: bottom - drawer_height(t, &layer),
