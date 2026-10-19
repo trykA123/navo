@@ -297,3 +297,25 @@ fn a_sheet_save_is_refused_while_the_file_on_disk_is_broken() {
     assert_eq!(fixed.error, None);
     assert_eq!(fixed.values.theme(), ThemeChoice::Dark);
 }
+
+#[test]
+fn a_kept_view_part_lands_in_its_viewer_table_and_keeps_comments() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(
+        &file,
+        "# mine\n[text.view]\nline-numbers = true # gutter\nline-ends = false\n",
+    )
+    .unwrap();
+    let settings = hooks(Some(&file));
+    let kept = Change {
+        field: Field::TextLineEnds,
+        value: Value::Flag(true),
+    };
+    let stored = save(&settings, kept).unwrap();
+    assert_eq!(stored.get(Field::TextLineEnds), &Value::Flag(true));
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        "# mine\n[text.view]\nline-numbers = true # gutter\nline-ends = true\n"
+    );
+}

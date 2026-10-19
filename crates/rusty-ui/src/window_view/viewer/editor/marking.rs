@@ -77,7 +77,7 @@ impl EditorView {
                 toggle_bookmark(self, at, cx);
             }
             BodyAct::StepBookmark { backward } => self.step_bookmark(backward, cx),
-            BodyAct::LineEnds => self.toggle_line_ends(cx),
+            BodyAct::LineEnds => self.say(READ_ONLY, cx),
             BodyAct::Follow => self.say(NO_FOLLOW, cx),
         }
     }
@@ -124,14 +124,6 @@ impl EditorView {
         };
         self.editor
             .update(cx, |state, cx| state.set_selected_range(at..at, cx));
-        cx.notify();
-    }
-
-    fn toggle_line_ends(&mut self, cx: &mut Context<Self>) {
-        if self.editing {
-            return self.say(READ_ONLY, cx);
-        }
-        self.marking.line_ends = !self.marking.line_ends;
         cx.notify();
     }
 

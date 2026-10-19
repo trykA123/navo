@@ -59,6 +59,7 @@ impl PagedView {
                 let text = TextLook {
                     digits: self.digits(),
                     shift: self.shift,
+                    numbers: self.line_numbers,
                 };
                 lines
                     .iter()

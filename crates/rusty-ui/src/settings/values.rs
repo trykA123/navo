@@ -92,7 +92,9 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::FontSize => Value::Number(13),
         Field::ModifierHints => Value::Pick(2),
         Field::ModifierHintsDelay => Value::Number(400),
-        Field::FoldersFirst | Field::SpaceMeasuresFolders => Value::Flag(true),
+        Field::FoldersFirst | Field::SpaceMeasuresFolders | Field::TextLineNumbers => {
+            Value::Flag(true)
+        }
         Field::TerminalProvider => text("windows-terminal"),
         _ => match spec.control {
             Control::Choices(..) => Value::Pick(0),
@@ -200,7 +202,7 @@ impl Values {
         self.pick(Field::HiddenFiles) == SHOWN
     }
 
-    fn flag(&self, field: Field) -> bool {
+    pub fn flag(&self, field: Field) -> bool {
         matches!(self.get(field), Value::Flag(true))
     }
 
@@ -237,12 +239,19 @@ impl Values {
         }
     }
 
-    pub fn opens_inspector(&self) -> bool {
-        match PRESETS.get(self.pick(Field::AutomotivePreset)) {
+    pub fn is_shown(&self, preset: Option<Field>, part: Field) -> bool {
+        let Some(preset) = preset else {
+            return self.flag(part);
+        };
+        match PRESETS.get(self.pick(preset)) {
             Some(preset) if preset.toml == "rich" => true,
-            Some(preset) if preset.toml == "custom" => self.flag(Field::AutomotiveInspector),
+            Some(preset) if preset.toml == "custom" => self.flag(part),
             _ => false,
         }
+    }
+
+    pub fn opens_inspector(&self) -> bool {
+        self.is_shown(Some(Field::AutomotivePreset), Field::AutomotiveInspector)
     }
 
     pub fn quick(&self) -> QuickSettings {

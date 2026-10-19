@@ -17,7 +17,9 @@ pub use exif::ExifEntry;
 
 use super::body::{BodyKeys, Key, MenuEntry, ViewerBody};
 use super::keys_bar::NEXT_PREVIOUS;
+use super::parts::{IMAGE, PartSet};
 use crate::prelude::*;
+use crate::settings::{Field, Values};
 use zoom::{STEP, Viewport, Zoom};
 
 const PAN_STEP: f32 = 64.;
@@ -104,11 +106,6 @@ impl ImageView {
         self.pan_by(point(columns * PAN_STEP, rows * PAN_STEP), cx);
     }
 
-    fn toggle_info(&mut self, cx: &mut Context<Self>) {
-        self.info = !self.info;
-        cx.notify();
-    }
-
     fn set_note(&mut self, note: SharedString, cx: &mut Context<Self>) {
         self.note = Some(note);
         cx.notify();
@@ -158,16 +155,25 @@ impl ViewerBody for ImageBody {
 
     fn menu(&self, _: bool, _: &mut App) -> Vec<MenuEntry> {
         vec![
-            MenuEntry::Run("Copy image", Box::new(super::CopyImage)),
-            MenuEntry::Run("Copy path", Box::new(super::CopyFilePath)),
+            MenuEntry::Run("Copy image", Box::new(super::CopyImage), false),
+            MenuEntry::Run("Copy path", Box::new(super::CopyFilePath), false),
             MenuEntry::Break,
-            MenuEntry::Run("Fit", Box::new(super::FitImage)),
-            MenuEntry::Run("100 %", Box::new(super::ActualSize)),
+            MenuEntry::Run("Fit", Box::new(super::FitImage), false),
+            MenuEntry::Run("100 %", Box::new(super::ActualSize), false),
         ]
     }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {
         self.0.update(cx, |view, cx| view.set_note(note, cx));
+    }
+
+    fn parts(&self, _: &App) -> Option<&'static PartSet> {
+        Some(&IMAGE)
+    }
+
+    fn show_parts(&self, values: &Values, cx: &mut App) {
+        let shown = values.flag(Field::ImageDetails);
+        self.0.update(cx, |view, cx| view.show_info(shown, cx));
     }
 
     fn as_any(&self) -> &dyn Any {

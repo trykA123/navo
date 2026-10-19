@@ -22,7 +22,9 @@ use crate::structured_sample::{
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
-use crate::window_samples::{hint_windows, job_windows, sheet_windows, window_element};
+use crate::window_samples::{
+    display_window, hint_windows, job_windows, sheet_windows, window_element,
+};
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -69,7 +71,7 @@ pub struct Gallery {
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
     menus: [(Page, Entity<MenuPage>); 4],
-    viewer_menus: [Entity<ViewerMenuPage>; 2],
+    viewer_menus: [Entity<ViewerMenuPage>; 4],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
@@ -77,6 +79,7 @@ pub struct Gallery {
     job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
+    display_window: Entity<WindowPage>,
     hint_windows: [Entity<WindowPage>; 4],
     crash_window: Entity<WindowPage>,
     tab: usize,
@@ -107,8 +110,13 @@ impl Gallery {
             marks: None,
             image: image_sample::image_view(cx).ok(),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
-            viewer_menus: [ViewerMenuShows::Text, ViewerMenuShows::Tree]
-                .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
+            viewer_menus: [
+                ViewerMenuShows::Text,
+                ViewerMenuShows::Tree,
+                ViewerMenuShows::ViewText,
+                ViewerMenuShows::ViewAutomotive,
+            ]
+            .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
             ctrl_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Ctrl), cx)),
@@ -116,6 +124,7 @@ impl Gallery {
             job_windows: job_windows(cx),
             menu_window: cx.new(WindowPage::with_menu),
             sheet_windows: sheet_windows(window, cx),
+            display_window: display_window(cx),
             hint_windows: hint_windows(cx),
             crash_window: cx.new(WindowPage::with_crash),
             tab: 1,
@@ -327,6 +336,9 @@ impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let root = root(&t);
+        if self.page == Page::SettingsDisplay {
+            return root.child(self.display_window.clone());
+        }
         if let Some(page) = window_element(self.page, self.windows()) {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
@@ -346,7 +358,10 @@ impl Render for Gallery {
             Page::Menu | Page::MenuSubmenu | Page::MenuFilter | Page::MenuFiles => {
                 root.children(self.menu_page(self.page))
             }
-            Page::ViewerMenuText | Page::ViewerMenuTree => root.children(self.viewer_menu()),
+            Page::ViewerMenuText
+            | Page::ViewerMenuTree
+            | Page::ViewMenuText
+            | Page::ViewMenuAutomotive => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree
             | Page::Table
@@ -376,6 +391,8 @@ impl Gallery {
         match self.page {
             Page::ViewerMenuText => Some(self.viewer_menus[0].clone()),
             Page::ViewerMenuTree => Some(self.viewer_menus[1].clone()),
+            Page::ViewMenuText => Some(self.viewer_menus[2].clone()),
+            Page::ViewMenuAutomotive => Some(self.viewer_menus[3].clone()),
             _ => None,
         }
     }

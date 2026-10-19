@@ -6,12 +6,12 @@ use super::{Drawer, Focus, GoTo, MemoryView};
 use crate::prelude::*;
 use crate::primitives::text_field_state;
 use crate::window_view::viewer::{
-    Back, GoEnd, GoStart, OpenGoTo, PageDown, PageUp, RowDown, RowUp,
+    Back, GoEnd, GoStart, LeftDrawer, OpenGoTo, PageDown, PageUp, RightDrawer, RowDown, RowUp,
 };
 
 pub(super) const CONTEXT: &str = "MemoryImage";
 
-gpui_kit::actions!(memory_image, [ToggleNavigator, ToggleInspector, PickItem]);
+gpui_kit::actions!(memory_image, [PickItem]);
 
 pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
     crate::commands::bind_namespace(cx, "memory_image");
@@ -68,10 +68,7 @@ impl MemoryView {
         self.selected = item;
         self.scroll
             .scroll_to_top(usize::try_from(row).unwrap_or(usize::MAX));
-        let opens = cx
-            .try_global::<super::AutomotiveLook>()
-            .is_some_and(|look| look.opens_inspector);
-        if opens && !self.inspector.read(cx).is_open() {
+        if self.opens_inspector && !self.inspector.read(cx).is_open() {
             self.toggle_inspector(cx);
         }
     }
@@ -202,8 +199,8 @@ impl MemoryView {
             .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.move_by(i64::MAX, cx)))
             .on_action(cx.listener(|view, _: &OpenGoTo, window, cx| view.open_go_to(window, cx)))
             .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
-            .on_action(cx.listener(|view, _: &ToggleNavigator, _, cx| view.toggle_navigator(cx)))
-            .on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+            .on_action(cx.listener(|view, _: &LeftDrawer, _, cx| view.toggle_navigator(cx)))
+            .on_action(cx.listener(|view, _: &RightDrawer, _, cx| view.toggle_inspector(cx)))
             .on_action(cx.listener(|view, _: &PickItem, _, cx| {
                 if view.focus_in == Focus::Navigator {
                     view.pick_item(view.selected, cx);

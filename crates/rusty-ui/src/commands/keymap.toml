@@ -749,6 +749,18 @@ command = "viewer.follow"
 keys = ["alt-f"]
 
 [[bind]]
+command = "viewer.view_menu"
+keys = ["alt-v"]
+
+[[bind]]
+command = "view.left_drawer"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "view.right_drawer"
+keys = ["ctrl-i"]
+
+[[bind]]
 command = "viewer.context_menu"
 keys = ["menu", "shift-f10"]
 
@@ -895,6 +907,11 @@ command = "image.toggle_info"
 keys = ["i"]
 
 [[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Image"
+
+[[bind]]
 command = "image.copy"
 keys = ["ctrl-c"]
 
@@ -1019,14 +1036,6 @@ command = "table.sort_by_column"
 keys = ["ctrl-f3"]
 
 # MemoryImage
-
-[[bind]]
-command = "memory.toggle_navigator"
-keys = ["ctrl-b"]
-
-[[bind]]
-command = "memory.toggle_inspector"
-keys = ["ctrl-i"]
 
 [[bind]]
 command = "memory.go_to_item"

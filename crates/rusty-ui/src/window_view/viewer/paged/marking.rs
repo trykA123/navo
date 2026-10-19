@@ -67,7 +67,7 @@ impl PagedView {
             BodyAct::ClearMarks => clear_marks(self, cx),
             BodyAct::ToggleBookmark => toggle_bookmark(self, self.top, cx),
             BodyAct::StepBookmark { backward } => self.step_bookmark(backward, cx),
-            BodyAct::LineEnds => self.toggle_line_ends(cx),
+            BodyAct::LineEnds => self.set_note(TEXT_ONLY, cx),
             BodyAct::Follow => self.toggle_follow(cx),
         }
     }
@@ -92,13 +92,5 @@ impl PagedView {
             Some(at) => self.user_move(Move::Offset(at), cx),
             None => self.set_note(NO_BOOKMARKS, cx),
         }
-    }
-
-    fn toggle_line_ends(&mut self, cx: &mut Context<Self>) {
-        if self.kind != PagedKind::Text {
-            return self.set_note(TEXT_ONLY, cx);
-        }
-        self.marking.line_ends = !self.marking.line_ends;
-        cx.notify();
     }
 }

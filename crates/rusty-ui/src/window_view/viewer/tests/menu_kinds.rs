@@ -14,7 +14,7 @@ use crate::window_view::viewer::{MenuEntry, PagedKind};
 fn run_names(entries: &[MenuEntry], out: &mut Vec<&'static str>) {
     for entry in entries {
         match entry {
-            MenuEntry::Run(_, action) => out.push(action.name()),
+            MenuEntry::Run(_, action, _) => out.push(action.name()),
             MenuEntry::Submenu(_, children) => run_names(children, out),
             MenuEntry::Break => {}
         }

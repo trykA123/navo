@@ -23,6 +23,7 @@ mod rebound;
 mod save;
 mod search;
 pub(in crate::window_view::viewer) mod structured;
+mod view_parts;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

@@ -3,11 +3,11 @@ use std::sync::LazyLock;
 pub const MEMORY_NAME: &str = "bcm_app.hex";
 
 pub const MEMORY_STEPS: [&str; 5] = [
-    "memory_image::ToggleNavigator",
+    "viewer::LeftDrawer",
     "viewer::RowDown",
     "viewer::RowDown",
     "memory_image::PickItem",
-    "memory_image::ToggleInspector",
+    "viewer::RightDrawer",
 ];
 
 static MEMORY: LazyLock<String> = LazyLock::new(memory_image);

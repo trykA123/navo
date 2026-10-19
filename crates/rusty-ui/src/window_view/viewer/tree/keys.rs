@@ -47,23 +47,23 @@ pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
 
 pub(super) fn menu_entries() -> Vec<MenuEntry> {
     let depths: Vec<MenuEntry> = vec![
-        MenuEntry::Run("1", Box::new(FoldDepth1)),
-        MenuEntry::Run("2", Box::new(FoldDepth2)),
-        MenuEntry::Run("3", Box::new(FoldDepth3)),
-        MenuEntry::Run("4", Box::new(FoldDepth4)),
-        MenuEntry::Run("5", Box::new(FoldDepth5)),
-        MenuEntry::Run("6", Box::new(FoldDepth6)),
-        MenuEntry::Run("7", Box::new(FoldDepth7)),
-        MenuEntry::Run("8", Box::new(FoldDepth8)),
-        MenuEntry::Run("9", Box::new(FoldDepth9)),
+        MenuEntry::Run("1", Box::new(FoldDepth1), false),
+        MenuEntry::Run("2", Box::new(FoldDepth2), false),
+        MenuEntry::Run("3", Box::new(FoldDepth3), false),
+        MenuEntry::Run("4", Box::new(FoldDepth4), false),
+        MenuEntry::Run("5", Box::new(FoldDepth5), false),
+        MenuEntry::Run("6", Box::new(FoldDepth6), false),
+        MenuEntry::Run("7", Box::new(FoldDepth7), false),
+        MenuEntry::Run("8", Box::new(FoldDepth8), false),
+        MenuEntry::Run("9", Box::new(FoldDepth9), false),
     ];
     vec![
-        MenuEntry::Run("Copy value", Box::new(CopyValue)),
-        MenuEntry::Run("Copy key", Box::new(CopyKey)),
-        MenuEntry::Run("Copy path", Box::new(CopyPath)),
+        MenuEntry::Run("Copy value", Box::new(CopyValue), false),
+        MenuEntry::Run("Copy key", Box::new(CopyKey), false),
+        MenuEntry::Run("Copy path", Box::new(CopyPath), false),
         MenuEntry::Break,
-        MenuEntry::Run("Fold branch", Box::new(CloseSubtree)),
-        MenuEntry::Run("Fold all", Box::new(CloseAll)),
+        MenuEntry::Run("Fold branch", Box::new(CloseSubtree), false),
+        MenuEntry::Run("Fold all", Box::new(CloseAll), false),
         MenuEntry::Submenu("Depth", depths),
     ]
 }

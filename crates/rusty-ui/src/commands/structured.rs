@@ -165,22 +165,10 @@ pub(super) const GROUPS: [Group; 4] = [
     },
     Group {
         context: "MemoryImage",
-        commands: &[
-            (
-                "memory_image::ToggleNavigator",
-                "memory.toggle_navigator",
-                "Ranges drawer",
-            ),
-            (
-                "memory_image::ToggleInspector",
-                "memory.toggle_inspector",
-                "Inspector drawer",
-            ),
-            (
-                "memory_image::PickItem",
-                "memory.go_to_item",
-                "Go to the picked range",
-            ),
-        ],
+        commands: &[(
+            "memory_image::PickItem",
+            "memory.go_to_item",
+            "Go to the picked range",
+        )],
     },
 ];

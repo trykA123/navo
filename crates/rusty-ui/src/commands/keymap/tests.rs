@@ -13,13 +13,13 @@ fn error_of(text: &str) -> Option<KeymapError> {
 fn the_built_in_keymap_parses_and_validates() {
     let parsed = Keymap::parse(BUILTIN);
     assert_eq!(parsed.as_ref().err(), None);
-    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(248));
+    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(250));
 }
 
 #[test]
 fn the_built_in_keymap_is_parsed_once() {
     assert!(std::ptr::eq(Keymap::builtin(), Keymap::builtin()));
-    assert_eq!(Keymap::builtin().binds().len(), 248);
+    assert_eq!(Keymap::builtin().binds().len(), 250);
 }
 
 #[test]
@@ -191,4 +191,33 @@ fn keys_are_shown_the_way_menus_write_them() {
     ];
     assert_eq!(shown, expected.map(|key| Some(key.to_owned())));
     assert_eq!(super::shown("ctrl-a-b"), None);
+}
+
+fn placed(name: &str) -> Vec<(String, Vec<String>)> {
+    Keymap::builtin()
+        .binds()
+        .iter()
+        .filter(|bind| bind.spec.name == name)
+        .map(|bind| (bind.context.clone(), bind.keys.clone()))
+        .collect()
+}
+
+#[test]
+fn the_view_menu_and_drawer_keys_sit_in_the_viewer_context() {
+    let viewer = |key: &str| vec![("Viewer".to_owned(), vec![key.to_owned()])];
+    assert_eq!(placed("viewer.view_menu"), viewer("alt-v"));
+    assert_eq!(placed("view.left_drawer"), viewer("ctrl-b"));
+    assert_eq!(placed("view.right_drawer"), viewer("ctrl-i"));
+}
+
+#[test]
+fn escape_steps_back_in_the_image_view_and_memory_drawers_use_the_shared_keys() {
+    let back = placed("viewer.back");
+    assert!(back.contains(&("Image".to_owned(), vec!["escape".to_owned()])));
+    assert!(placed("memory.toggle_navigator").is_empty());
+    assert!(placed("memory.toggle_inspector").is_empty());
+    assert_eq!(
+        placed("image.toggle_info"),
+        [("Image".to_owned(), vec!["i".to_owned()])]
+    );
 }

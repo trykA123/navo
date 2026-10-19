@@ -18,8 +18,9 @@ fn items(entries: &[MenuEntry], hint: &dyn Fn(&dyn Action) -> Option<String>) ->
     entries
         .iter()
         .map(|entry| match entry {
-            MenuEntry::Run(label, action) => MenuItem {
+            MenuEntry::Run(label, action, checked) => MenuItem {
                 accelerator: hint(action.as_ref()),
+                checked: *checked,
                 ..MenuItem::new(ItemId::Action(action.name()), label, Group::Ferrite)
             },
             MenuEntry::Submenu(label, children) => MenuItem {
@@ -43,19 +44,19 @@ fn hint(action: &dyn Action, focus: &FocusHandle, window: &Window) -> Option<Str
 
 pub(in crate::window_view::viewer) fn marking_entries() -> Vec<MenuEntry> {
     let colours: Vec<MenuEntry> = vec![
-        MenuEntry::Run("Mark 1", Box::new(Mark1)),
-        MenuEntry::Run("Mark 2", Box::new(Mark2)),
-        MenuEntry::Run("Mark 3", Box::new(Mark3)),
-        MenuEntry::Run("Mark 4", Box::new(Mark4)),
-        MenuEntry::Run("Mark 5", Box::new(Mark5)),
-        MenuEntry::Run("Mark 6", Box::new(Mark6)),
-        MenuEntry::Run("Mark 7", Box::new(Mark7)),
-        MenuEntry::Run("Mark 8", Box::new(Mark8)),
+        MenuEntry::Run("Mark 1", Box::new(Mark1), false),
+        MenuEntry::Run("Mark 2", Box::new(Mark2), false),
+        MenuEntry::Run("Mark 3", Box::new(Mark3), false),
+        MenuEntry::Run("Mark 4", Box::new(Mark4), false),
+        MenuEntry::Run("Mark 5", Box::new(Mark5), false),
+        MenuEntry::Run("Mark 6", Box::new(Mark6), false),
+        MenuEntry::Run("Mark 7", Box::new(Mark7), false),
+        MenuEntry::Run("Mark 8", Box::new(Mark8), false),
         MenuEntry::Break,
-        MenuEntry::Run("Clear marks", Box::new(ClearMarks)),
+        MenuEntry::Run("Clear marks", Box::new(ClearMarks), false),
     ];
     vec![
         MenuEntry::Submenu("Mark colour", colours),
-        MenuEntry::Run("Bookmark", Box::new(ToggleBookmark)),
+        MenuEntry::Run("Bookmark", Box::new(ToggleBookmark), false),
     ]
 }

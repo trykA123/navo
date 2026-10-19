@@ -1,8 +1,11 @@
+use rusty_core::shell_menu::ShellMenu;
 use rusty_ui::context_menu::{ContextMenu, ContextMenuInput};
 use rusty_ui::prelude::*;
+use rusty_ui::settings::{Change, Field, Value, Values};
 use rusty_ui::tokens;
-use rusty_ui::window_view::{ViewerBody, viewer_menu};
+use rusty_ui::window_view::{ViewerBody, view_menu, viewer_menu};
 
+use crate::automotive_sample::{MEMORY_NAME, memory};
 use crate::structured_sample::{self as structured, TREE, TREE_NAME};
 
 const TEXT_NAME: &str = "deploy.sh";
@@ -17,11 +20,14 @@ cp target/release/ferrite \"$target/\"
 echo \"Copied to $target\"
 ";
 const FRAMES_BEFORE_OPEN: u8 = 2;
+const GALLERY_TOP: f32 = 120.;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Shows {
     Text,
     Tree,
+    ViewText,
+    ViewAutomotive,
 }
 
 pub struct ViewerMenuPage {
@@ -33,15 +39,25 @@ pub struct ViewerMenuPage {
 
 impl ViewerMenuPage {
     pub fn new(shows: Shows, window: &mut Window, cx: &mut App) -> Self {
-        let (name, text) = match shows {
-            Shows::Text => (TEXT_NAME, TEXT),
-            Shows::Tree => (TREE_NAME, TREE),
-        };
+        let body = structured::body(body_title(shows), body_text(shows), window, cx);
+        if let Some(body) = &body {
+            body.show_parts(&shown(shows), cx);
+        }
         Self {
             shows,
-            body: structured::body(name, text, window, cx),
+            body,
             menu: None,
             frames: 0,
+        }
+    }
+
+    fn shell_menu(&self, body: &dyn ViewerBody, window: &Window, cx: &mut App) -> ShellMenu {
+        let focus = body.focus_handle(cx);
+        match self.shows {
+            Shows::Text | Shows::Tree => viewer_menu(&body.menu(false, cx), &focus, window),
+            Shows::ViewText | Shows::ViewAutomotive => {
+                view_menu(body, &shown(self.shows), window, cx).unwrap_or_default()
+            }
         }
     }
 
@@ -49,14 +65,16 @@ impl ViewerMenuPage {
         let Some(body) = self.body.as_ref().filter(|_| self.menu.is_none()) else {
             return;
         };
-        let entries = body.menu(false, cx);
+        let menu = self.shell_menu(body.as_ref(), window, cx);
         let focus = body.focus_handle(cx);
+        let width = window.viewport_size().width;
         let anchor = match self.shows {
             Shows::Text => Point::new(px(360.), px(250.)),
             Shows::Tree => Point::new(px(420.), px(210.)),
+            Shows::ViewText | Shows::ViewAutomotive => Point::new(width - px(24.), px(GALLERY_TOP)),
         };
         let input = ContextMenuInput {
-            menu: viewer_menu(&entries, &focus, window),
+            menu,
             context: body_title(self.shows).into(),
             anchor,
             bounds: Bounds::new(Point::default(), window.viewport_size()),
@@ -73,8 +91,34 @@ impl ViewerMenuPage {
 
 fn body_title(shows: Shows) -> &'static str {
     match shows {
-        Shows::Text => TEXT_NAME,
+        Shows::Text | Shows::ViewText => TEXT_NAME,
         Shows::Tree => TREE_NAME,
+        Shows::ViewAutomotive => MEMORY_NAME,
+    }
+}
+
+fn body_text(shows: Shows) -> &'static str {
+    match shows {
+        Shows::Text | Shows::ViewText => TEXT,
+        Shows::Tree => TREE,
+        Shows::ViewAutomotive => memory(),
+    }
+}
+
+fn shown(shows: Shows) -> Values {
+    let flag = |field, on| Change {
+        field,
+        value: Value::Flag(on),
+    };
+    match shows {
+        Shows::ViewAutomotive => Values::default()
+            .with(&Change {
+                field: Field::AutomotivePreset,
+                value: Value::Pick(2),
+            })
+            .with(&flag(Field::AutomotiveInspector, true))
+            .with(&flag(Field::AutomotiveRowBars, true)),
+        _ => Values::default(),
     }
 }
 

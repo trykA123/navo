@@ -66,6 +66,7 @@ impl FerriteWindow {
             this.viewer_menu_event(event, window, cx);
         });
         viewer.menu = Some((menu, events));
+        viewer.is_view_menu = false;
         cx.notify();
     }
 
