@@ -8,6 +8,7 @@ use rusty_fs::{FakeFs, FakeOp, Fault, JobLog, JobOutcome, Provider, ProviderOps,
 use super::{JobStatus, OpLog, Operations};
 use crate::browser::Browser;
 
+mod mode;
 mod pause;
 
 fn fake() -> Arc<FakeFs> {

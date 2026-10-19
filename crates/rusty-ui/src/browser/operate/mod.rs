@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use rusty_core::{Command, FsError, Location, OpKind, OperationPlan, ProviderPath};
-use rusty_fs::{CancelToken, JobOutcome, JobSlot, Priority, Progress, volume_of};
+use rusty_fs::{
+    CancelToken, CopyMode, JobOutcome, JobSlot, Priority, Progress, drive_class, volume_of,
+};
 
 use super::{Browser, Message};
 
@@ -12,11 +14,20 @@ mod work;
 
 pub use paste::PasteRefusal;
 pub use types::*;
-use work::{JobWork, lands_inside, plan_for, start_progress};
+use work::{JobWork, lands_inside, plan_for, start_progress, worker_count};
 
 impl Browser {
     pub fn set_operations(&mut self, operations: Operations) {
         self.operations = operations;
+    }
+
+    pub fn set_copy_mode(&mut self, mode: CopyMode) {
+        self.copy_mode = mode;
+    }
+
+    #[must_use]
+    pub fn copy_mode(&self) -> CopyMode {
+        self.copy_mode
     }
 
     #[must_use]
@@ -271,8 +282,15 @@ impl Browser {
     }
 
     fn spawn_job(&self, pending: PendingOp, cancel: CancelToken) -> Result<(), String> {
+        let workers = worker_count(
+            self.copy_mode,
+            pending.sources.first(),
+            pending.target.as_ref(),
+            drive_class,
+        );
         let work = JobWork {
             id: pending.id,
+            workers,
             plan: pending.plan,
             ops: Arc::clone(&self.provider),
             factory: Arc::clone(&self.operations.log),

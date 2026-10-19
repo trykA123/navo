@@ -58,3 +58,17 @@ pub struct AutomotiveView {
     pub charts: bool,
     pub row_bars: bool,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct CopySettings {
+    pub mode: CopyMode,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CopyMode {
+    #[default]
+    Auto,
+    Standard,
+}

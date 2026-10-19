@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::view::{Automotive, ImageViewer, TextViewer};
+use super::view::{Automotive, CopySettings, ImageViewer, TextViewer};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
@@ -14,6 +14,7 @@ pub struct Settings {
     pub editor: Editor,
     pub text: TextViewer,
     pub image: ImageViewer,
+    pub copy: CopySettings,
     pub automotive: Automotive,
     pub experimental: BTreeMap<String, bool>,
 }

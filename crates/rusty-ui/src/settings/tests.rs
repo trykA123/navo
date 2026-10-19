@@ -246,3 +246,29 @@ fn text_parts_default_to_line_numbers_on_and_line_ends_off() {
     assert!(!values.flag(Field::ImageDetails));
     assert!(values.is_shown(None, Field::TextLineNumbers));
 }
+
+#[test]
+fn the_copy_mode_row_sits_in_its_own_section_with_plain_help() {
+    let row = spec(Field::CopyMode);
+    assert_eq!(row.section, Section::Copy);
+    assert_eq!(row.key, "copy.mode");
+    assert_eq!(
+        row.help,
+        "Auto copies several files at once where the drives allow; Standard copies one file at a time."
+    );
+    assert!(matches!(row.control, Control::Choices(choices, Look::Segments) if choices.len() == 2));
+    assert!(Field::CopyMode.is_applied());
+}
+
+#[test]
+fn the_copy_mode_starts_auto_and_follows_the_pick() {
+    let values = Values::default();
+    assert_eq!(values.copy_mode(), rusty_fs::CopyMode::Auto);
+    assert!(!values.is_changed(Field::CopyMode));
+    let standard = values.with(&Change {
+        field: Field::CopyMode,
+        value: Value::Pick(1),
+    });
+    assert_eq!(standard.copy_mode(), rusty_fs::CopyMode::Standard);
+    assert!(standard.is_changed(Field::CopyMode));
+}

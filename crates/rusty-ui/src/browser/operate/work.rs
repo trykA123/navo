@@ -1,7 +1,7 @@
 use rusty_core::{ConflictPolicy, FsError, Location, OperationPlan, PlanRequest, plan};
 use rusty_fs::{
-    CancelToken, JobContext, JobOutcome, Progress, Provider, ProviderOps, existing_at, run_job,
-    scan,
+    AutoTuning, CancelToken, CopyMode, DriveClass, JobContext, JobOutcome, Progress, Provider,
+    ProviderOps, WorkerCounts, existing_at, job_workers, run_job_parallel, scan,
 };
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -60,8 +60,20 @@ pub(super) fn plan_for(
     }))
 }
 
+pub(super) fn worker_count(
+    mode: CopyMode,
+    source: Option<&Location>,
+    target: Option<&Location>,
+    class_of: impl Fn(&Location) -> DriveClass,
+) -> usize {
+    let class = |place: Option<&Location>| place.map_or(DriveClass::Unknown, &class_of);
+    let counts = WorkerCounts::from(&AutoTuning::default());
+    job_workers(mode, class(source), class(target), counts)
+}
+
 pub(super) struct JobWork {
     pub id: u64,
+    pub workers: usize,
     pub plan: OperationPlan,
     pub ops: Arc<dyn ProviderOps>,
     pub factory: LogFactory,
@@ -118,7 +130,7 @@ impl JobWork {
 
     fn execute(&self, progress: &mut dyn FnMut(&Progress)) -> Result<JobOutcome, String> {
         let mut log = (self.factory)(&self.plan)?;
-        let outcome = run_job(
+        let outcome = run_job_parallel(
             &self.plan,
             &[],
             &mut JobContext {
@@ -127,6 +139,7 @@ impl JobWork {
                 cancel: &self.cancel,
                 progress,
             },
+            self.workers,
         );
         log.finish(&outcome);
         Ok(outcome)

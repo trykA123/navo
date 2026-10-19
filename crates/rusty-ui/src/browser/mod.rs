@@ -14,10 +14,9 @@ use rusty_fs::{
 };
 
 pub(crate) use measure::Measured;
-pub use naming::NameProblem;
-pub use offline::Offline;
 use operate::JobUpdate;
 pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PasteRefusal, PendingOp};
+pub use {naming::NameProblem, offline::Offline};
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
 pub type Launcher = Arc<dyn Fn(&Location) + Send + Sync>;
@@ -78,6 +77,7 @@ pub struct Browser {
     measures_folders: bool,
     default_sort: crate::file_list::SortKey,
     folders_first: bool,
+    copy_mode: rusty_fs::CopyMode,
     sorts: HashMap<TabId, crate::file_list::SortKey>,
     next_op: u64,
     launcher: Launcher,
@@ -126,6 +126,7 @@ impl Browser {
             measures_folders: true,
             default_sort: crate::file_list::SortKey::default(),
             folders_first: true,
+            copy_mode: rusty_fs::CopyMode::default(),
             sorts: HashMap::new(),
             next_op: 0,
             launcher: Arc::new(|_| {}),

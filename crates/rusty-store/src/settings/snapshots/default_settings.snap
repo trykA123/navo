@@ -35,6 +35,9 @@ line-ends = false
 [image.view]
 details = false
 
+[copy]
+mode = "auto"
+
 [automotive.view]
 preset = "simple"
 inspector = false

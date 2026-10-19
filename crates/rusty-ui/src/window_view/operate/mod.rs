@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use rusty_core::{Location, OpKind, OperationPlan};
+use rusty_fs::CopyMode;
 
 use super::FerriteWindow;
 use crate::browser::PendingOp;
@@ -40,7 +41,12 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         confirm_label: label.into(),
         danger: pending.plan.kind == OpKind::Delete || protected,
         typed: protected.then(|| "DELETE".into()),
+        mode: None,
     }
+}
+
+pub(super) fn mode_label(kind: OpKind, mode: CopyMode) -> Option<SharedString> {
+    matches!(kind, OpKind::Copy | OpKind::Move).then(|| mode.label().into())
 }
 
 fn summary(plan: &OperationPlan, protected: bool) -> String {
@@ -65,7 +71,8 @@ fn summary(plan: &OperationPlan, protected: bool) -> String {
 impl FerriteWindow {
     pub(super) fn dialog(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let pending = self.browser.pending()?;
-        let props = confirm_props(pending);
+        let mut props = confirm_props(pending);
+        props.mode = mode_label(pending.plan.kind, self.browser.copy_mode());
         let (confirm, cancel) = (cx.weak_entity(), cx.weak_entity());
         let dialog = ConfirmDialog::new(("confirm", pending.id), props)
             .on_confirm(move |window, cx| {

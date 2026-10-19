@@ -23,9 +23,9 @@ pub use session::{
     read_session_file, write_session,
 };
 pub use settings::{
-    Appearance, Automotive, AutomotiveView, Completion, DefaultChange, Density, Editor, Files,
-    HiddenFiles, ImageView, ImageViewer, LoadReport, ModifierHints, Saved, SelectionSettings,
-    SessionBackup, SettingValue, Settings, SettingsError, SettingsStore, SortKey, Terminal,
-    TextView, TextViewer, ThemeMode, ViewPreset, key_line as settings_key_line,
+    Appearance, Automotive, AutomotiveView, Completion, CopyMode, CopySettings, DefaultChange,
+    Density, Editor, Files, HiddenFiles, ImageView, ImageViewer, LoadReport, ModifierHints, Saved,
+    SelectionSettings, SessionBackup, SettingValue, Settings, SettingsError, SettingsStore,
+    SortKey, Terminal, TextView, TextViewer, ThemeMode, ViewPreset, key_line as settings_key_line,
     parse as parse_settings, section_line as settings_section_line, to_toml as settings_to_toml,
 };
