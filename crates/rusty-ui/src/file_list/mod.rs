@@ -1,6 +1,7 @@
 mod header;
 mod keys;
 pub(crate) mod kind;
+mod lift;
 mod press;
 pub(crate) mod row;
 mod sort;
@@ -83,6 +84,7 @@ pub struct FileList {
     on_command: Option<CommandHandler>,
     on_list_action: Option<ActionHandler>,
     on_page_rows: Option<PageRowsHandler>,
+    cover: Option<crate::modifier_hints::Cover>,
 }
 
 impl FileList {
@@ -94,6 +96,7 @@ impl FileList {
             on_command: None,
             on_list_action: None,
             on_page_rows: None,
+            cover: None,
         }
     }
 
@@ -130,6 +133,7 @@ struct ListState {
     followed_scroll: Option<(u64, usize, Pixels)>,
     page_rows: Option<u64>,
     list_bounds: Option<Bounds<Pixels>>,
+    lift: Pixels,
     press: press::Press,
 }
 
@@ -363,7 +367,7 @@ fn report_page_rows(
         let is_new = watch.state.update(cx, |state, _| {
             let is_new = state.page_rows != Some(rows);
             state.page_rows = Some(rows);
-            state.list_bounds = Some(*list);
+            state.list_bounds = Some(lift::unshifted(*list, state.lift));
             is_new
         });
         if let (true, Some(handler)) = (is_new, handler.clone()) {
@@ -379,6 +383,7 @@ impl RenderOnce for FileList {
         let state = window.use_keyed_state(self.id.clone(), cx, |_, _| ListState::default());
         let wanted = (self.props.view.scroll, self.props.rows.len());
         let scroll = follow_scroll(&state, wanted, row_height, cx);
+        let lift = lift::lift_for(&state, (self.props.view.cursor, self.cover), row_height, cx);
         let len = self.props.rows.len();
         let label = format!("{} files", self.props.folder);
         let ctx = Rc::new(ListContext {
@@ -406,7 +411,8 @@ impl RenderOnce for FileList {
             .min_h_0()
             .on_children_prepainted(report_page_rows(self.on_page_rows, page_watch))
             .on_scroll_wheel(report_scroll(&ctx, scroll_watch))
-            .child(list);
+            .overflow_hidden()
+            .child(lift::lifted(list, lift));
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
             .key_context(keys::CONTEXT)

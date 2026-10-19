@@ -14,6 +14,7 @@ mod format;
 pub mod job_card;
 pub mod job_row;
 pub mod languages;
+pub mod modifier_hints;
 pub mod pane_chrome;
 pub mod prelude;
 pub mod primitives;

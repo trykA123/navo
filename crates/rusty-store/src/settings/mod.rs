@@ -19,8 +19,8 @@ use complete::reconcile;
 pub use edit::{SettingValue, key_line};
 
 pub use model::{
-    Appearance, Density, Editor, Files, HiddenFiles, SelectionSettings, Settings, SortKey,
-    Terminal, ThemeMode,
+    Appearance, Density, Editor, Files, HiddenFiles, ModifierHints, SelectionSettings, Settings,
+    SortKey, Terminal, ThemeMode,
 };
 pub use parse::{parse, to_toml};
 

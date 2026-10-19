@@ -23,6 +23,7 @@ mod tokens_sample;
 mod viewer_menu_page;
 mod viewer_sample;
 mod window_page;
+mod window_samples;
 
 #[cfg(test)]
 mod tests;

@@ -13,7 +13,8 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle};
 
 pub use fields::{
-    Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, Look, SORTS, Section, THEMES,
+    Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look, SORTS, Section,
+    THEMES,
 };
 pub use steps::{Nudge, first_row, moved, next_section, nudged, rows_in, section_of};
 pub use values::{Change, Value, Values};

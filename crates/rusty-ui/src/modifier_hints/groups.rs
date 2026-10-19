@@ -1,0 +1,119 @@
+pub const OTHER: &str = "Other";
+
+pub const ORDER: [&str; 9] = [
+    "Clipboard",
+    "Tabs",
+    "Sort",
+    "Files",
+    "Pane",
+    "View",
+    "Navigation",
+    "Window",
+    OTHER,
+];
+
+const GROUPS: [(&str, &[&str]); 8] = [
+    (
+        "Clipboard",
+        &["files.clipboard_copy", "files.clipboard_cut", "files.paste"],
+    ),
+    (
+        "Tabs",
+        &[
+            "tab.new",
+            "tab.close",
+            "tab.next",
+            "tab.previous",
+            "tab.go_to_first",
+            "tab.go_to_second",
+            "tab.go_to_third",
+            "tab.go_to_fourth",
+            "tab.go_to_fifth",
+            "tab.go_to_sixth",
+            "tab.go_to_seventh",
+            "tab.go_to_eighth",
+            "tab.go_to_last",
+        ],
+    ),
+    (
+        "Sort",
+        &[
+            "files.sort_by_name",
+            "files.sort_by_extension",
+            "files.sort_by_date",
+            "files.sort_by_size",
+        ],
+    ),
+    (
+        "Files",
+        &[
+            "files.open",
+            "files.open_parent",
+            "files.view",
+            "files.edit",
+            "files.edit_with",
+            "files.copy",
+            "files.move",
+            "files.rename",
+            "files.new_folder",
+            "files.recycle",
+            "files.delete",
+            "files.toggle_mark",
+            "files.toggle_mark_down",
+            "files.mark_pattern",
+            "files.unmark_pattern",
+            "files.invert_marks",
+            "files.context_menu",
+        ],
+    ),
+    (
+        "Pane",
+        &[
+            "pane.edit_path",
+            "files.refresh",
+            "files.clear_filter",
+            "pane.switch",
+            "pane.drive_menu_first",
+            "pane.drive_menu_second",
+            "pane.reset_split",
+        ],
+    ),
+    ("View", &["preview.browse", "sheet.narrower", "sheet.wider"]),
+    (
+        "Navigation",
+        &[
+            "files.cursor_up",
+            "files.cursor_down",
+            "files.page_up",
+            "files.page_down",
+            "files.cursor_first",
+            "files.cursor_last",
+            "pane.go_back",
+            "pane.go_forward",
+        ],
+    ),
+    (
+        "Window",
+        &[
+            "app.command_palette",
+            "jobs.toggle",
+            "settings.toggle",
+            "app_menu.toggle",
+            "window.new",
+            "help.key_map",
+            "app.quit",
+        ],
+    ),
+];
+
+#[must_use]
+pub fn place_of(command: &str) -> (usize, usize) {
+    GROUPS
+        .iter()
+        .enumerate()
+        .find_map(|(group, (_, commands))| {
+            let at = commands.iter().position(|name| *name == command)?;
+            Some((group, at))
+        })
+        .unwrap_or((ORDER.len() - 1, usize::MAX))
+}

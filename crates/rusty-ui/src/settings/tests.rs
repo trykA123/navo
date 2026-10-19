@@ -1,5 +1,6 @@
 use super::*;
 use crate::app_menu::Setting;
+use crate::modifier_hints::HintsMode;
 use crate::tokens::{Density, ThemeChoice};
 
 fn spec(field: Field) -> &'static FieldSpec {
@@ -125,4 +126,32 @@ fn a_menu_tile_toggle_becomes_a_change_of_its_field() {
     assert!(!values.with(&change).show_hidden());
     let theme = values.toggled(Setting::Theme);
     assert_eq!(values.with(&theme).theme(), ThemeChoice::Light);
+}
+
+#[test]
+fn appearance_has_the_modifier_hint_rows() {
+    let hints = spec(Field::ModifierHints);
+    assert_eq!(hints.section, Section::Appearance);
+    assert_eq!(hints.key, "appearance.modifier-hints");
+    let Control::Choices(options, Look::Segments) = hints.control else {
+        panic!("modifier hints are not segments: {:?}", hints.control);
+    };
+    let toml: Vec<&str> = options.iter().map(|option| option.toml).collect();
+    assert_eq!(toml, ["off", "fkeys", "all"]);
+    let delay = spec(Field::ModifierHintsDelay);
+    assert_eq!(delay.section, Section::Appearance);
+    assert_eq!(delay.key, "appearance.modifier-hints-delay-ms");
+    assert_eq!(delay.control, Control::Number);
+    assert!(Field::ModifierHints.is_applied());
+    assert!(Field::ModifierHintsDelay.is_applied());
+}
+
+#[test]
+fn modifier_hints_default_to_every_shortcut_after_400_ms() {
+    let values = Values::default();
+    assert_eq!(values.modifier_hints(), HintsMode::All);
+    assert_eq!(values.modifier_hints_delay_ms(), 400);
+    let change = Change::modifier_hints(HintsMode::Fkeys);
+    assert_eq!(change.key(), "appearance.modifier-hints");
+    assert_eq!(values.with(&change).modifier_hints(), HintsMode::Fkeys);
 }

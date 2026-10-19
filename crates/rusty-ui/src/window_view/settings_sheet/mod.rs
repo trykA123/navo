@@ -147,6 +147,19 @@ impl FerriteWindow {
         cx.notify();
     }
 
+    pub(super) fn open_settings_at(
+        &mut self,
+        field: Field,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_settings(window, cx);
+        let row = FIELDS.iter().position(|spec| spec.field == field);
+        if let Some(row) = row.filter(|_| self.settings.is_open) {
+            self.select_setting(row, window, cx);
+        }
+    }
+
     fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settings.is_open = false;
         self.settings.edit = None;

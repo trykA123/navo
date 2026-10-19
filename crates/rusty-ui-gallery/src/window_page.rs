@@ -7,6 +7,7 @@ use rusty_ui::commands::Keymap;
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::job_card::{JobCard, JobPill, PillFit};
+use rusty_ui::modifier_hints::{Combo, Cover, HintsDrawer, drawer_height, layer_in};
 use rusty_ui::pane_chrome::{
     DriveInfo, DrivePill, PaneTabs, PathBar, card_header, current_drive, pane_card,
 };
@@ -62,6 +63,12 @@ pub struct SheetShows {
 }
 
 #[derive(Clone, Copy)]
+pub struct HintsShown {
+    pub combo: Combo,
+    pub cursor: u64,
+}
+
+#[derive(Clone, Copy)]
 pub struct JobsShown {
     pub count: usize,
     pub is_pill: bool,
@@ -74,6 +81,7 @@ struct Sheet {
 
 pub struct WindowPage {
     held: Option<KeyLayer>,
+    hints: Option<HintsShown>,
     jobs: Option<JobsShown>,
     is_menu_open: bool,
     sheet: Option<Sheet>,
@@ -90,6 +98,7 @@ impl WindowPage {
     pub fn new(held: Option<KeyLayer>, cx: &mut Context<Self>) -> Self {
         Self {
             held,
+            hints: None,
             jobs: None,
             is_menu_open: false,
             sheet: None,
@@ -149,6 +158,38 @@ impl WindowPage {
             jobs: Some(shown),
             ..Self::new(None, cx)
         }
+    }
+
+    pub fn with_hints(shown: HintsShown, held: KeyLayer, cx: &mut Context<Self>) -> Self {
+        Self {
+            hints: Some(shown),
+            ..Self::new(Some(held), cx)
+        }
+    }
+
+    fn hints_layer(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
+        let shown = self.hints?;
+        let drawer =
+            HintsDrawer::new(layer_in(Keymap::builtin(), shown.combo)).settings_key(Some("ctrl-,"));
+        Some(
+            div()
+                .absolute()
+                .left(t.spacing.md)
+                .right(t.spacing.md)
+                .bottom_0()
+                .child(drawer),
+        )
+    }
+
+    fn cover(&self, index: usize, window: &Window, cx: &App) -> Option<Cover> {
+        let shown = self.hints.filter(|_| index == self.active_index())?;
+        let t = tokens::current(cx);
+        let layer = layer_in(Keymap::builtin(), shown.combo);
+        let bottom = window.viewport_size().height - t.spacing.fkey_height;
+        Some(Cover {
+            top: bottom - drawer_height(t, &layer),
+            gap: t.spacing.md,
+        })
     }
 
     pub fn with_menu(cx: &mut Context<Self>) -> Self {
@@ -231,7 +272,7 @@ impl WindowPage {
             folder: folder.into(),
             rows: self.rows.clone(),
             view: ViewState {
-                cursor: side.cursor,
+                cursor: self.hints.map_or(side.cursor, |shown| shown.cursor),
                 scroll: 0,
             },
             marked,
@@ -242,7 +283,7 @@ impl WindowPage {
         FileList::new(("list", index), props)
     }
 
-    fn card(&self, index: usize, cx: &App) -> impl IntoElement {
+    fn card(&self, index: usize, window: &Window, cx: &App) -> impl IntoElement {
         let side = &SIDES[index];
         let is_active = index == self.active_index();
         let here = location(side.path);
@@ -265,7 +306,10 @@ impl WindowPage {
         let card = pane_card(("pane", index), label, is_active, cx)
             .child(header)
             .child(PathBar::new(("path", index), here))
-            .child(self.list(index, side, Rc::new(marked.clone())))
+            .child(
+                self.list(index, side, Rc::new(marked.clone()))
+                    .lift_above(self.cover(index, window, cx)),
+            )
             .child(StatusBar::new(
                 ("status", index),
                 status_of(&self.rows, &marked),
@@ -280,8 +324,8 @@ impl WindowPage {
 impl Render for WindowPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let panes =
-            Splitter::new("panes", &self.split, self.card(0, cx), self.card(1, cx)).line_on_hover();
+        let (left, right) = (self.card(0, window, cx), self.card(1, window, cx));
+        let panes = Splitter::new("panes", &self.split, left, right).line_on_hover();
         let is_open = self.is_menu_open;
         let menu = self.menu(&t);
         let sheet = self.sheet_layer(&t, window);
@@ -306,7 +350,8 @@ impl Render for WindowPage {
                     .px(t.spacing.xs)
                     .child(panes)
                     .children(self.job_card(&t))
-                    .children(sheet),
+                    .children(sheet)
+                    .children(self.hints_layer(&t)),
             )
             .child(self.fkey_bar(window))
             .children(menu)
@@ -325,7 +370,7 @@ fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 18]) -> Option<AnyElement> {
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 22]) -> Option<AnyElement> {
     let [
         main,
         shift,
@@ -341,9 +386,13 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 18]) -> Option<
         recording,
         conflict,
         invalid,
-        jobs @ ..,
+        job,
+        job_pill,
+        two,
+        two_pill,
+        hints @ ..,
     ] = windows;
-    let [job, job_pill, two, two_pill] = jobs;
+    let [hints_ctrl, hints_shift, hints_alt, hints_low] = hints;
     let shown = match page {
         Page::Window => main,
         Page::WindowShift => shift,
@@ -364,6 +413,10 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 18]) -> Option<
         Page::ShortcutsRecording => recording,
         Page::ShortcutsConflict => conflict,
         Page::ShortcutsInvalid => invalid,
+        Page::HintsCtrl => hints_ctrl,
+        Page::HintsShift => hints_shift,
+        Page::HintsAlt => hints_alt,
+        Page::HintsLow => hints_low,
         _ => return None,
     };
     Some(shown.clone().into_any_element())

@@ -41,6 +41,10 @@ pub enum Page {
     ShortcutsRecording,
     ShortcutsConflict,
     ShortcutsInvalid,
+    HintsCtrl,
+    HintsShift,
+    HintsAlt,
+    HintsLow,
 }
 
 pub struct PageInfo {
@@ -59,7 +63,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 41] = [
+pub const PAGES: [PageInfo; 45] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -169,6 +173,20 @@ pub const PAGES: [PageInfo; 41] = [
         Page::ShortcutsInvalid,
         "Shortcuts, invalid file",
         "p20-shortcuts-invalid",
+        false,
+    ),
+    info(Page::HintsCtrl, "Hints, Ctrl held", "p27-hints-ctrl", false),
+    info(
+        Page::HintsShift,
+        "Hints, Shift held",
+        "p27-hints-shift",
+        false,
+    ),
+    info(Page::HintsAlt, "Hints, Alt held", "p27-hints-alt", false),
+    info(
+        Page::HintsLow,
+        "Hints, cursor on a low row",
+        "p27-hints-low",
         false,
     ),
 ];

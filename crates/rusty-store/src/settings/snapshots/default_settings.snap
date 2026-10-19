@@ -9,6 +9,8 @@ dark-theme = "Ferrite Dark"
 font = "Inter"
 font-size = 13
 density = "normal"
+modifier-hints = "all"
+modifier-hints-delay-ms = 400
 
 [files]
 hidden-files = "shown"

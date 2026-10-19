@@ -41,5 +41,6 @@ impl FerriteWindow {
             .children(self.job_card_layer(cx))
             .children(self.preview_layer(window, cx))
             .children(self.settings_layer(window, cx))
+            .children(self.hints_layer(window, cx))
     }
 }

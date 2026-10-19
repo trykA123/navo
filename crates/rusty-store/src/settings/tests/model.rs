@@ -9,6 +9,24 @@ fn appearance_defaults() {
     assert_eq!(a.font, "Inter");
     assert_eq!(a.font_size, 13);
     assert_eq!(a.density, Density::Normal);
+    assert_eq!(a.modifier_hints, ModifierHints::All);
+    assert_eq!(a.modifier_hints_delay_ms, 400);
+}
+
+#[test]
+fn modifier_hints_read_their_three_values_and_the_delay() {
+    for (text, hints) in [
+        ("all", ModifierHints::All),
+        ("fkeys", ModifierHints::Fkeys),
+        ("off", ModifierHints::Off),
+    ] {
+        let toml =
+            format!("[appearance]\nmodifier-hints = \"{text}\"\nmodifier-hints-delay-ms = 650\n");
+        let (settings, unknown) = crate::parse_settings(&toml).unwrap();
+        assert!(unknown.is_empty());
+        assert_eq!(settings.appearance.modifier_hints, hints);
+        assert_eq!(settings.appearance.modifier_hints_delay_ms, 650);
+    }
 }
 
 #[test]

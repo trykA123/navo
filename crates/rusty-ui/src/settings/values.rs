@@ -3,10 +3,12 @@ use gpui_kit::SharedString;
 use super::fields::{Control, FIELDS, Field, FieldSpec};
 use crate::app_menu::{QuickSettings, Setting};
 use crate::file_list::{SortBy, SortKey};
+use crate::modifier_hints::HintsMode;
 use crate::tokens::{Density, ThemeChoice};
 
 const THEME_ORDER: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
 const DENSITY_ORDER: [Density; 3] = [Density::Compact, Density::Normal, Density::Comfortable];
+const HINTS_ORDER: [HintsMode; 3] = [HintsMode::Off, HintsMode::Fkeys, HintsMode::All];
 const SORT_ORDER: [SortBy; 4] = [SortBy::Name, SortBy::Size, SortBy::Date, SortBy::Ext];
 const SHOWN: usize = 0;
 const HIDDEN: usize = 1;
@@ -37,6 +39,10 @@ impl Change {
 
     pub fn density(density: Density) -> Self {
         Self::pick(Field::Density, &DENSITY_ORDER, density)
+    }
+
+    pub fn modifier_hints(hints: HintsMode) -> Self {
+        Self::pick(Field::ModifierHints, &HINTS_ORDER, hints)
     }
 
     pub fn show_hidden(shown: bool) -> Self {
@@ -75,6 +81,8 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::DarkTheme => text("Ferrite Dark"),
         Field::Font => text("Inter"),
         Field::FontSize => Value::Number(13),
+        Field::ModifierHints => Value::Pick(2),
+        Field::ModifierHintsDelay => Value::Number(400),
         Field::FoldersFirst | Field::SpaceMeasuresFolders => Value::Flag(true),
         Field::TerminalProvider => text("windows-terminal"),
         _ => match spec.control {
@@ -139,6 +147,20 @@ impl Values {
             .get(self.pick(Field::Density))
             .copied()
             .unwrap_or_default()
+    }
+
+    pub fn modifier_hints(&self) -> HintsMode {
+        HINTS_ORDER
+            .get(self.pick(Field::ModifierHints))
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn modifier_hints_delay_ms(&self) -> i64 {
+        match self.get(Field::ModifierHintsDelay) {
+            Value::Number(ms) => *ms,
+            _ => 400,
+        }
     }
 
     pub fn show_hidden(&self) -> bool {

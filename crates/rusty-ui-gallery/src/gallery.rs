@@ -3,8 +3,6 @@ use rusty_ui::prelude::*;
 use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
-use rusty_ui::settings::Field;
-use rusty_ui::side_sheet::Side;
 use rusty_ui::tokens::{self, Mode, Theme};
 use rusty_ui::window_view::{ArchiveView, BodyKeys, FontView, ImageView, PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
@@ -16,13 +14,14 @@ use crate::operate_page::OperatePage;
 pub use crate::pages::{PAGES, Page};
 use crate::pane_page::PanePage;
 use crate::sections;
-use crate::shortcuts_sample::{self, Shows as ShortcutsShows};
+use crate::shortcuts_sample;
 use crate::structured_sample::{
     self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
 };
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
-use crate::window_page::{JobsShown, NARROW, SheetShows, WIDE, WindowPage, window_element};
+use crate::window_page::{WindowPage, window_element};
+use crate::window_samples::{hint_windows, job_windows, sheet_windows};
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -76,6 +75,7 @@ pub struct Gallery {
     job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
+    hint_windows: [Entity<WindowPage>; 4],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -112,6 +112,7 @@ impl Gallery {
             job_windows: job_windows(cx),
             menu_window: cx.new(WindowPage::with_menu),
             sheet_windows: sheet_windows(window, cx),
+            hint_windows: hint_windows(cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -259,46 +260,8 @@ fn column(t: &Theme) -> Div {
         .min_w_0()
 }
 
-fn job_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
-    [(1, false), (1, true), (2, false), (2, true)].map(|(count, is_pill)| {
-        cx.new(|cx| WindowPage::with_jobs(JobsShown { count, is_pill }, cx))
-    })
-}
-
-fn sheet_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 9] {
-    let shortcuts = [
-        ShortcutsShows::Normal,
-        ShortcutsShows::Recording,
-        ShortcutsShows::Conflict,
-        ShortcutsShows::Invalid,
-    ]
-    .map(|shows| Some(shortcuts_sample::page(shows, window, cx)));
-    let [normal, recording, conflict, invalid] = shortcuts;
-    let shows = [
-        (Side::Left, Some(WIDE), false, None, None),
-        (Side::Right, Some(WIDE), true, None, None),
-        (Side::Left, Some(NARROW), false, None, None),
-        (Side::Left, None, false, Some(Field::Density), None),
-        (Side::Left, None, false, Some(Field::HiddenFiles), None),
-        (Side::Left, None, false, None, normal),
-        (Side::Left, None, false, None, recording),
-        (Side::Left, None, false, None, conflict),
-        (Side::Left, None, false, None, invalid),
-    ];
-    shows.map(|(active, window_width, is_ringed, settings, shortcuts)| {
-        let shows = SheetShows {
-            active,
-            window_width,
-            is_ringed,
-            settings,
-            shortcuts,
-        };
-        cx.new(|cx| WindowPage::with_sheet(shows, cx))
-    })
-}
-
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 18] {
+    fn windows(&self) -> [&Entity<WindowPage>; 22] {
         let [
             sheet,
             sheet_left,
@@ -311,6 +274,7 @@ impl Gallery {
             invalid,
         ] = &self.sheet_windows;
         let [job, job_pill, two, two_pill] = &self.job_windows;
+        let [hints_ctrl, hints_shift, hints_alt, hints_low] = &self.hint_windows;
         [
             &self.main_window,
             &self.shift_window,
@@ -330,6 +294,10 @@ impl Gallery {
             job_pill,
             two,
             two_pill,
+            hints_ctrl,
+            hints_shift,
+            hints_alt,
+            hints_low,
         ]
     }
 }

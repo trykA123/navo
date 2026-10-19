@@ -30,7 +30,7 @@ fn a_missing_file_is_written_whole_and_every_default_recorded() {
         to_toml(&Settings::default()).replace("\n[editor]\n\n[experimental]\n", "")
     );
     let recorded = db.settings_defaults().unwrap();
-    assert_eq!(recorded.len(), 14);
+    assert_eq!(recorded.len(), 16);
     assert_eq!(
         recorded.get("files.sort").map(String::as_str),
         Some("\"name\"")

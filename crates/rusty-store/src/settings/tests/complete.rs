@@ -7,6 +7,8 @@ dark-theme = \"Ferrite Dark\"
 font = \"Inter\"
 font-size = 13
 density = \"normal\"
+modifier-hints = \"all\"
+modifier-hints-delay-ms = 400
 
 [files]
 hidden-files = \"shown\"
@@ -23,13 +25,15 @@ patterns-select-folders = false
 provider = \"windows-terminal\"
 ";
 
-const DEFAULT_KEYS: [(&str, &str); 14] = [
+const DEFAULT_KEYS: [(&str, &str); 16] = [
     ("appearance.mode", "\"system\""),
     ("appearance.light-theme", "\"Ferrite Light\""),
     ("appearance.dark-theme", "\"Ferrite Dark\""),
     ("appearance.font", "\"Inter\""),
     ("appearance.font-size", "13"),
     ("appearance.density", "\"normal\""),
+    ("appearance.modifier-hints", "\"all\""),
+    ("appearance.modifier-hints-delay-ms", "400"),
     ("files.hidden-files", "\"shown\""),
     ("files.show-system", "false"),
     ("files.folders-first", "true"),
@@ -87,7 +91,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n";
     assert_eq!(completed(before), after);
 }
 
@@ -305,8 +309,8 @@ fn reconcile_updates_following_keys_and_adds_missing_ones_together() {
     let before = FULL.replace("font-size = 13\n", "");
     let done = reconcile(&before, &ledger, &sorted_by_date()).unwrap();
     let expected = FULL.replace("sort = \"name\"", "sort = \"date\"").replace(
-        "font-size = 13\ndensity = \"normal\"\n",
-        "density = \"normal\"\nfont-size = 13\n",
+        "font-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n",
+        "density = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\nfont-size = 13\n",
     );
     assert_eq!(done.text, expected);
     assert_eq!(

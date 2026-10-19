@@ -1,5 +1,8 @@
+use super::FerriteWindow;
 use crate::commands::{Keymap, normal_key};
-use crate::fkey_bar::KeyLayer;
+use crate::fkey_bar::{FKeyBar, KeyLayer};
+use crate::modifier_hints::HintsMode;
+use crate::prelude::*;
 
 pub type FKey = (&'static str, &'static str);
 
@@ -118,4 +121,28 @@ pub fn delete_warning_in(keymap: &Keymap) -> Option<(Option<KeyLayer>, usize)> {
         _ => Some(KeyLayer::Alt),
     };
     Some((layer, index))
+}
+
+impl FerriteWindow {
+    pub(super) fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
+        let is_fixed = self.values.modifier_hints() == HintsMode::Off;
+        let held = self.hints.held.filter(|_| !is_fixed);
+        let bar = match &self.viewer {
+            Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
+            None if self.settings.is_open() => {
+                let labels = settings_labels_in(crate::commands::active(cx));
+                FKeyBar::new("fkeys", keys_in_layer(&labels, held)).layers(held, labels)
+            }
+            None => {
+                let keymap = crate::commands::active(cx);
+                let bar = FKeyBar::new("fkeys", layer_keys_in(keymap, held))
+                    .layers(held, key_labels_in(keymap));
+                match delete_warning_in(keymap) {
+                    Some((layer, index)) => bar.warn(layer, index, DELETE_WARNING),
+                    None => bar,
+                }
+            }
+        };
+        self.with_job_pill(bar, window, cx)
+    }
 }

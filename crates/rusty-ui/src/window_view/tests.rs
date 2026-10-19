@@ -26,6 +26,7 @@ mod drive_fs;
 mod drives;
 mod fkeys;
 mod hand_off;
+mod hints;
 mod jobs;
 mod keymap;
 mod offline;

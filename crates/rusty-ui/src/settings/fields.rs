@@ -47,6 +47,8 @@ pub enum Field {
     DarkTheme,
     Font,
     FontSize,
+    ModifierHints,
+    ModifierHintsDelay,
     HiddenFiles,
     ShowSystem,
     FoldersFirst,
@@ -78,6 +80,11 @@ pub const DENSITIES: [Choice; 3] = [
     choice("Compact", "compact"),
     choice("Normal", "normal"),
     choice("Comfortable", "comfortable"),
+];
+pub const HINTS: [Choice; 3] = [
+    choice("Off", "off"),
+    choice("F-keys only", "fkeys"),
+    choice("All shortcuts", "all"),
 ];
 pub const HIDDEN: [Choice; 2] = [choice("Shown", "shown"), choice("Hidden", "hidden")];
 pub const SORTS: [Choice; 4] = [
@@ -130,7 +137,7 @@ const fn spec(
 use Field as F;
 use Section as S;
 
-pub const FIELDS: [FieldSpec; 16] = [
+pub const FIELDS: [FieldSpec; 18] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -159,6 +166,20 @@ pub const FIELDS: [FieldSpec; 16] = [
     spec(
         (F::FontSize, S::Appearance, "appearance.font-size"),
         ("Font size", "In pixels"),
+        Control::Number,
+    ),
+    spec(
+        (F::ModifierHints, S::Appearance, "appearance.modifier-hints"),
+        ("Modifier hints", "What holding Ctrl, Shift or Alt shows"),
+        Control::Choices(&HINTS, Look::Segments),
+    ),
+    spec(
+        (
+            F::ModifierHintsDelay,
+            S::Appearance,
+            "appearance.modifier-hints-delay-ms",
+        ),
+        ("Hint delay", "Milliseconds to hold, 150 to 2000"),
         Control::Number,
     ),
     spec(

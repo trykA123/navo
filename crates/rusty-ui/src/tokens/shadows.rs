@@ -15,6 +15,7 @@ pub struct Shadows {
     pub sheet: Vec<BoxShadow>,
     pub sheet_ring: Vec<BoxShadow>,
     pub focus: Vec<BoxShadow>,
+    pub up: Vec<BoxShadow>,
 }
 
 #[derive(Clone, Copy)]
@@ -58,6 +59,7 @@ struct Depth {
     menu: [Layer; 2],
     chip: [Layer; 2],
     sheet: Layer,
+    up: Layer,
 }
 
 fn depth(mode: Mode) -> Depth {
@@ -79,6 +81,7 @@ fn depth(mode: Mode) -> Depth {
                     drop(ui.opacity(0.2), 8., 20., -10.),
                 ],
                 sheet: drop(ink.opacity(0.42), 28., 60., -20.),
+                up: drop(ink.opacity(0.35), -18., 40., -18.),
             }
         }
         Mode::Dark => {
@@ -98,6 +101,7 @@ fn depth(mode: Mode) -> Depth {
                     drop(black.opacity(0.6), 10., 24., -10.),
                 ],
                 sheet: drop(black.opacity(0.85), 28., 60., -20.),
+                up: drop(black.opacity(0.75), -18., 40., -18.),
             }
         }
     }
@@ -117,5 +121,6 @@ pub(super) fn shadows(mode: Mode, s: &Surfaces) -> Shadows {
         sheet: shadow(sheet),
         sheet_ring: shadow(sheet.into_iter().chain([ring(s.pill_ring, 1.5)])),
         focus: shadow([ring(s.pill_ring, 2.)]),
+        up: shadow([d.up, ring(s.card_edge, 1.)]),
     }
 }

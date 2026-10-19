@@ -22,6 +22,8 @@ pub struct Appearance {
     pub font: String,
     pub font_size: u16,
     pub density: Density,
+    pub modifier_hints: ModifierHints,
+    pub modifier_hints_delay_ms: u16,
 }
 
 impl Default for Appearance {
@@ -33,6 +35,8 @@ impl Default for Appearance {
             font: "Inter".to_owned(),
             font_size: 13,
             density: Density::default(),
+            modifier_hints: ModifierHints::default(),
+            modifier_hints_delay_ms: 400,
         }
     }
 }
@@ -53,6 +57,15 @@ pub enum Density {
     #[default]
     Normal,
     Comfortable,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ModifierHints {
+    #[default]
+    All,
+    Fkeys,
+    Off,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -74,6 +74,7 @@ impl FerriteWindow {
         let error = self.pane_error(pane, tab);
         let has_cursor = is_active && !self.preview.is_browsing(window, cx);
         let props = self.list_props(tab, has_cursor);
+        let cover = self.hint_cover(window, cx).filter(|_| has_cursor);
         let status = StatusBarProps {
             free_bytes: self.free_on_drive(pane),
             mark: self.listing_mark(tab),
@@ -83,7 +84,9 @@ impl FerriteWindow {
         let path = self.path_row(pane, cx);
         let list = match waited {
             Some(waited) => Self::waiting_view(&waited, &focus, cx),
-            None => Self::file_list(pane, props, &focus, cx).into_any_element(),
+            None => Self::file_list(pane, props, &focus, cx)
+                .lift_above(cover)
+                .into_any_element(),
         };
         let header = self.pane_header(pane, is_active, cx);
         let body = Self::pane_keys(div().key_context(PANE), cx)

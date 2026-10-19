@@ -17,14 +17,26 @@ fn appearance() -> impl Strategy<Value = Appearance> {
         Just(Density::Normal),
         Just(Density::Comfortable)
     ];
-    (mode, TEXT, TEXT, TEXT, any::<u16>(), density).prop_map(
-        |(mode, light_theme, dark_theme, font, font_size, density)| Appearance {
+    let hints = prop_oneof![
+        Just(ModifierHints::All),
+        Just(ModifierHints::Fkeys),
+        Just(ModifierHints::Off)
+    ];
+    let looks = (mode, TEXT, TEXT, TEXT, any::<u16>(), density);
+    (looks, hints, any::<u16>()).prop_map(
+        |(
+            (mode, light_theme, dark_theme, font, font_size, density),
+            modifier_hints,
+            modifier_hints_delay_ms,
+        )| Appearance {
             mode,
             light_theme,
             dark_theme,
             font,
             font_size,
             density,
+            modifier_hints,
+            modifier_hints_delay_ms,
         },
     )
 }

@@ -5,6 +5,7 @@ mod drives;
 mod editor;
 mod fkeys;
 mod hand_off;
+mod hints;
 mod jobs;
 mod keys;
 mod layout;
@@ -37,7 +38,7 @@ use rusty_fs::ProviderOps;
 
 use crate::app_menu::{Identity, ToggleAppMenu};
 use crate::browser::{Browser, Launcher, Operations, Waker};
-use crate::fkey_bar::{FKeyBar, KeyLayer};
+use crate::fkey_bar::KeyLayer;
 use crate::prelude::*;
 use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
@@ -115,7 +116,7 @@ pub struct FerriteWindow {
     menu_focus: FocusHandle,
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
-    held_layer: Option<KeyLayer>,
+    hints: hints::Hints,
     app_menu: Option<app_menu::OpenMenu>,
     app_menu_focus: FocusHandle,
     values: Values,
@@ -170,7 +171,7 @@ impl FerriteWindow {
             menu_focus: cx.focus_handle(),
             path_edit: None,
             waiting: waiting::Waiting::default(),
-            held_layer: None,
+            hints: hints::Hints::new(window, cx),
             app_menu: None,
             app_menu_focus: cx.focus_handle(),
             values,
@@ -280,31 +281,11 @@ impl FerriteWindow {
 
     fn track_modifiers(&mut self, modifiers: Modifiers, window: &Window, cx: &mut Context<Self>) {
         let held = KeyLayer::held(&modifiers).filter(|_| window.is_window_active());
-        if held != self.held_layer {
-            self.held_layer = held;
+        if held != self.hints.held {
+            self.hints.held = held;
             cx.notify();
         }
-    }
-
-    fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
-        let held = self.held_layer;
-        let bar = match &self.viewer {
-            Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
-            None if self.settings.is_open() => {
-                let labels = settings_labels_in(crate::commands::active(cx));
-                FKeyBar::new("fkeys", keys_in_layer(&labels, held)).layers(held, labels)
-            }
-            None => {
-                let keymap = crate::commands::active(cx);
-                let bar = FKeyBar::new("fkeys", layer_keys_in(keymap, held))
-                    .layers(held, key_labels_in(keymap));
-                match delete_warning_in(keymap) {
-                    Some((layer, index)) => bar.warn(layer, index, DELETE_WARNING),
-                    None => bar,
-                }
-            }
-        };
-        self.with_job_pill(bar, window, cx)
+        self.hint_modifiers(modifiers, window, cx);
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {

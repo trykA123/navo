@@ -155,6 +155,7 @@ fn every_shadow_token_has_visible_layers() {
             ("sheet", &shadows.sheet),
             ("sheet_ring", &shadows.sheet_ring),
             ("focus", &shadows.focus),
+            ("up", &shadows.up),
         ] {
             assert!(!layers.is_empty(), "{mode:?}: {name} has no shadow");
             for layer in layers {
