@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
-use super::{JobUpdate, LogFactory, OpRequest};
+use super::{Copying, JobUpdate, LogFactory, OpRequest};
 use crate::browser::{Message, Waker};
 
 const PROGRESS_EVERY: Duration = Duration::from_millis(50);
@@ -73,7 +73,9 @@ pub(super) fn worker_count(
 
 pub(super) struct JobWork {
     pub id: u64,
-    pub workers: usize,
+    pub copying: Copying,
+    pub source: Option<Location>,
+    pub target: Option<Location>,
     pub plan: OperationPlan,
     pub ops: Arc<dyn ProviderOps>,
     pub factory: LogFactory,
@@ -129,6 +131,8 @@ impl JobWork {
     }
 
     fn execute(&self, progress: &mut dyn FnMut(&Progress)) -> Result<JobOutcome, String> {
+        let Copying { mode, class_of } = self.copying;
+        let workers = worker_count(mode, self.source.as_ref(), self.target.as_ref(), class_of);
         let mut log = (self.factory)(&self.plan)?;
         let outcome = run_job_parallel(
             &self.plan,
@@ -139,7 +143,7 @@ impl JobWork {
                 cancel: &self.cancel,
                 progress,
             },
-            self.workers,
+            workers,
         );
         log.finish(&outcome, self.ops.as_ref());
         Ok(outcome)
