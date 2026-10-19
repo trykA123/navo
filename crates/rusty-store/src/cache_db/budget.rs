@@ -8,6 +8,14 @@ pub(super) fn used_bytes(conn: &Connection, table: &str) -> Result<u64, rusqlite
     )
 }
 
+pub(super) fn entries(conn: &Connection, table: &str) -> Result<u64, rusqlite::Error> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM blob WHERE tbl = ?1",
+        [table],
+        read_size,
+    )
+}
+
 pub(super) fn enforce(
     conn: &mut Connection,
     table: &str,

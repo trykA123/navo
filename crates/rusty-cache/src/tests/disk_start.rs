@@ -396,3 +396,30 @@ fn close_is_bounded_and_can_finish_after_a_stalled_writer_is_released() {
     release.send(()).unwrap();
     assert!(disk.close(Duration::from_secs(1)));
 }
+
+#[test]
+fn stats_count_the_stored_listings_against_the_disk_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = db_in(&dir);
+    let keys = serial_keys(7);
+    seed(&path, &keys, &folder(r"C:\work"), listing(&["a", "b"]));
+    seed(&path, &keys, &folder(r"C:\docs"), listing(&["c"]));
+    let disk = DiskListings::open(&path, warm(&ListingCache::default(), &keys, Vec::new()));
+    let stats = disk.stats();
+    assert_eq!((stats.entries, stats.budget), (2, crate::DISK_BUDGET));
+    assert!(stats.bytes > 0, "{stats:?}");
+}
+
+#[test]
+fn stats_follow_a_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = serial_keys(7);
+    let work = folder(r"C:\work");
+    let cache = ListingCache::default();
+    cache.put(settled(&keys, &work), listing(&["a"]));
+    let disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, Vec::new()));
+    assert_eq!(disk.stats().entries, 0);
+    disk.save_folders(&cache, &keys, std::slice::from_ref(&work));
+    assert!(disk.flush(PATIENT));
+    assert_eq!(disk.stats().entries, 1);
+}

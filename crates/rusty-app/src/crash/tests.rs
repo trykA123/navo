@@ -30,6 +30,7 @@ fn diagnostics() -> Diagnostics {
         )),
         ring: Arc::new(EventRing::new(EventRing::DEFAULT_BUDGET)),
         misses: Opened::default().misses(),
+        caches: rusty_diag::CacheRegistry::default(),
     }
 }
 

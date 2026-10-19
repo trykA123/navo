@@ -85,7 +85,7 @@ pub fn write_report_with_crashes(
     crashes: &[PathBuf],
 ) -> io::Result<ReportSummary> {
     let report = serde_json::to_vec_pretty(&Document::new(input, redactor))?;
-    let summary = summary_text(input);
+    let summary = summary_text(input, redactor);
     if fs::symlink_metadata(path).is_ok() {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,

@@ -1,4 +1,5 @@
 use std::io;
+use std::sync::Arc;
 use std::thread;
 
 use super::*;
@@ -50,10 +51,18 @@ fn report(caches: &CacheRegistry, tasks: &TaskCounters) -> MemoryReport {
     memory_report(&ok_probe(), caches, tasks)
 }
 
-fn usage(name: &str, bytes: u64, budget: u64) -> CacheUsage {
+fn size(bytes: u64, pinned_bytes: u64, entries: u64) -> CacheSize {
+    CacheSize {
+        bytes,
+        pinned_bytes,
+        entries,
+    }
+}
+
+fn usage(name: &str, size: CacheSize, budget: u64) -> CacheUsage {
     CacheUsage {
         name: name.to_owned(),
-        bytes,
+        size,
         budget,
     }
 }
@@ -112,129 +121,73 @@ mod proc_status {
 }
 
 mod caches {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use super::*;
 
     #[test]
-    fn set_replaces_the_size() {
+    fn a_registered_cache_reports_its_size_and_budget() {
         let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        icons.set(5);
-        icons.set(3);
+        caches.register("icons", 8 * KB, || size(3, 1, 2));
         assert_eq!(
             report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 3, 8 * KB)]
+            [usage("icons", size(3, 1, 2), 8 * KB)]
         );
     }
 
     #[test]
-    fn add_accumulates() {
+    fn the_size_is_measured_when_the_report_is_made() {
         let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        icons.add(5);
-        icons.add(7);
-        assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 12, 8 * KB)]
-        );
+        let bytes = Arc::new(AtomicU64::new(5));
+        let seen = Arc::clone(&bytes);
+        caches.register("icons", 8 * KB, move || {
+            size(seen.load(Ordering::Relaxed), 0, 1)
+        });
+        bytes.store(7, Ordering::Relaxed);
+        assert_eq!(caches.usage(), [usage("icons", size(7, 0, 1), 8 * KB)]);
     }
 
     #[test]
-    fn sub_subtracts() {
-        let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        icons.set(10);
-        icons.sub(4);
-        assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 6, 8 * KB)]
-        );
+    fn unpinned_bytes_are_the_bytes_outside_pins() {
+        assert_eq!(size(10, 4, 3).unpinned_bytes(), 6);
     }
 
     #[test]
-    fn sub_saturates_at_zero() {
-        let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        icons.set(3);
-        icons.sub(10);
-        assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 0, 8 * KB)]
-        );
-    }
-
-    #[test]
-    fn two_caches_are_reported_apart() {
-        let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        let listings = caches.register("listings", 64 * KB);
-        icons.set(1);
-        listings.set(2);
-        assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 1, 8 * KB), usage("listings", 2, 64 * KB)]
-        );
-    }
-
-    #[test]
-    fn a_dropped_cache_disappears() {
-        let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        let listings = caches.register("listings", 64 * KB);
-        drop(icons);
-        listings.set(2);
-        assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("listings", 2, 64 * KB)]
-        );
-    }
-
-    #[test]
-    fn a_cache_stays_while_a_cloned_handle_lives() {
-        let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        let clone = icons.clone();
-        drop(icons);
-        clone.set(4);
-        assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 4, 8 * KB)]
-        );
+    fn unpinned_bytes_never_go_below_zero() {
+        assert_eq!(size(2, 4, 1).unpinned_bytes(), 0);
     }
 
     #[test]
     fn caches_keep_registration_order() {
         let caches = CacheRegistry::default();
-        let _thumbnails = caches.register("thumbnails", 256 * KB);
-        let _icons = caches.register("icons", 8 * KB);
-        let _listings = caches.register("listings", 64 * KB);
-        let names: Vec<String> = report(&caches, &TaskCounters::default())
-            .caches
-            .into_iter()
-            .map(|cache| cache.name)
-            .collect();
+        caches.register("thumbnails", 256 * KB, CacheSize::default);
+        caches.register("icons", 8 * KB, CacheSize::default);
+        caches.register("listings", 64 * KB, CacheSize::default);
+        let names: Vec<String> = caches.usage().into_iter().map(|cache| cache.name).collect();
         assert_eq!(names, ["thumbnails", "icons", "listings"]);
     }
 
     #[test]
     fn the_same_name_twice_gives_two_entries() {
         let caches = CacheRegistry::default();
-        let first = caches.register("icons", 8 * KB);
-        let second = caches.register("icons", 4 * KB);
-        first.set(1);
-        second.set(2);
+        caches.register("icons", 8 * KB, || size(1, 0, 1));
+        caches.register("icons", 4 * KB, || size(2, 0, 1));
         assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 1, 8 * KB), usage("icons", 2, 4 * KB)]
+            caches.usage(),
+            [
+                usage("icons", size(1, 0, 1), 8 * KB),
+                usage("icons", size(2, 0, 1), 4 * KB)
+            ]
         );
     }
 
     #[test]
     fn a_cloned_registry_shares_its_caches() {
         let caches = CacheRegistry::default();
-        let _icons = caches.clone().register("icons", 8 * KB);
+        caches.clone().register("icons", 8 * KB, CacheSize::default);
         assert_eq!(
-            report(&caches, &TaskCounters::default()).caches,
-            [usage("icons", 0, 8 * KB)]
+            caches.usage(),
+            [usage("icons", CacheSize::default(), 8 * KB)]
         );
     }
 }
@@ -331,15 +284,14 @@ mod reports {
     fn report_with_a_fake_probe_has_the_process_memory() {
         let tasks = TaskCounters::default();
         let caches = CacheRegistry::default();
-        let icons = caches.register("icons", 8 * KB);
-        icons.set(3);
+        caches.register("icons", 8 * KB, || size(3, 0, 1));
         let _watcher = tasks.start("watcher");
         assert_eq!(
             memory_report(&ok_probe(), &caches, &tasks),
             MemoryReport {
                 process: Some(memory(300 * KB, 200 * KB)),
                 probe_error: None,
-                caches: vec![usage("icons", 3, 8 * KB)],
+                caches: vec![usage("icons", size(3, 0, 1), 8 * KB)],
                 tasks: owners(&[("watcher", 1)]),
             }
         );
@@ -365,9 +317,8 @@ mod thread_safety {
     fn assert_send_sync<T: Send + Sync>() {}
 
     #[test]
-    fn registries_handles_and_guards_are_send_and_sync() {
+    fn registries_and_guards_are_send_and_sync() {
         assert_send_sync::<CacheRegistry>();
-        assert_send_sync::<CacheHandle>();
         assert_send_sync::<TaskCounters>();
         assert_send_sync::<TaskGuard>();
     }

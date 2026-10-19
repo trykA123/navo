@@ -172,3 +172,11 @@ fn used_bytes_after_clear_is_zero() {
     cache.clear(T).unwrap();
     assert_eq!(cache.used_bytes(T).unwrap(), 0);
 }
+
+#[test]
+fn entries_counts_the_rows_of_one_table() {
+    let mut cache = mem_with_budget(T, 30);
+    fill_abc(&mut cache);
+    cache.put("other", b"x", b"y").unwrap();
+    assert_eq!(cache.entries(T).unwrap(), 3);
+}

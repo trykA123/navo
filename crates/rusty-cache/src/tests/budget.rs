@@ -141,3 +141,20 @@ fn patch_past_the_budget_drops_the_entry() {
     assert!(cache.get(&key("a")).is_none());
     assert_eq!(cache.stats().bytes, 0);
 }
+
+#[test]
+fn stats_report_pinned_bytes_and_entries() {
+    let one = cost(&key("a"), &listing(&["x"]));
+    let cache = three_slot_cache();
+    ["a", "b", "c"]
+        .iter()
+        .for_each(|name| cache.pin(&key(name)));
+    ["a", "b", "d"]
+        .iter()
+        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    let stats = cache.stats();
+    assert_eq!(
+        (stats.pinned_bytes, stats.pinned_entries, stats.entries),
+        (one * 2, 2, 3)
+    );
+}

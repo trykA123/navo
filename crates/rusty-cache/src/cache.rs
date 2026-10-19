@@ -11,7 +11,9 @@ pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheStats {
     pub bytes: usize,
+    pub pinned_bytes: usize,
     pub entries: usize,
+    pub pinned_entries: usize,
     pub budget: usize,
     pub hits: u64,
     pub misses: u64,

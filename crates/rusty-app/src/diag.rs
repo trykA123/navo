@@ -1,11 +1,14 @@
 use std::io;
 use std::num::NonZero;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
+use rusty_cache::{DiskListings, ListingCache};
 use rusty_diag::{
-    BuildInfo, CacheRegistry, DpiAwareness, Identity, MemoryProbe, Redactor, ReportInput,
-    ReportSummary, Salt, SystemInfo, TaskCounters, memory_report, write_report_with_crashes,
+    BuildInfo, CacheRegistry, CacheSize, DpiAwareness, EventRing, Identity, MemoryProbe, Redactor,
+    ReportInput, ReportSummary, Salt, SystemInfo, TaskCounters, memory_report,
+    write_report_with_crashes,
 };
 
 use crate::logging::Diagnostics;
@@ -31,7 +34,7 @@ pub(crate) fn write_with_crashes(
     input.redaction_misses = diagnostics.misses.count();
     input.memory = Some(memory_report(
         probe().as_ref(),
-        &CacheRegistry::default(),
+        &diagnostics.caches,
         &TaskCounters::default(),
     ));
     input.startup_ms = vec![(
@@ -39,6 +42,49 @@ pub(crate) fn write_with_crashes(
         started.elapsed().as_secs_f64() * 1000.0,
     )];
     write_report_with_crashes(path, &input, &diagnostics.redactor, crashes)
+}
+
+pub(crate) fn register_listings(
+    caches: &CacheRegistry,
+    cache: &ListingCache,
+    disk: Option<&DiskListings>,
+) {
+    let memory = cache.clone();
+    let budget = memory.stats().budget;
+    caches.register("listings in memory", wide(budget), move || {
+        let stats = memory.stats();
+        CacheSize {
+            bytes: wide(stats.bytes),
+            pinned_bytes: wide(stats.pinned_bytes),
+            entries: wide(stats.entries),
+        }
+    });
+    if let Some(disk) = disk.cloned() {
+        caches.register("listings in cache.db", disk.stats().budget, move || {
+            let stats = disk.stats();
+            CacheSize {
+                bytes: stats.bytes,
+                pinned_bytes: 0,
+                entries: stats.entries,
+            }
+        });
+    }
+}
+
+pub(crate) fn register_events(caches: &CacheRegistry, ring: &Arc<EventRing>) {
+    let ring = Arc::clone(ring);
+    caches.register("diagnostic events", wide(ring.budget()), move || {
+        let stats = ring.stats();
+        CacheSize {
+            bytes: wide(stats.bytes),
+            pinned_bytes: 0,
+            entries: wide(stats.events),
+        }
+    });
+}
+
+fn wide(count: usize) -> u64 {
+    u64::try_from(count).unwrap_or(u64::MAX)
 }
 
 pub fn redactor() -> Redactor {

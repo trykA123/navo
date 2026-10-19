@@ -33,6 +33,10 @@ impl Writer {
         }
     }
 
+    pub(super) fn usage(&self) -> (u64, u64) {
+        self.table.usage()
+    }
+
     pub(super) fn forget_closed(&mut self, open: &HashSet<Location>) {
         self.written.retain(|key, _| open.contains(&key.location));
     }

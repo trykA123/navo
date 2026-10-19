@@ -46,6 +46,16 @@ impl ListingTable {
         self.db.put(TABLE, &codec::encode_key(key), &body.pack())
     }
 
+    pub(crate) fn usage(&self) -> (u64, u64) {
+        match (self.db.used_bytes(TABLE), self.db.entries(TABLE)) {
+            (Ok(bytes), Ok(entries)) => (bytes, entries),
+            (Err(error), _) | (_, Err(error)) => {
+                tracing::warn!(%error, "listing cache size unknown");
+                (0, 0)
+            }
+        }
+    }
+
     fn drop_row(&mut self, id: &[u8], reason: DecodeError) {
         tracing::warn!(%reason, "dropping unreadable cached listing");
         if let Err(error) = self.db.remove(TABLE, id) {
