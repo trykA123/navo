@@ -43,6 +43,7 @@ const SHIFT_COLUMNS: usize = 8;
 pub struct PagedView {
     title: SharedString,
     summary: Option<SharedString>,
+    problem: Option<SharedString>,
     source: SharedSource,
     reopen: Reopen,
     index_run: IndexRun,
@@ -82,9 +83,11 @@ impl PagedView {
         kind: PagedKind,
         cx: &mut Context<Self>,
     ) -> Self {
+        let layout = paged.source.layout();
         let mut view = Self {
             title: title.into(),
             summary: paged.summary.map(SharedString::from),
+            problem: paged.problem.map(SharedString::from),
             seen_len: paged.source.len(),
             source: paged.source,
             marking: Marking::new(paged.reopen.clone()),
@@ -116,6 +119,7 @@ impl PagedView {
             previews: HashMap::new(),
             preview_job: None,
         };
+        view.marking.set_layout(layout);
         view.start_index(cx);
         view
     }

@@ -3,7 +3,7 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use rusty_core::paging::LineIndex;
+use rusty_core::paging::{LineIndex, TextLayout};
 
 use super::IndexResult;
 
@@ -13,11 +13,12 @@ const CHUNK: usize = 1024 * 1024;
 
 pub fn index_lines(
     path: &Path,
+    layout: TextLayout,
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(&LineIndex),
 ) -> IndexResult {
     let mut file = File::open(path).map_err(|error| format!("Cannot open it: {error}"))?;
-    let mut index = LineIndex::new();
+    let mut index = LineIndex::with_layout(layout);
     let mut buf = vec![0u8; CHUNK];
     let mut reported = 0;
     loop {

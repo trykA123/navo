@@ -5,6 +5,7 @@ mod body;
 mod cancel;
 mod editor;
 mod elf;
+mod encoding;
 mod files;
 mod font;
 mod image;
@@ -33,9 +34,11 @@ use std::rc::Rc;
 
 use gpui_kit::{Bounds, FocusHandle, Subscription};
 use rusty_core::Location;
+use rusty_core::encoding::{Encoding, TextEncoding};
 
 pub use archive::{ArchiveSource, ArchiveView};
 pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody};
+pub use encoding::encoding_picker;
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, ReadBytes, Reopen, Save, SaveError,
     SharedSource,
@@ -88,6 +91,9 @@ pub(super) struct Viewer {
     bounds: Rc<Cell<Bounds<Pixels>>>,
     start_line: Option<u64>,
     start_note: Option<SharedString>,
+    encoding: Option<&'static Encoding>,
+    detected: Option<TextEncoding>,
+    reencoding: Option<u64>,
 }
 
 fn merged_note(load: Option<&'static str>, start: Option<SharedString>) -> Option<SharedString> {
@@ -126,6 +132,9 @@ impl Viewer {
             bounds: Rc::default(),
             start_line: None,
             start_note: None,
+            encoding: None,
+            detected: None,
+            reencoding: None,
         }
     }
 

@@ -27,7 +27,9 @@ impl ViewerKind for Hex {
     }
 
     fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
-        Ok(Box::new((load.hooks.paged)(load.location)?))
+        Ok(Box::new(
+            load.hooks.paged_with(load.location, load.encoding)?,
+        ))
     }
 
     fn attach(

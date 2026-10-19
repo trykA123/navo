@@ -42,6 +42,7 @@ fn paged(bytes: Arc<Vec<u8>>) -> Paged {
             Ok(Some(index))
         }),
         summary: None,
+        problem: None,
         editable: false,
         stamp: None,
     }

@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use rusty_core::marks::{MarkError, MarkSet};
-use rusty_core::paging::{Counted, Needle};
+use rusty_core::paging::{Counted, Needle, TextLayout};
 
 use super::Marked;
 use super::jobs::Job;
@@ -12,6 +12,7 @@ use crate::prelude::*;
 pub(in crate::window_view::viewer) struct MarkLayer {
     pub set: MarkSet,
     pub rev: u64,
+    pub layout: TextLayout,
     hits: Vec<Tally>,
     job: Option<Job>,
 }
@@ -81,7 +82,7 @@ impl MarkLayer {
     fn want(&mut self, needle: Needle) {
         match self.hits.iter_mut().find(|hits| hits.needle == needle) {
             Some(hits) => hits.source_changed(None),
-            None => self.hits.push(Tally::new(needle)),
+            None => self.hits.push(Tally::new(needle, self.layout)),
         }
     }
 }

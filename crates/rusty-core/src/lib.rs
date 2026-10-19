@@ -7,6 +7,7 @@ pub mod encoding;
 mod fs_error;
 mod id;
 mod layout;
+pub mod line_ends;
 mod location;
 pub mod marks;
 mod name;

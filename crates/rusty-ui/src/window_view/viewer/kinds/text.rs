@@ -35,12 +35,7 @@ impl ViewerKind for Text {
     }
 
     fn score(&self, sniff: &Sniff<'_>) -> u8 {
-        let paged_utf16 = sniff.len > EDIT_LIMIT && rusty_core::encoding::is_utf16(sniff.head);
-        if sniff.looks_binary() || paged_utf16 {
-            BINARY
-        } else {
-            TEXT
-        }
+        if sniff.looks_binary() { BINARY } else { TEXT }
     }
 
     fn editable(&self, sniff: &Sniff<'_>) -> bool {
@@ -52,11 +47,12 @@ impl ViewerKind for Text {
             hooks,
             location,
             sniff,
+            encoding,
             ..
         } = load;
         let loaded = if self.editable(sniff) {
             TextLoad::Editor(EditorFile {
-                file: (hooks.read)(location)?,
+                file: hooks.read_with(location, encoding)?,
                 language: detect(sniff.name, sniff.head),
                 split: markdown_extension(sniff.name).map(|extension| SplitChoice {
                     is_shown: (hooks.split)(&extension).unwrap_or(true),
@@ -64,7 +60,7 @@ impl ViewerKind for Text {
                 }),
             })
         } else {
-            TextLoad::Paged((hooks.paged)(location)?)
+            TextLoad::Paged(hooks.paged_with(location, encoding)?)
         };
         Ok(Box::new(loaded))
     }

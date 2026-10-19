@@ -40,18 +40,28 @@ fn hex_found<S: ByteSource + ?Sized>(probe: &Probe<'_, S>, at: u64) -> Result<Fo
 
 fn text_found<S: ByteSource + ?Sized>(probe: &Probe<'_, S>, at: u64) -> Result<FoundRow, String> {
     let source = probe.source;
+    let layout = source.layout();
     let row = row_at(source, row_start_at(source, at)?)?;
     let mut bytes = vec![0u8; usize::try_from(row.end - row.start).unwrap_or(0)];
     let read = read_full(source, row.start, &mut bytes)?;
-    let line = String::from_utf8_lossy(&bytes[..read]);
-    let hit = usize::try_from(at - row.start).unwrap_or(0);
+    let skip = if row.start == 0 {
+        layout.bom_len().min(read)
+    } else {
+        0
+    };
+    let bytes = &bytes[skip..read];
+    let line = layout.decode(bytes);
+    let from = usize::try_from(at - row.start)
+        .unwrap_or(0)
+        .saturating_sub(skip);
     let width = usize::try_from(probe.width).unwrap_or(0);
+    let hit = layout.text_range(bytes, from, width);
     let number = match probe.index {
         Some(index) => index.line_number(source, row.start)?,
         None => None,
     };
     let place = number.map_or_else(String::new, |number| number.to_string());
-    Ok(preview(place, &line, hit..hit + width))
+    Ok(preview(place, &line, hit))
 }
 
 fn found_row<S: ByteSource + ?Sized>(probe: &Probe<'_, S>, at: u64) -> FoundRow {

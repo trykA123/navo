@@ -36,6 +36,7 @@ fn a_utf16_file_reads_edits_and_saves_back_as_utf16() {
         crlf: opened.crlf,
         expected: opened.stamp,
         encoding: opened.encoding,
+        ends: None,
     };
     write(&at(&file), &save).unwrap();
     assert_eq!(
@@ -59,6 +60,7 @@ fn a_windows_1252_file_shows_accents_and_saves_back_unchanged() {
         crlf: opened.crlf,
         expected: opened.stamp,
         encoding: opened.encoding,
+        ends: None,
     };
     write(&at(&file), &save).unwrap();
     assert_eq!(fs::read(&file).unwrap(), bytes);
@@ -77,6 +79,7 @@ fn a_character_the_encoding_cannot_hold_fails_the_save_and_keeps_the_file() {
         crlf: opened.crlf,
         expected: opened.stamp,
         encoding: opened.encoding,
+        ends: None,
     };
     let saved = write(&at(&file), &save);
     assert!(
@@ -128,6 +131,7 @@ fn a_utf16_file_with_crlf_saved_unedited_is_byte_identical() {
         crlf: opened.crlf,
         expected: opened.stamp,
         encoding: opened.encoding,
+        ends: None,
     };
     write(&at(&file), &save).unwrap();
     assert_eq!(fs::read(&file).unwrap(), bytes);
@@ -202,12 +206,6 @@ fn bomless_utf16_followed_by_zero_bytes_is_not_editable() {
     let wide: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let bytes = [&wide[..4096], &[0; 4096]].concat();
     read_only_or_binary("wide.txt", &bytes);
-}
-
-#[test]
-fn mixed_line_endings_open_read_only() {
-    let (_dir, _, opened) = opened("mixed.txt", b"one\r\ntwo\nthree\nfour\n");
-    assert!(opened.read_only);
 }
 
 #[test]

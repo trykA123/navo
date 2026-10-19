@@ -80,6 +80,7 @@ fn paged(bytes: Vec<u8>) -> Paged {
             Ok(Some(index))
         }),
         summary: None,
+        problem: None,
         editable: false,
         stamp: None,
     }
@@ -217,6 +218,7 @@ fn the_preview_hooks_refuse_to_write() {
         crlf: false,
         expected: None,
         encoding: TextEncoding::default(),
+        ends: None,
     };
     let location = Location::new("/tmp/notes.txt").unwrap();
     let guarded = read_only(&hooks);

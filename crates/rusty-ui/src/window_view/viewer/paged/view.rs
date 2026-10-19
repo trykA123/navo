@@ -10,6 +10,7 @@ use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::body::Key;
+use crate::window_view::viewer::encoding::encoding_button;
 use crate::window_view::viewer::search::bar::{
     BarLook, FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS, bar_row,
 };
@@ -99,6 +100,18 @@ impl PagedView {
         Some(format::count(lines, "line", "lines").into())
     }
 
+    fn encoding_control(&self) -> Option<impl IntoElement> {
+        (self.kind == PagedKind::Text).then(|| encoding_button(self.source.layout().text))
+    }
+
+    fn problem_status(&self, t: &Theme) -> Option<ObservedElement<Stateful<Div>>> {
+        let problem = self
+            .problem
+            .clone()
+            .filter(|_| self.kind == PagedKind::Text)?;
+        Some(status(t, "paged-problem", problem).text_color(t.colors.warn))
+    }
+
     fn find_status(&self) -> Option<SharedString> {
         if let Some(progress) = &self.find.progress {
             let shown = percent(progress.done, progress.total);
@@ -163,6 +176,7 @@ impl PagedView {
             )
             .child(small(t, t.colors.muted).child(self.mode_label()))
             .child(small(t, t.colors.muted).child(format::size(self.source.len())))
+            .children(self.encoding_control())
             .when_some(summary, |row, summary| {
                 row.child(small(t, t.colors.muted).child(summary))
             })
@@ -173,6 +187,7 @@ impl PagedView {
             })
             .children(self.follow_badge(t))
             .child(div().flex_1())
+            .children(self.problem_status(t))
             .children(
                 self.index_status()
                     .map(|text| status(t, "paged-index", text)),

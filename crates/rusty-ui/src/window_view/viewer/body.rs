@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use gpui_kit::{Action, AnyView, FocusHandle};
 use rusty_core::Location;
+use rusty_core::encoding::TextEncoding;
 use rusty_core::marks::{Bookmarks, MarkSet};
 
 use super::FileHooks;
@@ -118,4 +119,8 @@ pub trait ViewerBody: Any {
     }
 
     fn show_parts(&self, _: &Values, _: &mut App) {}
+
+    fn encoding(&self, _: &App) -> Option<TextEncoding> {
+        None
+    }
 }

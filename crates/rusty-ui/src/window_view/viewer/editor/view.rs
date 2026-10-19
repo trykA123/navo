@@ -7,6 +7,7 @@ use super::overlay::{OverlayLook, overlay};
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
+use crate::window_view::viewer::encoding::encoding_button;
 use crate::window_view::viewer::search::GO_TO_CONTEXT;
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
 use crate::window_view::viewer::search::find_all::{
@@ -100,9 +101,9 @@ impl EditorView {
                     .text_color(t.colors.muted)
                     .text_size(t.typography.small)
                     .child(mode)
-                    .children(self.stamp.map(|stamp| format::size(stamp.len)))
-                    .child(self.encoding.label()),
+                    .children(self.stamp.map(|stamp| format::size(stamp.len))),
             )
+            .child(encoding_button(self.encoding))
             .when(self.dirty, |d| {
                 d.child(div().text_color(t.colors.mark).child("●"))
             })

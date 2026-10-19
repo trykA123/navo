@@ -6,6 +6,7 @@ use rusty_ui::window_view::{Save, SaveError};
 
 use super::{bytes, line_endings, mostly_crlf, read, write};
 
+mod chosen;
 mod encodings;
 
 fn at(path: &std::path::Path) -> Location {
@@ -18,6 +19,7 @@ fn save(text: &str, crlf: bool, expected: Option<rusty_ui::window_view::FileStam
         crlf,
         expected,
         encoding: TextEncoding::default(),
+        ends: None,
     }
 }
 

@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
-use rusty_core::encoding::TextEncoding;
+use rusty_core::encoding::{Encoding, TextEncoding};
+use rusty_core::line_ends::LineEnds;
 use rusty_core::marks::{Bookmarks, MarkSet, SearchHistory};
 use rusty_core::paging::{ByteSource, LineIndex, Needle};
 use rusty_fs::archive::ArchiveListing;
@@ -22,6 +23,7 @@ pub struct FileText {
     pub crlf: bool,
     pub stamp: Option<FileStamp>,
     pub encoding: TextEncoding,
+    pub ends: Option<Arc<LineEnds>>,
 }
 
 impl FileText {
@@ -33,6 +35,7 @@ impl FileText {
             crlf: false,
             stamp: None,
             encoding: TextEncoding::default(),
+            ends: None,
         }
     }
 }
@@ -43,6 +46,7 @@ pub struct Save<'a> {
     pub crlf: bool,
     pub expected: Option<FileStamp>,
     pub encoding: TextEncoding,
+    pub ends: Option<&'a LineEnds>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,15 +74,18 @@ pub struct Paged {
     pub reopen: Reopen,
     pub index: IndexRun,
     pub summary: Option<String>,
+    pub problem: Option<String>,
     pub editable: bool,
     pub stamp: Option<FileStamp>,
 }
 
 type Read = Arc<dyn Fn(&Location) -> Result<FileText, String> + Send + Sync>;
+type ReadAs = Arc<dyn Fn(&Location, &'static Encoding) -> Result<FileText, String> + Send + Sync>;
 type Write =
     Arc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError> + Send + Sync>;
 type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
 type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
+type OpenPagedAs = Arc<dyn Fn(&Location, &'static Encoding) -> Result<Paged, String> + Send + Sync>;
 type ListArchive =
     Arc<dyn Fn(&Location, &AtomicBool) -> Result<ArchiveListing, String> + Send + Sync>;
 type ReadArchiveEntry =
@@ -95,9 +102,11 @@ pub type ReadRange = Arc<dyn Fn(&Location, u64, usize) -> Result<Vec<u8>, String
 #[derive(Clone)]
 pub struct FileHooks {
     pub read: Read,
+    pub read_as: ReadAs,
     pub write: Write,
     pub head: ReadHead,
     pub paged: OpenPaged,
+    pub paged_as: OpenPagedAs,
     pub archive: ListArchive,
     pub archive_entry: ReadArchiveEntry,
     pub memory: LoadMemory,
@@ -112,15 +121,39 @@ pub struct FileHooks {
 }
 
 impl FileHooks {
+    pub fn read_with(
+        &self,
+        location: &Location,
+        encoding: Option<&'static Encoding>,
+    ) -> Result<FileText, String> {
+        match encoding {
+            Some(encoding) => (self.read_as)(location, encoding),
+            None => (self.read)(location),
+        }
+    }
+
+    pub fn paged_with(
+        &self,
+        location: &Location,
+        encoding: Option<&'static Encoding>,
+    ) -> Result<Paged, String> {
+        match encoding {
+            Some(encoding) => (self.paged_as)(location, encoding),
+            None => (self.paged)(location),
+        }
+    }
+
     #[must_use]
     pub fn none() -> Self {
         Self {
             read: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            read_as: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
             write: Arc::new(|_, _| {
                 Err(SaveError::Failed("Files cannot be saved here.".to_owned()))
             }),
             head: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
+            paged_as: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
             archive: Arc::new(|_, _| Err("Archives cannot be opened here.".to_owned())),
             archive_entry: Arc::new(|_, _, _| Err("Archives cannot be opened here.".to_owned())),
             memory: Arc::new(|_, _| None),

@@ -1,5 +1,8 @@
 use rusty_core::Location;
+use std::sync::Arc;
+
 use rusty_core::encoding::TextEncoding;
+use rusty_core::line_ends::LineEnds;
 
 use super::EditorView;
 use crate::prelude::*;
@@ -15,6 +18,7 @@ struct SaveJob {
     text: String,
     crlf: bool,
     encoding: TextEncoding,
+    ends: Option<Arc<LineEnds>>,
     expected: Option<FileStamp>,
 }
 
@@ -25,6 +29,7 @@ impl SaveJob {
             crlf: self.crlf,
             expected: self.expected,
             encoding: self.encoding,
+            ends: self.ends.as_deref(),
         };
         (hooks.write)(&self.location, &save)
     }
@@ -40,6 +45,7 @@ impl EditorView {
             text: self.editor.read(cx).value().to_string(),
             crlf: self.crlf,
             encoding: self.encoding,
+            ends: self.ends.clone(),
             expected: if self.overwrite { None } else { self.stamp },
         };
         let hooks = self.host.hooks.clone();

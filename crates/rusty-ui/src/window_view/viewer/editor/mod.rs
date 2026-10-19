@@ -12,6 +12,7 @@ use std::sync::Arc;
 use gpui_kit::component::input::{EditorState, InputEvent, RangeDecorationCollection};
 use gpui_kit::{Subscription, Task};
 use rusty_core::encoding::TextEncoding;
+use rusty_core::line_ends::LineEnds;
 
 pub(super) use body::{EditorBody, EditorFile};
 pub(super) use preview::SplitChoice;
@@ -29,14 +30,13 @@ use find::EditorFind;
 use marking::text_source;
 use preview::Split;
 
-const NOT_LOSSLESS: &str = "Not valid in its encoding: opened read-only.";
-
 pub(super) struct EditorView {
     host: Host,
     editor: Entity<EditorState>,
     editing: bool,
     can_edit: bool,
     crlf: bool,
+    ends: Option<Arc<LineEnds>>,
     encoding: TextEncoding,
     stamp: Option<FileStamp>,
     persists: bool,
@@ -58,6 +58,21 @@ pub(super) struct EditorView {
     _changes: Subscription,
 }
 
+fn not_lossless(encoding: &TextEncoding) -> SharedString {
+    format!(
+        "Not valid as {}: bad bytes show as \u{FFFD}. Opened read-only.",
+        encoding.label()
+    )
+    .into()
+}
+
+fn crlf_offsets(file: &FileText, text: &Arc<str>) -> Option<CrlfOffsets> {
+    match &file.ends {
+        Some(ends) => Some(CrlfOffsets(Arc::from(ends.crlf_marks(&file.text)))),
+        None => file.crlf.then(|| CrlfOffsets(text.clone())),
+    }
+}
+
 fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLink) {
     let persists =
         file.encoding.encoding.name() == "UTF-8" && !file.encoding.bom && !file.read_only;
@@ -70,7 +85,7 @@ fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLi
         location: host.location.clone(),
         stamp: file.stamp.filter(|_| persists),
         carried,
-        crlf: file.crlf.then(|| CrlfOffsets(text.clone())),
+        crlf: crlf_offsets(file, text),
     };
     (persists, link)
 }
@@ -115,6 +130,7 @@ impl EditorView {
             editing: false,
             can_edit: !file.read_only,
             crlf: file.crlf,
+            ends: file.ends.clone(),
             encoding: file.encoding,
             stamp: file.stamp,
             persists,
@@ -122,7 +138,7 @@ impl EditorView {
             revision: 0,
             overwrite: false,
             saving: None,
-            note: file.read_only.then(|| NOT_LOSSLESS.into()),
+            note: file.read_only.then(|| not_lossless(&file.encoding)),
             find: EditorFind::default(),
             go_to: None,
             marking: Marking::new(text_source(shared)),

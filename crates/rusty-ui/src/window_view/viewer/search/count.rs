@@ -112,7 +112,7 @@ pub(in crate::window_view::viewer) fn count_search<V: Marked>(
         return;
     }
     marking.count = Some(CountRun {
-        tally: Tally::new(needle),
+        tally: Tally::new(needle, marking.layout),
         failed: false,
         generation: 0,
         job: None,

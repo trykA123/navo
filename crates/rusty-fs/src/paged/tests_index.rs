@@ -1,6 +1,8 @@
 use std::fs;
 use std::sync::atomic::AtomicBool;
 
+use rusty_core::paging::TextLayout;
+
 use super::*;
 
 fn lines(count: usize, line: &[u8]) -> Vec<u8> {
@@ -13,7 +15,7 @@ fn run(path: &Path, cancel: bool) -> (Indexed, Vec<(u64, bool)>) {
     let cancel = AtomicBool::new(cancel);
     let mut calls = Vec::new();
     let mut progress = |index: &LineIndex| calls.push((index.scanned(), index.is_done()));
-    let result = index_lines(path, &cancel, &mut progress);
+    let result = index_lines(path, TextLayout::default(), &cancel, &mut progress);
     (result, calls)
 }
 

@@ -60,6 +60,7 @@ gpui_kit::actions!(
         ToggleInfo,
         ShowMenu,
         ViewMenu,
+        ChooseEncoding,
         LeftDrawer,
         RightDrawer,
         ToggleLineNumbers,

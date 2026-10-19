@@ -88,7 +88,7 @@ pub struct Gallery {
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 3],
     menus: [(Page, Entity<MenuPage>); 6],
-    viewer_menus: [Entity<ViewerMenuPage>; 6],
+    viewer_menus: [Entity<ViewerMenuPage>; 7],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
@@ -135,6 +135,7 @@ impl Gallery {
                 ViewerMenuShows::Text,
                 ViewerMenuShows::Tree,
                 ViewerMenuShows::ViewText,
+                ViewerMenuShows::Encoding,
                 ViewerMenuShows::ViewAutomotive,
                 ViewerMenuShows::ViewElf,
                 ViewerMenuShows::ViewTrace,
@@ -335,12 +336,7 @@ impl Render for Gallery {
             | Page::MenuFiles
             | Page::MenuBackground
             | Page::MenuEmptyFolder => root.children(self.menu_page(self.page)),
-            Page::ViewerMenuText
-            | Page::ViewerMenuTree
-            | Page::ViewMenuText
-            | Page::ViewMenuAutomotive
-            | Page::ViewMenuElf
-            | Page::ViewMenuTrace => root.children(self.viewer_menu()),
+            _ if self.viewer_menu().is_some() => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree
             | Page::Table
@@ -367,9 +363,10 @@ impl Gallery {
             Page::ViewerMenuText => Some(self.viewer_menus[0].clone()),
             Page::ViewerMenuTree => Some(self.viewer_menus[1].clone()),
             Page::ViewMenuText => Some(self.viewer_menus[2].clone()),
-            Page::ViewMenuAutomotive => Some(self.viewer_menus[3].clone()),
-            Page::ViewMenuElf => Some(self.viewer_menus[4].clone()),
-            Page::ViewMenuTrace => Some(self.viewer_menus[5].clone()),
+            Page::ViewerEncoding => Some(self.viewer_menus[3].clone()),
+            Page::ViewMenuAutomotive => Some(self.viewer_menus[4].clone()),
+            Page::ViewMenuElf => Some(self.viewer_menus[5].clone()),
+            Page::ViewMenuTrace => Some(self.viewer_menus[6].clone()),
             _ => None,
         }
     }

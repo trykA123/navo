@@ -153,6 +153,7 @@ viewer.back | escape | Tree
 viewer.show_line_ends | alt-l | Viewer
 viewer.follow | alt-f | Viewer
 viewer.view_menu | alt-v | Viewer
+viewer.encoding | ctrl-shift-e | Viewer
 view.left_drawer | ctrl-b | Viewer
 view.right_drawer | ctrl-i | Viewer
 viewer.context_menu | menu | Viewer

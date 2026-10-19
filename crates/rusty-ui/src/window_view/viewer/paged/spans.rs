@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use rusty_core::paging::HEX_WIDTH;
+use rusty_core::paging::{HEX_WIDTH, TextLayout};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Paint {
@@ -46,8 +46,10 @@ impl RowPaint<'_> {
 
 pub(super) struct TextCut {
     pub start: u64,
+    pub end: u64,
     pub shift: usize,
     pub limit: usize,
+    pub layout: TextLayout,
 }
 
 pub(super) fn shown_text(
@@ -55,13 +57,20 @@ pub(super) fn shown_text(
     cut: &TextCut,
     painted: &Painted<'_>,
 ) -> (String, Vec<(Range<usize>, Paint)>) {
-    let row = painted.within(&(cut.start..cut.start + text.len() as u64));
+    let row = painted.within(&(cut.start..cut.end));
     let mut shown = String::new();
     let mut runs: Vec<(Range<usize>, Paint)> = Vec::new();
-    for (at, ch) in text.char_indices().skip(cut.shift).take(cut.limit) {
+    let mut raw = cut.start;
+    let wanted = cut.shift..cut.shift.saturating_add(cut.limit);
+    for (position, ch) in text.chars().enumerate().take(wanted.end) {
+        let here = raw;
+        raw += cut.layout.raw_len(ch) as u64;
+        if position < wanted.start {
+            continue;
+        }
         let from = shown.len();
         shown.push(if ch.is_control() { ' ' } else { ch });
-        let Some(paint) = row.at(cut.start + at as u64) else {
+        let Some(paint) = row.at(here) else {
             continue;
         };
         match runs.last_mut() {
@@ -79,8 +88,8 @@ pub(super) fn hex_slots(start: u64, painted: &Painted<'_>) -> Vec<(usize, Paint)
         .collect()
 }
 
-pub(super) fn line_end(start: u64, end: u64, next: u64) -> Option<&'static str> {
-    match next.checked_sub(end.max(start)) {
+pub(super) fn line_end(start: u64, end: u64, next: u64, unit: u64) -> Option<&'static str> {
+    match next.checked_sub(end.max(start)).map(|bytes| bytes / unit) {
         Some(2) => Some("CRLF"),
         Some(1) => Some("LF"),
         _ => None,
@@ -89,13 +98,17 @@ pub(super) fn line_end(start: u64, end: u64, next: u64) -> Option<&'static str> 
 
 #[cfg(test)]
 mod tests {
+    use rusty_core::paging::TextLayout;
+
     use super::{Paint, Painted, TextCut, hex_slots, line_end, shown_text};
 
     fn cut(start: u64) -> TextCut {
         TextCut {
             start,
+            end: start + 100,
             shift: 0,
             limit: 100,
+            layout: TextLayout::default(),
         }
     }
 
@@ -158,8 +171,10 @@ mod tests {
 
     #[test]
     fn line_ends_read_from_the_row_bounds() {
-        assert_eq!(line_end(0, 5, 7), Some("CRLF"));
-        assert_eq!(line_end(0, 5, 6), Some("LF"));
-        assert_eq!(line_end(0, 5, 5), None);
+        assert_eq!(line_end(0, 5, 7, 1), Some("CRLF"));
+        assert_eq!(line_end(0, 5, 6, 1), Some("LF"));
+        assert_eq!(line_end(0, 5, 5, 1), None);
+        assert_eq!(line_end(0, 10, 14, 2), Some("CRLF"));
+        assert_eq!(line_end(0, 10, 12, 2), Some("LF"));
     }
 }

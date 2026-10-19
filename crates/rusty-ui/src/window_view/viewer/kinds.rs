@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusty_core::Location;
+use rusty_core::encoding::Encoding;
 
 use super::FileHooks;
 use super::body::{Attach, ViewerBody};
@@ -79,6 +80,7 @@ pub struct Load<'a> {
     pub location: &'a Location,
     pub sniff: &'a Sniff<'a>,
     pub cancel: &'a AtomicBool,
+    pub encoding: Option<&'static Encoding>,
 }
 
 impl<'a> Load<'a> {
@@ -94,7 +96,13 @@ impl<'a> Load<'a> {
             location,
             sniff,
             cancel,
+            encoding: None,
         }
+    }
+
+    #[must_use]
+    pub fn in_encoding(self, encoding: Option<&'static Encoding>) -> Self {
+        Self { encoding, ..self }
     }
 
     pub(super) fn ensure_open(&self) -> Result<(), String> {
