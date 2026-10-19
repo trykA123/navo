@@ -8,8 +8,8 @@ use super::windows::attrib;
 use super::*;
 use crate::local::win_copy::{self, CopyProgress};
 use crate::{
-    AutoTuning, JobContext, JobOutcome, Progress, ProviderOps, TEMP_SUFFIX, clean_up, existing_at,
-    roll_back, run_job, scan,
+    AutoTuning, JobContext, JobOutcome, Journaled, Progress, ProviderOps, TEMP_SUFFIX, clean_up,
+    existing_at, roll_back, run_job, scan,
 };
 
 const LARGE_SIZE: usize = 32 * 1024 * 1024 + 73;
@@ -163,7 +163,12 @@ fn rolling_back_a_job_removes_a_copy_of_a_readonly_source() {
             .attributes
             .readonly
     );
-    let outcome = roll_back(&plan, &[0], &mut ctx);
+    let job = Journaled {
+        plan: &plan,
+        done: &[0],
+        held: &[],
+    };
+    let outcome = roll_back(&job, &mut ctx);
     attrib("-r", &source);
     assert_eq!(outcome, JobOutcome::Done);
     assert!(!dir.path().join("dst/source.bin").exists());

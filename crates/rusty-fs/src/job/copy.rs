@@ -1,6 +1,7 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution};
 
-use super::{StepOutcome, TEMP_SUFFIX};
+use super::aside::Aside;
+use super::{JobContext, StepOutcome, TEMP_SUFFIX};
 use crate::{CancelToken, ProviderOps};
 
 pub(super) struct Copier<'a> {
@@ -22,41 +23,65 @@ pub(super) fn temp_of(target: &Location) -> Result<Location, FsError> {
     parent.join(&temp).map_err(|_| invalid(target))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Copied {
+    Skipped,
+    Placed,
+    Ready,
+}
+
 pub(super) fn copy(
     copier: &Copier<'_>,
     step: &CopyStep<'_>,
     on_bytes: &mut dyn FnMut(u64),
-) -> Result<StepOutcome, FsError> {
+) -> Result<Copied, FsError> {
     let exists = copier.ops.metadata(step.target).is_ok();
     if exists && !overwrites(copier.plan, step.target) {
-        return Ok(StepOutcome::Skipped);
+        return Ok(Copied::Skipped);
     }
     let temp = temp_of(step.target)?;
     remove_if_present(copier.ops, &temp)?;
-    let placement = Placement {
-        step,
-        temp: &temp,
-        exists,
-    };
-    let result = write_and_place(copier, &placement, on_bytes);
+    let result = write(copier, step, &temp, on_bytes).and_then(|()| {
+        if exists {
+            Ok(Copied::Ready)
+        } else {
+            copier
+                .ops
+                .rename(&temp, step.target)
+                .map(|()| Copied::Placed)
+        }
+    });
     if result.is_err() {
         let _ = remove_if_present(copier.ops, &temp);
     }
-    result.map(|()| StepOutcome::Done)
+    result
 }
 
-struct Placement<'a> {
-    step: &'a CopyStep<'a>,
-    temp: &'a Location,
-    exists: bool,
+pub(super) fn place(
+    aside: &Aside,
+    ctx: &mut JobContext<'_>,
+    copied: Copied,
+    target: &Location,
+) -> Result<StepOutcome, FsError> {
+    match copied {
+        Copied::Skipped => Ok(StepOutcome::Skipped),
+        Copied::Placed => Ok(StepOutcome::Done),
+        Copied::Ready => {
+            let placed = aside.place_over(ctx, target);
+            if placed.is_err() {
+                let _ = temp_of(target).map(|temp| remove_if_present(ctx.ops, &temp));
+            }
+            placed.map(|()| StepOutcome::Done)
+        }
+    }
 }
 
-fn write_and_place(
+fn write(
     copier: &Copier<'_>,
-    placement: &Placement<'_>,
+    step: &CopyStep<'_>,
+    temp: &Location,
     on_bytes: &mut dyn FnMut(u64),
 ) -> Result<(), FsError> {
-    let Placement { step, temp, exists } = *placement;
     let Copier { ops, cancel, .. } = *copier;
     let written = ops.copy_file(step.source, temp, on_bytes, cancel)?;
     if cancel.is_cancelled() {
@@ -66,11 +91,7 @@ fn write_and_place(
     if written != step.size || on_disk != written {
         return Err(failure(FsErrorKind::Unknown, step.target));
     }
-    if exists {
-        ops.replace(temp, step.target)
-    } else {
-        ops.rename(temp, step.target)
-    }
+    Ok(())
 }
 
 fn overwrites(plan: &OperationPlan, target: &Location) -> bool {

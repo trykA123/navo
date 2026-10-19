@@ -128,7 +128,7 @@ impl JobWork {
                 progress,
             },
         );
-        log.finish(&outcome);
+        log.finish(&outcome, self.ops.as_ref());
         Ok(outcome)
     }
 }

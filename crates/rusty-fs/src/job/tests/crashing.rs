@@ -20,6 +20,8 @@ pub(super) struct Crashing<'a> {
     path: String,
     ops: Vec<FakeOp>,
     dead: AtomicBool,
+    inside: bool,
+    fatal: bool,
 }
 
 impl<'a> Crashing<'a> {
@@ -29,6 +31,22 @@ impl<'a> Crashing<'a> {
             path: path.to_owned(),
             ops: vec![op],
             dead: AtomicBool::new(false),
+            inside: false,
+            fatal: true,
+        }
+    }
+
+    pub(super) fn inside_holding(fs: &'a FakeFs, op: FakeOp) -> Self {
+        Self {
+            inside: true,
+            ..Self::new(fs, HELD_PREFIX, op)
+        }
+    }
+
+    pub(super) fn refusing(self) -> Self {
+        Self {
+            fatal: false,
+            ..self
         }
     }
 
@@ -47,10 +65,20 @@ impl<'a> Crashing<'a> {
     }
 
     fn hits(&self, location: &Location, op: FakeOp) -> bool {
-        self.ops.contains(&op) && location.path().to_text().trim_start_matches('/') == self.path
+        let text = location.path().to_text();
+        let path = text.trim_start_matches('/');
+        let matches = if self.inside {
+            path.split('/').any(|part| part.starts_with(&self.path))
+        } else {
+            path == self.path
+        };
+        self.ops.contains(&op) && matches
     }
 
     fn die(&self) -> FsError {
+        if !self.fatal {
+            return FsError::new(FsErrorKind::AccessDenied);
+        }
         self.dead.store(true, Ordering::SeqCst);
         died()
     }
@@ -161,10 +189,19 @@ pub(super) fn crashed_with(
 }
 
 pub(super) fn crashed_on(ops: &Crashing<'_>, plan: &OperationPlan, workers: usize) -> Vec<u32> {
+    crashed_keeping(ops, plan, workers).0
+}
+
+pub(super) fn crashed_keeping(
+    ops: &Crashing<'_>,
+    plan: &OperationPlan,
+    workers: usize,
+) -> (Vec<u32>, Vec<HeldFile>) {
     let mut harness = Harness {
         workers,
+        keeps_held: true,
         ..Harness::default()
     };
     let _ = harness.run(ops, plan, &[]);
-    harness.log.done()
+    (harness.log.done(), harness.log.held)
 }

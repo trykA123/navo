@@ -18,6 +18,8 @@ mod crash;
 mod crashing;
 mod faults;
 mod journal;
+mod kept_aside;
+mod kept_aside_crash;
 mod move_;
 mod parallel;
 mod parallel_pause;
@@ -34,6 +36,8 @@ const MODES: [usize; 2] = [0, 4];
 struct Log {
     entries: Vec<(u32, StepOutcome)>,
     fail_on: Option<u32>,
+    held: Vec<HeldFile>,
+    unjournaled: bool,
 }
 
 fn log_error() -> FsError {
@@ -50,6 +54,14 @@ impl JobLog for Log {
         }
         self.entries.push((seq, outcome));
         Ok(())
+    }
+
+    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
+        if self.unjournaled {
+            return Ok(false);
+        }
+        self.held.push(held.clone());
+        Ok(true)
     }
 }
 
@@ -70,15 +82,21 @@ struct Harness {
     cancel_after_bytes: Option<u64>,
     progress: Vec<Progress>,
     workers: usize,
+    keeps_held: bool,
+    held: Vec<HeldFile>,
 }
 
 impl Harness {
     fn run(&mut self, ops: &dyn ProviderOps, plan: &OperationPlan, done: &[u32]) -> JobOutcome {
         let workers = self.workers;
-        self.with(ops, |ctx| match workers {
+        let outcome = self.with(ops, |ctx| match workers {
             0 => run_job(plan, done, ctx),
             n => super::parallel::run(plan, done, ctx, n),
-        })
+        });
+        if !self.keeps_held {
+            let _ = release_held(&self.log.held, ops);
+        }
+        outcome
     }
 
     fn roll_back(
@@ -87,7 +105,15 @@ impl Harness {
         plan: &OperationPlan,
         done: &[u32],
     ) -> JobOutcome {
-        self.with(ops, |ctx| roll_back(plan, done, ctx))
+        let held = std::mem::take(&mut self.held);
+        let job = Journaled {
+            plan,
+            done,
+            held: &held,
+        };
+        let outcome = self.with(ops, |ctx| roll_back(&job, ctx));
+        self.held = held;
+        outcome
     }
 
     fn with(

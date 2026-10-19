@@ -5,10 +5,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, OperationPlan};
 use rusty_fs::{
-    CancelToken, JobContext, JobLog, JobOutcome, ProviderOps, StepOutcome, clean_up, roll_back,
+    CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, ProviderOps, StepOutcome,
+    clean_up, roll_back,
 };
 use rusty_store::{Db, JobId, JobJournal, JobState, JournalError, StepState, UnfinishedJob};
 use rusty_ui::browser::{LogFactory, OpLog};
+
+mod held;
 
 const KEEP_FINISHED: u32 = 50;
 
@@ -80,6 +83,7 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
             journal: Arc::clone(&journal),
             job,
             kind,
+            held: Vec::new(),
         }) as Box<dyn OpLog>)
     })
 }
@@ -88,6 +92,7 @@ struct JournalLog {
     journal: SharedJournal,
     job: JobId,
     kind: String,
+    held: Vec<HeldFile>,
 }
 
 impl JobLog for JournalLog {
@@ -101,10 +106,16 @@ impl JobLog for JournalLog {
             .mark_step(self.job, seq, state, None)
             .map_err(|_| FsError::new(FsErrorKind::Unknown))
     }
+
+    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
+        held::record(&self.journal, self.job, held)?;
+        self.held.push(held.clone());
+        Ok(true)
+    }
 }
 
 impl OpLog for JournalLog {
-    fn finish(&mut self, outcome: &JobOutcome) {
+    fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) {
         let state = match outcome {
             JobOutcome::Done => JobState::Done,
             JobOutcome::Cancelled => JobState::Cancelled,
@@ -127,6 +138,7 @@ impl OpLog for JournalLog {
             );
         }
         let _ = lock(&self.journal).finish(self.job, state);
+        let _ = held::release(&self.journal, self.job, &self.held, ops);
     }
 }
 
@@ -136,20 +148,28 @@ impl JobLog for Quiet {
     fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
         Ok(())
     }
+
+    fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
+        Ok(false)
+    }
 }
 
 pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, JournalError> {
     let unfinished = lock(journal).unfinished()?;
     let count = u32::try_from(unfinished.len()).unwrap_or(u32::MAX);
     for job in unfinished {
-        let state = undo(&job, ops);
+        let state = match held::held_of(journal, job.id)? {
+            Some(held) => undo(&job, &held, ops),
+            None => JobState::Failed,
+        };
         lock(journal).finish(job.id, state)?;
     }
+    held::release_finished(journal, ops)?;
     lock(journal).prune(KEEP_FINISHED)?;
     Ok(count)
 }
 
-fn undo(job: &UnfinishedJob, ops: &dyn ProviderOps) -> JobState {
+fn undo(job: &UnfinishedJob, held: &[HeldFile], ops: &dyn ProviderOps) -> JobState {
     let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
         return JobState::Failed;
     };
@@ -161,8 +181,11 @@ fn undo(job: &UnfinishedJob, ops: &dyn ProviderOps) -> JobState {
         .collect();
     let _ = clean_up(&plan, &done, ops);
     let outcome = roll_back(
-        &plan,
-        &done,
+        &Journaled {
+            plan: &plan,
+            done: &done,
+            held,
+        },
         &mut JobContext {
             ops,
             log: &mut Quiet,
@@ -181,3 +204,6 @@ mod tests;
 
 #[cfg(test)]
 mod events_tests;
+
+#[cfg(test)]
+mod held_tests;

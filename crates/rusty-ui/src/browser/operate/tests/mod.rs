@@ -88,10 +88,14 @@ impl JobLog for SharedLog {
         }
         Ok(())
     }
+
+    fn journal_held(&mut self, _: &rusty_fs::HeldFile) -> Result<bool, rusty_core::FsError> {
+        Ok(false)
+    }
 }
 
 impl OpLog for SharedLog {
-    fn finish(&mut self, outcome: &JobOutcome) {
+    fn finish(&mut self, outcome: &JobOutcome, _: &dyn ProviderOps) {
         if let Ok(mut record) = self.0.lock() {
             record.finished = Some(outcome.clone());
         }

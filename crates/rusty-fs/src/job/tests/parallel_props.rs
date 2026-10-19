@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use proptest::prelude::*;
 
-use super::crashing::crashed_with;
+use super::crashing::{Crashing, crashed_keeping};
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -121,6 +121,7 @@ struct Interrupted {
     before: HashMap<String, u64>,
     failed: Option<(u32, FsErrorKind)>,
     done: Vec<u32>,
+    held: Vec<HeldFile>,
 }
 
 fn source_of(spec: &Spec, pick: usize) -> Option<String> {
@@ -141,10 +142,13 @@ fn interrupted(spec: &Spec, interruption: &Interruption, workers: usize) -> Inte
         ..Harness::default()
     };
     let mut failed = None;
+    let mut held = Vec::new();
     let done = match interruption {
         Interruption::Crash(pick) => {
             let path = source_of(spec, *pick).unwrap_or_default();
-            let done = crashed_with(&fs, &plan, &path, workers);
+            let crashing = Crashing::new(&fs, &path, FakeOp::Copy);
+            let (done, kept) = crashed_keeping(&crashing, &plan, workers);
+            held = kept;
             let _ = clean_up(&plan, &done, &fs);
             done
         }
@@ -167,6 +171,7 @@ fn interrupted(spec: &Spec, interruption: &Interruption, workers: usize) -> Inte
         before,
         failed,
         done,
+        held,
     }
 }
 
@@ -203,6 +208,7 @@ fn resumed(run: &Interrupted, workers: usize) -> (JobOutcome, Snapshot, Vec<Stri
         ..Harness::default()
     };
     let outcome = harness.run(&run.fs, &run.plan, &run.done);
+    let _ = release_held(&run.held, &run.fs);
     (outcome, tree_of(&run.fs, ""), leftovers(&run.fs))
 }
 

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use rusty_core::{ConflictPolicy, OpKind, PlanRequest, plan};
 
 use super::*;
-use crate::job::{JobContext, JobLog, JobOutcome, Progress, StepOutcome, run_job};
+use crate::job::{HeldFile, JobContext, JobLog, JobOutcome, Progress, StepOutcome, run_job};
 use crate::{ProviderOps, existing_at, scan};
 
 pub(super) fn child(folder: &Location, name: &str) -> Location {
@@ -168,12 +168,17 @@ fn remove_file_removes_a_file() {
 }
 
 #[derive(Default)]
-pub(super) struct Log(Vec<(u32, StepOutcome)>);
+pub(super) struct Log(Vec<(u32, StepOutcome)>, pub(super) Vec<HeldFile>);
 
 impl JobLog for Log {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         self.0.push((seq, outcome));
         Ok(())
+    }
+
+    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
+        self.1.push(held.clone());
+        Ok(true)
     }
 }
 

@@ -51,7 +51,7 @@ fn run(fs: &FakeFs, plan: &OperationPlan, journal: &SharedJournal, finish: bool)
     );
     assert_eq!(outcome, JobOutcome::Done);
     if finish {
-        log.finish(&outcome);
+        log.finish(&outcome, fs);
     }
 }
 

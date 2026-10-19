@@ -1,5 +1,7 @@
 use crate::db::{Db, DbError};
 
+mod held;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct JobId(pub i64);
 
@@ -151,7 +153,9 @@ impl JobJournal {
 
     pub fn prune(&mut self, keep_finished: u32) -> Result<u32, JournalError> {
         let deleted = self.db.connection().execute(
-            "DELETE FROM job WHERE state != 'running' AND id NOT IN (
+            "DELETE FROM job WHERE state != 'running'
+             AND id NOT IN (SELECT job_id FROM undo WHERE job_id IS NOT NULL)
+             AND id NOT IN (
                  SELECT id FROM job WHERE state != 'running'
                  ORDER BY created_at DESC, id DESC LIMIT ?1
              )",
