@@ -46,7 +46,7 @@ fn rename_back(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Restored, FsErr
     }
 }
 
-fn is_placed(entry: &FsEntry, held: &HeldFile) -> bool {
+pub(super) fn is_placed(entry: &FsEntry, held: &HeldFile) -> bool {
     held.placed.is_some_and(|stamp| matches_stamp(entry, stamp))
 }
 

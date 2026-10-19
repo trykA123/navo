@@ -272,6 +272,9 @@ mod events_tests;
 mod held_tests;
 
 #[cfg(test)]
+mod move_over_tests;
+
+#[cfg(test)]
 mod undo_guard_tests;
 
 #[cfg(test)]

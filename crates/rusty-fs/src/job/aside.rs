@@ -90,6 +90,34 @@ impl Aside {
         })
     }
 
+    pub(super) fn move_over(
+        &self,
+        ctx: &mut JobContext<'_>,
+        source: &Location,
+        target: &Location,
+    ) -> Result<(), FsError> {
+        let ops = ctx.ops;
+        let moving = ops.metadata(source)?;
+        let holdable = presence(ops, target)?
+            .is_some_and(|entry| matches!(entry.kind, EntryKind::File | EntryKind::Link));
+        if moving.kind != EntryKind::File || !holdable {
+            return ops.rename(source, target);
+        }
+        let placed = Some(FileStamp {
+            size: moving.size,
+            modified_ms: moving.modified_ms,
+        });
+        let held = self.held_file(ops, &self.on_disk(ops, target), placed)?;
+        if !ctx.log.journal_held(&held)? {
+            return ops.replace(source, target);
+        }
+        make_room(ops, &held.held)?;
+        ops.rename(&held.original, &held.held)?;
+        ops.rename(source, target).inspect_err(|_| {
+            let _ = ops.rename(&held.held, &held.original);
+        })
+    }
+
     fn on_disk(&self, ops: &dyn ProviderOps, target: &Location) -> Location {
         let Some(folder) = target.parent() else {
             return target.clone();
