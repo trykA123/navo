@@ -26,6 +26,14 @@ fn version_flag_prints_the_version() {
 }
 
 #[test]
+fn pdf_helper_mode_stands_alone_without_a_console() {
+    assert_eq!(parse_strs(&["--pdf-helper"]), Ok(Command::PdfHelper));
+    assert!(!Command::PdfHelper.uses_console());
+    assert!(refusal(&["--pdf-helper", "a.pdf"]).contains("unknown argument a.pdf"));
+    assert!(refusal(&["work", "--pdf-helper"]).contains("--pdf-helper stands alone"));
+}
+
+#[test]
 fn diag_report_takes_a_path() {
     assert_eq!(
         parse_strs(&["--diag-report", "out.zip"]),

@@ -6,6 +6,7 @@ pub(crate) enum Command {
     Open(Start),
     Version,
     DiagReport(PathBuf),
+    PdfHelper,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -20,12 +21,16 @@ pub(crate) struct Start {
 
 pub(crate) const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>]]";
 
-const STANDALONE: [&str; 2] = ["--version", "--diag-report"];
+const STANDALONE: [&str; 3] = ["--version", "--diag-report", "--pdf-helper"];
 const WINDOW_FLAGS: [&str; 5] = ["--view", "--profile", "--metrics", "--left", "--right"];
 
 impl Command {
     pub(crate) fn uses_console(&self) -> bool {
-        !matches!(self, Self::Open(start) if !start.is_metrics())
+        match self {
+            Self::Open(start) => start.is_metrics(),
+            Self::PdfHelper => false,
+            Self::Version | Self::DiagReport(_) => true,
+        }
     }
 }
 
@@ -77,10 +82,10 @@ fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
 }
 
 fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Command, String> {
-    let command = if flag == "--version" {
-        Command::Version
-    } else {
-        Command::DiagReport(value(flag, rest.next())?)
+    let command = match flag {
+        "--version" => Command::Version,
+        "--pdf-helper" => Command::PdfHelper,
+        _ => Command::DiagReport(value(flag, rest.next())?),
     };
     let Some(extra) = rest.next() else {
         return Ok(command);
