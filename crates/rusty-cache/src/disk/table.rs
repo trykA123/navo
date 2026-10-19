@@ -46,14 +46,8 @@ impl ListingTable {
         self.db.put(TABLE, &codec::encode_key(key), &body.pack())
     }
 
-    pub(crate) fn usage(&self) -> (u64, u64) {
-        match (self.db.used_bytes(TABLE), self.db.entries(TABLE)) {
-            (Ok(bytes), Ok(entries)) => (bytes, entries),
-            (Err(error), _) | (_, Err(error)) => {
-                tracing::warn!(%error, "listing cache size unknown");
-                (0, 0)
-            }
-        }
+    pub(crate) fn usage(&self) -> Option<(u64, u64)> {
+        usage_of(&self.db)
     }
 
     fn drop_row(&mut self, id: &[u8], reason: DecodeError) {
@@ -74,4 +68,10 @@ impl ListingTable {
             .put(TABLE, &codec::encode_key(key), value)
             .unwrap_or_default();
     }
+}
+
+pub(crate) fn usage_of(db: &CacheDb) -> Option<(u64, u64)> {
+    db.usage(TABLE)
+        .inspect_err(|error| tracing::warn!(%error, "cannot measure the listing cache"))
+        .ok()
 }

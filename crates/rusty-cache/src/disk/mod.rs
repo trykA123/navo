@@ -63,7 +63,10 @@ struct Shared {
 }
 
 impl Shared {
-    fn record(&self, (bytes, entries): (u64, u64)) {
+    fn record(&self, usage: Option<(u64, u64)>) {
+        let Some((bytes, entries)) = usage else {
+            return;
+        };
         self.bytes.store(bytes, Ordering::Relaxed);
         self.entries.store(entries, Ordering::Relaxed);
     }
@@ -130,6 +133,22 @@ impl DiskListings {
                 });
             }
         }
+    }
+
+    #[must_use]
+    pub fn stored(path: &Path) -> Option<DiskStats> {
+        if !path.is_file() {
+            return None;
+        }
+        let (db, _) = CacheDb::open(path)
+            .inspect_err(|error| tracing::warn!(%error, "cannot open the listing cache"))
+            .ok()?;
+        let (bytes, entries) = table::usage_of(&db)?;
+        Some(DiskStats {
+            bytes,
+            entries,
+            budget: DISK_BUDGET,
+        })
     }
 
     #[must_use]

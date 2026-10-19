@@ -33,7 +33,7 @@ impl Writer {
         }
     }
 
-    pub(super) fn usage(&self) -> (u64, u64) {
+    pub(super) fn usage(&self) -> Option<(u64, u64)> {
         self.table.usage()
     }
 

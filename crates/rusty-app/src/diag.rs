@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
-use rusty_cache::{DiskListings, ListingCache};
+use rusty_cache::{DiskListings, DiskStats, ListingCache};
 use rusty_diag::{
     BuildInfo, CacheRegistry, CacheSize, DpiAwareness, EventRing, Identity, MemoryProbe, Redactor,
     ReportInput, ReportSummary, Salt, SystemInfo, TaskCounters, memory_report,
@@ -21,6 +21,18 @@ pub fn write(
     diagnostics: &Diagnostics,
 ) -> io::Result<ReportSummary> {
     write_with_crashes(path, started, diagnostics, &[])
+}
+
+pub fn write_on_demand(
+    path: &Path,
+    started: Instant,
+    diagnostics: &Diagnostics,
+    data: Option<&Path>,
+) -> io::Result<ReportSummary> {
+    if let Some(stats) = data.and_then(|data| DiskListings::stored(&data.join("cache.db"))) {
+        listings_on_disk(&diagnostics.caches, stats.budget, move || stats);
+    }
+    write(path, started, diagnostics)
 }
 
 pub(crate) fn write_with_crashes(
@@ -60,15 +72,23 @@ pub(crate) fn register_listings(
         }
     });
     if let Some(disk) = disk.cloned() {
-        caches.register("listings in cache.db", disk.stats().budget, move || {
-            let stats = disk.stats();
-            CacheSize {
-                bytes: stats.bytes,
-                pinned_bytes: 0,
-                entries: stats.entries,
-            }
-        });
+        listings_on_disk(caches, disk.stats().budget, move || disk.stats());
     }
+}
+
+fn listings_on_disk(
+    caches: &CacheRegistry,
+    budget: u64,
+    measure: impl Fn() -> DiskStats + Send + Sync + 'static,
+) {
+    caches.register("listings in cache.db", budget, move || {
+        let stats = measure();
+        CacheSize {
+            bytes: stats.bytes,
+            pinned_bytes: 0,
+            entries: stats.entries,
+        }
+    });
 }
 
 pub(crate) fn register_events(caches: &CacheRegistry, ring: &Arc<EventRing>) {

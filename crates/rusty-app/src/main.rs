@@ -115,7 +115,8 @@ fn install_logging(profile: &Profile) -> logging::Diagnostics {
 
 fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
     let diagnostics = install_logging(profile);
-    match diag::write(path, started, &diagnostics) {
+    let data = profile.dirs().map(|dirs| dirs.data.as_path());
+    match diag::write_on_demand(path, started, &diagnostics, data) {
         Ok(summary) => {
             println!(
                 "ferrite: wrote {} ({} bytes)",

@@ -218,3 +218,37 @@ fn the_report_shows_cache_db_against_its_budget() {
         (Value::from(0), Value::from(32 * 1024 * 1024))
     );
 }
+
+#[test]
+fn the_on_demand_report_reads_cache_db_from_the_data_folder() {
+    let diagnostics = diagnostics(Opened::default());
+    let dir = tempfile::tempdir().unwrap();
+    let keys = rusty_cache::CacheKeys::default();
+    let folder = rusty_core::Location::new("other://open").unwrap();
+    let cache = rusty_cache::ListingCache::default();
+    cache.put(
+        keys.key(&folder).unwrap(),
+        rusty_cache::CachedListing {
+            rows: Arc::from([]),
+            read_at: std::time::SystemTime::UNIX_EPOCH,
+            folder_changed: None,
+            complete: true,
+        },
+    );
+    let warm = rusty_cache::Warm {
+        cache: rusty_cache::ListingCache::default(),
+        keys: keys.clone(),
+        folders: Vec::new(),
+        deadline: Instant::now() + std::time::Duration::from_secs(5),
+    };
+    let disk = rusty_cache::DiskListings::open(&dir.path().join("cache.db"), warm);
+    disk.save_folders(&cache, &keys, std::slice::from_ref(&folder));
+    assert!(disk.close(std::time::Duration::from_secs(5)));
+    let path = dir.path().join("report.zip");
+    write_on_demand(&path, Instant::now(), &diagnostics, Some(dir.path())).unwrap();
+    let stored = cache_named(&read_report(&path), "listings in cache.db").clone();
+    assert_eq!(
+        (stored["entries"].clone(), stored["budget"].clone()),
+        (Value::from(1), Value::from(32 * 1024 * 1024))
+    );
+}

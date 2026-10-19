@@ -423,3 +423,21 @@ fn stats_follow_a_save() {
     assert!(disk.flush(PATIENT));
     assert_eq!(disk.stats().entries, 1);
 }
+
+#[test]
+fn stored_reads_the_listing_table_without_a_writer() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = db_in(&dir);
+    let keys = serial_keys(7);
+    seed(&path, &keys, &folder(r"C:\work"), listing(&["a", "b"]));
+    let stats = DiskListings::stored(&path).expect("the table is readable");
+    assert_eq!((stats.entries, stats.budget), (1, crate::DISK_BUDGET));
+    assert!(stats.bytes > 0, "{stats:?}");
+}
+
+#[test]
+fn stored_of_a_missing_file_is_none_and_creates_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(DiskListings::stored(&db_in(&dir)), None);
+    assert!(!db_in(&dir).exists());
+}

@@ -174,9 +174,9 @@ fn used_bytes_after_clear_is_zero() {
 }
 
 #[test]
-fn entries_counts_the_rows_of_one_table() {
+fn usage_gives_the_bytes_and_rows_of_one_table() {
     let mut cache = mem_with_budget(T, 30);
     fill_abc(&mut cache);
     cache.put("other", b"x", b"y").unwrap();
-    assert_eq!(cache.entries(T).unwrap(), 3);
+    assert_eq!(cache.usage(T).unwrap(), (30, 3));
 }

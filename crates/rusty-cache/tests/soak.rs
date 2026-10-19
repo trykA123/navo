@@ -10,8 +10,8 @@
 use std::time::{Instant, SystemTime};
 
 use rusty_cache::{CacheKey, CacheKeys, CachedListing, Change, ListingCache};
-use rusty_core::Location;
-use rusty_fs::{CancelToken, FakeFs, load_folder};
+use rusty_core::{Location, ProviderPath};
+use rusty_fs::{Attributes, CancelToken, EntryKind, FakeFs, FsEntry, load_folder};
 
 const GROUPS: usize = 200;
 const LEAVES: usize = 250;
@@ -88,6 +88,7 @@ struct Peak {
     total: usize,
     reads: usize,
     checks: usize,
+    added: usize,
 }
 
 struct Tab {
@@ -194,10 +195,20 @@ impl<'a> Soak<'a> {
         let Some(listing) = self.cache.get(&key) else {
             return;
         };
-        let Some(first) = listing.rows.first() else {
-            return;
+        let change = match listing.rows.first() {
+            Some(first) if self.rng.below(2) == 0 => Change::Modified(first.clone()),
+            _ => {
+                self.peak.added += 1;
+                let name = format!("added-{:06}.dat", self.peak.added);
+                Change::Added(FsEntry {
+                    name: ProviderPath::from_text(&name),
+                    kind: EntryKind::File,
+                    size: 1,
+                    modified_ms: None,
+                    attributes: Attributes::default(),
+                })
+            }
         };
-        let change = Change::Modified(first.clone());
         self.cache.patch(&key, SystemTime::now(), [change]);
     }
 
@@ -262,17 +273,21 @@ fn private_bytes() -> Option<u64> {
     None
 }
 
-fn run_soak(fs: &FakeFs, largest: usize, tabs: usize) -> Peak {
-    let mut soak = Soak::new(fs, largest);
-    soak.churn(tabs);
+fn round(soak: &mut Soak<'_>) {
+    soak.churn(TABS);
     let stats = soak.cache.stats();
     assert_eq!((stats.pinned_bytes, stats.pinned_entries), (0, 0));
     assert!(stats.bytes <= BUDGET, "{} left after the pins", stats.bytes);
+    assert!(stats.evictions > 0, "the budget never evicted");
+    assert!(
+        soak.peak.unpinned > BUDGET / 2,
+        "unpinned bytes peaked at {}",
+        soak.peak.unpinned
+    );
     eprintln!(
-        "soak: after the last tab closed {} bytes in {} listings, {} evictions",
+        "soak: after the last tab closed {} bytes in {} listings, {} evictions so far",
         stats.bytes, stats.entries, stats.evictions
     );
-    soak.peak
 }
 
 #[test]
@@ -283,23 +298,29 @@ fn ten_thousand_tabs_over_fifty_thousand_folders_stay_in_budget_and_give_the_hea
     let largest = largest_listing(&fs, &folders);
     drop(folders);
     let cold = private_bytes();
+    let mut soak = Soak::new(&fs, largest);
     for _ in 0..WARM_UP_ROUNDS {
-        run_soak(&fs, largest, TABS);
+        round(&mut soak);
     }
     let baseline = private_bytes();
-    let peak = run_soak(&fs, largest, TABS);
+    round(&mut soak);
     let after = private_bytes();
+    let peak = &soak.peak;
     eprintln!(
-        "soak: {TABS} tabs, {FOLDERS} folders, budget {BUDGET}, peak unpinned {}, peak pinned {} in {} listings, peak total {}, {} reads, {} checks, {:.1} s",
+        "soak: {} rounds of {TABS} tabs, {FOLDERS} folders, budget {BUDGET}, peak unpinned {}, peak pinned {} in {} listings, peak total {}, {} reads, {} rows added, {} checks, {:.1} s",
+        WARM_UP_ROUNDS + 1,
         peak.unpinned,
         peak.pinned,
         peak.pinned_entries,
         peak.total,
         peak.reads,
+        peak.added,
         peak.checks,
         started.elapsed().as_secs_f64()
     );
-    eprintln!("soak: private heap cold {cold:?}, baseline {baseline:?}, after {after:?}");
+    eprintln!(
+        "soak: private heap cold {cold:?}, baseline {baseline:?}, after {after:?}, cache alive"
+    );
     if let (Some(baseline), Some(after)) = (baseline, after) {
         let limit = baseline as f64 * (1.0 + HEAP_SLACK);
         assert!(
