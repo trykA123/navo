@@ -2,7 +2,7 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{ClickEvent, Role, Stateful, WeakEntity};
 use rusty_automotive::{Elf, Section};
 
-use super::text::{address, class, is_wide, place, source, span};
+use super::text::{Spot, address, class, is_wide, place, source, span};
 use super::{ElfView, Focus, NavItem};
 use crate::format;
 use crate::prelude::*;
@@ -292,7 +292,11 @@ impl ElfView {
         if let Some(raw) = elf.raw_name(symbol) {
             facts.push(pair(t, ("Mangled", raw.to_owned())));
         }
-        let line = source(elf, self.lines.as_ref(), at);
+        if let Some(at) = self.go_address {
+            facts.push(pair(t, ("Went to", address(at, wide))));
+        }
+        let spot = self.go_address.map_or(Spot::Symbol(at), Spot::Address);
+        let line = source(elf, self.lines.as_ref(), spot);
         let source_line = div()
             .id("elf-inspector-source")
             .aria_label(line.clone())

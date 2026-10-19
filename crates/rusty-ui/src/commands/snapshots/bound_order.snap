@@ -241,6 +241,11 @@ elf.sort_by_name | ctrl-f3 | Elf
 elf.sort_by_section | ctrl-f4 | Elf
 elf.sort_by_address | ctrl-f5 | Elf
 elf.sort_by_size | ctrl-f6 | Elf
+elf.type_n | n | ElfTable
+elf.type_p | p | ElfTable
+elf.type_one | 1 | ElfTable
+elf.type_three | 3 | ElfTable
+elf.type_five | 5 | ElfTable
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu

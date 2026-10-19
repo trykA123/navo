@@ -1,5 +1,6 @@
 mod draw;
 mod drawers;
+mod go_to;
 mod jobs;
 mod keys;
 mod text;
@@ -10,15 +11,16 @@ mod tests;
 use std::any::Any;
 use std::sync::Arc;
 
-use gpui_kit::{AnyView, FocusHandle};
+use gpui_kit::{AnyView, FocusHandle, Subscription};
 use rusty_automotive::{Elf, Lines, Query, Scope, Symbol};
 
 pub(super) use keys::bind_keys;
 
 use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
+use super::search::bar::GO_TO_KEYS;
 use crate::prelude::*;
-use crate::primitives::ListScroll;
+use crate::primitives::{ListScroll, TextFieldState};
 use crate::side_sheet::SheetState;
 
 pub(in crate::window_view::viewer) struct ElfFile {
@@ -35,7 +37,7 @@ enum Phase {
 enum Index {
     Running,
     Ready(Arc<Elf>),
-    Failed,
+    Failed(SharedString),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +69,12 @@ impl NavItem {
     }
 }
 
+struct GoTo {
+    input: Entity<TextFieldState>,
+    error: Option<SharedString>,
+    _enter: Subscription,
+}
+
 pub(in crate::window_view::viewer) struct ElfView {
     title: SharedString,
     len: u64,
@@ -88,6 +96,10 @@ pub(in crate::window_view::viewer) struct ElfView {
     inspector: Entity<SheetState>,
     top_drawer: Drawer,
     note: Option<SharedString>,
+    lines_error: Option<SharedString>,
+    go_to: Option<GoTo>,
+    go_address: Option<u64>,
+    wanted_symbol: Option<u32>,
     page: usize,
 }
 
@@ -115,6 +127,10 @@ impl ElfView {
             inspector: cx.new(|_| SheetState::new()),
             top_drawer: Drawer::Navigator,
             note: None,
+            lines_error: None,
+            go_to: None,
+            go_address: None,
+            wanted_symbol: None,
             page: 1,
         }
     }
@@ -122,7 +138,7 @@ impl ElfView {
     fn elf(&self) -> Option<&Elf> {
         match &self.index {
             Index::Ready(elf) => Some(elf),
-            Index::Running | Index::Failed => None,
+            Index::Running | Index::Failed(_) => None,
         }
     }
 
@@ -164,9 +180,13 @@ impl ViewerBody for ElfBody {
 
     fn keys(&self, cx: &App) -> BodyKeys {
         let view = self.0.read(cx);
+        if view.go_to.is_some() {
+            return BodyKeys::Modal(GO_TO_KEYS.to_vec());
+        }
         let mut keys = vec![
             ("Ctrl+B", "Sections"),
             ("Ctrl+I", "Inspector"),
+            ("Ctrl+G", "Go to address"),
             ("Ctrl+F3", "Sort by name"),
         ];
         if view.focus_in == Focus::Navigator {
@@ -182,7 +202,11 @@ impl ViewerBody for ElfBody {
     }
 
     fn is_typing(&self, cx: &App) -> bool {
-        self.0.read(cx).is_filtering()
+        self.0.read(cx).elf().is_some()
+    }
+
+    fn takes_letters(&self, _: &App) -> bool {
+        true
     }
 
     fn as_any(&self) -> &dyn Any {

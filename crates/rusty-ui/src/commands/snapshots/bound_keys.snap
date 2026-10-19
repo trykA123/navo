@@ -60,6 +60,11 @@ elf.sort_by_section | ctrl-f4 | Elf
 elf.sort_by_size | ctrl-f6 | Elf
 elf.toggle_inspector | ctrl-i | Elf
 elf.toggle_navigator | ctrl-b | Elf
+elf.type_five | 5 | ElfTable
+elf.type_n | n | ElfTable
+elf.type_one | 1 | ElfTable
+elf.type_p | p | ElfTable
+elf.type_three | 3 | ElfTable
 files.clear_filter | escape | FileList
 files.clipboard_copy | ctrl-c | FileList
 files.clipboard_cut | ctrl-x | FileList

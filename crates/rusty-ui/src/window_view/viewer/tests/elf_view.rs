@@ -4,10 +4,11 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use rusty_automotive::elf_sample::{build, demo, firmware};
 
+use super::find::bottom_keys;
 use super::structured::open_named;
 use super::{Setup, has_editor, label, redraw, text_of, visible};
 use crate::window_view::FerriteWindow;
-use crate::window_view::tests::{press, settle};
+use crate::window_view::tests::{press, settle, type_in};
 
 fn open_bytes(
     cx: &mut TestAppContext,
@@ -191,4 +192,69 @@ fn the_drawers_never_cover_the_status_line(cx: &mut TestAppContext) {
         inspector.bottom() <= status.top(),
         "{inspector:?} {status:?}"
     );
+}
+
+#[gpui_kit::test]
+fn lister_letters_and_digits_type_into_an_empty_filter(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    typed(cx, window, &view, "pwm_init");
+    assert!(view.read_with(cx, |view, _| view.viewer_location().is_some()));
+    assert!(text_of(cx, window, "filter").starts_with("Filter pwm_init, 1 item"));
+    press(cx, window, &view, "escape");
+    settle_motion(cx, window, &view);
+    typed(cx, window, &view, "1ms");
+    assert!(text_of(cx, window, "filter").starts_with("Filter 1ms, 1 item"));
+    assert!(label(cx, window, ("elf-row", 0)).starts_with("Os_Task_1ms, "));
+}
+
+#[gpui_kit::test]
+fn the_key_bar_offers_alt_keys_and_no_next_file(cx: &mut TestAppContext) {
+    let (window, _) = open(cx);
+    let keys = bottom_keys(cx, window);
+    assert!(keys.iter().any(|key| key == "Alt+1 Text"), "{keys:?}");
+    assert!(
+        !keys.iter().any(|key| key.contains("Next file")),
+        "{keys:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn typing_with_the_navigator_focused_does_not_filter_the_table(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    press(cx, window, &view, "ctrl-b");
+    typed(cx, window, &view, "can");
+    assert!(!visible(cx, window, "filter"));
+}
+
+#[gpui_kit::test]
+fn ctrl_g_goes_to_the_symbol_holding_an_address_and_its_line(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    typed(cx, window, &view, "can");
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "8115");
+    press(cx, window, &view, "enter");
+    settle_motion(cx, window, &view);
+    assert!(
+        !visible(cx, window, "filter"),
+        "the filter is cleared to show it"
+    );
+    assert_eq!(text_of(cx, window, "elf-cursor"), "SystemInit · 0x00008101");
+    assert!(visible(cx, window, "elf-inspector"));
+    assert_eq!(
+        text_of(cx, window, "elf-inspector-source"),
+        "/work/src/main.c:57"
+    );
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "zz");
+    press(cx, window, &view, "enter");
+    assert!(text_of(cx, window, "elf-go-to-error").contains("Not a hex address"));
+}
+
+#[gpui_kit::test]
+fn a_file_that_fails_to_parse_says_why_in_the_status(cx: &mut TestAppContext) {
+    let mut bytes = build(&firmware(false, false)).expect("the sample builds");
+    bytes.truncate(24);
+    let (window, _) = open_bytes(cx, "broken.elf", bytes);
+    let status = text_of(cx, window, "elf-status");
+    assert!(status.contains("not a readable ELF file"), "{status}");
 }

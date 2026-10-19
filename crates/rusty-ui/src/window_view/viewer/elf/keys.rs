@@ -4,9 +4,12 @@ use rusty_automotive::{Column, Order};
 use super::{Drawer, ElfView, Focus};
 use crate::file_list::typed_char;
 use crate::prelude::*;
-use crate::window_view::viewer::{Back, GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
+use crate::window_view::viewer::{
+    Back, GoEnd, GoStart, OpenGoTo, PageDown, PageUp, RowDown, RowUp,
+};
 
 pub(super) const CONTEXT: &str = "Elf";
+pub(super) const TABLE_CONTEXT: &str = "ElfTable";
 
 gpui_kit::actions!(
     elf_view,
@@ -17,7 +20,12 @@ gpui_kit::actions!(
         SortByName,
         SortBySection,
         SortByAddress,
-        SortBySize
+        SortBySize,
+        TypeN,
+        TypeP,
+        TypeOne,
+        TypeThree,
+        TypeFive
     ]
 );
 
@@ -44,6 +52,7 @@ impl ElfView {
     }
 
     fn move_by(&mut self, by: i64, cx: &mut Context<Self>) {
+        self.go_address = None;
         match self.focus_in {
             Focus::Content => self.move_cursor(step(self.cursor, by, self.rows.len()), cx),
             Focus::Navigator => {
@@ -130,7 +139,10 @@ impl ElfView {
         }
     }
 
-    fn back(&mut self, cx: &mut Context<Self>) {
+    fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.close_go_to(window, cx) {
+            return;
+        }
         match self.top_open(cx) {
             Some(Drawer::Navigator) => self.close_navigator(cx),
             Some(Drawer::Inspector) => self.toggle_inspector(cx),
@@ -154,8 +166,20 @@ impl ElfView {
         self.run_select(cx);
     }
 
+    fn takes_typing(&self) -> bool {
+        self.elf().is_some() && self.go_to.is_none() && self.focus_in == Focus::Content
+    }
+
+    fn type_char(&mut self, typed: char, cx: &mut Context<Self>) {
+        if self.takes_typing() {
+            let mut text = self.query.text.clone();
+            text.push(typed);
+            self.set_filter(text, cx);
+        }
+    }
+
     fn type_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        if self.elf().is_none() {
+        if !self.takes_typing() {
             return;
         }
         let mut text = self.query.text.clone();
@@ -170,6 +194,16 @@ impl ElfView {
         self.set_filter(text, cx);
     }
 
+    pub(super) fn typing(table: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        table
+            .on_action(cx.listener(|view, _: &TypeN, _, cx| view.type_char('n', cx)))
+            .on_action(cx.listener(|view, _: &TypeP, _, cx| view.type_char('p', cx)))
+            .on_action(cx.listener(|view, _: &TypeOne, _, cx| view.type_char('1', cx)))
+            .on_action(cx.listener(|view, _: &TypeThree, _, cx| view.type_char('3', cx)))
+            .on_action(cx.listener(|view, _: &TypeFive, _, cx| view.type_char('5', cx)))
+            .on_key_down(cx.listener(|view, event, _, cx| view.type_key(event, cx)))
+    }
+
     pub(super) fn keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &RowUp, _, cx| view.move_by(-1, cx)))
             .on_action(cx.listener(|view, _: &RowDown, _, cx| view.move_by(1, cx)))
@@ -181,7 +215,8 @@ impl ElfView {
             }))
             .on_action(cx.listener(|view, _: &GoStart, _, cx| view.move_by(i64::MIN, cx)))
             .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.move_by(i64::MAX, cx)))
-            .on_action(cx.listener(|view, _: &Back, _, cx| view.back(cx)))
+            .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenGoTo, window, cx| view.open_go_to(window, cx)))
             .on_action(cx.listener(|view, _: &ToggleNavigator, _, cx| view.toggle_navigator(cx)))
             .on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
             .on_action(cx.listener(|view, _: &PickItem, _, cx| view.enter(cx)))
@@ -193,6 +228,5 @@ impl ElfView {
                 view.sort_by(Column::Address, cx);
             }))
             .on_action(cx.listener(|view, _: &SortBySize, _, cx| view.sort_by(Column::Size, cx)))
-            .on_key_down(cx.listener(|view, event, _, cx| view.type_key(event, cx)))
     }
 }

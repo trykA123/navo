@@ -84,15 +84,14 @@ impl ElfView {
                 self.move_cursor(0, cx);
             }
             IndexMessage::Parsed(Err(error)) => {
-                self.index = Index::Failed;
+                self.index = Index::Failed(error.to_string().into());
                 self.phase = Phase::Done;
-                self.note = Some(error.to_string().into());
             }
             IndexMessage::Lines(result) => {
                 self.phase = Phase::Done;
                 match result {
                     Ok(lines) => self.lines = Some(lines),
-                    Err(error) => self.note = Some(error.to_string().into()),
+                    Err(error) => self.lines_error = Some(error.to_string().into()),
                 }
             }
         }
@@ -121,7 +120,10 @@ impl ElfView {
         if selected.query != self.query {
             return;
         }
-        let kept = self.selected().map(|(at, _)| at as u32);
+        let kept = self
+            .wanted_symbol
+            .take()
+            .or_else(|| self.selected().map(|(at, _)| at as u32));
         self.selecting = None;
         self.rows = Arc::new(selected.rows);
         match kept.and_then(|kept| self.rows.iter().position(|at| *at == kept)) {

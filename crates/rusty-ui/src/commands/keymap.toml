@@ -1072,6 +1072,28 @@ command = "viewer.back"
 keys = ["escape"]
 context = "Elf"
 
+# ElfTable
+
+[[bind]]
+command = "elf.type_n"
+keys = ["n"]
+
+[[bind]]
+command = "elf.type_p"
+keys = ["p"]
+
+[[bind]]
+command = "elf.type_one"
+keys = ["1"]
+
+[[bind]]
+command = "elf.type_three"
+keys = ["3"]
+
+[[bind]]
+command = "elf.type_five"
+keys = ["5"]
+
 # Markdown
 
 [[bind]]

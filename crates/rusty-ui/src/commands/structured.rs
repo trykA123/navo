@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 5] = [
+pub(super) const GROUPS: [Group; 6] = [
     Group {
         context: "Tree",
         commands: &[
@@ -220,6 +220,24 @@ pub(super) const GROUPS: [Group; 5] = [
                 "elf_view::SortBySize",
                 "elf.sort_by_size",
                 "Sort symbols by size",
+            ),
+        ],
+    },
+    Group {
+        context: "ElfTable",
+        commands: &[
+            ("elf_view::TypeN", "elf.type_n", "Type n in the filter"),
+            ("elf_view::TypeP", "elf.type_p", "Type p in the filter"),
+            ("elf_view::TypeOne", "elf.type_one", "Type 1 in the filter"),
+            (
+                "elf_view::TypeThree",
+                "elf.type_three",
+                "Type 3 in the filter",
+            ),
+            (
+                "elf_view::TypeFive",
+                "elf.type_five",
+                "Type 5 in the filter",
             ),
         ],
     },

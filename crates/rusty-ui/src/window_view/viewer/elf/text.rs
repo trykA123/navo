@@ -84,20 +84,43 @@ pub(super) fn status(elf: &Elf, lines: Option<&Lines>) -> Vec<Check> {
             .iter()
             .map(|problem| check(problem.to_string(), true)),
     );
-    if let Some(problem) = lines.and_then(|lines| lines.problem.as_ref()) {
-        checks.push(check(problem.to_string(), true));
+    if let Some(lines) = lines {
+        checks.extend(
+            lines
+                .problems
+                .iter()
+                .map(|problem| check(problem.to_string(), true)),
+        );
     }
     checks
 }
 
-pub(super) fn source(elf: &Elf, lines: Option<&Lines>, symbol: usize) -> String {
+pub(super) fn parse_address(text: &str) -> Result<u64, String> {
+    let trimmed = text.trim();
+    let digits = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+        .unwrap_or(trimmed);
+    u64::from_str_radix(digits, 16).map_err(|_| format!("Not a hex address: {trimmed}"))
+}
+
+pub(super) enum Spot {
+    Symbol(usize),
+    Address(u64),
+}
+
+pub(super) fn source(elf: &Elf, lines: Option<&Lines>, spot: Spot) -> String {
     if !elf.has_dwarf() {
         return "No DWARF line info in this file".to_owned();
     }
     let Some(lines) = lines else {
         return "Reading DWARF lines…".to_owned();
     };
-    match lines.get(symbol) {
+    let found = match spot {
+        Spot::Symbol(at) => lines.get(at),
+        Spot::Address(at) => lines.at(at),
+    };
+    match found {
         Some((file, 0)) => file.to_owned(),
         Some((file, line)) => format!("{file}:{line}"),
         None => "No source line for this address".to_owned(),

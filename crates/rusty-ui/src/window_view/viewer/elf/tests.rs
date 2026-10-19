@@ -1,7 +1,7 @@
 use rusty_automotive::elf_sample::{build, firmware};
 use rusty_automotive::{Elf, ElfReader, Watch};
 
-use super::text::{address, row_label, source, span, status};
+use super::text::{Spot, address, parse_address, row_label, source, span, status};
 
 fn parse(is_64: bool) -> Elf {
     let bytes = build(&firmware(is_64, false)).expect("the sample builds");
@@ -65,5 +65,15 @@ fn the_status_names_machine_class_entry_totals_and_problems() {
 #[test]
 fn without_dwarf_the_source_says_so() {
     let elf = parse(false);
-    assert_eq!(source(&elf, None, 0), "No DWARF line info in this file");
+    assert_eq!(
+        source(&elf, None, Spot::Symbol(0)),
+        "No DWARF line info in this file"
+    );
+}
+
+#[test]
+fn addresses_parse_with_or_without_a_prefix() {
+    assert_eq!(parse_address("0x8000400"), Ok(0x800_0400));
+    assert_eq!(parse_address(" 1F00 "), Ok(0x1F00));
+    assert!(parse_address("zz").is_err());
 }

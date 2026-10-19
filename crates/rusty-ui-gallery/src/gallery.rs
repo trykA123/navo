@@ -254,14 +254,21 @@ fn image_keys() -> FKeyBar {
 
 fn sample_keys(body: &dyn ViewerBody, cx: &App) -> FKeyBar {
     let (BodyKeys::Modal(keys) | BodyKeys::Normal(keys)) = body.keys(cx);
-    let viewer = [
-        ("1", "Text"),
-        ("3", "Hex"),
-        ("N", "Next file"),
-        ("P", "Previous file"),
-        ("Esc", "Close"),
-    ];
-    FKeyBar::new("sample-keys", keys.into_iter().chain(viewer))
+    let viewer: &[(&'static str, &'static str)] = if body.takes_letters(cx) {
+        &[("Alt+1", "Text"), ("Alt+3", "Hex"), ("Esc", "Close")]
+    } else {
+        &[
+            ("1", "Text"),
+            ("3", "Hex"),
+            ("N", "Next file"),
+            ("P", "Previous file"),
+            ("Esc", "Close"),
+        ]
+    };
+    FKeyBar::new(
+        "sample-keys",
+        keys.into_iter().chain(viewer.iter().copied()),
+    )
 }
 
 fn column(t: &Theme) -> Div {

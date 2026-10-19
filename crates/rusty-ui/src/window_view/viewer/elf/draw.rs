@@ -2,7 +2,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{ClickEvent, Role, WeakEntity};
 use rusty_automotive::{Column, Elf, Symbol};
 
-use super::keys::CONTEXT;
+use super::keys::{CONTEXT, TABLE_CONTEXT};
 use super::text::{Check, address, is_wide, place, row_label, status};
 use super::{ElfView, Focus, Index, Phase};
 use crate::file_list::filter_bar;
@@ -11,6 +11,7 @@ use crate::prelude::*;
 use crate::primitives::{IconName, VirtualList, icon};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
+use crate::window_view::viewer::search::bar::{BarLook, bar_row};
 
 const CHAR_WIDTH: f32 = 7.2;
 const PER_MILLE: u64 = 1000;
@@ -77,6 +78,7 @@ fn select_row(
         let _ = view.update(cx, |view, cx| {
             window.focus(&view.focus, cx);
             view.focus_in = Focus::Content;
+            view.go_address = None;
             view.move_cursor(row, cx);
             view.open_inspector_if_asked(cx);
         });
@@ -203,11 +205,42 @@ impl ElfView {
         }
     }
 
+    fn header_view(&self, t: &Theme) -> Div {
+        let bar = self.go_to.as_ref().map(|go_to| {
+            let look = BarLook {
+                id: "elf-go-to",
+                input_id: "elf-go-to-input",
+                error_id: "elf-go-to-error",
+                label: "Go to address",
+                input: &go_to.input,
+                is_find: false,
+                match_case: None,
+                count: None,
+                error: go_to.error.clone(),
+            };
+            bar_row(t, look, |_, _, _| {})
+        });
+        header(t, self.header_parts()).children(bar)
+    }
+
+    fn checks(&self) -> Vec<Check> {
+        let mut checks = match &self.index {
+            Index::Ready(elf) => status(elf, self.lines.as_ref()),
+            Index::Failed(error) => vec![Check {
+                text: error.to_string(),
+                is_bad: true,
+            }],
+            Index::Running => Vec::new(),
+        };
+        checks.extend(self.lines_error.as_ref().map(|error| Check {
+            text: error.to_string(),
+            is_bad: true,
+        }));
+        checks
+    }
+
     fn status_line(&self, t: &Theme) -> impl IntoElement {
-        let checks = self
-            .elf()
-            .map(|elf| status(elf, self.lines.as_ref()))
-            .unwrap_or_default();
+        let checks = self.checks();
         let label = checks
             .iter()
             .map(|check| check.text.as_str())
@@ -277,10 +310,17 @@ impl Render for ElfView {
         let filter = self
             .is_filtering()
             .then(|| filter_bar(&t, self.query.text.clone().into(), self.rows.len()));
-        let root = div()
-            .id("elf-view")
-            .key_context(CONTEXT)
-            .track_focus(&self.focus);
+        let body = div()
+            .id("elf-body")
+            .key_context(TABLE_CONTEXT)
+            .track_focus(&self.focus)
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(table)
+            .children(filter);
+        let root = div().id("elf-view").key_context(CONTEXT);
         Self::keys(root, cx)
             .flex()
             .flex_col()
@@ -289,9 +329,8 @@ impl Render for ElfView {
             .size_full()
             .bg(t.colors.surface)
             .text_size(t.typography.body)
-            .child(header(&t, self.header_parts()))
-            .child(table)
-            .children(filter)
+            .child(self.header_view(&t))
+            .child(Self::typing(body, cx))
             .child(self.status_line(&t))
     }
 }

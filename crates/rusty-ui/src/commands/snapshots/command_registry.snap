@@ -233,6 +233,11 @@ elf.sort_by_name | Sort symbols by name | Elf
 elf.sort_by_section | Sort symbols by section | Elf
 elf.sort_by_address | Sort symbols by address | Elf
 elf.sort_by_size | Sort symbols by size | Elf
+elf.type_n | Type n in the filter | ElfTable
+elf.type_p | Type p in the filter | ElfTable
+elf.type_one | Type 1 in the filter | ElfTable
+elf.type_three | Type 3 in the filter | ElfTable
+elf.type_five | Type 5 in the filter | ElfTable
 app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global

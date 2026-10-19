@@ -70,6 +70,10 @@ pub trait ViewerBody: Any {
         false
     }
 
+    fn takes_letters(&self, _: &App) -> bool {
+        false
+    }
+
     fn can_start_editing(&self, _: &App) -> bool {
         false
     }
