@@ -6281,6 +6281,7 @@ dependencies = [
  "lz4_flex",
  "proptest",
  "rusty-core",
+ "rusty-diag",
  "rusty-fs",
  "rusty-store",
  "tempfile",
@@ -6308,6 +6309,7 @@ dependencies = [
 name = "rusty-diag"
 version = "0.0.1"
 dependencies = [
+ "insta",
  "proptest",
  "serde",
  "serde_json",

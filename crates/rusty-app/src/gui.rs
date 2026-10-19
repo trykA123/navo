@@ -104,6 +104,7 @@ pub(crate) fn open(launch: Launch) {
     metrics::mark("databases opened");
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
+    crate::diag::register_listings(&launch.crash.diagnostics.caches, &cache, disk.as_ref());
     metrics::mark("listing cache read");
     let (settings, _settings_watch) = finish_settings(|| settings_start.finish().loaded);
     tracing::info!(viewer = launch.view.is_some(), "window opening");

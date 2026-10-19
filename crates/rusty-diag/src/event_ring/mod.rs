@@ -36,6 +36,11 @@ impl EventRing {
         }
     }
 
+    #[must_use]
+    pub fn budget(&self) -> usize {
+        self.budget
+    }
+
     pub fn push(&self, event: &str) {
         if event.len() > self.budget {
             self.rejected.fetch_add(1, Ordering::Relaxed);
