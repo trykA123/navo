@@ -1,7 +1,7 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution};
 
 use super::aside::Aside;
-use super::{JobContext, StepOutcome, TEMP_SUFFIX};
+use super::{FileStamp, JobContext, PlacedFile, StepOutcome, TEMP_SUFFIX};
 use crate::{CancelToken, ProviderOps};
 
 pub(super) struct Copier<'a> {
@@ -26,7 +26,7 @@ pub(super) fn temp_of(target: &Location) -> Result<Location, FsError> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Copied {
     Skipped,
-    Placed,
+    Placed(FileStamp),
     Ready,
 }
 
@@ -41,14 +41,14 @@ pub(super) fn copy(
     }
     let temp = temp_of(step.target)?;
     remove_if_present(copier.ops, &temp)?;
-    let result = write(copier, step, &temp, on_bytes).and_then(|()| {
+    let result = write(copier, step, &temp, on_bytes).and_then(|stamp| {
         if exists {
             Ok(Copied::Ready)
         } else {
             copier
                 .ops
                 .rename(&temp, step.target)
-                .map(|()| Copied::Placed)
+                .map(|()| Copied::Placed(stamp))
         }
     });
     if result.is_err() {
@@ -65,7 +65,7 @@ pub(super) fn place(
 ) -> Result<StepOutcome, FsError> {
     match copied {
         Copied::Skipped => Ok(StepOutcome::Skipped),
-        Copied::Placed => Ok(StepOutcome::Done),
+        Copied::Placed(stamp) => journal_placed(ctx, target, stamp).map(|()| StepOutcome::Done),
         Copied::Ready => {
             let placed = aside.place_over(ctx, target);
             if placed.is_err() {
@@ -76,22 +76,36 @@ pub(super) fn place(
     }
 }
 
+pub(super) fn journal_placed(
+    ctx: &mut JobContext<'_>,
+    target: &Location,
+    stamp: FileStamp,
+) -> Result<(), FsError> {
+    ctx.log.journal_placed(&PlacedFile {
+        target: target.clone(),
+        stamp,
+    })
+}
+
 fn write(
     copier: &Copier<'_>,
     step: &CopyStep<'_>,
     temp: &Location,
     on_bytes: &mut dyn FnMut(u64),
-) -> Result<(), FsError> {
+) -> Result<FileStamp, FsError> {
     let Copier { ops, cancel, .. } = *copier;
     let written = ops.copy_file(step.source, temp, on_bytes, cancel)?;
     if cancel.is_cancelled() {
         return Err(failure(FsErrorKind::Cancelled, step.target));
     }
-    let on_disk = ops.metadata(temp)?.size;
-    if written != step.size || on_disk != written {
+    let on_disk = ops.metadata(temp)?;
+    if written != step.size || on_disk.size != written {
         return Err(failure(FsErrorKind::Unknown, step.target));
     }
-    Ok(())
+    Ok(FileStamp {
+        size: on_disk.size,
+        modified_ms: on_disk.modified_ms,
+    })
 }
 
 fn overwrites(plan: &OperationPlan, target: &Location) -> bool {

@@ -30,16 +30,7 @@ pub(super) fn old_report() -> FsEntry {
 }
 
 pub(super) fn source_report(fs: &FakeFs, size: u64) {
-    fs.add_entry(
-        "home/docs",
-        FsEntry {
-            name: ProviderPath::from_text("report.txt"),
-            kind: EntryKind::File,
-            size,
-            modified_ms: Some(9_000),
-            attributes: Attributes::default(),
-        },
-    );
+    add_timed(fs, "home/docs", "report.txt", size);
 }
 
 pub(super) fn fake() -> FakeFs {
@@ -100,11 +91,37 @@ pub(super) fn holding(fs: &FakeFs) -> Vec<String> {
     found
 }
 
-pub(super) fn held_rows(journal: &SharedJournal) -> usize {
+fn rows_placed(journal: &SharedJournal, placed: bool) -> usize {
     let journal = lock(journal);
     (1..=4)
-        .map(|id| journal.held(rusty_store::JobId(id)).unwrap().len())
-        .sum()
+        .flat_map(|id| journal.held(rusty_store::JobId(id)).unwrap())
+        .filter(|row| {
+            let is_placed = serde_json::from_slice::<serde_json::Value>(row)
+                .is_ok_and(|value| value.get("placed_target").is_some());
+            is_placed == placed
+        })
+        .count()
+}
+
+pub(super) fn held_rows(journal: &SharedJournal) -> usize {
+    rows_placed(journal, false)
+}
+
+pub(super) fn placed_rows(journal: &SharedJournal) -> usize {
+    rows_placed(journal, true)
+}
+
+pub(super) fn add_timed(fs: &FakeFs, folder: &str, name: &str, size: u64) {
+    fs.add_entry(
+        folder,
+        FsEntry {
+            name: ProviderPath::from_text(name),
+            kind: EntryKind::File,
+            size,
+            modified_ms: Some(9_000),
+            attributes: Attributes::default(),
+        },
+    );
 }
 
 #[test]
@@ -238,11 +255,11 @@ fn a_failed_restore_at_start_keeps_the_held_file_for_the_next_start() {
 }
 
 #[test]
-fn a_missing_target_folder_at_start_keeps_the_held_rows() {
+fn a_missing_target_volume_at_start_keeps_the_held_rows() {
     let fs = fake();
     let journal = journal();
     finished_without_release(&fs, &journal);
-    fs.remove("dest/docs");
+    fs.remove("dest");
     let _ = recover(&journal, &fs).unwrap();
     assert_eq!(held_rows(&journal), 1);
 }

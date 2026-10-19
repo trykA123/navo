@@ -37,9 +37,18 @@ pub struct HeldFile {
     pub placed: Option<FileStamp>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlacedFile {
+    pub target: Location,
+    pub stamp: FileStamp,
+}
+
 pub trait JobLog {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError>;
+    fn journal_placed(&mut self, _placed: &PlacedFile) -> Result<(), FsError> {
+        Ok(())
+    }
     fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
 }
 
@@ -89,6 +98,8 @@ pub struct Journaled<'a> {
     pub plan: &'a OperationPlan,
     pub done: &'a [u32],
     pub held: &'a [HeldFile],
+    pub placed: &'a [PlacedFile],
+    pub held_unreadable: bool,
 }
 
 #[must_use]

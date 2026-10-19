@@ -1,5 +1,5 @@
 use rusty_core::{FsError, FsErrorKind, Location};
-use rusty_fs::{FileStamp, HeldFile, ProviderOps, release_held};
+use rusty_fs::{FileStamp, HeldFile, PlacedFile, ProviderOps, release_held};
 use rusty_store::{JobId, JournalError};
 use serde::{Deserialize, Serialize};
 
@@ -15,9 +15,41 @@ struct HeldRecord {
     placed_modified_ms: Option<i64>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct PlacedRecord {
+    placed_target: Location,
+    size: u64,
+    #[serde(default)]
+    modified_ms: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Row {
+    Placed(PlacedRecord),
+    Held(HeldRecord),
+}
+
 pub(super) struct Held {
     pub files: Vec<HeldFile>,
+    pub placed: Vec<PlacedFile>,
     pub unreadable: usize,
+}
+
+pub(super) fn record_placed(
+    journal: &SharedJournal,
+    job: JobId,
+    placed: &PlacedFile,
+) -> Result<(), FsError> {
+    let record = PlacedRecord {
+        placed_target: placed.target.clone(),
+        size: placed.stamp.size,
+        modified_ms: placed.stamp.modified_ms,
+    };
+    let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
+    lock(journal)
+        .record_held(job, &bytes, now_ms())
+        .map_err(|_| FsError::new(FsErrorKind::Unknown))
 }
 
 pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Result<(), FsError> {
@@ -37,17 +69,25 @@ pub(super) fn held_of(journal: &SharedJournal, job: JobId) -> Result<Held, Journ
     let rows = lock(journal).held(job)?;
     let mut held = Held {
         files: Vec::new(),
+        placed: Vec::new(),
         unreadable: 0,
     };
     for row in &rows {
-        match serde_json::from_slice::<HeldRecord>(row) {
-            Ok(record) => held.files.push(HeldFile {
+        match serde_json::from_slice::<Row>(row) {
+            Ok(Row::Held(record)) => held.files.push(HeldFile {
                 original: record.original,
                 held: record.held,
                 placed: record.placed_size.map(|size| FileStamp {
                     size,
                     modified_ms: record.placed_modified_ms,
                 }),
+            }),
+            Ok(Row::Placed(record)) => held.placed.push(PlacedFile {
+                target: record.placed_target,
+                stamp: FileStamp {
+                    size: record.size,
+                    modified_ms: record.modified_ms,
+                },
             }),
             Err(error) => {
                 held.unreadable += 1;
@@ -64,10 +104,9 @@ pub(super) fn release(
     held: &[HeldFile],
     ops: &dyn ProviderOps,
 ) -> Result<(), JournalError> {
-    if held.is_empty() {
-        return Ok(());
-    }
-    if let Err(error) = release_held(held, ops) {
+    if !held.is_empty()
+        && let Err(error) = release_held(held, ops)
+    {
         tracing::warn!(job = job.0, error = ?error.kind, "held files not released");
         return Ok(());
     }

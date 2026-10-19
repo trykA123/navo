@@ -91,7 +91,7 @@ fn a_late_restore_never_undoes_a_later_job_over_the_same_file() {
 fn undo_with_the_source_volume_missing_keeps_the_held_file() {
     for workers in MODES {
         let (fs, plan, harness) = overwritten(workers);
-        fs.remove("src");
+        unplug(&fs, "src");
         let (outcome, _) = undone(&fs, &plan, &harness);
         let held = harness.log.held[0].held.path().to_text();
         assert_eq!(

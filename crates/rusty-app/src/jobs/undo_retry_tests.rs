@@ -2,8 +2,8 @@ use rusty_fs::FakeFs;
 use rusty_store::JobId;
 
 use super::held_tests::{
-    beside, crashed_with_a_failing_restore, fake, held_rows, holding, journal, old_report, run,
-    target,
+    add_timed, beside, crashed_with_a_failing_restore, fake, held_rows, holding, journal,
+    old_report, run, target,
 };
 use super::{SharedJournal, lock, recover};
 
@@ -12,7 +12,7 @@ const SUB: &str = "dest/docs/sub";
 
 fn with_notes() -> FakeFs {
     let fs = fake();
-    fs.add_file("home/docs/notes.txt", 5);
+    add_timed(&fs, "home/docs", "notes.txt", 5);
     fs
 }
 
@@ -42,7 +42,7 @@ fn a_retried_undo_keeps_a_file_the_user_made_after_the_first_undo() {
 #[test]
 fn a_retried_undo_keeps_a_folder_the_user_made_after_the_first_undo() {
     let fs = fake();
-    fs.add_file("home/docs/sub/x.txt", 3);
+    add_timed(&fs, "home/docs/sub", "x.txt", 3);
     let journal = journal();
     crashed_with_a_failing_restore(&fs, &journal);
     assert_eq!(size_of(&fs, SUB), None);

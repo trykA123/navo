@@ -27,6 +27,7 @@ mod parallel;
 mod parallel_pause;
 mod parallel_props;
 mod pause;
+mod placed;
 mod replace;
 mod roll_back;
 mod workers;
@@ -39,6 +40,7 @@ struct Log {
     entries: Vec<(u32, StepOutcome)>,
     fail_on: Option<u32>,
     held: Vec<HeldFile>,
+    placed: Vec<PlacedFile>,
     unjournaled: bool,
     beside: Vec<rusty_core::Location>,
 }
@@ -67,6 +69,11 @@ impl JobLog for Log {
         Ok(true)
     }
 
+    fn journal_placed(&mut self, placed: &PlacedFile) -> Result<(), FsError> {
+        self.placed.push(placed.clone());
+        Ok(())
+    }
+
     fn kept_beside(&mut self, _: &HeldFile, beside: &rusty_core::Location) {
         self.beside.push(beside.clone());
     }
@@ -91,6 +98,28 @@ struct Harness {
     workers: usize,
     keeps_held: bool,
     held: Vec<HeldFile>,
+    placed: Vec<PlacedFile>,
+}
+
+fn stamps_of_done_copies(
+    ops: &dyn ProviderOps,
+    plan: &OperationPlan,
+    done: &[u32],
+) -> Vec<PlacedFile> {
+    (0_u32..)
+        .zip(&plan.steps)
+        .filter(|(seq, _)| done.contains(seq))
+        .filter_map(|(_, step)| match step {
+            Step::CopyFile { target, .. } => ops.metadata(target).ok().map(|entry| PlacedFile {
+                target: target.clone(),
+                stamp: FileStamp {
+                    size: entry.size,
+                    modified_ms: entry.modified_ms,
+                },
+            }),
+            _ => None,
+        })
+        .collect()
 }
 
 impl Harness {
@@ -113,10 +142,16 @@ impl Harness {
         done: &[u32],
     ) -> JobOutcome {
         let held = std::mem::take(&mut self.held);
+        let placed = match self.placed.is_empty() {
+            true => stamps_of_done_copies(ops, plan, done),
+            false => self.placed.clone(),
+        };
         let job = Journaled {
             plan,
             done,
             held: &held,
+            placed: &placed,
+            held_unreadable: false,
         };
         let outcome = self.with(ops, |ctx| roll_back(&job, ctx));
         self.held = held;
@@ -197,9 +232,32 @@ fn fixture(files: &[(&str, u64)]) -> FakeFs {
     fs.add_folder("src");
     fs.add_folder("dst");
     for (path, size) in files {
-        fs.add_file(path, *size);
+        let (folder, name) = path.rsplit_once('/').unwrap_or(("", path));
+        fs.add_entry(
+            folder,
+            FsEntry {
+                name: rusty_core::ProviderPath::from_text(name),
+                kind: EntryKind::File,
+                size: *size,
+                modified_ms: Some(1_000),
+                attributes: Attributes::default(),
+            },
+        );
     }
     fs
+}
+
+fn unplug(fs: &FakeFs, folder: &str) {
+    fs.remove(folder);
+    let seen = fs.calls("/", FakeOp::Metadata);
+    for call in seen + 1..=seen + 64 {
+        fs.fault(
+            "/",
+            FakeOp::Metadata,
+            call,
+            Fault::Fail(FsErrorKind::NotFound),
+        );
+    }
 }
 
 fn add_link(fs: &FakeFs, folder: &str, name: &str) {

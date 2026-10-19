@@ -405,10 +405,21 @@ fn undo_restores_every_held_file_even_when_one_restore_fails() {
 }
 
 #[test]
-fn a_missing_target_folder_is_not_taken_for_a_released_file() {
+fn a_deleted_target_folder_counts_as_released_and_restored() {
     for workers in MODES {
         let (fs, plan, harness) = overwritten(workers);
         fs.remove("dst");
+        let released = release_held(&harness.log.held, &fs).map_err(|e| e.kind);
+        let restored = failure(&undone(&fs, &plan, &harness)).map(|(_, kind)| kind);
+        assert_eq!((released, restored), (Ok(()), None), "workers {workers}");
+    }
+}
+
+#[test]
+fn an_absent_target_volume_is_not_taken_for_a_released_file() {
+    for workers in MODES {
+        let (fs, plan, harness) = overwritten(workers);
+        unplug(&fs, "dst");
         let released = release_held(&harness.log.held, &fs).map_err(|e| e.kind);
         let restored = failure(&undone(&fs, &plan, &harness)).map(|(_, kind)| kind);
         assert_eq!(

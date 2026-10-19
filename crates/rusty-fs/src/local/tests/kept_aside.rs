@@ -42,6 +42,8 @@ impl Overwrite {
             plan: &self.plan,
             done: &done,
             held: &held,
+            placed: &[],
+            held_unreadable: false,
         };
         roll_back(
             &job,

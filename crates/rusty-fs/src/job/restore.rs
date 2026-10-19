@@ -1,9 +1,9 @@
 use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
-use super::HeldFile;
 use super::aside::presence;
 use super::copy::failure;
-use crate::{EntryKind, FsEntry, ProviderOps};
+use super::{FileStamp, HeldFile};
+use crate::{EntryKind, FsEntry, ProviderOps, already_exists};
 
 const BESIDE_LIMIT: u32 = 999;
 
@@ -41,22 +41,20 @@ fn bring_back(
 fn rename_back(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Restored, FsError> {
     match ops.rename(&held.held, &held.original) {
         Ok(()) => Ok(Restored::Back),
-        Err(error) => {
-            if presence(ops, &held.original)?.is_none() {
-                return Err(error);
-            }
-            keep_beside(ops, held).map(Restored::Beside)
-        }
+        Err(error) if already_exists(&error) => keep_beside(ops, held).map(Restored::Beside),
+        Err(error) => Err(error),
     }
 }
 
 fn is_placed(entry: &FsEntry, held: &HeldFile) -> bool {
-    held.placed.is_some_and(|stamp| {
-        entry.kind == EntryKind::File
-            && entry.size == stamp.size
-            && entry.modified_ms.is_some()
-            && entry.modified_ms == stamp.modified_ms
-    })
+    held.placed.is_some_and(|stamp| matches_stamp(entry, stamp))
+}
+
+pub(super) fn matches_stamp(entry: &FsEntry, stamp: FileStamp) -> bool {
+    entry.kind == EntryKind::File
+        && entry.size == stamp.size
+        && entry.modified_ms.is_some()
+        && entry.modified_ms == stamp.modified_ms
 }
 
 fn keep_beside(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Location, FsError> {
@@ -76,8 +74,8 @@ fn keep_beside(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Location, FsErr
         let candidate = folder.join(&beside).map_err(|_| invalid())?;
         match ops.rename(&held.held, &candidate) {
             Ok(()) => return Ok(candidate),
-            Err(error) if presence(ops, &candidate)?.is_none() => return Err(error),
-            Err(_) => {}
+            Err(error) if already_exists(&error) => {}
+            Err(error) => return Err(error),
         }
     }
     Err(failure(FsErrorKind::Unknown, &held.original))
@@ -91,7 +89,35 @@ fn surely_gone(ops: &dyn ProviderOps, held: &HeldFile) -> Result<(), FsError> {
     if presence(ops, &folder)?.is_some() || presence(ops, &held.original)?.is_some() {
         return Ok(());
     }
+    if folder_deleted(ops, &held.original)? {
+        return Ok(());
+    }
     Err(failure(FsErrorKind::NotFound, &folder))
+}
+
+fn folder_deleted(ops: &dyn ProviderOps, location: &Location) -> Result<bool, FsError> {
+    let Some(folder) = location.parent() else {
+        return Ok(false);
+    };
+    if presence(ops, &folder)?.is_some() {
+        return Ok(false);
+    }
+    match folder.parent() {
+        Some(above) => Ok(presence(ops, &above)?.is_some()),
+        None => Ok(false),
+    }
+}
+
+pub(super) fn gone_or_folder_deleted(
+    ops: &dyn ProviderOps,
+    location: &Location,
+) -> Result<bool, FsError> {
+    surely_absent(ops, location).or_else(|error| {
+        if error.kind == FsErrorKind::NotFound && folder_deleted(ops, location)? {
+            return Ok(true);
+        }
+        Err(error)
+    })
 }
 
 pub(super) fn surely_absent(ops: &dyn ProviderOps, location: &Location) -> Result<bool, FsError> {

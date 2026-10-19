@@ -34,6 +34,7 @@ pub enum Fault {
     FailAfterEntries { kind: FsErrorKind, entries: usize },
     FailAfterBytes { kind: FsErrorKind, bytes: u64 },
     Collide,
+    LinkThenFail(FsErrorKind),
 }
 
 type CallKey = (String, FakeOp);
@@ -267,7 +268,7 @@ impl Provider for FakeFs {
                 return Err(error(kind, folder));
             }
             Some(Fault::FailAfterEntries { kind, entries }) => (entries, Some(kind)),
-            Some(Fault::Collide) | None => (usize::MAX, None),
+            Some(Fault::Collide | Fault::LinkThenFail(_)) | None => (usize::MAX, None),
         };
         let mut entries = self
             .tree()
@@ -293,7 +294,7 @@ impl Provider for FakeFs {
                 | Fault::FailAfterEntries { kind, .. }
                 | Fault::FailAfterBytes { kind, .. },
             ) => Err(error(kind, location)),
-            Some(Fault::Collide) | None => self
+            Some(Fault::Collide | Fault::LinkThenFail(_)) | None => self
                 .tree()
                 .metadata(&path)
                 .ok_or_else(|| error(FsErrorKind::NotFound, location)),

@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
-use super::copy::{failure, temp_of};
+use super::copy::{failure, journal_placed, temp_of};
 use super::{FileStamp, HeldFile, JobContext};
 use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, ProviderOps};
 
@@ -55,7 +55,15 @@ impl Aside {
         let ops = ctx.ops;
         let temp = temp_of(target)?;
         match presence(ops, target)? {
-            None => return ops.replace(&temp, target),
+            None => {
+                let new = ops.metadata(&temp)?;
+                let stamp = FileStamp {
+                    size: new.size,
+                    modified_ms: new.modified_ms,
+                };
+                ops.replace(&temp, target)?;
+                return journal_placed(ctx, target, stamp);
+            }
             Some(entry) if matches!(entry.kind, EntryKind::File | EntryKind::Link) => {}
             Some(_) => return Err(failure(FsErrorKind::NameInvalid, target)),
         }

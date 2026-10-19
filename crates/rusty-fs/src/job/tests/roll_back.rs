@@ -5,6 +5,7 @@ struct Crashed {
     fs: FakeFs,
     plan: OperationPlan,
     done: Vec<u32>,
+    placed: Vec<PlacedFile>,
     before: Snapshot,
 }
 
@@ -19,16 +20,21 @@ fn crashed_folder_copy(workers: usize) -> Crashed {
     let plan = copy_plan(&fs, &["src/b"], "dst");
     let done = crashed_with(&fs, &plan, "src/b/c3.txt", workers);
     let _ = clean_up(&plan, &done, &fs);
+    let placed = stamps_of_done_copies(&fs, &plan, &done);
     Crashed {
         fs,
         plan,
         done,
+        placed,
         before,
     }
 }
 
 fn rolled_back(crashed: &Crashed) -> (JobOutcome, Harness) {
-    let mut harness = Harness::default();
+    let mut harness = Harness {
+        placed: crashed.placed.clone(),
+        ..Harness::default()
+    };
     let outcome = harness.roll_back(&crashed.fs, &crashed.plan, &crashed.done);
     (outcome, harness)
 }

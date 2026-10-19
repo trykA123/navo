@@ -76,3 +76,51 @@ fn release_never_replaces_a_file_that_appears_at_the_free_name() {
         (Some(1), Some(old_entry("a.txt")))
     );
 }
+
+fn failing_after_linking(fs: &FakeFs, harness: &Harness) {
+    let held = harness.log.held[0].held.path().to_text();
+    let kind = FsErrorKind::AccessDenied;
+    fs.fault(&held, FakeOp::Rename, 1, Fault::LinkThenFail(kind));
+}
+
+fn failed_undo(fs: &FakeFs, plan: &OperationPlan, harness: &Harness) -> Option<FsErrorKind> {
+    let mut undo = Harness {
+        held: harness.log.held.clone(),
+        ..Harness::default()
+    };
+    let outcome = undo.roll_back(fs, plan, &harness.log.done());
+    failure(&outcome).map(|(_, kind)| kind)
+}
+
+#[test]
+fn a_beside_rename_that_fails_for_another_reason_stops_at_once() {
+    let (fs, plan, harness) = overwritten();
+    fs.remove("dst/a.txt");
+    fs.add_file("dst/a.txt", 5);
+    failing_after_linking(&fs, &harness);
+    let held = harness.log.held[0].held.path().to_text();
+    assert_eq!(
+        (
+            failed_undo(&fs, &plan, &harness),
+            size(&fs, "dst/a (before copy 2).txt"),
+            size(&fs, &held)
+        ),
+        (Some(FsErrorKind::AccessDenied), None, Some(3))
+    );
+}
+
+#[test]
+fn a_put_back_that_fails_for_another_reason_does_not_go_beside() {
+    let (fs, plan, harness) = overwritten();
+    fs.remove("dst/a.txt");
+    failing_after_linking(&fs, &harness);
+    let held = harness.log.held[0].held.path().to_text();
+    assert_eq!(
+        (
+            failed_undo(&fs, &plan, &harness),
+            size(&fs, "dst/a (before copy).txt"),
+            size(&fs, &held)
+        ),
+        (Some(FsErrorKind::AccessDenied), None, Some(3))
+    );
+}

@@ -3,6 +3,7 @@
 pub mod archive;
 mod code_page;
 mod drive_class;
+mod exists;
 mod fake;
 pub mod hostile_names;
 mod io_queue;
@@ -17,15 +18,16 @@ mod watch;
 
 pub use code_page::{ansi_code_page, encoding_for_code_page};
 pub use drive_class::{DriveClass, drive_class};
+pub(crate) use exists::{ALREADY_EXISTS_CODES, already_exists};
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use io_queue::{
     Cancelled, IoQueue, Job, JobId, JobSlot, OwnerGuard, OwnerId, Priority, Scheduler, VolumeId,
     VolumeKind, volume_of,
 };
 pub use job::{
-    FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOutcome, Journaled, Progress,
-    StepOutcome, TEMP_SUFFIX, WorkerCounts, clean_up, copy_workers, release_held, roll_back,
-    run_job, run_job_parallel,
+    FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile,
+    Progress, StepOutcome, TEMP_SUFFIX, WorkerCounts, clean_up, copy_workers, release_held,
+    roll_back, run_job, run_job_parallel,
 };
 pub use local::{AutoTuning, LocalFs, os_path};
 pub use measure::{

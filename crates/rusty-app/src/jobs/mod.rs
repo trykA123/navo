@@ -5,8 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan};
 use rusty_fs::{
-    CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, ProviderOps, StepOutcome,
-    clean_up, roll_back,
+    CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, ProviderOps,
+    StepOutcome, clean_up, roll_back,
 };
 use rusty_store::{Db, JobId, JobJournal, JobState, JournalError, StepState, UnfinishedJob};
 use rusty_ui::browser::{LogFactory, OpLog};
@@ -112,6 +112,10 @@ impl JobLog for JournalLog {
         self.held.push(held.clone());
         Ok(true)
     }
+
+    fn journal_placed(&mut self, placed: &PlacedFile) -> Result<(), FsError> {
+        held::record_placed(&self.journal, self.job, placed)
+    }
 }
 
 impl OpLog for JournalLog {
@@ -199,7 +203,7 @@ fn undo(
     ops: &dyn ProviderOps,
 ) -> Result<JobState, JournalError> {
     let held = held::held_of(journal, job.id)?;
-    let state = roll_back_job(journal, job, &held.files, ops);
+    let state = roll_back_job(journal, job, &held, ops);
     Ok(match state {
         JobState::RolledBack if held.unreadable > 0 => JobState::RestorePending,
         other => other,
@@ -209,11 +213,11 @@ fn undo(
 fn roll_back_job(
     journal: &SharedJournal,
     job: &UnfinishedJob,
-    held: &[HeldFile],
+    held: &held::Held,
     ops: &dyn ProviderOps,
 ) -> JobState {
     let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
-        return unrestored(held);
+        return unrestored(&held.files);
     };
     let done = left_to_undo(job);
     let _ = clean_up(&plan, &done, ops);
@@ -226,7 +230,9 @@ fn roll_back_job(
         &Journaled {
             plan: &plan,
             done: &done,
-            held,
+            held: &held.files,
+            placed: &held.placed,
+            held_unreadable: held.unreadable > 0,
         },
         &mut JobContext {
             ops,
@@ -244,7 +250,7 @@ fn roll_back_job(
     }
     match outcome {
         JobOutcome::Done => JobState::RolledBack,
-        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(held),
+        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(&held.files),
     }
 }
 
@@ -264,6 +270,9 @@ mod events_tests;
 
 #[cfg(test)]
 mod held_tests;
+
+#[cfg(test)]
+mod undo_guard_tests;
 
 #[cfg(test)]
 mod undo_retry_tests;

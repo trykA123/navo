@@ -2,7 +2,7 @@ use rusty_core::{FsError, FsErrorKind, Location};
 
 use super::tree::{Tree, split_last};
 use super::{FakeFs, FakeOp, Fault, error, lock};
-use crate::{CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange};
+use crate::{ALREADY_EXISTS_CODES, CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange};
 
 const CHUNK: u64 = 4096;
 
@@ -13,7 +13,7 @@ fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
             | Fault::FailAfterEntries { kind, .. }
             | Fault::FailAfterBytes { kind, .. },
         ) => Err(error(kind, location)),
-        Some(Fault::Collide) | None => Ok(()),
+        Some(Fault::Collide | Fault::LinkThenFail(_)) | None => Ok(()),
     }
 }
 
@@ -26,6 +26,13 @@ fn vacant(tree: &Tree, path: &str) -> Result<(), FsErrorKind> {
         return Err(FsErrorKind::NotFound);
     }
     Ok(())
+}
+
+fn already_exists_error(location: &Location) -> FsError {
+    FsError {
+        os_code: Some(ALREADY_EXISTS_CODES[0]),
+        ..error(FsErrorKind::Unknown, location)
+    }
 }
 
 fn existing_kind(tree: &Tree, path: &str) -> Result<EntryKind, FsErrorKind> {
@@ -149,14 +156,24 @@ impl ProviderOps for FakeFs {
         let fault = self.record_call(&from, FakeOp::Rename);
         let to = self.own_path(target)?;
         let collide = fault == Some(Fault::Collide);
-        if !collide {
+        let linked = match fault {
+            Some(Fault::LinkThenFail(kind)) => Some(kind),
+            _ => None,
+        };
+        if !collide && linked.is_none() {
             fail_now(fault, source)?;
         }
         let mut tree = self.tree();
-        if collide {
+        if collide || linked.is_some() {
             tree.add_file(&to, 1);
         }
+        if let Some(kind) = linked {
+            return Err(error(kind, source));
+        }
         existing_kind(&tree, &from).map_err(|k| error(k, source))?;
+        if tree.metadata(&to).is_some() {
+            return Err(already_exists_error(target));
+        }
         vacant(&tree, &to).map_err(|k| error(k, target))?;
         if to.starts_with(&format!("{from}/")) {
             return Err(error(FsErrorKind::NameInvalid, target));
