@@ -164,6 +164,19 @@ fn status(t: &Theme, text: SharedString) -> impl IntoElement + use<> {
         .child(text)
 }
 
+fn strip(t: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .border_t_1()
+        .border_color(t.surfaces.card_edge)
+        .rounded_b(t.radii.sheet)
+        .bg(t.surfaces.field)
+        .text_color(t.colors.muted)
+        .text_size(t.typography.small)
+        .whitespace_nowrap()
+}
+
 pub(super) fn footer(t: &Theme, hints: Vec<Hint>, text: Option<SharedString>) -> Option<Div> {
     if hints.is_empty() && text.is_none() {
         return None;
@@ -172,23 +185,32 @@ pub(super) fn footer(t: &Theme, hints: Vec<Hint>, text: Option<SharedString>) ->
         .into_iter()
         .enumerate()
         .map(|(index, entry)| hint(t, index, entry));
+    let Some(text) = text else {
+        return Some(
+            strip(t)
+                .items_center()
+                .gap(t.spacing.xl)
+                .h(px(FOOTER_HEIGHT))
+                .px(t.spacing.xl)
+                .overflow_hidden()
+                .children(chips),
+        );
+    };
     Some(
-        div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(t.spacing.xl)
-            .h(px(FOOTER_HEIGHT))
+        strip(t)
+            .flex_col()
+            .gap(t.spacing.sm)
             .px(t.spacing.xl)
-            .overflow_hidden()
-            .whitespace_nowrap()
-            .border_t_1()
-            .border_color(t.surfaces.card_edge)
-            .rounded_b(t.radii.sheet)
-            .bg(t.surfaces.field)
-            .text_color(t.colors.muted)
-            .text_size(t.typography.small)
-            .children(text.map(|text| status(t, text)))
-            .children(chips),
+            .py(t.spacing.md)
+            .child(status(t, text))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_x(t.spacing.xl)
+                    .gap_y(t.spacing.sm)
+                    .children(chips),
+            ),
     )
 }

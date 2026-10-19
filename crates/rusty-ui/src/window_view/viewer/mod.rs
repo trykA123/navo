@@ -35,10 +35,12 @@ pub use font::{FontFace, FontView};
 pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
 pub use keys::bind_keys;
 use keys::*;
+pub(in crate::window_view) use keys::{BackspaceKey, PageDown};
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use menu::viewer_menu;
 pub use paged::{PagedKind, PagedView};
 pub use search::memory::MemoryLink;
+pub(in crate::window_view) use tree::FilterBack;
 
 use super::FerriteWindow;
 use crate::prelude::*;
@@ -46,6 +48,11 @@ use open::Opening;
 pub(super) use open::{Opened, Picked, Request, Turn, sniff_and_load};
 
 pub(in crate::window_view) const CONTEXT: &str = "Viewer";
+
+#[cfg(test)]
+pub(in crate::window_view) fn paged_top(body: &dyn ViewerBody, cx: &App) -> Option<u64> {
+    paged::PagedBody::of(body).map(|paged| paged.0.read(cx).top)
+}
 const PAGED_CONTEXT: &str = "Paged";
 const IMAGE_CONTEXT: &str = "Image";
 pub(super) const LINE_BREAK: &str = if cfg!(windows) { "\r\n" } else { "\n" };

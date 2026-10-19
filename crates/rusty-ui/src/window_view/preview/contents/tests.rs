@@ -148,5 +148,30 @@ fn opening_below_stops_at_the_row_cap() {
     let reads = contents.open_below(0);
     let reads = contents.attach(reads[0].0, Ok((folders(&["one", "two", "three"]), 0)));
     assert!(reads.is_empty());
-    assert_eq!(contents.len(), CHILD_LIMIT + 2);
+    assert!(contents.len() <= CHILD_LIMIT, "{}", contents.len());
+}
+
+#[test]
+fn opening_below_fifty_full_folders_stays_under_the_cap_with_few_reads() {
+    let mut contents = Contents::new(root());
+    let (node, _) = contents.root().unwrap();
+    contents.attach(node, Ok((folders(&["big"]), 0)));
+    let reads = contents.open_below(0);
+    let names: Vec<String> = (0..50).map(|index| format!("part{index}")).collect();
+    let parts: Vec<&str> = names.iter().map(String::as_str).collect();
+    let mut queue: std::collections::VecDeque<_> =
+        contents.attach(reads[0].0, Ok((folders(&parts), 0))).into();
+    assert!(queue.len() <= 4, "{} reads at once", queue.len());
+    let mut asked = queue.len();
+    while let Some((folder, _)) = queue.pop_front() {
+        let files = (0..CHILD_LIMIT)
+            .map(|index| entry(&format!("f{index}"), EntryKind::File))
+            .collect();
+        let more = contents.attach(folder, Ok((files, 0)));
+        asked += more.len();
+        queue.extend(more);
+        assert!(contents.len() <= CHILD_LIMIT, "{}", contents.len());
+    }
+    assert!(asked <= 4, "{asked} reads");
+    assert_eq!(contents.len(), 51);
 }

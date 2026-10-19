@@ -4,11 +4,12 @@ use std::sync::Arc;
 use rusty_core::Location;
 use rusty_fs::{JobSlot, OwnerGuard, Priority, Provider, folder_size, volume_of};
 
-use super::Preview;
 use super::inbox::Arrival;
+use super::{Preview, Shown};
 use crate::format;
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
+use crate::window_view::viewer::PageDown;
 
 struct Counting {
     location: Location,
@@ -35,6 +36,11 @@ impl Marks {
         self.sizes.get(location).copied()
     }
 
+    #[cfg(test)]
+    pub(in crate::window_view) fn is_counting(&self, location: &Location) -> bool {
+        self.counting.iter().any(|c| &c.location == location)
+    }
+
     pub(in crate::window_view) fn total(&self) -> Option<u64> {
         self.marked.iter().map(|location| self.size(location)).sum()
     }
@@ -43,6 +49,8 @@ impl Marks {
         let before = self.marked.len();
         self.marked.retain(|marked| marked != location);
         if self.marked.len() < before {
+            self.counting
+                .retain(|counting| &counting.location != location);
             return false;
         }
         self.marked.push(location.clone());
@@ -112,7 +120,11 @@ impl Preview {
 }
 
 impl FerriteWindow {
-    pub(super) fn browse_mark(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn browse_mark(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(self.preview.shown, Some(Shown::File(_))) {
+            window.dispatch_action(Box::new(PageDown), cx);
+            return;
+        }
         let Some(target) = self.preview.folder().and_then(|f| f.spot_target()) else {
             self.browse_step(1, cx);
             return;
@@ -142,18 +154,19 @@ impl FerriteWindow {
     }
 
     pub(super) fn folder_counted(&mut self, location: &Location, bytes: u64) -> bool {
-        let Some(folder) = self.preview.folder_mut() else {
+        let preview = &mut self.preview;
+        let shown = match &mut preview.shown {
+            Some(Shown::Folder(folder)) => Some(&mut folder.marks),
+            _ => None,
+        };
+        let waiting = shown
+            .into_iter()
+            .chain(preview.trail.iter_mut().map(|crumb| &mut crumb.marks))
+            .find(|marks| marks.counting.iter().any(|c| &c.location == location));
+        let Some(marks) = waiting else {
             return false;
         };
-        if !folder
-            .marks
-            .counting
-            .iter()
-            .any(|c| &c.location == location)
-        {
-            return false;
-        }
-        folder.marks.know(location, bytes);
+        marks.know(location, bytes);
         true
     }
 }

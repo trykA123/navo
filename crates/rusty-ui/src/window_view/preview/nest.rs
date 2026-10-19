@@ -2,6 +2,7 @@ use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 
 use super::follow::Target;
+use super::marks::Marks;
 use super::spot::Carry;
 use super::{Preview, Shown};
 use crate::prelude::*;
@@ -14,6 +15,7 @@ const SEPARATOR: &str = " › ";
 pub(super) struct Crumb {
     target: Target,
     carry: Option<Carry>,
+    pub marks: Marks,
 }
 
 impl Preview {
@@ -45,8 +47,13 @@ impl FerriteWindow {
         let crumb = Crumb {
             target: folder.target.clone(),
             carry: folder.carry(),
+            marks: Marks::default(),
         };
+        let is_folder = target.is_folder();
         self.preview.trail.push(crumb);
+        if !is_folder {
+            self.keep_marks();
+        }
         let shown = if target.is_folder() {
             let mut folder = self.start_folder(target, None);
             folder.want_spot();
@@ -66,7 +73,27 @@ impl FerriteWindow {
             Some(carry) => folder.adopt(carry),
             None => folder.want_spot(),
         }
+        folder.marks = crumb.marks;
         self.show_nested(Shown::Folder(Box::new(folder)), window, cx);
+    }
+
+    pub(super) fn nested_up(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preview.trail.is_empty() {
+            cx.propagate();
+            return;
+        }
+        cx.stop_propagation();
+        self.preview_up(window, cx);
+    }
+
+    fn keep_marks(&mut self) {
+        let marks = self
+            .preview
+            .folder_mut()
+            .map(|f| std::mem::take(&mut f.marks));
+        if let (Some(marks), Some(crumb)) = (marks, self.preview.trail.last_mut()) {
+            crumb.marks = marks;
+        }
     }
 
     fn show_nested(&mut self, shown: Shown, window: &mut Window, cx: &mut Context<Self>) {

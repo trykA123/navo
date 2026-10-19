@@ -7,6 +7,7 @@ use super::spot::{Fold, Spot};
 use super::{Preview, Shown};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
+use crate::window_view::viewer::{BackspaceKey, FilterBack};
 
 const BROWSE: &str = "PreviewBrowse";
 
@@ -198,7 +199,15 @@ impl FerriteWindow {
             }))
             .on_action(cx.listener(|this, _: &BrowseUnfoldAll, _, cx| this.fold_below(true, cx)))
             .on_action(cx.listener(|this, _: &BrowseFoldAll, _, cx| this.fold_below(false, cx)))
-            .on_action(cx.listener(|this, _: &BrowseMark, _, cx| this.browse_mark(cx)))
+            .on_action(cx.listener(|this, _: &BrowseMark, window, cx| {
+                this.browse_mark(window, cx);
+            }))
+            .capture_action(cx.listener(|this, _: &BackspaceKey, window, cx| {
+                this.nested_up(window, cx);
+            }))
+            .capture_action(cx.listener(|this, _: &FilterBack, window, cx| {
+                this.nested_up(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &BrowseView, window, cx| {
                 this.browse_view(window, cx);
             }))

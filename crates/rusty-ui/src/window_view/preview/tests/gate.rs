@@ -14,7 +14,7 @@ struct Hold {
 pub(super) struct Gate {
     inner: Arc<FakeFs>,
     folder: Location,
-    gated_call: u32,
+    gated_call: AtomicU32,
     calls: AtomicU32,
     hold: Mutex<Hold>,
     changed: Condvar,
@@ -25,11 +25,17 @@ impl Gate {
         Arc::new(Self {
             inner: Arc::clone(inner),
             folder: inner.location(folder),
-            gated_call: 1,
+            gated_call: AtomicU32::new(1),
             calls: AtomicU32::new(0),
             hold: Mutex::new(Hold::default()),
             changed: Condvar::new(),
         })
+    }
+
+    pub fn arm(&self) {
+        *self.hold.lock().unwrap() = Hold::default();
+        let next = self.calls.load(Ordering::SeqCst) + 1;
+        self.gated_call.store(next, Ordering::SeqCst);
     }
 
     pub fn is_held(&self) -> bool {
@@ -80,7 +86,8 @@ impl Provider for Gate {
         cancel: &CancelToken,
     ) -> Result<(), FsError> {
         let is_gated = folder == &self.folder
-            && self.calls.fetch_add(1, Ordering::SeqCst) + 1 == self.gated_call;
+            && self.calls.fetch_add(1, Ordering::SeqCst) + 1
+                == self.gated_call.load(Ordering::SeqCst);
         if is_gated {
             self.hold_here(cancel);
         }

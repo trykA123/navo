@@ -12,6 +12,7 @@ use gpui_kit::{AnyView, FocusHandle, Task};
 use rusty_structured::xml::Children;
 use rusty_structured::{NodeId, Outline, ParseError, Step, Tree};
 
+pub(in crate::window_view) use keys::FilterBack;
 pub(super) use keys::bind_keys;
 
 use super::background::Job;

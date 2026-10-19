@@ -3,9 +3,11 @@ use std::sync::Arc;
 use gpui_kit::TestAppContext;
 use rusty_fs::FakeFs;
 
-use super::{Rig, open_fake};
+use super::gate::Gate;
+use super::{Rig, open_fake, open_on};
 use crate::format;
 use crate::window_view::FerriteWindow;
+use crate::window_view::FileHooks;
 use crate::window_view::preview::contents::RowKind;
 use crate::window_view::preview::spot::Spot;
 
@@ -87,6 +89,10 @@ fn the_footer_shows_the_marked_count_and_total_size(cx: &mut TestAppContext) {
         status(cx, &rig),
         Some(format!("3 marked · {}", format::size(5_540)))
     );
+    let hints: Vec<String> = (0..5usize)
+        .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
+        .collect();
+    assert_eq!(hints, ["Open", "Go to", "Mark", "Recount", "Close"]);
 }
 
 #[gpui_kit::test]
@@ -140,4 +146,53 @@ fn marks_clear_when_the_preview_closes(cx: &mut TestAppContext) {
     assert!(rig.wait_until(cx, is_done));
     assert_eq!(rig.read(cx, marked).0, 0);
     assert_eq!(status(cx, &rig), None);
+}
+
+#[gpui_kit::test]
+fn unmarking_a_folder_stops_its_running_count(cx: &mut TestAppContext) {
+    let fs = Arc::new(project());
+    let gate = Gate::new(&fs, "home/proj/target");
+    let rig = open_on(cx, &fs, gate.clone(), FileHooks::none());
+    rig.open(cx);
+    gate.release();
+    assert!(rig.wait_until(cx, is_done));
+    rig.key(cx, "ctrl-shift-q");
+    rig.key(cx, "down");
+    gate.arm();
+    rig.key(cx, "space");
+    assert!(rig.wait_until(cx, |_| gate.is_held()));
+    let target = fs.location("home/proj/target");
+    assert!(rig.read(cx, |view| {
+        view.preview
+            .folder()
+            .is_some_and(|folder| folder.marks.is_counting(&target))
+    }));
+    rig.key(cx, "up");
+    rig.key(cx, "space");
+    assert!(rig.read(cx, |view| {
+        view.preview
+            .folder()
+            .is_some_and(|folder| !folder.marks.is_counting(&target))
+    }));
+    gate.release();
+    assert!(gate.wait_until_done());
+    assert_eq!(rig.read(cx, marked), (0, Some(0)));
+}
+
+#[gpui_kit::test]
+fn marks_survive_a_file_opened_in_the_preview(cx: &mut TestAppContext) {
+    let (rig, _) = browsing(cx);
+    rig.key(cx, "space");
+    assert!(rig.wait_until(cx, |view| marked(view) == (1, Some(500))));
+    rig.key(cx, "down");
+    assert_eq!(spot(cx, &rig).as_deref(), Some("readme.md"));
+    rig.key(cx, "enter");
+    assert!(rig.wait_until(cx, |view| view.preview.folder().is_none()));
+    rig.key(cx, "backspace");
+    assert!(rig.wait_until(cx, is_done));
+    assert_eq!(rig.read(cx, marked), (1, Some(500)));
+    assert_eq!(
+        status(cx, &rig),
+        Some(format!("1 marked · {}", format::size(500)))
+    );
 }

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use rusty_core::Location;
 use rusty_fs::{EntryKind, FsEntry};
@@ -36,7 +36,7 @@ pub(in crate::window_view) struct Contents {
     entries: HashMap<NodeId, FsEntry>,
     folders: HashMap<NodeId, Location>,
     more: HashMap<NodeId, usize>,
-    deep: HashSet<NodeId>,
+    deep: deep::Deep,
     failure: Option<String>,
     is_read: bool,
 }
@@ -71,7 +71,7 @@ impl Contents {
             entries: HashMap::new(),
             folders,
             more: HashMap::new(),
-            deep: HashSet::new(),
+            deep: deep::Deep::default(),
             failure: None,
             is_read: false,
         }
@@ -223,7 +223,11 @@ impl Contents {
             Err(_) => {}
         }
         self.is_read |= is_root;
+        let is_capped = self.cap_deep(parent);
         self.outline.loaded(&self.tree, parent);
+        if is_capped {
+            return Vec::new();
+        }
         self.go_deeper(parent)
     }
 
