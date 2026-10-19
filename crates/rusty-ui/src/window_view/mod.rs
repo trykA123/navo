@@ -13,6 +13,7 @@ mod layout;
 mod operate;
 mod pane;
 mod path_edit;
+mod placement;
 mod preview;
 mod prompt;
 mod rest;
@@ -61,6 +62,7 @@ pub use fkeys::{
 pub use hand_off::{OpenHooks, OpenInbox, OpenRequest, OpenSender, open_requests};
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
+pub use placement::DisplayScale;
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
@@ -323,11 +325,12 @@ impl FerriteWindow {
         (self.on_save)(self.browser.state());
     }
 
-    fn close(&mut self, cx: &mut Context<Self>) -> bool {
+    fn close(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {
         if self.warn_unsaved(cx) {
             return false;
         }
         let _ = self.browser.shutdown(JOB_STOP_WAIT);
+        self.remember_placement(window, cx);
         self.save();
         true
     }
@@ -341,8 +344,11 @@ impl FerriteWindow {
             .on_mica()
             .app_button(self.app_menu.is_some(), toggle)
             .header(HeaderSearch::new())
-            .on_close(move |_, cx| {
-                if this.update(cx, |view, cx| view.close(cx)).unwrap_or(true) {
+            .on_close(move |window, cx| {
+                if this
+                    .update(cx, |view, cx| view.close(window, cx))
+                    .unwrap_or(true)
+                {
                     cx.quit();
                 }
             })
@@ -350,8 +356,10 @@ impl FerriteWindow {
 
     fn close_saves_and_quits(window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.weak_entity();
-        window.on_window_should_close(cx, move |_, cx| {
-            let closing = this.update(cx, |view, cx| view.close(cx)).unwrap_or(true);
+        window.on_window_should_close(cx, move |window, cx| {
+            let closing = this
+                .update(cx, |view, cx| view.close(window, cx))
+                .unwrap_or(true);
             if closing {
                 cx.quit();
             }

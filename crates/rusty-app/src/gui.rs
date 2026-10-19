@@ -132,6 +132,7 @@ pub(crate) fn open(launch: Launch) {
             open: open_hooks(launch.path, launch.instance_requests),
             crash_report: launch.crash.service(),
         },
+        Rc::new(rusty_shell::display_scale),
         quitter(disk, launch.cleanup, launch.running),
     );
 }
