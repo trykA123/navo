@@ -20,6 +20,7 @@ mod faults;
 mod journal;
 mod kept_aside;
 mod kept_aside_crash;
+mod kept_aside_late;
 mod move_;
 mod parallel;
 mod parallel_pause;
@@ -38,6 +39,7 @@ struct Log {
     fail_on: Option<u32>,
     held: Vec<HeldFile>,
     unjournaled: bool,
+    beside: Vec<rusty_core::Location>,
 }
 
 fn log_error() -> FsError {
@@ -62,6 +64,10 @@ impl JobLog for Log {
         }
         self.held.push(held.clone());
         Ok(true)
+    }
+
+    fn kept_beside(&mut self, _: &HeldFile, beside: &rusty_core::Location) {
+        self.beside.push(beside.clone());
     }
 }
 

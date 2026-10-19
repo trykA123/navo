@@ -1,5 +1,5 @@
 use rusty_core::{FsError, FsErrorKind, Location};
-use rusty_fs::{HeldFile, ProviderOps, release_held};
+use rusty_fs::{FileStamp, HeldFile, ProviderOps, release_held};
 use rusty_store::{JobId, JournalError};
 use serde::{Deserialize, Serialize};
 
@@ -9,12 +9,16 @@ use super::{SharedJournal, lock, now_ms};
 struct HeldRecord {
     original: Location,
     held: Location,
+    placed_size: u64,
+    placed_modified_ms: Option<i64>,
 }
 
 pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Result<(), FsError> {
     let record = HeldRecord {
         original: held.original.clone(),
         held: held.held.clone(),
+        placed_size: held.placed.size,
+        placed_modified_ms: held.placed.modified_ms,
     };
     let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
     lock(journal)
@@ -34,6 +38,10 @@ pub(super) fn held_of(
             Some(HeldFile {
                 original: record.original,
                 held: record.held,
+                placed: FileStamp {
+                    size: record.placed_size,
+                    modified_ms: record.placed_modified_ms,
+                },
             })
         })
         .collect())

@@ -3,6 +3,7 @@ mod copy;
 mod hold;
 mod parallel;
 mod pool;
+mod restore;
 mod run;
 mod undo;
 mod workers;
@@ -23,15 +24,23 @@ pub enum StepOutcome {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileStamp {
+    pub size: u64,
+    pub modified_ms: Option<i64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeldFile {
     pub original: Location,
     pub held: Location,
+    pub placed: FileStamp,
 }
 
 pub trait JobLog {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError>;
+    fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,7 +97,7 @@ pub fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
 }
 
 pub fn release_held(held: &[HeldFile], ops: &dyn ProviderOps) -> Result<(), FsError> {
-    aside::release(held, ops)
+    restore::release(held, ops)
 }
 
 pub fn clean_up(plan: &OperationPlan, done: &[u32], ops: &dyn ProviderOps) -> Result<u32, FsError> {

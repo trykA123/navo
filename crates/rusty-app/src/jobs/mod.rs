@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusty_core::{FsError, FsErrorKind, OperationPlan};
+use rusty_core::{FsError, FsErrorKind, Location, OperationPlan};
 use rusty_fs::{
     CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, ProviderOps, StepOutcome,
     clean_up, roll_back,
@@ -143,7 +143,10 @@ impl OpLog for JournalLog {
     }
 }
 
-struct Quiet;
+#[derive(Default)]
+struct Quiet {
+    kept_beside: u32,
+}
 
 impl JobLog for Quiet {
     fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
@@ -153,6 +156,10 @@ impl JobLog for Quiet {
     fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
         Ok(false)
     }
+
+    fn kept_beside(&mut self, _: &HeldFile, _: &Location) {
+        self.kept_beside += 1;
+    }
 }
 
 pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, JournalError> {
@@ -160,7 +167,7 @@ pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, Jo
     let count = u32::try_from(unfinished.len()).unwrap_or(u32::MAX);
     for job in unfinished.iter().rev() {
         let state = match held::held_of(journal, job.id)? {
-            Some(held) => undo(job, &held, &done_of(job), ops),
+            Some(held) => undo(job, &held, ops),
             None => JobState::Failed,
         };
         lock(journal).finish(job.id, state)?;
@@ -168,7 +175,7 @@ pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, Jo
     let pending = lock(journal).restore_pending()?;
     for job in pending.iter().rev() {
         if let Some(held) = held::held_of(journal, job.id)? {
-            let state = undo(job, &held, &[], ops);
+            let state = undo(job, &held, ops);
             lock(journal).finish(job.id, state)?;
         }
     }
@@ -185,24 +192,33 @@ fn done_of(job: &UnfinishedJob) -> Vec<u32> {
         .collect()
 }
 
-fn undo(job: &UnfinishedJob, held: &[HeldFile], done: &[u32], ops: &dyn ProviderOps) -> JobState {
+fn undo(job: &UnfinishedJob, held: &[HeldFile], ops: &dyn ProviderOps) -> JobState {
     let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
         return unrestored(held);
     };
-    let _ = clean_up(&plan, done, ops);
+    let done = done_of(job);
+    let _ = clean_up(&plan, &done, ops);
+    let mut log = Quiet::default();
     let outcome = roll_back(
         &Journaled {
             plan: &plan,
-            done,
+            done: &done,
             held,
         },
         &mut JobContext {
             ops,
-            log: &mut Quiet,
+            log: &mut log,
             cancel: &CancelToken::new(),
             progress: &mut |_| {},
         },
     );
+    if log.kept_beside > 0 {
+        tracing::warn!(
+            job = job.id.0,
+            files = log.kept_beside,
+            "old files restored beside newer ones as \"(before copy)\""
+        );
+    }
     match outcome {
         JobOutcome::Done => JobState::RolledBack,
         JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(held),

@@ -271,3 +271,81 @@ fn a_failed_finish_write_keeps_the_held_file_for_recovery() {
         (Some(old_report()), Vec::new(), 0)
     );
 }
+
+const BESIDE: &str = "dest/docs/report (before copy).txt";
+
+fn crashed_with_a_failing_restore(fs: &FakeFs, journal: &SharedJournal) {
+    run(fs, journal, false);
+    let sharing = rusty_fs::Fault::Fail(rusty_core::FsErrorKind::SharingViolation);
+    for call in [1, 2] {
+        fs.fault(
+            &held_path(fs),
+            rusty_fs::FakeOp::Replace,
+            call,
+            sharing.clone(),
+        );
+    }
+    let _ = recover(journal, fs).unwrap();
+    assert_eq!(held_rows(journal), 1);
+}
+
+fn beside(fs: &FakeFs) -> Option<FsEntry> {
+    fs.metadata(&fs.location(BESIDE)).ok().map(|entry| FsEntry {
+        name: old_report().name,
+        ..entry
+    })
+}
+
+#[test]
+fn a_retried_restore_keeps_what_the_user_saved_since() {
+    let fs = fake();
+    let journal = journal();
+    crashed_with_a_failing_restore(&fs, &journal);
+    fs.remove(TARGET);
+    fs.add_file(TARGET, 11);
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!(
+        (
+            target(&fs).map(|e| e.size),
+            beside(&fs),
+            holding(&fs),
+            held_rows(&journal)
+        ),
+        (Some(11), Some(old_report()), Vec::new(), 0)
+    );
+}
+
+#[test]
+fn a_retried_restore_keeps_a_later_jobs_file() {
+    let fs = fake();
+    let journal = journal();
+    crashed_with_a_failing_restore(&fs, &journal);
+    fs.add_file("home/docs/report.txt", 9);
+    run(&fs, &journal, true);
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!(
+        (
+            target(&fs).map(|e| e.size),
+            beside(&fs),
+            held_rows(&journal)
+        ),
+        (Some(9), Some(old_report()), 0)
+    );
+}
+
+#[test]
+fn a_missing_source_volume_keeps_the_job_waiting_for_its_restore() {
+    let fs = fake();
+    let journal = journal();
+    run(&fs, &journal, false);
+    fs.remove("home");
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!(
+        (
+            target(&fs).map(|e| e.size),
+            holding(&fs).len(),
+            held_rows(&journal)
+        ),
+        (Some(7), 1, 1)
+    );
+}

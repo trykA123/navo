@@ -458,7 +458,7 @@ fn undo_ignores_a_held_record_whose_name_differs_only_in_case() {
     let (fs, plan, harness) = overwritten(0);
     let other_case = HeldFile {
         original: fs.location("dst/A.txt"),
-        held: harness.log.held[0].held.clone(),
+        ..harness.log.held[0].clone()
     };
     let mut undo = Harness {
         held: vec![other_case],

@@ -158,7 +158,7 @@ fn a_crash_during_undo_of_a_held_but_unplaced_file_is_finished_by_the_next_recov
             Crashing::new(fs, &temp(TARGET), FakeOp::Replace)
         });
         let held = crashed.held[0].held.path().to_text();
-        let dying = Crashing::new(&crashed.fs, &held, FakeOp::Replace);
+        let dying = Crashing::new(&crashed.fs, &held, FakeOp::Rename);
         assert_ne!(crashed.recover(&dying), JobOutcome::Done);
         assert!(crashed.old_is_kept(), "workers {workers}");
         assert_eq!(crashed.recover(&crashed.fs), JobOutcome::Done);
