@@ -2,9 +2,10 @@ use super::names::replace;
 use super::path::extension;
 use super::{DriveKind, PathKind, Redactor};
 
+mod backtrace;
 mod quoted;
 
-use quoted::hide_quoted;
+use quoted::{Quotes, hide_quoted};
 
 enum Piece<'a> {
     Text(&'a str),
@@ -14,6 +15,10 @@ enum Piece<'a> {
 impl Redactor {
     #[must_use]
     pub fn text(&self, text: &str) -> String {
+        self.redact(text, Quotes::Prose)
+    }
+
+    fn redact(&self, text: &str, quotes: Quotes) -> String {
         let pieces = self.scan_paths(text);
         let replacements = self.replacements();
         let mut output = String::new();
@@ -23,7 +28,7 @@ impl Redactor {
                 Piece::Path(path) => output.push_str(&path),
             }
         }
-        hide_quoted(&output, &replacements)
+        hide_quoted(&output, &replacements, quotes)
     }
 
     fn scan_paths<'a>(&self, mut text: &'a str) -> Vec<Piece<'a>> {

@@ -33,7 +33,8 @@ unwrap_used = "deny"
 [profile.release]
 lto = "fat"
 codegen-units = 1
-strip = true
+debug = "line-tables-only"
+strip = "none"
 panic = "unwind"
 
 [patch.crates-io]

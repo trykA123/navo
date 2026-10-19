@@ -47,6 +47,18 @@ fn diag_report_without_a_path_is_refused() {
 }
 
 #[test]
+fn crash_test_requires_an_explicit_profile_and_stands_alone() {
+    assert_eq!(
+        parse_strs(&["--crash-test", "probe"]),
+        Ok(Command::CrashTest(PathBuf::from("probe")))
+    );
+    assert!(refusal(&["--crash-test"]).contains("--crash-test needs a value"));
+    assert!(refusal(&["--crash-test", "probe", "--version"]).contains("stands alone"));
+    assert!(refusal(&["work", "--crash-test", "probe"]).contains("stands alone"));
+    assert!(!USAGE.contains("--crash-test"));
+}
+
+#[test]
 fn an_empty_path_is_refused() {
     assert!(refusal(&["--diag-report", ""]).contains("--diag-report needs a value"));
 }
