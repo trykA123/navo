@@ -214,7 +214,7 @@ fn fd(words: &mut Tokens<'_>, base: Base, data: &mut Vec<u8>) -> Shape {
         words.next();
     }
     let flags = (small(words.next(), 2, 1), small(words.next(), 2, 1));
-    let dlc = small(words.next(), 16, 15);
+    let dlc = small(words.next(), radix(base), 15);
     let len = small(words.next(), 10, 64);
     let (Some(brs), Some(esi), Some(dlc), Some(len)) = (flags.0, flags.1, dlc, len) else {
         return Shape::Malformed(BAD_FD);
@@ -263,7 +263,10 @@ fn after_time(words: &mut Tokens<'_>, base: Base, data: &mut Vec<u8>) -> Shape {
 
 pub(crate) fn parse(line: &[u8], base: Base, data: &mut Vec<u8>) -> (Option<u64>, Shape) {
     data.clear();
-    let line = line.trim_ascii();
+    let line = line
+        .strip_prefix(b"\xEF\xBB\xBF")
+        .unwrap_or(line)
+        .trim_ascii();
     if line.is_empty() {
         return (None, Shape::Blank);
     }

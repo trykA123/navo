@@ -5,7 +5,7 @@ mod line;
 mod sniff;
 
 pub use decode::Plan;
-pub use index::{IdStat, Kinds, Trace, TraceProblem, index_trace};
+pub use index::{IdStat, Kinds, MAX_IDS, Trace, TraceProblem, index_trace};
 pub use sniff::{Evidence, sniff_trace};
 
 pub const TRACE_EXTENSIONS: [&str; 1] = ["asc"];

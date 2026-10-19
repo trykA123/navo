@@ -9,6 +9,7 @@ use crate::{IndexError, Watch};
 
 pub(crate) const BLOCK: u64 = 32;
 pub(crate) const NO_KEY: u32 = u32::MAX;
+pub const MAX_IDS: usize = 65_536;
 const CHECK_EVERY: u64 = 4096;
 const KEPT_PROBLEMS: usize = 1000;
 pub(crate) const TOO_LONG: &str = "the line is longer than 4 KiB";
@@ -70,6 +71,7 @@ pub struct Trace {
     pub first_ns: Option<u64>,
     pub last_ns: Option<u64>,
     pub malformed: u64,
+    pub unlisted: u64,
     pub problems: Vec<TraceProblem>,
     pub lines: u64,
     pub end: u64,
@@ -139,7 +141,15 @@ impl Trace {
     }
 
     #[must_use]
-    pub fn resume(&self) -> Self {
+    pub fn resume(&mut self) -> Self {
+        if self.lookup.len() != self.stats.len() {
+            self.lookup = (0..self.stats.len())
+                .filter_map(|at| {
+                    let stat = self.stats.get(at)?;
+                    Some(((stat.channel, stat.id), u32::try_from(at).ok()?))
+                })
+                .collect();
+        }
         Self {
             date: self.date.clone(),
             internal_events: self.internal_events,
@@ -149,6 +159,7 @@ impl Trace {
             first_ns: self.first_ns,
             last_ns: self.last_ns,
             malformed: self.malformed,
+            unlisted: self.unlisted,
             problems: self.problems.clone(),
             lines: self.lines,
             end: self.end,
@@ -157,7 +168,7 @@ impl Trace {
             row_base: self.rows,
             blocks: Vec::new(),
             keys: Vec::new(),
-            lookup: self.lookup.clone(),
+            lookup: std::mem::take(&mut self.lookup),
         }
     }
 
@@ -195,7 +206,7 @@ impl Trace {
         watch: &mut Watch<'_>,
         rows: u64,
     ) -> Result<bool, IndexError> {
-        self.feed(source, (rows, true), watch)
+        self.feed(source, (rows, false), watch)
     }
 
     fn feed(
@@ -322,21 +333,33 @@ impl Trace {
         let Some(id) = head.id else {
             return NO_KEY;
         };
-        let next = u32::try_from(self.stats.len()).unwrap_or(NO_KEY);
-        let key = *self.lookup.entry((head.channel, id)).or_insert(next);
-        if key == next && key != NO_KEY {
-            self.stats.push(IdStat {
-                channel: head.channel,
-                id,
-                count: 0,
-                first_ns: now,
-                last_ns: now,
-            });
-        }
+        let key = match self.lookup.get(&(head.channel, id)) {
+            Some(key) => *key,
+            None if self.stats.len() >= MAX_IDS => {
+                self.unlisted += 1;
+                return NO_KEY;
+            }
+            None => self.add_stat(head.channel, id, now),
+        };
         if let Some(stat) = self.stats.get_mut(key as usize) {
             stat.count += 1;
             stat.last_ns = now;
         }
+        key
+    }
+}
+
+impl Trace {
+    fn add_stat(&mut self, channel: u16, id: CanId, now: u64) -> u32 {
+        let key = u32::try_from(self.stats.len()).unwrap_or(NO_KEY);
+        self.lookup.insert((channel, id), key);
+        self.stats.push(IdStat {
+            channel,
+            id,
+            count: 0,
+            first_ns: now,
+            last_ns: now,
+        });
         key
     }
 }

@@ -12,8 +12,8 @@ pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};
 pub use scan::index;
 pub use trace::{
-    Base, Body, CanId, Direction, Entry, Evidence, Frame, FrameKind, IdStat, Kinds, Notation, Plan,
-    TRACE_EXTENSIONS, Trace, TraceProblem, index_trace, sniff_trace,
+    Base, Body, CanId, Direction, Entry, Evidence, Frame, FrameKind, IdStat, Kinds, MAX_IDS,
+    Notation, Plan, TRACE_EXTENSIONS, Trace, TraceProblem, index_trace, sniff_trace,
 };
 
 pub type ReadAt<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;

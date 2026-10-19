@@ -268,3 +268,53 @@ fn armoured_keys_and_prose_do_not_sniff_as_a_trace() {
     assert_eq!(sniff_trace(key.as_bytes()), None);
     assert_eq!(sniff_trace(b"1 apple\n2 pears\n"), None);
 }
+
+#[test]
+fn reading_in_chunks_leaves_an_unterminated_last_line_for_later() {
+    let text = "0.1 1 10 Rx d 1 01\n0.2 1 11 Rx d 8 01 02";
+    let trace = support::chunked_trace(text, 1000);
+    assert_eq!(trace.rows(), 1);
+    assert_eq!(trace.end, 19);
+}
+
+#[test]
+fn more_lines_after_a_chunked_read_reuse_the_known_ids() {
+    let first = "0.1 1 10 Rx d 1 01\n0.2 1 11 Rx d 1 02\n";
+    let mut trace = support::chunked_trace(first, 1);
+    let grown = format!("{first}0.3 1 10 Rx d 1 03\n");
+    assert_eq!(trace_more(&mut trace, &grown), 1);
+    assert_eq!(trace.stats.len(), 2);
+    assert_eq!(trace.stats[0].count, 2);
+    assert_eq!(trace.key_of(2), trace.key_of(0));
+}
+
+#[test]
+fn ids_beyond_the_limit_are_counted_but_not_listed() {
+    let mut text = String::new();
+    for raw in 0..=rusty_automotive::MAX_IDS as u32 {
+        text.push_str(&format!("0.1 1 {raw:X}x Rx d 0\n"));
+    }
+    let trace = trace_of(&text);
+    assert_eq!(trace.stats.len(), rusty_automotive::MAX_IDS);
+    assert_eq!(trace.unlisted, 1);
+    assert_eq!(trace.key_of(rusty_automotive::MAX_IDS as u64), None);
+    assert_eq!(trace.kinds.can, rusty_automotive::MAX_IDS as u64 + 1);
+}
+
+#[test]
+fn a_byte_order_mark_does_not_hide_the_header() {
+    let text = "\u{FEFF}base dec  timestamps relative\n0.1 1 10 Rx d 0\n";
+    let trace = trace_of(text);
+    assert_eq!(trace.notation().base, Base::Dec);
+    assert!(trace.notation().relative);
+    assert_eq!(trace.rows(), 1);
+}
+
+#[test]
+fn a_can_fd_dlc_is_read_in_the_file_base() {
+    let text = "base dec  timestamps absolute\n0.1 CANFD 1 Rx 291 1 0 13 32 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31\n";
+    let trace = trace_of(text);
+    let frame = frame(&every_entry(text, &trace)[0]).clone();
+    assert_eq!(frame.dlc, 13);
+    assert_eq!(frame.data.len(), 32);
+}
