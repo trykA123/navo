@@ -8,6 +8,7 @@ use rusty_core::{FsErrorKind, ProviderPath};
 
 use super::verbatim::verbatim;
 pub(super) use super::win_replace::{rename_new, replace};
+pub(super) use super::win_volume::volume_serial;
 use crate::Attributes;
 
 const READONLY: u32 = 0x1;

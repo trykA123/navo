@@ -128,6 +128,12 @@ impl ProviderOps for LocalFs {
     fn recycle(&self, location: &Location) -> Result<(), FsError> {
         trash::delete(os_path(location)?).map_err(|_| error(FsErrorKind::Unknown, location))
     }
+
+    fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        super::platform::volume_serial(&os_path(location)?)
+            .map(Some)
+            .map_err(|e| io_error(&e, location))
+    }
 }
 
 #[cfg(not(windows))]

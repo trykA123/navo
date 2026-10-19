@@ -5,6 +5,7 @@ use super::{FakeFs, FakeOp, Fault, error, lock};
 use crate::{ALREADY_EXISTS_CODES, CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange};
 
 const CHUNK: u64 = 4096;
+const DEFAULT_VOLUME: u64 = 1;
 
 fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
     match fault {
@@ -221,6 +222,19 @@ impl ProviderOps for FakeFs {
 
     fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError> {
         self.remove_kind(location, EntryKind::Folder)
+    }
+
+    fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        let path = self.own_path(location)?;
+        if self.tree().metadata(&path).is_none() {
+            return Err(error(FsErrorKind::NotFound, location));
+        }
+        let volumes = lock(&self.volumes);
+        let nearest = volumes
+            .iter()
+            .filter(|(mount, _)| path == **mount || path.starts_with(&format!("{mount}/")))
+            .max_by_key(|(mount, _)| mount.len());
+        Ok(Some(nearest.map_or(DEFAULT_VOLUME, |(_, serial)| *serial)))
     }
 
     fn recycle(&self, location: &Location) -> Result<(), FsError> {

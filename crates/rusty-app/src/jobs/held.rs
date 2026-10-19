@@ -13,6 +13,8 @@ struct HeldRecord {
     placed_size: Option<u64>,
     #[serde(default)]
     placed_modified_ms: Option<i64>,
+    #[serde(default)]
+    volume: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -58,6 +60,7 @@ pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Re
         held: held.held.clone(),
         placed_size: held.placed.map(|stamp| stamp.size),
         placed_modified_ms: held.placed.and_then(|stamp| stamp.modified_ms),
+        volume: held.volume,
     };
     let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
     lock(journal)
@@ -81,6 +84,7 @@ pub(super) fn held_of(journal: &SharedJournal, job: JobId) -> Result<Held, Journ
                     size,
                     modified_ms: record.placed_modified_ms,
                 }),
+                volume: record.volume,
             }),
             Ok(Row::Placed(record)) => held.placed.push(PlacedFile {
                 target: record.placed_target,

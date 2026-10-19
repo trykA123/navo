@@ -136,6 +136,7 @@ fn a_held_record_with_the_exact_name_wins_over_a_case_twin() {
             size: 1,
             modified_ms: None,
         }),
+        volume: None,
     };
     let records = [held(r"C:\dst\A.txt"), held(r"C:\dst\a.txt")];
     let step = Step::CopyFile {

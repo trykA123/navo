@@ -101,3 +101,69 @@ fn a_move_whose_old_name_cannot_be_removed_leaves_no_second_name() {
     }
     assert_eq!(found, (true, false));
 }
+
+const EACCES: i32 = 13;
+const ENOENT: i32 = 2;
+
+fn linked(dir: &TempDir) -> (PathBuf, PathBuf) {
+    fs::write(path(dir, "a.txt"), b"abc").unwrap();
+    (path(dir, "a.txt"), path(dir, "c.txt"))
+}
+
+fn hard_link(old: &Path, new: &Path) -> io::Result<()> {
+    fs::hard_link(old, new)
+}
+
+#[test]
+fn an_unlink_that_reports_missing_after_the_server_removed_the_old_name_keeps_the_new_one() {
+    let (dir, _) = temp();
+    let (from, to) = linked(&dir);
+    let moved = platform::move_with(&from, &to, hard_link, |old| {
+        fs::remove_file(old)?;
+        Err(io::Error::from_raw_os_error(ENOENT))
+    });
+    assert_eq!(
+        (moved.is_ok(), from.exists(), fs::read(&to).ok()),
+        (true, false, Some(b"abc".to_vec()))
+    );
+}
+
+#[test]
+fn a_refused_unlink_with_the_old_name_still_linked_removes_the_new_name() {
+    let (dir, _) = temp();
+    let (from, to) = linked(&dir);
+    let moved = platform::move_with(&from, &to, hard_link, |_| {
+        Err(io::Error::from_raw_os_error(EACCES))
+    });
+    assert_eq!(
+        (
+            moved.map_err(|error| error.raw_os_error()),
+            fs::read(&from).ok(),
+            to.exists()
+        ),
+        (Err(Some(EACCES)), Some(b"abc".to_vec()), false)
+    );
+}
+
+#[test]
+fn a_refused_unlink_with_another_file_under_the_old_name_keeps_the_new_name() {
+    let (dir, _) = temp();
+    let (from, to) = linked(&dir);
+    let moved = platform::move_with(&from, &to, hard_link, |old| {
+        fs::remove_file(old)?;
+        fs::write(old, b"other")?;
+        Err(io::Error::from_raw_os_error(EACCES))
+    });
+    assert_eq!(
+        (
+            moved.map_err(|error| error.raw_os_error()),
+            fs::read(&from).ok(),
+            fs::read(&to).ok()
+        ),
+        (
+            Err(Some(EACCES)),
+            Some(b"other".to_vec()),
+            Some(b"abc".to_vec())
+        )
+    );
+}

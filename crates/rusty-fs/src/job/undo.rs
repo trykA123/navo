@@ -66,7 +66,7 @@ fn undo(
     let ops = ctx.ops;
     match step {
         Step::CopyFile { source, target, .. } => {
-            if source_gone(job, source, ops)? {
+            if source_gone(job, source, held, ops)? {
                 return held.map_or(Ok(StepOutcome::Skipped), |held| {
                     settle(keep(ops, held)?, held, ctx)
                 });
@@ -114,6 +114,7 @@ fn remove_copy(
 fn source_gone(
     job: &Journaled<'_>,
     source: &Location,
+    held: Option<&HeldFile>,
     ops: &dyn ProviderOps,
 ) -> Result<bool, FsError> {
     let removed_by_job = (0_u32..).zip(&job.plan.steps).any(|(seq, step)| {
@@ -123,7 +124,7 @@ fn source_gone(
     if removed_by_job {
         return Ok(true);
     }
-    gone_or_folder_deleted(ops, source)
+    gone_or_folder_deleted(ops, source, held.and_then(|file| file.volume))
 }
 
 fn settle(

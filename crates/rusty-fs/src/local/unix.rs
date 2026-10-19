@@ -2,7 +2,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
 use std::io;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use rusty_core::{FsErrorKind, ProviderPath};
@@ -45,6 +45,10 @@ pub(super) fn error_kind(code: i32) -> FsErrorKind {
     FsErrorKind::from_errno(code)
 }
 
+pub(super) fn volume_serial(folder: &Path) -> io::Result<u64> {
+    fs::metadata(folder).map(|metadata| metadata.dev())
+}
+
 pub(super) fn replace(from: &Path, to: &Path) -> io::Result<()> {
     fs::rename(from, to)
 }
@@ -74,6 +78,15 @@ pub(super) fn move_without_replace(
     to: &Path,
     link: impl Fn(&Path, &Path) -> io::Result<()>,
 ) -> io::Result<()> {
+    move_with(from, to, link, |old| fs::remove_file(old))
+}
+
+pub(super) fn move_with(
+    from: &Path,
+    to: &Path,
+    link: impl Fn(&Path, &Path) -> io::Result<()>,
+    unlink: impl Fn(&Path) -> io::Result<()>,
+) -> io::Result<()> {
     if fs::symlink_metadata(from)?.is_dir() {
         return rename_if_absent(from, to);
     }
@@ -82,9 +95,22 @@ pub(super) fn move_without_replace(
         Err(error) if lacks_hard_links(&error) => return rename_if_absent(from, to),
         Err(error) => return Err(error),
     }
-    fs::remove_file(from).inspect_err(|_| {
-        let _ = fs::remove_file(to);
-    })
+    unlink(from).or_else(|error| settle_unlink(from, to, error))
+}
+
+fn settle_unlink(from: &Path, to: &Path, error: io::Error) -> io::Result<()> {
+    match fs::symlink_metadata(from) {
+        Err(gone) if gone.kind() == io::ErrorKind::NotFound => Ok(()),
+        Ok(old) if fs::symlink_metadata(to).is_ok_and(|new| same_inode(&old, &new)) => {
+            let _ = fs::remove_file(to);
+            Err(error)
+        }
+        _ => Err(error),
+    }
+}
+
+fn same_inode(left: &Metadata, right: &Metadata) -> bool {
+    left.dev() == right.dev() && left.ino() == right.ino()
 }
 
 fn lacks_hard_links(error: &io::Error) -> bool {

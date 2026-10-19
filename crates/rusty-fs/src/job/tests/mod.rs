@@ -30,6 +30,7 @@ mod pause;
 mod placed;
 mod replace;
 mod roll_back;
+mod volume_proof;
 mod workers;
 
 const BIG: u64 = 10_000;

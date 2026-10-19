@@ -35,6 +35,7 @@ pub struct HeldFile {
     pub original: Location,
     pub held: Location,
     pub placed: Option<FileStamp>,
+    pub volume: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

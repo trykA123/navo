@@ -89,31 +89,39 @@ fn surely_gone(ops: &dyn ProviderOps, held: &HeldFile) -> Result<(), FsError> {
     if presence(ops, &folder)?.is_some() || presence(ops, &held.original)?.is_some() {
         return Ok(());
     }
-    if folder_deleted(ops, &held.original)? {
+    if folder_deleted(ops, &held.original, held.volume)? {
         return Ok(());
     }
     Err(failure(FsErrorKind::NotFound, &folder))
 }
 
-fn folder_deleted(ops: &dyn ProviderOps, location: &Location) -> Result<bool, FsError> {
-    let Some(folder) = location.parent() else {
+fn folder_deleted(
+    ops: &dyn ProviderOps,
+    location: &Location,
+    volume: Option<u64>,
+) -> Result<bool, FsError> {
+    let (Some(volume), Some(folder)) = (volume, location.parent()) else {
         return Ok(false);
     };
     if presence(ops, &folder)?.is_some() {
         return Ok(false);
     }
-    match folder.parent() {
-        Some(above) => Ok(presence(ops, &above)?.is_some()),
-        None => Ok(false),
+    let Some(above) = folder.parent() else {
+        return Ok(false);
+    };
+    if presence(ops, &above)?.is_none() {
+        return Ok(false);
     }
+    Ok(ops.volume_serial(&above).ok().flatten() == Some(volume))
 }
 
 pub(super) fn gone_or_folder_deleted(
     ops: &dyn ProviderOps,
     location: &Location,
+    volume: Option<u64>,
 ) -> Result<bool, FsError> {
     surely_absent(ops, location).or_else(|error| {
-        if error.kind == FsErrorKind::NotFound && folder_deleted(ops, location)? {
+        if error.kind == FsErrorKind::NotFound && folder_deleted(ops, location, volume)? {
             return Ok(true);
         }
         Err(error)

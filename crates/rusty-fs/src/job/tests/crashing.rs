@@ -178,6 +178,10 @@ impl ProviderOps for Crashing<'_> {
         self.enter(location, FakeOp::Recycle)?;
         self.fs.recycle(location)
     }
+
+    fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        self.fs.volume_serial(location)
+    }
 }
 
 pub(super) fn crashed(fs: &FakeFs, plan: &OperationPlan, copy_of: &str) -> Vec<u32> {

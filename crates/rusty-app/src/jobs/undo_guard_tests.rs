@@ -150,3 +150,38 @@ fn a_copy_without_a_journaled_stamp_is_kept() {
     let _ = recover(&journal, &fs).unwrap();
     assert_eq!(target(&fs).map(|entry| entry.size), Some(7));
 }
+
+fn forget_volumes(journal: &SharedJournal) {
+    let rows = lock(journal).held(JobId(1)).unwrap();
+    lock(journal).forget_held(JobId(1)).unwrap();
+    for row in rows {
+        let mut value: serde_json::Value = serde_json::from_slice(&row).unwrap();
+        if let Some(record) = value.as_object_mut() {
+            record.remove("volume");
+        }
+        let bytes = serde_json::to_vec(&value).unwrap();
+        lock(journal).record_held(JobId(1), &bytes, 0).unwrap();
+    }
+}
+
+#[test]
+fn a_missing_mount_point_keeps_the_restore_pending() {
+    let fs = fake();
+    fs.set_volume("dest/docs", 2);
+    let journal = journal();
+    run(&fs, &journal, false);
+    fs.remove("dest/docs");
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!((pending_jobs(&journal), held_rows(&journal)), (1, 1));
+}
+
+#[test]
+fn a_held_row_from_before_volumes_keeps_the_restore_pending() {
+    let fs = fake();
+    let journal = journal();
+    run(&fs, &journal, false);
+    forget_volumes(&journal);
+    fs.remove("dest/docs");
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!((pending_jobs(&journal), held_rows(&journal)), (1, 1));
+}
