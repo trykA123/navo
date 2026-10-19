@@ -73,7 +73,7 @@ impl PdfView {
                 format::count(total, "hit", "hits")
             };
             let on = format::count(pages, "page", "pages");
-            let so_far = if doc.index.is_complete() {
+            let so_far = if doc.index.is_complete() && self.searching.is_none() {
                 ""
             } else {
                 " so far"

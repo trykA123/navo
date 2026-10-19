@@ -119,7 +119,12 @@ impl Shots {
         self.pool.add(shot.bytes);
         self.kept.push_back((page, shot));
         while self.bytes > self.budget || self.pool.is_over() {
-            let Some(at) = self.kept.iter().position(|(kept, _)| !keep.contains(kept)) else {
+            let newest = self.kept.len() - 1;
+            let Some(at) = self
+                .kept
+                .range(..newest)
+                .position(|(kept, _)| !keep.contains(kept))
+            else {
                 break;
             };
             dropped.extend(self.remove(at));
@@ -181,5 +186,17 @@ mod tests {
         assert_eq!((dropped.len(), second.pages()), (1, vec![1]));
         drop(first);
         assert_eq!(pool.used.load(Ordering::Relaxed), 100 * 10 * 4);
+    }
+
+    #[test]
+    fn a_full_pool_never_evicts_the_shot_just_drawn() {
+        let pool = Pool::new(100 * 10 * 4 * 2);
+        let mut other = Shots::new(PAGE_BUDGET, pool.clone());
+        other.insert(0, shot(100), &(0..1));
+        other.insert(1, shot(100), &(0..2));
+        let mut thumbs = Shots::new(PAGE_BUDGET, pool.clone());
+        thumbs.insert(0, shot(100), &(0..0));
+        let dropped = thumbs.insert(1, shot(100), &(0..0));
+        assert_eq!((dropped.len(), thumbs.pages()), (1, vec![1]));
     }
 }

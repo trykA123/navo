@@ -110,6 +110,7 @@ impl PdfView {
             return;
         };
         doc.hits.clear();
+        doc.lists.hit_key = None;
         let pages: Vec<(u32, PageWords)> = if query.is_empty() {
             Vec::new()
         } else {
