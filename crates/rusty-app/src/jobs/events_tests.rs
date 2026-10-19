@@ -62,9 +62,9 @@ fn a_finished_job_is_logged_with_its_kind_and_state() {
 fn a_failed_job_is_logged_without_its_paths() {
     let fs = fake();
     let error = FsError {
-        kind: FsErrorKind::NotFound,
         location: Some(fs.location("home/secret-docs/payroll.txt")),
         os_code: Some(2),
+        ..FsError::new(FsErrorKind::NotFound)
     };
     let line = finish_and_capture(&JobOutcome::Failed { seq: 1, error });
     assert!(line.contains(r#""msg":"job failed""#), "{line}");

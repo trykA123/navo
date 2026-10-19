@@ -24,7 +24,7 @@ pub use apply::{
 };
 pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
 pub use direction::Direction;
-pub use fs_error::{FsError, FsErrorKind, RecoveryAction};
+pub use fs_error::{FsError, FsErrorKind, LockHolder, RecoveryAction};
 pub use id::{PaneId, TabId, WindowId};
 pub use layout::{Layout, LayoutError, Rect};
 pub use location::{Location, LocationError, ProviderId, ProviderPath, typed_location};

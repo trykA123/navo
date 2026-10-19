@@ -56,9 +56,8 @@ fn normalize(path: &str) -> &str {
 
 fn error(kind: FsErrorKind, location: &Location) -> FsError {
     FsError {
-        kind,
         location: Some(location.clone()),
-        os_code: None,
+        ..FsError::new(kind)
     }
 }
 

@@ -70,9 +70,8 @@ pub trait Provider: Send + Sync {
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError>;
     fn watch(&self, folder: &Location, _sink: WatchSink) -> Result<Watch, FsError> {
         Err(FsError {
-            kind: FsErrorKind::Unknown,
             location: Some(folder.clone()),
-            os_code: None,
+            ..FsError::new(FsErrorKind::Unknown)
         })
     }
     fn watch_tree(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {

@@ -10,9 +10,8 @@ const PARTIAL: u64 = 4096;
 
 fn died() -> FsError {
     FsError {
-        kind: FsErrorKind::Unknown,
-        location: None,
         os_code: Some(DIED),
+        ..FsError::new(FsErrorKind::Unknown)
     }
 }
 

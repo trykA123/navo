@@ -73,9 +73,8 @@ const ERRNO_CODES: [(i32, FsErrorKind); 21] = [
 
 fn error(kind: FsErrorKind, location: Option<&str>) -> FsError {
     FsError {
-        kind,
         location: location.map(|text| Location::new(text).unwrap()),
-        os_code: None,
+        ..FsError::new(kind)
     }
 }
 
@@ -181,4 +180,74 @@ fn message_never_holds_the_os_text() {
         .map(|(message, _)| message)
         .collect();
     assert_eq!(leaking, Vec::<String>::new());
+}
+
+fn assert_holder_message(names: &[&str], programs: &str) {
+    for kind in [SharingViolation, Locked] {
+        for (location, subject) in [(None, "The item"), (Some("report.docx"), "“report.docx”")]
+        {
+            let failure = FsError {
+                holders: (1u32..)
+                    .zip(names)
+                    .map(|(pid, &name)| LockHolder {
+                        name: name.to_owned(),
+                        pid,
+                    })
+                    .collect(),
+                ..error(kind, location)
+            };
+            assert_eq!(
+                failure.message(),
+                format!("{subject} is in use by {programs}."),
+                "{kind:?} at {location:?}"
+            );
+            assert_eq!(failure.recovery(), error(kind, location).recovery());
+        }
+    }
+}
+
+#[test]
+fn lock_message_names_one_holder() {
+    assert_holder_message(&["Microsoft Word"], "Microsoft Word");
+}
+
+#[test]
+fn lock_message_names_two_holders() {
+    assert_holder_message(&["Microsoft Word", "Excel"], "Microsoft Word and Excel");
+}
+
+#[test]
+fn lock_message_counts_three_or_more_holders() {
+    assert_holder_message(
+        &["Microsoft Word", "Excel", "Notepad"],
+        "Microsoft Word, Excel and 1 more program",
+    );
+    assert_holder_message(
+        &["Microsoft Word", "Excel", "Notepad", "Explorer"],
+        "Microsoft Word, Excel and 2 more programs",
+    );
+}
+
+#[test]
+fn lock_message_lists_duplicate_names_once_in_first_seen_order() {
+    assert_holder_message(&["Word", "Word"], "Word");
+    assert_holder_message(&["Word", "Excel", "Word", "Excel"], "Word and Excel");
+    assert_holder_message(
+        &["Word", "Excel", "Word", "Notepad", "Excel", "Explorer"],
+        "Word, Excel and 2 more programs",
+    );
+}
+
+#[test]
+fn lock_message_without_holders_keeps_the_original_text() {
+    for (kind, suffix) in [
+        (SharingViolation, "is in use by another program."),
+        (Locked, "is locked."),
+    ] {
+        assert_eq!(error(kind, None).message(), format!("The item {suffix}"));
+        assert_eq!(
+            error(kind, Some("report.docx")).message(),
+            format!("“report.docx” {suffix}")
+        );
+    }
 }
