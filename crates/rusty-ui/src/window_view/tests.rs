@@ -31,6 +31,7 @@ mod hints;
 mod jobs;
 mod keymap;
 mod offline;
+mod placement;
 mod prefetch;
 mod settings_layer;
 mod settings_news;
@@ -243,6 +244,17 @@ pub(super) fn press(
     cx.update_window(window, |_, window, cx| window.render_frame(cx))
         .expect("window");
     cx.run_until_parked();
+}
+
+pub(super) fn close_in(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<FerriteWindow>,
+) -> bool {
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close(window, cx))
+    })
+    .expect("window")
 }
 
 #[gpui_kit::test]
@@ -708,9 +720,9 @@ fn closing_the_window_with_unsaved_edits_warns_first(cx: &mut TestAppContext) {
     press(cx, window, &view, "f3");
     press(cx, window, &view, "ctrl-e");
     type_in(cx, window, &view, "x");
-    let first = view.update(cx, |view, cx| view.close(cx));
+    let first = close_in(cx, window, &view);
     assert!(!first);
     assert!(viewer_open(cx, &view));
-    let second = view.update(cx, |view, cx| view.close(cx));
+    let second = close_in(cx, window, &view);
     assert!(second);
 }
