@@ -88,6 +88,7 @@ fn execute_command(
     let clock = ProcessClock::detect(started, metrics::process_age);
     let profile = match &command {
         Command::Open(start) => profile::choose(start, detect),
+        Command::CrashTest(root) => Ok(Profile::Folder(StoreDirs::in_profile(root))),
         _ => Ok(Profile::User(detect())),
     };
     let profile = match profile {
@@ -105,8 +106,21 @@ fn execute_command(
             ExitCode::SUCCESS
         }
         Command::DiagReport(path) => write_report(&path, started, &profile),
+        Command::CrashTest(_) => crash_test(&profile),
         Command::PdfHelper => pdf_helper::run(),
     }
+}
+
+#[inline(never)]
+#[allow(clippy::panic, reason = "an opt-in CI probe exercises the panic hook")]
+fn crash_test(profile: &Profile) -> ExitCode {
+    if std::env::var_os("FERRITE_CRASH_TEST").as_deref() != Some(std::ffi::OsStr::new("1")) {
+        eprintln!("ferrite: --crash-test requires FERRITE_CRASH_TEST=1");
+        return ExitCode::from(2);
+    }
+    let diagnostics = install_logging(profile);
+    crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
+    panic!("Ferrite CI crash test");
 }
 
 fn install_logging(profile: &Profile) -> logging::Diagnostics {

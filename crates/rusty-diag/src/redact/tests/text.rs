@@ -471,3 +471,50 @@ fn paths_after_markup_and_pipes_are_found() {
         assert_absent(&redactor().text(line), &["secret", "plan"]);
     }
 }
+
+const BACKTRACE: &str = r"   0: std::backtrace::Backtrace::force_capture
+             at /rustc/90b35a62/library/std/src/backtrace.rs:312
+   1: <alloc::boxed::Box<dyn for<'a, 'b> core::ops::function::Fn<(&'a std::panic::PanicHookInfo<'b>,), Output = ()> + core::marker::Send + core::marker::Sync> as core::ops::function::Fn<Args>>::call
+             at /rustc/90b35a62/library/alloc/src/boxed.rs:1999
+   2: rusty_store::read::<&'static str, impl Fn() + 'static>
+             at \\fileserver01\builds\rusty\src\lib.rs:7
+   3: core::fmt::write<'_>
+             at C:\Users\admin\Secret\ferrite\src\main.rs:123
+   4: ferrite::crash_test
+             at C:\Users\admin\Secret\ferrite\src\main.rs:118
+   5: main
+";
+
+#[test]
+fn backtrace_keeps_frame_names_with_lifetimes() {
+    let out = redactor().backtrace(BACKTRACE);
+    for frame in [
+        "0: std::backtrace::Backtrace::force_capture",
+        "1: <alloc::boxed::Box<dyn for<'a, 'b> core::ops::function::Fn<(&'a std::panic::PanicHookInfo<'b>,), Output = ()> + core::marker::Send + core::marker::Sync> as core::ops::function::Fn<Args>>::call",
+        "2: rusty_store::read::<&'static str, impl Fn() + 'static>",
+        "3: core::fmt::write<'_>",
+        "4: ferrite::crash_test",
+        "5: main",
+    ] {
+        assert!(out.contains(frame), "{frame} missing from {out}");
+    }
+    for line in [
+        "\\main.rs:118",
+        "\\main.rs:123",
+        "\\lib.rs:7",
+        "/boxed.rs:1999",
+    ] {
+        assert!(out.contains(line), "{line} missing from {out}");
+    }
+    assert_eq!(out.lines().count(), BACKTRACE.lines().count());
+    assert_absent(&out, &["admin", "secret", "fileserver01", "builds"]);
+}
+
+#[test]
+fn backtrace_still_hides_quoted_text_on_one_line() {
+    let out =
+        redactor().backtrace("   0: x\n note 'private words here'\n   1: ferrite::crash_test\n");
+    assert!(out.contains("<text:"), "{out}");
+    assert!(out.contains("1: ferrite::crash_test"), "{out}");
+    assert_absent(&out, &["private"]);
+}

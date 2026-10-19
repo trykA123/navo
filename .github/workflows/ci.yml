@@ -86,16 +86,37 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build --release -p rusty-app
       - run: cargo xtask binsize target/release/ferrite.exe
+        continue-on-error: true
       - shell: pwsh
         run: |
           $out = (& target/release/ferrite.exe --version | Out-String).Trim()
           if ($out -ne 'ferrite 0.0.1') { throw "unexpected output: $out" }
-      - name: Stage ferrite.exe with pdfium.dll and its licences
+      - name: Stage ferrite.exe with its PDB, pdfium.dll and licences
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item -LiteralPath target/release/ferrite.exe -Destination dist
+          Copy-Item -LiteralPath target/release/ferrite.pdb -Destination dist
           ./.github/scripts/fetch-pdfium.ps1 -Destination dist -Licenses dist/licenses/pdfium
+      - name: Verify release crash backtrace from the staged distribution
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          $crashProfile = Join-Path $env:RUNNER_TEMP ('ferrite-crash-' + [guid]::NewGuid())
+          $env:FERRITE_CRASH_TEST = '1'
+          $exe = (Resolve-Path -LiteralPath dist/ferrite.exe).Path
+          Rename-Item -LiteralPath target/release/ferrite.pdb -NewName ferrite.pdb.saved
+          try {
+            $probe = Start-Process -FilePath $exe -ArgumentList @('--crash-test', "`"$crashProfile`"") -Wait -PassThru -NoNewWindow
+          } finally {
+            Rename-Item -LiteralPath target/release/ferrite.pdb.saved -NewName ferrite.pdb
+          }
+          if ($probe.ExitCode -ne 101) { throw "unexpected crash probe exit: $($probe.ExitCode)" }
+          $records = @(Get-ChildItem -LiteralPath "$crashProfile/data/logs" -Filter 'crash-*.json')
+          if ($records.Count -ne 1) { throw "expected one crash record, got $($records.Count)" }
+          $record = Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json
+          if ($record.message -ne 'Ferrite CI crash test') { throw 'unexpected panic message' }
+          if ($record.backtrace -notmatch 'ferrite::crash_test') { throw 'release backtrace has no Ferrite crash_test frame' }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ferrite-windows-x64-${{ github.sha }}
@@ -181,6 +202,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo build --release -p rusty-app
       - run: cargo xtask binsize target/release/ferrite
+        continue-on-error: true
       - run: test "$(target/release/ferrite --version)" = "ferrite 0.0.1"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -8,17 +8,25 @@ const PAIRS: [(char, char); 4] = [
     ('\u{2018}', '\u{2019}'),
 ];
 
-pub(super) fn hide_quoted(text: &str, replacements: &[Replacement]) -> String {
-    let closers = Closers::new(text);
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Quotes {
+    Prose,
+    Code,
+}
+
+pub(super) fn hide_quoted(text: &str, replacements: &[Replacement], quotes: Quotes) -> String {
+    let closers = Closers::new(text, quotes);
     let mut output = String::with_capacity(text.len());
     let mut before: Option<char> = None;
     let mut index = 0;
     while let Some(open) = text[index..].chars().next() {
         let body = index + open.len_utf8();
+        let lifetime = quotes == Quotes::Code && is_lifetime(text, index);
         let close = PAIRS
             .iter()
             .position(|(o, _)| *o == open)
-            .filter(|_| before.is_none_or(|ch| !ch.is_alphanumeric()));
+            .filter(|_| before.is_none_or(|ch| !ch.is_alphanumeric()))
+            .filter(|_| !lifetime);
         match close.and_then(|kind| closers.after(kind, body)) {
             Some((close, end)) => {
                 output.push(open);
@@ -27,7 +35,7 @@ pub(super) fn hide_quoted(text: &str, replacements: &[Replacement]) -> String {
                 before = Some(close);
                 index = end + close.len_utf8();
             }
-            None if opens_unclosed(open, before, &text[body..]) => {
+            None if !lifetime && opens_unclosed(open, before, &text[body..]) => {
                 output.push(open);
                 output.push_str(&hidden(&text[body..], replacements));
                 index = text.len();
@@ -47,9 +55,12 @@ struct Closers {
 }
 
 impl Closers {
-    fn new(text: &str) -> Self {
+    fn new(text: &str, quotes: Quotes) -> Self {
         let mut positions = vec![Vec::new(); PAIRS.len()];
         for (index, ch) in text.char_indices() {
+            if quotes == Quotes::Code && is_lifetime(text, index) {
+                continue;
+            }
             let followed_ok = text[index + ch.len_utf8()..]
                 .chars()
                 .next()
@@ -72,6 +83,21 @@ impl Closers {
         let (_, close) = PAIRS.get(kind)?;
         list.get(first).map(|&end| (*close, end))
     }
+}
+
+fn is_lifetime(text: &str, index: usize) -> bool {
+    let Some(name) = text[index..].strip_prefix('\'') else {
+        return false;
+    };
+    let end = name
+        .find(|ch: char| !ch.is_alphanumeric() && ch != '_')
+        .unwrap_or(name.len());
+    let is_name = end > 0 && !name.starts_with(|ch: char| ch.is_ascii_digit());
+    is_name
+        && !name[end..].starts_with('\'')
+        && text[..index]
+            .trim_end_matches(' ')
+            .ends_with(['<', '&', '+', ',', '('])
 }
 
 fn opens_unclosed(open: char, before: Option<char>, after_open: &str) -> bool {
