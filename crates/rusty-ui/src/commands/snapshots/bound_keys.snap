@@ -207,6 +207,14 @@ table.copy_row | ctrl-shift-c | Table
 table.first_cell | home | Table
 table.last_cell | end | Table
 table.sort_by_column | ctrl-f3 | Table
+trace.filter_backspace | backspace | CanTrace
+trace.filter_by_id | enter | CanTrace
+trace.sort_ids | alt-s | CanTrace
+trace.toggle_inspector | ctrl-i | CanTrace
+trace.toggle_navigator | ctrl-b | CanTrace
+trace.type_five | 5 | CanTrace
+trace.type_one | 1 | CanTrace
+trace.type_three | 3 | CanTrace
 tree.collapse_all | ctrl-shift-left | Tree
 tree.collapse_all_or_type | - | Tree
 tree.collapse_branch | alt-left | Tree
@@ -230,6 +238,7 @@ tree.type_n | n | Tree
 tree.type_one | 1 | Tree
 tree.type_p | p | Tree
 tree.type_three | 3 | Tree
+viewer.back | escape | CanTrace
 viewer.back | escape | MemoryImage
 viewer.back | escape | Paged
 viewer.back | escape | Tree

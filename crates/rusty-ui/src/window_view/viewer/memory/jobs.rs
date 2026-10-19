@@ -1,4 +1,4 @@
-use std::io::{self, BufReader, Read};
+use std::io::BufReader;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,35 +8,12 @@ use rusty_automotive::{Format, Image, IndexError, Layout, Watch, index};
 use super::text::is_wide;
 use super::{Fetched, Index, MemoryView, Ready, Windows};
 use crate::prelude::*;
-use crate::window_view::viewer::background::{Job, Throttle, ranged, spawn_job};
+use crate::window_view::viewer::background::{Job, Ranged, Throttle, ranged, spawn_job};
 use crate::window_view::viewer::body::Host;
 
 const INDEX_EVERY: Duration = Duration::from_millis(100);
 const CHUNK: usize = 1024 * 1024;
 const FETCH_MARGIN: u64 = 64;
-
-struct Ranged<F> {
-    read: F,
-    at: u64,
-    len: u64,
-}
-
-impl<F: FnMut(u64, usize) -> Result<Vec<u8>, String>> Read for Ranged<F> {
-    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        let left = usize::try_from(self.len.saturating_sub(self.at)).unwrap_or(usize::MAX);
-        let wanted = buffer.len().min(left);
-        if wanted == 0 {
-            return Ok(0);
-        }
-        let bytes = (self.read)(self.at, wanted).map_err(io::Error::other)?;
-        let count = bytes.len().min(wanted);
-        if let (Some(into), Some(from)) = (buffer.get_mut(..count), bytes.get(..count)) {
-            into.copy_from_slice(from);
-        }
-        self.at += count as u64;
-        Ok(count)
-    }
-}
 
 pub(super) enum IndexMessage {
     Progress(u64),

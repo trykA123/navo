@@ -7,7 +7,7 @@ use rusty_ui::tokens::{self, Mode, Theme};
 use rusty_ui::window_view::{ArchiveView, BodyKeys, FontView, ImageView, PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
-use crate::automotive_sample::{MEMORY_NAME, MEMORY_STEPS, memory};
+use crate::automotive_sample::{MEMORY_NAME, MEMORY_STEPS, TRACE_NAME, TRACE_STEPS, memory, trace};
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::menu_page::{MenuPage, Shows as MenuShows};
@@ -64,6 +64,7 @@ pub struct Gallery {
     markdown: Option<Box<dyn ViewerBody>>,
     markdown_preview: Option<Box<dyn ViewerBody>>,
     memory: [Option<Box<dyn ViewerBody>>; 2],
+    trace: [Option<Box<dyn ViewerBody>>; 2],
     archive: Entity<ArchiveView>,
     font: Option<Entity<FontView>>,
     marks: Option<Entity<PagedView>>,
@@ -102,6 +103,7 @@ impl Gallery {
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
             markdown_preview: structured::editing(MARKDOWN_NAME, MARKDOWN, window, cx),
             memory: [(); 2].map(|()| structured::body(MEMORY_NAME, memory(), window, cx)),
+            trace: [(); 2].map(|()| structured::body(TRACE_NAME, trace(), window, cx)),
             archive: rich_sample::archive_view(cx),
             font: rich_sample::font_view(cx),
             marks: None,
@@ -147,6 +149,8 @@ impl Gallery {
             Page::MarkdownPreview => self.markdown_preview.as_deref(),
             Page::MemoryImage => self.memory[0].as_deref(),
             Page::MemoryDrawers => self.memory[1].as_deref(),
+            Page::TraceTable => self.trace[0].as_deref(),
+            Page::TraceDrawers => self.trace[1].as_deref(),
             _ => None,
         }
     }
@@ -162,6 +166,7 @@ impl Gallery {
             Page::Tree => &TREE_STEPS,
             Page::Table => &TABLE_STEPS,
             Page::MemoryDrawers => &MEMORY_STEPS,
+            Page::TraceDrawers => &TRACE_STEPS,
             _ => &[],
         };
         for name in steps {
@@ -353,10 +358,16 @@ impl Render for Gallery {
             | Page::Markdown
             | Page::MarkdownPreview
             | Page::MemoryImage
-            | Page::MemoryDrawers => {
+            | Page::MemoryDrawers
+            | Page::TraceTable
+            | Page::TraceDrawers => {
                 let has_keys = matches!(
                     self.page,
-                    Page::Tree | Page::MemoryImage | Page::MemoryDrawers
+                    Page::Tree
+                        | Page::MemoryImage
+                        | Page::MemoryDrawers
+                        | Page::TraceTable
+                        | Page::TraceDrawers
                 );
                 match self.sample() {
                     Some(body) => root

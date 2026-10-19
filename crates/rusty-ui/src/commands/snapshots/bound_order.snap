@@ -193,6 +193,7 @@ image.toggle_info | i | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
 viewer.back | escape | MemoryImage
+viewer.back | escape | CanTrace
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
@@ -232,6 +233,15 @@ markdown.copy_block | ctrl-c | Markdown
 memory.toggle_navigator | ctrl-b | MemoryImage
 memory.toggle_inspector | ctrl-i | MemoryImage
 memory.go_to_item | enter | MemoryImage
+[can_trace]
+trace.toggle_navigator | ctrl-b | CanTrace
+trace.toggle_inspector | ctrl-i | CanTrace
+trace.filter_by_id | enter | CanTrace
+trace.sort_ids | alt-s | CanTrace
+trace.type_one | 1 | CanTrace
+trace.type_three | 3 | CanTrace
+trace.type_five | 5 | CanTrace
+trace.filter_backspace | backspace | CanTrace
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu

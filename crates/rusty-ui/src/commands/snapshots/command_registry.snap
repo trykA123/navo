@@ -226,6 +226,14 @@ markdown.copy_link | Copy link | Markdown
 memory.toggle_navigator | Ranges drawer | MemoryImage
 memory.toggle_inspector | Inspector drawer | MemoryImage
 memory.go_to_item | Go to the picked range | MemoryImage
+trace.toggle_navigator | IDs drawer | CanTrace
+trace.toggle_inspector | Inspector drawer | CanTrace
+trace.filter_by_id | Filter by the picked ID | CanTrace
+trace.sort_ids | Sort IDs by count or ID | CanTrace
+trace.type_one | Type 1 in the ID filter | CanTrace
+trace.type_three | Type 3 in the ID filter | CanTrace
+trace.type_five | Type 5 in the ID filter | CanTrace
+trace.filter_backspace | Erase in the ID filter | CanTrace
 app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global

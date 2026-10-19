@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 4] = [
+pub(super) const GROUPS: [Group; 5] = [
     Group {
         context: "Tree",
         commands: &[
@@ -180,6 +180,51 @@ pub(super) const GROUPS: [Group; 4] = [
                 "memory_image::PickItem",
                 "memory.go_to_item",
                 "Go to the picked range",
+            ),
+        ],
+    },
+    Group {
+        context: "CanTrace",
+        commands: &[
+            (
+                "can_trace::ToggleNavigator",
+                "trace.toggle_navigator",
+                "IDs drawer",
+            ),
+            (
+                "can_trace::ToggleInspector",
+                "trace.toggle_inspector",
+                "Inspector drawer",
+            ),
+            (
+                "can_trace::PickId",
+                "trace.filter_by_id",
+                "Filter by the picked ID",
+            ),
+            (
+                "can_trace::SortIds",
+                "trace.sort_ids",
+                "Sort IDs by count or ID",
+            ),
+            (
+                "can_trace::TypeOne",
+                "trace.type_one",
+                "Type 1 in the ID filter",
+            ),
+            (
+                "can_trace::TypeThree",
+                "trace.type_three",
+                "Type 3 in the ID filter",
+            ),
+            (
+                "can_trace::TypeFive",
+                "trace.type_five",
+                "Type 5 in the ID filter",
+            ),
+            (
+                "can_trace::FilterBack",
+                "trace.filter_backspace",
+                "Erase in the ID filter",
             ),
         ],
     },

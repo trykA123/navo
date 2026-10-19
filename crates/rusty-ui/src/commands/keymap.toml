@@ -1037,6 +1037,45 @@ command = "viewer.back"
 keys = ["escape"]
 context = "MemoryImage"
 
+# CanTrace
+
+[[bind]]
+command = "trace.toggle_navigator"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "trace.toggle_inspector"
+keys = ["ctrl-i"]
+
+[[bind]]
+command = "trace.filter_by_id"
+keys = ["enter"]
+
+[[bind]]
+command = "trace.sort_ids"
+keys = ["alt-s"]
+
+[[bind]]
+command = "trace.type_one"
+keys = ["1"]
+
+[[bind]]
+command = "trace.type_three"
+keys = ["3"]
+
+[[bind]]
+command = "trace.type_five"
+keys = ["5"]
+
+[[bind]]
+command = "trace.filter_backspace"
+keys = ["backspace"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "CanTrace"
+
 # Markdown
 
 [[bind]]
