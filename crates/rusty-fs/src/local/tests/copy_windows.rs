@@ -1,8 +1,12 @@
+use std::io;
+use std::os::windows::fs::OpenOptionsExt;
+
 use rusty_core::{ConflictPolicy, OpKind, OperationPlan, PlanRequest, plan};
 
 use super::ops::{Log, child};
 use super::windows::attrib;
 use super::*;
+use crate::local::win_copy::{self, CopyProgress};
 use crate::{
     AutoTuning, JobContext, JobOutcome, Progress, ProviderOps, TEMP_SUFFIX, clean_up, existing_at,
     roll_back, run_job, scan,
@@ -250,4 +254,64 @@ fn unbuffered_copy_handles_the_threshold_and_an_unaligned_end() {
         assert!(seen.windows(2).all(|pair| pair[0] <= pair[1]));
         fs::remove_file(dir.path().join("target.bin")).unwrap();
     }
+}
+
+#[test]
+fn a_failed_flush_fails_the_copy_at_the_target() {
+    let (dir, root) = temp();
+    write_file(dir.path(), "source.bin", 3_000);
+    let target = child(&root, "target.bin");
+    let cancel = CancelToken::new();
+    let mut report = |_: u64| {};
+    let failure = win_copy::copy(
+        &child(&root, "source.bin"),
+        &target,
+        &AutoTuning::default(),
+        CopyProgress::new(&mut report, &cancel)
+            .with_flush(|_| Err(io::Error::from_raw_os_error(112))),
+    )
+    .unwrap_err();
+    assert_eq!(failure.kind, FsErrorKind::DiskFull);
+    assert!(failure.location.unwrap().same_place(&target));
+}
+
+#[test]
+fn an_empty_file_copies() {
+    let (dir, root) = temp();
+    write_file(dir.path(), "source.bin", 0);
+    let written = LocalFs::new()
+        .copy_file(
+            &child(&root, "source.bin"),
+            &child(&root, "target.bin"),
+            &mut |_| {},
+            &CancelToken::new(),
+        )
+        .unwrap();
+    assert_eq!(written, 0);
+    assert_eq!(
+        fs::metadata(dir.path().join("target.bin")).unwrap().len(),
+        0
+    );
+}
+
+#[test]
+fn a_locked_source_is_reported_at_the_source() {
+    let (dir, root) = temp();
+    write_file(dir.path(), "source.bin", 3);
+    let _lock = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(dir.path().join("source.bin"))
+        .unwrap();
+    let source = child(&root, "source.bin");
+    let failure = LocalFs::new()
+        .copy_file(
+            &source,
+            &child(&root, "target.bin"),
+            &mut |_| {},
+            &CancelToken::new(),
+        )
+        .unwrap_err();
+    assert_eq!(failure.kind, FsErrorKind::SharingViolation);
+    assert!(failure.location.unwrap().same_place(&source));
 }
