@@ -9,6 +9,8 @@ const HOLD_LIMIT: Duration = Duration::from_secs(10);
 #[derive(Default)]
 struct Hold {
     held: usize,
+    reading: usize,
+    most_reading: usize,
     is_released: bool,
 }
 
@@ -38,9 +40,19 @@ impl Held {
         assert!(!timeout.timed_out(), "held {} of {count} lists", hold.held);
     }
 
+    pub fn most_reading(&self) -> usize {
+        self.hold.lock().unwrap().most_reading
+    }
+
     pub fn release(&self) {
         self.hold.lock().unwrap().is_released = true;
         self.changed.notify_all();
+    }
+
+    fn start_reading(&self) {
+        let mut hold = self.hold.lock().unwrap();
+        hold.reading += 1;
+        hold.most_reading = hold.most_reading.max(hold.reading);
     }
 
     fn hold_here(&self) {
@@ -70,10 +82,13 @@ impl Provider for Held {
         sink: &mut dyn ListSink,
         cancel: &CancelToken,
     ) -> Result<(), FsError> {
+        self.start_reading();
         if self.folders.contains(folder) {
             self.hold_here();
         }
-        self.inner.list(folder, sink, cancel)
+        let listed = self.inner.list(folder, sink, cancel);
+        self.hold.lock().unwrap().reading -= 1;
+        listed
     }
 
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {

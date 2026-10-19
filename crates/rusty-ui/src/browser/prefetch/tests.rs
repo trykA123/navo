@@ -146,7 +146,7 @@ fn a_finished_prefetch_stays_cached_after_the_cursor_moves_on() {
 }
 
 #[test]
-fn three_quick_rests_never_keep_more_than_two_in_flight() {
+fn three_quick_rests_read_at_most_two_folders_at_once() {
     let fs = fake();
     let held = Held::new(&fs, &["home/alpha", "home/beta"]);
     let mut browser = browser_with(held.clone(), &fs, ListingCache::default());
@@ -154,29 +154,91 @@ fn three_quick_rests_never_keep_more_than_two_in_flight() {
     held.wait_until_held(1);
     rest_on(&mut browser, "beta");
     rest_on(&mut browser, "gamma");
-    assert_eq!(browser.prefetching(), 2);
     browser.poll();
-    assert_eq!(browser.prefetching(), 2);
     assert_eq!(fs.calls("home/gamma", FakeOp::List), 0);
     held.release();
     settle(&mut browser);
-    assert_eq!(browser.prefetching(), 0);
+    assert!(held.most_reading() <= 2);
+    assert_eq!(fs.calls("home/beta", FakeOp::List), 0);
     assert!(is_cached_at(&browser, &fs, "home/gamma"));
 }
 
 #[test]
-fn a_waiting_rest_is_dropped_when_the_cursor_moves_on() {
+fn a_queued_rest_is_dropped_when_the_cursor_moves_on() {
     let fs = fake();
     let held = Held::new(&fs, &["home/alpha", "home/beta"]);
     let mut browser = browser_with(held.clone(), &fs, ListingCache::default());
     rest_on(&mut browser, "alpha");
+    held.wait_until_held(1);
     rest_on(&mut browser, "beta");
     rest_on(&mut browser, "gamma");
     put_cursor_on(&mut browser, "notes.txt");
     browser.leave_prefetches(None);
     held.release();
     settle(&mut browser);
+    assert_eq!(fs.calls("home/beta", FakeOp::List), 0);
     assert_eq!(fs.calls("home/gamma", FakeOp::List), 0);
+}
+
+#[test]
+fn a_running_prefetch_never_delays_a_refresh_of_the_open_folder() {
+    let fs = fake();
+    let held = Held::new(&fs, &["home/alpha"]);
+    let mut browser = browser_with(held.clone(), &fs, ListingCache::default());
+    rest_on(&mut browser, "alpha");
+    held.wait_until_held(1);
+    browser.command(&Command::PaneRefresh).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while browser.loading() && Instant::now() < deadline {
+        browser.poll();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let tab = browser.state().active_tab();
+    assert!(tab.pending_request().is_none());
+    assert!(browser.offline(tab.id()).is_none());
+    assert!(names(&browser).contains(&"alpha".to_owned()));
+    held.release();
+    settle(&mut browser);
+}
+
+#[test]
+fn enter_on_a_folder_still_prefetching_lists_it_once() {
+    let fs = fake();
+    let held = Held::new(&fs, &["home/alpha"]);
+    let mut browser = browser_with(held.clone(), &fs, ListingCache::default());
+    rest_on(&mut browser, "alpha");
+    held.wait_until_held(1);
+    let row = browser.state().active_tab().view().cursor;
+    assert!(browser.open_row(row));
+    let target = browser.cursor_folder();
+    browser.leave_prefetches(target.as_ref());
+    assert!(browser.loading());
+    held.release();
+    settle(&mut browser);
+    assert_eq!(names(&browser), ["one.txt", "two.txt"]);
+    assert_eq!(fs.calls("home/alpha", FakeOp::List), 1);
+    assert!(!browser.loading());
+}
+
+#[test]
+fn a_dead_share_entered_while_prefetching_still_goes_offline() {
+    let fs = fake();
+    let share = Stalled::new(&fs, "home/alpha");
+    let mut browser = browser_with(share.clone(), &fs, ListingCache::default());
+    share.stop_answering();
+    rest_on(&mut browser, "alpha");
+    share.wait_until_held(1);
+    let row = browser.state().active_tab().view().cursor;
+    assert!(browser.open_row(row));
+    browser.leave_prefetches(None);
+    let tab = browser.state().active_tab();
+    let (tab, request) = (tab.id(), tab.pending_request().unwrap());
+    assert!(browser.listing_overdue(tab, request).is_some());
+    assert!(browser.offline(tab).is_some());
+    share.answer();
+    settle(&mut browser);
+    assert!(browser.offline(tab).is_none());
+    assert_eq!(names(&browser), ["one.txt", "two.txt"]);
 }
 
 #[test]

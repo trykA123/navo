@@ -317,7 +317,13 @@ impl Browser {
     }
 
     fn list(&mut self, tab: TabId, location: Location, request: u64) {
-        self.stalls.begin(tab, request);
+        if let Some(progress) = self.adopt_prefetch(tab, &location, request) {
+            self.stalls.begin(tab, request, progress);
+            self.in_flight += 1;
+            return;
+        }
+        self.stalls
+            .begin(tab, request, offline::Progress::default());
         self.submit(tab, location, request);
     }
 
