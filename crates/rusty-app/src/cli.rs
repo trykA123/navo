@@ -10,6 +10,7 @@ pub(crate) enum Command {
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Start {
+    pub(crate) path: Option<PathBuf>,
     pub(crate) view: Option<PathBuf>,
     pub(crate) profile: Option<PathBuf>,
     pub(crate) metrics: Option<PathBuf>,
@@ -17,7 +18,7 @@ pub(crate) struct Start {
     pub(crate) right: Option<PathBuf>,
 }
 
-pub(crate) const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>]]";
+pub(crate) const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>]]";
 
 const STANDALONE: [&str; 2] = ["--version", "--diag-report"];
 const WINDOW_FLAGS: [&str; 5] = ["--view", "--profile", "--metrics", "--left", "--right"];
@@ -61,13 +62,16 @@ fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
             return standalone(&flag, args);
         }
         is_first = false;
-        let slot = start
-            .slot(&flag)
-            .ok_or_else(|| format!("unknown argument {flag}"))?;
-        if slot.is_some() {
-            return Err(format!("{flag} given twice"));
+        if let Some(slot) = start.slot(&flag) {
+            if slot.is_some() {
+                return Err(format!("{flag} given twice"));
+            }
+            *slot = Some(value(&flag, args.next())?);
+        } else if flag.starts_with('-') || arg.is_empty() {
+            return Err(format!("unknown argument {flag}"));
+        } else if start.path.replace(PathBuf::from(arg)).is_some() {
+            return Err("only one path is accepted".into());
         }
-        *slot = Some(value(&flag, args.next())?);
     }
     Ok(Command::Open(start))
 }

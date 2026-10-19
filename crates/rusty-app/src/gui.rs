@@ -2,6 +2,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use rusty_cache::{CacheKeys, DiskListings, DriveIdentity, ListingCache, Warm};
@@ -31,6 +32,21 @@ pub(crate) struct Launch {
     pub(crate) dirs: Option<StoreDirs>,
     pub(crate) cleanup: crate::profile::Cleanup,
     pub(crate) start_watch: Option<StartWatch>,
+    pub(crate) instance_requests: Receiver<crate::instance::Request>,
+}
+
+pub(crate) fn on_instance_request(
+    sender: &Sender<crate::instance::Request>,
+    request: crate::instance::Request,
+) -> crate::instance::Reply {
+    tracing::info!("instance request received");
+    match sender.send(request) {
+        Ok(()) => crate::instance::Reply::Ok,
+        Err(error) => {
+            tracing::warn!(%error, "window no longer accepts instance requests");
+            crate::instance::Reply::Error
+        }
+    }
 }
 
 pub(crate) fn pane_folders(start: &Start) -> Result<[Option<Location>; 2], String> {
@@ -51,6 +67,7 @@ pub(crate) fn pane_folders(start: &Start) -> Result<[Option<Location>; 2], Strin
 }
 
 pub(crate) fn open(launch: Launch) {
+    let _instance_requests = launch.instance_requests;
     let dirs = launch.dirs;
     let settings_start = settings::start_from(dirs.as_ref());
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());

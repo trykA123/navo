@@ -95,6 +95,7 @@ fn every_window_flag_is_read_in_any_order() {
     assert_eq!(
         parsed,
         Start {
+            path: None,
             view: None,
             profile: Some(PathBuf::from("p")),
             metrics: Some(PathBuf::from("m.json")),
@@ -102,6 +103,40 @@ fn every_window_flag_is_read_in_any_order() {
             right: Some(PathBuf::from("fixture/nested")),
         }
     );
+}
+
+#[test]
+fn one_positional_path_opens_the_window() {
+    assert_eq!(start(&["work"]).path, Some(PathBuf::from("work")));
+}
+
+#[test]
+fn the_positional_path_can_appear_between_window_flags() {
+    let parsed = start(&["--left", "a", "work", "--right", "b"]);
+    assert_eq!(parsed.path, Some(PathBuf::from("work")));
+    assert_eq!(parsed.left, Some(PathBuf::from("a")));
+    assert_eq!(parsed.right, Some(PathBuf::from("b")));
+    assert_eq!(
+        start(&["work", "--view", "note"]).view,
+        Some(PathBuf::from("note"))
+    );
+}
+
+#[test]
+fn two_positional_paths_are_refused() {
+    assert!(refusal(&["a", "b"]).contains("only one path"));
+}
+
+#[test]
+fn a_path_cannot_accompany_a_standalone_flag() {
+    for args in [
+        &["work", "--version"][..],
+        &["--version", "work"],
+        &["work", "--diag-report", "out.zip"],
+        &["--diag-report", "out.zip", "work"],
+    ] {
+        assert!(parse_strs(args).is_err(), "{args:?}");
+    }
 }
 
 #[test]

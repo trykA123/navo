@@ -14,6 +14,7 @@ mod drives;
 mod editor;
 mod files;
 mod gui;
+mod instance;
 mod jobs;
 mod keymap;
 mod launch;
@@ -27,7 +28,10 @@ mod watch_file;
 #[cfg(windows)]
 mod windows_memory;
 
+use std::ops::ControlFlow;
+use std::path::Path;
 use std::process::ExitCode;
+use std::sync::mpsc::{self, Sender};
 use std::time::Instant;
 
 use cli::{Command, Start};
@@ -89,29 +93,39 @@ fn execute_command(
             return ExitCode::FAILURE;
         }
     };
-    let diagnostics = logging::install(profile.dirs().map(|dirs| dirs.data.as_path()));
-    logging::log_start();
-    metrics::mark("logging ready");
     match command {
         Command::Open(start) => open_window(start, panes, &profile, clock),
         Command::Version => {
+            let _diagnostics = install_logging(&profile);
             println!("ferrite {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        Command::DiagReport(path) => match diag::write(&path, started, &diagnostics) {
-            Ok(summary) => {
-                println!(
-                    "ferrite: wrote {} ({} bytes)",
-                    path.display(),
-                    summary.bytes
-                );
-                ExitCode::SUCCESS
-            }
-            Err(error) => {
-                eprintln!("ferrite: cannot write {}: {error}", path.display());
-                ExitCode::FAILURE
-            }
-        },
+        Command::DiagReport(path) => write_report(&path, started, &profile),
+    }
+}
+
+fn install_logging(profile: &Profile) -> logging::Diagnostics {
+    let diagnostics = logging::install(profile.dirs().map(|dirs| dirs.data.as_path()));
+    logging::log_start();
+    metrics::mark("logging ready");
+    diagnostics
+}
+
+fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
+    let diagnostics = install_logging(profile);
+    match diag::write(path, started, &diagnostics) {
+        Ok(summary) => {
+            println!(
+                "ferrite: wrote {} ({} bytes)",
+                path.display(),
+                summary.bytes
+            );
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("ferrite: cannot write {}: {error}", path.display());
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -121,6 +135,17 @@ fn open_window(
     profile: &Profile,
     clock: ProcessClock,
 ) -> ExitCode {
+    let (sender, requests) = mpsc::channel();
+    let _guard = match prepare_instance(&start, profile, sender) {
+        Ok(ControlFlow::Continue(guard)) => guard,
+        Ok(ControlFlow::Break(code)) => return code,
+        Err(error) => {
+            console::attach();
+            eprintln!("ferrite: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let _diagnostics = install_logging(profile);
     let run = start
         .metrics
         .clone()
@@ -131,12 +156,47 @@ fn open_window(
         dirs: profile.dirs().cloned(),
         cleanup: profile.cleanup(),
         start_watch: run.as_ref().map(metrics::Run::watch),
+        instance_requests: requests,
     });
     if let Err(error) = profile.cleanup().run() {
         eprintln!("ferrite: cannot remove the temporary profile: {error}");
         return ExitCode::FAILURE;
     }
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
+}
+
+fn prepare_instance(
+    start: &Start,
+    profile: &Profile,
+    sender: Sender<instance::Request>,
+) -> Result<ControlFlow<ExitCode, Option<instance::Guard>>, instance::Error> {
+    if start.is_metrics() {
+        return Ok(ControlFlow::Continue(None));
+    }
+    let dirs = profile.dirs().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "cannot determine the profile data folder",
+        )
+    })?;
+    match instance::acquire(&dirs.data)? {
+        instance::Acquired::First(mut guard) => {
+            guard.serve(move |request| gui::on_instance_request(&sender, request))?;
+            Ok(ControlFlow::Continue(Some(guard)))
+        }
+        instance::Acquired::Second(client) => {
+            let request = instance::Request::from_start(start, &std::env::current_dir()?)?;
+            let reply = client.send(&request, std::time::Duration::from_secs(2))?;
+            let code = if reply == instance::Reply::Ok {
+                ExitCode::SUCCESS
+            } else {
+                console::attach();
+                eprintln!("ferrite: the running Ferrite rejected the request");
+                ExitCode::FAILURE
+            };
+            Ok(ControlFlow::Break(code))
+        }
+    }
 }
 
 #[cfg(test)]
