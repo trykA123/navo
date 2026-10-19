@@ -531,6 +531,17 @@ fn trace_rig(cx: &mut TestAppContext) -> Rig {
     rig
 }
 
+fn map_rig(cx: &mut TestAppContext) -> Rig {
+    let rig = rig(
+        cx,
+        ("a.map", "b.map"),
+        crate::window_view::viewer::map::tests::SAMPLE.as_bytes(),
+    );
+    rig.settle(cx);
+    rig.settle(cx);
+    rig
+}
+
 fn click(rig: &Rig, cx: &mut TestAppContext, id: (&'static str, usize)) {
     cx.update_window(rig.window, |_, window, cx| window.click(id, cx))
         .expect("window");
@@ -566,6 +577,15 @@ fn alt_v_opens_the_view_menu_in_the_can_trace_view(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn alt_v_opens_the_view_menu_in_the_map_view(cx: &mut TestAppContext) {
+    let rig = map_rig(cx);
+    rig.press(cx, "alt-v");
+    assert_eq!(rig.rows(cx), table_rows(0, false));
+    run_item(cx, rig.window, "Rich");
+    assert_eq!(rig.rows(cx), table_rows(1, true));
+}
+
+#[gpui_kit::test]
 fn the_view_menu_header_reads_view(cx: &mut TestAppContext) {
     let rig = rig(cx, ("a.txt", "b.txt"), TEXT);
     rig.press(cx, "alt-v");
@@ -580,6 +600,16 @@ fn the_inspector_opens_by_itself_in_rich_when_an_elf_symbol_is_picked(cx: &mut T
     choose_rich(&rig, cx);
     click(&rig, cx, ("elf-row", 2));
     assert!(visible(cx, rig.window, "elf-inspector"));
+}
+
+#[gpui_kit::test]
+fn the_inspector_opens_by_itself_in_rich_when_a_map_row_is_picked(cx: &mut TestAppContext) {
+    let rig = map_rig(cx);
+    click(&rig, cx, ("map-row", 1));
+    assert!(!visible(cx, rig.window, "map-inspector"));
+    choose_rich(&rig, cx);
+    click(&rig, cx, ("map-row", 2));
+    assert!(visible(cx, rig.window, "map-inspector"));
 }
 
 #[gpui_kit::test]
@@ -598,4 +628,6 @@ fn the_elf_and_trace_bars_list_the_view_key(cx: &mut TestAppContext) {
     assert!(bottom_keys(cx, elf.window).contains(&"Alt+V View".to_owned()));
     let trace = trace_rig(cx);
     assert!(bottom_keys(cx, trace.window).contains(&"Alt+V View".to_owned()));
+    let map = map_rig(cx);
+    assert!(bottom_keys(cx, map.window).contains(&"Alt+V View".to_owned()));
 }

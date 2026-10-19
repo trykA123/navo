@@ -84,6 +84,7 @@ impl FerriteWindow {
             .flex_col()
             .flex_1()
             .min_h_0()
+            .min_w_0()
             .bg(t.colors.surface);
         let root = match &viewer.body {
             Some(body) => root.child(body.view()),
