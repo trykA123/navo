@@ -84,6 +84,7 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
             job,
             kind,
             held: Vec::new(),
+            stranded: false,
         }) as Box<dyn OpLog>)
     })
 }
@@ -93,6 +94,7 @@ struct JournalLog {
     job: JobId,
     kind: String,
     held: Vec<HeldFile>,
+    stranded: bool,
 }
 
 impl JobLog for JournalLog {
@@ -116,6 +118,10 @@ impl JobLog for JournalLog {
     fn journal_placed(&mut self, placed: &PlacedFile) -> Result<(), FsError> {
         held::record_placed(&self.journal, self.job, placed)
     }
+
+    fn held_stranded(&mut self, _: &HeldFile) {
+        self.stranded = true;
+    }
 }
 
 impl OpLog for JournalLog {
@@ -123,6 +129,7 @@ impl OpLog for JournalLog {
         let state = match outcome {
             JobOutcome::Done => JobState::Done,
             JobOutcome::Cancelled => JobState::Cancelled,
+            JobOutcome::Failed { .. } if self.stranded => JobState::RestorePending,
             JobOutcome::Failed { .. } => JobState::Failed,
         };
         if let JobOutcome::Failed { seq, error } = outcome {
@@ -141,7 +148,7 @@ impl OpLog for JournalLog {
                 "job finished"
             );
         }
-        if lock(&self.journal).finish(self.job, state).is_ok() {
+        if lock(&self.journal).finish(self.job, state).is_ok() && !self.stranded {
             let _ = held::release(&self.journal, self.job, &self.held, ops);
         }
     }

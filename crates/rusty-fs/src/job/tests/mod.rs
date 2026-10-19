@@ -25,6 +25,7 @@ mod kept_aside_race;
 mod move_;
 mod move_over;
 mod move_over_crash;
+mod move_over_race;
 mod parallel;
 mod parallel_pause;
 mod parallel_props;
@@ -46,6 +47,7 @@ struct Log {
     placed: Vec<PlacedFile>,
     unjournaled: bool,
     beside: Vec<rusty_core::Location>,
+    stranded: Vec<HeldFile>,
 }
 
 fn log_error() -> FsError {
@@ -79,6 +81,10 @@ impl JobLog for Log {
 
     fn kept_beside(&mut self, _: &HeldFile, beside: &rusty_core::Location) {
         self.beside.push(beside.clone());
+    }
+
+    fn held_stranded(&mut self, held: &HeldFile) {
+        self.stranded.push(held.clone());
     }
 }
 

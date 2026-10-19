@@ -97,3 +97,38 @@ fn a_move_over_a_file_changed_since_keeps_the_new_file_and_puts_the_old_beside()
         (Some(8), Some(2), Some(7))
     );
 }
+
+#[test]
+fn a_job_whose_old_file_could_not_be_put_back_is_not_released_and_stays_pending() {
+    let fs = fake();
+    let journal = journal();
+    let plan = move_plan(&fs);
+    let mut log = log_factory(Arc::clone(&journal))(&plan).unwrap();
+    let mut ctx = JobContext {
+        ops: &fs,
+        log: log.as_mut(),
+        cancel: &CancelToken::new(),
+        progress: &mut |_| {},
+    };
+    assert_eq!(run_job(&plan, &[], &mut ctx), JobOutcome::Done);
+    let stuck = rusty_fs::HeldFile {
+        original: fs.location("dest/docs/report.txt"),
+        held: fs.location("dest/docs/report.txt"),
+        placed: None,
+        volume: None,
+    };
+    log.held_stranded(&stuck);
+    let failed = JobOutcome::Failed {
+        seq: 0,
+        error: rusty_core::FsError::new(rusty_core::FsErrorKind::AccessDenied),
+    };
+    log.finish(&failed, &fs);
+    assert_eq!(
+        (
+            holding(&fs).len(),
+            held_rows(&journal),
+            super::lock(&journal).restore_pending().unwrap().len()
+        ),
+        (1, 1, 1)
+    );
+}
