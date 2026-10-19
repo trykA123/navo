@@ -193,6 +193,7 @@ image.toggle_info | i | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
 viewer.back | escape | MemoryImage
+viewer.back | escape | Elf
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
@@ -232,6 +233,14 @@ markdown.copy_block | ctrl-c | Markdown
 memory.toggle_navigator | ctrl-b | MemoryImage
 memory.toggle_inspector | ctrl-i | MemoryImage
 memory.go_to_item | enter | MemoryImage
+[elf_view]
+elf.toggle_navigator | ctrl-b | Elf
+elf.toggle_inspector | ctrl-i | Elf
+elf.pick_item | enter | Elf
+elf.sort_by_name | ctrl-f3 | Elf
+elf.sort_by_section | ctrl-f4 | Elf
+elf.sort_by_address | ctrl-f5 | Elf
+elf.sort_by_size | ctrl-f6 | Elf
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu

@@ -12,6 +12,22 @@ pub const MEMORY_STEPS: [&str; 5] = [
 
 static MEMORY: LazyLock<String> = LazyLock::new(memory_image);
 
+pub const ELF_NAME: &str = "bcm_app.elf";
+
+pub const ELF_STEPS: [&str; 4] = [
+    "elf_view::ToggleNavigator",
+    "viewer::RowDown",
+    "elf_view::PickItem",
+    "elf_view::ToggleInspector",
+];
+
+static ELF: LazyLock<Vec<u8>> =
+    LazyLock::new(|| rusty_automotive::elf_sample::demo().unwrap_or_default());
+
+pub fn elf() -> &'static [u8] {
+    &ELF
+}
+
 pub fn memory() -> &'static str {
     &MEMORY
 }

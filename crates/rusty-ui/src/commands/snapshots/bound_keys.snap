@@ -53,6 +53,13 @@ editor.focus_preview | f6 | Viewer
 editor.leave_preview | escape | MarkdownPreview
 editor.leave_preview | f6 | MarkdownPreview
 editor.toggle_preview | ctrl-shift-v | Viewer
+elf.pick_item | enter | Elf
+elf.sort_by_address | ctrl-f5 | Elf
+elf.sort_by_name | ctrl-f3 | Elf
+elf.sort_by_section | ctrl-f4 | Elf
+elf.sort_by_size | ctrl-f6 | Elf
+elf.toggle_inspector | ctrl-i | Elf
+elf.toggle_navigator | ctrl-b | Elf
 files.clear_filter | escape | FileList
 files.clipboard_copy | ctrl-c | FileList
 files.clipboard_cut | ctrl-x | FileList
@@ -230,6 +237,7 @@ tree.type_n | n | Tree
 tree.type_one | 1 | Tree
 tree.type_p | p | Tree
 tree.type_three | 3 | Tree
+viewer.back | escape | Elf
 viewer.back | escape | MemoryImage
 viewer.back | escape | Paged
 viewer.back | escape | Tree

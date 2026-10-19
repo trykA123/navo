@@ -226,6 +226,13 @@ markdown.copy_link | Copy link | Markdown
 memory.toggle_navigator | Ranges drawer | MemoryImage
 memory.toggle_inspector | Inspector drawer | MemoryImage
 memory.go_to_item | Go to the picked range | MemoryImage
+elf.toggle_navigator | Sections drawer | Elf
+elf.toggle_inspector | Inspector drawer | Elf
+elf.pick_item | Show the picked section's symbols, or inspect the symbol | Elf
+elf.sort_by_name | Sort symbols by name | Elf
+elf.sort_by_section | Sort symbols by section | Elf
+elf.sort_by_address | Sort symbols by address | Elf
+elf.sort_by_size | Sort symbols by size | Elf
 app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global

@@ -4,6 +4,7 @@ mod background;
 mod body;
 mod cancel;
 mod editor;
+mod elf;
 mod files;
 mod font;
 mod image;
