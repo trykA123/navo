@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use rusty_store::{Settings, SettingsStore, ThemeMode};
 use rusty_ui::settings::{Change, Control, FIELDS, Field, Value, Values};
 use rusty_ui::tokens::{Density, ThemeChoice};
-use rusty_ui::window_view::{SettingsHooks, SettingsNews};
+use rusty_ui::window_view::{KeyLine, SettingsHooks, SettingsNews};
 
 use super::{Loaded, Reloader, values_of};
 
@@ -14,6 +14,10 @@ fn hooks(path: Option<&Path>) -> SettingsHooks {
 }
 
 const OLD_EDITOR_FILE: &str = "[files]\nshow-hidden = false\n\n[editor]\npath = \"code\"\n";
+
+fn no_ledger() -> Mutex<super::LedgerFile> {
+    Mutex::new(super::LedgerFile::new(None))
+}
 
 fn file_in(dir: &tempfile::TempDir) -> std::path::PathBuf {
     dir.path().join("ferrite.toml")
@@ -38,7 +42,10 @@ fn save(settings: &SettingsHooks, change: Change) -> Result<Values, String> {
 
 #[test]
 fn the_defaults_match_on_both_sides() {
-    assert_eq!(values_of(&Settings::default()), Values::default());
+    let dir = tempfile::tempdir().unwrap();
+    let (store, _) = SettingsStore::load(&file_in(&dir));
+    assert_eq!(store.current(), &Settings::default());
+    assert_eq!(values_of(&store), Values::default());
 }
 
 #[test]
@@ -83,7 +90,8 @@ fn a_sheet_save_after_deletion_restores_all_current_settings() {
     assert_eq!(again.values, expected);
     assert_eq!(stored, expected);
     for spec in &FIELDS {
-        assert!((again.line_of)(spec.key).is_some(), "{}", spec.key);
+        let found = (again.line_of)(spec.key);
+        assert!(found.is_some_and(|found| !found.is_missing), "{}", spec.key);
     }
 }
 
@@ -200,8 +208,16 @@ fn the_line_of_a_key_is_read_from_the_file() {
     let file = file_in(&dir);
     fs::write(&file, "# mine\n[appearance]\ndensity = \"compact\"\n").unwrap();
     let settings = hooks(Some(&file));
-    assert_eq!((settings.line_of)("appearance.density"), Some(3));
-    assert_eq!((settings.line_of)("appearance.mode"), None);
+    let density = KeyLine {
+        line: 3,
+        is_missing: false,
+    };
+    assert_eq!((settings.line_of)("appearance.density"), Some(density));
+    let mode = KeyLine {
+        line: 2,
+        is_missing: true,
+    };
+    assert_eq!((settings.line_of)("appearance.mode"), Some(mode));
     let location = settings.file.expect("a settings file");
     let name = Path::new(location.as_str()).file_name();
     assert_eq!(name.and_then(|name| name.to_str()), Some("ferrite.toml"));
@@ -250,13 +266,13 @@ fn saves_and_reloads_carry_a_rising_generation() {
     let (store, _) = SettingsStore::load(&file);
     let store = Arc::new(Mutex::new(store));
     let mut reloader = Reloader::new(store.clone(), None);
-    let first = super::save(&store, &[Change::theme(ThemeChoice::Dark)]);
+    let first = super::save(&store, &no_ledger(), &[Change::theme(ThemeChoice::Dark)]);
     fs::write(&file, "[appearance]\nmode = \"light\"\n").unwrap();
     let Some(SettingsNews::Applied { generation, .. }) = reloader.reload() else {
         panic!("the hand edit applies");
     };
     assert!(generation > first.generation);
-    let second = super::save(&store, &[Change::density(Density::Compact)]);
+    let second = super::save(&store, &no_ledger(), &[Change::density(Density::Compact)]);
     assert!(second.generation > generation);
 }
 

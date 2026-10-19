@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, TestAppContext};
+use gpui_kit::{AppContext as _, Pixels, Point, TestAppContext, point};
 use rusty_core::{Location, OpKind};
 use rusty_fs::{CancelToken, Progress};
 
@@ -43,14 +43,23 @@ fn add_running_copy(cx: &mut TestAppContext, rig: &Rig) {
     });
 }
 
-fn row_under_the_job_card(cx: &mut TestAppContext, rig: &Rig) -> Option<usize> {
+fn row_under_the_job_card(cx: &mut TestAppContext, rig: &Rig) -> Option<(usize, Point<Pixels>)> {
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         let card = window.find("job-card").bounds();
-        (0..FIELDS.len()).find(|index| {
-            window
-                .try_find(("settings-row", *index))
-                .is_some_and(|row| card.contains(&row.bounds().center()))
+        let list_end = window.find("settings-footer").bounds().top();
+        (0..FIELDS.len()).find_map(|index| {
+            let row = window.try_find(("settings-row", index))?.bounds();
+            let top = row.top().max(card.top());
+            let bottom = row.bottom().min(card.bottom()).min(list_end);
+            let x = row.center().x;
+            let is_over = top < bottom && card.left() <= x && x <= card.right();
+            is_over.then(|| {
+                (
+                    index,
+                    point(row.size.width / 2., (top + bottom) / 2. - row.top()),
+                )
+            })
         })
     })
     .expect("window")
@@ -62,8 +71,13 @@ fn the_job_card_stays_under_the_settings_sheet(cx: &mut TestAppContext) {
     rig.press(cx, "tab");
     open_settings(cx, &rig);
     add_running_copy(cx, &rig);
-    let row = row_under_the_job_card(cx, &rig).expect("a settings row overlaps the job card");
-    rig.click(cx, ("settings-row", row));
+    let (row, offset) =
+        row_under_the_job_card(cx, &rig).expect("a settings row overlaps the job card");
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click_at(("settings-row", row), offset, cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
     assert_eq!(rig.view.read_with(cx, |view, _| view.settings_row()), row);
 }
 

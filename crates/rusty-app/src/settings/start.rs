@@ -16,6 +16,7 @@ pub struct Loaded {
     pub path: PathBuf,
     pub store: SettingsStore,
     pub report: LoadReport,
+    pub ledger: Option<PathBuf>,
     pub(super) late: Option<Receiver<Started>>,
 }
 
@@ -32,6 +33,7 @@ impl Loaded {
             path: path.to_owned(),
             store,
             report,
+            ledger: None,
             late: None,
         }
     }
@@ -46,6 +48,7 @@ pub struct Started {
 pub struct Starting {
     receiver: Receiver<Started>,
     file: Option<PathBuf>,
+    ledger: Option<PathBuf>,
     backup: SessionBackup,
     wait: Duration,
 }
@@ -77,6 +80,7 @@ impl Starting {
             .as_deref()
             .map(|file| Loaded::load_sharing(file, self.backup.clone()));
         if let Some(loaded) = &mut loaded {
+            loaded.ledger = self.ledger;
             loaded.late = pending.then_some(self.receiver);
         }
         Started {
@@ -101,6 +105,7 @@ pub(super) fn start_sharing(
         return Started::default();
     };
     let mut loaded = Loaded::load_sharing(file, backup);
+    loaded.ledger = ledger.map(Path::to_owned);
     let default_changes = match ledger {
         Some(ledger) if loaded.report.error.is_none() => {
             follow_defaults(&mut loaded.store, ledger, &Settings::default())
@@ -124,9 +129,12 @@ pub fn start_from(dirs: Option<&StoreDirs>) -> Starting {
 #[must_use]
 pub fn start_in_background(file: Option<PathBuf>, ledger: Option<PathBuf>) -> Starting {
     let worker_file = file.clone();
-    spawn(file, WAIT, move |backup| {
-        start_sharing(worker_file.as_deref(), ledger.as_deref(), backup)
-    })
+    let worker_ledger = ledger.clone();
+    let mut starting = spawn(file, WAIT, move |backup| {
+        start_sharing(worker_file.as_deref(), worker_ledger.as_deref(), backup)
+    });
+    starting.ledger = ledger;
+    starting
 }
 
 pub(super) fn spawn(
@@ -147,6 +155,7 @@ pub(super) fn spawn(
     Starting {
         receiver,
         file,
+        ledger: None,
         backup,
         wait,
     }
