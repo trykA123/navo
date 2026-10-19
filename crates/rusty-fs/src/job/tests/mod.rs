@@ -19,8 +19,12 @@ mod crashing;
 mod faults;
 mod journal;
 mod move_;
+mod parallel;
+mod parallel_pause;
+mod parallel_props;
 mod pause;
 mod roll_back;
+mod workers;
 
 const BIG: u64 = 10_000;
 
@@ -63,11 +67,16 @@ struct Harness {
     cancel: CancelToken,
     cancel_after_bytes: Option<u64>,
     progress: Vec<Progress>,
+    workers: usize,
 }
 
 impl Harness {
     fn run(&mut self, ops: &dyn ProviderOps, plan: &OperationPlan, done: &[u32]) -> JobOutcome {
-        self.with(ops, |ctx| run_job(plan, done, ctx))
+        let workers = self.workers;
+        self.with(ops, |ctx| match workers {
+            0 => run_job(plan, done, ctx),
+            n => super::parallel::run(plan, done, ctx, n),
+        })
     }
 
     fn roll_back(

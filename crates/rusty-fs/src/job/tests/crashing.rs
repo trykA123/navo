@@ -136,8 +136,20 @@ impl ProviderOps for Crashing<'_> {
 }
 
 pub(super) fn crashed(fs: &FakeFs, plan: &OperationPlan, copy_of: &str) -> Vec<u32> {
+    crashed_with(fs, plan, copy_of, 0)
+}
+
+pub(super) fn crashed_with(
+    fs: &FakeFs,
+    plan: &OperationPlan,
+    copy_of: &str,
+    workers: usize,
+) -> Vec<u32> {
     let ops = Crashing::new(fs, copy_of, FakeOp::Copy);
-    let mut harness = Harness::default();
+    let mut harness = Harness {
+        workers,
+        ..Harness::default()
+    };
     let _ = harness.run(&ops, plan, &[]);
     harness.log.done()
 }
