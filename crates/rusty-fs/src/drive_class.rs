@@ -57,12 +57,12 @@ fn cached_class(
 }
 
 #[cfg(any(windows, test))]
-fn classify(remote: bool, seek_penalty: Option<bool>) -> DriveClass {
-    match (remote, seek_penalty) {
-        (true, _) => DriveClass::Network,
-        (false, Some(false)) => DriveClass::Ssd,
-        (false, Some(true)) => DriveClass::Hdd,
-        (false, None) => DriveClass::Unknown,
+fn classify(remote: bool, seek_penalty: Option<bool>, trim_enabled: Option<bool>) -> DriveClass {
+    match (remote, seek_penalty, trim_enabled) {
+        (true, _, _) => DriveClass::Network,
+        (false, Some(false), _) | (false, None, Some(true)) => DriveClass::Ssd,
+        (false, Some(true), _) => DriveClass::Hdd,
+        (false, None, None | Some(false)) => DriveClass::Unknown,
     }
 }
 

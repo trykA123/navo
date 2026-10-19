@@ -4,25 +4,41 @@ use super::*;
 use crate::volume_of;
 
 #[test]
-fn remote_is_network_even_when_seek_penalty_fails() {
-    assert_eq!(classify(true, None), DriveClass::Network);
-    assert_eq!(classify(true, Some(true)), DriveClass::Network);
-    assert_eq!(classify(true, Some(false)), DriveClass::Network);
+fn remote_is_network_for_all_query_results() {
+    for seek_penalty in [None, Some(true), Some(false)] {
+        for trim_enabled in [None, Some(true), Some(false)] {
+            assert_eq!(
+                classify(true, seek_penalty, trim_enabled),
+                DriveClass::Network
+            );
+        }
+    }
 }
 
 #[test]
 fn seek_penalty_is_hdd() {
-    assert_eq!(classify(false, Some(true)), DriveClass::Hdd);
+    for trim_enabled in [None, Some(true), Some(false)] {
+        assert_eq!(classify(false, Some(true), trim_enabled), DriveClass::Hdd);
+    }
 }
 
 #[test]
 fn no_seek_penalty_is_ssd() {
-    assert_eq!(classify(false, Some(false)), DriveClass::Ssd);
+    for trim_enabled in [None, Some(true), Some(false)] {
+        assert_eq!(classify(false, Some(false), trim_enabled), DriveClass::Ssd);
+    }
+}
+
+#[test]
+fn failed_seek_penalty_with_trim_is_ssd() {
+    assert_eq!(classify(false, None, Some(true)), DriveClass::Ssd);
 }
 
 #[test]
 fn failed_seek_penalty_is_unknown() {
-    assert_eq!(classify(false, None), DriveClass::Unknown);
+    for trim_enabled in [None, Some(false)] {
+        assert_eq!(classify(false, None, trim_enabled), DriveClass::Unknown);
+    }
 }
 
 #[test]
@@ -86,10 +102,21 @@ fn other_platforms_are_unknown() {
 
 #[cfg(windows)]
 #[test]
-fn system_drive_is_known() {
+#[expect(
+    clippy::print_stderr,
+    reason = "reports Windows storage query errors in CI"
+)]
+fn system_drive_is_local() {
     let root = std::env::var("SystemDrive").expect("Windows defines SystemDrive");
     let location = Location::new(format!("{root}\\")).expect("valid system drive");
-    assert_ne!(drive_class(&location), DriveClass::Unknown);
+    let class = drive_class(&location);
+    if class == DriveClass::Unknown {
+        let (seek_error, trim_error) = windows::query_errors(&root);
+        eprintln!(
+            "system drive {root}: seek penalty GetLastError={seek_error}, trim GetLastError={trim_error}"
+        );
+    }
+    assert_ne!(class, DriveClass::Network);
 }
 
 #[cfg(windows)]
