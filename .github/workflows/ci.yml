@@ -53,8 +53,8 @@ jobs:
   gate-windows:
     runs-on: windows-latest
     env:
-      CARGO_PROFILE_DEV_DEBUG: "0"
-      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
       FERRITE_EXPECT_PDFIUM: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -116,7 +116,7 @@ jobs:
           if ($records.Count -ne 1) { throw "expected one crash record, got $($records.Count)" }
           $record = Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json
           if ($record.message -ne 'Ferrite CI crash test') { throw 'unexpected panic message' }
-          if ($record.backtrace -notmatch 'ferrite::crash_test') { throw 'release backtrace has no Ferrite crash_test frame' }
+          if ($record.backtrace -notmatch 'ferrite::crash_test\r?\n\s+at [^\r\n]*main\.rs:\d+') { throw 'release backtrace has no Ferrite crash_test frame with its source location' }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ferrite-windows-x64-${{ github.sha }}

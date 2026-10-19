@@ -42,5 +42,14 @@ fn guarded_crash_test_writes_a_record_in_the_given_profile() {
         serde_json::from_slice(&fs::read(&records[0]).unwrap()).unwrap();
     assert_eq!(record["message"], "Ferrite CI crash test");
     let backtrace = record["backtrace"].as_str().unwrap();
-    assert!(backtrace.contains("ferrite::crash_test"), "{backtrace}");
+    let mut lines = backtrace.lines();
+    assert!(
+        lines.any(|line| line.contains("ferrite::crash_test")),
+        "{backtrace}"
+    );
+    let location = lines.next().unwrap_or_default();
+    assert!(
+        location.trim_start().starts_with("at ") && location.contains("main.rs:"),
+        "the crash_test frame has no source location: {backtrace}"
+    );
 }
