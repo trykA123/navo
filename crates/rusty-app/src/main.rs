@@ -9,6 +9,7 @@ mod app_menu;
 mod cli;
 mod clipboard;
 mod console;
+mod crash;
 mod diag;
 mod drives;
 mod editor;
@@ -145,7 +146,9 @@ fn open_window(
             return ExitCode::FAILURE;
         }
     };
-    let _diagnostics = install_logging(profile);
+    let diagnostics = install_logging(profile);
+    crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
+    let (pending_crash, running) = prepare_crash(profile);
     let run = start
         .metrics
         .clone()
@@ -158,12 +161,31 @@ fn open_window(
         cleanup: profile.cleanup(),
         start_watch: run.as_ref().map(metrics::Run::watch),
         instance_requests: requests,
+        pending_crash,
+        running,
+        diagnostics,
+        report_started: Instant::now(),
     });
     if let Err(error) = profile.cleanup().run() {
         eprintln!("ferrite: cannot remove the temporary profile: {error}");
         return ExitCode::FAILURE;
     }
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
+}
+
+fn prepare_crash(profile: &Profile) -> (Option<crash::Pending>, Option<crash::Running>) {
+    let Some(dirs) = profile.dirs() else {
+        return (None, None);
+    };
+    let pending = crash::pending(&dirs.data);
+    let running = match crash::Running::start(&dirs.data) {
+        Ok(running) => Some(running),
+        Err(error) => {
+            tracing::warn!(%error, "cannot create the running marker");
+            None
+        }
+    };
+    (pending, running)
 }
 
 fn prepare_instance(

@@ -35,6 +35,16 @@ pub(crate) struct Launch {
     pub(crate) cleanup: crate::profile::Cleanup,
     pub(crate) start_watch: Option<StartWatch>,
     pub(crate) instance_requests: OpenInbox,
+    #[expect(dead_code, reason = "C2 consumes the pending crash notice")]
+    pub(crate) pending_crash: Option<crate::crash::Pending>,
+    pub(crate) running: Option<crate::crash::Running>,
+    #[expect(
+        dead_code,
+        reason = "C2 uses these diagnostics to save the crash report"
+    )]
+    pub(crate) diagnostics: crate::logging::Diagnostics,
+    #[expect(dead_code, reason = "C2 uses this start time in the crash report")]
+    pub(crate) report_started: Instant,
 }
 
 pub(crate) fn on_instance_request(
@@ -132,14 +142,23 @@ pub(crate) fn open(launch: Launch) {
                 inbox: Some(launch.instance_requests),
             },
         },
-        quitter(disk, launch.cleanup),
+        quitter(disk, launch.cleanup, launch.running),
     );
 }
 
-fn quitter(disk: Option<DiskListings>, cleanup: crate::profile::Cleanup) -> Rc<dyn Fn()> {
+fn quitter(
+    disk: Option<DiskListings>,
+    cleanup: crate::profile::Cleanup,
+    running: Option<crate::crash::Running>,
+) -> Rc<dyn Fn()> {
     Rc::new(move || {
         if let Some(disk) = &disk {
             let _ = disk.close(EXIT_CLOSE);
+        }
+        if let Some(running) = &running
+            && let Err(error) = running.finish()
+        {
+            tracing::warn!(%error, "cannot remove the running marker");
         }
         cleanup.on_quit();
     })

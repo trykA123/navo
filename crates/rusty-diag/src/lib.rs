@@ -15,4 +15,7 @@ pub use memory::{
 #[cfg(target_os = "linux")]
 pub use memory::{ProcStatusProbe, parse_proc_status};
 pub use redact::{DriveKind, Identity, LengthClass, PathKind, RedactedPath, Redactor, Salt};
-pub use report::{BuildInfo, ErrorRecord, ReportInput, ReportSummary, SystemInfo, write_report};
+pub use report::{
+    BuildInfo, ErrorRecord, ReportInput, ReportSummary, SystemInfo, write_report,
+    write_report_with_crashes,
+};

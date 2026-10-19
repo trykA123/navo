@@ -10,6 +10,7 @@ name = "ferrite"
 path = "src/main.rs"
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 encoding_rs = "0.8.42"
 rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }
@@ -32,6 +33,7 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_Security",
   "Win32_Security_Authorization",
   "Win32_Storage_FileSystem",
+  "Win32_System_Com",
   "Win32_System_Console",
   "Win32_System_IO",
   "Win32_System_Pipes",
@@ -39,6 +41,7 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_System_RemoteDesktop",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
+  "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }
 

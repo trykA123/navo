@@ -1,11 +1,11 @@
 use std::io;
 use std::num::NonZero;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use rusty_diag::{
     BuildInfo, CacheRegistry, Identity, MemoryProbe, Redactor, ReportInput, ReportSummary, Salt,
-    SystemInfo, TaskCounters, memory_report, write_report,
+    SystemInfo, TaskCounters, memory_report, write_report_with_crashes,
 };
 
 use crate::logging::Diagnostics;
@@ -16,6 +16,15 @@ pub fn write(
     path: &Path,
     started: Instant,
     diagnostics: &Diagnostics,
+) -> io::Result<ReportSummary> {
+    write_with_crashes(path, started, diagnostics, &[])
+}
+
+pub(crate) fn write_with_crashes(
+    path: &Path,
+    started: Instant,
+    diagnostics: &Diagnostics,
+    crashes: &[PathBuf],
 ) -> io::Result<ReportSummary> {
     let mut input = report_input();
     input.events = diagnostics.ring.snapshot();
@@ -29,7 +38,7 @@ pub fn write(
         "report".to_owned(),
         started.elapsed().as_secs_f64() * 1000.0,
     )];
-    write_report(path, &input, &diagnostics.redactor)
+    write_report_with_crashes(path, &input, &diagnostics.redactor, crashes)
 }
 
 pub fn redactor() -> Redactor {

@@ -63,6 +63,15 @@ pub fn write_report(
     input: &ReportInput,
     redactor: &Redactor,
 ) -> io::Result<ReportSummary> {
+    write_report_with_crashes(path, input, redactor, &[])
+}
+
+pub fn write_report_with_crashes(
+    path: &Path,
+    input: &ReportInput,
+    redactor: &Redactor,
+    crashes: &[PathBuf],
+) -> io::Result<ReportSummary> {
     let report = serde_json::to_vec_pretty(&Document::new(input, redactor))?;
     let summary = summary_text(input);
     if fs::symlink_metadata(path).is_ok() {
@@ -73,7 +82,7 @@ pub fn write_report(
     }
     let temp = temp_path(path)?;
     let file = File::create_new(&temp)?;
-    let written = write_zip(file, &report, summary.as_bytes())
+    let written = write_zip(file, &report, summary.as_bytes(), crashes)
         .and_then(|()| publish(&temp, path))
         .and_then(|()| fs::metadata(path));
     let _ = fs::remove_file(&temp);
@@ -107,13 +116,26 @@ fn temp_path(path: &Path) -> io::Result<PathBuf> {
     Ok(path.with_file_name(temp))
 }
 
-fn write_zip(file: File, report: &[u8], summary: &[u8]) -> io::Result<()> {
+fn write_zip(file: File, report: &[u8], summary: &[u8], crashes: &[PathBuf]) -> io::Result<()> {
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     let mut zip = ZipWriter::new(file);
     zip.start_file("report.json", options)?;
     zip.write_all(report)?;
     zip.start_file("summary.txt", options)?;
     zip.write_all(summary)?;
+    for path in crashes {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "crash path has no UTF-8 file name",
+                )
+            })?;
+        zip.start_file(format!("crashes/{name}"), options)?;
+        io::copy(&mut File::open(path)?, &mut zip)?;
+    }
     zip.finish()?.sync_all()
 }
 
