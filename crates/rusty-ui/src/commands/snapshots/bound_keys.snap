@@ -131,6 +131,9 @@ markdown.copy_block | ctrl-c | Markdown
 markdown.next_link | tab | Markdown
 markdown.open_link | enter | Markdown
 markdown.previous_link | shift-tab | Markdown
+memory.go_to_item | enter | MemoryImage
+memory.toggle_inspector | ctrl-i | MemoryImage
+memory.toggle_navigator | ctrl-b | MemoryImage
 pane.drive_menu_first | alt-f1 | FerritePane
 pane.drive_menu_second | alt-f2 | FerritePane
 pane.edit_path | ctrl-l | FerritePane
@@ -226,6 +229,7 @@ tree.type_n | n | Tree
 tree.type_one | 1 | Tree
 tree.type_p | p | Tree
 tree.type_three | 3 | Tree
+viewer.back | escape | MemoryImage
 viewer.back | escape | Paged
 viewer.back | escape | Tree
 viewer.back | escape | ViewerFind

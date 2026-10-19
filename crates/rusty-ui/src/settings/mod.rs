@@ -13,8 +13,8 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle};
 
 pub use fields::{
-    Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look, SORTS, Section,
-    THEMES,
+    Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look, PRESETS, SORTS,
+    Section, THEMES,
 };
 pub use steps::{Nudge, first_row, moved, next_section, nudged, rows_in, section_of};
 pub use values::{Change, Value, Values};
@@ -24,6 +24,7 @@ use crate::side_sheet::{SheetFrame, SheetState, SideSheet};
 use crate::tokens;
 
 pub const CONTEXT: &str = "SettingsSheet";
+const LAST_SECTION: Section = Section::ALL[Section::ALL.len() - 1];
 pub const FIELD_CONTEXT: &str = "SettingsField";
 
 gpui_kit::actions!(
@@ -168,13 +169,13 @@ impl SettingsBody {
 
     fn section_event(&self, forward: bool) -> SheetEvent {
         let edge = if forward {
-            Section::Editor
+            LAST_SECTION
         } else {
             Section::Appearance
         };
         match (self.shortcuts.is_some(), forward) {
             (true, true) => SheetEvent::Select(first_row(Section::Appearance)),
-            (true, false) => SheetEvent::Select(first_row(Section::Editor)),
+            (true, false) => SheetEvent::Select(first_row(LAST_SECTION)),
             (false, _) if section_of(self.row) == edge => SheetEvent::Shortcuts,
             (false, _) => SheetEvent::Select(next_section(self.row, forward)),
         }

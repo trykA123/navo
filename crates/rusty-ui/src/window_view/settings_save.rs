@@ -127,11 +127,14 @@ fn fields_of(changes: &[Change]) -> Vec<Field> {
     changes.iter().map(|change| change.field).collect()
 }
 
-pub(super) fn steer_browser(values: &Values, browser: &mut Browser) {
+pub(super) fn steer(values: &Values, browser: &mut Browser, cx: &mut App) {
     browser.set_show_hidden(values.show_hidden());
     browser.set_show_system(values.show_system());
     browser.set_default_sort(values.sort_key(), values.folders_first());
     browser.set_space_measures_folders(values.space_measures_folders());
+    cx.set_global(super::viewer::AutomotiveLook {
+        opens_inspector: values.opens_inspector(),
+    });
 }
 
 impl FerriteWindow {
@@ -140,7 +143,7 @@ impl FerriteWindow {
         if old.theme() != self.values.theme() || old.density() != self.values.density() {
             self.apply_theme(window, cx);
         }
-        steer_browser(&self.values, &mut self.browser);
+        steer(&self.values, &mut self.browser, cx);
     }
 
     pub(super) fn toggle_setting(

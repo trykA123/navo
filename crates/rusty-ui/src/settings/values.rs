@@ -1,6 +1,6 @@
 use gpui_kit::SharedString;
 
-use super::fields::{Control, FIELDS, Field, FieldSpec};
+use super::fields::{Control, FIELDS, Field, FieldSpec, PRESETS};
 use crate::app_menu::{QuickSettings, Setting};
 use crate::file_list::{SortBy, SortKey};
 use crate::modifier_hints::HintsMode;
@@ -201,6 +201,14 @@ impl Values {
         match self.get(Field::EditorPath) {
             Value::Text(text) if !text.is_empty() => Some(text.to_string()),
             _ => None,
+        }
+    }
+
+    pub fn opens_inspector(&self) -> bool {
+        match PRESETS.get(self.pick(Field::AutomotivePreset)) {
+            Some(preset) if preset.toml == "rich" => true,
+            Some(preset) if preset.toml == "custom" => self.flag(Field::AutomotiveInspector),
+            _ => false,
         }
     }
 

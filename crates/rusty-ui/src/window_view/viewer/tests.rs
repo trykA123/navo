@@ -13,6 +13,7 @@ mod markdown_split;
 mod markdown_table;
 mod marks;
 mod memory;
+mod memory_image;
 mod menu;
 mod menu_copy;
 mod menu_kinds;

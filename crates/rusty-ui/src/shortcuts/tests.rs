@@ -191,7 +191,7 @@ fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     }
 }
 
-const BACK_CONTEXTS: [&str; 4] = ["ViewerGoTo", "Paged", "ViewerFind", "Tree"];
+const BACK_CONTEXTS: [&str; 5] = ["ViewerGoTo", "Paged", "ViewerFind", "Tree", "MemoryImage"];
 
 #[test]
 fn a_command_bound_in_several_contexts_is_recorded_in_each() {

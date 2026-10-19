@@ -210,7 +210,10 @@ impl Rig {
     pub(in crate::window_view) fn open_page(&self, cx: &mut TestAppContext) {
         self.press(cx, "ctrl-,");
         self.settle_motion(cx);
-        self.click(cx, ("settings-section", 5usize));
+        self.click(
+            cx,
+            ("settings-section", crate::settings::Section::ALL.len()),
+        );
     }
 
     fn page(&self, cx: &mut TestAppContext) -> Entity<ShortcutsPage> {

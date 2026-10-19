@@ -7,6 +7,7 @@ use rusty_ui::tokens::{self, Mode, Theme};
 use rusty_ui::window_view::{ArchiveView, BodyKeys, FontView, ImageView, PagedView, ViewerBody};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
+use crate::automotive_sample::{MEMORY_NAME, MEMORY_STEPS, memory};
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::menu_page::{MenuPage, Shows as MenuShows};
@@ -62,6 +63,7 @@ pub struct Gallery {
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
     markdown_preview: Option<Box<dyn ViewerBody>>,
+    memory: [Option<Box<dyn ViewerBody>>; 2],
     archive: Entity<ArchiveView>,
     font: Option<Entity<FontView>>,
     marks: Option<Entity<PagedView>>,
@@ -99,6 +101,7 @@ impl Gallery {
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
             markdown_preview: structured::editing(MARKDOWN_NAME, MARKDOWN, window, cx),
+            memory: [(); 2].map(|()| structured::body(MEMORY_NAME, memory(), window, cx)),
             archive: rich_sample::archive_view(cx),
             font: rich_sample::font_view(cx),
             marks: None,
@@ -142,6 +145,8 @@ impl Gallery {
             Page::Table => self.table.as_deref(),
             Page::Markdown => self.markdown.as_deref(),
             Page::MarkdownPreview => self.markdown_preview.as_deref(),
+            Page::MemoryImage => self.memory[0].as_deref(),
+            Page::MemoryDrawers => self.memory[1].as_deref(),
             _ => None,
         }
     }
@@ -156,6 +161,7 @@ impl Gallery {
         let steps: &[&str] = match self.page {
             Page::Tree => &TREE_STEPS,
             Page::Table => &TABLE_STEPS,
+            Page::MemoryDrawers => &MEMORY_STEPS,
             _ => &[],
         };
         for name in steps {
@@ -342,13 +348,20 @@ impl Render for Gallery {
             }
             Page::ViewerMenuText | Page::ViewerMenuTree => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
-            Page::Tree | Page::Table | Page::Markdown | Page::MarkdownPreview => {
+            Page::Tree
+            | Page::Table
+            | Page::Markdown
+            | Page::MarkdownPreview
+            | Page::MemoryImage
+            | Page::MemoryDrawers => {
+                let has_keys = matches!(
+                    self.page,
+                    Page::Tree | Page::MemoryImage | Page::MemoryDrawers
+                );
                 match self.sample() {
                     Some(body) => root
                         .child(body.view())
-                        .when(self.page == Page::Tree, |root| {
-                            root.child(sample_keys(body, cx))
-                        }),
+                        .when(has_keys, |root| root.child(sample_keys(body, cx))),
                     None => root.child("This sample did not load."),
                 }
             }

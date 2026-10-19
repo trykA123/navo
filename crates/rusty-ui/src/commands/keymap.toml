@@ -1014,6 +1014,25 @@ keys = ["ctrl-shift-c"]
 command = "table.sort_by_column"
 keys = ["ctrl-f3"]
 
+# MemoryImage
+
+[[bind]]
+command = "memory.toggle_navigator"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "memory.toggle_inspector"
+keys = ["ctrl-i"]
+
+[[bind]]
+command = "memory.go_to_item"
+keys = ["enter"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "MemoryImage"
+
 # Markdown
 
 [[bind]]
