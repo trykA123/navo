@@ -119,9 +119,10 @@ fn an_overwrite_on_disk_holds_the_old_file_next_to_the_target() {
     let held_path = os_path(&held.held).unwrap();
     assert_eq!(fs::read(job.target()).unwrap(), NEW);
     assert_eq!(fs::read(&held_path).unwrap(), OLD);
+    let holder = held_path.parent().and_then(Path::parent).unwrap();
     assert_eq!(
-        held_path.parent().and_then(Path::parent),
-        Some(job.dir.path().join("dst").as_path())
+        fs::canonicalize(holder).unwrap(),
+        fs::canonicalize(job.dir.path().join("dst")).unwrap()
     );
 }
 
