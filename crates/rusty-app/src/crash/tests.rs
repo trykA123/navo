@@ -68,6 +68,21 @@ fn crash_files(data: &Path) -> Vec<std::path::PathBuf> {
     files
 }
 
+fn assert_no_canaries_in_zip(zip: &mut zip::ZipArchive<fs::File>) {
+    for index in 0..zip.len() {
+        let mut entry = zip.by_index(index).unwrap();
+        let mut text = String::new();
+        entry.read_to_string(&mut text).unwrap();
+        for needle in ["canary", "7731", "canarydom", "secret plan"] {
+            assert!(
+                !text.to_lowercase().contains(needle),
+                "leaked {needle} in {:?}: {text}",
+                entry.name()
+            );
+        }
+    }
+}
+
 #[test]
 fn hook_redacts_message_thread_and_events() {
     let dir = tempfile::tempdir().unwrap();
@@ -264,6 +279,8 @@ fn save_report_contains_the_normal_report_and_all_crash_files() {
     let downloads = tempfile::tempdir().unwrap();
     let logs = dir.path().join("logs");
     fs::create_dir(&logs).unwrap();
+    let diagnostics = diagnostics();
+    with_hook(dir.path(), &diagnostics, |_| trigger(MESSAGE));
     for second in 0..2 {
         fs::write(
             logs.join(format!("crash-20261019-12000{second}-1.json")),
@@ -273,13 +290,13 @@ fn save_report_contains_the_normal_report_and_all_crash_files() {
     }
     let _running = Running::start(dir.path()).unwrap();
     let previous = pending(dir.path()).unwrap();
-    let path = save_report(&previous, Instant::now(), &diagnostics(), downloads.path()).unwrap();
+    let path = save_report(&previous, Instant::now(), &diagnostics, downloads.path()).unwrap();
     assert_eq!(path.parent(), Some(downloads.path()));
     let name = path.file_name().unwrap().to_str().unwrap();
     assert!(name.starts_with("ferrite-report-") && name.ends_with(".zip"));
     assert_eq!(name.len(), "ferrite-report-20261019-1200.zip".len());
     let mut zip = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
-    assert_eq!(zip.len(), 4);
+    assert_eq!(zip.len(), 5);
     assert!(zip.by_name("summary.txt").is_ok());
     let report: Value = serde_json::from_reader(zip.by_name("report.json").unwrap()).unwrap();
     assert!(report["memory"].is_object());
@@ -295,10 +312,39 @@ fn save_report_contains_the_normal_report_and_all_crash_files() {
         .unwrap();
         assert_eq!(text, fs::read_to_string(file).unwrap());
     }
+    assert_no_canaries_in_zip(&mut zip);
     assert!(pending(dir.path()).is_some());
-    let again = save_report(&previous, Instant::now(), &diagnostics(), downloads.path()).unwrap();
+    let again = save_report(&previous, Instant::now(), &diagnostics, downloads.path()).unwrap();
     assert_ne!(again, path);
     assert!(path.exists() && again.exists());
+}
+
+#[test]
+fn save_report_skips_a_crash_file_deleted_after_pending() {
+    let dir = tempfile::tempdir().unwrap();
+    let downloads = tempfile::tempdir().unwrap();
+    let logs = dir.path().join("logs");
+    fs::create_dir(&logs).unwrap();
+    let removed = logs.join("crash-20261019-120000-1.json");
+    let remaining = logs.join("crash-20261019-120001-1.json");
+    for file in [&removed, &remaining] {
+        fs::write(file, "{\"message\":\"test panic\"}").unwrap();
+    }
+    let _running = Running::start(dir.path()).unwrap();
+    let previous = pending(dir.path()).unwrap();
+    assert_eq!(previous.files, [removed.clone(), remaining.clone()]);
+    fs::remove_file(&removed).unwrap();
+    let path = save_report(&previous, Instant::now(), &diagnostics(), downloads.path()).unwrap();
+    let mut zip = zip::ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
+    assert_eq!(zip.len(), 3);
+    assert!(zip.by_name("report.json").is_ok());
+    assert!(zip.by_name("summary.txt").is_ok());
+    let mut text = String::new();
+    zip.by_name("crashes/crash-20261019-120001-1.json")
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    assert_eq!(text, fs::read_to_string(remaining).unwrap());
 }
 
 #[test]

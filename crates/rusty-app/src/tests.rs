@@ -5,6 +5,31 @@ use std::process::ExitCode;
 use rusty_store::StoreDirs;
 
 #[test]
+fn crash_startup_without_an_instance_guard_leaves_no_marker() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = StoreDirs::in_profile(root.path());
+    let profile = crate::profile::Profile::User(Some(dirs.clone()));
+    let (pending, running) = super::prepare_crash(&profile, None);
+    assert!(pending.is_none());
+    assert!(running.is_none());
+    assert!(!dirs.data.join("running").exists());
+}
+
+#[test]
+fn crash_startup_without_an_instance_guard_ignores_the_previous_marker() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = StoreDirs::in_profile(root.path());
+    let _previous = crate::crash::Running::start(&dirs.data).unwrap();
+    let marker = dirs.data.join("running");
+    let before = std::fs::read(&marker).unwrap();
+    let profile = crate::profile::Profile::User(Some(dirs));
+    let (pending, running) = super::prepare_crash(&profile, None);
+    assert!(pending.is_none());
+    assert!(running.is_none());
+    assert_eq!(std::fs::read(marker).unwrap(), before);
+}
+
+#[test]
 fn a_refused_command_never_detects_or_writes_user_folders() {
     let root = tempfile::tempdir().unwrap();
     let dirs = StoreDirs::in_profile(root.path());

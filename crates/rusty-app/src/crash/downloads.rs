@@ -63,6 +63,7 @@ mod tests {
         std::fs::create_dir(&downloads).unwrap();
         assert_eq!(fallback(Some(dir.path().into())), Some(downloads));
         assert_eq!(fallback(None), None);
-        let _ = crate::crash::downloads_dir();
+        #[cfg(windows)]
+        assert!(crate::crash::downloads_dir().unwrap().is_dir());
     }
 }

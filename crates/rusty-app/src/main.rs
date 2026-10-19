@@ -138,7 +138,7 @@ fn open_window(
     clock: ProcessClock,
 ) -> ExitCode {
     let (sender, requests) = open_requests();
-    let _guard = match prepare_instance(&start, profile, sender) {
+    let guard = match prepare_instance(&start, profile, sender) {
         Ok(ControlFlow::Continue(guard)) => guard,
         Ok(ControlFlow::Break(code)) => return code,
         Err(error) => {
@@ -149,7 +149,7 @@ fn open_window(
     };
     let diagnostics = install_logging(profile);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
-    let (pending_crash, running) = prepare_crash(profile);
+    let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
     let run = start
         .metrics
         .clone()
@@ -176,7 +176,13 @@ fn open_window(
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
 }
 
-fn prepare_crash(profile: &Profile) -> (Option<crash::Pending>, Option<crash::Running>) {
+fn prepare_crash(
+    profile: &Profile,
+    guard: Option<&instance::Guard>,
+) -> (Option<crash::Pending>, Option<crash::Running>) {
+    if guard.is_none() {
+        return (None, None);
+    }
     let Some(dirs) = profile.dirs() else {
         return (None, None);
     };

@@ -32,22 +32,28 @@ fn unclean(data: &Path, folder: Option<&Path>) -> CrashReport {
 }
 
 #[test]
-fn save_writes_the_zip_in_the_folder_and_clears_the_pending_crash() {
+fn save_after_restart_and_clean_quit_shows_the_notice_only_once() {
     let data = tempfile::tempdir().unwrap();
     let downloads = tempfile::tempdir().unwrap();
     let report = unclean(data.path(), Some(downloads.path()));
+    let running = Running::start(data.path()).unwrap();
     let zip = report.save().unwrap();
     assert_eq!(zip.parent(), path_location(downloads.path()));
     let saved: Vec<_> = std::fs::read_dir(downloads.path()).unwrap().collect();
     assert_eq!(saved.len(), 1);
+    assert!(data.path().join("running").is_file());
+    running.finish().unwrap();
     assert!(pending(data.path()).is_none());
 }
 
 #[test]
-fn dismiss_clears_the_pending_crash() {
+fn dismiss_after_restart_and_clean_quit_shows_the_notice_only_once() {
     let data = tempfile::tempdir().unwrap();
     let report = unclean(data.path(), None);
+    let running = Running::start(data.path()).unwrap();
     report.dismiss();
+    assert!(data.path().join("running").is_file());
+    running.finish().unwrap();
     assert!(pending(data.path()).is_none());
 }
 

@@ -124,6 +124,11 @@ fn write_zip(file: File, report: &[u8], summary: &[u8], crashes: &[PathBuf]) -> 
     zip.start_file("summary.txt", options)?;
     zip.write_all(summary)?;
     for path in crashes {
+        let mut crash = match File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -134,7 +139,7 @@ fn write_zip(file: File, report: &[u8], summary: &[u8], crashes: &[PathBuf]) -> 
                 )
             })?;
         zip.start_file(format!("crashes/{name}"), options)?;
-        io::copy(&mut File::open(path)?, &mut zip)?;
+        io::copy(&mut crash, &mut zip)?;
     }
     zip.finish()?.sync_all()
 }
