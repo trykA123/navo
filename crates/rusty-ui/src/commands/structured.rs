@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 4] = [
+pub(super) const GROUPS: [Group; 6] = [
     Group {
         context: "Tree",
         commands: &[
@@ -180,6 +180,64 @@ pub(super) const GROUPS: [Group; 4] = [
                 "memory_image::PickItem",
                 "memory.go_to_item",
                 "Go to the picked range",
+            ),
+        ],
+    },
+    Group {
+        context: "Elf",
+        commands: &[
+            (
+                "elf_view::ToggleNavigator",
+                "elf.toggle_navigator",
+                "Sections drawer",
+            ),
+            (
+                "elf_view::ToggleInspector",
+                "elf.toggle_inspector",
+                "Inspector drawer",
+            ),
+            (
+                "elf_view::PickItem",
+                "elf.pick_item",
+                "Show the picked section's symbols, or inspect the symbol",
+            ),
+            (
+                "elf_view::SortByName",
+                "elf.sort_by_name",
+                "Sort symbols by name",
+            ),
+            (
+                "elf_view::SortBySection",
+                "elf.sort_by_section",
+                "Sort symbols by section",
+            ),
+            (
+                "elf_view::SortByAddress",
+                "elf.sort_by_address",
+                "Sort symbols by address",
+            ),
+            (
+                "elf_view::SortBySize",
+                "elf.sort_by_size",
+                "Sort symbols by size",
+            ),
+        ],
+    },
+    Group {
+        context: "ElfTable",
+        commands: &[
+            ("elf_view::TypeN", "elf.type_n", "Type n in the filter"),
+            ("elf_view::TypeP", "elf.type_p", "Type p in the filter"),
+            ("elf_view::TypeOne", "elf.type_one", "Type 1 in the filter"),
+            (
+                "elf_view::TypeThree",
+                "elf.type_three",
+                "Type 3 in the filter",
+            ),
+            (
+                "elf_view::TypeFive",
+                "elf.type_five",
+                "Type 5 in the filter",
             ),
         ],
     },

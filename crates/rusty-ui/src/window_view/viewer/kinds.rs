@@ -1,4 +1,5 @@
 mod archive;
+mod elf;
 mod font;
 mod hex;
 mod image;
@@ -146,6 +147,7 @@ impl Kinds {
             Arc::new(archive::Archive),
             Arc::new(font::Font),
             Arc::new(memory::MemoryKind),
+            Arc::new(elf::ElfKind),
         ])
     }
 

@@ -1041,6 +1041,63 @@ command = "viewer.back"
 keys = ["escape"]
 context = "MemoryImage"
 
+# Elf
+
+[[bind]]
+command = "elf.toggle_navigator"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "elf.toggle_inspector"
+keys = ["ctrl-i"]
+
+[[bind]]
+command = "elf.pick_item"
+keys = ["enter"]
+
+[[bind]]
+command = "elf.sort_by_name"
+keys = ["ctrl-f3"]
+
+[[bind]]
+command = "elf.sort_by_section"
+keys = ["ctrl-f4"]
+
+[[bind]]
+command = "elf.sort_by_address"
+keys = ["ctrl-f5"]
+
+[[bind]]
+command = "elf.sort_by_size"
+keys = ["ctrl-f6"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Elf"
+
+# ElfTable
+
+[[bind]]
+command = "elf.type_n"
+keys = ["n"]
+
+[[bind]]
+command = "elf.type_p"
+keys = ["p"]
+
+[[bind]]
+command = "elf.type_one"
+keys = ["1"]
+
+[[bind]]
+command = "elf.type_three"
+keys = ["3"]
+
+[[bind]]
+command = "elf.type_five"
+keys = ["5"]
+
 # Markdown
 
 [[bind]]
