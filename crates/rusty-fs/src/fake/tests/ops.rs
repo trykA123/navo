@@ -67,6 +67,20 @@ fn create_folder_fails_when_a_file_is_there() {
 }
 
 #[test]
+fn create_file_makes_an_empty_file() {
+    let fs = sample();
+    let made = fs.create_file(&fs.location("b/notes.txt"));
+    assert_eq!((made, size(&fs, "b/notes.txt")), (Ok(()), Some(0)));
+}
+
+#[test]
+fn create_file_keeps_an_existing_file() {
+    let fs = sample();
+    let made = fs.create_file(&fs.location("a/f.txt"));
+    assert_eq!((made.is_err(), size(&fs, "a/f.txt")), (true, Some(10_000)));
+}
+
+#[test]
 fn create_folder_fails_when_a_folder_is_there() {
     let fs = sample();
     assert!(fs.create_folder(&fs.location("a")).is_err());

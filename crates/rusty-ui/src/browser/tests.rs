@@ -376,6 +376,10 @@ impl ProviderOps for Gated {
         self.fs.create_folder(location)
     }
 
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.create_file(location)
+    }
+
     fn copy_file(
         &self,
         source: &Location,

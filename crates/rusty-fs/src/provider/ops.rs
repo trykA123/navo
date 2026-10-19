@@ -4,6 +4,7 @@ use super::{CancelToken, Provider};
 
 pub trait ProviderOps: Provider {
     fn create_folder(&self, location: &Location) -> Result<(), FsError>;
+    fn create_file(&self, location: &Location) -> Result<(), FsError>;
     #[expect(
         clippy::too_many_arguments,
         reason = "signature fixed by the P8 O5 contract"

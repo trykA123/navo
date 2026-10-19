@@ -14,6 +14,15 @@ impl ProviderOps for LocalFs {
         fs::create_dir(&path).map_err(|e| io_error(&e, location))
     }
 
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        File::options()
+            .write(true)
+            .create_new(true)
+            .open(os_path(location)?)
+            .map(drop)
+            .map_err(|e| io_error(&e, location))
+    }
+
     fn copy_file(
         &self,
         source: &Location,

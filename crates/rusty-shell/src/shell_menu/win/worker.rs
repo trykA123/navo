@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -14,11 +13,13 @@ use super::{Link, SessionHandle};
 use crate::shell_menu::fill::{self, Background, FillReply, Fills};
 use crate::shell_menu::pending::{Cancel, Reply, answer_unless_cancelled};
 use crate::shell_menu::station::{self, BusySince, Station};
-use crate::shell_menu::{InvokeOptions, MenuError, MenuSession, ScreenPoint, WindowHandle};
+use crate::shell_menu::{
+    InvokeOptions, MenuError, MenuSession, MenuSource, ScreenPoint, WindowHandle,
+};
 
 pub(super) enum Request {
     Open {
-        paths: Vec<PathBuf>,
+        source: MenuSource,
         reply: Reply<MenuSession>,
         cancel: Cancel,
     },
@@ -140,16 +141,17 @@ impl Station for Worker {
 
 impl Worker {
     fn warm(&self) {
-        let _ = LoadedMenu::query(&[std::env::temp_dir()], HWND::default());
+        let warm = MenuSource::Items(vec![std::env::temp_dir()]);
+        let _ = LoadedMenu::query(&warm, HWND::default());
     }
 
     fn serve_request(&mut self, request: Request) -> bool {
         match request {
             Request::Open {
-                paths,
+                source,
                 reply,
                 cancel,
-            } => answer_unless_cancelled(&cancel, &reply, || self.open(&paths)),
+            } => answer_unless_cancelled(&cancel, &reply, || self.open(&source)),
             Request::Fill {
                 session,
                 path,
@@ -200,8 +202,8 @@ impl Worker {
         }
     }
 
-    fn open(&mut self, paths: &[PathBuf]) -> Result<MenuSession, MenuError> {
-        let mut loaded = LoadedMenu::query(paths, HWND::default())?;
+    fn open(&mut self, source: &MenuSource) -> Result<MenuSession, MenuError> {
+        let mut loaded = LoadedMenu::query(source, HWND::default())?;
         let menu = loaded.walk();
         let id = self.next_session;
         self.next_session += 1;

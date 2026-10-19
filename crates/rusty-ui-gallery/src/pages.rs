@@ -19,6 +19,8 @@ pub enum Page {
     MenuSubmenu,
     MenuFilter,
     MenuFiles,
+    MenuBackground,
+    MenuEmptyFolder,
     ViewerMenuText,
     ViewerMenuTree,
     Tokens,
@@ -64,7 +66,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 46] = [
+pub const PAGES: [PageInfo; 48] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -89,6 +91,18 @@ pub const PAGES: [PageInfo; 46] = [
     info(Page::MenuSubmenu, "Menu 7-Zip", "p17-menu-7zip", false),
     info(Page::MenuFilter, "Menu filter", "p17-menu-filter", false),
     info(Page::MenuFiles, "Menu files", "p17-menu-files", false),
+    info(
+        Page::MenuBackground,
+        "Menu, folder",
+        "p17-m8-background",
+        false,
+    ),
+    info(
+        Page::MenuEmptyFolder,
+        "Menu, empty folder",
+        "p17-m8-empty-folder",
+        false,
+    ),
     info(
         Page::ViewerMenuText,
         "Viewer menu",

@@ -301,6 +301,72 @@ fn an_unknown_verb_without_an_id_fails_without_a_retry() {
     assert!(matches!(result, Err(MenuError::Shell { .. })), "{result:?}");
 }
 
+fn filled(session: &MenuSession, position: usize) -> Vec<MenuItem> {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        match session.fill(&[position]).wait_timeout(ANSWER).unwrap() {
+            Ok(Submenu::Filled(children)) => return children,
+            Ok(Submenu::Loading) if Instant::now() < deadline => std::thread::sleep(POLL),
+            other => panic!("the submenu did not fill: {other:?}"),
+        }
+    }
+}
+
+fn files_in(folder: &Path) -> Vec<String> {
+    std::fs::read_dir(folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn the_folder_background_menu_creates_a_text_document_from_new() {
+    let fixture = Fixture::new();
+    let folder = fixture.folder("drafts");
+    let service = ShellMenuService::start().unwrap();
+    let started = Instant::now();
+    let session = service
+        .open_background(folder.clone())
+        .wait_timeout(ANSWER)
+        .expect("the shell answers")
+        .expect("the background menu opens");
+    let names: Vec<_> = session.menu().items.iter().map(|item| &item.text).collect();
+    eprintln!(
+        "background: {names:?} in {} ms",
+        started.elapsed().as_millis()
+    );
+    let position = session
+        .menu()
+        .items
+        .iter()
+        .position(|item| item.is_submenu() && item.text.eq_ignore_ascii_case("New"))
+        .expect("a New submenu");
+    let children = filled(&session, position);
+    let kinds: Vec<_> = children.iter().map(|child| &child.text).collect();
+    eprintln!("new: {kinds:?}");
+    let text_document = children
+        .iter()
+        .find(|child| child.text.contains("Text Document"))
+        .expect("a Text Document item")
+        .id
+        .clone();
+    session
+        .invoke(&text_document, InvokeOptions::default())
+        .wait_timeout(ANSWER)
+        .unwrap()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while files_in(&folder).is_empty() && Instant::now() < deadline {
+        std::thread::sleep(POLL);
+    }
+    let created = files_in(&folder);
+    eprintln!("created: {created:?}");
+    assert!(
+        created.iter().any(|name| name.ends_with(".txt")),
+        "{created:?}"
+    );
+}
+
 #[test]
 fn items_in_two_folders_give_different_folders() {
     let (first, second) = (Fixture::new(), Fixture::new());

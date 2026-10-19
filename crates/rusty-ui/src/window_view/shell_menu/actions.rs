@@ -5,9 +5,12 @@ use rusty_core::shell_menu::FerriteAction;
 use super::FerriteWindow;
 use super::run::ShellCall;
 use crate::file_list::{
-    CopyItems, EditItem, MoveItems, OpenRow, RecycleItems, RenameItem, ViewItem,
+    CopyItems, EditItem, MoveItems, NewFile, NewFolder, OpenRow, Paste, RecycleItems, Refresh,
+    RenameItem, ViewItem,
 };
 use crate::prelude::*;
+
+const UNKNOWN_ACTION: &str = "This menu item has no command";
 
 impl FerriteWindow {
     pub(super) fn run_ferrite(
@@ -24,11 +27,29 @@ impl FerriteWindow {
             FerriteAction::Move => Box::new(MoveItems),
             FerriteAction::Rename => Box::new(RenameItem),
             FerriteAction::Delete => Box::new(RecycleItems),
+            FerriteAction::NewFolder => Box::new(NewFolder),
+            FerriteAction::NewFile => Box::new(NewFile),
+            FerriteAction::Paste => Box::new(Paste),
+            FerriteAction::Refresh => Box::new(Refresh),
+            FerriteAction::SortBy => return,
             FerriteAction::CopyPath => return self.copy_paths(cx),
             FerriteAction::Properties => return self.start_shell_call(ShellCall::Properties),
             FerriteAction::ClassicMenu => return self.start_shell_call(ShellCall::Classic),
         };
         window.dispatch_action(list_action, cx);
+    }
+
+    pub(super) fn run_named(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        match cx.build_action(name, None) {
+            Ok(action) => window.dispatch_action(action, cx),
+            Err(error) => {
+                debug_assert!(false, "menu item {name}: {error}");
+                if let Some(run) = &self.menu_run {
+                    let pane = run.pane;
+                    self.report_pane_error(pane, format!("{UNKNOWN_ACTION} ({name})").into());
+                }
+            }
+        }
     }
 
     fn copy_paths(&self, cx: &mut Context<Self>) {

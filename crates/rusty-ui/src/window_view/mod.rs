@@ -64,7 +64,9 @@ pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
-pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use shell_menu::{
+    BackgroundLook, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession, background_items,
+};
 pub use start::run;
 pub use start_watch::{StartReport, StartWatch};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};

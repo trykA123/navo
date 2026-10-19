@@ -29,6 +29,7 @@ files.clear_filter | escape | FileList
 files.rename | f2 | FileList
 files.rename | shift-f6 | FileList
 files.new_folder | f7 | FileList
+files.new_file | shift-f7 | FileList
 files.mark_pattern | + | FileList
 files.unmark_pattern | - | FileList
 files.invert_marks | * | FileList

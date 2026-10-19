@@ -88,6 +88,11 @@ impl ProviderOps for Crashing<'_> {
         self.fs.create_folder(location)
     }
 
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        self.enter(location, FakeOp::Create)?;
+        self.fs.create_file(location)
+    }
+
     fn copy_file(
         &self,
         source: &Location,

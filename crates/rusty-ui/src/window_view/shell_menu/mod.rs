@@ -1,4 +1,5 @@
 mod actions;
+mod background;
 mod prefetch;
 mod provider;
 mod run;
@@ -11,6 +12,7 @@ use gpui_kit::Point;
 use rusty_core::PaneId;
 use rusty_core::shell_menu::{FerriteAction, ItemId, MenuItem, ShellMenu, ferrite_actions};
 
+pub use background::{BackgroundLook, background_items};
 pub use provider::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 
 use super::FerriteWindow;
@@ -44,22 +46,73 @@ impl FerriteWindow {
             ),
             None => Session::Missing(NO_SHELL.to_owned()),
         };
-        self.menu_runs += 1;
         let open = MenuOpen {
-            id: self.menu_runs,
-            show: PendingView {
-                anchor,
-                context: found.context.into(),
-                restore: self.handle(pane, cx),
-                until: cx.background_executor().now() + WAIT_FOR_SHELL,
-                has_classic: has_shell,
-            },
+            id: self.menu_runs + 1,
+            show: self.pending_view((pane, anchor), found.context.into(), cx),
             pane,
             items: found.items,
             spot: targets::screen_spot(window, anchor),
             ferrite: ferrite_items(has_shell),
             session,
         };
+        self.start_menu_run(open, window, cx);
+    }
+
+    fn open_background_menu(
+        &mut self,
+        (pane, anchor): (PaneId, Point<Pixels>),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.browser.state().pane(pane).map(|pane| pane.active()) else {
+            return;
+        };
+        let folder = tab.location().clone();
+        let count = u64::try_from(self.browser.details(tab.id()).len()).unwrap_or(u64::MAX);
+        let context = format!(
+            "{} · {}",
+            super::pane::title_of(tab),
+            crate::format::count(count, "item", "items")
+        );
+        let look = BackgroundLook {
+            sort: self.browser.sort_key(tab.id()),
+            can_paste: self.has_files_to_paste(),
+            has_properties: self.shell_menus.is_some() && folder.is_local(),
+        };
+        let session = match self.shell_menus.clone() {
+            Some(provider) => Session::Opening(provider.open_background(&folder)),
+            None => Session::Missing(NO_SHELL.to_owned()),
+        };
+        self.drop_prefetch();
+        let open = MenuOpen {
+            id: self.menu_runs + 1,
+            show: self.pending_view((pane, anchor), context.into(), cx),
+            pane,
+            items: vec![folder],
+            spot: targets::screen_spot(window, anchor),
+            ferrite: background_items(&look),
+            session,
+        };
+        self.start_menu_run(open, window, cx);
+    }
+
+    fn pending_view(
+        &mut self,
+        (pane, anchor): (PaneId, Point<Pixels>),
+        context: SharedString,
+        cx: &mut Context<Self>,
+    ) -> PendingView {
+        PendingView {
+            anchor,
+            context,
+            restore: self.handle(pane, cx),
+            until: cx.background_executor().now() + WAIT_FOR_SHELL,
+            has_classic: self.shell_menus.is_some(),
+        }
+    }
+
+    fn start_menu_run(&mut self, open: MenuOpen, window: &mut Window, cx: &mut Context<Self>) {
+        self.menu_runs = open.id;
         self.menu_run = Some(MenuRun::new(open));
         self.poll_shell_menu(self.menu_runs, window, cx);
         self.keep_polling(window, cx);
@@ -74,6 +127,9 @@ impl FerriteWindow {
         match action {
             FileListAction::ContextMenu(anchor) => {
                 self.open_shell_menu((pane, *anchor), window, cx)
+            }
+            FileListAction::BackgroundMenu(anchor) => {
+                self.open_background_menu((pane, *anchor), window, cx)
             }
             FileListAction::MenuPrefetch { adds_cursor } => {
                 self.prefetch_shell_menu(pane, *adds_cursor);
@@ -109,6 +165,10 @@ impl FerriteWindow {
             ContextMenuEvent::Chosen(ItemId::Ferrite(action)) => {
                 self.close_shell_menu();
                 self.run_ferrite(*action, window, cx);
+            }
+            ContextMenuEvent::Chosen(ItemId::Action(name)) => {
+                self.close_shell_menu();
+                self.run_named(name, window, cx);
             }
             ContextMenuEvent::Chosen(id) => {
                 let label = self

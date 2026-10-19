@@ -17,7 +17,7 @@ use crate::prelude::*;
 use crate::status_bar::{StatusBar, StatusBarProps};
 use crate::tokens;
 
-fn title_of(tab: &Tab) -> SharedString {
+pub(super) fn title_of(tab: &Tab) -> SharedString {
     path_segments(tab.location())
         .pop()
         .map(|segment| segment.label)
@@ -255,6 +255,7 @@ impl FerriteWindow {
             }
             FileListAction::Rename(row) => self.ask_rename(*row),
             FileListAction::NewFolder => self.ask_new_folder(),
+            FileListAction::NewFile => self.ask_new_file(),
             FileListAction::SelectPattern { add } => self.ask_pattern(*add),
             FileListAction::Edit { row, choose } => self.edit_row(*row, *choose),
             FileListAction::View(row) => return self.view_or_preview(*row, window, cx),
@@ -262,6 +263,7 @@ impl FerriteWindow {
                 self.browser.sort_by(*by);
             }
             FileListAction::ContextMenu(_)
+            | FileListAction::BackgroundMenu(_)
             | FileListAction::MenuPrefetch { .. }
             | FileListAction::MenuCancel => {}
         }

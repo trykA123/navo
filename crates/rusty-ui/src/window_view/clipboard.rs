@@ -138,6 +138,11 @@ impl FerriteWindow {
         });
     }
 
+    pub(super) fn has_files_to_paste(&self) -> bool {
+        let read = self.file_clipboard().and_then(|service| service.read());
+        matches!(read, Ok(Some(files)) if !files.items.is_empty())
+    }
+
     pub(super) fn paste(&mut self) {
         let read = self.file_clipboard().and_then(|service| service.read());
         let files = match read {

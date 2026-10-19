@@ -97,6 +97,16 @@ impl ProviderOps for FakeFs {
         Ok(())
     }
 
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        let path = self.write_call(location, FakeOp::Create)?;
+        let mut tree = self.tree();
+        vacant(&tree, &path).map_err(|k| error(k, location))?;
+        tree.add_file(&path, 0);
+        drop(tree);
+        self.changed(&path, WatchChange::Created);
+        Ok(())
+    }
+
     fn copy_file(
         &self,
         source: &Location,

@@ -67,6 +67,7 @@ pane.go_forward | Forward | FileList
 files.clear_filter | Clear filter | FileList
 files.rename | Rename | FileList
 files.new_folder | New folder | FileList
+files.new_file | New file | FileList
 files.mark_pattern | Mark by pattern | FileList
 files.unmark_pattern | Unmark by pattern | FileList
 files.invert_marks | Invert marks | FileList

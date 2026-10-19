@@ -21,6 +21,7 @@ use super::{fake, open_options, settle, two_panes};
 struct Shell {
     answer: RefCell<Option<Result<ShellMenu, String>>>,
     opened: RefCell<Vec<Vec<Location>>>,
+    backgrounds: RefCell<Vec<Location>>,
     fills: RefCell<HashMap<Vec<usize>, Submenu>>,
     asked: RefCell<Vec<Vec<usize>>>,
     invoked: RefCell<Vec<ItemId>>,
@@ -49,15 +50,26 @@ struct FakeSession {
     shell: Rc<Shell>,
 }
 
-impl ShellMenuProvider for FakeProvider {
-    fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>> {
-        self.0.opened.borrow_mut().push(items.to_vec());
+impl FakeProvider {
+    fn reply(&self) -> Reply<Box<dyn ShellMenuSession>> {
         let shell = self.0.clone();
         let ready = RefCell::new(shell.session());
         Box::new(move || {
             let answer = ready.borrow_mut().take().or_else(|| shell.session())?;
             Some(answer.map(|session| Box::new(session) as Box<dyn ShellMenuSession>))
         })
+    }
+}
+
+impl ShellMenuProvider for FakeProvider {
+    fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>> {
+        self.0.opened.borrow_mut().push(items.to_vec());
+        self.reply()
+    }
+
+    fn open_background(&self, folder: &Location) -> Reply<Box<dyn ShellMenuSession>> {
+        self.0.backgrounds.borrow_mut().push(folder.clone());
+        self.reply()
     }
 }
 
@@ -143,6 +155,14 @@ fn rig_with(cx: &mut TestAppContext, has_shell: bool, files: &[&str]) -> Rig {
         fs.add_file(file, 1);
     }
     let state = two_panes(&fs);
+    rig_on(cx, has_shell, (fs, state))
+}
+
+fn rig_on(
+    cx: &mut TestAppContext,
+    has_shell: bool,
+    (fs, state): (Arc<FakeFs>, rusty_core::AppState),
+) -> Rig {
     let shell = Rc::new(Shell::default());
     let provider: Rc<dyn ShellMenuProvider> = Rc::new(FakeProvider(shell.clone()));
     let options = StartOptions {
@@ -807,3 +827,5 @@ fn a_right_release_outside_the_list_toggles_once(cx: &mut TestAppContext) {
     assert_eq!(rig.marked(cx), [1]);
     assert!(!rig.is_open(cx));
 }
+
+mod background;
