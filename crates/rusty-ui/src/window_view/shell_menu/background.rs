@@ -9,11 +9,17 @@ pub struct BackgroundLook {
     pub has_properties: bool,
 }
 
-const SORTS: [(SortBy, &str, &str, char); 4] = [
-    (SortBy::Name, "file_list::SortName", "Name\tCtrl+F3", 'N'),
-    (SortBy::Ext, "file_list::SortExt", "Extension\tCtrl+F4", 'E'),
-    (SortBy::Date, "file_list::SortDate", "Date\tCtrl+F5", 'D'),
-    (SortBy::Size, "file_list::SortSize", "Size\tCtrl+F6", 'S'),
+const SORTS: [(SortBy, &str, &str, &str, char); 4] = [
+    (SortBy::Name, "file_list::SortName", "Name", "Ctrl+F3", 'N'),
+    (
+        SortBy::Ext,
+        "file_list::SortExt",
+        "Extension",
+        "Ctrl+F4",
+        'E',
+    ),
+    (SortBy::Date, "file_list::SortDate", "Date", "Ctrl+F5", 'D'),
+    (SortBy::Size, "file_list::SortSize", "Size", "Ctrl+F6", 'S'),
 ];
 
 fn ferrite(action: FerriteAction, raw: &str, key: char) -> MenuItem {
@@ -23,13 +29,29 @@ fn ferrite(action: FerriteAction, raw: &str, key: char) -> MenuItem {
     }
 }
 
-fn sort_menu(current: SortBy) -> MenuItem {
+fn sort_label(name: &str, current: Option<SortKey>) -> String {
+    match current {
+        Some(SortKey {
+            descending: false, ..
+        }) => format!("{name} ↑"),
+        Some(SortKey {
+            descending: true, ..
+        }) => format!("{name} ↓"),
+        None => name.to_owned(),
+    }
+}
+
+fn sort_menu(current: SortKey) -> MenuItem {
     let children = SORTS
         .into_iter()
-        .map(|(by, action, raw, key)| MenuItem {
-            access_key: Some(key),
-            checked: by == current,
-            ..MenuItem::new(ItemId::Action(action), raw, Group::Ferrite)
+        .map(|(by, action, name, keys, key)| {
+            let shown = (by == current.by).then_some(current);
+            let raw = format!("{}\t{keys}", sort_label(name, shown));
+            MenuItem {
+                access_key: Some(key),
+                checked: shown.is_some(),
+                ..MenuItem::new(ItemId::Action(action), &raw, Group::Ferrite)
+            }
         })
         .collect();
     MenuItem {
@@ -48,7 +70,7 @@ pub fn background_items(look: &BackgroundLook) -> Vec<MenuItem> {
             ..ferrite(FerriteAction::Paste, "Paste\tCtrl+V", 'P')
         },
         ferrite(FerriteAction::Refresh, "Refresh\tCtrl+R", 'R'),
-        sort_menu(look.sort.by),
+        sort_menu(look.sort),
         ferrite(FerriteAction::CopyPath, "Copy folder path", 'C'),
     ];
     if look.has_properties {

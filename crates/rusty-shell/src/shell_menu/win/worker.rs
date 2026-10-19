@@ -141,8 +141,9 @@ impl Station for Worker {
 
 impl Worker {
     fn warm(&self) {
-        let warm = MenuSource::Items(vec![std::env::temp_dir()]);
-        let _ = LoadedMenu::query(&warm, HWND::default());
+        let folder = std::env::temp_dir();
+        let _ = LoadedMenu::query(&MenuSource::Items(vec![folder.clone()]), HWND::default());
+        let _ = LoadedMenu::query(&MenuSource::Background(folder), HWND::default());
     }
 
     fn serve_request(&mut self, request: Request) -> bool {

@@ -163,11 +163,20 @@ fn rig_on(
     has_shell: bool,
     (fs, state): (Arc<FakeFs>, rusty_core::AppState),
 ) -> Rig {
+    let options = super::options_for(fs.clone(), state);
+    rig_from(cx, has_shell, (fs, options))
+}
+
+fn rig_from(
+    cx: &mut TestAppContext,
+    has_shell: bool,
+    (fs, options): (Arc<FakeFs>, StartOptions),
+) -> Rig {
     let shell = Rc::new(Shell::default());
     let provider: Rc<dyn ShellMenuProvider> = Rc::new(FakeProvider(shell.clone()));
     let options = StartOptions {
         shell_menu: has_shell.then_some(provider),
-        ..super::options_for(fs.clone(), state)
+        ..options
     };
     let (window, view) = open_options(cx, options);
     let pane = view.read_with(cx, |view, _| view.browser.state().focused_pane());

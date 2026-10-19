@@ -8,6 +8,7 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use rusty_core::shell_menu::{ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
@@ -24,12 +25,14 @@ use windows::Win32::System::Threading::{
     GR_GDIOBJECTS, GR_USEROBJECTS, GetCurrentProcess, GetGuiResources, GetProcessHandleCount,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowExW, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_KEYDOWN,
+    FindWindowExW, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_CLOSE, WM_KEYDOWN,
 };
 use windows::core::w;
 
 const ANSWER: Duration = Duration::from_secs(30);
 const POLL: Duration = Duration::from_millis(10);
+
+static WINDOWS_OF_THIS_PROCESS: Mutex<()> = Mutex::new(());
 
 struct Fixture {
     dir: TempDir,
@@ -367,6 +370,57 @@ fn the_folder_background_menu_creates_a_text_document_from_new() {
     );
 }
 
+fn close_dialog(deadline: Instant) -> bool {
+    // SAFETY: read-only window queries and a posted close message to this process's dialog.
+    unsafe {
+        let pid = std::process::id();
+        while Instant::now() < deadline {
+            let mut after: Option<HWND> = None;
+            while let Ok(window) = FindWindowExW(None, after, w!("#32770"), None) {
+                let mut owner = 0;
+                GetWindowThreadProcessId(window, Some(&mut owner));
+                if owner == pid && IsWindowVisible(window).as_bool() {
+                    return PostMessageW(Some(window), WM_CLOSE, WPARAM(0), LPARAM(0)).is_ok();
+                }
+                after = Some(window);
+            }
+            std::thread::sleep(POLL);
+        }
+        false
+    }
+}
+
+#[test]
+fn properties_on_the_folder_background_menu_is_invoked() {
+    let _alone = WINDOWS_OF_THIS_PROCESS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let fixture = Fixture::new();
+    let folder = fixture.folder("shown");
+    let service = ShellMenuService::start().unwrap();
+    let session = service
+        .open_background(folder)
+        .wait_timeout(ANSWER)
+        .expect("the shell answers")
+        .expect("the background menu opens");
+    assert!(
+        find_verb(session.menu(), "properties").is_some(),
+        "no `properties` in {:?}",
+        session.menu()
+    );
+    let properties = ItemId::Shell {
+        command: 0,
+        verb: Some("properties".to_owned()),
+    };
+    let result = session
+        .invoke(&properties, InvokeOptions::default())
+        .wait_timeout(ANSWER)
+        .unwrap();
+    let closed = close_dialog(Instant::now() + Duration::from_secs(10));
+    eprintln!("background properties: {result:?}, dialog seen: {closed}");
+    assert_eq!(result, Ok(()));
+}
+
 #[test]
 fn items_in_two_folders_give_different_folders() {
     let (first, second) = (Fixture::new(), Fixture::new());
@@ -415,6 +469,9 @@ fn open_and_drop(service: &ShellMenuService, path: &Path, times: usize) {
 fn dropped_sessions_release_their_menus() {
     let fixture = Fixture::new();
     let path = fixture.file("notes.txt");
+    let _alone = WINDOWS_OF_THIS_PROCESS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
     let service = ShellMenuService::start().unwrap();
     open_and_drop(&service, &path, 10);
     let before = resources();

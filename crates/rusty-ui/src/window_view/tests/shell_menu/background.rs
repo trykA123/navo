@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AppContext as _, InputEvent as _, MouseButton, MouseDownEvent, Pixels, Point, TestAppContext,
@@ -6,9 +8,11 @@ use gpui_kit::{
 use rusty_core::AppState;
 use rusty_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
 
-use super::super::{fake, settle, type_in};
-use super::{Rig, rig, rig_on, shell_item};
+use super::super::clipboard::FakeClipboard;
+use super::super::{fake, options_for, settle, two_panes, type_in};
+use super::{Rig, rig, rig_from, rig_on, shell_item};
 use crate::file_list::SortBy;
+use crate::window_view::{ClipboardEffect, ClipboardFiles, FileClipboardService};
 
 const FERRITE_ROWS: [&str; 7] = [
     "# Ferrite",
@@ -236,7 +240,7 @@ fn sort_by_checks_the_current_order_and_changes_it(cx: &mut TestAppContext) {
     let checked = |rig: &Rig, cx: &mut TestAppContext, text| {
         rig.menu_item(cx, text).is_some_and(|item| item.checked)
     };
-    assert!(checked(&rig, cx, "Name"));
+    assert!(checked(&rig, cx, "Name ↑"));
     assert!(!checked(&rig, cx, "Date"));
     rig.type_text(cx, "date");
     assert_eq!(rig.rows(cx), ["Sort by › Date"]);
@@ -247,6 +251,42 @@ fn sort_by_checks_the_current_order_and_changes_it(cx: &mut TestAppContext) {
         view.browser.sort_key(tab).by
     });
     assert_eq!(sort, SortBy::Date);
+}
+
+#[gpui_kit::test]
+fn choosing_the_checked_order_reverses_it_and_the_menu_says_so(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.open_background(cx);
+    rig.choose(cx, "name");
+    let descending = rig.view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        view.browser.sort_key(tab).descending
+    });
+    assert!(descending);
+    rig.open_background(cx);
+    let name = rig
+        .menu_item(cx, "Name ↓")
+        .expect("the reversed order on Name");
+    assert!(name.checked);
+}
+
+#[gpui_kit::test]
+fn paste_is_enabled_when_the_clipboard_holds_files(cx: &mut TestAppContext) {
+    let fs = fake();
+    let clipboard = FakeClipboard::default();
+    *clipboard.held.borrow_mut() = Some(ClipboardFiles {
+        items: vec![fs.location("dest")],
+        effect: ClipboardEffect::Copy,
+    });
+    let shared: Rc<dyn FileClipboardService> = Rc::new(clipboard);
+    let options = crate::window_view::StartOptions {
+        file_clipboard: Some(shared),
+        ..options_for(fs.clone(), two_panes(&fs))
+    };
+    let rig = rig_from(cx, true, (fs, options));
+    rig.open_background(cx);
+    let paste = rig.menu_item(cx, "Paste").expect("a Paste item");
+    assert!(paste.enabled);
 }
 
 #[gpui_kit::test]
