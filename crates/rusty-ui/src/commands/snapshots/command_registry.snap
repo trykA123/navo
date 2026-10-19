@@ -233,6 +233,8 @@ trace.sort_ids | Sort IDs by count or ID | CanTrace
 trace.type_one | Type 1 in the ID filter | CanTrace
 trace.type_three | Type 3 in the ID filter | CanTrace
 trace.type_five | Type 5 in the ID filter | CanTrace
+trace.type_n | Type n in the ID filter | CanTrace
+trace.type_p | Type p in the ID filter | CanTrace
 trace.filter_backspace | Erase in the ID filter | CanTrace
 app.command_palette | Command palette | global
 window.new | New window | global

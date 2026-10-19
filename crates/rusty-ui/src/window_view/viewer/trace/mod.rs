@@ -26,6 +26,7 @@ use crate::side_sheet::SheetState;
 
 pub(in crate::window_view::viewer) struct TraceFile {
     pub len: u64,
+    pub head: Vec<u8>,
 }
 
 struct Filter {
@@ -73,8 +74,14 @@ pub(in crate::window_view::viewer) struct TraceView {
     cursor: u64,
     fetched: Option<Fetched>,
     fetching: Option<(Range<u64>, u64, Job)>,
+    failed_rows: Option<(Range<u64>, u64)>,
     inspected: Option<Inspected>,
     inspecting: Option<(u64, Job)>,
+    failed_inspect: Option<u64>,
+    prefix: Vec<u8>,
+    index_error: Option<SharedString>,
+    read_error: Option<SharedString>,
+    is_replaced: bool,
     navigator: Entity<SheetState>,
     inspector: Entity<SheetState>,
     top_drawer: Drawer,
@@ -104,8 +111,14 @@ impl TraceView {
             cursor: 0,
             fetched: None,
             fetching: None,
+            failed_rows: None,
             inspected: None,
             inspecting: None,
+            failed_inspect: None,
+            prefix: file.head.iter().copied().take(follow::PREFIX).collect(),
+            index_error: None,
+            read_error: None,
+            is_replaced: false,
             navigator: cx.new(|_| SheetState::new()),
             inspector: cx.new(|_| SheetState::new()),
             top_drawer: Drawer::Navigator,

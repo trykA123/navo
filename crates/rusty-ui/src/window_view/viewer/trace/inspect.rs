@@ -2,7 +2,7 @@ use gpui_kit::Stateful;
 use gpui_kit::base::TestSupportExt;
 use rusty_automotive::{Body, Entry, Frame, FrameKind};
 
-use super::text::{binary, direction, id, kind, period, span, time};
+use super::text::{binary, direction, kind, period, span, time};
 use super::{Inspected, TraceView};
 use crate::format;
 use crate::prelude::*;
@@ -52,7 +52,7 @@ fn frame_fields(t: &Theme, entry: &Entry, frame: &Frame) -> Vec<Div> {
         rows.push(field(
             t,
             "ID",
-            format!("0x{} · {} · {width}", id(found), found.raw),
+            format!("0x{:X} · {} · {width}", found.raw, found.raw),
         ));
     }
     rows.push(field(t, "Direction", direction(frame.direction).to_owned()));

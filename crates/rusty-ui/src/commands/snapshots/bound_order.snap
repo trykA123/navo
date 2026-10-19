@@ -241,6 +241,8 @@ trace.sort_ids | alt-s | CanTrace
 trace.type_one | 1 | CanTrace
 trace.type_three | 3 | CanTrace
 trace.type_five | 5 | CanTrace
+trace.type_n | n | CanTrace
+trace.type_p | p | CanTrace
 trace.filter_backspace | backspace | CanTrace
 [drive_menu]
 drive_menu.up | up | DriveMenu

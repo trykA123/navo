@@ -213,7 +213,9 @@ trace.sort_ids | alt-s | CanTrace
 trace.toggle_inspector | ctrl-i | CanTrace
 trace.toggle_navigator | ctrl-b | CanTrace
 trace.type_five | 5 | CanTrace
+trace.type_n | n | CanTrace
 trace.type_one | 1 | CanTrace
+trace.type_p | p | CanTrace
 trace.type_three | 3 | CanTrace
 tree.collapse_all | ctrl-shift-left | Tree
 tree.collapse_all_or_type | - | Tree

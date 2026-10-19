@@ -1,4 +1,6 @@
-use rusty_automotive::{Body, CanId, Direction, Entry, Frame, FrameKind, IdStat, Trace};
+use rusty_automotive::{
+    Base, Body, CanId, Direction, Entry, Frame, FrameKind, IdStat, MAX_IDS, Trace,
+};
 
 use crate::format;
 
@@ -33,11 +35,12 @@ pub(super) fn span(ns: u64) -> String {
     }
 }
 
-pub(super) fn id(id: CanId) -> String {
-    if id.extended {
-        format!("{:08X}x", id.raw)
-    } else {
-        format!("{:03X}", id.raw)
+pub(super) fn id(id: CanId, base: Base) -> String {
+    let suffix = if id.extended { "x" } else { "" };
+    match (base, id.extended) {
+        (Base::Dec, _) => format!("{}{suffix}", id.raw),
+        (Base::Hex, true) => format!("{:08X}x", id.raw),
+        (Base::Hex, false) => format!("{:03X}", id.raw),
     }
 }
 
@@ -78,9 +81,9 @@ fn length(frame: &Frame) -> String {
     }
 }
 
-fn columns(time: &str, frame: Option<&Frame>, (type_, data): (&str, &str)) -> String {
-    let (channel, id_text, dir, len) = frame.map_or_else(Default::default, |frame| {
-        let id_text = frame.id.map(id).unwrap_or_default();
+fn columns(time: &str, frame: Option<(&Frame, Base)>, (type_, data): (&str, &str)) -> String {
+    let (channel, id_text, dir, len) = frame.map_or_else(Default::default, |(frame, base)| {
+        let id_text = frame.id.map(|found| id(found, base)).unwrap_or_default();
         (
             frame.channel.to_string(),
             id_text,
@@ -106,7 +109,7 @@ fn is_time_token(token: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || byte == b'.')
 }
 
-pub(super) fn row(entry: &Entry) -> (String, Tone) {
+pub(super) fn row(entry: &Entry, base: Base) -> (String, Tone) {
     let at = entry.time_ns.map(time).unwrap_or_default();
     match &entry.body {
         Body::Frame(frame) => {
@@ -116,7 +119,10 @@ pub(super) fn row(entry: &Entry) -> (String, Tone) {
                 Tone::Plain
             };
             let data = hex(&frame.data);
-            (columns(&at, Some(frame), (kind(frame.kind), &data)), tone)
+            (
+                columns(&at, Some((frame, base)), (kind(frame.kind), &data)),
+                tone,
+            )
         }
         Body::Other(text) => (
             columns(&at, None, ("Other", without_time(text))),
@@ -128,13 +134,13 @@ pub(super) fn row(entry: &Entry) -> (String, Tone) {
     }
 }
 
-pub(super) fn stat_name(stat: &IdStat) -> String {
-    format!("{} · ch {}", id(stat.id), stat.channel)
+pub(super) fn stat_name(stat: &IdStat, base: Base) -> String {
+    format!("{} · ch {}", id(stat.id, base), stat.channel)
 }
 
-pub(super) fn matches(stat: &IdStat, typed: &str) -> bool {
+pub(super) fn matches(stat: &IdStat, typed: &str, base: Base) -> bool {
     typed.is_empty()
-        || id(stat.id)
+        || id(stat.id, base)
             .to_ascii_lowercase()
             .contains(&typed.to_ascii_lowercase())
 }
@@ -169,6 +175,12 @@ pub(super) fn status(trace: &Trace) -> Vec<Check> {
         format::count(errors, "error frame", "error frames"),
         errors > 0,
     ));
+    if trace.unlisted > 0 {
+        checks.push(check(
+            format!("IDs beyond {} not listed", format::bytes(MAX_IDS as u64)),
+            false,
+        ));
+    }
     if trace.malformed > 0 {
         checks.push(check(
             format::count(trace.malformed, "malformed line", "malformed lines"),

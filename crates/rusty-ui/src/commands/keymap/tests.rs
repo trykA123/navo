@@ -13,13 +13,13 @@ fn error_of(text: &str) -> Option<KeymapError> {
 fn the_built_in_keymap_parses_and_validates() {
     let parsed = Keymap::parse(BUILTIN);
     assert_eq!(parsed.as_ref().err(), None);
-    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(257));
+    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(259));
 }
 
 #[test]
 fn the_built_in_keymap_is_parsed_once() {
     assert!(std::ptr::eq(Keymap::builtin(), Keymap::builtin()));
-    assert_eq!(Keymap::builtin().binds().len(), 257);
+    assert_eq!(Keymap::builtin().binds().len(), 259);
 }
 
 #[test]

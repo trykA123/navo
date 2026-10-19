@@ -59,9 +59,10 @@ fn status_part(t: &Theme, at: usize, Check { text, is_bad }: Check) -> Div {
 
 impl TraceView {
     fn row_view(&self, t: &Theme, shown: u64, view: &WeakEntity<Self>) -> AnyElement {
+        let base = self.trace.notation().base;
         let (text, tone) = self
             .entry(shown)
-            .map_or_else(|| (String::new(), Tone::Quiet), row);
+            .map_or_else(|| (String::new(), Tone::Quiet), |entry| row(entry, base));
         let is_error = tone == Tone::Error;
         let element: ObservedElement<Stateful<Div>> = mono(t)
             .id(("trace-row", shown as usize))
@@ -149,9 +150,36 @@ impl TraceView {
                 },
             );
         }
+        checks.extend(self.file_checks());
         if let Some(label) = self.follow_label() {
             checks.push(Check {
                 text: label.to_owned(),
+                is_bad: false,
+            });
+        }
+        checks
+    }
+
+    fn file_checks(&self) -> Vec<Check> {
+        let errors = [&self.index_error, &self.read_error];
+        let mut checks: Vec<Check> = errors
+            .into_iter()
+            .flatten()
+            .map(|error| Check {
+                text: error.to_string(),
+                is_bad: true,
+            })
+            .collect();
+        let is_settled = self.is_indexed && self.reading.is_none();
+        if is_settled && self.trace.end < self.len {
+            checks.push(Check {
+                text: "last line incomplete".to_owned(),
+                is_bad: false,
+            });
+        }
+        if self.is_replaced {
+            checks.push(Check {
+                text: "file was replaced".to_owned(),
                 is_bad: false,
             });
         }

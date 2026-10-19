@@ -48,7 +48,11 @@ impl TraceView {
         let detail = stat
             .mean_period_ns()
             .map_or_else(|| "once".to_owned(), |ns| format!("every {}", span(ns)));
-        (stat_name(stat), detail, format::bytes(stat.count))
+        (
+            stat_name(stat, self.trace.notation().base),
+            detail,
+            format::bytes(stat.count),
+        )
     }
 
     fn item_row(&self, t: &Theme, at: usize) -> ObservedElement<Stateful<Div>> {

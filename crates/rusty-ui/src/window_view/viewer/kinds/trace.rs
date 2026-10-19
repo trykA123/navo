@@ -43,6 +43,7 @@ impl ViewerKind for TraceKind {
         }
         Ok(Box::new(TraceFile {
             len: load.sniff.len,
+            head: load.sniff.head.to_vec(),
         }))
     }
 

@@ -17,6 +17,8 @@ gpui_kit::actions!(
         TypeOne,
         TypeThree,
         TypeFive,
+        TypeN,
+        TypeP,
         FilterBack,
     ]
 );
@@ -189,6 +191,8 @@ impl TraceView {
             .on_action(cx.listener(|view, _: &TypeOne, _, cx| view.type_or_pass('1', cx)))
             .on_action(cx.listener(|view, _: &TypeThree, _, cx| view.type_or_pass('3', cx)))
             .on_action(cx.listener(|view, _: &TypeFive, _, cx| view.type_or_pass('5', cx)))
+            .on_action(cx.listener(|view, _: &TypeN, _, cx| view.type_or_pass('n', cx)))
+            .on_action(cx.listener(|view, _: &TypeP, _, cx| view.type_or_pass('p', cx)))
             .on_key_down(cx.listener(|view, event: &KeyDownEvent, _, cx| {
                 view.type_key(event, cx);
             }))

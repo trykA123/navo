@@ -1,4 +1,4 @@
-use rusty_automotive::{Body, CanId, Direction, Entry, Frame, FrameKind};
+use rusty_automotive::{Base, Body, CanId, Direction, Entry, Frame, FrameKind};
 
 use super::text::{Tone, binary, column_titles, id, row, span, time};
 
@@ -21,19 +21,30 @@ fn times_show_microseconds_and_spans_pick_their_unit() {
 #[test]
 fn ids_are_hex_with_an_x_for_extended() {
     assert_eq!(
-        id(CanId {
-            raw: 0x7DF,
-            extended: false
-        }),
+        id(
+            CanId {
+                raw: 0x7DF,
+                extended: false
+            },
+            Base::Hex
+        ),
         "7DF"
     );
     assert_eq!(
-        id(CanId {
-            raw: 0x18FE_F100,
-            extended: true
-        }),
+        id(
+            CanId {
+                raw: 0x18FE_F100,
+                extended: true
+            },
+            Base::Hex
+        ),
         "18FEF100x"
     );
+    let dec = CanId {
+        raw: 291,
+        extended: true,
+    };
+    assert_eq!(id(dec, Base::Dec), "291x");
 }
 
 #[test]
@@ -54,7 +65,7 @@ fn a_frame_row_lines_up_under_the_column_titles() {
         dlc: 2,
         data: vec![0x01, 0xFF],
     };
-    let (text, tone) = row(&entry(Body::Frame(frame)));
+    let (text, tone) = row(&entry(Body::Frame(frame)), Base::Hex);
     assert_eq!(tone, Tone::Plain);
     assert_eq!(
         text,
@@ -74,10 +85,11 @@ fn error_frames_and_other_lines_have_their_own_tone() {
         dlc: 0,
         data: Vec::new(),
     };
-    assert_eq!(row(&entry(Body::Frame(error))).1, Tone::Error);
-    let (text, tone) = row(&entry(Body::Other(
-        "1.234567 Start of measurement".to_owned(),
-    )));
+    assert_eq!(row(&entry(Body::Frame(error)), Base::Hex).1, Tone::Error);
+    let (text, tone) = row(
+        &entry(Body::Other("1.234567 Start of measurement".to_owned())),
+        Base::Hex,
+    );
     assert_eq!(tone, Tone::Quiet);
     assert!(
         text.ends_with("Other        Start of measurement"),

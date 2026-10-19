@@ -222,6 +222,16 @@ pub(super) const GROUPS: [Group; 5] = [
                 "Type 5 in the ID filter",
             ),
             (
+                "can_trace::TypeN",
+                "trace.type_n",
+                "Type n in the ID filter",
+            ),
+            (
+                "can_trace::TypeP",
+                "trace.type_p",
+                "Type p in the ID filter",
+            ),
+            (
                 "can_trace::FilterBack",
                 "trace.filter_backspace",
                 "Erase in the ID filter",

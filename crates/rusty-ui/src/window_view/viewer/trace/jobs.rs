@@ -51,14 +51,15 @@ pub(super) fn start_index(host: &Host, len: u64, cx: &mut Context<TraceView>) ->
                     Ok(done) => done,
                     Err(error) => return send(ReadMessage::Done(Err(error))),
                 };
+                if done {
+                    send(ReadMessage::Chunk(Box::new(tail)));
+                    return send(ReadMessage::Done(Ok(())));
+                }
                 let next = tail.resume();
                 send(ReadMessage::Chunk(Box::new(std::mem::replace(
                     &mut tail, next,
                 ))));
                 budget = CHUNK_ROWS;
-                if done {
-                    return send(ReadMessage::Done(Ok(())));
-                }
             }
         },
         TraceView::read_message,
@@ -74,7 +75,7 @@ impl TraceView {
                 self.reading = None;
                 self.is_indexed = true;
                 if let Err(error) = result {
-                    self.note = Some(error.to_string().into());
+                    self.index_error = Some(error.to_string().into());
                 }
             }
         }
@@ -83,13 +84,15 @@ impl TraceView {
 
     pub(super) fn append(&mut self, tail: Trace, cx: &mut Context<Self>) {
         let before = self.trace.rows();
+        let ids = self.trace.stats.len();
         self.scanned = tail.end;
         self.trace.append(tail);
+        self.len = self.len.max(self.trace.end);
         if let Some(filter) = &mut self.filter {
             let more = self.trace.rows_with_from(filter.key, before);
             filter.rows.extend(more);
         }
-        if self.navigator.read(cx).is_open() {
+        if ids != self.trace.stats.len() && self.navigator.read(cx).is_open() {
             self.refresh_nav();
         }
         if before == 0 && self.trace.rows() > 0 {
@@ -114,7 +117,7 @@ impl TraceView {
     pub(super) fn request_rows(&mut self, top: u64, cx: &mut Context<Self>) {
         let len = self.shown_rows();
         let wanted = top.min(len)..(top + self.page + 1).min(len);
-        if wanted.is_empty() || self.is_covered(&wanted) {
+        if wanted.is_empty() || self.is_covered(&wanted) || self.has_failed(&wanted) {
             return;
         }
         let shown = top.saturating_sub(FETCH_MARGIN)..(wanted.end + FETCH_MARGIN).min(len);
@@ -143,15 +146,30 @@ impl TraceView {
         self.fetching = None;
         match fetch.result {
             Ok(entries) => {
+                self.failed_rows = None;
+                self.read_error = None;
                 self.fetched = Some(Fetched {
                     shown: fetch.shown,
                     generation: fetch.generation,
                     entries,
                 });
             }
-            Err(error) => self.note = Some(error.into()),
+            Err(error) => {
+                self.failed_rows = Some((fetch.shown, fetch.generation));
+                self.read_error = Some(error.into());
+            }
         }
         cx.notify();
+    }
+
+    fn has_failed(&self, wanted: &std::ops::Range<u64>) -> bool {
+        self.failed_rows
+            .as_ref()
+            .is_some_and(|(shown, generation)| {
+                *generation == self.generation
+                    && shown.start <= wanted.start
+                    && wanted.end <= shown.end
+            })
     }
 
     pub(super) fn request_inspect(&mut self, cx: &mut Context<Self>) {
@@ -160,7 +178,8 @@ impl TraceView {
         };
         let known = self.inspected.as_ref().map(|inspected| inspected.row);
         let asked = self.inspecting.as_ref().map(|(row, _)| *row);
-        if known == Some(row) || asked == Some(row) || !self.inspector.read(cx).is_open() {
+        let skip = known == Some(row) || asked == Some(row) || self.failed_inspect == Some(row);
+        if skip || !self.inspector.read(cx).is_open() {
             return;
         }
         let rows: Vec<u64> = self
@@ -197,7 +216,10 @@ impl TraceView {
                     previous: previous.into_iter().next(),
                 });
             }
-            Err(error) => self.note = Some(error.into()),
+            Err(error) => {
+                self.failed_inspect = Some(inspect.row);
+                self.read_error = Some(error.into());
+            }
         }
         cx.notify();
     }
