@@ -1197,6 +1197,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpp_demangle"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2bb79cb74d735044c972aae58ed0aaa9a837e85b01106a54c39e42e97f62253"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2138,6 +2147,11 @@ name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
+dependencies = [
+ "fallible-iterator",
+ "indexmap",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "gl_generator"
@@ -4944,6 +4958,9 @@ version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
 dependencies = [
+ "crc32fast",
+ "hashbrown 0.15.5",
+ "indexmap",
  "memchr",
 ]
 
@@ -6229,7 +6246,11 @@ dependencies = [
 name = "rusty-automotive"
 version = "0.0.1"
 dependencies = [
+ "cpp_demangle",
+ "gimli",
+ "object",
  "proptest",
+ "rustc-demangle",
  "thiserror 2.0.21",
 ]
 
@@ -6427,6 +6448,7 @@ version = "0.0.1"
 dependencies = [
  "gpui-kit",
  "image",
+ "rusty-automotive",
  "rusty-core",
  "rusty-fs",
  "rusty-ui",

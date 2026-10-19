@@ -1,15 +1,24 @@
 #![forbid(unsafe_code)]
 
+mod elf;
 mod image;
 mod layout;
 mod record;
 mod scan;
+mod source;
 
 use std::sync::atomic::AtomicBool;
 
+pub use elf::sample as elf_sample;
+pub use elf::{
+    Bind, Class, Column, ELF_EXTENSIONS, Elf, ElfProblem, ElfReader, Endian, Header, Lines, Order,
+    Place, Query, Scope, Section, Segment, SourceLine, Symbol, SymbolKind, Totals, select,
+    sniff_elf,
+};
 pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};
 pub use scan::index;
+pub use source::Source;
 
 pub type ReadAt<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
 
@@ -26,6 +35,8 @@ pub enum IndexError {
     Read(String),
     #[error("indexing was cancelled")]
     Cancelled,
+    #[error("not a readable ELF file: {0}")]
+    Malformed(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
