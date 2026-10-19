@@ -26,6 +26,7 @@ pub struct Host {
     pub on_saved: Rc<dyn Fn(&mut App)>,
     pub open: OpenFile,
     pub carried: Option<Carried>,
+    pub is_preview: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -69,6 +70,10 @@ pub trait ViewerBody: Any {
     }
 
     fn is_typing(&self, _: &App) -> bool {
+        false
+    }
+
+    fn takes_letters(&self, _: &App) -> bool {
         false
     }
 

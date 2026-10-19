@@ -6,7 +6,7 @@ use gpui_kit::Task;
 use rusty_core::Location;
 
 use super::cancel::Cancel;
-use super::kinds::IMAGE_ID;
+use super::kinds::{IMAGE_ID, PDF_ID};
 use super::modes::Shown;
 use super::{Declined, FileHooks, Head, Kind, Kinds, Load, Loaded, Slot, Sniff, Viewer};
 use crate::prelude::*;
@@ -17,14 +17,19 @@ const SLOW_OPEN: Duration = Duration::from_secs(2);
 const CLOSED: &str = "The viewer closed before the file opened.";
 
 static IMAGE_LOADING: Mutex<()> = Mutex::new(());
+static PDF_OPENING: Mutex<()> = Mutex::new(());
 
 pub(super) fn load_while_alive(
     alive: &Weak<()>,
     kind: &Kind,
     load: impl FnOnce() -> Result<Loaded, String>,
 ) -> Result<Loaded, String> {
-    let _turn = (kind.id() == IMAGE_ID)
-        .then(|| IMAGE_LOADING.lock().unwrap_or_else(PoisonError::into_inner));
+    let turn = match kind.id() {
+        IMAGE_ID => Some(&IMAGE_LOADING),
+        PDF_ID => Some(&PDF_OPENING),
+        _ => None,
+    };
+    let _turn = turn.map(|turn| turn.lock().unwrap_or_else(PoisonError::into_inner));
     if alive.strong_count() == 0 {
         return Err(CLOSED.to_owned());
     }

@@ -326,3 +326,50 @@ fn an_svg_inside_a_text_file_can_still_be_shown_as_an_image() {
         ]
     );
 }
+
+#[test]
+fn pdf_bytes_open_the_pdf_view_and_text_and_hex_stay_available() {
+    let head = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj";
+    let sniff = sniff(head, 4096);
+    let slots: Vec<(&str, Slot)> = Kinds::builtin()
+        .choose(&sniff)
+        .iter()
+        .map(|kind| (kind.id(), kind.slot()))
+        .collect();
+    assert_eq!(slots.first(), Some(&("pdf", Slot::Rich)));
+    assert!(slots.contains(&("text", Slot::Text)));
+    assert!(slots.contains(&("hex", Slot::Hex)));
+}
+
+#[test]
+fn pdf_magic_inside_text_is_still_text_but_binary_junk_may_lead_it() {
+    let ids = |head: &[u8]| -> Vec<&str> {
+        Kinds::builtin()
+            .choose(&sniff(head, head.len() as u64))
+            .iter()
+            .map(|kind| kind.id())
+            .collect()
+    };
+    let notes = ids(b"Release notes
+%PDF-1.7 is the format we export
+");
+    assert!(!notes.contains(&"pdf"), "{notes:?}");
+    let led = ids(b" MacBinary  %PDF-1.4
+1 0 obj");
+    assert_eq!(led.first(), Some(&"pdf"));
+}
+
+#[test]
+fn a_pdf_name_without_the_pdf_header_is_not_a_pdf() {
+    let named = Sniff {
+        head: b"just some notes",
+        name: "notes.pdf",
+        len: 15,
+    };
+    let ids: Vec<&str> = Kinds::builtin()
+        .choose(&named)
+        .iter()
+        .map(|kind| kind.id())
+        .collect();
+    assert!(!ids.contains(&"pdf"), "{ids:?}");
+}

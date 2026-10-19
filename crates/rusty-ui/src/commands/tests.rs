@@ -5,12 +5,14 @@ use gpui_kit::{App, TestAppContext};
 use super::{GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 19] = [
+const NAMESPACES: [&str; 22] = [
     "app_menu",
+    "can_trace",
     "confirm_dialog",
     "context_menu",
     "dialog_focus",
     "drive_menu",
+    "elf_view",
     "ferrite_tabs",
     "ferrite_window",
     "file_list",
@@ -23,6 +25,7 @@ const NAMESPACES: [&str; 19] = [
     "side_sheet",
     "viewer",
     "viewer_markdown",
+    "viewer_pdf",
     "viewer_table",
     "viewer_tree",
 ];
@@ -333,7 +336,7 @@ fn a_module_binds_only_its_own_commands(cx: &mut TestAppContext) {
         .copied()
         .filter(|action| !action.starts_with("file_list::"))
         .collect();
-    assert_eq!((actions.len(), foreign), (39, Vec::<&str>::new()));
+    assert_eq!((actions.len(), foreign), (40, Vec::<&str>::new()));
 }
 
 #[gpui_kit::test]
@@ -347,4 +350,42 @@ fn every_keymap_command_with_an_action_builds(cx: &mut TestAppContext) {
             .collect()
     });
     assert_eq!(broken, Vec::<&str>::new());
+}
+
+#[test]
+fn pdf_keys_shadow_only_the_viewer_marks_and_escape() {
+    let binds = Keymap::builtin().binds();
+    let in_context = |context: &str| -> Vec<(String, &'static str)> {
+        binds
+            .iter()
+            .filter(|bind| bind.context == context)
+            .flat_map(|bind| {
+                bind.keys
+                    .iter()
+                    .map(|key| (super::normal_key(key).unwrap_or_default(), bind.spec.name))
+            })
+            .collect()
+    };
+    let viewer = in_context("Viewer");
+    let shadowed: Vec<(String, &str, &str)> = in_context("Pdf")
+        .into_iter()
+        .filter_map(|(key, pdf)| {
+            let (_, under) = viewer.iter().find(|(used, _)| *used == key)?;
+            Some((key, *under, pdf))
+        })
+        .collect();
+    assert_eq!(
+        shadowed,
+        [
+            ("escape".to_owned(), "viewer.close", "viewer.back"),
+            ("ctrl-0".to_owned(), "mark.clear", "pdf.fit"),
+            ("ctrl-1".to_owned(), "mark.colour_one", "pdf.actual_size"),
+            ("ctrl-i".to_owned(), "view.right_drawer", "pdf.all_hits"),
+            (
+                "ctrl-b".to_owned(),
+                "view.left_drawer",
+                "pdf.pages_and_outline"
+            ),
+        ]
+    );
 }

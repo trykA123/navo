@@ -5,8 +5,12 @@ clipboard = { max-threads = 1 }
 filter = "binary(clipboard_windows) | binary(shell_menu_windows)"
 test-group = "clipboard"
 
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 5 }
+
 [profile.ci]
 fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 10 }
 
 [profile.ci.junit]
 path = "junit.xml"

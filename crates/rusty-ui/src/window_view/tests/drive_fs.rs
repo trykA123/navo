@@ -110,6 +110,10 @@ impl ProviderOps for DriveFs {
         self.fake.create_folder(&self.fake(location))
     }
 
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        self.fake.create_file(&self.fake(location))
+    }
+
     fn copy_file(
         &self,
         source: &Location,

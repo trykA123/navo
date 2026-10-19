@@ -77,9 +77,17 @@ fn a_hung_render_times_out_and_the_next_request_restarts_the_helper() {
 
 #[test]
 fn a_crashed_helper_is_reported_and_restarted() {
-    let mut document = open(&launcher(), "locked.pdf", Some(PASSWORD)).unwrap();
+    let mut document = open(&launcher(), "a.pdf", None).unwrap();
     assert_eq!(document.render(page(CRASH_PAGE)), Err(PdfError::HelperDied));
     assert_eq!(document.text(0).unwrap().text(), "page 0");
+}
+
+#[test]
+fn a_locked_document_asks_for_the_password_again_after_a_crash() {
+    let mut document = open(&launcher(), "locked.pdf", Some(PASSWORD)).unwrap();
+    assert_eq!(document.text(0).unwrap().text(), "page 0");
+    assert_eq!(document.render(page(CRASH_PAGE)), Err(PdfError::HelperDied));
+    assert_eq!(document.text(0), Err(PdfError::NeedsPassword));
 }
 
 #[test]

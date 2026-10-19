@@ -64,7 +64,9 @@ impl Writer {
                 .location()
                 .map(|at| format!("{}:{}", short_location(at.file()), at.line())),
             message: self.redactor.text(message(info)),
-            backtrace: self.redactor.text(&Backtrace::force_capture().to_string()),
+            backtrace: self
+                .redactor
+                .backtrace(&Backtrace::force_capture().to_string()),
             events: events.iter().skip(skip).map(ToString::to_string).collect(),
         };
         let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");

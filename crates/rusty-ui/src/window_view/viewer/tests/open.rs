@@ -268,3 +268,97 @@ fn switching_the_view_while_it_loads_cancels_the_earlier_load(cx: &mut TestAppCo
     assert!(viewer_open(cx, &view));
     assert!(first.load(Ordering::Relaxed));
 }
+
+const PDF_HEAD: &[u8] = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n";
+
+#[derive(Clone, Default)]
+struct Opens {
+    count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    running: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    most: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl Opens {
+    fn hooks(&self, gate: std::sync::mpsc::Receiver<()>) -> crate::window_view::viewer::FileHooks {
+        use std::sync::atomic::Ordering;
+        use std::sync::{Arc, Mutex};
+
+        let (opens, gate) = (self.clone(), Mutex::new(gate));
+        crate::window_view::viewer::FileHooks {
+            pdf: Arc::new(move |_, _| {
+                let now = opens.running.fetch_add(1, Ordering::SeqCst) + 1;
+                opens.most.fetch_max(now, Ordering::SeqCst);
+                if opens.count.fetch_add(1, Ordering::SeqCst) == 0 {
+                    let _ = gate.lock().expect("gate").recv();
+                }
+                opens.running.fetch_sub(1, Ordering::SeqCst);
+                Err(rusty_pdf::protocol::PdfError::TooLarge)
+            }),
+            ..crate::window_view::viewer::FileHooks::none()
+        }
+    }
+}
+
+fn open_pdf_in_thread(
+    alive: &std::sync::Arc<()>,
+    hooks: &crate::window_view::viewer::FileHooks,
+) -> std::thread::JoinHandle<bool> {
+    use std::sync::atomic::AtomicBool;
+
+    use crate::window_view::viewer::open::load_while_alive;
+    use crate::window_view::viewer::{Load, Sniff};
+
+    let (weak, hooks) = (std::sync::Arc::downgrade(alive), hooks.clone());
+    std::thread::spawn(move || {
+        let kind = kind_for("a.pdf", PDF_HEAD);
+        let sniff = Sniff {
+            head: PDF_HEAD,
+            name: "a.pdf",
+            len: PDF_HEAD.len() as u64,
+        };
+        let location = rusty_core::Location::new("/home/a.pdf").expect("location");
+        let cancel = AtomicBool::new(false);
+        load_while_alive(&weak, &kind, || {
+            kind.load(Load {
+                hooks: &hooks,
+                location: &location,
+                sniff: &sniff,
+                cancel: &cancel,
+            })
+        })
+        .is_ok()
+    })
+}
+
+#[test]
+fn a_preview_sweep_over_pdfs_opens_one_helper_at_a_time_and_skips_passed_files() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let opens = Opens::default();
+    let (release, gate) = std::sync::mpsc::channel();
+    let hooks = opens.hooks(gate);
+    let first = Arc::new(());
+    let holding = open_pdf_in_thread(&first, &hooks);
+    while opens.count.load(Ordering::SeqCst) == 0 {
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let passed: Vec<Arc<()>> = (0..3).map(|_| Arc::new(())).collect();
+    let skipped: Vec<_> = passed
+        .iter()
+        .map(|alive| open_pdf_in_thread(alive, &hooks))
+        .collect();
+    let last = Arc::new(());
+    let wanted = open_pdf_in_thread(&last, &hooks);
+    std::thread::sleep(Duration::from_millis(50));
+    drop(passed);
+    release.send(()).expect("release");
+    assert!(holding.join().expect("first"));
+    for thread in skipped {
+        assert!(!thread.join().expect("passed"));
+    }
+    assert!(wanted.join().expect("last"));
+    assert_eq!(opens.count.load(Ordering::SeqCst), 2);
+    assert_eq!(opens.most.load(Ordering::SeqCst), 1);
+}

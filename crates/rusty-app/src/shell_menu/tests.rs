@@ -28,6 +28,14 @@ fn a_file_outside_the_local_disk_gets_an_empty_menu_without_the_shell() {
 }
 
 #[test]
+fn a_folder_outside_the_local_disk_gets_an_empty_background_menu() {
+    let provider = started().expect("the menu service starts");
+    let remote = Location::new("fake://home").unwrap();
+    let session = answer(&provider.open_background(&remote)).expect("an empty menu");
+    assert_eq!(*session.menu(), ShellMenu::default());
+}
+
+#[test]
 fn the_shell_gets_a_drive_path_without_the_verbatim_prefix() {
     let path = std::path::PathBuf::from(r"\\?\C:\WORK_STUFF\paperwing");
     assert_eq!(shell_form(path), Ok(r"C:\WORK_STUFF\paperwing".into()));

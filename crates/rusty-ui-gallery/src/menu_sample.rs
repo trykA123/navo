@@ -2,8 +2,11 @@ use rusty_core::shell_menu::{
     Group, Icon, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
 };
 use rusty_ui::Hsla;
+use rusty_ui::file_list::SortKey;
+use rusty_ui::window_view::{BackgroundLook, background_items};
 
 pub const SEVEN_ZIP: usize = 12;
+pub const NEW: usize = 7;
 const ICON_SIDE: u32 = 16;
 
 fn shell(command: u32, raw: &str, group: Group) -> MenuItem {
@@ -111,5 +114,46 @@ pub fn zip_menu(icon_color: Hsla) -> ShellMenu {
 pub fn files_menu(icon_color: Hsla) -> ShellMenu {
     let mut items = ferrite_actions();
     items.extend(windows_items("commander", badge(icon_color)));
+    ShellMenu { items }
+}
+
+fn disabled(item: MenuItem) -> MenuItem {
+    MenuItem {
+        enabled: false,
+        ..item
+    }
+}
+
+fn folder_items() -> Vec<MenuItem> {
+    let new_types = vec![
+        shell(60, "&Folder", Group::Other),
+        shell(61, "&Shortcut", Group::Other),
+        MenuItem::separator(Group::Other),
+        shell(62, "Bitmap image", Group::Other),
+        shell(63, "Rich Text Document", Group::Other),
+        shell(64, "Text Document", Group::Other),
+        shell(65, "Compressed (zipped) Folder", Group::Other),
+    ];
+    vec![
+        submenu(shell(20, "Ne&w", Group::Other), Submenu::Filled(new_types)),
+        shell(21, "Open in Terminal", Group::Open),
+        disabled(shell(22, "&Paste", Group::Edit)),
+        disabled(shell(23, "Paste &shortcut", Group::Edit)),
+        rare(submenu(
+            shell(24, "Give access to", Group::Share),
+            Submenu::Lazy,
+        )),
+        hidden(shell(25, "&Properties", Group::Other)),
+    ]
+}
+
+pub fn folder_menu() -> ShellMenu {
+    let look = BackgroundLook {
+        sort: SortKey::default(),
+        can_paste: false,
+        has_properties: true,
+    };
+    let mut items = background_items(&look);
+    items.extend(folder_items());
     ShellMenu { items }
 }

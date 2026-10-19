@@ -2,8 +2,8 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui_kit::{
-    App, Div, InteractiveElement, MouseButton, MouseMoveEvent, Pixels, Point, Stateful, Window,
-    point,
+    App, Div, InteractiveElement, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point,
+    Stateful, Window, point,
 };
 use rusty_core::Command;
 
@@ -73,6 +73,16 @@ pub(super) fn drag_over(
     }
 }
 
+pub(super) fn background_down(
+    ctx: &Rc<ListContext>,
+) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static {
+    let ctx = ctx.clone();
+    move |event, window, cx| {
+        ctx.take_focus(window, cx);
+        ctx.act(FileListAction::BackgroundMenu(event.position), window, cx);
+    }
+}
+
 pub(super) fn release_on(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
     let (inside, outside) = (ctx.clone(), ctx.clone());
     root.on_mouse_up(MouseButton::Right, move |_, window, cx| {
@@ -128,15 +138,13 @@ impl ListContext {
     }
 
     pub(super) fn menu_at_cursor(&self, window: &mut Window, cx: &mut App) {
-        if self
-            .props
-            .rows
-            .get(row_index(self.props.view.cursor))
-            .is_some()
-        {
-            let anchor = self.cursor_anchor(cx);
-            self.act(FileListAction::ContextMenu(anchor), window, cx);
-        }
+        let anchor = self.cursor_anchor(cx);
+        let on_row = self.props.rows.get(row_index(self.props.view.cursor));
+        let action = match on_row {
+            Some(_) => FileListAction::ContextMenu(anchor),
+            None => FileListAction::BackgroundMenu(anchor),
+        };
+        self.act(action, window, cx);
     }
 
     fn cursor_anchor(&self, cx: &App) -> Point<Pixels> {

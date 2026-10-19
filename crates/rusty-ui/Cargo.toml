@@ -63,6 +63,7 @@ rusty-automotive = { path = "../rusty-automotive" }
 rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
+rusty-pdf = { path = "../rusty-pdf" }
 rusty-structured = { path = "../rusty-structured" }
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"
@@ -89,6 +90,7 @@ windows-version = "0.1.7"
 [dev-dependencies]
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 insta = "1.49.0"
+rusty-automotive = { path = "../rusty-automotive", features = ["sample"] }
 tempfile = "3.27.0"
 
 [lints]

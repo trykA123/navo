@@ -21,6 +21,11 @@ pub enum FerriteAction {
     CopyPath,
     Properties,
     ClassicMenu,
+    NewFolder,
+    NewFile,
+    Paste,
+    Refresh,
+    SortBy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

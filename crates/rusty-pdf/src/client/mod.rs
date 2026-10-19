@@ -49,7 +49,6 @@ impl Launcher {
 pub struct Document {
     launcher: Launcher,
     path: String,
-    password: Option<String>,
     pages: u32,
     helper: Option<Helper>,
 }
@@ -66,11 +65,10 @@ impl Document {
         let mut document = Self {
             launcher: launcher.clone(),
             path: path.to_owned(),
-            password: password.map(str::to_owned),
             pages: 0,
             helper: None,
         };
-        document.start()?;
+        document.start(password)?;
         Ok(document)
     }
 
@@ -105,11 +103,11 @@ impl Document {
         }
     }
 
-    fn start(&mut self) -> Result<&mut Helper, PdfError> {
+    fn start(&mut self, password: Option<&str>) -> Result<&mut Helper, PdfError> {
         let mut helper = Helper::spawn(&self.launcher)?;
         let open = Request::Open {
             path: self.path.clone(),
-            password: self.password.clone(),
+            password: password.map(str::to_owned),
         };
         match helper.call(&open, self.launcher.timeout)? {
             Response::Opened { pages } => self.pages = pages,
@@ -123,7 +121,7 @@ impl Document {
         let timeout = self.launcher.timeout;
         let helper = match self.helper.take() {
             Some(helper) => self.helper.insert(helper),
-            None => self.start()?,
+            None => self.start(None)?,
         };
         match helper.call(request, timeout) {
             Ok(Response::Failed(error)) => Err(error),

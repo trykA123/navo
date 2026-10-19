@@ -1,8 +1,8 @@
-use std::path::PathBuf;
-
 use rusty_core::shell_menu::{ShellMenu, Submenu};
 
-use super::{InvokeOptions, MenuError, MenuSession, Pending, ScreenPoint, WindowHandle};
+use super::{
+    InvokeOptions, MenuError, MenuSession, MenuSource, Pending, ScreenPoint, WindowHandle,
+};
 
 pub(super) struct Service;
 
@@ -12,7 +12,7 @@ impl Service {
         Ok(Self)
     }
 
-    pub(super) fn open(&self, _paths: Vec<PathBuf>) -> Pending<MenuSession> {
+    pub(super) fn open(&self, _source: MenuSource) -> Pending<MenuSession> {
         Pending::ready(Ok(MenuSession {
             menu: ShellMenu::default(),
             handle: SessionHandle,
@@ -62,6 +62,16 @@ mod tests {
     #[test]
     fn open_gives_a_menu_without_shell_items() {
         assert!(session().menu().items.is_empty());
+    }
+
+    #[test]
+    fn a_folder_background_gives_a_menu_without_shell_items() {
+        let service = ShellMenuService::start().expect("the stub service always starts");
+        let session = service
+            .open_background("/data".into())
+            .wait()
+            .expect("the stub opens any folder");
+        assert!(session.menu().items.is_empty());
     }
 
     #[test]

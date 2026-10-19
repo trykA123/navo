@@ -114,6 +114,17 @@ fn create_folder_refuses_an_existing_entry() {
 }
 
 #[test]
+fn create_file_makes_an_empty_file_and_refuses_an_existing_entry() {
+    let (dir, root) = temp();
+    let ops = LocalFs::new();
+    ops.create_file(&child(&root, "notes.txt")).unwrap();
+    assert_eq!(std::fs::metadata(path(&dir, "notes.txt")).unwrap().len(), 0);
+    write_file(dir.path(), "kept.txt", 5);
+    assert!(ops.create_file(&child(&root, "kept.txt")).is_err());
+    assert_eq!(std::fs::metadata(path(&dir, "kept.txt")).unwrap().len(), 5);
+}
+
+#[test]
 fn rename_refuses_an_existing_target() {
     let (dir, root) = temp();
     write_file(dir.path(), "a.txt", 3);

@@ -12,6 +12,22 @@ pub const MEMORY_STEPS: [&str; 5] = [
 
 static MEMORY: LazyLock<String> = LazyLock::new(memory_image);
 
+pub const ELF_NAME: &str = "bcm_app.elf";
+
+pub const ELF_STEPS: [&str; 4] = [
+    "elf_view::ToggleNavigator",
+    "viewer::RowDown",
+    "elf_view::PickItem",
+    "elf_view::ToggleInspector",
+];
+
+static ELF: LazyLock<Vec<u8>> =
+    LazyLock::new(|| rusty_automotive::elf_sample::demo().unwrap_or_default());
+
+pub fn elf() -> &'static [u8] {
+    &ELF
+}
+
 pub fn memory() -> &'static str {
     &MEMORY
 }
@@ -58,5 +74,75 @@ fn memory_image() -> String {
     }
     lines.push(record(5, 0, &[0x08, 0x00, 0x04, 0x01]));
     lines.push(record(1, 0, &[]));
+    lines.join("\n") + "\n"
+}
+
+pub const TRACE_NAME: &str = "body_can_2026-10-19.asc";
+
+pub const TRACE_STEPS: [&str; 4] = [
+    "can_trace::ToggleNavigator",
+    "viewer::RowDown",
+    "can_trace::PickId",
+    "can_trace::ToggleInspector",
+];
+
+static TRACE: LazyLock<String> = LazyLock::new(can_trace);
+
+pub fn trace() -> &'static str {
+    &TRACE
+}
+
+const MESSAGES: [(&str, u8, u64); 6] = [
+    ("0C9", 1, 10),
+    ("1A0", 1, 20),
+    ("3E9", 1, 50),
+    ("18FEF100x", 2, 100),
+    ("7DF", 2, 0),
+    ("4F1", 1, 25),
+];
+
+fn frame_line(ms: u64, (id, channel): (&str, u8), data: &[u8]) -> String {
+    let bytes: Vec<String> = data.iter().map(|byte| format!("{byte:02X}")).collect();
+    format!(
+        "{:>4}.{:06} {channel}  {id:<15} Rx   d {} {}",
+        ms / 1000,
+        ms % 1000 * 1000,
+        data.len(),
+        bytes.join(" ")
+    )
+}
+
+fn can_trace() -> String {
+    let mut lines = vec![
+        "date Mon Oct 19 09:41:07.000 am 2026".to_owned(),
+        "base hex  timestamps absolute".to_owned(),
+        "internal events logged".to_owned(),
+        "Begin Triggerblock Mon Oct 19 09:41:07.000 am 2026".to_owned(),
+        "   0.000000 Start of measurement".to_owned(),
+    ];
+    let mut state = 0x5EED_1234u32;
+    for ms in (0..1200u64).step_by(5) {
+        for (id, channel, every) in MESSAGES {
+            if every == 0 || ms % every != 0 {
+                continue;
+            }
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let len = if id == "3E9" { 4 } else { 8 };
+            let data: Vec<u8> = (0..len).map(|at| (state >> (at % 4 * 8)) as u8).collect();
+            lines.push(frame_line(ms, (id, channel), &data));
+        }
+        if ms == 400 {
+            lines.push("   0.400500 2  ErrorFrame".to_owned());
+        }
+        if ms == 600 {
+            lines.push(frame_line(
+                600,
+                ("7DF", 2),
+                &[0x02, 0x01, 0x0D, 0, 0, 0, 0, 0],
+            ));
+            lines.push("   0.600800 CANFD   1 Rx        2A0  DiagFd   1 0 9 12 10 11 12 13 14 15 16 17 18 19 1A 1B   130000  0 1000 0 0 0 0 0".to_owned());
+        }
+    }
+    lines.push("End TriggerBlock".to_owned());
     lines.join("\n") + "\n"
 }

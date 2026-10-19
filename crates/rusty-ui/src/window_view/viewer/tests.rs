@@ -1,5 +1,7 @@
 mod archive;
 mod at_line;
+mod can_trace;
+mod elf_view;
 mod find;
 mod find_all;
 mod follow;
@@ -19,6 +21,8 @@ mod menu_copy;
 mod menu_kinds;
 mod moves;
 mod open;
+mod pdf;
+mod pdf_find;
 mod rebound;
 mod save;
 mod search;

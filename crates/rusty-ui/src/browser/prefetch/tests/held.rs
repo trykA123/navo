@@ -101,6 +101,10 @@ impl ProviderOps for Held {
         self.inner.create_folder(location)
     }
 
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        self.inner.create_file(location)
+    }
+
     fn copy_file(
         &self,
         source: &Location,

@@ -8,7 +8,7 @@ use crate::{Conflict, Location};
 
 pub(super) struct Walk<'a> {
     request: &'a PlanRequest,
-    existing: HashMap<String, &'a ExistingItem>,
+    existing: HashMap<String, Vec<&'a ExistingItem>>,
     planned: HashMap<String, Vec<Location>>,
     pub(super) steps: Vec<Step>,
     pub(super) conflicts: Vec<Conflict>,
@@ -19,13 +19,13 @@ pub(super) struct Walk<'a> {
 
 impl<'a> Walk<'a> {
     pub(super) fn new(request: &'a PlanRequest) -> Self {
+        let mut existing: HashMap<String, Vec<&'a ExistingItem>> = HashMap::new();
+        for item in &request.existing {
+            existing.entry(key(&item.location)).or_default().push(item);
+        }
         Self {
             request,
-            existing: request
-                .existing
-                .iter()
-                .map(|e| (key(&e.location), e))
-                .collect(),
+            existing,
             planned: HashMap::new(),
             steps: Vec::new(),
             conflicts: Vec::new(),
@@ -190,9 +190,10 @@ impl<'a> Walk<'a> {
 
     fn existing_at(&self, location: &Location) -> Option<&'a ExistingItem> {
         self.existing
-            .get(&key(location))
+            .get(&key(location))?
+            .iter()
             .copied()
-            .filter(|found| found.location.same_place(location))
+            .find(|found| found.location.same_place(location))
     }
 
     fn conflict(&mut self, item: &ScannedItem, target: Location, resolution: Resolution) {

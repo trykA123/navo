@@ -72,6 +72,7 @@ fn the_alt_and_shift_layers_map_their_commands_to_groups() {
         [
             "files.edit_with",
             "files.rename",
+            "files.new_file",
             "files.delete",
             "files.context_menu"
         ]

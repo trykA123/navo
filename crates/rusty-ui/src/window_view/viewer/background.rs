@@ -1,3 +1,4 @@
+use std::io::{self, Read};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -76,4 +77,27 @@ pub(super) fn ranged(
 ) -> impl FnMut(u64, usize) -> Result<Vec<u8>, String> + Send + 'static {
     let (range, location) = (hooks.range.clone(), location.clone());
     move |offset, len| range(&location, offset, len)
+}
+
+pub(super) struct Ranged<F> {
+    pub read: F,
+    pub at: u64,
+    pub len: u64,
+}
+
+impl<F: FnMut(u64, usize) -> Result<Vec<u8>, String>> Read for Ranged<F> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let left = usize::try_from(self.len.saturating_sub(self.at)).unwrap_or(usize::MAX);
+        let wanted = buffer.len().min(left);
+        if wanted == 0 {
+            return Ok(0);
+        }
+        let bytes = (self.read)(self.at, wanted).map_err(io::Error::other)?;
+        let count = bytes.len().min(wanted);
+        if let (Some(into), Some(from)) = (buffer.get_mut(..count), bytes.get(..count)) {
+            into.copy_from_slice(from);
+        }
+        self.at += count as u64;
+        Ok(count)
+    }
 }

@@ -6,7 +6,7 @@ mod shell_menu;
 
 pub use clipboard::{
     ClipboardError, Effect, FileClipboard, clear_if_same, decode_drop_files, encode_drop_files,
-    read_files, write_files,
+    has_files, read_files, write_files,
 };
 pub use display::display_scale;
 pub use drives::{

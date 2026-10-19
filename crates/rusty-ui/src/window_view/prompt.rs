@@ -8,6 +8,7 @@ pub(super) enum PromptKind {
         from: String,
     },
     NewFolder,
+    NewFile,
     Select {
         add: bool,
     },
@@ -24,6 +25,7 @@ pub(super) struct Prompt {
 }
 
 const NEW_FOLDER: &str = "New folder";
+const NEW_FILE: &str = "New file.txt";
 const EVERY_FILE: &str = "*.*";
 
 pub(super) fn stem_end(name: &str) -> usize {
@@ -45,6 +47,14 @@ pub(super) fn prompt_props(kind: &PromptKind, error: Option<SharedString>) -> Pr
             label: "Folder name".into(),
             value: NEW_FOLDER.into(),
             select: 0..NEW_FOLDER.len(),
+            confirm_label: "Create".into(),
+            error,
+        },
+        PromptKind::NewFile => PromptProps {
+            title: "New file".into(),
+            label: "File name".into(),
+            value: NEW_FILE.into(),
+            select: 0..stem_end(NEW_FILE),
             confirm_label: "Create".into(),
             error,
         },
@@ -92,6 +102,10 @@ impl FerriteWindow {
 
     pub(super) fn ask_new_folder(&mut self) {
         self.open_prompt(PromptKind::NewFolder);
+    }
+
+    pub(super) fn ask_new_file(&mut self) {
+        self.open_prompt(PromptKind::NewFile);
     }
 
     pub(super) fn open_prompt(&mut self, kind: PromptKind) {
@@ -142,6 +156,10 @@ impl FerriteWindow {
             PromptKind::NewFolder => self
                 .browser
                 .new_folder(value)
+                .map_err(|p| Some(p.to_string())),
+            PromptKind::NewFile => self
+                .browser
+                .new_file(value)
                 .map_err(|p| Some(p.to_string())),
             PromptKind::Select { add } => self.mark_pattern(*add, value),
             PromptKind::ChooseEditor { target, .. } => {

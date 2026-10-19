@@ -6,6 +6,11 @@ pub fn write_files(_files: &FileClipboard) -> Result<(), ClipboardError> {
     Err(ClipboardError::Unsupported)
 }
 
+#[must_use]
+pub fn has_files() -> bool {
+    false
+}
+
 pub fn read_files() -> Result<Option<FileClipboard>, ClipboardError> {
     Err(ClipboardError::Unsupported)
 }

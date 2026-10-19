@@ -89,11 +89,13 @@ impl PanePage {
             | FileListAction::Filter(_)
             | FileListAction::Rename(_)
             | FileListAction::NewFolder
+            | FileListAction::NewFile
             | FileListAction::SelectPattern { .. }
             | FileListAction::Sort(_)
             | FileListAction::Edit { .. }
             | FileListAction::View(_)
             | FileListAction::ContextMenu(_)
+            | FileListAction::BackgroundMenu(_)
             | FileListAction::MenuPrefetch { .. }
             | FileListAction::MenuCancel => None,
         };
