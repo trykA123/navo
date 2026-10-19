@@ -1,4 +1,6 @@
-use gimli::write::{Address, DwarfUnit, EndianVec, LineProgram, LineString, Sections};
+use gimli::write::{
+    Address, AttributeValue, DwarfUnit, EndianVec, LineProgram, LineString, Sections,
+};
 use gimli::{Encoding, Format, LineEncoding, RunTimeEndian};
 use object::Endianness;
 use object::elf;
@@ -17,6 +19,7 @@ pub struct Part {
     pub kind: u32,
     pub flags: u64,
     pub address: u64,
+    pub load_address: u64,
     pub data: Vec<u8>,
     pub size: u64,
 }
@@ -49,6 +52,7 @@ pub fn text(address: u64, len: usize) -> Part {
         kind: elf::SHT_PROGBITS,
         flags: u64::from(elf::SHF_ALLOC | elf::SHF_EXECINSTR),
         address,
+        load_address: address,
         data: vec![0x90; len],
         size: len as u64,
     }
@@ -60,6 +64,7 @@ pub fn data(address: u64, len: usize) -> Part {
         kind: elf::SHT_PROGBITS,
         flags: u64::from(elf::SHF_ALLOC | elf::SHF_WRITE),
         address,
+        load_address: address,
         data: vec![0x11; len],
         size: len as u64,
     }
@@ -71,6 +76,7 @@ pub fn bss(address: u64, size: u64) -> Part {
         kind: elf::SHT_NOBITS,
         flags: u64::from(elf::SHF_ALLOC | elf::SHF_WRITE),
         address,
+        load_address: address,
         data: Vec::new(),
         size,
     }
@@ -102,7 +108,10 @@ pub fn firmware(is_64: bool, is_big: bool) -> Spec {
         entry: 0x0800_0101,
         parts: vec![
             text(0x0800_0000, 0x400),
-            data(0x2000_0000, 0x40),
+            Part {
+                load_address: 0x0800_0400,
+                ..data(0x2000_0000, 0x40)
+            },
             bss(0x2000_0040, 0x200),
         ],
         symbols: Some(vec![
@@ -131,17 +140,32 @@ pub fn firmware(is_64: bool, is_big: bool) -> Spec {
     }
 }
 
+pub type DebugSections = Vec<(&'static str, Vec<u8>)>;
+
 pub fn line_program(
     is_64: bool,
     is_big: bool,
     rows: &[(u64, u64, u64)],
-) -> Result<Vec<(&'static str, Vec<u8>)>, String> {
+) -> Result<DebugSections, String> {
+    line_program_in(b"/work/src", (is_64, is_big), rows)
+}
+
+pub fn line_program_in(
+    directory: &[u8],
+    (is_64, is_big): (bool, bool),
+    rows: &[(u64, u64, u64)],
+) -> Result<DebugSections, String> {
     let encoding = Encoding {
         format: Format::Dwarf32,
         version: 4,
         address_size: if is_64 { 8 } else { 4 },
     };
     let mut dwarf = DwarfUnit::new(encoding);
+    let root = dwarf.unit.root();
+    dwarf.unit.get_mut(root).set(
+        gimli::DW_AT_comp_dir,
+        AttributeValue::String(b"/work".to_vec()),
+    );
     let mut program = LineProgram::new(
         encoding,
         LineEncoding::default(),
@@ -150,7 +174,7 @@ pub fn line_program(
         LineString::String(b"main.c".to_vec()),
         None,
     );
-    let directory = program.add_directory(LineString::String(b"/work/src".to_vec()));
+    let directory = program.add_directory(LineString::String(directory.to_vec()));
     let file = program.add_file(LineString::String(b"main.c".to_vec()), directory, None);
     for (start, len, line) in rows {
         program.begin_sequence(Some(Address::Constant(*start)));
@@ -297,7 +321,7 @@ fn write_contents(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) -> 
             p_flags: *flags,
             p_offset: *offset as u64,
             p_vaddr: part.address,
-            p_paddr: part.address,
+            p_paddr: part.load_address,
             p_filesz: part.data.len() as u64,
             p_memsz: part.size,
             p_align: 4,

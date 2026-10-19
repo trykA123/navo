@@ -12,17 +12,14 @@ const MAX_SEGMENTS: usize = 4_096;
 pub(super) const MAX_TABLE: u64 = 256 * 1024 * 1024;
 pub(super) const MAX_NAME: usize = 1024;
 
-const DWARF: [&str; 10] = [
+const DWARF: [&str; 7] = [
     ".debug_abbrev",
     ".debug_addr",
     ".debug_info",
     ".debug_line",
     ".debug_line_str",
-    ".debug_ranges",
-    ".debug_rnglists",
     ".debug_str",
     ".debug_str_offsets",
-    ".debug_aranges",
 ];
 
 pub(super) type Data<'a, R> = &'a ReadCache<R>;
@@ -106,6 +103,7 @@ fn parse_as<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
     let segments = segments_of::<Elf, R>((header, endian), data, &mut problems);
     let table = SymbolTable {
         endian,
+        machine: header.e_machine(endian),
         headers,
         sections: &sections,
         data,
@@ -221,33 +219,49 @@ fn dwarf_of(sections: &[Section], problems: &mut Vec<ElfProblem>) -> Vec<(&'stat
     found
 }
 
+fn is_copied(section: &Section, segments: &[Segment]) -> bool {
+    segments.iter().any(|segment| {
+        segment.is_load()
+            && segment.virtual_address != segment.physical_address
+            && segment.span().contains(&section.address)
+    })
+}
+
 fn totals(sections: &[Section], segments: &[Segment]) -> Totals {
-    let loads: Vec<&Segment> = segments
+    let loaded: Vec<&Section> = sections
         .iter()
-        .filter(|segment| segment.is_load())
+        .filter(|section| section.is_loaded())
         .collect();
-    if !loads.is_empty() {
-        let load = loads
-            .iter()
-            .fold(0u64, |sum, segment| sum.saturating_add(segment.file_size));
-        let ram = loads
-            .iter()
-            .filter(|segment| segment.is_writable())
-            .fold(0u64, |sum, segment| sum.saturating_add(segment.memory_size));
+    if loaded.is_empty() {
+        let loads = segments.iter().filter(|segment| segment.is_load());
+        let (load, ram) = loads.fold((0u64, 0u64), |(load, ram), segment| {
+            let ram_part = if segment.is_writable() {
+                segment.memory_size
+            } else {
+                0
+            };
+            (
+                load.saturating_add(segment.file_size),
+                ram.saturating_add(ram_part),
+            )
+        });
         return Totals {
             load,
             ram,
             from_segments: true,
         };
     }
-    let alloc = u64::from(elf::SHF_ALLOC);
+    let has_loads = segments.iter().any(Segment::is_load);
     let write = u64::from(elf::SHF_WRITE);
     let mut totals = Totals::default();
-    for section in sections.iter().filter(|section| section.flags & alloc != 0) {
-        if section.kind != elf::SHT_NOBITS {
+    for section in loaded {
+        let is_nobits = section.kind == elf::SHT_NOBITS;
+        if !is_nobits {
             totals.load = totals.load.saturating_add(section.size);
         }
-        if section.flags & write != 0 {
+        let is_ram =
+            section.flags & write != 0 && (is_nobits || !has_loads || is_copied(section, segments));
+        if is_ram {
             totals.ram = totals.ram.saturating_add(section.size);
         }
     }

@@ -3,6 +3,7 @@ mod lines;
 mod names;
 mod parse;
 mod query;
+#[cfg(feature = "sample")]
 pub mod sample;
 mod symbols;
 
@@ -16,8 +17,6 @@ pub use lines::{Lines, SourceLine};
 pub use query::{Column, Order, Query, Scope, select};
 
 use crate::{IndexError, Watch};
-
-pub const ELF_EXTENSIONS: [&str; 3] = ["elf", "axf", "out"];
 
 const MAGIC: &[u8; 4] = b"\x7FELF";
 
@@ -119,6 +118,7 @@ pub struct Totals {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ElfProblem {
     Stripped,
+    OnlyDynamic,
     NoDwarf,
     CompressedDwarf,
     Malformed(String),
@@ -127,18 +127,24 @@ pub enum ElfProblem {
         kept: u64,
         total: u64,
     },
+    Stopped {
+        what: &'static str,
+        after: u64,
+    },
 }
 
 impl fmt::Display for ElfProblem {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Stripped => out.write_str("stripped: no symbol table"),
+            Self::OnlyDynamic => out.write_str("no symbol table: dynamic symbols only"),
             Self::NoDwarf => out.write_str("no DWARF line info"),
             Self::CompressedDwarf => out.write_str("compressed DWARF is not read"),
             Self::Malformed(what) => write!(out, "malformed: {what}"),
             Self::TooMany { what, kept, total } => {
                 write!(out, "{what}: showing {kept} of {total}")
             }
+            Self::Stopped { what, after } => write!(out, "{what}: stopped after {after}"),
         }
     }
 }
@@ -181,6 +187,28 @@ impl Elf {
     }
 
     #[must_use]
+    pub fn symbol_at(&self, address: u64) -> Option<usize> {
+        let defined = self.symbols.iter().enumerate().filter(|(_, symbol)| {
+            matches!(symbol.place, Place::Section(_)) && symbol.value <= address
+        });
+        let mut nearest: Option<(usize, &Symbol)> = None;
+        for (at, symbol) in defined {
+            let contains = address < symbol.value.saturating_add(symbol.size);
+            let is_better = match nearest {
+                None => true,
+                Some((_, best)) => {
+                    let best_contains = address < best.value.saturating_add(best.size);
+                    (contains, symbol.value) > (best_contains, best.value)
+                }
+            };
+            if is_better {
+                nearest = Some((at, symbol));
+            }
+        }
+        nearest.map(|(at, _)| at)
+    }
+
+    #[must_use]
     pub fn has_dwarf(&self) -> bool {
         self.dwarf.iter().any(|(name, _)| *name == ".debug_line")
     }
@@ -204,6 +232,11 @@ impl Section {
     #[must_use]
     pub fn is_loaded(&self) -> bool {
         self.flags & u64::from(object::elf::SHF_ALLOC) != 0
+    }
+
+    #[must_use]
+    pub fn is_executable(&self) -> bool {
+        self.is_loaded() && self.flags & u64::from(object::elf::SHF_EXECINSTR) != 0
     }
 
     #[must_use]

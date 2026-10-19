@@ -1,6 +1,6 @@
 use ::object::elf;
 
-use super::{Named, Spec, bss, build, data, func, line_program, object, text};
+use super::{Named, Part, Spec, bss, build, data, func, line_program, object, text};
 
 const DEMO_FUNCTIONS: [&str; 24] = [
     "Reset_Handler",
@@ -16,8 +16,8 @@ const DEMO_FUNCTIONS: [&str; 24] = [
     "Dem_SetEventStatus",
     "EcuM_Init",
     "Fee_MainFunction",
-    "Lin_GetStatus",
-    "Nm_MainFunction",
+    "Pwm_Init",
+    "Os_Task_1ms",
     "Os_StartScheduler",
     "Pwm_SetDutyCycle",
     "Rte_Read_DoorSwitch",
@@ -71,7 +71,10 @@ pub fn demo() -> Result<Vec<u8>, String> {
         entry: base + 1,
         parts: vec![
             text(base, 0x1800),
-            data(0x2000_0000, 0x400),
+            Part {
+                load_address: base + 0x1800,
+                ..data(0x2000_0000, 0x400)
+            },
             bss(0x2000_0400, 0x1000),
         ],
         symbols: Some(symbols),

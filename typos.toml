@@ -15,7 +15,6 @@ wdth = "wdth"
 flate = "flate"
 recomandation = "recomandation"
 alege = "alege"
-aranges = "aranges"
 rela = "rela"
 
 [default.extend-identifiers]

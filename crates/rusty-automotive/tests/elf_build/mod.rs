@@ -45,3 +45,24 @@ pub fn named<'a>(elf: &'a Elf, name: &str) -> Option<(usize, &'a rusty_automotiv
         .enumerate()
         .find(|(_, symbol)| elf.name(symbol) == name)
 }
+
+pub fn line_program_in(directory: &[u8], rows: &[(u64, u64, u64)]) -> Vec<(&'static str, Vec<u8>)> {
+    rusty_automotive::elf_sample::line_program_in(directory, (false, false), rows).unwrap()
+}
+
+pub fn rh850(text_at: u64, rows: &[(u64, u64, u64)]) -> Spec {
+    Spec {
+        is_64: false,
+        is_big: false,
+        machine: EM_V800,
+        entry: text_at,
+        parts: vec![text(text_at, 0x800)],
+        symbols: Some(vec![
+            func("_RESET", text_at, 0x10, 0),
+            func("main", text_at + 0x400, 0x40, 0),
+            func("tick", text_at + 0x480, 0x20, 0),
+        ]),
+        loads: vec![(0, 5)],
+        debug: line_program(false, false, rows),
+    }
+}

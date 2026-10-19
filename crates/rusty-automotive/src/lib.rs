@@ -9,11 +9,11 @@ mod source;
 
 use std::sync::atomic::AtomicBool;
 
+#[cfg(feature = "sample")]
 pub use elf::sample as elf_sample;
 pub use elf::{
-    Bind, Class, Column, ELF_EXTENSIONS, Elf, ElfProblem, ElfReader, Endian, Header, Lines, Order,
-    Place, Query, Scope, Section, Segment, SourceLine, Symbol, SymbolKind, Totals, select,
-    sniff_elf,
+    Bind, Class, Column, Elf, ElfProblem, ElfReader, Endian, Header, Lines, Order, Place, Query,
+    Scope, Section, Segment, SourceLine, Symbol, SymbolKind, Totals, select, sniff_elf,
 };
 pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};

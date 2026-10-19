@@ -64,7 +64,7 @@ fn load_segments_give_load_and_ram_totals() {
     let elf = parse(&build(&firmware(false, false)));
     assert_eq!(elf.load_segments().count(), 3);
     assert_eq!(elf.segments[0].flag_letters(), "R-X");
-    assert!(elf.totals.from_segments);
+    assert!(!elf.totals.from_segments, "sections give the totals");
     assert_eq!(elf.totals.load, 0x400 + 0x40);
     assert_eq!(elf.totals.ram, 0x40 + 0x200);
 }

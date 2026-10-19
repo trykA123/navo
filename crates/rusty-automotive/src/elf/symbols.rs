@@ -17,6 +17,7 @@ const CHECK_EVERY: usize = 8_192;
 
 pub(super) struct SymbolTable<'a, S, R: ReadCacheOps> {
     pub endian: Endianness,
+    pub machine: u16,
     pub headers: &'a [S],
     pub sections: &'a [Section],
     pub data: Data<'a, R>,
@@ -123,7 +124,7 @@ where
         return None;
     };
     if symtab.sh_type(endian) != elf::SHT_SYMTAB {
-        problems.push(ElfProblem::Stripped);
+        problems.push(ElfProblem::OnlyDynamic);
     }
     let found = bytes_of((symtab, endian), table.data, "symbol table").and_then(|bytes| {
         let strtab = table
@@ -144,20 +145,37 @@ where
     }
 }
 
+fn is_mapping(name: &str) -> bool {
+    let tag = name.split_once('.').map_or(name, |(tag, _)| tag);
+    matches!(tag, "$a" | "$t" | "$d" | "$x")
+}
+
+struct Context<'a> {
+    strings: &'a [u8],
+    endian: Endianness,
+    sections: usize,
+    has_mapping: bool,
+}
+
 fn symbol_of<Y: Sym<Endian = Endianness>>(
     sym: &Y,
-    (strings, endian, sections): (&[u8], Endianness, usize),
+    context: &Context<'_>,
     names: &mut Names,
-) -> Symbol {
+) -> Option<Symbol> {
+    let (strings, endian, sections) = (context.strings, context.endian, context.sections);
     let name = name_at(strings, sym.st_name(endian)).unwrap_or_else(|| {
         names.bad += 1;
         String::new()
     });
+    let is_local_notype = sym.st_type() == elf::STT_NOTYPE && sym.st_bind() == elf::STB_LOCAL;
+    if context.has_mapping && is_local_notype && is_mapping(&name) {
+        return None;
+    }
     let (name, raw) = match demangle(&name) {
         Some(shown) => (names.push(&shown), Some(names.push(&name))),
         None => (names.push(&name), None),
     };
-    Symbol {
+    Some(Symbol {
         name,
         raw,
         value: sym.st_value(endian).into(),
@@ -165,7 +183,7 @@ fn symbol_of<Y: Sym<Endian = Endianness>>(
         kind: kind_of(sym.st_type()),
         bind: bind_of(sym.st_bind()),
         place: place_of(sym.st_shndx(endian), sections),
-    }
+    })
 }
 
 pub(super) fn read_symbols<S, R>(
@@ -192,7 +210,12 @@ where
     }
     let mut names = Names::default();
     let mut symbols = Vec::with_capacity(total.min(MAX_SYMBOLS));
-    let context = (strings, table.endian, table.sections.len());
+    let context = Context {
+        strings,
+        endian: table.endian,
+        sections: table.sections.len(),
+        has_mapping: matches!(table.machine, elf::EM_ARM | elf::EM_AARCH64),
+    };
     for (at, sym) in raw.iter().enumerate().skip(1).take(MAX_SYMBOLS) {
         if at % CHECK_EVERY == 0 {
             if watch.cancel.load(Ordering::Relaxed) {
@@ -200,9 +223,10 @@ where
             }
             (watch.progress)(start + (at * size_of_val(sym)) as u64);
         }
-        if !matches!(sym.st_type(), elf::STT_SECTION | elf::STT_FILE) {
-            symbols.push(symbol_of(sym, context, &mut names));
+        if matches!(sym.st_type(), elf::STT_SECTION | elf::STT_FILE) {
+            continue;
         }
+        symbols.extend(symbol_of(sym, &context, &mut names));
     }
     names.report(problems);
     Ok((symbols, names.text))

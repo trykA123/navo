@@ -6251,6 +6251,7 @@ dependencies = [
  "object",
  "proptest",
  "rustc-demangle",
+ "rusty-automotive",
  "thiserror 2.0.21",
 ]
 
