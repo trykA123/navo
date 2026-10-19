@@ -137,8 +137,9 @@ impl OpLog for JournalLog {
                 "job finished"
             );
         }
-        let _ = lock(&self.journal).finish(self.job, state);
-        let _ = held::release(&self.journal, self.job, &self.held, ops);
+        if lock(&self.journal).finish(self.job, state).is_ok() {
+            let _ = held::release(&self.journal, self.job, &self.held, ops);
+        }
     }
 }
 
@@ -157,33 +158,42 @@ impl JobLog for Quiet {
 pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, JournalError> {
     let unfinished = lock(journal).unfinished()?;
     let count = u32::try_from(unfinished.len()).unwrap_or(u32::MAX);
-    for job in unfinished {
+    for job in unfinished.iter().rev() {
         let state = match held::held_of(journal, job.id)? {
-            Some(held) => undo(&job, &held, ops),
+            Some(held) => undo(job, &held, &done_of(job), ops),
             None => JobState::Failed,
         };
         lock(journal).finish(job.id, state)?;
+    }
+    let pending = lock(journal).restore_pending()?;
+    for job in pending.iter().rev() {
+        if let Some(held) = held::held_of(journal, job.id)? {
+            let state = undo(job, &held, &[], ops);
+            lock(journal).finish(job.id, state)?;
+        }
     }
     held::release_finished(journal, ops)?;
     lock(journal).prune(KEEP_FINISHED)?;
     Ok(count)
 }
 
-fn undo(job: &UnfinishedJob, held: &[HeldFile], ops: &dyn ProviderOps) -> JobState {
-    let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
-        return JobState::Failed;
-    };
-    let done: Vec<u32> = job
-        .steps
+fn done_of(job: &UnfinishedJob) -> Vec<u32> {
+    job.steps
         .iter()
         .filter(|step| step.state == StepState::Done)
         .map(|step| step.seq)
-        .collect();
-    let _ = clean_up(&plan, &done, ops);
+        .collect()
+}
+
+fn undo(job: &UnfinishedJob, held: &[HeldFile], done: &[u32], ops: &dyn ProviderOps) -> JobState {
+    let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
+        return unrestored(held);
+    };
+    let _ = clean_up(&plan, done, ops);
     let outcome = roll_back(
         &Journaled {
             plan: &plan,
-            done: &done,
+            done,
             held,
         },
         &mut JobContext {
@@ -195,7 +205,15 @@ fn undo(job: &UnfinishedJob, held: &[HeldFile], ops: &dyn ProviderOps) -> JobSta
     );
     match outcome {
         JobOutcome::Done => JobState::RolledBack,
-        JobOutcome::Cancelled | JobOutcome::Failed { .. } => JobState::Failed,
+        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(held),
+    }
+}
+
+fn unrestored(held: &[HeldFile]) -> JobState {
+    if held.is_empty() {
+        JobState::Failed
+    } else {
+        JobState::RestorePending
     }
 }
 

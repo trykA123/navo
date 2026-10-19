@@ -12,6 +12,7 @@ pub enum JobState {
     Failed,
     Cancelled,
     RolledBack,
+    RestorePending,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,12 +129,20 @@ impl JobJournal {
     }
 
     pub fn unfinished(&self) -> Result<Vec<UnfinishedJob>, JournalError> {
+        self.jobs_in(JobState::Running)
+    }
+
+    pub fn restore_pending(&self) -> Result<Vec<UnfinishedJob>, JournalError> {
+        self.jobs_in(JobState::RestorePending)
+    }
+
+    fn jobs_in(&self, state: JobState) -> Result<Vec<UnfinishedJob>, JournalError> {
         let mut jobs = self.db.connection().prepare(
-            "SELECT id, kind, plan, created_at FROM job WHERE state = 'running'
+            "SELECT id, kind, plan, created_at FROM job WHERE state = ?1
              ORDER BY created_at, id",
         )?;
         let rows = jobs
-            .query_map([], |row| {
+            .query_map([job_text(state)], |row| {
                 Ok(UnfinishedJob {
                     id: JobId(row.get(0)?),
                     kind: row.get(1)?,
@@ -229,6 +238,7 @@ fn job_text(state: JobState) -> &'static str {
         JobState::Failed => "failed",
         JobState::Cancelled => "cancelled",
         JobState::RolledBack => "rolled_back",
+        JobState::RestorePending => "restore_pending",
     }
 }
 

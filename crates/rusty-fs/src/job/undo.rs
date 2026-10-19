@@ -7,23 +7,24 @@ use crate::ProviderOps;
 
 pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
     let steps: Vec<(u32, &Step)> = (0_u32..).zip(&job.plan.steps).collect();
+    let mut first = None;
     for &(seq, step) in steps.iter().rev() {
         let held = held_for(step, job.held);
         if !job.done.contains(&seq) && held.is_none() {
             continue;
         }
-        let outcome = match undo(step, held, ctx.ops) {
-            Ok(outcome) => outcome,
+        let logged = match undo(step, held, ctx.ops) {
+            Ok(outcome) => ctx.log.step(seq, outcome),
             Err(error) => {
                 let _ = ctx.log.step(seq, StepOutcome::Failed);
-                return JobOutcome::Failed { seq, error };
+                Err(error)
             }
         };
-        if let Err(error) = ctx.log.step(seq, outcome) {
-            return JobOutcome::Failed { seq, error };
+        if let Err(error) = logged {
+            first.get_or_insert(JobOutcome::Failed { seq, error });
         }
     }
-    JobOutcome::Done
+    first.unwrap_or(JobOutcome::Done)
 }
 
 fn held_for<'h>(step: &Step, held: &'h [HeldFile]) -> Option<&'h HeldFile> {

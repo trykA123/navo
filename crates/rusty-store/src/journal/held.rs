@@ -28,7 +28,7 @@ impl JobJournal {
     pub fn finished_holding(&self) -> Result<Vec<JobId>, JournalError> {
         let mut statement = self.db.connection().prepare(
             "SELECT DISTINCT job.id FROM job JOIN undo ON undo.job_id = job.id
-             WHERE job.state != 'running' ORDER BY job.id",
+             WHERE job.state NOT IN ('running', 'restore_pending') ORDER BY job.id",
         )?;
         let rows = statement
             .query_map([], |row| Ok(JobId(row.get(0)?)))?

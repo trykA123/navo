@@ -358,3 +358,115 @@ fn an_overwrite_whose_target_is_gone_copies_without_holding() {
         );
     }
 }
+
+fn held_path(harness: &Harness, index: usize) -> String {
+    harness.log.held[index].held.path().to_text()
+}
+
+#[test]
+fn undo_restores_every_held_file_even_when_one_restore_fails() {
+    for workers in MODES {
+        let (fs, plan) = over_old(&["a.txt", "b.txt"]);
+        let mut harness = keeping(workers);
+        let _ = harness.run(&fs, &plan, &[]);
+        let b = harness
+            .log
+            .held
+            .iter()
+            .position(|file| file.original == fs.location("dst/b.txt"))
+            .unwrap();
+        let sharing = Fault::Fail(FsErrorKind::SharingViolation);
+        fs.fault(&held_path(&harness, b), FakeOp::Replace, 1, sharing);
+        let outcome = undone(&fs, &plan, &harness);
+        assert_eq!(
+            (
+                failure(&outcome).map(|(_, kind)| kind),
+                entry_at(&fs, "dst/a.txt"),
+                size(&fs, &held_path(&harness, b)),
+            ),
+            (
+                Some(FsErrorKind::SharingViolation),
+                Some(old_entry("a.txt")),
+                Some(OLD)
+            ),
+            "workers {workers}"
+        );
+    }
+}
+
+#[test]
+fn a_missing_target_folder_is_not_taken_for_a_released_file() {
+    for workers in MODES {
+        let (fs, plan, harness) = overwritten(workers);
+        fs.remove("dst");
+        let released = release_held(&harness.log.held, &fs).map_err(|e| e.kind);
+        let restored = failure(&undone(&fs, &plan, &harness)).map(|(_, kind)| kind);
+        assert_eq!(
+            (released, restored),
+            (Err(FsErrorKind::NotFound), Some(FsErrorKind::NotFound)),
+            "workers {workers}"
+        );
+    }
+}
+
+#[test]
+fn a_target_that_became_a_folder_is_never_held() {
+    for workers in MODES {
+        let (fs, plan) = over_old(&["a.txt"]);
+        fs.remove("dst/a.txt");
+        fs.add_folder("dst/a.txt");
+        let (outcome, harness) = run_in(workers, &fs, &plan);
+        assert_eq!(
+            (
+                failure(&outcome),
+                entry_at(&fs, "dst/a.txt").map(|e| e.kind),
+                harness.log.held.len(),
+                holding(&fs),
+                leftovers(&fs),
+            ),
+            (
+                Some((0, FsErrorKind::NameInvalid)),
+                Some(EntryKind::Folder),
+                0,
+                Vec::new(),
+                Vec::new()
+            ),
+            "workers {workers}"
+        );
+    }
+}
+
+#[test]
+fn a_stray_file_in_the_holding_folder_does_not_block_the_release() {
+    for workers in MODES {
+        let (fs, _, harness) = overwritten(workers);
+        let folder = harness.log.held[0].held.parent().unwrap();
+        fs.add_file(&format!("{}/Thumbs.db", folder.path().to_text()), 1);
+        assert_eq!(
+            (
+                release_held(&harness.log.held, &fs),
+                size(&fs, &held_path(&harness, 0)),
+            ),
+            (Ok(()), None),
+            "workers {workers}"
+        );
+    }
+}
+
+#[test]
+fn undo_ignores_a_held_record_whose_name_differs_only_in_case() {
+    let (fs, plan, harness) = overwritten(0);
+    let other_case = HeldFile {
+        original: fs.location("dst/A.txt"),
+        held: harness.log.held[0].held.clone(),
+    };
+    let mut undo = Harness {
+        held: vec![other_case],
+        ..Harness::default()
+    };
+    let _ = undo.roll_back(&fs, &plan, &harness.log.done());
+    assert_eq!(
+        (size(&fs, "dst/a.txt"), size(&fs, &held_path(&harness, 0))),
+        (None, Some(OLD))
+    );
+}

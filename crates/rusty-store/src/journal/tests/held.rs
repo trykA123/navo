@@ -68,3 +68,22 @@ fn prune_keeps_a_finished_job_that_still_holds_files() {
     journal.forget_held(holding).unwrap();
     assert_eq!(journal.prune(0).unwrap(), 1);
 }
+
+#[test]
+fn a_job_waiting_for_a_restore_is_not_released_and_is_listed_for_retry() {
+    let mut journal = journal();
+    let job = journal.create_job("copy", b"plan", 1, 100).unwrap();
+    journal.record_held(job, b"h", 101).unwrap();
+    journal.finish(job, JobState::RestorePending).unwrap();
+    let pending: Vec<JobId> = journal
+        .restore_pending()
+        .unwrap()
+        .iter()
+        .map(|job| job.id)
+        .collect();
+    assert_eq!(
+        (journal.finished_holding().unwrap(), pending),
+        (Vec::new(), vec![job])
+    );
+    assert!(journal.unfinished().unwrap().is_empty());
+}

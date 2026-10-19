@@ -230,4 +230,21 @@ mod on_windows {
             (NEW.to_vec(), Vec::<String>::new())
         );
     }
+
+    #[test]
+    fn undo_brings_the_old_file_back_under_its_own_spelling() {
+        let mut job = with_old_target(|target| {
+            fs::rename(target, target.with_file_name("A.bin")).unwrap();
+        });
+        assert_eq!(job.undo(), JobOutcome::Done);
+        let names: Vec<String> = fs::read_dir(job.dir.path().join("dst"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| !name.starts_with(HELD_PREFIX))
+            .collect();
+        assert_eq!(
+            (names, fs::read(job.target()).unwrap()),
+            (vec!["A.bin".to_owned()], OLD.to_vec())
+        );
+    }
 }

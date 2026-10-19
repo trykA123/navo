@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
 use super::copy::{failure, temp_of};
 use super::{HeldFile, JobContext, StepOutcome};
-use crate::{EntryKind, FsEntry, ProviderOps};
+use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, ProviderOps};
 
 pub const HELD_PREFIX: &str = ".ferrite-held-";
 
@@ -13,6 +16,7 @@ static RUNS: AtomicU64 = AtomicU64::new(0);
 
 pub(super) struct Aside {
     folder: ProviderPath,
+    spellings: Mutex<HashMap<String, Vec<ProviderPath>>>,
 }
 
 impl Aside {
@@ -24,6 +28,7 @@ impl Aside {
         let name = format!("{HELD_PREFIX}{:x}-{nanos:x}-{run:x}", std::process::id());
         Self {
             folder: ProviderPath::from_text(&name),
+            spellings: Mutex::new(HashMap::new()),
         }
     }
 
@@ -48,19 +53,50 @@ impl Aside {
     ) -> Result<(), FsError> {
         let ops = ctx.ops;
         let temp = temp_of(target)?;
-        if presence(ops, target)?.is_none() {
-            return ops.replace(&temp, target);
+        match presence(ops, target)? {
+            None => return ops.replace(&temp, target),
+            Some(entry) if matches!(entry.kind, EntryKind::File | EntryKind::Link) => {}
+            Some(_) => return Err(failure(FsErrorKind::NameInvalid, target)),
         }
-        let held = self.held_file(target)?;
+        let held = self.held_file(&self.on_disk(ops, target))?;
         if !ctx.log.journal_held(&held)? {
             return ops.replace(&temp, target);
         }
         make_room(ops, &held.held)?;
-        ops.rename(target, &held.held)?;
+        ops.rename(&held.original, &held.held)?;
         ops.replace(&temp, target).inspect_err(|_| {
-            let _ = ops.rename(&held.held, target);
+            let _ = ops.rename(&held.held, &held.original);
         })
     }
+
+    fn on_disk(&self, ops: &dyn ProviderOps, target: &Location) -> Location {
+        let Some(folder) = target.parent() else {
+            return target.clone();
+        };
+        let mut spellings = self
+            .spellings
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let names = spellings
+            .entry(folder.as_str().to_owned())
+            .or_insert_with(|| names_in(ops, &folder));
+        let found = names
+            .iter()
+            .filter_map(|name| folder.join(name).ok())
+            .filter(|candidate| candidate.same_place(target))
+            .min_by_key(|candidate| candidate != target);
+        found.unwrap_or_else(|| target.clone())
+    }
+}
+
+fn names_in(ops: &dyn ProviderOps, folder: &Location) -> Vec<ProviderPath> {
+    let mut names = Vec::new();
+    let mut sink = |batch: EntryBatch| {
+        names.extend(batch.entries.into_iter().map(|entry| entry.name));
+        ControlFlow::Continue(())
+    };
+    let _ = ops.list(folder, &mut sink, &CancelToken::new());
+    names
 }
 
 fn presence(ops: &dyn ProviderOps, location: &Location) -> Result<Option<FsEntry>, FsError> {
@@ -86,9 +122,20 @@ fn make_room(ops: &dyn ProviderOps, held: &Location) -> Result<(), FsError> {
     }
 }
 
+fn surely_gone(ops: &dyn ProviderOps, held: &HeldFile) -> Result<(), FsError> {
+    let folder = held
+        .original
+        .parent()
+        .ok_or_else(|| failure(FsErrorKind::NameInvalid, &held.original))?;
+    match presence(ops, &folder)? {
+        Some(_) => Ok(()),
+        None => Err(failure(FsErrorKind::NotFound, &folder)),
+    }
+}
+
 pub(super) fn restore(ops: &dyn ProviderOps, held: &HeldFile) -> Result<StepOutcome, FsError> {
     if presence(ops, &held.held)?.is_none() {
-        return Ok(StepOutcome::Skipped);
+        return surely_gone(ops, held).map(|()| StepOutcome::Skipped);
     }
     ops.replace(&held.held, &held.original)
         .map(|()| StepOutcome::Done)
@@ -107,9 +154,9 @@ pub(super) fn release(held: &[HeldFile], ops: &dyn ProviderOps) -> Result<(), Fs
             folders.push(folder);
         }
     }
-    for folder in &folders {
-        if let Err(error) = remove_folder(ops, folder) {
-            first.get_or_insert(error);
+    if first.is_none() {
+        for folder in &folders {
+            let _ = remove_folder(ops, folder);
         }
     }
     first.map_or(Ok(()), Err)
@@ -117,7 +164,7 @@ pub(super) fn release(held: &[HeldFile], ops: &dyn ProviderOps) -> Result<(), Fs
 
 fn release_one(ops: &dyn ProviderOps, file: &HeldFile) -> Result<(), FsError> {
     if presence(ops, &file.held)?.is_none() {
-        return Ok(());
+        return surely_gone(ops, file);
     }
     match presence(ops, &file.original)? {
         Some(_) => ops.remove_file(&file.held),

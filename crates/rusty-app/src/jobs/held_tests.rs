@@ -189,3 +189,85 @@ fn held_files_that_cannot_be_released_stay_journaled() {
     let _ = recover(&journal, &fs).unwrap();
     assert_eq!((holding(&fs), held_rows(&journal)), (Vec::new(), 0));
 }
+
+fn held_path(fs: &FakeFs) -> String {
+    format!("dest/docs/{}/report.txt", holding(fs)[0])
+}
+
+#[test]
+fn a_failed_restore_at_start_keeps_the_held_file_for_the_next_start() {
+    let fs = fake();
+    let journal = journal();
+    run(&fs, &journal, false);
+    let sharing = rusty_fs::Fault::Fail(rusty_core::FsErrorKind::SharingViolation);
+    for call in [1, 2] {
+        fs.fault(
+            &held_path(&fs),
+            rusty_fs::FakeOp::Replace,
+            call,
+            sharing.clone(),
+        );
+    }
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!(
+        (
+            target(&fs).map(|e| e.size),
+            holding(&fs).len(),
+            held_rows(&journal)
+        ),
+        (Some(7), 1, 1)
+    );
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!(
+        (target(&fs), holding(&fs), held_rows(&journal)),
+        (Some(old_report()), Vec::new(), 0)
+    );
+}
+
+#[test]
+fn a_missing_target_folder_at_start_keeps_the_held_rows() {
+    let fs = fake();
+    let journal = journal();
+    finished_without_release(&fs, &journal);
+    fs.remove("dest/docs");
+    let _ = recover(&journal, &fs).unwrap();
+    assert_eq!(held_rows(&journal), 1);
+}
+
+#[test]
+fn two_crashed_jobs_over_one_target_roll_back_newest_first() {
+    let fs = fake();
+    let journal = journal();
+    run(&fs, &journal, false);
+    fs.add_file("home/docs/report.txt", 9);
+    run(&fs, &journal, false);
+    assert_eq!(recover(&journal, &fs).unwrap(), 2);
+    assert_eq!(
+        (target(&fs), holding(&fs), held_rows(&journal)),
+        (Some(old_report()), Vec::new(), 0)
+    );
+}
+
+const NO_FINISH: &str = "CREATE TRIGGER no_finish BEFORE UPDATE OF state ON job
+     BEGIN SELECT RAISE(ABORT, 'finish refused'); END;";
+
+#[test]
+fn a_failed_finish_write_keeps_the_held_file_for_recovery() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("ferrite.db");
+    let fs = fake();
+    let journal = super::open(&file).unwrap();
+    let (guard, _) = Db::open(&file, false).unwrap();
+    guard.connection().execute_batch(NO_FINISH).unwrap();
+    run(&fs, &journal, true);
+    assert_eq!((holding(&fs).len(), held_rows(&journal)), (1, 1));
+    guard
+        .connection()
+        .execute_batch("DROP TRIGGER no_finish;")
+        .unwrap();
+    assert_eq!(recover(&journal, &fs).unwrap(), 1);
+    assert_eq!(
+        (target(&fs), holding(&fs), held_rows(&journal)),
+        (Some(old_report()), Vec::new(), 0)
+    );
+}
