@@ -256,7 +256,12 @@ preview.cursor_up | up | PreviewBrowse
 preview.cursor_down | down | PreviewBrowse
 preview.fold | left | PreviewBrowse
 preview.unfold | right | PreviewBrowse
+preview.unfold_all | alt-right | PreviewBrowse
+preview.fold_all | alt-left | PreviewBrowse
 preview.open | enter | PreviewBrowse
+preview.go_to | shift-enter | PreviewBrowse
+preview.open_parent | backspace | PreviewBrowse
+preview.toggle_mark | space | PreviewBrowse
 preview.view | f3 | PreviewBrowse
 preview.leave | escape | PreviewBrowse
 preview.leave_and_switch | tab | PreviewBrowse

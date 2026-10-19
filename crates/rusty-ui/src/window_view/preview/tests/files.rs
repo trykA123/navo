@@ -291,3 +291,37 @@ fn a_reloaded_file_preview_keeps_focus_in_its_new_body(cx: &mut TestAppContext) 
     assert!(body_has_focus(cx, &rig));
     assert!(!rig.list_has_focus(cx));
 }
+
+fn samples_in_docs(cx: &mut TestAppContext) -> Rig {
+    let fs = FakeFs::new();
+    for (name, bytes) in samples() {
+        fs.add_file(&format!("home/docs/{name}"), bytes.len() as u64);
+    }
+    open_samples_on(cx, fs).0
+}
+
+fn shows_body_of(view: &crate::window_view::FerriteWindow, name: &str) -> bool {
+    matches!(view.preview.shown(), Some(Shown::File(file)) if file.target.name() == name && file.body.is_some())
+}
+
+#[gpui_kit::test]
+fn backspace_in_a_file_opened_in_the_preview_goes_back_to_its_folder(cx: &mut TestAppContext) {
+    let rig = samples_in_docs(cx);
+    rig.open(cx);
+    assert!(rig.wait_until(cx, |view| {
+        view.preview.folder().is_some_and(|f| f.contents.is_read())
+    }));
+    rig.key(cx, "ctrl-shift-q");
+    for _ in 0..5 {
+        rig.key(cx, "down");
+    }
+    rig.key(cx, "enter");
+    assert!(rig.wait_until(cx, |view| shows_body_of(view, "notes.txt")));
+    assert!(body_has_focus(cx, &rig));
+    rig.key(cx, "backspace");
+    assert!(rig.wait_until(cx, |view| {
+        view.preview
+            .folder()
+            .is_some_and(|f| f.target.name() == "docs")
+    }));
+}

@@ -11,6 +11,7 @@ use rusty_structured::NodeId;
 use super::contents::{CHILD_LIMIT, Contents};
 use super::follow::Target;
 use super::inbox::Arrival;
+use super::marks::Marks;
 use super::scan::{Scan, Snapshots};
 use super::spot::{Restore, Spot};
 use super::{Preview, Shown};
@@ -32,6 +33,7 @@ pub(in crate::window_view) struct FolderPreview {
     pub summary_scroll: ScrollHandle,
     pub spot: Option<Spot>,
     pub restore: Option<Restore>,
+    pub marks: Marks,
     load: u64,
     reads: Vec<Read>,
 }
@@ -123,7 +125,7 @@ struct ReadRequest {
 }
 
 impl FerriteWindow {
-    fn provider_for_preview(&self) -> Arc<dyn Provider> {
+    pub(super) fn provider_for_preview(&self) -> Arc<dyn Provider> {
         self.provider.clone()
     }
 
@@ -144,6 +146,7 @@ impl FerriteWindow {
             summary_scroll: ScrollHandle::new(),
             spot: None,
             restore: None,
+            marks: Marks::default(),
             load,
             reads,
         }
@@ -187,6 +190,7 @@ impl FerriteWindow {
             changed |= match arrival {
                 Arrival::Read { load, node, listed } => self.folder_read(load, node, listed),
                 Arrival::Snapshot { run, snapshot } => self.profile_arrived(run, snapshot),
+                Arrival::Counted { location, bytes } => self.folder_counted(&location, bytes),
             };
         }
         changed
@@ -208,10 +212,40 @@ impl FerriteWindow {
         if !folder.reads.iter().any(|read| read.node == node) {
             return false;
         }
-        folder.contents.attach(node, listed);
+        let deeper = folder.contents.attach(node, listed);
         folder.settle_spot();
         folder.reads.retain(|read| read.node != node);
+        self.read_more(deeper);
         true
+    }
+
+    fn read_more(&mut self, wanted: Vec<(NodeId, Location)>) {
+        let Some(load) = self.preview.folder().map(|folder| folder.load) else {
+            return;
+        };
+        let reads: Vec<Read> = wanted
+            .into_iter()
+            .map(|(node, location)| self.read_folder(load, node, location))
+            .collect();
+        if let Some(folder) = self.preview.folder_mut() {
+            folder.reads.extend(reads);
+        }
+    }
+
+    pub(super) fn fold_below(&mut self, is_opening: bool, cx: &mut Context<Self>) {
+        let Some(folder) = self.preview.folder_mut() else {
+            return;
+        };
+        let Some(index) = folder.spot_row() else {
+            return;
+        };
+        if is_opening {
+            let wanted = folder.contents.open_below(index);
+            self.read_more(wanted);
+        } else {
+            folder.contents.close_below(index);
+        }
+        cx.notify();
     }
 
     fn profile_arrived(&mut self, run: u64, snapshot: LiveSnapshot) -> bool {
@@ -297,13 +331,8 @@ impl FerriteWindow {
         let Some(folder) = self.preview.folder_mut() else {
             return;
         };
-        let load = folder.load;
-        if let Some((node, location)) = folder.contents.toggle(index) {
-            let read = self.read_folder(load, node, location);
-            if let Some(folder) = self.preview.folder_mut() {
-                folder.reads.push(read);
-            }
-        }
+        let wanted = folder.contents.toggle(index).into_iter().collect();
+        self.read_more(wanted);
         cx.notify();
     }
 }

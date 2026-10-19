@@ -152,8 +152,20 @@ fn hint(t: &Theme, index: usize, hint: Hint) -> impl IntoElement + use<> {
         .when(!hint.label.is_empty(), |chip| chip.child(hint.label))
 }
 
-pub(super) fn footer(t: &Theme, hints: Vec<Hint>) -> Option<Div> {
-    if hints.is_empty() {
+fn status(t: &Theme, text: SharedString) -> impl IntoElement + use<> {
+    div()
+        .id("side-sheet-status")
+        .role(Role::Status)
+        .aria_label(text.clone())
+        .test_support()
+        .flex_none()
+        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+        .text_color(t.colors.text)
+        .child(text)
+}
+
+pub(super) fn footer(t: &Theme, hints: Vec<Hint>, text: Option<SharedString>) -> Option<Div> {
+    if hints.is_empty() && text.is_none() {
         return None;
     }
     let chips = hints
@@ -176,6 +188,7 @@ pub(super) fn footer(t: &Theme, hints: Vec<Hint>) -> Option<Div> {
             .bg(t.surfaces.field)
             .text_color(t.colors.muted)
             .text_size(t.typography.small)
+            .children(text.map(|text| status(t, text)))
             .children(chips),
     )
 }

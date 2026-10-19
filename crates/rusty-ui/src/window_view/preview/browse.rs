@@ -1,6 +1,7 @@
 use gpui_kit::FocusHandle;
 use rusty_core::Command;
 
+use super::contents::Place;
 use super::folder::FolderPreview;
 use super::spot::{Fold, Spot};
 use super::{Preview, Shown};
@@ -17,6 +18,11 @@ gpui_kit::actions!(
         BrowseFold,
         BrowseUnfold,
         BrowseOpen,
+        BrowseGoTo,
+        BrowseParent,
+        BrowseUnfoldAll,
+        BrowseFoldAll,
+        BrowseMark,
         BrowseView,
         LeaveBrowse,
         LeaveAndSwitch,
@@ -104,13 +110,13 @@ impl FerriteWindow {
         };
         folder.spot = Some(pick.spot);
         if pick.clicks >= 2 {
-            self.browse_open(window, cx);
+            self.preview_into(window, cx);
         } else {
             self.enter_browse(window, cx);
         }
     }
 
-    fn browse_step(&mut self, delta: isize, cx: &mut Context<Self>) {
+    pub(super) fn browse_step(&mut self, delta: isize, cx: &mut Context<Self>) {
         if let Some(folder) = self.preview.folder_mut() {
             folder.step_by(delta);
             cx.notify();
@@ -133,8 +139,16 @@ impl FerriteWindow {
         }
     }
 
-    fn browse_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(place) = self.preview.folder().and_then(FolderPreview::place) else {
+    fn browse_go_to(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let place = match &self.preview.shown {
+            Some(Shown::File(file)) => Some(Place {
+                folder: file.target.folder.clone(),
+                name: file.target.name(),
+                is_folder: false,
+            }),
+            _ => self.preview.folder().and_then(FolderPreview::place),
+        };
+        let Some(place) = place else {
             return;
         };
         if !place.is_folder {
@@ -174,8 +188,17 @@ impl FerriteWindow {
             .on_action(cx.listener(|this, _: &BrowseFold, _, cx| this.browse_fold(false, cx)))
             .on_action(cx.listener(|this, _: &BrowseUnfold, _, cx| this.browse_fold(true, cx)))
             .on_action(cx.listener(|this, _: &BrowseOpen, window, cx| {
-                this.browse_open(window, cx);
+                this.preview_into(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &BrowseGoTo, window, cx| {
+                this.browse_go_to(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &BrowseParent, window, cx| {
+                this.preview_up(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &BrowseUnfoldAll, _, cx| this.fold_below(true, cx)))
+            .on_action(cx.listener(|this, _: &BrowseFoldAll, _, cx| this.fold_below(false, cx)))
+            .on_action(cx.listener(|this, _: &BrowseMark, _, cx| this.browse_mark(cx)))
             .on_action(cx.listener(|this, _: &BrowseView, window, cx| {
                 this.browse_view(window, cx);
             }))

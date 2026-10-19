@@ -7,6 +7,8 @@ mod follow;
 mod frame;
 mod header;
 mod inbox;
+mod marks;
+mod nest;
 mod scan;
 mod sheet;
 mod spot;
@@ -63,6 +65,7 @@ pub(in crate::window_view) struct Preview {
     is_stale: bool,
     wait: Option<Task<()>>,
     shown: Option<Shown>,
+    trail: Vec<nest::Crumb>,
     reads: IoQueue,
     scans: Arc<IoQueue>,
     inbox: inbox::Inbox,
@@ -81,6 +84,7 @@ impl Preview {
             is_stale: false,
             wait: None,
             shown: None,
+            trail: Vec::new(),
             reads: IoQueue::new(),
             scans: Arc::new(IoQueue::new()),
             inbox: inbox::Inbox::new(wake),
@@ -119,6 +123,8 @@ impl FerriteWindow {
         self.preview.sheet.update(cx, |sheet, cx| sheet.close(cx));
         self.preview.wait = None;
         self.preview.seen = None;
+        self.preview.trail.clear();
+        self.preview.clear_marks();
         self.preview.stop_loading();
     }
 
@@ -140,6 +146,9 @@ impl FerriteWindow {
             (Some(next), Some(seen)) if next.same_place(seen)
         );
         self.preview.seen = key;
+        if is_same_place && !self.preview.trail.is_empty() {
+            return;
+        }
         if !is_same_place {
             self.preview.stop_loading();
         }
@@ -158,14 +167,16 @@ impl FerriteWindow {
             return;
         }
         self.preview.is_stale = false;
+        self.preview.trail.clear();
         let was_browsing = self.preview.is_browsing(window, cx);
         let same_folder = self.preview.folder_mut().filter(|folder| {
             target
                 .as_ref()
                 .is_some_and(|target| target.location == folder.target.location)
         });
-        let (carried, scan) = same_folder.map_or((None, None), |folder| {
-            (folder.carry(), folder.scan.take_session())
+        let (carried, scan, marks) = same_folder.map_or((None, None, None), |folder| {
+            let marks = std::mem::take(&mut folder.marks);
+            (folder.carry(), folder.scan.take_session(), Some(marks))
         });
         let shown = match target {
             None => Shown::Empty,
@@ -174,6 +185,7 @@ impl FerriteWindow {
                 if let Some(carry) = carried {
                     folder.adopt(carry);
                 }
+                folder.marks = marks.unwrap_or_default();
                 Shown::Folder(Box::new(folder))
             }
             Some(target) => Shown::File(Box::new(self.start_file(target, window, cx))),

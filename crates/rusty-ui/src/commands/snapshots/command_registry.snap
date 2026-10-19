@@ -31,7 +31,12 @@ preview.cursor_up | Up | PreviewBrowse
 preview.cursor_down | Down | PreviewBrowse
 preview.fold | Fold folder | PreviewBrowse
 preview.unfold | Unfold folder | PreviewBrowse
-preview.open | Open | PreviewBrowse
+preview.unfold_all | Unfold everything below | PreviewBrowse
+preview.fold_all | Fold everything below | PreviewBrowse
+preview.open | Open in preview | PreviewBrowse
+preview.go_to | Open in pane | PreviewBrowse
+preview.open_parent | Up one folder | PreviewBrowse
+preview.toggle_mark | Mark and count | PreviewBrowse
 preview.view | View file | PreviewBrowse
 preview.leave | Close preview | PreviewBrowse
 preview.leave_and_switch | Leave preview, switch pane | PreviewBrowse

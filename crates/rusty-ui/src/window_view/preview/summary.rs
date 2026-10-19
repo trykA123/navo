@@ -145,12 +145,32 @@ pub(in crate::window_view) struct Picks {
     pub view: WeakEntity<FerriteWindow>,
     pub spot: Option<Spot>,
     pub is_browsing: bool,
+    pub marked: Vec<usize>,
+}
+
+fn largest_name(t: &Theme, name: &str, is_marked: bool) -> Div {
+    div()
+        .flex_none()
+        .font_weight(FontWeight::SEMIBOLD)
+        .when(is_marked, |name| name.text_color(t.colors.mark))
+        .child(name.to_owned())
+}
+
+fn largest_size(t: &Theme, bytes: u64, is_marked: bool) -> Div {
+    div()
+        .flex_none()
+        .when(is_marked, |size| {
+            size.text_color(t.colors.mark)
+                .font_weight(FontWeight::SEMIBOLD)
+        })
+        .child(format::size(bytes))
 }
 
 fn largest_row(t: &Theme, (rank, file): (usize, &LargeFile), picks: &Picks) -> impl IntoElement {
     let cut = file.path.rfind(['\\', '/']).map_or(0, |at| at + 1);
     let (folder, name) = file.path.split_at(cut);
     let is_spot = picks.spot == Some(Spot::Largest(rank));
+    let is_marked = picks.marked.contains(&rank);
     let row = div()
         .id(("preview-largest", rank))
         .aria_label(file.path.clone())
@@ -189,14 +209,9 @@ fn largest_row(t: &Theme, (rank, file): (usize, &LargeFile), picks: &Picks) -> i
                         .text_color(t.colors.muted)
                         .child(folder.to_owned()),
                 )
-                .child(
-                    div()
-                        .flex_none()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(name.to_owned()),
-                ),
+                .child(largest_name(t, name, is_marked)),
         )
-        .child(div().flex_none().child(format::size(file.bytes)));
+        .child(largest_size(t, file.bytes, is_marked));
     Mark::of(is_spot, picks.is_browsing).paint(row, t)
 }
 

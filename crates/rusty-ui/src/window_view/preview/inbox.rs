@@ -1,5 +1,6 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 
+use rusty_core::Location;
 use rusty_fs::{FsEntry, LiveSnapshot};
 use rusty_structured::NodeId;
 
@@ -14,6 +15,10 @@ pub(super) enum Arrival {
     Snapshot {
         run: u64,
         snapshot: LiveSnapshot,
+    },
+    Counted {
+        location: Location,
+        bytes: u64,
     },
 }
 
