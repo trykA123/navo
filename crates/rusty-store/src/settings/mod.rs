@@ -14,16 +14,20 @@ mod model;
 mod parse;
 mod pending;
 mod saving;
+mod view;
 
 pub use complete::DefaultChange;
 use complete::{Ledger, reconcile};
 pub use edit::{SettingValue, key_line, section_line};
 
 pub use model::{
-    Appearance, Automotive, AutomotiveView, Density, Editor, Files, HiddenFiles, ModifierHints,
-    SelectionSettings, Settings, SortKey, Terminal, ThemeMode, ViewPreset,
+    Appearance, Density, Editor, Files, HiddenFiles, ModifierHints, SelectionSettings, Settings,
+    SortKey, Terminal, ThemeMode,
 };
 pub use parse::{parse, to_toml};
+pub use view::{
+    Automotive, AutomotiveView, ImageView, ImageViewer, TextView, TextViewer, ViewPreset,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SettingsError {

@@ -509,3 +509,23 @@ fn a_nested_key_saved_without_its_section_adds_no_empty_parent_header() {
     );
     assert!(store.current().automotive.view.inspector);
 }
+
+#[test]
+fn keeping_a_text_part_writes_its_key_and_keeps_comments() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "# mine\n[text.view]\nline-numbers = true # gutter\nline-ends = false\n",
+    );
+    let (mut store, _) = SettingsStore::load(&path);
+    store
+        .save_preserving_edits("text.view.line-ends", Some(SettingValue::Bool(true)))
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text,
+        "# mine\n[text.view]\nline-numbers = true # gutter\nline-ends = true\n"
+    );
+    assert!(store.current().text.view.line_ends);
+}

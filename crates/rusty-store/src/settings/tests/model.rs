@@ -88,3 +88,25 @@ fn the_automotive_view_reads_its_own_table() {
     assert_eq!(settings.automotive.view.preset, crate::ViewPreset::Custom);
     assert!(settings.automotive.view.inspector && settings.automotive.view.row_bars);
 }
+
+#[test]
+fn the_text_view_shows_line_numbers_and_hides_line_ends_by_default() {
+    let view = Settings::default().text.view;
+    assert!(view.line_numbers);
+    assert!(!view.line_ends);
+}
+
+#[test]
+fn the_image_view_starts_without_details() {
+    assert!(!Settings::default().image.view.details);
+}
+
+#[test]
+fn the_text_and_image_views_read_their_own_tables() {
+    let text =
+        "[text.view]\nline-numbers = false\nline-ends = true\n\n[image.view]\ndetails = true\n";
+    let (settings, unknown) = crate::parse_settings(text).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert!(!settings.text.view.line_numbers && settings.text.view.line_ends);
+    assert!(settings.image.view.details);
+}

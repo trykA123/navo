@@ -28,6 +28,13 @@ provider = "windows-terminal"
 
 [editor]
 
+[text.view]
+line-numbers = true
+line-ends = false
+
+[image.view]
+details = false
+
 [automotive.view]
 preset = "simple"
 inspector = false
