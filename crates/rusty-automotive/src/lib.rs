@@ -4,6 +4,7 @@ mod elf;
 mod image;
 mod layout;
 mod lines;
+pub mod map;
 mod record;
 mod scan;
 mod source;
@@ -19,6 +20,7 @@ pub use elf::{
 };
 pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};
+pub use map::{MapFlavor, MapModel, MapProblem, index_map, sniff_map};
 pub use scan::{MAX_PIECES, index};
 pub use source::Source;
 pub use trace::{
