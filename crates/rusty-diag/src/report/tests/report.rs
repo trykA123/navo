@@ -78,6 +78,28 @@ fn memory_is_null_when_absent() {
 }
 
 #[test]
+fn report_serializes_every_dpi_awareness_mode() {
+    use crate::DpiAwareness;
+
+    for (awareness, expected) in [
+        (DpiAwareness::Unaware, "unaware"),
+        (DpiAwareness::System, "system"),
+        (DpiAwareness::PerMonitor, "per-monitor"),
+        (DpiAwareness::PerMonitorV2, "per-monitor-v2"),
+        (DpiAwareness::default(), "unknown"),
+    ] {
+        let mut input = input();
+        input.system.dpi_awareness = awareness;
+        let written = write(&input);
+        assert_eq!(
+            report_json(&written.path)["system"]["dpi_awareness"],
+            expected
+        );
+        assert!(summary_text(&written.path).contains("DPI awareness"));
+    }
+}
+
+#[test]
 fn events_are_parsed_as_json() {
     let written = write(&input());
     let report = report_json(&written.path);

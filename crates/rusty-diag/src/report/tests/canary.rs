@@ -94,6 +94,7 @@ fn session_input(events: Vec<Arc<str>>, redaction_misses: u64) -> ReportInput {
             ram_bytes: 17_179_869_184,
             gpu: r"integrated, driver C:\Users\canary-user-7731\gpu".to_owned(),
             scale: 1.25,
+            dpi_awareness: crate::DpiAwareness::PerMonitorV2,
         },
         settings_changed: vec![
             (

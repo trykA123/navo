@@ -22,7 +22,7 @@ pub(super) fn summary_text(input: &ReportInput) -> String {
     let mut text = String::from("Ferrite diagnostic report (report.json)\n\n");
     let lines = [
         "Build: version and commit.".to_owned(),
-        "System: OS, CPU count, RAM, GPU and display scale.".to_owned(),
+        "System: OS, CPU count, RAM, GPU, display scale and DPI awareness.".to_owned(),
         format!(
             "Configuration: {} changed settings.",
             input.settings_changed.len()

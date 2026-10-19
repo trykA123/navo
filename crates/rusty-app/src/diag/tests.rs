@@ -100,6 +100,12 @@ fn the_input_names_this_build() {
     assert!(!input.build.commit.is_empty());
 }
 
+#[cfg(not(windows))]
+#[test]
+fn dpi_awareness_is_unknown_without_windows() {
+    assert_eq!(report_input().system.dpi_awareness, DpiAwareness::Unknown);
+}
+
 #[test]
 fn the_report_holds_build_system_memory_and_timing() {
     let dir = tempfile::tempdir().unwrap();
