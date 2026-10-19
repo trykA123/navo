@@ -240,3 +240,13 @@ fn a_low_cursor_row_moves_above_the_drawer_and_back(cx: &mut TestAppContext) {
     assert_eq!(after.row, before.row);
     assert_eq!(after.scroll, before.scroll);
 }
+
+#[gpui_kit::test]
+fn commands_without_a_handler_are_left_out_of_the_drawer(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, Rc::default());
+    hold_open(cx, window);
+    assert!(has_entry(cx, window, "hint-files.refresh"));
+    assert!(has_entry(cx, window, "hint-tab.go_to_first"));
+    assert!(!has_entry(cx, window, "hint-app.command_palette"));
+    assert!(!has_entry(cx, window, "hint-window.new"));
+}

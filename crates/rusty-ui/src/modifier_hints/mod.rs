@@ -3,6 +3,7 @@ mod drawer;
 mod groups;
 mod hold;
 mod layer;
+mod runs;
 
 #[cfg(test)]
 mod tests;
@@ -12,7 +13,7 @@ use gpui_kit::Pixels;
 pub use combo::Combo;
 pub use drawer::{HintsDrawer, TurnOff, drawer_height};
 pub use hold::{Arm, Delay, Hold};
-pub use layer::{Entry, Group, Layer, key_cap, layer_in};
+pub use layer::{Entry, Group, Layer, key_cap, layer_in, layer_where};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum HintsMode {

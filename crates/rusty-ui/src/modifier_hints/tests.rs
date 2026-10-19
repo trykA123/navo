@@ -54,14 +54,13 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
             "files.sort_by_size"
         ]
     );
-    assert_eq!(layer.count(), 28);
-    assert_eq!(layer.rows(), 13);
+    assert_eq!(layer.count(), 19);
 }
 
 #[test]
 fn the_alt_and_shift_layers_map_their_commands_to_groups() {
     let alt = layer_in(Keymap::builtin(), Combo::ALT);
-    assert_eq!(names(&alt), ["Pane", "Navigation", "Window"]);
+    assert_eq!(names(&alt), ["Pane", "Navigation"]);
     assert_eq!(
         commands(&group(&alt, "Navigation").entries),
         ["pane.go_back", "pane.go_forward"]
@@ -82,7 +81,7 @@ fn the_alt_and_shift_layers_map_their_commands_to_groups() {
 #[test]
 fn a_command_without_a_group_goes_to_other() {
     let keymap = user("[[bind]]\ncommand = \"workspace.list\"\nkeys = [\"ctrl-alt-w\"]\n");
-    let layer = layer_in(&keymap, Combo::new(true, true, false));
+    let layer = layer_where(&keymap, Combo::new(true, true, false), &|_| true);
     assert_eq!(names(&layer), ["Other"]);
     assert_eq!(layer.groups[0].entries[0].label, "Workspaces");
 }
@@ -319,4 +318,58 @@ fn drawer_text_reads_at_aa_in_both_themes() {
             assert!(ratio >= 4.5, "{mode:?} {name}: {ratio}");
         }
     }
+}
+
+fn labels(entries: &[Entry]) -> Vec<String> {
+    entries
+        .iter()
+        .map(|entry| entry.label.to_string())
+        .collect()
+}
+
+#[test]
+fn a_numbered_run_folds_into_one_row() {
+    let layer = layer_in(Keymap::builtin(), Combo::CTRL);
+    let tabs = &group(&layer, "Tabs").entries;
+    assert_eq!(
+        labels(tabs),
+        [
+            "New tab",
+            "Close tab",
+            "Next tab",
+            "Previous tab",
+            "Go to tab 1–8",
+            "Go to last tab"
+        ]
+    );
+    let run = tabs
+        .iter()
+        .find(|e| e.label == "Go to tab 1–8")
+        .expect("run");
+    assert_eq!(run.keys, ["1–8"]);
+    assert_eq!(layer.rows(), 6);
+}
+
+#[test]
+fn a_run_broken_by_a_rebind_lists_its_members() {
+    let keymap = user("[[bind]]\ncommand = \"tab.go_to_fourth\"\nkeys = [\"ctrl-0\"]\n");
+    let layer = layer_in(&keymap, Combo::CTRL);
+    let tabs = labels(&group(&layer, "Tabs").entries);
+    assert!(!tabs.iter().any(|label| label.contains('–')), "{tabs:?}");
+    assert!(tabs.contains(&"Go to tab 1".to_owned()));
+    assert!(tabs.contains(&"Go to tab 4".to_owned()));
+}
+
+#[test]
+fn a_command_without_a_handler_is_left_out() {
+    let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
+    let window = &group(&ctrl, "Window").entries;
+    assert!(!commands(window).contains(&"app.command_palette"));
+    assert!(!commands(window).contains(&"window.new"));
+    let alt = layer_in(Keymap::builtin(), Combo::ALT);
+    assert!(alt.groups.iter().all(|group| group.name != "Window"));
+    let wired = layer_where(Keymap::builtin(), Combo::CTRL, &|spec| {
+        spec.name != "files.paste" && spec.action.is_some()
+    });
+    assert!(!commands(&group(&wired, "Clipboard").entries).contains(&"files.paste"));
 }

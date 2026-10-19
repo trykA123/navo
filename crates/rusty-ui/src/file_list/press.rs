@@ -148,7 +148,7 @@ impl ListContext {
         let row_height = t.spacing.row_height;
         let top = row_number(state.scroll.top_row(row_height));
         let below = self.props.view.cursor.saturating_sub(top) + 1;
-        let y = list.origin.y + row_height * (below as f32);
+        let y = list.origin.y - state.lift + row_height * (below as f32);
         let name = t.spacing.xs + t.spacing.lg + check_column(t) + t.spacing.md;
         point(list.origin.x + name, y.min(list.bottom()))
     }

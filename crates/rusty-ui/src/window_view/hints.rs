@@ -1,10 +1,10 @@
 use gpui_kit::{AnyWindowHandle, Modifiers, Subscription, Task};
 
 use super::FerriteWindow;
-use crate::commands::active;
+use crate::commands::{CommandSpec, active};
 use crate::fkey_bar::KeyLayer;
 use crate::modifier_hints::{
-    Arm, Combo, Cover, Delay, HintsDrawer, HintsMode, Hold, Layer, drawer_height, layer_in,
+    Arm, Combo, Cover, Delay, HintsDrawer, HintsMode, Hold, Layer, drawer_height, layer_where,
 };
 use crate::prelude::*;
 use crate::settings::{Change, Field};
@@ -92,7 +92,13 @@ impl FerriteWindow {
             .hold
             .shown()
             .filter(|_| self.hints_allowed(window))?;
-        Some(layer_in(active(cx), combo))
+        let focus = self.focus.get(&self.browser.state().focused_pane())?;
+        let is_handled = |spec: &CommandSpec| {
+            spec.action
+                .and_then(|name| cx.build_action(name, None).ok())
+                .is_some_and(|action| window.is_action_available_in(action.as_ref(), focus))
+        };
+        Some(layer_where(active(cx), combo, &is_handled))
     }
 
     pub(super) fn hint_cover(&self, window: &Window, cx: &App) -> Option<Cover> {

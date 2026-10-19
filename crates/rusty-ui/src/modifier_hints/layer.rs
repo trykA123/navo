@@ -2,7 +2,8 @@ use gpui_kit::{Keystroke, SharedString};
 
 use super::combo::Combo;
 use super::groups::{ORDER, place_of};
-use crate::commands::{Bind, GLOBAL, Keymap};
+use super::runs::folded;
+use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap};
 
 const CONTEXTS: [&str; 3] = [GLOBAL, "FerritePane", "FileList"];
 
@@ -26,7 +27,7 @@ const CAPS: [(&str, &str); 14] = [
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Entry {
     pub command: &'static str,
-    pub label: &'static str,
+    pub label: SharedString,
     pub keys: Vec<SharedString>,
 }
 
@@ -85,12 +86,14 @@ fn caps_on(bind: &Bind, combo: Combo) -> Vec<SharedString> {
         .collect()
 }
 
-fn entries(keymap: &Keymap, combo: Combo) -> Vec<Entry> {
+pub type IsHandled<'a> = &'a dyn Fn(&CommandSpec) -> bool;
+
+fn entries(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<Entry> {
     let mut entries: Vec<Entry> = Vec::new();
     let binds = keymap
         .binds()
         .iter()
-        .filter(|bind| CONTEXTS.contains(&bind.context.as_str()));
+        .filter(|bind| CONTEXTS.contains(&bind.context.as_str()) && is_handled(&bind.spec));
     for bind in binds {
         let caps = caps_on(bind, combo);
         if caps.is_empty() {
@@ -100,7 +103,7 @@ fn entries(keymap: &Keymap, combo: Combo) -> Vec<Entry> {
         let Some(entry) = entries.iter_mut().find(|entry| entry.command == name) else {
             entries.push(Entry {
                 command: name,
-                label: bind.spec.label,
+                label: bind.spec.label.into(),
                 keys: caps,
             });
             continue;
@@ -116,7 +119,7 @@ fn entries(keymap: &Keymap, combo: Combo) -> Vec<Entry> {
         });
     }
     entries.sort_by_key(|entry| place_of(entry.command));
-    entries
+    folded(entries)
 }
 
 fn grouped(entries: Vec<Entry>) -> Vec<Group> {
@@ -136,12 +139,17 @@ fn grouped(entries: Vec<Entry>) -> Vec<Group> {
 
 #[must_use]
 pub fn layer_in(keymap: &Keymap, combo: Combo) -> Layer {
+    layer_where(keymap, combo, &|spec| spec.action.is_some())
+}
+
+#[must_use]
+pub fn layer_where(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Layer {
     let is_ctrl = combo == Combo::CTRL;
     Layer {
         combo,
-        groups: grouped(entries(keymap, combo)),
+        groups: grouped(entries(keymap, combo, is_handled)),
         more: if is_ctrl {
-            entries(keymap, combo.with_shift())
+            entries(keymap, combo.with_shift(), is_handled)
         } else {
             Vec::new()
         },

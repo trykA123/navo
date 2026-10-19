@@ -183,7 +183,7 @@ fn entry_label(t: &Theme, entry: &Entry, is_more: bool) -> impl IntoElement + us
         .aria_label(spoken)
         .test_support()
         .min_w_0()
-        .child(div().min_w_0().truncate().child(entry.label))
+        .child(div().min_w_0().truncate().child(entry.label.clone()))
 }
 
 fn column(t: &Theme, column: &Column) -> impl IntoElement + use<> {
