@@ -48,11 +48,18 @@ impl MapView {
         self.cursor = row.min(self.rows.len().saturating_sub(1));
         self.scroll.scroll_to(self.cursor);
         self.note = None;
-        self.inspection = self
-            .loaded()
-            .zip(self.selected())
-            .and_then(|(loaded, at)| facts::inspect(loaded, self.table(), at));
+        self.refresh_inspection(cx);
         cx.notify();
+    }
+
+    fn refresh_inspection(&mut self, cx: &Context<Self>) {
+        self.inspection = if self.inspector.read(cx).is_open() {
+            self.loaded()
+                .zip(self.selected())
+                .and_then(|(loaded, at)| facts::inspect(loaded, self.table(), at))
+        } else {
+            None
+        };
     }
 
     fn move_by(&mut self, by: i64, cx: &mut Context<Self>) {
@@ -147,6 +154,7 @@ impl MapView {
                 sheet.open(cx);
             }
         });
+        self.refresh_inspection(cx);
         cx.notify();
     }
 

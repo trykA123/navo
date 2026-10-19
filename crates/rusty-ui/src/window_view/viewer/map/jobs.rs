@@ -47,7 +47,7 @@ pub(super) fn start_index(host: &Host, len: u64, cx: &mut Context<MapView>) -> J
 }
 
 impl MapView {
-    fn index_message(&mut self, message: IndexMessage, cx: &mut Context<Self>) {
+    pub(super) fn index_message(&mut self, message: IndexMessage, cx: &mut Context<Self>) {
         match message {
             IndexMessage::Progress(done) => self.scanned = done,
             IndexMessage::Parsed(Ok((loaded, rows))) => {
@@ -55,6 +55,9 @@ impl MapView {
                 self.index = Index::Ready(loaded);
                 self.rows = Arc::new(rows);
                 self.move_cursor(0, cx);
+                if self.query != Query::default() {
+                    self.run_select(cx);
+                }
             }
             IndexMessage::Parsed(Err(error)) => {
                 self.index = Index::Failed(error.to_string().into());
@@ -94,6 +97,7 @@ impl MapView {
         match kept.and_then(|kept| self.rows.iter().position(|at| *at == kept)) {
             Some(row) => self.move_cursor(row, cx),
             None => {
+                self.go_address = None;
                 self.move_cursor(0, cx);
                 self.scroll.scroll_to_top(0);
             }

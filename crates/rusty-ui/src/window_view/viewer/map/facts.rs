@@ -36,14 +36,10 @@ fn holds(start: u64, size: u64, address: u64) -> bool {
 
 fn section_parts(loaded: &Loaded, section: &OutputSection) -> (Vec<Part>, usize) {
     let mut parts: Vec<Part> = loaded
-        .model
-        .contributions
-        .iter()
+        .contributions_to(&section.name)
         .filter(|part| {
-            part.output_section == section.name
-                && part
-                    .address
-                    .is_none_or(|at| holds(section.address, section.size, at))
+            part.address
+                .is_none_or(|at| holds(section.address, section.size, at))
         })
         .map(|part| Part {
             object: part.object_file.clone(),
@@ -65,11 +61,9 @@ fn symbol_home(loaded: &Loaded, symbol: &Symbol) -> (Option<String>, Option<Part
     let Some(section) = section else {
         return (symbol.section.clone(), None);
     };
-    let held_by = loaded.model.contributions.iter().find(|part| {
-        part.output_section == section.name
-            && part
-                .address
-                .is_some_and(|at| holds(at, part.size, symbol.address))
+    let held_by = loaded.contributions_to(&section.name).find(|part| {
+        part.address
+            .is_some_and(|at| holds(at, part.size, symbol.address))
     });
     let held_by = held_by.map(|part| Part {
         object: part.object_file.clone(),

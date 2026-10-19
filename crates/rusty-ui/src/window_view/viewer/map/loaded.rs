@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, HashMap};
 
-use rusty_automotive::map::MapModel;
+use rusty_automotive::map::{Contribution, MapModel};
 
 pub(super) const TOP_OBJECTS: usize = 10;
 
 type TopObjects = HashMap<String, Vec<(String, u64)>>;
+type BySection = HashMap<String, Vec<usize>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ObjectRow {
@@ -31,6 +32,7 @@ pub(super) struct Loaded {
     pub regions: Vec<RegionRow>,
     pub objects: Vec<ObjectRow>,
     pub top_objects: TopObjects,
+    by_section: BySection,
     pub spaces: Vec<Option<String>>,
     pub has_origins: bool,
 }
@@ -65,6 +67,17 @@ fn merge_objects(model: &MapModel) -> (Vec<ObjectRow>, TopObjects) {
     (objects, per_region)
 }
 
+fn by_section(model: &MapModel) -> BySection {
+    let mut by_section = BySection::new();
+    for (at, part) in model.contributions.iter().enumerate() {
+        by_section
+            .entry(part.output_section.clone())
+            .or_default()
+            .push(at);
+    }
+    by_section
+}
+
 fn spaces(model: &MapModel) -> Vec<Option<String>> {
     let mut spaces: Vec<Option<String>> = Vec::new();
     for symbol in &model.symbols {
@@ -91,10 +104,16 @@ impl Loaded {
             regions,
             objects,
             top_objects,
+            by_section: by_section(&model),
             spaces: spaces(&model),
             has_origins: model.regions.iter().any(|region| region.origin.is_some()),
             model,
         }
+    }
+
+    pub(super) fn contributions_to(&self, section: &str) -> impl Iterator<Item = &Contribution> {
+        let indexes = self.by_section.get(section).map_or(&[][..], Vec::as_slice);
+        indexes.iter().map(|at| &self.model.contributions[*at])
     }
 
     pub(super) fn used(&self) -> u64 {

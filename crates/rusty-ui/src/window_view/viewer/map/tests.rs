@@ -7,6 +7,9 @@ use super::loaded::Loaded;
 use super::scope::Scope;
 use super::select::{Column, Query, Table, select};
 use super::text::{INCONSISTENT, LOSSY, MAU, address, percent, span, status};
+use super::{MapBody, MapView};
+use crate::window_view::FerriteWindow;
+use gpui_kit::{Entity, TestAppContext};
 
 pub(in crate::window_view::viewer) const SAMPLE: &str = "\
 TASKING VX-toolset for TriCore linker map file
@@ -322,7 +325,7 @@ fn each_kind_of_problem_has_its_own_status_entry() {
     let model = index_map(bytes.as_slice(), &AtomicBool::new(false), &mut |_| {}).expect("map");
     let all = texts(&Loaded::new(model));
     assert_eq!(
-        all[5..9],
+        all[..4],
         [
             "some text was not valid UTF-8 and was decoded lossily",
             "1 address space with a unit other than 8 bit skipped",
@@ -408,4 +411,46 @@ fn the_origin_column_shows_only_when_the_map_gives_an_origin() {
             "1.4%"
         ]
     );
+}
+
+pub(in crate::window_view::viewer) struct Probe {
+    pub nav_cursor: usize,
+    pub has_inspection: bool,
+}
+
+fn map_view(cx: &mut TestAppContext, window: &Entity<FerriteWindow>) -> Entity<MapView> {
+    window.read_with(cx, |window, _| {
+        let body = window
+            .viewer
+            .as_ref()
+            .and_then(|viewer| viewer.body.as_ref());
+        body.and_then(|body| body.as_any().downcast_ref::<MapBody>())
+            .expect("a map body")
+            .0
+            .clone()
+    })
+}
+
+pub(in crate::window_view::viewer) fn probe(
+    cx: &mut TestAppContext,
+    window: &Entity<FerriteWindow>,
+) -> Probe {
+    let map = map_view(cx, window);
+    map.read_with(cx, |map, _| Probe {
+        nav_cursor: map.nav_cursor,
+        has_inspection: map.inspection.is_some(),
+    })
+}
+
+pub(in crate::window_view::viewer) fn sort_by_size_then_finish_parsing(
+    cx: &mut TestAppContext,
+    window: &Entity<FerriteWindow>,
+) {
+    let map = map_view(cx, window);
+    map.update(cx, |map, cx| {
+        let loaded = map.loaded().expect("loaded").clone();
+        map.query.sort_by(Column::Size);
+        let rows = select(&loaded, &Query::default(), &AtomicBool::new(false)).expect("rows");
+        map.index_message(super::jobs::IndexMessage::Parsed(Ok((loaded, rows))), cx);
+    });
 }

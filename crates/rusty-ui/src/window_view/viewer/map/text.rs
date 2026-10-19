@@ -187,7 +187,8 @@ fn problem_checks(model: &MapModel) -> Vec<Check> {
 pub(super) fn status(loaded: &Loaded) -> Vec<Check> {
     let model = &loaded.model;
     let count = |n: usize, one, many| format::count(n as u64, one, many);
-    let mut checks = vec![
+    let mut checks = problem_checks(model);
+    checks.extend([
         check(flavor(model.flavor).to_owned(), false),
         check(count(model.regions.len(), "region", "regions"), false),
         check(count(model.sections.len(), "section", "sections"), false),
@@ -200,8 +201,7 @@ pub(super) fn status(loaded: &Loaded) -> Vec<Check> {
             ),
             false,
         ),
-    ];
-    checks.extend(problem_checks(model));
+    ]);
     if model.skipped_sections > 0 {
         let parts = format::count(model.skipped_sections, "other part", "other parts");
         checks.push(check(format!("{parts} not shown"), false));

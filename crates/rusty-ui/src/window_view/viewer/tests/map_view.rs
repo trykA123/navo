@@ -8,7 +8,7 @@ use super::structured::open_named;
 use super::{Setup, has_editor, label, redraw, text_of, visible};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, settle, type_in};
-use crate::window_view::viewer::map::tests::SAMPLE;
+use crate::window_view::viewer::map::tests::{SAMPLE, probe, sort_by_size_then_finish_parsing};
 
 fn settle_motion(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<FerriteWindow>) {
     cx.executor().advance_clock(Duration::from_secs(1));
@@ -394,4 +394,73 @@ fn alt_1_shows_the_text_and_alt_5_brings_the_map_back(cx: &mut TestAppContext) {
     keys(cx, window, &view, &["alt-5"]);
     assert!(visible(cx, window, "map-status"));
     assert!(!has_editor(cx, &view));
+}
+
+#[gpui_kit::test]
+fn a_sort_chosen_while_the_map_loads_orders_the_rows_when_it_is_ready(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    sort_by_size_then_finish_parsing(cx, &view);
+    settle_motion(cx, window, &view);
+    assert_eq!(first_cell(row(cx, window, 0)), "mpe:pflash1");
+}
+
+#[gpui_kit::test]
+fn a_go_to_note_goes_when_the_filter_moves_the_cursor_to_another_symbol(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "0x80000344");
+    press(cx, window, &view, "enter");
+    settle_motion(cx, window, &view);
+    assert!(inspector_text(cx, window).contains("Went to 0x80000344"));
+    keys(cx, window, &view, &["t", "u", "n"]);
+    assert_eq!(text_of(cx, window, "map-cursor"), "tune_table · 0x80001000");
+    assert!(!inspector_text(cx, window).contains("Went to"));
+}
+
+#[gpui_kit::test]
+fn ctrl_g_puts_the_navigator_back_on_all(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    keys(
+        cx,
+        window,
+        &view,
+        &["ctrl-b", "down", "down", "enter", "escape"],
+    );
+    assert_eq!(probe(cx, &view).nav_cursor, 2);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "0x80000344");
+    press(cx, window, &view, "enter");
+    settle_motion(cx, window, &view);
+    assert_eq!(probe(cx, &view).nav_cursor, 0);
+}
+
+#[gpui_kit::test]
+fn the_inspection_is_computed_only_while_the_inspector_is_open(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    keys(cx, window, &view, &["down"]);
+    assert!(!probe(cx, &view).has_inspection);
+    keys(cx, window, &view, &["ctrl-i"]);
+    assert!(probe(cx, &view).has_inspection);
+    assert!(inspector_text(cx, window).contains("Length 65,536 B"));
+}
+
+#[gpui_kit::test]
+fn long_problems_keep_their_place_and_the_info_parts_give_way(cx: &mut TestAppContext) {
+    let mut text = SAMPLE.replace("| 896 | 64 | 0 |", "| 800 | 64 | 0 |");
+    text.push_str("+ Space mpe:wide (MAU = 16bit)\n| Name | Address |\n| bad | 0x1 |\n");
+    let (window, _) = open_text(cx, "broken.map", &text);
+    let (shown, parts) = cx
+        .update_window(window, |_, window, _| {
+            let parts: Vec<_> = (0..8usize)
+                .filter_map(|at| window.try_find(("map-status-part", at)))
+                .map(|part| part.bounds())
+                .collect();
+            (window.viewport_size().width, parts)
+        })
+        .expect("window");
+    assert_eq!(parts.len(), 8);
+    for part in parts {
+        assert!(part.right() <= shown, "{part:?} in a window {shown:?} wide");
+    }
+    assert!(text_of(cx, window, "map-status").starts_with("1 address space"));
 }

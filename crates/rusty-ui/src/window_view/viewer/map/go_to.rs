@@ -120,6 +120,7 @@ impl MapView {
         self.query.table = Table::Symbols;
         self.query.text.clear();
         self.query.scope = Scope::All;
+        self.nav_cursor = 0;
         self.rows = std::sync::Arc::new(Vec::new());
         self.run_select(cx);
     }

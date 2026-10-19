@@ -224,13 +224,16 @@ impl MapView {
                     t.colors.muted
                 };
                 div()
+                    .id(("map-status-part", at))
+                    .test_support()
                     .flex()
-                    .flex_none()
                     .gap(t.spacing.sm)
+                    .when(is_bad, |part| part.flex_none())
+                    .when(!is_bad, |part| part.min_w_0().overflow_hidden())
                     .when(at > 0, |part| {
-                        part.child(div().text_color(t.colors.faint).child("·"))
+                        part.child(div().flex_none().text_color(t.colors.faint).child("·"))
                     })
-                    .child(div().text_color(color).child(text))
+                    .child(div().min_w_0().truncate().text_color(color).child(text))
             });
         div()
             .id("map-status")
@@ -243,6 +246,7 @@ impl MapView {
             .gap(t.spacing.sm)
             .h(t.spacing.status_height)
             .px(t.spacing.xl)
+            .min_w_0()
             .overflow_hidden()
             .border_t_1()
             .border_color(t.colors.line)
