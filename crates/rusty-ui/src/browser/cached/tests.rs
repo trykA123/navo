@@ -10,10 +10,10 @@ use super::{Fetch, Fresh, Progress};
 use crate::browser::Browser;
 use crate::file_list::SortBy;
 
-mod gated;
+pub(in crate::browser) mod gated;
 mod kept;
 mod offline;
-mod stalled;
+pub(in crate::browser) mod stalled;
 
 fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();

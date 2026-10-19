@@ -30,6 +30,7 @@ mod hints;
 mod jobs;
 mod keymap;
 mod offline;
+mod prefetch;
 mod settings_layer;
 mod settings_news;
 mod settings_sheet;

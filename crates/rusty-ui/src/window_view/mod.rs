@@ -14,6 +14,7 @@ mod pane;
 mod path_edit;
 mod preview;
 mod prompt;
+mod rest;
 mod settings_news;
 mod settings_save;
 mod settings_sheet;
@@ -116,6 +117,7 @@ pub struct FerriteWindow {
     menu_focus: FocusHandle,
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
+    rest: rest::Rest,
     hints: hints::Hints,
     app_menu: Option<app_menu::OpenMenu>,
     app_menu_focus: FocusHandle,
@@ -134,7 +136,6 @@ pub struct FerriteWindow {
     start: Option<start_watch::Watching>,
     _activation: Subscription,
     _appearance: Subscription,
-    _watch: Subscription,
     _follow: Subscription,
 }
 
@@ -171,6 +172,7 @@ impl FerriteWindow {
             menu_focus: cx.focus_handle(),
             path_edit: None,
             waiting: waiting::Waiting::default(),
+            rest: rest::Rest::observe(cx),
             hints: hints::Hints::new(window, cx),
             app_menu: None,
             app_menu_focus: cx.focus_handle(),
@@ -189,7 +191,6 @@ impl FerriteWindow {
             start: options.start_watch.map(start_watch::Watching::built),
             _follow: cx.observe_in(&cx.entity(), window, Self::follow_cursor),
             _activation: cx.observe_window_activation(window, Self::activation_changed),
-            _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
         view.apply_theme(window, cx);
