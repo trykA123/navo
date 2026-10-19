@@ -6,12 +6,21 @@ use super::*;
 use crate::job::{JobContext, JobLog, JobOutcome, Progress, StepOutcome, run_job};
 use crate::{ProviderOps, existing_at, scan};
 
-fn child(folder: &Location, name: &str) -> Location {
+pub(super) fn child(folder: &Location, name: &str) -> Location {
     folder.join(&ProviderPath::from_text(name)).unwrap()
 }
 
 fn path(dir: &TempDir, name: &str) -> PathBuf {
     dir.path().join(name)
+}
+
+#[test]
+fn auto_tuning_defaults_match_the_copy_contract() {
+    let tuning = crate::AutoTuning::default();
+    assert_eq!(tuning.unbuffered_from, 256 * 1024 * 1024);
+    assert_eq!(tuning.ssd_workers, 4);
+    assert_eq!(tuning.network_workers, 8);
+    assert_eq!(tuning.slow_workers, 1);
 }
 
 #[test]
@@ -31,6 +40,7 @@ fn copy_file_writes_every_byte_and_reports_progress() {
     assert_eq!(written, 3_000_000);
     assert_eq!(fs::read(path(&dir, "b.bin")).unwrap(), data);
     assert_eq!(seen.last(), Some(&3_000_000));
+    assert!(seen.windows(2).all(|pair| pair[0] <= pair[1]));
 }
 
 #[test]
@@ -158,7 +168,7 @@ fn remove_file_removes_a_file() {
 }
 
 #[derive(Default)]
-struct Log(Vec<(u32, StepOutcome)>);
+pub(super) struct Log(Vec<(u32, StepOutcome)>);
 
 impl JobLog for Log {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
