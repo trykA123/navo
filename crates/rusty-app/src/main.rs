@@ -7,6 +7,7 @@
 
 mod app_menu;
 mod cli;
+mod clipboard;
 mod console;
 mod diag;
 mod drives;

@@ -16,6 +16,9 @@ files.open_parent | backspace | FileList
 pane.switch | tab | FileList
 files.copy | f5 | FileList
 files.move | f6 | FileList
+files.clipboard_copy | ctrl-c | FileList
+files.clipboard_cut | ctrl-x | FileList
+files.paste | ctrl-v | FileList
 files.recycle | f8 | FileList
 files.recycle | delete | FileList
 files.delete | shift-delete | FileList

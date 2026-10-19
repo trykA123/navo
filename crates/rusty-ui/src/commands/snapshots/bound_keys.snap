@@ -51,6 +51,8 @@ editor.leave_preview | escape | MarkdownPreview
 editor.leave_preview | f6 | MarkdownPreview
 editor.toggle_preview | ctrl-shift-v | Viewer
 files.clear_filter | escape | FileList
+files.clipboard_copy | ctrl-c | FileList
+files.clipboard_cut | ctrl-x | FileList
 files.context_menu | menu | FileList
 files.context_menu | shift-f10 | FileList
 files.copy | f5 | FileList
@@ -70,6 +72,7 @@ files.open | enter | FileList
 files.open_parent | backspace | FileList
 files.page_down | pagedown | FileList
 files.page_up | pageup | FileList
+files.paste | ctrl-v | FileList
 files.recycle | delete | FileList
 files.recycle | f8 | FileList
 files.refresh | ctrl-r | FileList

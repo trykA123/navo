@@ -124,6 +124,7 @@ impl FerriteWindow {
 
     pub(in crate::window_view) fn follow_cursor(
         &mut self,
+        _: Entity<Self>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {

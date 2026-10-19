@@ -83,6 +83,9 @@ impl PanePage {
                 .and_then(|entry| tab.location().join(&entry.name).ok()),
             FileListAction::SwitchPane
             | FileListAction::Operate(_)
+            | FileListAction::CopyToClipboard
+            | FileListAction::CutToClipboard
+            | FileListAction::Paste
             | FileListAction::Filter(_)
             | FileListAction::Rename(_)
             | FileListAction::NewFolder

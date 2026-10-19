@@ -19,6 +19,7 @@ mod app_menu_save;
 mod applied;
 mod cached;
 mod cards;
+pub(in crate::window_view) mod clipboard;
 mod delete_dialog;
 mod disk_start;
 mod drive_fs;
@@ -100,6 +101,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
+        file_clipboard: None,
         start_watch: None,
     }
 }
@@ -501,6 +503,7 @@ fn editor_window(
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
+        file_clipboard: None,
         start_watch: None,
     };
     let (window, view) = open_options(cx, options);
@@ -628,6 +631,7 @@ fn viewer_window(
         listing_cache: rusty_cache::ListingCache::default(),
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
+        file_clipboard: None,
         start_watch: None,
     };
     let (window, view) = open_options(cx, options);

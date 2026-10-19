@@ -1,4 +1,5 @@
 mod app_menu;
+mod clipboard;
 mod drive_menu;
 mod drives;
 mod editor;
@@ -45,6 +46,7 @@ use crate::tokens::{self, Mode};
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use app_menu::AppMenuHooks;
+pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{
@@ -89,6 +91,7 @@ pub struct StartOptions {
     pub listing_cache: ListingCache,
     pub cache_keys: CacheKeys,
     pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
+    pub file_clipboard: Option<Rc<dyn FileClipboardService>>,
     pub start_watch: Option<StartWatch>,
 }
 
@@ -123,6 +126,7 @@ pub struct FerriteWindow {
     preview: preview::Preview,
     job_ui: jobs::JobUi,
     keymap: user_keymap::KeymapState,
+    clipboard: clipboard::ClipboardState,
     start: Option<start_watch::Watching>,
     _activation: Subscription,
     _appearance: Subscription,
@@ -177,10 +181,9 @@ impl FerriteWindow {
             preview: preview::Preview::new(Self::waker(cx), cx),
             job_ui: jobs::JobUi::default(),
             keymap: user_keymap::KeymapState::default(),
+            clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             start: options.start_watch.map(start_watch::Watching::built),
-            _follow: cx.observe_in(&cx.entity(), window, |view, _, window, cx| {
-                view.follow_cursor(window, cx);
-            }),
+            _follow: cx.observe_in(&cx.entity(), window, Self::follow_cursor),
             _activation: cx.observe_window_activation(window, Self::activation_changed),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
@@ -241,6 +244,7 @@ impl FerriteWindow {
 
     fn wake(&mut self, cx: &mut Context<Self>) {
         let polled = self.browser.poll();
+        self.clear_finished_cuts();
         self.jobs_woke(cx);
         if self.poll_preview() || polled {
             cx.notify();
@@ -301,6 +305,7 @@ impl FerriteWindow {
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
         let _ = self.browser.command(command);
+        self.forget_clipboard_notice();
         self.focus_core_pane(window, cx);
         cx.notify();
     }

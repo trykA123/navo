@@ -25,6 +25,9 @@ gpui_kit::actions!(
         SwitchPane,
         CopyItems,
         MoveItems,
+        ClipboardCopy,
+        ClipboardCut,
+        Paste,
         RecycleItems,
         DeleteItems,
         GoBack,
@@ -82,6 +85,14 @@ fn mark<A: Action>(
     move |_, window, cx| ctx.mark_key(key, window, cx)
 }
 
+fn list_act<A: Action>(
+    ctx: &Rc<ListContext>,
+    action: FileListAction,
+) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    let ctx = ctx.clone();
+    move |_, window, cx| ctx.act(action, window, cx)
+}
+
 fn operate<A: Action>(
     ctx: &Rc<ListContext>,
     kind: OpKind,
@@ -116,7 +127,19 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
             let ctx = ctx.clone();
             move |_: &ClearFilter, window, cx| ctx.clear_filter(window, cx)
         });
-    register_more(root, ctx)
+    register_clipboard(register_more(root, ctx), ctx)
+}
+
+fn register_clipboard(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
+    root.on_action(list_act::<ClipboardCopy>(
+        ctx,
+        FileListAction::CopyToClipboard,
+    ))
+    .on_action(list_act::<ClipboardCut>(
+        ctx,
+        FileListAction::CutToClipboard,
+    ))
+    .on_action(list_act::<Paste>(ctx, FileListAction::Paste))
 }
 
 fn register_more(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {

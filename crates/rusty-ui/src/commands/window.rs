@@ -125,6 +125,17 @@ pub(super) const GROUPS: [Group; 7] = [
             ("file_list::CopyItems", "files.copy", "Copy"),
             ("file_list::MoveItems", "files.move", "Move"),
             (
+                "file_list::ClipboardCopy",
+                "files.clipboard_copy",
+                "Copy to clipboard",
+            ),
+            (
+                "file_list::ClipboardCut",
+                "files.clipboard_cut",
+                "Cut to clipboard",
+            ),
+            ("file_list::Paste", "files.paste", "Paste"),
+            (
                 "file_list::RecycleItems",
                 "files.recycle",
                 "Move to Recycle Bin",

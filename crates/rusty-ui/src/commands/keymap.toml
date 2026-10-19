@@ -200,6 +200,18 @@ command = "files.move"
 keys = ["f6"]
 
 [[bind]]
+command = "files.clipboard_copy"
+keys = ["ctrl-c"]
+
+[[bind]]
+command = "files.clipboard_cut"
+keys = ["ctrl-x"]
+
+[[bind]]
+command = "files.paste"
+keys = ["ctrl-v"]
+
+[[bind]]
 command = "files.recycle"
 keys = ["f8", "delete"]
 

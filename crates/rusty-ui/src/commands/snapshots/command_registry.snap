@@ -49,6 +49,9 @@ files.open_parent | Open parent folder | FileList
 pane.switch | Switch pane | FileList
 files.copy | Copy | FileList
 files.move | Move | FileList
+files.clipboard_copy | Copy to clipboard | FileList
+files.clipboard_cut | Cut to clipboard | FileList
+files.paste | Paste | FileList
 files.recycle | Move to Recycle Bin | FileList
 files.delete | Delete permanently | FileList
 pane.go_back | Back | FileList

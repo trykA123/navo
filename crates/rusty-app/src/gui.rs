@@ -17,7 +17,9 @@ use crate::cli::Start;
 use crate::startup::{
     home_location, initial_state, path_location, place_panes, save, session_folders,
 };
-use crate::{app_menu, drives, editor, files, jobs, keymap, launch, metrics, settings, shell_menu};
+use crate::{
+    app_menu, clipboard, drives, editor, files, jobs, keymap, launch, metrics, settings, shell_menu,
+};
 
 const START_READ: Duration = Duration::from_millis(50);
 const EXIT_WRITE: Duration = Duration::from_millis(300);
@@ -90,15 +92,20 @@ pub(crate) fn open(launch: Launch) {
             listing_cache: cache,
             cache_keys: keys,
             shell_menu: shell_menu::provider(),
+            file_clipboard: Some(clipboard::service()),
             start_watch: launch.start_watch,
         },
-        Rc::new(move || {
-            if let Some(disk) = &disk {
-                let _ = disk.close(EXIT_CLOSE);
-            }
-            launch.cleanup.on_quit();
-        }),
+        quitter(disk, launch.cleanup),
     );
+}
+
+fn quitter(disk: Option<DiskListings>, cleanup: crate::profile::Cleanup) -> Rc<dyn Fn()> {
+    Rc::new(move || {
+        if let Some(disk) = &disk {
+            let _ = disk.close(EXIT_CLOSE);
+        }
+        cleanup.on_quit();
+    })
 }
 
 fn finish_settings(

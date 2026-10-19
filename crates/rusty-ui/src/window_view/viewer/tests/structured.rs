@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -7,6 +8,7 @@ use rusty_fs::FakeFs;
 
 use super::{Log, Setup, editor_text, has_editor, hooks, label, press_only, redraw, text_of};
 use crate::window_view::FerriteWindow;
+use crate::window_view::tests::clipboard::FakeClipboard;
 use crate::window_view::tests::{press, settle};
 use crate::window_view::viewer::{FileHooks, Kinds, PagedKind};
 
@@ -314,4 +316,27 @@ fn a_short_row_fetch_is_not_asked_again_on_every_frame(cx: &mut TestAppContext) 
         settle(cx, &view);
     }
     assert!(reads(&log).is_empty(), "{:?}", reads(&log));
+}
+
+#[gpui_kit::test]
+fn ctrl_c_in_the_table_viewer_copies_the_cell_not_the_file(cx: &mut TestAppContext) {
+    let files = Rc::new(FakeClipboard::default());
+    let shared: Rc<dyn crate::window_view::FileClipboardService> = files.clone();
+    let options = crate::window_view::StartOptions {
+        file_clipboard: Some(shared),
+        ..super::options_with(
+            fake_with("fruit.csv", FRUIT.len() as u64),
+            hooks(Setup::new(FRUIT.to_vec()), &Log::default()),
+            Kinds::builtin(),
+        )
+    };
+    let (window, view) = crate::window_view::tests::open_options(cx, options);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+    press(cx, window, &view, "right");
+    press(cx, window, &view, "ctrl-c");
+    let copied = cx.read_from_clipboard().and_then(|item| item.text());
+    assert_eq!(copied.as_deref(), Some("10"));
+    assert!(files.writes.borrow().is_empty());
 }

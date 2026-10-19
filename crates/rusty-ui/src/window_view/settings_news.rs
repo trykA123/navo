@@ -85,6 +85,8 @@ impl FerriteWindow {
             text,
             is_error: true,
         });
-        problem.or_else(|| self.keymap_notice())
+        self.clipboard_notice()
+            .or(problem)
+            .or_else(|| self.keymap_notice())
     }
 }

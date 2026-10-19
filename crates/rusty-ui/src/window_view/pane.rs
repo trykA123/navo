@@ -5,6 +5,7 @@ use gpui_kit::base::TestSupportExt;
 use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
+use super::clipboard::ClipboardEffect;
 use super::keys::{
     BrowsePreview, DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit,
 };
@@ -243,6 +244,9 @@ impl FerriteWindow {
             FileListAction::Operate(kind) => {
                 self.browser.prepare(*kind);
             }
+            FileListAction::CopyToClipboard => self.put_on_clipboard(ClipboardEffect::Copy),
+            FileListAction::CutToClipboard => self.put_on_clipboard(ClipboardEffect::Move),
+            FileListAction::Paste => self.paste(),
             FileListAction::Filter(edit) => {
                 self.filter(*edit);
             }

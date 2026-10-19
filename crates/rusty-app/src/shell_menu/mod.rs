@@ -60,7 +60,7 @@ fn shell_form(path: PathBuf) -> Result<PathBuf, String> {
     Ok(PathBuf::from(plain))
 }
 
-fn without_verbatim(path: OsString) -> OsString {
+pub(crate) fn without_verbatim(path: OsString) -> OsString {
     let bytes = path.as_encoded_bytes();
     let starts_with = |head: &str| {
         bytes

@@ -1,4 +1,4 @@
-use rusty_core::{FsError, Location, OpKind, OperationPlan, TabId};
+use rusty_core::{FsError, Location, OpKind, OperationPlan, Risk, TabId};
 use rusty_fs::{CancelToken, JobLog, JobOutcome, Progress, StepOutcome};
 
 use std::sync::Arc;
@@ -46,6 +46,15 @@ pub struct PendingOp {
     pub(crate) source_tab: TabId,
 }
 
+impl PendingOp {
+    #[must_use]
+    pub fn is_protected(&self) -> bool {
+        self.plan.risks.iter().any(
+            |risk| matches!(risk, Risk::Protected(place) if Some(place) != self.target.as_ref()),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobStatus {
     Running,
@@ -91,4 +100,5 @@ pub(in crate::browser) struct OpRequest {
     pub(super) same_volume: bool,
     pub(super) protected: Vec<Location>,
     pub(super) source_tab: TabId,
+    pub(super) asks: bool,
 }

@@ -6,6 +6,7 @@ use rusty_fs::{CancelToken, JobOutcome, JobSlot, Priority, Progress, volume_of};
 
 use super::{Browser, Message};
 
+mod paste;
 mod types;
 mod work;
 
@@ -33,9 +34,11 @@ impl Browser {
     }
 
     pub fn prepare(&mut self, kind: OpKind) -> bool {
-        let Some(request) = self.op_request(kind) else {
-            return false;
-        };
+        self.op_request(kind)
+            .is_some_and(|request| self.submit_plan(request))
+    }
+
+    fn submit_plan(&mut self, request: OpRequest) -> bool {
         let Some(volume) = request.sources.first().map(volume_of) else {
             return false;
         };
@@ -164,24 +167,31 @@ impl Browser {
         }
     }
 
-    fn op_request(&mut self, kind: OpKind) -> Option<OpRequest> {
+    #[must_use]
+    pub fn selected_sources(&self) -> Vec<Location> {
         let tab = self.state.active_tab();
-        let listing = tab.listing()?;
+        let Some(listing) = tab.listing() else {
+            return Vec::new();
+        };
         let marked = tab.selection().marked();
         let rows = if marked.is_empty() {
             vec![tab.view().cursor]
         } else {
             marked
         };
-        let sources: Vec<Location> = rows
-            .into_iter()
+        rows.into_iter()
             .filter_map(|row| listing.get(row))
             .filter_map(|entry| {
                 tab.location()
                     .join(&ProviderPath::from_text(&entry.name))
                     .ok()
             })
-            .collect();
+            .collect()
+    }
+
+    fn op_request(&mut self, kind: OpKind) -> Option<OpRequest> {
+        let sources = self.selected_sources();
+        let tab = self.state.active_tab();
         let target = match kind {
             OpKind::Copy | OpKind::Move => Some(self.other_location()?),
             OpKind::Recycle | OpKind::Delete => None,
@@ -206,6 +216,7 @@ impl Browser {
             same_volume,
             protected: self.operations.protected.clone(),
             source_tab,
+            asks: true,
         })
     }
 
@@ -223,13 +234,18 @@ impl Browser {
     fn accept_plan(&mut self, request: OpRequest, result: Result<OperationPlan, FsError>) -> bool {
         match result {
             Ok(plan) => {
-                self.pending = Some(PendingOp {
+                let pending = PendingOp {
                     id: request.id,
                     sources: request.sources,
                     target: request.target,
                     plan,
                     source_tab: request.source_tab,
-                });
+                };
+                let asks = request.asks || pending.is_protected();
+                self.pending = Some(pending);
+                if !asks {
+                    self.confirm();
+                }
             }
             Err(error) => self.jobs.push(JobView {
                 id: request.id,
