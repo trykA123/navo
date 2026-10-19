@@ -176,7 +176,8 @@ fn robocopy(plan: &OperationPlan, workspace: &Workspace) -> Result<(), String> {
     let Some(rusty_core::Step::MakeFolder { target }) = plan.steps.first() else {
         return Err("benchmark plan must start with a data set folder".to_owned());
     };
-    let destination = rusty_fs::os_path(target).map_err(|error| error.message())?;
+    let destination =
+        super::workspace::simplified(&rusty_fs::os_path(target).map_err(|error| error.message())?);
     let name = destination
         .file_name()
         .ok_or_else(|| "data set folder has no name".to_owned())?;
