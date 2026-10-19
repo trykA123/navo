@@ -21,11 +21,14 @@ const WIDTH: f32 = 600.;
 const HEIGHT: f32 = 800.;
 const CHAR: f32 = 8.;
 const LINE: f32 = 14.;
+const MUTED: u32 = 5;
+const PDF_BYTES: &[u8] = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n\x00";
 const MOTION: std::time::Duration = std::time::Duration::from_millis(600);
 
 #[derive(Clone, Default)]
 pub(super) struct Calls {
     pub drawn: Arc<Mutex<Vec<u32>>>,
+    pub opens: Arc<Mutex<Vec<Option<String>>>>,
 }
 
 impl Calls {
@@ -66,6 +69,7 @@ fn chars_of(text: &str) -> Vec<TextChar> {
 struct Book {
     pages: u32,
     calls: Calls,
+    mute: Option<u32>,
 }
 
 impl PdfPages for Book {
@@ -81,6 +85,9 @@ impl PdfPages for Book {
     }
 
     fn text(&mut self, page: u32) -> Result<PageText, PdfError> {
+        if self.mute == Some(page) {
+            return Err(PdfError::Corrupt);
+        }
         PageText::new(WIDTH, HEIGHT, chars_of(&page_text(page))).map_err(|_| PdfError::Corrupt)
     }
 }
@@ -111,11 +118,17 @@ fn name_of(location: &Location) -> String {
 fn open_with(calls: &Calls) -> OpenPdf {
     let calls = calls.clone();
     Arc::new(move |location, password| {
+        calls
+            .opens
+            .lock()
+            .expect("calls")
+            .push(password.map(str::to_owned));
         let name = name_of(location);
-        if name == "a-book.pdf" {
+        if name == "a-book.pdf" || name == "a-muted.pdf" {
             return Ok(Box::new(Book {
                 pages: PAGES,
                 calls: calls.clone(),
+                mute: (name == "a-muted.pdf").then_some(MUTED),
             }) as Box<dyn PdfPages>);
         }
         let mut engine = FakeEngine::default();
@@ -124,8 +137,7 @@ fn open_with(calls: &Calls) -> OpenPdf {
     })
 }
 
-pub(super) fn hooks(open: OpenPdf) -> FileHooks {
-    let bytes = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n".repeat(64);
+pub(super) fn hooks(open: OpenPdf, bytes: Vec<u8>) -> FileHooks {
     FileHooks {
         pdf: open,
         ..super::hooks(super::Setup::new(bytes), &super::Log::default())
@@ -135,11 +147,15 @@ pub(super) fn hooks(open: OpenPdf) -> FileHooks {
 pub(super) type Rig = (AnyWindowHandle, Entity<FerriteWindow>, Calls);
 
 pub(super) fn rig_with(cx: &mut TestAppContext, name: &str, open: Option<OpenPdf>) -> Rig {
+    rig_bytes(cx, name, open, PDF_BYTES.repeat(64))
+}
+
+fn rig_bytes(cx: &mut TestAppContext, name: &str, open: Option<OpenPdf>, bytes: Vec<u8>) -> Rig {
     let fs = fake();
     fs.add_file(&format!("home/{name}"), 4);
     let calls = Calls::default();
     let open = open.unwrap_or_else(|| open_with(&calls));
-    let (window, view) = window_with(cx, fs, hooks(open), Kinds::builtin());
+    let (window, view) = window_with(cx, fs, hooks(open, bytes), Kinds::builtin());
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);
@@ -338,12 +354,6 @@ fn a_locked_pdf_asks_for_the_password_until_it_is_right(cx: &mut TestAppContext)
     keys(cx, &rig, &["enter"]);
     settle(cx, &rig.1);
     assert!(text(cx, rig.0, "pdf-password-error").starts_with("Wrong password"));
-    cx.update_window(rig.0, |_, window, cx| {
-        for _ in 0.."guess".len() {
-            window.press("backspace", cx);
-        }
-    })
-    .expect("window");
     type_in(cx, rig.0, &rig.1, PASSWORD);
     keys(cx, &rig, &["enter"]);
     settle(cx, &rig.1);
@@ -399,4 +409,37 @@ fn dragging_over_text_and_ctrl_c_copies_it(cx: &mut TestAppContext) {
     let copied = cx.read_from_clipboard().and_then(|item| item.text());
     assert_eq!(copied.as_deref(), Some("Page"));
     assert_eq!(text(cx, rig.0, "pdf-note"), "Copied 4 characters");
+}
+
+#[gpui_kit::test]
+fn an_over_long_password_is_wrong_without_starting_the_helper(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-locked.pdf");
+    let opens = rig.2.opens.lock().expect("calls").len();
+    let long = "x".repeat(rusty_pdf::protocol::MAX_PASSWORD_BYTES + 1);
+    cx.update_window(rig.0, |_, window, cx| window.input(&long, cx))
+        .expect("window");
+    keys(cx, &rig, &["enter"]);
+    settle(cx, &rig.1);
+    assert!(text(cx, rig.0, "pdf-password-error").starts_with("Wrong password"));
+    assert_eq!(rig.2.opens.lock().expect("calls").len(), opens);
+}
+
+#[gpui_kit::test]
+fn a_text_file_that_starts_like_a_pdf_falls_back_to_text(cx: &mut TestAppContext) {
+    let bytes = b"%PDF-1.4 export notes\nThe exporter writes these lines.\n".to_vec();
+    let rig = rig_bytes(cx, "a-broken.pdf", None, bytes);
+    assert!(!is_pdf(cx, &rig.1));
+    assert!(super::has_editor(cx, &rig.1) || super::kind(cx, &rig.1).is_some());
+}
+
+#[gpui_kit::test]
+fn a_page_whose_text_fails_is_named_in_the_status_line(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-muted.pdf");
+    keys(cx, &rig, &["ctrl-f"]);
+    type_in(cx, rig.0, &rig.1, "volt");
+    settle(cx, &rig.1);
+    let problem = text(cx, rig.0, "pdf-problem");
+    assert_eq!(problem, format!("Page {} could not be searched", MUTED + 1));
+    let count = text(cx, rig.0, "pdf-find-count");
+    assert!(count.ends_with("some pages skipped"), "{count}");
 }

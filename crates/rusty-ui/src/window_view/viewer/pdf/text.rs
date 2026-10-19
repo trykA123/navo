@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::ops::Range;
 use std::sync::Arc;
 
 use rusty_pdf::protocol::{CharBox, PageText};
@@ -6,9 +7,10 @@ use rusty_pdf::protocol::{CharBox, PageText};
 const BOXES_KEPT: usize = 24;
 pub(super) const INDEX_BUDGET: usize = 16 * 1024 * 1024;
 
+#[derive(Clone)]
 pub(super) struct PageWords {
-    pub chars: Box<[char]>,
-    lines: Box<[(u32, f32)]>,
+    pub chars: Arc<[char]>,
+    lines: Arc<[(u32, f32)]>,
 }
 
 impl PageWords {
@@ -26,7 +28,7 @@ impl PageWords {
         }
         Self {
             chars: text.chars().iter().map(|ch| ch.ch).collect(),
-            lines: lines.into_boxed_slice(),
+            lines: lines.into(),
         }
     }
 
@@ -129,11 +131,14 @@ impl Boxes {
             .map(|(_, text)| text)
     }
 
-    pub(super) fn insert(&mut self, page: u32, text: Arc<PageText>) {
+    pub(super) fn insert(&mut self, page: u32, text: Arc<PageText>, keep: &Range<u32>) {
         self.kept.retain(|(at, _)| *at != page);
         self.kept.push_back((page, text));
         while self.kept.len() > BOXES_KEPT {
-            self.kept.pop_front();
+            let Some(at) = self.kept.iter().position(|(at, _)| !keep.contains(at)) else {
+                break;
+            };
+            self.kept.remove(at);
         }
     }
 }
@@ -239,6 +244,18 @@ mod tests {
         let boxes = rects(&page(), 3, 3);
         assert_eq!(boxes.len(), 2);
         assert_eq!((boxes[0].left, boxes[0].right), (30., 49.));
+    }
+
+    #[test]
+    fn visible_pages_keep_their_boxes_when_older_pages_leave() {
+        let mut boxes = Boxes::default();
+        let text = Arc::new(page());
+        for at in 0..BOXES_KEPT as u32 + 4 {
+            boxes.insert(at, text.clone(), &(0..2));
+        }
+        assert!(boxes.get(0).is_some() && boxes.get(1).is_some());
+        assert!(boxes.get(2).is_none());
+        assert_eq!(boxes.kept.len(), BOXES_KEPT);
     }
 
     #[test]

@@ -163,6 +163,7 @@ fn start() -> PdfStart {
         location: Location::provider_root(ProviderId::local()),
         open,
         opened: Ok(Box::new(Manual)),
+        is_preview: false,
     }
 }
 

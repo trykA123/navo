@@ -155,6 +155,7 @@ fn body_in(
         location,
         hooks,
         carried: None,
+        is_preview: false,
         on_saved: Rc::new(|_| {}),
         open: Rc::new(|_, _| {}),
     };

@@ -65,8 +65,13 @@ impl PdfView {
 
     pub(super) fn hits_title(&self, t: &Theme) -> impl IntoElement {
         let summary = self.doc().map(|doc| {
-            let pages = doc.hits.pages().count() as u64;
-            let hits = format::count(doc.hits.total() as u64, "hit", "hits");
+            let pages = doc.hits.page_count() as u64;
+            let total = doc.hits.total() as u64;
+            let hits = if doc.hits.is_capped() {
+                format!("{}+ hits", format::bytes(total))
+            } else {
+                format::count(total, "hit", "hits")
+            };
             let on = format::count(pages, "page", "pages");
             let so_far = if doc.index.is_complete() {
                 ""
@@ -94,13 +99,14 @@ impl PdfView {
             return;
         };
         let last = doc.hits.total().saturating_sub(1);
-        let row = doc.lists.hit_row;
-        doc.lists.hit_row = if down {
+        let row = doc.selected_hit_row();
+        let row = if down {
             (row + 1).min(last)
         } else {
             row.saturating_sub(1)
         };
-        doc.lists.hit_scroll.scroll_to(doc.lists.hit_row);
+        doc.lists.hit_key = doc.hits.get(row).map(|hit| hit.key());
+        doc.lists.hit_scroll.scroll_to(row);
         cx.notify();
     }
 
@@ -120,7 +126,7 @@ impl PdfView {
                     marked,
                 )
             });
-        let is_selected = doc.lists.hit_row == row;
+        let is_selected = doc.lists.hit_key == Some(hit.key());
         let page = if is_first {
             format!("p. {}", hit.page + 1)
         } else {
@@ -166,17 +172,13 @@ impl PdfView {
             let Some(doc) = view.doc() else {
                 return Vec::new();
             };
-            let skip = range.start.saturating_sub(1);
-            let mut previous = (range.start > 0)
-                .then(|| doc.hits.all().nth(skip).map(|hit| hit.page))
-                .flatten();
-            let shown: Vec<Hit> = doc
-                .hits
-                .all()
-                .skip(range.start)
-                .take(range.len())
-                .copied()
-                .collect();
+            let all = doc.hits.all();
+            let mut previous = range
+                .start
+                .checked_sub(1)
+                .and_then(|at| all.get(at))
+                .map(|hit| hit.page);
+            let shown: Vec<Hit> = all.get(range.clone()).unwrap_or(&[]).to_vec();
             range
                 .zip(shown)
                 .map(|(row, hit)| {
@@ -210,7 +212,7 @@ impl PdfView {
             .on_action(cx.listener(|view, _: &ListUp, _, cx| view.move_hit_row(false, cx)))
             .on_action(cx.listener(|view, _: &ListDown, _, cx| view.move_hit_row(true, cx)))
             .on_action(cx.listener(|view, _: &ListGo, _, cx| {
-                let row = view.doc().map_or(0, |doc| doc.lists.hit_row);
+                let row = view.doc().map_or(0, super::doc::Doc::selected_hit_row);
                 view.go_to_hit(row, cx);
             }))
             .on_action(cx.listener(|view, _: &ListClose, window, cx| {

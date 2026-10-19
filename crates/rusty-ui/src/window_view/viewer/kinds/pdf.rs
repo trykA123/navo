@@ -1,6 +1,7 @@
+use rusty_core::encoding::looks_binary;
 use rusty_pdf::protocol::PdfError;
 
-use super::{Load, Loaded, Slot, Sniff, ViewerKind};
+use super::{Declined, Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::pdf::{PdfBody, PdfPages, PdfStart, PdfView};
@@ -9,10 +10,14 @@ pub(in crate::window_view::viewer) const PDF_ID: &str = "pdf";
 const PDF: u8 = 95;
 const MAGIC: &[u8] = b"%PDF-";
 const MAGIC_WITHIN: usize = 1024;
+const NOT_A_PDF: &str = "This file starts like a PDF but is not one, so it opens as text.";
 
 pub(in crate::window_view::viewer) fn is_pdf(head: &[u8]) -> bool {
-    let head = &head[..head.len().min(MAGIC_WITHIN)];
-    head.windows(MAGIC.len()).any(|window| window == MAGIC)
+    if head.starts_with(MAGIC) {
+        return true;
+    }
+    let near = &head[..head.len().min(MAGIC_WITHIN)];
+    near.windows(MAGIC.len()).any(|window| window == MAGIC) && looks_binary(head)
 }
 
 struct Opened {
@@ -42,6 +47,9 @@ impl ViewerKind for Pdf {
     fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
         load.ensure_open()?;
         let pages = (load.hooks.pdf)(load.location, None);
+        if matches!(pages, Err(PdfError::Corrupt)) && !looks_binary(load.sniff.head) {
+            return Ok(Box::new(Declined(NOT_A_PDF)));
+        }
         Ok(Box::new(Opened {
             pages,
             len: load.sniff.len,
@@ -64,6 +72,7 @@ impl ViewerKind for Pdf {
             location: attach.host.location,
             open: attach.host.hooks.pdf,
             opened: opened.pages,
+            is_preview: attach.host.is_preview,
         };
         let view = cx.new(|cx| PdfView::new(start, window, cx));
         Ok(Box::new(PdfBody(view)))

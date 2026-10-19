@@ -90,7 +90,7 @@ fn marks_on(t: &Theme, doc: &Doc, page: u32) -> Vec<AnyElement> {
 
 fn page_state(doc: &Doc, page: u32) -> String {
     let number = page + 1;
-    match (doc.broken.get(&page), doc.shots.get(page)) {
+    match (doc.trouble.broken.get(&page), doc.shots.get(page)) {
         (Some(error), _) => format!("Page {number} was not drawn: {error}"),
         (None, Some(_)) => format!("Page {number}"),
         (None, None) => format!("Page {number}, drawing"),
@@ -104,6 +104,7 @@ fn sheet(t: &Theme, doc: &Doc, page: u32) -> AnyElement {
     let left = doc.camera.page_left(&doc.pages, page);
     let label = page_state(doc, page);
     let broken = doc
+        .trouble
         .broken
         .get(&page)
         .map(|error| format!("This page was not drawn: {error}"));

@@ -61,6 +61,7 @@ impl PdfView {
         self.with_camera(cx, |doc| {
             let middle = doc.camera.middle();
             doc.camera.set_zoom(&doc.pages, zoom, middle);
+            doc.forget_drawing();
         });
     }
 
@@ -87,6 +88,7 @@ impl PdfView {
         self.with_camera(cx, |doc| {
             let pointer = pointer.unwrap_or_else(|| doc.camera.middle());
             doc.camera.zoom_by(&doc.pages, factor, pointer);
+            doc.forget_drawing();
         });
     }
 

@@ -72,7 +72,7 @@ impl PdfView {
             return Vec::new();
         };
         if self.pages_with_hits && doc.hits.total() > 0 {
-            doc.hits.pages().map(|(page, _)| page).collect()
+            doc.hits.page_list().collect()
         } else {
             (0..doc.count()).collect()
         }

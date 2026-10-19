@@ -3,6 +3,7 @@ mod card;
 mod doc;
 mod find;
 mod hit_list;
+mod hits;
 mod jobs;
 mod keys;
 mod layout;
@@ -18,6 +19,7 @@ mod source;
 mod stage;
 mod text;
 mod toolbar;
+mod trouble;
 mod view;
 mod work;
 
@@ -50,6 +52,7 @@ pub struct PdfStart {
     pub location: Location,
     pub open: OpenPdf,
     pub opened: Result<Box<dyn PdfPages>, PdfError>,
+    pub is_preview: bool,
 }
 
 enum Phase {
@@ -83,7 +86,11 @@ pub struct PdfView {
     hits_focus: FocusHandle,
     inputs: Inputs,
     query: Query,
+    searching: Option<Task<()>>,
     is_finding: bool,
+    is_preview: bool,
+    is_active: bool,
+    _focus_in: Subscription,
     pages_with_hits: bool,
     look: PdfLook,
     left: Entity<SheetState>,
@@ -94,9 +101,9 @@ pub struct PdfView {
     measured: Rc<Cell<Measured>>,
 }
 
-fn phase_of(opened: Result<Box<dyn PdfPages>, PdfError>) -> Phase {
+fn phase_of(opened: Result<Box<dyn PdfPages>, PdfError>, is_preview: bool) -> Phase {
     match opened {
-        Ok(pages) => Phase::Ready(Box::new(Doc::new(pages))),
+        Ok(pages) => Phase::Ready(Box::new(Doc::new(pages, is_preview))),
         Err(PdfError::NeedsPassword) => Phase::Locked { error: None },
         Err(error) => Phase::Refused(error),
     }
@@ -112,18 +119,29 @@ impl PdfView {
             }
         })
         .detach();
+        let focus = cx.focus_handle();
+        let focus_in = cx.on_focus_in(&focus, window, |view: &mut Self, _, cx| {
+            if !view.is_active {
+                view.is_active = true;
+                cx.notify();
+            }
+        });
         Self {
             title: start.title,
             len: start.len,
             location: start.location,
             open: start.open,
-            phase: phase_of(start.opened),
-            focus: cx.focus_handle(),
+            phase: phase_of(start.opened, start.is_preview),
+            focus,
             pages_focus: cx.focus_handle(),
             hits_focus: cx.focus_handle(),
             inputs,
             query: Query::default(),
+            searching: None,
             is_finding: false,
+            is_preview: start.is_preview,
+            is_active: !start.is_preview,
+            _focus_in: focus_in,
             pages_with_hits: false,
             look: PdfLook::default(),
             left: cx.new(|_| SheetState::new()),

@@ -135,19 +135,29 @@ fn ctrl_b_toggles_the_left_drawer_and_ctrl_p_opens_it_on_pages(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn esc_closes_find_then_the_top_drawer_then_the_viewer(cx: &mut TestAppContext) {
+fn esc_closes_the_top_drawer_then_find_then_the_viewer(cx: &mut TestAppContext) {
     let rig = rig(cx, "a-book.pdf");
-    keys(cx, &rig, &["ctrl-b"]);
     find(cx, &rig, "volt");
-    assert!(visible(cx, rig.0, "pdf-left-drawer"));
-    keys(cx, &rig, &["escape"]);
-    assert!(!visible(cx, rig.0, "pdf-find-count"));
+    keys(cx, &rig, &["ctrl-b", "ctrl-f"]);
     assert!(visible(cx, rig.0, "pdf-left-drawer"));
     keys(cx, &rig, &["escape"]);
     assert!(!visible(cx, rig.0, "pdf-left-drawer"));
+    assert!(visible(cx, rig.0, "pdf-find-count"));
+    keys(cx, &rig, &["escape"]);
+    assert!(!visible(cx, rig.0, "pdf-find-count"));
     assert!(viewer_open(cx, &rig.1));
     keys(cx, &rig, &["escape"]);
     assert!(!viewer_open(cx, &rig.1));
+}
+
+#[gpui_kit::test]
+fn closing_one_drawer_gives_focus_to_the_other(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    keys(cx, &rig, &["ctrl-b", "ctrl-i", "escape"]);
+    assert!(!visible(cx, rig.0, "pdf-right-drawer"));
+    assert!(visible(cx, rig.0, "pdf-left-drawer"));
+    keys(cx, &rig, &["down", "down", "enter"]);
+    assert_eq!(text(cx, rig.0, "pdf-status"), "PDF · page 3 of 40");
 }
 
 #[gpui_kit::test]

@@ -8,6 +8,7 @@ pub(super) const ACTUAL: f32 = 96. / 72.;
 pub(super) const STEP: f32 = 1.2;
 const MIN_SCALE: f32 = 0.1;
 const MAX_SCALE: f32 = 8. * ACTUAL;
+const MAX_SIDE: f32 = 14_400.;
 const A4: Size<f32> = Size {
     width: 595.,
     height: 842.,
@@ -31,6 +32,7 @@ pub(super) struct Pages {
     tops: Vec<f32>,
     widest: f32,
     any_known: bool,
+    revision: u64,
 }
 
 impl Pages {
@@ -42,6 +44,7 @@ impl Pages {
             tops: Vec::new(),
             widest: A4.width,
             any_known: false,
+            revision: 0,
         };
         pages.measure();
         pages
@@ -60,6 +63,26 @@ impl Pages {
             .sizes
             .iter()
             .fold(1., |wide, page| page.width.max(wide));
+        self.revision += 1;
+    }
+
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub(super) fn set_aspect(&mut self, page: u32, ratio: f32) -> bool {
+        let at = page as usize;
+        if at >= self.sizes.len() || self.is_known[at] || !ratio.is_finite() || ratio <= 0. {
+            return false;
+        }
+        let width = self.sizes[at].width;
+        let wanted = size(width, (width * ratio).min(MAX_SIDE));
+        if (self.sizes[at].height - wanted.height).abs() < 0.5 {
+            return false;
+        }
+        self.sizes[at] = wanted;
+        self.measure();
+        true
     }
 
     pub(super) fn count(&self) -> u32 {
@@ -72,6 +95,7 @@ impl Pages {
 
     pub(super) fn set_size(&mut self, page: u32, found: Size<f32>) -> bool {
         let at = page as usize;
+        let found = size(found.width.min(MAX_SIDE), found.height.min(MAX_SIDE));
         let usable = found.width > 1. && found.height > 1. && found.width.is_finite();
         if at >= self.sizes.len() || !usable || (self.is_known[at] && self.sizes[at] == found) {
             return false;
@@ -280,6 +304,23 @@ mod tests {
             (size(100., 200.), size(200., 100.))
         );
         assert_eq!(pages.widest(), 200.);
+    }
+
+    #[test]
+    fn a_drawn_page_sets_its_height_until_its_text_gives_the_size() {
+        let mut pages = Pages::new(2);
+        assert!(pages.set_aspect(1, 2.));
+        assert_eq!(pages.size(1), size(595., 1190.));
+        pages.set_size(1, size(100., 150.));
+        assert!(!pages.set_aspect(1, 2.));
+        assert_eq!(pages.size(1), size(100., 150.));
+    }
+
+    #[test]
+    fn page_sizes_stop_at_the_pdf_maximum() {
+        let mut pages = Pages::new(1);
+        pages.set_size(0, size(1e9, 300.));
+        assert_eq!(pages.size(0), size(MAX_SIDE, 300.));
     }
 
     #[test]

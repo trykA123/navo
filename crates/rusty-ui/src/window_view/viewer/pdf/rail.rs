@@ -1,10 +1,9 @@
-use std::collections::BTreeMap;
-
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{MouseButton, MouseDownEvent, Stateful};
 
 use super::PdfView;
 use super::doc::Doc;
+use super::search::Hit;
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::Theme;
@@ -19,15 +18,30 @@ fn fraction(doc: &Doc, page: u32, y: f32) -> f32 {
     ((doc.pages.top(page, 1.) + y * doc.pages.size(page).height) / total).clamp(0., 1.)
 }
 
-fn hit_slots(doc: &Doc) -> BTreeMap<u32, bool> {
-    let current = doc.hits.current();
-    let mut slots: BTreeMap<u32, bool> = BTreeMap::new();
-    for hit in doc.hits.all() {
-        let slot = (fraction(doc, hit.page, hit.y) * SLOTS) as u32;
-        let is_current = current.is_some_and(|current| current == *hit);
-        *slots.entry(slot).or_default() |= is_current;
-    }
+fn slot_of(doc: &Doc, hit: &Hit) -> u32 {
+    (fraction(doc, hit.page, hit.y) * SLOTS) as u32
+}
+
+fn hit_slots(doc: &Doc) -> Vec<(u32, bool)> {
+    let key = (doc.hits.revision(), doc.pages.revision());
+    let cached = doc
+        .rail
+        .borrow()
+        .as_ref()
+        .filter(|(at, _)| *at == key)
+        .map(|(_, slots)| slots.clone());
+    let slots = cached.unwrap_or_else(|| {
+        let mut slots: Vec<u32> = doc.hits.all().iter().map(|hit| slot_of(doc, hit)).collect();
+        slots.sort_unstable();
+        slots.dedup();
+        *doc.rail.borrow_mut() = Some((key, slots.clone()));
+        slots
+    });
+    let current = doc.hits.current().map(|hit| slot_of(doc, &hit));
     slots
+        .into_iter()
+        .map(|slot| (slot, Some(slot) == current))
+        .collect()
 }
 
 fn tick(t: &Theme, is_current: bool) -> Div {

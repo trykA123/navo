@@ -36,7 +36,11 @@ impl PdfView {
     pub(super) fn close_sheet(&mut self, side: Side, window: &mut Window, cx: &mut Context<Self>) {
         self.sheet_of(side).update(cx, |sheet, cx| sheet.close(cx));
         self.drawers.retain(|open| *open != side);
-        self.focus_pages(window, cx);
+        match self.drawers.last() {
+            Some(Side::Left) => window.focus(&self.pages_focus, cx),
+            Some(Side::Right) => window.focus(&self.hits_focus, cx),
+            None => self.focus_pages(window, cx),
+        }
         cx.notify();
     }
 

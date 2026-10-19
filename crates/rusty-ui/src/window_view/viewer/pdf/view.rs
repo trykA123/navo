@@ -36,6 +36,13 @@ fn labelled(
         .child(text)
 }
 
+fn and_more(count: usize) -> String {
+    match count.saturating_sub(1) {
+        0 => String::new(),
+        more => format!(" (and {more} more)"),
+    }
+}
+
 impl PdfView {
     fn meta(&self) -> SharedString {
         let size = format::size(self.len);
@@ -100,15 +107,19 @@ impl PdfView {
                 let (headline, _) = super::card::refusal(error);
                 Some(headline.into())
             }
-            Phase::Ready(doc) => doc.broken.iter().next_back().map(|(page, error)| {
-                let more = doc.broken.len().saturating_sub(1);
-                let others = if more > 0 {
-                    format!(" (and {more} more)")
-                } else {
-                    String::new()
-                };
-                format!("Page {} was not drawn: {error}{others}", page + 1).into()
-            }),
+            Phase::Ready(doc) => {
+                let trouble = &doc.trouble;
+                let drawn = trouble.broken.iter().next().map(|(page, error)| {
+                    let others = and_more(trouble.broken.len());
+                    format!("Page {} was not drawn: {error}{others}", page + 1)
+                });
+                let searched = trouble.unread.iter().next().map(|page| {
+                    let others = and_more(trouble.unread.len());
+                    format!("Page {} could not be searched{others}", page + 1)
+                });
+                let problems: Vec<String> = drawn.into_iter().chain(searched).collect();
+                (!problems.is_empty()).then(|| problems.join(" · ").into())
+            }
             _ => None,
         }
     }
@@ -140,7 +151,7 @@ impl PdfView {
         if self.leave_page_box(window, cx) {
             return self.focus_pages(window, cx);
         }
-        if !self.close_find(window, cx) && !self.close_top(window, cx) {
+        if !self.close_top(window, cx) && !self.close_find(window, cx) {
             cx.propagate();
         }
     }

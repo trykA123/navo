@@ -2,13 +2,17 @@ use gpui_kit::Focusable;
 
 use super::PdfView;
 use super::doc::Doc;
-use super::search::{Hit, Hits, Query, find};
+use super::hits::{HIT_CAP, Progress, count_label};
+use super::search::{Hit, Query, find};
 use super::text::{PageWords, rects};
 use crate::prelude::*;
 
 const NO_MORE_YET: &str = "No more hits yet. Ferrite is still reading the pages.";
 const TYPE_FIRST: &str = "Type the text to find first.";
 const BAND: f32 = 12.;
+const AT_ONCE: usize = 256 * 1024;
+
+type Found = Vec<(u32, Vec<Hit>)>;
 
 fn hits_in(page: u32, words: &PageWords, query: &Query) -> Vec<Hit> {
     find(&words.chars, query)
@@ -22,11 +26,18 @@ fn hits_in(page: u32, words: &PageWords, query: &Query) -> Vec<Hit> {
         .collect()
 }
 
-fn first_from(hits: &Hits, page: u32) -> Option<Hit> {
-    hits.all()
-        .find(|hit| hit.page >= page)
-        .copied()
-        .or_else(|| hits.wrap(false))
+fn search_pages(pages: &[(u32, PageWords)], query: &Query) -> Found {
+    let mut total = 0;
+    let mut found = Vec::new();
+    for (page, words) in pages {
+        if total > HIT_CAP {
+            break;
+        }
+        let hits = hits_in(*page, words, query);
+        total += hits.len();
+        found.push((*page, hits));
+    }
+    found
 }
 
 fn reveal(doc: &mut Doc, hit: Hit) {
@@ -44,33 +55,22 @@ fn reveal(doc: &mut Doc, hit: Hit) {
             y - BAND..y + BAND
         });
     doc.camera.show_band(&doc.pages, hit.page, band);
-    if let Some(row) = doc
-        .hits
-        .all()
-        .position(|found| found.page == hit.page && found.start == hit.start)
-    {
-        doc.lists.hit_row = row;
+    doc.lists.hit_key = Some(hit.key());
+    if let Some(row) = doc.hits.index_of(hit.key()) {
         doc.lists.hit_scroll.scroll_to(row);
     }
 }
 
-fn search_all(doc: &mut Doc, query: &Query) {
-    doc.hits.clear();
-    if query.is_empty() {
-        return;
-    }
-    let found: Vec<(u32, Vec<Hit>)> = doc
-        .index
-        .pages()
-        .map(|(page, words)| (page, hits_in(page, words, query)))
-        .collect();
+fn take_found(doc: &mut Doc, found: Found) {
     for (page, hits) in found {
         doc.hits.add_page(page, hits);
     }
-    let first = first_from(&doc.hits, doc.current_page());
-    doc.hits.set_current(first);
-    if let Some(hit) = first {
-        reveal(doc, hit);
+    if doc.hits.current().is_none() {
+        let first = doc.hits.first_from(doc.current_page());
+        doc.hits.set_current(first);
+        if let Some(hit) = first {
+            reveal(doc, hit);
+        }
     }
 }
 
@@ -105,11 +105,39 @@ impl PdfView {
 
     fn rerun(&mut self, cx: &mut Context<Self>) {
         let query = self.query.clone();
-        if let Some(doc) = self.doc_mut() {
-            search_all(doc, &query);
+        self.searching = None;
+        let Some(doc) = self.doc_mut() else {
+            return;
+        };
+        doc.hits.clear();
+        let pages: Vec<(u32, PageWords)> = if query.is_empty() {
+            Vec::new()
+        } else {
+            doc.index
+                .pages()
+                .map(|(page, words)| (page, words.clone()))
+                .collect()
+        };
+        let chars: usize = pages.iter().map(|(_, words)| words.chars.len()).sum();
+        if chars <= AT_ONCE {
+            take_found(doc, search_pages(&pages, &query));
+        } else {
+            let search = cx.background_spawn(async move { search_pages(&pages, &query) });
+            self.searching = Some(cx.spawn(async move |this, cx| {
+                let found = search.await;
+                let _ = this.update(cx, |view, cx| view.searched(found, cx));
+            }));
         }
         cx.notify();
         self.pump(cx);
+    }
+
+    fn searched(&mut self, found: Found, cx: &mut Context<Self>) {
+        self.searching = None;
+        if let Some(doc) = self.doc_mut() {
+            take_found(doc, found);
+        }
+        cx.notify();
     }
 
     pub(super) fn search_page(&mut self, page: u32) {
@@ -121,14 +149,7 @@ impl PdfView {
             return;
         };
         let hits = hits_in(page, words, &query);
-        doc.hits.add_page(page, hits);
-        if doc.hits.current().is_none() {
-            let first = first_from(&doc.hits, doc.current_page());
-            doc.hits.set_current(first);
-            if let Some(hit) = first {
-                reveal(doc, hit);
-            }
-        }
+        take_found(doc, vec![(page, hits)]);
     }
 
     pub(super) fn step(&mut self, backward: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -139,12 +160,16 @@ impl PdfView {
         let Some(doc) = self.doc_mut() else {
             return;
         };
-        let from = doc
-            .hits
-            .current()
-            .map_or((doc.current_page(), 0), |hit| (hit.page, hit.start));
+        let current = doc.hits.current();
         let wrapped = || doc.hits.wrap(backward).filter(|_| doc.index.is_complete());
-        let next = doc.hits.step(from, backward).or_else(wrapped);
+        let next = match current {
+            Some(hit) => doc.hits.step(hit.key(), backward).or_else(wrapped),
+            None if backward => doc
+                .hits
+                .step((doc.current_page(), 0), true)
+                .or_else(wrapped),
+            None => doc.hits.first_from(doc.current_page()),
+        };
         match next {
             Some(hit) => {
                 doc.hits.set_current(Some(hit));
@@ -161,7 +186,7 @@ impl PdfView {
         let Some(doc) = self.doc_mut() else {
             return;
         };
-        let picked = doc.hits.all().nth(row).copied();
+        let picked = doc.hits.get(row);
         if let Some(hit) = picked {
             doc.hits.set_current(Some(hit));
             reveal(doc, hit);
@@ -199,6 +224,10 @@ impl PdfView {
         if self.query.is_empty() {
             return None;
         }
-        Some(super::search::count_label(&doc.hits, doc.index.is_complete()).into())
+        let progress = Progress {
+            is_complete: doc.index.is_complete() && self.searching.is_none(),
+            is_partial: !doc.trouble.unread.is_empty() || doc.index.is_full(),
+        };
+        Some(count_label(&doc.hits, &progress).into())
     }
 }

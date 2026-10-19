@@ -1,18 +1,18 @@
-use std::cell::Cell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::{RenderImage, Task, size};
-use rusty_pdf::protocol::{PageText, PdfError};
+use rusty_pdf::protocol::PageText;
 
+use super::hits::{HitKey, Hits};
 use super::jobs::{Done, Job, Shared};
 use super::layout::{Camera, Pages};
-use super::search::Hits;
-use super::shots::{PAGE_BUDGET, Shot, Shots, THUMB_BUDGET};
+use super::shots::{PAGE_BUDGET, PREVIEW_BUDGET, Pool, Shot, Shots, THUMB_BUDGET};
 use super::source::PdfPages;
 use super::text::{Boxes, PageWords, TextIndex};
+use super::trouble::{Trouble, Verdict};
 use crate::primitives::ListScroll;
 
 const MARGIN: u32 = 1;
@@ -29,7 +29,7 @@ pub(super) struct Selection {
 
 #[derive(Default)]
 pub(super) struct Lists {
-    pub hit_row: usize,
+    pub hit_key: Option<HitKey>,
     pub page_row: usize,
     pub hit_scroll: ListScroll,
     pub page_scroll: ListScroll,
@@ -45,33 +45,48 @@ pub(super) struct Doc {
     pub boxes: Boxes,
     pub index: TextIndex,
     pub hits: Hits,
-    pub broken: BTreeMap<u32, PdfError>,
-    pub unread: BTreeSet<u32>,
+    pub trouble: Trouble,
+    pub rail: RefCell<Option<RailSlots>>,
     pub selection: Option<Selection>,
     pub is_dragging: bool,
     pub lists: Lists,
     pub busy: Option<Task<()>>,
 }
 
+pub(super) type RailSlots = ((u64, u64), Vec<u32>);
+
 pub(super) struct Wants {
     pub index: bool,
     pub thumbs: bool,
+    pub first_only: bool,
+}
+
+#[derive(Default)]
+pub(super) struct Applied {
+    pub read: Option<u32>,
+    pub dropped: Vec<Arc<RenderImage>>,
+    pub verdict: Option<Verdict>,
 }
 
 impl Doc {
-    pub(super) fn new(pages: Box<dyn PdfPages>) -> Self {
+    pub(super) fn new(pages: Box<dyn PdfPages>, is_preview: bool) -> Self {
         let count = pages.page_count();
+        let budget = if is_preview {
+            PREVIEW_BUDGET
+        } else {
+            PAGE_BUDGET
+        };
         Self {
             shared: Arc::new(Mutex::new(pages)),
             pages: Pages::new(count),
             camera: Camera::default(),
-            shots: Shots::new(PAGE_BUDGET),
-            thumbs: Shots::new(THUMB_BUDGET),
+            shots: Shots::new(budget, Pool::shared()),
+            thumbs: Shots::new(THUMB_BUDGET, Pool::shared()),
             boxes: Boxes::default(),
             index: TextIndex::new(count),
             hits: Hits::default(),
-            broken: BTreeMap::new(),
-            unread: BTreeSet::new(),
+            trouble: Trouble::default(),
+            rail: RefCell::default(),
             selection: None,
             is_dragging: false,
             lists: Lists::default(),
@@ -101,8 +116,11 @@ impl Doc {
             .visible(camera.scroll.y, camera.viewport.height, self.scale())
     }
 
-    fn near(&self) -> Vec<u32> {
+    fn near(&self, first_only: bool) -> Vec<u32> {
         let shown = self.shown();
+        if first_only {
+            return shown.take(1).collect();
+        }
         let from = shown.start.saturating_sub(MARGIN);
         let to = (shown.end + MARGIN).min(self.count());
         let current = self.current_page();
@@ -127,7 +145,7 @@ impl Doc {
         }
         near.iter()
             .copied()
-            .filter(|page| !self.broken.contains_key(page))
+            .filter(|page| !self.trouble.broken.contains_key(page))
             .map(|page| (page, self.width_of(page)))
             .find(|(page, width)| self.shots.needs(*page, *width))
             .map(|(page, width)| Job::Page { page, width })
@@ -136,7 +154,7 @@ impl Doc {
     fn thumb_job(&self) -> Option<Job> {
         let (from, to) = self.lists.thumbs_shown.get();
         (from..to.min(self.count()))
-            .filter(|page| !self.broken.contains_key(page))
+            .filter(|page| !self.trouble.broken.contains_key(page))
             .find(|page| self.thumbs.get(*page).is_none())
             .map(|page| Job::Thumb {
                 page,
@@ -148,15 +166,18 @@ impl Doc {
         if self.count() == 0 {
             return None;
         }
-        if !self.pages.has_size() && !self.unread.contains(&0) {
+        if !self.pages.has_size() && !self.trouble.unread.contains(&0) {
             return Some(Job::Text { page: 0 });
         }
-        let near = self.near();
+        let near = self.near(wants.first_only);
         let page = self.page_job(&near);
+        if wants.first_only {
+            return page;
+        }
         let text = || {
             near.iter()
                 .copied()
-                .find(|page| self.boxes.get(*page).is_none() && !self.unread.contains(page))
+                .find(|page| self.boxes.get(*page).is_none() && !self.trouble.unread.contains(page))
                 .map(|page| Job::Text { page })
         };
         let thumb = || self.thumb_job().filter(|_| wants.thumbs);
@@ -176,37 +197,106 @@ impl Doc {
             self.camera.keep_anchor(&self.pages, anchor);
         }
         let is_new = self.index.insert(page, PageWords::of(&text));
-        self.boxes.insert(page, text);
+        let keep = self.keep();
+        self.boxes.insert(page, text, &keep);
         is_new
     }
 
-    pub(super) fn apply(&mut self, done: Done) -> (Option<u32>, Vec<Arc<RenderImage>>) {
+    fn drawn(&mut self, job: Job, width: u32, height: u32) {
+        let page = job.page();
+        let anchor = self.pages.anchor(self.camera.scroll.y, self.scale());
+        if matches!(job, Job::Page { .. })
+            && self
+                .pages
+                .set_aspect(page, height as f32 / width.max(1) as f32)
+        {
+            self.camera.keep_anchor(&self.pages, anchor);
+        }
+    }
+
+    pub(super) fn apply(&mut self, done: Done) -> Applied {
         let keep = self.keep();
+        let mut applied = Applied::default();
         match done {
-            Done::Drawn(Job::Thumb { page, .. }, picture) => {
-                let shot = Shot::new(picture.width, picture.height, picture.image);
-                (None, self.thumbs.insert(page, shot, &(0..0)))
-            }
             Done::Drawn(job, picture) => {
+                self.trouble.succeeded();
+                self.drawn(job, picture.width, picture.height);
                 let shot = Shot::new(picture.width, picture.height, picture.image);
-                (None, self.shots.insert(job.page(), shot, &keep))
+                applied.dropped = match job {
+                    Job::Thumb { page, .. } => self.thumbs.insert(page, shot, &(0..0)),
+                    _ => self.shots.insert(job.page(), shot, &keep),
+                };
             }
-            Done::Read(page, text) => (self.read(page, text).then_some(page), Vec::new()),
-            Done::Failed(Job::Text { page }, _) => {
-                self.unread.insert(page);
-                self.index.skip(page);
-                (None, Vec::new())
+            Done::Read(page, text) => {
+                self.trouble.succeeded();
+                applied.read = self.read(page, text).then_some(page);
             }
             Done::Failed(job, error) => {
-                self.broken.insert(job.page(), error);
-                (None, Vec::new())
+                applied.verdict = self.trouble.failed(job, error);
+                if self.trouble.unread.contains(&job.page()) {
+                    self.index.skip(job.page());
+                }
             }
         }
+        applied
+    }
+
+    pub(super) fn selected_hit_row(&self) -> usize {
+        let key = self
+            .lists
+            .hit_key
+            .or_else(|| self.hits.current().map(|hit| hit.key()));
+        key.and_then(|key| self.hits.index_of(key)).unwrap_or(0)
+    }
+
+    pub(super) fn forget_drawing(&mut self) {
+        self.trouble.forget_drawing();
     }
 
     pub(super) fn drain_images(&mut self) -> Vec<Arc<RenderImage>> {
         let mut images = self.shots.drain();
         images.extend(self.thumbs.drain());
         images
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::size;
+    use rusty_pdf::protocol::{Bitmap, PdfError, RenderRequest};
+
+    use super::*;
+
+    struct Blank;
+
+    impl PdfPages for Blank {
+        fn page_count(&self) -> u32 {
+            30
+        }
+
+        fn render(&mut self, _: RenderRequest) -> Result<Bitmap, PdfError> {
+            Err(PdfError::TooLarge)
+        }
+
+        fn text(&mut self, _: u32) -> Result<PageText, PdfError> {
+            Err(PdfError::Corrupt)
+        }
+    }
+
+    #[test]
+    fn a_resting_preview_draws_only_its_first_visible_page() {
+        let mut doc = Doc::new(Box::new(Blank), true);
+        doc.camera.viewport = size(800., 3000.);
+        doc.pages.set_size(0, size(600., 800.));
+        let wants = Wants {
+            index: true,
+            thumbs: true,
+            first_only: true,
+        };
+        let job = doc.next_job(&wants).map(|job| job.page());
+        assert_eq!(job, Some(0));
+        assert!(matches!(doc.next_job(&wants), Some(Job::Page { .. })));
+        doc.trouble.broken.insert(0, PdfError::TooLarge);
+        assert!(doc.next_job(&wants).is_none());
     }
 }
