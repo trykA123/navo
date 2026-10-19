@@ -125,19 +125,21 @@ fn search_finds_a_command_name() {
     assert_eq!(shown(&rows, "files.sort_by_date"), ["files.sort_by_date"]);
 }
 
+const CTRL_F5: [&str; 2] = ["files.sort_by_date", "elf.sort_by_address"];
+
 #[test]
 fn search_finds_the_command_bound_to_a_key() {
     let rows = rows(Keymap::builtin());
-    assert_eq!(shown(&rows, "ctrl+f5"), ["files.sort_by_date"]);
-    assert_eq!(shown(&rows, "Ctrl+F5"), ["files.sort_by_date"]);
-    assert_eq!(shown(&rows, "ctrl-f5"), ["files.sort_by_date"]);
+    assert_eq!(shown(&rows, "ctrl+f5"), CTRL_F5);
+    assert_eq!(shown(&rows, "Ctrl+F5"), CTRL_F5);
+    assert_eq!(shown(&rows, "ctrl-f5"), CTRL_F5);
 }
 
 #[test]
 fn a_key_search_takes_modifiers_in_any_order_and_spaces() {
     let rows = rows(Keymap::builtin());
     for typed in ["f5 ctrl", "F5+CTRL", "ctrl - f5", "ctrl f5", " f5-ctrl "] {
-        assert_eq!(shown(&rows, typed), ["files.sort_by_date"], "{typed}");
+        assert_eq!(shown(&rows, typed), CTRL_F5, "{typed}");
     }
     let tab = ["tab.previous"];
     assert_eq!(shown(&rows, "shift+ctrl+tab"), tab);
@@ -191,7 +193,16 @@ fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     }
 }
 
-const BACK_CONTEXTS: [&str; 4] = ["ViewerGoTo", "Paged", "ViewerFind", "Tree"];
+const BACK_CONTEXTS: [&str; 8] = [
+    "ViewerGoTo",
+    "Paged",
+    "ViewerFind",
+    "Tree",
+    "Pdf",
+    "MemoryImage",
+    "Elf",
+    "CanTrace",
+];
 
 #[test]
 fn a_command_bound_in_several_contexts_is_recorded_in_each() {
@@ -220,6 +231,7 @@ fn the_home_context_is_written_without_a_context() {
         set_in("viewer.go_to_start", None, &["f8"]),
         set_in("viewer.go_to_start", Some("Archive"), &["f8"]),
         set_in("viewer.go_to_start", Some("Tree"), &["f8"]),
+        set_in("viewer.go_to_start", Some("Pdf"), &["f8"]),
     ];
     assert_eq!(edits, expected);
 }

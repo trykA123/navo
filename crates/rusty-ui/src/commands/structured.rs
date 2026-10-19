@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 3] = [
+pub(super) const GROUPS: [Group; 8] = [
     Group {
         context: "Tree",
         commands: &[
@@ -161,6 +161,157 @@ pub(super) const GROUPS: [Group; 3] = [
                 "markdown.copy_link",
                 "Copy link",
             ),
+        ],
+    },
+    Group {
+        context: "MemoryImage",
+        commands: &[
+            (
+                "memory_image::ToggleNavigator",
+                "memory.toggle_navigator",
+                "Ranges drawer",
+            ),
+            (
+                "memory_image::ToggleInspector",
+                "memory.toggle_inspector",
+                "Inspector drawer",
+            ),
+            (
+                "memory_image::PickItem",
+                "memory.go_to_item",
+                "Go to the picked range",
+            ),
+        ],
+    },
+    Group {
+        context: "Elf",
+        commands: &[
+            (
+                "elf_view::ToggleNavigator",
+                "elf.toggle_navigator",
+                "Sections drawer",
+            ),
+            (
+                "elf_view::ToggleInspector",
+                "elf.toggle_inspector",
+                "Inspector drawer",
+            ),
+            (
+                "elf_view::PickItem",
+                "elf.pick_item",
+                "Show the picked section's symbols, or inspect the symbol",
+            ),
+            (
+                "elf_view::SortByName",
+                "elf.sort_by_name",
+                "Sort symbols by name",
+            ),
+            (
+                "elf_view::SortBySection",
+                "elf.sort_by_section",
+                "Sort symbols by section",
+            ),
+            (
+                "elf_view::SortByAddress",
+                "elf.sort_by_address",
+                "Sort symbols by address",
+            ),
+            (
+                "elf_view::SortBySize",
+                "elf.sort_by_size",
+                "Sort symbols by size",
+            ),
+        ],
+    },
+    Group {
+        context: "ElfTable",
+        commands: &[
+            ("elf_view::TypeN", "elf.type_n", "Type n in the filter"),
+            ("elf_view::TypeP", "elf.type_p", "Type p in the filter"),
+            ("elf_view::TypeOne", "elf.type_one", "Type 1 in the filter"),
+            (
+                "elf_view::TypeThree",
+                "elf.type_three",
+                "Type 3 in the filter",
+            ),
+            (
+                "elf_view::TypeFive",
+                "elf.type_five",
+                "Type 5 in the filter",
+            ),
+        ],
+    },
+    Group {
+        context: "CanTrace",
+        commands: &[
+            (
+                "can_trace::ToggleNavigator",
+                "trace.toggle_navigator",
+                "IDs drawer",
+            ),
+            (
+                "can_trace::ToggleInspector",
+                "trace.toggle_inspector",
+                "Inspector drawer",
+            ),
+            (
+                "can_trace::PickId",
+                "trace.filter_by_id",
+                "Filter by the picked ID",
+            ),
+            (
+                "can_trace::SortIds",
+                "trace.sort_ids",
+                "Sort IDs by count or ID",
+            ),
+            (
+                "can_trace::TypeOne",
+                "trace.type_one",
+                "Type 1 in the ID filter",
+            ),
+            (
+                "can_trace::TypeThree",
+                "trace.type_three",
+                "Type 3 in the ID filter",
+            ),
+            (
+                "can_trace::TypeFive",
+                "trace.type_five",
+                "Type 5 in the ID filter",
+            ),
+            (
+                "can_trace::TypeN",
+                "trace.type_n",
+                "Type n in the ID filter",
+            ),
+            (
+                "can_trace::TypeP",
+                "trace.type_p",
+                "Type p in the ID filter",
+            ),
+            (
+                "can_trace::FilterBack",
+                "trace.filter_backspace",
+                "Erase in the ID filter",
+            ),
+        ],
+    },
+    Group {
+        context: "Pdf",
+        commands: &[
+            ("viewer_pdf::FitWidth", "pdf.fit", "Fit to width"),
+            ("viewer_pdf::ActualSize", "pdf.actual_size", "Actual size"),
+            ("viewer_pdf::ZoomIn", "pdf.zoom_in", "Zoom in"),
+            ("viewer_pdf::ZoomOut", "pdf.zoom_out", "Zoom out"),
+            ("viewer_pdf::WholeWord", "pdf.whole_word", "Whole word"),
+            ("viewer_pdf::AllHits", "pdf.all_hits", "All hits"),
+            (
+                "viewer_pdf::LeftDrawer",
+                "pdf.pages_and_outline",
+                "Pages and outline",
+            ),
+            ("viewer_pdf::PagesDrawer", "pdf.pages", "Pages"),
+            ("viewer_pdf::CopyText", "pdf.copy", "Copy selected text"),
         ],
     },
 ];

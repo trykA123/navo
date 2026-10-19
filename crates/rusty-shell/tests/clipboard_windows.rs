@@ -1,6 +1,6 @@
 #![cfg(windows)]
 
-use rusty_shell::{Effect, FileClipboard, clear_if_same, read_files, write_files};
+use rusty_shell::{Effect, FileClipboard, clear_if_same, has_files, read_files, write_files};
 use windows_sys::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, IsClipboardFormatAvailable, OpenClipboard,
 };
@@ -41,6 +41,7 @@ fn clipboard_move_round_trips_and_clear_requires_matching_paths() {
     // SAFETY: querying format availability needs no pointers or open clipboard.
     let available = unsafe { IsClipboardFormatAvailable(u32::from(CF_HDROP)) };
     assert_ne!(available, 0);
+    assert!(has_files());
     assert_eq!(read_files().unwrap(), Some(files.clone()));
     let different = FileClipboard {
         paths: vec![dir.path().join("different.txt")],
@@ -57,5 +58,6 @@ fn clipboard_move_round_trips_and_clear_requires_matching_paths() {
     // SAFETY: querying format availability needs no pointers or open clipboard.
     let available = unsafe { IsClipboardFormatAvailable(u32::from(CF_HDROP)) };
     assert_eq!(available, 0);
+    assert!(!has_files());
     assert!(!clear_if_same(&same_paths).unwrap());
 }

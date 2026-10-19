@@ -145,7 +145,13 @@ impl Store {
     pub(crate) fn stats(&self) -> CacheStats {
         CacheStats {
             bytes: self.bytes,
+            pinned_bytes: self.pinned_bytes,
             entries: self.slots.len(),
+            pinned_entries: self
+                .pins
+                .keys()
+                .filter(|key| self.slots.contains_key(*key))
+                .count(),
             budget: self.budget,
             hits: self.hits,
             misses: self.misses,

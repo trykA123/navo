@@ -29,6 +29,7 @@ files.clear_filter | escape | FileList
 files.rename | f2 | FileList
 files.rename | shift-f6 | FileList
 files.new_folder | f7 | FileList
+files.new_file | shift-f7 | FileList
 files.mark_pattern | + | FileList
 files.unmark_pattern | - | FileList
 files.invert_marks | * | FileList
@@ -192,6 +193,12 @@ image.zoom_out | - | Image
 image.toggle_info | i | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
+viewer.go_to_start | home | Pdf
+viewer.go_to_end | end | Pdf
+viewer.back | escape | Pdf
+viewer.back | escape | MemoryImage
+viewer.back | escape | Elf
+viewer.back | escape | CanTrace
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
@@ -227,6 +234,46 @@ markdown.open_link | enter | Markdown
 markdown.next_link | tab | Markdown
 markdown.previous_link | shift-tab | Markdown
 markdown.copy_block | ctrl-c | Markdown
+[memory_image]
+memory.toggle_navigator | ctrl-b | MemoryImage
+memory.toggle_inspector | ctrl-i | MemoryImage
+memory.go_to_item | enter | MemoryImage
+[elf_view]
+elf.toggle_navigator | ctrl-b | Elf
+elf.toggle_inspector | ctrl-i | Elf
+elf.pick_item | enter | Elf
+elf.sort_by_name | ctrl-f3 | Elf
+elf.sort_by_section | ctrl-f4 | Elf
+elf.sort_by_address | ctrl-f5 | Elf
+elf.sort_by_size | ctrl-f6 | Elf
+elf.type_n | n | ElfTable
+elf.type_p | p | ElfTable
+elf.type_one | 1 | ElfTable
+elf.type_three | 3 | ElfTable
+elf.type_five | 5 | ElfTable
+[can_trace]
+trace.toggle_navigator | ctrl-b | CanTrace
+trace.toggle_inspector | ctrl-i | CanTrace
+trace.filter_by_id | enter | CanTrace
+trace.sort_ids | alt-s | CanTrace
+trace.type_one | 1 | CanTrace
+trace.type_three | 3 | CanTrace
+trace.type_five | 5 | CanTrace
+trace.type_n | n | CanTrace
+trace.type_p | p | CanTrace
+trace.filter_backspace | backspace | CanTrace
+[viewer_pdf]
+pdf.fit | ctrl-0 | Pdf
+pdf.actual_size | ctrl-1 | Pdf
+pdf.zoom_in | ctrl-= | Pdf
+pdf.zoom_in | ctrl-shift-= | Pdf
+pdf.zoom_out | ctrl-- | Pdf
+pdf.whole_word | alt-w | Pdf
+pdf.all_hits | ctrl-i | Pdf
+pdf.all_hits | ctrl-shift-f | Pdf
+pdf.pages_and_outline | ctrl-b | Pdf
+pdf.pages | ctrl-p | Pdf
+pdf.copy | ctrl-c | Pdf
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu

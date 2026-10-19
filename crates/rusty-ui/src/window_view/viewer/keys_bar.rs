@@ -34,12 +34,16 @@ impl Viewer {
             None => Vec::new(),
         };
         let editing = self.is_editing(cx);
+        let takes_letters = self
+            .body
+            .as_ref()
+            .is_some_and(|body| body.takes_letters(cx));
         if self.can_start_editing(cx) {
             keys.push(("Ctrl+E", "Edit"));
         }
-        let slots = self.slot_keys(editing, &keys);
+        let slots = self.slot_keys(editing || takes_letters, &keys);
         keys.extend(slots);
-        if !editing && !keys.contains(&NEXT_PREVIOUS) {
+        if !editing && !takes_letters && !keys.contains(&NEXT_PREVIOUS) {
             keys.extend(FILES);
         }
         keys.push(CLOSE);

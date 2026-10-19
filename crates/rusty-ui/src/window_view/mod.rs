@@ -66,7 +66,9 @@ pub use placement::DisplayScale;
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
-pub use shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use shell_menu::{
+    BackgroundLook, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession, background_items,
+};
 pub use start::run;
 pub use start_watch::{StartReport, StartWatch};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
@@ -77,6 +79,7 @@ pub use viewer::{
     ViewerKind,
 };
 pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, MenuEntry, Picture, ReadBytes, decode_image};
+pub use viewer::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use viewer::{bind_keys as bind_viewer_keys, viewer_menu};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
@@ -159,7 +162,7 @@ impl FerriteWindow {
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
-        settings_save::steer_browser(&values, &mut browser);
+        settings_save::steer(&values, &mut browser, cx);
         browser.start();
         let mut view = Self {
             browser,

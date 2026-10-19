@@ -22,6 +22,7 @@ mod keymap;
 mod launch;
 mod logging;
 mod metrics;
+mod pdf_helper;
 mod profile;
 mod settings;
 mod shell_menu;
@@ -57,6 +58,7 @@ fn execute(
         console::attach();
     }
     let command = match parsed {
+        Ok(Command::PdfHelper) => return pdf_helper::run(),
         Ok(command) => command,
         Err(usage) => {
             eprintln!("{usage}");
@@ -86,6 +88,7 @@ fn execute_command(
     let clock = ProcessClock::detect(started, metrics::process_age);
     let profile = match &command {
         Command::Open(start) => profile::choose(start, detect),
+        Command::CrashTest(root) => Ok(Profile::Folder(StoreDirs::in_profile(root))),
         _ => Ok(Profile::User(detect())),
     };
     let profile = match profile {
@@ -103,7 +106,21 @@ fn execute_command(
             ExitCode::SUCCESS
         }
         Command::DiagReport(path) => write_report(&path, started, &profile),
+        Command::CrashTest(_) => crash_test(&profile),
+        Command::PdfHelper => pdf_helper::run(),
     }
+}
+
+#[inline(never)]
+#[allow(clippy::panic, reason = "an opt-in CI probe exercises the panic hook")]
+fn crash_test(profile: &Profile) -> ExitCode {
+    if std::env::var_os("FERRITE_CRASH_TEST").as_deref() != Some(std::ffi::OsStr::new("1")) {
+        eprintln!("ferrite: --crash-test requires FERRITE_CRASH_TEST=1");
+        return ExitCode::from(2);
+    }
+    let diagnostics = install_logging(profile);
+    crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
+    panic!("Ferrite CI crash test");
 }
 
 fn install_logging(profile: &Profile) -> logging::Diagnostics {
@@ -115,7 +132,8 @@ fn install_logging(profile: &Profile) -> logging::Diagnostics {
 
 fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
     let diagnostics = install_logging(profile);
-    match diag::write(path, started, &diagnostics) {
+    let data = profile.dirs().map(|dirs| dirs.data.as_path());
+    match diag::write_on_demand(path, started, &diagnostics, data) {
         Ok(summary) => {
             println!(
                 "ferrite: wrote {} ({} bytes)",

@@ -7,6 +7,8 @@ use rusty_core::marks::{Bookmarks, MarkSet, SearchHistory};
 use rusty_core::paging::{ByteSource, LineIndex, Needle};
 use rusty_fs::archive::ArchiveListing;
 
+use super::pdf::{OpenPdf, no_pdf};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStamp {
     pub len: u64,
@@ -106,6 +108,7 @@ pub struct FileHooks {
     pub save_split: SaveSplit,
     pub bytes: ReadBytes,
     pub range: ReadRange,
+    pub pdf: OpenPdf,
 }
 
 impl FileHooks {
@@ -128,6 +131,7 @@ impl FileHooks {
             save_split: Arc::new(|_, _| {}),
             bytes: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
             range: Arc::new(|_, _, _| Err("Files cannot be opened here.".to_owned())),
+            pdf: no_pdf(),
         }
     }
 }

@@ -210,7 +210,10 @@ impl Rig {
     pub(in crate::window_view) fn open_page(&self, cx: &mut TestAppContext) {
         self.press(cx, "ctrl-,");
         self.settle_motion(cx);
-        self.click(cx, ("settings-section", 5usize));
+        self.click(
+            cx,
+            ("settings-section", crate::settings::Section::ALL.len()),
+        );
     }
 
     fn page(&self, cx: &mut TestAppContext) -> Entity<ShortcutsPage> {
@@ -341,7 +344,10 @@ fn search_finds_the_command_bound_to_a_typed_key(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_page(cx);
     rig.type_text(cx, "ctrl+f5");
-    assert_eq!(rig.visible(cx), ["files.sort_by_date"]);
+    assert_eq!(
+        rig.visible(cx),
+        ["files.sort_by_date", "elf.sort_by_address"]
+    );
 }
 
 #[gpui_kit::test]
@@ -351,7 +357,11 @@ fn keys_typed_as_on_a_keyboard_land_in_the_search(cx: &mut TestAppContext) {
         rig.open_page(cx);
         rig.type_keys(cx, typed);
         assert_eq!(rig.query(cx), typed);
-        assert_eq!(rig.visible(cx), ["files.sort_by_date"], "{typed}");
+        assert_eq!(
+            rig.visible(cx),
+            ["files.sort_by_date", "elf.sort_by_address"],
+            "{typed}"
+        );
     }
 }
 

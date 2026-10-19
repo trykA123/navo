@@ -45,6 +45,9 @@ struct Process {
 struct Cache {
     name: String,
     bytes: u64,
+    pinned_bytes: u64,
+    unpinned_bytes: u64,
+    entries: u64,
     budget: u64,
 }
 
@@ -149,7 +152,10 @@ fn memory(report: &MemoryReport, redactor: &Redactor) -> Memory {
             .iter()
             .map(|c| Cache {
                 name: redactor.text(&c.name),
-                bytes: c.bytes,
+                bytes: c.size.bytes,
+                pinned_bytes: c.size.pinned_bytes,
+                unpinned_bytes: c.size.unpinned_bytes(),
+                entries: c.size.entries,
                 budget: c.budget,
             })
             .collect(),

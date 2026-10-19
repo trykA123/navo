@@ -274,6 +274,10 @@ command = "files.new_folder"
 keys = ["f7"]
 
 [[bind]]
+command = "files.new_file"
+keys = ["shift-f7"]
+
+[[bind]]
 command = "files.mark_pattern"
 keys = ["+"]
 
@@ -902,6 +906,59 @@ keys = ["ctrl-c"]
 command = "image.copy_path"
 keys = ["ctrl-shift-c"]
 
+# Pdf
+
+[[bind]]
+command = "viewer.go_to_start"
+keys = ["home"]
+context = "Pdf"
+
+[[bind]]
+command = "viewer.go_to_end"
+keys = ["end"]
+context = "Pdf"
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Pdf"
+
+[[bind]]
+command = "pdf.fit"
+keys = ["ctrl-0"]
+
+[[bind]]
+command = "pdf.actual_size"
+keys = ["ctrl-1"]
+
+[[bind]]
+command = "pdf.zoom_in"
+keys = ["ctrl-=", "ctrl-shift-="]
+
+[[bind]]
+command = "pdf.zoom_out"
+keys = ["ctrl--"]
+
+[[bind]]
+command = "pdf.whole_word"
+keys = ["alt-w"]
+
+[[bind]]
+command = "pdf.all_hits"
+keys = ["ctrl-i", "ctrl-shift-f"]
+
+[[bind]]
+command = "pdf.pages_and_outline"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "pdf.pages"
+keys = ["ctrl-p"]
+
+[[bind]]
+command = "pdf.copy"
+keys = ["ctrl-c"]
+
 # Tree
 
 [[bind]]
@@ -1017,6 +1074,129 @@ keys = ["ctrl-shift-c"]
 [[bind]]
 command = "table.sort_by_column"
 keys = ["ctrl-f3"]
+
+# MemoryImage
+
+[[bind]]
+command = "memory.toggle_navigator"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "memory.toggle_inspector"
+keys = ["ctrl-i"]
+
+[[bind]]
+command = "memory.go_to_item"
+keys = ["enter"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "MemoryImage"
+
+# Elf
+
+[[bind]]
+command = "elf.toggle_navigator"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "elf.toggle_inspector"
+keys = ["ctrl-i"]
+
+[[bind]]
+command = "elf.pick_item"
+keys = ["enter"]
+
+[[bind]]
+command = "elf.sort_by_name"
+keys = ["ctrl-f3"]
+
+[[bind]]
+command = "elf.sort_by_section"
+keys = ["ctrl-f4"]
+
+[[bind]]
+command = "elf.sort_by_address"
+keys = ["ctrl-f5"]
+
+[[bind]]
+command = "elf.sort_by_size"
+keys = ["ctrl-f6"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Elf"
+
+# ElfTable
+
+[[bind]]
+command = "elf.type_n"
+keys = ["n"]
+
+[[bind]]
+command = "elf.type_p"
+keys = ["p"]
+
+[[bind]]
+command = "elf.type_one"
+keys = ["1"]
+
+[[bind]]
+command = "elf.type_three"
+keys = ["3"]
+
+[[bind]]
+command = "elf.type_five"
+keys = ["5"]
+
+# CanTrace
+
+[[bind]]
+command = "trace.toggle_navigator"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "trace.toggle_inspector"
+keys = ["ctrl-i"]
+
+[[bind]]
+command = "trace.filter_by_id"
+keys = ["enter"]
+
+[[bind]]
+command = "trace.sort_ids"
+keys = ["alt-s"]
+
+[[bind]]
+command = "trace.type_one"
+keys = ["1"]
+
+[[bind]]
+command = "trace.type_three"
+keys = ["3"]
+
+[[bind]]
+command = "trace.type_five"
+keys = ["5"]
+
+[[bind]]
+command = "trace.type_n"
+keys = ["n"]
+
+[[bind]]
+command = "trace.type_p"
+keys = ["p"]
+
+[[bind]]
+command = "trace.filter_backspace"
+keys = ["backspace"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "CanTrace"
 
 # Markdown
 

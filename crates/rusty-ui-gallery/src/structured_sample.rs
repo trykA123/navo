@@ -93,12 +93,13 @@ let tree = parse_json(bytes)?; // a long line scrolls inside its block when it d
 [^1]: Links open with Tab and Enter, or Ctrl+click.
 ";
 
-fn hooks(bytes: &'static str) -> FileHooks {
+fn hooks(bytes: &'static [u8]) -> FileHooks {
+    let text = std::str::from_utf8(bytes).unwrap_or_default();
     FileHooks {
-        read: Arc::new(move |_| Ok(FileText::plain(bytes))),
-        bytes: Arc::new(move |_, _| Ok(bytes.as_bytes().to_vec())),
+        read: Arc::new(move |_| Ok(FileText::plain(text))),
+        bytes: Arc::new(move |_, _| Ok(bytes.to_vec())),
         range: Arc::new(move |_, offset, len| {
-            let data = bytes.as_bytes();
+            let data = bytes;
             let start = usize::try_from(offset)
                 .unwrap_or(usize::MAX)
                 .min(data.len());
@@ -117,7 +118,16 @@ pub fn body(
     window: &mut Window,
     cx: &mut App,
 ) -> Option<Box<dyn ViewerBody>> {
-    body_in((name, text), None, window, cx)
+    body_in((name, text.as_bytes()), None, window, cx)
+}
+
+pub fn binary(
+    name: &'static str,
+    bytes: &'static [u8],
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Box<dyn ViewerBody>> {
+    body_in((name, bytes), None, window, cx)
 }
 
 pub fn editing(
@@ -126,18 +136,18 @@ pub fn editing(
     window: &mut Window,
     cx: &mut App,
 ) -> Option<Box<dyn ViewerBody>> {
-    body_in((name, text), Some("text"), window, cx)
+    body_in((name, text.as_bytes()), Some("text"), window, cx)
 }
 
 fn body_in(
-    (name, text): (&'static str, &'static str),
+    (name, text): (&'static str, &'static [u8]),
     edit_kind: Option<&str>,
     window: &mut Window,
     cx: &mut App,
 ) -> Option<Box<dyn ViewerBody>> {
     let location = Location::new(format!("/samples/{name}")).ok()?;
     let sniff = Sniff {
-        head: text.as_bytes(),
+        head: text,
         name,
         len: text.len() as u64,
     };
@@ -155,6 +165,7 @@ fn body_in(
         location,
         hooks,
         carried: None,
+        is_preview: false,
         on_saved: Rc::new(|_| {}),
         open: Rc::new(|_, _| {}),
     };

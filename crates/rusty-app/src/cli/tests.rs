@@ -26,6 +26,14 @@ fn version_flag_prints_the_version() {
 }
 
 #[test]
+fn pdf_helper_mode_stands_alone_without_a_console() {
+    assert_eq!(parse_strs(&["--pdf-helper"]), Ok(Command::PdfHelper));
+    assert!(!Command::PdfHelper.uses_console());
+    assert!(refusal(&["--pdf-helper", "a.pdf"]).contains("unknown argument a.pdf"));
+    assert!(refusal(&["work", "--pdf-helper"]).contains("--pdf-helper stands alone"));
+}
+
+#[test]
 fn diag_report_takes_a_path() {
     assert_eq!(
         parse_strs(&["--diag-report", "out.zip"]),
@@ -36,6 +44,18 @@ fn diag_report_takes_a_path() {
 #[test]
 fn diag_report_without_a_path_is_refused() {
     assert!(refusal(&["--diag-report"]).contains("--diag-report needs a value"));
+}
+
+#[test]
+fn crash_test_requires_an_explicit_profile_and_stands_alone() {
+    assert_eq!(
+        parse_strs(&["--crash-test", "probe"]),
+        Ok(Command::CrashTest(PathBuf::from("probe")))
+    );
+    assert!(refusal(&["--crash-test"]).contains("--crash-test needs a value"));
+    assert!(refusal(&["--crash-test", "probe", "--version"]).contains("stands alone"));
+    assert!(refusal(&["work", "--crash-test", "probe"]).contains("stands alone"));
+    assert!(!USAGE.contains("--crash-test"));
 }
 
 #[test]

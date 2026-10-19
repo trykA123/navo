@@ -8,7 +8,7 @@ use rusty_store::{Db, backup_path};
 use rusty_ui::settings::{Change, Values};
 use rusty_ui::tokens::ThemeChoice;
 
-use super::{Loaded, follow_defaults, hooks, spawn, start, start_in_background, start_sharing};
+use super::{Loaded, follow_defaults, hooks, spawn, start, start_sharing, start_waiting};
 
 struct Paths {
     _dir: tempfile::TempDir,
@@ -39,10 +39,11 @@ fn a_fresh_start_writes_every_setting_and_records_the_defaults() {
         "mode = \"system\"",
         "sort = \"name\"",
         "provider = \"windows-terminal\"",
+        "[automotive.view]\npreset = \"simple\"",
     ] {
         assert!(text.contains(key), "{key} missing from {text}");
     }
-    assert_eq!(recorded(&at.ledger), 16);
+    assert_eq!(recorded(&at.ledger), 21);
     assert_eq!(started.default_changes, []);
     let settings = hooks(started.loaded);
     assert_eq!(settings.values, Values::default());
@@ -111,9 +112,14 @@ fn a_sheet_save_after_the_start_keeps_the_backup_from_before_the_session() {
 #[test]
 fn the_background_start_gives_the_same_result() {
     let at = paths();
-    let started = start_in_background(Some(at.file.clone()), Some(at.ledger.clone())).finish();
+    let started = start_waiting(
+        Some(at.file.clone()),
+        Some(at.ledger.clone()),
+        Duration::from_secs(60),
+    )
+    .finish();
     assert!(started.loaded.is_some());
-    assert_eq!(recorded(&at.ledger), 16);
+    assert_eq!(recorded(&at.ledger), 21);
     assert!(
         fs::read_to_string(&at.file)
             .unwrap()

@@ -1,6 +1,4 @@
-use std::fs;
-#[cfg(not(windows))]
-use std::fs::File;
+use std::fs::{self, File};
 #[cfg(not(windows))]
 use std::io::{Read, Write};
 
@@ -18,6 +16,15 @@ impl ProviderOps for LocalFs {
     fn create_folder(&self, location: &Location) -> Result<(), FsError> {
         let path = os_path(location)?;
         fs::create_dir(&path).map_err(|e| io_error(&e, location))
+    }
+
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        File::options()
+            .write(true)
+            .create_new(true)
+            .open(os_path(location)?)
+            .map(drop)
+            .map_err(|e| io_error(&e, location))
     }
 
     #[cfg(windows)]

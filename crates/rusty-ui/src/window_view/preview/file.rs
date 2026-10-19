@@ -115,6 +115,7 @@ impl FerriteWindow {
             on_saved: Rc::new(|_| {}),
             open: Self::open_later(cx.weak_entity(), window.window_handle()),
             carried: None,
+            is_preview: true,
         }
     }
 

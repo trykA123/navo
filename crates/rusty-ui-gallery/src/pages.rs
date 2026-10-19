@@ -19,6 +19,8 @@ pub enum Page {
     MenuSubmenu,
     MenuFilter,
     MenuFiles,
+    MenuBackground,
+    MenuEmptyFolder,
     ViewerMenuText,
     ViewerMenuTree,
     Tokens,
@@ -46,6 +48,15 @@ pub enum Page {
     HintsAlt,
     HintsLow,
     CrashNotice,
+    MemoryImage,
+    MemoryDrawers,
+    ElfSymbols,
+    ElfDrawers,
+    TraceTable,
+    TraceDrawers,
+    PdfCalm,
+    PdfSearch,
+    PdfDrawers,
 }
 
 pub struct PageInfo {
@@ -64,7 +75,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 46] = [
+pub const PAGES: [PageInfo; 57] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -89,6 +100,18 @@ pub const PAGES: [PageInfo; 46] = [
     info(Page::MenuSubmenu, "Menu 7-Zip", "p17-menu-7zip", false),
     info(Page::MenuFilter, "Menu filter", "p17-menu-filter", false),
     info(Page::MenuFiles, "Menu files", "p17-menu-files", false),
+    info(
+        Page::MenuBackground,
+        "Menu, folder",
+        "p17-m8-background",
+        false,
+    ),
+    info(
+        Page::MenuEmptyFolder,
+        "Menu, empty folder",
+        "p17-m8-empty-folder",
+        false,
+    ),
     info(
         Page::ViewerMenuText,
         "Viewer menu",
@@ -191,6 +214,35 @@ pub const PAGES: [PageInfo; 46] = [
         false,
     ),
     info(Page::CrashNotice, "Crash notice", "p29-crash-notice", false),
+    info(
+        Page::MemoryImage,
+        "Memory image",
+        "p16-b2-hex-simple",
+        false,
+    ),
+    info(
+        Page::MemoryDrawers,
+        "Memory image, drawers",
+        "p16-b2-hex-drawers",
+        false,
+    ),
+    info(Page::ElfSymbols, "ELF symbols", "p16-b3-elf-simple", false),
+    info(
+        Page::ElfDrawers,
+        "ELF symbols, drawers",
+        "p16-b3-elf-drawers",
+        false,
+    ),
+    info(Page::TraceTable, "CAN trace", "p16-b6-asc-simple", false),
+    info(
+        Page::TraceDrawers,
+        "CAN trace, drawers",
+        "p16-b6-asc-drawers",
+        false,
+    ),
+    info(Page::PdfCalm, "PDF", "p15-a10b-calm", true),
+    info(Page::PdfSearch, "PDF search", "p15-a10b-search", false),
+    info(Page::PdfDrawers, "PDF drawers", "p15-a10b-drawers", false),
 ];
 
 impl Page {

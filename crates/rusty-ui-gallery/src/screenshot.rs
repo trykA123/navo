@@ -65,7 +65,17 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
                 gallery.set_mode(mode, cx);
             });
             cx.background_executor().timer(SETTLE).await;
-            if mode == Mode::Light && matches!(page, Page::Tree | Page::Table) {
+            if mode == Mode::Light
+                && matches!(
+                    page,
+                    Page::Tree
+                        | Page::Table
+                        | Page::MemoryDrawers
+                        | Page::ElfDrawers
+                        | Page::TraceDrawers
+                        | Page::PdfDrawers
+                )
+            {
                 cx.update(|cx| drive(window, &gallery, cx));
                 cx.background_executor().timer(SETTLE).await;
             }

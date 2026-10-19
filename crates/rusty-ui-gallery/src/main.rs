@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod automotive_sample;
 mod drives_page;
 mod gallery;
 mod image_sample;
@@ -11,6 +12,7 @@ mod options;
 mod pages;
 mod pane_page;
 mod pane_sample;
+mod pdf_sample;
 mod rich_sample;
 mod screenshot;
 mod sections;

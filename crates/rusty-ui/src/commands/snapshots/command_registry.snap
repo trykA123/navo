@@ -67,6 +67,7 @@ pane.go_forward | Forward | FileList
 files.clear_filter | Clear filter | FileList
 files.rename | Rename | FileList
 files.new_folder | New folder | FileList
+files.new_file | New file | FileList
 files.mark_pattern | Mark by pattern | FileList
 files.unmark_pattern | Unmark by pattern | FileList
 files.invert_marks | Invert marks | FileList
@@ -223,6 +224,40 @@ markdown.next_link | Next link | Markdown
 markdown.previous_link | Previous link | Markdown
 markdown.copy_block | Copy block | Markdown
 markdown.copy_link | Copy link | Markdown
+memory.toggle_navigator | Ranges drawer | MemoryImage
+memory.toggle_inspector | Inspector drawer | MemoryImage
+memory.go_to_item | Go to the picked range | MemoryImage
+elf.toggle_navigator | Sections drawer | Elf
+elf.toggle_inspector | Inspector drawer | Elf
+elf.pick_item | Show the picked section's symbols, or inspect the symbol | Elf
+elf.sort_by_name | Sort symbols by name | Elf
+elf.sort_by_section | Sort symbols by section | Elf
+elf.sort_by_address | Sort symbols by address | Elf
+elf.sort_by_size | Sort symbols by size | Elf
+elf.type_n | Type n in the filter | ElfTable
+elf.type_p | Type p in the filter | ElfTable
+elf.type_one | Type 1 in the filter | ElfTable
+elf.type_three | Type 3 in the filter | ElfTable
+elf.type_five | Type 5 in the filter | ElfTable
+trace.toggle_navigator | IDs drawer | CanTrace
+trace.toggle_inspector | Inspector drawer | CanTrace
+trace.filter_by_id | Filter by the picked ID | CanTrace
+trace.sort_ids | Sort IDs by count or ID | CanTrace
+trace.type_one | Type 1 in the ID filter | CanTrace
+trace.type_three | Type 3 in the ID filter | CanTrace
+trace.type_five | Type 5 in the ID filter | CanTrace
+trace.type_n | Type n in the ID filter | CanTrace
+trace.type_p | Type p in the ID filter | CanTrace
+trace.filter_backspace | Erase in the ID filter | CanTrace
+pdf.fit | Fit to width | Pdf
+pdf.actual_size | Actual size | Pdf
+pdf.zoom_in | Zoom in | Pdf
+pdf.zoom_out | Zoom out | Pdf
+pdf.whole_word | Whole word | Pdf
+pdf.all_hits | All hits | Pdf
+pdf.pages_and_outline | Pages and outline | Pdf
+pdf.pages | Pages | Pdf
+pdf.copy | Copy selected text | Pdf
 app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global

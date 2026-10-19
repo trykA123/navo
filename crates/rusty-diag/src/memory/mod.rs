@@ -3,8 +3,7 @@ mod linux;
 
 use std::collections::BTreeMap;
 use std::io;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError, Weak};
+use std::sync::{Arc, Mutex, PoisonError};
 
 #[cfg(target_os = "linux")]
 pub use linux::{ProcStatusProbe, parse_proc_status};
@@ -30,60 +29,62 @@ impl MemoryProbe for FakeProbe {
     }
 }
 
-type CacheEntry = (String, u64, Weak<AtomicU64>);
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CacheSize {
+    pub bytes: u64,
+    pub pinned_bytes: u64,
+    pub entries: u64,
+}
+
+impl CacheSize {
+    #[must_use]
+    pub fn unpinned_bytes(&self) -> u64 {
+        self.bytes.saturating_sub(self.pinned_bytes)
+    }
+}
+
+type Measure = Box<dyn Fn() -> CacheSize + Send + Sync>;
+
+struct Registered {
+    name: String,
+    budget: u64,
+    measure: Measure,
+}
 
 #[derive(Clone, Default)]
 pub struct CacheRegistry {
-    entries: Arc<Mutex<Vec<CacheEntry>>>,
+    entries: Arc<Mutex<Vec<Registered>>>,
 }
 
 impl CacheRegistry {
-    pub fn register(&self, name: &str, budget_bytes: u64) -> CacheHandle {
-        let bytes = Arc::new(AtomicU64::new(0));
-        let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
-        entries.retain(|(_, _, bytes)| bytes.strong_count() > 0);
-        entries.push((name.to_owned(), budget_bytes, Arc::downgrade(&bytes)));
-        CacheHandle { bytes }
-    }
-
-    fn snapshot(&self) -> Vec<CacheUsage> {
-        let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut caches = Vec::with_capacity(entries.len());
-        entries.retain(|(name, budget, bytes)| {
-            let Some(bytes) = bytes.upgrade() else {
-                return false;
-            };
-            caches.push(CacheUsage {
-                name: name.clone(),
-                bytes: bytes.load(Ordering::Relaxed),
-                budget: *budget,
+    pub fn register(
+        &self,
+        name: &str,
+        budget_bytes: u64,
+        measure: impl Fn() -> CacheSize + Send + Sync + 'static,
+    ) {
+        self.entries
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(Registered {
+                name: name.to_owned(),
+                budget: budget_bytes,
+                measure: Box::new(measure),
             });
-            true
-        });
-        caches
-    }
-}
-
-#[derive(Clone)]
-pub struct CacheHandle {
-    bytes: Arc<AtomicU64>,
-}
-
-impl CacheHandle {
-    pub fn set(&self, bytes: u64) {
-        self.bytes.store(bytes, Ordering::Relaxed);
     }
 
-    pub fn add(&self, bytes: u64) {
-        self.bytes.fetch_add(bytes, Ordering::Relaxed);
-    }
-
-    pub fn sub(&self, bytes: u64) {
-        let _ = self
-            .bytes
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-                Some(current.saturating_sub(bytes))
-            });
+    #[must_use]
+    pub fn usage(&self) -> Vec<CacheUsage> {
+        self.entries
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .map(|cache| CacheUsage {
+                name: cache.name.clone(),
+                size: (cache.measure)(),
+                budget: cache.budget,
+            })
+            .collect()
     }
 }
 
@@ -133,7 +134,7 @@ impl Drop for TaskGuard {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheUsage {
     pub name: String,
-    pub bytes: u64,
+    pub size: CacheSize,
     pub budget: u64,
 }
 
@@ -157,7 +158,7 @@ pub fn memory_report(
     MemoryReport {
         process,
         probe_error,
-        caches: caches.snapshot(),
+        caches: caches.usage(),
         tasks: tasks.snapshot(),
     }
 }

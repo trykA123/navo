@@ -58,6 +58,8 @@ impl ClipboardFault {
 pub trait FileClipboardService {
     fn write(&self, files: &ClipboardFiles) -> Result<(), ClipboardFault>;
     fn read(&self) -> Result<Option<ClipboardFiles>, ClipboardFault>;
+    /// Never blocks: only asks whether files are offered, without reading them.
+    fn has_files(&self) -> bool;
     fn clear_if_same(&self, files: &ClipboardFiles) -> Result<bool, ClipboardFault>;
 }
 
@@ -136,6 +138,11 @@ impl FerriteWindow {
             }
             Err(error) => fault(&error),
         });
+    }
+
+    pub(super) fn has_files_to_paste(&self) -> bool {
+        self.file_clipboard()
+            .is_ok_and(|service| service.has_files())
     }
 
     pub(super) fn paste(&mut self) {
