@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::fs;
 use std::io::Read;
 use std::panic::{self, AssertUnwindSafe};
@@ -15,6 +16,10 @@ use super::*;
 use crate::logging::{self, Diagnostics, Opened};
 
 static HOOK_LOCK: Mutex<()> = Mutex::new(());
+thread_local! {
+    // Other tests in this binary panic in parallel; only this test's threads reach the crash hook.
+    static OWNED: Cell<bool> = const { Cell::new(false) };
+}
 const MESSAGE: &str = r"user=canary-user-7731 host=CANARY-PC-7731 domain=CANARYDOM C:\Users\canary-user-7731\Documents\canary-project-7731 \\canary-srv-7731\share\canary-7731\q3.xlsx cannot rename 'Secret Plan.docx'";
 
 fn diagnostics() -> Diagnostics {
@@ -37,21 +42,36 @@ fn with_hook(data: &Path, diagnostics: &Diagnostics, run: impl FnOnce(Arc<Atomic
     let _lock = HOOK_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let previous = panic::take_hook();
+    let previous = Arc::new(panic::take_hook());
     let calls = Arc::new(AtomicUsize::new(0));
     let counter = calls.clone();
     panic::set_hook(Box::new(move |_| {
         counter.fetch_add(1, Ordering::Relaxed);
     }));
-    let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        install(Some(data), diagnostics);
-        run(calls);
+    install(Some(data), diagnostics);
+    let installed = panic::take_hook();
+    let elsewhere = previous.clone();
+    panic::set_hook(Box::new(move |info| {
+        if OWNED.get() {
+            installed(info);
+        } else {
+            elsewhere(info);
+        }
     }));
+    own_thread();
+    let result = panic::catch_unwind(AssertUnwindSafe(|| run(calls)));
+    OWNED.set(false);
     drop(panic::take_hook());
-    panic::set_hook(previous);
+    panic::set_hook(
+        Arc::try_unwrap(previous).unwrap_or_else(|shared| Box::new(move |info| shared(info))),
+    );
     if let Err(payload) = result {
         panic::resume_unwind(payload);
     }
+}
+
+fn own_thread() {
+    OWNED.set(true);
 }
 
 fn trigger(message: &str) {
@@ -101,7 +121,10 @@ fn hook_redacts_message_thread_and_events() {
     with_hook(dir.path(), &diagnostics, |_| {
         let thread = std::thread::Builder::new()
             .name("canary-user-7731".into())
-            .spawn(|| panic!("{MESSAGE}"))
+            .spawn(|| {
+                own_thread();
+                panic!("{MESSAGE}")
+            })
             .unwrap();
         assert!(thread.join().is_err());
     });
