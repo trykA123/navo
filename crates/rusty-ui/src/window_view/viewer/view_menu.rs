@@ -3,7 +3,7 @@ use rusty_core::shell_menu::{ItemId, ShellMenu};
 
 use super::body::{BodyAct, MenuEntry, ViewerBody};
 use super::menu::viewer_menu;
-use super::parts::{PRESET_ACTIONS, PartSet};
+use super::parts::{PRESET_ACTIONS, PartSet, ViewParts};
 use super::{
     Back, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds, ToggleCharts, ToggleInfo,
     ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector, ToggleRowBars, ViewCustom,
@@ -12,12 +12,13 @@ use super::{
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant};
-use crate::settings::{Field, PRESETS, Value, Values};
+use crate::settings::{Change, Field, PRESETS, Value, Values};
 use crate::tokens;
 use crate::window_view::{FerriteWindow, SaveReport};
 
 const NO_PARTS: &str = "This view has no parts to show or hide.";
 const KEPT: &str = "Kept as the default in ferrite.toml.";
+const SAVING: &str = "Saving\u{2026}";
 const NOT_KEPT: &str = "Not kept as the default.";
 const NOT_SAVED: &str = "ferrite.toml could not be saved.";
 const MENU_TITLE: &str = "View";
@@ -36,6 +37,10 @@ impl ViewOp {
     fn keeps_menu_open(self) -> bool {
         matches!(self, Self::Toggle(_) | Self::Preset(_))
     }
+}
+
+fn empty_keep_note(parts: &ViewParts) -> &'static str {
+    if parts.is_pending() { SAVING } else { KEPT }
 }
 
 fn view_entries(set: &PartSet, shown: &Values, is_editing: bool) -> Vec<MenuEntry> {
@@ -183,8 +188,9 @@ impl FerriteWindow {
             }
             ViewOp::Keep => {
                 let kept = viewer.parts.keep(&values);
+                let note = empty_keep_note(&viewer.parts);
                 if kept.is_empty() {
-                    viewer.say(KEPT, cx);
+                    viewer.say(note, cx);
                 }
                 kept
             }
@@ -200,7 +206,7 @@ impl FerriteWindow {
     pub(in crate::window_view) fn keep_settled(
         &mut self,
         report: &SaveReport,
-        sent: &[Field],
+        sent: &[Change],
         cx: &mut App,
     ) {
         let Some(viewer) = self.viewer.as_mut() else {

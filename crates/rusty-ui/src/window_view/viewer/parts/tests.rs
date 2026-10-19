@@ -1,4 +1,4 @@
-use super::{AUTOMOTIVE, IMAGE, TEXT, ViewParts};
+use super::{AUTOMOTIVE, AUTOMOTIVE_TABLE, IMAGE, TEXT, ViewParts};
 use crate::settings::{Change, Field, Value, Values};
 
 fn set(values: &Values, field: Field, value: Value) -> Values {
@@ -181,10 +181,16 @@ fn a_kept_part_stays_an_override_until_a_clean_save_is_reported() {
     parts.toggle(&TEXT, Field::TextLineEnds, &settings);
     let kept = parts.keep(&settings);
     assert_eq!(kept.len(), 1);
-    assert_eq!(parts.settle(&[Field::TextLineEnds], false), Some(false));
+    assert_eq!(
+        parts.settle(&[change(Field::TextLineEnds, true)], false),
+        Some(false)
+    );
     assert!(parts.is_shown(&TEXT, Field::TextLineEnds, &settings));
     parts.keep(&settings);
-    assert_eq!(parts.settle(&[Field::TextLineEnds], true), Some(true));
+    assert_eq!(
+        parts.settle(&[change(Field::TextLineEnds, true)], true),
+        Some(true)
+    );
     assert!(!parts.is_shown(&TEXT, Field::TextLineEnds, &settings));
     assert_eq!(parts, ViewParts::default());
 }
@@ -194,5 +200,89 @@ fn a_save_of_other_fields_does_not_settle_a_keep() {
     let mut parts = ViewParts::default();
     parts.toggle(&TEXT, Field::TextLineEnds, &Values::default());
     parts.keep(&Values::default());
-    assert_eq!(parts.settle(&[Field::Theme], true), None);
+    assert_eq!(parts.settle(&[change(Field::Theme, true)], true), None);
+}
+
+fn memory_parts_shown(parts: &ViewParts, settings: &Values) -> [bool; 3] {
+    [
+        Field::AutomotiveMemoryStrip,
+        Field::AutomotiveCharts,
+        Field::AutomotiveRowBars,
+    ]
+    .map(|field| parts.is_shown(&AUTOMOTIVE, field, settings))
+}
+
+#[test]
+fn a_toggle_in_the_table_view_keeps_the_memory_parts_of_a_rich_preset_shown() {
+    let mut parts = ViewParts::default();
+    let settings = rich();
+    parts.toggle(&AUTOMOTIVE_TABLE, Field::AutomotiveInspector, &settings);
+    assert!(!parts.is_shown(&AUTOMOTIVE_TABLE, Field::AutomotiveInspector, &settings));
+    assert_eq!(memory_parts_shown(&parts, &settings), [true; 3]);
+    let kept = parts.keep(&settings);
+    let saved = kept.iter().fold(settings.clone(), |all, one| all.with(one));
+    assert_eq!(memory_parts_shown(&ViewParts::default(), &saved), [true; 3]);
+    assert!(!saved.is_shown(AUTOMOTIVE.preset, Field::AutomotiveInspector));
+}
+
+#[test]
+fn custom_chosen_in_the_table_view_keeps_the_memory_parts_of_a_rich_preset_shown() {
+    let mut parts = ViewParts::default();
+    let settings = rich();
+    parts.choose(&AUTOMOTIVE_TABLE, 2, &settings);
+    assert_eq!(memory_parts_shown(&parts, &settings), [true; 3]);
+    assert!(parts.is_shown(&AUTOMOTIVE_TABLE, Field::AutomotiveInspector, &settings));
+    let kept = parts.keep(&settings);
+    let saved = kept.iter().fold(settings.clone(), |all, one| all.with(one));
+    assert_eq!(memory_parts_shown(&ViewParts::default(), &saved), [true; 3]);
+}
+
+fn change(field: Field, on: bool) -> Change {
+    Change {
+        field,
+        value: Value::Flag(on),
+    }
+}
+
+#[test]
+fn a_second_keep_while_the_first_save_runs_leaves_the_keep_pending() {
+    let mut parts = ViewParts::default();
+    let settings = Values::default();
+    parts.toggle(&TEXT, Field::TextLineEnds, &settings);
+    assert_eq!(parts.keep(&settings).len(), 1);
+    let applied = set(&settings, Field::TextLineEnds, Value::Flag(true));
+    assert!(parts.keep(&applied).is_empty());
+    assert!(parts.is_pending());
+}
+
+#[test]
+fn a_failed_first_save_still_reports_after_a_second_keep() {
+    let mut parts = ViewParts::default();
+    let settings = Values::default();
+    parts.toggle(&TEXT, Field::TextLineEnds, &settings);
+    parts.keep(&settings);
+    let applied = set(&settings, Field::TextLineEnds, Value::Flag(true));
+    parts.keep(&applied);
+    let sent = [change(Field::TextLineEnds, true)];
+    assert_eq!(parts.settle(&sent, false), Some(false));
+    assert!(!parts.is_pending());
+    assert!(parts.is_shown(&TEXT, Field::TextLineEnds, &settings));
+}
+
+#[test]
+fn an_older_save_of_the_same_field_does_not_settle_a_newer_keep() {
+    let mut parts = ViewParts::default();
+    let settings = Values::default();
+    parts.toggle(&TEXT, Field::TextLineEnds, &settings);
+    parts.keep(&settings);
+    parts.toggle(&TEXT, Field::TextLineEnds, &settings);
+    let applied = set(&settings, Field::TextLineEnds, Value::Flag(true));
+    let newer = parts.keep(&applied);
+    assert_eq!(newer, [change(Field::TextLineEnds, false)]);
+    assert_eq!(
+        parts.settle(&[change(Field::TextLineEnds, true)], true),
+        None
+    );
+    assert!(parts.is_pending());
+    assert_eq!(parts.settle(&newer, true), Some(true));
 }
