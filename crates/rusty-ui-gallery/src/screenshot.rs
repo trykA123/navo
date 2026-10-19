@@ -73,6 +73,7 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
                         | Page::MemoryDrawers
                         | Page::ElfDrawers
                         | Page::TraceDrawers
+                        | Page::PdfDrawers
                 )
             {
                 cx.update(|cx| drive(window, &gallery, cx));

@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 7] = [
+pub(super) const GROUPS: [Group; 8] = [
     Group {
         context: "Tree",
         commands: &[
@@ -294,6 +294,24 @@ pub(super) const GROUPS: [Group; 7] = [
                 "trace.filter_backspace",
                 "Erase in the ID filter",
             ),
+        ],
+    },
+    Group {
+        context: "Pdf",
+        commands: &[
+            ("viewer_pdf::FitWidth", "pdf.fit", "Fit to width"),
+            ("viewer_pdf::ActualSize", "pdf.actual_size", "Actual size"),
+            ("viewer_pdf::ZoomIn", "pdf.zoom_in", "Zoom in"),
+            ("viewer_pdf::ZoomOut", "pdf.zoom_out", "Zoom out"),
+            ("viewer_pdf::WholeWord", "pdf.whole_word", "Whole word"),
+            ("viewer_pdf::AllHits", "pdf.all_hits", "All hits"),
+            (
+                "viewer_pdf::LeftDrawer",
+                "pdf.pages_and_outline",
+                "Pages and outline",
+            ),
+            ("viewer_pdf::PagesDrawer", "pdf.pages", "Pages"),
+            ("viewer_pdf::CopyText", "pdf.copy", "Copy selected text"),
         ],
     },
 ];

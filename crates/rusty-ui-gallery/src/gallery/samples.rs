@@ -17,9 +17,21 @@ impl Gallery {
         }
     }
 
+    pub(super) fn pdf_sample(&self) -> Option<&Entity<PdfView>> {
+        match self.page {
+            Page::PdfCalm => Some(&self.pdf[0]),
+            Page::PdfSearch => Some(&self.pdf[1]),
+            Page::PdfDrawers => Some(&self.pdf[2]),
+            _ => None,
+        }
+    }
+
     pub fn focus_sample(&self, window: &mut Window, cx: &mut App) {
         if let Some(body) = self.sample() {
             window.focus(&body.focus_handle(cx), cx);
+        }
+        if let Some(pdf) = self.pdf_sample() {
+            window.focus(&pdf.focus_handle(cx), cx);
         }
     }
 
@@ -30,6 +42,7 @@ impl Gallery {
             Page::MemoryDrawers => &MEMORY_STEPS,
             Page::ElfDrawers => &ELF_STEPS,
             Page::TraceDrawers => &TRACE_STEPS,
+            Page::PdfDrawers => &PDF_STEPS,
             _ => &[],
         };
         for name in steps {

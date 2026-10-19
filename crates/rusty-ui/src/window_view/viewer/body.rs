@@ -24,6 +24,7 @@ pub struct Host {
     pub on_saved: Rc<dyn Fn(&mut App)>,
     pub open: OpenFile,
     pub carried: Option<Carried>,
+    pub is_preview: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

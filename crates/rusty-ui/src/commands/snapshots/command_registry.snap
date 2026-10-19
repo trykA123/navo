@@ -249,6 +249,15 @@ trace.type_five | Type 5 in the ID filter | CanTrace
 trace.type_n | Type n in the ID filter | CanTrace
 trace.type_p | Type p in the ID filter | CanTrace
 trace.filter_backspace | Erase in the ID filter | CanTrace
+pdf.fit | Fit to width | Pdf
+pdf.actual_size | Actual size | Pdf
+pdf.zoom_in | Zoom in | Pdf
+pdf.zoom_out | Zoom out | Pdf
+pdf.whole_word | Whole word | Pdf
+pdf.all_hits | All hits | Pdf
+pdf.pages_and_outline | Pages and outline | Pdf
+pdf.pages | Pages | Pdf
+pdf.copy | Copy selected text | Pdf
 app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global

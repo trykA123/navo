@@ -5,6 +5,7 @@ mod hex;
 mod image;
 mod markdown;
 mod memory;
+mod pdf;
 mod table;
 mod text;
 mod trace;
@@ -62,6 +63,7 @@ impl Sniff<'_> {
 }
 
 pub(super) use image::{IMAGE_ID, is_image_name};
+pub(super) use pdf::PDF_ID;
 pub(super) use text::paged_text;
 
 pub type Loaded = Box<dyn Any + Send>;
@@ -150,6 +152,7 @@ impl Kinds {
             Arc::new(memory::MemoryKind),
             Arc::new(elf::ElfKind),
             Arc::new(trace::TraceKind),
+            Arc::new(pdf::Pdf),
         ])
     }
 

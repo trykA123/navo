@@ -13,6 +13,7 @@ mod archive;
 mod code_page;
 mod memory;
 mod paged;
+mod pdf;
 mod summary;
 
 const MAX_VIEW: u64 = 16 * 1024 * 1024;
@@ -31,6 +32,7 @@ pub fn hooks(db: Option<SharedDb>) -> FileHooks {
         archive_entry: Arc::new(archive::archive_entry),
         bytes: Arc::new(bytes),
         range: Arc::new(range),
+        pdf: Arc::new(pdf::open),
         ..FileHooks::none()
     };
     match db {

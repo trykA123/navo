@@ -193,6 +193,9 @@ image.zoom_out | - | Image
 image.toggle_info | i | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
+viewer.go_to_start | home | Pdf
+viewer.go_to_end | end | Pdf
+viewer.back | escape | Pdf
 viewer.back | escape | MemoryImage
 viewer.back | escape | Elf
 viewer.back | escape | CanTrace
@@ -259,6 +262,18 @@ trace.type_five | 5 | CanTrace
 trace.type_n | n | CanTrace
 trace.type_p | p | CanTrace
 trace.filter_backspace | backspace | CanTrace
+[viewer_pdf]
+pdf.fit | ctrl-0 | Pdf
+pdf.actual_size | ctrl-1 | Pdf
+pdf.zoom_in | ctrl-= | Pdf
+pdf.zoom_in | ctrl-shift-= | Pdf
+pdf.zoom_out | ctrl-- | Pdf
+pdf.whole_word | alt-w | Pdf
+pdf.all_hits | ctrl-i | Pdf
+pdf.all_hits | ctrl-shift-f | Pdf
+pdf.pages_and_outline | ctrl-b | Pdf
+pdf.pages | ctrl-p | Pdf
+pdf.copy | ctrl-c | Pdf
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu
