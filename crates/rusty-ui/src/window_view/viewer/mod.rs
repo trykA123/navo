@@ -16,6 +16,7 @@ mod menu;
 mod modes;
 mod open;
 mod paged;
+mod pdf;
 mod rich_header;
 mod search;
 mod table;
@@ -39,6 +40,7 @@ pub(in crate::window_view) use keys::{BackspaceKey, PageDown};
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use menu::viewer_menu;
 pub use paged::{PagedKind, PagedView};
+pub use pdf::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use search::memory::MemoryLink;
 pub(in crate::window_view) use tree::FilterBack;
 

@@ -62,6 +62,7 @@ resvg = "=0.46.0"
 rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
+rusty-pdf = { path = "../rusty-pdf" }
 rusty-structured = { path = "../rusty-structured" }
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"

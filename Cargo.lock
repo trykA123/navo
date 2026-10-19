@@ -6446,6 +6446,7 @@ dependencies = [
  "rusty-cache",
  "rusty-core",
  "rusty-fs",
+ "rusty-pdf",
  "rusty-structured",
  "serde",
  "tempfile",
@@ -6477,6 +6478,7 @@ dependencies = [
  "image",
  "rusty-core",
  "rusty-fs",
+ "rusty-pdf",
  "rusty-ui",
 ]
 

@@ -223,6 +223,15 @@ markdown.next_link | Next link | Markdown
 markdown.previous_link | Previous link | Markdown
 markdown.copy_block | Copy block | Markdown
 markdown.copy_link | Copy link | Markdown
+pdf.fit | Fit to width | Pdf
+pdf.actual_size | Actual size | Pdf
+pdf.zoom_in | Zoom in | Pdf
+pdf.zoom_out | Zoom out | Pdf
+pdf.whole_word | Whole word | Pdf
+pdf.all_hits | All hits | Pdf
+pdf.pages_and_outline | Pages and outline | Pdf
+pdf.pages | Pages | Pdf
+pdf.copy | Copy selected text | Pdf
 app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global

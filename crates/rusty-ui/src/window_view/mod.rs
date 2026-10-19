@@ -77,6 +77,7 @@ pub use viewer::{
     ViewerKind,
 };
 pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, MenuEntry, Picture, ReadBytes, decode_image};
+pub use viewer::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use viewer::{bind_keys as bind_viewer_keys, viewer_menu};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;

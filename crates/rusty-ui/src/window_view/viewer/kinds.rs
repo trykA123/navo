@@ -3,6 +3,7 @@ mod font;
 mod hex;
 mod image;
 mod markdown;
+mod pdf;
 mod table;
 mod text;
 mod tree;
@@ -144,6 +145,7 @@ impl Kinds {
             Arc::new(markdown::MarkdownKind),
             Arc::new(archive::Archive),
             Arc::new(font::Font),
+            Arc::new(pdf::Pdf),
         ])
     }
 

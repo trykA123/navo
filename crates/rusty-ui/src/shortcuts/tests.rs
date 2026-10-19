@@ -191,7 +191,7 @@ fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     }
 }
 
-const BACK_CONTEXTS: [&str; 4] = ["ViewerGoTo", "Paged", "ViewerFind", "Tree"];
+const BACK_CONTEXTS: [&str; 5] = ["ViewerGoTo", "Paged", "ViewerFind", "Tree", "Pdf"];
 
 #[test]
 fn a_command_bound_in_several_contexts_is_recorded_in_each() {
@@ -220,6 +220,7 @@ fn the_home_context_is_written_without_a_context() {
         set_in("viewer.go_to_start", None, &["f8"]),
         set_in("viewer.go_to_start", Some("Archive"), &["f8"]),
         set_in("viewer.go_to_start", Some("Tree"), &["f8"]),
+        set_in("viewer.go_to_start", Some("Pdf"), &["f8"]),
     ];
     assert_eq!(edits, expected);
 }

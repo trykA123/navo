@@ -902,6 +902,59 @@ keys = ["ctrl-c"]
 command = "image.copy_path"
 keys = ["ctrl-shift-c"]
 
+# Pdf
+
+[[bind]]
+command = "viewer.go_to_start"
+keys = ["home"]
+context = "Pdf"
+
+[[bind]]
+command = "viewer.go_to_end"
+keys = ["end"]
+context = "Pdf"
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Pdf"
+
+[[bind]]
+command = "pdf.fit"
+keys = ["ctrl-0"]
+
+[[bind]]
+command = "pdf.actual_size"
+keys = ["ctrl-1"]
+
+[[bind]]
+command = "pdf.zoom_in"
+keys = ["ctrl-=", "ctrl-shift-="]
+
+[[bind]]
+command = "pdf.zoom_out"
+keys = ["ctrl--"]
+
+[[bind]]
+command = "pdf.whole_word"
+keys = ["alt-w"]
+
+[[bind]]
+command = "pdf.all_hits"
+keys = ["ctrl-i", "ctrl-shift-f"]
+
+[[bind]]
+command = "pdf.pages_and_outline"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "pdf.pages"
+keys = ["ctrl-p"]
+
+[[bind]]
+command = "pdf.copy"
+keys = ["ctrl-c"]
+
 # Tree
 
 [[bind]]
