@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use proptest::prelude::*;
 
+use super::crashing::crashed_with;
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -97,6 +100,112 @@ fn spec() -> impl Strategy<Value = Spec> {
         })
 }
 
+#[derive(Debug, Clone)]
+enum Interruption {
+    Fail(usize),
+    Cancel(u64),
+    Crash(usize),
+}
+
+fn interruption() -> impl Strategy<Value = Interruption> {
+    prop_oneof![
+        any::<usize>().prop_map(Interruption::Fail),
+        (0_u64..200_000).prop_map(Interruption::Cancel),
+        any::<usize>().prop_map(Interruption::Crash),
+    ]
+}
+
+struct Interrupted {
+    fs: FakeFs,
+    plan: OperationPlan,
+    before: HashMap<String, u64>,
+    failed: Option<(u32, FsErrorKind)>,
+    done: Vec<u32>,
+}
+
+fn source_of(spec: &Spec, pick: usize) -> Option<String> {
+    let files = file_paths(spec);
+    let (path, _) = files.get(pick % files.len().max(1))?;
+    Some(format!("src/{path}"))
+}
+
+fn interrupted(spec: &Spec, interruption: &Interruption, workers: usize) -> Interrupted {
+    let fs = build(spec);
+    let plan = job_plan(&fs, spec);
+    let before = tree_of(&fs, "")
+        .into_iter()
+        .map(|(path, _, size)| (path, size))
+        .collect();
+    let mut harness = Harness {
+        workers,
+        ..Harness::default()
+    };
+    let mut failed = None;
+    let done = match interruption {
+        Interruption::Crash(pick) => {
+            let path = source_of(spec, *pick).unwrap_or_default();
+            let done = crashed_with(&fs, &plan, &path, workers);
+            let _ = clean_up(&plan, &done, &fs);
+            done
+        }
+        Interruption::Fail(pick) => {
+            if let Some(path) = source_of(spec, *pick) {
+                fs.fault(&path, FakeOp::Copy, 1, Fault::Fail(FsErrorKind::DiskFull));
+            }
+            failed = failure(&harness.run(&fs, &plan, &[]));
+            harness.log.done()
+        }
+        Interruption::Cancel(bytes) => {
+            harness.cancel_after_bytes = Some(*bytes);
+            let _ = harness.run(&fs, &plan, &[]);
+            harness.log.done()
+        }
+    };
+    Interrupted {
+        fs,
+        plan,
+        before,
+        failed,
+        done,
+    }
+}
+
+fn holds_only_done_copies(run: &Interrupted) -> bool {
+    (0_u32..).zip(&run.plan.steps).all(|(seq, step)| {
+        let Step::CopyFile {
+            target,
+            size: planned,
+            ..
+        } = step
+        else {
+            return true;
+        };
+        let path = target.path().to_text();
+        let found = size(&run.fs, &path);
+        let before = run.before.get(&path).copied();
+        if run.done.contains(&seq) {
+            found == Some(*planned)
+        } else {
+            found == before || (found.is_none() && overwrites(&run.plan, target))
+        }
+    })
+}
+
+fn overwrites(plan: &OperationPlan, target: &rusty_core::Location) -> bool {
+    plan.conflicts
+        .iter()
+        .any(|c| c.resolution == rusty_core::Resolution::Overwrite && c.target.same_place(target))
+}
+
+fn resumed(run: &Interrupted, workers: usize) -> (JobOutcome, Snapshot, Vec<String>) {
+    let mut harness = Harness {
+        workers,
+        ..Harness::default()
+    };
+    let outcome = harness.run(&run.fs, &run.plan, &run.done);
+    (outcome, tree_of(&run.fs, ""), leftovers(&run.fs))
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(96))]
 
@@ -105,5 +214,24 @@ proptest! {
         let standard = ending(&spec, 0);
         prop_assert_eq!(&standard.0, &JobOutcome::Done);
         prop_assert_eq!(ending(&spec, spec.workers), standard);
+    }
+
+    #[test]
+    fn an_interrupted_parallel_job_resumes_to_the_standard_result(
+        spec in spec(),
+        interruption in interruption(),
+    ) {
+        let clean = ending(&spec, 0).1;
+        let standard = interrupted(&spec, &interruption, 0);
+        let parallel = interrupted(&spec, &interruption, spec.workers);
+        prop_assert_eq!(parallel.failed, standard.failed);
+        for (run, workers) in [(&standard, 0), (&parallel, spec.workers)] {
+            prop_assert_eq!(leftovers(&run.fs), Vec::<String>::new());
+            prop_assert!(holds_only_done_copies(run), "{} workers", workers);
+            prop_assert_eq!(
+                resumed(run, workers),
+                (JobOutcome::Done, clean.clone(), Vec::new())
+            );
+        }
     }
 }

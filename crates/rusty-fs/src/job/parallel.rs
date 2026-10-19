@@ -5,7 +5,7 @@ use std::thread::{Builder, scope};
 
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
-use super::copy::{Copier, CopyStep, failure};
+use super::copy::{Copier, CopyStep, failure, temp_of};
 use super::pool::{Event, Task, work};
 use super::run::{apply, counted, current_of, holds_kept, note_kept};
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
@@ -66,6 +66,13 @@ struct Runner<'p, 'c, 'a> {
     cancelled: bool,
 }
 
+fn names_clash(one: &Location, other: &Location) -> bool {
+    let is_temp_of = |temp: &Location, of: &Location| {
+        temp_of(of).is_ok_and(|candidate| candidate.same_place(temp))
+    };
+    one.same_place(other) || is_temp_of(one, other) || is_temp_of(other, one)
+}
+
 fn room_for(step: &Step, workers: usize) -> usize {
     match step {
         Step::CopyFile { .. } => workers.saturating_sub(1),
@@ -104,7 +111,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                 self.count(step);
                 continue;
             }
-            self.wait_for_room(room_for(step, self.pool.workers));
+            self.wait_for_room(step);
             if self.stopped() {
                 break;
             }
@@ -129,10 +136,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         self.cancelled || self.failed.is_some()
     }
 
-    fn wait_for_room(&mut self, room: usize) {
+    fn wait_for_room(&mut self, step: &Step) {
+        let room = room_for(step, self.pool.workers);
         loop {
             self.note_pause();
-            if self.stopped() || (self.in_flight.len() <= room && !self.progress.paused) {
+            let is_busy =
+                self.in_flight.len() > room || self.progress.paused || self.shares_a_name(step);
+            if self.stopped() || !is_busy {
                 return;
             }
             if self.in_flight.is_empty() {
@@ -141,6 +151,16 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                 self.receive();
             }
         }
+    }
+
+    fn shares_a_name(&self, step: &Step) -> bool {
+        let Step::CopyFile { target, .. } = step else {
+            return false;
+        };
+        self.in_flight.values().any(|(other, _)| match other {
+            Step::CopyFile { target: busy, .. } => names_clash(target, busy),
+            _ => false,
+        })
     }
 
     fn note_pause(&mut self) {
@@ -239,7 +259,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
 
     fn report(&mut self) {
         let in_flight: u64 = self.in_flight.values().map(|(_, bytes)| bytes).sum();
-        self.progress.bytes_done = self.settled + in_flight;
+        self.progress.bytes_done = self.progress.bytes_done.max(self.settled + in_flight);
         (self.ctx.progress)(&self.progress);
     }
 }

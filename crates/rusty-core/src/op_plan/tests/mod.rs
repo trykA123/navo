@@ -4,6 +4,7 @@ mod conflicts;
 mod copy;
 mod delete;
 mod move_;
+mod planned;
 mod props;
 mod risks;
 

@@ -210,27 +210,6 @@ fn cancelled_mid_job(workers: usize) -> (FakeFs, OperationPlan, JobOutcome, Harn
     (fs, plan, outcome, harness)
 }
 
-fn copy_targets(plan: &OperationPlan) -> Vec<(u32, String, u64)> {
-    (0_u32..)
-        .zip(&plan.steps)
-        .filter_map(|(seq, step)| match step {
-            Step::CopyFile { target, size, .. } => Some((seq, target.path().to_text(), *size)),
-            _ => None,
-        })
-        .collect()
-}
-
-fn placed_exactly_the_done_copies(fs: &FakeFs, plan: &OperationPlan, done: &[u32]) -> bool {
-    copy_targets(plan).iter().all(|(seq, target, planned)| {
-        let found = size(fs, target);
-        if done.contains(seq) {
-            found == Some(*planned)
-        } else {
-            found.is_none()
-        }
-    })
-}
-
 #[test]
 fn cancel_mid_parallel_job_ends_cancelled() {
     for workers in WORKERS {
@@ -283,7 +262,10 @@ impl Gate {
 pub(super) struct Hooked<'a> {
     pub(super) fs: &'a FakeFs,
     pub(super) before_copy: &'a (dyn Fn(&str, &CancelToken) + Sync),
+    pub(super) on_chunk: &'a (dyn Fn(&str, u64) + Sync),
 }
+
+pub(super) fn no_chunk_hook(_: &str, _: u64) {}
 
 impl Provider for Hooked<'_> {
     fn id(&self) -> ProviderId {
@@ -320,8 +302,13 @@ impl ProviderOps for Hooked<'_> {
         progress: &mut dyn FnMut(u64),
         cancel: &CancelToken,
     ) -> Result<u64, FsError> {
-        (self.before_copy)(&source.path().to_text(), cancel);
-        self.fs.copy_file(source, target, progress, cancel)
+        let path = source.path().to_text();
+        (self.before_copy)(&path, cancel);
+        let mut chunk = |bytes: u64| {
+            (self.on_chunk)(&path, bytes);
+            progress(bytes);
+        };
+        self.fs.copy_file(source, target, &mut chunk, cancel)
     }
 
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
@@ -361,11 +348,18 @@ impl JobLog for OpensOnFailure<'_> {
 
 const FLAT: usize = 10;
 
-fn held_until_a_failure(failing: &[usize]) -> (FakeFs, JobOutcome, Vec<(u32, StepOutcome)>) {
+struct Held {
+    fs: FakeFs,
+    outcome: JobOutcome,
+    logged: Vec<(u32, StepOutcome)>,
+    progress: Vec<Progress>,
+}
+
+fn held_until_a_failure(failing: &[(usize, Fault)]) -> Held {
     let fs = flat(FLAT);
     let plan = copy_flat(&fs, FLAT);
     let gate = Gate::default();
-    let first = failing[0];
+    let first = failing[0].0;
     let held: Vec<String> = (0..FLAT)
         .filter(|i| *i != first)
         .map(|i| format!("src/f{i}.txt"))
@@ -378,34 +372,39 @@ fn held_until_a_failure(failing: &[usize]) -> (FakeFs, JobOutcome, Vec<(u32, Ste
     let ops = Hooked {
         fs: &fs,
         before_copy: &hold,
+        on_chunk: &no_chunk_hook,
     };
-    let kinds = [FsErrorKind::Locked, FsErrorKind::AccessDenied];
-    for (index, kind) in failing.iter().zip(kinds) {
-        fs.fault(
-            &format!("src/f{index}.txt"),
-            FakeOp::Copy,
-            1,
-            Fault::Fail(kind),
-        );
+    for (index, fault) in failing {
+        fs.fault(&format!("src/f{index}.txt"), FakeOp::Copy, 1, fault.clone());
     }
     let mut log = OpensOnFailure {
         log: Log::default(),
         gate: &gate,
     };
     let cancel = CancelToken::new();
+    let mut progress = Vec::new();
     let mut ctx = JobContext {
         ops: &ops,
         log: &mut log,
         cancel: &cancel,
-        progress: &mut |_| {},
+        progress: &mut |p: &Progress| progress.push(p.clone()),
     };
     let outcome = super::super::parallel::run(&plan, &[], &mut ctx, 4);
-    (fs, outcome, sorted(log.log.entries))
+    Held {
+        fs,
+        outcome,
+        logged: sorted(log.log.entries),
+        progress,
+    }
+}
+
+fn locked() -> Fault {
+    Fault::Fail(FsErrorKind::Locked)
 }
 
 #[test]
 fn the_first_parallel_failure_starts_no_new_copy() {
-    let (fs, _, _) = held_until_a_failure(&[1]);
+    let Held { fs, .. } = held_until_a_failure(&[(1, locked())]);
     let started: Vec<u32> = (0..FLAT)
         .map(|i| fs.calls(&format!("src/f{i}.txt"), FakeOp::Copy))
         .collect();
@@ -414,13 +413,13 @@ fn the_first_parallel_failure_starts_no_new_copy() {
 
 #[test]
 fn the_first_parallel_failure_is_reported() {
-    let (_, outcome, _) = held_until_a_failure(&[1]);
+    let Held { outcome, .. } = held_until_a_failure(&[(1, locked())]);
     assert_eq!(failure(&outcome), Some((1, FsErrorKind::Locked)));
 }
 
 #[test]
 fn copies_in_flight_at_a_failure_finish_and_are_journalled() {
-    let (fs, _, logged) = held_until_a_failure(&[1]);
+    let Held { fs, logged, .. } = held_until_a_failure(&[(1, locked())]);
     assert_eq!(
         (logged, tree_of(&fs, "dst"), leftovers(&fs)),
         (
@@ -440,7 +439,9 @@ fn copies_in_flight_at_a_failure_finish_and_are_journalled() {
 
 #[test]
 fn a_parallel_failure_reports_the_lowest_failed_step_not_the_first_seen() {
-    let (_, outcome, logged) = held_until_a_failure(&[2, 1]);
+    let Held {
+        outcome, logged, ..
+    } = held_until_a_failure(&[(2, locked()), (1, Fault::Fail(FsErrorKind::AccessDenied))]);
     assert_eq!(
         (failure(&outcome), logged),
         (
@@ -452,6 +453,38 @@ fn a_parallel_failure_reports_the_lowest_failed_step_not_the_first_seen() {
                 (3, StepOutcome::Done),
             ]
         )
+    );
+}
+
+#[test]
+fn progress_never_goes_back_when_a_copy_in_flight_fails() {
+    let fault = Fault::FailAfterBytes {
+        kind: FsErrorKind::DiskFull,
+        bytes: 8_000,
+    };
+    let Held { progress, .. } = held_until_a_failure(&[(1, fault)]);
+    let bytes: Vec<u64> = progress.iter().map(|p| p.bytes_done).collect();
+    assert!(bytes.windows(2).all(|pair| pair[0] <= pair[1]), "{bytes:?}");
+}
+
+#[test]
+fn a_panicking_copy_fails_its_step_and_leaves_no_temporary_file() {
+    let fs = three_files();
+    let plan = copy_three(&fs);
+    let panic_in_two = |path: &str, _: u64| assert_ne!(path, "src/two.txt", "copy panicked");
+    let ops = Hooked {
+        fs: &fs,
+        before_copy: &|_: &str, _: &CancelToken| {},
+        on_chunk: &panic_in_two,
+    };
+    let (outcome, _) = run_in(4, &ops, &plan);
+    assert_eq!(
+        (
+            failure(&outcome),
+            leftovers(&fs),
+            exists(&fs, "dst/two.txt")
+        ),
+        (Some((1, FsErrorKind::Unknown)), Vec::new(), false)
     );
 }
 
@@ -540,4 +573,103 @@ fn a_parallel_crash_rolls_back_to_the_starting_tree() {
     let mut next_start = Harness::default();
     assert_eq!(next_start.roll_back(&fs, &plan, &done), JobOutcome::Done);
     assert_eq!((tree_of(&fs, ""), leftovers(&fs)), (before, Vec::new()));
+}
+
+fn kept_somewhere(fs: &FakeFs, files: &[(&str, &str, u64)]) -> bool {
+    files.iter().all(|(source, target, bytes)| {
+        [*source, *target]
+            .iter()
+            .any(|p| size(fs, p) == Some(*bytes))
+    })
+}
+
+const TWINS: [(&str, &str, u64); 2] = [
+    ("src/a/x.txt", "dst/x.txt", 5_000),
+    ("src/b/x.txt", "dst/x.txt", 6_000),
+];
+
+fn twins() -> FakeFs {
+    fixture(&TWINS.map(|(source, _, bytes)| (source, bytes)))
+}
+
+fn move_twins(fs: &FakeFs) -> OperationPlan {
+    plan(&PlanRequest {
+        policy: ConflictPolicy::OverwriteAll,
+        ..request(fs, OpKind::Move, &["src/a/x.txt", "src/b/x.txt"], "dst")
+    })
+}
+
+#[test]
+fn a_parallel_move_of_two_files_with_one_target_loses_neither() {
+    ends_like_standard(twins, move_twins);
+    let fs = twins();
+    let _ = run_in(8, &fs, &move_twins(&fs));
+    assert!(kept_somewhere(&fs, &TWINS));
+}
+
+const NEIGHBOURS: [(&str, &str, u64); 2] = [
+    ("src/x.ferrite-part", "dst/x.ferrite-part", 5_000),
+    ("src/x", "dst/x", 6_000),
+];
+
+fn neighbours() -> FakeFs {
+    fixture(&NEIGHBOURS.map(|(source, _, bytes)| (source, bytes)))
+}
+
+fn move_neighbours(fs: &FakeFs) -> OperationPlan {
+    plan(&request(
+        fs,
+        OpKind::Move,
+        &["src/x.ferrite-part", "src/x"],
+        "dst",
+    ))
+}
+
+#[test]
+fn a_parallel_move_of_a_file_next_to_its_temporary_name_loses_neither() {
+    ends_like_standard(neighbours, move_neighbours);
+    let fs = neighbours();
+    let _ = run_in(8, &fs, &move_neighbours(&fs));
+    assert!(kept_somewhere(&fs, &NEIGHBOURS));
+}
+
+fn copy_step((source, target, size): (&str, &str, u64), fs: &FakeFs) -> Step {
+    Step::CopyFile {
+        source: fs.location(source),
+        target: fs.location(target),
+        size,
+    }
+}
+
+fn hand_built(fs: &FakeFs, files: [(&str, &str, u64); 2]) -> OperationPlan {
+    let sources = files.map(|(source, _, _)| source);
+    let mut plan = plan(&request(fs, OpKind::Move, &sources, "dst"));
+    plan.conflicts.clear();
+    plan.steps = files.iter().map(|file| copy_step(*file, fs)).collect();
+    plan.steps
+        .extend(files.iter().map(|(source, _, _)| Step::RemoveFile {
+            location: fs.location(source),
+        }));
+    plan
+}
+
+fn hand_built_ends_like_standard(build: fn() -> FakeFs, files: [(&str, &str, u64); 2]) {
+    let standard = ending(build, |fs| hand_built(fs, files), 0);
+    for _ in 0..20 {
+        assert_eq!(ending(build, |fs| hand_built(fs, files), 8), standard);
+        let fs = build();
+        let _ = run_in(8, &fs, &hand_built(&fs, files));
+        assert!(kept_somewhere(&fs, &files));
+    }
+}
+
+#[test]
+fn copies_that_share_a_target_run_in_plan_order() {
+    hand_built_ends_like_standard(twins, TWINS);
+}
+
+#[test]
+fn a_copy_whose_temporary_name_is_another_target_runs_in_plan_order() {
+    let reversed = [NEIGHBOURS[1], NEIGHBOURS[0]];
+    hand_built_ends_like_standard(neighbours, reversed);
 }

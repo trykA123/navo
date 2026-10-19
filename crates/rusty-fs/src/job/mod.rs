@@ -12,7 +12,7 @@ use crate::{CancelToken, ProviderOps};
 
 pub use workers::{WorkerCounts, copy_workers};
 
-pub const TEMP_SUFFIX: &str = ".ferrite-part";
+pub use rusty_core::TEMP_SUFFIX;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepOutcome {

@@ -2,7 +2,7 @@ use std::thread::scope;
 
 const CHUNK: u64 = 4096;
 
-use super::parallel::Hooked;
+use super::parallel::{Hooked, no_chunk_hook};
 use super::pause::{Paused, clean_copy, start_with};
 use super::*;
 
@@ -51,6 +51,7 @@ fn a_parallel_pause_holds_a_copy_within_one_chunk() {
     let ops = Hooked {
         fs: &fs,
         before_copy: &pause_inside_the_first_copy,
+        on_chunk: &no_chunk_hook,
     };
     scope(|s| {
         let paused = Paused {
@@ -78,6 +79,7 @@ fn cancel_while_a_parallel_job_is_paused_ends_promptly_with_no_temporary_file() 
     let ops = Hooked {
         fs: &fs,
         before_copy: &pause_inside_the_first_copy,
+        on_chunk: &no_chunk_hook,
     };
     let done = scope(|s| {
         let paused = Paused {
