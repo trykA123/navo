@@ -15,6 +15,7 @@ rustix = { version = "1.1.5", features = ["fs"] }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
+  "Win32_Graphics_Gdi",
   "Win32_NetworkManagement_WNet",
   "Win32_Storage_FileSystem",
   "Win32_Security",
@@ -23,6 +24,7 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_System_Memory",
   "Win32_System_Ole",
   "Win32_System_Threading",
+  "Win32_UI_HiDpi",
   "Win32_UI_Shell",
 ] }
 windows = { version = "=0.62.2", features = [

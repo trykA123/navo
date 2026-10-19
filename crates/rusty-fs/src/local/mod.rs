@@ -16,9 +16,13 @@ mod ops;
 #[cfg(any(windows, test))]
 mod verbatim;
 #[cfg(windows)]
+mod win_copy;
+#[cfg(windows)]
 mod win_list;
 #[cfg(windows)]
 mod win_lock;
+#[cfg(windows)]
+mod win_replace;
 #[cfg(windows)]
 mod win_watch;
 #[cfg(windows)]
@@ -44,8 +48,29 @@ const DEFAULT_BATCH: usize = 512;
 type Children<'a> = Box<dyn Iterator<Item = Result<FsEntry, FsError>> + 'a>;
 
 #[derive(Debug, Clone)]
+pub struct AutoTuning {
+    pub unbuffered_from: u64,
+    pub ssd_workers: usize,
+    pub network_workers: usize,
+    pub slow_workers: usize,
+}
+
+impl Default for AutoTuning {
+    fn default() -> Self {
+        Self {
+            unbuffered_from: 256 * 1024 * 1024,
+            ssd_workers: 4,
+            network_workers: 8,
+            slow_workers: 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct LocalFs {
     batch_size: usize,
+    #[cfg(windows)]
+    auto_tuning: AutoTuning,
     #[cfg(windows)]
     std_listing: bool,
 }
@@ -53,8 +78,19 @@ pub struct LocalFs {
 impl LocalFs {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_auto_tuning(AutoTuning::default())
+    }
+
+    #[must_use]
+    #[cfg_attr(
+        not(windows),
+        expect(unused_variables, reason = "auto tuning is only used on Windows")
+    )]
+    pub fn with_auto_tuning(auto_tuning: AutoTuning) -> Self {
         Self {
             batch_size: DEFAULT_BATCH,
+            #[cfg(windows)]
+            auto_tuning,
             #[cfg(windows)]
             std_listing: false,
         }

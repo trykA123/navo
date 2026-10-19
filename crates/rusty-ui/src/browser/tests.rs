@@ -390,6 +390,10 @@ impl ProviderOps for Gated {
         self.fs.rename(source, target)
     }
 
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.fs.replace(source, target)
+    }
+
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
         self.fs.remove_file(location)
     }

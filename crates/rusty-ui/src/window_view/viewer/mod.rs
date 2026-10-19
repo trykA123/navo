@@ -73,6 +73,14 @@ pub(super) struct Viewer {
     carried: Option<Carried>,
     menu: Option<(Entity<crate::context_menu::ContextMenu>, Subscription)>,
     start_line: Option<u64>,
+    start_note: Option<SharedString>,
+}
+
+fn merged_note(load: Option<&'static str>, start: Option<SharedString>) -> Option<SharedString> {
+    match (load, start) {
+        (Some(load), Some(start)) => Some(format!("{load} {start}").into()),
+        (load, start) => start.or(load.map(SharedString::new_static)),
+    }
 }
 
 fn platform_lines(text: &str) -> String {
@@ -100,6 +108,7 @@ impl Viewer {
             carried: None,
             menu: None,
             start_line: None,
+            start_note: None,
         }
     }
 
@@ -181,9 +190,14 @@ impl FerriteWindow {
         self.show_viewer(viewer, window, cx);
     }
 
-    pub(in crate::window_view) fn open_viewer_at_line(&mut self, line: Option<u64>) {
+    pub(in crate::window_view) fn open_viewer_at_line(
+        &mut self,
+        line: Option<u64>,
+        note: Option<SharedString>,
+    ) {
         if let Some(viewer) = &mut self.viewer {
             viewer.start_line = line;
+            viewer.start_note = note;
         }
     }
 

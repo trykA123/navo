@@ -167,6 +167,7 @@ settings.next_section | tab | SettingsSheet
 settings.next_value | right | SettingsSheet
 settings.previous_section | shift-tab | SettingsSheet
 settings.previous_value | left | SettingsSheet
+settings.reset_value | f8 | SettingsSheet
 settings.row_down | down | SettingsSheet
 settings.row_up | up | SettingsSheet
 settings.show_in_file | f3 | SettingsSheet

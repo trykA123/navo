@@ -1,5 +1,6 @@
 mod controls;
 mod fields;
+mod row_state;
 mod steps;
 mod values;
 mod view;
@@ -39,6 +40,7 @@ gpui_kit::actions!(
         PreviousSection,
         EditValue,
         OpenKey,
+        ResetValue,
         UndoChange,
         CloseSettings,
         CancelEdit
@@ -63,10 +65,9 @@ pub enum SheetEvent {
 type Handler = Rc<dyn Fn(&SheetEvent, &mut Window, &mut App)>;
 
 pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) -> SideSheet {
-    let title = div().font_weight(FontWeight::SEMIBOLD).child("Settings");
     let sheet = SideSheet::new("settings-sheet", state, frame)
         .label("Settings")
-        .header(title);
+        .header(SheetTitle);
     if body.shortcuts.is_some() {
         return sheet
             .body(body)
@@ -75,13 +76,34 @@ pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) 
             .hint(&["ctrl-r"], "Reset")
             .hint(&["tab"], "Section");
     }
-    sheet
+    let can_reset = body.reset_event().is_some();
+    let sheet = sheet
         .body(body)
         .hint(&["↑", "↓"], "Move")
         .hint(&["←", "→"], "Change")
         .hint(&["tab"], "Section")
-        .hint(&["f3"], "TOML line")
-        .hint(&["ctrl-z"], "Undo")
+        .hint(&["f3"], "TOML line");
+    let sheet = if can_reset {
+        sheet.hint(&["f8"], "Reset")
+    } else {
+        sheet
+    };
+    sheet.hint(&["ctrl-z"], "Undo")
+}
+
+#[derive(IntoElement)]
+struct SheetTitle;
+
+impl RenderOnce for SheetTitle {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = tokens::current(cx);
+        div()
+            .flex()
+            .items_center()
+            .gap(t.spacing.lg)
+            .child(div().font_weight(FontWeight::SEMIBOLD).child("Settings"))
+            .child(row_state::live_chip(t))
+    }
 }
 
 #[derive(IntoElement)]
@@ -180,6 +202,12 @@ impl SettingsBody {
         }
     }
 
+    fn reset_event(&self) -> Option<SheetEvent> {
+        let spec = FIELDS.get(self.row)?;
+        let is_shown = self.shortcuts.is_none() && self.values.is_changed(spec.field);
+        is_shown.then(|| SheetEvent::Set(Change::reset(spec.field)))
+    }
+
     fn edit_event(&self) -> Option<SheetEvent> {
         let spec = FIELDS.get(self.row)?;
         matches!(spec.control, Control::Text | Control::Number)
@@ -225,6 +253,7 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
     let flip = on_event(body, body.flip_event());
     let edit = on_event(body, body.edit_event());
     let locate = on_event(body, field.map(SheetEvent::Locate));
+    let reset = on_event(body, body.reset_event());
     let undo = on_event(body, Some(SheetEvent::Undo));
     root.on_action(move |_: &RowUp, window, cx| up(window, cx))
         .on_action(move |_: &RowDown, window, cx| down(window, cx))
@@ -233,6 +262,7 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
         .on_action(move |_: &ValueFlip, window, cx| flip(window, cx))
         .on_action(move |_: &EditValue, window, cx| edit(window, cx))
         .on_action(move |_: &OpenKey, window, cx| locate(window, cx))
+        .on_action(move |_: &ResetValue, window, cx| reset(window, cx))
         .on_action(move |_: &UndoChange, window, cx| undo(window, cx))
 }
 
@@ -248,6 +278,7 @@ impl RenderOnce for SettingsBody {
             send: self.on_event.clone(),
         };
         let shown = self.shortcuts.is_none().then_some(section);
+        let footer = shown.map(|_| row_state::footer(&t, &self.values));
         let content = match self.shortcuts {
             Some(page) => page,
             None => view::content(&look, section, self.scroll.as_ref()).into_any_element(),
@@ -271,7 +302,8 @@ impl RenderOnce for SettingsBody {
                     .min_w_0()
                     .min_h_0()
                     .children(self.error.map(|message| view::error_line(&t, message)))
-                    .child(content),
+                    .child(content)
+                    .children(footer),
             );
         div()
             .flex()

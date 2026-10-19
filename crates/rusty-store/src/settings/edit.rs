@@ -114,3 +114,26 @@ pub(super) fn key_source(text: &str, key: &str) -> Result<Option<(String, String
         (line.to_owned(), item.to_string())
     }))
 }
+
+#[must_use]
+pub fn section_line(text: &str, key: &str) -> usize {
+    let plain = text.strip_prefix(BOM).unwrap_or(text);
+    let last = plain.lines().count().max(1);
+    let Ok(document) = toml_edit::Document::parse(plain) else {
+        return last;
+    };
+    let mut parts: Vec<&str> = key.split('.').collect();
+    parts.pop();
+    let mut table: &dyn TableLike = document.as_table();
+    let mut header = None;
+    for part in parts {
+        let Some(inner) = table.get(part).and_then(Item::as_table) else {
+            break;
+        };
+        header = inner.span().map(|span| span.start).or(header);
+        table = inner;
+    }
+    header
+        .and_then(|start| plain.get(..start))
+        .map_or(last, |before| before.matches('\n').count() + 1)
+}

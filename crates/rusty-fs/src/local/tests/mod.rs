@@ -8,6 +8,8 @@ use tempfile::TempDir;
 use super::*;
 use crate::{EntryBatch, EntryKind};
 
+#[cfg(windows)]
+mod copy_windows;
 mod errors;
 mod hostile;
 mod listing;
@@ -18,6 +20,7 @@ mod notify_info;
 mod ops;
 mod pause;
 mod perf;
+mod replace;
 mod verbatim;
 #[cfg(windows)]
 mod windows;

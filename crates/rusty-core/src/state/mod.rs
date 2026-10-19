@@ -6,6 +6,7 @@ mod window;
 
 use std::collections::BTreeMap;
 
+use crate::placement::{MonitorSetup, Placement};
 use crate::{Direction, LayoutError, Location, PaneId, TabId, WindowId};
 pub use history::History;
 pub use listing::{Entry, Listing};
@@ -73,6 +74,10 @@ impl AppState {
         } else {
             self.others.get(&id)
         }
+    }
+
+    pub fn remember_placement(&mut self, setup: &MonitorSetup, placement: Placement) {
+        self.focused.remember(setup, placement);
     }
 
     #[must_use]

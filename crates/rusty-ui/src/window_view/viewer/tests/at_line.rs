@@ -4,9 +4,11 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{Log, Setup, editor_of, hooks, redraw};
+use crate::prelude::SharedString;
 use crate::settings::{Field, Values};
 use crate::window_view::tests::{fake, home_beside_dest, open_options, options_for, press, settle};
-use crate::window_view::{FerriteWindow, SaveReport, SettingsHooks, StartOptions};
+use crate::window_view::viewer::merged_note;
+use crate::window_view::{FerriteWindow, KeyLine, SaveReport, SettingsHooks, StartOptions};
 
 const TOML: &[u8] = b"# mine\n[appearance]\nmode = \"dark\"\ndensity = \"compact\"\n";
 
@@ -18,10 +20,7 @@ fn settings_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteW
         files: hooks(Setup::new(TOML.to_vec()), &Log::default()),
         settings: SettingsHooks {
             file: Some(file),
-            line_of: Arc::new(move |key| {
-                let line = line_in(&text, key)?;
-                Some(line)
-            }),
+            line_of: Arc::new(move |key| Some(line_in(&text, key))),
             ..SettingsHooks::none()
         },
         ..options_for(fs.clone(), home_beside_dest(&fs))
@@ -29,12 +28,34 @@ fn settings_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteW
     open_options(cx, options)
 }
 
-fn line_in(text: &str, key: &str) -> Option<u64> {
-    let name = key.rsplit('.').next()?;
-    let at = text
-        .lines()
-        .position(|line| line.starts_with(&format!("{name} =")))?;
-    u64::try_from(at + 1).ok()
+fn line_in(text: &str, key: &str) -> KeyLine {
+    let (section, name) = key.rsplit_once('.').unwrap_or_default();
+    let found = |wanted: String| {
+        text.lines()
+            .position(|line| line.starts_with(&wanted))
+            .and_then(|at| u64::try_from(at + 1).ok())
+    };
+    if let Some(line) = found(format!("{name} =")) {
+        return KeyLine {
+            line,
+            is_missing: false,
+        };
+    }
+    let last = u64::try_from(text.lines().count()).unwrap_or(1);
+    KeyLine {
+        line: found(format!("[{section}]")).unwrap_or(last),
+        is_missing: true,
+    }
+}
+
+fn viewer_note(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<String> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .try_find("viewer-message")
+            .and_then(|found| found.label().map(str::to_owned))
+    })
+    .expect("window")
 }
 
 fn cursor_line(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Option<u32> {
@@ -66,12 +87,49 @@ fn f3_on_a_row_opens_ferrite_toml_at_its_key(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_key_that_is_not_in_the_file_opens_at_the_top(cx: &mut TestAppContext) {
+fn a_key_that_is_not_in_the_file_opens_at_its_section_header_with_a_note(cx: &mut TestAppContext) {
+    let (window, view) = settings_window(cx);
+    press(cx, window, &view, "ctrl-,");
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "down");
+    open_at_key(cx, window, &view);
+    assert_eq!(cursor_line(cx, &view), Some(1));
+    let note = viewer_note(cx, window).unwrap_or_default();
+    assert!(note.contains("appearance.light-theme"), "{note}");
+    assert!(note.contains("the default applies"), "{note}");
+}
+
+#[test]
+fn the_missing_key_note_stays_beside_a_note_from_opening_the_file() {
+    let start = Some(SharedString::from("mode is missing; the default applies."));
+    let both = merged_note(Some("Shown as text."), start.clone());
+    assert_eq!(
+        both.as_deref(),
+        Some("Shown as text. mode is missing; the default applies.")
+    );
+    assert_eq!(merged_note(None, start.clone()), start);
+    assert_eq!(
+        merged_note(Some("Shown as text."), None).as_deref(),
+        Some("Shown as text.")
+    );
+}
+
+#[gpui_kit::test]
+fn a_key_whose_section_is_not_in_the_file_opens_at_the_last_line(cx: &mut TestAppContext) {
     let (window, view) = settings_window(cx);
     press(cx, window, &view, "ctrl-,");
     press(cx, window, &view, "tab");
     open_at_key(cx, window, &view);
-    assert_eq!(cursor_line(cx, &view), Some(0));
+    assert_eq!(cursor_line(cx, &view), Some(3));
+}
+
+#[gpui_kit::test]
+fn a_key_in_the_file_opens_without_a_note(cx: &mut TestAppContext) {
+    let (window, view) = settings_window(cx);
+    press(cx, window, &view, "ctrl-,");
+    press(cx, window, &view, "down");
+    open_at_key(cx, window, &view);
+    assert_eq!(viewer_note(cx, window), None);
 }
 
 #[gpui_kit::test]
@@ -136,7 +194,7 @@ fn waiting_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWi
             }),
             line_of: Arc::new(move |key| {
                 finding.lock().expect("log").push("line");
-                line_in(&disk.lock().expect("disk"), key)
+                Some(line_in(&disk.lock().expect("disk"), key))
             }),
             ..SettingsHooks::none()
         },

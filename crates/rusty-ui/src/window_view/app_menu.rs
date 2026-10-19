@@ -81,7 +81,7 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         match command {
-            MenuCommand::Quit if self.close(cx) => cx.quit(),
+            MenuCommand::Quit if self.close(window, cx) => cx.quit(),
             MenuCommand::AllSettings => self.open_settings(window, cx),
             _ => {}
         }
