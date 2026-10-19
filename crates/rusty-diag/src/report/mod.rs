@@ -28,6 +28,18 @@ pub struct SystemInfo {
     pub ram_bytes: u64,
     pub gpu: String,
     pub scale: f32,
+    pub dpi_awareness: DpiAwareness,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DpiAwareness {
+    Unaware,
+    System,
+    PerMonitor,
+    PerMonitorV2,
+    #[default]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize)]

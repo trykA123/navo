@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use rusty_diag::{
-    BuildInfo, CacheRegistry, Identity, MemoryProbe, Redactor, ReportInput, ReportSummary, Salt,
-    SystemInfo, TaskCounters, memory_report, write_report_with_crashes,
+    BuildInfo, CacheRegistry, DpiAwareness, Identity, MemoryProbe, Redactor, ReportInput,
+    ReportSummary, Salt, SystemInfo, TaskCounters, memory_report, write_report_with_crashes,
 };
 
 use crate::logging::Diagnostics;
@@ -75,9 +75,49 @@ pub fn report_input() -> ReportInput {
             ram_bytes: total_ram(),
             gpu: NO_WINDOW.to_owned(),
             scale: 0.0,
+            dpi_awareness: dpi_awareness(),
         },
         ..ReportInput::default()
     }
+}
+
+#[cfg(windows)]
+fn dpi_awareness() -> DpiAwareness {
+    use windows_sys::Win32::UI::HiDpi::{
+        AreDpiAwarenessContextsEqual, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,
+        DPI_AWARENESS_CONTEXT_UNAWARE, DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED,
+        GetThreadDpiAwarenessContext,
+    };
+
+    // SAFETY: These APIs accept the current thread context and predefined context constants.
+    unsafe {
+        let context = GetThreadDpiAwarenessContext();
+        [
+            (
+                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+                DpiAwareness::PerMonitorV2,
+            ),
+            (
+                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
+                DpiAwareness::PerMonitor,
+            ),
+            (DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, DpiAwareness::System),
+            (DPI_AWARENESS_CONTEXT_UNAWARE, DpiAwareness::Unaware),
+            (
+                DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED,
+                DpiAwareness::Unaware,
+            ),
+        ]
+        .into_iter()
+        .find(|(known, _)| AreDpiAwarenessContextsEqual(context, *known) != 0)
+        .map_or(DpiAwareness::Unknown, |(_, awareness)| awareness)
+    }
+}
+
+#[cfg(not(windows))]
+fn dpi_awareness() -> DpiAwareness {
+    DpiAwareness::Unknown
 }
 
 #[cfg(any(not(windows), test))]

@@ -7,7 +7,7 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use super::{BuildInfo, ErrorRecord, ReportInput, ReportSummary, SystemInfo, write_report};
-use crate::{CacheUsage, Identity, MemoryReport, ProcessMemory, Redactor, Salt};
+use crate::{CacheUsage, DpiAwareness, Identity, MemoryReport, ProcessMemory, Redactor, Salt};
 
 mod canary;
 mod report;
@@ -72,6 +72,7 @@ fn input() -> ReportInput {
             ram_bytes: 17_179_869_184,
             gpu: "integrated".to_owned(),
             scale: 1.5,
+            dpi_awareness: DpiAwareness::PerMonitorV2,
         },
         settings_changed: vec![("theme".to_owned(), "dark".to_owned())],
         errors: vec![error("list folder", "access denied")],

@@ -26,10 +26,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err(format!("missing {}", icon.display()).into());
     }
     println!("cargo:rerun-if-changed={}", icon.display());
+    let manifest = manifest_dir.join("ferrite.manifest");
+    println!("cargo:rerun-if-changed={}", manifest.display());
 
     let version = env::var("CARGO_PKG_VERSION")?;
     let rc = PathBuf::from(env::var("OUT_DIR")?).join("ferrite.rc");
-    fs::write(&rc, resource_script(&icon.display().to_string(), &version))?;
+    fs::write(
+        &rc,
+        resource_script(
+            &icon.display().to_string(),
+            &manifest.display().to_string(),
+            &version,
+        ),
+    )?;
     embed_resource::compile(&rc, embed_resource::NONE).manifest_required()?;
     Ok(())
 }
@@ -49,15 +58,17 @@ fn git(args: &[&str]) -> Option<String> {
     Some(text.trim().to_owned()).filter(|text| output.status.success() && !text.is_empty())
 }
 
-fn resource_script(icon: &str, version: &str) -> String {
+fn resource_script(icon: &str, manifest: &str, version: &str) -> String {
     let mut parts = version
         .split(['.', '-'])
         .map(|p| p.parse::<u16>().unwrap_or(0));
     let mut next = || parts.next().unwrap_or(0);
     let numeric = format!("{},{},{},0", next(), next(), next());
     let icon = icon.replace('\\', "\\\\");
+    let manifest = manifest.replace('\\', "\\\\");
     format!(
         r#"1 ICON "{icon}"
+1 24 "{manifest}"
 1 VERSIONINFO
 FILEVERSION {numeric}
 PRODUCTVERSION {numeric}
