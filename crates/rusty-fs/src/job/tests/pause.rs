@@ -24,16 +24,16 @@ impl Drop for Stop {
     }
 }
 
-struct Running<'scope> {
-    token: CancelToken,
+pub(super) struct Running<'scope> {
+    pub(super) token: CancelToken,
     _stop: Stop,
     log: Arc<Mutex<Log>>,
-    seen: Receiver<Progress>,
+    pub(super) seen: Receiver<Progress>,
     job: ScopedJoinHandle<'scope, JobOutcome>,
 }
 
 impl Running<'_> {
-    fn next_pause(&self) -> Option<Progress> {
+    pub(super) fn next_pause(&self) -> Option<Progress> {
         loop {
             let progress = self.seen.recv_timeout(WAIT).ok()?;
             if progress.paused {
@@ -42,7 +42,7 @@ impl Running<'_> {
         }
     }
 
-    fn ends_promptly(&self) -> bool {
+    pub(super) fn ends_promptly(&self) -> bool {
         loop {
             match self.seen.recv_timeout(WAIT) {
                 Ok(_) => {}
@@ -52,15 +52,15 @@ impl Running<'_> {
         }
     }
 
-    fn logged(&self) -> Vec<(u32, StepOutcome)> {
+    pub(super) fn logged(&self) -> Vec<(u32, StepOutcome)> {
         self.log.lock().expect("log").entries.clone()
     }
 
-    fn done(&self) -> Vec<u32> {
+    pub(super) fn done(&self) -> Vec<u32> {
         self.log.lock().expect("log").done()
     }
 
-    fn finish(self) -> JobOutcome {
+    pub(super) fn finish(self) -> JobOutcome {
         let has_ended = self.ends_promptly();
         self.token.cancel();
         let outcome = self.job.join().expect("job thread");
@@ -73,6 +73,25 @@ fn start<'scope>(
     scope: &'scope Scope<'scope, '_>,
     ops: &'scope dyn ProviderOps,
     plan: &'scope OperationPlan,
+    pause_when: impl FnMut(&Progress) -> bool + Send + 'scope,
+) -> Running<'scope> {
+    let job = Paused {
+        ops,
+        plan,
+        workers: 0,
+    };
+    start_with(scope, job, pause_when)
+}
+
+pub(super) struct Paused<'scope> {
+    pub(super) ops: &'scope dyn ProviderOps,
+    pub(super) plan: &'scope OperationPlan,
+    pub(super) workers: usize,
+}
+
+pub(super) fn start_with<'scope>(
+    scope: &'scope Scope<'scope, '_>,
+    Paused { ops, plan, workers }: Paused<'scope>,
     mut pause_when: impl FnMut(&Progress) -> bool + Send + 'scope,
 ) -> Running<'scope> {
     let token = CancelToken::new();
@@ -89,16 +108,16 @@ fn start<'scope>(
             }
             let _ = sender.send(progress.clone());
         };
-        run_job(
-            plan,
-            &[],
-            &mut JobContext {
-                ops,
-                log: &mut Shared(shared),
-                cancel: &cancel,
-                progress: &mut on_progress,
-            },
-        )
+        let mut ctx = JobContext {
+            ops,
+            log: &mut Shared(shared),
+            cancel: &cancel,
+            progress: &mut on_progress,
+        };
+        match workers {
+            0 => run_job(plan, &[], &mut ctx),
+            n => super::super::parallel::run(plan, &[], &mut ctx, n),
+        }
     });
     Running {
         _stop: Stop(token.clone()),
@@ -109,7 +128,7 @@ fn start<'scope>(
     }
 }
 
-fn clean_copy() -> Snapshot {
+pub(super) fn clean_copy() -> Snapshot {
     let fs = three_files();
     let _ = run(&fs, &copy_three(&fs));
     tree_of(&fs, "")

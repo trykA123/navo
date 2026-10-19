@@ -1,6 +1,6 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
-use super::copy::{CopyStep, copy};
+use super::copy::{Copier, CopyStep, copy};
 use super::hold::hold;
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
@@ -15,7 +15,7 @@ pub(super) fn current_of(step: &Step) -> Location {
     }
 }
 
-fn counted(step: &Step) -> (u64, u64) {
+pub(super) fn counted(step: &Step) -> (u64, u64) {
     match step {
         Step::CopyFile { size, .. } => (*size, 1),
         Step::RemoveFile { .. } => (0, 1),
@@ -71,7 +71,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
     JobOutcome::Done
 }
 
-fn note_kept(step: &Step, outcome: StepOutcome, kept: &mut Vec<Location>) {
+pub(super) fn note_kept(step: &Step, outcome: StepOutcome, kept: &mut Vec<Location>) {
     if let Step::CopyFile { source, .. } = step
         && outcome != StepOutcome::Done
     {
@@ -79,7 +79,7 @@ fn note_kept(step: &Step, outcome: StepOutcome, kept: &mut Vec<Location>) {
     }
 }
 
-fn holds_kept(step: &Step, kept: &[Location]) -> bool {
+pub(super) fn holds_kept(step: &Step, kept: &[Location]) -> bool {
     let location = match step {
         Step::RemoveFile { location }
         | Step::RemoveLink { location }
@@ -98,7 +98,7 @@ fn advance(progress: &mut Progress, step: &Step) {
     progress.files_done += files;
 }
 
-fn apply(
+pub(super) fn apply(
     plan: &OperationPlan,
     step: &Step,
     ctx: &mut JobContext<'_>,
@@ -118,7 +118,7 @@ fn apply(
                 target,
                 size: *size,
             };
-            copy(plan, &step, ctx, progress)
+            copy_in_order(plan, &step, ctx, progress)
         }
         Step::Rename { source, target } => done(ops.rename(source, target)),
         Step::Recycle { location } => done(ops.recycle(location)),
@@ -126,6 +126,27 @@ fn apply(
         Step::RemoveLink { location } => done(ops.remove_link(location)),
         Step::RemoveFolder { location } => done(ops.remove_empty_folder(location)),
     }
+}
+
+fn copy_in_order(
+    plan: &OperationPlan,
+    step: &CopyStep<'_>,
+    ctx: &mut JobContext<'_>,
+    progress: &mut Progress,
+) -> Result<StepOutcome, FsError> {
+    let copier = Copier {
+        plan,
+        ops: ctx.ops,
+        cancel: ctx.cancel,
+    };
+    let base = progress.bytes_done;
+    let (cancel, report) = (ctx.cancel, &mut *ctx.progress);
+    let mut on_bytes = |bytes: u64| {
+        progress.bytes_done = base + bytes;
+        report(progress);
+        hold(cancel, progress, report);
+    };
+    copy(&copier, step, &mut on_bytes)
 }
 
 fn make_folder(ctx: &mut JobContext<'_>, target: &Location) -> Result<StepOutcome, FsError> {

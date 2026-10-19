@@ -19,10 +19,16 @@ mod crashing;
 mod faults;
 mod journal;
 mod move_;
+mod parallel;
+mod parallel_pause;
+mod parallel_props;
 mod pause;
+mod replace;
 mod roll_back;
+mod workers;
 
 const BIG: u64 = 10_000;
+const MODES: [usize; 2] = [0, 4];
 
 #[derive(Default)]
 struct Log {
@@ -63,11 +69,16 @@ struct Harness {
     cancel: CancelToken,
     cancel_after_bytes: Option<u64>,
     progress: Vec<Progress>,
+    workers: usize,
 }
 
 impl Harness {
     fn run(&mut self, ops: &dyn ProviderOps, plan: &OperationPlan, done: &[u32]) -> JobOutcome {
-        self.with(ops, |ctx| run_job(plan, done, ctx))
+        let workers = self.workers;
+        self.with(ops, |ctx| match workers {
+            0 => run_job(plan, done, ctx),
+            n => super::parallel::run(plan, done, ctx, n),
+        })
     }
 
     fn roll_back(
@@ -108,9 +119,37 @@ impl Harness {
 }
 
 fn run(ops: &dyn ProviderOps, plan: &OperationPlan) -> (JobOutcome, Harness) {
-    let mut harness = Harness::default();
+    run_in(0, ops, plan)
+}
+
+fn run_in(workers: usize, ops: &dyn ProviderOps, plan: &OperationPlan) -> (JobOutcome, Harness) {
+    let mut harness = Harness {
+        workers,
+        ..Harness::default()
+    };
     let outcome = harness.run(ops, plan, &[]);
     (outcome, harness)
+}
+
+fn copy_targets(plan: &OperationPlan) -> Vec<(u32, String, u64)> {
+    (0_u32..)
+        .zip(&plan.steps)
+        .filter_map(|(seq, step)| match step {
+            Step::CopyFile { target, size, .. } => Some((seq, target.path().to_text(), *size)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn placed_exactly_the_done_copies(fs: &FakeFs, plan: &OperationPlan, done: &[u32]) -> bool {
+    copy_targets(plan).iter().all(|(seq, target, planned)| {
+        let found = size(fs, target);
+        if done.contains(seq) {
+            found == Some(*planned)
+        } else {
+            found.is_none()
+        }
+    })
 }
 
 fn failure(outcome: &JobOutcome) -> Option<(u32, FsErrorKind)> {

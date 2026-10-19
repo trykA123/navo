@@ -22,6 +22,7 @@ pub enum FakeOp {
     Create,
     Copy,
     Rename,
+    Replace,
     Remove,
     Recycle,
     Watch,

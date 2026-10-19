@@ -125,6 +125,10 @@ impl ProviderOps for DriveFs {
         self.fake.rename(&self.fake(source), &self.fake(target))
     }
 
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.fake.replace(&self.fake(source), &self.fake(target))
+    }
+
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
         self.fake.remove_file(&self.fake(location))
     }

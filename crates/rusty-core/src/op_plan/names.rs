@@ -1,3 +1,4 @@
+use super::TEMP_SUFFIX;
 use crate::{Location, ProviderPath};
 
 pub(super) fn name_of(location: &Location) -> Option<ProviderPath> {
@@ -18,4 +19,10 @@ pub(super) fn numbered(name: &ProviderPath, number: u32) -> ProviderPath {
 
 pub(super) fn key(location: &Location) -> String {
     location.as_str().to_lowercase()
+}
+
+pub(super) fn temp_of(location: &Location) -> Option<Location> {
+    let name = name_of(location)?.to_text();
+    let temp = ProviderPath::from_text(&format!("{name}{TEMP_SUFFIX}"));
+    location.parent()?.join(&temp).ok()
 }

@@ -149,6 +149,33 @@ impl ProviderOps for FakeFs {
         Ok(())
     }
 
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        let from = self.write_call(source, FakeOp::Replace)?;
+        let to = self.own_path(target)?;
+        let mut tree = self.tree();
+        if existing_kind(&tree, &from).map_err(|k| error(k, source))? != EntryKind::File {
+            return Err(error(FsErrorKind::NameInvalid, source));
+        }
+        let replaced = match existing_kind(&tree, &to) {
+            Ok(EntryKind::File) => true,
+            Ok(_) => return Err(error(FsErrorKind::NameInvalid, target)),
+            Err(_) => {
+                vacant(&tree, &to).map_err(|k| error(k, target))?;
+                false
+            }
+        };
+        if replaced {
+            tree.remove(&to);
+        }
+        tree.move_node(&from, &to);
+        drop(tree);
+        if replaced {
+            self.changed(&to, WatchChange::Removed);
+        }
+        self.moved(&from, &to);
+        Ok(())
+    }
+
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
         self.remove_kind(location, EntryKind::File)
     }
