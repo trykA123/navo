@@ -69,6 +69,13 @@ pub(super) struct Viewer {
     start_note: Option<SharedString>,
 }
 
+fn merged_note(load: Option<&'static str>, start: Option<SharedString>) -> Option<SharedString> {
+    match (load, start) {
+        (Some(load), Some(start)) => Some(format!("{load} {start}").into()),
+        (load, start) => start.or(load.map(SharedString::new_static)),
+    }
+}
+
 fn platform_lines(text: &str) -> String {
     text.replace('\n', LINE_BREAK)
 }

@@ -5,14 +5,16 @@ use std::sync::{Arc, Mutex, PoisonError};
 use rusty_core::Location;
 use rusty_fs::Watch;
 use rusty_store::{
-    Db, Saved, SettingValue, Settings, SettingsError, SettingsStore, settings_key_line,
+    Saved, SettingValue, Settings, SettingsError, SettingsStore, settings_key_line,
     settings_section_line,
 };
 use rusty_ui::settings::{Change, Control, FieldSpec, Value, Values};
 use rusty_ui::window_view::{FindLine, KeyLine, SaveReport, SettingsHooks, SettingsNews};
 
 use crate::watch_file::watch_file;
+use ledger::LedgerFile;
 
+mod ledger;
 mod reload;
 mod start;
 
@@ -70,7 +72,9 @@ pub fn watched(
 
 fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
     let path = loaded.as_ref().map(|loaded| loaded.path.clone());
-    let ledger = loaded.as_ref().and_then(|loaded| loaded.ledger.clone());
+    let ledger = Mutex::new(LedgerFile::new(
+        loaded.as_ref().and_then(|loaded| loaded.ledger.clone()),
+    ));
     let load_error = loaded
         .as_ref()
         .and_then(|loaded| loaded.report.error.as_ref())
@@ -89,7 +93,7 @@ fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
         load_error: load_error.map(Into::into),
         save: Arc::new(move |changes| {
             let saved = match &store {
-                Some(store) => save(store, ledger.as_deref(), changes),
+                Some(store) => save(store, &ledger, changes),
                 None => SaveReport::saved(remember(&session, changes)),
             };
             if let Some(message) = &saved.error {
@@ -104,11 +108,16 @@ fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
     (hooks, shared)
 }
 
-fn save(store: &Mutex<SettingsStore>, ledger: Option<&Path>, changes: &[Change]) -> SaveReport {
+fn save(
+    store: &Mutex<SettingsStore>,
+    ledger: &Mutex<LedgerFile>,
+    changes: &[Change],
+) -> SaveReport {
     let mut store = store.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut ledger = ledger.lock().unwrap_or_else(PoisonError::into_inner);
     let mut report = SaveReport::saved(Values::default());
     for change in changes {
-        match save_one(&mut store, ledger, change) {
+        match save_one(&mut store, &mut ledger, change) {
             Ok(saved) => {
                 if !saved.was_present {
                     report.was_absent.push(change.field);
@@ -131,20 +140,21 @@ fn save(store: &Mutex<SettingsStore>, ledger: Option<&Path>, changes: &[Change])
 
 fn save_one(
     store: &mut SettingsStore,
-    ledger: Option<&Path>,
+    ledger: &mut LedgerFile,
     change: &Change,
 ) -> Result<Saved, SettingsError> {
     if change.value != Value::Reset {
         return store.save_preserving_edits(change.key(), stored_value(change));
     }
-    let db = ledger.and_then(|path| match Db::open(path, false) {
-        Ok((db, _)) => Some(db),
+    let defaults = Settings::default();
+    match ledger.open() {
+        Ok(db) => store.reset(change.key(), db, &defaults),
         Err(error) => {
-            report(&format!("{}: {error}", path.display()));
-            None
+            let mut saved = store.reset(change.key(), None, &defaults)?;
+            saved.ledger_error = Some(error);
+            Ok(saved)
         }
-    });
-    store.reset(change.key(), db.as_ref(), &Settings::default())
+    }
 }
 
 fn remember(session: &Mutex<Values>, changes: &[Change]) -> Values {

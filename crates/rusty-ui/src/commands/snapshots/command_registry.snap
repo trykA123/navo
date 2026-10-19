@@ -105,6 +105,7 @@ settings.next_section | Next section | SettingsSheet
 settings.previous_section | Previous section | SettingsSheet
 settings.edit_value | Edit value | SettingsSheet
 settings.show_in_file | Show in settings file | SettingsSheet
+settings.reset_value | Reset to default | SettingsSheet
 settings.undo | Undo change | SettingsSheet
 settings.close | Close settings | SettingsSheet
 settings.cancel_edit | Cancel edit | SettingsField

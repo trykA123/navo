@@ -4,8 +4,10 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{Log, Setup, editor_of, hooks, redraw};
+use crate::prelude::SharedString;
 use crate::settings::{Field, Values};
 use crate::window_view::tests::{fake, home_beside_dest, open_options, options_for, press, settle};
+use crate::window_view::viewer::merged_note;
 use crate::window_view::{FerriteWindow, KeyLine, SaveReport, SettingsHooks, StartOptions};
 
 const TOML: &[u8] = b"# mine\n[appearance]\nmode = \"dark\"\ndensity = \"compact\"\n";
@@ -95,6 +97,21 @@ fn a_key_that_is_not_in_the_file_opens_at_its_section_header_with_a_note(cx: &mu
     let note = viewer_note(cx, window).unwrap_or_default();
     assert!(note.contains("appearance.light-theme"), "{note}");
     assert!(note.contains("the default applies"), "{note}");
+}
+
+#[test]
+fn the_missing_key_note_stays_beside_a_note_from_opening_the_file() {
+    let start = Some(SharedString::from("mode is missing; the default applies."));
+    let both = merged_note(Some("Shown as text."), start.clone());
+    assert_eq!(
+        both.as_deref(),
+        Some("Shown as text. mode is missing; the default applies.")
+    );
+    assert_eq!(merged_note(None, start.clone()), start);
+    assert_eq!(
+        merged_note(Some("Shown as text."), None).as_deref(),
+        Some("Shown as text.")
+    );
 }
 
 #[gpui_kit::test]

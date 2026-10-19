@@ -491,6 +491,10 @@ command = "settings.show_in_file"
 keys = ["f3"]
 
 [[bind]]
+command = "settings.reset_value"
+keys = ["f8"]
+
+[[bind]]
 command = "settings.undo"
 keys = ["ctrl-z"]
 

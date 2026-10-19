@@ -80,6 +80,7 @@ settings.previous_section | shift-tab | SettingsSheet
 settings.edit_value | enter | SettingsSheet
 settings.edit_value | f2 | SettingsSheet
 settings.show_in_file | f3 | SettingsSheet
+settings.reset_value | f8 | SettingsSheet
 settings.undo | ctrl-z | SettingsSheet
 settings.close | escape | SettingsSheet
 settings.cancel_edit | escape | SettingsField

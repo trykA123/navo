@@ -40,6 +40,7 @@ gpui_kit::actions!(
         PreviousSection,
         EditValue,
         OpenKey,
+        ResetValue,
         UndoChange,
         CloseSettings,
         CancelEdit
@@ -75,13 +76,19 @@ pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) 
             .hint(&["ctrl-r"], "Reset")
             .hint(&["tab"], "Section");
     }
-    sheet
+    let can_reset = body.reset_event().is_some();
+    let sheet = sheet
         .body(body)
         .hint(&["↑", "↓"], "Move")
         .hint(&["←", "→"], "Change")
         .hint(&["tab"], "Section")
-        .hint(&["f3"], "TOML line")
-        .hint(&["ctrl-z"], "Undo")
+        .hint(&["f3"], "TOML line");
+    let sheet = if can_reset {
+        sheet.hint(&["f8"], "Reset")
+    } else {
+        sheet
+    };
+    sheet.hint(&["ctrl-z"], "Undo")
 }
 
 #[derive(IntoElement)]
@@ -195,6 +202,12 @@ impl SettingsBody {
         }
     }
 
+    fn reset_event(&self) -> Option<SheetEvent> {
+        let spec = FIELDS.get(self.row)?;
+        let is_shown = self.shortcuts.is_none() && self.values.is_changed(spec.field);
+        is_shown.then(|| SheetEvent::Set(Change::reset(spec.field)))
+    }
+
     fn edit_event(&self) -> Option<SheetEvent> {
         let spec = FIELDS.get(self.row)?;
         matches!(spec.control, Control::Text | Control::Number)
@@ -240,6 +253,7 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
     let flip = on_event(body, body.flip_event());
     let edit = on_event(body, body.edit_event());
     let locate = on_event(body, field.map(SheetEvent::Locate));
+    let reset = on_event(body, body.reset_event());
     let undo = on_event(body, Some(SheetEvent::Undo));
     root.on_action(move |_: &RowUp, window, cx| up(window, cx))
         .on_action(move |_: &RowDown, window, cx| down(window, cx))
@@ -248,6 +262,7 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
         .on_action(move |_: &ValueFlip, window, cx| flip(window, cx))
         .on_action(move |_: &EditValue, window, cx| edit(window, cx))
         .on_action(move |_: &OpenKey, window, cx| locate(window, cx))
+        .on_action(move |_: &ResetValue, window, cx| reset(window, cx))
         .on_action(move |_: &UndoChange, window, cx| undo(window, cx))
 }
 

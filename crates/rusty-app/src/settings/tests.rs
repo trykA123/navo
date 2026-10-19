@@ -15,6 +15,10 @@ fn hooks(path: Option<&Path>) -> SettingsHooks {
 
 const OLD_EDITOR_FILE: &str = "[files]\nshow-hidden = false\n\n[editor]\npath = \"code\"\n";
 
+fn no_ledger() -> Mutex<super::LedgerFile> {
+    Mutex::new(super::LedgerFile::new(None))
+}
+
 fn file_in(dir: &tempfile::TempDir) -> std::path::PathBuf {
     dir.path().join("ferrite.toml")
 }
@@ -262,13 +266,13 @@ fn saves_and_reloads_carry_a_rising_generation() {
     let (store, _) = SettingsStore::load(&file);
     let store = Arc::new(Mutex::new(store));
     let mut reloader = Reloader::new(store.clone(), None);
-    let first = super::save(&store, None, &[Change::theme(ThemeChoice::Dark)]);
+    let first = super::save(&store, &no_ledger(), &[Change::theme(ThemeChoice::Dark)]);
     fs::write(&file, "[appearance]\nmode = \"light\"\n").unwrap();
     let Some(SettingsNews::Applied { generation, .. }) = reloader.reload() else {
         panic!("the hand edit applies");
     };
     assert!(generation > first.generation);
-    let second = super::save(&store, None, &[Change::density(Density::Compact)]);
+    let second = super::save(&store, &no_ledger(), &[Change::density(Density::Compact)]);
     assert!(second.generation > generation);
 }
 

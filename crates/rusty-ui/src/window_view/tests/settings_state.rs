@@ -154,3 +154,71 @@ fn rows_keep_their_height_when_the_key_line_appears(cx: &mut TestAppContext) {
     assert!(shows(cx, &rig, "settings-key"));
     assert_eq!(height_of_row(cx, &rig, row), away);
 }
+
+fn last_change(rig: &Rig) -> Option<Change> {
+    rig.store.changes.lock().expect("changes").last().cloned()
+}
+
+fn hint_labels(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
+    (0..8usize)
+        .filter_map(|index| label(cx, rig, ("side-sheet-hint", index)))
+        .collect()
+}
+
+#[gpui_kit::test]
+fn ctrl_z_after_reset_brings_the_old_value_back_as_changed(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::Density);
+    rig.press(cx, "left");
+    rig.click(cx, ("settings-reset", row_of(Field::Density)));
+    rig.press(cx, "ctrl-z");
+    assert_eq!(last_change(&rig), Some(Change::density(Density::Compact)));
+    assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Compact);
+    assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Changed"));
+}
+
+#[gpui_kit::test]
+fn ctrl_z_after_reset_of_a_key_without_a_default_writes_it_back(cx: &mut TestAppContext) {
+    let values = Values::default().with(&Change::text(Field::EditorPath, "code"));
+    let rig = super::app_menu::rig_on(cx, values, None);
+    rig.store
+        .present
+        .lock()
+        .expect("present")
+        .push(Field::EditorPath);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::EditorPath);
+    rig.press(cx, "f8");
+    assert_eq!(last_change(&rig), Some(Change::reset(Field::EditorPath)));
+    assert_eq!(
+        state(cx, &rig, Field::EditorPath).as_deref(),
+        Some("Default")
+    );
+    rig.press(cx, "ctrl-z");
+    assert_eq!(
+        last_change(&rig),
+        Some(Change::text(Field::EditorPath, "code"))
+    );
+    assert_eq!(
+        state(cx, &rig, Field::EditorPath).as_deref(),
+        Some("Changed")
+    );
+}
+
+#[gpui_kit::test]
+fn f8_resets_a_changed_row_and_its_hint_shows_only_there(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::Density);
+    assert!(!hint_labels(cx, &rig).contains(&"Reset".to_owned()));
+    let before = rig.store.changes.lock().expect("changes").len();
+    rig.press(cx, "f8");
+    assert_eq!(rig.store.changes.lock().expect("changes").len(), before);
+    rig.press(cx, "left");
+    assert!(hint_labels(cx, &rig).contains(&"Reset".to_owned()));
+    rig.press(cx, "f8");
+    assert_eq!(last_change(&rig), Some(Change::reset(Field::Density)));
+    assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Default"));
+    assert!(!hint_labels(cx, &rig).contains(&"Reset".to_owned()));
+}
