@@ -5,6 +5,7 @@ fn initial_state_saves_one_window_one_pane_one_tab() {
     let expected = SessionState {
         windows: vec![WindowState {
             id: 1,
+            placement: Vec::new(),
             layout: LayoutState::Pane(2),
             focused_pane: 2,
             panes: vec![pane_state(2, vec![tab_state(3, "/home")])],

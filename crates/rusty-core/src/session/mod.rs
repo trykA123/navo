@@ -6,20 +6,29 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::AppState;
+use crate::placement::{MonitorSetup, Placement};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionState {
     pub windows: Vec<WindowState>,
     pub focused_window: u64,
     pub next_id: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WindowState {
     pub id: u64,
     pub layout: LayoutState,
     pub focused_pane: u64,
     pub panes: Vec<PaneState>,
+    #[serde(default, deserialize_with = "crate::placement::deserialize_placements")]
+    pub placement: Vec<Placement>,
+}
+
+impl WindowState {
+    pub fn remember(&mut self, setup: &MonitorSetup, placement: Placement) {
+        crate::placement::remember(&mut self.placement, setup, placement);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

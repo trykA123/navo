@@ -112,6 +112,7 @@ fn valid() -> SessionState {
     SessionState {
         windows: vec![WindowState {
             id: 1,
+            placement: Vec::new(),
             layout: split_state(true, LayoutState::Pane(2), LayoutState::Pane(4)),
             focused_pane: 4,
             panes: vec![

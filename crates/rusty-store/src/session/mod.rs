@@ -1,3 +1,5 @@
+mod migration;
+
 use std::fs;
 use std::path::Path;
 
@@ -6,7 +8,7 @@ use rusty_core::{AppState, SessionState};
 use crate::{backup_path, write_atomic};
 
 pub const SESSION_MAGIC: &[u8; 16] = b"FERRITE-SESSION\n";
-pub const SESSION_VERSION: u16 = 1;
+pub const SESSION_VERSION: u16 = 2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionFileError {
@@ -89,7 +91,7 @@ pub fn read_session_file(path: &Path) -> Result<SessionState, SessionFileError> 
     if crc32fast::hash(body) != crc {
         return Err(SessionFileError::BadChecksum);
     }
-    postcard::from_bytes(body).map_err(|e| SessionFileError::Decode(e.to_string()))
+    migration::decode(version, body)
 }
 
 #[must_use]

@@ -12,6 +12,7 @@ use crate::backup_path;
 
 mod file;
 mod load;
+mod migration;
 mod speed;
 
 const HEADER_LEN: usize = 26;
@@ -49,6 +50,7 @@ fn one_pane(location: &str) -> SessionState {
     SessionState {
         windows: vec![WindowState {
             id: 1,
+            placement: Vec::new(),
             layout: LayoutState::Pane(2),
             focused_pane: 2,
             panes: vec![pane(2, tab(3, location))],
@@ -109,6 +111,7 @@ fn three_panes_of_100_rows() -> SessionState {
     SessionState {
         windows: vec![WindowState {
             id: 1,
+            placement: Vec::new(),
             layout: split(
                 LayoutState::Pane(2),
                 split(LayoutState::Pane(4), LayoutState::Pane(6)),
