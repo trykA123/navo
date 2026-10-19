@@ -3,7 +3,7 @@ use std::rc::Rc;
 use rusty_core::{Location, OpKind};
 
 use super::FerriteWindow;
-use crate::browser::JobStatus;
+use crate::browser::{JobStatus, PasteRefusal};
 use crate::format;
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
@@ -84,6 +84,14 @@ fn info(text: impl Into<SharedString>) -> StatusNotice {
     }
 }
 
+fn refusal_text(refused: PasteRefusal) -> &'static str {
+    match refused {
+        PasteRefusal::Nothing => NOTHING_TO_PASTE,
+        PasteRefusal::AlreadyHere => "The files are already in this folder",
+        PasteRefusal::IntoItself => "Cannot paste a folder into itself",
+    }
+}
+
 fn fault(fault: &ClipboardFault) -> StatusNotice {
     StatusNotice {
         text: fault.message(),
@@ -140,9 +148,12 @@ impl FerriteWindow {
             }
         };
         self.clipboard.notice = None;
-        let started = self.browser.paste(files.effect.kind(), files.items.clone());
-        if let (Some(id), ClipboardEffect::Move) = (started, files.effect) {
-            self.clipboard.cuts.push((id, files));
+        match self.browser.paste(files.effect.kind(), files.items.clone()) {
+            Ok(id) if files.effect == ClipboardEffect::Move => {
+                self.clipboard.cuts.push((id, files))
+            }
+            Ok(_) => {}
+            Err(refused) => self.clipboard.notice = Some(info(refusal_text(refused))),
         }
     }
 

@@ -16,7 +16,7 @@ pub(crate) use measure::Measured;
 pub use naming::NameProblem;
 pub use offline::Offline;
 use operate::JobUpdate;
-pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PendingOp};
+pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PasteRefusal, PendingOp};
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
 pub type Launcher = Arc<dyn Fn(&Location) + Send + Sync>;

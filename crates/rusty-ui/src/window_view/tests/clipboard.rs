@@ -264,3 +264,31 @@ fn pasting_a_cut_protected_folder_still_asks_for_the_typed_word(cx: &mut TestApp
     assert!(rig.jobs(cx).is_empty());
     assert!(rig.exists("home/docs/report.txt"));
 }
+
+#[gpui_kit::test]
+fn pasting_into_the_files_own_folder_says_they_are_already_here(cx: &mut TestAppContext) {
+    let rig = rig(cx, FakeClipboard::default());
+    rig.hold(&["home/a.txt"], ClipboardEffect::Copy);
+    rig.press(cx, "ctrl-v");
+    assert_eq!(
+        rig.notice(cx).as_deref(),
+        Some("The files are already in this folder")
+    );
+    assert!(rig.jobs(cx).is_empty());
+    assert!(!rig.has_pending(cx));
+}
+
+#[gpui_kit::test]
+fn pasting_a_folder_into_itself_is_refused_with_a_message(cx: &mut TestAppContext) {
+    let rig = rig(cx, FakeClipboard::default());
+    rig.hold(&["dest"], ClipboardEffect::Move);
+    rig.press(cx, "tab");
+    rig.press(cx, "ctrl-v");
+    assert_eq!(
+        rig.notice(cx).as_deref(),
+        Some("Cannot paste a folder into itself")
+    );
+    assert!(rig.jobs(cx).is_empty());
+    assert!(!rig.has_pending(cx));
+    assert!(rig.clipboard.clears.borrow().is_empty());
+}
