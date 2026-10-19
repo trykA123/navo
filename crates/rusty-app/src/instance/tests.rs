@@ -187,7 +187,7 @@ fn dropping_the_guard_releases_the_lock() {
 
 #[test]
 fn a_profile_without_dirs_continues_without_an_instance_guard() {
-    let (sender, _) = mpsc::channel();
+    let (sender, _) = rusty_ui::window_view::open_requests();
     let result = crate::prepare_instance(
         &crate::cli::Start::default(),
         &crate::profile::Profile::User(None),

@@ -31,7 +31,6 @@ mod windows_memory;
 use std::ops::ControlFlow;
 use std::path::Path;
 use std::process::ExitCode;
-use std::sync::mpsc::{self, Sender};
 use std::time::Instant;
 
 use cli::{Command, Start};
@@ -39,6 +38,7 @@ use metrics::ProcessClock;
 use profile::Profile;
 use rusty_core::Location;
 use rusty_store::StoreDirs;
+use rusty_ui::window_view::{OpenSender, open_requests};
 
 fn main() -> ExitCode {
     execute(std::env::args_os().skip(1), StoreDirs::detect)
@@ -135,7 +135,7 @@ fn open_window(
     profile: &Profile,
     clock: ProcessClock,
 ) -> ExitCode {
-    let (sender, requests) = mpsc::channel();
+    let (sender, requests) = open_requests();
     let _guard = match prepare_instance(&start, profile, sender) {
         Ok(ControlFlow::Continue(guard)) => guard,
         Ok(ControlFlow::Break(code)) => return code,
@@ -151,6 +151,7 @@ fn open_window(
         .clone()
         .map(|path| metrics::Run::new(path, clock));
     gui::open(gui::Launch {
+        path: start.path,
         view: start.view,
         panes,
         dirs: profile.dirs().cloned(),
@@ -168,7 +169,7 @@ fn open_window(
 fn prepare_instance(
     start: &Start,
     profile: &Profile,
-    sender: Sender<instance::Request>,
+    sender: OpenSender,
 ) -> Result<ControlFlow<ExitCode, Option<instance::Guard>>, instance::Error> {
     if start.is_metrics() {
         return Ok(ControlFlow::Continue(None));

@@ -237,6 +237,7 @@ pub(super) fn options_with(fs: Arc<FakeFs>, files: FileHooks, kinds: super::Kind
         shell_menu: None,
         file_clipboard: None,
         start_watch: None,
+        open: crate::window_view::OpenHooks::none(),
     }
 }
 
