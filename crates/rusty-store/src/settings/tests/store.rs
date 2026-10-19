@@ -529,3 +529,23 @@ fn keeping_a_text_part_writes_its_key_and_keeps_comments() {
     );
     assert!(store.current().text.view.line_ends);
 }
+
+#[test]
+fn hiding_a_window_part_writes_its_key_and_keeps_comments() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "# mine\n[window.view]\npath-bar = true # the bar\nfkey-bar = true\n",
+    );
+    let (mut store, _) = SettingsStore::load(&path);
+    store
+        .save_preserving_edits("window.view.path-bar", Some(SettingValue::Bool(false)))
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text,
+        "# mine\n[window.view]\npath-bar = false # the bar\nfkey-bar = true\n"
+    );
+    assert!(!store.current().window.view.path_bar);
+}

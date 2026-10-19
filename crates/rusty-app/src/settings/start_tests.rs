@@ -44,7 +44,7 @@ fn a_fresh_start_writes_every_setting_and_records_the_defaults() {
     ] {
         assert!(text.contains(key), "{key} missing from {text}");
     }
-    assert_eq!(recorded(&at.ledger), 24);
+    assert_eq!(recorded(&at.ledger), 36);
     assert_eq!(started.default_changes, []);
     let settings = hooks(started.loaded);
     assert_eq!(settings.values, Values::default());
@@ -120,7 +120,7 @@ fn the_background_start_gives_the_same_result() {
     )
     .finish();
     assert!(started.loaded.is_some());
-    assert_eq!(recorded(&at.ledger), 24);
+    assert_eq!(recorded(&at.ledger), 36);
     assert!(
         fs::read_to_string(&at.file)
             .unwrap()

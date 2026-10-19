@@ -104,7 +104,7 @@ impl FerriteWindow {
     pub(super) fn hint_cover(&self, window: &Window, cx: &App) -> Option<Cover> {
         let layer = self.hint_layer(window, cx)?;
         let t = tokens::current(cx);
-        let bottom = window.viewport_size().height - t.spacing.fkey_height;
+        let bottom = window.viewport_size().height - self.fkey_strip_height(t);
         Some(Cover {
             top: bottom - drawer_height(t, &layer),
             gap: t.spacing.md,

@@ -142,6 +142,7 @@ impl FerriteWindow {
         }
         steer(&self.values, &mut self.browser);
         self.show_parts(cx);
+        self.refresh_window_menu(cx);
     }
 
     pub(super) fn toggle_setting(

@@ -23,6 +23,7 @@ tab.new | New tab | FerritePane
 pane.drive_menu_first | Drives of pane 1 | FerritePane
 pane.drive_menu_second | Drives of pane 2 | FerritePane
 pane.edit_path | Edit path | FerritePane
+window.view_menu | Window view menu | FerritePane
 pane.reset_split | Reset pane split | FerritePane
 preview.browse | Browse in preview | FerritePane
 crash_notice.focus | Go to the crash notice | FerritePane

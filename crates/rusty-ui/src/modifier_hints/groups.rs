@@ -79,7 +79,15 @@ const GROUPS: [(&str, &[&str]); 8] = [
             "pane.reset_split",
         ],
     ),
-    ("View", &["preview.browse", "sheet.narrower", "sheet.wider"]),
+    (
+        "View",
+        &[
+            "window.view_menu",
+            "preview.browse",
+            "sheet.narrower",
+            "sheet.wider",
+        ],
+    ),
     (
         "Navigation",
         &[

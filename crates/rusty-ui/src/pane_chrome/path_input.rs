@@ -125,6 +125,7 @@ impl RenderOnce for PathInput {
         let cancel = self.on_cancel;
         div()
             .id(self.id)
+            .test_support()
             .key_context(CONTEXT)
             .on_action(move |_: &CancelPath, window, cx| {
                 if let Some(handler) = &cancel {

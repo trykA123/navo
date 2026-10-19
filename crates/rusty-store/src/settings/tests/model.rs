@@ -110,3 +110,29 @@ fn the_text_and_image_views_read_their_own_tables() {
     assert!(!settings.text.view.line_numbers && settings.text.view.line_ends);
     assert!(settings.image.view.details);
 }
+
+#[test]
+fn every_window_part_is_shown_by_default() {
+    let view = Settings::default().window.view;
+    assert_eq!(view, crate::WindowView::default());
+    assert!(
+        view.tabs_with_one
+            && view.path_bar
+            && view.drive_button
+            && view.title_search
+            && view.fkey_bar
+            && view.icons
+    );
+    assert!(view.ext_column && view.size_column && view.date_column);
+    assert!(view.free_space && view.marked_totals && view.contents);
+}
+
+#[test]
+fn the_window_view_reads_its_own_table() {
+    let text = "[window.view]\npath-bar = false\next-column = false\ncontents = false\n";
+    let (settings, unknown) = crate::parse_settings(text).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    let view = settings.window.view;
+    assert!(!view.path_bar && !view.ext_column && !view.contents);
+    assert!(view.tabs_with_one && view.size_column && view.free_space);
+}

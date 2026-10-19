@@ -28,9 +28,9 @@ impl CrashReportService for FakeReport {
     }
 }
 
-struct Rig {
-    window: AnyWindowHandle,
-    view: Entity<FerriteWindow>,
+pub(super) struct Rig {
+    pub(super) window: AnyWindowHandle,
+    pub(super) view: Entity<FerriteWindow>,
     fs: Arc<FakeFs>,
     report: Option<Arc<FakeReport>>,
 }
@@ -62,7 +62,7 @@ fn rig_with(cx: &mut TestAppContext, saved: Option<Result<&str, &str>>) -> Rig {
     }
 }
 
-fn unclean(cx: &mut TestAppContext) -> Rig {
+pub(super) fn unclean(cx: &mut TestAppContext) -> Rig {
     rig_with(cx, Some(Ok(&format!("home/Downloads/{ZIP}"))))
 }
 
@@ -71,7 +71,7 @@ impl Rig {
         self.report.as_deref().expect("a pending crash")
     }
 
-    fn is_shown(&self, cx: &mut TestAppContext) -> bool {
+    pub(super) fn is_shown(&self, cx: &mut TestAppContext) -> bool {
         cx.update_window(self.window, |_, window, cx| {
             window.render_frame(cx);
             window

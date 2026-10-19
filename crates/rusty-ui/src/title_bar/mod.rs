@@ -45,6 +45,7 @@ pub(crate) fn main_window_options(title: impl Into<SharedString>) -> WindowOptio
 pub struct FerriteTitleBar {
     title: SharedString,
     header: Vec<AnyElement>,
+    trailing: Vec<AnyElement>,
     is_on_mica: bool,
     on_close: Option<CloseHandler>,
     app_button: Option<(bool, AppButtonHandler)>,
@@ -55,6 +56,7 @@ impl FerriteTitleBar {
         Self {
             title: title.into(),
             header: Vec::new(),
+            trailing: Vec::new(),
             is_on_mica: false,
             on_close: None,
             app_button: None,
@@ -63,6 +65,12 @@ impl FerriteTitleBar {
 
     pub fn header(mut self, content: impl IntoElement) -> Self {
         self.header.push(content.into_any_element());
+        self
+    }
+
+    #[must_use]
+    pub fn trailing(mut self, content: impl IntoElement) -> Self {
+        self.trailing.push(content.into_any_element());
         self
     }
 
@@ -147,7 +155,7 @@ impl RenderOnce for FerriteTitleBar {
                 self.app_button,
             ))
             .children(centre.map(|item| centre_area(t, item)))
-            .child(header_area(t, items))
+            .child(header_area(t, items.chain(self.trailing)))
             .when_some(self.on_close, |bar, handler| {
                 bar.on_close_window(move |_, window, cx| {
                     handler(window, cx);

@@ -12,9 +12,7 @@ use super::FerriteWindow;
 use super::settings_news::SettingsInbox;
 use super::settings_save::{SaveReport, SaveSettings, Saver};
 use crate::prelude::*;
-use crate::settings::{
-    Change, FIELDS, Field, SettingsBody, SheetEvent, Values, rows_in, section_of,
-};
+use crate::settings::{Change, FIELDS, Field, SettingsBody, SheetEvent, Values, child_of};
 use crate::side_sheet::SheetState;
 use crate::tokens;
 
@@ -209,9 +207,8 @@ impl FerriteWindow {
         if std::mem::take(&mut self.settings.is_shortcuts) {
             self.pause_shortcuts(cx);
         }
-        let at = rows_in(section_of(row)).position(|(index, _)| index == row);
-        if let Some(at) = at {
-            self.settings.scroll.scroll_to_item(at + 1);
+        if let Some(child) = child_of(row) {
+            self.settings.scroll.scroll_to_item(child);
         }
         if self.settings.edit.is_none() {
             self.focus_settings(window, cx);

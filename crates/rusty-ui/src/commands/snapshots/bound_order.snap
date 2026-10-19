@@ -316,6 +316,7 @@ tab.new | ctrl-t | FerritePane
 pane.drive_menu_first | alt-f1 | FerritePane
 pane.drive_menu_second | alt-f2 | FerritePane
 pane.edit_path | ctrl-l | FerritePane
+window.view_menu | alt-v | FerritePane
 pane.reset_split | ctrl-shift-0 | FerritePane
 preview.browse | ctrl-shift-q | FerritePane
 crash_notice.focus | ctrl-shift-r | FerritePane

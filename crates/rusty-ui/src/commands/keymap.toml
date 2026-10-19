@@ -90,6 +90,10 @@ command = "pane.edit_path"
 keys = ["ctrl-l"]
 
 [[bind]]
+command = "window.view_menu"
+keys = ["alt-v"]
+
+[[bind]]
 command = "pane.reset_split"
 keys = ["ctrl-shift-0"]
 

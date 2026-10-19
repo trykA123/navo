@@ -56,6 +56,11 @@ pub(super) const GROUPS: [Group; 8] = [
             ),
             ("ferrite_window::EditPath", "pane.edit_path", "Edit path"),
             (
+                "ferrite_window::OpenViewMenu",
+                "window.view_menu",
+                "Window view menu",
+            ),
+            (
                 "ferrite_window::ResetSplit",
                 "pane.reset_split",
                 "Reset pane split",

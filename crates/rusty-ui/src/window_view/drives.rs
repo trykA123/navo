@@ -166,7 +166,7 @@ impl FerriteWindow {
         self.drives.errors.insert(pane, (location, depth, message));
     }
 
-    pub(super) fn drive_pill(&self, pane: PaneId, cx: &mut Context<Self>) -> Div {
+    pub(super) fn drive_pill(&self, pane: PaneId, is_shown: bool, cx: &mut Context<Self>) -> Div {
         let drive = self
             .current_drive(pane)
             .and_then(|index| self.drives.list.get(index).cloned());
@@ -191,7 +191,7 @@ impl FerriteWindow {
         div()
             .relative()
             .flex_none()
-            .child(pill)
+            .when(is_shown, |host| host.child(pill))
             .children(self.drive_menu_view(pane, cx))
     }
 }

@@ -8,7 +8,7 @@ use gpui_kit::{
 };
 
 use super::row::{check_column, columns, date_column, ext_column};
-use super::{FileListAction, ListContext, SortBy, SortKey};
+use super::{FileListAction, ListContext, ListParts, SortBy, SortKey};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
@@ -53,13 +53,63 @@ fn columns_of(t: &Theme) -> [Column; 4] {
     ]
 }
 
-fn cell(t: &Theme, column: Column, sort: SortKey, ctx: &Rc<ListContext>) -> impl IntoElement {
-    let is_active = sort.by == column.by;
-    let arrow = if sort.descending {
+struct Sorted {
+    key: SortKey,
+    hidden: Option<&'static str>,
+}
+
+impl Sorted {
+    fn of(key: SortKey, columns: &[Column], parts: ListParts) -> Self {
+        let hidden = columns
+            .iter()
+            .find(|column| column.by == key.by && !parts.shows(column.by))
+            .map(|column| column.label);
+        Self { key, hidden }
+    }
+
+    fn marks(&self, column: &Column) -> bool {
+        self.key.by == column.by || (column.by == SortBy::Name && self.hidden.is_some())
+    }
+
+    fn describe(&self) -> String {
+        let way = if self.key.descending {
+            "descending"
+        } else {
+            "ascending"
+        };
+        match self.hidden {
+            Some(hidden) => format!("Sorted {way} by {hidden}"),
+            None => format!("Sorted {way}"),
+        }
+    }
+
+    fn note(&self, t: &Theme, column: &Column) -> Option<impl IntoElement + use<>> {
+        let by = self.hidden.filter(|_| column.by == SortBy::Name)?;
+        Some(
+            div()
+                .id("sort-hidden")
+                .aria_label(format!("Sorted by {by}"))
+                .test_support()
+                .font_weight(FontWeight::NORMAL)
+                .text_color(t.colors.muted)
+                .child(format!("by {by}")),
+        )
+    }
+}
+
+fn arrow_slot(t: &Theme, sorted: &Sorted, is_active: bool) -> Div {
+    let arrow = if sorted.key.descending {
         IconName::ArrowDown
     } else {
         IconName::ArrowUp
     };
+    div().flex_none().w(px(10.)).when(is_active, |slot| {
+        slot.child(icon(arrow, px(10.), t.colors.accent_text))
+    })
+}
+
+fn cell(t: &Theme, column: Column, sorted: &Sorted, ctx: &Rc<ListContext>) -> impl IntoElement {
+    let is_active = sorted.marks(&column);
     let right = matches!(column.by, SortBy::Size | SortBy::Date);
     let by = column.by;
     let ctx = ctx.clone();
@@ -68,13 +118,7 @@ fn cell(t: &Theme, column: Column, sort: SortKey, ctx: &Rc<ListContext>) -> impl
         .role(Role::Button)
         .aria_label(column.label)
         .aria_keyshortcuts(column.keys)
-        .when(is_active, |cell| {
-            cell.aria_description(if sort.descending {
-                "Sorted descending"
-            } else {
-                "Sorted ascending"
-            })
-        })
+        .when(is_active, |cell| cell.aria_description(sorted.describe()))
         .test_support()
         .flex()
         .items_center()
@@ -96,13 +140,14 @@ fn cell(t: &Theme, column: Column, sort: SortKey, ctx: &Rc<ListContext>) -> impl
                 .test_support()
                 .child(column.label),
         )
-        .child(div().flex_none().w(px(10.)).when(is_active, |slot| {
-            slot.child(icon(arrow, px(10.), t.colors.accent_text))
-        }))
+        .children(sorted.note(t, &column))
+        .child(arrow_slot(t, sorted, is_active))
 }
 
 pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {
     let c = &t.colors;
+    let all = columns_of(t);
+    let sorted = Sorted::of(sort, &all, ctx.parts);
     columns(t)
         .flex_none()
         .h(t.spacing.row_height)
@@ -110,8 +155,8 @@ pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {
         .text_color(c.muted)
         .child(div().w(check_column(t)).flex_none())
         .children(
-            columns_of(t)
-                .into_iter()
-                .map(|column| cell(t, column, sort, ctx)),
+            all.into_iter()
+                .filter(|column| ctx.parts.shows(column.by))
+                .map(|column| cell(t, column, &sorted, ctx)),
         )
 }

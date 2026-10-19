@@ -34,6 +34,23 @@ impl ListingMark {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FooterParts {
+    pub free_space: bool,
+    pub marked_totals: bool,
+    pub contents: bool,
+}
+
+impl Default for FooterParts {
+    fn default() -> Self {
+        Self {
+            free_space: true,
+            marked_totals: true,
+            contents: true,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct StatusBarProps {
     pub files: u64,
@@ -73,14 +90,19 @@ impl StatusBarProps {
     }
 
     pub fn text(&self) -> String {
-        let parts = [
-            Some(self.contents_text()),
+        self.text_in(FooterParts::default())
+    }
+
+    pub fn text_in(&self, parts: FooterParts) -> String {
+        let shown = [
+            parts.contents.then(|| self.contents_text()),
             self.mark.text(),
-            Some(self.free_text()),
+            parts.free_space.then(|| self.free_text()),
         ];
         self.marked_text()
+            .filter(|_| parts.marked_totals)
             .into_iter()
-            .chain(parts.into_iter().flatten())
+            .chain(shown.into_iter().flatten())
             .collect::<Vec<_>>()
             .join(" · ")
     }
@@ -97,6 +119,7 @@ pub struct StatusBar {
     id: ElementId,
     props: StatusBarProps,
     notice: Option<StatusNotice>,
+    parts: FooterParts,
 }
 
 impl StatusBar {
@@ -105,7 +128,19 @@ impl StatusBar {
             id: id.into(),
             props,
             notice: None,
+            parts: FooterParts::default(),
         }
+    }
+
+    #[must_use]
+    pub fn parts(mut self, parts: FooterParts) -> Self {
+        self.parts = parts;
+        self
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.props.text_in(self.parts).is_empty() && self.notice.is_none()
     }
 
     #[must_use]
@@ -134,9 +169,11 @@ impl RenderOnce for StatusBar {
         let t = tokens::current(cx);
         let c = &t.colors;
         let props = self.props;
+        let parts = self.parts;
+        let text = props.text_in(parts);
         let label = match &self.notice {
-            Some(notice) => format!("{} · {}", notice.text, props.text()),
-            None => props.text(),
+            Some(notice) => format!("{} · {}", notice.text, text),
+            None => text,
         };
         div()
             .id(self.id)
@@ -154,26 +191,31 @@ impl RenderOnce for StatusBar {
             .border_t_1()
             .border_color(t.surfaces.card_edge)
             .when_some(self.notice, |d, notice| d.child(notice_text(t, notice)))
-            .when_some(props.marked_text(), |d, marked| {
-                d.child(
-                    div()
-                        .flex_none()
-                        .text_color(c.mark)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(format!("{marked} ·")),
-                )
-            })
+            .when_some(
+                props.marked_text().filter(|_| parts.marked_totals),
+                |d, marked| {
+                    d.child(
+                        div()
+                            .flex_none()
+                            .text_color(c.mark)
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(format!("{marked} ·")),
+                    )
+                },
+            )
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .child(props.contents_text()),
+                    .when(parts.contents, |d| d.child(props.contents_text())),
             )
             .when_some(props.mark.text(), |d, mark| {
                 d.child(div().flex_none().child(mark))
             })
-            .child(div().flex_none().child(props.free_text()))
+            .when(parts.free_space, |d| {
+                d.child(div().flex_none().child(props.free_text()))
+            })
     }
 }
 
@@ -183,7 +225,7 @@ mod tests {
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{Context, IntoElement, Render, Role, TestAppContext, Window};
 
-    use super::{ListingMark, StatusBar, StatusBarProps, StatusNotice};
+    use super::{FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice};
     use crate::format;
     use crate::test_window::open;
 
@@ -289,5 +331,75 @@ mod tests {
             label_with(props, Some(notice), cx).as_deref(),
             Some("keymap.toml, line 3: unknown command `x` · 1 file, 0 folders · 0 B · – free")
         );
+    }
+
+    fn none() -> FooterParts {
+        FooterParts {
+            free_space: false,
+            marked_totals: false,
+            contents: false,
+        }
+    }
+
+    fn busy_props(mark: ListingMark) -> StatusBarProps {
+        StatusBarProps {
+            files: 5,
+            folders: 1,
+            bytes: 37_412,
+            marked: 2,
+            marked_bytes: 15_148,
+            free_bytes: Some(512_000_000),
+            mark,
+        }
+    }
+
+    #[test]
+    fn each_footer_part_leaves_the_text_when_hidden() {
+        let props = busy_props(ListingMark::Fresh);
+        let all = FooterParts::default();
+        let text = |parts| props.text_in(parts);
+        assert!(
+            text(FooterParts {
+                free_space: false,
+                ..all
+            })
+            .ends_with("36.5 KB")
+        );
+        assert!(
+            !text(FooterParts {
+                marked_totals: false,
+                ..all
+            })
+            .contains("marked")
+        );
+        assert!(
+            !text(FooterParts {
+                contents: false,
+                ..all
+            })
+            .contains("files")
+        );
+        assert_eq!(text(none()), "");
+    }
+
+    #[test]
+    fn a_footer_with_every_part_hidden_is_empty_unless_it_has_a_problem() {
+        let quiet = StatusBar::new("status", busy_props(ListingMark::Fresh)).parts(none());
+        assert!(quiet.is_empty());
+        let offline = StatusBar::new(
+            "status",
+            busy_props(ListingMark::Offline { cached_at_ms: None }),
+        )
+        .parts(none());
+        assert!(!offline.is_empty());
+        assert_eq!(
+            offline.props.text_in(none()),
+            "Offline \u{b7} showing cached"
+        );
+        let notice = StatusNotice {
+            text: "disk full".into(),
+            is_error: true,
+        };
+        assert!(!quiet.notice(Some(notice)).is_empty());
     }
 }

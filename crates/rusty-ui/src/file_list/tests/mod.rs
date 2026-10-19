@@ -1,5 +1,6 @@
 mod density;
 mod input;
+mod parts;
 mod render;
 
 use std::rc::Rc;

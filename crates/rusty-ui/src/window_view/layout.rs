@@ -31,12 +31,14 @@ impl FerriteWindow {
     pub(super) fn body_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let t = tokens::current(cx).clone();
         let body = self.panes_view(window, cx);
+        let has_strip = self.fkey_strip_height(&t) > px(0.);
         div()
             .relative()
             .flex()
             .flex_1()
             .min_h_0()
             .px(t.spacing.xs)
+            .when(!has_strip, |area| area.pb(t.spacing.md))
             .child(body)
             .children(self.job_card_layer(cx))
             .children(self.preview_layer(window, cx))

@@ -24,6 +24,20 @@ patterns-select-folders = false
 [terminal]
 provider = \"windows-terminal\"
 
+[window.view]
+tabs-with-one = true
+path-bar = true
+drive-button = true
+title-search = true
+fkey-bar = true
+icons = true
+ext-column = true
+size-column = true
+date-column = true
+free-space = true
+marked-totals = true
+contents = true
+
 [text.view]
 line-numbers = true
 line-ends = false
@@ -39,7 +53,7 @@ charts = false
 row-bars = false
 ";
 
-const DEFAULT_KEYS: [(&str, &str); 24] = [
+const DEFAULT_KEYS: [(&str, &str); 36] = [
     ("appearance.mode", "\"system\""),
     ("appearance.light-theme", "\"Ferrite Light\""),
     ("appearance.dark-theme", "\"Ferrite Dark\""),
@@ -56,6 +70,18 @@ const DEFAULT_KEYS: [(&str, &str); 24] = [
     ("selection.space-measures-folders", "true"),
     ("selection.patterns-select-folders", "false"),
     ("terminal.provider", "\"windows-terminal\""),
+    ("window.view.tabs-with-one", "true"),
+    ("window.view.path-bar", "true"),
+    ("window.view.drive-button", "true"),
+    ("window.view.title-search", "true"),
+    ("window.view.fkey-bar", "true"),
+    ("window.view.icons", "true"),
+    ("window.view.ext-column", "true"),
+    ("window.view.size-column", "true"),
+    ("window.view.date-column", "true"),
+    ("window.view.free-space", "true"),
+    ("window.view.marked-totals", "true"),
+    ("window.view.contents", "true"),
     ("text.view.line-numbers", "true"),
     ("text.view.line-ends", "false"),
     ("image.view.details", "false"),
@@ -113,7 +139,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[text.view]\nline-numbers = true\nline-ends = false\n\n[image.view]\ndetails = false\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = true\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\n\n[image.view]\ndetails = false\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
     assert_eq!(completed(before), after);
 }
 
@@ -550,9 +576,45 @@ fn only_the_viewer_sections_are_added_to_an_older_complete_file() {
 fn a_trailing_comment_stays_under_its_section_when_viewer_sections_are_added() {
     let before = format!("{}# the end\n", without_viewers());
     let after = completed(&before);
-    assert_eq!(header_above(&after, "# the end"), "[terminal]", "{after}");
+    assert_eq!(
+        header_above(&after, "# the end"),
+        "[window.view]",
+        "{after}"
+    );
     assert_eq!(after.matches("# the end").count(), 1, "{after}");
     assert!(parse(&after).is_ok(), "{after}");
+}
+
+fn without_window() -> String {
+    let from = FULL.find("\n[window.view]").unwrap();
+    let to = FULL.find("\n[text.view]").unwrap();
+    format!("{}{}", &FULL[..from], &FULL[to..])
+}
+
+#[test]
+fn only_the_window_section_is_added_to_an_older_complete_file() {
+    let before = without_window();
+    assert!(!before.contains("[window"), "{before}");
+    let after = completed(&before);
+    assert!(after.starts_with(&before), "{after}");
+    assert!(
+        after.ends_with("marked-totals = true\ncontents = true\n"),
+        "{after}"
+    );
+    assert_eq!(after.matches("[window.view]").count(), 1, "{after}");
+    assert!(parse(&after).is_ok(), "{after}");
+}
+
+#[test]
+fn a_hand_set_window_part_stays_when_the_other_parts_are_added() {
+    let before = format!(
+        "{}\n[window.view]\nfkey-bar = false # no bar\n",
+        without_window()
+    );
+    let after = completed(&before);
+    assert!(after.contains("fkey-bar = false # no bar"), "{after}");
+    assert!(after.contains("tabs-with-one = true"), "{after}");
+    assert_eq!(after.matches("fkey-bar").count(), 1, "{after}");
 }
 
 fn without_automotive() -> String {

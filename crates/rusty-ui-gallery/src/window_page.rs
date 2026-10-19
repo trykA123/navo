@@ -1,36 +1,45 @@
+mod card;
+
 use std::rc::Rc;
 
-use rusty_core::{Location, ProviderId, Selection, ViewState};
+use rusty_core::{Location, ProviderId};
 use rusty_fs::FsEntry;
 use rusty_ui::app_menu::{AppMenu, Identity, Install, QuickSettings};
 use rusty_ui::commands::Keymap;
+use rusty_ui::context_menu::{ContextMenu, ContextMenuInput};
 use rusty_ui::crash_notice::{CrashKeys, CrashNotice};
-use rusty_ui::file_list::{FileList, FileListProps, SortKey};
+use rusty_ui::file_list::SortKey;
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::job_card::{JobCard, JobPill, PillFit};
 use rusty_ui::modifier_hints::{Combo, Cover, HintsDrawer, Layer, drawer_height, layer_where};
-use rusty_ui::pane_chrome::{
-    DriveInfo, DrivePill, PaneTabs, PathBar, card_header, current_drive, pane_card,
-};
+use rusty_ui::pane_chrome::DriveInfo;
 use rusty_ui::prelude::*;
-use rusty_ui::primitives::{Splitter, SplitterState};
-use rusty_ui::settings::Field;
+use rusty_ui::primitives::{Button, ButtonVariant, Splitter, SplitterState};
+use rusty_ui::settings::{Field, Values, WindowParts};
 use rusty_ui::shortcuts::ShortcutsPage;
 use rusty_ui::side_sheet::{SheetFrame, SheetState, Side as PaneSide};
-use rusty_ui::status_bar::StatusBar;
 use rusty_ui::tokens::{self, Density, Mode, Theme, ThemeChoice};
 use rusty_ui::window_view::{
     DELETE_WARNING, delete_warning_in, key_labels, keys_in_layer, layer_keys, settings_labels_in,
+    window_view_menu,
 };
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
 use crate::job_sample;
-use crate::pane_page::status_of;
 use crate::pane_sample;
 use crate::settings_sample;
 use crate::sheet_sample;
 use crate::shortcuts_sample;
+
+#[derive(Default)]
+struct ViewMenuShown {
+    wanted: bool,
+    frames: u8,
+    menu: Option<Entity<ContextMenu>>,
+}
+
+const FRAMES_BEFORE_MENU: u8 = 2;
 
 struct Side {
     tabs: &'static [&'static str],
@@ -89,6 +98,10 @@ pub struct WindowPage {
     rows: Rc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
     split: Entity<SplitterState>,
+    parts: WindowParts,
+    sort: SortKey,
+    is_single_tab: bool,
+    view_menu: ViewMenuShown,
 }
 
 fn location(text: &str) -> Location {
@@ -107,6 +120,27 @@ impl WindowPage {
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
             split: cx.new(|_| SplitterState::new(0.5)),
+            parts: WindowParts::default(),
+            sort: SortKey::default(),
+            is_single_tab: false,
+            view_menu: ViewMenuShown::default(),
+        }
+    }
+
+    pub fn sorted_by(mut self, sort: SortKey) -> Self {
+        self.sort = sort;
+        self
+    }
+
+    pub fn with_parts(parts: WindowParts, shows_menu: bool, cx: &mut Context<Self>) -> Self {
+        Self {
+            parts,
+            is_single_tab: true,
+            view_menu: ViewMenuShown {
+                wanted: shows_menu,
+                ..ViewMenuShown::default()
+            },
+            ..Self::new(None, cx)
         }
     }
 
@@ -116,11 +150,15 @@ impl WindowPage {
             .is_some_and(|sheet| sheet.shows.settings.is_some() || sheet.shows.shortcuts.is_some())
     }
 
-    fn fkey_bar(&self, window: &Window) -> FKeyBar {
+    fn fkey_bar(&self, window: &Window) -> Option<FKeyBar> {
         if self.shows_settings() {
             let labels = settings_labels_in(Keymap::builtin());
-            return FKeyBar::new("fkeys", keys_in_layer(&labels, self.held))
-                .layers(self.held, labels);
+            return Some(
+                FKeyBar::new("fkeys", keys_in_layer(&labels, self.held)).layers(self.held, labels),
+            );
+        }
+        if !self.parts.fkey_bar {
+            return None;
         }
         let bar = FKeyBar::new("fkeys", layer_keys(self.held)).layers(self.held, key_labels());
         let bar = match delete_warning_in(Keymap::builtin()) {
@@ -128,12 +166,64 @@ impl WindowPage {
             None => bar,
         };
         let Some(shown) = self.jobs else {
-            return bar;
+            return Some(bar);
         };
         let fit = PillFit::for_width(window.viewport_size().width);
         let bar = bar.reserve_pill_width(fit.slot_width());
-        if shown.is_pill {
+        Some(if shown.is_pill {
             bar.right_slot(JobPill::new(&job_sample::jobs(shown.count), fit))
+        } else {
+            bar
+        })
+    }
+
+    fn open_view_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let viewport = window.viewport_size();
+        let t = tokens::current(cx).clone();
+        let input = ContextMenuInput {
+            menu: window_view_menu(&Values::default()),
+            context: "View".into(),
+            anchor: Point::new(viewport.width - t.spacing.xl, t.spacing.header_height),
+            bounds: Bounds::new(Point::default(), viewport),
+            restore: None,
+        };
+        self.view_menu.menu = Some(cx.new(|cx| {
+            let mut menu = ContextMenu::new(input, window, cx);
+            menu.hide_classic(cx);
+            menu.name_ferrite_group("View", cx);
+            menu
+        }));
+        cx.notify();
+    }
+
+    fn view_menu_layer(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<ContextMenu>> {
+        let shown = &mut self.view_menu;
+        if shown.wanted && shown.menu.is_none() {
+            if shown.frames < FRAMES_BEFORE_MENU {
+                shown.frames += 1;
+                window.request_animation_frame();
+            } else {
+                cx.defer_in(window, Self::open_view_menu);
+            }
+        }
+        shown.menu.clone()
+    }
+
+    fn title_bar(&self, is_menu_open: bool) -> FerriteTitleBar {
+        let bar = FerriteTitleBar::new("Ferrite")
+            .on_mica()
+            .app_button(is_menu_open, |_, _, _| {})
+            .trailing(
+                Button::new("window-view", "View")
+                    .variant(ButtonVariant::Ghost)
+                    .tooltip("View menu (Alt+V)"),
+            );
+        if self.parts.title_search {
+            bar.header(HeaderSearch::new())
         } else {
             bar
         }
@@ -193,7 +283,12 @@ impl WindowPage {
         let shown = self.hints.filter(|_| index == self.active_index())?;
         let t = tokens::current(cx);
         let layer = self.hint_layer(shown.combo);
-        let bottom = window.viewport_size().height - t.spacing.fkey_height;
+        let bar = if self.parts.fkey_bar {
+            t.spacing.fkey_height
+        } else {
+            px(0.)
+        };
+        let bottom = window.viewport_size().height - bar;
         Some(Cover {
             top: bottom - drawer_height(t, &layer),
             gap: t.spacing.md,
@@ -290,60 +385,6 @@ impl WindowPage {
         self.is_menu_open
             .then(|| AppMenu::new("app-menu", identity, settings).into_overlay(t))
     }
-
-    fn list(&self, index: usize, side: &Side, marked: Rc<Selection>) -> FileList {
-        let folder = side.tabs.first().copied().unwrap_or_default();
-        let props = FileListProps {
-            folder: folder.into(),
-            rows: self.rows.clone(),
-            view: ViewState {
-                cursor: self.hints.map_or(side.cursor, |shown| shown.cursor),
-                scroll: 0,
-            },
-            marked,
-            is_active: index == self.active_index(),
-            filter: None,
-            sort: SortKey::default(),
-        };
-        FileList::new(("list", index), props)
-    }
-
-    fn card(&self, index: usize, window: &Window, cx: &App) -> impl IntoElement {
-        let side = &SIDES[index];
-        let is_active = index == self.active_index();
-        let here = location(side.path);
-        let mut marked = Selection::new(self.rows.len() as u64);
-        marked.mark_rows(side.marked.iter().copied());
-        let tabs =
-            PaneTabs::new(("tabs", index), side.tabs.iter().copied(), 0).highlighted(is_active);
-        let header = card_header(tokens::current(cx))
-            .child(div().flex_1().min_w_0().child(tabs))
-            .child(DrivePill::new(
-                ("drive-pill", index),
-                current_drive(&self.drives, &here)
-                    .and_then(|drive| self.drives.get(drive).cloned()),
-            ));
-        let label = if index == 0 {
-            "Left pane"
-        } else {
-            "Right pane"
-        };
-        let card = pane_card(("pane", index), label, is_active, cx)
-            .child(header)
-            .child(PathBar::new(("path", index), here))
-            .child(
-                self.list(index, side, Rc::new(marked.clone()))
-                    .lift_above(self.cover(index, window, cx)),
-            )
-            .child(StatusBar::new(
-                ("status", index),
-                status_of(&self.rows, &marked),
-            ));
-        div()
-            .size_full()
-            .p(tokens::current(cx).spacing.xs)
-            .child(card)
-    }
 }
 
 impl Render for WindowPage {
@@ -354,18 +395,14 @@ impl Render for WindowPage {
         let is_open = self.is_menu_open;
         let menu = self.menu(&t);
         let sheet = self.sheet_layer(&t, window);
+        let view_menu = self.view_menu_layer(window, cx);
         div()
             .relative()
             .size_full()
             .flex()
             .flex_col()
             .bg(t.surfaces.mica())
-            .child(
-                FerriteTitleBar::new("Ferrite")
-                    .on_mica()
-                    .app_button(is_open, |_, _, _| {})
-                    .header(HeaderSearch::new()),
-            )
+            .child(self.title_bar(is_open))
             .children(self.crash_notice(&t))
             .child(
                 div()
@@ -374,12 +411,14 @@ impl Render for WindowPage {
                     .flex_1()
                     .min_h_0()
                     .px(t.spacing.xs)
+                    .when(!self.parts.fkey_bar, |area| area.pb(t.spacing.md))
                     .child(panes)
                     .children(self.job_card(&t))
                     .children(sheet)
                     .children(self.hints_layer(&t)),
             )
-            .child(self.fkey_bar(window))
+            .children(self.fkey_bar(window))
             .children(menu)
+            .children(view_menu)
     }
 }

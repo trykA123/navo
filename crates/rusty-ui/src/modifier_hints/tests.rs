@@ -60,7 +60,7 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
 #[test]
 fn the_alt_and_shift_layers_map_their_commands_to_groups() {
     let alt = layer_in(Keymap::builtin(), Combo::ALT);
-    assert_eq!(names(&alt), ["Pane", "Navigation"]);
+    assert_eq!(names(&alt), ["Pane", "View", "Navigation"]);
     assert_eq!(
         commands(&group(&alt, "Navigation").entries),
         ["pane.go_back", "pane.go_forward"]

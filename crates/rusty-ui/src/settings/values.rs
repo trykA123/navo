@@ -95,6 +95,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::FoldersFirst | Field::SpaceMeasuresFolders | Field::TextLineNumbers => {
             Value::Flag(true)
         }
+        field if field.is_window_part() => Value::Flag(true),
         Field::TerminalProvider => text("windows-terminal"),
         _ => match spec.control {
             Control::Choices(..) => Value::Pick(0),
