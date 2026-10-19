@@ -1,4 +1,4 @@
-use super::{elf, markdown, memory, pdf, table, trace, tree};
+use super::{elf, map, markdown, memory, pdf, table, trace, tree};
 use crate::prelude::*;
 
 gpui_kit::actions!(
@@ -89,6 +89,7 @@ pub fn bind_keys(cx: &mut App) {
     markdown::bind_keys(cx);
     memory::bind_keys(cx);
     elf::bind_keys(cx);
+    map::bind_keys(cx);
     trace::bind_keys(cx);
     pdf::bind_keys(cx);
 }

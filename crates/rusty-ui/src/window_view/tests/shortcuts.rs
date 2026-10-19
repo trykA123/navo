@@ -339,15 +339,18 @@ fn search_finds_a_label(cx: &mut TestAppContext) {
     assert_eq!(rig.visible(cx), ["files.sort_by_size"]);
 }
 
+const CTRL_F5: [&str; 3] = [
+    "files.sort_by_date",
+    "elf.sort_by_address",
+    "map.sort_by_address",
+];
+
 #[gpui_kit::test]
 fn search_finds_the_command_bound_to_a_typed_key(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_page(cx);
     rig.type_text(cx, "ctrl+f5");
-    assert_eq!(
-        rig.visible(cx),
-        ["files.sort_by_date", "elf.sort_by_address"]
-    );
+    assert_eq!(rig.visible(cx), CTRL_F5);
 }
 
 #[gpui_kit::test]
@@ -357,11 +360,7 @@ fn keys_typed_as_on_a_keyboard_land_in_the_search(cx: &mut TestAppContext) {
         rig.open_page(cx);
         rig.type_keys(cx, typed);
         assert_eq!(rig.query(cx), typed);
-        assert_eq!(
-            rig.visible(cx),
-            ["files.sort_by_date", "elf.sort_by_address"],
-            "{typed}"
-        );
+        assert_eq!(rig.visible(cx), CTRL_F5, "{typed}");
     }
 }
 

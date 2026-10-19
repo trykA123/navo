@@ -15,6 +15,7 @@ use crate::automotive_sample::{
 };
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
+use crate::map_sample::{MAP_NAME, MAP_STEPS, map};
 use crate::menu_page::{MenuPage, Shows as MenuShows};
 use crate::operate_page::OperatePage;
 pub use crate::pages::{PAGES, Page};
@@ -81,6 +82,7 @@ pub struct Gallery {
     markdown_preview: Option<Box<dyn ViewerBody>>,
     memory: [Option<Box<dyn ViewerBody>>; 2],
     elf: [Option<Box<dyn ViewerBody>>; 2],
+    map: [Option<Box<dyn ViewerBody>>; 2],
     trace: [Option<Box<dyn ViewerBody>>; 2],
     archive: Entity<ArchiveView>,
     font: Option<Entity<FontView>>,
@@ -123,6 +125,7 @@ impl Gallery {
             markdown_preview: structured::editing(MARKDOWN_NAME, MARKDOWN, window, cx),
             memory: [(); 2].map(|()| structured::body(MEMORY_NAME, memory(), window, cx)),
             elf: [(); 2].map(|()| structured::binary(ELF_NAME, elf(), window, cx)),
+            map: [(); 2].map(|()| structured::body(MAP_NAME, map(), window, cx)),
             trace: [(); 2].map(|()| structured::body(TRACE_NAME, trace(), window, cx)),
             archive: rich_sample::archive_view(cx),
             font: rich_sample::font_view(cx),
@@ -342,16 +345,7 @@ impl Render for Gallery {
             | Page::ViewMenuElf
             | Page::ViewMenuTrace => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
-            Page::Tree
-            | Page::Table
-            | Page::Markdown
-            | Page::MarkdownPreview
-            | Page::MemoryImage
-            | Page::MemoryDrawers
-            | Page::ElfSymbols
-            | Page::ElfDrawers
-            | Page::TraceTable
-            | Page::TraceDrawers => self.sample_page(root, cx),
+            page if page.is_viewer_sample() => self.sample_page(root, cx),
             Page::Tokens => root.child(tokens_page::render(&t)),
             Page::PdfCalm | Page::PdfSearch | Page::PdfDrawers => {
                 root.children(self.pdf_sample().cloned())

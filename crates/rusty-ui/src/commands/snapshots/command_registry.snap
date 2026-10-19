@@ -248,6 +248,17 @@ elf.type_p | Type p in the filter | ElfTable
 elf.type_one | Type 1 in the filter | ElfTable
 elf.type_three | Type 3 in the filter | ElfTable
 elf.type_five | Type 5 in the filter | ElfTable
+map.pick_item | Show only the picked region or object, or inspect the row | Map
+map.next_table | Show the next table: memory, sections, symbols | Map
+map.sort_by_name | Sort the table by name | Map
+map.sort_by_second | Sort the table by used %, region or space | Map
+map.sort_by_address | Sort the table by address | Map
+map.sort_by_size | Sort the table by size | Map
+map.type_n | Type n in the filter | MapTable
+map.type_p | Type p in the filter | MapTable
+map.type_one | Type 1 in the filter | MapTable
+map.type_three | Type 3 in the filter | MapTable
+map.type_five | Type 5 in the filter | MapTable
 trace.filter_by_id | Filter by the picked ID | CanTrace
 trace.sort_ids | Sort IDs by count or ID | CanTrace
 trace.type_one | Type 1 in the ID filter | CanTrace

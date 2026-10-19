@@ -11,6 +11,8 @@ impl Gallery {
             Page::MemoryDrawers => self.memory[1].as_deref(),
             Page::ElfSymbols => self.elf[0].as_deref(),
             Page::ElfDrawers => self.elf[1].as_deref(),
+            Page::MapTables => self.map[0].as_deref(),
+            Page::MapDrawers => self.map[1].as_deref(),
             Page::TraceTable => self.trace[0].as_deref(),
             Page::TraceDrawers => self.trace[1].as_deref(),
             _ => None,
@@ -42,6 +44,7 @@ impl Gallery {
             Page::MemoryDrawers => &MEMORY_STEPS,
             Page::ElfDrawers => &ELF_STEPS,
             Page::TraceDrawers => &TRACE_STEPS,
+            Page::MapDrawers => &MAP_STEPS,
             Page::PdfDrawers => &PDF_STEPS,
             _ => &[],
         };
@@ -62,6 +65,8 @@ impl Gallery {
                 | Page::ElfDrawers
                 | Page::TraceTable
                 | Page::TraceDrawers
+                | Page::MapTables
+                | Page::MapDrawers
         );
         match self.sample() {
             Some(body) => root

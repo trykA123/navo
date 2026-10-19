@@ -95,7 +95,7 @@ pub(super) fn status(elf: &Elf, lines: Option<&Lines>) -> Vec<Check> {
     checks
 }
 
-pub(super) fn parse_address(text: &str) -> Result<u64, String> {
+pub(in crate::window_view::viewer) fn parse_address(text: &str) -> Result<u64, String> {
     let trimmed = text.trim();
     let digits = trimmed
         .strip_prefix("0x")

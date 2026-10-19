@@ -1148,6 +1148,59 @@ keys = ["3"]
 command = "elf.type_five"
 keys = ["5"]
 
+# Map
+
+[[bind]]
+command = "map.pick_item"
+keys = ["enter"]
+
+[[bind]]
+command = "map.next_table"
+keys = ["alt-t"]
+
+[[bind]]
+command = "map.sort_by_name"
+keys = ["ctrl-f3"]
+
+[[bind]]
+command = "map.sort_by_second"
+keys = ["ctrl-f4"]
+
+[[bind]]
+command = "map.sort_by_address"
+keys = ["ctrl-f5"]
+
+[[bind]]
+command = "map.sort_by_size"
+keys = ["ctrl-f6"]
+
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Map"
+
+# MapTable
+
+[[bind]]
+command = "map.type_n"
+keys = ["n"]
+
+[[bind]]
+command = "map.type_p"
+keys = ["p"]
+
+[[bind]]
+command = "map.type_one"
+keys = ["1"]
+
+[[bind]]
+command = "map.type_three"
+keys = ["3"]
+
+[[bind]]
+command = "map.type_five"
+keys = ["5"]
+
 # CanTrace
 
 [[bind]]

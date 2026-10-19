@@ -125,7 +125,11 @@ fn search_finds_a_command_name() {
     assert_eq!(shown(&rows, "files.sort_by_date"), ["files.sort_by_date"]);
 }
 
-const CTRL_F5: [&str; 2] = ["files.sort_by_date", "elf.sort_by_address"];
+const CTRL_F5: [&str; 3] = [
+    "files.sort_by_date",
+    "elf.sort_by_address",
+    "map.sort_by_address",
+];
 
 #[test]
 fn search_finds_the_command_bound_to_a_key() {
@@ -193,7 +197,7 @@ fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     }
 }
 
-const BACK_CONTEXTS: [&str; 9] = [
+const BACK_CONTEXTS: [&str; 10] = [
     "ViewerGoTo",
     "Paged",
     "ViewerFind",
@@ -202,6 +206,7 @@ const BACK_CONTEXTS: [&str; 9] = [
     "Pdf",
     "MemoryImage",
     "Elf",
+    "Map",
     "CanTrace",
 ];
 

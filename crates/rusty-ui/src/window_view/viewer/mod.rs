@@ -12,6 +12,7 @@ mod keys;
 mod keys_bar;
 mod kinds;
 mod lister;
+mod map;
 mod markdown;
 mod memory;
 mod menu;

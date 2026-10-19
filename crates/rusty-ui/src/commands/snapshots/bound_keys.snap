@@ -129,6 +129,17 @@ lister.previous_image | backspace | Viewer
 lister.show_hex | 3 | Viewer
 lister.show_rich | 5 | Viewer
 lister.show_text | 1 | Viewer
+map.next_table | alt-t | Map
+map.pick_item | enter | Map
+map.sort_by_address | ctrl-f5 | Map
+map.sort_by_name | ctrl-f3 | Map
+map.sort_by_second | ctrl-f4 | Map
+map.sort_by_size | ctrl-f6 | Map
+map.type_five | 5 | MapTable
+map.type_n | n | MapTable
+map.type_one | 1 | MapTable
+map.type_p | p | MapTable
+map.type_three | 3 | MapTable
 mark.clear | ctrl-0 | Viewer
 mark.colour_eight | ctrl-8 | Viewer
 mark.colour_five | ctrl-5 | Viewer
@@ -261,6 +272,7 @@ view.right_drawer | ctrl-i | Viewer
 viewer.back | escape | CanTrace
 viewer.back | escape | Elf
 viewer.back | escape | Image
+viewer.back | escape | Map
 viewer.back | escape | MemoryImage
 viewer.back | escape | Paged
 viewer.back | escape | Pdf

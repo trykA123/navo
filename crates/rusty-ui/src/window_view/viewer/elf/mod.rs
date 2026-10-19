@@ -15,6 +15,7 @@ use gpui_kit::{AnyView, FocusHandle, Subscription};
 use rusty_automotive::{Elf, Lines, Query, Scope, Symbol};
 
 pub(super) use keys::bind_keys;
+pub(in crate::window_view::viewer) use text::parse_address;
 
 use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
