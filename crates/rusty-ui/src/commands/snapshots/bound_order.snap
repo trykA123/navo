@@ -193,6 +193,7 @@ image.zoom_out | - | Image
 image.toggle_info | i | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
+viewer.back | escape | MemoryImage
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
@@ -228,6 +229,10 @@ markdown.open_link | enter | Markdown
 markdown.next_link | tab | Markdown
 markdown.previous_link | shift-tab | Markdown
 markdown.copy_block | ctrl-c | Markdown
+[memory_image]
+memory.toggle_navigator | ctrl-b | MemoryImage
+memory.toggle_inspector | ctrl-i | MemoryImage
+memory.go_to_item | enter | MemoryImage
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu

@@ -39,18 +39,25 @@ fn patch_plain(
         return Ok(text.to_owned());
     };
     let mut table: &mut dyn TableLike = document.as_table_mut();
-    for part in parts {
+    let outer = parts.len().saturating_sub(1);
+    for (at, part) in parts.into_iter().enumerate() {
         if value.is_none() && table.get(part).is_none() {
             return Ok(text.to_owned());
         }
         table = table
             .entry(part)
-            .or_insert_with(toml_edit::table)
+            .or_insert_with(|| section(at < outer))
             .as_table_like_mut()
             .ok_or(SettingsError::FileInvalid)?;
     }
     set(table, name, value);
     Ok(document.to_string())
+}
+
+fn section(is_implicit: bool) -> Item {
+    let mut table = toml_edit::Table::new();
+    table.set_implicit(is_implicit);
+    Item::Table(table)
 }
 
 fn set(table: &mut dyn TableLike, name: &str, value: Option<SettingValue>) {

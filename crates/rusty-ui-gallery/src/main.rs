@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod automotive_sample;
 mod drives_page;
 mod gallery;
 mod image_sample;

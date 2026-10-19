@@ -7,15 +7,17 @@ pub enum Section {
     Selection,
     Terminal,
     Editor,
+    Automotive,
 }
 
 impl Section {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
         Self::Terminal,
         Self::Editor,
+        Self::Automotive,
     ];
 
     pub fn label(self) -> &'static str {
@@ -25,6 +27,7 @@ impl Section {
             Self::Selection => "Selection",
             Self::Terminal => "Terminal",
             Self::Editor => "Editor",
+            Self::Automotive => "Automotive",
         }
     }
 
@@ -35,6 +38,7 @@ impl Section {
             Self::Selection => IconName::MousePointer,
             Self::Terminal => IconName::SquareTerminal,
             Self::Editor => IconName::FilePen,
+            Self::Automotive => IconName::MemoryStick,
         }
     }
 }
@@ -59,6 +63,11 @@ pub enum Field {
     TerminalProvider,
     TerminalCommand,
     EditorPath,
+    AutomotivePreset,
+    AutomotiveInspector,
+    AutomotiveMemoryStrip,
+    AutomotiveCharts,
+    AutomotiveRowBars,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -87,6 +96,11 @@ pub const HINTS: [Choice; 3] = [
     choice("All shortcuts", "all"),
 ];
 pub const HIDDEN: [Choice; 2] = [choice("Shown", "shown"), choice("Hidden", "hidden")];
+pub const PRESETS: [Choice; 3] = [
+    choice("Simple", "simple"),
+    choice("Rich", "rich"),
+    choice("Custom", "custom"),
+];
 pub const SORTS: [Choice; 4] = [
     choice("Name", "name"),
     choice("Size", "size"),
@@ -137,7 +151,7 @@ const fn spec(
 use Field as F;
 use Section as S;
 
-pub const FIELDS: [FieldSpec; 18] = [
+pub const FIELDS: [FieldSpec; 23] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -249,6 +263,58 @@ pub const FIELDS: [FieldSpec; 18] = [
         ("Editor", "The program F4 opens files with"),
         Control::Text,
     ),
+    spec(
+        (F::AutomotivePreset, S::Automotive, "automotive.view.preset"),
+        (
+            "View",
+            "Simple keeps the view calm, Rich turns every part on, Custom uses the toggles below.",
+        ),
+        Control::Choices(&PRESETS, Look::Segments),
+    ),
+    spec(
+        (
+            F::AutomotiveInspector,
+            S::Automotive,
+            "automotive.view.inspector",
+        ),
+        (
+            "Open the inspector",
+            "Opens the details drawer by itself when you pick a range or section.",
+        ),
+        Control::Toggle,
+    ),
+    spec(
+        (
+            F::AutomotiveMemoryStrip,
+            S::Automotive,
+            "automotive.view.memory-strip",
+        ),
+        (
+            "Memory strip",
+            "Shows a map of the address space beside the ranges list.",
+        ),
+        Control::Toggle,
+    ),
+    spec(
+        (F::AutomotiveCharts, S::Automotive, "automotive.view.charts"),
+        (
+            "Charts",
+            "Shows bars, sparklines, bus load and signal curves where a view has them.",
+        ),
+        Control::Toggle,
+    ),
+    spec(
+        (
+            F::AutomotiveRowBars,
+            S::Automotive,
+            "automotive.view.row-bars",
+        ),
+        (
+            "Row bars",
+            "Shows a size bar and counts on each row of the ranges list.",
+        ),
+        Control::Toggle,
+    ),
 ];
 
 impl Field {
@@ -269,6 +335,9 @@ impl Field {
                 | Self::FontSize
                 | Self::TerminalProvider
                 | Self::TerminalCommand
+                | Self::AutomotiveMemoryStrip
+                | Self::AutomotiveCharts
+                | Self::AutomotiveRowBars
         )
     }
 }

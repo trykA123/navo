@@ -48,6 +48,8 @@ pub enum Page {
     HintsAlt,
     HintsLow,
     CrashNotice,
+    MemoryImage,
+    MemoryDrawers,
 }
 
 pub struct PageInfo {
@@ -66,7 +68,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 48] = [
+pub const PAGES: [PageInfo; 50] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -205,6 +207,18 @@ pub const PAGES: [PageInfo; 48] = [
         false,
     ),
     info(Page::CrashNotice, "Crash notice", "p29-crash-notice", false),
+    info(
+        Page::MemoryImage,
+        "Memory image",
+        "p16-b2-hex-simple",
+        false,
+    ),
+    info(
+        Page::MemoryDrawers,
+        "Memory image, drawers",
+        "p16-b2-hex-drawers",
+        false,
+    ),
 ];
 
 impl Page {
