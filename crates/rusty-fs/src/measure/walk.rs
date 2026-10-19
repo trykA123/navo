@@ -93,8 +93,7 @@ impl Folder<'_> {
 
 fn cancelled(location: &Location) -> FsError {
     FsError {
-        kind: FsErrorKind::Cancelled,
         location: Some(location.clone()),
-        os_code: None,
+        ..FsError::new(FsErrorKind::Cancelled)
     }
 }

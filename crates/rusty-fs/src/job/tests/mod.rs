@@ -32,9 +32,8 @@ struct Log {
 
 fn log_error() -> FsError {
     FsError {
-        kind: FsErrorKind::DiskFull,
-        location: None,
         os_code: Some(7),
+        ..FsError::new(FsErrorKind::DiskFull)
     }
 }
 

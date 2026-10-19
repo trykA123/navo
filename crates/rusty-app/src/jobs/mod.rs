@@ -99,11 +99,7 @@ impl JobLog for JournalLog {
         };
         lock(&self.journal)
             .mark_step(self.job, seq, state, None)
-            .map_err(|_| FsError {
-                kind: FsErrorKind::Unknown,
-                location: None,
-                os_code: None,
-            })
+            .map_err(|_| FsError::new(FsErrorKind::Unknown))
     }
 }
 

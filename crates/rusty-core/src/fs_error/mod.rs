@@ -28,10 +28,17 @@ pub enum RecoveryAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockHolder {
+    pub name: String,
+    pub pid: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FsError {
     pub kind: FsErrorKind,
     pub location: Option<Location>,
     pub os_code: Option<i32>,
+    pub holders: Vec<LockHolder>,
 }
 
 impl FsErrorKind {
@@ -72,7 +79,20 @@ impl FsErrorKind {
 
 impl FsError {
     #[must_use]
+    pub fn new(kind: FsErrorKind) -> Self {
+        Self {
+            kind,
+            location: None,
+            os_code: None,
+            holders: Vec::new(),
+        }
+    }
+
+    #[must_use]
     pub fn message(&self) -> String {
+        if let Some(message) = self.holder_message() {
+            return message;
+        }
         let base = match &self.location {
             Some(location) => with_location(self.kind, &location.path().display()),
             None => without_location(self.kind).to_owned(),
@@ -97,6 +117,33 @@ impl FsError {
             FsErrorKind::Cancelled => &[],
             FsErrorKind::Unknown => &[Retry, Skip, Cancel],
         }
+    }
+
+    fn holder_message(&self) -> Option<String> {
+        if !matches!(
+            self.kind,
+            FsErrorKind::SharingViolation | FsErrorKind::Locked
+        ) {
+            return None;
+        }
+        let mut names = Vec::new();
+        for holder in &self.holders {
+            if !names.contains(&holder.name.as_str()) {
+                names.push(holder.name.as_str());
+            }
+        }
+        let programs = match names.as_slice() {
+            [] => return None,
+            [a] => (*a).to_owned(),
+            [a, b] => format!("{a} and {b}"),
+            [a, b, _] => format!("{a}, {b} and 1 more program"),
+            [a, b, rest @ ..] => format!("{a}, {b} and {} more programs", rest.len()),
+        };
+        let subject = self.location.as_ref().map_or_else(
+            || "The item".to_owned(),
+            |location| format!("“{}”", location.path().display()),
+        );
+        Some(format!("{subject} is in use by {programs}."))
     }
 }
 

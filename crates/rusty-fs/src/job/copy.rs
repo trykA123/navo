@@ -94,9 +94,8 @@ pub(super) fn remove_if_present(
 
 fn failure(kind: FsErrorKind, location: &Location) -> FsError {
     FsError {
-        kind,
         location: Some(location.clone()),
-        os_code: None,
+        ..FsError::new(kind)
     }
 }
 

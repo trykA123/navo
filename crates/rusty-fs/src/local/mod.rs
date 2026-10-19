@@ -18,6 +18,8 @@ mod verbatim;
 #[cfg(windows)]
 mod win_list;
 #[cfg(windows)]
+mod win_lock;
+#[cfg(windows)]
 mod win_watch;
 #[cfg(windows)]
 use win_watch as platform_watch;
@@ -29,7 +31,7 @@ use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
+use rusty_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, ProviderPath};
 
 #[cfg(any(windows, target_os = "linux"))]
 use crate::watch::Depth;
@@ -248,20 +250,34 @@ fn modified_ms(metadata: &Metadata) -> Option<i64> {
 
 fn error(kind: FsErrorKind, location: &Location) -> FsError {
     FsError {
-        kind,
         location: Some(location.clone()),
-        os_code: None,
+        ..FsError::new(kind)
     }
 }
 
 fn io_error(failure: &io::Error, location: &Location) -> FsError {
     let os_code = failure.raw_os_error();
     let kind = os_code.map_or_else(|| kind_of_io(failure.kind()), platform::error_kind);
+    let holders = match kind {
+        FsErrorKind::SharingViolation | FsErrorKind::Locked => lock_holders(location),
+        _ => Vec::new(),
+    };
     FsError {
         kind,
         location: Some(location.clone()),
         os_code,
+        holders,
     }
+}
+
+#[cfg(windows)]
+fn lock_holders(location: &Location) -> Vec<LockHolder> {
+    os_path(location).map_or_else(|_| Vec::new(), |path| win_lock::holders(&path))
+}
+
+#[cfg(not(windows))]
+fn lock_holders(_location: &Location) -> Vec<LockHolder> {
+    Vec::new()
 }
 
 fn kind_of_io(kind: io::ErrorKind) -> FsErrorKind {

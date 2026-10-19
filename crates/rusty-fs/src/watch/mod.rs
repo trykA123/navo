@@ -129,9 +129,8 @@ impl Watch {
             .name("folder-watch".to_owned())
             .spawn(move || debounce(&events, sink, batch))
             .map_err(|_| FsError {
-                kind: FsErrorKind::Unknown,
                 location: Some(folder.clone()),
-                os_code: None,
+                ..FsError::new(FsErrorKind::Unknown)
             })?;
         Ok(Self {
             raw,

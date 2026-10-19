@@ -131,11 +131,7 @@ fn quick_changes_arrive_as_one_batch() {
 fn a_failure_flushes_the_pending_batch_first() {
     let (_watch, raw, events, _) = manual_watch();
     raw.change(created("a"));
-    let error = FsError {
-        kind: FsErrorKind::NetworkLost,
-        location: None,
-        os_code: None,
-    };
+    let error = FsError::new(FsErrorKind::NetworkLost);
     raw.failed(error.clone());
     let wait = Duration::from_secs(5);
     assert_eq!(
