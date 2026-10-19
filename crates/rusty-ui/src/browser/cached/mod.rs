@@ -276,4 +276,4 @@ impl Drop for Browser {
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

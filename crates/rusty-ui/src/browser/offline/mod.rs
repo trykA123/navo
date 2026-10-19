@@ -61,10 +61,10 @@ impl Stall {
 pub(super) struct Stalls(HashMap<TabId, Stall>);
 
 impl Stalls {
-    pub(super) fn begin(&mut self, tab: TabId, request: u64) {
+    pub(super) fn begin(&mut self, tab: TabId, request: u64, progress: Progress) {
         let stall = Stall {
             request,
-            progress: Progress::default(),
+            progress,
             offline: None,
             is_attempting: true,
             is_retrying: false,

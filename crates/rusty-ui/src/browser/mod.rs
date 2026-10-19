@@ -35,6 +35,7 @@ enum Message {
     Named(naming::Named),
     Watched(Location, WatchEvent),
     Recheck(Location),
+    Prefetched(u64),
 }
 
 impl Message {
@@ -44,6 +45,7 @@ impl Message {
             Self::Job(JobUpdate::Progress { .. } | JobUpdate::Done { .. })
                 | Self::Watched(..)
                 | Self::Recheck(_)
+                | Self::Prefetched(_)
         )
     }
 }
@@ -86,6 +88,7 @@ pub struct Browser {
     watching: watched::Watching,
     profiles: ProfileCache,
     stalls: offline::Stalls,
+    prefetches: prefetch::Prefetches,
 }
 
 impl Browser {
@@ -133,6 +136,7 @@ impl Browser {
             watching: watched::Watching::default(),
             profiles: ProfileCache::default(),
             stalls: offline::Stalls::default(),
+            prefetches: prefetch::Prefetches::default(),
         }
     }
 
@@ -247,6 +251,7 @@ impl Browser {
                 Message::Named(named) => self.accept_named(named),
                 Message::Watched(location, event) => self.accept_watched(&location, event),
                 Message::Recheck(location) => self.accept_recheck(&location),
+                Message::Prefetched(id) => self.prefetched(id),
             };
         }
         changed
@@ -312,7 +317,13 @@ impl Browser {
     }
 
     fn list(&mut self, tab: TabId, location: Location, request: u64) {
-        self.stalls.begin(tab, request);
+        if let Some(progress) = self.adopt_prefetch(tab, &location, request) {
+            self.stalls.begin(tab, request, progress);
+            self.in_flight += 1;
+            return;
+        }
+        self.stalls
+            .begin(tab, request, offline::Progress::default());
         self.submit(tab, location, request);
     }
 
@@ -407,6 +418,7 @@ mod measure;
 mod naming;
 mod offline;
 mod operate;
+mod prefetch;
 mod sort;
 #[cfg(test)]
 mod tests;
