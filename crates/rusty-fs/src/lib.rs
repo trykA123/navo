@@ -2,6 +2,7 @@
 
 pub mod archive;
 mod code_page;
+mod drive_class;
 mod fake;
 pub mod hostile_names;
 mod io_queue;
@@ -15,6 +16,7 @@ mod snapshot;
 mod watch;
 
 pub use code_page::{ansi_code_page, encoding_for_code_page};
+pub use drive_class::{DriveClass, drive_class};
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use io_queue::{
     Cancelled, IoQueue, Job, JobId, JobSlot, OwnerGuard, OwnerId, Priority, Scheduler, VolumeId,
