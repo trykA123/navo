@@ -4,6 +4,7 @@ mod drive_menu;
 mod drives;
 mod editor;
 mod fkeys;
+mod hand_off;
 mod jobs;
 mod keys;
 mod layout;
@@ -53,6 +54,7 @@ pub use fkeys::{
     DELETE_WARNING, FKey, Labels, delete_warning_in, key_labels, key_labels_in, keys_in_layer,
     layer_keys, layer_keys_in, settings_labels_in,
 };
+pub use hand_off::{OpenHooks, OpenInbox, OpenRequest, OpenSender, open_requests};
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
@@ -93,6 +95,7 @@ pub struct StartOptions {
     pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
     pub file_clipboard: Option<Rc<dyn FileClipboardService>>,
     pub start_watch: Option<StartWatch>,
+    pub open: OpenHooks,
 }
 
 pub struct FerriteWindow {
@@ -190,6 +193,7 @@ impl FerriteWindow {
         };
         view.apply_theme(window, cx);
         view.listen_files(options.keymap, window, cx);
+        view.listen_open(options.open, window, cx);
         Self::after_open(options.view, window, cx);
         view
     }

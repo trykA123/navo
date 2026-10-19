@@ -11,7 +11,9 @@ use rusty_shell::VolumeIdentity;
 use rusty_store::StoreDirs;
 use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
-use rusty_ui::window_view::{SaveSession, StartOptions, StartWatch, run};
+use rusty_ui::window_view::{
+    OpenHooks, OpenInbox, OpenRequest, OpenSender, SaveSession, StartOptions, StartWatch, run,
+};
 
 use crate::cli::Start;
 use crate::startup::{
@@ -26,11 +28,42 @@ const EXIT_WRITE: Duration = Duration::from_millis(300);
 const EXIT_CLOSE: Duration = Duration::from_secs(1);
 
 pub(crate) struct Launch {
+    pub(crate) path: Option<PathBuf>,
     pub(crate) view: Option<PathBuf>,
     pub(crate) panes: [Option<Location>; 2],
     pub(crate) dirs: Option<StoreDirs>,
     pub(crate) cleanup: crate::profile::Cleanup,
     pub(crate) start_watch: Option<StartWatch>,
+    pub(crate) instance_requests: OpenInbox,
+}
+
+pub(crate) fn on_instance_request(
+    sender: &OpenSender,
+    request: crate::instance::Request,
+) -> crate::instance::Reply {
+    tracing::info!("instance request received");
+    if sender.send(open_request(&request)) {
+        crate::instance::Reply::Ok
+    } else {
+        tracing::warn!("window no longer accepts instance requests");
+        crate::instance::Reply::Error
+    }
+}
+
+fn open_request(request: &crate::instance::Request) -> OpenRequest {
+    let location = |path: &Option<PathBuf>| {
+        let location = path.as_deref().and_then(path_location);
+        if path.is_some() && location.is_none() {
+            tracing::warn!("instance request path is not a usable location");
+        }
+        location
+    };
+    OpenRequest {
+        path: location(&request.path),
+        left: location(&request.left),
+        right: location(&request.right),
+        view: location(&request.view),
+    }
 }
 
 pub(crate) fn pane_folders(start: &Start) -> Result<[Option<Location>; 2], String> {
@@ -94,6 +127,10 @@ pub(crate) fn open(launch: Launch) {
             shell_menu: shell_menu::provider(),
             file_clipboard: Some(clipboard::service()),
             start_watch: launch.start_watch,
+            open: OpenHooks {
+                path: launch.path.and_then(|path| path_location(&path)),
+                inbox: Some(launch.instance_requests),
+            },
         },
         quitter(disk, launch.cleanup),
     );

@@ -21,6 +21,7 @@ rusty-ui = { path = "../rusty-ui" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tempfile = "3.27.0"
+thiserror = "2.0.21"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["env-filter", "registry", "std"] }
 
@@ -28,10 +29,17 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
   "Win32_Globalization",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
   "Win32_System_Console",
+  "Win32_System_IO",
+  "Win32_System_Pipes",
   "Win32_System_ProcessStatus",
+  "Win32_System_RemoteDesktop",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
 ] }
 
 [dev-dependencies]

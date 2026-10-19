@@ -29,7 +29,7 @@ fn env(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
 
-fn last_name(location: &Location) -> Option<String> {
+pub(super) fn last_name(location: &Location) -> Option<String> {
     location
         .path()
         .to_text()
@@ -38,7 +38,7 @@ fn last_name(location: &Location) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn is_folder(entry: &FsEntry) -> bool {
+pub(super) fn is_folder(entry: &FsEntry) -> bool {
     entry.kind == EntryKind::Folder
         || (entry.kind == EntryKind::Link && entry.attributes.link_to_folder)
 }

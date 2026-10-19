@@ -7,7 +7,6 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_panes};
 use crate::app_menu::{Identity, Install, QuickSettings};
-use crate::browser::Operations;
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
 use crate::window_view::{AppMenuHooks, SaveReport, SettingsHooks, SettingsSender};
@@ -143,16 +142,7 @@ pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option
     }
     .channel();
     let options = StartOptions {
-        state,
-        provider: fs,
         on_save: Rc::new(move |_| count.set(count.get() + 1)),
-        mode: Mode::Light,
-        operations: Operations::unlogged(),
-        launcher: Arc::new(|_| {}),
-        editor: super::super::EditorHooks::none(),
-        files: super::super::FileHooks::none(),
-        kinds: super::super::Kinds::builtin(),
-        drives: super::super::DriveHooks::none(),
         app_menu: AppMenuHooks {
             identity: Identity {
                 version: "0.0.1".into(),
@@ -161,13 +151,7 @@ pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option
             },
         },
         settings,
-        keymap: crate::window_view::KeymapHooks::none(),
-        view: None,
-        listing_cache: rusty_cache::ListingCache::default(),
-        cache_keys: rusty_cache::CacheKeys::default(),
-        shell_menu: None,
-        file_clipboard: None,
-        start_watch: None,
+        ..super::options_for(fs, state)
     };
     let (window, view) = open_options(cx, options);
     Rig {

@@ -222,6 +222,18 @@ impl Browser {
         true
     }
 
+    pub fn open_tab_at(&mut self, folder: Location, name: Option<String>) -> bool {
+        let location = Some(folder);
+        if self.command(&Command::PaneOpenTab { location }).is_err() {
+            return false;
+        }
+        if let Some(name) = name {
+            self.focus_after_load
+                .insert(self.state.active_tab().id(), name);
+        }
+        true
+    }
+
     pub fn poll(&mut self) -> bool {
         let mut changed = false;
         while let Ok(message) = self.receiver.try_recv() {

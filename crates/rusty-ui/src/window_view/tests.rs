@@ -25,6 +25,7 @@ mod disk_start;
 mod drive_fs;
 mod drives;
 mod fkeys;
+mod hand_off;
 mod jobs;
 mod keymap;
 mod offline;
@@ -103,6 +104,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         shell_menu: None,
         file_clipboard: None,
         start_watch: None,
+        open: super::OpenHooks::none(),
     }
 }
 
@@ -505,6 +507,7 @@ fn editor_window(
         shell_menu: None,
         file_clipboard: None,
         start_watch: None,
+        open: crate::window_view::OpenHooks::none(),
     };
     let (window, view) = open_options(cx, options);
     (window, view, log)
@@ -591,14 +594,8 @@ fn viewer_window(
     let refuse = std::sync::atomic::AtomicBool::new(changed_once);
     let read = read.map(str::to_owned).map_err(str::to_owned);
     let fs = fake();
+    let state = home_beside_dest(&fs);
     let options = StartOptions {
-        state: home_beside_dest(&fs),
-        provider: fs,
-        on_save: Rc::new(|_| {}),
-        mode: Mode::Light,
-        operations: Operations::unlogged(),
-        launcher: Arc::new(|_| {}),
-        editor: super::EditorHooks::none(),
         files: super::FileHooks {
             read: Arc::new(move |_| {
                 read.clone().map(|text| super::FileText {
@@ -622,17 +619,7 @@ fn viewer_window(
             paged: Arc::new(|_| Err("No paged view here.".to_owned())),
             ..super::FileHooks::none()
         },
-        kinds: super::Kinds::builtin(),
-        drives: super::DriveHooks::none(),
-        app_menu: super::AppMenuHooks::none(),
-        settings: super::SettingsHooks::none(),
-        keymap: crate::window_view::KeymapHooks::none(),
-        view: None,
-        listing_cache: rusty_cache::ListingCache::default(),
-        cache_keys: rusty_cache::CacheKeys::default(),
-        shell_menu: None,
-        file_clipboard: None,
-        start_watch: None,
+        ..options_for(fs, state)
     };
     let (window, view) = open_options(cx, options);
     (window, view, written)

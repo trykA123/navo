@@ -111,6 +111,10 @@ impl FerriteWindow {
         self.clipboard.notice.clone()
     }
 
+    pub(super) fn show_notice(&mut self, notice: StatusNotice) {
+        self.clipboard.notice = Some(notice);
+    }
+
     pub(super) fn forget_clipboard_notice(&mut self) {
         self.clipboard.notice = None;
     }
