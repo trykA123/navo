@@ -10,13 +10,14 @@ const NAMES: [&str; 10] = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9",
 
 const PREFIXES: [&str; 4] = ["", "shift-", "ctrl-", "alt-"];
 
-const SLOTS: [(&str, &str); 17] = [
+const SLOTS: [(&str, &str); 18] = [
     ("files.rename", "Rename"),
     ("files.view", "View"),
     ("files.edit", "Edit"),
     ("files.copy", "Copy"),
     ("files.move", "Move"),
     ("files.new_folder", "New folder"),
+    ("files.new_file", "New file"),
     ("files.recycle", "Delete"),
     ("app_menu.toggle", "Menu"),
     ("files.edit_with", "Edit with"),

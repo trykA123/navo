@@ -24,7 +24,8 @@ use rusty_fs::FsEntry;
 
 pub use keys::bind_keys;
 pub(crate) use keys::{
-    ClearFilter, CopyItems, EditItem, MoveItems, OpenRow, RecycleItems, RenameItem, ViewItem,
+    ClearFilter, CopyItems, EditItem, MoveItems, NewFile, NewFolder, OpenRow, Paste, RecycleItems,
+    Refresh, RenameItem, ViewItem,
 };
 pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
@@ -56,11 +57,13 @@ pub enum FileListAction {
     Filter(FilterEdit),
     Rename(u64),
     NewFolder,
+    NewFile,
     SelectPattern { add: bool },
     Sort(SortBy),
     Edit { row: u64, choose: bool },
     View(u64),
     ContextMenu(Point<Pixels>),
+    BackgroundMenu(Point<Pixels>),
     MenuPrefetch { adds_cursor: bool },
     MenuCancel,
 }
@@ -293,6 +296,7 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
             }
         })
         .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+            cx.stop_propagation();
             right.right_down((row, event.position), window, cx);
         })
         .on_mouse_move(press::drag_over(ctx, row));
@@ -399,18 +403,15 @@ impl RenderOnce for FileList {
             .label(label)
             .describe_rows(move |index| row_semantics(&semantics.props, index))
             .when_some(ctx.focus.clone(), |list, focus| list.track_focus(&focus));
-        let page_watch = Watch {
-            state: state.clone(),
-            row_height,
-        };
-        let scroll_watch = Watch { state, row_height };
+        let watch = |state| Watch { state, row_height };
         let area = div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
-            .on_children_prepainted(report_page_rows(self.on_page_rows, page_watch))
-            .on_scroll_wheel(report_scroll(&ctx, scroll_watch))
+            .on_children_prepainted(report_page_rows(self.on_page_rows, watch(state.clone())))
+            .on_scroll_wheel(report_scroll(&ctx, watch(state)))
+            .on_mouse_down(MouseButton::Right, press::background_down(&ctx))
             .overflow_hidden()
             .child(lift::lifted(list, lift));
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)

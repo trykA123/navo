@@ -38,7 +38,8 @@ enum Change {
         to: Location,
         case_only: bool,
     },
-    Create(Location),
+    CreateFolder(Location),
+    CreateFile(Location),
 }
 
 impl Browser {
@@ -63,6 +64,14 @@ impl Browser {
     }
 
     pub fn new_folder(&mut self, name: &str) -> Result<(), NameProblem> {
+        self.create(name, Change::CreateFolder)
+    }
+
+    pub fn new_file(&mut self, name: &str) -> Result<(), NameProblem> {
+        self.create(name, Change::CreateFile)
+    }
+
+    fn create(&mut self, name: &str, change: fn(Location) -> Change) -> Result<(), NameProblem> {
         check_name(name).map_err(NameProblem::Invalid)?;
         if self.taken(name, None) {
             return Err(NameProblem::Exists);
@@ -70,7 +79,7 @@ impl Browser {
         let Some(target) = self.here(name) else {
             return Err(NameProblem::Invalid(NameError::Empty));
         };
-        self.submit_change(Change::Create(target), name.to_owned());
+        self.submit_change(change(target), name.to_owned());
         Ok(())
     }
 
@@ -153,7 +162,8 @@ impl Browser {
 
 fn apply_change(ops: &dyn ProviderOps, change: &Change) -> Result<(), FsError> {
     match change {
-        Change::Create(target) => ops.create_folder(target),
+        Change::CreateFolder(target) => ops.create_folder(target),
+        Change::CreateFile(target) => ops.create_file(target),
         Change::Rename {
             from,
             to,

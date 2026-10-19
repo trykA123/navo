@@ -42,11 +42,13 @@ const TABLE_STEPS: [&str; 4] = [
     "viewer_table::SortColumn",
 ];
 
-const MENU_PAGES: [(Page, MenuShows); 4] = [
+const MENU_PAGES: [(Page, MenuShows); 6] = [
     (Page::Menu, MenuShows::Root),
     (Page::MenuSubmenu, MenuShows::SevenZip),
     (Page::MenuFilter, MenuShows::Filter),
     (Page::MenuFiles, MenuShows::Files),
+    (Page::MenuBackground, MenuShows::Background),
+    (Page::MenuEmptyFolder, MenuShows::EmptyFolder),
 ];
 
 pub struct Gallery {
@@ -66,7 +68,7 @@ pub struct Gallery {
     font: Option<Entity<FontView>>,
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
-    menus: [(Page, Entity<MenuPage>); 4],
+    menus: [(Page, Entity<MenuPage>); 6],
     viewer_menus: [Entity<ViewerMenuPage>; 2],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
@@ -337,9 +339,12 @@ impl Render for Gallery {
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
             Page::Image => root.children(self.image.clone()).child(image_keys()),
-            Page::Menu | Page::MenuSubmenu | Page::MenuFilter | Page::MenuFiles => {
-                root.children(self.menu_page(self.page))
-            }
+            Page::Menu
+            | Page::MenuSubmenu
+            | Page::MenuFilter
+            | Page::MenuFiles
+            | Page::MenuBackground
+            | Page::MenuEmptyFolder => root.children(self.menu_page(self.page)),
             Page::ViewerMenuText | Page::ViewerMenuTree => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree | Page::Table | Page::Markdown | Page::MarkdownPreview => {

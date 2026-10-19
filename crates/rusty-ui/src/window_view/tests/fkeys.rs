@@ -179,7 +179,7 @@ fn the_built_in_keymap_gives_the_known_f_key_bar() {
         "Edit with",
         "",
         "Rename",
-        "",
+        "New file",
         "Delete",
         "",
         "Context",

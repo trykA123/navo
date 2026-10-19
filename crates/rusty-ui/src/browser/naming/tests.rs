@@ -112,6 +112,29 @@ fn new_folder_creates_it_and_puts_the_cursor_on_it() {
 }
 
 #[test]
+fn new_file_creates_an_empty_file_and_puts_the_cursor_on_it() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    assert_eq!(browser.new_file("notes.txt"), Ok(()));
+    settle(&mut browser);
+    let created = fs.metadata(&fs.location("home/notes.txt")).map(|e| e.size);
+    assert_eq!(created, Ok(0));
+    assert_eq!(cursor_name(&browser).as_deref(), Some("notes.txt"));
+}
+
+#[test]
+fn new_file_refuses_a_name_that_is_already_here() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    assert_eq!(browser.new_file("A.TXT"), Err(NameProblem::Exists));
+    assert_eq!(browser.new_file("docs"), Err(NameProblem::Exists));
+    assert_eq!(
+        fs.metadata(&fs.location("home/a.txt")).map(|e| e.size),
+        Ok(3)
+    );
+}
+
+#[test]
 fn a_failed_rename_shows_its_error_in_the_pane() {
     use rusty_core::FsErrorKind;
     use rusty_fs::{FakeOp, Fault};

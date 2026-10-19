@@ -109,20 +109,35 @@ fn options(at: ScreenSpot) -> InvokeOptions {
     }
 }
 
+fn session_reply(pending: Pending<MenuSession>) -> Reply<Box<dyn ShellMenuSession>> {
+    reply(pending, |session| {
+        Box::new(Session(session)) as Box<dyn ShellMenuSession>
+    })
+}
+
+fn unavailable(reason: String) -> Reply<Box<dyn ShellMenuSession>> {
+    Box::new(move || {
+        let unavailable = Unavailable {
+            menu: ShellMenu::default(),
+            reason: reason.clone(),
+        };
+        Some(Ok(Box::new(unavailable) as Box<dyn ShellMenuSession>))
+    })
+}
+
 impl ShellMenuProvider for Provider {
     fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>> {
         let paths: Result<Vec<PathBuf>, String> = items.iter().map(path_of).collect();
         match paths {
-            Ok(paths) => reply(self.0.open(paths), |session| {
-                Box::new(Session(session)) as Box<dyn ShellMenuSession>
-            }),
-            Err(reason) => Box::new(move || {
-                let unavailable = Unavailable {
-                    menu: ShellMenu::default(),
-                    reason: reason.clone(),
-                };
-                Some(Ok(Box::new(unavailable) as Box<dyn ShellMenuSession>))
-            }),
+            Ok(paths) => session_reply(self.0.open(paths)),
+            Err(reason) => unavailable(reason),
+        }
+    }
+
+    fn open_background(&self, folder: &Location) -> Reply<Box<dyn ShellMenuSession>> {
+        match path_of(folder) {
+            Ok(path) => session_reply(self.0.open_background(path)),
+            Err(reason) => unavailable(reason),
         }
     }
 }

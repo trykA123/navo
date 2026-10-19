@@ -67,6 +67,10 @@ impl FileClipboardService for ShellClipboard {
             .transpose()
     }
 
+    fn has_files(&self) -> bool {
+        rusty_shell::has_files()
+    }
+
     fn clear_if_same(&self, files: &ClipboardFiles) -> Result<bool, ClipboardFault> {
         rusty_shell::clear_if_same(&to_shell(files)?).map_err(fault)
     }

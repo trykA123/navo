@@ -19,6 +19,11 @@ pub(super) fn ferrite_icon(action: FerriteAction) -> IconName {
         FerriteAction::CopyPath => IconName::Copy,
         FerriteAction::Properties => IconName::Info,
         FerriteAction::ClassicMenu => IconName::SquareMenu,
+        FerriteAction::NewFolder => IconName::FolderPlus,
+        FerriteAction::NewFile => IconName::FilePlus,
+        FerriteAction::Paste => IconName::ClipboardPaste,
+        FerriteAction::Refresh => IconName::RefreshCw,
+        FerriteAction::SortBy => IconName::ArrowUpDown,
     }
 }
 

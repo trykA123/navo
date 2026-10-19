@@ -54,6 +54,12 @@ pub struct InvokeOptions {
     pub show: Show,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MenuSource {
+    Items(Vec<PathBuf>),
+    Background(PathBuf),
+}
+
 pub struct ShellMenuService {
     inner: platform::Service,
 }
@@ -66,9 +72,15 @@ impl ShellMenuService {
     #[must_use]
     pub fn open(&self, paths: Vec<PathBuf>) -> Pending<MenuSession> {
         match selection::common_parent(&paths) {
-            Ok(()) => self.inner.open(paths),
+            Ok(()) => self.inner.open(MenuSource::Items(paths)),
             Err(error) => Pending::ready(Err(error)),
         }
+    }
+
+    /// The menu of the folder itself, as Explorer shows it for its empty space.
+    #[must_use]
+    pub fn open_background(&self, folder: PathBuf) -> Pending<MenuSession> {
+        self.inner.open(MenuSource::Background(folder))
     }
 }
 

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use rusty_core::shell_menu::{Group, MenuItem, ShellMenu, Submenu};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -14,8 +13,8 @@ use windows::core::Interface;
 use super::read::{Entry, ID_FIRST, ID_LAST, Verbs, has_named_item, read_level};
 use super::sta::MenuHandler;
 use super::{selection, shell_error};
-use crate::shell_menu::MenuError;
 use crate::shell_menu::classify::{guess_group, is_unfilled, to_menu_item};
+use crate::shell_menu::{MenuError, MenuSource};
 
 const MAX_DEPTH: usize = 4;
 
@@ -34,8 +33,11 @@ pub(super) struct LoadedMenu {
 }
 
 impl LoadedMenu {
-    pub(super) fn query(paths: &[PathBuf], owner: HWND) -> Result<Self, MenuError> {
-        let menu = selection::context_menu(paths, owner)?;
+    pub(super) fn query(source: &MenuSource, owner: HWND) -> Result<Self, MenuError> {
+        let menu = match source {
+            MenuSource::Items(paths) => selection::context_menu(paths, owner)?,
+            MenuSource::Background(folder) => selection::background_menu(folder, owner)?,
+        };
         // SAFETY: a fresh popup menu, owned by the returned value and destroyed in Drop.
         let hmenu = unsafe { CreatePopupMenu() }.map_err(shell_error("CreatePopupMenu"))?;
         let mut loaded = Self {

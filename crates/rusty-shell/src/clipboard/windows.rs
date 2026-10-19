@@ -138,6 +138,12 @@ pub fn write_files(files: &FileClipboard) -> Result<(), ClipboardError> {
     published
 }
 
+#[must_use]
+pub fn has_files() -> bool {
+    // SAFETY: a format query needs no open clipboard and asks no owner to render data.
+    unsafe { IsClipboardFormatAvailable(u32::from(CF_HDROP)) != 0 }
+}
+
 pub fn read_files() -> Result<Option<FileClipboard>, ClipboardError> {
     let _clipboard = Clipboard::open(ptr::null_mut())?;
     read_open()

@@ -195,6 +195,7 @@ pub(super) const GROUPS: [Group; 8] = [
             ),
             ("file_list::RenameItem", "files.rename", "Rename"),
             ("file_list::NewFolder", "files.new_folder", "New folder"),
+            ("file_list::NewFile", "files.new_file", "New file"),
             (
                 "file_list::MarkPattern",
                 "files.mark_pattern",

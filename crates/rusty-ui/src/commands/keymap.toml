@@ -274,6 +274,10 @@ command = "files.new_folder"
 keys = ["f7"]
 
 [[bind]]
+command = "files.new_file"
+keys = ["shift-f7"]
+
+[[bind]]
 command = "files.mark_pattern"
 keys = ["+"]
 

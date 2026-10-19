@@ -5,7 +5,7 @@ use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::Common::ITEMIDLIST;
 use windows::Win32::UI::Shell::{
-    IContextMenu, ILFindLastID, IShellFolder, SHBindToParent, SHParseDisplayName,
+    IContextMenu, ILFindLastID, IShellFolder, SHBindToObject, SHBindToParent, SHParseDisplayName,
 };
 use windows::core::HSTRING;
 
@@ -67,5 +67,17 @@ pub(super) fn context_menu(paths: &[PathBuf], owner: HWND) -> Result<IContextMen
         folder
             .GetUIObjectOf(owner, &children, None)
             .map_err(shell_error("IShellFolder::GetUIObjectOf"))
+    }
+}
+
+pub(super) fn background_menu(folder: &Path, owner: HWND) -> Result<IContextMenu, MenuError> {
+    let pidl = Pidl::parse(folder)?;
+    // SAFETY: the PIDL outlives both calls; the folder object owns its own references.
+    unsafe {
+        let shell_folder: IShellFolder =
+            SHBindToObject(None, pidl.as_ptr(), None).map_err(shell_error("SHBindToObject"))?;
+        shell_folder
+            .CreateViewObject(owner)
+            .map_err(shell_error("IShellFolder::CreateViewObject"))
     }
 }

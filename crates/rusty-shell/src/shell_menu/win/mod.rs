@@ -6,7 +6,6 @@ mod selection;
 mod sta;
 mod worker;
 
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -17,7 +16,9 @@ use windows::Win32::Foundation::HWND;
 
 use super::fill::Fills;
 use super::station::{self, BusySince};
-use super::{InvokeOptions, MenuError, MenuSession, Pending, ScreenPoint, WindowHandle};
+use super::{
+    InvokeOptions, MenuError, MenuSession, MenuSource, Pending, ScreenPoint, WindowHandle,
+};
 use worker::Request;
 
 fn shell_error(context: &'static str) -> impl Fn(windows::core::Error) -> MenuError {
@@ -87,7 +88,7 @@ impl Service {
         })
     }
 
-    pub(super) fn open(&self, paths: Vec<PathBuf>) -> Pending<MenuSession> {
+    pub(super) fn open(&self, source: MenuSource) -> Pending<MenuSession> {
         let mut worker = self.worker.lock().unwrap_or_else(PoisonError::into_inner);
         if worker.is_hung()
             && let Ok(fresh) = Worker::spawn()
@@ -98,7 +99,7 @@ impl Service {
         }
         let (reply, cancel, pending) = Pending::cancellable();
         let request = Request::Open {
-            paths,
+            source,
             reply,
             cancel,
         };
