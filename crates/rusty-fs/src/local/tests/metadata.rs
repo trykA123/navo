@@ -1,4 +1,5 @@
 use super::*;
+use crate::ProviderOps;
 
 fn child(folder: &Location, name: &str) -> Location {
     folder.join(&ProviderPath::from_text(name)).unwrap()
@@ -72,4 +73,26 @@ fn a_missing_path_error_carries_the_location() {
     let missing = child(&folder, "missing");
     let error = LocalFs::new().metadata(&missing).unwrap_err();
     assert_eq!(error.location, Some(missing));
+}
+
+#[test]
+fn a_folder_and_its_subfolder_share_a_volume_serial() {
+    let (dir, folder) = temp();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    let local = LocalFs::new();
+    let outer = local.volume_serial(&folder).unwrap();
+    assert_eq!(
+        (
+            outer.is_some(),
+            local.volume_serial(&child(&folder, "sub")).unwrap()
+        ),
+        (true, outer)
+    );
+}
+
+#[test]
+fn a_missing_folder_has_no_volume_serial() {
+    let (_dir, folder) = temp();
+    let missing = LocalFs::new().volume_serial(&child(&folder, "nope"));
+    assert_eq!(missing.map_err(|e| e.kind), Err(FsErrorKind::NotFound));
 }

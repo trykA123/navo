@@ -1,8 +1,11 @@
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
-use rusty_core::{ConflictPolicy, OpKind, OperationPlan, PlanRequest, plan};
-use rusty_fs::{CancelToken, FakeFs, JobContext, JobOutcome, Progress, Provider, run_job, scan};
+use rusty_core::{ConflictPolicy, OpKind, OperationPlan, PlanRequest, ProviderPath, plan};
+use rusty_fs::{
+    Attributes, CancelToken, EntryKind, FakeFs, FsEntry, JobContext, JobOutcome, Progress,
+    Provider, run_job, scan,
+};
 use rusty_store::{Db, JobJournal, StepState};
 
 use super::{SharedJournal, lock, log_factory, open, recover};
@@ -14,8 +17,16 @@ fn journal() -> SharedJournal {
 
 fn fake() -> FakeFs {
     let fs = FakeFs::new();
-    fs.add_folder("home/docs");
-    fs.add_file("home/docs/report.txt", 7);
+    fs.add_entry(
+        "home/docs",
+        FsEntry {
+            name: ProviderPath::from_text("report.txt"),
+            kind: EntryKind::File,
+            size: 7,
+            modified_ms: Some(9_000),
+            attributes: Attributes::default(),
+        },
+    );
     fs.add_folder("dest");
     fs
 }
@@ -51,7 +62,7 @@ fn run(fs: &FakeFs, plan: &OperationPlan, journal: &SharedJournal, finish: bool)
     );
     assert_eq!(outcome, JobOutcome::Done);
     if finish {
-        log.finish(&outcome);
+        log.finish(&outcome, fs);
     }
 }
 

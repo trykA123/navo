@@ -22,4 +22,7 @@ pub trait ProviderOps: Provider {
     fn remove_link(&self, location: &Location) -> Result<(), FsError>;
     fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError>;
     fn recycle(&self, location: &Location) -> Result<(), FsError>;
+    fn volume_serial(&self, _location: &Location) -> Result<Option<u64>, FsError> {
+        Ok(None)
+    }
 }

@@ -33,6 +33,8 @@ pub enum Fault {
     Fail(FsErrorKind),
     FailAfterEntries { kind: FsErrorKind, entries: usize },
     FailAfterBytes { kind: FsErrorKind, bytes: u64 },
+    Collide,
+    LinkThenFail(FsErrorKind),
 }
 
 type CallKey = (String, FakeOp);
@@ -43,6 +45,7 @@ pub struct FakeFs {
     faults: Mutex<HashMap<CallKey, Vec<(u32, Fault)>>>,
     calls: Mutex<HashMap<CallKey, u32>>,
     recycled: Mutex<Vec<String>>,
+    volumes: Mutex<HashMap<String, u64>>,
     batch_size: usize,
     watchable: bool,
     watchers: Watchers,
@@ -74,6 +77,7 @@ impl FakeFs {
             faults: Mutex::new(HashMap::new()),
             calls: Mutex::new(HashMap::new()),
             recycled: Mutex::new(Vec::new()),
+            volumes: Mutex::new(HashMap::new()),
             batch_size: DEFAULT_BATCH,
             watchable: false,
             watchers: Watchers::default(),
@@ -160,6 +164,10 @@ impl FakeFs {
             .get(&(normalize(path).to_owned(), op))
             .copied()
             .unwrap_or(0)
+    }
+
+    pub fn set_volume(&self, path: &str, serial: u64) {
+        lock(&self.volumes).insert(normalize(path).trim_end_matches('/').to_owned(), serial);
     }
 
     #[must_use]
@@ -266,7 +274,7 @@ impl Provider for FakeFs {
                 return Err(error(kind, folder));
             }
             Some(Fault::FailAfterEntries { kind, entries }) => (entries, Some(kind)),
-            None => (usize::MAX, None),
+            Some(Fault::Collide | Fault::LinkThenFail(_)) | None => (usize::MAX, None),
         };
         let mut entries = self
             .tree()
@@ -292,7 +300,7 @@ impl Provider for FakeFs {
                 | Fault::FailAfterEntries { kind, .. }
                 | Fault::FailAfterBytes { kind, .. },
             ) => Err(error(kind, location)),
-            None => self
+            Some(Fault::Collide | Fault::LinkThenFail(_)) | None => self
                 .tree()
                 .metadata(&path)
                 .ok_or_else(|| error(FsErrorKind::NotFound, location)),

@@ -1,7 +1,9 @@
+mod aside;
 mod copy;
 mod hold;
 mod parallel;
 mod pool;
+mod restore;
 mod run;
 mod undo;
 mod workers;
@@ -10,6 +12,7 @@ use rusty_core::{FsError, Location, OperationPlan};
 
 use crate::{CancelToken, ProviderOps};
 
+pub use aside::HELD_PREFIX;
 pub use workers::{WorkerCounts, copy_workers};
 
 pub use rusty_core::TEMP_SUFFIX;
@@ -21,8 +24,33 @@ pub enum StepOutcome {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileStamp {
+    pub size: u64,
+    pub modified_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeldFile {
+    pub original: Location,
+    pub held: Location,
+    pub placed: Option<FileStamp>,
+    pub volume: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlacedFile {
+    pub target: Location,
+    pub stamp: FileStamp,
+}
+
 pub trait JobLog {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
+    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError>;
+    fn journal_placed(&mut self, _placed: &PlacedFile) -> Result<(), FsError> {
+        Ok(())
+    }
+    fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,9 +95,21 @@ pub fn run_job_parallel(
     parallel::run(plan, done, ctx, workers)
 }
 
+pub struct Journaled<'a> {
+    pub plan: &'a OperationPlan,
+    pub done: &'a [u32],
+    pub held: &'a [HeldFile],
+    pub placed: &'a [PlacedFile],
+    pub held_unreadable: bool,
+}
+
 #[must_use]
-pub fn roll_back(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
-    undo::roll_back(plan, done, ctx)
+pub fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
+    undo::roll_back(job, ctx)
+}
+
+pub fn release_held(held: &[HeldFile], ops: &dyn ProviderOps) -> Result<(), FsError> {
+    restore::release(held, ops)
 }
 
 pub fn clean_up(plan: &OperationPlan, done: &[u32], ops: &dyn ProviderOps) -> Result<u32, FsError> {

@@ -1,10 +1,10 @@
 use rusty_core::{FsError, Location, OpKind, OperationPlan, Risk, TabId};
-use rusty_fs::{CancelToken, JobLog, JobOutcome, Progress, StepOutcome};
+use rusty_fs::{CancelToken, HeldFile, JobLog, JobOutcome, Progress, ProviderOps, StepOutcome};
 
 use std::sync::Arc;
 
 pub trait OpLog: JobLog + Send {
-    fn finish(&mut self, outcome: &JobOutcome);
+    fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps);
 }
 
 pub type LogFactory = Arc<dyn Fn(&OperationPlan) -> Result<Box<dyn OpLog>, String> + Send + Sync>;
@@ -31,10 +31,14 @@ impl JobLog for NoLog {
     fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
         Ok(())
     }
+
+    fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
+        Ok(false)
+    }
 }
 
 impl OpLog for NoLog {
-    fn finish(&mut self, _: &JobOutcome) {}
+    fn finish(&mut self, _: &JobOutcome, _: &dyn ProviderOps) {}
 }
 
 #[derive(Debug, Clone)]

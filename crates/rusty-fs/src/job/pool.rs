@@ -4,8 +4,7 @@ use std::sync::{Mutex, PoisonError};
 
 use rusty_core::{FsError, FsErrorKind};
 
-use super::StepOutcome;
-use super::copy::{Copier, CopyStep, copy, failure, remove_if_present, temp_of};
+use super::copy::{Copied, Copier, CopyStep, copy, failure, remove_if_present, temp_of};
 
 pub(super) struct Task<'p> {
     pub seq: u32,
@@ -19,7 +18,7 @@ pub(super) enum Event {
     },
     Finished {
         seq: u32,
-        result: Result<StepOutcome, FsError>,
+        result: Result<Copied, FsError>,
     },
 }
 

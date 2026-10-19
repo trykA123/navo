@@ -1,5 +1,7 @@
 use crate::db::{Db, DbError};
 
+mod held;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct JobId(pub i64);
 
@@ -10,6 +12,7 @@ pub enum JobState {
     Failed,
     Cancelled,
     RolledBack,
+    RestorePending,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,12 +129,20 @@ impl JobJournal {
     }
 
     pub fn unfinished(&self) -> Result<Vec<UnfinishedJob>, JournalError> {
+        self.jobs_in(JobState::Running)
+    }
+
+    pub fn restore_pending(&self) -> Result<Vec<UnfinishedJob>, JournalError> {
+        self.jobs_in(JobState::RestorePending)
+    }
+
+    fn jobs_in(&self, state: JobState) -> Result<Vec<UnfinishedJob>, JournalError> {
         let mut jobs = self.db.connection().prepare(
-            "SELECT id, kind, plan, created_at FROM job WHERE state = 'running'
+            "SELECT id, kind, plan, created_at FROM job WHERE state = ?1
              ORDER BY created_at, id",
         )?;
         let rows = jobs
-            .query_map([], |row| {
+            .query_map([job_text(state)], |row| {
                 Ok(UnfinishedJob {
                     id: JobId(row.get(0)?),
                     kind: row.get(1)?,
@@ -151,7 +162,9 @@ impl JobJournal {
 
     pub fn prune(&mut self, keep_finished: u32) -> Result<u32, JournalError> {
         let deleted = self.db.connection().execute(
-            "DELETE FROM job WHERE state != 'running' AND id NOT IN (
+            "DELETE FROM job WHERE state != 'running'
+             AND id NOT IN (SELECT job_id FROM undo WHERE job_id IS NOT NULL)
+             AND id NOT IN (
                  SELECT id FROM job WHERE state != 'running'
                  ORDER BY created_at DESC, id DESC LIMIT ?1
              )",
@@ -225,6 +238,7 @@ fn job_text(state: JobState) -> &'static str {
         JobState::Failed => "failed",
         JobState::Cancelled => "cancelled",
         JobState::RolledBack => "rolled_back",
+        JobState::RestorePending => "restore_pending",
     }
 }
 

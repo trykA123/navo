@@ -2,8 +2,8 @@ use std::{path::Path, time::Instant};
 
 use rusty_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan};
 use rusty_fs::{
-    AutoTuning, CancelToken, JobContext, JobLog, JobOutcome, LocalFs, StepOutcome, WorkerCounts,
-    copy_workers, drive_class, existing_at, run_job, run_job_parallel, scan,
+    AutoTuning, CancelToken, HeldFile, JobContext, JobLog, JobOutcome, LocalFs, StepOutcome,
+    WorkerCounts, copy_workers, drive_class, existing_at, run_job, run_job_parallel, scan,
 };
 
 use super::{
@@ -154,6 +154,10 @@ struct BenchLog;
 impl JobLog for BenchLog {
     fn step(&mut self, _seq: u32, _outcome: StepOutcome) -> Result<(), FsError> {
         Ok(())
+    }
+
+    fn journal_held(&mut self, _held: &HeldFile) -> Result<bool, FsError> {
+        Ok(false)
     }
 }
 
