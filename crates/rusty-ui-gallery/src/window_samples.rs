@@ -4,8 +4,9 @@ use rusty_ui::prelude::*;
 use rusty_ui::settings::Field;
 use rusty_ui::side_sheet::Side;
 
+use crate::gallery::Page;
 use crate::shortcuts_sample::{self, Shows as ShortcutsShows};
-use crate::window_page::{HintsShown, JobsShown, NARROW, SheetShows, WIDE, WindowPage};
+use crate::window_page::{HintsShown, JobsShown, SheetShows, WindowPage};
 
 pub fn job_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
     [(1, false), (1, true), (2, false), (2, true)].map(|(count, is_pill)| {
@@ -55,4 +56,69 @@ pub fn hint_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
     .map(|(combo, held, cursor)| {
         cx.new(|cx| WindowPage::with_hints(HintsShown { combo, cursor }, held, cx))
     })
+}
+
+pub const NARROW: f32 = 1100.;
+pub const WIDE: f32 = 1440.;
+
+fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
+    div()
+        .w(px(width))
+        .h_full()
+        .flex_none()
+        .child(window.clone())
+        .into_any_element()
+}
+
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 23]) -> Option<AnyElement> {
+    let [
+        main,
+        shift,
+        ctrl,
+        alt,
+        menu,
+        sheet,
+        sheet_left,
+        sheet_narrow,
+        settings,
+        settings_files,
+        shortcuts,
+        recording,
+        conflict,
+        invalid,
+        job,
+        job_pill,
+        two,
+        two_pill,
+        hints @ ..,
+    ] = windows;
+    let [hints_ctrl, hints_shift, hints_alt, hints_low, crash] = hints;
+    let shown = match page {
+        Page::Window => main,
+        Page::WindowShift => shift,
+        Page::WindowCtrl => ctrl,
+        Page::WindowAlt => alt,
+        Page::WindowJob => job,
+        Page::WindowJobPill => job_pill,
+        Page::WindowJobs => two,
+        Page::WindowJobsPill => two_pill,
+        Page::AppMenu => menu,
+        Page::WindowNarrow => return Some(fixed(NARROW, main)),
+        Page::Sheet => return Some(fixed(WIDE, sheet)),
+        Page::SheetLeft => return Some(fixed(WIDE, sheet_left)),
+        Page::SheetNarrow => return Some(fixed(NARROW, sheet_narrow)),
+        Page::Settings => settings,
+        Page::SettingsFiles => settings_files,
+        Page::Shortcuts => shortcuts,
+        Page::ShortcutsRecording => recording,
+        Page::ShortcutsConflict => conflict,
+        Page::ShortcutsInvalid => invalid,
+        Page::HintsCtrl => hints_ctrl,
+        Page::HintsShift => hints_shift,
+        Page::HintsAlt => hints_alt,
+        Page::HintsLow => hints_low,
+        Page::CrashNotice => crash,
+        _ => return None,
+    };
+    Some(shown.clone().into_any_element())
 }

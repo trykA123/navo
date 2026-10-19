@@ -70,6 +70,7 @@ fn open_big(
         file_clipboard: None,
         start_watch: None,
         open: crate::window_view::OpenHooks::none(),
+        crash_report: None,
     };
     let (window, view) = open_options(cx, options);
     (window, view, fs)

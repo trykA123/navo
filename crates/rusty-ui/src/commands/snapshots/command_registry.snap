@@ -25,6 +25,9 @@ pane.drive_menu_second | Drives of pane 2 | FerritePane
 pane.edit_path | Edit path | FerritePane
 pane.reset_split | Reset pane split | FerritePane
 preview.browse | Browse in preview | FerritePane
+crash_notice.focus | Go to the crash notice | FerritePane
+crash_notice.save | Save crash report | CrashNotice
+crash_notice.dismiss | Dismiss crash notice | CrashNotice
 pane.leave_waiting | Stop waiting | PaneWaiting
 pane.retry_listing | Retry listing | PaneWaiting
 preview.cursor_up | Up | PreviewBrowse

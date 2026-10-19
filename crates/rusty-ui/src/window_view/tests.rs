@@ -20,6 +20,7 @@ mod applied;
 mod cached;
 mod cards;
 pub(in crate::window_view) mod clipboard;
+mod crash_notice;
 mod delete_dialog;
 mod disk_start;
 mod drive_fs;
@@ -106,6 +107,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         file_clipboard: None,
         start_watch: None,
         open: super::OpenHooks::none(),
+        crash_report: None,
     }
 }
 
@@ -465,13 +467,8 @@ fn editor_window(
     let log = Rc::new(std::cell::RefCell::new(EditorLog::default()));
     let (remembered, opened) = (log.clone(), log.clone());
     let fs = fake();
+    let state = home_beside_dest(&fs);
     let options = StartOptions {
-        state: home_beside_dest(&fs),
-        provider: fs,
-        on_save: Rc::new(|_| {}),
-        mode: Mode::Light,
-        operations: Operations::unlogged(),
-        launcher: Arc::new(|_| {}),
         editor: super::EditorHooks {
             suggestion: Some("code.exe".to_owned()),
             resolve: Rc::new(move |program| {
@@ -488,10 +485,6 @@ fn editor_window(
                 Ok(())
             }),
         },
-        files: super::FileHooks::none(),
-        kinds: super::Kinds::builtin(),
-        drives: super::DriveHooks::none(),
-        app_menu: super::AppMenuHooks::none(),
         settings: super::SettingsHooks {
             values: chosen.map_or_else(crate::settings::Values::default, |program| {
                 crate::settings::Values::default().with(&crate::settings::Change::text(
@@ -501,14 +494,7 @@ fn editor_window(
             }),
             ..super::SettingsHooks::none()
         },
-        keymap: crate::window_view::KeymapHooks::none(),
-        view: None,
-        listing_cache: rusty_cache::ListingCache::default(),
-        cache_keys: rusty_cache::CacheKeys::default(),
-        shell_menu: None,
-        file_clipboard: None,
-        start_watch: None,
-        open: crate::window_view::OpenHooks::none(),
+        ..options_for(fs, state)
     };
     let (window, view) = open_options(cx, options);
     (window, view, log)

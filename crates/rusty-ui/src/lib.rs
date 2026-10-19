@@ -7,6 +7,7 @@ pub mod browser;
 pub mod commands;
 pub mod confirm_dialog;
 pub mod context_menu;
+pub mod crash_notice;
 mod dialog_focus;
 pub mod file_list;
 pub mod fkey_bar;

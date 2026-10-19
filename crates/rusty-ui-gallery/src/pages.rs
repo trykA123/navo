@@ -45,6 +45,7 @@ pub enum Page {
     HintsShift,
     HintsAlt,
     HintsLow,
+    CrashNotice,
 }
 
 pub struct PageInfo {
@@ -63,7 +64,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 45] = [
+pub const PAGES: [PageInfo; 46] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -189,6 +190,7 @@ pub const PAGES: [PageInfo; 45] = [
         "p27-hints-low",
         false,
     ),
+    info(Page::CrashNotice, "Crash notice", "p29-crash-notice", false),
 ];
 
 impl Page {

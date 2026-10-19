@@ -35,16 +35,8 @@ pub(crate) struct Launch {
     pub(crate) cleanup: crate::profile::Cleanup,
     pub(crate) start_watch: Option<StartWatch>,
     pub(crate) instance_requests: OpenInbox,
-    #[expect(dead_code, reason = "C2 consumes the pending crash notice")]
-    pub(crate) pending_crash: Option<crate::crash::Pending>,
     pub(crate) running: Option<crate::crash::Running>,
-    #[expect(
-        dead_code,
-        reason = "C2 uses these diagnostics to save the crash report"
-    )]
-    pub(crate) diagnostics: crate::logging::Diagnostics,
-    #[expect(dead_code, reason = "C2 uses this start time in the crash report")]
-    pub(crate) report_started: Instant,
+    pub(crate) crash: crate::crash_report::CrashStart,
 }
 
 pub(crate) fn on_instance_request(
@@ -137,13 +129,18 @@ pub(crate) fn open(launch: Launch) {
             shell_menu: shell_menu::provider(),
             file_clipboard: Some(clipboard::service()),
             start_watch: launch.start_watch,
-            open: OpenHooks {
-                path: launch.path.and_then(|path| path_location(&path)),
-                inbox: Some(launch.instance_requests),
-            },
+            open: open_hooks(launch.path, launch.instance_requests),
+            crash_report: launch.crash.service(),
         },
         quitter(disk, launch.cleanup, launch.running),
     );
+}
+
+fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox) -> OpenHooks {
+    OpenHooks {
+        path: path.and_then(|path| path_location(&path)),
+        inbox: Some(inbox),
+    }
 }
 
 fn quitter(

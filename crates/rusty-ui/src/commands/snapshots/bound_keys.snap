@@ -36,6 +36,9 @@ context_menu.show_classic | shift-f10 | ContextMenu
 context_menu.show_classic | shift-f10 | ContextMenu > Input
 context_menu.up | up | ContextMenu
 context_menu.up | up | ContextMenu > Input
+crash_notice.dismiss | escape | CrashNotice
+crash_notice.focus | ctrl-shift-r | FerritePane
+crash_notice.save | enter | CrashNotice
 dialog.next_button | right | DialogButton
 dialog.next_field | tab | Dialog
 dialog.press | enter | DialogButton

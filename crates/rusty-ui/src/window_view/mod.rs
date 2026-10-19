@@ -1,5 +1,6 @@
 mod app_menu;
 mod clipboard;
+mod crash;
 mod drive_menu;
 mod drives;
 mod editor;
@@ -49,6 +50,7 @@ const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use app_menu::AppMenuHooks;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
+pub use crash::CrashReportService;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
 pub use editor::EditorHooks;
 pub use fkeys::{
@@ -97,6 +99,7 @@ pub struct StartOptions {
     pub file_clipboard: Option<Rc<dyn FileClipboardService>>,
     pub start_watch: Option<StartWatch>,
     pub open: OpenHooks,
+    pub crash_report: Option<Arc<dyn CrashReportService>>,
 }
 
 pub struct FerriteWindow {
@@ -131,6 +134,7 @@ pub struct FerriteWindow {
     job_ui: jobs::JobUi,
     keymap: user_keymap::KeymapState,
     clipboard: clipboard::ClipboardState,
+    crash: crash::CrashState,
     start: Option<start_watch::Watching>,
     _activation: Subscription,
     _appearance: Subscription,
@@ -186,16 +190,16 @@ impl FerriteWindow {
             job_ui: jobs::JobUi::default(),
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
+            crash: crash::CrashState::new(options.crash_report, cx),
             start: options.start_watch.map(start_watch::Watching::built),
             _follow: cx.observe_in(&cx.entity(), window, Self::follow_cursor),
             _activation: cx.observe_window_activation(window, Self::activation_changed),
             _watch: cx.observe_self(Self::watch_listings),
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
-        view.apply_theme(window, cx);
         view.listen_files(options.keymap, window, cx);
         view.listen_open(options.open, window, cx);
-        Self::after_open(options.view, window, cx);
+        view.after_open(options.view, window, cx);
         view
     }
 
@@ -212,10 +216,12 @@ impl FerriteWindow {
     }
 
     fn after_open(
+        &mut self,
         start_view: Option<rusty_core::Location>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);
         Self::poll_drives(cx);
         cx.defer_in(window, move |view, window, cx| {
@@ -366,6 +372,7 @@ impl Render for FerriteWindow {
             .when(gradient == GradientLayer::BelowTitleBar, |below| {
                 below.bg(t.surfaces.mica())
             })
+            .children(self.crash_notice_view(window, cx))
             .child(self.body_area(window, cx))
             .child(self.fkey_bar(window, cx));
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
@@ -400,6 +407,7 @@ impl Render for FerriteWindow {
             .children(menu)
             .children(self.shell_menu_view())
             .children(self.viewer_menu_view());
+        let root = self.crash_keys(root, cx);
         self.preview_keys(root, window, cx)
     }
 }

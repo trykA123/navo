@@ -1,7 +1,7 @@
 use super::Group;
 use super::contexts::GLOBAL;
 
-pub(super) const GROUPS: [Group; 7] = [
+pub(super) const GROUPS: [Group; 8] = [
     Group {
         context: GLOBAL,
         commands: &[
@@ -64,6 +64,26 @@ pub(super) const GROUPS: [Group; 7] = [
                 "ferrite_window::BrowsePreview",
                 "preview.browse",
                 "Browse in preview",
+            ),
+            (
+                "ferrite_window::FocusCrashNotice",
+                "crash_notice.focus",
+                "Go to the crash notice",
+            ),
+        ],
+    },
+    Group {
+        context: "CrashNotice",
+        commands: &[
+            (
+                "ferrite_window::SaveCrashReport",
+                "crash_notice.save",
+                "Save crash report",
+            ),
+            (
+                "ferrite_window::DismissCrashNotice",
+                "crash_notice.dismiss",
+                "Dismiss crash notice",
             ),
         ],
     },

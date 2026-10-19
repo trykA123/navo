@@ -97,6 +97,20 @@ keys = ["ctrl-shift-0"]
 command = "preview.browse"
 keys = ["ctrl-shift-q"]
 
+[[bind]]
+command = "crash_notice.focus"
+keys = ["ctrl-shift-r"]
+
+# CrashNotice
+
+[[bind]]
+command = "crash_notice.save"
+keys = ["enter"]
+
+[[bind]]
+command = "crash_notice.dismiss"
+keys = ["escape"]
+
 # PaneWaiting
 
 [[bind]]

@@ -107,7 +107,12 @@ fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
     let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
     assert_eq!(
         commands(&ctrl.more),
-        ["tab.previous", "pane.reset_split", "preview.browse"]
+        [
+            "tab.previous",
+            "pane.reset_split",
+            "preview.browse",
+            "crash_notice.focus"
+        ]
     );
     assert_eq!(ctrl.more[0].keys, ["Tab"]);
     assert!(layer_in(Keymap::builtin(), Combo::SHIFT).more.is_empty());

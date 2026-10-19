@@ -10,6 +10,7 @@ mod cli;
 mod clipboard;
 mod console;
 mod crash;
+mod crash_report;
 mod diag;
 mod drives;
 mod editor;
@@ -161,10 +162,12 @@ fn open_window(
         cleanup: profile.cleanup(),
         start_watch: run.as_ref().map(metrics::Run::watch),
         instance_requests: requests,
-        pending_crash,
         running,
-        diagnostics,
-        report_started: Instant::now(),
+        crash: crash_report::CrashStart {
+            pending: pending_crash,
+            started: Instant::now(),
+            diagnostics,
+        },
     });
     if let Err(error) = profile.cleanup().run() {
         eprintln!("ferrite: cannot remove the temporary profile: {error}");

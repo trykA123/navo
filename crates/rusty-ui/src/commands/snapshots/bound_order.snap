@@ -269,6 +269,9 @@ pane.drive_menu_second | alt-f2 | FerritePane
 pane.edit_path | ctrl-l | FerritePane
 pane.reset_split | ctrl-shift-0 | FerritePane
 preview.browse | ctrl-shift-q | FerritePane
+crash_notice.focus | ctrl-shift-r | FerritePane
+crash_notice.save | enter | CrashNotice
+crash_notice.dismiss | escape | CrashNotice
 pane.leave_waiting | escape | PaneWaiting
 pane.leave_waiting | backspace | PaneWaiting
 pane.retry_listing | enter | PaneWaiting

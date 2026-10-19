@@ -4,6 +4,7 @@ use rusty_core::{Location, ProviderId, Selection, ViewState};
 use rusty_fs::FsEntry;
 use rusty_ui::app_menu::{AppMenu, Identity, Install, QuickSettings};
 use rusty_ui::commands::Keymap;
+use rusty_ui::crash_notice::{CrashKeys, CrashNotice};
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::job_card::{JobCard, JobPill, PillFit};
@@ -24,7 +25,6 @@ use rusty_ui::window_view::{
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::six_drives;
-use crate::gallery::Page;
 use crate::job_sample;
 use crate::pane_page::status_of;
 use crate::pane_sample;
@@ -84,6 +84,7 @@ pub struct WindowPage {
     hints: Option<HintsShown>,
     jobs: Option<JobsShown>,
     is_menu_open: bool,
+    has_crash: bool,
     sheet: Option<Sheet>,
     rows: Rc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
@@ -101,6 +102,7 @@ impl WindowPage {
             hints: None,
             jobs: None,
             is_menu_open: false,
+            has_crash: false,
             sheet: None,
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
@@ -189,6 +191,23 @@ impl WindowPage {
         Some(Cover {
             top: bottom - drawer_height(t, &layer),
             gap: t.spacing.md,
+        })
+    }
+
+    pub fn with_crash(cx: &mut Context<Self>) -> Self {
+        Self {
+            has_crash: true,
+            ..Self::new(None, cx)
+        }
+    }
+
+    fn crash_notice(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
+        self.has_crash.then(|| {
+            div()
+                .flex_none()
+                .mx(t.spacing.xs * 2.)
+                .my(t.spacing.xs)
+                .child(CrashNotice::new(CrashKeys::of(Keymap::builtin())))
         })
     }
 
@@ -341,6 +360,7 @@ impl Render for WindowPage {
                     .app_button(is_open, |_, _, _| {})
                     .header(HeaderSearch::new()),
             )
+            .children(self.crash_notice(&t))
             .child(
                 div()
                     .relative()
@@ -356,68 +376,4 @@ impl Render for WindowPage {
             .child(self.fkey_bar(window))
             .children(menu)
     }
-}
-
-pub const NARROW: f32 = 1100.;
-pub const WIDE: f32 = 1440.;
-
-fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
-    div()
-        .w(px(width))
-        .h_full()
-        .flex_none()
-        .child(window.clone())
-        .into_any_element()
-}
-
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 22]) -> Option<AnyElement> {
-    let [
-        main,
-        shift,
-        ctrl,
-        alt,
-        menu,
-        sheet,
-        sheet_left,
-        sheet_narrow,
-        settings,
-        settings_files,
-        shortcuts,
-        recording,
-        conflict,
-        invalid,
-        job,
-        job_pill,
-        two,
-        two_pill,
-        hints @ ..,
-    ] = windows;
-    let [hints_ctrl, hints_shift, hints_alt, hints_low] = hints;
-    let shown = match page {
-        Page::Window => main,
-        Page::WindowShift => shift,
-        Page::WindowCtrl => ctrl,
-        Page::WindowAlt => alt,
-        Page::WindowJob => job,
-        Page::WindowJobPill => job_pill,
-        Page::WindowJobs => two,
-        Page::WindowJobsPill => two_pill,
-        Page::AppMenu => menu,
-        Page::WindowNarrow => return Some(fixed(NARROW, main)),
-        Page::Sheet => return Some(fixed(WIDE, sheet)),
-        Page::SheetLeft => return Some(fixed(WIDE, sheet_left)),
-        Page::SheetNarrow => return Some(fixed(NARROW, sheet_narrow)),
-        Page::Settings => settings,
-        Page::SettingsFiles => settings_files,
-        Page::Shortcuts => shortcuts,
-        Page::ShortcutsRecording => recording,
-        Page::ShortcutsConflict => conflict,
-        Page::ShortcutsInvalid => invalid,
-        Page::HintsCtrl => hints_ctrl,
-        Page::HintsShift => hints_shift,
-        Page::HintsAlt => hints_alt,
-        Page::HintsLow => hints_low,
-        _ => return None,
-    };
-    Some(shown.clone().into_any_element())
 }

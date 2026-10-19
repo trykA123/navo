@@ -5,18 +5,22 @@ use crate::prelude::*;
 
 pub(super) const PANE: &str = "FerritePane";
 pub(super) const WAITING: &str = "PaneWaiting";
+pub(super) const CRASH: &str = "CrashNotice";
 
 gpui_kit::actions!(
     ferrite_window,
     [
         BrowsePreview,
+        DismissCrashNotice,
         DriveMenuFirst,
         DriveMenuSecond,
         EditPath,
+        FocusCrashNotice,
         LeaveWaiting,
         NewTab,
         ResetSplit,
         RetryListing,
+        SaveCrashReport,
         ToggleJobs
     ]
 );

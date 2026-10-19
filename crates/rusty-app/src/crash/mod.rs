@@ -66,10 +66,6 @@ pub(crate) fn clear(pending: &Pending) -> io::Result<()> {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "C2 consumes the report-saving API")
-)]
 pub(crate) fn save_report(
     pending: &Pending,
     started: Instant,
@@ -94,10 +90,6 @@ pub(crate) fn save_report(
     Err(last)
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "C2 resolves the save destination")
-)]
 pub(crate) fn downloads_dir() -> Option<PathBuf> {
     downloads::resolve()
 }

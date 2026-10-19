@@ -20,8 +20,8 @@ use crate::structured_sample::{
 };
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
-use crate::window_page::{WindowPage, window_element};
-use crate::window_samples::{hint_windows, job_windows, sheet_windows};
+use crate::window_page::WindowPage;
+use crate::window_samples::{hint_windows, job_windows, sheet_windows, window_element};
 use crate::{rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
@@ -76,6 +76,7 @@ pub struct Gallery {
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
     hint_windows: [Entity<WindowPage>; 4],
+    crash_window: Entity<WindowPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -113,6 +114,7 @@ impl Gallery {
             menu_window: cx.new(WindowPage::with_menu),
             sheet_windows: sheet_windows(window, cx),
             hint_windows: hint_windows(cx),
+            crash_window: cx.new(WindowPage::with_crash),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -261,7 +263,7 @@ fn column(t: &Theme) -> Div {
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 22] {
+    fn windows(&self) -> [&Entity<WindowPage>; 23] {
         let [
             sheet,
             sheet_left,
@@ -298,6 +300,7 @@ impl Gallery {
             hints_shift,
             hints_alt,
             hints_low,
+            &self.crash_window,
         ]
     }
 }
