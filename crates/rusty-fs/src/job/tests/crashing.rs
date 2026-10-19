@@ -18,7 +18,7 @@ fn died() -> FsError {
 pub(super) struct Crashing<'a> {
     fs: &'a FakeFs,
     path: String,
-    op: FakeOp,
+    ops: Vec<FakeOp>,
     dead: AtomicBool,
 }
 
@@ -27,8 +27,15 @@ impl<'a> Crashing<'a> {
         Self {
             fs,
             path: path.to_owned(),
-            op,
+            ops: vec![op],
             dead: AtomicBool::new(false),
+        }
+    }
+
+    pub(super) fn placing(fs: &'a FakeFs, temp: &str) -> Self {
+        Self {
+            ops: vec![FakeOp::Rename, FakeOp::Replace],
+            ..Self::new(fs, temp, FakeOp::Rename)
         }
     }
 
@@ -40,7 +47,7 @@ impl<'a> Crashing<'a> {
     }
 
     fn hits(&self, location: &Location, op: FakeOp) -> bool {
-        op == self.op && location.path().to_text().trim_start_matches('/') == self.path
+        self.ops.contains(&op) && location.path().to_text().trim_start_matches('/') == self.path
     }
 
     fn die(&self) -> FsError {
@@ -114,6 +121,11 @@ impl ProviderOps for Crashing<'_> {
         self.fs.rename(source, target)
     }
 
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.enter(source, FakeOp::Replace)?;
+        self.fs.replace(source, target)
+    }
+
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
         self.enter(location, FakeOp::Remove)?;
         self.fs.remove_file(location)
@@ -145,11 +157,14 @@ pub(super) fn crashed_with(
     copy_of: &str,
     workers: usize,
 ) -> Vec<u32> {
-    let ops = Crashing::new(fs, copy_of, FakeOp::Copy);
+    crashed_on(&Crashing::new(fs, copy_of, FakeOp::Copy), plan, workers)
+}
+
+pub(super) fn crashed_on(ops: &Crashing<'_>, plan: &OperationPlan, workers: usize) -> Vec<u32> {
     let mut harness = Harness {
         workers,
         ..Harness::default()
     };
-    let _ = harness.run(&ops, plan, &[]);
+    let _ = harness.run(ops, plan, &[]);
     harness.log.done()
 }

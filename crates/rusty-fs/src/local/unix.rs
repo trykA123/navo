@@ -1,8 +1,9 @@
 use std::ffi::{OsStr, OsString};
-use std::fs::Metadata;
+use std::fs::{self, Metadata};
+use std::io;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use rusty_core::{FsErrorKind, ProviderPath};
 
@@ -37,4 +38,8 @@ pub(super) fn name_attributes(name: &OsStr) -> Attributes {
 
 pub(super) fn error_kind(code: i32) -> FsErrorKind {
     FsErrorKind::from_errno(code)
+}
+
+pub(super) fn replace(from: &Path, to: &Path) -> io::Result<()> {
+    fs::rename(from, to)
 }
