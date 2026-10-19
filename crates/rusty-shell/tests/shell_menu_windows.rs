@@ -304,6 +304,7 @@ fn an_unknown_verb_without_an_id_fails_without_a_retry() {
     assert!(matches!(result, Err(MenuError::Shell { .. })), "{result:?}");
 }
 
+#[expect(clippy::panic, reason = "a test helper fails the calling test")]
 fn filled(session: &MenuSession, position: usize) -> Vec<MenuItem> {
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
