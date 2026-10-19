@@ -64,11 +64,11 @@ fn an_empty_key_list_unbinds_the_command() {
 
 #[test]
 fn an_allowed_context_missing_from_the_built_in_file_adds_a_binding() {
-    assert_eq!(keys_in(Keymap::builtin(), "viewer.back", "Image"), None);
-    let result = overlaid(&one("viewer.back", "\"backspace\"", Some("Image")));
+    assert_eq!(keys_in(Keymap::builtin(), "viewer.back", "Table"), None);
+    let result = overlaid(&one("viewer.back", "\"backspace\"", Some("Table")));
     let keymap = &result.keymap;
     assert_eq!(
-        keys_in(keymap, "viewer.back", "Image"),
+        keys_in(keymap, "viewer.back", "Table"),
         Some(vec!["backspace".to_owned()])
     );
     assert_eq!(

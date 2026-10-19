@@ -193,11 +193,12 @@ fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     }
 }
 
-const BACK_CONTEXTS: [&str; 8] = [
+const BACK_CONTEXTS: [&str; 9] = [
     "ViewerGoTo",
     "Paged",
     "ViewerFind",
     "Tree",
+    "Image",
     "Pdf",
     "MemoryImage",
     "Elf",

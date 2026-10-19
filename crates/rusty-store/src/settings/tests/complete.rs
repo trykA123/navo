@@ -24,6 +24,13 @@ patterns-select-folders = false
 [terminal]
 provider = \"windows-terminal\"
 
+[text.view]
+line-numbers = true
+line-ends = false
+
+[image.view]
+details = false
+
 [automotive.view]
 preset = \"simple\"
 inspector = false
@@ -32,7 +39,7 @@ charts = false
 row-bars = false
 ";
 
-const DEFAULT_KEYS: [(&str, &str); 21] = [
+const DEFAULT_KEYS: [(&str, &str); 24] = [
     ("appearance.mode", "\"system\""),
     ("appearance.light-theme", "\"Ferrite Light\""),
     ("appearance.dark-theme", "\"Ferrite Dark\""),
@@ -49,6 +56,9 @@ const DEFAULT_KEYS: [(&str, &str); 21] = [
     ("selection.space-measures-folders", "true"),
     ("selection.patterns-select-folders", "false"),
     ("terminal.provider", "\"windows-terminal\""),
+    ("text.view.line-numbers", "true"),
+    ("text.view.line-ends", "false"),
+    ("image.view.details", "false"),
     ("automotive.view.preset", "\"simple\""),
     ("automotive.view.inspector", "false"),
     ("automotive.view.memory-strip", "false"),
@@ -103,7 +113,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[text.view]\nline-numbers = true\nline-ends = false\n\n[image.view]\ndetails = false\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
     assert_eq!(completed(before), after);
 }
 
@@ -523,6 +533,28 @@ fn an_upgrade_in_a_mixed_file_keeps_the_line_ending_of_the_changed_line() {
     assert_eq!(done.text, "# mine\n[files]\r\nsort = \"date\"\r\n");
 }
 
+fn without_viewers() -> String {
+    let at = FULL.find("\n[text.view]").unwrap();
+    FULL[..at].to_owned()
+}
+
+#[test]
+fn only_the_viewer_sections_are_added_to_an_older_complete_file() {
+    let after = completed(&without_viewers());
+    assert_eq!(after, FULL);
+    assert!(!after.contains("[text]\n"), "{after}");
+    assert!(!after.contains("[image]\n"), "{after}");
+}
+
+#[test]
+fn a_trailing_comment_stays_under_its_section_when_viewer_sections_are_added() {
+    let before = format!("{}# the end\n", without_viewers());
+    let after = completed(&before);
+    assert_eq!(header_above(&after, "# the end"), "[terminal]", "{after}");
+    assert_eq!(after.matches("# the end").count(), 1, "{after}");
+    assert!(parse(&after).is_ok(), "{after}");
+}
+
 fn without_automotive() -> String {
     let at = FULL.find("\n[automotive.view]").unwrap();
     FULL[..at].to_owned()
@@ -539,7 +571,7 @@ fn only_the_automotive_section_is_added_to_an_older_complete_file() {
 fn a_trailing_comment_survives_when_only_a_nested_section_is_added() {
     let before = format!("{}# the end\n", without_automotive());
     let after = completed(&before);
-    assert_eq!(header_above(&after, "# the end"), "[terminal]", "{after}");
+    assert_eq!(header_above(&after, "# the end"), "[image.view]", "{after}");
     assert_eq!(after.matches("# the end").count(), 1, "{after}");
     assert!(after.ends_with("row-bars = false\n"), "{after}");
     assert!(parse(&after).is_ok(), "{after}");

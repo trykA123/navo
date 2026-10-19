@@ -291,6 +291,25 @@ fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     select_on_click(row, look.send.as_ref(), index).into_any_element()
 }
 
+fn group_heading(t: &Theme, label: &'static str) -> AnyElement {
+    div()
+        .id(SharedString::from(format!(
+            "settings-group-{}",
+            label.to_lowercase()
+        )))
+        .role(Role::Heading)
+        .aria_label(label)
+        .test_support()
+        .flex_none()
+        .px(t.spacing.xl)
+        .pt(t.spacing.md)
+        .text_size(t.typography.tiny)
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(t.colors.muted)
+        .child(label)
+        .into_any_element()
+}
+
 pub(super) fn content(
     look: &Look,
     section: Section,
@@ -306,9 +325,15 @@ pub(super) fn content(
         .text_color(t.colors.muted)
         .font_weight(FontWeight::SEMIBOLD)
         .child(section.label());
-    let rows: Vec<AnyElement> = rows_in(section)
-        .map(|(index, spec)| row(look, index, spec))
-        .collect();
+    let mut group = None;
+    let mut rows: Vec<AnyElement> = Vec::new();
+    for (index, spec) in rows_in(section) {
+        if section == Section::Display && spec.group() != group {
+            group = spec.group();
+            rows.extend(group.map(|label| group_heading(t, label)));
+        }
+        rows.push(row(look, index, spec));
+    }
     div()
         .id("settings-rows")
         .flex()

@@ -11,24 +11,19 @@ use std::any::Any;
 use std::ops::Range;
 use std::sync::Arc;
 
-use gpui_kit::{AnyView, FocusHandle, Global, Subscription};
+use gpui_kit::{AnyView, FocusHandle, Subscription};
 use rusty_automotive::{Format, Image, Item, Layout, ROW_BYTES, Row};
 
 pub(super) use keys::bind_keys;
 
 use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
+use super::parts::{AUTOMOTIVE, PartSet};
 use super::search::bar::GO_TO_KEYS;
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
+use crate::settings::Values;
 use crate::side_sheet::SheetState;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::window_view) struct AutomotiveLook {
-    pub opens_inspector: bool,
-}
-
-impl Global for AutomotiveLook {}
 
 pub(in crate::window_view::viewer) struct MemoryFile {
     pub len: u64,
@@ -94,6 +89,7 @@ pub(in crate::window_view::viewer) struct MemoryView {
     note: Option<SharedString>,
     read_error: Option<SharedString>,
     page: u64,
+    opens_inspector: bool,
 }
 
 impl MemoryView {
@@ -123,6 +119,7 @@ impl MemoryView {
             note: None,
             read_error: None,
             page: 1,
+            opens_inspector: false,
         }
     }
 
@@ -205,5 +202,14 @@ impl ViewerBody for MemoryBody {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn parts(&self, _: &App) -> Option<&'static PartSet> {
+        Some(&AUTOMOTIVE)
+    }
+
+    fn show_parts(&self, values: &Values, cx: &mut App) {
+        let opens = values.opens_inspector();
+        self.0.update(cx, |view, _| view.opens_inspector = opens);
     }
 }

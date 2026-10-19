@@ -13,6 +13,7 @@ use crate::window_view::viewer::search::find_all::{
     close_find_all, find_all_panel, go_to_found, move_in_find_all,
 };
 use crate::window_view::viewer::search::overview::StripLook;
+use crate::window_view::viewer::view_menu::view_button;
 use crate::window_view::viewer::{
     Back, CopyPathLine, FindAll, FindSelection, ListClose, ListDown, ListGo, ListUp, MatchCase,
     NewerSearch, OlderSearch, OpenFind, OpenGoTo, PageDown,
@@ -111,6 +112,7 @@ impl EditorView {
             })
             .when_some(count, |d, count| d.child(status(t, "find-count", count)))
             .children(self.bar(t, cx))
+            .child(view_button())
     }
 
     fn find_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -201,6 +203,7 @@ impl EditorView {
 impl Render for EditorView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
+        self.sync_line_numbers(window, cx);
         self.sync_decorations(&t, cx);
         self.update_overview(&t, cx);
         self.marking.sync_find_all();

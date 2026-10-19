@@ -50,6 +50,11 @@ pub enum Page {
     CrashNotice,
     MemoryImage,
     MemoryDrawers,
+    ViewMenuText,
+    ViewMenuAutomotive,
+    ViewMenuElf,
+    ViewMenuTrace,
+    SettingsDisplay,
     ElfSymbols,
     ElfDrawers,
     TraceTable,
@@ -75,7 +80,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 57] = [
+pub const PAGES: [PageInfo; 62] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -224,6 +229,36 @@ pub const PAGES: [PageInfo; 57] = [
         Page::MemoryDrawers,
         "Memory image, drawers",
         "p16-b2-hex-drawers",
+        false,
+    ),
+    info(
+        Page::ViewMenuText,
+        "View menu, text",
+        "p33-v1-view-menu-text",
+        false,
+    ),
+    info(
+        Page::ViewMenuAutomotive,
+        "View menu, automotive",
+        "p33-v1-view-menu-automotive",
+        false,
+    ),
+    info(
+        Page::ViewMenuElf,
+        "View menu, ELF",
+        "p33-v1-view-menu-elf",
+        false,
+    ),
+    info(
+        Page::ViewMenuTrace,
+        "View menu, CAN trace",
+        "p33-v1-view-menu-trace",
+        false,
+    ),
+    info(
+        Page::SettingsDisplay,
+        "Display settings",
+        "p33-v1-display-settings",
         false,
     ),
     info(Page::ElfSymbols, "ELF symbols", "p16-b3-elf-simple", false),

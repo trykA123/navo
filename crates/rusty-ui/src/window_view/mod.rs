@@ -80,7 +80,7 @@ pub use viewer::{
 };
 pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, MenuEntry, Picture, ReadBytes, decode_image};
 pub use viewer::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
-pub use viewer::{bind_keys as bind_viewer_keys, viewer_menu};
+pub use viewer::{bind_keys as bind_viewer_keys, view_menu, viewer_menu};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
@@ -162,7 +162,7 @@ impl FerriteWindow {
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
-        settings_save::steer(&values, &mut browser, cx);
+        settings_save::steer(&values, &mut browser);
         browser.start();
         let mut view = Self {
             browser,

@@ -67,6 +67,43 @@ pub(super) const GROUPS: [Group; 5] = [
                 "Follow the end of the file",
             ),
             ("viewer::ShowMenu", "viewer.context_menu", "Context menu"),
+            ("viewer::ViewMenu", "viewer.view_menu", "View menu"),
+            ("viewer::LeftDrawer", "view.left_drawer", "Left drawer"),
+            ("viewer::RightDrawer", "view.right_drawer", "Right drawer"),
+            (
+                "viewer::ToggleLineNumbers",
+                "view.line_numbers",
+                "Show or hide line numbers",
+            ),
+            (
+                "viewer::ToggleOpensInspector",
+                "view.opens_inspector",
+                "Open the inspector on pick",
+            ),
+            (
+                "viewer::ToggleMemoryStrip",
+                "view.memory_strip",
+                "Show or hide the memory strip",
+            ),
+            ("viewer::ToggleCharts", "view.charts", "Show or hide charts"),
+            (
+                "viewer::ToggleRowBars",
+                "view.row_bars",
+                "Show or hide row bars",
+            ),
+            ("viewer::ViewSimple", "view.simple", "Simple view"),
+            ("viewer::ViewRich", "view.rich", "Rich view"),
+            ("viewer::ViewCustom", "view.custom", "Custom view"),
+            (
+                "viewer::KeepViewDefault",
+                "view.keep_as_default",
+                "Keep the view as default",
+            ),
+            (
+                "viewer::ResetView",
+                "view.reset_to_defaults",
+                "Reset the view to the defaults",
+            ),
             (
                 "viewer::CopyPathLine",
                 "viewer.copy_path_line",

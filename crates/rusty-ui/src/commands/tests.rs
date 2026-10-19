@@ -383,3 +383,20 @@ fn pdf_keys_shadow_only_the_viewer_marks_and_escape() {
         ]
     );
 }
+
+#[test]
+fn drawer_keys_belong_to_the_shared_view_commands_in_every_viewer() {
+    let binds = Keymap::builtin().binds();
+    let keyed = |key: &str| -> Vec<(String, &str)> {
+        binds
+            .iter()
+            .filter(|bind| bind.keys.iter().any(|used| used == key))
+            .map(|bind| (bind.context.clone(), bind.spec.name))
+            .collect()
+    };
+    assert_eq!(keyed("ctrl-b"), [("Viewer".to_owned(), "view.left_drawer")]);
+    assert_eq!(
+        keyed("ctrl-i"),
+        [("Viewer".to_owned(), "view.right_drawer")]
+    );
+}

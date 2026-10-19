@@ -7,6 +7,7 @@ use crate::format;
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName};
 use crate::tokens::{self, Theme};
+use crate::window_view::viewer::view_menu::view_button;
 use crate::window_view::viewer::{
     ActualSize, CopyImage, FitImage, IMAGE_CONTEXT, RowDown, RowUp, ScrollLeft, ScrollRight,
     ToggleInfo, ZoomIn, ZoomOut,
@@ -54,8 +55,7 @@ impl ImageView {
         .into()
     }
 
-    fn header(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let toggle = cx.listener(|view, _, _, cx| view.toggle_info(cx));
+    fn header(&self, t: &Theme) -> Div {
         div()
             .flex()
             .flex_none()
@@ -90,8 +90,9 @@ impl ImageView {
             .child(
                 IconButton::new("image-info-toggle", IconName::Info, "Details (I)")
                     .selected(self.info)
-                    .on_click(toggle),
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(ToggleInfo), cx)),
             )
+            .child(view_button())
     }
 
     fn info_panel(&self, t: &Theme) -> impl IntoElement {
@@ -131,7 +132,6 @@ impl ImageView {
             .on_action(cx.listener(|view, _: &ActualSize, _, cx| view.actual_size(cx)))
             .on_action(cx.listener(|view, _: &ZoomIn, _, cx| view.zoom_step(true, None, cx)))
             .on_action(cx.listener(|view, _: &ZoomOut, _, cx| view.zoom_step(false, None, cx)))
-            .on_action(cx.listener(|view, _: &ToggleInfo, _, cx| view.toggle_info(cx)))
             .on_action(cx.listener(|view, _: &ScrollLeft, _, cx| view.pan_step(1., 0., cx)))
             .on_action(cx.listener(|view, _: &ScrollRight, _, cx| view.pan_step(-1., 0., cx)))
             .on_action(cx.listener(|view, _: &RowUp, _, cx| view.pan_step(0., 1., cx)))
@@ -155,7 +155,7 @@ impl Render for ImageView {
             .min_h_0()
             .size_full()
             .bg(t.colors.surface)
-            .child(self.header(&t, cx))
+            .child(self.header(&t))
             .child(
                 div()
                     .flex()

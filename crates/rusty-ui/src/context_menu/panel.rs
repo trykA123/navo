@@ -193,6 +193,7 @@ impl ContextMenu {
                     menu: self.state.menu(),
                     icons: &self.icons,
                     is_active,
+                    ferrite_header: &self.ferrite_header,
                 };
                 let selected = level.selection.index();
                 level

@@ -30,14 +30,14 @@ impl MarkdownView {
         self.menu_block = block;
         let mut entries = Vec::new();
         if block.is_some() {
-            entries.push(MenuEntry::Run("Copy", Box::new(CopyBlock)));
+            entries.push(MenuEntry::Run("Copy", Box::new(CopyBlock), false));
         }
         if link.is_some() {
             if !entries.is_empty() {
                 entries.push(MenuEntry::Break);
             }
-            entries.push(MenuEntry::Run("Open link", Box::new(OpenLink)));
-            entries.push(MenuEntry::Run("Copy link", Box::new(CopyLink)));
+            entries.push(MenuEntry::Run("Open link", Box::new(OpenLink), false));
+            entries.push(MenuEntry::Run("Copy link", Box::new(CopyLink), false));
         }
         entries
     }

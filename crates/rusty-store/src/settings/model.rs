@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::view::{Automotive, ImageViewer, TextViewer};
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Settings {
@@ -10,6 +12,8 @@ pub struct Settings {
     pub selection: SelectionSettings,
     pub terminal: Terminal,
     pub editor: Editor,
+    pub text: TextViewer,
+    pub image: ImageViewer,
     pub automotive: Automotive,
     pub experimental: BTreeMap<String, bool>,
 }
@@ -147,29 +151,4 @@ impl Default for Terminal {
 pub struct Editor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "kebab-case")]
-pub struct Automotive {
-    pub view: AutomotiveView,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "kebab-case")]
-pub struct AutomotiveView {
-    pub preset: ViewPreset,
-    pub inspector: bool,
-    pub memory_strip: bool,
-    pub charts: bool,
-    pub row_bars: bool,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ViewPreset {
-    #[default]
-    Simple,
-    Rich,
-    Custom,
 }

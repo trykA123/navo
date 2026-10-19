@@ -10,6 +10,7 @@ use crate::primitives::VirtualList;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
+use crate::window_view::viewer::view_menu::view_button;
 
 const COLUMNS: &str = "00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F";
 const EMPTY: [Option<u8>; 16] = [None; 16];
@@ -182,7 +183,9 @@ impl MemoryView {
             };
             bar_row(t, look, |_, _, _| {})
         });
-        header(t, self.header_parts()).children(bar)
+        header(t, self.header_parts())
+            .child(view_button())
+            .children(bar)
     }
 
     fn status_line(&self, t: &Theme) -> impl IntoElement {

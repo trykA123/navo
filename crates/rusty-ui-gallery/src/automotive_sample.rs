@@ -3,11 +3,11 @@ use std::sync::LazyLock;
 pub const MEMORY_NAME: &str = "bcm_app.hex";
 
 pub const MEMORY_STEPS: [&str; 5] = [
-    "memory_image::ToggleNavigator",
+    "viewer::LeftDrawer",
     "viewer::RowDown",
     "viewer::RowDown",
     "memory_image::PickItem",
-    "memory_image::ToggleInspector",
+    "viewer::RightDrawer",
 ];
 
 static MEMORY: LazyLock<String> = LazyLock::new(memory_image);
@@ -15,10 +15,10 @@ static MEMORY: LazyLock<String> = LazyLock::new(memory_image);
 pub const ELF_NAME: &str = "bcm_app.elf";
 
 pub const ELF_STEPS: [&str; 4] = [
-    "elf_view::ToggleNavigator",
+    "viewer::LeftDrawer",
     "viewer::RowDown",
     "elf_view::PickItem",
-    "elf_view::ToggleInspector",
+    "viewer::RightDrawer",
 ];
 
 static ELF: LazyLock<Vec<u8>> =
@@ -80,10 +80,10 @@ fn memory_image() -> String {
 pub const TRACE_NAME: &str = "body_can_2026-10-19.asc";
 
 pub const TRACE_STEPS: [&str; 4] = [
-    "can_trace::ToggleNavigator",
+    "viewer::LeftDrawer",
     "viewer::RowDown",
     "can_trace::PickId",
-    "can_trace::ToggleInspector",
+    "viewer::RightDrawer",
 ];
 
 static TRACE: LazyLock<String> = LazyLock::new(can_trace);

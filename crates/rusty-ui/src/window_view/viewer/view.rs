@@ -1,5 +1,5 @@
-use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
+use gpui_kit::{Role, canvas};
 
 use super::{CONTEXT, CloseViewer, SaveFile, Viewer};
 use crate::prelude::*;
@@ -71,7 +71,15 @@ impl FerriteWindow {
             .on_action(save)
             .on_action(close);
         let root = Self::lister_actions(Self::slot_actions(root, cx), cx);
-        let root = Self::marking_actions(Self::menu_opening(root, cx), cx)
+        let root = Self::marking_actions(Self::menu_opening(root, cx), cx);
+        let bounds = viewer.bounds.clone();
+        let root = Self::view_actions(root, cx)
+            .relative()
+            .child(
+                canvas(move |area, _, _| bounds.set(area), |_, (), _, _| {})
+                    .absolute()
+                    .size_full(),
+            )
             .flex()
             .flex_col()
             .flex_1()

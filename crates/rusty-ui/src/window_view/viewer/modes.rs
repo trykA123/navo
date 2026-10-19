@@ -149,6 +149,7 @@ impl FerriteWindow {
             viewer.say(note, cx);
         }
         window.focus(&viewer.focus_target(cx), cx);
+        self.show_parts(cx);
         cx.notify();
     }
 
@@ -175,6 +176,7 @@ impl FerriteWindow {
         if reused {
             viewer.kind = Some(kind);
             window.focus(&viewer.focus_target(cx), cx);
+            self.show_parts(cx);
             cx.notify();
             return;
         }

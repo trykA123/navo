@@ -753,6 +753,18 @@ command = "viewer.follow"
 keys = ["alt-f"]
 
 [[bind]]
+command = "viewer.view_menu"
+keys = ["alt-v"]
+
+[[bind]]
+command = "view.left_drawer"
+keys = ["ctrl-b"]
+
+[[bind]]
+command = "view.right_drawer"
+keys = ["ctrl-i"]
+
+[[bind]]
 command = "viewer.context_menu"
 keys = ["menu", "shift-f10"]
 
@@ -899,6 +911,11 @@ command = "image.toggle_info"
 keys = ["i"]
 
 [[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Image"
+
+[[bind]]
 command = "image.copy"
 keys = ["ctrl-c"]
 
@@ -945,11 +962,7 @@ keys = ["alt-w"]
 
 [[bind]]
 command = "pdf.all_hits"
-keys = ["ctrl-i", "ctrl-shift-f"]
-
-[[bind]]
-command = "pdf.pages_and_outline"
-keys = ["ctrl-b"]
+keys = ["ctrl-shift-f"]
 
 [[bind]]
 command = "pdf.pages"
@@ -1078,14 +1091,6 @@ keys = ["ctrl-f3"]
 # MemoryImage
 
 [[bind]]
-command = "memory.toggle_navigator"
-keys = ["ctrl-b"]
-
-[[bind]]
-command = "memory.toggle_inspector"
-keys = ["ctrl-i"]
-
-[[bind]]
 command = "memory.go_to_item"
 keys = ["enter"]
 
@@ -1095,14 +1100,6 @@ keys = ["escape"]
 context = "MemoryImage"
 
 # Elf
-
-[[bind]]
-command = "elf.toggle_navigator"
-keys = ["ctrl-b"]
-
-[[bind]]
-command = "elf.toggle_inspector"
-keys = ["ctrl-i"]
 
 [[bind]]
 command = "elf.pick_item"
@@ -1152,14 +1149,6 @@ command = "elf.type_five"
 keys = ["5"]
 
 # CanTrace
-
-[[bind]]
-command = "trace.toggle_navigator"
-keys = ["ctrl-b"]
-
-[[bind]]
-command = "trace.toggle_inspector"
-keys = ["ctrl-i"]
 
 [[bind]]
 command = "trace.filter_by_id"

@@ -17,6 +17,7 @@ use crate::window_view::viewer::search::count::count_label;
 use crate::window_view::viewer::search::find_all::{
     close_find_all, find_all_panel, go_to_found, move_in_find_all,
 };
+use crate::window_view::viewer::view_menu::view_button;
 use crate::window_view::viewer::{
     Back, FindAll, GoEnd, GoStart, ListClose, ListDown, ListGo, ListUp, MatchCase, NewerSearch,
     OlderSearch, OpenFind, OpenGoTo, PAGED_CONTEXT, PageDown, PageUp, RowDown, RowUp, ScrollLeft,
@@ -70,15 +71,17 @@ impl PagedView {
             PagedKind::Text => ("Ctrl+G", "Go to line"),
         };
         let mut keys = vec![("Ctrl+F", "Find"), ("F3", "Next"), go_to];
-        keys.extend(MARK_KEYS);
-        if self.kind == PagedKind::Text {
-            let follow = if self.is_following() {
-                "Stop following"
-            } else {
-                "Follow"
-            };
-            keys.extend([("Alt+L", "Line ends"), ("Alt+F", follow)]);
+        if self.kind == PagedKind::Hex {
+            keys.extend(MARK_KEYS);
+            return keys;
         }
+        let follow = if self.is_following() {
+            "Stop following"
+        } else {
+            "Follow"
+        };
+        keys.extend(&MARK_KEYS[1..]);
+        keys.push(("Alt+F", follow));
         keys
     }
 
@@ -184,6 +187,7 @@ impl PagedView {
                     .map(|text| status(t, "find-count", text)),
             )
             .children(self.find.bar.as_ref().map(|bar| self.bar_view(t, bar, cx)))
+            .when(self.kind == PagedKind::Text, |row| row.child(view_button()))
     }
 
     fn movement_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {

@@ -3,7 +3,7 @@ use gpui_kit::{Action, ClipboardItem, Stateful};
 use super::body::BodyAct;
 use super::{
     ClearMarks, CopyFilePath, Mark1, Mark2, Mark3, Mark4, Mark5, Mark6, Mark7, Mark8, NextBookmark,
-    PreviousBookmark, ShowLineEnds, ToggleBookmark, ToggleFollow,
+    PreviousBookmark, ToggleBookmark, ToggleFollow,
 };
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
@@ -50,7 +50,6 @@ impl FerriteWindow {
         let root = act_on::<NextBookmark>(root, next, cx);
         let previous = BodyAct::StepBookmark { backward: true };
         let root = act_on::<PreviousBookmark>(root, previous, cx);
-        let root = act_on::<ShowLineEnds>(root, BodyAct::LineEnds, cx);
         let root = act_on::<ToggleFollow>(root, BodyAct::Follow, cx);
         root.on_action(cx.listener(|view, _: &CopyFilePath, _, cx| view.copy_file_path(cx)))
     }

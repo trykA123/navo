@@ -11,7 +11,6 @@ gpui_kit::actions!(
         ZoomOut,
         WholeWord,
         AllHits,
-        LeftDrawer,
         PagesDrawer,
         CopyText,
     ]

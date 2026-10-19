@@ -46,6 +46,17 @@ pub fn sheet_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 
     })
 }
 
+pub fn display_window(cx: &mut App) -> Entity<WindowPage> {
+    let shows = SheetShows {
+        active: Side::Left,
+        window_width: None,
+        is_ringed: false,
+        settings: Some(Field::TextLineNumbers),
+        shortcuts: None,
+    };
+    cx.new(|cx| WindowPage::with_sheet(shows, cx))
+}
+
 pub fn hint_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
     [
         (Combo::CTRL, KeyLayer::Ctrl, 2),

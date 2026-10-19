@@ -27,7 +27,9 @@ use crate::structured_sample::{
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
-use crate::window_samples::{hint_windows, job_windows, sheet_windows, window_element};
+use crate::window_samples::{
+    display_window, hint_windows, job_windows, sheet_windows, window_element,
+};
 use crate::{pdf_sample, rich_sample, viewer_sample};
 
 mod samples;
@@ -52,7 +54,7 @@ const TABLE_STEPS: [&str; 4] = [
     "viewer_table::SortColumn",
 ];
 
-const PDF_STEPS: [&str; 2] = ["viewer_pdf::LeftDrawer", "viewer_pdf::AllHits"];
+const PDF_STEPS: [&str; 2] = ["viewer::LeftDrawer", "viewer::RightDrawer"];
 const PDF_SEARCH: &str = "undervoltage";
 
 const MENU_PAGES: [(Page, MenuShows); 6] = [
@@ -86,7 +88,7 @@ pub struct Gallery {
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 3],
     menus: [(Page, Entity<MenuPage>); 6],
-    viewer_menus: [Entity<ViewerMenuPage>; 2],
+    viewer_menus: [Entity<ViewerMenuPage>; 6],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
@@ -94,6 +96,7 @@ pub struct Gallery {
     job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
+    display_window: Entity<WindowPage>,
     hint_windows: [Entity<WindowPage>; 4],
     crash_window: Entity<WindowPage>,
     tab: usize,
@@ -128,8 +131,15 @@ impl Gallery {
             pdf: [None, Some(PDF_SEARCH), Some(PDF_SEARCH)]
                 .map(|search| pdf_sample::pdf_view(search, window, cx)),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
-            viewer_menus: [ViewerMenuShows::Text, ViewerMenuShows::Tree]
-                .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
+            viewer_menus: [
+                ViewerMenuShows::Text,
+                ViewerMenuShows::Tree,
+                ViewerMenuShows::ViewText,
+                ViewerMenuShows::ViewAutomotive,
+                ViewerMenuShows::ViewElf,
+                ViewerMenuShows::ViewTrace,
+            ]
+            .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
             ctrl_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Ctrl), cx)),
@@ -137,6 +147,7 @@ impl Gallery {
             job_windows: job_windows(cx),
             menu_window: cx.new(WindowPage::with_menu),
             sheet_windows: sheet_windows(window, cx),
+            display_window: display_window(cx),
             hint_windows: hint_windows(cx),
             crash_window: cx.new(WindowPage::with_crash),
             tab: 1,
@@ -299,6 +310,9 @@ impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let root = root(&t);
+        if self.page == Page::SettingsDisplay {
+            return root.child(self.display_window.clone());
+        }
         if let Some(page) = window_element(self.page, self.windows()) {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
@@ -321,7 +335,12 @@ impl Render for Gallery {
             | Page::MenuFiles
             | Page::MenuBackground
             | Page::MenuEmptyFolder => root.children(self.menu_page(self.page)),
-            Page::ViewerMenuText | Page::ViewerMenuTree => root.children(self.viewer_menu()),
+            Page::ViewerMenuText
+            | Page::ViewerMenuTree
+            | Page::ViewMenuText
+            | Page::ViewMenuAutomotive
+            | Page::ViewMenuElf
+            | Page::ViewMenuTrace => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree
             | Page::Table
@@ -347,6 +366,10 @@ impl Gallery {
         match self.page {
             Page::ViewerMenuText => Some(self.viewer_menus[0].clone()),
             Page::ViewerMenuTree => Some(self.viewer_menus[1].clone()),
+            Page::ViewMenuText => Some(self.viewer_menus[2].clone()),
+            Page::ViewMenuAutomotive => Some(self.viewer_menus[3].clone()),
+            Page::ViewMenuElf => Some(self.viewer_menus[4].clone()),
+            Page::ViewMenuTrace => Some(self.viewer_menus[5].clone()),
             _ => None,
         }
     }

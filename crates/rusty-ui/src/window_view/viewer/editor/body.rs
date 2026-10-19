@@ -5,11 +5,13 @@ use gpui_kit::{AnyView, FocusHandle, Focusable};
 
 use super::{EditorView, SplitChoice};
 use crate::prelude::*;
+use crate::settings::Values;
 use crate::window_view::viewer::FileText;
 use crate::window_view::viewer::body::{
     BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody,
 };
 use crate::window_view::viewer::menu::marking_entries;
+use crate::window_view::viewer::parts::{PartSet, TEXT};
 use crate::window_view::viewer::search::bar::{FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS};
 use crate::window_view::viewer::{CopyPathLine, FindSelection, OpenGoTo, ShowHex, ToggleFollow};
 
@@ -106,9 +108,11 @@ impl ViewerBody for EditorBody {
         if view.is_split() {
             keys.push(("F6", "Focus preview"));
         }
-        keys.extend(MARK_KEYS);
-        if !view.editing {
-            keys.extend([("Alt+L", "Line ends"), ("Alt+F", "Follow")]);
+        if view.editing {
+            keys.extend(MARK_KEYS);
+        } else {
+            keys.extend(&MARK_KEYS[1..]);
+            keys.push(("Alt+F", "Follow"));
         }
         BodyKeys::Normal(keys)
     }
@@ -142,25 +146,41 @@ impl ViewerBody for EditorBody {
         let editing = self.0.read(cx).editing;
         let mut entries = Vec::new();
         if editing {
-            entries.push(MenuEntry::Run("Cut", Box::new(Cut)));
+            entries.push(MenuEntry::Run("Cut", Box::new(Cut), false));
         }
-        entries.push(MenuEntry::Run("Copy", Box::new(Copy)));
+        entries.push(MenuEntry::Run("Copy", Box::new(Copy), false));
         if editing {
-            entries.push(MenuEntry::Run("Paste", Box::new(Paste)));
+            entries.push(MenuEntry::Run("Paste", Box::new(Paste), false));
         }
-        entries.push(MenuEntry::Run("Select all", Box::new(SelectAll)));
+        entries.push(MenuEntry::Run("Select all", Box::new(SelectAll), false));
         entries.push(MenuEntry::Break);
-        entries.push(MenuEntry::Run("Find selection", Box::new(FindSelection)));
-        entries.push(MenuEntry::Run("Copy path:line", Box::new(CopyPathLine)));
+        entries.push(MenuEntry::Run(
+            "Find selection",
+            Box::new(FindSelection),
+            false,
+        ));
+        entries.push(MenuEntry::Run(
+            "Copy path:line",
+            Box::new(CopyPathLine),
+            false,
+        ));
         entries.push(MenuEntry::Break);
         entries.extend(marking_entries());
         entries.push(MenuEntry::Break);
-        entries.push(MenuEntry::Run("Go to line", Box::new(OpenGoTo)));
+        entries.push(MenuEntry::Run("Go to line", Box::new(OpenGoTo), false));
         if !editing {
-            entries.push(MenuEntry::Run("Follow", Box::new(ToggleFollow)));
+            entries.push(MenuEntry::Run("Follow", Box::new(ToggleFollow), false));
         }
-        entries.push(MenuEntry::Run("Open as Hex", Box::new(ShowHex)));
+        entries.push(MenuEntry::Run("Open as Hex", Box::new(ShowHex), false));
         entries
+    }
+
+    fn parts(&self, _: &App) -> Option<&'static PartSet> {
+        Some(&TEXT)
+    }
+
+    fn show_parts(&self, values: &Values, cx: &mut App) {
+        self.0.update(cx, |view, cx| view.show_parts(values, cx));
     }
 
     fn menu_anchor(&self, cx: &App) -> Option<Point<Pixels>> {

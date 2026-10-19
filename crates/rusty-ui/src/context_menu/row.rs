@@ -21,6 +21,7 @@ pub(super) struct RowLook<'a> {
     pub menu: &'a ShellMenu,
     pub icons: &'a ShellIcons,
     pub is_active: bool,
+    pub ferrite_header: &'a SharedString,
 }
 
 fn base(index: usize) -> RowElement {
@@ -60,7 +61,7 @@ fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
 pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool) -> RowElement {
     let t = look.theme;
     match row {
-        Row::Header(section) => header(t, *section, index),
+        Row::Header(section) => header(look, *section, index),
         Row::Separator => base(index)
             .h(px(SEPARATOR))
             .px(t.spacing.sm)
@@ -78,14 +79,15 @@ pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool)
     }
 }
 
-fn header(t: &Theme, section: Section, index: usize) -> RowElement {
+fn header(look: &RowLook, section: Section, index: usize) -> RowElement {
+    let t = look.theme;
     let label = match section {
-        Section::Ferrite => "Ferrite",
-        Section::Windows => "Windows",
+        Section::Ferrite => look.ferrite_header.clone(),
+        Section::Windows => "Windows".into(),
     };
     base(index)
         .role(Role::Heading)
-        .aria_label(label)
+        .aria_label(label.clone())
         .items_end()
         .h(px(HEADER))
         .px(t.spacing.md)

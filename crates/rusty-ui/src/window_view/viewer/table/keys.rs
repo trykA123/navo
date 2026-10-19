@@ -22,11 +22,11 @@ pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
 
 pub(super) fn menu_entries() -> Vec<MenuEntry> {
     vec![
-        MenuEntry::Run("Copy cell", Box::new(CopyCell)),
-        MenuEntry::Run("Copy row", Box::new(CopyRow)),
-        MenuEntry::Run("Copy column", Box::new(CopyColumn)),
+        MenuEntry::Run("Copy cell", Box::new(CopyCell), false),
+        MenuEntry::Run("Copy row", Box::new(CopyRow), false),
+        MenuEntry::Run("Copy column", Box::new(CopyColumn), false),
         MenuEntry::Break,
-        MenuEntry::Run("Sort by this column", Box::new(SortColumn)),
+        MenuEntry::Run("Sort by this column", Box::new(SortColumn), false),
     ]
 }
 

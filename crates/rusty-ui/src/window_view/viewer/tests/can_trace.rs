@@ -13,7 +13,7 @@ use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, settle};
 use crate::window_view::viewer::{FileHooks, Head, Kinds, PagedKind};
 
-const LOG: &str = "\
+pub(super) const LOG: &str = "\
 date Mon Oct 19 09:41:07.000 am 2026
 base hex  timestamps absolute
 Begin Triggerblock Mon Oct 19 09:41:07.000 am 2026

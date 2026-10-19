@@ -9,7 +9,7 @@ use super::structured::open_named;
 use super::{Setup, has_editor, label, press_only, redraw, text_of, visible};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, settle, type_in};
-use crate::window_view::viewer::{AutomotiveLook, FileHooks, Kinds};
+use crate::window_view::viewer::{FileHooks, Kinds};
 
 const EXAMPLE: &str = "\
 :10010000214601360121470136007EFE09D2190140\r
@@ -133,11 +133,14 @@ fn enter_in_the_navigator_jumps_to_the_picked_range(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn the_inspector_opens_by_itself_when_the_setting_asks(cx: &mut TestAppContext) {
     let (window, view) = open(cx, "app.hex", WITH_GAP);
-    cx.update(|cx| {
-        cx.set_global(AutomotiveLook {
-            opens_inspector: true,
-        });
+    let rich = crate::settings::Values::default().with(&crate::settings::Change {
+        field: crate::settings::Field::AutomotivePreset,
+        value: crate::settings::Value::Pick(1),
     });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.set_values(rich, window, cx));
+    })
+    .expect("window");
     press(cx, window, &view, "ctrl-b");
     press(cx, window, &view, "enter");
     settle_motion(cx, window, &view);

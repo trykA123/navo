@@ -23,6 +23,7 @@ use super::search::memory::{MemoryLink, attach_memory};
 use super::search::overview::Overview;
 use super::{FileStamp, FileText};
 use crate::prelude::*;
+use crate::settings::{Field, Values};
 use crate::tokens::Mode;
 use find::EditorFind;
 use marking::text_source;
@@ -47,6 +48,8 @@ pub(super) struct EditorView {
     find: EditorFind,
     go_to: Option<lines::GoToBar>,
     marking: Marking,
+    line_numbers: bool,
+    gutter: Option<bool>,
     decorations: RangeDecorationCollection,
     decorated: Option<(u64, Mode)>,
     overview: Overview,
@@ -123,6 +126,8 @@ impl EditorView {
             find: EditorFind::default(),
             go_to: None,
             marking: Marking::new(text_source(shared)),
+            line_numbers: true,
+            gutter: None,
             decorations,
             decorated: None,
             overview: Overview::default(),
@@ -132,6 +137,26 @@ impl EditorView {
         };
         attach_memory(&mut view, link, cx);
         view
+    }
+
+    fn show_parts(&mut self, values: &Values, cx: &mut Context<Self>) {
+        self.line_numbers = values.flag(Field::TextLineNumbers);
+        self.marking.line_ends = values.flag(Field::TextLineEnds);
+        cx.notify();
+    }
+
+    fn sync_line_numbers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let wanted = self.line_numbers;
+        if self.gutter != Some(wanted) {
+            self.gutter = Some(wanted);
+            self.editor
+                .update(cx, |state, cx| state.set_line_number(wanted, window, cx));
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn shows_line_numbers(&self) -> bool {
+        self.gutter == Some(true)
     }
 
     #[cfg(test)]
@@ -168,7 +193,6 @@ impl EditorView {
             self.editing = true;
             self.find.bar = None;
             self.marking.find_all = None;
-            self.marking.line_ends = false;
             self.editor.update(cx, |state, cx| {
                 state.set_readonly(false, cx);
                 state.set_searchable(true, cx);

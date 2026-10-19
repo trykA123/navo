@@ -22,6 +22,7 @@ pub(super) struct RowLook<'a> {
 pub(super) struct TextLook {
     pub digits: usize,
     pub shift: usize,
+    pub numbers: bool,
 }
 
 impl RowLook<'_> {
@@ -164,15 +165,17 @@ pub(super) fn text_row(
     row_frame(look, index, line.text.clone())
         .when(is_hit, |row| row.bg(look.t.colors.selection))
         .child(look.gutter(index, look.is_bookmarked(span)))
-        .child(
-            div()
-                .id(("paged-line", index))
-                .aria_label(number.clone())
-                .test_support()
-                .flex_none()
-                .text_color(look.t.colors.muted)
-                .child(format!("{number:>width$}", width = text.digits)),
-        )
+        .when(text.numbers, |row| {
+            row.child(
+                div()
+                    .id(("paged-line", index))
+                    .aria_label(number.clone())
+                    .test_support()
+                    .flex_none()
+                    .text_color(look.t.colors.muted)
+                    .child(format!("{number:>width$}", width = text.digits)),
+            )
+        })
         .child(
             div()
                 .flex()

@@ -202,7 +202,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         "Selection",
         "Terminal",
         "Editor",
-        "Automotive",
+        "Display",
         "Shortcuts",
         "Appearance",
     ];
@@ -224,7 +224,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
     rig.press(cx, "shift-tab");
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
-        Some("automotive.view.preset")
+        Some("text.view.line-numbers")
     );
 }
 
@@ -418,4 +418,29 @@ fn ctrl_comma_closes_the_path_editor(cx: &mut TestAppContext) {
     assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_none()));
     assert!(is_open(cx, &rig));
     assert!(sheet_has_focus(cx, &rig));
+}
+
+#[gpui_kit::test]
+fn the_display_section_groups_the_viewer_parts_and_flips_one(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::TextLineEnds);
+    assert_eq!(
+        label(cx, &rig, "settings-group-text").as_deref(),
+        Some("Text")
+    );
+    assert_eq!(
+        label(cx, &rig, "settings-group-image").as_deref(),
+        Some("Image")
+    );
+    assert_eq!(
+        label(cx, &rig, "settings-key").as_deref(),
+        Some("text.view.line-ends")
+    );
+    rig.press(cx, "space");
+    let change = Change {
+        field: Field::TextLineEnds,
+        value: Value::Flag(true),
+    };
+    assert_eq!(last_change(&rig), Some(change));
 }

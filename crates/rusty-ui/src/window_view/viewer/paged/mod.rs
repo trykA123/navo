@@ -29,6 +29,7 @@ use super::search::memory::{MemoryLink, attach_memory};
 use super::search::overview::Overview;
 use super::search::{Marking, source_changed};
 use crate::prelude::*;
+use crate::settings::{Field, Values};
 use find::{BarKind, FindState};
 use follow::Follower;
 use jobs::{IndexDone, IndexMessage};
@@ -67,6 +68,7 @@ pub struct PagedView {
     index_job: Option<Job>,
     find: FindState,
     marking: Marking,
+    line_numbers: bool,
     follower: Follower,
     overview: Overview,
     previews: HashMap<u64, FoundRow>,
@@ -86,6 +88,7 @@ impl PagedView {
             seen_len: paged.source.len(),
             source: paged.source,
             marking: Marking::new(paged.reopen.clone()),
+            line_numbers: true,
             reopen: paged.reopen,
             index_run: paged.index,
             kind,
@@ -119,6 +122,12 @@ impl PagedView {
 
     pub fn attach_memory(&mut self, link: MemoryLink, cx: &mut Context<Self>) {
         attach_memory(self, link, cx);
+    }
+
+    pub(super) fn show_text_parts(&mut self, values: &Values, cx: &mut Context<Self>) {
+        self.line_numbers = values.flag(Field::TextLineNumbers);
+        self.marking.line_ends = values.flag(Field::TextLineEnds);
+        cx.notify();
     }
 
     pub(super) fn marking_now(&self) -> &Marking {
