@@ -175,16 +175,6 @@ pub(super) const GROUPS: [Group; 8] = [
         context: "Elf",
         commands: &[
             (
-                "elf_view::ToggleNavigator",
-                "elf.toggle_navigator",
-                "Sections drawer",
-            ),
-            (
-                "elf_view::ToggleInspector",
-                "elf.toggle_inspector",
-                "Inspector drawer",
-            ),
-            (
                 "elf_view::PickItem",
                 "elf.pick_item",
                 "Show the picked section's symbols, or inspect the symbol",
@@ -232,16 +222,6 @@ pub(super) const GROUPS: [Group; 8] = [
     Group {
         context: "CanTrace",
         commands: &[
-            (
-                "can_trace::ToggleNavigator",
-                "trace.toggle_navigator",
-                "IDs drawer",
-            ),
-            (
-                "can_trace::ToggleInspector",
-                "trace.toggle_inspector",
-                "Inspector drawer",
-            ),
             (
                 "can_trace::PickId",
                 "trace.filter_by_id",
@@ -293,11 +273,6 @@ pub(super) const GROUPS: [Group; 8] = [
             ("viewer_pdf::ZoomOut", "pdf.zoom_out", "Zoom out"),
             ("viewer_pdf::WholeWord", "pdf.whole_word", "Whole word"),
             ("viewer_pdf::AllHits", "pdf.all_hits", "All hits"),
-            (
-                "viewer_pdf::LeftDrawer",
-                "pdf.pages_and_outline",
-                "Pages and outline",
-            ),
             ("viewer_pdf::PagesDrawer", "pdf.pages", "Pages"),
             ("viewer_pdf::CopyText", "pdf.copy", "Copy selected text"),
         ],

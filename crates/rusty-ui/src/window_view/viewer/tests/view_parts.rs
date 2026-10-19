@@ -10,7 +10,7 @@ use rusty_fs::FakeFs;
 use super::find::bottom_keys;
 use super::image::image_view;
 use super::menu::{hint, press_key, run_item};
-use super::{Log, Setup, editor_of, hooks, options_with, redraw, visible};
+use super::{Log, Setup, editor_of, hooks, label, options_with, redraw, visible};
 use crate::settings::{Change, Field, Value, Values};
 use crate::window_view::tests::{open_options, press, settle, viewer_open};
 use crate::window_view::viewer::Kinds;
@@ -501,4 +501,101 @@ fn rich_then_custom_in_the_menu_keeps_every_automotive_part_shown(cx: &mut TestA
     press_key(cx, rig.window, "escape");
     run_item(cx, rig.window, "Custom");
     assert_eq!(rig.rows(cx), automotive_rows(2, [true; 4]));
+}
+
+fn table_rows(preset: usize, inspector: bool) -> Vec<(String, bool)> {
+    let presets = ["Simple", "Rich", "Custom"]
+        .iter()
+        .enumerate()
+        .map(|(at, label)| ((*label).to_owned(), at == preset));
+    presets
+        .chain([
+            (String::new(), false),
+            ("Open the inspector".to_owned(), inspector),
+            (String::new(), false),
+            ("Keep as default".to_owned(), false),
+            ("Reset to defaults".to_owned(), false),
+        ])
+        .collect()
+}
+
+fn elf_rig(cx: &mut TestAppContext) -> Rig {
+    let bytes = rusty_automotive::elf_sample::demo().expect("the demo builds");
+    rig(cx, ("a.elf", "b.elf"), &bytes)
+}
+
+fn trace_rig(cx: &mut TestAppContext) -> Rig {
+    let rig = rig(cx, ("a.asc", "b.asc"), super::can_trace::LOG.as_bytes());
+    rig.settle(cx);
+    rig.settle(cx);
+    rig
+}
+
+fn click(rig: &Rig, cx: &mut TestAppContext, id: (&'static str, usize)) {
+    cx.update_window(rig.window, |_, window, cx| window.click(id, cx))
+        .expect("window");
+    rig.settle(cx);
+}
+
+fn choose_rich(rig: &Rig, cx: &mut TestAppContext) {
+    rig.press(cx, "alt-v");
+    run_item(cx, rig.window, "Rich");
+    press_key(cx, rig.window, "escape");
+    press_key(cx, rig.window, "escape");
+    rig.settle(cx);
+    assert!(rig.menu_items(cx).is_none());
+    assert!(viewer_open(cx, &rig.view));
+}
+
+#[gpui_kit::test]
+fn alt_v_opens_the_view_menu_in_the_elf_view(cx: &mut TestAppContext) {
+    let rig = elf_rig(cx);
+    rig.press(cx, "alt-v");
+    assert_eq!(rig.rows(cx), table_rows(0, false));
+    run_item(cx, rig.window, "Rich");
+    assert_eq!(rig.rows(cx), table_rows(1, true));
+}
+
+#[gpui_kit::test]
+fn alt_v_opens_the_view_menu_in_the_can_trace_view(cx: &mut TestAppContext) {
+    let rig = trace_rig(cx);
+    rig.press(cx, "alt-v");
+    assert_eq!(rig.rows(cx), table_rows(0, false));
+    run_item(cx, rig.window, "Open the inspector");
+    assert_eq!(rig.rows(cx), table_rows(2, true));
+}
+
+#[gpui_kit::test]
+fn the_view_menu_header_reads_view(cx: &mut TestAppContext) {
+    let rig = rig(cx, ("a.txt", "b.txt"), TEXT);
+    rig.press(cx, "alt-v");
+    assert_eq!(label(cx, rig.window, ("menu-row", 0)), "View");
+}
+
+#[gpui_kit::test]
+fn the_inspector_opens_by_itself_in_rich_when_an_elf_symbol_is_picked(cx: &mut TestAppContext) {
+    let rig = elf_rig(cx);
+    click(&rig, cx, ("elf-row", 1));
+    assert!(!visible(cx, rig.window, "elf-inspector"));
+    choose_rich(&rig, cx);
+    click(&rig, cx, ("elf-row", 2));
+    assert!(visible(cx, rig.window, "elf-inspector"));
+}
+
+#[gpui_kit::test]
+fn the_inspector_opens_by_itself_in_rich_when_a_trace_frame_is_picked(cx: &mut TestAppContext) {
+    let rig = trace_rig(cx);
+    click(&rig, cx, ("trace-row", 1));
+    assert!(!visible(cx, rig.window, "trace-inspector"));
+    choose_rich(&rig, cx);
+    click(&rig, cx, ("trace-row", 2));
+    assert!(visible(cx, rig.window, "trace-inspector"));
+}
+
+#[gpui_kit::test]
+fn the_elf_and_trace_bars_list_the_view_key(cx: &mut TestAppContext) {
+    let elf = elf_rig(cx);
+    assert!(bottom_keys(cx, elf.window).contains(&"Alt+V View".to_owned()));
+    let trace = trace_rig(cx);
+    assert!(bottom_keys(cx, trace.window).contains(&"Alt+V View".to_owned()));
 }

@@ -20,8 +20,10 @@ pub(super) use keys::bind_keys;
 
 use super::background::Job;
 use super::body::{BodyAct, BodyKeys, Host, ViewerBody};
+use super::parts::{AUTOMOTIVE_TABLE, PartSet};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
+use crate::settings::Values;
 use crate::side_sheet::SheetState;
 
 pub(in crate::window_view::viewer) struct TraceFile {
@@ -90,6 +92,7 @@ pub(in crate::window_view::viewer) struct TraceView {
     follower: follow::Follower,
     note: Option<SharedString>,
     page: u64,
+    opens_inspector: bool,
 }
 
 impl TraceView {
@@ -127,6 +130,7 @@ impl TraceView {
             follower: follow::Follower::default(),
             note: None,
             page: 1,
+            opens_inspector: false,
         }
     }
 
@@ -213,5 +217,14 @@ impl ViewerBody for TraceBody {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn parts(&self, _: &App) -> Option<&'static PartSet> {
+        Some(&AUTOMOTIVE_TABLE)
+    }
+
+    fn show_parts(&self, values: &Values, cx: &mut App) {
+        let opens = values.opens_inspector();
+        self.0.update(cx, |view, _| view.opens_inspector = opens);
     }
 }

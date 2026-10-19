@@ -90,8 +90,9 @@ pub(super) fn sample_keys(body: &dyn ViewerBody, cx: &App) -> FKeyBar {
             ("Esc", "Close"),
         ]
     };
+    let view = body.parts(cx).map(|_| ("Alt+V", "View"));
     FKeyBar::new(
         "sample-keys",
-        keys.into_iter().chain(viewer.iter().copied()),
+        keys.into_iter().chain(view).chain(viewer.iter().copied()),
     )
 }

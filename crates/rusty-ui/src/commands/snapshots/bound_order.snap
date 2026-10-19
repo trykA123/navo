@@ -241,8 +241,6 @@ markdown.copy_block | ctrl-c | Markdown
 [memory_image]
 memory.go_to_item | enter | MemoryImage
 [elf_view]
-elf.toggle_navigator | ctrl-b | Elf
-elf.toggle_inspector | ctrl-i | Elf
 elf.pick_item | enter | Elf
 elf.sort_by_name | ctrl-f3 | Elf
 elf.sort_by_section | ctrl-f4 | Elf
@@ -254,8 +252,6 @@ elf.type_one | 1 | ElfTable
 elf.type_three | 3 | ElfTable
 elf.type_five | 5 | ElfTable
 [can_trace]
-trace.toggle_navigator | ctrl-b | CanTrace
-trace.toggle_inspector | ctrl-i | CanTrace
 trace.filter_by_id | enter | CanTrace
 trace.sort_ids | alt-s | CanTrace
 trace.type_one | 1 | CanTrace
@@ -271,9 +267,7 @@ pdf.zoom_in | ctrl-= | Pdf
 pdf.zoom_in | ctrl-shift-= | Pdf
 pdf.zoom_out | ctrl-- | Pdf
 pdf.whole_word | alt-w | Pdf
-pdf.all_hits | ctrl-i | Pdf
 pdf.all_hits | ctrl-shift-f | Pdf
-pdf.pages_and_outline | ctrl-b | Pdf
 pdf.pages | ctrl-p | Pdf
 pdf.copy | ctrl-c | Pdf
 [drive_menu]

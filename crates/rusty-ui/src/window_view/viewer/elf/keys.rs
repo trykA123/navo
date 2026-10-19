@@ -5,7 +5,7 @@ use super::{Drawer, ElfView, Focus};
 use crate::file_list::typed_char;
 use crate::prelude::*;
 use crate::window_view::viewer::{
-    Back, GoEnd, GoStart, OpenGoTo, PageDown, PageUp, RowDown, RowUp,
+    Back, GoEnd, GoStart, LeftDrawer, OpenGoTo, PageDown, PageUp, RightDrawer, RowDown, RowUp,
 };
 
 pub(super) const CONTEXT: &str = "Elf";
@@ -14,8 +14,6 @@ pub(super) const TABLE_CONTEXT: &str = "ElfTable";
 gpui_kit::actions!(
     elf_view,
     [
-        ToggleNavigator,
-        ToggleInspector,
         PickItem,
         SortByName,
         SortBySection,
@@ -214,8 +212,8 @@ impl ElfView {
             .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.move_by(i64::MAX, cx)))
             .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
             .on_action(cx.listener(|view, _: &OpenGoTo, window, cx| view.open_go_to(window, cx)))
-            .on_action(cx.listener(|view, _: &ToggleNavigator, _, cx| view.toggle_navigator(cx)))
-            .on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+            .on_action(cx.listener(|view, _: &LeftDrawer, _, cx| view.toggle_navigator(cx)))
+            .on_action(cx.listener(|view, _: &RightDrawer, _, cx| view.toggle_inspector(cx)))
             .on_action(cx.listener(|view, _: &PickItem, _, cx| view.enter(cx)))
             .on_action(cx.listener(|view, _: &SortByName, _, cx| view.sort_by(Column::Name, cx)))
             .on_action(cx.listener(|view, _: &SortBySection, _, cx| {

@@ -18,9 +18,11 @@ pub(super) use keys::bind_keys;
 
 use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
+use super::parts::{AUTOMOTIVE_TABLE, PartSet};
 use super::search::bar::GO_TO_KEYS;
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
+use crate::settings::Values;
 use crate::side_sheet::SheetState;
 
 pub(in crate::window_view::viewer) struct ElfFile {
@@ -213,5 +215,14 @@ impl ViewerBody for ElfBody {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn parts(&self, _: &App) -> Option<&'static PartSet> {
+        Some(&AUTOMOTIVE_TABLE)
+    }
+
+    fn show_parts(&self, values: &Values, cx: &mut App) {
+        let opens = values.opens_inspector();
+        self.0.update(cx, |view, _| view.opens_inspector = opens);
     }
 }

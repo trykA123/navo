@@ -2,7 +2,7 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{Role, Stateful};
 
 use super::keys::{
-    ActualSize, AllHits, CopyText, FitWidth, LeftDrawer, PagesDrawer, WholeWord, ZoomIn, ZoomOut,
+    ActualSize, AllHits, CopyText, FitWidth, PagesDrawer, WholeWord, ZoomIn, ZoomOut,
 };
 use super::layout::Zoom;
 use super::rail::hit_rail;
@@ -11,8 +11,8 @@ use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::{
-    Back, GoEnd, GoStart, MatchCase, OpenFind, OpenGoTo, PageDown, PageUp, RowDown, RowUp,
-    ScrollLeft, ScrollRight,
+    Back, GoEnd, GoStart, LeftDrawer, MatchCase, OpenFind, OpenGoTo, PageDown, PageUp, RightDrawer,
+    RowDown, RowUp, ScrollLeft, ScrollRight,
 };
 
 fn small(t: &Theme, color: Hsla) -> Div {
@@ -177,6 +177,9 @@ impl PdfView {
             .on_action(cx.listener(|view, _: &MatchCase, _, cx| view.toggle_case(cx)))
             .on_action(cx.listener(|view, _: &WholeWord, _, cx| view.toggle_word(cx)))
             .on_action(cx.listener(|view, _: &AllHits, window, cx| view.toggle_hits(window, cx)))
+            .on_action(cx.listener(|view, _: &RightDrawer, window, cx| {
+                view.toggle_hits(window, cx);
+            }))
             .on_action(cx.listener(|view, _: &LeftDrawer, window, cx| view.toggle_left(window, cx)))
             .on_action(cx.listener(|view, _: &PagesDrawer, window, cx| view.open_pages(window, cx)))
             .on_action(cx.listener(|view, _: &CopyText, _, cx| view.copy_selection(cx)))

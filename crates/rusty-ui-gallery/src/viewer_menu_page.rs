@@ -5,7 +5,7 @@ use rusty_ui::settings::{Change, Field, Value, Values};
 use rusty_ui::tokens;
 use rusty_ui::window_view::{ViewerBody, view_menu, viewer_menu};
 
-use crate::automotive_sample::{MEMORY_NAME, memory};
+use crate::automotive_sample::{ELF_NAME, MEMORY_NAME, TRACE_NAME, elf, memory, trace};
 use crate::structured_sample::{self as structured, TREE, TREE_NAME};
 
 const TEXT_NAME: &str = "deploy.sh";
@@ -28,6 +28,14 @@ pub enum Shows {
     Tree,
     ViewText,
     ViewAutomotive,
+    ViewElf,
+    ViewTrace,
+}
+
+impl Shows {
+    fn is_view(self) -> bool {
+        !matches!(self, Self::Text | Self::Tree)
+    }
 }
 
 pub struct ViewerMenuPage {
@@ -39,7 +47,7 @@ pub struct ViewerMenuPage {
 
 impl ViewerMenuPage {
     pub fn new(shows: Shows, window: &mut Window, cx: &mut App) -> Self {
-        let body = structured::body(body_title(shows), body_text(shows), window, cx);
+        let body = open_body(shows, window, cx);
         if let Some(body) = &body {
             body.show_parts(&shown(shows), cx);
         }
@@ -55,9 +63,7 @@ impl ViewerMenuPage {
         let focus = body.focus_handle(cx);
         match self.shows {
             Shows::Text | Shows::Tree => viewer_menu(&body.menu(false, cx), &focus, window),
-            Shows::ViewText | Shows::ViewAutomotive => {
-                view_menu(body, &shown(self.shows), window, cx).unwrap_or_default()
-            }
+            _ => view_menu(body, &shown(self.shows), window, cx).unwrap_or_default(),
         }
     }
 
@@ -71,7 +77,7 @@ impl ViewerMenuPage {
         let anchor = match self.shows {
             Shows::Text => Point::new(px(360.), px(250.)),
             Shows::Tree => Point::new(px(420.), px(210.)),
-            Shows::ViewText | Shows::ViewAutomotive => Point::new(width - px(24.), px(GALLERY_TOP)),
+            _ => Point::new(width - px(24.), px(GALLERY_TOP)),
         };
         let input = ContextMenuInput {
             menu,
@@ -80,9 +86,13 @@ impl ViewerMenuPage {
             bounds: Bounds::new(Point::default(), window.viewport_size()),
             restore: Some(focus),
         };
+        let is_view = self.shows.is_view();
         self.menu = Some(cx.new(|cx| {
             let mut menu = ContextMenu::new(input, window, cx);
             menu.hide_classic(cx);
+            if is_view {
+                menu.name_ferrite_group("View", cx);
+            }
             menu
         }));
         cx.notify();
@@ -94,6 +104,15 @@ fn body_title(shows: Shows) -> &'static str {
         Shows::Text | Shows::ViewText => TEXT_NAME,
         Shows::Tree => TREE_NAME,
         Shows::ViewAutomotive => MEMORY_NAME,
+        Shows::ViewElf => ELF_NAME,
+        Shows::ViewTrace => TRACE_NAME,
+    }
+}
+
+fn open_body(shows: Shows, window: &mut Window, cx: &mut App) -> Option<Box<dyn ViewerBody>> {
+    match shows {
+        Shows::ViewElf => structured::binary(ELF_NAME, elf(), window, cx),
+        _ => structured::body(body_title(shows), body_text(shows), window, cx),
     }
 }
 
@@ -102,6 +121,8 @@ fn body_text(shows: Shows) -> &'static str {
         Shows::Text | Shows::ViewText => TEXT,
         Shows::Tree => TREE,
         Shows::ViewAutomotive => memory(),
+        Shows::ViewElf => "",
+        Shows::ViewTrace => trace(),
     }
 }
 
@@ -118,6 +139,10 @@ fn shown(shows: Shows) -> Values {
             })
             .with(&flag(Field::AutomotiveInspector, true))
             .with(&flag(Field::AutomotiveRowBars, true)),
+        Shows::ViewElf => Values::default().with(&Change {
+            field: Field::AutomotivePreset,
+            value: Value::Pick(1),
+        }),
         _ => Values::default(),
     }
 }

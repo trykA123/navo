@@ -30,6 +30,7 @@ fn select_row(
             view.focus_in = Focus::Content;
             view.follow_moved(shown + 1 >= view.shown_rows());
             view.move_cursor(shown, cx);
+            view.open_inspector_if_asked(cx);
         });
     }
 }

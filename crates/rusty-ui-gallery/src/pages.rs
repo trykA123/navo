@@ -52,6 +52,8 @@ pub enum Page {
     MemoryDrawers,
     ViewMenuText,
     ViewMenuAutomotive,
+    ViewMenuElf,
+    ViewMenuTrace,
     SettingsDisplay,
     ElfSymbols,
     ElfDrawers,
@@ -78,7 +80,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 60] = [
+pub const PAGES: [PageInfo; 62] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -239,6 +241,18 @@ pub const PAGES: [PageInfo; 60] = [
         Page::ViewMenuAutomotive,
         "View menu, automotive",
         "p33-v1-view-menu-automotive",
+        false,
+    ),
+    info(
+        Page::ViewMenuElf,
+        "View menu, ELF",
+        "p33-v1-view-menu-elf",
+        false,
+    ),
+    info(
+        Page::ViewMenuTrace,
+        "View menu, CAN trace",
+        "p33-v1-view-menu-trace",
         false,
     ),
     info(

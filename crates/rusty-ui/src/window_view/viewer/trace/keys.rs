@@ -3,23 +3,16 @@ use gpui_kit::{KeyDownEvent, Stateful};
 use super::{Drawer, Focus, TraceView};
 use crate::file_list::typed_char;
 use crate::prelude::*;
-use crate::window_view::viewer::{Back, GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
+use crate::window_view::viewer::{
+    Back, GoEnd, GoStart, LeftDrawer, PageDown, PageUp, RightDrawer, RowDown, RowUp,
+};
 
 pub(super) const CONTEXT: &str = "CanTrace";
 
 gpui_kit::actions!(
     can_trace,
     [
-        ToggleNavigator,
-        ToggleInspector,
-        PickId,
-        SortIds,
-        TypeOne,
-        TypeThree,
-        TypeFive,
-        TypeN,
-        TypeP,
-        FilterBack,
+        PickId, SortIds, TypeOne, TypeThree, TypeFive, TypeN, TypeP, FilterBack,
     ]
 );
 
@@ -95,6 +88,12 @@ impl TraceView {
         self.nav.typed.clear();
         self.navigator.update(cx, |sheet, cx| sheet.close(cx));
         cx.notify();
+    }
+
+    pub(super) fn open_inspector_if_asked(&mut self, cx: &mut Context<Self>) {
+        if self.opens_inspector && !self.inspector.read(cx).is_open() {
+            self.toggle_inspector(cx);
+        }
     }
 
     pub(super) fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
@@ -177,8 +176,8 @@ impl TraceView {
 
     pub(super) fn commands(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &Back, _, cx| view.back(cx)))
-            .on_action(cx.listener(|view, _: &ToggleNavigator, _, cx| view.toggle_navigator(cx)))
-            .on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+            .on_action(cx.listener(|view, _: &LeftDrawer, _, cx| view.toggle_navigator(cx)))
+            .on_action(cx.listener(|view, _: &RightDrawer, _, cx| view.toggle_inspector(cx)))
             .on_action(cx.listener(|view, _: &PickId, _, cx| {
                 view.in_navigator(cx, |view, cx| view.pick_nav(view.nav.selected, cx));
             }))

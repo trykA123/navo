@@ -962,11 +962,7 @@ keys = ["alt-w"]
 
 [[bind]]
 command = "pdf.all_hits"
-keys = ["ctrl-i", "ctrl-shift-f"]
-
-[[bind]]
-command = "pdf.pages_and_outline"
-keys = ["ctrl-b"]
+keys = ["ctrl-shift-f"]
 
 [[bind]]
 command = "pdf.pages"
@@ -1106,14 +1102,6 @@ context = "MemoryImage"
 # Elf
 
 [[bind]]
-command = "elf.toggle_navigator"
-keys = ["ctrl-b"]
-
-[[bind]]
-command = "elf.toggle_inspector"
-keys = ["ctrl-i"]
-
-[[bind]]
 command = "elf.pick_item"
 keys = ["enter"]
 
@@ -1161,14 +1149,6 @@ command = "elf.type_five"
 keys = ["5"]
 
 # CanTrace
-
-[[bind]]
-command = "trace.toggle_navigator"
-keys = ["ctrl-b"]
-
-[[bind]]
-command = "trace.toggle_inspector"
-keys = ["ctrl-i"]
 
 [[bind]]
 command = "trace.filter_by_id"

@@ -58,8 +58,6 @@ elf.sort_by_address | ctrl-f5 | Elf
 elf.sort_by_name | ctrl-f3 | Elf
 elf.sort_by_section | ctrl-f4 | Elf
 elf.sort_by_size | ctrl-f6 | Elf
-elf.toggle_inspector | ctrl-i | Elf
-elf.toggle_navigator | ctrl-b | Elf
 elf.type_five | 5 | ElfTable
 elf.type_n | n | ElfTable
 elf.type_one | 1 | ElfTable
@@ -157,12 +155,10 @@ pane.retry_listing | enter | PaneWaiting
 pane.switch | tab | FileList
 path_input.cancel | escape | PathInput
 pdf.actual_size | ctrl-1 | Pdf
-pdf.all_hits | ctrl-i | Pdf
 pdf.all_hits | ctrl-shift-f | Pdf
 pdf.copy | ctrl-c | Pdf
 pdf.fit | ctrl-0 | Pdf
 pdf.pages | ctrl-p | Pdf
-pdf.pages_and_outline | ctrl-b | Pdf
 pdf.whole_word | alt-w | Pdf
 pdf.zoom_in | ctrl-= | Pdf
 pdf.zoom_in | ctrl-shift-= | Pdf
@@ -232,8 +228,6 @@ table.sort_by_column | ctrl-f3 | Table
 trace.filter_backspace | backspace | CanTrace
 trace.filter_by_id | enter | CanTrace
 trace.sort_ids | alt-s | CanTrace
-trace.toggle_inspector | ctrl-i | CanTrace
-trace.toggle_navigator | ctrl-b | CanTrace
 trace.type_five | 5 | CanTrace
 trace.type_n | n | CanTrace
 trace.type_one | 1 | CanTrace

@@ -34,6 +34,7 @@ use state::MenuState;
 
 const CONTEXT: &str = "ContextMenu";
 const ROOT: &str = "context-menu";
+const FERRITE_HEADER: &str = "Ferrite";
 const PLACEHOLDER: &str = "Type to filter commands";
 const HOVER_DELAY: Duration = Duration::from_millis(150);
 
@@ -58,6 +59,7 @@ pub struct ContextMenu {
     origin: Point<Pixels>,
     grow: Option<Grow>,
     has_classic: bool,
+    ferrite_header: SharedString,
     _field: Subscription,
     _release: Subscription,
 }
@@ -96,6 +98,7 @@ impl ContextMenu {
             origin,
             grow: None,
             has_classic: true,
+            ferrite_header: FERRITE_HEADER.into(),
             context: input.context,
             bounds: input.bounds,
             field,
@@ -115,6 +118,11 @@ impl ContextMenu {
 
     pub fn hide_classic(&mut self, cx: &mut Context<Self>) {
         self.has_classic = false;
+        cx.notify();
+    }
+
+    pub fn name_ferrite_group(&mut self, header: &str, cx: &mut Context<Self>) {
+        self.ferrite_header = header.to_owned().into();
         cx.notify();
     }
 

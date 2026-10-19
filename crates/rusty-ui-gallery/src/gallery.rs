@@ -54,7 +54,7 @@ const TABLE_STEPS: [&str; 4] = [
     "viewer_table::SortColumn",
 ];
 
-const PDF_STEPS: [&str; 2] = ["viewer_pdf::LeftDrawer", "viewer_pdf::AllHits"];
+const PDF_STEPS: [&str; 2] = ["viewer::LeftDrawer", "viewer::RightDrawer"];
 const PDF_SEARCH: &str = "undervoltage";
 
 const MENU_PAGES: [(Page, MenuShows); 6] = [
@@ -88,7 +88,7 @@ pub struct Gallery {
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 3],
     menus: [(Page, Entity<MenuPage>); 6],
-    viewer_menus: [Entity<ViewerMenuPage>; 4],
+    viewer_menus: [Entity<ViewerMenuPage>; 6],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
@@ -136,6 +136,8 @@ impl Gallery {
                 ViewerMenuShows::Tree,
                 ViewerMenuShows::ViewText,
                 ViewerMenuShows::ViewAutomotive,
+                ViewerMenuShows::ViewElf,
+                ViewerMenuShows::ViewTrace,
             ]
             .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
@@ -336,7 +338,9 @@ impl Render for Gallery {
             Page::ViewerMenuText
             | Page::ViewerMenuTree
             | Page::ViewMenuText
-            | Page::ViewMenuAutomotive => root.children(self.viewer_menu()),
+            | Page::ViewMenuAutomotive
+            | Page::ViewMenuElf
+            | Page::ViewMenuTrace => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             Page::Tree
             | Page::Table
@@ -364,6 +368,8 @@ impl Gallery {
             Page::ViewerMenuTree => Some(self.viewer_menus[1].clone()),
             Page::ViewMenuText => Some(self.viewer_menus[2].clone()),
             Page::ViewMenuAutomotive => Some(self.viewer_menus[3].clone()),
+            Page::ViewMenuElf => Some(self.viewer_menus[4].clone()),
+            Page::ViewMenuTrace => Some(self.viewer_menus[5].clone()),
             _ => None,
         }
     }

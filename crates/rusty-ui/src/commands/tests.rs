@@ -380,12 +380,23 @@ fn pdf_keys_shadow_only_the_viewer_marks_and_escape() {
             ("escape".to_owned(), "viewer.close", "viewer.back"),
             ("ctrl-0".to_owned(), "mark.clear", "pdf.fit"),
             ("ctrl-1".to_owned(), "mark.colour_one", "pdf.actual_size"),
-            ("ctrl-i".to_owned(), "view.right_drawer", "pdf.all_hits"),
-            (
-                "ctrl-b".to_owned(),
-                "view.left_drawer",
-                "pdf.pages_and_outline"
-            ),
         ]
+    );
+}
+
+#[test]
+fn drawer_keys_belong_to_the_shared_view_commands_in_every_viewer() {
+    let binds = Keymap::builtin().binds();
+    let keyed = |key: &str| -> Vec<(String, &str)> {
+        binds
+            .iter()
+            .filter(|bind| bind.keys.iter().any(|used| used == key))
+            .map(|bind| (bind.context.clone(), bind.spec.name))
+            .collect()
+    };
+    assert_eq!(keyed("ctrl-b"), [("Viewer".to_owned(), "view.left_drawer")]);
+    assert_eq!(
+        keyed("ctrl-i"),
+        [("Viewer".to_owned(), "view.right_drawer")]
     );
 }
