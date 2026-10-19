@@ -1,7 +1,7 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
 use super::aside::Aside;
-use super::copy::{Copier, CopyStep, copy, place};
+use super::copy::{Copier, CopyStep, copy, overwrites, place};
 use super::hold::hold;
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
@@ -132,12 +132,24 @@ pub(super) fn apply(
             };
             copy_in_order(job, &step, ctx, progress)
         }
-        Step::Rename { source, target } => done(ops.rename(source, target)),
+        Step::Rename { source, target } => done(rename_step(job, ctx, source, target)),
         Step::Recycle { location } => done(ops.recycle(location)),
         Step::RemoveFile { location } => done(ops.remove_file(location)),
         Step::RemoveLink { location } => done(ops.remove_link(location)),
         Step::RemoveFolder { location } => done(ops.remove_empty_folder(location)),
     }
+}
+
+fn rename_step(
+    job: Job<'_>,
+    ctx: &mut JobContext<'_>,
+    source: &Location,
+    target: &Location,
+) -> Result<(), FsError> {
+    if overwrites(job.plan, target) {
+        return job.aside.move_over(ctx, source, target);
+    }
+    ctx.ops.rename(source, target)
 }
 
 fn copy_in_order(

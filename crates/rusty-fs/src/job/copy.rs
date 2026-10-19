@@ -108,7 +108,7 @@ fn write(
     })
 }
 
-fn overwrites(plan: &OperationPlan, target: &Location) -> bool {
+pub(super) fn overwrites(plan: &OperationPlan, target: &Location) -> bool {
     plan.conflicts
         .iter()
         .any(|c| c.resolution == Resolution::Overwrite && c.target.same_place(target))

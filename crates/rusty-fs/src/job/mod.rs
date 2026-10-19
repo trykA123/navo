@@ -51,6 +51,7 @@ pub trait JobLog {
         Ok(())
     }
     fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
+    fn held_stranded(&mut self, _held: &HeldFile) {}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

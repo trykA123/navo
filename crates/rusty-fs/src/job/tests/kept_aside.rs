@@ -127,9 +127,9 @@ fn the_old_file_is_held_in_a_job_folder_next_to_the_target() {
     }
 }
 
-struct Watching<'a> {
-    fs: &'a FakeFs,
-    seen: Vec<Option<u64>>,
+pub(super) struct Watching<'a> {
+    pub(super) fs: &'a FakeFs,
+    pub(super) seen: Vec<Option<u64>>,
 }
 
 impl JobLog for Watching<'_> {
