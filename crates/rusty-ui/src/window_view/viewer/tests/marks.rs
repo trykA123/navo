@@ -216,6 +216,7 @@ fn the_keys_bar_lists_the_mark_bookmark_and_follow_keys(cx: &mut TestAppContext)
         "F2 Next bookmark",
         "Alt+L Line ends",
         "Alt+F Follow",
+        "Alt+V View",
         "Esc Close",
     ] {
         assert!(reading.contains(&key.to_owned()), "{key} in {reading:?}");

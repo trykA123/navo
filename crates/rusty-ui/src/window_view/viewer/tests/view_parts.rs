@@ -7,6 +7,7 @@ use image::ImageFormat;
 use rusty_core::shell_menu::MenuItem;
 use rusty_fs::FakeFs;
 
+use super::find::bottom_keys;
 use super::image::image_view;
 use super::menu::{hint, press_key, run_item};
 use super::{Log, Setup, editor_of, hooks, options_with, redraw, visible};
@@ -30,6 +31,7 @@ struct Rig {
     window: AnyWindowHandle,
     view: Entity<FerriteWindow>,
     saved: Arc<Mutex<Vec<Change>>>,
+    failure: Arc<Mutex<Option<String>>>,
     news: SettingsSender,
 }
 
@@ -48,9 +50,18 @@ fn rig_on(cx: &mut TestAppContext, names: (&str, &str), setup: Setup, values: Va
     let saved: Arc<Mutex<Vec<Change>>> = Arc::default();
     let stored = Arc::new(Mutex::new(values.clone()));
     let log = saved.clone();
+    let failure: Arc<Mutex<Option<String>>> = Arc::default();
+    let failing = failure.clone();
     let (settings, news) = SettingsHooks {
         values,
         save: Arc::new(move |changes| {
+            if let Some(error) = failing.lock().expect("failure").clone() {
+                return SaveReport {
+                    failed: changes.iter().map(|change| change.field).collect(),
+                    error: Some(error),
+                    ..SaveReport::saved(stored.lock().expect("stored").clone())
+                };
+            }
             log.lock().expect("saved").extend_from_slice(changes);
             let mut stored = stored.lock().expect("stored");
             *stored = changes
@@ -70,6 +81,7 @@ fn rig_on(cx: &mut TestAppContext, names: (&str, &str), setup: Setup, values: Va
         window,
         view,
         saved,
+        failure,
         news,
     };
     rig.press(cx, "down");
@@ -411,4 +423,82 @@ fn ctrl_b_and_ctrl_i_open_the_memory_drawers_and_escape_closes_the_top_one(
     assert!(viewer_open(cx, &rig.view));
     rig.press(cx, "escape");
     assert!(!viewer_open(cx, &rig.view));
+}
+
+fn note(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<String> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .try_find("viewer-message")
+            .and_then(|found| found.label().map(str::to_owned))
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn keep_on_a_broken_settings_file_shows_the_problem_and_keeps_the_toggle(cx: &mut TestAppContext) {
+    let rig = rig(cx, ("a.txt", "b.txt"), TEXT);
+    *rig.failure.lock().expect("failure") = Some("ferrite.toml is invalid at line 2.".to_owned());
+    rig.press(cx, "alt-l");
+    rig.press(cx, "alt-v");
+    run_item(cx, rig.window, "Keep as default");
+    rig.settle(cx);
+    let shown = note(cx, rig.window).unwrap_or_default();
+    assert!(
+        shown.contains("ferrite.toml is invalid at line 2."),
+        "{shown}"
+    );
+    assert!(!shown.contains("Kept"), "{shown}");
+    assert!(rig.line_ends(cx));
+    assert_eq!(rig.setting(cx, Field::TextLineEnds), Value::Flag(false));
+    *rig.failure.lock().expect("failure") = None;
+    rig.press(cx, "alt-v");
+    run_item(cx, rig.window, "Keep as default");
+    rig.settle(cx);
+    assert_eq!(
+        note(cx, rig.window).as_deref(),
+        Some("Kept as the default in ferrite.toml.")
+    );
+    assert_eq!(rig.setting(cx, Field::TextLineEnds), Value::Flag(true));
+    assert!(rig.line_ends(cx));
+}
+
+#[gpui_kit::test]
+fn the_view_key_is_on_the_bar_of_every_viewer_with_parts(cx: &mut TestAppContext) {
+    let rig = rig(cx, ("a.txt", "b.txt"), TEXT);
+    assert!(bottom_keys(cx, rig.window).contains(&"Alt+V View".to_owned()));
+    let bytes: Vec<u8> = (0..4096).map(|at| (at * 7 % 251) as u8).collect();
+    let hex = self::rig(cx, ("a.bin", "b.bin"), &bytes);
+    assert!(!bottom_keys(cx, hex.window).contains(&"Alt+V View".to_owned()));
+}
+
+#[gpui_kit::test]
+fn the_image_bar_lists_the_view_key_and_the_details_key(cx: &mut TestAppContext) {
+    let rig = rig(cx, ("a.jpg", "b.jpg"), &photo(40, 30, 1));
+    let keys = bottom_keys(cx, rig.window);
+    assert!(keys.contains(&"Alt+V View".to_owned()), "{keys:?}");
+    assert!(keys.contains(&"Ctrl+I Details".to_owned()), "{keys:?}");
+}
+
+#[gpui_kit::test]
+fn the_line_ends_row_is_left_out_while_editing(cx: &mut TestAppContext) {
+    let rig = rig(cx, ("a.txt", "b.txt"), TEXT);
+    rig.press(cx, "ctrl-e");
+    rig.press(cx, "alt-v");
+    let rows = rig.rows(cx);
+    assert!(
+        !rows.iter().any(|(text, _)| text == "Line ends"),
+        "{rows:?}"
+    );
+    assert!(rows.iter().any(|(text, _)| text == "Line numbers"));
+}
+
+#[gpui_kit::test]
+fn rich_then_custom_in_the_menu_keeps_every_automotive_part_shown(cx: &mut TestAppContext) {
+    let rig = rig(cx, ("a.hex", "b.hex"), MEMORY);
+    rig.press(cx, "alt-v");
+    run_item(cx, rig.window, "Rich");
+    press_key(cx, rig.window, "escape");
+    run_item(cx, rig.window, "Custom");
+    assert_eq!(rig.rows(cx), automotive_rows(2, [true; 4]));
 }

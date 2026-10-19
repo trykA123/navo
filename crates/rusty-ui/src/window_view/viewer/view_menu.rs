@@ -14,10 +14,12 @@ use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant};
 use crate::settings::{Field, PRESETS, Value, Values};
 use crate::tokens;
-use crate::window_view::FerriteWindow;
+use crate::window_view::{FerriteWindow, SaveReport};
 
 const NO_PARTS: &str = "This view has no parts to show or hide.";
 const KEPT: &str = "Kept as the default in ferrite.toml.";
+const NOT_KEPT: &str = "Not kept as the default.";
+const NOT_SAVED: &str = "ferrite.toml could not be saved.";
 const MENU_TITLE: &str = "View";
 const KEEP: &str = "Keep as default";
 const RESET: &str = "Reset to defaults";
@@ -36,7 +38,7 @@ impl ViewOp {
     }
 }
 
-pub fn view_entries(set: &PartSet, shown: &Values) -> Vec<MenuEntry> {
+fn view_entries(set: &PartSet, shown: &Values, is_editing: bool) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
     if let Some(preset) = set.preset {
         let at = shown.get(preset).clone();
@@ -47,6 +49,9 @@ pub fn view_entries(set: &PartSet, shown: &Values) -> Vec<MenuEntry> {
         entries.push(MenuEntry::Break);
     }
     for part in set.parts {
+        if is_editing && part.field == Field::TextLineEnds {
+            continue;
+        }
         let is_on = shown.is_shown(set.preset, part.field);
         entries.push(MenuEntry::Run(
             part.field.spec().label,
@@ -68,7 +73,8 @@ pub fn view_menu(
 ) -> Option<ShellMenu> {
     let set = body.parts(cx)?;
     let focus = body.focus_handle(cx);
-    Some(viewer_menu(&view_entries(set, shown), &focus, window))
+    let entries = view_entries(set, shown, body.is_editing(cx));
+    Some(viewer_menu(&entries, &focus, window))
 }
 
 pub fn view_button() -> impl IntoElement {
@@ -168,7 +174,7 @@ impl FerriteWindow {
             }
             ViewOp::Toggle(_) => return,
             ViewOp::Preset(at) => {
-                viewer.parts.choose(set, at);
+                viewer.parts.choose(set, at, &values);
                 Vec::new()
             }
             ViewOp::Reset => {
@@ -176,8 +182,11 @@ impl FerriteWindow {
                 Vec::new()
             }
             ViewOp::Keep => {
-                viewer.say(KEPT, cx);
-                viewer.parts.keep(&values)
+                let kept = viewer.parts.keep(&values);
+                if kept.is_empty() {
+                    viewer.say(KEPT, cx);
+                }
+                kept
             }
         };
         for change in kept {
@@ -186,6 +195,26 @@ impl FerriteWindow {
         self.show_parts(cx);
         self.refresh_view_menu(window, cx);
         cx.notify();
+    }
+
+    pub(in crate::window_view) fn keep_settled(
+        &mut self,
+        report: &SaveReport,
+        sent: &[Field],
+        cx: &mut App,
+    ) {
+        let Some(viewer) = self.viewer.as_mut() else {
+            return;
+        };
+        let is_clean = report.failed.is_empty() && report.error.is_none();
+        match viewer.parts.settle(sent, is_clean) {
+            Some(true) => viewer.say(KEPT, cx),
+            Some(false) => {
+                let problem = report.error.as_deref().unwrap_or(NOT_SAVED);
+                viewer.say(format!("{NOT_KEPT} {problem}"), cx);
+            }
+            None => {}
+        }
     }
 
     fn show_line_ends(&mut self, window: &mut Window, cx: &mut Context<Self>) {

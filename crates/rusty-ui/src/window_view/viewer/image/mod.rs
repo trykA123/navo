@@ -29,7 +29,7 @@ const IMAGE_KEYS: [Key; 6] = [
     ("+/−", "Zoom"),
     ("Arrows/Drag", "Pan"),
     NEXT_PREVIOUS,
-    ("I", "Info"),
+    ("Ctrl+I", "Details"),
 ];
 
 pub struct ImageView {

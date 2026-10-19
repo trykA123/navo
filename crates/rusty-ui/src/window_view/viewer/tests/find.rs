@@ -148,7 +148,7 @@ pub(super) fn bottom_keys(
     cx: &mut TestAppContext,
     window: gpui_kit::AnyWindowHandle,
 ) -> Vec<String> {
-    (0usize..12)
+    (0usize..16)
         .filter_map(|index| {
             cx.update_window(window, |_, window, _| {
                 window

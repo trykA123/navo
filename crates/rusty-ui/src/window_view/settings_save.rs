@@ -189,6 +189,7 @@ impl FerriteWindow {
         let sent = fields_of(&std::mem::take(&mut self.saver.in_flight));
         self.saver.settle(&report, &sent);
         self.settings.undo_learned(&report, &sent);
+        self.keep_settled(&report, &sent, cx);
         let fresh = self.saver.on_disk(report.values, report.generation);
         self.set_values(fresh, window, cx);
         self.start_save(window, cx);
