@@ -9,6 +9,7 @@ publish.workspace = true
 image = { version = "=0.25.10", default-features = false, features = ["png"] }
 rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
+rusty-pdf = { path = "../rusty-pdf" }
 rusty-ui = { path = "../rusty-ui" }
 
 [dev-dependencies]

@@ -1,10 +1,13 @@
+use rusty_ui::Focusable;
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::{
     Button, ButtonVariant, IconButton, IconName, ListScroll, SplitterState,
 };
 use rusty_ui::tokens::{self, Mode, Theme};
-use rusty_ui::window_view::{ArchiveView, BodyKeys, FontView, ImageView, PagedView, ViewerBody};
+use rusty_ui::window_view::{
+    ArchiveView, BodyKeys, FontView, ImageView, PagedView, PdfView, ViewerBody,
+};
 use rusty_ui::{FerriteTitleBar, HeaderSearch};
 
 use crate::drives_page::{DrivesPage, Shows};
@@ -22,7 +25,7 @@ use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{hint_windows, job_windows, sheet_windows, window_element};
-use crate::{rich_sample, viewer_sample};
+use crate::{pdf_sample, rich_sample, viewer_sample};
 
 const TREE_STEPS: [&str; 9] = [
     "viewer::RowDown",
@@ -41,6 +44,9 @@ const TABLE_STEPS: [&str; 4] = [
     "viewer_table::SortColumn",
     "viewer_table::SortColumn",
 ];
+
+const PDF_STEPS: [&str; 2] = ["viewer_pdf::LeftDrawer", "viewer_pdf::AllHits"];
+const PDF_SEARCH: &str = "undervoltage";
 
 const MENU_PAGES: [(Page, MenuShows); 4] = [
     (Page::Menu, MenuShows::Root),
@@ -66,6 +72,7 @@ pub struct Gallery {
     font: Option<Entity<FontView>>,
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
+    pdf: [Entity<PdfView>; 3],
     menus: [(Page, Entity<MenuPage>); 4],
     viewer_menus: [Entity<ViewerMenuPage>; 2],
     main_window: Entity<WindowPage>,
@@ -103,6 +110,8 @@ impl Gallery {
             font: rich_sample::font_view(cx),
             marks: None,
             image: image_sample::image_view(cx).ok(),
+            pdf: [None, Some(PDF_SEARCH), Some(PDF_SEARCH)]
+                .map(|search| pdf_sample::pdf_view(search, window, cx)),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
             viewer_menus: [ViewerMenuShows::Text, ViewerMenuShows::Tree]
                 .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
@@ -146,9 +155,21 @@ impl Gallery {
         }
     }
 
+    fn pdf_sample(&self) -> Option<&Entity<PdfView>> {
+        match self.page {
+            Page::PdfCalm => Some(&self.pdf[0]),
+            Page::PdfSearch => Some(&self.pdf[1]),
+            Page::PdfDrawers => Some(&self.pdf[2]),
+            _ => None,
+        }
+    }
+
     pub fn focus_sample(&self, window: &mut Window, cx: &mut App) {
         if let Some(body) = self.sample() {
             window.focus(&body.focus_handle(cx), cx);
+        }
+        if let Some(pdf) = self.pdf_sample() {
+            window.focus(&pdf.focus_handle(cx), cx);
         }
     }
 
@@ -156,6 +177,7 @@ impl Gallery {
         let steps: &[&str] = match self.page {
             Page::Tree => &TREE_STEPS,
             Page::Table => &TABLE_STEPS,
+            Page::PdfDrawers => &PDF_STEPS,
             _ => &[],
         };
         for name in steps {
@@ -353,6 +375,9 @@ impl Render for Gallery {
                 }
             }
             Page::Tokens => root.child(tokens_page::render(&t)),
+            Page::PdfCalm | Page::PdfSearch | Page::PdfDrawers => {
+                root.children(self.pdf_sample().cloned())
+            }
             _ => root,
         }
     }

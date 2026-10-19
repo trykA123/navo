@@ -11,6 +11,7 @@ mod options;
 mod pages;
 mod pane_page;
 mod pane_sample;
+mod pdf_sample;
 mod rich_sample;
 mod screenshot;
 mod sections;

@@ -46,6 +46,9 @@ pub enum Page {
     HintsAlt,
     HintsLow,
     CrashNotice,
+    PdfCalm,
+    PdfSearch,
+    PdfDrawers,
 }
 
 pub struct PageInfo {
@@ -64,7 +67,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 46] = [
+pub const PAGES: [PageInfo; 49] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -191,6 +194,9 @@ pub const PAGES: [PageInfo; 46] = [
         false,
     ),
     info(Page::CrashNotice, "Crash notice", "p29-crash-notice", false),
+    info(Page::PdfCalm, "PDF", "p15-a10b-calm", true),
+    info(Page::PdfSearch, "PDF search", "p15-a10b-search", false),
+    info(Page::PdfDrawers, "PDF drawers", "p15-a10b-drawers", false),
 ];
 
 impl Page {
