@@ -3,6 +3,7 @@
 mod image;
 mod layout;
 mod lines;
+pub mod map;
 mod record;
 mod scan;
 
@@ -10,6 +11,7 @@ use std::sync::atomic::AtomicBool;
 
 pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};
+pub use map::{MapFlavor, MapModel, MapProblem, index_map, sniff_map};
 pub use scan::{MAX_PIECES, index};
 
 pub type ReadAt<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
