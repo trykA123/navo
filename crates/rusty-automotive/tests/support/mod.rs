@@ -1,12 +1,13 @@
 #![allow(
     dead_code,
     clippy::unwrap_used,
+    clippy::panic,
     reason = "test helpers; each test binary uses a part of them"
 )]
 
 use std::sync::atomic::AtomicBool;
 
-use rusty_automotive::{Format, Image, Watch, index};
+use rusty_automotive::{Body, Entry, Format, Frame, Image, Trace, Watch, index, index_trace};
 
 pub const INTEL_EXAMPLE: &str = "\
 :10010000214601360121470136007EFE09D2190140\r
@@ -111,4 +112,72 @@ pub fn read_all(text: &str, image: &Image, window: std::ops::Range<u64>) -> Vec<
         Ok(bytes[start..(start + len).min(bytes.len())].to_vec())
     };
     image.read(window, &mut read).unwrap()
+}
+
+pub fn trace_of(text: &str) -> Trace {
+    let cancel = AtomicBool::new(false);
+    let mut progress = |_| {};
+    let watch = Watch {
+        cancel: &cancel,
+        progress: &mut progress,
+    };
+    index_trace(text.as_bytes(), watch).unwrap()
+}
+
+pub fn entries_of(text: &str, trace: &Trace, rows: &[u64]) -> Vec<Entry> {
+    let bytes = text.as_bytes();
+    let mut read = |offset: u64, len: usize| {
+        let start = (offset as usize).min(bytes.len());
+        Ok(bytes[start..(start + len).min(bytes.len())].to_vec())
+    };
+    trace.plan(rows).decode(&mut read).unwrap()
+}
+
+pub fn every_entry(text: &str, trace: &Trace) -> Vec<Entry> {
+    let rows: Vec<u64> = (0..trace.rows()).collect();
+    entries_of(text, trace, &rows)
+}
+
+pub fn chunked_trace(text: &str, rows: u64) -> Trace {
+    let cancel = AtomicBool::new(false);
+    let mut progress = |_| {};
+    let mut watch = Watch {
+        cancel: &cancel,
+        progress: &mut progress,
+    };
+    let mut source = text.as_bytes();
+    let mut trace = Trace::default();
+    let mut tail = Trace::default();
+    loop {
+        let done = tail.read_chunk(&mut source, &mut watch, rows).unwrap();
+        let next = tail.resume();
+        trace.append(tail);
+        tail = next;
+        if done {
+            return trace;
+        }
+    }
+}
+
+pub fn frame(entry: &Entry) -> &Frame {
+    match &entry.body {
+        Body::Frame(frame) => frame,
+        other => panic!("not a frame: {other:?}"),
+    }
+}
+
+pub fn trace_more(trace: &mut rusty_automotive::Trace, text: &str) -> u64 {
+    use std::sync::atomic::AtomicBool;
+    let cancel = AtomicBool::new(false);
+    let mut progress = |_| {};
+    let watch = rusty_automotive::Watch {
+        cancel: &cancel,
+        progress: &mut progress,
+    };
+    let before = trace.rows();
+    let mut tail = trace.resume();
+    let rest = &text.as_bytes()[trace.end as usize..];
+    tail.read_more(rest, watch, u64::MAX).unwrap();
+    trace.append(tail);
+    trace.rows() - before
 }

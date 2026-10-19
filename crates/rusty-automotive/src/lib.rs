@@ -7,6 +7,7 @@ mod lines;
 mod record;
 mod scan;
 mod source;
+mod trace;
 
 use std::sync::atomic::AtomicBool;
 
@@ -20,6 +21,10 @@ pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};
 pub use scan::{MAX_PIECES, index};
 pub use source::Source;
+pub use trace::{
+    Base, Body, CanId, Direction, Entry, Evidence, Frame, FrameKind, IdStat, Kinds, MAX_IDS,
+    Notation, Plan, TRACE_EXTENSIONS, Trace, TraceProblem, index_trace, sniff_trace,
+};
 
 pub type ReadAt<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
 

@@ -1,5 +1,6 @@
 mod archive;
 mod at_line;
+mod can_trace;
 mod elf_view;
 mod find;
 mod find_all;

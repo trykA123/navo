@@ -68,7 +68,11 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
             if mode == Mode::Light
                 && matches!(
                     page,
-                    Page::Tree | Page::Table | Page::MemoryDrawers | Page::ElfDrawers
+                    Page::Tree
+                        | Page::Table
+                        | Page::MemoryDrawers
+                        | Page::ElfDrawers
+                        | Page::TraceDrawers
                 )
             {
                 cx.update(|cx| drive(window, &gallery, cx));

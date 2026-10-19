@@ -7,6 +7,7 @@ mod markdown;
 mod memory;
 mod table;
 mod text;
+mod trace;
 mod tree;
 
 use std::any::Any;
@@ -148,6 +149,7 @@ impl Kinds {
             Arc::new(font::Font),
             Arc::new(memory::MemoryKind),
             Arc::new(elf::ElfKind),
+            Arc::new(trace::TraceKind),
         ])
     }
 

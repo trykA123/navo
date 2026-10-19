@@ -195,6 +195,7 @@ image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
 viewer.back | escape | MemoryImage
 viewer.back | escape | Elf
+viewer.back | escape | CanTrace
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
@@ -247,6 +248,17 @@ elf.type_p | p | ElfTable
 elf.type_one | 1 | ElfTable
 elf.type_three | 3 | ElfTable
 elf.type_five | 5 | ElfTable
+[can_trace]
+trace.toggle_navigator | ctrl-b | CanTrace
+trace.toggle_inspector | ctrl-i | CanTrace
+trace.filter_by_id | enter | CanTrace
+trace.sort_ids | alt-s | CanTrace
+trace.type_one | 1 | CanTrace
+trace.type_three | 3 | CanTrace
+trace.type_five | 5 | CanTrace
+trace.type_n | n | CanTrace
+trace.type_p | p | CanTrace
+trace.filter_backspace | backspace | CanTrace
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu

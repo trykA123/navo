@@ -21,6 +21,7 @@ mod paged;
 mod rich_header;
 mod search;
 mod table;
+mod trace;
 mod tree;
 mod view;
 

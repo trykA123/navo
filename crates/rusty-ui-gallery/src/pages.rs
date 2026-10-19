@@ -52,6 +52,8 @@ pub enum Page {
     MemoryDrawers,
     ElfSymbols,
     ElfDrawers,
+    TraceTable,
+    TraceDrawers,
 }
 
 pub struct PageInfo {
@@ -70,7 +72,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 52] = [
+pub const PAGES: [PageInfo; 54] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -226,6 +228,13 @@ pub const PAGES: [PageInfo; 52] = [
         Page::ElfDrawers,
         "ELF symbols, drawers",
         "p16-b3-elf-drawers",
+        false,
+    ),
+    info(Page::TraceTable, "CAN trace", "p16-b6-asc-simple", false),
+    info(
+        Page::TraceDrawers,
+        "CAN trace, drawers",
+        "p16-b6-asc-drawers",
         false,
     ),
 ];
