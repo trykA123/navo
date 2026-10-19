@@ -10,5 +10,6 @@ pub struct HelperLimits {
     pub memory_bytes: usize,
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
+#[cfg(windows)]
 mod tests;

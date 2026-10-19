@@ -18,7 +18,10 @@ mod tests {
     #[test]
     fn the_version_matches_the_pdfium_pinned_in_ci() {
         let workflow = include_str!("../../../.github/workflows/ci.yml");
-        let pin = format!("PDFIUM_TAG: {}\n", super::PDFIUM_VERSION);
-        assert!(workflow.contains(&pin), "ci.yml must pin {pin}");
+        let pin = format!("PDFIUM_TAG: {}", super::PDFIUM_VERSION);
+        assert!(
+            workflow.lines().any(|line| line.trim() == pin),
+            "ci.yml must pin {pin}"
+        );
     }
 }
