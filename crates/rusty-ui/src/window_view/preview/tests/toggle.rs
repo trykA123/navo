@@ -5,11 +5,18 @@ use gpui_kit::test::TestWindowExt;
 
 use super::{Rig, open_fake};
 use crate::primitives::Kbd;
+use crate::window_view::FerriteWindow;
 use crate::window_view::preview::Shown;
 use crate::window_view::tests::fake;
 
 fn is_open(cx: &mut TestAppContext, rig: &Rig) -> bool {
     rig.read(cx, |view| view.preview.is_open())
+}
+
+fn is_counted(view: &FerriteWindow) -> bool {
+    view.preview
+        .folder()
+        .is_some_and(|folder| !folder.scan.is_counting())
 }
 
 #[gpui_kit::test]
@@ -44,6 +51,7 @@ fn escape_closes_the_preview_opened_with_f3(cx: &mut TestAppContext) {
     let rig = open_fake(cx, &fake());
     rig.key(cx, "f3");
     rig.settle_motion(cx);
+    assert!(rig.wait_until(cx, is_counted));
     rig.key(cx, "escape");
     assert!(!is_open(cx, &rig));
     rig.settle_motion(cx);
@@ -83,11 +91,7 @@ fn the_open_state_outlives_the_viewer(cx: &mut TestAppContext) {
 fn the_footer_names_every_preview_key(cx: &mut TestAppContext) {
     let rig = open_fake(cx, &fake());
     rig.open(cx);
-    assert!(rig.wait_until(cx, |view| {
-        view.preview
-            .folder()
-            .is_some_and(|folder| !folder.scan.is_counting())
-    }));
+    assert!(rig.wait_until(cx, is_counted));
     let hints: Vec<String> = (0..5usize)
         .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
         .collect();

@@ -128,9 +128,17 @@ pub fn start_from(dirs: Option<&StoreDirs>) -> Starting {
 
 #[must_use]
 pub fn start_in_background(file: Option<PathBuf>, ledger: Option<PathBuf>) -> Starting {
+    start_waiting(file, ledger, WAIT)
+}
+
+pub(super) fn start_waiting(
+    file: Option<PathBuf>,
+    ledger: Option<PathBuf>,
+    wait: Duration,
+) -> Starting {
     let worker_file = file.clone();
     let worker_ledger = ledger.clone();
-    let mut starting = spawn(file, WAIT, move |backup| {
+    let mut starting = spawn(file, wait, move |backup| {
         start_sharing(worker_file.as_deref(), worker_ledger.as_deref(), backup)
     });
     starting.ledger = ledger;
