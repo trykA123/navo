@@ -4,19 +4,37 @@ fn arbitrary_monitor() -> impl Strategy<Value = Monitor> {
     (
         -20000..20000,
         -20000..20000,
-        1..8000_u32,
-        1..5000_u32,
+        6..8000_u32,
+        6..5000_u32,
         0..6_usize,
     )
-        .prop_map(|(x, y, width, height, scale)| {
-            monitor(
-                physical(x, y, width, height),
-                [0.75, 1.0, 1.25, 1.5, 2.0, 3.0][scale],
+        .prop_flat_map(|(x, y, width, height, scale)| {
+            (
+                Just(monitor(
+                    physical(x, y, width, height),
+                    [0.75, 1.0, 1.25, 1.5, 2.0, 3.0][scale],
+                )),
+                2..width / 2,
+                2..width / 2,
+                2..height / 2,
+                2..height / 2,
             )
+        })
+        .prop_map(|(mut monitor, left, right, top, bottom)| {
+            monitor.work_area = physical(
+                monitor.bounds.x + i32::try_from(left).unwrap(),
+                monitor.bounds.y + i32::try_from(top).unwrap(),
+                monitor.bounds.width - left - right,
+                monitor.bounds.height - top - bottom,
+            );
+            monitor
         })
 }
 
-fn assert_contained(current: &MonitorSetup, result: Restored) -> Result<(), TestCaseError> {
+pub(super) fn assert_contained(
+    current: &MonitorSetup,
+    result: Restored,
+) -> Result<(), TestCaseError> {
     let monitor = current
         .monitors()
         .iter()
@@ -58,21 +76,31 @@ proptest! {
     }
 
     #[test]
-    fn exact_setups_keep_valid_saved_bounds_inside_the_saved_monitor(
+    fn exact_setups_restore_positive_bounds_inside_changed_work_areas(
         monitors in prop::collection::vec(arbitrary_monitor(), 1..5),
         index in any::<usize>(),
+        x in -20000.0..20000.0_f64,
+        y in -20000.0..20000.0_f64,
+        width in 0.001..40000.0_f64,
+        height in 0.001..40000.0_f64,
         maximized in any::<bool>(),
     ) {
+        let mut old_monitors = monitors.clone();
+        for monitor in &mut old_monitors {
+            monitor.work_area.x -= 1;
+            monitor.work_area.width += 1;
+        }
+        let old = setup(old_monitors);
         let current = setup(monitors);
         let index = index % current.monitors().len();
         let monitor = current.monitors()[index];
-        let mut saved = placement(&current, index);
-        saved.bounds = logical(0.0, 0.0,
-            f64::from(monitor.work_area.width) / f64::from(monitor.scale),
-            f64::from(monitor.work_area.height) / f64::from(monitor.scale));
+        prop_assert_eq!(old.fingerprint(), current.fingerprint());
+        prop_assert_ne!(old.monitors()[index].work_area, monitor.work_area);
+        let mut saved = placement(&old, index);
+        saved.bounds = logical(x, y, width, height);
         saved.maximized = maximized;
-        let result = restore(&current, &[saved.clone()]);
-        prop_assert_eq!(result.bounds, saved.bounds);
+        let result = restore(&current, &[saved]);
+        prop_assert_eq!(result.monitor, monitor.bounds);
         prop_assert_eq!(result.maximized, maximized);
         assert_contained(&current, result)?;
     }

@@ -3,13 +3,18 @@ use super::{Monitor, MonitorLocalLogicalRect, MonitorSetup, Placement, Restored}
 #[must_use]
 pub fn restore(current: &MonitorSetup, placements: &[Placement]) -> Restored {
     let fingerprint = current.fingerprint();
-    if let Some(saved) = placements.iter().find(|saved| {
-        saved.setup == fingerprint
-            && saved.bounds.is_valid()
-            && current.0.iter().any(|m| m.bounds == saved.monitor)
+    if let Some((saved, monitor)) = placements.iter().find_map(|saved| {
+        if saved.setup != fingerprint || !saved.bounds.is_valid() {
+            return None;
+        }
+        current
+            .0
+            .iter()
+            .find(|m| m.bounds == saved.monitor)
+            .map(|monitor| (saved, monitor))
     }) {
         return Restored {
-            bounds: saved.bounds,
+            bounds: clamp_to_work_area(saved.bounds, monitor),
             monitor: saved.monitor,
             maximized: saved.maximized,
         };
@@ -23,7 +28,13 @@ pub fn restore(current: &MonitorSetup, placements: &[Placement]) -> Restored {
     let primary = current
         .0
         .iter()
-        .find(|m| m.bounds.x == 0 && m.bounds.y == 0)
+        .find(|m| m.primary)
+        .or_else(|| {
+            current
+                .0
+                .iter()
+                .find(|m| m.bounds.x == 0 && m.bounds.y == 0)
+        })
         .unwrap_or(&current.0[0]);
     let area = logical_work_area(primary);
     let width = 1280.0_f64.min(area.width * 0.8);
@@ -96,22 +107,36 @@ fn restore_visible(current: &MonitorSetup, saved: &Placement) -> Option<Restored
         .map(|m| (m, physical.overlap_fraction(m)))
         .filter(|(_, fraction)| *fraction >= 0.25)
         .max_by(|(_, left), (_, right)| left.total_cmp(right))?;
-    let area = logical_work_area(monitor);
     let scale = f64::from(monitor.scale);
-    let width = saved.bounds.width.min(area.width);
-    let height = saved.bounds.height.min(area.height);
     let x = (physical.x - f64::from(monitor.bounds.x)) / scale;
     let y = (physical.y - f64::from(monitor.bounds.y)) / scale;
     Some(Restored {
-        bounds: MonitorLocalLogicalRect {
-            x: x.clamp(area.x, area.x + (area.width - width)),
-            y: y.clamp(area.y, area.y + (area.height - height)),
-            width,
-            height,
-        },
+        bounds: clamp_to_work_area(
+            MonitorLocalLogicalRect {
+                x,
+                y,
+                ..saved.bounds
+            },
+            monitor,
+        ),
         monitor: monitor.bounds,
         maximized: saved.maximized,
     })
+}
+
+fn clamp_to_work_area(
+    bounds: MonitorLocalLogicalRect,
+    monitor: &Monitor,
+) -> MonitorLocalLogicalRect {
+    let area = logical_work_area(monitor);
+    let width = bounds.width.min(area.width);
+    let height = bounds.height.min(area.height);
+    MonitorLocalLogicalRect {
+        x: bounds.x.clamp(area.x, area.x + (area.width - width)),
+        y: bounds.y.clamp(area.y, area.y + (area.height - height)),
+        width,
+        height,
+    }
 }
 
 fn logical_work_area(monitor: &Monitor) -> MonitorLocalLogicalRect {

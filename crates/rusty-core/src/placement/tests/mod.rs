@@ -29,6 +29,7 @@ fn monitor(bounds: PhysicalRect, scale: f32) -> Monitor {
         bounds,
         work_area: bounds,
         scale,
+        primary: false,
     }
 }
 
@@ -94,6 +95,43 @@ fn exact_match_keeps_maximized_and_normal_bounds_on_the_saved_monitor() {
 }
 
 #[test]
+fn exact_match_moves_bounds_inside_after_the_taskbar_moves_to_the_top() {
+    let mut original = monitor(physical(0, 0, 1920, 1080), 1.0);
+    original.work_area.height -= 40;
+    let old = setup(vec![original]);
+    let mut saved = placement(&old, 0);
+    saved.bounds = logical(100.0, 0.0, 1000.0, 1040.0);
+    let mut current = original;
+    current.work_area.y = 40;
+    let current = setup(vec![current]);
+    assert_eq!(old.fingerprint(), current.fingerprint());
+    let result = restore(&current, &[saved]);
+    assert_eq!(result.bounds, logical(100.0, 40.0, 1000.0, 1040.0));
+    props::assert_contained(&current, result).unwrap();
+}
+
+#[test]
+fn exact_match_keeps_bounds_already_inside_the_changed_work_area() {
+    let old = single();
+    let saved = placement(&old, 0);
+    let mut current = old.monitors()[0];
+    current.work_area = physical(0, 40, 1920, 1040);
+    let result = restore(&setup(vec![current]), std::slice::from_ref(&saved));
+    assert_eq!(result.bounds, saved.bounds);
+}
+
+#[test]
+fn exact_match_shrinks_bounds_to_fit_the_changed_work_area() {
+    let old = single();
+    let mut saved = placement(&old, 0);
+    saved.bounds = logical(-100.0, 0.0, 2100.0, 1080.0);
+    let mut current = old.monitors()[0];
+    current.work_area = physical(0, 40, 1920, 1040);
+    let result = restore(&setup(vec![current]), &[saved]);
+    assert_eq!(result.bounds, logical(0.0, 40.0, 1920.0, 1040.0));
+}
+
+#[test]
 fn moved_monitor_clamps_a_window_with_exactly_a_quarter_visible() {
     let mut saved = placement(&single(), 0);
     saved.bounds = logical(1200.0, 100.0, 800.0, 600.0);
@@ -134,8 +172,21 @@ fn no_placements_uses_eighty_percent_and_the_monitor_at_origin() {
 }
 
 #[test]
+fn no_placements_uses_the_flagged_primary_before_the_origin_monitor() {
+    let mut primary = monitor(physical(1920, 0, 1920, 1080), 1.0);
+    primary.primary = true;
+    let current = setup(vec![single().monitors()[0], primary]);
+    let result = restore(&current, &[]);
+    assert_eq!(result.bounds, logical(320.0, 140.0, 1280.0, 800.0));
+    assert_eq!(result.monitor, primary.bounds);
+}
+
+#[test]
 fn no_monitor_at_origin_uses_the_first_monitor() {
-    let current = setup(vec![monitor(physical(2000, -500, 1920, 1080), 1.0)]);
+    let current = setup(vec![
+        monitor(physical(2000, -500, 1920, 1080), 1.0),
+        monitor(physical(-1920, 0, 1920, 1080), 1.0),
+    ]);
     let result = restore(&current, &[]);
     assert_eq!(result.bounds, logical(320.0, 140.0, 1280.0, 800.0));
     assert_eq!(result.monitor, current.monitors()[0].bounds);

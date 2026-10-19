@@ -23,6 +23,7 @@ pub struct Monitor {
     pub bounds: PhysicalRect,
     pub work_area: PhysicalRect,
     pub scale: f32,
+    pub primary: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
