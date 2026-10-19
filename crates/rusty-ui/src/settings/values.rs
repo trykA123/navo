@@ -20,6 +20,7 @@ pub enum Value {
     Text(SharedString),
     Number(i64),
     Unset,
+    Reset,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -52,6 +53,13 @@ impl Change {
         }
     }
 
+    pub fn reset(field: Field) -> Self {
+        Self {
+            field,
+            value: Value::Reset,
+        }
+    }
+
     pub fn text(field: Field, text: impl Into<SharedString>) -> Self {
         Self {
             field,
@@ -71,6 +79,7 @@ impl Change {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Values {
     values: Vec<Value>,
+    changed: Vec<bool>,
 }
 
 fn default_of(spec: &FieldSpec) -> Value {
@@ -102,9 +111,30 @@ impl Default for Values {
 
 impl Values {
     pub fn from_fn(mut value_of: impl FnMut(&FieldSpec) -> Value) -> Self {
-        Self {
-            values: FIELDS.iter().map(&mut value_of).collect(),
-        }
+        let values: Vec<Value> = FIELDS.iter().map(&mut value_of).collect();
+        let changed = FIELDS
+            .iter()
+            .zip(&values)
+            .map(|(spec, value)| *value != default_of(spec))
+            .collect();
+        Self { values, changed }
+    }
+
+    #[must_use]
+    pub fn marked(mut self, is_users: impl Fn(&FieldSpec) -> bool) -> Self {
+        self.changed = FIELDS.iter().map(is_users).collect();
+        self
+    }
+
+    pub fn is_changed(&self, field: Field) -> bool {
+        self.changed[field.index()]
+    }
+
+    pub fn changed_count(&self) -> usize {
+        self.changed
+            .iter()
+            .filter(|is_changed| **is_changed)
+            .count()
     }
 
     pub fn get(&self, field: Field) -> &Value {
@@ -114,10 +144,13 @@ impl Values {
     #[must_use]
     pub fn with(&self, change: &Change) -> Self {
         let mut values = self.clone();
-        values.values[change.field.index()] = match &change.value {
-            Value::Unset => default_of(change.field.spec()),
+        let default = default_of(change.field.spec());
+        let value = match &change.value {
+            Value::Unset | Value::Reset => default.clone(),
             value => value.clone(),
         };
+        values.changed[change.field.index()] = value != default;
+        values.values[change.field.index()] = value;
         values
     }
 

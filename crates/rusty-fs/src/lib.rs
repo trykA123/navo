@@ -26,7 +26,7 @@ pub use job::{
     JobContext, JobLog, JobOutcome, Progress, StepOutcome, TEMP_SUFFIX, clean_up, roll_back,
     run_job,
 };
-pub use local::{LocalFs, os_path};
+pub use local::{AutoTuning, LocalFs, os_path};
 pub use measure::{
     FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LIVE_EVERY, LargeFile, LiveHandle,
     LiveRequest, LiveSink, LiveSnapshot, PROGRESS_EVERY, ProfileHandle, ProfileSink, ProfileState,

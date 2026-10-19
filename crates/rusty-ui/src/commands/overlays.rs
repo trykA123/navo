@@ -96,6 +96,11 @@ pub(super) const GROUPS: [Group; 9] = [
                 "settings.show_in_file",
                 "Show in settings file",
             ),
+            (
+                "settings_sheet::ResetValue",
+                "settings.reset_value",
+                "Reset to default",
+            ),
             ("settings_sheet::UndoChange", "settings.undo", "Undo change"),
             (
                 "settings_sheet::CloseSettings",

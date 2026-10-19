@@ -18,7 +18,13 @@ use crate::settings::{
 use crate::side_sheet::SheetState;
 use crate::tokens;
 
-pub type FindLine = Arc<dyn Fn(&str) -> Option<u64> + Send + Sync>;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct KeyLine {
+    pub line: u64,
+    pub is_missing: bool,
+}
+
+pub type FindLine = Arc<dyn Fn(&str) -> Option<KeyLine> + Send + Sync>;
 
 pub struct SettingsHooks {
     pub values: Values,

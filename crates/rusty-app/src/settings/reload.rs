@@ -66,7 +66,7 @@ impl Reloader {
         let was_broken = self.problem.take().is_some();
         let is_same = store.current() == &before;
         (was_broken || !is_same).then(|| SettingsNews::Applied {
-            values: values_of(store.current()),
+            values: values_of(&store),
             generation: store.generation(),
         })
     }

@@ -1,11 +1,17 @@
-use std::fs::{self, File};
+use std::fs;
+#[cfg(not(windows))]
+use std::fs::File;
+#[cfg(not(windows))]
 use std::io::{Read, Write};
 
 use rusty_core::{FsError, FsErrorKind, Location};
 
+#[cfg(windows)]
+use super::win_copy::{self, CopyProgress};
 use super::{LocalFs, error, io_error, os_path};
 use crate::{CancelToken, ProviderOps};
 
+#[cfg(not(windows))]
 const CHUNK: usize = 1 << 20;
 
 impl ProviderOps for LocalFs {
@@ -14,6 +20,23 @@ impl ProviderOps for LocalFs {
         fs::create_dir(&path).map_err(|e| io_error(&e, location))
     }
 
+    #[cfg(windows)]
+    fn copy_file(
+        &self,
+        source: &Location,
+        target: &Location,
+        progress: &mut dyn FnMut(u64),
+        cancel: &CancelToken,
+    ) -> Result<u64, FsError> {
+        win_copy::copy(
+            source,
+            target,
+            &self.auto_tuning,
+            CopyProgress::new(progress, cancel),
+        )
+    }
+
+    #[cfg(not(windows))]
     fn copy_file(
         &self,
         source: &Location,
@@ -53,7 +76,26 @@ impl ProviderOps for LocalFs {
     }
 
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
-        fs::remove_file(os_path(location)?).map_err(|e| io_error(&e, location))
+        let path = os_path(location)?;
+        let result = fs::remove_file(&path);
+        #[cfg(windows)]
+        if let Err(failure) = &result
+            && failure.raw_os_error()
+                == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED.cast_signed())
+        {
+            let metadata = fs::symlink_metadata(&path).map_err(|e| io_error(&e, location))?;
+            let mut permissions = metadata.permissions();
+            if metadata.is_file() && permissions.readonly() {
+                #[expect(
+                    clippy::permissions_set_readonly_false,
+                    reason = "on Windows this clears only the read-only attribute"
+                )]
+                permissions.set_readonly(false);
+                fs::set_permissions(&path, permissions).map_err(|e| io_error(&e, location))?;
+                return fs::remove_file(&path).map_err(|e| io_error(&e, location));
+            }
+        }
+        result.map_err(|e| io_error(&e, location))
     }
 
     fn remove_link(&self, location: &Location) -> Result<(), FsError> {
@@ -76,12 +118,14 @@ impl ProviderOps for LocalFs {
     }
 }
 
+#[cfg(not(windows))]
 enum PumpError {
     Read(std::io::Error),
     Write(std::io::Error),
     Cancelled,
 }
 
+#[cfg(not(windows))]
 impl PumpError {
     fn located(self, source: &Location, target: &Location) -> FsError {
         match self {
@@ -92,6 +136,7 @@ impl PumpError {
     }
 }
 
+#[cfg(not(windows))]
 fn pump(
     input: &mut File,
     output: &mut File,

@@ -9,14 +9,15 @@ use crate::{Db, DbError};
 
 mod complete;
 mod edit;
+mod following;
 mod model;
 mod parse;
 mod pending;
 mod saving;
 
 pub use complete::DefaultChange;
-use complete::reconcile;
-pub use edit::{SettingValue, key_line};
+use complete::{Ledger, reconcile};
+pub use edit::{SettingValue, key_line, section_line};
 
 pub use model::{
     Appearance, Automotive, AutomotiveView, Density, Editor, Files, HiddenFiles, ModifierHints,
@@ -71,6 +72,7 @@ pub struct Completion {
 pub struct Saved {
     pub was_present: bool,
     pub durability_error: Option<SettingsError>,
+    pub ledger_error: Option<SettingsError>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -82,6 +84,7 @@ pub struct SettingsStore {
     current: Settings,
     generation: u64,
     backup: SessionBackup,
+    followed: Ledger,
 }
 
 impl SettingsStore {
@@ -95,6 +98,7 @@ impl SettingsStore {
             current: Settings::default(),
             generation: 0,
             backup,
+            followed: Ledger::new(),
         };
         let report = store.reload();
         (store, report)
@@ -144,6 +148,8 @@ impl SettingsStore {
         let text = read(&self.path)?;
         let recorded = ledger.settings_defaults().map_err(ledger_error)?;
         let done = reconcile(text.as_deref().unwrap_or_default(), &recorded, defaults)?;
+        let mut followed = recorded;
+        followed.extend(done.written.iter().cloned());
         let written = text.as_deref() != Some(done.text.as_str());
         let mut durability_error = None;
         let recorded = if written {
@@ -163,6 +169,7 @@ impl SettingsStore {
                 .record_settings_defaults(&done.written, now())
                 .map_err(ledger_error)
         };
+        self.followed = followed;
         let ledger_error = recorded.err().or(recovery_error);
         Ok(Completion {
             changes: done.changes,

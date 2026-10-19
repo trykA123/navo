@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use rusty_cache::{CacheKeys, ListingCache, ProfileCache};
+use rusty_core::placement::{MonitorSetup, Placement};
 use rusty_core::{
     AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location,
     ProviderPath, TabId, apply, apply_event, list_missing,
@@ -270,6 +271,10 @@ impl Browser {
     #[must_use]
     pub fn state(&self) -> &AppState {
         &self.state
+    }
+
+    pub fn remember_placement(&mut self, setup: &MonitorSetup, placement: Placement) {
+        self.state.remember_placement(setup, placement);
     }
 
     #[must_use]
