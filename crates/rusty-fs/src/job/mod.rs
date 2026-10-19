@@ -1,13 +1,18 @@
 mod copy;
 mod hold;
+mod parallel;
+mod pool;
 mod run;
 mod undo;
+mod workers;
 
 use rusty_core::{FsError, Location, OperationPlan};
 
 use crate::{CancelToken, ProviderOps};
 
-pub const TEMP_SUFFIX: &str = ".ferrite-part";
+pub use workers::{WorkerCounts, copy_workers};
+
+pub use rusty_core::TEMP_SUFFIX;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepOutcome {
@@ -47,6 +52,19 @@ pub struct JobContext<'a> {
 #[must_use]
 pub fn run_job(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
     run::run(plan, done, ctx)
+}
+
+#[must_use]
+pub fn run_job_parallel(
+    plan: &OperationPlan,
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+    workers: usize,
+) -> JobOutcome {
+    if workers <= 1 {
+        return run::run(plan, done, ctx);
+    }
+    parallel::run(plan, done, ctx, workers)
 }
 
 #[must_use]

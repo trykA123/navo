@@ -14,6 +14,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  PDFIUM_TAG: chromium/8076
+  PDFIUM_SHA256: 808d36da9bc5a3104315fb307c80998121f565ee53953633bf33e80d7429e5ac
 
 jobs:
   gate-linux:
@@ -53,6 +55,7 @@ jobs:
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
+      FERRITE_EXPECT_PDFIUM: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
@@ -62,6 +65,9 @@ jobs:
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest@0.9.148
+      - name: Put pdfium.dll next to the test build of ferrite.exe
+        shell: pwsh
+        run: ./.github/scripts/fetch-pdfium.ps1 -Destination target/debug
       - run: cargo nextest run --workspace --profile ci
       - run: cargo test --workspace --doc
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -86,10 +92,16 @@ jobs:
         run: |
           $out = (& target/release/ferrite.exe --version | Out-String).Trim()
           if ($out -ne 'ferrite 0.0.1') { throw "unexpected output: $out" }
+      - name: Stage ferrite.exe with pdfium.dll and its licences
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -LiteralPath target/release/ferrite.exe -Destination dist
+          ./.github/scripts/fetch-pdfium.ps1 -Destination dist -Licenses dist/licenses/pdfium
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ferrite-windows-x64-${{ github.sha }}
-          path: target/release/ferrite.exe
+          path: dist/
       - name: listing benchmark, read_dir vs native, 50k files
         continue-on-error: true
         timeout-minutes: 10

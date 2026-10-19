@@ -7,7 +7,9 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use super::{BuildInfo, ErrorRecord, ReportInput, ReportSummary, SystemInfo, write_report};
-use crate::{CacheUsage, DpiAwareness, Identity, MemoryReport, ProcessMemory, Redactor, Salt};
+use crate::{
+    CacheSize, CacheUsage, DpiAwareness, Identity, MemoryReport, ProcessMemory, Redactor, Salt,
+};
 
 mod canary;
 mod report;
@@ -51,11 +53,26 @@ fn memory() -> MemoryReport {
             private_bytes: 98_765_432,
         }),
         probe_error: None,
-        caches: vec![CacheUsage {
-            name: "thumbnails".to_owned(),
-            bytes: 4_096,
-            budget: 65_536,
-        }],
+        caches: vec![
+            CacheUsage {
+                name: "listings in memory".to_owned(),
+                size: CacheSize {
+                    bytes: 70_254_592,
+                    pinned_bytes: 3_145_728,
+                    entries: 1_204,
+                },
+                budget: 67_108_864,
+            },
+            CacheUsage {
+                name: "thumbnails".to_owned(),
+                size: CacheSize {
+                    bytes: 4_096,
+                    pinned_bytes: 0,
+                    entries: 3,
+                },
+                budget: 65_536,
+            },
+        ],
         tasks: vec![("listing".to_owned(), 2)],
     }
 }

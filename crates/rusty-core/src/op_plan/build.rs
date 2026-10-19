@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::names::{key, name_of, numbered};
+use super::names::{key, name_of, numbered, temp_of};
 use super::{
     ConflictPolicy, ExistingItem, ItemKind, OpKind, PlanRequest, Resolution, ScannedItem, Step,
 };
@@ -9,7 +9,7 @@ use crate::{Conflict, Location};
 pub(super) struct Walk<'a> {
     request: &'a PlanRequest,
     existing: HashMap<String, &'a ExistingItem>,
-    planned: Vec<Location>,
+    planned: HashMap<String, Vec<Location>>,
     pub(super) steps: Vec<Step>,
     pub(super) conflicts: Vec<Conflict>,
     pub(super) links_skipped: u64,
@@ -26,7 +26,7 @@ impl<'a> Walk<'a> {
                 .iter()
                 .map(|e| (key(&e.location), e))
                 .collect(),
-            planned: Vec::new(),
+            planned: HashMap::new(),
             steps: Vec::new(),
             conflicts: Vec::new(),
             links_skipped: 0,
@@ -97,10 +97,10 @@ impl<'a> Walk<'a> {
 
     fn place_file(&mut self, index: usize, item: &ScannedItem, destination: Location) {
         let same_place = item.location.same_place(&destination);
-        let resolution = match (same_place, self.existing_at(&destination)) {
-            (true, _) => Some(self.same_place_resolution(&destination)),
-            (false, Some(found)) => Some(self.resolve(item, found, &destination)),
-            (false, None) => None,
+        let resolution = if same_place {
+            Some(self.same_place_resolution(&destination))
+        } else {
+            self.clash_at(item, &destination)
         };
         let target = match &resolution {
             Some(Resolution::Skip | Resolution::Ask) => None,
@@ -111,7 +111,7 @@ impl<'a> Walk<'a> {
             self.conflict(item, destination, resolution);
         }
         if let Some(target) = target {
-            self.planned.push(target.clone());
+            self.note_planned(&target);
             self.steps.push(Step::CopyFile {
                 source: item.location.clone(),
                 target,
@@ -148,10 +148,44 @@ impl<'a> Walk<'a> {
         (2..u32::MAX)
             .filter_map(|number| folder.join(&numbered(&name, number)).ok())
             .find(|candidate| {
-                self.existing_at(candidate).is_none()
-                    && !self.planned.iter().any(|p| p.same_place(candidate))
+                self.existing_at(candidate).is_none() && !self.clashes_with_planned(candidate)
             })
             .map_or(Resolution::Skip, Resolution::Rename)
+    }
+
+    fn clash_at(&self, item: &ScannedItem, destination: &Location) -> Option<Resolution> {
+        if self.clashes_with_planned(destination) {
+            return Some(self.planned_resolution(destination));
+        }
+        self.existing_at(destination)
+            .map(|found| self.resolve(item, found, destination))
+    }
+
+    fn planned_resolution(&self, destination: &Location) -> Resolution {
+        match self.request.policy {
+            ConflictPolicy::Rename => self.free_name(destination),
+            ConflictPolicy::Ask => Resolution::Ask,
+            ConflictPolicy::Skip
+            | ConflictPolicy::OverwriteOlder
+            | ConflictPolicy::OverwriteAll => Resolution::Skip,
+        }
+    }
+
+    fn is_planned(&self, location: &Location) -> bool {
+        self.planned
+            .get(&key(location))
+            .is_some_and(|found| found.iter().any(|p| p.same_place(location)))
+    }
+
+    fn clashes_with_planned(&self, location: &Location) -> bool {
+        self.is_planned(location) || temp_of(location).is_some_and(|temp| self.is_planned(&temp))
+    }
+
+    fn note_planned(&mut self, location: &Location) {
+        self.planned
+            .entry(key(location))
+            .or_default()
+            .push(location.clone());
     }
 
     fn existing_at(&self, location: &Location) -> Option<&'a ExistingItem> {
@@ -231,9 +265,7 @@ impl Walk<'_> {
             if item.location.same_place(&destination) {
                 continue;
             }
-            let resolution = self
-                .existing_at(&destination)
-                .map(|found| self.resolve(item, found, &destination));
+            let resolution = self.clash_at(item, &destination);
             let renamed = match &resolution {
                 Some(Resolution::Skip | Resolution::Ask) => None,
                 Some(Resolution::Rename(other)) => Some(other.clone()),
@@ -243,7 +275,7 @@ impl Walk<'_> {
                 self.conflict(item, destination, resolution);
             }
             if let Some(renamed) = renamed {
-                self.planned.push(renamed.clone());
+                self.note_planned(&renamed);
                 self.steps.push(Step::Rename {
                     source: item.location.clone(),
                     target: renamed,

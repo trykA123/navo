@@ -99,6 +99,11 @@ impl CacheDb {
         Ok(budget::used_bytes(&self.conn, table)?)
     }
 
+    pub fn usage(&self, table: &str) -> Result<(u64, u64), CacheError> {
+        let bytes = budget::used_bytes(&self.conn, table)?;
+        Ok((bytes, budget::entries(&self.conn, table)?))
+    }
+
     pub fn clear(&mut self, table: &str) -> Result<(), CacheError> {
         self.check_budget_error()?;
         self.conn

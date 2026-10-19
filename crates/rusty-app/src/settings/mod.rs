@@ -21,7 +21,7 @@ mod start;
 pub use reload::Reloader;
 pub use start::{Loaded, start_from};
 #[cfg(test)]
-use start::{follow_defaults, spawn, start, start_in_background, start_sharing};
+use start::{follow_defaults, spawn, start, start_sharing, start_waiting};
 
 const FILE: &str = "ferrite.toml";
 

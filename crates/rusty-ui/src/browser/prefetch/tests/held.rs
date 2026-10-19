@@ -115,6 +115,10 @@ impl ProviderOps for Held {
         self.inner.rename(source, target)
     }
 
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.inner.replace(source, target)
+    }
+
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
         self.inner.remove_file(location)
     }

@@ -16,6 +16,7 @@ pub trait ProviderOps: Provider {
         cancel: &CancelToken,
     ) -> Result<u64, FsError>;
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError>;
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError>;
     fn remove_file(&self, location: &Location) -> Result<(), FsError>;
     fn remove_link(&self, location: &Location) -> Result<(), FsError>;
     fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError>;

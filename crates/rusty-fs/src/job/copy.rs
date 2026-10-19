@@ -1,8 +1,13 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution};
 
-use super::hold::hold;
-use super::{JobContext, Progress, StepOutcome, TEMP_SUFFIX};
-use crate::ProviderOps;
+use super::{StepOutcome, TEMP_SUFFIX};
+use crate::{CancelToken, ProviderOps};
+
+pub(super) struct Copier<'a> {
+    pub plan: &'a OperationPlan,
+    pub ops: &'a dyn ProviderOps,
+    pub cancel: &'a CancelToken,
+}
 
 pub(super) struct CopyStep<'a> {
     pub source: &'a Location,
@@ -18,25 +23,24 @@ pub(super) fn temp_of(target: &Location) -> Result<Location, FsError> {
 }
 
 pub(super) fn copy(
-    plan: &OperationPlan,
+    copier: &Copier<'_>,
     step: &CopyStep<'_>,
-    ctx: &mut JobContext<'_>,
-    progress: &mut Progress,
+    on_bytes: &mut dyn FnMut(u64),
 ) -> Result<StepOutcome, FsError> {
-    let exists = ctx.ops.metadata(step.target).is_ok();
-    if exists && !overwrites(plan, step.target) {
+    let exists = copier.ops.metadata(step.target).is_ok();
+    if exists && !overwrites(copier.plan, step.target) {
         return Ok(StepOutcome::Skipped);
     }
     let temp = temp_of(step.target)?;
-    remove_if_present(ctx.ops, &temp)?;
+    remove_if_present(copier.ops, &temp)?;
     let placement = Placement {
         step,
         temp: &temp,
         exists,
     };
-    let result = write_and_place(&placement, ctx, progress);
+    let result = write_and_place(copier, &placement, on_bytes);
     if result.is_err() {
-        let _ = remove_if_present(ctx.ops, &temp);
+        let _ = remove_if_present(copier.ops, &temp);
     }
     result.map(|()| StepOutcome::Done)
 }
@@ -48,32 +52,25 @@ struct Placement<'a> {
 }
 
 fn write_and_place(
+    copier: &Copier<'_>,
     placement: &Placement<'_>,
-    ctx: &mut JobContext<'_>,
-    progress: &mut Progress,
+    on_bytes: &mut dyn FnMut(u64),
 ) -> Result<(), FsError> {
     let Placement { step, temp, exists } = *placement;
-    let base = progress.bytes_done;
-    let (cancel, report) = (ctx.cancel, &mut *ctx.progress);
-    let mut on_bytes = |bytes: u64| {
-        progress.bytes_done = base + bytes;
-        report(progress);
-        hold(cancel, progress, report);
-    };
-    let written = ctx
-        .ops
-        .copy_file(step.source, temp, &mut on_bytes, cancel)?;
+    let Copier { ops, cancel, .. } = *copier;
+    let written = ops.copy_file(step.source, temp, on_bytes, cancel)?;
     if cancel.is_cancelled() {
         return Err(failure(FsErrorKind::Cancelled, step.target));
     }
-    let on_disk = ctx.ops.metadata(temp)?.size;
+    let on_disk = ops.metadata(temp)?.size;
     if written != step.size || on_disk != written {
         return Err(failure(FsErrorKind::Unknown, step.target));
     }
     if exists {
-        ctx.ops.remove_file(step.target)?;
+        ops.replace(temp, step.target)
+    } else {
+        ops.rename(temp, step.target)
     }
-    ctx.ops.rename(temp, step.target)
 }
 
 fn overwrites(plan: &OperationPlan, target: &Location) -> bool {
@@ -92,7 +89,7 @@ pub(super) fn remove_if_present(
     ops.remove_file(location).map(|()| true)
 }
 
-fn failure(kind: FsErrorKind, location: &Location) -> FsError {
+pub(super) fn failure(kind: FsErrorKind, location: &Location) -> FsError {
     FsError {
         location: Some(location.clone()),
         ..FsError::new(kind)

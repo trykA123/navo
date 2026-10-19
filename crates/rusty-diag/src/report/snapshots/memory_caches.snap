@@ -1,0 +1,16 @@
+---
+source: crates/rusty-diag/src/report/tests/report.rs
+expression: caches
+---
+name: "listings in memory"
+bytes: 70254592
+pinned_bytes: 3145728
+unpinned_bytes: 67108864
+entries: 1204
+budget: 67108864
+name: "thumbnails"
+bytes: 4096
+pinned_bytes: 0
+unpinned_bytes: 4096
+entries: 3
+budget: 65536

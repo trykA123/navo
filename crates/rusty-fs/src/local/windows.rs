@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use rusty_core::{FsErrorKind, ProviderPath};
 
 use super::verbatim::verbatim;
+pub(super) use super::win_replace::replace;
 use crate::Attributes;
 
 const READONLY: u32 = 0x1;

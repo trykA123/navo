@@ -22,6 +22,7 @@ mod keymap;
 mod launch;
 mod logging;
 mod metrics;
+mod pdf_helper;
 mod profile;
 mod settings;
 mod shell_menu;
@@ -57,6 +58,7 @@ fn execute(
         console::attach();
     }
     let command = match parsed {
+        Ok(Command::PdfHelper) => return pdf_helper::run(),
         Ok(command) => command,
         Err(usage) => {
             eprintln!("{usage}");
@@ -103,6 +105,7 @@ fn execute_command(
             ExitCode::SUCCESS
         }
         Command::DiagReport(path) => write_report(&path, started, &profile),
+        Command::PdfHelper => pdf_helper::run(),
     }
 }
 
@@ -115,7 +118,8 @@ fn install_logging(profile: &Profile) -> logging::Diagnostics {
 
 fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
     let diagnostics = install_logging(profile);
-    match diag::write(path, started, &diagnostics) {
+    let data = profile.dirs().map(|dirs| dirs.data.as_path());
+    match diag::write_on_demand(path, started, &diagnostics, data) {
         Ok(summary) => {
             println!(
                 "ferrite: wrote {} ({} bytes)",

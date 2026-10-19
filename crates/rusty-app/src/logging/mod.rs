@@ -2,7 +2,7 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
-use rusty_diag::{EventRing, LogConfig, LogLayer, RedactionMisses, Redactor};
+use rusty_diag::{CacheRegistry, EventRing, LogConfig, LogLayer, RedactionMisses, Redactor};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
@@ -15,6 +15,7 @@ pub struct Diagnostics {
     pub redactor: Arc<Redactor>,
     pub ring: Arc<EventRing>,
     pub misses: RedactionMisses,
+    pub caches: CacheRegistry,
 }
 
 #[derive(Default)]
@@ -52,10 +53,13 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
     if let Err(error) = tracing::subscriber::set_global_default(subscriber) {
         eprintln!("ferrite: cannot install logging: {error}");
     }
+    let caches = CacheRegistry::default();
+    crate::diag::register_events(&caches, &ring);
     Diagnostics {
         redactor,
         ring,
         misses,
+        caches,
     }
 }
 

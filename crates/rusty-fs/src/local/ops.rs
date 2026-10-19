@@ -67,6 +67,14 @@ impl ProviderOps for LocalFs {
         Ok(total)
     }
 
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        let target_path = os_path(target)?;
+        if fs::symlink_metadata(&target_path).is_ok_and(|m| m.is_dir()) {
+            return Err(error(FsErrorKind::NameInvalid, target));
+        }
+        super::platform::replace(&os_path(source)?, &target_path).map_err(|e| io_error(&e, target))
+    }
+
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
         let target_path = os_path(target)?;
         if fs::symlink_metadata(&target_path).is_ok() {

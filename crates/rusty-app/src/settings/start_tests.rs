@@ -8,7 +8,7 @@ use rusty_store::{Db, backup_path};
 use rusty_ui::settings::{Change, Values};
 use rusty_ui::tokens::ThemeChoice;
 
-use super::{Loaded, follow_defaults, hooks, spawn, start, start_in_background, start_sharing};
+use super::{Loaded, follow_defaults, hooks, spawn, start, start_sharing, start_waiting};
 
 struct Paths {
     _dir: tempfile::TempDir,
@@ -112,7 +112,12 @@ fn a_sheet_save_after_the_start_keeps_the_backup_from_before_the_session() {
 #[test]
 fn the_background_start_gives_the_same_result() {
     let at = paths();
-    let started = start_in_background(Some(at.file.clone()), Some(at.ledger.clone())).finish();
+    let started = start_waiting(
+        Some(at.file.clone()),
+        Some(at.ledger.clone()),
+        Duration::from_secs(60),
+    )
+    .finish();
     assert!(started.loaded.is_some());
     assert_eq!(recorded(&at.ledger), 21);
     assert!(
