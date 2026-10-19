@@ -108,9 +108,11 @@ impl ViewerBody for EditorBody {
         if view.is_split() {
             keys.push(("F6", "Focus preview"));
         }
-        keys.extend(MARK_KEYS);
-        if !view.editing {
-            keys.extend([("Alt+L", "Line ends"), ("Alt+F", "Follow")]);
+        if view.editing {
+            keys.extend(MARK_KEYS);
+        } else {
+            keys.extend(&MARK_KEYS[1..]);
+            keys.push(("Alt+F", "Follow"));
         }
         BodyKeys::Normal(keys)
     }

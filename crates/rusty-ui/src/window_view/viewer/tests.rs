@@ -7,6 +7,7 @@ mod find_all;
 mod follow;
 mod font;
 mod image;
+mod key_bar;
 mod kind;
 mod language;
 mod lister;

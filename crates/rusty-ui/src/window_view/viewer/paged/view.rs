@@ -71,15 +71,17 @@ impl PagedView {
             PagedKind::Text => ("Ctrl+G", "Go to line"),
         };
         let mut keys = vec![("Ctrl+F", "Find"), ("F3", "Next"), go_to];
-        keys.extend(MARK_KEYS);
-        if self.kind == PagedKind::Text {
-            let follow = if self.is_following() {
-                "Stop following"
-            } else {
-                "Follow"
-            };
-            keys.extend([("Alt+L", "Line ends"), ("Alt+F", follow)]);
+        if self.kind == PagedKind::Hex {
+            keys.extend(MARK_KEYS);
+            return keys;
         }
+        let follow = if self.is_following() {
+            "Stop following"
+        } else {
+            "Follow"
+        };
+        keys.extend(&MARK_KEYS[1..]);
+        keys.push(("Alt+F", follow));
         keys
     }
 

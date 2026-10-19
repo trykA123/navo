@@ -211,10 +211,8 @@ fn the_keys_bar_lists_the_mark_bookmark_and_follow_keys(cx: &mut TestAppContext)
     let (window, view, _) = text_window(cx, Setup::huge(numbered_lines()));
     let reading = super::find::bottom_keys(cx, window);
     for key in [
-        "Ctrl+1…8 Mark",
         "Ctrl+F2 Bookmark",
         "F2 Next bookmark",
-        "Alt+L Line ends",
         "Alt+F Follow",
         "Alt+V View",
         "Esc Close",
