@@ -6226,6 +6226,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-automotive"
+version = "0.0.1"
+dependencies = [
+ "proptest",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "rusty-cache"
 version = "0.0.1"
 dependencies = [
@@ -6386,6 +6394,7 @@ dependencies = [
  "kamadak-exif",
  "raw-window-handle",
  "resvg 0.46.0",
+ "rusty-automotive",
  "rusty-cache",
  "rusty-core",
  "rusty-fs",
