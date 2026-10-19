@@ -109,7 +109,28 @@ pub(super) const GROUPS: [Group; 8] = [
             ("preview::BrowseDown", "preview.cursor_down", "Down"),
             ("preview::BrowseFold", "preview.fold", "Fold folder"),
             ("preview::BrowseUnfold", "preview.unfold", "Unfold folder"),
-            ("preview::BrowseOpen", "preview.open", "Open"),
+            (
+                "preview::BrowseUnfoldAll",
+                "preview.unfold_all",
+                "Unfold everything below",
+            ),
+            (
+                "preview::BrowseFoldAll",
+                "preview.fold_all",
+                "Fold everything below",
+            ),
+            ("preview::BrowseOpen", "preview.open", "Open in preview"),
+            ("preview::BrowseGoTo", "preview.go_to", "Open in pane"),
+            (
+                "preview::BrowseParent",
+                "preview.open_parent",
+                "Up one folder",
+            ),
+            (
+                "preview::BrowseMark",
+                "preview.toggle_mark",
+                "Mark and count",
+            ),
             ("preview::BrowseView", "preview.view", "View file"),
             ("preview::LeaveBrowse", "preview.leave", "Close preview"),
             (

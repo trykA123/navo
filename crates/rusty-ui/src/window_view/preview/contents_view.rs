@@ -5,6 +5,7 @@ use rusty_fs::{EntryKind, FsEntry};
 
 use super::browse::Pick;
 use super::contents::{Contents, RowKind, Shape};
+use super::marks::Marks;
 use super::spot::Spot;
 use super::summary::heading;
 use crate::file_list::kind;
@@ -116,25 +117,50 @@ fn size_of(entry: &FsEntry, folder_bytes: Option<u64>) -> String {
     }
 }
 
-fn entry_row(t: &Theme, entry: &FsEntry, folder_bytes: Option<u64>) -> Vec<AnyElement> {
+struct Cells<'a> {
+    entry: &'a FsEntry,
+    folder_bytes: Option<u64>,
+    is_marked: bool,
+    index: usize,
+}
+
+fn entry_row(t: &Theme, cells: Cells<'_>) -> Vec<AnyElement> {
+    let Cells {
+        entry,
+        folder_bytes,
+        is_marked,
+        index,
+    } = cells;
     let name = entry.name.to_text();
     let (_, extension) = kind::split_name(&name, entry.kind);
     let (glyph, color) = kind::icon(entry.kind, extension, &t.colors);
     let is_folder = entry.kind == EntryKind::Folder;
+    let size = size_of(entry, folder_bytes);
     vec![
         icon(glyph, t.spacing.icon, color).into_any_element(),
         div()
             .flex_1()
             .min_w_0()
             .truncate()
-            .when(is_folder, |name| name.font_weight(FontWeight::SEMIBOLD))
+            .when(is_folder || is_marked, |name| {
+                name.font_weight(FontWeight::SEMIBOLD)
+            })
+            .when(is_marked, |name| name.text_color(t.colors.mark))
             .child(name)
             .into_any_element(),
         div()
+            .id(("preview-node-size", index))
+            .aria_label(size.clone())
+            .test_support()
             .flex_none()
             .text_size(t.typography.small)
-            .text_color(t.colors.muted)
-            .child(size_of(entry, folder_bytes))
+            .text_color(if is_marked {
+                t.colors.mark
+            } else {
+                t.colors.muted
+            })
+            .when(is_marked, |size| size.font_weight(FontWeight::SEMIBOLD))
+            .child(size)
             .into_any_element(),
     ]
 }
@@ -161,8 +187,38 @@ struct Source<'a> {
     t: &'a Theme,
     contents: &'a Contents,
     cache: &'a ProfileCache,
+    marks: &'a Marks,
     spot_row: Option<usize>,
     is_browsing: bool,
+}
+
+fn row_cells(source: &Source<'_>, index: usize, kind: &RowKind<'_>) -> Vec<AnyElement> {
+    let entry = match kind {
+        RowKind::Entry(entry) => *entry,
+        RowKind::More(hidden) => return more_row(source.t, *hidden),
+    };
+    let folder_bytes = source.contents.location(index).and_then(|location| {
+        source.marks.size(location).or_else(|| {
+            source
+                .cache
+                .get(location, entry.modified_ms.unwrap_or_default())
+                .map(|profile| profile.totals.bytes)
+        })
+    });
+    let is_marked = source
+        .contents
+        .place(index)
+        .and_then(|place| place.location())
+        .is_some_and(|location| source.marks.is_marked(&location));
+    entry_row(
+        source.t,
+        Cells {
+            entry,
+            folder_bytes,
+            is_marked,
+            index,
+        },
+    )
 }
 
 fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>) -> AnyElement {
@@ -170,17 +226,7 @@ fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>)
     let Some((kind, shape)) = source.contents.row(index) else {
         return div().into_any_element();
     };
-    let folder_bytes = match (&kind, source.contents.location(index)) {
-        (RowKind::Entry(entry), Some(location)) => source
-            .cache
-            .get(location, entry.modified_ms.unwrap_or_default())
-            .map(|profile| profile.totals.bytes),
-        _ => None,
-    };
-    let cells = match &kind {
-        RowKind::Entry(entry) => entry_row(t, entry, folder_bytes),
-        RowKind::More(hidden) => more_row(t, *hidden),
-    };
+    let cells = row_cells(source, index, &kind);
     let hover = t.colors.hover;
     let is_spot = source.spot_row == Some(index);
     let row = div()
@@ -230,6 +276,7 @@ fn visible_rows(
         t: tokens::current(cx),
         contents: &folder.contents,
         cache: shown.browser.profiles(),
+        marks: &folder.marks,
         spot_row: folder.spot_row(),
         is_browsing: shown.preview.is_browsing(window, cx),
     };

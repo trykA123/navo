@@ -152,30 +152,65 @@ fn hint(t: &Theme, index: usize, hint: Hint) -> impl IntoElement + use<> {
         .when(!hint.label.is_empty(), |chip| chip.child(hint.label))
 }
 
-pub(super) fn footer(t: &Theme, hints: Vec<Hint>) -> Option<Div> {
-    if hints.is_empty() {
+fn status(t: &Theme, text: SharedString) -> impl IntoElement + use<> {
+    div()
+        .id("side-sheet-status")
+        .role(Role::Status)
+        .aria_label(text.clone())
+        .test_support()
+        .flex_none()
+        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+        .text_color(t.colors.text)
+        .child(text)
+}
+
+fn strip(t: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .border_t_1()
+        .border_color(t.surfaces.card_edge)
+        .rounded_b(t.radii.sheet)
+        .bg(t.surfaces.field)
+        .text_color(t.colors.muted)
+        .text_size(t.typography.small)
+        .whitespace_nowrap()
+}
+
+pub(super) fn footer(t: &Theme, hints: Vec<Hint>, text: Option<SharedString>) -> Option<Div> {
+    if hints.is_empty() && text.is_none() {
         return None;
     }
     let chips = hints
         .into_iter()
         .enumerate()
         .map(|(index, entry)| hint(t, index, entry));
+    let Some(text) = text else {
+        return Some(
+            strip(t)
+                .items_center()
+                .gap(t.spacing.xl)
+                .h(px(FOOTER_HEIGHT))
+                .px(t.spacing.xl)
+                .overflow_hidden()
+                .children(chips),
+        );
+    };
     Some(
-        div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(t.spacing.xl)
-            .h(px(FOOTER_HEIGHT))
+        strip(t)
+            .flex_col()
+            .gap(t.spacing.sm)
             .px(t.spacing.xl)
-            .overflow_hidden()
-            .whitespace_nowrap()
-            .border_t_1()
-            .border_color(t.surfaces.card_edge)
-            .rounded_b(t.radii.sheet)
-            .bg(t.surfaces.field)
-            .text_color(t.colors.muted)
-            .text_size(t.typography.small)
-            .children(chips),
+            .py(t.spacing.md)
+            .child(status(t, text))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_x(t.spacing.xl)
+                    .gap_y(t.spacing.sm)
+                    .children(chips),
+            ),
     )
 }

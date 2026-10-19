@@ -1,8 +1,10 @@
 use rusty_core::{Location, ProviderPath};
+use rusty_fs::{Attributes, EntryKind, FsEntry};
 use rusty_structured::NodeId;
 
 use super::contents::Place;
 use super::folder::FolderPreview;
+use super::follow::Target;
 use super::summary::LARGEST_AT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,6 +150,44 @@ impl FolderPreview {
                 largest_place(&self.target.location, &file.path)
             }
         }
+    }
+
+    pub(super) fn spot_target(&self) -> Option<Target> {
+        let place = self.place()?;
+        let entry = match self.spot? {
+            Spot::Tree(_) => self.contents.entry(self.spot_row()?)?.clone(),
+            Spot::Largest(rank) => FsEntry {
+                name: ProviderPath::from_text(&place.name),
+                kind: EntryKind::File,
+                size: self.scan.profile.as_ref()?.largest.get(rank)?.bytes,
+                modified_ms: None,
+                attributes: Attributes::default(),
+            },
+        };
+        Some(Target {
+            pane: self.target.pane,
+            tab: self.target.tab,
+            location: place.location()?,
+            folder: place.folder,
+            entry,
+        })
+    }
+
+    pub(super) fn marked_largest(&self) -> Vec<usize> {
+        let Some(profile) = self.scan.profile.as_ref() else {
+            return Vec::new();
+        };
+        profile
+            .largest
+            .iter()
+            .enumerate()
+            .filter(|(_, file)| {
+                largest_place(&self.target.location, &file.path)
+                    .and_then(|place| place.location())
+                    .is_some_and(|location| self.marks.is_marked(&location))
+            })
+            .map(|(rank, _)| rank)
+            .collect()
     }
 
     pub(super) fn fold_for(&self, is_opening: bool) -> Option<Fold> {

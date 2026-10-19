@@ -94,3 +94,84 @@ fn an_unreadable_folder_says_why() {
     assert_eq!(contents.failure(), Some("Access denied."));
     assert!(contents.is_read());
 }
+
+fn folders(names: &[&str]) -> Vec<FsEntry> {
+    names
+        .iter()
+        .map(|name| entry(name, EntryKind::Folder))
+        .collect()
+}
+
+#[test]
+fn opening_below_reads_every_folder_under_the_row_as_it_arrives() {
+    let mut contents = Contents::new(root());
+    read_root(&mut contents);
+    let reads = contents.open_below(0);
+    let [(src, _)] = reads.as_slice() else {
+        panic!("one read for src, got {}", reads.len());
+    };
+    let mut children = folders(&["lib"]);
+    children.push(entry("main.rs", EntryKind::File));
+    let reads = contents.attach(*src, Ok((children, 0)));
+    let [(lib, location)] = reads.as_slice() else {
+        panic!("one read for lib, got {}", reads.len());
+    };
+    assert_eq!(location.as_str(), "/work/src/lib");
+    let reads = contents.attach(*lib, Ok((vec![entry("mod.rs", EntryKind::File)], 0)));
+    assert!(reads.is_empty());
+    assert_eq!(
+        names(&contents),
+        ["src", "lib", "mod.rs", "main.rs", "notes.txt"]
+    );
+}
+
+#[test]
+fn closing_below_folds_the_row_and_every_folder_under_it() {
+    let mut contents = Contents::new(root());
+    read_root(&mut contents);
+    let reads = contents.open_below(0);
+    let reads = contents.attach(reads[0].0, Ok((folders(&["lib"]), 0)));
+    contents.attach(reads[0].0, Ok((vec![entry("mod.rs", EntryKind::File)], 0)));
+    contents.close_below(0);
+    assert_eq!(names(&contents), ["src", "notes.txt"]);
+    assert!(contents.toggle(0).is_none());
+    assert_eq!(names(&contents), ["src", "lib", "notes.txt"]);
+}
+
+#[test]
+fn opening_below_stops_at_the_row_cap() {
+    let mut contents = Contents::new(root());
+    let (node, _) = contents.root().unwrap();
+    let mut top = folders(&["big"]);
+    top.extend((2..CHILD_LIMIT).map(|index| entry(&format!("f{index}"), EntryKind::File)));
+    contents.attach(node, Ok((top, 0)));
+    let reads = contents.open_below(0);
+    let reads = contents.attach(reads[0].0, Ok((folders(&["one", "two", "three"]), 0)));
+    assert!(reads.is_empty());
+    assert!(contents.len() <= CHILD_LIMIT, "{}", contents.len());
+}
+
+#[test]
+fn opening_below_fifty_full_folders_stays_under_the_cap_with_few_reads() {
+    let mut contents = Contents::new(root());
+    let (node, _) = contents.root().unwrap();
+    contents.attach(node, Ok((folders(&["big"]), 0)));
+    let reads = contents.open_below(0);
+    let names: Vec<String> = (0..50).map(|index| format!("part{index}")).collect();
+    let parts: Vec<&str> = names.iter().map(String::as_str).collect();
+    let mut queue: std::collections::VecDeque<_> =
+        contents.attach(reads[0].0, Ok((folders(&parts), 0))).into();
+    assert!(queue.len() <= 4, "{} reads at once", queue.len());
+    let mut asked = queue.len();
+    while let Some((folder, _)) = queue.pop_front() {
+        let files = (0..CHILD_LIMIT)
+            .map(|index| entry(&format!("f{index}"), EntryKind::File))
+            .collect();
+        let more = contents.attach(folder, Ok((files, 0)));
+        asked += more.len();
+        queue.extend(more);
+        assert!(contents.len() <= CHILD_LIMIT, "{}", contents.len());
+    }
+    assert!(asked <= 4, "{asked} reads");
+    assert_eq!(contents.len(), 51);
+}

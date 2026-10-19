@@ -90,7 +90,7 @@ fn list_cursor_bar(cx: &mut TestAppContext, rig: &Rig) -> bool {
 }
 
 fn hints(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
-    (0..7usize)
+    (0..9usize)
         .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
         .collect()
 }
@@ -135,7 +135,7 @@ fn ctrl_shift_q_focuses_the_sheet_with_a_chip_a_ring_and_a_passive_list_cursor(
     assert_eq!(spot(cx, &rig), seen("src"));
     assert_eq!(
         hints(cx, &rig),
-        ["Move", "Fold", "Go to", "View", "Recount", "Close"]
+        ["Open", "Go to", "Mark", "Recount", "Close"]
     );
 }
 
@@ -175,20 +175,20 @@ fn left_and_right_fold_the_tree(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn enter_on_a_folder_navigates_the_active_pane_into_it(cx: &mut TestAppContext) {
+fn shift_enter_on_a_folder_navigates_the_active_pane_into_it(cx: &mut TestAppContext) {
     let (rig, fs) = browsing(cx);
-    rig.key(cx, "enter");
+    rig.key(cx, "shift-enter");
     assert_eq!(location(cx, &rig), fs.location("home/proj/src").as_str());
     assert!(rig.list_has_focus(cx));
 }
 
 #[gpui_kit::test]
-fn enter_on_a_largest_file_reveals_it_with_the_cursor_on_it(cx: &mut TestAppContext) {
+fn shift_enter_on_a_largest_file_reveals_it_with_the_cursor_on_it(cx: &mut TestAppContext) {
     let (rig, fs) = browsing(cx);
     for _ in 0..3 {
         rig.key(cx, "down");
     }
-    rig.key(cx, "enter");
+    rig.key(cx, "shift-enter");
     let folder = fs.location("home/proj/target");
     assert!(rig.wait_until(cx, |view| {
         view.browser.state().active_tab().location() == &folder
@@ -212,7 +212,7 @@ fn f3_on_a_file_opens_the_full_viewer(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_click_selects_and_browses_and_a_double_click_goes_to(cx: &mut TestAppContext) {
+fn a_click_selects_and_browses_and_a_double_click_opens_in_the_preview(cx: &mut TestAppContext) {
     let fs = Arc::new(project());
     let rig = open_fake(cx, &fs);
     rig.open(cx);
@@ -227,8 +227,15 @@ fn a_click_selects_and_browses_and_a_double_click_goes_to(cx: &mut TestAppContex
     })
     .expect("window");
     rig.redraw(cx);
-    assert_eq!(location(cx, &rig), fs.location("home/proj/src").as_str());
-    assert!(rig.list_has_focus(cx));
+    assert!(rig.wait_until(cx, |view| {
+        is_done(view)
+            && view
+                .preview
+                .folder()
+                .is_some_and(|f| f.target.name() == "src")
+    }));
+    assert_eq!(location(cx, &rig), fs.location("home").as_str());
+    assert!(sheet_has_focus(cx, &rig));
 }
 
 #[gpui_kit::test]

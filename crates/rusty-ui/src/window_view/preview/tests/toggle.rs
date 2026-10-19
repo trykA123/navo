@@ -83,16 +83,21 @@ fn the_open_state_outlives_the_viewer(cx: &mut TestAppContext) {
 fn the_footer_names_every_preview_key(cx: &mut TestAppContext) {
     let rig = open_fake(cx, &fake());
     rig.open(cx);
+    assert!(rig.wait_until(cx, |view| {
+        view.preview
+            .folder()
+            .is_some_and(|folder| !folder.scan.is_counting())
+    }));
     let hints: Vec<String> = (0..5usize)
         .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
         .collect();
-    assert_eq!(hints, ["Browse", "Open", "Stop scan", "[ ]", "Close"]);
+    assert_eq!(hints, ["Browse", "Open", "[ ]", "Close"]);
     let escape = Kbd::new("escape", "escape").map(|kbd| kbd.text());
     let close_keys = cx
         .update_window(rig.window, |_, window, cx| {
             window.render_frame(cx);
             let hint = window
-                .within(("side-sheet-hint", 4usize))
+                .within(("side-sheet-hint", 3usize))
                 .find(("key", 0usize));
             let button = window.find("side-sheet-close-key");
             [

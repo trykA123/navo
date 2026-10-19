@@ -4,6 +4,7 @@ use gpui_kit::base::TestSupportExt;
 use super::Shown;
 use super::file::FilePreview;
 use super::header::{title_of, title_view};
+use super::nest::breadcrumb;
 use super::summary::{Picks, Sections, summary};
 use crate::prelude::*;
 use crate::side_sheet::{SheetFrame, SideSheet, on_resize_keys};
@@ -95,23 +96,7 @@ impl FerriteWindow {
             })
             .body(self.browse_frame(body, cx))
             .accent_ring(is_browsing);
-        let sheet = match (is_browsing, is_folder) {
-            (true, true) => sheet
-                .hint(&["↑", "↓"], "Move")
-                .hint(&["←", "→"], "Fold")
-                .hint(&["enter"], "Go to")
-                .hint(&["f3"], "View")
-                .hint(&["ctrl-r"], "Recount")
-                .hint(&["escape"], "Close"),
-            (true, false) => sheet.hint(&["escape"], "Close"),
-            (false, true) => Self::list_hints(sheet).hint(&["escape"], "Stop scan"),
-            (false, false) => Self::list_hints(sheet),
-        };
-        let sheet = if is_browsing {
-            sheet
-        } else {
-            sheet.hint(&["[", "]"], "").hint(&["escape"], "Close")
-        };
+        let sheet = self.footer(sheet, is_browsing, is_folder);
         Some(
             div()
                 .absolute()
@@ -124,6 +109,37 @@ impl FerriteWindow {
         )
     }
 
+    fn footer(&self, sheet: SideSheet, is_browsing: bool, is_folder: bool) -> SideSheet {
+        let is_nested = !self.preview.trail.is_empty();
+        let is_counting = self
+            .preview
+            .folder()
+            .is_some_and(|folder| folder.scan.is_counting());
+        let sheet = match (is_browsing, is_folder) {
+            (true, true) => sheet
+                .hint(&["enter"], "Open")
+                .hint(&["shift-enter"], "Go to")
+                .hint(&["space"], "Mark"),
+            (true, false) => sheet.hint(&["shift-enter"], "Go to"),
+            (false, _) => Self::list_hints(sheet).hint(&["[", "]"], ""),
+        };
+        let sheet = match (is_browsing, is_nested, is_folder) {
+            (true, true, _) => sheet.hint(&["backspace"], "Up"),
+            (true, false, true) => sheet.hint(&["ctrl-r"], "Recount"),
+            _ => sheet,
+        };
+        let sheet = if !is_browsing && is_counting {
+            sheet.hint(&["escape"], "Stop scan")
+        } else {
+            sheet.hint(&["escape"], "Close")
+        };
+        let marks = self.preview.folder().and_then(|f| f.marks.summary());
+        match marks {
+            Some(text) => sheet.status(text),
+            None => sheet,
+        }
+    }
+
     fn list_hints(sheet: SideSheet) -> SideSheet {
         sheet
             .hint(&["ctrl-shift-q"], "Browse")
@@ -131,6 +147,22 @@ impl FerriteWindow {
     }
 
     fn preview_body(&self, t: &Theme, look: BodyLook, cx: &mut Context<Self>) -> AnyElement {
+        let body = self.shown_body(t, look, cx);
+        match breadcrumb(t, &self.preview.crumbs()) {
+            Some(crumbs) => div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .child(crumbs)
+                .child(body)
+                .into_any_element(),
+            None => body,
+        }
+    }
+
+    fn shown_body(&self, t: &Theme, look: BodyLook, cx: &mut Context<Self>) -> AnyElement {
         match self.preview.shown.as_ref() {
             Some(Shown::File(file)) => file_body(t, file),
             Some(Shown::Folder(_)) => self.folder_body(t, look, cx),
@@ -164,6 +196,7 @@ impl FerriteWindow {
                 view: cx.weak_entity(),
                 spot: folder.spot,
                 is_browsing,
+                marked: folder.marked_largest(),
             },
         };
         let contents = self.contents_view(t, cx);

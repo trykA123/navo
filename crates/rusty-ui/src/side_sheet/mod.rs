@@ -69,6 +69,7 @@ pub struct SideSheet {
     title: Vec<AnyElement>,
     body: Vec<AnyElement>,
     hints: Vec<Hint>,
+    status: Option<SharedString>,
     close: Option<(SharedString, CloseHandler)>,
     is_ringed: bool,
 }
@@ -83,6 +84,7 @@ impl SideSheet {
             title: Vec::new(),
             body: Vec::new(),
             hints: Vec::new(),
+            status: None,
             close: None,
             is_ringed: false,
         }
@@ -115,6 +117,12 @@ impl SideSheet {
                 .collect(),
             label: label.into(),
         });
+        self
+    }
+
+    #[must_use]
+    pub fn status(mut self, text: impl Into<SharedString>) -> Self {
+        self.status = Some(text.into());
         self
     }
 
@@ -227,7 +235,7 @@ impl RenderOnce for SideSheet {
             })
             .child(view::header(t, self.title, self.close))
             .child(view::body(self.body))
-            .children(view::footer(t, self.hints))
+            .children(view::footer(t, self.hints, self.status))
             .child(view::grip(t, side, owner));
         sheet.into_any_element()
     }

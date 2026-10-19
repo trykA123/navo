@@ -146,11 +146,16 @@ preview.browse | ctrl-shift-q | FerritePane
 preview.cursor_down | down | PreviewBrowse
 preview.cursor_up | up | PreviewBrowse
 preview.fold | left | PreviewBrowse
+preview.fold_all | alt-left | PreviewBrowse
+preview.go_to | shift-enter | PreviewBrowse
 preview.leave | escape | PreviewBrowse
 preview.leave_and_switch | tab | PreviewBrowse
 preview.open | enter | PreviewBrowse
+preview.open_parent | backspace | PreviewBrowse
 preview.recount | ctrl-r | PreviewBrowse
+preview.toggle_mark | space | PreviewBrowse
 preview.unfold | right | PreviewBrowse
+preview.unfold_all | alt-right | PreviewBrowse
 preview.view | f3 | PreviewBrowse
 prompt.cancel | escape | PromptDialog
 settings.cancel_edit | escape | SettingsField

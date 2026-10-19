@@ -36,6 +36,7 @@ pub(in crate::window_view) struct Contents {
     entries: HashMap<NodeId, FsEntry>,
     folders: HashMap<NodeId, Location>,
     more: HashMap<NodeId, usize>,
+    deep: deep::Deep,
     failure: Option<String>,
     is_read: bool,
 }
@@ -70,6 +71,7 @@ impl Contents {
             entries: HashMap::new(),
             folders,
             more: HashMap::new(),
+            deep: deep::Deep::default(),
             failure: None,
             is_read: false,
         }
@@ -123,6 +125,11 @@ impl Contents {
             can_open: self.tree.child_count(row.node) > 0,
         };
         Some((kind, shape))
+    }
+
+    pub(super) fn entry(&self, index: usize) -> Option<&FsEntry> {
+        let row = self.shown_rows().get(index)?;
+        self.entries.get(&row.node)
     }
 
     pub(super) fn location(&self, index: usize) -> Option<&Location> {
@@ -201,10 +208,14 @@ impl Contents {
         }
     }
 
-    pub(super) fn attach(&mut self, parent: NodeId, listed: Result<(Vec<FsEntry>, usize), String>) {
+    pub(super) fn attach(
+        &mut self,
+        parent: NodeId,
+        listed: Result<(Vec<FsEntry>, usize), String>,
+    ) -> Vec<(NodeId, Location)> {
         let is_root = self.tree.root() == Some(parent);
         if self.tree.take_lazy(parent).is_none() {
-            return;
+            return Vec::new();
         }
         match listed {
             Ok((entries, hidden)) => self.push_children(parent, entries, hidden),
@@ -212,7 +223,12 @@ impl Contents {
             Err(_) => {}
         }
         self.is_read |= is_root;
+        let is_capped = self.cap_deep(parent);
         self.outline.loaded(&self.tree, parent);
+        if is_capped {
+            return Vec::new();
+        }
+        self.go_deeper(parent)
     }
 
     fn push_children(&mut self, parent: NodeId, entries: Vec<FsEntry>, hidden: usize) {
@@ -244,5 +260,6 @@ impl Contents {
     }
 }
 
+mod deep;
 #[cfg(test)]
 mod tests;

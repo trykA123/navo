@@ -140,8 +140,28 @@ command = "preview.unfold"
 keys = ["right"]
 
 [[bind]]
+command = "preview.unfold_all"
+keys = ["alt-right"]
+
+[[bind]]
+command = "preview.fold_all"
+keys = ["alt-left"]
+
+[[bind]]
 command = "preview.open"
 keys = ["enter"]
+
+[[bind]]
+command = "preview.go_to"
+keys = ["shift-enter"]
+
+[[bind]]
+command = "preview.open_parent"
+keys = ["backspace"]
+
+[[bind]]
+command = "preview.toggle_mark"
+keys = ["space"]
 
 [[bind]]
 command = "preview.view"

@@ -291,3 +291,117 @@ fn a_reloaded_file_preview_keeps_focus_in_its_new_body(cx: &mut TestAppContext) 
     assert!(body_has_focus(cx, &rig));
     assert!(!rig.list_has_focus(cx));
 }
+
+fn samples_in_docs(cx: &mut TestAppContext) -> Rig {
+    let fs = FakeFs::new();
+    for (name, bytes) in samples() {
+        fs.add_file(&format!("home/docs/{name}"), bytes.len() as u64);
+    }
+    open_samples_on(cx, fs).0
+}
+
+fn shows_body_of(view: &crate::window_view::FerriteWindow, name: &str) -> bool {
+    matches!(view.preview.shown(), Some(Shown::File(file)) if file.target.name() == name && file.body.is_some())
+}
+
+#[gpui_kit::test]
+fn backspace_in_a_file_opened_in_the_preview_goes_back_to_its_folder(cx: &mut TestAppContext) {
+    let rig = samples_in_docs(cx);
+    rig.open(cx);
+    assert!(rig.wait_until(cx, |view| {
+        view.preview.folder().is_some_and(|f| f.contents.is_read())
+    }));
+    rig.key(cx, "ctrl-shift-q");
+    for _ in 0..5 {
+        rig.key(cx, "down");
+    }
+    rig.key(cx, "enter");
+    assert!(rig.wait_until(cx, |view| shows_body_of(view, "notes.txt")));
+    assert!(body_has_focus(cx, &rig));
+    rig.key(cx, "backspace");
+    assert!(rig.wait_until(cx, |view| {
+        view.preview
+            .folder()
+            .is_some_and(|f| f.target.name() == "docs")
+    }));
+}
+
+fn docs_with(cx: &mut TestAppContext, name: &str, bytes: Vec<u8>) -> Rig {
+    let fs = FakeFs::new();
+    let mut stored = HashMap::new();
+    let extra = (name, bytes);
+    for (name, bytes) in samples().into_iter().chain([extra]) {
+        fs.add_file(&format!("home/docs/{name}"), bytes.len() as u64);
+        stored.insert(name.to_owned(), bytes);
+    }
+    let fs = Arc::new(fs);
+    let rig = open_on(cx, &fs, fs.clone(), disk_hooks(&Arc::new(stored)));
+    rig.open(cx);
+    assert!(rig.wait_until(cx, |view| {
+        view.preview.folder().is_some_and(|f| f.contents.is_read())
+    }));
+    rig.key(cx, "ctrl-shift-q");
+    rig
+}
+
+fn open_row(cx: &mut TestAppContext, rig: &Rig, row: usize, name: &str) {
+    for _ in 0..row {
+        rig.key(cx, "down");
+    }
+    rig.key(cx, "enter");
+    assert!(rig.wait_until(cx, |view| shows_body_of(view, name)));
+    assert!(body_has_focus(cx, rig));
+}
+
+fn shows_docs(view: &crate::window_view::FerriteWindow) -> bool {
+    view.preview
+        .folder()
+        .is_some_and(|f| f.target.name() == "docs")
+}
+
+#[gpui_kit::test]
+fn backspace_in_an_image_opened_in_the_preview_goes_back_to_its_folder(cx: &mut TestAppContext) {
+    let rig = docs_with(cx, "zebra.txt", b"z".to_vec());
+    open_row(cx, &rig, 6, "photo.png");
+    assert_eq!(shown_kind(cx, &rig), Some(("image", true)));
+    rig.key(cx, "backspace");
+    assert!(rig.wait_until(cx, shows_docs));
+}
+
+#[gpui_kit::test]
+fn backspace_in_a_filtered_tree_goes_back_to_its_folder(cx: &mut TestAppContext) {
+    let rig = docs_with(cx, "zebra.txt", b"z".to_vec());
+    open_row(cx, &rig, 2, "config.yaml");
+    rig.key(cx, "n");
+    rig.key(cx, "backspace");
+    assert!(rig.wait_until(cx, shows_docs));
+}
+
+#[gpui_kit::test]
+fn space_pages_down_in_a_long_file_opened_in_the_preview(cx: &mut TestAppContext) {
+    let rig = docs_with(
+        cx,
+        "large.bin",
+        (0..64 * 1024).map(|at| (at % 251) as u8).collect(),
+    );
+    open_row(cx, &rig, 5, "large.bin");
+    let top = |cx: &mut TestAppContext| {
+        rig.view
+            .read_with(cx, |view, cx| match view.preview.shown() {
+                Some(Shown::File(file)) => file
+                    .body
+                    .as_ref()
+                    .and_then(|body| crate::window_view::viewer::paged_top(body.as_ref(), cx)),
+                _ => None,
+            })
+    };
+    assert_eq!(top(cx), Some(0));
+    rig.key(cx, "space");
+    assert!(top(cx).is_some_and(|top| top > 0), "{:?}", top(cx));
+    assert!(rig.read(cx, |view| shows_body_of(view, "large.bin")));
+    rig.key(cx, "backspace");
+    assert!(rig.wait_until(cx, shows_docs));
+    assert!(rig.read(cx, |view| {
+        view.preview.folder().is_some_and(|f| f.marks.len() == 0)
+    }));
+}

@@ -305,3 +305,13 @@ fn the_section_heading_stays_pinned_and_opaque_while_the_summary_scrolls(cx: &mu
         Some("By type")
     );
 }
+
+#[gpui_kit::test]
+fn while_a_folder_is_counted_escape_names_only_stop_scan(cx: &mut TestAppContext) {
+    let (rig, gate) = gated(cx);
+    let hints: Vec<String> = (0..5usize)
+        .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
+        .collect();
+    assert_eq!(hints, ["Browse", "Open", "[ ]", "Stop scan"]);
+    gate.release();
+}
