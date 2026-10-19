@@ -10,6 +10,7 @@ mod faults;
 mod listing;
 mod ops;
 mod props;
+mod replace;
 mod tree;
 mod watch;
 

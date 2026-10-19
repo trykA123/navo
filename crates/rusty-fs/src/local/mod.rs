@@ -20,6 +20,8 @@ mod win_list;
 #[cfg(windows)]
 mod win_lock;
 #[cfg(windows)]
+mod win_replace;
+#[cfg(windows)]
 mod win_watch;
 #[cfg(windows)]
 use win_watch as platform_watch;

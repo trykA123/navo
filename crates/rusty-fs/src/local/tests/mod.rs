@@ -18,6 +18,7 @@ mod notify_info;
 mod ops;
 mod pause;
 mod perf;
+mod replace;
 mod verbatim;
 #[cfg(windows)]
 mod windows;

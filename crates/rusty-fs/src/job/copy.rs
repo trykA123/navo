@@ -67,9 +67,10 @@ fn write_and_place(
         return Err(failure(FsErrorKind::Unknown, step.target));
     }
     if exists {
-        ops.remove_file(step.target)?;
+        ops.replace(temp, step.target)
+    } else {
+        ops.rename(temp, step.target)
     }
-    ops.rename(temp, step.target)
 }
 
 fn overwrites(plan: &OperationPlan, target: &Location) -> bool {

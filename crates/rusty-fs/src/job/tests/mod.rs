@@ -23,6 +23,7 @@ mod parallel;
 mod parallel_pause;
 mod parallel_props;
 mod pause;
+mod replace;
 mod roll_back;
 mod workers;
 
