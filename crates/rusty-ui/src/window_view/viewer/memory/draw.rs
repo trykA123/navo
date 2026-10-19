@@ -186,10 +186,16 @@ impl MemoryView {
     }
 
     fn status_line(&self, t: &Theme) -> impl IntoElement {
-        let checks = match self.ready() {
+        let mut checks = match self.ready() {
             Some(ready) => status(&ready.image),
             None => Vec::new(),
         };
+        if let Some(error) = &self.read_error {
+            checks.push(Check {
+                text: format!("rows could not be read: {error}"),
+                is_bad: true,
+            });
+        }
         let label = checks
             .iter()
             .map(|check| check.text.as_str())
@@ -246,7 +252,7 @@ impl Render for MemoryView {
         self.measure(window, &t);
         let top = self.scroll.top_row(t.spacing.row_height) as u64;
         self.request_rows(top, cx);
-        let content = div()
+        let rows = div()
             .relative()
             .flex()
             .flex_col()
@@ -254,8 +260,14 @@ impl Render for MemoryView {
             .min_h_0()
             .child(self.column_head(&t))
             .child(self.list(cx))
-            .child(self.status_line(&t))
             .child(self.drawers(&t, window, cx));
+        let content = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(rows)
+            .child(self.status_line(&t));
         let root = div()
             .id("memory-image")
             .key_context(CONTEXT)

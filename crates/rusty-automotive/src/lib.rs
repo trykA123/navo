@@ -2,6 +2,7 @@
 
 mod image;
 mod layout;
+mod lines;
 mod record;
 mod scan;
 
@@ -9,7 +10,7 @@ use std::sync::atomic::AtomicBool;
 
 pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};
-pub use scan::index;
+pub use scan::{MAX_PIECES, index};
 
 pub type ReadAt<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
 
@@ -87,7 +88,7 @@ impl Format {
 pub fn sniff(head: &[u8]) -> Option<Format> {
     let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     let first = head
-        .split(|byte| *byte == b'\n')
+        .split(|byte| lines::is_line_end(*byte))
         .map(<[u8]>::trim_ascii)
         .find(|line| !line.is_empty())?;
     let mut bytes = Vec::new();

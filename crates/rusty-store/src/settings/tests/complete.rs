@@ -522,3 +522,25 @@ fn an_upgrade_in_a_mixed_file_keeps_the_line_ending_of_the_changed_line() {
     let done = upgrade_text(before, &ledger, &sorted_by_date()).unwrap();
     assert_eq!(done.text, "# mine\n[files]\r\nsort = \"date\"\r\n");
 }
+
+fn without_automotive() -> String {
+    let at = FULL.find("\n[automotive.view]").unwrap();
+    FULL[..at].to_owned()
+}
+
+#[test]
+fn only_the_automotive_section_is_added_to_an_older_complete_file() {
+    let after = completed(&without_automotive());
+    assert_eq!(after, FULL);
+    assert!(!after.contains("[automotive]\n"), "{after}");
+}
+
+#[test]
+fn a_trailing_comment_survives_when_only_a_nested_section_is_added() {
+    let before = format!("{}# the end\n", without_automotive());
+    let after = completed(&before);
+    assert_eq!(header_above(&after, "# the end"), "[terminal]", "{after}");
+    assert_eq!(after.matches("# the end").count(), 1, "{after}");
+    assert!(after.ends_with("row-bars = false\n"), "{after}");
+    assert!(parse(&after).is_ok(), "{after}");
+}

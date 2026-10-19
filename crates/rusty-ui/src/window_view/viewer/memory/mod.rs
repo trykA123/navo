@@ -92,6 +92,7 @@ pub(in crate::window_view::viewer) struct MemoryView {
     fetching: Option<(Range<u64>, Job)>,
     go_to: Option<GoTo>,
     note: Option<SharedString>,
+    read_error: Option<SharedString>,
     page: u64,
 }
 
@@ -120,6 +121,7 @@ impl MemoryView {
             fetching: None,
             go_to: None,
             note: None,
+            read_error: None,
             page: 1,
         }
     }

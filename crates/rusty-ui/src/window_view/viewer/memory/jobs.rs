@@ -143,15 +143,20 @@ impl MemoryView {
 
     fn rows_fetched(&mut self, fetch: Fetch, cx: &mut Context<Self>) {
         self.fetching = None;
-        match fetch.result {
+        let windows = match fetch.result {
             Ok(windows) => {
-                self.fetched = Some(Fetched {
-                    rows: fetch.rows,
-                    windows,
-                });
+                self.read_error = None;
+                windows
             }
-            Err(error) => self.note = Some(error.into()),
-        }
+            Err(error) => {
+                self.read_error = Some(error.into());
+                Vec::new()
+            }
+        };
+        self.fetched = Some(Fetched {
+            rows: fetch.rows,
+            windows,
+        });
         cx.notify();
     }
 }

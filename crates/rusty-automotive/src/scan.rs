@@ -1,4 +1,6 @@
 use std::io::BufRead;
+
+use crate::lines::{Lines, Step};
 use std::ops::Range;
 use std::sync::atomic::Ordering;
 
@@ -8,7 +10,10 @@ use crate::{Format, IndexError, Watch};
 
 const PIECE_SPAN: u64 = 4096;
 pub(crate) const MAX_SPAN: u64 = PIECE_SPAN + 256;
-const CHECK_EVERY: u64 = 4096;
+const CHECK_EVERY: u64 = 256 * 1024;
+const PIECE_FILE_SPAN: u64 = 64 * 1024;
+pub const MAX_PIECES: usize = 200_000;
+const TOO_LONG: &str = "the line is too long";
 const KEPT_PROBLEMS: usize = 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,23 +40,23 @@ struct Scan {
     pieces: Vec<Piece>,
 }
 
-pub fn index(
-    format: Format,
-    mut source: impl BufRead,
-    watch: Watch<'_>,
-) -> Result<Image, IndexError> {
+pub fn index(format: Format, source: impl BufRead, watch: Watch<'_>) -> Result<Image, IndexError> {
     let mut scan = Scan::new(format);
+    let mut lines = Lines::new(source);
     let (mut line, mut bytes) = (Vec::new(), Vec::new());
-    loop {
+    let mut next_check = CHECK_EVERY;
+    while !scan.is_full() {
         line.clear();
-        let read = source
-            .read_until(b'\n', &mut line)
+        let step = lines
+            .next(&mut line)
             .map_err(|error| IndexError::Read(error.to_string()))?;
-        if read == 0 {
-            break;
+        match step {
+            Step::End => break,
+            Step::Skip(len) => scan.offset += len,
+            Step::Line { len, is_too_long } => scan.take(&line, (len, is_too_long), &mut bytes),
         }
-        scan.take(&line, &mut bytes);
-        if scan.line.is_multiple_of(CHECK_EVERY) {
+        if scan.offset >= next_check {
+            next_check = scan.offset + CHECK_EVERY;
             if watch.cancel.load(Ordering::Relaxed) {
                 return Err(IndexError::Cancelled);
             }
@@ -86,18 +91,34 @@ impl Scan {
         }
     }
 
-    fn take(&mut self, raw: &[u8], bytes: &mut Vec<u8>) {
+    fn is_full(&self) -> bool {
+        self.pieces.len() >= MAX_PIECES
+    }
+
+    fn malformed(&mut self, reason: &'static str) {
+        self.pieces.extend(self.piece.take());
+        let line = self.line;
+        self.note(Problem::Malformed { line, reason });
+        if self.is_full() {
+            self.note(Problem::TooFragmented { line });
+        }
+    }
+
+    fn take(&mut self, raw: &[u8], (len, is_too_long): (u64, bool), bytes: &mut Vec<u8>) {
         let at = self.offset;
-        self.offset += raw.len() as u64;
+        self.offset += len;
         self.line += 1;
         let line = self.line;
+        if is_too_long {
+            return self.malformed(TOO_LONG);
+        }
         let text = raw.trim_ascii();
         if text.is_empty() {
             return;
         }
         let record = match decode(self.cursor.format, text, bytes) {
             Ok(record) => record,
-            Err(reason) => return self.note(Problem::Malformed { line, reason }),
+            Err(reason) => return self.malformed(reason),
         };
         if let Some((stored, computed)) = record.wrong_sum {
             self.checksum_errors += 1;
@@ -122,7 +143,7 @@ impl Scan {
                 self.start = start.or(self.start);
             }
             Ok(Event::Other) => {}
-            Err(reason) => self.note(Problem::Malformed { line, reason }),
+            Err(reason) => self.malformed(reason),
         }
     }
 
@@ -133,6 +154,7 @@ impl Scan {
         if let Some(piece) = &mut self.piece
             && piece.end == span.start
             && piece.end - piece.start < PIECE_SPAN
+            && self.offset - piece.offset <= PIECE_FILE_SPAN
         {
             piece.end = span.end;
             piece.file_end = self.offset;
@@ -147,10 +169,16 @@ impl Scan {
             base,
         };
         self.pieces.extend(self.piece.replace(next));
+        if self.is_full() {
+            let line = self.line;
+            self.note(Problem::TooFragmented { line });
+        }
     }
 
     fn finish(mut self) -> Image {
-        self.pieces.extend(self.piece.take());
+        if !self.is_full() {
+            self.pieces.extend(self.piece.take());
+        }
         self.pieces.sort_by_key(|piece| piece.start);
         let mut ranges: Vec<Range<u64>> = Vec::new();
         let mut overlaps = Vec::new();

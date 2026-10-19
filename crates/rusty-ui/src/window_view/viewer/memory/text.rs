@@ -147,6 +147,10 @@ pub(super) fn problem(problem: &Problem, wide: bool) -> (String, String) {
             format!("Overlap · line {}", format::bytes(*line)),
             format!("{} is written twice", span(range, wide)),
         ),
+        Problem::TooFragmented { line } => (
+            format!("Too fragmented · line {}", format::bytes(*line)),
+            "indexing stopped here; the rest of the file is not shown".to_owned(),
+        ),
         Problem::AfterEnd { line } => (
             format!("After the end · line {}", format::bytes(*line)),
             "records after the end-of-file record are ignored".to_owned(),

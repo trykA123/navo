@@ -110,14 +110,26 @@ fn keep_trailing_under_its_section(document: &mut DocumentMut, sections: &[Strin
         .filter(|(key, _)| !sections.iter().any(|known| known == key.get()))
         .filter_map(|(_, item)| item.as_table_mut());
     for section in added {
-        position += 1;
-        section.set_position(Some(position));
-        if let Some(prefix) = prefix.take() {
-            section.decor_mut().set_prefix(prefix);
-        }
+        place_after(section, &mut position, &mut prefix);
     }
     if prefix.is_none() {
         document.set_trailing("");
+    }
+}
+
+fn place_after(section: &mut Table, position: &mut isize, prefix: &mut Option<String>) {
+    if section.is_implicit() {
+        for (_, item) in section.iter_mut() {
+            if let Some(inner) = item.as_table_mut() {
+                place_after(inner, position, prefix);
+            }
+        }
+        return;
+    }
+    *position += 1;
+    section.set_position(Some(*position));
+    if let Some(prefix) = prefix.take() {
+        section.decor_mut().set_prefix(prefix);
     }
 }
 

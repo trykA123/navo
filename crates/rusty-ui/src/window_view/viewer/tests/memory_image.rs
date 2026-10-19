@@ -1,12 +1,15 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
 use super::structured::open_named;
-use super::{Setup, has_editor, label, redraw, text_of, visible};
+use super::{Setup, has_editor, label, press_only, redraw, text_of, visible};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, settle, type_in};
-use crate::window_view::viewer::AutomotiveLook;
+use crate::window_view::viewer::{AutomotiveLook, FileHooks, Kinds};
 
 const EXAMPLE: &str = "\
 :10010000214601360121470136007EFE09D2190140\r
@@ -154,4 +157,63 @@ fn ctrl_g_goes_to_an_address_and_rejects_one_outside_the_image(cx: &mut TestAppC
     press(cx, window, &view, "enter");
     let error = text_of(cx, window, "memory-go-to-error");
     assert!(error.contains("outside the image"), "{error}");
+}
+
+fn bounds_of(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    id: &'static str,
+) -> gpui_kit::Bounds<gpui_kit::Pixels> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.find(id).bounds()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn the_status_line_stays_visible_with_both_drawers_open(cx: &mut TestAppContext) {
+    let (window, view) = open(cx, "app.hex", WITH_GAP);
+    press(cx, window, &view, "ctrl-b");
+    press(cx, window, &view, "ctrl-i");
+    settle_motion(cx, window, &view);
+    let status = bounds_of(cx, window, "memory-status");
+    for drawer in ["memory-navigator", "memory-inspector"] {
+        let sheet = bounds_of(cx, window, drawer);
+        assert!(
+            !sheet.intersects(&status),
+            "{drawer} {sheet:?} covers {status:?}"
+        );
+    }
+}
+
+#[gpui_kit::test]
+fn a_failed_row_read_is_shown_once_and_not_retried_on_every_frame(cx: &mut TestAppContext) {
+    let bytes = WITH_GAP.as_bytes().to_vec();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let base = super::hooks(Setup::new(bytes.clone()), &super::Log::default());
+    let counted = calls.clone();
+    let files = FileHooks {
+        range: Arc::new(move |_, offset, len| {
+            if counted.fetch_add(1, Ordering::Relaxed) > 0 {
+                return Err("The drive was removed.".to_owned());
+            }
+            let start = usize::try_from(offset)
+                .unwrap_or(usize::MAX)
+                .min(bytes.len());
+            Ok(bytes[start..(start + len).min(bytes.len())].to_vec())
+        }),
+        ..base
+    };
+    let fs = super::structured::fake_with("app.hex", WITH_GAP.len() as u64);
+    let (window, view) = super::window_with(cx, fs, files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press_only(cx, window, "f3");
+    for _ in 0..5 {
+        settle(cx, &view);
+        redraw(cx, window);
+    }
+    assert!(calls.load(Ordering::Relaxed) <= 3, "{calls:?}");
+    let status = text_of(cx, window, "memory-status");
+    assert!(status.contains("The drive was removed."), "{status}");
 }

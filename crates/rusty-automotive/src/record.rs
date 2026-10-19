@@ -138,29 +138,30 @@ pub(crate) struct Cursor {
 impl Cursor {
     pub(crate) fn locate(&mut self, record: &Record<'_>) -> Result<Event, &'static str> {
         use crate::Start;
-        let value = || match record.data.len() {
-            2 | 4 => Ok(big_endian(record.data)),
-            _ => Err(WRONG_LENGTH),
+        let value = |len: usize| {
+            (record.data.len() == len)
+                .then(|| big_endian(record.data))
+                .ok_or(WRONG_LENGTH)
         };
         Ok(match (self.format, record.kind) {
             (Format::IntelHex, 0) => Event::Data(self.base + record.address),
             (Format::IntelHex, 1) => Event::End(None),
             (Format::IntelHex, 2) => {
-                self.base = value()? << 4;
+                self.base = value(2)? << 4;
                 Event::Other
             }
             (Format::IntelHex, 4) => {
-                self.base = value()? << 16;
+                self.base = value(2)? << 16;
                 Event::Other
             }
             (Format::IntelHex, 3) => {
-                let value = value()?;
+                let value = value(4)?;
                 Event::Start(Start::Segment {
                     cs: u16::try_from(value >> 16).map_err(|_| WRONG_LENGTH)?,
                     ip: u16::try_from(value & 0xFFFF).map_err(|_| WRONG_LENGTH)?,
                 })
             }
-            (Format::IntelHex, 5) => Event::Start(Start::Linear(value()?)),
+            (Format::IntelHex, 5) => Event::Start(Start::Linear(value(4)?)),
             (Format::SRecord, 1..=3) => Event::Data(record.address),
             (Format::SRecord, 7..=9) => Event::End(Some(Start::Linear(record.address))),
             _ => Event::Other,

@@ -1,8 +1,11 @@
 use std::ops::Range;
 
+use crate::lines::is_line_end;
 use crate::record::{Cursor, Event, decode};
 use crate::scan::{MAX_SPAN, Piece};
 use crate::{Format, ReadAt};
+
+const MAX_HITS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Start {
@@ -16,6 +19,7 @@ pub enum Problem {
     Malformed { line: u64, reason: &'static str },
     Overlap { line: u64, range: Range<u64> },
     AfterEnd { line: u64 },
+    TooFragmented { line: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,6 +130,8 @@ impl Image {
             .filter(|piece| piece.end > window.start)
             .collect();
         hits.sort_by_key(|piece| piece.offset);
+        let extra = hits.len().saturating_sub(MAX_HITS);
+        hits.drain(..extra);
         for piece in hits {
             fill(self.format, piece, (&window, &mut out), read)?;
         }
@@ -147,7 +153,10 @@ fn fill(
         base: piece.base,
     };
     let mut bytes = Vec::new();
-    for line in text.split(|byte| *byte == b'\n').map(<[u8]>::trim_ascii) {
+    for line in text
+        .split(|byte| is_line_end(*byte))
+        .map(<[u8]>::trim_ascii)
+    {
         let Ok(record) = decode(format, line, &mut bytes) else {
             continue;
         };
