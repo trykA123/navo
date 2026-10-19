@@ -6,7 +6,7 @@ use super::{
     fixture::{self, DATA_SETS},
     options::{self, Options},
     report::{Measurement, markdown, median},
-    workspace::Workspace,
+    workspace::{Workspace, simplified},
 };
 
 fn args(values: &[&str]) -> Vec<String> {
@@ -216,4 +216,16 @@ fn a_linked_target_is_refused_even_when_its_destination_is_empty() {
     assert!(target.is_symlink());
     assert!(real.is_dir());
     assert_eq!(fs::read_dir(root.0.join("real")).unwrap().count(), 0);
+}
+
+#[test]
+fn simplified_strips_the_verbatim_prefix() {
+    for (input, expected) in [
+        (r"\\?\D:\a\_temp\small", r"D:\a\_temp\small"),
+        (r"\\?\UNC\server\share\dir", r"\\server\share\dir"),
+        (r"D:\plain\path", r"D:\plain\path"),
+        ("/home/user/work", "/home/user/work"),
+    ] {
+        assert_eq!(simplified(&PathBuf::from(input)), PathBuf::from(expected));
+    }
 }

@@ -22,8 +22,9 @@ impl Workspace {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
             .unwrap_or_else(|| Path::new("."));
-        let parent =
-            fs::canonicalize(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
+        let parent = fs::canonicalize(parent)
+            .map(|path| simplified(&path))
+            .map_err(|error| format!("{}: {error}", parent.display()))?;
         let target = parent.join(name);
         let restore_target = empty_target(&target)?;
         let timestamp = SystemTime::now()
@@ -87,6 +88,19 @@ impl Workspace {
             create_folder(&self.target)?;
         }
         Ok(())
+    }
+}
+
+pub(super) fn simplified(path: &Path) -> PathBuf {
+    let Some(text) = path.to_str() else {
+        return path.to_path_buf();
+    };
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        path.to_path_buf()
     }
 }
 
