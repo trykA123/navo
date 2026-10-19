@@ -8,7 +8,7 @@ use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::prelude::*;
 use rusty_ui::tokens;
 
-use crate::menu_sample::{self, SEVEN_ZIP};
+use crate::menu_sample::{self, NEW, SEVEN_ZIP};
 use crate::pane_sample;
 
 const ZIP_ROW: u64 = 11;
@@ -20,7 +20,11 @@ pub enum Shows {
     SevenZip,
     Filter,
     Files,
+    Background,
+    EmptyFolder,
 }
+
+const FOLDER_ROWS: usize = 6;
 
 pub struct MenuPage {
     shows: Shows,
@@ -31,9 +35,15 @@ pub struct MenuPage {
 
 impl MenuPage {
     pub fn new(shows: Shows, cx: &mut Context<Self>) -> Self {
+        let all = pane_sample::rows();
+        let rows: Rc<[FsEntry]> = match shows {
+            Shows::Background => all.iter().take(FOLDER_ROWS).cloned().collect(),
+            Shows::EmptyFolder => Rc::from([]),
+            _ => all,
+        };
         Self {
             shows,
-            rows: pane_sample::rows(),
+            rows,
             focus: cx.focus_handle(),
             menu: None,
         }
@@ -41,11 +51,13 @@ impl MenuPage {
 
     fn list(&self) -> FileList {
         let mut marked = Selection::new(self.rows.len() as u64);
-        let cursor = if self.shows == Shows::Files {
-            marked.mark_rows(MARKED);
-            MARKED[2]
-        } else {
-            ZIP_ROW
+        let cursor = match self.shows {
+            Shows::Files => {
+                marked.mark_rows(MARKED);
+                MARKED[2]
+            }
+            Shows::Background | Shows::EmptyFolder => 0,
+            _ => ZIP_ROW,
         };
         let props = FileListProps {
             folder: "commander".into(),
@@ -62,6 +74,16 @@ impl MenuPage {
     fn build(&self, window: &mut Window, cx: &mut Context<Self>) -> Entity<ContextMenu> {
         let color = tokens::current(cx).colors.kind_archive;
         let (menu, context, anchor) = match self.shows {
+            Shows::Background => (
+                menu_sample::folder_menu(),
+                "commander · 6 items",
+                Point::new(px(420.), px(330.)),
+            ),
+            Shows::EmptyFolder => (
+                menu_sample::folder_menu(),
+                "drafts · 0 items",
+                Point::new(px(300.), px(150.)),
+            ),
             Shows::Files => (
                 menu_sample::files_menu(color),
                 "3 files · 21.0 MB",
@@ -85,8 +107,9 @@ impl MenuPage {
             let mut menu = ContextMenu::new(input, window, cx);
             match shows {
                 Shows::SevenZip => menu.open_submenu(&[SEVEN_ZIP], cx),
+                Shows::EmptyFolder => menu.open_submenu(&[NEW], cx),
                 Shows::Filter => menu.set_query("ext", window, cx),
-                Shows::Root | Shows::Files => {}
+                Shows::Root | Shows::Files | Shows::Background => {}
             }
             menu
         })

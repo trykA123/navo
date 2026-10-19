@@ -1,4 +1,4 @@
-use super::{markdown, table, tree};
+use super::{markdown, memory, table, tree};
 use crate::prelude::*;
 
 gpui_kit::actions!(
@@ -74,4 +74,5 @@ pub fn bind_keys(cx: &mut App) {
     tree::bind_keys(cx);
     table::bind_keys(cx);
     markdown::bind_keys(cx);
+    memory::bind_keys(cx);
 }

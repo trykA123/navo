@@ -110,14 +110,26 @@ fn keep_trailing_under_its_section(document: &mut DocumentMut, sections: &[Strin
         .filter(|(key, _)| !sections.iter().any(|known| known == key.get()))
         .filter_map(|(_, item)| item.as_table_mut());
     for section in added {
-        position += 1;
-        section.set_position(Some(position));
-        if let Some(prefix) = prefix.take() {
-            section.decor_mut().set_prefix(prefix);
-        }
+        place_after(section, &mut position, &mut prefix);
     }
     if prefix.is_none() {
         document.set_trailing("");
+    }
+}
+
+fn place_after(section: &mut Table, position: &mut isize, prefix: &mut Option<String>) {
+    if section.is_implicit() {
+        for (_, item) in section.iter_mut() {
+            if let Some(inner) = item.as_table_mut() {
+                place_after(inner, position, prefix);
+            }
+        }
+        return;
+    }
+    *position += 1;
+    section.set_position(Some(*position));
+    if let Some(prefix) = prefix.take() {
+        section.decor_mut().set_prefix(prefix);
     }
 }
 
@@ -136,8 +148,11 @@ fn insert(document: &mut DocumentMut, entry: &Entry) -> bool {
     };
     let is_first = document.as_table().is_empty();
     let mut table: &mut dyn TableLike = document.as_table_mut();
-    for part in parents {
-        let section = table.entry(part).or_insert_with(|| new_section(is_first));
+    for (at, part) in parents.iter().enumerate() {
+        let is_outer = at + 1 < parents.len();
+        let section = table
+            .entry(part)
+            .or_insert_with(|| new_section(is_first, is_outer));
         let Some(next) = section.as_table_like_mut() else {
             return false;
         };
@@ -147,8 +162,9 @@ fn insert(document: &mut DocumentMut, entry: &Entry) -> bool {
     true
 }
 
-fn new_section(is_first: bool) -> Item {
+fn new_section(is_first: bool, is_outer: bool) -> Item {
     let mut section = Table::new();
+    section.set_implicit(is_outer);
     if !is_first {
         section.decor_mut().set_prefix("\n");
     }

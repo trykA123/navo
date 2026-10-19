@@ -61,6 +61,25 @@ fn files() -> impl Strategy<Value = Files> {
     })
 }
 
+fn automotive() -> impl Strategy<Value = Automotive> {
+    let preset = prop_oneof![
+        Just(ViewPreset::Simple),
+        Just(ViewPreset::Rich),
+        Just(ViewPreset::Custom)
+    ];
+    (preset, any::<[bool; 4]>()).prop_map(
+        |(preset, [inspector, memory_strip, charts, row_bars])| Automotive {
+            view: AutomotiveView {
+                preset,
+                inspector,
+                memory_strip,
+                charts,
+                row_bars,
+            },
+        },
+    )
+}
+
 pub(super) fn settings() -> impl Strategy<Value = Settings> {
     let selection = any::<[bool; 2]>().prop_map(|[space, patterns]| SelectionSettings {
         space_measures_folders: space,
@@ -74,17 +93,20 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
         appearance(),
         files(),
         selection,
-        (terminal, editor),
+        (terminal, editor, automotive()),
         experimental,
     )
         .prop_map(
-            |(appearance, files, selection, (terminal, editor), experimental)| Settings {
-                appearance,
-                files,
-                selection,
-                terminal,
-                editor,
-                experimental,
+            |(appearance, files, selection, (terminal, editor, automotive), experimental)| {
+                Settings {
+                    appearance,
+                    files,
+                    selection,
+                    terminal,
+                    editor,
+                    automotive,
+                    experimental,
+                }
             },
         )
 }

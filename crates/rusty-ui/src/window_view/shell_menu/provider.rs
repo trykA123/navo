@@ -13,6 +13,7 @@ pub struct ScreenSpot {
 
 pub trait ShellMenuProvider {
     fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>>;
+    fn open_background(&self, folder: &Location) -> Reply<Box<dyn ShellMenuSession>>;
 }
 
 pub trait ShellMenuSession {

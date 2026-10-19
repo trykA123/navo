@@ -491,3 +491,21 @@ fn save_reports_whether_the_key_was_in_the_file() {
     let second = store.save(MODE, Some(text("light"))).unwrap();
     assert!(second.was_present);
 }
+
+#[test]
+fn a_nested_key_saved_without_its_section_adds_no_empty_parent_header() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[editor]\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    store
+        .save("automotive.view.inspector", Some(SettingValue::Bool(true)))
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(!text.contains("[automotive]"), "{text}");
+    assert!(
+        text.contains("[automotive.view]\ninspector = true\n"),
+        "{text}"
+    );
+    assert!(store.current().automotive.view.inspector);
+}

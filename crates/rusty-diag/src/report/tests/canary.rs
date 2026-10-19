@@ -10,7 +10,7 @@ use tracing_subscriber::layer::SubscriberExt;
 
 use super::{BuildInfo, ErrorRecord, ReportInput, SystemInfo, error, redactor, write_report};
 use crate::{
-    CacheRegistry, CacheUsage, EventRing, FakeProbe, LogConfig, LogLayer, MemoryReport,
+    CacheRegistry, CacheSize, CacheUsage, EventRing, FakeProbe, LogConfig, LogLayer, MemoryReport,
     TaskCounters, memory_report,
 };
 
@@ -72,8 +72,11 @@ fn emit(round: usize) {
 
 fn session_memory() -> MemoryReport {
     let caches = CacheRegistry::default();
-    let thumbs = caches.register("thumbs for canary-user-7731", 65_536);
-    thumbs.set(4_096);
+    caches.register("thumbs for canary-user-7731", 65_536, || CacheSize {
+        bytes: 4_096,
+        pinned_bytes: 1_024,
+        entries: 2,
+    });
     let tasks = TaskCounters::default();
     let _scan = tasks.start(r"scan \\canary-srv-7731\share");
     let probe = FakeProbe(Err(io::Error::other(
@@ -199,7 +202,11 @@ fn memory() -> impl Strategy<Value = MemoryReport> {
         probe_error: Some(probe_error),
         caches: vec![CacheUsage {
             name: cache,
-            bytes: 1,
+            size: CacheSize {
+                bytes: 1,
+                pinned_bytes: 0,
+                entries: 1,
+            },
             budget: 2,
         }],
         tasks: vec![(owner, 1)],

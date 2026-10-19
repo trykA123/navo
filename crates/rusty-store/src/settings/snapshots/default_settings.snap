@@ -28,4 +28,11 @@ provider = "windows-terminal"
 
 [editor]
 
+[automotive.view]
+preset = "simple"
+inspector = false
+memory-strip = false
+charts = false
+row-bars = false
+
 [experimental]

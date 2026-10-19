@@ -5,6 +5,7 @@ mod writer;
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(test)]
 use std::sync::mpsc::Sender;
 use std::sync::mpsc::{self, Receiver, SyncSender};
@@ -45,11 +46,30 @@ struct Progress {
     is_gone: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiskStats {
+    pub bytes: u64,
+    pub entries: u64,
+    pub budget: u64,
+}
+
 #[derive(Default)]
 struct Shared {
     open: Mutex<HashSet<Location>>,
     progress: Mutex<Progress>,
     moved: Condvar,
+    bytes: AtomicU64,
+    entries: AtomicU64,
+}
+
+impl Shared {
+    fn record(&self, usage: Option<(u64, u64)>) {
+        let Some((bytes, entries)) = usage else {
+            return;
+        };
+        self.bytes.store(bytes, Ordering::Relaxed);
+        self.entries.store(entries, Ordering::Relaxed);
+    }
 }
 
 #[derive(Clone)]
@@ -112,6 +132,31 @@ impl DiskListings {
                     is_forced: true,
                 });
             }
+        }
+    }
+
+    #[must_use]
+    pub fn stored(path: &Path) -> Option<DiskStats> {
+        if !path.is_file() {
+            return None;
+        }
+        let (db, _) = CacheDb::open(path)
+            .inspect_err(|error| tracing::warn!(%error, "cannot open the listing cache"))
+            .ok()?;
+        let (bytes, entries) = table::usage_of(&db)?;
+        Some(DiskStats {
+            bytes,
+            entries,
+            budget: DISK_BUDGET,
+        })
+    }
+
+    #[must_use]
+    pub fn stats(&self) -> DiskStats {
+        DiskStats {
+            bytes: self.shared.bytes.load(Ordering::Relaxed),
+            entries: self.shared.entries.load(Ordering::Relaxed),
+            budget: DISK_BUDGET,
         }
     }
 
@@ -202,6 +247,7 @@ fn run(path: &Path, warm: Warm, inbox: Receiver<Job>, shared: &Shared) {
     let Some(table) = open_table(path).map(|table| warm::warm_up(table, warm)) else {
         return;
     };
+    shared.record(table.usage());
     lock(&shared.progress).is_loaded = true;
     shared.moved.notify_all();
     let mut writer = Writer::new(table);
@@ -215,6 +261,7 @@ fn run(path: &Path, warm: Warm, inbox: Receiver<Job>, shared: &Shared) {
                 let is_open = lock(&shared.open).contains(&key.location);
                 if is_forced || is_open {
                     writer.write(&key, &listing, is_forced);
+                    shared.record(writer.usage());
                 }
                 writer.forget_closed(&lock(&shared.open));
             }

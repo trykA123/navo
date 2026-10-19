@@ -5,7 +5,7 @@ use gpui_kit::{App, TestAppContext};
 use super::{GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 18] = [
+const NAMESPACES: [&str; 19] = [
     "app_menu",
     "confirm_dialog",
     "context_menu",
@@ -14,6 +14,7 @@ const NAMESPACES: [&str; 18] = [
     "ferrite_tabs",
     "ferrite_window",
     "file_list",
+    "memory_image",
     "path_input",
     "preview",
     "prompt_dialog",
@@ -332,7 +333,7 @@ fn a_module_binds_only_its_own_commands(cx: &mut TestAppContext) {
         .copied()
         .filter(|action| !action.starts_with("file_list::"))
         .collect();
-    assert_eq!((actions.len(), foreign), (39, Vec::<&str>::new()));
+    assert_eq!((actions.len(), foreign), (40, Vec::<&str>::new()));
 }
 
 #[gpui_kit::test]

@@ -269,3 +269,38 @@ fn a_failed_rename_leaves_no_temp_file() {
         .collect();
     assert!(temps.is_empty(), "{temps:?}");
 }
+
+fn with_snapshot_dir(check: impl FnOnce()) {
+    insta::with_settings!({ snapshot_path => "../snapshots", prepend_module_to_snapshot => false }, {
+        check();
+    });
+}
+
+#[test]
+fn every_cache_is_reported_against_its_budget() {
+    let written = write(&input());
+    let report = report_json(&written.path);
+    let fields = [
+        "name",
+        "bytes",
+        "pinned_bytes",
+        "unpinned_bytes",
+        "entries",
+        "budget",
+    ];
+    let caches: Vec<String> = report["memory"]["caches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|cache| fields.map(|field| format!("{field}: {}", cache[field])))
+        .collect();
+    let caches = caches.join("\n");
+    with_snapshot_dir(|| insta::assert_snapshot!("memory_caches", caches));
+}
+
+#[test]
+fn summary_shows_every_cache_against_its_budget() {
+    let written = write(&input());
+    let summary = summary_text(&written.path);
+    with_snapshot_dir(|| insta::assert_snapshot!("summary_text", summary));
+}

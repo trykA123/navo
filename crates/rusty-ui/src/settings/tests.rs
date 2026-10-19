@@ -95,9 +95,9 @@ fn arrows_step_a_number_and_text_needs_editing() {
 #[test]
 fn tab_jumps_to_the_next_section_and_wraps() {
     assert_eq!(section_of(next_section(0, true)), Section::Files);
-    let last = first_row(Section::Editor);
+    let last = first_row(Section::Automotive);
     assert_eq!(next_section(last, true), 0);
-    assert_eq!(section_of(next_section(0, false)), Section::Editor);
+    assert_eq!(section_of(next_section(0, false)), Section::Automotive);
 }
 
 #[test]
@@ -154,4 +154,53 @@ fn modifier_hints_default_to_every_shortcut_after_400_ms() {
     let change = Change::modifier_hints(HintsMode::Fkeys);
     assert_eq!(change.key(), "appearance.modifier-hints");
     assert_eq!(values.with(&change).modifier_hints(), HintsMode::Fkeys);
+}
+
+#[test]
+fn the_automotive_section_has_the_view_preset_and_four_parts() {
+    let keys: Vec<&str> = FIELDS
+        .iter()
+        .filter(|spec| spec.section == Section::Automotive)
+        .map(|spec| spec.key)
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            "automotive.view.preset",
+            "automotive.view.inspector",
+            "automotive.view.memory-strip",
+            "automotive.view.charts",
+            "automotive.view.row-bars",
+        ]
+    );
+    assert!(!Field::AutomotiveCharts.is_applied());
+    assert!(Field::AutomotiveInspector.is_applied());
+}
+
+#[test]
+fn the_inspector_opens_by_itself_only_in_rich_or_when_custom_asks() {
+    let custom = |inspector: bool| {
+        Values::default()
+            .with(&Change {
+                field: Field::AutomotivePreset,
+                value: Value::Pick(2),
+            })
+            .with(&Change {
+                field: Field::AutomotiveInspector,
+                value: Value::Flag(inspector),
+            })
+    };
+    let rich = Values::default().with(&Change {
+        field: Field::AutomotivePreset,
+        value: Value::Pick(1),
+    });
+    let simple_with_flag = Values::default().with(&Change {
+        field: Field::AutomotiveInspector,
+        value: Value::Flag(true),
+    });
+    assert!(!Values::default().opens_inspector());
+    assert!(!simple_with_flag.opens_inspector());
+    assert!(rich.opens_inspector());
+    assert!(custom(true).opens_inspector());
+    assert!(!custom(false).opens_inspector());
 }

@@ -37,6 +37,11 @@ impl FileClipboardService for FakeClipboard {
         Ok(self.held.borrow().clone())
     }
 
+    fn has_files(&self) -> bool {
+        let held = self.held.borrow();
+        !self.unsupported && held.as_ref().is_some_and(|files| !files.items.is_empty())
+    }
+
     fn clear_if_same(&self, files: &ClipboardFiles) -> Result<bool, ClipboardFault> {
         if self.unsupported {
             return Err(ClipboardFault::Unsupported);
