@@ -64,6 +64,16 @@ jobs:
           tool: cargo-nextest@0.9.148
       - run: cargo nextest run --workspace --profile ci
       - run: cargo test --workspace --doc
+      - name: Copy benchmark (informational)
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'ferrite-copy-bench'
+          $table = cargo xtask bench-copy $target --sets 'small,medium' --runs 1
+          $benchmarkExit = $LASTEXITCODE
+          $table | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($benchmarkExit -ne 0) { exit $benchmarkExit }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
