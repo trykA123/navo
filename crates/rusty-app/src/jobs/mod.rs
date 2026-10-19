@@ -143,14 +143,20 @@ impl OpLog for JournalLog {
     }
 }
 
-#[derive(Default)]
-struct Quiet {
+struct Recovery<'a> {
+    journal: &'a SharedJournal,
+    job: JobId,
     kept_beside: u32,
 }
 
-impl JobLog for Quiet {
-    fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
-        Ok(())
+impl JobLog for Recovery<'_> {
+    fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        if outcome == StepOutcome::Failed {
+            return Ok(());
+        }
+        lock(self.journal)
+            .mark_undone(self.job, seq)
+            .map_err(|_| FsError::new(FsErrorKind::Unknown))
     }
 
     fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
@@ -166,39 +172,56 @@ pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, Jo
     let unfinished = lock(journal).unfinished()?;
     let count = u32::try_from(unfinished.len()).unwrap_or(u32::MAX);
     for job in unfinished.iter().rev() {
-        let state = match held::held_of(journal, job.id)? {
-            Some(held) => undo(job, &held, ops),
-            None => JobState::Failed,
-        };
+        let state = undo(journal, job, ops)?;
         lock(journal).finish(job.id, state)?;
     }
     let pending = lock(journal).restore_pending()?;
     for job in pending.iter().rev() {
-        if let Some(held) = held::held_of(journal, job.id)? {
-            let state = undo(job, &held, ops);
-            lock(journal).finish(job.id, state)?;
-        }
+        let state = undo(journal, job, ops)?;
+        lock(journal).finish(job.id, state)?;
     }
     held::release_finished(journal, ops)?;
     lock(journal).prune(KEEP_FINISHED)?;
     Ok(count)
 }
 
-fn done_of(job: &UnfinishedJob) -> Vec<u32> {
+fn left_to_undo(job: &UnfinishedJob) -> Vec<u32> {
     job.steps
         .iter()
-        .filter(|step| step.state == StepState::Done)
+        .filter(|step| step.state == StepState::Done && !step.is_undone())
         .map(|step| step.seq)
         .collect()
 }
 
-fn undo(job: &UnfinishedJob, held: &[HeldFile], ops: &dyn ProviderOps) -> JobState {
+fn undo(
+    journal: &SharedJournal,
+    job: &UnfinishedJob,
+    ops: &dyn ProviderOps,
+) -> Result<JobState, JournalError> {
+    let held = held::held_of(journal, job.id)?;
+    let state = roll_back_job(journal, job, &held.files, ops);
+    Ok(match state {
+        JobState::RolledBack if held.unreadable > 0 => JobState::RestorePending,
+        other => other,
+    })
+}
+
+fn roll_back_job(
+    journal: &SharedJournal,
+    job: &UnfinishedJob,
+    held: &[HeldFile],
+    ops: &dyn ProviderOps,
+) -> JobState {
     let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
         return unrestored(held);
     };
-    let done = done_of(job);
+    let done = left_to_undo(job);
     let _ = clean_up(&plan, &done, ops);
-    let mut log = Quiet::default();
+    let mut log = Recovery {
+        journal,
+        job: job.id,
+        kept_beside: 0,
+    };
     let outcome = roll_back(
         &Journaled {
             plan: &plan,
@@ -241,3 +264,6 @@ mod events_tests;
 
 #[cfg(test)]
 mod held_tests;
+
+#[cfg(test)]
+mod undo_retry_tests;

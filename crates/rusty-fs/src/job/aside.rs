@@ -32,7 +32,7 @@ impl Aside {
         }
     }
 
-    fn held_file(&self, target: &Location, placed: FileStamp) -> Result<HeldFile, FsError> {
+    fn held_file(&self, target: &Location, placed: Option<FileStamp>) -> Result<HeldFile, FsError> {
         let invalid = || failure(FsErrorKind::NameInvalid, target);
         let name = target.name().ok_or_else(invalid)?;
         let folder = target.parent().ok_or_else(invalid)?;
@@ -60,10 +60,10 @@ impl Aside {
             Some(_) => return Err(failure(FsErrorKind::NameInvalid, target)),
         }
         let new = ops.metadata(&temp)?;
-        let placed = FileStamp {
+        let placed = Some(FileStamp {
             size: new.size,
             modified_ms: new.modified_ms,
-        };
+        });
         let held = self.held_file(&self.on_disk(ops, target), placed)?;
         if !ctx.log.journal_held(&held)? {
             return ops.replace(&temp, target);

@@ -6348,6 +6348,7 @@ dependencies = [
  "inotify",
  "lzma-rust2",
  "proptest",
+ "rustix",
  "rusty-core",
  "ruzstd",
  "same-file",

@@ -34,7 +34,7 @@ pub struct FileStamp {
 pub struct HeldFile {
     pub original: Location,
     pub held: Location,
-    pub placed: FileStamp,
+    pub placed: Option<FileStamp>,
 }
 
 pub trait JobLog {

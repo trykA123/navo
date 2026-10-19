@@ -1,4 +1,13 @@
-use super::{JobId, JobJournal, JournalError};
+use super::{JobId, JobJournal, JournalError, JournalStep};
+
+const UNDONE: &[u8] = b"undone";
+
+impl JournalStep {
+    #[must_use]
+    pub fn is_undone(&self) -> bool {
+        self.detail.as_deref() == Some(UNDONE)
+    }
+}
 
 impl JobJournal {
     pub fn record_held(
@@ -42,5 +51,16 @@ impl JobJournal {
             .connection()
             .execute("DELETE FROM undo WHERE job_id = ?1", [job.0])?;
         Ok(u32::try_from(deleted).unwrap_or(u32::MAX))
+    }
+
+    pub fn mark_undone(&mut self, job: JobId, seq: u32) -> Result<(), JournalError> {
+        let changed = self.db.connection().execute(
+            "UPDATE job_step SET detail = ?3 WHERE job_id = ?1 AND seq = ?2",
+            rusqlite::params![job.0, seq, UNDONE],
+        )?;
+        if changed == 0 {
+            return Err(self.missing(job, seq)?);
+        }
+        Ok(())
     }
 }

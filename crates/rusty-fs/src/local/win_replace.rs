@@ -10,7 +10,7 @@ use std::path::Path;
 
 use windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED;
 use windows_sys::Win32::Storage::FileSystem::{
-    MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
+    MOVE_FILE_FLAGS, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
 };
 
 pub(super) fn replace(from: &Path, to: &Path) -> io::Result<()> {
@@ -41,16 +41,18 @@ fn replace_read_only(from: &Path, to: &Path, denied: io::Error) -> io::Result<()
     })
 }
 
+pub(super) fn rename_new(from: &Path, to: &Path) -> io::Result<()> {
+    move_with(from, to, MOVEFILE_WRITE_THROUGH)
+}
+
 fn move_over(from: &Path, to: &Path) -> io::Result<()> {
+    move_with(from, to, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)
+}
+
+fn move_with(from: &Path, to: &Path, flags: MOVE_FILE_FLAGS) -> io::Result<()> {
     let (from, to) = (wide(from), wide(to));
     // SAFETY: both buffers are NUL-terminated UTF-16 paths that outlive this synchronous call.
-    let moved = unsafe {
-        MoveFileExW(
-            from.as_ptr(),
-            to.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
+    let moved = unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), flags) };
     if moved == 0 {
         Err(io::Error::last_os_error())
     } else {

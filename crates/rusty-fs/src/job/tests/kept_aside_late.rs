@@ -132,10 +132,10 @@ fn a_held_record_with_the_exact_name_wins_over_a_case_twin() {
     let held = |original: &str| HeldFile {
         original: windows_style(original),
         held: windows_style(r"C:\dst\.ferrite-held-x\a.txt"),
-        placed: FileStamp {
+        placed: Some(FileStamp {
             size: 1,
             modified_ms: None,
-        },
+        }),
     };
     let records = [held(r"C:\dst\A.txt"), held(r"C:\dst\a.txt")];
     let step = Step::CopyFile {
@@ -145,4 +145,53 @@ fn a_held_record_with_the_exact_name_wins_over_a_case_twin() {
     };
     let found = super::super::undo::held_for(&step, &records).map(|file| &file.original);
     assert_eq!(found, Some(&windows_style(r"C:\dst\a.txt")));
+}
+
+#[test]
+fn a_target_without_a_modified_time_is_never_taken_for_the_placed_file() {
+    let (fs, plan, harness) = overwritten(0);
+    let mut held = harness.log.held.clone();
+    held[0].placed = Some(FileStamp {
+        size: BIG,
+        modified_ms: None,
+    });
+    fs.remove("dst/a.txt");
+    fs.add_file("dst/a.txt", BIG);
+    let mut undo = Harness {
+        held,
+        ..Harness::default()
+    };
+    let outcome = undo.roll_back(&fs, &plan, &harness.log.done());
+    assert_eq!(
+        (
+            outcome,
+            size(&fs, "dst/a.txt"),
+            as_old(&fs, "dst/a (before copy).txt")
+        ),
+        (JobOutcome::Done, Some(BIG), Some(old_entry("a.txt")))
+    );
+}
+
+#[test]
+fn undo_with_the_source_gone_puts_the_old_file_beside_the_copy() {
+    for workers in MODES {
+        let (fs, plan, harness) = overwritten(workers);
+        fs.remove("src/a.txt");
+        let (outcome, log) = undone(&fs, &plan, &harness);
+        assert_eq!(
+            (
+                outcome,
+                size(&fs, "dst/a.txt"),
+                as_old(&fs, "dst/a (before copy).txt"),
+                log.beside,
+            ),
+            (
+                JobOutcome::Done,
+                Some(BIG),
+                Some(old_entry("a.txt")),
+                vec![fs.location("dst/a (before copy).txt")]
+            ),
+            "workers {workers}"
+        );
+    }
 }

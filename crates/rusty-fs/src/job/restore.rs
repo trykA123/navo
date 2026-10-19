@@ -14,24 +14,49 @@ pub(super) enum Restored {
 }
 
 pub(super) fn restore(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Restored, FsError> {
+    bring_back(ops, held, true)
+}
+
+pub(super) fn keep(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Restored, FsError> {
+    bring_back(ops, held, false)
+}
+
+fn bring_back(
+    ops: &dyn ProviderOps,
+    held: &HeldFile,
+    replace_placed: bool,
+) -> Result<Restored, FsError> {
     if presence(ops, &held.held)?.is_none() {
         return surely_gone(ops, held).map(|()| Restored::Gone);
     }
     match presence(ops, &held.original)? {
-        None => ops
-            .rename(&held.held, &held.original)
-            .map(|()| Restored::Back),
-        Some(entry) if is_placed(&entry, held) => ops
+        None => rename_back(ops, held),
+        Some(entry) if replace_placed && is_placed(&entry, held) => ops
             .replace(&held.held, &held.original)
             .map(|()| Restored::Back),
         Some(_) => keep_beside(ops, held).map(Restored::Beside),
     }
 }
 
+fn rename_back(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Restored, FsError> {
+    match ops.rename(&held.held, &held.original) {
+        Ok(()) => Ok(Restored::Back),
+        Err(error) => {
+            if presence(ops, &held.original)?.is_none() {
+                return Err(error);
+            }
+            keep_beside(ops, held).map(Restored::Beside)
+        }
+    }
+}
+
 fn is_placed(entry: &FsEntry, held: &HeldFile) -> bool {
-    entry.kind == EntryKind::File
-        && entry.size == held.placed.size
-        && entry.modified_ms == held.placed.modified_ms
+    held.placed.is_some_and(|stamp| {
+        entry.kind == EntryKind::File
+            && entry.size == stamp.size
+            && entry.modified_ms.is_some()
+            && entry.modified_ms == stamp.modified_ms
+    })
 }
 
 fn keep_beside(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Location, FsError> {
@@ -49,8 +74,10 @@ fn keep_beside(ops: &dyn ProviderOps, held: &HeldFile) -> Result<Location, FsErr
         };
         let beside = ProviderPath::from_text(&format!("{stem} ({label}){extension}"));
         let candidate = folder.join(&beside).map_err(|_| invalid())?;
-        if presence(ops, &candidate)?.is_none() {
-            return ops.rename(&held.held, &candidate).map(|()| candidate);
+        match ops.rename(&held.held, &candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(error) if presence(ops, &candidate)?.is_none() => return Err(error),
+            Err(_) => {}
         }
     }
     Err(failure(FsErrorKind::Unknown, &held.original))
@@ -107,7 +134,7 @@ fn release_one(ops: &dyn ProviderOps, file: &HeldFile) -> Result<(), FsError> {
     }
     match presence(ops, &file.original)? {
         Some(_) => ops.remove_file(&file.held),
-        None => ops.rename(&file.held, &file.original),
+        None => rename_back(ops, file).map(|_| ()),
     }
 }
 

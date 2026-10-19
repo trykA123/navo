@@ -9,16 +9,23 @@ use super::{SharedJournal, lock, now_ms};
 struct HeldRecord {
     original: Location,
     held: Location,
-    placed_size: u64,
+    #[serde(default)]
+    placed_size: Option<u64>,
+    #[serde(default)]
     placed_modified_ms: Option<i64>,
+}
+
+pub(super) struct Held {
+    pub files: Vec<HeldFile>,
+    pub unreadable: usize,
 }
 
 pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Result<(), FsError> {
     let record = HeldRecord {
         original: held.original.clone(),
         held: held.held.clone(),
-        placed_size: held.placed.size,
-        placed_modified_ms: held.placed.modified_ms,
+        placed_size: held.placed.map(|stamp| stamp.size),
+        placed_modified_ms: held.placed.and_then(|stamp| stamp.modified_ms),
     };
     let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
     lock(journal)
@@ -26,25 +33,29 @@ pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Re
         .map_err(|_| FsError::new(FsErrorKind::Unknown))
 }
 
-pub(super) fn held_of(
-    journal: &SharedJournal,
-    job: JobId,
-) -> Result<Option<Vec<HeldFile>>, JournalError> {
+pub(super) fn held_of(journal: &SharedJournal, job: JobId) -> Result<Held, JournalError> {
     let rows = lock(journal).held(job)?;
-    Ok(rows
-        .iter()
-        .map(|row| {
-            let record = serde_json::from_slice::<HeldRecord>(row).ok()?;
-            Some(HeldFile {
+    let mut held = Held {
+        files: Vec::new(),
+        unreadable: 0,
+    };
+    for row in &rows {
+        match serde_json::from_slice::<HeldRecord>(row) {
+            Ok(record) => held.files.push(HeldFile {
                 original: record.original,
                 held: record.held,
-                placed: FileStamp {
-                    size: record.placed_size,
+                placed: record.placed_size.map(|size| FileStamp {
+                    size,
                     modified_ms: record.placed_modified_ms,
-                },
-            })
-        })
-        .collect())
+                }),
+            }),
+            Err(error) => {
+                held.unreadable += 1;
+                tracing::warn!(job = job.0, %error, "unreadable held-file record kept");
+            }
+        }
+    }
+    Ok(held)
 }
 
 pub(super) fn release(
@@ -69,8 +80,9 @@ pub(super) fn release_finished(
 ) -> Result<(), JournalError> {
     let jobs = lock(journal).finished_holding()?;
     for job in jobs {
-        if let Some(held) = held_of(journal, job)? {
-            release(journal, job, &held, ops)?;
+        let held = held_of(journal, job)?;
+        if held.unreadable == 0 {
+            release(journal, job, &held.files, ops)?;
         }
     }
     Ok(())

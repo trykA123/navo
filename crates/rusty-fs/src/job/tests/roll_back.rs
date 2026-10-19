@@ -143,3 +143,27 @@ fn roll_back_of_a_move_keeps_copies_whose_source_is_gone() {
         assert_eq!(size(&fs, "dst/b/c.txt"), Some(BIG));
     }
 }
+
+#[test]
+fn roll_back_keeps_a_copy_target_the_user_replaced_since() {
+    for workers in MODES {
+        let crashed = crashed_folder_copy(workers);
+        crashed.fs.remove("dst/b/c1.txt");
+        crashed.fs.add_entry(
+            "dst/b",
+            FsEntry {
+                name: rusty_core::ProviderPath::from_text("c1.txt"),
+                kind: EntryKind::File,
+                size: 5_000,
+                modified_ms: Some(77),
+                attributes: Attributes::default(),
+            },
+        );
+        let _ = rolled_back(&crashed);
+        assert_eq!(
+            size(&crashed.fs, "dst/b/c1.txt"),
+            Some(5_000),
+            "workers {workers}"
+        );
+    }
+}

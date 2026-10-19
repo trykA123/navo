@@ -2,9 +2,11 @@ use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
 use super::aside::presence;
 use super::copy::{remove_if_present, temp_of};
-use super::restore::{Restored, restore, surely_absent};
+use super::restore::{Restored, keep, restore, surely_absent};
 use super::{HeldFile, JobContext, JobOutcome, Journaled, StepOutcome};
-use crate::ProviderOps;
+use crate::{EntryKind, FsEntry, ProviderOps};
+
+const MTIME_SLACK_MS: u64 = 2_000;
 
 pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
     let steps: Vec<(u32, &Step)> = (0_u32..).zip(&job.plan.steps).collect();
@@ -45,13 +47,19 @@ fn undo(
 ) -> Result<StepOutcome, FsError> {
     let ops = ctx.ops;
     match step {
-        Step::CopyFile { source, target, .. } => {
+        Step::CopyFile {
+            source,
+            target,
+            size,
+        } => {
             if source_gone(job, source, ops)? {
-                return Ok(StepOutcome::Skipped);
+                return held.map_or(Ok(StepOutcome::Skipped), |held| {
+                    settle(keep(ops, held)?, held, ctx)
+                });
             }
             match held {
-                Some(held) => put_back(held, ctx),
-                None => already_undone(ops.remove_file(target)),
+                Some(held) => settle(restore(ops, held)?, held, ctx),
+                None => remove_copy(ops, (source, target), *size),
             }
         }
         Step::MakeFolder { target } => Ok(match ops.remove_empty_folder(target) {
@@ -71,12 +79,35 @@ fn undo(
     }
 }
 
-fn already_undone(removed: Result<(), FsError>) -> Result<StepOutcome, FsError> {
-    match removed {
+fn remove_copy(
+    ops: &dyn ProviderOps,
+    (source, target): (&Location, &Location),
+    size: u64,
+) -> Result<StepOutcome, FsError> {
+    let Some(placed) = presence(ops, target)? else {
+        return Ok(StepOutcome::Skipped);
+    };
+    let original = presence(ops, source)?;
+    if !is_copy(&placed, original.as_ref(), size) {
+        return Ok(StepOutcome::Skipped);
+    }
+    match ops.remove_file(target) {
         Ok(()) => Ok(StepOutcome::Done),
         Err(error) if error.kind == FsErrorKind::NotFound => Ok(StepOutcome::Skipped),
         Err(error) => Err(error),
     }
+}
+
+fn is_copy(placed: &FsEntry, source: Option<&FsEntry>, size: u64) -> bool {
+    let same_time = match (
+        placed.modified_ms,
+        source.and_then(|entry| entry.modified_ms),
+    ) {
+        (Some(a), Some(b)) => a.abs_diff(b) <= MTIME_SLACK_MS,
+        (None, None) => true,
+        _ => false,
+    };
+    placed.kind == EntryKind::File && placed.size == size && same_time
 }
 
 fn source_gone(
@@ -94,8 +125,12 @@ fn source_gone(
     surely_absent(ops, source)
 }
 
-fn put_back(held: &HeldFile, ctx: &mut JobContext<'_>) -> Result<StepOutcome, FsError> {
-    Ok(match restore(ctx.ops, held)? {
+fn settle(
+    restored: Restored,
+    held: &HeldFile,
+    ctx: &mut JobContext<'_>,
+) -> Result<StepOutcome, FsError> {
+    Ok(match restored {
         Restored::Back => StepOutcome::Done,
         Restored::Beside(beside) => {
             ctx.log.kept_beside(held, &beside);

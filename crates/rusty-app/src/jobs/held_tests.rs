@@ -11,12 +11,12 @@ use super::{SharedJournal, lock, log_factory, recover};
 
 const TARGET: &str = "dest/docs/report.txt";
 
-fn journal() -> SharedJournal {
+pub(super) fn journal() -> SharedJournal {
     let db = Db::open_in_memory().unwrap();
     Arc::new(Mutex::new(JobJournal::new(db).unwrap()))
 }
 
-fn old_report() -> FsEntry {
+pub(super) fn old_report() -> FsEntry {
     FsEntry {
         name: ProviderPath::from_text("report.txt"),
         kind: EntryKind::File,
@@ -29,9 +29,22 @@ fn old_report() -> FsEntry {
     }
 }
 
-fn fake() -> FakeFs {
+pub(super) fn source_report(fs: &FakeFs, size: u64) {
+    fs.add_entry(
+        "home/docs",
+        FsEntry {
+            name: ProviderPath::from_text("report.txt"),
+            kind: EntryKind::File,
+            size,
+            modified_ms: Some(9_000),
+            attributes: Attributes::default(),
+        },
+    );
+}
+
+pub(super) fn fake() -> FakeFs {
     let fs = FakeFs::new();
-    fs.add_file("home/docs/report.txt", 7);
+    source_report(&fs, 7);
     fs.add_folder("dest/docs");
     fs.add_entry("dest/docs", old_report());
     fs
@@ -53,7 +66,7 @@ fn overwrite_plan(fs: &FakeFs) -> OperationPlan {
     })
 }
 
-fn run(fs: &FakeFs, journal: &SharedJournal, finish: bool) {
+pub(super) fn run(fs: &FakeFs, journal: &SharedJournal, finish: bool) {
     let plan = overwrite_plan(fs);
     let mut log = log_factory(Arc::clone(journal))(&plan).unwrap();
     let outcome = run_job(
@@ -72,11 +85,11 @@ fn run(fs: &FakeFs, journal: &SharedJournal, finish: bool) {
     }
 }
 
-fn target(fs: &FakeFs) -> Option<FsEntry> {
+pub(super) fn target(fs: &FakeFs) -> Option<FsEntry> {
     fs.metadata(&fs.location(TARGET)).ok()
 }
 
-fn holding(fs: &FakeFs) -> Vec<String> {
+pub(super) fn holding(fs: &FakeFs) -> Vec<String> {
     let mut found = Vec::new();
     let mut sink = |batch: rusty_fs::EntryBatch| {
         found.extend(batch.entries.into_iter().map(|e| e.name.to_text()));
@@ -87,7 +100,7 @@ fn holding(fs: &FakeFs) -> Vec<String> {
     found
 }
 
-fn held_rows(journal: &SharedJournal) -> usize {
+pub(super) fn held_rows(journal: &SharedJournal) -> usize {
     let journal = lock(journal);
     (1..=4)
         .map(|id| journal.held(rusty_store::JobId(id)).unwrap().len())
@@ -190,7 +203,7 @@ fn held_files_that_cannot_be_released_stay_journaled() {
     assert_eq!((holding(&fs), held_rows(&journal)), (Vec::new(), 0));
 }
 
-fn held_path(fs: &FakeFs) -> String {
+pub(super) fn held_path(fs: &FakeFs) -> String {
     format!("dest/docs/{}/report.txt", holding(fs)[0])
 }
 
@@ -239,7 +252,7 @@ fn two_crashed_jobs_over_one_target_roll_back_newest_first() {
     let fs = fake();
     let journal = journal();
     run(&fs, &journal, false);
-    fs.add_file("home/docs/report.txt", 9);
+    source_report(&fs, 9);
     run(&fs, &journal, false);
     assert_eq!(recover(&journal, &fs).unwrap(), 2);
     assert_eq!(
@@ -274,7 +287,7 @@ fn a_failed_finish_write_keeps_the_held_file_for_recovery() {
 
 const BESIDE: &str = "dest/docs/report (before copy).txt";
 
-fn crashed_with_a_failing_restore(fs: &FakeFs, journal: &SharedJournal) {
+pub(super) fn crashed_with_a_failing_restore(fs: &FakeFs, journal: &SharedJournal) {
     run(fs, journal, false);
     let sharing = rusty_fs::Fault::Fail(rusty_core::FsErrorKind::SharingViolation);
     for call in [1, 2] {
@@ -289,7 +302,7 @@ fn crashed_with_a_failing_restore(fs: &FakeFs, journal: &SharedJournal) {
     assert_eq!(held_rows(journal), 1);
 }
 
-fn beside(fs: &FakeFs) -> Option<FsEntry> {
+pub(super) fn beside(fs: &FakeFs) -> Option<FsEntry> {
     fs.metadata(&fs.location(BESIDE)).ok().map(|entry| FsEntry {
         name: old_report().name,
         ..entry
@@ -320,7 +333,7 @@ fn a_retried_restore_keeps_a_later_jobs_file() {
     let fs = fake();
     let journal = journal();
     crashed_with_a_failing_restore(&fs, &journal);
-    fs.add_file("home/docs/report.txt", 9);
+    source_report(&fs, 9);
     run(&fs, &journal, true);
     let _ = recover(&journal, &fs).unwrap();
     assert_eq!(

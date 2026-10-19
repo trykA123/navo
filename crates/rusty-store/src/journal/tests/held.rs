@@ -87,3 +87,27 @@ fn a_job_waiting_for_a_restore_is_not_released_and_is_listed_for_retry() {
     );
     assert!(journal.unfinished().unwrap().is_empty());
 }
+
+#[test]
+fn an_undone_step_keeps_its_state_and_says_so() {
+    let mut journal = journal();
+    let job = journal.create_job("copy", b"plan", 2, 100).unwrap();
+    journal.mark_step(job, 0, StepState::Done, None).unwrap();
+    journal.mark_undone(job, 0).unwrap();
+    let steps = journal.unfinished().unwrap().remove(0).steps;
+    assert_eq!(
+        steps
+            .iter()
+            .map(|step| (step.state, step.is_undone()))
+            .collect::<Vec<_>>(),
+        [(StepState::Done, true), (StepState::Pending, false)]
+    );
+}
+
+#[test]
+fn marking_an_unknown_step_undone_is_rejected() {
+    let mut journal = journal();
+    let job = journal.create_job("copy", b"plan", 1, 100).unwrap();
+    assert!(journal.mark_undone(job, 5).is_err());
+    assert!(journal.mark_undone(JobId(42), 0).is_err());
+}

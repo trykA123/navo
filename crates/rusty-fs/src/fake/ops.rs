@@ -13,7 +13,7 @@ fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
             | Fault::FailAfterEntries { kind, .. }
             | Fault::FailAfterBytes { kind, .. },
         ) => Err(error(kind, location)),
-        None => Ok(()),
+        Some(Fault::Collide) | None => Ok(()),
     }
 }
 
@@ -145,9 +145,17 @@ impl ProviderOps for FakeFs {
     }
 
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
-        let from = self.write_call(source, FakeOp::Rename)?;
+        let from = self.own_path(source)?;
+        let fault = self.record_call(&from, FakeOp::Rename);
         let to = self.own_path(target)?;
+        let collide = fault == Some(Fault::Collide);
+        if !collide {
+            fail_now(fault, source)?;
+        }
         let mut tree = self.tree();
+        if collide {
+            tree.add_file(&to, 1);
+        }
         existing_kind(&tree, &from).map_err(|k| error(k, source))?;
         vacant(&tree, &to).map_err(|k| error(k, target))?;
         if to.starts_with(&format!("{from}/")) {

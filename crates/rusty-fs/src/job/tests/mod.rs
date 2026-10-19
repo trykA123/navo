@@ -21,6 +21,7 @@ mod journal;
 mod kept_aside;
 mod kept_aside_crash;
 mod kept_aside_late;
+mod kept_aside_race;
 mod move_;
 mod parallel;
 mod parallel_pause;

@@ -20,7 +20,14 @@ pub(super) fn old_entry(name: &str) -> FsEntry {
 pub(super) fn over_old(names: &[&str]) -> (FakeFs, OperationPlan) {
     let fs = fixture(&[]);
     for name in names {
-        fs.add_file(&format!("src/{name}"), BIG);
+        fs.add_entry(
+            "src",
+            FsEntry {
+                size: BIG,
+                modified_ms: Some(2_000),
+                ..old_entry(name)
+            },
+        );
         fs.add_entry("dst", old_entry(name));
     }
     let sources: Vec<String> = names.iter().map(|name| format!("src/{name}")).collect();
@@ -325,7 +332,7 @@ fn a_failed_hold_keeps_the_old_target() {
 }
 
 #[test]
-fn undo_of_a_move_whose_source_is_gone_keeps_the_moved_file_and_the_held_one() {
+fn undo_of_a_move_whose_source_is_gone_keeps_the_moved_file_and_the_old_one_beside_it() {
     for workers in MODES {
         let fs = fixture(&[("src/a.txt", BIG)]);
         fs.add_entry("dst", old_entry("a.txt"));
@@ -336,10 +343,13 @@ fn undo_of_a_move_whose_source_is_gone_keeps_the_moved_file_and_the_held_one() {
         let mut harness = keeping(workers);
         let _ = harness.run(&fs, &plan, &[]);
         let _ = undone(&fs, &plan, &harness);
-        let held = &harness.log.held[0].held;
         assert_eq!(
-            (size(&fs, "dst/a.txt"), fs.metadata(held).ok()),
-            (Some(BIG), Some(old_entry("a.txt"))),
+            (
+                size(&fs, "dst/a.txt"),
+                size(&fs, "dst/a (before copy).txt"),
+                fs.metadata(&harness.log.held[0].held).ok()
+            ),
+            (Some(BIG), Some(OLD), None),
             "workers {workers}"
         );
     }
