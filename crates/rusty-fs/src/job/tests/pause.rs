@@ -14,6 +14,10 @@ impl JobLog for Shared {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         self.0.lock().expect("log").step(seq, outcome)
     }
+
+    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
+        self.0.lock().expect("log").journal_held(held)
+    }
 }
 
 struct Stop(CancelToken);

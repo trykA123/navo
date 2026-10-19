@@ -4,7 +4,7 @@ use std::thread::scope;
 use rusty_core::{ConflictPolicy, OpKind, OperationPlan, PlanRequest, plan};
 
 use super::*;
-use crate::job::{JobContext, JobLog, JobOutcome, Progress, StepOutcome, run_job};
+use crate::job::{HeldFile, JobContext, JobLog, JobOutcome, Progress, StepOutcome, run_job};
 use crate::{TEMP_SUFFIX, scan};
 
 const MIB: u64 = 1 << 20;
@@ -14,6 +14,10 @@ struct Quiet;
 impl JobLog for Quiet {
     fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
         Ok(())
+    }
+
+    fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
+        Ok(false)
     }
 }
 

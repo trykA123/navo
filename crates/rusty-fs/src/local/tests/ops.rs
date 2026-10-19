@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use rusty_core::{ConflictPolicy, OpKind, PlanRequest, plan};
 
 use super::*;
-use crate::job::{JobContext, JobLog, JobOutcome, Progress, StepOutcome, run_job};
+use crate::job::{HeldFile, JobContext, JobLog, JobOutcome, Progress, StepOutcome, run_job};
 use crate::{ProviderOps, existing_at, scan};
 
 pub(super) fn child(folder: &Location, name: &str) -> Location {
@@ -179,12 +179,17 @@ fn remove_file_removes_a_file() {
 }
 
 #[derive(Default)]
-pub(super) struct Log(Vec<(u32, StepOutcome)>);
+pub(super) struct Log(Vec<(u32, StepOutcome)>, pub(super) Vec<HeldFile>);
 
 impl JobLog for Log {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         self.0.push((seq, outcome));
         Ok(())
+    }
+
+    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
+        self.1.push(held.clone());
+        Ok(true)
     }
 }
 
@@ -244,4 +249,35 @@ fn walkdir(root: &std::path::Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+#[test]
+fn the_platform_rename_never_replaces_in_one_step() {
+    let (dir, _) = temp();
+    write_file(dir.path(), "a.txt", 3);
+    write_file(dir.path(), "b.txt", 5);
+    let refused = platform::rename_new(&path(&dir, "a.txt"), &path(&dir, "b.txt"));
+    assert_eq!(
+        refused.map_err(|error| error.kind()),
+        Err(std::io::ErrorKind::AlreadyExists)
+    );
+    assert_eq!(
+        (
+            fs::metadata(path(&dir, "a.txt")).unwrap().len(),
+            fs::metadata(path(&dir, "b.txt")).unwrap().len()
+        ),
+        (3, 5)
+    );
+    platform::rename_new(&path(&dir, "a.txt"), &path(&dir, "c.txt")).unwrap();
+    assert!(!path(&dir, "a.txt").exists() && path(&dir, "c.txt").exists());
+}
+
+#[test]
+fn the_platform_rename_moves_a_folder_and_refuses_an_existing_one() {
+    let (dir, _) = temp();
+    fs::create_dir(path(&dir, "x")).unwrap();
+    fs::create_dir(path(&dir, "y")).unwrap();
+    assert!(platform::rename_new(&path(&dir, "x"), &path(&dir, "y")).is_err());
+    platform::rename_new(&path(&dir, "x"), &path(&dir, "z")).unwrap();
+    assert!(!path(&dir, "x").exists() && path(&dir, "z").exists());
 }

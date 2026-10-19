@@ -83,11 +83,8 @@ impl ProviderOps for LocalFs {
     }
 
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
-        let target_path = os_path(target)?;
-        if fs::symlink_metadata(&target_path).is_ok() {
-            return Err(error(FsErrorKind::Unknown, target));
-        }
-        fs::rename(os_path(source)?, &target_path).map_err(|e| io_error(&e, source))
+        super::platform::rename_new(&os_path(source)?, &os_path(target)?)
+            .map_err(|e| io_error(&e, source))
     }
 
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
@@ -130,6 +127,12 @@ impl ProviderOps for LocalFs {
 
     fn recycle(&self, location: &Location) -> Result<(), FsError> {
         trash::delete(os_path(location)?).map_err(|_| error(FsErrorKind::Unknown, location))
+    }
+
+    fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        super::platform::volume_serial(&os_path(location)?)
+            .map(Some)
+            .map_err(|e| io_error(&e, location))
     }
 }
 

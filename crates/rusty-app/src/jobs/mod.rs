@@ -3,12 +3,15 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusty_core::{FsError, FsErrorKind, OperationPlan};
+use rusty_core::{FsError, FsErrorKind, Location, OperationPlan};
 use rusty_fs::{
-    CancelToken, JobContext, JobLog, JobOutcome, ProviderOps, StepOutcome, clean_up, roll_back,
+    CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, ProviderOps,
+    StepOutcome, clean_up, roll_back,
 };
 use rusty_store::{Db, JobId, JobJournal, JobState, JournalError, StepState, UnfinishedJob};
 use rusty_ui::browser::{LogFactory, OpLog};
+
+mod held;
 
 const KEEP_FINISHED: u32 = 50;
 
@@ -80,6 +83,7 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
             journal: Arc::clone(&journal),
             job,
             kind,
+            held: Vec::new(),
         }) as Box<dyn OpLog>)
     })
 }
@@ -88,6 +92,7 @@ struct JournalLog {
     journal: SharedJournal,
     job: JobId,
     kind: String,
+    held: Vec<HeldFile>,
 }
 
 impl JobLog for JournalLog {
@@ -101,10 +106,20 @@ impl JobLog for JournalLog {
             .mark_step(self.job, seq, state, None)
             .map_err(|_| FsError::new(FsErrorKind::Unknown))
     }
+
+    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
+        held::record(&self.journal, self.job, held)?;
+        self.held.push(held.clone());
+        Ok(true)
+    }
+
+    fn journal_placed(&mut self, placed: &PlacedFile) -> Result<(), FsError> {
+        held::record_placed(&self.journal, self.job, placed)
+    }
 }
 
 impl OpLog for JournalLog {
-    fn finish(&mut self, outcome: &JobOutcome) {
+    fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) {
         let state = match outcome {
             JobOutcome::Done => JobState::Done,
             JobOutcome::Cancelled => JobState::Cancelled,
@@ -126,53 +141,124 @@ impl OpLog for JournalLog {
                 "job finished"
             );
         }
-        let _ = lock(&self.journal).finish(self.job, state);
+        if lock(&self.journal).finish(self.job, state).is_ok() {
+            let _ = held::release(&self.journal, self.job, &self.held, ops);
+        }
     }
 }
 
-struct Quiet;
+struct Recovery<'a> {
+    journal: &'a SharedJournal,
+    job: JobId,
+    kept_beside: u32,
+}
 
-impl JobLog for Quiet {
-    fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
-        Ok(())
+impl JobLog for Recovery<'_> {
+    fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        if outcome == StepOutcome::Failed {
+            return Ok(());
+        }
+        lock(self.journal)
+            .mark_undone(self.job, seq)
+            .map_err(|_| FsError::new(FsErrorKind::Unknown))
+    }
+
+    fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
+        Ok(false)
+    }
+
+    fn kept_beside(&mut self, _: &HeldFile, _: &Location) {
+        self.kept_beside += 1;
     }
 }
 
 pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, JournalError> {
     let unfinished = lock(journal).unfinished()?;
     let count = u32::try_from(unfinished.len()).unwrap_or(u32::MAX);
-    for job in unfinished {
-        let state = undo(&job, ops);
+    for job in unfinished.iter().rev() {
+        let state = undo(journal, job, ops)?;
         lock(journal).finish(job.id, state)?;
     }
+    let pending = lock(journal).restore_pending()?;
+    for job in pending.iter().rev() {
+        let state = undo(journal, job, ops)?;
+        lock(journal).finish(job.id, state)?;
+    }
+    held::release_finished(journal, ops)?;
     lock(journal).prune(KEEP_FINISHED)?;
     Ok(count)
 }
 
-fn undo(job: &UnfinishedJob, ops: &dyn ProviderOps) -> JobState {
-    let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
-        return JobState::Failed;
-    };
-    let done: Vec<u32> = job
-        .steps
+fn left_to_undo(job: &UnfinishedJob) -> Vec<u32> {
+    job.steps
         .iter()
-        .filter(|step| step.state == StepState::Done)
+        .filter(|step| step.state == StepState::Done && !step.is_undone())
         .map(|step| step.seq)
-        .collect();
+        .collect()
+}
+
+fn undo(
+    journal: &SharedJournal,
+    job: &UnfinishedJob,
+    ops: &dyn ProviderOps,
+) -> Result<JobState, JournalError> {
+    let held = held::held_of(journal, job.id)?;
+    let state = roll_back_job(journal, job, &held, ops);
+    Ok(match state {
+        JobState::RolledBack if held.unreadable > 0 => JobState::RestorePending,
+        other => other,
+    })
+}
+
+fn roll_back_job(
+    journal: &SharedJournal,
+    job: &UnfinishedJob,
+    held: &held::Held,
+    ops: &dyn ProviderOps,
+) -> JobState {
+    let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
+        return unrestored(&held.files);
+    };
+    let done = left_to_undo(job);
     let _ = clean_up(&plan, &done, ops);
+    let mut log = Recovery {
+        journal,
+        job: job.id,
+        kept_beside: 0,
+    };
     let outcome = roll_back(
-        &plan,
-        &done,
+        &Journaled {
+            plan: &plan,
+            done: &done,
+            held: &held.files,
+            placed: &held.placed,
+            held_unreadable: held.unreadable > 0,
+        },
         &mut JobContext {
             ops,
-            log: &mut Quiet,
+            log: &mut log,
             cancel: &CancelToken::new(),
             progress: &mut |_| {},
         },
     );
+    if log.kept_beside > 0 {
+        tracing::warn!(
+            job = job.id.0,
+            files = log.kept_beside,
+            "old files restored beside newer ones as \"(before copy)\""
+        );
+    }
     match outcome {
         JobOutcome::Done => JobState::RolledBack,
-        JobOutcome::Cancelled | JobOutcome::Failed { .. } => JobState::Failed,
+        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(&held.files),
+    }
+}
+
+fn unrestored(held: &[HeldFile]) -> JobState {
+    if held.is_empty() {
+        JobState::Failed
+    } else {
+        JobState::RestorePending
     }
 }
 
@@ -181,3 +267,12 @@ mod tests;
 
 #[cfg(test)]
 mod events_tests;
+
+#[cfg(test)]
+mod held_tests;
+
+#[cfg(test)]
+mod undo_guard_tests;
+
+#[cfg(test)]
+mod undo_retry_tests;

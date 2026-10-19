@@ -15,11 +15,24 @@ fn crashed_while_placing(workers: usize) -> (FakeFs, OperationPlan, Vec<u32>) {
 }
 
 #[test]
-fn a_crash_while_placing_an_overwrite_keeps_the_old_target() {
+fn without_a_journal_a_crash_while_placing_keeps_the_old_target() {
     for workers in MODES {
-        let (fs, _, done) = crashed_while_placing(workers);
+        let (fs, plan) = old_target();
+        let mut harness = Harness {
+            workers,
+            log: Log {
+                unjournaled: true,
+                ..Log::default()
+            },
+            ..Harness::default()
+        };
+        let _ = harness.run(&Crashing::placing(&fs, &temp("dst/a.txt")), &plan, &[]);
         assert_eq!(
-            (done, size(&fs, "dst/a.txt"), size(&fs, &temp("dst/a.txt"))),
+            (
+                harness.log.done(),
+                size(&fs, "dst/a.txt"),
+                size(&fs, &temp("dst/a.txt"))
+            ),
             (Vec::new(), Some(3), Some(BIG)),
             "workers {workers}"
         );

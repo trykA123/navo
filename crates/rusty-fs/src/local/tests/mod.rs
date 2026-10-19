@@ -12,10 +12,13 @@ use crate::{EntryBatch, EntryKind};
 mod copy_windows;
 mod errors;
 mod hostile;
+mod kept_aside;
 mod listing;
 mod metadata;
 #[cfg(windows)]
 mod native;
+#[cfg(unix)]
+mod no_replace;
 mod notify_info;
 mod ops;
 mod pause;

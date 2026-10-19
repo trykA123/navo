@@ -5,9 +5,10 @@ use std::thread::{Builder, scope};
 
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
-use super::copy::{Copier, CopyStep, failure, temp_of};
+use super::aside::Aside;
+use super::copy::{Copied, Copier, CopyStep, failure, place, temp_of};
 use super::pool::{Event, Task, work};
-use super::run::{apply, counted, current_of, holds_kept, note_kept};
+use super::run::{Job, apply, counted, current_of, holds_kept, note_kept};
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
 pub(super) fn run(
@@ -16,6 +17,11 @@ pub(super) fn run(
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
+    let aside = Aside::new();
+    let job = Job {
+        plan,
+        aside: &aside,
+    };
     let copier = Copier {
         plan,
         ops: ctx.ops,
@@ -42,7 +48,7 @@ pub(super) fn run(
             events: finished,
             workers: started,
         };
-        let mut runner = Runner::new(plan, ctx, pool);
+        let mut runner = Runner::new(job, ctx, pool);
         runner.walk(done);
         runner.outcome()
     })
@@ -55,7 +61,7 @@ struct Pool<'p> {
 }
 
 struct Runner<'p, 'c, 'a> {
-    plan: &'p OperationPlan,
+    job: Job<'p>,
     ctx: &'c mut JobContext<'a>,
     pool: Pool<'p>,
     in_flight: HashMap<u32, (&'p Step, u64)>,
@@ -82,7 +88,8 @@ fn room_for(step: &Step, workers: usize) -> usize {
 }
 
 impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
-    fn new(plan: &'p OperationPlan, ctx: &'c mut JobContext<'a>, pool: Pool<'p>) -> Self {
+    fn new(job: Job<'p>, ctx: &'c mut JobContext<'a>, pool: Pool<'p>) -> Self {
+        let plan = job.plan;
         let progress = Progress {
             bytes_done: 0,
             bytes_total: plan.totals.bytes,
@@ -92,7 +99,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             paused: false,
         };
         Self {
-            plan,
+            job,
             ctx,
             pool,
             in_flight: HashMap::new(),
@@ -105,7 +112,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
     }
 
     fn walk(&mut self, done: &[u32]) {
-        let plan = self.plan;
+        let plan = self.job.plan;
         for (seq, step) in (0_u32..).zip(&plan.steps) {
             if done.contains(&seq) {
                 self.count(step);
@@ -183,7 +190,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             let result = if holds_kept(step, &self.kept) {
                 Ok(StepOutcome::Skipped)
             } else {
-                apply(self.plan, step, self.ctx, &mut self.progress)
+                apply(self.job, step, self.ctx, &mut self.progress)
             };
             self.settle(seq, step, result);
             return;
@@ -210,6 +217,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             }
             Ok(Event::Finished { seq, result }) => {
                 if let Some((step, _)) = self.in_flight.remove(&seq) {
+                    let result = result.and_then(|copied| self.place(step, copied));
                     self.settle(seq, step, result);
                 }
             }
@@ -220,6 +228,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                 }
             }
         }
+    }
+
+    fn place(&mut self, step: &Step, copied: Copied) -> Result<StepOutcome, FsError> {
+        let Step::CopyFile { target, .. } = step else {
+            return Err(FsError::new(FsErrorKind::Unknown));
+        };
+        place(self.job.aside, self.ctx, copied, target)
     }
 
     fn settle(&mut self, seq: u32, step: &Step, result: Result<StepOutcome, FsError>) {

@@ -5,6 +5,7 @@ struct Crashed {
     fs: FakeFs,
     plan: OperationPlan,
     done: Vec<u32>,
+    placed: Vec<PlacedFile>,
     before: Snapshot,
 }
 
@@ -19,16 +20,21 @@ fn crashed_folder_copy(workers: usize) -> Crashed {
     let plan = copy_plan(&fs, &["src/b"], "dst");
     let done = crashed_with(&fs, &plan, "src/b/c3.txt", workers);
     let _ = clean_up(&plan, &done, &fs);
+    let placed = stamps_of_done_copies(&fs, &plan, &done);
     Crashed {
         fs,
         plan,
         done,
+        placed,
         before,
     }
 }
 
 fn rolled_back(crashed: &Crashed) -> (JobOutcome, Harness) {
-    let mut harness = Harness::default();
+    let mut harness = Harness {
+        placed: crashed.placed.clone(),
+        ..Harness::default()
+    };
     let outcome = harness.roll_back(&crashed.fs, &crashed.plan, &crashed.done);
     (outcome, harness)
 }
@@ -141,5 +147,29 @@ fn roll_back_of_a_move_keeps_copies_whose_source_is_gone() {
         let plan = ran(workers, &fs, &request(&fs, OpKind::Move, &["src/b"], "dst"));
         let _ = Harness::default().roll_back(&fs, &plan, &all_seqs(&plan));
         assert_eq!(size(&fs, "dst/b/c.txt"), Some(BIG));
+    }
+}
+
+#[test]
+fn roll_back_keeps_a_copy_target_the_user_replaced_since() {
+    for workers in MODES {
+        let crashed = crashed_folder_copy(workers);
+        crashed.fs.remove("dst/b/c1.txt");
+        crashed.fs.add_entry(
+            "dst/b",
+            FsEntry {
+                name: rusty_core::ProviderPath::from_text("c1.txt"),
+                kind: EntryKind::File,
+                size: 5_000,
+                modified_ms: Some(77),
+                attributes: Attributes::default(),
+            },
+        );
+        let _ = rolled_back(&crashed);
+        assert_eq!(
+            size(&crashed.fs, "dst/b/c1.txt"),
+            Some(5_000),
+            "workers {workers}"
+        );
     }
 }
