@@ -4,7 +4,8 @@ use super::ops::{Log, child};
 use super::windows::attrib;
 use super::*;
 use crate::{
-    AutoTuning, JobContext, JobOutcome, Progress, ProviderOps, TEMP_SUFFIX, run_job, scan,
+    AutoTuning, JobContext, JobOutcome, Progress, ProviderOps, TEMP_SUFFIX, clean_up, existing_at,
+    roll_back, run_job, scan,
 };
 
 const LARGE_SIZE: usize = 32 * 1024 * 1024 + 73;
@@ -32,7 +33,7 @@ fn cancelling_mid_file_returns_cancelled() {
         &child(&root, "source.bin"),
         &child(&root, "target.bin"),
         &mut |bytes| {
-            if bytes > 0 && bytes < LARGE_SIZE as u64 {
+            if bytes > 0 && bytes < u64::try_from(LARGE_SIZE).unwrap() {
                 cancelled_at = Some(bytes);
                 cancel.cancel();
             }
@@ -53,7 +54,7 @@ fn a_job_cancelled_mid_file_leaves_no_part_file() {
     let cancel = CancelToken::new();
     let mut log = Log::default();
     let mut on_progress = |progress: &Progress| {
-        if progress.bytes_done > 0 && progress.bytes_done < LARGE_SIZE as u64 {
+        if progress.bytes_done > 0 && progress.bytes_done < u64::try_from(LARGE_SIZE).unwrap() {
             cancel.cancel();
         }
     };
@@ -135,14 +136,104 @@ fn copy_keeps_readonly_and_hidden_attributes() {
 }
 
 #[test]
+fn rolling_back_a_job_removes_a_copy_of_a_readonly_source() {
+    let (dir, root) = temp();
+    write_file(dir.path(), "source.bin", 3);
+    let source = dir.path().join("source.bin");
+    attrib("+r", &source);
+    fs::create_dir(dir.path().join("dst")).unwrap();
+    let ops = LocalFs::new();
+    let plan = copy_plan(&ops, &root);
+    let cancel = CancelToken::new();
+    let mut log = Log::default();
+    let mut ctx = JobContext {
+        ops: &ops,
+        log: &mut log,
+        cancel: &cancel,
+        progress: &mut |_| {},
+    };
+    assert_eq!(run_job(&plan, &[], &mut ctx), JobOutcome::Done);
+    assert!(
+        ops.metadata(&child(&root, "dst/source.bin"))
+            .unwrap()
+            .attributes
+            .readonly
+    );
+    let outcome = roll_back(&plan, &[0], &mut ctx);
+    attrib("-r", &source);
+    assert_eq!(outcome, JobOutcome::Done);
+    assert!(!dir.path().join("dst/source.bin").exists());
+    assert!(source.exists());
+}
+
+#[test]
+fn crash_cleanup_removes_a_readonly_part_file() {
+    let (dir, root) = temp();
+    write_file(dir.path(), "source.bin", 3);
+    fs::create_dir(dir.path().join("dst")).unwrap();
+    let ops = LocalFs::new();
+    let plan = copy_plan(&ops, &root);
+    let part_name = format!("dst/source.bin{TEMP_SUFFIX}");
+    let part = dir.path().join(&part_name);
+    write_file(dir.path(), &part_name, 1);
+    attrib("+r", &part);
+    assert_eq!(clean_up(&plan, &[], &ops).unwrap(), 1);
+    assert!(!part.exists());
+    assert!(!dir.path().join("dst/source.bin").exists());
+    assert!(dir.path().join("source.bin").exists());
+}
+
+#[test]
+fn a_job_overwrites_an_existing_readonly_target() {
+    let (dir, root) = temp();
+    fs::write(dir.path().join("source.bin"), b"replacement").unwrap();
+    fs::create_dir(dir.path().join("dst")).unwrap();
+    let target = dir.path().join("dst/source.bin");
+    fs::write(&target, b"old").unwrap();
+    attrib("+r", &target);
+    let ops = LocalFs::new();
+    let cancel = CancelToken::new();
+    let items = scan(&ops, &[child(&root, "source.bin")], &cancel).unwrap();
+    let destination = child(&root, "dst");
+    let existing = existing_at(&ops, &items, &destination, &cancel).unwrap();
+    let plan = plan(&PlanRequest {
+        kind: OpKind::Copy,
+        items,
+        target: Some(destination),
+        existing,
+        policy: ConflictPolicy::OverwriteAll,
+        same_volume: true,
+        protected: Vec::new(),
+    });
+    let mut log = Log::default();
+    let outcome = run_job(
+        &plan,
+        &[],
+        &mut JobContext {
+            ops: &ops,
+            log: &mut log,
+            cancel: &cancel,
+            progress: &mut |_| {},
+        },
+    );
+    assert_eq!(outcome, JobOutcome::Done);
+    assert_eq!(fs::read(&target).unwrap(), b"replacement");
+    assert!(
+        !dir.path()
+            .join(format!("dst/source.bin{TEMP_SUFFIX}"))
+            .exists()
+    );
+}
+
+#[test]
 fn unbuffered_copy_handles_the_threshold_and_an_unaligned_end() {
     let (dir, root) = temp();
     let ops = LocalFs::with_auto_tuning(AutoTuning {
         unbuffered_from: 4096,
         ..AutoTuning::default()
     });
-    for size in [4096, 8329] {
-        let data: Vec<u8> = (0..size).map(|i| (i % 251) as u8).collect();
+    for size in [4096_u32, 8329] {
+        let data: Vec<u8> = (0..size).map(|i| u8::try_from(i % 251).unwrap()).collect();
         fs::write(dir.path().join("source.bin"), &data).unwrap();
         let mut seen = Vec::new();
         let written = ops
@@ -153,9 +244,9 @@ fn unbuffered_copy_handles_the_threshold_and_an_unaligned_end() {
                 &CancelToken::new(),
             )
             .unwrap();
-        assert_eq!(written, size as u64);
+        assert_eq!(written, u64::from(size));
         assert_eq!(fs::read(dir.path().join("target.bin")).unwrap(), data);
-        assert_eq!(seen.last(), Some(&(size as u64)));
+        assert_eq!(seen.last(), Some(&u64::from(size)));
         assert!(seen.windows(2).all(|pair| pair[0] <= pair[1]));
         fs::remove_file(dir.path().join("target.bin")).unwrap();
     }

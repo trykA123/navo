@@ -76,7 +76,26 @@ impl ProviderOps for LocalFs {
     }
 
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
-        fs::remove_file(os_path(location)?).map_err(|e| io_error(&e, location))
+        let path = os_path(location)?;
+        let result = fs::remove_file(&path);
+        #[cfg(windows)]
+        if let Err(failure) = &result
+            && failure.raw_os_error()
+                == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED.cast_signed())
+        {
+            let metadata = fs::symlink_metadata(&path).map_err(|e| io_error(&e, location))?;
+            let mut permissions = metadata.permissions();
+            if metadata.is_file() && permissions.readonly() {
+                #[expect(
+                    clippy::permissions_set_readonly_false,
+                    reason = "on Windows this clears only the read-only attribute"
+                )]
+                permissions.set_readonly(false);
+                fs::set_permissions(&path, permissions).map_err(|e| io_error(&e, location))?;
+                return fs::remove_file(&path).map_err(|e| io_error(&e, location));
+            }
+        }
+        result.map_err(|e| io_error(&e, location))
     }
 
     fn remove_link(&self, location: &Location) -> Result<(), FsError> {

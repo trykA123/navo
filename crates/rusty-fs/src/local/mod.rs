@@ -80,11 +80,15 @@ impl LocalFs {
     }
 
     #[must_use]
-    pub fn with_auto_tuning(_auto_tuning: AutoTuning) -> Self {
+    #[cfg_attr(
+        not(windows),
+        expect(unused_variables, reason = "auto tuning is only used on Windows")
+    )]
+    pub fn with_auto_tuning(auto_tuning: AutoTuning) -> Self {
         Self {
             batch_size: DEFAULT_BATCH,
             #[cfg(windows)]
-            auto_tuning: _auto_tuning,
+            auto_tuning,
             #[cfg(windows)]
             std_listing: false,
         }

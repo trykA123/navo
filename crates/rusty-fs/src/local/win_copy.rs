@@ -80,7 +80,8 @@ pub(super) fn copy(
         flags |= COPY_FILE_NO_BUFFERING;
     }
     let parameters = COPYFILE2_EXTENDED_PARAMETERS {
-        dwSize: size_of::<COPYFILE2_EXTENDED_PARAMETERS>() as u32,
+        dwSize: u32::try_from(size_of::<COPYFILE2_EXTENDED_PARAMETERS>())
+            .map_err(|_| error(FsErrorKind::Unknown, target))?,
         dwCopyFlags: flags,
         pfCancel: std::ptr::null_mut(),
         pProgressRoutine: Some(on_progress),
