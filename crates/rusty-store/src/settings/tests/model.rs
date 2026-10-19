@@ -110,3 +110,37 @@ fn the_text_and_image_views_read_their_own_tables() {
     assert!(!settings.text.view.line_numbers && settings.text.view.line_ends);
     assert!(settings.image.view.details);
 }
+
+#[test]
+fn copy_mode_defaults_to_auto() {
+    assert_eq!(Settings::default().copy.mode, crate::CopyMode::Auto);
+}
+
+#[test]
+fn copy_mode_reads_both_values() {
+    for (text, mode) in [
+        ("auto", crate::CopyMode::Auto),
+        ("standard", crate::CopyMode::Standard),
+    ] {
+        let (settings, unknown) =
+            crate::parse_settings(&format!("[copy]\nmode = \"{text}\"\n")).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        assert_eq!(settings.copy.mode, mode);
+    }
+}
+
+#[test]
+fn an_unknown_copy_mode_is_reported_with_its_place() {
+    let error = crate::parse_settings("[copy]\nmode = \"turbo\"\n").unwrap_err();
+    assert!(
+        matches!(
+            error,
+            crate::SettingsError::Invalid {
+                line: 2,
+                column: 8,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}

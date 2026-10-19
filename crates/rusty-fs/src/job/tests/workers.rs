@@ -1,5 +1,5 @@
 use crate::DriveClass::{Hdd, Network, Ssd, Unknown};
-use crate::{DriveClass, WorkerCounts, copy_workers};
+use crate::{CopyMode, DriveClass, WorkerCounts, copy_workers, job_workers};
 
 const COUNTS: WorkerCounts = WorkerCounts {
     ssd: 4,
@@ -61,4 +61,24 @@ fn a_zero_count_still_copies_with_one_worker() {
         slow: 0,
     };
     assert_eq!(copy_workers(Ssd, Ssd, counts), 1);
+}
+
+#[test]
+fn standard_mode_always_runs_one_worker() {
+    for (source, target) in [(Ssd, Ssd), (Network, Network), (Ssd, Network)] {
+        assert_eq!(job_workers(CopyMode::Standard, source, target, COUNTS), 1);
+    }
+}
+
+#[test]
+fn auto_mode_follows_the_drives() {
+    assert_eq!(job_workers(CopyMode::Auto, Ssd, Ssd, COUNTS), 4);
+    assert_eq!(job_workers(CopyMode::Auto, Network, Ssd, COUNTS), 8);
+    assert_eq!(job_workers(CopyMode::Auto, Hdd, Ssd, COUNTS), 1);
+}
+
+#[test]
+fn the_mode_names_itself_for_the_dialog() {
+    assert_eq!(CopyMode::default().label(), "Auto");
+    assert_eq!(CopyMode::Standard.label(), "Standard");
 }

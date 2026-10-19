@@ -41,7 +41,7 @@ pub(super) fn fake() -> FakeFs {
     fs
 }
 
-fn overwrite_plan(fs: &FakeFs) -> OperationPlan {
+pub(super) fn overwrite_plan(fs: &FakeFs) -> OperationPlan {
     let cancel = CancelToken::new();
     let items = scan(fs, &[fs.location("home/docs")], &cancel).unwrap();
     let target = fs.location("dest");

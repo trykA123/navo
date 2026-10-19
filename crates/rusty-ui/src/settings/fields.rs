@@ -7,16 +7,18 @@ pub enum Section {
     Selection,
     Terminal,
     Editor,
+    Copy,
     Display,
 }
 
 impl Section {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
         Self::Terminal,
         Self::Editor,
+        Self::Copy,
         Self::Display,
     ];
 
@@ -27,6 +29,7 @@ impl Section {
             Self::Selection => "Selection",
             Self::Terminal => "Terminal",
             Self::Editor => "Editor",
+            Self::Copy => "Copy",
             Self::Display => "Display",
         }
     }
@@ -38,6 +41,7 @@ impl Section {
             Self::Selection => IconName::MousePointer,
             Self::Terminal => IconName::SquareTerminal,
             Self::Editor => IconName::FilePen,
+            Self::Copy => IconName::Copy,
             Self::Display => IconName::Eye,
         }
     }
@@ -63,6 +67,7 @@ pub enum Field {
     TerminalProvider,
     TerminalCommand,
     EditorPath,
+    CopyMode,
     TextLineNumbers,
     TextLineEnds,
     ImageDetails,
@@ -104,6 +109,7 @@ pub const PRESETS: [Choice; 3] = [
     choice("Rich", "rich"),
     choice("Custom", "custom"),
 ];
+pub const COPY_MODES: [Choice; 2] = [choice("Auto", "auto"), choice("Standard", "standard")];
 pub const SORTS: [Choice; 4] = [
     choice("Name", "name"),
     choice("Size", "size"),
@@ -154,7 +160,7 @@ const fn spec(
 use Field as F;
 use Section as S;
 
-pub const FIELDS: [FieldSpec; 26] = [
+pub const FIELDS: [FieldSpec; 27] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -265,6 +271,14 @@ pub const FIELDS: [FieldSpec; 26] = [
         (F::EditorPath, S::Editor, "editor.path"),
         ("Editor", "The program F4 opens files with"),
         Control::Text,
+    ),
+    spec(
+        (F::CopyMode, S::Copy, "copy.mode"),
+        (
+            "Copy mode",
+            "Auto copies several files at once where the drives allow; Standard copies one file at a time.",
+        ),
+        Control::Choices(&COPY_MODES, Look::Segments),
     ),
     spec(
         (F::TextLineNumbers, S::Display, "text.view.line-numbers"),

@@ -1,10 +1,30 @@
 use rusty_core::{FsError, Location, OpKind, OperationPlan, Risk, TabId};
-use rusty_fs::{CancelToken, HeldFile, JobLog, JobOutcome, Progress, ProviderOps, StepOutcome};
+use rusty_fs::{
+    CancelToken, CopyMode, DriveClass, HeldFile, JobLog, JobOutcome, Progress, ProviderOps,
+    StepOutcome, drive_class,
+};
 
 use std::sync::Arc;
 
 pub trait OpLog: JobLog + Send {
     fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps);
+}
+
+pub(in crate::browser) type ClassOf = fn(&Location) -> DriveClass;
+
+#[derive(Clone, Copy)]
+pub(in crate::browser) struct Copying {
+    pub mode: CopyMode,
+    pub class_of: ClassOf,
+}
+
+impl Default for Copying {
+    fn default() -> Self {
+        Self {
+            mode: CopyMode::default(),
+            class_of: drive_class,
+        }
+    }
 }
 
 pub type LogFactory = Arc<dyn Fn(&OperationPlan) -> Result<Box<dyn OpLog>, String> + Send + Sync>;

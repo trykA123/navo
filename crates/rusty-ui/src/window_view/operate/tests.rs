@@ -2,9 +2,10 @@ use rusty_core::{AppState, Conflict, Location, OpKind, OperationPlan, Resolution
 use rusty_fs::{CancelToken, Progress};
 
 use super::super::jobs::job_info;
-use super::confirm_props;
+use super::{confirm_props, mode_label};
 use crate::browser::{JobStatus, JobView, PendingOp};
 use crate::job_row::JobRowState;
+use rusty_fs::CopyMode;
 
 fn at(path: &str) -> Location {
     Location::new(path).unwrap()
@@ -159,4 +160,16 @@ fn moving_a_protected_source_still_needs_the_typed_word() {
     let props = confirm_props(&pending(risky, Some(at("/dest"))));
     assert!(props.danger);
     assert_eq!(props.typed.as_deref(), Some("DELETE"));
+}
+
+#[test]
+fn only_a_copy_or_a_move_shows_the_mode() {
+    let label = |kind, mode| mode_label(kind, mode).map(|text| text.to_string());
+    assert_eq!(label(OpKind::Copy, CopyMode::Auto).as_deref(), Some("Auto"));
+    assert_eq!(
+        label(OpKind::Move, CopyMode::Standard).as_deref(),
+        Some("Standard")
+    );
+    assert_eq!(label(OpKind::Delete, CopyMode::Auto), None);
+    assert_eq!(label(OpKind::Recycle, CopyMode::Standard), None);
 }

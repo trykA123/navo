@@ -1,4 +1,5 @@
 use gpui_kit::SharedString;
+use rusty_fs::CopyMode;
 
 use super::fields::{Control, FIELDS, Field, FieldSpec, PRESETS};
 use crate::app_menu::{QuickSettings, Setting};
@@ -10,6 +11,7 @@ const THEME_ORDER: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, 
 const DENSITY_ORDER: [Density; 3] = [Density::Compact, Density::Normal, Density::Comfortable];
 const HINTS_ORDER: [HintsMode; 3] = [HintsMode::Off, HintsMode::Fkeys, HintsMode::All];
 const SORT_ORDER: [SortBy; 4] = [SortBy::Name, SortBy::Size, SortBy::Date, SortBy::Ext];
+const COPY_ORDER: [CopyMode; 2] = [CopyMode::Auto, CopyMode::Standard];
 const SHOWN: usize = 0;
 const HIDDEN: usize = 1;
 
@@ -230,6 +232,13 @@ impl Values {
 
     pub fn patterns_select_folders(&self) -> bool {
         self.flag(Field::PatternsSelectFolders)
+    }
+
+    pub fn copy_mode(&self) -> CopyMode {
+        COPY_ORDER
+            .get(self.pick(Field::CopyMode))
+            .copied()
+            .unwrap_or_default()
     }
 
     pub fn editor_path(&self) -> Option<String> {

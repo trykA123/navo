@@ -286,3 +286,6 @@ mod undo_guard_tests;
 
 #[cfg(test)]
 mod undo_retry_tests;
+
+#[cfg(test)]
+mod parallel_tests;

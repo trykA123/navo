@@ -80,7 +80,7 @@ fn automotive() -> impl Strategy<Value = Automotive> {
     )
 }
 
-fn viewers() -> impl Strategy<Value = (TextViewer, ImageViewer, Automotive)> {
+fn viewers() -> impl Strategy<Value = (TextViewer, ImageViewer, Automotive, CopySettings)> {
     let text = any::<[bool; 2]>().prop_map(|[line_numbers, line_ends]| TextViewer {
         view: TextView {
             line_numbers,
@@ -90,7 +90,9 @@ fn viewers() -> impl Strategy<Value = (TextViewer, ImageViewer, Automotive)> {
     let image = any::<bool>().prop_map(|details| ImageViewer {
         view: ImageView { details },
     });
-    (text, image, automotive())
+    let copy = prop_oneof![Just(CopyMode::Auto), Just(CopyMode::Standard)]
+        .prop_map(|mode| CopySettings { mode });
+    (text, image, automotive(), copy)
 }
 
 pub(super) fn settings() -> impl Strategy<Value = Settings> {
@@ -114,7 +116,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 appearance,
                 files,
                 selection,
-                (terminal, editor, (text, image, automotive)),
+                (terminal, editor, (text, image, automotive, copy)),
                 experimental,
             )| Settings {
                 appearance,
@@ -124,6 +126,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 editor,
                 text,
                 image,
+                copy,
                 automotive,
                 experimental,
             },

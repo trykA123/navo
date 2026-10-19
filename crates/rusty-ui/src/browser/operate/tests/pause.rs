@@ -1,6 +1,6 @@
 use super::*;
 
-fn gated(browser: &mut Browser) -> Arc<AtomicBool> {
+pub(super) fn gated(browser: &mut Browser) -> Arc<AtomicBool> {
     let gate = Arc::new(AtomicBool::new(false));
     let open = Arc::clone(&gate);
     browser.set_operations(Operations {
