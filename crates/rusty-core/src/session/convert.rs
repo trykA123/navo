@@ -22,6 +22,7 @@ pub(super) fn save(state: &AppState, rows_per_pane: usize) -> SessionState {
 fn save_window(window: &Window, rows_per_pane: usize) -> WindowState {
     WindowState {
         id: window.id().get(),
+        placement: window.placement().to_vec(),
         layout: window.layout().to_state(),
         focused_pane: window.layout().focused().get(),
         panes: window
@@ -120,7 +121,12 @@ fn restore_window(window: &WindowState) -> Result<Window, String> {
         .iter()
         .map(restore_pane)
         .collect::<Result<Vec<_>, _>>()?;
-    Window::restore(WindowId::new(window.id), layout, panes)
+    Window::restore(
+        WindowId::new(window.id),
+        layout,
+        panes,
+        window.placement.clone(),
+    )
 }
 
 fn restore_pane(pane: &PaneState) -> Result<Pane, String> {

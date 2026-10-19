@@ -13,7 +13,7 @@ pub use pane::Pane;
 pub use tab::{Tab, ViewState};
 pub use window::Window;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AppState {
     focused: Window,
     others: BTreeMap<WindowId, Window>,

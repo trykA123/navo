@@ -1,14 +1,16 @@
 use std::collections::BTreeMap;
 
 use super::{Pane, StateError};
+use crate::placement::{MonitorSetup, Placement};
 use crate::{Direction, Layout, PaneId, WindowId};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Window {
     id: WindowId,
     layout: Layout,
     focused: Pane,
     others: BTreeMap<PaneId, Pane>,
+    placement: Vec<Placement>,
 }
 
 impl Window {
@@ -40,7 +42,22 @@ impl Window {
             .collect()
     }
 
-    pub(crate) fn restore(id: WindowId, layout: Layout, panes: Vec<Pane>) -> Result<Self, String> {
+    #[must_use]
+    pub fn placement(&self) -> &[Placement] {
+        &self.placement
+    }
+
+    pub fn remember(&mut self, setup: &MonitorSetup, placement: Placement) {
+        crate::placement::remember(&mut self.placement, setup, placement);
+    }
+
+    pub(crate) fn restore(
+        id: WindowId,
+        layout: Layout,
+        panes: Vec<Pane>,
+        mut placement: Vec<Placement>,
+    ) -> Result<Self, String> {
+        placement.truncate(crate::placement::MAX_PLACEMENTS);
         let mut others: BTreeMap<PaneId, Pane> = panes.into_iter().map(|p| (p.id(), p)).collect();
         let mut wanted = layout.panes();
         wanted.sort_unstable();
@@ -58,6 +75,7 @@ impl Window {
             layout,
             focused,
             others,
+            placement,
         })
     }
 
@@ -67,6 +85,7 @@ impl Window {
             layout: Layout::new(pane.id()),
             focused: pane,
             others: BTreeMap::new(),
+            placement: Vec::new(),
         }
     }
 

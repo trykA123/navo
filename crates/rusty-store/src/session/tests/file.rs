@@ -9,12 +9,12 @@ fn written_session_reads_back_equal() {
 }
 
 #[test]
-fn file_starts_with_magic_then_version_one() {
+fn file_starts_with_magic_then_version_two() {
     let dir = tmp();
     let path = session_file(&dir);
     write_session(&path, &first()).unwrap();
     let bytes = fs::read(&path).unwrap();
-    assert_eq!(&bytes[..18], b"FERRITE-SESSION\n\x01\x00");
+    assert_eq!(&bytes[..18], b"FERRITE-SESSION\n\x02\x00");
 }
 
 #[test]
@@ -22,7 +22,10 @@ fn file_is_the_header_then_the_postcard_body() {
     let dir = tmp();
     let path = session_file(&dir);
     write_session(&path, &first()).unwrap();
-    assert_eq!(fs::read(&path).unwrap(), framed(1, &body(&first())));
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        framed(SESSION_VERSION, &body(&first()))
+    );
 }
 
 #[test]
@@ -59,13 +62,13 @@ fn wrong_magic_is_bad_magic() {
 fn newer_version_is_too_new() {
     let dir = tmp();
     let path = session_file(&dir);
-    fs::write(&path, framed(2, &body(&first()))).unwrap();
+    fs::write(&path, framed(SESSION_VERSION + 1, &body(&first()))).unwrap();
     assert!(matches!(
         read_session_file(&path),
         Err(SessionFileError::TooNew {
-            found: 2,
-            supported: 1
-        })
+            found,
+            supported
+        }) if found == SESSION_VERSION + 1 && supported == SESSION_VERSION
     ));
 }
 
@@ -155,7 +158,7 @@ fn a_newer_main_file_is_not_deleted_by_a_write() {
         rusty_core::AppState::new(rusty_core::Location::new("/home").unwrap()).to_session(10);
     write_session(&path, &session).unwrap();
     let mut bytes = std::fs::read(&path).unwrap();
-    bytes[16] = 2;
+    bytes[16..18].copy_from_slice(&(SESSION_VERSION + 1).to_le_bytes());
     std::fs::write(&path, &bytes).unwrap();
     write_session(&path, &session).unwrap();
     assert_eq!(std::fs::read(crate::backup_path(&path)).unwrap(), bytes);
