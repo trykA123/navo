@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use rusty_core::{Location, ProviderId};
-use rusty_pdf::protocol::{Bitmap, CharBox, PageText, PdfError, RenderRequest, TextChar};
+use rusty_pdf::protocol::{
+    Bitmap, CharBox, PageLinks, PageText, PdfError, RenderRequest, TextChar,
+};
 use rusty_ui::prelude::*;
 use rusty_ui::window_view::{OpenPdf, PdfPages, PdfStart, PdfView};
 
@@ -153,6 +155,10 @@ impl PdfPages for Manual {
         let chars = glyphs(page).into_iter().map(|glyph| glyph.text).collect();
         PageText::new(WIDTH, HEIGHT, chars).map_err(|_| PdfError::Corrupt)
     }
+
+    fn links(&mut self, _: u32) -> Result<PageLinks, PdfError> {
+        PageLinks::new(WIDTH, HEIGHT, Vec::new()).map_err(|_| PdfError::Corrupt)
+    }
 }
 
 fn start() -> PdfStart {
@@ -162,6 +168,7 @@ fn start() -> PdfStart {
         len: 18_402_361,
         location: Location::provider_root(ProviderId::local()),
         open,
+        open_uri: Arc::new(|_| {}),
         opened: Ok(Box::new(Manual)),
         is_preview: false,
     }

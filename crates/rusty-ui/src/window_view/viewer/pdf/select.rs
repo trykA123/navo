@@ -1,4 +1,6 @@
-use gpui_kit::{ClipboardItem, MouseButton, MouseDownEvent, MouseMoveEvent, Point, point};
+use gpui_kit::{
+    ClipboardItem, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Point, point,
+};
 
 use super::PdfView;
 use super::doc::{Doc, Selection};
@@ -9,7 +11,7 @@ use crate::prelude::*;
 const SELECT_FIRST: &str = "Drag over the text on a page to select it first.";
 const NO_TEXT: &str = "This page has no text to copy.";
 
-pub(super) fn char_under(doc: &Doc, at: Point<f32>) -> Option<(u32, u32)> {
+pub(super) fn page_point(doc: &Doc, at: Point<f32>) -> Option<(u32, f32, f32)> {
     let scale = doc.scale();
     let y = doc.camera.scroll.y + at.y;
     let page = doc.pages.page_at(y, scale);
@@ -17,7 +19,12 @@ pub(super) fn char_under(doc: &Doc, at: Point<f32>) -> Option<(u32, u32)> {
     let x = (at.x - doc.camera.page_left(&doc.pages, page)) / scale;
     let y = (y - doc.pages.top(page, scale)) / scale;
     let inside = (0. ..=size.width).contains(&x) && (0. ..=size.height).contains(&y);
-    let text = doc.boxes.get(page).filter(|_| inside)?;
+    inside.then_some((page, x, y))
+}
+
+pub(super) fn char_under(doc: &Doc, at: Point<f32>) -> Option<(u32, u32)> {
+    let (page, x, y) = page_point(doc, at)?;
+    let text = doc.boxes.get(page)?;
     char_at(text, x, y).map(|at| (page, at))
 }
 
@@ -47,6 +54,7 @@ impl PdfView {
             to: at,
         });
         doc.is_dragging = doc.selection.is_some();
+        doc.press = Some(at);
         cx.notify();
     }
 
@@ -69,9 +77,14 @@ impl PdfView {
         }
     }
 
-    pub(super) fn release(&mut self) {
-        if let Some(doc) = self.doc_mut() {
-            doc.is_dragging = false;
+    pub(super) fn release(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) {
+        let at = self.local(event.position);
+        let Some(doc) = self.doc_mut() else {
+            return;
+        };
+        doc.is_dragging = false;
+        if let Some(from) = doc.press.take() {
+            self.click(from, at, cx);
         }
     }
 

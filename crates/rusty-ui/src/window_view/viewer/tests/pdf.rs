@@ -8,7 +8,9 @@ use gpui_kit::{AppContext as _, InputEvent as _};
 use rusty_core::Location;
 use rusty_pdf::Engine;
 use rusty_pdf::fake::{FakeEngine, PASSWORD};
-use rusty_pdf::protocol::{Bitmap, CharBox, PageText, PdfError, RenderRequest, TextChar};
+use rusty_pdf::protocol::{
+    Bitmap, CharBox, LinkTarget, PageLink, PageLinks, PageText, PdfError, RenderRequest, TextChar,
+};
 
 use super::{redraw, visible, window_with};
 use crate::window_view::FerriteWindow;
@@ -17,9 +19,9 @@ use crate::window_view::viewer::pdf::{OpenPdf, PdfBody, PdfPages};
 use crate::window_view::viewer::{FileHooks, Kinds};
 
 pub(super) const PAGES: u32 = 40;
-const WIDTH: f32 = 600.;
+pub(super) const WIDTH: f32 = 600.;
 const HEIGHT: f32 = 800.;
-const CHAR: f32 = 8.;
+pub(super) const CHAR: f32 = 8.;
 const LINE: f32 = 14.;
 const MUTED: u32 = 5;
 const PDF_BYTES: &[u8] = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n\x00";
@@ -29,6 +31,7 @@ const MOTION: std::time::Duration = std::time::Duration::from_millis(600);
 pub(super) struct Calls {
     pub drawn: Arc<Mutex<Vec<u32>>>,
     pub opens: Arc<Mutex<Vec<Option<String>>>>,
+    pub uris: Arc<Mutex<Vec<String>>>,
 }
 
 impl Calls {
@@ -66,6 +69,48 @@ fn chars_of(text: &str) -> Vec<TextChar> {
     chars
 }
 
+pub(super) const LINK_COLUMN: f32 = 40.;
+
+fn link_box(top: f32) -> CharBox {
+    CharBox {
+        left: LINK_COLUMN,
+        top,
+        right: LINK_COLUMN + 80.,
+        bottom: top + 14.,
+    }
+}
+
+fn book_links() -> Result<PageLinks, PdfError> {
+    let uri = |uri: &str| LinkTarget::Uri(uri.to_owned());
+    let targets = [
+        (
+            CharBox {
+                left: 40.,
+                top: 38.,
+                right: 200.,
+                bottom: 54.,
+            },
+            LinkTarget::Page { page: 9, top: None },
+        ),
+        (
+            link_box(100.),
+            LinkTarget::Page {
+                page: 6,
+                top: Some(100.),
+            },
+        ),
+        (link_box(130.), uri("https://example.org/a")),
+        (link_box(160.), uri("file:///etc/passwd")),
+        (link_box(190.), uri("javascript:alert(1)")),
+        (link_box(220.), LinkTarget::Unsupported),
+    ];
+    let links = targets
+        .into_iter()
+        .map(|(bounds, target)| PageLink { bounds, target })
+        .collect();
+    PageLinks::new(WIDTH, HEIGHT, links).map_err(|_| PdfError::Corrupt)
+}
+
 struct Book {
     pages: u32,
     calls: Calls,
@@ -90,6 +135,10 @@ impl PdfPages for Book {
         }
         PageText::new(WIDTH, HEIGHT, chars_of(&page_text(page))).map_err(|_| PdfError::Corrupt)
     }
+
+    fn links(&mut self, _: u32) -> Result<PageLinks, PdfError> {
+        book_links()
+    }
 }
 
 struct Fake(FakeEngine);
@@ -105,6 +154,10 @@ impl PdfPages for Fake {
 
     fn text(&mut self, page: u32) -> Result<PageText, PdfError> {
         self.0.text(page)
+    }
+
+    fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
+        self.0.links(page)
     }
 }
 
@@ -155,7 +208,12 @@ fn rig_bytes(cx: &mut TestAppContext, name: &str, open: Option<OpenPdf>, bytes: 
     fs.add_file(&format!("home/{name}"), 4);
     let calls = Calls::default();
     let open = open.unwrap_or_else(|| open_with(&calls));
-    let (window, view) = window_with(cx, fs, hooks(open, bytes), Kinds::builtin());
+    let uris = calls.uris.clone();
+    let files = FileHooks {
+        open_uri: Arc::new(move |uri| uris.lock().expect("calls").push(uri.to_owned())),
+        ..hooks(open, bytes)
+    };
+    let (window, view) = window_with(cx, fs, files, Kinds::builtin());
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);

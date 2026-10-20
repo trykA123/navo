@@ -118,22 +118,31 @@ impl TextIndex {
     }
 }
 
-#[derive(Default)]
-pub(super) struct Boxes {
-    kept: VecDeque<(u32, Arc<PageText>)>,
+pub(super) struct Kept<T> {
+    kept: VecDeque<(u32, Arc<T>)>,
 }
 
-impl Boxes {
-    pub(super) fn get(&self, page: u32) -> Option<&Arc<PageText>> {
+pub(super) type Boxes = Kept<PageText>;
+
+impl<T> Default for Kept<T> {
+    fn default() -> Self {
+        Self {
+            kept: VecDeque::new(),
+        }
+    }
+}
+
+impl<T> Kept<T> {
+    pub(super) fn get(&self, page: u32) -> Option<&Arc<T>> {
         self.kept
             .iter()
             .find(|(at, _)| *at == page)
-            .map(|(_, text)| text)
+            .map(|(_, kept)| kept)
     }
 
-    pub(super) fn insert(&mut self, page: u32, text: Arc<PageText>, keep: &Range<u32>) {
+    pub(super) fn insert(&mut self, page: u32, value: Arc<T>, keep: &Range<u32>) {
         self.kept.retain(|(at, _)| *at != page);
-        self.kept.push_back((page, text));
+        self.kept.push_back((page, value));
         while self.kept.len() > BOXES_KEPT {
             let Some(at) = self.kept.iter().position(|(at, _)| !keep.contains(at)) else {
                 break;

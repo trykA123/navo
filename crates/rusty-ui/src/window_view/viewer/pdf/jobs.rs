@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use gpui_kit::RenderImage;
 use image::{Frame, RgbaImage};
-use rusty_pdf::protocol::{Bitmap, PageText, PdfError, RenderRequest, Rotation};
+use rusty_pdf::protocol::{Bitmap, PageLinks, PageText, PdfError, RenderRequest, Rotation};
 
 use super::source::PdfPages;
 
@@ -13,12 +13,16 @@ pub(super) enum Job {
     Page { page: u32, width: u32 },
     Thumb { page: u32, width: u32 },
     Text { page: u32 },
+    Links { page: u32 },
 }
 
 impl Job {
     pub(super) fn page(self) -> u32 {
         match self {
-            Self::Page { page, .. } | Self::Thumb { page, .. } | Self::Text { page } => page,
+            Self::Page { page, .. }
+            | Self::Thumb { page, .. }
+            | Self::Text { page }
+            | Self::Links { page } => page,
         }
     }
 }
@@ -32,6 +36,7 @@ pub(super) struct Picture {
 pub(super) enum Done {
     Drawn(Job, Picture),
     Read(u32, Arc<PageText>),
+    Linked(u32, Arc<Option<PageLinks>>),
     Failed(Job, PdfError),
 }
 
@@ -65,6 +70,7 @@ pub(super) fn run(shared: &Shared, job: Job) -> Done {
     let pages = pages.as_mut();
     let drawn = match job {
         Job::Page { page, width } | Job::Thumb { page, width } => draw(pages, page, width),
+        Job::Links { page } => return Done::Linked(page, Arc::new(pages.links(page).ok())),
         Job::Text { page } => {
             return match pages.text(page) {
                 Ok(text) => Done::Read(page, Arc::new(text)),

@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use rusty_core::Location;
 use rusty_pdf::Document;
-use rusty_pdf::protocol::{Bitmap, PageText, PdfError, RenderRequest};
+use rusty_pdf::protocol::{Bitmap, PageLinks, PageText, PdfError, RenderRequest};
 
 pub trait PdfPages: Send {
     fn page_count(&self) -> u32;
     fn render(&mut self, request: RenderRequest) -> Result<Bitmap, PdfError>;
     fn text(&mut self, page: u32) -> Result<PageText, PdfError>;
+    fn links(&mut self, page: u32) -> Result<PageLinks, PdfError>;
 }
 
 impl PdfPages for Document {
@@ -22,7 +23,13 @@ impl PdfPages for Document {
     fn text(&mut self, page: u32) -> Result<PageText, PdfError> {
         Document::text(self, page)
     }
+
+    fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
+        Document::links(self, page)
+    }
 }
+
+pub type OpenUri = Arc<dyn Fn(&str) + Send + Sync>;
 
 pub type OpenPdf =
     Arc<dyn Fn(&Location, Option<&str>) -> Result<Box<dyn PdfPages>, PdfError> + Send + Sync>;
