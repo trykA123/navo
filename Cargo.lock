@@ -6640,6 +6640,7 @@ dependencies = [
  "image",
  "insta",
  "kamadak-exif",
+ "proptest",
  "raw-window-handle",
  "resvg 0.46.0",
  "rusty-automotive",
