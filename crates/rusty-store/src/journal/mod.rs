@@ -53,6 +53,17 @@ pub enum JournalError {
     BadState(String),
 }
 
+impl JournalError {
+    #[must_use]
+    pub fn is_corruption(&self) -> bool {
+        match self {
+            Self::Db(error) => error.is_corruption(),
+            Self::Sqlite(error) => crate::db::is_corrupt_sqlite(error),
+            _ => false,
+        }
+    }
+}
+
 pub struct JobJournal {
     db: Db,
 }

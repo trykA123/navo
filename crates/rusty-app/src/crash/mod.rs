@@ -7,6 +7,13 @@ use crate::logging::Diagnostics;
 
 mod downloads;
 mod hook;
+#[cfg(test)]
+pub(crate) mod test_damage;
+mod unclean;
+
+#[cfg(test)]
+pub(crate) use unclean::sentinel_path;
+pub(crate) use unclean::{note_previous_exit, open_db, record_failed_check};
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);
 

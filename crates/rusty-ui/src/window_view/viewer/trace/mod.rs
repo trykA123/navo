@@ -14,7 +14,7 @@ use std::any::Any;
 use std::ops::Range;
 
 use gpui_kit::{AnyView, FocusHandle};
-use rusty_automotive::{Entry, Trace};
+use rusty_automotive::{Entry, Trace, sniff_blf};
 
 pub(super) use keys::bind_keys;
 
@@ -97,7 +97,7 @@ pub(in crate::window_view::viewer) struct TraceView {
 
 impl TraceView {
     fn new(file: &TraceFile, host: Host, cx: &mut Context<Self>) -> Self {
-        let reading = jobs::start_index(&host, file.len, cx);
+        let reading = jobs::start_index(&host, (file.len, sniff_blf(&file.head)), cx);
         Self {
             title: host.title.clone(),
             len: file.len,
@@ -191,11 +191,10 @@ impl ViewerBody for TraceBody {
 
     fn keys(&self, cx: &App) -> BodyKeys {
         let view = self.0.read(cx);
-        let mut keys = vec![
-            ("Ctrl+B", "IDs"),
-            ("Ctrl+I", "Inspector"),
-            ("Alt+F", "Follow"),
-        ];
+        let mut keys = vec![("Ctrl+B", "IDs"), ("Ctrl+I", "Inspector")];
+        if view.trace.supports_follow() {
+            keys.push(("Alt+F", "Follow"));
+        }
         if view.focus_in == Focus::Navigator {
             keys.insert(0, ("Enter", "Filter by ID"));
             keys.insert(1, ("Alt+S", "Sort"));

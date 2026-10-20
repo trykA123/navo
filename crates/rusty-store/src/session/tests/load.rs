@@ -84,3 +84,40 @@ fn backup_error_is_not_reported_when_main_is_used() {
     let (_, _, errors) = load_session(&path);
     assert!(errors.is_empty(), "{errors:?}");
 }
+
+#[test]
+fn newer_main_file_falls_back_to_the_backup_and_stays_on_disk() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    let newer = framed(SESSION_VERSION + 1, &body(&first()));
+    fs::write(&path, &newer).unwrap();
+    put(&backup_path(&path), &second());
+    let (session, source, errors) = load_session(&path);
+    assert_eq!((session, source), (Some(second()), SessionSource::Backup));
+    assert!(matches!(
+        errors.as_slice(),
+        [SessionFileError::TooNew { .. }]
+    ));
+    assert_eq!(fs::read(&path).unwrap(), newer);
+}
+
+#[test]
+fn newer_main_and_backup_files_start_empty() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    fs::write(&path, framed(SESSION_VERSION + 1, &body(&first()))).unwrap();
+    fs::write(
+        backup_path(&path),
+        framed(SESSION_VERSION + 2, &body(&second())),
+    )
+    .unwrap();
+    let (session, source, errors) = load_session(&path);
+    assert_eq!((session, source), (None, SessionSource::Empty));
+    assert!(matches!(
+        errors.as_slice(),
+        [
+            SessionFileError::TooNew { .. },
+            SessionFileError::TooNew { .. }
+        ]
+    ));
+}

@@ -57,11 +57,11 @@ pub(super) struct Table {
     pub columns: Vec<Column>,
 }
 
-pub(super) fn cells(text: &str) -> Vec<&str> {
+pub(super) fn raw_cells(text: &str) -> Vec<&str> {
     let text = text.trim();
     let text = text.strip_prefix('|').unwrap_or(text);
     let text = text.strip_suffix('|').unwrap_or(text);
-    text.split('|').map(str::trim).collect()
+    text.split('|').collect()
 }
 
 fn parse_number(text: &str, unit: Option<Unit>) -> Parsed<u64> {

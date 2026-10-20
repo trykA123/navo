@@ -7,7 +7,23 @@ use rusty_store::{SessionFileError, load_session, write_session};
 const ROWS_PER_PANE: usize = 200;
 
 pub fn initial_state(session_file: &Path, home: Location) -> AppState {
-    let (session, _, _) = load_session(session_file);
+    let (session, _, errors) = load_session(session_file);
+    if let Some((found, supported)) = errors.iter().find_map(|error| match error {
+        SessionFileError::TooNew { found, supported } => Some((found, supported)),
+        _ => None,
+    }) {
+        let outcome = if session.is_some() {
+            "using the backup"
+        } else {
+            "starting fresh"
+        };
+        tracing::warn!(
+            found,
+            supported,
+            outcome,
+            "session is from a newer Ferrite; the file is kept as it is"
+        );
+    }
     session
         .and_then(|session| AppState::from_session(session).ok())
         .unwrap_or_else(|| fresh(home))
