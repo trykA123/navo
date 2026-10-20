@@ -19,6 +19,10 @@ activity-deleting = Deleting { $count ->
     [one] { $files } file
    *[other] { $files } files
 }
+activity-renaming = Renaming { $count ->
+    [one] { $files } file
+   *[other] { $files } files
+}
 activity-progress = { $done } of { $total }
 activity-left = { $time } left
 activity-pausing = Pausing…
@@ -39,6 +43,10 @@ activity-delete-failed = { $count ->
     [one] { $files } file could not be deleted
    *[other] { $files } files could not be deleted
 }
+activity-rename-failed = { $count ->
+    [one] { $files } file could not be renamed
+   *[other] { $files } files could not be renamed
+}
 activity-copied = Copied { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -55,8 +63,13 @@ activity-deleted = Deleted { $count ->
     [one] { $items } item
    *[other] { $items } items
 }
+activity-renamed = Renamed { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
 activity-dragging = Dragging { $count ->
     [one] { $items } item
    *[other] { $items } items
 }
 activity-drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
+files-rename-confirm = Rename { $items }?

@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use rusty_core::{Location, OpKind, OperationPlan};
 use rusty_fs::CopyMode;
+use rusty_l10n::t;
 
 use super::FerriteWindow;
 use crate::browser::PendingOp;
@@ -27,6 +28,7 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         OpKind::Move => (format!("Move {count} to {target}?"), "Move"),
         OpKind::Recycle => (format!("Move {count} to the Recycle Bin?"), "Recycle"),
         OpKind::Delete => (format!("Delete {count} permanently?"), "Delete permanently"),
+        OpKind::Rename => (t!("files-rename-confirm", items = count.as_str()), "Rename"),
     };
     let protected = pending.is_protected();
     ConfirmProps {

@@ -19,6 +19,7 @@ pub enum OpKind {
     Move,
     Recycle,
     Delete,
+    Rename,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,7 +155,7 @@ pub fn plan(request: &PlanRequest) -> OperationPlan {
         (OpKind::Delete, _) => {
             walk.steps = request.items.iter().rev().map(build::removal).collect();
         }
-        (OpKind::Copy | OpKind::Move, None) => {}
+        (OpKind::Copy | OpKind::Move, None) | (OpKind::Rename, _) => {}
     }
     let totals = risks::totals(request, &walk.steps, &walk.moved);
     let risks = risks::risks(request, &walk, &totals);

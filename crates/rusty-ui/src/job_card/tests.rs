@@ -45,6 +45,12 @@ fn a_job_names_its_verb_and_items() {
     assert_eq!(moved.name(), "Move 1 item");
     assert_eq!(moved.heading(), "Moving 1 item");
     assert_eq!(copy().heading(), "Copying 4 items");
+    let renamed = JobInfo {
+        kind: OpKind::Rename,
+        ..copy()
+    };
+    assert_eq!(renamed.name(), "Rename 4 items");
+    assert_eq!(renamed.heading(), "Renaming 4 items");
     assert_eq!(with_state(JobRowState::Done).heading(), "Copied 4 items");
     assert_eq!(with_state(JobRowState::Cancelled).heading(), "Copy 4 items");
 }

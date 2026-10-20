@@ -91,3 +91,18 @@ fn delete_totals_removed_files_folders_and_scanned_bytes() {
         }
     );
 }
+
+#[test]
+fn rename_plans_nothing_and_asks_nothing() {
+    let plan = plan(&request(OpKind::Rename, tree(), None));
+    assert!(plan.steps.is_empty());
+    assert!(plan.risks.is_empty());
+    assert_eq!(
+        plan.totals,
+        Totals {
+            files: 0,
+            folders: 0,
+            bytes: 0
+        }
+    );
+}
