@@ -2,6 +2,43 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## alpha-2026-10-21a — 2026-10-21
+
+### New
+
+- Drag and drop onto tabs: a drop goes into that tab's folder.
+- Drag and drop onto path crumbs: a drop goes into that folder.
+- Drag and drop onto a drive pill: a drop goes into the root of that drive. The drive must be connected.
+- Drops onto these targets show the same badge and refusals as drops onto folder rows. Esc cancels.
+- Alt-drop creates shortcuts. On Windows a shortcut is named "name - Shortcut.lnk". Ctrl+Z removes them.
+- Alt-drop into the same folder is refused for now.
+- Ctrl+K remembers the folders you visit and the files you open, and it finds them.
+- Ctrl+K also finds the folders open in your tabs.
+- With an empty box, Ctrl+K lists your 8 most used folders.
+- Settings file, [search]: remember = false turns off all remembering, also for commands.
+- ELF view: noise symbols that the compiler adds are hidden. The status line counts them. Alt+H shows them.
+
+### Fixed
+
+- Drag and drop: if the list changes during a drag, Ferrite refuses the drop. It says "The list changed during the drag. Nothing was moved." Before, a drop could move a different file or go into another folder.
+- Drag and drop: on Windows, the badge treats upper and lower case as the same, as the copy does.
+- Ctrl+K: key hints no longer sit under the scrollbar. Hints show Ctrl+V and Alt+Left.
+- A security update to a network library.
+
+### Built but not switched on yet
+
+- Multi-rename: the pattern, find and replace and case fields, and the preview table with its summary are in. The window that holds them comes next.
+- Rich ELF and MAP view: used flash now counts initialised data copies. TASKING ROM copies count once, under their module. A chip mapped twice gets numbered names. The screens come next.
+- File index: on Windows, Ferrite reads NTFS volumes and their change journal directly. This needs admin. A folder keeps its contents when it is renamed between two journal reads. It is not connected to Ctrl+K yet.
+
+## alpha-2026-10-20r — 2026-10-20
+
+### Built but not switched on yet
+
+- Multi-rename: a batch runs as one job, and one Ctrl+Z puts every name back, also after a crash. If putting names back stops halfway, the batch stays pending and is retried; nothing is overwritten. The dialog comes next.
+- Rich ELF and MAP view: usage bars per memory region with used and free, a colour legend, a file-bytes bar, and the lookup of the matching MAP or memory definition next to the open file. The screens come next.
+- Ctrl+K file index: a folder index that loads its saved copy at once, rescans in the background and follows changes. It is not connected to Ctrl+K yet.
+
 ## alpha-2026-10-20q — 2026-10-20
 
 ### New
