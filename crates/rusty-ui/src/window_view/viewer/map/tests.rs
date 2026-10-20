@@ -454,3 +454,39 @@ pub(in crate::window_view::viewer) fn sort_by_size_then_finish_parsing(
         map.index_message(super::jobs::IndexMessage::Parsed(Ok((loaded, rows))), cx);
     });
 }
+
+pub(in crate::window_view::viewer) fn column_width(
+    cx: &mut TestAppContext,
+    window: &Entity<FerriteWindow>,
+    table: usize,
+    at: usize,
+) -> gpui_kit::Pixels {
+    let map = map_view(cx, window);
+    map.read_with(cx, |map, cx| {
+        let columns = map.columns.as_ref().expect("columns");
+        columns.set(Table::ALL[table]).read(cx).width(at)
+    })
+}
+
+#[test]
+fn a_long_section_name_keeps_its_module_and_a_symbol_its_prefix() {
+    let section = super::columns::fitted_name(
+        Table::Sections,
+        ".text.Com.Com_SendSignalGroupArrayWithTimeout",
+        24,
+    );
+    assert_eq!(section.prefix, "Com.");
+    assert!(section.rest.contains('…'));
+    let symbol = super::columns::fitted_name(
+        Table::Symbols,
+        "Can_MainFunction_ReadAllChannelsAndReport",
+        24,
+    );
+    assert_eq!(symbol.prefix, "Can_");
+    assert!(symbol.rest.starts_with("Main") && symbol.rest.ends_with("Report"));
+    let region = super::columns::fitted_name(Table::Memory, "mpe:flash0", 24);
+    assert_eq!(
+        (region.prefix.as_str(), region.rest.as_str()),
+        ("", "mpe:flash0")
+    );
+}
