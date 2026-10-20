@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusty_core::{Location, OpKind};
+use rusty_core::{CommandError, Location, OpKind};
 
 use super::FerriteWindow;
 use crate::browser::{JobStatus, PasteRefusal};
@@ -115,6 +115,15 @@ impl FerriteWindow {
 
     pub(super) fn show_notice(&mut self, notice: StatusNotice) {
         self.clipboard.notice = Some(notice);
+    }
+
+    pub(super) fn show_refusal(&mut self, result: Result<(), CommandError>) {
+        if result == Err(CommandError::NothingToRestore) {
+            self.show_notice(StatusNotice {
+                text: rusty_l10n::tr("files-marks-restore-none").into(),
+                is_error: true,
+            });
+        }
     }
 
     pub(super) fn forget_clipboard_notice(&mut self) {

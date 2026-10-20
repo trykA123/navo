@@ -1,5 +1,6 @@
 mod density;
 mod input;
+mod marks;
 mod parts;
 mod render;
 

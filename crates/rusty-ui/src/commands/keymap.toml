@@ -298,6 +298,50 @@ command = "files.invert_marks"
 keys = ["*"]
 
 [[bind]]
+command = "files.extend_up"
+keys = ["shift-up"]
+
+[[bind]]
+command = "files.extend_down"
+keys = ["shift-down"]
+
+[[bind]]
+command = "files.extend_page_up"
+keys = ["shift-pageup"]
+
+[[bind]]
+command = "files.extend_page_down"
+keys = ["shift-pagedown"]
+
+[[bind]]
+command = "files.extend_first"
+keys = ["shift-home"]
+
+[[bind]]
+command = "files.extend_last"
+keys = ["shift-end"]
+
+[[bind]]
+command = "files.mark_all"
+keys = ["ctrl-a", "ctrl-+"]
+
+[[bind]]
+command = "files.unmark_all"
+keys = ["ctrl-shift-a", "ctrl--"]
+
+[[bind]]
+command = "files.restore_marks"
+keys = ["/"]
+
+[[bind]]
+command = "files.mark_extension"
+keys = ["alt-+"]
+
+[[bind]]
+command = "files.unmark_extension"
+keys = ["alt--"]
+
+[[bind]]
 command = "files.sort_by_name"
 keys = ["ctrl-f3"]
 

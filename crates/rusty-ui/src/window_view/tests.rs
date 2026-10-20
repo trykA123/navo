@@ -30,6 +30,7 @@ mod hand_off;
 mod hints;
 mod jobs;
 mod keymap;
+mod marks;
 mod offline;
 mod placement;
 mod prefetch;

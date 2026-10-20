@@ -316,8 +316,9 @@ impl FerriteWindow {
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
-        let _ = self.browser.command(command);
+        let result = self.browser.command(command);
         self.forget_clipboard_notice();
+        self.show_refusal(result);
         self.focus_core_pane(window, cx);
         cx.notify();
     }

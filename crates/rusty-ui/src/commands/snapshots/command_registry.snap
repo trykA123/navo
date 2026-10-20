@@ -89,6 +89,17 @@ drive_menu.up | Up | DriveMenu
 drive_menu.down | Down | DriveMenu
 drive_menu.open | Open drive | DriveMenu
 drive_menu.close | Close drive menu | DriveMenu
+files.extend_up | Extend marks up | FileList
+files.extend_down | Extend marks down | FileList
+files.extend_page_up | Extend marks a page up | FileList
+files.extend_page_down | Extend marks a page down | FileList
+files.extend_first | Extend marks to the first row | FileList
+files.extend_last | Extend marks to the last row | FileList
+files.mark_all | Mark all | FileList
+files.unmark_all | Unmark all | FileList
+files.restore_marks | Restore last marks | FileList
+files.mark_extension | Mark files with this extension | FileList
+files.unmark_extension | Unmark files with this extension | FileList
 context_menu.up | Up | ContextMenu
 context_menu.down | Down | ContextMenu
 context_menu.first | First item | ContextMenu

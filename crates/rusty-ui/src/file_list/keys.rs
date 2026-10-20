@@ -39,6 +39,17 @@ gpui_kit::actions!(
         MarkPattern,
         UnmarkPattern,
         InvertMarks,
+        ExtendUp,
+        ExtendDown,
+        ExtendPageUp,
+        ExtendPageDown,
+        ExtendFirst,
+        ExtendLast,
+        MarkAll,
+        UnmarkAll,
+        RestoreMarks,
+        MarkExtension,
+        UnmarkExtension,
         SortName,
         SortExt,
         SortDate,
@@ -68,6 +79,13 @@ fn move_to<A: Action>(
     to: CursorMove,
 ) -> impl Fn(&A, &mut Window, &mut App) + 'static {
     send(ctx, Command::PaneCursorMove { to })
+}
+
+fn extend<A: Action>(
+    ctx: &Rc<ListContext>,
+    to: CursorMove,
+) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    send(ctx, Command::SelectionExtend { to, unmark: false })
 }
 
 fn sort<A: Action>(
@@ -128,7 +146,27 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
             let ctx = ctx.clone();
             move |_: &ClearFilter, window, cx| ctx.clear_filter(window, cx)
         });
-    register_clipboard(register_more(root, ctx), ctx)
+    register_marks(register_clipboard(register_more(root, ctx), ctx), ctx)
+}
+
+fn register_marks(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
+    root.on_action(extend::<ExtendUp>(ctx, CursorMove::Up))
+        .on_action(extend::<ExtendDown>(ctx, CursorMove::Down))
+        .on_action(extend::<ExtendPageUp>(ctx, CursorMove::PageUp))
+        .on_action(extend::<ExtendPageDown>(ctx, CursorMove::PageDown))
+        .on_action(extend::<ExtendFirst>(ctx, CursorMove::First))
+        .on_action(extend::<ExtendLast>(ctx, CursorMove::Last))
+        .on_action(send::<MarkAll>(ctx, Command::SelectionAll))
+        .on_action(send::<UnmarkAll>(ctx, Command::SelectionClear))
+        .on_action(send::<RestoreMarks>(ctx, Command::SelectionRestore))
+        .on_action(send::<MarkExtension>(
+            ctx,
+            Command::SelectionExtension { mark: true },
+        ))
+        .on_action(send::<UnmarkExtension>(
+            ctx,
+            Command::SelectionExtension { mark: false },
+        ))
 }
 
 fn register_clipboard(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {

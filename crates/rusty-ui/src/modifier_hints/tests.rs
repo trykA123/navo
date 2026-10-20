@@ -36,7 +36,19 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
     let layer = layer_in(Keymap::builtin(), Combo::CTRL);
     assert_eq!(
         names(&layer),
-        ["Clipboard", "Tabs", "Sort", "Pane", "View", "Window"]
+        [
+            "Clipboard",
+            "Tabs",
+            "Sort",
+            "Files",
+            "Pane",
+            "View",
+            "Window"
+        ]
+    );
+    assert_eq!(
+        commands(&group(&layer, "Files").entries),
+        ["files.mark_all", "files.unmark_all"]
     );
     let clipboard = &group(&layer, "Clipboard").entries;
     assert_eq!(
@@ -54,7 +66,7 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
             "files.sort_by_size"
         ]
     );
-    assert_eq!(layer.count(), 19);
+    assert_eq!(layer.count(), 21);
 }
 
 #[test]
@@ -74,6 +86,12 @@ fn the_alt_and_shift_layers_map_their_commands_to_groups() {
             "files.rename",
             "files.new_file",
             "files.delete",
+            "files.extend_up",
+            "files.extend_down",
+            "files.extend_page_up",
+            "files.extend_page_down",
+            "files.extend_first",
+            "files.extend_last",
             "files.context_menu"
         ]
     );
@@ -110,6 +128,7 @@ fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
         commands(&ctrl.more),
         [
             "tab.previous",
+            "files.unmark_all",
             "pane.reset_split",
             "preview.browse",
             "crash_notice.focus"
