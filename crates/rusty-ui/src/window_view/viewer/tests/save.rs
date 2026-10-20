@@ -60,7 +60,7 @@ fn disk_hooks(disk: &Shared) -> FileHooks {
             } else {
                 (disk.text, disk.stamp) = (save.text.to_owned(), next);
             }
-            Ok(Some(stamp_of(save.text, next)))
+            Ok(Some(stamp_of(save.text, next)).into())
         }),
         ..FileHooks::none()
     }

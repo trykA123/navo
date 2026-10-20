@@ -68,6 +68,11 @@ pub(super) const GROUPS: [Group; 5] = [
             ),
             ("viewer::ShowMenu", "viewer.context_menu", "Context menu"),
             ("viewer::ViewMenu", "viewer.view_menu", "View menu"),
+            (
+                "viewer::ChooseEncoding",
+                "viewer.encoding",
+                "Choose the text encoding",
+            ),
             ("viewer::LeftDrawer", "view.left_drawer", "Left drawer"),
             ("viewer::RightDrawer", "view.right_drawer", "Right drawer"),
             (

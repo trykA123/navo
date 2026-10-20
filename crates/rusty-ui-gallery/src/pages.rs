@@ -51,6 +51,7 @@ pub enum Page {
     MemoryImage,
     MemoryDrawers,
     ViewMenuText,
+    ViewerEncoding,
     ViewMenuAutomotive,
     ViewMenuElf,
     ViewMenuTrace,
@@ -87,7 +88,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 69] = [
+pub const PAGES: [PageInfo; 70] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -242,6 +243,12 @@ pub const PAGES: [PageInfo; 69] = [
         Page::ViewMenuText,
         "View menu, text",
         "p33-v1-view-menu-text",
+        false,
+    ),
+    info(
+        Page::ViewerEncoding,
+        "Encoding picker, text",
+        "p15-a2b-encoding-picker",
         false,
     ),
     info(

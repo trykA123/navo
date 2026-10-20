@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{HighlightStyle, Stateful, StyledText};
-use rusty_core::paging::HEX_WIDTH;
+use rusty_core::paging::{HEX_WIDTH, TextLayout};
 
 use super::lines::{HexLine, TextLine};
 use super::spans::{Paint, Painted, TextCut, hex_slots, line_end, shown_text};
@@ -23,6 +23,7 @@ pub(super) struct TextLook {
     pub digits: usize,
     pub shift: usize,
     pub numbers: bool,
+    pub layout: TextLayout,
 }
 
 impl RowLook<'_> {
@@ -123,8 +124,14 @@ pub(super) fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyEl
         .into_any_element()
 }
 
-fn line_end_glyph(look: &RowLook<'_>, index: usize, line: &TextLine) -> Option<impl IntoElement> {
-    let glyph = line_end(line.start, line.end, line.next).filter(|_| look.line_ends)?;
+fn line_end_glyph(
+    look: &RowLook<'_>,
+    unit: usize,
+    index: usize,
+    line: &TextLine,
+) -> Option<impl IntoElement> {
+    let glyph =
+        line_end(line.start, line.end, line.next, unit as u64).filter(|_| look.line_ends)?;
     Some(
         div()
             .id(("paged-eol", index))
@@ -152,9 +159,11 @@ pub(super) fn text_row(
         .map(|number| number.to_string())
         .unwrap_or_default();
     let cut = TextCut {
-        start: line.start,
+        start: line.text_from,
+        end: line.end,
         shift: text.shift,
         limit: SHOWN_CHARS,
+        layout: text.layout,
     };
     let (shown, runs) = shown_text(&line.text, &cut, &look.painted);
     let span = line.start..line.next.max(line.start + 1);
@@ -182,7 +191,7 @@ pub(super) fn text_row(
                 .items_center()
                 .gap(look.t.spacing.xs)
                 .child(StyledText::new(shown).with_highlights(look.styled(runs)))
-                .children(line_end_glyph(look, index, line)),
+                .children(line_end_glyph(look, text.layout.unit(), index, line)),
         )
         .into_any_element()
 }

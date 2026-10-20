@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use rusty_core::paging::{ByteSource, Counted, Needle, count};
+use rusty_core::paging::{ByteSource, Counted, Needle, TextLayout, count};
 
 use super::jobs::{Job, Throttle, spawn_job};
 use crate::prelude::*;
@@ -37,9 +37,10 @@ pub(in crate::window_view::viewer) enum ScanUpdate {
     Finished,
 }
 
-pub(in crate::window_view::viewer) fn needle_width(needle: &Needle) -> u64 {
+pub(in crate::window_view::viewer) fn needle_width(needle: &Needle, layout: &TextLayout) -> u64 {
     match needle {
-        Needle::Text { text, .. } => text.len() as u64,
+        Needle::Text { text, .. } if layout.is_utf8() => text.len() as u64,
+        Needle::Text { text, .. } => layout.encode(text).map_or(0, |bytes| bytes.len() as u64),
         Needle::Bytes(bytes) => bytes.len() as u64,
     }
 }
@@ -47,15 +48,17 @@ pub(in crate::window_view::viewer) fn needle_width(needle: &Needle) -> u64 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::window_view::viewer) struct Tally {
     pub needle: Needle,
+    pub layout: TextLayout,
     pub counted: Counted,
     pub scanned: u64,
     pub need: Option<Need>,
 }
 
 impl Tally {
-    pub(in crate::window_view::viewer) fn new(needle: Needle) -> Self {
+    pub(in crate::window_view::viewer) fn new(needle: Needle, layout: TextLayout) -> Self {
         Self {
             needle,
+            layout,
             counted: Counted::default(),
             scanned: 0,
             need: Some(Need::Full),
@@ -63,7 +66,7 @@ impl Tally {
     }
 
     pub(in crate::window_view::viewer) fn width(&self) -> u64 {
-        needle_width(&self.needle)
+        needle_width(&self.needle, &self.layout)
     }
 
     pub(in crate::window_view::viewer) fn source_changed(&mut self, appended_to: Option<u64>) {
@@ -128,6 +131,10 @@ impl ByteSource for Tail<'_> {
         let take = buf.len().min(room);
         self.source.read_at(at, &mut buf[..take])
     }
+
+    fn layout(&self) -> TextLayout {
+        self.source.layout()
+    }
 }
 
 fn scan_one(
@@ -137,7 +144,7 @@ fn scan_one(
     send: &dyn Fn(ScanUpdate),
 ) -> Option<ScanUpdate> {
     let len = source.len();
-    let from = scan.from.min(len);
+    let from = source.layout().align(scan.from.min(len));
     let tail = Tail { source, from, len };
     let mut throttle = Throttle::new(RUNNING_EVERY);
     let counted = count(&tail, &scan.needle, KEEP, cancel, &mut |_, total| {
@@ -192,7 +199,7 @@ pub(in crate::window_view::viewer) fn start_scans<V: 'static>(
 
 #[cfg(test)]
 mod tests {
-    use rusty_core::paging::{Counted, Needle};
+    use rusty_core::paging::{Counted, Needle, TextLayout};
 
     use super::{Need, Scanned, Tally};
 
@@ -218,7 +225,7 @@ mod tests {
 
     #[test]
     fn growth_resumes_one_needle_width_before_the_old_end() {
-        let mut tally = Tally::new(word("abc"));
+        let mut tally = Tally::new(word("abc"), TextLayout::default());
         let _ = tally.take_scan();
         tally.land(Scanned {
             needle: word("abc"),
@@ -230,7 +237,7 @@ mod tests {
 
     #[test]
     fn appended_starts_add_to_the_total() {
-        let mut tally = Tally::new(word("ab"));
+        let mut tally = Tally::new(word("ab"), TextLayout::default());
         let _ = tally.take_scan();
         tally.land(landed(0, 100, vec![4, 50]));
         tally.source_changed(Some(200));
@@ -243,7 +250,7 @@ mod tests {
 
     #[test]
     fn growth_during_a_running_scan_resumes_from_its_end_once_it_lands() {
-        let mut tally = Tally::new(word("ab"));
+        let mut tally = Tally::new(word("ab"), TextLayout::default());
         let _ = tally.take_scan();
         tally.source_changed(Some(150));
         assert_eq!(tally.need, Some(Need::Tail));
@@ -253,7 +260,7 @@ mod tests {
 
     #[test]
     fn a_shrunk_or_rewritten_source_needs_a_full_scan() {
-        let mut tally = Tally::new(word("ab"));
+        let mut tally = Tally::new(word("ab"), TextLayout::default());
         let _ = tally.take_scan();
         tally.land(landed(0, 100, vec![4]));
         tally.source_changed(Some(50));
@@ -266,7 +273,7 @@ mod tests {
 
     #[test]
     fn a_failed_scan_starts_again_from_zero() {
-        let mut tally = Tally::new(word("ab"));
+        let mut tally = Tally::new(word("ab"), TextLayout::default());
         let _ = tally.take_scan();
         tally.source_changed(Some(150));
         assert_eq!(tally.take_scan().map(|scan| scan.from), Some(0));

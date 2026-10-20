@@ -1,5 +1,15 @@
 use super::*;
 
+pub(super) const VIEWER_MENUS: [ViewerMenuShows; 7] = [
+    ViewerMenuShows::Text,
+    ViewerMenuShows::Tree,
+    ViewerMenuShows::ViewText,
+    ViewerMenuShows::Encoding,
+    ViewerMenuShows::ViewAutomotive,
+    ViewerMenuShows::ViewElf,
+    ViewerMenuShows::ViewTrace,
+];
+
 impl Gallery {
     pub(super) fn sample(&self) -> Option<&dyn ViewerBody> {
         match self.page {

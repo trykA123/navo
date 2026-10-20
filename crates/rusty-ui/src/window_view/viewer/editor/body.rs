@@ -2,6 +2,7 @@ use std::any::Any;
 
 use gpui_kit::component::input::{Copy, Cut, Paste, SelectAll};
 use gpui_kit::{AnyView, FocusHandle, Focusable};
+use rusty_core::encoding::TextEncoding;
 
 use super::{EditorView, SplitChoice};
 use crate::prelude::*;
@@ -177,6 +178,10 @@ impl ViewerBody for EditorBody {
 
     fn parts(&self, _: &App) -> Option<&'static PartSet> {
         Some(&TEXT)
+    }
+
+    fn encoding(&self, cx: &App) -> Option<TextEncoding> {
+        Some(self.0.read(cx).encoding)
     }
 
     fn show_parts(&self, values: &Values, cx: &mut App) {

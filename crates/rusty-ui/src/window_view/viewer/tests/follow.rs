@@ -86,6 +86,7 @@ fn growing_paged(growing: &Growing) -> Paged {
             Ok(Some(index))
         }),
         summary: None,
+        problem: None,
         editable: false,
         stamp: None,
     }

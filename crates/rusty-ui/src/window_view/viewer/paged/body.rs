@@ -1,6 +1,7 @@
 use std::any::Any;
 
 use gpui_kit::{AnyView, FocusHandle, Focusable};
+use rusty_core::encoding::TextEncoding;
 
 use super::{PagedKind, PagedView};
 use crate::prelude::*;
@@ -37,6 +38,10 @@ impl PagedBody {
 
     pub(in crate::window_view::viewer) fn of(body: &dyn ViewerBody) -> Option<&Self> {
         body.as_any().downcast_ref::<Self>()
+    }
+
+    pub(in crate::window_view::viewer) fn needs_whole_file(&self, cx: &App) -> bool {
+        self.0.read(cx).needs_whole_file()
     }
 
     pub(in crate::window_view::viewer) fn show_as(&self, kind: PagedKind, cx: &mut App) {
@@ -103,6 +108,11 @@ impl ViewerBody for PagedBody {
     fn show_parts(&self, values: &Values, cx: &mut App) {
         self.0
             .update(cx, |paged, cx| paged.show_text_parts(values, cx));
+    }
+
+    fn encoding(&self, cx: &App) -> Option<TextEncoding> {
+        let paged = self.0.read(cx);
+        (paged.kind == PagedKind::Text).then(|| paged.source.layout().text)
     }
 
     fn carry(&self, cx: &App) -> Option<Carried> {

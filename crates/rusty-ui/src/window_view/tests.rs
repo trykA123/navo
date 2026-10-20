@@ -618,7 +618,7 @@ fn viewer_window(
                     return Err(super::SaveError::Changed);
                 }
                 saved.lock().expect("log").push(save.text.to_owned());
-                Ok(None)
+                Ok(None.into())
             }),
             head: Arc::new(|_| Ok(hello_head())),
             paged: Arc::new(|_| Err("No paged view here.".to_owned())),

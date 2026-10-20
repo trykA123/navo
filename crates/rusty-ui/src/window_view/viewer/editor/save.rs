@@ -1,10 +1,13 @@
 use rusty_core::Location;
+use std::sync::Arc;
+
 use rusty_core::encoding::TextEncoding;
+use rusty_core::line_ends::LineEnds;
 
 use super::EditorView;
 use crate::prelude::*;
 use crate::window_view::viewer::search::memory::restamp;
-use crate::window_view::viewer::{FileHooks, FileStamp, Save, SaveError};
+use crate::window_view::viewer::{FileHooks, FileStamp, Save, SaveError, Saved};
 
 const SAVING: &str = "Saving…";
 const SAVED: &str = "Saved.";
@@ -15,16 +18,18 @@ struct SaveJob {
     text: String,
     crlf: bool,
     encoding: TextEncoding,
+    ends: Option<Arc<LineEnds>>,
     expected: Option<FileStamp>,
 }
 
 impl SaveJob {
-    fn write(&self, hooks: &FileHooks) -> Result<Option<FileStamp>, SaveError> {
+    fn write(&self, hooks: &FileHooks) -> Result<Saved, SaveError> {
         let save = Save {
             text: &self.text,
             crlf: self.crlf,
             expected: self.expected,
             encoding: self.encoding,
+            ends: self.ends.as_deref(),
         };
         (hooks.write)(&self.location, &save)
     }
@@ -40,6 +45,7 @@ impl EditorView {
             text: self.editor.read(cx).value().to_string(),
             crlf: self.crlf,
             encoding: self.encoding,
+            ends: self.ends.clone(),
             expected: if self.overwrite { None } else { self.stamp },
         };
         let hooks = self.host.hooks.clone();
@@ -52,24 +58,22 @@ impl EditorView {
         })
         .detach();
         self.saving = Some(cx.spawn(async move |this, cx| {
-            let result = receiver
+            let written = receiver
                 .await
                 .unwrap_or_else(|_| Err(SaveError::Failed("Could not save.".to_owned())));
-            let _ = this.update(cx, |view, cx| view.saved(revision, result, cx));
+            let _ = this.update(cx, |view, cx| view.saved(revision, written, cx));
         }));
         cx.notify();
     }
 
-    fn saved(
-        &mut self,
-        revision: u64,
-        result: Result<Option<FileStamp>, SaveError>,
-        cx: &mut Context<Self>,
-    ) {
+    fn saved(&mut self, revision: u64, written: Result<Saved, SaveError>, cx: &mut Context<Self>) {
         self.saving = None;
-        match result {
-            Ok(stamp) => {
+        match written {
+            Ok(Saved { stamp, ends }) => {
                 self.stamp = stamp;
+                if let Some(ends) = ends {
+                    self.ends = Some(Arc::new(ends));
+                }
                 self.dirty = self.revision != revision;
                 self.note = Some(SAVED.into());
                 if let Some(stamp) = stamp.filter(|_| self.persists) {

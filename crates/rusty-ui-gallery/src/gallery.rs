@@ -36,7 +36,7 @@ use crate::{pdf_sample, rich_sample, viewer_sample};
 
 mod samples;
 
-use samples::image_keys;
+use samples::{VIEWER_MENUS, image_keys};
 
 const TREE_STEPS: [&str; 9] = [
     "viewer::RowDown",
@@ -91,7 +91,7 @@ pub struct Gallery {
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 3],
     menus: [(Page, Entity<MenuPage>); 6],
-    viewer_menus: [Entity<ViewerMenuPage>; 6],
+    viewer_menus: [Entity<ViewerMenuPage>; 7],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
@@ -136,15 +136,8 @@ impl Gallery {
             pdf: [None, Some(PDF_SEARCH), Some(PDF_SEARCH)]
                 .map(|search| pdf_sample::pdf_view(search, window, cx)),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
-            viewer_menus: [
-                ViewerMenuShows::Text,
-                ViewerMenuShows::Tree,
-                ViewerMenuShows::ViewText,
-                ViewerMenuShows::ViewAutomotive,
-                ViewerMenuShows::ViewElf,
-                ViewerMenuShows::ViewTrace,
-            ]
-            .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
+            viewer_menus: VIEWER_MENUS
+                .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
             ctrl_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Ctrl), cx)),
@@ -345,12 +338,7 @@ impl Render for Gallery {
             | Page::MenuFiles
             | Page::MenuBackground
             | Page::MenuEmptyFolder => root.children(self.menu_page(self.page)),
-            Page::ViewerMenuText
-            | Page::ViewerMenuTree
-            | Page::ViewMenuText
-            | Page::ViewMenuAutomotive
-            | Page::ViewMenuElf
-            | Page::ViewMenuTrace => root.children(self.viewer_menu()),
+            _ if self.viewer_menu().is_some() => root.children(self.viewer_menu()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             page if page.is_viewer_sample() => self.sample_page(root, cx),
             Page::Tokens => root.child(tokens_page::render(&t)),
@@ -373,9 +361,10 @@ impl Gallery {
             Page::ViewerMenuText => Some(self.viewer_menus[0].clone()),
             Page::ViewerMenuTree => Some(self.viewer_menus[1].clone()),
             Page::ViewMenuText => Some(self.viewer_menus[2].clone()),
-            Page::ViewMenuAutomotive => Some(self.viewer_menus[3].clone()),
-            Page::ViewMenuElf => Some(self.viewer_menus[4].clone()),
-            Page::ViewMenuTrace => Some(self.viewer_menus[5].clone()),
+            Page::ViewerEncoding => Some(self.viewer_menus[3].clone()),
+            Page::ViewMenuAutomotive => Some(self.viewer_menus[4].clone()),
+            Page::ViewMenuElf => Some(self.viewer_menus[5].clone()),
+            Page::ViewMenuTrace => Some(self.viewer_menus[6].clone()),
             _ => None,
         }
     }

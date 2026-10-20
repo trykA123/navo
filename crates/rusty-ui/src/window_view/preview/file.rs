@@ -76,6 +76,7 @@ impl FerriteWindow {
             hooks: read_only(&self.files),
             location: target.location.clone(),
             name: target.name(),
+            encoding: None,
         };
         let kinds = self.kinds.clone();
         let flag = Arc::new(AtomicBool::new(false));

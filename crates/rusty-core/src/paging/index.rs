@@ -1,4 +1,4 @@
-use super::{ByteSource, read_full, span};
+use super::{ByteSource, TextLayout, read_full, span};
 
 const SCAN_BUF: usize = 64 * 1024;
 
@@ -15,6 +15,7 @@ const FIRST: Mark = Mark { offset: 0, line: 0 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineIndex {
+    layout: TextLayout,
     starts: Vec<Mark>,
     points: Vec<Mark>,
     scanned: u64,
@@ -31,7 +32,13 @@ impl Default for LineIndex {
 impl LineIndex {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_layout(TextLayout::default())
+    }
+
+    #[must_use]
+    pub fn with_layout(layout: TextLayout) -> Self {
         Self {
+            layout,
             starts: vec![FIRST],
             points: vec![FIRST],
             scanned: 0,
@@ -42,11 +49,12 @@ impl LineIndex {
 
     pub fn feed(&mut self, chunk: &[u8]) {
         let base = self.scanned;
-        for at in memchr::memchr_iter(b'\n', chunk) {
+        let unit = self.layout.unit() as u64;
+        for at in self.layout.newlines(chunk) {
             let newline = base + at as u64;
-            self.mark_within(newline + 1);
+            self.mark_within(newline + unit);
             self.newlines += 1;
-            let next = newline + 1;
+            let next = newline + unit;
             let last_start = self.starts.last().map_or(0, |mark| mark.offset);
             if self.newlines.is_multiple_of(MARK_EVERY) || next - last_start >= MARK_BYTES {
                 let mark = Mark {
@@ -102,9 +110,12 @@ impl LineIndex {
         if self.scanned == 0 {
             return Ok(0);
         }
-        let mut last = [0u8; 1];
-        read_full(src, self.scanned - 1, &mut last)?;
-        Ok(self.newlines + u64::from(last[0] != b'\n'))
+        let unit = self.layout.unit();
+        let mut last = [0u8; 2];
+        let at = self.scanned.saturating_sub(unit as u64);
+        let read = read_full(src, at, &mut last[..unit])?;
+        let ended = read == unit && self.layout.is_lf(&last[..unit]);
+        Ok(self.newlines + u64::from(!ended))
     }
 
     pub fn line_number<S: ByteSource + ?Sized>(
@@ -119,6 +130,7 @@ impl LineIndex {
         } else {
             offset
         };
+        let offset = self.layout.align(offset);
         let at = self.points.partition_point(|mark| mark.offset <= offset);
         let mark = self
             .points
@@ -165,7 +177,7 @@ fn count_newlines<S: ByteSource + ?Sized>(src: &S, from: u64, to: u64) -> Result
         if read == 0 {
             break;
         }
-        count += memchr::memchr_iter(b'\n', &buf[..read]).count() as u64;
+        count += src.layout().newlines(&buf[..read]).count() as u64;
         at += read as u64;
     }
     Ok(count)
@@ -189,10 +201,10 @@ fn skip_newlines<S: ByteSource + ?Sized>(
         if read == 0 {
             break;
         }
-        for found in memchr::memchr_iter(b'\n', &buf[..read]) {
+        for found in src.layout().newlines(&buf[..read]) {
             left -= 1;
             if left == 0 {
-                return Ok(Some(at + found as u64 + 1));
+                return Ok(Some(at + (found + src.layout().unit()) as u64));
             }
         }
         at += read as u64;

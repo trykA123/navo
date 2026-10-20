@@ -2,12 +2,13 @@ use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use rusty_core::Location;
-use rusty_core::encoding::{decode, encode, looks_binary};
+use rusty_core::encoding::{Encoding, decode, decode_as, encode, looks_binary};
+use rusty_core::line_ends::{DIFF_BUDGET, LineEnds};
 use rusty_store::replace_atomic;
-use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
+use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError, Saved};
 
 mod archive;
 mod code_page;
@@ -25,9 +26,11 @@ pub use memory::{SharedDb, open as open_memory};
 pub fn hooks(db: Option<SharedDb>) -> FileHooks {
     let hooks = FileHooks {
         read: Arc::new(read),
+        read_as: Arc::new(read_as),
         write: Arc::new(write),
         head: Arc::new(paged::head),
         paged: Arc::new(paged::paged),
+        paged_as: Arc::new(paged::paged_as),
         archive: Arc::new(archive::archive),
         archive_entry: Arc::new(archive::archive_entry),
         bytes: Arc::new(bytes),
@@ -63,6 +66,14 @@ fn stamp_of(path: &std::path::Path) -> Option<FileStamp> {
 }
 
 pub fn read(location: &Location) -> Result<FileText, String> {
+    read_with(location, None)
+}
+
+pub fn read_as(location: &Location, encoding: &'static Encoding) -> Result<FileText, String> {
+    read_with(location, Some(encoding))
+}
+
+fn read_with(location: &Location, chosen: Option<&'static Encoding>) -> Result<FileText, String> {
     let path = path_of(location)?;
     let size = fs::metadata(&path)
         .map_err(|error| format!("Cannot open it: {error}"))?
@@ -71,18 +82,27 @@ pub fn read(location: &Location) -> Result<FileText, String> {
         return Err("Too large to open here (over 16 MB). F4 opens it in your editor.".to_owned());
     }
     let bytes = fs::read(&path).map_err(|error| format!("Cannot open it: {error}"))?;
-    if looks_binary(&bytes[..bytes.len().min(SNIFF)]) {
+    if chosen.is_none() && looks_binary(&bytes[..bytes.len().min(SNIFF)]) {
         return Err("This looks like a binary file. F4 opens it in your editor.".to_owned());
     }
     let stamp = stamp_of(&path);
-    let decoded = decode(&bytes, code_page::ansi());
+    let decoded = match chosen {
+        Some(encoding) => decode_as(&bytes, encoding),
+        None => decode(&bytes, code_page::ansi()),
+    };
     let crlf = mostly_crlf(decoded.text.as_bytes());
+    let (text, ends) = match LineEnds::unify(&decoded.text) {
+        Some((unified, ends)) => (unified, Some(Arc::new(ends))),
+        None => (decoded.text, None),
+    };
+    let stray = ends.as_deref().is_some_and(LineEnds::has_stray_cr);
     Ok(FileText {
         crlf,
-        read_only: !decoded.lossless || line_endings(&decoded.text, crlf) != decoded.text,
-        text: decoded.text,
+        read_only: !decoded.lossless || stray,
+        text,
         stamp,
         encoding: decoded.encoding,
+        ends,
     })
 }
 
@@ -140,19 +160,36 @@ pub fn line_endings(text: &str, crlf: bool) -> String {
     }
 }
 
-pub fn write(location: &Location, save: &Save<'_>) -> Result<Option<FileStamp>, SaveError> {
+pub fn write(location: &Location, save: &Save<'_>) -> Result<Saved, SaveError> {
+    write_within(location, save, DIFF_BUDGET)
+}
+
+fn write_within(
+    location: &Location,
+    save: &Save<'_>,
+    budget: Duration,
+) -> Result<Saved, SaveError> {
     let path = path_of(location).map_err(SaveError::Failed)?;
     if let Some(expected) = save.expected
         && stamp_of(&path) != Some(expected)
     {
         return Err(SaveError::Changed);
     }
-    let text = line_endings(save.text, save.crlf);
+    let (text, ends) = match save.ends {
+        Some(ends) => ends
+            .apply_within(save.text, budget)
+            .map(|(text, ends)| (text, Some(ends)))
+            .map_err(|error| SaveError::Failed(error.to_string()))?,
+        None => (line_endings(save.text, save.crlf), None),
+    };
     let bytes = encode(&text, &save.encoding)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
     replace_atomic(&path, &bytes)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
-    Ok(stamp_of(&path))
+    Ok(Saved {
+        stamp: stamp_of(&path),
+        ends,
+    })
 }
 
 #[cfg(test)]

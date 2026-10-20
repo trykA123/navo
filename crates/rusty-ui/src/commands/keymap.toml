@@ -780,6 +780,10 @@ command = "viewer.view_menu"
 keys = ["alt-v"]
 
 [[bind]]
+command = "viewer.encoding"
+keys = ["ctrl-shift-e"]
+
+[[bind]]
 command = "view.left_drawer"
 keys = ["ctrl-b"]
 

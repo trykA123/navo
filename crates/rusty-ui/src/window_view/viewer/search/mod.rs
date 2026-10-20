@@ -12,6 +12,7 @@ pub(in crate::window_view::viewer) mod scan;
 use std::ops::Range;
 
 use rusty_core::marks::Bookmarks;
+use rusty_core::paging::TextLayout;
 
 use crate::prelude::*;
 use crate::window_view::viewer::files::Reopen;
@@ -35,6 +36,7 @@ pub(in crate::window_view::viewer) struct Marking {
     pub find_all: Option<FindAll>,
     pub line_ends: bool,
     pub rev: u64,
+    pub layout: TextLayout,
     ticks: Ticks,
     memory: Memory,
 }
@@ -50,9 +52,15 @@ impl Marking {
             find_all: None,
             line_ends: false,
             rev: 0,
+            layout: TextLayout::default(),
             ticks: Ticks::default(),
             memory: Memory::default(),
         }
+    }
+
+    pub(in crate::window_view::viewer) fn set_layout(&mut self, layout: TextLayout) {
+        self.layout = layout;
+        self.marks.layout = layout;
     }
 
     pub(in crate::window_view::viewer) fn ticks(&self) -> &[(u32, u8)] {

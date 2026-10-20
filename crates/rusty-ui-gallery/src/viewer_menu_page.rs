@@ -3,7 +3,7 @@ use rusty_ui::context_menu::{ContextMenu, ContextMenuInput};
 use rusty_ui::prelude::*;
 use rusty_ui::settings::{Change, Field, Value, Values};
 use rusty_ui::tokens;
-use rusty_ui::window_view::{ViewerBody, view_menu, viewer_menu};
+use rusty_ui::window_view::{ViewerBody, encoding_picker, view_menu, viewer_menu};
 
 use crate::automotive_sample::{ELF_NAME, MEMORY_NAME, TRACE_NAME, elf, memory, trace};
 use crate::structured_sample::{self as structured, TREE, TREE_NAME};
@@ -27,6 +27,7 @@ pub enum Shows {
     Text,
     Tree,
     ViewText,
+    Encoding,
     ViewAutomotive,
     ViewElf,
     ViewTrace,
@@ -34,7 +35,7 @@ pub enum Shows {
 
 impl Shows {
     fn is_view(self) -> bool {
-        !matches!(self, Self::Text | Self::Tree)
+        !matches!(self, Self::Text | Self::Tree | Self::Encoding)
     }
 }
 
@@ -63,6 +64,10 @@ impl ViewerMenuPage {
         let focus = body.focus_handle(cx);
         match self.shows {
             Shows::Text | Shows::Tree => viewer_menu(&body.menu(false, cx), &focus, window),
+            Shows::Encoding => body
+                .encoding(cx)
+                .map(|found| encoding_picker(&found, &found))
+                .unwrap_or_default(),
             _ => view_menu(body, &shown(self.shows), window, cx).unwrap_or_default(),
         }
     }
@@ -87,11 +92,14 @@ impl ViewerMenuPage {
             restore: Some(focus),
         };
         let is_view = self.shows.is_view();
+        let is_encoding = self.shows == Shows::Encoding;
         self.menu = Some(cx.new(|cx| {
             let mut menu = ContextMenu::new(input, window, cx);
             menu.hide_classic(cx);
             if is_view {
                 menu.name_ferrite_group("View", cx);
+            } else if is_encoding {
+                menu.name_ferrite_group("Encoding", cx);
             }
             menu
         }));
@@ -101,7 +109,7 @@ impl ViewerMenuPage {
 
 fn body_title(shows: Shows) -> &'static str {
     match shows {
-        Shows::Text | Shows::ViewText => TEXT_NAME,
+        Shows::Text | Shows::ViewText | Shows::Encoding => TEXT_NAME,
         Shows::Tree => TREE_NAME,
         Shows::ViewAutomotive => MEMORY_NAME,
         Shows::ViewElf => ELF_NAME,
@@ -118,7 +126,7 @@ fn open_body(shows: Shows, window: &mut Window, cx: &mut App) -> Option<Box<dyn 
 
 fn body_text(shows: Shows) -> &'static str {
     match shows {
-        Shows::Text | Shows::ViewText => TEXT,
+        Shows::Text | Shows::ViewText | Shows::Encoding => TEXT,
         Shows::Tree => TREE,
         Shows::ViewAutomotive => memory(),
         Shows::ViewElf => "",

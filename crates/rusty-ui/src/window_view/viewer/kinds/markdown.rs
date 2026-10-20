@@ -67,9 +67,10 @@ impl ViewerKind for MarkdownKind {
             hooks,
             location,
             sniff,
+            encoding,
             ..
         } = load;
-        let file = (hooks.read)(location)?;
+        let file = hooks.read_with(location, encoding)?;
         load.ensure_open()?;
         let doc = match markdown::parse(&file.text) {
             Ok(doc) => doc,

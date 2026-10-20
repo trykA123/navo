@@ -5,9 +5,9 @@ use super::body::{BodyAct, MenuEntry, ViewerBody};
 use super::menu::viewer_menu;
 use super::parts::{PRESET_ACTIONS, PartSet, ViewParts};
 use super::{
-    Back, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds, ToggleCharts, ToggleInfo,
-    ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector, ToggleRowBars, ViewCustom,
-    ViewMenu, ViewRich, ViewSimple,
+    Back, ChooseEncoding, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds, ToggleCharts,
+    ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector, ToggleRowBars,
+    ViewCustom, ViewMenu, ViewRich, ViewSimple,
 };
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
@@ -23,6 +23,7 @@ const NOT_KEPT: &str = "Not kept as the default.";
 const NOT_SAVED: &str = "ferrite.toml could not be saved.";
 const MENU_TITLE: &str = "View";
 const KEEP: &str = "Keep as default";
+const ENCODING: &str = "Encoding\u{2026}";
 const RESET: &str = "Reset to defaults";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +32,7 @@ enum ViewOp {
     Preset(usize),
     Keep,
     Reset,
+    Encoding,
 }
 
 impl ViewOp {
@@ -43,7 +45,12 @@ fn empty_keep_note(parts: &ViewParts) -> &'static str {
     if parts.is_pending() { SAVING } else { KEPT }
 }
 
-fn view_entries(set: &PartSet, shown: &Values, is_editing: bool) -> Vec<MenuEntry> {
+fn view_entries(
+    set: &PartSet,
+    shown: &Values,
+    is_editing: bool,
+    has_encoding: bool,
+) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
     if let Some(preset) = set.preset {
         let at = shown.get(preset).clone();
@@ -64,6 +71,10 @@ fn view_entries(set: &PartSet, shown: &Values, is_editing: bool) -> Vec<MenuEntr
             is_on,
         ));
     }
+    if has_encoding {
+        entries.push(MenuEntry::Break);
+        entries.push(MenuEntry::Run(ENCODING, Box::new(ChooseEncoding), false));
+    }
     entries.push(MenuEntry::Break);
     entries.push(MenuEntry::Run(KEEP, Box::new(KeepViewDefault), false));
     entries.push(MenuEntry::Run(RESET, Box::new(ResetView), false));
@@ -78,7 +89,8 @@ pub fn view_menu(
 ) -> Option<ShellMenu> {
     let set = body.parts(cx)?;
     let focus = body.focus_handle(cx);
-    let entries = view_entries(set, shown, body.is_editing(cx));
+    let has_encoding = body.encoding(cx).is_some();
+    let entries = view_entries(set, shown, body.is_editing(cx), has_encoding);
     Some(viewer_menu(&entries, &focus, window))
 }
 
@@ -105,6 +117,7 @@ fn op_of(set: &PartSet, name: &str) -> Option<ViewOp> {
         [
             (KeepViewDefault.name(), ViewOp::Keep),
             (ResetView.name(), ViewOp::Reset),
+            (ChooseEncoding.name(), ViewOp::Encoding),
         ]
         .into_iter()
         .find(|(action, _)| *action == name)
@@ -125,6 +138,9 @@ impl FerriteWindow {
         let root = root
             .on_action(cx.listener(|view, _: &ViewMenu, window, cx| {
                 view.open_view_menu(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &ChooseEncoding, window, cx| {
+                view.open_encoding_menu(window, cx);
             }))
             .on_action(cx.listener(|view, _: &ShowLineEnds, window, cx| {
                 view.show_line_ends(window, cx);
@@ -165,6 +181,9 @@ impl FerriteWindow {
     }
 
     fn run_view(&mut self, op: ViewOp, window: &mut Window, cx: &mut Context<Self>) {
+        if op == ViewOp::Encoding {
+            return self.open_encoding_menu(window, cx);
+        }
         let Some(set) = self.body_parts(cx) else {
             return;
         };
@@ -186,6 +205,7 @@ impl FerriteWindow {
                 viewer.parts.reset();
                 Vec::new()
             }
+            ViewOp::Encoding => return,
             ViewOp::Keep => {
                 let kept = viewer.parts.keep(&values);
                 let note = empty_keep_note(&viewer.parts);

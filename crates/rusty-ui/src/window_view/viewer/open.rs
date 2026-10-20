@@ -4,9 +4,10 @@ use std::time::Duration;
 
 use gpui_kit::Task;
 use rusty_core::Location;
+use rusty_core::encoding::Encoding;
 
 use super::cancel::Cancel;
-use super::kinds::{IMAGE_ID, PDF_ID};
+use super::kinds::{IMAGE_ID, PDF_ID, paged_text};
 use super::modes::Shown;
 use super::{Declined, FileHooks, Head, Kind, Kinds, Load, Loaded, Slot, Sniff, Viewer};
 use crate::prelude::*;
@@ -109,6 +110,7 @@ pub(in crate::window_view) struct Request {
     pub hooks: FileHooks,
     pub location: Location,
     pub name: String,
+    pub encoding: Option<&'static Encoding>,
 }
 
 #[derive(Clone, Copy)]
@@ -118,6 +120,12 @@ pub(in crate::window_view) struct Turn<'a> {
 }
 
 impl Request {
+    pub(super) fn paged_text(&self) -> Result<Loaded, String> {
+        self.hooks
+            .paged_with(&self.location, self.encoding)
+            .map(paged_text)
+    }
+
     pub(super) fn loader<'a>(
         &'a self,
         sniff: &'a Sniff<'_>,
@@ -130,6 +138,7 @@ impl Request {
                     location: &self.location,
                     sniff,
                     cancel: turn.cancel,
+                    encoding: self.encoding,
                 })
             })
         }
@@ -205,6 +214,7 @@ impl FerriteWindow {
             hooks: self.files.clone(),
             location: viewer.location.clone(),
             name: viewer.title.to_string(),
+            encoding: viewer.encoding,
         }
     }
 
