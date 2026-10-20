@@ -7,10 +7,12 @@ use rusqlite::{Connection, TransactionBehavior};
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
+mod frecency;
 mod migrations;
 mod settings_defaults;
 mod viewer;
 
+pub use frecency::Frecent;
 use migrations::MIGRATIONS;
 pub use viewer::{FileMemory, Stamp};
 
