@@ -1,12 +1,17 @@
+mod case;
 pub mod check;
 mod mask;
 mod parse;
+mod rules;
+mod search;
 mod split;
 
+pub use case::{ExtCase, NameCase};
 pub use mask::{
-    CaseMode, CounterSpec, FieldLookup, LocalTime, Mask, MaskError, MaskErrorKind, Span, Subject,
-    Token,
+    CaseMode, CounterParts, CounterSpec, FieldLookup, LocalTime, Mask, MaskError, MaskErrorKind,
+    Span, Subject, Token,
 };
+pub use rules::{Compiled, Counter, Find, RenameRules, RuleError, RuleField};
 pub use split::split_name;
 
 #[cfg(test)]

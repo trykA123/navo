@@ -1,4 +1,4 @@
-use super::mask::{CaseMode, CounterSpec, Mask, MaskError, MaskErrorKind, Span, Token};
+use super::mask::{CaseMode, CounterParts, Mask, MaskError, MaskErrorKind, Span, Token};
 
 impl Mask {
     pub fn parse(text: &str) -> Result<Self, MaskError> {
@@ -121,23 +121,37 @@ fn span(text: &str) -> Result<Span, MaskErrorKind> {
     }
 }
 
-fn counter(text: &str) -> Result<Option<CounterSpec>, MaskErrorKind> {
-    if text.is_empty() {
-        return Ok(None);
-    }
+fn counter(text: &str) -> Result<CounterParts, MaskErrorKind> {
     let bad = || MaskErrorKind::BadCounter;
-    let (start, rest) = digits(text).ok_or_else(bad)?;
-    let (step, rest) = digits(rest.strip_prefix('+').ok_or_else(bad)?).ok_or_else(bad)?;
-    let (width, rest) = digits(rest.strip_prefix(':').ok_or_else(bad)?).ok_or_else(bad)?;
-    let width = u8::try_from(width).map_err(|_| bad())?;
-    if !rest.is_empty() || step < 1 || !(1..=10).contains(&width) {
+    let (start, rest) = leading_number(text).ok_or_else(bad)?;
+    let (step, rest) = marked_number(rest, '+').ok_or_else(bad)?;
+    let (width, rest) = marked_number(rest, ':').ok_or_else(bad)?;
+    let width = width.map(u8::try_from).transpose().map_err(|_| bad())?;
+    let step_ok = step.is_none_or(|step| step >= 1);
+    let width_ok = width.is_none_or(|width| (1..=10).contains(&width));
+    if !rest.is_empty() || !step_ok || !width_ok {
         return Err(bad());
     }
-    Ok(Some(CounterSpec {
+    Ok(CounterParts {
         start,
         step,
         digits: width,
-    }))
+    })
+}
+
+fn leading_number(text: &str) -> Option<(Option<u64>, &str)> {
+    if text.starts_with(|c: char| c.is_ascii_digit()) {
+        let (value, rest) = digits(text)?;
+        return Some((Some(value), rest));
+    }
+    Some((None, text))
+}
+
+fn marked_number(text: &str, mark: char) -> Option<(Option<u64>, &str)> {
+    match text.strip_prefix(mark) {
+        Some(rest) => digits(rest).map(|(value, rest)| (Some(value), rest)),
+        None => Some((None, text)),
+    }
 }
 
 fn digits(text: &str) -> Option<(u64, &str)> {
