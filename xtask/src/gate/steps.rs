@@ -34,10 +34,6 @@ pub fn steps(options: &GateOptions) -> Vec<Step> {
     steps
 }
 
-fn step(name: &'static str, program: &'static str, args: &'static [&'static str]) -> Step {
-    Step {
-        name,
-        program,
-        args,
-    }
+fn step(name: &'static str, program: &'static str, args: &[&str]) -> Step {
+    Step::new(name, program, args)
 }

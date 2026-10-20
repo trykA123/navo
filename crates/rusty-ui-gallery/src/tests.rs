@@ -32,6 +32,31 @@ fn screenshot_without_a_directory_is_an_error() {
     assert!(parse_args(args(&["--bogus"])).is_err());
 }
 
+#[test]
+fn pages_limit_the_screenshots_to_the_listed_stems() {
+    let parsed = parse_args(args(&[
+        "--screenshot",
+        "shots",
+        "--pages",
+        "p7-pane,p15-table",
+    ]));
+    assert_eq!(
+        parsed.map(|options| options.pages),
+        Ok(Some(vec!["p7-pane".to_string(), "p15-table".to_string()]))
+    );
+    let all = parse_args(args(&["--screenshot", "shots"]));
+    assert_eq!(all.map(|options| options.pages), Ok(None));
+}
+
+#[test]
+fn an_unknown_page_stem_is_an_error_naming_it() {
+    let error = parse_args(args(&["--screenshot", "shots", "--pages", "p7-pane,nope"]))
+        .expect_err("unknown stem");
+    assert!(error.contains("nope"));
+    assert!(!error.contains("p7-pane"));
+    assert!(parse_args(args(&["--pages", "p7-pane"])).is_err());
+}
+
 #[gpui_kit::test]
 fn the_gallery_opens_a_window_with_every_primitive(cx: &mut TestAppContext) {
     let (window, _) = cx.update(|cx| {

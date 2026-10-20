@@ -24,25 +24,29 @@ pub fn run(args: &[String]) -> ExitCode {
 }
 
 pub(super) fn run_steps(root: &Path, steps: &[Step]) -> ExitCode {
+    run_labeled(root, "gate", steps)
+}
+
+pub(super) fn run_labeled(root: &Path, label: &str, steps: &[Step]) -> ExitCode {
     let started = Instant::now();
     for step in steps {
-        let code = run_step(root, step);
+        let code = run_step(root, label, step);
         if code != ExitCode::SUCCESS {
             return code;
         }
     }
     println!(
-        "gate: all {} steps passed ({:.1} s)",
+        "{label}: all {} steps passed ({:.1} s)",
         steps.len(),
         started.elapsed().as_secs_f64()
     );
     ExitCode::SUCCESS
 }
 
-fn run_step(root: &Path, step: &Step) -> ExitCode {
+fn run_step(root: &Path, label: &str, step: &Step) -> ExitCode {
     let started = Instant::now();
     let status = Command::new(step.program)
-        .args(step.args)
+        .args(&step.args)
         .current_dir(root)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
@@ -60,7 +64,7 @@ fn run_step(root: &Path, step: &Step) -> ExitCode {
         Err(error) => (ExitCode::FAILURE, format!("failed: {error}")),
     };
     println!(
-        "gate: {} {result} ({:.1} s)",
+        "{label}: {} {result} ({:.1} s)",
         step.name,
         started.elapsed().as_secs_f64()
     );

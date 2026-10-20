@@ -82,6 +82,7 @@ fn main() -> ExitCode {
         let opened = rusty_ui::open_window(window_options(cx), cx, |window, cx| {
             cx.new(|cx| Gallery::new(Mode::Light, window, cx))
         });
+        let pages = options.pages;
         match (opened, options.screenshot_dir) {
             (Err(error), _) => {
                 report(&format!("could not open the gallery window: {error:#}"));
@@ -93,6 +94,7 @@ fn main() -> ExitCode {
                     window,
                     gallery,
                     dir,
+                    pages,
                 };
                 screenshot::capture(shot, run_failed, cx);
             }
