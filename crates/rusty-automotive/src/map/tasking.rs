@@ -2,7 +2,8 @@ use super::model::MapModel;
 use super::parts::{self, Part};
 use super::retention::{Record, Retention};
 use super::rows;
-use super::table::{Parsed, Side, Table, cells};
+use super::table::{Parsed, Side, Table, raw_cells};
+use super::wrap::Wrapped;
 
 pub(super) struct Tasking {
     pub model: MapModel,
@@ -13,6 +14,7 @@ pub(super) struct Tasking {
     unsupported_mau: bool,
     symbol_order: Option<String>,
     retention: Retention,
+    wrapped: Option<Wrapped>,
 }
 
 impl Tasking {
@@ -26,6 +28,7 @@ impl Tasking {
             unsupported_mau: false,
             symbol_order: None,
             retention: Retention::default(),
+            wrapped: None,
         }
     }
 
@@ -64,12 +67,17 @@ impl Tasking {
     }
 
     pub(super) fn drop_row(&mut self, reason: &'static str) {
+        self.flush_row();
         self.clear_file();
         self.model.malformed(reason);
     }
 
     pub(super) fn take(&mut self, text: &str) {
         let text = text.trim().trim_start_matches('\u{feff}');
+        if self.continue_row(text) {
+            return;
+        }
+        self.flush_row();
         if let Some(header) = parts::header(text) {
             return self.header(header);
         }
@@ -91,7 +99,47 @@ impl Tasking {
             }
             return;
         }
-        self.take_cells(&cells(text));
+        self.take_row(text);
+    }
+
+    fn continue_row(&mut self, text: &str) -> bool {
+        let Some(row) = self.wrapped.as_mut() else {
+            return false;
+        };
+        let is_row = text.starts_with('|') && !text.bytes().all(|byte| b"|+-= \t".contains(&byte));
+        if !is_row || !row.extend(&raw_cells(text)) {
+            return false;
+        }
+        if !row.is_open() {
+            self.flush_row();
+        }
+        true
+    }
+
+    pub(super) fn flush_row(&mut self) {
+        let Some(row) = self.wrapped.take() else {
+            return;
+        };
+        let cells: Vec<&str> = row.cells().collect();
+        let now = std::mem::replace(&mut self.model.lines, row.line);
+        self.store_row(&cells);
+        self.model.lines = now;
+    }
+
+    fn take_row(&mut self, text: &str) {
+        let raw = raw_cells(text);
+        let cells: Vec<&str> = raw.iter().map(|cell| cell.trim()).collect();
+        if self.start_table(&cells) {
+            return;
+        }
+        let can_wrap = raw.len() == self.table.columns.len() && !self.retention.capped(self.part);
+        if can_wrap {
+            self.wrapped = Wrapped::start(&raw, self.model.lines);
+            if self.wrapped.is_some() {
+                return;
+            }
+        }
+        self.store_row(&cells);
     }
 
     fn is_header(&self, table: &Table) -> bool {
@@ -115,7 +163,7 @@ impl Tasking {
         }
     }
 
-    fn take_cells(&mut self, cells: &[&str]) {
+    fn start_table(&mut self, cells: &[&str]) -> bool {
         if cells.iter().any(|cell| {
             [
                 "section",
@@ -136,13 +184,17 @@ impl Tasking {
             if self.is_header(&table) {
                 self.table = table;
                 self.clear_file();
-                return;
+                return true;
             }
             if table.has(&["space", "stack name"]) && self.part == Part::Memory {
                 self.table = Table::default();
-                return;
+                return true;
             }
         }
+        false
+    }
+
+    fn store_row(&mut self, cells: &[&str]) {
         if self.table.columns.is_empty() || self.retention.capped(self.part) {
             self.clear_file();
             return;

@@ -26,6 +26,7 @@ pub fn index_map(
             Step::End => break,
             Step::Skip(bytes) => {
                 offset += bytes;
+                parser.flush_row();
                 parser.clear_file();
             }
             Step::Line { bytes, too_long } => {
@@ -43,6 +44,7 @@ pub fn index_map(
     if !recognized {
         return Err(MapError::UnsupportedFormat);
     }
+    parser.flush_row();
     super::finish::finish(&mut parser.model);
     check_cancel(cancel)?;
     progress(offset);
