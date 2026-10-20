@@ -1,9 +1,11 @@
 mod kind;
 mod regions;
+mod strip;
 mod table;
 
 pub use kind::Kind;
 pub use regions::{regions_for_elf, regions_for_map};
+pub use strip::{Break, Cell, Scale, ScaleMode, cells};
 
 use crate::mdf::ChipKind;
 
