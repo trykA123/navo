@@ -6,10 +6,18 @@ pub use pattern::{Pattern, PatternError};
 const WORD: u64 = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct Span {
+    anchor: u64,
+    base: Vec<u64>,
+    unmark: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selection {
     len: u64,
     bits: Vec<u64>,
     anchor: Option<u64>,
+    span: Option<Span>,
 }
 
 impl Selection {
@@ -20,6 +28,7 @@ impl Selection {
             len,
             bits: vec![0; words],
             anchor: None,
+            span: None,
         }
     }
 
@@ -91,6 +100,39 @@ impl Selection {
         });
     }
 
+    pub fn extend(&mut self, from_cursor: u64, to: u64, unmark: bool) {
+        let Some(last) = self.len.checked_sub(1) else {
+            return;
+        };
+        let span = self.span.get_or_insert_with(|| Span {
+            anchor: from_cursor.min(last),
+            base: self.bits.clone(),
+            unmark,
+        });
+        self.bits.clone_from(&span.base);
+        let anchor = span.anchor;
+        let on = !span.unmark;
+        let to = to.min(last);
+        for row in anchor.min(to)..=anchor.max(to) {
+            self.set(row, on);
+        }
+    }
+
+    pub fn end_span(&mut self) {
+        self.span = None;
+    }
+
+    pub fn mark_extension(&mut self, listing: &Listing, ext: Option<&str>, on: bool) {
+        self.each_row(listing, false, |name, _| {
+            let matches = match (extension(name), ext) {
+                (Some(actual), Some(wanted)) => actual.eq_ignore_ascii_case(wanted),
+                (None, None) => true,
+                _ => false,
+            };
+            matches.then_some(on)
+        });
+    }
+
     pub fn unmark_pattern(&mut self, listing: &Listing, pattern: &Pattern, folders: bool) {
         self.each_row(listing, folders, |entry_name, _| {
             pattern.matches(entry_name).then_some(false)
@@ -112,6 +154,7 @@ impl Selection {
     }
 
     pub fn clear(&mut self) {
+        self.end_span();
         self.bits.fill(0);
         self.anchor = None;
     }
@@ -147,6 +190,12 @@ impl Selection {
         let i = usize::try_from(row / WORD).ok()?;
         (i < self.bits.len()).then_some((i, 1 << (row % WORD)))
     }
+}
+
+pub(crate) fn extension(name: &str) -> Option<&str> {
+    name.rfind('.')
+        .filter(|dot| *dot > 0 && dot + 1 < name.len())
+        .map(|dot| &name[dot + 1..])
 }
 
 #[cfg(test)]

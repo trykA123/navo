@@ -5,6 +5,7 @@ mod ids;
 mod parsing;
 mod props;
 mod round_trip;
+mod selection;
 mod snapshots;
 
 fn location(text: &str) -> Location {
@@ -37,6 +38,9 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     "selection.toggle",
     "selection.toggle-down",
     "selection.range { to: 7 }",
+    "selection.extend { to: down, unmark: false }",
+    "selection.extension { mark: true }",
+    "selection.restore",
     r#"selection.add-pattern { pattern: "*.rs" }"#,
     r#"selection.remove-pattern { pattern: "?.txt" }"#,
     "selection.invert",

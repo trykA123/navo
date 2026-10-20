@@ -99,6 +99,14 @@ impl AppState {
         self.focused.focused_pane_mut().active_mut()
     }
 
+    pub(crate) fn last_marks(&self) -> Option<&[String]> {
+        self.focused.last_marks()
+    }
+
+    pub(crate) fn remember_marks(&mut self, names: Vec<String>) {
+        self.focused.remember_marks(names);
+    }
+
     pub(crate) fn focused_pane_mut(&mut self) -> &mut Pane {
         self.focused.focused_pane_mut()
     }

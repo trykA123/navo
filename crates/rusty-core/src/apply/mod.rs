@@ -61,9 +61,14 @@ pub enum CommandError {
     NoListing,
     #[error("the folder is empty")]
     EmptyListing,
+    #[error("No saved marks match this folder")]
+    NothingToRestore,
 }
 
 pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, CommandError> {
+    if !matches!(command, Command::SelectionExtend { .. }) {
+        state.active_tab_mut().selection_mut().end_span();
+    }
     match command {
         Command::PaneOpenTab { location } => Ok(pane::open_tab(state, location.as_ref())),
         Command::PaneCloseTab { tab } => pane::close_tab(state, *tab),
@@ -78,6 +83,9 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::SelectionToggle => select::toggle(state),
         Command::SelectionToggleDown => select::toggle_down(state),
         Command::SelectionRange { to } => select::range(state, *to),
+        Command::SelectionExtend { to, unmark } => select::extend(state, *to, *unmark),
+        Command::SelectionExtension { mark } => select::extension(state, *mark),
+        Command::SelectionRestore => select::restore(state),
         Command::SelectionAddPattern { pattern, folders } => select::pattern(
             state,
             pattern,

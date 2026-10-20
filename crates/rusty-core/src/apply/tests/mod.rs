@@ -12,6 +12,8 @@ mod layout;
 mod pane;
 mod props;
 mod select;
+mod select_restore;
+mod select_span;
 mod window;
 
 fn loc(text: &str) -> Location {

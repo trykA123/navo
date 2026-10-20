@@ -5,6 +5,7 @@ mod marks;
 mod memory;
 mod pattern;
 mod props;
+mod span;
 
 fn entry(name: &str, is_folder: bool) -> Entry {
     Entry {

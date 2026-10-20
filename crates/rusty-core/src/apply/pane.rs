@@ -23,7 +23,8 @@ pub(super) fn close_tab(
 }
 
 pub(super) fn navigate(state: &mut AppState, location: &Location) -> Vec<Effect> {
-    state.active_tab_mut().navigate(location.clone());
+    let marks = state.active_tab_mut().navigate(location.clone());
+    state.remember_marks(marks);
     list_active(state)
 }
 
@@ -46,12 +47,14 @@ pub(super) fn go_drive(state: &mut AppState, root: &Location) -> Vec<Effect> {
 }
 
 pub(super) fn back(state: &mut AppState) -> Result<Vec<Effect>, CommandError> {
-    state.active_tab_mut().back()?;
+    let marks = state.active_tab_mut().back()?;
+    state.remember_marks(marks);
     Ok(list_active(state))
 }
 
 pub(super) fn forward(state: &mut AppState) -> Result<Vec<Effect>, CommandError> {
-    state.active_tab_mut().forward()?;
+    let marks = state.active_tab_mut().forward()?;
+    state.remember_marks(marks);
     Ok(list_active(state))
 }
 
@@ -59,11 +62,18 @@ pub(super) fn cursor_move(
     state: &mut AppState,
     to: CursorMove,
 ) -> Result<Vec<Effect>, CommandError> {
+    let row = cursor_target(state, to)?;
+    state.active_tab_mut().set_cursor(row);
+    state.focused_pane_mut().reveal_cursor();
+    Ok(Vec::new())
+}
+
+pub(super) fn cursor_target(state: &AppState, to: CursorMove) -> Result<u64, CommandError> {
     let last = last_row(state)?;
     let cursor = state.active_tab().view().cursor;
     let page = state
-        .focused_pane_mut()
-        .page_rows()
+        .pane(state.focused_pane())
+        .map_or(1, crate::Pane::page_rows)
         .saturating_sub(1)
         .max(1);
     let row = match to {
@@ -75,9 +85,7 @@ pub(super) fn cursor_move(
         CursorMove::Last => last,
         CursorMove::Row(row) => row,
     };
-    state.active_tab_mut().set_cursor(row.min(last));
-    state.focused_pane_mut().reveal_cursor();
-    Ok(Vec::new())
+    Ok(row.min(last))
 }
 
 pub(super) fn reveal_tab(state: &mut AppState, tab: TabId) {

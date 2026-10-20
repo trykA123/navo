@@ -4,6 +4,8 @@ use super::{Pane, StateError};
 use crate::placement::{MonitorSetup, Placement};
 use crate::{Direction, Layout, PaneId, WindowId};
 
+pub(super) const MAX_LAST_MARKS: usize = 100_000;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Window {
     id: WindowId,
@@ -11,6 +13,7 @@ pub struct Window {
     focused: Pane,
     others: BTreeMap<PaneId, Pane>,
     placement: Vec<Placement>,
+    last_marks: Option<Vec<String>>,
 }
 
 impl Window {
@@ -76,6 +79,7 @@ impl Window {
             focused,
             others,
             placement,
+            last_marks: None,
         })
     }
 
@@ -86,6 +90,18 @@ impl Window {
             focused: pane,
             others: BTreeMap::new(),
             placement: Vec::new(),
+            last_marks: None,
+        }
+    }
+
+    pub(super) fn last_marks(&self) -> Option<&[String]> {
+        self.last_marks.as_deref()
+    }
+
+    pub(super) fn remember_marks(&mut self, mut names: Vec<String>) {
+        if !names.is_empty() {
+            names.truncate(MAX_LAST_MARKS);
+            self.last_marks = Some(names);
         }
     }
 

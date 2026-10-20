@@ -109,6 +109,8 @@ pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
         CommandId::PaneGoDrive => &["root"],
         CommandId::PaneCloseTab | CommandId::PaneActivateTab => &["tab"],
         CommandId::PaneCursorMove | CommandId::SelectionRange | CommandId::PaneScroll => &["to"],
+        CommandId::SelectionExtend => &["to", "unmark"],
+        CommandId::SelectionExtension => &["mark"],
         CommandId::WindowClose | CommandId::WindowFocus => &["window"],
         CommandId::SelectionAddPattern | CommandId::SelectionRemovePattern => {
             &["pattern", "folders"]
@@ -150,6 +152,9 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::SelectionRange => Command::SelectionRange {
             to: fields.required("to", unsigned::<u64>)?,
         },
+        Id::SelectionExtend | Id::SelectionExtension | Id::SelectionRestore => {
+            selection_command(&mut fields)?
+        }
         Id::SelectionAddPattern | Id::SelectionRemovePattern => pattern_command(&mut fields)?,
         Id::SelectionInvert => Command::SelectionInvert,
         Id::SelectionAll => Command::SelectionAll,
@@ -163,6 +168,19 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         },
         Id::WindowOpen | Id::WindowClose | Id::WindowFocus => window_command(&mut fields)?,
         Id::AppSaveSession => Command::AppSaveSession,
+    })
+}
+
+fn selection_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
+    Ok(match fields.command {
+        CommandId::SelectionExtend => Command::SelectionExtend {
+            to: fields.required("to", cursor_move)?,
+            unmark: fields.required("unmark", flag)?,
+        },
+        CommandId::SelectionExtension => Command::SelectionExtension {
+            mark: fields.required("mark", flag)?,
+        },
+        _ => Command::SelectionRestore,
     })
 }
 

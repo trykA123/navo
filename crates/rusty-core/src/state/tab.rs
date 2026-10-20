@@ -82,36 +82,47 @@ impl Tab {
         }
     }
 
-    pub(crate) fn navigate(&mut self, location: Location) {
-        let previous = self.leave(location);
+    pub(crate) fn navigate(&mut self, location: Location) -> Vec<String> {
+        let (previous, marks) = self.leave(location);
         self.history.push(previous);
         self.arrive();
+        marks
     }
 
-    pub(crate) fn back(&mut self) -> Result<(), StateError> {
+    pub(crate) fn back(&mut self) -> Result<Vec<String>, StateError> {
         let target = self
             .history
             .back()
             .last()
             .cloned()
             .ok_or(StateError::NothingBack)?;
-        let previous = self.leave(target);
+        let (previous, marks) = self.leave(target);
         self.history.step_back(previous);
         self.arrive();
-        Ok(())
+        Ok(marks)
     }
 
-    pub(crate) fn forward(&mut self) -> Result<(), StateError> {
+    pub(crate) fn forward(&mut self) -> Result<Vec<String>, StateError> {
         let target = self
             .history
             .forward()
             .first()
             .cloned()
             .ok_or(StateError::NothingForward)?;
-        let previous = self.leave(target);
+        let (previous, marks) = self.leave(target);
         self.history.step_forward(previous);
         self.arrive();
-        Ok(())
+        Ok(marks)
+    }
+
+    pub(crate) fn marked_names(&self) -> Vec<String> {
+        self.selection
+            .marked()
+            .into_iter()
+            .filter_map(|row| self.listing.as_ref()?.get(row))
+            .take(super::window::MAX_LAST_MARKS)
+            .map(|entry| entry.name.clone())
+            .collect()
     }
 
     pub(crate) fn selection_mut(&mut self) -> &mut Selection {
@@ -251,7 +262,8 @@ impl Tab {
         self.view.scroll = self.clamp(row);
     }
 
-    fn leave(&mut self, target: Location) -> Location {
+    fn leave(&mut self, target: Location) -> (Location, Vec<String>) {
+        let marks = self.marked_names();
         self.views.insert(self.location.clone(), self.view);
         if let Some(entry) = self.listing.as_ref().and_then(|l| l.get(self.view.cursor)) {
             self.names.insert(self.location.clone(), entry.name.clone());
@@ -259,7 +271,7 @@ impl Tab {
         self.listing = None;
         self.pending = None;
         self.selection = Selection::new(0);
-        std::mem::replace(&mut self.location, target)
+        (std::mem::replace(&mut self.location, target), marks)
     }
 
     fn arrive(&mut self) {

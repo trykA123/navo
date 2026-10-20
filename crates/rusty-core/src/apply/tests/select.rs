@@ -209,7 +209,7 @@ fn remove_pattern_with_folders_unmarks_matching_folders_too() {
         folders: true,
     };
     run(&mut state, command);
-    assert_eq!(marked(&state), vec![2]);
+    assert_eq!(marked(&state), vec![0, 2]);
 }
 
 #[test]
@@ -237,7 +237,7 @@ fn remove_pattern_unmarks_matching_files_only() {
     run(&mut state, Command::SelectionToggle);
     run(&mut state, Command::SelectionAll);
     run(&mut state, remove("*.rs"));
-    assert_eq!(marked(&state), vec![2, 3]);
+    assert_eq!(marked(&state), vec![0, 2, 3]);
 }
 
 #[test]
@@ -285,10 +285,10 @@ fn invert_without_a_listing_fails() {
 }
 
 #[test]
-fn all_marks_files_only() {
+fn all_marks_files_and_folders() {
     let mut state = at_work(mixed());
     run(&mut state, Command::SelectionAll);
-    assert_eq!(marked(&state), vec![1, 2, 4]);
+    assert_eq!(marked(&state), vec![0, 1, 2, 3, 4]);
 }
 
 #[test]

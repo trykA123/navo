@@ -72,6 +72,10 @@ fn any_command() -> impl Strategy<Value = Command> {
         Just(Command::SelectionInvert),
         Just(Command::SelectionAll),
         Just(Command::SelectionClear),
+        (any_cursor_move(), any::<bool>())
+            .prop_map(|(to, unmark)| Command::SelectionExtend { to, unmark }),
+        any::<bool>().prop_map(|mark| Command::SelectionExtension { mark }),
+        Just(Command::SelectionRestore),
         any_direction().prop_map(|direction| Command::LayoutSplit { direction }),
         Just(Command::LayoutClose),
         any_direction().prop_map(|direction| Command::LayoutFocus { direction }),
