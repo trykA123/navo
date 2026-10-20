@@ -20,7 +20,7 @@ pub(in crate::window_view::viewer) use text::parse_address;
 
 use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
-use super::parts::{AUTOMOTIVE_TABLE, PartSet};
+use super::parts::{AUTOMOTIVE_LAYOUT, LayoutParts, PartSet};
 use super::search::bar::GO_TO_KEYS;
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
@@ -106,6 +106,7 @@ pub(in crate::window_view::viewer) struct ElfView {
     wanted_symbol: Option<u32>,
     page: usize,
     opens_inspector: bool,
+    layout: LayoutParts,
     columns: Option<columns::Columns>,
 }
 
@@ -139,6 +140,7 @@ impl ElfView {
             wanted_symbol: None,
             page: 1,
             opens_inspector: false,
+            layout: LayoutParts::default(),
             columns: None,
         }
     }
@@ -222,11 +224,15 @@ impl ViewerBody for ElfBody {
     }
 
     fn parts(&self, _: &App) -> Option<&'static PartSet> {
-        Some(&AUTOMOTIVE_TABLE)
+        Some(&AUTOMOTIVE_LAYOUT)
     }
 
     fn show_parts(&self, values: &Values, cx: &mut App) {
         let opens = values.opens_inspector();
-        self.0.update(cx, |view, _| view.opens_inspector = opens);
+        let layout = LayoutParts::of(values);
+        self.0.update(cx, |view, _| {
+            view.opens_inspector = opens;
+            view.layout = layout;
+        });
     }
 }

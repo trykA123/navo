@@ -68,6 +68,8 @@ gpui_kit::actions!(
         ToggleMemoryStrip,
         ToggleCharts,
         ToggleRowBars,
+        ToggleUsageBars,
+        ToggleWhoUses,
         ViewSimple,
         ViewRich,
         ViewCustom,

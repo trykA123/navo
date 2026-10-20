@@ -367,6 +367,18 @@ fn table_rows(preset: usize, inspector: bool) -> Vec<(String, bool)> {
         .collect()
 }
 
+fn layout_rows(preset: usize, on: bool) -> Vec<(String, bool)> {
+    let mut rows = table_rows(preset, on);
+    let parts = [
+        "Memory strip",
+        "Used and free bars",
+        "Who uses the flash",
+        "Row bars",
+    ];
+    rows.splice(5..5, parts.map(|part| (part.to_owned(), on)));
+    rows
+}
+
 fn elf_rig(cx: &mut TestAppContext) -> Rig {
     let bytes = rusty_automotive::elf_sample::demo().expect("the demo builds");
     rig(cx, ("a.elf", "b.elf"), &bytes)
@@ -410,9 +422,9 @@ fn choose_rich(rig: &Rig, cx: &mut TestAppContext) {
 fn alt_v_opens_the_view_menu_in_the_elf_view(cx: &mut TestAppContext) {
     let rig = elf_rig(cx);
     rig.press(cx, "alt-v");
-    assert_eq!(rig.rows(cx), table_rows(0, false));
+    assert_eq!(rig.rows(cx), layout_rows(0, false));
     run_item(cx, rig.window, "Rich");
-    assert_eq!(rig.rows(cx), table_rows(1, true));
+    assert_eq!(rig.rows(cx), layout_rows(1, true));
 }
 
 #[gpui_kit::test]
@@ -428,9 +440,9 @@ fn alt_v_opens_the_view_menu_in_the_can_trace_view(cx: &mut TestAppContext) {
 fn alt_v_opens_the_view_menu_in_the_map_view(cx: &mut TestAppContext) {
     let rig = map_rig(cx);
     rig.press(cx, "alt-v");
-    assert_eq!(rig.rows(cx), table_rows(0, false));
+    assert_eq!(rig.rows(cx), layout_rows(0, false));
     run_item(cx, rig.window, "Rich");
-    assert_eq!(rig.rows(cx), table_rows(1, true));
+    assert_eq!(rig.rows(cx), layout_rows(1, true));
 }
 
 #[gpui_kit::test]

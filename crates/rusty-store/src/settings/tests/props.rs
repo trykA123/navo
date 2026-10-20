@@ -68,14 +68,26 @@ fn automotive() -> impl Strategy<Value = Automotive> {
         Just(ViewPreset::Rich),
         Just(ViewPreset::Custom)
     ];
-    (preset, any::<[bool; 4]>()).prop_map(
-        |(preset, [inspector, memory_strip, charts, row_bars])| Automotive {
+    (preset, any::<[bool; 6]>()).prop_map(
+        |(
+            preset,
+            [
+                inspector,
+                memory_strip,
+                charts,
+                row_bars,
+                usage_bars,
+                who_uses,
+            ],
+        )| Automotive {
             view: AutomotiveView {
                 preset,
                 inspector,
                 memory_strip,
                 charts,
                 row_bars,
+                usage_bars,
+                who_uses,
             },
         },
     )

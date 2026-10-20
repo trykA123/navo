@@ -1,5 +1,7 @@
-use super::{AUTOMOTIVE, AUTOMOTIVE_TABLE, IMAGE, TEXT, ViewParts};
+use super::{AUTOMOTIVE, AUTOMOTIVE_LAYOUT, AUTOMOTIVE_TABLE, IMAGE, LayoutParts, TEXT, ViewParts};
 use crate::settings::{Change, Field, Value, Values};
+use crate::window_view::viewer::body::MenuEntry;
+use crate::window_view::viewer::view_menu::view_entries;
 
 fn set(values: &Values, field: Field, value: Value) -> Values {
     values.with(&Change { field, value })
@@ -285,4 +287,61 @@ fn an_older_save_of_the_same_field_does_not_settle_a_newer_keep() {
     );
     assert!(parts.is_pending());
     assert_eq!(parts.settle(&newer, true), Some(true));
+}
+
+#[test]
+fn rich_turns_every_layout_part_on() {
+    let layout = LayoutParts::of(&rich());
+    assert_eq!(
+        layout,
+        LayoutParts {
+            strip: true,
+            bars: true,
+            who: true,
+            row_bars: true,
+        }
+    );
+    assert_eq!(LayoutParts::of(&Values::default()), LayoutParts::default());
+}
+
+#[test]
+fn a_layout_toggle_makes_the_preset_custom_and_keeps_the_other_parts() {
+    let mut parts = ViewParts::default();
+    let settings = rich();
+    parts.toggle(&AUTOMOTIVE_LAYOUT, Field::AutomotiveWhoUses, &settings);
+    let shown = parts.effective(&settings);
+    assert_eq!(shown.get(Field::AutomotivePreset), &Value::Pick(2));
+    assert_eq!(
+        LayoutParts::of(&shown),
+        LayoutParts {
+            strip: true,
+            bars: true,
+            who: false,
+            row_bars: true,
+        }
+    );
+}
+
+#[test]
+fn keep_as_default_writes_the_two_new_keys() {
+    let mut parts = ViewParts::default();
+    let settings = Values::default();
+    parts.choose(&AUTOMOTIVE_LAYOUT, 1, &settings);
+    let kept = parts.keep(&settings);
+    for field in [Field::AutomotiveUsageBars, Field::AutomotiveWhoUses] {
+        assert!(kept.iter().any(|change| change.field == field), "{field:?}");
+    }
+}
+
+#[test]
+fn the_view_menu_lists_five_parts_for_elf_and_map_and_four_for_hex() {
+    let parts = |set| {
+        let entries = view_entries(set, &Values::default(), false, false);
+        let breaks: Vec<usize> = (0..entries.len())
+            .filter(|at| matches!(entries[*at], MenuEntry::Break))
+            .collect();
+        breaks[1] - breaks[0] - 1
+    };
+    assert_eq!(parts(&AUTOMOTIVE_LAYOUT), 5);
+    assert_eq!(parts(&AUTOMOTIVE), 4);
 }
