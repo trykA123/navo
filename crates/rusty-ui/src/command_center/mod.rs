@@ -1,13 +1,17 @@
 use crate::prelude::*;
 
+mod commands_source;
 mod query;
 mod source;
 
 #[cfg(test)]
 mod tests;
 
+pub use commands_source::{CommandRow, CommandsSnapshot, CommandsSource};
 pub use query::{Query, Scope, Term};
-pub use source::{ArgKind, Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target};
+pub use source::{Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target};
+
+pub use crate::commands::ArgKind;
 
 gpui_kit::actions!(command_center, [Toggle]);
 
