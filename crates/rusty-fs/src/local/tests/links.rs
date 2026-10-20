@@ -94,6 +94,7 @@ fn run_link(plan: &OperationPlan) -> (JobOutcome, Vec<(u32, StepOutcome)>) {
     with_job(|ctx| run_job(plan, &[], ctx))
 }
 
+#[cfg(unix)]
 fn recover_link(plan: &OperationPlan) -> (JobOutcome, Vec<(u32, StepOutcome)>) {
     let job = Journaled {
         plan,

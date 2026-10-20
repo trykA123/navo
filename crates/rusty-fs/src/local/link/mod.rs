@@ -61,6 +61,21 @@ pub(super) fn link_target(at: &Location) -> Result<Option<Location>, FsError> {
     }
 }
 
+pub(super) fn points_at(at: &Location, target_of: &Location) -> Result<bool, FsError> {
+    let Some(found) = link_target(at)? else {
+        return Ok(false);
+    };
+    #[cfg(unix)]
+    let same = found == *target_of;
+    #[cfg(windows)]
+    let same = found == *target_of
+        || matches!(
+            (super::os_path(&found), super::os_path(target_of)),
+            (Ok(found), Ok(wanted)) if windows::same_path(&found, &wanted)
+        );
+    Ok(same)
+}
+
 #[cfg(windows)]
 fn plain_path(location: &Location) -> Result<PathBuf, FsError> {
     use std::os::windows::ffi::OsStringExt;

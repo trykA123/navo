@@ -34,21 +34,11 @@ pub(super) fn undo_link(
 }
 
 fn points_at(ops: &dyn ProviderOps, at: &Location, target_of: &Location) -> Result<bool, FsError> {
-    match ops.link_target(at) {
-        Ok(found) => Ok(found.is_some_and(|found| same_target(&found, target_of))),
+    match ops.link_points_at(at, target_of) {
+        Ok(points) => Ok(points),
         Err(error) if error.kind == FsErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
-}
-
-fn same_target(found: &Location, wanted: &Location) -> bool {
-    found == wanted
-        || (cfg!(windows)
-            && found.is_local()
-            && found
-                .path()
-                .to_text()
-                .eq_ignore_ascii_case(&wanted.path().to_text()))
 }
 
 fn makes_shortcut_files(at: &Location) -> bool {

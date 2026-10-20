@@ -491,9 +491,15 @@ fn with_reduced_motion_nothing_travels(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn without_reduced_motion_a_new_line_rises(cx: &mut TestAppContext) {
     let (window, view) = open_plain(cx);
+    cx.update(|cx| {
+        let mut theme = crate::tokens::current(cx).clone();
+        theme.motion.base = Duration::from_secs(600);
+        cx.set_global(theme);
+    });
     add(cx, &view, running(1, 100 * MB));
+    std::thread::sleep(Duration::from_millis(250));
     let title = centre_offset(cx, window, ("activity-title", 1u64).into());
-    assert!(title > 0.5, "{title}");
+    assert!(title > 3., "{title}");
 }
 
 fn six_jobs(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) {

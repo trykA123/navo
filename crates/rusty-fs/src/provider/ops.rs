@@ -31,6 +31,9 @@ pub trait ProviderOps: Provider {
     fn link_target(&self, _at: &Location) -> Result<Option<Location>, FsError> {
         Ok(None)
     }
+    fn link_points_at(&self, at: &Location, target_of: &Location) -> Result<bool, FsError> {
+        Ok(self.link_target(at)?.as_ref() == Some(target_of))
+    }
     fn volume_serial(&self, _location: &Location) -> Result<Option<u64>, FsError> {
         Ok(None)
     }
