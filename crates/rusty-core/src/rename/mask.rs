@@ -24,6 +24,24 @@ impl Default for CounterSpec {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CounterParts {
+    pub start: Option<u64>,
+    pub step: Option<u64>,
+    pub digits: Option<u8>,
+}
+
+impl CounterParts {
+    #[must_use]
+    pub fn resolve(self, default: CounterSpec) -> CounterSpec {
+        CounterSpec {
+            start: self.start.unwrap_or(default.start),
+            step: self.step.unwrap_or(default.step),
+            digits: self.digits.unwrap_or(default.digits),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Text(String),
@@ -31,7 +49,7 @@ pub enum Token {
     Ext(Span),
     Parent,
     Grand,
-    Counter(Option<CounterSpec>),
+    Counter(CounterParts),
     Year,
     ShortYear,
     Month,
@@ -130,7 +148,7 @@ impl Mask {
                 Token::Ext(span) => slice(subject.ext, *span),
                 Token::Parent => subject.parent.to_owned(),
                 Token::Grand => subject.grand.to_owned(),
-                Token::Counter(spec) => number(spec.unwrap_or(default_counter), counter),
+                Token::Counter(parts) => number(parts.resolve(default_counter), counter),
                 Token::Case(next) => {
                     mode = *next;
                     continue;

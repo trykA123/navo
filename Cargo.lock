@@ -6494,6 +6494,7 @@ dependencies = [
  "memchr",
  "postcard",
  "proptest",
+ "regex",
  "serde",
  "serde_json",
  "similar",
