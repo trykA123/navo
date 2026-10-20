@@ -6670,6 +6670,7 @@ dependencies = [
  "tree-sitter-xml",
  "ts-parser-perl",
  "ttf-parser",
+ "url",
  "windows-version",
 ]
 

@@ -41,7 +41,7 @@ pub(super) use body::PdfBody;
 pub use keys::bind_keys;
 pub use look::PdfLook;
 pub(super) use source::no_pdf;
-pub use source::{OpenPdf, OpenUri, PdfPages};
+pub use source::{OpenPdf, PdfPages};
 
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
@@ -57,7 +57,6 @@ pub struct PdfStart {
     pub len: u64,
     pub location: Location,
     pub open: OpenPdf,
-    pub open_uri: OpenUri,
     pub opened: Result<Box<dyn PdfPages>, PdfError>,
     pub is_preview: bool,
 }
@@ -87,7 +86,6 @@ pub struct PdfView {
     len: u64,
     location: Location,
     open: OpenPdf,
-    open_uri: OpenUri,
     phase: Phase,
     focus: FocusHandle,
     pages_focus: FocusHandle,
@@ -139,7 +137,6 @@ impl PdfView {
             len: start.len,
             location: start.location,
             open: start.open,
-            open_uri: start.open_uri,
             phase: phase_of(start.opened, start.is_preview),
             focus,
             pages_focus: cx.focus_handle(),

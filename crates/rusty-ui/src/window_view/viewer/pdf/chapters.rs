@@ -19,10 +19,17 @@ impl Chapters {
         }
     }
 
-    pub(super) fn current(&self, page: u32) -> Option<usize> {
-        self.items().iter().rposition(
-            |item| matches!(item.target, LinkTarget::Page { page: at, .. } if at <= page),
-        )
+    pub(super) fn current(&self, (page, y): (u32, f32)) -> Option<usize> {
+        self.items()
+            .iter()
+            .enumerate()
+            .filter_map(|(row, item)| match item.target {
+                LinkTarget::Page { page, top } => Some((row, page, top.unwrap_or(f32::MIN))),
+                _ => None,
+            })
+            .filter(|&(_, at, top)| at < page || (at == page && top <= y))
+            .max_by(|a, b| a.1.cmp(&b.1).then(a.2.total_cmp(&b.2)))
+            .map(|(row, ..)| row)
     }
 }
 
@@ -48,9 +55,24 @@ mod tests {
             at(9),
             item(LinkTarget::Uri("https://example.org".into())),
         ]);
-        assert_eq!(chapters.current(0), Some(0));
-        assert_eq!(chapters.current(8), Some(1));
-        assert_eq!(chapters.current(30), Some(3));
-        assert_eq!(Chapters::Unread.current(3), None);
+        assert_eq!(chapters.current((0, 0.)), Some(0));
+        assert_eq!(chapters.current((8, 0.)), Some(1));
+        assert_eq!(chapters.current((30, 0.)), Some(3));
+        assert_eq!(Chapters::Unread.current((3, 0.)), None);
+    }
+
+    #[test]
+    fn the_current_chapter_follows_page_and_top_not_outline_order() {
+        let at = |page, top| item(LinkTarget::Page { page, top });
+        let chapters = Chapters::Read(vec![
+            at(0, None),
+            at(9, None),
+            at(4, Some(300.)),
+            at(4, Some(100.)),
+        ]);
+        assert_eq!(chapters.current((4, 50.)), Some(0));
+        assert_eq!(chapters.current((4, 200.)), Some(3));
+        assert_eq!(chapters.current((5, 0.)), Some(2));
+        assert_eq!(chapters.current((9, -10.)), Some(1));
     }
 }

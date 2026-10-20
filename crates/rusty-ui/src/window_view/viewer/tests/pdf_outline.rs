@@ -100,6 +100,24 @@ fn a_target_that_is_not_followed_does_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn an_outline_that_times_out_once_is_read_on_the_retry(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-slow.pdf");
+    open_outline(cx, &rig);
+    assert_eq!(text(cx, rig.0, row(0)), "Introduction");
+}
+
+#[gpui_kit::test]
+fn an_unreadable_outline_says_so_and_is_not_empty(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-lost.pdf");
+    open_outline(cx, &rig);
+    assert_eq!(
+        text(cx, rig.0, "pdf-outline-note"),
+        "Ferrite could not read this PDF's outline."
+    );
+    assert!(!shown(cx, rig.0, row(0)));
+}
+
+#[gpui_kit::test]
 fn a_document_without_an_outline_says_so(cx: &mut TestAppContext) {
     let rig = rig(cx, "a-flat.pdf");
     open_outline(cx, &rig);

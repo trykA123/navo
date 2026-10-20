@@ -34,8 +34,6 @@ impl PdfPages for Document {
     }
 }
 
-pub type OpenUri = Arc<dyn Fn(&str) + Send + Sync>;
-
 pub type OpenPdf =
     Arc<dyn Fn(&Location, Option<&str>) -> Result<Box<dyn PdfPages>, PdfError> + Send + Sync>;
 

@@ -12,10 +12,6 @@ pub fn launcher() -> Launcher {
     })
 }
 
-pub fn open_uri(uri: &str) {
-    let _ = Command::new(opener()).arg(uri).spawn();
-}
-
 fn opener() -> &'static str {
     if cfg!(windows) {
         "explorer"

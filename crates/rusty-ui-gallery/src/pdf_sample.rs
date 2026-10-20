@@ -209,7 +209,6 @@ fn start() -> PdfStart {
         len: 18_402_361,
         location: Location::provider_root(ProviderId::local()),
         open,
-        open_uri: Arc::new(|_| {}),
         opened: Ok(Box::new(Manual)),
         is_preview: false,
     }

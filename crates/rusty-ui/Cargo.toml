@@ -84,6 +84,7 @@ tree-sitter-sequel = "=0.3.11"
 tree-sitter-xml = "=0.7.0"
 ts-parser-perl = "=2.0.0"
 ttf-parser = { version = "=0.25.1", default-features = false, features = ["std"] }
+url = "=2.5.8"
 
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1.7"

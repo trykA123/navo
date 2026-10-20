@@ -222,7 +222,7 @@ fn open_error(error: PdfiumError, has_password: bool) -> PdfError {
 
 #[cfg(test)]
 mod tests {
-    use super::links::{destination_top, link_bounds, uri_target};
+    use super::links::{Targets, destination_top, link_bounds, uri_target};
     use super::*;
     use crate::protocol::{LinkTarget, MAX_URI_BYTES};
     use pdfium_render::prelude::{PdfDestinationViewSettings as View, PdfPoints, PdfRect};
@@ -318,6 +318,33 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn fit_rectangle_tops_take_the_upper_mapped_corner_on_every_rotation() {
+        let fit = View::FitPageToRectangle(PdfRect::new_from_values(150., 10., 160., 20.));
+        for (turns, expected) in [(0, 40.), (1, 10.), (2, 150.), (3, 180.)] {
+            assert_eq!(
+                destination_top(&Upright::new(turns, 100., 200.), fit),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn each_destination_page_transform_is_loaded_once() {
+        let mut loads = Vec::new();
+        let mut targets = Targets::new(|page| {
+            loads.push(page);
+            (page != 3).then(|| Upright::new(1, 100., 200.))
+        });
+        for page in [2, 3, 2, 3, 2] {
+            targets.upright(page);
+        }
+        assert_eq!(targets.upright(2).map(|upright| upright.turns), Some(1));
+        assert!(targets.upright(3).is_none());
+        drop(targets);
+        assert_eq!(loads, [2, 3]);
     }
 
     #[test]

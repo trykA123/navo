@@ -4,7 +4,7 @@ use rusty_pdf::protocol::LinkTarget;
 
 use super::PdfView;
 use super::layout::Anchor;
-use super::links::{is_opened, link_at, scheme_of};
+use super::links::{link_at, web_link};
 use crate::prelude::*;
 
 const CLICK_SLOP: f32 = 4.;
@@ -53,10 +53,10 @@ impl PdfView {
     }
 
     fn open_link(&mut self, uri: &str, cx: &mut Context<Self>) {
-        match scheme_of(uri) {
-            Some(scheme) if is_opened(&scheme) => (self.open_uri)(uri),
-            other => {
-                let scheme = other.unwrap_or_else(|| t!("pdf-link-scheme-unknown"));
+        match web_link(uri) {
+            Ok(url) => cx.open_url(url.as_str()),
+            Err(scheme) => {
+                let scheme = scheme.unwrap_or_else(|| t!("pdf-link-scheme-unknown"));
                 self.set_note(t!("pdf-link-not-opened", scheme = scheme), cx);
             }
         }

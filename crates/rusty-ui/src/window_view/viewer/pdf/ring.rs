@@ -1,3 +1,4 @@
+use gpui_kit::Focusable;
 use rusty_pdf::protocol::LinkTarget;
 
 use super::PdfView;
@@ -39,13 +40,30 @@ fn next_in(order: &[Ring], at: Option<Ring>, backward: bool) -> Option<Ring> {
     order.get(to).copied()
 }
 
+impl Doc {
+    pub(super) fn drop_hidden_ring(&mut self) {
+        if self
+            .ring
+            .is_some_and(|(page, _)| !self.shown().contains(&page))
+        {
+            self.ring = None;
+        }
+    }
+}
+
 impl PdfView {
-    fn ring_free(&self) -> bool {
-        self.drawers.is_empty() && !self.is_finding
+    fn ring_free(&self, window: &Window, cx: &App) -> bool {
+        let is_going = self
+            .inputs
+            .page
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window);
+        self.drawers.is_empty() && !self.is_finding && !is_going
     }
 
-    pub(super) fn step_ring(&mut self, backward: bool, cx: &mut Context<Self>) {
-        if !self.ring_free() {
+    pub(super) fn step_ring(&mut self, backward: bool, window: &Window, cx: &mut Context<Self>) {
+        if !self.ring_free(window, cx) {
             return cx.propagate();
         }
         let Some(doc) = self.doc_mut() else {
@@ -65,15 +83,15 @@ impl PdfView {
         cx.notify();
     }
 
-    pub(super) fn follow_ring(&mut self, cx: &mut Context<Self>) {
-        match self.ringed_target() {
+    pub(super) fn follow_ring(&mut self, window: &Window, cx: &mut Context<Self>) {
+        match self.ringed_target(window, cx) {
             Some(target) => self.follow(target, cx),
             None => cx.propagate(),
         }
     }
 
-    fn ringed_target(&self) -> Option<LinkTarget> {
-        if !self.ring_free() {
+    fn ringed_target(&self, window: &Window, cx: &App) -> Option<LinkTarget> {
+        if !self.ring_free(window, cx) {
             return None;
         }
         let doc = self.doc()?;
@@ -82,8 +100,8 @@ impl PdfView {
         Some(link.target.clone())
     }
 
-    pub(super) fn clear_ring(&mut self, cx: &mut Context<Self>) -> bool {
-        if !self.ring_free() {
+    pub(super) fn clear_ring(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {
+        if !self.ring_free(window, cx) {
             return false;
         }
         let cleared = self.doc_mut().is_some_and(|doc| doc.ring.take().is_some());
