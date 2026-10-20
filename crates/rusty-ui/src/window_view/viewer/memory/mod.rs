@@ -137,7 +137,7 @@ impl MemoryView {
     fn item_of_row(&self, row: u64) -> Option<usize> {
         let ready = self.ready()?;
         match ready.layout.row(row)? {
-            Row::Data { address } => ready
+            Row::Data { address, .. } => ready
                 .image
                 .item_at(address)
                 .or_else(|| ready.image.item_at(address + ROW_BYTES - 1)),
