@@ -28,6 +28,7 @@ window.view_menu | FerritePane | true
 pane.reset_split | FerritePane | true
 preview.browse | FerritePane | true
 crash_notice.focus | FerritePane | true
+activity.focus | FerritePane | true
 crash_notice.save | CrashNotice | true
 crash_notice.dismiss | CrashNotice | true
 pane.leave_waiting | PaneWaiting | true
@@ -146,6 +147,14 @@ dialog.previous_button | DialogButton | false
 dialog.press | DialogButton | false
 confirm.cancel | ConfirmDialog | true
 prompt.cancel | PromptDialog | true
+activity.previous | ActivityStrip | false
+activity.next | ActivityStrip | false
+activity.pause | ActivityStrip | false
+activity.remove | ActivityStrip | false
+activity.act | ActivityStrip | false
+activity.leave | ActivityStrip | false
+activity.previous_item | ActivityDrawer | false
+activity.next_item | ActivityDrawer | false
 viewer.save | Viewer | true
 viewer.close | Viewer | true
 viewer.edit | Viewer | true

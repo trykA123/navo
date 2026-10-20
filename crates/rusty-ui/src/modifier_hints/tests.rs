@@ -72,7 +72,10 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
 #[test]
 fn the_alt_and_shift_layers_map_their_commands_to_groups() {
     let alt = layer_in(Keymap::builtin(), Combo::ALT);
-    assert_eq!(names(&alt), ["Files", "Pane", "View", "Navigation"]);
+    assert_eq!(
+        names(&alt),
+        ["Files", "Pane", "View", "Navigation", "Window"]
+    );
     assert_eq!(
         commands(&group(&alt, "Navigation").entries),
         ["pane.go_back", "pane.go_forward"]
@@ -391,7 +394,7 @@ fn a_command_without_a_handler_is_left_out() {
     let window = &group(&ctrl, "Window").entries;
     assert!(!commands(window).contains(&"window.new"));
     let alt = layer_in(Keymap::builtin(), Combo::ALT);
-    assert!(alt.groups.iter().all(|group| group.name != "Window"));
+    assert_eq!(commands(&group(&alt, "Window").entries), ["activity.focus"]);
     let wired = layer_where(Keymap::builtin(), Combo::CTRL, &|spec| {
         spec.name != "files.paste" && spec.action.is_some()
     });

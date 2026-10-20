@@ -7,9 +7,12 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use gpui_kit::SharedString;
+use rusty_core::OpKind;
 
 use crate::job_card::{JobInfo, Pause};
 use crate::job_row::JobRowState;
+
+pub use text::percent;
 
 pub const DONE_FOR: Duration = Duration::from_secs(8);
 
@@ -33,7 +36,9 @@ pub enum ActivityId {
 pub struct ActivityItem {
     pub id: ActivityId,
     pub kind: ActivityKind,
+    pub op: Option<OpKind>,
     pub title: SharedString,
+    pub chip: SharedString,
     pub detail: Option<SharedString>,
     pub progress: Option<f32>,
     pub paused: bool,
@@ -43,10 +48,13 @@ pub struct ActivityItem {
 
 impl ActivityItem {
     fn new(id: ActivityId, kind: ActivityKind, title: String) -> Self {
+        let title: SharedString = title.into();
         Self {
             id,
             kind,
-            title: title.into(),
+            op: None,
+            chip: title.clone(),
+            title,
             detail: None,
             progress: None,
             paused: false,
@@ -57,6 +65,8 @@ impl ActivityItem {
 
     fn job(job: &JobInfo) -> Self {
         Self {
+            op: Some(job.kind),
+            chip: text::job_chip(job).into(),
             detail: Some(text::job_detail(job).into()),
             progress: Some(job.fraction()),
             paused: job.pause != Pause::Off,
@@ -72,6 +82,8 @@ impl ActivityItem {
 
     fn failure(job: &JobInfo, message: &SharedString) -> Self {
         Self {
+            op: Some(job.kind),
+            chip: text::failure_chip(job).into(),
             detail: Some(message.clone()),
             ..Self::new(
                 ActivityId::Job(job.id),
@@ -82,11 +94,15 @@ impl ActivityItem {
     }
 
     fn done(job: &JobInfo) -> Self {
-        Self::new(
-            ActivityId::Job(job.id),
-            ActivityKind::Done,
-            text::done_title(job),
-        )
+        Self {
+            op: Some(job.kind),
+            chip: text::done_chip(job).into(),
+            ..Self::new(
+                ActivityId::Job(job.id),
+                ActivityKind::Done,
+                text::done_title(job),
+            )
+        }
     }
 
     fn drag(items: usize) -> Self {
@@ -215,6 +231,7 @@ impl Activity {
 
     pub fn set_background(&mut self, id: u64, title: SharedString, progress: Option<f32>) {
         let item = ActivityItem {
+            chip: title.clone(),
             title,
             progress,
             ..ActivityItem::new(

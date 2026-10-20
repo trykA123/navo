@@ -15,6 +15,7 @@ gpui_kit::actions!(
         DriveMenuFirst,
         DriveMenuSecond,
         EditPath,
+        FocusActivity,
         FocusCrashNotice,
         LeaveWaiting,
         NewTab,
@@ -58,6 +59,7 @@ pub fn bind_keys(cx: &mut App) {
     super::tab_keys::bind_keys(cx);
     crate::side_sheet::bind_keys(cx);
     crate::command_center::bind_keys(cx);
+    crate::activity_strip::bind_keys(cx);
     super::preview::bind_keys(cx);
     crate::commands::bind_namespace(cx, "ferrite_window");
 }

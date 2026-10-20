@@ -109,3 +109,40 @@ pub(super) fn drag_title(items: usize) -> String {
 pub(super) fn drag_keys() -> String {
     tr("activity-drag-keys")
 }
+
+#[must_use]
+pub fn percent(fraction: f32) -> String {
+    let percent = (fraction.clamp(0., 1.) * 100.).floor();
+    t!("activity-percent", percent = format!("{percent:.0}"))
+}
+
+pub(super) fn job_chip(job: &JobInfo) -> String {
+    let id = match job.kind {
+        OpKind::Copy => "activity-chip-copy",
+        OpKind::Move => "activity-chip-move",
+        OpKind::Recycle | OpKind::Delete => "activity-chip-delete",
+    };
+    let chip = t!(id, percent = percent(job.fraction()));
+    match job.pause {
+        Pause::Off => chip,
+        Pause::Asked | Pause::On => t!("activity-chip-paused", chip = chip),
+    }
+}
+
+pub(super) fn failure_chip(job: &JobInfo) -> String {
+    tr(match job.kind {
+        OpKind::Copy => "activity-chip-copy-failed",
+        OpKind::Move => "activity-chip-move-failed",
+        OpKind::Recycle | OpKind::Delete => "activity-chip-delete-failed",
+    })
+}
+
+pub(super) fn done_chip(job: &JobInfo) -> String {
+    let (count, items) = (items_of(job), format::bytes(items_of(job)));
+    let id = match job.kind {
+        OpKind::Copy => "activity-chip-copied",
+        OpKind::Move | OpKind::Recycle => "activity-chip-moved",
+        OpKind::Delete => "activity-chip-deleted",
+    };
+    t!(id, count = count, items = items)
+}

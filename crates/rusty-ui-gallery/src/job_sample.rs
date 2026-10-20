@@ -40,6 +40,66 @@ fn move_to_stick() -> JobInfo {
     }
 }
 
+fn failed_copy() -> JobInfo {
+    JobInfo {
+        id: 3,
+        files_done: 35,
+        state: JobRowState::Failed("Access denied".into()),
+        speed: None,
+        ..copy()
+    }
+}
+
+fn done_move() -> JobInfo {
+    JobInfo {
+        id: 4,
+        items: 3,
+        target: Some(r"C:\work\Projects".into()),
+        bytes_done: 2806 * MB,
+        files_done: 37,
+        state: JobRowState::Done,
+        ..move_to_stick()
+    }
+}
+
+fn paused_copy() -> JobInfo {
+    JobInfo {
+        id: 5,
+        target: Some(r"D:\photos".into()),
+        bytes_done: 310 * MB,
+        files_done: 120,
+        files_total: 480,
+        speed: None,
+        pause: Pause::On,
+        ..copy()
+    }
+}
+
+fn recycle() -> JobInfo {
+    JobInfo {
+        id: 6,
+        kind: OpKind::Recycle,
+        items: 9,
+        target: None,
+        bytes_done: 40 * MB,
+        bytes_total: 90 * MB,
+        files_done: 4,
+        files_total: 9,
+        speed: Some(20 * MB),
+        ..copy()
+    }
+}
+
 pub fn jobs(count: usize) -> Vec<JobInfo> {
-    [copy(), move_to_stick()].into_iter().take(count).collect()
+    [
+        copy(),
+        move_to_stick(),
+        failed_copy(),
+        done_move(),
+        paused_copy(),
+        recycle(),
+    ]
+    .into_iter()
+    .take(count)
+    .collect()
 }

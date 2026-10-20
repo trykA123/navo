@@ -34,8 +34,8 @@ use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
-    hint_windows, job_windows, parts_element, parts_windows, preview_element, preview_windows,
-    settings_windows, sheet_windows, window_element,
+    hint_windows, job_element, job_windows, parts_element, parts_windows, preview_element,
+    preview_windows, settings_windows, sheet_windows, window_element,
 };
 use crate::{pdf_sample, rich_sample, viewer_sample};
 
@@ -106,7 +106,7 @@ pub struct Gallery {
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
     alt_window: Entity<WindowPage>,
-    job_windows: [Entity<WindowPage>; 4],
+    job_windows: [Entity<WindowPage>; 7],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
     settings_windows: [Entity<WindowPage>; 3],
@@ -268,7 +268,7 @@ fn column(t: &Theme) -> Div {
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 23] {
+    fn windows(&self) -> [&Entity<WindowPage>; 19] {
         let [
             sheet,
             sheet_left,
@@ -280,7 +280,6 @@ impl Gallery {
             conflict,
             invalid,
         ] = &self.sheet_windows;
-        let [job, job_pill, two, two_pill] = &self.job_windows;
         let [hints_ctrl, hints_shift, hints_alt, hints_low] = &self.hint_windows;
         [
             &self.main_window,
@@ -297,10 +296,6 @@ impl Gallery {
             recording,
             conflict,
             invalid,
-            job,
-            job_pill,
-            two,
-            two_pill,
             hints_ctrl,
             hints_shift,
             hints_alt,
@@ -375,6 +370,7 @@ impl Gallery {
     fn window_page(&self) -> Option<AnyElement> {
         parts_element(self.page, &self.parts_windows)
             .or_else(|| preview_element(self.page, &self.preview_windows))
+            .or_else(|| job_element(self.page, &self.job_windows))
             .or_else(|| window_element(self.page, self.windows()))
     }
 

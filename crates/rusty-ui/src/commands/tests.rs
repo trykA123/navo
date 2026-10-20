@@ -6,7 +6,8 @@ use rusty_l10n::{FILES, catalog, tr};
 use super::{GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 24] = [
+const NAMESPACES: [&str; 25] = [
+    "activity_strip",
     "app_menu",
     "can_trace",
     "command_center",

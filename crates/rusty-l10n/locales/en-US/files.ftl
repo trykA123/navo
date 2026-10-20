@@ -73,3 +73,35 @@ activity-dragging = Dragging { $count ->
 }
 activity-drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
 files-rename-confirm = Rename { $items }?
+activity-percent = { $percent }%
+activity-chip-copy = Copy { $percent }
+activity-chip-move = Move { $percent }
+activity-chip-delete = Delete { $percent }
+activity-chip-paused = { $chip } · Paused
+activity-chip-copy-failed = Copy failed
+activity-chip-move-failed = Move failed
+activity-chip-delete-failed = Delete failed
+activity-chip-copied = Copied { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-chip-moved = Moved { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-chip-deleted = Deleted { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-strip = Activity
+activity-pause = Pause
+activity-resume = Resume
+activity-cancel = Cancel
+activity-show = Show
+activity-dismiss = Dismiss
+activity-all = All { $count }
+activity-drawer-title = { $count ->
+    [one] { $items } activity
+   *[other] { $items } activities
+}
+activity-drawer-close = Close

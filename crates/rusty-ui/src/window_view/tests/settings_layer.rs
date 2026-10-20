@@ -40,7 +40,7 @@ fn add_running_copy(cx: &mut TestAppContext, rig: &Rig) {
             cancel: CancelToken::new(),
             source_tab,
         });
-        cx.notify();
+        view.refresh_activity(cx);
     });
 }
 
@@ -72,6 +72,7 @@ fn the_job_card_stays_under_the_settings_sheet(cx: &mut TestAppContext) {
     rig.press(cx, "tab");
     open_settings(cx, &rig);
     add_running_copy(cx, &rig);
+    rig.press(cx, "ctrl-j");
     let (row, offset) =
         row_under_the_job_card(cx, &rig).expect("a settings row overlaps the job card");
     cx.update_window(rig.window, |_, window, cx| {

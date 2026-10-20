@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 10] = [
+pub(super) const GROUPS: [Group; 12] = [
     Group {
         context: "ContextMenu",
         commands: &[
@@ -261,5 +261,47 @@ pub(super) const GROUPS: [Group; 10] = [
             "prompt.cancel",
             "cmd-prompt-cancel",
         )],
+    },
+    Group {
+        context: "ActivityStrip",
+        commands: &[
+            (
+                "activity_strip::Previous",
+                "activity.previous",
+                "cmd-activity-previous",
+            ),
+            ("activity_strip::Next", "activity.next", "cmd-activity-next"),
+            (
+                "activity_strip::PauseOrResume",
+                "activity.pause",
+                "cmd-activity-pause",
+            ),
+            (
+                "activity_strip::Remove",
+                "activity.remove",
+                "cmd-activity-remove",
+            ),
+            ("activity_strip::Press", "activity.act", "cmd-activity-act"),
+            (
+                "activity_strip::Leave",
+                "activity.leave",
+                "cmd-activity-leave",
+            ),
+        ],
+    },
+    Group {
+        context: "ActivityDrawer",
+        commands: &[
+            (
+                "activity_strip::PreviousItem",
+                "activity.previous_item",
+                "cmd-activity-previous-item",
+            ),
+            (
+                "activity_strip::NextItem",
+                "activity.next_item",
+                "cmd-activity-next-item",
+            ),
+        ],
     },
 ];

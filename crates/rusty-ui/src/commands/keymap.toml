@@ -109,6 +109,10 @@ keys = ["ctrl-shift-q"]
 command = "crash_notice.focus"
 keys = ["ctrl-shift-r"]
 
+[[bind]]
+command = "activity.focus"
+keys = ["alt-j"]
+
 # CrashNotice
 
 [[bind]]
@@ -118,6 +122,42 @@ keys = ["enter"]
 [[bind]]
 command = "crash_notice.dismiss"
 keys = ["escape"]
+
+# ActivityStrip
+
+[[bind]]
+command = "activity.previous"
+keys = ["left"]
+
+[[bind]]
+command = "activity.next"
+keys = ["right"]
+
+[[bind]]
+command = "activity.pause"
+keys = ["space"]
+
+[[bind]]
+command = "activity.remove"
+keys = ["delete"]
+
+[[bind]]
+command = "activity.act"
+keys = ["enter"]
+
+[[bind]]
+command = "activity.leave"
+keys = ["escape"]
+
+# ActivityDrawer
+
+[[bind]]
+command = "activity.previous_item"
+keys = ["up"]
+
+[[bind]]
+command = "activity.next_item"
+keys = ["down"]
 
 # PaneWaiting
 

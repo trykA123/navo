@@ -31,7 +31,7 @@ pub(super) struct Shown {
 }
 
 impl Viewer {
-    pub(super) fn focus_target(&self, cx: &App) -> FocusHandle {
+    pub(in crate::window_view) fn focus_target(&self, cx: &App) -> FocusHandle {
         match &self.body {
             Some(body) => body.focus_handle(cx),
             None => self.focus.clone(),

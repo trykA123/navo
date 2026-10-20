@@ -82,4 +82,12 @@ pub(super) const HIDDEN: &[&str] = &[
     "shortcuts.next_row",
     "path_input.cancel",
     "settings.cancel_edit",
+    "activity.previous",
+    "activity.next",
+    "activity.pause",
+    "activity.remove",
+    "activity.act",
+    "activity.leave",
+    "activity.previous_item",
+    "activity.next_item",
 ];

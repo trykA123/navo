@@ -105,7 +105,7 @@ fn the_main_window_reserves_no_pill_area_without_a_job(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
-fn a_copy_job_reserves_the_pill_area_after_f10(cx: &mut TestAppContext) {
+fn a_copy_job_leaves_the_bar_alone_and_shows_in_the_strip(cx: &mut TestAppContext) {
     let fs = fake();
     let state = home_beside_dest(&fs);
     let (window, view) = open_with(cx, fs, state, Rc::default());
@@ -114,10 +114,9 @@ fn a_copy_job_reserves_the_pill_area_after_f10(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let bar = window.within("fkeys");
-        let f10 = bar.find(("fkey", 9usize));
-        let slot = bar.find("fkey-pill-slot");
-        assert_eq!(f10.label(), Some("F10 Menu"));
-        assert!(slot.bounds().left() >= f10.bounds().right());
+        assert_eq!(bar.find(("fkey", 9usize)).label(), Some("F10 Menu"));
+        assert!(bar.try_find("fkey-pill-slot").is_none());
+        assert!(window.try_find("activity-strip").is_some());
     })
     .expect("window");
 }

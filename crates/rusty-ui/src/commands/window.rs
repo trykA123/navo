@@ -124,6 +124,11 @@ pub(super) const GROUPS: [Group; 8] = [
                 "crash_notice.focus",
                 "cmd-crash-notice-focus",
             ),
+            (
+                "ferrite_window::FocusActivity",
+                "activity.focus",
+                "cmd-activity-focus",
+            ),
         ],
     },
     Group {

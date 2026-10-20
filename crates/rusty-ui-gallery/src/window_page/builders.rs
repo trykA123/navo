@@ -1,13 +1,15 @@
 use rusty_ui::fkey_bar::KeyLayer;
 use rusty_ui::prelude::*;
 
-use super::{HintsShown, JobsShown, WindowPage};
+use super::{HintsShown, JobsLook, JobsShown, WindowPage};
 
 impl WindowPage {
     pub fn with_jobs(shown: JobsShown, cx: &mut Context<Self>) -> Self {
+        let mut page = Self::new(None, cx);
+        page.parts.fkey_bar = shown.look == JobsLook::Card;
         Self {
             jobs: Some(shown),
-            ..Self::new(None, cx)
+            ..page
         }
     }
 
