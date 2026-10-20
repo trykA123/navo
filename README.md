@@ -25,13 +25,14 @@ Prerequisites: Rust 1.99.0 (pinned in `rust-toolchain.toml`) and the tools in [d
 3. taplo (TOML check)
 4. typos
 5. size limits
-6. cargo-deny
-7. cargo-audit
-8. nextest
-9. doc tests
-10. coverage (only with `--coverage`)
+6. l10n: the Fluent files parse, every literal message id exists and is used, and the count of hard-coded texts (capitalised literals of two or more words in non-test code of `rusty-ui` and `rusty-app`) matches `xtask/l10n-allow.txt`
+7. cargo-deny
+8. cargo-audit
+9. nextest
+10. doc tests
+11. coverage (only with `--coverage`)
 
-Other subcommands: `cargo xtask size`, `cargo xtask coverage`, `cargo xtask binsize <path>`.
+Other subcommands: `cargo xtask size`, `cargo xtask l10n [--list]`, `cargo xtask coverage`, `cargo xtask binsize <path>`.
 
 On Linux, `scripts/install-local.sh` builds an `x86-64-v3` binary (as CachyOS does) into `target/x86-64-v3/` and installs it as `~/.local/bin/ferrite`, with its icons and a `.desktop` entry under `~/.local/share`.
 
