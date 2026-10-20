@@ -77,7 +77,7 @@ fn tasking_tables_feed_the_common_model() {
     );
     assert_eq!(model.discarded[0].object_file.as_deref(), Some("old.o"));
     assert_eq!(model.discarded[0].name, ".text.old (7)");
-    assert_eq!(model.skipped_sections, 6);
+    assert_eq!(model.skipped_parts.len(), 6);
     assert_eq!(model.lines, FIXTURE.lines().count() as u64);
 }
 

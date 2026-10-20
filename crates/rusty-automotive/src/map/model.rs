@@ -68,7 +68,7 @@ pub struct MapModel {
     pub discarded: Vec<DiscardedSection>,
     pub problems: Vec<MapProblem>,
     pub problem_total: u64,
-    pub skipped_sections: u64,
+    pub skipped_parts: Vec<String>,
     pub lines: u64,
 }
 
@@ -93,9 +93,14 @@ impl MapModel {
             discarded: Vec::new(),
             problems: Vec::new(),
             problem_total: 0,
-            skipped_sections: 0,
+            skipped_parts: Vec::new(),
             lines: 0,
         }
+    }
+
+    #[must_use]
+    pub fn has_symbol_sizes(&self) -> bool {
+        self.symbols.iter().any(|symbol| symbol.size.is_some())
     }
 
     pub(super) fn note(&mut self, problem: MapProblem) {

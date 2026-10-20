@@ -10,6 +10,8 @@ pub(super) struct Tasking {
     part: Part,
     table: Table,
     space: Option<String>,
+    symbol_space: Option<String>,
+    previous_title: Option<String>,
     file: String,
     unsupported_mau: bool,
     symbol_order: Option<String>,
@@ -25,6 +27,8 @@ impl Tasking {
             part: Part::Skip,
             table: Table::default(),
             space: None,
+            symbol_space: None,
+            previous_title: None,
             file: String::new(),
             unsupported_mau: false,
             symbol_order: None,
@@ -36,10 +40,18 @@ impl Tasking {
 
     fn header(&mut self, name: String) {
         self.part = parts::part(&name);
-        if self.part == Part::Skip {
-            self.model.skipped_sections += 1;
+        if self.part == Part::Skip
+            && self.model.skipped_parts.len() < 32
+            && !self
+                .model
+                .skipped_parts
+                .iter()
+                .any(|title| title.eq_ignore_ascii_case(&name))
+        {
+            self.model.skipped_parts.push(name.clone());
         }
         if self.part == Part::Symbols {
+            let name = name.to_ascii_lowercase();
             if self.model.symbols.is_empty() {
                 self.symbol_order = Some(name);
             } else if self.symbol_order.as_deref() != Some(name.as_str()) {
@@ -48,6 +60,7 @@ impl Tasking {
         }
         self.table = Table::default();
         self.space = None;
+        self.symbol_space = None;
         self.file.clear();
         self.unsupported_mau = false;
     }
@@ -55,6 +68,7 @@ impl Tasking {
     fn address_space(&mut self, text: &str) {
         let (space, mau) = text.split_once(" (MAU = ").unwrap_or((text, "8bit)"));
         self.space = Some(space.trim().to_owned());
+        self.symbol_space = None;
         self.table = Table::default();
         self.file.clear();
         self.unsupported_mau = mau.trim() != "8bit)";
@@ -71,6 +85,7 @@ impl Tasking {
     pub(super) fn drop_row(&mut self, reason: &'static str) {
         self.flush_row();
         self.clear_file();
+        self.previous_title = None;
         self.model.malformed(reason);
     }
 
@@ -80,8 +95,13 @@ impl Tasking {
             return;
         }
         self.flush_row();
-        if let Some(header) = parts::header(text) {
+        let header = parts::header(text, self.previous_title.take().as_deref());
+        if let Some(header) = header {
             return self.header(header);
+        }
+        self.previous_title = parts::title(text).map(str::to_owned);
+        if self.previous_title.is_some() {
+            return;
         }
         if self.part == Part::Skip {
             return;
@@ -180,6 +200,7 @@ impl Tasking {
             if self.is_header(&table) {
                 self.required = mandatory(self.part, &table);
                 self.table = table;
+                self.symbol_space = None;
                 self.clear_file();
                 return true;
             }
@@ -225,7 +246,12 @@ impl Tasking {
                 }
                 Record::Memory(region)
             }
-            Part::Symbols => Record::Symbol(rows::symbol(&row, self.space.as_deref())?),
+            Part::Symbols => {
+                let space = self.symbol_space.as_deref().or(self.space.as_deref());
+                let symbol = rows::symbol(&row, space)?;
+                self.symbol_space.clone_from(&symbol.address_space);
+                Record::Symbol(symbol)
+            }
             Part::Removed => Record::Discarded(rows::discarded(&row)?),
             Part::Link => {
                 let file_column = row
