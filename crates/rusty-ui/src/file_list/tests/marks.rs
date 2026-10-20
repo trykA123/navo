@@ -1,12 +1,15 @@
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, Keystroke, TestAppContext};
-use rusty_core::{Command, CursorMove};
+use rusty_core::{Command, CursorMove, SpanMode};
 
 use super::{actions, commands, open_list, props, sample_rows};
 use crate::file_list::{FileListAction, FileListProps};
 
 fn extend(to: CursorMove) -> Command {
-    Command::SelectionExtend { to, unmark: false }
+    Command::SelectionExtend {
+        to,
+        mode: SpanMode::Mark,
+    }
 }
 
 fn pressed(cx: &mut TestAppContext, props: FileListProps, keys: &[&str]) -> Vec<Command> {

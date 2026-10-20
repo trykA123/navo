@@ -147,8 +147,8 @@ fn the_footer_counts_marks_the_filter_hides(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.press(cx, &["down", "shift-down"]);
     assert_eq!(rig.marked(cx), [1, 2]);
-    assert!(!rig.footer(cx).contains("hidden by filter"));
+    assert!(!rig.footer(cx).contains("marked not shown"));
     rig.press(cx, &["c"]);
     let footer = rig.footer(cx);
-    assert!(footer.contains("2 hidden by filter"), "{footer}");
+    assert!(footer.contains("2 marked not shown"), "{footer}");
 }

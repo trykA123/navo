@@ -154,3 +154,59 @@ fn hiding_every_mark_counts_them_and_clearing_the_filter_resets_the_count() {
     assert_eq!(browser.hidden_marks(active(&browser)), 0);
     assert_eq!(marked_names(&browser).len(), 6);
 }
+
+#[test]
+fn unmark_all_saves_the_hidden_marks_so_restore_brings_all_back() {
+    let fs = fake();
+    let mut browser = two_groups(&fs);
+    browser.command(&Command::SelectionClear).unwrap();
+    browser.filter_clear();
+    browser.command(&Command::SelectionRestore).unwrap();
+    assert_eq!(
+        marked_names(&browser),
+        ["alpha.txt", "apple.txt", "beta.txt", "bravo.txt"]
+    );
+}
+
+#[test]
+fn unmark_all_with_only_hidden_marks_saves_them() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "a");
+    mark_all(&mut browser);
+    browser.filter_clear();
+    typed(&mut browser, "b");
+    browser.command(&Command::SelectionClear).unwrap();
+    browser.filter_clear();
+    browser.command(&Command::SelectionRestore).unwrap();
+    assert_eq!(marked_names(&browser), ["alpha.txt", "apple.txt"]);
+}
+
+#[test]
+fn restore_under_a_filter_keeps_the_filtered_names_for_later() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    mark_all(&mut browser);
+    browser.command(&Command::SelectionClear).unwrap();
+    typed(&mut browser, "a");
+    browser.command(&Command::SelectionRestore).unwrap();
+    assert_eq!(marked_names(&browser), ["alpha.txt", "apple.txt"]);
+    assert_eq!(browser.hidden_marks(active(&browser)), 4);
+    browser.filter_clear();
+    assert_eq!(marked_names(&browser).len(), 6);
+}
+
+#[test]
+fn restore_succeeds_when_the_filter_hides_every_saved_name() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "b");
+    mark_all(&mut browser);
+    browser.command(&Command::SelectionClear).unwrap();
+    browser.filter_clear();
+    typed(&mut browser, "a");
+    browser.command(&Command::SelectionRestore).unwrap();
+    assert_eq!(browser.hidden_marks(active(&browser)), 2);
+    browser.filter_clear();
+    assert_eq!(marked_names(&browser), ["beta.txt", "bravo.txt"]);
+}

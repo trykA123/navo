@@ -42,6 +42,10 @@ fn any_direction() -> impl Strategy<Value = Direction> {
     prop::sample::select(Direction::ALL.to_vec())
 }
 
+fn any_span_mode() -> impl Strategy<Value = SpanMode> {
+    prop::sample::select(vec![SpanMode::Mark, SpanMode::Unmark, SpanMode::Toggle])
+}
+
 fn any_cursor_move() -> impl Strategy<Value = CursorMove> {
     prop_oneof![
         Just(CursorMove::Up),
@@ -72,8 +76,8 @@ fn any_command() -> impl Strategy<Value = Command> {
         Just(Command::SelectionInvert),
         Just(Command::SelectionAll),
         Just(Command::SelectionClear),
-        (any_cursor_move(), any::<bool>())
-            .prop_map(|(to, unmark)| Command::SelectionExtend { to, unmark }),
+        (any_cursor_move(), any_span_mode())
+            .prop_map(|(to, mode)| Command::SelectionExtend { to, mode }),
         any::<bool>().prop_map(|mark| Command::SelectionExtension { mark }),
         Just(Command::SelectionRestore),
         any_direction().prop_map(|direction| Command::LayoutSplit { direction }),

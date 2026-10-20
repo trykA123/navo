@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use rusty_core::{Command, Event, Listing, Location, TabId};
+use rusty_core::{Command, CommandError, Effect, Event, Listing, Location, TabId, apply};
 
 use super::Browser;
 
@@ -17,10 +17,62 @@ impl Browser {
             .map_or(0, |hidden| hidden.names.len() as u64)
     }
 
-    pub(in crate::browser) fn forget_cleared_marks(&mut self, command: &Command) {
-        if matches!(command, Command::SelectionClear) {
-            self.hidden_marks.remove(&self.state.active_tab().id());
+    pub(in crate::browser) fn apply_keeping_hidden_marks(
+        &mut self,
+        command: &Command,
+    ) -> Result<Vec<Effect>, CommandError> {
+        match command {
+            Command::SelectionClear => {
+                let tab = self.state.active_tab();
+                let mut names = tab.marked_names();
+                let hidden = self.hidden_marks.remove(&tab.id());
+                let effects = apply(&mut self.state, command)?;
+                if let Some(hidden) = hidden {
+                    names.extend(hidden.names);
+                    self.state.remember_marks(names);
+                }
+                Ok(effects)
+            }
+            Command::SelectionRestore => {
+                let is_hidden = self.restore_hidden();
+                match apply(&mut self.state, command) {
+                    Err(CommandError::NothingToRestore) if is_hidden => Ok(Vec::new()),
+                    applied => applied,
+                }
+            }
+            _ => apply(&mut self.state, command),
         }
+    }
+
+    fn restore_hidden(&mut self) -> bool {
+        let tab = self.state.active_tab();
+        let (Some(saved), Some(shown), Some(full)) = (
+            self.state.last_marks(),
+            tab.listing(),
+            self.full.get(&tab.id()),
+        ) else {
+            return false;
+        };
+        let saved: HashSet<&str> = saved.iter().map(String::as_str).collect();
+        let visible: HashSet<&str> = shown.entries().iter().map(|e| e.name.as_str()).collect();
+        let newly: Vec<String> = full
+            .listing
+            .entries()
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .filter(|name| saved.contains(name) && !visible.contains(name))
+            .map(str::to_owned)
+            .collect();
+        if newly.is_empty() {
+            return false;
+        }
+        let (id, location) = (tab.id(), tab.location().clone());
+        let hidden = self.hidden_marks.entry(id).or_insert_with(|| HiddenMarks {
+            location,
+            names: HashSet::new(),
+        });
+        hidden.names.extend(newly);
+        true
     }
 
     pub(in crate::browser) fn hide_marks(&mut self, tab: TabId, shown: &Listing) {

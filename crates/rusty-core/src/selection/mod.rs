@@ -5,11 +5,39 @@ pub use pattern::{Pattern, PatternError};
 
 const WORD: u64 = 64;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpanMode {
+    Mark,
+    Unmark,
+    Toggle,
+}
+
+impl SpanMode {
+    #[must_use]
+    pub fn keyword(self) -> &'static str {
+        match self {
+            Self::Mark => "mark",
+            Self::Unmark => "unmark",
+            Self::Toggle => "toggle",
+        }
+    }
+
+    #[must_use]
+    pub fn from_keyword(keyword: &str) -> Option<Self> {
+        match keyword {
+            "mark" => Some(Self::Mark),
+            "unmark" => Some(Self::Unmark),
+            "toggle" => Some(Self::Toggle),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Span {
     anchor: u64,
     base: Vec<u64>,
-    unmark: bool,
+    mode: SpanMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,20 +128,26 @@ impl Selection {
         });
     }
 
-    pub fn extend(&mut self, from_cursor: u64, to: u64, unmark: bool) {
+    pub fn extend(&mut self, from_cursor: u64, to: u64, mode: SpanMode) {
         let Some(last) = self.len.checked_sub(1) else {
             return;
         };
         let span = self.span.get_or_insert_with(|| Span {
             anchor: from_cursor.min(last),
             base: self.bits.clone(),
-            unmark,
+            mode,
         });
         self.bits.clone_from(&span.base);
-        let anchor = span.anchor;
-        let on = !span.unmark;
-        let to = to.min(last);
+        let (anchor, mode) = (span.anchor, span.mode);
+        if to > last {
+            return;
+        }
         for row in anchor.min(to)..=anchor.max(to) {
+            let on = match mode {
+                SpanMode::Mark => true,
+                SpanMode::Unmark => false,
+                SpanMode::Toggle => !self.is_marked(row),
+            };
             self.set(row, on);
         }
     }

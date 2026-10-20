@@ -1,10 +1,11 @@
 use gpui_kit::AppContext as _;
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, Modifiers, MouseButton, Pixels, Point, TestAppContext};
-use rusty_core::{Command, CursorMove};
+use gpui_kit::{AnyWindowHandle, Modifiers, MouseButton, Pixels, Point, TestAppContext, point, px};
+use rusty_core::{Command, CursorMove, SpanMode};
+use rusty_fs::{EntryKind, FsEntry};
 
 use super::mouse::{LAST_ROW, below, gap_of, icon_of, row_bounds};
-use super::{commands, open_list, props, sample_rows};
+use super::{commands, entry, open_list, props, sample_rows};
 use crate::test_pointer::{self, ctrl, dispatch, up};
 
 fn cursor(row: u64) -> Command {
@@ -13,10 +14,10 @@ fn cursor(row: u64) -> Command {
     }
 }
 
-fn extend(row: u64, unmark: bool) -> Command {
+fn extend(row: u64, mode: SpanMode) -> Command {
     Command::SelectionExtend {
         to: CursorMove::Row(row),
-        unmark,
+        mode,
     }
 }
 
@@ -53,16 +54,59 @@ fn a_lasso_from_below_marks_the_crossed_rows_and_shrinks_back(cx: &mut TestAppCo
     lasso(cx, window, Modifiers::default(), &[start, row_three]);
     assert!(is_drawn(cx, window));
     let last = LAST_ROW as u64;
-    assert_eq!(commands(&harness, cx), [cursor(last), extend(3, false)]);
+    assert_eq!(
+        commands(&harness, cx),
+        [cursor(last), extend(3, SpanMode::Mark)]
+    );
     dispatch(
         cx,
         window,
         test_pointer::moved(Some(MouseButton::Left), row_four, Modifiers::default()),
     );
     release(cx, window, row_four);
-    let expected = [cursor(last), extend(3, false), extend(4, false)];
+    let expected = [
+        cursor(last),
+        extend(3, SpanMode::Mark),
+        extend(4, SpanMode::Mark),
+    ];
     assert_eq!(commands(&harness, cx), expected);
     assert!(!is_drawn(cx, window));
+}
+
+#[gpui_kit::test]
+fn a_lasso_from_below_that_comes_back_below_holds_no_rows(cx: &mut TestAppContext) {
+    let (window, harness) = open_list(cx, props(sample_rows()));
+    let start = below(cx, window);
+    let row_four = centre(cx, window, 4);
+    lasso(cx, window, Modifiers::default(), &[start, row_four, start]);
+    let last = LAST_ROW as u64;
+    let expected = [
+        cursor(last),
+        extend(4, SpanMode::Mark),
+        extend(last + 1, SpanMode::Mark),
+    ];
+    assert_eq!(commands(&harness, cx), expected);
+}
+
+#[gpui_kit::test]
+fn a_lasso_dragged_past_the_bottom_edge_stops_at_the_last_shown_row(cx: &mut TestAppContext) {
+    let rows: Vec<FsEntry> = (0..500)
+        .map(|i| entry(&format!("f{i:03}.txt"), EntryKind::File, 1))
+        .collect();
+    let (window, harness) = open_list(cx, props(rows.into()));
+    let start = gap_of(cx, window, 2);
+    let far_below = point(start.x, start.y + px(5_000.));
+    lasso(cx, window, Modifiers::default(), &[start, far_below]);
+    let shown = harness.read_with(cx, |harness, _| harness.page_rows.last().copied());
+    let shown = shown.expect("page rows");
+    let Some(Command::SelectionExtend {
+        to: CursorMove::Row(far),
+        ..
+    }) = commands(&harness, cx).last().cloned()
+    else {
+        panic!("no extend");
+    };
+    assert!((2..=shown).contains(&far), "{far} of {shown} shown");
 }
 
 #[gpui_kit::test]
@@ -74,7 +118,7 @@ fn a_lasso_keeps_earlier_marks_and_does_not_unmark_all(cx: &mut TestAppContext) 
     release(cx, window, row_two);
     let sent = commands(&harness, cx);
     assert!(!sent.contains(&Command::SelectionClear), "{sent:?}");
-    assert_eq!(sent.last(), Some(&extend(2, false)));
+    assert_eq!(sent.last(), Some(&extend(2, SpanMode::Mark)));
 }
 
 #[gpui_kit::test]
@@ -84,18 +128,22 @@ fn a_lasso_from_the_gap_right_of_a_name_spans_from_that_row(cx: &mut TestAppCont
     let row_three = centre(cx, window, 3);
     lasso(cx, window, Modifiers::default(), &[start, row_three]);
     release(cx, window, row_three);
-    let expected = [cursor(1), cursor(1), extend(3, false)];
+    let expected = [cursor(1), cursor(1), extend(3, SpanMode::Mark)];
     assert_eq!(commands(&harness, cx), expected);
 }
 
 #[gpui_kit::test]
-fn ctrl_lasso_unmarks_and_its_release_does_not_toggle(cx: &mut TestAppContext) {
+fn ctrl_lasso_toggles_and_its_release_does_not_toggle_again(cx: &mut TestAppContext) {
     let (window, harness) = open_list(cx, props(sample_rows()));
     let start = gap_of(cx, window, 1);
     let (row_three, row_one) = (centre(cx, window, 3), centre(cx, window, 1));
     lasso(cx, window, ctrl(), &[start, row_three, row_one]);
     dispatch(cx, window, up(MouseButton::Left, row_one, ctrl()));
-    let expected = [cursor(1), extend(3, true), extend(1, true)];
+    let expected = [
+        cursor(1),
+        extend(3, SpanMode::Toggle),
+        extend(1, SpanMode::Toggle),
+    ];
     assert_eq!(commands(&harness, cx), expected);
 }
 

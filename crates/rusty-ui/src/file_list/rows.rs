@@ -5,7 +5,7 @@ use gpui_kit::{
     AnyElement, App, ClickEvent, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
     StatefulInteractiveElement, Window,
 };
-use rusty_core::{Command, CursorMove};
+use rusty_core::{Command, CursorMove, SpanMode};
 
 use super::row::{self, RowLook};
 use super::{FileListAction, ListContext, lasso, press, row_number};
@@ -70,8 +70,8 @@ impl ListContext {
         let modifiers = event.modifiers();
         let to = CursorMove::Row(row);
         if modifiers.shift {
-            let unmark = false;
-            self.send(Command::SelectionExtend { to, unmark }, window, cx);
+            let mode = SpanMode::Mark;
+            self.send(Command::SelectionExtend { to, mode }, window, cx);
         } else if modifiers.control {
             self.send(Command::PaneCursorMove { to }, window, cx);
             self.send(Command::SelectionToggle, window, cx);

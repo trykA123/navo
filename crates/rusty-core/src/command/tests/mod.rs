@@ -1,4 +1,6 @@
-use crate::{Command, CommandId, CursorMove, Direction, Location, ParseError, ParseErrorKind};
+use crate::{
+    Command, CommandId, CursorMove, Direction, Location, ParseError, ParseErrorKind, SpanMode,
+};
 
 mod errors;
 mod ids;
@@ -38,7 +40,7 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     "selection.toggle",
     "selection.toggle-down",
     "selection.range { to: 7 }",
-    "selection.extend { to: down, unmark: false }",
+    "selection.extend { to: down, mode: toggle }",
     "selection.extension { mark: true }",
     "selection.restore",
     r#"selection.add-pattern { pattern: "*.rs" }"#,

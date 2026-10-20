@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui_kit::{
     Action, App, Div, InteractiveElement, MouseButton, NavigationDirection, Stateful, Window,
 };
-use rusty_core::{Command, CursorMove, OpKind};
+use rusty_core::{Command, CursorMove, OpKind, SpanMode};
 
 use super::{FileListAction, ListContext, SortBy};
 
@@ -85,7 +85,8 @@ fn extend<A: Action>(
     ctx: &Rc<ListContext>,
     to: CursorMove,
 ) -> impl Fn(&A, &mut Window, &mut App) + 'static {
-    send(ctx, Command::SelectionExtend { to, unmark: false })
+    let mode = SpanMode::Mark;
+    send(ctx, Command::SelectionExtend { to, mode })
 }
 
 fn sort<A: Action>(

@@ -67,7 +67,7 @@ fn the_status_shows_counts_sizes_and_free_space(cx: &mut TestAppContext) {
 fn no_hidden_marks_leave_the_status_without_a_count(cx: &mut TestAppContext) {
     let props = busy_props(ListingMark::Fresh);
     let text = label(props, cx).expect("label");
-    assert!(!text.contains("hidden"), "{text}");
+    assert!(!text.contains("not shown"), "{text}");
 }
 
 #[gpui_kit::test]
@@ -79,7 +79,7 @@ fn hidden_marks_show_a_count_after_the_marked_totals(cx: &mut TestAppContext) {
     assert_eq!(
         label(props, cx).as_deref(),
         Some(
-            "2 marked, 14.8 KB · 3 hidden by filter · 5 files, 1 folder · 36.5 KB · 488.3 MB free"
+            "2 marked, 14.8 KB · 3 marked not shown · 5 files, 1 folder · 36.5 KB · 488.3 MB free"
         )
     );
     let one = StatusBarProps {
@@ -89,7 +89,7 @@ fn hidden_marks_show_a_count_after_the_marked_totals(cx: &mut TestAppContext) {
     assert!(
         label(one, cx)
             .expect("label")
-            .contains("· 1 hidden by filter ·")
+            .contains("· 1 marked not shown ·")
     );
 }
 

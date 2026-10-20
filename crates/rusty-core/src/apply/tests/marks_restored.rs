@@ -47,7 +47,7 @@ fn restoring_marks_ends_the_span() {
         &mut state,
         Command::SelectionExtend {
             to: CursorMove::Down,
-            unmark: false,
+            mode: crate::SpanMode::Mark,
         },
     );
     let tab = active(&state);
@@ -56,7 +56,7 @@ fn restoring_marks_ends_the_span() {
         &mut state,
         Command::SelectionExtend {
             to: CursorMove::Down,
-            unmark: false,
+            mode: crate::SpanMode::Mark,
         },
     );
     assert_eq!(marked(&state), vec![0, 1, 2, 5]);

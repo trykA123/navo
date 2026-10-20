@@ -5,7 +5,7 @@ use gpui_kit::{
     App, Div, InteractiveElement, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point,
     Stateful, Window, point,
 };
-use rusty_core::{Command, CursorMove};
+use rusty_core::{Command, CursorMove, SpanMode};
 
 use super::row::check_column;
 use super::{FileListAction, ListContext, row_index, row_number};
@@ -18,7 +18,7 @@ struct Held {
     press: u64,
     row: u64,
     last: u64,
-    unmark: bool,
+    mode: SpanMode,
     dragged: bool,
 }
 
@@ -29,13 +29,13 @@ pub(super) struct Press {
 }
 
 impl Press {
-    fn start(&mut self, row: u64, unmark: bool) -> u64 {
+    fn start(&mut self, row: u64, mode: SpanMode) -> u64 {
         self.count += 1;
         self.held = Some(Held {
             press: self.count,
             row,
             last: row,
-            unmark,
+            mode,
             dragged: false,
         });
         self.count
@@ -79,8 +79,8 @@ pub(super) fn drag_over(
             let to = CursorMove::Row(held.row);
             ctx.send(Command::PaneCursorMove { to }, window, cx);
         }
-        let (to, unmark) = (CursorMove::Row(row), held.unmark);
-        ctx.send(Command::SelectionExtend { to, unmark }, window, cx);
+        let (to, mode) = (CursorMove::Row(row), held.mode);
+        ctx.send(Command::SelectionExtend { to, mode }, window, cx);
     }
 }
 
@@ -112,10 +112,14 @@ impl ListContext {
         cx: &mut App,
     ) {
         self.click(row, window, cx);
-        let unmark = self.props.marked.is_marked(row);
+        let mode = if self.props.marked.is_marked(row) {
+            SpanMode::Unmark
+        } else {
+            SpanMode::Mark
+        };
         let press = self
             .state
-            .update(cx, |state, _| state.press.start(row, unmark));
+            .update(cx, |state, _| state.press.start(row, mode));
         let adds_cursor = self.adds_pressed_row(row);
         self.act(FileListAction::MenuPrefetch { adds_cursor }, window, cx);
         let ctx = self.clone();

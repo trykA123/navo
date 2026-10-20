@@ -5,7 +5,7 @@ use gpui_kit::{
     App, DispatchPhase, Div, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Styled, Window, canvas, div, px,
 };
-use rusty_core::{Command, CursorMove};
+use rusty_core::{Command, CursorMove, SpanMode};
 
 use super::ListContext;
 use crate::tokens::{self, Theme};
@@ -24,7 +24,7 @@ struct Lasso {
     from: Point<Pixels>,
     to: Point<Pixels>,
     start: Start,
-    unmark: bool,
+    mode: SpanMode,
     is_plain: bool,
     is_drawn: bool,
     far: Option<u64>,
@@ -41,6 +41,7 @@ struct Rows {
     top: Pixels,
     height: Pixels,
     len: u64,
+    shown: (Pixels, Pixels),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -83,7 +84,11 @@ impl Held {
             from: event.position,
             to: event.position,
             start,
-            unmark: modifiers.control,
+            mode: if modifiers.control {
+                SpanMode::Toggle
+            } else {
+                SpanMode::Mark
+            },
             is_plain: !modifiers.modified(),
             is_drawn: false,
             far: None,
@@ -108,10 +113,11 @@ impl Held {
         }) else {
             return Step::Redraw;
         };
-        let far = match rows.crossed(lasso.from.y, at.y) {
-            Some((first, _)) if at.y < lasso.from.y => first,
+        let y = at.y.max(rows.shown.0).min(rows.shown.1);
+        let far = match rows.crossed(lasso.from.y, y) {
+            Some((first, _)) if y < lasso.from.y => first,
             Some((_, end)) => end,
-            None if lasso.far.is_some() => anchor,
+            None if lasso.far.is_some() => rows.len,
             None => return Step::Redraw,
         };
         let step = Step::Span {
@@ -133,6 +139,7 @@ impl ListContext {
             top: list.origin.y - state.lift + state.scroll.offset_y(),
             height: tokens::current(cx).rows.height,
             len: super::row_number(self.props.rows.len()),
+            shown: (list.top(), list.bottom() - px(1.)),
         })
     }
 
@@ -149,13 +156,15 @@ impl ListContext {
             }
             return;
         };
-        let unmark = self.state.read(cx).lasso.lasso.is_some_and(|l| l.unmark);
+        let Some(mode) = self.state.read(cx).lasso.lasso.map(|l| l.mode) else {
+            return;
+        };
         if let Some(anchor) = anchor {
             let to = CursorMove::Row(anchor);
             self.send(Command::PaneCursorMove { to }, window, cx);
         }
         let to = CursorMove::Row(far);
-        self.send(Command::SelectionExtend { to, unmark }, window, cx);
+        self.send(Command::SelectionExtend { to, mode }, window, cx);
         window.refresh();
     }
 
@@ -259,6 +268,7 @@ mod tests {
             top: px(100.),
             height: px(20.),
             len: 5,
+            shown: (px(100.), px(199.)),
         };
         assert_eq!(rows.crossed(px(130.), px(175.)), Some((1, 3)));
         assert_eq!(rows.crossed(px(260.), px(150.)), Some((2, 4)));

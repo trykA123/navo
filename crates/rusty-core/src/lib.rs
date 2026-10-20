@@ -37,7 +37,7 @@ pub use op_plan::{
     plan,
 };
 pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
-pub use selection::{Pattern, PatternError, Selection};
+pub use selection::{Pattern, PatternError, Selection, SpanMode};
 pub use session::{
     EntryState, LayoutState, MAX_LAYOUT_DEPTH, PaneState, RowsState, SessionError, SessionState,
     TabState, WindowState,

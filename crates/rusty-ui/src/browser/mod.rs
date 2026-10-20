@@ -7,7 +7,7 @@ use rusty_cache::{CacheKeys, ListingCache, ProfileCache};
 use rusty_core::placement::{MonitorSetup, Placement};
 use rusty_core::{
     AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location, TabId,
-    apply, apply_event, list_missing,
+    apply_event, list_missing,
 };
 use rusty_fs::{
     FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps, WatchEvent, volume_of,
@@ -154,8 +154,7 @@ impl Browser {
             return Ok(());
         }
         let focused = self.state.focused_pane();
-        let effects = apply(&mut self.state, command)?;
-        self.forget_cleared_marks(command);
+        let effects = self.apply_keeping_hidden_marks(command)?;
         self.drop_stale_filters();
         self.run(effects);
         if self.state.focused_pane() != focused {

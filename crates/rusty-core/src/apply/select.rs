@@ -1,5 +1,5 @@
 use super::{CommandError, Effect, last_row, loaded_listing};
-use crate::{AppState, CursorMove, Pattern, TabId};
+use crate::{AppState, CursorMove, Pattern, SpanMode, TabId};
 
 pub(super) fn toggle(state: &mut AppState) -> Result<Vec<Effect>, CommandError> {
     last_row(state)?;
@@ -42,12 +42,16 @@ pub(super) fn range(state: &mut AppState, to: u64) -> Result<Vec<Effect>, Comman
 pub(super) fn extend(
     state: &mut AppState,
     to: CursorMove,
-    unmark: bool,
+    mode: SpanMode,
 ) -> Result<Vec<Effect>, CommandError> {
     let target = super::pane::cursor_target(state, to)?;
+    let span_to = match to {
+        CursorMove::Row(row) => row,
+        _ => target,
+    };
     let tab = state.active_tab_mut();
     let cursor = tab.view().cursor;
-    tab.selection_mut().extend(cursor, target, unmark);
+    tab.selection_mut().extend(cursor, span_to, mode);
     tab.set_cursor(target);
     state.focused_pane_mut().reveal_cursor();
     Ok(Vec::new())

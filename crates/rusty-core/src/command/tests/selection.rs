@@ -13,9 +13,10 @@ fn selection_extend_round_trips_every_target_and_mode() {
         ("18446744073709551615", CursorMove::Row(u64::MAX)),
     ];
     for (target, to) in targets {
-        for unmark in [false, true] {
-            let text = format!("selection.extend {{ to: {target}, unmark: {unmark} }}");
-            let command = Command::SelectionExtend { to, unmark };
+        for mode in [SpanMode::Mark, SpanMode::Unmark, SpanMode::Toggle] {
+            let word = mode.keyword();
+            let text = format!("selection.extend {{ to: {target}, mode: {word} }}");
+            let command = Command::SelectionExtend { to, mode };
             assert_eq!(parse(&text), Ok(command.clone()));
             assert_eq!(command.to_string(), text);
         }
@@ -45,7 +46,7 @@ fn selection_commands_reject_missing_fields() {
         (
             "selection.extend { to: up }",
             CommandId::SelectionExtend,
-            "unmark",
+            "mode",
         ),
         ("selection.extension", CommandId::SelectionExtension, "mark"),
     ];
@@ -60,13 +61,15 @@ fn selection_commands_reject_missing_fields() {
 #[test]
 fn selection_commands_reject_invalid_arguments() {
     let cases = [
-        "selection.extend { to: sideways, unmark: false }",
-        "selection.extend { to: -1, unmark: false }",
-        "selection.extend { to: 18446744073709551616, unmark: false }",
-        "selection.extend { to: \"up\", unmark: false }",
-        "selection.extend { to: down, unmark: yes }",
-        "selection.extend { to: down, unmark: 1 }",
-        "selection.extend { to: down, unmark: false, unmark: true }",
+        "selection.extend { to: sideways, mode: mark }",
+        "selection.extend { to: -1, mode: mark }",
+        "selection.extend { to: 18446744073709551616, mode: mark }",
+        "selection.extend { to: \"up\", mode: mark }",
+        "selection.extend { to: down, mode: flip }",
+        "selection.extend { to: down, mode: 1 }",
+        "selection.extend { to: down, mode: \"mark\" }",
+        "selection.extend { to: down, mode: mark, mode: toggle }",
+        "selection.extend { to: down, unmark: false }",
         "selection.extension { mark: yes }",
         "selection.extension { mark: \"true\" }",
         "selection.extension { mark: 1 }",

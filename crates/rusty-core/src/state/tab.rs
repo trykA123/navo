@@ -115,7 +115,8 @@ impl Tab {
         Ok(marks)
     }
 
-    pub(crate) fn marked_names(&self) -> Vec<String> {
+    #[must_use]
+    pub fn marked_names(&self) -> Vec<String> {
         self.selection
             .marked()
             .into_iter()

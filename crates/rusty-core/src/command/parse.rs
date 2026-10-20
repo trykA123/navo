@@ -1,6 +1,6 @@
 use super::lexer::{Lexer, Value};
 use super::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
-use crate::{Direction, Location};
+use crate::{Direction, Location, SpanMode};
 
 struct Field<'a> {
     name: &'static str,
@@ -109,7 +109,7 @@ pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
         CommandId::PaneGoDrive => &["root"],
         CommandId::PaneCloseTab | CommandId::PaneActivateTab => &["tab"],
         CommandId::PaneCursorMove | CommandId::SelectionRange | CommandId::PaneScroll => &["to"],
-        CommandId::SelectionExtend => &["to", "unmark"],
+        CommandId::SelectionExtend => &["to", "mode"],
         CommandId::SelectionExtension => &["mark"],
         CommandId::WindowClose | CommandId::WindowFocus => &["window"],
         CommandId::SelectionAddPattern | CommandId::SelectionRemovePattern => {
@@ -175,7 +175,7 @@ fn selection_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
     Ok(match fields.command {
         CommandId::SelectionExtend => Command::SelectionExtend {
             to: fields.required("to", cursor_move)?,
-            unmark: fields.required("unmark", flag)?,
+            mode: fields.required("mode", span_mode)?,
         },
         CommandId::SelectionExtension => Command::SelectionExtension {
             mark: fields.required("mark", flag)?,
@@ -297,6 +297,14 @@ fn direction(value: Value<'_>) -> Result<Direction, Problem> {
     match value {
         Value::Word(word) => Direction::from_keyword(word)
             .ok_or_else(|| Problem::Invalid("expected left, right, up or down".to_owned())),
+        _ => Err(Problem::WrongType("keyword")),
+    }
+}
+
+fn span_mode(value: Value<'_>) -> Result<SpanMode, Problem> {
+    match value {
+        Value::Word(word) => SpanMode::from_keyword(word)
+            .ok_or_else(|| Problem::Invalid("expected mark, unmark or toggle".to_owned())),
         _ => Err(Problem::WrongType("keyword")),
     }
 }

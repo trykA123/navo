@@ -5,7 +5,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, Bounds, Modifiers, MouseButton, Pixels, Point, TestAppContext, point, px,
 };
-use rusty_core::{Command, CursorMove, Selection};
+use rusty_core::{Command, CursorMove, Selection, SpanMode};
 
 use super::{actions, commands, open_list, props, sample_rows};
 use crate::file_list::FileListAction;
@@ -58,10 +58,10 @@ fn cursor(row: u64) -> Command {
     }
 }
 
-fn extend(row: u64, unmark: bool) -> Command {
+fn extend(row: u64, mode: SpanMode) -> Command {
     Command::SelectionExtend {
         to: CursorMove::Row(row),
-        unmark,
+        mode,
     }
 }
 
@@ -90,7 +90,10 @@ fn shift_click_and_ctrl_shift_click_extend_from_the_cursor(cx: &mut TestAppConte
         ..Modifiers::default()
     };
     click_row(cx, window, 1, both);
-    assert_eq!(commands(&harness, cx), [extend(3, false), extend(1, false)]);
+    assert_eq!(
+        commands(&harness, cx),
+        [extend(3, SpanMode::Mark), extend(1, SpanMode::Mark)]
+    );
 }
 
 #[gpui_kit::test]
@@ -146,7 +149,12 @@ fn right_drag(cx: &mut TestAppContext, window: AnyWindowHandle, rows: &[usize]) 
 fn a_right_drag_paints_a_span_and_shrinks_back_without_a_toggle(cx: &mut TestAppContext) {
     let (window, harness) = open_list(cx, props(sample_rows()));
     right_drag(cx, window, &[1, 3, 2]);
-    let expected = [cursor(1), cursor(1), extend(3, false), extend(2, false)];
+    let expected = [
+        cursor(1),
+        cursor(1),
+        extend(3, SpanMode::Mark),
+        extend(2, SpanMode::Mark),
+    ];
     assert_eq!(commands(&harness, cx), expected);
     let cancels = actions(&harness, cx)
         .into_iter()
@@ -165,6 +173,6 @@ fn a_right_drag_from_a_marked_row_unmarks(cx: &mut TestAppContext) {
     right_drag(cx, window, &[1, 3]);
     assert_eq!(
         commands(&harness, cx),
-        [cursor(1), cursor(1), extend(3, true)]
+        [cursor(1), cursor(1), extend(3, SpanMode::Unmark)]
     );
 }

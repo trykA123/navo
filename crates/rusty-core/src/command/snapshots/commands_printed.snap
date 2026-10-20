@@ -15,7 +15,7 @@ pane.scroll { to: 120 }
 selection.toggle
 selection.toggle-down
 selection.range { to: 7 }
-selection.extend { to: down, unmark: false }
+selection.extend { to: down, mode: toggle }
 selection.extension { mark: true }
 selection.restore
 selection.add-pattern { pattern: "*.rs" }
