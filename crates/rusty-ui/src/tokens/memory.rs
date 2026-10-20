@@ -17,18 +17,20 @@ pub struct MemColors {
     pub data: MemKind,
     pub bss: MemKind,
     pub other: MemKind,
+    pub fill: MemKind,
     pub free: Hsla,
     pub free_line: Hsla,
 }
 
 impl MemColors {
-    pub fn kinds(&self) -> [(&'static str, MemKind); 5] {
+    pub fn kinds(&self) -> [(&'static str, MemKind); 6] {
         [
             ("code", self.code),
             ("rodata", self.rodata),
             ("data", self.data),
             ("bss", self.bss),
             ("other", self.other),
+            ("fill", self.fill),
         ]
     }
 }
@@ -46,6 +48,7 @@ pub(super) fn mem_colors(mode: Mode) -> MemColors {
             data: kind(210., [(0.60, 0.086), (0.94, 0.013), (0.46, 0.078)]),
             bss: kind(238., [(0.60, 0.09), (0.94, 0.013), (0.46, 0.08)]),
             other: kind(60., [(0.60, 0.025), (0.94, 0.006), (0.46, 0.025)]),
+            fill: kind(260., [(0.60, 0.008), (0.94, 0.003), (0.46, 0.008)]),
             free: oklch(0.965, 0.004, 260.),
             free_line: oklch(0.6, 0.016, 260.),
         },
@@ -55,6 +58,7 @@ pub(super) fn mem_colors(mode: Mode) -> MemColors {
             data: kind(210., [(0.68, 0.078), (0.30, 0.03), (0.84, 0.04)]),
             bss: kind(238., [(0.68, 0.08), (0.30, 0.03), (0.84, 0.04)]),
             other: kind(60., [(0.68, 0.022), (0.30, 0.012), (0.84, 0.014)]),
+            fill: kind(260., [(0.68, 0.006), (0.30, 0.006), (0.84, 0.006)]),
             free: oklch(0.21, 0.01, 260.),
             free_line: oklch(0.58, 0.014, 260.),
         },
