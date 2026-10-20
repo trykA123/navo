@@ -11,6 +11,7 @@ use super::{JobStatus, OpLog, Operations};
 use crate::browser::Browser;
 
 mod concurrent;
+mod drop;
 mod mode;
 mod pause;
 

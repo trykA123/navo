@@ -6,6 +6,22 @@ use rusty_fs::{
 
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
+pub struct DropRequest {
+    pub kind: OpKind,
+    pub sources: Vec<Location>,
+    pub target: Location,
+    pub confirm: DropConfirm,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum DropConfirm {
+    #[default]
+    Never,
+    Moves,
+    Always,
+}
+
 pub trait OpLog: JobLog + Send {
     fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps);
 }

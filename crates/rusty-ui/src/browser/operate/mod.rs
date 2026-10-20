@@ -10,7 +10,7 @@ mod paste;
 mod types;
 mod work;
 
-pub use paste::PasteRefusal;
+pub use paste::{PasteRefusal, same_volume};
 pub use types::*;
 use work::{JobWork, lands_inside, plan_for, start_progress};
 

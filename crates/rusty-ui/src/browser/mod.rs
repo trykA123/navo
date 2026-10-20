@@ -15,7 +15,7 @@ use rusty_fs::{
 
 pub(crate) use measure::Measured;
 use operate::JobUpdate;
-pub use operate::{JobStatus, JobView, LogFactory, OpLog, Operations, PasteRefusal, PendingOp};
+pub use operate::*;
 pub use {naming::NameProblem, offline::Offline};
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
