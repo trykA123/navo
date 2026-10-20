@@ -10,7 +10,23 @@ pub enum Evidence {
 }
 
 #[must_use]
+pub fn sniff_blf(head: &[u8]) -> bool {
+    if head.len() < 72 || !head.starts_with(b"LOGG") {
+        return false;
+    }
+    let size = u32::from_le_bytes([head[4], head[5], head[6], head[7]]);
+    let field = |at: usize| u16::from_le_bytes([head[at], head[at + 1]]);
+    (72..=4096).contains(&size)
+        && (1980..=2100).contains(&field(40))
+        && (1..=12).contains(&field(42))
+        && (1..=31).contains(&field(46))
+}
+
+#[must_use]
 pub fn sniff_trace(head: &[u8]) -> Option<Evidence> {
+    if sniff_blf(head) {
+        return Some(Evidence::Header);
+    }
     let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     let complete = match head.iter().rposition(|byte| *byte == b'\n') {
         Some(end) => head.get(..end).unwrap_or_default(),

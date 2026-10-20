@@ -6349,6 +6349,7 @@ name = "rusty-automotive"
 version = "0.0.1"
 dependencies = [
  "cpp_demangle",
+ "flate2",
  "gimli",
  "object",
  "proptest",
