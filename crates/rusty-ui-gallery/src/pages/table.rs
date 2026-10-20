@@ -9,7 +9,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 96] = [
+pub const PAGES: [PageInfo; 98] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -329,6 +329,18 @@ pub const PAGES: [PageInfo; 96] = [
         Page::MultiRename,
         "Multi-rename fields",
         "p41-b4-fields",
+        false,
+    ),
+    info(
+        Page::MultiRenamePreview,
+        "Rename preview",
+        "p41-b5-preview",
+        false,
+    ),
+    info(
+        Page::MultiRenamePreviewLarge,
+        "Rename preview, 50,000 rows",
+        "p41-b5-preview-large",
         false,
     ),
 ];

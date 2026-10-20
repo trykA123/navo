@@ -1,5 +1,6 @@
 use crate::drag_page::DragPage;
 use crate::multi_rename_page::MultiRenamePage;
+use crate::multi_rename_preview_page::{PreviewPages, preview_pages};
 use crate::treemap_page::TreemapPage;
 use rusty_automotive::Section;
 use rusty_automotive::space::{Kind, Region, RegionSource};
@@ -122,6 +123,7 @@ pub type DragTreemapBars = (
     Entity<TreemapPage>,
     Entity<BarsPage>,
     Entity<MultiRenamePage>,
+    PreviewPages,
 );
 
 pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
@@ -130,5 +132,6 @@ pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
         cx.new(|_| TreemapPage::new()),
         cx.new(|_| BarsPage),
         cx.new(|cx| MultiRenamePage::new(window, cx)),
+        preview_pages(window, cx),
     )
 }

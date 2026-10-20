@@ -9,6 +9,7 @@ pub use form::Form;
 pub use item::Item;
 pub use keys::bind_keys;
 pub use preview::{Listing, Preview, PreviewRow, Summary};
+pub use view::{PreviewEvent, PreviewView, Shown};
 
 #[cfg(test)]
 mod tests;

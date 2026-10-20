@@ -17,7 +17,6 @@ use crate::bars_page::{DragTreemapBars, drag_treemap_bars};
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
 use crate::drives_page::{DrivesPage, Shows};
-use crate::image_sample;
 use crate::kinds_page::KindsPage;
 use crate::map_sample::{MAP_NAME, MAP_STEPS, map};
 use crate::menu_page::{MenuPage, Shows as MenuShows};
@@ -25,21 +24,20 @@ use crate::mouse_page::MousePage;
 use crate::operate_page::OperatePage;
 pub use crate::pages::{PAGES, Page};
 use crate::pane_page::PanePage;
-use crate::sections;
-use crate::shortcuts_sample;
 use crate::strip_page::StripPage;
 use crate::structured_sample::{
     self as structured, CODE, CODE_NAME, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE,
     TREE_NAME,
 };
-use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
     hint_windows, job_element, job_windows, parts_element, parts_windows, preview_element,
     preview_windows, settings_windows, sheet_windows, window_element,
 };
-use crate::{pdf_sample, rich_sample, viewer_sample};
+use crate::{
+    image_sample, pdf_sample, rich_sample, sections, shortcuts_sample, tokens_page, viewer_sample,
+};
 
 mod samples;
 
@@ -352,6 +350,8 @@ impl Render for Gallery {
             Page::Treemap => root.child(self.drag_treemap.1.clone()),
             Page::UsageBars => root.child(self.drag_treemap.2.clone()),
             Page::MultiRename => root.child(self.drag_treemap.3.clone()),
+            Page::MultiRenamePreview => root.child(self.drag_treemap.4[0].clone()),
+            Page::MultiRenamePreviewLarge => root.child(self.drag_treemap.4[1].clone()),
             Page::MemoryStrip => root.child(self.strip.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),

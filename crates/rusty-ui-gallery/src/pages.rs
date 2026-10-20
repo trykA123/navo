@@ -100,6 +100,8 @@ pub enum Page {
     Treemap,
     UsageBars,
     MultiRename,
+    MultiRenamePreview,
+    MultiRenamePreviewLarge,
 }
 
 pub struct PageInfo {
