@@ -13,6 +13,13 @@ pub use sniff::{Evidence, sniff_trace};
 pub const TRACE_EXTENSIONS: [&str; 2] = ["asc", "trc"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TraceFormat {
+    #[default]
+    Asc,
+    Trc(Option<&'static str>),
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Base {
     #[default]
     Hex,

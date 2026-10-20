@@ -1,5 +1,5 @@
 use super::asc::{self, Header, Shape};
-use super::{Notation, trc};
+use super::{Notation, TraceFormat, trc};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Clock {
@@ -24,6 +24,13 @@ impl Clock {
         match &mut self.trc {
             Some(state) => state.parse(line, data),
             None => asc::parse(line, self.notation.base, data),
+        }
+    }
+
+    pub(crate) fn format(&self) -> TraceFormat {
+        match &self.trc {
+            Some(state) => TraceFormat::Trc(state.version_label()),
+            None => TraceFormat::Asc,
         }
     }
 

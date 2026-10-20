@@ -126,7 +126,7 @@ fn optional_trc_columns_and_an_empty_fd_payload_decode() {
 
 #[test]
 fn malformed_trc_rows_report_their_physical_line_and_keep_later_frames() {
-    let text = ";$FILEVERSION=2.1\n;$COLUMNS=N,O,T,B,I,d,L,D\n1 no DT 1 0010 Rx 0\n2 1 DT 0 0010 Rx 0\n3 1 DT 1 0010 Wrong 0\n4 1 DT 1 9999 Rx 0\n5 1 FD 1 0010 Rx 16\n6 1 DT 1 0010 Rx 2 01\n7 1 DT 1 0010 Rx 1 ZZ\n8 1 DT 1 0010 Rx 1 01\n";
+    let text = ";$FILEVERSION=2.1\n;$COLUMNS=N,O,T,B,I,d,L,D\n1 no DT 1 0010 Rx 0\n2 1 DT 0 0010 Rx 0\n3 1 DT 1 0010 Wrong 0\n4 1 DT 1 123456789 Rx 0\n5 1 FD 1 0010 Rx 16\n6 1 DT 1 0010 Rx 2 01\n7 1 DT 1 0010 Rx 1 ZZ\n8 1 DT 1 0010 Rx 1 01\n";
     let trace = trace_of(text);
     assert_eq!(trace.malformed, 7);
     assert_eq!(

@@ -2,7 +2,7 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{ClickEvent, Role, Stateful, WeakEntity};
 
 use super::keys::CONTEXT;
-use super::text::{Check, Tone, column_titles, row, status};
+use super::text::{Check, Tone, column_titles, format_label, row, status};
 use super::{Focus, TraceView};
 use crate::format;
 use crate::prelude::*;
@@ -61,9 +61,11 @@ fn status_part(t: &Theme, at: usize, Check { text, is_bad }: Check) -> Div {
 impl TraceView {
     fn row_view(&self, t: &Theme, shown: u64, view: &WeakEntity<Self>) -> AnyElement {
         let base = self.trace.notation().base;
-        let (text, tone) = self
-            .entry(shown)
-            .map_or_else(|| (String::new(), Tone::Quiet), |entry| row(entry, base));
+        let format = self.trace.format();
+        let (text, tone) = self.entry(shown).map_or_else(
+            || (String::new(), Tone::Quiet),
+            |entry| row(entry, (base, format)),
+        );
         let is_error = tone == Tone::Error;
         let element: ObservedElement<Stateful<Div>> = mono(t)
             .id(("trace-row", shown as usize))
@@ -132,7 +134,7 @@ impl TraceView {
         });
         HeaderParts {
             title: self.title.clone(),
-            mode: "Vector ASC".into(),
+            mode: format_label(self.trace.format()).into(),
             len: self.len,
             detail,
             status: self.progress().map(|text| ("trace-progress", text)),

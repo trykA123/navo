@@ -180,11 +180,11 @@ fn modern_fields<'a>(
 }
 
 fn identifier(value: &str) -> Result<CanId> {
-    let extended = value.len() == 8;
-    if !(value.len() == 4 || extended) || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !(1..=8).contains(&value.len()) || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(BAD_ID);
     }
     let raw = u32::from_str_radix(value, 16).map_err(|_| BAD_ID)?;
+    let extended = value.len() > 4 || raw > 0x7FF;
     let limit = if extended {
         (1 << 29) - 1
     } else {

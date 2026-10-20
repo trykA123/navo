@@ -16,6 +16,28 @@ enum Version {
     V21,
 }
 
+impl Version {
+    fn of(value: &str) -> Self {
+        match value {
+            "1.1" => Self::V11,
+            "1.3" => Self::V13,
+            "2.0" => Self::V20,
+            "2.1" => Self::V21,
+            _ => Self::Unknown,
+        }
+    }
+
+    fn label(self) -> Option<&'static str> {
+        match self {
+            Self::Unknown => None,
+            Self::V11 => Some("1.1"),
+            Self::V13 => Some("1.3"),
+            Self::V20 => Some("2.0"),
+            Self::V21 => Some("2.1"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Columns {
     number: bool,
@@ -66,7 +88,17 @@ pub(crate) fn is_header(line: &[u8]) -> bool {
     )
 }
 
+pub(crate) fn has_unsupported_version(line: &[u8]) -> bool {
+    line.strip_prefix(b";$FILEVERSION=")
+        .and_then(|value| std::str::from_utf8(value).ok())
+        .is_some_and(|value| Version::of(value.trim()) == Version::Unknown)
+}
+
 impl State {
+    pub(crate) fn version_label(&self) -> Option<&'static str> {
+        self.version.label()
+    }
+
     pub(crate) fn parse(&mut self, line: &[u8], data: &mut Vec<u8>) -> (Option<u64>, Shape) {
         data.clear();
         if line.is_empty() {
@@ -117,13 +149,7 @@ impl State {
 
     fn version(&mut self, value: &str) -> Shape {
         self.columns = None;
-        self.version = match value {
-            "1.1" => Version::V11,
-            "1.3" => Version::V13,
-            "2.0" => Version::V20,
-            "2.1" => Version::V21,
-            _ => Version::Unknown,
-        };
+        self.version = Version::of(value);
         if self.version == Version::Unknown {
             Shape::Malformed(BAD_VERSION)
         } else {

@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 use super::asc::{Head, Header, Shape};
 use super::line::{MAX_LINE, next_line};
 use super::text::Clock;
-use super::{CanId, FrameKind, Notation};
+use super::{CanId, FrameKind, Notation, TraceFormat};
 use crate::{IndexError, Watch};
 
 pub(crate) const BLOCK: u64 = 32;
@@ -94,6 +94,11 @@ impl Trace {
     #[must_use]
     pub fn rows(&self) -> u64 {
         self.rows
+    }
+
+    #[must_use]
+    pub fn format(&self) -> TraceFormat {
+        self.clock.format()
     }
 
     #[must_use]
