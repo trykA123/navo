@@ -18,6 +18,7 @@ use super::{Preview, Shown};
 use crate::browser::Measured;
 use crate::prelude::*;
 use crate::primitives::ListScroll;
+use crate::settings::Field;
 use crate::window_view::FerriteWindow;
 
 struct Read {
@@ -148,7 +149,7 @@ impl FerriteWindow {
             spot: None,
             restore: None,
             marks: Marks::default(),
-            hides_largest: false,
+            hides_largest: !self.preview_shows(Field::PreviewLargestFiles),
             load,
             reads,
         }

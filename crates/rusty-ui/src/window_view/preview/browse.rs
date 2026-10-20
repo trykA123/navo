@@ -177,7 +177,7 @@ impl FerriteWindow {
     }
 
     pub(super) fn browse_frame(&self, body: AnyElement, cx: &mut Context<Self>) -> AnyElement {
-        div()
+        let frame = div()
             .id("preview-browse")
             .key_context(BROWSE)
             .track_focus(&self.preview.browse)
@@ -224,7 +224,7 @@ impl FerriteWindow {
             }))
             .on_action(cx.listener(|this, _: &Recount, _, cx| this.recount_folder(cx)))
             .on_action(Self::view_menu_listener(cx))
-            .child(body)
-            .into_any_element()
+            .child(body);
+        Self::part_actions(frame, cx).into_any_element()
     }
 }

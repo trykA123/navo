@@ -10,6 +10,7 @@ use rusty_fs::FakeFs;
 
 use super::Rig;
 use crate::settings::{Change, Field, Value, Values};
+use crate::window_view::preview::browse::{ToggleLargestFiles, ToggleTypeBars};
 use crate::window_view::preview::spot::Spot;
 use crate::window_view::tests::{open_options, options_for, two_panes};
 use crate::window_view::{
@@ -381,4 +382,173 @@ fn the_other_keys_of_the_sheet_work_with_both_parts_hidden(cx: &mut TestAppConte
     parts.rig.key(cx, "ctrl-r");
     parts.rig.key(cx, "escape");
     assert!(!parts.rig.read(cx, |view| view.preview.is_open()));
+}
+
+fn shows_folder(name: &'static str) -> impl Fn(&FerriteWindow) -> bool {
+    move |view| {
+        is_done(view)
+            && view
+                .preview
+                .folder()
+                .is_some_and(|folder| folder.target.name() == name)
+    }
+}
+
+fn spot_place_is_tree(view: &FerriteWindow) -> bool {
+    view.preview.folder().is_some_and(|folder| {
+        matches!(folder.spot, Some(Spot::Tree(_))) && folder.place().is_some()
+    })
+}
+
+#[gpui_kit::test]
+fn a_nested_folder_keeps_the_largest_files_hidden(cx: &mut TestAppContext) {
+    let parts = parts(cx, off(&[LARGEST]));
+    parts.browse(cx);
+    parts.rig.key(cx, "enter");
+    assert!(parts.rig.wait_until(cx, shows_folder("src")));
+    for _ in 0..8 {
+        parts.rig.key(cx, "down");
+    }
+    assert!(!parts.spot_is_largest(cx));
+    assert!(parts.rig.read(cx, spot_place_is_tree));
+}
+
+#[gpui_kit::test]
+fn a_nested_folder_follows_a_largest_files_toggle(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    parts.browse(cx);
+    parts.rig.key(cx, "enter");
+    assert!(parts.rig.wait_until(cx, shows_folder("src")));
+    parts.rig.key(cx, "alt-v");
+    parts.toggle(cx, "Largest files");
+    parts.rig.key(cx, "escape");
+    for _ in 0..8 {
+        parts.rig.key(cx, "down");
+    }
+    assert!(!parts.spot_is_largest(cx));
+}
+
+#[gpui_kit::test]
+fn going_up_never_lands_on_a_hidden_largest_row(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    parts.browse(cx);
+    for _ in 0..8 {
+        parts.rig.key(cx, "down");
+    }
+    assert!(parts.spot_is_largest(cx));
+    parts.rig.key(cx, "enter");
+    parts.settle(cx);
+    assert!(parts.news.send(SettingsNews::Applied {
+        values: off(&[LARGEST]),
+        generation: 1,
+    }));
+    parts.settle(cx);
+    parts.rig.key(cx, "backspace");
+    assert!(parts.rig.wait_until(cx, shows_folder("proj")));
+    assert!(!parts.spot_is_largest(cx));
+    parts.rig.key(cx, "down");
+    assert!(!parts.spot_is_largest(cx));
+}
+
+fn mark_two(parts: &Parts, cx: &mut TestAppContext) {
+    parts.rig.key(cx, "space");
+    parts.rig.key(cx, "space");
+}
+
+#[gpui_kit::test]
+fn a_failed_keep_shows_over_the_marks_summary(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    *parts.failure.lock().expect("failure") = Some("ferrite.toml is invalid at line 4.".to_owned());
+    parts.browse(cx);
+    mark_two(&parts, cx);
+    let marked = parts.rig.label(cx, "side-sheet-status").unwrap_or_default();
+    assert!(marked.contains("2 marked"), "{marked}");
+    parts.rig.key(cx, "alt-v");
+    parts.toggle(cx, "Type bars");
+    parts.run(cx, "Keep as default");
+    parts.settle(cx);
+    let shown = parts.rig.label(cx, "side-sheet-status").unwrap_or_default();
+    assert!(shown.contains("Not kept"), "{shown}");
+}
+
+#[gpui_kit::test]
+fn a_toggle_after_keep_clears_the_kept_note(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    parts.browse(cx);
+    parts.rig.key(cx, "alt-v");
+    parts.toggle(cx, "Type bars");
+    parts.run(cx, "Keep as default");
+    parts.settle(cx);
+    let kept = parts.rig.label(cx, "side-sheet-status").unwrap_or_default();
+    assert!(kept.contains("Kept"), "{kept}");
+    parts.rig.key(cx, "alt-v");
+    parts.toggle(cx, "Largest files");
+    parts.rig.redraw(cx);
+    assert_eq!(parts.rig.label(cx, "side-sheet-status"), None);
+}
+
+#[gpui_kit::test]
+fn a_reset_after_keep_clears_the_kept_note(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    parts.browse(cx);
+    parts.rig.key(cx, "alt-v");
+    parts.toggle(cx, "Type bars");
+    parts.run(cx, "Keep as default");
+    parts.settle(cx);
+    parts.rig.key(cx, "alt-v");
+    parts.run(cx, "Reset to defaults");
+    parts.rig.redraw(cx);
+    assert_eq!(parts.rig.label(cx, "side-sheet-status"), None);
+}
+
+#[gpui_kit::test]
+fn keep_shows_saving_while_the_save_runs(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    parts.browse(cx);
+    parts.rig.key(cx, "alt-v");
+    parts.toggle(cx, "Type bars");
+    parts.rig.key(cx, "alt-v");
+    cx.update_window(parts.rig.window, |_, window, cx| {
+        window.input("Keep as default", cx)
+    })
+    .expect("window");
+    cx.run_until_parked();
+    cx.update_window(parts.rig.window, |_, window, cx| window.press("enter", cx))
+        .expect("window");
+    let note = parts.rig.read(cx, |view| view.preview.view.note());
+    assert_eq!(note.as_deref(), Some("Saving\u{2026}"));
+    parts.settle(cx);
+    let note = parts.rig.read(cx, |view| view.preview.view.note());
+    assert_eq!(
+        note.as_deref(),
+        Some("Kept as the default in ferrite.toml.")
+    );
+}
+
+fn dispatch(parts: &Parts, cx: &mut TestAppContext, action: Box<dyn gpui_kit::Action>) {
+    cx.update_window(parts.rig.window, |_, window, cx| {
+        window.dispatch_action(action, cx)
+    })
+    .expect("window");
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn the_type_bars_command_toggles_the_part(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    parts.browse(cx);
+    dispatch(&parts, cx, Box::new(ToggleTypeBars));
+    parts.rig.redraw(cx);
+    assert!(!parts.bars(cx));
+    assert!(parts.largest(cx));
+}
+
+#[gpui_kit::test]
+fn the_largest_files_command_toggles_the_part(cx: &mut TestAppContext) {
+    let parts = parts(cx, Values::default());
+    parts.browse(cx);
+    dispatch(&parts, cx, Box::new(ToggleLargestFiles));
+    parts.rig.redraw(cx);
+    assert!(!parts.largest(cx));
+    assert!(parts.bars(cx));
 }

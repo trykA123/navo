@@ -21,12 +21,6 @@ fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, DbError> {
     postcard::to_stdvec(value).map_err(|error| DbError::Encode(error.to_string()))
 }
 
-const VIEWER_MODULE: &str = "viewer";
-
-fn split_key(extension: &str) -> String {
-    format!("markdown-split.{extension}")
-}
-
 fn size_of(stamp: Stamp) -> i64 {
     i64::try_from(stamp.size).unwrap_or(i64::MAX)
 }
@@ -131,31 +125,6 @@ impl Db {
             "DELETE FROM search_history WHERE rowid NOT IN
              (SELECT rowid FROM search_history ORDER BY used_at DESC, rowid DESC LIMIT ?1)",
             [i64::try_from(SearchHistory::MAX).unwrap_or(i64::MAX)],
-        )?;
-        Ok(())
-    }
-
-    pub fn markdown_split(&self, extension: &str) -> Result<Option<bool>, DbError> {
-        let value = self
-            .connection()
-            .query_row(
-                "SELECT value FROM module_kv WHERE module = ?1 AND key = ?2",
-                [VIEWER_MODULE, &split_key(extension)],
-                |row| row.get::<_, Vec<u8>>(0),
-            )
-            .optional()?;
-        Ok(value.map(|value| value.first().is_some_and(|byte| *byte != 0)))
-    }
-
-    pub fn save_markdown_split(&self, extension: &str, is_shown: bool) -> Result<(), DbError> {
-        self.connection().execute(
-            "INSERT INTO module_kv (module, key, value) VALUES (?1, ?2, ?3)
-             ON CONFLICT (module, key) DO UPDATE SET value = excluded.value",
-            params![
-                VIEWER_MODULE,
-                split_key(extension),
-                vec![u8::from(is_shown)]
-            ],
         )?;
         Ok(())
     }

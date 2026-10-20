@@ -42,6 +42,14 @@ impl EditorBody {
         self.0.read(cx).editor.clone()
     }
 
+    pub(in crate::window_view::viewer) fn has_preview_focus(
+        &self,
+        window: &Window,
+        cx: &App,
+    ) -> bool {
+        self.0.read(cx).is_preview_focused(window, cx)
+    }
+
     #[cfg(test)]
     pub(in crate::window_view::viewer) fn find_text(&self, cx: &App) -> Option<String> {
         self.0.read(cx).typed(cx)

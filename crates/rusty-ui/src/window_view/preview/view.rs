@@ -1,4 +1,4 @@
-use gpui_kit::{Action, Focusable, Subscription, WeakEntity, point};
+use gpui_kit::{Action, Focusable, Stateful, Subscription, WeakEntity, point};
 use rusty_core::shell_menu::{ItemId, ShellMenu};
 
 use super::browse::{ToggleLargestFiles, ToggleTypeBars, ViewMenu};
@@ -105,6 +105,16 @@ impl FerriteWindow {
         }
     }
 
+    pub(super) fn part_actions(frame: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        frame
+            .on_action(cx.listener(|this, _: &ToggleTypeBars, window, cx| {
+                this.run_preview_op(Op::Toggle(Field::PreviewTypeBars), window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleLargestFiles, window, cx| {
+                this.run_preview_op(Op::Toggle(Field::PreviewLargestFiles), window, cx);
+            }))
+    }
+
     pub(in crate::window_view) fn preview_shows(&self, field: Field) -> bool {
         self.preview
             .view
@@ -193,17 +203,17 @@ impl FerriteWindow {
         let kept = match op {
             Op::Toggle(field) => {
                 self.preview.view.parts.toggle(&PREVIEW, field, &values);
+                self.preview.view.note = None;
                 Vec::new()
             }
             Op::Reset => {
                 self.preview.view.parts.reset();
+                self.preview.view.note = None;
                 Vec::new()
             }
             Op::Keep => {
                 let kept = self.preview.view.parts.keep(&values);
-                if kept.is_empty() {
-                    self.preview.view.note = Some(empty_keep_note(&self.preview.view.parts).into());
-                }
+                self.preview.view.note = Some(empty_keep_note(&self.preview.view.parts).into());
                 kept
             }
         };

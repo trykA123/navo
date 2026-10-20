@@ -70,6 +70,7 @@ impl FerriteWindow {
         };
         let mut folder = self.start_folder(crumb.target, None);
         match crumb.carry {
+            Some(Carry::Largest(_)) if folder.hides_largest => folder.want_spot(),
             Some(carry) => folder.adopt(carry),
             None => folder.want_spot(),
         }
@@ -101,6 +102,7 @@ impl FerriteWindow {
         self.preview.is_stale = false;
         self.preview.loads += 1;
         self.preview.shown = Some(shown);
+        self.apply_preview_parts();
         let target = self.preview.browse_target(cx);
         window.focus(&target, cx);
         cx.notify();

@@ -139,9 +139,9 @@ impl FerriteWindow {
         } else {
             sheet.hint(&["escape"], "Close")
         };
-        let marks = self.preview.folder().and_then(|f| f.marks.summary());
-        let marks = marks.or_else(|| self.preview.view.note().map(|note| note.to_string()));
-        match marks {
+        let note = self.preview.view.note().map(|note| note.to_string());
+        let summary = self.preview.folder().and_then(|f| f.marks.summary());
+        match note.or(summary) {
             Some(text) => sheet.status(text),
             None => sheet,
         }

@@ -129,6 +129,32 @@ fn ctrl_shift_v_toggles_the_split_for_the_open_file_only(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn hiding_the_split_keeps_the_focus_in_a_bar(cx: &mut TestAppContext) {
+    let (window, view) = open_editing(cx, "notes.md", NOTES);
+    press(cx, window, &view, "ctrl-g");
+    redraw(cx, window);
+    assert_eq!(
+        focused_side(cx, window, &view),
+        None,
+        "the bar has the focus"
+    );
+    press(cx, window, &view, "ctrl-shift-v");
+    settle(cx, &view);
+    assert!(!shows_preview(cx, window));
+    assert_eq!(focused_side(cx, window, &view), None);
+}
+
+#[gpui_kit::test]
+fn hiding_the_split_from_the_preview_moves_the_focus_to_the_source(cx: &mut TestAppContext) {
+    let (window, view) = open_editing(cx, "notes.md", NOTES);
+    press(cx, window, &view, "f6");
+    assert_eq!(focused_side(cx, window, &view), Some("preview"));
+    press(cx, window, &view, "ctrl-shift-v");
+    settle(cx, &view);
+    assert_eq!(focused_side(cx, window, &view), Some("source"));
+}
+
+#[gpui_kit::test]
 fn a_non_markdown_file_has_no_split(cx: &mut TestAppContext) {
     let (window, view) = open_editing(cx, "notes.txt", NOTES);
     assert!(!shows_preview(cx, window));

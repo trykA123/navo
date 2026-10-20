@@ -2,6 +2,7 @@ use super::ViewOp;
 use crate::prelude::*;
 use crate::settings::Field;
 use crate::window_view::FerriteWindow;
+use crate::window_view::viewer::editor::EditorBody;
 
 impl FerriteWindow {
     pub(super) fn toggle_split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -35,7 +36,11 @@ impl FerriteWindow {
                     .parts
                     .is_shown(set, Field::MarkdownPreviewSplit, &self.values)
         });
-        if is_hidden {
+        let had_focus = body
+            .as_any()
+            .downcast_ref::<EditorBody>()
+            .is_some_and(|editor| editor.has_preview_focus(window, cx));
+        if is_hidden && had_focus {
             window.focus(&body.focus_handle(cx), cx);
         }
     }
