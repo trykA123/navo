@@ -106,6 +106,11 @@ fn expected_totals(items: &[ScannedItem], plan: &OperationPlan) -> Totals {
             folders: 0,
             bytes: 0,
         },
+        (OpKind::Link, _) => Totals {
+            files: count(|s| matches!(s, Step::MakeLink { .. })),
+            folders: 0,
+            bytes: 0,
+        },
         (OpKind::Delete, _) => Totals {
             files: count(|s| matches!(s, Step::RemoveFile { .. })),
             folders: count(|s| matches!(s, Step::RemoveFolder { .. })),
@@ -151,6 +156,7 @@ fn locations(step: &Step) -> Vec<&Location> {
         Step::CopyFile { source, target, .. } | Step::Rename { source, target } => {
             vec![source, target]
         }
+        Step::MakeLink { target_of, at } => vec![target_of, at],
         Step::MakeFolder { target } => vec![target],
         Step::Recycle { location }
         | Step::RemoveFile { location }

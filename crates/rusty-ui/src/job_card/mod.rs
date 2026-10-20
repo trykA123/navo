@@ -33,6 +33,7 @@ fn kind_icon(kind: OpKind) -> IconName {
         OpKind::Move => IconName::FolderInput,
         OpKind::Recycle | OpKind::Delete => IconName::Trash,
         OpKind::Rename => IconName::Pencil,
+        OpKind::Link => IconName::Link,
     }
 }
 

@@ -4,6 +4,7 @@ mod case_twins;
 mod conflicts;
 mod copy;
 mod delete;
+mod link;
 mod move_;
 mod planned;
 mod props;

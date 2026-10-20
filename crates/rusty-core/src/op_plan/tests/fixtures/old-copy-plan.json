@@ -1,0 +1,10 @@
+{
+  "kind": "Copy",
+  "steps": [
+    { "MakeFolder": { "target": "/dest/docs" } },
+    { "CopyFile": { "source": "/src/docs/note.txt", "target": "/dest/docs/note.txt", "size": 8 } }
+  ],
+  "totals": { "files": 1, "folders": 1, "bytes": 8 },
+  "conflicts": [],
+  "risks": []
+}

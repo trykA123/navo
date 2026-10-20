@@ -23,6 +23,10 @@ activity-renaming = Renaming { $count ->
     [one] { $files } file
    *[other] { $files } files
 }
+activity-linking = Creating { $count ->
+    [one] { $files } shortcut
+   *[other] { $files } shortcuts
+} in { $target }
 activity-progress = { $done } of { $total }
 activity-left = { $time } left
 activity-pausing = Pausing…
@@ -47,6 +51,10 @@ activity-rename-failed = { $count ->
     [one] { $files } file could not be renamed
    *[other] { $files } files could not be renamed
 }
+activity-link-failed = { $count ->
+    [one] { $files } shortcut could not be created
+   *[other] { $files } shortcuts could not be created
+}
 activity-copied = Copied { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -67,11 +75,20 @@ activity-renamed = Renamed { $count ->
     [one] { $items } item
    *[other] { $items } items
 }
+activity-linked = Created { $count ->
+    [one] { $items } shortcut
+   *[other] { $items } shortcuts
+} in { $target }
 activity-dragging = Dragging { $count ->
     [one] { $items } item
    *[other] { $items } items
 }
 activity-drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
+files-link-confirm = Create shortcuts for { $items } in { $target }?
+files-link-label = Create shortcuts
+link-verb = Create shortcuts for
+link-verb-running = Creating shortcuts for
+link-verb-done = Created shortcuts for
 files-rename-confirm = Rename { $items }?
 activity-percent = { $percent }%
 activity-chip-copy = Copy { $percent }
@@ -79,12 +96,14 @@ activity-chip-move = Move { $percent }
 activity-chip-delete = Delete { $percent }
 activity-chip-recycle = Recycle { $percent }
 activity-chip-rename = Rename { $percent }
+activity-chip-link = Shortcuts { $percent }
 activity-chip-paused = { $chip } · Paused
 activity-chip-copy-failed = Copy failed
 activity-chip-move-failed = Move failed
 activity-chip-delete-failed = Delete failed
 activity-chip-recycle-failed = Recycle failed
 activity-chip-rename-failed = Rename failed
+activity-chip-link-failed = Shortcuts failed
 activity-chip-copied = Copied { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -104,6 +123,10 @@ activity-chip-recycled = Recycled { $count ->
 activity-chip-renamed = Renamed { $count ->
     [one] { $items } item
    *[other] { $items } items
+}
+activity-chip-linked = Created { $count ->
+    [one] { $items } shortcut
+   *[other] { $items } shortcuts
 }
 activity-strip = Activity
 activity-pause = Pause

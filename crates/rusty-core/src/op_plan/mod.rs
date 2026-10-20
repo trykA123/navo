@@ -20,6 +20,7 @@ pub enum OpKind {
     Recycle,
     Delete,
     Rename,
+    Link,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,6 +93,10 @@ pub enum Step {
     RemoveFolder {
         location: Location,
     },
+    MakeLink {
+        target_of: Location,
+        at: Location,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,11 +156,12 @@ pub fn plan(request: &PlanRequest) -> OperationPlan {
             walk.copy(target);
             walk.remove_moved();
         }
+        (OpKind::Link, Some(target)) => walk.link_tops(target),
         (OpKind::Recycle, _) => recycle(request, &mut walk),
         (OpKind::Delete, _) => {
             walk.steps = request.items.iter().rev().map(build::removal).collect();
         }
-        (OpKind::Copy | OpKind::Move, None) | (OpKind::Rename, _) => {}
+        (OpKind::Copy | OpKind::Move | OpKind::Link, None) | (OpKind::Rename, _) => {}
     }
     let totals = risks::totals(request, &walk.steps, &walk.moved);
     let risks = risks::risks(request, &walk, &totals);

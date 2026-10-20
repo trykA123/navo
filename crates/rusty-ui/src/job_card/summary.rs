@@ -3,6 +3,8 @@ use std::time::Duration;
 use gpui_kit::SharedString;
 use rusty_core::OpKind;
 
+use rusty_l10n::tr;
+
 use crate::format;
 use crate::job_row::JobRowState;
 
@@ -30,14 +32,16 @@ pub struct JobInfo {
     pub pause: Pause,
 }
 
-fn verbs(kind: OpKind) -> [&'static str; 3] {
+fn verbs(kind: OpKind) -> [String; 3] {
     match kind {
         OpKind::Copy => ["Copy", "Copying", "Copied"],
         OpKind::Move => ["Move", "Moving", "Moved"],
         OpKind::Recycle => ["Recycle", "Recycling", "Recycled"],
         OpKind::Delete => ["Delete", "Deleting", "Deleted"],
         OpKind::Rename => ["Rename", "Renaming", "Renamed"],
+        OpKind::Link => return ["link-verb", "link-verb-running", "link-verb-done"].map(tr),
     }
+    .map(str::to_owned)
 }
 
 fn fraction_of(done: u64, total: u64) -> f32 {
@@ -75,14 +79,15 @@ impl JobInfo {
     }
 
     pub fn name(&self) -> String {
-        format!("{} {}", verbs(self.kind)[0], self.items_text())
+        format!("{} {}", verbs(self.kind)[0].as_str(), self.items_text())
     }
 
     pub fn heading(&self) -> String {
+        let [name, running, done] = verbs(self.kind);
         let verb = match self.state {
-            JobRowState::Running => verbs(self.kind)[1],
-            JobRowState::Done => verbs(self.kind)[2],
-            JobRowState::Failed(_) | JobRowState::Cancelled => verbs(self.kind)[0],
+            JobRowState::Running => running,
+            JobRowState::Done => done,
+            JobRowState::Failed(_) | JobRowState::Cancelled => name,
         };
         format!("{verb} {}", self.items_text())
     }

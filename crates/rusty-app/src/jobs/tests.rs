@@ -67,6 +67,33 @@ fn run(fs: &FakeFs, plan: &OperationPlan, journal: &SharedJournal, finish: bool)
 }
 
 #[test]
+fn a_link_plan_round_trips_through_the_journal() {
+    let fs = fake();
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("ferrite.db");
+    let plan = plan(&PlanRequest {
+        kind: OpKind::Link,
+        items: scan(&fs, &[fs.location("home/docs")], &CancelToken::new()).unwrap(),
+        target: Some(fs.location("dest")),
+        existing: Vec::new(),
+        policy: ConflictPolicy::Ask,
+        same_volume: true,
+        protected: Vec::new(),
+    });
+    let journal = open(&file).unwrap();
+    let log = log_factory(Arc::clone(&journal))(&plan).unwrap();
+    drop((log, journal));
+    let jobs = lock(&open(&file).unwrap()).unfinished().unwrap();
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].kind, "link");
+    assert_eq!(
+        serde_json::from_slice::<OperationPlan>(&jobs[0].plan).unwrap(),
+        plan
+    );
+    assert_eq!(jobs[0].steps.len(), 1);
+}
+
+#[test]
 fn every_step_of_a_job_is_journaled() {
     let fs = fake();
     let journal = journal();

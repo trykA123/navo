@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use rusty_core::{Location, OpKind, OperationPlan};
 use rusty_fs::CopyMode;
-use rusty_l10n::t;
+use rusty_l10n::{t, tr};
 
 use super::FerriteWindow;
 use crate::activity::ActivityId;
@@ -25,11 +25,28 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
     let count = items(pending.sources.len());
     let target = target_text(pending.target.as_ref());
     let (title, label) = match pending.plan.kind {
-        OpKind::Copy => (format!("Copy {count} to {target}?"), "Copy"),
-        OpKind::Move => (format!("Move {count} to {target}?"), "Move"),
-        OpKind::Recycle => (format!("Move {count} to the Recycle Bin?"), "Recycle"),
-        OpKind::Delete => (format!("Delete {count} permanently?"), "Delete permanently"),
-        OpKind::Rename => (t!("files-rename-confirm", items = count.as_str()), "Rename"),
+        OpKind::Copy => (format!("Copy {count} to {target}?"), "Copy".to_owned()),
+        OpKind::Move => (format!("Move {count} to {target}?"), "Move".to_owned()),
+        OpKind::Recycle => (
+            format!("Move {count} to the Recycle Bin?"),
+            "Recycle".to_owned(),
+        ),
+        OpKind::Delete => (
+            format!("Delete {count} permanently?"),
+            "Delete permanently".to_owned(),
+        ),
+        OpKind::Rename => (
+            t!("files-rename-confirm", items = count.as_str()),
+            "Rename".to_owned(),
+        ),
+        OpKind::Link => (
+            t!(
+                "files-link-confirm",
+                items = count.as_str(),
+                target = target
+            ),
+            tr("files-link-label"),
+        ),
     };
     let protected = pending.is_protected();
     ConfirmProps {
