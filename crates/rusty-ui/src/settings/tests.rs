@@ -364,3 +364,16 @@ fn the_copy_mode_starts_auto_and_follows_the_pick() {
     assert_eq!(standard.copy_mode(), rusty_fs::CopyMode::Standard);
     assert!(standard.is_changed(Field::CopyMode));
 }
+
+#[test]
+fn files_has_the_drop_confirm_row_defaulting_to_never() {
+    let row = spec(Field::DropConfirm);
+    assert_eq!(row.section, Section::Files);
+    assert_eq!(row.key, "files.drop-confirm");
+    let Control::Choices(options, Look::Segments) = row.control else {
+        panic!("drop confirm is not segments: {:?}", row.control);
+    };
+    let toml: Vec<&str> = options.iter().map(|option| option.toml).collect();
+    assert_eq!(toml, ["never", "moves", "always"]);
+    assert_eq!(Values::default().get(Field::DropConfirm), &Value::Pick(0));
+}

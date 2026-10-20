@@ -118,6 +118,20 @@ fn both_hidden_files_values_parse() {
 }
 
 #[test]
+fn every_drop_confirm_value_parses_and_round_trips() {
+    for (text, value) in [
+        ("never", DropConfirm::Never),
+        ("moves", DropConfirm::Moves),
+        ("always", DropConfirm::Always),
+    ] {
+        let file = format!("[files]\ndrop-confirm = \"{text}\"\n");
+        let settings = parsed(&file);
+        assert_eq!(settings.files.drop_confirm, value);
+        assert_eq!(parsed(&to_toml(&settings)), settings);
+    }
+}
+
+#[test]
 fn the_legacy_show_hidden_key_is_ignored_quietly() {
     let old = "[files]\nshow-hidden = false\n\n[editor]\npath = \"code\"\n";
     let (settings, unknown) = parse(old).unwrap();

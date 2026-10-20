@@ -18,6 +18,7 @@ show-system = false
 folders-first = true
 sort = "name"
 sort-descending = false
+drop-confirm = "never"
 
 [selection]
 space-measures-folders = true

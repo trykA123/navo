@@ -37,6 +37,7 @@ fn files_defaults() {
     assert!(f.folders_first);
     assert_eq!(f.sort, SortKey::Name);
     assert!(!f.sort_descending);
+    assert_eq!(f.drop_confirm, DropConfirm::Never);
 }
 
 #[test]

@@ -58,6 +58,7 @@ fn files() -> impl Strategy<Value = Files> {
         folders_first: folders,
         sort,
         sort_descending: descending,
+        drop_confirm: DropConfirm::default(),
     })
 }
 

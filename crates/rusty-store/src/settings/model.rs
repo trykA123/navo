@@ -88,6 +88,7 @@ pub struct Files {
     pub folders_first: bool,
     pub sort: SortKey,
     pub sort_descending: bool,
+    pub drop_confirm: DropConfirm,
 }
 
 impl Default for Files {
@@ -98,8 +99,18 @@ impl Default for Files {
             folders_first: true,
             sort: SortKey::default(),
             sort_descending: false,
+            drop_confirm: DropConfirm::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DropConfirm {
+    #[default]
+    Never,
+    Moves,
+    Always,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
