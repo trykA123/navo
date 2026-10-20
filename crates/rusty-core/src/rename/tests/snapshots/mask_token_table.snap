@@ -1,0 +1,51 @@
+---
+source: crates/rusty-core/src/rename/tests/mask.rs
+expression: "lines.join(\"\\n\")"
+---
+[N] => [Name(All)]
+[N3] => [Name(At(3))]
+[N2-5] => [Name(Range(2, 5))]
+[N2,5] => [Name(Len(2, 5))]
+[N2-] => [Name(From(2))]
+[N-3] => [Name(At(-3))]
+[N-3,3] => [Name(Len(-3, 3))]
+[N2--2] => [Name(Range(2, -2))]
+[N-4--2] => [Name(Range(-4, -2))]
+[N-2-] => [Name(From(-2))]
+[E] => [Ext(All)]
+[E3] => [Ext(At(3))]
+[E2-5] => [Ext(Range(2, 5))]
+[E2,5] => [Ext(Len(2, 5))]
+[E2-] => [Ext(From(2))]
+[E-3,3] => [Ext(Len(-3, 3))]
+[P] => [Parent]
+[G] => [Grand]
+[C] => [Counter(None)]
+[C10+5:3] => [Counter(Some(CounterSpec { start: 10, step: 5, digits: 3 }))]
+[Y] => [Year]
+[y] => [ShortYear]
+[M] => [Month]
+[D] => [Day]
+[h] => [Hour]
+[i] => [Minute]
+[s] => [Second]
+[d] => [Date]
+[t] => [Time]
+[U] => [Case(Upper)]
+[L] => [Case(Lower)]
+[F] => [Case(Words)]
+[n] => [Case(Original)]
+[=exif.date] => [Field { group: "exif", field: "date" }]
+[=audio.artist] => [Field { group: "audio", field: "artist" }]
+[=file.size] => [Field { group: "file", field: "size" }]
+[=exif] => error: MaskError { at: 1, kind: BadField }
+[=Exif.date] => error: MaskError { at: 1, kind: BadField }
+[[ => [Text("[")]
+]] => [Text("]")]
+a[[N]]b => [Text("a[N]b")]
+[Q] => error: MaskError { at: 1, kind: UnknownToken }
+[N2--] => error: MaskError { at: 1, kind: BadSpan }
+[C0+0:3] => error: MaskError { at: 1, kind: BadCounter }
+x[ => error: MaskError { at: 2, kind: Unclosed }
+x] => error: MaskError { at: 2, kind: StrayClose }
+[N2-5 => error: MaskError { at: 1, kind: Unclosed }
