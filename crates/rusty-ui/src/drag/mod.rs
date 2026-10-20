@@ -1,4 +1,5 @@
 mod badge;
+mod landing;
 
 #[cfg(test)]
 mod tests;
@@ -9,6 +10,7 @@ use rusty_l10n::{t, tr};
 use crate::SharedString;
 
 pub use badge::DragBadge;
+pub use landing::Landing;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileDrag {

@@ -9,6 +9,8 @@ use gpui_kit::{
 };
 
 use super::{Tooltip, icon};
+use crate::drag::Landing;
+use crate::file_list::DropPayload;
 use crate::file_list::row::inset_ring;
 use crate::tokens::{self, Theme};
 
@@ -40,6 +42,7 @@ pub struct Tabs {
     selected: usize,
     is_highlighted: bool,
     on_select: Option<SelectHandler>,
+    landing: Landing<usize>,
 }
 
 impl Tabs {
@@ -50,6 +53,7 @@ impl Tabs {
             selected: 0,
             is_highlighted: false,
             on_select: None,
+            landing: Landing::default(),
         }
     }
 
@@ -67,6 +71,26 @@ impl Tabs {
         self.on_select = Some(Rc::new(handler));
         self
     }
+
+    pub(crate) fn set_landing(&mut self, landing: Landing<usize>) {
+        self.landing = landing;
+    }
+
+    pub fn on_drop(
+        mut self,
+        handler: impl Fn(&usize, &DropPayload, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_drop(handler);
+        self
+    }
+
+    pub fn on_hover(
+        mut self,
+        handler: impl Fn(&usize, bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_hover(handler);
+        self
+    }
 }
 
 struct TabProps<'a> {
@@ -76,6 +100,7 @@ struct TabProps<'a> {
     is_selected: bool,
     is_highlighted: bool,
     on_select: Option<SelectHandler>,
+    landing: Landing<usize>,
 }
 
 fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
@@ -105,6 +130,7 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
         .when_some(props.on_select, |base, handler| {
             base.on_click(move |_, window, cx| handler(&index, window, cx))
         });
+    let base = props.landing.accept(base, (index, c.accent));
     match (props.is_selected, props.is_highlighted) {
         (false, _) => base.hover(|style| style.bg(c.hover)),
         (true, true) => base
@@ -124,6 +150,7 @@ impl RenderOnce for Tabs {
         let selected = self.selected;
         let is_highlighted = self.is_highlighted;
         let on_select = self.on_select;
+        let landing = self.landing;
         let tabs = self.tabs.into_iter().enumerate().map(|(index, tab)| {
             let props = TabProps {
                 theme: t,
@@ -132,6 +159,7 @@ impl RenderOnce for Tabs {
                 is_selected: index == selected,
                 is_highlighted,
                 on_select: on_select.clone(),
+                landing: landing.clone(),
             };
             render_tab(tab, props)
         });

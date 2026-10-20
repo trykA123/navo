@@ -27,6 +27,8 @@ pub use path_bar::PathBar;
 pub use path_input::PathInput;
 pub use segments::{PathSegment, path_segments};
 
+use crate::drag::Landing;
+use crate::file_list::DropPayload;
 use crate::primitives::{IconName, Tab, Tabs, icon};
 use crate::tokens;
 
@@ -44,6 +46,7 @@ pub struct PaneTabs {
     active: usize,
     is_highlighted: bool,
     on_command: Option<CommandHandler>,
+    landing: Landing<usize>,
 }
 
 impl PaneTabs {
@@ -58,6 +61,7 @@ impl PaneTabs {
             active,
             is_highlighted: false,
             on_command: None,
+            landing: Landing::default(),
         }
     }
 
@@ -71,6 +75,22 @@ impl PaneTabs {
         handler: impl Fn(&Command, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_command = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn on_drop(
+        mut self,
+        handler: impl Fn(&usize, &DropPayload, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_drop(handler);
+        self
+    }
+
+    pub fn on_hover(
+        mut self,
+        handler: impl Fn(&usize, bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_hover(handler);
         self
     }
 }
@@ -108,9 +128,10 @@ impl RenderOnce for PaneTabs {
             .titles
             .into_iter()
             .map(|title| Tab::new(title).icon(IconName::Folder));
-        let tabs = Tabs::new(self.id, tabs)
+        let mut tabs = Tabs::new(self.id, tabs)
             .selected(self.active)
             .highlighted(self.is_highlighted);
+        tabs.set_landing(self.landing);
         let plus = new_tab_button(self.on_command.clone(), cx);
         let tabs = match self.on_command {
             Some(handler) => tabs.on_select(move |index, window, cx| {

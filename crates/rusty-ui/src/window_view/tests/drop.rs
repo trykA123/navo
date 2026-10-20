@@ -5,12 +5,13 @@ use gpui_kit::{
     AnyWindowHandle, AppContext as _, Capslock, Entity, InputEvent as _, Modifiers,
     ModifiersChangedEvent, MouseButton, Pixels, Point, TestAppContext, point, px,
 };
-use rusty_core::{DropOp, Location, OpKind, PaneId};
+use rusty_core::{Command, DropOp, Location, OpKind, PaneId};
 use rusty_fs::{FakeFs, Provider};
 use rusty_l10n::tr;
 
 use super::{home_beside_dest, open_options, options_for, press, settle, with_fkey_bar};
 use crate::drag::Hover;
+use crate::pane_chrome::path_segments;
 use crate::settings::{Change, Field, Value, Values};
 use crate::test_pointer::{self, ctrl, dispatch, moved, up};
 use crate::window_view::FerriteWindow;
@@ -127,6 +128,54 @@ impl Rig {
     fn drop_on(&self, cx: &mut TestAppContext, (row, to): (usize, Point<Pixels>), mods: Modifiers) {
         self.drag_to(cx, (row, to), mods);
         self.release(cx, to, mods);
+    }
+
+    fn second_tab(&self, cx: &mut TestAppContext, pane: PaneId, path: &str) {
+        let open = Command::PaneOpenTab {
+            location: Some(self.fs.location(path)),
+        };
+        let back = Command::PaneActivateTab { tab: 0 };
+        cx.update_window(self.window, |_, window, cx| {
+            self.view.update(cx, |view, cx| {
+                view.focus_pane(pane);
+                view.apply(&open, window, cx);
+                view.apply(&back, window, cx);
+                view.focus_pane(self.home);
+            });
+        })
+        .expect("window");
+        settle(cx, &self.view);
+    }
+
+    fn tab_centre(&self, cx: &mut TestAppContext, tab: usize) -> Point<Pixels> {
+        let pane = self.dest.get();
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            window.within(("tabs", pane)).find(tab).bounds().center()
+        })
+        .expect("window")
+    }
+
+    fn crumb_centre(&self, cx: &mut TestAppContext, crumb: usize) -> Point<Pixels> {
+        let pane = self.dest.get();
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .within(("path", pane))
+                .find(("segment", crumb))
+                .bounds()
+                .center()
+        })
+        .expect("window")
+    }
+
+    fn active_tab(&self, cx: &mut TestAppContext, pane: PaneId) -> usize {
+        self.view.read_with(cx, |view, _| {
+            view.browser
+                .state()
+                .pane(pane)
+                .map_or(0, |pane| pane.active_index())
+        })
     }
 
     fn key(&self, cx: &mut TestAppContext, key: &str) {
@@ -396,4 +445,47 @@ fn focus_stays_in_the_source_pane_after_a_drop(cx: &mut TestAppContext) {
     let before = cursor(cx).expect("cursor");
     rig.key(cx, "down");
     assert_eq!(cursor(cx), Some(before + 1));
+}
+
+#[gpui_kit::test]
+fn a_drop_on_another_tab_copies_into_its_folder_without_activating_it(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.second_tab(cx, rig.dest, "home/docs");
+    let to = rig.tab_centre(cx, 1);
+    rig.drag_to(cx, (A, to), ctrl());
+    let hover = rig.hover(cx).expect("hover");
+    assert_eq!(hover.op, Some(DropOp::Copy));
+    assert_eq!(hover.target_label.as_ref(), "docs");
+    rig.release(cx, to, ctrl());
+    assert_eq!(
+        rig.jobs(cx),
+        [(OpKind::Copy, Some(rig.fs.location("home/docs")))]
+    );
+    assert!(rig.exists("home/docs/a.txt"));
+    assert!(rig.exists("home/a.txt"));
+    assert_eq!(rig.active_tab(cx, rig.dest), 0);
+}
+
+#[gpui_kit::test]
+fn a_drop_on_the_tab_of_the_sources_own_folder_is_refused(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.second_tab(cx, rig.dest, "home");
+    let to = rig.tab_centre(cx, 1);
+    rig.drop_on(cx, (A, to), Modifiers::default());
+    assert!(rig.jobs(cx).is_empty());
+    assert_eq!(rig.notice(cx), Some(tr("drag-refused-same-folder")));
+}
+
+#[gpui_kit::test]
+fn a_drop_on_the_root_crumb_targets_the_root(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let root = path_segments(&rig.fs.location("dest"))[0].location.clone();
+    let to = rig.crumb_centre(cx, 0);
+    rig.drag_to(cx, (A, to), Modifiers::default());
+    assert_eq!(
+        rig.hover(cx).map(|hover| hover.op),
+        Some(Some(DropOp::Move))
+    );
+    rig.release(cx, to, Modifiers::default());
+    assert_eq!(rig.jobs(cx), [(OpKind::Move, Some(root))]);
 }

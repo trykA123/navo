@@ -9,6 +9,8 @@ use gpui_kit::{
 use rusty_core::Location;
 
 use super::segments::{PathSegment, path_segments};
+use crate::drag::Landing;
+use crate::file_list::DropPayload;
 use crate::primitives::{IconName, icon};
 use crate::tokens::{self, Theme};
 
@@ -23,6 +25,7 @@ pub struct PathBar {
     location: Location,
     on_navigate: Option<NavigateHandler>,
     on_edit: Option<EditHandler>,
+    landing: Landing<Location>,
 }
 
 impl PathBar {
@@ -32,6 +35,7 @@ impl PathBar {
             location,
             on_navigate: None,
             on_edit: None,
+            landing: Landing::default(),
         }
     }
 
@@ -40,6 +44,22 @@ impl PathBar {
         handler: impl Fn(&Location, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_navigate = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn on_drop(
+        mut self,
+        handler: impl Fn(&Location, &DropPayload, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_drop(handler);
+        self
+    }
+
+    pub fn on_hover(
+        mut self,
+        handler: impl Fn(&Location, bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_hover(handler);
         self
     }
 
@@ -54,13 +74,14 @@ struct SegmentProps<'a> {
     index: usize,
     is_last: bool,
     on_navigate: Option<NavigateHandler>,
+    landing: Landing<Location>,
 }
 
 fn segment(item: PathSegment, props: SegmentProps) -> AnyElement {
     let t = props.theme;
     let c = &t.colors;
-    let target = item.location;
-    div()
+    let target = item.location.clone();
+    let crumb = div()
         .id(("segment", props.index))
         .role(Role::Button)
         .aria_label(item.label.clone())
@@ -75,7 +96,10 @@ fn segment(item: PathSegment, props: SegmentProps) -> AnyElement {
         .when_some(props.on_navigate, |d, handler| {
             d.on_click(move |_, window, cx| handler(&target, window, cx))
         })
-        .child(item.label)
+        .child(item.label);
+    props
+        .landing
+        .accept(crumb, (item.location, c.accent))
         .into_any_element()
 }
 
@@ -110,6 +134,7 @@ impl RenderOnce for PathBar {
                 index,
                 is_last: index == last,
                 on_navigate: self.on_navigate.clone(),
+                landing: self.landing.clone(),
             };
             crumbs.push(segment(item, props));
         }

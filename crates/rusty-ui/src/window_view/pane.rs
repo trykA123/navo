@@ -245,17 +245,19 @@ impl FerriteWindow {
         active: usize,
         cx: &mut Context<Self>,
     ) -> PaneTabs {
-        PaneTabs::new(("tabs", pane.get()), titles, active).on_command(cx.listener(
+        let tabs = PaneTabs::new(("tabs", pane.get()), titles, active).on_command(cx.listener(
             move |this: &mut Self, command: &Command, window, cx| {
                 this.focus_pane(pane);
                 this.apply(command, window, cx);
             },
-        ))
+        ));
+        Self::wire_tab_drops(tabs, pane, cx)
     }
 
     fn path_bar(pane: PaneId, location: Location, cx: &mut Context<Self>) -> PathBar {
         let edit = cx.weak_entity();
-        PathBar::new(("path", pane.get()), location)
+        let bar = PathBar::new(("path", pane.get()), location);
+        Self::wire_crumb_drops(bar, pane, cx)
             .on_navigate(
                 cx.listener(move |this: &mut Self, location: &Location, window, cx| {
                     let command = Command::PaneNavigate {

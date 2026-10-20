@@ -7,7 +7,7 @@ use crate::browser::{DropRequest, PasteRefusal, drop_refusal, same_volume};
 use crate::drag::{DragBadge, DragState, FileDrag, Hover, Refusal};
 use crate::file_list::{DropEvent, DropPayload, DropSpot, FileList};
 use crate::modifier_hints::HintsMode;
-use crate::pane_chrome::path_segments;
+use crate::pane_chrome::{PaneTabs, PathBar, path_segments};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 
@@ -15,8 +15,15 @@ pub(super) struct DragSession {
     sources: Vec<Location>,
     source_pane: PaneId,
     pub(super) state: Entity<DragState>,
-    over: Option<(PaneId, DropSpot)>,
+    over: Option<Over>,
     _escape: Subscription,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Over {
+    Spot(PaneId, DropSpot),
+    Tab(PaneId, usize),
+    Crumb(PaneId, Location),
 }
 
 fn keys_of(modifiers: &Modifiers) -> DropKeys {
@@ -198,11 +205,87 @@ impl FerriteWindow {
             return;
         };
         match spot {
-            Some(spot) => session.over = Some((pane, spot)),
-            None if session.over.is_some_and(|(over, _)| over == pane) => session.over = None,
+            Some(spot) => session.over = Some(Over::Spot(pane, spot)),
+            None if matches!(session.over, Some(Over::Spot(over, _)) if over == pane) => {
+                session.over = None;
+            }
             None => return,
         }
         self.show_hover(keys, cx);
+    }
+
+    fn place_hover(
+        &mut self,
+        (over, inside): (Over, bool),
+        keys: DropKeys,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session) = self.drag_session.as_mut() else {
+            return;
+        };
+        if inside {
+            session.over = Some(over);
+        } else if session.over.as_ref() == Some(&over) {
+            session.over = None;
+        } else {
+            return;
+        }
+        self.show_hover(keys, cx);
+    }
+
+    pub(super) fn wire_tab_drops(tabs: PaneTabs, pane: PaneId, cx: &mut Context<Self>) -> PaneTabs {
+        let (hover, drop) = (cx.weak_entity(), cx.weak_entity());
+        tabs.on_hover(move |tab, inside, window, cx| {
+            let keys = keys_of(&window.modifiers());
+            let _ = hover.update(cx, |view, cx| {
+                view.place_hover((Over::Tab(pane, *tab), inside), keys, cx);
+            });
+        })
+        .on_drop(move |tab, payload, window, cx| {
+            let _ = drop.update(cx, |view, cx| {
+                view.drop_on_tab((pane, *tab, payload), window, cx);
+            });
+        })
+    }
+
+    pub(super) fn wire_crumb_drops(bar: PathBar, pane: PaneId, cx: &mut Context<Self>) -> PathBar {
+        let (hover, drop) = (cx.weak_entity(), cx.weak_entity());
+        bar.on_hover(move |crumb, inside, window, cx| {
+            let keys = keys_of(&window.modifiers());
+            let _ = hover.update(cx, |view, cx| {
+                let over = Over::Crumb(pane, crumb.clone());
+                view.place_hover((over, inside), keys, cx);
+            });
+        })
+        .on_drop(move |crumb, payload, window, cx| {
+            let _ = drop.update(cx, |view, cx| {
+                view.drop_on((crumb.clone(), payload), window, cx);
+            });
+        })
+    }
+
+    fn drop_on_tab(
+        &mut self,
+        (pane, tab, payload): (PaneId, usize, &DropPayload),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(target) = self.tab_location(pane, tab) {
+            self.drop_on((target, payload), window, cx);
+        }
+    }
+
+    fn tab_location(&self, pane: PaneId, tab: usize) -> Option<Location> {
+        let pane = self.browser.state().pane(pane)?;
+        pane.tabs().get(tab).map(|tab| tab.location().clone())
+    }
+
+    fn over_target(&self, over: &Over) -> Option<Location> {
+        match over {
+            Over::Spot(pane, spot) => self.drop_target(*pane, *spot),
+            Over::Tab(pane, tab) => self.tab_location(*pane, *tab),
+            Over::Crumb(_, location) => Some(location.clone()),
+        }
     }
 
     pub(super) fn drag_modifiers(&mut self, modifiers: &Modifiers, cx: &mut Context<Self>) {
@@ -218,7 +301,8 @@ impl FerriteWindow {
         };
         let hover = session
             .over
-            .and_then(|(pane, spot)| self.drop_target(pane, spot))
+            .as_ref()
+            .and_then(|over| self.over_target(over))
             .map(|target| hover_of(&session.sources, &target, keys));
         session.state.update(cx, |state, cx| {
             if state.hover != hover {
