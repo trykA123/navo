@@ -27,3 +27,6 @@ space-kind-data = data
 space-kind-bss = bss
 space-kind-other = other
 space-kind-fill = linker fill
+viewer-space-share = { $percent } %
+viewer-space-more = { $count } more
+viewer-space-stripped = This file has no symbol table, so bytes cannot be traced to modules.

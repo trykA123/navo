@@ -58,6 +58,7 @@ pub use search::memory::MemoryLink;
 pub use space::{
     Item as StripItem, Label as StripLabel, MemoryStrip, Step as StripStep, StripData, StripEvent,
 };
+pub use space::{Treemap, TreemapEvent, TreemapGroup, TreemapPart};
 pub(in crate::window_view) use tree::FilterBack;
 pub use view_menu::view_menu;
 

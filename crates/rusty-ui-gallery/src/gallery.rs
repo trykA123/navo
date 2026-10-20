@@ -33,6 +33,7 @@ use crate::structured_sample::{
     TREE_NAME,
 };
 use crate::tokens_page;
+use crate::treemap_page::TreemapPage;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
@@ -87,7 +88,7 @@ pub struct Gallery {
     typed_path: Entity<DrivesPage>,
     kinds: Entity<KindsPage>,
     columns: Entity<ColumnsPage>,
-    drag: Entity<DragPage>,
+    drag_treemap: (Entity<DragPage>, Entity<TreemapPage>),
     strip: Entity<StripPage>,
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
@@ -139,7 +140,7 @@ impl Gallery {
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             kinds: cx.new(KindsPage::new),
             columns: cx.new(|cx| ColumnsPage::new(window, cx)),
-            drag: cx.new(DragPage::new),
+            drag_treemap: (cx.new(DragPage::new), cx.new(|_| TreemapPage::new())),
             strip: cx.new(StripPage::new),
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
@@ -348,7 +349,8 @@ impl Render for Gallery {
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::FileKinds => root.child(self.kinds.clone()),
             Page::Columns => root.child(self.columns.clone()),
-            Page::Drag => root.child(self.drag.clone()),
+            Page::Drag => root.child(self.drag_treemap.0.clone()),
+            Page::Treemap => root.child(self.drag_treemap.1.clone()),
             Page::MemoryStrip => root.child(self.strip.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),

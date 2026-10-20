@@ -323,4 +323,5 @@ pub const PAGES: [PageInfo; 93] = [
         "p38-c5-memory-strip",
         false,
     ),
+    info(Page::Treemap, "Treemap", "p38-c6-treemap", false),
 ];
