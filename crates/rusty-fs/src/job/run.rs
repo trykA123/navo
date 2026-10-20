@@ -21,7 +21,7 @@ pub(super) fn current_of(step: &Step) -> Location {
 pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
     match step {
         Step::CopyFile { size, .. } => (*size, 1),
-        Step::RemoveFile { .. } => (0, 1),
+        Step::RemoveFile { .. } | Step::MakeLink { .. } => (0, 1),
         Step::Rename { target, .. } if kind == OpKind::Rename && !is_temporary(target) => (0, 1),
         _ => (0, 0),
     }
@@ -140,7 +140,7 @@ pub(super) fn apply(
         Step::RemoveFile { location } => done(ops.remove_file(location)),
         Step::RemoveLink { location } => done(ops.remove_link(location)),
         Step::RemoveFolder { location } => done(ops.remove_empty_folder(location)),
-        Step::MakeLink { at, .. } => Err(not_supported(at)),
+        Step::MakeLink { target_of, at } => done(ops.make_link(target_of, at)),
     }
 }
 
@@ -184,11 +184,4 @@ fn make_folder(ctx: &mut JobContext<'_>, target: &Location) -> Result<StepOutcom
         return Ok(StepOutcome::Skipped);
     }
     ctx.ops.create_folder(target).map(|()| StepOutcome::Done)
-}
-
-pub(super) fn not_supported(at: &Location) -> FsError {
-    FsError {
-        location: Some(at.clone()),
-        ..FsError::new(FsErrorKind::NotSupportedYet)
-    }
 }

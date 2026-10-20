@@ -33,6 +33,37 @@ pub fn make_link(target_dir: &Path, source: &Path) -> Result<PathBuf, FsError> {
     ))
 }
 
+pub(super) fn link_at(target_of: &Location, at: &Location) -> Result<(), FsError> {
+    let source = link_path(target_of)?;
+    let place = link_path(at)?;
+    #[cfg(unix)]
+    let result = std::os::unix::fs::symlink(&source, &place);
+    #[cfg(windows)]
+    let result = {
+        let folder = place
+            .parent()
+            .ok_or_else(|| super::error(FsErrorKind::NameInvalid, at))?;
+        windows::Shortcut::new(folder, &source)?.publish(&place)
+    };
+    result.map_err(|e| super::io_error(&e, at))
+}
+
+#[cfg(unix)]
+fn link_path(location: &Location) -> Result<PathBuf, FsError> {
+    super::os_path(location)
+}
+
+#[cfg(windows)]
+fn link_path(location: &Location) -> Result<PathBuf, FsError> {
+    use std::os::windows::ffi::OsStringExt;
+    location
+        .is_local()
+        .then(|| location.path().to_wide())
+        .flatten()
+        .map(|units| PathBuf::from(OsString::from_wide(&units)))
+        .ok_or_else(|| super::error(FsErrorKind::NameInvalid, location))
+}
+
 fn link_name(name: &OsStr, number: u64) -> OsString {
     let mut name = name.to_os_string();
     #[cfg(windows)]

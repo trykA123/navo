@@ -258,7 +258,7 @@ fn roll_back_job(
             held: &held.files,
             placed: &held.placed,
             held_unreadable: held.unreadable > 0,
-            unsure: renames.then(|| first_not_done(job)).flatten(),
+            unsure: unsure_step(plan.kind, job),
         },
         &mut JobContext {
             ops,
@@ -280,11 +280,16 @@ fn roll_back_job(
     }
 }
 
-fn first_not_done(job: &UnfinishedJob) -> Option<u32> {
-    job.steps
+fn unsure_step(kind: OpKind, job: &UnfinishedJob) -> Option<u32> {
+    let step = job
+        .steps
         .iter()
-        .find(|step| step.state != StepState::Done)
-        .map(|step| step.seq)
+        .find(|step| step.state != StepState::Done)?;
+    match kind {
+        OpKind::Rename => Some(step.seq),
+        OpKind::Link if step.state == StepState::Pending => Some(step.seq),
+        _ => None,
+    }
 }
 
 fn unrestored(held: &[HeldFile], renames: bool) -> JobState {
@@ -318,3 +323,6 @@ mod parallel_tests;
 
 #[cfg(test)]
 mod rename_tests;
+
+#[cfg(test)]
+mod link_tests;

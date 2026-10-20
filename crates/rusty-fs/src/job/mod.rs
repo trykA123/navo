@@ -1,6 +1,7 @@
 mod aside;
 mod copy;
 mod hold;
+mod link;
 mod parallel;
 mod pool;
 mod rename;

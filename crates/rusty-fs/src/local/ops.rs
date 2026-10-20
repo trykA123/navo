@@ -129,6 +129,10 @@ impl ProviderOps for LocalFs {
         trash::delete(os_path(location)?).map_err(|_| error(FsErrorKind::Unknown, location))
     }
 
+    fn make_link(&self, target_of: &Location, at: &Location) -> Result<(), FsError> {
+        super::link::link_at(target_of, at)
+    }
+
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         super::platform::volume_serial(&os_path(location)?)
             .map(Some)

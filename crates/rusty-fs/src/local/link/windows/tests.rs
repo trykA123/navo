@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 use std::fs;
-use std::os::windows::ffi::OsStringExt;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::PathBuf;
 
 use windows::Win32::System::Com::STGM_READ;
@@ -39,6 +39,28 @@ fn shortcut_resolves_to_source() {
         fs::canonicalize(resolved).unwrap(),
         fs::canonicalize(source).unwrap()
     );
+}
+
+#[test]
+fn provider_shortcut_resolves_to_source_and_is_never_overwritten() {
+    let (_directory, source, target) = fixture();
+    let at = target.join("report.txt - Shortcut.lnk");
+    let ops = crate::LocalFs::new();
+    crate::ProviderOps::make_link(&ops, &location_of(&source), &location_of(&at)).unwrap();
+    let resolved = fs::canonicalize(shortcut_target(&at)).unwrap();
+    assert_eq!(resolved, fs::canonicalize(&source).unwrap());
+    let before = fs::read(&at).unwrap();
+    let other = target.join("other.txt");
+    fs::write(&other, b"other").unwrap();
+    let clash = crate::ProviderOps::make_link(&ops, &location_of(&other), &location_of(&at));
+    assert!(clash.is_err());
+    assert_eq!(fs::read(&at).unwrap(), before);
+    assert_eq!(fs::read_dir(&target).unwrap().count(), 2);
+}
+
+fn location_of(path: &Path) -> rusty_core::Location {
+    let units: Vec<u16> = path.as_os_str().encode_wide().collect();
+    rusty_core::Location::local(rusty_core::ProviderPath::from_wide(&units)).unwrap()
 }
 
 fn shortcut_target(path: &Path) -> PathBuf {

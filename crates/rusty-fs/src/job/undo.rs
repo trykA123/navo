@@ -2,10 +2,10 @@ use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
 use super::aside::presence;
 use super::copy::{overwrites, remove_if_present, temp_of};
+use super::link::undo_link;
 use super::restore::{
     Restored, gone_or_folder_deleted, is_placed, keep, matches_stamp, restore, surely_absent,
 };
-use super::run::not_supported;
 use super::{FileStamp, HeldFile, JobContext, JobOutcome, Journaled, PlacedFile, StepOutcome};
 use crate::{ProviderOps, already_exists};
 
@@ -98,7 +98,7 @@ fn undo(
             Some(held) => undo_move_over(source, target, held, ctx),
             None => undo_rename(ops, source, target),
         },
-        Step::MakeLink { at, .. } => Err(not_supported(at)),
+        Step::MakeLink { at, .. } => undo_link(ops, at),
         Step::Recycle { .. }
         | Step::RemoveFile { .. }
         | Step::RemoveLink { .. }
@@ -118,8 +118,10 @@ fn undo_rename(
 }
 
 fn undo_unsure(ops: &dyn ProviderOps, step: &Step) -> Result<StepOutcome, FsError> {
-    let Step::Rename { source, target } = step else {
-        return Ok(StepOutcome::Skipped);
+    let (source, target) = match step {
+        Step::Rename { source, target } => (source, target),
+        Step::MakeLink { at, .. } => return undo_link(ops, at),
+        _ => return Ok(StepOutcome::Skipped),
     };
     if presence(ops, source)?.is_some() || presence(ops, target)?.is_none() {
         return Ok(StepOutcome::Skipped);
