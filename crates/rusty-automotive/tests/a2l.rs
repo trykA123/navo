@@ -29,8 +29,12 @@ const FIXTURE: &str = r#"ASAP2_VERSION 1 71
 "#;
 
 fn parse(text: &str) -> A2lModel {
+    parse_bytes(text.as_bytes())
+}
+
+fn parse_bytes(bytes: &[u8]) -> A2lModel {
     index_a2l(
-        text.as_bytes(),
+        bytes,
         Watch {
             cancel: &AtomicBool::new(false),
             progress: &mut |_| {},
@@ -144,6 +148,72 @@ fn a2l_cancels_during_a_large_comment_and_at_completion() {
         },
     );
     assert!(matches!(result, Err(DescriptionError::Cancelled)));
+}
+
+#[test]
+fn a2l_decodes_windows_1252_text_instead_of_dropping_the_block() {
+    let mut bytes = b"/begin PROJECT P \"\" /begin MODULE M \"\"\n/begin COMPU_METHOD Temp \"\" IDENTICAL \"%3.0\" \"".to_vec();
+    bytes.extend_from_slice(&[0xB0, b'C']);
+    bytes.extend_from_slice(b"\"\n/end COMPU_METHOD\n/begin MEASUREMENT Heat \"Temp");
+    bytes.push(0xE9);
+    bytes.extend_from_slice(b"\" UBYTE Temp 1 0 0 100 PHYS_UNIT \"");
+    bytes.extend_from_slice(&[0xB0, b'F']);
+    bytes.extend_from_slice(b"\"\n/end MEASUREMENT\n/end MODULE /end PROJECT");
+    let model = parse_bytes(&bytes);
+    assert!(
+        model.report.problems.is_empty(),
+        "{:?}",
+        model.report.problems
+    );
+    assert_eq!(&*model.compu_methods[0].unit, "\u{b0}C");
+    assert_eq!(model.measurements[0].unit.as_deref(), Some("\u{b0}F"));
+}
+
+#[test]
+fn a2l_uses_the_version_declared_by_the_file() {
+    let text = "ASAP2_VERSION 1 51\n/begin PROJECT P \"\" /begin MODULE M \"\"\n/begin MEASUREMENT Old \"\" UBYTE Conv 1 0 0 1\n ARRAY_SIZE 4\n BYTE_ORDER MSB_LAST\n/end MEASUREMENT\n/end MODULE /end PROJECT";
+    let model = parse(text);
+    assert_eq!(model.version, Some((1, 51)));
+    assert_eq!(model.report.problem_count, 0, "{:?}", model.report.problems);
+    assert_eq!(model.measurements.len(), 1);
+    let model = parse(&text.replace("ASAP2_VERSION 1 51\n", ""));
+    assert_eq!(model.version, None);
+    assert_eq!(model.measurements.len(), 1);
+}
+
+#[test]
+fn a2l_keeps_the_characteristic_kind_and_conversion_type() {
+    let text = "/begin PROJECT P \"\" /begin MODULE M \"\"\n/begin CHARACTERISTIC Curve1 \"\" CURVE 4096 Layout 0 Conv 0 10\n/end CHARACTERISTIC\n/begin CHARACTERISTIC Block \"\" VAL_BLK 8192 Layout 0 Conv 0 10\n/end CHARACTERISTIC\n/begin COMPU_METHOD Conv \"\" TAB_VERB \"%3.0\" \"\"\n/end COMPU_METHOD\n/begin COMPU_METHOD Lin \"\" LINEAR \"%3.0\" \"\"\n COEFFS_LINEAR 2 1\n/end COMPU_METHOD\n/end MODULE /end PROJECT";
+    let model = parse(text);
+    let kinds: Vec<_> = model
+        .characteristics
+        .iter()
+        .map(|row| row.kind.as_str())
+        .collect();
+    assert_eq!(kinds, ["CURVE", "VAL_BLK"]);
+    let types: Vec<_> = model
+        .compu_methods
+        .iter()
+        .map(|row| row.conversion_type.as_str())
+        .collect();
+    assert_eq!(types, ["TAB_VERB", "LINEAR"]);
+}
+
+#[test]
+fn a2l_accepts_doubled_quotes_inside_strings() {
+    let text = "/begin PROJECT P \"\" /begin MODULE M \"\"\n/begin MEASUREMENT Quoted \"a \"\"b\"\" c\" UBYTE Conv 1 0 0 1\n/end MEASUREMENT\n/begin MEASUREMENT After \"\" UBYTE Conv 1 0 0 1\n/end MEASUREMENT\n/end MODULE /end PROJECT";
+    let model = parse(text);
+    assert_eq!(model.report.problem_count, 0, "{:?}", model.report.problems);
+    assert_eq!(model.measurements.len(), 2);
+}
+
+#[test]
+fn a2l_drops_an_open_row_when_its_module_ends() {
+    let text = "/begin PROJECT P \"\"\n/begin MODULE A \"\"\n/begin MEASUREMENT Open \"\" UBYTE Conv 1 0 0 1\n/end MODULE\n/begin MODULE B \"\"\n/begin MEASUREMENT Good \"\" UBYTE Conv 1 0 0 1\n/end MEASUREMENT\n/end MODULE /end PROJECT";
+    let model = parse(text);
+    assert_eq!(model.measurements.len(), 1);
+    assert_eq!(model.measurements[0].name, "Good");
+    assert_eq!(model.report.problem_count, 1, "{:?}", model.report.problems);
 }
 
 #[test]

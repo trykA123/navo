@@ -20,6 +20,8 @@ struct Scanner {
     scopes: Vec<Scope>,
     block: Option<Block>,
     stopped: bool,
+    reading_version: bool,
+    major: Option<u16>,
 }
 
 impl Scanner {
@@ -40,7 +42,22 @@ impl Scanner {
         }
     }
 
+    fn read_version(&mut self, token: &Token) {
+        let number = (token.kind == TokenKind::Word)
+            .then(|| token.text.parse::<u16>().ok())
+            .flatten();
+        match (number, self.major) {
+            (Some(major), None) => self.major = Some(major),
+            (Some(minor), Some(major)) => {
+                self.model.version = Some((major, minor));
+                self.reading_version = false;
+            }
+            (None, _) => self.reading_version = false,
+        }
+    }
+
     fn begin(&mut self, tag: Token) {
+        self.reading_version = false;
         if self.scopes.len() >= MAX_DEPTH {
             self.model.report.problem(
                 tag.line,
@@ -180,6 +197,9 @@ impl Scanner {
         {
             self.model.parse(block, module);
         }
+        if self.block.as_ref().is_some_and(|block| block.depth > at) {
+            self.block = None;
+        }
         self.scopes.truncate(at);
     }
 
@@ -197,6 +217,10 @@ impl Scanner {
             {
                 block.overflow = true;
             }
+            return;
+        }
+        if self.reading_version {
+            self.read_version(&token);
             return;
         }
         self.name(&token);
@@ -237,6 +261,10 @@ pub fn index_a2l(read: impl BufRead, watch: Watch<'_>) -> Result<A2lModel, Descr
                 if let Some(tag) = lexer.significant()? {
                     scanner.end(tag);
                 }
+            }
+            (TokenKind::Word, "ASAP2_VERSION") if scanner.scopes.is_empty() => {
+                scanner.reading_version = true;
+                scanner.major = None;
             }
             (TokenKind::Word, "/include") => {
                 scanner.model.report.problem(

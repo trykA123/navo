@@ -39,6 +39,7 @@ pub struct Characteristic {
     pub module: usize,
     pub line: u64,
     pub name: String,
+    pub kind: String,
     pub address: u32,
     pub record_layout: String,
     pub conversion: String,
@@ -52,12 +53,14 @@ pub struct CompuMethod {
     pub module: usize,
     pub line: u64,
     pub name: String,
+    pub conversion_type: String,
     pub unit: Arc<str>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct A2lModel {
     pub project: Option<String>,
+    pub version: Option<(u16, u16)>,
     pub modules: Vec<Module>,
     pub measurements: Vec<Measurement>,
     pub characteristics: Vec<Characteristic>,

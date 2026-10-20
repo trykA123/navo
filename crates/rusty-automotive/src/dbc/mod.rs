@@ -15,6 +15,14 @@ pub enum Number {
     Float(f64),
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SignalFormat {
+    #[default]
+    Integer,
+    Float,
+    Double,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Multiplexing {
     Plain,
@@ -30,6 +38,7 @@ pub struct Signal {
     pub length: u64,
     pub byte_order: Endian,
     pub signed: bool,
+    pub format: SignalFormat,
     pub factor: f64,
     pub offset: f64,
     pub min: Number,
@@ -102,7 +111,8 @@ pub struct DbcModel {
     pub cycle_time_default_ms: Option<f64>,
     pub report: DescriptionReport,
     lookup: HashMap<CanId, usize>,
-    cycles: HashMap<CanId, f64>,
+    cycles: HashMap<CanId, Option<f64>>,
+    formats: HashMap<(CanId, String), SignalFormat>,
 }
 
 impl DbcModel {
@@ -122,9 +132,24 @@ impl DbcModel {
                 .cycles
                 .get(&message.id)
                 .copied()
-                .or(self.cycle_time_default_ms);
+                .unwrap_or(self.cycle_time_default_ms);
         }
+        self.apply_formats();
         self.cycles = HashMap::new();
+        self.formats = HashMap::new();
+    }
+
+    fn apply_formats(&mut self) {
+        if self.formats.is_empty() {
+            return;
+        }
+        for message in &mut self.messages {
+            for signal in &mut message.signals {
+                let key = (message.id, std::mem::take(&mut signal.name));
+                signal.format = self.formats.get(&key).copied().unwrap_or_default();
+                signal.name = key.1;
+            }
+        }
     }
 }
 
@@ -162,6 +187,6 @@ pub fn sniff_dbc(head: &[u8]) -> bool {
 fn recognized(line: &str) -> bool {
     matches!(
         line.split_whitespace().next(),
-        Some("VERSION" | "BO_" | "BU_:")
+        Some("VERSION" | "BO_" | "BU_:" | "BU_")
     ) && can_dbc::Dbc::try_from(format!("{}\n", line.trim_end()).as_str()).is_ok()
 }

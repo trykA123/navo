@@ -14,7 +14,7 @@ struct Record {
 
 impl Record {
     fn statement(&self) -> bool {
-        !matches!(self.kind.as_str(), "BO_" | "SG_" | "BU_:" | "VERSION")
+        !matches!(self.kind.as_str(), "BO_" | "SG_" | "VERSION")
     }
 
     fn push(&mut self, token: &Token) {
@@ -33,6 +33,7 @@ struct Scanner {
     model: DbcModel,
     record: Record,
     current: Option<usize>,
+    independent: bool,
     symbols: bool,
     first: bool,
 }
@@ -52,6 +53,9 @@ impl Scanner {
             }
             self.first = true;
             return;
+        }
+        if self.first && !token.indented && self.record.kind == "BU_:" {
+            self.flush();
         }
         if self.start(&token) {
             self.record.push(&token);
@@ -78,6 +82,7 @@ impl Scanner {
             kind,
             "VERSION"
                 | "BU_:"
+                | "BU_"
                 | "BO_"
                 | "SG_"
                 | "VAL_"
@@ -87,13 +92,14 @@ impl Scanner {
                 | "BA_DEF_"
                 | "BA_DEF_DEF_"
                 | "SG_MUL_VAL_"
+                | "SIG_VALTYPE_"
         );
         if known && (self.first || self.record.kind.is_empty()) {
             if !self.record.kind.is_empty() {
                 self.flush();
             }
             self.record = Record {
-                kind: kind.into(),
+                kind: if kind == "BU_" { "BU_:" } else { kind }.into(),
                 line: token.line,
                 ..Record::default()
             };
@@ -108,6 +114,10 @@ impl Scanner {
         }
         if record.kind == "BO_" {
             self.current = None;
+            self.independent = false;
+        }
+        if record.kind == "SG_" && self.independent {
+            return;
         }
         if record.overflow {
             self.model.report.problem(
@@ -116,12 +126,23 @@ impl Scanner {
             );
             return;
         }
-        if !valid_ids(&record.text) {
-            self.model
-                .report
-                .problem(record.line, "invalid CAN message ID");
-            return;
+        match id_word(&record.text).map(valid_id) {
+            Some(Id::Independent) => {
+                self.independent |= record.kind == "BO_";
+                return;
+            }
+            Some(Id::Invalid) => {
+                self.model
+                    .report
+                    .problem(record.line, "invalid CAN message ID");
+                return;
+            }
+            _ => {}
         }
+        self.parse(&record);
+    }
+
+    fn parse(&mut self, record: &Record) {
         let is_signal = record.kind == "SG_";
         let text = if is_signal {
             format!("BO_ 0 Frame: 8 Vector__XXX\n{}\n", record.text.trim_end())
@@ -133,7 +154,7 @@ impl Scanner {
                 if self.model.report.retain_rows(
                     record.line,
                     record.text.len(),
-                    super::convert::rows(&parsed),
+                    super::convert::rows(&parsed).saturating_sub(usize::from(is_signal)),
                 ) =>
             {
                 self.model
@@ -152,25 +173,57 @@ impl Scanner {
     }
 }
 
-fn valid_ids(text: &str) -> bool {
-    let words: Vec<_> = text.split_whitespace().take(5).collect();
-    let at = match words.as_slice() {
-        ["BO_" | "SG_MUL_VAL_", ..] => Some(1),
-        ["VAL_", second, ..] if second.bytes().all(|byte| byte.is_ascii_digit()) => Some(1),
-        ["CM_", "BO_" | "SG_", ..] | ["BA_", _, "BO_" | "SG_", ..] => words
-            .iter()
-            .position(|word| matches!(*word, "BO_" | "SG_"))
-            .map(|at| at + 1),
+enum Id {
+    Valid,
+    Independent,
+    Invalid,
+}
+
+const INDEPENDENT_SIGNALS: u32 = 0xC000_0000;
+
+fn valid_id(word: &str) -> Id {
+    match word.parse::<u32>() {
+        Ok(INDEPENDENT_SIGNALS) => Id::Independent,
+        Ok(id) if id <= 2047 || ((id & (1 << 31)) != 0 && (id & !(1 << 31)) <= 536_870_911) => {
+            Id::Valid
+        }
+        _ => Id::Invalid,
+    }
+}
+
+fn id_word(text: &str) -> Option<&str> {
+    let mut words = text.split_whitespace();
+    match words.next()? {
+        "BO_" | "SG_MUL_VAL_" | "SIG_VALTYPE_" => words.next(),
+        "VAL_" => words
+            .next()
+            .filter(|word| word.bytes().all(|byte| byte.is_ascii_digit())),
+        "CM_" => match words.next()? {
+            "BO_" | "SG_" => words.next(),
+            _ => None,
+        },
+        "BA_" => {
+            let mut words =
+                after_quoted(text.trim_start().strip_prefix("BA_")?)?.split_whitespace();
+            match words.next()? {
+                "BO_" | "SG_" => words.next(),
+                _ => None,
+            }
+        }
         _ => None,
-    };
-    at.is_none_or(|at| {
-        words
-            .get(at)
-            .and_then(|word| word.parse::<u32>().ok())
-            .is_some_and(|id| {
-                id <= 2047 || ((id & (1 << 31)) != 0 && (id & !(1 << 31)) <= 536_870_911)
-            })
-    })
+    }
+}
+
+fn after_quoted(text: &str) -> Option<&str> {
+    let text = text.trim_start().strip_prefix('"')?;
+    let mut escaped = false;
+    for (at, byte) in text.bytes().enumerate() {
+        if byte == b'"' && !escaped {
+            return text.get(at + 1..);
+        }
+        escaped = byte == b'\\' && !escaped;
+    }
+    None
 }
 
 fn error_line(reason: &str) -> u64 {

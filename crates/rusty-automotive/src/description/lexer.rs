@@ -20,6 +20,7 @@ pub(crate) struct Token {
     pub text: String,
     pub line: u64,
     pub kind: TokenKind,
+    pub indented: bool,
 }
 
 pub(crate) struct Lexer<'a, R> {
@@ -30,6 +31,8 @@ pub(crate) struct Lexer<'a, R> {
     filled: usize,
     offset: u64,
     line: u64,
+    fresh: bool,
+    indent: bool,
 }
 
 impl<'a, R: BufRead> Lexer<'a, R> {
@@ -42,6 +45,8 @@ impl<'a, R: BufRead> Lexer<'a, R> {
             filled: 0,
             offset: 0,
             line: 1,
+            fresh: true,
+            indent: false,
         }
     }
 
@@ -88,11 +93,27 @@ impl<'a, R: BufRead> Lexer<'a, R> {
         while let Some(byte) = self.peek()? {
             let line = self.line;
             self.take()?;
-            if let Some(token) = self.classify(byte, line)? {
+            let indented = self.lead(byte);
+            if let Some(mut token) = self.classify(byte, line)? {
+                token.indented = indented;
                 return Ok(Some(token));
             }
         }
         Ok(None)
+    }
+
+    fn lead(&mut self, byte: u8) -> bool {
+        if byte == b'\n' {
+            self.fresh = true;
+            self.indent = false;
+        } else if byte.is_ascii_whitespace() {
+            self.indent |= self.fresh;
+        } else {
+            let indented = self.fresh && self.indent;
+            self.fresh = false;
+            return indented;
+        }
+        false
     }
 
     fn classify(&mut self, byte: u8, line: u64) -> Result<Option<Token>, DescriptionError> {
@@ -108,6 +129,7 @@ impl<'a, R: BufRead> Lexer<'a, R> {
             text: char::from(byte).to_string(),
             line,
             kind,
+            indented: false,
         }))
     }
 
@@ -148,8 +170,13 @@ impl<'a, R: BufRead> Lexer<'a, R> {
             if !too_long {
                 bytes.push(byte);
             }
-            if byte == b'"' && !escaped {
+            let closes = byte == b'"' && !escaped;
+            if closes && self.peek()? != Some(b'"') {
                 return Ok(Self::token(bytes, line, TokenKind::Quoted, too_long));
+            }
+            if closes {
+                self.take()?;
+                bytes.extend((!too_long).then_some(b'"'));
             }
             escaped = byte == b'\\' && !escaped;
         }
@@ -157,6 +184,7 @@ impl<'a, R: BufRead> Lexer<'a, R> {
             text: "unterminated quoted string".into(),
             line,
             kind: TokenKind::Problem,
+            indented: false,
         })
     }
 
@@ -177,22 +205,31 @@ impl<'a, R: BufRead> Lexer<'a, R> {
             text: "unterminated block comment".into(),
             line,
             kind: TokenKind::Problem,
+            indented: false,
         }))
     }
 
     fn token(bytes: Vec<u8>, line: u64, kind: TokenKind, too_long: bool) -> Token {
-        match String::from_utf8(bytes) {
-            Ok(mut text) if !too_long => {
-                if line == 1 && text.starts_with('\u{feff}') {
-                    text.drain(..3);
-                }
-                Token { text, line, kind }
-            }
-            _ => Token {
-                text: "invalid UTF-8 or token exceeds 64 KiB".into(),
+        if too_long {
+            return Token {
+                text: "token exceeds 64 KiB".into(),
                 line,
                 kind: TokenKind::Problem,
-            },
+                indented: false,
+            };
+        }
+        let mut text = String::from_utf8(bytes).unwrap_or_else(|error| {
+            let (text, _) = encoding_rs::WINDOWS_1252.decode_without_bom_handling(error.as_bytes());
+            text.into_owned()
+        });
+        if line == 1 && text.starts_with('\u{feff}') {
+            text.drain(..3);
+        }
+        Token {
+            text,
+            line,
+            kind,
+            indented: false,
         }
     }
 }

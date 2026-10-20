@@ -6447,6 +6447,7 @@ dependencies = [
  "a2lfile",
  "can-dbc",
  "cpp_demangle",
+ "encoding_rs",
  "gimli",
  "object",
  "proptest",

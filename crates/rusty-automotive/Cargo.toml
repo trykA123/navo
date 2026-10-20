@@ -9,6 +9,7 @@ publish.workspace = true
 a2lfile = { version = "=3.5.1", default-features = false }
 can-dbc = { version = "=10.0.0", default-features = false }
 cpp_demangle = "=0.4.5"
+encoding_rs = "0.8.42"
 gimli = { version = "=0.32.3", default-features = false, features = ["read", "std"] }
 object = { version = "=0.37.3", default-features = false, features = [
     "elf",

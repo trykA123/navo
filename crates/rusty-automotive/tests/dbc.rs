@@ -2,7 +2,7 @@
 
 use rusty_automotive::{
     CanId, DescriptionError, Endian, Watch,
-    dbc::{DbcModel, Multiplexing, Number, ValueTarget},
+    dbc::{DbcModel, Multiplexing, Number, SignalFormat, ValueTarget},
     index_dbc, sniff_dbc,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,8 +34,12 @@ SG_MUL_VAL_ 42 Signed Mode 3-3, 5-8;
 "#;
 
 fn parse(text: &str) -> DbcModel {
+    parse_bytes(text.as_bytes())
+}
+
+fn parse_bytes(bytes: &[u8]) -> DbcModel {
     index_dbc(
-        text.as_bytes(),
+        bytes,
         Watch {
             cancel: &AtomicBool::new(false),
             progress: &mut |_| {},
@@ -139,6 +143,110 @@ fn dbc_rejects_ids_that_the_library_would_truncate() {
     assert_eq!(model.messages.len(), 1);
     assert_eq!(model.messages[0].name, "Valid");
     assert_eq!(model.report.problems[0].line, 1);
+}
+
+fn id(raw: u32) -> CanId {
+    CanId {
+        raw,
+        extended: false,
+    }
+}
+
+#[test]
+fn dbc_decodes_windows_1252_units_instead_of_dropping_the_signal() {
+    let mut bytes = b"BO_ 42 Frame: 8 Sender\n SG_ Temp : 0|8@1+ (1,0) [0|255] \"".to_vec();
+    bytes.extend_from_slice(&[0xB0, b'C', 0x80]);
+    bytes.extend_from_slice(b"\" Receiver\n");
+    let model = parse_bytes(&bytes);
+    assert!(
+        model.report.problems.is_empty(),
+        "{:?}",
+        model.report.problems
+    );
+    assert_eq!(model.signals(id(42)).unwrap()[0].unit, "\u{b0}C\u{20ac}");
+}
+
+#[test]
+fn dbc_skips_the_independent_signal_pseudo_message_silently() {
+    let model = parse(
+        "BO_ 3221225472 VECTOR__INDEPENDENT_SIG_MSG: 0 Vector__XXX\n SG_ Loose : 0|8@1+ (1,0) [0|255] \"\" Vector__XXX\nBO_ 42 Frame: 8 Sender\n SG_ Kept : 0|8@1+ (1,0) [0|255] \"\" Receiver\nCM_ SG_ 3221225472 Loose \"note\";\nBA_ \"GenSigStartValue\" SG_ 3221225472 Loose 3;\nVAL_ 3221225472 Loose 0 \"Off\";\nSIG_VALTYPE_ 3221225472 Loose : 1;\n",
+    );
+    assert!(
+        model.report.problems.is_empty(),
+        "{:?}",
+        model.report.problems
+    );
+    assert_eq!(model.messages.len(), 1);
+    assert_eq!(model.messages[0].signals[0].name, "Kept");
+    assert!(model.comments.is_empty());
+    assert!(model.value_tables.is_empty());
+}
+
+#[test]
+fn dbc_accepts_a_spaced_node_header_and_continued_node_lists() {
+    let model = parse("BU_ : First Second\n Third\n\tFourth\nBO_ 42 Frame: 8 First\n");
+    assert!(
+        model.report.problems.is_empty(),
+        "{:?}",
+        model.report.problems
+    );
+    assert_eq!(model.nodes, ["First", "Second", "Third", "Fourth"]);
+    assert_eq!(model.messages.len(), 1);
+    let model = parse("BU_: First\n Second\nBS_:\nBO_ 42 Frame: 8 First\n");
+    assert_eq!(model.nodes, ["First", "Second"]);
+}
+
+#[test]
+fn dbc_reads_float_and_double_signal_value_types() {
+    let model = parse(
+        "BO_ 42 Frame: 8 Sender\n SG_ Plain : 0|8@1+ (1,0) [0|255] \"\" Receiver\n SG_ Single : 8|32@1+ (1,0) [0|0] \"\" Receiver\n SG_ Wide : 0|64@1+ (1,0) [0|0] \"\" Receiver\nSIG_VALTYPE_ 42 Single : 1;\nSIG_VALTYPE_ 42 Wide : 2;\n",
+    );
+    assert!(
+        model.report.problems.is_empty(),
+        "{:?}",
+        model.report.problems
+    );
+    let formats: Vec<_> = model
+        .signals(id(42))
+        .unwrap()
+        .iter()
+        .map(|signal| signal.format)
+        .collect();
+    assert_eq!(
+        formats,
+        [
+            SignalFormat::Integer,
+            SignalFormat::Float,
+            SignalFormat::Double
+        ]
+    );
+}
+
+#[test]
+fn dbc_checks_ids_after_attribute_names_that_contain_spaces() {
+    let model = parse("BO_ 42 Frame: 8 Sender\nBA_ \"Gen Msg Cycle\" BO_ 65578 10;\n");
+    assert_eq!(model.report.problem_count, 1);
+    assert_eq!(model.report.problems[0].reason, "invalid CAN message ID");
+    assert_eq!(model.report.problems[0].line, 2);
+}
+
+#[test]
+fn dbc_stores_no_cycle_time_for_a_zero_cycle() {
+    let text = "BO_ 42 Zero: 8 Sender\nBO_ 43 Default: 8 Sender\nBA_DEF_DEF_ \"GenMsgCycleTime\" 20;\nBA_ \"GenMsgCycleTime\" BO_ 42 0;\n";
+    let model = parse(text);
+    assert_eq!(model.message(id(42)).unwrap().cycle_time_ms, None);
+    assert_eq!(model.message(id(43)).unwrap().cycle_time_ms, Some(20.0));
+    let model = parse("BO_ 42 Frame: 8 Sender\nBA_DEF_DEF_ \"GenMsgCycleTime\" 0;\n");
+    assert_eq!(model.cycle_time_default_ms, None);
+    assert_eq!(model.message(id(42)).unwrap().cycle_time_ms, None);
+}
+
+#[test]
+fn dbc_does_not_count_the_signal_wrapper_message_toward_the_row_cap() {
+    let signals = " SG_ Value : 0|8@1+ (1,0) [0|255] \"\" Receiver\n".repeat(90_000);
+    let model = parse(&format!("BO_ 42 Frame: 8 Sender\n{signals}"));
+    assert_eq!(model.report.problem_count, 0);
+    assert_eq!(model.signals(id(42)).unwrap().len(), 90_000);
 }
 
 #[test]

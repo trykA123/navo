@@ -50,8 +50,9 @@ impl A2lModel {
             );
             return;
         }
+        let (major, minor) = self.version.unwrap_or((1, 71));
         let text = format!(
-            "ASAP2_VERSION 1 71 /begin PROJECT P \"\" /begin MODULE M \"\"\n{}\n/end MODULE /end PROJECT",
+            "ASAP2_VERSION {major} {minor} /begin PROJECT P \"\" /begin MODULE M \"\"\n{}\n/end MODULE /end PROJECT",
             block.text
         );
         match a2lfile::load_from_string(&text, None, false) {
@@ -116,6 +117,7 @@ impl A2lModel {
             module,
             line,
             name: row.get_name().to_owned(),
+            kind: row.characteristic_type.to_string(),
             address: row.address,
             record_layout: row.deposit,
             conversion: row.conversion,
@@ -134,6 +136,7 @@ impl A2lModel {
                 module,
                 line,
                 name: row.get_name().to_owned(),
+                conversion_type: row.conversion_type.to_string(),
                 unit: row.unit.into(),
             });
         }

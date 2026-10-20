@@ -1,10 +1,11 @@
 use can_dbc::{
-    AttributeValue, Comment as LibraryComment, MessageId, NumericValue, ValueDescription,
+    AttributeValue, Comment as LibraryComment, MessageId, NumericValue, SignalExtendedValueType,
+    ValueDescription,
 };
 
 use super::{
-    Comment, CommentTarget, DbcModel, Message, MultiplexRange, Multiplexing, Number, Signal, Value,
-    ValueTable, ValueTarget,
+    Comment, CommentTarget, DbcModel, Message, MultiplexRange, Multiplexing, Number, Signal,
+    SignalFormat, Value, ValueTable, ValueTarget,
 };
 use crate::{CanId, Endian};
 
@@ -39,6 +40,7 @@ fn signal(value: can_dbc::Signal) -> Signal {
             can_dbc::ByteOrder::BigEndian => Endian::Big,
         },
         signed: value.value_type == can_dbc::ValueType::Signed,
+        format: SignalFormat::Integer,
         factor: value.factor,
         offset: value.offset,
         min: number(value.min),
@@ -122,6 +124,15 @@ impl DbcModel {
             }));
         self.take_values(parsed.value_descriptions);
         self.take_ranges(parsed.extended_multiplex);
+        for entry in parsed.signal_extended_value_type_list {
+            let format = match entry.signal_extended_value_type {
+                SignalExtendedValueType::SignedOrUnsignedInteger => SignalFormat::Integer,
+                SignalExtendedValueType::IEEEfloat32Bit => SignalFormat::Float,
+                SignalExtendedValueType::IEEEdouble64bit => SignalFormat::Double,
+            };
+            self.formats
+                .insert((id(entry.message_id), entry.signal_name), format);
+        }
         for attribute in parsed.attribute_values_message {
             if attribute.name == "GenMsgCycleTime" {
                 self.take_cycle(Some(id(attribute.message_id)), attribute.value, line);
@@ -181,10 +192,11 @@ impl DbcModel {
             self.report.problem(line, "invalid GenMsgCycleTime");
             return;
         };
+        let value = (value > 0.0).then_some(value);
         if let Some(id) = id {
             self.cycles.insert(id, value);
         } else {
-            self.cycle_time_default_ms = Some(value);
+            self.cycle_time_default_ms = value;
         }
     }
 
@@ -266,4 +278,5 @@ pub(super) fn rows(parsed: &can_dbc::Dbc) -> usize {
         + parsed.comments.len()
         + parsed.attribute_values_message.len()
         + parsed.attribute_defaults.len()
+        + parsed.signal_extended_value_type_list.len()
 }
