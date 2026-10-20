@@ -15,7 +15,8 @@ pub fn same_volume(a: &Location, b: &Location) -> bool {
     volume_of(a) == volume_of(b)
 }
 
-fn refusal(target: &Location, sources: &[Location]) -> Option<PasteRefusal> {
+#[must_use]
+pub fn drop_refusal(target: &Location, sources: &[Location]) -> Option<PasteRefusal> {
     if sources.is_empty() {
         return Some(PasteRefusal::Nothing);
     }
@@ -52,7 +53,7 @@ impl Browser {
             target,
             confirm,
         } = request;
-        if let Some(refused) = refusal(&target, &sources) {
+        if let Some(refused) = drop_refusal(&target, &sources) {
             return Err(refused);
         }
         let source_tab = self.drop_source_tab(&sources);

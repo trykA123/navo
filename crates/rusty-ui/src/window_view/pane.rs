@@ -319,8 +319,8 @@ impl FerriteWindow {
         focus: &FocusHandle,
         cx: &mut Context<Self>,
     ) -> FileList {
-        FileList::new(("list", pane.get()), props)
-            .track_focus(focus)
+        let list = FileList::new(("list", pane.get()), props).track_focus(focus);
+        Self::wire_drops(list, pane, cx)
             .on_command(
                 cx.listener(move |this: &mut Self, command: &Command, window, cx| {
                     this.focus_pane(pane);
