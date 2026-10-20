@@ -4,6 +4,8 @@ use rusty_core::Location;
 
 use super::FerriteWindow;
 use super::operate::JOB_LINGER;
+use gpui_kit::base::TestSupportExt;
+
 use crate::browser::{JobStatus, JobView};
 use crate::fkey_bar::FKeyBar;
 use crate::job_card::{JobCard, JobInfo, JobPill, JobsSummary, Pause, PillFit, SpeedMeter};
@@ -120,13 +122,24 @@ impl FerriteWindow {
         }
     }
 
-    fn job_infos(&self) -> Vec<JobInfo> {
+    pub(super) fn job_infos(&self) -> Vec<JobInfo> {
         let meter = &self.job_ui.meter;
         self.browser
             .jobs()
             .iter()
             .map(|job| job_info(job, meter.speed(job.id)))
             .collect()
+    }
+
+    fn job_pill(&self, jobs: &[JobInfo], fit: PillFit, cx: &mut Context<Self>) -> JobPill {
+        let this = cx.weak_entity();
+        JobPill::new(jobs, fit)
+            .when(JobsSummary::of(jobs).is_ended(), |pill| {
+                pill.fade_out(JOB_LINGER)
+            })
+            .on_click(move |_, cx| {
+                let _ = this.update(cx, |view, cx| view.toggle_jobs(cx));
+            })
     }
 
     pub(super) fn with_job_pill(
@@ -144,15 +157,22 @@ impl FerriteWindow {
         if !self.job_ui.is_pill {
             return bar;
         }
-        let this = cx.weak_entity();
-        let pill = JobPill::new(&jobs, fit)
-            .when(JobsSummary::of(&jobs).is_ended(), |pill| {
-                pill.fade_out(JOB_LINGER)
-            })
-            .on_click(move |_, cx| {
-                let _ = this.update(cx, |view, cx| view.toggle_jobs(cx));
-            });
-        bar.right_slot(pill)
+        bar.right_slot(self.job_pill(&jobs, fit, cx))
+    }
+
+    pub(super) fn pill_strip(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let height = tokens::current(cx).spacing.fkey_height;
+        let fit = PillFit::for_width(window.viewport_size().width);
+        div()
+            .id("job-strip")
+            .test_support()
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_end()
+            .h(height)
+            .px(tokens::current(cx).spacing.md)
+            .child(self.job_pill(&self.job_infos(), fit, cx))
     }
 
     pub(super) fn job_card_layer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {

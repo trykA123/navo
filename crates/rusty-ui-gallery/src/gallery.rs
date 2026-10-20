@@ -29,7 +29,8 @@ use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
-    display_window, hint_windows, job_windows, sheet_windows, window_element,
+    display_window, hint_windows, job_windows, parts_element, parts_windows, sheet_windows,
+    window_element,
 };
 use crate::{pdf_sample, rich_sample, viewer_sample};
 
@@ -101,6 +102,7 @@ pub struct Gallery {
     display_window: Entity<WindowPage>,
     hint_windows: [Entity<WindowPage>; 4],
     crash_window: Entity<WindowPage>,
+    parts_windows: [Entity<WindowPage>; 3],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -153,6 +155,7 @@ impl Gallery {
             display_window: display_window(cx),
             hint_windows: hint_windows(cx),
             crash_window: cx.new(WindowPage::with_crash),
+            parts_windows: parts_windows(cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -316,7 +319,7 @@ impl Render for Gallery {
         if self.page == Page::SettingsDisplay {
             return root.child(self.display_window.clone());
         }
-        if let Some(page) = window_element(self.page, self.windows()) {
+        if let Some(page) = self.window_page() {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
         }
@@ -356,6 +359,11 @@ impl Render for Gallery {
 }
 
 impl Gallery {
+    fn window_page(&self) -> Option<AnyElement> {
+        parts_element(self.page, &self.parts_windows)
+            .or_else(|| window_element(self.page, self.windows()))
+    }
+
     fn viewer_menu(&self) -> Option<Entity<ViewerMenuPage>> {
         match self.page {
             Page::ViewerMenuText => Some(self.viewer_menus[0].clone()),

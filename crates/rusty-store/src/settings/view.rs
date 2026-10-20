@@ -61,6 +61,48 @@ pub struct AutomotiveView {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+pub struct WindowSettings {
+    pub view: WindowView,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct WindowView {
+    pub tabs_with_one: bool,
+    pub path_bar: bool,
+    pub drive_button: bool,
+    pub title_search: bool,
+    pub fkey_bar: bool,
+    pub icons: bool,
+    pub ext_column: bool,
+    pub size_column: bool,
+    pub date_column: bool,
+    pub free_space: bool,
+    pub marked_totals: bool,
+    pub contents: bool,
+}
+
+impl Default for WindowView {
+    fn default() -> Self {
+        Self {
+            tabs_with_one: true,
+            path_bar: true,
+            drive_button: true,
+            title_search: true,
+            fkey_bar: true,
+            icons: true,
+            ext_column: true,
+            size_column: true,
+            date_column: true,
+            free_space: true,
+            marked_totals: true,
+            contents: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct CopySettings {
     pub mode: CopyMode,
 }

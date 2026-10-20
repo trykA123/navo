@@ -308,3 +308,4 @@ viewer.show_line_ends | alt-l | Viewer
 viewer.show_rich | alt-5 | Viewer
 viewer.show_text | alt-1 | Viewer
 viewer.view_menu | alt-v | Viewer
+window.view_menu | alt-v | FerritePane

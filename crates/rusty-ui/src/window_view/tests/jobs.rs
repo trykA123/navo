@@ -10,26 +10,29 @@ use super::{fake, home_beside_dest, open_options_sized, open_with, options_for, 
 use crate::browser::{JobStatus, JobView};
 use crate::window_view::FerriteWindow;
 
-const MB: u64 = 1024 * 1024;
+pub(super) const MB: u64 = 1024 * 1024;
 
 fn at(path: &str) -> Location {
     Location::new(path).unwrap()
 }
 
-fn open_at(cx: &mut TestAppContext, width: f32) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+pub(super) fn open_at(
+    cx: &mut TestAppContext,
+    width: f32,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let fs = fake();
     let state = home_beside_dest(&fs);
     open_options_sized(cx, options_for(fs, state), px(width))
 }
 
-struct Fake {
+pub(super) struct Fake {
     id: u64,
     kind: OpKind,
     done: u64,
     status: JobStatus,
 }
 
-fn running(id: u64, done: u64) -> Fake {
+pub(super) fn running(id: u64, done: u64) -> Fake {
     Fake {
         id,
         kind: OpKind::Copy,
@@ -38,7 +41,7 @@ fn running(id: u64, done: u64) -> Fake {
     }
 }
 
-fn add(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, job: Fake) {
+pub(super) fn add(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, job: Fake) {
     view.update(cx, |view, cx| {
         let source_tab = view.browser.state().active_tab().id();
         view.browser.jobs_mut().push(JobView {
@@ -72,7 +75,7 @@ fn give_speed(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, id: u64, pe
     });
 }
 
-fn key(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
+pub(super) fn key(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.press(key, cx);
@@ -94,13 +97,13 @@ fn click(cx: &mut TestAppContext, window: AnyWindowHandle, id: impl Into<Element
 }
 
 #[derive(Debug)]
-struct Shown {
-    card: Option<String>,
-    pill: Option<String>,
-    pill_parts: [bool; 3],
+pub(super) struct Shown {
+    pub(super) card: Option<String>,
+    pub(super) pill: Option<String>,
+    pub(super) pill_parts: [bool; 3],
 }
 
-fn shown(cx: &mut TestAppContext, window: AnyWindowHandle) -> Shown {
+pub(super) fn shown(cx: &mut TestAppContext, window: AnyWindowHandle) -> Shown {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let card = window

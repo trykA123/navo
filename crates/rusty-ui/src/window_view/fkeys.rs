@@ -3,6 +3,8 @@ use crate::commands::{Keymap, normal_key};
 use crate::fkey_bar::{FKeyBar, KeyLayer};
 use crate::modifier_hints::HintsMode;
 use crate::prelude::*;
+use crate::settings::WindowParts;
+use crate::tokens::Theme;
 
 pub type FKey = (&'static str, &'static str);
 
@@ -125,7 +127,31 @@ pub fn delete_warning_in(keymap: &Keymap) -> Option<(Option<KeyLayer>, usize)> {
 }
 
 impl FerriteWindow {
-    pub(super) fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
+    fn hides_fkeys(&self) -> bool {
+        self.viewer.is_none() && !self.settings.is_open() && !WindowParts::of(&self.values).fkey_bar
+    }
+
+    fn shows_job_pill(&self) -> bool {
+        self.job_ui.is_pill && !self.job_infos().is_empty()
+    }
+
+    pub(super) fn fkey_strip_height(&self, t: &Theme) -> Pixels {
+        if self.hides_fkeys() && !self.shows_job_pill() {
+            px(0.)
+        } else {
+            t.spacing.fkey_height
+        }
+    }
+
+    pub(super) fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.hides_fkeys() {
+            return Some(self.keys_bar(window, cx).into_any_element());
+        }
+        let strip = self.shows_job_pill().then(|| self.pill_strip(window, cx));
+        strip.map(|strip| strip.into_any_element())
+    }
+
+    fn keys_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
         let is_fixed = self.values.modifier_hints() == HintsMode::Off;
         let held = self.hints.held.filter(|_| !is_fixed);
         let bar = match &self.viewer {

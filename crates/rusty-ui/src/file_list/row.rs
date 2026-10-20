@@ -6,7 +6,7 @@ use gpui_kit::{
 };
 use rusty_fs::{EntryKind, FsEntry};
 
-use super::kind;
+use super::{ListParts, kind};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
@@ -18,6 +18,7 @@ pub(super) struct RowLook<'a> {
     pub is_cursor: bool,
     pub is_marked: bool,
     pub is_active_pane: bool,
+    pub parts: ListParts,
 }
 
 pub(super) fn ext_column(t: &Theme) -> Pixels {
@@ -91,18 +92,28 @@ fn right_cell(width: Pixels, text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 
+pub(super) fn name_text(
+    (name, extension): (&str, &str),
+    is_folder: bool,
+    shows_ext: bool,
+) -> String {
+    match (is_folder, shows_ext || extension.is_empty()) {
+        (true, _) => format!("[{name}]"),
+        (false, true) => name.to_owned(),
+        (false, false) => format!("{name}.{extension}"),
+    }
+}
+
 fn name_cell(look: &RowLook, name: &str, extension: &str) -> Div {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
     let (glyph, glyph_color) = kind::icon(entry.kind, extension, c);
     let is_folder = entry.kind == EntryKind::Folder;
-    let text = if is_folder {
-        format!("[{name}]")
-    } else {
-        name.to_owned()
-    };
+    let text = name_text((name, extension), is_folder, look.parts.ext);
     let glyph = div()
+        .id("row-icon")
+        .test_support()
         .flex_none()
         .when(entry.attributes.hidden, |d| d.opacity(HIDDEN_ICON_OPACITY))
         .child(icon(glyph, t.spacing.icon - px(1.), glyph_color));
@@ -112,7 +123,7 @@ fn name_cell(look: &RowLook, name: &str, extension: &str) -> Div {
         .gap(t.spacing.md)
         .flex_1()
         .min_w_0()
-        .child(glyph)
+        .when(look.parts.icons, |d| d.child(glyph))
         .child(
             div()
                 .min_w_0()
@@ -149,8 +160,12 @@ pub(super) fn cells(look: &RowLook) -> Div {
         .text_size(t.typography.small)
         .text_color(number_color)
         .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
-        .child(right_cell(t.spacing.size_column, kind::size_text(entry)))
-        .child(right_cell(date_column(t), kind::date_text(entry)));
+        .when(look.parts.size, |d| {
+            d.child(right_cell(t.spacing.size_column, kind::size_text(entry)))
+        })
+        .when(look.parts.date, |d| {
+            d.child(right_cell(date_column(t), kind::date_text(entry)))
+        });
     let is_active_cursor = look.is_cursor && look.is_active_pane;
     let is_idle_cursor = look.is_cursor && !look.is_active_pane;
     columns(t)
@@ -165,14 +180,16 @@ pub(super) fn cells(look: &RowLook) -> Div {
         .when(is_idle_cursor, |d| d.shadow(inset_ring(c.line)))
         .child(check_cell(look))
         .child(name_cell(look, name, extension))
-        .child(
-            div()
-                .w(ext_column(t))
-                .flex_none()
-                .truncate()
-                .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
-                .child(extension.to_owned()),
-        )
+        .when(look.parts.ext, |d| {
+            d.child(
+                div()
+                    .w(ext_column(t))
+                    .flex_none()
+                    .truncate()
+                    .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
+                    .child(extension.to_owned()),
+            )
+        })
         .child(numbers)
 }
 

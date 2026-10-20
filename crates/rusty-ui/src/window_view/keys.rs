@@ -18,6 +18,7 @@ gpui_kit::actions!(
         FocusCrashNotice,
         LeaveWaiting,
         NewTab,
+        OpenViewMenu,
         ResetSplit,
         RetryListing,
         SaveCrashReport,

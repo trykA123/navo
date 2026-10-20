@@ -14,7 +14,7 @@ const CHECK_WAIT: Duration = Duration::from_secs(2);
 
 pub(super) struct PathEdit {
     pub(super) pane: PaneId,
-    id: u64,
+    pub(super) id: u64,
     error: Option<SharedString>,
     _check: Option<Task<()>>,
 }
