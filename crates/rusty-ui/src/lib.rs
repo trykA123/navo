@@ -22,6 +22,7 @@ pub mod pane_chrome;
 pub mod prelude;
 pub mod primitives;
 pub mod prompt_dialog;
+pub mod rename;
 pub mod settings;
 pub mod shortcuts;
 pub mod side_sheet;

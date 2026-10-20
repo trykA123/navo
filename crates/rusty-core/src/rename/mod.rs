@@ -1,6 +1,7 @@
 mod case;
 pub mod check;
 mod cleanup;
+mod fields;
 mod mask;
 mod order;
 mod parse;
@@ -10,6 +11,9 @@ mod split;
 
 pub use case::{ExtCase, NameCase};
 pub use cleanup::Cleanup;
+pub use fields::{
+    FieldInfo, FieldProvider, FieldRef, FieldRegistry, ItemFields, Values, groups_needed,
+};
 pub use mask::{
     CaseMode, CounterParts, CounterSpec, FieldLookup, LocalTime, Mask, MaskError, MaskErrorKind,
     Span, Subject, Token,
