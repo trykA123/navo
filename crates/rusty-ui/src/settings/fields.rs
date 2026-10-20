@@ -65,6 +65,7 @@ pub enum Field {
     FoldersFirst,
     Sort,
     SortDescending,
+    DropConfirm,
     SpaceMeasuresFolders,
     PatternsSelectFolders,
     TerminalProvider,
@@ -133,6 +134,11 @@ pub const SYNTAX_THEMES: [Choice; 2] = [
     choice("settings-syntax-theme-oxidised-iron", "oxidised-iron"),
     choice("settings-syntax-theme-mocha", "mocha"),
 ];
+pub const DROP_CONFIRMS: [Choice; 3] = [
+    choice("settings-drop-confirm-never", "never"),
+    choice("settings-drop-confirm-moves", "moves"),
+    choice("settings-drop-confirm-always", "always"),
+];
 pub const SORTS: [Choice; 4] = [
     choice("Name", "name"),
     choice("Size", "size"),
@@ -183,7 +189,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-const GENERAL: [FieldSpec; 19] = [
+const GENERAL: [FieldSpec; 20] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -257,6 +263,11 @@ const GENERAL: [FieldSpec; 19] = [
         Control::Toggle,
     ),
     spec(
+        (F::DropConfirm, S::Files, "files.drop-confirm"),
+        ("settings-drop-confirm", "settings-drop-confirm-help"),
+        Control::Choices(&DROP_CONFIRMS, Look::Segments),
+    ),
+    spec(
         (
             F::SpaceMeasuresFolders,
             S::Selection,
@@ -305,7 +316,7 @@ const GENERAL: [FieldSpec; 19] = [
     ),
 ];
 
-pub const FIELDS: [FieldSpec; 43] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
+pub const FIELDS: [FieldSpec; 44] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
 
 const fn join<const A: usize, const B: usize, const C: usize, const N: usize>(
     first: [FieldSpec; A],

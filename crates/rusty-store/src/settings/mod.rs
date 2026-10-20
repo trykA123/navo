@@ -21,8 +21,8 @@ use complete::{Ledger, reconcile};
 pub use edit::{SettingValue, key_line, section_line};
 
 pub use model::{
-    Appearance, Density, Editor, Files, HiddenFiles, ModifierHints, SelectionSettings, Settings,
-    SortKey, Terminal, ThemeMode,
+    Appearance, Density, DropConfirm, Editor, Files, HiddenFiles, ModifierHints, SelectionSettings,
+    Settings, SortKey, Terminal, ThemeMode,
 };
 pub use parse::{parse, to_toml};
 pub use view::{
