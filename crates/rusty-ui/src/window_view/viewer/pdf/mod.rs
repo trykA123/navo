@@ -1,5 +1,6 @@
 mod body;
 mod card;
+mod chapters;
 mod doc;
 mod find;
 mod follow;
@@ -11,6 +12,7 @@ mod layout;
 mod links;
 mod look;
 mod navigate;
+mod outline;
 mod page_list;
 mod rail;
 mod search;

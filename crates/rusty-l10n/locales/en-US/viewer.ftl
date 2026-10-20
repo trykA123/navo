@@ -7,3 +7,4 @@ pdf-link-page = Page { $page }
 pdf-link-unsupported = This link type is not followed
 pdf-link-not-opened = Not opened: { $scheme } links
 pdf-link-scheme-unknown = unknown
+pdf-outline-empty = This PDF has no outline. Use Pages, or Find to jump to a heading.

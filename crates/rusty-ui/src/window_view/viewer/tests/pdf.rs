@@ -9,7 +9,8 @@ use rusty_core::Location;
 use rusty_pdf::Engine;
 use rusty_pdf::fake::{FakeEngine, PASSWORD};
 use rusty_pdf::protocol::{
-    Bitmap, CharBox, LinkTarget, PageLink, PageLinks, PageText, PdfError, RenderRequest, TextChar,
+    Bitmap, CharBox, LinkTarget, Outline, OutlineItem, PageLink, PageLinks, PageText, PdfError,
+    RenderRequest, TextChar,
 };
 
 use super::{redraw, visible, window_with};
@@ -111,10 +112,35 @@ fn book_links() -> Result<PageLinks, PdfError> {
     PageLinks::new(WIDTH, HEIGHT, links).map_err(|_| PdfError::Corrupt)
 }
 
+pub(super) const LONG_TITLE: &str = "Electrical characteristics over the full recommended operating temperature range with every optional feature enabled";
+
+fn book_outline() -> Result<Outline, PdfError> {
+    let page = |page| LinkTarget::Page { page, top: None };
+    let entries = [
+        ("Introduction", 0, page(0)),
+        ("Scope", 1, page(2)),
+        ("Operation", 0, page(9)),
+        ("Attachment", 0, LinkTarget::Unsupported),
+        (LONG_TITLE, 1, page(20)),
+        ("Appendix", 0, page(30)),
+        ("Deepest", 9, page(31)),
+    ];
+    let items = entries
+        .into_iter()
+        .map(|(title, level, target)| OutlineItem {
+            title: title.to_owned(),
+            level,
+            target,
+        })
+        .collect();
+    Outline::new(items).map_err(|_| PdfError::Corrupt)
+}
+
 struct Book {
     pages: u32,
     calls: Calls,
     mute: Option<u32>,
+    is_flat: bool,
 }
 
 impl PdfPages for Book {
@@ -139,6 +165,13 @@ impl PdfPages for Book {
     fn links(&mut self, _: u32) -> Result<PageLinks, PdfError> {
         book_links()
     }
+
+    fn outline(&mut self) -> Result<Outline, PdfError> {
+        if self.is_flat {
+            return Outline::new(Vec::new()).map_err(|_| PdfError::Corrupt);
+        }
+        book_outline()
+    }
 }
 
 struct Fake(FakeEngine);
@@ -159,6 +192,10 @@ impl PdfPages for Fake {
     fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
         self.0.links(page)
     }
+
+    fn outline(&mut self) -> Result<Outline, PdfError> {
+        self.0.outline()
+    }
 }
 
 fn name_of(location: &Location) -> String {
@@ -177,11 +214,12 @@ fn open_with(calls: &Calls) -> OpenPdf {
             .expect("calls")
             .push(password.map(str::to_owned));
         let name = name_of(location);
-        if name == "a-book.pdf" || name == "a-muted.pdf" {
+        if matches!(name.as_str(), "a-book.pdf" | "a-muted.pdf" | "a-flat.pdf") {
             return Ok(Box::new(Book {
                 pages: PAGES,
                 calls: calls.clone(),
                 mute: (name == "a-muted.pdf").then_some(MUTED),
+                is_flat: name == "a-flat.pdf",
             }) as Box<dyn PdfPages>);
         }
         let mut engine = FakeEngine::default();

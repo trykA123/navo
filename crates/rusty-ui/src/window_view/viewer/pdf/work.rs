@@ -16,6 +16,7 @@ impl PdfView {
         Wants {
             index: !self.query.is_empty() && !first_only,
             thumbs: self.left.read(cx).is_open() && self.left_tab == LeftTab::Pages,
+            chapters: self.left.read(cx).is_open() && self.left_tab == LeftTab::Outline,
             first_only,
         }
     }

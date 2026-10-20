@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use rusty_core::Location;
 use rusty_pdf::Document;
-use rusty_pdf::protocol::{Bitmap, PageLinks, PageText, PdfError, RenderRequest};
+use rusty_pdf::protocol::{Bitmap, Outline, PageLinks, PageText, PdfError, RenderRequest};
 
 pub trait PdfPages: Send {
     fn page_count(&self) -> u32;
     fn render(&mut self, request: RenderRequest) -> Result<Bitmap, PdfError>;
     fn text(&mut self, page: u32) -> Result<PageText, PdfError>;
     fn links(&mut self, page: u32) -> Result<PageLinks, PdfError>;
+    fn outline(&mut self) -> Result<Outline, PdfError>;
 }
 
 impl PdfPages for Document {
@@ -26,6 +27,10 @@ impl PdfPages for Document {
 
     fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
         Document::links(self, page)
+    }
+
+    fn outline(&mut self) -> Result<Outline, PdfError> {
+        Document::outline(self)
     }
 }
 
