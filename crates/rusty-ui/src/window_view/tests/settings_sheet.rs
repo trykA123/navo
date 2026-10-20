@@ -499,6 +499,11 @@ fn the_display_section_groups_the_viewer_parts_and_flips_one(cx: &mut TestAppCon
     assert_eq!(last_change(&rig), Some(change));
     rig.press(cx, "down");
     assert_eq!(
+        label(cx, &rig, "settings-key").as_deref(),
+        Some("text.view.syntax-theme")
+    );
+    rig.press(cx, "down");
+    assert_eq!(
         label(cx, &rig, "settings-group-image").as_deref(),
         Some("Image")
     );

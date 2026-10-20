@@ -41,6 +41,7 @@ contents = true
 [text.view]
 line-numbers = true
 line-ends = false
+syntax-theme = \"oxidised-iron\"
 
 [image.view]
 details = false
@@ -63,7 +64,7 @@ charts = false
 row-bars = false
 ";
 
-const DEFAULT_KEYS: [(&str, &str); 40] = [
+const DEFAULT_KEYS: [(&str, &str); 41] = [
     ("appearance.mode", "\"system\""),
     ("appearance.light-theme", "\"Ferrite Light\""),
     ("appearance.dark-theme", "\"Ferrite Dark\""),
@@ -94,6 +95,7 @@ const DEFAULT_KEYS: [(&str, &str); 40] = [
     ("window.view.contents", "true"),
     ("text.view.line-numbers", "true"),
     ("text.view.line-ends", "false"),
+    ("text.view.syntax-theme", "\"oxidised-iron\""),
     ("image.view.details", "false"),
     ("markdown.view.preview-split", "true"),
     ("preview.view.type-bars", "true"),
@@ -153,7 +155,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = true\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = true\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
     assert_eq!(completed(before), after);
 }
 

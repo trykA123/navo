@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use gpui_kit::App;
 use gpui_kit::component::theme::{Theme as KitTheme, ThemeColor, ThemeMode};
 
-use super::{Colors, Density, Mode, Theme};
+use super::{Colors, Density, Mode, SyntaxTheme, Theme, highlight_theme};
 
 fn map_colors(c: &Colors, k: &mut ThemeColor) {
     k.background = c.background;
@@ -56,7 +58,13 @@ pub fn apply(mode: Mode, cx: &mut App) {
 }
 
 pub fn apply_with(mode: Mode, density: Density, cx: &mut App) {
-    let theme = Theme::with_density(mode, density);
+    let syntax = cx.try_global::<Theme>().map(|theme| theme.syntax);
+    apply_look(mode, density, syntax.unwrap_or_default(), cx);
+}
+
+pub fn apply_look(mode: Mode, density: Density, syntax: SyntaxTheme, cx: &mut App) {
+    let mut theme = Theme::with_density(mode, density);
+    theme.syntax = syntax;
     cx.set_global(theme.clone());
     let kit_mode = if mode.is_dark() {
         ThemeMode::Dark
@@ -73,5 +81,7 @@ pub fn apply_with(mode: Mode, density: Density, cx: &mut App) {
         kit.radius = radius;
         kit.shadow = false;
         map_colors(&colors, &mut kit.colors);
+        let highlight = highlight_theme(syntax, mode, &colors, &kit.highlight_theme);
+        kit.highlight_theme = Arc::new(highlight);
     });
 }

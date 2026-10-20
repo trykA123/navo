@@ -105,7 +105,7 @@ fn item(t: &Theme, index: usize, moved: &Moved, send: Option<&Handler>) -> AnyEl
     div()
         .id(("settings-upgrade-item", index))
         .role(Role::ListItem)
-        .aria_label(format!("{}, {}", spec.label, moved.line()))
+        .aria_label(format!("{}, {}", spec.label(), moved.line()))
         .test_support()
         .flex()
         .items_center()
@@ -116,7 +116,7 @@ fn item(t: &Theme, index: usize, moved: &Moved, send: Option<&Handler>) -> AnyEl
                 .flex_col()
                 .flex_1()
                 .min_w_0()
-                .child(div().font_weight(FontWeight::MEDIUM).child(spec.label))
+                .child(div().font_weight(FontWeight::MEDIUM).child(spec.label()))
                 .child(
                     div()
                         .font_family(t.typography.mono_font.clone())

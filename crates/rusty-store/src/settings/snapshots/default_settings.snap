@@ -45,6 +45,7 @@ contents = true
 [text.view]
 line-numbers = true
 line-ends = false
+syntax-theme = "oxidised-iron"
 
 [image.view]
 details = false

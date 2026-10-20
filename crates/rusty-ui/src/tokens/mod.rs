@@ -6,6 +6,7 @@ mod marks;
 mod motion;
 mod shadows;
 mod surfaces;
+mod syntax;
 
 #[cfg(test)]
 mod tests;
@@ -16,11 +17,12 @@ use gpui_kit::{App, Global, Hsla, Pixels, SharedString};
 
 pub use contrast::{contrast_ratio, relative_luminance};
 pub use density::{Density, Rows};
-pub use kit::{apply, apply_with};
+pub use kit::{apply, apply_look, apply_with};
 pub use marks::MarkColors;
 pub use motion::Motion;
 pub use shadows::Shadows;
 pub use surfaces::Surfaces;
+pub use syntax::{SyntaxTheme, highlight_theme};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Mode {
@@ -166,6 +168,7 @@ pub struct Theme {
     pub motion: Motion,
     pub density: Density,
     pub rows: Rows,
+    pub syntax: SyntaxTheme,
 }
 
 impl Global for Theme {}
@@ -191,6 +194,7 @@ impl Theme {
             shadows: shadows::shadows(mode, &surfaces),
             surfaces,
             motion: motion::motion(),
+            syntax: SyntaxTheme::default(),
         }
     }
 }

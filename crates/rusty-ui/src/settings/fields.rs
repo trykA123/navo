@@ -1,5 +1,6 @@
 use super::viewer_fields::VIEWER_FIELDS;
 use super::window_fields::WINDOW_FIELDS;
+use crate::prelude::SharedString;
 use crate::primitives::IconName;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -84,6 +85,7 @@ pub enum Field {
     WindowContents,
     TextLineNumbers,
     TextLineEnds,
+    TextSyntaxTheme,
     ImageDetails,
     MarkdownPreviewSplit,
     PreviewTypeBars,
@@ -127,6 +129,10 @@ pub const PRESETS: [Choice; 3] = [
     choice("Custom", "custom"),
 ];
 pub const COPY_MODES: [Choice; 2] = [choice("Auto", "auto"), choice("Standard", "standard")];
+pub const SYNTAX_THEMES: [Choice; 2] = [
+    choice("settings-syntax-theme-oxidised-iron", "oxidised-iron"),
+    choice("settings-syntax-theme-mocha", "mocha"),
+];
 pub const SORTS: [Choice; 4] = [
     choice("Name", "name"),
     choice("Size", "size"),
@@ -299,7 +305,7 @@ const GENERAL: [FieldSpec; 19] = [
     ),
 ];
 
-pub const FIELDS: [FieldSpec; 42] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
+pub const FIELDS: [FieldSpec; 43] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
 
 const fn join<const A: usize, const B: usize, const C: usize, const N: usize>(
     first: [FieldSpec; A],
@@ -339,7 +345,31 @@ const GROUPS: [(&str, &str); 6] = [
     ("automotive", "Automotive"),
 ];
 
+const MESSAGE_PREFIX: &str = "settings-";
+
+fn shown(text: &'static str) -> SharedString {
+    if text.starts_with(MESSAGE_PREFIX) {
+        rusty_l10n::tr(text).into()
+    } else {
+        text.into()
+    }
+}
+
+impl Choice {
+    pub fn text(&self) -> SharedString {
+        shown(self.label)
+    }
+}
+
 impl FieldSpec {
+    pub fn label(&self) -> SharedString {
+        shown(self.label)
+    }
+
+    pub fn help(&self) -> SharedString {
+        shown(self.help)
+    }
+
     pub fn table(&self) -> &'static str {
         self.key.split('.').next().unwrap_or_default()
     }

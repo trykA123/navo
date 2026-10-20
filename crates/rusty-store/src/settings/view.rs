@@ -20,6 +20,7 @@ pub struct TextViewer {
 pub struct TextView {
     pub line_numbers: bool,
     pub line_ends: bool,
+    pub syntax_theme: SyntaxThemeChoice,
 }
 
 impl Default for TextView {
@@ -27,8 +28,17 @@ impl Default for TextView {
         Self {
             line_numbers: true,
             line_ends: false,
+            syntax_theme: SyntaxThemeChoice::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SyntaxThemeChoice {
+    #[default]
+    OxidisedIron,
+    Mocha,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-const HIGHLIGHT_NAMES: [&str; 41] = [
+pub(crate) const HIGHLIGHT_NAMES: [&str; 41] = [
     "attribute",
     "boolean",
     "comment",

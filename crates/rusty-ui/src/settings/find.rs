@@ -20,7 +20,7 @@ impl Filter {
         if self.is_empty() {
             return true;
         }
-        let text = format!("{} {} {}", spec.label, spec.key, spec.help).to_lowercase();
+        let text = format!("{} {} {}", spec.label(), spec.key, spec.help()).to_lowercase();
         self.0.iter().all(|word| text.contains(word))
     }
 
