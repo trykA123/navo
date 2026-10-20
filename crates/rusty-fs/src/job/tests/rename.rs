@@ -161,10 +161,9 @@ fn a_fault_at_any_step_puts_everything_back() {
         );
         let outcome = run_batch(&fs, &plan);
         let seq = u32::try_from(step).unwrap();
-        assert_eq!(
+        assert!(
             matches!(&outcome, RenameOutcome::PutBack { seq: at, error }
                 if *at == seq && error.kind == FsErrorKind::Locked),
-            true,
             "step {step}: {outcome:?}"
         );
         assert_eq!(tree_of(&fs, "d"), before, "step {step}");
@@ -400,4 +399,15 @@ fn a_finished_batch_leaves_no_temporary_name() {
         [size(&fs, "d/a"), size(&fs, "d/b"), size(&fs, "d/c")],
         [Some(30), Some(10), Some(20)]
     );
+}
+
+#[test]
+fn a_rename_step_counts_as_an_item_only_in_a_rename_job() {
+    let fs = FakeFs::new();
+    let step = Step::Rename {
+        source: fs.location("d/a"),
+        target: fs.location("e/a"),
+    };
+    assert_eq!(crate::job::run::counted(OpKind::Rename, &step), (0, 1));
+    assert_eq!(crate::job::run::counted(OpKind::Move, &step), (0, 0));
 }

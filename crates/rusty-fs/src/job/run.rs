@@ -1,4 +1,4 @@
-use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
+use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::Aside;
 use super::copy::{Copier, CopyStep, copy, overwrites, place};
@@ -17,11 +17,11 @@ pub(super) fn current_of(step: &Step) -> Location {
     }
 }
 
-pub(super) fn counted(step: &Step) -> (u64, u64) {
+pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
     match step {
         Step::CopyFile { size, .. } => (*size, 1),
         Step::RemoveFile { .. } => (0, 1),
-        Step::Rename { target, .. } if !is_temporary(target) => (0, 1),
+        Step::Rename { target, .. } if kind == OpKind::Rename && !is_temporary(target) => (0, 1),
         _ => (0, 0),
     }
 }
@@ -49,7 +49,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
     let mut kept = Vec::new();
     for (seq, step) in (0_u32..).zip(&plan.steps) {
         if done.contains(&seq) {
-            advance(&mut progress, step);
+            advance(&mut progress, plan.kind, step);
             continue;
         }
         hold(ctx.cancel, &mut progress, ctx.progress);
@@ -70,7 +70,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
                     return JobOutcome::Failed { seq, error };
                 }
                 progress.bytes_done = start;
-                advance(&mut progress, step);
+                advance(&mut progress, plan.kind, step);
                 (ctx.progress)(&progress);
             }
             Err(error) if error.kind == FsErrorKind::Cancelled || ctx.cancel.is_cancelled() => {
@@ -106,8 +106,8 @@ pub(super) fn holds_kept(step: &Step, kept: &[Location]) -> bool {
     })
 }
 
-fn advance(progress: &mut Progress, step: &Step) {
-    let (bytes, files) = counted(step);
+fn advance(progress: &mut Progress, kind: OpKind, step: &Step) {
+    let (bytes, files) = counted(kind, step);
     progress.bytes_done += bytes;
     progress.files_done += files;
 }

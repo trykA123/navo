@@ -267,7 +267,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
     }
 
     fn count(&mut self, step: &Step) {
-        let (bytes, files) = counted(step);
+        let (bytes, files) = counted(self.job.plan.kind, step);
         self.settled += bytes;
         self.progress.files_done += files;
     }

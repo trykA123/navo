@@ -69,7 +69,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
     let mut inner = JobContext {
         ops: *ops,
         log: &mut tracking,
-        cancel: *cancel,
+        cancel,
         progress: &mut **progress,
     };
     let first = match run::run(plan, &[], &mut inner) {
@@ -89,7 +89,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
     let mut inner = JobContext {
         ops: *ops,
         log: &mut tracking,
-        cancel: *cancel,
+        cancel,
         progress: &mut **progress,
     };
     match roll_back(&job, &mut inner) {
