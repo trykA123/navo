@@ -1,6 +1,6 @@
 use rusty_core::{FsError, FsErrorKind, Location};
 
-use super::tree::{Tree, split_last};
+use super::tree::{Tree, fold_text, split_last};
 use super::{FakeFs, FakeOp, Fault, error, lock};
 use crate::{ALREADY_EXISTS_CODES, CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange};
 
@@ -172,10 +172,13 @@ impl ProviderOps for FakeFs {
             return Err(error(kind, source));
         }
         existing_kind(&tree, &from).map_err(|k| error(k, source))?;
-        if tree.metadata(&to).is_some() {
+        let case_only = tree.folds() && fold_text(&from) == fold_text(&to);
+        if !case_only && tree.metadata(&to).is_some() {
             return Err(already_exists_error(target));
         }
-        vacant(&tree, &to).map_err(|k| error(k, target))?;
+        if !case_only {
+            vacant(&tree, &to).map_err(|k| error(k, target))?;
+        }
         if to.starts_with(&format!("{from}/")) {
             return Err(error(FsErrorKind::NameInvalid, target));
         }
