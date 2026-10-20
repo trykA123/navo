@@ -247,6 +247,5 @@ fn commands_without_a_handler_are_left_out_of_the_drawer(cx: &mut TestAppContext
     hold_open(cx, window);
     assert!(has_entry(cx, window, "hint-files.refresh"));
     assert!(has_entry(cx, window, "hint-tab.go_to_first"));
-    assert!(!has_entry(cx, window, "hint-app.command_palette"));
     assert!(!has_entry(cx, window, "hint-window.new"));
 }

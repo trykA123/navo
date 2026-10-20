@@ -57,6 +57,7 @@ pub fn bind_keys(cx: &mut App) {
     crate::pane_chrome::bind_keys(cx);
     super::tab_keys::bind_keys(cx);
     crate::side_sheet::bind_keys(cx);
+    crate::command_center::bind_keys(cx);
     super::preview::bind_keys(cx);
     crate::commands::bind_namespace(cx, "ferrite_window");
 }

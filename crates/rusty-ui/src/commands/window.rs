@@ -26,6 +26,11 @@ pub(super) const GROUPS: [Group; 8] = [
                 "cmd-sheet-narrower",
             ),
             ("side_sheet::Wider", "sheet.wider", "cmd-sheet-wider"),
+            (
+                "command_center::Toggle",
+                "app.command_palette",
+                "cmd-app-command-palette",
+            ),
         ],
     },
     Group {

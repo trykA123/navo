@@ -3,12 +3,13 @@ use std::collections::HashSet;
 use gpui_kit::{App, TestAppContext};
 use rusty_l10n::{FILES, catalog, tr};
 
-use super::{GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings};
+use super::{GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 23] = [
+const NAMESPACES: [&str; 24] = [
     "app_menu",
     "can_trace",
+    "command_center",
     "confirm_dialog",
     "context_menu",
     "dialog_focus",
@@ -432,4 +433,61 @@ fn every_cmd_message_in_the_files_belongs_to_a_command() {
         .filter(|id| id.starts_with("cmd-") && !labels.contains(id))
         .collect();
     assert_eq!(orphans, Vec::<&str>::new());
+}
+
+#[test]
+fn entries_cover_every_command_in_order() {
+    let names: Vec<&str> = entries().iter().map(|entry| entry.spec.name).collect();
+    let all: Vec<&str> = all().map(|spec| spec.name).collect();
+    assert_eq!(names, all);
+}
+
+#[test]
+fn every_entry_is_enabled_and_takes_no_argument() {
+    let odd: Vec<&str> = entries()
+        .iter()
+        .filter(|entry| !entry.enabled || entry.arg.is_some())
+        .map(|entry| entry.spec.name)
+        .collect();
+    assert_eq!(odd, Vec::<&str>::new());
+}
+
+#[test]
+fn the_command_center_toggle_is_a_hidden_global_command() {
+    let toggle = by_name("app.command_palette");
+    assert_eq!(
+        toggle.map(|spec| (spec.action, spec.context)),
+        Some((Some("command_center::Toggle"), GLOBAL))
+    );
+    let entry = entries()
+        .into_iter()
+        .find(|entry| entry.spec.name == "app.command_palette");
+    assert_eq!(entry.map(|entry| entry.in_palette), Some(false));
+}
+
+#[test]
+fn every_hidden_name_is_a_registered_command() {
+    let known: HashSet<&str> = all().map(|spec| spec.name).collect();
+    let unknown: Vec<&str> = super::palette_hidden::HIDDEN
+        .iter()
+        .copied()
+        .filter(|name| !known.contains(name))
+        .collect();
+    assert_eq!(unknown, Vec::<&str>::new());
+}
+
+#[test]
+fn the_palette_entries_match_the_snapshot() {
+    let lines: Vec<String> = entries()
+        .iter()
+        .map(|entry| {
+            format!(
+                "{} | {} | {}",
+                entry.spec.name, entry.spec.context, entry.in_palette
+            )
+        })
+        .collect();
+    insta::with_settings!({ prepend_module_to_snapshot => false }, {
+        insta::assert_snapshot!("palette_entries", lines.join("\n"));
+    });
 }

@@ -7,6 +7,7 @@ settings.toggle | All settings | global
 jobs.toggle | Show or hide jobs | global
 sheet.narrower | Narrower side sheet | global
 sheet.wider | Wider side sheet | global
+app.command_palette | Command center | global
 tab.next | Next tab | FerritePane
 tab.previous | Previous tab | FerritePane
 tab.close | Close tab | FerritePane
@@ -299,7 +300,6 @@ pdf.link_previous | Previous link | Pdf
 pdf.link_follow | Follow link | Pdf
 pdf.trail_back | Back | Pdf
 pdf.trail_forward | Forward | Pdf
-app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global
 help.key_map | Help and key map | global

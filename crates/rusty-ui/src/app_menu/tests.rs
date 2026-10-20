@@ -64,7 +64,7 @@ fn a_single_tile_still_joins_the_ring() {
 
 #[test]
 fn a_letter_jumps_to_the_next_row_starting_with_it() {
-    let labels = ["Command palette", "New window", "Copy", "Quit"];
+    let labels = ["Command center", "New window", "Copy", "Quit"];
     assert_eq!(jump(&labels, None, "q"), Some(3));
     assert_eq!(jump(&labels, None, "C"), Some(0));
     assert_eq!(jump(&labels, Some(0), "c"), Some(2));
@@ -219,7 +219,7 @@ fn the_menu_shows_the_identity_three_tiles_and_six_rows(cx: &mut TestAppContext)
         assert_eq!(
             labels,
             [
-                "Command palette",
+                "Command center",
                 "New window",
                 "Workspaces",
                 "Help and key map",
@@ -458,7 +458,7 @@ fn the_menu_rows_keep_their_commands_labels_and_keys() {
     assert_eq!(
         rows,
         [
-            (MenuCommand::CommandPalette, "Command palette", "Ctrl+K"),
+            (MenuCommand::CommandPalette, "Command center", "Ctrl+K"),
             (MenuCommand::NewWindow, "New window", "Ctrl+N"),
             (MenuCommand::Workspaces, "Workspaces", "submenu"),
             (MenuCommand::Help, "Help and key map", "F1"),

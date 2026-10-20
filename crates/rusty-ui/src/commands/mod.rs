@@ -3,6 +3,7 @@ mod contexts;
 mod keymap;
 mod marks;
 mod overlays;
+mod palette_hidden;
 mod structured;
 mod viewer;
 mod window;
@@ -35,13 +36,38 @@ struct Group {
     commands: &'static [(&'static str, &'static str, &'static str)],
 }
 
-const MENU_ONLY: [(&str, &str); 5] = [
-    ("app.command_palette", "cmd-app-command-palette"),
+const MENU_ONLY: [(&str, &str); 4] = [
     ("window.new", "cmd-window-new"),
     ("workspace.list", "cmd-workspace-list"),
     ("help.key_map", "cmd-help-key-map"),
     ("app.quit", "cmd-app-quit"),
 ];
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ArgKind {
+    Path,
+    Text,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CommandEntry {
+    pub spec: CommandSpec,
+    pub enabled: bool,
+    pub in_palette: bool,
+    pub arg: Option<ArgKind>,
+}
+
+#[must_use]
+pub fn entries() -> Vec<CommandEntry> {
+    all()
+        .map(|spec| CommandEntry {
+            spec,
+            enabled: true,
+            in_palette: !palette_hidden::HIDDEN.contains(&spec.name),
+            arg: None,
+        })
+        .collect()
+}
 
 pub fn all() -> impl Iterator<Item = CommandSpec> {
     let bound = [

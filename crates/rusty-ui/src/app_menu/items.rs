@@ -73,7 +73,7 @@ pub(super) const ROWS: [RowSpec; 6] = [
     RowSpec {
         command: MenuCommand::CommandPalette,
         icon: IconName::Command,
-        label: "Command palette",
+        label: "Command center",
         trailing: Trailing::Keys,
     },
     RowSpec {
