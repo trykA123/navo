@@ -8,7 +8,7 @@ use object::{Endianness, Pod};
 
 use super::demangle::demangle;
 use super::parse::{Data, bytes_of, name_at};
-use super::{Bind, ElfProblem, Place, Section, Symbol, SymbolKind};
+use super::{Bind, ElfProblem, FileMark, Place, Section, Symbol, SymbolKind};
 use crate::{IndexError, Watch};
 
 const MAX_SYMBOLS: usize = 1_000_000;
@@ -190,14 +190,14 @@ pub(super) fn read_symbols<S, R>(
     table: &SymbolTable<'_, S, R>,
     watch: &mut Watch<'_>,
     problems: &mut Vec<ElfProblem>,
-) -> Result<(Vec<Symbol>, String), IndexError>
+) -> Result<(Vec<Symbol>, String, Vec<FileMark>), IndexError>
 where
     S: SectionHeader<Endian = Endianness>,
     S::Elf: object::read::elf::FileHeader<Endian = Endianness>,
     R: ReadCacheOps,
 {
     let Some((bytes, strings, start)) = locate(table, problems) else {
-        return Ok((Vec::new(), String::new()));
+        return Ok((Vec::new(), String::new(), Vec::new()));
     };
     let raw: &[<S::Elf as object::read::elf::FileHeader>::Sym] = entries(bytes);
     let total = raw.len().saturating_sub(1);
@@ -210,6 +210,7 @@ where
     }
     let mut names = Names::default();
     let mut symbols = Vec::with_capacity(total.min(MAX_SYMBOLS));
+    let mut marks = Vec::new();
     let context = Context {
         strings,
         endian: table.endian,
@@ -223,11 +224,19 @@ where
             }
             (watch.progress)(start + (at * size_of_val(sym)) as u64);
         }
-        if matches!(sym.st_type(), elf::STT_SECTION | elf::STT_FILE) {
+        if sym.st_type() == elf::STT_FILE {
+            let name = name_at(strings, sym.st_name(table.endian)).unwrap_or_default();
+            marks.push(FileMark {
+                first: symbols.len() as u32,
+                name: names.push(&name),
+            });
+            continue;
+        }
+        if sym.st_type() == elf::STT_SECTION {
             continue;
         }
         symbols.extend(symbol_of(sym, &context, &mut names));
     }
     names.report(problems);
-    Ok((symbols, names.text))
+    Ok((symbols, names.text, marks))
 }

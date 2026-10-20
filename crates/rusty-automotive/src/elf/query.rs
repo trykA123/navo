@@ -75,7 +75,7 @@ fn is_boundary(symbol: &Symbol) -> bool {
     symbol.size != 0 || symbol.bind != Bind::Local
 }
 
-fn estimate(elf: &Elf, symbol: &Symbol, next: Option<u64>) -> Option<u64> {
+pub(crate) fn estimate(elf: &Elf, symbol: &Symbol, next: Option<u64>) -> Option<u64> {
     if !is_estimable(symbol) {
         return None;
     }
@@ -100,10 +100,10 @@ pub fn estimated_size(elf: &Elf, at: usize) -> Option<u64> {
     estimate(elf, symbol, next)
 }
 
-struct Boundaries(Vec<Vec<u64>>);
+pub(crate) struct Boundaries(Vec<Vec<u64>>);
 
 impl Boundaries {
-    fn new(elf: &Elf) -> Self {
+    pub(crate) fn new(elf: &Elf) -> Self {
         let mut by_section = vec![Vec::new(); elf.sections.len()];
         for symbol in &elf.symbols {
             if is_boundary(symbol)
@@ -120,7 +120,7 @@ impl Boundaries {
         Self(by_section)
     }
 
-    fn after(&self, symbol: &Symbol) -> Option<u64> {
+    pub(crate) fn after(&self, symbol: &Symbol) -> Option<u64> {
         let Place::Section(index) = symbol.place else {
             return None;
         };

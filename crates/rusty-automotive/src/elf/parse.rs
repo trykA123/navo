@@ -108,7 +108,7 @@ fn parse_as<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
         sections: &sections,
         data,
     };
-    let (symbols, names) = read_symbols(&table, watch, &mut problems)?;
+    let (symbols, names, files) = read_symbols(&table, watch, &mut problems)?;
     let dwarf = dwarf_of(&sections, &mut problems);
     let totals = totals(&sections, &segments);
     Ok(super::Elf {
@@ -119,6 +119,7 @@ fn parse_as<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
         problems,
         totals,
         names,
+        files,
         dwarf,
     })
 }
