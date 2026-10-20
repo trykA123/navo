@@ -12,6 +12,7 @@ pub mod mdf;
 mod record;
 mod scan;
 mod source;
+pub mod space;
 mod trace;
 
 use std::sync::atomic::AtomicBool;
