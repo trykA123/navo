@@ -7,7 +7,7 @@ use rusty_core::line_ends::LineEnds;
 use super::EditorView;
 use crate::prelude::*;
 use crate::window_view::viewer::search::memory::restamp;
-use crate::window_view::viewer::{FileHooks, FileStamp, Save, SaveError};
+use crate::window_view::viewer::{FileHooks, FileStamp, Save, SaveError, Saved};
 
 const SAVING: &str = "Saving…";
 const SAVED: &str = "Saved.";
@@ -22,13 +22,8 @@ struct SaveJob {
     expected: Option<FileStamp>,
 }
 
-struct Written {
-    result: Result<Option<FileStamp>, SaveError>,
-    ends: Option<Arc<LineEnds>>,
-}
-
 impl SaveJob {
-    fn write(&self, hooks: &FileHooks) -> Written {
+    fn write(&self, hooks: &FileHooks) -> Result<Saved, SaveError> {
         let save = Save {
             text: &self.text,
             crlf: self.crlf,
@@ -36,12 +31,7 @@ impl SaveJob {
             encoding: self.encoding,
             ends: self.ends.as_deref(),
         };
-        let result = (hooks.write)(&self.location, &save);
-        let ends = match (&result, &self.ends) {
-            (Ok(_), Some(ends)) => Some(Arc::new(ends.rebuilt(&self.text))),
-            _ => None,
-        };
-        Written { result, ends }
+        (hooks.write)(&self.location, &save)
     }
 }
 
@@ -68,22 +58,21 @@ impl EditorView {
         })
         .detach();
         self.saving = Some(cx.spawn(async move |this, cx| {
-            let written = receiver.await.unwrap_or_else(|_| Written {
-                result: Err(SaveError::Failed("Could not save.".to_owned())),
-                ends: None,
-            });
+            let written = receiver
+                .await
+                .unwrap_or_else(|_| Err(SaveError::Failed("Could not save.".to_owned())));
             let _ = this.update(cx, |view, cx| view.saved(revision, written, cx));
         }));
         cx.notify();
     }
 
-    fn saved(&mut self, revision: u64, written: Written, cx: &mut Context<Self>) {
+    fn saved(&mut self, revision: u64, written: Result<Saved, SaveError>, cx: &mut Context<Self>) {
         self.saving = None;
-        match written.result {
-            Ok(stamp) => {
+        match written {
+            Ok(Saved { stamp, ends }) => {
                 self.stamp = stamp;
-                if written.ends.is_some() {
-                    self.ends = written.ends;
+                if let Some(ends) = ends {
+                    self.ends = Some(Arc::new(ends));
                 }
                 self.dirty = self.revision != revision;
                 self.note = Some(SAVED.into());

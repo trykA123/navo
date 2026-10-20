@@ -203,7 +203,7 @@ fn the_preview_hooks_refuse_to_write() {
     let hooks = FileHooks {
         write: Arc::new(move |_, _| {
             counted.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            Ok(None)
+            Ok(None.into())
         }),
         save_memory: Arc::new(move |_, _, _, _| {
             saved.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

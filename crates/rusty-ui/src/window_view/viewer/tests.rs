@@ -183,7 +183,7 @@ pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
         }),
         write: Arc::new(move |_, save| {
             written.lock().expect("log").push(save.text.to_owned());
-            Ok(None)
+            Ok(None.into())
         }),
         head: Arc::new(move |location| {
             let name = location

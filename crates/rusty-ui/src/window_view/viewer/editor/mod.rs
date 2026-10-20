@@ -58,10 +58,14 @@ pub(super) struct EditorView {
     _changes: Subscription,
 }
 
-fn not_lossless(encoding: &TextEncoding) -> SharedString {
+fn read_only_note(file: &FileText) -> SharedString {
+    if file.ends.as_deref().is_some_and(LineEnds::has_stray_cr) {
+        return "Opened read-only: a line ends with a lone CR, so its line endings cannot be kept exactly."
+            .into();
+    }
     format!(
         "Not valid as {}: bad bytes show as \u{FFFD}. Opened read-only.",
-        encoding.label()
+        file.encoding.label()
     )
     .into()
 }
@@ -114,6 +118,7 @@ impl EditorView {
         } = opened;
         let shared: Arc<str> = Arc::from(file.text.as_str());
         let (persists, link) = memory_link(&file, &shared, &host);
+        let note = file.read_only.then(|| read_only_note(&file));
         let editor = cx.new(|cx| read_only_state(file.text, language, window, cx));
         let decorations = editor.update(cx, |state, cx| {
             state.create_range_decorations_collection(Vec::new(), cx)
@@ -138,7 +143,7 @@ impl EditorView {
             revision: 0,
             overwrite: false,
             saving: None,
-            note: file.read_only.then(|| not_lossless(&file.encoding)),
+            note,
             find: EditorFind::default(),
             go_to: None,
             marking: Marking::new(text_source(shared)),

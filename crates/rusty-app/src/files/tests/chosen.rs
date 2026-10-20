@@ -1,13 +1,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use encoding_rs::{UTF_8, UTF_16LE, WINDOWS_1252};
+use rusty_core::line_ends::LineEnds;
 use rusty_core::paging::{ByteSource, row_at, row_start_at};
-use rusty_ui::window_view::{FileText, Save};
+use rusty_ui::window_view::{FileText, Save, SaveError};
 
 use super::at;
-use crate::files::{paged::paged, paged::paged_as, read, read_as, write};
+use crate::files::{paged::paged, paged::paged_as, read, read_as, write, write_within};
 
 const FRENCH: &str =
     "Le café était déjà prêt à côté de l'hôpital, où la clé du théâtre restait oubliée.\n";
@@ -104,6 +106,50 @@ fn editing_one_line_of_a_mixed_file_keeps_every_other_line_ending() {
         fs::read(&path).unwrap(),
         b"one\r\ntwo\nTHREE and more\r\nfour\nfive"
     );
+}
+
+#[test]
+fn a_save_returns_the_table_of_the_bytes_it_wrote() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = stored(&dir, "mixed.txt", b"one\r\ntwo\nthree\r\nfour\nfive");
+    let opened = read(&at(&path)).unwrap();
+    let edited = format!("new\n{}", opened.text.replace("three", "THREE"));
+    let save = Save {
+        text: &edited,
+        crlf: opened.crlf,
+        expected: opened.stamp,
+        encoding: opened.encoding,
+        ends: opened.ends.as_deref(),
+    };
+    let saved = write(&at(&path), &save).unwrap();
+    let on_disk = String::from_utf8(fs::read(&path).unwrap()).unwrap();
+    let from_disk = LineEnds::unify(&on_disk).map(|(_, ends)| ends);
+    assert_eq!(saved.ends, from_disk);
+    assert!(saved.ends.is_some());
+}
+
+#[test]
+fn a_save_that_runs_out_of_time_refuses_and_leaves_the_file_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let original = b"one\r\ntwo\nthree\r\nfour\nfive";
+    let path = stored(&dir, "mixed.txt", original);
+    let opened = read(&at(&path)).unwrap();
+    let edited = opened.text.replace("three", "THREE");
+    let save = Save {
+        text: &edited,
+        crlf: opened.crlf,
+        expected: opened.stamp,
+        encoding: opened.encoding,
+        ends: opened.ends.as_deref(),
+    };
+    let refused = write_within(&at(&path), &save, Duration::ZERO);
+    assert_eq!(
+        refused,
+        Err(SaveError::Failed(
+            "This file mixes line endings and the change is too large to keep every line's ending. Nothing was saved.".to_owned()
+        ))
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
 }
 
 const STRAY: &str = "a\r\r\nb\nc";

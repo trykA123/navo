@@ -3,7 +3,13 @@ use std::time::{Duration, Instant};
 
 use similar::{Algorithm, DiffTag, capture_diff_slices_deadline};
 
-const DIFF_BUDGET: Duration = Duration::from_secs(2);
+pub const DIFF_BUDGET: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "This file mixes line endings and the change is too large to keep every line's ending. Nothing was saved."
+)]
+pub struct TooLarge;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineEnds {
@@ -92,20 +98,14 @@ impl LineEnds {
         marks
     }
 
-    #[must_use]
-    pub fn apply(&self, edited: &str) -> String {
-        self.resolve(edited).0
+    pub fn apply(&self, edited: &str) -> Result<(String, Self), TooLarge> {
+        self.apply_within(edited, DIFF_BUDGET)
     }
 
-    #[must_use]
-    pub fn rebuilt(&self, edited: &str) -> Self {
-        self.resolve(edited).1
-    }
-
-    fn resolve(&self, edited: &str) -> (String, Self) {
+    pub fn apply_within(&self, edited: &str, budget: Duration) -> Result<(String, Self), TooLarge> {
         let lines = self.lines_of(edited);
         let hashes: Vec<u64> = lines.iter().map(|line| hash_of(line)).collect();
-        let origins = self.origins(&hashes);
+        let origins = self.origins(&hashes, budget)?;
         let crlf: Vec<bool> = origins
             .iter()
             .take(lines.len() - 1)
@@ -129,7 +129,7 @@ impl LineEnds {
             default_crlf,
             stray_cr: false,
         };
-        (text, ends)
+        Ok((text, ends))
     }
 
     fn lines_of<'a>(&self, edited: &'a str) -> Vec<&'a str> {
@@ -143,12 +143,15 @@ impl LineEnds {
         lines
     }
 
-    fn origins(&self, new: &[u64]) -> Vec<Option<usize>> {
+    fn origins(&self, new: &[u64], budget: Duration) -> Result<Vec<Option<usize>>, TooLarge> {
         let old_rev: Vec<u64> = self.hashes.iter().rev().copied().collect();
         let new_rev: Vec<u64> = new.iter().rev().copied().collect();
-        let deadline = Instant::now() + DIFF_BUDGET;
+        let deadline = Instant::now() + budget;
         let ops =
             capture_diff_slices_deadline(Algorithm::Patience, &old_rev, &new_rev, Some(deadline));
+        if Instant::now() >= deadline {
+            return Err(TooLarge);
+        }
         let mut origins = vec![None; new.len()];
         for op in ops {
             let (tag, old, changed) = op.as_tag_tuple();
@@ -161,15 +164,21 @@ impl LineEnds {
                 origins[new_start + step] = Some(old_start + step);
             }
         }
-        origins
+        Ok(origins)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::LineEnds;
+    use std::time::Duration;
+
+    use super::{DIFF_BUDGET, LineEnds, TooLarge};
 
     const MIXED: &str = "one\r\ntwo\nthree\r\nfour\nfive";
+
+    fn applied(ends: &LineEnds, edited: &str) -> String {
+        ends.apply(edited).expect("within the budget").0
+    }
 
     fn ends_of(text: &str) -> LineEnds {
         LineEnds::unify(text).expect("mixed").1
@@ -191,28 +200,31 @@ mod tests {
     #[test]
     fn applying_the_unedited_text_gives_the_original_back() {
         let (text, ends) = LineEnds::unify(MIXED).expect("mixed");
-        assert_eq!(ends.apply(&text), MIXED);
+        assert_eq!(applied(&ends, &text), MIXED);
     }
 
     #[test]
     fn editing_one_line_keeps_every_other_ending() {
         let ends = ends_of(MIXED);
         let edited = "one\ntwo\nTHREE\nfour\nfive";
-        assert_eq!(ends.apply(edited), "one\r\ntwo\nTHREE\r\nfour\nfive");
+        assert_eq!(applied(&ends, edited), "one\r\ntwo\nTHREE\r\nfour\nfive");
     }
 
     #[test]
     fn inserting_a_line_keeps_the_endings_around_it() {
         let ends = ends_of(MIXED);
         let edited = "one\ntwo\nthree\nnew\nfour\nfive";
-        assert_eq!(ends.apply(edited), "one\r\ntwo\nthree\r\nnew\nfour\nfive");
+        assert_eq!(
+            applied(&ends, edited),
+            "one\r\ntwo\nthree\r\nnew\nfour\nfive"
+        );
     }
 
     #[test]
     fn deleting_a_line_keeps_the_endings_around_it() {
         let ends = ends_of(MIXED);
         assert_eq!(
-            ends.apply("one\nthree\nfour\nfive"),
+            applied(&ends, "one\nthree\nfour\nfive"),
             "one\r\nthree\r\nfour\nfive"
         );
     }
@@ -221,7 +233,7 @@ mod tests {
     fn appending_lines_uses_the_majority_style() {
         let ends = ends_of("a\r\nb\r\nc\nd\r\ne");
         assert_eq!(
-            ends.apply("a\nb\nc\nd\ne\nf\n"),
+            applied(&ends, "a\nb\nc\nd\ne\nf\n"),
             "a\r\nb\r\nc\nd\r\ne\r\nf\r\n"
         );
     }
@@ -254,37 +266,62 @@ mod tests {
         edited.insert(6, ("added after 5".to_owned(), "\n"));
         let plain: String = edited.iter().map(|(line, _)| format!("{line}\n")).collect();
         assert_eq!(text.lines().count(), 2000);
-        assert_eq!(ends.apply(&plain), document(&edited));
+        assert_eq!(applied(&ends, &plain), document(&edited));
     }
 
     #[test]
-    fn deleting_the_first_of_two_equal_lines_keeps_the_remaining_ending() {
+    fn known_limit_deleting_either_of_two_equal_lines_keeps_the_first_ones_ending() {
         let ends = ends_of("x\r\nx\nz");
-        assert_eq!(ends.apply("x\nz"), "x\nz");
+        assert_eq!(applied(&ends, "x\nz"), "x\nz");
     }
 
     #[test]
     fn a_changed_line_keeps_the_ending_of_the_line_it_replaces() {
         let ends = ends_of("a\r\nb\nc\r\nd\ne");
-        assert_eq!(ends.apply("a\nB\nC\nd\ne"), "a\r\nB\nC\r\nd\ne");
+        assert_eq!(applied(&ends, "a\nB\nC\nd\ne"), "a\r\nB\nC\r\nd\ne");
     }
 
     #[test]
     fn a_line_body_that_ends_in_a_lone_cr_is_flagged_and_kept() {
         let (text, ends) = LineEnds::unify("a\r\r\nb\nc").expect("mixed");
         assert!(ends.has_stray_cr());
-        assert_eq!(ends.apply(&text), "a\r\r\nb\nc");
+        assert_eq!(applied(&ends, &text), "a\r\r\nb\nc");
         let (_, plain) = LineEnds::unify("a\rb\r\nc\nd").expect("mixed");
         assert!(!plain.has_stray_cr());
     }
 
     #[test]
-    fn a_rebuilt_table_diffs_the_next_save_against_the_saved_text() {
+    fn the_table_from_a_save_diffs_the_next_save_against_the_saved_text() {
         let ends = ends_of(MIXED);
         let first = "new\none\ntwo\nthree\nfour\nfive";
-        let saved = ends.apply(first);
-        let rebuilt = ends.rebuilt(first);
+        let (saved, table) = ends.apply(first).expect("within the budget");
         let second = "new\none\ntwo\nTHREE\nfour\nfive";
-        assert_eq!(rebuilt.apply(second), saved.replace("three", "THREE"));
+        assert_eq!(applied(&table, second), saved.replace("three", "THREE"));
+    }
+
+    #[test]
+    fn the_table_from_a_save_equals_the_table_of_the_text_it_wrote() {
+        let ends = ends_of(MIXED);
+        let (saved, table) = ends
+            .apply("new\none\ntwo\nTHREE\nfour\nfive")
+            .expect("within the budget");
+        assert_eq!(saved, "new\none\r\ntwo\nTHREE\r\nfour\nfive");
+        assert_eq!(LineEnds::unify(&saved).map(|(_, read)| read), Some(table));
+    }
+
+    #[test]
+    fn an_expired_deadline_refuses_an_edit_to_a_mixed_file() {
+        let ends = ends_of(MIXED);
+        let edited = "one\ntwo\nTHREE\nfour\nfive";
+        assert_eq!(ends.apply_within(edited, Duration::ZERO), Err(TooLarge));
+        assert!(ends.apply_within(edited, DIFF_BUDGET).is_ok());
+    }
+
+    #[test]
+    fn the_refusal_says_that_nothing_was_saved() {
+        assert_eq!(
+            TooLarge.to_string(),
+            "This file mixes line endings and the change is too large to keep every line's ending. Nothing was saved."
+        );
     }
 }

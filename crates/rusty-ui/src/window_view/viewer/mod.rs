@@ -41,7 +41,7 @@ pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerB
 pub use encoding::encoding_picker;
 pub use files::{
     FileHooks, FileStamp, FileText, Head, IndexRun, Paged, ReadBytes, Reopen, Save, SaveError,
-    SharedSource,
+    Saved, SharedSource,
 };
 pub use font::{FontFace, FontView};
 pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};

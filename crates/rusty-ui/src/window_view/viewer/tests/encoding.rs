@@ -10,7 +10,9 @@ use super::menu::{hint, press_key, run_item};
 use super::{label, redraw, text_of, visible, window_with};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{fake, press, settle, type_in};
-use crate::window_view::viewer::{EDIT_LIMIT, FileHooks, FileStamp, FileText, Head, Kinds, Paged};
+use crate::window_view::viewer::{
+    EDIT_LIMIT, FileHooks, FileStamp, FileText, Head, Kinds, Paged, Saved,
+};
 
 fn fallback() -> &'static Encoding {
     Encoding::for_label(b"windows-1250").expect("a known label")
@@ -122,7 +124,7 @@ fn hooks_for(bytes: Vec<u8>, len: u64, calls: &Calls) -> FileHooks {
             paged_as_log.add(format!("paged_as {}", encoding.name()));
             Ok(paged_laid(&d, choose(&d, encoding)))
         }),
-        write: Arc::new(|_, _| Ok(None)),
+        write: Arc::new(|_, _| Ok(None.into())),
         ..FileHooks::none()
     }
 }
@@ -362,14 +364,50 @@ fn mixed_hooks(original: &'static str, written: &Arc<Mutex<Vec<String>>>) -> Fil
             })
         }),
         write: Arc::new(move |_, save| {
-            let bytes = save
-                .ends
-                .map_or_else(|| save.text.to_owned(), |ends| ends.apply(save.text));
+            let (bytes, ends) = match save.ends {
+                Some(ends) => ends
+                    .apply(save.text)
+                    .map(|(bytes, ends)| (bytes, Some(ends)))
+                    .expect("within the budget"),
+                None => (save.text.to_owned(), None),
+            };
             log.lock().expect("log").push(bytes);
-            Ok(None)
+            Ok(Saved { stamp: None, ends })
         }),
         ..FileHooks::none()
     }
+}
+
+#[gpui_kit::test]
+fn a_file_opened_read_only_for_a_lone_cr_says_so(cx: &mut TestAppContext) {
+    let original = "a\r\r\nb\nc";
+    let (unified, ends) = rusty_core::line_ends::LineEnds::unify(original).expect("mixed");
+    let ends = Arc::new(ends);
+    let files = FileHooks {
+        head: Arc::new(move |_| {
+            Ok(Head {
+                bytes: original.as_bytes().to_vec(),
+                len: original.len() as u64,
+            })
+        }),
+        read: Arc::new(move |_| {
+            Ok(FileText {
+                read_only: true,
+                ends: Some(ends.clone()),
+                ..FileText::plain(unified.clone())
+            })
+        }),
+        ..FileHooks::none()
+    };
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+    let message = text_of(cx, window, "viewer-message");
+    assert_eq!(
+        message,
+        "Opened read-only: a line ends with a lone CR, so its line endings cannot be kept exactly."
+    );
 }
 
 fn last_written(written: &Arc<Mutex<Vec<String>>>) -> Option<String> {

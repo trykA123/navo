@@ -50,6 +50,18 @@ pub struct Save<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Saved {
+    pub stamp: Option<FileStamp>,
+    pub ends: Option<LineEnds>,
+}
+
+impl From<Option<FileStamp>> for Saved {
+    fn from(stamp: Option<FileStamp>) -> Self {
+        Self { stamp, ends: None }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SaveError {
     Changed,
     Failed(String),
@@ -81,8 +93,7 @@ pub struct Paged {
 
 type Read = Arc<dyn Fn(&Location) -> Result<FileText, String> + Send + Sync>;
 type ReadAs = Arc<dyn Fn(&Location, &'static Encoding) -> Result<FileText, String> + Send + Sync>;
-type Write =
-    Arc<dyn Fn(&Location, &Save<'_>) -> Result<Option<FileStamp>, SaveError> + Send + Sync>;
+type Write = Arc<dyn Fn(&Location, &Save<'_>) -> Result<Saved, SaveError> + Send + Sync>;
 type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
 type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
 type OpenPagedAs = Arc<dyn Fn(&Location, &'static Encoding) -> Result<Paged, String> + Send + Sync>;

@@ -2,13 +2,13 @@ use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use rusty_core::Location;
 use rusty_core::encoding::{Encoding, decode, decode_as, encode, looks_binary};
-use rusty_core::line_ends::LineEnds;
+use rusty_core::line_ends::{DIFF_BUDGET, LineEnds};
 use rusty_store::replace_atomic;
-use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError};
+use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError, Saved};
 
 mod archive;
 mod code_page;
@@ -160,22 +160,36 @@ pub fn line_endings(text: &str, crlf: bool) -> String {
     }
 }
 
-pub fn write(location: &Location, save: &Save<'_>) -> Result<Option<FileStamp>, SaveError> {
+pub fn write(location: &Location, save: &Save<'_>) -> Result<Saved, SaveError> {
+    write_within(location, save, DIFF_BUDGET)
+}
+
+fn write_within(
+    location: &Location,
+    save: &Save<'_>,
+    budget: Duration,
+) -> Result<Saved, SaveError> {
     let path = path_of(location).map_err(SaveError::Failed)?;
     if let Some(expected) = save.expected
         && stamp_of(&path) != Some(expected)
     {
         return Err(SaveError::Changed);
     }
-    let text = match save.ends {
-        Some(ends) => ends.apply(save.text),
-        None => line_endings(save.text, save.crlf),
+    let (text, ends) = match save.ends {
+        Some(ends) => ends
+            .apply_within(save.text, budget)
+            .map(|(text, ends)| (text, Some(ends)))
+            .map_err(|error| SaveError::Failed(error.to_string()))?,
+        None => (line_endings(save.text, save.crlf), None),
     };
     let bytes = encode(&text, &save.encoding)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
     replace_atomic(&path, &bytes)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
-    Ok(stamp_of(&path))
+    Ok(Saved {
+        stamp: stamp_of(&path),
+        ends,
+    })
 }
 
 #[cfg(test)]
