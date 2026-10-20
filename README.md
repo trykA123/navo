@@ -18,7 +18,9 @@ Status: Foundation phase. The workspace, quality gate and CI are in place (plan 
 
 Prerequisites: Rust 1.99.0 (pinned in `rust-toolchain.toml`) and the tools in [docs/dev-tools.md](docs/dev-tools.md).
 
-`cargo xtask gate` runs the whole quality gate. `cargo xtask gate --coverage` adds the coverage floors. The gate runs, in order:
+`cargo xtask gate` runs the whole quality gate. `cargo xtask gate --coverage` adds the coverage floors. Workers run `cargo xtask check -p <crate> [-p <crate>...]` on the crates they changed: fmt, clippy, taplo, typos, size, l10n and the nextest run for those crates only. The full gate runs on main after merging. `rusty-ui-gallery --screenshot <dir> --pages <stem,stem,...>` shoots only the listed gallery pages.
+
+The gate runs, in order:
 
 1. `cargo fmt` check
 2. clippy

@@ -37,6 +37,7 @@ pub struct Shot {
     pub window: AnyWindowHandle,
     pub gallery: Entity<Gallery>,
     pub dir: PathBuf,
+    pub pages: Option<Vec<String>>,
 }
 
 fn drive(window: AnyWindowHandle, gallery: &Entity<Gallery>, cx: &mut App) {
@@ -48,18 +49,23 @@ fn drive(window: AnyWindowHandle, gallery: &Entity<Gallery>, cx: &mut App) {
     });
 }
 
+fn shots(pages: Option<&[String]>) -> impl Iterator<Item = (Page, Mode)> {
+    PAGES
+        .iter()
+        .filter(move |info| pages.is_none_or(|stems| stems.iter().any(|stem| stem == info.stem)))
+        .flat_map(|info| [Mode::Light, Mode::Dark].map(|mode| (info.page, mode)))
+}
+
 pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
     let Shot {
         window,
         gallery,
         dir,
+        pages,
     } = shot;
     cx.spawn(async move |cx| {
         let mut errors = Vec::new();
-        for (page, mode) in PAGES
-            .iter()
-            .flat_map(|info| [Mode::Light, Mode::Dark].map(|mode| (info.page, mode)))
-        {
+        for (page, mode) in shots(pages.as_deref()) {
             gallery.update(cx, |gallery, cx| {
                 gallery.set_page(page, cx);
                 gallery.set_mode(mode, cx);

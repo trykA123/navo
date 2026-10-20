@@ -38,6 +38,18 @@ fn steps_without_coverage_follow_the_exact_order() {
         ),
         ("doc-tests", "cargo", &["test", "--workspace", "--doc"]),
     ];
+    let expected: Vec<_> = expected
+        .into_iter()
+        .map(|(name, program, args)| Step::new(name, program, args))
+        .collect();
+    let actual: Vec<_> = actual
+        .into_iter()
+        .map(|(name, program, args)| Step {
+            name,
+            program,
+            args,
+        })
+        .collect();
     assert_eq!(actual, expected);
 }
 
@@ -49,11 +61,7 @@ fn coverage_is_appended_last_when_requested() {
     let mut expected = steps(&GateOptions {
         with_coverage: false,
     });
-    expected.push(Step {
-        name: "coverage",
-        program: "cargo",
-        args: &["xtask", "coverage"],
-    });
+    expected.push(Step::new("coverage", "cargo", &["xtask", "coverage"]));
     assert_eq!(actual, expected);
 }
 
@@ -63,7 +71,7 @@ fn no_step_repeats() {
         let actual = steps(&GateOptions { with_coverage });
         let commands: BTreeSet<_> = actual
             .iter()
-            .map(|step| (step.program, step.args))
+            .map(|step| (step.program, step.args.clone()))
             .collect();
         assert_eq!(commands.len(), actual.len());
     }
@@ -95,16 +103,8 @@ fn steps_with_coverage_have_eleven_steps() {
 fn all_steps_passing_return_success() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let steps = [
-        Step {
-            name: "first",
-            program: "cargo",
-            args: &["--version"],
-        },
-        Step {
-            name: "second",
-            program: "cargo",
-            args: &["--version"],
-        },
+        Step::new("first", "cargo", &["--version"]),
+        Step::new("second", "cargo", &["--version"]),
     ];
     assert_eq!(
         super::run::run_steps(root, &steps),
@@ -155,21 +155,13 @@ fn temporary_root_cleanup_ignores_missing_directories() {
 fn first_failure_prevents_later_steps_from_running() {
     let root = TestRoot::new();
     let steps = [
-        Step {
-            name: "passing",
-            program: "cargo",
-            args: &["--version"],
-        },
-        Step {
-            name: "failing",
-            program: "cargo",
-            args: &["xtask-no-such-subcommand"],
-        },
-        Step {
-            name: "later",
-            program: "cargo",
-            args: &["new", "--lib", "--vcs", "none", "gate-later-step"],
-        },
+        Step::new("passing", "cargo", &["--version"]),
+        Step::new("failing", "cargo", &["xtask-no-such-subcommand"]),
+        Step::new(
+            "later",
+            "cargo",
+            &["new", "--lib", "--vcs", "none", "gate-later-step"],
+        ),
     ];
     let marker = root.0.join("gate-later-step/Cargo.toml");
     assert_ne!(
@@ -187,11 +179,7 @@ fn first_failure_prevents_later_steps_from_running() {
 #[test]
 fn failing_step_propagates_its_exit_code() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let steps = [Step {
-        name: "failing",
-        program: "cargo",
-        args: &["xtask-no-such-subcommand"],
-    }];
+    let steps = [Step::new("failing", "cargo", &["xtask-no-such-subcommand"])];
     assert_eq!(
         super::run::run_steps(root, &steps),
         std::process::ExitCode::from(101)
@@ -201,13 +189,73 @@ fn failing_step_propagates_its_exit_code() {
 #[test]
 fn unspawnable_step_returns_failure() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let steps = [Step {
-        name: "unspawnable",
-        program: "rusty-gate-no-such-program",
-        args: &[],
-    }];
+    let steps = [Step::new("unspawnable", "rusty-gate-no-such-program", &[])];
     assert_eq!(
         super::run::run_steps(root, &steps),
         std::process::ExitCode::FAILURE
+    );
+}
+
+fn strings(list: &[&str]) -> Vec<String> {
+    list.iter().map(|arg| (*arg).to_string()).collect()
+}
+
+#[test]
+fn check_steps_for_one_crate_follow_the_exact_order() {
+    let actual: Vec<_> = super::check::check_steps(&["rusty-core"])
+        .into_iter()
+        .map(|step| (step.name, step.program, step.args))
+        .collect();
+    let expected = [
+        ("fmt", "cargo", strings(&["fmt", "--all", "--check"])),
+        (
+            "clippy",
+            "cargo",
+            strings(&[
+                "clippy",
+                "-p",
+                "rusty-core",
+                "--all-targets",
+                "--",
+                "-D",
+                "warnings",
+            ]),
+        ),
+        ("taplo", "taplo", strings(&["check"])),
+        ("typos", "typos", strings(&[])),
+        ("size", "cargo", strings(&["xtask", "size"])),
+        ("l10n", "cargo", strings(&["xtask", "l10n"])),
+        (
+            "nextest",
+            "cargo",
+            strings(&["nextest", "run", "-p", "rusty-core", "--profile", "ci"]),
+        ),
+    ];
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn check_steps_for_two_crates_repeat_the_package_flag() {
+    let steps = super::check::check_steps(&["a", "b"]);
+    assert_eq!(
+        steps[1].args[..5],
+        strings(&["clippy", "-p", "a", "-p", "b"])
+    );
+    assert_eq!(
+        steps[6].args,
+        strings(&["nextest", "run", "-p", "a", "-p", "b", "--profile", "ci"])
+    );
+}
+
+#[test]
+fn check_without_crates_is_a_usage_error() {
+    assert_eq!(super::check(&[]), std::process::ExitCode::from(2));
+    assert_eq!(
+        super::check(&strings(&["-p"])),
+        std::process::ExitCode::from(2)
+    );
+    assert_eq!(
+        super::check(&strings(&["core"])),
+        std::process::ExitCode::from(2)
     );
 }
