@@ -1,10 +1,12 @@
 mod build;
+mod drop;
 mod names;
 mod protect;
 mod risks;
 
 use serde::{Deserialize, Serialize};
 
+pub use drop::{DropKeys, DropOp, drop_op};
 pub use protect::is_protected;
 
 use crate::Location;

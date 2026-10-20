@@ -29,7 +29,7 @@ pub use job::{
     PlacedFile, Progress, StepOutcome, TEMP_SUFFIX, WorkerCounts, clean_up, copy_workers,
     job_workers, release_held, roll_back, run_job, run_job_parallel,
 };
-pub use local::{AutoTuning, LocalFs, os_path};
+pub use local::{AutoTuning, LocalFs, make_link, os_path};
 pub use measure::{
     FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LIVE_EVERY, LargeFile, LiveHandle,
     LiveRequest, LiveSink, LiveSnapshot, PROGRESS_EVERY, ProfileHandle, ProfileSink, ProfileState,
