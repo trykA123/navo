@@ -373,3 +373,44 @@ fn a_pdf_name_without_the_pdf_header_is_not_a_pdf() {
         .collect();
     assert!(!ids.contains(&"pdf"), "{ids:?}");
 }
+
+fn map_kinds(name: &str, head: &[u8]) -> Vec<&'static str> {
+    let named = Sniff {
+        head,
+        name,
+        len: head.len() as u64,
+    };
+    Kinds::builtin()
+        .choose(&named)
+        .iter()
+        .map(|kind| kind.id())
+        .collect()
+}
+
+const TASKING_HEAD: &[u8] =
+    b"TASKING VX-toolset for TriCore linker map file\n* Link Result\n* Locate Result\n";
+
+#[test]
+fn a_map_file_with_tasking_tables_opens_the_linker_map_view_first() {
+    let ids = map_kinds("app.map", TASKING_HEAD);
+    assert_eq!(ids.first(), Some(&"linker-map"));
+    assert!(ids.contains(&"text"), "{ids:?}");
+    assert_eq!(
+        map_kinds("APP.MAP", TASKING_HEAD).first(),
+        Some(&"linker-map")
+    );
+}
+
+#[test]
+fn a_map_file_without_tasking_tables_stays_text() {
+    let gnu = b"Memory Configuration\n\nName Origin Length Attributes\nFLASH 0x0 0x1000 xr\n";
+    assert!(!map_kinds("app.map", gnu).contains(&"linker-map"));
+    assert!(!map_kinds("app.map", b"* Link Result\n").contains(&"linker-map"));
+    assert!(!map_kinds("app.map", b"").contains(&"linker-map"));
+}
+
+#[test]
+fn tasking_text_in_a_file_not_named_map_stays_text() {
+    assert!(!map_kinds("notes.txt", TASKING_HEAD).contains(&"linker-map"));
+    assert!(!map_kinds("app.map.bak", TASKING_HEAD).contains(&"linker-map"));
+}

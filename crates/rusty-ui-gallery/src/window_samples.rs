@@ -1,7 +1,8 @@
+use rusty_ui::file_list::{SortBy, SortKey};
 use rusty_ui::fkey_bar::KeyLayer;
 use rusty_ui::modifier_hints::Combo;
 use rusty_ui::prelude::*;
-use rusty_ui::settings::Field;
+use rusty_ui::settings::{Field, WindowParts};
 use rusty_ui::side_sheet::Side;
 
 use crate::gallery::Page;
@@ -129,6 +130,32 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 23]) -> Option<
         Page::HintsAlt => hints_alt,
         Page::HintsLow => hints_low,
         Page::CrashNotice => crash,
+        _ => return None,
+    };
+    Some(shown.clone().into_any_element())
+}
+
+pub fn parts_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
+    let by_size = SortKey {
+        by: SortBy::Size,
+        descending: true,
+    };
+    [
+        (WindowParts::default(), false, SortKey::default()),
+        (WindowParts::all(false), false, by_size),
+        (WindowParts::default(), true, SortKey::default()),
+    ]
+    .map(|(parts, shows_menu, sort)| {
+        cx.new(|cx| WindowPage::with_parts(parts, shows_menu, cx).sorted_by(sort))
+    })
+}
+
+pub fn parts_element(page: Page, windows: &[Entity<WindowPage>; 3]) -> Option<AnyElement> {
+    let [on, off, menu] = windows;
+    let shown = match page {
+        Page::WindowPartsOn => on,
+        Page::WindowPartsOff => off,
+        Page::WindowViewMenu => menu,
         _ => return None,
     };
     Some(shown.clone().into_any_element())

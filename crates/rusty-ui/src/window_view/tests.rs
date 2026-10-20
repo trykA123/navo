@@ -43,6 +43,8 @@ mod start_watch;
 mod tabs;
 mod typed;
 mod watched;
+mod window_menu;
+mod window_parts;
 use crate::browser::Operations;
 use crate::tokens::{self, Mode};
 

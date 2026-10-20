@@ -25,9 +25,11 @@ mod start;
 mod start_watch;
 mod status;
 mod tab_keys;
+mod title;
 mod user_keymap;
 mod viewer;
 mod waiting;
+mod window_menu;
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -45,7 +47,7 @@ use crate::fkey_bar::KeyLayer;
 use crate::prelude::*;
 use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
-use crate::title_bar::{FerriteTitleBar, GradientLayer, HeaderSearch, system_backdrop};
+use crate::title_bar::{GradientLayer, system_backdrop};
 use crate::tokens::{self, Mode};
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
@@ -81,6 +83,7 @@ pub use viewer::{
 pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, MenuEntry, Picture, ReadBytes, decode_image};
 pub use viewer::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use viewer::{bind_keys as bind_viewer_keys, encoding_picker, view_menu, viewer_menu};
+pub use window_menu::window_view_menu;
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
@@ -130,6 +133,7 @@ pub struct FerriteWindow {
     app_menu: Option<app_menu::OpenMenu>,
     app_menu_focus: FocusHandle,
     values: Values,
+    window_menu: window_menu::WindowMenu,
     identity: Identity,
     saver: settings_save::Saver,
     settings: settings_sheet::SettingsPanel,
@@ -186,6 +190,7 @@ impl FerriteWindow {
             app_menu: None,
             app_menu_focus: cx.focus_handle(),
             values,
+            window_menu: window_menu::WindowMenu::default(),
             identity: options.app_menu.identity,
             saver,
             settings,
@@ -203,10 +208,19 @@ impl FerriteWindow {
             _activation: cx.observe_window_activation(window, Self::activation_changed),
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
-        view.listen_files(options.keymap, window, cx);
-        view.listen_open(options.open, window, cx);
+        view.listen((options.keymap, options.open), window, cx);
         view.after_open(options.view, window, cx);
         view
+    }
+
+    fn listen(
+        &mut self,
+        hooks: (KeymapHooks, OpenHooks),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.listen_files(hooks.0, window, cx);
+        self.listen_open(hooks.1, window, cx);
     }
 
     fn appearance_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -338,25 +352,6 @@ impl FerriteWindow {
         true
     }
 
-    fn title_bar(&self, cx: &mut Context<Self>) -> FerriteTitleBar {
-        let this = cx.weak_entity();
-        let toggle = cx.listener(|view: &mut Self, _: &ClickEvent, window, cx| {
-            view.toggle_app_menu(window, cx);
-        });
-        FerriteTitleBar::new("Ferrite")
-            .on_mica()
-            .app_button(self.app_menu.is_some(), toggle)
-            .header(HeaderSearch::new())
-            .on_close(move |window, cx| {
-                if this
-                    .update(cx, |view, cx| view.close(window, cx))
-                    .unwrap_or(true)
-                {
-                    cx.quit();
-                }
-            })
-    }
-
     fn close_saves_and_quits(window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.weak_entity();
         window.on_window_should_close(cx, move |window, cx| {
@@ -386,7 +381,7 @@ impl Render for FerriteWindow {
             })
             .children(self.crash_notice_view(window, cx))
             .child(self.body_area(window, cx))
-            .child(self.fkey_bar(window, cx));
+            .children(self.fkey_bar(window, cx));
         let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
         let menu = self.app_menu_view(cx);
         let root = div()
@@ -418,7 +413,9 @@ impl Render for FerriteWindow {
             .children(dialog)
             .children(menu)
             .children(self.shell_menu_view())
-            .children(self.viewer_menu_view());
+            .children(self.viewer_menu_view())
+            .children(self.window_menu_view());
+        let root = Self::open_window_menu_on(root, cx);
         let root = self.crash_keys(root, cx);
         self.preview_keys(root, window, cx)
     }

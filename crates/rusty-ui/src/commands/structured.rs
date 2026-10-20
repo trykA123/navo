@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 8] = [
+pub(super) const GROUPS: [Group; 10] = [
     Group {
         context: "Tree",
         commands: &[
@@ -215,6 +215,59 @@ pub(super) const GROUPS: [Group; 8] = [
             (
                 "elf_view::TypeFive",
                 "elf.type_five",
+                "Type 5 in the filter",
+            ),
+        ],
+    },
+    Group {
+        context: "Map",
+        commands: &[
+            (
+                "map_view::PickItem",
+                "map.pick_item",
+                "Show only the picked region or object, or inspect the row",
+            ),
+            (
+                "map_view::NextTable",
+                "map.next_table",
+                "Show the next table: memory, sections, symbols",
+            ),
+            (
+                "map_view::SortByName",
+                "map.sort_by_name",
+                "Sort the table by name",
+            ),
+            (
+                "map_view::SortBySecond",
+                "map.sort_by_second",
+                "Sort the table by used %, region or space",
+            ),
+            (
+                "map_view::SortByAddress",
+                "map.sort_by_address",
+                "Sort the table by address",
+            ),
+            (
+                "map_view::SortBySize",
+                "map.sort_by_size",
+                "Sort the table by size",
+            ),
+        ],
+    },
+    Group {
+        context: "MapTable",
+        commands: &[
+            ("map_view::TypeN", "map.type_n", "Type n in the filter"),
+            ("map_view::TypeP", "map.type_p", "Type p in the filter"),
+            ("map_view::TypeOne", "map.type_one", "Type 1 in the filter"),
+            (
+                "map_view::TypeThree",
+                "map.type_three",
+                "Type 3 in the filter",
+            ),
+            (
+                "map_view::TypeFive",
+                "map.type_five",
                 "Type 5 in the filter",
             ),
         ],

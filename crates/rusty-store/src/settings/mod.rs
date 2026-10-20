@@ -27,7 +27,7 @@ pub use model::{
 pub use parse::{parse, to_toml};
 pub use view::{
     Automotive, AutomotiveView, CopyMode, CopySettings, ImageView, ImageViewer, TextView,
-    TextViewer, ViewPreset,
+    TextViewer, ViewPreset, WindowSettings, WindowView,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

@@ -203,6 +203,7 @@ viewer.go_to_end | end | Pdf
 viewer.back | escape | Pdf
 viewer.back | escape | MemoryImage
 viewer.back | escape | Elf
+viewer.back | escape | Map
 viewer.back | escape | CanTrace
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
@@ -252,6 +253,18 @@ elf.type_p | p | ElfTable
 elf.type_one | 1 | ElfTable
 elf.type_three | 3 | ElfTable
 elf.type_five | 5 | ElfTable
+[map_view]
+map.pick_item | enter | Map
+map.next_table | alt-t | Map
+map.sort_by_name | ctrl-f3 | Map
+map.sort_by_second | ctrl-f4 | Map
+map.sort_by_address | ctrl-f5 | Map
+map.sort_by_size | ctrl-f6 | Map
+map.type_n | n | MapTable
+map.type_p | p | MapTable
+map.type_one | 1 | MapTable
+map.type_three | 3 | MapTable
+map.type_five | 5 | MapTable
 [can_trace]
 trace.filter_by_id | enter | CanTrace
 trace.sort_ids | alt-s | CanTrace
@@ -317,6 +330,7 @@ tab.new | ctrl-t | FerritePane
 pane.drive_menu_first | alt-f1 | FerritePane
 pane.drive_menu_second | alt-f2 | FerritePane
 pane.edit_path | ctrl-l | FerritePane
+window.view_menu | alt-v | FerritePane
 pane.reset_split | ctrl-shift-0 | FerritePane
 preview.browse | ctrl-shift-q | FerritePane
 crash_notice.focus | ctrl-shift-r | FerritePane

@@ -4,6 +4,9 @@ mod row_state;
 mod steps;
 mod values;
 mod view;
+mod viewer_fields;
+mod window;
+mod window_fields;
 
 #[cfg(test)]
 mod tests;
@@ -17,8 +20,9 @@ pub use fields::{
     Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look, PRESETS, SORTS,
     Section, THEMES,
 };
-pub use steps::{Nudge, first_row, moved, next_section, nudged, rows_in, section_of};
+pub use steps::{Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of};
 pub use values::{Change, Value, Values};
+pub use window::WindowParts;
 
 use crate::prelude::*;
 use crate::side_sheet::{SheetFrame, SheetState, SideSheet};

@@ -82,3 +82,19 @@ pub fn rows_in(section: Section) -> impl Iterator<Item = (usize, &'static FieldS
         .enumerate()
         .filter(move |(_, spec)| spec.section == section)
 }
+
+pub fn child_of(row: usize) -> Option<usize> {
+    let section = section_of(row);
+    let mut group = None;
+    let mut headings = 0;
+    for (at, (index, spec)) in rows_in(section).enumerate() {
+        if section == Section::Display && spec.group() != group {
+            group = spec.group();
+            headings += usize::from(group.is_some());
+        }
+        if index == row {
+            return Some(at + headings + 1);
+        }
+    }
+    None
+}

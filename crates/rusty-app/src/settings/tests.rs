@@ -322,3 +322,46 @@ fn a_kept_view_part_lands_in_its_viewer_table_and_keeps_comments() {
         "# mine\n[text.view]\nline-numbers = true # gutter\nline-ends = true\n"
     );
 }
+
+#[test]
+fn a_hidden_window_part_lands_in_the_window_view_table_and_keeps_comments() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(
+        &file,
+        "# mine\n[window.view]\npath-bar = true # the bar\nfkey-bar = true\n",
+    )
+    .unwrap();
+    let settings = hooks(Some(&file));
+    let hidden = Change {
+        field: Field::WindowPathBar,
+        value: Value::Flag(false),
+    };
+    let stored = save(&settings, hidden).unwrap();
+    assert_eq!(stored.get(Field::WindowPathBar), &Value::Flag(false));
+    assert_eq!(stored.get(Field::WindowFkeyBar), &Value::Flag(true));
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        "# mine\n[window.view]\npath-bar = false # the bar\nfkey-bar = true\n"
+    );
+}
+
+#[test]
+fn resetting_a_window_part_brings_the_default_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(&file, "[window.view]\nsize-column = false\n").unwrap();
+    let settings = hooks(Some(&file));
+    assert_eq!(
+        settings.values.get(Field::WindowSizeColumn),
+        &Value::Flag(false)
+    );
+    assert!(settings.values.is_changed(Field::WindowSizeColumn));
+    let stored = save(&settings, Change::reset(Field::WindowSizeColumn)).unwrap();
+    assert_eq!(stored.get(Field::WindowSizeColumn), &Value::Flag(true));
+    assert!(
+        !fs::read_to_string(&file)
+            .unwrap()
+            .contains("size-column = false")
+    );
+}
