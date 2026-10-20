@@ -1,3 +1,4 @@
+mod keep;
 mod migration;
 
 use std::fs;
@@ -35,16 +36,8 @@ const HEADER_LEN: usize = 16 + 2 + 4 + 4;
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
 pub fn write_session(path: &Path, session: &SessionState) -> Result<(), SessionFileError> {
-    if matches!(
-        usable(path),
-        Err(SessionFileError::BadMagic
-            | SessionFileError::BadChecksum
-            | SessionFileError::Decode(_))
-    ) {
-        let mut corrupt = path.as_os_str().to_owned();
-        corrupt.push(".corrupt");
-        let _ = fs::rename(path, corrupt);
-    }
+    keep::set_aside_unreadable(path)?;
+    keep::keep_newer_backup(&backup_path(path))?;
     let body =
         postcard::to_allocvec(session).map_err(|e| SessionFileError::Decode(e.to_string()))?;
     let len = u32::try_from(body.len())
@@ -103,6 +96,10 @@ pub fn load_session(path: &Path) -> (Option<SessionState>, SessionSource, Vec<Se
     ] {
         match usable(&candidate) {
             Ok(session) => return (Some(session), source, errors),
+            Err(error @ SessionFileError::TooNew { .. }) => {
+                errors.push(error);
+                break;
+            }
             Err(error) => errors.push(error),
         }
     }

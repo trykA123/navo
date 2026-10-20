@@ -154,3 +154,16 @@ fn no_folder_overrides_keep_the_restored_focused_pane() {
     place_panes(&mut restored, [None, None]);
     assert_eq!(restored.focused_pane(), right);
 }
+
+#[test]
+fn a_newer_session_starts_at_home_and_stays_on_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("session.bin");
+    save(&initial_state(&file, home()), &file).unwrap();
+    let mut newer = std::fs::read(&file).unwrap();
+    newer[16..18].copy_from_slice(&(rusty_store::SESSION_VERSION + 1).to_le_bytes());
+    std::fs::write(&file, &newer).unwrap();
+    let state = initial_state(&file, home());
+    assert_eq!(state.active_tab().location(), &home());
+    assert_eq!(std::fs::read(&file).unwrap(), newer);
+}

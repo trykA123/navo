@@ -84,3 +84,17 @@ fn backup_error_is_not_reported_when_main_is_used() {
     let (_, _, errors) = load_session(&path);
     assert!(errors.is_empty(), "{errors:?}");
 }
+
+#[test]
+fn newer_main_file_starts_empty_without_using_the_backup() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    fs::write(&path, framed(SESSION_VERSION + 1, &body(&first()))).unwrap();
+    put(&backup_path(&path), &second());
+    let (session, source, errors) = load_session(&path);
+    assert_eq!((session, source), (None, SessionSource::Empty));
+    assert!(matches!(
+        errors.as_slice(),
+        [SessionFileError::TooNew { .. }]
+    ));
+}

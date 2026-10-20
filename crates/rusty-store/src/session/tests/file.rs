@@ -150,18 +150,83 @@ fn writing_after_a_backup_load_keeps_the_good_backup() {
     assert!(read_session_file(&crate::backup_path(&path)).is_ok());
 }
 
+fn newer_bytes(version: u16, session: &SessionState) -> Vec<u8> {
+    framed(version, &body(session))
+}
+
+fn kept(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
 #[test]
-fn a_newer_main_file_is_not_deleted_by_a_write() {
+fn a_newer_main_file_survives_two_writes() {
     let dir = tmp();
-    let path = dir.path().join("session.bin");
-    let session =
-        rusty_core::AppState::new(rusty_core::Location::new("/home").unwrap()).to_session(10);
-    write_session(&path, &session).unwrap();
-    let mut bytes = std::fs::read(&path).unwrap();
-    bytes[16..18].copy_from_slice(&(SESSION_VERSION + 1).to_le_bytes());
-    std::fs::write(&path, &bytes).unwrap();
-    write_session(&path, &session).unwrap();
-    assert_eq!(std::fs::read(crate::backup_path(&path)).unwrap(), bytes);
+    let path = session_file(&dir);
+    let newer = newer_bytes(SESSION_VERSION + 1, &first());
+    fs::write(&path, &newer).unwrap();
+    write_session(&path, &second()).unwrap();
+    write_session(&path, &second()).unwrap();
+    let copy = kept(&path, &format!(".v{}", SESSION_VERSION + 1));
+    assert_eq!(fs::read(copy).unwrap(), newer);
+    assert_eq!(read_session_file(&path).unwrap(), second());
+}
+
+#[test]
+fn a_second_downgrade_keeps_the_first_copy() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    let version = SESSION_VERSION + 1;
+    let older_newer = newer_bytes(version, &first());
+    let latest_newer = newer_bytes(version, &second());
+    fs::write(&path, &older_newer).unwrap();
+    write_session(&path, &second()).unwrap();
+    fs::write(&path, &latest_newer).unwrap();
+    write_session(&path, &second()).unwrap();
+    write_session(&path, &second()).unwrap();
+    let copy = kept(&path, &format!(".v{version}"));
+    assert_eq!(fs::read(&copy).unwrap(), older_newer);
+    assert_eq!(fs::read(kept(&copy, ".2")).unwrap(), latest_newer);
+}
+
+#[test]
+fn a_newer_backup_file_is_kept_too() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    let newer = newer_bytes(SESSION_VERSION + 3, &first());
+    fs::write(backup_path(&path), &newer).unwrap();
+    write_session(&path, &second()).unwrap();
+    write_session(&path, &second()).unwrap();
+    let copy = kept(&backup_path(&path), &format!(".v{}", SESSION_VERSION + 3));
+    assert_eq!(fs::read(copy).unwrap(), newer);
+}
+
+#[test]
+fn a_newer_file_that_cannot_be_kept_is_not_overwritten() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    let newer = newer_bytes(SESSION_VERSION + 1, &first());
+    fs::write(&path, &newer).unwrap();
+    for n in 1..1000 {
+        let name = if n == 1 {
+            format!(".v{}", SESSION_VERSION + 1)
+        } else {
+            format!(".v{}.{n}", SESSION_VERSION + 1)
+        };
+        fs::write(kept(&path, &name), b"x").unwrap();
+    }
+    assert!(write_session(&path, &second()).is_err());
+    assert_eq!(fs::read(&path).unwrap(), newer);
+}
+
+#[test]
+fn a_newer_main_file_is_not_corrupt_aside() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    fs::write(&path, newer_bytes(SESSION_VERSION + 1, &first())).unwrap();
+    write_session(&path, &second()).unwrap();
+    assert!(!kept(&path, ".corrupt").exists());
 }
 
 #[test]
