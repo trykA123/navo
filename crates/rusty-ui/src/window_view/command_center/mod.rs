@@ -11,7 +11,8 @@ use gpui_kit::{Bounds, FocusHandle, Pixels, Subscription, point, px, size};
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
-    CommandsSource, HintKeys, INPUT_ROW, LEAVE, ResultSource, Row, Selection,
+    CommandsSource, HintKeys, INPUT_ROW, LEAVE, RecentSource, ResultSource, Row, Selection,
+    TabsSnapshot, TabsSource,
 };
 use crate::commands::{self, ArgKind};
 use crate::modifier_hints::HintsMode;
@@ -113,8 +114,13 @@ impl FerriteWindow {
             Arc::new(snapshot),
             self.command_center.hooks.command_use.clone(),
         ))];
+        let recent = Arc::new(RecentSource::new(self.command_center.hooks.frecent.clone()));
+        sources.push(recent.clone());
+        sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(
+            self.browser.state(),
+        ))));
         sources.extend(self.command_center.sources.iter().cloned());
-        let rows: Rc<[Row]> = search::recent().into();
+        let rows: Rc<[Row]> = search::recent(Vec::new()).into();
         let anchor = self.command_center_anchor(window, cx);
         let props = CommandCenterProps {
             rows: rows.clone(),
@@ -140,9 +146,10 @@ impl FerriteWindow {
             anchor,
             keys,
             restore,
-            search: search::Search::new(sources),
+            search: search::Search::new(sources, recent),
             _events: events,
         });
+        self.load_recent(window, cx);
         cx.notify();
     }
 

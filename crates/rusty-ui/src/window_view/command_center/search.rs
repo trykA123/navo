@@ -2,17 +2,20 @@ use std::sync::Arc;
 
 use super::super::FerriteWindow;
 use crate::command_center::{
-    Cancel, Hit, HitSink, Query, Request, ResultSource, Results, Row, Scope, Selection,
+    Cancel, Hit, HitSink, Query, RecentSource, Request, ResultSource, Results, Row, Scope,
+    Selection,
 };
 use crate::prelude::*;
 
 const LIMIT: usize = 500;
+const RECENT_FOLDERS: usize = 8;
 
-pub(super) fn recent() -> Vec<Row> {
-    Results::recent(Vec::new(), Vec::new())
+pub(super) fn recent(folders: Vec<Hit>) -> Vec<Row> {
+    Results::recent(Vec::new(), folders)
 }
 
 pub(super) struct Search {
+    recent: Arc<RecentSource>,
     sources: Arc<[Arc<dyn ResultSource>]>,
     generation: u64,
     cancel: Cancel,
@@ -20,8 +23,9 @@ pub(super) struct Search {
 }
 
 impl Search {
-    pub(super) fn new(sources: Vec<Arc<dyn ResultSource>>) -> Self {
+    pub(super) fn new(sources: Vec<Arc<dyn ResultSource>>, recent: Arc<RecentSource>) -> Self {
         Self {
+            recent,
             sources: sources.into(),
             generation: 0,
             cancel: Cancel::new(),
@@ -78,12 +82,10 @@ impl FerriteWindow {
         open.error = None;
         let generation = open.search.next();
         if open.step.is_some() || query.trim().is_empty() {
-            let rows = if open.step.is_some() {
-                Vec::new()
-            } else {
-                recent()
-            };
-            return self.show_rows((generation, rows), window, cx);
+            if open.step.is_some() {
+                return self.show_rows((generation, Vec::new()), window, cx);
+            }
+            return self.load_recent(window, cx);
         }
         let query = Query::parse(query);
         let scope = query.scope;
@@ -107,6 +109,24 @@ impl FerriteWindow {
             let hits = task.await;
             let _ = this.update_in(cx, |view, window, cx| {
                 view.receive_hits((generation, scope, hits), window, cx);
+            });
+        })
+        .detach();
+    }
+
+    pub(super) fn load_recent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(open) = self.command_center.open.as_ref() else {
+            return;
+        };
+        let generation = open.search.generation();
+        let source = open.search.recent.clone();
+        let task = cx
+            .background_executor()
+            .spawn(async move { source.top_folders(RECENT_FOLDERS) });
+        cx.spawn_in(window, async move |this, cx| {
+            let folders = task.await;
+            let _ = this.update_in(cx, |view, window, cx| {
+                view.show_rows((generation, recent(folders)), window, cx);
             });
         })
         .detach();

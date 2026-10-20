@@ -9,7 +9,7 @@ use super::{fake, open_options, options_for, press, settle, two_panes};
 use crate::command_center::{
     ArgKind, Cancel, Group, Hit, HitSink, Request, ResultSource, Scope, Scopes, Target,
 };
-use crate::window_view::FerriteWindow;
+use crate::window_view::{FerriteWindow, Frecent};
 
 struct Fixed(Vec<Hit>);
 
@@ -170,6 +170,34 @@ fn an_empty_box_shows_only_the_prefix_hint(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.press(cx, "ctrl-k");
     assert_eq!(rig.rows(cx).len(), 1);
+}
+
+#[gpui_kit::test]
+fn an_empty_box_lists_the_most_frecent_folders_under_recent(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let (dest, file) = (location("dest"), location("home/a.txt"));
+    rig.view.update(cx, |view, _| {
+        view.command_center.hooks.frecent = Arc::new(move |_| {
+            vec![
+                Frecent {
+                    location: dest.as_str().to_owned(),
+                    is_folder: true,
+                    weight: 9.0,
+                },
+                Frecent {
+                    location: file.as_str().to_owned(),
+                    is_folder: false,
+                    weight: 8.0,
+                },
+            ]
+        });
+    });
+    rig.press(cx, "ctrl-k");
+    settle(cx, &rig.view);
+    let rows = rig.rows(cx);
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(rows[0], "# Recent");
+    assert!(rows[1].contains("dest"), "{rows:?}");
 }
 
 #[gpui_kit::test]

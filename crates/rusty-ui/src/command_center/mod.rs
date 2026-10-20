@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
 mod commands_source;
+mod file_sources;
 mod query;
 pub mod rank;
 mod results;
@@ -12,6 +13,7 @@ mod view;
 mod tests;
 
 pub use commands_source::{CommandRow, CommandsSnapshot, CommandsSource};
+pub use file_sources::{Frecents, RecentSource, TabsSnapshot, TabsSource};
 pub use query::{Query, Scope, Term};
 pub use results::{Heading, Results, Row};
 pub use selection::Selection;
