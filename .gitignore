@@ -3,3 +3,11 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local only: gallery screenshots, experiments, session notes
+design/screens/
+design/prototype/
+design/commander-bundle.html
+spikes/
+plans/*/
+plans/handoff-*.md

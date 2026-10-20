@@ -1,8 +1,6 @@
 [files]
 extend-exclude = [
     "target/",
-    "design/prototype/fonts/",
-    "design/screens/",
     "design/prototypes/",
     "vendor/",
     "crates/rusty-syntax/src/builtin/rules/",
