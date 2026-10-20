@@ -40,6 +40,7 @@ impl PdfView {
         let here = doc.pages.anchor(doc.camera.scroll.y, scale);
         doc.trail.leave(here);
         doc.selection = None;
+        doc.ring = None;
         let page = page.min(doc.count().saturating_sub(1));
         match top {
             Some(top) => {
@@ -69,10 +70,6 @@ impl PdfView {
         cx.notify();
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Alt+Left and Alt+Right bind it in P37 U2")
-    )]
     pub(in crate::window_view::viewer) fn go_back(&mut self, cx: &mut Context<Self>) {
         let spot = self.doc_mut().and_then(|doc| {
             let here = doc.pages.anchor(doc.camera.scroll.y, doc.scale());
@@ -83,10 +80,6 @@ impl PdfView {
         }
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Alt+Left and Alt+Right bind it in P37 U2")
-    )]
     pub(in crate::window_view::viewer) fn go_forward(&mut self, cx: &mut Context<Self>) {
         let spot = self.doc_mut().and_then(|doc| {
             let here = doc.pages.anchor(doc.camera.scroll.y, doc.scale());

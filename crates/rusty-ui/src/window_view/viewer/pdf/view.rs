@@ -2,7 +2,8 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{Role, Stateful};
 
 use super::keys::{
-    ActualSize, AllHits, CopyText, FitWidth, PagesDrawer, WholeWord, ZoomIn, ZoomOut,
+    ActualSize, AllHits, CopyText, FitWidth, LinkFollow, LinkNext, LinkPrevious, PagesDrawer,
+    TrailBack, TrailForward, WholeWord, ZoomIn, ZoomOut,
 };
 use super::layout::Zoom;
 use super::rail::hit_rail;
@@ -148,6 +149,9 @@ impl PdfView {
     }
 
     fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.clear_ring(cx) {
+            return;
+        }
         if self.leave_page_box(window, cx) {
             return self.focus_pages(window, cx);
         }
@@ -184,6 +188,11 @@ impl PdfView {
             .on_action(cx.listener(|view, _: &PagesDrawer, window, cx| view.open_pages(window, cx)))
             .on_action(cx.listener(|view, _: &CopyText, _, cx| view.copy_selection(cx)))
             .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
+            .on_action(cx.listener(|view, _: &LinkNext, _, cx| view.step_ring(false, cx)))
+            .on_action(cx.listener(|view, _: &LinkPrevious, _, cx| view.step_ring(true, cx)))
+            .on_action(cx.listener(|view, _: &LinkFollow, _, cx| view.follow_ring(cx)))
+            .on_action(cx.listener(|view, _: &TrailBack, _, cx| view.go_back(cx)))
+            .on_action(cx.listener(|view, _: &TrailForward, _, cx| view.go_forward(cx)))
     }
 
     fn content(&self, t: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {

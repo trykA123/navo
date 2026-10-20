@@ -382,6 +382,7 @@ fn pdf_keys_shadow_only_the_viewer_marks_and_escape() {
             ("escape".to_owned(), "viewer.close", "viewer.back"),
             ("ctrl-0".to_owned(), "mark.clear", "pdf.fit"),
             ("ctrl-1".to_owned(), "mark.colour_one", "pdf.actual_size"),
+            ("enter".to_owned(), "lister.find_next", "pdf.link_follow"),
         ]
     );
 }

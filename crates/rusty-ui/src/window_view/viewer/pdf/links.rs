@@ -57,19 +57,23 @@ pub(super) fn link_at(doc: &Doc, at: Point<f32>) -> Option<&PageLink> {
         .find(|link| holds(&link.bounds, x, y))
 }
 
-fn region(t: &Theme, scale: f32, id: ElementId, link: &PageLink) -> AnyElement {
-    let bounds = link.bounds;
-    let tip = describe(&link.target);
-    let shown = tip.clone();
+fn frame(scale: f32, bounds: CharBox) -> Div {
     div()
-        .id(id)
-        .aria_label(tip)
-        .test_support()
         .absolute()
         .left(px(bounds.left * scale))
         .top(px(bounds.top * scale))
         .w(px((bounds.right - bounds.left) * scale))
         .h(px((bounds.bottom - bounds.top) * scale))
+}
+
+fn region(t: &Theme, scale: f32, id: ElementId, link: &PageLink) -> AnyElement {
+    let bounds = link.bounds;
+    let tip = describe(&link.target);
+    let shown = tip.clone();
+    frame(scale, bounds)
+        .id(id)
+        .aria_label(tip)
+        .test_support()
         .rounded(t.radii.xs)
         .when(link.target != LinkTarget::Unsupported, |region| {
             region.cursor_pointer()
@@ -83,15 +87,24 @@ pub(super) fn link_regions(t: &Theme, doc: &Doc, page: u32) -> Vec<AnyElement> {
         return Vec::new();
     };
     let scale = doc.scale();
-    links
-        .links()
-        .iter()
-        .enumerate()
-        .map(|(index, link)| {
-            let id = ElementId::from(("pdf-link", page as usize * MAX_LINKS + index));
-            region(t, scale, id, link)
-        })
-        .collect()
+    let ring = doc
+        .ring
+        .filter(|(on, _)| *on == page)
+        .and_then(|(_, index)| links.links().get(index))
+        .map(|link| {
+            frame(scale, link.bounds)
+                .id("pdf-link-ring")
+                .test_support()
+                .rounded(t.radii.xs)
+                .border_2()
+                .border_color(t.colors.accent)
+                .into_any_element()
+        });
+    let regions = links.links().iter().enumerate().map(|(index, link)| {
+        let id = ElementId::from(("pdf-link", page as usize * MAX_LINKS + index));
+        region(t, scale, id, link)
+    });
+    regions.chain(ring).collect()
 }
 
 #[cfg(test)]

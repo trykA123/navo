@@ -316,6 +316,27 @@ pub(super) const GROUPS: [Group; 10] = [
             ("viewer_pdf::AllHits", "pdf.all_hits", "cmd-pdf-all-hits"),
             ("viewer_pdf::PagesDrawer", "pdf.pages", "cmd-pdf-pages"),
             ("viewer_pdf::CopyText", "pdf.copy", "cmd-pdf-copy"),
+            ("viewer_pdf::LinkNext", "pdf.link_next", "cmd-pdf-link-next"),
+            (
+                "viewer_pdf::LinkPrevious",
+                "pdf.link_previous",
+                "cmd-pdf-link-previous",
+            ),
+            (
+                "viewer_pdf::LinkFollow",
+                "pdf.link_follow",
+                "cmd-pdf-link-follow",
+            ),
+            (
+                "viewer_pdf::TrailBack",
+                "pdf.trail_back",
+                "cmd-pdf-trail-back",
+            ),
+            (
+                "viewer_pdf::TrailForward",
+                "pdf.trail_forward",
+                "cmd-pdf-trail-forward",
+            ),
         ],
     },
 ];

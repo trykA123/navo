@@ -254,8 +254,8 @@ fn a_key_of_any_context_the_command_is_bound_in_is_a_conflict() {
     let found = conflict(Keymap::builtin(), &proposal("viewer.back", &["alt-left"]));
     let expected = Conflict {
         key: "alt-left".to_owned(),
-        other: spec("tree.collapse_branch"),
-        context: "Tree".to_owned(),
+        other: spec("pdf.trail_back"),
+        context: "Pdf".to_owned(),
         reach: Reach::Same,
     };
     assert_eq!(found, Some(expected));
@@ -291,14 +291,14 @@ fn a_key_of_a_nested_context_is_a_conflict_that_would_hide_the_new_key() {
     );
     let expected = Conflict {
         key: "alt-left".to_owned(),
-        other: spec("tree.collapse_branch"),
-        context: "Tree".to_owned(),
+        other: spec("pdf.trail_back"),
+        context: "Pdf".to_owned(),
         reach: Reach::Inner,
     };
     assert_eq!(found.as_ref(), Some(&expected));
     assert_eq!(
         expected.message(),
-        "Alt+Left is used by Fold branch — it would hide your key there. Replace?"
+        "Alt+Left is used by Back — it would hide your key there. Replace?"
     );
 }
 
@@ -310,6 +310,7 @@ fn replacing_a_key_of_a_nested_context_takes_it_from_there() {
     );
     let expected = [
         set_in("lister.show_text", None, &["alt-left"]),
+        set_in("pdf.trail_back", None, &[]),
         set_in("tree.collapse_branch", None, &[]),
     ];
     assert_eq!(edits, expected);

@@ -1047,6 +1047,26 @@ keys = ["ctrl-p"]
 command = "pdf.copy"
 keys = ["ctrl-c"]
 
+[[bind]]
+command = "pdf.link_next"
+keys = ["tab"]
+
+[[bind]]
+command = "pdf.link_previous"
+keys = ["shift-tab"]
+
+[[bind]]
+command = "pdf.link_follow"
+keys = ["enter"]
+
+[[bind]]
+command = "pdf.trail_back"
+keys = ["alt-left"]
+
+[[bind]]
+command = "pdf.trail_forward"
+keys = ["alt-right"]
+
 # Tree
 
 [[bind]]

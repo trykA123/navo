@@ -21,20 +21,12 @@ impl Trail {
         self.forward.clear();
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Alt+Left and Alt+Right bind it in P37 U2")
-    )]
     pub(super) fn step_back(&mut self, here: Anchor) -> Option<Anchor> {
         let to = self.back.pop()?;
         push(&mut self.forward, here);
         Some(to)
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Alt+Left and Alt+Right bind it in P37 U2")
-    )]
     pub(super) fn step_forward(&mut self, here: Anchor) -> Option<Anchor> {
         let to = self.forward.pop()?;
         push(&mut self.back, here);

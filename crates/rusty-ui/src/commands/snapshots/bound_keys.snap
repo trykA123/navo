@@ -191,7 +191,12 @@ pdf.actual_size | ctrl-1 | Pdf
 pdf.all_hits | ctrl-shift-f | Pdf
 pdf.copy | ctrl-c | Pdf
 pdf.fit | ctrl-0 | Pdf
+pdf.link_follow | enter | Pdf
+pdf.link_next | tab | Pdf
+pdf.link_previous | shift-tab | Pdf
 pdf.pages | ctrl-p | Pdf
+pdf.trail_back | alt-left | Pdf
+pdf.trail_forward | alt-right | Pdf
 pdf.whole_word | alt-w | Pdf
 pdf.zoom_in | ctrl-= | Pdf
 pdf.zoom_in | ctrl-shift-= | Pdf
