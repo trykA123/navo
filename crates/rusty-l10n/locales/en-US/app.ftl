@@ -1,0 +1,38 @@
+command-center = Command center
+command-center-results-label = Results
+command-center-placeholder = Search files and commands
+command-center-placeholder-path = Folder path, or a few letters
+command-center-placeholder-text = Type the text
+command-center-top-hit = Top hit
+command-center-recent = Recent
+command-center-commands = Commands
+command-center-folders = Folders
+command-center-files = Files
+command-center-show-all = Show all { $count }
+command-center-show-all-commands = commands
+command-center-show-all-files = files and folders
+command-center-command-detail = { $context } command
+command-center-folder = Folder
+command-center-prefix-commands = commands
+command-center-prefix-files = files
+command-center-prefix-paths = paths
+command-center-results = { $count ->
+    [one] { $count } result
+   *[other] { $count } results
+}
+command-center-none-mixed = No commands, folders or files match
+command-center-none-commands = No commands match
+command-center-none-files = No files or folders match
+command-center-none-path = Nothing at
+command-center-key-run = run
+command-center-key-choose = choose
+command-center-key-open = open
+command-center-key-reveal = reveal
+command-center-key-other-pane = other pane
+command-center-key-new-tab = new tab
+command-center-key-next-group = next group
+command-center-key-show-all = show all
+command-center-key-complete = complete
+command-center-key-go = go
+command-center-key-close = close
+command-center-key-back = back
