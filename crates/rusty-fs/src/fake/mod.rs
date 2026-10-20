@@ -73,7 +73,7 @@ impl FakeFs {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            tree: Mutex::new(Tree::new()),
+            tree: Mutex::new(Tree::new(false)),
             faults: Mutex::new(HashMap::new()),
             calls: Mutex::new(HashMap::new()),
             recycled: Mutex::new(Vec::new()),
@@ -81,6 +81,14 @@ impl FakeFs {
             batch_size: DEFAULT_BATCH,
             watchable: false,
             watchers: Watchers::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn case_insensitive(self) -> Self {
+        Self {
+            tree: Mutex::new(Tree::new(true)),
+            ..self
         }
     }
 

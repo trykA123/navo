@@ -5,6 +5,7 @@ use crate::{Attributes, EntryKind, FsEntry};
 #[derive(Debug)]
 pub(super) struct Tree {
     root: Node,
+    fold: bool,
 }
 
 #[derive(Debug)]
@@ -31,16 +32,23 @@ impl Node {
         }
     }
 
-    fn child(&self, name: &ProviderPath) -> Option<&Self> {
-        self.children.iter().find(|c| &c.entry.name == name)
+    fn index(&self, name: &ProviderPath, fold: bool) -> Option<usize> {
+        self.children
+            .iter()
+            .position(|c| same_name(&c.entry.name, name, fold))
     }
 
-    fn child_mut(&mut self, name: &ProviderPath) -> Option<&mut Self> {
-        self.children.iter_mut().find(|c| &c.entry.name == name)
+    fn child(&self, name: &ProviderPath, fold: bool) -> Option<&Self> {
+        self.index(name, fold).map(|i| &self.children[i])
     }
 
-    fn child_or_folder(&mut self, name: &ProviderPath) -> &mut Self {
-        let index = match self.children.iter().position(|c| &c.entry.name == name) {
+    fn child_mut(&mut self, name: &ProviderPath, fold: bool) -> Option<&mut Self> {
+        let index = self.index(name, fold)?;
+        Some(&mut self.children[index])
+    }
+
+    fn child_or_folder(&mut self, name: &ProviderPath, fold: bool) -> &mut Self {
+        let index = match self.index(name, fold) {
             Some(index) => index,
             None => {
                 self.children.push(Self::folder(name.clone()));
@@ -49,6 +57,22 @@ impl Node {
         };
         &mut self.children[index]
     }
+}
+
+fn fold_char(c: char) -> char {
+    let mut upper = c.to_uppercase();
+    match (upper.next(), upper.next()) {
+        (Some(u), None) => u,
+        _ => c,
+    }
+}
+
+pub(super) fn fold_text(text: &str) -> String {
+    text.chars().map(fold_char).collect()
+}
+
+fn same_name(a: &ProviderPath, b: &ProviderPath, fold: bool) -> bool {
+    a == b || (fold && fold_text(&a.to_text()) == fold_text(&b.to_text()))
 }
 
 fn segments(path: &str) -> impl Iterator<Item = ProviderPath> + '_ {
@@ -74,22 +98,31 @@ fn file(name: ProviderPath, size: u64) -> FsEntry {
 }
 
 impl Tree {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(fold: bool) -> Self {
         Self {
             root: Node::folder(ProviderPath::from_text("/")),
+            fold,
         }
     }
 
+    pub(super) fn folds(&self) -> bool {
+        self.fold
+    }
+
     fn find(&self, path: &str) -> Option<&Node> {
-        segments(path).try_fold(&self.root, |node, name| node.child(&name))
+        segments(path).try_fold(&self.root, |node, name| node.child(&name, self.fold))
     }
 
     fn find_mut(&mut self, path: &str) -> Option<&mut Node> {
-        segments(path).try_fold(&mut self.root, |node, name| node.child_mut(&name))
+        let fold = self.fold;
+        segments(path).try_fold(&mut self.root, |node, name| node.child_mut(&name, fold))
     }
 
     fn folder_mut(&mut self, path: &str) -> &mut Node {
-        segments(path).fold(&mut self.root, |node, name| node.child_or_folder(&name))
+        let fold = self.fold;
+        segments(path).fold(&mut self.root, |node, name| {
+            node.child_or_folder(&name, fold)
+        })
     }
 
     pub(super) fn add_folder(&mut self, path: &str) {
@@ -103,18 +136,21 @@ impl Tree {
     }
 
     pub(super) fn insert(&mut self, folder: &str, entry: FsEntry) {
+        let fold = self.fold;
         let parent = self.folder_mut(folder);
-        match parent.child_mut(&entry.name) {
+        match parent.child_mut(&entry.name, fold) {
             Some(existing) => existing.entry = entry,
             None => parent.children.push(Node::leaf(entry)),
         }
     }
 
     pub(super) fn remove(&mut self, path: &str) {
+        let fold = self.fold;
         if let Some((parent, name)) = split_last(path)
             && let Some(node) = self.find_mut(parent)
         {
-            node.children.retain(|c| c.entry.name != name);
+            node.children
+                .retain(|c| !same_name(&c.entry.name, &name, fold));
         }
     }
 
@@ -145,9 +181,10 @@ impl Tree {
     }
 
     fn take(&mut self, path: &str) -> Option<Node> {
+        let fold = self.fold;
         let (parent, name) = split_last(path)?;
         let node = self.find_mut(parent)?;
-        let index = node.children.iter().position(|c| c.entry.name == name)?;
+        let index = node.index(&name, fold)?;
         Some(node.children.remove(index))
     }
 
