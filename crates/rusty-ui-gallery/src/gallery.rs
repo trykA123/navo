@@ -27,6 +27,7 @@ pub use crate::pages::{PAGES, Page};
 use crate::pane_page::PanePage;
 use crate::sections;
 use crate::shortcuts_sample;
+use crate::strip_page::StripPage;
 use crate::structured_sample::{
     self as structured, CODE, CODE_NAME, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE,
     TREE_NAME,
@@ -42,7 +43,7 @@ use crate::{pdf_sample, rich_sample, viewer_sample};
 
 mod samples;
 
-use samples::{VIEWER_MENUS, image_keys};
+use samples::image_keys;
 
 const TREE_STEPS: [&str; 9] = [
     "viewer::RowDown",
@@ -87,6 +88,7 @@ pub struct Gallery {
     kinds: Entity<KindsPage>,
     columns: Entity<ColumnsPage>,
     drag: Entity<DragPage>,
+    strip: Entity<StripPage>,
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
@@ -138,6 +140,7 @@ impl Gallery {
             kinds: cx.new(KindsPage::new),
             columns: cx.new(|cx| ColumnsPage::new(window, cx)),
             drag: cx.new(DragPage::new),
+            strip: cx.new(StripPage::new),
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
@@ -155,8 +158,7 @@ impl Gallery {
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
             command_centers: command_center_page::PAGES
                 .map(|(page, shows)| (page, cx.new(|cx| CommandCenterPage::new(shows, cx)))),
-            viewer_menus: VIEWER_MENUS
-                .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
+            viewer_menus: samples::viewer_menu_pages(window, cx),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
             shift_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Shift), cx)),
             ctrl_window: cx.new(|cx| WindowPage::new(Some(KeyLayer::Ctrl), cx)),
@@ -347,6 +349,7 @@ impl Render for Gallery {
             Page::FileKinds => root.child(self.kinds.clone()),
             Page::Columns => root.child(self.columns.clone()),
             Page::Drag => root.child(self.drag.clone()),
+            Page::MemoryStrip => root.child(self.strip.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),

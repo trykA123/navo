@@ -16,3 +16,14 @@ viewer-memory-padding-gaps = { $count ->
     [one] { $count } padding gap
    *[other] { $count } padding gaps
 }
+space-strip-label = { $region } memory strip
+space-strip-tip = { $name } · { $kind } · { $size } at { $address }
+space-strip-tip-object = { $name } · { $kind } · { $size } at { $address } · { $object }
+space-strip-sections = { $count } sections · { $size }
+space-strip-symbols = { $count } symbols · { $size }
+space-kind-code = code
+space-kind-rodata = read-only data
+space-kind-data = data
+space-kind-bss = bss
+space-kind-other = other
+space-kind-fill = linker fill

@@ -96,6 +96,7 @@ pub enum Page {
     CommandCenterNoMatch,
     CommandCenterIndexing,
     Drag,
+    MemoryStrip,
 }
 
 pub struct PageInfo {

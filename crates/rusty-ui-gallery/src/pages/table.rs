@@ -9,7 +9,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 92] = [
+pub const PAGES: [PageInfo; 93] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -317,4 +317,10 @@ pub const PAGES: [PageInfo; 92] = [
         false,
     ),
     info(Page::Drag, "Drag badge", "p36-d4-drag-badge", false),
+    info(
+        Page::MemoryStrip,
+        "Memory strip",
+        "p38-c5-memory-strip",
+        false,
+    ),
 ];

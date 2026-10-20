@@ -11,6 +11,10 @@ pub(super) const VIEWER_MENUS: [ViewerMenuShows; 8] = [
     ViewerMenuShows::ViewMarkdown,
 ];
 
+pub(super) fn viewer_menu_pages(window: &mut Window, cx: &mut App) -> [Entity<ViewerMenuPage>; 8] {
+    VIEWER_MENUS.map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx)))
+}
+
 impl Gallery {
     pub(super) fn sample(&self) -> Option<&dyn ViewerBody> {
         match self.page {

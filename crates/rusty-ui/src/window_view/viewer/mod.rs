@@ -24,6 +24,7 @@ pub(in crate::window_view) mod parts;
 mod pdf;
 mod rich_header;
 mod search;
+mod space;
 mod table;
 mod trace;
 mod tree;
@@ -54,6 +55,9 @@ pub use menu::viewer_menu;
 pub use paged::{PagedKind, PagedView};
 pub use pdf::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use search::memory::MemoryLink;
+pub use space::{
+    Item as StripItem, Label as StripLabel, MemoryStrip, Step as StripStep, StripData, StripEvent,
+};
 pub(in crate::window_view) use tree::FilterBack;
 pub use view_menu::view_menu;
 
