@@ -97,6 +97,21 @@ fn the_text_view_shows_line_numbers_and_hides_line_ends_by_default() {
 }
 
 #[test]
+fn the_syntax_theme_defaults_to_oxidised_iron_and_reads_mocha() {
+    assert_eq!(
+        Settings::default().text.view.syntax_theme,
+        crate::settings::view::SyntaxThemeChoice::OxidisedIron
+    );
+    let (settings, unknown) =
+        crate::parse_settings("[text.view]\nsyntax-theme = \"mocha\"\n").unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert_eq!(
+        settings.text.view.syntax_theme,
+        crate::settings::view::SyntaxThemeChoice::Mocha
+    );
+}
+
+#[test]
 fn the_image_view_starts_without_details() {
     assert!(!Settings::default().image.view.details);
 }

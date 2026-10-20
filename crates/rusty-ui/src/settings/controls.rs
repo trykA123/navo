@@ -69,7 +69,7 @@ pub(super) fn segments(picks: &Picks) -> impl IntoElement + use<> {
         let button = div()
             .id(("settings-segment", index))
             .role(Role::RadioButton)
-            .aria_label(option.label)
+            .aria_label(option.text())
             .aria_selected(is_on)
             .test_support()
             .flex()
@@ -87,7 +87,7 @@ pub(super) fn segments(picks: &Picks) -> impl IntoElement + use<> {
                     .border_color(t.surfaces.card_edge)
                     .font_weight(FontWeight::SEMIBOLD)
             })
-            .child(option.label);
+            .child(option.text());
         pick_on_click(button, picks.send, picks.change(index))
     });
     div()
@@ -256,7 +256,7 @@ pub(super) fn pictures(picks: &Picks, look: Look) -> impl IntoElement + use<> {
         let thumb = div()
             .id((name, index))
             .role(Role::RadioButton)
-            .aria_label(option.label)
+            .aria_label(option.text())
             .aria_selected(is_on)
             .test_support()
             .flex()
@@ -280,7 +280,7 @@ pub(super) fn pictures(picks: &Picks, look: Look) -> impl IntoElement + use<> {
                     })
                     .child(swatch),
             )
-            .child(option.label);
+            .child(option.text());
         pick_on_click(thumb, picks.send, picks.change(index))
     });
     div()

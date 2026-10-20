@@ -1,11 +1,12 @@
 use std::time::Duration;
 
+use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, ElementId, TestAppContext};
+use gpui_kit::{AppContext as _, ElementId, Hsla, TestAppContext};
 
 use super::app_menu::{Rig, rig};
 use crate::settings::{Change, FIELDS, Field, Values};
-use crate::tokens::{self, Density, ThemeChoice};
+use crate::tokens::{self, Density, SyntaxTheme, ThemeChoice};
 use crate::window_view::SettingsNews;
 
 fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
@@ -221,4 +222,41 @@ fn f8_resets_a_changed_row_and_its_hint_shows_only_there(cx: &mut TestAppContext
     assert_eq!(last_change(&rig), Some(Change::reset(Field::Density)));
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Default"));
     assert!(!hint_labels(cx, &rig).contains(&"Reset".to_owned()));
+}
+
+fn keyword_colour(cx: &mut TestAppContext) -> Option<Hsla> {
+    cx.read(|cx| {
+        let theme = &KitTheme::global(cx).highlight_theme;
+        theme.style("keyword").and_then(|style| style.color)
+    })
+}
+
+#[gpui_kit::test]
+fn a_syntax_theme_pick_in_the_sheet_recolours_the_highlight_theme_live(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::Light);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::TextSyntaxTheme);
+    let iron = keyword_colour(cx);
+    assert!(iron.is_some());
+    rig.press(cx, "right");
+    let mocha = Change::syntax_theme(SyntaxTheme::Mocha);
+    assert_eq!(last_change(&rig), Some(mocha));
+    assert_eq!(cx.read(|cx| tokens::current(cx).syntax), SyntaxTheme::Mocha);
+    assert_ne!(keyword_colour(cx), iron);
+    rig.press(cx, "left");
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).syntax),
+        SyntaxTheme::OxidisedIron
+    );
+    assert_eq!(keyword_colour(cx), iron);
+}
+
+#[gpui_kit::test]
+fn a_hand_edited_syntax_theme_applies_live(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::Light);
+    let iron = keyword_colour(cx);
+    let edited = Values::default().with(&Change::syntax_theme(SyntaxTheme::Mocha));
+    send(cx, &rig, edited, 1);
+    assert_eq!(cx.read(|cx| tokens::current(cx).syntax), SyntaxTheme::Mocha);
+    assert_ne!(keyword_colour(cx), iron);
 }

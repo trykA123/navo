@@ -116,12 +116,20 @@ fn window() -> impl Strategy<Value = WindowSettings> {
 }
 
 fn viewers() -> impl Strategy<Value = (TextViewer, ImageViewer, Automotive, CopySettings)> {
-    let text = any::<[bool; 2]>().prop_map(|[line_numbers, line_ends]| TextViewer {
-        view: TextView {
-            line_numbers,
-            line_ends,
-        },
-    });
+    let syntax = prop_oneof![
+        Just(crate::settings::view::SyntaxThemeChoice::OxidisedIron),
+        Just(crate::settings::view::SyntaxThemeChoice::Mocha)
+    ];
+    let text =
+        (any::<[bool; 2]>(), syntax).prop_map(|([line_numbers, line_ends], syntax_theme)| {
+            TextViewer {
+                view: TextView {
+                    line_numbers,
+                    line_ends,
+                    syntax_theme,
+                },
+            }
+        });
     let image = any::<bool>().prop_map(|details| ImageViewer {
         view: ImageView { details },
     });

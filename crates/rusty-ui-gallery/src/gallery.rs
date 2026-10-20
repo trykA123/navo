@@ -23,7 +23,8 @@ use crate::pane_page::PanePage;
 use crate::sections;
 use crate::shortcuts_sample;
 use crate::structured_sample::{
-    self as structured, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE, TREE_NAME,
+    self as structured, CODE, CODE_NAME, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE,
+    TREE_NAME,
 };
 use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
@@ -81,6 +82,7 @@ pub struct Gallery {
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
     markdown_preview: Option<Box<dyn ViewerBody>>,
+    code: Option<Box<dyn ViewerBody>>,
     memory: [Option<Box<dyn ViewerBody>>; 2],
     elf: [Option<Box<dyn ViewerBody>>; 2],
     map: [Option<Box<dyn ViewerBody>>; 2],
@@ -126,6 +128,7 @@ impl Gallery {
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
             markdown_preview: structured::editing(MARKDOWN_NAME, MARKDOWN, window, cx),
+            code: structured::body(CODE_NAME, CODE, window, cx),
             memory: [(); 2].map(|()| structured::body(MEMORY_NAME, memory(), window, cx)),
             elf: [(); 2].map(|()| structured::binary(ELF_NAME, elf(), window, cx)),
             map: [(); 2].map(|()| structured::body(MAP_NAME, map(), window, cx)),

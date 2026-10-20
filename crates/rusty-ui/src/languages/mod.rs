@@ -4,6 +4,8 @@ mod grammars;
 mod names;
 mod sniff;
 
+#[cfg(test)]
+pub(crate) use captures::HIGHLIGHT_NAMES;
 pub use grammars::register_languages;
 
 #[must_use]

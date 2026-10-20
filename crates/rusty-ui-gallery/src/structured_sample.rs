@@ -8,6 +8,7 @@ use rusty_ui::window_view::{Attach, FileHooks, FileText, Host, Kinds, Load, Snif
 
 pub const TREE_NAME: &str = "ferrite.json";
 pub const TABLE_NAME: &str = "cities.csv";
+pub const CODE_NAME: &str = "copy_job.rs";
 pub const MARKDOWN_NAME: &str = "RELEASE.md";
 
 pub const TREE: &str = r#"{
@@ -46,6 +47,32 @@ Targu Mures;Mures;116033;49.3;1332;
 Baia Mare;Maramures;108759;235.7;1329;
 Buzau;Buzau;100230;81.3;1431;
 ";
+
+pub const CODE: &str = r##"/// Copies one file and reports progress to the job queue.
+#[derive(Debug, Clone)]
+pub struct CopyJob<'a> {
+    pub source: &'a Path,
+    pub chunk: usize,
+}
+
+impl<'a> CopyJob<'a> {
+    pub const CHUNK: usize = 1 << 20;
+
+    pub fn run(&self, tx: &Sender<Progress>) -> io::Result<u64> {
+        let mut done = 0u64; // bytes so far
+        let pattern = Regex::new(r"^\d{4}-\d{2}")?;
+        if self.chunk == 0 || !self.source.exists() {
+            return Err(io::Error::other("empty \"source\""));
+        }
+        let name = self.source.display().to_string();
+        tx.send(Progress::Started { total: None }).ok();
+        for part in name.split('/').filter(|part| pattern.is_match(part)) {
+            done += part.len() as u64;
+        }
+        Ok(done)
+    }
+}
+"##;
 
 pub const MARKDOWN: &str = "# Ferrite 0.0.1
 

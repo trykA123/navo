@@ -1,6 +1,6 @@
-use super::fields::{Control, F, FieldSpec, Look, PRESETS, S, spec};
+use super::fields::{Control, F, FieldSpec, Look, PRESETS, S, SYNTAX_THEMES, spec};
 
-pub(super) const VIEWER_FIELDS: [FieldSpec; 11] = [
+pub(super) const VIEWER_FIELDS: [FieldSpec; 12] = [
     spec(
         (F::TextLineNumbers, S::Display, "text.view.line-numbers"),
         (
@@ -13,6 +13,11 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 11] = [
         (F::TextLineEnds, S::Display, "text.view.line-ends"),
         ("Line ends", "Marks where each line ends, as LF or CRLF."),
         Control::Toggle,
+    ),
+    spec(
+        (F::TextSyntaxTheme, S::Display, "text.view.syntax-theme"),
+        ("settings-syntax-theme", "settings-syntax-theme-help"),
+        Control::Choices(&SYNTAX_THEMES, Look::Segments),
     ),
     spec(
         (F::ImageDetails, S::Display, "image.view.details"),

@@ -92,6 +92,7 @@ windows-version = "0.1.7"
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 insta = "1.49.0"
 rusty-automotive = { path = "../rusty-automotive", features = ["sample"] }
+rusty-syntax = { path = "../rusty-syntax" }
 tempfile = "3.27.0"
 
 [lints]

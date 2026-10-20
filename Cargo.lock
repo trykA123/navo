@@ -6549,6 +6549,7 @@ dependencies = [
  "rusty-l10n",
  "rusty-pdf",
  "rusty-structured",
+ "rusty-syntax",
  "serde",
  "tempfile",
  "toml 1.1.8+spec-1.1.0",

@@ -161,7 +161,7 @@ fn spoken(spec: &FieldSpec, value: &Value) -> SharedString {
     match (spec.control, value) {
         (Control::Choices(options, _), Value::Pick(at)) => options
             .get(*at)
-            .map_or_else(SharedString::default, |option| option.label.into()),
+            .map_or_else(SharedString::default, |option| option.text()),
         (_, Value::Flag(on)) => if *on { "On" } else { "Off" }.into(),
         (_, Value::Text(text)) => text.clone(),
         (_, Value::Number(number)) => number.to_string().into(),
@@ -245,7 +245,7 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
         .flex()
         .items_center()
         .gap(t.spacing.md)
-        .child(div().font_weight(FontWeight::MEDIUM).child(spec.label))
+        .child(div().font_weight(FontWeight::MEDIUM).child(spec.label()))
         .child(row_state::tag(t, index, look.values.is_changed(spec.field)));
     div()
         .flex()
@@ -257,7 +257,7 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
             div()
                 .text_size(t.typography.small)
                 .text_color(t.colors.muted)
-                .child(spec.help),
+                .child(spec.help()),
         )
         .children(pending)
         .child(key_line(t, spec, index == look.row))
@@ -281,7 +281,7 @@ fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     let row = div()
         .id(("settings-row", index))
         .role(Role::ListItem)
-        .aria_label(spec.label)
+        .aria_label(spec.label())
         .aria_value(spoken(spec, value))
         .aria_selected(is_current)
         .test_support()

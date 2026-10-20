@@ -182,7 +182,7 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
     let groups: Vec<Option<&str>> = keys.iter().map(|(group, _)| *group).collect();
     let expected = [
         ("Window", 12),
-        ("Text", 2),
+        ("Text", 3),
         ("Image", 1),
         ("Markdown", 1),
         ("Preview", 2),
@@ -201,6 +201,7 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
         [
             "text.view.line-numbers",
             "text.view.line-ends",
+            "text.view.syntax-theme",
             "image.view.details",
             "markdown.view.preview-split",
             "preview.view.type-bars",
@@ -250,8 +251,9 @@ fn every_display_row_has_a_one_sentence_hint() {
         .iter()
         .filter(|spec| spec.section == Section::Display)
     {
-        assert!(spec.help.ends_with('.'), "{}", spec.key);
-        assert_eq!(spec.help.matches(". ").count(), 0, "{}", spec.key);
+        let help = spec.help();
+        assert!(help.ends_with('.'), "{}", spec.key);
+        assert_eq!(help.matches(". ").count(), 0, "{}", spec.key);
     }
 }
 
@@ -327,7 +329,7 @@ fn the_scroll_child_of_a_row_counts_the_group_headings_above_it() {
     assert_eq!(child(Field::WindowTabsWithOne), Some(2));
     assert_eq!(child(Field::WindowContents), Some(13));
     assert_eq!(child(Field::TextLineNumbers), Some(15));
-    assert_eq!(child(Field::ImageDetails), Some(18));
+    assert_eq!(child(Field::ImageDetails), Some(19));
 }
 
 #[test]

@@ -170,7 +170,7 @@ fn a_noop_completion_records_defaults_without_writing_a_pending_file() {
     let done = store.complete(&db, &Settings::default());
     on_stage(|_, _| Ok(()));
     assert_eq!(done.unwrap(), Completion::default());
-    assert_eq!(db.settings_defaults().unwrap().len(), 40);
+    assert_eq!(db.settings_defaults().unwrap().len(), 41);
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
     assert!(!pending_file(&path).exists());
 }
@@ -544,7 +544,7 @@ mod unix {
         let done = store.complete(&db, &Settings::default());
         set_mode(dir.path(), 0o755);
         assert_eq!(done.unwrap(), Completion::default());
-        assert_eq!(db.settings_defaults().unwrap().len(), 40);
+        assert_eq!(db.settings_defaults().unwrap().len(), 41);
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
         assert_eq!(mode_of(&path), 0o644);
         assert!(!pending_file(&path).exists());

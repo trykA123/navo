@@ -155,11 +155,11 @@ impl ViewerBody for ImageBody {
 
     fn menu(&self, _: bool, _: &mut App) -> Vec<MenuEntry> {
         vec![
-            MenuEntry::Run("Copy image", Box::new(super::CopyImage), false),
-            MenuEntry::Run("Copy path", Box::new(super::CopyFilePath), false),
+            MenuEntry::Run("Copy image".into(), Box::new(super::CopyImage), false),
+            MenuEntry::Run("Copy path".into(), Box::new(super::CopyFilePath), false),
             MenuEntry::Break,
-            MenuEntry::Run("Fit", Box::new(super::FitImage), false),
-            MenuEntry::Run("100 %", Box::new(super::ActualSize), false),
+            MenuEntry::Run("Fit".into(), Box::new(super::FitImage), false),
+            MenuEntry::Run("100 %".into(), Box::new(super::ActualSize), false),
         ]
     }
 

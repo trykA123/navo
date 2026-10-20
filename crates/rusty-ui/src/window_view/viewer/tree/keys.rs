@@ -47,23 +47,23 @@ pub(in crate::window_view::viewer) fn bind_keys(cx: &mut App) {
 
 pub(super) fn menu_entries() -> Vec<MenuEntry> {
     let depths: Vec<MenuEntry> = vec![
-        MenuEntry::Run("1", Box::new(FoldDepth1), false),
-        MenuEntry::Run("2", Box::new(FoldDepth2), false),
-        MenuEntry::Run("3", Box::new(FoldDepth3), false),
-        MenuEntry::Run("4", Box::new(FoldDepth4), false),
-        MenuEntry::Run("5", Box::new(FoldDepth5), false),
-        MenuEntry::Run("6", Box::new(FoldDepth6), false),
-        MenuEntry::Run("7", Box::new(FoldDepth7), false),
-        MenuEntry::Run("8", Box::new(FoldDepth8), false),
-        MenuEntry::Run("9", Box::new(FoldDepth9), false),
+        MenuEntry::Run("1".into(), Box::new(FoldDepth1), false),
+        MenuEntry::Run("2".into(), Box::new(FoldDepth2), false),
+        MenuEntry::Run("3".into(), Box::new(FoldDepth3), false),
+        MenuEntry::Run("4".into(), Box::new(FoldDepth4), false),
+        MenuEntry::Run("5".into(), Box::new(FoldDepth5), false),
+        MenuEntry::Run("6".into(), Box::new(FoldDepth6), false),
+        MenuEntry::Run("7".into(), Box::new(FoldDepth7), false),
+        MenuEntry::Run("8".into(), Box::new(FoldDepth8), false),
+        MenuEntry::Run("9".into(), Box::new(FoldDepth9), false),
     ];
     vec![
-        MenuEntry::Run("Copy value", Box::new(CopyValue), false),
-        MenuEntry::Run("Copy key", Box::new(CopyKey), false),
-        MenuEntry::Run("Copy path", Box::new(CopyPath), false),
+        MenuEntry::Run("Copy value".into(), Box::new(CopyValue), false),
+        MenuEntry::Run("Copy key".into(), Box::new(CopyKey), false),
+        MenuEntry::Run("Copy path".into(), Box::new(CopyPath), false),
         MenuEntry::Break,
-        MenuEntry::Run("Fold branch", Box::new(CloseSubtree), false),
-        MenuEntry::Run("Fold all", Box::new(CloseAll), false),
+        MenuEntry::Run("Fold branch".into(), Box::new(CloseSubtree), false),
+        MenuEntry::Run("Fold all".into(), Box::new(CloseAll), false),
         MenuEntry::Submenu("Depth", depths),
     ]
 }
