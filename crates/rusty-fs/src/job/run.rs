@@ -9,6 +9,7 @@ use super::{JobContext, JobOutcome, Progress, StepOutcome};
 pub(super) fn current_of(step: &Step) -> Location {
     match step {
         Step::MakeFolder { target } => target.clone(),
+        Step::MakeLink { at, .. } => at.clone(),
         Step::CopyFile { source, .. } | Step::Rename { source, .. } => source.clone(),
         Step::Recycle { location }
         | Step::RemoveFile { location }
@@ -139,6 +140,7 @@ pub(super) fn apply(
         Step::RemoveFile { location } => done(ops.remove_file(location)),
         Step::RemoveLink { location } => done(ops.remove_link(location)),
         Step::RemoveFolder { location } => done(ops.remove_empty_folder(location)),
+        Step::MakeLink { at, .. } => Err(not_supported(at)),
     }
 }
 
@@ -182,4 +184,11 @@ fn make_folder(ctx: &mut JobContext<'_>, target: &Location) -> Result<StepOutcom
         return Ok(StepOutcome::Skipped);
     }
     ctx.ops.create_folder(target).map(|()| StepOutcome::Done)
+}
+
+pub(super) fn not_supported(at: &Location) -> FsError {
+    FsError {
+        location: Some(at.clone()),
+        ..FsError::new(FsErrorKind::NotSupportedYet)
+    }
 }

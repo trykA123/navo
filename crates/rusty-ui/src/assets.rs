@@ -69,6 +69,7 @@ icon_assets!(
         Keyboard,
         Layers,
         LayoutGrid,
+        Link,
         List,
         Lock,
         Map,

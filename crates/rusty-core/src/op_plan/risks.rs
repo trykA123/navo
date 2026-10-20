@@ -22,6 +22,11 @@ pub(super) fn totals(request: &PlanRequest, steps: &[Step], moved: &[bool]) -> T
                 .map(|i| i.size)
                 .sum(),
         },
+        OpKind::Link => Totals {
+            files: count(|s| matches!(s, Step::MakeLink { .. })),
+            folders: 0,
+            bytes: 0,
+        },
         _ => Totals {
             files: count(|s| matches!(s, Step::CopyFile { .. })),
             folders: count(|s| matches!(s, Step::MakeFolder { .. })),

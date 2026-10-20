@@ -5,6 +5,7 @@ use super::copy::{overwrites, remove_if_present, temp_of};
 use super::restore::{
     Restored, gone_or_folder_deleted, is_placed, keep, matches_stamp, restore, surely_absent,
 };
+use super::run::not_supported;
 use super::{FileStamp, HeldFile, JobContext, JobOutcome, Journaled, PlacedFile, StepOutcome};
 use crate::{ProviderOps, already_exists};
 
@@ -91,6 +92,7 @@ fn undo(
             Some(held) => undo_move_over(source, target, held, ctx),
             None => undo_rename(ops, source, target),
         },
+        Step::MakeLink { at, .. } => Err(not_supported(at)),
         Step::Recycle { .. }
         | Step::RemoveFile { .. }
         | Step::RemoveLink { .. }

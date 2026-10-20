@@ -39,6 +39,12 @@ pub(super) fn job_title(job: &JobInfo) -> String {
         OpKind::Recycle => t!("activity-recycling", count = count, files = files),
         OpKind::Delete => t!("activity-deleting", count = count, files = files),
         OpKind::Rename => t!("activity-renaming", count = count, files = files),
+        OpKind::Link => t!(
+            "activity-linking",
+            count = count,
+            files = files,
+            target = target_of(job)
+        ),
     }
 }
 
@@ -71,6 +77,7 @@ pub(super) fn failure_title(job: &JobInfo) -> String {
         OpKind::Recycle => "activity-recycle-failed",
         OpKind::Delete => "activity-delete-failed",
         OpKind::Rename => "activity-rename-failed",
+        OpKind::Link => "activity-link-failed",
     };
     t!(id, count = count, files = files)
 }
@@ -94,6 +101,12 @@ pub(super) fn done_title(job: &JobInfo) -> String {
         OpKind::Recycle => t!("activity-recycled", count = count, items = items),
         OpKind::Delete => t!("activity-deleted", count = count, items = items),
         OpKind::Rename => t!("activity-renamed", count = count, items = items),
+        OpKind::Link => t!(
+            "activity-linked",
+            count = count,
+            items = items,
+            target = target
+        ),
     }
 }
 

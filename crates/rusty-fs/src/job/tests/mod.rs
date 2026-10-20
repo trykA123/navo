@@ -22,6 +22,7 @@ mod kept_aside;
 mod kept_aside_crash;
 mod kept_aside_late;
 mod kept_aside_race;
+mod link;
 mod move_;
 mod move_over;
 mod move_over_crash;

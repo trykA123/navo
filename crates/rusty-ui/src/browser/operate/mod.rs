@@ -208,7 +208,7 @@ impl Browser {
         let sources = self.selected_sources();
         let tab = self.state.active_tab();
         let target = match kind {
-            OpKind::Copy | OpKind::Move => Some(self.other_location()?),
+            OpKind::Copy | OpKind::Move | OpKind::Link => Some(self.other_location()?),
             OpKind::Recycle | OpKind::Delete => None,
             OpKind::Rename => return None,
         };

@@ -141,7 +141,7 @@ fn split_text(text: &str) -> Result<(ProviderId, ProviderPath), LocationError> {
     }
 }
 
-fn windows_style(text: &str) -> bool {
+pub(crate) fn windows_style(text: &str) -> bool {
     let mut chars = text.chars();
     text.starts_with(r"\\")
         || matches!((chars.next(), chars.next()), (Some(letter), Some(':')) if letter.is_ascii_alphabetic())
