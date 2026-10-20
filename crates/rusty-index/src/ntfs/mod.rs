@@ -2,7 +2,9 @@ use std::collections::{HashMap, VecDeque};
 use std::io;
 
 use crate::table::{Flags, NO_PARENT, NameTable, TableChange, TableError};
-use crate::usn::{FrnMap, JournalPosition, ParseError, Resume, UsnBatch, parse_batch};
+use crate::usn::{
+    FrnMap, JournalPosition, ParseError, PendingRenames, Resume, UsnBatch, parse_batch,
+};
 
 #[cfg(windows)]
 mod windows;
@@ -36,6 +38,7 @@ pub struct NtfsIndex {
     pub table: NameTable,
     pub ids: FrnMap,
     pub position: JournalPosition,
+    renames: PendingRenames,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,14 +66,20 @@ impl NtfsIndex {
             table,
             ids: [(ROOT_REFERENCE, root)].into(),
             position,
+            renames: PendingRenames::default(),
         })
+    }
+
+    pub fn restart_at(&mut self, position: JournalPosition) {
+        self.position = position;
+        self.renames.clear();
     }
 
     pub fn apply_batch(&mut self, batch: UsnBatch) -> Result<Vec<UnresolvedChange>, NtfsError> {
         validate_journal_cursor(&batch, self.position)?;
         let next_usn = batch.next_usn;
         let mut pending = Pending::default();
-        for change in batch.into_changes() {
+        for change in batch.into_changes(&mut self.renames) {
             pending.push(self, change)?;
         }
         self.position.next_usn = next_usn;

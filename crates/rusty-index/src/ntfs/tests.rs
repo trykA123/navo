@@ -1,7 +1,7 @@
 use super::*;
 use std::collections::VecDeque;
 
-use crate::usn::UsnRecord;
+use crate::usn::{MAX_CARRIED_READS, UsnRecord};
 
 const ROOT: u128 = (5 << 48) | 5;
 const POSITION: JournalPosition = JournalPosition {
@@ -186,6 +186,73 @@ fn unknown_rename_becomes_add_and_repeated_creates_update_one_entry() {
     assert_eq!(index.table.len(), 2);
     assert_eq!(index.table.name(index.ids[&8]), Some("new"));
     assert_eq!(index.position.next_usn, 110);
+}
+
+fn create(file_id: u128, parent_id: u128, name: &str) -> UsnRecord {
+    let mut created = record(file_id, parent_id, name);
+    created.reason = 0x100;
+    created
+}
+
+fn folder_with_child() -> NtfsIndex {
+    let mut index = NtfsIndex::new('C', POSITION).unwrap();
+    index
+        .apply_batch(UsnBatch {
+            next_usn: 110,
+            records: vec![create(8, ROOT, "old"), create(9, 8, "child")],
+        })
+        .unwrap();
+    index
+}
+
+#[test]
+fn a_folder_renamed_across_two_reads_keeps_its_children() {
+    let mut index = folder_with_child();
+    let mut old = record(8, ROOT, "old");
+    old.reason = 0x1000;
+    let mut new = record(8, ROOT, "new");
+    new.reason = 0x2000;
+    index
+        .apply_batch(UsnBatch {
+            next_usn: 120,
+            records: vec![old],
+        })
+        .unwrap();
+    assert_eq!(index.table.name(index.ids[&8]), Some("old"));
+    index
+        .apply_batch(UsnBatch {
+            next_usn: 130,
+            records: vec![new],
+        })
+        .unwrap();
+    assert_eq!(index.table.name(index.ids[&8]), Some("new"));
+    assert_eq!(index.table.parent(index.ids[&9]), Some(index.ids[&8]));
+    assert_eq!(index.table.len(), 3);
+}
+
+#[test]
+fn restarting_the_journal_forgets_waiting_old_names() {
+    let mut index = folder_with_child();
+    let mut old = record(8, ROOT, "old");
+    old.reason = 0x1000;
+    index
+        .apply_batch(UsnBatch {
+            next_usn: 120,
+            records: vec![old],
+        })
+        .unwrap();
+    index.restart_at(POSITION);
+    let mut next = POSITION.next_usn;
+    for _ in 0..=MAX_CARRIED_READS + 1 {
+        next += 10;
+        index
+            .apply_batch(UsnBatch {
+                next_usn: next,
+                records: vec![create(20, ROOT, "other")],
+            })
+            .unwrap();
+    }
+    assert_eq!(index.table.len(), 4);
 }
 
 #[test]

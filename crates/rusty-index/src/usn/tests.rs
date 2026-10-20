@@ -64,8 +64,18 @@ fn batch(records: &[Vec<u8>]) -> Vec<u8> {
 }
 
 fn changes(records: &[Record]) -> Vec<TableChange> {
+    changes_after(records, &mut PendingRenames::default())
+}
+
+fn changes_after(records: &[Record], renames: &mut PendingRenames) -> Vec<TableChange> {
     let records: Vec<_> = records.iter().map(Record::bytes).collect();
-    parse_batch(&batch(&records)).unwrap().into_changes()
+    parse_batch(&batch(&records)).unwrap().into_changes(renames)
+}
+
+fn other_file() -> Record {
+    let mut record = Record::new(2, CREATE, "elm");
+    record.file_id = 50;
+    record
 }
 
 #[test]
@@ -199,15 +209,83 @@ fn pairs_renames_by_file_reference_across_interleaved_records() {
 }
 
 #[test]
-fn unpaired_old_removes_and_unpaired_new_adds() {
-    assert_eq!(
-        changes(&[Record::new(2, OLD, "old")]),
-        vec![TableChange::Remove { file_id: 42 }]
-    );
+fn unpaired_new_adds() {
     assert!(matches!(
         changes(&[Record::new(2, NEW, "new")]).as_slice(),
         [TableChange::Add { name, .. }] if name == "new"
     ));
+}
+
+#[test]
+fn an_old_name_pairs_with_a_new_name_in_a_later_read() {
+    let mut renames = PendingRenames::default();
+    assert!(changes_after(&[Record::new(2, OLD, "old")], &mut renames).is_empty());
+    let mut new = Record::new(2, NEW, "new");
+    new.attributes = 0x10;
+    assert_eq!(
+        changes_after(&[new], &mut renames),
+        vec![TableChange::Rename {
+            file_id: 42,
+            parent_id: 7,
+            name: "new".into(),
+            flags: Flags::FOLDER,
+        }]
+    );
+    for _ in 0..=MAX_CARRIED_READS + 1 {
+        assert_eq!(changes_after(&[other_file()], &mut renames).len(), 1);
+    }
+}
+
+#[test]
+fn an_old_name_without_a_partner_is_removed_after_the_allowed_reads() {
+    let mut renames = PendingRenames::default();
+    assert!(changes_after(&[Record::new(2, OLD, "old")], &mut renames).is_empty());
+    for _ in 0..MAX_CARRIED_READS {
+        assert!(matches!(
+            changes_after(&[other_file()], &mut renames).as_slice(),
+            [TableChange::Add { file_id: 50, .. }]
+        ));
+    }
+    assert_eq!(
+        changes_after(&[other_file()], &mut renames),
+        vec![
+            TableChange::Add {
+                file_id: 50,
+                parent_id: 7,
+                name: "elm".into(),
+                flags: Flags::NONE,
+            },
+            TableChange::Remove { file_id: 42 },
+        ]
+    );
+    assert_eq!(changes_after(&[other_file()], &mut renames).len(), 1);
+}
+
+#[test]
+fn empty_reads_do_not_age_a_waiting_old_name() {
+    let mut renames = PendingRenames::default();
+    changes_after(&[Record::new(2, OLD, "old")], &mut renames);
+    for _ in 0..=MAX_CARRIED_READS * 3 {
+        assert!(changes_after(&[], &mut renames).is_empty());
+    }
+    assert!(matches!(
+        changes_after(&[Record::new(2, NEW, "new")], &mut renames).as_slice(),
+        [TableChange::Rename { .. }]
+    ));
+}
+
+#[test]
+fn clearing_drops_waiting_old_names_without_removing_them() {
+    let mut renames = PendingRenames::default();
+    changes_after(&[Record::new(2, OLD, "old")], &mut renames);
+    renames.clear();
+    assert!(matches!(
+        changes_after(&[Record::new(2, NEW, "new")], &mut renames).as_slice(),
+        [TableChange::Add { .. }]
+    ));
+    for _ in 0..=MAX_CARRIED_READS + 1 {
+        assert_eq!(changes_after(&[other_file()], &mut renames).len(), 1);
+    }
 }
 
 #[test]
@@ -350,7 +428,7 @@ fn fixed_seed_random_and_mutated_buffers_never_panic() {
             }
         }
         if let Ok(parsed) = parse_batch(&bytes) {
-            let _ = parsed.into_changes();
+            let _ = parsed.into_changes(&mut PendingRenames::default());
         }
     }
 }

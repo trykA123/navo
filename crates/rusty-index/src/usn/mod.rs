@@ -27,11 +27,47 @@ pub struct UsnBatch {
     pub records: Vec<UsnRecord>,
 }
 
+// A new name follows its old name within a read or two; a longer wait means the pair is lost.
+pub const MAX_CARRIED_READS: u32 = 2;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PendingRenames {
+    waiting: Vec<(u128, u32)>,
+}
+
+impl PendingRenames {
+    pub fn clear(&mut self) {
+        self.waiting.clear();
+    }
+
+    fn settle(&mut self, mut open: HashSet<u128>, seen: &[u128], aged: bool) -> Vec<TableChange> {
+        let mut removed = Vec::new();
+        for (file_id, reads) in std::mem::take(&mut self.waiting) {
+            if !open.remove(&file_id) {
+                continue;
+            }
+            let reads = reads + u32::from(aged);
+            if reads > MAX_CARRIED_READS {
+                removed.push(TableChange::Remove { file_id });
+            } else {
+                self.waiting.push((file_id, reads));
+            }
+        }
+        for &file_id in seen {
+            if open.remove(&file_id) {
+                self.waiting.push((file_id, 0));
+            }
+        }
+        removed
+    }
+}
+
 impl UsnBatch {
-    pub fn into_changes(self) -> Vec<TableChange> {
+    pub fn into_changes(self, renames: &mut PendingRenames) -> Vec<TableChange> {
         let mut changes = Vec::new();
-        let mut pending = HashSet::new();
+        let mut pending: HashSet<u128> = renames.waiting.iter().map(|&(id, _)| id).collect();
         let mut old_ids = Vec::new();
+        let aged = !self.records.is_empty();
         for record in self.records {
             if record.reason & RENAME_OLD_NAME != 0 {
                 old_ids.push(record.file_id);
@@ -40,12 +76,7 @@ impl UsnBatch {
                 changes.push(change);
             }
         }
-        changes.extend(
-            old_ids
-                .into_iter()
-                .filter(|id| pending.remove(id))
-                .map(|file_id| TableChange::Remove { file_id }),
-        );
+        changes.extend(renames.settle(pending, &old_ids, aged));
         changes
     }
 }
