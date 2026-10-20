@@ -312,6 +312,11 @@ pdf.whole_word | alt-w | Pdf
 pdf.all_hits | ctrl-shift-f | Pdf
 pdf.pages | ctrl-p | Pdf
 pdf.copy | ctrl-c | Pdf
+pdf.link_next | tab | Pdf
+pdf.link_previous | shift-tab | Pdf
+pdf.link_follow | enter | Pdf
+pdf.trail_back | alt-left | Pdf
+pdf.trail_forward | alt-right | Pdf
 [drive_menu]
 drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu

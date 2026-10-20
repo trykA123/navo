@@ -89,3 +89,45 @@ fn dragging_from_a_link_selects_text_and_does_not_follow(cx: &mut TestAppContext
     assert_eq!(copied.as_deref(), Some("Page"));
     assert_eq!(status(cx, &rig), "PDF · page 1 of 40");
 }
+
+fn has_ring(cx: &mut TestAppContext, rig: &Rig) -> bool {
+    cx.update_window(rig.0, |_, window, _| {
+        window.try_find("pdf-link-ring").is_some()
+    })
+    .expect("window")
+}
+
+fn ring_on(cx: &mut TestAppContext, rig: &Rig, index: usize) -> bool {
+    has_ring(cx, rig) && bounds(cx, rig.0, "pdf-link-ring") == bounds(cx, rig.0, link(index))
+}
+
+#[gpui_kit::test]
+fn tab_walks_the_links_in_reading_order_and_shift_tab_walks_back(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    assert!(!has_ring(cx, &rig));
+    keys(cx, &rig, &["tab"]);
+    assert!(ring_on(cx, &rig, 0));
+    keys(cx, &rig, &["tab"]);
+    assert!(ring_on(cx, &rig, 1));
+    keys(cx, &rig, &["shift-tab"]);
+    assert!(ring_on(cx, &rig, 0));
+}
+
+#[gpui_kit::test]
+fn enter_follows_the_focused_link_and_alt_arrows_walk_the_trail(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    keys(cx, &rig, &["tab", "tab", "enter"]);
+    assert_eq!(status(cx, &rig), "PDF · page 7 of 40");
+    keys(cx, &rig, &["alt-left"]);
+    assert_eq!(status(cx, &rig), "PDF · page 1 of 40");
+    keys(cx, &rig, &["alt-right"]);
+    assert_eq!(status(cx, &rig), "PDF · page 7 of 40");
+}
+
+#[gpui_kit::test]
+fn escape_clears_the_link_focus_and_keeps_the_page(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    keys(cx, &rig, &["tab", "escape"]);
+    assert!(!has_ring(cx, &rig));
+    assert_eq!(status(cx, &rig), "PDF · page 1 of 40");
+}

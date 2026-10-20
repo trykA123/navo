@@ -13,6 +13,11 @@ gpui_kit::actions!(
         AllHits,
         PagesDrawer,
         CopyText,
+        LinkNext,
+        LinkPrevious,
+        LinkFollow,
+        TrailBack,
+        TrailForward,
     ]
 );
 

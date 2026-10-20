@@ -13,6 +13,7 @@ mod look;
 mod navigate;
 mod page_list;
 mod rail;
+mod ring;
 mod search;
 mod select;
 mod sheets;

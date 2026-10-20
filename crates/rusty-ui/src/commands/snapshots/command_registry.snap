@@ -294,6 +294,11 @@ pdf.whole_word | Whole word | Pdf
 pdf.all_hits | All hits | Pdf
 pdf.pages | Pages | Pdf
 pdf.copy | Copy selected text | Pdf
+pdf.link_next | Next link | Pdf
+pdf.link_previous | Previous link | Pdf
+pdf.link_follow | Follow link | Pdf
+pdf.trail_back | Back | Pdf
+pdf.trail_forward | Forward | Pdf
 app.command_palette | Command palette | global
 window.new | New window | global
 workspace.list | Workspaces | global
