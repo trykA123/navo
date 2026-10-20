@@ -16,6 +16,7 @@ pub(super) struct HexLine {
 
 pub(super) struct TextLine {
     pub start: u64,
+    pub text_from: u64,
     pub end: u64,
     pub next: u64,
     pub text: String,
@@ -54,12 +55,14 @@ pub(super) fn hex_lines<S: ByteSource + ?Sized>(
 }
 
 fn starts_line<S: ByteSource + ?Sized>(src: &S, offset: u64) -> Result<bool, String> {
-    if offset == 0 {
+    let layout = src.layout();
+    let unit = layout.unit();
+    let Some(before) = offset.checked_sub(unit as u64) else {
         return Ok(true);
-    }
-    let mut byte = [0u8; 1];
-    let read = read_full(src, offset - 1, &mut byte)?;
-    Ok(read == 1 && byte[0] == b'\n')
+    };
+    let mut bytes = [0u8; 2];
+    let read = read_full(src, before, &mut bytes[..unit])?;
+    Ok(read == unit && layout.is_lf(&bytes[..unit]))
 }
 
 fn counted(index: &LineIndex, offset: u64) -> bool {
@@ -73,6 +76,7 @@ pub(super) fn text_lines<S: ByteSource + ?Sized>(
     index: Option<&LineIndex>,
 ) -> Result<Screen<TextLine>, String> {
     let len = src.len();
+    let layout = src.layout();
     let mut lines = Vec::with_capacity(count);
     let mut number = match index {
         Some(index) => index.line_number(src, top)?,
@@ -84,14 +88,20 @@ pub(super) fn text_lines<S: ByteSource + ?Sized>(
         let row = row_at(src, at)?;
         let mut bytes = vec![0u8; byte_len(row.start, row.end)];
         let read = read_full(src, row.start, &mut bytes)?;
+        let skip = if row.start == 0 {
+            layout.bom_len().min(read)
+        } else {
+            0
+        };
         let line = number
             .filter(|_| is_line_start)
             .filter(|_| index.is_some_and(|index| counted(index, row.start)));
         lines.push(TextLine {
             start: row.start,
+            text_from: row.start + skip as u64,
             end: row.end,
             next: row.next,
-            text: String::from_utf8_lossy(&bytes[..read]).into_owned(),
+            text: layout.decode(&bytes[skip..read]),
             line,
         });
         is_line_start = row.next > row.end;

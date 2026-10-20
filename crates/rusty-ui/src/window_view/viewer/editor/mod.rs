@@ -12,6 +12,7 @@ use std::sync::Arc;
 use gpui_kit::component::input::{EditorState, InputEvent, RangeDecorationCollection};
 use gpui_kit::{Subscription, Task};
 use rusty_core::encoding::TextEncoding;
+use rusty_core::line_ends::LineEnds;
 
 pub(super) use body::{EditorBody, EditorFile};
 pub(super) use preview::SplitChoice;
@@ -29,14 +30,13 @@ use find::EditorFind;
 use marking::text_source;
 use preview::Split;
 
-const NOT_LOSSLESS: &str = "Not valid in its encoding: opened read-only.";
-
 pub(super) struct EditorView {
     host: Host,
     editor: Entity<EditorState>,
     editing: bool,
     can_edit: bool,
     crlf: bool,
+    ends: Option<Arc<LineEnds>>,
     encoding: TextEncoding,
     stamp: Option<FileStamp>,
     persists: bool,
@@ -58,6 +58,25 @@ pub(super) struct EditorView {
     _changes: Subscription,
 }
 
+fn read_only_note(file: &FileText) -> SharedString {
+    if file.ends.as_deref().is_some_and(LineEnds::has_stray_cr) {
+        return "Opened read-only: a line ends with a lone CR, so its line endings cannot be kept exactly."
+            .into();
+    }
+    format!(
+        "Not valid as {}: bad bytes show as \u{FFFD}. Opened read-only.",
+        file.encoding.label()
+    )
+    .into()
+}
+
+fn crlf_offsets(file: &FileText, text: &Arc<str>) -> Option<CrlfOffsets> {
+    match &file.ends {
+        Some(ends) => Some(CrlfOffsets(Arc::from(ends.crlf_marks(&file.text)))),
+        None => file.crlf.then(|| CrlfOffsets(text.clone())),
+    }
+}
+
 fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLink) {
     let persists =
         file.encoding.encoding.name() == "UTF-8" && !file.encoding.bom && !file.read_only;
@@ -70,7 +89,7 @@ fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLi
         location: host.location.clone(),
         stamp: file.stamp.filter(|_| persists),
         carried,
-        crlf: file.crlf.then(|| CrlfOffsets(text.clone())),
+        crlf: crlf_offsets(file, text),
     };
     (persists, link)
 }
@@ -99,6 +118,7 @@ impl EditorView {
         } = opened;
         let shared: Arc<str> = Arc::from(file.text.as_str());
         let (persists, link) = memory_link(&file, &shared, &host);
+        let note = file.read_only.then(|| read_only_note(&file));
         let editor = cx.new(|cx| read_only_state(file.text, language, window, cx));
         let decorations = editor.update(cx, |state, cx| {
             state.create_range_decorations_collection(Vec::new(), cx)
@@ -115,6 +135,7 @@ impl EditorView {
             editing: false,
             can_edit: !file.read_only,
             crlf: file.crlf,
+            ends: file.ends.clone(),
             encoding: file.encoding,
             stamp: file.stamp,
             persists,
@@ -122,7 +143,7 @@ impl EditorView {
             revision: 0,
             overwrite: false,
             saving: None,
-            note: file.read_only.then(|| NOT_LOSSLESS.into()),
+            note,
             find: EditorFind::default(),
             go_to: None,
             marking: Marking::new(text_source(shared)),

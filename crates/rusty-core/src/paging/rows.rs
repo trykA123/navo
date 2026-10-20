@@ -1,10 +1,10 @@
-use super::{ByteSource, read_full, span};
+use super::{ByteSource, TextLayout, read_full, span};
 
 pub const MAX_ROW: u64 = 4096;
 pub const LOOK_BACK: u64 = 64 * 1024;
 
-const ROW_BUF: usize = 4098;
-const CHAR_STEPS: usize = 3;
+const ROW_BUF: usize = 4100;
+const LEAD_BUF: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Row {
@@ -22,25 +22,27 @@ pub fn row_at<S: ByteSource + ?Sized>(src: &S, start: u64) -> Result<Row, String
             next: len,
         });
     }
+    let layout = src.layout();
+    let unit = layout.unit();
     let mut buf = [0u8; ROW_BUF];
     let count = read_full(src, start, &mut buf)?;
     let read = &buf[..count];
-    if let Some(at) = newline_in(read) {
-        let shown = if at > 0 && read[at - 1] == b'\r' {
-            at - 1
+    if let Some(at) = newline_in(&layout, read) {
+        let shown = if at >= unit && layout.is_cr(&read[at - unit..at]) {
+            at - unit
         } else {
             at
         };
         return Ok(Row {
             start,
             end: start + shown as u64,
-            next: start + at as u64 + 1,
+            next: start + (at + unit) as u64,
         });
     }
     let cut = if count <= span(0, MAX_ROW) {
         count
     } else {
-        char_cut(read)
+        layout.cut_back(read, span(0, MAX_ROW))
     };
     let end = start + cut as u64;
     Ok(Row {
@@ -50,21 +52,16 @@ pub fn row_at<S: ByteSource + ?Sized>(src: &S, start: u64) -> Result<Row, String
     })
 }
 
-fn newline_in(read: &[u8]) -> Option<usize> {
+fn newline_in(layout: &TextLayout, read: &[u8]) -> Option<usize> {
     let row = span(0, MAX_ROW);
-    memchr::memchr(b'\n', &read[..read.len().min(row + 1)])
-        .or_else(|| (read.get(row..row + 2) == Some(b"\r\n")).then_some(row + 1))
-}
-
-fn char_cut(read: &[u8]) -> usize {
-    let mut cut = span(0, MAX_ROW);
-    for _ in 0..CHAR_STEPS {
-        if read[cut] & 0xC0 != 0x80 {
-            break;
-        }
-        cut -= 1;
-    }
-    cut
+    let unit = layout.unit();
+    layout
+        .first_newline(&read[..read.len().min(row + unit)])
+        .or_else(|| {
+            let cr = read.get(row..row + unit)?;
+            let lf = read.get(row + unit..row + 2 * unit)?;
+            (layout.is_cr(cr) && layout.is_lf(lf)).then_some(row + unit)
+        })
 }
 
 pub fn row_start_at<S: ByteSource + ?Sized>(src: &S, offset: u64) -> Result<u64, String> {
@@ -75,6 +72,7 @@ pub fn row_start_at<S: ByteSource + ?Sized>(src: &S, offset: u64) -> Result<u64,
     if offset >= len {
         return previous_row(src, len);
     }
+    let offset = src.layout().align(offset);
     let (anchor, _) = line_anchor(src, offset)?;
     step_to(src, anchor, offset)
 }
@@ -91,25 +89,22 @@ fn step_to<S: ByteSource + ?Sized>(src: &S, anchor: u64, offset: u64) -> Result<
 }
 
 fn line_anchor<S: ByteSource + ?Sized>(src: &S, offset: u64) -> Result<(u64, bool), String> {
-    let low = (offset + 1).saturating_sub(LOOK_BACK);
+    let layout = src.layout();
+    let offset = layout.align(offset);
+    let low = layout.align((offset + 1).saturating_sub(LOOK_BACK));
     let mut buf = vec![0u8; span(low, offset)];
     let count = read_full(src, low, &mut buf)?;
-    Ok(match memchr::memrchr(b'\n', &buf[..count]) {
-        Some(at) => (low + at as u64 + 1, true),
+    Ok(match layout.last_newline(&buf[..count]) {
+        Some(at) => (low + (at + layout.unit()) as u64, true),
         None => (low, low == 0),
     })
 }
 
 fn row_ending_at<S: ByteSource + ?Sized>(src: &S, start: u64) -> Result<Option<u64>, String> {
     let mut candidate = start.saturating_sub(MAX_ROW);
-    let mut lead = [0u8; CHAR_STEPS];
+    let mut lead = [0u8; LEAD_BUF];
     let count = read_full(src, candidate, &mut lead)?;
-    for byte in &lead[..count] {
-        if byte & 0xC0 != 0x80 {
-            break;
-        }
-        candidate += 1;
-    }
+    candidate += src.layout().skip_continuation(&lead[..count]) as u64;
     let fits = candidate < start && row_at(src, candidate)?.next == start;
     Ok(fits.then_some(candidate))
 }
@@ -118,12 +113,19 @@ pub fn previous_row<S: ByteSource + ?Sized>(src: &S, start: u64) -> Result<u64, 
     if start == 0 {
         return Ok(0);
     }
-    let start = start.min(src.len());
-    let (anchor, exact) = line_anchor(src, start - 1)?;
+    let len = src.len();
+    let layout = src.layout();
+    let start = if start < len {
+        layout.align(start)
+    } else {
+        len
+    };
+    let before = start.saturating_sub(layout.unit() as u64);
+    let (anchor, exact) = line_anchor(src, before)?;
     if !exact && let Some(found) = row_ending_at(src, start)? {
         return Ok(found);
     }
-    step_to(src, anchor, start - 1)
+    step_to(src, anchor, before)
 }
 
 pub fn rows_down<S: ByteSource + ?Sized>(src: &S, start: u64, count: u64) -> Result<u64, String> {

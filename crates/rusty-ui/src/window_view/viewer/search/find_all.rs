@@ -113,8 +113,9 @@ pub(in crate::window_view::viewer) fn open_find_all<V: Marked>(
     count_search(view, needle.clone(), cx);
     let focus = cx.focus_handle();
     window.focus(&focus, cx);
+    let width = needle_width(&needle, &view.marking().layout);
     view.marking().find_all = Some(FindAll {
-        width: needle_width(&needle),
+        width,
         needle,
         starts: None,
         generation: 0,

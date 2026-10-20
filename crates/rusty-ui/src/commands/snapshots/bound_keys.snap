@@ -284,6 +284,7 @@ viewer.context_menu | menu | Viewer
 viewer.context_menu | shift-f10 | Viewer
 viewer.copy_path_line | ctrl-shift-c | Viewer
 viewer.edit | ctrl-e | Viewer
+viewer.encoding | ctrl-shift-e | Viewer
 viewer.follow | alt-f | Viewer
 viewer.go_to_end | ctrl-end | Viewer
 viewer.go_to_end | end | Archive

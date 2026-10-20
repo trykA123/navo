@@ -2,6 +2,7 @@ mod archive;
 mod at_line;
 mod can_trace;
 mod elf_view;
+mod encoding;
 mod find;
 mod find_all;
 mod follow;
@@ -152,6 +153,7 @@ fn paged_of(bytes: &Arc<Vec<u8>>, setup: &Setup, log: &Log) -> Paged {
         }),
         index: index_run(bytes.clone(), setup.index_fails),
         summary: None,
+        problem: None,
         editable: false,
         stamp: Some(FileStamp {
             len: bytes.len() as u64,
@@ -182,7 +184,7 @@ pub(super) fn hooks(setup: Setup, log: &Log) -> FileHooks {
         }),
         write: Arc::new(move |_, save| {
             written.lock().expect("log").push(save.text.to_owned());
-            Ok(None)
+            Ok(None.into())
         }),
         head: Arc::new(move |location| {
             let name = location

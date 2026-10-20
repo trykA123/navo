@@ -230,7 +230,7 @@ impl PagedView {
                 len.saturating_sub(from)
             },
             backward,
-            width: needle_width(&needle),
+            width: needle_width(&needle, &self.marking.layout),
         });
         self.find.note = None;
         let search = Search {

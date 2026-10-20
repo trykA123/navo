@@ -183,6 +183,7 @@ fn open_in_thread(
                 location: &location,
                 sniff: &sniff,
                 cancel: &cancel,
+                encoding: None,
             })
         })
         .is_ok()
@@ -324,6 +325,7 @@ fn open_pdf_in_thread(
                 location: &location,
                 sniff: &sniff,
                 cancel: &cancel,
+                encoding: None,
             })
         })
         .is_ok()

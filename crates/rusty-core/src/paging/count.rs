@@ -22,7 +22,7 @@ pub fn count<S: ByteSource + ?Sized>(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<Counted, String> {
-    let Some((matcher, width)) = Matcher::new(needle)? else {
+    let Some((matcher, width)) = Matcher::new(needle, &src.layout())? else {
         return Ok(Counted {
             done: true,
             ..Counted::default()

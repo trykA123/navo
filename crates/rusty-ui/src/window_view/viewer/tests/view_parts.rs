@@ -180,6 +180,8 @@ fn text_rows(numbers: bool, ends: bool) -> Vec<(String, bool)> {
         ("Line numbers".to_owned(), numbers),
         ("Line ends".to_owned(), ends),
         (String::new(), false),
+        ("Encoding\u{2026}".to_owned(), false),
+        (String::new(), false),
         ("Keep as default".to_owned(), false),
         ("Reset to defaults".to_owned(), false),
     ]

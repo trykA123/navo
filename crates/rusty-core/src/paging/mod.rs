@@ -1,12 +1,14 @@
 mod count;
 mod hex;
 mod index;
+mod layout;
 mod rows;
 mod search;
 
 pub use count::{Counted, count, ordinal};
 pub use hex::{HEX_WIDTH, HexRow, hex_row, hex_row_start, hex_rows};
 pub use index::{LineIndex, MARK_BYTES, MARK_EVERY};
+pub use layout::{Laid, Newlines, TextLayout};
 pub use rows::{LOOK_BACK, MAX_ROW, Row, previous_row, row_at, row_start_at, rows_down, rows_up};
 pub use search::{Found, Needle, SEARCH_CHUNK, Search, find, parse_hex};
 
@@ -24,6 +26,10 @@ pub trait ByteSource {
 
     fn take_rewritten(&self) -> bool {
         false
+    }
+
+    fn layout(&self) -> TextLayout {
+        TextLayout::default()
     }
 }
 
@@ -71,6 +77,8 @@ mod tests_count;
 mod tests_hex;
 #[cfg(test)]
 mod tests_index;
+#[cfg(test)]
+mod tests_layout;
 #[cfg(test)]
 mod tests_review;
 #[cfg(test)]

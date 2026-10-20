@@ -9,7 +9,7 @@ use super::find::numbered_lines;
 use super::search::{editor_view, paged_marking, search_for};
 use super::{Log, Setup, hooks, press_only, redraw, window_with};
 use crate::window_view::FerriteWindow;
-use crate::window_view::tests::{fake, press, settle, viewer_open};
+use crate::window_view::tests::{fake, press, settle, type_in, viewer_open};
 use crate::window_view::viewer::{FileHooks, FileText, Kinds};
 use rusty_core::encoding::TextEncoding;
 
@@ -281,6 +281,37 @@ fn crlf_editor_bookmarks_are_stored_and_reloaded_at_file_offsets(cx: &mut TestAp
     assert_eq!(paged_bookmarks(cx, &view), [10]);
     press(cx, window, &view, "escape");
     assert!(!viewer_open(cx, &view));
+    press(cx, window, &view, "f3");
+    settle(cx, &view);
+    assert_eq!(editor_bookmarks(cx, &view), [8]);
+}
+
+#[gpui_kit::test]
+fn bookmarks_in_an_edited_mixed_file_reopen_on_the_same_text(cx: &mut TestAppContext) {
+    let recorder = Recorder::default();
+    let disk = b"one\r\ntwo\nthree\r\nfour\n".to_vec();
+    let (unified, ends) =
+        rusty_core::line_ends::LineEnds::unify("one\r\ntwo\nthree\r\nfour\n").expect("mixed");
+    let file = FileText {
+        ends: Some(Arc::new(ends)),
+        ..FileText::plain(unified)
+    };
+    let files = read_as(&recorder, || Setup::new(disk.clone()), file);
+    let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    let editor = super::editor_of(cx, &view).expect("the text editor is open");
+    editor.update(cx, |state, cx| state.set_selected_range(8..8, cx));
+    press(cx, window, &view, "ctrl-f2");
+    press(cx, window, &view, "ctrl-e");
+    editor.update(cx, |state, cx| state.set_selected_range(0..0, cx));
+    type_in(cx, window, &view, "new\n");
+    press(cx, window, &view, "escape");
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+    cx.executor().advance_clock(Duration::from_secs(1));
+    settle(cx, &view);
+    assert_eq!(stored_bookmarks(&recorder), [9]);
     press(cx, window, &view, "f3");
     settle(cx, &view);
     assert_eq!(editor_bookmarks(cx, &view), [8]);

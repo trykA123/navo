@@ -84,6 +84,7 @@ fn paged(bytes: Vec<u8>, summary: Option<&str>) -> Paged {
             Ok(Some(index))
         }),
         summary: summary.map(str::to_owned),
+        problem: None,
         editable: false,
         stamp: None,
     }

@@ -156,6 +156,7 @@ viewer.show_line_ends | Show line ends | Viewer
 viewer.follow | Follow the end of the file | Viewer
 viewer.context_menu | Context menu | Viewer
 viewer.view_menu | View menu | Viewer
+viewer.encoding | Choose the text encoding | Viewer
 view.left_drawer | Left drawer | Viewer
 view.right_drawer | Right drawer | Viewer
 view.line_numbers | Show or hide line numbers | Viewer

@@ -4,7 +4,7 @@ use aho_corasick::AhoCorasick;
 use memchr::memmem;
 use serde::{Deserialize, Serialize};
 
-use super::{ByteSource, read_full, span};
+use super::{ByteSource, TextLayout, read_full, span};
 
 pub const SEARCH_CHUNK: usize = 1024 * 1024;
 
@@ -55,56 +55,113 @@ pub fn parse_hex(input: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-pub(super) enum Matcher {
+pub(super) struct Matcher {
+    kind: Kind,
+    unit: usize,
+    width: usize,
+}
+
+enum Kind {
     Exact(Vec<u8>),
     Fold(AhoCorasick),
 }
 
 impl Matcher {
-    pub(super) fn new(needle: &Needle) -> Result<Option<(Self, usize)>, String> {
-        let (bytes, fold) = match needle {
-            Needle::Text { text, match_case } => (text.as_bytes(), !match_case),
-            Needle::Bytes(bytes) => (bytes.as_slice(), false),
+    pub(super) fn new(
+        needle: &Needle,
+        layout: &TextLayout,
+    ) -> Result<Option<(Self, usize)>, String> {
+        let (bytes, fold, unit) = match needle {
+            Needle::Text { text, match_case } => {
+                let Some(bytes) = layout.encode(text) else {
+                    return Ok(None);
+                };
+                let fold = !match_case && (!layout.is_wide() || text.is_ascii());
+                (bytes, fold, layout.unit())
+            }
+            Needle::Bytes(bytes) => (bytes.clone(), false, 1),
         };
         if bytes.is_empty() {
             return Ok(None);
         }
-        let matcher = if fold {
+        let width = bytes.len();
+        let kind = if fold {
             let built = AhoCorasick::builder()
                 .ascii_case_insensitive(true)
-                .build([bytes])
+                .build([&bytes])
                 .map_err(|error| error.to_string())?;
-            Self::Fold(built)
+            Kind::Fold(built)
         } else {
-            Self::Exact(bytes.to_vec())
+            Kind::Exact(bytes)
         };
-        Ok(Some((matcher, bytes.len())))
+        Ok(Some((Self { kind, unit, width }, width)))
+    }
+
+    fn is_aligned(&self, start: usize) -> bool {
+        start.is_multiple_of(self.unit)
     }
 
     fn first(&self, hay: &[u8]) -> Option<usize> {
-        match self {
-            Self::Exact(needle) => memmem::find(hay, needle),
-            Self::Fold(automaton) => automaton.find(hay).map(|found| found.start()),
+        match &self.kind {
+            Kind::Exact(needle) => self.first_exact(hay, needle),
+            Kind::Fold(automaton) => automaton
+                .find_overlapping_iter(hay)
+                .map(|found| found.start())
+                .find(|start| self.is_aligned(*start)),
+        }
+    }
+
+    fn first_exact(&self, hay: &[u8], needle: &[u8]) -> Option<usize> {
+        let mut from = 0;
+        loop {
+            let found = from + memmem::find(&hay[from..], needle)?;
+            if self.is_aligned(found) {
+                return Some(found);
+            }
+            from = found + 1;
         }
     }
 
     pub(super) fn starts(&self, hay: &[u8]) -> Vec<usize> {
-        match self {
-            Self::Exact(needle) => memmem::find_iter(hay, needle).collect(),
-            Self::Fold(automaton) => automaton
+        match &self.kind {
+            Kind::Exact(needle) if self.unit == 1 => memmem::find_iter(hay, needle).collect(),
+            Kind::Fold(automaton) if self.unit == 1 => automaton
                 .find_iter(hay)
                 .map(|found| found.start())
                 .collect(),
+            _ => self.aligned_starts(hay),
         }
     }
 
+    fn aligned_starts(&self, hay: &[u8]) -> Vec<usize> {
+        let mut starts: Vec<usize> = Vec::new();
+        let mut from = 0;
+        while let Some(found) = self.first(&hay[from..]).map(|found| from + found) {
+            starts.push(found);
+            from = found + self.width;
+        }
+        starts
+    }
+
     fn last(&self, hay: &[u8]) -> Option<usize> {
-        match self {
-            Self::Exact(needle) => memmem::rfind(hay, needle),
-            Self::Fold(automaton) => automaton
+        match &self.kind {
+            Kind::Exact(needle) => self.last_exact(hay, needle),
+            Kind::Fold(automaton) => automaton
                 .find_overlapping_iter(hay)
                 .map(|found| found.start())
+                .filter(|start| self.is_aligned(*start))
                 .last(),
+        }
+    }
+
+    fn last_exact(&self, hay: &[u8], needle: &[u8]) -> Option<usize> {
+        let mut end = hay.len();
+        loop {
+            let found = memmem::rfind(&hay[..end], needle)?;
+            if self.is_aligned(found) {
+                return Some(found);
+            }
+            end = found + needle.len() - 1;
         }
     }
 }
@@ -118,13 +175,14 @@ pub fn find<S: ByteSource + ?Sized>(
     if cancel.load(Ordering::Relaxed) {
         return Ok(Found::Cancelled);
     }
-    let Some((matcher, width)) = Matcher::new(&search.needle)? else {
+    let layout = src.layout();
+    let Some((matcher, width)) = Matcher::new(&search.needle, &layout)? else {
         return Ok(Found::NotFound);
     };
     let scan = Scan {
         matcher: &matcher,
         extra: width as u64 - 1,
-        from: search.from.min(src.len()),
+        from: layout.align(search.from.min(src.len())),
         cancel,
     };
     if search.backward {

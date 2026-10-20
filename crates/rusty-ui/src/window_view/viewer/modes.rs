@@ -5,7 +5,6 @@ use rusty_core::{Command, Location};
 
 use super::body::{Attach, Host, OpenFile};
 use super::editor::EditorBody;
-use super::kinds::paged_text;
 use super::open::{Picked, load_or_text, load_while_alive, start};
 use super::paged::PagedBody;
 use super::{Kind, Slot, Viewer};
@@ -148,6 +147,7 @@ impl FerriteWindow {
         if let Some(note) = super::merged_note(note, viewer.start_note.take()) {
             viewer.say(note, cx);
         }
+        viewer.note_detected(cx);
         window.focus(&viewer.focus_target(cx), cx);
         self.show_parts(cx);
         cx.notify();
@@ -188,6 +188,18 @@ impl FerriteWindow {
         self.load_kind(choice, window, cx);
     }
 
+    pub(super) fn reload_kind(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(kind) = self.viewer.as_ref().and_then(|viewer| viewer.kind.clone()) else {
+            return;
+        };
+        let choice = Choice {
+            kind,
+            edit: false,
+            follow_from: None,
+        };
+        self.load_kind(choice, window, cx);
+    }
+
     fn load_kind(&mut self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
         let Choice {
             kind,
@@ -211,9 +223,7 @@ impl FerriteWindow {
                 };
                 match follow_from {
                     Some(_) => Picked {
-                        loaded: load_while_alive(turn.alive, &kind, || {
-                            (request.hooks.paged)(&request.location).map(paged_text)
-                        }),
+                        loaded: load_while_alive(turn.alive, &kind, || request.paged_text()),
                         kind,
                         note: None,
                     },

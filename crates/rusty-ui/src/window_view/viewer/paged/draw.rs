@@ -60,6 +60,7 @@ impl PagedView {
                     digits: self.digits(),
                     shift: self.shift,
                     numbers: self.line_numbers,
+                    layout: self.source.layout(),
                 };
                 lines
                     .iter()
