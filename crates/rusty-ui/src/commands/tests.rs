@@ -338,7 +338,7 @@ fn a_module_binds_only_its_own_commands(cx: &mut TestAppContext) {
         .copied()
         .filter(|action| !action.starts_with("file_list::"))
         .collect();
-    assert_eq!((actions.len(), foreign), (40, Vec::<&str>::new()));
+    assert_eq!((actions.len(), foreign), (41, Vec::<&str>::new()));
 }
 
 #[gpui_kit::test]

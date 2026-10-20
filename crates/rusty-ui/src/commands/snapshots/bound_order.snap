@@ -43,6 +43,7 @@ files.view | f3 | FileList
 files.refresh | ctrl-r | FileList
 files.context_menu | menu | FileList
 files.context_menu | shift-f10 | FileList
+files.context_menu | alt-m | FileList
 [dialog_focus]
 dialog.next_field | tab | Dialog
 dialog.previous_field | shift-tab | Dialog
