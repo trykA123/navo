@@ -50,14 +50,23 @@ pub struct Mdf {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Region {
     pub name: String,
-    pub start: u64,
+    pub start: Option<u64>,
+    pub start_estimated: bool,
     pub size: u64,
-    pub kind: ChipKind,
+    pub kind: Option<ChipKind>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TableOrigin {
+    #[default]
+    Mdf,
+    Map,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegionTable {
     pub regions: Vec<Region>,
+    pub origin: TableOrigin,
 }
 
 impl Mdf {
@@ -70,13 +79,17 @@ impl Mdf {
                 let chip = self.mapped_chip(map).ok()?;
                 Some(Region {
                     name: chip.name.clone(),
-                    start: map.start,
+                    start: Some(map.start),
+                    start_estimated: false,
                     size: map.size,
-                    kind: chip.kind,
+                    kind: Some(chip.kind),
                 })
             })
             .collect();
-        RegionTable { regions }
+        RegionTable {
+            regions,
+            origin: TableOrigin::Mdf,
+        }
     }
 
     fn mapped_chip(&self, map: &MapLine) -> Result<&Chip, &'static str> {
@@ -124,21 +137,24 @@ mod tests {
             vec![
                 Region {
                     name: "pflash0".into(),
-                    start: 0x8000_0000,
+                    start: Some(0x8000_0000),
+                    start_estimated: false,
                     size: 256,
-                    kind: ChipKind::Rom
+                    kind: Some(ChipKind::Rom)
                 },
                 Region {
                     name: "pflash1".into(),
-                    start: 0x8000_0100,
+                    start: Some(0x8000_0100),
+                    start_estimated: false,
                     size: 128,
-                    kind: ChipKind::Rom
+                    kind: Some(ChipKind::Rom)
                 },
                 Region {
                     name: "dspr0".into(),
-                    start: 0x2000_0000,
+                    start: Some(0x2000_0000),
+                    start_estimated: false,
                     size: 64,
-                    kind: ChipKind::Ram
+                    kind: Some(ChipKind::Ram)
                 },
             ]
         );
@@ -181,7 +197,7 @@ mod tests {
         let regions = model.regions();
         assert_eq!(
             (regions.regions[0].start, regions.regions[0].size),
-            (256, 16)
+            (Some(256), 16)
         );
     }
 
