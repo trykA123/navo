@@ -13,24 +13,29 @@ pub(super) fn put_links(out: &mut Vec<u8>, links: &PageLinks) -> Result<(), Code
         for value in [bounds.left, bounds.top, bounds.right, bounds.bottom] {
             put_f32(out, value);
         }
-        match &link.target {
-            LinkTarget::Page { page, top } => {
-                out.push(1);
-                put_u32(out, *page);
-                match top {
-                    None => out.push(0),
-                    Some(top) => {
-                        out.push(1);
-                        put_f32(out, *top);
-                    }
+        put_target(out, &link.target)?;
+    }
+    Ok(())
+}
+
+pub(super) fn put_target(out: &mut Vec<u8>, target: &LinkTarget) -> Result<(), CodecError> {
+    match target {
+        LinkTarget::Page { page, top } => {
+            out.push(1);
+            put_u32(out, *page);
+            match top {
+                None => out.push(0),
+                Some(top) => {
+                    out.push(1);
+                    put_f32(out, *top);
                 }
             }
-            LinkTarget::Uri(uri) => {
-                out.push(2);
-                put_str(out, "URI", uri, MAX_URI_BYTES)?;
-            }
-            LinkTarget::Unsupported => out.push(3),
         }
+        LinkTarget::Uri(uri) => {
+            out.push(2);
+            put_str(out, "URI", uri, MAX_URI_BYTES)?;
+        }
+        LinkTarget::Unsupported => out.push(3),
     }
     Ok(())
 }
@@ -59,7 +64,14 @@ fn page_link(input: &mut Input<'_>) -> Result<PageLink, CodecError> {
         right: input.f32()?,
         bottom: input.f32()?,
     };
-    let target = match input.u8()? {
+    Ok(PageLink {
+        bounds,
+        target: target(input)?,
+    })
+}
+
+pub(super) fn target(input: &mut Input<'_>) -> Result<LinkTarget, CodecError> {
+    Ok(match input.u8()? {
         1 => LinkTarget::Page {
             page: input.u32()?,
             top: match input.u8()? {
@@ -71,6 +83,5 @@ fn page_link(input: &mut Input<'_>) -> Result<PageLink, CodecError> {
         2 => LinkTarget::Uri(input.string("URI", MAX_URI_BYTES)?),
         3 => LinkTarget::Unsupported,
         _ => return Err(CodecError::Malformed("unknown link target")),
-    };
-    Ok(PageLink { bounds, target })
+    })
 }

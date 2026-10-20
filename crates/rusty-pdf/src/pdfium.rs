@@ -1,4 +1,5 @@
 mod links;
+mod outline;
 
 use std::path::{Path, PathBuf};
 
@@ -8,8 +9,8 @@ use pdfium_render::prelude::{
 };
 
 use crate::protocol::{
-    Bitmap, CharBox, MAX_TEXT_CHARS, PageLinks, PageText, PdfError, RenderRequest, Rotation,
-    TextChar, check_render_size,
+    Bitmap, CharBox, MAX_TEXT_CHARS, Outline, PageLinks, PageText, PdfError, RenderRequest,
+    Rotation, TextChar, check_render_size,
 };
 use crate::serve::{Engine, clip};
 
@@ -128,6 +129,10 @@ impl Engine for PdfiumEngine {
 
     fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
         links::extract(self, self.page(page)?)
+    }
+
+    fn outline(&mut self) -> Result<Outline, PdfError> {
+        outline::extract(self, self.document.as_ref().ok_or(PdfError::NotOpen)?)
     }
 
     fn close(&mut self) {

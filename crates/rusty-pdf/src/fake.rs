@@ -2,8 +2,8 @@ use std::thread;
 use std::time::Duration;
 
 use crate::protocol::{
-    Bitmap, CharBox, LinkTarget, PageLink, PageLinks, PageText, PdfError, RenderRequest, TextChar,
-    check_render_size,
+    Bitmap, CharBox, LinkTarget, Outline, OutlineItem, PageLink, PageLinks, PageText, PdfError,
+    RenderRequest, TextChar, check_render_size,
 };
 use crate::serve::Engine;
 
@@ -93,6 +93,36 @@ impl Engine for FakeEngine {
             })
             .collect();
         PageLinks::new(100.0, 200.0, links).map_err(|_| PdfError::TooLarge)
+    }
+
+    fn outline(&mut self) -> Result<Outline, PdfError> {
+        self.check_open()?;
+        let entries = [
+            (
+                "Chapter 1",
+                0,
+                LinkTarget::Page {
+                    page: 0,
+                    top: Some(20.0),
+                },
+            ),
+            ("Section é", 1, LinkTarget::Page { page: 1, top: None }),
+            (
+                "Website",
+                1,
+                LinkTarget::Uri("https://example.org/outline".into()),
+            ),
+            ("Unsupported", 0, LinkTarget::Unsupported),
+        ];
+        let items = entries
+            .into_iter()
+            .map(|(title, level, target)| OutlineItem {
+                title: title.into(),
+                level,
+                target,
+            })
+            .collect();
+        Outline::new(items).map_err(|_| PdfError::TooLarge)
     }
 
     fn close(&mut self) {
