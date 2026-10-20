@@ -1,3 +1,5 @@
+mod links;
+
 use std::path::{Path, PathBuf};
 
 use pdfium_render::prelude::{
@@ -6,8 +8,8 @@ use pdfium_render::prelude::{
 };
 
 use crate::protocol::{
-    Bitmap, CharBox, MAX_TEXT_CHARS, PageText, PdfError, RenderRequest, Rotation, TextChar,
-    check_render_size,
+    Bitmap, CharBox, MAX_TEXT_CHARS, PageLinks, PageText, PdfError, RenderRequest, Rotation,
+    TextChar, check_render_size,
 };
 use crate::serve::{Engine, clip};
 
@@ -124,6 +126,10 @@ impl Engine for PdfiumEngine {
         PageText::new(width, height, chars).map_err(|_| PdfError::Corrupt)
     }
 
+    fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
+        links::extract(self, self.page(page)?)
+    }
+
     fn close(&mut self) {
         self.document = None;
     }
@@ -211,7 +217,10 @@ fn open_error(error: PdfiumError, has_password: bool) -> PdfError {
 
 #[cfg(test)]
 mod tests {
+    use super::links::{destination_top, link_bounds, uri_target};
     use super::*;
+    use crate::protocol::{LinkTarget, MAX_URI_BYTES};
+    use pdfium_render::prelude::{PdfDestinationViewSettings as View, PdfPoints, PdfRect};
 
     fn mapped(turns: u8, width: f32, height: f32) -> CharBox {
         Upright::new(turns, width, height).map((10., 150.), (20., 160.))
@@ -229,5 +238,87 @@ mod tests {
         assert_eq!(mapped(1, 200., 100.), boxed(150., 10., 160., 20.));
         assert_eq!(mapped(2, 100., 200.), boxed(80., 150., 90., 160.));
         assert_eq!(mapped(3, 200., 100.), boxed(40., 80., 50., 90.));
+    }
+
+    #[test]
+    fn link_boxes_share_the_text_transform_and_drop_non_finite_bounds() {
+        let rect = PdfRect::new_from_values(150., 10., 160., 20.);
+        for turns in 0..4 {
+            let upright = Upright::new(turns, 100., 200.);
+            assert_eq!(
+                link_bounds(&upright, rect),
+                Some(upright.map((10., 150.), (20., 160.)))
+            );
+        }
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            for rect in [
+                PdfRect::new_from_values(value, 10., 160., 20.),
+                PdfRect::new_from_values(150., value, 160., 20.),
+                PdfRect::new_from_values(150., 10., value, 20.),
+                PdfRect::new_from_values(150., 10., 160., value),
+            ] {
+                assert_eq!(link_bounds(&Upright::new(0, 100., 200.), rect), None);
+            }
+        }
+    }
+
+    #[test]
+    fn destination_tops_follow_the_destination_page_rotation() {
+        let xyz = View::SpecificCoordinatesAndZoom(
+            Some(PdfPoints::new(10.)),
+            Some(PdfPoints::new(160.)),
+            None,
+        );
+        for (turns, expected) in [(0, 40.), (1, 10.), (2, 160.), (3, 190.)] {
+            assert_eq!(
+                destination_top(&Upright::new(turns, 100., 200.), xyz),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn destination_tops_keep_missing_coordinates_absent() {
+        let upright = Upright::new(0, 100., 200.);
+        for view in [
+            View::Unknown,
+            View::FitPageToWindow,
+            View::FitBoundsToWindow,
+            View::SpecificCoordinatesAndZoom(None, None, None),
+            View::FitPageHorizontallyToWindow(None),
+            View::FitBoundsHorizontallyToWindow(None),
+            View::FitPageVerticallyToWindow(Some(PdfPoints::new(10.))),
+            View::FitBoundsVerticallyToWindow(None),
+        ] {
+            assert_eq!(destination_top(&upright, view), None);
+        }
+        for view in [
+            View::FitPageHorizontallyToWindow(Some(PdfPoints::new(160.))),
+            View::FitBoundsHorizontallyToWindow(Some(PdfPoints::new(160.))),
+            View::FitPageToRectangle(PdfRect::new_from_values(150., 10., 160., 20.)),
+        ] {
+            assert_eq!(destination_top(&upright, view), Some(40.));
+        }
+        assert_eq!(
+            destination_top(
+                &upright,
+                View::FitPageHorizontallyToWindow(Some(PdfPoints::new(f32::NAN)))
+            ),
+            None
+        );
+        assert_eq!(
+            destination_top(
+                &Upright::new(1, 100., 200.),
+                View::FitPageHorizontallyToWindow(Some(PdfPoints::new(160.)))
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn oversized_uris_become_unsupported_by_byte_length() {
+        let uri = "é".repeat(MAX_URI_BYTES / 2);
+        assert_eq!(uri_target(uri.clone()), LinkTarget::Uri(uri.clone()));
+        assert_eq!(uri_target(format!("{uri}é")), LinkTarget::Unsupported);
     }
 }

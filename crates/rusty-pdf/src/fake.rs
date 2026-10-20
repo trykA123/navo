@@ -2,7 +2,8 @@ use std::thread;
 use std::time::Duration;
 
 use crate::protocol::{
-    Bitmap, CharBox, PageText, PdfError, RenderRequest, TextChar, check_render_size,
+    Bitmap, CharBox, LinkTarget, PageLink, PageLinks, PageText, PdfError, RenderRequest, TextChar,
+    check_render_size,
 };
 use crate::serve::Engine;
 
@@ -66,6 +67,32 @@ impl Engine for FakeEngine {
             })
             .collect();
         PageText::new(100.0, 200.0, chars).map_err(|_| PdfError::TooLarge)
+    }
+
+    fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
+        self.check_page(page)?;
+        let targets = [
+            LinkTarget::Page {
+                page: (page + 1) % PAGES,
+                top: Some(20.0),
+            },
+            LinkTarget::Uri(format!("https://example.org/page/{page}")),
+            LinkTarget::Unsupported,
+        ];
+        let links = targets
+            .into_iter()
+            .enumerate()
+            .map(|(index, target)| PageLink {
+                bounds: CharBox {
+                    left: 10.0,
+                    top: 20.0 + index as f32 * 20.0,
+                    right: 40.0,
+                    bottom: 32.0 + index as f32 * 20.0,
+                },
+                target,
+            })
+            .collect();
+        PageLinks::new(100.0, 200.0, links).map_err(|_| PdfError::TooLarge)
     }
 
     fn close(&mut self) {
