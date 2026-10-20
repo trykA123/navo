@@ -12,10 +12,16 @@ pub fn initial_state(session_file: &Path, home: Location) -> AppState {
         SessionFileError::TooNew { found, supported } => Some((found, supported)),
         _ => None,
     }) {
+        let outcome = if session.is_some() {
+            "using the backup"
+        } else {
+            "starting fresh"
+        };
         tracing::warn!(
             found,
             supported,
-            "session is from a newer Ferrite; starting fresh"
+            outcome,
+            "session is from a newer Ferrite; the file is kept as it is"
         );
     }
     session

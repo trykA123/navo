@@ -26,6 +26,20 @@ pub enum DbError {
     Encode(String),
 }
 
+impl DbError {
+    #[must_use]
+    pub fn is_corruption(&self) -> bool {
+        match self {
+            Self::Corrupt(_) => true,
+            Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _)) => matches!(
+                failure.code,
+                rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase
+            ),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenReport {
     pub from_version: u32,
