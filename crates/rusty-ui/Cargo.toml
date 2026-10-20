@@ -57,6 +57,7 @@ image = { version = "=0.25.10", default-features = false, features = [
   "webp",
 ] }
 kamadak-exif = "=0.6.1"
+lofty = "=0.25.4"
 raw-window-handle = "0.6.2"
 resvg = "=0.46.0"
 rusty-automotive = { path = "../rusty-automotive" }

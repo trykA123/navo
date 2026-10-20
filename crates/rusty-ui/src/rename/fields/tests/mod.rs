@@ -12,9 +12,12 @@ fn registry() -> FieldRegistry {
 }
 
 #[test]
-fn the_builtin_registry_lists_file_and_exif_with_their_fields() {
+fn the_builtin_registry_lists_all_groups_with_their_fields() {
     let registry = registry();
-    assert_eq!(registry.groups().collect::<Vec<_>>(), ["file", "exif"]);
+    assert_eq!(
+        registry.groups().collect::<Vec<_>>(),
+        ["file", "exif", "audio"]
+    );
     let listed: Vec<String> = registry
         .listing()
         .map(|entry| format!("{}.{}", entry.group, entry.field.name))
@@ -32,6 +35,12 @@ fn the_builtin_registry_lists_file_and_exif_with_their_fields() {
             "exif.model",
             "exif.width",
             "exif.height",
+            "audio.artist",
+            "audio.title",
+            "audio.album",
+            "audio.track",
+            "audio.year",
+            "audio.genre",
         ]
     );
 }
