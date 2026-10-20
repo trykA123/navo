@@ -40,7 +40,10 @@ windows = { version = "=0.62.2", features = [
 
 [target.'cfg(windows)'.dev-dependencies]
 tempfile = "3.27.0"
-windows = { version = "=0.62.2", features = ["Win32_System_DataExchange"] }
+windows = { version = "=0.62.2", features = [
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_DataExchange",
+] }
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
 
 [lints]

@@ -22,6 +22,7 @@ use rusty_core::shell_menu::{ItemId, ShellMenu, Submenu};
 
 pub use error::MenuError;
 pub use pending::Pending;
+pub(crate) use selection::folder_key;
 
 #[cfg(not(windows))]
 use stub as platform;

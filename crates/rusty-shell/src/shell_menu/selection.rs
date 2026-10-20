@@ -4,20 +4,23 @@ use super::MenuError;
 
 pub(super) fn common_parent(paths: &[PathBuf]) -> Result<(), MenuError> {
     let (first, rest) = paths.split_first().ok_or(MenuError::Empty)?;
-    let parent = folder_key(first)?;
+    let key = |path: &Path| {
+        folder_key(path).map_err(|error| MenuError::Path {
+            path: path.to_path_buf(),
+            message: error.to_string(),
+        })
+    };
+    let parent = key(first)?;
     for path in rest {
-        if folder_key(path)? != parent {
+        if key(path)? != parent {
             return Err(MenuError::DifferentFolders);
         }
     }
     Ok(())
 }
 
-fn folder_key(path: &Path) -> Result<String, MenuError> {
-    let absolute = std::path::absolute(path).map_err(|error| MenuError::Path {
-        path: path.to_path_buf(),
-        message: error.to_string(),
-    })?;
+pub(crate) fn folder_key(path: &Path) -> std::io::Result<String> {
+    let absolute = std::path::absolute(path)?;
     let normal: PathBuf = absolute.components().collect();
     let parent = normal
         .parent()
