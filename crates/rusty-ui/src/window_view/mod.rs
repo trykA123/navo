@@ -89,6 +89,7 @@ pub use viewer::{
     ViewerBody, ViewerKind,
 };
 pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, MenuEntry, Picture, ReadBytes, decode_image};
+pub use viewer::{FileBytes, FileBytesBar, FilePart, Legend, RegionHead, UsageBar, UsageLine};
 pub use viewer::{MemoryStrip, StripData, StripEvent, StripItem, StripLabel, StripStep};
 pub use viewer::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use viewer::{Treemap, TreemapEvent, TreemapGroup, TreemapPart};

@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod automotive_sample;
+mod bars_page;
 mod columns_page;
 mod command_center_page;
 mod drag_page;

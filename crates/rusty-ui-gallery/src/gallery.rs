@@ -13,9 +13,9 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 use crate::automotive_sample::{
     ELF_NAME, ELF_STEPS, MEMORY_NAME, MEMORY_STEPS, TRACE_NAME, TRACE_STEPS, elf, memory, trace,
 };
+use crate::bars_page::{DragTreemapBars, drag_treemap_bars};
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
-use crate::drag_page::DragPage;
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::kinds_page::KindsPage;
@@ -33,7 +33,6 @@ use crate::structured_sample::{
     TREE_NAME,
 };
 use crate::tokens_page;
-use crate::treemap_page::TreemapPage;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
@@ -88,7 +87,7 @@ pub struct Gallery {
     typed_path: Entity<DrivesPage>,
     kinds: Entity<KindsPage>,
     columns: Entity<ColumnsPage>,
-    drag_treemap: (Entity<DragPage>, Entity<TreemapPage>),
+    drag_treemap: DragTreemapBars,
     strip: Entity<StripPage>,
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
@@ -140,7 +139,7 @@ impl Gallery {
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             kinds: cx.new(KindsPage::new),
             columns: cx.new(|cx| ColumnsPage::new(window, cx)),
-            drag_treemap: (cx.new(DragPage::new), cx.new(|_| TreemapPage::new())),
+            drag_treemap: drag_treemap_bars(cx),
             strip: cx.new(StripPage::new),
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
@@ -351,6 +350,7 @@ impl Render for Gallery {
             Page::Columns => root.child(self.columns.clone()),
             Page::Drag => root.child(self.drag_treemap.0.clone()),
             Page::Treemap => root.child(self.drag_treemap.1.clone()),
+            Page::UsageBars => root.child(self.drag_treemap.2.clone()),
             Page::MemoryStrip => root.child(self.strip.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),

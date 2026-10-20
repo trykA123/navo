@@ -55,6 +55,7 @@ pub use menu::viewer_menu;
 pub use paged::{PagedKind, PagedView};
 pub use pdf::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use search::memory::MemoryLink;
+pub use space::{FileBytes, FileBytesBar, FilePart, Legend, RegionHead, UsageBar, UsageLine};
 pub use space::{
     Item as StripItem, Label as StripLabel, MemoryStrip, Step as StripStep, StripData, StripEvent,
 };

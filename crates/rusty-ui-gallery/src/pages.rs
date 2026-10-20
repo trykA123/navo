@@ -98,6 +98,7 @@ pub enum Page {
     Drag,
     MemoryStrip,
     Treemap,
+    UsageBars,
 }
 
 pub struct PageInfo {
