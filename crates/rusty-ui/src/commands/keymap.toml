@@ -287,15 +287,15 @@ keys = ["shift-f7"]
 
 [[bind]]
 command = "files.mark_pattern"
-keys = ["+"]
+keys = ["+", "add"]
 
 [[bind]]
 command = "files.unmark_pattern"
-keys = ["-"]
+keys = ["-", "subtract"]
 
 [[bind]]
 command = "files.invert_marks"
-keys = ["*"]
+keys = ["*", "multiply"]
 
 [[bind]]
 command = "files.extend_up"
@@ -323,23 +323,23 @@ keys = ["shift-end"]
 
 [[bind]]
 command = "files.mark_all"
-keys = ["ctrl-a", "ctrl-+"]
+keys = ["ctrl-a", "ctrl-+", "ctrl-add"]
 
 [[bind]]
 command = "files.unmark_all"
-keys = ["ctrl-shift-a", "ctrl--"]
+keys = ["ctrl-shift-a", "ctrl--", "ctrl-subtract"]
 
 [[bind]]
 command = "files.restore_marks"
-keys = ["/"]
+keys = ["/", "divide"]
 
 [[bind]]
 command = "files.mark_extension"
-keys = ["alt-+"]
+keys = ["alt-+", "alt-add"]
 
 [[bind]]
 command = "files.unmark_extension"
-keys = ["alt--"]
+keys = ["alt--", "alt-subtract"]
 
 [[bind]]
 command = "files.sort_by_name"

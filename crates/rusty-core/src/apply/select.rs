@@ -1,5 +1,5 @@
 use super::{CommandError, Effect, last_row, loaded_listing};
-use crate::{AppState, CursorMove, Pattern};
+use crate::{AppState, CursorMove, Pattern, TabId};
 
 pub(super) fn toggle(state: &mut AppState) -> Result<Vec<Effect>, CommandError> {
     last_row(state)?;
@@ -133,4 +133,20 @@ pub(super) fn clear(state: &mut AppState) -> Vec<Effect> {
     state.remember_marks(state.active_tab().marked_names());
     state.active_tab_mut().selection_mut().clear();
     Vec::new()
+}
+
+pub(super) fn mark_names(state: &mut AppState, tab: TabId, names: &[String]) {
+    let Some(tab) = state.tab_mut(tab) else {
+        return;
+    };
+    let wanted: std::collections::HashSet<&str> = names.iter().map(String::as_str).collect();
+    let rows: Vec<u64> = tab
+        .listing()
+        .into_iter()
+        .flat_map(|listing| listing.entries().iter().zip(0..))
+        .filter_map(|(entry, row)| wanted.contains(entry.name.as_str()).then_some(row))
+        .collect();
+    let selection = tab.selection_mut();
+    selection.mark_rows(rows);
+    selection.end_span();
 }

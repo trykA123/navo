@@ -3,6 +3,7 @@ use crate::{
     LogEntry, LogError, PaneId, Record, Recorder, TabId, apply, apply_event,
 };
 
+mod marks;
 mod props;
 mod recorder;
 mod text;

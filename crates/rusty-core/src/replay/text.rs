@@ -72,6 +72,19 @@ fn write_event(out: &mut String, event: &Event) {
         Event::PageRowsChanged { pane, rows } => {
             let _ = writeln!(out, "!page-rows {{ pane: {}, rows: {rows} }}", pane.get());
         }
+        Event::MarksRestored { tab, names } => write_names(out, *tab, names),
+    }
+}
+
+fn write_names(out: &mut String, tab: TabId, names: &[String]) {
+    let _ = writeln!(
+        out,
+        "!marks-restored {{ tab: {}, names: {} }}",
+        tab.get(),
+        names.len()
+    );
+    for name in names {
+        let _ = writeln!(out, "  {}", quote(name));
     }
 }
 
@@ -202,6 +215,15 @@ fn event_entry(text: &str, lines: &[&str], next: &mut usize) -> Result<LogEntry,
                 rows: int(&fields, "rows")?,
             }
         }
+        "marks-restored" => {
+            expect_fields(&fields, &["tab", "names"])?;
+            let count = int(&fields, "names")?;
+            let names = name_lines(lines, next, count)?;
+            Event::MarksRestored {
+                tab: TabId::new(int(&fields, "tab")?),
+                names,
+            }
+        }
         other => return Err(format!("unknown event {other:?}")),
     };
     Ok(LogEntry::Event(event))
@@ -232,6 +254,23 @@ fn read_filtered(
             listing,
         }
     })
+}
+
+fn name_lines(lines: &[&str], next: &mut usize, count: u64) -> Result<Vec<String>, String> {
+    let missing = || format!("expected {count} name lines");
+    let count = usize::try_from(count).map_err(|_| missing())?;
+    let stop = next.checked_add(count).ok_or_else(missing)?;
+    let slice = lines.get(*next..stop).ok_or_else(missing)?;
+    let names = slice
+        .iter()
+        .map(|line| {
+            let mut lexer = Lexer::new(line.strip_prefix("  ").ok_or_else(missing)?);
+            let name = string_value(&mut lexer)?;
+            end(&lexer).map(|()| name)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    *next = stop;
+    Ok(names)
 }
 
 fn entry_lines(lines: &[&str], next: &mut usize, count: u64) -> Result<Vec<Entry>, String> {

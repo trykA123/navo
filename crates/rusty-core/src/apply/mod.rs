@@ -49,6 +49,10 @@ pub enum Event {
         location: Location,
         listing: Listing,
     },
+    MarksRestored {
+        tab: TabId,
+        names: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -160,6 +164,7 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
                 pane::reveal_tab(state, tab);
             }
         }
+        Event::MarksRestored { tab, names } => select::mark_names(state, tab, &names),
     }
     Vec::new()
 }
