@@ -79,6 +79,7 @@ pub enum Page {
     SettingsFind,
     MouseMarks,
     FileKinds,
+    Columns,
 }
 
 pub struct PageInfo {
@@ -372,6 +373,7 @@ pub const PAGES: [PageInfo; 79] = [
     ),
     info(Page::MouseMarks, "Mouse marks", "p36-k5-mouse-marks", false),
     info(Page::FileKinds, "File types", "p36-file-kinds", false),
+    info(Page::Columns, "Columns", "p38-columns", false),
 ];
 
 impl Page {

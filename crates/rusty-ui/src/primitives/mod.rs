@@ -12,7 +12,10 @@ mod virtual_list;
 mod tests;
 
 pub use button::{Button, ButtonVariant, IconButton};
-pub use columns::{Fitted, fit_name, map_prefix, symbol_prefix};
+pub use columns::{
+    ColumnAlign, ColumnEvent, ColumnHead, ColumnSet, ColumnSpec, Fitted, fit_name, map_prefix,
+    symbol_prefix,
+};
 pub use gpui_kit::assets::IconName;
 pub use icon::icon;
 pub use kbd::Kbd;

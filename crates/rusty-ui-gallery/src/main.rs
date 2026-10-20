@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod automotive_sample;
+mod columns_page;
 mod drives_page;
 mod gallery;
 mod image_sample;
