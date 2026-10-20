@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod activity;
 mod app;
 pub mod app_menu;
 mod assets;
