@@ -159,4 +159,3 @@ drag-carry = { $count ->
 drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
 drag-refused-same-folder = Already in this folder
 drag-refused-into-itself = Cannot drop a folder into itself
-drag-link-later = Shortcuts from a drop come next

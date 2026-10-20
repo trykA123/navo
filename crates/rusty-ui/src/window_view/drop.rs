@@ -1,6 +1,5 @@
 use gpui_kit::{AnyWindowHandle, Modifiers, Subscription};
 use rusty_core::{DropKeys, DropOp, Location, OpKind, PaneId, ProviderPath, drop_op};
-use rusty_l10n::tr;
 
 use super::FerriteWindow;
 use crate::browser::{DropRequest, PasteRefusal, drop_refusal, same_volume};
@@ -369,10 +368,7 @@ impl FerriteWindow {
         let kind = match op_for(&sources, &target, keys) {
             DropOp::Copy => OpKind::Copy,
             DropOp::Move => OpKind::Move,
-            DropOp::Link => {
-                self.show_notice(info(tr("drag-link-later")));
-                return;
-            }
+            DropOp::Link => OpKind::Link,
         };
         let request = DropRequest {
             kind,

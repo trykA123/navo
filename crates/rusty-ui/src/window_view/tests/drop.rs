@@ -423,16 +423,46 @@ fn drop_confirm_moves_asks_before_a_dragged_move(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn alt_shows_shortcuts_in_the_badge_and_a_drop_runs_nothing(cx: &mut TestAppContext) {
+fn alt_drop_makes_a_shortcut_and_the_badge_says_so(cx: &mut TestAppContext) {
     let rig = rig(cx);
     let to = rig.list_spot(cx, rig.dest);
     rig.drag_to(cx, (A, to), alt());
     assert_eq!(rig.hover(cx).and_then(|hover| hover.op), Some(DropOp::Link));
+    let head = rig.view.read_with(cx, |view, cx| {
+        view.drag_session
+            .as_ref()
+            .map(|session| session.state.read(cx).lines().head)
+    });
+    assert_eq!(head.as_deref(), Some("Create 1 shortcut in dest"));
     rig.release(cx, to, alt());
-    assert!(rig.jobs(cx).is_empty());
+    assert_eq!(rig.jobs(cx).first().map(|job| job.0), Some(OpKind::Link));
     assert!(rig.exists("home/a.txt"));
-    assert!(!rig.exists("dest/a.txt"));
-    assert_eq!(rig.notice(cx), Some(tr("drag-link-later")));
+    assert!(rig.fs.link_target("dest/a.txt").is_some());
+}
+
+#[gpui_kit::test]
+fn ctrl_shift_drop_of_marked_rows_makes_a_shortcut_each(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.mark(cx, &[A, B]);
+    let to = rig.list_spot(cx, rig.dest);
+    let keys = Modifiers {
+        shift: true,
+        ..ctrl()
+    };
+    rig.drop_on(cx, (A, to), keys);
+    assert!(rig.fs.link_target("dest/a.txt").is_some());
+    assert!(rig.fs.link_target("dest/b.txt").is_some());
+    assert!(!rig.exists("dest/c.txt"));
+    assert!(rig.exists("home/b.txt"));
+}
+
+#[gpui_kit::test]
+fn an_alt_drop_into_the_same_folder_is_refused(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let to = rig.list_spot(cx, rig.home);
+    rig.drop_on(cx, (A, to), alt());
+    assert!(rig.jobs(cx).is_empty());
+    assert_eq!(rig.notice(cx), Some(tr("drag-refused-same-folder")));
 }
 
 #[gpui_kit::test]
