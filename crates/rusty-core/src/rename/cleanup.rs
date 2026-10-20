@@ -15,7 +15,7 @@ impl Cleanup {
     pub(super) fn apply(self, text: &str) -> String {
         let mut text = text.to_owned();
         if self.remove_accents {
-            text = text.nfd().filter(|c| !is_combining_mark(*c)).collect();
+            text = text.chars().map(strip_marks).collect();
         }
         if self.collapse {
             text = collapse(&text);
@@ -27,6 +27,19 @@ impl Cleanup {
             text = text.replace(' ', "_");
         }
         text
+    }
+}
+
+fn strip_marks(c: char) -> String {
+    let decomposed: Vec<char> = std::iter::once(c).nfd().collect();
+    if decomposed.iter().any(|d| is_combining_mark(*d)) {
+        decomposed
+            .into_iter()
+            .filter(|d| !is_combining_mark(*d))
+            .nfc()
+            .collect()
+    } else {
+        c.to_string()
     }
 }
 

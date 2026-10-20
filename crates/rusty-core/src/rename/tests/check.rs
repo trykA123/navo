@@ -240,6 +240,19 @@ fn folding_maps_simple_case_pairs_and_keeps_multi_char_ones() {
     assert_eq!(fold_key("AbC", Fold::Exact), "AbC");
 }
 
+#[test]
+fn folding_uses_simple_mappings_for_greek_with_ypogegrammeni() {
+    assert_eq!(
+        fold_key("\u{1FB3}", Fold::Insensitive),
+        fold_key("\u{1FBC}", Fold::Insensitive)
+    );
+    assert_eq!(
+        fold_key("\u{1F80}", Fold::Insensitive),
+        fold_key("\u{1F88}", Fold::Insensitive)
+    );
+    assert_eq!(fold_key("AbÉșȚ", Fold::Insensitive), "abéșț");
+}
+
 proptest! {
     #[test]
     fn random_names_never_panic(

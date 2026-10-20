@@ -59,7 +59,10 @@ pub fn fold_key(name: &str, fold: Fold) -> String {
 }
 
 fn fold_char(ch: char) -> char {
-    single(ch.to_uppercase()).map_or(ch, |upper| single(upper.to_lowercase()).unwrap_or(upper))
+    match single(ch.to_uppercase()) {
+        Some(upper) => single(upper.to_lowercase()).unwrap_or(upper),
+        None => single(ch.to_lowercase()).unwrap_or(ch),
+    }
 }
 
 fn single(mut chars: impl Iterator<Item = char>) -> Option<char> {

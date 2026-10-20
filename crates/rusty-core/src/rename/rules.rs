@@ -115,9 +115,14 @@ impl Compiled {
         let (stem, ext) = if self.name_only {
             (self.search.apply(&stem), ext)
         } else {
-            let whole = self.search.apply(&join(&stem, &ext));
-            let (stem, ext) = split_name(&whole);
-            (stem.to_owned(), ext.to_owned())
+            let joined = join(&stem, &ext);
+            let whole = self.search.apply(&joined);
+            if whole == joined {
+                (stem, ext)
+            } else {
+                let (stem, ext) = split_name(&whole);
+                (stem.to_owned(), ext.to_owned())
+            }
         };
         let stem = self.cleanup.apply(&self.name_case.apply(&stem));
         let ext = self.cleanup.apply(&self.ext_case.apply(&ext));
