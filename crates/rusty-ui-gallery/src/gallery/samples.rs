@@ -18,6 +18,7 @@ impl Gallery {
             Page::Table => self.table.as_deref(),
             Page::Markdown => self.markdown.as_deref(),
             Page::MarkdownPreview => self.markdown_preview.as_deref(),
+            Page::Code => self.code.as_deref(),
             Page::MemoryImage => self.memory[0].as_deref(),
             Page::MemoryDrawers => self.memory[1].as_deref(),
             Page::ElfSymbols => self.elf[0].as_deref(),

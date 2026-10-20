@@ -11,6 +11,7 @@ pub enum Page {
     Table,
     Markdown,
     MarkdownPreview,
+    Code,
     Archive,
     Font,
     Marks,
@@ -93,7 +94,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 75] = [
+pub const PAGES: [PageInfo; 76] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -110,6 +111,7 @@ pub const PAGES: [PageInfo; 75] = [
         "p15-markdown-preview",
         false,
     ),
+    info(Page::Code, "Code", "p34-code", false),
     info(Page::Archive, "Zip", "p15-archive", false),
     info(Page::Font, "Font", "p15-font", false),
     info(Page::Marks, "Marks", "p15-marks", false),
@@ -374,6 +376,7 @@ impl Page {
                 | Self::Table
                 | Self::Markdown
                 | Self::MarkdownPreview
+                | Self::Code
                 | Self::MemoryImage
                 | Self::MemoryDrawers
                 | Self::ElfSymbols
