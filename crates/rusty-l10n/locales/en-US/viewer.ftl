@@ -7,3 +7,5 @@ pdf-link-page = Page { $page }
 pdf-link-unsupported = This link type is not followed
 pdf-link-not-opened = Not opened: { $scheme } links
 pdf-link-scheme-unknown = unknown
+columns-resize = Resize { $column }
+columns-fit-hint = Double-click to fit

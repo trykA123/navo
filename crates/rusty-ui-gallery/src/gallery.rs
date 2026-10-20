@@ -13,6 +13,7 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 use crate::automotive_sample::{
     ELF_NAME, ELF_STEPS, MEMORY_NAME, MEMORY_STEPS, TRACE_NAME, TRACE_STEPS, elf, memory, trace,
 };
+use crate::columns_page::ColumnsPage;
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::kinds_page::KindsPage;
@@ -82,6 +83,7 @@ pub struct Gallery {
     drives: Entity<DrivesPage>,
     typed_path: Entity<DrivesPage>,
     kinds: Entity<KindsPage>,
+    columns: Entity<ColumnsPage>,
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
@@ -130,6 +132,7 @@ impl Gallery {
             drives: cx.new(|cx| DrivesPage::new(Shows::Menu, cx)),
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             kinds: cx.new(KindsPage::new),
+            columns: cx.new(|cx| ColumnsPage::new(window, cx)),
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
@@ -341,6 +344,7 @@ impl Render for Gallery {
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::FileKinds => root.child(self.kinds.clone()),
+            Page::Columns => root.child(self.columns.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
