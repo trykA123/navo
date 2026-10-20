@@ -55,7 +55,7 @@ fn saving_the_same_name_replaces_rules_and_time() {
 #[test]
 fn last_used_is_returned_apart_from_the_named_presets() {
     let db = Db::open_in_memory().unwrap();
-    db.save_preset("", RULES, 50).unwrap();
+    db.save_last_used(RULES, 50).unwrap();
     db.save_preset("numbered", RULES, 100).unwrap();
     let presets = db.presets().unwrap();
     assert_eq!(names(&db), ["numbered"]);
@@ -65,8 +65,8 @@ fn last_used_is_returned_apart_from_the_named_presets() {
 #[test]
 fn last_used_is_replaced_by_the_next_run() {
     let db = Db::open_in_memory().unwrap();
-    db.save_preset("", RULES, 50).unwrap();
-    db.save_preset("", "{}", 60).unwrap();
+    db.save_last_used(RULES, 50).unwrap();
+    db.save_last_used("{}", 60).unwrap();
     let last = db.presets().unwrap().last_used.unwrap();
     assert_eq!((last.rules.as_str(), last.saved_at), ("{}", 60));
 }
@@ -74,7 +74,7 @@ fn last_used_is_replaced_by_the_next_run() {
 #[test]
 fn deleting_removes_only_that_preset() {
     let db = Db::open_in_memory().unwrap();
-    db.save_preset("", RULES, 1).unwrap();
+    db.save_last_used(RULES, 1).unwrap();
     db.save_preset("a", RULES, 1).unwrap();
     db.save_preset("b", RULES, 1).unwrap();
     db.delete_preset("a").unwrap();
@@ -100,4 +100,19 @@ fn presets_survive_a_reopen() {
         .unwrap();
     let (db, _) = Db::open(&path, false).unwrap();
     assert_eq!(names(&db), ["numbered"]);
+}
+
+#[test]
+fn a_preset_needs_a_name() {
+    let db = Db::open_in_memory().unwrap();
+    for name in ["", " ", "\t "] {
+        assert!(
+            matches!(
+                db.save_preset(name, RULES, 1),
+                Err(DbError::BlankPresetName)
+            ),
+            "{name:?}"
+        );
+    }
+    assert_eq!(db.presets().unwrap(), RenamePresets::default());
 }

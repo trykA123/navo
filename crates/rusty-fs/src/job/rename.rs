@@ -36,6 +36,13 @@ impl JobLog for Tracking<'_> {
         self.inner.step(seq, outcome)
     }
 
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        if outcome == StepOutcome::Failed {
+            self.failed.push(seq);
+        }
+        self.inner.undone(seq, outcome)
+    }
+
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
         self.inner.journal_held(held)
     }
@@ -85,6 +92,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
         held: &[],
         placed: &[],
         held_unreadable: false,
+        unsure: first.as_ref().map(|(seq, _)| *seq),
     };
     let mut inner = JobContext {
         ops: *ops,

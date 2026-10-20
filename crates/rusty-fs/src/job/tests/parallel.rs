@@ -353,6 +353,10 @@ impl JobLog for OpensOnFailure<'_> {
         self.log.step(seq, outcome)
     }
 
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        self.log.undone(seq, outcome)
+    }
+
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
         self.log.journal_held(held)
     }

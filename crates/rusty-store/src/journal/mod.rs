@@ -180,7 +180,7 @@ impl JobJournal {
 
     pub fn prune(&mut self, keep_finished: u32) -> Result<u32, JournalError> {
         let deleted = self.db.connection().execute(
-            "DELETE FROM job WHERE state != 'running'
+            "DELETE FROM job WHERE state NOT IN ('running', 'restore_pending')
              AND id NOT IN (SELECT job_id FROM undo WHERE job_id IS NOT NULL)
              AND id NOT IN (
                  SELECT id FROM job WHERE state != 'running'

@@ -187,6 +187,10 @@ impl JobLog for Log {
         Ok(())
     }
 
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        self.step(seq, outcome)
+    }
+
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
         self.1.push(held.clone());
         Ok(true)

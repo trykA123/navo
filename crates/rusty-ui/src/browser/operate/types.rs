@@ -68,6 +68,10 @@ impl JobLog for NoLog {
         Ok(())
     }
 
+    fn undone(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
+        Ok(())
+    }
+
     fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
         Ok(false)
     }

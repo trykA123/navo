@@ -11,7 +11,7 @@ pub struct FinishedJob {
 impl JobJournal {
     pub fn last_undoable(&self, kind: &str) -> Result<Option<FinishedJob>, JournalError> {
         let row = self.db.connection().query_row(
-            "SELECT id, plan, created_at FROM job WHERE state = 'done' AND kind = ?1
+            "SELECT id, plan, created_at FROM job WHERE state IN ('done', 'restore_pending') AND kind = ?1
                  ORDER BY created_at DESC, id DESC LIMIT 1",
             [kind],
             |row| Ok((JobId(row.get(0)?), row.get(1)?, row.get(2)?)),

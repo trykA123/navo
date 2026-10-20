@@ -30,6 +30,16 @@ fn prune_keeps_newest_finished_jobs() {
 }
 
 #[test]
+fn prune_never_deletes_a_job_waiting_for_its_restore() {
+    let mut journal = journal();
+    let pending = journal.create_job("rename", b"plan", 1, 1).unwrap();
+    journal.finish(pending, JobState::RestorePending).unwrap();
+    finished_jobs(&mut journal, &[100, 200]);
+    assert_eq!(journal.prune(0).unwrap(), 2);
+    assert_eq!(job_ids(&journal), vec![pending.0]);
+}
+
+#[test]
 fn prune_never_deletes_running_jobs() {
     let mut journal = journal();
     let running = journal.create_job("move", b"plan", 1, 1).unwrap();

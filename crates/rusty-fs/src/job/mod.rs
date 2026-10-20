@@ -48,6 +48,7 @@ pub struct PlacedFile {
 
 pub trait JobLog {
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError>;
     fn journal_placed(&mut self, _placed: &PlacedFile) -> Result<(), FsError> {
         Ok(())
@@ -109,6 +110,7 @@ pub struct Journaled<'a> {
     pub held: &'a [HeldFile],
     pub placed: &'a [PlacedFile],
     pub held_unreadable: bool,
+    pub unsure: Option<u32>,
 }
 
 #[must_use]
