@@ -6,6 +6,7 @@ use super::FerriteWindow;
 use super::operate::JOB_LINGER;
 use gpui_kit::base::TestSupportExt;
 
+use crate::activity::Activity;
 use crate::browser::{JobStatus, JobView};
 use crate::fkey_bar::FKeyBar;
 use crate::job_card::{JobCard, JobInfo, JobPill, JobsSummary, Pause, PillFit, SpeedMeter};
@@ -19,6 +20,7 @@ const SAMPLE_EVERY: Duration = Duration::from_millis(500);
 pub(super) struct JobUi {
     pub(super) is_pill: bool,
     pub(super) meter: SpeedMeter,
+    pub(super) activity: Activity,
     is_sampling: bool,
 }
 
@@ -62,6 +64,7 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
 impl FerriteWindow {
     pub(super) fn jobs_woke(&mut self, cx: &mut Context<Self>) {
         self.sample_job_speeds(cx.background_executor().now());
+        self.sync_activity(cx.background_executor().now());
         if self.job_ui.is_sampling || !self.browser.running() {
             return;
         }
@@ -80,6 +83,7 @@ impl FerriteWindow {
 
     fn sample_while_running(&mut self, cx: &mut Context<Self>) -> bool {
         self.sample_job_speeds(cx.background_executor().now());
+        self.sync_activity(cx.background_executor().now());
         cx.notify();
         self.job_ui.is_sampling = self.browser.running();
         self.job_ui.is_sampling
@@ -97,6 +101,11 @@ impl FerriteWindow {
             }
         }
         meter.retain(&jobs.iter().map(|job| job.id).collect::<Vec<_>>());
+    }
+
+    fn sync_activity(&mut self, now: Instant) {
+        let jobs = self.job_infos();
+        self.job_ui.activity.sync(&jobs, now);
     }
 
     pub(super) fn jobs_changed(&mut self) {
