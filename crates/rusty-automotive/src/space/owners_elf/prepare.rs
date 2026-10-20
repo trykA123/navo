@@ -6,6 +6,7 @@ use object::elf::{STT_FILE, STT_SECTION};
 use super::files::classify;
 use super::from_map::MapIndex;
 use crate::elf::{Boundaries, estimate};
+use crate::space::images::images;
 use crate::space::{Kind, OwnerRef, regions_for_elf};
 use crate::{Bind, Elf, Lines, MapModel, Place, Symbol, SymbolKind};
 
@@ -22,6 +23,7 @@ pub(super) struct Context<'a> {
     pub(super) file_of: Vec<u32>,
     pub(super) section_file: Vec<u32>,
     crowded: Vec<bool>,
+    images: Vec<Option<(u64, u64)>>,
 }
 
 fn real_file(index: usize, name: &str) -> u32 {
@@ -53,6 +55,7 @@ impl<'a> Context<'a> {
             file_of: vec![NONE; elf.symbols.len()],
             section_file: vec![NONE; count],
             crowded: crowded(elf),
+            images: image_table(elf),
         };
         context.scan();
         context.sort();
@@ -126,16 +129,16 @@ impl<'a> Context<'a> {
     }
 
     pub(super) fn load_image(&self, at: usize) -> Option<(u64, u64)> {
-        let section = &self.elf.sections[at];
-        let segment = self.elf.load_segments().find(|segment| {
-            segment.virtual_address <= section.address
-                && section.span().end <= segment.span().end
-                && segment.physical_address != segment.virtual_address
-        })?;
-        let offset = section.address - segment.virtual_address;
-        let kept = segment.file_size.saturating_sub(offset).min(section.size);
-        (kept > 0).then_some((segment.physical_address + offset, kept))
+        self.images[at]
     }
+}
+
+fn image_table(elf: &Elf) -> Vec<Option<(u64, u64)>> {
+    let mut table = vec![None; elf.sections.len()];
+    for image in images(elf) {
+        table[image.section] = Some((image.start, image.size));
+    }
+    table
 }
 
 fn crowded(elf: &Elf) -> Vec<bool> {

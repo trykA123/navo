@@ -168,7 +168,10 @@ fn split_data(fixture: &mut Fixture) {
         let data_at = fixture.push(format!(".data.{module}.State{at}"), data(ram, 16));
         fixture.push(
             format!("[.data.{module}.State{at}]"),
-            data(ROM + 0x4_0000 + at as u64 * 16, 16),
+            Part {
+                flags: 2,
+                ..data(ROM + 0x4_0000 + at as u64 * 16, 16)
+            },
         );
         let zero_at = fixture.push(
             format!(".bss.{module}.Buffer{at}"),
@@ -273,7 +276,15 @@ fn merged_functions(fixture: &mut Fixture) -> Vec<(u64, u64, u64)> {
 }
 
 pub fn merged_layout(symbols: usize) -> Fixture {
-    assert!(symbols >= 11_000);
+    merged_with(symbols, 0, 24_000_000)
+}
+
+pub fn estimated_layout(symbols: usize, estimated: usize) -> Fixture {
+    merged_with(symbols, estimated, 20_000_000)
+}
+
+fn merged_with(symbols: usize, estimated: usize, pad: usize) -> Fixture {
+    assert!(symbols >= 11_000 + estimated);
     let mut fixture = Fixture::new();
     let init = merged_sections(&mut fixture);
     let rows = merged_functions(&mut fixture);
@@ -290,7 +301,7 @@ pub fn merged_layout(symbols: usize) -> Fixture {
             .symbols()
             .push(local(absolute(&format!("Synthetic_Constant{at}"), at)));
     }
-    for at in 0..symbols - 11_000 {
+    for at in 0..symbols - 11_000 - estimated {
         fixture.symbols().push(local(func(
             &format!(".L{at:06}"),
             ROM + (at % 4400) as u64 * 192 + (at % 128) as u64,
@@ -298,8 +309,16 @@ pub fn merged_layout(symbols: usize) -> Fixture {
             0,
         )));
     }
+    for at in 0..estimated {
+        fixture.symbols().push(func(
+            &format!("Synthetic_Entry{at}"),
+            ROM + (at % 4400) as u64 * 192 + 130,
+            0,
+            0,
+        ));
+    }
     fixture.spec.debug = line_program(false, false, &rows);
-    fixture.pad(24_000_000);
+    fixture.pad(pad);
     fixture
 }
 
@@ -310,7 +329,13 @@ pub fn small(is_64: bool, is_big: bool, stripped: bool, dwarf: bool) -> Fixture 
     fixture.push(".text.Com.Init".into(), text(ROM, 64));
     fixture.push(".text.Lamp.Read".into(), text(ROM + 64, 64));
     fixture.push(".data.Com.State".into(), data(RAM, 16));
-    fixture.push("[.data.Com.State]".into(), data(ROM + 128, 16));
+    fixture.push(
+        "[.data.Com.State]".into(),
+        Part {
+            flags: 2,
+            ..data(ROM + 128, 16)
+        },
+    );
     fixture.push(".bss.Lamp.Buffer".into(), bss(RAM + 16, 64));
     fixture.push(
         "$fill".into(),

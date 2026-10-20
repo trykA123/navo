@@ -8,7 +8,7 @@ mod section;
 use std::ops::Range;
 
 use self::files::Interner;
-pub(super) use self::files::plain_section;
+pub(super) use self::files::{plain_section, unnumbered};
 pub use self::map_owners::owners_of_map;
 use self::prepare::Context;
 use super::Kind;
@@ -123,7 +123,7 @@ impl Owners {
                 .map_or("", |section| section.name.as_str()),
             NameRef::Contribution(at) => map
                 .and_then(|map| map.contributions.get(at as usize))
-                .map_or("", |part| plain_section(&part.section)),
+                .map_or("", |part| unnumbered(&part.section)),
             NameRef::Unattributed => NOT_ATTRIBUTED,
         }
     }

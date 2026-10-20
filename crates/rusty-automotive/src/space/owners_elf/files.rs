@@ -21,6 +21,13 @@ pub(super) fn classify(name: &str) -> Option<FileKind> {
 }
 
 pub(in crate::space) fn plain_section(name: &str) -> &str {
+    let name = unnumbered(name);
+    name.strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .unwrap_or(name)
+}
+
+pub(in crate::space) fn unnumbered(name: &str) -> &str {
     name.strip_suffix(')')
         .and_then(|rest| rest.rsplit_once(" ("))
         .filter(|(_, digits)| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
@@ -64,5 +71,13 @@ mod tests {
         assert_eq!(plain_section(".text.turn (12)"), ".text.turn");
         assert_eq!(plain_section(".text (x)"), ".text (x)");
         assert_eq!(plain_section(".text"), ".text");
+    }
+
+    #[test]
+    fn one_pair_of_brackets_is_dropped() {
+        assert_eq!(plain_section("[.data.Com.State]"), ".data.Com.State");
+        assert_eq!(plain_section("[.data.Com] (3)"), ".data.Com");
+        assert_eq!(unnumbered("[.data.Com] (3)"), "[.data.Com]");
+        assert_eq!(plain_section("[.data"), "[.data");
     }
 }

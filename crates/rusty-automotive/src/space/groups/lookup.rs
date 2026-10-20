@@ -1,6 +1,6 @@
 use super::module::Modules;
 use super::{Grouping, OTHER, Origin};
-use crate::space::{NOT_ATTRIBUTED, Owner, Owners, plain_section};
+use crate::space::{NOT_ATTRIBUTED, NameRef, Owner, Owners, unnumbered};
 
 pub(super) struct Lookup<'a> {
     pub(super) owners: &'a Owners,
@@ -32,9 +32,13 @@ impl<'a> Lookup<'a> {
         if name == NOT_ATTRIBUTED {
             return (NOT_ATTRIBUTED, false);
         }
+        let section = match owner.name {
+            NameRef::Symbol(_) => None,
+            _ => self.section(owner),
+        };
         let found = self
             .modules
-            .of([self.owners.object(owner), self.section(owner), Some(name)]);
+            .of([self.owners.object(owner), section, Some(name)]);
         found.map_or((OTHER, false), |found| (found.name, found.listed))
     }
 
@@ -52,7 +56,7 @@ impl<'a> Lookup<'a> {
             Origin::Map(map) => map
                 .sections
                 .get(at)
-                .map(|section| plain_section(&section.name)),
+                .map(|section| unnumbered(&section.name)),
         }
     }
 }

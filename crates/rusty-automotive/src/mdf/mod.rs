@@ -72,7 +72,7 @@ pub struct RegionTable {
 impl Mdf {
     #[must_use]
     pub fn regions(&self) -> RegionTable {
-        let regions = self
+        let mut regions: Vec<Region> = self
             .maps
             .iter()
             .filter_map(|map| {
@@ -86,6 +86,17 @@ impl Mdf {
                 })
             })
             .collect();
+        for at in 1..regions.len() {
+            let base = regions[at].name.clone();
+            let mut copy = 2;
+            while regions[..at]
+                .iter()
+                .any(|other| other.name.eq_ignore_ascii_case(&regions[at].name))
+            {
+                regions[at].name = format!("{base} ({copy})");
+                copy += 1;
+            }
+        }
         RegionTable {
             regions,
             origin: TableOrigin::Mdf,
@@ -123,6 +134,21 @@ mod tests {
         model
             .problems
             .contains(&MdfProblem::Malformed { line, reason })
+    }
+
+    #[test]
+    fn a_chip_mapped_twice_gets_numbered_region_names() {
+        let model = parse_mdf(
+            "space a 1 8\nspace b 2 8\nchip x 10 8 64 ram\n\
+             map 1 0x100 64 10 0\nmap 2 0x100 64 10 0\nmap 2 0x200 64 10 0\n",
+        );
+        let names: Vec<_> = model
+            .regions()
+            .regions
+            .into_iter()
+            .map(|r| r.name)
+            .collect();
+        assert_eq!(names, ["x", "x (2)", "x (3)"]);
     }
 
     #[test]

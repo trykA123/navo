@@ -531,3 +531,55 @@ fn space_regions_map_section_without_a_region_falls_back_to_its_address() {
     assert_eq!(regions.items[0].used, 0x40);
     assert_eq!(regions.outside, 1);
 }
+
+fn elf_with_images(parts: Vec<Part>, loads: Vec<(usize, u32)>) -> Elf {
+    parse(&build(&Spec {
+        is_64: false,
+        is_big: false,
+        machine: EM_V800,
+        entry: 0,
+        parts,
+        symbols: None,
+        loads,
+        debug: Vec::new(),
+    }))
+}
+
+fn init_data(address: u64, image: u64, len: usize) -> Part {
+    Part {
+        load_address: image,
+        ..data(address, len)
+    }
+}
+
+#[test]
+fn space_regions_a_load_image_is_a_data_block_in_flash() {
+    let elf = elf_with_images(
+        vec![text(ROM, 0x100), init_data(DSPR, ROM + 0x100, 0x40)],
+        vec![(0, 5), (1, 6)],
+    );
+    let regions = regions_for_elf(&elf, Some(&mdf_table()));
+    let flash = region(&regions, "pflash");
+    assert_eq!(flash.used, 0x140);
+    assert_eq!(flash.by_kind[Kind::Data.index()], 0x40);
+    assert_eq!(flash.blocks[1].owner, OwnerRef::ElfImage(2));
+    assert_eq!(region(&regions, "dspr").used, 0x40);
+}
+
+#[test]
+fn space_regions_a_load_image_over_a_rom_copy_section_counts_once() {
+    let copy = Part {
+        name: "[.data.Com.State]",
+        flags: ALLOC,
+        ..data(ROM + 0x100, 0x40)
+    };
+    let elf = elf_with_images(
+        vec![text(ROM, 0x100), copy, init_data(DSPR, ROM + 0x100, 0x40)],
+        vec![(0, 5), (1, 4), (2, 6)],
+    );
+    let regions = regions_for_elf(&elf, Some(&mdf_table()));
+    let flash = region(&regions, "pflash");
+    assert_eq!(flash.used, 0x140);
+    assert_eq!(flash.by_kind[Kind::Rodata.index()], 0x40);
+    assert_eq!(flash.by_kind[Kind::Data.index()], 0);
+}

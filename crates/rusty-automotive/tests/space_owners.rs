@@ -92,7 +92,8 @@ fn assert_tiles_regions(owners: &Owners, regions: &Regions) {
             }
         };
         let inside = owners.in_span(span);
-        assert_eq!(sum(inside, false), region.used, "{}", region.name);
+        let all: u64 = inside.iter().map(|owner| owner.size).sum();
+        assert_eq!(all, region.used, "{}", region.name);
     }
 }
 
@@ -474,4 +475,26 @@ fn space_owners_no_loaded_sections_gives_no_owners() {
     let elf = parse(&build(&spec(vec![note], None, Vec::new())));
     let found = owners(&elf, None::<&Lines>, None);
     assert!(found.items.is_empty());
+}
+
+#[test]
+fn space_owners_a_load_address_that_overflows_gives_no_image() {
+    let init = Part {
+        load_address: 0xFFFF_FFFF_FFFF_FF00,
+        ..data(0x1000, 0x200)
+    };
+    let mut wide = spec(
+        vec![init],
+        Some(vec![object("counter", 0x1000, 4, 0)]),
+        vec![(0, LOAD_RW)],
+    );
+    wide.is_64 = true;
+    let elf = parse(&build(&wide));
+    let found = owners(&elf, None, None);
+    assert!(found.items.iter().all(|owner| !owner.image));
+    assert!(found.items.iter().all(|owner| owner.start < 0x2000));
+    assert_eq!(found.provenance.load_images, 0);
+    let regions = regions_for_elf(&elf, None);
+    assert_eq!(regions.items.len(), 1);
+    assert_eq!(regions.items[0].used, 0x200);
 }

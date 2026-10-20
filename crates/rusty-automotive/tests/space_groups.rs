@@ -523,6 +523,8 @@ fn space_groups_flash_groups_count_load_images_and_mark_them() {
     );
     let groups = flash_groups(&elf, Grouping::Module, &[]);
     assert_eq!(pairs(&groups), [("Com", 0x140)]);
+    let regions = regions_for_elf(&elf, Some(&table()));
+    assert_eq!(region_named(&regions, "pflash").used, 0x140);
     assert_eq!(groups[0].image, 0x40);
     assert_eq!(groups[0].by_kind[Kind::Data.index()], 0x40);
 
@@ -582,4 +584,93 @@ fn space_groups_top_keeps_22_and_counts_the_rest() {
     assert_eq!((cut.more, cut.more_bytes), (3, 0x30));
     let all = top(&groups[..3], TOP_GROUPS);
     assert_eq!((all.shown.len(), all.more, all.more_bytes), (3, 0, 0));
+}
+
+const COPY: &str = "[.data.Com.State]";
+
+#[test]
+fn space_groups_an_elf_rom_copy_belongs_to_its_module_as_rodata() {
+    let copy = Part {
+        name: COPY,
+        flags: 2,
+        ..data(ROM + 0x40, 0x20)
+    };
+    let elf = elf_of(vec![text(ROM, 0x40), copy], None, vec![(0, LOAD_RX)]);
+    let regions = regions_for_elf(&elf, Some(&table()));
+    let flash = region_named(&regions, "pflash");
+    assert_eq!(flash.by_kind[Kind::Rodata.index()], 0x20);
+    let found = owners(&elf, None, None);
+    let origin = Origin::Elf {
+        elf: &elf,
+        map: None,
+    };
+    let groups = group(&found, origin, flash, &by(Grouping::Module));
+    let com = groups.iter().find(|group| group.name == "Com").unwrap();
+    assert_eq!((com.bytes, com.by_kind[Kind::Rodata.index()]), (0x20, 0x20));
+}
+
+#[test]
+fn space_groups_a_map_rom_copy_belongs_to_its_module_as_rodata() {
+    let map = map_of(
+        "* Link Result\n| File | Section | Size | Offset | Section | Size |\n\
+         | _.o | [.data.Com.State] (1) | 0x10 | 0x0 | [.data.Com.State] (9) | 0x10 |\n\
+         * Locate Result\n* Sections\n+ Space chip:core:linear (MAU = 8bit)\n\
+         | Group | Chip | Section | Space addr | Chip addr | Size (MAU) | Alignment |\n\
+         | code | mc0_rom | [.data.Com.State] (9) | 0xa004c000 | 0x0 | 0x10 | 0x4 |\n\
+         * Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n\
+         | mc0_rom | 16 | 0 | 0 | 1008 | 1024 |\n",
+    );
+    let regions = regions_for_map(&map, None);
+    assert_eq!(regions.items[0].by_kind[Kind::Rodata.index()], 0x10);
+    let found = owners_of_map(&map);
+    let groups = group(
+        &found,
+        Origin::Map(&map),
+        &regions.items[0],
+        &by(Grouping::Module),
+    );
+    assert_eq!(pairs(&groups), [("Com", 0x10)]);
+    assert_eq!(groups[0].by_kind[Kind::Rodata.index()], 0x10);
+}
+
+#[test]
+fn space_groups_overlapping_regions_do_not_count_owners_twice() {
+    let mdf = parse_mdf(
+        "space a 1 8\nspace b 2 8\nchip x 10 8 64 ram\nchip y 11 8 64 ram\n\
+         map 1 0x100 64 10 0\nmap 2 0x100 64 11 0\n",
+    )
+    .regions();
+    let elf = elf_of(
+        vec![data(0x100, 0x20)],
+        Some(vec![object("Com_state", 0x100, 0x20, 0)]),
+        vec![(0, LOAD_RW)],
+    );
+    let regions = regions_for_elf(&elf, Some(&mdf));
+    let found = owners(&elf, None, None);
+    let origin = Origin::Elf {
+        elf: &elf,
+        map: None,
+    };
+    let first = group(&found, origin, &regions.items[0], &by(Grouping::Module));
+    assert_eq!(pairs(&first), [("Com", 0x20)]);
+    let second = &regions.items[1];
+    assert_eq!(second.used, 0);
+    assert!(group(&found, origin, second, &by(Grouping::Module)).is_empty());
+}
+
+#[test]
+fn space_groups_symbols_in_a_named_section_group_by_their_own_names() {
+    let elf = elf_of(
+        vec![Part {
+            name: ".text.cpu0_code",
+            ..text(ROM, 0x40)
+        }],
+        Some(vec![
+            func("Com_Main", ROM, 0x20, 0),
+            func("Lamp_Run", ROM + 0x20, 0x20, 0),
+        ]),
+        vec![(0, LOAD_RX)],
+    );
+    let groups = flash_groups(&elf, Grouping::Module, &[]);
+    assert_eq!(pairs(&groups), [("Com", 0x20), ("Lamp", 0x20)]);
 }

@@ -1,4 +1,5 @@
 mod groups;
+mod images;
 mod kind;
 mod owners_elf;
 mod regions;
@@ -11,8 +12,8 @@ pub use groups::{
     flash_region, group, top,
 };
 pub use kind::Kind;
-use owners_elf::plain_section;
 pub use owners_elf::{NOT_ATTRIBUTED, NameRef, Owner, Owners, Provenance, owners, owners_of_map};
+use owners_elf::{plain_section, unnumbered};
 pub use regions::{regions_for_elf, regions_for_map};
 pub use strip::{Break, Cell, Scale, ScaleMode, cells, inner};
 pub use treemap::{
@@ -32,6 +33,7 @@ pub enum RegionSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OwnerRef {
     ElfSection(usize),
+    ElfImage(usize),
     MapSection(usize),
 }
 

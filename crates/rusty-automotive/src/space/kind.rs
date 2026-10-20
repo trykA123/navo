@@ -42,6 +42,15 @@ impl Kind {
         if name == "*fill*" || is_fill_name(name) {
             return Self::Fill;
         }
+        if let Some(inner) = name
+            .strip_prefix('[')
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
+            return match Self::of_name(inner) {
+                Self::Data => Self::Rodata,
+                other => other,
+            };
+        }
         let lead = name
             .trim_start_matches('.')
             .split('.')
@@ -120,6 +129,13 @@ mod tests {
             Kind::of_section(&section(".database", SHT_NOBITS)),
             Kind::Bss
         );
+    }
+
+    #[test]
+    fn bracketed_rom_copies_are_rodata_by_name() {
+        assert_eq!(Kind::of_name("[.data.Com.State]"), Kind::Rodata);
+        assert_eq!(Kind::of_name("[.zdata.Com]"), Kind::Rodata);
+        assert_eq!(Kind::of_name(".data.Com.State"), Kind::Data);
     }
 
     #[test]

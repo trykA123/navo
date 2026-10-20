@@ -3,6 +3,8 @@ mod module;
 mod pick;
 mod table;
 
+use std::ops::Range;
+
 use self::lookup::Lookup;
 use self::module::Modules;
 pub use self::pick::{available, default_grouping, flash_region};
@@ -81,9 +83,6 @@ pub fn top(groups: &[Group], limit: usize) -> Top<'_> {
 
 #[must_use]
 pub fn group(owners: &Owners, origin: Origin<'_>, region: &Region, by: &GroupBy<'_>) -> Vec<Group> {
-    let Some(span) = region.span() else {
-        return Vec::new();
-    };
     let modules = Modules::new(by.modules);
     let lookup = Lookup {
         owners,
@@ -92,10 +91,29 @@ pub fn group(owners: &Owners, origin: Origin<'_>, region: &Region, by: &GroupBy<
         grouping: by.grouping,
     };
     let mut table = Table::default();
-    for owner in owners.in_span(span) {
-        if owner.kind != Kind::Fill {
-            table.add(lookup.key(owner), owner, lookup.child(owner));
+    for span in block_spans(region) {
+        for owner in owners.in_span(span) {
+            if owner.kind != Kind::Fill {
+                table.add(lookup.key(owner), owner, lookup.child(owner));
+            }
         }
     }
     table.finish()
+}
+
+fn block_spans(region: &Region) -> Vec<Range<u64>> {
+    let mut spans: Vec<Range<u64>> = region
+        .blocks
+        .iter()
+        .map(|block| block.start..block.start.saturating_add(block.size))
+        .collect();
+    spans.sort_by_key(|span| span.start);
+    let mut merged: Vec<Range<u64>> = Vec::with_capacity(spans.len());
+    for span in spans {
+        match merged.last_mut() {
+            Some(last) if span.start <= last.end => last.end = last.end.max(span.end),
+            _ => merged.push(span),
+        }
+    }
+    merged
 }

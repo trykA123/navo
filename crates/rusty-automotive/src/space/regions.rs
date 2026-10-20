@@ -2,8 +2,9 @@ use crate::elf::Elf;
 use crate::map::MapModel;
 use crate::mdf::{Region as Declared, RegionTable, TableOrigin};
 
+use super::images::images;
 use super::kind::takes_no_address_space;
-use super::{Block, Kind, OwnerRef, Region, RegionSource, Regions, plain_section};
+use super::{Block, Kind, OwnerRef, Region, RegionSource, Regions, unnumbered};
 
 const CLUSTER_GAP: u64 = 16 * 1024 * 1024;
 
@@ -30,6 +31,15 @@ pub fn regions_for_elf(elf: &Elf, table: Option<&RegionTable>) -> Regions {
             },
             region: None,
         })
+        .chain(images(elf).into_iter().map(|image| Placed {
+            block: Block {
+                start: image.start,
+                size: image.size,
+                kind: Kind::Data,
+                owner: OwnerRef::ElfImage(image.section),
+            },
+            region: None,
+        }))
         .collect();
     assemble(placed, table)
 }
@@ -49,7 +59,7 @@ pub fn regions_for_map(map: &MapModel, mdf: Option<&RegionTable>) -> Regions {
             block: Block {
                 start: section.address,
                 size: section.size,
-                kind: Kind::of_name(plain_section(&section.name)),
+                kind: Kind::of_name(unnumbered(&section.name)),
                 owner: OwnerRef::MapSection(at),
             },
             region: section.region.as_deref(),

@@ -1,5 +1,5 @@
 use super::claims::Claims;
-use super::files::plain_section;
+use super::files::{plain_section, unnumbered};
 use super::from_map::MapIndex;
 use super::{Builder, NameRef, Owner, Owners};
 use crate::MapModel;
@@ -10,7 +10,7 @@ pub fn owners_of_map(map: &MapModel) -> Owners {
     let index = MapIndex::new(map);
     let mut builder = Builder::default();
     for (at, section) in map.sections.iter().enumerate() {
-        let kind = Kind::of_name(plain_section(&section.name));
+        let kind = Kind::of_name(unnumbered(&section.name));
         if section.size > 0 && kind != Kind::Fill {
             claim_section(&index, &mut builder, map, (at, kind));
         }
@@ -44,7 +44,7 @@ fn claim_section(
         image: false,
     };
     for (n, part) in index.within(span) {
-        let is_fill = Kind::of_name(plain_section(&part.section)) == Kind::Fill;
+        let is_fill = Kind::of_name(unnumbered(&part.section)) == Kind::Fill;
         if is_fill || plain_section(&part.output_section) != plain_section(&section.name) {
             continue;
         }

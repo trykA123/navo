@@ -187,11 +187,14 @@ impl Work<'_> {
         let copies: Vec<Owner> = self.out.items[first..]
             .iter()
             .filter(|owner| owner.start - base < limit)
-            .map(|owner| Owner {
-                start: load + (owner.start - base),
-                size: owner.size.min(limit - (owner.start - base)),
-                image: true,
-                ..*owner
+            .filter_map(|owner| {
+                let at = owner.start - base;
+                Some(Owner {
+                    start: load.checked_add(at)?,
+                    size: owner.size.min(limit - at),
+                    image: true,
+                    ..*owner
+                })
             })
             .collect();
         if !copies.is_empty() {

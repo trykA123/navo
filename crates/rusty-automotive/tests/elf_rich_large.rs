@@ -22,7 +22,7 @@ use rusty_automotive::{
     },
 };
 
-use rich::{MDF, merged_layout, split_layout};
+use rich::{MDF, estimated_layout, merged_layout, split_layout};
 
 #[derive(Default)]
 struct Timings(Vec<(String, Duration, Option<u64>)>);
@@ -116,11 +116,7 @@ fn items(groups: &[Group]) -> Vec<Item> {
 fn measure_strips(timings: &mut Timings, name: &str, model: &Model<'_>) {
     for region in &model.regions.items {
         let inside = model.owners.in_span(region.span().unwrap());
-        let used: u64 = inside
-            .iter()
-            .filter(|owner| !owner.image)
-            .map(|owner| owner.size)
-            .sum();
+        let used: u64 = inside.iter().map(|owner| owner.size).sum();
         assert_eq!(used, region.used, "{name}/{} owners", region.name);
         for mode in [ScaleMode::Compressed, ScaleMode::True] {
             let (cells, _) = timings.time(format!("{name}/strip/{}/{mode:?}", region.name), || {
@@ -162,7 +158,7 @@ fn measure_model(timings: &mut Timings, name: &str, mut model: Model<'_>) {
                 .sum();
             assert_eq!(
                 groups.iter().map(|group| group.bytes).sum::<u64>(),
-                region.used + images
+                region.used
             );
             assert_eq!(groups.iter().map(|group| group.image).sum::<u64>(), images);
             assert!(
@@ -178,7 +174,7 @@ fn measure_model(timings: &mut Timings, name: &str, mut model: Model<'_>) {
             timings.limit_last(1);
             assert_eq!(
                 tiles.iter().map(|tile| tile.value).sum::<u64>(),
-                region.used + images
+                region.used
             );
         }
     }
@@ -353,6 +349,36 @@ fn gcc_merged_layout_meets_rich_budgets() {
 }
 
 #[test]
+#[ignore = "release speed and memory budgets; run explicitly with --run-ignored all"]
+fn gcc_merged_layout_with_210k_symbols_times_the_estimate_path() {
+    let bytes = estimated_layout(210_000, 4000).build();
+    let mut timings = Timings::default();
+    let (elf, lines) = parse_elf(&bytes, &mut timings);
+    assert!(elf.problems.is_empty(), "{:?}", elf.problems);
+    assert_eq!(elf.symbols.len(), 210_000);
+    let table = parse_mdf(MDF).regions();
+    let (regions, region_time) =
+        timings.time("ELF/regions", || space::regions_for_elf(&elf, Some(&table)));
+    let (owners, owner_time) =
+        timings.time("ELF/owners", || space::owners(&elf, Some(&lines), None));
+    assert!(owners.provenance.estimated >= 2000);
+    measure_model(
+        &mut timings,
+        "ELF",
+        Model {
+            owners,
+            regions,
+            origin: Origin::Elf {
+                elf: &elf,
+                map: None,
+            },
+            elapsed: region_time + owner_time,
+        },
+    );
+    timings.finish();
+}
+
+#[test]
 fn rich_small_fixtures_cover_classes_endianness_stripping_dwarf_and_siblings() {
     for (is_64, is_big) in [(false, false), (false, true), (true, false), (true, true)] {
         for (stripped, dwarf) in [(false, false), (false, true), (true, false), (true, true)] {
@@ -395,7 +421,6 @@ fn check_small_model(elf: &Elf, lines: &Lines, map: Option<&MapModel>) {
                 owners
                     .in_span(region.span().unwrap())
                     .iter()
-                    .filter(|owner| !owner.image)
                     .map(|owner| owner.size)
                     .sum::<u64>(),
                 region.used
