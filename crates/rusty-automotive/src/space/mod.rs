@@ -70,7 +70,9 @@ impl Region {
     }
 
     fn push(&mut self, block: Block) {
-        self.used = self.used.saturating_add(block.size);
+        if block.kind != Kind::Fill {
+            self.used = self.used.saturating_add(block.size);
+        }
         let bytes = &mut self.by_kind[block.kind.index()];
         *bytes = bytes.saturating_add(block.size);
         self.blocks.push(block);

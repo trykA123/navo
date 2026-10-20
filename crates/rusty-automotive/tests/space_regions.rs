@@ -133,6 +133,11 @@ fn space_regions_kind_of_name_uses_the_leading_part() {
         (".sdata.table", Kind::Data),
         (".zdata", Kind::Data),
         (".bss", Kind::Bss),
+        ("*fill*", Kind::Fill),
+        ("$fill", Kind::Fill),
+        ("$fill.1", Kind::Fill),
+        (".rodata.refill_table", Kind::Rodata),
+        ("fill", Kind::Other),
         (".sbss", Kind::Bss),
         (".zbss.stack", Kind::Bss),
         (".debug_info", Kind::Other),
@@ -144,6 +149,80 @@ fn space_regions_kind_of_name_uses_the_leading_part() {
     for (name, expected) in cases {
         assert_eq!(Kind::of_name(name), expected, "{name}");
     }
+}
+
+fn named(name: &'static str, part: Part) -> Part {
+    Part { name, ..part }
+}
+
+#[test]
+fn space_regions_kind_of_section_names_fill_whatever_the_flags() {
+    let fill = |name: &str, kind: u32, flags: u64| Section {
+        name: name.to_owned(),
+        ..section(kind, flags)
+    };
+    let cases = [
+        ("$fill", PROGBITS, ALLOC, Kind::Fill),
+        ("$fill.2", PROGBITS, ALLOC | EXEC, Kind::Fill),
+        ("$fill", NOBITS, ALLOC | WRITE, Kind::Fill),
+        (".rodata.refill_table", PROGBITS, ALLOC, Kind::Rodata),
+        (".fill_table", PROGBITS, ALLOC, Kind::Rodata),
+        ("x$fill", PROGBITS, ALLOC, Kind::Rodata),
+    ];
+    for (name, kind, flags, expected) in cases {
+        assert_eq!(
+            Kind::of_section(&fill(name, kind, flags)),
+            expected,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn space_regions_fill_is_in_by_kind_and_blocks_but_not_in_used() {
+    let elf = elf_of(vec![
+        text(ROM, 0x400),
+        named("$fill", rodata(ROM + 0x400, 0x80)),
+        named("$fill", rodata(ROM + 0x480, 0x40)),
+        named(".rodata.refill_table", rodata(ROM + 0x4C0, 0x20)),
+    ]);
+    let table = mdf_table();
+    let regions = regions_for_elf(&elf, Some(&table));
+    let flash = region(&regions, "pflash");
+    assert_eq!(flash.used, 0x420);
+    assert_eq!(flash.free(), Some(ROM_SIZE - 0x420));
+    assert_eq!(flash.by_kind[Kind::Fill.index()], 0xC0);
+    assert_eq!(flash.by_kind[Kind::Code.index()], 0x400);
+    assert_eq!(flash.by_kind[Kind::Rodata.index()], 0x20);
+    let kinds: Vec<_> = flash.blocks.iter().map(|b| (b.size, b.kind)).collect();
+    assert_eq!(
+        kinds,
+        [
+            (0x400, Kind::Code),
+            (0x80, Kind::Fill),
+            (0x40, Kind::Fill),
+            (0x20, Kind::Rodata)
+        ]
+    );
+    let clusters = regions_for_elf(&elf, None);
+    assert_eq!(clusters.items[0].used, 0x420);
+    assert_eq!(clusters.items[0].by_kind[Kind::Fill.index()], 0xC0);
+}
+
+#[test]
+fn space_regions_a_map_fill_entry_is_fill_and_not_used() {
+    let body = "* Locate Result\n| Section | Address | Size | Chip |\n\
+        | .text | 0xa004c000 | 0x100 | mc0_rom |\n\
+        | *fill* | 0xa004c100 | 0x40 | mc0_rom |\n\
+        | .rodata.refill_table | 0xa004c140 | 0x10 | mc0_rom |\n\
+        * Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n\
+        | mc0_rom | 336 | 0 | 0 | 3760 | 4096 |\n";
+    let regions = regions_for_map(&map_of(body), None);
+    let rom = &regions.items[0];
+    assert_eq!(rom.used, 0x110);
+    assert_eq!(rom.by_kind[Kind::Fill.index()], 0x40);
+    assert_eq!(rom.by_kind[Kind::Rodata.index()], 0x10);
+    assert_eq!(rom.blocks[1].kind, Kind::Fill);
 }
 
 #[test]

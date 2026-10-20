@@ -96,6 +96,10 @@ fn assert_tiles_regions(owners: &Owners, regions: &Regions) {
     }
 }
 
+fn region_named<'a>(regions: &'a Regions, name: &str) -> &'a rusty_automotive::space::Region {
+    regions.items.iter().find(|r| r.name == name).unwrap()
+}
+
 fn map_of(body: &str) -> MapModel {
     let text = format!("TASKING VX\n{body}");
     index_map(text.as_bytes(), &AtomicBool::new(false), &mut |_| {}).unwrap()
@@ -227,6 +231,36 @@ fn space_owners_a_stripped_file_falls_back_to_section_owners() {
     assert_eq!(provenance.from_sections, 3);
     assert_eq!(provenance.from_symbols + provenance.estimated, 0);
     assert_tiles_regions(&found, &regions_for_elf(&elf, Some(&table())));
+}
+
+#[test]
+fn space_owners_fill_sections_are_never_owners_and_never_unattributed() {
+    let fill = |address, len| Part {
+        name: "$fill",
+        flags: 2,
+        ..data(address, len)
+    };
+    let elf = parse(&build(&spec(
+        vec![
+            text(ROM, 0x100),
+            fill(ROM + 0x100, 0x80),
+            fill(ROM + 0x180, 0x40),
+        ],
+        Some(vec![func("main", ROM, 0x100, 0)]),
+        vec![(0, LOAD_RX)],
+    )));
+    let found = owners(&elf, None, None);
+    let regions = regions_for_elf(&elf, Some(&table()));
+    assert_tiles_regions(&found, &regions);
+    let flash = region_named(&regions, "pflash");
+    assert_eq!(
+        (flash.used, flash.by_kind[Kind::Fill.index()]),
+        (0x100, 0xC0)
+    );
+    assert_eq!(found.items.len(), 1);
+    assert!(found.items.iter().all(|owner| owner.kind != Kind::Fill));
+    assert_eq!(found.provenance.not_attributed, 0);
+    assert_eq!(names(&found, &elf, &found.items), ["main"]);
 }
 
 #[test]

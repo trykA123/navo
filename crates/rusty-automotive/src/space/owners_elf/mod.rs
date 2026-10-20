@@ -69,7 +69,7 @@ pub fn owners(elf: &Elf, lines: Option<&Lines>, map: Option<&MapModel>) -> Owner
     builder.provenance.has_lines = lines.is_some_and(|lines| !lines.files.is_empty());
     for (at, section) in elf.sections.iter().enumerate() {
         let is_placed = section.is_loaded() && section.size > 0 && !takes_no_address_space(section);
-        if is_placed {
+        if is_placed && Kind::of_section(section) != Kind::Fill {
             section::build(&context, &mut builder, at);
         }
     }
