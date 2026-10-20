@@ -6,19 +6,21 @@ use super::app_menu::{Rig, rig_full, rig_on};
 use super::crash_notice::unclean;
 use super::drive_fs::{Setup, drive_window};
 use super::jobs::{MB, add, key, open_at, running};
-use super::press;
+use super::{press, with_fkey_bar};
 use crate::app_menu::QuickSettings;
 use crate::file_list::SortBy;
 use crate::settings::{Change, FIELDS, Field, Value, Values};
 use crate::window_view::FerriteWindow;
 
 pub(super) fn off(fields: &[Field]) -> Values {
-    fields.iter().fold(Values::default(), |values, field| {
-        values.with(&Change {
-            field: *field,
-            value: Value::Flag(false),
+    fields
+        .iter()
+        .fold(with_fkey_bar(Values::default()), |values, field| {
+            values.with(&Change {
+                field: *field,
+                value: Value::Flag(false),
+            })
         })
-    })
 }
 
 pub(super) fn every_part() -> Vec<Field> {
@@ -67,7 +69,7 @@ fn drawn_with(
     field: Field,
     probe: impl Fn(&mut TestAppContext, &Rig) -> bool,
 ) {
-    let shown = rig_on(cx, Values::default(), None);
+    let shown = rig_on(cx, with_fkey_bar(Values::default()), None);
     assert!(probe(cx, &shown), "{field:?} is drawn by default");
     let hidden = rig_on(cx, off(&[field]), None);
     assert!(!probe(cx, &hidden), "{field:?} is drawn although hidden");
@@ -107,6 +109,12 @@ fn a_hidden_fkey_bar_is_not_drawn(cx: &mut TestAppContext) {
     drawn_with(cx, Field::WindowFkeyBar, |cx, rig| {
         is_drawn(cx, rig.window, "fkeys")
     });
+}
+
+#[gpui_kit::test]
+fn the_fkey_bar_is_not_drawn_by_default(cx: &mut TestAppContext) {
+    let rig = rig_on(cx, Values::default(), None);
+    assert!(!is_drawn(cx, rig.window, "fkeys"));
 }
 
 #[gpui_kit::test]

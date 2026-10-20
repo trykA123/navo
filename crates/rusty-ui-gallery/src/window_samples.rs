@@ -154,9 +154,9 @@ pub fn parts_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
         descending: true,
     };
     [
-        (WindowParts::default(), false, SortKey::default()),
+        (WindowParts::all(true), false, SortKey::default()),
         (WindowParts::all(false), false, by_size),
-        (WindowParts::default(), true, SortKey::default()),
+        (WindowParts::all(true), true, SortKey::default()),
     ]
     .map(|(parts, shows_menu, sort)| {
         cx.new(|cx| WindowPage::with_parts(parts, shows_menu, cx).sorted_by(sort))

@@ -141,7 +141,7 @@ impl Default for WindowView {
             path_bar: true,
             drive_button: true,
             title_search: true,
-            fkey_bar: true,
+            fkey_bar: false,
             icons: true,
             ext_column: true,
             size_column: true,

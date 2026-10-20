@@ -127,7 +127,7 @@ fn the_text_and_image_views_read_their_own_tables() {
 }
 
 #[test]
-fn every_window_part_is_shown_by_default() {
+fn every_window_part_but_the_fkey_bar_is_shown_by_default() {
     let view = Settings::default().window.view;
     assert_eq!(view, crate::WindowView::default());
     assert!(
@@ -135,7 +135,7 @@ fn every_window_part_is_shown_by_default() {
             && view.path_bar
             && view.drive_button
             && view.title_search
-            && view.fkey_bar
+            && !view.fkey_bar
             && view.icons
     );
     assert!(view.ext_column && view.size_column && view.date_column);

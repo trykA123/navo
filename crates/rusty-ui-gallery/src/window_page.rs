@@ -123,7 +123,7 @@ impl WindowPage {
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
             split: cx.new(|_| SplitterState::new(0.5)),
-            parts: WindowParts::default(),
+            parts: WindowParts::all(true),
             sort: SortKey::default(),
             is_single_tab: false,
             view_menu: ViewMenuShown::default(),
