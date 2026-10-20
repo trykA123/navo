@@ -2,6 +2,8 @@ use std::sync::atomic::AtomicBool;
 
 use rusty_automotive::map::{MapModel, MapProblem, index_map};
 
+mod words;
+
 #[allow(clippy::unwrap_used, reason = "synthetic test fixtures must parse")]
 fn parse(body: &str) -> MapModel {
     let text = format!("TASKING VX-toolset linker map\n{body}");
@@ -12,7 +14,7 @@ fn line(cells: &[(&str, usize)]) -> String {
     let mut text = String::new();
     for (cell, width) in cells {
         text.push('|');
-        if cell.len() >= *width {
+        if cell.len() > *width {
             text.push_str(&format!(" {cell}"));
         } else {
             text.push_str(&format!(" {cell:<width$} "));

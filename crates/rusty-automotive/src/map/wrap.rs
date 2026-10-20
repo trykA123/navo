@@ -1,4 +1,6 @@
 use super::MAX_MAP_LINE;
+use super::parts::Part;
+use super::table::Table;
 
 pub(super) struct Wrapped {
     cells: Vec<String>,
@@ -7,42 +9,63 @@ pub(super) struct Wrapped {
 }
 
 fn is_filled(raw: &str) -> bool {
-    !raw.is_empty() && !raw.ends_with(char::is_whitespace)
+    let tail = raw.trim_end_matches(char::is_whitespace);
+    !tail.is_empty() && raw.len() - tail.len() <= 1
+}
+
+pub(super) fn mandatory(part: Part, table: &Table) -> Vec<bool> {
+    table
+        .columns
+        .iter()
+        .map(|column| {
+            let name = column.name.as_str();
+            let size = name.contains("size");
+            let place = name.contains("addr") || name.contains("offset");
+            match part {
+                Part::Locate => size || name.starts_with("chip"),
+                Part::Removed => matches!(name, "file" | "object file"),
+                Part::Symbols => place || name == "value",
+                Part::Link | Part::Memory | Part::Skip => size || place,
+            }
+        })
+        .collect()
 }
 
 impl Wrapped {
-    pub(super) fn start(raw: &[&str], line: u64) -> Option<Self> {
-        let filled: Vec<bool> = raw.iter().map(|cell| is_filled(cell)).collect();
-        filled.contains(&true).then(|| Self {
+    pub(super) fn start(raw: &[&str], line: u64) -> Self {
+        Self {
             cells: raw.iter().map(|cell| cell.trim().to_owned()).collect(),
-            filled,
+            filled: raw.iter().map(|cell| is_filled(cell)).collect(),
             line,
-        })
+        }
     }
 
-    pub(super) fn extend(&mut self, raw: &[&str]) -> bool {
-        let fits = raw.len() == self.cells.len()
+    pub(super) fn extend(&mut self, raw: &[&str], required: &[bool]) -> bool {
+        let continues = raw.len() == self.cells.len()
             && raw.iter().any(|cell| !cell.trim().is_empty())
             && raw
                 .iter()
-                .zip(&self.filled)
+                .zip(required)
+                .any(|(cell, &required)| required && cell.trim().is_empty())
+            && raw
+                .iter()
                 .zip(&self.cells)
-                .all(|((cell, &filled), held)| {
-                    let text = cell.trim();
-                    text.is_empty() || (filled && held.len() + text.len() <= MAX_MAP_LINE)
-                });
-        if !fits {
+                .all(|(cell, held)| held.len() + cell.trim().len() <= MAX_MAP_LINE);
+        if !continues {
             return false;
         }
-        for (held, cell) in self.cells.iter_mut().zip(raw) {
-            held.push_str(cell.trim());
+        for ((held, cell), filled) in self.cells.iter_mut().zip(raw).zip(&mut self.filled) {
+            let text = cell.trim();
+            if text.is_empty() {
+                continue;
+            }
+            if !held.is_empty() && !*filled {
+                held.push(' ');
+            }
+            held.push_str(text);
+            *filled = is_filled(cell);
         }
-        self.filled = raw.iter().map(|cell| is_filled(cell)).collect();
         true
-    }
-
-    pub(super) fn is_open(&self) -> bool {
-        self.filled.contains(&true)
     }
 
     pub(super) fn cells(&self) -> impl Iterator<Item = &str> {

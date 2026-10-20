@@ -3,7 +3,7 @@ use super::parts::{self, Part};
 use super::retention::{Record, Retention};
 use super::rows;
 use super::table::{Parsed, Side, Table, raw_cells};
-use super::wrap::Wrapped;
+use super::wrap::{Wrapped, mandatory};
 
 pub(super) struct Tasking {
     pub model: MapModel,
@@ -15,6 +15,7 @@ pub(super) struct Tasking {
     symbol_order: Option<String>,
     retention: Retention,
     wrapped: Option<Wrapped>,
+    required: Vec<bool>,
 }
 
 impl Tasking {
@@ -29,6 +30,7 @@ impl Tasking {
             symbol_order: None,
             retention: Retention::default(),
             wrapped: None,
+            required: Vec::new(),
         }
     }
 
@@ -107,13 +109,7 @@ impl Tasking {
             return false;
         };
         let is_row = text.starts_with('|') && !text.bytes().all(|byte| b"|+-= \t".contains(&byte));
-        if !is_row || !row.extend(&raw_cells(text)) {
-            return false;
-        }
-        if !row.is_open() {
-            self.flush_row();
-        }
-        true
+        is_row && row.extend(&raw_cells(text), &self.required)
     }
 
     pub(super) fn flush_row(&mut self) {
@@ -132,12 +128,12 @@ impl Tasking {
         if self.start_table(&cells) {
             return;
         }
-        let can_wrap = raw.len() == self.table.columns.len() && !self.retention.capped(self.part);
+        let can_wrap = raw.len() == self.table.columns.len()
+            && !self.retention.capped(self.part)
+            && self.required.contains(&true);
         if can_wrap {
-            self.wrapped = Wrapped::start(&raw, self.model.lines);
-            if self.wrapped.is_some() {
-                return;
-            }
+            self.wrapped = Some(Wrapped::start(&raw, self.model.lines));
+            return;
         }
         self.store_row(&cells);
     }
@@ -182,6 +178,7 @@ impl Tasking {
         }) {
             let table = Table::from_cells(cells);
             if self.is_header(&table) {
+                self.required = mandatory(self.part, &table);
                 self.table = table;
                 self.clear_file();
                 return true;
