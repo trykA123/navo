@@ -7,3 +7,7 @@ settings-drop-confirm-help = Ask before a dragged move runs.
 settings-drop-confirm-never = Never
 settings-drop-confirm-moves = Only moves
 settings-drop-confirm-always = Always
+settings-usage-bars = Used and free bars
+settings-usage-bars-help = Shows how full each memory region is, with percentages and a bar for the file itself.
+settings-who-uses = Who uses the flash
+settings-who-uses-help = Shows a treemap of which parts of the program take the most space.

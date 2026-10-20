@@ -109,6 +109,8 @@ pub struct AutomotiveView {
     pub memory_strip: bool,
     pub charts: bool,
     pub row_bars: bool,
+    pub usage_bars: bool,
+    pub who_uses: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

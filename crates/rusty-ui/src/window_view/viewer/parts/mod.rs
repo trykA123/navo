@@ -2,7 +2,8 @@ use gpui_kit::Action;
 
 use super::{
     ShowLineEnds, ToggleCharts, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip,
-    ToggleOpensInspector, TogglePreview, ToggleRowBars, ViewCustom, ViewRich, ViewSimple,
+    ToggleOpensInspector, TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewCustom,
+    ViewRich, ViewSimple,
 };
 use crate::settings::{Change, Field, PRESETS, Value, Values};
 
@@ -101,12 +102,89 @@ const AUTOMOTIVE_PARTS: &[Part] = &[
     },
 ];
 
+const LAYOUT_PARTS: &[Part] = &[
+    Part {
+        field: Field::AutomotiveInspector,
+        action: || Box::new(ToggleOpensInspector),
+    },
+    Part {
+        field: Field::AutomotiveMemoryStrip,
+        action: || Box::new(ToggleMemoryStrip),
+    },
+    Part {
+        field: Field::AutomotiveUsageBars,
+        action: || Box::new(ToggleUsageBars),
+    },
+    Part {
+        field: Field::AutomotiveWhoUses,
+        action: || Box::new(ToggleWhoUses),
+    },
+    Part {
+        field: Field::AutomotiveRowBars,
+        action: || Box::new(ToggleRowBars),
+    },
+];
+
+const AUTOMOTIVE_FAMILY: &[Part] = &[
+    Part {
+        field: Field::AutomotiveInspector,
+        action: || Box::new(ToggleOpensInspector),
+    },
+    Part {
+        field: Field::AutomotiveMemoryStrip,
+        action: || Box::new(ToggleMemoryStrip),
+    },
+    Part {
+        field: Field::AutomotiveCharts,
+        action: || Box::new(ToggleCharts),
+    },
+    Part {
+        field: Field::AutomotiveUsageBars,
+        action: || Box::new(ToggleUsageBars),
+    },
+    Part {
+        field: Field::AutomotiveWhoUses,
+        action: || Box::new(ToggleWhoUses),
+    },
+    Part {
+        field: Field::AutomotiveRowBars,
+        action: || Box::new(ToggleRowBars),
+    },
+];
+
 pub(in crate::window_view) const AUTOMOTIVE: PartSet = PartSet {
     preset: Some(Field::AutomotivePreset),
     parts: AUTOMOTIVE_PARTS,
-    family: AUTOMOTIVE_PARTS,
+    family: AUTOMOTIVE_FAMILY,
     right_drawer: None,
 };
+
+pub(in crate::window_view) const AUTOMOTIVE_LAYOUT: PartSet = PartSet {
+    preset: Some(Field::AutomotivePreset),
+    parts: LAYOUT_PARTS,
+    family: AUTOMOTIVE_FAMILY,
+    right_drawer: None,
+};
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::window_view) struct LayoutParts {
+    pub strip: bool,
+    pub bars: bool,
+    pub who: bool,
+    pub row_bars: bool,
+}
+
+impl LayoutParts {
+    pub fn of(values: &Values) -> Self {
+        let shown = |field| values.is_shown(AUTOMOTIVE_LAYOUT.preset, field);
+        Self {
+            strip: shown(Field::AutomotiveMemoryStrip),
+            bars: shown(Field::AutomotiveUsageBars),
+            who: shown(Field::AutomotiveWhoUses),
+            row_bars: shown(Field::AutomotiveRowBars),
+        }
+    }
+}
 
 pub(in crate::window_view) const AUTOMOTIVE_TABLE: PartSet = PartSet {
     preset: Some(Field::AutomotivePreset),
@@ -114,7 +192,7 @@ pub(in crate::window_view) const AUTOMOTIVE_TABLE: PartSet = PartSet {
         field: Field::AutomotiveInspector,
         action: || Box::new(ToggleOpensInspector),
     }],
-    family: AUTOMOTIVE_PARTS,
+    family: AUTOMOTIVE_FAMILY,
     right_drawer: None,
 };
 

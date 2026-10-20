@@ -1,6 +1,6 @@
 use super::fields::{Control, F, FieldSpec, Look, PRESETS, S, SYNTAX_THEMES, spec};
 
-pub(super) const VIEWER_FIELDS: [FieldSpec; 12] = [
+pub(super) const VIEWER_FIELDS: [FieldSpec; 14] = [
     spec(
         (F::TextLineNumbers, S::Display, "text.view.line-numbers"),
         (
@@ -105,6 +105,20 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 12] = [
             "Row bars",
             "Shows a size bar and counts on each row of the ranges list.",
         ),
+        Control::Toggle,
+    ),
+    spec(
+        (
+            F::AutomotiveUsageBars,
+            S::Display,
+            "automotive.view.usage-bars",
+        ),
+        ("settings-usage-bars", "settings-usage-bars-help"),
+        Control::Toggle,
+    ),
+    spec(
+        (F::AutomotiveWhoUses, S::Display, "automotive.view.who-uses"),
+        ("settings-who-uses", "settings-who-uses-help"),
         Control::Toggle,
     ),
 ];

@@ -7,7 +7,7 @@ use super::parts::{PRESET_ACTIONS, PartSet};
 use super::{
     Back, ChooseEncoding, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds, ToggleCharts,
     ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector, TogglePreview,
-    ToggleRowBars, ViewCustom, ViewMenu, ViewRich, ViewSimple,
+    ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewCustom, ViewMenu, ViewRich, ViewSimple,
 };
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
@@ -166,6 +166,8 @@ impl FerriteWindow {
             on_view::<ToggleMemoryStrip>(root, ViewOp::Toggle(Field::AutomotiveMemoryStrip), cx);
         let root = on_view::<ToggleCharts>(root, ViewOp::Toggle(Field::AutomotiveCharts), cx);
         let root = on_view::<ToggleRowBars>(root, ViewOp::Toggle(Field::AutomotiveRowBars), cx);
+        let root = on_view::<ToggleUsageBars>(root, ViewOp::Toggle(Field::AutomotiveUsageBars), cx);
+        let root = on_view::<ToggleWhoUses>(root, ViewOp::Toggle(Field::AutomotiveWhoUses), cx);
         let root = on_view::<ViewSimple>(root, ViewOp::Preset(0), cx);
         let root = on_view::<ViewRich>(root, ViewOp::Preset(1), cx);
         let root = on_view::<ViewCustom>(root, ViewOp::Preset(2), cx);

@@ -202,6 +202,8 @@ view.opens_inspector | Open the inspector on pick | Viewer
 view.memory_strip | Show or hide the memory strip | Viewer
 view.charts | Show or hide charts | Viewer
 view.row_bars | Show or hide row bars | Viewer
+view.usage_bars | Show or hide the used and free bars | Viewer
+view.who_uses | Show or hide who uses the flash | Viewer
 view.simple | Simple view | Viewer
 view.rich | Rich view | Viewer
 view.custom | Custom view | Viewer

@@ -96,6 +96,8 @@ pub enum Field {
     AutomotiveMemoryStrip,
     AutomotiveCharts,
     AutomotiveRowBars,
+    AutomotiveUsageBars,
+    AutomotiveWhoUses,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -316,7 +318,7 @@ const GENERAL: [FieldSpec; 20] = [
     ),
 ];
 
-pub const FIELDS: [FieldSpec; 44] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
+pub const FIELDS: [FieldSpec; 46] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
 
 const fn join<const A: usize, const B: usize, const C: usize, const N: usize>(
     first: [FieldSpec; A],
@@ -419,6 +421,8 @@ impl Field {
                 | Self::AutomotiveMemoryStrip
                 | Self::AutomotiveCharts
                 | Self::AutomotiveRowBars
+                | Self::AutomotiveUsageBars
+                | Self::AutomotiveWhoUses
         )
     }
 }

@@ -144,6 +144,16 @@ pub(super) const GROUPS: [Group; 5] = [
                 "view.row_bars",
                 "cmd-view-row-bars",
             ),
+            (
+                "viewer::ToggleUsageBars",
+                "view.usage_bars",
+                "cmd-view-usage-bars",
+            ),
+            (
+                "viewer::ToggleWhoUses",
+                "view.who_uses",
+                "cmd-view-who-uses",
+            ),
             ("viewer::ViewSimple", "view.simple", "cmd-view-simple"),
             ("viewer::ViewRich", "view.rich", "cmd-view-rich"),
             ("viewer::ViewCustom", "view.custom", "cmd-view-custom"),

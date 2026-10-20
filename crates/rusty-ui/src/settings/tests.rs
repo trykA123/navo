@@ -186,7 +186,7 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
         ("Image", 1),
         ("Markdown", 1),
         ("Preview", 2),
-        ("Automotive", 5),
+        ("Automotive", 7),
     ];
     let expected: Vec<Option<&str>> = expected
         .iter()
@@ -211,6 +211,8 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
             "automotive.view.memory-strip",
             "automotive.view.charts",
             "automotive.view.row-bars",
+            "automotive.view.usage-bars",
+            "automotive.view.who-uses",
         ]
     );
     assert!(!Field::AutomotiveCharts.is_applied());

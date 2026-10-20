@@ -67,5 +67,7 @@ inspector = false
 memory-strip = false
 charts = false
 row-bars = false
+usage-bars = false
+who-uses = false
 
 [experimental]
