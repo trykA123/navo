@@ -5,7 +5,7 @@ mod row;
 
 use std::rc::Rc;
 
-use gpui_kit::base::TestSupportExt;
+use gpui_kit::base::{Scrollbar, TestSupportExt};
 use gpui_kit::component::input::{Input, InputEvent};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
@@ -160,6 +160,14 @@ impl CommandCenter {
     fn is_virtual(&self) -> bool {
         self.props.rows.len() >= VIRTUAL_FROM
     }
+
+    fn gutter(&self) -> Pixels {
+        if self.is_virtual() {
+            Scrollbar::width()
+        } else {
+            px(0.)
+        }
+    }
 }
 
 fn interactive(
@@ -191,6 +199,7 @@ struct Paint {
     rows: Rc<[Row]>,
     selected: Option<usize>,
     detail_chars: usize,
+    gutter: Pixels,
     view: WeakEntity<CommandCenter>,
 }
 
@@ -199,6 +208,7 @@ impl Paint {
         let look = RowLook {
             theme: &self.theme,
             detail_chars: self.detail_chars,
+            gutter: self.gutter,
         };
         self.rows[range.clone()]
             .iter()
@@ -367,6 +377,7 @@ impl Render for CommandCenter {
             rows: self.props.rows.clone(),
             selected: self.props.selection.index(),
             detail_chars: (frame.width / px(CHAR_WIDTH)) as usize,
+            gutter: self.gutter(),
             view: cx.entity().downgrade(),
         };
         let panel = div()

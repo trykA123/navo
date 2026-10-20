@@ -60,14 +60,14 @@ fn hits_are_commands_with_an_action_target() {
 fn key_hints_come_from_the_given_keymap() {
     let hits = run(&all_visible(), "refresh", &Cancel::new());
     let shortcut = find(&hits, "Refresh").and_then(|hit| hit.shortcut.clone());
-    assert_eq!(shortcut.as_deref(), Some("Ctrl+R"));
+    assert_eq!(shortcut.as_deref(), Some("ctrl-r"));
 
     let keymap = Keymap::parse("[[bind]]\ncommand = \"files.refresh\"\nkeys = [\"ctrl-q\"]\n")
         .expect("a valid keymap");
     let snapshot = Arc::new(CommandsSnapshot::build(&entries(), &FILES, &keymap));
     let hits = run(&CommandsSource::new(snapshot), "refresh", &Cancel::new());
     let shortcut = find(&hits, "Refresh").and_then(|hit| hit.shortcut.clone());
-    assert_eq!(shortcut.as_deref(), Some("Ctrl+Q"));
+    assert_eq!(shortcut.as_deref(), Some("ctrl-q"));
 }
 
 #[test]

@@ -47,7 +47,10 @@ impl CommandsSnapshot {
                     name: entry.spec.name,
                     action,
                     label: tr(entry.spec.label),
-                    shortcut: keymap.keys_of(entry.spec.name).find_map(shown),
+                    shortcut: keymap
+                        .keys_of(entry.spec.name)
+                        .find(|key| shown(key).is_some())
+                        .map(str::to_owned),
                     arg: entry.arg,
                 })
             })

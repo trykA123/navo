@@ -4,8 +4,8 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, Div, FontWeight, HighlightStyle, Hsla, InteractiveElement, IntoElement,
-    ParentElement, Role, SharedString, Stateful, StatefulInteractiveElement, Styled, StyledText,
-    div, px,
+    ParentElement, Pixels, Role, SharedString, Stateful, StatefulInteractiveElement, Styled,
+    StyledText, div, px,
 };
 use rusty_fs::EntryKind;
 use rusty_l10n::{t, tr};
@@ -33,6 +33,7 @@ pub(super) type RowElement = ObservedElement<Stateful<Div>>;
 pub(super) struct RowLook<'a> {
     pub theme: &'a Theme,
     pub detail_chars: usize,
+    pub gutter: Pixels,
 }
 
 pub(crate) fn highlight_ranges(text: &str, indices: &[u32]) -> Vec<Range<usize>> {
@@ -86,13 +87,15 @@ fn base(index: usize) -> RowElement {
         .w_full()
 }
 
-fn option(t: &Theme, index: usize, is_selected: bool, height: f32) -> RowElement {
+fn option(look: &RowLook, index: usize, is_selected: bool, height: f32) -> RowElement {
+    let t = look.theme;
     base(index)
         .role(Role::ListBoxOption)
         .aria_selected(is_selected)
         .gap(t.spacing.md)
         .h(px(height))
-        .px(t.spacing.md)
+        .pl(t.spacing.md)
+        .pr(t.spacing.md + look.gutter)
         .rounded(t.radii.card)
         .cursor_pointer()
         .when(is_selected, |row| row.bg(t.colors.selection))
@@ -194,7 +197,7 @@ fn hit_row(look: &RowLook, hit: &Hit, index: usize, is_selected: bool) -> RowEle
     let t = look.theme;
     let text = shown_title(hit);
     let (name, color) = hit_icon(t, hit);
-    option(t, index, is_selected, ROW)
+    option(look, index, is_selected, ROW)
         .aria_label(text.clone())
         .child(icon(name, t.spacing.icon, color))
         .child(title(t, hit, text))
@@ -259,7 +262,7 @@ fn top_hit(look: &RowLook, hit: &Hit, index: usize, is_selected: bool) -> RowEle
         .child(title(t, hit, text.clone()).font_weight(FontWeight::SEMIBOLD))
         .child(detail(t, &line, look.detail_chars));
     let right = shortcut(t, hit.shortcut.as_ref()).or_else(|| badge(t, hit));
-    option(t, index, is_selected, TOP_HIT)
+    option(look, index, is_selected, TOP_HIT)
         .aria_label(text)
         .gap(t.spacing.xl)
         .child(tile)
@@ -280,7 +283,7 @@ fn show_all(
         Group::Folders | Group::Files => tr("command-center-show-all-files"),
         Group::Module(name) => name.to_owned(),
     };
-    option(t, index, is_selected, ROW)
+    option(look, index, is_selected, ROW)
         .aria_label(label.clone())
         .child(icon(IconName::ChevronRight, t.spacing.icon, t.colors.muted))
         .child(

@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use gpui_kit::base::Scrollbar;
 use gpui_kit::test::{ScopedWindow, TestWindowExt};
 use gpui_kit::{
     AnyWindowHandle, AppContext as _, Bounds, Context, Entity, InteractiveElement, IntoElement,
@@ -470,4 +471,47 @@ fn the_panel_centres_on_the_field_and_stays_inside_the_window() {
     let narrow = place(field, size(px(600.), px(720.)));
     assert_eq!(narrow.width, px(568.));
     assert_eq!(narrow.origin.x, px(16.));
+}
+
+#[gpui_kit::test]
+fn key_hints_end_before_the_scrollbar_of_a_long_list(cx: &mut TestAppContext) {
+    let hits = (0..70).map(|n| Hit {
+        score: 100 - n,
+        ..command(&format!("Copy {n}"), Some("ctrl-v"))
+    });
+    let center = open(cx, props(Results::merge(hits.collect(), Scope::Commands)));
+    let (key, list) = center.read(cx, |window| {
+        let key = window
+            .within(("command-center-row", 1usize))
+            .find(("command-center-key", 0usize))
+            .bounds();
+        (key, window.find("command-center-list").bounds())
+    });
+    assert!(key.right() <= list.right() - Scrollbar::width());
+}
+
+#[gpui_kit::test]
+fn key_caps_are_written_with_capitals(cx: &mut TestAppContext) {
+    let hits = vec![
+        command("Paste", Some("ctrl-v")),
+        Hit {
+            score: 9,
+            ..command("Back", Some("alt-left"))
+        },
+    ];
+    let center = open(cx, props(Results::merge(hits, Scope::Commands)));
+    let keys = center.read(cx, |window| {
+        (1usize..3)
+            .map(|row| {
+                let key = window
+                    .within(("command-center-row", row))
+                    .find(("command-center-key", 0usize));
+                key.label().map(str::to_owned)
+            })
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        keys,
+        [Some("Ctrl+V".to_owned()), Some("Alt+Left".to_owned())]
+    );
 }
