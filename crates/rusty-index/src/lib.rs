@@ -2,6 +2,7 @@
 
 pub mod file;
 pub mod fuzzy;
+pub mod host;
 pub mod search;
 pub mod table;
 pub mod usn;
