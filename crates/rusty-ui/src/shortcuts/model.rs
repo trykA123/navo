@@ -1,3 +1,5 @@
+use rusty_l10n::tr;
+
 use crate::commands::{CommandSpec, Keymap, all, normal_key, shown};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,7 +87,7 @@ impl Query {
         if self.text.is_empty() {
             return true;
         }
-        [row.spec.label, row.spec.name]
+        [tr(row.spec.label).as_str(), row.spec.name]
             .iter()
             .any(|word| word.to_lowercase().contains(&self.text))
             || row.keys.iter().any(|key| self.matches_key(key))

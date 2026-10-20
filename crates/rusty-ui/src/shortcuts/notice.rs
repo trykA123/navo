@@ -1,5 +1,6 @@
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
+use rusty_l10n::tr;
 
 use super::page::{Pending, ShortcutsPage, Stage};
 use crate::commands::shown;
@@ -56,7 +57,7 @@ pub(super) fn banner(t: &Theme, problem: &SharedString, cx: &Context<ShortcutsPa
 }
 
 fn pending_text(pending: &Pending) -> String {
-    let label = pending.spec.label;
+    let label = tr(pending.spec.label);
     match pending.keys.as_deref() {
         None => format!("The reset of {label}"),
         Some([]) => format!("Removing the key of {label}"),
@@ -109,7 +110,7 @@ pub(super) fn footer(t: &Theme, stage: &Stage, cx: &Context<ShortcutsPage>) -> O
             "shortcuts-recording",
             format!(
                 "Press the new key for {}. Esc cancels, Backspace removes the key.",
-                spec.label
+                tr(spec.label)
             ),
         )
         .text_color(t.colors.muted),

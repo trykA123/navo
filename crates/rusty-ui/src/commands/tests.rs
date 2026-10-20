@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use gpui_kit::{App, TestAppContext};
+use rusty_l10n::{FILES, catalog, tr};
 
 use super::{GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
@@ -183,7 +184,7 @@ fn the_name_check_rejects_other_shapes() {
 #[test]
 fn every_command_has_a_label_and_a_context() {
     let empty: Vec<&str> = all()
-        .filter(|spec| spec.label.trim().is_empty() || spec.context.trim().is_empty())
+        .filter(|spec| tr(spec.label).trim().is_empty() || spec.context.trim().is_empty())
         .map(|spec| spec.name)
         .collect();
     assert_eq!(empty, Vec::<&str>::new());
@@ -242,7 +243,7 @@ fn no_command_toggles_the_preview() {
 #[test]
 fn the_command_list_matches_the_snapshot() {
     let lines: Vec<String> = all()
-        .map(|spec| format!("{} | {} | {}", spec.name, spec.label, spec.context))
+        .map(|spec| format!("{} | {} | {}", spec.name, tr(spec.label), spec.context))
         .collect();
     insta::with_settings!({ prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!("command_registry", lines.join("\n"));
@@ -400,4 +401,34 @@ fn drawer_keys_belong_to_the_shared_view_commands_in_every_viewer() {
         keyed("ctrl-i"),
         [("Viewer".to_owned(), "view.right_drawer")]
     );
+}
+
+#[test]
+fn every_command_label_is_the_cmd_id_of_its_name() {
+    let wrong: Vec<&str> = all()
+        .filter(|spec| spec.label != format!("cmd-{}", spec.name.replace(['.', '_'], "-")))
+        .map(|spec| spec.name)
+        .collect();
+    assert_eq!(wrong, Vec::<&str>::new());
+}
+
+#[test]
+fn every_command_label_exists_in_the_bundle() {
+    let missing: Vec<&str> = all()
+        .filter(|spec| !catalog().has(spec.label))
+        .map(|spec| spec.label)
+        .collect();
+    assert_eq!(missing, Vec::<&str>::new());
+}
+
+#[test]
+fn every_cmd_message_in_the_files_belongs_to_a_command() {
+    let labels: HashSet<&str> = all().map(|spec| spec.label).collect();
+    let orphans: Vec<&str> = FILES
+        .iter()
+        .flat_map(|(_, source)| source.lines())
+        .filter_map(|line| line.split(" =").next())
+        .filter(|id| id.starts_with("cmd-") && !labels.contains(id))
+        .collect();
+    assert_eq!(orphans, Vec::<&str>::new());
 }

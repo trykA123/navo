@@ -4,113 +4,165 @@ pub(super) const GROUPS: [Group; 10] = [
     Group {
         context: "ContextMenu",
         commands: &[
-            ("context_menu::MenuUp", "context_menu.up", "Up"),
-            ("context_menu::MenuDown", "context_menu.down", "Down"),
-            ("context_menu::MenuHome", "context_menu.first", "First item"),
-            ("context_menu::MenuEnd", "context_menu.last", "Last item"),
+            (
+                "context_menu::MenuUp",
+                "context_menu.up",
+                "cmd-context-menu-up",
+            ),
+            (
+                "context_menu::MenuDown",
+                "context_menu.down",
+                "cmd-context-menu-down",
+            ),
+            (
+                "context_menu::MenuHome",
+                "context_menu.first",
+                "cmd-context-menu-first",
+            ),
+            (
+                "context_menu::MenuEnd",
+                "context_menu.last",
+                "cmd-context-menu-last",
+            ),
             (
                 "context_menu::MenuPageUp",
                 "context_menu.page_up",
-                "Page up",
+                "cmd-context-menu-page-up",
             ),
             (
                 "context_menu::MenuPageDown",
                 "context_menu.page_down",
-                "Page down",
+                "cmd-context-menu-page-down",
             ),
             (
                 "context_menu::MenuEnter",
                 "context_menu.choose",
-                "Choose item",
+                "cmd-context-menu-choose",
             ),
             (
                 "context_menu::MenuRight",
                 "context_menu.open_submenu",
-                "Open submenu",
+                "cmd-context-menu-open-submenu",
             ),
             (
                 "context_menu::MenuLeft",
                 "context_menu.close_submenu",
-                "Close submenu",
+                "cmd-context-menu-close-submenu",
             ),
             (
                 "context_menu::MenuEscape",
                 "context_menu.back",
-                "Back or close",
+                "cmd-context-menu-back",
             ),
             (
                 "context_menu::MenuClassic",
                 "context_menu.show_classic",
-                "Classic menu",
+                "cmd-context-menu-show-classic",
             ),
         ],
     },
     Group {
         context: "AppMenu",
         commands: &[
-            ("app_menu::FocusLeft", "app_menu.focus_left", "Left"),
-            ("app_menu::FocusRight", "app_menu.focus_right", "Right"),
-            ("app_menu::FocusUp", "app_menu.focus_up", "Up"),
-            ("app_menu::FocusDown", "app_menu.focus_down", "Down"),
-            ("app_menu::Activate", "app_menu.activate", "Choose item"),
-            ("app_menu::CloseMenu", "app_menu.close", "Close app menu"),
+            (
+                "app_menu::FocusLeft",
+                "app_menu.focus_left",
+                "cmd-app-menu-focus-left",
+            ),
+            (
+                "app_menu::FocusRight",
+                "app_menu.focus_right",
+                "cmd-app-menu-focus-right",
+            ),
+            (
+                "app_menu::FocusUp",
+                "app_menu.focus_up",
+                "cmd-app-menu-focus-up",
+            ),
+            (
+                "app_menu::FocusDown",
+                "app_menu.focus_down",
+                "cmd-app-menu-focus-down",
+            ),
+            (
+                "app_menu::Activate",
+                "app_menu.activate",
+                "cmd-app-menu-activate",
+            ),
+            (
+                "app_menu::CloseMenu",
+                "app_menu.close",
+                "cmd-app-menu-close",
+            ),
         ],
     },
     Group {
         context: "SettingsSheet",
         commands: &[
-            ("settings_sheet::RowUp", "settings.row_up", "Up"),
-            ("settings_sheet::RowDown", "settings.row_down", "Down"),
+            (
+                "settings_sheet::RowUp",
+                "settings.row_up",
+                "cmd-settings-row-up",
+            ),
+            (
+                "settings_sheet::RowDown",
+                "settings.row_down",
+                "cmd-settings-row-down",
+            ),
             (
                 "settings_sheet::ValueBack",
                 "settings.previous_value",
-                "Previous value",
+                "cmd-settings-previous-value",
             ),
             (
                 "settings_sheet::ValueForward",
                 "settings.next_value",
-                "Next value",
+                "cmd-settings-next-value",
             ),
             (
                 "settings_sheet::ValueFlip",
                 "settings.flip_value",
-                "Turn on or off",
+                "cmd-settings-flip-value",
             ),
             (
                 "settings_sheet::NextSection",
                 "settings.next_section",
-                "Next section",
+                "cmd-settings-next-section",
             ),
             (
                 "settings_sheet::PreviousSection",
                 "settings.previous_section",
-                "Previous section",
+                "cmd-settings-previous-section",
             ),
             (
                 "settings_sheet::EditValue",
                 "settings.edit_value",
-                "Edit value",
+                "cmd-settings-edit-value",
             ),
             (
                 "settings_sheet::OpenKey",
                 "settings.show_in_file",
-                "Show in settings file",
+                "cmd-settings-show-in-file",
             ),
             (
                 "settings_sheet::ResetValue",
                 "settings.reset_value",
-                "Reset to default",
+                "cmd-settings-reset-value",
             ),
-            ("settings_sheet::UndoChange", "settings.undo", "Undo change"),
+            (
+                "settings_sheet::UndoChange",
+                "settings.undo",
+                "cmd-settings-undo",
+            ),
             (
                 "settings_sheet::FindSetting",
                 "settings.find",
-                "Find a setting",
+                "cmd-settings-find",
             ),
             (
                 "settings_sheet::CloseSettings",
                 "settings.close",
-                "Close settings",
+                "cmd-settings-close",
             ),
         ],
     },
@@ -119,7 +171,7 @@ pub(super) const GROUPS: [Group; 10] = [
         commands: &[(
             "settings_sheet::CancelEdit",
             "settings.cancel_edit",
-            "Cancel edit",
+            "cmd-settings-cancel-edit",
         )],
     },
     Group {
@@ -128,12 +180,12 @@ pub(super) const GROUPS: [Group; 10] = [
             (
                 "settings_sheet::ClearFind",
                 "settings.clear_find",
-                "Clear the search",
+                "cmd-settings-clear-find",
             ),
             (
                 "settings_sheet::FindToList",
                 "settings.find_to_list",
-                "Back to the list",
+                "cmd-settings-find-to-list",
             ),
         ],
     },
@@ -143,30 +195,38 @@ pub(super) const GROUPS: [Group; 10] = [
             (
                 "shortcuts::PreviousRow",
                 "shortcuts.previous_row",
-                "Previous shortcut",
+                "cmd-shortcuts-previous-row",
             ),
-            ("shortcuts::NextRow", "shortcuts.next_row", "Next shortcut"),
-            ("shortcuts::Record", "shortcuts.record", "Record a new key"),
+            (
+                "shortcuts::NextRow",
+                "shortcuts.next_row",
+                "cmd-shortcuts-next-row",
+            ),
+            (
+                "shortcuts::Record",
+                "shortcuts.record",
+                "cmd-shortcuts-record",
+            ),
             (
                 "shortcuts::Cancel",
                 "shortcuts.cancel",
-                "Cancel the new key",
+                "cmd-shortcuts-cancel",
             ),
-            (
-                "shortcuts::Reset",
-                "shortcuts.reset",
-                "Reset to the default key",
-            ),
+            ("shortcuts::Reset", "shortcuts.reset", "cmd-shortcuts-reset"),
         ],
     },
     Group {
         context: "Dialog",
         commands: &[
-            ("dialog_focus::Next", "dialog.next_field", "Next field"),
+            (
+                "dialog_focus::Next",
+                "dialog.next_field",
+                "cmd-dialog-next-field",
+            ),
             (
                 "dialog_focus::Previous",
                 "dialog.previous_field",
-                "Previous field",
+                "cmd-dialog-previous-field",
             ),
         ],
     },
@@ -176,22 +236,30 @@ pub(super) const GROUPS: [Group; 10] = [
             (
                 "dialog_focus::NextButton",
                 "dialog.next_button",
-                "Next button",
+                "cmd-dialog-next-button",
             ),
             (
                 "dialog_focus::PreviousButton",
                 "dialog.previous_button",
-                "Previous button",
+                "cmd-dialog-previous-button",
             ),
-            ("dialog_focus::Press", "dialog.press", "Press button"),
+            ("dialog_focus::Press", "dialog.press", "cmd-dialog-press"),
         ],
     },
     Group {
         context: "ConfirmDialog",
-        commands: &[("confirm_dialog::Dismiss", "confirm.cancel", "Cancel")],
+        commands: &[(
+            "confirm_dialog::Dismiss",
+            "confirm.cancel",
+            "cmd-confirm-cancel",
+        )],
     },
     Group {
         context: "PromptDialog",
-        commands: &[("prompt_dialog::Dismiss", "prompt.cancel", "Cancel")],
+        commands: &[(
+            "prompt_dialog::Dismiss",
+            "prompt.cancel",
+            "cmd-prompt-cancel",
+        )],
     },
 ];

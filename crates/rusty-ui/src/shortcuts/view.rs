@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{Focusable, Role, WeakEntity};
+use rusty_l10n::tr;
 
 use super::model::{Line, Row, area_label};
 use super::notice::{banner, footer};
@@ -111,7 +112,7 @@ fn title(t: &Theme, row: &Row) -> Div {
             div()
                 .truncate()
                 .font_weight(FontWeight::MEDIUM)
-                .child(row.spec.label),
+                .child(tr(row.spec.label)),
         )
         .children(mark);
     div()
@@ -153,7 +154,7 @@ fn command_line(t: &Theme, shown_page: &Shown, row: &Row) -> AnyElement {
     div()
         .id(named("shortcut", name))
         .role(Role::Button)
-        .aria_label(row.spec.label)
+        .aria_label(tr(row.spec.label))
         .aria_selected(is_selected)
         .test_support()
         .flex()
@@ -228,7 +229,7 @@ fn describe(shown_page: &Shown, index: usize) -> RowSemantics {
         _ => None,
     };
     RowSemantics {
-        label: row.map(|row| row.spec.label.into()),
+        label: row.map(|row| tr(row.spec.label).into()),
         is_selected: row.map(|row| shown_page.selected == Some(row.spec.name)),
         is_active_descendant: row.is_some_and(|row| shown_page.selected == Some(row.spec.name)),
     }
