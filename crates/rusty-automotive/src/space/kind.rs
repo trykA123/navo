@@ -25,7 +25,7 @@ impl Kind {
             Self::Other
         } else if section.is_executable() {
             Self::Code
-        } else if section.kind == SHT_NOBITS {
+        } else if section.kind == SHT_NOBITS && !is_copied_data(section) {
             Self::Bss
         } else if section.flags & u64::from(SHF_WRITE) != 0 {
             Self::Data
@@ -62,4 +62,61 @@ impl Kind {
 
 pub(super) fn takes_no_address_space(section: &Section) -> bool {
     section.kind == SHT_NOBITS && section.flags & u64::from(SHF_TLS) != 0
+}
+
+fn is_copied_data(section: &Section) -> bool {
+    let name = section.name.as_str();
+    section.flags & u64::from(SHF_WRITE) != 0
+        && ["data", "zdata", "sdata"].iter().any(|stem| {
+            name.strip_prefix('.')
+                .and_then(|rest| rest.strip_prefix(stem))
+                .is_some_and(|tail| tail.is_empty() || tail.starts_with('.'))
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use object::elf::{SHF_ALLOC, SHT_PROGBITS};
+
+    use super::*;
+
+    fn section(name: &str, kind: u32) -> Section {
+        Section {
+            name: name.to_owned(),
+            kind,
+            flags: u64::from(SHF_ALLOC | SHF_WRITE),
+            address: 0,
+            size: 4,
+            offset: 0,
+        }
+    }
+
+    #[test]
+    fn nobits_zdata_is_data() {
+        assert_eq!(
+            Kind::of_section(&section(".zdata.foo", SHT_NOBITS)),
+            Kind::Data
+        );
+        assert_eq!(Kind::of_section(&section(".sdata", SHT_NOBITS)), Kind::Data);
+    }
+
+    #[test]
+    fn nobits_bss_stays_bss() {
+        assert_eq!(
+            Kind::of_section(&section(".bss.foo", SHT_NOBITS)),
+            Kind::Bss
+        );
+        assert_eq!(
+            Kind::of_section(&section(".database", SHT_NOBITS)),
+            Kind::Bss
+        );
+    }
+
+    #[test]
+    fn progbits_data_stays_data() {
+        assert_eq!(
+            Kind::of_section(&section(".data", SHT_PROGBITS)),
+            Kind::Data
+        );
+    }
 }
