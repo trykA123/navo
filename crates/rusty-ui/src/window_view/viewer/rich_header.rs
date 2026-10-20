@@ -20,6 +20,14 @@ fn small(t: &Theme) -> Div {
         .text_color(t.colors.muted)
 }
 
+fn mode(t: &Theme, label: SharedString) -> impl IntoElement {
+    small(t)
+        .id("viewer-mode")
+        .aria_label(label.clone())
+        .test_support()
+        .child(label)
+}
+
 pub(super) fn header(t: &Theme, parts: HeaderParts) -> Div {
     div()
         .flex()
@@ -42,7 +50,7 @@ pub(super) fn header(t: &Theme, parts: HeaderParts) -> Div {
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(parts.title),
         )
-        .child(small(t).child(parts.mode))
+        .child(mode(t, parts.mode))
         .child(small(t).child(format::size(parts.len)))
         .when_some(parts.detail, |row, (id, detail)| {
             row.child(

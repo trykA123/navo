@@ -2,7 +2,7 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{ClickEvent, Role, Stateful, WeakEntity};
 
 use super::keys::CONTEXT;
-use super::text::{Check, Tone, column_titles, format_label, row, status};
+use super::text::{Check, Tone, column_titles, row, status, trace_label};
 use super::{Focus, TraceView};
 use crate::format;
 use crate::prelude::*;
@@ -134,7 +134,7 @@ impl TraceView {
         });
         HeaderParts {
             title: self.title.clone(),
-            mode: format_label(self.trace.format()).into(),
+            mode: trace_label(&self.trace).into(),
             len: self.len,
             detail,
             status: self.progress().map(|text| ("trace-progress", text)),

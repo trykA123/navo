@@ -95,6 +95,14 @@ fn columns(time: &str, frame: Option<(&Frame, Base)>, (type_, data): (&str, &str
     format!("{time:>12}  {channel:<3} {id_text:<11} {dir:<5} {type_:<7} {len:>3}  {data}")
 }
 
+pub(super) fn trace_label(trace: &Trace) -> String {
+    if trace.blf.is_some() {
+        tr("trace-format-blf")
+    } else {
+        format_label(trace.format())
+    }
+}
+
 pub(super) fn format_label(format: TraceFormat) -> String {
     match format {
         TraceFormat::Asc => tr("trace-format-asc"),

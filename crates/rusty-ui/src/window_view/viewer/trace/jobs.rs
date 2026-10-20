@@ -1,7 +1,8 @@
 use std::io::BufReader;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use rusty_automotive::{Entry, IndexError, Trace, Watch};
+use rusty_automotive::{Entry, IndexError, Trace, Watch, index_blf};
 
 use super::{Fetched, Inspected, TraceView};
 use crate::prelude::*;
@@ -9,6 +10,7 @@ use crate::window_view::viewer::background::{Job, Ranged, Throttle, ranged, spaw
 use crate::window_view::viewer::body::Host;
 
 const PROGRESS_EVERY: Duration = Duration::from_millis(100);
+const BLF_BUFFER: usize = 256 * 1024;
 const CHUNK: usize = 1024 * 1024;
 const FIRST_ROWS: u64 = 2_000;
 const CHUNK_ROWS: u64 = 250_000;
@@ -31,8 +33,42 @@ pub(super) struct Inspect {
     result: Result<Vec<Entry>, String>,
 }
 
-pub(super) fn start_index(host: &Host, len: u64, cx: &mut Context<TraceView>) -> Job {
+fn index_whole(
+    read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
+    len: u64,
+    (cancel, send): (&AtomicBool, &dyn Fn(ReadMessage)),
+) {
+    let mut throttle = Throttle::new(PROGRESS_EVERY);
+    let mut progress = |done: u64| {
+        throttle.when_due(|| send(ReadMessage::Progress(done)));
+    };
+    let watch = Watch {
+        cancel,
+        progress: &mut progress,
+    };
+    let source = BufReader::with_capacity(BLF_BUFFER, Ranged { read, at: 0, len });
+    match index_blf(source, watch) {
+        Ok(trace) => {
+            send(ReadMessage::Chunk(Box::new(trace)));
+            send(ReadMessage::Done(Ok(())));
+        }
+        Err(error) => send(ReadMessage::Done(Err(error))),
+    }
+}
+
+pub(super) fn start_index(
+    host: &Host,
+    (len, is_blf): (u64, bool),
+    cx: &mut Context<TraceView>,
+) -> Job {
     let read = ranged(&host.hooks, &host.location);
+    if is_blf {
+        return spawn_job(
+            cx,
+            move |cancel, send| index_whole(read, len, (cancel, send)),
+            TraceView::read_message,
+        );
+    }
     spawn_job(
         cx,
         move |cancel, send| {

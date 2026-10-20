@@ -85,6 +85,18 @@ pub(super) struct Ranged<F> {
     pub len: u64,
 }
 
+impl<F> io::Seek for Ranged<F> {
+    fn seek(&mut self, to: io::SeekFrom) -> io::Result<u64> {
+        let target = match to {
+            io::SeekFrom::Start(at) => Some(at),
+            io::SeekFrom::End(delta) => self.len.checked_add_signed(delta),
+            io::SeekFrom::Current(delta) => self.at.checked_add_signed(delta),
+        };
+        self.at = target.ok_or_else(|| io::Error::other("seek before the start"))?;
+        Ok(self.at)
+    }
+}
+
 impl<F: FnMut(u64, usize) -> Result<Vec<u8>, String>> Read for Ranged<F> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let left = usize::try_from(self.len.saturating_sub(self.at)).unwrap_or(usize::MAX);
