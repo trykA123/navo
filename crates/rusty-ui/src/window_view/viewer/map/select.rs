@@ -24,39 +24,34 @@ pub(super) enum Column {
 pub(super) struct Head {
     pub column: Column,
     pub name: &'static str,
-    pub width: usize,
 }
 
-const fn head(column: Column, name: &'static str, width: usize) -> Head {
-    Head {
-        column,
-        name,
-        width,
-    }
+const fn head(column: Column, name: &'static str) -> Head {
+    Head { column, name }
 }
 
 const MEMORY: [Head; 6] = [
-    head(Column::Name, "Region", 0),
-    head(Column::Address, "Origin", 13),
-    head(Column::Size, "Length", 12),
-    head(Column::Used, "Used", 12),
-    head(Column::Free, "Free", 12),
-    head(Column::Percent, "Used %", 9),
+    head(Column::Name, "Region"),
+    head(Column::Address, "Origin"),
+    head(Column::Size, "Length"),
+    head(Column::Used, "Used"),
+    head(Column::Free, "Free"),
+    head(Column::Percent, "Used %"),
 ];
 
 const SECTIONS: [Head; 5] = [
-    head(Column::Name, "Section", 0),
-    head(Column::Address, "Address", 13),
-    head(Column::Size, "Size", 12),
-    head(Column::Region, "Region", 22),
-    head(Column::Space, "Space", 22),
+    head(Column::Name, "Section"),
+    head(Column::Address, "Address"),
+    head(Column::Size, "Size"),
+    head(Column::Region, "Region"),
+    head(Column::Space, "Space"),
 ];
 
 const SYMBOLS: [Head; 4] = [
-    head(Column::Name, "Symbol", 0),
-    head(Column::Address, "Address", 13),
-    head(Column::Size, "Size", 12),
-    head(Column::Space, "Space", 22),
+    head(Column::Name, "Symbol"),
+    head(Column::Address, "Address"),
+    head(Column::Size, "Size"),
+    head(Column::Space, "Space"),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

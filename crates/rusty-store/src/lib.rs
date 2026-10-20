@@ -15,7 +15,7 @@ pub use cache_db::{CacheDb, CacheError, CacheOpen};
 pub use db::{Db, DbError, FileMemory, Frecent, OpenReport, RenamePreset, RenamePresets, Stamp};
 pub use dirs::StoreDirs;
 pub use journal::{
-    JobId, JobJournal, JobState, JournalError, JournalStep, StepState, UnfinishedJob,
+    FinishedJob, JobId, JobJournal, JobState, JournalError, JournalStep, StepState, UnfinishedJob,
 };
 pub use keymap_file::{KeymapEdit, KeymapFile, KeymapFileError, patch_keymap};
 pub use session::{

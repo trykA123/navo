@@ -9,6 +9,7 @@ mod held;
 mod mark;
 mod prune;
 mod settings;
+mod undoable;
 
 fn journal() -> JobJournal {
     JobJournal::new(Db::open_in_memory().unwrap()).unwrap()

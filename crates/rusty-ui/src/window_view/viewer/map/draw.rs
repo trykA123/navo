@@ -2,8 +2,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{ClickEvent, Role, WeakEntity};
 
 use super::keys::{CONTEXT, TABLE_CONTEXT};
-use super::select::{Column, Head};
-use super::text::{Check, flavor, heads, row_label, status, summary};
+use super::text::{Check, flavor, row_label, status, summary};
 use super::{Focus, Index, MapView};
 use crate::file_list::filter_bar;
 use crate::format;
@@ -12,44 +11,6 @@ use crate::primitives::{IconName, VirtualList, icon};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
-
-const CHAR_WIDTH: f32 = 7.2;
-
-fn chars(t: &Theme, count: usize) -> Pixels {
-    px(count as f32 * CHAR_WIDTH) + t.spacing.md * 2.
-}
-
-fn cell(t: &Theme, head: &Head, text: String) -> Div {
-    let base = div()
-        .flex()
-        .items_center()
-        .h_full()
-        .px(t.spacing.md)
-        .overflow_hidden()
-        .whitespace_nowrap();
-    let base = if head.width == 0 {
-        base.flex_1().min_w_0()
-    } else {
-        base.flex_none().w(chars(t, head.width))
-    };
-    match head.column {
-        Column::Address => base.font_family(t.typography.mono_font.clone()),
-        Column::Size | Column::Used | Column::Free | Column::Percent => base
-            .justify_end()
-            .font_family(t.typography.numbers_font.clone()),
-        _ => base,
-    }
-    .child(div().min_w_0().truncate().child(text))
-}
-
-fn sort_arrow(descending: bool, color: Hsla) -> impl IntoElement {
-    let glyph = if descending {
-        IconName::ArrowDown
-    } else {
-        IconName::ArrowUp
-    };
-    icon(glyph, px(10.), color)
-}
 
 fn select_row(
     view: WeakEntity<MapView>,
@@ -67,14 +28,14 @@ fn select_row(
 }
 
 impl MapView {
-    fn row_view(&self, t: &Theme, row: usize, view: &WeakEntity<Self>) -> AnyElement {
+    fn row_view(&self, row: usize, view: &WeakEntity<Self>, cx: &App) -> AnyElement {
+        let t = tokens::current(cx);
         let (Some(loaded), Some(at)) = (self.loaded(), self.rows.get(row)) else {
             return div().into_any_element();
         };
         let at = *at as usize;
         let table = self.table();
         let cells = super::text::cells(loaded, table, at);
-        let heads = heads(loaded, table);
         div()
             .id(("map-row", row))
             .aria_label(row_label(loaded, table, at))
@@ -85,12 +46,7 @@ impl MapView {
             .cursor_pointer()
             .when(row % 2 == 1, |line| line.bg(t.colors.zebra))
             .when(row == self.cursor, |line| line.bg(t.colors.hover))
-            .children(
-                heads
-                    .iter()
-                    .zip(cells)
-                    .map(|(head, text)| cell(t, head, text)),
-            )
+            .children(self.row_cells(row, &cells, cx))
             .on_click(select_row(view.clone(), row))
             .into_any_element()
     }
@@ -105,49 +61,11 @@ impl MapView {
                 let Some(entity) = view.upgrade() else {
                     return Vec::new();
                 };
-                let t = tokens::current(cx).clone();
                 let this = entity.read(cx);
-                range.map(|row| this.row_view(&t, row, &view)).collect()
+                range.map(|row| this.row_view(row, &view, cx)).collect()
             },
         )
         .label(self.table().name())
-    }
-
-    fn column_head(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let order = self.query.order();
-        let table = self.table();
-        let heads = self
-            .loaded()
-            .map_or_else(|| table.heads().to_vec(), |loaded| heads(loaded, table));
-        let cells = heads.into_iter().enumerate().map(|(at, head)| {
-            let column = head.column;
-            let sorted = (order.column == column).then_some(order.descending);
-            let arrow = sorted.map(|descending| sort_arrow(descending, t.colors.accent_text));
-            cell(t, &head, head.name.to_owned())
-                .id(("map-head", at))
-                .role(Role::Button)
-                .aria_label(head.name)
-                .test_support()
-                .gap(t.spacing.xs)
-                .cursor_pointer()
-                .when(sorted.is_some(), |cell| cell.text_color(t.colors.text))
-                .children(arrow)
-                .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
-                    window.focus(&view.focus, cx);
-                    view.sort_by(column, cx);
-                }))
-        });
-        div()
-            .flex()
-            .flex_none()
-            .h(t.spacing.row_height)
-            .text_size(t.typography.tiny)
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(t.colors.muted)
-            .bg(t.colors.rail)
-            .border_b_1()
-            .border_color(t.colors.line)
-            .children(cells)
     }
 
     fn progress(&self) -> Option<SharedString> {
@@ -304,6 +222,7 @@ impl Render for MapView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         self.measure(window, &t);
+        self.ensure_columns(window, cx);
         let table = div()
             .id("map-table")
             .relative()
@@ -312,7 +231,7 @@ impl Render for MapView {
             .flex_1()
             .min_h_0()
             .child(self.table_bar(&t, cx))
-            .child(self.column_head(&t, cx))
+            .children(self.column_head())
             .child(self.list(cx))
             .child(self.drawers(&t, window, cx));
         let text = &self.query.text;
