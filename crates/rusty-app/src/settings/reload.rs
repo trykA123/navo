@@ -7,6 +7,7 @@ use rusty_ui::window_view::SettingsNews;
 
 use super::start::Started;
 use super::{describe, report, values_of};
+use crate::search_hooks::Remember;
 
 pub(super) struct Delivery {
     reloader: Reloader,
@@ -61,12 +62,23 @@ pub(super) fn receive_late(receiver: Option<Receiver<Started>>, delivery: Arc<Mu
 pub struct Reloader {
     store: Arc<Mutex<SettingsStore>>,
     problem: Option<String>,
+    remember: Option<Remember>,
 }
 
 impl Reloader {
     #[must_use]
     pub fn new(store: Arc<Mutex<SettingsStore>>, problem: Option<String>) -> Self {
-        Self { store, problem }
+        Self {
+            store,
+            problem,
+            remember: None,
+        }
+    }
+
+    #[must_use]
+    pub(super) fn remembering(mut self, remember: Option<Remember>) -> Self {
+        self.remember = remember;
+        self
     }
 
     pub fn reload(&mut self) -> Option<SettingsNews> {
@@ -80,6 +92,9 @@ impl Reloader {
             report(&message);
             self.problem = Some(message.clone());
             return Some(SettingsNews::Invalid(message));
+        }
+        if let Some(remember) = &self.remember {
+            remember.set(store.current().search.remember);
         }
         let was_broken = self.problem.take().is_some();
         let is_same = store.current() == &before;

@@ -49,6 +49,7 @@ pub(in crate::window_view) mod shortcuts;
 mod start_watch;
 mod tabs;
 mod typed;
+mod visits;
 mod watched;
 mod window_menu;
 mod window_parts;

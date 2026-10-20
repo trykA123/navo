@@ -33,6 +33,7 @@ mod tab_keys;
 mod title;
 mod user_keymap;
 mod viewer;
+mod visits;
 mod waiting;
 mod watches;
 mod window_menu;
@@ -72,7 +73,7 @@ pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use placement::DisplayScale;
 pub use preview::folder_summary;
-pub use search_hooks::SearchHooks;
+pub use search_hooks::{Frecent, SearchHooks};
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
@@ -266,6 +267,7 @@ impl FerriteWindow {
 
     fn wake(&mut self, cx: &mut Context<Self>) {
         let polled = self.browser.poll();
+        self.note_seen(cx);
         self.clear_finished_cuts();
         self.jobs_woke(cx);
         if self.poll_preview() || polled {

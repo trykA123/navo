@@ -197,6 +197,9 @@ impl FerriteWindow {
             }),
         };
         if opened {
+            if !folder {
+                self.note_file(location, cx);
+            }
             self.focus_core_pane(window, cx);
         }
         cx.notify();

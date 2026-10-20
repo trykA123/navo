@@ -14,6 +14,7 @@ use rusty_fs::{
 };
 
 pub(crate) use measure::Measured;
+pub(crate) use open::Seen;
 use operate::JobUpdate;
 pub use operate::*;
 pub use rename_batch::{
@@ -87,6 +88,8 @@ pub struct Browser {
     sorts: HashMap<TabId, crate::file_list::SortKey>,
     next_op: u64,
     launcher: Launcher,
+    seen: Vec<open::Seen>,
+    shown: HashMap<TabId, Location>,
     cache: ListingCache,
     keys: CacheKeys,
     cached: HashMap<TabId, u64>,
@@ -138,6 +141,8 @@ impl Browser {
             sorts: HashMap::new(),
             next_op: 0,
             launcher: Arc::new(|_| {}),
+            seen: Vec::new(),
+            shown: HashMap::new(),
             cache: ListingCache::default(),
             keys: CacheKeys::default(),
             cached: HashMap::new(),
@@ -311,6 +316,9 @@ impl Browser {
         }
         let listing = match result {
             Ok(fresh) => {
+                if self.shown.insert(tab, location.clone()).as_ref() != Some(&location) {
+                    self.seen.push(open::Seen::Folder(location.clone()));
+                }
                 match self.late_errors.remove(&tab) {
                     Some(error) => self.errors.insert(tab, error),
                     None => self.errors.remove(&tab),

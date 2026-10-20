@@ -466,3 +466,31 @@ fn a_link_to_a_file_is_not_opened_as_a_folder() {
 }
 
 mod rename_batch;
+
+#[test]
+fn a_refresh_of_the_same_folder_is_not_a_new_visit() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    browser.command(&Command::PaneRefresh).unwrap();
+    settle(&mut browser);
+    browser
+        .command(&Command::PaneNavigate {
+            location: fs.location("home/docs"),
+        })
+        .unwrap();
+    settle(&mut browser);
+    let folders: Vec<String> = browser
+        .take_seen()
+        .into_iter()
+        .filter_map(|seen| match seen {
+            Seen::Folder(location) => Some(location.as_str().to_owned()),
+            Seen::File(_) => None,
+        })
+        .collect();
+    assert_eq!(folders, [here_of(&fs, "home"), here_of(&fs, "home/docs")]);
+}
+
+fn here_of(fs: &FakeFs, path: &str) -> String {
+    fs.location(path).as_str().to_owned()
+}

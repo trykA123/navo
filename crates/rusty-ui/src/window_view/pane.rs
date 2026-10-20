@@ -284,6 +284,7 @@ impl FerriteWindow {
         match action {
             FileListAction::Open(row) => {
                 self.browser.open_row(*row);
+                self.note_seen(cx);
             }
             FileListAction::Up => {
                 self.browser.go_up();

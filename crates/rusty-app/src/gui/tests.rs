@@ -117,10 +117,13 @@ fn pane_folders_refuse_files() {
 #[test]
 fn settings_read_is_marked_after_loading_finishes() {
     let mut completed = None;
-    let _settings = super::finish_settings(|| {
-        completed = Some(std::time::Instant::now());
-        None
-    });
+    let _settings = super::finish_settings(
+        || {
+            completed = Some(std::time::Instant::now());
+            None
+        },
+        &crate::search_hooks::Remember::default(),
+    );
     let at = crate::metrics::all()
         .into_iter()
         .find_map(|(name, at)| (name == "settings read").then_some(at))

@@ -4,7 +4,17 @@ use rusty_fs::EntryKind;
 
 use super::{Browser, Launcher};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Seen {
+    Folder(Location),
+    File(Location),
+}
+
 impl Browser {
+    pub fn take_seen(&mut self) -> Vec<Seen> {
+        std::mem::take(&mut self.seen)
+    }
+
     pub fn open_row(&mut self, row: u64) -> bool {
         let tab = self.state.active_tab();
         let Some(entry) = tab.listing().and_then(|l| l.get(row)) else {
@@ -21,6 +31,7 @@ impl Browser {
         };
         if !entry.is_folder && !is_link {
             (self.launcher)(&location);
+            self.seen.push(Seen::File(location));
             return true;
         }
         self.command(&Command::PaneNavigate { location }).is_ok()

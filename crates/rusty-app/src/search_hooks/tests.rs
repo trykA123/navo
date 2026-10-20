@@ -8,9 +8,13 @@ fn shared() -> Arc<Mutex<Db>> {
     Arc::new(Mutex::new(Db::open_in_memory().unwrap()))
 }
 
+fn remembering() -> super::Remember {
+    super::Remember::default()
+}
+
 #[test]
 fn recorded_commands_come_back_with_the_most_used_first() {
-    let hooks = hooks(Some(shared()));
+    let hooks = hooks(Some(shared()), remembering());
     (hooks.record_command)("files.refresh");
     (hooks.record_command)("pane.switch");
     (hooks.record_command)("pane.switch");
@@ -22,7 +26,7 @@ fn recorded_commands_come_back_with_the_most_used_first() {
 
 #[test]
 fn clearing_forgets_command_use() {
-    let hooks = hooks(Some(shared()));
+    let hooks = hooks(Some(shared()), remembering());
     (hooks.record_command)("files.refresh");
     (hooks.clear)();
     assert!((hooks.command_use)().is_empty());
@@ -36,10 +40,38 @@ fn a_failed_write_is_swallowed_and_without_a_database_nothing_happens() {
         .connection()
         .execute_batch("DROP TABLE command_use")
         .unwrap();
-    let broken = hooks(Some(db));
+    let broken = hooks(Some(db), remembering());
     (broken.record_command)("files.refresh");
     assert!((broken.command_use)().is_empty());
-    let none = hooks(None);
+    let none = hooks(None, remembering());
     (none.record_command)("files.refresh");
     assert!((none.command_use)().is_empty());
+}
+
+#[test]
+fn visits_come_back_most_frecent_first() {
+    let hooks = hooks(Some(shared()), remembering());
+    (hooks.record_visit)("/home/docs", true);
+    (hooks.record_visit)("/home/a.txt", false);
+    (hooks.record_visit)("/home/docs", true);
+    let found = (hooks.frecent)(10);
+    assert_eq!(found.len(), 2);
+    assert_eq!(found[0].location, "/home/docs");
+    assert!(found[0].is_folder && !found[1].is_folder);
+    (hooks.clear)();
+    assert!((hooks.frecent)(10).is_empty());
+}
+
+#[test]
+fn with_remember_off_nothing_is_recorded_and_turning_it_on_resumes() {
+    let remember = remembering();
+    let hooks = hooks(Some(shared()), remember.clone());
+    remember.set(false);
+    (hooks.record_visit)("/home/docs", true);
+    (hooks.record_command)("files.refresh");
+    assert!((hooks.frecent)(10).is_empty());
+    assert!((hooks.command_use)().is_empty());
+    remember.set(true);
+    (hooks.record_visit)("/home/docs", true);
+    assert_eq!((hooks.frecent)(10).len(), 1);
 }

@@ -103,7 +103,9 @@ pub(crate) fn open(launch: Launch) {
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
     crate::diag::register_listings(&launch.crash.diagnostics.caches, &cache, disk.as_ref());
     metrics::mark("listing cache read");
-    let (settings, _settings_watch) = finish_settings(|| settings_start.finish().into_loaded());
+    let remember = crate::search_hooks::Remember::default();
+    let (settings, _settings_watch) =
+        finish_settings(|| settings_start.finish().into_loaded(), &remember);
     tracing::info!(viewer = launch.view.is_some(), "window opening");
     metrics::mark("window opening");
     run(
@@ -115,7 +117,7 @@ pub(crate) fn open(launch: Launch) {
             operations,
             launcher: launch::launcher(),
             editor: editor::hooks(|name| std::env::var(name).ok()),
-            search: crate::search_hooks::hooks(memory.clone()),
+            search: crate::search_hooks::hooks(memory.clone(), remember),
             files: files::hooks(memory),
             kinds: rusty_ui::window_view::Kinds::builtin(),
             drives: drives::hooks(),
@@ -168,13 +170,14 @@ fn quitter(
 
 fn finish_settings(
     load: impl FnOnce() -> Option<settings::Loaded>,
+    remember: &crate::search_hooks::Remember,
 ) -> (
     rusty_ui::window_view::SettingsHooks,
     Option<rusty_fs::Watch>,
 ) {
     let loaded = load();
     metrics::mark("settings read");
-    settings::live(loaded)
+    settings::live(loaded, remember)
 }
 
 fn session_saver(

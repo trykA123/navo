@@ -11,6 +11,7 @@ use rusty_store::{
 use rusty_ui::settings::{Change, Control, FieldSpec, Value, Values};
 use rusty_ui::window_view::{FindLine, KeyLine, SaveReport, SettingsHooks, SettingsNews};
 
+use crate::search_hooks::Remember;
 use crate::watch_file::watch_file;
 use ledger::LedgerFile;
 
@@ -33,9 +34,12 @@ pub fn hooks(loaded: Option<Loaded>) -> SettingsHooks {
     parts(loaded).0
 }
 
-pub fn live(loaded: Option<Loaded>) -> (SettingsHooks, Option<Watch>) {
+pub fn live(loaded: Option<Loaded>, remember: &Remember) -> (SettingsHooks, Option<Watch>) {
     let (carrier, sender) = SettingsHooks::none().channel();
-    let (hooks, watching) = watched(loaded, move |news| {
+    if let Some(loaded) = &loaded {
+        remember.set(loaded.store.current().search.remember);
+    }
+    let (hooks, watching) = watching(loaded, Some(remember.clone()), move |news| {
         let _ = sender.send(news);
     });
     let hooks = SettingsHooks {
@@ -45,8 +49,17 @@ pub fn live(loaded: Option<Loaded>) -> (SettingsHooks, Option<Watch>) {
     (hooks, watching)
 }
 
+#[cfg(test)]
 pub fn watched(
+    loaded: Option<Loaded>,
+    on_news: impl FnMut(SettingsNews) + Send + 'static,
+) -> (SettingsHooks, Option<Watch>) {
+    watching(loaded, None, on_news)
+}
+
+fn watching(
     mut loaded: Option<Loaded>,
+    remember: Option<Remember>,
     on_news: impl FnMut(SettingsNews) + Send + 'static,
 ) -> (SettingsHooks, Option<Watch>) {
     let late = loaded.as_mut().and_then(|loaded| loaded.late.take());
@@ -59,7 +72,8 @@ pub fn watched(
         return (hooks, None);
     };
     let problem = hooks.load_error.as_ref().map(ToString::to_string);
-    let reloader = reload::Delivery::new(Reloader::new(store, problem), on_news);
+    let reloader =
+        reload::Delivery::new(Reloader::new(store, problem).remembering(remember), on_news);
     let watched = reloader.clone();
     let watching = watch_file(&path, move || {
         reload::deliver(&watched);

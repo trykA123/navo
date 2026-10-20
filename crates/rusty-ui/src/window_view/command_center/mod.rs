@@ -26,6 +26,7 @@ pub(super) struct CommandCenterState {
     pub(super) anchor: Anchor,
     pub(super) sources: Vec<Arc<dyn ResultSource>>,
     pub(super) hooks: SearchHooks,
+    pub(super) visits: super::visits::Visits,
 }
 
 impl CommandCenterState {
@@ -36,6 +37,7 @@ impl CommandCenterState {
             anchor: Anchor::default(),
             sources: Vec::new(),
             hooks,
+            visits: super::visits::Visits::default(),
         }
     }
 }
