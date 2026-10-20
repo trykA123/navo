@@ -198,6 +198,21 @@ fn the_estimate_runs_to_the_next_symbol() {
 }
 
 #[test]
+fn the_estimate_skips_local_labels_inside_the_function() {
+    let elf = parse(&build(&noisy(vec![
+        func("asm_entry", 0x0800_0160, 0, 0),
+        local(func(".L1", 0x0800_0168, 0, 0)),
+        local(func(".L2", 0x0800_0170, 0, 0)),
+        func("after", 0x0800_0180, 4, 0),
+    ])));
+    assert_eq!(
+        estimated_size(&elf, index_of(&elf, "asm_entry")),
+        Some(0x20)
+    );
+    assert!(names(&elf, &Query::default()).contains(&"asm_entry".to_owned()));
+}
+
+#[test]
 fn the_estimate_stops_at_the_section_end() {
     let elf = parse(&build(&noisy(vec![func("tail", 0x0800_03f0, 0, 0)])));
     assert_eq!(estimated_size(&elf, index_of(&elf, "tail")), Some(0x10));

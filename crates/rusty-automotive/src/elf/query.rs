@@ -71,6 +71,10 @@ fn is_estimable(symbol: &Symbol) -> bool {
         && matches!(symbol.kind, SymbolKind::Func | SymbolKind::Object)
 }
 
+fn is_boundary(symbol: &Symbol) -> bool {
+    symbol.size != 0 || symbol.bind != Bind::Local
+}
+
 fn estimate(elf: &Elf, symbol: &Symbol, next: Option<u64>) -> Option<u64> {
     if !is_estimable(symbol) {
         return None;
@@ -88,7 +92,9 @@ pub fn estimated_size(elf: &Elf, at: usize) -> Option<u64> {
     let next = elf
         .symbols
         .iter()
-        .filter(|other| other.place == symbol.place && other.value > symbol.value)
+        .filter(|other| {
+            other.place == symbol.place && other.value > symbol.value && is_boundary(other)
+        })
         .map(|other| other.value)
         .min();
     estimate(elf, symbol, next)
@@ -100,7 +106,8 @@ impl Boundaries {
     fn new(elf: &Elf) -> Self {
         let mut by_section = vec![Vec::new(); elf.sections.len()];
         for symbol in &elf.symbols {
-            if let Place::Section(index) = symbol.place
+            if is_boundary(symbol)
+                && let Place::Section(index) = symbol.place
                 && let Some(addresses) = by_section.get_mut(index as usize)
             {
                 addresses.push(symbol.value);
