@@ -27,6 +27,7 @@ fn request() -> impl Strategy<Value = Request> {
         }),
         any::<u32>().prop_map(|page| Request::Text { page }),
         any::<u32>().prop_map(|page| Request::Links { page }),
+        Just(Request::Outline),
         Just(Request::Close),
     ]
 }
@@ -107,11 +108,37 @@ fn response() -> impl Strategy<Value = Response> {
             )),
         Just(Response::Closed),
         page_links().prop_map(Response::Links),
+        outline().prop_map(Response::Outline),
         error().prop_map(Response::Failed),
     ]
 }
 
+fn outline() -> impl Strategy<Value = Outline> {
+    let target = prop_oneof![
+        (any::<u32>(), proptest::option::of(finite()))
+            .prop_map(|(page, top)| LinkTarget::Page { page, top }),
+        ".{0,64}".prop_map(LinkTarget::Uri),
+        Just(LinkTarget::Unsupported),
+    ];
+    let item = (".{0,512}", 0u8..=MAX_OUTLINE_LEVEL, target).prop_map(|(title, level, target)| {
+        OutlineItem {
+            title,
+            level,
+            target,
+        }
+    });
+    proptest::collection::vec(item, 0..16).prop_map(|items| Outline::new(items).unwrap())
+}
+
 proptest! {
+    #[test]
+    fn random_outlines_round_trip(outline in outline()) {
+        let response = Response::Outline(outline);
+        let mut wire = Vec::new();
+        write_response(&mut wire, &response).unwrap();
+        prop_assert_eq!(read_response(&mut Cursor::new(wire)).unwrap(), Some(response));
+    }
+
     #[test]
     fn random_page_links_round_trip(links in page_links()) {
         let response = Response::Links(links);

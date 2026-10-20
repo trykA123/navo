@@ -2,13 +2,13 @@ use std::io::Cursor;
 
 use super::*;
 
-fn round_trip_request(request: &Request) -> Request {
+pub(super) fn round_trip_request(request: &Request) -> Request {
     let mut wire = Vec::new();
     write_request(&mut wire, request).unwrap();
     read_request(&mut Cursor::new(wire)).unwrap().unwrap()
 }
 
-fn round_trip_response(response: &Response) -> Response {
+pub(super) fn round_trip_response(response: &Response) -> Response {
     let mut wire = Vec::new();
     write_response(&mut wire, response).unwrap();
     read_response(&mut Cursor::new(wire)).unwrap().unwrap()

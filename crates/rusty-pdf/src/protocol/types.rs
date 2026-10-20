@@ -1,6 +1,6 @@
 use std::io;
 
-use super::{MAX_PIXELS, MAX_SIDE, MAX_TEXT_CHARS, PageLinks};
+use super::{MAX_PIXELS, MAX_SIDE, MAX_TEXT_CHARS, Outline, PageLinks};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
@@ -16,6 +16,7 @@ pub enum Request {
     Links {
         page: u32,
     },
+    Outline,
     Close,
 }
 
@@ -48,6 +49,7 @@ pub enum Response {
     Page(Bitmap),
     Text(PageText),
     Links(PageLinks),
+    Outline(Outline),
     Closed,
     Failed(PdfError),
 }

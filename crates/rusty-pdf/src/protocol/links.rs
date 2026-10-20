@@ -7,6 +7,22 @@ pub enum LinkTarget {
     Unsupported,
 }
 
+impl LinkTarget {
+    pub(super) fn validate(&self) -> Result<(), CodecError> {
+        match self {
+            Self::Page { top: Some(top), .. } if !top.is_finite() => {
+                Err(CodecError::Malformed("link destination is not finite"))
+            }
+            Self::Uri(uri) if uri.len() > MAX_URI_BYTES => Err(CodecError::TooLarge {
+                what: "URI",
+                len: uri.len() as u64,
+                max: MAX_URI_BYTES as u64,
+            }),
+            _ => Ok(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct PageLink {
     pub bounds: CharBox,
@@ -36,19 +52,7 @@ impl PageLinks {
             if !link.bounds.is_finite() {
                 return Err(CodecError::Malformed("link box is not finite"));
             }
-            match &link.target {
-                LinkTarget::Page { top: Some(top), .. } if !top.is_finite() => {
-                    return Err(CodecError::Malformed("link destination is not finite"));
-                }
-                LinkTarget::Uri(uri) if uri.len() > MAX_URI_BYTES => {
-                    return Err(CodecError::TooLarge {
-                        what: "URI",
-                        len: uri.len() as u64,
-                        max: MAX_URI_BYTES as u64,
-                    });
-                }
-                _ => {}
-            }
+            link.target.validate()?;
         }
         Ok(Self {
             width,

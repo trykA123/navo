@@ -193,3 +193,20 @@ fn an_unavailable_engine_has_no_links() {
     );
     assert_eq!(replies, [Response::Failed(PdfError::NotOpen)]);
 }
+
+#[test]
+fn outlines_require_an_open_document() {
+    let replies = exchange(
+        &mut FakeEngine::default(),
+        &[Request::Outline, open("a.pdf"), Request::Outline],
+    );
+    assert_eq!(replies[0], Response::Failed(PdfError::NotOpen));
+    let Response::Outline(outline) = &replies[2] else {
+        panic!("expected an outline")
+    };
+    assert_eq!(outline.items().len(), 4);
+    assert_eq!(
+        exchange(&mut Unavailable::new("no pdfium"), &[Request::Outline]),
+        [Response::Failed(PdfError::NotOpen)]
+    );
+}

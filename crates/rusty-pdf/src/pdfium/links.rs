@@ -1,5 +1,5 @@
 use pdfium_render::prelude::{
-    PdfAction, PdfDestination, PdfDestinationViewSettings as View, PdfLink, PdfPage, PdfRect,
+    PdfAction, PdfDestination, PdfDestinationViewSettings as View, PdfPage, PdfRect,
 };
 
 use super::{PdfiumEngine, Upright, quarter_turns};
@@ -36,14 +36,18 @@ pub(super) fn extract(engine: &PdfiumEngine, page: PdfPage<'_>) -> Result<PageLi
         };
         links.push(PageLink {
             bounds,
-            target: link_target(engine, &link),
+            target: action_target(engine, link.action(), || link.destination()),
         });
     }
     PageLinks::new(width, height, links).map_err(|_| PdfError::Corrupt)
 }
 
-fn link_target(engine: &PdfiumEngine, link: &PdfLink<'_>) -> LinkTarget {
-    match link.action() {
+pub(super) fn action_target<'a>(
+    engine: &PdfiumEngine,
+    action: Option<PdfAction<'a>>,
+    destination: impl FnOnce() -> Option<PdfDestination<'a>>,
+) -> LinkTarget {
+    match action {
         Some(PdfAction::LocalDestination(action)) => action
             .destination()
             .map(|destination| destination_target(engine, destination))
@@ -52,8 +56,7 @@ fn link_target(engine: &PdfiumEngine, link: &PdfLink<'_>) -> LinkTarget {
             .uri()
             .map(uri_target)
             .unwrap_or(LinkTarget::Unsupported),
-        None => link
-            .destination()
+        None => destination()
             .map(|destination| destination_target(engine, destination))
             .unwrap_or(LinkTarget::Unsupported),
         Some(_) => LinkTarget::Unsupported,

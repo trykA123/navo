@@ -180,3 +180,29 @@ fn page_links_cross_the_fake_helper_pipe() {
     );
     document.close();
 }
+
+#[test]
+fn the_document_outline_crosses_the_fake_helper_pipe() {
+    let mut document = open(&launcher(), "a.pdf", None).unwrap();
+    let outline = document.outline().unwrap();
+    let items = outline.items();
+    assert_eq!(items.len(), 4);
+    assert_eq!((&*items[0].title, items[0].level), ("Chapter 1", 0));
+    assert_eq!(
+        items[0].target,
+        LinkTarget::Page {
+            page: 0,
+            top: Some(20.0)
+        }
+    );
+    assert_eq!((&*items[1].title, items[1].level), ("Section é", 1));
+    assert_eq!(items[1].target, LinkTarget::Page { page: 1, top: None });
+    assert_eq!((&*items[2].title, items[2].level), ("Website", 1));
+    assert_eq!(
+        items[2].target,
+        LinkTarget::Uri("https://example.org/outline".into())
+    );
+    assert_eq!((&*items[3].title, items[3].level), ("Unsupported", 0));
+    assert_eq!(items[3].target, LinkTarget::Unsupported);
+    document.close();
+}
