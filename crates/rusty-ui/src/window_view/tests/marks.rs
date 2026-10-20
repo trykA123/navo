@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use gpui_kit::AppContext as _;
+use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
 use rusty_core::AppState;
 use rusty_fs::FakeFs;
@@ -35,6 +37,21 @@ impl Rig {
         self.view.read_with(cx, |view, _| {
             view.browser.state().active_tab().selection().marked()
         })
+    }
+
+    fn footer(&self, cx: &mut TestAppContext) -> String {
+        let pane = self
+            .view
+            .read_with(cx, |view, _| view.browser.state().focused_pane());
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .find(("status", pane.get()))
+                .label()
+                .map(str::to_owned)
+        })
+        .expect("window")
+        .expect("label")
     }
 
     fn notice(&self, cx: &mut TestAppContext) -> Option<(String, bool)> {
@@ -123,4 +140,15 @@ fn typed_letters_still_filter(cx: &mut TestAppContext) {
         view.browser.filter_text(tab).map(str::to_owned)
     });
     assert_eq!(filter.as_deref(), Some("c"));
+}
+
+#[gpui_kit::test]
+fn the_footer_counts_marks_the_filter_hides(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, &["down", "shift-down"]);
+    assert_eq!(rig.marked(cx), [1, 2]);
+    assert!(!rig.footer(cx).contains("hidden by filter"));
+    rig.press(cx, &["c"]);
+    let footer = rig.footer(cx);
+    assert!(footer.contains("2 hidden by filter"), "{footer}");
 }
