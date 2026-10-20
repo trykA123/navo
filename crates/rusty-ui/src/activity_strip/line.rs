@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui_kit::base::{ObservedElement, TestSupportExt};
@@ -13,6 +14,11 @@ use crate::primitives::icon;
 use crate::tokens::{self, Theme};
 
 const DETAIL_SHRINK: f32 = 100.;
+const CHIPS_SHRINK: f32 = 1000.;
+const CHIPS_SHARE: f32 = 0.45;
+const MIN_CHIP: f32 = 40.;
+
+pub type ChipsShown = Rc<Cell<Option<usize>>>;
 
 #[derive(IntoElement)]
 pub struct ActivityStrip {
@@ -20,6 +26,8 @@ pub struct ActivityStrip {
     selected: Option<Stop>,
     all_key: Option<SharedString>,
     is_leaving: bool,
+    is_focused: bool,
+    chips_shown: Option<ChipsShown>,
     on_stop: Option<StopHandler>,
     on_hover: Option<HoverHandler>,
 }
@@ -32,6 +40,8 @@ impl ActivityStrip {
             selected: None,
             all_key: None,
             is_leaving: false,
+            is_focused: false,
+            chips_shown: None,
             on_stop: None,
             on_hover: None,
         }
@@ -46,6 +56,18 @@ impl ActivityStrip {
     #[must_use]
     pub fn all_key(mut self, key: Option<&str>) -> Self {
         self.all_key = key.map(|key| key.to_owned().into());
+        self
+    }
+
+    #[must_use]
+    pub fn focused(mut self, is_focused: bool) -> Self {
+        self.is_focused = is_focused;
+        self
+    }
+
+    #[must_use]
+    pub fn chips_shown(mut self, shown: ChipsShown) -> Self {
+        self.chips_shown = Some(shown);
         self
     }
 
@@ -114,13 +136,14 @@ impl ActivityStrip {
                 .text_color(t.colors.muted)
         });
         let buttons = acts_of(item).into_iter().map(|act| {
-            let face = button::act_button(item, act, self.selected);
+            let face = button::act_button(item, act, self.selected, self.is_focused);
             button::render(t, face, Stop::Button(item.id, act), self.on_stop.as_ref())
         });
         div()
             .relative()
             .flex()
-            .flex_1()
+            .flex_grow(1.)
+            .flex_shrink(1.)
             .min_w_0()
             .items_center()
             .gap(t.spacing.md)
@@ -136,7 +159,7 @@ impl ActivityStrip {
     fn chips(&self, t: &Theme, reduce_motion: bool) -> Div {
         let chips = self.items.iter().skip(1).map(|item| {
             let face = button::chip(item, self.selected);
-            let chip = div().relative().child(button::render(
+            let chip = div().relative().min_w_0().child(button::render(
                 t,
                 face,
                 Stop::Chip(item.id),
@@ -149,14 +172,23 @@ impl ActivityStrip {
                 reduce_motion,
             )
         });
+        let shown = self.chips_shown.clone();
         div()
             .flex()
-            .flex_shrink(1.)
+            .flex_wrap()
+            .flex_shrink(CHIPS_SHRINK)
             .min_w_0()
+            .max_w(relative(CHIPS_SHARE))
+            .h(px(button::BUTTON_HEIGHT))
             .overflow_hidden()
             .items_center()
             .gap(t.spacing.xs)
             .children(chips)
+            .when_some(shown, |chips, shown| {
+                chips.on_children_prepainted(move |bounds, _, _| {
+                    shown.set(Some(fitting(&bounds)));
+                })
+            })
     }
 
     fn all_button(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
@@ -175,10 +207,31 @@ impl ActivityStrip {
     }
 }
 
+fn fitting(bounds: &[Bounds<Pixels>]) -> usize {
+    let Some(first) = bounds.first() else {
+        return 0;
+    };
+    bounds
+        .iter()
+        .take_while(|chip| {
+            chip.top() < first.top() + chip.size.height / 2. && chip.size.width >= px(MIN_CHIP)
+        })
+        .count()
+}
+
 impl ActivityStrip {
-    fn band(&self, t: &Theme, primary: &ActivityItem, reduce_motion: bool) -> Div {
+    fn band(
+        &self,
+        t: &Theme,
+        primary: &ActivityItem,
+        reduce_motion: bool,
+    ) -> impl IntoElement + use<> {
         let content = self.content(t, primary);
-        div()
+        let is_ringed = self.is_focused && self.selected.is_none();
+        let band = div()
+            .id("activity-band")
+            .aria_selected(is_ringed)
+            .test_support()
             .relative()
             .flex()
             .flex_1()
@@ -200,7 +253,8 @@ impl ActivityStrip {
                 reduce_motion,
             ))
             .child(self.chips(t, reduce_motion))
-            .children(self.all_button(t))
+            .children(self.all_button(t));
+        button::ring(t, band, is_ringed)
     }
 }
 

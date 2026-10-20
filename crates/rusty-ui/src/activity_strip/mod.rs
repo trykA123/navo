@@ -18,8 +18,10 @@ use crate::primitives::IconName;
 use crate::tokens::{Motion, Theme};
 
 pub use drawer::ActivityDrawer;
-pub use line::ActivityStrip;
-pub use stops::{Act, Stop, acts_of, drawer_stops, line_stops, settle, step, step_item};
+pub use line::{ActivityStrip, ChipsShown};
+pub use stops::{
+    Act, Stop, acts_of, drawer_stops, line_stops, settle, shown_line_stops, step, step_item,
+};
 
 gpui_kit::actions!(
     activity_strip,

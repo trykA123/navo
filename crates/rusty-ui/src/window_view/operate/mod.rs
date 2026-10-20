@@ -100,6 +100,7 @@ impl FerriteWindow {
     fn close_dialog(&mut self, confirmed: bool, window: &mut Window, cx: &mut Context<Self>) {
         if confirmed {
             self.browser.confirm();
+            self.refresh_activity(cx);
         } else {
             self.browser.dismiss();
         }
@@ -122,35 +123,33 @@ impl FerriteWindow {
     fn forget_jobs(&mut self, ids: &[u64], cx: &mut Context<Self>) {
         if self.browser.forget_jobs(ids) {
             self.jobs_changed();
-            cx.notify();
+            self.refresh_activity(cx);
         }
     }
 
     pub(super) fn dismiss_job(&mut self, id: u64, cx: &mut Context<Self>) {
-        if self.job_ui.activity.dismiss(ActivityId::Job(id)) {
-            cx.notify();
-        }
+        self.job_ui.activity.dismiss(ActivityId::Job(id));
         if self.browser.dismiss_job(id) {
             self.jobs_changed();
-            cx.notify();
         }
+        self.refresh_activity(cx);
     }
 
     pub(super) fn pause_job(&mut self, id: u64, cx: &mut Context<Self>) {
         if self.browser.pause_job(id) {
-            cx.notify();
+            self.refresh_activity(cx);
         }
     }
 
     pub(super) fn resume_job(&mut self, id: u64, cx: &mut Context<Self>) {
         if self.browser.resume_job(id) {
-            cx.notify();
+            self.refresh_activity(cx);
         }
     }
 
     pub(super) fn cancel_job(&mut self, id: u64, cx: &mut Context<Self>) {
         self.browser.cancel_job(id);
-        cx.notify();
+        self.refresh_activity(cx);
     }
 }
 

@@ -321,3 +321,15 @@ fn a_chip_names_each_item_in_a_few_words() {
         ]
     );
 }
+
+#[test]
+fn a_paused_job_says_so_on_its_chip() {
+    let mut activity = Activity::default();
+    let paused = JobInfo {
+        pause: Pause::On,
+        ..copy(1)
+    };
+    activity.sync(&[paused], Instant::now());
+    let chip = activity.primary().map(|item| item.chip.to_string());
+    assert_eq!(chip.as_deref(), Some("Copy 32% · Paused"));
+}

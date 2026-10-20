@@ -40,7 +40,7 @@ fn add_running_copy(cx: &mut TestAppContext, rig: &Rig) {
             cancel: CancelToken::new(),
             source_tab,
         });
-        cx.notify();
+        view.refresh_activity(cx);
     });
 }
 

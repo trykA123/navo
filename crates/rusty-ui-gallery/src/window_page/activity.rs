@@ -38,7 +38,7 @@ impl WindowPage {
                 .left(t.spacing.md)
                 .right(t.spacing.md)
                 .bottom(t.spacing.xs)
-                .child(ActivityDrawer::new(items).selected(first)),
+                .child(ActivityDrawer::new(items).selected(first).focused(true)),
         )
     }
 }

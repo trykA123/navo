@@ -119,7 +119,11 @@ pub(super) fn job_chip(job: &JobInfo) -> String {
         OpKind::Move => "activity-chip-move",
         OpKind::Recycle | OpKind::Delete => "activity-chip-delete",
     };
-    t!(id, percent = percent(job.fraction()))
+    let chip = t!(id, percent = percent(job.fraction()));
+    match job.pause {
+        Pause::Off => chip,
+        Pause::Asked | Pause::On => t!("activity-chip-paused", chip = chip),
+    }
 }
 
 pub(super) fn failure_chip(job: &JobInfo) -> String {

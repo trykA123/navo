@@ -64,6 +64,7 @@ activity-percent = { $percent }%
 activity-chip-copy = Copy { $percent }
 activity-chip-move = Move { $percent }
 activity-chip-delete = Delete { $percent }
+activity-chip-paused = { $chip } · Paused
 activity-chip-copy-failed = Copy failed
 activity-chip-move-failed = Move failed
 activity-chip-delete-failed = Delete failed

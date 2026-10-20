@@ -62,7 +62,7 @@ pub(super) fn add(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, job: Fa
             cancel: CancelToken::new(),
             source_tab,
         });
-        cx.notify();
+        view.refresh_activity(cx);
     });
 }
 
@@ -365,7 +365,7 @@ fn a_done_job_leaves_while_a_failed_job_stays(cx: &mut TestAppContext) {
 fn engine_pauses(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, is_paused: bool) {
     view.update(cx, |view, cx| {
         view.browser.jobs_mut()[0].progress.paused = is_paused;
-        cx.notify();
+        view.refresh_activity(cx);
     });
 }
 

@@ -104,7 +104,7 @@ pub struct Gallery {
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
     alt_window: Entity<WindowPage>,
-    job_windows: [Entity<WindowPage>; 5],
+    job_windows: [Entity<WindowPage>; 7],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
     settings_windows: [Entity<WindowPage>; 3],

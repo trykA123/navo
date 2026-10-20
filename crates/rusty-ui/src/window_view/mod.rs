@@ -25,6 +25,7 @@ mod start;
 mod start_watch;
 mod status;
 mod strip;
+mod strip_keys;
 mod tab_keys;
 mod title;
 mod user_keymap;
@@ -201,7 +202,7 @@ impl FerriteWindow {
             prefetch: None,
             menu_runs: 0,
             preview: preview::Preview::new(Self::waker(cx), cx),
-            job_ui: jobs::JobUi::new(cx),
+            job_ui: jobs::JobUi::new(window, cx),
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             crash: crash::CrashState::new(options.crash_report, cx),

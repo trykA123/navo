@@ -11,7 +11,7 @@ use crate::prelude::*;
 use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::Theme;
 
-const BUTTON_HEIGHT: f32 = 24.;
+pub(super) const BUTTON_HEIGHT: f32 = 24.;
 
 pub(super) struct Face {
     pub id: ElementId,
@@ -32,8 +32,14 @@ fn act_face(act: Act) -> (&'static str, Option<IconName>, Option<&'static str>) 
     }
 }
 
-pub(super) fn act_button(item: &ActivityItem, act: Act, selected: Option<Stop>) -> Face {
+pub(super) fn act_button(
+    item: &ActivityItem,
+    act: Act,
+    selected: Option<Stop>,
+    shows_keys: bool,
+) -> Face {
     let (name, glyph, key) = act_face(act);
+    let key = key.filter(|_| shows_keys);
     Face {
         id: (name, key_of(item.id)).into(),
         label: tr(name).into(),
@@ -100,6 +106,9 @@ pub(super) fn render(
         .text_size(t.typography.small)
         .text_color(text)
         .whitespace_nowrap()
+        .when(face.is_chip, |chip| {
+            chip.flex_shrink(1.).min_w_0().truncate()
+        })
         .cursor_pointer()
         .hover(move |button| button.bg(hover))
         .children(

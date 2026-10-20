@@ -11,25 +11,30 @@ use crate::settings_sample::Extras;
 use crate::shortcuts_sample::{self, Shows as ShortcutsShows};
 use crate::window_page::{HintsShown, JobsLook, JobsShown, SheetShows, WindowPage};
 
-pub fn job_windows(cx: &mut App) -> [Entity<WindowPage>; 5] {
+pub fn job_windows(cx: &mut App) -> [Entity<WindowPage>; 7] {
     [
         (1, JobsLook::Card),
         (1, JobsLook::Strip),
         (2, JobsLook::Card),
         (2, JobsLook::Strip),
         (4, JobsLook::Drawer),
+        (6, JobsLook::Strip),
+        (6, JobsLook::Drawer),
     ]
     .map(|(count, look)| cx.new(|cx| WindowPage::with_jobs(JobsShown { count, look }, cx)))
 }
 
-pub fn job_element(page: Page, windows: &[Entity<WindowPage>; 5]) -> Option<AnyElement> {
-    let [job, job_strip, two, two_strip, drawer] = windows;
+pub fn job_element(page: Page, windows: &[Entity<WindowPage>; 7]) -> Option<AnyElement> {
+    let [job, job_strip, two, two_strip, drawer, six, six_drawer] = windows;
     let shown = match page {
         Page::WindowJob => job,
         Page::WindowJobStrip => job_strip,
         Page::WindowJobs => two,
         Page::WindowJobsStrip => two_strip,
         Page::WindowActivityDrawer => drawer,
+        Page::SixStrip => return Some(fixed(SIX_WIDE, six)),
+        Page::Six390 => return Some(fixed(PHONE, six)),
+        Page::SixDrawer => return Some(fixed(PHONE, six_drawer)),
         _ => return None,
     };
     Some(shown.clone().into_any_element())
@@ -103,6 +108,8 @@ pub fn hint_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
 
 pub const NARROW: f32 = 1100.;
 pub const WIDE: f32 = 1440.;
+const SIX_WIDE: f32 = 1280.;
+const PHONE: f32 = 390.;
 
 fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
     div()

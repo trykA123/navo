@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use rusty_core::OpKind;
 
-use super::{Act, Stop, drawer_stops, line_stops, settle, step, step_item};
+use super::{Act, Stop, drawer_stops, line_stops, settle, shown_line_stops, step, step_item};
 use crate::activity::{Activity, ActivityId, ActivityItem};
 use crate::job_card::{JobInfo, Pause};
 use crate::job_row::JobRowState;
@@ -124,4 +124,20 @@ fn a_stop_that_went_away_settles_on_the_first() {
     assert_eq!(settle(&stops, Some(Stop::Chip(TWO))), Some(Stop::Chip(ONE)));
     assert_eq!(settle(&stops, Some(Stop::All)), Some(Stop::All));
     assert_eq!(settle(&[], Some(Stop::All)), None);
+}
+
+#[test]
+fn chips_that_do_not_fit_are_not_stops() {
+    let all = items(&[
+        job(1, JobRowState::Running),
+        job(2, JobRowState::Running),
+        job(3, JobRowState::Running),
+    ]);
+    let ids: Vec<ActivityId> = all.iter().map(|item| item.id).collect();
+    let stops = shown_line_stops(&all, Some(1));
+    assert!(stops.contains(&Stop::Chip(ids[1])));
+    assert!(!stops.contains(&Stop::Chip(ids[2])));
+    assert_eq!(stops.last(), Some(&Stop::All));
+    assert_eq!(shown_line_stops(&all, None), line_stops(&all));
+    assert!(!shown_line_stops(&all, Some(0)).contains(&Stop::Chip(ids[1])));
 }

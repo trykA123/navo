@@ -24,12 +24,12 @@ pub(super) struct JobUi {
 }
 
 impl JobUi {
-    pub(super) fn new(cx: &App) -> Self {
+    pub(super) fn new(window: &mut Window, cx: &mut Context<FerriteWindow>) -> Self {
         Self {
             is_card_hidden: true,
             meter: SpeedMeter::default(),
             activity: Activity::default(),
-            strip: StripUi::new(cx),
+            strip: StripUi::new(window, cx),
             is_sampling: false,
         }
     }
@@ -75,7 +75,7 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
 impl FerriteWindow {
     pub(super) fn jobs_woke(&mut self, cx: &mut Context<Self>) {
         self.sample_job_speeds(cx.background_executor().now());
-        self.sync_activity(cx.background_executor().now());
+        self.refresh_activity(cx);
         if self.job_ui.is_sampling || !self.browser.running() {
             return;
         }
@@ -94,8 +94,7 @@ impl FerriteWindow {
 
     fn sample_while_running(&mut self, cx: &mut Context<Self>) -> bool {
         self.sample_job_speeds(cx.background_executor().now());
-        self.sync_activity(cx.background_executor().now());
-        cx.notify();
+        self.refresh_activity(cx);
         self.job_ui.is_sampling = self.browser.running();
         self.job_ui.is_sampling
     }

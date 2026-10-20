@@ -62,9 +62,44 @@ fn done_move() -> JobInfo {
     }
 }
 
+fn paused_copy() -> JobInfo {
+    JobInfo {
+        id: 5,
+        target: Some(r"D:\photos".into()),
+        bytes_done: 310 * MB,
+        files_done: 120,
+        files_total: 480,
+        speed: None,
+        pause: Pause::On,
+        ..copy()
+    }
+}
+
+fn recycle() -> JobInfo {
+    JobInfo {
+        id: 6,
+        kind: OpKind::Recycle,
+        items: 9,
+        target: None,
+        bytes_done: 40 * MB,
+        bytes_total: 90 * MB,
+        files_done: 4,
+        files_total: 9,
+        speed: Some(20 * MB),
+        ..copy()
+    }
+}
+
 pub fn jobs(count: usize) -> Vec<JobInfo> {
-    [copy(), move_to_stick(), failed_copy(), done_move()]
-        .into_iter()
-        .take(count)
-        .collect()
+    [
+        copy(),
+        move_to_stick(),
+        failed_copy(),
+        done_move(),
+        paused_copy(),
+        recycle(),
+    ]
+    .into_iter()
+    .take(count)
+    .collect()
 }

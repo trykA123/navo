@@ -1,21 +1,27 @@
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, ElementId, Entity, TestAppContext, px};
+use gpui_kit::{
+    AnyWindowHandle, AppContext as _, Bounds, ElementId, Entity, Pixels, TestAppContext, px,
+};
 use rusty_core::OpKind;
 
 use super::jobs::{Fake, MB, add, key, running};
-use super::{fake, home_beside_dest, open_options_sized, options_for, press};
+use super::{fake, home_beside_dest, open_options_sized, options_for, press, two_panes};
 use crate::browser::JobStatus;
 use crate::settings::Values;
 use crate::window_view::FerriteWindow;
 
 fn open_plain(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    open_wide(cx, 1280.)
+}
+
+fn open_wide(cx: &mut TestAppContext, width: f32) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let fs = fake();
     let state = home_beside_dest(&fs);
     let mut options = options_for(fs, state);
     options.settings.values = Values::default();
-    open_options_sized(cx, options, px(1280.))
+    open_options_sized(cx, options, px(width))
 }
 
 fn failed(id: u64) -> Fake {
@@ -294,4 +300,279 @@ fn the_all_button_opens_the_drawer(cx: &mut TestAppContext) {
     add(cx, &view, running(2, 0));
     click(cx, window, "activity-all");
     assert!(has(cx, window, "activity-drawer"));
+}
+
+fn in_pane(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<FerriteWindow>) -> bool {
+    find(cx, window, |window, cx| {
+        let view = view.read(cx);
+        let pane = view.browser.state().focused_pane();
+        view.focus
+            .get(&pane)
+            .is_some_and(|focus| focus.is_focused(window))
+    })
+}
+
+fn done(id: u64) -> Fake {
+    Fake {
+        status: JobStatus::Done,
+        ..running(id, 400 * MB)
+    }
+}
+
+fn bounds(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    id: impl Into<ElementId>,
+) -> Option<Bounds<Pixels>> {
+    let id = id.into();
+    find(cx, window, |window, _| {
+        window.try_find(id).map(|found| found.bounds())
+    })
+}
+
+#[gpui_kit::test]
+fn show_in_the_drawer_closes_it_and_the_card_is_on_top(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, running(1, 100 * MB));
+    add(cx, &view, failed(2));
+    key(cx, window, "alt-j");
+    assert!(in_drawer(cx, window, ("activity-show", 2u64)));
+    key(cx, window, "enter");
+    assert!(!has(cx, window, "activity-drawer"));
+    let card = find(cx, window, |window, _| {
+        window
+            .try_find("job-card")
+            .is_some_and(|card| card.visible())
+    });
+    assert!(card);
+    assert!(in_pane(cx, window, &view));
+}
+
+#[gpui_kit::test]
+fn escape_from_the_line_returns_to_the_pane(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "alt-j");
+    assert!(!in_pane(cx, window, &view));
+    key(cx, window, "escape");
+    assert!(in_pane(cx, window, &view));
+}
+
+#[gpui_kit::test]
+fn escape_from_the_drawer_returns_to_the_viewer(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = two_panes(&fs);
+    let file = fs.location("home/a.txt");
+    let (window, view) = open_options_sized(cx, options_for(fs, state), px(1280.));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.view_location(file, window, cx));
+    })
+    .expect("window");
+    cx.run_until_parked();
+    add(cx, &view, running(1, 100 * MB));
+    add(cx, &view, running(2, 0));
+    let in_viewer = |cx: &mut TestAppContext| {
+        find(cx, window, |window, cx| {
+            let view = view.read(cx);
+            let viewer = view.viewer.as_ref().expect("viewer");
+            viewer.focus_target(cx).is_focused(window)
+        })
+    };
+    assert!(in_viewer(cx));
+    click(cx, window, "activity-all");
+    assert!(in_drawer(cx, window, ("activity-pause", 2u64)));
+    key(cx, window, "escape");
+    assert!(!has(cx, window, "activity-drawer"));
+    assert!(in_viewer(cx));
+}
+
+#[gpui_kit::test]
+fn delete_and_space_in_the_strip_leave_files_dialogs_and_marks_alone(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = two_panes(&fs);
+    let (window, view) = open_options_sized(cx, options_for(fs.clone(), state), px(1280.));
+    add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "alt-j");
+    key(cx, window, "space");
+    key(cx, window, "delete");
+    assert_eq!(pause_asked(cx, &view), [true]);
+    assert_eq!(cancelled(cx, &view), [true]);
+    let (pending, marked) = view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab();
+        (view.browser.pending().is_some(), tab.selection().marked())
+    });
+    assert!(!pending);
+    assert!(marked.is_empty(), "{marked:?}");
+    assert!(fs.recycled().is_empty());
+}
+
+#[gpui_kit::test]
+fn a_done_item_stays_while_the_strip_has_focus(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, done(1));
+    key(cx, window, "alt-j");
+    advance(cx, Duration::from_secs(20));
+    assert!(has(cx, window, "activity-strip"));
+    key(cx, window, "escape");
+    advance(cx, Duration::from_secs(9));
+    assert!(!has(cx, window, "activity-strip"));
+    assert!(in_pane(cx, window, &view));
+}
+
+#[gpui_kit::test]
+fn alt_j_on_an_item_without_buttons_rings_the_band(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, done(1));
+    assert!(!selected(cx, window, "activity-band"));
+    key(cx, window, "alt-j");
+    assert!(selected(cx, window, "activity-band"));
+}
+
+#[gpui_kit::test]
+fn a_job_ending_while_the_drawer_is_open_settles_the_selection(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, running(1, 100 * MB));
+    add(cx, &view, running(2, 0));
+    key(cx, window, "alt-j");
+    assert!(in_drawer(cx, window, ("activity-pause", 2u64)));
+    view.update(cx, |view, cx| {
+        view.browser.jobs_mut()[1].status = JobStatus::Done;
+        view.refresh_activity(cx);
+    });
+    assert!(has(cx, window, "activity-drawer"));
+    assert!(in_drawer(cx, window, ("activity-pause", 1u64)));
+    key(cx, window, "space");
+    assert_eq!(pause_asked(cx, &view), [true, false]);
+}
+
+#[gpui_kit::test]
+fn delete_and_space_on_the_all_button_do_nothing(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "alt-j");
+    add(cx, &view, running(2, 0));
+    key(cx, window, "left");
+    assert!(selected(cx, window, "activity-all"));
+    key(cx, window, "delete");
+    key(cx, window, "space");
+    assert_eq!(cancelled(cx, &view), [false, false]);
+    assert_eq!(pause_asked(cx, &view), [false, false]);
+}
+
+#[gpui_kit::test]
+fn show_and_dismiss_keys_show_only_while_the_strip_has_focus(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, failed(1));
+    assert_eq!(label(cx, window, ("activity-show", 1u64)), "Show");
+    assert_eq!(label(cx, window, ("activity-dismiss", 1u64)), "Dismiss");
+    key(cx, window, "alt-j");
+    assert_ne!(label(cx, window, ("activity-show", 1u64)), "Show");
+    assert_ne!(label(cx, window, ("activity-dismiss", 1u64)), "Dismiss");
+}
+
+fn centre_offset(cx: &mut TestAppContext, window: AnyWindowHandle, id: ElementId) -> f32 {
+    let band = bounds(cx, window, "activity-band").expect("band");
+    let shown = bounds(cx, window, id).expect("element");
+    f32::from(shown.center().y - band.center().y).abs()
+}
+
+#[gpui_kit::test]
+fn with_reduced_motion_nothing_travels(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    add(cx, &view, running(1, 100 * MB));
+    add(cx, &view, running(2, 0));
+    let title = centre_offset(cx, window, ("activity-title", 2u64).into());
+    let chip = centre_offset(cx, window, ("activity-chip", 1u64).into());
+    assert!(title < 0.5, "{title}");
+    assert!(chip < 0.5, "{chip}");
+}
+
+#[gpui_kit::test]
+fn without_reduced_motion_a_new_line_rises(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    add(cx, &view, running(1, 100 * MB));
+    let title = centre_offset(cx, window, ("activity-title", 1u64).into());
+    assert!(title > 0.5, "{title}");
+}
+
+fn six_jobs(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) {
+    for id in 1..=6 {
+        add(cx, view, running(id, id * 10 * MB));
+    }
+}
+
+fn assert_primary_fits(cx: &mut TestAppContext, window: AnyWindowHandle) {
+    let band = bounds(cx, window, "activity-band").expect("band");
+    let all = bounds(cx, window, "activity-all").expect("all");
+    let pause = bounds(cx, window, ("activity-pause", 6u64)).expect("pause");
+    let cancel = bounds(cx, window, ("activity-cancel", 6u64)).expect("cancel");
+    assert!(pause.left() > band.left(), "{pause:?} {band:?}");
+    assert!(cancel.right() <= all.left(), "{cancel:?} {all:?}");
+    assert!(all.right() <= band.right(), "{all:?} {band:?}");
+    for id in 1..=5u64 {
+        let chip = bounds(cx, window, ("activity-chip", id)).expect("chip");
+        let is_shown = chip.left() < band.right() && chip.size.width > px(0.);
+        assert!(!is_shown || chip.left() >= cancel.right(), "{id} {chip:?}");
+    }
+}
+
+#[gpui_kit::test]
+fn many_items_keep_the_primary_whole_at_1280(cx: &mut TestAppContext) {
+    let (window, view) = open_wide(cx, 1280.);
+    six_jobs(cx, &view);
+    advance(cx, Duration::from_secs(1));
+    assert_primary_fits(cx, window);
+    let title = bounds(cx, window, ("activity-title", 6u64)).expect("title");
+    assert!(title.size.width > px(100.), "{title:?}");
+}
+
+#[gpui_kit::test]
+fn many_items_keep_the_primary_whole_at_390(cx: &mut TestAppContext) {
+    let (window, view) = open_wide(cx, 390.);
+    six_jobs(cx, &view);
+    advance(cx, Duration::from_secs(1));
+    assert_primary_fits(cx, window);
+}
+
+#[gpui_kit::test]
+fn chips_that_are_cut_off_are_not_stops(cx: &mut TestAppContext) {
+    let (window, view) = open_wide(cx, 390.);
+    add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "alt-j");
+    for id in 2..=6 {
+        add(cx, &view, running(id, id * 10 * MB));
+    }
+    advance(cx, Duration::from_secs(1));
+    let band = bounds(cx, window, "activity-band").expect("band");
+    let all = bounds(cx, window, "activity-all").expect("all");
+    for _ in 0..8 {
+        key(cx, window, "right");
+        for id in 1..=5u64 {
+            if selected(cx, window, ("activity-chip", id)) {
+                let chip = bounds(cx, window, ("activity-chip", id)).expect("chip");
+                assert!(chip.right() <= all.left(), "{id} {chip:?} {all:?}");
+                assert!(chip.left() >= band.left(), "{id} {chip:?}");
+                assert!(chip.bottom() <= band.bottom(), "{id} {chip:?} {band:?}");
+                assert!(chip.size.width >= px(40.), "{id} {chip:?}");
+            }
+        }
+    }
+}
+
+#[gpui_kit::test]
+fn down_in_a_long_drawer_keeps_the_selected_row_in_view(cx: &mut TestAppContext) {
+    let (window, view) = open_plain(cx);
+    for id in 1..=12 {
+        add(cx, &view, running(id, id * MB));
+    }
+    key(cx, window, "alt-j");
+    for _ in 0..11 {
+        key(cx, window, "down");
+    }
+    assert!(in_drawer(cx, window, ("activity-pause", 1u64)));
+    let drawer = bounds(cx, window, "activity-drawer").expect("drawer");
+    let row = bounds(cx, window, ("activity-row", 1u64)).expect("row");
+    assert!(row.bottom() <= drawer.bottom(), "{row:?} {drawer:?}");
+    assert!(row.top() >= drawer.top(), "{row:?} {drawer:?}");
 }

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{RenderOnce, Role};
+use gpui_kit::{RenderOnce, Role, ScrollHandle};
 use rusty_l10n::{t, tr};
 
 use super::button;
@@ -21,6 +21,8 @@ const PERCENT_WIDTH: f32 = 44.;
 pub struct ActivityDrawer {
     items: Vec<ActivityItem>,
     selected: Option<Stop>,
+    is_focused: bool,
+    scroll: Option<ScrollHandle>,
     on_stop: Option<StopHandler>,
 }
 
@@ -30,6 +32,8 @@ impl ActivityDrawer {
         Self {
             items,
             selected: None,
+            is_focused: false,
+            scroll: None,
             on_stop: None,
         }
     }
@@ -37,6 +41,18 @@ impl ActivityDrawer {
     #[must_use]
     pub fn selected(mut self, stop: Option<Stop>) -> Self {
         self.selected = stop;
+        self
+    }
+
+    #[must_use]
+    pub fn focused(mut self, is_focused: bool) -> Self {
+        self.is_focused = is_focused;
+        self
+    }
+
+    #[must_use]
+    pub fn scroll(mut self, handle: &ScrollHandle) -> Self {
+        self.scroll = Some(handle.clone());
         self
     }
 
@@ -116,7 +132,7 @@ impl ActivityDrawer {
                     .child(percent(progress))
             });
         let buttons = acts_of(item).into_iter().map(|act| {
-            let face = button::act_button(item, act, self.selected);
+            let face = button::act_button(item, act, self.selected, self.is_focused);
             button::render(t, face, Stop::Button(item.id, act), self.on_stop.as_ref())
         });
         let tint = match item.kind {
@@ -187,6 +203,9 @@ impl RenderOnce for ActivityDrawer {
             .p(t.spacing.lg)
             .max_h(px(MAX_HEIGHT))
             .overflow_y_scroll()
+            .when_some(self.scroll.clone(), |drawer, handle| {
+                drawer.track_scroll(&handle)
+            })
             .rounded(t.radii.card)
             .border_1()
             .border_color(t.surfaces.card_edge)

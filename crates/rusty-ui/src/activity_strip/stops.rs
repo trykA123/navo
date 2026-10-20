@@ -61,6 +61,18 @@ pub fn line_stops(items: &[ActivityItem]) -> Vec<Stop> {
 }
 
 #[must_use]
+pub fn shown_line_stops(items: &[ActivityItem], chips: Option<usize>) -> Vec<Stop> {
+    let hidden: Vec<Stop> = items
+        .iter()
+        .skip(chips.map_or(usize::MAX, |chips| chips.saturating_add(1)))
+        .map(|item| Stop::Chip(item.id))
+        .collect();
+    let mut stops = line_stops(items);
+    stops.retain(|stop| !hidden.contains(stop));
+    stops
+}
+
+#[must_use]
 pub fn drawer_stops(items: &[ActivityItem]) -> Vec<Stop> {
     items
         .iter()
