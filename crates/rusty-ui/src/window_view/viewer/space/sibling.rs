@@ -1,0 +1,178 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use rusty_automotive::map::{MapError, index_map};
+use rusty_automotive::{MapModel, Mdf, parse_mdf, sniff_map, sniff_mdf};
+use rusty_core::{Location, ProviderPath};
+
+use crate::prelude::*;
+use crate::window_view::viewer::FileHooks;
+use crate::window_view::viewer::background::{Job, spawn_job};
+use crate::window_view::viewer::body::Host;
+
+pub(in crate::window_view::viewer) const MDF_LIMIT: u64 = 1024 * 1024;
+pub(in crate::window_view::viewer) const MAP_LIMIT: u64 = 64 * 1024 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::window_view::viewer) enum Partner {
+    Mdf,
+    Map,
+}
+
+impl Partner {
+    fn extensions(self) -> [&'static str; 2] {
+        match self {
+            Self::Mdf => ["mdf", "MDF"],
+            Self::Map => ["map", "MAP"],
+        }
+    }
+
+    fn limit(self) -> u64 {
+        match self {
+            Self::Mdf => MDF_LIMIT,
+            Self::Map => MAP_LIMIT,
+        }
+    }
+
+    fn sniff(self, head: &[u8]) -> bool {
+        match self {
+            Self::Mdf => sniff_mdf(head),
+            Self::Map => sniff_map(head).is_some(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window_view::viewer) enum SiblingProblem {
+    TooLarge { name: String, limit: u64 },
+    NotRecognised { name: String },
+    Unreadable { name: String },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(in crate::window_view::viewer) struct SiblingNames {
+    pub mdf: Option<String>,
+    pub map: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(in crate::window_view::viewer) struct Siblings {
+    pub mdf: Option<Mdf>,
+    pub map: Option<Arc<MapModel>>,
+    pub names: SiblingNames,
+    pub problems: Vec<SiblingProblem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window_view::viewer) struct Stem {
+    folder: Location,
+    stem: String,
+    extension: String,
+}
+
+pub(in crate::window_view::viewer) fn stem_of(location: &Location) -> Option<Stem> {
+    let folder = location.parent()?;
+    let name = location.name()?.to_text();
+    let (stem, extension) = match name.rsplit_once('.') {
+        Some((stem, extension)) if !stem.is_empty() => (stem, extension),
+        _ => (name.as_str(), ""),
+    };
+    Some(Stem {
+        folder,
+        stem: stem.to_owned(),
+        extension: extension.to_owned(),
+    })
+}
+
+pub(in crate::window_view::viewer) fn start_siblings<V: 'static>(
+    host: &Host,
+    stem: Option<Stem>,
+    cx: &mut Context<V>,
+    apply: impl Fn(&mut V, Siblings, &mut Context<V>) + 'static,
+) -> Job {
+    let hooks = host.hooks.clone();
+    spawn_job(
+        cx,
+        move |cancel, send| {
+            let siblings = load_siblings(&hooks, stem.as_ref(), cancel);
+            if !cancel.load(Ordering::Relaxed) {
+                send(siblings);
+            }
+        },
+        apply,
+    )
+}
+
+pub(in crate::window_view::viewer) fn load_siblings(
+    hooks: &FileHooks,
+    stem: Option<&Stem>,
+    cancel: &AtomicBool,
+) -> Siblings {
+    let mut siblings = Siblings::default();
+    let Some(stem) = stem else {
+        return siblings;
+    };
+    if let Some((name, bytes)) = find(hooks, stem, Partner::Mdf, &mut siblings.problems) {
+        siblings.mdf = Some(parse_mdf(&String::from_utf8_lossy(&bytes)));
+        siblings.names.mdf = Some(name);
+    }
+    if cancel.load(Ordering::Relaxed) {
+        return siblings;
+    }
+    if let Some((name, bytes)) = find(hooks, stem, Partner::Map, &mut siblings.problems) {
+        match index_map(bytes.as_slice(), cancel, &mut |_| {}) {
+            Ok(model) => {
+                siblings.map = Some(Arc::new(model));
+                siblings.names.map = Some(name);
+            }
+            Err(MapError::Cancelled) => {}
+            Err(MapError::UnsupportedFormat) => {
+                siblings
+                    .problems
+                    .push(SiblingProblem::NotRecognised { name });
+            }
+            Err(MapError::Read(_)) => siblings.problems.push(SiblingProblem::Unreadable { name }),
+        }
+    }
+    siblings
+}
+
+fn find(
+    hooks: &FileHooks,
+    stem: &Stem,
+    partner: Partner,
+    problems: &mut Vec<SiblingProblem>,
+) -> Option<(String, Vec<u8>)> {
+    if partner
+        .extensions()
+        .iter()
+        .any(|extension| extension.eq_ignore_ascii_case(&stem.extension))
+    {
+        return None;
+    }
+    let (name, location, head) = partner.extensions().iter().find_map(|extension| {
+        let name = format!("{}.{extension}", stem.stem);
+        let location = stem.folder.join(&ProviderPath::from_text(&name)).ok()?;
+        let head = (hooks.head)(&location).ok()?;
+        Some((name, location, head))
+    })?;
+    let limit = partner.limit();
+    if head.len > limit {
+        problems.push(SiblingProblem::TooLarge { name, limit });
+        return None;
+    }
+    if !partner.sniff(&head.bytes) {
+        problems.push(SiblingProblem::NotRecognised { name });
+        return None;
+    }
+    match (hooks.bytes)(&location, limit) {
+        Ok(bytes) => Some((name, bytes)),
+        Err(_) => {
+            problems.push(SiblingProblem::Unreadable { name });
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

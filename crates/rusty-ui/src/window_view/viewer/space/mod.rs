@@ -1,3 +1,8 @@
+#[expect(
+    dead_code,
+    reason = "the Rich ELF and MAP views start it in P38 C7 and C8"
+)]
+mod sibling;
 mod strip;
 mod treemap;
 
