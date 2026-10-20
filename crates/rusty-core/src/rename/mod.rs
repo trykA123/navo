@@ -1,3 +1,4 @@
+pub mod check;
 mod mask;
 mod parse;
 mod split;
