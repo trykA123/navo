@@ -8,7 +8,7 @@ use gpui_kit::{
 use rusty_core::{Command, CursorMove, SpanMode};
 
 use super::row::{self, RowLook};
-use super::{FileListAction, ListContext, lasso, press, row_number};
+use super::{FileListAction, ListContext, drop, lasso, press, row_number};
 use crate::tokens::{self, Theme};
 
 fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyElement> {
@@ -23,7 +23,8 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
         parts: ctx.parts,
     };
     let (left, right, click) = (ctx.clone(), ctx.clone(), ctx.clone());
-    let element = row::cells(&look, lasso::start_zone(ctx, row))
+    let zones = (drop::grip(ctx, row), lasso::start_zone(ctx, row));
+    let element = row::cells(&look, zones)
         .id("cells")
         .on_mouse_down(MouseButton::Left, move |event, window, cx| {
             left.left_down((row, event), window, cx);
@@ -34,7 +35,7 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
         })
         .on_mouse_move(press::drag_over(ctx, row))
         .on_click(move |event, window, cx| click.modified_click((row, event), window, cx));
-    Some(element.into_any_element())
+    Some(drop::target(element, ctx, (row, theme)).into_any_element())
 }
 
 pub(super) fn render_rows(

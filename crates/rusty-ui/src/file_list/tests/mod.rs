@@ -1,4 +1,5 @@
 mod density;
+mod drag;
 mod input;
 mod kinds;
 mod lasso;

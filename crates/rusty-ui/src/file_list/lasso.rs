@@ -73,6 +73,10 @@ impl Held {
         self.swallows = false;
     }
 
+    pub(super) fn swallow(&mut self) {
+        self.swallows = true;
+    }
+
     pub(super) fn swallows_click(&self) -> bool {
         self.swallows
     }

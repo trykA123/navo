@@ -2,7 +2,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     BoxShadow, Div, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, Role,
-    SharedString, StatefulInteractiveElement, Styled, div, point, px,
+    SharedString, Stateful, StatefulInteractiveElement, Styled, div, point, px,
 };
 use rusty_fs::{EntryKind, FsEntry};
 
@@ -104,7 +104,11 @@ pub(super) fn name_text(
     }
 }
 
-fn name_cell(look: &RowLook, (name, extension): (&str, &str), zone: Div) -> Div {
+fn name_cell(
+    look: &RowLook,
+    (name, extension): (&str, &str),
+    (grip, zone): (Stateful<Div>, Div),
+) -> Div {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
@@ -124,15 +128,23 @@ fn name_cell(look: &RowLook, (name, extension): (&str, &str), zone: Div) -> Div 
         .flex_1()
         .min_w_0()
         .h_full()
-        .when(look.parts.icons, |d| d.child(glyph))
         .child(
-            div()
+            grip.test_support()
+                .flex()
+                .items_center()
+                .gap(t.spacing.md)
                 .min_w_0()
-                .truncate()
-                .when(is_folder || look.is_marked, |d| {
-                    d.font_weight(FontWeight::SEMIBOLD)
-                })
-                .child(text),
+                .h_full()
+                .when(look.parts.icons, |d| d.child(glyph))
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .when(is_folder || look.is_marked, |d| {
+                            d.font_weight(FontWeight::SEMIBOLD)
+                        })
+                        .child(text),
+                ),
         )
         .child(zone.flex_1().h_full())
 }
@@ -146,7 +158,7 @@ fn name_color(look: &RowLook) -> Hsla {
     }
 }
 
-pub(super) fn cells(look: &RowLook, zone: Div) -> Div {
+pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
@@ -181,7 +193,7 @@ pub(super) fn cells(look: &RowLook, zone: Div) -> Div {
         })
         .when(is_idle_cursor, |d| d.shadow(inset_ring(c.line)))
         .child(check_cell(look))
-        .child(name_cell(look, (name, extension), zone))
+        .child(name_cell(look, (name, extension), zones))
         .when(look.parts.ext, |d| {
             d.child(
                 div()
