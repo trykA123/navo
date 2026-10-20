@@ -255,7 +255,10 @@ fn undo_of_a_key_that_was_not_in_the_file_removes_it() {
     let report = (settings.save)(&[undo]);
     assert_eq!(report.values.theme(), ThemeChoice::System);
     let text = fs::read_to_string(&file).unwrap();
-    assert!(!text.contains("mode"), "{text}");
+    assert!(
+        !text.contains("mode = \"system\"") && !text.contains("mode = \"dark\""),
+        "{text}"
+    );
 }
 
 #[test]

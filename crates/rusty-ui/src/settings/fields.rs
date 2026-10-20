@@ -9,16 +9,18 @@ pub enum Section {
     Selection,
     Terminal,
     Editor,
+    Copy,
     Display,
 }
 
 impl Section {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
         Self::Terminal,
         Self::Editor,
+        Self::Copy,
         Self::Display,
     ];
 
@@ -29,6 +31,7 @@ impl Section {
             Self::Selection => "Selection",
             Self::Terminal => "Terminal",
             Self::Editor => "Editor",
+            Self::Copy => "Copy",
             Self::Display => "Display",
         }
     }
@@ -40,6 +43,7 @@ impl Section {
             Self::Selection => IconName::MousePointer,
             Self::Terminal => IconName::SquareTerminal,
             Self::Editor => IconName::FilePen,
+            Self::Copy => IconName::Copy,
             Self::Display => IconName::Eye,
         }
     }
@@ -65,6 +69,7 @@ pub enum Field {
     TerminalProvider,
     TerminalCommand,
     EditorPath,
+    CopyMode,
     WindowTabsWithOne,
     WindowPathBar,
     WindowDriveButton,
@@ -118,6 +123,7 @@ pub const PRESETS: [Choice; 3] = [
     choice("Rich", "rich"),
     choice("Custom", "custom"),
 ];
+pub const COPY_MODES: [Choice; 2] = [choice("Auto", "auto"), choice("Standard", "standard")];
 pub const SORTS: [Choice; 4] = [
     choice("Name", "name"),
     choice("Size", "size"),
@@ -168,7 +174,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-const GENERAL: [FieldSpec; 18] = [
+const GENERAL: [FieldSpec; 19] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -280,9 +286,17 @@ const GENERAL: [FieldSpec; 18] = [
         ("Editor", "The program F4 opens files with"),
         Control::Text,
     ),
+    spec(
+        (F::CopyMode, S::Copy, "copy.mode"),
+        (
+            "Copy mode",
+            "Auto copies several files at once where the drives allow; Standard copies one file at a time.",
+        ),
+        Control::Choices(&COPY_MODES, Look::Segments),
+    ),
 ];
 
-pub const FIELDS: [FieldSpec; 38] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
+pub const FIELDS: [FieldSpec; 39] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
 
 const fn join<const A: usize, const B: usize, const C: usize, const N: usize>(
     first: [FieldSpec; A],

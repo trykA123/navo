@@ -3,6 +3,7 @@ mod elf;
 mod font;
 mod hex;
 mod image;
+mod map;
 mod markdown;
 mod memory;
 mod pdf;
@@ -151,6 +152,7 @@ impl Kinds {
             Arc::new(font::Font),
             Arc::new(memory::MemoryKind),
             Arc::new(elf::ElfKind),
+            Arc::new(map::MapKind),
             Arc::new(trace::TraceKind),
             Arc::new(pdf::Pdf),
         ])

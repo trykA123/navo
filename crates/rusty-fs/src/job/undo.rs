@@ -1,12 +1,12 @@
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
 use super::aside::presence;
-use super::copy::{remove_if_present, temp_of};
+use super::copy::{overwrites, remove_if_present, temp_of};
 use super::restore::{
-    Restored, gone_or_folder_deleted, keep, matches_stamp, restore, surely_absent,
+    Restored, gone_or_folder_deleted, is_placed, keep, matches_stamp, restore, surely_absent,
 };
 use super::{FileStamp, HeldFile, JobContext, JobOutcome, Journaled, PlacedFile, StepOutcome};
-use crate::ProviderOps;
+use crate::{ProviderOps, already_exists};
 
 pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
     let steps: Vec<(u32, &Step)> = (0_u32..).zip(&job.plan.steps).collect();
@@ -34,7 +34,7 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
 }
 
 pub(super) fn held_for<'h>(step: &Step, held: &'h [HeldFile]) -> Option<&'h HeldFile> {
-    let Step::CopyFile { target, .. } = step else {
+    let (Step::CopyFile { target, .. } | Step::Rename { target, .. }) = step else {
         return None;
     };
     held.iter()
@@ -43,7 +43,14 @@ pub(super) fn held_for<'h>(step: &Step, held: &'h [HeldFile]) -> Option<&'h Held
 }
 
 fn awaits_unreadable_row(job: &Journaled<'_>, step: &Step, held: Option<&HeldFile>) -> bool {
-    job.held_unreadable && held.is_none() && matches!(step, Step::CopyFile { .. })
+    if !job.held_unreadable || held.is_some() {
+        return false;
+    }
+    match step {
+        Step::CopyFile { .. } => true,
+        Step::Rename { target, .. } => overwrites(job.plan, target),
+        _ => false,
+    }
 }
 
 fn placed_for(step: &Step, placed: &[PlacedFile]) -> Option<FileStamp> {
@@ -80,16 +87,62 @@ fn undo(
             Ok(()) => StepOutcome::Done,
             Err(_) => StepOutcome::Skipped,
         }),
-        Step::Rename { source, target } => {
-            if surely_absent(ops, target)? && presence(ops, source)?.is_some() {
-                return Ok(StepOutcome::Skipped);
-            }
-            ops.rename(target, source).map(|()| StepOutcome::Done)
-        }
+        Step::Rename { source, target } => match held {
+            Some(held) => undo_move_over(source, target, held, ctx),
+            None => undo_rename(ops, source, target),
+        },
         Step::Recycle { .. }
         | Step::RemoveFile { .. }
         | Step::RemoveLink { .. }
         | Step::RemoveFolder { .. } => Ok(StepOutcome::Skipped),
+    }
+}
+
+fn undo_rename(
+    ops: &dyn ProviderOps,
+    source: &Location,
+    target: &Location,
+) -> Result<StepOutcome, FsError> {
+    if surely_absent(ops, target)? && presence(ops, source)?.is_some() {
+        return Ok(StepOutcome::Skipped);
+    }
+    ops.rename(target, source).map(|()| StepOutcome::Done)
+}
+
+fn undo_move_over(
+    source: &Location,
+    target: &Location,
+    held: &HeldFile,
+    ctx: &mut JobContext<'_>,
+) -> Result<StepOutcome, FsError> {
+    let ops = ctx.ops;
+    if presence(ops, &held.held)?.is_some() {
+        move_back(ops, source, target, held)?;
+    }
+    settle(keep(ops, held)?, held, ctx)
+}
+
+fn move_back(
+    ops: &dyn ProviderOps,
+    source: &Location,
+    target: &Location,
+    held: &HeldFile,
+) -> Result<(), FsError> {
+    let Some(at) = presence(ops, target)? else {
+        return Ok(());
+    };
+    if !is_placed(&at, held) {
+        return Ok(());
+    }
+    match ops.rename(target, source) {
+        Err(error) if already_exists(&error) => Ok(()),
+        Err(error)
+            if error.kind == FsErrorKind::NotFound
+                && gone_or_folder_deleted(ops, source, held.volume)? =>
+        {
+            Ok(())
+        }
+        other => other,
     }
 }
 

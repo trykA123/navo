@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
 use super::copy::{failure, journal_placed, temp_of};
+use super::restore::{Restored, keep};
 use super::{FileStamp, HeldFile, JobContext};
 use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, ProviderOps};
 
@@ -85,9 +86,34 @@ impl Aside {
         }
         make_room(ops, &held.held)?;
         ops.rename(&held.original, &held.held)?;
-        ops.replace(&temp, target).inspect_err(|_| {
-            let _ = ops.rename(&held.held, &held.original);
-        })
+        ops.replace(&temp, target)
+            .map_err(|cause| put_back(ctx, &held, cause))
+    }
+
+    pub(super) fn move_over(
+        &self,
+        ctx: &mut JobContext<'_>,
+        source: &Location,
+        target: &Location,
+    ) -> Result<(), FsError> {
+        let ops = ctx.ops;
+        let moving = ops.metadata(source)?;
+        let holdable = presence(ops, target)?.is_some_and(|entry| entry.kind == EntryKind::File);
+        if moving.kind != EntryKind::File || !holdable {
+            return ops.rename(source, target);
+        }
+        let placed = Some(FileStamp {
+            size: moving.size,
+            modified_ms: moving.modified_ms,
+        });
+        let held = self.held_file(ops, &self.on_disk(ops, target), placed)?;
+        if !ctx.log.journal_held(&held)? {
+            return ops.replace(source, target);
+        }
+        make_room(ops, &held.held)?;
+        ops.rename(&held.original, &held.held)?;
+        ops.rename(source, target)
+            .map_err(|cause| put_back(ctx, &held, cause))
     }
 
     fn on_disk(&self, ops: &dyn ProviderOps, target: &Location) -> Location {
@@ -107,6 +133,20 @@ impl Aside {
             .filter(|candidate| candidate.same_place(target))
             .min_by_key(|candidate| candidate != target);
         found.unwrap_or_else(|| target.clone())
+    }
+}
+
+fn put_back(ctx: &mut JobContext<'_>, held: &HeldFile, cause: FsError) -> FsError {
+    match keep(ctx.ops, held) {
+        Ok(Restored::Beside(beside)) => {
+            ctx.log.kept_beside(held, &beside);
+            cause
+        }
+        Ok(Restored::Back | Restored::Gone) => cause,
+        Err(error) => {
+            ctx.log.held_stranded(held);
+            error
+        }
     }
 }
 

@@ -283,3 +283,29 @@ fn the_scroll_child_of_a_row_counts_the_group_headings_above_it() {
     assert_eq!(child(Field::TextLineNumbers), Some(15));
     assert_eq!(child(Field::ImageDetails), Some(18));
 }
+
+#[test]
+fn the_copy_mode_row_sits_in_its_own_section_with_plain_help() {
+    let row = spec(Field::CopyMode);
+    assert_eq!(row.section, Section::Copy);
+    assert_eq!(row.key, "copy.mode");
+    assert_eq!(
+        row.help,
+        "Auto copies several files at once where the drives allow; Standard copies one file at a time."
+    );
+    assert!(matches!(row.control, Control::Choices(choices, Look::Segments) if choices.len() == 2));
+    assert!(Field::CopyMode.is_applied());
+}
+
+#[test]
+fn the_copy_mode_starts_auto_and_follows_the_pick() {
+    let values = Values::default();
+    assert_eq!(values.copy_mode(), rusty_fs::CopyMode::Auto);
+    assert!(!values.is_changed(Field::CopyMode));
+    let standard = values.with(&Change {
+        field: Field::CopyMode,
+        value: Value::Pick(1),
+    });
+    assert_eq!(standard.copy_mode(), rusty_fs::CopyMode::Standard);
+    assert!(standard.is_changed(Field::CopyMode));
+}

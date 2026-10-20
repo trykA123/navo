@@ -75,6 +75,7 @@ fn permanent() -> ConfirmProps {
         confirm_label: "Delete permanently".into(),
         danger: true,
         typed: None,
+        mode: None,
     }
 }
 
@@ -87,6 +88,7 @@ fn protected() -> ConfirmProps {
         confirm_label: "Delete permanently".into(),
         danger: true,
         typed: Some("DELETE".into()),
+        mode: None,
     }
 }
 

@@ -22,6 +22,7 @@ pub(super) struct Crashing<'a> {
     dead: AtomicBool,
     inside: bool,
     fatal: bool,
+    takes: Option<String>,
 }
 
 impl<'a> Crashing<'a> {
@@ -33,6 +34,7 @@ impl<'a> Crashing<'a> {
             dead: AtomicBool::new(false),
             inside: false,
             fatal: true,
+            takes: None,
         }
     }
 
@@ -47,6 +49,15 @@ impl<'a> Crashing<'a> {
         Self {
             fatal: false,
             ..self
+        }
+    }
+
+    pub(super) fn taking(fs: &'a FakeFs, temp: &str, taken: &str) -> Self {
+        Self {
+            ops: vec![FakeOp::Replace],
+            fatal: false,
+            takes: Some(taken.to_owned()),
+            ..Self::new(fs, temp, FakeOp::Replace)
         }
     }
 
@@ -86,6 +97,9 @@ impl<'a> Crashing<'a> {
     fn enter(&self, location: &Location, op: FakeOp) -> Result<(), FsError> {
         self.alive()?;
         if self.hits(location, op) {
+            if let Some(taken) = &self.takes {
+                self.fs.add_file(taken, 1);
+            }
             return Err(self.die());
         }
         Ok(())

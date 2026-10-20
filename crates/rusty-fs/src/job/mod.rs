@@ -13,7 +13,7 @@ use rusty_core::{FsError, Location, OperationPlan};
 use crate::{CancelToken, ProviderOps};
 
 pub use aside::HELD_PREFIX;
-pub use workers::{WorkerCounts, copy_workers};
+pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
 
 pub use rusty_core::TEMP_SUFFIX;
 
@@ -51,6 +51,7 @@ pub trait JobLog {
         Ok(())
     }
     fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
+    fn held_stranded(&mut self, _held: &HeldFile) {}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

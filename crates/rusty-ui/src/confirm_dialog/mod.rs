@@ -35,6 +35,7 @@ pub struct ConfirmProps {
     pub confirm_label: SharedString,
     pub danger: bool,
     pub typed: Option<SharedString>,
+    pub mode: Option<SharedString>,
 }
 
 impl ConfirmProps {
@@ -216,6 +217,28 @@ fn paths(t: &Theme, props: &ConfirmProps) -> Div {
         })
 }
 
+fn summary_row(t: &Theme, props: &ConfirmProps) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(t.spacing.md)
+        .child(label("summary", props.summary.clone()).text_color(t.colors.muted))
+        .when_some(props.mode.clone(), |row, mode| {
+            row.child(
+                label("mode", mode)
+                    .flex_none()
+                    .px(t.spacing.sm)
+                    .py(t.spacing.xxs)
+                    .rounded(t.radii.sm)
+                    .border_1()
+                    .border_color(t.colors.line)
+                    .text_size(t.typography.small)
+                    .text_color(t.colors.muted),
+            )
+        })
+}
+
 fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) -> Div {
     let variant = if props.danger {
         ButtonVariant::Danger
@@ -288,7 +311,7 @@ impl RenderOnce for ConfirmDialog {
             .text_size(t.typography.body)
             .child(heading(&t, &props))
             .child(paths(&t, &props))
-            .child(label("summary", props.summary.clone()).text_color(t.colors.muted))
+            .child(summary_row(&t, &props))
             .when_some(field, |dialog, field| {
                 dialog.child(TextField::new("typed", &field, "Confirmation word"))
             })

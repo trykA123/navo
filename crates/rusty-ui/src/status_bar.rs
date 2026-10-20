@@ -1,12 +1,16 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement, Styled, Window, div,
+    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role, SharedString,
+    StatefulInteractiveElement, Styled, Window, div,
 };
 
 use crate::format;
 use crate::tokens;
+
+mod chips;
+
+use chips::{marked_chip, notice_text};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ListingMark {
@@ -150,24 +154,6 @@ impl StatusBar {
     }
 }
 
-fn marked_part(marked: String, more: bool) -> String {
-    if more { format!("{marked} ·") } else { marked }
-}
-
-fn notice_text(t: &tokens::Theme, notice: StatusNotice) -> impl IntoElement {
-    let color = if notice.is_error {
-        t.colors.mark
-    } else {
-        t.colors.warn
-    };
-    div()
-        .flex_shrink(1.)
-        .min_w_0()
-        .truncate()
-        .text_color(color)
-        .child(notice.text)
-}
-
 impl RenderOnce for StatusBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
@@ -199,15 +185,7 @@ impl RenderOnce for StatusBar {
             .when_some(self.notice, |d, notice| d.child(notice_text(t, notice)))
             .when_some(
                 props.marked_text().filter(|_| parts.marked_totals),
-                |d, marked| {
-                    d.child(
-                        div()
-                            .flex_none()
-                            .text_color(c.mark)
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(marked_part(marked, more)),
-                    )
-                },
+                |d, marked| d.child(marked_chip(c.mark, marked, more)),
             )
             .child(
                 div()
@@ -231,7 +209,8 @@ mod tests {
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{Context, IntoElement, Render, Role, TestAppContext, Window};
 
-    use super::{FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice, marked_part};
+    use super::chips::marked_part;
+    use super::{FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice};
     use crate::format;
     use crate::test_window::open;
 

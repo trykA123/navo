@@ -20,6 +20,7 @@ fn props(lines: usize, more: u64) -> ConfirmProps {
         confirm_label: "Delete permanently".into(),
         danger: true,
         typed: None,
+        mode: None,
     }
 }
 
@@ -332,4 +333,20 @@ fn space_and_arrows_still_type_in_the_field(cx: &mut TestAppContext) {
     press(window, &["left", "right", "space"], cx);
     assert_eq!(focused(window, cx), ["typed"]);
     assert_eq!(counts(&harness, cx), (0, 0));
+}
+
+#[gpui_kit::test]
+fn a_copy_dialog_shows_its_mode_as_a_small_label(cx: &mut TestAppContext) {
+    for mode in ["Auto", "Standard"] {
+        let mut copy = props(1, 0);
+        copy.mode = Some(mode.into());
+        let (window, _) = open_dialog(cx, copy);
+        assert_eq!(label(window, "mode", cx).as_deref(), Some(mode));
+    }
+}
+
+#[gpui_kit::test]
+fn a_dialog_without_a_mode_has_no_mode_label(cx: &mut TestAppContext) {
+    let (window, _) = open_dialog(cx, props(1, 0));
+    assert_eq!(label(window, "mode", cx), None);
 }

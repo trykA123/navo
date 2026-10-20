@@ -32,7 +32,7 @@ fn a_missing_file_is_written_whole_and_every_default_recorded() {
             .replace("\n\n[experimental]\n", "\n")
     );
     let recorded = db.settings_defaults().unwrap();
-    assert_eq!(recorded.len(), 36);
+    assert_eq!(recorded.len(), 37);
     assert_eq!(
         recorded.get("files.sort").map(String::as_str),
         Some("\"name\"")

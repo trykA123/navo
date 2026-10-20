@@ -5,7 +5,7 @@ use gpui_kit::{App, TestAppContext};
 use super::{GLOBAL, Keymap, all, by_name, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 22] = [
+const NAMESPACES: [&str; 23] = [
     "app_menu",
     "can_trace",
     "confirm_dialog",
@@ -16,6 +16,7 @@ const NAMESPACES: [&str; 22] = [
     "ferrite_tabs",
     "ferrite_window",
     "file_list",
+    "map_view",
     "memory_image",
     "path_input",
     "preview",

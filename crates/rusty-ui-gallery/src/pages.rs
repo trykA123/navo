@@ -59,6 +59,8 @@ pub enum Page {
     ElfDrawers,
     TraceTable,
     TraceDrawers,
+    MapTables,
+    MapDrawers,
     PdfCalm,
     PdfSearch,
     PdfDrawers,
@@ -83,7 +85,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 65] = [
+pub const PAGES: [PageInfo; 67] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -278,6 +280,13 @@ pub const PAGES: [PageInfo; 65] = [
         "p16-b6-asc-drawers",
         false,
     ),
+    info(Page::MapTables, "Linker map", "p16-b4b-map-simple", false),
+    info(
+        Page::MapDrawers,
+        "Linker map, drawers",
+        "p16-b4b-map-drawers",
+        false,
+    ),
     info(Page::PdfCalm, "PDF", "p15-a10b-calm", true),
     info(Page::PdfSearch, "PDF search", "p15-a10b-search", false),
     info(Page::PdfDrawers, "PDF drawers", "p15-a10b-drawers", false),
@@ -302,6 +311,24 @@ pub const PAGES: [PageInfo; 65] = [
 ];
 
 impl Page {
+    pub fn is_viewer_sample(self) -> bool {
+        matches!(
+            self,
+            Self::Tree
+                | Self::Table
+                | Self::Markdown
+                | Self::MarkdownPreview
+                | Self::MemoryImage
+                | Self::MemoryDrawers
+                | Self::ElfSymbols
+                | Self::ElfDrawers
+                | Self::TraceTable
+                | Self::TraceDrawers
+                | Self::MapTables
+                | Self::MapDrawers
+        )
+    }
+
     pub fn info(self) -> &'static PageInfo {
         &PAGES[self as usize]
     }
