@@ -1,5 +1,6 @@
-use super::{Flags, NO_PARENT, NameTable, TableError};
+use super::{Flags, NO_PARENT, NameTable, TableChange, TableError};
 use crate::fuzzy::Fuzzy;
+use crate::usn::FrnMap;
 
 fn tree() -> (NameTable, [u32; 5]) {
     let mut t = NameTable::new();
@@ -13,6 +14,155 @@ fn tree() -> (NameTable, [u32; 5]) {
 
 fn win(t: &NameTable, id: u32) -> Option<String> {
     t.path_with(id, '\\')
+}
+
+fn add(file_id: u128, parent_id: u128, name: &str, flags: Flags) -> TableChange {
+    TableChange::Add {
+        file_id,
+        parent_id,
+        name: name.into(),
+        flags,
+    }
+}
+
+fn journal_tree() -> (NameTable, FrnMap) {
+    let mut table = NameTable::new();
+    let mut ids = FrnMap::new();
+    for change in [
+        add(7, 7, "C:", Flags::FOLDER),
+        add(8, 7, "grove", Flags::FOLDER),
+        add(42, 7, "ash", Flags::NONE),
+    ] {
+        table.apply(change, &mut ids).unwrap();
+    }
+    (table, ids)
+}
+
+#[test]
+fn changes_map_full_file_references_to_dense_entry_ids() {
+    let (mut table, mut ids) = journal_tree();
+    let wide = (1u128 << 100) | 42;
+    table
+        .apply(add(wide, 8, "elm", Flags::HIDDEN), &mut ids)
+        .unwrap();
+    assert_eq!(ids[&7], 0);
+    assert_eq!(ids[&42], 2);
+    assert_ne!(ids[&42], ids[&wide]);
+    assert_eq!(win(&table, ids[&wide]).as_deref(), Some("C:\\grove\\elm"));
+    assert_eq!(table.flags(ids[&wide]), Some(Flags::HIDDEN));
+}
+
+#[test]
+fn applying_duplicate_adds_keeps_the_existing_entry_id() {
+    let (mut table, mut ids) = journal_tree();
+    let id = ids[&42];
+    table
+        .apply(add(42, 8, "elm", Flags::SYSTEM), &mut ids)
+        .unwrap();
+    assert_eq!(ids[&42], id);
+    assert_eq!(table.len(), 3);
+    assert_eq!(win(&table, id).as_deref(), Some("C:\\grove\\elm"));
+    assert_eq!(table.flags(id), Some(Flags::SYSTEM));
+}
+
+#[test]
+fn applying_rename_moves_an_entry_and_updates_attributes() {
+    let (mut table, mut ids) = journal_tree();
+    let id = ids[&42];
+    table
+        .apply(
+            TableChange::Rename {
+                file_id: 42,
+                parent_id: 8,
+                name: "elm".into(),
+                flags: Flags::HIDDEN,
+            },
+            &mut ids,
+        )
+        .unwrap();
+    assert_eq!(ids[&42], id);
+    assert_eq!(win(&table, id).as_deref(), Some("C:\\grove\\elm"));
+    assert_eq!(table.flags(id), Some(Flags::HIDDEN));
+}
+
+#[test]
+fn applying_attributes_clears_previous_flags_without_renaming() {
+    let (mut table, mut ids) = journal_tree();
+    for flags in [Flags::HIDDEN | Flags::SYSTEM, Flags::NONE] {
+        table
+            .apply(TableChange::Attributes { file_id: 42, flags }, &mut ids)
+            .unwrap();
+        assert_eq!(table.flags(ids[&42]), Some(flags));
+        assert_eq!(table.name(ids[&42]), Some("ash"));
+    }
+}
+
+#[test]
+fn applying_remove_drops_descendants_and_their_file_reference_mappings() {
+    let (mut table, mut ids) = journal_tree();
+    table
+        .apply(add(43, 8, "elm", Flags::NONE), &mut ids)
+        .unwrap();
+    table
+        .apply(TableChange::Remove { file_id: 8 }, &mut ids)
+        .unwrap();
+    assert_eq!(table.len(), 2);
+    assert!(!ids.contains_key(&8));
+    assert!(!ids.contains_key(&43));
+    table
+        .apply(TableChange::Remove { file_id: 8 }, &mut ids)
+        .unwrap();
+    assert_eq!(table.len(), 2);
+}
+
+#[test]
+fn applying_journal_reset_clears_the_table_and_file_references() {
+    let (mut table, mut ids) = journal_tree();
+    table.apply(TableChange::JournalReset, &mut ids).unwrap();
+    assert!(table.is_empty());
+    assert_eq!(table.slots(), 0);
+    assert!(ids.is_empty());
+}
+
+#[test]
+fn missing_parent_is_an_error_and_does_not_partly_apply_an_add() {
+    let (mut table, mut ids) = journal_tree();
+    assert_eq!(
+        table.apply(add(43, 99, "elm", Flags::NONE), &mut ids),
+        Err(TableError::UnknownFileReference(99))
+    );
+    assert_eq!(table.len(), 3);
+    assert!(!ids.contains_key(&43));
+}
+
+#[test]
+fn rename_cycle_and_unknown_file_references_leave_the_table_unchanged() {
+    let (mut table, mut ids) = journal_tree();
+    let root = ids[&7];
+    assert_eq!(
+        table.apply(
+            TableChange::Rename {
+                file_id: 7,
+                parent_id: 8,
+                name: "loop".into(),
+                flags: Flags::NONE,
+            },
+            &mut ids
+        ),
+        Err(TableError::Cycle(root))
+    );
+    assert_eq!(table.name(root), Some("C:"));
+    assert_eq!(table.flags(root), Some(Flags::FOLDER));
+    assert_eq!(
+        table.apply(
+            TableChange::Attributes {
+                file_id: 99,
+                flags: Flags::HIDDEN,
+            },
+            &mut ids
+        ),
+        Err(TableError::UnknownFileReference(99))
+    );
 }
 
 #[test]

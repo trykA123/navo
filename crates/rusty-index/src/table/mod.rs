@@ -1,9 +1,11 @@
+mod change;
 mod flags;
 
 use std::ops::Range;
 
 use crate::fuzzy::{Fuzzy, Match};
 
+pub use change::TableChange;
 pub use flags::Flags;
 
 pub const NO_PARENT: u32 = u32::MAX;
@@ -16,6 +18,8 @@ pub enum TableError {
     Full,
     #[error("entry {0} does not exist")]
     UnknownId(u32),
+    #[error("file reference {0} does not have a live table entry")]
+    UnknownFileReference(u128),
     #[error("entry {0} would become its own ancestor")]
     Cycle(u32),
 }
