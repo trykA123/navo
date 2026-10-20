@@ -210,6 +210,7 @@ impl Browser {
         let target = match kind {
             OpKind::Copy | OpKind::Move => Some(self.other_location()?),
             OpKind::Recycle | OpKind::Delete => None,
+            OpKind::Rename => return None,
         };
         if sources.is_empty()
             || target

@@ -282,6 +282,26 @@ fn recycle_and_delete_read_without_a_target() {
 }
 
 #[test]
+fn rename_reads_without_a_target() {
+    let mut activity = Activity::default();
+    let renaming = JobInfo {
+        kind: OpKind::Rename,
+        target: None,
+        ..copy(1)
+    };
+    activity.sync(&[renaming], Instant::now());
+    assert_eq!(primary(&activity).title.as_ref(), "Renaming 128 files");
+    let renamed = JobInfo {
+        kind: OpKind::Rename,
+        items: 3,
+        target: None,
+        ..done(2)
+    };
+    activity.sync(&[renamed], Instant::now());
+    assert_eq!(primary(&activity).title.as_ref(), "Renamed 3 items");
+}
+
+#[test]
 fn a_drag_shows_its_keys() {
     let mut activity = Activity::default();
     activity.set_drag(Some(3));

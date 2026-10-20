@@ -36,6 +36,7 @@ fn verbs(kind: OpKind) -> [&'static str; 3] {
         OpKind::Move => ["Move", "Moving", "Moved"],
         OpKind::Recycle => ["Recycle", "Recycling", "Recycled"],
         OpKind::Delete => ["Delete", "Deleting", "Deleted"],
+        OpKind::Rename => ["Rename", "Renaming", "Renamed"],
     }
 }
 

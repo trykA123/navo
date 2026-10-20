@@ -101,6 +101,11 @@ fn expected_totals(items: &[ScannedItem], plan: &OperationPlan) -> Totals {
             folders: count(|s| matches!(s, Step::MakeFolder { .. })),
             bytes: copied_bytes,
         },
+        (OpKind::Rename, _) => Totals {
+            files: 0,
+            folders: 0,
+            bytes: 0,
+        },
         (OpKind::Delete, _) => Totals {
             files: count(|s| matches!(s, Step::RemoveFile { .. })),
             folders: count(|s| matches!(s, Step::RemoveFolder { .. })),
