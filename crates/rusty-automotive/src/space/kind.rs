@@ -9,10 +9,11 @@ pub enum Kind {
     Data,
     Bss,
     Other,
+    Fill,
 }
 
 impl Kind {
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 6;
 
     #[must_use]
     pub fn index(self) -> usize {
@@ -21,7 +22,9 @@ impl Kind {
 
     #[must_use]
     pub fn of_section(section: &Section) -> Self {
-        if !section.is_loaded() {
+        if is_fill_name(&section.name) {
+            Self::Fill
+        } else if !section.is_loaded() {
             Self::Other
         } else if section.is_executable() {
             Self::Code
@@ -36,6 +39,9 @@ impl Kind {
 
     #[must_use]
     pub fn of_name(name: &str) -> Self {
+        if name == "*fill*" || is_fill_name(name) {
+            return Self::Fill;
+        }
         let lead = name
             .trim_start_matches('.')
             .split('.')
@@ -62,6 +68,10 @@ impl Kind {
 
 pub(super) fn takes_no_address_space(section: &Section) -> bool {
     section.kind == SHT_NOBITS && section.flags & u64::from(SHF_TLS) != 0
+}
+
+fn is_fill_name(name: &str) -> bool {
+    name.starts_with("$fill")
 }
 
 fn is_copied_data(section: &Section) -> bool {
