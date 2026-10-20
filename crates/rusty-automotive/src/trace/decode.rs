@@ -1,6 +1,6 @@
 use std::io::{self, BufReader, Read};
 
-use super::asc::{Head, Shape, parse};
+use super::asc::{Head, Shape};
 use super::index::{Block, Trace};
 use super::line::next_line;
 use super::{Body, Entry, Frame};
@@ -126,7 +126,7 @@ fn decode_step(step: &Step, read: &mut ReadAt<'_>, out: &mut Vec<Entry>) -> io::
         if taken.too_long {
             continue;
         }
-        let (time, shape) = parse(&line, clock.notation.base, &mut data);
+        let (time, shape) = clock.parse(&line, &mut data);
         let head = match &shape {
             Shape::Blank => continue,
             Shape::Header(header) => {

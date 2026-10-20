@@ -1,4 +1,4 @@
-use super::{Base, CanId, Direction, FrameKind, Notation};
+use super::{Base, CanId, Direction, FrameKind};
 
 pub(crate) const BAD_ID: &str = "the ID is not a valid CAN identifier";
 const BAD_DLC: &str = "the DLC is missing or not a number";
@@ -279,29 +279,4 @@ pub(crate) fn parse(line: &[u8], base: Base, data: &mut Vec<u8>) -> (Option<u64>
         return (None, Shape::Other);
     }
     (time, after_time(&mut words, base, data))
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct Clock {
-    pub notation: Notation,
-    pub now: u64,
-}
-
-impl Clock {
-    pub(crate) fn tick(&mut self, time: Option<u64>) -> Option<u64> {
-        let time = time?;
-        self.now = if self.notation.relative {
-            self.now.saturating_add(time)
-        } else {
-            time
-        };
-        Some(self.now)
-    }
-
-    pub(crate) fn read(&mut self, header: &Header) {
-        if let Header::Notation { base, relative } = header {
-            self.notation.base = base.unwrap_or(self.notation.base);
-            self.notation.relative = relative.unwrap_or(self.notation.relative);
-        }
-    }
 }
