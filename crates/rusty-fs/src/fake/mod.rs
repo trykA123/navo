@@ -45,7 +45,7 @@ pub struct FakeFs {
     faults: Mutex<HashMap<CallKey, Vec<(u32, Fault)>>>,
     calls: Mutex<HashMap<CallKey, u32>>,
     recycled: Mutex<Vec<String>>,
-    volumes: Mutex<HashMap<String, u64>>,
+    volumes: Mutex<HashMap<String, Option<u64>>>,
     batch_size: usize,
     watchable: bool,
     watchers: Watchers,
@@ -167,6 +167,10 @@ impl FakeFs {
     }
 
     pub fn set_volume(&self, path: &str, serial: u64) {
+        self.set_volume_serial(path, Some(serial));
+    }
+
+    pub fn set_volume_serial(&self, path: &str, serial: Option<u64>) {
         lock(&self.volumes).insert(normalize(path).trim_end_matches('/').to_owned(), serial);
     }
 

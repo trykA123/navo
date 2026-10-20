@@ -1,7 +1,7 @@
 use rusty_core::{ConflictPolicy, FsError, Location, OperationPlan, PlanRequest, plan};
 use rusty_fs::{
-    AutoTuning, CancelToken, CopyMode, DriveClass, JobContext, JobOutcome, Progress, Provider,
-    ProviderOps, WorkerCounts, existing_at, job_workers, run_job_parallel, scan,
+    AutoTuning, CancelToken, CopyMode, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
+    WorkerCounts, existing_at, job_workers, run_job_parallel, scan,
 };
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -40,7 +40,7 @@ pub(super) fn start_progress(plan: &OperationPlan) -> Progress {
 }
 
 pub(super) fn plan_for(
-    provider: &dyn Provider,
+    provider: &dyn ProviderOps,
     request: &OpRequest,
     cancel: &CancelToken,
 ) -> Result<OperationPlan, FsError> {
@@ -49,13 +49,27 @@ pub(super) fn plan_for(
         Some(target) => existing_at(provider, &items, target, cancel)?,
         None => Vec::new(),
     };
+    let same_volume = if request.same_volume
+        && let Some(source) = request.sources.first().and_then(Location::parent)
+        && let Some(target) = &request.target
+    {
+        match (
+            provider.volume_serial(&source).ok().flatten(),
+            provider.volume_serial(target).ok().flatten(),
+        ) {
+            (Some(source), Some(target)) => source == target,
+            _ => true,
+        }
+    } else {
+        request.same_volume
+    };
     Ok(plan(&PlanRequest {
         kind: request.kind,
         items,
         target: request.target.clone(),
         existing,
         policy: ConflictPolicy::Ask,
-        same_volume: request.same_volume,
+        same_volume,
         protected: request.protected.clone(),
     }))
 }
@@ -147,5 +161,129 @@ impl JobWork {
         );
         log.finish(&outcome, self.ops.as_ref());
         Ok(outcome)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rusty_core::{AppState, OpKind, Step};
+    use rusty_fs::FakeFs;
+
+    use super::*;
+
+    fn move_plan(source_serial: Option<u64>, target_serial: Option<u64>) -> OperationPlan {
+        let fs = FakeFs::new();
+        fs.add_file("home/a.txt", 3);
+        fs.add_folder("dest");
+        fs.set_volume_serial("home", source_serial);
+        fs.set_volume_serial("dest", target_serial);
+        fs.set_volume("home/a.txt", 2);
+        let state = AppState::new(fs.location("home"));
+        let request = OpRequest {
+            id: 1,
+            kind: OpKind::Move,
+            sources: vec![fs.location("home/a.txt")],
+            target: Some(fs.location("dest")),
+            same_volume: true,
+            protected: Vec::new(),
+            source_tab: state.active_tab().id(),
+            asks: true,
+        };
+        plan_for(&fs, &request, &CancelToken::new()).unwrap()
+    }
+
+    #[test]
+    fn differing_volume_serials_copy_then_remove() {
+        let plan = move_plan(Some(1), Some(2));
+        assert!(matches!(
+            plan.steps.as_slice(),
+            [Step::CopyFile { .. }, Step::RemoveFile { .. }]
+        ));
+    }
+
+    #[test]
+    fn equal_volume_serials_rename() {
+        let plan = move_plan(Some(1), Some(1));
+        assert!(matches!(plan.steps.as_slice(), [Step::Rename { .. }]));
+    }
+
+    #[test]
+    fn unknown_source_volume_keeps_rename() {
+        let plan = move_plan(None, Some(2));
+        assert!(matches!(plan.steps.as_slice(), [Step::Rename { .. }]));
+    }
+
+    #[test]
+    fn unknown_target_volume_keeps_rename() {
+        let plan = move_plan(Some(2), None);
+        assert!(matches!(plan.steps.as_slice(), [Step::Rename { .. }]));
+    }
+
+    #[cfg(target_os = "linux")]
+    fn cross_device_dirs() -> Option<(tempfile::TempDir, tempfile::TempDir)> {
+        use std::os::unix::fs::MetadataExt;
+
+        if !std::path::Path::new("/dev/shm").is_dir() {
+            return None;
+        }
+        let source = tempfile::tempdir_in("/dev/shm").unwrap();
+        let target = tempfile::tempdir().unwrap();
+        (std::fs::metadata(source.path()).unwrap().dev()
+            != std::fs::metadata(target.path()).unwrap().dev())
+        .then_some((source, target))
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_tmpfs_move_across_devices_succeeds() {
+        use std::fs;
+        use std::os::unix::ffi::OsStrExt;
+        use std::path::Path;
+        use std::sync::mpsc;
+
+        use rusty_core::ProviderPath;
+        use rusty_fs::LocalFs;
+
+        use crate::browser::{Browser, JobStatus};
+
+        let Some((source_dir, target_dir)) = cross_device_dirs() else {
+            return;
+        };
+        let source_path = source_dir.path().join("a.txt");
+        fs::write(&source_path, b"cross-device move").unwrap();
+        let location = |path: &Path| {
+            Location::local(ProviderPath::from_bytes(path.as_os_str().as_bytes())).unwrap()
+        };
+        let (wake, awake) = mpsc::channel();
+        let mut browser = Browser::new(
+            AppState::new(location(target_dir.path())),
+            Arc::new(LocalFs::new()),
+            Arc::new(move || {
+                let _ = wake.send(());
+            }),
+        );
+        browser
+            .paste(OpKind::Move, vec![location(&source_path)])
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            browser.poll();
+            if browser
+                .jobs()
+                .first()
+                .is_some_and(|job| job.status != JobStatus::Running)
+            {
+                break;
+            }
+            awake
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .unwrap();
+        }
+        assert_eq!(browser.jobs()[0].status, JobStatus::Done);
+        assert_eq!(
+            fs::read(target_dir.path().join("a.txt")).unwrap(),
+            b"cross-device move"
+        );
+        assert!(!source_path.exists());
     }
 }
