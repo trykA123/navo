@@ -73,6 +73,7 @@ impl FerriteWindow {
                 let fresh = self.saver.on_disk(values, generation);
                 if fresh != self.values {
                     self.set_values(fresh, window, cx);
+                    self.follow_defaults();
                     self.saver.count_disk_apply();
                 }
             }

@@ -4,6 +4,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, TestAppContext};
 
 use super::app_menu::{Rig, rig};
+use crate::settings::Values;
 use crate::settings::{Change, DefaultShift, Field, Value};
 use crate::tokens::ThemeChoice;
 use crate::window_view::SettingsNews;
@@ -29,7 +30,7 @@ fn shift(key: &str, old: &str, new: &str) -> DefaultShift {
 }
 
 fn sort_shift() -> DefaultShift {
-    shift("files.sort", "\"name\"", "\"date\"")
+    shift("files.sort", "\"date\"", "\"name\"")
 }
 
 fn send(cx: &mut TestAppContext, rig: &Rig, shifts: Vec<DefaultShift>) {
@@ -75,7 +76,7 @@ fn the_notice_lists_each_change_with_its_label_and_key(cx: &mut TestAppContext) 
     );
     assert_eq!(
         label(cx, &rig, ("settings-upgrade-item", 0usize)).as_deref(),
-        Some("Sort by, files.sort: name → date")
+        Some("Sort by, files.sort: date → name")
     );
     assert_eq!(
         label(cx, &rig, ("settings-upgrade-item", 1usize)).as_deref(),
@@ -106,7 +107,7 @@ fn keep_old_value_saves_the_old_value_and_drops_that_item(cx: &mut TestAppContex
         last,
         Some(Change {
             field: Field::Sort,
-            value: Value::Pick(0)
+            value: Value::Pick(2)
         })
     );
     assert_eq!(
@@ -164,4 +165,97 @@ fn the_status_line_points_to_a_pending_notice_until_it_is_dismissed(cx: &mut Tes
     rig.press(cx, "escape");
     settle_motion(cx, &rig);
     assert!(!status(cx, &rig).contains("Defaults changed"));
+}
+
+fn last_change(rig: &Rig) -> Option<Change> {
+    rig.store.changes.lock().expect("changes").last().cloned()
+}
+
+fn sort_row(cx: &mut TestAppContext, rig: &Rig) {
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings_at(Field::Sort, window, cx)
+        });
+    })
+    .expect("window");
+    settle_motion(cx, rig);
+}
+
+#[gpui_kit::test]
+fn picking_another_value_in_that_row_drops_the_item(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    send(cx, &rig, vec![sort_shift()]);
+    open(cx, &rig);
+    sort_row(cx, &rig);
+    rig.press(cx, "right");
+    settle_motion(cx, &rig);
+    assert!(!shows(cx, &rig, "settings-upgrade"));
+}
+
+#[gpui_kit::test]
+fn a_file_edit_to_that_key_drops_the_item(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    send(cx, &rig, vec![sort_shift()]);
+    open(cx, &rig);
+    assert!(shows(cx, &rig, "settings-upgrade"));
+    let edited = Values::default()
+        .with(&Change {
+            field: Field::Sort,
+            value: Value::Pick(1),
+        })
+        .with(&Change::show_hidden(true));
+    assert!(rig.news.send(SettingsNews::Applied {
+        values: edited,
+        generation: 1
+    }));
+    settle_motion(cx, &rig);
+    assert!(!shows(cx, &rig, "settings-upgrade"));
+}
+
+#[gpui_kit::test]
+fn a_default_already_changed_in_the_sheet_shows_no_item(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    sort_row(cx, &rig);
+    rig.press(cx, "right");
+    settle_motion(cx, &rig);
+    send(cx, &rig, vec![sort_shift()]);
+    settle_motion(cx, &rig);
+    assert!(!shows(cx, &rig, "settings-upgrade"));
+}
+
+#[gpui_kit::test]
+fn ctrl_z_undoes_keep_old_value(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    send(cx, &rig, vec![sort_shift()]);
+    open(cx, &rig);
+    rig.click(cx, ("settings-keep", 0usize));
+    settle_motion(cx, &rig);
+    assert_eq!(last_change(&rig).map(|c| c.value), Some(Value::Pick(2)));
+    rig.press(cx, "ctrl-z");
+    settle_motion(cx, &rig);
+    assert_eq!(
+        last_change(&rig),
+        Some(Change {
+            field: Field::Sort,
+            value: Value::Unset
+        })
+    );
+    let sort = rig
+        .view
+        .read_with(cx, |view, _| view.values.get(Field::Sort).clone());
+    assert_eq!(sort, Value::Pick(0));
+}
+
+#[gpui_kit::test]
+fn a_failed_save_keeps_the_item_and_shows_the_problem(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    send(cx, &rig, vec![sort_shift()]);
+    open(cx, &rig);
+    *rig.store.failure.lock().expect("failure") = Some("disk full".to_owned());
+    rig.click(cx, ("settings-keep", 0usize));
+    settle_motion(cx, &rig);
+    assert!(shows(cx, &rig, ("settings-upgrade-item", 0usize)));
+    assert!(rig.view.read_with(cx, |view, _| view.saver.error.is_some()));
 }

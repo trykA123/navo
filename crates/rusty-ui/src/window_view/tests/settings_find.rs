@@ -164,3 +164,21 @@ fn closing_the_sheet_clears_the_find(cx: &mut TestAppContext) {
     assert_eq!(find_text(cx, &rig).as_deref(), Some(""));
     assert!(shows_row(cx, &rig, Field::Theme));
 }
+
+#[gpui_kit::test]
+fn keys_change_nothing_when_no_row_matches_the_find(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::Dark);
+    open(cx, &rig);
+    find(cx, &rig, "zzz");
+    let before = rig.view.read_with(cx, |view, _| view.values.clone());
+    rig.press(cx, "down");
+    for key in ["space", "left", "right", "f8"] {
+        rig.press(cx, key);
+    }
+    settle_motion(cx, &rig);
+    assert!(rig.store.changes.lock().expect("changes").is_empty());
+    assert_eq!(
+        rig.view.read_with(cx, |view, _| view.values.clone()),
+        before
+    );
+}

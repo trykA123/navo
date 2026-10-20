@@ -215,8 +215,12 @@ impl SettingsBody {
         self
     }
 
+    fn shown_spec(&self) -> Option<&'static FieldSpec> {
+        FIELDS.get(self.row).filter(|spec| self.filter.admits(spec))
+    }
+
     fn event_for(&self, nudge: Nudge) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         let value = nudged(spec, self.values.get(spec.field), nudge)?;
         Some(SheetEvent::Set(Change {
             field: spec.field,
@@ -225,37 +229,44 @@ impl SettingsBody {
     }
 
     fn flip_event(&self) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         match spec.control {
             Control::Text => Some(SheetEvent::Edit(spec.field)),
             _ => self.event_for(Nudge::Flip),
         }
     }
 
-    fn section_event(&self, forward: bool) -> SheetEvent {
+    fn section_event(&self, forward: bool) -> Option<SheetEvent> {
         let edge = if forward {
             LAST_SECTION
         } else {
             Section::Appearance
         };
         match (self.shortcuts.is_some(), forward) {
-            (true, true) => SheetEvent::Select(first_row(Section::Appearance)),
-            (true, false) => SheetEvent::Select(first_row(LAST_SECTION)),
+            (true, true) => self
+                .filter
+                .first_in(Section::Appearance)
+                .map(SheetEvent::Select),
+            (true, false) => self.filter.first_in(LAST_SECTION).map(SheetEvent::Select),
             (false, _) if self.filter.is_empty() && section_of(self.row) == edge => {
-                SheetEvent::Shortcuts
+                Some(SheetEvent::Shortcuts)
             }
-            (false, _) => SheetEvent::Select(next_section(&self.filter, self.row, forward)),
+            (false, _) => Some(SheetEvent::Select(next_section(
+                &self.filter,
+                self.row,
+                forward,
+            ))),
         }
     }
 
     fn reset_event(&self) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         let is_shown = self.shortcuts.is_none() && self.values.is_changed(spec.field);
         is_shown.then(|| SheetEvent::Set(Change::reset(spec.field)))
     }
 
     fn edit_event(&self) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         matches!(spec.control, Control::Text | Control::Number)
             .then_some(SheetEvent::Edit(spec.field))
     }
@@ -276,8 +287,8 @@ fn on_event(
 }
 
 fn register(root: Div, body: &SettingsBody) -> Div {
-    let next = on_event(body, Some(body.section_event(true)));
-    let previous = on_event(body, Some(body.section_event(false)));
+    let next = on_event(body, body.section_event(true));
+    let previous = on_event(body, body.section_event(false));
     let close = on_event(body, Some(SheetEvent::Close));
     let root = root
         .on_action(move |_: &NextSection, window, cx| next(window, cx))

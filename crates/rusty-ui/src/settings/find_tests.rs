@@ -146,3 +146,41 @@ fn a_shift_for_an_unknown_key_has_no_row_and_an_unknown_old_value_no_keep() {
     let moved = Moved::of(&shift("files.sort", "\"oldest\"", "\"date\"")).unwrap();
     assert_eq!(moved.keep_change(), None);
 }
+
+fn on_shortcuts(filter: &str) -> SettingsBody {
+    SettingsBody::new(Values::default(), 0)
+        .shortcuts(Some(div().into_any_element()))
+        .filter(Filter::new(filter))
+}
+
+#[test]
+fn tab_from_shortcuts_lands_on_a_shown_row_or_nowhere() {
+    let density = FIELDS
+        .iter()
+        .position(|s| s.field == Field::Density)
+        .unwrap();
+    assert_eq!(
+        on_shortcuts("appearance.density").section_event(true),
+        Some(SheetEvent::Select(density))
+    );
+    assert_eq!(on_shortcuts("files.sort").section_event(true), None);
+    assert_eq!(on_shortcuts("zzz").section_event(false), None);
+    assert!(on_shortcuts("").section_event(true).is_some());
+}
+
+#[test]
+fn a_hidden_row_gets_no_key_events() {
+    let row = FIELDS
+        .iter()
+        .position(|s| s.field == Field::FontSize)
+        .unwrap();
+    let values = Values::default().with(&Change {
+        field: Field::FontSize,
+        value: Value::Number(14),
+    });
+    let body = SettingsBody::new(values, row).filter(Filter::new("zzz"));
+    assert!(body.reset_event().is_none());
+    assert_eq!(body.event_for(Nudge::Forward), None);
+    assert_eq!(body.flip_event(), None);
+    assert_eq!(body.edit_event(), None);
+}

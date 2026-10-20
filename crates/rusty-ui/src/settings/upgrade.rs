@@ -2,7 +2,7 @@ use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 
 use super::fields::{Control, FIELDS, Field};
-use super::values::{Change, Value};
+use super::values::{Change, Value, Values};
 use super::{Handler, SheetEvent};
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, IconName, icon};
@@ -22,6 +22,7 @@ pub struct Moved {
     pub shift: DefaultShift,
     pub field: Field,
     keep: Option<Value>,
+    new: Option<Value>,
 }
 
 fn parsed(canonical: &str) -> Option<toml::Value> {
@@ -58,6 +59,7 @@ impl Moved {
             shift: shift.clone(),
             field: spec.field,
             keep: parsed(&shift.old).and_then(|old| value_of(spec.control, old)),
+            new: parsed(&shift.new).and_then(|new| value_of(spec.control, new)),
         })
     }
 
@@ -69,6 +71,11 @@ impl Moved {
             plain(&self.shift.old),
             plain(&self.shift.new)
         )
+    }
+
+    #[must_use]
+    pub fn is_current(&self, values: &Values) -> bool {
+        self.new.as_ref() == Some(values.get(self.field))
     }
 
     #[must_use]
