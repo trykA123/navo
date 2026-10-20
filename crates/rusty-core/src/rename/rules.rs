@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::case::{ExtCase, NameCase};
+use super::cleanup::Cleanup;
 use super::mask::{CounterSpec, Mask, Subject};
 use super::search::Search;
 use super::split::split_name;
@@ -46,6 +47,7 @@ pub struct RenameRules {
     pub name_case: NameCase,
     pub ext_case: ExtCase,
     pub counter: Counter,
+    pub cleanup: Cleanup,
 }
 
 impl Default for RenameRules {
@@ -58,6 +60,7 @@ impl Default for RenameRules {
             name_case: NameCase::Unchanged,
             ext_case: ExtCase::Unchanged,
             counter: Counter::default(),
+            cleanup: Cleanup::default(),
         }
     }
 }
@@ -84,6 +87,7 @@ pub struct Compiled {
     name_only: bool,
     name_case: NameCase,
     ext_case: ExtCase,
+    cleanup: Cleanup,
     counter: CounterSpec,
 }
 
@@ -99,6 +103,7 @@ impl Compiled {
             name_only: rules.find.name_only,
             name_case: rules.name_case,
             ext_case: rules.ext_case,
+            cleanup: rules.cleanup,
             counter: counter(rules.counter).map_err(|m| fail(RuleField::Counter, m))?,
         })
     }
@@ -114,7 +119,9 @@ impl Compiled {
             let (stem, ext) = split_name(&whole);
             (stem.to_owned(), ext.to_owned())
         };
-        join(&self.name_case.apply(&stem), &self.ext_case.apply(&ext))
+        let stem = self.cleanup.apply(&self.name_case.apply(&stem));
+        let ext = self.cleanup.apply(&self.ext_case.apply(&ext));
+        join(&stem, &ext)
     }
 }
 
