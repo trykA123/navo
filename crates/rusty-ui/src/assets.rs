@@ -86,6 +86,7 @@ icon_assets!(
         Rows3,
         Search,
         SlidersHorizontal,
+        SquareChevronRight,
         SquareMenu,
         SquarePlus,
         SquareTerminal,

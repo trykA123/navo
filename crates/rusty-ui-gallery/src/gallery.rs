@@ -13,6 +13,7 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 use crate::automotive_sample::{
     ELF_NAME, ELF_STEPS, MEMORY_NAME, MEMORY_STEPS, TRACE_NAME, TRACE_STEPS, elf, memory, trace,
 };
+use crate::command_center_page::{self, CommandCenterPage};
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::kinds_page::KindsPage;
@@ -97,6 +98,7 @@ pub struct Gallery {
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 4],
     menus: [(Page, Entity<MenuPage>); 6],
+    command_centers: [(Page, Entity<CommandCenterPage>); 7],
     viewer_menus: [Entity<ViewerMenuPage>; 8],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
@@ -145,6 +147,8 @@ impl Gallery {
             image: image_sample::image_view(cx).ok(),
             pdf: pdf_sample::pdf_views(PDF_SEARCH, window, cx),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
+            command_centers: command_center_page::PAGES
+                .map(|(page, shows)| (page, cx.new(|cx| CommandCenterPage::new(shows, cx)))),
             viewer_menus: VIEWER_MENUS
                 .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
             main_window: cx.new(|cx| WindowPage::new(None, cx)),
@@ -351,6 +355,7 @@ impl Render for Gallery {
             | Page::MenuBackground
             | Page::MenuEmptyFolder => root.children(self.menu_page(self.page)),
             _ if self.viewer_menu().is_some() => root.children(self.viewer_menu()),
+            _ if self.command_center().is_some() => root.children(self.command_center()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             page if page.is_viewer_sample() => self.sample_page(root, cx),
             Page::Tokens => root.child(tokens_page::render(&t)),

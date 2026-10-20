@@ -31,6 +31,13 @@ impl Gallery {
         }
     }
 
+    pub(super) fn command_center(&self) -> Option<Entity<CommandCenterPage>> {
+        self.command_centers
+            .iter()
+            .find(|(shown, _)| *shown == self.page)
+            .map(|(_, page)| page.clone())
+    }
+
     pub(super) fn pdf_sample(&self) -> Option<&Entity<PdfView>> {
         match self.page {
             Page::PdfCalm => Some(&self.pdf[0]),
