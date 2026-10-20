@@ -27,7 +27,7 @@ fn decay(transaction: &Transaction<'_>, table: &str) -> Result<(), DbError> {
         transaction.query_row(&format!("SELECT total(score) FROM {table}"), [], |row| {
             row.get(0)
         })?;
-    if total > DECAY_ABOVE {
+    if total >= DECAY_ABOVE {
         transaction.execute(&format!("UPDATE {table} SET score = score * ?1"), [DECAY])?;
         transaction.execute(&format!("DELETE FROM {table} WHERE score < 1"), [])?;
     }
@@ -42,6 +42,7 @@ impl Db {
         now_ms: i64,
     ) -> Result<(), DbError> {
         let transaction = self.connection().unchecked_transaction()?;
+        decay(&transaction, "frecency")?;
         transaction.execute(
             "INSERT INTO frecency (location, score, last_at, is_folder) VALUES (?1, 1.0, ?2, ?3)
              ON CONFLICT (location) DO UPDATE SET score = score + 1.0, last_at = excluded.last_at,
@@ -57,7 +58,6 @@ impl Db {
              (SELECT id FROM history ORDER BY id DESC LIMIT 1 OFFSET ?1)",
             [HISTORY_MAX],
         )?;
-        decay(&transaction, "frecency")?;
         transaction.commit()?;
         Ok(())
     }
@@ -82,12 +82,12 @@ impl Db {
 
     pub fn record_command(&self, name: &str, now_ms: i64) -> Result<(), DbError> {
         let transaction = self.connection().unchecked_transaction()?;
+        decay(&transaction, "command_use")?;
         transaction.execute(
             "INSERT INTO command_use (name, score, last_at) VALUES (?1, 1.0, ?2)
              ON CONFLICT (name) DO UPDATE SET score = score + 1.0, last_at = excluded.last_at",
             params![name, now_ms],
         )?;
-        decay(&transaction, "command_use")?;
         transaction.commit()?;
         Ok(())
     }

@@ -142,7 +142,7 @@ fn passing_ten_thousand_scales_every_score_by_nine_tenths() {
     db.record_visit("file:///a", true, NOW).unwrap();
     assert_eq!(
         (score(&db, "file:///a"), score(&db, "file:///b")),
-        (Some(9_001.0 * 0.9), Some(900.0))
+        (Some(9_000.0 * 0.9 + 1.0), Some(900.0))
     );
 }
 
@@ -156,6 +156,46 @@ fn decay_drops_scores_below_one() {
     );
     db.record_visit("file:///a", true, NOW).unwrap();
     assert_eq!(score(&db, "file:///b"), None);
+}
+
+#[test]
+fn a_new_folder_recorded_at_the_threshold_keeps_its_first_weight() {
+    let db = Db::open_in_memory().unwrap();
+    seed(
+        &db,
+        "frecency",
+        &[("file:///a", 9_999.0), ("file:///b", 1.0)],
+    );
+    db.record_visit("file:///new", true, NOW).unwrap();
+    assert_eq!(score(&db, "file:///new"), Some(1.0));
+}
+
+#[test]
+fn a_new_command_recorded_at_the_threshold_keeps_its_first_weight() {
+    let db = Db::open_in_memory().unwrap();
+    seed(&db, "command_use", &[("a", 9_999.0), ("b", 1.0)]);
+    db.record_command("new", NOW).unwrap();
+    let new = db
+        .command_use(10, NOW)
+        .unwrap()
+        .into_iter()
+        .find(|(name, _)| name == "new");
+    assert_eq!(new, Some(("new".to_owned(), 4.0)));
+}
+
+#[test]
+fn decay_at_the_threshold_still_trims_other_low_rows() {
+    let db = Db::open_in_memory().unwrap();
+    seed(
+        &db,
+        "frecency",
+        &[("file:///a", 9_999.0), ("file:///b", 1.0)],
+    );
+    db.record_visit("file:///new", true, NOW).unwrap();
+    assert_eq!(
+        (score(&db, "file:///a"), score(&db, "file:///b")),
+        (Some(9_999.0 * 0.9), None)
+    );
 }
 
 #[test]
