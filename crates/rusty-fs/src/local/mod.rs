@@ -1,3 +1,4 @@
+mod link;
 #[cfg(target_os = "linux")]
 mod linux_watch;
 #[cfg(target_os = "linux")]
@@ -38,6 +39,8 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use rusty_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, ProviderPath};
+
+pub use link::make_link;
 
 #[cfg(any(windows, target_os = "linux"))]
 use crate::watch::Depth;

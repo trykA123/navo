@@ -6534,6 +6534,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "trash",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
  "zip",
 ]
