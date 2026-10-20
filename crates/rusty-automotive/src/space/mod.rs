@@ -1,8 +1,10 @@
 mod kind;
+mod owners_elf;
 mod regions;
 mod table;
 
 pub use kind::Kind;
+pub use owners_elf::{NOT_ATTRIBUTED, NameRef, Owner, Owners, Provenance, owners};
 pub use regions::{regions_for_elf, regions_for_map};
 
 use crate::mdf::ChipKind;

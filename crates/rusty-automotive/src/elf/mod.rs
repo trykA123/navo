@@ -14,6 +14,7 @@ use object::ReadCache;
 use object::read::ReadCacheOps;
 
 pub use lines::{Lines, SourceLine};
+pub(crate) use query::{Boundaries, estimate};
 pub use query::{Column, Order, Query, Scope, Selection, estimated_size, select};
 
 use crate::{IndexError, Watch};
@@ -108,6 +109,12 @@ pub struct Symbol {
     pub place: Place,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FileMark {
+    first: u32,
+    name: Range<u32>,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Totals {
     pub load: u64,
@@ -158,6 +165,7 @@ pub struct Elf {
     pub problems: Vec<ElfProblem>,
     pub totals: Totals,
     names: String,
+    files: Vec<FileMark>,
     dwarf: Vec<(&'static str, usize)>,
 }
 
@@ -176,6 +184,12 @@ impl Elf {
         self.names
             .get(range.start as usize..range.end as usize)
             .unwrap_or("")
+    }
+
+    pub fn file_marks(&self) -> impl Iterator<Item = (usize, &str)> {
+        self.files
+            .iter()
+            .map(|mark| (mark.first as usize, self.text(&mark.name)))
     }
 
     #[must_use]
