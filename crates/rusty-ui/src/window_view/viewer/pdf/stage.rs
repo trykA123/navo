@@ -149,6 +149,7 @@ impl PdfView {
         let Some(doc) = self.doc_mut() else {
             return;
         };
+        doc.drop_hidden_ring();
         let camera = &mut doc.camera;
         if camera.viewport == measured.size && camera.device == measured.device.max(1.) {
             return;

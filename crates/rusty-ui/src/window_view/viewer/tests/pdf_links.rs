@@ -53,10 +53,28 @@ fn a_click_on_a_page_link_goes_there_and_back_returns(cx: &mut TestAppContext) {
 fn an_https_link_calls_the_opener(cx: &mut TestAppContext) {
     let rig = rig(cx, "a-book.pdf");
     click(cx, &rig, 2);
-    assert_eq!(
-        *rig.2.uris.lock().expect("calls"),
-        ["https://example.org/a".to_owned()]
-    );
+    assert_eq!(cx.opened_url().as_deref(), Some("https://example.org/a"));
+}
+
+#[gpui_kit::test]
+fn a_page_link_with_a_top_puts_that_spot_near_the_top_of_the_view(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    click(cx, &rig, 1);
+    let stage = bounds(cx, rig.0, "pdf-stage");
+    let page = bounds(cx, rig.0, ("pdf-page", 6usize));
+    let scale = f32::from(page.size.width) / WIDTH;
+    let spot = page.origin.y + px(100. * scale) - stage.origin.y;
+    assert!((f32::from(spot) - 24.).abs() < 1., "{spot:?}");
+}
+
+#[gpui_kit::test]
+fn links_with_shell_or_hidden_characters_are_not_opened(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    for index in 6..=10 {
+        click(cx, &rig, index);
+        assert_eq!(text(cx, rig.0, "pdf-note"), "Not opened: unknown links");
+    }
+    assert_eq!(cx.opened_url(), None);
 }
 
 #[gpui_kit::test]
@@ -67,7 +85,7 @@ fn file_and_javascript_links_are_not_opened_and_say_so(cx: &mut TestAppContext) 
     click(cx, &rig, 4);
     assert_eq!(text(cx, rig.0, "pdf-note"), "Not opened: javascript links");
     click(cx, &rig, 5);
-    assert!(rig.2.uris.lock().expect("calls").is_empty());
+    assert_eq!(cx.opened_url(), None);
     assert_eq!(status(cx, &rig), "PDF · page 1 of 40");
 }
 
@@ -129,5 +147,22 @@ fn escape_clears_the_link_focus_and_keeps_the_page(cx: &mut TestAppContext) {
     let rig = rig(cx, "a-book.pdf");
     keys(cx, &rig, &["tab", "escape"]);
     assert!(!has_ring(cx, &rig));
+    assert_eq!(status(cx, &rig), "PDF · page 1 of 40");
+}
+
+#[gpui_kit::test]
+fn tab_in_the_go_to_page_field_leaves_the_links_alone(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    keys(cx, &rig, &["ctrl-g", "tab", "enter"]);
+    assert!(!has_ring(cx, &rig));
+    assert_eq!(status(cx, &rig), "PDF · page 1 of 40");
+}
+
+#[gpui_kit::test]
+fn the_link_focus_drops_when_its_page_scrolls_away(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    keys(cx, &rig, &["tab", "end", "home"]);
+    assert!(!has_ring(cx, &rig));
+    keys(cx, &rig, &["enter"]);
     assert_eq!(status(cx, &rig), "PDF · page 1 of 40");
 }

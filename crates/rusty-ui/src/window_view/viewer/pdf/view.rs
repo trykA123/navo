@@ -149,7 +149,7 @@ impl PdfView {
     }
 
     fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.clear_ring(cx) {
+        if self.clear_ring(window, cx) {
             return;
         }
         if self.leave_page_box(window, cx) {
@@ -188,9 +188,15 @@ impl PdfView {
             .on_action(cx.listener(|view, _: &PagesDrawer, window, cx| view.open_pages(window, cx)))
             .on_action(cx.listener(|view, _: &CopyText, _, cx| view.copy_selection(cx)))
             .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
-            .on_action(cx.listener(|view, _: &LinkNext, _, cx| view.step_ring(false, cx)))
-            .on_action(cx.listener(|view, _: &LinkPrevious, _, cx| view.step_ring(true, cx)))
-            .on_action(cx.listener(|view, _: &LinkFollow, _, cx| view.follow_ring(cx)))
+            .on_action(cx.listener(|view, _: &LinkNext, window, cx| {
+                view.step_ring(false, window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &LinkPrevious, window, cx| {
+                view.step_ring(true, window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &LinkFollow, window, cx| {
+                view.follow_ring(window, cx);
+            }))
             .on_action(cx.listener(|view, _: &TrailBack, _, cx| view.go_back(cx)))
             .on_action(cx.listener(|view, _: &TrailForward, _, cx| view.go_forward(cx)))
     }

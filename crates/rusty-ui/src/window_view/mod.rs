@@ -82,7 +82,7 @@ pub use viewer::{
     ViewerBody, ViewerKind,
 };
 pub use viewer::{ExifEntry, IMAGE_LIMIT, ImageView, MenuEntry, Picture, ReadBytes, decode_image};
-pub use viewer::{OpenPdf, OpenUri, PdfLook, PdfPages, PdfStart, PdfView};
+pub use viewer::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use viewer::{bind_keys as bind_viewer_keys, encoding_picker, view_menu, viewer_menu};
 pub use window_menu::window_view_menu;
 

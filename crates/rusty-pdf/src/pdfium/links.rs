@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use pdfium_render::prelude::{
     PdfAction, PdfDestination, PdfDestinationViewSettings as View, PdfPage, PdfRect,
 };
@@ -7,9 +9,78 @@ use crate::protocol::{
     CharBox, LinkTarget, MAX_PAGE_LINKS, MAX_URI_BYTES, PageLink, PageLinks, PdfError,
 };
 
+pub(super) struct Targets<F> {
+    load: F,
+    known: HashMap<u32, Option<Upright>>,
+}
+
+impl<F: FnMut(u32) -> Option<Upright>> Targets<F> {
+    pub(super) fn new(load: F) -> Self {
+        Self {
+            load,
+            known: HashMap::new(),
+        }
+    }
+
+    pub(super) fn upright(&mut self, page: u32) -> Option<&Upright> {
+        let load = &mut self.load;
+        self.known
+            .entry(page)
+            .or_insert_with(|| load(page))
+            .as_ref()
+    }
+
+    pub(super) fn target<'a>(
+        &mut self,
+        action: Option<PdfAction<'a>>,
+        destination: impl FnOnce() -> Option<PdfDestination<'a>>,
+    ) -> LinkTarget {
+        match action {
+            Some(PdfAction::LocalDestination(action)) => action
+                .destination()
+                .map(|destination| self.destination_target(destination))
+                .unwrap_or(LinkTarget::Unsupported),
+            Some(PdfAction::Uri(action)) => action
+                .uri()
+                .map(uri_target)
+                .unwrap_or(LinkTarget::Unsupported),
+            None => destination()
+                .map(|destination| self.destination_target(destination))
+                .unwrap_or(LinkTarget::Unsupported),
+            Some(_) => LinkTarget::Unsupported,
+        }
+    }
+
+    fn destination_target(&mut self, destination: PdfDestination<'_>) -> LinkTarget {
+        let Some(page) = destination
+            .page_index()
+            .ok()
+            .and_then(|index| u32::try_from(index).ok())
+        else {
+            return LinkTarget::Unsupported;
+        };
+        let view = destination.view_settings().ok();
+        let top = view.and_then(|view| destination_top(self.upright(page)?, view));
+        LinkTarget::Page { page, top }
+    }
+}
+
+pub(super) fn targets(engine: &PdfiumEngine) -> Targets<impl FnMut(u32) -> Option<Upright> + '_> {
+    Targets::new(move |index| engine.page(index).ok().map(|page| upright_of(&page)))
+}
+
+fn upright_of(page: &PdfPage<'_>) -> Upright {
+    Upright::new(
+        page.rotation().map_or(0, quarter_turns),
+        page.width().value,
+        page.height().value,
+    )
+}
+
 pub(super) fn extract(engine: &PdfiumEngine, page: PdfPage<'_>) -> Result<PageLinks, PdfError> {
     let (width, height) = (page.width().value, page.height().value);
-    let upright = Upright::new(page.rotation().map_or(0, quarter_turns), width, height);
+    let upright = upright_of(&page);
+    let mut targets = targets(engine);
     let annotations = page.annotations();
     let mut links = Vec::new();
     let mut count = 0;
@@ -36,50 +107,10 @@ pub(super) fn extract(engine: &PdfiumEngine, page: PdfPage<'_>) -> Result<PageLi
         };
         links.push(PageLink {
             bounds,
-            target: action_target(engine, link.action(), || link.destination()),
+            target: targets.target(link.action(), || link.destination()),
         });
     }
     PageLinks::new(width, height, links).map_err(|_| PdfError::Corrupt)
-}
-
-pub(super) fn action_target<'a>(
-    engine: &PdfiumEngine,
-    action: Option<PdfAction<'a>>,
-    destination: impl FnOnce() -> Option<PdfDestination<'a>>,
-) -> LinkTarget {
-    match action {
-        Some(PdfAction::LocalDestination(action)) => action
-            .destination()
-            .map(|destination| destination_target(engine, destination))
-            .unwrap_or(LinkTarget::Unsupported),
-        Some(PdfAction::Uri(action)) => action
-            .uri()
-            .map(uri_target)
-            .unwrap_or(LinkTarget::Unsupported),
-        None => destination()
-            .map(|destination| destination_target(engine, destination))
-            .unwrap_or(LinkTarget::Unsupported),
-        Some(_) => LinkTarget::Unsupported,
-    }
-}
-
-fn destination_target(engine: &PdfiumEngine, destination: PdfDestination<'_>) -> LinkTarget {
-    let Some(page) = destination
-        .page_index()
-        .ok()
-        .and_then(|index| u32::try_from(index).ok())
-    else {
-        return LinkTarget::Unsupported;
-    };
-    let top = engine.page(page).ok().and_then(|page| {
-        let upright = Upright::new(
-            page.rotation().map_or(0, quarter_turns),
-            page.width().value,
-            page.height().value,
-        );
-        destination_top(&upright, destination.view_settings().ok()?)
-    });
-    LinkTarget::Page { page, top }
 }
 
 pub(super) fn link_bounds(upright: &Upright, rect: PdfRect) -> Option<CharBox> {
@@ -98,10 +129,16 @@ pub(super) fn link_bounds(upright: &Upright, rect: PdfRect) -> Option<CharBox> {
 
 pub(super) fn destination_top(upright: &Upright, view: View) -> Option<f32> {
     let (x, y) = match view {
+        View::FitPageToRectangle(rect) => {
+            let corners = upright.map(
+                (rect.left().value, rect.bottom().value),
+                (rect.right().value, rect.top().value),
+            );
+            return corners.top.is_finite().then_some(corners.top);
+        }
         View::SpecificCoordinatesAndZoom(x, y, _) => (x, y),
         View::FitPageHorizontallyToWindow(y) | View::FitBoundsHorizontallyToWindow(y) => (None, y),
         View::FitPageVerticallyToWindow(x) | View::FitBoundsVerticallyToWindow(x) => (x, None),
-        View::FitPageToRectangle(rect) => (Some(rect.left()), Some(rect.top())),
         _ => return None,
     };
     let point = if upright.turns % 2 == 1 {

@@ -32,7 +32,6 @@ const MOTION: std::time::Duration = std::time::Duration::from_millis(600);
 pub(super) struct Calls {
     pub drawn: Arc<Mutex<Vec<u32>>>,
     pub opens: Arc<Mutex<Vec<Option<String>>>>,
-    pub uris: Arc<Mutex<Vec<String>>>,
 }
 
 impl Calls {
@@ -73,10 +72,14 @@ fn chars_of(text: &str) -> Vec<TextChar> {
 pub(super) const LINK_COLUMN: f32 = 40.;
 
 fn link_box(top: f32) -> CharBox {
+    side_box(LINK_COLUMN, top)
+}
+
+fn side_box(left: f32, top: f32) -> CharBox {
     CharBox {
-        left: LINK_COLUMN,
+        left,
         top,
-        right: LINK_COLUMN + 80.,
+        right: left + 80.,
         bottom: top + 14.,
     }
 }
@@ -104,6 +107,14 @@ fn book_links() -> Result<PageLinks, PdfError> {
         (link_box(160.), uri("file:///etc/passwd")),
         (link_box(190.), uri("javascript:alert(1)")),
         (link_box(220.), LinkTarget::Unsupported),
+        (side_box(300., 100.), uri("https://example.org/\"a")),
+        (side_box(300., 130.), uri("https://example.org/a b")),
+        (
+            side_box(300., 160.),
+            uri("https://example.org,/select,C:\\Windows"),
+        ),
+        (side_box(300., 190.), uri("-https://example.org")),
+        (side_box(300., 220.), uri("https://example.org/\u{7}")),
     ];
     let links = targets
         .into_iter()
@@ -141,6 +152,7 @@ struct Book {
     calls: Calls,
     mute: Option<u32>,
     is_flat: bool,
+    outline_fails: u32,
 }
 
 impl PdfPages for Book {
@@ -167,6 +179,10 @@ impl PdfPages for Book {
     }
 
     fn outline(&mut self) -> Result<Outline, PdfError> {
+        if self.outline_fails > 0 {
+            self.outline_fails -= 1;
+            return Err(PdfError::Timeout);
+        }
         if self.is_flat {
             return Outline::new(Vec::new()).map_err(|_| PdfError::Corrupt);
         }
@@ -214,12 +230,24 @@ fn open_with(calls: &Calls) -> OpenPdf {
             .expect("calls")
             .push(password.map(str::to_owned));
         let name = name_of(location);
-        if matches!(name.as_str(), "a-book.pdf" | "a-muted.pdf" | "a-flat.pdf") {
+        let books = [
+            "a-book.pdf",
+            "a-muted.pdf",
+            "a-flat.pdf",
+            "a-slow.pdf",
+            "a-lost.pdf",
+        ];
+        if books.contains(&name.as_str()) {
             return Ok(Box::new(Book {
                 pages: PAGES,
                 calls: calls.clone(),
                 mute: (name == "a-muted.pdf").then_some(MUTED),
                 is_flat: name == "a-flat.pdf",
+                outline_fails: match name.as_str() {
+                    "a-slow.pdf" => 1,
+                    "a-lost.pdf" => 2,
+                    _ => 0,
+                },
             }) as Box<dyn PdfPages>);
         }
         let mut engine = FakeEngine::default();
@@ -246,12 +274,7 @@ fn rig_bytes(cx: &mut TestAppContext, name: &str, open: Option<OpenPdf>, bytes: 
     fs.add_file(&format!("home/{name}"), 4);
     let calls = Calls::default();
     let open = open.unwrap_or_else(|| open_with(&calls));
-    let uris = calls.uris.clone();
-    let files = FileHooks {
-        open_uri: Arc::new(move |uri| uris.lock().expect("calls").push(uri.to_owned())),
-        ..hooks(open, bytes)
-    };
-    let (window, view) = window_with(cx, fs, files, Kinds::builtin());
+    let (window, view) = window_with(cx, fs, hooks(open, bytes), Kinds::builtin());
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);

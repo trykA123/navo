@@ -21,6 +21,7 @@ const MARGIN: u32 = 1;
 const MAX_WIDTH: u32 = 4096;
 const MIN_WIDTH: u32 = 16;
 pub(super) const THUMB_WIDTH: u32 = 96;
+const READING_LINE: f32 = 32.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Selection {
@@ -47,7 +48,7 @@ pub(super) struct Doc {
     pub shots: Shots,
     pub thumbs: Shots,
     pub boxes: Boxes,
-    pub links: Kept<Option<PageLinks>>,
+    pub links: Kept<PageLinks>,
     pub trail: Trail,
     pub ring: Option<super::ring::Ring>,
     pub chapters: Chapters,
@@ -123,6 +124,16 @@ impl Doc {
 
     pub(super) fn current_page(&self) -> u32 {
         self.camera.current_page(&self.pages)
+    }
+
+    pub(super) fn reading_spot(&self) -> (u32, f32) {
+        let scale = self.scale();
+        let y = self.camera.scroll.y + READING_LINE;
+        let page = self.pages.page_at(y, scale);
+        (
+            page,
+            (y - self.pages.top(page, scale)) / scale.max(f32::EPSILON),
+        )
     }
 
     pub(super) fn shown(&self) -> Range<u32> {
@@ -202,10 +213,14 @@ impl Doc {
                     self.boxes.get(*page).is_some()
                         && self.links.get(*page).is_none()
                         && !self.trouble.unread.contains(page)
+                        && !self.trouble.unlinked.contains(page)
                 })
                 .map(|page| Job::Links { page })
         };
-        let chapters = || (wants.chapters && !self.chapters.is_read()).then_some(Job::Outline);
+        let chapters = || {
+            let is_due = wants.chapters && !self.chapters.is_read() && !self.trouble.outline_lost;
+            is_due.then_some(Job::Outline)
+        };
         let thumb = || self.thumb_job().filter(|_| wants.thumbs);
         let index = || {
             self.index
@@ -221,7 +236,7 @@ impl Doc {
     }
 
     pub(super) fn links_on(&self, page: u32) -> Option<&PageLinks> {
-        self.links.get(page)?.as_ref().as_ref()
+        self.links.get(page).map(Arc::as_ref)
     }
 
     pub(super) fn read(&mut self, page: u32, text: Arc<PageText>) -> bool {
@@ -285,7 +300,7 @@ impl Doc {
     }
 
     pub(super) fn show_chapter(&mut self) {
-        let row = self.chapters.current(self.current_page()).unwrap_or(0);
+        let row = self.chapters.current(self.reading_spot()).unwrap_or(0);
         self.lists.outline_row = row;
         self.lists.outline_scroll.scroll_to(row);
     }
@@ -314,6 +329,7 @@ mod tests {
     use gpui_kit::size;
     use rusty_pdf::protocol::{Bitmap, Outline, PdfError, RenderRequest};
 
+    use super::super::jobs;
     use super::*;
 
     struct Blank;
@@ -332,12 +348,28 @@ mod tests {
         }
 
         fn links(&mut self, _: u32) -> Result<PageLinks, PdfError> {
-            Err(PdfError::Corrupt)
+            Err(PdfError::HelperDied)
         }
 
         fn outline(&mut self) -> Result<Outline, PdfError> {
             Err(PdfError::Corrupt)
         }
+    }
+
+    #[test]
+    fn link_and_outline_errors_are_failures_that_keep_helper_deaths() {
+        let mut doc = Doc::new(Box::new(Blank), false);
+        let shared = doc.shared();
+        let verdicts: Vec<_> = (0..3)
+            .map(|page| doc.apply(jobs::run(&shared, Job::Links { page })).verdict)
+            .collect();
+        assert_eq!(
+            verdicts,
+            [None, None, Some(Verdict::Refuse(PdfError::HelperDied))]
+        );
+        assert!(doc.trouble.broken.is_empty());
+        doc.apply(jobs::run(&shared, Job::Outline));
+        assert!(doc.trouble.outline_lost && !doc.chapters.is_read());
     }
 
     #[test]

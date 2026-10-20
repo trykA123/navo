@@ -147,7 +147,7 @@ impl PdfView {
                 return Vec::new();
             };
             let items = doc.chapters.items();
-            let current = doc.chapters.current(doc.current_page());
+            let current = doc.chapters.current(doc.reading_spot());
             let shown: Vec<OutlineItem> = items.get(range.clone()).unwrap_or(&[]).to_vec();
             range
                 .zip(shown)
@@ -177,8 +177,12 @@ impl PdfView {
         )
         .row_height(px(ROW))
         .label("Outline");
-        let note = (doc.chapters.is_read() && doc.chapters.items().is_empty())
-            .then(|| SharedString::from(t!("pdf-outline-empty")));
+        let note = if doc.trouble.outline_lost {
+            Some(SharedString::from(t!("pdf-outline-unreadable")))
+        } else {
+            (doc.chapters.is_read() && doc.chapters.items().is_empty())
+                .then(|| SharedString::from(t!("pdf-outline-empty")))
+        };
         list_frame("pdf-outline")
             .track_focus(&self.pages_focus)
             .on_action(cx.listener(|view, _: &ListUp, _, cx| view.move_outline_row(false, cx)))

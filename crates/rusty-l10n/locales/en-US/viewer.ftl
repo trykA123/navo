@@ -10,3 +10,4 @@ pdf-link-scheme-unknown = unknown
 pdf-outline-empty = This PDF has no outline. Use Pages, or Find to jump to a heading.
 columns-resize = Resize { $column }
 columns-fit-hint = Double-click to fit
+pdf-outline-unreadable = Ferrite could not read this PDF's outline.

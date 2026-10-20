@@ -4,7 +4,7 @@ use std::hash::Hash;
 use pdfium_render::prelude::PdfDocument;
 
 use super::PdfiumEngine;
-use super::links::action_target;
+use super::links::targets;
 use crate::protocol::{
     LinkTarget, MAX_OUTLINE_ITEMS, MAX_OUTLINE_LEVEL, MAX_TITLE_CHARS, Outline, OutlineItem,
     PdfError,
@@ -15,10 +15,11 @@ pub(super) fn extract(
     document: &PdfDocument<'_>,
 ) -> Result<Outline, PdfError> {
     let bookmarks = document.bookmarks();
+    let mut targets = targets(engine);
     let items = flatten(bookmarks.root(), |bookmark| {
         let title = bookmark.title();
         let target = if title.is_some() {
-            action_target(engine, bookmark.action(), || bookmark.destination())
+            targets.target(bookmark.action(), || bookmark.destination())
         } else {
             LinkTarget::Unsupported
         };

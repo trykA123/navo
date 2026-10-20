@@ -40,7 +40,7 @@ pub(super) struct Picture {
 pub(super) enum Done {
     Drawn(Job, Picture),
     Read(u32, Arc<PageText>),
-    Linked(u32, Arc<Option<PageLinks>>),
+    Linked(u32, Arc<PageLinks>),
     Outlined(Vec<OutlineItem>),
     Failed(Job, PdfError),
 }
@@ -75,10 +75,17 @@ pub(super) fn run(shared: &Shared, job: Job) -> Done {
     let pages = pages.as_mut();
     let drawn = match job {
         Job::Page { page, width } | Job::Thumb { page, width } => draw(pages, page, width),
-        Job::Links { page } => return Done::Linked(page, Arc::new(pages.links(page).ok())),
+        Job::Links { page } => {
+            return match pages.links(page) {
+                Ok(links) => Done::Linked(page, Arc::new(links)),
+                Err(error) => Done::Failed(job, error),
+            };
+        }
         Job::Outline => {
-            let items = pages.outline().map(|outline| outline.items().to_vec());
-            return Done::Outlined(items.unwrap_or_default());
+            return match pages.outline() {
+                Ok(outline) => Done::Outlined(outline.items().to_vec()),
+                Err(error) => Done::Failed(job, error),
+            };
         }
         Job::Text { page } => {
             return match pages.text(page) {

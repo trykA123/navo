@@ -12,11 +12,32 @@ pub(super) enum Verdict {
     Refuse(PdfError),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Kind {
+    Drawing,
+    Text,
+    Links,
+    Outline,
+}
+
+impl Kind {
+    fn of(job: Job) -> Self {
+        match job {
+            Job::Page { .. } | Job::Thumb { .. } => Self::Drawing,
+            Job::Text { .. } => Self::Text,
+            Job::Links { .. } => Self::Links,
+            Job::Outline => Self::Outline,
+        }
+    }
+}
+
 #[derive(Default)]
 pub(super) struct Trouble {
     pub broken: BTreeMap<u32, PdfError>,
     pub unread: BTreeSet<u32>,
-    retried: BTreeSet<(bool, u32)>,
+    pub unlinked: BTreeSet<u32>,
+    pub outline_lost: bool,
+    retried: BTreeSet<(Kind, u32)>,
     deaths: u32,
 }
 
@@ -39,22 +60,28 @@ impl Trouble {
                 return Some(Verdict::Refuse(error));
             }
         }
-        let is_text = matches!(job, Job::Text { .. });
-        let page = job.page();
-        if is_transient(&error) && self.retried.insert((is_text, page)) {
+        let (kind, page) = (Kind::of(job), job.page());
+        if is_transient(&error) && self.retried.insert((kind, page)) {
             return None;
         }
-        if is_text {
-            self.unread.insert(page);
-        } else {
-            self.broken.insert(page, error);
+        match kind {
+            Kind::Drawing => {
+                self.broken.insert(page, error);
+            }
+            Kind::Text => {
+                self.unread.insert(page);
+            }
+            Kind::Links => {
+                self.unlinked.insert(page);
+            }
+            Kind::Outline => self.outline_lost = true,
         }
         None
     }
 
     pub(super) fn forget_drawing(&mut self) {
         self.broken.clear();
-        self.retried.retain(|(is_text, _)| *is_text);
+        self.retried.retain(|(kind, _)| *kind != Kind::Drawing);
     }
 }
 
@@ -99,5 +126,34 @@ mod tests {
         );
         trouble.failed(Job::Text { page: 5 }, PdfError::Corrupt);
         assert!(trouble.unread.contains(&5));
+    }
+
+    #[test]
+    fn link_and_outline_failures_never_break_drawing_and_retry_once() {
+        let mut trouble = Trouble::default();
+        assert_eq!(
+            trouble.failed(Job::Links { page: 0 }, PdfError::Timeout),
+            None
+        );
+        assert!(trouble.unlinked.is_empty());
+        trouble.failed(Job::Links { page: 0 }, PdfError::Timeout);
+        assert!(trouble.unlinked.contains(&0));
+        trouble.failed(Job::Outline, PdfError::Timeout);
+        assert!(!trouble.outline_lost);
+        trouble.failed(Job::Outline, PdfError::Timeout);
+        assert!(trouble.outline_lost);
+        assert!(trouble.broken.is_empty());
+    }
+
+    #[test]
+    fn helper_deaths_on_links_and_outline_count_toward_refusing() {
+        let mut trouble = Trouble::default();
+        assert_eq!(
+            trouble.failed(Job::Links { page: 1 }, PdfError::HelperDied),
+            None
+        );
+        assert_eq!(trouble.failed(Job::Outline, PdfError::HelperDied), None);
+        let last = trouble.failed(Job::Links { page: 2 }, PdfError::HelperDied);
+        assert_eq!(last, Some(Verdict::Refuse(PdfError::HelperDied)));
     }
 }
