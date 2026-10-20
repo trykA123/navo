@@ -202,8 +202,12 @@ pub(super) fn status(loaded: &Loaded) -> Vec<Check> {
             false,
         ),
     ]);
-    if model.skipped_sections > 0 {
-        let parts = format::count(model.skipped_sections, "other part", "other parts");
+    if !model.skipped_parts.is_empty() {
+        let parts = format::count(
+            model.skipped_parts.len() as u64,
+            "other part",
+            "other parts",
+        );
         checks.push(check(format!("{parts} not shown"), false));
     }
     checks
