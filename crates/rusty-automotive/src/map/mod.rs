@@ -8,6 +8,7 @@ mod rows;
 mod scan;
 mod table;
 mod tasking;
+mod wrap;
 
 pub use model::{
     Contribution, DiscardedSection, MapError, MapFlavor, MapModel, MapProblem, MemoryRegion,
