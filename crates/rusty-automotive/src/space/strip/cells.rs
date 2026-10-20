@@ -4,7 +4,14 @@ use crate::space::{Block, Kind, Region};
 
 use super::Scale;
 
-const KINDS: [Kind; Kind::COUNT] = [Kind::Code, Kind::Rodata, Kind::Data, Kind::Bss, Kind::Other];
+const KINDS: [Kind; Kind::COUNT] = [
+    Kind::Code,
+    Kind::Rodata,
+    Kind::Data,
+    Kind::Bss,
+    Kind::Other,
+    Kind::Fill,
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cell {
