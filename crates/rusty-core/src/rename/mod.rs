@@ -1,5 +1,6 @@
 mod case;
 pub mod check;
+mod cleanup;
 mod mask;
 mod order;
 mod parse;
@@ -8,6 +9,7 @@ mod search;
 mod split;
 
 pub use case::{ExtCase, NameCase};
+pub use cleanup::Cleanup;
 pub use mask::{
     CaseMode, CounterParts, CounterSpec, FieldLookup, LocalTime, Mask, MaskError, MaskErrorKind,
     Span, Subject, Token,
