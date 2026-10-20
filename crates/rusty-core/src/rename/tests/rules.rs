@@ -70,6 +70,16 @@ fn masks_run_before_search_and_case() {
 }
 
 #[test]
+fn an_empty_find_keeps_the_mask_split() {
+    let rules = RenameRules {
+        ext_mask: String::new(),
+        name_case: NameCase::Upper,
+        ..RenameRules::default()
+    };
+    assert_eq!(rename(&rules, "my.photo.jpg"), "MY.PHOTO");
+}
+
+#[test]
 fn case_runs_after_replace() {
     let mut rules = find("a", "b");
     rules.name_case = NameCase::Upper;

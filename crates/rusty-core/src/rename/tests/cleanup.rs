@@ -68,6 +68,15 @@ fn accents_drop_marks_and_keep_undecomposable_letters() {
 }
 
 #[test]
+fn accents_leave_other_decompositions_unchanged() {
+    let c = only("accents");
+    for name in ["한글.txt", "\u{F900}.txt", "\u{2126}.txt", "ǅ.txt"] {
+        assert_eq!(run(c, name), name);
+    }
+    assert_eq!(run(c, "Ștefan àé.txt"), "Stefan ae.txt");
+}
+
+#[test]
 fn spaces_become_underscores() {
     let c = only("underscore");
     assert_eq!(run(c, "a b  c.txt"), "a_b__c.txt");
