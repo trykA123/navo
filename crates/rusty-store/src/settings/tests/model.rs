@@ -170,3 +170,22 @@ fn an_unknown_copy_mode_is_reported_with_its_place() {
         "{error:?}"
     );
 }
+
+#[test]
+fn the_markdown_split_is_on_by_default_and_reads_its_own_table() {
+    assert!(Settings::default().markdown.view.preview_split);
+    let (settings, unknown) =
+        crate::parse_settings("[markdown.view]\npreview-split = false\n").unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert!(!settings.markdown.view.preview_split);
+}
+
+#[test]
+fn the_preview_sheet_shows_type_bars_and_largest_files_by_default() {
+    let view = Settings::default().preview.view;
+    assert!(view.type_bars && view.largest_files);
+    let text = "[preview.view]\nlargest-files = false\n";
+    let (settings, unknown) = crate::parse_settings(text).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert!(settings.preview.view.type_bars && !settings.preview.view.largest_files);
+}

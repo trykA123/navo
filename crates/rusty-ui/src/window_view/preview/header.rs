@@ -114,7 +114,12 @@ fn browsing_chip(t: &Theme) -> impl IntoElement {
         .child("Browsing")
 }
 
-pub(super) fn title_view(t: &Theme, title: Title, is_browsing: bool) -> Div {
+pub(super) fn title_view(
+    t: &Theme,
+    title: Title,
+    is_browsing: bool,
+    view: Option<AnyElement>,
+) -> Div {
     let text = div()
         .flex()
         .flex_col()
@@ -150,4 +155,5 @@ pub(super) fn title_view(t: &Theme, title: Title, is_browsing: bool) -> Div {
         .when(!title.chip.is_empty(), |row| row.child(chip(t, title.chip)))
         .when(is_browsing, |row| row.child(browsing_chip(t)))
         .child(div().flex_1())
+        .children(view)
 }

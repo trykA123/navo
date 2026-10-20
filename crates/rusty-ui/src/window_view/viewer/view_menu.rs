@@ -3,11 +3,11 @@ use rusty_core::shell_menu::{ItemId, ShellMenu};
 
 use super::body::{BodyAct, MenuEntry, ViewerBody};
 use super::menu::viewer_menu;
-use super::parts::{PRESET_ACTIONS, PartSet, ViewParts};
+use super::parts::{PRESET_ACTIONS, PartSet};
 use super::{
     Back, ChooseEncoding, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds, ToggleCharts,
-    ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector, ToggleRowBars,
-    ViewCustom, ViewMenu, ViewRich, ViewSimple,
+    ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector, TogglePreview,
+    ToggleRowBars, ViewCustom, ViewMenu, ViewRich, ViewSimple,
 };
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
@@ -16,15 +16,13 @@ use crate::settings::{Change, Field, PRESETS, Value, Values};
 use crate::tokens;
 use crate::window_view::{FerriteWindow, SaveReport};
 
-const NO_PARTS: &str = "This view has no parts to show or hide.";
-const KEPT: &str = "Kept as the default in ferrite.toml.";
-const SAVING: &str = "Saving\u{2026}";
-const NOT_KEPT: &str = "Not kept as the default.";
-const NOT_SAVED: &str = "ferrite.toml could not be saved.";
-const MENU_TITLE: &str = "View";
-const KEEP: &str = "Keep as default";
-const ENCODING: &str = "Encoding\u{2026}";
-const RESET: &str = "Reset to defaults";
+pub(in crate::window_view) mod labels;
+mod split;
+
+use labels::{
+    ENCODING, KEEP_LABEL, KEPT, MENU_TITLE, NO_PARTS, NOT_KEPT, NOT_SAVED, RESET_LABEL,
+    empty_keep_note,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ViewOp {
@@ -41,11 +39,7 @@ impl ViewOp {
     }
 }
 
-fn empty_keep_note(parts: &ViewParts) -> &'static str {
-    if parts.is_pending() { SAVING } else { KEPT }
-}
-
-fn view_entries(
+pub(in crate::window_view) fn view_entries(
     set: &PartSet,
     shown: &Values,
     is_editing: bool,
@@ -76,8 +70,8 @@ fn view_entries(
         entries.push(MenuEntry::Run(ENCODING, Box::new(ChooseEncoding), false));
     }
     entries.push(MenuEntry::Break);
-    entries.push(MenuEntry::Run(KEEP, Box::new(KeepViewDefault), false));
-    entries.push(MenuEntry::Run(RESET, Box::new(ResetView), false));
+    entries.push(MenuEntry::Run(KEEP_LABEL, Box::new(KeepViewDefault), false));
+    entries.push(MenuEntry::Run(RESET_LABEL, Box::new(ResetView), false));
     entries
 }
 
@@ -144,6 +138,9 @@ impl FerriteWindow {
             }))
             .on_action(cx.listener(|view, _: &ShowLineEnds, window, cx| {
                 view.show_line_ends(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &TogglePreview, window, cx| {
+                view.toggle_split(window, cx);
             }))
             .on_action(cx.listener(|view, _: &RightDrawer, window, cx| {
                 view.right_drawer(window, cx);
@@ -219,6 +216,12 @@ impl FerriteWindow {
             self.change_setting(change, window, cx);
         }
         self.show_parts(cx);
+        if matches!(
+            op,
+            ViewOp::Toggle(Field::MarkdownPreviewSplit) | ViewOp::Reset
+        ) {
+            self.leave_hidden_split(window, cx);
+        }
         self.refresh_view_menu(window, cx);
         cx.notify();
     }
@@ -229,6 +232,7 @@ impl FerriteWindow {
         sent: &[Change],
         cx: &mut App,
     ) {
+        self.preview_keep_settled(report, sent);
         let Some(viewer) = self.viewer.as_mut() else {
             return;
         };

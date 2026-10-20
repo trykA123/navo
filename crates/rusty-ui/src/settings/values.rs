@@ -94,9 +94,12 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::FontSize => Value::Number(13),
         Field::ModifierHints => Value::Pick(2),
         Field::ModifierHintsDelay => Value::Number(400),
-        Field::FoldersFirst | Field::SpaceMeasuresFolders | Field::TextLineNumbers => {
-            Value::Flag(true)
-        }
+        Field::FoldersFirst
+        | Field::SpaceMeasuresFolders
+        | Field::TextLineNumbers
+        | Field::MarkdownPreviewSplit
+        | Field::PreviewTypeBars
+        | Field::PreviewLargestFiles => Value::Flag(true),
         field if field.is_window_part() => Value::Flag(true),
         Field::TerminalProvider => text("windows-terminal"),
         _ => match spec.control {

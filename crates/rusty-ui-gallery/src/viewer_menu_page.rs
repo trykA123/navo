@@ -6,7 +6,7 @@ use rusty_ui::tokens;
 use rusty_ui::window_view::{ViewerBody, encoding_picker, view_menu, viewer_menu};
 
 use crate::automotive_sample::{ELF_NAME, MEMORY_NAME, TRACE_NAME, elf, memory, trace};
-use crate::structured_sample::{self as structured, TREE, TREE_NAME};
+use crate::structured_sample::{self as structured, MARKDOWN, MARKDOWN_NAME, TREE, TREE_NAME};
 
 const TEXT_NAME: &str = "deploy.sh";
 const TEXT: &str = "#!/usr/bin/env bash
@@ -31,6 +31,7 @@ pub enum Shows {
     ViewAutomotive,
     ViewElf,
     ViewTrace,
+    ViewMarkdown,
 }
 
 impl Shows {
@@ -114,12 +115,14 @@ fn body_title(shows: Shows) -> &'static str {
         Shows::ViewAutomotive => MEMORY_NAME,
         Shows::ViewElf => ELF_NAME,
         Shows::ViewTrace => TRACE_NAME,
+        Shows::ViewMarkdown => MARKDOWN_NAME,
     }
 }
 
 fn open_body(shows: Shows, window: &mut Window, cx: &mut App) -> Option<Box<dyn ViewerBody>> {
     match shows {
         Shows::ViewElf => structured::binary(ELF_NAME, elf(), window, cx),
+        Shows::ViewMarkdown => structured::editing(MARKDOWN_NAME, MARKDOWN, window, cx),
         _ => structured::body(body_title(shows), body_text(shows), window, cx),
     }
 }
@@ -129,7 +132,7 @@ fn body_text(shows: Shows) -> &'static str {
         Shows::Text | Shows::ViewText | Shows::Encoding => TEXT,
         Shows::Tree => TREE,
         Shows::ViewAutomotive => memory(),
-        Shows::ViewElf => "",
+        Shows::ViewElf | Shows::ViewMarkdown => "",
         Shows::ViewTrace => trace(),
     }
 }

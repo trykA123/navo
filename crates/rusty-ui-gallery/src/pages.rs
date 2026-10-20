@@ -68,6 +68,11 @@ pub enum Page {
     WindowPartsOn,
     WindowPartsOff,
     WindowViewMenu,
+    ViewMenuMarkdown,
+    PreviewPartsOn,
+    PreviewNoBars,
+    PreviewNoLargest,
+    PreviewPartsOff,
 }
 
 pub struct PageInfo {
@@ -86,7 +91,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 68] = [
+pub const PAGES: [PageInfo; 73] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -313,6 +318,36 @@ pub const PAGES: [PageInfo; 68] = [
         Page::WindowViewMenu,
         "Window, View menu",
         "p33-w1-view-menu",
+        false,
+    ),
+    info(
+        Page::ViewMenuMarkdown,
+        "View menu, Markdown",
+        "p33-v2-view-menu-markdown",
+        false,
+    ),
+    info(
+        Page::PreviewPartsOn,
+        "Preview sheet, every part",
+        "p33-v2-preview-on",
+        false,
+    ),
+    info(
+        Page::PreviewNoBars,
+        "Preview sheet, no type bars",
+        "p33-v2-preview-no-bars",
+        false,
+    ),
+    info(
+        Page::PreviewNoLargest,
+        "Preview sheet, no largest files",
+        "p33-v2-preview-no-largest",
+        false,
+    ),
+    info(
+        Page::PreviewPartsOff,
+        "Preview sheet, no optional part",
+        "p33-v2-preview-off",
         false,
     ),
 ];

@@ -64,7 +64,12 @@ fn type_name(t: &Theme, color: Hsla, name: String) -> Div {
         .child(div().truncate().child(name))
 }
 
-fn type_row(t: &Theme, (extension, tally): (&str, Tally), most: u64) -> Div {
+fn type_row(
+    t: &Theme,
+    (rank, (extension, tally)): (usize, (&str, Tally)),
+    most: u64,
+    has_bar: bool,
+) -> Div {
     let color = swatch_color(t, extension);
     let share = if most == 0 {
         0.
@@ -98,20 +103,24 @@ fn type_row(t: &Theme, (extension, tally): (&str, Tally), most: u64) -> Div {
                 .text_right()
                 .child(format::size(tally.bytes)),
         )
-        .child(
-            div()
-                .flex_1()
-                .min_w(px(40.))
-                .h(px(BAR_HEIGHT))
-                .rounded(t.radii.full)
-                .bg(t.surfaces.field)
-                .shadow(inset_ring(t.colors.line))
-                .overflow_hidden()
-                .child(div().h_full().w(relative(share)).bg(color)),
-        )
+        .when(has_bar, |row| row.child(type_bar(t, rank, color, share)))
 }
 
-fn types(t: &Theme, profile: Option<&FolderProfile>) -> impl IntoElement + use<> {
+fn type_bar(t: &Theme, rank: usize, color: Hsla, share: f32) -> impl IntoElement {
+    div()
+        .id(("preview-type-bar", rank))
+        .test_support()
+        .flex_1()
+        .min_w(px(40.))
+        .h(px(BAR_HEIGHT))
+        .rounded(t.radii.full)
+        .bg(t.surfaces.field)
+        .shadow(inset_ring(t.colors.line))
+        .overflow_hidden()
+        .child(div().h_full().w(relative(share)).bg(color))
+}
+
+fn types(t: &Theme, profile: Option<&FolderProfile>, has_bars: bool) -> impl IntoElement + use<> {
     let mut rows: Vec<(&str, Tally)> = profile
         .map(|profile| {
             profile
@@ -131,7 +140,11 @@ fn types(t: &Theme, profile: Option<&FolderProfile>) -> impl IntoElement + use<>
         .flex()
         .flex_col()
         .py(t.spacing.xs)
-        .children(rows.into_iter().map(|row| type_row(t, row, most)))
+        .children(
+            rows.into_iter()
+                .enumerate()
+                .map(|row| type_row(t, row, most, has_bars)),
+        )
 }
 
 fn type_count(profile: Option<&FolderProfile>) -> String {
@@ -227,11 +240,41 @@ fn largest(t: &Theme, profile: Option<&FolderProfile>, picks: &Picks) -> impl In
     )
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::window_view) struct Shows {
+    pub type_bars: bool,
+    pub largest: bool,
+}
+
 pub(in crate::window_view) struct Sections {
+    pub show: Shows,
     pub stats: Div,
     pub profile: Option<FolderProfile>,
     pub scroll: ScrollHandle,
     pub picks: Picks,
+}
+
+pub fn folder_summary(
+    t: &Theme,
+    profile: FolderProfile,
+    (type_bars, largest): (bool, bool),
+    stats: Div,
+) -> impl IntoElement + use<> {
+    summary(
+        t,
+        Sections {
+            show: Shows { type_bars, largest },
+            stats,
+            profile: Some(profile),
+            scroll: ScrollHandle::new(),
+            picks: Picks {
+                view: WeakEntity::new_invalid(),
+                spot: None,
+                is_browsing: false,
+                marked: Vec::new(),
+            },
+        },
+    )
 }
 
 pub(super) fn summary(t: &Theme, sections: Sections) -> impl IntoElement + use<> {
@@ -240,7 +283,9 @@ pub(super) fn summary(t: &Theme, sections: Sections) -> impl IntoElement + use<>
     let largest_heading = |id| heading(t, id, "Largest files", "top 10".to_owned());
     let pinned = match sections.scroll.top_item() {
         TYPES_AT => Some(types_heading("preview-pinned-heading")),
-        top if top >= LARGEST_AT => Some(largest_heading("preview-pinned-heading")),
+        top if top >= LARGEST_AT && sections.show.largest => {
+            Some(largest_heading("preview-pinned-heading"))
+        }
         _ => None,
     };
     let column = div()
@@ -255,9 +300,12 @@ pub(super) fn summary(t: &Theme, sections: Sections) -> impl IntoElement + use<>
         .pb(t.spacing.xxl)
         .child(sections.stats.pt(t.spacing.xl).pb(t.spacing.md))
         .child(types_heading("preview-types-heading"))
-        .child(types(t, profile))
-        .child(largest_heading("preview-largest-heading"))
-        .child(largest(t, profile, &sections.picks));
+        .child(types(t, profile, sections.show.type_bars))
+        .when(sections.show.largest, |column| {
+            column
+                .child(largest_heading("preview-largest-heading"))
+                .child(largest(t, profile, &sections.picks))
+        });
     div()
         .relative()
         .size_full()

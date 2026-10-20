@@ -324,6 +324,7 @@ preview.view | f3 | PreviewBrowse
 preview.leave | escape | PreviewBrowse
 preview.leave_and_switch | tab | PreviewBrowse
 preview.recount | ctrl-r | PreviewBrowse
+preview.view_menu | alt-v | PreviewBrowse
 [ferrite_window]
 jobs.toggle | ctrl-j | global
 tab.new | ctrl-t | FerritePane

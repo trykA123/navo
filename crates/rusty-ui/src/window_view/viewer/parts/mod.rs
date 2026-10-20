@@ -2,7 +2,7 @@ use gpui_kit::Action;
 
 use super::{
     ShowLineEnds, ToggleCharts, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip,
-    ToggleOpensInspector, ToggleRowBars, ViewCustom, ViewRich, ViewSimple,
+    ToggleOpensInspector, TogglePreview, ToggleRowBars, ViewCustom, ViewRich, ViewSimple,
 };
 use crate::settings::{Change, Field, PRESETS, Value, Values};
 
@@ -45,6 +45,28 @@ pub(in crate::window_view) const TEXT: PartSet = PartSet {
     preset: None,
     parts: TEXT_PARTS,
     family: TEXT_PARTS,
+    right_drawer: None,
+};
+
+const MARKDOWN_TEXT_PARTS: &[Part] = &[
+    Part {
+        field: Field::TextLineNumbers,
+        action: || Box::new(ToggleLineNumbers),
+    },
+    Part {
+        field: Field::TextLineEnds,
+        action: || Box::new(ShowLineEnds),
+    },
+    Part {
+        field: Field::MarkdownPreviewSplit,
+        action: || Box::new(TogglePreview),
+    },
+];
+
+pub(in crate::window_view) const MARKDOWN_TEXT: PartSet = PartSet {
+    preset: None,
+    parts: MARKDOWN_TEXT_PARTS,
+    family: MARKDOWN_TEXT_PARTS,
     right_drawer: None,
 };
 

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
@@ -14,32 +12,15 @@ use super::{Log, Setup, editor_of, has_editor, hooks, press_only, redraw, window
 use crate::tokens;
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, settle, type_in, viewer_open};
+use crate::window_view::viewer::Kinds;
 use crate::window_view::viewer::editor::EditorBody;
-use crate::window_view::viewer::{FileHooks, Kinds};
-
-type Saved = Arc<Mutex<HashMap<String, bool>>>;
-
-fn split_hooks(source: &str, saved: &Saved) -> FileHooks {
-    let files = hooks(Setup::new(source.as_bytes().to_vec()), &Log::default());
-    let (load, save) = (saved.clone(), saved.clone());
-    FileHooks {
-        split: Arc::new(move |extension| load.lock().expect("saved").get(extension).copied()),
-        save_split: Arc::new(move |extension, is_shown| {
-            save.lock()
-                .expect("saved")
-                .insert(extension.to_owned(), is_shown);
-        }),
-        ..files
-    }
-}
 
 fn open_editing(
     cx: &mut TestAppContext,
     name: &str,
     source: &str,
-    saved: &Saved,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
-    let files = split_hooks(source, saved);
+    let files = hooks(Setup::new(source.as_bytes().to_vec()), &Log::default());
     let fs = fake_with(name, source.len() as u64);
     let (window, view) = window_with(cx, fs, files, Kinds::builtin());
     press(cx, window, &view, "down");
@@ -95,7 +76,7 @@ const NOTES: &str = "# Notes\n\nSome **bold** text.\n";
 
 #[gpui_kit::test]
 fn markdown_opens_split_while_editing_with_a_rendered_preview(cx: &mut TestAppContext) {
-    let (window, view) = open_editing(cx, "notes.md", NOTES, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", NOTES);
     assert!(shows_preview(cx, window));
     let shown = with_editor(cx, &view, EditorBody::preview_text);
     assert_eq!(shown.as_deref(), Some("Notes\nSome bold text."));
@@ -104,7 +85,7 @@ fn markdown_opens_split_while_editing_with_a_rendered_preview(cx: &mut TestAppCo
 
 #[gpui_kit::test]
 fn several_keystrokes_give_one_preview_render(cx: &mut TestAppContext) {
-    let (window, view) = open_editing(cx, "notes.md", NOTES, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", NOTES);
     let renders = |cx: &mut TestAppContext| with_editor(cx, &view, EditorBody::preview_renders);
     let before = renders(cx);
     for key in ["a", "b", "c"] {
@@ -121,7 +102,7 @@ fn several_keystrokes_give_one_preview_render(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn the_preview_shows_the_block_of_the_cursor_line(cx: &mut TestAppContext) {
     let source: String = (0..300).map(|at| format!("Paragraph {at}\n\n")).collect();
-    let (window, view) = open_editing(cx, "long.md", &source, &Saved::default());
+    let (window, view) = open_editing(cx, "long.md", &source);
     assert!(preview_has_block(cx, window, 0));
     assert!(!preview_has_block(cx, window, 200));
     press(cx, window, &view, "ctrl-g");
@@ -135,40 +116,30 @@ fn the_preview_shows_the_block_of_the_cursor_line(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn ctrl_shift_v_toggles_the_split_and_remembers_it_per_extension(cx: &mut TestAppContext) {
-    let saved = Saved::default();
-    let (window, view) = open_editing(cx, "notes.md", NOTES, &saved);
+fn ctrl_shift_v_toggles_the_split_for_the_open_file_only(cx: &mut TestAppContext) {
+    let (window, view) = open_editing(cx, "notes.md", NOTES);
     press(cx, window, &view, "ctrl-shift-v");
     settle(cx, &view);
     assert!(!shows_preview(cx, window));
-    assert_eq!(saved.lock().expect("saved").get("md"), Some(&false));
-    let (window, view) = open_editing(cx, "other.md", NOTES, &saved);
-    assert!(!shows_preview(cx, window), "md stays without the preview");
-    let (markdown, _) = open_editing(cx, "guide.markdown", NOTES, &saved);
-    assert!(
-        shows_preview(cx, markdown),
-        "other extensions keep their own choice"
-    );
+    let (other, _) = open_editing(cx, "other.md", NOTES);
+    assert!(shows_preview(cx, other), "a new file follows the settings");
     press(cx, window, &view, "ctrl-shift-v");
     settle(cx, &view);
     assert!(shows_preview(cx, window));
-    assert_eq!(saved.lock().expect("saved").get("md"), Some(&true));
 }
 
 #[gpui_kit::test]
 fn a_non_markdown_file_has_no_split(cx: &mut TestAppContext) {
-    let saved = Saved::default();
-    let (window, view) = open_editing(cx, "notes.txt", NOTES, &saved);
+    let (window, view) = open_editing(cx, "notes.txt", NOTES);
     assert!(!shows_preview(cx, window));
     press(cx, window, &view, "ctrl-shift-v");
     settle(cx, &view);
     assert!(!shows_preview(cx, window));
-    assert!(saved.lock().expect("saved").is_empty());
 }
 
 #[gpui_kit::test]
 fn f6_moves_focus_to_the_preview_and_escape_returns_to_the_source(cx: &mut TestAppContext) {
-    let (window, view) = open_editing(cx, "notes.md", NOTES, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", NOTES);
     let focus = |cx: &mut TestAppContext| focused_side(cx, window, &view);
     assert_eq!(focus(cx), Some("source"));
     press(cx, window, &view, "f6");
@@ -214,7 +185,7 @@ fn with_window_editor<T>(
 #[gpui_kit::test]
 fn a_file_link_in_the_preview_waits_for_unsaved_edits(cx: &mut TestAppContext) {
     let source = "[next](next.md)\n";
-    let (window, view) = open_editing(cx, "notes.md", source, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", source);
     type_in(cx, window, &view, "x");
     wait(cx, 200);
     press(cx, window, &view, "f6");
@@ -246,7 +217,7 @@ const NO_PREVIEW: &str = "No preview: Markdown over 1 MB.";
 #[gpui_kit::test]
 fn f6_into_a_refused_preview_and_escape_come_back_to_the_source(cx: &mut TestAppContext) {
     let source = large_source(MAX_SOURCE - 10);
-    let (window, view) = open_editing(cx, "big.md", &source, &Saved::default());
+    let (window, view) = open_editing(cx, "big.md", &source);
     type_in(cx, window, &view, &"y".repeat(20));
     wait(cx, 200);
     redraw(cx, window);
@@ -262,7 +233,7 @@ fn f6_into_a_refused_preview_and_escape_come_back_to_the_source(cx: &mut TestApp
 #[gpui_kit::test]
 fn a_preview_refused_while_focused_keeps_the_focus(cx: &mut TestAppContext) {
     let source = large_source(MAX_SOURCE - 10);
-    let (window, view) = open_editing(cx, "big.md", &source, &Saved::default());
+    let (window, view) = open_editing(cx, "big.md", &source);
     press(cx, window, &view, "f6");
     let editor = editor_of(cx, &view).expect("the editor");
     let grown = format!("{source}{}", "y".repeat(20));
@@ -294,7 +265,7 @@ fn edit_and_save(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity
 
 #[gpui_kit::test]
 fn the_preview_link_status_shows_over_the_save_note(cx: &mut TestAppContext) {
-    let (window, view) = open_editing(cx, "notes.md", LINKED, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", LINKED);
     edit_and_save(cx, window, &view);
     press(cx, window, &view, "f6");
     press(cx, window, &view, "tab");
@@ -308,7 +279,7 @@ fn the_preview_link_status_shows_over_the_save_note(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn typing_clears_the_save_note(cx: &mut TestAppContext) {
-    let (window, view) = open_editing(cx, "notes.md", LINKED, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", LINKED);
     edit_and_save(cx, window, &view);
     type_in(cx, window, &view, "y");
     wait(cx, 200);
@@ -317,7 +288,7 @@ fn typing_clears_the_save_note(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn after_saving_enter_on_a_preview_link_opens_the_file(cx: &mut TestAppContext) {
-    let (window, view) = open_editing(cx, "notes.md", LINKED, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", LINKED);
     edit_and_save(cx, window, &view);
     press(cx, window, &view, "f6");
     press(cx, window, &view, "tab");
@@ -357,7 +328,7 @@ fn ctrl_click(cx: &mut TestAppContext, window: AnyWindowHandle, at: Point<Pixels
 
 #[gpui_kit::test]
 fn after_saving_ctrl_click_on_a_preview_link_opens_the_file(cx: &mut TestAppContext) {
-    let (window, view) = open_editing(cx, "notes.md", LINKED, &Saved::default());
+    let (window, view) = open_editing(cx, "notes.md", LINKED);
     edit_and_save(cx, window, &view);
     let link = cx
         .update_window(window, |_, window, cx| {
@@ -377,7 +348,7 @@ fn after_saving_ctrl_click_on_a_preview_link_opens_the_file(cx: &mut TestAppCont
 #[gpui_kit::test]
 fn markdown_over_200_kb_is_parsed_off_the_ui_thread(cx: &mut TestAppContext) {
     let source = large_source(300 * 1024);
-    let (window, view) = open_editing(cx, "big.md", &source, &Saved::default());
+    let (window, view) = open_editing(cx, "big.md", &source);
     let renders = |cx: &mut TestAppContext| with_editor(cx, &view, EditorBody::preview_renders);
     assert_eq!(renders(cx), 1);
     press(cx, window, &view, "ctrl-shift-v");
@@ -393,7 +364,7 @@ fn markdown_over_200_kb_is_parsed_off_the_ui_thread(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn markdown_over_1_mib_opens_with_the_preview_refused(cx: &mut TestAppContext) {
     let source = large_source(MAX_SOURCE + 10);
-    let (window, view) = open_editing(cx, "big.md", &source, &Saved::default());
+    let (window, view) = open_editing(cx, "big.md", &source);
     assert!(shows_preview(cx, window));
     assert_eq!(
         super::text_of(cx, window, "editor-preview-note"),
@@ -426,7 +397,7 @@ fn preview_x(
 #[gpui_kit::test]
 fn a_new_table_does_not_take_the_sideways_scroll_of_another(cx: &mut TestAppContext) {
     let first = wide_table(&"a".repeat(30));
-    let (window, view) = open_editing(cx, "tables.md", &first, &Saved::default());
+    let (window, view) = open_editing(cx, "tables.md", &first);
     press(cx, window, &view, "f6");
     press(cx, window, &view, "right");
     redraw(cx, window);

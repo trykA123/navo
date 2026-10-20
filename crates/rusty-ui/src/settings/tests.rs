@@ -161,14 +161,21 @@ fn modifier_hints_default_to_every_shortcut_after_400_ms() {
 }
 
 #[test]
-fn the_display_section_groups_window_text_image_and_automotive_parts() {
+fn the_display_section_groups_the_window_and_each_viewer_in_order() {
     let keys: Vec<(Option<&str>, &str)> = FIELDS
         .iter()
         .filter(|spec| spec.section == Section::Display)
         .map(|spec| (spec.group(), spec.key))
         .collect();
     let groups: Vec<Option<&str>> = keys.iter().map(|(group, _)| *group).collect();
-    let expected = [("Window", 12), ("Text", 2), ("Image", 1), ("Automotive", 5)];
+    let expected = [
+        ("Window", 12),
+        ("Text", 2),
+        ("Image", 1),
+        ("Markdown", 1),
+        ("Preview", 2),
+        ("Automotive", 5),
+    ];
     let expected: Vec<Option<&str>> = expected
         .iter()
         .flat_map(|(group, count)| std::iter::repeat_n(Some(*group), *count))
@@ -183,6 +190,9 @@ fn the_display_section_groups_window_text_image_and_automotive_parts() {
             "text.view.line-numbers",
             "text.view.line-ends",
             "image.view.details",
+            "markdown.view.preview-split",
+            "preview.view.type-bars",
+            "preview.view.largest-files",
             "automotive.view.preset",
             "automotive.view.inspector",
             "automotive.view.memory-strip",
@@ -240,6 +250,26 @@ fn text_parts_default_to_line_numbers_on_and_line_ends_off() {
     assert!(!values.flag(Field::TextLineEnds));
     assert!(!values.flag(Field::ImageDetails));
     assert!(values.is_shown(None, Field::TextLineNumbers));
+}
+
+#[test]
+fn the_markdown_split_and_both_preview_parts_default_to_on() {
+    let values = Values::default();
+    for field in [
+        Field::MarkdownPreviewSplit,
+        Field::PreviewTypeBars,
+        Field::PreviewLargestFiles,
+    ] {
+        assert!(values.flag(field), "{}", field.spec().key);
+        assert!(!values.is_changed(field));
+        assert!(field.is_applied());
+    }
+    let hidden = values.with(&Change {
+        field: Field::PreviewTypeBars,
+        value: Value::Flag(false),
+    });
+    assert!(hidden.is_changed(Field::PreviewTypeBars));
+    assert!(hidden.flag(Field::PreviewLargestFiles));
 }
 
 #[test]

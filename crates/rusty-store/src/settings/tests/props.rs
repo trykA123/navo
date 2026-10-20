@@ -130,6 +130,19 @@ fn viewers() -> impl Strategy<Value = (TextViewer, ImageViewer, Automotive, Copy
     (text, image, automotive(), copy)
 }
 
+fn markdown_and_preview() -> impl Strategy<Value = (MarkdownViewer, PreviewViewer)> {
+    let markdown = any::<bool>().prop_map(|preview_split| MarkdownViewer {
+        view: MarkdownView { preview_split },
+    });
+    let preview = any::<[bool; 2]>().prop_map(|[type_bars, largest_files]| PreviewViewer {
+        view: PreviewView {
+            type_bars,
+            largest_files,
+        },
+    });
+    (markdown, preview)
+}
+
 pub(super) fn settings() -> impl Strategy<Value = Settings> {
     let selection = any::<[bool; 2]>().prop_map(|[space, patterns]| SelectionSettings {
         space_measures_folders: space,
@@ -143,7 +156,13 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
         appearance(),
         files(),
         selection,
-        (terminal, editor, window(), viewers()),
+        (
+            terminal,
+            editor,
+            window(),
+            viewers(),
+            markdown_and_preview(),
+        ),
         experimental,
     )
         .prop_map(
@@ -151,7 +170,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 appearance,
                 files,
                 selection,
-                (terminal, editor, window, (text, image, automotive, copy)),
+                (terminal, editor, window, (text, image, automotive, copy), (markdown, preview)),
                 experimental,
             )| Settings {
                 appearance,
@@ -162,6 +181,8 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 window,
                 text,
                 image,
+                markdown,
+                preview,
                 copy,
                 automotive,
                 experimental,

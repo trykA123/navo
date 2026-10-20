@@ -365,3 +365,30 @@ fn resetting_a_window_part_brings_the_default_back() {
             .contains("size-column = false")
     );
 }
+
+#[test]
+fn a_kept_markdown_split_and_preview_parts_land_in_their_tables_and_keep_comments() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(
+        &file,
+        "# mine\n[markdown.view]\npreview-split = true # beside\n\n[preview.view]\ntype-bars = true\nlargest-files = true # ten\n",
+    )
+    .unwrap();
+    let settings = hooks(Some(&file));
+    for (field, is_on) in [
+        (Field::MarkdownPreviewSplit, false),
+        (Field::PreviewLargestFiles, false),
+    ] {
+        let kept = Change {
+            field,
+            value: Value::Flag(is_on),
+        };
+        let stored = save(&settings, kept).unwrap();
+        assert_eq!(stored.get(field), &Value::Flag(is_on));
+    }
+    let text = fs::read_to_string(&file).unwrap();
+    assert!(text.contains("preview-split = false # beside"), "{text}");
+    assert!(text.contains("type-bars = true\n"), "{text}");
+    assert!(text.contains("largest-files = false # ten"), "{text}");
+}

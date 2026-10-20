@@ -112,13 +112,3 @@ fn opening_keeps_only_the_newest_file_memories() {
     assert!(!kept(paths[0]));
     assert!(kept(paths[1]) && kept(paths[2]));
 }
-
-#[test]
-fn the_markdown_split_choice_comes_back_after_a_restart() {
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("ferrite.db");
-    assert_eq!((hooks_on(&file).split)("md"), None);
-    (hooks_on(&file).save_split)("md", false);
-    assert_eq!((hooks_on(&file).split)("md"), Some(false));
-    assert_eq!((hooks_on(&file).split)("markdown"), None);
-}

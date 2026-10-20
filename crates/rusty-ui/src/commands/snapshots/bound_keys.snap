@@ -189,6 +189,7 @@ preview.toggle_mark | space | PreviewBrowse
 preview.unfold | right | PreviewBrowse
 preview.unfold_all | alt-right | PreviewBrowse
 preview.view | f3 | PreviewBrowse
+preview.view_menu | alt-v | PreviewBrowse
 prompt.cancel | escape | PromptDialog
 settings.cancel_edit | escape | SettingsField
 settings.close | escape | SettingsSheet

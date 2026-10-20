@@ -65,6 +65,7 @@ pub use hand_off::{OpenHooks, OpenInbox, OpenRequest, OpenSender, open_requests}
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use placement::DisplayScale;
+pub use preview::folder_summary;
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
@@ -414,7 +415,7 @@ impl Render for FerriteWindow {
             .children(menu)
             .children(self.shell_menu_view())
             .children(self.viewer_menu_view())
-            .children(self.window_menu_view());
+            .children(self.view_menus());
         let root = Self::open_window_menu_on(root, cx);
         let root = self.crash_keys(root, cx);
         self.preview_keys(root, window, cx)

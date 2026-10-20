@@ -29,8 +29,8 @@ use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
-    display_window, hint_windows, job_windows, parts_element, parts_windows, sheet_windows,
-    window_element,
+    display_window, hint_windows, job_windows, parts_element, parts_windows, preview_element,
+    preview_windows, sheet_windows, window_element,
 };
 use crate::{pdf_sample, rich_sample, viewer_sample};
 
@@ -91,7 +91,7 @@ pub struct Gallery {
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 3],
     menus: [(Page, Entity<MenuPage>); 6],
-    viewer_menus: [Entity<ViewerMenuPage>; 7],
+    viewer_menus: [Entity<ViewerMenuPage>; 8],
     main_window: Entity<WindowPage>,
     shift_window: Entity<WindowPage>,
     ctrl_window: Entity<WindowPage>,
@@ -103,6 +103,7 @@ pub struct Gallery {
     hint_windows: [Entity<WindowPage>; 4],
     crash_window: Entity<WindowPage>,
     parts_windows: [Entity<WindowPage>; 3],
+    preview_windows: [Entity<WindowPage>; 4],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -149,6 +150,7 @@ impl Gallery {
             hint_windows: hint_windows(cx),
             crash_window: cx.new(WindowPage::with_crash),
             parts_windows: parts_windows(cx),
+            preview_windows: preview_windows(cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -349,6 +351,7 @@ impl Render for Gallery {
 impl Gallery {
     fn window_page(&self) -> Option<AnyElement> {
         parts_element(self.page, &self.parts_windows)
+            .or_else(|| preview_element(self.page, &self.preview_windows))
             .or_else(|| window_element(self.page, self.windows()))
     }
 
@@ -361,6 +364,7 @@ impl Gallery {
             Page::ViewMenuAutomotive => Some(self.viewer_menus[4].clone()),
             Page::ViewMenuElf => Some(self.viewer_menus[5].clone()),
             Page::ViewMenuTrace => Some(self.viewer_menus[6].clone()),
+            Page::ViewMenuMarkdown => Some(self.viewer_menus[7].clone()),
             _ => None,
         }
     }

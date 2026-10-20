@@ -8,6 +8,7 @@ mod live;
 mod marks;
 mod nest;
 mod toggle;
+mod view_parts;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

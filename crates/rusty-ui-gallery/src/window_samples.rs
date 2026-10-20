@@ -150,6 +150,31 @@ pub fn parts_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
     })
 }
 
+pub fn preview_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
+    [(true, true), (false, true), (true, false), (false, false)].map(|parts| {
+        let shows = SheetShows {
+            active: Side::Left,
+            window_width: None,
+            is_ringed: false,
+            settings: None,
+            shortcuts: None,
+        };
+        cx.new(|cx| WindowPage::with_sheet(shows, cx).with_preview_parts(parts))
+    })
+}
+
+pub fn preview_element(page: Page, windows: &[Entity<WindowPage>; 4]) -> Option<AnyElement> {
+    let [on, no_bars, no_largest, off] = windows;
+    let shown = match page {
+        Page::PreviewPartsOn => on,
+        Page::PreviewNoBars => no_bars,
+        Page::PreviewNoLargest => no_largest,
+        Page::PreviewPartsOff => off,
+        _ => return None,
+    };
+    Some(shown.clone().into_any_element())
+}
+
 pub fn parts_element(page: Page, windows: &[Entity<WindowPage>; 3]) -> Option<AnyElement> {
     let [on, off, menu] = windows;
     let shown = match page {

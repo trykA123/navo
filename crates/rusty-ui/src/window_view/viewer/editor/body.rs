@@ -12,7 +12,7 @@ use crate::window_view::viewer::body::{
     BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody,
 };
 use crate::window_view::viewer::menu::marking_entries;
-use crate::window_view::viewer::parts::{PartSet, TEXT};
+use crate::window_view::viewer::parts::{MARKDOWN_TEXT, PartSet, TEXT};
 use crate::window_view::viewer::search::bar::{FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS};
 use crate::window_view::viewer::{CopyPathLine, FindSelection, OpenGoTo, ShowHex, ToggleFollow};
 
@@ -176,8 +176,12 @@ impl ViewerBody for EditorBody {
         entries
     }
 
-    fn parts(&self, _: &App) -> Option<&'static PartSet> {
-        Some(&TEXT)
+    fn parts(&self, cx: &App) -> Option<&'static PartSet> {
+        Some(if self.0.read(cx).has_split() {
+            &MARKDOWN_TEXT
+        } else {
+            &TEXT
+        })
     }
 
     fn encoding(&self, cx: &App) -> Option<TextEncoding> {

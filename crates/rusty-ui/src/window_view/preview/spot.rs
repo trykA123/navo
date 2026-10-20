@@ -58,7 +58,22 @@ impl Place {
 
 impl FolderPreview {
     fn largest_len(&self) -> usize {
+        if self.hides_largest {
+            return 0;
+        }
         self.scan.profile.as_ref().map_or(0, |p| p.largest.len())
+    }
+
+    pub(super) fn show_largest(&mut self, is_shown: bool) {
+        self.hides_largest = !is_shown;
+        if self.hides_largest && matches!(self.spot, Some(Spot::Largest(_))) {
+            self.spot = self
+                .contents
+                .len()
+                .checked_sub(1)
+                .and_then(|last| self.contents.node_at(last))
+                .map(Spot::Tree);
+        }
     }
 
     pub(in crate::window_view) fn spot_row(&self) -> Option<usize> {

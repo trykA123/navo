@@ -34,6 +34,7 @@ pub(in crate::window_view) struct FolderPreview {
     pub spot: Option<Spot>,
     pub restore: Option<Restore>,
     pub marks: Marks,
+    pub hides_largest: bool,
     load: u64,
     reads: Vec<Read>,
 }
@@ -147,6 +148,7 @@ impl FerriteWindow {
             spot: None,
             restore: None,
             marks: Marks::default(),
+            hides_largest: false,
             load,
             reads,
         }

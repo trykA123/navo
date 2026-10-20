@@ -56,10 +56,7 @@ impl ViewerKind for Text {
             TextLoad::Editor(EditorFile {
                 file: hooks.read_with(location, encoding)?,
                 language: detect(sniff.name, sniff.head),
-                split: markdown_extension(sniff.name).map(|extension| SplitChoice {
-                    is_shown: (hooks.split)(&extension).unwrap_or(true),
-                    extension,
-                }),
+                split: markdown_extension(sniff.name).map(|_| SplitChoice { is_shown: true }),
             })
         } else {
             TextLoad::Paged(hooks.paged_with(location, encoding)?)

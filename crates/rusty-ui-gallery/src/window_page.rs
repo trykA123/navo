@@ -102,6 +102,7 @@ pub struct WindowPage {
     sort: SortKey,
     is_single_tab: bool,
     view_menu: ViewMenuShown,
+    preview_parts: Option<(bool, bool)>,
 }
 
 fn location(text: &str) -> Location {
@@ -124,7 +125,13 @@ impl WindowPage {
             sort: SortKey::default(),
             is_single_tab: false,
             view_menu: ViewMenuShown::default(),
+            preview_parts: None,
         }
+    }
+
+    pub fn with_preview_parts(mut self, parts: (bool, bool)) -> Self {
+        self.preview_parts = Some(parts);
+        self
     }
 
     pub fn sorted_by(mut self, sort: SortKey) -> Self {
@@ -355,7 +362,10 @@ impl WindowPage {
         let shown = match (&sheet.shows.shortcuts, sheet.shows.settings) {
             (Some(page), _) => shortcuts_sample::sheet(&sheet.state, frame, page),
             (None, Some(field)) => settings_sample::sheet(t, &sheet.state, frame, field),
-            (None, None) => sheet_sample::sheet(t, &sheet.state, frame),
+            (None, None) => match self.preview_parts {
+                Some(parts) => sheet_sample::sheet_with_parts(t, &sheet.state, frame, parts),
+                None => sheet_sample::sheet(t, &sheet.state, frame),
+            },
         };
         let layer = div()
             .absolute()

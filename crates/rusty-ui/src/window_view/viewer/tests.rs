@@ -31,6 +31,8 @@ mod save;
 mod search;
 pub(in crate::window_view::viewer) mod structured;
 mod view_parts;
+mod view_parts_md;
+mod view_rig;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

@@ -27,7 +27,10 @@ gpui_kit::actions!(
         BrowseView,
         LeaveBrowse,
         LeaveAndSwitch,
-        Recount
+        Recount,
+        ViewMenu,
+        ToggleTypeBars,
+        ToggleLargestFiles
     ]
 );
 
@@ -220,6 +223,7 @@ impl FerriteWindow {
                 this.switch_pane(window, cx);
             }))
             .on_action(cx.listener(|this, _: &Recount, _, cx| this.recount_folder(cx)))
+            .on_action(Self::view_menu_listener(cx))
             .child(body)
             .into_any_element()
     }

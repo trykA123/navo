@@ -143,6 +143,7 @@ impl FerriteWindow {
         }
         steer(&self.values, &mut self.browser);
         self.show_parts(cx);
+        self.apply_preview_parts();
         self.refresh_window_menu(cx);
     }
 
