@@ -141,14 +141,14 @@ fn reset_puts_every_window_part_back_and_leaves_other_settings(cx: &mut TestAppC
     assert_eq!(stored_parts(&rig), WindowParts::all(false));
     rig.press(cx, "alt-v");
     pick(cx, &rig, "reset to defaults");
-    assert_eq!(stored_parts(&rig), WindowParts::all(true));
+    assert_eq!(stored_parts(&rig), WindowParts::default());
     let changes = rig.store.changes.lock().expect("changes").clone();
-    assert_eq!(changes.len(), 12);
+    assert_eq!(changes.len(), 11);
     assert!(changes.iter().all(|change| change.value == Value::Reset));
     let stored = rig.store.stored.lock().expect("stored").clone();
     assert_eq!(stored.density(), Density::Compact);
     assert!(items(cx, &rig).is_none());
-    assert!(is_drawn(cx, &rig, "fkeys") && is_drawn(cx, &rig, "title-bar-search"));
+    assert!(!is_drawn(cx, &rig, "fkeys") && is_drawn(cx, &rig, "title-bar-search"));
 }
 
 #[gpui_kit::test]

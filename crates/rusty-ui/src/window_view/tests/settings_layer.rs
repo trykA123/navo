@@ -5,10 +5,11 @@ use gpui_kit::{AppContext as _, Pixels, Point, TestAppContext, point};
 use rusty_core::{Location, OpKind};
 use rusty_fs::{CancelToken, Progress};
 
-use super::app_menu::{Rig, rig};
+use super::app_menu::{Rig, rig, rig_on};
 use super::fkeys::key_labels;
+use super::with_fkey_bar;
 use crate::browser::{JobStatus, JobView};
-use crate::settings::FIELDS;
+use crate::settings::{FIELDS, Values};
 use crate::tokens::ThemeChoice;
 
 fn open_settings(cx: &mut TestAppContext, rig: &Rig) {
@@ -83,7 +84,7 @@ fn the_job_card_stays_under_the_settings_sheet(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn open_settings_switch_the_f_keys_to_the_settings_layer(cx: &mut TestAppContext) {
-    let rig = rig(cx, ThemeChoice::System);
+    let rig = rig_on(cx, with_fkey_bar(Values::default()), None);
     let (base, _) = key_labels(cx, rig.window);
     assert_eq!(base[1], "F2 Rename");
     open_settings(cx, &rig);

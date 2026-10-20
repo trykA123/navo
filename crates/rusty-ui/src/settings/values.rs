@@ -104,6 +104,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::MarkdownPreviewSplit
         | Field::PreviewTypeBars
         | Field::PreviewLargestFiles => Value::Flag(true),
+        Field::WindowFkeyBar => Value::Flag(false),
         field if field.is_window_part() => Value::Flag(true),
         Field::TerminalProvider => text("windows-terminal"),
         _ => match spec.control {

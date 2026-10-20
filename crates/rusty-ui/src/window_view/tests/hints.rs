@@ -11,7 +11,7 @@ use rusty_fs::FakeFs;
 
 use super::app_menu::{Rig, rig_on};
 use super::fkeys::{hold, key_labels};
-use super::{FerriteWindow, fake, open, open_with, press, two_panes};
+use super::{FerriteWindow, fake, open, open_with, press, two_panes, with_fkey_bar};
 use crate::commands::{Keymap, set_active};
 use crate::modifier_hints::HintsMode;
 use crate::settings::{Change, FIELDS, Field, Values};
@@ -63,7 +63,7 @@ fn hold_open(cx: &mut TestAppContext, window: AnyWindowHandle) {
 fn rig_with_hints(cx: &mut TestAppContext, hints: HintsMode) -> Rig {
     rig_on(
         cx,
-        Values::default().with(&Change::modifier_hints(hints)),
+        with_fkey_bar(Values::default()).with(&Change::modifier_hints(hints)),
         None,
     )
 }

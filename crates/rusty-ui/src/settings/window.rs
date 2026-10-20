@@ -19,7 +19,9 @@ pub struct WindowParts {
 
 impl Default for WindowParts {
     fn default() -> Self {
-        Self::all(true)
+        let mut parts = Self::all(true);
+        parts.fkey_bar = false;
+        parts
     }
 }
 

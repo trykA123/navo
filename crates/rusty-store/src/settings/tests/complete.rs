@@ -29,7 +29,7 @@ tabs-with-one = true
 path-bar = true
 drive-button = true
 title-search = true
-fkey-bar = true
+fkey-bar = false
 icons = true
 ext-column = true
 size-column = true
@@ -85,7 +85,7 @@ const DEFAULT_KEYS: [(&str, &str); 41] = [
     ("window.view.path-bar", "true"),
     ("window.view.drive-button", "true"),
     ("window.view.title-search", "true"),
-    ("window.view.fkey-bar", "true"),
+    ("window.view.fkey-bar", "false"),
     ("window.view.icons", "true"),
     ("window.view.ext-column", "true"),
     ("window.view.size-column", "true"),
@@ -155,7 +155,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = true\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\n";
     assert_eq!(completed(before), after);
 }
 
@@ -622,13 +622,13 @@ fn only_the_window_section_is_added_to_an_older_complete_file() {
 }
 
 #[test]
-fn a_hand_set_window_part_stays_when_the_other_parts_are_added() {
+fn a_hand_set_fkey_bar_stays_on_when_the_other_parts_are_added() {
     let before = format!(
-        "{}\n[window.view]\nfkey-bar = false # no bar\n",
+        "{}\n[window.view]\nfkey-bar = true # bar on\n",
         without_window()
     );
     let after = completed(&before);
-    assert!(after.contains("fkey-bar = false # no bar"), "{after}");
+    assert!(after.contains("fkey-bar = true # bar on"), "{after}");
     assert!(after.contains("tabs-with-one = true"), "{after}");
     assert_eq!(after.matches("fkey-bar").count(), 1, "{after}");
 }

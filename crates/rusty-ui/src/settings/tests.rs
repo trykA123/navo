@@ -287,10 +287,17 @@ fn the_markdown_split_and_both_preview_parts_default_to_on() {
 }
 
 #[test]
-fn every_window_part_is_on_by_default_and_reads_back() {
+fn every_window_part_but_the_fkey_bar_is_on_by_default_and_reads_back() {
     let values = Values::default();
     assert_eq!(WindowParts::of(&values), WindowParts::default());
-    assert_eq!(WindowParts::default(), WindowParts::all(true));
+    assert!(!WindowParts::default().fkey_bar);
+    assert_eq!(
+        WindowParts {
+            fkey_bar: true,
+            ..WindowParts::default()
+        },
+        WindowParts::all(true)
+    );
     let hidden = values.with(&Change {
         field: Field::WindowSizeColumn,
         value: Value::Flag(false),

@@ -531,6 +531,18 @@ fn keeping_a_text_part_writes_its_key_and_keeps_comments() {
 }
 
 #[test]
+fn an_explicit_fkey_bar_true_in_the_file_still_shows_the_bar() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[window.view]\nfkey-bar = true\n");
+    let (store, _) = SettingsStore::load(&path);
+    assert!(store.current().window.view.fkey_bar);
+    let other = tmp();
+    let (empty, _) = SettingsStore::load(&settings_file(&other));
+    assert!(!empty.current().window.view.fkey_bar);
+}
+
+#[test]
 fn hiding_a_window_part_writes_its_key_and_keeps_comments() {
     let dir = tmp();
     let path = settings_file(&dir);

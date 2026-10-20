@@ -48,6 +48,7 @@ mod watched;
 mod window_menu;
 mod window_parts;
 use crate::browser::Operations;
+use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Mode};
 
 pub(super) fn two_panes(fs: &FakeFs) -> AppState {
@@ -92,6 +93,13 @@ fn open_with(
     open_options(cx, options)
 }
 
+pub(super) fn with_fkey_bar(values: Values) -> Values {
+    values.with(&Change {
+        field: Field::WindowFkeyBar,
+        value: Value::Flag(true),
+    })
+}
+
 pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
     StartOptions {
         state,
@@ -105,7 +113,10 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
         app_menu: super::AppMenuHooks::none(),
-        settings: super::SettingsHooks::none(),
+        settings: super::SettingsHooks {
+            values: with_fkey_bar(Values::default()),
+            ..super::SettingsHooks::none()
+        },
         keymap: crate::window_view::KeymapHooks::none(),
         view: None,
         listing_cache: rusty_cache::ListingCache::default(),
