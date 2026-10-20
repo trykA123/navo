@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 12] = [
+pub(super) const GROUPS: [Group; 13] = [
     Group {
         context: "ContextMenu",
         commands: &[
@@ -58,6 +58,66 @@ pub(super) const GROUPS: [Group; 12] = [
                 "context_menu::MenuClassic",
                 "context_menu.show_classic",
                 "cmd-context-menu-show-classic",
+            ),
+        ],
+    },
+    Group {
+        context: "CommandCenter",
+        commands: &[
+            (
+                "command_center::Up",
+                "command_center.up",
+                "cmd-command-center-up",
+            ),
+            (
+                "command_center::Down",
+                "command_center.down",
+                "cmd-command-center-down",
+            ),
+            (
+                "command_center::PageUp",
+                "command_center.page_up",
+                "cmd-command-center-page-up",
+            ),
+            (
+                "command_center::PageDown",
+                "command_center.page_down",
+                "cmd-command-center-page-down",
+            ),
+            (
+                "command_center::First",
+                "command_center.first",
+                "cmd-command-center-first",
+            ),
+            (
+                "command_center::Last",
+                "command_center.last",
+                "cmd-command-center-last",
+            ),
+            (
+                "command_center::NextGroup",
+                "command_center.next_group",
+                "cmd-command-center-next-group",
+            ),
+            (
+                "command_center::PreviousGroup",
+                "command_center.previous_group",
+                "cmd-command-center-previous-group",
+            ),
+            (
+                "command_center::Run",
+                "command_center.run",
+                "cmd-command-center-run",
+            ),
+            (
+                "command_center::RunInNewTab",
+                "command_center.run_in_new_tab",
+                "cmd-command-center-run-in-new-tab",
+            ),
+            (
+                "command_center::Back",
+                "command_center.back",
+                "cmd-command-center-back",
             ),
         ],
     },

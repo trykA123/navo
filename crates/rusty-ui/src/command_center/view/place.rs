@@ -1,7 +1,7 @@
 use gpui_kit::{Bounds, Pixels, Point, Size, point, px};
 
 const WIDTH: f32 = 640.;
-pub(super) const INPUT_ROW: f32 = 42.;
+pub const INPUT_ROW: f32 = 42.;
 const MARGIN: f32 = 16.;
 const MIN_HEIGHT: f32 = 240.;
 

@@ -10,6 +10,12 @@ impl Selection {
     }
 
     #[must_use]
+    pub fn at(rows: &[Row], index: usize) -> Self {
+        let is_selectable = rows.get(index).is_some_and(Row::is_selectable);
+        Self(is_selectable.then_some(index))
+    }
+
+    #[must_use]
     pub fn index(self) -> Option<usize> {
         self.0
     }

@@ -1,5 +1,6 @@
 mod app_menu;
 mod clipboard;
+mod command_center;
 mod crash;
 mod drive_menu;
 mod drives;
@@ -149,6 +150,7 @@ pub struct FerriteWindow {
     keymap: user_keymap::KeymapState,
     clipboard: clipboard::ClipboardState,
     crash: crash::CrashState,
+    command_center: command_center::CommandCenterState,
     start: Option<start_watch::Watching>,
     _activation: Subscription,
     _appearance: Subscription,
@@ -206,24 +208,14 @@ impl FerriteWindow {
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             crash: crash::CrashState::new(options.crash_report, cx),
+            command_center: command_center::CommandCenterState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
             _follow: cx.observe_in(&cx.entity(), window, Self::follow_cursor),
             _activation: cx.observe_window_activation(window, Self::activation_changed),
             _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
         };
-        view.listen((options.keymap, options.open), window, cx);
-        view.after_open(options.view, window, cx);
+        view.after_open((options.keymap, options.open, options.view), window, cx);
         view
-    }
-
-    fn listen(
-        &mut self,
-        hooks: (KeymapHooks, OpenHooks),
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.listen_files(hooks.0, window, cx);
-        self.listen_open(hooks.1, window, cx);
     }
 
     fn appearance_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -240,10 +232,12 @@ impl FerriteWindow {
 
     fn after_open(
         &mut self,
-        start_view: Option<rusty_core::Location>,
+        (keymap, open, start_view): (KeymapHooks, OpenHooks, Option<rusty_core::Location>),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.listen_files(keymap, window, cx);
+        self.listen_open(open, window, cx);
         self.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);
         Self::poll_drives(cx);
@@ -420,7 +414,7 @@ impl Render for FerriteWindow {
             .children(self.viewer_menu_view())
             .children(self.view_menus());
         let root = Self::open_window_menu_on(root, cx);
-        let root = self.activity_keys(self.crash_keys(root, cx), cx);
+        let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
         self.preview_keys(root, window, cx)
     }
 }

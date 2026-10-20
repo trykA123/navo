@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
@@ -9,7 +11,7 @@ use rusty_l10n::{t, tr};
 use super::super::query::{Query, Scope};
 use super::super::results::Row;
 use super::super::source::{Group, Hit, Target};
-use crate::commands::ArgKind;
+use crate::commands::{ArgKind, Keymap};
 use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::Theme;
 
@@ -19,25 +21,80 @@ const SEPARATOR: &str = " · ";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Hint {
     pub keys: &'static str,
+    pub command: &'static str,
     pub label: &'static str,
 }
 
-const fn hint(keys: &'static str, label: &'static str) -> Hint {
-    Hint { keys, label }
+const fn hint(keys: &'static str, command: &'static str, label: &'static str) -> Hint {
+    Hint {
+        keys,
+        command,
+        label,
+    }
 }
 
-const RUN: Hint = hint("enter", "command-center-key-run");
-const CHOOSE: Hint = hint("enter", "command-center-key-choose");
-const OPEN: Hint = hint("enter", "command-center-key-open");
-const GO: Hint = hint("enter", "command-center-key-go");
-const SHOW_ALL: Hint = hint("enter", "command-center-key-show-all");
-const REVEAL: Hint = hint("shift-enter", "command-center-key-reveal");
-const OTHER_PANE: Hint = hint("ctrl-enter", "command-center-key-other-pane");
-const NEW_TAB: Hint = hint("alt-enter", "command-center-key-new-tab");
-const NEXT_GROUP: Hint = hint("tab", "command-center-key-next-group");
-const COMPLETE: Hint = hint("tab", "command-center-key-complete");
-const CLOSE: Hint = hint("escape", "command-center-key-close");
-const BACK: Hint = hint("escape", "command-center-key-back");
+const RUN_COMMAND: &str = "command_center.run";
+const NEXT_COMMAND: &str = "command_center.next_group";
+pub(super) const BACK_COMMAND: &str = "command_center.back";
+
+const RUN: Hint = hint("enter", RUN_COMMAND, "command-center-key-run");
+const CHOOSE: Hint = hint("enter", RUN_COMMAND, "command-center-key-choose");
+const OPEN: Hint = hint("enter", RUN_COMMAND, "command-center-key-open");
+const GO: Hint = hint("enter", RUN_COMMAND, "command-center-key-go");
+const SHOW_ALL: Hint = hint("enter", RUN_COMMAND, "command-center-key-show-all");
+const REVEAL: Hint = hint(
+    "shift-enter",
+    "command_center.reveal",
+    "command-center-key-reveal",
+);
+const OTHER_PANE: Hint = hint(
+    "ctrl-enter",
+    "command_center.other_pane",
+    "command-center-key-other-pane",
+);
+const NEW_TAB: Hint = hint(
+    "alt-enter",
+    "command_center.run_in_new_tab",
+    "command-center-key-new-tab",
+);
+const NEXT_GROUP: Hint = hint("tab", NEXT_COMMAND, "command-center-key-next-group");
+const COMPLETE: Hint = hint("tab", NEXT_COMMAND, "command-center-key-complete");
+const CLOSE: Hint = hint("escape", BACK_COMMAND, "command-center-key-close");
+const BACK: Hint = hint("escape", BACK_COMMAND, "command-center-key-back");
+
+const HINTED: [&str; 6] = [
+    RUN_COMMAND,
+    "command_center.run_in_new_tab",
+    NEXT_COMMAND,
+    BACK_COMMAND,
+    "command_center.reveal",
+    "command_center.other_pane",
+];
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HintKeys(Rc<[(&'static str, SharedString)]>);
+
+impl HintKeys {
+    #[must_use]
+    pub fn of(keymap: &Keymap) -> Self {
+        let keys = HINTED
+            .iter()
+            .filter_map(|command| {
+                let key = keymap.keys_of(command).next()?;
+                Some((*command, SharedString::from(key.to_owned())))
+            })
+            .collect();
+        Self(keys)
+    }
+
+    #[must_use]
+    pub fn key(&self, command: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(name, _)| *name == command)
+            .map(|(_, key)| key.as_ref())
+    }
+}
 
 pub(crate) fn hints(row: Option<&Row>, argument: Option<ArgKind>, is_path: bool) -> Vec<Hint> {
     match (argument, row) {
@@ -121,7 +178,7 @@ pub(super) struct FooterLook<'a> {
     pub note: Option<SharedString>,
     pub error: Option<SharedString>,
     pub count: Option<usize>,
-    pub hints: Option<Vec<Hint>>,
+    pub hints: Option<(Vec<Hint>, &'a HintKeys)>,
 }
 
 fn status(t: &Theme, look: &FooterLook) -> Option<Div> {
@@ -158,16 +215,12 @@ fn status(t: &Theme, look: &FooterLook) -> Option<Div> {
     Some(div().min_w_0().child(line))
 }
 
-fn key_hints(t: &Theme, hints: &[Hint]) -> impl IntoElement {
+fn key_hints(t: &Theme, hints: &[Hint], keys: &HintKeys) -> impl IntoElement {
     let caps: Vec<_> = hints
         .iter()
+        .filter_map(|hint| Some((keys.key(hint.command)?, hint)))
         .enumerate()
-        .map(|(index, hint)| {
-            (
-                Kbd::new(("command-center-hint-key", index), hint.keys),
-                hint,
-            )
-        })
+        .map(|(index, (key, hint))| (Kbd::new(("command-center-hint-key", index), key), hint))
         .collect();
     let label = caps
         .iter()
@@ -213,7 +266,7 @@ pub(super) fn render(look: FooterLook) -> Div {
         .text_color(t.colors.muted)
         .whitespace_nowrap()
         .children(status(t, &look))
-        .when_some(look.hints.as_deref(), |footer, hints| {
-            footer.child(key_hints(t, hints))
+        .when_some(look.hints.as_ref(), |footer, (hints, keys)| {
+            footer.child(key_hints(t, hints, keys))
         })
 }

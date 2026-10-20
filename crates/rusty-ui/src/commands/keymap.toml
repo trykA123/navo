@@ -546,6 +546,107 @@ command = "context_menu.show_classic"
 keys = ["shift-f10"]
 context = "ContextMenu > Input"
 
+# CommandCenter
+
+[[bind]]
+command = "command_center.up"
+keys = ["up"]
+
+[[bind]]
+command = "command_center.up"
+keys = ["up"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.down"
+keys = ["down"]
+
+[[bind]]
+command = "command_center.down"
+keys = ["down"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.page_up"
+keys = ["pageup"]
+
+[[bind]]
+command = "command_center.page_up"
+keys = ["pageup"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.page_down"
+keys = ["pagedown"]
+
+[[bind]]
+command = "command_center.page_down"
+keys = ["pagedown"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.first"
+keys = ["ctrl-home"]
+
+[[bind]]
+command = "command_center.first"
+keys = ["ctrl-home"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.last"
+keys = ["ctrl-end"]
+
+[[bind]]
+command = "command_center.last"
+keys = ["ctrl-end"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.next_group"
+keys = ["tab"]
+
+[[bind]]
+command = "command_center.next_group"
+keys = ["tab"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.previous_group"
+keys = ["shift-tab"]
+
+[[bind]]
+command = "command_center.previous_group"
+keys = ["shift-tab"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.run"
+keys = ["enter"]
+
+[[bind]]
+command = "command_center.run"
+keys = ["enter"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.run_in_new_tab"
+keys = ["alt-enter"]
+
+[[bind]]
+command = "command_center.run_in_new_tab"
+keys = ["alt-enter"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.back"
+keys = ["escape"]
+
+[[bind]]
+command = "command_center.back"
+keys = ["escape"]
+context = "CommandCenter > Input"
+
 # AppMenu
 
 [[bind]]

@@ -23,6 +23,28 @@ app_menu.toggle | f10 | global
 bookmark.next | f2 | Viewer
 bookmark.previous | shift-f2 | Viewer
 bookmark.toggle | ctrl-f2 | Viewer
+command_center.back | escape | CommandCenter
+command_center.back | escape | CommandCenter > Input
+command_center.down | down | CommandCenter
+command_center.down | down | CommandCenter > Input
+command_center.first | ctrl-home | CommandCenter
+command_center.first | ctrl-home | CommandCenter > Input
+command_center.last | ctrl-end | CommandCenter
+command_center.last | ctrl-end | CommandCenter > Input
+command_center.next_group | tab | CommandCenter
+command_center.next_group | tab | CommandCenter > Input
+command_center.page_down | pagedown | CommandCenter
+command_center.page_down | pagedown | CommandCenter > Input
+command_center.page_up | pageup | CommandCenter
+command_center.page_up | pageup | CommandCenter > Input
+command_center.previous_group | shift-tab | CommandCenter
+command_center.previous_group | shift-tab | CommandCenter > Input
+command_center.run | enter | CommandCenter
+command_center.run | enter | CommandCenter > Input
+command_center.run_in_new_tab | alt-enter | CommandCenter
+command_center.run_in_new_tab | alt-enter | CommandCenter > Input
+command_center.up | up | CommandCenter
+command_center.up | up | CommandCenter > Input
 confirm.cancel | escape | ConfirmDialog
 context_menu.back | escape | ContextMenu
 context_menu.back | escape | ContextMenu > Input

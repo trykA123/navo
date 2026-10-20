@@ -4,9 +4,10 @@ use rusty_core::{Location, Selection as Marks, ViewState};
 use rusty_fs::FsEntry;
 use rusty_ui::FocusHandle;
 use rusty_ui::command_center::{
-    ArgKind, Argument, CommandCenter, CommandCenterProps, Group, Hit, Results, Row, Scope,
-    Selection, Target,
+    ArgKind, Argument, CommandCenter, CommandCenterProps, Group, HintKeys, Hit, Results, Row,
+    Scope, Selection, Target,
 };
+use rusty_ui::commands::Keymap;
 use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::prelude::*;
 use rusty_ui::tokens;
@@ -205,7 +206,8 @@ fn props(shows: Shows, rows: Vec<Row>, viewport: Bounds<Pixels>) -> CommandCente
             point(center - px(FIELD_WIDTH / 2.), px(FIELD_TOP)),
             size(px(FIELD_WIDTH), px(FIELD_HEIGHT)),
         ),
-        has_key_hints: true,
+        key_hints: Some(HintKeys::of(Keymap::builtin())),
+        is_leaving: false,
     }
 }
 
