@@ -4,7 +4,11 @@ use super::StepOutcome;
 use super::aside::presence;
 use crate::{EntryKind, ProviderOps};
 
-pub(super) fn undo_link(ops: &dyn ProviderOps, at: &Location) -> Result<StepOutcome, FsError> {
+pub(super) fn undo_link(
+    ops: &dyn ProviderOps,
+    at: &Location,
+    target_of: &Location,
+) -> Result<StepOutcome, FsError> {
     let Some(found) = presence(ops, at)? else {
         return Ok(StepOutcome::Skipped);
     };
@@ -14,7 +18,7 @@ pub(super) fn undo_link(ops: &dyn ProviderOps, at: &Location) -> Result<StepOutc
     } else {
         found.kind == EntryKind::Link
     };
-    if !ours {
+    if !ours || !points_at(ops, at, target_of)? {
         return Ok(StepOutcome::Skipped);
     }
     let result = if shortcut {
@@ -27,6 +31,24 @@ pub(super) fn undo_link(ops: &dyn ProviderOps, at: &Location) -> Result<StepOutc
         Err(error) if error.kind == FsErrorKind::NotFound => Ok(StepOutcome::Skipped),
         Err(error) => Err(error),
     }
+}
+
+fn points_at(ops: &dyn ProviderOps, at: &Location, target_of: &Location) -> Result<bool, FsError> {
+    match ops.link_target(at) {
+        Ok(found) => Ok(found.is_some_and(|found| same_target(&found, target_of))),
+        Err(error) if error.kind == FsErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn same_target(found: &Location, wanted: &Location) -> bool {
+    found == wanted
+        || (cfg!(windows)
+            && found.is_local()
+            && found
+                .path()
+                .to_text()
+                .eq_ignore_ascii_case(&wanted.path().to_text()))
 }
 
 fn makes_shortcut_files(at: &Location) -> bool {

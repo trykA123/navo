@@ -200,6 +200,20 @@ impl FakeFs {
         lock(&self.links).get(path).cloned()
     }
 
+    fn move_links(&self, from: &str, to: &str) {
+        let mut links = lock(&self.links);
+        let moved: Vec<String> = links
+            .keys()
+            .filter(|path| path.as_str() == from || path.starts_with(&format!("{from}/")))
+            .cloned()
+            .collect();
+        for path in moved {
+            if let Some(target) = links.remove(&path) {
+                links.insert(format!("{to}{}", &path[from.len()..]), target);
+            }
+        }
+    }
+
     fn tree(&self) -> MutexGuard<'_, Tree> {
         lock(&self.tree)
     }

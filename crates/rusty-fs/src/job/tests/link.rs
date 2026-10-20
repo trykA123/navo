@@ -221,3 +221,63 @@ fn recovery_keeps_a_regular_file_at_an_unsure_link() {
     assert_eq!(harness.log.undone, [(0, StepOutcome::Skipped)]);
     assert_eq!(size(&fs, "dst/a.txt"), Some(3));
 }
+
+fn replace_with_link_to(fs: &FakeFs, at: &str, target: &str) {
+    fs.remove(at);
+    fs.make_link(&fs.location(target), &fs.location(at))
+        .unwrap();
+}
+
+#[test]
+fn undo_keeps_a_link_that_replaced_ours_with_another_target() {
+    let fs = sources();
+    let plan = link_plan(&fs);
+    let (_, mut harness) = run(&fs, &plan);
+    replace_with_link_to(&fs, "dst/a.txt", "src/b.txt");
+    assert_eq!(harness.roll_back(&fs, &plan, &[0, 1]), JobOutcome::Done);
+    assert_eq!(
+        harness.log.undone,
+        [(1, StepOutcome::Done), (0, StepOutcome::Skipped)]
+    );
+    assert_eq!(fs.link_target("dst/a.txt").as_deref(), Some("src/b.txt"));
+}
+
+#[test]
+fn undo_keeps_a_link_whose_target_the_provider_cannot_tell() {
+    let fs = sources();
+    let plan = link_plan(&fs);
+    let (_, mut harness) = run(&fs, &plan);
+    fs.remove("dst/a.txt");
+    add_link(&fs, "dst", "a.txt");
+    assert_eq!(harness.roll_back(&fs, &plan, &[0, 1]), JobOutcome::Done);
+    assert_eq!(harness.log.undone[1], (0, StepOutcome::Skipped));
+    assert_eq!(kind_of(&fs, "dst/a.txt"), Some(EntryKind::Link));
+}
+
+#[test]
+fn undo_removes_our_link_after_it_was_renamed_away_and_back() {
+    let fs = sources();
+    let plan = link_plan(&fs);
+    let (_, mut harness) = run(&fs, &plan);
+    fs.rename(&fs.location("dst/a.txt"), &fs.location("dst/moved.txt"))
+        .unwrap();
+    assert_eq!(
+        fs.link_target("dst/moved.txt").as_deref(),
+        Some("src/a.txt")
+    );
+    fs.rename(&fs.location("dst/moved.txt"), &fs.location("dst/a.txt"))
+        .unwrap();
+    assert_eq!(harness.roll_back(&fs, &plan, &[0, 1]), JobOutcome::Done);
+    assert_eq!(kind_of(&fs, "dst/a.txt"), None);
+}
+
+#[test]
+fn recovery_keeps_a_link_someone_else_made_at_an_unsure_name() {
+    let fs = sources();
+    let plan = link_plan(&fs);
+    replace_with_link_to(&fs, "dst/a.txt", "src/b.txt");
+    let (outcome, harness) = recover(&fs, &plan, Some(0));
+    assert_eq!(outcome, JobOutcome::Done);
+    assert_eq!(harness.log.undone, [(0, StepOutcome::Skipped)]);
+    assert_eq!(fs.link_target("dst/a.txt").as_deref(), Some("src/b.txt"));
+}

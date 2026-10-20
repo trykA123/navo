@@ -187,6 +187,7 @@ impl ProviderOps for FakeFs {
         }
         tree.move_node(&from, &to);
         drop(tree);
+        self.move_links(&from, &to);
         self.moved(&from, &to);
         Ok(())
     }
@@ -254,6 +255,11 @@ impl ProviderOps for FakeFs {
         lock(&self.links).insert(path.clone(), target);
         self.changed(&path, WatchChange::Created);
         Ok(())
+    }
+
+    fn link_target(&self, at: &Location) -> Result<Option<Location>, FsError> {
+        let path = self.own_path(at)?;
+        Ok(FakeFs::link_target(self, &path).map(|target| self.location(&target)))
     }
 
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {

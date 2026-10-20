@@ -28,6 +28,9 @@ pub trait ProviderOps: Provider {
             ..FsError::new(FsErrorKind::NotSupportedYet)
         })
     }
+    fn link_target(&self, _at: &Location) -> Result<Option<Location>, FsError> {
+        Ok(None)
+    }
     fn volume_serial(&self, _location: &Location) -> Result<Option<u64>, FsError> {
         Ok(None)
     }

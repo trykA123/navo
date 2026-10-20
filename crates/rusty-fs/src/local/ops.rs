@@ -133,6 +133,10 @@ impl ProviderOps for LocalFs {
         super::link::link_at(target_of, at)
     }
 
+    fn link_target(&self, at: &Location) -> Result<Option<Location>, FsError> {
+        super::link::link_target(at)
+    }
+
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         super::platform::volume_serial(&os_path(location)?)
             .map(Some)
