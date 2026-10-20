@@ -4,6 +4,7 @@ mod owners_elf;
 mod regions;
 mod strip;
 mod table;
+mod treemap;
 
 pub use groups::{
     Child, Group, GroupBy, Grouping, OTHER, Origin, TOP_GROUPS, Top, available, default_grouping,
@@ -13,7 +14,11 @@ pub use kind::Kind;
 use owners_elf::plain_section;
 pub use owners_elf::{NOT_ATTRIBUTED, NameRef, Owner, Owners, Provenance, owners, owners_of_map};
 pub use regions::{regions_for_elf, regions_for_map};
-pub use strip::{Break, Cell, Scale, ScaleMode, cells};
+pub use strip::{Break, Cell, Scale, ScaleMode, cells, inner};
+pub use treemap::{
+    HEADER_PX, INNER_MIN_HEIGHT, INNER_MIN_WIDTH, Item, KIND_BAR_PX, MAX_GROUPS, MAX_INNER, Part,
+    Rect, TEXT_MIN_HEIGHT, TEXT_MIN_WIDTH, Target, Tile, layout,
+};
 
 use crate::mdf::ChipKind;
 
