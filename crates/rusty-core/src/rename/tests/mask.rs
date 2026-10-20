@@ -1,4 +1,6 @@
-use crate::rename::{CounterSpec, LocalTime, Mask, MaskError, MaskErrorKind, Span, Subject, Token};
+use crate::rename::{
+    CounterParts, CounterSpec, LocalTime, Mask, MaskError, MaskErrorKind, Span, Subject, Token,
+};
 
 const TIME: LocalTime = LocalTime {
     year: 2026,
@@ -463,10 +465,14 @@ fn malformed_spans_are_errors() {
 #[test]
 fn malformed_counters_are_errors() {
     for text in [
-        "[C10]",
-        "[C10+5]",
-        "[C+5:3]",
         "[C10+5:]",
+        "[C+]",
+        "[C:]",
+        "[C+0]",
+        "[C:0]",
+        "[C:11]",
+        "[C:3+5]",
+        "[C+5C10]",
         "[C10+0:3]",
         "[C1+1:0]",
         "[C1+1:11]",
@@ -477,6 +483,34 @@ fn malformed_counters_are_errors() {
     ] {
         assert_eq!(error(text).kind, MaskErrorKind::BadCounter, "{text}");
     }
+}
+
+#[test]
+fn partial_counters_take_the_missing_parts_from_the_default() {
+    let default = CounterSpec {
+        start: 7,
+        step: 2,
+        digits: 4,
+    };
+    let s = subject("a", "");
+    assert_eq!(mask("[C10]").render_with(&s, 1, default), "0012");
+    assert_eq!(mask("[C+5]").render_with(&s, 1, default), "0012");
+    assert_eq!(mask("[C:3]").render_with(&s, 1, default), "009");
+    assert_eq!(mask("[C10:3]").render_with(&s, 1, default), "012");
+    assert_eq!(mask("[C10+5]").render_with(&s, 1, default), "0015");
+    assert_eq!(mask("[C+5:2]").render_with(&s, 2, default), "17");
+}
+
+#[test]
+fn partial_counters_parse_into_their_parts() {
+    assert_eq!(
+        mask("[C10:3]").tokens(),
+        [Token::Counter(CounterParts {
+            start: Some(10),
+            step: None,
+            digits: Some(3),
+        })]
+    );
 }
 
 #[test]
@@ -493,7 +527,7 @@ fn parse_builds_the_expected_tokens() {
             Token::Text("a".into()),
             Token::Name(Span::Range(2, 4)),
             Token::Text("b".into()),
-            Token::Counter(None),
+            Token::Counter(CounterParts::default()),
         ]
     );
 }
@@ -519,6 +553,12 @@ const TABLE: &[&str] = &[
     "[G]",
     "[C]",
     "[C10+5:3]",
+    "[C10]",
+    "[C+5]",
+    "[C:3]",
+    "[C10:3]",
+    "[C10+5]",
+    "[C+5:3]",
     "[Y]",
     "[y]",
     "[M]",
@@ -543,6 +583,8 @@ const TABLE: &[&str] = &[
     "[Q]",
     "[N2--]",
     "[C0+0:3]",
+    "[C+0]",
+    "[C:11]",
     "x[",
     "x]",
     "[N2-5",

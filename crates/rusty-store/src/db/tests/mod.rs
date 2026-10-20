@@ -13,8 +13,10 @@ mod guards;
 mod memory;
 mod migrations;
 mod props;
+mod rename_presets;
 mod settings_defaults;
 mod v4;
+mod v5;
 mod viewer;
 
 const V1_TABLES: [&str; 7] = [
@@ -27,13 +29,14 @@ const V1_TABLES: [&str; 7] = [
     "undo",
 ];
 
-const TABLES: [&str; 11] = [
+const TABLES: [&str; 12] = [
     "command_use",
     "frecency",
     "history",
     "job",
     "job_step",
     "module_kv",
+    "rename_preset",
     "search_history",
     "settings_defaults",
     "tags",
