@@ -96,7 +96,7 @@ fn v3_fixture_has_rows_in_every_table() {
 fn v3_fixture_reports_its_starting_version() {
     let dir = tmp();
     let (_, report) = Db::open(&v3_file(&dir), false).unwrap();
-    assert_eq!((report.from_version, report.to_version), (3, 4));
+    assert_eq!((report.from_version, report.to_version), (3, Db::VERSION));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn v3_schema_outside_frecency_is_kept() {
     let want = schema(&Connection::open(&path).unwrap());
     let (db, _) = Db::open(&path, false).unwrap();
     let mut got = schema(db.connection());
-    got.retain(|(name, _)| !name.contains("command_use"));
+    got.retain(|(name, _)| !name.contains("command_use") && !name.contains("rename_preset"));
     assert_eq!(got, want);
 }
 
@@ -208,7 +208,10 @@ fn reopening_a_v4_file_reports_no_migration() {
     let dir = tmp();
     let path = v4_file_with_rows(&dir);
     let (_, report) = Db::open(&path, false).unwrap();
-    assert_eq!((report.from_version, report.to_version), (4, 4));
+    assert_eq!(
+        (report.from_version, report.to_version),
+        (Db::VERSION, Db::VERSION)
+    );
 }
 
 #[test]
@@ -239,8 +242,8 @@ fn a_newer_file_with_v4_rows_is_refused_as_too_new() {
         matches!(
             err,
             DbError::TooNew {
-                found: 5,
-                supported: 4
+                found: 6,
+                supported: 5
             }
         ),
         "{err:?}"
