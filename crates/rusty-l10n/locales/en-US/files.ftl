@@ -77,10 +77,14 @@ activity-percent = { $percent }%
 activity-chip-copy = Copy { $percent }
 activity-chip-move = Move { $percent }
 activity-chip-delete = Delete { $percent }
+activity-chip-recycle = Recycle { $percent }
+activity-chip-rename = Rename { $percent }
 activity-chip-paused = { $chip } · Paused
 activity-chip-copy-failed = Copy failed
 activity-chip-move-failed = Move failed
 activity-chip-delete-failed = Delete failed
+activity-chip-recycle-failed = Recycle failed
+activity-chip-rename-failed = Rename failed
 activity-chip-copied = Copied { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -90,6 +94,14 @@ activity-chip-moved = Moved { $count ->
    *[other] { $items } items
 }
 activity-chip-deleted = Deleted { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-chip-recycled = Recycled { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-chip-renamed = Renamed { $count ->
     [one] { $items } item
    *[other] { $items } items
 }

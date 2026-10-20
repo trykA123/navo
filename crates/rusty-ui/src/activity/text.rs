@@ -120,7 +120,9 @@ pub(super) fn job_chip(job: &JobInfo) -> String {
     let id = match job.kind {
         OpKind::Copy => "activity-chip-copy",
         OpKind::Move => "activity-chip-move",
-        OpKind::Recycle | OpKind::Delete => "activity-chip-delete",
+        OpKind::Recycle => "activity-chip-recycle",
+        OpKind::Delete => "activity-chip-delete",
+        OpKind::Rename => "activity-chip-rename",
     };
     let chip = t!(id, percent = percent(job.fraction()));
     match job.pause {
@@ -133,7 +135,9 @@ pub(super) fn failure_chip(job: &JobInfo) -> String {
     tr(match job.kind {
         OpKind::Copy => "activity-chip-copy-failed",
         OpKind::Move => "activity-chip-move-failed",
-        OpKind::Recycle | OpKind::Delete => "activity-chip-delete-failed",
+        OpKind::Recycle => "activity-chip-recycle-failed",
+        OpKind::Delete => "activity-chip-delete-failed",
+        OpKind::Rename => "activity-chip-rename-failed",
     })
 }
 
@@ -141,8 +145,10 @@ pub(super) fn done_chip(job: &JobInfo) -> String {
     let (count, items) = (items_of(job), format::bytes(items_of(job)));
     let id = match job.kind {
         OpKind::Copy => "activity-chip-copied",
-        OpKind::Move | OpKind::Recycle => "activity-chip-moved",
+        OpKind::Move => "activity-chip-moved",
+        OpKind::Recycle => "activity-chip-recycled",
         OpKind::Delete => "activity-chip-deleted",
+        OpKind::Rename => "activity-chip-renamed",
     };
     t!(id, count = count, items = items)
 }
