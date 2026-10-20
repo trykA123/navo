@@ -14,7 +14,7 @@ use crate::drag::Hover;
 use crate::pane_chrome::path_segments;
 use crate::settings::{Change, Field, Value, Values};
 use crate::test_pointer::{self, ctrl, dispatch, moved, up};
-use crate::window_view::FerriteWindow;
+use crate::window_view::{DriveIcon, DriveInfo, FerriteWindow};
 
 const DOCS: usize = 0;
 const A: usize = 1;
@@ -41,9 +41,25 @@ fn files() -> Arc<FakeFs> {
 }
 
 fn rig_with(cx: &mut TestAppContext, values: Values) -> Rig {
+    rig_on(cx, (values, false))
+}
+
+fn rig_on(cx: &mut TestAppContext, (values, with_drive): (Values, bool)) -> Rig {
     let fs = files();
     let mut options = options_for(fs.clone(), home_beside_dest(&fs));
     options.settings.values = values;
+    if with_drive {
+        let drive = DriveInfo {
+            root: fs.location("dest").root(),
+            letter: None,
+            icon: DriveIcon::Fixed,
+            label: Some("Test".to_owned()),
+            remote: None,
+            connected: true,
+            space: None,
+        };
+        options.drives.refresh = Arc::new(move || vec![drive.clone()]);
+    }
     let (window, view) = open_options(cx, options);
     let (home, dest) = view.read_with(cx, |view, _| {
         let state = view.browser.state();
@@ -165,6 +181,15 @@ impl Rig {
                 .find(("segment", crumb))
                 .bounds()
                 .center()
+        })
+        .expect("window")
+    }
+
+    fn pill_centre(&self, cx: &mut TestAppContext) -> Point<Pixels> {
+        let pane = self.dest.get();
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find(("drive-pill", pane)).bounds().center()
         })
         .expect("window")
     }
@@ -488,4 +513,40 @@ fn a_drop_on_the_root_crumb_targets_the_root(cx: &mut TestAppContext) {
     );
     rig.release(cx, to, Modifiers::default());
     assert_eq!(rig.jobs(cx), [(OpKind::Move, Some(root))]);
+}
+
+#[gpui_kit::test]
+fn a_drop_on_the_drive_pill_targets_the_drive_root(cx: &mut TestAppContext) {
+    let rig = rig_on(cx, (with_fkey_bar(Values::default()), true));
+    let root = rig.fs.location("dest").root();
+    let to = rig.pill_centre(cx);
+    rig.drag_to(cx, (A, to), Modifiers::default());
+    let hover = rig.hover(cx).expect("hover");
+    assert_eq!(hover.op, Some(DropOp::Move));
+    rig.release(cx, to, Modifiers::default());
+    assert_eq!(rig.jobs(cx), [(OpKind::Move, Some(root))]);
+    assert!(rig.exists("a.txt"));
+    assert!(!rig.exists("home/a.txt"));
+}
+
+#[gpui_kit::test]
+fn a_drop_on_the_pill_of_the_sources_own_root_is_refused(cx: &mut TestAppContext) {
+    let rig = rig_on(cx, (with_fkey_bar(Values::default()), true));
+    rig.fs.add_file("top.txt", 2);
+    let root = Command::PaneNavigate {
+        location: rig.fs.location("dest").root(),
+    };
+    cx.update_window(rig.window, |_, window, cx| {
+        rig.view
+            .update(cx, |view, cx| view.apply(&root, window, cx));
+    })
+    .expect("window");
+    settle(cx, &rig.view);
+    let to = rig.pill_centre(cx);
+    rig.drag_to(cx, (2, to), Modifiers::default());
+    assert!(rig.hover(cx).expect("hover").refusal.is_some());
+    rig.release(cx, to, Modifiers::default());
+    assert!(rig.jobs(cx).is_empty());
+    assert_eq!(rig.notice(cx), Some(tr("drag-refused-same-folder")));
+    assert!(rig.exists("top.txt"));
 }

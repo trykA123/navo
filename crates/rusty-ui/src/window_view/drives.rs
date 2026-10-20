@@ -188,6 +188,7 @@ impl FerriteWindow {
                     view.open_drive_menu_for(pane, window, cx);
                 });
             });
+        let pill = Self::wire_drive_drops(pill, pane, cx);
         div()
             .relative()
             .flex_none()

@@ -7,7 +7,11 @@ use gpui_kit::{
     Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px, relative,
 };
 
+use rusty_core::Location;
+
 use super::drives::DriveInfo;
+use crate::drag::Landing;
+use crate::file_list::DropPayload;
 use crate::file_list::row::inset_ring;
 use crate::primitives::{IconName, Tooltip, icon};
 use crate::tokens::{self, Theme};
@@ -26,6 +30,7 @@ pub struct DrivePill {
     is_busy: bool,
     is_open: bool,
     on_open: Option<OpenHandler>,
+    landing: Landing<Location>,
 }
 
 impl DrivePill {
@@ -36,6 +41,7 @@ impl DrivePill {
             is_busy: false,
             is_open: false,
             on_open: None,
+            landing: Landing::default(),
         }
     }
 
@@ -53,6 +59,22 @@ impl DrivePill {
 
     pub fn on_open(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_open = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn on_drop(
+        mut self,
+        handler: impl Fn(&Location, &DropPayload, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_drop(handler);
+        self
+    }
+
+    pub fn on_hover(
+        mut self,
+        handler: impl Fn(&Location, bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_hover(handler);
         self
     }
 }
@@ -137,7 +159,10 @@ impl RenderOnce for DrivePill {
         let name = drive.map_or_else(|| "Drives".into(), spoken_name);
         let tip: Option<SharedString> = drive.map(|drive| drive.tooltip().into());
         let is_dimmed = self.is_busy || drive.is_some_and(|drive| !drive.connected);
-        div()
+        let target = drive
+            .filter(|drive| drive.connected)
+            .map(|drive| (drive.root.clone(), c.accent));
+        let pill = div()
             .id(self.id)
             .role(Role::Button)
             .aria_label(name)
@@ -169,6 +194,10 @@ impl RenderOnce for DrivePill {
                     (!was_open).then(|| handler(window, cx));
                 })
             })
-            .child(face(t, drive, self.is_busy))
+            .child(face(t, drive, self.is_busy));
+        match target {
+            Some(target) => self.landing.accept(pill, target),
+            None => pill,
+        }
     }
 }

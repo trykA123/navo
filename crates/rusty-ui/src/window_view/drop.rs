@@ -7,7 +7,7 @@ use crate::browser::{DropRequest, PasteRefusal, drop_refusal, same_volume};
 use crate::drag::{DragBadge, DragState, FileDrag, Hover, Refusal};
 use crate::file_list::{DropEvent, DropPayload, DropSpot, FileList};
 use crate::modifier_hints::HintsMode;
-use crate::pane_chrome::{PaneTabs, PathBar, path_segments};
+use crate::pane_chrome::{DrivePill, PaneTabs, PathBar, path_segments};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 
@@ -24,6 +24,7 @@ enum Over {
     Spot(PaneId, DropSpot),
     Tab(PaneId, usize),
     Crumb(PaneId, Location),
+    Drive(PaneId, Location),
 }
 
 fn keys_of(modifiers: &Modifiers) -> DropKeys {
@@ -264,6 +265,26 @@ impl FerriteWindow {
         })
     }
 
+    pub(super) fn wire_drive_drops(
+        pill: DrivePill,
+        pane: PaneId,
+        cx: &mut Context<Self>,
+    ) -> DrivePill {
+        let (hover, drop) = (cx.weak_entity(), cx.weak_entity());
+        pill.on_hover(move |root, inside, window, cx| {
+            let keys = keys_of(&window.modifiers());
+            let _ = hover.update(cx, |view, cx| {
+                let over = Over::Drive(pane, root.clone());
+                view.place_hover((over, inside), keys, cx);
+            });
+        })
+        .on_drop(move |root, payload, window, cx| {
+            let _ = drop.update(cx, |view, cx| {
+                view.drop_on((root.clone(), payload), window, cx);
+            });
+        })
+    }
+
     fn drop_on_tab(
         &mut self,
         (pane, tab, payload): (PaneId, usize, &DropPayload),
@@ -284,7 +305,7 @@ impl FerriteWindow {
         match over {
             Over::Spot(pane, spot) => self.drop_target(*pane, *spot),
             Over::Tab(pane, tab) => self.tab_location(*pane, *tab),
-            Over::Crumb(_, location) => Some(location.clone()),
+            Over::Crumb(_, location) | Over::Drive(_, location) => Some(location.clone()),
         }
     }
 
