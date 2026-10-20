@@ -68,6 +68,8 @@ pub enum Page {
     WindowPartsOn,
     WindowPartsOff,
     WindowViewMenu,
+    SettingsUpgrade,
+    SettingsFind,
 }
 
 pub struct PageInfo {
@@ -86,7 +88,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 68] = [
+pub const PAGES: [PageInfo; 70] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -313,6 +315,18 @@ pub const PAGES: [PageInfo; 68] = [
         Page::WindowViewMenu,
         "Window, View menu",
         "p33-w1-view-menu",
+        false,
+    ),
+    info(
+        Page::SettingsUpgrade,
+        "Settings, upgrade notice",
+        "p22-s3b-upgrade-notice",
+        false,
+    ),
+    info(
+        Page::SettingsFind,
+        "Settings, find a setting",
+        "p22-s3b-find",
         false,
     ),
 ];

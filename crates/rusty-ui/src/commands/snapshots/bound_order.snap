@@ -83,8 +83,14 @@ settings.edit_value | f2 | SettingsSheet
 settings.show_in_file | f3 | SettingsSheet
 settings.reset_value | f8 | SettingsSheet
 settings.undo | ctrl-z | SettingsSheet
+settings.find | ctrl-f | SettingsSheet
 settings.close | escape | SettingsSheet
 settings.cancel_edit | escape | SettingsField
+settings.clear_find | escape | SettingsFind
+settings.find_to_list | down | SettingsFind
+settings.find_to_list | enter | SettingsFind
+settings.find_to_list | down | SettingsFind > Input
+settings.find_to_list | enter | SettingsFind > Input
 [shortcuts]
 shortcuts.previous_row | up | Shortcuts
 shortcuts.previous_row | up | Shortcuts > Input

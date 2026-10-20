@@ -28,7 +28,7 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 use crate::drives_page::six_drives;
 use crate::job_sample;
 use crate::pane_sample;
-use crate::settings_sample;
+use crate::settings_sample::{self, Extras, Shown};
 use crate::sheet_sample;
 use crate::shortcuts_sample;
 
@@ -68,6 +68,7 @@ pub struct SheetShows {
     pub window_width: Option<f32>,
     pub is_ringed: bool,
     pub settings: Option<Field>,
+    pub extras: Extras,
     pub shortcuts: Option<Entity<ShortcutsPage>>,
 }
 
@@ -354,7 +355,13 @@ impl WindowPage {
         };
         let shown = match (&sheet.shows.shortcuts, sheet.shows.settings) {
             (Some(page), _) => shortcuts_sample::sheet(&sheet.state, frame, page),
-            (None, Some(field)) => settings_sample::sheet(t, &sheet.state, frame, field),
+            (None, Some(field)) => {
+                let shown = Shown {
+                    field,
+                    extras: &sheet.shows.extras,
+                };
+                settings_sample::sheet(t, &sheet.state, frame, &shown)
+            }
             (None, None) => sheet_sample::sheet(t, &sheet.state, frame),
         };
         let layer = div()

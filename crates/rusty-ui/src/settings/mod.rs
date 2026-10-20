@@ -1,13 +1,18 @@
 mod controls;
 mod fields;
+mod find;
+mod find_bar;
 mod row_state;
 mod steps;
+mod upgrade;
 mod values;
 mod view;
 mod viewer_fields;
 mod window;
 mod window_fields;
 
+#[cfg(test)]
+mod find_tests;
 #[cfg(test)]
 mod tests;
 
@@ -20,7 +25,10 @@ pub use fields::{
     Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look, PRESETS, SORTS,
     Section, THEMES,
 };
+pub use find::{Filter, Line, lines};
+pub use find_bar::find_field;
 pub use steps::{Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of};
+pub use upgrade::{DefaultShift, Moved};
 pub use values::{Change, Value, Values};
 pub use window::WindowParts;
 
@@ -31,6 +39,7 @@ use crate::tokens;
 pub const CONTEXT: &str = "SettingsSheet";
 const LAST_SECTION: Section = Section::ALL[Section::ALL.len() - 1];
 pub const FIELD_CONTEXT: &str = "SettingsField";
+pub const FIND_CONTEXT: &str = "SettingsFind";
 
 gpui_kit::actions!(
     settings_sheet,
@@ -47,6 +56,9 @@ gpui_kit::actions!(
         OpenKey,
         ResetValue,
         UndoChange,
+        FindSetting,
+        ClearFind,
+        FindToList,
         CloseSettings,
         CancelEdit
     ]
@@ -64,6 +76,9 @@ pub enum SheetEvent {
     Edit(Field),
     Locate(Field),
     Undo,
+    Find,
+    Keep(Field),
+    DismissUpgrade,
     Close,
 }
 
@@ -93,7 +108,7 @@ pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) 
     } else {
         sheet
     };
-    sheet.hint(&["ctrl-z"], "Undo")
+    sheet.hint(&["ctrl-z"], "Undo").hint(&["ctrl-f"], "Find")
 }
 
 #[derive(IntoElement)]
@@ -118,6 +133,9 @@ pub struct SettingsBody {
     error: Option<SharedString>,
     editor: Option<AnyElement>,
     shortcuts: Option<AnyElement>,
+    filter: Filter,
+    find: Option<AnyElement>,
+    upgrade: Vec<Moved>,
     focus: Option<FocusHandle>,
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
@@ -131,6 +149,9 @@ impl SettingsBody {
             error: None,
             editor: None,
             shortcuts: None,
+            filter: Filter::default(),
+            find: None,
+            upgrade: Vec::new(),
             focus: None,
             scroll: None,
             on_event: None,
@@ -156,6 +177,24 @@ impl SettingsBody {
     }
 
     #[must_use]
+    pub fn filter(mut self, filter: Filter) -> Self {
+        self.filter = filter;
+        self
+    }
+
+    #[must_use]
+    pub fn find(mut self, bar: Option<AnyElement>) -> Self {
+        self.find = bar;
+        self
+    }
+
+    #[must_use]
+    pub fn upgrade(mut self, items: Vec<Moved>) -> Self {
+        self.upgrade = items;
+        self
+    }
+
+    #[must_use]
     pub fn track_focus(mut self, focus: &FocusHandle) -> Self {
         self.focus = Some(focus.clone());
         self
@@ -176,8 +215,12 @@ impl SettingsBody {
         self
     }
 
+    fn shown_spec(&self) -> Option<&'static FieldSpec> {
+        FIELDS.get(self.row).filter(|spec| self.filter.admits(spec))
+    }
+
     fn event_for(&self, nudge: Nudge) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         let value = nudged(spec, self.values.get(spec.field), nudge)?;
         Some(SheetEvent::Set(Change {
             field: spec.field,
@@ -186,35 +229,44 @@ impl SettingsBody {
     }
 
     fn flip_event(&self) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         match spec.control {
             Control::Text => Some(SheetEvent::Edit(spec.field)),
             _ => self.event_for(Nudge::Flip),
         }
     }
 
-    fn section_event(&self, forward: bool) -> SheetEvent {
+    fn section_event(&self, forward: bool) -> Option<SheetEvent> {
         let edge = if forward {
             LAST_SECTION
         } else {
             Section::Appearance
         };
         match (self.shortcuts.is_some(), forward) {
-            (true, true) => SheetEvent::Select(first_row(Section::Appearance)),
-            (true, false) => SheetEvent::Select(first_row(LAST_SECTION)),
-            (false, _) if section_of(self.row) == edge => SheetEvent::Shortcuts,
-            (false, _) => SheetEvent::Select(next_section(self.row, forward)),
+            (true, true) => self
+                .filter
+                .first_in(Section::Appearance)
+                .map(SheetEvent::Select),
+            (true, false) => self.filter.first_in(LAST_SECTION).map(SheetEvent::Select),
+            (false, _) if self.filter.is_empty() && section_of(self.row) == edge => {
+                Some(SheetEvent::Shortcuts)
+            }
+            (false, _) => Some(SheetEvent::Select(next_section(
+                &self.filter,
+                self.row,
+                forward,
+            ))),
         }
     }
 
     fn reset_event(&self) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         let is_shown = self.shortcuts.is_none() && self.values.is_changed(spec.field);
         is_shown.then(|| SheetEvent::Set(Change::reset(spec.field)))
     }
 
     fn edit_event(&self) -> Option<SheetEvent> {
-        let spec = FIELDS.get(self.row)?;
+        let spec = self.shown_spec()?;
         matches!(spec.control, Control::Text | Control::Number)
             .then_some(SheetEvent::Edit(spec.field))
     }
@@ -235,8 +287,8 @@ fn on_event(
 }
 
 fn register(root: Div, body: &SettingsBody) -> Div {
-    let next = on_event(body, Some(body.section_event(true)));
-    let previous = on_event(body, Some(body.section_event(false)));
+    let next = on_event(body, body.section_event(true));
+    let previous = on_event(body, body.section_event(false));
     let close = on_event(body, Some(SheetEvent::Close));
     let root = root
         .on_action(move |_: &NextSection, window, cx| next(window, cx))
@@ -251,8 +303,10 @@ fn register(root: Div, body: &SettingsBody) -> Div {
 fn register_fields(root: Div, body: &SettingsBody) -> Div {
     let row = body.row;
     let field = FIELDS.get(row).map(|spec| spec.field);
-    let up = on_event(body, Some(SheetEvent::Select(moved(row, false))));
-    let down = on_event(body, Some(SheetEvent::Select(moved(row, true))));
+    let filter = &body.filter;
+    let up = on_event(body, Some(SheetEvent::Select(moved(filter, row, false))));
+    let down = on_event(body, Some(SheetEvent::Select(moved(filter, row, true))));
+    let find = on_event(body, Some(SheetEvent::Find));
     let back = on_event(body, body.event_for(Nudge::Back));
     let forward = on_event(body, body.event_for(Nudge::Forward));
     let flip = on_event(body, body.flip_event());
@@ -269,6 +323,7 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
         .on_action(move |_: &OpenKey, window, cx| locate(window, cx))
         .on_action(move |_: &ResetValue, window, cx| reset(window, cx))
         .on_action(move |_: &UndoChange, window, cx| undo(window, cx))
+        .on_action(move |_: &FindSetting, window, cx| find(window, cx))
 }
 
 impl RenderOnce for SettingsBody {
@@ -280,9 +335,13 @@ impl RenderOnce for SettingsBody {
             theme: &t,
             values: &self.values,
             row: self.row,
+            filter: &self.filter,
             send: self.on_event.clone(),
         };
         let shown = self.shortcuts.is_none().then_some(section);
+        let notice = shown
+            .filter(|_| !self.upgrade.is_empty())
+            .map(|_| upgrade::card(&t, &self.upgrade, self.on_event.as_ref()));
         let footer = shown.map(|_| row_state::footer(&t, &self.values));
         let content = match self.shortcuts {
             Some(page) => page,
@@ -307,16 +366,22 @@ impl RenderOnce for SettingsBody {
                     .min_w_0()
                     .min_h_0()
                     .children(self.error.map(|message| view::error_line(&t, message)))
+                    .children(notice)
                     .child(content)
                     .children(footer),
             );
-        div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h_0()
-            .min_w_0()
-            .child(keyed)
-            .children(self.editor)
+        framed(self.find.filter(|_| shown.is_some()), keyed, self.editor)
     }
+}
+
+fn framed(find: Option<AnyElement>, body: impl IntoElement, editor: Option<AnyElement>) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_h_0()
+        .min_w_0()
+        .children(find)
+        .child(body)
+        .children(editor)
 }

@@ -4,13 +4,14 @@ use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use super::settings_sheet::SettingsHooks;
 use super::{FerriteWindow, KeymapHooks};
 use crate::prelude::*;
-use crate::settings::Values;
+use crate::settings::{DefaultShift, Values};
 use crate::status_bar::StatusNotice;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SettingsNews {
     Applied { values: Values, generation: u64 },
     Invalid(String),
+    Defaults(Vec<DefaultShift>),
 }
 
 #[derive(Clone, Debug)]
@@ -72,10 +73,12 @@ impl FerriteWindow {
                 let fresh = self.saver.on_disk(values, generation);
                 if fresh != self.values {
                     self.set_values(fresh, window, cx);
+                    self.follow_defaults();
                     self.saver.count_disk_apply();
                 }
             }
             SettingsNews::Invalid(message) => self.saver.disk_invalid(message.into()),
+            SettingsNews::Defaults(shifts) => self.take_defaults(shifts),
         }
         cx.notify();
     }
@@ -88,5 +91,6 @@ impl FerriteWindow {
         self.clipboard_notice()
             .or(problem)
             .or_else(|| self.keymap_notice())
+            .or_else(|| self.upgrade_notice())
     }
 }
