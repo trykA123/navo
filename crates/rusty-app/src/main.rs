@@ -168,6 +168,7 @@ fn open_window(
     let diagnostics = install_logging(profile);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
+    crash::note_previous_exit(pending_crash.as_ref());
     let run = start
         .metrics
         .clone()

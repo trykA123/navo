@@ -2,9 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::Duration;
 
-use rusty_store::{
-    Db, DefaultChange, LoadReport, SessionBackup, Settings, SettingsStore, StoreDirs,
-};
+use rusty_store::{DefaultChange, LoadReport, SessionBackup, Settings, SettingsStore, StoreDirs};
 
 use super::{describe, report};
 
@@ -185,7 +183,7 @@ pub(super) fn follow_defaults(
     ledger: &Path,
     defaults: &Settings,
 ) -> Vec<DefaultChange> {
-    let db = match Db::open(ledger, false) {
+    let db = match crate::crash::open_db(ledger) {
         Ok((db, _)) => db,
         Err(error) => {
             report(&format!("{}: {error}", ledger.display()));

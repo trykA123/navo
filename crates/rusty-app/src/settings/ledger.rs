@@ -17,7 +17,7 @@ impl LedgerFile {
             return Ok(None);
         };
         if self.db.is_none() {
-            let (db, _) = Db::open(path, false).map_err(|error| {
+            let (db, _) = crate::crash::open_db(path).map_err(|error| {
                 SettingsError::Ledger(format!("opening {}: {error}", path.display()))
             })?;
             self.db = Some(db);

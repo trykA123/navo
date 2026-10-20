@@ -19,7 +19,7 @@ pub fn open(file: &Path) -> Option<SharedDb> {
 }
 
 fn open_keeping(file: &Path, keep: usize) -> Option<SharedDb> {
-    let (db, _) = Db::open(file, false)
+    let (db, _) = crate::crash::open_db(file)
         .inspect_err(|error| report(&format!("opening {}", file.display()), error))
         .ok()?;
     let _ = db
