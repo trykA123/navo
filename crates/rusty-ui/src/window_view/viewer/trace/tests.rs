@@ -1,6 +1,6 @@
-use rusty_automotive::{Base, Body, CanId, Direction, Entry, Frame, FrameKind};
+use rusty_automotive::{Base, Body, CanId, Direction, Entry, Frame, FrameKind, TraceFormat};
 
-use super::text::{Tone, binary, column_titles, id, row, span, time};
+use super::text::{Tone, binary, column_titles, format_label, id, row, span, time};
 
 fn entry(body: Body) -> Entry {
     Entry {
@@ -65,7 +65,7 @@ fn a_frame_row_lines_up_under_the_column_titles() {
         dlc: 2,
         data: vec![0x01, 0xFF],
     };
-    let (text, tone) = row(&entry(Body::Frame(frame)), Base::Hex);
+    let (text, tone) = row(&entry(Body::Frame(frame)), (Base::Hex, TraceFormat::Asc));
     assert_eq!(tone, Tone::Plain);
     assert_eq!(
         text,
@@ -85,14 +85,34 @@ fn error_frames_and_other_lines_have_their_own_tone() {
         dlc: 0,
         data: Vec::new(),
     };
-    assert_eq!(row(&entry(Body::Frame(error)), Base::Hex).1, Tone::Error);
+    assert_eq!(
+        row(&entry(Body::Frame(error)), (Base::Hex, TraceFormat::Asc)).1,
+        Tone::Error
+    );
     let (text, tone) = row(
         &entry(Body::Other("1.234567 Start of measurement".to_owned())),
-        Base::Hex,
+        (Base::Hex, TraceFormat::Asc),
     );
     assert_eq!(tone, Tone::Quiet);
     assert!(
         text.ends_with("Other        Start of measurement"),
         "{text}"
     );
+}
+
+#[test]
+fn the_header_names_the_file_format() {
+    assert_eq!(format_label(TraceFormat::Asc), "Vector ASC");
+    assert_eq!(format_label(TraceFormat::Trc(Some("2.1"))), "PEAK TRC 2.1");
+    assert_eq!(format_label(TraceFormat::Trc(None)), "PEAK TRC");
+}
+
+#[test]
+fn trc_event_rows_drop_the_message_number_and_the_time() {
+    let trc = (Base::Hex, TraceFormat::Trc(Some("1.1")));
+    for text in ["1) 4.500 Warng FFFFFFFF 4", "1 4.500 Warng FFFFFFFF 4"] {
+        let (line, _) = row(&entry(Body::Other(text.to_owned())), trc);
+        assert!(line.ends_with("Other        Warng FFFFFFFF 4"), "{line}");
+        assert_eq!(line.matches("1.234567").count(), 1, "{line}");
+    }
 }

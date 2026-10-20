@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::sync::atomic::Ordering;
 
-use super::asc::{Clock, Head, Header, Shape, parse};
+use super::asc::{Head, Header, Shape};
 use super::line::{MAX_LINE, next_line};
-use super::{CanId, FrameKind, Notation};
+use super::text::Clock;
+use super::{CanId, FrameKind, Notation, TraceFormat};
 use crate::{IndexError, Watch};
 
 pub(crate) const BLOCK: u64 = 32;
@@ -93,6 +94,11 @@ impl Trace {
     #[must_use]
     pub fn rows(&self) -> u64 {
         self.rows
+    }
+
+    #[must_use]
+    pub fn format(&self) -> TraceFormat {
+        self.clock.format()
     }
 
     #[must_use]
@@ -262,7 +268,7 @@ impl Trace {
     }
 
     fn take(&mut self, at: u64, line: &[u8], data: &mut Vec<u8>) {
-        let (time, shape) = parse(line, self.clock.notation.base, data);
+        let (time, shape) = self.clock.parse(line, data);
         match shape {
             Shape::Blank => {}
             Shape::Header(header) => self.header(header),
