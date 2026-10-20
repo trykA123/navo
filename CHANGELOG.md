@@ -2,6 +2,23 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## alpha-2026-10-20q — 2026-10-20
+
+### New
+
+- Drag and drop between the panes: drag a file, or the marked files, by its icon or name onto the other pane or onto a folder row.
+- A drag moves by default on the same drive and copies across drives. Hold Ctrl to copy. Hold Shift to move.
+- A badge next to the pointer says what will happen. Drops into the same folder or into itself are refused with a reason. Esc cancels.
+- Settings, Files: "Drag and drop" asks Never (default), Only moves or Always before a dragged move runs.
+- Ctrl+K learns. Commands you run from it often move up the list.
+
+### Built but not switched on yet
+
+- Alt-drop shortcuts: the badge shows "Create shortcuts". Shortcuts can be made and undone, also on folders with very long paths. A drop does not create them yet.
+- Rich ELF and MAP view: memory colours and the View menu parts (usage bars, who uses) are in. The screens come next.
+- Multi-rename: the engine, Ctrl+M and the keys are in. The dialog comes next.
+- Settings file: a new Search section for the file index (what to index, drives, folders to skip). The index itself comes later.
+
 ## alpha-2026-10-20p — 2026-10-20
 
 ### New
