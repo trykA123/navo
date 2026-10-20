@@ -2,20 +2,22 @@ use std::sync::Arc;
 
 use super::super::FerriteWindow;
 use crate::command_center::{
-    Cancel, Hit, HitSink, Query, RecentSource, Request, ResultSource, Results, Row, Scope,
-    Selection,
+    Cancel, CommandsSnapshot, Hit, HitSink, Query, RecentSource, Request, ResultSource, Results,
+    Row, Scope, Selection,
 };
 use crate::prelude::*;
 
 const LIMIT: usize = 500;
+const RECENT_COMMANDS: usize = 5;
 const RECENT_FOLDERS: usize = 8;
 
-pub(super) fn recent(folders: Vec<Hit>) -> Vec<Row> {
-    Results::recent(Vec::new(), folders)
+pub(super) fn recent(commands: Vec<Hit>, folders: Vec<Hit>) -> Vec<Row> {
+    Results::recent(commands, folders)
 }
 
 pub(super) struct Search {
     recent: Arc<RecentSource>,
+    commands: Arc<CommandsSnapshot>,
     sources: Arc<[Arc<dyn ResultSource>]>,
     generation: u64,
     cancel: Cancel,
@@ -23,9 +25,13 @@ pub(super) struct Search {
 }
 
 impl Search {
-    pub(super) fn new(sources: Vec<Arc<dyn ResultSource>>, recent: Arc<RecentSource>) -> Self {
+    pub(super) fn new(
+        sources: Vec<Arc<dyn ResultSource>>,
+        (recent, commands): (Arc<RecentSource>, Arc<CommandsSnapshot>),
+    ) -> Self {
         Self {
             recent,
+            commands,
             sources: sources.into(),
             generation: 0,
             cancel: Cancel::new(),
@@ -120,13 +126,16 @@ impl FerriteWindow {
         };
         let generation = open.search.generation();
         let source = open.search.recent.clone();
-        let task = cx
-            .background_executor()
-            .spawn(async move { source.top_folders(RECENT_FOLDERS) });
+        let snapshot = open.search.commands.clone();
+        let latest = self.command_center.hooks.recent_commands.clone();
+        let task = cx.background_executor().spawn(async move {
+            let commands = snapshot.hits_of(&latest(RECENT_COMMANDS));
+            (commands, source.top_folders(RECENT_FOLDERS))
+        });
         cx.spawn_in(window, async move |this, cx| {
-            let folders = task.await;
+            let (commands, folders) = task.await;
             let _ = this.update_in(cx, |view, window, cx| {
-                view.show_rows((generation, recent(folders)), window, cx);
+                view.show_rows((generation, recent(commands, folders)), window, cx);
             });
         })
         .detach();

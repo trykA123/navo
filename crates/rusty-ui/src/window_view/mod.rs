@@ -74,7 +74,7 @@ pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use placement::DisplayScale;
 pub use preview::folder_summary;
-pub use search_hooks::{Frecent, SearchHooks};
+pub use search_hooks::{Frecent, RecentCommands, SearchHooks};
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};

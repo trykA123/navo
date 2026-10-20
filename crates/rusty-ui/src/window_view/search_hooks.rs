@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 pub type CommandUse = Arc<dyn Fn() -> Vec<(String, f64)> + Send + Sync>;
+pub type RecentCommands = Arc<dyn Fn(usize) -> Vec<String> + Send + Sync>;
 pub type RecordCommand = Arc<dyn Fn(&str) + Send + Sync>;
 pub type Frecents = Arc<dyn Fn(usize) -> Vec<Frecent> + Send + Sync>;
 pub type RecordVisit = Arc<dyn Fn(&str, bool) + Send + Sync>;
@@ -16,6 +17,7 @@ pub struct Frecent {
 #[derive(Clone)]
 pub struct SearchHooks {
     pub command_use: CommandUse,
+    pub recent_commands: RecentCommands,
     pub record_command: RecordCommand,
     pub frecent: Frecents,
     pub record_visit: RecordVisit,
@@ -27,6 +29,7 @@ impl SearchHooks {
     pub fn none() -> Self {
         Self {
             command_use: Arc::new(Vec::new),
+            recent_commands: Arc::new(|_| Vec::new()),
             record_command: Arc::new(|_| {}),
             frecent: Arc::new(|_| Vec::new()),
             record_visit: Arc::new(|_, _| {}),

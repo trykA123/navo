@@ -201,6 +201,35 @@ fn an_empty_box_lists_the_most_frecent_folders_under_recent(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn an_empty_box_lists_the_last_commands_before_the_folders(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let dest = location("dest");
+    rig.view.update(cx, |view, _| {
+        let hooks = &mut view.command_center.hooks;
+        hooks.recent_commands = Arc::new(|_| {
+            vec![
+                "file_list::SwitchPane".to_owned(),
+                "gone::Missing".to_owned(),
+            ]
+        });
+        hooks.frecent = Arc::new(move |_| {
+            vec![Frecent {
+                location: dest.as_str().to_owned(),
+                is_folder: true,
+                weight: 9.0,
+            }]
+        });
+    });
+    rig.press(cx, "ctrl-k");
+    settle(cx, &rig.view);
+    let rows = rig.rows(cx);
+    assert_eq!(rows.len(), 4, "{rows:?}");
+    assert_eq!(rows[0], "# Recent");
+    assert!(rows[1].contains("witch"), "{rows:?}");
+    assert!(rows[2].contains("dest"), "{rows:?}");
+}
+
+#[gpui_kit::test]
 fn typing_finds_commands_of_the_focused_file_list(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.press(cx, "ctrl-k");

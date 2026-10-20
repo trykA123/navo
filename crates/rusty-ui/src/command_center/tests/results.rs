@@ -324,3 +324,40 @@ fn show_all_rows_are_selectable() {
     selection.last(&rows);
     assert_eq!(selected_title(&rows, selection), "all Commands 12");
 }
+
+fn place_hit(source: &'static str, path: &str, score: i64) -> Hit {
+    let location = rusty_core::Location::new(path).unwrap();
+    Hit {
+        title: path.to_owned().into(),
+        target: if source == "tabs" {
+            Target::GoTo(location)
+        } else {
+            Target::Open {
+                location,
+                folder: true,
+            }
+        },
+        ..hit(source, Group::Folders, path, score)
+    }
+}
+
+#[test]
+fn a_place_found_by_recent_and_tabs_shows_once_as_the_tabs_row_with_the_higher_score() {
+    let hits = vec![
+        place_hit("recent", "C:\\Work\\Ferrite", 90),
+        place_hit("tabs", "c:\\work\\ferrite", 60),
+        place_hit("tabs", "c:\\work\\ferrite", 60),
+        place_hit("recent", "/work/other", 50),
+    ];
+    let rows = Results::merge(hits, Scope::Files);
+    let shown: Vec<&Hit> = rows
+        .iter()
+        .filter_map(|row| match row {
+            Row::Hit(hit) => Some(hit),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(shown.len(), 2, "{rows:?}");
+    assert_eq!((shown[0].source, shown[0].score), ("tabs", 90));
+    assert_eq!(shown[1].source, "recent");
+}

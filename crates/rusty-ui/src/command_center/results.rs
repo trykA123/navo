@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
+use rusty_core::Location;
+
 use super::query::Scope;
-use super::source::{Group, Hit};
+use super::source::{Group, Hit, Target};
 
 const SCOPED_CAP: usize = 500;
 const RECENT_COMMANDS: usize = 5;
@@ -35,7 +37,7 @@ pub struct Results;
 impl Results {
     #[must_use]
     pub fn merge(hits: Vec<Hit>, scope: Scope) -> Vec<Row> {
-        let ordered = order(hits);
+        let ordered = order(one_per_place(hits));
         match scope {
             Scope::Mixed => mixed(ordered),
             Scope::Commands | Scope::Files => scoped(ordered),
@@ -58,6 +60,47 @@ impl Results {
         rows.push(Row::Hint);
         rows
     }
+}
+
+fn place_of(hit: &Hit) -> Option<&Location> {
+    match (&hit.target, hit.source) {
+        (Target::GoTo(location), "tabs") | (Target::Open { location, .. }, "recent") => {
+            Some(location)
+        }
+        _ => None,
+    }
+}
+
+fn one_per_place(mut hits: Vec<Hit>) -> Vec<Hit> {
+    let same = |hits: &[Hit], a: usize, b: usize| match (place_of(&hits[a]), place_of(&hits[b])) {
+        (Some(a), Some(b)) => a.same_place(b),
+        _ => false,
+    };
+    let of = |source: &str| -> Vec<usize> {
+        (0..hits.len())
+            .filter(|&at| hits[at].source == source && place_of(&hits[at]).is_some())
+            .collect()
+    };
+    let (tab_hits, recent_hits) = (of("tabs"), of("recent"));
+    let mut dropped = vec![false; hits.len()];
+    let mut kept: Vec<usize> = Vec::new();
+    for at in tab_hits.into_iter().chain(recent_hits) {
+        let first = kept.iter().copied().find(|&tab| same(&hits, tab, at));
+        match first {
+            Some(tab) => {
+                hits[tab].score = hits[tab].score.max(hits[at].score);
+                dropped[at] = true;
+            }
+            None if hits[at].source == "tabs" => kept.push(at),
+            None => {}
+        }
+    }
+    let mut at = 0;
+    hits.retain(|_| {
+        at += 1;
+        !dropped[at - 1]
+    });
+    hits
 }
 
 fn order(mut hits: Vec<Hit>) -> Vec<Hit> {

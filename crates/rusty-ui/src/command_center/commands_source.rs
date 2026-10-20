@@ -20,6 +20,21 @@ pub struct CommandRow {
 }
 
 impl CommandRow {
+    fn hit(&self, score: i64, indices: Vec<u32>) -> Hit {
+        Hit {
+            source: "commands",
+            group: Group::Commands,
+            title: SharedString::from(self.label.clone()),
+            detail: SharedString::default(),
+            score,
+            indices,
+            target: self.arg.map_or(Target::Action(self.action), |kind| {
+                Target::Arg(self.name, kind)
+            }),
+            shortcut: self.shortcut.clone().map(SharedString::from),
+        }
+    }
+
     fn use_key(&self) -> &'static str {
         if self.arg.is_some() {
             self.name
@@ -56,6 +71,15 @@ impl CommandsSnapshot {
             })
             .collect();
         Self { rows }
+    }
+
+    #[must_use]
+    pub fn hits_of(&self, names: &[String]) -> Vec<Hit> {
+        names
+            .iter()
+            .filter_map(|name| self.rows.iter().find(|row| row.use_key() == name))
+            .map(|row| row.hit(0, Vec::new()))
+            .collect()
     }
 
     #[must_use]
@@ -149,23 +173,14 @@ impl ResultSource for CommandsSource {
                 (None, Some(name)) => (name.score, Vec::new()),
                 (None, None) => continue,
             };
-            let target = row.arg.map_or(Target::Action(row.action), |kind| {
-                Target::Arg(row.name, kind)
-            });
-            let hit = Hit {
-                source: "commands",
-                group: Group::Commands,
-                title: SharedString::from(row.label.clone()),
-                detail: SharedString::default(),
-                score: rank::score(
+            let hit = row.hit(
+                rank::score(
                     i64::from(score),
                     weights.get(row.use_key()).copied().unwrap_or(0.0),
                     rank::name_bonus(&row.label, &text),
                 ),
                 indices,
-                target,
-                shortcut: row.shortcut.clone().map(SharedString::from),
-            };
+            );
             sink.push(request.generation, hit);
         }
     }

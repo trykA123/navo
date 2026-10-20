@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use rusty_ui::window_view::{Frecent, SearchHooks};
+use rusty_ui::window_view::{Frecent, RecentCommands, SearchHooks};
 
 use crate::files::{SharedDb, lock, now_ms};
 
@@ -30,12 +30,25 @@ fn report(doing: &str, error: &rusty_store::DbError) {
     eprintln!("ferrite: search memory: {doing}: {error}");
 }
 
+fn recent_commands(db: SharedDb, remember: Remember) -> RecentCommands {
+    Arc::new(move |limit| {
+        if !remember.is_on() {
+            return Vec::new();
+        }
+        lock(&db)
+            .recent_commands(limit)
+            .inspect_err(|error| report("loading recent commands", error))
+            .unwrap_or_default()
+    })
+}
+
 pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
     let Some(db) = db else {
         return SearchHooks::none();
     };
     let (weights, record, places, visit, clear) =
-        (db.clone(), db.clone(), db.clone(), db.clone(), db);
+        (db.clone(), db.clone(), db.clone(), db.clone(), db.clone());
+    let recent_commands = recent_commands(db, remember.clone());
     let (remember_command, remember_visit) = (remember.clone(), remember);
     SearchHooks {
         command_use: Arc::new(move || {
@@ -44,6 +57,7 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
                 .inspect_err(|error| report("loading command use", error))
                 .unwrap_or_default()
         }),
+        recent_commands,
         record_command: Arc::new(move |name| {
             if !remember_command.is_on() {
                 return;

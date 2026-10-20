@@ -104,6 +104,14 @@ impl Db {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    pub fn recent_commands(&self, limit: usize) -> Result<Vec<String>, DbError> {
+        let mut statement = self
+            .connection()
+            .prepare("SELECT name FROM command_use ORDER BY last_at DESC, name LIMIT ?1")?;
+        let rows = statement.query_map([limit_of(limit)], |row| row.get(0))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     pub fn clear_search_history(&self) -> Result<(), DbError> {
         let transaction = self.connection().unchecked_transaction()?;
         transaction.execute_batch(

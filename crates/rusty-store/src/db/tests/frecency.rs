@@ -319,3 +319,25 @@ fn clear_search_history_keeps_every_other_table() {
     let after: Vec<i64> = others.iter().map(|table| count(&db, table)).collect();
     assert_eq!(after, before);
 }
+
+#[test]
+fn recent_commands_lists_the_latest_run_first_and_stops_at_the_limit() {
+    let db = Db::open_in_memory().unwrap();
+    db.record_command("a", NOW - 3 * DAY).unwrap();
+    db.record_command("b", NOW - DAY).unwrap();
+    db.record_command("c", NOW).unwrap();
+    db.record_command("a", NOW - HOUR).unwrap();
+    db.record_command("a", NOW - 2 * HOUR).unwrap();
+    assert_eq!(db.recent_commands(3).unwrap(), ["c", "a", "b"]);
+    assert_eq!(db.recent_commands(2).unwrap(), ["c", "a"]);
+}
+
+#[test]
+fn recent_commands_lists_the_latest_run_first_even_when_older_use_weighs_more() {
+    let db = Db::open_in_memory().unwrap();
+    for _ in 0..5 {
+        db.record_command("heavy", NOW - 2 * DAY).unwrap();
+    }
+    db.record_command("light", NOW).unwrap();
+    assert_eq!(db.recent_commands(5).unwrap(), ["light", "heavy"]);
+}

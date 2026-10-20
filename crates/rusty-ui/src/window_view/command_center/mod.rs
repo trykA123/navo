@@ -110,8 +110,9 @@ impl FerriteWindow {
         let keymap = commands::active(cx);
         let snapshot = CommandsSnapshot::build(&commands::entries(), &stack, keymap);
         let keys = HintKeys::of(keymap);
+        let snapshot = Arc::new(snapshot);
         let mut sources: Vec<Arc<dyn ResultSource>> = vec![Arc::new(CommandsSource::with_use(
-            Arc::new(snapshot),
+            snapshot.clone(),
             self.command_center.hooks.command_use.clone(),
         ))];
         let recent = Arc::new(RecentSource::new(self.command_center.hooks.frecent.clone()));
@@ -120,7 +121,7 @@ impl FerriteWindow {
             self.browser.state(),
         ))));
         sources.extend(self.command_center.sources.iter().cloned());
-        let rows: Rc<[Row]> = search::recent(Vec::new()).into();
+        let rows: Rc<[Row]> = search::recent(Vec::new(), Vec::new()).into();
         let anchor = self.command_center_anchor(window, cx);
         let props = CommandCenterProps {
             rows: rows.clone(),
@@ -146,7 +147,7 @@ impl FerriteWindow {
             anchor,
             keys,
             restore,
-            search: search::Search::new(sources, recent),
+            search: search::Search::new(sources, (recent, snapshot)),
             _events: events,
         });
         self.load_recent(window, cx);
