@@ -3,6 +3,7 @@ mod copy;
 mod hold;
 mod parallel;
 mod pool;
+mod rename;
 mod restore;
 mod run;
 mod undo;
@@ -13,6 +14,7 @@ use rusty_core::{FsError, Location, OperationPlan};
 use crate::{CancelToken, ProviderOps};
 
 pub use aside::HELD_PREFIX;
+pub use rename::RenameOutcome;
 pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
 
 pub use rusty_core::TEMP_SUFFIX;
@@ -94,6 +96,11 @@ pub fn run_job_parallel(
         return run::run(plan, done, ctx);
     }
     parallel::run(plan, done, ctx, workers)
+}
+
+#[must_use]
+pub fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> RenameOutcome {
+    rename::run_rename(plan, ctx)
 }
 
 pub struct Journaled<'a> {

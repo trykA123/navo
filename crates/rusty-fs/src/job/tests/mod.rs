@@ -31,6 +31,7 @@ mod parallel_pause;
 mod parallel_props;
 mod pause;
 mod placed;
+mod rename;
 mod replace;
 mod roll_back;
 mod volume_proof;
