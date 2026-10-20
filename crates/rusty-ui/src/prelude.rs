@@ -5,3 +5,7 @@ pub use gpui_kit::{
     Render, SharedString, StatefulInteractiveElement, Styled, TitlebarOptions, Window,
     WindowBounds, WindowOptions, div, px, relative, size,
 };
+pub use gpui_kit::{
+    InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    PlatformInput, point,
+};

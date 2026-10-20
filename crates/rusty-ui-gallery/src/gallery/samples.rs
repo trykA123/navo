@@ -50,6 +50,13 @@ impl Gallery {
     }
 
     pub fn drive_sample(&self, window: &mut Window, cx: &mut App) {
+        if self.page == Page::MouseMarks {
+            let events = self.mouse.update(cx, |page, cx| page.take_drive(cx));
+            for event in events {
+                window.dispatch_event(event, cx);
+            }
+            return;
+        }
         let steps: &[&str] = match self.page {
             Page::Tree => &TREE_STEPS,
             Page::Table => &TABLE_STEPS,

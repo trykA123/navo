@@ -5,7 +5,7 @@ use gpui_kit::{
     App, Div, InteractiveElement, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point,
     Stateful, Window, point,
 };
-use rusty_core::Command;
+use rusty_core::{Command, CursorMove};
 
 use super::row::check_column;
 use super::{FileListAction, ListContext, row_index, row_number};
@@ -17,6 +17,8 @@ const LONG_PRESS: Duration = Duration::from_millis(400);
 struct Held {
     press: u64,
     row: u64,
+    last: u64,
+    unmark: bool,
     dragged: bool,
 }
 
@@ -27,11 +29,13 @@ pub(super) struct Press {
 }
 
 impl Press {
-    fn start(&mut self, row: u64) -> u64 {
+    fn start(&mut self, row: u64, unmark: bool) -> u64 {
         self.count += 1;
         self.held = Some(Held {
             press: self.count,
             row,
+            last: row,
+            unmark,
             dragged: false,
         });
         self.count
@@ -45,18 +49,16 @@ impl Press {
         Some(held.row)
     }
 
-    fn drag(&mut self, row: u64) -> bool {
-        match &mut self.held {
-            Some(held) if held.row != row && !held.dragged => {
-                held.dragged = true;
-                true
-            }
-            _ => false,
-        }
+    fn drag(&mut self, row: u64) -> Option<Held> {
+        let held = self.held.as_mut().filter(|held| held.last != row)?;
+        let before = *held;
+        held.dragged = true;
+        held.last = row;
+        Some(before)
     }
 
     fn release(&mut self) -> bool {
-        self.held.take().is_some()
+        self.held.take().is_some_and(|held| !held.dragged)
     }
 }
 
@@ -66,10 +68,19 @@ pub(super) fn drag_over(
 ) -> impl Fn(&MouseMoveEvent, &mut Window, &mut App) + 'static {
     let ctx = ctx.clone();
     move |event, window, cx| {
-        let is_right = event.pressed_button == Some(MouseButton::Right);
-        if is_right && ctx.state.update(cx, |state, _| state.press.drag(row)) {
-            ctx.act(FileListAction::MenuCancel, window, cx);
+        if event.pressed_button != Some(MouseButton::Right) {
+            return;
         }
+        let Some(held) = ctx.state.update(cx, |state, _| state.press.drag(row)) else {
+            return;
+        };
+        if !held.dragged {
+            ctx.act(FileListAction::MenuCancel, window, cx);
+            let to = CursorMove::Row(held.row);
+            ctx.send(Command::PaneCursorMove { to }, window, cx);
+        }
+        let (to, unmark) = (CursorMove::Row(row), held.unmark);
+        ctx.send(Command::SelectionExtend { to, unmark }, window, cx);
     }
 }
 
@@ -101,7 +112,10 @@ impl ListContext {
         cx: &mut App,
     ) {
         self.click(row, window, cx);
-        let press = self.state.update(cx, |state, _| state.press.start(row));
+        let unmark = self.props.marked.is_marked(row);
+        let press = self
+            .state
+            .update(cx, |state, _| state.press.start(row, unmark));
         let adds_cursor = self.adds_pressed_row(row);
         self.act(FileListAction::MenuPrefetch { adds_cursor }, window, cx);
         let ctx = self.clone();
@@ -117,7 +131,7 @@ impl ListContext {
         let Some(row) = self.state.update(cx, |state, _| state.press.fire(press)) else {
             return;
         };
-        let to = rusty_core::CursorMove::Row(row);
+        let to = CursorMove::Row(row);
         self.send(Command::PaneCursorMove { to }, window, cx);
         if self.adds_pressed_row(row) {
             self.send(Command::SelectionToggle, window, cx);

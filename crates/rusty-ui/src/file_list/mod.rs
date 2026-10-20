@@ -2,24 +2,25 @@ mod action;
 mod header;
 mod keys;
 pub(crate) mod kind;
+mod lasso;
 mod lift;
 mod parts;
 mod press;
 pub(crate) mod row;
+mod rows;
 mod sort;
 
 #[cfg(test)]
 mod tests;
 
-use std::ops::Range;
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
-    Keystroke, MouseButton, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
-    Styled, Window, div,
+    App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, Keystroke,
+    MouseButton, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, Styled, Window,
+    div,
 };
 use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
@@ -35,8 +36,7 @@ pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
 
 use crate::primitives::{ListScroll, RowSemantics, VirtualList};
-use crate::tokens::{self, Theme};
-use row::RowLook;
+use crate::tokens;
 
 type CommandHandler = Rc<dyn Fn(&Command, &mut Window, &mut App)>;
 type ActionHandler = Rc<dyn Fn(&FileListAction, &mut Window, &mut App)>;
@@ -120,6 +120,7 @@ struct ListState {
     list_bounds: Option<Bounds<Pixels>>,
     lift: Pixels,
     press: press::Press,
+    lasso: lasso::Held,
 }
 
 struct ListContext {
@@ -259,46 +260,6 @@ fn row_semantics(props: &FileListProps, index: usize) -> RowSemantics {
     }
 }
 
-fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyElement> {
-    let entry = ctx.props.rows.get(index)?;
-    let row = row_number(index);
-    let look = RowLook {
-        theme,
-        entry,
-        is_cursor: ctx.props.view.cursor == row,
-        is_marked: ctx.props.marked.is_marked(row),
-        is_active_pane: ctx.props.is_active,
-        parts: ctx.parts,
-    };
-    let left = ctx.clone();
-    let right = ctx.clone();
-    let element = row::cells(&look)
-        .on_mouse_down(MouseButton::Left, move |event, window, cx| {
-            left.click(row, window, cx);
-            if event.click_count >= 2 {
-                left.act(FileListAction::Open(row), window, cx);
-            }
-        })
-        .on_mouse_down(MouseButton::Right, move |event, window, cx| {
-            cx.stop_propagation();
-            right.right_down((row, event.position), window, cx);
-        })
-        .on_mouse_move(press::drag_over(ctx, row));
-    Some(element.into_any_element())
-}
-
-fn render_rows(
-    ctx: &Rc<ListContext>,
-) -> impl Fn(Range<usize>, &mut Window, &mut App) -> Vec<AnyElement> + 'static {
-    let ctx = ctx.clone();
-    move |range, _, cx| {
-        let theme = tokens::current(cx);
-        range
-            .filter_map(|index| render_row(&ctx, theme, index))
-            .collect()
-    }
-}
-
 fn follow_scroll(
     state: &Entity<ListState>,
     (wanted, len): (u64, usize),
@@ -383,7 +344,7 @@ impl RenderOnce for FileList {
             parts: self.parts,
         });
         let semantics = ctx.clone();
-        let list = VirtualList::new("list", len, &scroll, render_rows(&ctx))
+        let list = VirtualList::new("list", len, &scroll, rows::render_rows(&ctx))
             .row_height(row_height)
             .label(label)
             .describe_rows(move |index| row_semantics(&semantics.props, index))
@@ -399,6 +360,7 @@ impl RenderOnce for FileList {
             .on_mouse_down(MouseButton::Right, press::background_down(&ctx))
             .overflow_hidden()
             .child(lift::lifted(list, lift));
+        let area = lasso::layer(area, &ctx, &t, cx);
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
             .key_context(keys::CONTEXT)

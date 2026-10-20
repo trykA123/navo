@@ -29,6 +29,8 @@ pub mod tokens;
 pub mod window_view;
 
 #[cfg(test)]
+mod test_pointer;
+#[cfg(test)]
 mod test_window;
 
 pub use app::{UiError, application, init};

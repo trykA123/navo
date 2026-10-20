@@ -104,7 +104,7 @@ pub(super) fn name_text(
     }
 }
 
-fn name_cell(look: &RowLook, name: &str, extension: &str) -> Div {
+fn name_cell(look: &RowLook, (name, extension): (&str, &str), zone: Div) -> Div {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
@@ -123,6 +123,7 @@ fn name_cell(look: &RowLook, name: &str, extension: &str) -> Div {
         .gap(t.spacing.md)
         .flex_1()
         .min_w_0()
+        .h_full()
         .when(look.parts.icons, |d| d.child(glyph))
         .child(
             div()
@@ -133,6 +134,7 @@ fn name_cell(look: &RowLook, name: &str, extension: &str) -> Div {
                 })
                 .child(text),
         )
+        .child(zone.flex_1().h_full())
 }
 
 fn name_color(look: &RowLook) -> Hsla {
@@ -144,7 +146,7 @@ fn name_color(look: &RowLook) -> Hsla {
     }
 }
 
-pub(super) fn cells(look: &RowLook) -> Div {
+pub(super) fn cells(look: &RowLook, zone: Div) -> Div {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
@@ -179,7 +181,7 @@ pub(super) fn cells(look: &RowLook) -> Div {
         })
         .when(is_idle_cursor, |d| d.shadow(inset_ring(c.line)))
         .child(check_cell(look))
-        .child(name_cell(look, name, extension))
+        .child(name_cell(look, (name, extension), zone))
         .when(look.parts.ext, |d| {
             d.child(
                 div()
