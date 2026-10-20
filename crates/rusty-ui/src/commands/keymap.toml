@@ -1426,6 +1426,10 @@ command = "elf.sort_by_size"
 keys = ["ctrl-f6"]
 
 [[bind]]
+command = "elf.toggle_noise"
+keys = ["alt-h"]
+
+[[bind]]
 command = "viewer.back"
 keys = ["escape"]
 context = "Elf"

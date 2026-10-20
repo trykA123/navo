@@ -1,7 +1,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use rusty_automotive::{Elf, ElfReader, IndexError, Lines, Query, Source, Watch, select};
+use rusty_automotive::{
+    Elf, ElfReader, IndexError, Lines, Query, Selection, Source, Watch, select,
+};
+use rusty_l10n::t;
 
 use super::{ElfView, Index, NavItem, Phase};
 use crate::prelude::*;
@@ -12,13 +15,13 @@ const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
 pub(super) enum IndexMessage {
     Progress(Phase),
-    Parsed(Result<(Arc<Elf>, Vec<u32>), IndexError>),
+    Parsed(Result<(Arc<Elf>, Selection), IndexError>),
     Lines(Result<Lines, IndexError>),
 }
 
 pub(super) struct Selected {
     query: Query,
-    rows: Vec<u32>,
+    selection: Selection,
 }
 
 fn nav_items(elf: &Elf) -> Vec<NavItem> {
@@ -52,7 +55,7 @@ pub(super) fn start_index(host: &Host, len: u64, cx: &mut Context<ElfView>) -> J
             let parsed = reader.parse(&mut watch).and_then(|elf| {
                 let selection =
                     select(&elf, &Query::default(), cancel).ok_or(IndexError::Cancelled)?;
-                Ok((Arc::new(elf), selection.rows))
+                Ok((Arc::new(elf), selection))
             });
             let elf = parsed.as_ref().ok().map(|(elf, _)| elf.clone());
             send(IndexMessage::Parsed(parsed));
@@ -77,10 +80,11 @@ impl ElfView {
     fn index_message(&mut self, message: IndexMessage, cx: &mut Context<Self>) {
         match message {
             IndexMessage::Progress(phase) => self.phase = phase,
-            IndexMessage::Parsed(Ok((elf, rows))) => {
+            IndexMessage::Parsed(Ok((elf, selection))) => {
                 self.nav_items = nav_items(&elf);
                 self.index = Index::Ready(elf);
-                self.rows = Arc::new(rows);
+                self.rows = Arc::new(selection.rows);
+                self.hidden = selection.hidden;
                 self.phase = Phase::Lines(0);
                 self.refit_columns(cx);
                 self.move_cursor(0, cx);
@@ -110,8 +114,7 @@ impl ElfView {
             cx,
             move |cancel, send| {
                 if let Some(selection) = select(&elf, &query, cancel) {
-                    let rows = selection.rows;
-                    send(Selected { query, rows });
+                    send(Selected { query, selection });
                 }
             },
             Self::selected_rows,
@@ -123,17 +126,19 @@ impl ElfView {
         if selected.query != self.query {
             return;
         }
-        let kept = self
-            .wanted_symbol
-            .take()
-            .or_else(|| self.selected().map(|(at, _)| at as u32));
+        let wanted = self.wanted_symbol.take();
+        let kept = wanted.or_else(|| self.selected().map(|(at, _)| at as u32));
         self.selecting = None;
-        self.rows = Arc::new(selected.rows);
+        self.rows = Arc::new(selected.selection.rows);
+        self.hidden = selected.selection.hidden;
         match kept.and_then(|kept| self.rows.iter().position(|at| *at == kept)) {
             Some(row) => self.move_cursor(row, cx),
             None => {
                 self.move_cursor(0, cx);
                 self.scroll.scroll_to_top(0);
+                if wanted.is_some() && self.query.hide_noise {
+                    self.set_note(t!("elf-hidden-note"), cx);
+                }
             }
         }
     }

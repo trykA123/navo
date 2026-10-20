@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext, point, px};
-use rusty_automotive::elf_sample::{build, demo, firmware};
+use rusty_automotive::elf_sample::{Named, build, demo, firmware, func};
 
 use super::find::bottom_keys;
 use super::structured::open_named;
@@ -308,4 +308,52 @@ fn a_head_click_sorts_the_symbols_by_that_column(cx: &mut TestAppContext) {
     settle_motion(cx, window, &view);
     press(cx, window, &view, "ctrl-home");
     assert!(label(cx, window, ("elf-row", 0)).starts_with("bcm::Doors::scan(unsigned int), "));
+}
+
+fn open_with_labels(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    let mut spec = firmware(false, false);
+    spec.symbols.as_mut().expect("symbols").push(Named {
+        bind: 0,
+        ..func("local_label", 0x0800_0170, 0, 0)
+    });
+    open_bytes(cx, "labels.elf", build(&spec).expect("the sample builds"))
+}
+
+#[gpui_kit::test]
+fn the_status_counts_the_hidden_symbols_and_alt_h_shows_them(cx: &mut TestAppContext) {
+    let (window, view) = open_with_labels(cx);
+    let status = text_of(cx, window, "elf-status");
+    assert!(status.contains("1 hidden (zero-size, ABS)"), "{status}");
+    assert!(!has_row(cx, window, 6), "the label is hidden");
+    press(cx, window, &view, "alt-h");
+    settle_motion(cx, window, &view);
+    assert!(has_row(cx, window, 6), "every symbol shows");
+    assert!(!text_of(cx, window, "elf-status").contains("hidden"));
+    press(cx, window, &view, "alt-h");
+    settle_motion(cx, window, &view);
+    assert!(!has_row(cx, window, 6));
+}
+
+#[gpui_kit::test]
+fn ctrl_g_to_a_hidden_label_says_how_to_show_it(cx: &mut TestAppContext) {
+    let (window, view) = open_with_labels(cx);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "8000170");
+    press(cx, window, &view, "enter");
+    settle_motion(cx, window, &view);
+    assert_eq!(
+        text_of(cx, window, "elf-progress"),
+        "Hidden by the zero-size filter; Alt+H shows it."
+    );
+    assert!(visible(cx, window, "elf-inspector"));
+    press(cx, window, &view, "alt-h");
+    settle_motion(cx, window, &view);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "8000170");
+    press(cx, window, &view, "enter");
+    settle_motion(cx, window, &view);
+    assert_eq!(
+        text_of(cx, window, "elf-cursor"),
+        "local_label · 0x08000170"
+    );
 }

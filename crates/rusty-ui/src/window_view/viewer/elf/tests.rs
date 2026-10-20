@@ -45,7 +45,7 @@ fn a_row_reads_as_its_columns() {
 #[test]
 fn the_status_names_machine_class_entry_totals_and_problems() {
     let elf = parse(true);
-    let texts: Vec<String> = status(&elf, None)
+    let texts: Vec<String> = status(&elf, None, 0)
         .into_iter()
         .map(|check| check.text)
         .collect();

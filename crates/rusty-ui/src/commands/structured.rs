@@ -207,6 +207,11 @@ pub(super) const GROUPS: [Group; 10] = [
                 "elf.sort_by_size",
                 "cmd-elf-sort-by-size",
             ),
+            (
+                "elf_view::ToggleNoise",
+                "elf.toggle_noise",
+                "cmd-elf-toggle-noise",
+            ),
         ],
     },
     Group {

@@ -1,4 +1,5 @@
 use rusty_automotive::{Class, Elf, Endian, Lines, Place, Symbol};
+use rusty_l10n::t;
 
 use crate::format;
 
@@ -59,7 +60,7 @@ fn check(text: String, is_bad: bool) -> Check {
     Check { text, is_bad }
 }
 
-pub(super) fn status(elf: &Elf, lines: Option<&Lines>) -> Vec<Check> {
+pub(super) fn status(elf: &Elf, lines: Option<&Lines>, hidden: u64) -> Vec<Check> {
     let wide = is_wide(elf);
     let totals = elf.totals;
     let mut checks = vec![
@@ -79,6 +80,9 @@ pub(super) fn status(elf: &Elf, lines: Option<&Lines>) -> Vec<Check> {
             false,
         ),
     ];
+    if hidden > 0 {
+        checks.push(check(t!("elf-hidden", count = hidden as i64), false));
+    }
     checks.extend(
         elf.problems
             .iter()

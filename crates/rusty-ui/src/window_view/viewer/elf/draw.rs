@@ -117,7 +117,7 @@ impl ElfView {
 
     fn checks(&self) -> Vec<Check> {
         let mut checks = match &self.index {
-            Index::Ready(elf) => status(elf, self.lines.as_ref()),
+            Index::Ready(elf) => status(elf, self.lines.as_ref(), self.hidden),
             Index::Failed(error) => vec![Check {
                 text: error.to_string(),
                 is_bad: true,

@@ -287,6 +287,7 @@ elf.sort_by_name | Elf | true
 elf.sort_by_section | Elf | true
 elf.sort_by_address | Elf | true
 elf.sort_by_size | Elf | true
+elf.toggle_noise | Elf | true
 elf.type_n | ElfTable | false
 elf.type_p | ElfTable | false
 elf.type_one | ElfTable | false

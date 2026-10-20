@@ -45,3 +45,6 @@ space-file-part = { $name } · { $size } · { $percent } %
 viewer-space-share = { $percent } %
 viewer-space-more = { $count } more
 viewer-space-stripped = This file has no symbol table, so bytes cannot be traced to modules.
+
+elf-hidden = { $count } hidden (zero-size, ABS)
+elf-hidden-note = Hidden by the zero-size filter; Alt+H shows it.

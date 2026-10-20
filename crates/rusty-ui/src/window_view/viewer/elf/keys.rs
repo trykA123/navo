@@ -19,6 +19,7 @@ gpui_kit::actions!(
         SortBySection,
         SortByAddress,
         SortBySize,
+        ToggleNoise,
         TypeN,
         TypeP,
         TypeOne,
@@ -72,6 +73,11 @@ impl ElfView {
             column,
             descending: old.column == column && !old.descending,
         };
+        self.run_select(cx);
+    }
+
+    fn toggle_noise(&mut self, cx: &mut Context<Self>) {
+        self.query.hide_noise = !self.query.hide_noise;
         self.run_select(cx);
     }
 
@@ -223,5 +229,6 @@ impl ElfView {
                 view.sort_by(Column::Address, cx);
             }))
             .on_action(cx.listener(|view, _: &SortBySize, _, cx| view.sort_by(Column::Size, cx)))
+            .on_action(cx.listener(|view, _: &ToggleNoise, _, cx| view.toggle_noise(cx)))
     }
 }

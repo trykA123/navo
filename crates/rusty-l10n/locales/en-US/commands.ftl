@@ -280,6 +280,7 @@ cmd-elf-sort-by-name = Sort symbols by name
 cmd-elf-sort-by-section = Sort symbols by section
 cmd-elf-sort-by-address = Sort symbols by address
 cmd-elf-sort-by-size = Sort symbols by size
+cmd-elf-toggle-noise = Show or hide zero-size, ABS, file and section symbols
 cmd-elf-type-n = Type n in the filter
 cmd-elf-type-p = Type p in the filter
 cmd-elf-type-one = Type 1 in the filter

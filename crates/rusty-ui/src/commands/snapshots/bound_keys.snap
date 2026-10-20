@@ -90,6 +90,7 @@ elf.sort_by_address | ctrl-f5 | Elf
 elf.sort_by_name | ctrl-f3 | Elf
 elf.sort_by_section | ctrl-f4 | Elf
 elf.sort_by_size | ctrl-f6 | Elf
+elf.toggle_noise | alt-h | Elf
 elf.type_five | 5 | ElfTable
 elf.type_n | n | ElfTable
 elf.type_one | 1 | ElfTable
