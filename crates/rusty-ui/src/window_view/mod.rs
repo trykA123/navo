@@ -4,6 +4,7 @@ mod command_center;
 mod crash;
 mod drive_menu;
 mod drives;
+mod drop;
 mod editor;
 mod fkeys;
 mod hand_off;
@@ -32,6 +33,7 @@ mod title;
 mod user_keymap;
 mod viewer;
 mod waiting;
+mod watches;
 mod window_menu;
 
 use std::collections::HashMap;
@@ -129,6 +131,7 @@ pub struct FerriteWindow {
     provider: Arc<dyn ProviderOps>,
     drives: drives::Drives,
     drive_menu: Option<drive_menu::MenuState>,
+    drag_session: Option<drop::DragSession>,
     menu_focus: FocusHandle,
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
@@ -152,9 +155,7 @@ pub struct FerriteWindow {
     crash: crash::CrashState,
     command_center: command_center::CommandCenterState,
     start: Option<start_watch::Watching>,
-    _activation: Subscription,
-    _appearance: Subscription,
-    _follow: Subscription,
+    _watches: [Subscription; 3],
 }
 
 fn mode_of(appearance: WindowAppearance) -> Mode {
@@ -187,6 +188,7 @@ impl FerriteWindow {
             provider: options.provider,
             drives: drives::Drives::new(options.drives),
             drive_menu: None,
+            drag_session: None,
             menu_focus: cx.focus_handle(),
             path_edit: None,
             waiting: waiting::Waiting::default(),
@@ -210,24 +212,10 @@ impl FerriteWindow {
             crash: crash::CrashState::new(options.crash_report, cx),
             command_center: command_center::CommandCenterState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
-            _follow: cx.observe_in(&cx.entity(), window, Self::follow_cursor),
-            _activation: cx.observe_window_activation(window, Self::activation_changed),
-            _appearance: cx.observe_window_appearance(window, Self::appearance_changed),
+            _watches: Self::watches(window, cx),
         };
         view.after_open((options.keymap, options.open, options.view), window, cx);
         view
-    }
-
-    fn appearance_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.apply_theme(window, cx);
-        cx.notify();
-    }
-
-    fn activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.track_modifiers(window.modifiers(), window, cx);
-        if window.is_window_active() && self.browser.revalidate_unwatched() {
-            cx.notify();
-        }
     }
 
     fn after_open(
@@ -309,6 +297,7 @@ impl FerriteWindow {
             cx.notify();
         }
         self.hint_modifiers(modifiers, window, cx);
+        self.drag_modifiers(&modifiers, cx);
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {

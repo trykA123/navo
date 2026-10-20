@@ -27,6 +27,7 @@ mod delete_dialog;
 mod disk_start;
 mod drive_fs;
 mod drives;
+mod drop;
 mod fkeys;
 mod hand_off;
 mod hints;

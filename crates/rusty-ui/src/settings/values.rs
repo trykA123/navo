@@ -3,6 +3,7 @@ use rusty_fs::CopyMode;
 
 use super::fields::{Control, FIELDS, Field, FieldSpec, PRESETS};
 use crate::app_menu::{QuickSettings, Setting};
+use crate::browser::DropConfirm;
 use crate::file_list::{SortBy, SortKey};
 use crate::modifier_hints::HintsMode;
 use crate::tokens::{Density, SyntaxTheme, ThemeChoice};
@@ -12,6 +13,8 @@ const DENSITY_ORDER: [Density; 3] = [Density::Compact, Density::Normal, Density:
 const HINTS_ORDER: [HintsMode; 3] = [HintsMode::Off, HintsMode::Fkeys, HintsMode::All];
 const SORT_ORDER: [SortBy; 4] = [SortBy::Name, SortBy::Size, SortBy::Date, SortBy::Ext];
 const COPY_ORDER: [CopyMode; 2] = [CopyMode::Auto, CopyMode::Standard];
+const DROP_CONFIRM_ORDER: [DropConfirm; 3] =
+    [DropConfirm::Never, DropConfirm::Moves, DropConfirm::Always];
 const SHOWN: usize = 0;
 const HIDDEN: usize = 1;
 
@@ -214,6 +217,13 @@ impl Values {
             Value::Number(ms) => *ms,
             _ => 400,
         }
+    }
+
+    pub fn drop_confirm(&self) -> DropConfirm {
+        DROP_CONFIRM_ORDER
+            .get(self.pick(Field::DropConfirm))
+            .copied()
+            .unwrap_or_default()
     }
 
     pub fn show_hidden(&self) -> bool {
