@@ -1,5 +1,6 @@
 mod density;
 mod input;
+mod kinds;
 mod parts;
 mod render;
 

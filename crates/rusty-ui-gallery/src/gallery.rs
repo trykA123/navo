@@ -15,6 +15,7 @@ use crate::automotive_sample::{
 };
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
+use crate::kinds_page::KindsPage;
 use crate::map_sample::{MAP_NAME, MAP_STEPS, map};
 use crate::menu_page::{MenuPage, Shows as MenuShows};
 use crate::operate_page::OperatePage;
@@ -78,6 +79,7 @@ pub struct Gallery {
     paged_text: Entity<PagedView>,
     drives: Entity<DrivesPage>,
     typed_path: Entity<DrivesPage>,
+    kinds: Entity<KindsPage>,
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
@@ -124,6 +126,7 @@ impl Gallery {
             paged_text: viewer_sample::text_view(cx),
             drives: cx.new(|cx| DrivesPage::new(Shows::Menu, cx)),
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
+            kinds: cx.new(KindsPage::new),
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
@@ -333,6 +336,7 @@ impl Render for Gallery {
             Page::PagedText => root.child(self.paged_text.clone()),
             Page::Drives => root.child(self.drives.clone()),
             Page::TypedPath => root.child(self.typed_path.clone()),
+            Page::FileKinds => root.child(self.kinds.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
