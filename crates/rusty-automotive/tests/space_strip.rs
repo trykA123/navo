@@ -40,6 +40,21 @@ fn true_scale(region: &Region) -> Scale {
 }
 
 #[test]
+fn space_strip_linker_fill_keeps_its_own_kind() {
+    let region = region(
+        Some(1000),
+        &[
+            (0, 100, Kind::Code),
+            (100, 100, Kind::Fill),
+            (200, 1, Kind::Fill),
+        ],
+    );
+    let found = cells(&region, &true_scale(&region), 100);
+    let kinds: Vec<Kind> = found.iter().map(|cell| cell.kind).collect();
+    assert_eq!(kinds, [Kind::Code, Kind::Fill, Kind::Fill]);
+}
+
+#[test]
 fn space_strip_cells_follow_address_order() {
     let region = region(
         Some(1000),
