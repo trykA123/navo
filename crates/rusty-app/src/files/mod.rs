@@ -95,9 +95,10 @@ fn read_with(location: &Location, chosen: Option<&'static Encoding>) -> Result<F
         Some((unified, ends)) => (unified, Some(Arc::new(ends))),
         None => (decoded.text, None),
     };
+    let stray = ends.as_deref().is_some_and(LineEnds::has_stray_cr);
     Ok(FileText {
         crlf,
-        read_only: !decoded.lossless,
+        read_only: !decoded.lossless || stray,
         text,
         stamp,
         encoding: decoded.encoding,

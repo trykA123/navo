@@ -106,22 +106,50 @@ fn editing_one_line_of_a_mixed_file_keeps_every_other_line_ending() {
     );
 }
 
-#[test]
-fn an_unedited_mixed_file_saves_byte_identical_in_every_encoding() {
-    let dir = tempfile::tempdir().unwrap();
-    let text = "d\u{e9}j\u{e0}\r\nthé\nsucre\r\n\r\nlait\n";
-    let files = [
+const STRAY: &str = "a\r\r\nb\nc";
+
+fn encoded_every_way(text: &str) -> [(&'static str, Vec<u8>); 3] {
+    [
         ("utf8.txt", text.as_bytes().to_vec()),
         ("latin.txt", latin1(text)),
         ("wide.txt", utf16_le_with_bom(text)),
-    ];
-    for (name, bytes) in files {
+    ]
+}
+
+#[test]
+fn an_unedited_mixed_file_saves_byte_identical_in_every_encoding() {
+    let dir = tempfile::tempdir().unwrap();
+    for text in ["d\u{e9}j\u{e0}\r\nthé\nsucre\r\n\r\nlait\n", "a\rb\r\nc\nd"] {
+        for (name, bytes) in encoded_every_way(text) {
+            let path = stored(&dir, name, &bytes);
+            let opened = read(&at(&path)).unwrap();
+            assert!(!opened.read_only, "{name}");
+            assert!(opened.ends.is_some(), "{name}");
+            saved_unedited(&path, &opened);
+            assert_eq!(fs::read(&path).unwrap(), bytes, "{name}");
+        }
+    }
+}
+
+#[test]
+fn an_unedited_file_with_a_lone_cr_or_a_doubled_cr_saves_byte_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    for text in [STRAY, "a\rb\rc"] {
+        for (name, bytes) in encoded_every_way(text) {
+            let path = stored(&dir, name, &bytes);
+            let opened = read(&at(&path)).unwrap();
+            saved_unedited(&path, &opened);
+            assert_eq!(fs::read(&path).unwrap(), bytes, "{text:?} {name}");
+        }
+    }
+}
+
+#[test]
+fn a_mixed_file_with_a_cr_before_a_line_end_opens_read_only() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, bytes) in encoded_every_way(STRAY) {
         let path = stored(&dir, name, &bytes);
-        let opened = read(&at(&path)).unwrap();
-        assert!(!opened.read_only, "{name}");
-        assert!(opened.ends.is_some(), "{name}");
-        saved_unedited(&path, &opened);
-        assert_eq!(fs::read(&path).unwrap(), bytes, "{name}");
+        assert!(read(&at(&path)).unwrap().read_only, "{name}");
     }
 }
 

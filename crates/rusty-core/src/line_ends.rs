@@ -1,10 +1,16 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::time::{Duration, Instant};
+
+use similar::{Algorithm, DiffTag, capture_diff_slices_deadline};
+
+const DIFF_BUDGET: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineEnds {
     hashes: Vec<u64>,
     crlf: Vec<bool>,
     default_crlf: bool,
+    stray_cr: bool,
 }
 
 fn is_mixed(text: &str) -> bool {
@@ -22,6 +28,14 @@ fn hash_of(line: &str) -> u64 {
     hasher.finish()
 }
 
+fn majority_crlf(crlf: &[bool]) -> bool {
+    crlf.iter().filter(|is_crlf| **is_crlf).count() * 2 > crlf.len()
+}
+
+fn break_text(is_crlf: bool) -> &'static str {
+    if is_crlf { "\r\n" } else { "\n" }
+}
+
 impl LineEnds {
     #[must_use]
     pub fn unify(text: &str) -> Option<(String, Self)> {
@@ -31,6 +45,7 @@ impl LineEnds {
         let mut unified = String::with_capacity(text.len());
         let mut hashes = Vec::new();
         let mut crlf = Vec::new();
+        let mut stray_cr = false;
         let mut rest = text;
         while let Some(at) = rest.find('\n') {
             let line = &rest[..at];
@@ -38,21 +53,29 @@ impl LineEnds {
                 Some(body) => (body, true),
                 None => (line, false),
             };
+            stray_cr |= body.ends_with('\r');
             unified.push_str(body);
             unified.push('\n');
             hashes.push(hash_of(body));
             crlf.push(is_crlf);
             rest = &rest[at + 1..];
         }
+        stray_cr |= rest.ends_with('\r');
         unified.push_str(rest);
         hashes.push(hash_of(rest));
-        let default_crlf = crlf.iter().filter(|is_crlf| **is_crlf).count() * 2 > crlf.len();
+        let default_crlf = majority_crlf(&crlf);
         let ends = Self {
             hashes,
             crlf,
             default_crlf,
+            stray_cr,
         };
         Some((unified, ends))
+    }
+
+    #[must_use]
+    pub fn has_stray_cr(&self) -> bool {
+        self.stray_cr
     }
 
     #[must_use]
@@ -69,64 +92,77 @@ impl LineEnds {
         marks
     }
 
-    fn is_crlf_after(&self, shared: &Shared, after: usize) -> bool {
-        let Shared {
-            old,
-            new,
-            prefix,
-            suffix,
-        } = *shared;
-        let from = if after < prefix {
-            Some(after)
-        } else if after >= new - suffix {
-            Some(after + old - new)
-        } else {
-            (old == new).then_some(after)
-        };
-        from.and_then(|at| self.crlf.get(at).copied())
-            .unwrap_or(self.default_crlf)
+    #[must_use]
+    pub fn apply(&self, edited: &str) -> String {
+        self.resolve(edited).0
     }
 
     #[must_use]
-    pub fn apply(&self, edited: &str) -> String {
-        let edited = edited.replace("\r\n", "\n");
-        let lines: Vec<&str> = edited.split('\n').collect();
+    pub fn rebuilt(&self, edited: &str) -> Self {
+        self.resolve(edited).1
+    }
+
+    fn resolve(&self, edited: &str) -> (String, Self) {
+        let lines = self.lines_of(edited);
         let hashes: Vec<u64> = lines.iter().map(|line| hash_of(line)).collect();
-        let (old, new) = (self.hashes.len(), hashes.len());
-        let room = old.min(new);
-        let prefix = (0..room)
-            .take_while(|at| self.hashes[*at] == hashes[*at])
-            .count();
-        let suffix = (0..room - prefix)
-            .take_while(|back| self.hashes[old - 1 - back] == hashes[new - 1 - back])
-            .count();
-        let shared = Shared {
-            old,
-            new,
-            prefix,
-            suffix,
-        };
+        let origins = self.origins(&hashes);
+        let crlf: Vec<bool> = origins
+            .iter()
+            .take(lines.len() - 1)
+            .map(|origin| {
+                origin
+                    .and_then(|old| self.crlf.get(old).copied())
+                    .unwrap_or(self.default_crlf)
+            })
+            .collect();
         let mut text = String::with_capacity(edited.len() + lines.len());
         for (at, line) in lines.iter().enumerate() {
             text.push_str(line);
-            if at + 1 < new {
-                text.push_str(break_text(self.is_crlf_after(&shared, at)));
+            if let Some(is_crlf) = crlf.get(at) {
+                text.push_str(break_text(*is_crlf));
             }
         }
-        text
+        let default_crlf = majority_crlf(&crlf);
+        let ends = Self {
+            hashes,
+            crlf,
+            default_crlf,
+            stray_cr: false,
+        };
+        (text, ends)
     }
-}
 
-#[derive(Clone, Copy)]
-struct Shared {
-    old: usize,
-    new: usize,
-    prefix: usize,
-    suffix: usize,
-}
+    fn lines_of<'a>(&self, edited: &'a str) -> Vec<&'a str> {
+        let mut lines: Vec<&str> = edited.split('\n').collect();
+        if !self.stray_cr {
+            let last = lines.len() - 1;
+            for line in &mut lines[..last] {
+                *line = line.strip_suffix('\r').unwrap_or(line);
+            }
+        }
+        lines
+    }
 
-fn break_text(is_crlf: bool) -> &'static str {
-    if is_crlf { "\r\n" } else { "\n" }
+    fn origins(&self, new: &[u64]) -> Vec<Option<usize>> {
+        let old_rev: Vec<u64> = self.hashes.iter().rev().copied().collect();
+        let new_rev: Vec<u64> = new.iter().rev().copied().collect();
+        let deadline = Instant::now() + DIFF_BUDGET;
+        let ops =
+            capture_diff_slices_deadline(Algorithm::Patience, &old_rev, &new_rev, Some(deadline));
+        let mut origins = vec![None; new.len()];
+        for op in ops {
+            let (tag, old, changed) = op.as_tag_tuple();
+            if !matches!(tag, DiffTag::Equal | DiffTag::Replace) {
+                continue;
+            }
+            let old_start = self.hashes.len() - old.end;
+            let new_start = new.len() - changed.end;
+            for step in 0..old.len().min(changed.len()) {
+                origins[new_start + step] = Some(old_start + step);
+            }
+        }
+        origins
+    }
 }
 
 #[cfg(test)]
@@ -194,5 +230,61 @@ mod tests {
     fn crlf_marks_blank_the_plain_line_feeds() {
         let ends = ends_of("a\r\nb\nc\r\nd");
         assert_eq!(ends.crlf_marks("a\nb\nc\nd"), "a\nb c\nd");
+    }
+
+    fn ending_of(at: usize) -> &'static str {
+        if at.is_multiple_of(3) { "\r\n" } else { "\n" }
+    }
+
+    fn document(lines: &[(String, &'static str)]) -> String {
+        lines
+            .iter()
+            .map(|(line, ending)| format!("{line}{ending}"))
+            .collect()
+    }
+
+    #[test]
+    fn two_edits_far_apart_leave_every_line_between_them_alone() {
+        let original: Vec<(String, &str)> = (0..2000)
+            .map(|at| (format!("line {at}"), ending_of(at)))
+            .collect();
+        let (text, ends) = LineEnds::unify(&document(&original)).expect("mixed");
+        let mut edited = original.clone();
+        edited[1005].0 = "changed 1005".to_owned();
+        edited.insert(6, ("added after 5".to_owned(), "\n"));
+        let plain: String = edited.iter().map(|(line, _)| format!("{line}\n")).collect();
+        assert_eq!(text.lines().count(), 2000);
+        assert_eq!(ends.apply(&plain), document(&edited));
+    }
+
+    #[test]
+    fn deleting_the_first_of_two_equal_lines_keeps_the_remaining_ending() {
+        let ends = ends_of("x\r\nx\nz");
+        assert_eq!(ends.apply("x\nz"), "x\nz");
+    }
+
+    #[test]
+    fn a_changed_line_keeps_the_ending_of_the_line_it_replaces() {
+        let ends = ends_of("a\r\nb\nc\r\nd\ne");
+        assert_eq!(ends.apply("a\nB\nC\nd\ne"), "a\r\nB\nC\r\nd\ne");
+    }
+
+    #[test]
+    fn a_line_body_that_ends_in_a_lone_cr_is_flagged_and_kept() {
+        let (text, ends) = LineEnds::unify("a\r\r\nb\nc").expect("mixed");
+        assert!(ends.has_stray_cr());
+        assert_eq!(ends.apply(&text), "a\r\r\nb\nc");
+        let (_, plain) = LineEnds::unify("a\rb\r\nc\nd").expect("mixed");
+        assert!(!plain.has_stray_cr());
+    }
+
+    #[test]
+    fn a_rebuilt_table_diffs_the_next_save_against_the_saved_text() {
+        let ends = ends_of(MIXED);
+        let first = "new\none\ntwo\nthree\nfour\nfive";
+        let saved = ends.apply(first);
+        let rebuilt = ends.rebuilt(first);
+        let second = "new\none\ntwo\nTHREE\nfour\nfive";
+        assert_eq!(rebuilt.apply(second), saved.replace("three", "THREE"));
     }
 }

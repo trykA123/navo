@@ -76,7 +76,8 @@ impl Matcher {
                 let Some(bytes) = layout.encode(text) else {
                     return Ok(None);
                 };
-                (bytes, !match_case, layout.unit())
+                let fold = !match_case && (!layout.is_wide() || text.is_ascii());
+                (bytes, fold, layout.unit())
             }
             Needle::Bytes(bytes) => (bytes.clone(), false, 1),
         };

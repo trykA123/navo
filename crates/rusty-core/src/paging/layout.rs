@@ -30,6 +30,11 @@ impl TextLayout {
     }
 
     #[must_use]
+    pub fn needs_whole_file(&self) -> bool {
+        !self.is_utf8() && !self.is_wide() && !self.text.encoding.is_single_byte()
+    }
+
+    #[must_use]
     pub fn unit(&self) -> usize {
         if self.is_wide() { 2 } else { 1 }
     }

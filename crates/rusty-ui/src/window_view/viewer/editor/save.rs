@@ -22,8 +22,13 @@ struct SaveJob {
     expected: Option<FileStamp>,
 }
 
+struct Written {
+    result: Result<Option<FileStamp>, SaveError>,
+    ends: Option<Arc<LineEnds>>,
+}
+
 impl SaveJob {
-    fn write(&self, hooks: &FileHooks) -> Result<Option<FileStamp>, SaveError> {
+    fn write(&self, hooks: &FileHooks) -> Written {
         let save = Save {
             text: &self.text,
             crlf: self.crlf,
@@ -31,7 +36,12 @@ impl SaveJob {
             encoding: self.encoding,
             ends: self.ends.as_deref(),
         };
-        (hooks.write)(&self.location, &save)
+        let result = (hooks.write)(&self.location, &save);
+        let ends = match (&result, &self.ends) {
+            (Ok(_), Some(ends)) => Some(Arc::new(ends.rebuilt(&self.text))),
+            _ => None,
+        };
+        Written { result, ends }
     }
 }
 
@@ -58,24 +68,23 @@ impl EditorView {
         })
         .detach();
         self.saving = Some(cx.spawn(async move |this, cx| {
-            let result = receiver
-                .await
-                .unwrap_or_else(|_| Err(SaveError::Failed("Could not save.".to_owned())));
-            let _ = this.update(cx, |view, cx| view.saved(revision, result, cx));
+            let written = receiver.await.unwrap_or_else(|_| Written {
+                result: Err(SaveError::Failed("Could not save.".to_owned())),
+                ends: None,
+            });
+            let _ = this.update(cx, |view, cx| view.saved(revision, written, cx));
         }));
         cx.notify();
     }
 
-    fn saved(
-        &mut self,
-        revision: u64,
-        result: Result<Option<FileStamp>, SaveError>,
-        cx: &mut Context<Self>,
-    ) {
+    fn saved(&mut self, revision: u64, written: Written, cx: &mut Context<Self>) {
         self.saving = None;
-        match result {
+        match written.result {
             Ok(stamp) => {
                 self.stamp = stamp;
+                if written.ends.is_some() {
+                    self.ends = written.ends;
+                }
                 self.dirty = self.revision != revision;
                 self.note = Some(SAVED.into());
                 if let Some(stamp) = stamp.filter(|_| self.persists) {

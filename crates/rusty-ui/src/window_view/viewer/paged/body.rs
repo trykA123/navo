@@ -40,6 +40,10 @@ impl PagedBody {
         body.as_any().downcast_ref::<Self>()
     }
 
+    pub(in crate::window_view::viewer) fn needs_whole_file(&self, cx: &App) -> bool {
+        self.0.read(cx).needs_whole_file()
+    }
+
     pub(in crate::window_view::viewer) fn show_as(&self, kind: PagedKind, cx: &mut App) {
         self.0.update(cx, |paged, cx| paged.set_kind(kind, cx));
     }

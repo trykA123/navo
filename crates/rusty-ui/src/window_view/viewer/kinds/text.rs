@@ -9,6 +9,8 @@ use crate::window_view::viewer::{Paged, PagedKind};
 
 const TEXT: u8 = 50;
 const BINARY: u8 = 1;
+const NEEDS_WHOLE_FILE: &str =
+    "This encoding needs the whole file to read text, so it opens as Hex.";
 
 enum TextLoad {
     Editor(EditorFile),
@@ -84,13 +86,26 @@ impl ViewerKind for Text {
                 Box::new(body)
             }
             TextLoad::Paged(paged) => {
-                Box::new(PagedBody::new(attach.host, paged, PagedKind::Text, cx))
+                let whole = paged.source.layout().needs_whole_file();
+                let kind = if whole {
+                    PagedKind::Hex
+                } else {
+                    PagedKind::Text
+                };
+                let body = PagedBody::new(attach.host, paged, kind, cx);
+                if whole {
+                    body.set_note(NEEDS_WHOLE_FILE.into(), cx);
+                }
+                Box::new(body)
             }
         })
     }
 
     fn reuse(&self, body: &dyn ViewerBody, sniff: &Sniff<'_>, cx: &mut App) -> bool {
-        let Some(paged) = PagedBody::of(body).filter(|_| !self.editable(sniff)) else {
+        let Some(paged) = PagedBody::of(body)
+            .filter(|_| !self.editable(sniff))
+            .filter(|paged| !paged.needs_whole_file(cx))
+        else {
             return false;
         };
         paged.show_as(PagedKind::Text, cx);

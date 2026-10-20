@@ -191,3 +191,48 @@ fn the_layout_decodes_rows_and_maps_text_to_bytes() {
     assert_eq!(latin.text_range(&[0x63, 0xE9, 0x61], 1, 1), 1..3);
     assert_eq!(layout(UTF_8, false).text_range(b"abc", 1, 1), 1..2);
 }
+
+#[test]
+fn a_cjk_search_is_case_exact_in_utf16() {
+    let text = "x \u{4100} y \u{6100} z";
+    for little in [true, false] {
+        let encoding = if little { UTF_16LE } else { UTF_16BE };
+        let bytes = wide(text, little, false);
+        let src = laid(&bytes, layout(encoding, false));
+        assert_eq!(
+            find_in(&src, "\u{4100}", false, (0, false)),
+            Found::At(4),
+            "little {little}"
+        );
+        assert_eq!(
+            find_in(&src, "\u{6100}", false, (0, false)),
+            Found::At(12),
+            "little {little}"
+        );
+        assert_eq!(
+            find_in(&src, "\u{4100}", false, (6, false)),
+            Found::NotFound,
+            "little {little}"
+        );
+    }
+}
+
+#[test]
+fn an_ascii_search_still_folds_case_in_utf16() {
+    let bytes = wide("a \u{6100} B", true, false);
+    let src = laid(&bytes, layout(UTF_16LE, false));
+    assert_eq!(find_in(&src, "b", false, (0, false)), Found::At(8));
+    assert_eq!(find_in(&src, "A", false, (0, false)), Found::At(0));
+    assert_eq!(find_in(&src, "a", false, (2, false)), Found::NotFound);
+}
+
+#[test]
+fn only_the_legacy_multi_byte_encodings_need_the_whole_file() {
+    for label in ["Shift_JIS", "GBK", "Big5", "EUC-JP", "EUC-KR"] {
+        let encoding = encoding_rs::Encoding::for_label(label.as_bytes()).unwrap();
+        assert!(layout(encoding, false).needs_whole_file(), "{label}");
+    }
+    for encoding in [UTF_8, UTF_16LE, UTF_16BE, WINDOWS_1252] {
+        assert!(!layout(encoding, false).needs_whole_file());
+    }
+}

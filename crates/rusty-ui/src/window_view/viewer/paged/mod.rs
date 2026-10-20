@@ -190,6 +190,10 @@ impl PagedView {
         cx.notify();
     }
 
+    pub(super) fn needs_whole_file(&self) -> bool {
+        self.source.layout().needs_whole_file()
+    }
+
     pub(super) fn set_kind(&mut self, kind: PagedKind, cx: &mut Context<Self>) {
         if self.kind == kind {
             return;

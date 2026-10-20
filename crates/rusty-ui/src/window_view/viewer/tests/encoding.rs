@@ -335,16 +335,20 @@ fn the_hex_view_has_no_encoding_to_choose(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_mixed_line_ending_file_is_editable_and_saves_each_line_with_its_own_ending(
-    cx: &mut TestAppContext,
-) {
-    let original = "one\r\ntwo\nthree\r\nfour\n";
+fn a_big_shift_jis_file_chosen_in_the_picker_opens_as_hex_with_a_note(cx: &mut TestAppContext) {
+    let rig = open(cx, latin1(&FRENCH.repeat(40)), Some(EDIT_LIMIT + 1));
+    rig.choose(cx, "Shift_JIS");
+    assert_eq!(rig.calls.all(), ["paged", "paged_as Shift_JIS"]);
+    assert_eq!(rig.encoding(cx), None);
+    let note = text_of(cx, rig.window, "paged-status");
+    assert!(note.contains("needs the whole file"), "{note}");
+}
+
+fn mixed_hooks(original: &'static str, written: &Arc<Mutex<Vec<String>>>) -> FileHooks {
     let (unified, ends) = rusty_core::line_ends::LineEnds::unify(original).expect("mixed");
     let ends = Arc::new(ends);
-    let written: Arc<Mutex<Vec<String>>> = Arc::default();
     let log = written.clone();
-    let (text, shared) = (unified.clone(), ends.clone());
-    let files = FileHooks {
+    FileHooks {
         head: Arc::new(move |_| {
             Ok(Head {
                 bytes: original.as_bytes().to_vec(),
@@ -353,8 +357,8 @@ fn a_mixed_line_ending_file_is_editable_and_saves_each_line_with_its_own_ending(
         }),
         read: Arc::new(move |_| {
             Ok(FileText {
-                ends: Some(shared.clone()),
-                ..FileText::plain(text.clone())
+                ends: Some(ends.clone()),
+                ..FileText::plain(unified.clone())
             })
         }),
         write: Arc::new(move |_, save| {
@@ -365,22 +369,63 @@ fn a_mixed_line_ending_file_is_editable_and_saves_each_line_with_its_own_ending(
             Ok(None)
         }),
         ..FileHooks::none()
-    };
+    }
+}
+
+fn last_written(written: &Arc<Mutex<Vec<String>>>) -> Option<String> {
+    written.lock().expect("log").last().cloned()
+}
+
+#[gpui_kit::test]
+fn a_mixed_line_ending_file_is_editable_and_saves_each_line_with_its_own_ending(
+    cx: &mut TestAppContext,
+) {
+    let original = "one\r\ntwo\nthree\r\nfour\n";
+    let written: Arc<Mutex<Vec<String>>> = Arc::default();
+    let files = mixed_hooks(original, &written);
     let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);
     press(cx, window, &view, "ctrl-e");
     press(cx, window, &view, "ctrl-s");
-    assert_eq!(
-        written.lock().expect("log").last().map(String::as_str),
-        Some(original)
-    );
+    assert_eq!(last_written(&written).as_deref(), Some(original));
     press(cx, window, &view, "ctrl-home");
     type_in(cx, window, &view, "X");
     press(cx, window, &view, "ctrl-s");
     assert_eq!(
-        written.lock().expect("log").last().map(String::as_str),
+        last_written(&written).as_deref(),
         Some("Xone\r\ntwo\nthree\r\nfour\n")
+    );
+}
+
+#[gpui_kit::test]
+fn a_second_save_keeps_the_endings_the_first_save_wrote(cx: &mut TestAppContext) {
+    let original = "one\r\ntwo\nthree\r\nfour\n";
+    let written: Arc<Mutex<Vec<String>>> = Arc::default();
+    let (window, view) = window_with(
+        cx,
+        fake(),
+        mixed_hooks(original, &written),
+        Kinds::builtin(),
+    );
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+    press(cx, window, &view, "ctrl-e");
+    press(cx, window, &view, "ctrl-home");
+    type_in(cx, window, &view, "new\n");
+    press(cx, window, &view, "ctrl-s");
+    assert_eq!(
+        last_written(&written).as_deref(),
+        Some("new\none\r\ntwo\nthree\r\nfour\n")
+    );
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "down");
+    type_in(cx, window, &view, "X");
+    press(cx, window, &view, "ctrl-s");
+    assert_eq!(
+        last_written(&written).as_deref(),
+        Some("new\none\r\ntwo\nXthree\r\nfour\n")
     );
 }
