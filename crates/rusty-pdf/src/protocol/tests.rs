@@ -43,6 +43,7 @@ fn every_request_survives_a_round_trip() {
             rotation: Rotation::ThreeQuarters,
         }),
         Request::Text { page: 7 },
+        Request::Links { page: u32::MAX },
         Request::Close,
     ];
     for request in &requests {
@@ -206,4 +207,123 @@ fn a_surrogate_code_point_is_rejected() {
 #[test]
 fn text_joins_its_characters() {
     assert_eq!(sample_text().text(), "Hé");
+}
+
+fn sample_link(target: LinkTarget) -> PageLink {
+    PageLink {
+        bounds: CharBox {
+            left: 10.0,
+            top: 20.0,
+            right: 30.0,
+            bottom: 40.0,
+        },
+        target,
+    }
+}
+
+#[test]
+fn every_link_target_survives_a_round_trip_in_order() {
+    let links = vec![
+        sample_link(LinkTarget::Page {
+            page: 3,
+            top: Some(42.5),
+        }),
+        sample_link(LinkTarget::Page {
+            page: u32::MAX,
+            top: None,
+        }),
+        sample_link(LinkTarget::Uri("https://example.org/é".into())),
+        sample_link(LinkTarget::Unsupported),
+    ];
+    let response = Response::Links(PageLinks::new(612.0, 792.0, links).unwrap());
+    assert_eq!(round_trip_response(&response), response);
+    let empty = Response::Links(PageLinks::new(612.0, 792.0, vec![]).unwrap());
+    assert_eq!(round_trip_response(&empty), empty);
+}
+
+#[test]
+fn a_link_count_over_its_limit_is_rejected() {
+    let links = vec![sample_link(LinkTarget::Unsupported); MAX_PAGE_LINKS + 1];
+    assert!(matches!(
+        PageLinks::new(1.0, 1.0, links),
+        Err(CodecError::TooLarge { .. })
+    ));
+    let response = Response::Links(PageLinks::new(1.0, 1.0, vec![]).unwrap());
+    let mut payload = encode_response(&response).unwrap();
+    payload[9..13].copy_from_slice(&(MAX_PAGE_LINKS as u32 + 1).to_le_bytes());
+    assert!(matches!(
+        decode_response(&payload),
+        Err(CodecError::TooLarge { .. })
+    ));
+}
+
+#[test]
+fn a_uri_over_its_byte_limit_is_rejected() {
+    let uri = "é".repeat(MAX_URI_BYTES / 2 + 1);
+    assert!(matches!(
+        PageLinks::new(1.0, 1.0, vec![sample_link(LinkTarget::Uri(uri))]),
+        Err(CodecError::TooLarge { .. })
+    ));
+    let response = Response::Links(
+        PageLinks::new(1.0, 1.0, vec![sample_link(LinkTarget::Uri(String::new()))]).unwrap(),
+    );
+    let mut payload = encode_response(&response).unwrap();
+    payload[30..34].copy_from_slice(&(MAX_URI_BYTES as u32 + 1).to_le_bytes());
+    assert!(matches!(
+        decode_response(&payload),
+        Err(CodecError::TooLarge { .. })
+    ));
+}
+
+#[test]
+fn non_finite_link_boxes_are_rejected_on_both_sides() {
+    let link = sample_link(LinkTarget::Unsupported);
+    let response = Response::Links(PageLinks::new(1.0, 1.0, vec![link.clone()]).unwrap());
+    let payload = encode_response(&response).unwrap();
+    for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        for coordinate in 0..4 {
+            let mut bounds = [10.0, 20.0, 30.0, 40.0];
+            bounds[coordinate] = value;
+            let mut invalid = link.clone();
+            invalid.bounds = CharBox {
+                left: bounds[0],
+                top: bounds[1],
+                right: bounds[2],
+                bottom: bounds[3],
+            };
+            assert!(matches!(
+                PageLinks::new(1.0, 1.0, vec![invalid]),
+                Err(CodecError::Malformed(_))
+            ));
+            let mut invalid = payload.clone();
+            let start = 13 + coordinate * 4;
+            invalid[start..start + 4].copy_from_slice(&value.to_le_bytes());
+            assert!(matches!(
+                decode_response(&invalid),
+                Err(CodecError::Malformed(_))
+            ));
+        }
+    }
+}
+
+#[test]
+fn non_finite_link_dimensions_and_destinations_are_rejected() {
+    for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        assert!(matches!(
+            PageLinks::new(value, 1.0, vec![]),
+            Err(CodecError::Malformed(_))
+        ));
+        assert!(matches!(
+            PageLinks::new(1.0, value, vec![]),
+            Err(CodecError::Malformed(_))
+        ));
+        let link = sample_link(LinkTarget::Page {
+            page: 0,
+            top: Some(value),
+        });
+        assert!(matches!(
+            PageLinks::new(1.0, 1.0, vec![link]),
+            Err(CodecError::Malformed(_))
+        ));
+    }
 }

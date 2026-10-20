@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use super::*;
 use crate::fake::{FakeEngine, PAGES};
-use crate::protocol::{Rotation, read_response, write_request};
+use crate::protocol::{LinkTarget, Rotation, read_response, write_request};
 
 fn exchange(engine: &mut dyn Engine, requests: &[Request]) -> Vec<Response> {
     let mut wire = Vec::new();
@@ -146,4 +146,50 @@ fn clip_keeps_long_messages_under_the_limit_on_a_char_boundary() {
     let clipped = clip("é".repeat(MAX_MESSAGE_BYTES));
     assert!(clipped.len() <= MAX_MESSAGE_BYTES);
     assert!(clipped.chars().all(|ch| ch == 'é'));
+}
+
+#[test]
+fn the_fake_engine_serves_page_links_and_page_errors() {
+    let replies = exchange(
+        &mut FakeEngine::default(),
+        &[
+            Request::Links { page: 0 },
+            open("a.pdf"),
+            Request::Links { page: 2 },
+            Request::Links { page: PAGES },
+        ],
+    );
+    assert_eq!(replies[0], Response::Failed(PdfError::NotOpen));
+    let Response::Links(links) = &replies[2] else {
+        panic!("expected links")
+    };
+    assert_eq!((links.width(), links.height()), (100.0, 200.0));
+    assert_eq!(
+        links.links()[0].target,
+        LinkTarget::Page {
+            page: 3,
+            top: Some(20.0)
+        }
+    );
+    assert_eq!(
+        links.links()[1].target,
+        LinkTarget::Uri("https://example.org/page/2".into())
+    );
+    assert_eq!(links.links()[2].target, LinkTarget::Unsupported);
+    assert_eq!(
+        replies[3],
+        Response::Failed(PdfError::NoSuchPage {
+            page: PAGES,
+            count: PAGES
+        })
+    );
+}
+
+#[test]
+fn an_unavailable_engine_has_no_links() {
+    let replies = exchange(
+        &mut Unavailable::new("no pdfium"),
+        &[Request::Links { page: 0 }],
+    );
+    assert_eq!(replies, [Response::Failed(PdfError::NotOpen)]);
 }

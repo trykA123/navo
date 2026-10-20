@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use rusty_pdf::fake::{CRASH_PAGE, HANG_PAGE, PAGES, PASSWORD};
-use rusty_pdf::protocol::{PdfError, RenderRequest, Rotation};
+use rusty_pdf::protocol::{CharBox, LinkTarget, PdfError, RenderRequest, Rotation};
 use rusty_pdf::{Document, Launcher};
 
 const FAKE: &str = env!("CARGO_BIN_EXE_rusty-pdf-fake-helper");
@@ -142,4 +142,41 @@ fn a_document_moves_to_a_worker_thread() {
     .join()
     .unwrap();
     assert_eq!(pages, Ok(PAGES));
+}
+
+#[test]
+fn page_links_cross_the_fake_helper_pipe() {
+    let mut document = open(&launcher(), "a.pdf", None).unwrap();
+    let links = document.links(2).unwrap();
+    assert_eq!((links.width(), links.height()), (100.0, 200.0));
+    assert_eq!(links.links().len(), 3);
+    assert_eq!(
+        links.links()[0].bounds,
+        CharBox {
+            left: 10.0,
+            top: 20.0,
+            right: 40.0,
+            bottom: 32.0
+        }
+    );
+    assert_eq!(
+        links.links()[0].target,
+        LinkTarget::Page {
+            page: 3,
+            top: Some(20.0)
+        }
+    );
+    assert_eq!(
+        links.links()[1].target,
+        LinkTarget::Uri("https://example.org/page/2".into())
+    );
+    assert_eq!(links.links()[2].target, LinkTarget::Unsupported);
+    assert_eq!(
+        document.links(PAGES),
+        Err(PdfError::NoSuchPage {
+            page: PAGES,
+            count: PAGES
+        })
+    );
+    document.close();
 }

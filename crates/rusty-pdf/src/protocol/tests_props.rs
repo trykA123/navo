@@ -26,6 +26,7 @@ fn request() -> impl Strategy<Value = Request> {
             })
         }),
         any::<u32>().prop_map(|page| Request::Text { page }),
+        any::<u32>().prop_map(|page| Request::Links { page }),
         Just(Request::Close),
     ]
 }
@@ -65,6 +66,21 @@ fn error() -> impl Strategy<Value = PdfError> {
     ]
 }
 
+fn page_links() -> impl Strategy<Value = PageLinks> {
+    let target = prop_oneof![
+        (any::<u32>(), proptest::option::of(finite()))
+            .prop_map(|(page, top)| LinkTarget::Page { page, top }),
+        ".{0,64}".prop_map(LinkTarget::Uri),
+        Just(LinkTarget::Unsupported),
+    ];
+    let link = (text_char(), target).prop_map(|(text, target)| PageLink {
+        bounds: text.bounds,
+        target,
+    });
+    (finite(), finite(), proptest::collection::vec(link, 0..16))
+        .prop_map(|(width, height, links)| PageLinks::new(width, height, links).unwrap())
+}
+
 fn response() -> impl Strategy<Value = Response> {
     prop_oneof![
         any::<u32>().prop_map(|pages| Response::Opened { pages }),
@@ -90,11 +106,20 @@ fn response() -> impl Strategy<Value = Response> {
                 PageText::new(width, height, chars).unwrap()
             )),
         Just(Response::Closed),
+        page_links().prop_map(Response::Links),
         error().prop_map(Response::Failed),
     ]
 }
 
 proptest! {
+    #[test]
+    fn random_page_links_round_trip(links in page_links()) {
+        let response = Response::Links(links);
+        let mut wire = Vec::new();
+        write_response(&mut wire, &response).unwrap();
+        prop_assert_eq!(read_response(&mut Cursor::new(wire)).unwrap(), Some(response));
+    }
+
     #[test]
     fn random_requests_round_trip(request in request()) {
         let mut wire = Vec::new();

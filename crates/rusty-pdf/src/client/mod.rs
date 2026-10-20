@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use helper::Helper;
 
-use crate::protocol::{Bitmap, PageText, PdfError, RenderRequest, Request, Response};
+use crate::protocol::{Bitmap, PageLinks, PageText, PdfError, RenderRequest, Request, Response};
 
 pub type Confine = Arc<dyn Fn(&Child) -> io::Result<Box<dyn Send>> + Send + Sync>;
 
@@ -97,6 +97,13 @@ impl Document {
         }
     }
 
+    pub fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
+        match self.call(&Request::Links { page })? {
+            Response::Links(links) => Ok(links),
+            other => Err(self.unexpected(&other)),
+        }
+    }
+
     pub fn close(mut self) {
         if let Some(helper) = self.helper.as_mut() {
             let _ = helper.call(&Request::Close, self.launcher.timeout);
@@ -145,6 +152,7 @@ fn unexpected_reply(response: &Response) -> PdfError {
         Response::PageCount(_) => "PageCount",
         Response::Page(_) => "Page",
         Response::Text(_) => "Text",
+        Response::Links(_) => "Links",
         Response::Closed => "Closed",
         Response::Failed(_) => "Failed",
     };

@@ -1,3 +1,5 @@
+mod links;
+
 use super::types::{CharBox, check_size};
 use super::{
     Bitmap, CodecError, MAX_MESSAGE_BYTES, MAX_PASSWORD_BYTES, MAX_PATH_BYTES, MAX_TEXT_CHARS,
@@ -26,6 +28,10 @@ pub fn encode_request(request: &Request) -> Result<Vec<u8>, CodecError> {
             put_u32(&mut out, *page);
         }
         Request::Close => out.push(5),
+        Request::Links { page } => {
+            out.push(6);
+            put_u32(&mut out, *page);
+        }
     }
     Ok(out)
 }
@@ -45,6 +51,7 @@ pub fn decode_request(bytes: &[u8]) -> Result<Request, CodecError> {
         }),
         4 => Request::Text { page: input.u32()? },
         5 => Request::Close,
+        6 => Request::Links { page: input.u32()? },
         _ => return Err(CodecError::Malformed("unknown request")),
     };
     input.finish(request)
@@ -63,6 +70,7 @@ pub fn encode_response(response: &Response) -> Result<Vec<u8>, CodecError> {
         }
         Response::Page(bitmap) => put_bitmap(&mut out, bitmap),
         Response::Text(text) => put_text(&mut out, text),
+        Response::Links(links) => links::put_links(&mut out, links)?,
         Response::Closed => out.push(5),
         Response::Failed(error) => {
             out.push(6);
@@ -83,6 +91,7 @@ pub fn decode_response(bytes: &[u8]) -> Result<Response, CodecError> {
         4 => Response::Text(text(&mut input)?),
         5 => Response::Closed,
         6 => Response::Failed(error(&mut input)?),
+        7 => Response::Links(links::links(&mut input)?),
         _ => return Err(CodecError::Malformed("unknown response")),
     };
     input.finish(response)
