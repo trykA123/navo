@@ -55,11 +55,11 @@ pub(super) fn load(
         let mut bytes = [0; 16];
         read_exact(source, &mut bytes)?;
         let head = ObjectHeader::parse(&bytes)?;
-        let next = at
+        let framed = at
             .checked_add(head.size as u64)
-            .and_then(|next| next.checked_add((head.size % 4) as u64))
-            .filter(|next| *next <= end)
+            .filter(|framed| *framed <= end)
             .ok_or(Error::Invalid("truncated BLF object or container"))?;
+        let next = framed.saturating_add((head.size % 4) as u64).min(end);
         if head.kind == 10 {
             let data = read_container(source, head)?;
             return Ok(Some(Container {

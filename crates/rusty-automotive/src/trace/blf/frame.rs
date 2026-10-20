@@ -11,7 +11,7 @@ pub(super) fn decode(head: ObjectHeader, bytes: &[u8]) -> Result<Frame> {
         1 | 86 => classic(head.kind, bytes),
         73 => error_frame(bytes),
         100 => fd(bytes),
-        101 => fd64(head, bytes),
+        101 => fd64(bytes),
         _ => Err(Error::Invalid("unsupported BLF CAN object")),
     }?;
     if frame.channel == 0 {
@@ -60,7 +60,7 @@ fn classic(kind: u32, bytes: &[u8]) -> Result<Frame> {
     }
     let flags = byte(bytes, 2)?;
     let dlc = byte(bytes, 3)?;
-    if dlc > 8 {
+    if dlc > 15 {
         return Err(Error::Invalid("invalid BLF classic DLC"));
     }
     let remote = flags & 128 != 0;
@@ -77,7 +77,7 @@ fn classic(kind: u32, bytes: &[u8]) -> Result<Frame> {
         data: if remote {
             Vec::new()
         } else {
-            payload(bytes, 8, dlc)?
+            payload(bytes, 8, dlc.min(8))?
         },
     })
 }
@@ -138,29 +138,29 @@ fn fd(bytes: &[u8]) -> Result<Frame> {
     })
 }
 
-fn fd64(head: ObjectHeader, bytes: &[u8]) -> Result<Frame> {
+fn fd64(bytes: &[u8]) -> Result<Frame> {
     let dlc = byte(bytes, 1)?;
     let length = byte(bytes, 2)?;
     let flags = u32_at(bytes, 12)?;
     let kind = fd_kind(flags >> 12, flags & 16 != 0)?;
     validate_length(dlc, length, kind)?;
-    let tx = byte(bytes, 34)?;
-    if tx > 1 {
-        return Err(Error::Invalid("invalid BLF CAN direction"));
-    }
-    let offset = usize::from(byte(bytes, 35)?);
-    let payload_end = head.header_size + 40 + usize::from(length);
-    if bytes.len() < 40 || (offset != 0 && (offset < payload_end || offset > head.size)) {
-        return Err(Error::Invalid("invalid BLF FD extension offset"));
+    let logged = match byte(bytes, 34)? {
+        0 => Direction::Rx,
+        1 => Direction::Tx,
+        2 => Direction::TxRequest,
+        _ => return Err(Error::Invalid("invalid BLF CAN direction")),
+    };
+    if bytes.len() < 40 {
+        return Err(Error::Invalid("short BLF FD message"));
     }
     Ok(Frame {
         channel: u16::from(byte(bytes, 0)?),
         id: Some(id(u32_at(bytes, 4)?)?),
-        direction: if flags & 128 != 0 {
-            Some(Direction::TxRequest)
+        direction: Some(if flags & 128 != 0 {
+            Direction::TxRequest
         } else {
-            direction(tx == 1)
-        },
+            logged
+        }),
         kind,
         dlc,
         data: if kind == FrameKind::Remote {

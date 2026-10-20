@@ -12,7 +12,7 @@ pub(crate) const BLOCK: u64 = 32;
 pub(crate) const NO_KEY: u32 = u32::MAX;
 pub const MAX_IDS: usize = 65_536;
 const CHECK_EVERY: u64 = 4096;
-const KEPT_PROBLEMS: usize = 1000;
+pub(crate) const KEPT_PROBLEMS: usize = 1000;
 pub(crate) const TOO_LONG: &str = "the line is longer than 4 KiB";
 
 #[derive(Debug, Clone, PartialEq, Eq)]

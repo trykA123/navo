@@ -4,7 +4,7 @@ use std::io::Cursor;
 use std::sync::atomic::AtomicBool;
 
 use blf_build::*;
-use rusty_automotive::{IndexError, Watch, index_blf};
+use rusty_automotive::{Direction, IndexError, Watch, index_blf};
 
 #[test]
 fn corrupt_inner_objects_keep_the_valid_prefix_and_stop() {
@@ -56,15 +56,18 @@ fn truncated_inner_objects_keep_frames_before_the_split() {
 #[test]
 fn truncated_file_and_container_headers_never_panic() {
     let inner = object(1, 1, 1, &classic(1, 0, 16));
-    let bytes = file(&[container(&inner, true)], 1);
+    let whole = container(&inner, true);
+    let padded = whole.len() - u32::from_le_bytes(whole[8..12].try_into().unwrap()) as usize;
+    let bytes = file(&[whole], 1);
     for length in 0..bytes.len() {
         let trace = trace(&bytes[..length]);
-        if length == 144 {
-            assert_eq!(trace.malformed, 0);
+        if length >= bytes.len() - padded {
+            assert_eq!((trace.malformed, trace.rows()), (0, 1), "length {length}");
+        } else if length == 144 {
+            assert_eq!((trace.malformed, trace.rows()), (0, 0));
         } else {
-            assert_eq!(trace.malformed, 1, "length {length}");
+            assert_eq!((trace.malformed, trace.rows()), (1, 0), "length {length}");
         }
-        assert_eq!(trace.rows(), 0);
         assert!(!trace.supports_follow());
     }
 }
@@ -149,11 +152,10 @@ fn oversized_inflation_fields_and_compression_bombs_are_bounded() {
     assert!(trace.problems[0].reason.contains("inflated size"));
 }
 
-#[test]
-fn invalid_can_payloads_stop_before_the_bad_frame() {
+fn invalid_objects() -> Vec<Vec<u8>> {
     let mut invalid = Vec::new();
     let mut payload = classic(1, 0, 16);
-    payload[3] = 9;
+    payload[3] = 16;
     invalid.push(object(1, 1, 0, &payload));
     invalid.push(object(1, 1, 0, &classic(1, 0, 1 << 29)));
     invalid.push(object(86, 1, 0, &classic(1, 0, 16)));
@@ -163,16 +165,129 @@ fn invalid_can_payloads_stop_before_the_bad_frame() {
         invalid.push(object(kind, 1, 0, &payload));
     }
     let mut payload = fd(101, 7 << 12);
-    payload[35] = 60;
+    payload[34] = 3;
     invalid.push(object(101, 1, 0, &payload));
     invalid.push(object(101, 1, 0, &[0; 39]));
     invalid.push(object(73, 1, 0, &[0; 23]));
-    for bad in invalid {
-        let bytes = file(&[container(&bad, false)], 1);
+    invalid
+}
+
+#[test]
+fn invalid_can_payloads_are_counted_and_later_frames_are_kept() {
+    let good = object(1, 1, 1, &classic(1, 0, 16));
+    for bad in invalid_objects() {
+        let inner = [good.clone(), bad.clone(), good.clone()].concat();
+        let bytes = file(&[container(&inner, false)], 3);
         let trace = trace(&bytes);
-        assert_eq!(trace.rows(), 0);
+        assert_eq!(trace.rows(), 2);
         assert_eq!(trace.malformed, 1);
+        assert_eq!(trace.problems.len(), 1);
+        assert_eq!(trace.problems[0].line, 2);
+        assert_eq!(trace.blf.as_ref().unwrap().problem_position, None);
+        assert_eq!(entries(&bytes, &trace, &[0, 1]).len(), 2);
     }
+}
+
+#[test]
+fn window_ordinals_agree_with_the_index_across_a_bad_frame() {
+    let mut inner = Vec::new();
+    for at in 0..100u64 {
+        let bad = at % 10 == 3;
+        let payload = if bad {
+            classic(1, 0, 1 << 29)
+        } else {
+            classic(1, 0, 16)
+        };
+        inner.extend(object(1, 1, at, &payload));
+    }
+    let bytes = file(&[container(&inner, true)], 100);
+    let trace = trace(&bytes);
+    assert_eq!(trace.rows(), 90);
+    assert_eq!(trace.malformed, 10);
+    assert_eq!(trace.lines, 100);
+    let wanted = [0, 2, 3, 40, 41, 89];
+    let decoded = entries(&bytes, &trace, &wanted);
+    let lines: Vec<_> = decoded.iter().map(|entry| entry.line).collect();
+    assert_eq!(lines, vec![1, 3, 5, 46, 47, 100]);
+    for entry in &decoded {
+        assert_eq!(entry.time_ns, Some(entry.line - 1));
+    }
+}
+
+#[test]
+fn rejected_frame_problems_are_capped() {
+    let inner: Vec<u8> = (0..1100)
+        .flat_map(|_| object(1, 1, 0, &classic(1, 0, 1 << 29)))
+        .collect();
+    let bytes = file(&[container(&inner, true)], 1100);
+    let trace = trace(&bytes);
+    assert_eq!(trace.malformed, 1100);
+    assert_eq!(trace.problems.len(), 1000);
+    assert_eq!(trace.rows(), 0);
+}
+
+#[test]
+fn classic_dlc_above_eight_is_legal_and_keeps_the_logged_value() {
+    let mut inner = Vec::new();
+    for dlc in [9, 12, 15] {
+        let mut payload = classic(1, 0, 16);
+        payload[3] = dlc;
+        inner.extend(object(1, 1, 0, &payload));
+    }
+    let bytes = file(&[container(&inner, false)], 3);
+    let trace = trace(&bytes);
+    assert_eq!(trace.malformed, 0);
+    for (entry, dlc) in entries(&bytes, &trace, &[0, 1, 2]).iter().zip([9, 12, 15]) {
+        assert_eq!(frame(entry).dlc, dlc);
+        assert_eq!(frame(entry).data, (0..8).collect::<Vec<u8>>());
+    }
+}
+
+#[test]
+fn fd64_direction_codes_map_and_unknown_codes_are_malformed() {
+    let mut inner = Vec::new();
+    for code in [0, 1, 2, 3] {
+        let mut payload = fd(101, 7 << 12);
+        payload[34] = code;
+        payload[35] = 200;
+        inner.extend(object(101, 1, 0, &payload));
+    }
+    let bytes = file(&[container(&inner, false)], 4);
+    let trace = trace(&bytes);
+    assert_eq!(trace.rows(), 3);
+    assert_eq!(trace.malformed, 1);
+    let directions: Vec<_> = entries(&bytes, &trace, &[0, 1, 2])
+        .iter()
+        .map(|entry| frame(entry).direction)
+        .collect();
+    assert_eq!(
+        directions,
+        vec![
+            Some(Direction::Rx),
+            Some(Direction::Tx),
+            Some(Direction::TxRequest)
+        ]
+    );
+}
+
+#[test]
+fn missing_padding_after_the_last_container_keeps_its_frames() {
+    let mut payload = classic(1, 0, 16);
+    payload.extend([0, 0]);
+    let inner = [
+        object(1, 1, 0, &payload),
+        object(1, 1, 1, &classic(1, 0, 16)),
+    ]
+    .concat();
+    let whole = container(&inner, false);
+    let padding = whole.len() - 32 - inner.len();
+    assert!(padding > 0);
+    let mut bytes = file(&[whole], 2);
+    bytes.truncate(bytes.len() - padding);
+    let trace = trace(&bytes);
+    assert_eq!(trace.malformed, 0);
+    assert_eq!(trace.rows(), 2);
+    assert_eq!(entries(&bytes, &trace, &[0, 1]).len(), 2);
 }
 
 #[test]

@@ -10,6 +10,7 @@ use crate::{Frame, Watch};
 pub(super) struct Object {
     pub position: BlfPosition,
     pub frame: Option<(u64, Frame)>,
+    pub rejected: Option<&'static str>,
 }
 
 pub(super) struct Stream<R> {
@@ -178,18 +179,26 @@ impl<R: Read + Seek> Stream<R> {
         self.transfer(&mut header[16..prefix], watch)?;
         self.skip(head.header_size - prefix, watch)?;
         let payload_size = head.size - head.header_size;
-        let frame = if frame::is_can(head.kind) {
+        let (mut frame, mut rejected) = (None, None);
+        if frame::is_can(head.kind) {
             let time = head.time_ns(&header[..prefix])?;
             let mut payload = [0; 128];
             let take = payload_size.min(payload.len());
             self.transfer(&mut payload[..take], watch)?;
             self.skip(payload_size - take, watch)?;
-            Some((time, frame::decode(head, &payload[..take])?))
+            match frame::decode(head, &payload[..take]) {
+                Ok(decoded) => frame = Some((time, decoded)),
+                Err(Error::Invalid(reason)) => rejected = Some(reason),
+                Err(error) => return Err(error),
+            }
         } else {
             self.skip(payload_size, watch)?;
             count_skipped(&mut self.skipped, head.kind)?;
-            None
-        };
-        Ok(Some(Object { position, frame }))
+        }
+        Ok(Some(Object {
+            position,
+            frame,
+            rejected,
+        }))
     }
 }

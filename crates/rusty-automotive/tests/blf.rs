@@ -146,11 +146,39 @@ fn blf_filters_share_the_trace_statistics_and_sparse_window_api() {
 #[test]
 fn logg_sniffing_uses_binary_magic_only_at_offset_zero() {
     assert!(TRACE_EXTENSIONS.contains(&"blf"));
-    assert!(sniff_blf(b"LOGG\0\0\0\0"));
-    assert_eq!(sniff_trace(b"LOGG\0\0\0\0"), Some(Evidence::Header));
+    let bytes = file(&[], 0);
+    assert!(sniff_blf(&bytes));
+    assert_eq!(sniff_trace(&bytes), Some(Evidence::Header));
     for bytes in [b"LOG".as_slice(), b" LOGG", b"\0LOGG", b"\xEF\xBB\xBFLOGG"] {
         assert!(!sniff_blf(bytes));
         assert_eq!(sniff_trace(bytes), None);
+    }
+}
+
+#[test]
+fn logg_text_and_implausible_headers_are_not_blf() {
+    let text = [b"LOGGING started\n".as_slice(), &[b' '; 80]].concat();
+    assert!(!sniff_blf(&text));
+    assert_eq!(sniff_trace(&text), None);
+    let good = file(&[], 0);
+    assert!(!sniff_blf(&good[..71]));
+    for (at, value) in [
+        (4, 71),
+        (4, 4097),
+        (40, 1979),
+        (40, 2101),
+        (42, 0),
+        (42, 13),
+        (46, 0),
+        (46, 32),
+    ] {
+        let mut bytes = good.clone();
+        if at == 4 {
+            put32(&mut bytes, at, value);
+        } else {
+            put16(&mut bytes, at, value as u16);
+        }
+        assert!(!sniff_blf(&bytes), "offset {at} value {value}");
     }
 }
 

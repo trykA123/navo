@@ -55,6 +55,15 @@ fn scan<R: Read + Seek>(
 
 fn take_object(trace: &mut Trace, object: super::stream::Object) {
     trace.lines += 1;
+    if let Some(reason) = object.rejected {
+        trace.malformed += 1;
+        if trace.problems.len() < super::super::index::KEPT_PROBLEMS {
+            trace.problems.push(TraceProblem {
+                line: trace.lines,
+                reason,
+            });
+        }
+    }
     let Some((time, frame)) = object.frame else {
         return;
     };
