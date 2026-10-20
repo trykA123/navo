@@ -28,11 +28,11 @@ fn open_keeping(file: &Path, keep: usize) -> Option<SharedDb> {
     Some(Arc::new(Mutex::new(db)))
 }
 
-fn lock(db: &SharedDb) -> MutexGuard<'_, Db> {
+pub(crate) fn lock(db: &SharedDb) -> MutexGuard<'_, Db> {
     db.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-fn now_ms() -> i64 {
+pub(crate) fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| {

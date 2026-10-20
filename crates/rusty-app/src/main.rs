@@ -24,6 +24,7 @@ mod logging;
 mod metrics;
 mod pdf_helper;
 mod profile;
+mod search_hooks;
 mod settings;
 mod shell_menu;
 mod startup;

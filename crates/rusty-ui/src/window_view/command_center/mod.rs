@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use gpui_kit::{Bounds, FocusHandle, Pixels, Subscription, point, px, size};
 
-use super::FerriteWindow;
+use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
     CommandsSource, HintKeys, INPUT_ROW, LEAVE, ResultSource, Row, Selection,
@@ -20,12 +20,24 @@ use crate::tokens;
 
 pub(super) type Anchor = Rc<Cell<Option<Bounds<Pixels>>>>;
 
-#[derive(Default)]
 pub(super) struct CommandCenterState {
     open: Option<Open>,
     leaving: Option<Entity<CommandCenter>>,
     pub(super) anchor: Anchor,
     pub(super) sources: Vec<Arc<dyn ResultSource>>,
+    pub(super) hooks: SearchHooks,
+}
+
+impl CommandCenterState {
+    pub(super) fn new(hooks: SearchHooks) -> Self {
+        Self {
+            open: None,
+            leaving: None,
+            anchor: Anchor::default(),
+            sources: Vec::new(),
+            hooks,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,8 +107,10 @@ impl FerriteWindow {
         let keymap = commands::active(cx);
         let snapshot = CommandsSnapshot::build(&commands::entries(), &stack, keymap);
         let keys = HintKeys::of(keymap);
-        let mut sources: Vec<Arc<dyn ResultSource>> =
-            vec![Arc::new(CommandsSource::new(Arc::new(snapshot)))];
+        let mut sources: Vec<Arc<dyn ResultSource>> = vec![Arc::new(CommandsSource::with_use(
+            Arc::new(snapshot),
+            self.command_center.hooks.command_use.clone(),
+        ))];
         sources.extend(self.command_center.sources.iter().cloned());
         let rows: Rc<[Row]> = search::recent().into();
         let anchor = self.command_center_anchor(window, cx);

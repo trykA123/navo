@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use gpui_kit::SharedString;
@@ -5,6 +6,7 @@ use rusty_index::fuzzy::Fuzzy;
 use rusty_l10n::tr;
 
 use super::query::Term;
+use super::rank;
 use super::source::{Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target};
 use crate::commands::{ArgKind, CommandEntry, GLOBAL, Keymap, is_within, shown};
 
@@ -15,6 +17,16 @@ pub struct CommandRow {
     pub label: String,
     pub shortcut: Option<String>,
     pub arg: Option<ArgKind>,
+}
+
+impl CommandRow {
+    fn use_key(&self) -> &'static str {
+        if self.arg.is_some() {
+            self.name
+        } else {
+            self.action
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -53,15 +65,37 @@ fn in_scope(context: &str, stack: &[&str]) -> bool {
     context == GLOBAL || stack.iter().any(|at| is_within(at, context))
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct CommandsSource {
     snapshot: Arc<CommandsSnapshot>,
+    uses: Option<UseWeights>,
+}
+
+pub type UseWeights = Arc<dyn Fn() -> Vec<(String, f64)> + Send + Sync>;
+
+impl std::fmt::Debug for CommandsSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommandsSource")
+            .field("snapshot", &self.snapshot)
+            .finish_non_exhaustive()
+    }
 }
 
 impl CommandsSource {
     #[must_use]
     pub fn new(snapshot: Arc<CommandsSnapshot>) -> Self {
-        Self { snapshot }
+        Self {
+            snapshot,
+            uses: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_use(snapshot: Arc<CommandsSnapshot>, uses: UseWeights) -> Self {
+        Self {
+            snapshot,
+            uses: Some(uses),
+        }
     }
 }
 
@@ -97,6 +131,11 @@ impl ResultSource for CommandsSource {
             return;
         };
         let mut fuzzy = Fuzzy::new(&text, false);
+        let weights: HashMap<String, f64> = self
+            .uses
+            .as_ref()
+            .map(|load| load().into_iter().collect())
+            .unwrap_or_default();
         for row in &self.snapshot.rows {
             if cancel.is_cancelled() {
                 return;
@@ -115,7 +154,11 @@ impl ResultSource for CommandsSource {
                 group: Group::Commands,
                 title: SharedString::from(row.label.clone()),
                 detail: SharedString::default(),
-                score: i64::from(score),
+                score: rank::score(
+                    i64::from(score),
+                    weights.get(row.use_key()).copied().unwrap_or(0.0),
+                    rank::name_bonus(&row.label, &text),
+                ),
                 indices,
                 target,
                 shortcut: row.shortcut.clone().map(SharedString::from),

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
@@ -318,4 +318,45 @@ fn escape_leaves_the_argument_step_before_closing(cx: &mut TestAppContext) {
     rig.press(cx, "escape");
     assert!(rig.is_open(cx));
     assert!(rig.label(cx, "command-center-chip").is_none());
+}
+
+fn recording(cx: &mut TestAppContext, rig: &Rig) -> Arc<Mutex<Vec<String>>> {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    rig.view.update(cx, |view, _| {
+        view.command_center.hooks.record_command = Arc::new(move |name| {
+            sink.lock().unwrap().push(name.to_owned());
+        });
+    });
+    seen
+}
+
+#[gpui_kit::test]
+fn running_a_command_from_the_box_records_its_use(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let seen = recording(cx, &rig);
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "switch pane");
+    rig.press(cx, "enter");
+    cx.run_until_parked();
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec!["file_list::SwitchPane".to_owned()]
+    );
+}
+
+#[gpui_kit::test]
+fn closing_without_running_and_running_a_folder_record_nothing(cx: &mut TestAppContext) {
+    let rig = rig_with(
+        cx,
+        vec![hit("dest", Group::Folders, Target::GoTo(location("dest")))],
+    );
+    let seen = recording(cx, &rig);
+    rig.press(cx, "ctrl-k");
+    rig.press(cx, "escape");
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "dest");
+    rig.press(cx, "enter");
+    cx.run_until_parked();
+    assert!(seen.lock().unwrap().is_empty());
 }

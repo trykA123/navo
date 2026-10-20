@@ -19,6 +19,7 @@ mod placement;
 mod preview;
 mod prompt;
 mod rest;
+mod search_hooks;
 mod settings_news;
 mod settings_save;
 mod settings_sheet;
@@ -71,6 +72,7 @@ pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use placement::DisplayScale;
 pub use preview::folder_summary;
+pub use search_hooks::SearchHooks;
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
@@ -115,6 +117,7 @@ pub struct StartOptions {
     pub start_watch: Option<StartWatch>,
     pub open: OpenHooks,
     pub crash_report: Option<Arc<dyn CrashReportService>>,
+    pub search: SearchHooks,
 }
 
 pub struct FerriteWindow {
@@ -210,7 +213,7 @@ impl FerriteWindow {
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             crash: crash::CrashState::new(options.crash_report, cx),
-            command_center: command_center::CommandCenterState::default(),
+            command_center: command_center::CommandCenterState::new(options.search),
             start: options.start_watch.map(start_watch::Watching::built),
             _watches: Self::watches(window, cx),
         };

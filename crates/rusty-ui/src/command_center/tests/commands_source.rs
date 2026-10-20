@@ -126,3 +126,22 @@ fn the_source_describes_itself() {
     assert_eq!(source.id(), "commands");
     assert_eq!(source.group(), Group::Commands);
 }
+
+#[test]
+fn a_command_used_often_scores_higher_than_the_same_unused_one() {
+    let plain = run(&all_visible(), "refresh", &Cancel::new());
+    let base = find(&plain, "Refresh").expect("Refresh matches").score;
+    let snapshot = snapshot_of(&entries(), &FILES);
+    let weights: Arc<dyn Fn() -> Vec<(String, f64)> + Send + Sync> =
+        Arc::new(|| vec![("file_list::Refresh".to_owned(), 8.0)]);
+    let source = CommandsSource::with_use(snapshot, weights);
+    let used = run(&source, "refresh", &Cancel::new());
+    let lifted = find(&used, "Refresh").expect("Refresh matches").score;
+    assert!(lifted > base);
+    let rivals = run(&source, "mark all", &Cancel::new());
+    let unused = run(&all_visible(), "mark all", &Cancel::new());
+    assert_eq!(
+        find(&rivals, "Mark all").map(|hit| hit.score),
+        find(&unused, "Mark all").map(|hit| hit.score)
+    );
+}

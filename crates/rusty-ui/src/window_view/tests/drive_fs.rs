@@ -257,6 +257,7 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         start_watch: None,
         open: crate::window_view::OpenHooks::none(),
         crash_report: None,
+        search: crate::window_view::SearchHooks::none(),
     };
     let (window, view) = open_options(cx, options);
     Rig {

@@ -95,10 +95,7 @@ pub(crate) fn open(launch: Launch) {
     let mut state = initial_state(session.as_deref().unwrap_or(no_session), home.clone());
     place_panes(&mut state, launch.panes);
     metrics::mark("session read");
-    let memory = dirs
-        .as_ref()
-        .filter(|dirs| dirs.ensure().is_ok())
-        .and_then(|dirs| files::open_memory(&dirs.data.join("ferrite.db")));
+    let memory = open_memory(dirs.as_ref());
     let local = Arc::new(LocalFs::new());
     let (operations, _instance) = operations(dirs.as_ref(), &home, local.as_ref());
     metrics::mark("databases opened");
@@ -118,6 +115,7 @@ pub(crate) fn open(launch: Launch) {
             operations,
             launcher: launch::launcher(),
             editor: editor::hooks(|name| std::env::var(name).ok()),
+            search: crate::search_hooks::hooks(memory.clone()),
             files: files::hooks(memory),
             kinds: rusty_ui::window_view::Kinds::builtin(),
             drives: drives::hooks(),
@@ -136,6 +134,11 @@ pub(crate) fn open(launch: Launch) {
         Rc::new(rusty_shell::display_scale),
         quitter(disk, launch.cleanup, launch.running),
     );
+}
+
+fn open_memory(dirs: Option<&StoreDirs>) -> Option<files::SharedDb> {
+    dirs.filter(|dirs| dirs.ensure().is_ok())
+        .and_then(|dirs| files::open_memory(&dirs.data.join("ferrite.db")))
 }
 
 fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox) -> OpenHooks {

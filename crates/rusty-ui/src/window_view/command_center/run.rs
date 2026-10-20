@@ -83,7 +83,10 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         match hit.target {
-            Target::Action(name) => self.run_action(name, window, cx),
+            Target::Action(name) => {
+                self.record_command(name, cx);
+                self.run_action(name, window, cx);
+            }
             Target::Core(command) => self.run_core(&command, window, cx),
             Target::Arg(name, kind) => {
                 let label = hit.title.trim_end_matches(ELLIPSIS).trim_end().to_owned();
@@ -136,6 +139,14 @@ impl FerriteWindow {
         });
     }
 
+    fn record_command(&self, name: &str, cx: &mut Context<Self>) {
+        let record = self.command_center.hooks.record_command.clone();
+        let name = name.to_owned();
+        cx.background_executor()
+            .spawn(async move { record(&name) })
+            .detach();
+    }
+
     fn run_core(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
         self.close_command_center(window, cx);
         self.apply(command, window, cx);
@@ -148,7 +159,10 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         match argument_command(step, value) {
-            Ok(command) => self.run_core(&command, window, cx),
+            Ok(command) => {
+                self.record_command(step.name, cx);
+                self.run_core(&command, window, cx);
+            }
             Err(error) => {
                 if let Some(open) = self.command_center.open.as_mut() {
                     open.error = Some(error.into());

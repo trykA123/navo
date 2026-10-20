@@ -22,6 +22,7 @@ const SNIFF: usize = 8 * 1024;
 const MAX_RANGE: usize = 64 * 1024 * 1024;
 
 pub use memory::{SharedDb, open as open_memory};
+pub(crate) use memory::{lock, now_ms};
 
 pub fn hooks(db: Option<SharedDb>) -> FileHooks {
     let hooks = FileHooks {

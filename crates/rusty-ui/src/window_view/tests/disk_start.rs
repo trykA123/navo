@@ -99,6 +99,7 @@ fn open_from_disk(
         start_watch: None,
         open: crate::window_view::OpenHooks::none(),
         crash_report: None,
+        search: crate::window_view::SearchHooks::none(),
     };
     let (window, view) = open_unsettled(cx, options, gpui_kit::px(1000.));
     (window, view, disk)
