@@ -23,7 +23,8 @@ pub use description::{DescriptionError, DescriptionProblem, DescriptionReport};
 pub use elf::sample as elf_sample;
 pub use elf::{
     Bind, Class, Column, Elf, ElfProblem, ElfReader, Endian, Header, Lines, Order, Place, Query,
-    Scope, Section, Segment, SourceLine, Symbol, SymbolKind, Totals, select, sniff_elf,
+    Scope, Section, Segment, Selection, SourceLine, Symbol, SymbolKind, Totals, estimated_size,
+    select, sniff_elf,
 };
 pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, ROW_BYTES, Row};
