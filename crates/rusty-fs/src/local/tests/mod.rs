@@ -23,6 +23,8 @@ mod notify_info;
 mod ops;
 mod pause;
 mod perf;
+#[cfg(windows)]
+mod rename_batch;
 mod replace;
 mod verbatim;
 #[cfg(windows)]

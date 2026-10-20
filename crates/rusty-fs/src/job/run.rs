@@ -3,6 +3,7 @@ use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 use super::aside::Aside;
 use super::copy::{Copier, CopyStep, copy, overwrites, place};
 use super::hold::hold;
+use super::rename::is_temporary;
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
 pub(super) fn current_of(step: &Step) -> Location {
@@ -20,6 +21,7 @@ pub(super) fn counted(step: &Step) -> (u64, u64) {
     match step {
         Step::CopyFile { size, .. } => (*size, 1),
         Step::RemoveFile { .. } => (0, 1),
+        Step::Rename { target, .. } if !is_temporary(target) => (0, 1),
         _ => (0, 0),
     }
 }
