@@ -99,6 +99,7 @@ pub enum Page {
     MemoryStrip,
     Treemap,
     UsageBars,
+    MultiRename,
 }
 
 pub struct PageInfo {

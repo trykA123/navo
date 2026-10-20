@@ -3,6 +3,7 @@ mod item;
 mod keys;
 mod preview;
 pub mod texts;
+pub mod view;
 
 pub use form::Form;
 pub use item::Item;

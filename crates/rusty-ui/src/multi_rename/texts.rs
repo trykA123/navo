@@ -1,34 +1,3 @@
-pub const TOKENS: [&str; 28] = [
-    "rename-token-menu-filter",
-    "rename-token-menu-empty",
-    "rename-token-name",
-    "rename-token-name-char",
-    "rename-token-name-range",
-    "rename-token-name-from",
-    "rename-token-name-count",
-    "rename-token-extension",
-    "rename-token-extension-range",
-    "rename-token-parent",
-    "rename-token-grandparent",
-    "rename-token-counter",
-    "rename-token-counter-own",
-    "rename-token-year-full",
-    "rename-token-year",
-    "rename-token-month",
-    "rename-token-day",
-    "rename-token-hour",
-    "rename-token-minute",
-    "rename-token-second",
-    "rename-token-date",
-    "rename-token-time",
-    "rename-token-upper",
-    "rename-token-lower",
-    "rename-token-first",
-    "rename-token-original",
-    "rename-token-open",
-    "rename-token-close",
-];
-
 pub const STATUS: [&str; 12] = [
     "rename-status-unchanged",
     "rename-status-excluded",
@@ -42,14 +11,6 @@ pub const STATUS: [&str; 12] = [
     "rename-status-reserved",
     "rename-status-long-path",
     "rename-status-loading",
-];
-
-pub const CASES: [&str; 5] = [
-    "rename-case-unchanged",
-    "rename-case-lower",
-    "rename-case-upper",
-    "rename-case-first",
-    "rename-case-title",
 ];
 
 pub const CLEANUP: [&str; 4] = [
@@ -70,23 +31,9 @@ pub const PRESETS: [&str; 8] = [
     "rename-presets-delete-confirm",
 ];
 
-pub const LABELS: [&str; 29] = [
+pub const LABELS: [&str; 15] = [
     "rename-title",
     "rename-presets",
-    "rename-name-mask",
-    "rename-extension-mask",
-    "rename-insert-token",
-    "rename-find",
-    "rename-replace",
-    "rename-regex",
-    "rename-match-case",
-    "rename-first-only",
-    "rename-name-only",
-    "rename-name-case",
-    "rename-extension-case",
-    "rename-counter-start",
-    "rename-counter-step",
-    "rename-counter-digits",
     "rename-column-old",
     "rename-column-new",
     "rename-column-status",
