@@ -24,8 +24,9 @@ pub use map::{MapFlavor, MapModel, MapProblem, index_map, sniff_map};
 pub use scan::{MAX_PIECES, index};
 pub use source::Source;
 pub use trace::{
-    Base, Body, CanId, Direction, Entry, Evidence, Frame, FrameKind, IdStat, Kinds, MAX_IDS,
-    Notation, Plan, TRACE_EXTENSIONS, Trace, TraceProblem, index_trace, sniff_trace,
+    Base, BlfHeader, BlfInfo, BlfPosition, Body, CanId, Direction, Entry, Evidence, Frame,
+    FrameKind, IdStat, Kinds, MAX_IDS, Notation, Plan, SystemTime, TRACE_EXTENSIONS, Trace,
+    TraceProblem, index_blf, index_trace, sniff_blf, sniff_trace,
 };
 
 pub type ReadAt<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;

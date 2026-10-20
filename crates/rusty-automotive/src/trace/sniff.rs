@@ -10,7 +10,15 @@ pub enum Evidence {
 }
 
 #[must_use]
+pub fn sniff_blf(head: &[u8]) -> bool {
+    head.starts_with(b"LOGG")
+}
+
+#[must_use]
 pub fn sniff_trace(head: &[u8]) -> Option<Evidence> {
+    if sniff_blf(head) {
+        return Some(Evidence::Header);
+    }
     let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     let complete = match head.iter().rposition(|byte| *byte == b'\n') {
         Some(end) => head.get(..end).unwrap_or_default(),

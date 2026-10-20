@@ -64,6 +64,7 @@ pub(crate) struct Block {
 
 #[derive(Debug, Clone, Default)]
 pub struct Trace {
+    pub blf: Option<super::blf::BlfInfo>,
     pub date: Option<String>,
     pub internal_events: Option<bool>,
     pub kinds: Kinds,
@@ -80,6 +81,7 @@ pub struct Trace {
     rows: u64,
     row_base: u64,
     pub(crate) blocks: Vec<Block>,
+    pub(crate) binary_blocks: Vec<super::blf::Checkpoint>,
     keys: Vec<u32>,
     lookup: HashMap<(u16, CanId), u32>,
 }
@@ -91,6 +93,31 @@ pub fn index_trace(mut source: impl BufRead, mut watch: Watch<'_>) -> Result<Tra
 }
 
 impl Trace {
+    pub(super) fn new_blf() -> Self {
+        Self {
+            blf: Some(super::blf::BlfInfo::default()),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn supports_follow(&self) -> bool {
+        self.blf.is_none()
+    }
+
+    pub(super) fn binary_row(&mut self, now: u64, frame: &super::Frame) {
+        self.row(
+            Some(now),
+            Shape::Frame(Head {
+                channel: frame.channel,
+                id: frame.id,
+                direction: frame.direction,
+                kind: frame.kind,
+                dlc: frame.dlc,
+            }),
+        );
+    }
+
     #[must_use]
     pub fn rows(&self) -> u64 {
         self.rows
@@ -152,6 +179,7 @@ impl Trace {
                 .collect();
         }
         Self {
+            blf: self.blf.clone(),
             date: self.date.clone(),
             internal_events: self.internal_events,
             kinds: self.kinds,
@@ -168,6 +196,7 @@ impl Trace {
             rows: self.rows,
             row_base: self.rows,
             blocks: Vec::new(),
+            binary_blocks: Vec::new(),
             keys: Vec::new(),
             lookup: std::mem::take(&mut self.lookup),
         }
@@ -216,6 +245,9 @@ impl Trace {
         (budget, keeps_partial): (u64, bool),
         watch: &mut Watch<'_>,
     ) -> Result<bool, IndexError> {
+        if !self.supports_follow() {
+            return Err(IndexError::Read("BLF traces do not support Follow".into()));
+        }
         let stop = self.rows.saturating_add(budget);
         let mut line = Vec::with_capacity(MAX_LINE + 2);
         let mut data = Vec::with_capacity(64);
