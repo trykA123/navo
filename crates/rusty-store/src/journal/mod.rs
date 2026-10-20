@@ -1,6 +1,9 @@
 use crate::db::{Db, DbError};
 
 mod held;
+mod undoable;
+
+pub use undoable::FinishedJob;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct JobId(pub i64);
@@ -12,6 +15,7 @@ pub enum JobState {
     Failed,
     Cancelled,
     RolledBack,
+    Undone,
     RestorePending,
 }
 
@@ -63,6 +67,9 @@ impl JournalError {
         }
     }
 }
+
+const RENAME_KIND: &str = "rename";
+const KEEP_RENAME_UNDO: u32 = 20;
 
 pub struct JobJournal {
     db: Db,
@@ -178,13 +185,17 @@ impl JobJournal {
              AND id NOT IN (
                  SELECT id FROM job WHERE state != 'running'
                  ORDER BY created_at DESC, id DESC LIMIT ?1
+             )
+             AND id NOT IN (
+                 SELECT id FROM job WHERE state = 'done' AND kind = ?2
+                 ORDER BY created_at DESC, id DESC LIMIT ?3
              )",
-            [keep_finished],
+            rusqlite::params![keep_finished, RENAME_KIND, KEEP_RENAME_UNDO],
         )?;
         Ok(u32::try_from(deleted).unwrap_or(u32::MAX))
     }
 
-    fn steps(&self, job: JobId) -> Result<Vec<JournalStep>, JournalError> {
+    pub(super) fn steps(&self, job: JobId) -> Result<Vec<JournalStep>, JournalError> {
         let mut statement = self
             .db
             .connection()
@@ -249,6 +260,7 @@ fn job_text(state: JobState) -> &'static str {
         JobState::Failed => "failed",
         JobState::Cancelled => "cancelled",
         JobState::RolledBack => "rolled_back",
+        JobState::Undone => "undone",
         JobState::RestorePending => "restore_pending",
     }
 }
