@@ -2,9 +2,10 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{Role, ScrollHandle};
 
 use super::controls::{self, Picks};
-use super::fields::{Control, FieldSpec, Look as ChoiceLook, Section};
+use super::fields::{Control, FIELDS, FieldSpec, Look as ChoiceLook, Section};
+use super::find::{Filter, Line, lines};
 use super::row_state;
-use super::steps::{first_row, rows_in};
+use super::steps::first_row;
 use super::values::{Value, Values};
 use super::{Handler, SheetEvent};
 use crate::prelude::*;
@@ -17,11 +18,14 @@ const MARKER: (f32, f32) = (3., 14.);
 const ROW_MIN: f32 = 48.;
 const NOT_APPLIED: &str = "Not applied yet";
 const SHORTCUTS: &str = "Shortcuts";
+const NO_MATCH: &str = "No setting matches";
+const DIMMED: f32 = 0.45;
 
 pub(super) struct Look<'a> {
     pub theme: &'a Theme,
     pub values: &'a Values,
     pub row: usize,
+    pub filter: &'a Filter,
     pub send: Option<Handler>,
 }
 
@@ -49,6 +53,7 @@ struct NavItem {
     label: &'static str,
     glyph: IconName,
     is_on: bool,
+    is_empty: bool,
     event: SheetEvent,
 }
 
@@ -82,6 +87,7 @@ fn nav_item(look: &Look, item: NavItem) -> AnyElement {
         .rounded(t.radii.md)
         .cursor_pointer()
         .whitespace_nowrap()
+        .when(item.is_empty, |element| element.opacity(DIMMED))
         .hover(|element| element.bg(t.colors.hover))
         .when(item.is_on, |element| {
             element
@@ -91,7 +97,8 @@ fn nav_item(look: &Look, item: NavItem) -> AnyElement {
         })
         .child(icon(item.glyph, t.spacing.icon, tint))
         .child(item.label);
-    send_on_click(element, look.send.as_ref(), item.event).into_any_element()
+    let send = look.send.as_ref().filter(|_| !item.is_empty);
+    send_on_click(element, send, item.event).into_any_element()
 }
 
 pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + use<> {
@@ -104,13 +111,19 @@ pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + u
             label: section.label(),
             glyph: section.icon(),
             is_on: current == Some(*section),
-            event: SheetEvent::Select(first_row(*section)),
+            is_empty: look.filter.first_in(*section).is_none(),
+            event: SheetEvent::Select(
+                look.filter
+                    .first_in(*section)
+                    .unwrap_or(first_row(*section)),
+            ),
         });
     let shortcuts = NavItem {
         index: Section::ALL.len(),
         label: SHORTCUTS,
         glyph: IconName::Keyboard,
         is_on: current.is_none(),
+        is_empty: false,
         event: SheetEvent::Shortcuts,
     };
     let items = sections.chain([shortcuts]).map(|item| nav_item(look, item));
@@ -310,13 +323,8 @@ fn group_heading(t: &Theme, label: &'static str) -> AnyElement {
         .into_any_element()
 }
 
-pub(super) fn content(
-    look: &Look,
-    section: Section,
-    scroll: Option<&ScrollHandle>,
-) -> impl IntoElement + use<> {
-    let t = look.theme;
-    let heading = div()
+fn section_heading(t: &Theme, section: Section) -> AnyElement {
+    div()
         .flex_none()
         .px(t.spacing.xl)
         .pt(t.spacing.lg)
@@ -324,15 +332,40 @@ pub(super) fn content(
         .text_size(t.typography.small)
         .text_color(t.colors.muted)
         .font_weight(FontWeight::SEMIBOLD)
-        .child(section.label());
-    let mut group = None;
-    let mut rows: Vec<AnyElement> = Vec::new();
-    for (index, spec) in rows_in(section) {
-        if section == Section::Display && spec.group() != group {
-            group = spec.group();
-            rows.extend(group.map(|label| group_heading(t, label)));
-        }
-        rows.push(row(look, index, spec));
+        .child(section.label())
+        .into_any_element()
+}
+
+fn no_match(t: &Theme) -> AnyElement {
+    div()
+        .id("settings-no-match")
+        .role(Role::Status)
+        .aria_label(NO_MATCH)
+        .test_support()
+        .flex_none()
+        .px(t.spacing.xl)
+        .py(t.spacing.lg)
+        .text_color(t.colors.muted)
+        .child(NO_MATCH)
+        .into_any_element()
+}
+
+pub(super) fn content(
+    look: &Look,
+    section: Section,
+    scroll: Option<&ScrollHandle>,
+) -> impl IntoElement + use<> {
+    let t = look.theme;
+    let mut rows: Vec<AnyElement> = lines(look.filter, section)
+        .into_iter()
+        .filter_map(|line| match line {
+            Line::Section(section) => Some(section_heading(t, section)),
+            Line::Group(label) => Some(group_heading(t, label)),
+            Line::Row(index) => FIELDS.get(index).map(|spec| row(look, index, spec)),
+        })
+        .collect();
+    if rows.is_empty() {
+        rows.push(no_match(t));
     }
     div()
         .id("settings-rows")
@@ -345,6 +378,5 @@ pub(super) fn content(
         .pb(t.spacing.md)
         .overflow_y_scroll()
         .when_some(scroll, |list, scroll| list.track_scroll(scroll))
-        .child(heading)
         .children(rows)
 }

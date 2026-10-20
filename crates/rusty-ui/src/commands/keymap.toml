@@ -527,6 +527,10 @@ command = "settings.undo"
 keys = ["ctrl-z"]
 
 [[bind]]
+command = "settings.find"
+keys = ["ctrl-f"]
+
+[[bind]]
 command = "settings.close"
 keys = ["escape"]
 
@@ -535,6 +539,21 @@ keys = ["escape"]
 [[bind]]
 command = "settings.cancel_edit"
 keys = ["escape"]
+
+# SettingsFind
+
+[[bind]]
+command = "settings.clear_find"
+keys = ["escape"]
+
+[[bind]]
+command = "settings.find_to_list"
+keys = ["down", "enter"]
+
+[[bind]]
+command = "settings.find_to_list"
+keys = ["down", "enter"]
+context = "SettingsFind > Input"
 
 # Shortcuts
 

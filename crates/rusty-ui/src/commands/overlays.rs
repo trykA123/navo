@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 9] = [
+pub(super) const GROUPS: [Group; 10] = [
     Group {
         context: "ContextMenu",
         commands: &[
@@ -103,6 +103,11 @@ pub(super) const GROUPS: [Group; 9] = [
             ),
             ("settings_sheet::UndoChange", "settings.undo", "Undo change"),
             (
+                "settings_sheet::FindSetting",
+                "settings.find",
+                "Find a setting",
+            ),
+            (
                 "settings_sheet::CloseSettings",
                 "settings.close",
                 "Close settings",
@@ -116,6 +121,21 @@ pub(super) const GROUPS: [Group; 9] = [
             "settings.cancel_edit",
             "Cancel edit",
         )],
+    },
+    Group {
+        context: "SettingsFind",
+        commands: &[
+            (
+                "settings_sheet::ClearFind",
+                "settings.clear_find",
+                "Clear the search",
+            ),
+            (
+                "settings_sheet::FindToList",
+                "settings.find_to_list",
+                "Back to the list",
+            ),
+        ],
     },
     Group {
         context: "Shortcuts",

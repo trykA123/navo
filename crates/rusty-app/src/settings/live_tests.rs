@@ -65,13 +65,14 @@ fn applied(news: SettingsNews) -> Values {
     match news {
         SettingsNews::Applied { values, .. } => values,
         SettingsNews::Invalid(message) => panic!("expected values, got: {message}"),
+        SettingsNews::Defaults(_) => panic!("expected values, got a defaults notice"),
     }
 }
 
 fn invalid(news: SettingsNews) -> String {
     match news {
         SettingsNews::Invalid(message) => message,
-        SettingsNews::Applied { .. } => panic!("expected an error"),
+        SettingsNews::Applied { .. } | SettingsNews::Defaults(_) => panic!("expected an error"),
     }
 }
 

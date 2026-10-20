@@ -29,7 +29,7 @@ use crate::tokens_page;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
-    display_window, hint_windows, job_windows, parts_element, parts_windows, sheet_windows,
+    hint_windows, job_windows, parts_element, parts_windows, settings_windows, sheet_windows,
     window_element,
 };
 use crate::{pdf_sample, rich_sample, viewer_sample};
@@ -99,7 +99,7 @@ pub struct Gallery {
     job_windows: [Entity<WindowPage>; 4],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
-    display_window: Entity<WindowPage>,
+    settings_windows: [Entity<WindowPage>; 3],
     hint_windows: [Entity<WindowPage>; 4],
     crash_window: Entity<WindowPage>,
     parts_windows: [Entity<WindowPage>; 3],
@@ -152,7 +152,7 @@ impl Gallery {
             job_windows: job_windows(cx),
             menu_window: cx.new(WindowPage::with_menu),
             sheet_windows: sheet_windows(window, cx),
-            display_window: display_window(cx),
+            settings_windows: settings_windows(window, cx),
             hint_windows: hint_windows(cx),
             crash_window: cx.new(WindowPage::with_crash),
             parts_windows: parts_windows(cx),
@@ -316,8 +316,12 @@ impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let root = root(&t);
-        if self.page == Page::SettingsDisplay {
-            return root.child(self.display_window.clone());
+        let [display, upgrade, find] = &self.settings_windows;
+        match self.page {
+            Page::SettingsDisplay => return root.child(display.clone()),
+            Page::SettingsUpgrade => return root.child(upgrade.clone()),
+            Page::SettingsFind => return root.child(find.clone()),
+            _ => {}
         }
         if let Some(page) = self.window_page() {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);

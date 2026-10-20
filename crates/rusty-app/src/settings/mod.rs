@@ -50,6 +50,10 @@ pub fn watched(
     on_news: impl FnMut(SettingsNews) + Send + 'static,
 ) -> (SettingsHooks, Option<Watch>) {
     let late = loaded.as_mut().and_then(|loaded| loaded.late.take());
+    let changes = loaded
+        .as_mut()
+        .map(|loaded| std::mem::take(&mut loaded.default_changes))
+        .unwrap_or_default();
     let (hooks, shared) = parts(loaded);
     let Some((path, store)) = shared else {
         return (hooks, None);
@@ -61,6 +65,7 @@ pub fn watched(
         reload::deliver(&watched);
     });
     reload::deliver(&reloader);
+    reload::announce(&reloader, &changes);
     reload::receive_late(late, reloader);
     if watching.is_none() {
         tracing::warn!(
@@ -233,6 +238,8 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
 
 #[cfg(test)]
 mod live_tests;
+#[cfg(test)]
+mod notice_tests;
 #[cfg(test)]
 mod start_tests;
 #[cfg(test)]
