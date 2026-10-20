@@ -27,7 +27,7 @@ pub(crate) use row::highlight_ranges;
 use super::query::Query;
 use super::results::Row;
 use super::selection::Selection;
-use super::source::ArgKind;
+use crate::commands::ArgKind;
 use crate::primitives::{
     IconName, Kbd, ListScroll, RowSemantics, TextFieldState, VirtualList, icon, text_field_state,
 };

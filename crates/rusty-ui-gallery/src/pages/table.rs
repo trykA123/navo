@@ -9,7 +9,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 86] = [
+pub const PAGES: [PageInfo; 87] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -284,6 +284,7 @@ pub const PAGES: [PageInfo; 86] = [
     ),
     info(Page::MouseMarks, "Mouse marks", "p36-k5-mouse-marks", false),
     info(Page::FileKinds, "File types", "p36-file-kinds", false),
+    info(Page::Columns, "Columns", "p38-columns", false),
     info(Page::CommandCenter, "Command center", "p40-a7-mixed", false),
     info(
         Page::CommandCenterRecent,

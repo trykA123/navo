@@ -8,7 +8,8 @@ use rusty_l10n::{t, tr};
 
 use super::super::query::{Query, Scope};
 use super::super::results::Row;
-use super::super::source::{ArgKind, Group, Hit, Target};
+use super::super::source::{Group, Hit, Target};
+use crate::commands::ArgKind;
 use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::Theme;
 
