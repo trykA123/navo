@@ -5,12 +5,7 @@ use gpui_kit::SharedString;
 use rusty_core::{Command, Location};
 
 use super::query::{Query, Scope};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ArgKind {
-    Path,
-    Text,
-}
+use crate::commands::ArgKind;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Group {

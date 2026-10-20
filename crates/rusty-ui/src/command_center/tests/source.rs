@@ -3,8 +3,10 @@ use std::thread;
 
 use rusty_core::{Command, Location};
 
+use crate::commands::ArgKind;
+
 use crate::command_center::{
-    ArgKind, Cancel, Group, Hit, HitSink, Query, Request, ResultSource, Scope, Scopes, Target,
+    Cancel, Group, Hit, HitSink, Query, Request, ResultSource, Scope, Scopes, Target,
 };
 
 fn hit(title: &str) -> Hit {

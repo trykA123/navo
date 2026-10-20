@@ -6660,6 +6660,7 @@ dependencies = [
  "rusty-cache",
  "rusty-core",
  "rusty-fs",
+ "rusty-index",
  "rusty-l10n",
  "rusty-pdf",
  "rusty-structured",
