@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::space::{Block, Kind, Region};
+use crate::space::{Kind, Region};
 
 use super::Scale;
 
@@ -38,23 +38,42 @@ struct Piece {
 
 #[must_use]
 pub fn cells(region: &Region, scale: &Scale, width_px: u32) -> Vec<Cell> {
+    let spans = region.blocks.iter().map(|block| Span {
+        at: 0,
+        range: block.start..block.start.saturating_add(block.size),
+        kind: block.kind,
+    });
+    merged(
+        spans.enumerate().map(|(at, span)| Span { at, ..span }),
+        scale,
+        width_px,
+    )
+}
+
+pub(super) struct Span {
+    pub at: usize,
+    pub range: Range<u64>,
+    pub kind: Kind,
+}
+
+pub(super) fn merged(spans: impl Iterator<Item = Span>, scale: &Scale, width_px: u32) -> Vec<Cell> {
     if width_px == 0 {
         return Vec::new();
     }
     let domain = scale.domain();
     let mut out: Vec<Open> = Vec::new();
-    for (at, block) in region.blocks.iter().enumerate() {
-        if block.start >= domain.end {
+    for span in spans {
+        if span.range.start >= domain.end {
             break;
         }
-        let Some(span) = clip(block, &domain) else {
+        let Some(clipped) = clip(&span.range, &domain) else {
             continue;
         };
-        let (columns, narrow) = columns(scale, &span, width_px);
+        let (columns, narrow) = columns(scale, &clipped, width_px);
         let piece = Piece {
-            at,
-            kind: block.kind,
-            bytes: span.end - span.start,
+            at: span.at,
+            kind: span.kind,
+            bytes: clipped.end - clipped.start,
             columns,
             narrow,
         };
@@ -63,9 +82,9 @@ pub fn cells(region: &Region, scale: &Scale, width_px: u32) -> Vec<Cell> {
     out.into_iter().map(Open::finish).collect()
 }
 
-fn clip(block: &Block, domain: &Range<u64>) -> Option<Range<u64>> {
-    let start = block.start.max(domain.start);
-    let end = block.start.saturating_add(block.size).min(domain.end);
+fn clip(range: &Range<u64>, domain: &Range<u64>) -> Option<Range<u64>> {
+    let start = range.start.max(domain.start);
+    let end = range.end.min(domain.end);
     (end > start).then_some(start..end)
 }
 

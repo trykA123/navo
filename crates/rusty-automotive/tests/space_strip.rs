@@ -4,7 +4,8 @@ use std::time::Instant;
 
 use proptest::prelude::*;
 use rusty_automotive::space::{
-    Block, Kind, OwnerRef, Region, RegionSource, Scale, ScaleMode, cells,
+    Block, Kind, NameRef, Owner, OwnerRef, Owners, Region, RegionSource, Scale, ScaleMode, cells,
+    inner,
 };
 
 fn region(total: Option<u64>, blocks: &[(u64, u64, Kind)]) -> Region {
@@ -292,4 +293,155 @@ fn space_strip_cells_for_1600_px_stay_in_budget() {
         elapsed.as_millis() < 5,
         "strip cells took {elapsed:?} for 5000 blocks"
     );
+}
+
+fn owners_of(items: &[(u64, u64, Kind)]) -> Owners {
+    let mut owners = Owners::default();
+    owners.items = items
+        .iter()
+        .enumerate()
+        .map(|(at, &(start, size, kind))| Owner {
+            start,
+            size,
+            name: NameRef::Symbol(at as u32),
+            kind,
+            section: 0,
+            object: None,
+            source_file: None,
+            estimated: false,
+            image: false,
+        })
+        .collect();
+    owners
+}
+
+fn block(start: u64, size: u64) -> Block {
+    Block {
+        start,
+        size,
+        kind: Kind::Code,
+        owner: OwnerRef::ElfSection(0),
+    }
+}
+
+#[test]
+fn space_strip_inner_cells_split_a_wide_block_by_owner() {
+    let owners = owners_of(&[
+        (0, 400, Kind::Code),
+        (400, 300, Kind::Rodata),
+        (700, 300, Kind::Code),
+    ]);
+    let whole = block(0, 1000);
+    let region = region(Some(1000), &[(0, 1000, Kind::Code)]);
+    let found = inner(&owners, &whole, &true_scale(&region), 200);
+    let edges: Vec<(u32, u32)> = found.iter().map(|cell| (cell.x0, cell.x1)).collect();
+    assert_eq!(edges, [(0, 80), (80, 140), (140, 200)]);
+    let kinds: Vec<Kind> = found.iter().map(|cell| cell.kind).collect();
+    assert_eq!(kinds, [Kind::Code, Kind::Rodata, Kind::Code]);
+    assert_eq!(found[1].blocks, 1..2);
+    assert_eq!(found[1].bytes, 300);
+}
+
+#[test]
+fn space_strip_inner_cells_stay_inside_the_block() {
+    let owners = owners_of(&[
+        (0, 100, Kind::Code),
+        (100, 400, Kind::Data),
+        (500, 400, Kind::Bss),
+        (900, 100, Kind::Code),
+    ]);
+    let region = region(Some(1000), &[(100, 800, Kind::Data)]);
+    let found = inner(&owners, &block(100, 800), &true_scale(&region), 100);
+    assert_eq!(found.len(), 2);
+    assert_eq!(found[0].blocks, 1..2);
+    assert_eq!(found[1].blocks, 2..3);
+    assert_eq!((found[0].x0, found[1].x1), (10, 90));
+}
+
+#[test]
+fn space_strip_inner_cells_clip_an_owner_that_runs_past_the_block() {
+    let owners = owners_of(&[(0, 300, Kind::Code), (300, 900, Kind::Data)]);
+    let region = region(Some(1000), &[(0, 600, Kind::Code)]);
+    let found = inner(&owners, &block(0, 600), &true_scale(&region), 200);
+    assert_eq!(found.iter().map(|cell| cell.bytes).sum::<u64>(), 600);
+    assert_eq!(found[1].bytes, 300);
+}
+
+#[test]
+fn space_strip_inner_needs_a_block_wider_than_64_px() {
+    let owners = owners_of(&[(0, 500, Kind::Code), (500, 500, Kind::Data)]);
+    let region = region(Some(1000), &[(0, 1000, Kind::Code)]);
+    let scale = true_scale(&region);
+    assert!(inner(&owners, &block(0, 1000), &scale, 64).is_empty());
+    assert_eq!(inner(&owners, &block(0, 1000), &scale, 65).len(), 2);
+}
+
+#[test]
+fn space_strip_inner_skips_a_block_with_one_owner() {
+    let owners = owners_of(&[(0, 1000, Kind::Code)]);
+    let region = region(Some(1000), &[(0, 1000, Kind::Code)]);
+    assert!(inner(&owners, &block(0, 1000), &true_scale(&region), 800).is_empty());
+    assert!(
+        inner(
+            &Owners::default(),
+            &block(0, 1000),
+            &true_scale(&region),
+            800
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn space_strip_inner_merges_sub_pixel_owners_with_dominant_kind() {
+    let items: Vec<_> = (0..1000_u64)
+        .map(|at| {
+            (
+                at * 10,
+                10,
+                if at % 4 == 0 {
+                    Kind::Rodata
+                } else {
+                    Kind::Code
+                },
+            )
+        })
+        .collect();
+    let owners = owners_of(&items);
+    let region = region(Some(10_000), &[(0, 10_000, Kind::Code)]);
+    let found = inner(&owners, &block(0, 10_000), &true_scale(&region), 100);
+    assert_eq!(found.len(), 100);
+    assert!(
+        found
+            .iter()
+            .all(|cell| (9..=11).contains(&cell.blocks.len()) && cell.kind == Kind::Code)
+    );
+    assert_eq!(found.iter().map(|cell| cell.bytes).sum::<u64>(), 10_000);
+    assert!(found.windows(2).all(|pair| pair[0].x1 <= pair[1].x0));
+}
+
+#[test]
+fn space_strip_inner_keeps_one_pixel_for_tiny_owners() {
+    let owners = owners_of(&[
+        (0, 5000, Kind::Code),
+        (5000, 1, Kind::Data),
+        (5001, 4999, Kind::Code),
+    ]);
+    let region = region(Some(10_000), &[(0, 10_000, Kind::Code)]);
+    let found = inner(&owners, &block(0, 10_000), &true_scale(&region), 400);
+    assert_eq!(found.len(), 3);
+    assert_eq!(found[1].kind, Kind::Data);
+    assert!(found.iter().all(|cell| cell.x1 - cell.x0 >= 1));
+}
+
+#[test]
+fn space_strip_inner_follows_the_zoom_view() {
+    let owners = owners_of(&[(0, 500, Kind::Code), (500, 500, Kind::Data)]);
+    let region = region(Some(1000), &[(0, 1000, Kind::Code)]);
+    let scale = Scale::new(&region, ScaleMode::True, Some(250..750));
+    let found = inner(&owners, &block(0, 1000), &scale, 100);
+    assert_eq!(found.len(), 2);
+    assert_eq!((found[0].x0, found[0].x1), (0, 50));
+    assert_eq!(found[0].bytes, 250);
+    assert_eq!((found[1].x0, found[1].x1), (50, 100));
 }
