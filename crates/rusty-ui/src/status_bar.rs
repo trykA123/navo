@@ -150,6 +150,10 @@ impl StatusBar {
     }
 }
 
+fn marked_part(marked: String, more: bool) -> String {
+    if more { format!("{marked} ·") } else { marked }
+}
+
 fn notice_text(t: &tokens::Theme, notice: StatusNotice) -> impl IntoElement {
     let color = if notice.is_error {
         t.colors.mark
@@ -172,9 +176,11 @@ impl RenderOnce for StatusBar {
         let parts = self.parts;
         let text = props.text_in(parts);
         let label = match &self.notice {
+            Some(notice) if text.is_empty() => notice.text.to_string(),
             Some(notice) => format!("{} · {}", notice.text, text),
             None => text,
         };
+        let more = parts.contents || props.mark.text().is_some() || parts.free_space;
         div()
             .id(self.id)
             .role(Role::Status)
@@ -199,7 +205,7 @@ impl RenderOnce for StatusBar {
                             .flex_none()
                             .text_color(c.mark)
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(format!("{marked} ·")),
+                            .child(marked_part(marked, more)),
                     )
                 },
             )
@@ -225,15 +231,17 @@ mod tests {
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{Context, IntoElement, Render, Role, TestAppContext, Window};
 
-    use super::{FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice};
+    use super::{FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice, marked_part};
     use crate::format;
     use crate::test_window::open;
 
-    struct Status(StatusBarProps, Option<StatusNotice>);
+    struct Status(StatusBarProps, Option<StatusNotice>, FooterParts);
 
     impl Render for Status {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            StatusBar::new("status", self.0).notice(self.1.clone())
+            StatusBar::new("status", self.0)
+                .notice(self.1.clone())
+                .parts(self.2)
         }
     }
 
@@ -246,7 +254,16 @@ mod tests {
         notice: Option<StatusNotice>,
         cx: &mut TestAppContext,
     ) -> Option<String> {
-        let (window, _) = open(cx, move |_, _| Status(props, notice));
+        label_in(props, notice, FooterParts::default(), cx)
+    }
+
+    fn label_in(
+        props: StatusBarProps,
+        notice: Option<StatusNotice>,
+        parts: FooterParts,
+        cx: &mut TestAppContext,
+    ) -> Option<String> {
+        let (window, _) = open(cx, move |_, _| Status(props, notice, parts));
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
             let status = window.find("status");
@@ -401,5 +418,24 @@ mod tests {
             is_error: true,
         };
         assert!(!quiet.notice(Some(notice)).is_empty());
+    }
+
+    #[gpui_kit::test]
+    fn a_notice_alone_has_no_dangling_separator(cx: &mut TestAppContext) {
+        let notice = StatusNotice {
+            text: "disk full".into(),
+            is_error: true,
+        };
+        let props = busy_props(ListingMark::Fresh);
+        assert_eq!(
+            label_in(props, Some(notice), none(), cx).as_deref(),
+            Some("disk full")
+        );
+    }
+
+    #[test]
+    fn marked_totals_alone_end_without_a_separator() {
+        assert_eq!(marked_part("2 marked".into(), false), "2 marked");
+        assert_eq!(marked_part("2 marked".into(), true), "2 marked ·");
     }
 }
