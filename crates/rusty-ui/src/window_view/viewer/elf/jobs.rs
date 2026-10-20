@@ -50,8 +50,9 @@ pub(super) fn start_index(host: &Host, len: u64, cx: &mut Context<ElfView>) -> J
             };
             let reader = ElfReader::new(Source::new(read, len));
             let parsed = reader.parse(&mut watch).and_then(|elf| {
-                let rows = select(&elf, &Query::default(), cancel).ok_or(IndexError::Cancelled)?;
-                Ok((Arc::new(elf), rows))
+                let selection =
+                    select(&elf, &Query::default(), cancel).ok_or(IndexError::Cancelled)?;
+                Ok((Arc::new(elf), selection.rows))
             });
             let elf = parsed.as_ref().ok().map(|(elf, _)| elf.clone());
             send(IndexMessage::Parsed(parsed));
@@ -107,7 +108,8 @@ impl ElfView {
         self.selecting = Some(spawn_job(
             cx,
             move |cancel, send| {
-                if let Some(rows) = select(&elf, &query, cancel) {
+                if let Some(selection) = select(&elf, &query, cancel) {
+                    let rows = selection.rows;
                     send(Selected { query, rows });
                 }
             },

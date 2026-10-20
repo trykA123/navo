@@ -32,6 +32,7 @@ pub struct Named {
     pub kind: u8,
     pub bind: u8,
     pub part: Option<usize>,
+    pub is_absolute: bool,
 }
 
 #[derive(Clone)]
@@ -90,6 +91,7 @@ pub fn func(name: &str, value: u64, size: u64, part: usize) -> Named {
         kind: elf::STT_FUNC,
         bind: elf::STB_GLOBAL,
         part: Some(part),
+        is_absolute: false,
     }
 }
 
@@ -97,6 +99,15 @@ pub fn object(name: &str, value: u64, size: u64, part: usize) -> Named {
     Named {
         kind: elf::STT_OBJECT,
         ..func(name, value, size, part)
+    }
+}
+
+pub fn absolute(name: &str, value: u64) -> Named {
+    Named {
+        kind: elf::STT_NOTYPE,
+        part: None,
+        is_absolute: true,
+        ..func(name, value, 0, 0)
     }
 }
 
@@ -291,7 +302,7 @@ fn write_symbols(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) {
                     .map(|part| part.1),
                 st_info: (symbol.bind << 4) | symbol.kind,
                 st_other: 0,
-                st_shndx: 0,
+                st_shndx: if symbol.is_absolute { elf::SHN_ABS } else { 0 },
                 st_value: symbol.value,
                 st_size: symbol.size,
             });

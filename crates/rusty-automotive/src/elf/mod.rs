@@ -14,7 +14,7 @@ use object::ReadCache;
 use object::read::ReadCacheOps;
 
 pub use lines::{Lines, SourceLine};
-pub use query::{Column, Order, Query, Scope, select};
+pub use query::{Column, Order, Query, Scope, Selection, estimated_size, select};
 
 use crate::{IndexError, Watch};
 
