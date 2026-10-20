@@ -21,6 +21,7 @@ pub struct Settings {
     pub markdown: MarkdownViewer,
     pub preview: PreviewViewer,
     pub copy: CopySettings,
+    pub search: Search,
     pub automotive: Automotive,
     pub experimental: BTreeMap<String, bool>,
 }
@@ -169,4 +170,43 @@ impl Default for Terminal {
 pub struct Editor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct Search {
+    pub index: SearchIndex,
+    pub drives: Vec<String>,
+    pub walk_roots: Vec<String>,
+    pub exclude: Vec<String>,
+    pub network: bool,
+    pub removable: bool,
+    pub remember: bool,
+}
+
+impl Default for Search {
+    fn default() -> Self {
+        Self {
+            index: SearchIndex::default(),
+            drives: Vec::new(),
+            walk_roots: Vec::new(),
+            exclude: vec![
+                "$Recycle.Bin".to_owned(),
+                "System Volume Information".to_owned(),
+            ],
+            network: false,
+            removable: false,
+            remember: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SearchIndex {
+    #[default]
+    Auto,
+    Service,
+    Walk,
+    Off,
 }

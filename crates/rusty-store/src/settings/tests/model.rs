@@ -205,3 +205,79 @@ fn the_preview_sheet_shows_type_bars_and_largest_files_by_default() {
     assert!(unknown.is_empty(), "{unknown:?}");
     assert!(settings.preview.view.type_bars && !settings.preview.view.largest_files);
 }
+
+#[test]
+fn search_defaults() {
+    let search = Settings::default().search;
+    assert_eq!(search.index, SearchIndex::Auto);
+    assert!(search.drives.is_empty());
+    assert!(search.walk_roots.is_empty());
+    assert_eq!(
+        search.exclude,
+        ["$Recycle.Bin", "System Volume Information"]
+    );
+    assert!(!search.network && !search.removable);
+    assert!(search.remember);
+}
+
+#[test]
+fn search_settings_parse_and_round_trip() {
+    for (name, index) in [
+        ("auto", SearchIndex::Auto),
+        ("service", SearchIndex::Service),
+        ("walk", SearchIndex::Walk),
+        ("off", SearchIndex::Off),
+    ] {
+        let text = format!(
+            r#"[search]
+index = "{name}"
+drives = ['C:', 'D:']
+walk-roots = ['C:\Users\admin']
+exclude = ['cache']
+network = true
+removable = true
+remember = false
+"#
+        );
+        let (settings, unknown) = parse(&text).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        assert_eq!(settings.search.index, index);
+        assert_eq!(settings.search.drives, ["C:", "D:"]);
+        assert_eq!(settings.search.walk_roots, [r"C:\Users\admin"]);
+        assert_eq!(settings.search.exclude, ["cache"]);
+        assert!(settings.search.network && settings.search.removable);
+        assert!(!settings.search.remember);
+        assert_eq!(parse(&to_toml(&settings)).unwrap().0, settings);
+    }
+}
+
+#[test]
+fn invalid_search_values_keep_defaults_and_report_the_error() {
+    for value in [
+        "index = 'turbo'",
+        "index = false",
+        "drives = ['C:', 1]",
+        "walk-roots = false",
+        "exclude = [1]",
+        "network = 'yes'",
+        "removable = 1",
+        "remember = []",
+    ] {
+        let dir = tmp();
+        let path = settings_file(&dir);
+        write(&path, &format!("[search]\n{value}\n"));
+        let (store, report) = SettingsStore::load(&path);
+        assert_eq!(store.current().search, Search::default());
+        assert!(
+            matches!(report.error, Some(SettingsError::Invalid { line: 2, .. })),
+            "{report:?}"
+        );
+    }
+}
+
+#[test]
+fn unknown_search_keys_follow_the_existing_warning_path() {
+    let (settings, unknown) = parse("[search]\nremember = false\nfuture = true\n").unwrap();
+    assert!(!settings.search.remember);
+    assert_eq!(unknown, ["search.future"]);
+}

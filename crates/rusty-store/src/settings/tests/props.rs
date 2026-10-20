@@ -206,6 +206,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 preview,
                 copy,
                 automotive,
+                search: Search::default(),
                 experimental,
             },
         )

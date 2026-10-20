@@ -61,6 +61,15 @@ largest-files = true
 [copy]
 mode = "auto"
 
+[search]
+index = "auto"
+drives = []
+walk-roots = []
+exclude = ["$Recycle.Bin", "System Volume Information"]
+network = false
+removable = false
+remember = true
+
 [automotive.view]
 preset = "simple"
 inspector = false
