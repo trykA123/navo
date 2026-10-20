@@ -327,6 +327,10 @@ impl ProviderOps for Hooked<'_> {
         self.fs.remove_file(location)
     }
 
+    fn make_link(&self, target_of: &Location, at: &Location) -> Result<(), FsError> {
+        self.fs.make_link(target_of, at)
+    }
+
     fn remove_link(&self, location: &Location) -> Result<(), FsError> {
         self.fs.remove_link(location)
     }

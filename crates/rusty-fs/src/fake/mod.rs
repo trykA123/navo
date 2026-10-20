@@ -45,6 +45,7 @@ pub struct FakeFs {
     faults: Mutex<HashMap<CallKey, Vec<(u32, Fault)>>>,
     calls: Mutex<HashMap<CallKey, u32>>,
     recycled: Mutex<Vec<String>>,
+    links: Mutex<HashMap<String, String>>,
     volumes: Mutex<HashMap<String, Option<u64>>>,
     batch_size: usize,
     watchable: bool,
@@ -77,6 +78,7 @@ impl FakeFs {
             faults: Mutex::new(HashMap::new()),
             calls: Mutex::new(HashMap::new()),
             recycled: Mutex::new(Vec::new()),
+            links: Mutex::new(HashMap::new()),
             volumes: Mutex::new(HashMap::new()),
             batch_size: DEFAULT_BATCH,
             watchable: false,
@@ -134,6 +136,7 @@ impl FakeFs {
 
     pub fn remove(&self, path: &str) {
         self.tree().remove(path);
+        lock(&self.links).remove(normalize(path));
         self.changed(path, WatchChange::Removed);
     }
 
@@ -185,6 +188,30 @@ impl FakeFs {
     #[must_use]
     pub fn recycled(&self) -> Vec<String> {
         lock(&self.recycled).clone()
+    }
+
+    #[must_use]
+    pub fn link_target(&self, path: &str) -> Option<String> {
+        let path = normalize(path);
+        let entry = self.tree().metadata(path)?;
+        if entry.kind != crate::EntryKind::Link {
+            return None;
+        }
+        lock(&self.links).get(path).cloned()
+    }
+
+    fn move_links(&self, from: &str, to: &str) {
+        let mut links = lock(&self.links);
+        let moved: Vec<String> = links
+            .keys()
+            .filter(|path| path.as_str() == from || path.starts_with(&format!("{from}/")))
+            .cloned()
+            .collect();
+        for path in moved {
+            if let Some(target) = links.remove(&path) {
+                links.insert(format!("{to}{}", &path[from.len()..]), target);
+            }
+        }
     }
 
     fn tree(&self) -> MutexGuard<'_, Tree> {

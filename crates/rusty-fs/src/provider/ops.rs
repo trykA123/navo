@@ -1,4 +1,4 @@
-use rusty_core::{FsError, Location};
+use rusty_core::{FsError, FsErrorKind, Location};
 
 use super::{CancelToken, Provider};
 
@@ -22,6 +22,15 @@ pub trait ProviderOps: Provider {
     fn remove_link(&self, location: &Location) -> Result<(), FsError>;
     fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError>;
     fn recycle(&self, location: &Location) -> Result<(), FsError>;
+    fn make_link(&self, _target_of: &Location, at: &Location) -> Result<(), FsError> {
+        Err(FsError {
+            location: Some(at.clone()),
+            ..FsError::new(FsErrorKind::NotSupportedYet)
+        })
+    }
+    fn link_target(&self, _at: &Location) -> Result<Option<Location>, FsError> {
+        Ok(None)
+    }
     fn volume_serial(&self, _location: &Location) -> Result<Option<u64>, FsError> {
         Ok(None)
     }

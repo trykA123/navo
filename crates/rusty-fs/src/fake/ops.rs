@@ -2,7 +2,9 @@ use rusty_core::{FsError, FsErrorKind, Location};
 
 use super::tree::{Tree, fold_text, split_last};
 use super::{FakeFs, FakeOp, Fault, error, lock};
-use crate::{ALREADY_EXISTS_CODES, CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange};
+use crate::{
+    ALREADY_EXISTS_CODES, Attributes, CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange,
+};
 
 const CHUNK: u64 = 4096;
 const DEFAULT_VOLUME: u64 = 1;
@@ -62,6 +64,7 @@ impl FakeFs {
         }
         tree.remove(&path);
         drop(tree);
+        lock(&self.links).remove(&path);
         self.changed(&path, WatchChange::Removed);
         Ok(())
     }
@@ -184,6 +187,7 @@ impl ProviderOps for FakeFs {
         }
         tree.move_node(&from, &to);
         drop(tree);
+        self.move_links(&from, &to);
         self.moved(&from, &to);
         Ok(())
     }
@@ -225,6 +229,37 @@ impl ProviderOps for FakeFs {
 
     fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError> {
         self.remove_kind(location, EntryKind::Folder)
+    }
+
+    fn make_link(&self, target_of: &Location, at: &Location) -> Result<(), FsError> {
+        let path = self.write_call(at, FakeOp::Create)?;
+        let target = self.own_path(target_of)?;
+        let mut tree = self.tree();
+        if tree.metadata(&path).is_some() {
+            return Err(already_exists_error(at));
+        }
+        vacant(&tree, &path).map_err(|k| error(k, at))?;
+        let (parent, name) =
+            split_last(&path).ok_or_else(|| error(FsErrorKind::NameInvalid, at))?;
+        tree.insert(
+            parent,
+            FsEntry {
+                name,
+                kind: EntryKind::Link,
+                size: 0,
+                modified_ms: None,
+                attributes: Attributes::default(),
+            },
+        );
+        drop(tree);
+        lock(&self.links).insert(path.clone(), target);
+        self.changed(&path, WatchChange::Created);
+        Ok(())
+    }
+
+    fn link_target(&self, at: &Location) -> Result<Option<Location>, FsError> {
+        let path = self.own_path(at)?;
+        Ok(FakeFs::link_target(self, &path).map(|target| self.location(&target)))
     }
 
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {

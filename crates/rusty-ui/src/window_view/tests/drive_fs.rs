@@ -63,6 +63,13 @@ impl DriveFs {
         self.fake.location(text.trim_end_matches('/'))
     }
 
+    fn from_fake(location: &Location) -> Location {
+        let text = location.path().to_text();
+        let text = text.trim_start_matches('/');
+        let (drive, rest) = text.split_once('/').unwrap_or((text, ""));
+        local(&format!("{drive}:\\{}", rest.replace('/', "\\")))
+    }
+
     fn wait_if_slow(&self, folder: &Location, cancel: &CancelToken) {
         let path = self.fake(folder).path().to_text();
         if self.slow.as_deref() != Some(path.as_str()) {
@@ -147,6 +154,15 @@ impl ProviderOps for DriveFs {
 
     fn recycle(&self, location: &Location) -> Result<(), FsError> {
         self.fake.recycle(&self.fake(location))
+    }
+
+    fn make_link(&self, target_of: &Location, at: &Location) -> Result<(), FsError> {
+        self.fake.make_link(&self.fake(target_of), &self.fake(at))
+    }
+
+    fn link_target(&self, at: &Location) -> Result<Option<Location>, FsError> {
+        let found = ProviderOps::link_target(&self.fake, &self.fake(at))?;
+        Ok(found.map(|found| Self::from_fake(&found)))
     }
 }
 

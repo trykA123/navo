@@ -13,6 +13,7 @@ mod copy_windows;
 mod errors;
 mod hostile;
 mod kept_aside;
+mod links;
 mod listing;
 mod metadata;
 #[cfg(windows)]

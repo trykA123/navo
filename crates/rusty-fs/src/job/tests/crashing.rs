@@ -193,6 +193,11 @@ impl ProviderOps for Crashing<'_> {
         self.fs.recycle(location)
     }
 
+    fn make_link(&self, target_of: &Location, at: &Location) -> Result<(), FsError> {
+        self.enter(at, FakeOp::Create)?;
+        self.fs.make_link(target_of, at)
+    }
+
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         self.fs.volume_serial(location)
     }
