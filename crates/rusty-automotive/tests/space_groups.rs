@@ -9,8 +9,8 @@ use object::elf as raw;
 use rusty_automotive::mdf::{RegionTable, parse_mdf};
 use rusty_automotive::space::{
     Group, GroupBy, Grouping, Kind, NOT_ATTRIBUTED, OTHER, Origin, Region, Regions, TOP_GROUPS,
-    available, default_grouping, flash_region, group, owners, owners_of_map, regions_for_elf,
-    regions_for_map, top,
+    available, default_grouping, flash_region, group, lit_blocks, owners, owners_of_map,
+    regions_for_elf, regions_for_map, top,
 };
 use rusty_automotive::{Elf, MapModel, index_map};
 
@@ -194,6 +194,42 @@ fn space_groups_per_function_sections_name_the_module_without_the_kind_part() {
     assert_eq!(
         pairs(&groups),
         [("Lamp", 0x40), (OTHER, 0x20), ("Com", 0x20)]
+    );
+}
+
+#[test]
+fn space_groups_lit_blocks_mark_only_blocks_holding_the_group() {
+    let elf = elf_of(
+        vec![
+            text(ROM, 0x100),
+            Part {
+                name: ".rodata",
+                flags: 2,
+                ..data(ROM + 0x100, 0x20)
+            },
+        ],
+        Some(vec![func("Lamp_Read", ROM, 0x40, 0)]),
+        vec![(0, LOAD_RX)],
+    );
+    let found = owners(&elf, None, None);
+    let regions = regions_for_elf(&elf, Some(&table()));
+    let region = region_named(&regions, "pflash");
+    let origin = Origin::Elf {
+        elf: &elf,
+        map: None,
+    };
+    let by = by(Grouping::Section);
+    assert_eq!(
+        lit_blocks(&found, origin, region, (&by, ".RODATA")),
+        [false, true]
+    );
+    let by_module = GroupBy {
+        grouping: Grouping::Module,
+        modules: &[],
+    };
+    assert_eq!(
+        lit_blocks(&found, origin, region, (&by_module, "Lamp")),
+        [true, false]
     );
 }
 

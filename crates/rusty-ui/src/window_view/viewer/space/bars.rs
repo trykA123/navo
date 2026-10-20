@@ -1,7 +1,7 @@
 mod file;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{RenderOnce, Role, relative};
+use gpui_kit::{RenderOnce, Role, pattern_slash, relative};
 use rusty_automotive::space::{Kind, Region};
 use rusty_l10n::{t, tr};
 
@@ -82,6 +82,16 @@ pub(super) fn segment(share: f64, color: Hsla) -> Div {
         .bg(color)
 }
 
+fn hatch(t: &Theme) -> Div {
+    div()
+        .size_full()
+        .bg(pattern_slash(t.mem.fill.strong, 1., 3.))
+}
+
+fn fill_segment(t: &Theme, share: f64) -> Div {
+    segment(share, t.mem.fill.tint).child(hatch(t))
+}
+
 #[derive(IntoElement)]
 pub struct UsageBar {
     id: ElementId,
@@ -128,7 +138,7 @@ impl RenderOnce for UsageBar {
                 bar.child(segment(region.by_kind[index] as f64 / whole, color))
             });
         if fill > 0 {
-            used.child(segment(fill as f64 / whole, t.mem.fill.tint))
+            used.child(fill_segment(&t, fill as f64 / whole))
         } else {
             used
         }
@@ -245,16 +255,20 @@ const KIND_TEXTS: [&str; 6] = [
 impl RenderOnce for Legend {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let entry = |color: Hsla, outlined: bool, text: &str| {
+        let entry = |dot: Div, text: &str| {
             div()
                 .flex()
                 .items_center()
                 .gap(t.spacing.xs)
-                .child(swatch(&t, color, outlined))
+                .child(dot)
                 .child(tr(text))
         };
-        let kinds = (0..SHOWN_KINDS)
-            .map(|index| entry(kind_colours(&t, index).strong, false, KIND_TEXTS[index]));
+        let kinds = (0..SHOWN_KINDS).map(|index| {
+            entry(
+                swatch(&t, kind_colours(&t, index).strong, false),
+                KIND_TEXTS[index],
+            )
+        });
         div()
             .id("space-legend")
             .flex()
@@ -266,9 +280,12 @@ impl RenderOnce for Legend {
             .text_color(t.colors.muted)
             .children(kinds)
             .when(self.fill, |row| {
-                row.child(entry(t.mem.fill.tint, true, KIND_TEXTS[Kind::Fill.index()]))
+                let dot = swatch(&t, t.mem.fill.tint, true)
+                    .overflow_hidden()
+                    .child(hatch(&t));
+                row.child(entry(dot, KIND_TEXTS[Kind::Fill.index()]))
             })
-            .child(entry(t.mem.free, true, "space-kind-free"))
+            .child(entry(swatch(&t, t.mem.free, true), "space-kind-free"))
     }
 }
 

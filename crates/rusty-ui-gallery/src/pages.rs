@@ -104,6 +104,11 @@ pub enum Page {
     MultiRenamePreviewLarge,
     MultiRenameTool,
     MultiRenameToolMenu,
+    ElfRich,
+    ElfNoStrip,
+    ElfNoBars,
+    ElfNoWho,
+    ElfNoRowBars,
 }
 
 pub struct PageInfo {

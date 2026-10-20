@@ -1,13 +1,20 @@
 mod bars;
-#[expect(
-    dead_code,
-    reason = "the Rich ELF and MAP views start it in P38 C7 and C8"
-)]
+mod layout;
+mod model;
+mod rich;
 mod sibling;
 mod strip;
+mod switch;
 mod treemap;
 
+pub(in crate::window_view::viewer) use strip::kind_name;
 pub use strip::{Item, Label, MemoryStrip, Step, StripData, StripEvent};
 pub use treemap::{Treemap, TreemapEvent, TreemapGroup, TreemapPart};
 
 pub use bars::{FileBytes, FileBytesBar, FilePart, Legend, RegionHead, UsageBar, UsageLine};
+pub(in crate::window_view::viewer) use layout::{RichLook, rich_layout};
+#[cfg(test)]
+pub(in crate::window_view::viewer) use model::tests::DEMO_MDF;
+pub(in crate::window_view::viewer) use model::{RichModel, build_model};
+pub(in crate::window_view::viewer) use rich::{Pick, RichHost, RichSpace};
+pub(in crate::window_view::viewer) use sibling::{Siblings, start_siblings, stem_of};

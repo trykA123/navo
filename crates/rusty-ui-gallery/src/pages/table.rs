@@ -9,7 +9,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 100] = [
+pub const PAGES: [PageInfo; 105] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -353,6 +353,26 @@ pub const PAGES: [PageInfo; 100] = [
         Page::MultiRenameToolMenu,
         "Multi-rename tool, token menu",
         "p41-b6-tool-menu",
+        false,
+    ),
+    info(Page::ElfRich, "ELF Rich", "p38-c7-elf-rich", false),
+    info(
+        Page::ElfNoStrip,
+        "ELF, no strip",
+        "p38-c7-elf-no-strip",
+        false,
+    ),
+    info(Page::ElfNoBars, "ELF, no bars", "p38-c7-elf-no-bars", false),
+    info(
+        Page::ElfNoWho,
+        "ELF, no treemap",
+        "p38-c7-elf-no-who",
+        false,
+    ),
+    info(
+        Page::ElfNoRowBars,
+        "ELF, no row bars",
+        "p38-c7-elf-no-row-bars",
         false,
     ),
 ];

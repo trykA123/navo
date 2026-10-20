@@ -278,6 +278,9 @@ impl ElfView {
             .overflow_y_scroll()
             .gap(t.spacing.xl)
             .p(t.spacing.xl);
+        if let Some(parts) = self.pick_body(t, elf) {
+            return body.gap(t.spacing.sm).children(parts);
+        }
         let Some((at, symbol)) = self.selected() else {
             return body.child(div().text_color(t.colors.muted).child("No symbol selected"));
         };
@@ -296,7 +299,7 @@ impl ElfView {
             facts.push(pair(t, ("Went to", address(at, wide))));
         }
         let spot = self.go_address.map_or(Spot::Symbol(at), Spot::Address);
-        let line = source(elf, self.lines.as_ref(), spot);
+        let line = source(elf, self.lines.as_deref(), spot);
         let source_line = div()
             .id("elf-inspector-source")
             .aria_label(line.clone())
@@ -314,9 +317,10 @@ impl ElfView {
     fn inspector(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Option<SideSheet> {
         let elf = self.elf()?;
         let this = cx.weak_entity();
-        let name = self
-            .selected()
-            .map_or_else(String::new, |(_, symbol)| elf.name(symbol).to_owned());
+        let name = self.pick_name().unwrap_or_else(|| {
+            self.selected()
+                .map_or_else(String::new, |(_, symbol)| elf.name(symbol).to_owned())
+        });
         let title = div()
             .min_w_0()
             .truncate()

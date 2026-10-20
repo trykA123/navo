@@ -37,7 +37,7 @@ fn section(name: &str, kind: u32, flags: u64, size: u64) -> Section {
 #[test]
 fn the_label_names_the_percent_and_the_free_bytes() {
     let label = usage_label(&region(Some(4096), 1024));
-    assert_eq!(label, "pflash0: 25 % used, 3.0 KB free");
+    assert_eq!(label, "pflash0: 25% used, 3.0 KB free");
 }
 
 #[test]

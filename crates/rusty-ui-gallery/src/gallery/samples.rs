@@ -62,6 +62,9 @@ impl Gallery {
     }
 
     pub fn drive_sample(&self, window: &mut Window, cx: &mut App) {
+        if bars_page::drive_of(&self.drag_treemap, self.page, window, cx) {
+            return;
+        }
         if self.page == Page::MouseMarks {
             let events = self.mouse.update(cx, |page, cx| page.take_drive(cx));
             for event in events {

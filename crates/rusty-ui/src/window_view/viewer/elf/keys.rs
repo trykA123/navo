@@ -52,6 +52,9 @@ impl ElfView {
 
     fn move_by(&mut self, by: i64, cx: &mut Context<Self>) {
         self.go_address = None;
+        if self.focus_in == Focus::Content {
+            self.clear_pick(cx);
+        }
         match self.focus_in {
             Focus::Content => self.move_cursor(step(self.cursor, by, self.rows.len()), cx),
             Focus::Navigator => {
@@ -73,10 +76,11 @@ impl ElfView {
             column,
             descending: old.column == column && !old.descending,
         };
+        self.auto_sorted = false;
         self.run_select(cx);
     }
 
-    fn toggle_noise(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn toggle_noise(&mut self, cx: &mut Context<Self>) {
         self.query.hide_noise = !self.query.hide_noise;
         self.run_select(cx);
     }

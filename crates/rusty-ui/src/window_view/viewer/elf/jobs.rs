@@ -87,7 +87,12 @@ impl ElfView {
                 self.hidden = selection.hidden;
                 self.phase = Phase::Lines(0);
                 self.refit_columns(cx);
+                if self.query != Query::default() {
+                    self.rows = Arc::new(Vec::new());
+                    self.run_select(cx);
+                }
                 self.move_cursor(0, cx);
+                self.start_model(cx);
             }
             IndexMessage::Parsed(Err(error)) => {
                 self.index = Index::Failed(error.to_string().into());
@@ -96,7 +101,10 @@ impl ElfView {
             IndexMessage::Lines(result) => {
                 self.phase = Phase::Done;
                 match result {
-                    Ok(lines) => self.lines = Some(lines),
+                    Ok(lines) => {
+                        self.lines = Some(Arc::new(lines));
+                        self.start_model(cx);
+                    }
                     Err(error) => self.lines_error = Some(error.to_string().into()),
                 }
             }

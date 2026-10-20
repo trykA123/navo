@@ -1,6 +1,6 @@
 use rusty_automotive::space::{Rect, Target, Tile};
 
-use super::{caption, dominant, pick_of};
+use super::{caption, dominant, inner_name, pick_of};
 
 fn tile(target: Target, text: bool) -> Tile {
     Tile {
@@ -20,6 +20,13 @@ fn text_follows_the_layout_flag() {
     assert_eq!(head, "Com");
     assert!(detail.contains("2.0 KB"));
     assert!(detail.contains("50.0"));
+}
+
+#[test]
+fn an_inner_tile_named_like_its_parent_draws_no_second_label() {
+    let parent = "(not attributed)";
+    assert_eq!(inner_name(parent.to_owned(), parent), None);
+    assert_eq!(inner_name("Com".to_owned(), parent), Some("Com".to_owned()));
 }
 
 #[test]

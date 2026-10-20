@@ -458,6 +458,8 @@ fn the_inspector_opens_by_itself_in_rich_when_an_elf_symbol_is_picked(cx: &mut T
     click(&rig, cx, ("elf-row", 1));
     assert!(!visible(cx, rig.window, "elf-inspector"));
     choose_rich(&rig, cx);
+    rig.press(cx, "ctrl-home");
+    rig.settle(cx);
     click(&rig, cx, ("elf-row", 2));
     assert!(visible(cx, rig.window, "elf-inspector"));
 }

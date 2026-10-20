@@ -6,7 +6,7 @@ use super::cache::{Item, Over};
 use crate::format;
 use crate::prelude::SharedString;
 
-pub(super) fn kind_name(kind: Kind) -> String {
+pub(in crate::window_view::viewer) fn kind_name(kind: Kind) -> String {
     tr(match kind {
         Kind::Code => "space-kind-code",
         Kind::Rodata => "space-kind-rodata",

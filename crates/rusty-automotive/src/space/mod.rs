@@ -9,7 +9,7 @@ mod treemap;
 
 pub use groups::{
     Child, Group, GroupBy, Grouping, OTHER, Origin, TOP_GROUPS, Top, available, default_grouping,
-    flash_region, group, top,
+    flash_region, group, lit_blocks, top,
 };
 pub use kind::Kind;
 pub use owners_elf::{NOT_ATTRIBUTED, NameRef, Owner, Owners, Provenance, owners, owners_of_map};

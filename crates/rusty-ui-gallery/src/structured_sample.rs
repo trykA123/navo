@@ -4,7 +4,9 @@ use std::sync::atomic::AtomicBool;
 
 use rusty_core::Location;
 use rusty_ui::prelude::*;
-use rusty_ui::window_view::{Attach, FileHooks, FileText, Host, Kinds, Load, Sniff, ViewerBody};
+use rusty_ui::window_view::{
+    Attach, FileHooks, FileText, Head, Host, Kinds, Load, Sniff, ViewerBody,
+};
 
 pub const TREE_NAME: &str = "ferrite.json";
 pub const TABLE_NAME: &str = "cities.csv";
@@ -157,6 +159,40 @@ pub fn binary(
     body_in((name, bytes), None, window, cx)
 }
 
+fn beside(bytes: &'static [u8], (sibling, text): (&'static str, &'static str)) -> FileHooks {
+    let files = hooks(bytes);
+    let whole = files.bytes.clone();
+    FileHooks {
+        head: Arc::new(move |location| {
+            if location.as_str().ends_with(sibling) {
+                Ok(Head {
+                    bytes: text.as_bytes().to_vec(),
+                    len: text.len() as u64,
+                })
+            } else {
+                Err("not found".to_owned())
+            }
+        }),
+        bytes: Arc::new(move |location, limit| {
+            if location.as_str().ends_with(sibling) {
+                Ok(text.as_bytes().to_vec())
+            } else {
+                whole(location, limit)
+            }
+        }),
+        ..files
+    }
+}
+
+pub fn binary_beside(
+    (name, bytes): (&'static str, &'static [u8]),
+    sibling: (&'static str, &'static str),
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Box<dyn ViewerBody>> {
+    attach((name, bytes), (None, beside(bytes, sibling)), window, cx)
+}
+
 pub fn editing(
     name: &'static str,
     text: &'static str,
@@ -172,6 +208,15 @@ fn body_in(
     window: &mut Window,
     cx: &mut App,
 ) -> Option<Box<dyn ViewerBody>> {
+    attach((name, text), (edit_kind, hooks(text)), window, cx)
+}
+
+fn attach(
+    (name, text): (&'static str, &'static [u8]),
+    (edit_kind, hooks): (Option<&str>, FileHooks),
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Box<dyn ViewerBody>> {
     let location = Location::new(format!("/samples/{name}")).ok()?;
     let sniff = Sniff {
         head: text,
@@ -182,7 +227,6 @@ fn body_in(
         .choose(&sniff)
         .into_iter()
         .find(|kind| edit_kind.is_none_or(|id| kind.id() == id))?;
-    let hooks = hooks(text);
     let cancel = AtomicBool::new(false);
     let loaded = kind
         .load(Load::new(&hooks, &location, &sniff, &cancel))

@@ -82,6 +82,11 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
                         | Page::MapDrawers
                         | Page::PdfDrawers
                         | Page::MouseMarks
+                        | Page::ElfRich
+                        | Page::ElfNoStrip
+                        | Page::ElfNoBars
+                        | Page::ElfNoWho
+                        | Page::ElfNoRowBars
                 )
             {
                 cx.update(|cx| drive(window, &gallery, cx));

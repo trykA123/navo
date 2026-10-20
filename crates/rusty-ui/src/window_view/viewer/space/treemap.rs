@@ -120,6 +120,10 @@ fn caption(tile: &Tile, name: &str, total: u64) -> Option<(String, String)> {
     })
 }
 
+fn inner_name(name: String, parent: &str) -> Option<String> {
+    (name != parent).then_some(name)
+}
+
 fn place(rect: Rect) -> Div {
     div()
         .absolute()
@@ -197,6 +201,7 @@ impl Treemap {
         let more = matches!(tile.target, Target::More { .. });
         let (bg, ink) = colours(t, group, more);
         let name = name_of(tile, group, false);
+        let outer = name.clone();
         let nested = !tile.inner.is_empty();
         let mut cell = place(tile.rect).bg(bg).rounded(t.radii.xs);
         if more {
@@ -216,7 +221,7 @@ impl Treemap {
                 inner.rect.w,
                 inner.rect.h,
             );
-            let name = name_of(inner, group, true);
+            let name = inner_name(name_of(inner, group, true), &outer);
             cell.child(self.inner_tile(t, inner, (local, name, ink)))
         });
         let id = pick_of(tile).map_or(usize::MAX, |id| id as usize);
@@ -238,9 +243,14 @@ impl Treemap {
             .into_any_element()
     }
 
-    fn inner_tile(&self, t: &Theme, tile: &Tile, (local, name, ink): (Rect, String, Hsla)) -> Div {
+    fn inner_tile(
+        &self,
+        t: &Theme,
+        tile: &Tile,
+        (local, name, ink): (Rect, Option<String>, Hsla),
+    ) -> Div {
         let mut cell = place(local).bg(t.colors.surface).rounded(t.radii.xs);
-        if let Some(text) = caption(tile, &name, self.total) {
+        if let Some(text) = name.and_then(|name| caption(tile, &name, self.total)) {
             cell = cell.child(label(t, ink, text, false));
         }
         cell

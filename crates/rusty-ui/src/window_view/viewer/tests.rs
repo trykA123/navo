@@ -2,6 +2,7 @@ mod archive;
 mod at_line;
 mod can_trace;
 mod can_trace_blf;
+mod elf_rich;
 mod elf_view;
 mod encoding;
 mod find;

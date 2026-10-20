@@ -101,6 +101,34 @@ pub fn group(owners: &Owners, origin: Origin<'_>, region: &Region, by: &GroupBy<
     table.finish()
 }
 
+#[must_use]
+pub fn lit_blocks(
+    owners: &Owners,
+    origin: Origin<'_>,
+    region: &Region,
+    (by, name): (&GroupBy<'_>, &str),
+) -> Vec<bool> {
+    let modules = Modules::new(by.modules);
+    let lookup = Lookup {
+        owners,
+        origin,
+        modules: &modules,
+        grouping: by.grouping,
+    };
+    region
+        .blocks
+        .iter()
+        .map(|block| {
+            owners
+                .in_span(block.start..block.start.saturating_add(block.size))
+                .iter()
+                .any(|owner| {
+                    owner.kind != Kind::Fill && lookup.key(owner).0.eq_ignore_ascii_case(name)
+                })
+        })
+        .collect()
+}
+
 fn block_spans(region: &Region) -> Vec<Range<u64>> {
     let mut spans: Vec<Range<u64>> = region
         .blocks

@@ -6,6 +6,7 @@ mod columns_page;
 mod command_center_page;
 mod drag_page;
 mod drives_page;
+mod elf_rich_page;
 mod gallery;
 mod image_sample;
 mod job_sample;

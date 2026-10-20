@@ -19,6 +19,7 @@ use rusty_l10n::t;
 use self::cache::{Hit, Key, Layout};
 pub use self::cache::{Item, Step};
 use self::paint::{Look, Scene};
+pub(in crate::window_view::viewer) use self::tip::kind_name;
 use crate::prelude::*;
 use crate::primitives::Tooltip;
 use crate::tokens;

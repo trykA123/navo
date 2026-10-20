@@ -1,4 +1,5 @@
 use crate::drag_page::DragPage;
+use crate::elf_rich_page::{ELF_PAGES, ElfRichPage};
 use crate::multi_rename_page::MultiRenamePage;
 use crate::multi_rename_preview_page::{PreviewPages, preview_pages};
 use crate::multi_rename_tool_page::{ToolPages, tool_pages};
@@ -127,6 +128,7 @@ pub type DragTreemapBars = (
     Entity<MultiRenamePage>,
     PreviewPages,
     ToolPages,
+    [Entity<ElfRichPage>; 5],
 );
 
 pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
@@ -137,11 +139,28 @@ pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
         cx.new(|cx| MultiRenamePage::new(window, cx)),
         preview_pages(window, cx),
         tool_pages(window, cx),
+        ELF_PAGES.map(|(_, off)| cx.new(|cx| ElfRichPage::new(off, window, cx))),
     )
 }
 
+fn elf_page(pages: &DragTreemapBars, page: Page) -> Option<&Entity<ElfRichPage>> {
+    let at = ELF_PAGES.iter().position(|(shown, _)| *shown == page)?;
+    pages.6.get(at)
+}
+
+pub fn drive_of(pages: &DragTreemapBars, page: Page, window: &mut Window, cx: &mut App) -> bool {
+    let Some(elf) = elf_page(pages, page) else {
+        return false;
+    };
+    ElfRichPage::drive(elf, window, cx);
+    true
+}
+
 pub fn page_of(pages: &DragTreemapBars, page: Page) -> Option<AnyElement> {
-    let (drag, treemap, bars, fields, preview, tool) = pages;
+    if let Some(elf) = elf_page(pages, page) {
+        return Some(elf.clone().into_any_element());
+    }
+    let (drag, treemap, bars, fields, preview, tool, _) = pages;
     Some(match page {
         Page::Drag => drag.clone().into_any_element(),
         Page::Treemap => treemap.clone().into_any_element(),
