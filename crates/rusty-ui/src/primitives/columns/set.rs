@@ -44,6 +44,7 @@ pub struct ColumnSet {
     fitted: Vec<Pixels>,
     initial: Vec<Pixels>,
     widths: Vec<Pixels>,
+    measured: Pixels,
     drag: Option<DragStart>,
 }
 
@@ -78,6 +79,7 @@ impl ColumnSet {
             fitted: Vec::new(),
             initial: Vec::new(),
             widths: Vec::new(),
+            measured: px(0.),
             drag: None,
             specs,
         };
@@ -118,6 +120,24 @@ impl ColumnSet {
 
     pub fn width(&self, at: usize) -> Pixels {
         self.widths.get(at).copied().unwrap_or_default()
+    }
+
+    pub fn set_measured(&mut self, width: Pixels) -> bool {
+        if (self.measured - width).abs() < px(0.5) {
+            return false;
+        }
+        self.measured = width;
+        true
+    }
+
+    pub fn text_chars(&self, at: usize) -> usize {
+        let shown = if self.is_flex(at) && self.measured > px(0.) {
+            self.measured
+        } else {
+            self.width(at)
+        };
+        let room = (shown - self.padding).max(px(0.)) / self.char_width;
+        room.floor() as usize
     }
 
     pub fn set_width(&mut self, at: usize, width: Pixels) {
@@ -196,7 +216,7 @@ impl ColumnSet {
         }
     }
 
-    fn is_flex(&self, at: usize) -> bool {
+    pub(super) fn is_flex(&self, at: usize) -> bool {
         self.specs.get(at).is_some_and(|spec| spec.flex)
     }
 

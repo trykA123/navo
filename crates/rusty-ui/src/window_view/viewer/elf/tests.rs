@@ -77,3 +77,21 @@ fn addresses_parse_with_or_without_a_prefix() {
     assert_eq!(parse_address(" 1F00 "), Ok(0x1F00));
     assert!(parse_address("zz").is_err());
 }
+
+#[test]
+fn a_long_symbol_keeps_its_prefix_and_both_ends() {
+    let fitted = super::columns::fitted_name("Can_MainFunction_ReadAllChannelsAndReport", 24);
+    assert_eq!(fitted.prefix, "Can_");
+    assert!(fitted.rest.contains('…'));
+    assert!(fitted.rest.starts_with("Main") && fitted.rest.ends_with("Report"));
+    assert!(fitted.prefix.chars().count() + fitted.rest.chars().count() <= 24);
+}
+
+#[test]
+fn a_short_symbol_stays_whole() {
+    let fitted = super::columns::fitted_name("Can_Init", 24);
+    assert_eq!(
+        (fitted.prefix.as_str(), fitted.rest.as_str()),
+        ("Can_", "Init")
+    );
+}

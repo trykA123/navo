@@ -82,6 +82,7 @@ impl ElfView {
                 self.index = Index::Ready(elf);
                 self.rows = Arc::new(rows);
                 self.phase = Phase::Lines(0);
+                self.refit_columns(cx);
                 self.move_cursor(0, cx);
             }
             IndexMessage::Parsed(Err(error)) => {

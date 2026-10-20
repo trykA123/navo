@@ -269,3 +269,16 @@ fn the_char_width_is_measured_or_falls_back(cx: &mut TestAppContext) {
     let measured = view.read_with(cx, |view, cx| view.set.read(cx).char_width);
     assert!(measured > px(0.) && measured < px(20.), "{measured:?}");
 }
+
+#[gpui_kit::test]
+fn text_chars_follow_the_shown_width(cx: &mut TestAppContext) {
+    let (window, view) = open(cx, table(sample()));
+    let name = bounds(window, ("column", 0usize), cx);
+    view.read_with(cx, |view, cx| {
+        let set = view.set.read(cx);
+        let shown = (name.size.width - set.padding) / set.char_width;
+        assert_eq!(set.text_chars(0), shown.floor() as usize);
+        let fixed = (set.width(1) - set.padding) / set.char_width;
+        assert_eq!(set.text_chars(1), fixed.floor() as usize);
+    });
+}

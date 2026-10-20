@@ -3,7 +3,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, AppContext, Context, DragMoveEvent, ElementId, Empty, Entity, EntityId, FontWeight,
     InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, Render,
-    RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
 use rusty_l10n::{t, tr};
@@ -162,8 +162,23 @@ fn column(t: &Theme, column: Column<'_>, cx: &App) -> impl IntoElement {
     let align = read.align(at);
     let state = set.clone();
     let owner = set.entity_id();
+    let measure = read.is_flex(at).then(|| {
+        let set = set.clone();
+        canvas(
+            move |bounds, _, cx| {
+                let width = bounds.size.width;
+                if set.update(cx, |set, _| set.set_measured(width)) {
+                    set.update(cx, |_, cx| cx.notify());
+                }
+            },
+            |_, (), _, _| {},
+        )
+        .absolute()
+        .size_full()
+    });
     read.sized(at)
         .id(("column", at))
+        .relative()
         .test_support()
         .flex()
         .h_full()
@@ -186,6 +201,7 @@ fn column(t: &Theme, column: Column<'_>, cx: &App) -> impl IntoElement {
             },
         ))
         .child(handle(t, set.clone(), at, &text))
+        .children(measure)
 }
 
 impl RenderOnce for ColumnHead {

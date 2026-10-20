@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext, point, px};
 use rusty_automotive::elf_sample::{build, demo, firmware};
 
 use super::find::bottom_keys;
@@ -257,4 +257,55 @@ fn a_file_that_fails_to_parse_says_why_in_the_status(cx: &mut TestAppContext) {
     let (window, _) = open_bytes(cx, "broken.elf", bytes);
     let status = text_of(cx, window, "elf-status");
     assert!(status.contains("not a readable ELF file"), "{status}");
+}
+
+fn head_width(cx: &mut TestAppContext, window: AnyWindowHandle, at: usize) -> f32 {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        f32::from(
+            window
+                .within("elf-head")
+                .find(("column", at))
+                .bounds()
+                .size
+                .width,
+        )
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn dragging_a_head_handle_widens_the_column_and_the_width_stays(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    let before = head_width(cx, window, 1);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let from = window
+            .within("elf-head")
+            .find(("column-handle", 1usize))
+            .bounds()
+            .center();
+        window.drag(from, point(from.x + px(40.), from.y), cx);
+    })
+    .expect("window");
+    settle_motion(cx, window, &view);
+    assert!((head_width(cx, window, 1) - before - 40.).abs() <= 1.);
+    press(cx, window, &view, "down");
+    settle_motion(cx, window, &view);
+    assert!((head_width(cx, window, 1) - before - 40.).abs() <= 1.);
+}
+
+#[gpui_kit::test]
+fn a_head_click_sorts_the_symbols_by_that_column(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .within("elf-head")
+            .click(("column-title", 0usize), cx);
+    })
+    .expect("window");
+    settle_motion(cx, window, &view);
+    press(cx, window, &view, "ctrl-home");
+    assert!(label(cx, window, ("elf-row", 0)).starts_with("bcm::Doors::scan(unsigned int), "));
 }
