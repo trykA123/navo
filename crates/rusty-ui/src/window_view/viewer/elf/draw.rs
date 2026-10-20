@@ -1,74 +1,17 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{ClickEvent, Role, WeakEntity};
-use rusty_automotive::{Column, Elf, Symbol};
 
 use super::keys::{CONTEXT, TABLE_CONTEXT};
-use super::text::{Check, address, is_wide, place, row_label, status};
+use super::text::{Check, address, is_wide, row_label, status};
 use super::{ElfView, Focus, Index, Phase};
 use crate::file_list::filter_bar;
-use crate::format;
 use crate::prelude::*;
-use crate::primitives::{IconName, VirtualList, icon};
+use crate::primitives::VirtualList;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
 
-const CHAR_WIDTH: f32 = 7.2;
 const PER_MILLE: u64 = 1000;
-
-const COLUMNS: [(Column, &str, usize); 6] = [
-    (Column::Name, "Name", 0),
-    (Column::Address, "Address", 24),
-    (Column::Size, "Size", 10),
-    (Column::Kind, "Type", 7),
-    (Column::Bind, "Bind", 7),
-    (Column::Section, "Section", 14),
-];
-
-fn chars(t: &Theme, count: usize) -> Pixels {
-    px(count as f32 * CHAR_WIDTH) + t.spacing.md * 2.
-}
-
-fn cell(t: &Theme, (column, wide): (Column, bool), text: String) -> Div {
-    let width = COLUMNS
-        .iter()
-        .find(|(known, _, _)| *known == column)
-        .map_or(0, |(_, _, width)| *width);
-    let width = if column == Column::Address && !wide {
-        13
-    } else {
-        width
-    };
-    let base = div()
-        .flex()
-        .items_center()
-        .h_full()
-        .px(t.spacing.md)
-        .overflow_hidden()
-        .whitespace_nowrap();
-    let base = if width == 0 {
-        base.flex_1().min_w_0()
-    } else {
-        base.flex_none().w(chars(t, width))
-    };
-    match column {
-        Column::Address => base.font_family(t.typography.mono_font.clone()),
-        Column::Size => base
-            .justify_end()
-            .font_family(t.typography.numbers_font.clone()),
-        _ => base,
-    }
-    .child(div().min_w_0().truncate().child(text))
-}
-
-fn sort_arrow(descending: bool, color: Hsla) -> impl IntoElement {
-    let glyph = if descending {
-        IconName::ArrowDown
-    } else {
-        IconName::ArrowUp
-    };
-    icon(glyph, px(10.), color)
-}
 
 fn select_row(
     view: WeakEntity<ElfView>,
@@ -85,25 +28,9 @@ fn select_row(
     }
 }
 
-fn symbol_cells(t: &Theme, elf: &Elf, symbol: &Symbol) -> Vec<Div> {
-    let wide = is_wide(elf);
-    let texts = [
-        elf.name(symbol).to_owned(),
-        address(symbol.value, wide),
-        format::bytes(symbol.size),
-        symbol.kind.name(),
-        symbol.bind.name(),
-        place(elf, symbol),
-    ];
-    COLUMNS
-        .iter()
-        .zip(texts)
-        .map(|((column, _, _), text)| cell(t, (*column, wide), text))
-        .collect()
-}
-
 impl ElfView {
-    fn row_view(&self, t: &Theme, row: usize, view: &WeakEntity<Self>) -> AnyElement {
+    fn row_view(&self, row: usize, view: &WeakEntity<Self>, cx: &App) -> AnyElement {
+        let t = tokens::current(cx);
         let (Some(elf), Some((_, symbol))) = (self.elf(), self.symbol_at(row)) else {
             return div().into_any_element();
         };
@@ -117,7 +44,7 @@ impl ElfView {
             .cursor_pointer()
             .when(row % 2 == 1, |line| line.bg(t.colors.zebra))
             .when(row == self.cursor, |line| line.bg(t.colors.hover))
-            .children(symbol_cells(t, elf, symbol))
+            .children(self.symbol_cells(row, symbol, cx))
             .on_click(select_row(view.clone(), row))
             .into_any_element()
     }
@@ -132,46 +59,11 @@ impl ElfView {
                 let Some(entity) = view.upgrade() else {
                     return Vec::new();
                 };
-                let t = tokens::current(cx).clone();
                 let this = entity.read(cx);
-                range.map(|row| this.row_view(&t, row, &view)).collect()
+                range.map(|row| this.row_view(row, &view, cx)).collect()
             },
         )
         .label("Symbols")
-    }
-
-    fn column_head(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let wide = self.elf().is_some_and(is_wide);
-        let order = self.query.order;
-        let cells = COLUMNS.iter().enumerate().map(|(at, (column, name, _))| {
-            let column = *column;
-            let sorted = (order.column == column).then_some(order.descending);
-            let arrow = sorted.map(|descending| sort_arrow(descending, t.colors.accent_text));
-            cell(t, (column, wide), (*name).to_owned())
-                .id(("elf-head", at))
-                .role(Role::Button)
-                .aria_label(*name)
-                .test_support()
-                .gap(t.spacing.xs)
-                .cursor_pointer()
-                .when(sorted.is_some(), |cell| cell.text_color(t.colors.text))
-                .children(arrow)
-                .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
-                    window.focus(&view.focus, cx);
-                    view.sort_by(column, cx);
-                }))
-        });
-        div()
-            .flex()
-            .flex_none()
-            .h(t.spacing.row_height)
-            .text_size(t.typography.tiny)
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(t.colors.muted)
-            .bg(t.colors.rail)
-            .border_b_1()
-            .border_color(t.colors.line)
-            .children(cells)
     }
 
     fn progress(&self) -> Option<SharedString> {
@@ -297,6 +189,7 @@ impl Render for ElfView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         self.measure(window, &t);
+        self.ensure_columns(window, cx);
         let table = div()
             .id("elf-table")
             .relative()
@@ -304,7 +197,7 @@ impl Render for ElfView {
             .flex_col()
             .flex_1()
             .min_h_0()
-            .child(self.column_head(&t, cx))
+            .children(self.column_head())
             .child(self.list(cx))
             .child(self.drawers(&t, window, cx));
         let filter = self

@@ -1,3 +1,4 @@
+mod columns;
 mod draw;
 mod drawers;
 mod go_to;
@@ -105,6 +106,7 @@ pub(in crate::window_view::viewer) struct ElfView {
     wanted_symbol: Option<u32>,
     page: usize,
     opens_inspector: bool,
+    columns: Option<columns::Columns>,
 }
 
 impl ElfView {
@@ -137,6 +139,7 @@ impl ElfView {
             wanted_symbol: None,
             page: 1,
             opens_inspector: false,
+            columns: None,
         }
     }
 
