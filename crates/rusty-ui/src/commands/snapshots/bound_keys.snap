@@ -2,6 +2,7 @@
 source: crates/rusty-ui/src/commands/tests.rs
 expression: "lines.join(\"\\n\")"
 ---
+app.command_palette | ctrl-k | global
 app_menu.activate | enter | AppMenu
 app_menu.activate | space | AppMenu
 app_menu.close | escape | AppMenu

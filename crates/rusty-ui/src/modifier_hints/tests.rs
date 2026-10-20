@@ -66,7 +66,7 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
             "files.sort_by_size"
         ]
     );
-    assert_eq!(layer.count(), 21);
+    assert_eq!(layer.count(), 22);
 }
 
 #[test]
@@ -389,7 +389,6 @@ fn a_run_broken_by_a_rebind_lists_its_members() {
 fn a_command_without_a_handler_is_left_out() {
     let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
     let window = &group(&ctrl, "Window").entries;
-    assert!(!commands(window).contains(&"app.command_palette"));
     assert!(!commands(window).contains(&"window.new"));
     let alt = layer_in(Keymap::builtin(), Combo::ALT);
     assert!(alt.groups.iter().all(|group| group.name != "Window"));
