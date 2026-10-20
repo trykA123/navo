@@ -24,7 +24,7 @@ pub struct ExistingName {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Existing {
-    names: Vec<ExistingName>,
+    pub(super) names: Vec<ExistingName>,
 }
 
 impl Existing {
@@ -49,7 +49,7 @@ pub enum RowState {
     Problem(Problem),
 }
 
-type Key = (Location, String);
+pub(super) type Key = (Location, String);
 
 pub fn fold_key(name: &str, fold: Fold) -> String {
     match fold {
@@ -67,7 +67,7 @@ fn single(mut chars: impl Iterator<Item = char>) -> Option<char> {
     chars.next().is_none().then_some(first)
 }
 
-fn key(parent: &Location, name: &str, fold: Fold) -> Key {
+pub(super) fn key(parent: &Location, name: &str, fold: Fold) -> Key {
     (parent.clone(), fold_key(name, fold))
 }
 
