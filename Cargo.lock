@@ -6557,6 +6557,7 @@ version = "0.0.1"
 dependencies = [
  "crc32fast",
  "nucleo-matcher",
+ "rayon",
  "rusty-store",
  "tempfile",
  "thiserror 2.0.21",
