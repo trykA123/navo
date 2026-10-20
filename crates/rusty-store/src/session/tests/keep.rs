@@ -123,3 +123,40 @@ fn a_newer_file_held_open_by_another_process_is_not_overwritten() {
     assert!(write_session(&path, &second()).is_err());
     assert_eq!(fs::read(&path).unwrap(), newer);
 }
+
+#[test]
+fn a_corrupt_main_file_that_cannot_be_kept_aside_refuses_the_save() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    fs::write(&path, b"garbage").unwrap();
+    put(&backup_path(&path), &second());
+    let backup = fs::read(backup_path(&path)).unwrap();
+    let base = kept(&path, ".corrupt");
+    fs::write(&base, b"").unwrap();
+    for n in 2..1000 {
+        fs::write(kept(&base, &format!(".{n}")), b"").unwrap();
+    }
+    assert!(write_session(&path, &first()).is_err());
+    assert_eq!(fs::read(&path).unwrap(), b"garbage");
+    assert_eq!(fs::read(backup_path(&path)).unwrap(), backup);
+}
+
+#[cfg(windows)]
+#[test]
+fn a_corrupt_main_file_held_open_leaves_the_backup_unchanged() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_SHARE_READ: u32 = 1;
+    let dir = tmp();
+    let path = session_file(&dir);
+    fs::write(&path, b"garbage").unwrap();
+    put(&backup_path(&path), &second());
+    let backup = fs::read(backup_path(&path)).unwrap();
+    let _held = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(&path)
+        .unwrap();
+    assert!(write_session(&path, &first()).is_err());
+    assert_eq!(fs::read(backup_path(&path)).unwrap(), backup);
+}

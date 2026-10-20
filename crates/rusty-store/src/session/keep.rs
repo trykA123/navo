@@ -7,7 +7,13 @@ use super::{SessionFileError, usable};
 
 const MAX_KEPT_COPIES: u32 = 1000;
 
-pub(super) fn set_aside_unreadable(path: &Path) -> Result<(), SessionFileError> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum FileRole {
+    Main,
+    Backup,
+}
+
+pub(super) fn set_aside_unreadable(path: &Path, role: FileRole) -> Result<(), SessionFileError> {
     match usable(path) {
         Ok(_) => Ok(()),
         Err(SessionFileError::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -16,8 +22,11 @@ pub(super) fn set_aside_unreadable(path: &Path) -> Result<(), SessionFileError> 
             | SessionFileError::BadChecksum
             | SessionFileError::Decode(_),
         ) => {
-            let _ = move_aside(path, &suffixed(path, ".corrupt"));
-            Ok(())
+            let moved = move_aside(path, &suffixed(path, ".corrupt"));
+            match role {
+                FileRole::Main => Ok(moved?),
+                FileRole::Backup => Ok(()),
+            }
         }
         Err(SessionFileError::TooNew { found, .. }) => {
             move_aside(path, &suffixed(path, &format!(".v{found}")))?;

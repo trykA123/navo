@@ -37,8 +37,8 @@ const HEADER_LEN: usize = 16 + 2 + 4 + 4;
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
 pub fn write_session(path: &Path, session: &SessionState) -> Result<(), SessionFileError> {
-    keep::set_aside_unreadable(path)?;
-    keep::set_aside_unreadable(&backup_path(path))?;
+    keep::set_aside_unreadable(path, keep::FileRole::Main)?;
+    keep::set_aside_unreadable(&backup_path(path), keep::FileRole::Backup)?;
     let body =
         postcard::to_allocvec(session).map_err(|e| SessionFileError::Decode(e.to_string()))?;
     let len = u32::try_from(body.len())

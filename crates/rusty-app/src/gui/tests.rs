@@ -147,13 +147,29 @@ fn a_failed_integrity_check_on_record_keeps_the_journal_closed_and_the_file_unto
     let dirs = store(&dir);
     one_running_job(&dirs);
     let db = dirs.data.join("ferrite.db");
-    let mut bytes = std::fs::read(&db).unwrap();
-    bytes[100..2000].fill(0xFF);
-    std::fs::write(&db, &bytes).unwrap();
+    crate::crash::test_damage::fill_history(&db);
+    crate::crash::test_damage::corrupt_middle_page(&db);
+    let bytes = std::fs::read(&db).unwrap();
     let sentinel = crate::crash::sentinel_path(&db);
     std::fs::write(&sentinel, b"").unwrap();
-    let (ops, _lock) = operations(Some(&dirs), &home(), &FakeFs::new());
+    let (ops, lock) = operations(Some(&dirs), &home(), &FakeFs::new());
     assert_eq!(ops.protected.len(), 3);
+    drop((ops, lock));
     assert!(sentinel.exists());
     assert_eq!(std::fs::read(&db).unwrap(), bytes);
+    let (opened, _) = rusty_store::Db::open(&db, false).unwrap();
+    let journal = rusty_store::JobJournal::new(opened).unwrap();
+    assert_eq!(journal.unfinished().unwrap().len(), 1);
+}
+
+#[test]
+fn a_corrupt_journal_found_during_recovery_is_put_on_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let dirs = store(&dir);
+    one_running_job(&dirs);
+    let db = dirs.data.join("ferrite.db");
+    let page = crate::crash::test_damage::root_page(&db, "job");
+    crate::crash::test_damage::corrupt_page(&db, page);
+    let _started = operations(Some(&dirs), &home(), &FakeFs::new());
+    assert!(crate::crash::sentinel_path(&db).exists());
 }

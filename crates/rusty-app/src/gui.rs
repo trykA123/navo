@@ -240,8 +240,9 @@ pub(crate) fn operations(
             .into_iter()
             .filter_map(|path| Location::new(path.to_str()?).ok()),
     );
+    let db = dirs.data.join("ferrite.db");
     let journal = dirs.ensure().ok().and_then(|()| {
-        jobs::open(&dirs.data.join("ferrite.db"))
+        jobs::open(&db)
             .inspect_err(|error| tracing::error!(%error, "opening the job journal failed"))
             .ok()
     });
@@ -253,8 +254,13 @@ pub(crate) fn operations(
         };
         return (unlogged, instance.and_then(jobs::Instance::share));
     };
-    if instance.as_ref().is_some_and(|instance| instance.sole) {
-        let _ = jobs::recover(&journal, ops);
+    if instance.as_ref().is_some_and(|instance| instance.sole)
+        && let Err(error) = jobs::recover(&journal, ops)
+    {
+        tracing::error!(%error, "recovering unfinished jobs failed");
+        if error.is_corruption() {
+            crate::crash::record_failed_check(&db);
+        }
     }
     let logged = Operations {
         log: jobs::log_factory(journal),

@@ -27,13 +27,17 @@ fn open_checked(path: &Path, previous_exit_unclean: bool) -> Result<(Db, OpenRep
             Ok((db, report))
         }
         Err(error) => {
-            if error.is_corruption()
-                && let Err(write_error) = fs::write(&sentinel, b"")
-            {
-                tracing::error!(%write_error, "could not record the failed integrity check");
+            if error.is_corruption() {
+                record_failed_check(path);
             }
             Err(error)
         }
+    }
+}
+
+pub(crate) fn record_failed_check(db: &Path) {
+    if let Err(write_error) = fs::write(sentinel_path(db), b"") {
+        tracing::error!(%write_error, "could not record the failed integrity check");
     }
 }
 
@@ -86,7 +90,9 @@ mod tests {
     #[test]
     fn a_failed_check_is_still_made_at_a_later_clean_start() {
         let dir = tempfile::tempdir().unwrap();
-        let path = broken_db(&dir);
+        let path = dir.path().join("ferrite.db");
+        crate::crash::test_damage::fill_history(&path);
+        crate::crash::test_damage::corrupt_middle_page(&path);
         assert!(open_checked(&path, true).is_err());
         assert!(sentinel_path(&path).exists());
         assert!(open_checked(&path, false).is_err());

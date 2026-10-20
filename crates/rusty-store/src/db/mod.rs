@@ -31,13 +31,21 @@ impl DbError {
     pub fn is_corruption(&self) -> bool {
         match self {
             Self::Corrupt(_) => true,
-            Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _)) => matches!(
-                failure.code,
-                rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase
-            ),
+            Self::Sqlite(error) => is_corrupt_sqlite(error),
             _ => false,
         }
     }
+}
+
+pub(crate) fn is_corrupt_sqlite(error: &rusqlite::Error) -> bool {
+    matches!(
+        error.sqlite_error_code(),
+        Some(
+            rusqlite::ErrorCode::DatabaseCorrupt
+                | rusqlite::ErrorCode::NotADatabase
+                | rusqlite::ErrorCode::SystemIoFailure
+        )
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

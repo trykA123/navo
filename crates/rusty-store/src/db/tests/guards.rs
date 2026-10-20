@@ -115,3 +115,29 @@ fn too_new_file_with_a_hot_wal_is_not_checkpointed() {
     assert!(Db::open(&path, false).is_err());
     assert_eq!((fs::read(&path).unwrap(), fs::read(&wal).unwrap()), before);
 }
+
+fn sqlite_failure(code: std::ffi::c_int) -> DbError {
+    DbError::Sqlite(rusqlite::Error::SqliteFailure(
+        rusqlite::ffi::Error::new(code),
+        None,
+    ))
+}
+
+#[test]
+fn a_read_error_from_the_disk_counts_as_corruption() {
+    assert!(sqlite_failure(rusqlite::ffi::SQLITE_IOERR_READ).is_corruption());
+}
+
+#[test]
+fn a_busy_database_is_not_corruption() {
+    assert!(!sqlite_failure(rusqlite::ffi::SQLITE_BUSY).is_corruption());
+}
+
+#[test]
+fn a_failed_journal_read_from_the_disk_counts_as_corruption() {
+    let error = crate::JournalError::Sqlite(rusqlite::Error::SqliteFailure(
+        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR_READ),
+        None,
+    ));
+    assert!(error.is_corruption());
+}
