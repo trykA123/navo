@@ -1,4 +1,4 @@
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4];
 
 const V1: &str = "
 CREATE TABLE history (
@@ -65,5 +65,14 @@ CREATE TABLE settings_defaults (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     written_at INTEGER NOT NULL
+);
+";
+
+const V4: &str = "
+ALTER TABLE frecency ADD COLUMN is_folder INTEGER NOT NULL DEFAULT 1;
+CREATE TABLE command_use (
+    name TEXT PRIMARY KEY,
+    score REAL NOT NULL,
+    last_at INTEGER NOT NULL
 );
 ";

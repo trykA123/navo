@@ -7,12 +7,14 @@ use tempfile::TempDir;
 use super::*;
 
 mod fixtures;
+mod frecency;
 mod fresh;
 mod guards;
 mod memory;
 mod migrations;
 mod props;
 mod settings_defaults;
+mod v4;
 mod viewer;
 
 const V1_TABLES: [&str; 7] = [
@@ -25,7 +27,8 @@ const V1_TABLES: [&str; 7] = [
     "undo",
 ];
 
-const TABLES: [&str; 10] = [
+const TABLES: [&str; 11] = [
+    "command_use",
     "frecency",
     "history",
     "job",
@@ -41,6 +44,7 @@ const TABLES: [&str; 10] = [
 const V0_SQL: &str = include_str!("../../../tests/fixtures/db/v0.sql");
 const V1_SQL: &str = include_str!("../../../tests/fixtures/db/v1.sql");
 const V2_SQL: &str = include_str!("../../../tests/fixtures/db/v2.sql");
+const V3_SQL: &str = include_str!("../../../tests/fixtures/db/v3.sql");
 
 fn tmp() -> TempDir {
     TempDir::new().unwrap()
