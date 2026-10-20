@@ -6554,7 +6554,10 @@ dependencies = [
 name = "rusty-index"
 version = "0.0.1"
 dependencies = [
+ "crc32fast",
  "nucleo-matcher",
+ "rusty-store",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 

@@ -74,6 +74,51 @@ impl NameTable {
         self.flags.shrink_to_fit();
     }
 
+    pub(crate) fn raw_parts(&self) -> (&str, &[u32], &[u32], &[u16]) {
+        (&self.names, &self.offsets, &self.parents, &self.flags)
+    }
+
+    pub(crate) fn from_raw_parts(
+        names: String,
+        offsets: Vec<u32>,
+        parents: Vec<u32>,
+        flags: Vec<u16>,
+    ) -> Option<Self> {
+        let valid_flags = Flags::FOLDER.bits()
+            | Flags::HIDDEN.bits()
+            | Flags::SYSTEM.bits()
+            | Flags::REPARSE.bits()
+            | Flags::DELETED;
+        if offsets.len() != parents.len()
+            || offsets.len() != flags.len()
+            || u32::try_from(offsets.len()).is_err()
+            || u32::try_from(names.len()).is_err()
+            || (!names.is_empty() && !names.ends_with(NAME_END))
+            || flags.iter().any(|bits| bits & !valid_flags != 0)
+        {
+            return None;
+        }
+        if offsets.iter().any(|&offset| {
+            let at = offset as usize;
+            at >= names.len()
+                || !names.is_char_boundary(at)
+                || (at != 0 && names.as_bytes()[at - 1] != 0)
+        }) {
+            return None;
+        }
+        let live = flags
+            .iter()
+            .filter(|&&bits| bits & Flags::DELETED == 0)
+            .count();
+        Some(Self {
+            names,
+            offsets,
+            parents,
+            flags,
+            live,
+        })
+    }
+
     pub fn push(&mut self, parent: u32, name: &str, flags: Flags) -> Result<u32, TableError> {
         let id = self.slots();
         if id == NO_PARENT {
