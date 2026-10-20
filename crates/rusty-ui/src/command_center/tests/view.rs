@@ -10,10 +10,11 @@ use gpui_kit::{
 use rusty_core::Location;
 
 use crate::command_center::view::{
-    Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, Hint, highlight_ranges, hints,
-    place, result_count,
+    Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, Hint, HintKeys,
+    highlight_ranges, hints, place, result_count,
 };
 use crate::command_center::{ArgKind, Group, Heading, Hit, Results, Row, Scope, Selection, Target};
+use crate::commands::Keymap;
 use crate::test_pointer::{dispatch, down, up};
 use crate::test_window::open_sized;
 
@@ -84,7 +85,8 @@ fn props(rows: Vec<Row>) -> CommandCenterProps {
         note: None,
         error: None,
         anchor: Bounds::new(point(px(140.), px(8.)), size(px(520.), px(32.))),
-        has_key_hints: true,
+        key_hints: Some(HintKeys::of(Keymap::builtin())),
+        is_leaving: false,
     }
 }
 

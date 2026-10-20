@@ -1,24 +1,24 @@
 mod footer;
+mod motion;
 mod place;
 mod row;
 
 use std::rc::Rc;
 
-use gpui_kit::base::animation::ease_out_cubic;
-use gpui_kit::base::{ObservedElement, TestSupportExt};
+use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::{Input, InputEvent};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnchoredPositionMode, Animation, AnimationExt, AnyElement, App, Bounds, ClickEvent, Context,
-    Div, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement,
-    Modifiers, ParentElement, Pixels, Render, Role, ScrollHandle, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Subscription, WeakEntity, Window, anchored, deferred, div,
-    px,
+    AnchoredPositionMode, AnyElement, App, Bounds, ClickEvent, Context, Div, Entity, EventEmitter,
+    FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement, Modifiers, ParentElement,
+    Pixels, Render, Role, ScrollHandle, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, WeakEntity, Window, anchored, deferred, div, px,
 };
 use rusty_l10n::tr;
 
 #[cfg(test)]
 pub(crate) use footer::Hint;
+pub use footer::HintKeys;
 pub(crate) use footer::{hints, result_count};
 pub(crate) use place::place;
 #[cfg(test)]
@@ -31,16 +31,17 @@ use crate::commands::ArgKind;
 use crate::primitives::{
     IconName, Kbd, ListScroll, RowSemantics, TextFieldState, VirtualList, icon, text_field_state,
 };
-use crate::tokens::{Motion, Theme};
+use crate::tokens::Theme;
 use footer::FooterLook;
-use place::INPUT_ROW;
+pub use motion::LEAVE;
+use motion::enter;
+pub use place::INPUT_ROW;
 use row::{ROW, RowElement, RowLook};
 
 const ROOT: &str = "command-center";
 const CONTEXT: &str = "CommandCenter";
 const VISIBLE_ROWS: f32 = 12.;
 const VIRTUAL_FROM: usize = 64;
-const RISE: f32 = 4.;
 const FIELD: f32 = 32.;
 const CHIP: f32 = 22.;
 const CHAR_WIDTH: f32 = 14.;
@@ -59,7 +60,8 @@ pub struct CommandCenterProps {
     pub note: Option<SharedString>,
     pub error: Option<SharedString>,
     pub anchor: Bounds<Pixels>,
-    pub has_key_hints: bool,
+    pub key_hints: Option<HintKeys>,
+    pub is_leaving: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -261,7 +263,7 @@ impl CommandCenter {
                 field.child(chip(t, argument))
             })
             .child(div().flex_1().min_w_0().child(input))
-            .children(Kbd::new("command-center-escape", "escape"));
+            .children(self.escape_key());
         div()
             .flex()
             .flex_none()
@@ -269,6 +271,14 @@ impl CommandCenter {
             .h(px(INPUT_ROW))
             .p(t.spacing.xs)
             .child(field)
+    }
+
+    fn escape_key(&self) -> Option<Kbd> {
+        let key = match &self.props.key_hints {
+            Some(keys) => keys.key(footer::BACK_COMMAND)?,
+            None => "escape",
+        };
+        Kbd::new("command-center-escape", key)
     }
 
     fn list(&self, paint: Paint) -> AnyElement {
@@ -336,30 +346,15 @@ impl CommandCenter {
         let is_counted = argument.is_some() || !query.trim().is_empty();
         let is_path = Query::parse(query).path.is_some();
         let selected = props.selection.row(&props.rows);
+        let keys = props.key_hints.as_ref();
         footer::render(FooterLook {
             theme: t,
             note: props.note.clone(),
             error: props.error.clone(),
             count: (is_counted && !props.rows.is_empty()).then(|| result_count(&props.rows)),
-            hints: props
-                .has_key_hints
-                .then(|| hints(selected, argument, is_path)),
+            hints: keys.map(|keys| (hints(selected, argument, is_path), keys)),
         })
     }
-}
-
-fn enter(
-    panel: ObservedElement<Stateful<Div>>,
-    motion: &Motion,
-    reduce_motion: bool,
-) -> AnyElement {
-    let rise = Motion::travel(px(RISE), reduce_motion);
-    let animation = Animation::new(motion.fast).with_easing(ease_out_cubic);
-    panel
-        .with_animation("command-center-enter", animation, move |panel, delta| {
-            panel.mt(rise * (delta - 1.)).opacity(delta)
-        })
-        .into_any_element()
 }
 
 impl Render for CommandCenter {
@@ -403,7 +398,11 @@ impl Render for CommandCenter {
             anchored()
                 .position_mode(AnchoredPositionMode::Window)
                 .position(frame.origin)
-                .child(enter(panel, &t.motion, cx.reduce_motion())),
+                .child(enter(
+                    panel,
+                    &t.motion,
+                    (cx.reduce_motion(), self.props.is_leaving),
+                )),
         )
         .with_priority(2)
     }

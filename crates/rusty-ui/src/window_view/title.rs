@@ -1,3 +1,5 @@
+use gpui_kit::canvas;
+
 use super::FerriteWindow;
 use super::keys::OpenViewMenu;
 use crate::prelude::*;
@@ -13,6 +15,31 @@ fn view_button() -> impl IntoElement {
 }
 
 impl FerriteWindow {
+    fn search_field(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let anchor = self.command_center.anchor.clone();
+        let open = cx.listener(|view: &mut Self, _: &ClickEvent, window, cx| {
+            if view.command_center_view().is_none() {
+                view.toggle_command_center(window, cx);
+            }
+        });
+        div()
+            .id("title-bar-search-open")
+            .relative()
+            .flex()
+            .min_w_0()
+            .cursor_pointer()
+            .on_click(open)
+            .child(HeaderSearch::new())
+            .child(
+                canvas(
+                    move |bounds, _, _| anchor.set(Some(bounds)),
+                    |_, (), _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
+    }
+
     pub(super) fn title_bar(&self, cx: &mut Context<Self>) -> FerriteTitleBar {
         let this = cx.weak_entity();
         let toggle = cx.listener(|view: &mut Self, _: &ClickEvent, window, cx| {
@@ -22,8 +49,9 @@ impl FerriteWindow {
             .on_mica()
             .app_button(self.app_menu.is_some(), toggle);
         let bar = if WindowParts::of(&self.values).title_search {
-            bar.header(HeaderSearch::new())
+            bar.header(self.search_field(cx))
         } else {
+            self.command_center.anchor.set(None);
             bar
         };
         let bar = if self.can_open_window_menu() {

@@ -16,11 +16,29 @@ pub use query::{Query, Scope, Term};
 pub use results::{Heading, Results, Row};
 pub use selection::Selection;
 pub use source::{Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target};
-pub use view::{Argument, CommandCenter, CommandCenterEvent, CommandCenterProps};
+pub use view::{
+    Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, HintKeys, INPUT_ROW, LEAVE,
+};
 
 pub use crate::commands::ArgKind;
 
-gpui_kit::actions!(command_center, [Toggle]);
+gpui_kit::actions!(
+    command_center,
+    [
+        Toggle,
+        Up,
+        Down,
+        PageUp,
+        PageDown,
+        First,
+        Last,
+        NextGroup,
+        PreviousGroup,
+        Run,
+        RunInNewTab,
+        Back
+    ]
+);
 
 pub fn bind_keys(cx: &mut App) {
     crate::commands::bind_namespace(cx, "command_center");

@@ -83,6 +83,7 @@ impl FerriteWindow {
         match command {
             MenuCommand::Quit if self.close(window, cx) => cx.quit(),
             MenuCommand::AllSettings => self.open_settings(window, cx),
+            MenuCommand::CommandPalette => self.toggle_command_center(window, cx),
             _ => {}
         }
     }
