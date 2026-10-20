@@ -12,6 +12,9 @@ use rusty_store::{JobId, JobJournal, JobState, JournalError, StepState, Unfinish
 use rusty_ui::browser::{LogFactory, OpLog};
 
 mod held;
+mod pending;
+
+pub use pending::{StillPending, still_pending};
 
 const KEEP_FINISHED: u32 = 50;
 
@@ -79,15 +82,24 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
         let job = lock(&journal)
             .create_job(&kind, &bytes, steps, now_ms())
             .map_err(|error| error.to_string())?;
-        Ok(Box::new(JournalLog {
-            journal: Arc::clone(&journal),
-            job,
-            kind,
-            held: Vec::new(),
-            stranded: false,
-            put_back_failed: false,
-        }) as Box<dyn OpLog>)
+        let mut log = JournalLog::new(Arc::clone(&journal), job, kind);
+        log.renames = plan.kind == OpKind::Rename;
+        Ok(Box::new(log) as Box<dyn OpLog>)
     })
+}
+
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "P41 B7 wires it into RenameHooks")
+)]
+pub fn undo_log(journal: &SharedJournal, job: JobId) -> Result<Box<dyn OpLog>, String> {
+    lock(journal)
+        .finish(job, JobState::RestorePending)
+        .map_err(|error| error.to_string())?;
+    let mut log = JournalLog::new(Arc::clone(journal), job, "rename undo".to_owned());
+    log.undoing = true;
+    log.renames = true;
+    Ok(Box::new(log))
 }
 
 struct JournalLog {
@@ -97,6 +109,23 @@ struct JournalLog {
     held: Vec<HeldFile>,
     stranded: bool,
     put_back_failed: bool,
+    undoing: bool,
+    renames: bool,
+}
+
+impl JournalLog {
+    fn new(journal: SharedJournal, job: JobId, kind: String) -> Self {
+        Self {
+            journal,
+            job,
+            kind,
+            held: Vec::new(),
+            stranded: false,
+            put_back_failed: false,
+            undoing: false,
+            renames: false,
+        }
+    }
 }
 
 impl JobLog for JournalLog {
@@ -116,9 +145,11 @@ impl JobLog for JournalLog {
             self.put_back_failed = true;
             return Ok(());
         }
-        lock(&self.journal)
-            .mark_undone(self.job, seq)
-            .map_err(|_| FsError::new(FsErrorKind::Unknown))
+        let marked = lock(&self.journal).mark_undone(self.job, seq);
+        if marked.is_err() && self.renames {
+            self.put_back_failed = true;
+        }
+        marked.map_err(|_| FsError::new(FsErrorKind::Unknown))
     }
 
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
@@ -140,6 +171,8 @@ impl OpLog for JournalLog {
     fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) {
         let state = match outcome {
             _ if self.put_back_failed => JobState::RestorePending,
+            JobOutcome::Done if self.undoing => JobState::Undone,
+            _ if self.undoing => JobState::RestorePending,
             JobOutcome::Done => JobState::Done,
             JobOutcome::Cancelled => JobState::Cancelled,
             JobOutcome::Failed { .. } if self.stranded => JobState::RestorePending,

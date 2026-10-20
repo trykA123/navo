@@ -255,7 +255,7 @@ fn a_rename_whose_journal_write_fails_is_put_back() {
 }
 
 #[test]
-fn a_failure_while_putting_back_lists_the_files_left() {
+fn a_failure_while_putting_back_stops_there_and_lists_the_files_left() {
     let (fs, plan) = simple();
     fs.fault(
         &sources(&plan)[2],
@@ -274,8 +274,8 @@ fn a_failure_while_putting_back_lists_the_files_left() {
         panic!("expected Stuck, got {outcome:?}");
     };
     assert_eq!(error.kind, FsErrorKind::AccessDenied);
-    assert_eq!(left, [fs.location("d/y")]);
-    assert_eq!(names(&fs), ["a", "c", "y"]);
+    assert_eq!(left, [fs.location("d/x"), fs.location("d/y")]);
+    assert_eq!(names(&fs), ["c", "x", "y"]);
 }
 
 #[test]

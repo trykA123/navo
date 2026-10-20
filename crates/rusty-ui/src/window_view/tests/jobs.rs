@@ -7,7 +7,7 @@ use rusty_core::{Location, OpKind};
 use rusty_fs::{CancelToken, Progress};
 
 use super::{fake, home_beside_dest, open_options_sized, open_with, options_for, press};
-use crate::browser::{JobStatus, JobView};
+use crate::browser::{JobStatus, JobView, RenameReport};
 use crate::window_view::FerriteWindow;
 
 pub(super) const MB: u64 = 1024 * 1024;
@@ -61,6 +61,9 @@ pub(super) fn add(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, job: Fa
             status: job.status,
             cancel: CancelToken::new(),
             source_tab,
+            undo: false,
+            report: RenameReport::default(),
+            first_new: None,
         });
         view.refresh_activity(cx);
     });

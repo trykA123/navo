@@ -15,7 +15,7 @@ use rusty_core::{FsError, Location, OperationPlan};
 use crate::{CancelToken, ProviderOps};
 
 pub use aside::HELD_PREFIX;
-pub use rename::RenameOutcome;
+pub use rename::{RenameOutcome, is_temporary as is_rename_temporary};
 pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
 
 pub use rusty_core::TEMP_SUFFIX;

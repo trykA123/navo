@@ -257,12 +257,15 @@ pub(crate) fn operations(
         };
         return (unlogged, instance.and_then(jobs::Instance::share));
     };
-    if instance.as_ref().is_some_and(|instance| instance.sole)
-        && let Err(error) = jobs::recover(&journal, ops)
-    {
-        tracing::error!(%error, "recovering unfinished jobs failed");
-        if error.is_corruption() {
-            crate::crash::record_failed_check(&db);
+    if instance.as_ref().is_some_and(|instance| instance.sole) {
+        match jobs::recover(&journal, ops).and_then(|_| jobs::still_pending(&journal)) {
+            Ok(pending) => warn_still_pending(&pending),
+            Err(error) => {
+                tracing::error!(%error, "recovering unfinished jobs failed");
+                if error.is_corruption() {
+                    crate::crash::record_failed_check(&db);
+                }
+            }
         }
     }
     let logged = Operations {
@@ -270,6 +273,16 @@ pub(crate) fn operations(
         protected,
     };
     (logged, instance.and_then(jobs::Instance::share))
+}
+
+fn warn_still_pending(pending: &[jobs::StillPending]) {
+    for job in pending {
+        tracing::warn!(
+            job = job.job.0,
+            files = job.left.len(),
+            "files not yet put back after recovery"
+        );
+    }
 }
 
 #[cfg(test)]

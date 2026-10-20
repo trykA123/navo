@@ -3,7 +3,7 @@ use rusty_fs::{CancelToken, Progress};
 
 use super::super::jobs::job_info;
 use super::{confirm_props, mode_label};
-use crate::browser::{JobStatus, JobView, PendingOp};
+use crate::browser::{JobStatus, JobView, PendingOp, RenameReport};
 use crate::job_row::JobRowState;
 use rusty_fs::CopyMode;
 
@@ -106,6 +106,9 @@ fn job(kind: OpKind, status: JobStatus) -> JobView {
         status,
         cancel: CancelToken::new(),
         source_tab: AppState::new(at("/home")).active_tab().id(),
+        undo: false,
+        report: RenameReport::default(),
+        first_new: None,
     }
 }
 

@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use rusty_core::{Command, FsError, Location, OpKind, OperationPlan, ProviderPath};
 use rusty_fs::{CancelToken, CopyMode, JobOutcome, JobSlot, Priority, Progress, volume_of};
 
-use super::{Browser, Message};
+use super::{Browser, Message, RenameReport};
 
 mod paste;
 mod types;
@@ -12,6 +12,7 @@ mod work;
 
 pub use paste::{PasteRefusal, drop_refusal, same_volume};
 pub use types::*;
+pub(in crate::browser) use work::Run;
 use work::{JobWork, lands_inside, plan_for, start_progress};
 
 impl Browser {
@@ -88,6 +89,16 @@ impl Browser {
         let Some(pending) = self.pending.take() else {
             return false;
         };
+        self.start_job(pending, Run::Plain, None);
+        true
+    }
+
+    pub(in crate::browser) fn start_job(
+        &mut self,
+        pending: PendingOp,
+        run: Run,
+        first_new: Option<String>,
+    ) {
         self.jobs
             .retain(|job| matches!(job.status, JobStatus::Running | JobStatus::Failed(_)));
         let cancel = CancelToken::new();
@@ -101,12 +112,14 @@ impl Browser {
             status: JobStatus::Running,
             cancel: cancel.clone(),
             source_tab: pending.source_tab,
+            undo: matches!(run, Run::Undo { .. }),
+            report: RenameReport::default(),
+            first_new,
         };
-        if let Err(error) = self.spawn_job(pending, cancel) {
+        if let Err(error) = self.spawn_job(pending, run, cancel) {
             view.status = JobStatus::Failed(error);
         }
         self.jobs.push(view);
-        true
     }
 
     pub fn shutdown(&mut self, wait: Duration) -> bool {
@@ -145,7 +158,7 @@ impl Browser {
     }
 
     pub fn cancel_job(&mut self, id: u64) -> bool {
-        let Some(job) = self.jobs.iter().find(|job| job.id == id) else {
+        let Some(job) = self.jobs.iter().find(|job| job.id == id && !job.undo) else {
             return false;
         };
         job.cancel.cancel();
@@ -164,7 +177,7 @@ impl Browser {
         let running = self
             .jobs
             .iter()
-            .find(|job| job.id == id && job.status == JobStatus::Running);
+            .find(|job| job.id == id && job.status == JobStatus::Running && !job.undo);
         running.map(|job| steer(&job.cancel)).is_some()
     }
 
@@ -174,11 +187,7 @@ impl Browser {
             JobUpdate::Progress { id, progress } => {
                 self.with_job(id, |job| job.progress = progress)
             }
-            JobUpdate::Done {
-                id,
-                progress,
-                outcome,
-            } => self.finish_job(id, progress, outcome),
+            JobUpdate::Done { id, ended } => self.finish_job(id, ended),
         }
     }
 
@@ -280,12 +289,15 @@ impl Browser {
                 status: JobStatus::Failed(error.message()),
                 cancel: CancelToken::new(),
                 source_tab: request.source_tab,
+                undo: false,
+                report: RenameReport::default(),
+                first_new: None,
             }),
         }
         true
     }
 
-    fn spawn_job(&self, pending: PendingOp, cancel: CancelToken) -> Result<(), String> {
+    fn spawn_job(&self, pending: PendingOp, run: Run, cancel: CancelToken) -> Result<(), String> {
         let work = JobWork {
             id: pending.id,
             copying: self.copying,
@@ -294,6 +306,7 @@ impl Browser {
             plan: pending.plan,
             ops: Arc::clone(&self.provider),
             factory: Arc::clone(&self.operations.log),
+            run,
             cancel,
             sender: self.sender.clone(),
             wake: Arc::clone(&self.wake),
@@ -313,12 +326,12 @@ impl Browser {
         true
     }
 
-    fn finish_job(
-        &mut self,
-        id: u64,
-        progress: Option<Progress>,
-        outcome: Result<JobOutcome, String>,
-    ) -> bool {
+    fn finish_job(&mut self, id: u64, ended: Ended) -> bool {
+        let Ended {
+            progress,
+            outcome,
+            report,
+        } = ended;
         let status = match outcome {
             Ok(JobOutcome::Done) => JobStatus::Done,
             Ok(JobOutcome::Cancelled) => JobStatus::Cancelled,
@@ -326,6 +339,8 @@ impl Browser {
             Err(message) => JobStatus::Failed(message),
         };
         let mut source_tab = None;
+        let mut landing = None;
+        let mut undo = false;
         let is_done = status == JobStatus::Done;
         if matches!(status, JobStatus::Done | JobStatus::Cancelled) {
             self.ended.push(id);
@@ -335,9 +350,15 @@ impl Browser {
                 job.progress = progress;
             }
             job.status = status;
+            job.report = report;
             source_tab = Some(job.source_tab);
+            landing = job.landing();
+            undo = job.undo;
         });
-        if is_done && source_tab == Some(self.state.active_tab().id()) {
+        if is_done && let Some((tab, folder, name)) = landing {
+            self.land_on(tab, &folder, name);
+        }
+        if is_done && !undo && source_tab == Some(self.state.active_tab().id()) {
             let _ = self.command(&Command::SelectionClear);
         }
         self.relist_answering();

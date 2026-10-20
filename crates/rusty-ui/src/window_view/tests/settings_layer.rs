@@ -8,7 +8,7 @@ use rusty_fs::{CancelToken, Progress};
 use super::app_menu::{Rig, rig, rig_on};
 use super::fkeys::key_labels;
 use super::with_fkey_bar;
-use crate::browser::{JobStatus, JobView};
+use crate::browser::{JobStatus, JobView, RenameReport};
 use crate::settings::{FIELDS, Values};
 use crate::tokens::ThemeChoice;
 
@@ -39,6 +39,9 @@ fn add_running_copy(cx: &mut TestAppContext, rig: &Rig) {
             status: JobStatus::Running,
             cancel: CancelToken::new(),
             source_tab,
+            undo: false,
+            report: RenameReport::default(),
+            first_new: None,
         });
         view.refresh_activity(cx);
     });

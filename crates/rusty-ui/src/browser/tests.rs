@@ -464,3 +464,5 @@ fn a_link_to_a_file_is_not_opened_as_a_folder() {
     assert!(browser.open_row(3));
     assert_eq!(here(&browser), fs.location("home").as_str());
 }
+
+mod rename_batch;

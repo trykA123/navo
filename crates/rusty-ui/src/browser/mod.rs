@@ -16,6 +16,11 @@ use rusty_fs::{
 pub(crate) use measure::Measured;
 use operate::JobUpdate;
 pub use operate::*;
+pub use rename_batch::{
+    DeletePreset, LastRename, ListPresets, NamedPreset, RenameHooks, RenamePresetList,
+    RenameReport, SavePreset, UndoLogFactory, UndoOffer,
+};
+use rename_batch::{run_batch, run_undo};
 pub use {naming::NameProblem, offline::Offline};
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -91,6 +96,7 @@ pub struct Browser {
     profiles: ProfileCache,
     stalls: offline::Stalls,
     prefetches: prefetch::Prefetches,
+    rename_hooks: Option<RenameHooks>,
 }
 
 impl Browser {
@@ -141,6 +147,7 @@ impl Browser {
             profiles: ProfileCache::default(),
             stalls: offline::Stalls::default(),
             prefetches: prefetch::Prefetches::default(),
+            rename_hooks: None,
         }
     }
 
@@ -355,6 +362,7 @@ mod offline;
 mod open;
 mod operate;
 mod prefetch;
+mod rename_batch;
 mod sort;
 #[cfg(test)]
 mod tests;

@@ -27,7 +27,8 @@ pub use io_queue::{
 pub use job::{
     CopyMode, FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOutcome, Journaled,
     PlacedFile, Progress, RenameOutcome, StepOutcome, TEMP_SUFFIX, WorkerCounts, clean_up,
-    copy_workers, job_workers, release_held, roll_back, run_job, run_job_parallel, run_rename,
+    copy_workers, is_rename_temporary, job_workers, release_held, roll_back, run_job,
+    run_job_parallel, run_rename,
 };
 pub use local::{AutoTuning, LocalFs, make_link, os_path};
 pub use measure::{

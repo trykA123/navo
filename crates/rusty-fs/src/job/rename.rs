@@ -14,7 +14,7 @@ pub enum RenameOutcome {
     Stuck { error: FsError, left: Vec<Location> },
 }
 
-pub(super) fn is_temporary(target: &Location) -> bool {
+pub fn is_temporary(target: &Location) -> bool {
     target
         .name()
         .is_some_and(|name| name.to_text().starts_with(TEMP_PREFIX))
@@ -24,6 +24,7 @@ struct Tracking<'a> {
     inner: &'a mut dyn JobLog,
     done: Vec<u32>,
     failed: Vec<u32>,
+    undone: Vec<u32>,
 }
 
 impl JobLog for Tracking<'_> {
@@ -39,6 +40,8 @@ impl JobLog for Tracking<'_> {
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         if outcome == StepOutcome::Failed {
             self.failed.push(seq);
+        } else {
+            self.undone.push(seq);
         }
         self.inner.undone(seq, outcome)
     }
@@ -72,6 +75,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
         inner: &mut **log,
         done: Vec::new(),
         failed: Vec::new(),
+        undone: Vec::new(),
     };
     let mut inner = JobContext {
         ops: *ops,
@@ -103,7 +107,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
     match roll_back(&job, &mut inner) {
         JobOutcome::Failed { error, .. } => RenameOutcome::Stuck {
             error,
-            left: left_over(plan, &tracking.failed),
+            left: left_over(plan, &tracking.failed, &tracking.undone, &done),
         },
         JobOutcome::Done | JobOutcome::Cancelled => match first {
             Some((seq, error)) => RenameOutcome::PutBack { seq, error },
@@ -112,8 +116,9 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
     }
 }
 
-fn left_over(plan: &OperationPlan, failed: &[u32]) -> Vec<Location> {
-    let mut seqs = failed.to_vec();
+fn left_over(plan: &OperationPlan, failed: &[u32], undone: &[u32], done: &[u32]) -> Vec<Location> {
+    let not_run = done.iter().filter(|seq| !undone.contains(seq));
+    let mut seqs: Vec<u32> = failed.iter().chain(not_run).copied().collect();
     seqs.sort_unstable();
     seqs.dedup();
     seqs.iter()

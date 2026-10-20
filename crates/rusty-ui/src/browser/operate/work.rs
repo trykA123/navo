@@ -9,8 +9,10 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
-use super::{Copying, JobUpdate, LogFactory, OpRequest};
-use crate::browser::{Message, Waker};
+use super::{Copying, Ended, JobUpdate, LogFactory, OpRequest};
+use crate::browser::{
+    Message, RenameReport, UndoLogFactory, UndoOffer, Waker, run_batch, run_undo,
+};
 
 const PROGRESS_EVERY: Duration = Duration::from_millis(50);
 
@@ -85,6 +87,15 @@ pub(super) fn worker_count(
     job_workers(mode, class(source), class(target), counts)
 }
 
+pub(in crate::browser) enum Run {
+    Plain,
+    Rename,
+    Undo {
+        offer: UndoOffer,
+        log: UndoLogFactory,
+    },
+}
+
 pub(super) struct JobWork {
     pub id: u64,
     pub copying: Copying,
@@ -93,6 +104,7 @@ pub(super) struct JobWork {
     pub plan: OperationPlan,
     pub ops: Arc<dyn ProviderOps>,
     pub factory: LogFactory,
+    pub run: Run,
     pub cancel: CancelToken,
     pub sender: Sender<Message>,
     pub wake: Waker,
@@ -136,31 +148,48 @@ impl JobWork {
             self.execute(&mut |progress| reporter.report(progress))
         }))
         .unwrap_or_else(|_| Err("The job stopped unexpectedly".to_owned()));
+        let (outcome, report) = match outcome {
+            Ok((outcome, report)) => (Ok(outcome), report),
+            Err(message) => (Err(message), RenameReport::default()),
+        };
         let _ = self.sender.send(Message::Job(JobUpdate::Done {
             id: self.id,
-            progress: reporter.last,
-            outcome,
+            ended: Ended {
+                progress: reporter.last,
+                outcome,
+                report,
+            },
         }));
         (self.wake)();
     }
 
-    fn execute(&self, progress: &mut dyn FnMut(&Progress)) -> Result<JobOutcome, String> {
+    fn execute(
+        &self,
+        progress: &mut dyn FnMut(&Progress),
+    ) -> Result<(JobOutcome, RenameReport), String> {
+        let mut log = match &self.run {
+            Run::Undo { offer, log } => log(offer)?,
+            Run::Plain | Run::Rename => (self.factory)(&self.plan)?,
+        };
+        let mut ctx = JobContext {
+            ops: self.ops.as_ref(),
+            log: log.as_mut(),
+            cancel: &self.cancel,
+            progress,
+        };
+        let (outcome, report) = match &self.run {
+            Run::Plain => (self.run_plain(&mut ctx), RenameReport::default()),
+            Run::Rename => run_batch(&self.plan, &mut ctx),
+            Run::Undo { offer, .. } => run_undo(&offer.plan, &offer.done, &mut ctx),
+        };
+        log.finish(&outcome, self.ops.as_ref());
+        Ok((outcome, report))
+    }
+
+    fn run_plain(&self, ctx: &mut JobContext<'_>) -> JobOutcome {
         let Copying { mode, class_of } = self.copying;
         let workers = worker_count(mode, self.source.as_ref(), self.target.as_ref(), class_of);
-        let mut log = (self.factory)(&self.plan)?;
-        let outcome = run_job_parallel(
-            &self.plan,
-            &[],
-            &mut JobContext {
-                ops: self.ops.as_ref(),
-                log: log.as_mut(),
-                cancel: &self.cancel,
-                progress,
-            },
-            workers,
-        );
-        log.finish(&outcome, self.ops.as_ref());
-        Ok(outcome)
+        run_job_parallel(&self.plan, &[], ctx, workers)
     }
 }
 

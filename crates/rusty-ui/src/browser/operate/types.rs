@@ -6,6 +6,8 @@ use rusty_fs::{
 
 use std::sync::Arc;
 
+use crate::browser::RenameReport;
+
 #[derive(Debug, Clone)]
 pub struct DropRequest {
     pub kind: OpKind,
@@ -118,6 +120,16 @@ pub struct JobView {
     pub status: JobStatus,
     pub(crate) cancel: CancelToken,
     pub(crate) source_tab: TabId,
+    pub undo: bool,
+    pub report: RenameReport,
+    pub(crate) first_new: Option<String>,
+}
+
+impl JobView {
+    pub(super) fn landing(&self) -> Option<(TabId, Location, String)> {
+        let name = self.first_new.clone()?;
+        Some((self.source_tab, self.from.clone()?, name))
+    }
 }
 
 pub(in crate::browser) enum JobUpdate {
@@ -131,9 +143,14 @@ pub(in crate::browser) enum JobUpdate {
     },
     Done {
         id: u64,
-        progress: Option<Progress>,
-        outcome: Result<JobOutcome, String>,
+        ended: Ended,
     },
+}
+
+pub(in crate::browser) struct Ended {
+    pub progress: Option<Progress>,
+    pub outcome: Result<JobOutcome, String>,
+    pub report: RenameReport,
 }
 
 pub(in crate::browser) struct OpRequest {

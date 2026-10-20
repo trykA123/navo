@@ -1,4 +1,4 @@
-use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
+use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::presence;
 use super::copy::{overwrites, remove_if_present, temp_of};
@@ -35,6 +35,9 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
         };
         if let Err(error) = logged {
             first.get_or_insert(JobOutcome::Failed { seq, error });
+            if job.plan.kind == OpKind::Rename {
+                break;
+            }
         }
     }
     first.unwrap_or(JobOutcome::Done)
