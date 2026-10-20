@@ -1,4 +1,5 @@
 mod action;
+mod drop;
 mod header;
 mod icons;
 mod keys;
@@ -27,6 +28,7 @@ use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
 
 pub use action::{FileListAction, FilterEdit};
+pub use drop::{DropEvent, DropPayload, DropSpot};
 pub use keys::bind_keys;
 pub(crate) use keys::{
     ClearFilter, CopyItems, EditItem, MoveItems, NewFile, NewFolder, OpenRow, Paste, RecycleItems,
@@ -64,6 +66,7 @@ pub struct FileList {
     on_page_rows: Option<PageRowsHandler>,
     cover: Option<crate::modifier_hints::Cover>,
     parts: ListParts,
+    drag: drop::Wiring,
 }
 
 impl FileList {
@@ -77,6 +80,7 @@ impl FileList {
             on_page_rows: None,
             cover: None,
             parts: ListParts::default(),
+            drag: drop::Wiring::default(),
         }
     }
 
@@ -122,6 +126,7 @@ struct ListState {
     lift: Pixels,
     press: press::Press,
     lasso: lasso::Held,
+    drop_spot: Option<DropSpot>,
 }
 
 struct ListContext {
@@ -131,6 +136,7 @@ struct ListContext {
     on_command: Option<CommandHandler>,
     on_list_action: Option<ActionHandler>,
     parts: ListParts,
+    drag: drop::Wiring,
 }
 
 fn row_number(index: usize) -> u64 {
@@ -343,6 +349,7 @@ impl RenderOnce for FileList {
             on_command: self.on_command,
             on_list_action: self.on_list_action,
             parts: self.parts,
+            drag: self.drag,
         });
         let semantics = ctx.clone();
         let list = VirtualList::new("list", len, &scroll, rows::render_rows(&ctx))
@@ -361,7 +368,7 @@ impl RenderOnce for FileList {
             .on_mouse_down(MouseButton::Right, press::background_down(&ctx))
             .overflow_hidden()
             .child(lift::lifted(list, lift));
-        let area = lasso::layer(area, &ctx, &t, cx);
+        let area = drop::background(lasso::layer(area, &ctx, &t, cx), &ctx);
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
             .key_context(keys::CONTEXT)
