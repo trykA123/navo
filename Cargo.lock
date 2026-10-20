@@ -6554,6 +6554,7 @@ name = "rusty-index"
 version = "0.0.1"
 dependencies = [
  "nucleo-matcher",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
