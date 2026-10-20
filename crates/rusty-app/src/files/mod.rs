@@ -36,6 +36,7 @@ pub fn hooks(db: Option<SharedDb>) -> FileHooks {
         bytes: Arc::new(bytes),
         range: Arc::new(range),
         pdf: Arc::new(pdf::open),
+        open_uri: Arc::new(crate::launch::open_uri),
         ..FileHooks::none()
     };
     match db {

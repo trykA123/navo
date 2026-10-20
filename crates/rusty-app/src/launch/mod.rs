@@ -12,16 +12,23 @@ pub fn launcher() -> Launcher {
     })
 }
 
+pub fn open_uri(uri: &str) {
+    let _ = Command::new(opener()).arg(uri).spawn();
+}
+
+fn opener() -> &'static str {
+    if cfg!(windows) {
+        "explorer"
+    } else {
+        "xdg-open"
+    }
+}
+
 fn command_for(location: &Location) -> Option<Command> {
     if !location.is_local() {
         return None;
     }
-    let program = if cfg!(windows) {
-        "explorer"
-    } else {
-        "xdg-open"
-    };
-    let mut command = Command::new(program);
+    let mut command = Command::new(opener());
     command.arg(location.as_str());
     Some(command)
 }

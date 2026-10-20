@@ -71,6 +71,7 @@ impl ViewerKind for Pdf {
             len: opened.len,
             location: attach.host.location,
             open: attach.host.hooks.pdf,
+            open_uri: attach.host.hooks.open_uri,
             opened: opened.pages,
             is_preview: attach.host.is_preview,
         };

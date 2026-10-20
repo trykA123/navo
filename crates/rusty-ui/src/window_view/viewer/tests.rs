@@ -27,6 +27,7 @@ mod moves;
 mod open;
 mod pdf;
 mod pdf_find;
+mod pdf_links;
 mod rebound;
 mod save;
 mod search;

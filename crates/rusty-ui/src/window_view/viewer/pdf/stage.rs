@@ -8,6 +8,7 @@ use rusty_pdf::protocol::CharBox;
 use super::PdfView;
 use super::doc::Doc;
 use super::layout::STEP;
+use super::links::link_regions;
 use super::text::rects;
 use crate::prelude::*;
 use crate::tokens::{Mode, Theme};
@@ -129,6 +130,7 @@ fn sheet(t: &Theme, doc: &Doc, page: u32) -> AnyElement {
             )
         })
         .children(marks_on(t, doc, page))
+        .children(link_regions(t, doc, page))
         .when_some(broken, |sheet, message| {
             sheet.child(
                 div()
@@ -229,7 +231,7 @@ impl PdfView {
             .on_mouse_move(cx.listener(|view, event: &MouseMoveEvent, _, cx| view.drag(event, cx)))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|view, _: &MouseUpEvent, _, _| view.release()),
+                cx.listener(|view, event: &MouseUpEvent, _, cx| view.release(event, cx)),
             )
             .child(self.measure(cx))
             .children(sheets)

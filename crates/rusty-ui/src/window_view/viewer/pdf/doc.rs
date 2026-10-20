@@ -3,15 +3,16 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use gpui_kit::{RenderImage, Task, size};
-use rusty_pdf::protocol::PageText;
+use gpui_kit::{Point, RenderImage, Task, size};
+use rusty_pdf::protocol::{PageLinks, PageText};
 
 use super::hits::{HitKey, Hits};
 use super::jobs::{Done, Job, Shared};
 use super::layout::{Camera, Pages};
 use super::shots::{PAGE_BUDGET, PREVIEW_BUDGET, Pool, Shot, Shots, THUMB_BUDGET};
 use super::source::PdfPages;
-use super::text::{Boxes, PageWords, TextIndex};
+use super::text::{Boxes, Kept, PageWords, TextIndex};
+use super::trail::Trail;
 use super::trouble::{Trouble, Verdict};
 use crate::primitives::ListScroll;
 
@@ -43,6 +44,9 @@ pub(super) struct Doc {
     pub shots: Shots,
     pub thumbs: Shots,
     pub boxes: Boxes,
+    pub links: Kept<Option<PageLinks>>,
+    pub trail: Trail,
+    pub press: Option<Point<f32>>,
     pub index: TextIndex,
     pub hits: Hits,
     pub trouble: Trouble,
@@ -83,6 +87,9 @@ impl Doc {
             shots: Shots::new(budget, Pool::shared()),
             thumbs: Shots::new(THUMB_BUDGET, Pool::shared()),
             boxes: Boxes::default(),
+            links: Kept::default(),
+            trail: Trail::default(),
+            press: None,
             index: TextIndex::new(count),
             hits: Hits::default(),
             trouble: Trouble::default(),
@@ -180,6 +187,16 @@ impl Doc {
                 .find(|page| self.boxes.get(*page).is_none() && !self.trouble.unread.contains(page))
                 .map(|page| Job::Text { page })
         };
+        let linked = || {
+            near.iter()
+                .copied()
+                .find(|page| {
+                    self.boxes.get(*page).is_some()
+                        && self.links.get(*page).is_none()
+                        && !self.trouble.unread.contains(page)
+                })
+                .map(|page| Job::Links { page })
+        };
         let thumb = || self.thumb_job().filter(|_| wants.thumbs);
         let index = || {
             self.index
@@ -187,7 +204,14 @@ impl Doc {
                 .filter(|_| wants.index)
                 .map(|page| Job::Text { page })
         };
-        page.or_else(text).or_else(thumb).or_else(index)
+        page.or_else(text)
+            .or_else(linked)
+            .or_else(thumb)
+            .or_else(index)
+    }
+
+    pub(super) fn links_on(&self, page: u32) -> Option<&PageLinks> {
+        self.links.get(page)?.as_ref().as_ref()
     }
 
     pub(super) fn read(&mut self, page: u32, text: Arc<PageText>) -> bool {
@@ -230,6 +254,10 @@ impl Doc {
             Done::Read(page, text) => {
                 self.trouble.succeeded();
                 applied.read = self.read(page, text).then_some(page);
+            }
+            Done::Linked(page, links) => {
+                self.trouble.succeeded();
+                self.links.insert(page, links, &keep);
             }
             Done::Failed(job, error) => {
                 applied.verdict = self.trouble.failed(job, error);
@@ -279,6 +307,10 @@ mod tests {
         }
 
         fn text(&mut self, _: u32) -> Result<PageText, PdfError> {
+            Err(PdfError::Corrupt)
+        }
+
+        fn links(&mut self, _: u32) -> Result<PageLinks, PdfError> {
             Err(PdfError::Corrupt)
         }
     }
