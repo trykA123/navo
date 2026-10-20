@@ -15,6 +15,7 @@ use crate::automotive_sample::{
 };
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
+use crate::drag_page::DragPage;
 use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::kinds_page::KindsPage;
@@ -85,6 +86,7 @@ pub struct Gallery {
     typed_path: Entity<DrivesPage>,
     kinds: Entity<KindsPage>,
     columns: Entity<ColumnsPage>,
+    drag: Entity<DragPage>,
     tree: Option<Box<dyn ViewerBody>>,
     table: Option<Box<dyn ViewerBody>>,
     markdown: Option<Box<dyn ViewerBody>>,
@@ -135,6 +137,7 @@ impl Gallery {
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             kinds: cx.new(KindsPage::new),
             columns: cx.new(|cx| ColumnsPage::new(window, cx)),
+            drag: cx.new(DragPage::new),
             tree: structured::body(TREE_NAME, TREE, window, cx),
             table: structured::body(TABLE_NAME, TABLE, window, cx),
             markdown: structured::body(MARKDOWN_NAME, MARKDOWN, window, cx),
@@ -343,6 +346,7 @@ impl Render for Gallery {
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::FileKinds => root.child(self.kinds.clone()),
             Page::Columns => root.child(self.columns.clone()),
+            Page::Drag => root.child(self.drag.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),

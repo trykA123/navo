@@ -9,7 +9,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 91] = [
+pub const PAGES: [PageInfo; 92] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -316,4 +316,5 @@ pub const PAGES: [PageInfo; 91] = [
         "p40-a7-indexing",
         false,
     ),
+    info(Page::Drag, "Drag badge", "p36-d4-drag-badge", false),
 ];
