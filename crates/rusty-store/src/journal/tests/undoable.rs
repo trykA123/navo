@@ -53,12 +53,21 @@ fn only_done_jobs_are_undoable() {
         (300, JobState::RolledBack),
         (400, JobState::Failed),
         (500, JobState::Cancelled),
-        (600, JobState::RestorePending),
         (700, JobState::Running),
     ] {
         finished(&mut journal, "rename", at, state);
     }
     assert_eq!(journal.last_undoable("rename").unwrap().unwrap().id, done);
+}
+
+#[test]
+fn a_batch_whose_put_back_failed_stays_undoable() {
+    let mut journal = journal();
+    finished(&mut journal, "rename", 100, JobState::Done);
+    let stuck = finished(&mut journal, "rename", 200, JobState::RestorePending);
+    assert_eq!(journal.last_undoable("rename").unwrap().unwrap().id, stuck);
+    journal.mark_job_undone(stuck).unwrap();
+    assert_ne!(journal.last_undoable("rename").unwrap().unwrap().id, stuck);
 }
 
 #[test]

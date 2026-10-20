@@ -225,15 +225,33 @@ fn putting_back_logs_each_undone_step_in_reverse() {
     let (_, _, log) = run_with(&fs, &plan, None);
     let done = StepOutcome::Done;
     assert_eq!(
-        log.entries,
-        [
-            (0, done),
-            (1, done),
-            (2, StepOutcome::Failed),
-            (1, done),
-            (0, done)
-        ]
+        log.undone,
+        [(2, StepOutcome::Skipped), (1, done), (0, done)]
     );
+}
+
+#[test]
+fn a_rename_whose_journal_write_fails_is_put_back() {
+    let (fs, plan) = simple();
+    let before = tree_of(&fs, "d");
+    let mut log = Log {
+        fail_on: Some(1),
+        ..Log::default()
+    };
+    let outcome = {
+        let mut ctx = JobContext {
+            ops: &fs,
+            log: &mut log,
+            cancel: &CancelToken::new(),
+            progress: &mut |_| {},
+        };
+        crate::run_rename(&plan, &mut ctx)
+    };
+    assert!(
+        matches!(outcome, RenameOutcome::PutBack { seq: 1, .. }),
+        "{outcome:?}"
+    );
+    assert_eq!(tree_of(&fs, "d"), before);
 }
 
 #[test]

@@ -28,6 +28,8 @@ pub enum DbError {
     Corrupt(String),
     #[error("could not encode a value for the database: {0}")]
     Encode(String),
+    #[error("a rename preset needs a name")]
+    BlankPresetName,
 }
 
 impl DbError {

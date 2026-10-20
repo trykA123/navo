@@ -13,16 +13,22 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
     let mut first = None;
     for &(seq, step) in steps.iter().rev() {
         let held = held_for(step, job.held);
-        if !job.done.contains(&seq) && held.is_none() {
+        let unsure = job.unsure == Some(seq) && !job.done.contains(&seq) && held.is_none();
+        if !job.done.contains(&seq) && held.is_none() && !unsure {
             continue;
         }
         if awaits_unreadable_row(job, step, held) {
             continue;
         }
-        let logged = match undo(job, step, held, ctx) {
-            Ok(outcome) => ctx.log.step(seq, outcome),
+        let result = if unsure {
+            undo_unsure(ctx.ops, step)
+        } else {
+            undo(job, step, held, ctx)
+        };
+        let logged = match result {
+            Ok(outcome) => ctx.log.undone(seq, outcome),
             Err(error) => {
-                let _ = ctx.log.step(seq, StepOutcome::Failed);
+                let _ = ctx.log.undone(seq, StepOutcome::Failed);
                 Err(error)
             }
         };
@@ -104,6 +110,16 @@ fn undo_rename(
     target: &Location,
 ) -> Result<StepOutcome, FsError> {
     if surely_absent(ops, target)? && presence(ops, source)?.is_some() {
+        return Ok(StepOutcome::Skipped);
+    }
+    ops.rename(target, source).map(|()| StepOutcome::Done)
+}
+
+fn undo_unsure(ops: &dyn ProviderOps, step: &Step) -> Result<StepOutcome, FsError> {
+    let Step::Rename { source, target } = step else {
+        return Ok(StepOutcome::Skipped);
+    };
+    if presence(ops, source)?.is_some() || presence(ops, target)?.is_none() {
         return Ok(StepOutcome::Skipped);
     }
     ops.rename(target, source).map(|()| StepOutcome::Done)

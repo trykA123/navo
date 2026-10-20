@@ -156,6 +156,10 @@ impl JobLog for BenchLog {
         Ok(())
     }
 
+    fn undone(&mut self, _seq: u32, _outcome: StepOutcome) -> Result<(), FsError> {
+        Ok(())
+    }
+
     fn journal_held(&mut self, _held: &HeldFile) -> Result<bool, FsError> {
         Ok(false)
     }

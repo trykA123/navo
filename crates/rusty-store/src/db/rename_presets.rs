@@ -19,6 +19,17 @@ pub struct RenamePresets {
 
 impl Db {
     pub fn save_preset(&self, name: &str, rules_json: &str, now: i64) -> Result<(), DbError> {
+        if name.trim().is_empty() {
+            return Err(DbError::BlankPresetName);
+        }
+        self.write_preset(name, rules_json, now)
+    }
+
+    pub fn save_last_used(&self, rules_json: &str, now: i64) -> Result<(), DbError> {
+        self.write_preset(LAST_USED, rules_json, now)
+    }
+
+    fn write_preset(&self, name: &str, rules_json: &str, now: i64) -> Result<(), DbError> {
         self.connection().execute(
             "INSERT INTO rename_preset (name, rules, saved_at) VALUES (?1, ?2, ?3)
              ON CONFLICT (name) DO UPDATE SET rules = excluded.rules, saved_at = excluded.saved_at",

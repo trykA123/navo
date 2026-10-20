@@ -137,6 +137,10 @@ impl JobLog for Watching<'_> {
         Ok(())
     }
 
+    fn undone(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
+        Ok(())
+    }
+
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
         self.seen
             .push(self.fs.metadata(&held.original).ok().map(|e| e.size));

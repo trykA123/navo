@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusty_core::{FsError, FsErrorKind, Location, OperationPlan};
+use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan};
 use rusty_fs::{
     CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, ProviderOps,
     StepOutcome, clean_up, roll_back,
@@ -85,6 +85,7 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
             kind,
             held: Vec::new(),
             stranded: false,
+            put_back_failed: false,
         }) as Box<dyn OpLog>)
     })
 }
@@ -95,6 +96,7 @@ struct JournalLog {
     kind: String,
     held: Vec<HeldFile>,
     stranded: bool,
+    put_back_failed: bool,
 }
 
 impl JobLog for JournalLog {
@@ -106,6 +108,16 @@ impl JobLog for JournalLog {
         };
         lock(&self.journal)
             .mark_step(self.job, seq, state, None)
+            .map_err(|_| FsError::new(FsErrorKind::Unknown))
+    }
+
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        if outcome == StepOutcome::Failed {
+            self.put_back_failed = true;
+            return Ok(());
+        }
+        lock(&self.journal)
+            .mark_undone(self.job, seq)
             .map_err(|_| FsError::new(FsErrorKind::Unknown))
     }
 
@@ -127,6 +139,7 @@ impl JobLog for JournalLog {
 impl OpLog for JournalLog {
     fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) {
         let state = match outcome {
+            _ if self.put_back_failed => JobState::RestorePending,
             JobOutcome::Done => JobState::Done,
             JobOutcome::Cancelled => JobState::Cancelled,
             JobOutcome::Failed { .. } if self.stranded => JobState::RestorePending,
@@ -161,7 +174,11 @@ struct Recovery<'a> {
 }
 
 impl JobLog for Recovery<'_> {
-    fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+    fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
+        Ok(())
+    }
+
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         if outcome == StepOutcome::Failed {
             return Ok(());
         }
@@ -224,8 +241,9 @@ fn roll_back_job(
     ops: &dyn ProviderOps,
 ) -> JobState {
     let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
-        return unrestored(&held.files);
+        return unrestored(&held.files, false);
     };
+    let renames = plan.kind == OpKind::Rename;
     let done = left_to_undo(job);
     let _ = clean_up(&plan, &done, ops);
     let mut log = Recovery {
@@ -240,6 +258,7 @@ fn roll_back_job(
             held: &held.files,
             placed: &held.placed,
             held_unreadable: held.unreadable > 0,
+            unsure: renames.then(|| first_not_done(job)).flatten(),
         },
         &mut JobContext {
             ops,
@@ -257,12 +276,19 @@ fn roll_back_job(
     }
     match outcome {
         JobOutcome::Done => JobState::RolledBack,
-        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(&held.files),
+        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(&held.files, renames),
     }
 }
 
-fn unrestored(held: &[HeldFile]) -> JobState {
-    if held.is_empty() {
+fn first_not_done(job: &UnfinishedJob) -> Option<u32> {
+    job.steps
+        .iter()
+        .find(|step| step.state != StepState::Done)
+        .map(|step| step.seq)
+}
+
+fn unrestored(held: &[HeldFile], renames: bool) -> JobState {
+    if held.is_empty() && !renames {
         JobState::Failed
     } else {
         JobState::RestorePending
@@ -289,3 +315,6 @@ mod undo_retry_tests;
 
 #[cfg(test)]
 mod parallel_tests;
+
+#[cfg(test)]
+mod rename_tests;

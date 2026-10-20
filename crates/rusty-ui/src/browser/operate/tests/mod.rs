@@ -94,6 +94,10 @@ impl JobLog for SharedLog {
         Ok(())
     }
 
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), rusty_core::FsError> {
+        self.step(seq, outcome)
+    }
+
     fn journal_held(&mut self, _: &rusty_fs::HeldFile) -> Result<bool, rusty_core::FsError> {
         Ok(false)
     }

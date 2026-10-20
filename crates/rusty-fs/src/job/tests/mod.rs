@@ -43,6 +43,7 @@ const MODES: [usize; 2] = [0, 4];
 #[derive(Default)]
 struct Log {
     entries: Vec<(u32, StepOutcome)>,
+    undone: Vec<(u32, StepOutcome)>,
     fail_on: Option<u32>,
     held: Vec<HeldFile>,
     placed: Vec<PlacedFile>,
@@ -64,6 +65,12 @@ impl JobLog for Log {
             return Err(log_error());
         }
         self.entries.push((seq, outcome));
+        Ok(())
+    }
+
+    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        self.entries.push((seq, outcome));
+        self.undone.push((seq, outcome));
         Ok(())
     }
 
@@ -162,6 +169,7 @@ impl Harness {
             held: &held,
             placed: &placed,
             held_unreadable: false,
+            unsure: None,
         };
         let outcome = self.with(ops, |ctx| roll_back(&job, ctx));
         self.held = held;
