@@ -1,4 +1,5 @@
 use super::fields::{Control, FIELDS, FieldSpec, Section};
+use super::find::{Filter, Line, lines};
 use super::values::Value;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -41,12 +42,18 @@ pub fn nudged(spec: &FieldSpec, value: &Value, nudge: Nudge) -> Option<Value> {
     }
 }
 
-pub fn moved(row: usize, down: bool) -> usize {
-    if down {
-        (row + 1).min(FIELDS.len() - 1)
+pub fn moved(filter: &Filter, row: usize, down: bool) -> usize {
+    let mut admitted = FIELDS
+        .iter()
+        .enumerate()
+        .filter(|(_, spec)| filter.admits(spec))
+        .map(|(index, _)| index);
+    let found = if down {
+        admitted.find(|index| *index > row)
     } else {
-        row.saturating_sub(1)
-    }
+        admitted.rfind(|index| *index < row)
+    };
+    found.unwrap_or(row)
 }
 
 pub fn section_of(row: usize) -> Section {
@@ -62,18 +69,22 @@ pub fn first_row(section: Section) -> usize {
         .unwrap_or(0)
 }
 
-pub fn next_section(row: usize, forward: bool) -> usize {
+pub fn next_section(filter: &Filter, row: usize, forward: bool) -> usize {
     let count = Section::ALL.len();
     let at = Section::ALL
         .iter()
         .position(|section| *section == section_of(row))
         .unwrap_or(0);
-    let to = if forward {
-        (at + 1) % count
-    } else {
-        (at + count - 1) % count
-    };
-    first_row(Section::ALL[to])
+    (1..count)
+        .map(|step| {
+            if forward {
+                at + step
+            } else {
+                at + count - step
+            }
+        })
+        .find_map(|to| filter.first_in(Section::ALL[to % count]))
+        .unwrap_or(row)
 }
 
 pub fn rows_in(section: Section) -> impl Iterator<Item = (usize, &'static FieldSpec)> {
@@ -83,18 +94,8 @@ pub fn rows_in(section: Section) -> impl Iterator<Item = (usize, &'static FieldS
         .filter(move |(_, spec)| spec.section == section)
 }
 
-pub fn child_of(row: usize) -> Option<usize> {
-    let section = section_of(row);
-    let mut group = None;
-    let mut headings = 0;
-    for (at, (index, spec)) in rows_in(section).enumerate() {
-        if section == Section::Display && spec.group() != group {
-            group = spec.group();
-            headings += usize::from(group.is_some());
-        }
-        if index == row {
-            return Some(at + headings + 1);
-        }
-    }
-    None
+pub fn child_of(filter: &Filter, row: usize) -> Option<usize> {
+    lines(filter, section_of(row))
+        .iter()
+        .position(|line| *line == Line::Row(row))
 }

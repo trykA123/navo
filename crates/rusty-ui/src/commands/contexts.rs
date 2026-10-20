@@ -2,7 +2,7 @@ pub const GLOBAL: &str = "global";
 
 const VIEWER: &str = "Viewer";
 
-const PARENTS: [(&str, &str); 19] = [
+const PARENTS: [(&str, &str); 20] = [
     ("Archive", VIEWER),
     ("Elf", VIEWER),
     ("ElfTable", "Elf"),
@@ -22,6 +22,7 @@ const PARENTS: [(&str, &str); 19] = [
     ("ViewerGoTo", VIEWER),
     ("DialogButton", "Dialog"),
     ("SettingsField", "SettingsSheet"),
+    ("SettingsFind", "SettingsSheet"),
 ];
 
 fn parent(context: &str) -> Option<&str> {

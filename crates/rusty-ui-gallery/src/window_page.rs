@@ -1,3 +1,4 @@
+mod builders;
 mod card;
 
 use std::rc::Rc;
@@ -28,7 +29,7 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 use crate::drives_page::six_drives;
 use crate::job_sample;
 use crate::pane_sample;
-use crate::settings_sample;
+use crate::settings_sample::{self, Extras, Shown};
 use crate::sheet_sample;
 use crate::shortcuts_sample;
 
@@ -68,6 +69,7 @@ pub struct SheetShows {
     pub window_width: Option<f32>,
     pub is_ringed: bool,
     pub settings: Option<Field>,
+    pub extras: Extras,
     pub shortcuts: Option<Entity<ShortcutsPage>>,
 }
 
@@ -252,20 +254,6 @@ impl WindowPage {
         )
     }
 
-    pub fn with_jobs(shown: JobsShown, cx: &mut Context<Self>) -> Self {
-        Self {
-            jobs: Some(shown),
-            ..Self::new(None, cx)
-        }
-    }
-
-    pub fn with_hints(shown: HintsShown, held: KeyLayer, cx: &mut Context<Self>) -> Self {
-        Self {
-            hints: Some(shown),
-            ..Self::new(Some(held), cx)
-        }
-    }
-
     fn hint_layer(&self, combo: Combo) -> Layer {
         let has_crash = self.has_crash;
         layer_where(Keymap::builtin(), combo, &|spec| {
@@ -302,13 +290,6 @@ impl WindowPage {
         })
     }
 
-    pub fn with_crash(cx: &mut Context<Self>) -> Self {
-        Self {
-            has_crash: true,
-            ..Self::new(None, cx)
-        }
-    }
-
     fn crash_notice(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
         self.has_crash.then(|| {
             div()
@@ -317,13 +298,6 @@ impl WindowPage {
                 .my(t.spacing.xs)
                 .child(CrashNotice::new(CrashKeys::of(Keymap::builtin())))
         })
-    }
-
-    pub fn with_menu(cx: &mut Context<Self>) -> Self {
-        Self {
-            is_menu_open: true,
-            ..Self::new(None, cx)
-        }
     }
 
     pub fn with_sheet(shows: SheetShows, cx: &mut Context<Self>) -> Self {
@@ -361,7 +335,13 @@ impl WindowPage {
         };
         let shown = match (&sheet.shows.shortcuts, sheet.shows.settings) {
             (Some(page), _) => shortcuts_sample::sheet(&sheet.state, frame, page),
-            (None, Some(field)) => settings_sample::sheet(t, &sheet.state, frame, field),
+            (None, Some(field)) => {
+                let shown = Shown {
+                    field,
+                    extras: &sheet.shows.extras,
+                };
+                settings_sample::sheet(t, &sheet.state, frame, &shown)
+            }
             (None, None) => match self.preview_parts {
                 Some(parts) => sheet_sample::sheet_with_parts(t, &sheet.state, frame, parts),
                 None => sheet_sample::sheet(t, &sheet.state, frame),

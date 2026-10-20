@@ -17,6 +17,7 @@ pub struct Loaded {
     pub store: SettingsStore,
     pub report: LoadReport,
     pub ledger: Option<PathBuf>,
+    pub default_changes: Vec<DefaultChange>,
     pub(super) late: Option<Receiver<Started>>,
 }
 
@@ -34,6 +35,7 @@ impl Loaded {
             store,
             report,
             ledger: None,
+            default_changes: Vec::new(),
             late: None,
         }
     }
@@ -43,6 +45,15 @@ impl Loaded {
 pub struct Started {
     pub loaded: Option<Loaded>,
     pub default_changes: Vec<DefaultChange>,
+}
+
+impl Started {
+    #[must_use]
+    pub fn into_loaded(self) -> Option<Loaded> {
+        let mut loaded = self.loaded?;
+        loaded.default_changes = self.default_changes;
+        Some(loaded)
+    }
 }
 
 pub struct Starting {

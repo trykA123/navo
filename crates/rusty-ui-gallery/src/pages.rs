@@ -73,6 +73,8 @@ pub enum Page {
     PreviewNoBars,
     PreviewNoLargest,
     PreviewPartsOff,
+    SettingsUpgrade,
+    SettingsFind,
 }
 
 pub struct PageInfo {
@@ -91,7 +93,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 73] = [
+pub const PAGES: [PageInfo; 75] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -348,6 +350,18 @@ pub const PAGES: [PageInfo; 73] = [
         Page::PreviewPartsOff,
         "Preview sheet, no optional part",
         "p33-v2-preview-off",
+        false,
+    ),
+    info(
+        Page::SettingsUpgrade,
+        "Settings, upgrade notice",
+        "p22-s3b-upgrade-notice",
+        false,
+    ),
+    info(
+        Page::SettingsFind,
+        "Settings, find a setting",
+        "p22-s3b-find",
         false,
     ),
 ];

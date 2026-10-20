@@ -1,7 +1,8 @@
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use rusty_store::SettingsStore;
+use rusty_store::{DefaultChange, SettingsStore};
+use rusty_ui::settings::DefaultShift;
 use rusty_ui::window_view::SettingsNews;
 
 use super::start::Started;
@@ -31,11 +32,28 @@ pub(super) fn deliver(delivery: &Mutex<Delivery>) {
     }
 }
 
+pub(super) fn announce(delivery: &Mutex<Delivery>, changes: &[DefaultChange]) {
+    if changes.is_empty() {
+        return;
+    }
+    let shifts = changes
+        .iter()
+        .map(|change| DefaultShift {
+            key: change.key.clone(),
+            old: change.old.clone(),
+            new: change.new.clone(),
+        })
+        .collect();
+    let mut delivery = delivery.lock().unwrap_or_else(PoisonError::into_inner);
+    (delivery.on_news)(SettingsNews::Defaults(shifts));
+}
+
 pub(super) fn receive_late(receiver: Option<Receiver<Started>>, delivery: Arc<Mutex<Delivery>>) {
     let Some(receiver) = receiver else { return };
     std::thread::spawn(move || {
-        if receiver.recv().is_ok() {
+        if let Ok(started) = receiver.recv() {
             deliver(&delivery);
+            announce(&delivery, &started.default_changes);
         }
     });
 }

@@ -97,19 +97,31 @@ fn arrows_step_a_number_and_text_needs_editing() {
 
 #[test]
 fn tab_jumps_to_the_next_section_and_wraps() {
-    assert_eq!(section_of(next_section(0, true)), Section::Files);
+    assert_eq!(
+        section_of(next_section(&Filter::default(), 0, true)),
+        Section::Files
+    );
     let last = first_row(Section::Display);
-    assert_eq!(next_section(last, true), 0);
-    assert_eq!(section_of(next_section(0, false)), Section::Display);
-    assert_eq!(next_section(FIELDS.len() - 1, true), 0);
+    assert_eq!(next_section(&Filter::default(), last, true), 0);
+    assert_eq!(
+        section_of(next_section(&Filter::default(), 0, false)),
+        Section::Display
+    );
+    assert_eq!(next_section(&Filter::default(), FIELDS.len() - 1, true), 0);
 }
 
 #[test]
 fn rows_move_across_sections_and_stop_at_the_ends() {
     let last_appearance = first_row(Section::Files) - 1;
-    assert_eq!(section_of(moved(last_appearance, true)), Section::Files);
-    assert_eq!(moved(0, false), 0);
-    assert_eq!(moved(FIELDS.len() - 1, true), FIELDS.len() - 1);
+    assert_eq!(
+        section_of(moved(&Filter::default(), last_appearance, true)),
+        Section::Files
+    );
+    assert_eq!(moved(&Filter::default(), 0, false), 0);
+    assert_eq!(
+        moved(&Filter::default(), FIELDS.len() - 1, true),
+        FIELDS.len() - 1
+    );
 }
 
 #[test]
@@ -305,8 +317,12 @@ fn only_the_twelve_window_fields_are_window_parts() {
 
 #[test]
 fn the_scroll_child_of_a_row_counts_the_group_headings_above_it() {
-    let child =
-        |field: Field| child_of(FIELDS.iter().position(|spec| spec.field == field).unwrap());
+    let child = |field: Field| {
+        child_of(
+            &Filter::default(),
+            FIELDS.iter().position(|spec| spec.field == field).unwrap(),
+        )
+    };
     assert_eq!(child(Field::Theme), Some(1));
     assert_eq!(child(Field::WindowTabsWithOne), Some(2));
     assert_eq!(child(Field::WindowContents), Some(13));

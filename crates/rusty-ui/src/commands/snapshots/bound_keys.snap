@@ -192,9 +192,15 @@ preview.view | f3 | PreviewBrowse
 preview.view_menu | alt-v | PreviewBrowse
 prompt.cancel | escape | PromptDialog
 settings.cancel_edit | escape | SettingsField
+settings.clear_find | escape | SettingsFind
 settings.close | escape | SettingsSheet
 settings.edit_value | enter | SettingsSheet
 settings.edit_value | f2 | SettingsSheet
+settings.find | ctrl-f | SettingsSheet
+settings.find_to_list | down | SettingsFind
+settings.find_to_list | down | SettingsFind > Input
+settings.find_to_list | enter | SettingsFind
+settings.find_to_list | enter | SettingsFind > Input
 settings.flip_value | space | SettingsSheet
 settings.next_section | tab | SettingsSheet
 settings.next_value | right | SettingsSheet

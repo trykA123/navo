@@ -117,8 +117,11 @@ settings.edit_value | Edit value | SettingsSheet
 settings.show_in_file | Show in settings file | SettingsSheet
 settings.reset_value | Reset to default | SettingsSheet
 settings.undo | Undo change | SettingsSheet
+settings.find | Find a setting | SettingsSheet
 settings.close | Close settings | SettingsSheet
 settings.cancel_edit | Cancel edit | SettingsField
+settings.clear_find | Clear the search | SettingsFind
+settings.find_to_list | Back to the list | SettingsFind
 shortcuts.previous_row | Previous shortcut | Shortcuts
 shortcuts.next_row | Next shortcut | Shortcuts
 shortcuts.record | Record a new key | Shortcuts
