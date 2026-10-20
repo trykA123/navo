@@ -183,8 +183,9 @@ fn session_saver(
     Rc::new(move |state: &AppState| {
         if let Some(dirs) = dirs.as_ref()
             && dirs.ensure().is_ok()
+            && let Err(error) = save(state, &dirs.session_file())
         {
-            let _ = save(state, &dirs.session_file());
+            tracing::warn!(%error, "saving the session failed");
         }
         if let Some(disk) = &disk {
             disk.save_folders(&cache, &keys, &session_folders(state));
@@ -239,10 +240,12 @@ pub(crate) fn operations(
             .into_iter()
             .filter_map(|path| Location::new(path.to_str()?).ok()),
     );
-    let journal = dirs
-        .ensure()
-        .ok()
-        .and_then(|()| jobs::open(&dirs.data.join("ferrite.db")).ok());
+    let db = dirs.data.join("ferrite.db");
+    let journal = dirs.ensure().ok().and_then(|()| {
+        jobs::open(&db)
+            .inspect_err(|error| tracing::error!(%error, "opening the job journal failed"))
+            .ok()
+    });
     let instance = jobs::claim(&dirs.data.join("ferrite.lock"));
     let Some(journal) = journal else {
         let unlogged = Operations {
@@ -251,8 +254,13 @@ pub(crate) fn operations(
         };
         return (unlogged, instance.and_then(jobs::Instance::share));
     };
-    if instance.as_ref().is_some_and(|instance| instance.sole) {
-        let _ = jobs::recover(&journal, ops);
+    if instance.as_ref().is_some_and(|instance| instance.sole)
+        && let Err(error) = jobs::recover(&journal, ops)
+    {
+        tracing::error!(%error, "recovering unfinished jobs failed");
+        if error.is_corruption() {
+            crate::crash::record_failed_check(&db);
+        }
     }
     let logged = Operations {
         log: jobs::log_factory(journal),

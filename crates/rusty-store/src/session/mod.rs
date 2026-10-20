@@ -1,6 +1,8 @@
+mod keep;
 mod migration;
 
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 
 use rusty_core::{AppState, SessionState};
@@ -35,16 +37,8 @@ const HEADER_LEN: usize = 16 + 2 + 4 + 4;
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
 pub fn write_session(path: &Path, session: &SessionState) -> Result<(), SessionFileError> {
-    if matches!(
-        usable(path),
-        Err(SessionFileError::BadMagic
-            | SessionFileError::BadChecksum
-            | SessionFileError::Decode(_))
-    ) {
-        let mut corrupt = path.as_os_str().to_owned();
-        corrupt.push(".corrupt");
-        let _ = fs::rename(path, corrupt);
-    }
+    keep::set_aside_unreadable(path, keep::FileRole::Main)?;
+    keep::set_aside_unreadable(&backup_path(path), keep::FileRole::Backup)?;
     let body =
         postcard::to_allocvec(session).map_err(|e| SessionFileError::Decode(e.to_string()))?;
     let len = u32::try_from(body.len())
@@ -60,16 +54,41 @@ pub fn write_session(path: &Path, session: &SessionState) -> Result<(), SessionF
 }
 
 pub fn read_session_file(path: &Path) -> Result<SessionState, SessionFileError> {
-    if fs::metadata(path)?.len() > MAX_FILE_BYTES {
+    let mut file = fs::File::open(path)?;
+    let header = read_header(&mut file)?;
+    if file.metadata()?.len() > MAX_FILE_BYTES {
         return Err(SessionFileError::Decode(
             "session file is too large".to_owned(),
         ));
     }
-    let bytes = fs::read(path)?;
-    let (header, body) = bytes
-        .split_at_checked(HEADER_LEN)
+    let mut body = Vec::new();
+    file.take(MAX_FILE_BYTES).read_to_end(&mut body)?;
+    if usize::try_from(header.len).ok() != Some(body.len()) {
+        return Err(SessionFileError::Decode(format!(
+            "body is {} bytes, header says {}",
+            body.len(),
+            header.len
+        )));
+    }
+    if crc32fast::hash(&body) != header.crc {
+        return Err(SessionFileError::BadChecksum);
+    }
+    migration::decode(header.version, &body)
+}
+
+struct Header {
+    version: u16,
+    len: u32,
+    crc: u32,
+}
+
+fn read_header(file: &mut fs::File) -> Result<Header, SessionFileError> {
+    let mut bytes = Vec::with_capacity(HEADER_LEN);
+    file.take(HEADER_LEN as u64).read_to_end(&mut bytes)?;
+    let (magic, rest) = bytes
+        .split_at_checked(SESSION_MAGIC.len())
+        .filter(|(_, rest)| rest.len() == HEADER_LEN - SESSION_MAGIC.len())
         .ok_or(SessionFileError::BadMagic)?;
-    let (magic, rest) = header.split_at(SESSION_MAGIC.len());
     if magic != SESSION_MAGIC {
         return Err(SessionFileError::BadMagic);
     }
@@ -80,18 +99,11 @@ pub fn read_session_file(path: &Path) -> Result<SessionState, SessionFileError> 
             supported: SESSION_VERSION,
         });
     }
-    let len = u32::from_le_bytes([rest[2], rest[3], rest[4], rest[5]]);
-    let crc = u32::from_le_bytes([rest[6], rest[7], rest[8], rest[9]]);
-    if usize::try_from(len).ok() != Some(body.len()) {
-        return Err(SessionFileError::Decode(format!(
-            "body is {} bytes, header says {len}",
-            body.len()
-        )));
-    }
-    if crc32fast::hash(body) != crc {
-        return Err(SessionFileError::BadChecksum);
-    }
-    migration::decode(version, body)
+    Ok(Header {
+        version,
+        len: u32::from_le_bytes([rest[2], rest[3], rest[4], rest[5]]),
+        crc: u32::from_le_bytes([rest[6], rest[7], rest[8], rest[9]]),
+    })
 }
 
 #[must_use]

@@ -8,7 +8,7 @@ use rusty_fs::{
     CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, ProviderOps,
     StepOutcome, clean_up, roll_back,
 };
-use rusty_store::{Db, JobId, JobJournal, JobState, JournalError, StepState, UnfinishedJob};
+use rusty_store::{JobId, JobJournal, JobState, JournalError, StepState, UnfinishedJob};
 use rusty_ui::browser::{LogFactory, OpLog};
 
 mod held;
@@ -18,7 +18,7 @@ const KEEP_FINISHED: u32 = 50;
 pub type SharedJournal = Arc<Mutex<JobJournal>>;
 
 pub fn open(file: &Path) -> Result<SharedJournal, JournalError> {
-    let (db, _) = Db::open(file, false)?;
+    let (db, _) = crate::crash::open_db(file)?;
     Ok(Arc::new(Mutex::new(JobJournal::new(db)?)))
 }
 
