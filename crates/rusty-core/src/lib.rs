@@ -14,6 +14,7 @@ mod name;
 mod op_plan;
 pub mod paging;
 pub mod placement;
+pub mod rename;
 mod replay;
 mod selection;
 mod session;
