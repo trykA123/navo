@@ -3,7 +3,7 @@ use crate::map::MapModel;
 use crate::mdf::{Region as Declared, RegionTable, TableOrigin};
 
 use super::kind::takes_no_address_space;
-use super::{Block, Kind, OwnerRef, Region, RegionSource, Regions};
+use super::{Block, Kind, OwnerRef, Region, RegionSource, Regions, plain_section};
 
 const CLUSTER_GAP: u64 = 16 * 1024 * 1024;
 
@@ -49,7 +49,7 @@ pub fn regions_for_map(map: &MapModel, mdf: Option<&RegionTable>) -> Regions {
             block: Block {
                 start: section.address,
                 size: section.size,
-                kind: Kind::of_name(&section.name),
+                kind: Kind::of_name(plain_section(&section.name)),
                 owner: OwnerRef::MapSection(at),
             },
             region: section.region.as_deref(),

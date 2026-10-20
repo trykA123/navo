@@ -1,11 +1,17 @@
+mod groups;
 mod kind;
 mod owners_elf;
 mod regions;
 mod strip;
 mod table;
 
+pub use groups::{
+    Child, Group, GroupBy, Grouping, OTHER, Origin, TOP_GROUPS, Top, available, default_grouping,
+    flash_region, group, top,
+};
 pub use kind::Kind;
-pub use owners_elf::{NOT_ATTRIBUTED, NameRef, Owner, Owners, Provenance, owners};
+use owners_elf::plain_section;
+pub use owners_elf::{NOT_ATTRIBUTED, NameRef, Owner, Owners, Provenance, owners, owners_of_map};
 pub use regions::{regions_for_elf, regions_for_map};
 pub use strip::{Break, Cell, Scale, ScaleMode, cells};
 
@@ -55,6 +61,20 @@ impl Region {
     #[must_use]
     pub fn free(&self) -> Option<u64> {
         self.total.map(|total| total.saturating_sub(self.used))
+    }
+
+    #[must_use]
+    pub fn span(&self) -> Option<std::ops::Range<u64>> {
+        let first = self.blocks.iter().map(|block| block.start).min();
+        let last = self
+            .blocks
+            .iter()
+            .map(|block| block.start.saturating_add(block.size))
+            .max();
+        let start = self.start.or(first)?;
+        let declared = self.total.map(|total| start.saturating_add(total));
+        let end = declared.into_iter().chain(last).max()?;
+        Some(start..end)
     }
 
     fn new(name: String, source: RegionSource) -> Self {

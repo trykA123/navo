@@ -1,12 +1,15 @@
 mod claims;
 mod files;
 mod from_map;
+mod map_owners;
 mod prepare;
 mod section;
 
 use std::ops::Range;
 
-use self::files::{Interner, plain_section};
+use self::files::Interner;
+pub(super) use self::files::plain_section;
+pub use self::map_owners::owners_of_map;
 use self::prepare::Context;
 use super::Kind;
 use super::kind::takes_no_address_space;
@@ -101,11 +104,22 @@ impl Owners {
 
     #[must_use]
     pub fn name<'a>(&self, owner: &Owner, elf: &'a Elf, map: Option<&'a MapModel>) -> &'a str {
+        self.name_in(owner, Some(elf), map)
+    }
+
+    #[must_use]
+    pub fn name_in<'a>(
+        &self,
+        owner: &Owner,
+        elf: Option<&'a Elf>,
+        map: Option<&'a MapModel>,
+    ) -> &'a str {
         match owner.name {
-            NameRef::Symbol(at) => elf.symbols.get(at as usize).map_or("", |s| elf.name(s)),
+            NameRef::Symbol(at) => elf
+                .and_then(|elf| elf.symbols.get(at as usize).map(|s| elf.name(s)))
+                .unwrap_or(""),
             NameRef::Section(at) => elf
-                .sections
-                .get(at as usize)
+                .and_then(|elf| elf.sections.get(at as usize))
                 .map_or("", |section| section.name.as_str()),
             NameRef::Contribution(at) => map
                 .and_then(|map| map.contributions.get(at as usize))

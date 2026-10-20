@@ -20,7 +20,7 @@ pub(super) fn classify(name: &str) -> Option<FileKind> {
     }
 }
 
-pub(super) fn plain_section(name: &str) -> &str {
+pub(in crate::space) fn plain_section(name: &str) -> &str {
     name.strip_suffix(')')
         .and_then(|rest| rest.rsplit_once(" ("))
         .filter(|(_, digits)| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
