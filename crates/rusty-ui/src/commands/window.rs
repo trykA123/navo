@@ -305,6 +305,12 @@ pub(super) const GROUPS: [Group; 8] = [
             ),
             ("file_list::RenameItem", "files.rename", "cmd-files-rename"),
             (
+                "file_list::MultiRename",
+                "files.multi_rename",
+                "cmd-files-multi-rename",
+            ),
+            ("file_list::UndoLast", "files.undo", "cmd-files-undo"),
+            (
                 "file_list::NewFolder",
                 "files.new_folder",
                 "cmd-files-new-folder",

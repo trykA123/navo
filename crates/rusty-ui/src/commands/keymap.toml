@@ -322,6 +322,14 @@ command = "files.rename"
 keys = ["f2", "shift-f6"]
 
 [[bind]]
+command = "files.multi_rename"
+keys = ["ctrl-m"]
+
+[[bind]]
+command = "files.undo"
+keys = ["ctrl-z"]
+
+[[bind]]
 command = "files.new_folder"
 keys = ["f7"]
 
@@ -819,6 +827,62 @@ keys = ["enter", "space"]
 [[bind]]
 command = "confirm.cancel"
 keys = ["escape"]
+
+# MultiRename
+
+[[bind]]
+command = "multi_rename.rename"
+keys = ["enter"]
+
+[[bind]]
+command = "multi_rename.close"
+keys = ["escape"]
+
+[[bind]]
+command = "multi_rename.token_menu"
+keys = ["ctrl-space"]
+
+[[bind]]
+command = "multi_rename.focus_preview"
+keys = ["ctrl-down"]
+
+[[bind]]
+command = "multi_rename.focus_fields"
+keys = ["ctrl-up"]
+
+[[bind]]
+command = "multi_rename.page_up"
+keys = ["pageup"]
+
+[[bind]]
+command = "multi_rename.page_down"
+keys = ["pagedown"]
+
+[[bind]]
+command = "multi_rename.next_problem"
+keys = ["alt-down"]
+
+[[bind]]
+command = "multi_rename.previous_problem"
+keys = ["alt-up"]
+
+[[bind]]
+command = "multi_rename.save_preset"
+keys = ["ctrl-s"]
+
+[[bind]]
+command = "multi_rename.open_presets"
+keys = ["ctrl-o"]
+
+[[bind]]
+command = "multi_rename.reset"
+keys = ["ctrl-r"]
+
+# MultiRenamePreview
+
+[[bind]]
+command = "multi_rename.toggle_row"
+keys = ["delete"]
 
 # PromptDialog
 

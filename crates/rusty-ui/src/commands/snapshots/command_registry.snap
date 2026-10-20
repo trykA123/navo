@@ -72,6 +72,8 @@ pane.go_back | Back | FileList
 pane.go_forward | Forward | FileList
 files.clear_filter | Clear filter | FileList
 files.rename | Rename | FileList
+files.multi_rename | Rename several items | FileList
+files.undo | Undo the last rename | FileList
 files.new_folder | New folder | FileList
 files.new_file | New file | FileList
 files.mark_pattern | Mark by pattern | FileList
@@ -322,6 +324,19 @@ pdf.link_previous | Previous link | Pdf
 pdf.link_follow | Follow link | Pdf
 pdf.trail_back | Back | Pdf
 pdf.trail_forward | Forward | Pdf
+multi_rename.rename | Rename the items | MultiRename
+multi_rename.close | Close without renaming | MultiRename
+multi_rename.token_menu | Insert a token | MultiRename
+multi_rename.focus_preview | Go to the preview | MultiRename
+multi_rename.focus_fields | Back to the fields | MultiRename
+multi_rename.page_up | Scroll the preview up | MultiRename
+multi_rename.page_down | Scroll the preview down | MultiRename
+multi_rename.next_problem | Next problem | MultiRename
+multi_rename.previous_problem | Previous problem | MultiRename
+multi_rename.save_preset | Save a preset | MultiRename
+multi_rename.open_presets | Open a preset | MultiRename
+multi_rename.reset | Reset every field | MultiRename
+multi_rename.toggle_row | Exclude or include the row | MultiRenamePreview
 window.new | New window | global
 workspace.list | Workspaces | global
 help.key_map | Help and key map | global

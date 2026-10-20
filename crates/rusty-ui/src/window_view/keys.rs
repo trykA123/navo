@@ -45,6 +45,7 @@ pub(crate) fn bind_app_keys(cx: &mut App) {
     crate::file_list::bind_keys(cx);
     crate::confirm_dialog::bind_keys(cx);
     crate::prompt_dialog::bind_keys(cx);
+    crate::multi_rename::bind_keys(cx);
     crate::app_menu::bind_keys(cx);
     crate::settings::bind_keys(cx);
     crate::shortcuts::bind_keys(cx);

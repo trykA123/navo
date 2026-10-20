@@ -55,6 +55,8 @@ const GROUPS: [(&str, &[&str]); 8] = [
             "files.copy",
             "files.move",
             "files.rename",
+            "files.multi_rename",
+            "files.undo",
             "files.new_folder",
             "files.new_file",
             "files.recycle",

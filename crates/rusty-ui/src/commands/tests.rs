@@ -6,7 +6,7 @@ use rusty_l10n::{FILES, catalog, tr};
 use super::{GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 25] = [
+const NAMESPACES: [&str; 26] = [
     "activity_strip",
     "app_menu",
     "can_trace",
@@ -21,6 +21,7 @@ const NAMESPACES: [&str; 25] = [
     "file_list",
     "map_view",
     "memory_image",
+    "multi_rename",
     "path_input",
     "preview",
     "prompt_dialog",
@@ -340,7 +341,7 @@ fn a_module_binds_only_its_own_commands(cx: &mut TestAppContext) {
         .copied()
         .filter(|action| !action.starts_with("file_list::"))
         .collect();
-    assert_eq!((actions.len(), foreign), (62, Vec::<&str>::new()));
+    assert_eq!((actions.len(), foreign), (64, Vec::<&str>::new()));
 }
 
 #[gpui_kit::test]

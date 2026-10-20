@@ -126,6 +126,7 @@ files.mark_extension | alt-add | FileList
 files.mark_pattern | + | FileList
 files.mark_pattern | add | FileList
 files.move | f6 | FileList
+files.multi_rename | ctrl-m | FileList
 files.new_file | shift-f7 | FileList
 files.new_folder | f7 | FileList
 files.open | enter | FileList
@@ -146,6 +147,7 @@ files.sort_by_name | ctrl-f3 | FileList
 files.sort_by_size | ctrl-f6 | FileList
 files.toggle_mark | space | FileList
 files.toggle_mark_down | insert | FileList
+files.undo | ctrl-z | FileList
 files.unmark_all | ctrl-- | FileList
 files.unmark_all | ctrl-shift-a | FileList
 files.unmark_all | ctrl-subtract | FileList
@@ -208,6 +210,19 @@ markdown.next_link | tab | Markdown
 markdown.open_link | enter | Markdown
 markdown.previous_link | shift-tab | Markdown
 memory.go_to_item | enter | MemoryImage
+multi_rename.close | escape | MultiRename
+multi_rename.focus_fields | ctrl-up | MultiRename
+multi_rename.focus_preview | ctrl-down | MultiRename
+multi_rename.next_problem | alt-down | MultiRename
+multi_rename.open_presets | ctrl-o | MultiRename
+multi_rename.page_down | pagedown | MultiRename
+multi_rename.page_up | pageup | MultiRename
+multi_rename.previous_problem | alt-up | MultiRename
+multi_rename.rename | enter | MultiRename
+multi_rename.reset | ctrl-r | MultiRename
+multi_rename.save_preset | ctrl-s | MultiRename
+multi_rename.toggle_row | delete | MultiRenamePreview
+multi_rename.token_menu | ctrl-space | MultiRename
 pane.drive_menu_first | alt-f1 | FerritePane
 pane.drive_menu_second | alt-f2 | FerritePane
 pane.edit_path | ctrl-l | FerritePane

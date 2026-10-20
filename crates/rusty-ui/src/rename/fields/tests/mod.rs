@@ -65,3 +65,13 @@ pub(super) fn assert_all_safe(values: &rusty_core::rename::Values, fields: &[&st
         }
     }
 }
+
+#[test]
+fn every_builtin_field_has_a_label_text() {
+    let missing: Vec<String> = registry()
+        .listing()
+        .map(|entry| entry.field.label_id.to_string())
+        .filter(|id| !rusty_l10n::catalog().has(id))
+        .collect();
+    assert_eq!(missing, Vec::<String>::new());
+}

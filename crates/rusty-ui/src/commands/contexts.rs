@@ -2,7 +2,7 @@ pub const GLOBAL: &str = "global";
 
 const VIEWER: &str = "Viewer";
 
-const PARENTS: [(&str, &str); 20] = [
+const PARENTS: [(&str, &str); 22] = [
     ("Archive", VIEWER),
     ("Elf", VIEWER),
     ("ElfTable", "Elf"),
@@ -21,6 +21,8 @@ const PARENTS: [(&str, &str); 20] = [
     ("ViewerFind", VIEWER),
     ("ViewerGoTo", VIEWER),
     ("DialogButton", "Dialog"),
+    ("MultiRename", "Dialog"),
+    ("MultiRenamePreview", "MultiRename"),
     ("SettingsField", "SettingsSheet"),
     ("SettingsFind", "SettingsSheet"),
 ];

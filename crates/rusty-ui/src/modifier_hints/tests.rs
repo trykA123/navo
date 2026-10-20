@@ -48,7 +48,12 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
     );
     assert_eq!(
         commands(&group(&layer, "Files").entries),
-        ["files.mark_all", "files.unmark_all"]
+        [
+            "files.multi_rename",
+            "files.undo",
+            "files.mark_all",
+            "files.unmark_all"
+        ]
     );
     let clipboard = &group(&layer, "Clipboard").entries;
     assert_eq!(
@@ -66,7 +71,7 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
             "files.sort_by_size"
         ]
     );
-    assert_eq!(layer.count(), 22);
+    assert_eq!(layer.count(), 24);
 }
 
 #[test]

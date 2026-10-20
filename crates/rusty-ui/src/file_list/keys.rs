@@ -34,6 +34,8 @@ gpui_kit::actions!(
         GoForward,
         ClearFilter,
         RenameItem,
+        MultiRename,
+        UndoLast,
         NewFolder,
         NewFile,
         MarkPattern,
