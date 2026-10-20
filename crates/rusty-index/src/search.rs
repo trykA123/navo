@@ -116,10 +116,9 @@ impl<'a> Matchers<'a> {
         for &term in query {
             match term {
                 Term::Name(text) => matchers.names.push(Fuzzy::new(text, false)),
-                Term::Path(text) => matchers.paths.push(Fuzzy::new(
-                    &text.replace(['/', '\\'], std::path::MAIN_SEPARATOR_STR),
-                    true,
-                )),
+                Term::Path(text) => matchers
+                    .paths
+                    .push(Fuzzy::new(&text.replace('\\', "/"), true)),
                 Term::Ext(extensions) => matchers.extensions.push(extensions),
             }
         }
@@ -132,7 +131,7 @@ impl<'a> Matchers<'a> {
         }
         let mut hit = score_terms(&mut self.names, name)?;
         if !self.paths.is_empty() {
-            let path = table.path(id)?;
+            let path = table.path_with(id, '/')?;
             let path_hit = score_terms(&mut self.paths, &path)?;
             let offset = name_offset(&path, name);
             hit.score = hit.score.saturating_add(path_hit.score);

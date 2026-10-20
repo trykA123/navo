@@ -32,7 +32,8 @@ fn an_empty_file_has_size_zero_and_no_attrs() {
     let values = FileFields.read(&path);
     assert_eq!(values.get("size"), Some("0"));
     assert_eq!(values.get("size_kb"), Some("0"));
-    assert_eq!(values.get("attrs"), None);
+    let attrs = if cfg!(windows) { Some("A") } else { None };
+    assert_eq!(values.get("attrs"), attrs);
 }
 
 #[test]

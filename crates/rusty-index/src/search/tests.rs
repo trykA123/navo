@@ -201,3 +201,14 @@ fn search_million_names_timing() {
     assert_eq!(hits, expected);
     println!("search: 1,000,000 synthetic names, limit 50: {elapsed:?}");
 }
+
+#[test]
+fn search_path_terms_never_put_a_backslash_in_the_pattern() {
+    let mut table = NameTable::new();
+    let folder = table.push(NO_PARENT, "work", Flags::FOLDER).unwrap();
+    let expected = table.push(folder, "map.txt", Flags::NONE).unwrap();
+    for term in ["work\\map", "work/map"] {
+        let hits = search(&table, &[Term::Path(term)], 10, &|| false);
+        assert_eq!(ids(&hits), vec![expected], "{term}");
+    }
+}
