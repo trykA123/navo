@@ -105,7 +105,7 @@ fn a_running_copy_shows_its_line_with_pause_and_cancel(cx: &mut TestAppContext) 
     assert!(has(cx, window, "activity-strip"));
     let title = label(cx, window, ("activity-title", 1u64));
     assert_eq!(title, "Copying 12 files to /archive");
-    assert_eq!(label(cx, window, ("activity-percent", 1u64)), "25 %");
+    assert_eq!(label(cx, window, ("activity-percent", 1u64)), "25%");
     assert!(has(cx, window, ("activity-pause", 1u64)));
     assert!(has(cx, window, ("activity-cancel", 1u64)));
     assert!(!has(cx, window, "activity-all"));
@@ -166,7 +166,6 @@ fn hovering_the_row_keeps_a_done_item(cx: &mut TestAppContext) {
 fn a_failure_shows_and_dismisses(cx: &mut TestAppContext) {
     let (window, view) = open_plain(cx);
     add(cx, &view, failed(1));
-    key(cx, window, "ctrl-j");
     assert!(!has(cx, window, "job-card"));
     let title = label(cx, window, ("activity-title", 1u64));
     assert_eq!(title, "11 files could not be copied");
@@ -186,7 +185,7 @@ fn other_items_wait_as_chips_and_a_click_leads_with_one(cx: &mut TestAppContext)
         ..running(2, 0)
     };
     add(cx, &view, moving);
-    assert_eq!(label(cx, window, ("activity-chip", 1u64)), "Copy 25 %");
+    assert_eq!(label(cx, window, ("activity-chip", 1u64)), "Copy 25%");
     assert_eq!(label(cx, window, "activity-all"), "All 2 Alt+J");
     click(cx, window, ("activity-chip", 1u64));
     let title = label(cx, window, ("activity-title", 1u64));
@@ -198,7 +197,6 @@ fn other_items_wait_as_chips_and_a_click_leads_with_one(cx: &mut TestAppContext)
 fn the_job_pill_is_gone(cx: &mut TestAppContext) {
     let (window, view) = open_plain(cx);
     add(cx, &view, running(1, 100 * MB));
-    key(cx, window, "ctrl-j");
     assert!(!has(cx, window, "job-pill"));
     assert!(!has(cx, window, "job-card"));
     assert!(has(cx, window, "activity-strip"));

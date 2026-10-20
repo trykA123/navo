@@ -316,7 +316,7 @@ fn a_chip_names_each_item_in_a_few_words() {
         [
             "Copy failed",
             "Dragging 2 items",
-            "Move 64 %",
+            "Move 64%",
             "Copied 3 items"
         ]
     );

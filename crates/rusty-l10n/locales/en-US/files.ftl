@@ -60,7 +60,7 @@ activity-dragging = Dragging { $count ->
    *[other] { $items } items
 }
 activity-drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
-activity-percent = { $percent } %
+activity-percent = { $percent }%
 activity-chip-copy = Copy { $percent }
 activity-chip-move = Move { $percent }
 activity-chip-delete = Delete { $percent }

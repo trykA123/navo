@@ -26,7 +26,7 @@ pub(super) struct JobUi {
 impl JobUi {
     pub(super) fn new(cx: &App) -> Self {
         Self {
-            is_card_hidden: false,
+            is_card_hidden: true,
             meter: SpeedMeter::default(),
             activity: Activity::default(),
             strip: StripUi::new(cx),
@@ -121,7 +121,7 @@ impl FerriteWindow {
 
     pub(super) fn jobs_changed(&mut self) {
         if self.browser.jobs().is_empty() {
-            self.job_ui.is_card_hidden = false;
+            self.job_ui.is_card_hidden = true;
         }
     }
 

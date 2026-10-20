@@ -73,12 +73,11 @@ fn glyph(t: &Theme, item: &ActivityItem) -> (IconName, Hsla) {
 }
 
 fn fill_color(t: &Theme, item: &ActivityItem) -> Hsla {
-    let color = if item.paused {
-        t.colors.faint
+    if item.paused {
+        t.colors.faint.opacity(FILL_ALPHA)
     } else {
-        t.colors.accent
-    };
-    color.opacity(FILL_ALPHA)
+        t.colors.selection
+    }
 }
 
 fn rise_in<E: IntoElement + Styled + 'static>(

@@ -126,6 +126,7 @@ fn the_card_appears_while_a_job_runs(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     assert!(shown(cx, window).card.is_none());
     add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "ctrl-j");
     let now = shown(cx, window);
     let card = now.card.expect("a card");
     assert!(card.starts_with("Copying 4 items, 25%"), "{card}");
@@ -144,16 +145,18 @@ fn the_card_appears_while_a_job_runs(cx: &mut TestAppContext) {
 fn ctrl_j_hides_the_card_and_shows_it_again(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
-    key(cx, window, "ctrl-j");
     assert!(shown(cx, window).card.is_none());
     key(cx, window, "ctrl-j");
     assert!(shown(cx, window).card.is_some());
+    key(cx, window, "ctrl-j");
+    assert!(shown(cx, window).card.is_none());
 }
 
 #[gpui_kit::test]
 fn the_chevron_hides_the_card(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "ctrl-j");
     click(cx, window, "job-shrink");
     assert!(shown(cx, window).card.is_none());
 }
@@ -177,6 +180,7 @@ fn two_jobs_show_a_count_and_combined_progress(cx: &mut TestAppContext) {
             ..running(2, 0)
         },
     );
+    key(cx, window, "ctrl-j");
     let card = shown(cx, window).card.expect("a card");
     assert!(card.starts_with("2 jobs, 12%"), "{card}");
     assert!(label(cx, window, ("job-row", 1u64)).starts_with("Copy 4 items, 25%"));
@@ -187,6 +191,7 @@ fn two_jobs_show_a_count_and_combined_progress(cx: &mut TestAppContext) {
 fn cancel_asks_the_engine_to_stop_the_job(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "ctrl-j");
     click(cx, window, ("job-cancel", 1u64));
     let stopped = view.read_with(cx, |view, _| view.browser.jobs()[0].cancel.is_cancelled());
     assert!(stopped);
@@ -197,6 +202,7 @@ fn cancel_in_a_list_of_jobs_stops_only_that_job(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
     add(cx, &view, running(2, 0));
+    key(cx, window, "ctrl-j");
     click(cx, window, ("job-cancel", 2u64));
     let stopped = view.read_with(cx, |view, _| {
         view.browser
@@ -215,6 +221,7 @@ fn done_shows_briefly_then_the_card_goes_away(cx: &mut TestAppContext) {
     let (window, view) = open_with(cx, fs, state, Rc::default());
     press(cx, window, &view, "f5");
     press(cx, window, &view, "enter");
+    key(cx, window, "ctrl-j");
     let card = shown(cx, window).card.expect("a card");
     assert!(card.starts_with("Copied 1 item, Done"), "{card}");
     cx.executor().advance_clock(Duration::from_secs(1));
@@ -237,6 +244,7 @@ fn an_error_stays_until_it_is_dismissed(cx: &mut TestAppContext) {
             ..running(1, 100 * MB)
         },
     );
+    key(cx, window, "ctrl-j");
     cx.executor().advance_clock(Duration::from_secs(10));
     cx.run_until_parked();
     assert!(shown(cx, window).card.is_some());
@@ -271,6 +279,7 @@ fn with_reduced_motion_an_ended_job_stays_visible_until_it_leaves(cx: &mut TestA
             ..running(1, 400 * MB)
         },
     );
+    key(cx, window, "ctrl-j");
     assert!(card_visible(cx, window, "job-card"));
     key(cx, window, "ctrl-j");
     assert!(card_visible(cx, window, "activity-strip"));
@@ -291,6 +300,7 @@ fn tick(cx: &mut TestAppContext) {
 fn a_stalled_job_drops_its_speed_and_time_left(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 0));
+    key(cx, window, "ctrl-j");
     view.update(cx, |view, cx| view.wake(cx));
     for step in 1..=4 {
         set_done(cx, &view, step * 10 * MB);
@@ -319,7 +329,7 @@ fn ctrl_j_is_left_alone_while_a_dialog_is_open(cx: &mut TestAppContext) {
     assert!(view.read_with(cx, |view, _| view.browser.pending().is_some()));
     add(cx, &view, running(99, 100 * MB));
     key(cx, window, "ctrl-j");
-    assert!(shown(cx, window).card.is_some());
+    assert!(shown(cx, window).card.is_none());
 }
 
 #[gpui_kit::test]
@@ -337,6 +347,7 @@ fn a_done_job_leaves_while_a_failed_job_stays(cx: &mut TestAppContext) {
     );
     press(cx, window, &view, "f5");
     press(cx, window, &view, "enter");
+    key(cx, window, "ctrl-j");
     assert_eq!(view.read_with(cx, |view, _| view.browser.jobs().len()), 2);
     cx.executor().advance_clock(Duration::from_millis(2500));
     cx.run_until_parked();
@@ -373,6 +384,7 @@ fn the_pause_button_pauses_only_its_job(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
     add(cx, &view, running(2, 0));
+    key(cx, window, "ctrl-j");
     click(cx, window, ("job-pause", 2u64));
     assert_eq!(pause_asked(cx, &view), [false, true]);
 }
@@ -381,6 +393,7 @@ fn the_pause_button_pauses_only_its_job(cx: &mut TestAppContext) {
 fn a_paused_job_reads_paused_and_resume_continues_it(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
+    key(cx, window, "ctrl-j");
     give_speed(cx, &view, 1, 10 * MB);
     click(cx, window, ("job-pause", 1u64));
     let asked = label(cx, window, ("job-status", 1u64));
@@ -398,7 +411,6 @@ fn a_paused_job_reads_paused_and_resume_continues_it(cx: &mut TestAppContext) {
 fn the_strip_reads_paused_while_paused(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
-    key(cx, window, "ctrl-j");
     view.update(cx, |view, _| view.browser.jobs()[0].cancel.pause());
     engine_pauses(cx, &view, true);
     let detail = label(cx, window, ("activity-detail", 1u64));
@@ -410,6 +422,7 @@ fn the_strip_reads_paused_while_paused(cx: &mut TestAppContext) {
 fn the_speed_survives_a_pause_without_decaying(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 0));
+    key(cx, window, "ctrl-j");
     view.update(cx, |view, cx| view.wake(cx));
     for step in 1..=4 {
         set_done(cx, &view, step * 10 * MB);
