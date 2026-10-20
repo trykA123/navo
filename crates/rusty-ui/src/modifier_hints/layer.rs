@@ -1,4 +1,5 @@
 use gpui_kit::{Keystroke, SharedString};
+use rusty_l10n::tr;
 
 use super::combo::Combo;
 use super::groups::{ORDER, place_of};
@@ -103,7 +104,7 @@ fn entries(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<Entry> {
         let Some(entry) = entries.iter_mut().find(|entry| entry.command == name) else {
             entries.push(Entry {
                 command: name,
-                label: bind.spec.label.into(),
+                label: tr(bind.spec.label).into(),
                 keys: caps,
             });
             continue;

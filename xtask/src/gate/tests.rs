@@ -11,7 +11,7 @@ fn steps_without_coverage_follow_the_exact_order() {
     .into_iter()
     .map(|step| (step.name, step.program, step.args))
     .collect();
-    let expected: [(&str, &str, &[&str]); 9] = [
+    let expected: [(&str, &str, &[&str]); 10] = [
         ("fmt", "cargo", &["fmt", "--all", "--check"]),
         (
             "clippy",
@@ -28,6 +28,7 @@ fn steps_without_coverage_follow_the_exact_order() {
         ("taplo", "taplo", &["check"]),
         ("typos", "typos", &[]),
         ("size", "cargo", &["xtask", "size"]),
+        ("l10n", "cargo", &["xtask", "l10n"]),
         ("deny", "cargo", &["deny", "check"]),
         ("audit", "cargo", &["audit"]),
         (
@@ -69,24 +70,24 @@ fn no_step_repeats() {
 }
 
 #[test]
-fn steps_without_coverage_have_nine_steps() {
+fn steps_without_coverage_have_ten_steps() {
     assert_eq!(
         steps(&GateOptions {
             with_coverage: false,
         })
         .len(),
-        9
+        10
     );
 }
 
 #[test]
-fn steps_with_coverage_have_ten_steps() {
+fn steps_with_coverage_have_eleven_steps() {
     assert_eq!(
         steps(&GateOptions {
             with_coverage: true,
         })
         .len(),
-        10
+        11
     );
 }
 

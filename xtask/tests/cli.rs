@@ -72,4 +72,12 @@ mod tests {
         assert_eq!(output.stderr, b"usage: cargo xtask gate [--coverage]\n");
         assert!(output.stdout.is_empty());
     }
+
+    #[test]
+    fn l10n_rejects_unknown_options() {
+        let output = invoke(&["l10n", "--bogus"]);
+        assert_eq!(output.status.code(), Some(2));
+        assert_eq!(output.stderr, b"usage: cargo xtask l10n [--list]\n");
+        assert!(output.stdout.is_empty());
+    }
 }

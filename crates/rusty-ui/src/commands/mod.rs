@@ -35,11 +35,11 @@ struct Group {
 }
 
 const MENU_ONLY: [(&str, &str); 5] = [
-    ("app.command_palette", "Command palette"),
-    ("window.new", "New window"),
-    ("workspace.list", "Workspaces"),
-    ("help.key_map", "Help and key map"),
-    ("app.quit", "Quit"),
+    ("app.command_palette", "cmd-app-command-palette"),
+    ("window.new", "cmd-window-new"),
+    ("workspace.list", "cmd-workspace-list"),
+    ("help.key_map", "cmd-help-key-map"),
+    ("app.quit", "cmd-app-quit"),
 ];
 
 pub fn all() -> impl Iterator<Item = CommandSpec> {

@@ -1,4 +1,5 @@
 use gpui_kit::Keystroke;
+use rusty_l10n::tr;
 
 use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap, is_within, normal_key, shown};
 
@@ -43,7 +44,7 @@ impl Conflict {
     #[must_use]
     pub fn message(&self) -> String {
         let key = shown(&self.key).unwrap_or_else(|| self.key.clone());
-        let label = self.other.label;
+        let label = tr(self.other.label);
         match self.reach {
             Reach::Same => format!("{key} is used by {label} — replace it?"),
             Reach::Outer => {

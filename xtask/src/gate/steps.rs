@@ -18,6 +18,7 @@ pub fn steps(options: &GateOptions) -> Vec<Step> {
         step("taplo", "taplo", &["check"]),
         step("typos", "typos", &[]),
         step("size", "cargo", &["xtask", "size"]),
+        step("l10n", "cargo", &["xtask", "l10n"]),
         step("deny", "cargo", &["deny", "check"]),
         step("audit", "cargo", &["audit"]),
         step(
