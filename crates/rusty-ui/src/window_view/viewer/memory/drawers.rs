@@ -1,8 +1,9 @@
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{ClickEvent, Role, Stateful, WeakEntity};
-use rusty_automotive::{Image, Item};
+use rusty_automotive::Image;
 
-use super::text::{item_name, percent, problem, span, start, whole};
+use super::entries;
+use super::text::{padding_gaps, percent, problem, span, start, whole};
 use super::{Focus, MemoryView, Ready};
 use crate::format;
 use crate::prelude::*;
@@ -73,11 +74,17 @@ fn item_row(
     let Some(item) = ready.items.get(at) else {
         return div().id(("memory-item", at)).test_support();
     };
-    let span = item.span();
-    let name = item_name(&ready.items, at);
+    let span = &item.span;
+    let name = entries::name(&ready.items, at);
     let size = format::size(span.end - span.start);
-    let is_gap = matches!(item, Item::Gap(_));
-    let label = format!("{name}, {}, {size}", super::text::span(span, ready.wide));
+    let is_gap = item.is_gap;
+    let place = super::text::span(span, ready.wide);
+    let place = if item.folded > 0 {
+        format!("{place} · {}", padding_gaps(item.folded))
+    } else {
+        place
+    };
+    let label = format!("{name}, {place}, {size}");
     div()
         .id(("memory-item", at))
         .role(Role::ListItem)
@@ -98,7 +105,7 @@ fn item_row(
                 .font_family(t.typography.mono_font.clone())
                 .text_size(t.typography.small)
                 .text_color(t.colors.muted)
-                .child(super::text::span(span, ready.wide)),
+                .child(place),
         )
 }
 
@@ -286,7 +293,7 @@ impl MemoryView {
         let Some(item) = ready.items.get(self.selected) else {
             return div().id("memory-inspector-body");
         };
-        let span = item.span();
+        let span = &item.span;
         let whole = whole(&ready.image);
         let size = span.end - span.start;
         let into = span.start.saturating_sub(whole.start);
@@ -334,7 +341,7 @@ impl MemoryView {
         let range = ready
             .items
             .get(self.selected)
-            .map(|item| span(item.span(), ready.wide));
+            .map(|item| span(&item.span, ready.wide));
         let title = div()
             .flex()
             .flex_col()
@@ -342,7 +349,7 @@ impl MemoryView {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(item_name(&ready.items, self.selected)),
+                    .child(entries::name(&ready.items, self.selected)),
             )
             .children(range.map(|range| {
                 div()

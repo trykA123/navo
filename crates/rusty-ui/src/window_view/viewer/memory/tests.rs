@@ -1,4 +1,4 @@
-use super::text::{address, ascii, gap_row, hex_cells, parse_address, span};
+use super::text::{address, ascii, columns, gap_row, hex_cells, parse_address, span};
 
 #[test]
 fn addresses_show_eight_digits_unless_the_image_is_wide() {
@@ -38,4 +38,15 @@ fn addresses_parse_with_or_without_a_prefix() {
     assert_eq!(parse_address("0x8000400"), Ok(0x800_0400));
     assert_eq!(parse_address(" 1F00 "), Ok(0x1F00));
     assert!(parse_address("zz").is_err());
+}
+
+#[test]
+fn the_column_header_follows_the_row_width() {
+    assert_eq!(
+        columns(16),
+        "00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F"
+    );
+    let wide = columns(32);
+    assert!(wide.ends_with("18 19 1A 1B 1C 1D 1E 1F"));
+    assert_eq!(wide.len(), hex_cells(&[Some(0); 32]).0.len());
 }

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use rusty_automotive::{Format, Image, IndexError, Layout, LayoutOptions, Watch, index};
 
+use super::entries::entries;
 use super::text::is_wide;
 use super::{Fetched, Index, MemoryView, Ready, Windows};
 use crate::prelude::*;
@@ -50,6 +51,13 @@ pub(super) fn start_index(
     )
 }
 
+pub(super) fn options(row_bytes: u64) -> LayoutOptions {
+    LayoutOptions {
+        row_bytes,
+        ..LayoutOptions::default()
+    }
+}
+
 impl MemoryView {
     fn index_message(&mut self, message: IndexMessage, cx: &mut Context<Self>) {
         match message {
@@ -60,14 +68,8 @@ impl MemoryView {
             }
             IndexMessage::Done(Ok(image)) => {
                 let ready = Ready {
-                    layout: Layout::new(
-                        &image.ranges,
-                        LayoutOptions {
-                            fold_under: 0,
-                            ..LayoutOptions::default()
-                        },
-                    ),
-                    items: image.items(),
+                    layout: Layout::new(&image.ranges, options(self.row_bytes)),
+                    items: entries(&image),
                     wide: is_wide(&image),
                     image: Arc::new(image),
                 };

@@ -3,7 +3,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
+use gpui_kit::{
+    AnyWindowHandle, AppContext as _, Entity, TestAppContext, VisualTestContext, px, size,
+};
 
 use super::structured::open_named;
 use super::{Setup, has_editor, label, press_only, redraw, text_of, visible};
@@ -23,7 +25,7 @@ const WITH_GAP: &str = "\
 :020000040800F2
 :10000000000102030405060708090A0B0C0D0E0F78
 :10001000101112131415161718191A1B1C1D1E1F68
-:10010000202122232425262728292A2B2C2D2E2F77
+:10020000202122232425262728292A2B2C2D2E2F76
 :0400000508000131BD
 :00000001FF
 ";
@@ -39,6 +41,37 @@ fn open(
     settle(cx, &view);
     redraw(cx, window);
     (window, view)
+}
+
+const FOLDED: &str = "\
+:020000040800F2
+:10000000000102030405060708090A0B0C0D0E0F78
+:10001000101112131415161718191A1B1C1D1E1F68
+:10010000202122232425262728292A2B2C2D2E2F77
+:00000001FF
+";
+
+fn open_sized(
+    cx: &mut TestAppContext,
+    text: &str,
+    width: f32,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    let (window, view) = open(cx, "app.hex", text);
+    resize(cx, window, &view, width);
+    (window, view)
+}
+
+fn resize(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<FerriteWindow>,
+    width: f32,
+) {
+    VisualTestContext::from_window(window, cx).simulate_resize(size(px(width), px(600.)));
+    for _ in 0..3 {
+        settle(cx, view);
+        redraw(cx, window);
+    }
 }
 
 fn settle_motion(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<FerriteWindow>) {
@@ -67,7 +100,7 @@ fn a_gap_folds_into_one_row_and_a_bad_checksum_shows_in_the_status(cx: &mut Test
     let (window, _) = open(cx, "app.hex", &broken);
     assert_eq!(
         label(cx, window, ("memory-gap", 2)),
-        "gap 0x08000020–0x080000FF · 224 B not in file"
+        "gap 0x08000020–0x080001FF · 480 B not in file"
     );
     assert_eq!(
         text_of(cx, window, "memory-status"),
@@ -126,7 +159,7 @@ fn enter_in_the_navigator_jumps_to_the_picked_range(cx: &mut TestAppContext) {
     press(cx, window, &view, "down");
     press(cx, window, &view, "enter");
     settle_motion(cx, window, &view);
-    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000100 · Range 2");
+    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000200 · Range 2");
     assert!(!visible(cx, window, "memory-inspector"));
 }
 
@@ -151,10 +184,10 @@ fn the_inspector_opens_by_itself_when_the_setting_asks(cx: &mut TestAppContext) 
 fn ctrl_g_goes_to_an_address_and_rejects_one_outside_the_image(cx: &mut TestAppContext) {
     let (window, view) = open(cx, "app.hex", WITH_GAP);
     press(cx, window, &view, "ctrl-g");
-    type_in(cx, window, &view, "8000105");
+    type_in(cx, window, &view, "8000205");
     press(cx, window, &view, "enter");
     redraw(cx, window);
-    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000100 · Range 2");
+    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000200 · Range 2");
     press(cx, window, &view, "ctrl-g");
     type_in(cx, window, &view, "100");
     press(cx, window, &view, "enter");
@@ -219,4 +252,72 @@ fn a_failed_row_read_is_shown_once_and_not_retried_on_every_frame(cx: &mut TestA
     assert!(calls.load(Ordering::Relaxed) <= 3, "{calls:?}");
     let status = text_of(cx, window, "memory-status");
     assert!(status.contains("The drive was removed."), "{status}");
+}
+
+#[gpui_kit::test]
+fn a_wide_window_shows_32_bytes_per_row_and_a_narrow_one_16(cx: &mut TestAppContext) {
+    let (window, view) = open_sized(cx, WITH_GAP, 2400.);
+    let wide = label(cx, window, ("memory-row", 0));
+    assert!(wide.contains("1E 1F"), "{wide}");
+    assert!(wide.contains("0F  10"), "{wide}");
+    resize(cx, window, &view, 600.);
+    let narrow = label(cx, window, ("memory-row", 0));
+    assert!(narrow.contains("0E 0F"), "{narrow}");
+    assert!(!narrow.contains("1E 1F"), "{narrow}");
+    assert!(label(cx, window, ("memory-row", 1)).starts_with("0x08000010"));
+}
+
+#[gpui_kit::test]
+fn resizing_keeps_the_cursor_on_its_address(cx: &mut TestAppContext) {
+    let (window, view) = open_sized(cx, WITH_GAP, 600.);
+    press(cx, window, &view, "down");
+    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000010 · Range 1");
+    resize(cx, window, &view, 2400.);
+    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000000 · Range 1");
+    resize(cx, window, &view, 600.);
+    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000000 · Range 1");
+}
+
+#[gpui_kit::test]
+fn a_short_padding_gap_folds_into_the_rows_and_is_counted(cx: &mut TestAppContext) {
+    let (window, view) = open_sized(cx, FOLDED, 600.);
+    assert_eq!(
+        text_of(cx, window, "memory-status"),
+        "2 ranges · 1 gap · 1 folded · checksum OK · EOF present · no start address"
+    );
+    let folded = label(cx, window, ("memory-row", 2));
+    assert!(folded.starts_with("0x08000020  --"), "{folded}");
+    let gap_rows = cx
+        .update_window(window, |_, window, _| {
+            window.try_find(("memory-gap", 2usize)).is_some()
+        })
+        .expect("window");
+    assert!(!gap_rows, "no gap row for a folded gap");
+    press(cx, window, &view, "ctrl-b");
+    settle_motion(cx, window, &view);
+    assert!(label(cx, window, ("memory-item", 0)).contains("1 padding gap"));
+}
+
+#[gpui_kit::test]
+fn go_to_inside_a_folded_gap_lands_on_the_row_that_holds_it(cx: &mut TestAppContext) {
+    let (window, view) = open_sized(cx, FOLDED, 600.);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "8000055");
+    press(cx, window, &view, "enter");
+    redraw(cx, window);
+    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000050 · Range 1");
+}
+
+#[gpui_kit::test]
+fn go_to_inside_a_long_gap_lands_on_the_gap_row(cx: &mut TestAppContext) {
+    let (window, view) = open_sized(cx, WITH_GAP, 600.);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "8000100");
+    press(cx, window, &view, "enter");
+    redraw(cx, window);
+    assert_eq!(text_of(cx, window, "memory-cursor"), "0x08000020 · Gap");
+    assert_eq!(
+        label(cx, window, ("memory-gap", 2)),
+        "gap 0x08000020–0x080001FF · 480 B not in file"
+    );
 }

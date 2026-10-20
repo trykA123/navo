@@ -58,7 +58,7 @@ impl MemoryView {
 
     pub(super) fn pick_item(&mut self, item: usize, cx: &mut Context<Self>) {
         let row = self.ready().and_then(|ready| {
-            let start = ready.items.get(item)?.span().start;
+            let start = ready.items.get(item)?.span.start;
             ready.layout.row_of(start)
         });
         let Some(row) = row else {
