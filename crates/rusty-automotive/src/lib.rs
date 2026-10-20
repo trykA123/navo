@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod a2l;
+pub mod dbc;
+mod description;
 mod elf;
 mod image;
 mod layout;
@@ -12,6 +15,9 @@ mod trace;
 
 use std::sync::atomic::AtomicBool;
 
+pub use a2l::{A2lModel, index_a2l, sniff_a2l};
+pub use dbc::{DbcModel, index_dbc, sniff_dbc};
+pub use description::{DescriptionError, DescriptionProblem, DescriptionReport};
 #[cfg(feature = "sample")]
 pub use elf::sample as elf_sample;
 pub use elf::{
