@@ -101,7 +101,7 @@ impl MemoryView {
             return div().into_any_element();
         };
         let row = match row {
-            Row::Data { address } => self.data_row(t, index, address),
+            Row::Data { address, .. } => self.data_row(t, index, address),
             Row::Gap { range } => self.gap_view(t, index, &range),
         };
         row.w_full()
@@ -152,7 +152,7 @@ impl MemoryView {
     fn header_parts(&self) -> HeaderParts {
         let detail = self.ready().map(|ready| {
             let at = match ready.layout.row(self.cursor) {
-                Some(Row::Data { address: at }) => address(at, ready.wide),
+                Some(Row::Data { address: at, .. }) => address(at, ready.wide),
                 Some(Row::Gap { range }) => address(range.start, ready.wide),
                 None => String::new(),
             };

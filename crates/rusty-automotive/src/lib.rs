@@ -26,7 +26,7 @@ pub use elf::{
     Scope, Section, Segment, SourceLine, Symbol, SymbolKind, Totals, select, sniff_elf,
 };
 pub use image::{Counts, Image, Item, Problem, Start};
-pub use layout::{Layout, ROW_BYTES, Row};
+pub use layout::{Layout, LayoutOptions, ROW_BYTES, Row};
 pub use map::{MapFlavor, MapModel, MapProblem, index_map, sniff_map};
 pub use mdf::{Mdf, MdfProblem, RegionTable, parse_mdf, sniff_mdf};
 pub use scan::{MAX_PIECES, index};

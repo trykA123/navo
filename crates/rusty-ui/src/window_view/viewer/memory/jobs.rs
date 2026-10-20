@@ -3,7 +3,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rusty_automotive::{Format, Image, IndexError, Layout, Watch, index};
+use rusty_automotive::{Format, Image, IndexError, Layout, LayoutOptions, Watch, index};
 
 use super::text::is_wide;
 use super::{Fetched, Index, MemoryView, Ready, Windows};
@@ -60,7 +60,13 @@ impl MemoryView {
             }
             IndexMessage::Done(Ok(image)) => {
                 let ready = Ready {
-                    layout: Layout::new(&image.ranges),
+                    layout: Layout::new(
+                        &image.ranges,
+                        LayoutOptions {
+                            fold_under: 0,
+                            ..LayoutOptions::default()
+                        },
+                    ),
                     items: image.items(),
                     wide: is_wide(&image),
                     image: Arc::new(image),
