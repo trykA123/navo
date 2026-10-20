@@ -73,3 +73,22 @@ activity-dragging = Dragging { $count ->
 }
 activity-drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
 files-rename-confirm = Rename { $items }?
+drag-move = Move { $count ->
+    [one] { $count } item
+   *[other] { $count } items
+} to { $target }
+drag-copy = Copy { $count ->
+    [one] { $count } item
+   *[other] { $count } items
+} to { $target }
+drag-link = Create { $count ->
+    [one] { $count } shortcut
+   *[other] { $count } shortcuts
+} in { $target }
+drag-carry = { $count ->
+    [one] { $name }
+   *[other] { $count } items
+}
+drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
+drag-refused-same-folder = Already in this folder
+drag-refused-into-itself = Cannot drop a folder into itself

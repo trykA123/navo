@@ -3,6 +3,7 @@
 mod automotive_sample;
 mod columns_page;
 mod command_center_page;
+mod drag_page;
 mod drives_page;
 mod gallery;
 mod image_sample;
