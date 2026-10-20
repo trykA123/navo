@@ -1,14 +1,16 @@
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext, point, px};
 
 use super::find::bottom_keys;
 use super::structured::open_named;
 use super::{Setup, has_editor, label, redraw, text_of, visible};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::{press, settle, type_in};
-use crate::window_view::viewer::map::tests::{SAMPLE, probe, sort_by_size_then_finish_parsing};
+use crate::window_view::viewer::map::tests::{
+    SAMPLE, column_width, probe, sort_by_size_then_finish_parsing,
+};
 
 fn settle_motion(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<FerriteWindow>) {
     cx.executor().advance_clock(Duration::from_secs(1));
@@ -138,9 +140,9 @@ fn sort_keys_and_header_clicks_sort_and_again_reverse(cx: &mut TestAppContext) {
     assert_eq!(first_cell(row(cx, window, 0)), "tune_table");
     keys(cx, window, &view, &["ctrl-f6"]);
     assert_eq!(first_cell(row(cx, window, 0)), "rx_buffer");
-    click(cx, window, &view, ("map-head", 1));
+    click(cx, window, &view, ("column-title", 1));
     assert_eq!(first_cell(row(cx, window, 0)), "rx_buffer");
-    click(cx, window, &view, ("map-head", 1));
+    click(cx, window, &view, ("column-title", 1));
     assert_eq!(first_cell(row(cx, window, 0)), "tune_table");
     keys(cx, window, &view, &["ctrl-f4"]);
     assert_eq!(first_cell(row(cx, window, 0)), "engine_init");
@@ -463,4 +465,42 @@ fn long_problems_keep_their_place_and_the_info_parts_give_way(cx: &mut TestAppCo
         assert!(part.right() <= shown, "{part:?} in a window {shown:?} wide");
     }
     assert!(text_of(cx, window, "map-status").starts_with("1 address space"));
+}
+
+fn drag_handle(cx: &mut TestAppContext, window: AnyWindowHandle, at: usize, by: f32) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let from = window
+            .within("map-head")
+            .find(("column-handle", at))
+            .bounds()
+            .center();
+        window.drag(from, point(from.x + px(by), from.y), cx);
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_head_drag_widens_a_column_and_the_width_survives_a_table_switch(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    let before = column_width(cx, &view, 0, 2);
+    drag_handle(cx, window, 2, 40.);
+    settle_motion(cx, window, &view);
+    let after = column_width(cx, &view, 0, 2);
+    assert!(after > before, "{before:?} {after:?}");
+    keys(cx, window, &view, &["alt-t", "alt-t", "alt-t"]);
+    assert_eq!(column_width(cx, &view, 0, 2), after);
+}
+
+#[gpui_kit::test]
+fn each_table_keeps_its_own_widths(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    let sections = column_width(cx, &view, 1, 2);
+    drag_handle(cx, window, 2, 40.);
+    settle_motion(cx, window, &view);
+    assert_eq!(column_width(cx, &view, 1, 2), sections);
+    keys(cx, window, &view, &["alt-t"]);
+    drag_handle(cx, window, 2, 30.);
+    settle_motion(cx, window, &view);
+    assert!(column_width(cx, &view, 1, 2) > sections);
 }

@@ -1,4 +1,5 @@
 mod blocks;
+mod columns;
 mod draw;
 mod drawers;
 mod facts;
@@ -90,6 +91,7 @@ pub(in crate::window_view::viewer) struct MapView {
     wanted_row: Option<u32>,
     page: usize,
     opens_inspector: bool,
+    columns: Option<columns::Columns>,
 }
 
 impl MapView {
@@ -121,6 +123,7 @@ impl MapView {
             wanted_row: None,
             page: 1,
             opens_inspector: false,
+            columns: None,
         }
     }
 
