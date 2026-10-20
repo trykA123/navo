@@ -13,7 +13,7 @@ use rusty_ui::{FerriteTitleBar, HeaderSearch};
 use crate::automotive_sample::{
     ELF_NAME, ELF_STEPS, MEMORY_NAME, MEMORY_STEPS, TRACE_NAME, TRACE_STEPS, elf, memory, trace,
 };
-use crate::bars_page::{DragTreemapBars, drag_treemap_bars};
+use crate::bars_page::{self, DragTreemapBars, drag_treemap_bars};
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
 use crate::drives_page::{DrivesPage, Shows};
@@ -336,6 +336,9 @@ impl Render for Gallery {
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
         }
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
+        if let Some(page) = bars_page::page_of(&self.drag_treemap, self.page) {
+            return root.child(page);
+        }
         match self.page {
             Page::Pane => root.child(self.pane.clone()),
             Page::MouseMarks => root.child(self.mouse.clone()),
@@ -346,12 +349,6 @@ impl Render for Gallery {
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::FileKinds => root.child(self.kinds.clone()),
             Page::Columns => root.child(self.columns.clone()),
-            Page::Drag => root.child(self.drag_treemap.0.clone()),
-            Page::Treemap => root.child(self.drag_treemap.1.clone()),
-            Page::UsageBars => root.child(self.drag_treemap.2.clone()),
-            Page::MultiRename => root.child(self.drag_treemap.3.clone()),
-            Page::MultiRenamePreview => root.child(self.drag_treemap.4[0].clone()),
-            Page::MultiRenamePreviewLarge => root.child(self.drag_treemap.4[1].clone()),
             Page::MemoryStrip => root.child(self.strip.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
