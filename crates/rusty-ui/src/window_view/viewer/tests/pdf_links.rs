@@ -10,7 +10,7 @@ fn link(index: usize) -> (&'static str, usize) {
     ("pdf-link", index)
 }
 
-fn pdf_of(cx: &mut TestAppContext, rig: &Rig) -> Entity<PdfView> {
+pub(super) fn pdf_of(cx: &mut TestAppContext, rig: &Rig) -> Entity<PdfView> {
     rig.1
         .read_with(cx, |view, _| {
             let body = view.viewer.as_ref().and_then(|viewer| viewer.body.as_ref());

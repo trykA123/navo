@@ -67,8 +67,19 @@ impl PdfView {
         self.open_sheet(Side::Left, window, cx);
     }
 
+    pub fn open_outline(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.pick_tab(LeftTab::Outline, cx);
+        self.open_sheet(Side::Left, window, cx);
+    }
+
     pub(super) fn pick_tab(&mut self, tab: LeftTab, cx: &mut Context<Self>) {
         self.left_tab = tab;
+        if tab == LeftTab::Outline
+            && let Some(doc) = self.doc_mut()
+        {
+            doc.show_chapter();
+        }
+        self.pump(cx);
         cx.notify();
     }
 

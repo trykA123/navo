@@ -14,8 +14,6 @@ use crate::window_view::viewer::{ListClose, ListDown, ListGo, ListUp};
 
 const ROW: f32 = 104.;
 const THUMB: f32 = 64.;
-const NO_OUTLINE: &str =
-    "Ferrite cannot read PDF outlines yet. Use Pages, or Find to jump to a heading.";
 
 fn badge(t: &Theme, hits: usize) -> Div {
     div()
@@ -232,22 +230,7 @@ impl PdfView {
     pub(super) fn left_body(&self, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
         match self.left_tab {
             LeftTab::Pages => self.pages_list(t, cx),
-            LeftTab::Outline => list_frame("pdf-outline")
-                .track_focus(&self.pages_focus)
-                .on_action(cx.listener(|view, _: &ListClose, window, cx| {
-                    view.close_sheet(crate::side_sheet::Side::Left, window, cx);
-                }))
-                .child(
-                    div()
-                        .id("pdf-outline-note")
-                        .role(Role::Status)
-                        .aria_label(NO_OUTLINE)
-                        .test_support()
-                        .p(t.spacing.xl)
-                        .text_color(t.colors.muted)
-                        .child(NO_OUTLINE),
-                )
-                .into_any_element(),
+            LeftTab::Outline => self.outline_list(t, cx),
         }
     }
 }

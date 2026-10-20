@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use gpui_kit::{Point, RenderImage, Task, size};
 use rusty_pdf::protocol::{PageLinks, PageText};
 
+use super::chapters::Chapters;
 use super::hits::{HitKey, Hits};
 use super::jobs::{Done, Job, Shared};
 use super::layout::{Camera, Pages};
@@ -32,8 +33,10 @@ pub(super) struct Selection {
 pub(super) struct Lists {
     pub hit_key: Option<HitKey>,
     pub page_row: usize,
+    pub outline_row: usize,
     pub hit_scroll: ListScroll,
     pub page_scroll: ListScroll,
+    pub outline_scroll: ListScroll,
     pub thumbs_shown: Rc<Cell<(u32, u32)>>,
 }
 
@@ -47,6 +50,7 @@ pub(super) struct Doc {
     pub links: Kept<Option<PageLinks>>,
     pub trail: Trail,
     pub ring: Option<super::ring::Ring>,
+    pub chapters: Chapters,
     pub press: Option<Point<f32>>,
     pub index: TextIndex,
     pub hits: Hits,
@@ -63,6 +67,7 @@ pub(super) type RailSlots = ((u64, u64), Vec<u32>);
 pub(super) struct Wants {
     pub index: bool,
     pub thumbs: bool,
+    pub chapters: bool,
     pub first_only: bool,
 }
 
@@ -91,6 +96,7 @@ impl Doc {
             links: Kept::default(),
             trail: Trail::default(),
             ring: None,
+            chapters: Chapters::default(),
             press: None,
             index: TextIndex::new(count),
             hits: Hits::default(),
@@ -199,6 +205,7 @@ impl Doc {
                 })
                 .map(|page| Job::Links { page })
         };
+        let chapters = || (wants.chapters && !self.chapters.is_read()).then_some(Job::Outline);
         let thumb = || self.thumb_job().filter(|_| wants.thumbs);
         let index = || {
             self.index
@@ -208,6 +215,7 @@ impl Doc {
         };
         page.or_else(text)
             .or_else(linked)
+            .or_else(chapters)
             .or_else(thumb)
             .or_else(index)
     }
@@ -261,6 +269,11 @@ impl Doc {
                 self.trouble.succeeded();
                 self.links.insert(page, links, &keep);
             }
+            Done::Outlined(items) => {
+                self.trouble.succeeded();
+                self.chapters = Chapters::Read(items);
+                self.show_chapter();
+            }
             Done::Failed(job, error) => {
                 applied.verdict = self.trouble.failed(job, error);
                 if self.trouble.unread.contains(&job.page()) {
@@ -269,6 +282,12 @@ impl Doc {
             }
         }
         applied
+    }
+
+    pub(super) fn show_chapter(&mut self) {
+        let row = self.chapters.current(self.current_page()).unwrap_or(0);
+        self.lists.outline_row = row;
+        self.lists.outline_scroll.scroll_to(row);
     }
 
     pub(super) fn selected_hit_row(&self) -> usize {
@@ -293,7 +312,7 @@ impl Doc {
 #[cfg(test)]
 mod tests {
     use gpui_kit::size;
-    use rusty_pdf::protocol::{Bitmap, PdfError, RenderRequest};
+    use rusty_pdf::protocol::{Bitmap, Outline, PdfError, RenderRequest};
 
     use super::*;
 
@@ -315,6 +334,10 @@ mod tests {
         fn links(&mut self, _: u32) -> Result<PageLinks, PdfError> {
             Err(PdfError::Corrupt)
         }
+
+        fn outline(&mut self) -> Result<Outline, PdfError> {
+            Err(PdfError::Corrupt)
+        }
     }
 
     #[test]
@@ -325,6 +348,7 @@ mod tests {
         let wants = Wants {
             index: true,
             thumbs: true,
+            chapters: true,
             first_only: true,
         };
         let job = doc.next_job(&wants).map(|job| job.page());

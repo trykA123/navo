@@ -36,6 +36,7 @@ impl Gallery {
             Page::PdfCalm => Some(&self.pdf[0]),
             Page::PdfSearch => Some(&self.pdf[1]),
             Page::PdfDrawers => Some(&self.pdf[2]),
+            Page::PdfOutline => Some(&self.pdf[3]),
             _ => None,
         }
     }

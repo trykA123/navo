@@ -2,7 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use gpui_kit::RenderImage;
 use image::{Frame, RgbaImage};
-use rusty_pdf::protocol::{Bitmap, PageLinks, PageText, PdfError, RenderRequest, Rotation};
+use rusty_pdf::protocol::{
+    Bitmap, OutlineItem, PageLinks, PageText, PdfError, RenderRequest, Rotation,
+};
 
 use super::source::PdfPages;
 
@@ -14,6 +16,7 @@ pub(super) enum Job {
     Thumb { page: u32, width: u32 },
     Text { page: u32 },
     Links { page: u32 },
+    Outline,
 }
 
 impl Job {
@@ -23,6 +26,7 @@ impl Job {
             | Self::Thumb { page, .. }
             | Self::Text { page }
             | Self::Links { page } => page,
+            Self::Outline => 0,
         }
     }
 }
@@ -37,6 +41,7 @@ pub(super) enum Done {
     Drawn(Job, Picture),
     Read(u32, Arc<PageText>),
     Linked(u32, Arc<Option<PageLinks>>),
+    Outlined(Vec<OutlineItem>),
     Failed(Job, PdfError),
 }
 
@@ -71,6 +76,10 @@ pub(super) fn run(shared: &Shared, job: Job) -> Done {
     let drawn = match job {
         Job::Page { page, width } | Job::Thumb { page, width } => draw(pages, page, width),
         Job::Links { page } => return Done::Linked(page, Arc::new(pages.links(page).ok())),
+        Job::Outline => {
+            let items = pages.outline().map(|outline| outline.items().to_vec());
+            return Done::Outlined(items.unwrap_or_default());
+        }
         Job::Text { page } => {
             return match pages.text(page) {
                 Ok(text) => Done::Read(page, Arc::new(text)),

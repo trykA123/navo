@@ -66,6 +66,7 @@ pub enum Page {
     PdfCalm,
     PdfSearch,
     PdfDrawers,
+    PdfOutline,
     WindowPartsOn,
     WindowPartsOff,
     WindowViewMenu,
@@ -96,7 +97,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 78] = [
+pub const PAGES: [PageInfo; 79] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -308,6 +309,7 @@ pub const PAGES: [PageInfo; 78] = [
     info(Page::PdfCalm, "PDF", "p15-a10b-calm", true),
     info(Page::PdfSearch, "PDF search", "p15-a10b-search", false),
     info(Page::PdfDrawers, "PDF drawers", "p15-a10b-drawers", false),
+    info(Page::PdfOutline, "PDF outline", "p37-u3-outline", false),
     info(
         Page::WindowPartsOn,
         "Window, every part",

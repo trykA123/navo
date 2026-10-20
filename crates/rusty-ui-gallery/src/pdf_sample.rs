@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use rusty_core::{Location, ProviderId};
 use rusty_pdf::protocol::{
-    Bitmap, CharBox, PageLinks, PageText, PdfError, RenderRequest, TextChar,
+    Bitmap, CharBox, LinkTarget, Outline, OutlineItem, PageLinks, PageText, PdfError,
+    RenderRequest, TextChar,
 };
 use rusty_ui::prelude::*;
 use rusty_ui::window_view::{OpenPdf, PdfPages, PdfStart, PdfView};
@@ -159,7 +160,47 @@ impl PdfPages for Manual {
     fn links(&mut self, _: u32) -> Result<PageLinks, PdfError> {
         PageLinks::new(WIDTH, HEIGHT, Vec::new()).map_err(|_| PdfError::Corrupt)
     }
+
+    fn outline(&mut self) -> Result<Outline, PdfError> {
+        let items = CHAPTERS
+            .into_iter()
+            .map(|(title, level, page)| OutlineItem {
+                title: title.to_owned(),
+                level,
+                target: page.map_or(LinkTarget::Unsupported, |page| LinkTarget::Page {
+                    page,
+                    top: None,
+                }),
+            })
+            .collect();
+        Outline::new(items).map_err(|_| PdfError::Corrupt)
+    }
 }
+
+const CHAPTERS: [(&str, u8, Option<u32>); 14] = [
+    ("1 Overview", 0, Some(0)),
+    ("1.1 Features", 1, Some(0)),
+    ("1.2 Applications", 1, Some(1)),
+    ("2 Pin configuration and functions", 0, Some(3)),
+    ("3 Specifications", 0, Some(6)),
+    ("3.1 Absolute maximum ratings", 1, Some(6)),
+    (
+        "3.2 Electrical characteristics over the full recommended operating temperature range",
+        1,
+        Some(7),
+    ),
+    ("3.2.1 Input supply and undervoltage lockout", 2, Some(8)),
+    ("4 Detailed description", 0, Some(12)),
+    ("4.1 Power stage", 1, Some(12)),
+    ("4.2 Fault protection", 1, Some(31)),
+    ("5 Application information", 0, Some(48)),
+    ("Revision history", 0, None),
+    (
+        "Mechanical, packaging and orderable information",
+        0,
+        Some(310),
+    ),
+];
 
 fn start() -> PdfStart {
     let open: OpenPdf = Arc::new(|_, _| Ok(Box::new(Manual) as Box<dyn PdfPages>));
@@ -172,6 +213,23 @@ fn start() -> PdfStart {
         opened: Ok(Box::new(Manual)),
         is_preview: false,
     }
+}
+
+pub fn pdf_views(search: &str, window: &mut Window, cx: &mut App) -> [Entity<PdfView>; 4] {
+    [
+        pdf_view(None, window, cx),
+        pdf_view(Some(search), window, cx),
+        pdf_view(Some(search), window, cx),
+        outline_view(window, cx),
+    ]
+}
+
+fn outline_view(window: &mut Window, cx: &mut App) -> Entity<PdfView> {
+    cx.new(|cx| {
+        let mut view = PdfView::new(start(), window, cx);
+        view.open_outline(window, cx);
+        view
+    })
 }
 
 pub fn pdf_view(search: Option<&str>, window: &mut Window, cx: &mut App) -> Entity<PdfView> {

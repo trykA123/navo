@@ -95,7 +95,7 @@ pub struct Gallery {
     font: Option<Entity<FontView>>,
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
-    pdf: [Entity<PdfView>; 3],
+    pdf: [Entity<PdfView>; 4],
     menus: [(Page, Entity<MenuPage>); 6],
     viewer_menus: [Entity<ViewerMenuPage>; 8],
     main_window: Entity<WindowPage>,
@@ -143,8 +143,7 @@ impl Gallery {
             font: rich_sample::font_view(cx),
             marks: None,
             image: image_sample::image_view(cx).ok(),
-            pdf: [None, Some(PDF_SEARCH), Some(PDF_SEARCH)]
-                .map(|search| pdf_sample::pdf_view(search, window, cx)),
+            pdf: pdf_sample::pdf_views(PDF_SEARCH, window, cx),
             menus: MENU_PAGES.map(|(page, shows)| (page, cx.new(|cx| MenuPage::new(shows, cx)))),
             viewer_menus: VIEWER_MENUS
                 .map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx))),
@@ -355,7 +354,7 @@ impl Render for Gallery {
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             page if page.is_viewer_sample() => self.sample_page(root, cx),
             Page::Tokens => root.child(tokens_page::render(&t)),
-            Page::PdfCalm | Page::PdfSearch | Page::PdfDrawers => {
+            Page::PdfCalm | Page::PdfSearch | Page::PdfDrawers | Page::PdfOutline => {
                 root.children(self.pdf_sample().cloned())
             }
             _ => root,
