@@ -117,6 +117,7 @@ const GROUPS: [(&str, &[&str]); 8] = [
         &[
             "app.command_palette",
             "jobs.toggle",
+            "activity.focus",
             "settings.toggle",
             "app_menu.toggle",
             "window.new",

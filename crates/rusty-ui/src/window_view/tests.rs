@@ -14,6 +14,7 @@ use rusty_fs::Provider;
 
 use super::{FerriteWindow, StartOptions};
 
+mod activity;
 mod app_menu;
 mod app_menu_save;
 mod applied;

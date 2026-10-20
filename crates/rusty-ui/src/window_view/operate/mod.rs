@@ -4,6 +4,7 @@ use rusty_core::{Location, OpKind, OperationPlan};
 use rusty_fs::CopyMode;
 
 use super::FerriteWindow;
+use crate::activity::ActivityId;
 use crate::browser::PendingOp;
 use crate::confirm_dialog::{ConfirmDialog, ConfirmProps};
 use crate::format;
@@ -126,6 +127,9 @@ impl FerriteWindow {
     }
 
     pub(super) fn dismiss_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        if self.job_ui.activity.dismiss(ActivityId::Job(id)) {
+            cx.notify();
+        }
         if self.browser.dismiss_job(id) {
             self.jobs_changed();
             cx.notify();

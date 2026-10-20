@@ -293,21 +293,23 @@ fn the_crash_notice_still_shows_with_every_part_hidden(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
-fn the_job_pill_still_shows_at_the_right_edge_with_the_fkey_bar_hidden(cx: &mut TestAppContext) {
+fn a_job_shows_in_the_activity_strip_with_the_fkey_bar_hidden(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     view.update(cx, |view, _| view.values = off(&[Field::WindowFkeyBar]));
     add(cx, &view, running(1, 100 * MB));
     key(cx, window, "ctrl-j");
-    let (label, right, edge) = cx
+    let (title, right, edge) = cx
         .update_window(window, |_, window, cx| {
             window.render_frame(cx);
-            let strip = window.within("job-strip");
-            let pill = strip.find("job-pill");
-            let label = pill.label().map(str::to_owned);
-            (label, pill.bounds().right(), window.viewport_size().width)
+            let title = window
+                .find(("activity-title", 1u64))
+                .label()
+                .map(str::to_owned);
+            let strip = window.find("activity-strip").bounds();
+            (title, strip.right(), window.viewport_size().width)
         })
         .expect("window");
-    assert!(label.is_some_and(|label| label.starts_with("Copy 4 items")));
-    assert!(edge - right < gpui_kit::px(24.), "{right:?} of {edge:?}");
+    assert!(title.is_some_and(|title| title.starts_with("Copying 12 files")));
+    assert!(edge - right < gpui_kit::px(1.), "{right:?} of {edge:?}");
     assert!(!is_drawn(cx, window, "fkeys"));
 }

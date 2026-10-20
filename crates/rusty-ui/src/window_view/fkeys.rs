@@ -131,30 +131,39 @@ impl FerriteWindow {
         self.viewer.is_none() && !self.settings.is_open() && !WindowParts::of(&self.values).fkey_bar
     }
 
-    fn shows_job_pill(&self) -> bool {
-        self.job_ui.is_pill && !self.job_infos().is_empty()
-    }
-
     pub(super) fn fkey_strip_height(&self, t: &Theme) -> Pixels {
-        if self.hides_fkeys() && !self.shows_job_pill() {
+        let keys = if self.hides_fkeys() {
             px(0.)
         } else {
             t.spacing.fkey_height
-        }
+        };
+        let strip = if self.has_activity_row() {
+            t.spacing.fkey_height
+        } else {
+            px(0.)
+        };
+        keys + strip
     }
 
     pub(super) fn fkey_bar(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.hides_fkeys() {
-            return Some(self.keys_bar(window, cx).into_any_element());
+        let strip = self.activity_row(window, cx);
+        let keys = (!self.hides_fkeys()).then(|| self.keys_bar(cx));
+        if strip.is_none() && keys.is_none() {
+            return None;
         }
-        let strip = self.shows_job_pill().then(|| self.pill_strip(window, cx));
-        strip.map(|strip| strip.into_any_element())
+        let rows = div()
+            .flex()
+            .flex_col()
+            .flex_none()
+            .children(strip)
+            .children(keys);
+        Some(rows.into_any_element())
     }
 
-    fn keys_bar(&self, window: &Window, cx: &mut Context<Self>) -> FKeyBar {
+    fn keys_bar(&self, cx: &mut Context<Self>) -> FKeyBar {
         let is_fixed = self.values.modifier_hints() == HintsMode::Off;
         let held = self.hints.held.filter(|_| !is_fixed);
-        let bar = match &self.viewer {
+        match &self.viewer {
             Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
             None if self.settings.is_open() => {
                 let labels = settings_labels_in(crate::commands::active(cx));
@@ -169,7 +178,6 @@ impl FerriteWindow {
                     None => bar,
                 }
             }
-        };
-        self.with_job_pill(bar, window, cx)
+        }
     }
 }

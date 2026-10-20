@@ -24,6 +24,7 @@ mod shell_menu;
 mod start;
 mod start_watch;
 mod status;
+mod strip;
 mod tab_keys;
 mod title;
 mod user_keymap;
@@ -200,7 +201,7 @@ impl FerriteWindow {
             prefetch: None,
             menu_runs: 0,
             preview: preview::Preview::new(Self::waker(cx), cx),
-            job_ui: jobs::JobUi::default(),
+            job_ui: jobs::JobUi::new(cx),
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             crash: crash::CrashState::new(options.crash_report, cx),
@@ -418,7 +419,7 @@ impl Render for FerriteWindow {
             .children(self.viewer_menu_view())
             .children(self.view_menus());
         let root = Self::open_window_menu_on(root, cx);
-        let root = self.crash_keys(root, cx);
+        let root = self.activity_keys(self.crash_keys(root, cx), cx);
         self.preview_keys(root, window, cx)
     }
 }

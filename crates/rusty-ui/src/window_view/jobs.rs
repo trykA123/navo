@@ -4,24 +4,35 @@ use rusty_core::Location;
 
 use super::FerriteWindow;
 use super::operate::JOB_LINGER;
-use gpui_kit::base::TestSupportExt;
+use super::strip::StripUi;
 
 use crate::activity::Activity;
 use crate::browser::{JobStatus, JobView};
-use crate::fkey_bar::FKeyBar;
-use crate::job_card::{JobCard, JobInfo, JobPill, JobsSummary, Pause, PillFit, SpeedMeter};
+use crate::job_card::{JobCard, JobInfo, JobsSummary, Pause, SpeedMeter};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::tokens;
 
 const SAMPLE_EVERY: Duration = Duration::from_millis(500);
 
-#[derive(Default)]
 pub(super) struct JobUi {
-    pub(super) is_pill: bool,
+    pub(super) is_card_hidden: bool,
     pub(super) meter: SpeedMeter,
     pub(super) activity: Activity,
+    pub(super) strip: StripUi,
     is_sampling: bool,
+}
+
+impl JobUi {
+    pub(super) fn new(cx: &App) -> Self {
+        Self {
+            is_card_hidden: false,
+            meter: SpeedMeter::default(),
+            activity: Activity::default(),
+            strip: StripUi::new(cx),
+            is_sampling: false,
+        }
+    }
 }
 
 fn name_of(location: &Location) -> Option<SharedString> {
@@ -103,14 +114,14 @@ impl FerriteWindow {
         meter.retain(&jobs.iter().map(|job| job.id).collect::<Vec<_>>());
     }
 
-    fn sync_activity(&mut self, now: Instant) {
+    pub(super) fn sync_activity(&mut self, now: Instant) {
         let jobs = self.job_infos();
         self.job_ui.activity.sync(&jobs, now);
     }
 
     pub(super) fn jobs_changed(&mut self) {
         if self.browser.jobs().is_empty() {
-            self.job_ui.is_pill = false;
+            self.job_ui.is_card_hidden = false;
         }
     }
 
@@ -126,9 +137,14 @@ impl FerriteWindow {
 
     fn toggle_jobs(&mut self, cx: &mut Context<Self>) {
         if !self.browser.jobs().is_empty() {
-            self.job_ui.is_pill = !self.job_ui.is_pill;
+            self.job_ui.is_card_hidden = !self.job_ui.is_card_hidden;
             cx.notify();
         }
+    }
+
+    pub(super) fn show_job_card(&mut self, cx: &mut Context<Self>) {
+        self.job_ui.is_card_hidden = false;
+        cx.notify();
     }
 
     pub(super) fn job_infos(&self) -> Vec<JobInfo> {
@@ -140,53 +156,9 @@ impl FerriteWindow {
             .collect()
     }
 
-    fn job_pill(&self, jobs: &[JobInfo], fit: PillFit, cx: &mut Context<Self>) -> JobPill {
-        let this = cx.weak_entity();
-        JobPill::new(jobs, fit)
-            .when(JobsSummary::of(jobs).is_ended(), |pill| {
-                pill.fade_out(JOB_LINGER)
-            })
-            .on_click(move |_, cx| {
-                let _ = this.update(cx, |view, cx| view.toggle_jobs(cx));
-            })
-    }
-
-    pub(super) fn with_job_pill(
-        &self,
-        bar: FKeyBar,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> FKeyBar {
-        let jobs = self.job_infos();
-        if jobs.is_empty() {
-            return bar;
-        }
-        let fit = PillFit::for_width(window.viewport_size().width);
-        let bar = bar.reserve_pill_width(fit.slot_width());
-        if !self.job_ui.is_pill {
-            return bar;
-        }
-        bar.right_slot(self.job_pill(&jobs, fit, cx))
-    }
-
-    pub(super) fn pill_strip(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let height = tokens::current(cx).spacing.fkey_height;
-        let fit = PillFit::for_width(window.viewport_size().width);
-        div()
-            .id("job-strip")
-            .test_support()
-            .flex()
-            .flex_none()
-            .items_center()
-            .justify_end()
-            .h(height)
-            .px(tokens::current(cx).spacing.md)
-            .child(self.job_pill(&self.job_infos(), fit, cx))
-    }
-
     pub(super) fn job_card_layer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let jobs = self.job_infos();
-        if jobs.is_empty() || self.job_ui.is_pill {
+        if jobs.is_empty() || self.job_ui.is_card_hidden {
             return None;
         }
         let t = tokens::current(cx).clone();

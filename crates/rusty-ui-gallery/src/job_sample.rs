@@ -40,6 +40,31 @@ fn move_to_stick() -> JobInfo {
     }
 }
 
+fn failed_copy() -> JobInfo {
+    JobInfo {
+        id: 3,
+        files_done: 35,
+        state: JobRowState::Failed("Access denied".into()),
+        speed: None,
+        ..copy()
+    }
+}
+
+fn done_move() -> JobInfo {
+    JobInfo {
+        id: 4,
+        items: 3,
+        target: Some(r"C:\work\Projects".into()),
+        bytes_done: 2806 * MB,
+        files_done: 37,
+        state: JobRowState::Done,
+        ..move_to_stick()
+    }
+}
+
 pub fn jobs(count: usize) -> Vec<JobInfo> {
-    [copy(), move_to_stick()].into_iter().take(count).collect()
+    [copy(), move_to_stick(), failed_copy(), done_move()]
+        .into_iter()
+        .take(count)
+        .collect()
 }

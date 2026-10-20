@@ -26,10 +26,10 @@ pub(super) fn open_at(
 }
 
 pub(super) struct Fake {
-    id: u64,
-    kind: OpKind,
-    done: u64,
-    status: JobStatus,
+    pub(super) id: u64,
+    pub(super) kind: OpKind,
+    pub(super) done: u64,
+    pub(super) status: JobStatus,
 }
 
 pub(super) fn running(id: u64, done: u64) -> Fake {
@@ -99,8 +99,6 @@ fn click(cx: &mut TestAppContext, window: AnyWindowHandle, id: impl Into<Element
 #[derive(Debug)]
 pub(super) struct Shown {
     pub(super) card: Option<String>,
-    pub(super) pill: Option<String>,
-    pub(super) pill_parts: [bool; 3],
 }
 
 pub(super) fn shown(cx: &mut TestAppContext, window: AnyWindowHandle) -> Shown {
@@ -109,17 +107,7 @@ pub(super) fn shown(cx: &mut TestAppContext, window: AnyWindowHandle) -> Shown {
         let card = window
             .try_find("job-card")
             .map(|card| card.label().unwrap_or_default().to_owned());
-        let bar = window.within("fkeys");
-        let pill = bar
-            .try_find("job-pill")
-            .map(|pill| pill.label().unwrap_or_default().to_owned());
-        let pill_parts = ["job-pill-name", "job-pill-status", "job-pill-left"]
-            .map(|part| bar.try_find(part).is_some());
-        Shown {
-            card,
-            pill,
-            pill_parts,
-        }
+        Shown { card }
     })
     .expect("window")
 }
@@ -141,7 +129,6 @@ fn the_card_appears_while_a_job_runs(cx: &mut TestAppContext) {
     let now = shown(cx, window);
     let card = now.card.expect("a card");
     assert!(card.starts_with("Copying 4 items, 25%"), "{card}");
-    assert!(now.pill.is_none());
     assert_eq!(
         label(cx, window, ("job-route", 1u64)),
         "commander → /archive"
@@ -154,48 +141,28 @@ fn the_card_appears_while_a_job_runs(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn ctrl_j_shrinks_the_card_into_the_pill_and_grows_it_back(cx: &mut TestAppContext) {
+fn ctrl_j_hides_the_card_and_shows_it_again(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
     key(cx, window, "ctrl-j");
-    let small = shown(cx, window);
-    assert!(small.card.is_none());
-    let pill = small.pill.expect("a pill");
-    assert!(pill.starts_with("Copy 4 items, 25%"), "{pill}");
+    assert!(shown(cx, window).card.is_none());
     key(cx, window, "ctrl-j");
-    let big = shown(cx, window);
-    assert!(big.card.is_some());
-    assert!(big.pill.is_none());
+    assert!(shown(cx, window).card.is_some());
 }
 
 #[gpui_kit::test]
-fn the_chevron_shrinks_the_card(cx: &mut TestAppContext) {
+fn the_chevron_hides_the_card(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
     click(cx, window, "job-shrink");
-    let small = shown(cx, window);
-    assert!(small.card.is_none());
-    assert!(small.pill.is_some());
-}
-
-#[gpui_kit::test]
-fn a_click_on_the_pill_grows_the_card_back(cx: &mut TestAppContext) {
-    let (window, view) = open_at(cx, 1280.);
-    add(cx, &view, running(1, 100 * MB));
-    key(cx, window, "ctrl-j");
-    click(cx, window, "job-pill");
-    let big = shown(cx, window);
-    assert!(big.card.is_some());
-    assert!(big.pill.is_none());
+    assert!(shown(cx, window).card.is_none());
 }
 
 #[gpui_kit::test]
 fn ctrl_j_without_a_job_shows_nothing(cx: &mut TestAppContext) {
     let (window, _) = open_at(cx, 1280.);
     key(cx, window, "ctrl-j");
-    let now = shown(cx, window);
-    assert!(now.card.is_none());
-    assert!(now.pill.is_none());
+    assert!(shown(cx, window).card.is_none());
 }
 
 #[gpui_kit::test]
@@ -214,25 +181,6 @@ fn two_jobs_show_a_count_and_combined_progress(cx: &mut TestAppContext) {
     assert!(card.starts_with("2 jobs, 12%"), "{card}");
     assert!(label(cx, window, ("job-row", 1u64)).starts_with("Copy 4 items, 25%"));
     assert!(label(cx, window, ("job-row", 2u64)).starts_with("Move 4 items, 0%"));
-    key(cx, window, "ctrl-j");
-    let pill = shown(cx, window).pill.expect("a pill");
-    assert!(pill.starts_with("2 jobs, 12%"), "{pill}");
-}
-
-#[gpui_kit::test]
-fn narrow_windows_drop_the_name_then_the_time_left(cx: &mut TestAppContext) {
-    let cases = [
-        (1280., [true, true, true]),
-        (1050., [false, true, true]),
-        (900., [false, true, false]),
-    ];
-    for (width, parts) in cases {
-        let (window, view) = open_at(cx, width);
-        add(cx, &view, running(1, 100 * MB));
-        give_speed(cx, &view, 1, 10 * MB);
-        key(cx, window, "ctrl-j");
-        assert_eq!(shown(cx, window).pill_parts, parts, "{width}");
-    }
 }
 
 #[gpui_kit::test]
@@ -298,7 +246,12 @@ fn an_error_stays_until_it_is_dismissed(cx: &mut TestAppContext) {
     assert!(view.read_with(cx, |view, _| view.browser.jobs().is_empty()));
 }
 
-fn card_visible(cx: &mut TestAppContext, window: AnyWindowHandle, id: &'static str) -> bool {
+fn card_visible(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    id: impl Into<ElementId>,
+) -> bool {
+    let id = id.into();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).is_some_and(|found| found.visible())
@@ -320,7 +273,7 @@ fn with_reduced_motion_an_ended_job_stays_visible_until_it_leaves(cx: &mut TestA
     );
     assert!(card_visible(cx, window, "job-card"));
     key(cx, window, "ctrl-j");
-    assert!(card_visible(cx, window, "job-pill"));
+    assert!(card_visible(cx, window, "activity-strip"));
 }
 
 fn set_done(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, bytes: u64) {
@@ -366,9 +319,7 @@ fn ctrl_j_is_left_alone_while_a_dialog_is_open(cx: &mut TestAppContext) {
     assert!(view.read_with(cx, |view, _| view.browser.pending().is_some()));
     add(cx, &view, running(99, 100 * MB));
     key(cx, window, "ctrl-j");
-    let now = shown(cx, window);
-    assert!(now.card.is_some());
-    assert!(now.pill.is_none());
+    assert!(shown(cx, window).card.is_some());
 }
 
 #[gpui_kit::test]
@@ -398,24 +349,6 @@ fn a_done_job_leaves_while_a_failed_job_stays(cx: &mut TestAppContext) {
     });
     assert_eq!(left, [(99, JobStatus::Failed("Access denied".to_owned()))]);
     assert_eq!(label(cx, window, ("job-message", 99u64)), "Access denied");
-}
-
-#[gpui_kit::test]
-fn the_narrowest_pill_shows_an_ended_state_as_a_glyph_only(cx: &mut TestAppContext) {
-    let (window, view) = open_at(cx, 900.);
-    add(
-        cx,
-        &view,
-        Fake {
-            status: JobStatus::Failed("Access denied".to_owned()),
-            ..running(1, 100 * MB)
-        },
-    );
-    key(cx, window, "ctrl-j");
-    let small = shown(cx, window);
-    assert_eq!(small.pill_parts, [false, false, false]);
-    let pill = small.pill.expect("a pill");
-    assert!(pill.starts_with("Copy 4 items, Failed"), "{pill}");
 }
 
 fn engine_pauses(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, is_paused: bool) {
@@ -462,23 +395,15 @@ fn a_paused_job_reads_paused_and_resume_continues_it(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn the_pill_shows_a_pause_glyph_while_paused(cx: &mut TestAppContext) {
+fn the_strip_reads_paused_while_paused(cx: &mut TestAppContext) {
     let (window, view) = open_at(cx, 1280.);
     add(cx, &view, running(1, 100 * MB));
     key(cx, window, "ctrl-j");
-    let glyph = |cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, cx| {
-            window.render_frame(cx);
-            window.within("fkeys").try_find("job-pill-paused").is_some()
-        })
-        .expect("window")
-    };
-    assert!(!glyph(cx));
     view.update(cx, |view, _| view.browser.jobs()[0].cancel.pause());
     engine_pauses(cx, &view, true);
-    assert!(glyph(cx));
-    let pill = shown(cx, window).pill.expect("a pill");
-    assert!(pill.starts_with("Copy 4 items, Paused, 25%"), "{pill}");
+    let detail = label(cx, window, ("activity-detail", 1u64));
+    assert!(detail.ends_with("Paused"), "{detail}");
+    assert!(card_visible(cx, window, ("activity-resume", 1u64)));
 }
 
 #[gpui_kit::test]

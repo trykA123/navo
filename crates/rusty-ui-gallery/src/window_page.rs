@@ -1,3 +1,4 @@
+mod activity;
 mod builders;
 mod card;
 
@@ -11,7 +12,7 @@ use rusty_ui::context_menu::{ContextMenu, ContextMenuInput};
 use rusty_ui::crash_notice::{CrashKeys, CrashNotice};
 use rusty_ui::file_list::SortKey;
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
-use rusty_ui::job_card::{JobCard, JobPill, PillFit};
+use rusty_ui::job_card::JobCard;
 use rusty_ui::modifier_hints::{Combo, Cover, HintsDrawer, Layer, drawer_height, layer_where};
 use rusty_ui::pane_chrome::DriveInfo;
 use rusty_ui::prelude::*;
@@ -79,10 +80,17 @@ pub struct HintsShown {
     pub cursor: u64,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum JobsLook {
+    Card,
+    Strip,
+    Drawer,
+}
+
 #[derive(Clone, Copy)]
 pub struct JobsShown {
     pub count: usize,
-    pub is_pill: bool,
+    pub look: JobsLook,
 }
 
 struct Sheet {
@@ -159,7 +167,7 @@ impl WindowPage {
             .is_some_and(|sheet| sheet.shows.settings.is_some() || sheet.shows.shortcuts.is_some())
     }
 
-    fn fkey_bar(&self, window: &Window) -> Option<FKeyBar> {
+    fn fkey_bar(&self) -> Option<FKeyBar> {
         if self.shows_settings() {
             let labels = settings_labels_in(Keymap::builtin());
             return Some(
@@ -170,19 +178,9 @@ impl WindowPage {
             return None;
         }
         let bar = FKeyBar::new("fkeys", layer_keys(self.held)).layers(self.held, key_labels());
-        let bar = match delete_warning_in(Keymap::builtin()) {
+        Some(match delete_warning_in(Keymap::builtin()) {
             Some((layer, index)) => bar.warn(layer, index, DELETE_WARNING),
             None => bar,
-        };
-        let Some(shown) = self.jobs else {
-            return Some(bar);
-        };
-        let fit = PillFit::for_width(window.viewport_size().width);
-        let bar = bar.reserve_pill_width(fit.slot_width());
-        Some(if shown.is_pill {
-            bar.right_slot(JobPill::new(&job_sample::jobs(shown.count), fit))
-        } else {
-            bar
         })
     }
 
@@ -239,7 +237,7 @@ impl WindowPage {
     }
 
     fn job_card(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
-        let shown = self.jobs.filter(|shown| !shown.is_pill)?;
+        let shown = self.jobs.filter(|shown| shown.look == JobsLook::Card)?;
         let card = JobCard::new(job_sample::jobs(shown.count))
             .on_shrink(|_, _| {})
             .on_pause(|_, _, _| {})
@@ -401,13 +399,17 @@ impl Render for WindowPage {
                     .flex_1()
                     .min_h_0()
                     .px(t.spacing.xs)
-                    .when(!self.parts.fkey_bar, |area| area.pb(t.spacing.md))
+                    .when(!self.parts.fkey_bar && self.jobs.is_none(), |area| {
+                        area.pb(t.spacing.md)
+                    })
                     .child(panes)
                     .children(self.job_card(&t))
                     .children(sheet)
-                    .children(self.hints_layer(&t)),
+                    .children(self.hints_layer(&t))
+                    .children(self.activity_drawer(&t)),
             )
-            .children(self.fkey_bar(window))
+            .children(self.activity_row())
+            .children(self.fkey_bar())
             .children(menu)
             .children(view_menu)
     }

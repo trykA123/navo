@@ -29,6 +29,7 @@ impl FerriteWindow {
     }
 
     pub(super) fn body_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        self.refresh_activity(window, cx);
         let t = tokens::current(cx).clone();
         let body = self.panes_view(window, cx);
         let has_strip = self.fkey_strip_height(&t) > px(0.);
@@ -44,5 +45,6 @@ impl FerriteWindow {
             .children(self.preview_layer(window, cx))
             .children(self.settings_layer(window, cx))
             .children(self.hints_layer(window, cx))
+            .children(self.activity_drawer_layer(window, cx))
     }
 }

@@ -292,3 +292,32 @@ fn a_drag_shows_its_keys() {
         Some("Ctrl copy · Shift move · Alt shortcut · Esc cancel")
     );
 }
+
+#[test]
+fn a_chip_names_each_item_in_a_few_words() {
+    let now = Instant::now();
+    let mut activity = Activity::default();
+    let moving = JobInfo {
+        kind: OpKind::Move,
+        bytes_done: 64 * MB,
+        bytes_total: 100 * MB,
+        ..copy(1)
+    };
+    activity.sync(&[moving, done(2), failed(3)], now);
+    activity.set_drag(Some(2));
+    let chips: Vec<_> = activity
+        .primary()
+        .into_iter()
+        .chain(activity.rest())
+        .map(|item| item.chip.to_string())
+        .collect();
+    assert_eq!(
+        chips,
+        [
+            "Copy failed",
+            "Dragging 2 items",
+            "Move 64 %",
+            "Copied 3 items"
+        ]
+    );
+}

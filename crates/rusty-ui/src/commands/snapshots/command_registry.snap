@@ -28,6 +28,7 @@ window.view_menu | Window view menu | FerritePane
 pane.reset_split | Reset pane split | FerritePane
 preview.browse | Browse in preview | FerritePane
 crash_notice.focus | Go to the crash notice | FerritePane
+activity.focus | Go to the activity strip | FerritePane
 crash_notice.save | Save crash report | CrashNotice
 crash_notice.dismiss | Dismiss crash notice | CrashNotice
 pane.leave_waiting | Stop waiting | PaneWaiting
@@ -146,6 +147,14 @@ dialog.previous_button | Previous button | DialogButton
 dialog.press | Press button | DialogButton
 confirm.cancel | Cancel | ConfirmDialog
 prompt.cancel | Cancel | PromptDialog
+activity.previous | Previous activity button | ActivityStrip
+activity.next | Next activity button | ActivityStrip
+activity.pause | Pause or resume the job | ActivityStrip
+activity.remove | Cancel the job or dismiss the item | ActivityStrip
+activity.act | Press the activity button | ActivityStrip
+activity.leave | Back to the file list | ActivityStrip
+activity.previous_item | Previous activity | ActivityDrawer
+activity.next_item | Next activity | ActivityDrawer
 viewer.save | Save | Viewer
 viewer.close | Close viewer | Viewer
 viewer.edit | Edit file | Viewer
