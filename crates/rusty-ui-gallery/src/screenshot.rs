@@ -75,6 +75,7 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
                         | Page::TraceDrawers
                         | Page::MapDrawers
                         | Page::PdfDrawers
+                        | Page::MouseMarks
                 )
             {
                 cx.update(|cx| drive(window, &gallery, cx));

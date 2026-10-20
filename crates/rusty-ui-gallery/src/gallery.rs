@@ -17,6 +17,7 @@ use crate::drives_page::{DrivesPage, Shows};
 use crate::image_sample;
 use crate::map_sample::{MAP_NAME, MAP_STEPS, map};
 use crate::menu_page::{MenuPage, Shows as MenuShows};
+use crate::mouse_page::MousePage;
 use crate::operate_page::OperatePage;
 pub use crate::pages::{PAGES, Page};
 use crate::pane_page::PanePage;
@@ -73,6 +74,7 @@ pub struct Gallery {
     mode: Mode,
     page: Page,
     pane: Entity<PanePage>,
+    mouse: Entity<MousePage>,
     operate: Entity<OperatePage>,
     hex: Entity<PagedView>,
     paged_text: Entity<PagedView>,
@@ -119,6 +121,7 @@ impl Gallery {
             mode,
             page: Page::Primitives,
             pane: cx.new(PanePage::new),
+            mouse: cx.new(MousePage::new),
             operate: cx.new(OperatePage::new),
             hex: viewer_sample::hex_view(cx),
             paged_text: viewer_sample::text_view(cx),
@@ -328,6 +331,7 @@ impl Render for Gallery {
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
         match self.page {
             Page::Pane => root.child(self.pane.clone()),
+            Page::MouseMarks => root.child(self.mouse.clone()),
             Page::Operate => root.child(self.operate.clone()),
             Page::Hex => root.child(self.hex.clone()),
             Page::PagedText => root.child(self.paged_text.clone()),

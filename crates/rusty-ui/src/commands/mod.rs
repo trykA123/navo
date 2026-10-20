@@ -1,6 +1,7 @@
 mod bind;
 mod contexts;
 mod keymap;
+mod marks;
 mod overlays;
 mod structured;
 mod viewer;
@@ -45,6 +46,7 @@ const MENU_ONLY: [(&str, &str); 5] = [
 pub fn all() -> impl Iterator<Item = CommandSpec> {
     let bound = [
         window::GROUPS.as_slice(),
+        marks::GROUPS.as_slice(),
         overlays::GROUPS.as_slice(),
         viewer::GROUPS.as_slice(),
         structured::GROUPS.as_slice(),

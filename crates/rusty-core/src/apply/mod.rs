@@ -49,6 +49,10 @@ pub enum Event {
         location: Location,
         listing: Listing,
     },
+    MarksRestored {
+        tab: TabId,
+        names: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -61,9 +65,17 @@ pub enum CommandError {
     NoListing,
     #[error("the folder is empty")]
     EmptyListing,
+    #[error("No saved marks match this folder")]
+    NothingToRestore,
 }
 
 pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, CommandError> {
+    if !matches!(
+        command,
+        Command::SelectionExtend { .. } | Command::PaneScroll { .. }
+    ) {
+        state.active_tab_mut().selection_mut().end_span();
+    }
     match command {
         Command::PaneOpenTab { location } => Ok(pane::open_tab(state, location.as_ref())),
         Command::PaneCloseTab { tab } => pane::close_tab(state, *tab),
@@ -78,6 +90,9 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::SelectionToggle => select::toggle(state),
         Command::SelectionToggleDown => select::toggle_down(state),
         Command::SelectionRange { to } => select::range(state, *to),
+        Command::SelectionExtend { to, mode } => select::extend(state, *to, *mode),
+        Command::SelectionExtension { mark } => select::extension(state, *mark),
+        Command::SelectionRestore => select::restore(state),
         Command::SelectionAddPattern { pattern, folders } => select::pattern(
             state,
             pattern,
@@ -152,6 +167,7 @@ pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
                 pane::reveal_tab(state, tab);
             }
         }
+        Event::MarksRestored { tab, names } => select::mark_names(state, tab, &names),
     }
     Vec::new()
 }

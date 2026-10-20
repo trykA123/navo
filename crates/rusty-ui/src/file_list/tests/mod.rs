@@ -1,5 +1,8 @@
 mod density;
 mod input;
+mod lasso;
+mod marks;
+mod mouse;
 mod parts;
 mod render;
 

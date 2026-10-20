@@ -23,8 +23,31 @@ pub struct PanePage {
     focus: FocusHandle,
 }
 
-fn location(text: &str) -> Location {
+pub fn location(text: &str) -> Location {
     Location::new(text).unwrap_or_else(|_| Location::provider_root(ProviderId::local()))
+}
+
+pub fn run_on(state: &mut AppState, rows: &[FsEntry], command: &Command) {
+    let effects = apply(state, command).unwrap_or_default();
+    for effect in effects {
+        if let Effect::ListFolder {
+            tab,
+            location,
+            request,
+        } = effect
+        {
+            let listing = pane_sample::listing(rows);
+            apply_event(
+                state,
+                Event::ListingLoaded {
+                    tab,
+                    location,
+                    request,
+                    listing,
+                },
+            );
+        }
+    }
 }
 
 impl PanePage {
@@ -51,26 +74,7 @@ impl PanePage {
     }
 
     fn run(&mut self, command: &Command) {
-        let effects = apply(&mut self.state, command).unwrap_or_default();
-        for effect in effects {
-            if let Effect::ListFolder {
-                tab,
-                location,
-                request,
-            } = effect
-            {
-                let listing = pane_sample::listing(&self.rows);
-                apply_event(
-                    &mut self.state,
-                    Event::ListingLoaded {
-                        tab,
-                        location,
-                        request,
-                        listing,
-                    },
-                );
-            }
-        }
+        run_on(&mut self.state, &self.rows, command);
     }
 
     fn open(&mut self, action: FileListAction) {

@@ -287,15 +287,59 @@ keys = ["shift-f7"]
 
 [[bind]]
 command = "files.mark_pattern"
-keys = ["+"]
+keys = ["+", "add"]
 
 [[bind]]
 command = "files.unmark_pattern"
-keys = ["-"]
+keys = ["-", "subtract"]
 
 [[bind]]
 command = "files.invert_marks"
-keys = ["*"]
+keys = ["*", "multiply"]
+
+[[bind]]
+command = "files.extend_up"
+keys = ["shift-up"]
+
+[[bind]]
+command = "files.extend_down"
+keys = ["shift-down"]
+
+[[bind]]
+command = "files.extend_page_up"
+keys = ["shift-pageup"]
+
+[[bind]]
+command = "files.extend_page_down"
+keys = ["shift-pagedown"]
+
+[[bind]]
+command = "files.extend_first"
+keys = ["shift-home"]
+
+[[bind]]
+command = "files.extend_last"
+keys = ["shift-end"]
+
+[[bind]]
+command = "files.mark_all"
+keys = ["ctrl-a", "ctrl-+", "ctrl-add"]
+
+[[bind]]
+command = "files.unmark_all"
+keys = ["ctrl-shift-a", "ctrl--", "ctrl-subtract"]
+
+[[bind]]
+command = "files.restore_marks"
+keys = ["/", "divide"]
+
+[[bind]]
+command = "files.mark_extension"
+keys = ["alt-+", "alt-add"]
+
+[[bind]]
+command = "files.unmark_extension"
+keys = ["alt--", "alt-subtract"]
 
 [[bind]]
 command = "files.sort_by_name"

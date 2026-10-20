@@ -220,6 +220,7 @@ impl Browser {
             request,
             listing,
         });
+        self.remark_hidden(tab);
         let is_shown = self.state.tab(tab).is_some_and(|t| t.listing().is_some());
         if is_shown {
             self.cached.insert(tab, request);

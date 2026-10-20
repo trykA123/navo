@@ -9,9 +9,12 @@ mod drive;
 mod events;
 mod filtered;
 mod layout;
+mod marks_restored;
 mod pane;
 mod props;
 mod select;
+mod select_restore;
+mod select_span;
 mod window;
 
 fn loc(text: &str) -> Location {

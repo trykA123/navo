@@ -7,7 +7,7 @@ pub(crate) mod print;
 pub use error::{ParseError, ParseErrorKind};
 pub use id::CommandId;
 
-use crate::{Direction, Location};
+use crate::{Direction, Location, SpanMode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -24,6 +24,9 @@ pub enum Command {
     SelectionToggle,
     SelectionToggleDown,
     SelectionRange { to: u64 },
+    SelectionExtend { to: CursorMove, mode: SpanMode },
+    SelectionExtension { mark: bool },
+    SelectionRestore,
     SelectionAddPattern { pattern: String, folders: bool },
     SelectionRemovePattern { pattern: String, folders: bool },
     SelectionInvert,
@@ -94,6 +97,9 @@ impl Command {
             Self::SelectionToggle => Id::SelectionToggle,
             Self::SelectionToggleDown => Id::SelectionToggleDown,
             Self::SelectionRange { .. } => Id::SelectionRange,
+            Self::SelectionExtend { .. } => Id::SelectionExtend,
+            Self::SelectionExtension { .. } => Id::SelectionExtension,
+            Self::SelectionRestore => Id::SelectionRestore,
             Self::SelectionAddPattern { .. } => Id::SelectionAddPattern,
             Self::SelectionRemovePattern { .. } => Id::SelectionRemovePattern,
             Self::SelectionInvert => Id::SelectionInvert,

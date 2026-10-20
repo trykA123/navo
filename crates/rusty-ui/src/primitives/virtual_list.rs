@@ -30,6 +30,10 @@ impl ListScroll {
         self.0.scroll_to_item_strict(index, ScrollStrategy::Top);
     }
 
+    pub fn offset_y(&self) -> Pixels {
+        self.0.0.borrow().base_handle.offset().y
+    }
+
     pub fn top_row(&self, row_height: Pixels) -> usize {
         if row_height <= px(0.) {
             return 0;

@@ -8,6 +8,7 @@ mod job_sample;
 mod map_sample;
 mod menu_page;
 mod menu_sample;
+mod mouse_page;
 mod operate_page;
 mod options;
 mod pages;

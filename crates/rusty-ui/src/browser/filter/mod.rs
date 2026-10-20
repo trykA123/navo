@@ -5,6 +5,9 @@ use rusty_fs::FsEntry;
 
 use super::Browser;
 
+mod marks;
+pub(super) use marks::HiddenMarks;
+
 pub(super) struct Filter {
     location: Location,
     text: String,
@@ -77,11 +80,13 @@ impl Browser {
             return;
         };
         self.details.insert(tab, shown.details);
+        self.hide_marks(tab, &shown.listing);
         self.event(Event::ListingRefiltered {
             tab,
             location,
             listing: shown.listing,
         });
+        self.remark_hidden(tab);
     }
 
     #[must_use]
@@ -138,6 +143,7 @@ impl Browser {
                 listing: full.listing.clone(),
                 details: full.details.clone(),
             });
+        self.prune_hidden(tab, &full.listing);
         self.full.insert(tab, full);
         (shown.listing, shown.details)
     }
@@ -152,6 +158,7 @@ impl Browser {
     }
 
     pub(super) fn drop_stale_filters(&mut self) {
+        self.drop_hidden_marks();
         let state = &self.state;
         self.filters.retain(|tab, filter| {
             state
@@ -198,11 +205,13 @@ impl Browser {
             self.filters.insert(tab, Filter { location, text });
         }
         self.details.insert(tab, shown.details);
+        self.hide_marks(tab, &shown.listing);
         self.event(Event::ListingFiltered {
             tab,
             location,
             listing: shown.listing,
         });
+        self.remark_hidden(tab);
         true
     }
 }
@@ -261,5 +270,7 @@ fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
 
 #[cfg(test)]
 mod hidden_tests;
+#[cfg(test)]
+mod marks_tests;
 #[cfg(test)]
 mod tests;

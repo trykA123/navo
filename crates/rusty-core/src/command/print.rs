@@ -40,6 +40,13 @@ fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
         Command::PaneNavigate { location } => vec![("location", Shown::Str(location.as_str()))],
         Command::PaneGoDrive { root } => vec![("root", Shown::Str(root.as_str()))],
         Command::PaneCursorMove { to } => vec![("to", cursor_value(*to))],
+        Command::SelectionExtend { to, mode } => vec![
+            ("to", cursor_value(*to)),
+            ("mode", Shown::Word(mode.keyword())),
+        ],
+        Command::SelectionExtension { mark } => {
+            vec![("mark", Shown::Word(if *mark { "true" } else { "false" }))]
+        }
         Command::SelectionRange { to } | Command::PaneScroll { to } => {
             vec![("to", Shown::Int(*to))]
         }

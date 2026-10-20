@@ -98,6 +98,7 @@ impl FerriteWindow {
         let status = StatusBarProps {
             free_bytes: self.free_on_drive(pane),
             mark: self.listing_mark(tab),
+            hidden_marks: self.browser.hidden_marks(tab.id()),
             ..status_of(&props.rows, tab.selection())
         };
         let focus = self.handle(pane, cx);

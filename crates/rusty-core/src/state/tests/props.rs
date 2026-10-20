@@ -90,9 +90,11 @@ fn window_target(state: &AppState, pick: Option<usize>) -> WindowId {
 fn apply_tab_op(state: &mut AppState, op: &Op) -> Result<(), StateError> {
     let tab = state.active_tab_mut();
     match *op {
-        Op::Navigate(i) => tab.navigate(at(i)),
-        Op::Back => return tab.back(),
-        Op::Forward => return tab.forward(),
+        Op::Navigate(i) => {
+            tab.navigate(at(i));
+        }
+        Op::Back => return tab.back().map(|_| ()),
+        Op::Forward => return tab.forward().map(|_| ()),
         Op::SetListing(len) => tab.set_listing(listing(len)),
         Op::SetCursor(row) => tab.set_cursor(row),
         Op::SetScroll(row) => tab.set_scroll(row),
