@@ -3,6 +3,7 @@ mod density;
 mod design_b;
 mod kit;
 mod marks;
+mod memory;
 mod motion;
 mod shadows;
 mod surfaces;
@@ -19,6 +20,7 @@ pub use contrast::{contrast_ratio, relative_luminance};
 pub use density::{Density, Rows};
 pub use kit::{apply, apply_look, apply_with};
 pub use marks::MarkColors;
+pub use memory::{MemColors, MemKind};
 pub use motion::Motion;
 pub use shadows::Shadows;
 pub use surfaces::Surfaces;
@@ -170,6 +172,7 @@ pub struct Theme {
     pub spacing: Spacing,
     pub radii: Radii,
     pub marks: MarkColors,
+    pub mem: MemColors,
     pub surfaces: Surfaces,
     pub shadows: Shadows,
     pub motion: Motion,
@@ -198,6 +201,7 @@ impl Theme {
             spacing,
             radii: design_b::radii(),
             marks: marks::mark_colors(mode),
+            mem: memory::mem_colors(mode),
             shadows: shadows::shadows(mode, &surfaces),
             surfaces,
             motion: motion::motion(),

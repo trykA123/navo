@@ -252,6 +252,31 @@ fn mark_ticks_stand_out_three_to_one_from_the_surfaces() {
 }
 
 #[test]
+fn memory_kind_colours_meet_their_contrast_in_both_themes() {
+    for mode in MODES {
+        let theme = Theme::new(mode);
+        let ratio = super::contrast_ratio;
+        let colors = &theme.colors;
+        let mut pairs = vec![(
+            "free_line on background",
+            ratio(theme.mem.free_line, colors.background),
+            3.0,
+        )];
+        for (name, kind) in theme.mem.kinds() {
+            for bg in [colors.background, colors.surface] {
+                pairs.push((name, ratio(kind.strong, bg), 3.0));
+            }
+            pairs.push((name, ratio(kind.text, colors.background), 4.5));
+            pairs.push((name, ratio(kind.text, kind.tint), 4.5));
+            pairs.push((name, ratio(colors.text, kind.tint), 4.5));
+        }
+        for (name, got, need) in pairs {
+            assert!(got >= need, "{mode:?}: {name} is {got:.2}:1, needs {need}");
+        }
+    }
+}
+
+#[test]
 fn normal_density_keeps_todays_rows() {
     let theme = Theme::new(Mode::Light);
     assert_eq!(theme.density, Density::Normal);
