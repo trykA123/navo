@@ -11,3 +11,8 @@ pdf-outline-empty = This PDF has no outline. Use Pages, or Find to jump to a hea
 columns-resize = Resize { $column }
 columns-fit-hint = Double-click to fit
 pdf-outline-unreadable = Ferrite could not read this PDF's outline.
+viewer-memory-folded = { $count } folded
+viewer-memory-padding-gaps = { $count ->
+    [one] { $count } padding gap
+   *[other] { $count } padding gaps
+}

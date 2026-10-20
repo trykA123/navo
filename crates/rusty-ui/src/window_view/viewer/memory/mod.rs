@@ -1,8 +1,10 @@
 mod draw;
 mod drawers;
+mod entries;
 mod jobs;
 mod keys;
 mod text;
+mod width;
 
 #[cfg(test)]
 mod tests;
@@ -12,10 +14,11 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use gpui_kit::{AnyView, FocusHandle, Subscription};
-use rusty_automotive::{Format, Image, Item, Layout, ROW_BYTES, Row};
+use rusty_automotive::{Format, Image, Layout, Row};
 
 pub(super) use keys::bind_keys;
 
+use self::entries::{Entry, entry_at};
 use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
 use super::parts::{AUTOMOTIVE, PartSet};
@@ -33,7 +36,7 @@ pub(in crate::window_view::viewer) struct MemoryFile {
 struct Ready {
     image: Arc<Image>,
     layout: Layout,
-    items: Vec<Item>,
+    items: Vec<Entry>,
     wide: bool,
 }
 
@@ -89,6 +92,7 @@ pub(in crate::window_view::viewer) struct MemoryView {
     note: Option<SharedString>,
     read_error: Option<SharedString>,
     page: u64,
+    row_bytes: u64,
     opens_inspector: bool,
 }
 
@@ -119,6 +123,7 @@ impl MemoryView {
             note: None,
             read_error: None,
             page: 1,
+            row_bytes: 16,
             opens_inspector: false,
         }
     }
@@ -137,22 +142,21 @@ impl MemoryView {
     fn item_of_row(&self, row: u64) -> Option<usize> {
         let ready = self.ready()?;
         match ready.layout.row(row)? {
-            Row::Data { address, .. } => ready
-                .image
-                .item_at(address)
-                .or_else(|| ready.image.item_at(address + ROW_BYTES - 1)),
-            Row::Gap { range } => ready.image.item_at(range.start),
+            Row::Data { address, .. } => entry_at(&ready.items, address)
+                .or_else(|| entry_at(&ready.items, address + ready.layout.row_bytes() - 1)),
+            Row::Gap { range } => entry_at(&ready.items, range.start),
         }
     }
 
     fn bytes_at(&self, address: u64) -> Option<&[Option<u8>]> {
+        let row_bytes = usize::try_from(self.ready()?.layout.row_bytes()).ok()?;
         let fetched = self.fetched.as_ref()?;
         let (window, bytes) = fetched
             .windows
             .iter()
             .find(|(window, _)| window.contains(&address))?;
         let at = usize::try_from(address - window.start).ok()?;
-        bytes.get(at..at + ROW_BYTES as usize)
+        bytes.get(at..at + row_bytes)
     }
 
     fn set_note(&mut self, note: impl Into<SharedString>, cx: &mut Context<Self>) {

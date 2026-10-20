@@ -1,6 +1,7 @@
 use std::ops::Range;
 
-use rusty_automotive::{Image, Item, Problem, Start};
+use rusty_automotive::{Image, Problem, Start};
+use rusty_l10n::t;
 
 use crate::format;
 
@@ -36,7 +37,7 @@ pub(super) fn hex_cells(bytes: &[Option<u8>]) -> (String, Vec<Range<usize>>) {
     let mut missing = Vec::new();
     for (at, byte) in bytes.iter().enumerate() {
         if at > 0 {
-            text.push_str(if at == 8 { "  " } else { " " });
+            text.push_str(if at % 8 == 0 { "  " } else { " " });
         }
         match byte {
             Some(byte) => text.push_str(&format!("{byte:02X}")),
@@ -68,12 +69,19 @@ pub(super) fn gap_row(range: &Range<u64>, wide: bool) -> String {
     )
 }
 
-pub(super) fn item_name(items: &[Item], at: usize) -> String {
-    match items.get(at) {
-        Some(Item::Range(_)) => format!("Range {}", at / 2 + 1),
-        Some(Item::Gap(_)) => "Gap".to_owned(),
-        None => String::new(),
-    }
+pub(super) fn columns(row_bytes: usize) -> String {
+    let cells = (0..row_bytes)
+        .map(|at| format!("{at:02X}"))
+        .collect::<Vec<_>>();
+    cells
+        .chunks(8)
+        .map(|group| group.join(" "))
+        .collect::<Vec<_>>()
+        .join("  ")
+}
+
+pub(super) fn padding_gaps(count: u64) -> String {
+    t!("viewer-memory-padding-gaps", count = count)
 }
 
 pub(super) fn start(start: Start, wide: bool) -> String {
@@ -92,7 +100,7 @@ fn check(text: String, is_bad: bool) -> Check {
     Check { text, is_bad }
 }
 
-pub(super) fn status(image: &Image) -> Vec<Check> {
+pub(super) fn status(image: &Image, folded: u64) -> Vec<Check> {
     let wide = is_wide(image);
     let gaps = image.ranges.len().saturating_sub(1) as u64;
     let mut checks = vec![check(
@@ -103,6 +111,13 @@ pub(super) fn status(image: &Image) -> Vec<Check> {
         ),
         false,
     )];
+    if folded > 0 {
+        checks[0].text = format!(
+            "{} · {}",
+            checks[0].text,
+            t!("viewer-memory-folded", count = folded)
+        );
+    }
     checks.push(match image.checksum_errors {
         0 => check("checksum OK".to_owned(), false),
         errors => check(

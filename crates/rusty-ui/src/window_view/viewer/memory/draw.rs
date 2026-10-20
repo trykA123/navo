@@ -2,8 +2,9 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{ClickEvent, HighlightStyle, Role, Stateful, StyledText, WeakEntity};
 use rusty_automotive::Row;
 
+use super::entries::name;
 use super::keys::CONTEXT;
-use super::text::{Check, address, ascii, gap_row, hex_cells, item_name, status};
+use super::text::{Check, address, ascii, columns, gap_row, hex_cells, status};
 use super::{Focus, Index, MemoryView};
 use crate::prelude::*;
 use crate::primitives::VirtualList;
@@ -12,8 +13,7 @@ use crate::window_view::viewer::rich_header::{HeaderParts, header};
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
 use crate::window_view::viewer::view_menu::view_button;
 
-const COLUMNS: &str = "00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F";
-const EMPTY: [Option<u8>; 16] = [None; 16];
+const EMPTY: [Option<u8>; 32] = [None; 32];
 
 fn mono(t: &Theme) -> Div {
     div()
@@ -40,6 +40,13 @@ fn select_row(
 }
 
 impl MemoryView {
+    fn layout_row_bytes(&self) -> usize {
+        let bytes = self
+            .ready()
+            .map_or(self.row_bytes, |ready| ready.layout.row_bytes());
+        usize::try_from(bytes).unwrap_or(16).clamp(1, EMPTY.len())
+    }
+
     fn address_width(&self) -> usize {
         if self.ready().is_some_and(|ready| ready.wide) {
             18
@@ -50,7 +57,8 @@ impl MemoryView {
 
     fn data_row(&self, t: &Theme, index: u64, at: u64) -> ObservedElement<Stateful<Div>> {
         let wide = self.address_width() > 10;
-        let bytes = self.bytes_at(at).unwrap_or(&EMPTY);
+        let row_bytes = self.layout_row_bytes();
+        let bytes = self.bytes_at(at).unwrap_or(&EMPTY[..row_bytes]);
         let (hex, missing) = hex_cells(bytes);
         let faint = HighlightStyle {
             color: Some(t.colors.faint),
@@ -137,7 +145,7 @@ impl MemoryView {
             .border_b_1()
             .border_color(t.colors.line)
             .child(format!("{:<width$}", "Address"))
-            .child(COLUMNS)
+            .child(columns(self.layout_row_bytes()))
             .child("ASCII")
     }
 
@@ -156,7 +164,7 @@ impl MemoryView {
                 Some(Row::Gap { range }) => address(range.start, ready.wide),
                 None => String::new(),
             };
-            let name = item_name(&ready.items, self.selected);
+            let name = name(&ready.items, self.selected);
             ("memory-cursor", format!("{at} · {name}").into())
         });
         HeaderParts {
@@ -190,7 +198,7 @@ impl MemoryView {
 
     fn status_line(&self, t: &Theme) -> impl IntoElement {
         let mut checks = match self.ready() {
-            Some(ready) => status(&ready.image),
+            Some(ready) => status(&ready.image, ready.layout.folded()),
             None => Vec::new(),
         };
         if let Some(error) = &self.read_error {
@@ -253,6 +261,8 @@ impl Render for MemoryView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         self.measure(window, &t);
+        let wanted = self.wanted_row_bytes(window, &t);
+        self.fit_row_bytes(wanted, window, cx);
         let top = self.scroll.top_row(t.spacing.row_height) as u64;
         self.request_rows(top, cx);
         let rows = div()
