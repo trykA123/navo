@@ -23,7 +23,7 @@ fn open_at(cx: &mut TestAppContext, rig: &Rig, field: Field) {
 fn sort_by(name: &str) -> Change {
     let at = SORTS
         .iter()
-        .position(|choice| choice.label == name)
+        .position(|choice| choice.text() == name)
         .expect("a sort");
     Change {
         field: Field::Sort,

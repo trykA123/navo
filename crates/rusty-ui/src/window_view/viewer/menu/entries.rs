@@ -44,19 +44,19 @@ fn hint(action: &dyn Action, focus: &FocusHandle, window: &Window) -> Option<Str
 
 pub(in crate::window_view::viewer) fn marking_entries() -> Vec<MenuEntry> {
     let colours: Vec<MenuEntry> = vec![
-        MenuEntry::Run("Mark 1", Box::new(Mark1), false),
-        MenuEntry::Run("Mark 2", Box::new(Mark2), false),
-        MenuEntry::Run("Mark 3", Box::new(Mark3), false),
-        MenuEntry::Run("Mark 4", Box::new(Mark4), false),
-        MenuEntry::Run("Mark 5", Box::new(Mark5), false),
-        MenuEntry::Run("Mark 6", Box::new(Mark6), false),
-        MenuEntry::Run("Mark 7", Box::new(Mark7), false),
-        MenuEntry::Run("Mark 8", Box::new(Mark8), false),
+        MenuEntry::Run("Mark 1".into(), Box::new(Mark1), false),
+        MenuEntry::Run("Mark 2".into(), Box::new(Mark2), false),
+        MenuEntry::Run("Mark 3".into(), Box::new(Mark3), false),
+        MenuEntry::Run("Mark 4".into(), Box::new(Mark4), false),
+        MenuEntry::Run("Mark 5".into(), Box::new(Mark5), false),
+        MenuEntry::Run("Mark 6".into(), Box::new(Mark6), false),
+        MenuEntry::Run("Mark 7".into(), Box::new(Mark7), false),
+        MenuEntry::Run("Mark 8".into(), Box::new(Mark8), false),
         MenuEntry::Break,
-        MenuEntry::Run("Clear marks", Box::new(ClearMarks), false),
+        MenuEntry::Run("Clear marks".into(), Box::new(ClearMarks), false),
     ];
     vec![
         MenuEntry::Submenu("Mark colour", colours),
-        MenuEntry::Run("Bookmark", Box::new(ToggleBookmark), false),
+        MenuEntry::Run("Bookmark".into(), Box::new(ToggleBookmark), false),
     ]
 }

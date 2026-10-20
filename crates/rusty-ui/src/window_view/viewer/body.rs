@@ -47,7 +47,7 @@ pub enum BodyAct {
 }
 
 pub enum MenuEntry {
-    Run(&'static str, Box<dyn Action>, bool),
+    Run(SharedString, Box<dyn Action>, bool),
     Submenu(&'static str, Vec<MenuEntry>),
     Break,
 }

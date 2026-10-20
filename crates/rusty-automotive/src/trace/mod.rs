@@ -3,12 +3,21 @@ mod decode;
 mod index;
 mod line;
 mod sniff;
+mod text;
+mod trc;
 
 pub use decode::Plan;
 pub use index::{IdStat, Kinds, MAX_IDS, Trace, TraceProblem, index_trace};
 pub use sniff::{Evidence, sniff_trace};
 
-pub const TRACE_EXTENSIONS: [&str; 1] = ["asc"];
+pub const TRACE_EXTENSIONS: [&str; 2] = ["asc", "trc"];
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TraceFormat {
+    #[default]
+    Asc,
+    Trc(Option<&'static str>),
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Base {

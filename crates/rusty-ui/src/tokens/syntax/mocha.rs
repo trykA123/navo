@@ -27,7 +27,7 @@ pub(super) fn light(c: &Colors) -> Vec<Role> {
         role("embedded", ok(50., 0.06, 25.), Style::Plain),
         role("title", ok(53., 0.2, 30.), Style::Bold),
         role("link_text", ok(50., 0.14, 282.), Style::Plain),
-        role("link_uri", ok(50., 0.06, 25.), Style::Underline),
+        role("link_uri", ok(50., 0.06, 25.), Style::Plain),
         role("text.literal", ok(50., 0.085, 185.), Style::Plain),
     ]
 }
@@ -57,7 +57,7 @@ pub(super) fn dark(c: &Colors) -> Vec<Role> {
         role("embedded", ok(84., 0.04, 25.), Style::Plain),
         role("title", ok(72., 0.16, 30.), Style::Bold),
         role("link_text", ok(78., 0.09, 282.), Style::Plain),
-        role("link_uri", ok(84., 0.04, 25.), Style::Underline),
+        role("link_uri", ok(84., 0.04, 25.), Style::Plain),
         role("text.literal", ok(78., 0.08, 185.), Style::Plain),
     ]
 }

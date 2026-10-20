@@ -18,6 +18,10 @@ pub fn sniff_trace(head: &[u8]) -> Option<Evidence> {
     };
     let (mut frames, mut rows, mut data) = (0usize, 0usize, Vec::new());
     for line in complete.split(|byte| *byte == b'\n').take(LOOKED_AT) {
+        let line = line.trim_ascii();
+        if super::trc::is_header(line) {
+            return (!super::trc::has_unsupported_version(line)).then_some(Evidence::Header);
+        }
         match parse(line, Base::Hex, &mut data).1 {
             Shape::Header(Header::Notation {
                 base: Some(_),

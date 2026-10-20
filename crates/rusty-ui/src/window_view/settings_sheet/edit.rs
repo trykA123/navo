@@ -35,7 +35,7 @@ impl FerriteWindow {
             Value::Number(number) => number.to_string(),
             _ => return,
         };
-        let input = text_field_state(field.spec().label, window, cx);
+        let input = text_field_state(field.spec().label(), window, cx);
         input.update(cx, |state, cx| state.set_value(current, window, cx));
         let enter = cx.subscribe_in(&input, window, |view, _, event: &InputEvent, window, cx| {
             if let InputEvent::PressEnter { .. } = event {
@@ -100,7 +100,7 @@ impl FerriteWindow {
             .text_size(t.typography.small)
             .text_color(t.colors.muted)
             .child(format!("Enter saves {}, Esc cancels", spec.key))
-            .child(TextField::new("settings-input", &edit.input, spec.label))
+            .child(TextField::new("settings-input", &edit.input, spec.label()))
             .children(error);
         Some(bar.into_any_element())
     }

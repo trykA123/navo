@@ -99,7 +99,7 @@ pub enum Field {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Choice {
-    pub label: &'static str,
+    label: &'static str,
     pub toml: &'static str,
 }
 
@@ -160,7 +160,7 @@ pub struct FieldSpec {
     pub field: Field,
     pub section: Section,
     pub key: &'static str,
-    pub label: &'static str,
+    label: &'static str,
     pub help: &'static str,
     pub control: Control,
 }

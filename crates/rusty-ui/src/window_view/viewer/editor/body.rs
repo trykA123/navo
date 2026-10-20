@@ -155,32 +155,48 @@ impl ViewerBody for EditorBody {
         let editing = self.0.read(cx).editing;
         let mut entries = Vec::new();
         if editing {
-            entries.push(MenuEntry::Run("Cut", Box::new(Cut), false));
+            entries.push(MenuEntry::Run("Cut".into(), Box::new(Cut), false));
         }
-        entries.push(MenuEntry::Run("Copy", Box::new(Copy), false));
+        entries.push(MenuEntry::Run("Copy".into(), Box::new(Copy), false));
         if editing {
-            entries.push(MenuEntry::Run("Paste", Box::new(Paste), false));
+            entries.push(MenuEntry::Run("Paste".into(), Box::new(Paste), false));
         }
-        entries.push(MenuEntry::Run("Select all", Box::new(SelectAll), false));
+        entries.push(MenuEntry::Run(
+            "Select all".into(),
+            Box::new(SelectAll),
+            false,
+        ));
         entries.push(MenuEntry::Break);
         entries.push(MenuEntry::Run(
-            "Find selection",
+            "Find selection".into(),
             Box::new(FindSelection),
             false,
         ));
         entries.push(MenuEntry::Run(
-            "Copy path:line",
+            "Copy path:line".into(),
             Box::new(CopyPathLine),
             false,
         ));
         entries.push(MenuEntry::Break);
         entries.extend(marking_entries());
         entries.push(MenuEntry::Break);
-        entries.push(MenuEntry::Run("Go to line", Box::new(OpenGoTo), false));
+        entries.push(MenuEntry::Run(
+            "Go to line".into(),
+            Box::new(OpenGoTo),
+            false,
+        ));
         if !editing {
-            entries.push(MenuEntry::Run("Follow", Box::new(ToggleFollow), false));
+            entries.push(MenuEntry::Run(
+                "Follow".into(),
+                Box::new(ToggleFollow),
+                false,
+            ));
         }
-        entries.push(MenuEntry::Run("Open as Hex", Box::new(ShowHex), false));
+        entries.push(MenuEntry::Run(
+            "Open as Hex".into(),
+            Box::new(ShowHex),
+            false,
+        ));
         entries
     }
 

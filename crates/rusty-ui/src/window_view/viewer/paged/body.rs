@@ -76,11 +76,23 @@ impl ViewerBody for PagedBody {
         let mut entries = marking_entries();
         entries.push(MenuEntry::Break);
         if is_text {
-            entries.push(MenuEntry::Run("Go to line", Box::new(OpenGoTo), false));
+            entries.push(MenuEntry::Run(
+                "Go to line".into(),
+                Box::new(OpenGoTo),
+                false,
+            ));
         }
-        entries.push(MenuEntry::Run("Follow", Box::new(ToggleFollow), false));
+        entries.push(MenuEntry::Run(
+            "Follow".into(),
+            Box::new(ToggleFollow),
+            false,
+        ));
         if is_text {
-            entries.push(MenuEntry::Run("Open as Hex", Box::new(ShowHex), false));
+            entries.push(MenuEntry::Run(
+                "Open as Hex".into(),
+                Box::new(ShowHex),
+                false,
+            ));
         }
         entries
     }

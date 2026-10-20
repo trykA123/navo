@@ -35,7 +35,6 @@ pub(super) enum Style {
     Plain,
     Italic,
     Bold,
-    Underline,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -81,9 +80,6 @@ fn entry(role: &Role) -> toml::Value {
         Style::Italic => {
             table.insert("font_style".into(), "italic".into());
         }
-        Style::Underline => {
-            table.insert("font_style".into(), "underline".into());
-        }
         Style::Bold => {
             table.insert("font_weight".into(), 700_i64.into());
         }
@@ -126,7 +122,7 @@ pub fn highlight_theme(
     let style = &mut theme.style;
     style.editor_background = Some(colors.background);
     style.editor_foreground = Some(colors.text);
-    style.editor_active_line = Some(colors.hover);
+    style.editor_active_line = Some(colors.zebra);
     style.editor_line_number = Some(colors.faint);
     style.editor_active_line_number = Some(colors.text);
     theme

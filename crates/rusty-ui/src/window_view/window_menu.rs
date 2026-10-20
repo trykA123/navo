@@ -71,7 +71,7 @@ fn toggle(values: &Values, field: Field) -> MenuItem {
     let spec = field.spec();
     MenuItem {
         checked: is_on(values, field),
-        ..MenuItem::new(ItemId::Action(spec.key), spec.label, Group::Ferrite)
+        ..MenuItem::new(ItemId::Action(spec.key), &spec.label(), Group::Ferrite)
     }
 }
 
@@ -85,7 +85,7 @@ fn choice_menu(
         .enumerate()
         .map(|(at, choice)| MenuItem {
             checked: *current == Value::Pick(at),
-            ..MenuItem::new(ItemId::Action(choice.toml), choice.label, Group::Ferrite)
+            ..MenuItem::new(ItemId::Action(choice.toml), &choice.text(), Group::Ferrite)
         })
         .collect();
     MenuItem {

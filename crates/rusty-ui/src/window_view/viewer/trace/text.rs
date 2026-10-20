@@ -1,6 +1,7 @@
 use rusty_automotive::{
-    Base, Body, CanId, Direction, Entry, Frame, FrameKind, IdStat, MAX_IDS, Trace,
+    Base, Body, CanId, Direction, Entry, Frame, FrameKind, IdStat, MAX_IDS, Trace, TraceFormat,
 };
+use rusty_l10n::{t, tr};
 
 use crate::format;
 
@@ -94,12 +95,29 @@ fn columns(time: &str, frame: Option<(&Frame, Base)>, (type_, data): (&str, &str
     format!("{time:>12}  {channel:<3} {id_text:<11} {dir:<5} {type_:<7} {len:>3}  {data}")
 }
 
-fn without_time(text: &str) -> &str {
-    let trimmed = text.trim_start();
-    match trimmed.split_once(char::is_whitespace) {
-        Some((first, rest)) if is_time_token(first) => rest.trim_start(),
-        _ => trimmed,
+pub(super) fn format_label(format: TraceFormat) -> String {
+    match format {
+        TraceFormat::Asc => tr("trace-format-asc"),
+        TraceFormat::Trc(None) => tr("trace-format-trc"),
+        TraceFormat::Trc(Some(version)) => t!("trace-format-trc-version", version = version),
     }
+}
+
+fn without_time(text: &str, format: TraceFormat) -> &str {
+    let skip = match format {
+        TraceFormat::Asc => 1,
+        TraceFormat::Trc(_) => 2,
+    };
+    let mut rest = text.trim_start();
+    for _ in 0..skip {
+        match rest.split_once(char::is_whitespace) {
+            Some((first, tail)) if is_time_token(first.trim_end_matches(')')) => {
+                rest = tail.trim_start();
+            }
+            _ => break,
+        }
+    }
+    rest
 }
 
 fn is_time_token(token: &str) -> bool {
@@ -109,7 +127,7 @@ fn is_time_token(token: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || byte == b'.')
 }
 
-pub(super) fn row(entry: &Entry, base: Base) -> (String, Tone) {
+pub(super) fn row(entry: &Entry, (base, format): (Base, TraceFormat)) -> (String, Tone) {
     let at = entry.time_ns.map(time).unwrap_or_default();
     match &entry.body {
         Body::Frame(frame) => {
@@ -125,12 +143,13 @@ pub(super) fn row(entry: &Entry, base: Base) -> (String, Tone) {
             )
         }
         Body::Other(text) => (
-            columns(&at, None, ("Other", without_time(text))),
+            columns(&at, None, ("Other", without_time(text, format))),
             Tone::Quiet,
         ),
-        Body::Malformed { text, .. } => {
-            (columns(&at, None, ("Bad", without_time(text))), Tone::Bad)
-        }
+        Body::Malformed { text, .. } => (
+            columns(&at, None, ("Bad", without_time(text, format))),
+            Tone::Bad,
+        ),
     }
 }
 

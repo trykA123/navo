@@ -50,7 +50,7 @@ pub(in crate::window_view) fn view_entries(
         let at = shown.get(preset).clone();
         for (index, (choice, action)) in PRESETS.iter().zip(PRESET_ACTIONS).enumerate() {
             let is_on = at == Value::Pick(index);
-            entries.push(MenuEntry::Run(choice.label, action(), is_on));
+            entries.push(MenuEntry::Run(choice.text(), action(), is_on));
         }
         entries.push(MenuEntry::Break);
     }
@@ -60,18 +60,30 @@ pub(in crate::window_view) fn view_entries(
         }
         let is_on = shown.is_shown(set.preset, part.field);
         entries.push(MenuEntry::Run(
-            part.field.spec().label,
+            part.field.spec().label(),
             (part.action)(),
             is_on,
         ));
     }
     if has_encoding {
         entries.push(MenuEntry::Break);
-        entries.push(MenuEntry::Run(ENCODING, Box::new(ChooseEncoding), false));
+        entries.push(MenuEntry::Run(
+            ENCODING.into(),
+            Box::new(ChooseEncoding),
+            false,
+        ));
     }
     entries.push(MenuEntry::Break);
-    entries.push(MenuEntry::Run(KEEP_LABEL, Box::new(KeepViewDefault), false));
-    entries.push(MenuEntry::Run(RESET_LABEL, Box::new(ResetView), false));
+    entries.push(MenuEntry::Run(
+        KEEP_LABEL.into(),
+        Box::new(KeepViewDefault),
+        false,
+    ));
+    entries.push(MenuEntry::Run(
+        RESET_LABEL.into(),
+        Box::new(ResetView),
+        false,
+    ));
     entries
 }
 

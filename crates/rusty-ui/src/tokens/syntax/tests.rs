@@ -180,3 +180,32 @@ fn changing_the_mode_keeps_the_syntax_theme(cx: &mut TestAppContext) {
         assert_eq!(keyword, expected.style("keyword"));
     });
 }
+
+#[test]
+fn link_uri_is_not_underlined_until_the_kit_supports_it() {
+    for syntax in SyntaxTheme::ALL {
+        for mode in MODES {
+            let (theme, _) = built(syntax, mode);
+            let style = theme.style("link_uri").expect("a style");
+            assert_eq!(style.font_style, None, "{syntax:?} {mode:?}");
+        }
+    }
+}
+
+#[test]
+fn each_code_token_meets_aa_contrast_on_the_active_line() {
+    for syntax in SyntaxTheme::ALL {
+        for mode in MODES {
+            let (theme, _) = built(syntax, mode);
+            let line = theme.style.editor_active_line.expect("an active line");
+            for name in every_name() {
+                let colour = theme.style(name).and_then(|style| style.color);
+                let ratio = colour.map_or(0., |colour| contrast_ratio(colour, line));
+                assert!(
+                    ratio >= MINIMUM_CONTRAST,
+                    "{syntax:?} {mode:?}: {name} is {ratio:.2}:1 on the active line"
+                );
+            }
+        }
+    }
+}
