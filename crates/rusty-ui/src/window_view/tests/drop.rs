@@ -13,7 +13,7 @@ use super::{home_beside_dest, open_options, options_for, press, settle, with_fke
 use crate::drag::Hover;
 use crate::pane_chrome::path_segments;
 use crate::settings::{Change, Field, Value, Values};
-use crate::test_pointer::{self, ctrl, dispatch, moved, up};
+use crate::test_pointer::{self, ctrl, dispatch, down, moved, up};
 use crate::window_view::{DriveIcon, DriveInfo, FerriteWindow};
 
 const DOCS: usize = 0;
@@ -279,6 +279,18 @@ impl Rig {
                 .is_some_and(|focus| focus.is_focused(window))
         })
         .expect("window")
+    }
+
+    fn refresh(&self, cx: &mut TestAppContext) {
+        self.view.update(cx, |view, _| {
+            let _ = view.browser.command(&Command::PaneRefresh);
+        });
+        settle(cx, &self.view);
+    }
+
+    fn has_session(&self, cx: &mut TestAppContext) -> bool {
+        self.view
+            .read_with(cx, |view, _| view.drag_session.is_some())
     }
 
     fn has_drag(&self, cx: &mut TestAppContext) -> bool {
@@ -579,4 +591,114 @@ fn a_drop_on_the_pill_of_the_sources_own_root_is_refused(cx: &mut TestAppContext
     assert!(rig.jobs(cx).is_empty());
     assert_eq!(rig.notice(cx), Some(tr("drag-refused-same-folder")));
     assert!(rig.exists("top.txt"));
+}
+
+#[gpui_kit::test]
+fn a_list_change_between_press_and_drag_start_carries_nothing(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let mods = Modifiers::default();
+    let to = rig.list_spot(cx, rig.dest);
+    let from = rig.grip(cx, A);
+    dispatch(cx, rig.window, down(MouseButton::Left, from, mods));
+    rig.fs.remove("home/a.txt");
+    rig.refresh(cx);
+    assert_eq!(rig.grip(cx, A), from);
+    let nudge = point(from.x + px(12.), from.y);
+    dispatch(cx, rig.window, moved(Some(MouseButton::Left), nudge, mods));
+    dispatch(cx, rig.window, moved(Some(MouseButton::Left), to, mods));
+    assert_eq!(rig.carried(cx), None);
+    rig.release(cx, to, mods);
+    assert!(rig.jobs(cx).is_empty());
+    assert!(rig.exists("home/b.txt"));
+    assert!(!rig.exists("dest/b.txt"));
+    assert_eq!(rig.notice(cx), Some(tr("drag-refused-list-changed")));
+}
+
+#[gpui_kit::test]
+fn a_list_change_while_hovering_a_folder_refuses_the_drop(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let mods = Modifiers::default();
+    let to = rig.row_centre(cx, DOCS);
+    rig.drag_to(cx, (C, to), mods);
+    assert_eq!(rig.hover(cx).and_then(|hover| hover.op), Some(DropOp::Move));
+    rig.fs.add_folder("home/aaa");
+    rig.refresh(cx);
+    assert_eq!(rig.row_centre(cx, DOCS), to);
+    assert_eq!(rig.hover(cx).and_then(|hover| hover.op), None);
+    rig.release(cx, to, mods);
+    assert!(rig.jobs(cx).is_empty());
+    assert!(rig.exists("home/c.txt"));
+    assert!(!rig.exists("home/aaa/c.txt"));
+    assert!(!rig.exists("home/docs/c.txt"));
+    assert_eq!(rig.notice(cx), Some(tr("drag-refused-list-changed")));
+}
+
+#[gpui_kit::test]
+fn a_drag_released_off_any_target_leaves_no_session(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let mods = Modifiers::default();
+    let off = point(px(2.), px(2.));
+    rig.drag_to(cx, (A, off), mods);
+    assert!(rig.has_session(cx));
+    rig.release(cx, off, mods);
+    cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
+        .expect("window");
+    assert!(!rig.has_drag(cx));
+    assert!(!rig.has_session(cx));
+    assert!(rig.jobs(cx).is_empty());
+    assert!(rig.exists("home/a.txt"));
+}
+
+#[gpui_kit::test]
+fn drop_confirm_always_asks_before_a_dragged_copy(cx: &mut TestAppContext) {
+    let values = with_fkey_bar(Values::default()).with(&Change {
+        field: Field::DropConfirm,
+        value: Value::Pick(2),
+    });
+    let rig = rig_with(cx, values);
+    let to = rig.list_spot(cx, rig.dest);
+    rig.drop_on(cx, (A, to), ctrl());
+    let pending = rig.view.read_with(cx, |view, _| {
+        view.browser.pending().map(|pending| pending.plan.kind)
+    });
+    assert_eq!(pending, Some(OpKind::Copy));
+    assert!(rig.jobs(cx).is_empty());
+    assert!(!rig.exists("dest/a.txt"));
+    assert!(rig.exists("home/a.txt"));
+}
+
+#[gpui_kit::test]
+fn a_quick_drop_on_a_folder_row_moves_into_it(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let mods = Modifiers::default();
+    let to = rig.row_centre(cx, DOCS);
+    let from = rig.grip(cx, A);
+    let nudge = point(from.x + px(12.), from.y);
+    test_pointer::drag(cx, rig.window, (MouseButton::Left, mods), &[from, nudge]);
+    rig.release(cx, to, mods);
+    assert!(rig.exists("home/docs/a.txt"));
+    assert!(!rig.exists("home/a.txt"));
+}
+
+#[gpui_kit::test]
+fn a_pane_that_navigated_during_the_drag_refuses_a_same_named_folder(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let mods = Modifiers::default();
+    let to = rig.row_centre(cx, DOCS);
+    rig.drag_to(cx, (A, to), mods);
+    assert_eq!(rig.hover(cx).and_then(|hover| hover.op), Some(DropOp::Move));
+    rig.fs.add_folder("other/docs");
+    let go = Command::PaneNavigate {
+        location: rig.fs.location("other"),
+    };
+    rig.view.update(cx, |view, _| {
+        let _ = view.browser.command(&go);
+    });
+    settle(cx, &rig.view);
+    assert_eq!(rig.row_centre(cx, DOCS), to);
+    rig.release(cx, to, mods);
+    assert!(rig.jobs(cx).is_empty());
+    assert!(rig.exists("home/a.txt"));
+    assert!(!rig.exists("other/docs/a.txt"));
+    assert_eq!(rig.notice(cx), Some(tr("drag-refused-list-changed")));
 }

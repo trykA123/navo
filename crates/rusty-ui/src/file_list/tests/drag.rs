@@ -51,14 +51,14 @@ impl Render for Host {
             let host = cx.entity().downgrade();
             list.pane(PANE)
                 .on_drag_start(move |drag, _, cx| {
-                    let _ = host.update(cx, |host, _| host.starts.push(*drag));
+                    let _ = host.update(cx, |host, _| host.starts.push(drag.clone()));
                     badge(cx)
                 })
                 .on_drop(cx.listener(|this, event: &DropEvent, _, _| {
                     this.drops.push(event.clone());
                 }))
                 .on_hover(cx.listener(|this, spot: &Option<DropSpot>, _, _| {
-                    this.hovers.push(*spot);
+                    this.hovers.push(spot.clone());
                 }))
         } else {
             list
@@ -140,6 +140,7 @@ fn internal(row: usize) -> DropPayload {
     DropPayload::Internal(FileDrag {
         pane: PANE,
         row: row as u64,
+        name: sample_rows()[row].name.to_text().into(),
     })
 }
 
@@ -150,7 +151,14 @@ fn a_left_drag_from_the_icon_starts_a_file_drag_for_that_row(cx: &mut TestAppCon
     left_drag(cx, window, Modifiers::default(), &[from, nudge(from)]);
     assert!(has_drag(cx));
     let starts = read(&host, cx, |h| h.starts.clone());
-    assert_eq!(starts, [FileDrag { pane: PANE, row: 2 }]);
+    assert_eq!(
+        starts,
+        [FileDrag {
+            pane: PANE,
+            row: 2,
+            name: "Cargo.toml".into()
+        }]
+    );
     let is_lasso = cx
         .update_window(window, |_, window, _| {
             window.within("left").try_find("lasso").is_some()
@@ -165,13 +173,13 @@ fn a_drop_on_a_folder_row_names_that_row(cx: &mut TestAppContext) {
     let (from, to) = (name_of(cx, window, CARGO), centre(cx, window, SRC));
     left_drag(cx, window, Modifiers::default(), &[from, nudge(from), to]);
     assert_eq!(
-        read(&host, cx, |h| h.hovers.last().copied()),
-        Some(Some(DropSpot::Row(0)))
+        read(&host, cx, |h| h.hovers.last().cloned()),
+        Some(Some(DropSpot::Row(0, "src".into())))
     );
     release(cx, window, to, Modifiers::default());
     let expected = DropEvent {
         pane: PANE,
-        spot: DropSpot::Row(0),
+        spot: DropSpot::Row(0, "src".into()),
         payload: internal(CARGO),
     };
     assert_eq!(read(&host, cx, |h| h.drops.clone()), [expected]);
@@ -190,14 +198,16 @@ fn a_drop_on_a_file_row_or_below_the_rows_targets_the_pane_folder(cx: &mut TestA
         &[from, nudge(from), on_file],
     );
     assert_eq!(
-        read(&host, cx, |h| h.hovers.last().copied()),
+        read(&host, cx, |h| h.hovers.last().cloned()),
         Some(Some(DropSpot::Folder))
     );
     release(cx, window, on_file, Modifiers::default());
     let to = below(cx, window);
     left_drag(cx, window, Modifiers::default(), &[from, nudge(from), to]);
     release(cx, window, to, Modifiers::default());
-    let spots: Vec<_> = read(&host, cx, |h| h.drops.iter().map(|d| d.spot).collect());
+    let spots: Vec<_> = read(&host, cx, |h| {
+        h.drops.iter().map(|d| d.spot.clone()).collect()
+    });
     assert_eq!(spots, [DropSpot::Folder, DropSpot::Folder]);
 }
 
@@ -212,7 +222,7 @@ fn hovering_outside_the_list_reports_no_spot(cx: &mut TestAppContext) {
         Modifiers::default(),
         &[from, nudge(from), outside],
     );
-    assert_eq!(read(&host, cx, |h| h.hovers.last().copied()), Some(None));
+    assert_eq!(read(&host, cx, |h| h.hovers.last().cloned()), Some(None));
     release(cx, window, outside, Modifiers::default());
     assert!(read(&host, cx, |h| h.drops.is_empty()));
 }
@@ -231,7 +241,7 @@ fn files_dropped_from_outside_on_a_folder_row_arrive_as_external(cx: &mut TestAp
     dispatch(cx, window, submit.to_platform_input());
     let expected = DropEvent {
         pane: PANE,
-        spot: DropSpot::Row(0),
+        spot: DropSpot::Row(0, "src".into()),
         payload: DropPayload::External(paths),
     };
     assert_eq!(read(&host, cx, |h| h.drops.clone()), [expected]);

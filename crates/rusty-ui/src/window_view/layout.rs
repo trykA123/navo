@@ -29,6 +29,7 @@ impl FerriteWindow {
     }
 
     pub(super) fn body_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        self.end_finished_drag(cx);
         let t = tokens::current(cx).clone();
         let body = self.panes_view(window, cx);
         let has_strip = self.fkey_strip_height(&t) > px(0.);

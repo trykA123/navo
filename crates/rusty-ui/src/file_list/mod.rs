@@ -127,6 +127,8 @@ struct ListState {
     press: press::Press,
     lasso: lasso::Held,
     drop_spot: Option<DropSpot>,
+    hover_queued: bool,
+    pressed_name: Option<SharedString>,
 }
 
 struct ListContext {

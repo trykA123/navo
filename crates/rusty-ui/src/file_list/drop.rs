@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    App, Div, DragMoveEvent, Entity, ExternalPaths, InteractiveElement, Stateful,
+    App, Div, DragMoveEvent, Entity, ExternalPaths, InteractiveElement, MouseButton, Stateful,
     StatefulInteractiveElement, Styled, Window, div,
 };
 use rusty_core::PaneId;
@@ -9,6 +9,7 @@ use rusty_fs::EntryKind;
 
 use super::row::inset_ring;
 use super::{FileList, ListContext, row_index};
+use crate::SharedString;
 use crate::drag::{DragBadge, FileDrag};
 use crate::tokens::Theme;
 
@@ -22,9 +23,9 @@ pub enum DropPayload {
     External(ExternalPaths),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DropSpot {
-    Row(u64),
+    Row(u64, SharedString),
     Folder,
 }
 
@@ -84,7 +85,7 @@ trait Payload: 'static {
 
 impl Payload for FileDrag {
     fn payload(&self) -> DropPayload {
-        DropPayload::Internal(*self)
+        DropPayload::Internal(self.clone())
     }
 }
 
@@ -103,6 +104,14 @@ impl ListContext {
         self.accepts() && self.drag.on_hover.is_some()
     }
 
+    fn name_at(&self, row: u64) -> SharedString {
+        self.props
+            .rows
+            .get(row_index(row))
+            .map(|entry| entry.name.to_text().into())
+            .unwrap_or_default()
+    }
+
     fn dropped(&self, (spot, payload): (DropSpot, DropPayload), window: &mut Window, cx: &mut App) {
         if let (Some(pane), Some(handler)) = (self.drag.pane, &self.drag.on_drop) {
             let event = DropEvent {
@@ -115,7 +124,10 @@ impl ListContext {
     }
 
     fn report_hover(&self, window: &mut Window, cx: &mut App) {
-        let spot = self.state.read(cx).drop_spot;
+        let spot = self.state.update(cx, |state, _| {
+            state.hover_queued = false;
+            state.drop_spot.clone()
+        });
         if let Some(handler) = &self.drag.on_hover {
             handler(&spot, window, cx);
         }
@@ -127,26 +139,46 @@ pub(super) fn grip(ctx: &Rc<ListContext>, row: u64) -> Stateful<Div> {
     let (Some(pane), Some(start)) = (ctx.drag.pane, ctx.drag.on_drag_start.clone()) else {
         return grip;
     };
-    let state = ctx.state.clone();
-    grip.on_drag(FileDrag { pane, row }, move |drag, _, window, cx| {
-        state.update(cx, |state, _| state.lasso.swallow());
-        start(drag, window, cx)
+    let name = ctx.name_at(row);
+    let (state, pressed) = (ctx.state.clone(), ctx.state.clone());
+    let press_name = name.clone();
+    grip.on_mouse_down(MouseButton::Left, move |_, _, cx| {
+        let name = press_name.clone();
+        pressed.update(cx, |state, _| state.pressed_name = Some(name));
+    })
+    .on_drag(FileDrag { pane, row, name }, move |drag, _, window, cx| {
+        let pressed = state.update(cx, |state, _| {
+            state.lasso.swallow();
+            state.pressed_name.take()
+        });
+        let name = pressed.unwrap_or_else(|| drag.name.clone());
+        start(
+            &FileDrag {
+                name,
+                ..drag.clone()
+            },
+            window,
+            cx,
+        )
     })
 }
 
-fn drops<T: Payload, E: InteractiveElement>(el: E, ctx: &Rc<ListContext>, spot: DropSpot) -> E {
-    let ctx = ctx.clone();
-    el.on_drop(move |value: &T, window, cx| ctx.dropped((spot, value.payload()), window, cx))
+fn drops<T: Payload, E: InteractiveElement>(el: E, ctx: &Rc<ListContext>, spot: &DropSpot) -> E {
+    let (ctx, spot) = (ctx.clone(), spot.clone());
+    el.on_drop(move |value: &T, window, cx| {
+        ctx.dropped((spot.clone(), value.payload()), window, cx);
+    })
 }
 
 fn hover_row<T: 'static>(
     ctx: &Rc<ListContext>,
-    row: u64,
+    spot: &DropSpot,
 ) -> impl Fn(&DragMoveEvent<T>, &mut Window, &mut App) + 'static {
-    let state = ctx.state.clone();
+    let (state, spot) = (ctx.state.clone(), spot.clone());
     move |event, _, cx| {
         if event.bounds.contains(&event.event.position) {
-            state.update(cx, |state, _| state.drop_spot = Some(DropSpot::Row(row)));
+            let spot = spot.clone();
+            state.update(cx, |state, _| state.drop_spot = Some(spot));
         }
     }
 }
@@ -160,9 +192,14 @@ fn hover_area<T: 'static>(
             .bounds
             .contains(&event.event.position)
             .then_some(DropSpot::Folder);
-        ctx.state.update(cx, |state, _| state.drop_spot = spot);
-        let ctx = ctx.clone();
-        window.defer(cx, move |window, cx| ctx.report_hover(window, cx));
+        let queued = ctx.state.update(cx, |state, _| {
+            state.drop_spot = spot;
+            std::mem::replace(&mut state.hover_queued, true)
+        });
+        if !queued {
+            let ctx = ctx.clone();
+            window.defer(cx, move |window, cx| ctx.report_hover(window, cx));
+        }
     }
 }
 
@@ -180,22 +217,22 @@ pub(super) fn target(
         return cell;
     }
     let ring = t.colors.accent;
-    let spot = DropSpot::Row(row);
+    let spot = DropSpot::Row(row, ctx.name_at(row));
     let cell = cell
         .drag_over::<FileDrag>(move |style, _, _, _| style.shadow(inset_ring(ring)))
         .drag_over::<ExternalPaths>(move |style, _, _, _| style.shadow(inset_ring(ring)));
-    let cell = drops::<ExternalPaths, _>(drops::<FileDrag, _>(cell, ctx, spot), ctx, spot);
+    let cell = drops::<ExternalPaths, _>(drops::<FileDrag, _>(cell, ctx, &spot), ctx, &spot);
     if !ctx.hovers() {
         return cell;
     }
-    cell.on_drag_move(hover_row::<FileDrag>(ctx, row))
-        .on_drag_move(hover_row::<ExternalPaths>(ctx, row))
+    cell.on_drag_move(hover_row::<FileDrag>(ctx, &spot))
+        .on_drag_move(hover_row::<ExternalPaths>(ctx, &spot))
 }
 
 pub(super) fn background(area: Div, ctx: &Rc<ListContext>) -> Div {
     let area = if ctx.accepts() {
         let spot = DropSpot::Folder;
-        drops::<ExternalPaths, _>(drops::<FileDrag, _>(area, ctx, spot), ctx, spot)
+        drops::<ExternalPaths, _>(drops::<FileDrag, _>(area, ctx, &spot), ctx, &spot)
     } else {
         area
     };

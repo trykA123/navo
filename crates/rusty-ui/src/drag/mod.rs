@@ -12,10 +12,11 @@ use crate::SharedString;
 pub use badge::DragBadge;
 pub use landing::Landing;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileDrag {
     pub pane: PaneId,
     pub row: u64,
+    pub name: SharedString,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,6 +93,7 @@ impl DragState {
 pub enum Refusal {
     SameFolder,
     IntoItself,
+    ListChanged,
 }
 
 impl Refusal {
@@ -100,6 +102,7 @@ impl Refusal {
         let id = match self {
             Self::SameFolder => "drag-refused-same-folder",
             Self::IntoItself => "drag-refused-into-itself",
+            Self::ListChanged => "drag-refused-list-changed",
         };
         tr(id).into()
     }

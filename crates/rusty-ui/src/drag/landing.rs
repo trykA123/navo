@@ -49,7 +49,7 @@ impl<T: Clone + 'static> Landing<T> {
             .drag_over::<FileDrag>(move |style, _, _, _| style.shadow(inset_ring(ring)))
             .drag_over::<ExternalPaths>(move |style, _, _, _| style.shadow(inset_ring(ring)));
         let el = dropping::<FileDrag, _, _>(el, (&on_drop, &target), |drag| {
-            DropPayload::Internal(*drag)
+            DropPayload::Internal(drag.clone())
         });
         let el = dropping::<ExternalPaths, _, _>(el, (&on_drop, &target), |paths| {
             DropPayload::External(paths.clone())

@@ -2,31 +2,36 @@ use gpui_kit::{AnyWindowHandle, Modifiers, Subscription};
 use rusty_core::{DropKeys, DropOp, Location, OpKind, PaneId, ProviderPath, drop_op};
 
 use super::FerriteWindow;
+use super::drag_hover::Over;
 use crate::browser::{DropRequest, PasteRefusal, drop_refusal, same_volume};
-use crate::drag::{DragBadge, DragState, FileDrag, Hover, Refusal};
+use crate::drag::{DragBadge, DragState, FileDrag, Refusal};
 use crate::file_list::{DropEvent, DropPayload, DropSpot, FileList};
 use crate::modifier_hints::HintsMode;
-use crate::pane_chrome::{DrivePill, PaneTabs, PathBar, path_segments};
+use crate::pane_chrome::{DrivePill, PaneTabs, PathBar};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 
 pub(super) struct DragSession {
-    sources: Vec<Location>,
+    pub(super) carried: Carried,
     source_pane: PaneId,
     pub(super) state: Entity<DragState>,
-    over: Option<Over>,
+    pub(super) over: Option<Over>,
+    pub(super) keys: DropKeys,
+    pub(super) shown: Option<(Option<Over>, DropKeys)>,
+    pub(super) shown_target: Option<(PaneId, DropSpot, Location)>,
     _escape: Subscription,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Over {
-    Spot(PaneId, DropSpot),
-    Tab(PaneId, usize),
-    Crumb(PaneId, Location),
-    Drive(PaneId, Location),
+pub(super) struct Carried {
+    pub(super) sources: Vec<Location>,
+    pub(super) parents: Vec<Location>,
+    pub(super) folders: Vec<Location>,
+    first: SharedString,
 }
 
-fn keys_of(modifiers: &Modifiers) -> DropKeys {
+pub(super) type Target = Result<Location, Refusal>;
+
+pub(super) fn keys_of(modifiers: &Modifiers) -> DropKeys {
     DropKeys {
         ctrl: modifiers.control,
         shift: modifiers.shift,
@@ -34,36 +39,18 @@ fn keys_of(modifiers: &Modifiers) -> DropKeys {
     }
 }
 
-fn op_for(sources: &[Location], target: &Location, keys: DropKeys) -> DropOp {
+pub(super) fn op_for(sources: &[Location], target: &Location, keys: DropKeys) -> DropOp {
     let same = sources
         .first()
         .is_some_and(|source| same_volume(source, target));
     drop_op(same, keys)
 }
 
-fn refusal_of(refused: PasteRefusal) -> Option<Refusal> {
+pub(super) fn refusal_of(refused: PasteRefusal) -> Option<Refusal> {
     match refused {
         PasteRefusal::AlreadyHere => Some(Refusal::SameFolder),
         PasteRefusal::IntoItself => Some(Refusal::IntoItself),
         PasteRefusal::Nothing => None,
-    }
-}
-
-fn label_of(location: &Location) -> SharedString {
-    path_segments(location)
-        .pop()
-        .map(|segment| segment.label)
-        .unwrap_or_else(|| location.as_str().to_owned().into())
-}
-
-fn hover_of(sources: &[Location], target: &Location, keys: DropKeys) -> Hover {
-    let refusal = drop_refusal(target, sources)
-        .and_then(refusal_of)
-        .map(Refusal::text);
-    Hover {
-        target_label: label_of(target),
-        op: refusal.is_none().then(|| op_for(sources, target, keys)),
-        refusal,
     }
 }
 
@@ -111,7 +98,7 @@ impl FerriteWindow {
             })
             .on_hover(
                 cx.listener(move |view, spot: &Option<DropSpot>, window, cx| {
-                    view.drag_hover((pane, *spot), keys_of(&window.modifiers()), cx);
+                    view.drag_hover((pane, spot.clone()), keys_of(&window.modifiers()), cx);
                 }),
             )
             .on_drop(cx.listener(|view, event: &DropEvent, window, cx| {
@@ -119,18 +106,12 @@ impl FerriteWindow {
             }))
     }
 
-    fn drag_sources(&self, drag: &FileDrag) -> (Vec<Location>, SharedString) {
-        let Some(tab) = self
-            .browser
-            .state()
-            .pane(drag.pane)
-            .map(|pane| pane.active())
-        else {
-            return (Vec::new(), SharedString::default());
-        };
-        let Some(listing) = tab.listing() else {
-            return (Vec::new(), SharedString::default());
-        };
+    fn drag_sources(&self, drag: &FileDrag) -> Option<Carried> {
+        let tab = self.browser.state().pane(drag.pane)?.active();
+        let listing = tab.listing()?;
+        if listing.get(drag.row)?.name != drag.name.as_ref() {
+            return None;
+        }
         let selection = tab.selection();
         let rows = match selection.is_marked(drag.row) {
             true => selection.marked(),
@@ -140,18 +121,24 @@ impl FerriteWindow {
             .into_iter()
             .filter_map(|row| listing.get(row))
             .collect();
-        let first = entries
-            .first()
-            .map(|entry| SharedString::from(entry.name.clone()))
-            .unwrap_or_default();
-        let sources = entries
-            .into_iter()
-            .filter_map(|entry| {
-                let name = ProviderPath::from_text(&entry.name);
-                tab.location().join(&name).ok()
-            })
-            .collect();
-        (sources, first)
+        let folder = tab.location();
+        let join = |name: &str| folder.join(&ProviderPath::from_text(name)).ok();
+        Some(Carried {
+            sources: entries
+                .iter()
+                .filter_map(|entry| join(&entry.name))
+                .collect(),
+            parents: vec![folder.clone()],
+            folders: entries
+                .iter()
+                .filter(|entry| entry.is_folder)
+                .filter_map(|entry| join(&entry.name))
+                .collect(),
+            first: entries
+                .first()
+                .map(|entry| SharedString::from(entry.name.clone()))
+                .unwrap_or_default(),
+        })
     }
 
     fn start_drag(
@@ -162,75 +149,52 @@ impl FerriteWindow {
     ) -> Entity<DragBadge> {
         self.focus_pane(drag.pane);
         self.focus_core_pane(window, cx);
-        let (sources, first_name) = self.drag_sources(drag);
+        let Some(carried) = self.drag_sources(drag) else {
+            self.drag_session = None;
+            self.show_notice(info(Refusal::ListChanged.text()));
+            window.defer(cx, |window, cx| {
+                cx.stop_active_drag(window);
+            });
+            cx.notify();
+            return empty_badge(cx);
+        };
         let state = cx.new(|_| DragState {
-            count: sources.len(),
-            first_name,
+            count: carried.sources.len(),
+            first_name: carried.first.clone(),
             hover: None,
             keys_line: self.values.modifier_hints() != HintsMode::Off,
         });
         self.drag_session = Some(DragSession {
-            sources,
+            carried,
             source_pane: drag.pane,
             state: state.clone(),
             over: None,
+            keys: keys_of(&window.modifiers()),
+            shown: None,
+            shown_target: None,
             _escape: escape_cancels(window, cx),
         });
         cx.notify();
         cx.new(|cx| DragBadge::new(state, cx))
     }
 
-    fn drop_target(&self, pane: PaneId, spot: DropSpot) -> Option<Location> {
+    pub(super) fn drop_target(&self, pane: PaneId, spot: &DropSpot) -> Option<Target> {
         let tab = self.browser.state().pane(pane)?.active();
-        let folder = tab.location().clone();
-        let DropSpot::Row(row) = spot else {
-            return Some(folder);
+        let folder = tab.location();
+        let DropSpot::Row(row, name) = spot else {
+            return Some(Ok(folder.clone()));
         };
-        let entry = tab.listing().and_then(|listing| listing.get(row));
+        let entry = tab
+            .listing()
+            .and_then(|listing| listing.get(*row))
+            .filter(|entry| entry.is_folder && entry.name == name.as_ref());
         match entry {
-            Some(entry) if entry.is_folder => {
-                folder.join(&ProviderPath::from_text(&entry.name)).ok()
-            }
-            _ => Some(folder),
+            Some(entry) => folder
+                .join(&ProviderPath::from_text(&entry.name))
+                .ok()
+                .map(Ok),
+            None => Some(Err(Refusal::ListChanged)),
         }
-    }
-
-    fn drag_hover(
-        &mut self,
-        (pane, spot): (PaneId, Option<DropSpot>),
-        keys: DropKeys,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(session) = self.drag_session.as_mut() else {
-            return;
-        };
-        match spot {
-            Some(spot) => session.over = Some(Over::Spot(pane, spot)),
-            None if matches!(session.over, Some(Over::Spot(over, _)) if over == pane) => {
-                session.over = None;
-            }
-            None => return,
-        }
-        self.show_hover(keys, cx);
-    }
-
-    fn place_hover(
-        &mut self,
-        (over, inside): (Over, bool),
-        keys: DropKeys,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(session) = self.drag_session.as_mut() else {
-            return;
-        };
-        if inside {
-            session.over = Some(over);
-        } else if session.over.as_ref() == Some(&over) {
-            session.over = None;
-        } else {
-            return;
-        }
-        self.show_hover(keys, cx);
     }
 
     pub(super) fn wire_tab_drops(tabs: PaneTabs, pane: PaneId, cx: &mut Context<Self>) -> PaneTabs {
@@ -295,47 +259,51 @@ impl FerriteWindow {
         }
     }
 
-    fn tab_location(&self, pane: PaneId, tab: usize) -> Option<Location> {
+    pub(super) fn tab_location(&self, pane: PaneId, tab: usize) -> Option<Location> {
         let pane = self.browser.state().pane(pane)?;
         pane.tabs().get(tab).map(|tab| tab.location().clone())
     }
 
-    fn over_target(&self, over: &Over) -> Option<Location> {
-        match over {
-            Over::Spot(pane, spot) => self.drop_target(*pane, *spot),
-            Over::Tab(pane, tab) => self.tab_location(*pane, *tab),
-            Over::Crumb(_, location) | Over::Drive(_, location) => Some(location.clone()),
+    fn file_dropped(&mut self, event: &DropEvent, window: &mut Window, cx: &mut Context<Self>) {
+        match self.drop_target(event.pane, &event.spot) {
+            Some(Ok(target)) if !self.badge_named_other(event, &target) => {
+                self.drop_on((target, &event.payload), window, cx);
+            }
+            Some(_) => self.refuse_drop(&event.payload, window, cx),
+            None => {}
         }
     }
 
-    pub(super) fn drag_modifiers(&mut self, modifiers: &Modifiers, cx: &mut Context<Self>) {
-        if self.drag_session.is_some() && !cx.has_active_drag() {
-            self.drag_session = None;
-        }
-        self.show_hover(keys_of(modifiers), cx);
+    fn badge_named_other(&self, event: &DropEvent, target: &Location) -> bool {
+        let shown = self
+            .drag_session
+            .as_ref()
+            .and_then(|session| session.shown_target.as_ref());
+        let Some((pane, spot, named)) = shown else {
+            return false;
+        };
+        let same_spot = match (spot, &event.spot) {
+            (DropSpot::Row(shown, _), DropSpot::Row(row, _)) => shown == row,
+            (shown, spot) => shown == spot,
+        };
+        *pane == event.pane && same_spot && !named.same_place(target)
     }
 
-    fn show_hover(&self, keys: DropKeys, cx: &mut Context<Self>) {
-        let Some(session) = &self.drag_session else {
+    fn refuse_drop(&mut self, payload: &DropPayload, window: &mut Window, cx: &mut Context<Self>) {
+        let DropPayload::Internal(drag) = payload else {
             return;
         };
-        let hover = session
-            .over
-            .as_ref()
-            .and_then(|over| self.over_target(over))
-            .map(|target| hover_of(&session.sources, &target, keys));
-        session.state.update(cx, |state, cx| {
-            if state.hover != hover {
-                state.hover = hover;
-                cx.notify();
-            }
-        });
-    }
-
-    fn file_dropped(&mut self, event: &DropEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(target) = self.drop_target(event.pane, event.spot) {
-            self.drop_on((target, &event.payload), window, cx);
-        }
+        let Some(session) = self
+            .drag_session
+            .take()
+            .filter(|session| session.source_pane == drag.pane)
+        else {
+            return;
+        };
+        self.show_notice(info(Refusal::ListChanged.text()));
+        self.focus_pane(session.source_pane);
+        self.focus_core_pane(window, cx);
+        cx.notify();
     }
 
     pub(super) fn drop_on(
@@ -354,7 +322,11 @@ impl FerriteWindow {
         else {
             return;
         };
-        self.run_drop(session.sources, target, keys_of(&window.modifiers()));
+        self.run_drop(
+            session.carried.sources,
+            target,
+            keys_of(&window.modifiers()),
+        );
         self.focus_pane(session.source_pane);
         self.focus_core_pane(window, cx);
         cx.notify();

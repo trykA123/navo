@@ -20,20 +20,21 @@ pub fn drop_refusal(target: &Location, sources: &[Location]) -> Option<PasteRefu
     if sources.is_empty() {
         return Some(PasteRefusal::Nothing);
     }
-    if sources
-        .iter()
-        .any(|source| source.parent().as_ref() == Some(target))
-    {
+    let parents: Vec<Location> = sources.iter().filter_map(Location::parent).collect();
+    refusal_from(target, (&parents, sources))
+}
+
+#[must_use]
+pub fn refusal_from(
+    target: &Location,
+    (parents, folders): (&[Location], &[Location]),
+) -> Option<PasteRefusal> {
+    if parents.iter().any(|parent| parent.same_place(target)) {
         return Some(PasteRefusal::AlreadyHere);
     }
-    let mut current = Some(target.clone());
-    while let Some(location) = current {
-        if sources.contains(&location) {
-            return Some(PasteRefusal::IntoItself);
-        }
-        current = location.parent();
-    }
-    None
+    std::iter::successors(Some(target.clone()), Location::parent)
+        .any(|place| folders.iter().any(|folder| folder.same_place(&place)))
+        .then_some(PasteRefusal::IntoItself)
 }
 
 impl Browser {

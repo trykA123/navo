@@ -61,7 +61,8 @@ fn off_a_target_the_badge_names_what_is_carried() {
     assert_eq!(
         FileDrag {
             pane: PaneId::new(1),
-            row: 2
+            row: 2,
+            name: "b.txt".into(),
         }
         .row,
         2

@@ -1,7 +1,7 @@
 use rusty_core::{DropKeys, DropOp, Location, Step, drop_op};
 
 use super::*;
-use crate::browser::{DropConfirm, DropRequest, PasteRefusal, same_volume};
+use crate::browser::{DropConfirm, DropRequest, PasteRefusal, drop_refusal, same_volume};
 
 fn request(fs: &FakeFs, kind: OpKind, confirm: DropConfirm) -> DropRequest {
     DropRequest {
@@ -256,4 +256,23 @@ fn paste_copies_or_moves_into_the_active_folder_without_confirmation() {
         assert!(exists(&fs, "dest/docs/report.txt"));
         assert_eq!(exists(&fs, "home/docs"), kind == OpKind::Copy);
     }
+}
+
+#[test]
+fn refusals_ignore_case_on_windows_paths_like_the_planner() {
+    let loc = |text: &str| Location::new(text).unwrap();
+    let sources = [loc(r"C:\Work\Proj")];
+    let cases = [
+        (r"c:\work", PasteRefusal::AlreadyHere),
+        (r"c:\WORK\proj", PasteRefusal::IntoItself),
+        (r"c:\work\PROJ\sub", PasteRefusal::IntoItself),
+    ];
+    for (target, refusal) in cases {
+        assert_eq!(
+            drop_refusal(&loc(target), &sources),
+            Some(refusal),
+            "{target}"
+        );
+    }
+    assert_eq!(drop_refusal(&loc(r"c:\other"), &sources), None);
 }

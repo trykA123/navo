@@ -2,6 +2,7 @@ mod app_menu;
 mod clipboard;
 mod command_center;
 mod crash;
+mod drag_hover;
 mod drive_menu;
 mod drives;
 mod drop;
@@ -270,6 +271,9 @@ impl FerriteWindow {
         self.note_seen(cx);
         self.clear_finished_cuts();
         self.jobs_woke(cx);
+        if polled {
+            self.drag_list_changed(cx);
+        }
         if self.poll_preview() || polled {
             cx.notify();
         }
@@ -310,6 +314,7 @@ impl FerriteWindow {
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
         let result = self.browser.command(command);
+        self.drag_list_changed(cx);
         self.forget_clipboard_notice();
         self.show_refusal(result);
         self.focus_core_pane(window, cx);

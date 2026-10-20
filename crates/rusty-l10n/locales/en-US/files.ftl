@@ -159,3 +159,4 @@ drag-carry = { $count ->
 drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
 drag-refused-same-folder = Already in this folder
 drag-refused-into-itself = Cannot drop a folder into itself
+drag-refused-list-changed = The list changed during the drag. Nothing was moved.
