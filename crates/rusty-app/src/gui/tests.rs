@@ -140,3 +140,20 @@ fn clean_quitter_removes_the_crash_running_marker() {
     assert!(!dir.path().join("running").exists());
     assert!(crate::crash::pending(dir.path()).is_none());
 }
+
+#[test]
+fn a_failed_integrity_check_on_record_keeps_the_journal_closed_and_the_file_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let dirs = store(&dir);
+    one_running_job(&dirs);
+    let db = dirs.data.join("ferrite.db");
+    let mut bytes = std::fs::read(&db).unwrap();
+    bytes[100..2000].fill(0xFF);
+    std::fs::write(&db, &bytes).unwrap();
+    let sentinel = crate::crash::sentinel_path(&db);
+    std::fs::write(&sentinel, b"").unwrap();
+    let (ops, _lock) = operations(Some(&dirs), &home(), &FakeFs::new());
+    assert_eq!(ops.protected.len(), 3);
+    assert!(sentinel.exists());
+    assert_eq!(std::fs::read(&db).unwrap(), bytes);
+}

@@ -9,6 +9,8 @@ mod downloads;
 mod hook;
 mod unclean;
 
+#[cfg(test)]
+pub(crate) use unclean::sentinel_path;
 pub(crate) use unclean::{note_previous_exit, open_db};
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);

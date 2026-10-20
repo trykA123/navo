@@ -183,8 +183,9 @@ fn session_saver(
     Rc::new(move |state: &AppState| {
         if let Some(dirs) = dirs.as_ref()
             && dirs.ensure().is_ok()
+            && let Err(error) = save(state, &dirs.session_file())
         {
-            let _ = save(state, &dirs.session_file());
+            tracing::warn!(%error, "saving the session failed");
         }
         if let Some(disk) = &disk {
             disk.save_folders(&cache, &keys, &session_folders(state));
@@ -239,10 +240,11 @@ pub(crate) fn operations(
             .into_iter()
             .filter_map(|path| Location::new(path.to_str()?).ok()),
     );
-    let journal = dirs
-        .ensure()
-        .ok()
-        .and_then(|()| jobs::open(&dirs.data.join("ferrite.db")).ok());
+    let journal = dirs.ensure().ok().and_then(|()| {
+        jobs::open(&dirs.data.join("ferrite.db"))
+            .inspect_err(|error| tracing::error!(%error, "opening the job journal failed"))
+            .ok()
+    });
     let instance = jobs::claim(&dirs.data.join("ferrite.lock"));
     let Some(journal) = journal else {
         let unlogged = Operations {
