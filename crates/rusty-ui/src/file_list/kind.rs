@@ -1,21 +1,10 @@
 use gpui_kit::Hsla;
 use rusty_fs::{EntryKind, FsEntry};
 
+use super::icons;
 use crate::format;
 use crate::primitives::IconName;
 use crate::tokens::Colors;
-
-const CODE: [&str; 24] = [
-    "rs", "toml", "json", "js", "ts", "tsx", "jsx", "py", "c", "h", "cpp", "hpp", "cs", "go",
-    "java", "kt", "sh", "ps1", "bat", "cmd", "yml", "yaml", "xml", "html",
-];
-const IMAGE: [&str; 12] = [
-    "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "tif", "tiff", "heic", "avif",
-];
-const ARCHIVE: [&str; 11] = [
-    "zip", "7z", "rar", "tar", "gz", "tgz", "xz", "zst", "bz2", "iso", "cab",
-];
-const APP: [&str; 5] = ["exe", "msi", "appimage", "deb", "rpm"];
 
 pub(crate) fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
     if kind == EntryKind::Folder {
@@ -27,22 +16,14 @@ pub(crate) fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
     }
 }
 
-fn is_in(list: &[&str], extension: &str) -> bool {
-    list.iter()
-        .any(|known| known.eq_ignore_ascii_case(extension))
-}
-
 pub(crate) fn icon(kind: EntryKind, extension: &str, colors: &Colors) -> (IconName, Hsla) {
     match kind {
         EntryKind::Folder => (IconName::Folder, colors.folder),
         EntryKind::Link => (IconName::ArrowRight, colors.muted),
-        EntryKind::File if is_in(&CODE, extension) => (IconName::FileCode, colors.kind_code),
-        EntryKind::File if is_in(&IMAGE, extension) => (IconName::FileImage, colors.kind_image),
-        EntryKind::File if is_in(&ARCHIVE, extension) => {
-            (IconName::FileArchive, colors.kind_archive)
-        }
-        EntryKind::File if is_in(&APP, extension) => (IconName::SquarePlus, colors.kind_app),
-        EntryKind::File => (IconName::FileText, colors.muted),
+        EntryKind::File => match icons::lookup(extension) {
+            Some(group) => (group.icon, (group.tone)(colors)),
+            None => (IconName::FileText, colors.muted),
+        },
     }
 }
 

@@ -1,5 +1,6 @@
 mod action;
 mod header;
+mod icons;
 mod keys;
 pub(crate) mod kind;
 mod lasso;

@@ -99,6 +99,13 @@ pub struct Colors {
     pub kind_image: Hsla,
     pub kind_archive: Hsla,
     pub kind_app: Hsla,
+    pub kind_pdf: Hsla,
+    pub kind_doc: Hsla,
+    pub kind_sheet: Hsla,
+    pub kind_slides: Hsla,
+    pub kind_audio: Hsla,
+    pub kind_video: Hsla,
+    pub kind_auto: Hsla,
     pub ok: Hsla,
     pub warn: Hsla,
     pub terminal_background: Hsla,
@@ -223,7 +230,7 @@ const FILLED_PAIRS: [(&str, &str); 4] = [
 ];
 
 impl Colors {
-    pub fn entries(&self) -> [(&'static str, Hsla); 23] {
+    fn base_entries(&self) -> [(&'static str, Hsla); 23] {
         let Self {
             background,
             surface,
@@ -245,9 +252,7 @@ impl Colors {
             kind_app,
             ok,
             warn,
-            terminal_background,
-            terminal_text,
-            terminal_muted,
+            ..
         } = *self;
         [
             ("background", background),
@@ -270,10 +275,29 @@ impl Colors {
             ("kind_app", kind_app),
             ("ok", ok),
             ("warn", warn),
-            ("terminal_background", terminal_background),
-            ("terminal_text", terminal_text),
-            ("terminal_muted", terminal_muted),
+            ("terminal_background", self.terminal_background),
+            ("terminal_text", self.terminal_text),
+            ("terminal_muted", self.terminal_muted),
         ]
+    }
+
+    fn kind_entries(&self) -> [(&'static str, Hsla); 7] {
+        [
+            ("kind_pdf", self.kind_pdf),
+            ("kind_doc", self.kind_doc),
+            ("kind_sheet", self.kind_sheet),
+            ("kind_slides", self.kind_slides),
+            ("kind_audio", self.kind_audio),
+            ("kind_video", self.kind_video),
+            ("kind_auto", self.kind_auto),
+        ]
+    }
+
+    pub fn entries(&self) -> Vec<(&'static str, Hsla)> {
+        self.base_entries()
+            .into_iter()
+            .chain(self.kind_entries())
+            .collect()
     }
 
     pub fn get(&self, name: &str) -> Option<Hsla> {

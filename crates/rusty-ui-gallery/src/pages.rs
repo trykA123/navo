@@ -77,6 +77,7 @@ pub enum Page {
     SettingsUpgrade,
     SettingsFind,
     MouseMarks,
+    FileKinds,
 }
 
 pub struct PageInfo {
@@ -95,7 +96,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 77] = [
+pub const PAGES: [PageInfo; 78] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -368,6 +369,7 @@ pub const PAGES: [PageInfo; 77] = [
         false,
     ),
     info(Page::MouseMarks, "Mouse marks", "p36-k5-mouse-marks", false),
+    info(Page::FileKinds, "File types", "p36-file-kinds", false),
 ];
 
 impl Page {

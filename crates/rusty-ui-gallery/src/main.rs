@@ -5,6 +5,7 @@ mod drives_page;
 mod gallery;
 mod image_sample;
 mod job_sample;
+mod kinds_page;
 mod map_sample;
 mod menu_page;
 mod menu_sample;
