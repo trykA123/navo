@@ -45,6 +45,9 @@ preview.view | View file | PreviewBrowse
 preview.leave | Close preview | PreviewBrowse
 preview.leave_and_switch | Leave preview, switch pane | PreviewBrowse
 preview.recount | Recount folder | PreviewBrowse
+preview.view_menu | Preview view menu | PreviewBrowse
+preview.type_bars | Show or hide type bars | PreviewBrowse
+preview.largest_files | Show or hide the largest files | PreviewBrowse
 files.cursor_up | Up | FileList
 files.cursor_down | Down | FileList
 files.page_up | Page up | FileList

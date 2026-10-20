@@ -549,3 +549,50 @@ fn hiding_a_window_part_writes_its_key_and_keeps_comments() {
     );
     assert!(!store.current().window.view.path_bar);
 }
+
+#[test]
+fn keeping_the_markdown_split_off_writes_its_key_and_keeps_comments() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "# mine\n[markdown.view]\npreview-split = true # beside\n",
+    );
+    let (mut store, _) = SettingsStore::load(&path);
+    store
+        .save_preserving_edits(
+            "markdown.view.preview-split",
+            Some(SettingValue::Bool(false)),
+        )
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text,
+        "# mine\n[markdown.view]\npreview-split = false # beside\n"
+    );
+    assert!(!store.current().markdown.view.preview_split);
+}
+
+#[test]
+fn hiding_a_preview_part_writes_its_key_and_keeps_comments() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "# mine\n[preview.view]\ntype-bars = true # bars\nlargest-files = true\n",
+    );
+    let (mut store, _) = SettingsStore::load(&path);
+    store
+        .save_preserving_edits(
+            "preview.view.largest-files",
+            Some(SettingValue::Bool(false)),
+        )
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text,
+        "# mine\n[preview.view]\ntype-bars = true # bars\nlargest-files = false\n"
+    );
+    let view = &store.current().preview.view;
+    assert!(view.type_bars && !view.largest_files);
+}

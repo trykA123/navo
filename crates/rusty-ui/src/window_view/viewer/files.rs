@@ -105,8 +105,6 @@ type LoadMemory = Arc<dyn Fn(&Location, FileStamp) -> Option<(MarkSet, Bookmarks
 type SaveMemory = Arc<dyn Fn(&Location, FileStamp, &MarkSet, &Bookmarks) + Send + Sync>;
 type LoadHistory = Arc<dyn Fn() -> SearchHistory + Send + Sync>;
 type Remember = Arc<dyn Fn(&Needle) + Send + Sync>;
-type LoadSplit = Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>;
-type SaveSplit = Arc<dyn Fn(&str, bool) + Send + Sync>;
 pub type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
 pub type ReadRange = Arc<dyn Fn(&Location, u64, usize) -> Result<Vec<u8>, String> + Send + Sync>;
 
@@ -124,8 +122,6 @@ pub struct FileHooks {
     pub save_memory: SaveMemory,
     pub history: LoadHistory,
     pub remember: Remember,
-    pub split: LoadSplit,
-    pub save_split: SaveSplit,
     pub bytes: ReadBytes,
     pub range: ReadRange,
     pub pdf: OpenPdf,
@@ -171,8 +167,6 @@ impl FileHooks {
             save_memory: Arc::new(|_, _, _, _| {}),
             history: Arc::new(SearchHistory::default),
             remember: Arc::new(|_| {}),
-            split: Arc::new(|_| None),
-            save_split: Arc::new(|_, _| {}),
             bytes: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
             range: Arc::new(|_, _, _| Err("Files cannot be opened here.".to_owned())),
             pdf: no_pdf(),

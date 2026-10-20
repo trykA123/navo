@@ -163,6 +163,7 @@ impl EditorView {
     fn show_parts(&mut self, values: &Values, cx: &mut Context<Self>) {
         self.line_numbers = values.flag(Field::TextLineNumbers);
         self.marking.line_ends = values.flag(Field::TextLineEnds);
+        self.show_split(values.flag(Field::MarkdownPreviewSplit), cx);
         cx.notify();
     }
 

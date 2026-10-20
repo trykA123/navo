@@ -14,6 +14,7 @@ mod sheet;
 mod spot;
 mod stats;
 mod summary;
+mod view;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,6 +31,7 @@ pub(in crate::window_view) use browse::bind_keys;
 use file::FilePreview;
 use folder::FolderPreview;
 use follow::{Key, Target};
+pub use summary::folder_summary;
 
 const FOLLOW_AFTER: Duration = Duration::from_millis(150);
 
@@ -66,6 +68,7 @@ pub(in crate::window_view) struct Preview {
     wait: Option<Task<()>>,
     shown: Option<Shown>,
     trail: Vec<nest::Crumb>,
+    view: view::PreviewView,
     reads: IoQueue,
     scans: Arc<IoQueue>,
     inbox: inbox::Inbox,
@@ -85,6 +88,7 @@ impl Preview {
             wait: None,
             shown: None,
             trail: Vec::new(),
+            view: view::PreviewView::default(),
             reads: IoQueue::new(),
             scans: Arc::new(IoQueue::new()),
             inbox: inbox::Inbox::new(wake),
@@ -125,6 +129,7 @@ impl FerriteWindow {
         self.preview.seen = None;
         self.preview.trail.clear();
         self.preview.clear_marks();
+        self.preview.view.reset();
         self.preview.stop_loading();
     }
 
@@ -194,6 +199,7 @@ impl FerriteWindow {
             self.preview.loads += 1;
         }
         self.preview.shown = Some(shown);
+        self.apply_preview_parts();
         if was_browsing {
             let target = self.preview.browse_target(cx);
             window.focus(&target, cx);

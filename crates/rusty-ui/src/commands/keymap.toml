@@ -183,6 +183,10 @@ keys = ["tab"]
 command = "preview.recount"
 keys = ["ctrl-r"]
 
+[[bind]]
+command = "preview.view_menu"
+keys = ["alt-v"]
+
 # FileList
 
 [[bind]]

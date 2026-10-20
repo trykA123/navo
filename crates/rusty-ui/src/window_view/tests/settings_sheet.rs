@@ -251,6 +251,42 @@ fn the_display_section_starts_with_the_window_group_and_flips_a_part(cx: &mut Te
 }
 
 #[gpui_kit::test]
+fn the_display_section_has_markdown_and_preview_groups_whose_toggles_save(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    for (field, group, key) in [
+        (
+            Field::MarkdownPreviewSplit,
+            "Markdown",
+            "markdown.view.preview-split",
+        ),
+        (Field::PreviewTypeBars, "Preview", "preview.view.type-bars"),
+        (
+            Field::PreviewLargestFiles,
+            "Preview",
+            "preview.view.largest-files",
+        ),
+    ] {
+        if field == Field::MarkdownPreviewSplit {
+            go_to(cx, &rig, field);
+        } else {
+            rig.press(cx, "down");
+        }
+        assert_eq!(
+            label(cx, &rig, format!("settings-group-{}", group.to_lowercase())).as_deref(),
+            Some(group)
+        );
+        assert_eq!(label(cx, &rig, "settings-key").as_deref(), Some(key));
+        rig.press(cx, "space");
+        let change = Change {
+            field,
+            value: Value::Flag(false),
+        };
+        assert_eq!(last_change(&rig), Some(change));
+    }
+}
+
+#[gpui_kit::test]
 fn ctrl_z_undoes_the_last_change_and_saves_the_old_value(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.store

@@ -1,22 +1,16 @@
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, ElementId, Entity, TestAppContext};
+use gpui_kit::{AnyWindowHandle, AppContext as _, TestAppContext};
 use image::ImageFormat;
-use rusty_core::shell_menu::MenuItem;
-use rusty_fs::FakeFs;
 
 use super::find::bottom_keys;
 use super::image::image_view;
 use super::menu::{hint, press_key, run_item};
-use super::{Log, Setup, editor_of, hooks, label, options_with, redraw, visible};
+use super::view_rig::{Rig, rig, rig_on, shows};
+use super::{Setup, editor_of, label, visible};
 use crate::settings::{Change, Field, Value, Values};
-use crate::window_view::tests::{open_options, press, settle, viewer_open};
-use crate::window_view::viewer::Kinds;
-use crate::window_view::viewer::editor::{EditorBody, EditorView};
+use crate::window_view::SettingsNews;
+use crate::window_view::tests::viewer_open;
 use crate::window_view::viewer::image::fixtures::{encoded, photo};
-use crate::window_view::{FerriteWindow, SaveReport, SettingsHooks, SettingsNews, SettingsSender};
 
 const TEXT: &[u8] = b"one\r\ntwo\nthree\n";
 const MEMORY: &[u8] = b":020000040800F2
@@ -26,154 +20,6 @@ const MEMORY: &[u8] = b":020000040800F2
 :0400000508000131BD
 :00000001FF
 ";
-
-struct Rig {
-    window: AnyWindowHandle,
-    view: Entity<FerriteWindow>,
-    saved: Arc<Mutex<Vec<Change>>>,
-    failure: Arc<Mutex<Option<String>>>,
-    news: SettingsSender,
-}
-
-fn two_files(first: &str, second: &str, len: u64) -> Arc<FakeFs> {
-    let fs = FakeFs::new();
-    fs.add_folder("home/docs");
-    fs.add_file(&format!("home/{first}"), len);
-    fs.add_file(&format!("home/{second}"), len);
-    fs.add_folder("dest");
-    Arc::new(fs)
-}
-
-fn rig_on(cx: &mut TestAppContext, names: (&str, &str), setup: Setup, values: Values) -> Rig {
-    let fs = two_files(names.0, names.1, setup.bytes.len() as u64);
-    let files = hooks(setup, &Log::default());
-    let saved: Arc<Mutex<Vec<Change>>> = Arc::default();
-    let stored = Arc::new(Mutex::new(values.clone()));
-    let log = saved.clone();
-    let failure: Arc<Mutex<Option<String>>> = Arc::default();
-    let failing = failure.clone();
-    let (settings, news) = SettingsHooks {
-        values,
-        save: Arc::new(move |changes| {
-            if let Some(error) = failing.lock().expect("failure").clone() {
-                return SaveReport {
-                    failed: changes.iter().map(|change| change.field).collect(),
-                    error: Some(error),
-                    ..SaveReport::saved(stored.lock().expect("stored").clone())
-                };
-            }
-            log.lock().expect("saved").extend_from_slice(changes);
-            let mut stored = stored.lock().expect("stored");
-            *stored = changes
-                .iter()
-                .fold(stored.clone(), |all, one| all.with(one));
-            SaveReport::saved(stored.clone())
-        }),
-        ..SettingsHooks::none()
-    }
-    .channel();
-    let options = crate::window_view::StartOptions {
-        settings,
-        ..options_with(fs, files, Kinds::builtin())
-    };
-    let (window, view) = open_options(cx, options);
-    let rig = Rig {
-        window,
-        view,
-        saved,
-        failure,
-        news,
-    };
-    rig.press(cx, "down");
-    rig.press(cx, "f3");
-    rig.settle(cx);
-    rig
-}
-
-fn rig(cx: &mut TestAppContext, names: (&str, &str), bytes: &[u8]) -> Rig {
-    rig_on(cx, names, Setup::new(bytes.to_vec()), Values::default())
-}
-
-impl Rig {
-    fn press(&self, cx: &mut TestAppContext, key: &str) {
-        press(cx, self.window, &self.view, key);
-    }
-
-    fn settle(&self, cx: &mut TestAppContext) {
-        cx.executor().advance_clock(Duration::from_secs(1));
-        settle(cx, &self.view);
-        redraw(cx, self.window);
-        settle(cx, &self.view);
-        redraw(cx, self.window);
-    }
-
-    fn menu_items(&self, cx: &mut TestAppContext) -> Option<Vec<MenuItem>> {
-        self.view.read_with(cx, |view, cx| {
-            let menu = view.viewer_menu_view()?;
-            Some(menu.read(cx).menu().items.clone())
-        })
-    }
-
-    fn rows(&self, cx: &mut TestAppContext) -> Vec<(String, bool)> {
-        self.menu_items(cx)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|item| (item.text, item.checked))
-            .collect()
-    }
-
-    fn is_checked(&self, cx: &mut TestAppContext, text: &str) -> bool {
-        self.rows(cx)
-            .into_iter()
-            .any(|(row, checked)| row == text && checked)
-    }
-
-    fn line_ends(&self, cx: &mut TestAppContext) -> bool {
-        let editor = self.editor(cx);
-        editor.read_with(cx, |editor, _| editor.marking_state().line_ends)
-    }
-
-    fn line_numbers(&self, cx: &mut TestAppContext) -> bool {
-        let editor = self.editor(cx);
-        editor.read_with(cx, |editor, _| editor.shows_line_numbers())
-    }
-
-    fn editor(&self, cx: &mut TestAppContext) -> Entity<EditorView> {
-        self.view
-            .read_with(cx, |view, _| {
-                let body = view.viewer.as_ref()?.body.as_ref()?;
-                let editor = body.as_any().downcast_ref::<EditorBody>()?;
-                Some(editor.0.clone())
-            })
-            .expect("the text view is open")
-    }
-
-    fn shown_file(&self, cx: &mut TestAppContext) -> String {
-        self.view.read_with(cx, |view, _| {
-            view.viewer_location()
-                .map(|location| location.as_str().to_owned())
-                .unwrap_or_default()
-        })
-    }
-
-    fn saved(&self) -> Vec<Change> {
-        self.saved.lock().expect("saved").clone()
-    }
-
-    fn setting(&self, cx: &mut TestAppContext, field: Field) -> Value {
-        self.view
-            .read_with(cx, |view, _| view.values.get(field).clone())
-    }
-}
-
-fn shows(cx: &mut TestAppContext, window: AnyWindowHandle, id: impl Into<ElementId>) -> bool {
-    let id = id.into();
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        window.try_find(id).is_some_and(|found| found.visible())
-    })
-    .expect("window")
-}
 
 fn text_rows(numbers: bool, ends: bool) -> Vec<(String, bool)> {
     vec![
@@ -427,7 +273,7 @@ fn ctrl_b_and_ctrl_i_open_the_memory_drawers_and_escape_closes_the_top_one(
     assert!(!viewer_open(cx, &rig.view));
 }
 
-fn note(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<String> {
+pub(super) fn note(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<String> {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window

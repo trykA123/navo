@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) const VIEWER_MENUS: [ViewerMenuShows; 7] = [
+pub(super) const VIEWER_MENUS: [ViewerMenuShows; 8] = [
     ViewerMenuShows::Text,
     ViewerMenuShows::Tree,
     ViewerMenuShows::ViewText,
@@ -8,6 +8,7 @@ pub(super) const VIEWER_MENUS: [ViewerMenuShows; 7] = [
     ViewerMenuShows::ViewAutomotive,
     ViewerMenuShows::ViewElf,
     ViewerMenuShows::ViewTrace,
+    ViewerMenuShows::ViewMarkdown,
 ];
 
 impl Gallery {

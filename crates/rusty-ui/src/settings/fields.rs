@@ -85,6 +85,9 @@ pub enum Field {
     TextLineNumbers,
     TextLineEnds,
     ImageDetails,
+    MarkdownPreviewSplit,
+    PreviewTypeBars,
+    PreviewLargestFiles,
     AutomotivePreset,
     AutomotiveInspector,
     AutomotiveMemoryStrip,
@@ -296,7 +299,7 @@ const GENERAL: [FieldSpec; 19] = [
     ),
 ];
 
-pub const FIELDS: [FieldSpec; 39] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
+pub const FIELDS: [FieldSpec; 42] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
 
 const fn join<const A: usize, const B: usize, const C: usize, const N: usize>(
     first: [FieldSpec; A],
@@ -327,10 +330,12 @@ const fn join<const A: usize, const B: usize, const C: usize, const N: usize>(
     all
 }
 
-const GROUPS: [(&str, &str); 4] = [
+const GROUPS: [(&str, &str); 6] = [
     ("window", "Window"),
     ("text", "Text"),
     ("image", "Image"),
+    ("markdown", "Markdown"),
+    ("preview", "Preview"),
     ("automotive", "Automotive"),
 ];
 

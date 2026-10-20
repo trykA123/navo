@@ -6,6 +6,7 @@ use super::file::FilePreview;
 use super::header::{title_of, title_view};
 use super::nest::breadcrumb;
 use super::summary::{Picks, Sections, summary};
+use super::view::view_button;
 use crate::prelude::*;
 use crate::side_sheet::{SheetFrame, SideSheet, on_resize_keys};
 use crate::tokens::{self, Theme};
@@ -86,7 +87,12 @@ impl FerriteWindow {
         let body = self.preview_body(&t, BodyLook { frame, is_browsing }, cx);
         let sheet = SideSheet::new("preview-sheet", &self.preview.sheet, frame)
             .label("Preview")
-            .header(title_view(&t, title_of(&t, shown), is_browsing))
+            .header(title_view(
+                &t,
+                title_of(&t, shown),
+                is_browsing,
+                is_folder.then(|| view_button(cx.weak_entity()).into_any_element()),
+            ))
             .close("escape", move |window, cx| {
                 let _ = this.update(cx, |view, cx| {
                     view.close_preview(cx);
@@ -133,8 +139,9 @@ impl FerriteWindow {
         } else {
             sheet.hint(&["escape"], "Close")
         };
-        let marks = self.preview.folder().and_then(|f| f.marks.summary());
-        match marks {
+        let note = self.preview.view.note().map(|note| note.to_string());
+        let summary = self.preview.folder().and_then(|f| f.marks.summary());
+        match note.or(summary) {
             Some(text) => sheet.status(text),
             None => sheet,
         }
@@ -189,6 +196,7 @@ impl FerriteWindow {
             return div().into_any_element();
         };
         let sections = Sections {
+            show: self.preview_shown(),
             stats: Self::stats(folder, summary_width >= px(ROW_STATS), t, cx),
             profile: folder.scan.profile.clone(),
             scroll: folder.summary_scroll.clone(),

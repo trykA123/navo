@@ -45,6 +45,48 @@ pub struct ImageView {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+pub struct MarkdownViewer {
+    pub view: MarkdownView,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct MarkdownView {
+    pub preview_split: bool,
+}
+
+impl Default for MarkdownView {
+    fn default() -> Self {
+        Self {
+            preview_split: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct PreviewViewer {
+    pub view: PreviewView,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct PreviewView {
+    pub type_bars: bool,
+    pub largest_files: bool,
+}
+
+impl Default for PreviewView {
+    fn default() -> Self {
+        Self {
+            type_bars: true,
+            largest_files: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct Automotive {
     pub view: AutomotiveView,
 }

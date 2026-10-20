@@ -11,8 +11,7 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 use crate::window_view::viewer::body::Host;
 use crate::window_view::viewer::markdown::MarkdownView;
-use crate::window_view::viewer::search::jobs::run_detached;
-use crate::window_view::viewer::{FocusPreview, LeavePreview, TogglePreview};
+use crate::window_view::viewer::{FocusPreview, LeavePreview};
 
 const PREVIEW_CONTEXT: &str = "MarkdownPreview";
 const PREVIEW_AFTER: Duration = Duration::from_millis(150);
@@ -20,7 +19,6 @@ const INLINE_LIMIT: usize = 200 * 1024;
 const SAVE_FIRST: &str = "Save or discard your edits before opening another file.";
 
 pub(in crate::window_view::viewer) struct SplitChoice {
-    pub extension: String,
     pub is_shown: bool,
 }
 
@@ -131,20 +129,16 @@ impl EditorView {
             .or_else(|| split.view.read(cx).status())
     }
 
-    fn toggle_split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let editing = self.editing;
-        let Some(split) = self.split.as_mut().filter(|_| editing) else {
-            return cx.propagate();
+    pub(super) fn show_split(&mut self, is_shown: bool, cx: &mut Context<Self>) {
+        let Some(split) = self.split.as_mut() else {
+            return;
         };
-        split.choice.is_shown = !split.choice.is_shown;
-        let is_shown = split.choice.is_shown;
-        let extension = split.choice.extension.clone();
-        let save = self.host.hooks.save_split.clone();
-        run_detached(move || save(&extension, is_shown), cx);
+        if split.choice.is_shown == is_shown {
+            return;
+        }
+        split.choice.is_shown = is_shown;
         if is_shown {
             self.refresh_preview(cx);
-        } else if self.is_preview_focused(window, cx) {
-            self.leave_preview(window, cx);
         }
         cx.notify();
     }
@@ -285,10 +279,7 @@ impl EditorView {
     }
 
     pub(super) fn preview_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
-        root.on_action(cx.listener(|view, _: &TogglePreview, window, cx| {
-            view.toggle_split(window, cx);
-        }))
-        .on_action(cx.listener(|view, _: &FocusPreview, window, cx| {
+        root.on_action(cx.listener(|view, _: &FocusPreview, window, cx| {
             view.focus_preview(window, cx);
         }))
         .on_action(cx.listener(|view, _: &LeavePreview, window, cx| {

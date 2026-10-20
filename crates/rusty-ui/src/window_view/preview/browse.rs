@@ -27,7 +27,10 @@ gpui_kit::actions!(
         BrowseView,
         LeaveBrowse,
         LeaveAndSwitch,
-        Recount
+        Recount,
+        ViewMenu,
+        ToggleTypeBars,
+        ToggleLargestFiles
     ]
 );
 
@@ -174,7 +177,7 @@ impl FerriteWindow {
     }
 
     pub(super) fn browse_frame(&self, body: AnyElement, cx: &mut Context<Self>) -> AnyElement {
-        div()
+        let frame = div()
             .id("preview-browse")
             .key_context(BROWSE)
             .track_focus(&self.preview.browse)
@@ -220,7 +223,8 @@ impl FerriteWindow {
                 this.switch_pane(window, cx);
             }))
             .on_action(cx.listener(|this, _: &Recount, _, cx| this.recount_folder(cx)))
-            .child(body)
-            .into_any_element()
+            .on_action(Self::view_menu_listener(cx))
+            .child(body);
+        Self::part_actions(frame, cx).into_any_element()
     }
 }

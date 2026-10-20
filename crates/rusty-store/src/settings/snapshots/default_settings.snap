@@ -49,6 +49,13 @@ line-ends = false
 [image.view]
 details = false
 
+[markdown.view]
+preview-split = true
+
+[preview.view]
+type-bars = true
+largest-files = true
+
 [copy]
 mode = "auto"
 

@@ -1,3 +1,4 @@
+mod builders;
 mod card;
 
 use std::rc::Rc;
@@ -103,6 +104,7 @@ pub struct WindowPage {
     sort: SortKey,
     is_single_tab: bool,
     view_menu: ViewMenuShown,
+    preview_parts: Option<(bool, bool)>,
 }
 
 fn location(text: &str) -> Location {
@@ -125,7 +127,13 @@ impl WindowPage {
             sort: SortKey::default(),
             is_single_tab: false,
             view_menu: ViewMenuShown::default(),
+            preview_parts: None,
         }
+    }
+
+    pub fn with_preview_parts(mut self, parts: (bool, bool)) -> Self {
+        self.preview_parts = Some(parts);
+        self
     }
 
     pub fn sorted_by(mut self, sort: SortKey) -> Self {
@@ -246,20 +254,6 @@ impl WindowPage {
         )
     }
 
-    pub fn with_jobs(shown: JobsShown, cx: &mut Context<Self>) -> Self {
-        Self {
-            jobs: Some(shown),
-            ..Self::new(None, cx)
-        }
-    }
-
-    pub fn with_hints(shown: HintsShown, held: KeyLayer, cx: &mut Context<Self>) -> Self {
-        Self {
-            hints: Some(shown),
-            ..Self::new(Some(held), cx)
-        }
-    }
-
     fn hint_layer(&self, combo: Combo) -> Layer {
         let has_crash = self.has_crash;
         layer_where(Keymap::builtin(), combo, &|spec| {
@@ -296,13 +290,6 @@ impl WindowPage {
         })
     }
 
-    pub fn with_crash(cx: &mut Context<Self>) -> Self {
-        Self {
-            has_crash: true,
-            ..Self::new(None, cx)
-        }
-    }
-
     fn crash_notice(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
         self.has_crash.then(|| {
             div()
@@ -311,13 +298,6 @@ impl WindowPage {
                 .my(t.spacing.xs)
                 .child(CrashNotice::new(CrashKeys::of(Keymap::builtin())))
         })
-    }
-
-    pub fn with_menu(cx: &mut Context<Self>) -> Self {
-        Self {
-            is_menu_open: true,
-            ..Self::new(None, cx)
-        }
     }
 
     pub fn with_sheet(shows: SheetShows, cx: &mut Context<Self>) -> Self {
@@ -362,7 +342,10 @@ impl WindowPage {
                 };
                 settings_sample::sheet(t, &sheet.state, frame, &shown)
             }
-            (None, None) => sheet_sample::sheet(t, &sheet.state, frame),
+            (None, None) => match self.preview_parts {
+                Some(parts) => sheet_sample::sheet_with_parts(t, &sheet.state, frame, parts),
+                None => sheet_sample::sheet(t, &sheet.state, frame),
+            },
         };
         let layer = div()
             .absolute()

@@ -144,6 +144,21 @@ pub(super) const GROUPS: [Group; 8] = [
                 "Leave preview, switch pane",
             ),
             ("preview::Recount", "preview.recount", "Recount folder"),
+            (
+                "preview::ViewMenu",
+                "preview.view_menu",
+                "Preview view menu",
+            ),
+            (
+                "preview::ToggleTypeBars",
+                "preview.type_bars",
+                "Show or hide type bars",
+            ),
+            (
+                "preview::ToggleLargestFiles",
+                "preview.largest_files",
+                "Show or hide the largest files",
+            ),
         ],
     },
     Group {

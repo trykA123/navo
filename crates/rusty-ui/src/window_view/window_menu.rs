@@ -144,6 +144,11 @@ impl FerriteWindow {
         Some(self.window_menu.0.as_ref()?.0.clone())
     }
 
+    pub(super) fn view_menus(&self) -> Vec<Entity<ContextMenu>> {
+        let preview = self.preview_menu_view();
+        self.window_menu_view().into_iter().chain(preview).collect()
+    }
+
     pub(super) fn open_window_menu_on(root: Div, cx: &mut Context<Self>) -> Div {
         root.on_action(cx.listener(|view, _: &OpenViewMenu, window, cx| {
             view.open_window_menu(window, cx);
