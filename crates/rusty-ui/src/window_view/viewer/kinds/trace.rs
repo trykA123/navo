@@ -1,4 +1,4 @@
-use rusty_automotive::{Evidence, TRACE_EXTENSIONS, sniff_trace};
+use rusty_automotive::{Evidence, TRACE_EXTENSIONS, sniff_blf, sniff_trace};
 
 use super::{Load, Loaded, Slot, Sniff, ViewerKind, named};
 use crate::prelude::*;
@@ -10,6 +10,9 @@ const CAN_TRACE: u8 = 70;
 pub(super) struct TraceKind;
 
 fn is_trace(sniff: &Sniff<'_>) -> bool {
+    if sniff_blf(sniff.head) {
+        return true;
+    }
     if sniff.looks_binary() {
         return false;
     }

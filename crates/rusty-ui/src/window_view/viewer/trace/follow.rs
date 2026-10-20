@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use gpui_kit::{AsyncApp, Task, WeakEntity};
 use rusty_automotive::{IndexError, Trace, Watch};
+use rusty_l10n::tr;
 
 use super::TraceView;
 use crate::prelude::*;
@@ -38,6 +39,10 @@ async fn poll_once(this: &WeakEntity<TraceView>, cx: &mut AsyncApp) -> bool {
 
 impl TraceView {
     pub(super) fn toggle_follow(&mut self, cx: &mut Context<Self>) {
+        if !self.trace.supports_follow() {
+            self.set_note(tr("trace-follow-unavailable"), cx);
+            return;
+        }
         if self.follower.state == Follow::Off {
             let poll = cx.spawn(async move |this, cx| while poll_once(&this, cx).await {});
             self.follower = Follower {
@@ -117,7 +122,7 @@ impl TraceView {
         self.is_indexed = false;
         self.scanned = 0;
         self.is_replaced = true;
-        self.reading = Some(super::jobs::start_index(&self.host, probe.len, cx));
+        self.reading = Some(super::jobs::start_index(&self.host, (probe.len, false), cx));
     }
 
     fn read_grown(&mut self, len: u64, cx: &mut Context<Self>) {
