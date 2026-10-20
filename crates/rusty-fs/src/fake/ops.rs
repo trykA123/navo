@@ -234,7 +234,7 @@ impl ProviderOps for FakeFs {
             .iter()
             .filter(|(mount, _)| path == **mount || path.starts_with(&format!("{mount}/")))
             .max_by_key(|(mount, _)| mount.len());
-        Ok(Some(nearest.map_or(DEFAULT_VOLUME, |(_, serial)| *serial)))
+        Ok(nearest.map_or(Some(DEFAULT_VOLUME), |(_, serial)| *serial))
     }
 
     fn recycle(&self, location: &Location) -> Result<(), FsError> {
