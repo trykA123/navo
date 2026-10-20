@@ -9,11 +9,13 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 mod frecency;
 mod migrations;
+mod rename_presets;
 mod settings_defaults;
 mod viewer;
 
 pub use frecency::Frecent;
 use migrations::MIGRATIONS;
+pub use rename_presets::{RenamePreset, RenamePresets};
 pub use viewer::{FileMemory, Stamp};
 
 #[derive(Debug, thiserror::Error)]
