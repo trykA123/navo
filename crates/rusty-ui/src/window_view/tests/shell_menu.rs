@@ -439,6 +439,32 @@ fn shift_f10_opens_the_menu_for_the_marked_rows(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn alt_m_opens_the_menu_for_the_marked_rows(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "space");
+    rig.press(cx, "alt-m");
+    rig.wait(cx, 160);
+    assert!(rig.is_open(cx));
+    assert_eq!(
+        *rig.shell.opened.borrow(),
+        [vec![rig.location("home/docs")]]
+    );
+}
+
+#[gpui_kit::test]
+fn alt_m_with_nothing_marked_opens_the_menu_for_the_cursor_row(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "down");
+    rig.press(cx, "alt-m");
+    rig.wait(cx, 160);
+    assert!(rig.is_open(cx));
+    assert_eq!(
+        *rig.shell.opened.borrow(),
+        [vec![rig.location("home/a.txt")]]
+    );
+}
+
+#[gpui_kit::test]
 fn ferrite_actions_show_before_the_provider_answers(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
     assert_eq!(

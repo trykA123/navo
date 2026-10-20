@@ -331,7 +331,7 @@ keys = ["ctrl-r"]
 
 [[bind]]
 command = "files.context_menu"
-keys = ["menu", "shift-f10"]
+keys = ["menu", "shift-f10", "alt-m"]
 
 # PathInput
 

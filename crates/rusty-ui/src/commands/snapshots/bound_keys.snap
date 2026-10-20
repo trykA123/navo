@@ -66,6 +66,7 @@ elf.type_three | 3 | ElfTable
 files.clear_filter | escape | FileList
 files.clipboard_copy | ctrl-c | FileList
 files.clipboard_cut | ctrl-x | FileList
+files.context_menu | alt-m | FileList
 files.context_menu | menu | FileList
 files.context_menu | shift-f10 | FileList
 files.copy | f5 | FileList
