@@ -13,6 +13,7 @@ mod hints;
 mod jobs;
 mod keys;
 mod layout;
+mod multi_rename;
 mod operate;
 mod pane;
 mod path_edit;
@@ -162,6 +163,7 @@ pub struct FerriteWindow {
     clipboard: clipboard::ClipboardState,
     crash: crash::CrashState,
     command_center: command_center::CommandCenterState,
+    multi_rename: multi_rename::MultiRenameState,
     start: Option<start_watch::Watching>,
     _watches: [Subscription; 3],
 }
@@ -219,6 +221,7 @@ impl FerriteWindow {
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             crash: crash::CrashState::new(options.crash_report, cx),
             command_center: command_center::CommandCenterState::new(options.search),
+            multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
             _watches: Self::watches(window, cx),
         };
@@ -321,23 +324,6 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    fn panes(&self) -> Vec<PaneId> {
-        let state = self.browser.state();
-        state
-            .window(state.focused_window())
-            .map(|w| w.panes().iter().map(|p| p.id()).collect())
-            .unwrap_or_default()
-    }
-
-    fn switch_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let focused = self.browser.state().focused_pane();
-        if let Some(other) = self.panes().into_iter().find(|p| *p != focused) {
-            self.focus_pane(other);
-            self.focus_core_pane(window, cx);
-            cx.notify();
-        }
-    }
-
     fn save(&self) {
         (self.on_save)(self.browser.state());
     }
@@ -382,7 +368,7 @@ impl Render for FerriteWindow {
             .children(self.crash_notice_view(window, cx))
             .child(self.body_area(window, cx))
             .children(self.fkey_bar(window, cx));
-        let dialog = self.dialog(cx).or_else(|| self.prompt_view(cx));
+        let dialog = self.modal_view(window, cx);
         let menu = self.app_menu_view(cx);
         let root = div()
             .relative()
@@ -415,7 +401,7 @@ impl Render for FerriteWindow {
             .children(self.shell_menu_view())
             .children(self.viewer_menu_view())
             .children(self.view_menus());
-        let root = Self::open_window_menu_on(root, cx);
+        let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
         self.preview_keys(root, window, cx)
     }

@@ -21,6 +21,7 @@ const STATUS: usize = 2;
 const FIT_ROWS: usize = 200;
 const DIGIT_WIDTH: f32 = 8.;
 const TOGGLE_SIZE: f32 = 18.;
+const PAGE_ROWS: usize = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreviewEvent {
@@ -103,6 +104,27 @@ impl PreviewView {
     #[must_use]
     pub fn cursor(&self) -> Option<usize> {
         self.cursor
+    }
+
+    pub fn page(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let Some(last) = self.shown.len().checked_sub(1) else {
+            return;
+        };
+        let at = self
+            .cursor
+            .and_then(|row| self.shown.binary_search(&row).ok());
+        let next = match (at, forward) {
+            (None, _) => 0,
+            (Some(at), true) => (at + PAGE_ROWS).min(last),
+            (Some(at), false) => at.saturating_sub(PAGE_ROWS),
+        };
+        let row = self.shown.get(next).copied();
+        self.set_cursor(row, cx);
+    }
+
+    #[must_use]
+    pub fn first_shown(&self) -> Option<usize> {
+        self.shown.first().copied()
     }
 
     pub fn set_cursor(&mut self, row: Option<usize>, cx: &mut Context<Self>) {

@@ -22,6 +22,7 @@ use gpui_kit::{
 use rusty_core::shell_menu::{ShellMenu, Submenu};
 
 pub use keys::bind_keys;
+pub(crate) use keys::{MenuDown, MenuEnter, MenuEscape, MenuUp};
 pub use state::ContextMenuEvent;
 
 use crate::primitives::{TextFieldState, text_field_state};

@@ -94,7 +94,8 @@ impl FerriteWindow {
         if self.command_center.open.is_some() {
             return self.close_command_center(window, cx);
         }
-        if self.prompt.is_some() || self.browser.pending().is_some() {
+        if self.prompt.is_some() || self.browser.pending().is_some() || self.is_multi_rename_open()
+        {
             return;
         }
         if self.app_menu.is_some() {

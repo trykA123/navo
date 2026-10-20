@@ -24,6 +24,18 @@ impl Browser {
         self.rename_hooks.as_ref()
     }
 
+    #[must_use]
+    pub fn full_names(&self, tab: TabId) -> Vec<String> {
+        let listing = self
+            .full
+            .get(&tab)
+            .map(|full| &full.listing)
+            .or_else(|| self.state.tab(tab).and_then(|t| t.listing()));
+        listing
+            .map(|listing| listing.entries().iter().map(|e| e.name.clone()).collect())
+            .unwrap_or_default()
+    }
+
     pub fn rename_batch(&mut self, plan: OperationPlan, first_new: Option<&str>) -> bool {
         let sources: Vec<_> = plan
             .steps
@@ -59,7 +71,7 @@ impl Browser {
         true
     }
 
-    fn renaming(&self) -> bool {
+    pub fn renaming(&self) -> bool {
         self.jobs
             .iter()
             .any(|job| job.kind == OpKind::Rename && job.status == JobStatus::Running)

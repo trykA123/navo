@@ -299,7 +299,7 @@ impl FerriteWindow {
             FileListAction::Filter(edit) => {
                 self.filter(*edit);
             }
-            FileListAction::Rename(row) => self.ask_rename(*row),
+            FileListAction::Rename(row) => self.rename_row(*row, window, cx),
             FileListAction::NewFolder => self.ask_new_folder(),
             FileListAction::NewFile => self.ask_new_file(),
             FileListAction::SelectPattern { add } => self.ask_pattern(*add),
@@ -347,5 +347,24 @@ impl FerriteWindow {
                     .event(rusty_core::Event::PageRowsChanged { pane, rows: *rows });
                 cx.notify();
             }))
+    }
+}
+
+impl FerriteWindow {
+    pub(super) fn panes(&self) -> Vec<PaneId> {
+        let state = self.browser.state();
+        state
+            .window(state.focused_window())
+            .map(|w| w.panes().iter().map(|p| p.id()).collect())
+            .unwrap_or_default()
+    }
+
+    pub(super) fn switch_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let focused = self.browser.state().focused_pane();
+        if let Some(other) = self.panes().into_iter().find(|p| *p != focused) {
+            self.focus_pane(other);
+            self.focus_core_pane(window, cx);
+            cx.notify();
+        }
     }
 }

@@ -125,8 +125,10 @@ impl FerriteWindow {
     }
 
     pub(super) fn jobs_key(&mut self, cx: &mut Context<Self>) {
-        let is_busy =
-            self.prompt.is_some() || self.browser.pending().is_some() || self.app_menu.is_some();
+        let is_busy = self.prompt.is_some()
+            || self.browser.pending().is_some()
+            || self.app_menu.is_some()
+            || self.is_multi_rename_open();
         if is_busy || self.browser.jobs().is_empty() {
             cx.propagate();
             return;

@@ -1,6 +1,6 @@
 use rusty_core::OperationPlan;
 use rusty_core::rename::check::{Existing, Fold, Problem, Row, RowState};
-use rusty_core::rename::{Compiled, plan_batch};
+use rusty_core::rename::{Compiled, Subject, plan_batch};
 
 use super::item::Item;
 
@@ -111,7 +111,12 @@ fn rows(compiled: &Compiled, items: &[Item]) -> Vec<Row> {
             let new = if item.excluded {
                 item.name.clone()
             } else {
-                let name = compiled.new_name(&item.subject(), ordinal);
+                let lookup = |group: &str, field: &str| item.fields.get(group, field);
+                let subject = Subject {
+                    fields: Some(&lookup),
+                    ..item.subject()
+                };
+                let name = compiled.new_name(&subject, ordinal);
                 ordinal += 1;
                 name
             };

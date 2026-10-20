@@ -1,3 +1,4 @@
+use rusty_core::rename::FieldRegistry;
 use rusty_l10n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,5 +53,28 @@ pub fn matching(query: &str) -> Vec<Token> {
     TOKENS
         .into_iter()
         .filter(|token| query.is_empty() || token.description().to_lowercase().contains(&query))
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuToken {
+    pub insert: String,
+    pub text: String,
+}
+
+#[must_use]
+pub fn menu_tokens(query: &str, fields: &FieldRegistry) -> Vec<MenuToken> {
+    let query = query.trim().to_lowercase();
+    let builtin = TOKENS.iter().map(|token| MenuToken {
+        insert: token.insert.to_owned(),
+        text: token.description(),
+    });
+    let extra = fields.listing().map(|field| MenuToken {
+        insert: format!("[={}.{}]", field.group, field.field.name),
+        text: tr(&field.field.label_id),
+    });
+    builtin
+        .chain(extra)
+        .filter(|token| query.is_empty() || token.text.to_lowercase().contains(&query))
         .collect()
 }

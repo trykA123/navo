@@ -35,6 +35,7 @@ mod jobs;
 mod keymap;
 mod marks;
 mod mouse_marks;
+mod multi_rename;
 mod offline;
 mod placement;
 mod prefetch;

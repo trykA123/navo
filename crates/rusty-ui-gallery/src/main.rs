@@ -16,6 +16,7 @@ mod menu_sample;
 mod mouse_page;
 mod multi_rename_page;
 mod multi_rename_preview_page;
+mod multi_rename_tool_page;
 mod operate_page;
 mod options;
 mod pages;

@@ -28,6 +28,7 @@ icon_assets!(
         ArrowUp,
         ArrowUpDown,
         BookOpen,
+        Brackets,
         CaseSensitive,
         ChevronDown,
         ChevronLeft,

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Datelike, Local, TimeZone, Timelike};
 use rusty_core::Location;
-use rusty_core::rename::{LocalTime, Subject, split_name};
+use rusty_core::rename::{ItemFields, LocalTime, Subject, split_name};
 use rusty_fs::FsEntry;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -8,6 +8,7 @@ pub struct Item {
     pub parent: Location,
     pub name: String,
     pub excluded: bool,
+    pub fields: ItemFields,
     parent_name: String,
     grand_name: String,
     time: Option<LocalTime>,
@@ -20,6 +21,7 @@ impl Item {
             parent: parent.clone(),
             name: entry.name.to_text(),
             excluded: false,
+            fields: ItemFields::default(),
             parent_name: folder_name(Some(parent)),
             grand_name: folder_name(parent.parent().as_ref()),
             time: entry.modified_ms.and_then(local_time),

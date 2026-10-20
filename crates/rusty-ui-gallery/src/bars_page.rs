@@ -1,6 +1,7 @@
 use crate::drag_page::DragPage;
 use crate::multi_rename_page::MultiRenamePage;
 use crate::multi_rename_preview_page::{PreviewPages, preview_pages};
+use crate::multi_rename_tool_page::{ToolPages, tool_pages};
 use crate::pages::Page;
 use crate::treemap_page::TreemapPage;
 use rusty_automotive::Section;
@@ -125,6 +126,7 @@ pub type DragTreemapBars = (
     Entity<BarsPage>,
     Entity<MultiRenamePage>,
     PreviewPages,
+    ToolPages,
 );
 
 pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
@@ -134,11 +136,12 @@ pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
         cx.new(|_| BarsPage),
         cx.new(|cx| MultiRenamePage::new(window, cx)),
         preview_pages(window, cx),
+        tool_pages(window, cx),
     )
 }
 
 pub fn page_of(pages: &DragTreemapBars, page: Page) -> Option<AnyElement> {
-    let (drag, treemap, bars, fields, preview) = pages;
+    let (drag, treemap, bars, fields, preview, tool) = pages;
     Some(match page {
         Page::Drag => drag.clone().into_any_element(),
         Page::Treemap => treemap.clone().into_any_element(),
@@ -146,6 +149,8 @@ pub fn page_of(pages: &DragTreemapBars, page: Page) -> Option<AnyElement> {
         Page::MultiRename => fields.clone().into_any_element(),
         Page::MultiRenamePreview => preview[0].clone().into_any_element(),
         Page::MultiRenamePreviewLarge => preview[1].clone().into_any_element(),
+        Page::MultiRenameTool => tool[0].clone().into_any_element(),
+        Page::MultiRenameToolMenu => tool[1].clone().into_any_element(),
         _ => return None,
     })
 }

@@ -106,3 +106,7 @@ rename-presets-replace = Replace the preset { $name }?
 rename-presets-delete = Delete the preset { $name }?
 rename-presets-delete-confirm = Delete
 rename-open-loading = Wait until the folder has loaded
+rename-busy = Wait until the running rename ends
+rename-nothing = Nothing to rename.
+rename-folder-changed = The folder changed. Check the preview, then press Enter again.
+rename-presets-failed = The preset could not be stored: { $reason }

@@ -1,23 +1,22 @@
+mod cell;
 mod menu;
 mod tokens;
 
 use std::rc::Rc;
 
-use gpui_kit::base::TestSupportExt;
+use cell::{Cell, attach, caption, cell, error_line};
 use gpui_kit::{
-    App, Div, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px, transparent_black,
+    AnyElement, App, Div, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, Styled, Window, div, px,
 };
 use rusty_core::rename::{ExtCase, NameCase, RenameRules};
 use rusty_l10n::tr;
 
-use crate::primitives::{
-    Button, ButtonVariant, IconButton, IconName, TextField, TextFieldState, icon,
-};
+use crate::primitives::{Button, IconButton, IconName, TextFieldState};
 use crate::tokens::{self as theme, Theme};
 
 pub use menu::{FieldMenu, MenuRow};
-pub use tokens::{TOKENS, Token, matching};
+pub use tokens::{MenuToken, TOKENS, Token, matching, menu_tokens};
 
 type EventHandler = Rc<dyn Fn(FieldsEvent, &mut Window, &mut App)>;
 
@@ -30,6 +29,15 @@ pub enum Mask {
     Name,
     Extension,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuSlot {
+    Mask(Mask),
+    NameCase,
+    ExtensionCase,
+}
+
+type SlotMenu = Option<(MenuSlot, AnyElement)>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Toggle {
@@ -92,6 +100,7 @@ pub struct Fields {
     inputs: FieldInputs,
     rules: RenameRules,
     errors: FieldErrors,
+    menu: SlotMenu,
     on_event: Option<EventHandler>,
 }
 
@@ -102,12 +111,18 @@ impl Fields {
             inputs: inputs.clone(),
             rules: rules.clone(),
             errors: FieldErrors::default(),
+            menu: None,
             on_event: None,
         }
     }
 
     pub fn errors(mut self, errors: FieldErrors) -> Self {
         self.errors = errors;
+        self
+    }
+
+    pub fn menu(mut self, slot: MenuSlot, menu: impl IntoElement) -> Self {
+        self.menu = Some((slot, menu.into_any_element()));
         self
     }
 
@@ -127,61 +142,6 @@ struct CaseChoice {
     event: FieldsEvent,
 }
 
-struct Cell<'a> {
-    t: &'a Theme,
-    label: String,
-    input: &'a Entity<TextFieldState>,
-    error: Option<&'a SharedString>,
-}
-
-fn cell(id: &'static str, cell: Cell<'_>) -> Div {
-    let Cell {
-        t,
-        label,
-        input,
-        error,
-    } = cell;
-    let border = if error.is_some() {
-        t.colors.mark
-    } else {
-        transparent_black()
-    };
-    div()
-        .flex()
-        .flex_col()
-        .gap(t.spacing.xs)
-        .child(caption(t, label.clone()))
-        .child(
-            div()
-                .rounded(t.radii.sm)
-                .border_1()
-                .border_color(border)
-                .child(TextField::new(id, input, label)),
-        )
-}
-
-fn caption(t: &Theme, text: String) -> Div {
-    div()
-        .text_size(t.typography.small)
-        .text_color(t.colors.muted)
-        .child(text)
-}
-
-fn error_line(t: &Theme, id: &'static str, error: &SharedString) -> impl IntoElement + use<> {
-    div()
-        .id(id)
-        .role(Role::Alert)
-        .aria_label(error.clone())
-        .test_support()
-        .flex()
-        .items_center()
-        .gap(t.spacing.xs)
-        .text_size(t.typography.small)
-        .text_color(t.colors.mark)
-        .child(icon(IconName::TriangleAlert, t.spacing.icon, t.colors.mark))
-        .child(error.clone())
-}
-
 impl Fields {
     fn emit(
         &self,
@@ -195,7 +155,7 @@ impl Fields {
         }
     }
 
-    fn mask(&self, t: &Theme, mask: Mask) -> Div {
+    fn mask(&self, t: &Theme, mask: Mask, menu: &mut SlotMenu) -> Div {
         let (id, label, input, error) = match mask {
             Mask::Name => (
                 "name-mask",
@@ -223,24 +183,21 @@ impl Fields {
                 error: error.as_ref(),
             },
         );
-        let insert = Button::new(button_id, "[\u{a0}]")
-            .variant(ButtonVariant::Ghost)
-            .tooltip(tr("rename-insert-token"))
+        let insert = IconButton::new(button_id, IconName::Brackets, tr("rename-insert-token"))
             .on_click(self.emit(FieldsEvent::Tokens(mask)));
+        let row = div()
+            .flex()
+            .items_end()
+            .gap(t.spacing.sm)
+            .child(field.flex_1().min_w_0())
+            .child(insert);
         div()
             .flex()
             .flex_col()
             .flex_1()
             .min_w(px(FIELD_MIN))
             .gap(t.spacing.xs)
-            .child(
-                div()
-                    .flex()
-                    .items_end()
-                    .gap(t.spacing.sm)
-                    .child(field.flex_1().min_w_0())
-                    .child(insert),
-            )
+            .child(attach(row, MenuSlot::Mask(mask), menu))
             .children(error.as_ref().map(|error| error_line(t, error_id, error)))
     }
 
@@ -352,7 +309,7 @@ impl Fields {
         div().flex().gap(t.spacing.sm).children(cells)
     }
 
-    fn case_row(&self, t: &Theme) -> Div {
+    fn case_row(&self, t: &Theme, menu: &mut SlotMenu) -> Div {
         let rules = &self.rules;
         let name = self.case_button(
             t,
@@ -377,15 +334,16 @@ impl Fields {
             .flex_wrap()
             .items_end()
             .gap(t.spacing.md)
-            .child(name)
-            .child(extension)
+            .child(attach(name, MenuSlot::NameCase, menu))
+            .child(attach(extension, MenuSlot::ExtensionCase, menu))
             .child(self.counter(t))
     }
 }
 
 impl RenderOnce for Fields {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(mut self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme::current(cx).clone();
+        let mut menu = self.menu.take();
         let counter_error = self.errors.counter.clone();
         let find_error = self.errors.find.clone();
         div()
@@ -398,12 +356,12 @@ impl RenderOnce for Fields {
                     .flex()
                     .flex_wrap()
                     .gap(t.spacing.md)
-                    .child(self.mask(&t, Mask::Name))
-                    .child(self.mask(&t, Mask::Extension)),
+                    .child(self.mask(&t, Mask::Name, &mut menu))
+                    .child(self.mask(&t, Mask::Extension, &mut menu)),
             )
             .child(self.find_row(&t))
             .children(find_error.map(|error| error_line(&t, "find-error", &error)))
-            .child(self.case_row(&t))
+            .child(self.case_row(&t, &mut menu))
             .children(counter_error.map(|error| error_line(&t, "counter-error", &error)))
     }
 }

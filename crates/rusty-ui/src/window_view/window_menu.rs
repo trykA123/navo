@@ -156,7 +156,10 @@ impl FerriteWindow {
     }
 
     pub(super) fn can_open_window_menu(&self) -> bool {
-        self.viewer.is_none() && self.prompt.is_none() && self.browser.pending().is_none()
+        self.viewer.is_none()
+            && self.prompt.is_none()
+            && self.browser.pending().is_none()
+            && !self.is_multi_rename_open()
     }
 
     fn open_window_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {

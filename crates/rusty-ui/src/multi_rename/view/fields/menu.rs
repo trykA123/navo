@@ -61,6 +61,11 @@ impl FieldMenu {
         self
     }
 
+    pub fn empty(mut self, text: impl Into<SharedString>) -> Self {
+        self.empty = text.into();
+        self
+    }
+
     pub fn selected(mut self, index: usize) -> Self {
         self.selected = index;
         self

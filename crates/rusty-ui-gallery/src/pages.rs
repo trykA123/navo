@@ -102,6 +102,8 @@ pub enum Page {
     MultiRename,
     MultiRenamePreview,
     MultiRenamePreviewLarge,
+    MultiRenameTool,
+    MultiRenameToolMenu,
 }
 
 pub struct PageInfo {

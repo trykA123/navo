@@ -138,7 +138,9 @@ impl FerriteWindow {
     }
 
     pub(super) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let is_busy = self.prompt.is_some() || self.browser.pending().is_some();
+        let is_busy = self.prompt.is_some()
+            || self.browser.pending().is_some()
+            || self.is_multi_rename_open();
         if self.settings.is_open || is_busy || self.viewer.is_some() {
             return;
         }

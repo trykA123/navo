@@ -37,7 +37,8 @@ impl FerriteWindow {
             self.close_app_menu(window, cx);
             return;
         }
-        if self.prompt.is_some() || self.browser.pending().is_some() {
+        if self.prompt.is_some() || self.browser.pending().is_some() || self.is_multi_rename_open()
+        {
             return;
         }
         self.app_menu = Some(OpenMenu {
