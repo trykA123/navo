@@ -1,6 +1,8 @@
 use super::frames::{self, FrameError, MAX_FRAME_BYTES};
 use super::{Hit, Query, QueryTerm, Request, Response, Status, VolumeStatus};
 
+mod clients;
+
 fn query(generation: u64) -> Query {
     Query {
         request: Request {
@@ -200,17 +202,4 @@ fn oversized_requests_return_empty_hits_and_an_error_without_running_the_handler
         &super::CancelToken::new(),
     );
     assert!(called.load(std::sync::atomic::Ordering::Relaxed));
-}
-
-#[test]
-fn malformed_frames_drop_only_the_connection() {
-    let mut truncated = frames::encode(&query(1)).unwrap();
-    truncated.pop();
-    let garbage = [1, 0, 0, 0, 255];
-    for bytes in [&truncated[..], &garbage[..]] {
-        let error = frames::decode::<Query>(bytes).unwrap_err();
-        assert!(super::connection_result(Err(error.into())).is_ok());
-    }
-    assert!(super::connection_result(Err(super::PipeError::NotAvailable)).is_ok());
-    assert!(super::connection_result(Err(super::PipeError::TimedOut)).is_err());
 }

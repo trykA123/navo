@@ -7,6 +7,8 @@ pub const FORMAT_VERSION: u16 = 2;
 const MAGIC: &[u8; 16] = b"FERRITE-INDEX\0\0\0";
 const HEADER_LEN: usize = 70;
 const CHECKSUM_START: usize = HEADER_LEN - 4;
+const MAX_ENTRIES: u32 = 64_000_000;
+const MAX_NAME_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Header {
@@ -21,6 +23,8 @@ pub struct Header {
 pub enum FileError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("cannot allocate index snapshot: {0}")]
+    Allocation(#[from] std::collections::TryReserveError),
     #[error("not a Ferrite index file")]
     BadMagic,
     #[error("index format {found} differs from supported format {supported}")]
@@ -54,7 +58,8 @@ pub fn save_with_ids(
         .body_bytes()?
         .checked_add(HEADER_LEN)
         .ok_or(FileError::BadLength)?;
-    let mut bytes = Vec::with_capacity(capacity);
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(capacity)?;
     encode_header(&mut bytes, header, &lengths);
     encode_table(&mut bytes, table);
     for (&reference, &id) in ids {
@@ -110,25 +115,22 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
     if file.metadata()?.len() != HEADER_LEN as u64 + body_len as u64 {
         return Err(FileError::BadLength);
     }
-    let mut body = Vec::with_capacity(body_len);
-    file.take(body_len as u64 + 1).read_to_end(&mut body)?;
-    if body.len() != body_len {
-        return Err(FileError::BadLength);
-    }
+    let mut body = Vec::new();
+    body.try_reserve_exact(body_len)?;
+    body.resize(body_len, 0);
+    file.read_exact(&mut body)?;
     if checksum(&prefix[..CHECKSUM_START], &body) != expected_checksum {
         return Err(FileError::BadChecksum);
     }
     let mut input = body.as_slice();
-    header.root = std::str::from_utf8(take(&mut input, lengths.root as usize)?)
-        .map_err(|_| FileError::InvalidData("root is not UTF-8"))?
-        .to_owned();
-    let names = String::from_utf8(take(&mut input, lengths.names as usize)?.to_vec())
-        .map_err(|_| FileError::InvalidData("names are not UTF-8"))?;
+    header.root = read_string(&mut input, lengths.root)?;
+    let names = read_string(&mut input, lengths.names)?;
     let offsets = read_values(&mut input, lengths.entries, u32::from_le_bytes)?;
     let parents = read_values(&mut input, lengths.entries, u32::from_le_bytes)?;
     let flags = read_values(&mut input, lengths.entries, u16::from_le_bytes)?;
     let table = NameTable::from_raw_parts(names, offsets, parents, flags)
         .ok_or(FileError::InvalidData("invalid name table"))?;
+    validate_root(&header, &table)?;
     let ids = decode_ids(&mut input, lengths.references)?;
     validate_ids(&table, &ids)?;
     Ok((header, table, ids))
@@ -136,6 +138,7 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
 
 fn decode_ids(input: &mut &[u8], count: u32) -> Result<FrnMap, FileError> {
     let mut ids = FrnMap::new();
+    ids.try_reserve(count as usize)?;
     for _ in 0..count {
         let reference = u128::from_le_bytes(read_array(input)?);
         let id = u32::from_le_bytes(read_array(input)?);
@@ -147,9 +150,30 @@ fn decode_ids(input: &mut &[u8], count: u32) -> Result<FrnMap, FileError> {
 }
 
 pub(crate) fn validate_ids(table: &NameTable, ids: &FrnMap) -> Result<(), FileError> {
-    if ids.values().any(|&id| id >= table.slots()) {
+    if ids.len() > table.slots() as usize || ids.values().any(|&id| table.flags(id).is_none()) {
         return Err(FileError::InvalidData(
-            "file reference entry id is out of range",
+            "file reference does not name a live entry",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_root(header: &Header, table: &NameTable) -> Result<(), FileError> {
+    let root = header
+        .root
+        .split_once("://")
+        .map_or(header.root.as_str(), |(_, path)| path);
+    let windows = root.starts_with(r"\\")
+        || root.as_bytes().get(1) == Some(&b':')
+            && root.as_bytes().first().is_some_and(u8::is_ascii_alphabetic);
+    let root = if windows {
+        root.trim_end_matches(['\\', '/'])
+    } else {
+        root.trim_end_matches('/')
+    };
+    if table.slots() != 0 && table.name(0) != Some(root) {
+        return Err(FileError::InvalidData(
+            "name table root differs from header",
         ));
     }
     Ok(())
@@ -164,6 +188,12 @@ struct Lengths {
 
 impl Lengths {
     fn body_bytes(&self) -> Result<usize, FileError> {
+        if self.entries > MAX_ENTRIES
+            || u64::from(self.names) > MAX_NAME_BYTES
+            || self.references > self.entries
+        {
+            return Err(FileError::InvalidData("snapshot section exceeds limits"));
+        }
         let bytes = u64::from(self.root)
             + u64::from(self.names)
             + u64::from(self.entries) * 10
@@ -224,7 +254,21 @@ fn read_values<const N: usize, T>(
     count: u32,
     decode: fn([u8; N]) -> T,
 ) -> Result<Vec<T>, FileError> {
-    (0..count).map(|_| read_array(input).map(decode)).collect()
+    let mut values = Vec::new();
+    values.try_reserve_exact(count as usize)?;
+    for _ in 0..count {
+        values.push(decode(read_array(input)?));
+    }
+    Ok(values)
+}
+
+fn read_string(input: &mut &[u8], count: u32) -> Result<String, FileError> {
+    let value = std::str::from_utf8(take(input, count as usize)?)
+        .map_err(|_| FileError::InvalidData("index text is not UTF-8"))?;
+    let mut text = String::new();
+    text.try_reserve_exact(value.len())?;
+    text.push_str(value);
+    Ok(text)
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ fn header() -> Header {
         volume_serial: 0x0123_4567_89ab_cdef,
         journal_id: 0xfedc_ba98_7654_3210,
         next_usn: 0x1234_5678_9abc,
-        root: "fixture/資料".to_owned(),
+        root: "fixture".to_owned(),
         built_at: 1_790_000_000,
     }
 }
@@ -251,6 +251,108 @@ fn repair_checksum(bytes: &mut [u8]) {
     checksum.update(&bytes[..CHECKSUM_START]);
     checksum.update(&bytes[HEADER_LEN..]);
     bytes[CHECKSUM_START..HEADER_LEN].copy_from_slice(&checksum.finalize().to_le_bytes());
+}
+
+fn assert_corrupt_snapshot_is_rejected(mut bytes: Vec<u8>, at: usize, value: &[u8]) {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("invalid.index");
+    bytes[at..at + value.len()].copy_from_slice(value);
+    repair_checksum(&mut bytes);
+    fs::write(&path, bytes).unwrap();
+    assert!(matches!(load(&path), Err(FileError::InvalidData(_))));
+}
+
+fn fixture_bytes() -> Vec<u8> {
+    let folder = tempfile::tempdir().unwrap();
+    write_fixture(&folder.path().join("names.index"))
+}
+
+fn parents_start(bytes: &[u8]) -> usize {
+    let names = u32::from_le_bytes(bytes[54..58].try_into().unwrap()) as usize;
+    HEADER_LEN + header().root.len() + names + table().slots() as usize * 4
+}
+
+#[test]
+fn parent_cycles_are_rejected_with_a_valid_checksum() {
+    let mut bytes = fixture_bytes();
+    let parents = parents_start(&bytes);
+    let flags = parents + table().slots() as usize * 4;
+    bytes[flags + 4..flags + 6].copy_from_slice(&Flags::FOLDER.bits().to_le_bytes());
+    bytes[parents + 8..parents + 12].copy_from_slice(&1u32.to_le_bytes());
+    let at = parents_start(&bytes) + 4;
+    assert_corrupt_snapshot_is_rejected(bytes, at, &2u32.to_le_bytes());
+}
+
+#[test]
+fn out_of_range_parents_are_rejected_with_a_valid_checksum() {
+    let bytes = fixture_bytes();
+    let at = parents_start(&bytes) + 4;
+    assert_corrupt_snapshot_is_rejected(bytes, at, &table().slots().to_le_bytes());
+}
+
+#[test]
+fn parents_must_be_live_folders() {
+    for parent in [2u32, 3] {
+        let mut bytes = fixture_bytes();
+        let flags = parents_start(&bytes) + table().slots() as usize * 4;
+        bytes[flags + 6] |= Flags::FOLDER.bits() as u8;
+        let at = parents_start(&bytes) + 4;
+        assert_corrupt_snapshot_is_rejected(bytes, at, &parent.to_le_bytes());
+    }
+}
+
+#[test]
+fn wrong_root_is_rejected_with_a_valid_checksum() {
+    assert_corrupt_snapshot_is_rejected(fixture_bytes(), HEADER_LEN, b"another");
+}
+
+#[test]
+fn frn_targets_must_be_live_entries() {
+    let folder = tempfile::tempdir().unwrap();
+    let bytes = write_frn_fixture(&folder.path().join("ntfs.index"));
+    let at = bytes.len() - 4;
+    assert_corrupt_snapshot_is_rejected(bytes, at, &3u32.to_le_bytes());
+}
+
+#[test]
+fn root_identity_uses_the_same_path_form_as_the_walker() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("root.index");
+    for (claimed, stored) in [
+        ("C:\\", "C:"),
+        ("C:/", "C:"),
+        ("/", ""),
+        ("/folder/", "/folder"),
+        ("fake://tree", "tree"),
+    ] {
+        let mut table = NameTable::new();
+        table.push(NO_PARENT, stored, Flags::FOLDER).unwrap();
+        let mut header = header();
+        header.root = claimed.into();
+        save(&path, &header, &table).unwrap();
+        let (loaded_header, loaded) = load(&path).unwrap();
+        assert_eq!(loaded_header, header);
+        assert_eq!(loaded.name(0), Some(stored));
+    }
+}
+
+#[test]
+fn huge_section_counts_are_rejected_before_reading_the_body() {
+    let original = fixture_bytes();
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("lengths.index");
+    for (at, count) in [(58, 64_000_001u32), (62, table().slots() + 1)] {
+        let mut bytes = original[..HEADER_LEN].to_vec();
+        bytes[at..at + 4].copy_from_slice(&count.to_le_bytes());
+        fs::write(&path, bytes).unwrap();
+        assert!(matches!(load(&path), Err(FileError::InvalidData(_))));
+    }
+    for at in [50, 54, 58, 62] {
+        let mut bytes = original[..HEADER_LEN].to_vec();
+        bytes[at..at + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+        fs::write(&path, bytes).unwrap();
+        assert!(load(&path).is_err());
+    }
 }
 
 #[test]

@@ -6607,6 +6607,7 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror 2.0.21",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 

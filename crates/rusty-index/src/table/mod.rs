@@ -114,13 +114,55 @@ impl NameTable {
             .iter()
             .filter(|&&bits| bits & Flags::DELETED == 0)
             .count();
-        Some(Self {
+        let table = Self {
             names,
             offsets,
             parents,
             flags,
             live,
-        })
+        };
+        table.valid_structure().then_some(table)
+    }
+
+    pub(crate) fn valid_structure(&self) -> bool {
+        if self.slots() == 0 {
+            return true;
+        }
+        if self.parents[0] != NO_PARENT
+            || self
+                .flags(0)
+                .is_none_or(|flags| !flags.contains(Flags::FOLDER))
+            || self.parents.iter().enumerate().any(|(id, &parent)| {
+                if parent == NO_PARENT {
+                    return id != 0;
+                }
+                self.flags(parent)
+                    .is_none_or(|flags| !flags.contains(Flags::FOLDER))
+            })
+        {
+            return false;
+        }
+        let mut state = Vec::new();
+        if state.try_reserve_exact(self.parents.len()).is_err() {
+            return false;
+        }
+        state.resize(self.parents.len(), 0u8);
+        for start in 0..self.slots() {
+            let mut id = start;
+            while id != NO_PARENT && state[id as usize] == 0 {
+                state[id as usize] = 1;
+                id = self.parents[id as usize];
+            }
+            if id != NO_PARENT && state[id as usize] == 1 {
+                return false;
+            }
+            id = start;
+            while id != NO_PARENT && state[id as usize] == 1 {
+                state[id as usize] = 2;
+                id = self.parents[id as usize];
+            }
+        }
+        true
     }
 
     pub fn push(&mut self, parent: u32, name: &str, flags: Flags) -> Result<u32, TableError> {

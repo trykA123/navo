@@ -33,8 +33,33 @@ struct Session {
     stopped: CancelToken,
 }
 
+pub(super) trait Transport: Sync {
+    fn accept(&self, cancel: &Cancellation<'_>) -> Result<(), PipeError>;
+    fn disconnect(&self) -> Result<(), PipeError>;
+    fn read_query(&self, cancel: &Cancellation<'_>) -> Result<Query, PipeError>;
+    fn write_response(&self, response: &Response, deadline: Instant) -> Result<(), PipeError>;
+}
+
+impl Transport for platform::Pipe {
+    fn accept(&self, cancel: &Cancellation<'_>) -> Result<(), PipeError> {
+        self.accept(cancel)
+    }
+
+    fn disconnect(&self) -> Result<(), PipeError> {
+        self.disconnect()
+    }
+
+    fn read_query(&self, cancel: &Cancellation<'_>) -> Result<Query, PipeError> {
+        self.read(None, cancel)
+    }
+
+    fn write_response(&self, response: &Response, deadline: Instant) -> Result<(), PipeError> {
+        self.write(response, Some(deadline))
+    }
+}
+
 pub(super) fn serve_session(
-    pipe: &platform::Pipe,
+    pipe: &impl Transport,
     handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
     tokens: &[&CancelToken],
 ) -> Result<(), PipeError> {
@@ -46,12 +71,12 @@ pub(super) fn serve_session(
         let result = send_replies(pipe, handler, &session, events);
         session.stopped.cancel();
         let read_result = reader.join().map_err(|_| PipeError::NotAvailable)?;
-        result.and(connection_result(read_result))
+        result.and(read_result)
     })
 }
 
 fn read_queries(
-    pipe: &platform::Pipe,
+    pipe: &impl Transport,
     session: &Session,
     tokens: &[&CancelToken],
     wake: mpsc::SyncSender<()>,
@@ -59,7 +84,7 @@ fn read_queries(
     let tokens: Vec<_> = tokens.iter().copied().chain([&session.stopped]).collect();
     let result = (|| {
         while !session.stopped.is_cancelled() {
-            let query = pipe.read(None, &Cancellation::Tokens(&tokens))?;
+            let query = pipe.read_query(&Cancellation::Tokens(&tokens))?;
             session
                 .pending
                 .lock()
@@ -80,7 +105,7 @@ fn read_queries(
 }
 
 fn send_replies(
-    pipe: &platform::Pipe,
+    pipe: &impl Transport,
     handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
     session: &Session,
     events: mpsc::Receiver<()>,
@@ -110,9 +135,9 @@ fn send_replies(
             continue;
         }
         let hits = prepare_hits(query.generation, &mut reply)?;
-        let deadline = Some(Instant::now() + QUERY_TIMEOUT);
-        pipe.write(&hits, deadline)?;
-        pipe.write(
+        let deadline = Instant::now() + QUERY_TIMEOUT;
+        pipe.write_response(&hits, deadline)?;
+        pipe.write_response(
             &Response::Status {
                 generation: query.generation,
                 status: reply.status,
@@ -158,13 +183,6 @@ pub(super) fn prepare_hits(generation: u64, reply: &mut Reply) -> Result<Respons
         hits.pop();
     }
     Ok(response)
-}
-
-pub(super) fn connection_result(result: Result<(), PipeError>) -> Result<(), PipeError> {
-    match result {
-        Err(PipeError::Cancelled | PipeError::NotAvailable | PipeError::Frame(_)) => Ok(()),
-        other => other,
-    }
 }
 
 pub(super) struct StopOnDrop(pub(super) CancelToken);

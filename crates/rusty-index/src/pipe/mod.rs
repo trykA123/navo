@@ -10,9 +10,9 @@ use std::time::Instant;
 
 pub use cancel::CancelToken;
 use cancel::Cancellation;
+use session::StopOnDrop;
 #[cfg(test)]
 use session::{Pending, answer_request, prepare_hits};
-use session::{StopOnDrop, connection_result};
 #[cfg(not(windows))]
 use unix as platform;
 #[cfg(windows)]
@@ -198,7 +198,7 @@ impl Server {
 }
 
 fn serve_instance(
-    pipe: &platform::Pipe,
+    pipe: &impl session::Transport,
     handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
     cancel: &CancelToken,
     stopped: &CancelToken,
@@ -212,7 +212,9 @@ fn serve_instance(
             Ok(()) => {}
         }
         let result = session::serve_session(pipe, handler, tokens);
-        connection_result(result).and(pipe.disconnect())?;
+        if let Err(error) = result.and(pipe.disconnect()) {
+            tracing::debug!(%error, "index pipe client disconnected");
+        }
     }
 }
 

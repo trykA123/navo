@@ -1,5 +1,5 @@
 use super::{NtfsError, NtfsIndex};
-use crate::file::{Header, validate_ids};
+use crate::file::{Header, validate_ids, validate_root};
 use crate::table::NameTable;
 use crate::usn::{FrnMap, JournalPosition, PendingRenames};
 
@@ -21,9 +21,12 @@ impl NtfsIndex {
         if header.volume_serial != volume_serial
             || header.journal_id != journal_id
             || header.next_usn < 0
+            || ids.get(&super::ROOT_REFERENCE) != Some(&0)
+            || !table.valid_structure()
         {
             return Err(NtfsError::Reenumerate);
         }
+        validate_root(&header, &table)?;
         validate_ids(&table, &ids)?;
         Ok(Self {
             table,
@@ -146,6 +149,49 @@ mod tests {
     fn restore_refuses_an_out_of_range_entry_id() {
         let mut index = index();
         index.ids.insert(20, index.table.slots());
+        let saved = (header(&index), index.table, index.ids);
+        assert!(NtfsIndex::restore(saved, SERIAL, POSITION.journal_id).is_err());
+    }
+
+    #[test]
+    fn restore_refuses_a_dead_frn_target() {
+        let mut index = index();
+        index.table.remove(index.ids[&10]);
+        let saved = (header(&index), index.table, index.ids);
+        assert!(NtfsIndex::restore(saved, SERIAL, POSITION.journal_id).is_err());
+    }
+
+    #[test]
+    fn restore_refuses_a_root_that_differs_from_the_header() {
+        let index = index();
+        let mut header = header(&index);
+        header.root = "D:".into();
+        let saved = (header, index.table, index.ids);
+        assert!(NtfsIndex::restore(saved, SERIAL, POSITION.journal_id).is_err());
+    }
+
+    #[test]
+    fn restore_refuses_a_root_reference_that_points_to_another_entry() {
+        let mut index = index();
+        index.ids.insert(5, index.ids[&WIDE_ID]);
+        let saved = (header(&index), index.table, index.ids);
+        assert!(NtfsIndex::restore(saved, SERIAL, POSITION.journal_id).is_err());
+    }
+
+    #[test]
+    fn restore_refuses_an_invalid_parent() {
+        let mut index = index();
+        index.table.push(999, "orphan", Flags::NONE).unwrap();
+        let saved = (header(&index), index.table, index.ids);
+        assert!(NtfsIndex::restore(saved, SERIAL, POSITION.journal_id).is_err());
+    }
+
+    #[test]
+    fn restore_refuses_a_parent_cycle() {
+        let mut index = index();
+        let first = index.table.slots();
+        index.table.push(first + 1, "first", Flags::FOLDER).unwrap();
+        index.table.push(first, "second", Flags::FOLDER).unwrap();
         let saved = (header(&index), index.table, index.ids);
         assert!(NtfsIndex::restore(saved, SERIAL, POSITION.journal_id).is_err());
     }
