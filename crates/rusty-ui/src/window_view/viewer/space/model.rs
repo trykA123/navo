@@ -2,10 +2,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use rusty_automotive::space::{
-    Group, GroupBy, Grouping, Item, Origin, Owners, Part, Region, RegionSource, TOP_GROUPS,
-    available, default_grouping, flash_region, group, owners, regions_for_elf,
+    Group, GroupBy, Grouping, Item, Origin, Owners, Part, Provenance, Region, RegionSource,
+    Regions, TOP_GROUPS, available, default_grouping, flash_region, group, owners, owners_of_map,
+    regions_for_elf, regions_for_map,
 };
-use rusty_automotive::{Elf, Lines, RegionTable};
+use rusty_automotive::{Elf, Lines, MapModel, Mdf, RegionTable};
 use rusty_l10n::{t, tr};
 
 use super::sibling::{SiblingProblem, Siblings};
@@ -23,9 +24,16 @@ pub(in crate::window_view::viewer) struct RichModel {
     pub groups: Vec<Group>,
     pub provenance: String,
     pub region_source: Option<String>,
+    pub stripped: bool,
+    pub from_map: bool,
 }
 
 impl RichModel {
+    pub fn outside_note(&self) -> Option<String> {
+        let name = self.region_source.clone()?;
+        (self.outside > 0).then(|| t!("space-outside", count = self.outside as i64, name = name))
+    }
+
     pub fn treemap(&self) -> (Rc<[TreemapGroup]>, Vec<Item>) {
         let shown = &self.groups[..self.groups.len().min(TOP_GROUPS)];
         let groups = shown.iter().enumerate().map(|(at, group)| TreemapGroup {
@@ -61,7 +69,7 @@ impl RichModel {
     }
 }
 
-fn table(siblings: &Siblings) -> Option<RegionTable> {
+pub(super) fn table(siblings: &Siblings) -> Option<RegionTable> {
     match (&siblings.mdf, &siblings.map) {
         (Some(mdf), Some(map)) => Some(RegionTable::merge(map, &mdf.regions())),
         (Some(mdf), None) => Some(mdf.regions()),
@@ -70,17 +78,12 @@ fn table(siblings: &Siblings) -> Option<RegionTable> {
     }
 }
 
-pub(in crate::window_view::viewer) fn build_model(
-    elf: &Elf,
-    lines: Option<&Lines>,
-    siblings: &Siblings,
+pub(super) fn assemble(
+    (regions, found): (Regions, Owners),
+    origin: Origin<'_>,
     grouping: Option<Grouping>,
 ) -> RichModel {
-    let map = siblings.map.as_deref();
-    let regions = regions_for_elf(elf, table(siblings).as_ref());
-    let found = owners(elf, lines, map);
     let flash = flash_region(&regions);
-    let origin = Origin::Elf { elf, map };
     let region = flash.and_then(|at| regions.items.get(at));
     let usable = region
         .and_then(Region::span)
@@ -97,27 +100,92 @@ pub(in crate::window_view::viewer) fn build_model(
         modules: &[],
     };
     let groups = region.map_or_else(Vec::new, |region| group(&found, origin, region, &by));
-    let region_source = region_source(&regions.items, siblings);
-    let provenance = provenance(region_source.as_deref(), &found, siblings);
     RichModel {
         regions: regions.items.into_iter().map(Arc::new).collect(),
         outside: regions.outside,
+        stripped: !found.provenance.has_symbols,
         owners: Arc::new(found),
         flash,
         grouping,
         usable,
         groups,
-        provenance,
-        region_source,
+        provenance: String::new(),
+        region_source: None,
+        from_map: matches!(origin, Origin::Map(_)),
     }
 }
 
-fn region_source(regions: &[Region], siblings: &Siblings) -> Option<String> {
+pub(in crate::window_view::viewer) fn build_model(
+    elf: &Elf,
+    lines: Option<&Lines>,
+    siblings: &Siblings,
+    grouping: Option<Grouping>,
+) -> RichModel {
+    let map = siblings.map.as_deref();
+    let regions = regions_for_elf(elf, table(siblings).as_ref());
+    let found = owners(elf, lines, map);
+    let names = (siblings.names.mdf.as_deref(), siblings.names.map.as_deref());
+    let region_source = region_source(&regions.items, names);
+    let owned = elf_owners_text(&found.provenance, siblings);
+    let provenance = provenance(
+        region_source.as_deref(),
+        [owned, tr("space-from-flags")],
+        siblings,
+    );
+    RichModel {
+        provenance,
+        region_source,
+        ..assemble((regions, found), Origin::Elf { elf, map }, grouping)
+    }
+}
+
+pub(in crate::window_view::viewer) fn build_map_model(
+    map: &MapModel,
+    siblings: &Siblings,
+    (name, grouping): (&str, Option<Grouping>),
+) -> RichModel {
+    let elf = siblings.elf.as_deref();
+    let regions = regions_for_map(map, siblings.mdf.as_ref().map(Mdf::regions).as_ref(), elf);
+    let found = owners_of_map(map, elf);
+    let region_source = region_source(&regions.items, (siblings.names.mdf.as_deref(), Some(name)));
+    let owned = if found.provenance.from_map > 0 {
+        t!("space-from-map", name = name.to_owned())
+    } else {
+        tr("space-from-no-objects")
+    };
+    let kinds = match &siblings.names.elf {
+        Some(name) => t!("space-from-elf", name = name.clone()),
+        None => tr("space-from-names"),
+    };
+    let provenance = provenance(region_source.as_deref(), [owned, kinds], siblings);
+    RichModel {
+        provenance,
+        region_source,
+        stripped: false,
+        ..assemble((regions, found), Origin::Map(map), grouping)
+    }
+}
+
+fn elf_owners_text(found: &Provenance, siblings: &Siblings) -> String {
+    if !found.has_symbols {
+        tr("space-from-no-symbols")
+    } else if found.from_map > 0 {
+        let name = siblings.names.map.clone().unwrap_or_default();
+        t!("space-from-map", name = name)
+    } else if found.estimated > 0 {
+        t!("space-from-estimated", count = found.estimated as i64)
+    } else {
+        tr("space-from-symbols")
+    }
+}
+
+fn region_source(regions: &[Region], (mdf, map): (Option<&str>, Option<&str>)) -> Option<String> {
     match regions.first()?.source {
-        RegionSource::Mdf => siblings.names.mdf.clone(),
-        RegionSource::Map => siblings.names.map.clone(),
+        RegionSource::Mdf => mdf,
+        RegionSource::Map => map,
         RegionSource::Clusters => None,
     }
+    .map(str::to_owned)
 }
 
 fn problem_text(problem: &SiblingProblem) -> String {
@@ -130,28 +198,16 @@ fn problem_text(problem: &SiblingProblem) -> String {
     }
 }
 
-pub(in crate::window_view::viewer) fn provenance(
+fn provenance(
     region_source: Option<&str>,
-    owners: &Owners,
+    [owned, kinds]: [String; 2],
     siblings: &Siblings,
 ) -> String {
     let regions = match region_source {
         Some(name) => t!("space-from-regions", name = name.to_owned()),
         None => tr("space-from-clusters"),
     };
-    let found = &owners.provenance;
-    let owned = if !found.has_symbols {
-        tr("space-from-no-symbols")
-    } else if found.from_map > 0 {
-        let name = siblings.names.map.clone().unwrap_or_default();
-        t!("space-from-map", name = name)
-    } else if found.estimated > 0 {
-        t!("space-from-estimated", count = found.estimated as i64)
-    } else {
-        tr("space-from-symbols")
-    };
-    let parts = [regions, owned, tr("space-from-flags")];
-    parts
+    [regions, owned, kinds]
         .into_iter()
         .chain(siblings.problems.iter().map(problem_text))
         .collect::<Vec<_>>()

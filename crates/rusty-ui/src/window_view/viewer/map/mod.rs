@@ -8,6 +8,8 @@ mod jobs;
 mod keys;
 mod loaded;
 mod nav;
+mod rich;
+mod rich_view;
 mod scope;
 mod select;
 mod table_bar;
@@ -31,6 +33,7 @@ use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
 use super::parts::{AUTOMOTIVE_LAYOUT, LayoutParts, PartSet};
 use super::search::bar::GO_TO_KEYS;
+use super::space::{RichSpace, Siblings};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
 use crate::settings::Values;
@@ -93,11 +96,17 @@ pub(in crate::window_view::viewer) struct MapView {
     opens_inspector: bool,
     layout: LayoutParts,
     columns: Option<columns::Columns>,
+    rich: RichSpace,
+    siblings: Arc<Siblings>,
+    shows_sections_for_rich: bool,
+    _siblings_job: Job,
+    model_job: Option<Job>,
 }
 
 impl MapView {
     fn new(file: &MapFile, host: &Host, cx: &mut Context<Self>) -> Self {
         let job = jobs::start_index(host, file.len, cx);
+        let siblings_job = rich::start_siblings_of(host, cx);
         Self {
             title: host.title.clone(),
             len: file.len,
@@ -126,6 +135,11 @@ impl MapView {
             opens_inspector: false,
             layout: LayoutParts::default(),
             columns: None,
+            rich: RichSpace::default(),
+            siblings: Arc::new(Siblings::default()),
+            shows_sections_for_rich: false,
+            _siblings_job: siblings_job,
+            model_job: None,
         }
     }
 
@@ -210,9 +224,9 @@ impl ViewerBody for MapBody {
     fn show_parts(&self, values: &Values, cx: &mut App) {
         let opens = values.opens_inspector();
         let layout = LayoutParts::of(values);
-        self.0.update(cx, |view, _| {
+        self.0.update(cx, |view, cx| {
             view.opens_inspector = opens;
-            view.layout = layout;
+            view.apply_layout(layout, cx);
         });
     }
 }

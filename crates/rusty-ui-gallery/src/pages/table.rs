@@ -9,7 +9,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 105] = [
+pub const PAGES: [PageInfo; 110] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -373,6 +373,26 @@ pub const PAGES: [PageInfo; 105] = [
         Page::ElfNoRowBars,
         "ELF, no row bars",
         "p38-c7-elf-no-row-bars",
+        false,
+    ),
+    info(Page::MapRich, "MAP Rich", "p38-c8-map-rich", false),
+    info(
+        Page::MapNoStrip,
+        "MAP, no strip",
+        "p38-c8-map-no-strip",
+        false,
+    ),
+    info(Page::MapNoBars, "MAP, no bars", "p38-c8-map-no-bars", false),
+    info(
+        Page::MapNoWho,
+        "MAP, no treemap",
+        "p38-c8-map-no-who",
+        false,
+    ),
+    info(
+        Page::MapNoRowBars,
+        "MAP, no row bars",
+        "p38-c8-map-no-row-bars",
         false,
     ),
 ];

@@ -1,9 +1,9 @@
 use crate::drag_page::DragPage;
-use crate::elf_rich_page::{ELF_PAGES, ElfRichPage};
 use crate::multi_rename_page::MultiRenamePage;
 use crate::multi_rename_preview_page::{PreviewPages, preview_pages};
 use crate::multi_rename_tool_page::{ToolPages, tool_pages};
 use crate::pages::Page;
+use crate::rich_page::{RICH_PAGES, RichPage};
 use crate::treemap_page::TreemapPage;
 use rusty_automotive::Section;
 use rusty_automotive::space::{Kind, Region, RegionSource};
@@ -21,6 +21,7 @@ fn region(name: &str, total: Option<u64>, by_kind: [u64; Kind::COUNT]) -> Region
         start_estimated: false,
         total,
         chip: None,
+        reserved: None,
         used: by_kind[..Kind::Fill.index()].iter().sum(),
         by_kind,
         blocks: Vec::new(),
@@ -128,7 +129,7 @@ pub type DragTreemapBars = (
     Entity<MultiRenamePage>,
     PreviewPages,
     ToolPages,
-    [Entity<ElfRichPage>; 5],
+    [Entity<RichPage>; 10],
 );
 
 pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
@@ -139,26 +140,26 @@ pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
         cx.new(|cx| MultiRenamePage::new(window, cx)),
         preview_pages(window, cx),
         tool_pages(window, cx),
-        ELF_PAGES.map(|(_, off)| cx.new(|cx| ElfRichPage::new(off, window, cx))),
+        RICH_PAGES.map(|(_, sample, off)| cx.new(|cx| RichPage::new(sample, off, window, cx))),
     )
 }
 
-fn elf_page(pages: &DragTreemapBars, page: Page) -> Option<&Entity<ElfRichPage>> {
-    let at = ELF_PAGES.iter().position(|(shown, _)| *shown == page)?;
+fn rich_page(pages: &DragTreemapBars, page: Page) -> Option<&Entity<RichPage>> {
+    let at = RICH_PAGES.iter().position(|(shown, ..)| *shown == page)?;
     pages.6.get(at)
 }
 
 pub fn drive_of(pages: &DragTreemapBars, page: Page, window: &mut Window, cx: &mut App) -> bool {
-    let Some(elf) = elf_page(pages, page) else {
+    let Some(rich) = rich_page(pages, page) else {
         return false;
     };
-    ElfRichPage::drive(elf, window, cx);
+    RichPage::drive(rich, window, cx);
     true
 }
 
 pub fn page_of(pages: &DragTreemapBars, page: Page) -> Option<AnyElement> {
-    if let Some(elf) = elf_page(pages, page) {
-        return Some(elf.clone().into_any_element());
+    if let Some(rich) = rich_page(pages, page) {
+        return Some(rich.clone().into_any_element());
     }
     let (drag, treemap, bars, fields, preview, tool, _) = pages;
     Some(match page {

@@ -41,6 +41,12 @@ fn totals(map: &MapModel) -> Vec<Region> {
         match regions.iter_mut().find(|region| region.name == row.name) {
             Some(region) => {
                 region.size = region.size.saturating_add(row.length);
+                region.reserved = Some(
+                    region
+                        .reserved
+                        .unwrap_or_default()
+                        .saturating_add(row.reserved),
+                );
                 region.start = match (region.start, row.origin) {
                     (Some(known), Some(origin)) => Some(known.min(origin)),
                     (known, origin) => known.or(origin),
@@ -52,6 +58,7 @@ fn totals(map: &MapModel) -> Vec<Region> {
                 start_estimated: false,
                 size: row.length,
                 kind: None,
+                reserved: Some(row.reserved),
             }),
         }
     }

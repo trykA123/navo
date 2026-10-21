@@ -14,6 +14,7 @@ mod key_bar;
 mod kind;
 mod language;
 mod lister;
+mod map_rich;
 mod map_view;
 mod markdown;
 mod markdown_split;

@@ -12,6 +12,7 @@ fn region(total: Option<u64>, used: u64) -> Region {
         start_estimated: false,
         total,
         chip: None,
+        reserved: None,
         used,
         by_kind,
         blocks: Vec::new(),

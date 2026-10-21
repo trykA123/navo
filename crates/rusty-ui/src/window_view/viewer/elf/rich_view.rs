@@ -1,6 +1,5 @@
+use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{Role, relative};
-use rusty_automotive::space::{Block, Group, Kind, Region};
 use rusty_automotive::{Elf, Symbol};
 use rusty_l10n::{t, tr};
 
@@ -11,59 +10,11 @@ use crate::format;
 use crate::prelude::*;
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
-use crate::window_view::viewer::space::{Pick, kind_name};
+use crate::window_view::viewer::space::{
+    Pick, Picked, pick_facts, share_cell, share_head, share_of,
+};
 
-const SHARE_WIDTH: f32 = 96.;
 const CHECK_SIZE: f32 = 16.;
-const LARGEST_ITEMS: usize = 8;
-const KINDS: [Kind; 6] = [
-    Kind::Code,
-    Kind::Rodata,
-    Kind::Data,
-    Kind::Bss,
-    Kind::Other,
-    Kind::Fill,
-];
-
-fn share_of(regions: &[std::sync::Arc<Region>], symbol: &Symbol) -> Option<f64> {
-    let region = regions.iter().find(|region| {
-        region
-            .span()
-            .is_some_and(|span| span.contains(&symbol.value))
-    })?;
-    (region.used > 0).then(|| symbol.size as f64 / region.used as f64)
-}
-
-fn fact(t: &Theme, label: &str, value: String) -> Div {
-    div()
-        .flex()
-        .justify_between()
-        .gap(t.spacing.md)
-        .child(
-            div()
-                .flex_none()
-                .text_color(t.colors.muted)
-                .child(tr(label)),
-        )
-        .child(div().min_w_0().text_right().child(value))
-}
-
-fn caption(t: &Theme, text: &str) -> Div {
-    div()
-        .text_size(t.typography.tiny)
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(t.colors.muted)
-        .child(tr(text))
-}
-
-fn full_name(name: String) -> impl IntoElement {
-    div()
-        .id("elf-inspector-name")
-        .aria_label(name.clone())
-        .test_support()
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(name)
-}
 
 impl ElfView {
     pub(super) fn shows_share(&self) -> bool {
@@ -71,18 +22,7 @@ impl ElfView {
     }
 
     pub(super) fn share_head(&self, t: &Theme) -> Option<Div> {
-        self.shows_share().then(|| {
-            div()
-                .flex()
-                .flex_none()
-                .items_center()
-                .justify_end()
-                .w(px(SHARE_WIDTH))
-                .px(t.spacing.md)
-                .text_size(t.typography.small)
-                .text_color(t.colors.muted)
-                .child(tr("elf-column-share"))
-        })
+        self.shows_share().then(|| share_head(t))
     }
 
     pub(super) fn share_cell(&self, t: &Theme, symbol: &Symbol) -> Option<Div> {
@@ -93,39 +33,8 @@ impl ElfView {
             .rich
             .model
             .as_ref()
-            .and_then(|model| share_of(&model.regions, symbol));
-        let text = share.map_or_else(String::new, |share| {
-            t!(
-                "viewer-space-share",
-                percent = format!("{:.1}", share * 100.)
-            )
-        });
-        let bar = div()
-            .w(px(28.))
-            .h(px(6.))
-            .flex_none()
-            .rounded(t.radii.xs)
-            .bg(t.mem.free)
-            .child(
-                div()
-                    .h_full()
-                    .w(relative(share.unwrap_or(0.).clamp(0., 1.) as f32))
-                    .bg(t.mem.code.strong),
-            );
-        Some(
-            div()
-                .flex()
-                .flex_none()
-                .items_center()
-                .justify_end()
-                .gap(t.spacing.sm)
-                .w(px(SHARE_WIDTH))
-                .px(t.spacing.md)
-                .font_family(t.typography.numbers_font.clone())
-                .text_size(t.typography.small)
-                .child(bar)
-                .child(text),
-        )
+            .and_then(|model| share_of(&model.regions, (symbol.value, symbol.size)));
+        Some(share_cell(t, share))
     }
 
     fn noise_check(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -214,94 +123,23 @@ impl ElfView {
                 text,
                 is_bad: false,
             });
-        let outside = self.rich.model.as_ref().and_then(|model| {
-            let name = model.region_source.clone()?;
-            (model.outside > 0).then(|| Check {
-                text: t!("space-outside", count = model.outside as i64, name = name),
-                is_bad: true,
-            })
-        });
+        let outside = self
+            .rich
+            .model
+            .as_ref()
+            .and_then(|model| model.outside_note())
+            .map(|text| Check { text, is_bad: true });
         (picked, outside)
     }
 
     pub(super) fn pick_body(&self, t: &Theme, elf: &Elf) -> Option<Vec<AnyElement>> {
-        let model = self.rich.model.as_ref()?;
-        let name = self.pick_name()?;
-        let rest = match self.rich.pick? {
-            Pick::Block { region, block } => {
-                let region = model.regions.get(region)?;
-                block_facts(t, region, region.blocks.get(block)?, is_wide(elf))
-            }
-            Pick::Group(id) => group_facts(t, model.groups.get(id as usize)?),
+        let picked = Picked {
+            model: self.rich.model.as_ref()?,
+            pick: self.rich.pick?,
+            name: self.pick_name()?,
+            name_id: "elf-inspector-name",
         };
-        Some(
-            std::iter::once(full_name(name).into_any_element())
-                .chain(rest)
-                .collect(),
-        )
+        let wide = is_wide(elf);
+        pick_facts(t, picked, &|start, size| span(start, size, wide))
     }
-}
-
-fn line(t: &Theme, left: String, right: String) -> AnyElement {
-    div()
-        .flex()
-        .justify_between()
-        .gap(t.spacing.md)
-        .child(div().min_w_0().text_color(t.colors.muted).child(left))
-        .child(div().flex_none().child(right))
-        .into_any_element()
-}
-
-fn block_facts(t: &Theme, region: &Region, block: &Block, wide: bool) -> Vec<AnyElement> {
-    let facts = [
-        ("space-inspector-region", region.name.clone()),
-        ("space-inspector-kind", kind_name(block.kind)),
-        (
-            "space-inspector-address",
-            span(block.start, block.size, wide),
-        ),
-        ("space-inspector-size", format::size(block.size)),
-    ];
-    std::iter::once(caption(t, "space-inspector-block").into_any_element())
-        .chain(
-            facts
-                .into_iter()
-                .map(|(label, value)| fact(t, label, value).into_any_element()),
-        )
-        .collect()
-}
-
-fn group_facts(t: &Theme, group: &Group) -> Vec<AnyElement> {
-    let kinds = KINDS
-        .iter()
-        .filter(|kind| group.by_kind[kind.index()] > 0)
-        .map(|kind| {
-            line(
-                t,
-                kind_name(*kind),
-                format::size(group.by_kind[kind.index()]),
-            )
-        });
-    let largest = group
-        .children
-        .iter()
-        .take(LARGEST_ITEMS)
-        .map(|child| line(t, child.name.clone(), format::size(child.bytes)));
-    let head = [
-        caption(t, "space-inspector-group").into_any_element(),
-        fact(t, "space-inspector-size", format::size(group.bytes)).into_any_element(),
-        fact(
-            t,
-            "space-inspector-items",
-            format::bytes(u64::from(group.items)),
-        )
-        .into_any_element(),
-    ];
-    head.into_iter()
-        .chain(kinds)
-        .chain(std::iter::once(
-            caption(t, "space-inspector-largest").into_any_element(),
-        ))
-        .chain(largest)
-        .collect()
 }

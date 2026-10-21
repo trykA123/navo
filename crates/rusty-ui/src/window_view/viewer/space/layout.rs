@@ -107,7 +107,7 @@ fn region_row(
             .flex_col()
             .gap(t.spacing.xxs)
             .child(UsageBar::new(("space-usage", at), region))
-            .child(UsageLine::new(region, None))
+            .child(UsageLine::new(region, region.reserved))
     });
     let right = div()
         .flex()
@@ -181,6 +181,7 @@ fn blocked(model: &RichModel, at: usize) -> Option<String> {
     }
     Some(tr(match GROUPINGS[at].0 {
         Grouping::SourceFile => "space-group-no-source",
+        Grouping::ObjectFile if model.from_map => "space-group-no-object-map",
         Grouping::ObjectFile => "space-group-no-object",
         Grouping::Module | Grouping::Section => "space-group-no-owners",
     }))
@@ -220,7 +221,7 @@ fn treemap_box<V: RichHost>(rich: &RichSpace, model: &RichModel, cx: &mut Contex
     )
     .absolute()
     .size_full();
-    let stripped = !model.owners.provenance.has_symbols;
+    let stripped = model.stripped;
     let selected = match rich.pick {
         Some(Pick::Group(id)) => Some(id),
         _ => None,

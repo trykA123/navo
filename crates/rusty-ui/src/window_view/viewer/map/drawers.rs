@@ -288,6 +288,9 @@ impl MapView {
             .overflow_y_scroll()
             .gap(t.spacing.xl)
             .p(t.spacing.xl);
+        if let Some(parts) = self.pick_body(t) {
+            return body.gap(t.spacing.sm).children(parts).into_any_element();
+        }
         let Some(inspection) = &self.inspection else {
             let none = div().text_color(t.colors.muted).child("Nothing selected");
             return body.child(none).into_any_element();
@@ -302,12 +305,12 @@ impl MapView {
     fn inspector(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Option<SideSheet> {
         self.loaded()?;
         let this = cx.weak_entity();
-        let name = match &self.inspection {
+        let name = self.pick_name().unwrap_or_else(|| match &self.inspection {
             Some(Inspection::Region { region, .. }) => region.name.clone(),
             Some(Inspection::Section { section, .. }) => section.name.clone(),
             Some(Inspection::Symbol { symbol, .. }) => symbol.name.clone(),
             None => String::new(),
-        };
+        });
         let title = div()
             .min_w_0()
             .truncate()

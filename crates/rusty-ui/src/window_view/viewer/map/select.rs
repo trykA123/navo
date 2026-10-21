@@ -158,6 +158,10 @@ impl Query {
         };
     }
 
+    pub(super) fn set_order(&mut self, table: Table, order: Order) {
+        self.orders[table.index()] = order;
+    }
+
     pub(super) fn is_filtering(&self) -> bool {
         !self.text.is_empty() || self.scope != Scope::All
     }

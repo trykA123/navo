@@ -1,8 +1,11 @@
+use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusty_automotive::map::{MapError, index_map};
-use rusty_automotive::{MapModel, Mdf, parse_mdf, sniff_map, sniff_mdf};
+use rusty_automotive::{
+    Elf, ElfReader, IndexError, MapModel, Mdf, Watch, parse_mdf, sniff_elf, sniff_map, sniff_mdf,
+};
 use rusty_core::{Location, ProviderPath};
 
 use crate::prelude::*;
@@ -12,11 +15,13 @@ use crate::window_view::viewer::body::Host;
 
 pub(in crate::window_view::viewer) const MDF_LIMIT: u64 = 1024 * 1024;
 pub(in crate::window_view::viewer) const MAP_LIMIT: u64 = 64 * 1024 * 1024;
+pub(in crate::window_view::viewer) const ELF_LIMIT: u64 = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::window_view::viewer) enum Partner {
     Mdf,
     Map,
+    Elf,
 }
 
 impl Partner {
@@ -24,6 +29,7 @@ impl Partner {
         match self {
             Self::Mdf => ["mdf", "MDF"],
             Self::Map => ["map", "MAP"],
+            Self::Elf => ["elf", "ELF"],
         }
     }
 
@@ -31,6 +37,7 @@ impl Partner {
         match self {
             Self::Mdf => MDF_LIMIT,
             Self::Map => MAP_LIMIT,
+            Self::Elf => ELF_LIMIT,
         }
     }
 
@@ -38,6 +45,7 @@ impl Partner {
         match self {
             Self::Mdf => sniff_mdf(head),
             Self::Map => sniff_map(head).is_some(),
+            Self::Elf => sniff_elf(head),
         }
     }
 }
@@ -53,12 +61,14 @@ pub(in crate::window_view::viewer) enum SiblingProblem {
 pub(in crate::window_view::viewer) struct SiblingNames {
     pub mdf: Option<String>,
     pub map: Option<String>,
+    pub elf: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub(in crate::window_view::viewer) struct Siblings {
     pub mdf: Option<Mdf>,
     pub map: Option<Arc<MapModel>>,
+    pub elf: Option<Arc<Elf>>,
     pub names: SiblingNames,
     pub problems: Vec<SiblingProblem>,
 }
@@ -68,6 +78,16 @@ pub(in crate::window_view::viewer) struct Stem {
     folder: Location,
     stem: String,
     extension: String,
+    wants_elf: bool,
+}
+
+impl Stem {
+    pub(in crate::window_view::viewer) fn with_elf(self) -> Self {
+        Self {
+            wants_elf: true,
+            ..self
+        }
+    }
 }
 
 pub(in crate::window_view::viewer) fn stem_of(location: &Location) -> Option<Stem> {
@@ -81,6 +101,7 @@ pub(in crate::window_view::viewer) fn stem_of(location: &Location) -> Option<Ste
         folder,
         stem: stem.to_owned(),
         extension: extension.to_owned(),
+        wants_elf: false,
     })
 }
 
@@ -134,7 +155,31 @@ pub(in crate::window_view::viewer) fn load_siblings(
             Err(MapError::Read(_)) => siblings.problems.push(SiblingProblem::Unreadable { name }),
         }
     }
+    if stem.wants_elf && !cancel.load(Ordering::Relaxed) {
+        load_elf(hooks, stem, cancel, &mut siblings);
+    }
     siblings
+}
+
+fn load_elf(hooks: &FileHooks, stem: &Stem, cancel: &AtomicBool, siblings: &mut Siblings) {
+    let Some((name, bytes)) = find(hooks, stem, Partner::Elf, &mut siblings.problems) else {
+        return;
+    };
+    let reader = ElfReader::new(Cursor::new(bytes));
+    let mut watch = Watch {
+        cancel,
+        progress: &mut |_| {},
+    };
+    match reader.parse(&mut watch) {
+        Ok(elf) => {
+            siblings.elf = Some(Arc::new(elf));
+            siblings.names.elf = Some(name);
+        }
+        Err(IndexError::Cancelled) => {}
+        Err(IndexError::Read(_) | IndexError::Malformed(_)) => {
+            siblings.problems.push(SiblingProblem::Unreadable { name });
+        }
+    }
 }
 
 fn find(

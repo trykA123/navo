@@ -2,15 +2,17 @@ use super::claims::Claims;
 use super::files::{plain_section, unnumbered};
 use super::from_map::MapIndex;
 use super::{Builder, NameRef, Owner, Owners};
-use crate::MapModel;
 use crate::space::Kind;
+use crate::space::elf_kinds::ElfKinds;
+use crate::{Elf, MapModel};
 
 #[must_use]
-pub fn owners_of_map(map: &MapModel) -> Owners {
+pub fn owners_of_map(map: &MapModel, elf: Option<&Elf>) -> Owners {
+    let kinds = ElfKinds::new(elf);
     let index = MapIndex::new(map);
     let mut builder = Builder::default();
     for (at, section) in map.sections.iter().enumerate() {
-        let kind = Kind::of_name(unnumbered(&section.name));
+        let kind = kinds.of(section);
         if section.size > 0 && kind != Kind::Fill {
             claim_section(&index, &mut builder, map, (at, kind));
         }

@@ -64,6 +64,9 @@ impl MapView {
 
     fn move_by(&mut self, by: i64, cx: &mut Context<Self>) {
         self.go_address = None;
+        if self.focus_in == Focus::Content {
+            self.clear_pick(cx);
+        }
         match self.focus_in {
             Focus::Content => self.move_cursor(step(self.cursor, by, self.rows.len()), cx),
             Focus::Navigator => {
@@ -80,6 +83,7 @@ impl MapView {
     }
 
     pub(super) fn sort_by(&mut self, column: Column, cx: &mut Context<Self>) {
+        self.shows_sections_for_rich = false;
         self.query.sort_by(column);
         self.run_select(cx);
     }
@@ -95,6 +99,7 @@ impl MapView {
             return;
         }
         self.query.table = table;
+        self.shows_sections_for_rich = false;
         self.rows = std::sync::Arc::new(Vec::new());
         self.go_address = None;
         self.move_cursor(0, cx);

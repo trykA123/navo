@@ -470,7 +470,7 @@ fn the_inspector_opens_by_itself_in_rich_when_a_map_row_is_picked(cx: &mut TestA
     click(&rig, cx, ("map-row", 1));
     assert!(!visible(cx, rig.window, "map-inspector"));
     choose_rich(&rig, cx);
-    click(&rig, cx, ("map-row", 2));
+    click(&rig, cx, ("map-row", 0));
     assert!(visible(cx, rig.window, "map-inspector"));
 }
 

@@ -9,6 +9,7 @@ use rusty_ui::tokens::Mode;
 
 use crate::gallery::{Gallery, PAGES, Page};
 use crate::report;
+use crate::rich_page::RICH_PAGES;
 
 const SETTLE: Duration = Duration::from_millis(1500);
 
@@ -72,7 +73,7 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
             });
             cx.background_executor().timer(SETTLE).await;
             if mode == Mode::Light
-                && matches!(
+                && (matches!(
                     page,
                     Page::Tree
                         | Page::Table
@@ -82,12 +83,7 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
                         | Page::MapDrawers
                         | Page::PdfDrawers
                         | Page::MouseMarks
-                        | Page::ElfRich
-                        | Page::ElfNoStrip
-                        | Page::ElfNoBars
-                        | Page::ElfNoWho
-                        | Page::ElfNoRowBars
-                )
+                ) || RICH_PAGES.iter().any(|(shown, ..)| *shown == page))
             {
                 cx.update(|cx| drive(window, &gallery, cx));
                 cx.background_executor().timer(SETTLE).await;

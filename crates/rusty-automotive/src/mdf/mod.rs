@@ -54,6 +54,7 @@ pub struct Region {
     pub start_estimated: bool,
     pub size: u64,
     pub kind: Option<ChipKind>,
+    pub reserved: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -83,6 +84,7 @@ impl Mdf {
                     start_estimated: false,
                     size: map.size,
                     kind: Some(chip.kind),
+                    reserved: None,
                 })
             })
             .collect();
@@ -166,21 +168,24 @@ mod tests {
                     start: Some(0x8000_0000),
                     start_estimated: false,
                     size: 256,
-                    kind: Some(ChipKind::Rom)
+                    kind: Some(ChipKind::Rom),
+                    reserved: None,
                 },
                 Region {
                     name: "pflash1".into(),
                     start: Some(0x8000_0100),
                     start_estimated: false,
                     size: 128,
-                    kind: Some(ChipKind::Rom)
+                    kind: Some(ChipKind::Rom),
+                    reserved: None,
                 },
                 Region {
                     name: "dspr0".into(),
                     start: Some(0x2000_0000),
                     start_estimated: false,
                     size: 64,
-                    kind: Some(ChipKind::Ram)
+                    kind: Some(ChipKind::Ram),
+                    reserved: None,
                 },
             ]
         );

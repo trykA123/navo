@@ -323,9 +323,10 @@ fn tasking_split_layout_meets_rich_budgets() {
     assert_eq!(map.contributions.len(), 3300);
     measure_elf(&bytes, Some(&map), &mut timings);
     let table = parse_mdf(MDF).regions();
-    let (regions, region_time) =
-        timings.time("MAP/regions", || space::regions_for_map(&map, Some(&table)));
-    let (owners, owner_time) = timings.time("MAP/owners", || space::owners_of_map(&map));
+    let (regions, region_time) = timings.time("MAP/regions", || {
+        space::regions_for_map(&map, Some(&table), None)
+    });
+    let (owners, owner_time) = timings.time("MAP/owners", || space::owners_of_map(&map, None));
     measure_model(
         &mut timings,
         "MAP",

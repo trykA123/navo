@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 use elf_build::{EM_V800, Part, Spec, bss, build, data, parse, text};
 use rusty_automotive::mdf::{ChipKind, RegionTable, TableOrigin, parse_mdf};
 use rusty_automotive::space::{
-    Kind, OwnerRef, RegionSource, Regions, regions_for_elf, regions_for_map,
+    Kind, OwnerRef, RegionSource, Regions, owners_of_map, regions_for_elf, regions_for_map,
 };
 use rusty_automotive::{Elf, MapModel, Section, index_map};
 
@@ -217,7 +217,7 @@ fn space_regions_a_map_fill_entry_is_fill_and_not_used() {
         | .rodata.refill_table | 0xa004c140 | 0x10 | mc0_rom |\n\
         * Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n\
         | mc0_rom | 336 | 0 | 0 | 3760 | 4096 |\n";
-    let regions = regions_for_map(&map_of(body), None);
+    let regions = regions_for_map(&map_of(body), None, None);
     let rom = &regions.items[0];
     assert_eq!(rom.used, 0x110);
     assert_eq!(rom.by_kind[Kind::Fill.index()], 0x40);
@@ -447,7 +447,7 @@ fn space_regions_map_regions_estimate_a_missing_start_from_the_lowest_section() 
     let map = map_of(MAP);
     let table = RegionTable::from_map(&map);
     assert_eq!(table.origin, TableOrigin::Map);
-    let regions = regions_for_map(&map, None);
+    let regions = regions_for_map(&map, None, None);
     assert_eq!(regions.outside, 0);
     let names: Vec<_> = regions.items.iter().map(|r| r.name.as_str()).collect();
     assert_eq!(names, ["mc0_rom", "mc0_ram"]);
@@ -479,7 +479,7 @@ fn space_regions_map_start_comes_from_the_mdf_by_case_insensitive_name() {
         (rom.start, rom.start_estimated, rom.kind),
         (Some(0xA004_C000), false, Some(ChipKind::Rom))
     );
-    let regions = regions_for_map(&map, Some(&mdf));
+    let regions = regions_for_map(&map, Some(&mdf), None);
     assert_eq!(regions.items[1].chip, Some(ChipKind::Ram));
     assert_eq!(regions.items[1].start, Some(DSPR));
     assert!(!regions.items[1].start_estimated);
@@ -509,11 +509,11 @@ fn space_regions_map_without_a_memory_table_uses_the_mdf_then_clusters() {
     let map = map_of(body);
     assert!(map.regions.is_empty());
     let mdf = parse_mdf(MAP_MDF).regions();
-    let from_mdf = regions_for_map(&map, Some(&mdf));
+    let from_mdf = regions_for_map(&map, Some(&mdf), None);
     assert_eq!(from_mdf.items.len(), 2);
     assert_eq!(from_mdf.items[0].source, RegionSource::Mdf);
     assert_eq!(from_mdf.items[0].used, 0x100);
-    let clusters = regions_for_map(&map, None);
+    let clusters = regions_for_map(&map, None, None);
     assert_eq!(clusters.items.len(), 2);
     assert_eq!(clusters.items[0].source, RegionSource::Clusters);
     assert_eq!(clusters.items[0].total, None);
@@ -527,7 +527,7 @@ fn space_regions_map_section_without_a_region_falls_back_to_its_address() {
         | rom | 64 | 0 | 0 | 192 | 256 |\n";
     let map = map_of(body);
     let mdf = parse_mdf("space s 1 8\nchip rom 1 8 256 rom\nmap 1 0x100 256 1 0\n").regions();
-    let regions = regions_for_map(&map, Some(&mdf));
+    let regions = regions_for_map(&map, Some(&mdf), None);
     assert_eq!(regions.items[0].used, 0x40);
     assert_eq!(regions.outside, 1);
 }
@@ -582,4 +582,51 @@ fn space_regions_a_load_image_over_a_rom_copy_section_counts_once() {
     assert_eq!(flash.used, 0x140);
     assert_eq!(flash.by_kind[Kind::Rodata.index()], 0x40);
     assert_eq!(flash.by_kind[Kind::Data.index()], 0);
+}
+
+#[test]
+fn space_regions_map_reserved_bytes_are_not_free() {
+    let body = "* Locate Result\n| Section | Address | Size | Chip |\n\
+        | .text | 0xa004c000 | 0x100 | mc0_rom |\n\
+        * Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n\
+        | mc0_rom | 256 | 0 | 64 | 3776 | 4096 |\n";
+    let regions = regions_for_map(&map_of(body), None, None);
+    let rom = &regions.items[0];
+    assert_eq!((rom.used, rom.reserved), (256, Some(64)));
+    assert_eq!(rom.free(), Some(3776));
+    let from_mdf = regions_for_elf(
+        &elf_of(vec![text(ROM, 0x100)]),
+        Some(&RegionTable::merge(&map_of(body), &mdf_table())),
+    );
+    assert_eq!(from_mdf.items[0].reserved, Some(64));
+}
+
+#[test]
+fn space_regions_a_sibling_elf_decides_the_kind_of_a_map_section() {
+    let map = map_of(MAP);
+    let by_name = regions_for_map(&map, None, None);
+    assert_eq!(region(&by_name, "mc0_ram").by_kind[Kind::Other.index()], 8);
+    let elf = elf_of(vec![
+        text(ROM, 0x100),
+        Part {
+            name: ".mystery",
+            ..text(DSPR + 0x100, 8)
+        },
+        Part {
+            name: ".mystery",
+            ..text(LMU, 8)
+        },
+    ]);
+    let by_elf = regions_for_map(&map, None, Some(&elf));
+    let ram = region(&by_elf, "mc0_ram");
+    assert_eq!(ram.by_kind[Kind::Code.index()], 8);
+    assert_eq!(ram.by_kind[Kind::Other.index()], 0);
+    assert_eq!(ram.by_kind[Kind::Data.index()], 16);
+    let owners = owners_of_map(&map, Some(&elf));
+    let kinds: Vec<_> = owners
+        .in_span(DSPR + 0x100..DSPR + 0x108)
+        .iter()
+        .map(|owner| owner.kind)
+        .collect();
+    assert_eq!(kinds, [Kind::Code]);
 }

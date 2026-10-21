@@ -11,6 +11,7 @@ pub struct MemoryRegion {
     pub length: u64,
     pub used: u64,
     pub free: u64,
+    pub reserved: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

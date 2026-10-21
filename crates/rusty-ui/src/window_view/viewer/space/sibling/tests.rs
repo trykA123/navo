@@ -2,9 +2,12 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
+use rusty_automotive::elf_sample::demo;
 use rusty_core::Location;
 
-use super::{MAP_LIMIT, MDF_LIMIT, SiblingProblem, Siblings, Stem, load_siblings, stem_of};
+use super::{
+    ELF_LIMIT, MAP_LIMIT, MDF_LIMIT, SiblingProblem, Siblings, Stem, load_siblings, stem_of,
+};
 use crate::window_view::viewer::map::tests::SAMPLE;
 use crate::window_view::viewer::{FileHooks, Head};
 
@@ -31,6 +34,7 @@ enum Entry {
     Text(&'static str),
     Sized(u64),
     Broken(&'static str),
+    Binary(Vec<u8>),
 }
 
 #[derive(Default)]
@@ -54,6 +58,10 @@ impl Folder {
                     bytes: text.as_bytes().iter().copied().take(8192).collect(),
                     len: text.len() as u64,
                 }),
+                Some(Entry::Binary(bytes)) => Ok(Head {
+                    bytes: bytes.iter().copied().take(8192).collect(),
+                    len: bytes.len() as u64,
+                }),
                 Some(Entry::Sized(len)) => Ok(Head {
                     bytes: Vec::new(),
                     len: *len,
@@ -69,6 +77,7 @@ impl Folder {
                     Some(Entry::Text(text)) if text.len() as u64 <= limit => {
                         Ok(text.as_bytes().to_vec())
                     }
+                    Some(Entry::Binary(bytes)) if bytes.len() as u64 <= limit => Ok(bytes.clone()),
                     Some(Entry::Broken(_)) => Err("Cannot read it: device error".to_owned()),
                     Some(_) => Err("Too large to open here.".to_owned()),
                     None => Err("Cannot open it: not found".to_owned()),
@@ -85,6 +94,11 @@ impl Folder {
 
 fn stem(name: &str) -> Stem {
     stem_of(&Location::new(format!("/work/{name}")).expect("location")).expect("stem")
+}
+
+fn load_with_elf(folder: &Folder, open: &str) -> Siblings {
+    let stem = stem(open).with_elf();
+    load_siblings(&folder.hooks(), Some(&stem), &AtomicBool::new(false))
 }
 
 fn load(folder: &Folder, open: &str) -> Siblings {
@@ -235,4 +249,58 @@ fn a_cancelled_load_skips_the_map() {
 #[test]
 fn a_location_without_a_folder_has_no_stem() {
     assert!(stem_of(&Location::new("/").expect("root")).is_none());
+}
+
+fn tiny_elf() -> Vec<u8> {
+    demo().expect("the demo builds")
+}
+
+#[test]
+fn an_open_map_loads_the_elf_beside_it() {
+    let folder = Folder::default().with("demo.ELF", Entry::Binary(tiny_elf()));
+    let siblings = load_with_elf(&folder, "demo.map");
+    assert!(!siblings.elf.expect("elf").sections.is_empty());
+    assert_eq!(siblings.names.elf.as_deref(), Some("demo.ELF"));
+    assert_eq!(folder.reads(), [("/work/demo.ELF".to_owned(), ELF_LIMIT)]);
+}
+
+#[test]
+fn an_open_elf_never_loads_an_elf_sibling() {
+    let folder = Folder::default().with("demo.elf", Entry::Binary(tiny_elf()));
+    assert!(load(&folder, "demo.map").elf.is_none());
+    assert!(load_with_elf(&folder, "demo.elf").elf.is_none());
+    assert!(folder.reads().is_empty());
+}
+
+#[test]
+fn an_elf_sibling_that_is_not_an_elf_or_too_large_is_skipped_with_a_problem() {
+    let folder = Folder::default().with("demo.elf", Entry::Text("not an elf"));
+    let siblings = load_with_elf(&folder, "demo.map");
+    assert!(siblings.elf.is_none());
+    assert_eq!(
+        siblings.problems,
+        [SiblingProblem::NotRecognised {
+            name: "demo.elf".to_owned()
+        }]
+    );
+    let big = Folder::default().with("demo.elf", Entry::Sized(ELF_LIMIT + 1));
+    assert!(matches!(
+        load_with_elf(&big, "demo.map").problems.as_slice(),
+        [SiblingProblem::TooLarge { .. }]
+    ));
+}
+
+#[test]
+fn a_truncated_elf_sibling_counts_as_unreadable() {
+    let mut bytes = tiny_elf();
+    bytes.truncate(40);
+    let folder = Folder::default().with("demo.elf", Entry::Binary(bytes));
+    let siblings = load_with_elf(&folder, "demo.map");
+    assert!(siblings.elf.is_none());
+    assert_eq!(
+        siblings.problems,
+        [SiblingProblem::Unreadable {
+            name: "demo.elf".to_owned()
+        }]
+    );
 }

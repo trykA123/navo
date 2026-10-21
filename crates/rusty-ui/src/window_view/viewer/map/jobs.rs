@@ -53,11 +53,13 @@ impl MapView {
             IndexMessage::Parsed(Ok((loaded, rows))) => {
                 self.nav_items = nav::items(&loaded);
                 self.index = Index::Ready(loaded);
-                self.rows = Arc::new(rows);
+                let is_default = self.query == Query::default();
+                self.rows = Arc::new(if is_default { rows } else { Vec::new() });
                 self.move_cursor(0, cx);
-                if self.query != Query::default() {
+                if !is_default {
                     self.run_select(cx);
                 }
+                self.start_model(cx);
             }
             IndexMessage::Parsed(Err(error)) => {
                 self.index = Index::Failed(error.to_string().into());

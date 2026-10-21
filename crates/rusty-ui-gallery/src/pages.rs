@@ -109,6 +109,11 @@ pub enum Page {
     ElfNoBars,
     ElfNoWho,
     ElfNoRowBars,
+    MapRich,
+    MapNoStrip,
+    MapNoBars,
+    MapNoWho,
+    MapNoRowBars,
 }
 
 pub struct PageInfo {

@@ -2,9 +2,10 @@ use crate::elf::Elf;
 use crate::map::MapModel;
 use crate::mdf::{Region as Declared, RegionTable, TableOrigin};
 
+use super::elf_kinds::ElfKinds;
 use super::images::images;
 use super::kind::takes_no_address_space;
-use super::{Block, Kind, OwnerRef, Region, RegionSource, Regions, unnumbered};
+use super::{Block, Kind, OwnerRef, Region, RegionSource, Regions};
 
 const CLUSTER_GAP: u64 = 16 * 1024 * 1024;
 
@@ -45,11 +46,12 @@ pub fn regions_for_elf(elf: &Elf, table: Option<&RegionTable>) -> Regions {
 }
 
 #[must_use]
-pub fn regions_for_map(map: &MapModel, mdf: Option<&RegionTable>) -> Regions {
+pub fn regions_for_map(map: &MapModel, mdf: Option<&RegionTable>, elf: Option<&Elf>) -> Regions {
     let table = match mdf {
         Some(mdf) => RegionTable::merge(map, mdf),
         None => RegionTable::from_map(map),
     };
+    let kinds = ElfKinds::new(elf);
     let placed = map
         .sections
         .iter()
@@ -59,7 +61,7 @@ pub fn regions_for_map(map: &MapModel, mdf: Option<&RegionTable>) -> Regions {
             block: Block {
                 start: section.address,
                 size: section.size,
-                kind: Kind::of_name(unnumbered(&section.name)),
+                kind: kinds.of(section),
                 owner: OwnerRef::MapSection(at),
             },
             region: section.region.as_deref(),
@@ -104,6 +106,7 @@ fn open(declared: &Declared, source: RegionSource) -> Region {
         start_estimated: declared.start_estimated,
         total: Some(declared.size),
         chip: declared.kind,
+        reserved: declared.reserved,
         ..Region::new(declared.name.clone(), source)
     }
 }

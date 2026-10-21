@@ -3,11 +3,12 @@ use rusty_ui::settings::{Change, Field, Value, Values};
 use rusty_ui::window_view::ViewerBody;
 
 use crate::automotive_sample::{ELF_NAME, elf};
+use crate::map_sample::{MAP_NAME, map};
 use crate::pages::Page;
 use crate::structured_sample::binary_beside;
 
 const MDF_NAME: &str = "bcm_app.mdf";
-const MDF: &str = "\
+const ELF_MDF: &str = "\
 # invented memory definition for the gallery
 space linear 1 8
 chip pflash0 1 8 0x4000 rom
@@ -15,6 +16,24 @@ chip dsram0 2 8 0x2000 ram
 map 1 0x8000 0x4000 1 0
 map 1 0x20000000 0x2000 2 0
 ";
+const MAP_MDF: &str = "\
+# invented memory definition for the gallery map
+space linear 1 8
+chip mpe:pflash0 1 8 0x200000 rom
+chip mpe:dflash0 2 8 0x10000 rom
+chip mpe:dsram0 3 8 0x20000 ram
+chip mpe:psram0 4 8 0x10000 ram
+map 1 0x80000000 0x200000 1 0
+map 1 0xAF000000 0x10000 2 0
+map 1 0x70000000 0x20000 3 0
+map 1 0x70100000 0x10000 4 0
+";
+
+#[derive(Clone, Copy)]
+pub enum Sample {
+    Elf,
+    Map,
+}
 
 const PARTS: [Field; 4] = [
     Field::AutomotiveMemoryStrip,
@@ -23,12 +42,41 @@ const PARTS: [Field; 4] = [
     Field::AutomotiveRowBars,
 ];
 
-pub const ELF_PAGES: [(Page, Option<Field>); 5] = [
-    (Page::ElfRich, None),
-    (Page::ElfNoStrip, Some(Field::AutomotiveMemoryStrip)),
-    (Page::ElfNoBars, Some(Field::AutomotiveUsageBars)),
-    (Page::ElfNoWho, Some(Field::AutomotiveWhoUses)),
-    (Page::ElfNoRowBars, Some(Field::AutomotiveRowBars)),
+pub const RICH_PAGES: [(Page, Sample, Option<Field>); 10] = [
+    (Page::ElfRich, Sample::Elf, None),
+    (
+        Page::ElfNoStrip,
+        Sample::Elf,
+        Some(Field::AutomotiveMemoryStrip),
+    ),
+    (
+        Page::ElfNoBars,
+        Sample::Elf,
+        Some(Field::AutomotiveUsageBars),
+    ),
+    (Page::ElfNoWho, Sample::Elf, Some(Field::AutomotiveWhoUses)),
+    (
+        Page::ElfNoRowBars,
+        Sample::Elf,
+        Some(Field::AutomotiveRowBars),
+    ),
+    (Page::MapRich, Sample::Map, None),
+    (
+        Page::MapNoStrip,
+        Sample::Map,
+        Some(Field::AutomotiveMemoryStrip),
+    ),
+    (
+        Page::MapNoBars,
+        Sample::Map,
+        Some(Field::AutomotiveUsageBars),
+    ),
+    (Page::MapNoWho, Sample::Map, Some(Field::AutomotiveWhoUses)),
+    (
+        Page::MapNoRowBars,
+        Sample::Map,
+        Some(Field::AutomotiveRowBars),
+    ),
 ];
 
 fn values(off: Option<Field>) -> Values {
@@ -53,13 +101,21 @@ fn values(off: Option<Field>) -> Values {
     )
 }
 
-pub struct ElfRichPage {
+pub struct RichPage {
     body: Option<Box<dyn ViewerBody>>,
 }
 
-impl ElfRichPage {
-    pub fn new(off: Option<Field>, window: &mut Window, cx: &mut App) -> Self {
-        let body = binary_beside((ELF_NAME, elf()), (MDF_NAME, MDF), window, cx);
+impl RichPage {
+    pub fn new(sample: Sample, off: Option<Field>, window: &mut Window, cx: &mut App) -> Self {
+        let body = match sample {
+            Sample::Elf => binary_beside((ELF_NAME, elf()), (MDF_NAME, ELF_MDF), window, cx),
+            Sample::Map => binary_beside(
+                (MAP_NAME, map().as_bytes()),
+                (MDF_NAME, MAP_MDF),
+                window,
+                cx,
+            ),
+        };
         if let Some(body) = &body {
             body.show_parts(&values(off), cx);
         }
@@ -82,7 +138,7 @@ impl ElfRichPage {
     }
 }
 
-impl Render for ElfRichPage {
+impl Render for RichPage {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         match &self.body {
             Some(body) => div()

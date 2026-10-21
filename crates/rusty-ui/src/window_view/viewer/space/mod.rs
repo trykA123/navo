@@ -1,4 +1,5 @@
 mod bars;
+mod facts;
 mod layout;
 mod model;
 mod rich;
@@ -7,14 +8,16 @@ mod strip;
 mod switch;
 mod treemap;
 
-pub(in crate::window_view::viewer) use strip::kind_name;
 pub use strip::{Item, Label, MemoryStrip, Step, StripData, StripEvent};
 pub use treemap::{Treemap, TreemapEvent, TreemapGroup, TreemapPart};
 
 pub use bars::{FileBytes, FileBytesBar, FilePart, Legend, RegionHead, UsageBar, UsageLine};
+pub(in crate::window_view::viewer) use facts::{
+    Picked, pick_facts, share_cell, share_head, share_of,
+};
 pub(in crate::window_view::viewer) use layout::{RichLook, rich_layout};
 #[cfg(test)]
 pub(in crate::window_view::viewer) use model::tests::DEMO_MDF;
-pub(in crate::window_view::viewer) use model::{RichModel, build_model};
+pub(in crate::window_view::viewer) use model::{RichModel, build_map_model, build_model};
 pub(in crate::window_view::viewer) use rich::{Pick, RichHost, RichSpace};
 pub(in crate::window_view::viewer) use sibling::{Siblings, start_siblings, stem_of};

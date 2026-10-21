@@ -15,6 +15,7 @@ fn region(total: Option<u64>, blocks: &[(u64, u64, Kind)]) -> Region {
         start_estimated: false,
         total,
         chip: None,
+        reserved: None,
         used: 0,
         by_kind: [0; Kind::COUNT],
         blocks: Vec::new(),

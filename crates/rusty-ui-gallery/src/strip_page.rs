@@ -31,6 +31,7 @@ fn region(name: &str, total: u64, blocks: Vec<Block>) -> Region {
         start_estimated: false,
         total: Some(total),
         chip: None,
+        reserved: None,
         used: blocks.iter().map(|block| block.size).sum(),
         by_kind,
         blocks,

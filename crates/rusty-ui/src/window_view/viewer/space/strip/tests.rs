@@ -43,6 +43,7 @@ fn region() -> Region {
         start_estimated: false,
         total: Some(0x1_0000),
         chip: None,
+        reserved: None,
         used: 0xA000,
         by_kind: [0; Kind::COUNT],
         blocks,

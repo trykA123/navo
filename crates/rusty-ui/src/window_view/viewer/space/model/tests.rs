@@ -33,6 +33,7 @@ fn with_mdf() -> Siblings {
         names: SiblingNames {
             mdf: Some("app.mdf".into()),
             map: None,
+            elf: None,
         },
         ..Siblings::default()
     }

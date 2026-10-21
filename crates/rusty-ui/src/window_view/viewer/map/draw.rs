@@ -1,5 +1,5 @@
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{ClickEvent, Role, WeakEntity};
+use gpui_kit::{ClickEvent, Role, Stateful, WeakEntity};
 
 use super::keys::{CONTEXT, TABLE_CONTEXT};
 use super::text::{Check, flavor, row_label, status, summary};
@@ -11,6 +11,7 @@ use crate::primitives::{IconName, VirtualList, icon};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
+use crate::window_view::viewer::space::{RichLook, rich_layout};
 
 fn select_row(
     view: WeakEntity<MapView>,
@@ -21,6 +22,7 @@ fn select_row(
             window.focus(&view.focus, cx);
             view.focus_in = Focus::Content;
             view.go_address = None;
+            view.clear_pick(cx);
             view.move_cursor(row, cx);
             view.open_inspector_if_asked(cx);
         });
@@ -47,6 +49,7 @@ impl MapView {
             .when(row % 2 == 1, |line| line.bg(t.colors.zebra))
             .when(row == self.cursor, |line| line.bg(t.colors.hover))
             .children(self.row_cells(row, &cells, cx))
+            .children(self.share_cell(t, at))
             .on_click(select_row(view.clone(), row))
             .into_any_element()
     }
@@ -115,14 +118,18 @@ impl MapView {
     }
 
     fn checks(&self) -> Vec<Check> {
-        match &self.index {
+        let mut checks = match &self.index {
             Index::Ready(loaded) => status(loaded),
             Index::Failed(error) => vec![Check {
                 text: error.to_string(),
                 is_bad: true,
             }],
             Index::Running => Vec::new(),
-        }
+        };
+        let (picked, outside) = self.rich_checks();
+        checks.splice(0..0, picked);
+        checks.extend(outside);
+        checks
     }
 
     fn status_line(&self, t: &Theme) -> impl IntoElement {
@@ -218,22 +225,53 @@ impl MapView {
     }
 }
 
-impl Render for MapView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = tokens::current(cx).clone();
-        self.measure(window, &t);
-        self.ensure_columns(window, cx);
-        let table = div()
+impl MapView {
+    fn table_view(&self, t: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        let is_rich = self.is_rich();
+        let head = div().flex_1().min_w_0().children(self.column_head());
+        let head = match self.share_head(t) {
+            Some(share) => div().flex().flex_none().child(head).child(share),
+            None => div().child(head),
+        };
+        div()
             .id("map-table")
             .relative()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
-            .child(self.table_bar(&t, cx))
-            .children(self.column_head())
+            .child(self.table_bar(t, cx))
+            .child(head)
             .child(self.list(cx))
-            .child(self.drawers(&t, window, cx));
+            .when(!is_rich, |table| table.child(self.drawers(t, window, cx)))
+    }
+
+    fn rich_body(&self, table: AnyElement, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let t = &tokens::current(cx).clone();
+        let look = RichLook {
+            parts: self.layout,
+            width: window.viewport_size().width,
+            file_bytes: None,
+            table,
+        };
+        let drawers = self.drawers(t, window, cx);
+        div()
+            .relative()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(rich_layout(t, &self.rich, look, cx))
+            .child(drawers)
+    }
+}
+
+impl Render for MapView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = tokens::current(cx).clone();
+        self.measure(window, &t);
+        self.ensure_columns(window, cx);
+        let table = self.table_view(&t, window, cx);
         let text = &self.query.text;
         let filter = (!text.is_empty())
             .then(|| filter_bar(&t, self.query.text.clone().into(), self.rows.len()));
@@ -244,10 +282,23 @@ impl Render for MapView {
             .flex()
             .flex_col()
             .flex_1()
-            .min_h_0()
-            .child(table)
-            .children(self.scope_bar(&t))
-            .children(filter);
+            .min_h_0();
+        let body = if self.is_rich() {
+            let table = div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_h_0()
+                .child(table)
+                .children(self.scope_bar(&t))
+                .children(filter)
+                .into_any_element();
+            body.child(self.rich_body(table, window, cx))
+        } else {
+            body.child(table)
+                .children(self.scope_bar(&t))
+                .children(filter)
+        };
         let root = div().id("map-view").key_context(CONTEXT);
         Self::keys(root, cx)
             .flex()

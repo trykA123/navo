@@ -304,8 +304,8 @@ const MAP: &str = "* Link Result
 ";
 
 fn map_groups(map: &MapModel, region: &str, grouping: Grouping) -> Vec<Group> {
-    let found = owners_of_map(map);
-    let regions = regions_for_map(map, None);
+    let found = owners_of_map(map, None);
+    let regions = regions_for_map(map, None, None);
     group(
         &found,
         Origin::Map(map),
@@ -318,8 +318,8 @@ fn map_groups(map: &MapModel, region: &str, grouping: Grouping) -> Vec<Group> {
 fn space_groups_map_owners_come_from_located_sections_with_objects() {
     let map = map_of(MAP);
     assert_eq!(map.contributions.len(), 6);
-    let found = owners_of_map(&map);
-    let regions = regions_for_map(&map, None);
+    let found = owners_of_map(&map, None);
+    let regions = regions_for_map(&map, None, None);
     for region in &regions.items {
         let inside = found.in_span(region.span().unwrap());
         let total: u64 = inside.iter().map(|owner| owner.size).sum();
@@ -392,7 +392,7 @@ fn space_groups_map_object_and_section_groupings() {
 #[test]
 fn space_groups_fill_never_forms_a_group() {
     let map = map_of(MAP);
-    let regions = regions_for_map(&map, None);
+    let regions = regions_for_map(&map, None, None);
     let rom = region_named(&regions, "mc0_rom");
     assert_eq!(rom.by_kind[Kind::Fill.index()], 0x40);
     for grouping in Grouping::ALL {
@@ -423,7 +423,7 @@ fn space_groups_fill_never_forms_a_group() {
 #[test]
 fn space_groups_availability_follows_the_data() {
     let map = map_of(MAP);
-    let found = owners_of_map(&map);
+    let found = owners_of_map(&map, None);
     assert_eq!(
         available(&found, ROM..ROM + 0x400),
         [true, false, true, true]
@@ -460,8 +460,8 @@ fn space_groups_default_takes_the_first_grouping_with_more_than_one_group() {
          * Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n\
          | mc0_rom | 48 | 0 | 0 | 976 | 1024 |\n",
     );
-    let found = owners_of_map(&one_module);
-    let regions = regions_for_map(&one_module, None);
+    let found = owners_of_map(&one_module, None);
+    let regions = regions_for_map(&one_module, None, None);
     let origin = Origin::Map(&one_module);
     let rom = &regions.items[0];
     assert_eq!(
@@ -656,9 +656,9 @@ fn space_groups_a_map_rom_copy_belongs_to_its_module_as_rodata() {
          * Memory Usage\n| Memory | Code | Data | Reserved | Free | Total |\n\
          | mc0_rom | 16 | 0 | 0 | 1008 | 1024 |\n",
     );
-    let regions = regions_for_map(&map, None);
+    let regions = regions_for_map(&map, None, None);
     assert_eq!(regions.items[0].by_kind[Kind::Rodata.index()], 0x10);
-    let found = owners_of_map(&map);
+    let found = owners_of_map(&map, None);
     let groups = group(
         &found,
         Origin::Map(&map),

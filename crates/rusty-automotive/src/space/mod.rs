@@ -1,3 +1,4 @@
+mod elf_kinds;
 mod groups;
 mod images;
 mod kind;
@@ -52,6 +53,7 @@ pub struct Region {
     pub start_estimated: bool,
     pub total: Option<u64>,
     pub chip: Option<ChipKind>,
+    pub reserved: Option<u64>,
     pub used: u64,
     pub by_kind: [u64; Kind::COUNT],
     pub blocks: Vec<Block>,
@@ -67,7 +69,8 @@ pub struct Regions {
 impl Region {
     #[must_use]
     pub fn free(&self) -> Option<u64> {
-        self.total.map(|total| total.saturating_sub(self.used))
+        let taken = self.used.saturating_add(self.reserved.unwrap_or_default());
+        self.total.map(|total| total.saturating_sub(taken))
     }
 
     #[must_use]
@@ -91,6 +94,7 @@ impl Region {
             start_estimated: false,
             total: None,
             chip: None,
+            reserved: None,
             used: 0,
             by_kind: [0; Kind::COUNT],
             blocks: Vec::new(),

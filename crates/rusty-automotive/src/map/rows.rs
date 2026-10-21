@@ -20,6 +20,7 @@ pub(super) fn memory(row: &Row<'_>) -> Parsed<(MemoryRegion, bool)> {
             length,
             used,
             free,
+            reserved,
         },
         consistent,
     ))
