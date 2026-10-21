@@ -26,7 +26,7 @@ impl Frecency {
             (WEEK_MS, WEIGHT_WEEK),
         ]
         .into_iter()
-        .find_map(|(limit, factor)| (age <= limit).then_some(factor))
+        .find_map(|(limit, factor)| (age < limit).then_some(factor))
         .unwrap_or(WEIGHT_OLDER);
         self.score * factor
     }

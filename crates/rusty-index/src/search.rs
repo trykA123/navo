@@ -1,7 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
-use nucleo_matcher::{Utf32Str, chars::graphemes};
 use rayon::prelude::*;
 
 use crate::fuzzy::{Fuzzy, Match};
@@ -187,13 +186,7 @@ fn score_terms(matchers: &mut [Fuzzy], text: &str) -> Option<Match> {
 }
 
 fn name_offset(path: &str, name: &str) -> u32 {
-    let mut buffer = Vec::new();
-    let text = Utf32Str::new(path, &mut buffer);
-    let name_len = match text {
-        Utf32Str::Ascii(_) => name.len(),
-        Utf32Str::Unicode(_) => graphemes(name).count(),
-    };
-    (text.len() - name_len) as u32
+    (path.chars().count() - name.chars().count()) as u32
 }
 
 #[cfg(test)]

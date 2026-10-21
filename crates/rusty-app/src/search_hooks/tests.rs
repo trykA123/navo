@@ -75,3 +75,19 @@ fn with_remember_off_nothing_is_recorded_and_turning_it_on_resumes() {
     (hooks.record_visit)("/home/docs", true);
     assert_eq!((hooks.frecent)(10).len(), 1);
 }
+
+#[test]
+fn with_remember_off_stored_history_is_neither_used_nor_shown() {
+    let remember = remembering();
+    let hooks = hooks(Some(shared()), remember.clone());
+    (hooks.record_visit)("/home/docs", true);
+    (hooks.record_command)("files.refresh");
+    remember.set(false);
+    assert!((hooks.frecent)(10).is_empty());
+    assert!((hooks.command_use)().is_empty());
+    assert!((hooks.recent_commands)(10).is_empty());
+    remember.set(true);
+    assert_eq!((hooks.frecent)(10).len(), 1);
+    assert_eq!((hooks.command_use)().len(), 1);
+    assert_eq!((hooks.recent_commands)(10).len(), 1);
+}

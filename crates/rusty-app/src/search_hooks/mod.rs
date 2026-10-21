@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use rusty_ui::window_view::{Frecent, RecentCommands, SearchHooks};
+use rusty_ui::window_view::{CommandUse, Frecent, Frecents, RecentCommands, SearchHooks};
 
 use crate::files::{SharedDb, lock, now_ms};
 
@@ -42,21 +42,48 @@ fn recent_commands(db: SharedDb, remember: Remember) -> RecentCommands {
     })
 }
 
+fn command_use(db: SharedDb, remember: Remember) -> CommandUse {
+    Arc::new(move || {
+        if !remember.is_on() {
+            return Vec::new();
+        }
+        lock(&db)
+            .command_use(COMMAND_USE_LIMIT, now_ms())
+            .inspect_err(|error| report("loading command use", error))
+            .unwrap_or_default()
+    })
+}
+
+fn frecent(db: SharedDb, remember: Remember) -> Frecents {
+    Arc::new(move |limit| {
+        if !remember.is_on() {
+            return Vec::new();
+        }
+        lock(&db)
+            .frecent(limit, now_ms())
+            .inspect_err(|error| report("loading visits", error))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|found| Frecent {
+                location: found.location,
+                is_folder: found.is_folder,
+                weight: found.weight,
+            })
+            .collect()
+    })
+}
+
 pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
     let Some(db) = db else {
         return SearchHooks::none();
     };
-    let (weights, record, places, visit, clear) =
-        (db.clone(), db.clone(), db.clone(), db.clone(), db.clone());
+    let (record, visit, clear) = (db.clone(), db.clone(), db.clone());
+    let command_use = command_use(db.clone(), remember.clone());
+    let frecent = frecent(db.clone(), remember.clone());
     let recent_commands = recent_commands(db, remember.clone());
     let (remember_command, remember_visit) = (remember.clone(), remember);
     SearchHooks {
-        command_use: Arc::new(move || {
-            lock(&weights)
-                .command_use(COMMAND_USE_LIMIT, now_ms())
-                .inspect_err(|error| report("loading command use", error))
-                .unwrap_or_default()
-        }),
+        command_use,
         recent_commands,
         record_command: Arc::new(move |name| {
             if !remember_command.is_on() {
@@ -65,19 +92,7 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
             let saved = lock(&record).record_command(name, now_ms());
             let _ = saved.inspect_err(|error| report("saving command use", error));
         }),
-        frecent: Arc::new(move |limit| {
-            lock(&places)
-                .frecent(limit, now_ms())
-                .inspect_err(|error| report("loading visits", error))
-                .unwrap_or_default()
-                .into_iter()
-                .map(|found| Frecent {
-                    location: found.location,
-                    is_folder: found.is_folder,
-                    weight: found.weight,
-                })
-                .collect()
-        }),
+        frecent,
         record_visit: Arc::new(move |location, is_folder| {
             if !remember_visit.is_on() {
                 return;

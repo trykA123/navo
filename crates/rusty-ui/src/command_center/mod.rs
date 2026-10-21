@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
 mod commands_source;
+mod context_name;
 mod file_sources;
 mod query;
 pub mod rank;

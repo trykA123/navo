@@ -1,4 +1,4 @@
-use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::pattern::{Atom, AtomKind, CaseMatching, Normalization};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9,7 +9,7 @@ pub struct Match {
 
 pub struct Fuzzy {
     matcher: Matcher,
-    pattern: Pattern,
+    atoms: Vec<Atom>,
     empty: bool,
     buf: Vec<char>,
 }
@@ -22,7 +22,7 @@ impl Fuzzy {
         }
         Self {
             matcher: Matcher::new(config),
-            pattern: Pattern::parse(query, CaseMatching::Smart, Normalization::Smart),
+            atoms: plain(query),
             empty: query.trim().is_empty(),
             buf: Vec::new(),
         }
@@ -35,15 +35,37 @@ impl Fuzzy {
                 indices: Vec::new(),
             });
         }
-        let text = Utf32Str::new(haystack, &mut self.buf);
+        let text = if haystack.is_ascii() {
+            Utf32Str::Ascii(haystack.as_bytes())
+        } else {
+            self.buf.clear();
+            self.buf.extend(haystack.chars());
+            Utf32Str::Unicode(&self.buf)
+        };
         let mut indices = Vec::new();
-        let score = self
-            .pattern
-            .indices(text, &mut self.matcher, &mut indices)?;
+        let mut score = 0u32;
+        for atom in &self.atoms {
+            score += u32::from(atom.indices(text, &mut self.matcher, &mut indices)?);
+        }
         indices.sort_unstable();
         indices.dedup();
         Some(Match { score, indices })
     }
+}
+
+fn plain(query: &str) -> Vec<Atom> {
+    query
+        .split_whitespace()
+        .map(|term| {
+            Atom::new(
+                term,
+                CaseMatching::Smart,
+                Normalization::Smart,
+                AtomKind::Fuzzy,
+                false,
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

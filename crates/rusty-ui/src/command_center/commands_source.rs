@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use gpui_kit::SharedString;
 use rusty_index::fuzzy::Fuzzy;
 use rusty_l10n::tr;
 
-use super::query::Term;
+use super::context_name::context_name;
+use super::query::{Scope, Term};
 use super::rank;
 use super::source::{Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target};
 use crate::commands::{ArgKind, CommandEntry, GLOBAL, Keymap, is_within, shown};
@@ -15,6 +16,7 @@ pub struct CommandRow {
     pub name: &'static str,
     pub action: &'static str,
     pub label: String,
+    pub context: String,
     pub shortcut: Option<String>,
     pub arg: Option<ArgKind>,
 }
@@ -25,7 +27,7 @@ impl CommandRow {
             source: "commands",
             group: Group::Commands,
             title: SharedString::from(self.label.clone()),
-            detail: SharedString::default(),
+            detail: SharedString::from(self.context.clone()),
             score,
             indices,
             target: self.arg.map_or(Target::Action(self.action), |kind| {
@@ -62,10 +64,9 @@ impl CommandsSnapshot {
                     name: entry.spec.name,
                     action,
                     label: tr(entry.spec.label),
-                    shortcut: keymap
-                        .keys_of(entry.spec.name)
-                        .find(|key| shown(key).is_some())
-                        .map(str::to_owned),
+                    context: context_name(entry.spec.context)
+                        .unwrap_or_else(|| entry.spec.context.to_owned()),
+                    shortcut: shortcut_of(entry, stack, keymap),
                     arg: entry.arg,
                 })
             })
@@ -88,6 +89,20 @@ impl CommandsSnapshot {
     }
 }
 
+fn shortcut_of(entry: &CommandEntry, stack: &[&str], keymap: &Keymap) -> Option<String> {
+    let mut binds: Vec<_> = keymap
+        .binds()
+        .iter()
+        .filter(|bind| bind.spec.name == entry.spec.name && in_scope(&bind.context, stack))
+        .collect();
+    binds.sort_by_key(|bind| bind.context != entry.spec.context);
+    binds
+        .into_iter()
+        .flat_map(|bind| bind.keys.iter())
+        .find(|key| shown(key).is_some())
+        .cloned()
+}
+
 fn in_scope(context: &str, stack: &[&str]) -> bool {
     context == GLOBAL || stack.iter().any(|at| is_within(at, context))
 }
@@ -96,6 +111,7 @@ fn in_scope(context: &str, stack: &[&str]) -> bool {
 pub struct CommandsSource {
     snapshot: Arc<CommandsSnapshot>,
     uses: Option<UseWeights>,
+    weights: Arc<OnceLock<HashMap<String, f64>>>,
 }
 
 pub type UseWeights = Arc<dyn Fn() -> Vec<(String, f64)> + Send + Sync>;
@@ -114,6 +130,7 @@ impl CommandsSource {
         Self {
             snapshot,
             uses: None,
+            weights: Arc::default(),
         }
     }
 
@@ -122,18 +139,30 @@ impl CommandsSource {
         Self {
             snapshot,
             uses: Some(uses),
+            weights: Arc::default(),
         }
+    }
+
+    fn weights(&self) -> &HashMap<String, f64> {
+        self.weights.get_or_init(|| {
+            self.uses
+                .as_ref()
+                .map(|load| load().into_iter().collect())
+                .unwrap_or_default()
+        })
     }
 }
 
-fn words(request: &Request) -> Option<String> {
+pub(super) fn words(request: &Request) -> Option<String> {
     if request.query.path.is_some() {
         return None;
     }
+    let scoped = request.query.scope == Scope::Commands;
     let mut words = Vec::new();
     for term in &request.query.terms {
         match term {
             Term::Name(text) => words.push(text.as_str()),
+            Term::Path(text) if scoped => words.push(text.as_str()),
             Term::Path(_) | Term::Ext(_) => return None,
         }
     }
@@ -158,11 +187,7 @@ impl ResultSource for CommandsSource {
             return;
         };
         let mut fuzzy = Fuzzy::new(&text, false);
-        let weights: HashMap<String, f64> = self
-            .uses
-            .as_ref()
-            .map(|load| load().into_iter().collect())
-            .unwrap_or_default();
+        let weights = self.weights();
         for row in &self.snapshot.rows {
             if cancel.is_cancelled() {
                 return;

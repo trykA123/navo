@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::command_center::commands_source::words;
+use crate::command_center::context_name::context_name;
 use crate::command_center::{
     ArgKind, Cancel, CommandsSnapshot, CommandsSource, Group, Hit, HitSink, Query, Request,
     ResultSource, Target,
@@ -144,4 +146,80 @@ fn a_command_used_often_scores_higher_than_the_same_unused_one() {
         find(&rivals, "Mark all").map(|hit| hit.score),
         find(&unused, "Mark all").map(|hit| hit.score)
     );
+}
+
+#[test]
+fn a_command_row_names_its_context_in_plain_words() {
+    let files = run(&all_visible(), "refresh", &Cancel::new());
+    assert_eq!(
+        find(&files, "Refresh").map(|hit| &*hit.detail),
+        Some("File list")
+    );
+    let viewer = CommandsSource::new(snapshot_of(&entries(), &["Workspace", "Pdf"]));
+    let found = run(&viewer, "go to line", &Cancel::new());
+    assert_eq!(
+        find(&found, "Go to line").map(|hit| &*hit.detail),
+        Some("Viewer")
+    );
+}
+
+#[test]
+fn every_palette_command_has_a_plain_context_name() {
+    let mut missing: Vec<&str> = entries()
+        .iter()
+        .filter(|entry| entry.in_palette)
+        .map(|entry| entry.spec.context)
+        .filter(|context| context_name(context).is_none())
+        .collect();
+    missing.sort_unstable();
+    missing.dedup();
+    assert!(missing.is_empty(), "no plain name for {missing:?}");
+}
+
+#[test]
+fn the_shown_key_is_bound_in_the_commands_own_context() {
+    let text = "[[bind]]\ncommand = \"viewer.go_to_line\"\nkeys = [\"ctrl-g\"]\ncontext = \"Paged\"\n\n\
+                [[bind]]\ncommand = \"viewer.go_to_line\"\nkeys = [\"ctrl-l\"]\ncontext = \"Tree\"\n";
+    let keymap = Keymap::parse(text).expect("a valid keymap");
+    let stack = ["Workspace", "Tree"];
+    let snapshot = Arc::new(CommandsSnapshot::build(&entries(), &stack, &keymap));
+    let hits = run(&CommandsSource::new(snapshot), "go to line", &Cancel::new());
+    let shortcut = find(&hits, "Go to line").and_then(|hit| hit.shortcut.clone());
+    assert_eq!(shortcut.as_deref(), Some("ctrl-l"));
+    let stack = ["Workspace", "Image"];
+    let snapshot = Arc::new(CommandsSnapshot::build(&entries(), &stack, &keymap));
+    let hits = run(&CommandsSource::new(snapshot), "go to line", &Cancel::new());
+    let shortcut = find(&hits, "Go to line").and_then(|hit| hit.shortcut.clone());
+    assert_eq!(shortcut, None);
+}
+
+#[test]
+fn a_slash_in_a_commands_query_is_plain_name_text() {
+    let words = |input: &str| {
+        words(&Request {
+            query: Query::parse(input),
+            generation: 1,
+            here: None,
+            limit: 100,
+        })
+    };
+    assert_eq!(words(">save/as"), Some("save/as".to_owned()));
+    assert_eq!(words(">open src\\main"), Some("open src\\main".to_owned()));
+    assert_eq!(words("save/as"), None);
+    assert_eq!(words(">save ext:rs"), None);
+}
+
+#[test]
+fn use_weights_load_once_per_source() {
+    let loads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = loads.clone();
+    let weights: Arc<dyn Fn() -> Vec<(String, f64)> + Send + Sync> = Arc::new(move || {
+        counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Vec::new()
+    });
+    let source = CommandsSource::with_use(snapshot_of(&entries(), &FILES), weights);
+    run(&source, "r", &Cancel::new());
+    run(&source, "re", &Cancel::new());
+    run(&source, "ref", &Cancel::new());
+    assert_eq!(loads.load(std::sync::atomic::Ordering::SeqCst), 1);
 }

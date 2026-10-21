@@ -15,12 +15,12 @@ fn weight(score: f64, age_ms: i64) -> f64 {
 #[test]
 fn weight_tiers_follow_the_zoxide_rule() {
     assert_eq!(weight(2.0, 0), 8.0);
-    assert_eq!(weight(2.0, HOUR), 8.0);
-    assert_eq!(weight(2.0, HOUR + 1), 4.0);
-    assert_eq!(weight(2.0, DAY), 4.0);
-    assert_eq!(weight(2.0, DAY + 1), 1.0);
-    assert_eq!(weight(2.0, 7 * DAY), 1.0);
-    assert_eq!(weight(2.0, 7 * DAY + 1), 0.5);
+    assert_eq!(weight(2.0, HOUR - 1), 8.0);
+    assert_eq!(weight(2.0, HOUR), 4.0);
+    assert_eq!(weight(2.0, DAY - 1), 4.0);
+    assert_eq!(weight(2.0, DAY), 1.0);
+    assert_eq!(weight(2.0, 7 * DAY - 1), 1.0);
+    assert_eq!(weight(2.0, 7 * DAY), 0.5);
 }
 
 #[test]

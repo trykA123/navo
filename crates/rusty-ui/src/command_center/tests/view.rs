@@ -462,6 +462,27 @@ fn highlights_cover_matched_characters_as_byte_runs() {
 }
 
 #[test]
+fn highlights_land_on_the_matched_letters_after_combining_marks_and_emoji() {
+    let cases = [
+        ("re\u{301}sume\u{301}.txt", "sum"),
+        (
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467} family.txt",
+            "fam",
+        ),
+    ];
+    for (name, query) in cases {
+        let found = rusty_index::fuzzy::Fuzzy::new(query, false)
+            .score(name)
+            .expect("match");
+        let shown: String = highlight_ranges(name, &found.indices)
+            .into_iter()
+            .map(|range| &name[range])
+            .collect();
+        assert_eq!(shown, query);
+    }
+}
+
+#[test]
 fn the_panel_centres_on_the_field_and_stays_inside_the_window() {
     let field = Bounds::new(point(px(380.), px(7.)), size(px(520.), px(32.)));
     let frame = place(field, size(px(1280.), px(720.)));

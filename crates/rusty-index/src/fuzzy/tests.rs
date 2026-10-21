@@ -49,3 +49,52 @@ fn empty_query_matches_everything_with_zero() {
     assert_eq!(m.score, 0);
     assert!(m.indices.is_empty());
 }
+
+fn picked(text: &str, indices: &[u32]) -> String {
+    let wanted: Vec<char> = text
+        .chars()
+        .enumerate()
+        .filter(|(at, _)| indices.contains(&u32::try_from(*at).unwrap()))
+        .map(|(_, letter)| letter)
+        .collect();
+    wanted.into_iter().collect()
+}
+
+#[test]
+fn indices_are_char_positions_after_a_combining_mark() {
+    let name = "re\u{301}sume\u{301}.txt";
+    let mut f = Fuzzy::new("sum", false);
+    let m = f.score(name).expect("match");
+    assert_eq!(picked(name, &m.indices), "sum");
+}
+
+#[test]
+fn indices_are_char_positions_after_an_emoji_sequence() {
+    let name = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467} family.txt";
+    let mut f = Fuzzy::new("fam", false);
+    let m = f.score(name).expect("match");
+    assert_eq!(picked(name, &m.indices), "fam");
+}
+
+#[test]
+fn operator_characters_match_literally() {
+    let mut bang = Fuzzy::new("!jobs", false);
+    assert!(bang.score("!jobs.txt").is_some());
+    assert!(bang.score("jobs.txt").is_none());
+    let mut caret = Fuzzy::new("^read", false);
+    assert!(caret.score("^readme").is_some());
+    assert!(caret.score("readme").is_none());
+    let mut quote = Fuzzy::new("'a", false);
+    assert!(quote.score("'a").is_some());
+    assert!(quote.score("a").is_none());
+    let mut dollar = Fuzzy::new("md$", false);
+    assert!(dollar.score("a.md$").is_some());
+    assert!(dollar.score("a.md").is_none());
+}
+
+#[test]
+fn every_term_must_match() {
+    let mut f = Fuzzy::new("tab new", false);
+    assert!(f.score("New tab").is_some());
+    assert!(f.score("New window").is_none());
+}
