@@ -20,7 +20,7 @@ impl FerriteWindow {
         let Some(open) = self.command_center.open.as_mut() else {
             return;
         };
-        if open.search.shown != open.search.generation() {
+        if open.search.settled != open.search.generation() {
             open.run_when_shown = Some(way);
             return;
         }

@@ -94,9 +94,14 @@ fn a_bad_path_keeps_the_box_open_with_the_error(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn escape_leaves_the_step_with_the_query_then_closes(cx: &mut TestAppContext) {
+fn escape_in_a_step_clears_then_leaves_then_clears_then_closes(cx: &mut TestAppContext) {
     let rig = rig(cx);
     ask(cx, &rig, "go to folder");
+    rig.type_query(cx, "/dest/pro");
+    rig.press(cx, "escape");
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.query(cx), "");
+    assert!(rig.label(cx, "command-center-chip").is_some());
     rig.press(cx, "escape");
     assert!(rig.is_open(cx));
     assert!(rig.label(cx, "command-center-chip").is_none());
@@ -107,7 +112,45 @@ fn escape_leaves_the_step_with_the_query_then_closes(cx: &mut TestAppContext) {
             .any(|row| row.starts_with("Go to folder"))
     );
     rig.press(cx, "escape");
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.query(cx), "");
+    rig.press(cx, "escape");
     assert!(!rig.is_open(cx));
+}
+
+#[gpui_kit::test]
+fn enter_on_an_empty_step_shows_what_to_type_and_runs_nothing(cx: &mut TestAppContext) {
+    let rig = rig_with_projects(cx);
+    let start = rig.here(cx);
+    ask(cx, &rig, "go to folder");
+    rig.press(cx, "enter");
+    cx.run_until_parked();
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.error(cx).as_deref(), Some("Type a folder"));
+    assert_eq!(rig.here(cx), start);
+    rig.press(cx, "escape");
+    rig.press(cx, "escape");
+    rig.press(cx, "escape");
+    ask(cx, &rig, "mark by pattern…");
+    rig.press(cx, "enter");
+    assert!(rig.is_open(cx));
+    assert_eq!(rig.error(cx).as_deref(), Some("Type a pattern"));
+    assert_eq!(rig.marked(cx), 0);
+}
+
+#[gpui_kit::test]
+fn alt_enter_and_the_location_keys_do_nothing_in_a_step(cx: &mut TestAppContext) {
+    let rig = rig_with_projects(cx);
+    let (start, tabs) = (rig.here(cx), rig.tab_count(cx));
+    ask(cx, &rig, "go to folder");
+    rig.type_query(cx, &typed("projects"));
+    for key in ["alt-enter", "ctrl-enter", "shift-enter", "ctrl-shift-c"] {
+        rig.press(cx, key);
+        cx.run_until_parked();
+        assert!(rig.is_open(cx), "{key}");
+        assert_eq!(rig.here(cx), start, "{key}");
+        assert_eq!(rig.tab_count(cx), tabs, "{key}");
+    }
 }
 
 #[gpui_kit::test]

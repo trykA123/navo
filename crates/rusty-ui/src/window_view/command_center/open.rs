@@ -6,6 +6,7 @@ use rusty_l10n::t;
 use super::super::FerriteWindow;
 use super::super::hand_off::look_up;
 use super::super::path_edit::{is_folder, last_name};
+use crate::command_center::{Row, Target};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 
@@ -32,7 +33,7 @@ impl Way {
     }
 
     pub(super) fn runs_commands(self) -> bool {
-        matches!(self, Self::Open | Self::NewTab)
+        self == Self::Open
     }
 }
 
@@ -47,7 +48,25 @@ fn split(location: &Location) -> Option<(Location, String)> {
     Some((location.parent()?, last_name(location)?))
 }
 
+fn is_location(row: Option<&Row>) -> bool {
+    matches!(
+        row,
+        Some(Row::TopHit(hit) | Row::Hit(hit))
+            if matches!(hit.target, Target::Open { .. } | Target::GoTo(_))
+    )
+}
+
 impl FerriteWindow {
+    pub(super) fn click_way(&self, modifiers: Modifiers) -> Way {
+        let Some(open) = self.command_center.open.as_ref() else {
+            return Way::Open;
+        };
+        if open.step.is_some() || !is_location(open.selection.row(&open.rows)) {
+            return Way::Open;
+        }
+        Way::of_click(modifiers)
+    }
+
     pub(super) fn open_place(
         &mut self,
         (place, way): (Place, Way),
@@ -77,6 +96,10 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         let Place { location, folder } = place;
+        if self.prompt.is_some() || self.browser.pending().is_some() || self.is_multi_rename_open()
+        {
+            return;
+        }
         let folder = match found {
             Some(Err(error)) if error.kind == FsErrorKind::NotFound => {
                 let path = location.as_str().to_owned();

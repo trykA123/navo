@@ -10,6 +10,9 @@ use std::sync::Arc;
 
 use gpui_kit::{Bounds, FocusHandle, Pixels, Subscription, point, px, size};
 
+#[cfg(test)]
+pub(super) use search::Update;
+
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
@@ -62,7 +65,7 @@ struct Open {
     rows: Rc<[Row]>,
     selection: Selection,
     step: Option<Step>,
-    after_step: bool,
+    checking: Option<args::Checking>,
     error: Option<SharedString>,
     anchor: Bounds<Pixels>,
     keys: HintKeys,
@@ -99,7 +102,7 @@ impl Open {
                 label: step.label.clone(),
                 kind: step.kind,
             }),
-            note: None,
+            note: self.checking.as_ref().and_then(args::Checking::note),
             error: self.error.clone(),
             anchor: self.anchor,
             key_hints: has_key_hints.then(|| self.keys.clone()),
@@ -186,7 +189,7 @@ impl FerriteWindow {
             selection: Selection::start(&rows),
             rows,
             step: None,
-            after_step: false,
+            checking: None,
             error: None,
             anchor,
             keys,
@@ -270,7 +273,8 @@ impl FerriteWindow {
                 if let Some(open) = self.command_center.open.as_mut() {
                     open.selection = Selection::at(&open.rows, *index);
                 }
-                self.run_selected(open::Way::of_click(*modifiers), window, cx);
+                let way = self.click_way(*modifiers);
+                self.run_selected(way, window, cx);
             }
             CommandCenterEvent::Dismissed => self.close_command_center(window, cx),
         }

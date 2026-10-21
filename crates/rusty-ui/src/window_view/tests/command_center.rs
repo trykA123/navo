@@ -9,6 +9,7 @@ use super::{fake, open_options, options_for, press, settle, two_panes};
 use crate::command_center::{
     Cancel, Group, Hit, HitSink, Notes, Request, ResultSource, Scope, Scopes, Target,
 };
+use crate::window_view::command_center::Update;
 use crate::window_view::{FerriteWindow, Frecent};
 
 mod args;
@@ -358,11 +359,14 @@ fn results_of_an_older_generation_are_dropped(cx: &mut TestAppContext) {
     );
     cx.update_window(rig.window, |_, window, cx| {
         rig.view.update(cx, |view, cx| {
-            view.receive_hits(
-                (generation - 1, Scope::Mixed, vec![stale], Notes::default()),
-                window,
-                cx,
-            );
+            let update = Update {
+                generation: generation - 1,
+                scope: Scope::Mixed,
+                hits: vec![stale],
+                notes: Notes::default(),
+                settled: true,
+            };
+            view.receive_hits(update, window, cx);
         });
     })
     .expect("window");

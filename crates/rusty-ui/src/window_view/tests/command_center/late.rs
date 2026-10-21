@@ -7,7 +7,8 @@ use super::super::{
     home_beside_dest, open_options, options_for, press, prompt_open, settle, viewer_open,
 };
 use super::{Rig, fake, hit, location, recording, rig, rig_with};
-use crate::command_center::{Group, Notes, Scope, Target};
+use crate::command_center::{Group, Hit, Notes, Scope, Target};
+use crate::window_view::command_center::Update;
 
 pub(super) fn keys_unsettled(cx: &mut TestAppContext, rig: &Rig, keys: &[&str]) {
     cx.update_window(rig.window, |_, window, cx| {
@@ -42,6 +43,7 @@ fn enter_before_the_new_round_lands_runs_the_new_text(cx: &mut TestAppContext) {
     input_unsettled(cx, &rig, "switch pane");
     keys_unsettled(cx, &rig, &["enter"]);
     assert!(seen.lock().unwrap().is_empty());
+    cx.executor().advance_clock(Duration::from_millis(100));
     settle(cx, &rig.view);
     cx.run_until_parked();
     assert_eq!(
@@ -113,8 +115,14 @@ fn hits_of_a_closed_box_never_show_in_the_next_one(cx: &mut TestAppContext) {
     );
     cx.update_window(rig.window, |_, window, cx| {
         rig.view.update(cx, |view, cx| {
-            let hits = (old, Scope::Mixed, vec![stale], Notes::default());
-            view.receive_hits(hits, window, cx);
+            let update = Update {
+                generation: old,
+                scope: Scope::Mixed,
+                hits: vec![stale],
+                notes: Notes::default(),
+                settled: true,
+            };
+            view.receive_hits(update, window, cx);
         });
     })
     .expect("window");
@@ -184,4 +192,52 @@ fn commands_of_the_viewer_show_when_it_had_focus(cx: &mut TestAppContext) {
         rows.iter().any(|row| row.starts_with("Close viewer")),
         "{rows:?}"
     );
+}
+
+#[gpui_kit::test]
+fn enter_before_the_files_answer_runs_the_folder_that_is_the_top_hit(cx: &mut TestAppContext) {
+    let folder = Hit {
+        score: 1_000_000_000,
+        ..hit(
+            "switch pane",
+            Group::Folders,
+            Target::GoTo(location("dest")),
+        )
+    };
+    let rig = rig_with(cx, vec![folder]);
+    let seen = recording(cx, &rig);
+    rig.press(cx, "ctrl-k");
+    input_unsettled(cx, &rig, "switch pane");
+    cx.run_until_parked();
+    assert!(
+        rig.rows(cx)
+            .iter()
+            .any(|row| row.starts_with("Switch pane"))
+    );
+    keys_unsettled(cx, &rig, &["enter"]);
+    cx.run_until_parked();
+    assert!(seen.lock().unwrap().is_empty());
+    cx.executor().advance_clock(Duration::from_millis(100));
+    settle(cx, &rig.view);
+    cx.run_until_parked();
+    assert!(seen.lock().unwrap().is_empty());
+    assert!(!rig.is_open(cx));
+    assert!(rig.here(cx).ends_with("/dest"), "{}", rig.here(cx));
+}
+
+#[gpui_kit::test]
+fn alt_enter_and_the_location_keys_do_nothing_on_a_command_row(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let seen = recording(cx, &rig);
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "switch pane");
+    for key in ["alt-enter", "ctrl-enter", "shift-enter", "ctrl-shift-c"] {
+        rig.press(cx, key);
+        cx.run_until_parked();
+        assert!(rig.is_open(cx), "{key}");
+        assert!(seen.lock().unwrap().is_empty(), "{key}");
+    }
+    rig.press(cx, "enter");
+    cx.run_until_parked();
+    assert_eq!(seen.lock().unwrap().len(), 1);
 }

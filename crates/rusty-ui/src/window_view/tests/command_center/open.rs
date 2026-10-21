@@ -4,7 +4,8 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 use rusty_core::{Location, PaneId};
 
-use super::super::{open_options, options_for, settle, two_panes};
+use super::super::{open_options, options_for, prompt_open, settle, two_panes};
+use super::late::keys_unsettled;
 use super::{Fixed, Rig, fake, hit, location};
 use crate::command_center::{Group, Target};
 use crate::window_view::StartOptions;
@@ -229,4 +230,17 @@ fn a_missing_folder_says_so_and_stays(cx: &mut TestAppContext) {
     let notice = rig.view.read_with(cx, |view, _| view.clipboard_notice());
     assert!(notice.is_some_and(|notice| notice.is_error));
     assert_eq!(rig.here(cx), here("home"));
+}
+
+#[gpui_kit::test]
+fn a_dialog_opened_during_the_look_up_keeps_the_focus(cx: &mut TestAppContext) {
+    let (rig, _) = rig_on(cx, folder("home/docs"));
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "/result");
+    keys_unsettled(cx, &rig, &["enter", "f7"]);
+    settle(cx, &rig.view);
+    cx.run_until_parked();
+    assert!(prompt_open(cx, &rig.view));
+    assert_eq!(rig.here(cx), here("home"));
+    assert!(!rig.pane_has_focus(cx));
 }
