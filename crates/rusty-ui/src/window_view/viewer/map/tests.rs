@@ -305,7 +305,7 @@ fn the_status_names_the_toolchain_counts_totals_and_skipped_parts() {
             "4 sections",
             "6 symbols",
             "used 1.9 KB · free 98.1 KB",
-            "1 other part not shown",
+            "Not read: Tool and Invocation",
         ]
     );
 }

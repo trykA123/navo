@@ -35,6 +35,7 @@ pub(super) struct Loaded {
     by_section: BySection,
     pub spaces: Vec<Option<String>>,
     pub has_origins: bool,
+    pub has_sizes: bool,
 }
 
 fn merge_objects(model: &MapModel) -> (Vec<ObjectRow>, TopObjects) {
@@ -107,6 +108,7 @@ impl Loaded {
             by_section: by_section(&model),
             spaces: spaces(&model),
             has_origins: model.regions.iter().any(|region| region.origin.is_some()),
+            has_sizes: model.has_symbol_sizes(),
             model,
         }
     }

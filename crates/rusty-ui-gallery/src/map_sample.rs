@@ -12,10 +12,18 @@ pub const MAP_STEPS: [&str; 6] = [
     "viewer::RightDrawer",
 ];
 
+pub const MAP_UNREAD_STEPS: [&str; 2] = ["map_view::NextTable", "map_view::NextTable"];
+
 static MAP: LazyLock<String> = LazyLock::new(linker_map);
+
+static MAP_UNREAD: LazyLock<String> = LazyLock::new(unread_map);
 
 pub fn map() -> &'static str {
     &MAP
+}
+
+pub fn map_unread() -> &'static str {
+    &MAP_UNREAD
 }
 
 const SPACE: &str = "mpe:vtc:linear";
@@ -164,6 +172,14 @@ impl Builder {
 }
 
 fn linker_map() -> String {
+    render(&built(), true)
+}
+
+fn unread_map() -> String {
+    render(&built(), false)
+}
+
+fn built() -> Builder {
     let mut builder = Builder {
         state: 0x4D41_5031,
         cursors: [0; 4],
@@ -185,7 +201,7 @@ fn linker_map() -> String {
         ("bss", 3, "data"),
         &[(".bss.stacks".to_owned(), 0xFF3C)],
     );
-    render(&builder)
+    builder
 }
 
 fn link_result(builder: &Builder) -> String {
@@ -243,30 +259,46 @@ fn memory_usage(builder: &Builder) -> String {
     text
 }
 
-fn symbol_table(builder: &Builder) -> String {
-    let mut text = String::from("* Symbols (sorted on name)\n| Name | Address | Size | Space |\n");
+fn symbol_table(builder: &Builder, has_sizes: bool) -> String {
+    let head = if has_sizes {
+        "| Name | Address | Size | Space |"
+    } else {
+        "| Name | Address | Space |"
+    };
+    let mut text = format!("* Symbols (sorted on name)\n{head}\n");
     let mut symbols: Vec<&Symbol> = builder.symbols.iter().collect();
     symbols.sort_by(|a, b| a.name.cmp(&b.name));
     for symbol in symbols {
-        let _ = writeln!(
-            text,
-            "| {} | 0x{:08X} | 0x{:X} | {SPACE} |",
-            symbol.name, symbol.address, symbol.size
-        );
+        let _ = if has_sizes {
+            writeln!(
+                text,
+                "| {} | 0x{:08X} | 0x{:X} | {SPACE} |",
+                symbol.name, symbol.address, symbol.size
+            )
+        } else {
+            writeln!(
+                text,
+                "| {} | 0x{:08X} | {SPACE} |",
+                symbol.name, symbol.address
+            )
+        };
     }
     text
 }
 
 const REMOVED: &str = "* Removed Sections\n| Section | File | Library | Symbol | Reason |\n| .text.CanDrv_Legacy (91) | obj/can_drv.o | | CanDrv_Legacy | unreferenced |\n";
 
-fn render(builder: &Builder) -> String {
+const UNREAD: &str = "* Cross References\n======\ninvented reference lines\n* Call Graph\n======\ninvented call lines\n* Locate Rules\n======\ninvented rule lines\n* Future Extension\n======\ninvented extension lines\n";
+
+fn render(builder: &Builder, has_sizes: bool) -> String {
     [
         "TASKING VX-toolset for TriCore linker map file\n* Tool and Invocation\nltc -o bcm_app.elf bcm_app.lsl\n".to_owned(),
         link_result(builder),
         locate_result(builder),
         memory_usage(builder),
-        symbol_table(builder),
+        symbol_table(builder, has_sizes),
         REMOVED.to_owned(),
+        if has_sizes { String::new() } else { UNREAD.to_owned() },
     ]
     .concat()
 }

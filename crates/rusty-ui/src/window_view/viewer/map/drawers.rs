@@ -1,10 +1,11 @@
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{ClickEvent, Role, Stateful, WeakEntity};
+use rusty_l10n::t;
 
 use super::blocks::{Block, Row, blocks, file_name, spoken};
 use super::facts::Inspection;
 use super::loaded::Loaded;
-use super::nav::NavItem;
+use super::nav::{self, NavItem};
 use super::text::percent;
 use super::{Focus, MapView};
 use crate::format;
@@ -41,6 +42,27 @@ fn pick(view: WeakEntity<MapView>, at: usize) -> impl Fn(&ClickEvent, &mut Windo
 }
 
 fn item_text(loaded: &Loaded, item: NavItem) -> (String, String, String) {
+    match item {
+        NavItem::NotRead => (
+            t!("viewer-map-not-read-group"),
+            String::new(),
+            format::count(loaded.model.skipped_parts.len() as u64, "part", "parts"),
+        ),
+        NavItem::Unread(at) => (
+            loaded
+                .model
+                .skipped_parts
+                .get(at)
+                .cloned()
+                .unwrap_or_default(),
+            String::new(),
+            String::new(),
+        ),
+        _ => picked_text(loaded, item),
+    }
+}
+
+fn picked_text(loaded: &Loaded, item: NavItem) -> (String, String, String) {
     match item {
         NavItem::All => (
             "Whole map".to_owned(),
@@ -85,13 +107,14 @@ fn item_text(loaded: &Loaded, item: NavItem) -> (String, String, String) {
                 )
             })
             .unwrap_or_default(),
+        NavItem::NotRead | NavItem::Unread(_) => Default::default(),
     }
 }
 
 struct ItemLook {
     at: usize,
     is_selected: bool,
-    starts_objects: bool,
+    starts_group: bool,
 }
 
 fn item_row(
@@ -100,11 +123,8 @@ fn item_row(
     (item, look): (NavItem, ItemLook),
 ) -> ObservedElement<Stateful<Div>> {
     let (name, size, detail) = item_text(loaded, item);
-    let kind = match item {
-        NavItem::All => "All",
-        NavItem::Region(_) => "Region",
-        NavItem::Object(_) => "Object",
-    };
+    let kind = item.kind();
+    let is_pickable = item.is_pickable();
     div()
         .id(("map-item", look.at))
         .role(Role::ListItem)
@@ -118,8 +138,11 @@ fn item_row(
         .h(px(ITEM_HEIGHT))
         .pl(t.spacing.xl)
         .pr(t.spacing.xl * 2.)
-        .cursor_pointer()
-        .when(look.starts_objects, |row| {
+        .when(is_pickable, |row| row.cursor_pointer())
+        .when(matches!(item, NavItem::Unread(_)), |row| {
+            row.text_color(t.colors.muted)
+        })
+        .when(look.starts_group, |row| {
             row.border_t_1().border_color(t.colors.line)
         })
         .when(look.is_selected, |row| row.bg(t.colors.selection))
@@ -144,6 +167,18 @@ fn item_row(
                 .text_color(t.colors.muted)
                 .child(detail),
         )
+}
+
+fn clickable(
+    row: ObservedElement<Stateful<Div>>,
+    item: NavItem,
+    (view, at): (WeakEntity<MapView>, usize),
+) -> AnyElement {
+    if item.is_pickable() {
+        row.on_click(pick(view, at)).into_any_element()
+    } else {
+        row.into_any_element()
+    }
 }
 
 fn pair(t: &Theme, (label, value): (&'static str, String)) -> Div {
@@ -226,18 +261,10 @@ impl MapView {
                         let look = ItemLook {
                             at,
                             is_selected: at == this.nav_cursor,
-                            starts_objects: at > 0
-                                && matches!(item, NavItem::Object(_))
-                                && matches!(
-                                    this.nav_items.get(at - 1),
-                                    Some(NavItem::Region(_) | NavItem::All)
-                                ),
+                            starts_group: nav::starts_group(&this.nav_items, at),
                         };
-                        Some(
-                            item_row(&t, loaded, (item, look))
-                                .on_click(pick(view.clone(), at))
-                                .into_any_element(),
-                        )
+                        let row = item_row(&t, loaded, (item, look));
+                        Some(clickable(row, item, (view.clone(), at)))
                     })
                     .collect()
             },

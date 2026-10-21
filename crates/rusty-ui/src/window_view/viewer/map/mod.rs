@@ -17,6 +17,8 @@ mod text;
 
 #[cfg(test)]
 pub(in crate::window_view::viewer) mod tests;
+#[cfg(test)]
+mod tests_unread;
 
 use std::any::Any;
 use std::sync::Arc;

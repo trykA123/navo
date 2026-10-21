@@ -81,7 +81,7 @@ fn f3_on_a_tasking_map_shows_the_memory_table_and_a_status(cx: &mut TestAppConte
     assert_eq!(row(cx, window, 1), "mpe:flash0, 65,536, 960, 64,576, 1.4%");
     assert_eq!(
         text_of(cx, window, "map-status"),
-        "TASKING · 3 regions · 4 sections · 6 symbols · used 1.9 KB · free 98.1 KB · 1 other part not shown"
+        "TASKING · 3 regions · 4 sections · 6 symbols · used 1.9 KB · free 98.1 KB · Not read: Tool and Invocation"
     );
     assert_eq!(text_of(cx, window, "map-count"), "3 regions");
 }

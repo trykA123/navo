@@ -1,4 +1,5 @@
 use rusty_automotive::map::{MapFlavor, MapModel, MapProblem};
+use rusty_l10n::t;
 
 pub(super) use super::super::elf::parse_address;
 use super::loaded::Loaded;
@@ -9,6 +10,8 @@ pub(super) const LOSSY: &str = "lossy UTF-8 decoding was required";
 pub(super) const MAU: &str = "only 8-bit minimum addressable units are supported";
 pub(super) const INCONSISTENT: &str =
     "memory code, data and reserved do not match total minus free";
+
+const NOT_READ_SHOWN: usize = 3;
 
 pub(super) const EMPTY: &str = "–";
 
@@ -62,10 +65,12 @@ pub(super) fn heads(loaded: &Loaded, table: Table) -> Vec<Head> {
     let hides_origin = |head: &Head| {
         table == Table::Memory && head.column == Column::Address && !loaded.has_origins
     };
+    let hides_size =
+        |head: &Head| table == Table::Symbols && head.column == Column::Size && !loaded.has_sizes;
     table
         .heads()
         .iter()
-        .filter(|head| !hides_origin(head))
+        .filter(|head| !hides_origin(head) && !hides_size(head))
         .copied()
         .collect()
 }
@@ -98,12 +103,18 @@ pub(super) fn cells(loaded: &Loaded, table: Table, row: usize) -> Vec<String> {
             ]
         }),
         Table::Symbols => model.symbols.get(row).map_or_else(Vec::new, |symbol| {
-            vec![
-                symbol.name.clone(),
-                address(symbol.address),
-                symbol.size.map_or_else(|| EMPTY.to_owned(), format::bytes),
-                optional(symbol.address_space.as_deref()),
+            let size = loaded
+                .has_sizes
+                .then(|| symbol.size.map_or_else(|| EMPTY.to_owned(), format::bytes));
+            [
+                Some(symbol.name.clone()),
+                Some(address(symbol.address)),
+                size,
             ]
+            .into_iter()
+            .flatten()
+            .chain([optional(symbol.address_space.as_deref())])
+            .collect()
         }),
     }
 }
@@ -184,6 +195,21 @@ fn problem_checks(model: &MapModel) -> Vec<Check> {
     checks.into_iter().map(|text| check(text, true)).collect()
 }
 
+fn not_read(titles: &[String]) -> String {
+    let shown = titles
+        .iter()
+        .take(NOT_READ_SHOWN)
+        .cloned()
+        .collect::<Vec<_>>();
+    let more = titles.len() - shown.len();
+    let names = shown.join(", ");
+    if more > 0 {
+        t!("viewer-map-not-read-more", names = names, count = more)
+    } else {
+        t!("viewer-map-not-read", names = names)
+    }
+}
+
 pub(super) fn status(loaded: &Loaded) -> Vec<Check> {
     let model = &loaded.model;
     let count = |n: usize, one, many| format::count(n as u64, one, many);
@@ -203,12 +229,10 @@ pub(super) fn status(loaded: &Loaded) -> Vec<Check> {
         ),
     ]);
     if !model.skipped_parts.is_empty() {
-        let parts = format::count(
-            model.skipped_parts.len() as u64,
-            "other part",
-            "other parts",
-        );
-        checks.push(check(format!("{parts} not shown"), false));
+        checks.push(check(not_read(&model.skipped_parts), false));
+    }
+    if !model.symbols.is_empty() && !loaded.has_sizes {
+        checks.push(check(t!("viewer-map-no-sizes"), false));
     }
     checks
 }

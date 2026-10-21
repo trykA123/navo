@@ -18,7 +18,7 @@ use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
 use crate::drives_page::{DrivesPage, Shows};
 use crate::kinds_page::KindsPage;
-use crate::map_sample::{MAP_NAME, MAP_STEPS, map};
+use crate::map_sample::{MAP_NAME, MAP_STEPS, MAP_UNREAD_STEPS, map, map_unread};
 use crate::menu_page::{MenuPage, Shows as MenuShows};
 use crate::mouse_page::MousePage;
 use crate::operate_page::OperatePage;
@@ -94,7 +94,7 @@ pub struct Gallery {
     code: Option<Box<dyn ViewerBody>>,
     memory: [Option<Box<dyn ViewerBody>>; 2],
     elf: [Option<Box<dyn ViewerBody>>; 2],
-    map: [Option<Box<dyn ViewerBody>>; 2],
+    map: [Option<Box<dyn ViewerBody>>; 3],
     trace: [Option<Box<dyn ViewerBody>>; 2],
     archive: Entity<ArchiveView>,
     font: Option<Entity<FontView>>,
@@ -146,7 +146,7 @@ impl Gallery {
             code: structured::body(CODE_NAME, CODE, window, cx),
             memory: [(); 2].map(|()| structured::body(MEMORY_NAME, memory(), window, cx)),
             elf: [(); 2].map(|()| structured::binary(ELF_NAME, elf(), window, cx)),
-            map: [(); 2].map(|()| structured::body(MAP_NAME, map(), window, cx)),
+            map: samples::map_bodies(window, cx),
             trace: [(); 2].map(|()| structured::body(TRACE_NAME, trace(), window, cx)),
             archive: rich_sample::archive_view(cx),
             font: rich_sample::font_view(cx),

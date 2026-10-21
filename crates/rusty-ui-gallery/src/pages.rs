@@ -71,6 +71,7 @@ pub enum Page {
     TraceDrawers,
     MapTables,
     MapDrawers,
+    MapUnread,
     PdfCalm,
     PdfSearch,
     PdfDrawers,
@@ -141,6 +142,7 @@ impl Page {
                 | Self::TraceDrawers
                 | Self::MapTables
                 | Self::MapDrawers
+                | Self::MapUnread
         )
     }
 

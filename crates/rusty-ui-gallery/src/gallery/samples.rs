@@ -15,6 +15,10 @@ pub(super) fn viewer_menu_pages(window: &mut Window, cx: &mut App) -> [Entity<Vi
     VIEWER_MENUS.map(|shows| cx.new(|cx| ViewerMenuPage::new(shows, window, cx)))
 }
 
+pub(super) fn map_bodies(window: &mut Window, cx: &mut App) -> [Option<Box<dyn ViewerBody>>; 3] {
+    [map(), map(), map_unread()].map(|text| structured::body(MAP_NAME, text, window, cx))
+}
+
 impl Gallery {
     pub(super) fn sample(&self) -> Option<&dyn ViewerBody> {
         match self.page {
@@ -29,6 +33,7 @@ impl Gallery {
             Page::ElfDrawers => self.elf[1].as_deref(),
             Page::MapTables => self.map[0].as_deref(),
             Page::MapDrawers => self.map[1].as_deref(),
+            Page::MapUnread => self.map[2].as_deref(),
             Page::TraceTable => self.trace[0].as_deref(),
             Page::TraceDrawers => self.trace[1].as_deref(),
             _ => None,
@@ -79,6 +84,7 @@ impl Gallery {
             Page::ElfDrawers => &ELF_STEPS,
             Page::TraceDrawers => &TRACE_STEPS,
             Page::MapDrawers => &MAP_STEPS,
+            Page::MapUnread => &MAP_UNREAD_STEPS,
             Page::PdfDrawers => &PDF_STEPS,
             _ => &[],
         };
@@ -101,6 +107,7 @@ impl Gallery {
                 | Page::TraceDrawers
                 | Page::MapTables
                 | Page::MapDrawers
+                | Page::MapUnread
         );
         match self.sample() {
             Some(body) => root

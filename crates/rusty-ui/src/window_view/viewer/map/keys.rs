@@ -70,7 +70,8 @@ impl MapView {
         match self.focus_in {
             Focus::Content => self.move_cursor(step(self.cursor, by, self.rows.len()), cx),
             Focus::Navigator => {
-                self.nav_cursor = step(self.nav_cursor, by, self.nav_items.len());
+                self.nav_cursor =
+                    step(self.nav_cursor, by, super::nav::selectable(&self.nav_items));
                 self.nav_scroll.scroll_to(self.nav_cursor);
                 cx.notify();
             }
@@ -89,8 +90,15 @@ impl MapView {
     }
 
     fn sort_at(&mut self, key: usize, cx: &mut Context<Self>) {
-        if let Some(column) = self.table().sort_keys().get(key) {
-            self.sort_by(*column, cx);
+        let Some(loaded) = self.loaded() else {
+            return;
+        };
+        let shown = super::text::heads(loaded, self.table());
+        let column = self.table().sort_keys().get(key).copied();
+        if let Some(column) =
+            column.filter(|column| shown.iter().any(|head| head.column == *column))
+        {
+            self.sort_by(column, cx);
         }
     }
 

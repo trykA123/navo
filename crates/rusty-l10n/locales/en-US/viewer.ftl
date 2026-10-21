@@ -94,3 +94,7 @@ elf-column-share = Share
 
 elf-hidden = { $count } hidden (zero-size, ABS)
 elf-hidden-note = Hidden by the zero-size filter; Alt+H shows it.
+viewer-map-not-read = Not read: { $names }
+viewer-map-not-read-more = Not read: { $names } +{ $count } more
+viewer-map-no-sizes = This map lists no symbol sizes
+viewer-map-not-read-group = Not read

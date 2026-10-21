@@ -9,7 +9,7 @@ const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bo
     }
 }
 
-pub const PAGES: [PageInfo; 111] = [
+pub const PAGES: [PageInfo; 112] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -212,6 +212,7 @@ pub const PAGES: [PageInfo; 111] = [
         "p16-b4b-map-drawers",
         false,
     ),
+    info(Page::MapUnread, "Map unread", "p38-a10-map-unread", false),
     info(Page::PdfCalm, "PDF", "p15-a10b-calm", true),
     info(Page::PdfSearch, "PDF search", "p15-a10b-search", false),
     info(Page::PdfDrawers, "PDF drawers", "p15-a10b-drawers", false),

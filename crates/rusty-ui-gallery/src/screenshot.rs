@@ -81,6 +81,7 @@ pub fn capture(shot: Shot, failed: Arc<AtomicBool>, cx: &mut App) {
                         | Page::ElfDrawers
                         | Page::TraceDrawers
                         | Page::MapDrawers
+                        | Page::MapUnread
                         | Page::PdfDrawers
                         | Page::MouseMarks
                 ) || RICH_PAGES.iter().any(|(shown, ..)| *shown == page))
