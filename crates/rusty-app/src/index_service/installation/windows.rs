@@ -15,7 +15,9 @@ use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles}
 
 use super::directory::{Policy, ProtectedDirectory, known_folder};
 use super::elevation::wide;
-use super::install_plan::{CopyPlan, Step, clear_directory, data_directories, run_install};
+use super::install_plan::{
+    CopyPlan, FreshInstall, SettingsBackup, Step, clear_directory, data_directories, run_install,
+};
 use super::policy::{FAILURE_DELAYS, RESET_SECONDS, RESTART_CLEAN_STOPS};
 use super::scm::{ServiceHandle, checked, open_manager, service_handle, service_name};
 use super::storage::Storage;
@@ -24,29 +26,63 @@ mod configuration;
 
 pub(super) fn install() -> io::Result<()> {
     let config = super::session::installation_config()?;
-    let storage = Storage::open(true)?;
     let plan = CopyPlan::new(&known_folder(&FOLDERID_ProgramFiles)?, std::process::id());
+    let data = data_directories(&known_folder(&FOLDERID_ProgramData)?);
+    let parent = plan
+        .directory
+        .parent()
+        .ok_or_else(|| io::Error::other("missing install parent"))?;
+    let directories = [
+        parent.to_path_buf(),
+        plan.directory.clone(),
+        data[0].clone(),
+        data[1].clone(),
+    ];
+    let fresh = FreshInstall::observe(&plan, &directories);
+    let result = install_with(&plan, &config, &fresh);
+    if result.is_err() {
+        let _ = fresh.remove_directories();
+    }
+    result
+}
+
+fn install_with(
+    plan: &CopyPlan,
+    config: &super::config::Config,
+    fresh: &FreshInstall,
+) -> io::Result<()> {
+    let storage = Storage::open(true)?;
     let parent = plan
         .directory
         .parent()
         .ok_or_else(|| io::Error::other("missing install parent"))?;
     let _guard = ProtectedDirectory::open(&[parent, &plan.directory], Policy::Executable, true)?;
-    let command = binary_command(&plan);
+    let command = binary_command(plan);
     let manager = open_manager(SC_MANAGER_CREATE_SERVICE | SC_MANAGER_CONNECT)?;
     let (service, exists) = register(&manager, &command)?;
+    let was_running = exists && is_running(&service)?;
     let previous = exists
         .then(|| configuration::Configuration::read(&service))
         .transpose()?;
-    let result = run_install(exists, |step| match step {
+    let mut settings = None;
+    let result = run_install(exists, was_running, |step| match step {
         Step::Stop => stop(&service),
         Step::Copy => plan.copy_from(&std::env::current_exe()?),
         Step::RenameOld => plan.rename_old(),
         Step::Replace => plan.replace(),
+        Step::BackupSettings => {
+            settings = Some(SettingsBackup::capture(
+                &storage.directory.join("service.json"),
+            )?);
+            Ok(())
+        }
         Step::Configure => update(&service, &command)
             .and_then(|()| configure_recovery(&service))
-            .and_then(|()| storage.write_config(&config)),
+            .and_then(|()| storage.write_config(config)),
         Step::Start => start(&service),
         Step::Restore => plan.restore(),
+        Step::RestoreSettings => settings.as_ref().map_or(Ok(()), SettingsBackup::restore),
+        Step::RemoveFresh => fresh.remove_executable(plan),
         Step::DiscardCopy => plan.discard_copy(),
         Step::RestoreConfiguration => match &previous {
             Some(previous) => previous.restore(&service),
@@ -64,6 +100,13 @@ pub(super) fn install() -> io::Result<()> {
         return Err(error);
     }
     Ok(())
+}
+
+fn is_running(service: &ServiceHandle) -> io::Result<bool> {
+    let mut status = SERVICE_STATUS::default();
+    // SAFETY: service is live with QUERY_STATUS access; status is writable.
+    checked(unsafe { QueryServiceStatus(service.0, &mut status) })?;
+    Ok(status.dwCurrentState != SERVICE_STOPPED)
 }
 
 fn start(service: &ServiceHandle) -> io::Result<()> {

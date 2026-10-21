@@ -7,7 +7,7 @@ use std::{io, path::Path, time::Duration};
 
 fn record(exists: bool, failed: Option<Step>) -> (Vec<Step>, io::Result<()>) {
     let mut calls = Vec::new();
-    let result = run_install(exists, |step| {
+    let result = run_install(exists, true, |step| {
         calls.push(step);
         match failed == Some(step) && calls.iter().filter(|&&call| call == step).count() == 1 {
             true => Err(io::Error::other("original failure")),
@@ -25,7 +25,15 @@ fn reinstall_cleans_leftovers_then_deletes_the_old_image_after_start() {
     assert_eq!(
         calls,
         [
-            DeleteOld, Copy, RenameOld, Replace, Stop, Configure, Start, DeleteOld
+            DeleteOld,
+            Copy,
+            RenameOld,
+            Replace,
+            Stop,
+            BackupSettings,
+            Configure,
+            Start,
+            DeleteOld
         ]
     );
 }
@@ -33,7 +41,15 @@ fn reinstall_cleans_leftovers_then_deletes_the_old_image_after_start() {
 #[test]
 fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
     use Step::*;
-    let steps = [Copy, RenameOld, Replace, Stop, Configure, Start];
+    let steps = [
+        Copy,
+        RenameOld,
+        Replace,
+        Stop,
+        BackupSettings,
+        Configure,
+        Start,
+    ];
     for (end, failed) in steps.into_iter().enumerate() {
         let (calls, result) = record(true, Some(failed));
         assert_eq!(result.unwrap_err().to_string(), "original failure");
@@ -43,7 +59,8 @@ fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
             Copy => &[Start],
             RenameOld => &[DiscardCopy, Start],
             Replace => &[Restore, Start],
-            _ => &[Stop, Restore, RestoreConfiguration, Start],
+            Stop | BackupSettings => &[Stop, Restore, RestoreConfiguration, Start],
+            _ => &[Stop, RestoreSettings, Restore, RestoreConfiguration, Start],
         };
         assert_eq!(&calls[end + 2..], rollback, "after {failed:?}");
     }
@@ -53,24 +70,8 @@ fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
 fn a_failed_first_install_restores_but_never_starts() {
     let (calls, result) = record(false, Some(Step::Configure));
     assert!(result.is_err());
-    assert_eq!(calls.last(), Some(&Step::Restore));
+    assert_eq!(calls.last(), Some(&Step::RemoveFresh));
     assert!(!calls.contains(&Step::Start));
-}
-
-#[test]
-fn a_failed_restart_keeps_the_original_error_first() {
-    let error = run_install(true, |step| match step {
-        Step::Replace => Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "original failure",
-        )),
-        Step::Start => Err(io::Error::other("start refused")),
-        _ => Ok(()),
-    })
-    .unwrap_err();
-    assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
-    assert!(error.to_string().starts_with("original failure; "));
-    assert!(error.to_string().contains("start refused"));
 }
 
 #[test]
@@ -113,7 +114,7 @@ fn every_failure_after_replace_restores_the_old_image_and_configuration_before_s
         let mut configuration = previous.clone();
         let (mut running, mut injected) = (true, false);
         let mut calls = Vec::new();
-        let result = run_install(true, |step| {
+        let result = run_install(true, true, |step| {
             calls.push(step);
             if step == Start && injected {
                 assert_eq!(std::fs::read(&plan.executable).unwrap(), b"old");
@@ -180,6 +181,7 @@ fn execute_install_step(
         }
         RestoreConfiguration => *configuration = previous_service_configuration(),
         DiscardCopy => plan.discard_copy()?,
+        BackupSettings | RestoreSettings | RemoveFresh => {}
         DeleteOld => plan.delete_old()?,
     }
     Ok(())

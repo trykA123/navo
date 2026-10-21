@@ -1,5 +1,6 @@
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 pub(super) struct CopyPlan {
     pub directory: PathBuf,
@@ -52,7 +53,9 @@ impl CopyPlan {
         if !self.previous.try_exists()? {
             return cleanup;
         }
-        std::fs::rename(&self.previous, &self.executable)?;
+        retry(RESTORE_TRIES, RESTORE_DELAY, || {
+            std::fs::rename(&self.previous, &self.executable)
+        })?;
         cleanup
     }
 
@@ -75,6 +78,94 @@ impl CopyPlan {
     }
 }
 
+const RESTORE_TRIES: u32 = 5;
+const RESTORE_DELAY: Duration = Duration::from_millis(200);
+
+pub(super) fn retry<T>(
+    tries: u32,
+    delay: Duration,
+    mut operation: impl FnMut() -> io::Result<T>,
+) -> io::Result<T> {
+    let mut attempt = 1;
+    loop {
+        match operation() {
+            Err(_) if attempt < tries => {
+                attempt += 1;
+                std::thread::sleep(delay);
+            }
+            result => return result,
+        }
+    }
+}
+
+pub(super) struct SettingsBackup {
+    path: PathBuf,
+    previous: Option<Vec<u8>>,
+}
+
+impl SettingsBackup {
+    pub fn capture(path: &Path) -> io::Result<Self> {
+        let previous = match std::fs::read(path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
+        };
+        Ok(Self {
+            path: path.to_path_buf(),
+            previous,
+        })
+    }
+
+    pub fn restore(&self) -> io::Result<()> {
+        match &self.previous {
+            Some(bytes) => std::fs::write(&self.path, bytes),
+            None => match std::fs::remove_file(&self.path) {
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                result => result,
+            },
+        }
+    }
+}
+
+pub(super) struct FreshInstall {
+    had_executable: bool,
+    missing: Vec<PathBuf>,
+}
+
+impl FreshInstall {
+    pub fn observe(plan: &CopyPlan, directories: &[PathBuf]) -> Self {
+        Self {
+            had_executable: plan.executable.exists(),
+            missing: directories
+                .iter()
+                .filter(|path| !path.exists())
+                .cloned()
+                .collect(),
+        }
+    }
+
+    pub fn remove_executable(&self, plan: &CopyPlan) -> io::Result<()> {
+        if self.had_executable {
+            return Ok(());
+        }
+        match std::fs::remove_file(&plan.executable) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
+
+    pub fn remove_directories(&self) -> io::Result<()> {
+        let mut result = Ok(());
+        for path in self.missing.iter().rev() {
+            match std::fs::remove_dir(path) {
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                other => result = result.and(other),
+            }
+        }
+        result
+    }
+}
+
 fn is_old_image(name: &str) -> bool {
     name.strip_prefix("ferrite.exe.")
         .and_then(|name| name.strip_suffix(".old"))
@@ -87,9 +178,12 @@ pub(super) enum Step {
     Copy,
     RenameOld,
     Replace,
+    BackupSettings,
     Configure,
     Start,
     Restore,
+    RestoreSettings,
+    RemoveFresh,
     DiscardCopy,
     RestoreConfiguration,
     DeleteOld,
@@ -98,21 +192,30 @@ pub(super) enum Step {
 pub(super) fn install_steps(exists: bool) -> &'static [Step] {
     use Step::*;
     if exists {
-        &[Copy, RenameOld, Replace, Stop, Configure, Start]
+        &[
+            Copy,
+            RenameOld,
+            Replace,
+            Stop,
+            BackupSettings,
+            Configure,
+            Start,
+        ]
     } else {
-        &[Copy, RenameOld, Replace, Configure, Start]
+        &[Copy, RenameOld, Replace, BackupSettings, Configure, Start]
     }
 }
 
 pub(super) fn run_install(
     exists: bool,
+    was_running: bool,
     mut execute: impl FnMut(Step) -> io::Result<()>,
 ) -> io::Result<()> {
     let _ = execute(Step::DeleteOld);
     let mut completed = Vec::new();
     for &step in install_steps(exists) {
         if let Err(error) = execute(step) {
-            return Err(recover(exists, error, &completed, execute));
+            return Err(recover((exists, was_running), error, &completed, execute));
         }
         completed.push(step);
     }
@@ -121,7 +224,7 @@ pub(super) fn run_install(
 }
 
 fn recover(
-    exists: bool,
+    (exists, was_running): (bool, bool),
     error: io::Error,
     completed: &[Step],
     mut execute: impl FnMut(Step) -> io::Result<()>,
@@ -132,10 +235,16 @@ fn recover(
     if exists && replaced {
         rollback.push((Step::Stop, "stopping the replacement service"));
     }
+    if completed.contains(&Step::BackupSettings) {
+        rollback.push((Step::RestoreSettings, "restoring service.json"));
+    }
     if completed.contains(&Step::RenameOld) {
         rollback.push((Step::Restore, "restoring the previous executable"));
     } else if completed.contains(&Step::Copy) {
         rollback.push((Step::DiscardCopy, "discarding the temporary copy"));
+    }
+    if !exists && replaced {
+        rollback.push((Step::RemoveFresh, "removing the new executable"));
     }
     if exists && replaced {
         rollback.push((
@@ -143,7 +252,7 @@ fn recover(
             "restoring service configuration",
         ));
     }
-    if exists {
+    if exists && was_running {
         rollback.push((Step::Start, "restarting the service"));
     }
     for (step, context) in rollback {
@@ -208,11 +317,19 @@ mod tests {
         use Step::*;
         assert_eq!(
             install_steps(false),
-            &[Copy, RenameOld, Replace, Configure, Start]
+            &[Copy, RenameOld, Replace, BackupSettings, Configure, Start]
         );
         assert_eq!(
             install_steps(true),
-            &[Copy, RenameOld, Replace, Stop, Configure, Start]
+            &[
+                Copy,
+                RenameOld,
+                Replace,
+                Stop,
+                BackupSettings,
+                Configure,
+                Start
+            ]
         );
     }
 

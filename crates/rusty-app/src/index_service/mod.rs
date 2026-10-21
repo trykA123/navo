@@ -107,4 +107,6 @@ fn execute(_: Action) -> std::io::Result<()> {
 mod tests;
 
 #[cfg(test)]
+mod install_rollback_tests;
+#[cfg(test)]
 mod reliability_tests;

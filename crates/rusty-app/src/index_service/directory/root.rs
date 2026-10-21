@@ -3,7 +3,6 @@ use std::io;
 use std::os::windows::io::{AsRawHandle, OwnedHandle};
 use std::ptr;
 
-use windows_sys::Win32::Foundation::{GENERIC_ALL, GENERIC_WRITE};
 use windows_sys::Win32::Security::Authorization::{
     ConvertStringSidToSidW, GetSecurityInfo, SE_FILE_OBJECT,
 };
@@ -12,11 +11,8 @@ use windows_sys::Win32::Security::{
     INHERIT_ONLY_ACE, IsWellKnownSid, OWNER_SECURITY_INFORMATION, WinBuiltinAdministratorsSid,
     WinLocalSystemSid,
 };
-use windows_sys::Win32::Storage::FileSystem::{
-    DELETE, FILE_DELETE_CHILD, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, WRITE_DAC,
-    WRITE_OWNER,
-};
 
+use super::super::directory_policy::parent_ace_allowed;
 use super::super::elevation::{LocalAllocation, wide};
 
 const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
@@ -85,17 +81,8 @@ unsafe fn check_acl(owner: *mut c_void, acl: *mut ACL, installer: *mut c_void) -
         // SAFETY: type 0 is ACCESS_ALLOWED_ACE; its SID is inline at SidStart.
         let allowed = unsafe { &*ace.cast::<ACCESS_ALLOWED_ACE>() };
         let sid = ptr::addr_of!(allowed.SidStart).cast_mut().cast();
-        let mutations = DELETE
-            | FILE_DELETE_CHILD
-            | WRITE_DAC
-            | WRITE_OWNER
-            | GENERIC_ALL
-            | GENERIC_WRITE
-            | FILE_WRITE_DATA
-            | FILE_WRITE_EA
-            | FILE_WRITE_ATTRIBUTES;
         // SAFETY: sid is within the live ACE returned by GetAce.
-        if allowed.Mask & mutations != 0 && !unsafe { privileged(sid, installer) } {
+        if !parent_ace_allowed(allowed.Mask, unsafe { privileged(sid, installer) }) {
             return Ok(false);
         }
     }

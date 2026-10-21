@@ -42,3 +42,17 @@ pub(super) fn apply(
         }
     }
 }
+
+const DELETE: u32 = 0x0001_0000;
+const FILE_DELETE_CHILD: u32 = 0x40;
+const WRITE_DAC: u32 = 0x0004_0000;
+const WRITE_OWNER: u32 = 0x0008_0000;
+const GENERIC_ALL: u32 = 0x1000_0000;
+const GENERIC_WRITE: u32 = 0x4000_0000;
+
+pub(super) const PARENT_FORBIDDEN: u32 =
+    DELETE | FILE_DELETE_CHILD | WRITE_DAC | WRITE_OWNER | GENERIC_ALL | GENERIC_WRITE;
+
+pub(super) fn parent_ace_allowed(mask: u32, privileged: bool) -> bool {
+    privileged || mask & PARENT_FORBIDDEN == 0
+}
