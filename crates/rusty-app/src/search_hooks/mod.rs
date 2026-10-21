@@ -1,3 +1,5 @@
+mod service;
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -75,7 +77,10 @@ fn frecent(db: SharedDb, remember: Remember) -> Frecents {
 
 pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
     let Some(db) = db else {
-        return SearchHooks::none();
+        return SearchHooks {
+            service: service::hooks(),
+            ..SearchHooks::none()
+        };
     };
     let (record, visit, clear) = (db.clone(), db.clone(), db.clone());
     let command_use = command_use(db.clone(), remember.clone());
@@ -83,6 +88,7 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
     let recent_commands = recent_commands(db, remember.clone());
     let (remember_command, remember_visit) = (remember.clone(), remember);
     SearchHooks {
+        service: service::hooks(),
         command_use,
         recent_commands,
         record_command: Arc::new(move |name| {
@@ -104,7 +110,6 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
             let cleared = lock(&clear).clear_search_history();
             let _ = cleared.inspect_err(|error| report("clearing", error));
         }),
-        ..SearchHooks::none()
     }
 }
 

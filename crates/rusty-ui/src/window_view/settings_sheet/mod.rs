@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use gpui_kit::{FocusHandle, Focusable, ScrollHandle};
 use rusty_core::Location;
 
+use super::search_hooks::ServiceAction;
 use super::settings_news::SettingsInbox;
 use super::settings_save::{SaveReport, SaveSettings, Saver};
 use super::{FerriteWindow, SearchHooks};
@@ -227,8 +228,8 @@ impl FerriteWindow {
             SheetEvent::Keep(field) => self.keep_old(field, window, cx),
             SheetEvent::DismissUpgrade => self.dismiss_upgrade(),
             SheetEvent::ClearHistory => self.clear_search_history(),
-            SheetEvent::InstallService => self.install_index_service(),
-            SheetEvent::RemoveService => self.remove_index_service(),
+            SheetEvent::InstallService => self.install_index_service(cx),
+            SheetEvent::RemoveService => self.remove_index_service(cx),
             SheetEvent::Close => self.escape_settings(window, cx),
         }
         cx.notify();
@@ -243,16 +244,24 @@ impl FerriteWindow {
         (self.settings.search.service.status)()
     }
 
-    fn install_index_service(&mut self) {
+    fn install_index_service(&mut self, cx: &mut Context<Self>) {
         if self.index_service_status().can_install() {
-            (self.settings.search.service.install)();
+            self.run_index_service(self.settings.search.service.install.clone(), cx);
         }
     }
 
-    fn remove_index_service(&mut self) {
+    fn remove_index_service(&mut self, cx: &mut Context<Self>) {
         if self.index_service_status().can_remove() {
-            (self.settings.search.service.remove)();
+            self.run_index_service(self.settings.search.service.remove.clone(), cx);
         }
+    }
+
+    fn run_index_service(&self, action: ServiceAction, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            cx.background_spawn(async move { action() }).await;
+            let _ = this.update(cx, |_, cx| cx.notify());
+        })
+        .detach();
     }
 
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {

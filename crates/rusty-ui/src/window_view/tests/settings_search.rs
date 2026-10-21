@@ -28,9 +28,11 @@ fn hooks(calls: &Arc<Calls>) -> SearchHooks {
             status: Arc::new(move || *status.status.lock().unwrap()),
             install: Arc::new(move || {
                 install.install.fetch_add(1, Ordering::SeqCst);
+                *install.status.lock().unwrap() = ServiceStatus::Running;
             }),
             remove: Arc::new(move || {
                 remove.remove.fetch_add(1, Ordering::SeqCst);
+                *remove.status.lock().unwrap() = ServiceStatus::NotInstalled;
             }),
         },
         ..SearchHooks::none()
@@ -133,4 +135,32 @@ fn without_windows_the_page_says_the_service_is_a_windows_feature(cx: &mut TestA
     let (rig, _) = open_search(cx, ServiceStatus::NotAvailable, false);
     assert!(label(cx, &rig, "settings-service-note").is_some());
     assert!(label(cx, &rig, "settings-service-status").is_none());
+}
+
+#[gpui_kit::test]
+fn service_actions_finish_after_the_click_handler_and_refresh_status(cx: &mut TestAppContext) {
+    for (before, button, after) in [
+        (
+            ServiceStatus::NotInstalled,
+            "settings-service-install",
+            ServiceStatus::Running,
+        ),
+        (
+            ServiceStatus::Running,
+            "settings-service-remove",
+            ServiceStatus::NotInstalled,
+        ),
+    ] {
+        let (rig, calls) = open_search(cx, before, true);
+        cx.update_window(rig.window, |_, window, cx| {
+            window.click(button, cx);
+            assert_eq!(count(&calls.install) + count(&calls.remove), 0);
+        })
+        .expect("window");
+        cx.run_until_parked();
+        assert_eq!(
+            label(cx, &rig, "settings-service-status"),
+            Some(after.text().to_string())
+        );
+    }
 }

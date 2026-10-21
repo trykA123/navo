@@ -15,6 +15,8 @@ mod elevation;
 #[cfg(any(windows, test))]
 mod elevation_result;
 #[cfg(any(windows, test))]
+pub(crate) use elevation_result::ElevationError;
+#[cfg(any(windows, test))]
 mod install_plan;
 #[cfg(windows)]
 #[path = "installation/windows.rs"]
@@ -70,8 +72,13 @@ pub(crate) fn run(action: Action) -> std::process::ExitCode {
 }
 
 #[cfg(windows)]
-pub(crate) fn request_elevation(action: Action) -> Result<(), elevation_result::ElevationError> {
+pub(crate) fn request_elevation(action: Action) -> Result<(), ElevationError> {
     elevation::launch(action)
+}
+
+#[cfg(windows)]
+pub(crate) fn query_running() -> std::io::Result<Option<bool>> {
+    scm::query_running()
 }
 
 #[cfg(windows)]

@@ -10,7 +10,9 @@ use std::sync::atomic::{AtomicPtr, AtomicU32, Ordering};
 use std::{panic, ptr};
 
 use rusty_index::pipe::CancelToken;
-use windows_sys::Win32::Foundation::{ERROR_CALL_NOT_IMPLEMENTED, ERROR_SERVICE_SPECIFIC_ERROR};
+use windows_sys::Win32::Foundation::{
+    ERROR_CALL_NOT_IMPLEMENTED, ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_SPECIFIC_ERROR,
+};
 use windows_sys::Win32::System::Services::*;
 
 use super::policy::ServiceError;
@@ -22,6 +24,24 @@ static STATE: AtomicU32 = AtomicU32::new(SERVICE_START_PENDING);
 static CHECKPOINT: AtomicU32 = AtomicU32::new(0);
 
 pub(super) struct ServiceHandle(pub SC_HANDLE);
+
+pub(super) fn query_running() -> io::Result<Option<bool>> {
+    let manager = open_manager(SC_MANAGER_CONNECT)?;
+    let name = service_name();
+    // SAFETY: manager and terminated name remain live; only read-only status access is requested.
+    let raw = unsafe { OpenServiceW(manager.0, name.as_ptr(), SERVICE_QUERY_STATUS) };
+    let service = match service_handle(raw) {
+        Ok(service) => service,
+        Err(error) if error.raw_os_error() == Some(ERROR_SERVICE_DOES_NOT_EXIST as i32) => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+    let mut status = SERVICE_STATUS::default();
+    // SAFETY: service has QUERY_STATUS access; status is writable output storage.
+    checked(unsafe { QueryServiceStatus(service.0, &mut status) })?;
+    Ok(Some(status.dwCurrentState == SERVICE_RUNNING))
+}
 
 pub(super) fn dispatch() -> io::Result<()> {
     let mut name = service_name();
