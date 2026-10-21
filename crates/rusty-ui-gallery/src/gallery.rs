@@ -111,7 +111,7 @@ pub struct Gallery {
     job_windows: [Entity<WindowPage>; 7],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
-    settings_windows: [Entity<WindowPage>; 3],
+    settings_windows: [Entity<WindowPage>; 4],
     hint_windows: [Entity<WindowPage>; 4],
     crash_window: Entity<WindowPage>,
     parts_windows: [Entity<WindowPage>; 3],
@@ -324,11 +324,12 @@ impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let root = root(&t);
-        let [display, upgrade, find] = &self.settings_windows;
+        let [display, upgrade, find, search] = &self.settings_windows;
         match self.page {
             Page::SettingsDisplay => return root.child(display.clone()),
             Page::SettingsUpgrade => return root.child(upgrade.clone()),
             Page::SettingsFind => return root.child(find.clone()),
+            Page::SearchSettings => return root.child(search.clone()),
             _ => {}
         }
         if let Some(page) = self.window_page() {

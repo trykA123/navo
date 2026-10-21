@@ -104,6 +104,7 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
             let cleared = lock(&clear).clear_search_history();
             let _ = cleared.inspect_err(|error| report("clearing", error));
         }),
+        ..SearchHooks::none()
     }
 }
 

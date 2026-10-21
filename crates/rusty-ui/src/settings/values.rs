@@ -107,6 +107,8 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::MarkdownPreviewSplit
         | Field::PreviewTypeBars
         | Field::PreviewLargestFiles => Value::Flag(true),
+        Field::SearchRemember => Value::Flag(true),
+        Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
         Field::WindowFkeyBar => Value::Flag(false),
         field if field.is_window_part() => Value::Flag(true),
         Field::TerminalProvider => text("windows-terminal"),

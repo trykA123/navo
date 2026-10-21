@@ -379,3 +379,47 @@ fn files_has_the_drop_confirm_row_defaulting_to_never() {
     assert_eq!(toml, ["never", "moves", "always"]);
     assert_eq!(Values::default().get(Field::DropConfirm), &Value::Pick(0));
 }
+
+#[test]
+fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
+    let keys: Vec<&str> = rows_in(Section::Search).map(|(_, spec)| spec.key).collect();
+    assert_eq!(
+        keys,
+        [
+            "search.index",
+            "search.drives",
+            "search.exclude",
+            "search.network",
+            "search.removable",
+            "search.remember",
+        ]
+    );
+    let values = Values::default();
+    assert_eq!(values.get(Field::SearchIndex), &Value::Pick(0));
+    assert_eq!(values.get(Field::SearchRemember), &Value::Flag(true));
+    assert_eq!(values.get(Field::SearchNetwork), &Value::Flag(false));
+    assert_eq!(
+        values.get(Field::SearchExclude),
+        &Value::Text("$Recycle.Bin, System Volume Information".into())
+    );
+    assert!(Field::SearchDrives.is_list() && Field::SearchExclude.is_list());
+}
+
+#[test]
+fn drives_and_removable_rows_show_only_on_windows() {
+    let shown = |field: Field| Filter::default().admits(spec(field));
+    assert_eq!(shown(Field::SearchDrives), cfg!(windows));
+    assert_eq!(shown(Field::SearchRemovable), cfg!(windows));
+    assert!(shown(Field::SearchIndex) && shown(Field::SearchExclude));
+}
+
+#[test]
+fn the_search_page_ends_with_the_service_and_history_blocks() {
+    let found = lines(&Filter::default(), Section::Search);
+    assert_eq!(&found[found.len() - 2..], [Line::Service, Line::History]);
+    let only_history = lines(&Filter::new("clear"), Section::Search);
+    assert_eq!(
+        only_history,
+        [Line::Section(Section::Search), Line::History]
+    );
+}

@@ -10,11 +10,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 use gpui_kit::{FocusHandle, Focusable, ScrollHandle};
 use rusty_core::Location;
 
-use super::FerriteWindow;
 use super::settings_news::SettingsInbox;
 use super::settings_save::{SaveReport, SaveSettings, Saver};
+use super::{FerriteWindow, SearchHooks};
 use crate::prelude::*;
-use crate::settings::{Change, FIELDS, Field, Filter, SettingsBody, SheetEvent, Values, child_of};
+use crate::settings::{
+    Change, FIELDS, Field, Filter, SearchPage, ServiceStatus, SettingsBody, SheetEvent, Values,
+    child_of, section_of,
+};
 use crate::side_sheet::SheetState;
 use crate::tokens;
 
@@ -73,17 +76,25 @@ pub(super) struct SettingsPanel {
     line_of: FindLine,
     shortcuts: Option<shortcuts::ShortcutsPanel>,
     is_shortcuts: bool,
+    search: SearchHooks,
+    is_windows: bool,
+    is_history_cleared: bool,
     pub(super) news: Option<SettingsInbox>,
 }
 
 impl SettingsPanel {
-    pub(super) fn split(hooks: SettingsHooks, cx: &mut App) -> (Values, Saver, Self) {
+    pub(super) fn split(
+        hooks: SettingsHooks,
+        search: &SearchHooks,
+        cx: &mut App,
+    ) -> (Values, Saver, Self) {
         let saver = Saver::new(hooks.save, hooks.load_error, hooks.values.clone());
         (
             hooks.values,
             saver,
             Self {
                 news: hooks.news,
+                search: search.clone(),
                 ..Self::new(hooks.file, hooks.line_of, cx)
             },
         )
@@ -108,6 +119,9 @@ impl SettingsPanel {
             line_of,
             shortcuts: None,
             is_shortcuts: false,
+            search: SearchHooks::none(),
+            is_windows: cfg!(windows),
+            is_history_cleared: false,
             news: None,
         }
     }
@@ -179,6 +193,7 @@ impl FerriteWindow {
         self.settings.is_open = false;
         self.settings.edit = None;
         self.settings.waiting_locate = None;
+        self.settings.is_history_cleared = false;
         self.settings.undo.clear();
         self.clear_find(window, cx);
         self.pause_shortcuts(cx);
@@ -211,16 +226,49 @@ impl FerriteWindow {
             SheetEvent::Find => self.focus_find(window, cx),
             SheetEvent::Keep(field) => self.keep_old(field, window, cx),
             SheetEvent::DismissUpgrade => self.dismiss_upgrade(),
+            SheetEvent::ClearHistory => self.clear_search_history(),
+            SheetEvent::InstallService => self.install_index_service(),
+            SheetEvent::RemoveService => self.remove_index_service(),
             SheetEvent::Close => self.escape_settings(window, cx),
         }
         cx.notify();
     }
 
+    fn clear_search_history(&mut self) {
+        (self.settings.search.clear)();
+        self.settings.is_history_cleared = true;
+    }
+
+    fn index_service_status(&self) -> ServiceStatus {
+        (self.settings.search.service.status)()
+    }
+
+    fn install_index_service(&mut self) {
+        if self.index_service_status().can_install() {
+            (self.settings.search.service.install)();
+        }
+    }
+
+    fn remove_index_service(&mut self) {
+        if self.index_service_status().can_remove() {
+            (self.settings.search.service.remove)();
+        }
+    }
+
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let from = section_of(self.settings.row);
         self.settings.row = row.min(FIELDS.len() - 1);
         self.settings.notice = None;
         if std::mem::take(&mut self.settings.is_shortcuts) {
             self.pause_shortcuts(cx);
+            self.settings
+                .scroll
+                .set_offset(gpui_kit::point(px(0.), px(0.)));
+        }
+        if section_of(self.settings.row) != from {
+            self.settings
+                .scroll
+                .set_offset(gpui_kit::point(px(0.), px(0.)));
         }
         if let Some(child) = child_of(&self.settings.filter, row) {
             self.settings.scroll.scroll_to_item(child);
@@ -282,6 +330,11 @@ impl FerriteWindow {
             .filter(self.settings.filter.clone())
             .find(self.find_bar(&t, cx))
             .upgrade(self.settings.upgrade.items())
+            .search_page(SearchPage {
+                status: self.index_service_status(),
+                is_windows: self.settings.is_windows,
+                is_cleared: self.settings.is_history_cleared,
+            })
             .editor(self.edit_bar(&t, cx))
             .shortcuts(
                 self.shown_shortcuts()
@@ -313,6 +366,17 @@ impl FerriteWindow {
 
 #[cfg(test)]
 impl FerriteWindow {
+    pub(in crate::window_view) fn scroll_settings_to_end(&self) {
+        let end = self.settings.scroll.max_offset().y;
+        self.settings
+            .scroll
+            .set_offset(gpui_kit::point(px(0.), -end));
+    }
+
+    pub(in crate::window_view) fn set_settings_windows(&mut self, is_windows: bool) {
+        self.settings.is_windows = is_windows;
+    }
+
     pub(in crate::window_view) fn settings_row(&self) -> usize {
         self.settings.row
     }

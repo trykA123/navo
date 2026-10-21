@@ -1,7 +1,8 @@
 use rusty_ui::prelude::*;
 use rusty_ui::primitives::TextFieldState;
 use rusty_ui::settings::{
-    self, Change, DefaultShift, FIELDS, Field, Filter, Moved, SettingsBody, Values, find_field,
+    self, Change, DefaultShift, FIELDS, Field, Filter, Moved, SearchPage, ServiceStatus,
+    SettingsBody, Values, find_field,
 };
 use rusty_ui::side_sheet::{SheetFrame, SheetState, SideSheet};
 use rusty_ui::tokens::{Mode, Theme, ThemeChoice};
@@ -10,6 +11,7 @@ use rusty_ui::tokens::{Mode, Theme, ThemeChoice};
 pub struct Extras {
     pub has_notice: bool,
     pub find: Option<(Entity<TextFieldState>, &'static str)>,
+    pub is_scrolled_to_end: bool,
 }
 
 pub struct Shown<'a> {
@@ -45,7 +47,19 @@ pub fn sheet(t: &Theme, state: &Entity<SheetState>, frame: SheetFrame, shown: &S
         .iter()
         .position(|spec| spec.field == shown.field)
         .unwrap_or_default();
-    let body = SettingsBody::new(values, row);
+    let page = SearchPage {
+        status: ServiceStatus::NotAvailable,
+        is_windows: true,
+        is_cleared: false,
+    };
+    let body = SettingsBody::new(values, row).search_page(page);
+    let body = if shown.extras.is_scrolled_to_end {
+        let scroll = ScrollHandle::new();
+        scroll.set_offset(point(px(0.), px(-10_000.)));
+        body.track_scroll(&scroll)
+    } else {
+        body
+    };
     let body = match &shown.extras.find {
         Some((input, query)) => body
             .filter(Filter::new(query))

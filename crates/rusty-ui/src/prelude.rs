@@ -7,5 +7,5 @@ pub use gpui_kit::{
 };
 pub use gpui_kit::{
     InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    PlatformInput, point,
+    PlatformInput, ScrollHandle, point,
 };

@@ -29,7 +29,12 @@ fn row_of(field: Field) -> usize {
 }
 
 fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
-    for _ in 0..row_of(field) {
+    let filter = crate::settings::Filter::default();
+    let steps = FIELDS[..row_of(field)]
+        .iter()
+        .filter(|spec| filter.admits(spec))
+        .count();
+    for _ in 0..steps {
         rig.press(cx, "down");
     }
 }

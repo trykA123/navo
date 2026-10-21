@@ -86,6 +86,7 @@ pub enum Page {
     PreviewPartsOff,
     SettingsUpgrade,
     SettingsFind,
+    SearchSettings,
     MouseMarks,
     FileKinds,
     Columns,

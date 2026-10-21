@@ -8,6 +8,7 @@ pub enum SettingValue {
     Bool(bool),
     Integer(i64),
     Text(String),
+    List(Vec<String>),
 }
 
 impl From<SettingValue> for Value {
@@ -16,6 +17,7 @@ impl From<SettingValue> for Value {
             SettingValue::Bool(flag) => flag.into(),
             SettingValue::Integer(number) => number.into(),
             SettingValue::Text(text) => text.into(),
+            SettingValue::List(items) => items.into_iter().collect::<toml_edit::Array>().into(),
         }
     }
 }
@@ -103,6 +105,11 @@ impl super::Settings {
             toml::Value::Boolean(flag) => Some(SettingValue::Bool(*flag)),
             toml::Value::Integer(number) => Some(SettingValue::Integer(*number)),
             toml::Value::String(text) => Some(SettingValue::Text(text.clone())),
+            toml::Value::Array(items) => items
+                .iter()
+                .map(|item| item.as_str().map(str::to_owned))
+                .collect::<Option<Vec<_>>>()
+                .map(SettingValue::List),
             _ => None,
         }
     }

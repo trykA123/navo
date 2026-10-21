@@ -6,6 +6,9 @@ fn canonical(value: Option<SettingValue>) -> Option<String> {
         SettingValue::Bool(flag) => toml::Value::Boolean(flag),
         SettingValue::Integer(number) => toml::Value::Integer(number),
         SettingValue::Text(text) => toml::Value::String(text),
+        SettingValue::List(items) => {
+            toml::Value::Array(items.into_iter().map(toml::Value::String).collect())
+        }
     };
     Some(value.to_string())
 }

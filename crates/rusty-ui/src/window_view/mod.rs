@@ -78,9 +78,12 @@ pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use placement::DisplayScale;
 pub use preview::folder_summary;
-pub use search_hooks::{CommandUse, Frecent, Frecents, RecentCommands, SearchHooks};
+pub use search_hooks::{
+    CommandUse, Frecent, Frecents, RecentCommands, SearchHooks, ServiceHooks, ServiceStatus,
+};
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
+use settings_sheet::SettingsPanel as Panel;
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
 pub use shell_menu::{
     BackgroundLook, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession, background_items,
@@ -188,7 +191,7 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let (values, saver, settings) = settings_sheet::SettingsPanel::split(options.settings, cx);
+        let (values, saver, settings) = Panel::split(options.settings, &options.search, cx);
         let mut browser = Browser::new(options.state, options.provider.clone(), Self::waker(cx));
         browser.set_operations(options.operations);
         browser.set_launcher(options.launcher);

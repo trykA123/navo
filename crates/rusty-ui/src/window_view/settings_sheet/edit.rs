@@ -17,6 +17,15 @@ pub(super) struct TextEdit {
     _enter: Subscription,
 }
 
+fn joined(text: &str) -> String {
+    let items: Vec<&str> = text
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .collect();
+    items.join(", ")
+}
+
 fn parsed(field: Field, text: &str) -> Result<Value, &'static str> {
     let text = text.trim();
     match field.spec().control {
@@ -24,6 +33,7 @@ fn parsed(field: Field, text: &str) -> Result<Value, &'static str> {
             Ok(number) if number > 0 => Ok(Value::Number(number.into())),
             _ => Err(NUMBER_PROBLEM),
         },
+        _ if field.is_list() => Ok(Value::Text(joined(text).into())),
         _ => Ok(Value::Text(text.to_owned().into())),
     }
 }

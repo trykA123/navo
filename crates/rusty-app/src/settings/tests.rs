@@ -392,3 +392,20 @@ fn a_kept_markdown_split_and_preview_parts_land_in_their_tables_and_keep_comment
     assert!(text.contains("type-bars = true\n"), "{text}");
     assert!(text.contains("largest-files = false # ten"), "{text}");
 }
+
+#[test]
+fn search_lists_land_in_the_file_as_arrays_and_come_back_as_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    let settings = hooks(Some(&file));
+    let change = Change::text(Field::SearchDrives, "C:, D: ,");
+    let stored = save(&settings, change).unwrap();
+    assert_eq!(
+        stored.get(Field::SearchDrives),
+        &Value::Text("C:, D:".into())
+    );
+    let (store, _) = SettingsStore::load(&file);
+    assert_eq!(store.current().search.drives, ["C:", "D:"]);
+    let text = fs::read_to_string(&file).unwrap();
+    assert!(text.contains("drives = [\"C:\", \"D:\"]"), "{text}");
+}

@@ -73,21 +73,26 @@ pub fn sheet_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 
     })
 }
 
-pub fn settings_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 3] {
+pub fn settings_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 4] {
     let input = text_field_state("Find a setting by name, key or help", window, cx);
     input.update(cx, |state, cx| state.set_value("sort", window, cx));
     [
-        (Field::TextLineNumbers, false, None),
-        (Field::Theme, true, None),
-        (Field::Sort, false, Some((input, "sort"))),
+        (Field::TextLineNumbers, false, None, false),
+        (Field::Theme, true, None, false),
+        (Field::Sort, false, Some((input, "sort")), false),
+        (Field::SearchIndex, false, None, true),
     ]
-    .map(|(field, has_notice, find)| {
+    .map(|(field, has_notice, find, is_scrolled_to_end)| {
         let shows = SheetShows {
             active: Side::Left,
             window_width: None,
             is_ringed: false,
             settings: Some(field),
-            extras: Extras { has_notice, find },
+            extras: Extras {
+                has_notice,
+                find,
+                is_scrolled_to_end,
+            },
             shortcuts: None,
         };
         cx.new(|cx| WindowPage::with_sheet(shows, cx))

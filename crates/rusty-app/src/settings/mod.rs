@@ -216,6 +216,9 @@ fn stored_value(change: &Change) -> Option<SettingValue> {
     match (&change.value, change.field.spec().control) {
         (Value::Flag(flag), _) => Some(SettingValue::Bool(*flag)),
         (Value::Number(number), _) => Some(SettingValue::Integer(*number)),
+        (Value::Text(text), _) if change.field.is_list() => {
+            Some(SettingValue::List(split_list(text)))
+        }
         (Value::Text(text), _) if text.is_empty() => None,
         (Value::Text(text), _) => Some(SettingValue::Text(text.to_string())),
         (Value::Pick(at), Control::Choices(options, _)) => options
@@ -223,6 +226,14 @@ fn stored_value(change: &Change) -> Option<SettingValue> {
             .map(|option| SettingValue::Text(option.toml.to_owned())),
         (Value::Pick(_) | Value::Unset | Value::Reset, _) => None,
     }
+}
+
+fn split_list(text: &str) -> Vec<String> {
+    text.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 pub fn values_of(store: &SettingsStore) -> Values {
@@ -244,6 +255,9 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
             .map(Value::Pick),
         (Control::Toggle, Some(SettingValue::Bool(flag))) => Some(Value::Flag(flag)),
         (Control::Number, Some(SettingValue::Integer(number))) => Some(Value::Number(number)),
+        (Control::Text, Some(SettingValue::List(items))) => {
+            Some(Value::Text(items.join(", ").into()))
+        }
         (Control::Text, Some(SettingValue::Text(text))) => Some(Value::Text(text.into())),
         (Control::Text, None) => Some(Value::Text("".into())),
         _ => None,

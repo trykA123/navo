@@ -9,7 +9,7 @@ use super::{FerriteWindow, StartOptions, fake, open_options, press, settle, two_
 use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
-use crate::window_view::{AppMenuHooks, SaveReport, SettingsHooks, SettingsSender};
+use crate::window_view::{AppMenuHooks, SaveReport, SearchHooks, SettingsHooks, SettingsSender};
 
 pub(super) fn values_of(settings: QuickSettings) -> Values {
     Values::default()
@@ -126,6 +126,15 @@ fn rig_fs() -> Arc<rusty_fs::FakeFs> {
 }
 
 pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option<&str>) -> Rig {
+    rig_search(cx, values, load_error, SearchHooks::none())
+}
+
+pub(super) fn rig_search(
+    cx: &mut TestAppContext,
+    values: Values,
+    load_error: Option<&str>,
+    search: SearchHooks,
+) -> Rig {
     let fs = rig_fs();
     let state = two_panes(&fs);
     let store = Arc::new(FakeStore {
@@ -151,6 +160,7 @@ pub(super) fn rig_on(cx: &mut TestAppContext, values: Values, load_error: Option
             },
         },
         settings,
+        search,
         ..super::options_for(fs, state)
     };
     let (window, view) = open_options(cx, options);

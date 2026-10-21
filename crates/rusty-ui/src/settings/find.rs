@@ -1,4 +1,5 @@
 use super::fields::{FIELDS, FieldSpec, Section};
+use super::search_page::{HISTORY_WORDS, SERVICE_WORDS};
 use super::steps::rows_in;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -17,11 +18,19 @@ impl Filter {
 
     #[must_use]
     pub fn admits(&self, spec: &FieldSpec) -> bool {
+        if spec.field.is_windows_only() && !cfg!(windows) {
+            return false;
+        }
         if self.is_empty() {
             return true;
         }
         let text = format!("{} {} {}", spec.label(), spec.key, spec.help()).to_lowercase();
         self.0.iter().all(|word| text.contains(word))
+    }
+
+    #[must_use]
+    pub fn admits_text(&self, text: &str) -> bool {
+        self.0.iter().all(|word| text.contains(word.as_str()))
     }
 
     #[must_use]
@@ -50,6 +59,8 @@ pub enum Line {
     Section(Section),
     Group(&'static str),
     Row(usize),
+    Service,
+    History,
 }
 
 #[must_use]
@@ -67,7 +78,8 @@ fn section_lines(filter: &Filter, section: Section) -> Vec<Line> {
     let rows: Vec<_> = rows_in(section)
         .filter(|(_, spec)| filter.admits(spec))
         .collect();
-    if rows.is_empty() {
+    let extras = extra_lines(filter, section);
+    if rows.is_empty() && extras.is_empty() {
         return Vec::new();
     }
     let mut group = None;
@@ -79,5 +91,20 @@ fn section_lines(filter: &Filter, section: Section) -> Vec<Line> {
         }
         found.push(Line::Row(index));
     }
+    found.extend(extras);
     found
+}
+
+fn extra_lines(filter: &Filter, section: Section) -> Vec<Line> {
+    if section != Section::Search {
+        return Vec::new();
+    }
+    [
+        (Line::Service, SERVICE_WORDS),
+        (Line::History, HISTORY_WORDS),
+    ]
+    .into_iter()
+    .filter(|(_, words)| filter.admits_text(words))
+    .map(|(line, _)| line)
+    .collect()
 }

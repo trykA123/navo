@@ -63,7 +63,12 @@ fn row_of(field: Field) -> usize {
 }
 
 fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
-    for _ in 0..row_of(field) {
+    let filter = crate::settings::Filter::default();
+    let steps = FIELDS[..row_of(field)]
+        .iter()
+        .filter(|spec| filter.admits(spec))
+        .count();
+    for _ in 0..steps {
         rig.press(cx, "down");
     }
 }
@@ -203,6 +208,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         "Terminal",
         "Editor",
         "Copy",
+        "Search",
         "Display",
         "Shortcuts",
         "Appearance",
@@ -211,7 +217,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         rig.press(cx, "tab");
         let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
         assert!(in_sheet, "after tab {step}");
-        let current = (0..8usize).find(|index| {
+        let current = (0..9usize).find(|index| {
             cx.update_window(rig.window, |_, window, cx| {
                 window.render_frame(cx);
                 window.find(("settings-section", *index)).selected() == Some(true)

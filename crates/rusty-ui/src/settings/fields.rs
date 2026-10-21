@@ -1,3 +1,4 @@
+use super::search_fields::SEARCH_ROWS;
 use super::viewer_fields::VIEWER_FIELDS;
 use super::window_fields::WINDOW_FIELDS;
 use crate::prelude::SharedString;
@@ -11,17 +12,19 @@ pub enum Section {
     Terminal,
     Editor,
     Copy,
+    Search,
     Display,
 }
 
 impl Section {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
         Self::Terminal,
         Self::Editor,
         Self::Copy,
+        Self::Search,
         Self::Display,
     ];
 
@@ -33,6 +36,7 @@ impl Section {
             Self::Terminal => "Terminal",
             Self::Editor => "Editor",
             Self::Copy => "Copy",
+            Self::Search => "Search",
             Self::Display => "Display",
         }
     }
@@ -45,6 +49,7 @@ impl Section {
             Self::Terminal => IconName::SquareTerminal,
             Self::Editor => IconName::FilePen,
             Self::Copy => IconName::Copy,
+            Self::Search => IconName::Search,
             Self::Display => IconName::Eye,
         }
     }
@@ -72,6 +77,12 @@ pub enum Field {
     TerminalCommand,
     EditorPath,
     CopyMode,
+    SearchIndex,
+    SearchDrives,
+    SearchExclude,
+    SearchNetwork,
+    SearchRemovable,
+    SearchRemember,
     WindowTabsWithOne,
     WindowPathBar,
     WindowDriveButton,
@@ -106,7 +117,7 @@ pub struct Choice {
     pub toml: &'static str,
 }
 
-const fn choice(label: &'static str, toml: &'static str) -> Choice {
+pub(super) const fn choice(label: &'static str, toml: &'static str) -> Choice {
     Choice { label, toml }
 }
 
@@ -318,34 +329,22 @@ const GENERAL: [FieldSpec; 20] = [
     ),
 ];
 
-pub const FIELDS: [FieldSpec; 46] = join(GENERAL, WINDOW_FIELDS, VIEWER_FIELDS);
+pub const FIELDS: [FieldSpec; 52] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
 
-const fn join<const A: usize, const B: usize, const C: usize, const N: usize>(
-    first: [FieldSpec; A],
-    second: [FieldSpec; B],
-    third: [FieldSpec; C],
-) -> [FieldSpec; N] {
-    assert!(A + B + C == N, "FIELDS has the wrong length");
-    let mut all = [first[0]; N];
+const fn join<const N: usize>(parts: [&[FieldSpec]; 4]) -> [FieldSpec; N] {
+    let mut all = [parts[0][0]; N];
     let mut at = 0;
-    let mut index = 0;
-    while index < A {
-        all[at] = first[index];
-        at += 1;
-        index += 1;
+    let mut part = 0;
+    while part < parts.len() {
+        let mut index = 0;
+        while index < parts[part].len() {
+            all[at] = parts[part][index];
+            at += 1;
+            index += 1;
+        }
+        part += 1;
     }
-    index = 0;
-    while index < B {
-        all[at] = second[index];
-        at += 1;
-        index += 1;
-    }
-    index = 0;
-    while index < C {
-        all[at] = third[index];
-        at += 1;
-        index += 1;
-    }
+    assert!(at == N, "FIELDS has the wrong length");
     all
 }
 
@@ -410,19 +409,20 @@ impl Field {
     }
 
     pub fn is_applied(self) -> bool {
-        !matches!(
-            self,
-            Self::LightTheme
-                | Self::DarkTheme
-                | Self::Font
-                | Self::FontSize
-                | Self::TerminalProvider
-                | Self::TerminalCommand
-                | Self::AutomotiveMemoryStrip
-                | Self::AutomotiveCharts
-                | Self::AutomotiveRowBars
-                | Self::AutomotiveUsageBars
-                | Self::AutomotiveWhoUses
-        )
+        !self.is_unread_search()
+            && !matches!(
+                self,
+                Self::LightTheme
+                    | Self::DarkTheme
+                    | Self::Font
+                    | Self::FontSize
+                    | Self::TerminalProvider
+                    | Self::TerminalCommand
+                    | Self::AutomotiveMemoryStrip
+                    | Self::AutomotiveCharts
+                    | Self::AutomotiveRowBars
+                    | Self::AutomotiveUsageBars
+                    | Self::AutomotiveWhoUses
+            )
     }
 }

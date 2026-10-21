@@ -122,6 +122,21 @@ fn save_updates_current() {
 }
 
 #[test]
+fn a_list_value_is_saved_and_read_back() {
+    let dir = tmp();
+    let (mut store, _) = SettingsStore::load(&settings_file(&dir));
+    let names = vec!["C:".to_owned(), "D:".to_owned()];
+    store
+        .save("search.drives", Some(SettingValue::List(names.clone())))
+        .unwrap();
+    assert_eq!(store.current().search.drives, names);
+    assert_eq!(
+        store.current().value_at("search.drives"),
+        Some(SettingValue::List(names))
+    );
+}
+
+#[test]
 fn save_keeps_comments() {
     let dir = tmp();
     let path = settings_file(&dir);

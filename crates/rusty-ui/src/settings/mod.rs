@@ -3,6 +3,8 @@ mod fields;
 mod find;
 mod find_bar;
 mod row_state;
+mod search_fields;
+mod search_page;
 mod steps;
 mod upgrade;
 mod values;
@@ -27,6 +29,7 @@ pub use fields::{
 };
 pub use find::{Filter, Line, lines};
 pub use find_bar::find_field;
+pub use search_page::{SearchPage, ServiceStatus};
 pub use steps::{Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of};
 pub use upgrade::{DefaultShift, Moved};
 pub use values::{Change, Value, Values};
@@ -79,6 +82,9 @@ pub enum SheetEvent {
     Find,
     Keep(Field),
     DismissUpgrade,
+    ClearHistory,
+    InstallService,
+    RemoveService,
     Close,
 }
 
@@ -136,6 +142,7 @@ pub struct SettingsBody {
     filter: Filter,
     find: Option<AnyElement>,
     upgrade: Vec<Moved>,
+    page: SearchPage,
     focus: Option<FocusHandle>,
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
@@ -152,6 +159,7 @@ impl SettingsBody {
             filter: Filter::default(),
             find: None,
             upgrade: Vec::new(),
+            page: SearchPage::default(),
             focus: None,
             scroll: None,
             on_event: None,
@@ -191,6 +199,12 @@ impl SettingsBody {
     #[must_use]
     pub fn upgrade(mut self, items: Vec<Moved>) -> Self {
         self.upgrade = items;
+        self
+    }
+
+    #[must_use]
+    pub fn search_page(mut self, page: SearchPage) -> Self {
+        self.page = page;
         self
     }
 
@@ -336,6 +350,7 @@ impl RenderOnce for SettingsBody {
             values: &self.values,
             row: self.row,
             filter: &self.filter,
+            page: &self.page,
             send: self.on_event.clone(),
         };
         let shown = self.shortcuts.is_none().then_some(section);

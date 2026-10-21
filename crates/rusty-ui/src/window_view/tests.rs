@@ -42,6 +42,7 @@ mod prefetch;
 mod settings_find;
 mod settings_layer;
 mod settings_news;
+mod settings_search;
 mod settings_sheet;
 mod settings_state;
 mod settings_upgrade;

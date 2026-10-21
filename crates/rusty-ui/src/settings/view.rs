@@ -5,6 +5,7 @@ use super::controls::{self, Picks};
 use super::fields::{Control, FIELDS, FieldSpec, Look as ChoiceLook, Section};
 use super::find::{Filter, Line, lines};
 use super::row_state;
+use super::search_page::{self, SearchPage};
 use super::steps::first_row;
 use super::values::{Value, Values};
 use super::{Handler, SheetEvent};
@@ -26,6 +27,7 @@ pub(super) struct Look<'a> {
     pub values: &'a Values,
     pub row: usize,
     pub filter: &'a Filter,
+    pub page: &'a SearchPage,
     pub send: Option<Handler>,
 }
 
@@ -356,12 +358,19 @@ pub(super) fn content(
     scroll: Option<&ScrollHandle>,
 ) -> impl IntoElement + use<> {
     let t = look.theme;
+    let send = look.send.as_ref();
     let mut rows: Vec<AnyElement> = lines(look.filter, section)
         .into_iter()
-        .filter_map(|line| match line {
-            Line::Section(section) => Some(section_heading(t, section)),
-            Line::Group(label) => Some(group_heading(t, label)),
-            Line::Row(index) => FIELDS.get(index).map(|spec| row(look, index, spec)),
+        .flat_map(|line| match line {
+            Line::Section(section) => vec![section_heading(t, section)],
+            Line::Group(label) => vec![group_heading(t, label)],
+            Line::Row(index) => FIELDS
+                .get(index)
+                .map(|spec| row(look, index, spec))
+                .into_iter()
+                .collect(),
+            Line::Service => search_page::service_block(t, look.page, send),
+            Line::History => search_page::history_block(t, look.page, send),
         })
         .collect();
     if rows.is_empty() {
