@@ -58,16 +58,55 @@ pub struct CommandEntry {
     pub arg: Option<ArgKind>,
 }
 
+const ARGUMENT_COMMANDS: [(&str, &str, &str, ArgKind); 4] = [
+    (
+        "pane.navigate",
+        "command-center-arg-go-to-folder",
+        "FerritePane",
+        ArgKind::Path,
+    ),
+    (
+        "pane.open_tab",
+        "command-center-arg-open-folder-in-tab",
+        "FerritePane",
+        ArgKind::Path,
+    ),
+    (
+        "selection.add_pattern",
+        "command-center-arg-mark-by-pattern",
+        "FileList",
+        ArgKind::Text,
+    ),
+    (
+        "selection.remove_pattern",
+        "command-center-arg-unmark-by-pattern",
+        "FileList",
+        ArgKind::Text,
+    ),
+];
+
 #[must_use]
 pub fn entries() -> Vec<CommandEntry> {
-    all()
-        .map(|spec| CommandEntry {
-            spec,
+    let bound = all().map(|spec| CommandEntry {
+        spec,
+        enabled: true,
+        in_palette: !palette_hidden::HIDDEN.contains(&spec.name),
+        arg: None,
+    });
+    let asking = ARGUMENT_COMMANDS
+        .iter()
+        .map(|&(name, label, context, kind)| CommandEntry {
+            spec: CommandSpec {
+                name,
+                label,
+                context,
+                action: None,
+            },
             enabled: true,
-            in_palette: !palette_hidden::HIDDEN.contains(&spec.name),
-            arg: None,
-        })
-        .collect()
+            in_palette: true,
+            arg: Some(kind),
+        });
+    bound.chain(asking).collect()
 }
 
 pub fn all() -> impl Iterator<Item = CommandSpec> {

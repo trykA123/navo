@@ -76,8 +76,8 @@ files.multi_rename | FileList | true
 files.undo | FileList | true
 files.new_folder | FileList | true
 files.new_file | FileList | true
-files.mark_pattern | FileList | true
-files.unmark_pattern | FileList | true
+files.mark_pattern | FileList | false
+files.unmark_pattern | FileList | false
 files.invert_marks | FileList | true
 files.sort_by_name | FileList | true
 files.sort_by_extension | FileList | true
@@ -358,3 +358,7 @@ window.new | global | true
 workspace.list | global | true
 help.key_map | global | true
 app.quit | global | true
+pane.navigate | FerritePane | true
+pane.open_tab | FerritePane | true
+selection.add_pattern | FileList | true
+selection.remove_pattern | FileList | true

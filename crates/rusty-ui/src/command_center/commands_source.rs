@@ -59,7 +59,10 @@ impl CommandsSnapshot {
             .filter(|entry| entry.enabled && entry.in_palette)
             .filter(|entry| in_scope(entry.spec.context, stack))
             .filter_map(|entry| {
-                let action = entry.spec.action?;
+                let action = entry
+                    .spec
+                    .action
+                    .or_else(|| entry.arg.map(|_| entry.spec.name))?;
                 Some(CommandRow {
                     name: entry.spec.name,
                     action,

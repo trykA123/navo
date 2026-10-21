@@ -442,17 +442,28 @@ fn every_cmd_message_in_the_files_belongs_to_a_command() {
 fn entries_cover_every_command_in_order() {
     let names: Vec<&str> = entries().iter().map(|entry| entry.spec.name).collect();
     let all: Vec<&str> = all().map(|spec| spec.name).collect();
-    assert_eq!(names, all);
+    assert_eq!(names[..all.len()], all);
 }
 
 #[test]
-fn every_entry_is_enabled_and_takes_no_argument() {
-    let odd: Vec<&str> = entries()
+fn every_entry_is_enabled_and_only_the_asking_ones_take_an_argument() {
+    let entries = entries();
+    let disabled = entries.iter().filter(|entry| !entry.enabled).count();
+    let asking: Vec<&str> = entries
         .iter()
-        .filter(|entry| !entry.enabled || entry.arg.is_some())
+        .filter(|entry| entry.arg.is_some())
         .map(|entry| entry.spec.name)
         .collect();
-    assert_eq!(odd, Vec::<&str>::new());
+    assert_eq!(disabled, 0);
+    assert_eq!(
+        asking,
+        [
+            "pane.navigate",
+            "pane.open_tab",
+            "selection.add_pattern",
+            "selection.remove_pattern"
+        ]
+    );
 }
 
 #[test]

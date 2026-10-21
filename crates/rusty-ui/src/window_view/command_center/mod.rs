@@ -1,3 +1,4 @@
+mod args;
 mod keys;
 mod open;
 mod run;
@@ -53,6 +54,7 @@ struct Step {
     name: &'static str,
     kind: ArgKind,
     label: SharedString,
+    previous: SharedString,
 }
 
 struct Open {
@@ -60,6 +62,7 @@ struct Open {
     rows: Rc<[Row]>,
     selection: Selection,
     step: Option<Step>,
+    after_step: bool,
     error: Option<SharedString>,
     anchor: Bounds<Pixels>,
     keys: HintKeys,
@@ -183,6 +186,7 @@ impl FerriteWindow {
             selection: Selection::start(&rows),
             rows,
             step: None,
+            after_step: false,
             error: None,
             anchor,
             keys,
@@ -298,5 +302,10 @@ impl FerriteWindow {
     pub(super) fn command_center_generation(&self) -> Option<u64> {
         let open = self.command_center.open.as_ref()?;
         Some(open.search.generation())
+    }
+
+    pub(super) fn command_center_query(&self, cx: &App) -> Option<String> {
+        let open = self.command_center.open.as_ref()?;
+        Some(open.center.read(cx).query(cx).to_string())
     }
 }

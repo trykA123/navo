@@ -1,5 +1,7 @@
 pub(super) const HIDDEN: &[&str] = &[
     "app.command_palette",
+    "files.mark_pattern",
+    "files.unmark_pattern",
     "files.cursor_up",
     "files.cursor_down",
     "files.page_up",

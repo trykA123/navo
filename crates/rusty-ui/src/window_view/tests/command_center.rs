@@ -7,10 +7,11 @@ use rusty_core::Location;
 
 use super::{fake, open_options, options_for, press, settle, two_panes};
 use crate::command_center::{
-    ArgKind, Cancel, Group, Hit, HitSink, Notes, Request, ResultSource, Scope, Scopes, Target,
+    Cancel, Group, Hit, HitSink, Notes, Request, ResultSource, Scope, Scopes, Target,
 };
 use crate::window_view::{FerriteWindow, Frecent};
 
+mod args;
 mod late;
 mod open;
 
@@ -366,36 +367,6 @@ fn results_of_an_older_generation_are_dropped(cx: &mut TestAppContext) {
     })
     .expect("window");
     assert_eq!(rig.rows(cx), shown);
-}
-
-#[gpui_kit::test]
-fn an_argument_command_asks_for_its_value_then_runs(cx: &mut TestAppContext) {
-    let go = Target::Arg("pane.navigate", ArgKind::Path);
-    let rig = rig_with(cx, vec![hit("Go to folder…", Group::Commands, go)]);
-    rig.press(cx, "ctrl-k");
-    rig.type_query(cx, "go to");
-    rig.press(cx, "enter");
-    assert!(rig.is_open(cx));
-    assert_eq!(
-        rig.label(cx, "command-center-chip").as_deref(),
-        Some("Go to folder")
-    );
-    rig.type_query(cx, location("dest").as_str());
-    rig.press(cx, "enter");
-    assert!(!rig.is_open(cx));
-    assert_eq!(rig.here(cx), location("dest").as_str());
-}
-
-#[gpui_kit::test]
-fn escape_leaves_the_argument_step_before_closing(cx: &mut TestAppContext) {
-    let go = Target::Arg("pane.navigate", ArgKind::Path);
-    let rig = rig_with(cx, vec![hit("Go to folder…", Group::Commands, go)]);
-    rig.press(cx, "ctrl-k");
-    rig.type_query(cx, "go to");
-    rig.press(cx, "enter");
-    rig.press(cx, "escape");
-    assert!(rig.is_open(cx));
-    assert!(rig.label(cx, "command-center-chip").is_none());
 }
 
 fn recording(cx: &mut TestAppContext, rig: &Rig) -> Arc<Mutex<Vec<String>>> {

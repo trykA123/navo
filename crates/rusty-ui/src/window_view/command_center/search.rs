@@ -6,6 +6,7 @@ use crate::command_center::{
     Cancel, CommandsSnapshot, Group, Hit, HitSink, Notes, Query, RecentSource, Request,
     ResultSource, Results, Row, Scope,
 };
+use crate::commands::ArgKind;
 use crate::prelude::*;
 use gpui_kit::{AsyncWindowContext, WeakEntity};
 
@@ -59,6 +60,25 @@ impl Search {
 
     pub(super) fn generation(&self) -> u64 {
         self.generation
+    }
+
+    fn sources_for(&self, is_step: bool) -> Arc<[Arc<dyn ResultSource>]> {
+        if !is_step {
+            return self.sources.clone();
+        }
+        self.sources
+            .iter()
+            .filter(|source| source.id() == "paths")
+            .cloned()
+            .collect()
+    }
+}
+
+fn in_path_mode(text: &str) -> Query {
+    Query {
+        scope: Scope::Files,
+        terms: Vec::new(),
+        path: Some(text.to_owned()),
     }
 }
 
@@ -175,15 +195,22 @@ impl FerriteWindow {
             return;
         };
         open.error = None;
+        open.after_step = false;
         open.run_when_shown = None;
         let generation = open.search.next();
-        if open.step.is_some() || query.trim().is_empty() {
-            if open.step.is_some() {
-                return self.show_rows((generation, Vec::new()), window, cx);
-            }
+        let step = open.step.as_ref().map(|step| step.kind);
+        let is_blank = query.trim().is_empty();
+        if step == Some(ArgKind::Text) || (step.is_some() && is_blank) {
+            return self.show_rows((generation, Vec::new()), window, cx);
+        }
+        if is_blank {
             return self.load_recent(window, cx);
         }
-        let query = Query::parse(query);
+        let query = if step.is_some() {
+            in_path_mode(query)
+        } else {
+            Query::parse(query)
+        };
         let scope = query.scope;
         let request = Request {
             query,
@@ -193,7 +220,7 @@ impl FerriteWindow {
         };
         let search = &open.search;
         let round = Round {
-            sources: search.sources.clone(),
+            sources: search.sources_for(step.is_some()),
             request: Arc::new(request),
             sink: search.sink.clone(),
             cancel: search.cancel.clone(),

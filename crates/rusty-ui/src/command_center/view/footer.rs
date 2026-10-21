@@ -138,9 +138,9 @@ pub(crate) fn result_count(rows: &[Row]) -> usize {
         .sum()
 }
 
-pub(super) fn empty_parts(query: &str) -> (String, String) {
+pub(super) fn empty_parts(query: &str, is_path: bool) -> (String, String) {
     let parsed = Query::parse(query);
-    let (id, term) = match (parsed.path.is_some(), parsed.scope) {
+    let (id, term) = match (is_path || parsed.path.is_some(), parsed.scope) {
         (true, _) => ("command-center-none-path", query),
         (false, Scope::Mixed) => ("command-center-none-mixed", query),
         (false, Scope::Commands) => ("command-center-none-commands", &query[1..]),
@@ -149,8 +149,8 @@ pub(super) fn empty_parts(query: &str) -> (String, String) {
     (tr(id), term.trim().to_owned())
 }
 
-pub(super) fn empty_message(t: &Theme, query: &str) -> impl IntoElement {
-    let (lead, term) = empty_parts(query);
+pub(super) fn empty_message(t: &Theme, query: &str, is_path: bool) -> impl IntoElement {
+    let (lead, term) = empty_parts(query, is_path);
     div()
         .id("command-center-empty")
         .role(Role::Status)

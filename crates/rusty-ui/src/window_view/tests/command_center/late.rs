@@ -9,7 +9,7 @@ use super::super::{
 use super::{Rig, fake, hit, location, recording, rig, rig_with};
 use crate::command_center::{Group, Notes, Scope, Target};
 
-fn keys_unsettled(cx: &mut TestAppContext, rig: &Rig, keys: &[&str]) {
+pub(super) fn keys_unsettled(cx: &mut TestAppContext, rig: &Rig, keys: &[&str]) {
     cx.update_window(rig.window, |_, window, cx| {
         for key in keys {
             window.press(key, cx);
@@ -18,7 +18,7 @@ fn keys_unsettled(cx: &mut TestAppContext, rig: &Rig, keys: &[&str]) {
     .expect("window");
 }
 
-fn input_unsettled(cx: &mut TestAppContext, rig: &Rig, text: &str) {
+pub(super) fn input_unsettled(cx: &mut TestAppContext, rig: &Rig, text: &str) {
     cx.update_window(rig.window, |_, window, cx| window.input(text, cx))
         .expect("window");
 }

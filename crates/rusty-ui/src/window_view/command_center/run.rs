@@ -1,40 +1,11 @@
 use rusty_core::Command;
 
 use super::super::FerriteWindow;
-use super::Step;
+use super::args::{Value, picked};
 use super::open::{Place, Way};
-use crate::command_center::{Group, Hit, Query, Row, Target, completion};
-use crate::commands::ArgKind;
+use crate::command_center::{Group, Hit, Row, Target, completion};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
-
-const ELLIPSIS: char = '…';
-
-fn quoted(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for c in text.chars() {
-        match c {
-            '"' | '\\' => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", u32::from(c))),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-pub(super) fn argument_command(step: &Step, value: &str) -> Result<Command, String> {
-    let field = match step.kind {
-        ArgKind::Path => "location",
-        ArgKind::Text => "pattern",
-    };
-    let text = format!("{} {{ {field}: {} }}", step.name, quoted(value.trim()));
-    Command::parse(&text).map_err(|error| error.to_string())
-}
 
 fn prefix(group: Group) -> Option<char> {
     match group {
@@ -49,7 +20,7 @@ impl FerriteWindow {
         let Some(open) = self.command_center.open.as_mut() else {
             return;
         };
-        if open.step.is_none() && open.search.shown != open.search.generation() {
+        if open.search.shown != open.search.generation() {
             open.run_when_shown = Some(way);
             return;
         }
@@ -64,8 +35,10 @@ impl FerriteWindow {
             if !way.runs_commands() {
                 return;
             }
-            let value = open.center.read(cx).query(cx);
-            return self.run_argument((&step, &value), window, cx);
+            let typed = open.center.read(cx).query(cx).to_string();
+            let value =
+                picked(open.selection.row(&open.rows)).map_or(Value::Typed(typed), Value::Picked);
+            return self.run_argument((&step, value), window, cx);
         }
         match open.selection.row(&open.rows).cloned() {
             Some(Row::TopHit(hit) | Row::Hit(hit)) => self.run_hit((hit, way), window, cx),
@@ -99,18 +72,7 @@ impl FerriteWindow {
         match target {
             Target::Action(name) => self.run_action(name, window, cx),
             Target::Core(command) => self.run_core(&command, window, cx),
-            Target::Arg(name, kind) => {
-                let label = title.trim_end_matches(ELLIPSIS).trim_end().to_owned();
-                self.enter_step(
-                    Some(Step {
-                        name,
-                        kind,
-                        label: label.into(),
-                    }),
-                    window,
-                    cx,
-                );
-            }
+            Target::Arg(name, kind) => self.choose_argument((name, kind, &title), window, cx),
             Target::ShowAll(group) => self.show_all(group, window, cx),
             Target::Open { .. } | Target::GoTo(_) => {}
         }
@@ -140,7 +102,7 @@ impl FerriteWindow {
         });
     }
 
-    fn record_command(&self, name: &str, cx: &mut Context<Self>) {
+    pub(super) fn record_command(&self, name: &str, cx: &mut Context<Self>) {
         let record = self.command_center.hooks.record_command.clone();
         let name = name.to_owned();
         cx.background_executor()
@@ -148,29 +110,14 @@ impl FerriteWindow {
             .detach();
     }
 
-    fn run_core(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
-        self.close_command_center(window, cx);
-        self.apply(command, window, cx);
-    }
-
-    fn run_argument(
+    pub(super) fn run_core(
         &mut self,
-        (step, value): (&Step, &str),
+        command: &Command,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match argument_command(step, value) {
-            Ok(command) => {
-                self.record_command(step.name, cx);
-                self.run_core(&command, window, cx);
-            }
-            Err(error) => {
-                if let Some(open) = self.command_center.open.as_mut() {
-                    open.error = Some(error.into());
-                }
-                self.push_command_center(window, cx);
-            }
-        }
+        self.close_command_center(window, cx);
+        self.apply(command, window, cx);
     }
 
     pub(super) fn complete_path(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -179,7 +126,7 @@ impl FerriteWindow {
         };
         let query = open.center.read(cx).query(cx);
         let (true, Some(Row::TopHit(hit) | Row::Hit(hit))) = (
-            Query::parse(&query).path.is_some() && open.step.is_none(),
+            super::args::is_path_input(open.step.as_ref(), &query),
             open.selection.row(&open.rows),
         ) else {
             return false;
@@ -203,36 +150,5 @@ impl FerriteWindow {
         let center = open.center.clone();
         center.update(cx, |center, cx| center.set_query(&text, window, cx));
         self.query_changed(&text, window, cx);
-    }
-
-    pub(super) fn enter_step(
-        &mut self,
-        step: Option<Step>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(open) = self.command_center.open.as_mut() else {
-            return;
-        };
-        open.step = step;
-        open.error = None;
-        let center = open.center.clone();
-        center.update(cx, |center, cx| center.set_query("", window, cx));
-        self.query_changed("", window, cx);
-    }
-
-    pub(super) fn command_center_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(open) = self.command_center.open.as_ref() else {
-            return;
-        };
-        let center = open.center.clone();
-        if !center.read(cx).query(cx).is_empty() {
-            center.update(cx, |center, cx| center.set_query("", window, cx));
-            return self.query_changed("", window, cx);
-        }
-        if open.step.is_some() {
-            return self.enter_step(None, window, cx);
-        }
-        self.close_command_center(window, cx);
     }
 }

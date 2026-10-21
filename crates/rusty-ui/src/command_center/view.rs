@@ -1,3 +1,4 @@
+mod chip;
 mod footer;
 mod motion;
 mod place;
@@ -10,9 +11,9 @@ use gpui_kit::component::input::{Input, InputEvent};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnchoredPositionMode, AnyElement, App, Bounds, ClickEvent, Context, Div, Entity, EventEmitter,
-    FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement, Modifiers, ParentElement,
-    Pixels, Render, Role, ScrollHandle, SharedString, StatefulInteractiveElement, Styled,
-    Subscription, WeakEntity, Window, anchored, deferred, div, px,
+    FocusHandle, Focusable, InteractiveElement, IntoElement, Modifiers, ParentElement, Pixels,
+    Render, Role, ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Subscription,
+    WeakEntity, Window, anchored, deferred, div, px,
 };
 use rusty_l10n::tr;
 
@@ -32,6 +33,7 @@ use crate::primitives::{
     IconName, Kbd, ListScroll, RowSemantics, TextFieldState, VirtualList, icon, text_field_state,
 };
 use crate::tokens::Theme;
+use chip::chip;
 use footer::FooterLook;
 pub use motion::LEAVE;
 use motion::enter;
@@ -222,31 +224,6 @@ impl Paint {
     }
 }
 
-fn chip(t: &Theme, argument: &Argument) -> impl IntoElement {
-    div()
-        .id("command-center-chip")
-        .role(Role::Label)
-        .aria_label(argument.label.clone())
-        .test_support()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(t.spacing.xs)
-        .h(px(CHIP))
-        .px(t.spacing.md)
-        .rounded(t.radii.full)
-        .bg(t.surfaces.current)
-        .text_color(t.colors.accent_text)
-        .text_size(t.typography.tiny)
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(icon(
-            IconName::SquareChevronRight,
-            t.typography.small,
-            t.colors.accent_text,
-        ))
-        .child(argument.label.clone())
-}
-
 impl CommandCenter {
     fn input_row(&self, t: &Theme) -> Div {
         let input = Input::new(&self.field)
@@ -346,8 +323,11 @@ impl CommandCenter {
         if !paint.rows.is_empty() {
             return Some(self.list(paint));
         }
-        let has_query = !query.trim().is_empty();
-        has_query.then(|| footer::empty_message(&paint.theme, query).into_any_element())
+        let kind = self.props.argument.as_ref().map(|argument| argument.kind);
+        let has_query =
+            !query.trim().is_empty() && kind != Some(ArgKind::Text) && self.props.error.is_none();
+        let is_path = kind == Some(ArgKind::Path);
+        has_query.then(|| footer::empty_message(&paint.theme, query, is_path).into_any_element())
     }
 
     fn footer(&self, t: &Theme, query: &str) -> Div {

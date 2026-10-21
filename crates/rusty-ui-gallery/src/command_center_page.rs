@@ -176,7 +176,7 @@ fn rows(shows: Shows) -> (&'static str, Vec<Row>) {
                 .collect();
             ("C:\\Users\\", Results::merge(hits, Scope::Files))
         }
-        Shows::Argument => ("", Results::recent(Vec::new(), recent_folders())),
+        Shows::Argument => ("C:\\Users\\admin\\Nowhere", Vec::new()),
         Shows::NoMatch => ("qzxv", Vec::new()),
         Shows::Indexing => {
             let hits = BUDGET_FILES
@@ -201,7 +201,7 @@ fn props(shows: Shows, rows: Vec<Row>, viewport: Bounds<Pixels>) -> CommandCente
             kind: ArgKind::Path,
         }),
         note: (shows == Shows::Indexing).then(|| "Indexing C:\\ · 41 %".into()),
-        error: None,
+        error: (shows == Shows::Argument).then(|| "Nothing at C:\\Users\\admin\\Nowhere".into()),
         anchor: Bounds::new(
             point(center - px(FIELD_WIDTH / 2.), px(FIELD_TOP)),
             size(px(FIELD_WIDTH), px(FIELD_HEIGHT)),
