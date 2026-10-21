@@ -2,7 +2,7 @@ use rusty_core::{Command, Location};
 
 use super::super::FerriteWindow;
 use super::Step;
-use crate::command_center::{Group, Hit, Row, Target};
+use crate::command_center::{Group, Hit, Query, Row, Target, completion};
 use crate::commands::ArgKind;
 use crate::prelude::*;
 
@@ -203,6 +203,26 @@ impl FerriteWindow {
             self.focus_core_pane(window, cx);
         }
         cx.notify();
+    }
+
+    pub(super) fn complete_path(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(open) = self.command_center.open.as_ref() else {
+            return false;
+        };
+        let query = open.center.read(cx).query(cx);
+        let (true, Some(Row::TopHit(hit) | Row::Hit(hit))) = (
+            Query::parse(&query).path.is_some() && open.step.is_none(),
+            open.selection.row(&open.rows),
+        ) else {
+            return false;
+        };
+        let Some(text) = completion(&query, hit) else {
+            return false;
+        };
+        let center = open.center.clone();
+        center.update(cx, |center, cx| center.set_query(&text, window, cx));
+        self.query_changed(&text, window, cx);
+        true
     }
 
     fn show_all(&mut self, group: Group, window: &mut Window, cx: &mut Context<Self>) {

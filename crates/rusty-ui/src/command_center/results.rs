@@ -4,7 +4,7 @@ use gpui_kit::SharedString;
 use rusty_core::Location;
 
 use super::query::Scope;
-use super::source::{Capped, Group, Hit, Target};
+use super::source::{Capped, Group, Hit, Offline, Target};
 
 const SCOPED_CAP: usize = 500;
 const RECENT_COMMANDS: usize = 5;
@@ -16,6 +16,7 @@ pub enum Heading {
     Recent,
     Group(Group),
     FilesCapped { cap: usize, root: SharedString },
+    Offline(SharedString),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -58,6 +59,14 @@ impl Results {
     }
 
     #[must_use]
+    pub fn with_offline(mut rows: Vec<Row>, offline: Option<Offline>) -> Vec<Row> {
+        if let Some(Offline { path }) = offline {
+            rows.insert(0, Row::Header(Heading::Offline(path)));
+        }
+        rows
+    }
+
+    #[must_use]
     pub fn recent(commands: Vec<Hit>, folders: Vec<Hit>) -> Vec<Row> {
         let hits: Vec<Row> = commands
             .into_iter()
@@ -77,9 +86,8 @@ impl Results {
 
 fn place_of(hit: &Hit) -> Option<&Location> {
     match (&hit.target, hit.source) {
-        (Target::GoTo(location), "tabs") | (Target::Open { location, .. }, "recent" | "here") => {
-            Some(location)
-        }
+        (Target::GoTo(location), "tabs" | "paths")
+        | (Target::Open { location, .. }, "recent" | "paths" | "here") => Some(location),
         _ => None,
     }
 }
@@ -112,6 +120,11 @@ fn one_per_place(mut hits: Vec<Hit>) -> Vec<Hit> {
         .filter(|&at| absorb(&mut hits, &kept, at))
         .collect();
     kept.extend(recents);
+    let paths: Vec<usize> = of(&hits, "paths")
+        .into_iter()
+        .filter(|&at| absorb(&mut hits, &kept, at))
+        .collect();
+    kept.extend(paths);
     for at in of(&hits, "here") {
         absorb(&mut hits, &kept, at);
     }

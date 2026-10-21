@@ -80,6 +80,7 @@ fn heading_label(heading: &Heading) -> SharedString {
             root = root.to_string()
         )
         .into(),
+        Heading::Offline(path) => t!("command-center-path-offline", path = path.to_string()).into(),
     }
 }
 

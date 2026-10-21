@@ -14,12 +14,15 @@ mod tests;
 
 pub use commands_source::{CommandRow, CommandsSnapshot, CommandsSource};
 pub use file_sources::{
-    Frecents, HereOptions, HereSource, HereWalks, RecentSource, TabsSnapshot, TabsSource,
+    Frecents, HereOptions, HereSource, HereWalks, PathsSource, RecentSource, TabsSnapshot,
+    TabsSource, completion,
 };
 pub use query::{Query, Scope, Term};
 pub use results::{Heading, Results, Row};
 pub use selection::Selection;
-pub use source::{Cancel, Capped, Group, Hit, HitSink, Request, ResultSource, Scopes, Target};
+pub use source::{
+    Cancel, Capped, Group, Hit, HitSink, Notes, Offline, Request, ResultSource, Scopes, Target,
+};
 pub use view::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, HintKeys, INPUT_ROW, LEAVE,
 };

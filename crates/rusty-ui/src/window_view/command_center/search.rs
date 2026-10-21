@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::super::FerriteWindow;
 use crate::command_center::{
-    Cancel, Capped, CommandsSnapshot, Hit, HitSink, Query, RecentSource, Request, ResultSource,
+    Cancel, CommandsSnapshot, Hit, HitSink, Notes, Query, RecentSource, Request, ResultSource,
     Results, Row, Scope,
 };
 use crate::prelude::*;
@@ -75,17 +75,22 @@ impl Round {
             .filter(move |source| source.scopes().contains(scope))
     }
 
-    fn run(&self) -> (Vec<Hit>, Option<Capped>) {
+    fn run(&self) -> (Vec<Hit>, Notes) {
         for source in self.active() {
             if self.cancel.is_cancelled() {
                 break;
             }
             source.search(&self.request, &self.sink, &self.cancel);
         }
-        let capped = self
-            .active()
-            .find_map(|source| source.capped(&self.request));
-        (self.sink.drain(self.request.generation), capped)
+        let notes = Notes {
+            capped: self
+                .active()
+                .find_map(|source| source.capped(&self.request)),
+            offline: self
+                .active()
+                .find_map(|source| source.offline(&self.request)),
+        };
+        (self.sink.drain(self.request.generation), notes)
     }
 
     fn wait_for_more(&self) -> bool {
@@ -103,11 +108,11 @@ async fn stream(
     let generation = round.request.generation;
     loop {
         let step = round.clone();
-        let (hits, capped) = cx
+        let (hits, notes) = cx
             .background_executor()
             .spawn(async move { step.run() })
             .await;
-        let update = (generation, scope, hits, capped);
+        let update = (generation, scope, hits, notes);
         let shown = this.update_in(cx, |view, window, cx| view.receive_hits(update, window, cx));
         let step = round.clone();
         let more = cx
@@ -182,11 +187,12 @@ impl FerriteWindow {
 
     pub(in crate::window_view) fn receive_hits(
         &mut self,
-        (generation, scope, hits, capped): (u64, Scope, Vec<Hit>, Option<Capped>),
+        (generation, scope, hits, notes): (u64, Scope, Vec<Hit>, Notes),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let rows = Results::with_cap(Results::merge(hits, scope), capped);
+        let rows = Results::with_cap(Results::merge(hits, scope), notes.capped);
+        let rows = Results::with_offline(rows, notes.offline);
         self.show_rows((generation, rows), window, cx);
     }
 

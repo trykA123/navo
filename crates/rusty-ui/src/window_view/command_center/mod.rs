@@ -11,8 +11,8 @@ use gpui_kit::{Bounds, FocusHandle, Pixels, Subscription, point, px, size};
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
-    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, LEAVE, RecentSource, ResultSource,
-    Row, Selection, TabsSnapshot, TabsSource,
+    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, LEAVE, PathsSource, RecentSource,
+    ResultSource, Row, Selection, TabsSnapshot, TabsSource,
 };
 use crate::commands::{self, ArgKind};
 use crate::modifier_hints::HintsMode;
@@ -124,6 +124,29 @@ impl FerriteWindow {
         self.open_command_center(window, cx);
     }
 
+    fn file_sources(
+        &self,
+        snapshot: &Arc<CommandsSnapshot>,
+    ) -> (Vec<Arc<dyn ResultSource>>, Arc<RecentSource>) {
+        let hooks = &self.command_center.hooks;
+        let mut sources: Vec<Arc<dyn ResultSource>> = vec![Arc::new(CommandsSource::with_use(
+            snapshot.clone(),
+            hooks.command_use.clone(),
+        ))];
+        let recent = Arc::new(RecentSource::new(hooks.frecent.clone()));
+        sources.push(recent.clone());
+        sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(
+            self.browser.state(),
+        ))));
+        sources.push(Arc::new(HereSource::new(self.command_center.here.clone())));
+        sources.push(Arc::new(PathsSource::new(
+            self.provider.clone(),
+            Arc::new(|name| std::env::var(name).ok()),
+        )));
+        sources.extend(self.command_center.sources.iter().cloned());
+        (sources, recent)
+    }
+
     fn open_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let restore = window.focused(cx);
         let stack = focused_contexts(window);
@@ -132,17 +155,7 @@ impl FerriteWindow {
         let snapshot = CommandsSnapshot::build(&commands::entries(), &stack, keymap);
         let keys = HintKeys::of(keymap);
         let snapshot = Arc::new(snapshot);
-        let mut sources: Vec<Arc<dyn ResultSource>> = vec![Arc::new(CommandsSource::with_use(
-            snapshot.clone(),
-            self.command_center.hooks.command_use.clone(),
-        ))];
-        let recent = Arc::new(RecentSource::new(self.command_center.hooks.frecent.clone()));
-        sources.push(recent.clone());
-        sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(
-            self.browser.state(),
-        ))));
-        sources.push(Arc::new(HereSource::new(self.command_center.here.clone())));
-        sources.extend(self.command_center.sources.iter().cloned());
+        let (sources, recent) = self.file_sources(&snapshot);
         let rows: Rc<[Row]> = search::recent(Vec::new(), Vec::new()).into();
         let anchor = self.command_center_anchor(window, cx);
         let props = CommandCenterProps {

@@ -144,6 +144,17 @@ pub struct Capped {
     pub root: SharedString,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Offline {
+    pub path: SharedString,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Notes {
+    pub capped: Option<Capped>,
+    pub offline: Option<Offline>,
+}
+
 pub trait ResultSource: Send + Sync {
     fn id(&self) -> &'static str;
     fn group(&self) -> Group;
@@ -155,6 +166,10 @@ pub trait ResultSource: Send + Sync {
     }
 
     fn capped(&self, _request: &Request) -> Option<Capped> {
+        None
+    }
+
+    fn offline(&self, _request: &Request) -> Option<Offline> {
         None
     }
 }

@@ -7,7 +7,7 @@ use rusty_core::Location;
 
 use super::{fake, open_options, options_for, press, settle, two_panes};
 use crate::command_center::{
-    ArgKind, Cancel, Group, Hit, HitSink, Request, ResultSource, Scope, Scopes, Target,
+    ArgKind, Cancel, Group, Hit, HitSink, Notes, Request, ResultSource, Scope, Scopes, Target,
 };
 use crate::window_view::{FerriteWindow, Frecent};
 
@@ -353,7 +353,7 @@ fn results_of_an_older_generation_are_dropped(cx: &mut TestAppContext) {
     cx.update_window(rig.window, |_, window, cx| {
         rig.view.update(cx, |view, cx| {
             view.receive_hits(
-                (generation - 1, Scope::Mixed, vec![stale], None),
+                (generation - 1, Scope::Mixed, vec![stale], Notes::default()),
                 window,
                 cx,
             );

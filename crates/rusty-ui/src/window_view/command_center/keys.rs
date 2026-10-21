@@ -49,7 +49,9 @@ impl FerriteWindow {
                 view.move_selection(Selection::last, window, cx);
             }))
             .on_action(cx.listener(|view, _: &NextGroup, window, cx| {
-                view.move_selection(Selection::next_group, window, cx);
+                if !view.complete_path(window, cx) {
+                    view.move_selection(Selection::next_group, window, cx);
+                }
             }))
             .on_action(cx.listener(|view, _: &PreviousGroup, window, cx| {
                 view.move_selection(Selection::previous_group, window, cx);
