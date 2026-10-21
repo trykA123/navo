@@ -1,6 +1,8 @@
 mod bars;
 mod facts;
 mod keys;
+#[cfg(test)]
+mod large;
 mod layout;
 mod model;
 mod rich;

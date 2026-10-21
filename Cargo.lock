@@ -6705,6 +6705,7 @@ dependencies = [
  "insta",
  "kamadak-exif",
  "lofty",
+ "object",
  "proptest",
  "raw-window-handle",
  "resvg 0.46.0",

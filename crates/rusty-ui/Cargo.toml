@@ -96,6 +96,7 @@ windows-version = "0.1.7"
 [dev-dependencies]
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 insta = "1.49.0"
+object = { version = "=0.37.3", default-features = false, features = ["elf", "write_std"] }
 proptest = "1.12.0"
 rusty-automotive = { path = "../rusty-automotive", features = ["sample"] }
 rusty-syntax = { path = "../rusty-syntax" }

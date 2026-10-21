@@ -13,14 +13,14 @@ use crate::window_view::tests::{press, settle};
 use crate::window_view::viewer::space::DEMO_MDF;
 use crate::window_view::viewer::{FileHooks, Head, Kinds};
 
-fn with_mdf(files: FileHooks) -> FileHooks {
+fn with_mdf(files: FileHooks, mdf: &'static str) -> FileHooks {
     let (head, bytes) = (files.head.clone(), files.bytes.clone());
     FileHooks {
         head: Arc::new(move |location| {
             if location.as_str().ends_with(".mdf") {
                 return Ok(Head {
-                    bytes: DEMO_MDF.as_bytes().to_vec(),
-                    len: DEMO_MDF.len() as u64,
+                    bytes: mdf.as_bytes().to_vec(),
+                    len: mdf.len() as u64,
                 });
             }
             if location.as_str().ends_with(".elf") {
@@ -30,7 +30,7 @@ fn with_mdf(files: FileHooks) -> FileHooks {
         }),
         bytes: Arc::new(move |location, limit| {
             if location.as_str().ends_with(".mdf") {
-                return Ok(DEMO_MDF.as_bytes().to_vec());
+                return Ok(mdf.as_bytes().to_vec());
             }
             bytes(location, limit)
         }),
@@ -63,8 +63,17 @@ pub(in crate::window_view::viewer) fn open_in(
     bytes: Vec<u8>,
     values: Option<Values>,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    open_with_mdf(cx, bytes, DEMO_MDF, values)
+}
+
+pub(in crate::window_view::viewer) fn open_with_mdf(
+    cx: &mut TestAppContext,
+    bytes: Vec<u8>,
+    mdf: &'static str,
+    values: Option<Values>,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let len = bytes.len() as u64;
-    let files = with_mdf(hooks(Setup::new(bytes), &Log::default()));
+    let files = with_mdf(hooks(Setup::new(bytes), &Log::default()), mdf);
     let (window, view) = window_with(cx, fake_with("app.elf", len), files, Kinds::builtin());
     if let Some(values) = values {
         show(cx, (window, &view), values);
