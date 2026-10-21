@@ -2,6 +2,57 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## alpha-2026-10-21c — 2026-10-21
+
+### New
+
+- Ctrl+K: Enter opens the result.
+- Ctrl+K: Shift+Enter shows the result in its folder.
+- Ctrl+K: Ctrl+Enter opens the result in the other pane.
+- Ctrl+K: Alt+Enter opens the result in a new tab.
+- Ctrl+K: Ctrl+Shift+C copies the path of the result.
+- Ctrl+K: Alt+Enter does nothing on a command.
+- Ctrl+K: "Go to folder…", "Open folder in new tab…", "Mark by pattern…" and "Unmark by pattern…" ask for their value in the box.
+- Ctrl+K: Tab completes folder names in a value step.
+- Ctrl+K: in a value step, Esc clears the text first.
+- Ctrl+K: an empty value shows "Type a folder" or "Type a pattern".
+- Ctrl+K: a slow path shows "Checking…".
+- Multi-rename: Ctrl+Z puts a whole batch back.
+- Multi-rename: the preview highlights what changes and what Find matched.
+- Multi-rename: a path over 260 characters shows a warning.
+- Rich ELF view: the flash map gives each group its own colour. Its files use shades of that colour.
+- Rich ELF view: every tile shows its size and share. Tile areas are true to size.
+- Rich ELF view: the groups that do not fit go into one "N more" tile.
+- Rich ELF view: shares based on estimated sizes show "~".
+- Rich ELF and MAP view: reserved space has its own hatched part.
+- Rich ELF and MAP view: a region with unknown free space shows a thin bar.
+- Rich ELF and MAP view: the inspector shows exact bytes.
+- Rich ELF and MAP view: the address strip and the map have keys.
+- Rich ELF and MAP view: Alt+G regroups and keeps zoom and position.
+- Rich ELF and MAP view: empty strips take no Tab stop.
+- Rich ELF and MAP view: Esc clears a pick before the view closes.
+- MAP view: the status line names the parts that were not read.
+- MAP view: the Size column hides when the map has no sizes.
+- TASKING .mdf files open as a table of chips, spaces and addresses.
+- Settings has a new Search page.
+- The Search page sets the file index mode, the drives, the skipped names, and network and removable drives.
+- The Search page also sets whether searches are remembered. It clears the search history.
+- Settings rows that the index does not use yet say "Not applied yet".
+
+### Fixed
+
+- Ctrl+K: Enter typed quickly runs the best result.
+- Ctrl+K: the old dialog entries for marking by pattern no longer show twice.
+- Ctrl+K: a dead network share no longer piles up background work or blocks local folders.
+- Rich ELF and MAP view: bars never show 100% while space is free. Tiny values show "<1%".
+- Rich ELF and MAP view: keys and focus keep working after a rebuild.
+
+### Built but not switched on yet
+
+- Windows index service: it keeps a whole-disk index. It is built but not switched on yet.
+- The Search page's Install and Remove buttons are not connected yet.
+- Ctrl+K does not search through the index yet.
+
 ## alpha-2026-10-21b — 2026-10-21
 
 ### New
