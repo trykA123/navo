@@ -53,11 +53,14 @@ impl FerriteWindow {
     }
 
     fn copy_paths(&self, cx: &mut Context<Self>) {
-        let Some(run) = &self.menu_run else {
-            return;
-        };
-        let text: Vec<&str> = run.items.iter().map(Location::as_str).collect();
-        let line_break = if cfg!(windows) { "\r\n" } else { "\n" };
-        cx.write_to_clipboard(ClipboardItem::new_string(text.join(line_break)));
+        if let Some(run) = &self.menu_run {
+            put_paths_on_clipboard(&run.items, cx);
+        }
     }
+}
+
+pub(in crate::window_view) fn put_paths_on_clipboard(items: &[Location], cx: &mut App) {
+    let text: Vec<&str> = items.iter().map(Location::as_str).collect();
+    let line_break = if cfg!(windows) { "\r\n" } else { "\n" };
+    cx.write_to_clipboard(ClipboardItem::new_string(text.join(line_break)));
 }

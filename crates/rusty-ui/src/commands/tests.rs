@@ -342,7 +342,7 @@ fn a_module_binds_only_its_own_commands(cx: &mut TestAppContext) {
         .copied()
         .filter(|action| !action.starts_with("file_list::"))
         .collect();
-    assert_eq!((actions.len(), foreign), (64, Vec::<&str>::new()));
+    assert_eq!((actions.len(), foreign), (65, Vec::<&str>::new()));
 }
 
 #[gpui_kit::test]
@@ -504,4 +504,17 @@ fn the_palette_entries_match_the_snapshot() {
     insta::with_settings!({ prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!("palette_entries", lines.join("\n"));
     });
+}
+
+#[test]
+fn the_command_box_copy_path_key_stays_out_of_the_palette() {
+    let hidden = entries()
+        .into_iter()
+        .find(|entry| entry.spec.name == "command_center.copy_path")
+        .map(|entry| entry.in_palette);
+    let shown = entries()
+        .into_iter()
+        .find(|entry| entry.spec.name == "files.copy_path")
+        .map(|entry| entry.in_palette);
+    assert_eq!((hidden, shown), (Some(false), Some(true)));
 }

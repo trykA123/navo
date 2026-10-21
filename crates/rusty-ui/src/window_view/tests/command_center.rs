@@ -413,3 +413,15 @@ fn closing_without_running_and_running_a_folder_record_nothing(cx: &mut TestAppC
     cx.run_until_parked();
     assert!(seen.lock().unwrap().is_empty());
 }
+
+#[gpui_kit::test]
+fn copy_full_path_from_the_box_copies_the_cursor_item_of_the_focused_pane(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "down");
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "copy full path");
+    rig.press(cx, "enter");
+    cx.run_until_parked();
+    let copied = cx.read_from_clipboard().and_then(|item| item.text());
+    assert_eq!(copied, Some(location("home/a.txt").as_str().to_owned()));
+}

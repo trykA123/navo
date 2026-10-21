@@ -5,6 +5,7 @@ mod marks;
 mod multi_rename;
 mod overlays;
 mod palette_hidden;
+mod paths;
 mod structured;
 mod viewer;
 mod window;
@@ -113,6 +114,7 @@ pub fn all() -> impl Iterator<Item = CommandSpec> {
     let bound = [
         window::GROUPS.as_slice(),
         marks::GROUPS.as_slice(),
+        paths::GROUPS.as_slice(),
         overlays::GROUPS.as_slice(),
         viewer::GROUPS.as_slice(),
         structured::GROUPS.as_slice(),

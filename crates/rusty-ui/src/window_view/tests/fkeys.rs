@@ -168,7 +168,7 @@ fn the_built_in_keymap_gives_the_known_f_key_bar() {
         "Move",
         "New folder",
         "Delete",
-        "",
+        "Path",
         "Menu",
     ];
     let shift = [
@@ -216,10 +216,10 @@ fn the_delete_warning_sits_on_the_key_of_files_delete() {
 }
 
 #[gpui_kit::test]
-fn f9_has_no_command_so_its_cap_is_dimmed_like_f1(cx: &mut TestAppContext) {
+fn f9_has_a_label_so_its_cap_is_lit_unlike_f1(cx: &mut TestAppContext) {
     let (window, _) = open(cx, Rc::default());
     let (base, _) = key_labels(cx, window);
-    assert_eq!((base[0].as_str(), base[8].as_str()), ("F1", "F9"));
+    assert_eq!((base[0].as_str(), base[8].as_str()), ("F1", "F9 Path"));
 }
 
 #[gpui_kit::test]

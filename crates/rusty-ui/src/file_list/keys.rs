@@ -38,6 +38,7 @@ gpui_kit::actions!(
         UndoLast,
         NewFolder,
         NewFile,
+        CopyPath,
         MarkPattern,
         UnmarkPattern,
         InvertMarks,
@@ -194,6 +195,7 @@ fn register_more(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
         move |_: &NewFolder, window, cx| ctx.act(FileListAction::NewFolder, window, cx)
     })
     .on_action(list_act::<NewFile>(ctx, FileListAction::NewFile))
+    .on_action(list_act::<CopyPath>(ctx, FileListAction::CopyPath))
     .on_action({
         let ctx = ctx.clone();
         move |_: &ViewItem, window, cx| ctx.view_cursor(window, cx)

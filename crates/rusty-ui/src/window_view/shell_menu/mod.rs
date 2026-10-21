@@ -19,6 +19,7 @@ use super::FerriteWindow;
 use crate::context_menu::{ContextMenu, ContextMenuEvent};
 use crate::file_list::FileListAction;
 use crate::prelude::*;
+pub(super) use actions::put_paths_on_clipboard;
 pub(super) use prefetch::Prefetch;
 pub(super) use run::MenuRun;
 use run::{MenuOpen, PendingView, Session, ShellCall, Step};

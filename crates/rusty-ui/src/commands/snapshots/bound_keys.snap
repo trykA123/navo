@@ -109,6 +109,7 @@ files.context_menu | alt-m | FileList
 files.context_menu | menu | FileList
 files.context_menu | shift-f10 | FileList
 files.copy | f5 | FileList
+files.copy_path | f9 | FileList
 files.cursor_down | down | FileList
 files.cursor_first | home | FileList
 files.cursor_last | end | FileList

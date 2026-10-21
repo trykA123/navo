@@ -302,6 +302,7 @@ impl FerriteWindow {
             FileListAction::Rename(row) => self.rename_row(*row, window, cx),
             FileListAction::NewFolder => self.ask_new_folder(),
             FileListAction::NewFile => self.ask_new_file(),
+            FileListAction::CopyPath => self.copy_full_paths(cx),
             FileListAction::SelectPattern { add } => self.ask_pattern(*add),
             FileListAction::Edit { row, choose } => self.edit_row(*row, *choose),
             FileListAction::View(row) => return self.view_or_preview(*row, window, cx),

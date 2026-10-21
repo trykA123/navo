@@ -66,6 +66,7 @@ cmd-files-open-parent = Open parent folder
 cmd-pane-switch = Switch pane
 cmd-files-copy = Copy
 cmd-files-move = Move
+cmd-files-copy-path = Copy full path
 cmd-files-clipboard-copy = Copy to clipboard
 cmd-files-clipboard-cut = Cut to clipboard
 cmd-files-paste = Paste

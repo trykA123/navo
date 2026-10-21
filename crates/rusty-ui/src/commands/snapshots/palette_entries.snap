@@ -104,6 +104,7 @@ files.unmark_all | FileList | true
 files.restore_marks | FileList | true
 files.mark_extension | FileList | true
 files.unmark_extension | FileList | true
+files.copy_path | FileList | true
 context_menu.up | ContextMenu | false
 context_menu.down | ContextMenu | false
 context_menu.first | ContextMenu | false

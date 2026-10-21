@@ -23,6 +23,7 @@ pub enum FileListAction {
     Rename(u64),
     NewFolder,
     NewFile,
+    CopyPath,
     SelectPattern { add: bool },
     Sort(SortBy),
     Edit { row: u64, choose: bool },

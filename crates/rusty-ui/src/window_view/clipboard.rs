@@ -3,10 +3,12 @@ use std::rc::Rc;
 use rusty_core::{CommandError, Location, OpKind};
 
 use super::FerriteWindow;
+use super::shell_menu::put_paths_on_clipboard;
 use crate::browser::{JobStatus, PasteRefusal};
 use crate::format;
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
+use rusty_l10n::t;
 
 const NOTHING_TO_PASTE: &str = "Nothing to paste";
 const WINDOWS_ONLY: &str = "The file clipboard works on Windows only";
@@ -147,6 +149,16 @@ impl FerriteWindow {
             }
             Err(error) => fault(&error),
         });
+    }
+
+    pub(super) fn copy_full_paths(&mut self, cx: &mut Context<Self>) {
+        let items = self.browser.selected_sources();
+        if items.is_empty() {
+            return;
+        }
+        put_paths_on_clipboard(&items, cx);
+        let count = u64::try_from(items.len()).unwrap_or(u64::MAX);
+        self.clipboard.notice = Some(info(t!("files-path-copied", count = count)));
     }
 
     pub(super) fn has_files_to_paste(&self) -> bool {

@@ -88,6 +88,7 @@ impl PanePage {
             FileListAction::SwitchPane
             | FileListAction::Operate(_)
             | FileListAction::CopyToClipboard
+            | FileListAction::CopyPath
             | FileListAction::CutToClipboard
             | FileListAction::Paste
             | FileListAction::Filter(_)

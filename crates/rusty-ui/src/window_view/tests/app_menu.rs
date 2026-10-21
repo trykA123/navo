@@ -371,9 +371,9 @@ fn f10_does_nothing_while_a_confirm_dialog_is_open(cx: &mut TestAppContext) {
 }
 
 #[test]
-fn the_f10_cap_reads_menu_and_unbound_f9_stays_blank() {
+fn the_f10_cap_reads_menu_and_f9_reads_path() {
     let keys = crate::window_view::layer_keys(None);
-    assert_eq!(keys[8], ("F9", ""));
+    assert_eq!(keys[8], ("F9", "Path"));
     assert_eq!(keys[9], ("F10", "Menu"));
 }
 

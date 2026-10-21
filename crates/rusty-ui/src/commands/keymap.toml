@@ -338,6 +338,10 @@ command = "files.new_file"
 keys = ["shift-f7"]
 
 [[bind]]
+command = "files.copy_path"
+keys = ["f9"]
+
+[[bind]]
 command = "files.mark_pattern"
 keys = ["+", "add"]
 

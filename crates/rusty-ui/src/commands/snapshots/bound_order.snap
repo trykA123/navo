@@ -32,6 +32,7 @@ files.multi_rename | ctrl-m | FileList
 files.undo | ctrl-z | FileList
 files.new_folder | f7 | FileList
 files.new_file | shift-f7 | FileList
+files.copy_path | f9 | FileList
 files.mark_pattern | + | FileList
 files.mark_pattern | add | FileList
 files.unmark_pattern | - | FileList

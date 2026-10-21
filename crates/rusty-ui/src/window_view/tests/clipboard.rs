@@ -297,3 +297,42 @@ fn pasting_a_folder_into_itself_is_refused_with_a_message(cx: &mut TestAppContex
     assert!(!rig.has_pending(cx));
     assert!(rig.clipboard.clears.borrow().is_empty());
 }
+
+fn copied_text(cx: &mut TestAppContext) -> Option<String> {
+    cx.read_from_clipboard().and_then(|item| item.text())
+}
+
+#[gpui_kit::test]
+fn f9_copies_the_full_path_of_the_cursor_file(cx: &mut TestAppContext) {
+    let rig = rig(cx, FakeClipboard::default());
+    rig.press(cx, "down");
+    rig.press(cx, "f9");
+    assert_eq!(
+        copied_text(cx),
+        Some(rig.at("home/a.txt").as_str().to_owned())
+    );
+    assert_eq!(rig.notice(cx).as_deref(), Some("Copied path"));
+    assert!(rig.writes().is_empty());
+}
+
+#[gpui_kit::test]
+fn f9_copies_every_marked_path_joined_by_line_breaks(cx: &mut TestAppContext) {
+    let rig = rig(cx, FakeClipboard::default());
+    mark_both(cx, &rig);
+    rig.press(cx, "f9");
+    let line_break = if cfg!(windows) { "\r\n" } else { "\n" };
+    let expected = [rig.at("home/docs"), rig.at("home/a.txt")]
+        .map(|location| location.as_str().to_owned())
+        .join(line_break);
+    assert_eq!(copied_text(cx), Some(expected));
+    assert_eq!(rig.notice(cx).as_deref(), Some("Copied 2 paths"));
+}
+
+#[gpui_kit::test]
+fn f9_in_an_empty_folder_copies_nothing(cx: &mut TestAppContext) {
+    let rig = rig(cx, FakeClipboard::default());
+    rig.press(cx, "tab");
+    rig.press(cx, "f9");
+    assert_eq!(copied_text(cx), None);
+    assert_eq!(rig.notice(cx), None);
+}
