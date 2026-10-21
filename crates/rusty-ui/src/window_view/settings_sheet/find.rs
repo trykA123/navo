@@ -3,7 +3,9 @@ use gpui_kit::{Focusable, Subscription};
 
 use crate::prelude::*;
 use crate::primitives::{TextFieldState, text_field_state};
-use crate::settings::{ClearFind, FIND_CONTEXT, Filter, FindToList, child_of, find_field};
+use crate::settings::{
+    ClearFind, FIND_CONTEXT, Filter, FindToList, Section, child_of, find_field, section_of,
+};
 use crate::tokens::Theme;
 use crate::window_view::FerriteWindow;
 
@@ -47,8 +49,12 @@ impl FerriteWindow {
             return;
         }
         let row = filter.nearest(self.settings.row);
+        let from = section_of(self.settings.row);
         self.settings.row = row;
         self.settings.filter = filter;
+        if self.settings.is_open && from != Section::Search && section_of(row) == Section::Search {
+            self.refresh_index_service(cx);
+        }
         if let Some(child) = child_of(&self.settings.filter, row) {
             self.settings.scroll.scroll_to_item(child);
         }

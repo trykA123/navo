@@ -35,7 +35,7 @@ fn reply() -> Reply {
 
 fn hooks() -> IndexHooks {
     IndexHooks {
-        host: Arc::new(|_, _, _| reply()),
+        host: Arc::new(|_, _, _, _| reply()),
         ..IndexHooks::none()
     }
 }
@@ -76,14 +76,14 @@ fn auto_falls_back_when_the_pipe_is_absent_or_refuses() {
 #[test]
 fn service_without_a_pipe_returns_nothing_and_never_calls_the_host() {
     let mut hooks = hooks();
-    hooks.host = Arc::new(|_, _, _| panic!("service must not use the host"));
+    hooks.host = Arc::new(|_, _, _, _| panic!("service must not use the host"));
     assert!(run(&source(IndexMode::Service, hooks)).is_empty());
 }
 
 #[test]
 fn off_does_not_query_either_backend() {
     let mut hooks = hooks();
-    hooks.host = Arc::new(|_, _, _| panic!("off must not use the host"));
+    hooks.host = Arc::new(|_, _, _, _| panic!("off must not use the host"));
     hooks.pipe = crate::command_center::index_source::PipeQueries::new(Arc::new(|_, _, _| {
         panic!("off must not use the pipe")
     }));
@@ -93,8 +93,38 @@ fn off_does_not_query_either_backend() {
 #[test]
 fn no_rows_exist_before_the_first_complete_snapshot() {
     let mut hooks = hooks();
-    hooks.host = Arc::new(|_, _, _| Reply::default());
+    hooks.host = Arc::new(|_, _, _, _| Reply::default());
     assert!(run(&source(IndexMode::Walk, hooks)).is_empty());
+}
+
+#[test]
+fn auto_merges_walk_hits_for_a_refused_volume_and_deduplicates_places() {
+    let mut hooks = hooks();
+    hooks.pipe = crate::command_center::index_source::PipeQueries::new(Arc::new(|_, _, _| {
+        let mut reply = reply();
+        reply.status.volumes = vec![VolumeStatus {
+            root: "D:".into(),
+            errors: vec!["volume refused".into()],
+            ..VolumeStatus::default()
+        }];
+        Ok(reply)
+    }));
+    hooks.host = Arc::new(|_, _, _, service| {
+        assert_eq!(service.unwrap().volumes[0].root, "D:");
+        let mut reply = reply();
+        reply.hits[0].path = r"c:\Docs\budget.xlsx".into();
+        reply.hits.push(IndexHit {
+            path: r"D:\Docs\budget.xlsx".into(),
+            score: 100,
+            ..reply.hits[0].clone()
+        });
+        reply
+    });
+    let hits = run(&source(IndexMode::Auto, hooks));
+    assert_eq!(hits.len(), 2);
+    assert!(
+        matches!(&hits[0].target, Target::Open { location, .. } if location.as_str().starts_with("D:"))
+    );
 }
 
 #[test]
@@ -126,7 +156,7 @@ fn recent_wins_deduplication_and_keeps_the_higher_score() {
 #[test]
 fn indexing_note_uses_the_count_without_a_percentage() {
     let mut hooks = hooks();
-    hooks.host = Arc::new(|_, _, _| Reply {
+    hooks.host = Arc::new(|_, _, _, _| Reply {
         status: Status {
             volumes: vec![VolumeStatus {
                 root: "C:".into(),

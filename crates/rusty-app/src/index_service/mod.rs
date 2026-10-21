@@ -33,6 +33,8 @@ mod runtime;
 #[cfg(windows)]
 #[path = "scm/windows.rs"]
 mod scm;
+#[cfg(any(windows, test))]
+mod search;
 #[cfg(windows)]
 #[path = "session/windows.rs"]
 mod session;

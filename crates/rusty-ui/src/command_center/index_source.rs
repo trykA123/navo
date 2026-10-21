@@ -19,7 +19,11 @@ use metadata::Shown;
 pub use options::{IndexMode, IndexOptions, drive_root};
 pub use pipe::PipeQueries;
 
-pub type HostQuery = Arc<dyn Fn(&IndexOptions, &protocol::Query, &Cancel) -> Reply + Send + Sync>;
+pub type HostQuery = Arc<
+    dyn Fn(&IndexOptions, &protocol::Query, &Cancel, Option<&protocol::Status>) -> Reply
+        + Send
+        + Sync,
+>;
 
 #[derive(Clone)]
 pub struct IndexHooks {
@@ -37,7 +41,7 @@ impl IndexHooks {
             start: Arc::new(|_| {}),
             status: Arc::new(|| None),
             pipe: PipeQueries::new(Arc::new(|_, _, _| Err(protocol::PipeError::NotAvailable))),
-            host: Arc::new(|_, _, _| Reply::default()),
+            host: Arc::new(|_, _, _, _| Reply::default()),
             metadata: IndexMetadata::new(Arc::new(|_| {
                 Err(FsError {
                     kind: FsErrorKind::NotFound,
@@ -127,15 +131,20 @@ impl IndexSource {
             }
             IndexMode::Walk | IndexMode::Off => None,
         };
-        match reply {
-            Some(reply) => reply,
-            None if !cancel.is_cancelled()
-                && matches!(self.options.mode, IndexMode::Auto | IndexMode::Walk) =>
-            {
-                (self.hooks.host)(&self.options, &query, cancel)
-            }
-            None => Reply::default(),
+        if cancel.is_cancelled() || !matches!(self.options.mode, IndexMode::Auto | IndexMode::Walk)
+        {
+            return reply.unwrap_or_default();
         }
+        let walked = (self.hooks.host)(
+            &self.options,
+            &query,
+            cancel,
+            reply.as_ref().map(|reply| &reply.status),
+        );
+        let mut reply = reply.unwrap_or_default();
+        reply.hits.extend(walked.hits);
+        reply.status.volumes.extend(walked.status.volumes);
+        reply
     }
 
     fn hit(&self, found: protocol::Hit, words: &str) -> Option<Hit> {
@@ -229,8 +238,7 @@ impl ResultSource for IndexSource {
             })
             .collect::<Vec<_>>()
             .join(" ");
-        let mut hits: Vec<_> = reply
-            .hits
+        let mut hits: Vec<_> = deduplicate(reply.hits)
             .into_iter()
             .filter_map(|hit| self.hit(hit, &words))
             .collect();
@@ -268,4 +276,24 @@ impl ResultSource for IndexSource {
     fn shown(&self, hits: &[Hit], cancel: &Cancel) {
         self.shown.load(&self.hooks.metadata, hits, cancel);
     }
+}
+
+fn deduplicate(hits: Vec<protocol::Hit>) -> Vec<protocol::Hit> {
+    let mut places: Vec<(Location, protocol::Hit)> = Vec::new();
+    for hit in hits {
+        let Ok(location) = Location::new(&hit.path) else {
+            continue;
+        };
+        if let Some((_, kept)) = places
+            .iter_mut()
+            .find(|(place, _)| place.same_place(&location))
+        {
+            if hit.score > kept.score {
+                *kept = hit;
+            }
+            continue;
+        }
+        places.push((location, hit));
+    }
+    places.into_iter().map(|(_, hit)| hit).collect()
 }

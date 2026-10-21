@@ -6,18 +6,19 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rusty_index::file::{self, Header};
 use rusty_index::ntfs::{NtfsError, NtfsIndex, Volume};
-use rusty_index::pipe::{self, CancelToken, Hit, Reply, Request, Server, VolumeStatus};
-use rusty_index::search;
+use rusty_index::pipe::{self, CancelToken, Reply, Request, Server, VolumeStatus};
 
 use super::config::{Drive, index_path, select_volumes};
 use super::lifecycle::{SaveClock, guard_worker, restore_or_enumerate};
 use super::policy::ServiceError;
+use super::search::SearchIndex;
 use super::storage::Storage;
 
 #[derive(Default)]
 struct State {
     index: Option<NtfsIndex>,
     status: VolumeStatus,
+    search: SearchIndex,
 }
 
 type Shared = Arc<RwLock<State>>;
@@ -35,8 +36,8 @@ pub(super) fn run(
         let _stop = StopOnDrop(cancel);
         let mut workers = Vec::new();
         for (drive, shared) in drives.iter().zip(&shared) {
-            let mut worker =
-                Worker::new(*drive, Arc::clone(shared), &storage).map_err(ServiceError::Storage)?;
+            let mut worker = Worker::new(*drive, Arc::clone(shared), &storage, &config.search)
+                .map_err(ServiceError::Storage)?;
             let shared = Arc::clone(shared);
             workers.push(
                 std::thread::Builder::new()
@@ -130,16 +131,23 @@ struct Worker {
     shared: Shared,
     clock: SaveClock,
     started: Instant,
+    search: rusty_store::Search,
 }
 
 impl Worker {
-    fn new(drive: Drive, shared: Shared, storage: &Storage) -> io::Result<Self> {
+    fn new(
+        drive: Drive,
+        shared: Shared,
+        storage: &Storage,
+        search: &rusty_store::Search,
+    ) -> io::Result<Self> {
         Ok(Self {
             drive,
             shared,
             path: index_path(&storage.program_data, drive.letter)?,
             clock: SaveClock::default(),
             started: Instant::now(),
+            search: search.clone(),
         })
     }
 
@@ -211,15 +219,12 @@ impl Worker {
         };
         let batch = volume.read_journal(position)?;
         let changed = batch.next_usn != position.next_usn;
-        let result = self
-            .shared
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-            .index
-            .as_mut()
-            .map(|index| index.apply_batch(batch));
-        if let Some(result) = result {
-            ensure_resolved(result?)?;
+        let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
+        if let Some(index) = state.index.as_mut() {
+            ensure_resolved(index.apply_batch(batch)?)?;
+            if changed {
+                state.search = SearchIndex::new(&index.table, &self.search);
+            }
         }
         if changed {
             self.clock.changed(self.started.elapsed());
@@ -253,6 +258,7 @@ impl Worker {
     fn replace(&mut self, index: NtfsIndex) {
         let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
         state.status.progress = None;
+        state.search = SearchIndex::new(&index.table, &self.search);
         state.index = Some(index);
         self.clock.changed(self.started.elapsed());
     }
@@ -323,20 +329,9 @@ fn answer(volumes: &[Shared], request: &Request, cancel: &CancelToken) -> Reply 
         let mut status = state.status.clone();
         if let Some(index) = &state.index {
             status.entries = index.table.len() as u64;
-            reply.hits.extend(
-                search::search(&index.table, &request.terms(), pipe::MAX_HITS, &|| {
-                    cancel.is_cancelled()
-                })
-                .into_iter()
-                .filter_map(|hit| {
-                    Some(Hit {
-                        path: index.table.path_with(hit.id, '\\')?,
-                        flags: index.table.flags(hit.id)?.bits(),
-                        score: hit.score,
-                        indices: hit.indices,
-                    })
-                }),
-            );
+            reply
+                .hits
+                .extend(state.search.hits(&index.table, request, cancel));
         }
         reply.status.volumes.push(status);
     }

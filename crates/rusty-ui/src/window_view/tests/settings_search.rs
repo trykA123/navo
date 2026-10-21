@@ -14,6 +14,7 @@ struct Calls {
     clear: AtomicUsize,
     install: AtomicUsize,
     remove: AtomicUsize,
+    status_calls: AtomicUsize,
     status: Mutex<ServiceStatus>,
 }
 
@@ -25,7 +26,10 @@ fn hooks(calls: &Arc<Calls>) -> SearchHooks {
             clear.clear.fetch_add(1, Ordering::SeqCst);
         }),
         service: ServiceHooks {
-            status: Arc::new(move || *status.status.lock().unwrap()),
+            status: Arc::new(move || {
+                status.status_calls.fetch_add(1, Ordering::SeqCst);
+                *status.status.lock().unwrap()
+            }),
             install: Arc::new(move || {
                 install.install.fetch_add(1, Ordering::SeqCst);
                 *install.status.lock().unwrap() = ServiceStatus::Running;
@@ -155,12 +159,42 @@ fn service_actions_finish_after_the_click_handler_and_refresh_status(cx: &mut Te
         cx.update_window(rig.window, |_, window, cx| {
             window.click(button, cx);
             assert_eq!(count(&calls.install) + count(&calls.remove), 0);
+            rig.view.update(cx, |view, cx| {
+                view.toggle_settings(window, cx);
+                view.open_settings_at(Field::SearchIndex, window, cx);
+            });
         })
         .expect("window");
+        cx.executor().advance_clock(Duration::from_secs(1));
         cx.run_until_parked();
+        label(cx, &rig, "settings-service-status");
+        rig.view
+            .read_with(cx, |view, _| view.scroll_settings_to_end());
         assert_eq!(
             label(cx, &rig, "settings-service-status"),
             Some(after.text().to_string())
         );
+        assert_eq!(count(&calls.status_calls), 2);
     }
+}
+
+#[gpui_kit::test]
+fn rendering_uses_cached_status_and_each_search_open_refreshes_once(cx: &mut TestAppContext) {
+    let (rig, calls) = open_search(cx, ServiceStatus::Running, true);
+    assert_eq!(count(&calls.status_calls), 1);
+    calls.status_calls.store(0, Ordering::SeqCst);
+    for _ in 0..3 {
+        label(cx, &rig, "settings-service-status");
+    }
+    assert_eq!(count(&calls.status_calls), 0);
+    rig.press(cx, "escape");
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings_at(Field::SearchIndex, window, cx)
+        });
+    })
+    .expect("window");
+    cx.run_until_parked();
+    assert_eq!(count(&calls.status_calls), 1);
 }

@@ -624,7 +624,7 @@ fn open_index(
         polls.value.lock().unwrap().clone()
     });
     let searches = status.clone();
-    options.search.index.host = Arc::new(move |_, _, _| {
+    options.search.index.host = Arc::new(move |_, _, _, _| {
         searches.searches.fetch_add(1, Ordering::SeqCst);
         Default::default()
     });

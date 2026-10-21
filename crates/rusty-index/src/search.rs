@@ -23,12 +23,39 @@ pub struct TableHit {
     pub indices: Vec<u32>,
 }
 
+pub struct SearchOptions<'a, C, I> {
+    pub limit: usize,
+    pub cancel: &'a C,
+    pub include: &'a I,
+}
+
 pub fn search(
     table: &NameTable,
     query: &[Term<'_>],
     limit: usize,
     cancel: &(impl Fn() -> bool + Sync),
 ) -> Vec<TableHit> {
+    search_filtered(
+        table,
+        query,
+        SearchOptions {
+            limit,
+            cancel,
+            include: &|_| true,
+        },
+    )
+}
+
+pub fn search_filtered(
+    table: &NameTable,
+    query: &[Term<'_>],
+    options: SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn(u32) -> bool + Sync>,
+) -> Vec<TableHit> {
+    let SearchOptions {
+        limit,
+        cancel,
+        include,
+    } = options;
     if limit == 0 || table.is_empty() || cancel() {
         return Vec::new();
     }
@@ -36,6 +63,7 @@ pub fn search(
         table,
         limit,
         cancel,
+        include,
     };
     let hits = (0..table.slots().div_ceil(CHUNK_SIZE))
         .into_par_iter()
@@ -53,13 +81,14 @@ pub fn search(
         .collect()
 }
 
-struct Search<'a, C> {
+struct Search<'a, C, I> {
     table: &'a NameTable,
     limit: usize,
     cancel: &'a C,
+    include: &'a I,
 }
 
-impl<C: Fn() -> bool + Sync> Search<'_, C> {
+impl<C: Fn() -> bool + Sync, I: Fn(u32) -> bool + Sync> Search<'_, C, I> {
     fn scan_chunk(&self, matchers: &mut Matchers<'_>, chunk: u32) -> Candidates {
         if (self.cancel)() {
             return Candidates::new();
@@ -71,7 +100,9 @@ impl<C: Fn() -> bool + Sync> Search<'_, C> {
             if (self.cancel)() {
                 break;
             }
-            if let Some(hit) = matchers.score(self.table, id, name) {
+            if (self.include)(id)
+                && let Some(hit) = matchers.score(self.table, id, name)
+            {
                 keep_hit(&mut hits, (Reverse(hit.score), id, hit.indices), self.limit);
             }
         }

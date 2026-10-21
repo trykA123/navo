@@ -1,3 +1,5 @@
+mod retirement;
+mod roots;
 mod status;
 
 use std::hash::{Hash, Hasher};
@@ -10,10 +12,12 @@ use rusty_index::host::{Host, HostOptions, HostStatus};
 use rusty_index::pipe::{self, Reply, VolumeStatus};
 use rusty_index::search;
 use rusty_index::walker::Limits;
-use rusty_shell::{Drive, DriveKind};
 use rusty_store::StoreDirs;
-use rusty_ui::command_center::index_source::{IndexMetadata, PipeQueries, drive_root};
+use rusty_ui::command_center::index_source::{IndexMetadata, PipeQueries};
 use rusty_ui::command_center::{Cancel, IndexHooks, IndexMode, IndexOptions};
+
+use retirement::Retirements;
+use roots::{exclusions, is_allowed, roots};
 
 struct Root {
     location: Location,
@@ -27,9 +31,18 @@ struct Hosts {
     options: Option<IndexOptions>,
     queue: Arc<IoQueue>,
     roots: Vec<Root>,
+    desired: Vec<Location>,
+    retirement: Retirements,
 }
 
 pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks {
+    let retirement = match Retirements::new() {
+        Ok(retirement) => retirement,
+        Err(error) => {
+            tracing::warn!(%error, "cannot start walk index retirement worker");
+            return IndexHooks::none();
+        }
+    };
     let metadata = provider.clone();
     let hosts = Arc::new(Mutex::new(Hosts {
         provider,
@@ -37,6 +50,8 @@ pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks
         options: None,
         queue: Arc::new(IoQueue::new()),
         roots: Vec::new(),
+        desired: Vec::new(),
+        retirement,
     }));
     let start = hosts.clone();
     IndexHooks {
@@ -45,39 +60,43 @@ pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks
                 && pipe::Client::connect().is_ok();
             let mut hosts = start.lock().unwrap_or_else(PoisonError::into_inner);
             if service_ready {
-                retire(std::mem::take(&mut hosts.roots));
+                hosts.retire();
                 hosts.options = None;
             } else {
-                hosts.configure(options);
+                hosts.configure(options, None);
             }
         }),
         status: status::hook(hosts.clone()),
-        pipe: PipeQueries::new(Arc::new(|options, query, cancel| {
-            let mut client = pipe::Client::connect()?;
-            if cancel.is_cancelled() {
-                return Err(pipe::PipeError::Cancelled);
-            }
-            client.send_query(query)?;
-            let mut reply = client.receive(&|| cancel.is_cancelled())?;
-            let available = rusty_shell::list_drives();
-            reply.hits.retain(|hit| {
-                Location::new(&hit.path).is_ok_and(|path| is_allowed(options, &path, &available))
-            });
-            Ok(reply)
-        })),
-        host: Arc::new(move |options, query, cancel| {
-            hosts
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .query(options, query, cancel)
+        pipe: PipeQueries::new(Arc::new(query_pipe)),
+        host: Arc::new(move |options, query, cancel, service| {
+            let mut hosts = hosts.lock().unwrap_or_else(PoisonError::into_inner);
+            hosts.configure(options, service);
+            hosts.query(query, cancel)
         }),
         metadata: IndexMetadata::new(Arc::new(move |location| metadata.metadata(location))),
     }
 }
 
+fn query_pipe(
+    options: &IndexOptions,
+    query: &pipe::Query,
+    cancel: &Cancel,
+) -> Result<Reply, pipe::PipeError> {
+    let mut client = pipe::Client::connect()?;
+    if cancel.is_cancelled() {
+        return Err(pipe::PipeError::Cancelled);
+    }
+    client.send_query(query)?;
+    let mut reply = client.receive(&|| cancel.is_cancelled())?;
+    let available = rusty_shell::list_drives();
+    reply.hits.retain(|hit| {
+        Location::new(&hit.path).is_ok_and(|path| is_allowed(options, &path, &available))
+    });
+    Ok(reply)
+}
+
 impl Hosts {
-    fn query(&mut self, options: &IndexOptions, query: &pipe::Query, cancel: &Cancel) -> Reply {
-        self.configure(options);
+    fn query(&mut self, query: &pipe::Query, cancel: &Cancel) -> Reply {
         let mut reply = Reply::default();
         for root in &mut self.roots {
             if cancel.is_cancelled() {
@@ -110,32 +129,41 @@ impl Hosts {
         reply
     }
 
-    fn configure(&mut self, options: &IndexOptions) {
-        if self.options.as_ref().is_some_and(|old| {
+    fn configure(&mut self, options: &IndexOptions, service: Option<&pipe::Status>) {
+        let available = rusty_shell::list_drives();
+        let desired = if matches!(options.mode, IndexMode::Off | IndexMode::Service) {
+            Vec::new()
+        } else {
+            roots(options, &available, self.walk_roots(), service)
+        };
+        let unchanged = self.options.as_ref().is_some_and(|old| {
             old.mode == options.mode
                 && old.drives == options.drives
                 && old.exclude == options.exclude
                 && old.network == options.network
                 && old.removable == options.removable
-        }) {
-            return;
+        }) && self.desired == desired;
+        if !unchanged {
+            self.retire();
+            self.options = Some(options.clone());
+            self.desired = desired;
         }
-        retire(std::mem::take(&mut self.roots));
-        self.options = Some(options.clone());
-        if matches!(options.mode, IndexMode::Off | IndexMode::Service) {
-            return;
-        }
-        let available = rusty_shell::list_drives();
-        let home = crate::startup::home_location(|name| std::env::var(name).ok());
-        let explicit = self.walk_roots();
-        let roots = roots(options, &available, explicit, home);
         let exclude = exclusions(options, &available);
-        for location in roots {
-            self.start_root(location, &exclude);
+        for location in self.desired.clone() {
+            if !self
+                .roots
+                .iter()
+                .any(|root| root.location.same_place(&location))
+            {
+                self.start_root(location, &exclude);
+            }
         }
     }
 
     fn start_root(&mut self, location: Location, exclude: &[String]) {
+        if self.retirement.pending(&location) {
+            return;
+        }
         let Some(snapshot) = self.snapshot(&location) else {
             return;
         };
@@ -194,19 +222,17 @@ impl Hosts {
                 .join(format!("walk-{name}.index")),
         )
     }
+
+    fn retire(&mut self) {
+        for root in std::mem::take(&mut self.roots) {
+            self.retirement.push(root);
+        }
+    }
 }
 
 impl Drop for Hosts {
     fn drop(&mut self) {
-        retire(std::mem::take(&mut self.roots));
-    }
-}
-
-fn retire(roots: Vec<Root>) {
-    if !roots.is_empty() {
-        let _ = std::thread::Builder::new()
-            .name("close-walk-index".into())
-            .spawn(move || drop(roots));
+        self.retire();
     }
 }
 
@@ -237,64 +263,5 @@ fn search_root(root: &Root, query: &pipe::Query, cancel: &Cancel) -> Vec<pipe::H
     .collect()
 }
 
-fn roots(
-    options: &IndexOptions,
-    available: &[Drive],
-    explicit: Vec<String>,
-    home: Location,
-) -> Vec<Location> {
-    let requested = if !explicit.is_empty() {
-        explicit
-    } else if !options.drives.is_empty() {
-        options.drives.iter().map(|root| drive_root(root)).collect()
-    } else {
-        vec![home.as_str().to_owned()]
-    };
-    let mut roots = Vec::new();
-    for root in requested {
-        let Ok(root) = Location::new(root) else {
-            continue;
-        };
-        if is_allowed(options, &root, available)
-            && !roots.iter().any(|old: &Location| contains(old, &root))
-        {
-            roots.retain(|old| !contains(&root, old));
-            roots.push(root);
-        }
-    }
-    roots
-}
-
-fn is_allowed(options: &IndexOptions, root: &Location, available: &[Drive]) -> bool {
-    let kind = available
-        .iter()
-        .filter_map(|drive| {
-            let location = Location::new(&drive.root).ok()?;
-            contains(&location, root).then_some((drive.root.len(), drive.kind))
-        })
-        .max_by_key(|(length, _)| *length)
-        .map(|(_, kind)| kind);
-    if root.as_str().starts_with(r"\\") && !options.network {
-        return false;
-    }
-    !matches!(kind, Some(DriveKind::Network) if !options.network)
-        && !matches!(kind, Some(DriveKind::Removable) if !options.removable)
-}
-
-fn contains(parent: &Location, child: &Location) -> bool {
-    std::iter::successors(Some(child.clone()), Location::parent).any(|path| path.same_place(parent))
-}
-
-fn exclusions(options: &IndexOptions, available: &[Drive]) -> Vec<String> {
-    let mut exclude = options.exclude.clone();
-    exclude.extend(
-        available
-            .iter()
-            .filter(|drive| {
-                matches!(drive.kind, DriveKind::Network) && !options.network
-                    || matches!(drive.kind, DriveKind::Removable) && !options.removable
-            })
-            .map(|drive| drive.root.clone()),
-    );
-    exclude
-}
+#[cfg(test)]
+mod tests;

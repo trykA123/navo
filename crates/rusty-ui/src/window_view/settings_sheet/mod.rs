@@ -1,6 +1,7 @@
 mod edit;
 mod find;
 mod locate;
+mod service;
 mod shortcuts;
 mod undo;
 mod upgrade;
@@ -10,14 +11,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 use gpui_kit::{FocusHandle, Focusable, ScrollHandle};
 use rusty_core::Location;
 
-use super::search_hooks::ServiceAction;
 use super::settings_news::SettingsInbox;
 use super::settings_save::{SaveReport, SaveSettings, Saver};
 use super::{FerriteWindow, SearchHooks};
 use crate::prelude::*;
 use crate::settings::{
-    Change, FIELDS, Field, Filter, SearchPage, ServiceStatus, SettingsBody, SheetEvent, Values,
-    child_of, section_of,
+    Change, FIELDS, Field, Filter, SearchPage, Section, ServiceStatus, SettingsBody, SheetEvent,
+    Values, child_of, section_of,
 };
 use crate::side_sheet::SheetState;
 use crate::tokens;
@@ -80,6 +80,9 @@ pub(super) struct SettingsPanel {
     search: SearchHooks,
     is_windows: bool,
     is_history_cleared: bool,
+    service_status: ServiceStatus,
+    service_generation: u64,
+    service_action_pending: bool,
     pub(super) news: Option<SettingsInbox>,
 }
 
@@ -123,6 +126,9 @@ impl SettingsPanel {
             search: SearchHooks::none(),
             is_windows: cfg!(windows),
             is_history_cleared: false,
+            service_status: ServiceStatus::NotAvailable,
+            service_generation: 0,
+            service_action_pending: false,
             news: None,
         }
     }
@@ -169,6 +175,9 @@ impl FerriteWindow {
             self.settings.restore_preview = true;
         }
         self.settings.is_open = true;
+        if section_of(self.settings.row) == Section::Search {
+            self.refresh_index_service(cx);
+        }
         self.prepare_find(window, cx);
         self.settings.undo.clear();
         self.settings.notice = None;
@@ -240,35 +249,12 @@ impl FerriteWindow {
         self.settings.is_history_cleared = true;
     }
 
-    fn index_service_status(&self) -> ServiceStatus {
-        (self.settings.search.service.status)()
-    }
-
-    fn install_index_service(&mut self, cx: &mut Context<Self>) {
-        if self.index_service_status().can_install() {
-            self.run_index_service(self.settings.search.service.install.clone(), cx);
-        }
-    }
-
-    fn remove_index_service(&mut self, cx: &mut Context<Self>) {
-        if self.index_service_status().can_remove() {
-            self.run_index_service(self.settings.search.service.remove.clone(), cx);
-        }
-    }
-
-    fn run_index_service(&self, action: ServiceAction, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
-            cx.background_spawn(async move { action() }).await;
-            let _ = this.update(cx, |_, cx| cx.notify());
-        })
-        .detach();
-    }
-
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
         let from = section_of(self.settings.row);
         self.settings.row = row.min(FIELDS.len() - 1);
         self.settings.notice = None;
-        if std::mem::take(&mut self.settings.is_shortcuts) {
+        let was_shortcuts = std::mem::take(&mut self.settings.is_shortcuts);
+        if was_shortcuts {
             self.pause_shortcuts(cx);
             self.settings
                 .scroll
@@ -278,6 +264,11 @@ impl FerriteWindow {
             self.settings
                 .scroll
                 .set_offset(gpui_kit::point(px(0.), px(0.)));
+        }
+        if section_of(self.settings.row) == Section::Search
+            && (from != Section::Search || was_shortcuts)
+        {
+            self.refresh_index_service(cx);
         }
         if let Some(child) = child_of(&self.settings.filter, row) {
             self.settings.scroll.scroll_to_item(child);
@@ -340,7 +331,7 @@ impl FerriteWindow {
             .find(self.find_bar(&t, cx))
             .upgrade(self.settings.upgrade.items())
             .search_page(SearchPage {
-                status: self.index_service_status(),
+                status: self.settings.service_status,
                 is_windows: self.settings.is_windows,
                 is_cleared: self.settings.is_history_cleared,
             })
