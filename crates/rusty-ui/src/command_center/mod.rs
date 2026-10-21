@@ -3,6 +3,7 @@ use crate::prelude::*;
 mod commands_source;
 mod context_name;
 mod file_sources;
+pub mod flights;
 mod query;
 pub mod rank;
 mod results;
@@ -15,8 +16,8 @@ mod tests;
 
 pub use commands_source::{CommandRow, CommandsSnapshot, CommandsSource};
 pub use file_sources::{
-    Frecents, HereOptions, HereSource, HereWalks, PathsSource, RecentSource, TabsSnapshot,
-    TabsSource, completion,
+    Frecents, HereOptions, HereSource, HereWalks, PathListings, PathsSource, RecentSource,
+    TabsSnapshot, TabsSource, completion,
 };
 pub use query::{Query, Scope, Term};
 pub use results::{Heading, Results, Row};

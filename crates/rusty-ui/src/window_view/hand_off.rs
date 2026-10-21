@@ -1,20 +1,46 @@
-use std::pin::pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
-use futures::future::{Either, select};
-use gpui_kit::{AsyncWindowContext, WeakEntity};
+use gpui_kit::{AsyncWindowContext, Global, WeakEntity};
 use rusty_core::{Command, FsError, FsErrorKind, Location};
-use rusty_fs::{FsEntry, ProviderOps};
+use rusty_fs::{FsEntry, Provider, ProviderOps};
 
 use super::FerriteWindow;
 use super::path_edit::{is_folder, last_name};
+use crate::command_center::flights::{Answer, Ask, Flights, Rules};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 
 const CHECK_WAIT: Duration = Duration::from_secs(2);
+
+pub(super) type Found = Result<FsEntry, FsError>;
+
+pub(super) fn look_ups(wait: Duration) -> Flights<Found> {
+    Flights::new(Rules {
+        name: "look-up",
+        wait,
+        is_down,
+        now: Arc::new(Instant::now),
+    })
+}
+
+fn is_down(found: &Found) -> bool {
+    found
+        .as_ref()
+        .is_err_and(|error| matches!(error.kind, FsErrorKind::NetworkLost | FsErrorKind::Timeout))
+}
+
+struct LookUps(Flights<Found>);
+
+impl Default for LookUps {
+    fn default() -> Self {
+        Self(look_ups(CHECK_WAIT))
+    }
+}
+
+impl Global for LookUps {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OpenRequest {
@@ -65,11 +91,27 @@ pub(super) async fn look_up(
     location: Location,
     cx: &mut AsyncWindowContext,
 ) -> Option<Result<FsEntry, FsError>> {
-    let lookup = cx.background_spawn(async move { provider.metadata(&location) });
-    let timeout = cx.background_executor().timer(CHECK_WAIT);
-    match select(pin!(lookup), pin!(timeout)).await {
-        Either::Left((found, _)) => Some(found),
-        Either::Right(_) => None,
+    let flights = cx
+        .update(|_, cx| cx.default_global::<LookUps>().0.clone())
+        .ok()?;
+    cx.background_spawn(async move { check(&flights, provider, &location) })
+        .await
+}
+
+pub(super) fn check(
+    flights: &Flights<Found>,
+    provider: Arc<dyn Provider>,
+    location: &Location,
+) -> Option<Found> {
+    let target = location.clone();
+    let ask = Ask {
+        key: location,
+        since: flights.now(),
+        cancel: &|| false,
+    };
+    match flights.get(&ask, move || provider.metadata(&target)) {
+        Answer::Ready(found) => Some(found),
+        Answer::Unreachable | Answer::Busy(_) | Answer::Full | Answer::Cancelled => None,
     }
 }
 

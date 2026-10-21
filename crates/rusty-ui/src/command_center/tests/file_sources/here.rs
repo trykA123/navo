@@ -210,24 +210,39 @@ impl Provider for Gate {
 }
 
 #[test]
-fn closing_the_box_cancels_a_running_walk_and_the_next_search_walks_again() {
+fn reopening_on_a_hung_root_reuses_the_running_walk() {
     let fs = tree();
     let gate = Gate::new(fs.clone());
     let walks = HereWalks::new(gate.clone());
-    let source = HereSource::new(walks.clone());
     let root = fs.location("work");
     let (sink, cancel) = (HitSink::new(1), Cancel::new());
-    source.search(&request("budget", &root), &sink, &cancel);
+    HereSource::new(walks.clone()).search(&request("budget", &root), &sink, &cancel);
     gate.wait_until("the walk to start", |gate| {
         *gate.entered.lock().unwrap() >= 1
     });
-    walks.cancel();
-    gate.wait_until("the walk to see the cancel", |gate| {
-        gate.saw_cancel.load(Ordering::SeqCst)
-    });
+    let reopened = HereSource::new(walks.clone());
+    for typed in ["b", "bu", "bud", "budg", "budget"] {
+        reopened.search(&request(typed, &root), &sink, &cancel);
+    }
+    assert_eq!(*gate.entered.lock().unwrap(), 1);
     gate.is_open.store(true, Ordering::SeqCst);
-    let (hits, _) = settled(&source, &request("budget", &root));
+    let (hits, _) = settled(&reopened, &request("budget", &root));
     assert_eq!(titles(&hits), ["budget-2024.txt", "budget-archive"]);
+    assert_eq!(fs.calls("work", FakeOp::List), 1);
+    assert!(!gate.saw_cancel.load(Ordering::SeqCst));
+}
+
+#[test]
+fn a_blocked_root_starts_no_walk() {
+    let fs = tree();
+    let walks = HereWalks::new(fs.clone());
+    let source = HereSource::new(walks).skipping(Arc::new(|_| true));
+    let request = request("budget", &fs.location("work"));
+    let (sink, cancel) = (HitSink::new(1), Cancel::new());
+    source.search(&request, &sink, &cancel);
+    assert!(sink.drain(1).is_empty());
+    assert!(!source.wait_for_more(&request, &cancel));
+    assert_eq!(fs.calls("work", FakeOp::List), 0);
 }
 
 #[test]

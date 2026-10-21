@@ -16,8 +16,8 @@ pub(super) use search::Update;
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
-    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, LEAVE, PathsSource, RecentSource,
-    ResultSource, Row, Selection, TabsSnapshot, TabsSource,
+    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, LEAVE, PathListings, PathsSource,
+    RecentSource, ResultSource, Row, Selection, TabsSnapshot, TabsSource,
 };
 use crate::commands::{self, ArgKind};
 use crate::modifier_hints::HintsMode;
@@ -34,6 +34,7 @@ pub(super) struct CommandCenterState {
     pub(super) hooks: SearchHooks,
     pub(super) visits: super::visits::Visits,
     pub(super) here: HereWalks,
+    listings: PathListings,
     generation: u64,
 }
 
@@ -47,6 +48,7 @@ impl CommandCenterState {
             hooks,
             visits: super::visits::Visits::default(),
             here: HereWalks::new(provider.clone()),
+            listings: PathListings::new(provider.clone()),
             generation: 0,
         }
     }
@@ -148,9 +150,17 @@ impl FerriteWindow {
         sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(
             self.browser.state(),
         ))));
-        sources.push(Arc::new(HereSource::new(self.command_center.here.clone())));
+        let listings = self.command_center.listings.clone();
+        let tab = self.browser.state().active_tab().id();
+        let is_pane_offline = self.browser.offline(tab).is_some();
+        let walked = listings.clone();
+        sources.push(Arc::new(
+            HereSource::new(self.command_center.here.clone()).skipping(Arc::new(move |root| {
+                is_pane_offline || walked.is_unreachable(root)
+            })),
+        ));
         sources.push(Arc::new(PathsSource::new(
-            self.provider.clone(),
+            listings,
             Arc::new(|name| std::env::var(name).ok()),
         )));
         sources.extend(self.command_center.sources.iter().cloned());
@@ -220,7 +230,6 @@ impl FerriteWindow {
         };
         open.search.cancel();
         self.command_center.generation = open.search.generation();
-        self.command_center.here.cancel();
         match &open.restore {
             Some(handle) => window.focus(handle, cx),
             None => self.focus_core_pane(window, cx),

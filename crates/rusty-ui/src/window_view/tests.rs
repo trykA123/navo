@@ -33,6 +33,7 @@ mod hand_off;
 mod hints;
 mod jobs;
 mod keymap;
+mod look_up;
 mod marks;
 mod mouse_marks;
 mod multi_rename;

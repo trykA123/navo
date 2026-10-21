@@ -1,7 +1,5 @@
 use std::ops::ControlFlow;
-use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::thread;
 use std::time::{Duration, Instant};
 
 use gpui_kit::SharedString;
@@ -11,6 +9,7 @@ use rusty_index::fuzzy::Fuzzy;
 use rusty_l10n::t;
 
 use super::Place;
+use crate::command_center::flights::{Answer, Ask, Clock, Flights, Rules};
 use crate::command_center::rank;
 use crate::command_center::source::{
     Cancel, Group, Hit, HitSink, Offline, Request, ResultSource, Scopes, Target,
@@ -18,7 +17,6 @@ use crate::command_center::source::{
 
 pub const LIST_WAIT: Duration = Duration::from_secs(2);
 const GO_TO_SCORE: i64 = 1_000_000;
-const POLL: Duration = Duration::from_millis(20);
 
 pub type Env = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
@@ -28,67 +26,88 @@ pub(crate) struct Split {
     pub(crate) filter: String,
 }
 
+#[derive(Clone)]
 enum Listing {
     Folders(Vec<Location>),
     Unreachable,
     Failed,
 }
 
-pub struct PathsSource {
+#[derive(Clone)]
+pub struct PathListings {
     provider: Arc<dyn Provider>,
+    flights: Flights<Listing>,
+}
+
+impl PathListings {
+    #[must_use]
+    pub fn new(provider: Arc<dyn Provider>) -> Self {
+        Self::with_clock(provider, LIST_WAIT, Arc::new(Instant::now))
+    }
+
+    #[must_use]
+    pub fn with_clock(provider: Arc<dyn Provider>, wait: Duration, now: Clock) -> Self {
+        let flights = Flights::new(Rules {
+            name: "paths-list",
+            wait,
+            is_down: |listing| matches!(listing, Listing::Unreachable),
+            now,
+        });
+        Self { provider, flights }
+    }
+
+    #[must_use]
+    pub fn is_unreachable(&self, location: &Location) -> bool {
+        self.flights.is_unreachable(location)
+    }
+
+    fn list(&self, parent: &Location, since: Instant, cancel: &Cancel) -> Answer<Listing> {
+        let (provider, folder) = (self.provider.clone(), parent.clone());
+        let is_cancelled = || cancel.is_cancelled();
+        let ask = Ask {
+            key: parent,
+            since,
+            cancel: &is_cancelled,
+        };
+        self.flights.get(&ask, move || {
+            list_folders(provider.as_ref(), &folder, &CancelToken::new())
+        })
+    }
+}
+
+pub struct PathsSource {
+    listings: PathListings,
     env: Env,
-    wait: Duration,
+    opened: Instant,
     offline: Mutex<Option<(u64, SharedString)>>,
 }
 
 impl PathsSource {
     #[must_use]
-    pub fn new(provider: Arc<dyn Provider>, env: Env) -> Self {
-        Self::with_wait(provider, env, LIST_WAIT)
+    pub fn new(listings: PathListings, env: Env) -> Self {
+        Self {
+            opened: listings.flights.now(),
+            listings,
+            env,
+            offline: Mutex::new(None),
+        }
     }
 
     #[must_use]
     pub fn with_wait(provider: Arc<dyn Provider>, env: Env, wait: Duration) -> Self {
-        Self {
-            provider,
+        Self::new(
+            PathListings::with_clock(provider, wait, Arc::new(Instant::now)),
             env,
-            wait,
-            offline: Mutex::new(None),
-        }
+        )
     }
 
     fn offline(&self) -> MutexGuard<'_, Option<(u64, SharedString)>> {
         self.offline.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn list(&self, parent: &Location, cancel: &Cancel) -> Listing {
-        let (sender, receiver) = mpsc::channel();
-        let (provider, folder, token) = (self.provider.clone(), parent.clone(), CancelToken::new());
-        let job = token.clone();
-        let spawned = thread::Builder::new()
-            .name("paths-list".into())
-            .spawn(move || {
-                let _ = sender.send(list_folders(provider.as_ref(), &folder, &job));
-            });
-        if spawned.is_err() {
-            return Listing::Failed;
-        }
-        let deadline = Instant::now() + self.wait;
-        loop {
-            match receiver.recv_timeout(POLL) {
-                Ok(listing) => return listing,
-                Err(RecvTimeoutError::Disconnected) => return Listing::Failed,
-                Err(RecvTimeoutError::Timeout) => {}
-            }
-            if cancel.is_cancelled() {
-                token.cancel();
-                return Listing::Failed;
-            }
-            if Instant::now() >= deadline {
-                token.cancel();
-                return Listing::Unreachable;
-            }
-        }
+    fn note(&self, generation: u64, location: &Location) {
+        let path = SharedString::from(location.as_str().to_owned());
+        *self.offline() = Some((generation, path));
     }
 }
 
@@ -222,22 +241,23 @@ impl ResultSource for PathsSource {
         let Some(split) = split(input, here, &self.env) else {
             return;
         };
-        match self.list(&split.parent, cancel) {
-            Listing::Folders(folders) => {
+        let generation = request.generation;
+        match self.listings.list(&split.parent, self.opened, cancel) {
+            Answer::Ready(Listing::Folders(folders)) => {
                 let exists = split.filter.is_empty()
                     || folders.iter().any(|folder| folder.same_place(&split.typed));
                 if exists {
-                    sink.push(request.generation, go_to(&split.typed));
+                    sink.push(generation, go_to(&split.typed));
                 }
                 for hit in children(&split, folders) {
-                    sink.push(request.generation, hit);
+                    sink.push(generation, hit);
                 }
             }
-            Listing::Unreachable => {
-                let path = SharedString::from(split.parent.as_str().to_owned());
-                *self.offline() = Some((request.generation, path));
+            Answer::Ready(Listing::Unreachable) | Answer::Unreachable => {
+                self.note(generation, &split.parent);
             }
-            Listing::Failed => {}
+            Answer::Busy(other) => self.note(generation, &other),
+            Answer::Ready(Listing::Failed) | Answer::Full | Answer::Cancelled => {}
         }
     }
 

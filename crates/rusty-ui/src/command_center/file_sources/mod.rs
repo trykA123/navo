@@ -14,7 +14,7 @@ use super::source::{Group, Hit, Target};
 pub use here::{HereOptions, HereSource, HereWalks};
 #[cfg(test)]
 pub(crate) use paths::{Env, split};
-pub use paths::{PathsSource, completion};
+pub use paths::{PathListings, PathsSource, completion};
 pub use recent::{Frecents, RecentSource};
 pub use tabs::{TabsSnapshot, TabsSource};
 

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
@@ -6,8 +7,8 @@ use rusty_fs::{CancelToken, Capabilities, FakeFs, FakeOp, Fault, FsEntry, ListSi
 
 use crate::command_center::file_sources::{Env, split};
 use crate::command_center::{
-    Cancel, Group, Hit, HitSink, Offline, PathsSource, Query, Request, ResultSource, Results, Row,
-    Scope, Target, completion,
+    Cancel, Group, Hit, HitSink, Offline, PathListings, PathsSource, Query, Request, ResultSource,
+    Results, Row, Scope, Target, completion,
 };
 
 fn tree() -> Arc<FakeFs> {
@@ -272,4 +273,252 @@ fn a_path_hit_is_dropped_when_a_tab_or_recent_row_shows_the_same_place() {
         .collect();
     assert_eq!(shown.len(), 1);
     assert_eq!(shown[0].source, "recent");
+}
+
+struct Held {
+    inner: Arc<FakeFs>,
+    is_open: AtomicBool,
+    entered: AtomicUsize,
+    busy: AtomicUsize,
+    most: AtomicUsize,
+}
+
+impl Held {
+    fn new(inner: Arc<FakeFs>) -> Arc<Self> {
+        Arc::new(Self {
+            inner,
+            is_open: AtomicBool::new(false),
+            entered: AtomicUsize::new(0),
+            busy: AtomicUsize::new(0),
+            most: AtomicUsize::new(0),
+        })
+    }
+
+    fn count(counter: &AtomicUsize) -> usize {
+        counter.load(Ordering::SeqCst)
+    }
+
+    fn wait_until(&self, what: &str, done: impl Fn(&Self) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done(self) {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+}
+
+impl Provider for Held {
+    fn id(&self) -> ProviderId {
+        self.inner.id()
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        self.inner.capabilities()
+    }
+
+    fn list(
+        &self,
+        folder: &Location,
+        sink: &mut dyn ListSink,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        self.entered.fetch_add(1, Ordering::SeqCst);
+        let busy = self.busy.fetch_add(1, Ordering::SeqCst) + 1;
+        self.most.fetch_max(busy, Ordering::SeqCst);
+        while !self.is_open.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let result = self.inner.list(folder, sink, cancel);
+        self.busy.fetch_sub(1, Ordering::SeqCst);
+        result
+    }
+
+    fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        self.inner.metadata(location)
+    }
+}
+
+fn keystrokes() -> Vec<String> {
+    (0..20)
+        .map(|typed| format!("~/work/{}", &"abcdefghijklmnopqrst"[..typed]))
+        .collect()
+}
+
+struct Clocked {
+    listings: PathListings,
+    seconds: Arc<AtomicU64>,
+}
+
+fn clocked(provider: Arc<dyn Provider>, wait: Duration) -> Clocked {
+    let (base, seconds) = (Instant::now(), Arc::new(AtomicU64::new(0)));
+    let offset = seconds.clone();
+    let now = Arc::new(move || base + Duration::from_secs(offset.load(Ordering::SeqCst)));
+    Clocked {
+        listings: PathListings::with_clock(provider, wait, now),
+        seconds,
+    }
+}
+
+#[test]
+fn twenty_keystrokes_under_a_hung_parent_start_one_listing() {
+    let fs = tree();
+    let held = Held::new(fs.clone());
+    let listings = clocked(held.clone(), Duration::from_millis(50)).listings;
+    let source = PathsSource::new(listings.clone(), Arc::new(env));
+    for input in keystrokes() {
+        let (hits, offline) = run(&source, &input, &fs.location("home"));
+        assert!(hits.is_empty(), "{input}");
+        assert!(offline.is_some_and(|note| note.path.contains("work")));
+    }
+    held.wait_until("the listing to start", |held| {
+        Held::count(&held.entered) >= 1
+    });
+    assert_eq!(Held::count(&held.entered), 1);
+    assert!(listings.is_unreachable(&at(&fs, "/home/work")));
+    held.is_open.store(true, Ordering::SeqCst);
+}
+
+#[test]
+fn keystrokes_that_cancel_their_wait_share_the_running_listing() {
+    let fs = tree();
+    let held = Held::new(fs.clone());
+    let source = PathsSource::new(
+        clocked(held.clone(), Duration::from_secs(30)).listings,
+        Arc::new(env),
+    );
+    let cancel = Cancel::new();
+    cancel.cancel();
+    for input in keystrokes() {
+        let request = request(&input, &fs.location("home"));
+        source.search(&request, &HitSink::new(1), &cancel);
+    }
+    held.is_open.store(true, Ordering::SeqCst);
+    let (hits, _) = run(&source, "~/work/p", &fs.location("home"));
+    assert_eq!(children(&hits), ["photos", "projects"]);
+    assert_eq!(Held::count(&held.entered), 1);
+}
+
+#[test]
+fn a_new_parent_waits_for_the_hung_one_and_lists_after_its_release() {
+    let fs = tree();
+    let held = Held::new(fs.clone());
+    let listings = clocked(held.clone(), Duration::from_millis(50)).listings;
+    let source = PathsSource::new(listings.clone(), Arc::new(env));
+    let home = fs.location("home");
+    run(&source, "~/work/p", &home);
+    let (hits, offline) = run(&source, "~/", &home);
+    assert!(hits.is_empty());
+    assert!(offline.is_some_and(|note| note.path.contains("work")));
+    assert_eq!(Held::count(&held.entered), 1);
+    held.is_open.store(true, Ordering::SeqCst);
+    held.wait_until("the hung listing to free its flight", |_| {
+        !listings.is_unreachable(&at(&fs, "/home/work"))
+    });
+    let (hits, offline) = run(&source, "~/", &home);
+    assert_eq!(children(&hits), ["work"]);
+    assert!(offline.is_none());
+    let (hits, _) = run(&source, "~/work/p", &home);
+    assert_eq!(children(&hits), ["photos", "projects"]);
+    assert_eq!(Held::count(&held.entered), 2);
+    assert_eq!(Held::count(&held.most), 1);
+}
+
+#[test]
+fn filter_changes_reuse_the_listing_and_a_reopen_lists_again() {
+    let fs = tree();
+    let clocked = clocked(fs.clone(), Duration::from_secs(2));
+    let source = PathsSource::new(clocked.listings.clone(), Arc::new(env));
+    let home = fs.location("home");
+    for input in ["~/work/", "~/work/p", "~/work/pr", "~/work/n"] {
+        assert!(!run(&source, input, &home).0.is_empty(), "{input}");
+    }
+    assert_eq!(fs.calls("home/work", FakeOp::List), 1);
+    clocked.seconds.store(1, Ordering::SeqCst);
+    let reopened = PathsSource::new(clocked.listings, Arc::new(env));
+    run(&reopened, "~/work/p", &home);
+    assert_eq!(fs.calls("home/work", FakeOp::List), 2);
+}
+
+#[test]
+fn an_unreachable_parent_is_not_listed_again_for_30_seconds() {
+    let fs = tree();
+    fs.fault(
+        "home/work",
+        FakeOp::List,
+        1,
+        Fault::Fail(FsErrorKind::NetworkLost),
+    );
+    let clocked = clocked(fs.clone(), Duration::from_secs(2));
+    let home = fs.location("home");
+    let open = || PathsSource::new(clocked.listings.clone(), Arc::new(env));
+    assert!(run(&open(), "~/work/p", &home).1.is_some());
+    clocked.seconds.store(29, Ordering::SeqCst);
+    let (hits, offline) = run(&open(), "~/work/", &home);
+    assert!(hits.is_empty() && offline.is_some());
+    assert_eq!(fs.calls("home/work", FakeOp::List), 1);
+    clocked.seconds.store(31, Ordering::SeqCst);
+    let (hits, offline) = run(&open(), "~/work/p", &home);
+    assert_eq!(children(&hits), ["photos", "projects"]);
+    assert!(offline.is_none());
+    assert_eq!(fs.calls("home/work", FakeOp::List), 2);
+}
+
+#[derive(Default)]
+struct Shares {
+    is_open: AtomicBool,
+    entered: AtomicUsize,
+}
+
+impl Provider for Shares {
+    fn id(&self) -> ProviderId {
+        ProviderId::local()
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        Capabilities::default()
+    }
+
+    fn list(
+        &self,
+        folder: &Location,
+        _sink: &mut dyn ListSink,
+        _cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        if folder.as_str().starts_with(r"\\") {
+            self.entered.fetch_add(1, Ordering::SeqCst);
+            while !self.is_open.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        }
+        Ok(())
+    }
+
+    fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        Err(FsError {
+            location: Some(location.clone()),
+            ..FsError::new(FsErrorKind::NotFound)
+        })
+    }
+}
+
+#[test]
+fn a_hung_share_listing_does_not_delay_a_local_drive() {
+    let shares = Arc::new(Shares::default());
+    let source = PathsSource::with_wait(shares.clone(), Arc::new(env), Duration::from_secs(2));
+    let here = Location::new(r"C:\work").unwrap();
+    let request = request(r"\\nas\share\", &here);
+    let cancel = Cancel::new();
+    cancel.cancel();
+    source.search(&request, &HitSink::new(1), &cancel);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while shares.entered.load(Ordering::SeqCst) == 0 {
+        assert!(Instant::now() < deadline, "the share listing never started");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let started = Instant::now();
+    let (hits, offline) = run(&source, r"C:\", &here);
+    assert!(started.elapsed() < Duration::from_secs(1));
+    assert!(offline.is_none());
+    assert!(hits.iter().any(|hit| matches!(hit.target, Target::GoTo(_))));
+    shares.is_open.store(true, Ordering::SeqCst);
 }

@@ -10,6 +10,7 @@ use rusty_index::table::{Flags, NameTable};
 use rusty_index::walker::{self, Limits, Outcome};
 
 use super::Place;
+use crate::command_center::flights::Clock;
 use crate::command_center::query::Term;
 use crate::command_center::rank;
 use crate::command_center::source::{
@@ -20,7 +21,7 @@ pub const WALK_CAP: usize = 300_000;
 pub const WALK_AGE: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(40);
 
-pub type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
+pub type Blocked = Arc<dyn Fn(&Location) -> bool + Send + Sync>;
 
 #[derive(Clone)]
 pub struct HereOptions {
@@ -61,10 +62,6 @@ impl Walk {
 
     fn view(&self) -> View {
         self.lock().clone()
-    }
-
-    fn is_running(&self) -> bool {
-        self.lock().outcome.is_none()
     }
 
     fn is_reusable(&self, root: &Location, now: Instant, max_age: Duration) -> bool {
@@ -137,15 +134,6 @@ impl HereWalks {
         }))
     }
 
-    pub fn cancel(&self) {
-        let mut slot = self.slot();
-        if slot.as_ref().is_some_and(|walk| walk.is_running())
-            && let Some(walk) = slot.take()
-        {
-            walk.cancel.cancel();
-        }
-    }
-
     fn slot(&self) -> MutexGuard<'_, Option<Arc<Walk>>> {
         self.0.walk.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -202,6 +190,7 @@ struct Seen {
 
 pub struct HereSource {
     walks: HereWalks,
+    blocked: Option<Blocked>,
     seen: Mutex<Option<Seen>>,
 }
 
@@ -210,7 +199,16 @@ impl HereSource {
     pub fn new(walks: HereWalks) -> Self {
         Self {
             walks,
+            blocked: None,
             seen: Mutex::new(None),
+        }
+    }
+
+    #[must_use]
+    pub fn skipping(self, blocked: Blocked) -> Self {
+        Self {
+            blocked: Some(blocked),
+            ..self
         }
     }
 
@@ -260,7 +258,7 @@ impl ResultSource for HereSource {
             return;
         };
         let terms = index_terms(&request.query.terms);
-        if terms.is_empty() {
+        if terms.is_empty() || self.blocked.as_ref().is_some_and(|blocked| blocked(root)) {
             return;
         }
         let walk = self.walks.current(root);
