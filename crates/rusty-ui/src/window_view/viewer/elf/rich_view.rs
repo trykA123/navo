@@ -29,11 +29,13 @@ impl ElfView {
         if !self.shows_share() {
             return None;
         }
-        let share = self
-            .rich
-            .model
-            .as_ref()
-            .and_then(|model| share_of(&model.regions, (symbol.value, symbol.size)));
+        let share = self.rich.model.as_ref().and_then(|model| {
+            let estimate = self.elf().and_then(|elf| {
+                let boundaries = model.boundaries.as_ref()?;
+                boundaries.estimated_size(elf, symbol)
+            });
+            share_of(&model.regions, (symbol.value, symbol.size), estimate)
+        });
         Some(share_cell(t, share))
     }
 

@@ -285,3 +285,25 @@ fn space_treemap_layout_of_22_by_14_stays_in_budget() {
     assert_eq!(tiles.len(), 23);
     assert!(elapsed.as_micros() < 1000, "treemap took {elapsed:?}");
 }
+
+#[test]
+fn space_treemap_inner_areas_follow_values_with_a_remainder_tile() {
+    let values: Vec<u64> = (1..=20).map(|n| n * 37 % 400 + 50).collect();
+    let total: u64 = values.iter().sum();
+    let mut big = item(1, total);
+    big.parts = parts(&values);
+    let rect = Rect::new(0.0, 0.0, 700.0, 450.0);
+    let tile = &layout(&[big], rect)[0];
+    let area = Rect::new(0.0, 18.0, 700.0, 450.0 - 18.0 - 4.0);
+    let covered: f64 = tile.inner.iter().map(|inner| inner.rect.area()).sum();
+    assert!((covered - area.area()).abs() < 1e-6);
+    assert!(matches!(
+        tile.inner.last().unwrap().target,
+        Target::More { count: 6 }
+    ));
+    for inner in &tile.inner {
+        let wanted = inner.value as f64 / total as f64;
+        let drawn = inner.rect.area() / area.area();
+        assert!((drawn - wanted).abs() / wanted < 0.01, "{inner:?}");
+    }
+}

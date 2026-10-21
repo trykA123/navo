@@ -285,3 +285,24 @@ fn merged_sections_full_of_labels_still_filter_well() {
     assert_eq!(shown.hidden, 88);
     assert_eq!(shown.rows.len(), 6);
 }
+
+#[test]
+fn sorting_by_share_ranks_an_estimated_symbol_by_its_estimate() {
+    let elf = parse(&build(&noisy(vec![func("asm_entry", 0x0800_0160, 0, 0)])));
+    let by_share = Query {
+        order: order(Column::Share, true),
+        ..Query::default()
+    };
+    let by_size = Query {
+        order: order(Column::Size, true),
+        ..Query::default()
+    };
+    let rank = |query: &Query| {
+        names(&elf, query)
+            .iter()
+            .position(|name| name == "asm_entry")
+            .unwrap()
+    };
+    assert_eq!(rank(&by_size), names(&elf, &by_size).len() - 1);
+    assert!(rank(&by_share) < rank(&by_size));
+}

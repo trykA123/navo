@@ -45,6 +45,7 @@ space-file-symbols = symbols and strings
 space-file-other = other
 space-file-part = { $name } · { $size } · { $percent }%
 viewer-space-share = { $percent }%
+viewer-space-share-estimated = ~{ $percent }%
 viewer-space-more = { $count } more
 viewer-space-stripped = This file has no symbol table, so bytes cannot be traced to modules.
 space-title = Address space

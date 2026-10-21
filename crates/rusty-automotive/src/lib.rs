@@ -23,9 +23,9 @@ pub use description::{DescriptionError, DescriptionProblem, DescriptionReport};
 #[cfg(feature = "sample")]
 pub use elf::sample as elf_sample;
 pub use elf::{
-    Bind, Class, Column, Elf, ElfProblem, ElfReader, Endian, Header, Lines, Order, Place, Query,
-    Scope, Section, Segment, Selection, SourceLine, Symbol, SymbolKind, Totals, estimated_size,
-    select, sniff_elf,
+    Bind, Boundaries, Class, Column, Elf, ElfProblem, ElfReader, Endian, Header, Lines, Order,
+    Place, Query, Scope, Section, Segment, Selection, SourceLine, Symbol, SymbolKind, Totals,
+    estimated_size, select, sniff_elf,
 };
 pub use image::{Counts, Image, Item, Problem, Start};
 pub use layout::{Layout, LayoutOptions, ROW_BYTES, Row};

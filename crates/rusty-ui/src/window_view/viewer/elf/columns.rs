@@ -105,9 +105,11 @@ impl ElfView {
         let columns = self.columns.as_ref()?;
         let order = self.query.order;
         let head = ColumnHead::new("elf-head", &columns.set);
-        let sorted = COLUMNS
-            .iter()
-            .position(|(column, ..)| *column == order.column);
+        let shown = match order.column {
+            Column::Share => Column::Size,
+            column => column,
+        };
+        let sorted = COLUMNS.iter().position(|(column, ..)| *column == shown);
         Some(match sorted {
             Some(at) => head.sorted(at, order.descending),
             None => head,

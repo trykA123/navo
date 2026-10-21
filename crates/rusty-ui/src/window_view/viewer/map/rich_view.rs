@@ -26,7 +26,7 @@ impl MapView {
             .rich
             .model
             .as_ref()
-            .and_then(|model| share_of(&model.regions, (section.address, section.size)));
+            .and_then(|model| share_of(&model.regions, (section.address, section.size), None));
         Some(share_cell(t, share))
     }
 

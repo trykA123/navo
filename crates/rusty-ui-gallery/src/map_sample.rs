@@ -47,10 +47,12 @@ const MODULES: [(&str, &str, [&str; 3]); 14] = [
 
 const RESERVED: [u64; 4] = [0x8000, 0x2000, 0, 0];
 
+const COM_UNITS: usize = 17;
+
 const REGIONS: [(&str, u64, u64); 4] = [
-    ("mpe:pflash0", 0x8000_0000, 0x20_0000),
+    ("mpe:pflash0", 0x8000_0000, 0x40_0000),
     ("mpe:dflash0", 0xAF00_0000, 0x1_0000),
-    ("mpe:dsram0", 0x7000_0000, 0x2_0000),
+    ("mpe:dsram0", 0x7000_0000, 0x8_0000),
     ("mpe:psram0", 0x7010_0000, 0x1_0000),
 ];
 
@@ -190,6 +192,11 @@ fn built() -> Builder {
     };
     for module in MODULES {
         builder.module(module);
+    }
+    for unit in 0..COM_UNITS {
+        let object = format!("com_unit{unit:02}");
+        let prefix = format!("Com{unit:02}");
+        builder.module((&object, &prefix, ["Init", "Receive", "Send"]));
     }
     builder.place(
         "cal_table",

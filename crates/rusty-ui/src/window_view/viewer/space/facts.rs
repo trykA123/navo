@@ -23,14 +23,29 @@ const KINDS: [Kind; 6] = [
 
 pub(in crate::window_view::viewer) type SpanText<'a> = &'a dyn Fn(u64, u64) -> String;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(in crate::window_view::viewer) struct Share {
+    pub fraction: f64,
+    pub estimated: bool,
+}
+
 pub(in crate::window_view::viewer) fn share_of(
     regions: &[std::sync::Arc<Region>],
     (address, size): (u64, u64),
-) -> Option<f64> {
+    estimate: Option<u64>,
+) -> Option<Share> {
     let region = regions
         .iter()
         .find(|region| region.span().is_some_and(|span| span.contains(&address)))?;
-    (region.used > 0).then(|| size as f64 / region.used as f64)
+    let (bytes, estimated) = match (size, estimate) {
+        (0, Some(estimate)) => (estimate, true),
+        (0, None) => return None,
+        _ => (size, false),
+    };
+    (region.used > 0).then(|| Share {
+        fraction: bytes as f64 / region.used as f64,
+        estimated,
+    })
 }
 
 pub(in crate::window_view::viewer) fn share_head(t: &Theme) -> Div {
@@ -47,13 +62,17 @@ pub(in crate::window_view::viewer) fn share_head(t: &Theme) -> Div {
         .child(tr("elf-column-share"))
 }
 
-pub(in crate::window_view::viewer) fn share_cell(t: &Theme, share: Option<f64>) -> Div {
-    let text = share.map_or_else(String::new, |share| {
-        t!(
-            "viewer-space-share",
-            percent = format!("{:.1}", share * 100.)
-        )
-    });
+fn share_text(share: Share) -> String {
+    let percent = format!("{:.1}", share.fraction * 100.);
+    if share.estimated {
+        t!("viewer-space-share-estimated", percent = percent)
+    } else {
+        t!("viewer-space-share", percent = percent)
+    }
+}
+
+pub(in crate::window_view::viewer) fn share_cell(t: &Theme, share: Option<Share>) -> Div {
+    let text = share.map_or_else(String::new, share_text);
     let bar = div()
         .w(px(28.))
         .h(px(6.))
@@ -63,7 +82,9 @@ pub(in crate::window_view::viewer) fn share_cell(t: &Theme, share: Option<f64>) 
         .child(
             div()
                 .h_full()
-                .w(relative(share.unwrap_or(0.).clamp(0., 1.) as f32))
+                .w(relative(
+                    share.map_or(0., |share| share.fraction).clamp(0., 1.) as f32,
+                ))
                 .bg(t.mem.code.strong),
         );
     div()
@@ -208,3 +229,6 @@ pub(in crate::window_view::viewer) fn pick_facts(
             .collect(),
     )
 }
+
+#[cfg(test)]
+mod tests;

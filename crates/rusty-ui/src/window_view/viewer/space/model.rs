@@ -6,7 +6,7 @@ use rusty_automotive::space::{
     Regions, TOP_GROUPS, available, default_grouping, elf_kinds_match, flash_region, group, owners,
     owners_of_map, regions_for_elf, regions_for_map,
 };
-use rusty_automotive::{Elf, Lines, MapModel, Mdf, RegionTable};
+use rusty_automotive::{Boundaries, Elf, Lines, MapModel, Mdf, RegionTable};
 use rusty_l10n::{t, tr};
 
 use super::sibling::{SiblingProblem, Siblings};
@@ -26,6 +26,7 @@ pub(in crate::window_view::viewer) struct RichModel {
     pub region_source: Option<String>,
     pub stripped: bool,
     pub from_map: bool,
+    pub boundaries: Option<Boundaries>,
 }
 
 impl RichModel {
@@ -48,6 +49,7 @@ impl RichModel {
                 .map(|(id, child)| TreemapPart {
                     id: id as u32,
                     name: child.name.clone().into(),
+                    by_kind: child.by_kind,
                 })
                 .collect(),
         });
@@ -57,7 +59,6 @@ impl RichModel {
             parts: group
                 .children
                 .iter()
-                .take(SHOWN_PARTS)
                 .enumerate()
                 .map(|(id, child)| Part {
                     id: id as u32,
@@ -112,6 +113,7 @@ pub(super) fn assemble(
         provenance: String::new(),
         region_source: None,
         from_map: matches!(origin, Origin::Map(_)),
+        boundaries: None,
     }
 }
 
@@ -135,6 +137,7 @@ pub(in crate::window_view::viewer) fn build_model(
     RichModel {
         provenance,
         region_source,
+        boundaries: Some(Boundaries::new(elf)),
         ..assemble((regions, found), Origin::Elf { elf, map }, grouping)
     }
 }

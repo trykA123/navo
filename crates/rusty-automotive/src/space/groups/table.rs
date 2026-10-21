@@ -26,11 +26,14 @@ impl Table {
                 group.children.push(Child {
                     name: child.to_owned(),
                     bytes: 0,
+                    by_kind: [0; Kind::COUNT],
                 });
                 group.children.len() - 1
             });
         let kid = &mut group.children[place];
         kid.bytes = kid.bytes.saturating_add(owner.size);
+        let kid_bytes = &mut kid.by_kind[owner.kind.index()];
+        *kid_bytes = kid_bytes.saturating_add(owner.size);
     }
 
     fn slot(&mut self, name: &str, listed: bool) -> usize {

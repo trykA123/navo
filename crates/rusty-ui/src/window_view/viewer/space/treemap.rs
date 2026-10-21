@@ -6,9 +6,12 @@ use gpui_kit::{FocusHandle, RenderOnce, Role, StatefulInteractiveElement, relati
 use rusty_automotive::space::{KIND_BAR_PX, Kind, Rect, Target, Tile};
 use rusty_l10n::t;
 
+use self::palette::{GroupColours, Shade, palette};
 use crate::format;
 use crate::prelude::*;
-use crate::tokens::{self, MemKind, Theme};
+use crate::tokens::{self, Theme};
+
+mod palette;
 
 const GAP: f32 = 1.;
 const SELECTED_WIDTH: f32 = 2.;
@@ -18,6 +21,7 @@ const CURSOR_INSET: f64 = 3.;
 pub struct TreemapPart {
     pub id: u32,
     pub name: SharedString,
+    pub by_kind: [u64; Kind::COUNT],
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -86,22 +90,29 @@ impl Treemap {
     }
 }
 
-fn dominant(by_kind: &[u64; Kind::COUNT]) -> usize {
-    let mut best = 0;
-    for (index, bytes) in by_kind.iter().enumerate() {
-        if *bytes > by_kind[best] {
-            best = index;
-        }
+fn shade_of(
+    t: &Theme,
+    tile: &Tile,
+    (colours, rank): (Option<&GroupColours>, Option<usize>),
+) -> Shade {
+    if matches!(tile.target, Target::More { .. }) {
+        return Shade {
+            bg: t.mem.free,
+            ink: t.colors.muted,
+        };
     }
-    best
+    match (colours, rank) {
+        (Some(colours), Some(rank)) => colours.part(rank),
+        (Some(colours), None) => colours.base(),
+        (None, _) => Shade {
+            bg: t.mem.other.tint,
+            ink: t.mem.other.text,
+        },
+    }
 }
 
-fn colours(t: &Theme, group: Option<&TreemapGroup>, more: bool) -> (Hsla, Hsla) {
-    if more {
-        return (t.mem.free, t.colors.muted);
-    }
-    let kind: MemKind = group.map_or(t.mem.other, |g| t.mem.kinds()[dominant(&g.by_kind)].1);
-    (kind.tint, kind.text)
+fn group_index(groups: &[TreemapGroup], id: u32) -> Option<usize> {
+    groups.iter().position(|group| group.id == id)
 }
 
 fn pick_of(tile: &Tile) -> Option<u32> {
@@ -193,48 +204,62 @@ fn kind_bar(t: &Theme, rect: Rect, by_kind: &[u64; Kind::COUNT]) -> Div {
         })
 }
 
-fn name_of(tile: &Tile, group: Option<&TreemapGroup>, part_of: bool) -> String {
+fn part_of(group: Option<&TreemapGroup>, id: u32) -> Option<&TreemapPart> {
+    group?.parts.iter().find(|part| part.id == id)
+}
+
+fn name_of(tile: &Tile, group: Option<&TreemapGroup>, inner: bool) -> String {
     match (tile.target, group) {
         (Target::More { count }, _) => t!("viewer-space-more", count = count as i64),
-        (Target::Item(id), Some(group)) if part_of => group
-            .parts
-            .iter()
-            .find(|part| part.id == id)
+        (Target::Item(id), group) if inner => part_of(group, id)
             .map(|part| part.name.to_string())
             .unwrap_or_default(),
-        (_, Some(group)) if !part_of => group.name.to_string(),
+        (_, Some(group)) if !inner => group.name.to_string(),
         _ => String::new(),
     }
 }
 
+struct Parent<'a> {
+    group: Option<&'a TreemapGroup>,
+    colours: Option<&'a GroupColours>,
+    origin: Rect,
+    name: &'a str,
+}
+
 impl Treemap {
-    fn tile(&self, t: &Theme, tile: &Tile, group: Option<&TreemapGroup>) -> AnyElement {
+    fn tile(
+        &self,
+        t: &Theme,
+        tile: &Tile,
+        (group, colours): (Option<&TreemapGroup>, Option<&GroupColours>),
+    ) -> AnyElement {
         let more = matches!(tile.target, Target::More { .. });
-        let (bg, ink) = colours(t, group, more);
+        let shade = shade_of(t, tile, (colours, None));
         let name = name_of(tile, group, false);
-        let outer = name.clone();
         let nested = !tile.inner.is_empty();
-        let mut cell = place(tile.rect).bg(bg).rounded(t.radii.xs);
+        let mut cell = place(tile.rect).bg(shade.bg).rounded(t.radii.xs);
         if more {
             cell = cell.border_1().border_color(t.mem.free_line);
         }
         if let Some(text) = caption(tile, &name, self.total) {
-            cell = cell.child(label(t, ink, text, !nested));
+            cell = cell.child(label(t, shade.ink, text, !nested));
         }
         if let (Some(group), false) = (group, more) {
             cell = cell.child(kind_bar(t, tile.rect, &group.by_kind));
         }
-        let origin = tile.rect;
-        let cell = tile.inner.iter().fold(cell, |cell, inner| {
-            let local = Rect::new(
-                inner.rect.x - origin.x,
-                inner.rect.y - origin.y,
-                inner.rect.w,
-                inner.rect.h,
-            );
-            let name = inner_name(name_of(inner, group, true), &outer);
-            cell.child(self.inner_tile(t, inner, (local, name, ink)))
-        });
+        let parent = Parent {
+            group,
+            colours,
+            origin: tile.rect,
+            name: &name,
+        };
+        let cell = tile
+            .inner
+            .iter()
+            .enumerate()
+            .fold(cell, |cell, (rank, inner)| {
+                cell.child(self.inner_tile(t, inner, (&parent, rank)))
+            });
         let id = pick_of(tile).map_or(usize::MAX, |id| id as usize);
         let described = format!(
             "{name}, {} · {}",
@@ -254,17 +279,26 @@ impl Treemap {
             .into_any_element()
     }
 
-    fn inner_tile(
-        &self,
-        t: &Theme,
-        tile: &Tile,
-        (local, name, ink): (Rect, Option<String>, Hsla),
-    ) -> Div {
-        let mut cell = place(local).bg(t.colors.surface).rounded(t.radii.xs);
+    fn inner_tile(&self, t: &Theme, tile: &Tile, (parent, rank): (&Parent<'_>, usize)) -> Div {
+        let shade = shade_of(t, tile, (parent.colours, Some(rank)));
+        let local = Rect::new(
+            tile.rect.x - parent.origin.x,
+            tile.rect.y - parent.origin.y,
+            tile.rect.w,
+            tile.rect.h,
+        );
+        let mut cell = place(local).bg(shade.bg).rounded(t.radii.xs);
+        let name = inner_name(name_of(tile, parent.group, true), parent.name);
         if let Some(text) = name.and_then(|name| caption(tile, &name, self.total)) {
-            cell = cell.child(label(t, ink, text, false));
+            cell = cell.child(label(t, shade.ink, text, true));
         }
-        cell
+        match tile.target {
+            Target::More { .. } => cell.border_1().border_color(t.mem.free_line),
+            Target::Item(id) => match part_of(parent.group, id) {
+                Some(part) => cell.child(kind_bar(t, local, &part.by_kind)),
+                None => cell,
+            },
+        }
     }
 }
 
@@ -322,9 +356,12 @@ impl RenderOnce for Treemap {
         }
         let by_id: HashMap<u32, &TreemapGroup> =
             self.groups.iter().map(|group| (group.id, group)).collect();
+        let colours = palette(self.groups.len(), t.mode);
         let tiles = self.tiles.iter().map(|tile| {
-            let group = pick_of(tile).and_then(|id| by_id.get(&id).copied());
-            self.tile(&t, tile, group)
+            let id = pick_of(tile);
+            let group = id.and_then(|id| by_id.get(&id).copied());
+            let hue = id.and_then(|id| colours.get(group_index(&self.groups, id)?));
+            self.tile(&t, tile, (group, hue))
         });
         let outline = self
             .tiles

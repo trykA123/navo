@@ -710,3 +710,26 @@ fn space_groups_symbols_in_a_named_section_group_by_their_own_names() {
     let groups = flash_groups(&elf, Grouping::Module, &[]);
     assert_eq!(pairs(&groups), [("Com", 0x20), ("Lamp", 0x20)]);
 }
+
+#[test]
+fn space_groups_children_carry_their_own_kinds() {
+    let elf = module_elf();
+    let groups = flash_groups(&elf, Grouping::Module, &[]);
+    for group in &groups {
+        for child in &group.children {
+            assert_eq!(child.by_kind.iter().sum::<u64>(), child.bytes);
+        }
+        let from_children: u64 = group
+            .children
+            .iter()
+            .map(|c| c.by_kind[Kind::Code.index()])
+            .sum();
+        assert_eq!(from_children, group.by_kind[Kind::Code.index()]);
+    }
+    let rte = groups.iter().find(|g| g.name == "Rte_Lamp").unwrap();
+    assert!(
+        rte.children
+            .iter()
+            .all(|child| child.by_kind[Kind::Code.index()] == child.bytes)
+    );
+}

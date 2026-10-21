@@ -77,6 +77,20 @@ fn the_treemap_adds_up_to_the_used_bytes_of_the_flash() {
 }
 
 #[test]
+fn every_part_reaches_the_layout_with_its_own_kinds() {
+    let elf = parse(demo().expect("demo"));
+    let model = build_model(&elf, None, &with_mdf(), None);
+    let (groups, items) = model.treemap();
+    for (item, group) in items.iter().zip(groups.iter()) {
+        let parts: u64 = item.parts.iter().map(|part| part.value).sum();
+        assert_eq!(parts, item.value);
+        for part in &group.parts {
+            assert!(part.by_kind.iter().sum::<u64>() > 0);
+        }
+    }
+}
+
+#[test]
 fn an_unusable_grouping_falls_back_to_the_default() {
     let elf = parse(demo().expect("demo"));
     let model = build_model(&elf, None, &with_mdf(), Some(Grouping::ObjectFile));

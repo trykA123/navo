@@ -51,6 +51,7 @@ pub struct GroupBy<'a> {
 pub struct Child {
     pub name: String,
     pub bytes: u64,
+    pub by_kind: [u64; Kind::COUNT],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -42,6 +42,13 @@ pub struct TreemapPage {
     picked: Option<u32>,
 }
 
+fn part_kinds(group: usize, part: usize) -> [u64; 6] {
+    let mut kinds = [0; 6];
+    kinds[(group + part) % 4] = 1_000;
+    kinds[(group + 2 * part) % 4] += 400;
+    kinds
+}
+
 fn groups() -> Vec<TreemapGroup> {
     MODULES
         .iter()
@@ -56,6 +63,7 @@ fn groups() -> Vec<TreemapGroup> {
                 .map(|(part, name)| TreemapPart {
                     id: part as u32,
                     name: (*name).into(),
+                    by_kind: part_kinds(index, part),
                 })
                 .collect(),
         })

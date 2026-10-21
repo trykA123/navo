@@ -16,7 +16,7 @@ use crate::window_view::viewer::space::{
 };
 
 const LARGEST: Order = Order {
-    column: Column::Size,
+    column: Column::Share,
     descending: true,
 };
 

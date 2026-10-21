@@ -20,13 +20,13 @@ map 1 0x20000000 0x2000 2 0
 const MAP_MDF: &str = "\
 # invented memory definition for the gallery map
 space linear 1 8
-chip mpe:pflash0 1 8 0x200000 rom
+chip mpe:pflash0 1 8 0x400000 rom
 chip mpe:dflash0 2 8 0x10000 rom
-chip mpe:dsram0 3 8 0x20000 ram
+chip mpe:dsram0 3 8 0x80000 ram
 chip mpe:psram0 4 8 0x10000 ram
-map 1 0x80000000 0x200000 1 0
+map 1 0x80000000 0x400000 1 0
 map 1 0xAF000000 0x10000 2 0
-map 1 0x70000000 0x20000 3 0
+map 1 0x70000000 0x80000 3 0
 map 1 0x70100000 0x10000 4 0
 ";
 
