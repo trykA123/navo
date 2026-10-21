@@ -249,6 +249,19 @@ image.zoom_out | Zoom out | Image
 image.toggle_info | Show or hide image info | Image
 image.copy | Copy image | Image
 image.copy_path | Copy path | Image
+space.next_part | Move focus to the next part: table, memory strips, treemap | Space
+space.previous_part | Move focus to the previous part | Space
+space.previous_item | Select the previous block or tile | Space
+space.next_item | Select the next block or tile | Space
+space.region_above | Move to the strip of the region above | Space
+space.region_below | Move to the strip of the region below | Space
+space.first_block | Select the first block in the strip | Space
+space.last_block | Select the last block in the strip | Space
+space.zoom_in | Zoom into the selected block | Space
+space.zoom_out | Zoom out of the block | Space
+space.pick_group | Select the group of the tile | Space
+space.next_grouping | Group the treemap by the next grouping | Space
+space.toggle_scale | Switch between Compress gaps and True scale | Space
 tree.expand_branch | Open branch | Tree
 tree.collapse_branch | Fold branch | Tree
 tree.expand_all | Open all | Tree

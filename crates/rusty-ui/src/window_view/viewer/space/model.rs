@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use rusty_automotive::space::{
     Group, GroupBy, Grouping, Item, Origin, Owners, Part, Provenance, Region, RegionSource,
-    Regions, TOP_GROUPS, available, default_grouping, flash_region, group, owners, owners_of_map,
-    regions_for_elf, regions_for_map,
+    Regions, TOP_GROUPS, available, default_grouping, elf_kinds_match, flash_region, group, owners,
+    owners_of_map, regions_for_elf, regions_for_map,
 };
 use rusty_automotive::{Elf, Lines, MapModel, Mdf, RegionTable};
 use rusty_l10n::{t, tr};
@@ -153,9 +153,11 @@ pub(in crate::window_view::viewer) fn build_map_model(
     } else {
         tr("space-from-no-objects")
     };
-    let kinds = match &siblings.names.elf {
-        Some(name) => t!("space-from-elf", name = name.clone()),
-        None => tr("space-from-names"),
+    let kinds = match (&siblings.names.elf, elf) {
+        (Some(name), Some(elf)) if elf_kinds_match(map, elf) => {
+            t!("space-from-elf", name = name.clone())
+        }
+        _ => tr("space-from-names"),
     };
     let provenance = provenance(region_source.as_deref(), [owned, kinds], siblings);
     RichModel {

@@ -33,7 +33,7 @@ use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
 use super::parts::{AUTOMOTIVE_LAYOUT, LayoutParts, PartSet};
 use super::search::bar::GO_TO_KEYS;
-use super::space::{RichSpace, Siblings};
+use super::space::{NEXT_PART, RichSpace, Siblings};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
 use crate::settings::Values;
@@ -186,13 +186,18 @@ impl ViewerBody for MapBody {
         if view.go_to.is_some() {
             return BodyKeys::Modal(GO_TO_KEYS.to_vec());
         }
-        let mut keys = vec![
-            ("Ctrl+B", "Navigator"),
-            ("Ctrl+I", "Inspector"),
-            ("Ctrl+G", "Go to address"),
-            ("Alt+T", "Table"),
-            ("Ctrl+F3", "Sort by name"),
-        ];
+        let mut keys = vec![("Ctrl+B", "Navigator"), ("Ctrl+I", "Inspector")];
+        match view.rich_keys(cx) {
+            Some(Some(part)) => keys.extend(part),
+            rich => {
+                keys.extend([
+                    ("Ctrl+G", "Go to address"),
+                    ("Alt+T", "Table"),
+                    ("Ctrl+F3", "Sort by name"),
+                ]);
+                keys.extend(rich.map(|_| NEXT_PART));
+            }
+        }
         if view.focus_in == Focus::Navigator {
             keys.insert(0, ("Enter", "Show only this"));
         }

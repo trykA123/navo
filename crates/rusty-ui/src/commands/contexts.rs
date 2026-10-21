@@ -2,20 +2,23 @@ pub const GLOBAL: &str = "global";
 
 const VIEWER: &str = "Viewer";
 
-const PARENTS: [(&str, &str); 22] = [
+const PARENTS: [(&str, &str); 25] = [
     ("Archive", VIEWER),
-    ("Elf", VIEWER),
+    ("Elf", "Space"),
     ("ElfTable", "Elf"),
     ("CanTrace", VIEWER),
     ("FindAll", VIEWER),
     ("Image", VIEWER),
-    ("Map", VIEWER),
+    ("Map", "Space"),
     ("MapTable", "Map"),
     ("Markdown", VIEWER),
     ("MarkdownPreview", VIEWER),
     ("MemoryImage", VIEWER),
     ("Paged", VIEWER),
     ("Pdf", VIEWER),
+    ("Space", VIEWER),
+    ("SpaceStrip", "Space"),
+    ("SpaceTreemap", "Space"),
     ("Table", VIEWER),
     ("Tree", VIEWER),
     ("ViewerFind", VIEWER),

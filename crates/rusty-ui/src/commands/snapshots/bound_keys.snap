@@ -304,6 +304,23 @@ shortcuts.previous_row | up | Shortcuts > Input
 shortcuts.record | enter | Shortcuts
 shortcuts.record | enter | Shortcuts > Input
 shortcuts.reset | ctrl-r | Shortcuts
+space.first_block | home | SpaceStrip
+space.last_block | end | SpaceStrip
+space.next_grouping | alt-g | Space
+space.next_item | down | SpaceTreemap
+space.next_item | right | SpaceStrip
+space.next_item | right | SpaceTreemap
+space.next_part | tab | Space
+space.pick_group | enter | SpaceTreemap
+space.previous_item | left | SpaceStrip
+space.previous_item | left | SpaceTreemap
+space.previous_item | up | SpaceTreemap
+space.previous_part | shift-tab | Space
+space.region_above | up | SpaceStrip
+space.region_below | down | SpaceStrip
+space.toggle_scale | alt-z | Space
+space.zoom_in | enter | SpaceStrip
+space.zoom_out | backspace | SpaceStrip
 tab.close | ctrl-w | FerritePane
 tab.go_to_eighth | ctrl-8 | FerritePane
 tab.go_to_fifth | ctrl-5 | FerritePane

@@ -129,7 +129,7 @@ pub type DragTreemapBars = (
     Entity<MultiRenamePage>,
     PreviewPages,
     ToolPages,
-    [Entity<RichPage>; 10],
+    [Entity<RichPage>; 11],
 );
 
 pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
@@ -140,7 +140,8 @@ pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {
         cx.new(|cx| MultiRenamePage::new(window, cx)),
         preview_pages(window, cx),
         tool_pages(window, cx),
-        RICH_PAGES.map(|(_, sample, off)| cx.new(|cx| RichPage::new(sample, off, window, cx))),
+        RICH_PAGES
+            .map(|(page, sample, off)| cx.new(|cx| RichPage::new((page, sample, off), window, cx))),
     )
 }
 

@@ -1536,6 +1536,79 @@ keys = ["3"]
 command = "map.type_five"
 keys = ["5"]
 
+# Space
+
+[[bind]]
+command = "space.next_part"
+keys = ["tab"]
+
+[[bind]]
+command = "space.previous_part"
+keys = ["shift-tab"]
+
+[[bind]]
+command = "space.next_grouping"
+keys = ["alt-g"]
+
+[[bind]]
+command = "space.toggle_scale"
+keys = ["alt-z"]
+
+[[bind]]
+command = "space.previous_item"
+keys = ["left"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.next_item"
+keys = ["right"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.region_above"
+keys = ["up"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.region_below"
+keys = ["down"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.first_block"
+keys = ["home"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.last_block"
+keys = ["end"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.zoom_in"
+keys = ["enter"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.zoom_out"
+keys = ["backspace"]
+context = "SpaceStrip"
+
+[[bind]]
+command = "space.previous_item"
+keys = ["left", "up"]
+context = "SpaceTreemap"
+
+[[bind]]
+command = "space.next_item"
+keys = ["right", "down"]
+context = "SpaceTreemap"
+
+[[bind]]
+command = "space.pick_group"
+keys = ["enter"]
+context = "SpaceTreemap"
+
 # CanTrace
 
 [[bind]]

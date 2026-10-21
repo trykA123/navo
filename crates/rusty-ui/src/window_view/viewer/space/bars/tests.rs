@@ -60,6 +60,12 @@ fn a_known_region_lists_used_free_and_total_in_one_line() {
 }
 
 #[test]
+fn zero_reserved_bytes_are_not_named() {
+    let lines = usage_lines(&region(Some(4096), 1024), Some(0));
+    assert_eq!(lines, ["1.0 KB used · 3.0 KB free · of 4.0 KB"]);
+}
+
+#[test]
 fn small_shares_keep_a_decimal() {
     assert_eq!(percent_text(5, 1000), "0.5");
     assert_eq!(percent_text(500, 1000), "50");

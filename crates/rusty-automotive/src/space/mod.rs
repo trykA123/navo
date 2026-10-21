@@ -8,6 +8,7 @@ mod strip;
 mod table;
 mod treemap;
 
+pub use elf_kinds::elf_kinds_match;
 pub use groups::{
     Child, Group, GroupBy, Grouping, OTHER, Origin, TOP_GROUPS, Top, available, default_grouping,
     flash_region, group, lit_blocks, top,

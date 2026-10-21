@@ -6,7 +6,7 @@ use rusty_l10n::{FILES, catalog, tr};
 use super::{GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 26] = [
+const NAMESPACES: [&str; 27] = [
     "activity_strip",
     "app_menu",
     "can_trace",
@@ -28,6 +28,7 @@ const NAMESPACES: [&str; 26] = [
     "settings_sheet",
     "shortcuts",
     "side_sheet",
+    "space_view",
     "viewer",
     "viewer_markdown",
     "viewer_pdf",

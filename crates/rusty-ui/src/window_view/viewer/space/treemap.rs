@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{RenderOnce, Role, StatefulInteractiveElement, relative};
+use gpui_kit::{FocusHandle, RenderOnce, Role, StatefulInteractiveElement, relative};
 use rusty_automotive::space::{KIND_BAR_PX, Kind, Rect, Target, Tile};
 use rusty_l10n::t;
 
@@ -12,6 +12,7 @@ use crate::tokens::{self, MemKind, Theme};
 
 const GAP: f32 = 1.;
 const SELECTED_WIDTH: f32 = 2.;
+const CURSOR_INSET: f64 = 3.;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreemapPart {
@@ -42,6 +43,8 @@ pub struct Treemap {
     total: u64,
     selected: Option<u32>,
     stripped: bool,
+    focus: Option<FocusHandle>,
+    cursor: Option<u32>,
     on_event: Option<OnEvent>,
 }
 
@@ -55,12 +58,20 @@ impl Treemap {
             total,
             selected: None,
             stripped: false,
+            focus: None,
+            cursor: None,
             on_event: None,
         }
     }
 
     pub fn selected(mut self, group: Option<u32>) -> Self {
         self.selected = group;
+        self
+    }
+
+    pub fn focus(mut self, focus: Option<FocusHandle>, cursor: Option<u32>) -> Self {
+        self.focus = focus;
+        self.cursor = cursor;
         self
     }
 
@@ -263,14 +274,42 @@ fn emit(on_event: &Option<OnEvent>, event: TreemapEvent, window: &mut Window, cx
     }
 }
 
+impl Treemap {
+    fn cursor_ring(&self, t: &Theme, window: &Window) -> Option<Div> {
+        self.focus
+            .as_ref()
+            .filter(|focus| focus.is_focused(window))?;
+        let tile = self
+            .tiles
+            .iter()
+            .find(|tile| self.cursor.is_some() && pick_of(tile) == self.cursor)?;
+        let inset = CURSOR_INSET.min(tile.rect.w / 2.).min(tile.rect.h / 2.);
+        let rect = Rect::new(
+            tile.rect.x + inset,
+            tile.rect.y + inset,
+            tile.rect.w - 2. * inset,
+            tile.rect.h - 2. * inset,
+        );
+        Some(
+            place(rect)
+                .rounded(t.radii.xs)
+                .shadow(t.shadows.focus.clone()),
+        )
+    }
+}
+
 impl RenderOnce for Treemap {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let root = div()
             .id(self.id.clone())
             .relative()
             .size_full()
-            .overflow_hidden();
+            .overflow_hidden()
+            .when_some(self.focus.clone(), |root, focus| {
+                root.track_focus(&focus)
+                    .key_context(super::keys::TREEMAP_CONTEXT)
+            });
         if self.stripped {
             return root
                 .flex()
@@ -291,14 +330,17 @@ impl RenderOnce for Treemap {
             .tiles
             .iter()
             .find(|tile| pick_of(tile) == self.selected && self.selected.is_some());
-        root.children(tiles).when_some(outline, |root, tile| {
-            root.child(
-                place(tile.rect)
-                    .border(px(SELECTED_WIDTH))
-                    .border_color(t.colors.accent)
-                    .rounded(t.radii.xs),
-            )
-        })
+        let ring = self.cursor_ring(&t, window);
+        root.children(tiles)
+            .when_some(outline, |root, tile| {
+                root.child(
+                    place(tile.rect)
+                        .border(px(SELECTED_WIDTH))
+                        .border_color(t.colors.accent)
+                        .rounded(t.radii.xs),
+                )
+            })
+            .children(ring)
     }
 }
 

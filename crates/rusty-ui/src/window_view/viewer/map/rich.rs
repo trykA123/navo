@@ -1,18 +1,19 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
+use gpui_kit::FocusHandle;
 use rusty_automotive::space::{GroupBy, Grouping, Origin, OwnerRef, Owners, Region, lit_blocks};
 
 use super::loaded::Loaded;
 use super::select::{Column, Order, Table};
-use super::{Index, MapView};
+use super::{Focus, Index, MapView};
 use crate::prelude::*;
 use crate::window_view::viewer::background::{Job, spawn_job};
-use crate::window_view::viewer::body::Host;
+use crate::window_view::viewer::body::{Host, Key};
 use crate::window_view::viewer::parts::LayoutParts;
 use crate::window_view::viewer::space::{
-    Item as StripItem, Label, Pick, RichHost, RichModel, RichSpace, StripData, build_map_model,
-    start_siblings, stem_of,
+    Item as StripItem, Label, Part, Pick, RichHost, RichModel, RichSpace, StripData,
+    build_map_model, part_keys, start_siblings, stem_of,
 };
 
 const LARGEST: Order = Order {
@@ -127,6 +128,7 @@ impl MapView {
         }
         if !is_rich {
             self.clear_pick(cx);
+            self.rich.part = Part::Table;
         }
         cx.notify();
     }
@@ -139,6 +141,12 @@ impl MapView {
         self.go_address = None;
         self.move_cursor(0, cx);
         self.run_select(cx);
+    }
+
+    pub(super) fn rich_keys(&self, cx: &App) -> Option<Option<Vec<Key>>> {
+        self.space_layout()?;
+        self.rich.model.as_ref()?;
+        Some(part_keys(&self.rich, cx))
     }
 
     pub(super) fn clear_pick(&mut self, cx: &mut Context<Self>) {
@@ -177,6 +185,15 @@ impl MapView {
 impl RichHost for MapView {
     fn rich(&mut self) -> &mut RichSpace {
         &mut self.rich
+    }
+
+    fn space_layout(&self) -> Option<LayoutParts> {
+        let takes = self.is_rich() && self.focus_in == Focus::Content && self.go_to.is_none();
+        takes.then_some(self.layout)
+    }
+
+    fn table_focus(&self) -> FocusHandle {
+        self.focus.clone()
     }
 
     fn picked(&mut self, pick: Pick, cx: &mut Context<Self>) {

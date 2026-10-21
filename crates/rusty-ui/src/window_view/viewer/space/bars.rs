@@ -57,7 +57,7 @@ pub(super) fn usage_lines(region: &Region, reserved: Option<u64>) -> Vec<String>
         ];
     };
     let (free, total) = (format::size(free), format::size(total));
-    vec![match reserved {
+    vec![match reserved.filter(|reserved| *reserved > 0) {
         Some(reserved) => t!(
             "space-usage-line-reserved",
             used = used,

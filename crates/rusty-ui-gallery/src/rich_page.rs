@@ -1,6 +1,7 @@
+use rusty_ui::fkey_bar::FKeyBar;
 use rusty_ui::prelude::*;
 use rusty_ui::settings::{Change, Field, Value, Values};
-use rusty_ui::window_view::ViewerBody;
+use rusty_ui::window_view::{BodyKeys, ViewerBody};
 
 use crate::automotive_sample::{ELF_NAME, elf};
 use crate::map_sample::{MAP_NAME, map};
@@ -42,7 +43,7 @@ const PARTS: [Field; 4] = [
     Field::AutomotiveRowBars,
 ];
 
-pub const RICH_PAGES: [(Page, Sample, Option<Field>); 10] = [
+pub const RICH_PAGES: [(Page, Sample, Option<Field>); 11] = [
     (Page::ElfRich, Sample::Elf, None),
     (
         Page::ElfNoStrip,
@@ -77,6 +78,7 @@ pub const RICH_PAGES: [(Page, Sample, Option<Field>); 10] = [
         Sample::Map,
         Some(Field::AutomotiveRowBars),
     ),
+    (Page::ElfStripKeys, Sample::Elf, None),
 ];
 
 fn values(off: Option<Field>) -> Values {
@@ -103,10 +105,15 @@ fn values(off: Option<Field>) -> Values {
 
 pub struct RichPage {
     body: Option<Box<dyn ViewerBody>>,
+    shows_keys: bool,
 }
 
 impl RichPage {
-    pub fn new(sample: Sample, off: Option<Field>, window: &mut Window, cx: &mut App) -> Self {
+    pub fn new(
+        (page, sample, off): (Page, Sample, Option<Field>),
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self {
         let body = match sample {
             Sample::Elf => binary_beside((ELF_NAME, elf()), (MDF_NAME, ELF_MDF), window, cx),
             Sample::Map => binary_beside(
@@ -119,7 +126,10 @@ impl RichPage {
         if let Some(body) = &body {
             body.show_parts(&values(off), cx);
         }
-        Self { body }
+        Self {
+            body,
+            shows_keys: page == Page::ElfStripKeys,
+        }
     }
 
     pub fn drive(page: &Entity<Self>, window: &mut Window, cx: &mut App) {
@@ -132,21 +142,38 @@ impl RichPage {
             return;
         };
         window.focus(&focus, cx);
-        if let Ok(action) = cx.build_action("viewer::RightDrawer", None) {
-            window.dispatch_action(action, cx);
+        let actions: &[&str] = if page.read(cx).shows_keys {
+            &[
+                "space_view::NextPart",
+                "space_view::NextItem",
+                "space_view::NextItem",
+            ]
+        } else {
+            &["viewer::RightDrawer"]
+        };
+        for name in actions {
+            if let Ok(action) = cx.build_action(name, None) {
+                window.dispatch_action(action, cx);
+            }
         }
     }
 }
 
 impl Render for RichPage {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match &self.body {
             Some(body) => div()
                 .flex()
                 .flex_col()
                 .flex_1()
                 .min_h_0()
-                .child(body.view()),
+                .child(body.view())
+                .when(self.shows_keys, |page| {
+                    let keys = match body.keys(cx) {
+                        BodyKeys::Modal(keys) | BodyKeys::Normal(keys) => keys,
+                    };
+                    page.child(FKeyBar::new("fkeys", keys))
+                }),
             None => div().child("This sample did not load."),
         }
     }

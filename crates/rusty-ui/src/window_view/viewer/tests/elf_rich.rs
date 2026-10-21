@@ -38,7 +38,11 @@ fn with_mdf(files: FileHooks) -> FileHooks {
     }
 }
 
-fn settle_all(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<FerriteWindow>) {
+pub(in crate::window_view::viewer) fn settle_all(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<FerriteWindow>,
+) {
     for _ in 0..3 {
         cx.executor().advance_clock(Duration::from_secs(1));
         settle(cx, view);
@@ -54,7 +58,7 @@ fn open_bytes(cx: &mut TestAppContext, bytes: Vec<u8>) -> (AnyWindowHandle, Enti
     open_in(cx, bytes, None)
 }
 
-fn open_in(
+pub(in crate::window_view::viewer) fn open_in(
     cx: &mut TestAppContext,
     bytes: Vec<u8>,
     values: Option<Values>,
@@ -78,7 +82,7 @@ fn flag(field: Field, on: bool) -> Change {
     }
 }
 
-fn preset(at: usize) -> Values {
+pub(in crate::window_view::viewer) fn preset(at: usize) -> Values {
     Values::default().with(&Change {
         field: Field::AutomotivePreset,
         value: Value::Pick(at),
@@ -98,7 +102,7 @@ fn custom_without(off: Field) -> Values {
     })
 }
 
-fn show(
+pub(in crate::window_view::viewer) fn show(
     cx: &mut TestAppContext,
     (window, view): (AnyWindowHandle, &Entity<FerriteWindow>),
     values: Values,

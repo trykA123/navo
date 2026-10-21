@@ -114,6 +114,7 @@ pub enum Page {
     MapNoBars,
     MapNoWho,
     MapNoRowBars,
+    ElfStripKeys,
 }
 
 pub struct PageInfo {

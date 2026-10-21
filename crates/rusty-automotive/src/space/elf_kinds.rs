@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::{Kind, unnumbered};
 use crate::elf::Elf;
-use crate::map::OutputSection;
+use crate::map::{MapModel, OutputSection};
 
 pub(super) struct ElfKinds<'a>(HashMap<(u64, &'a str), Kind>);
 
@@ -30,4 +30,17 @@ impl<'a> ElfKinds<'a> {
             .copied()
             .unwrap_or_else(|| Kind::of_name(name))
     }
+}
+
+#[must_use]
+pub fn elf_kinds_match(map: &MapModel, elf: &Elf) -> bool {
+    let kinds = ElfKinds::new(Some(elf));
+    map.sections
+        .iter()
+        .filter(|section| section.size > 0)
+        .any(|section| {
+            kinds
+                .0
+                .contains_key(&(section.address, unnumbered(&section.name)))
+        })
 }

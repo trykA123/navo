@@ -1,13 +1,15 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui_kit::{Bounds, Subscription};
+use gpui_kit::{Bounds, FocusHandle, Subscription};
 use rusty_automotive::space::{Grouping, Item, Rect, Region, ScaleMode, Tile, layout};
 
+use super::keys::Part;
 use super::model::RichModel;
 use super::strip::{MemoryStrip, StripData, StripEvent};
 use super::treemap::TreemapGroup;
 use crate::prelude::*;
+use crate::window_view::viewer::parts::LayoutParts;
 
 const FLASH_STRIP: f32 = 40.;
 const OTHER_STRIP: f32 = 28.;
@@ -25,6 +27,8 @@ pub(in crate::window_view::viewer) trait RichHost:
     'static + Sized
 {
     fn rich(&mut self) -> &mut RichSpace;
+    fn space_layout(&self) -> Option<LayoutParts>;
+    fn table_focus(&self) -> FocusHandle;
     fn picked(&mut self, pick: Pick, cx: &mut Context<Self>);
     fn regroup(&mut self, grouping: Grouping, cx: &mut Context<Self>);
 }
@@ -35,6 +39,9 @@ pub(in crate::window_view::viewer) struct RichSpace {
     pub mode: ScaleMode,
     pub grouping: Option<Grouping>,
     pub pick: Option<Pick>,
+    pub part: Part,
+    pub tile: Option<u32>,
+    pub treemap_focus: Option<FocusHandle>,
     groups: Rc<[TreemapGroup]>,
     items: Vec<Item>,
     tiles: Option<SizedTiles>,
@@ -49,6 +56,9 @@ impl Default for RichSpace {
             mode: ScaleMode::Compressed,
             grouping: None,
             pick: None,
+            part: Part::Table,
+            tile: None,
+            treemap_focus: None,
             groups: Rc::from(Vec::new()),
             items: Vec::new(),
             tiles: None,
@@ -63,6 +73,7 @@ fn on_strip<V: RichHost>(
     move |view, _, event, cx| {
         if let StripEvent::Pick(block) = event {
             let block = *block;
+            view.rich().part = Part::Strip(region);
             view.picked(Pick::Block { region, block }, cx);
         }
     }
@@ -85,6 +96,34 @@ impl RichSpace {
         cx: &mut Context<V>,
     ) {
         let (groups, items) = model.treemap();
+        let same = self.strips.len() == model.regions.len()
+            && self
+                .model
+                .as_ref()
+                .is_some_and(|old| old.flash == model.flash);
+        if same {
+            for (strip, region) in self.strips.iter().zip(&model.regions) {
+                let data = data(region);
+                strip.update(cx, |strip, cx| strip.set_data(data, cx));
+            }
+        } else {
+            self.make_strips(&model, data, cx);
+        }
+        self.treemap_focus.get_or_insert_with(|| cx.focus_handle());
+        self.groups = groups;
+        self.items = items;
+        self.tiles = None;
+        self.pick = None;
+        self.tile = None;
+        self.model = Some(Arc::new(model));
+    }
+
+    fn make_strips<V: RichHost>(
+        &mut self,
+        model: &RichModel,
+        data: impl Fn(&Arc<Region>) -> StripData,
+        cx: &mut Context<V>,
+    ) {
         let flash = model.flash;
         let mode = self.mode;
         self.strips = model
@@ -111,11 +150,7 @@ impl RichSpace {
             .enumerate()
             .map(|(region, strip)| cx.subscribe(strip, on_strip::<V>(region)))
             .collect();
-        self.groups = groups;
-        self.items = items;
-        self.tiles = None;
-        self.pick = None;
-        self.model = Some(Arc::new(model));
+        self.part = Part::Table;
     }
 
     pub fn set_mode(&mut self, mode: ScaleMode, cx: &mut App) {

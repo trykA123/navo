@@ -90,7 +90,7 @@ fn open(
     open_in(cx, text, (elf, None))
 }
 
-fn open_in(
+pub(in crate::window_view::viewer) fn open_in(
     cx: &mut TestAppContext,
     text: &str,
     (elf, values): (Option<Vec<u8>>, Option<Values>),
@@ -115,7 +115,7 @@ fn flag(field: Field, on: bool) -> Change {
     }
 }
 
-fn preset(at: usize) -> Values {
+pub(in crate::window_view::viewer) fn preset(at: usize) -> Values {
     Values::default().with(&Change {
         field: Field::AutomotivePreset,
         value: Value::Pick(at),
@@ -135,7 +135,7 @@ fn custom_without(off: Field) -> Values {
     })
 }
 
-fn show(
+pub(in crate::window_view::viewer) fn show(
     cx: &mut TestAppContext,
     (window, view): (AnyWindowHandle, &Entity<FerriteWindow>),
     values: Values,
@@ -210,6 +210,30 @@ fn a_sibling_elf_gives_the_kinds_and_the_provenance_says_so(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn a_sibling_elf_with_no_matching_section_leaves_the_kinds_to_names(cx: &mut TestAppContext) {
+    let elf = build(&Spec {
+        is_64: false,
+        is_big: false,
+        machine: 36,
+        entry: 0,
+        parts: vec![Part {
+            name: ".text.elsewhere",
+            ..text(0x9000_0000, 0x40)
+        }],
+        symbols: None,
+        loads: Vec::new(),
+        debug: Vec::new(),
+    })
+    .expect("the sample builds");
+    let (window, view) = open(cx, SAMPLE, Some(elf));
+    show(cx, (window, &view), preset(1));
+    assert_eq!(
+        text_of(cx, window, "space-provenance"),
+        "regions from app.map · owners from app.map · kinds from section names"
+    );
+}
+
+#[gpui_kit::test]
 fn a_sibling_that_is_not_an_elf_is_named_as_skipped(cx: &mut TestAppContext) {
     let (window, view) = open(cx, SAMPLE, Some(b"plain text".to_vec()));
     show(cx, (window, &view), preset(1));
@@ -276,6 +300,7 @@ fn picking_a_group_names_it_in_full_in_the_status_and_the_inspector(cx: &mut Tes
     );
     assert_eq!(text_of(cx, window, "map-inspector-name"), name);
     press(cx, window, &view, "ctrl-i");
+    press(cx, window, &view, "tab");
     press(cx, window, &view, "down");
     settle_all(cx, window, &view);
     assert!(!text_of(cx, window, "map-status").starts_with(&name));

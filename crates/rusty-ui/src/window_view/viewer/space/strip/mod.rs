@@ -279,6 +279,7 @@ impl Render for MemoryStrip {
         let label = t!("space-strip-label", region = self.data.region.name.clone());
         div()
             .id("memory-strip")
+            .key_context(super::keys::STRIP_CONTEXT)
             .role(Role::Group)
             .aria_label(label)
             .test_support()

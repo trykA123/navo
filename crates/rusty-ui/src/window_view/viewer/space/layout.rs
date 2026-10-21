@@ -7,6 +7,7 @@ use rusty_automotive::space::{Grouping, Kind, Region, ScaleMode};
 use rusty_l10n::{t, tr};
 
 use super::bars::{Legend, RegionHead, UsageBar, UsageLine};
+use super::keys::Part;
 use super::model::RichModel;
 use super::rich::{Pick, RichHost, RichSpace};
 use super::switch::{Choice, switch};
@@ -22,7 +23,7 @@ const STACKED_WHO: f32 = 0.4;
 const WIDE_CONTENT: f32 = 1100.;
 const TOP_SHARE: f32 = 0.55;
 
-const GROUPINGS: [(Grouping, &str); 4] = [
+pub(super) const GROUPINGS: [(Grouping, &str); 4] = [
     (Grouping::Module, "space-group-module"),
     (Grouping::SourceFile, "space-group-source"),
     (Grouping::ObjectFile, "space-group-object"),
@@ -230,8 +231,14 @@ fn treemap_box<V: RichHost>(rich: &RichSpace, model: &RichModel, cx: &mut Contex
     let map = rich.tiles().filter(|_| !stripped).map(|tiles| {
         Treemap::new("space-treemap", rich.groups(), tiles)
             .selected(selected)
+            .focus(rich.treemap_focus.clone(), rich.tile)
             .on_event(move |TreemapEvent::Pick(id), _, cx| {
-                let _ = picker.update(cx, |view, cx| view.picked(Pick::Group(id), cx));
+                let _ = picker.update(cx, |view, cx| {
+                    let rich = view.rich();
+                    rich.part = Part::Treemap;
+                    rich.tile = Some(id);
+                    view.picked(Pick::Group(id), cx);
+                });
             })
     });
     let note = stripped

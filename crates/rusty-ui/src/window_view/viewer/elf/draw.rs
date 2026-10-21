@@ -10,7 +10,9 @@ use crate::primitives::VirtualList;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
-use crate::window_view::viewer::space::{FileBytesBar, RichLook, rich_layout};
+use crate::window_view::viewer::space::{
+    FileBytesBar, Part, RichLook, host_context, rich_layout, space_keys,
+};
 
 const PER_MILLE: u64 = 1000;
 
@@ -24,6 +26,7 @@ fn select_row(
             view.focus_in = Focus::Content;
             view.go_address = None;
             view.clear_pick(cx);
+            view.rich.part = Part::Table;
             view.move_cursor(row, cx);
             view.open_inspector_if_asked(cx);
         });
@@ -270,8 +273,8 @@ impl Render for ElfView {
         } else {
             body.child(table).children(filter)
         };
-        let root = div().id("elf-view").key_context(CONTEXT);
-        Self::keys(root, cx)
+        let root = div().id("elf-view").key_context(host_context(CONTEXT));
+        space_keys(Self::keys(root, cx), cx)
             .flex()
             .flex_col()
             .flex_1()
