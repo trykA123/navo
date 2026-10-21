@@ -5,7 +5,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 use rusty_core::OpKind;
 
-use super::{JobCard, JobInfo, JobsSummary, Pause, PillFit, SpeedMeter, time_text};
+use super::{JobCard, JobInfo, JobsSummary, Pause, PillFit, RenameNote, SpeedMeter, time_text};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::test_window::open;
@@ -27,6 +27,7 @@ fn copy() -> JobInfo {
         state: JobRowState::Running,
         speed: Some(10 * MB),
         pause: Pause::Off,
+        rename: RenameNote::default(),
     }
 }
 

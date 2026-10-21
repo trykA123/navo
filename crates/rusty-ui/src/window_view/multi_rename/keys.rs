@@ -30,7 +30,7 @@ impl FerriteWindow {
     }
 
     pub(in crate::window_view) fn multi_rename_on(root: Div, cx: &mut Context<Self>) -> Div {
-        root.on_action(cx.listener(|view, _: &MultiRename, window, cx| {
+        Self::undo_on(root, cx).on_action(cx.listener(|view, _: &MultiRename, window, cx| {
             view.open_multi_rename(window, cx);
         }))
     }

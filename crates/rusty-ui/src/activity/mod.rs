@@ -84,7 +84,7 @@ impl ActivityItem {
         Self {
             op: Some(job.kind),
             chip: text::failure_chip(job).into(),
-            detail: Some(message.clone()),
+            detail: Some(text::failure_detail(job, message).into()),
             ..Self::new(
                 ActivityId::Job(job.id),
                 ActivityKind::Failure,
@@ -93,10 +93,11 @@ impl ActivityItem {
         }
     }
 
-    fn done(job: &JobInfo) -> Self {
+    fn done(job: &JobInfo, undo_key: Option<&SharedString>) -> Self {
         Self {
             op: Some(job.kind),
             chip: text::done_chip(job).into(),
+            detail: text::done_detail(job, undo_key).map(Into::into),
             ..Self::new(
                 ActivityId::Job(job.id),
                 ActivityKind::Done,
@@ -137,6 +138,8 @@ pub struct Activity {
     ended: HashSet<u64>,
     pinned: Option<(ActivityId, ActivityKind)>,
     seq: u64,
+    undo_key: Option<SharedString>,
+    batches: Vec<(ActivityId, usize)>,
 }
 
 impl Activity {
@@ -163,7 +166,13 @@ impl Activity {
         }
         let (item, life) = match &job.state {
             JobRowState::Running => (ActivityItem::job(job), Life::Lasting),
-            JobRowState::Done => (ActivityItem::done(job), Life::Until(now + DONE_FOR)),
+            JobRowState::Done => {
+                self.note_batch(job);
+                (
+                    ActivityItem::done(job, self.undo_key.as_ref()),
+                    Life::Until(now + DONE_FOR),
+                )
+            }
             JobRowState::Failed(message) => (ActivityItem::failure(job, message), Life::Lasting),
             JobRowState::Cancelled => {
                 self.ended.insert(job.id);
@@ -175,6 +184,37 @@ impl Activity {
             self.ended.insert(job.id);
         }
         self.put(item, life);
+    }
+
+    fn note_batch(&mut self, job: &JobInfo) {
+        if job.kind == OpKind::Rename && !job.rename.undo {
+            self.batches.push((ActivityId::Job(job.id), job.items));
+        }
+    }
+
+    pub fn set_undo_key(&mut self, key: Option<SharedString>) {
+        self.undo_key = key;
+    }
+
+    pub fn shows_batch(&self, items: usize) -> bool {
+        self.batches.last().is_some_and(|&(id, count)| {
+            count == items
+                && self
+                    .entries
+                    .iter()
+                    .any(|entry| entry.item.id == id && entry.item.kind == ActivityKind::Done)
+        })
+    }
+
+    pub fn retire_batch(&mut self, items: usize) {
+        if self
+            .batches
+            .last()
+            .is_some_and(|&(_, count)| count == items)
+            && let Some((id, _)) = self.batches.pop()
+        {
+            self.dismiss(id);
+        }
     }
 
     pub fn tick(&mut self, now: Instant) {

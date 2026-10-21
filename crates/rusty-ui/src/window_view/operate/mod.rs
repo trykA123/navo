@@ -6,7 +6,7 @@ use rusty_l10n::{t, tr};
 
 use super::FerriteWindow;
 use crate::activity::ActivityId;
-use crate::browser::PendingOp;
+use crate::browser::{PendingOp, UndoOffer};
 use crate::confirm_dialog::{ConfirmDialog, ConfirmProps};
 use crate::format;
 use crate::prelude::*;
@@ -49,7 +49,7 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         ),
     };
     let protected = pending.is_protected();
-    ConfirmProps {
+    let props = ConfirmProps {
         title: title.into(),
         lines: pending
             .sources
@@ -62,6 +62,10 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         danger: pending.plan.kind == OpKind::Delete || protected,
         typed: protected.then(|| "DELETE".into()),
         mode: None,
+    };
+    match &pending.undo {
+        Some(offer) => super::undo::ask_props(props, offer),
+        None => props,
     }
 }
 
@@ -118,7 +122,12 @@ impl FerriteWindow {
 
     fn close_dialog(&mut self, confirmed: bool, window: &mut Window, cx: &mut Context<Self>) {
         if confirmed {
+            let undone = self.browser.pending().and_then(|op| op.undo.as_ref());
+            let undone = undone.map(UndoOffer::items);
             self.browser.confirm();
+            if let Some(items) = undone {
+                self.job_ui.activity.retire_batch(items);
+            }
             self.refresh_activity(cx);
         } else {
             self.browser.dismiss();

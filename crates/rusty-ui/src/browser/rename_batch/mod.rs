@@ -55,20 +55,44 @@ impl Browser {
     }
 
     pub fn undo_rename(&mut self, offer: UndoOffer) -> bool {
-        let Some(hooks) = &self.rename_hooks else {
+        match self.undo_pending(offer) {
+            Some(pending) => self.start_undo(pending),
+            None => false,
+        }
+    }
+
+    pub fn ask_undo(&mut self, offer: UndoOffer) -> bool {
+        let Some(pending) = self.undo_pending(offer) else {
             return false;
         };
-        let items = offer.items();
-        if (items == 0 && !offer.restore_pending) || self.renaming() {
+        self.pending = Some(pending);
+        true
+    }
+
+    pub(super) fn start_undo(&mut self, pending: PendingOp) -> bool {
+        let (Some(offer), Some(hooks)) = (pending.undo.clone(), &self.rename_hooks) else {
+            return false;
+        };
+        if self.renaming() {
             return false;
         }
         let log = Arc::clone(&hooks.undo_log);
+        self.start_job(pending, Run::Undo { offer, log }, None);
+        true
+    }
+
+    fn undo_pending(&mut self, offer: UndoOffer) -> Option<PendingOp> {
+        self.rename_hooks.as_ref()?;
+        let items = offer.items();
+        if (items == 0 && !offer.restore_pending) || self.renaming() {
+            return None;
+        }
         let mut plan = offer.plan.clone();
         plan.totals.files = u64::try_from(items).unwrap_or(u64::MAX);
         let sources = offer.item_targets().cloned().collect();
-        let pending = self.pending_for(sources, plan);
-        self.start_job(pending, Run::Undo { offer, log }, None);
-        true
+        let mut pending = self.pending_for(sources, plan);
+        pending.undo = Some(offer);
+        Some(pending)
     }
 
     pub fn renaming(&self) -> bool {
@@ -92,6 +116,7 @@ impl Browser {
             target: None,
             plan,
             source_tab: self.state.active_tab().id(),
+            undo: None,
         }
     }
 }

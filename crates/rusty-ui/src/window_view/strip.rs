@@ -6,7 +6,9 @@ use gpui_kit::{FocusHandle, ScrollHandle, Subscription, Task};
 use super::FerriteWindow;
 use crate::activity::{ActivityId, ActivityItem, ActivityKind};
 use crate::activity_strip::{ChipsShown, Stop};
+use crate::commands::active;
 use crate::prelude::*;
+use crate::primitives::Kbd;
 use crate::tokens;
 
 struct Timer {
@@ -69,6 +71,11 @@ impl StripUi {
     }
 }
 
+pub(super) fn undo_key(cx: &App) -> Option<SharedString> {
+    let key = active(cx).keys_of("files.undo").next()?;
+    Kbd::new("undo-key", key).map(|kbd| kbd.text().into())
+}
+
 fn wake_at(
     now: Instant,
     at: Instant,
@@ -86,6 +93,7 @@ fn wake_at(
 impl FerriteWindow {
     pub(super) fn refresh_activity(&mut self, cx: &mut Context<Self>) {
         let now = cx.background_executor().now();
+        self.job_ui.activity.set_undo_key(undo_key(cx));
         self.sync_activity(now);
         let activity = &self.job_ui.activity;
         let items: Vec<ActivityItem> = activity

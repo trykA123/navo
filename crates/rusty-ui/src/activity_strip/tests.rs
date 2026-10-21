@@ -4,7 +4,7 @@ use rusty_core::OpKind;
 
 use super::{Act, Stop, drawer_stops, line_stops, settle, shown_line_stops, step, step_item};
 use crate::activity::{Activity, ActivityId, ActivityItem};
-use crate::job_card::{JobInfo, Pause};
+use crate::job_card::{JobInfo, Pause, RenameNote};
 use crate::job_row::JobRowState;
 
 fn job(id: u64, state: JobRowState) -> JobInfo {
@@ -22,6 +22,7 @@ fn job(id: u64, state: JobRowState) -> JobInfo {
         state,
         speed: None,
         pause: Pause::Off,
+        rename: RenameNote::default(),
     }
 }
 

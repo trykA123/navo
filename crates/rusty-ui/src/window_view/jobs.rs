@@ -8,7 +8,7 @@ use super::strip::StripUi;
 
 use crate::activity::Activity;
 use crate::browser::{JobStatus, JobView};
-use crate::job_card::{JobCard, JobInfo, JobsSummary, Pause, SpeedMeter};
+use crate::job_card::{JobCard, JobInfo, JobsSummary, Pause, RenameNote, SpeedMeter};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::tokens;
@@ -68,6 +68,11 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
             (false, _) => Pause::Off,
             (true, false) => Pause::Asked,
             (true, true) => Pause::On,
+        },
+        rename: RenameNote {
+            undo: job.undo,
+            skipped: job.report.skipped,
+            left: job.report.left.iter().filter_map(name_of).collect(),
         },
     }
 }

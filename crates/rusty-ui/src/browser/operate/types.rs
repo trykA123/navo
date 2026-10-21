@@ -6,7 +6,7 @@ use rusty_fs::{
 
 use std::sync::Arc;
 
-use crate::browser::RenameReport;
+use crate::browser::{RenameReport, UndoOffer};
 
 #[derive(Debug, Clone)]
 pub struct DropRequest {
@@ -90,6 +90,7 @@ pub struct PendingOp {
     pub target: Option<Location>,
     pub plan: OperationPlan,
     pub(crate) source_tab: TabId,
+    pub undo: Option<UndoOffer>,
 }
 
 impl PendingOp {

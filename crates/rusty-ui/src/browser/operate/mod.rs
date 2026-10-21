@@ -89,6 +89,9 @@ impl Browser {
         let Some(pending) = self.pending.take() else {
             return false;
         };
+        if pending.undo.is_some() {
+            return self.start_undo(pending);
+        }
         self.start_job(pending, Run::Plain, None);
         true
     }
@@ -265,6 +268,7 @@ impl Browser {
                     target: request.target,
                     plan,
                     source_tab: request.source_tab,
+                    undo: None,
                 };
                 let asks = request.asks || pending.is_protected();
                 self.pending = Some(pending);

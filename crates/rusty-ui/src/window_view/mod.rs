@@ -34,6 +34,7 @@ mod strip;
 mod strip_keys;
 mod tab_keys;
 mod title;
+mod undo;
 mod user_keymap;
 mod viewer;
 mod visits;
@@ -247,6 +248,7 @@ impl FerriteWindow {
     ) -> Self {
         self.browser.set_rename_hooks(rename);
         self.listen_files(keymap, window, cx);
+        self.tell_pending_undo(cx);
         self.listen_open(open, window, cx);
         self.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);

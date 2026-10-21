@@ -110,3 +110,19 @@ rename-busy = Wait until the running rename ends
 rename-nothing = Nothing to rename.
 rename-folder-changed = The folder changed. Check the preview, then press Enter again.
 rename-presets-failed = The preset could not be stored: { $reason }
+undo-nothing = Nothing to undo
+undo-read-failed = The rename history could not be read: { $reason }
+undo-ask = Undo the rename of { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+} in { $folder }?
+undo-ask-label = Undo
+undo-ask-summary = Names go back as they were. Items that changed since are left as they are.
+undo-finish-ask = An earlier undo of a rename did not finish. Finish it now?
+undo-finish-label = Finish the undo
+undo-finish-summary = Names that are already back stay as they are.
+undo-pending-notice = A rename undo did not finish.
+undo-pending-notice-key = A rename undo did not finish. Press { $key } to finish it.
+undo-verb = Undo rename of
+undo-verb-running = Undoing rename of
+undo-verb-done = Undid rename of

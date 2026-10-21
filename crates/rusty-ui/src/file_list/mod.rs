@@ -32,7 +32,7 @@ pub use drop::{DropEvent, DropPayload, DropSpot};
 pub use keys::bind_keys;
 pub(crate) use keys::{
     ClearFilter, CopyItems, EditItem, MoveItems, MultiRename, NewFile, NewFolder, OpenRow, Paste,
-    RecycleItems, Refresh, RenameItem, ViewItem,
+    RecycleItems, Refresh, RenameItem, UndoLast, ViewItem,
 };
 pub use parts::ListParts;
 pub(crate) use row::filter_bar;

@@ -15,6 +15,13 @@ pub enum Pause {
     On,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RenameNote {
+    pub undo: bool,
+    pub skipped: usize,
+    pub left: Vec<SharedString>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobInfo {
     pub id: u64,
@@ -30,9 +37,13 @@ pub struct JobInfo {
     pub state: JobRowState,
     pub speed: Option<u64>,
     pub pause: Pause,
+    pub rename: RenameNote,
 }
 
-fn verbs(kind: OpKind) -> [String; 3] {
+fn verbs(kind: OpKind, is_undo: bool) -> [String; 3] {
+    if is_undo {
+        return ["undo-verb", "undo-verb-running", "undo-verb-done"].map(tr);
+    }
     match kind {
         OpKind::Copy => ["Copy", "Copying", "Copied"],
         OpKind::Move => ["Move", "Moving", "Moved"],
@@ -79,11 +90,15 @@ impl JobInfo {
     }
 
     pub fn name(&self) -> String {
-        format!("{} {}", verbs(self.kind)[0].as_str(), self.items_text())
+        format!(
+            "{} {}",
+            verbs(self.kind, self.rename.undo)[0].as_str(),
+            self.items_text()
+        )
     }
 
     pub fn heading(&self) -> String {
-        let [name, running, done] = verbs(self.kind);
+        let [name, running, done] = verbs(self.kind, self.rename.undo);
         let verb = match self.state {
             JobRowState::Running => running,
             JobRowState::Done => done,

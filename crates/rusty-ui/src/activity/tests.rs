@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use rusty_core::OpKind;
 
 use super::{Activity, ActivityId, ActivityItem, ActivityKind, DONE_FOR};
-use crate::job_card::{JobInfo, Pause};
+use crate::job_card::{JobInfo, Pause, RenameNote};
 use crate::job_row::JobRowState;
 
 const MB: u64 = 1024 * 1024;
@@ -23,6 +23,7 @@ fn copy(id: u64) -> JobInfo {
         state: JobRowState::Running,
         speed: Some(84 * MB),
         pause: Pause::Off,
+        rename: RenameNote::default(),
     }
 }
 
@@ -366,4 +367,120 @@ fn a_paused_job_says_so_on_its_chip() {
     activity.sync(&[paused], Instant::now());
     let chip = activity.primary().map(|item| item.chip.to_string());
     assert_eq!(chip.as_deref(), Some("Copy 32% · Paused"));
+}
+
+fn batch(id: u64, items: usize) -> JobInfo {
+    JobInfo {
+        kind: OpKind::Rename,
+        items,
+        target: None,
+        ..done(id)
+    }
+}
+
+fn undo_job(id: u64, state: JobRowState, rename: RenameNote) -> JobInfo {
+    JobInfo {
+        kind: OpKind::Rename,
+        items: 40,
+        files_total: 40,
+        files_done: 40,
+        target: None,
+        rename: RenameNote {
+            undo: true,
+            ..rename
+        },
+        ..with_state(copy(id), state)
+    }
+}
+
+#[test]
+fn a_done_rename_batch_names_the_undo_key() {
+    let mut activity = Activity::default();
+    activity.set_undo_key(Some("Ctrl+Z".into()));
+    activity.sync(&[batch(1, 3)], Instant::now());
+    assert_eq!(primary(&activity).detail.as_deref(), Some("Ctrl+Z undo"));
+    let mut unbound = Activity::default();
+    unbound.sync(&[batch(1, 3)], Instant::now());
+    assert_eq!(primary(&unbound).detail, None);
+}
+
+#[test]
+fn an_undo_job_reads_as_an_undo_and_counts_what_it_left() {
+    let now = Instant::now();
+    let mut activity = Activity::default();
+    activity.set_undo_key(Some("Ctrl+Z".into()));
+    activity.sync(
+        &[undo_job(1, JobRowState::Running, RenameNote::default())],
+        now,
+    );
+    assert_eq!(
+        primary(&activity).title.as_ref(),
+        "Undoing the rename of 40 items"
+    );
+    let note = RenameNote {
+        skipped: 3,
+        left: vec!["a.tmp".into()],
+        ..RenameNote::default()
+    };
+    activity.sync(&[undo_job(1, JobRowState::Done, note)], now);
+    assert_eq!(
+        primary(&activity).title.as_ref(),
+        "Undid the rename of 40 items"
+    );
+    assert_eq!(
+        primary(&activity).detail.as_deref(),
+        Some("3 items had changed and were left as they are · Still under a temporary name: a.tmp")
+    );
+}
+
+#[test]
+fn a_failed_batch_lists_the_files_left_renamed() {
+    let note = RenameNote {
+        left: vec!["x1.txt".into(), "x2.txt".into()],
+        ..RenameNote::default()
+    };
+    let failed = JobInfo {
+        kind: OpKind::Rename,
+        rename: note,
+        ..failed(1)
+    };
+    let mut activity = Activity::default();
+    activity.sync(&[failed], Instant::now());
+    assert_eq!(
+        primary(&activity).detail.as_deref(),
+        Some("Access denied · Still renamed: x1.txt, x2.txt")
+    );
+}
+
+#[test]
+fn only_the_newest_batch_with_a_shown_done_item_counts_as_shown() {
+    let now = Instant::now();
+    let mut activity = Activity::default();
+    activity.sync(&[batch(1, 3)], now);
+    assert!(activity.shows_batch(3));
+    assert!(
+        !activity.shows_batch(4),
+        "another item count is another batch"
+    );
+    activity.sync(&[batch(1, 3), batch(2, 5)], now);
+    assert!(activity.shows_batch(5));
+    activity.dismiss(ActivityId::Job(2));
+    assert!(
+        !activity.shows_batch(3),
+        "the newest batch has no item, so ask"
+    );
+    activity.retire_batch(5);
+    assert!(activity.shows_batch(3));
+    activity.retire_batch(3);
+    assert!(!activity.shows_batch(3));
+    assert_eq!(activity.len(), 0);
+}
+
+#[test]
+fn an_expired_done_item_is_no_longer_shown() {
+    let now = Instant::now();
+    let mut activity = Activity::default();
+    activity.sync(&[batch(1, 3)], now);
+    activity.tick(now + DONE_FOR);
+    assert!(!activity.shows_batch(3));
 }

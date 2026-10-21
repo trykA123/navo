@@ -51,6 +51,34 @@ activity-rename-failed = { $count ->
     [one] { $files } file could not be renamed
    *[other] { $files } files could not be renamed
 }
+activity-undoing = Undoing the rename of { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-undone = Undid the rename of { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-undo-failed = The undo of the rename of { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+} did not finish
+activity-chip-undo = Undo { $percent }
+activity-chip-undo-failed = Undo failed
+activity-chip-undone = Undid { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+}
+activity-undo-hint = { $key } undo
+activity-undo-skipped = { $count ->
+    [one] { $items } item had changed and was left as it is
+   *[other] { $items } items had changed and were left as they are
+}
+activity-undo-left = { $count ->
+    [one] Still under a temporary name: { $names }
+   *[other] Still under temporary names: { $names }
+}
+activity-rename-left = Still renamed: { $names }
 activity-link-failed = { $count ->
     [one] { $files } shortcut could not be created
    *[other] { $files } shortcuts could not be created
