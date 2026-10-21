@@ -2,6 +2,29 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## alpha-2026-10-21d — 2026-10-21
+
+### New
+
+- Ctrl+K finds files anywhere through a disk index, not only in the open folders. By default it indexes your user folder.
+- Settings › Search now applies the index mode (Auto, Service, Walk, Off), the drives, the skipped names, and network and removable drives.
+- While the index builds, Ctrl+K and the activity strip show "Indexing C: · 12,345 files".
+- Settings › Search shows whether the Windows index service runs, with Install and Remove. Windows asks for admin rights; cancelling changes nothing.
+- The index service keeps a whole-disk index of NTFS drives, so a new file shows up in a second. It is optional; without it Ctrl+K indexes the folders itself.
+- F4 on a folder opens the folder in your editor, as Total Commander does.
+
+### Fixed
+
+- Ctrl+K: a dead network share blocks only itself; local drives answer at once.
+- Index service: only your account can ask it, an untrusted install folder is replaced instead of reused, and a failed reinstall puts the old version and its settings back.
+- Index service: a client that stops reading or sends garbage is dropped without stopping the service.
+- Index service: a damaged or oversized saved index is rejected and rebuilt; a saved index with deleted folders still loads.
+- Index service: searches keep answering while the disk is busy.
+
+### Known problems
+
+- Dragging files from Ferrite into other apps (VS Code, Explorer) does not work yet. It comes next.
+
 ## alpha-2026-10-21c — 2026-10-21
 
 ### New
