@@ -12,6 +12,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - Settings › Search shows whether the Windows index service runs, with Install and Remove. Windows asks for admin rights; cancelling changes nothing.
 - The index service keeps a whole-disk index of NTFS drives, so a new file shows up in a second. It is optional; without it Ctrl+K indexes the folders itself.
 - F4 on a folder opens the folder in your editor, as Total Commander does.
+- F9 copies the full path of the file under the cursor, or of every marked file, one per line.
 
 ### Fixed
 
