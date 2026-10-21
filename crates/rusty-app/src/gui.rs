@@ -85,19 +85,24 @@ pub(crate) fn pane_folders(start: &Start) -> Result<[Option<Location>; 2], Strin
     ])
 }
 
+fn session_state(dirs: Option<&StoreDirs>, home: &Location) -> AppState {
+    let session = dirs.map(StoreDirs::session_file);
+    let no_session = Path::new("");
+    initial_state(session.as_deref().unwrap_or(no_session), home.clone())
+}
+
 pub(crate) fn open(launch: Launch) {
     let dirs = launch.dirs;
     let settings_start = settings::start_from(dirs.as_ref());
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
-    let session = dirs.as_ref().map(StoreDirs::session_file);
-    let no_session = Path::new("");
-    let mut state = initial_state(session.as_deref().unwrap_or(no_session), home.clone());
+    let mut state = session_state(dirs.as_ref(), &home);
     place_panes(&mut state, launch.panes);
     metrics::mark("session read");
     let memory = open_memory(dirs.as_ref());
     let local = Arc::new(LocalFs::new());
-    let (operations, _instance) = operations(dirs.as_ref(), &home, local.as_ref());
+    let (operations, _instance, journal) = operations(dirs.as_ref(), &home, local.as_ref());
+    let rename = crate::rename_hooks::hooks(journal, memory.clone());
     metrics::mark("databases opened");
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
@@ -132,6 +137,7 @@ pub(crate) fn open(launch: Launch) {
             start_watch: launch.start_watch,
             open: open_hooks(launch.path, launch.instance_requests),
             crash_report: launch.crash.service(),
+            rename: Some(rename),
         },
         Rc::new(rusty_shell::display_scale),
         quitter(disk, launch.cleanup, launch.running),
@@ -232,14 +238,14 @@ pub(crate) fn operations(
     dirs: Option<&StoreDirs>,
     home: &Location,
     ops: &dyn ProviderOps,
-) -> (Operations, Option<File>) {
+) -> (Operations, Option<File>, Option<jobs::SharedJournal>) {
     let mut protected = vec![home.clone()];
     let Some(dirs) = dirs else {
         let unlogged = Operations {
             protected,
             ..Operations::unlogged()
         };
-        return (unlogged, None);
+        return (unlogged, None, None);
     };
     protected.extend(
         [&dirs.config, &dirs.data]
@@ -258,7 +264,7 @@ pub(crate) fn operations(
             protected,
             ..Operations::unlogged()
         };
-        return (unlogged, instance.and_then(jobs::Instance::share));
+        return (unlogged, instance.and_then(jobs::Instance::share), None);
     };
     if instance.as_ref().is_some_and(|instance| instance.sole) {
         match jobs::recover(&journal, ops).and_then(|_| jobs::still_pending(&journal)) {
@@ -272,10 +278,14 @@ pub(crate) fn operations(
         }
     }
     let logged = Operations {
-        log: jobs::log_factory(journal),
+        log: jobs::log_factory(Arc::clone(&journal)),
         protected,
     };
-    (logged, instance.and_then(jobs::Instance::share))
+    (
+        logged,
+        instance.and_then(jobs::Instance::share),
+        Some(journal),
+    )
 }
 
 fn warn_still_pending(pending: &[jobs::StillPending]) {

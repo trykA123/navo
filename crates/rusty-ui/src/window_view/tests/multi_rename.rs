@@ -252,7 +252,7 @@ fn the_token_menu_inserts_at_the_caret(cx: &mut TestAppContext) {
 fn memory_hooks(store: &Arc<Mutex<Vec<NamedPreset>>>) -> RenameHooks {
     let (list, save, delete) = (store.clone(), store.clone(), store.clone());
     RenameHooks {
-        last: Arc::new(|| None),
+        last: Arc::new(|| Ok(None)),
         undo_log: Arc::new(|_| Err("none".to_owned())),
         presets: Arc::new(move || {
             let named = list.lock().map(|named| named.clone()).unwrap_or_default();
@@ -283,7 +283,7 @@ fn a_preset_saved_with_ctrl_s_loads_with_ctrl_o(cx: &mut TestAppContext) {
     let rig = marked_three(cx);
     let store = Arc::new(Mutex::new(Vec::new()));
     rig.view.update(cx, |view, _| {
-        view.browser.set_rename_hooks(memory_hooks(&store));
+        view.browser.set_rename_hooks(Some(memory_hooks(&store)));
     });
     rig.press(cx, &["ctrl-m"]);
     rig.type_text(cx, "new_[C]");

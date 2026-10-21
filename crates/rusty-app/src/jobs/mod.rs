@@ -25,7 +25,7 @@ pub fn open(file: &Path) -> Result<SharedJournal, JournalError> {
     Ok(Arc::new(Mutex::new(JobJournal::new(db)?)))
 }
 
-fn lock(journal: &SharedJournal) -> MutexGuard<'_, JobJournal> {
+pub(crate) fn lock(journal: &SharedJournal) -> MutexGuard<'_, JobJournal> {
     journal
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -88,10 +88,6 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
     })
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "P41 B7 wires it into RenameHooks")
-)]
 pub fn undo_log(journal: &SharedJournal, job: JobId) -> Result<Box<dyn OpLog>, String> {
     lock(journal)
         .finish(job, JobState::RestorePending)

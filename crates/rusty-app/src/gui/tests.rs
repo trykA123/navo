@@ -34,7 +34,7 @@ fn running_jobs(dirs: &StoreDirs) -> usize {
 
 #[test]
 fn without_store_folders_only_home_is_protected() {
-    let (ops, lock) = operations(None, &home(), &FakeFs::new());
+    let (ops, lock, _) = operations(None, &home(), &FakeFs::new());
     assert_eq!(ops.protected, [home()]);
     assert!(lock.is_none());
 }
@@ -43,7 +43,7 @@ fn without_store_folders_only_home_is_protected() {
 fn store_folders_are_protected_and_get_a_journal() {
     let dir = tempfile::tempdir().unwrap();
     let dirs = store(&dir);
-    let (ops, lock) = operations(Some(&dirs), &home(), &FakeFs::new());
+    let (ops, lock, _) = operations(Some(&dirs), &home(), &FakeFs::new());
     assert_eq!(ops.protected.len(), 3);
     assert!(dirs.data.join("ferrite.db").exists());
     assert!(lock.is_some());
@@ -155,7 +155,7 @@ fn a_failed_integrity_check_on_record_keeps_the_journal_closed_and_the_file_unto
     let bytes = std::fs::read(&db).unwrap();
     let sentinel = crate::crash::sentinel_path(&db);
     std::fs::write(&sentinel, b"").unwrap();
-    let (ops, lock) = operations(Some(&dirs), &home(), &FakeFs::new());
+    let (ops, lock, _) = operations(Some(&dirs), &home(), &FakeFs::new());
     assert_eq!(ops.protected.len(), 3);
     drop((ops, lock));
     assert!(sentinel.exists());

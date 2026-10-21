@@ -13,7 +13,7 @@ const LAST_USED: &str = "";
 
 fn no_hooks() -> RenameHooks {
     RenameHooks {
-        last: Arc::new(|| None),
+        last: Arc::new(|| Ok(None)),
         undo_log: Arc::new(|_| Err("no journal".to_owned())),
         presets: Arc::new(|| Ok(RenamePresetList::default())),
         save: Arc::new(|_, _| Ok(())),

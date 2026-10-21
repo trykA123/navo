@@ -15,8 +15,8 @@ pub use hooks::{
 pub(super) use run::{run_batch, run_undo};
 
 impl Browser {
-    pub fn set_rename_hooks(&mut self, hooks: RenameHooks) {
-        self.rename_hooks = Some(hooks);
+    pub fn set_rename_hooks(&mut self, hooks: Option<RenameHooks>) {
+        self.rename_hooks = hooks;
     }
 
     #[must_use]

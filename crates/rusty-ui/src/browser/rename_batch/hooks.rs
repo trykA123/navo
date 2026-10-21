@@ -55,7 +55,7 @@ pub struct RenamePresetList {
     pub last_used: Option<String>,
 }
 
-pub type LastRename = Arc<dyn Fn() -> Option<UndoOffer> + Send + Sync>;
+pub type LastRename = Arc<dyn Fn() -> Result<Option<UndoOffer>, String> + Send + Sync>;
 /// Opens the log for undoing `offer.job`. The journal must mark that job restore-pending before
 /// this returns, so a crash mid-undo is finished at start. `undone(seq, Done | Skipped)` marks the
 /// step undone; `undone(seq, Failed)` leaves it. `finish(Done)` marks the job undone; any other

@@ -53,7 +53,7 @@ use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
 use crate::app_menu::{Identity, ToggleAppMenu};
-use crate::browser::{Browser, Launcher, Operations, Waker};
+use crate::browser::{Browser, Launcher, Operations, RenameHooks, Waker};
 use crate::fkey_bar::KeyLayer;
 use crate::prelude::*;
 use crate::primitives::SplitterState;
@@ -103,6 +103,13 @@ pub use window_menu::window_view_menu;
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
+type AfterOpen = (
+    KeymapHooks,
+    OpenHooks,
+    Option<rusty_core::Location>,
+    Option<RenameHooks>,
+);
+
 pub struct StartOptions {
     pub state: AppState,
     pub provider: Arc<dyn ProviderOps>,
@@ -126,6 +133,7 @@ pub struct StartOptions {
     pub open: OpenHooks,
     pub crash_report: Option<Arc<dyn CrashReportService>>,
     pub search: SearchHooks,
+    pub rename: Option<RenameHooks>,
 }
 
 pub struct FerriteWindow {
@@ -186,7 +194,7 @@ impl FerriteWindow {
         browser.set_listing_cache(options.listing_cache, options.cache_keys);
         settings_save::steer(&values, &mut browser);
         browser.start();
-        let mut view = Self {
+        let view = Self {
             browser,
             focus: HashMap::new(),
             split: cx.new(|_| SplitterState::new(0.5)),
@@ -227,16 +235,17 @@ impl FerriteWindow {
             start: options.start_watch.map(start_watch::Watching::built),
             _watches: Self::watches(window, cx),
         };
-        view.after_open((options.keymap, options.open, options.view), window, cx);
-        view
+        let after = (options.keymap, options.open, options.view, options.rename);
+        view.after_open(after, window, cx)
     }
 
     fn after_open(
-        &mut self,
-        (keymap, open, start_view): (KeymapHooks, OpenHooks, Option<rusty_core::Location>),
+        mut self,
+        (keymap, open, start_view, rename): AfterOpen,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Self {
+        self.browser.set_rename_hooks(rename);
         self.listen_files(keymap, window, cx);
         self.listen_open(open, window, cx);
         self.apply_theme(window, cx);
@@ -249,6 +258,7 @@ impl FerriteWindow {
                 view.view_location(location, window, cx);
             }
         });
+        self
     }
 
     #[cfg(not(test))]

@@ -134,6 +134,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         open: super::OpenHooks::none(),
         crash_report: None,
         search: crate::window_view::SearchHooks::none(),
+        rename: None,
     }
 }
 

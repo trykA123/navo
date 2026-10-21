@@ -71,6 +71,17 @@ fn a_batch_whose_put_back_failed_stays_undoable() {
 }
 
 #[test]
+fn the_offer_says_whether_the_batch_is_restore_pending() {
+    let mut journal = journal();
+    let done = finished(&mut journal, "rename", 100, JobState::Done);
+    let job = journal.last_undoable("rename").unwrap().unwrap();
+    assert_eq!((job.id, job.restore_pending), (done, false));
+    let stuck = finished(&mut journal, "rename", 200, JobState::RestorePending);
+    let job = journal.last_undoable("rename").unwrap().unwrap();
+    assert_eq!((job.id, job.restore_pending), (stuck, true));
+}
+
+#[test]
 fn marking_undone_walks_back_through_older_batches() {
     let mut journal = journal();
     let first = finished(&mut journal, "rename", 100, JobState::Done);

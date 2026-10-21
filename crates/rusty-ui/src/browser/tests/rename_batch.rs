@@ -116,7 +116,7 @@ impl Journal {
     fn hooks(&self) -> RenameHooks {
         let (last, undo) = (self.clone(), self.clone());
         RenameHooks {
-            last: Arc::new(move || last.offer()),
+            last: Arc::new(move || Ok(last.offer())),
             undo_log: Arc::new(move |offer: &UndoOffer| {
                 undo.wait_for_gate();
                 let job = index(offer.job);
@@ -287,7 +287,7 @@ fn open(fs: &Arc<FakeFs>, journal: &Journal) -> Browser {
         Arc::new(|| {}),
     );
     browser.set_operations(journal.operations());
-    browser.set_rename_hooks(journal.hooks());
+    browser.set_rename_hooks(Some(journal.hooks()));
     browser.start();
     settle(&mut browser);
     browser
