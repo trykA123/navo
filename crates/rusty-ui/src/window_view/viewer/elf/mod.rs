@@ -117,6 +117,7 @@ pub(in crate::window_view::viewer) struct ElfView {
     auto_sorted: bool,
     _siblings_job: Job,
     model_job: Option<Job>,
+    regroup_job: Option<Job>,
 }
 
 impl ElfView {
@@ -158,6 +159,7 @@ impl ElfView {
             auto_sorted: false,
             _siblings_job: siblings_job,
             model_job: None,
+            regroup_job: None,
         }
     }
 

@@ -5,6 +5,7 @@ mod keys;
 mod large;
 mod layout;
 mod model;
+mod regroup;
 mod rich;
 mod sibling;
 mod strip;
@@ -25,5 +26,6 @@ pub(in crate::window_view::viewer) use layout::{RichLook, rich_layout};
 #[cfg(test)]
 pub(in crate::window_view::viewer) use model::tests::DEMO_MDF;
 pub(in crate::window_view::viewer) use model::{RichModel, build_map_model, build_model};
+pub(in crate::window_view::viewer) use regroup::regrouped;
 pub(in crate::window_view::viewer) use rich::{Pick, RichHost, RichSpace};
 pub(in crate::window_view::viewer) use sibling::{Siblings, start_siblings, stem_of};

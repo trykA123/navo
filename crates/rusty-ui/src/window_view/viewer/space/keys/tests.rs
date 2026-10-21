@@ -10,7 +10,7 @@ use crate::window_view::viewer::tests::{label, map_rich, text_of, visible};
 
 type Rig = (AnyWindowHandle, Entity<FerriteWindow>);
 
-fn rich_elf(cx: &mut TestAppContext) -> Rig {
+pub(super) fn rich_elf(cx: &mut TestAppContext) -> Rig {
     rich_elf_of(cx, demo().expect("the demo builds"))
 }
 
@@ -20,14 +20,14 @@ fn rich_elf_of(cx: &mut TestAppContext, bytes: Vec<u8>) -> Rig {
     (window, view)
 }
 
-fn keys(cx: &mut TestAppContext, (window, view): &Rig, keys: &[&str]) {
+pub(super) fn keys(cx: &mut TestAppContext, (window, view): &Rig, keys: &[&str]) {
     for key in keys {
         press(cx, *window, view, key);
     }
     settle_all(cx, *window, view);
 }
 
-fn hints(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
+pub(super) fn hints(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let bar = window.within("fkeys");
@@ -39,7 +39,7 @@ fn hints(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
     .expect("window")
 }
 
-fn picked(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
+pub(super) fn picked(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
     text_of(cx, window, "elf-inspector-name")
 }
 
@@ -47,7 +47,11 @@ fn filter(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<String> {
     visible(cx, window, "filter").then(|| text_of(cx, window, "filter"))
 }
 
-fn is_on(cx: &mut TestAppContext, window: AnyWindowHandle, id: (&'static str, usize)) -> bool {
+pub(super) fn is_on(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    id: (&'static str, usize),
+) -> bool {
     cx.update_window(window, |_, window, _| {
         window.find(id).selected() == Some(true)
     })

@@ -81,14 +81,23 @@ impl MemoryStrip {
     }
 
     pub fn set_data(&mut self, data: StripData, cx: &mut Context<Self>) {
+        if self.data.region.blocks != data.region.blocks {
+            self.zoom = None;
+            self.caret = None;
+        }
         self.data = data;
-        self.zoom = None;
-        self.caret = None;
         self.lit = None;
         self.hover = None;
         self.layout = None;
         self.relayout();
         cx.notify();
+    }
+
+    pub fn set_height(&mut self, height: Pixels, cx: &mut Context<Self>) {
+        if self.height != height {
+            self.height = height;
+            cx.notify();
+        }
     }
 
     pub fn mode(&self) -> ScaleMode {

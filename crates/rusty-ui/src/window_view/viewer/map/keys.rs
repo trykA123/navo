@@ -186,6 +186,10 @@ impl MapView {
         if self.close_go_to(window, cx) {
             return;
         }
+        if self.rich.pick.is_some() {
+            self.clear_pick(cx);
+            return;
+        }
         match self.top_open(cx) {
             Some(Drawer::Navigator) => self.close_navigator(cx),
             Some(Drawer::Inspector) => self.toggle_inspector(cx),

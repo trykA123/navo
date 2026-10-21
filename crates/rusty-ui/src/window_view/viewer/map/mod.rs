@@ -103,6 +103,7 @@ pub(in crate::window_view::viewer) struct MapView {
     shows_sections_for_rich: bool,
     _siblings_job: Job,
     model_job: Option<Job>,
+    regroup_job: Option<Job>,
 }
 
 impl MapView {
@@ -142,6 +143,7 @@ impl MapView {
             shows_sections_for_rich: false,
             _siblings_job: siblings_job,
             model_job: None,
+            regroup_job: None,
         }
     }
 

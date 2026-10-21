@@ -13,7 +13,7 @@ use crate::window_view::viewer::body::{Host, Key};
 use crate::window_view::viewer::parts::LayoutParts;
 use crate::window_view::viewer::space::{
     Item as StripItem, Label, Part, Pick, RichHost, RichModel, RichSpace, StripData,
-    build_map_model, part_keys, start_siblings, stem_of,
+    build_map_model, part_keys, regrouped, start_siblings, stem_of,
 };
 
 const LARGEST: Order = Order {
@@ -100,8 +100,32 @@ impl MapView {
             loaded,
             owners: model.owners.clone(),
         });
-        self.rich.install(model, data, cx);
+        let relight = self.rich.install(model, data, cx);
+        if let Some(id) = relight {
+            let lit = self.lit_for(id);
+            self.rich.set_pick(Some(Pick::Group(id)), &lit, cx);
+        }
+        if self.rich.wants_regroup().is_some() {
+            self.start_regroup(cx);
+        }
         cx.notify();
+    }
+
+    fn start_regroup(&mut self, cx: &mut Context<Self>) {
+        let (Index::Ready(loaded), Some(model), Some(grouping)) =
+            (&self.index, self.rich.model.clone(), self.rich.grouping)
+        else {
+            return;
+        };
+        let loaded = loaded.clone();
+        self.regroup_job = Some(spawn_job(
+            cx,
+            move |_, send| {
+                let model = regrouped(&model, Origin::Map(&loaded.model), grouping);
+                send((loaded.clone(), model));
+            },
+            Self::model_ready,
+        ));
     }
 
     pub(super) fn is_rich(&self) -> bool {
@@ -208,7 +232,6 @@ impl RichHost for MapView {
 
     fn regroup(&mut self, grouping: Grouping, cx: &mut Context<Self>) {
         self.rich.grouping = Some(grouping);
-        self.clear_pick(cx);
-        self.start_model(cx);
+        self.start_regroup(cx);
     }
 }

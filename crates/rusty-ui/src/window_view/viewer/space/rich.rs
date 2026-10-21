@@ -1,8 +1,8 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui_kit::{Bounds, FocusHandle, Subscription};
-use rusty_automotive::space::{Grouping, Item, Rect, Region, ScaleMode, Tile, layout};
+use gpui_kit::{Bounds, FocusHandle, Focusable, Subscription, WeakEntity};
+use rusty_automotive::space::{Grouping, Item, Rect, Region, ScaleMode, TOP_GROUPS, Tile, layout};
 
 use super::keys::Part;
 use super::model::RichModel;
@@ -88,69 +88,144 @@ fn bucket(value: Pixels) -> u32 {
     }
 }
 
+fn strip_height(model: &RichModel, at: usize) -> Pixels {
+    px(if Some(at) == model.flash {
+        FLASH_STRIP
+    } else {
+        OTHER_STRIP
+    })
+}
+
+fn place(items: &[Item], (width, height): (u32, u32)) -> Rc<[Tile]> {
+    let rect = Rect::new(0., 0., f64::from(width), f64::from(height));
+    layout(items, rect).into()
+}
+
+fn same_group(old: &RichModel, new: &RichModel, id: u32) -> Option<u32> {
+    if old.grouping != new.grouping {
+        return None;
+    }
+    let name = &old.groups.get(id as usize)?.name;
+    new.groups
+        .iter()
+        .take(TOP_GROUPS)
+        .position(|group| group.name == *name)
+        .map(|at| at as u32)
+}
+
+fn refocus_table<V: RichHost>(
+    (view, lost): (&WeakEntity<V>, &[FocusHandle]),
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if !lost.iter().any(|handle| handle.is_focused(window)) {
+        return;
+    }
+    let _ = view.update(cx, |view, cx| {
+        view.rich().part = Part::Table;
+        window.focus(&view.table_focus(), cx);
+        cx.notify();
+    });
+}
+
+fn recover_focus<V: RichHost>(lost: Vec<FocusHandle>, cx: &mut Context<V>) {
+    let view = cx.weak_entity();
+    cx.defer(move |cx| {
+        for window in cx.windows() {
+            let _ = window.update(cx, |_, window, cx| {
+                refocus_table((&view, &lost), window, cx)
+            });
+        }
+    });
+}
+
+fn refresh(strip: &Entity<MemoryStrip>, (height, data): (Pixels, StripData), cx: &mut App) {
+    strip.update(cx, |strip, cx| {
+        strip.set_height(height, cx);
+        strip.set_data(data, cx);
+    });
+}
+
 impl RichSpace {
     pub fn install<V: RichHost>(
         &mut self,
         model: RichModel,
         data: impl Fn(&Arc<Region>) -> StripData,
         cx: &mut Context<V>,
-    ) {
+    ) -> Option<u32> {
         let (groups, items) = model.treemap();
-        let same = self.strips.len() == model.regions.len()
-            && self
-                .model
-                .as_ref()
-                .is_some_and(|old| old.flash == model.flash);
-        if same {
-            for (strip, region) in self.strips.iter().zip(&model.regions) {
-                let data = data(region);
-                strip.update(cx, |strip, cx| strip.set_data(data, cx));
-            }
-        } else {
-            self.make_strips(&model, data, cx);
-        }
+        let old = self.model.take();
+        self.sync_strips(&model, data, cx);
         self.treemap_focus.get_or_insert_with(|| cx.focus_handle());
+        let kept = old.as_deref().and_then(|old| self.kept_pick(old, &model));
+        let tile = self
+            .tile
+            .zip(old.as_deref())
+            .and_then(|(id, old)| same_group(old, &model, id));
+        self.tile = tile.or_else(|| (self.part == Part::Treemap && !items.is_empty()).then_some(0));
+        self.tiles = self.tiles.take().map(|(key, _)| (key, place(&items, key)));
         self.groups = groups;
         self.items = items;
-        self.tiles = None;
-        self.pick = None;
-        self.tile = None;
+        self.pick = kept;
         self.model = Some(Arc::new(model));
+        match kept {
+            Some(Pick::Group(id)) => Some(id),
+            _ => None,
+        }
     }
 
-    fn make_strips<V: RichHost>(
+    pub fn wants_regroup(&self) -> Option<Grouping> {
+        let model = self.model.as_ref()?;
+        let wanted = self.grouping?;
+        (model.grouping != wanted && model.usable[wanted as usize]).then_some(wanted)
+    }
+
+    fn kept_pick(&self, old: &RichModel, new: &RichModel) -> Option<Pick> {
+        let pick = self.pick?;
+        match pick {
+            Pick::Block { region, block } => {
+                let (was, now) = (old.regions.get(region)?, new.regions.get(region)?);
+                (was.blocks == now.blocks && block < now.blocks.len()).then_some(pick)
+            }
+            Pick::Group(id) => same_group(old, new, id).map(Pick::Group),
+        }
+    }
+
+    fn sync_strips<V: RichHost>(
         &mut self,
         model: &RichModel,
         data: impl Fn(&Arc<Region>) -> StripData,
         cx: &mut Context<V>,
     ) {
-        let flash = model.flash;
         let mode = self.mode;
-        self.strips = model
-            .regions
-            .iter()
-            .enumerate()
-            .map(|(at, region)| {
-                let height = if Some(at) == flash {
-                    FLASH_STRIP
-                } else {
-                    OTHER_STRIP
-                };
-                let data = data(region);
-                cx.new(|cx| {
-                    let mut strip = MemoryStrip::new(data, px(height), cx);
-                    strip.set_mode(mode, cx);
-                    strip
-                })
-            })
-            .collect();
-        self._events = self
+        for (at, region) in model.regions.iter().enumerate() {
+            let (height, data) = (strip_height(model, at), data(region));
+            if let Some(strip) = self.strips.get(at) {
+                refresh(strip, (height, data), cx);
+                continue;
+            }
+            let strip = cx.new(|cx| {
+                let mut strip = MemoryStrip::new(data, height, cx);
+                strip.set_mode(mode, cx);
+                strip
+            });
+            self._events.push(cx.subscribe(&strip, on_strip::<V>(at)));
+            self.strips.push(strip);
+        }
+        let keep = model.regions.len();
+        let lost: Vec<FocusHandle> = self
             .strips
+            .split_off(keep)
             .iter()
-            .enumerate()
-            .map(|(region, strip)| cx.subscribe(strip, on_strip::<V>(region)))
+            .map(|strip| strip.focus_handle(cx))
             .collect();
-        self.part = Part::Table;
+        self._events.truncate(keep);
+        if matches!(self.part, Part::Strip(at) if at >= keep) {
+            self.part = Part::Table;
+        }
+        if !lost.is_empty() {
+            recover_focus(lost, cx);
+        }
     }
 
     pub fn set_mode(&mut self, mode: ScaleMode, cx: &mut App) {
@@ -188,8 +263,7 @@ impl RichSpace {
         if self.tiles.as_ref().is_some_and(|(at, _)| *at == key) {
             return false;
         }
-        let rect = Rect::new(0., 0., f64::from(key.0), f64::from(key.1));
-        self.tiles = Some((key, layout(&self.items, rect).into()));
+        self.tiles = Some((key, place(&self.items, key)));
         true
     }
 }

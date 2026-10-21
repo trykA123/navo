@@ -102,13 +102,22 @@ fn reading_order(rich: &RichSpace) -> Vec<u32> {
     placed.into_iter().map(|(_, id)| id).collect()
 }
 
+fn strip_stops(rich: &RichSpace) -> Vec<usize> {
+    let Some(model) = rich.model.as_ref() else {
+        return Vec::new();
+    };
+    (0..rich.strips.len())
+        .filter(|at| model.regions.get(*at).is_some_and(|r| !r.blocks.is_empty()))
+        .collect()
+}
+
 fn parts(rich: &RichSpace, layout: LayoutParts) -> Vec<Part> {
     let mut parts = vec![Part::Table];
     if rich.model.is_none() {
         return parts;
     }
     if layout.strip {
-        parts.extend((0..rich.strips.len()).map(Part::Strip));
+        parts.extend(strip_stops(rich).into_iter().map(Part::Strip));
     }
     if layout.who && rich.treemap_focus.is_some() && !reading_order(rich).is_empty() {
         parts.push(Part::Treemap);
@@ -226,13 +235,13 @@ fn change_region<V: RichHost>(view: &mut V, below: bool, window: &mut Window, cx
     let Some((_, Part::Strip(at))) = current(view, window, cx) else {
         return cx.propagate();
     };
-    let last = view.rich().strips.len().saturating_sub(1);
+    let stops = strip_stops(view.rich());
     let next = if below {
-        (at + 1).min(last)
+        stops.iter().copied().find(|stop| *stop > at)
     } else {
-        at.saturating_sub(1)
+        stops.iter().rev().copied().find(|stop| *stop < at)
     };
-    if next != at {
+    if let Some(next) = next {
         focus_part(view, Part::Strip(next), window, cx);
     }
 }
@@ -335,5 +344,7 @@ pub(in crate::window_view::viewer) fn space_keys<V: RichHost>(
         .on_action(cx.listener(|view, _: &ToggleScale, window, cx| toggle_scale(view, window, cx)))
 }
 
+#[cfg(test)]
+mod rebuild;
 #[cfg(test)]
 mod tests;
