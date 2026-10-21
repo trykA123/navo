@@ -378,6 +378,7 @@ viewer.back | escape | CanTrace
 viewer.back | escape | Elf
 viewer.back | escape | Image
 viewer.back | escape | Map
+viewer.back | escape | Mdf
 viewer.back | escape | MemoryImage
 viewer.back | escape | Paged
 viewer.back | escape | Pdf

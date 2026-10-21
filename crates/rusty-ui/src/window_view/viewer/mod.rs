@@ -15,6 +15,7 @@ mod kinds;
 mod lister;
 mod map;
 mod markdown;
+mod mdf;
 mod memory;
 mod menu;
 mod modes;

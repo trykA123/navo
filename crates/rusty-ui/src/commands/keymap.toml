@@ -1648,6 +1648,11 @@ command = "viewer.back"
 keys = ["escape"]
 context = "CanTrace"
 
+[[bind]]
+command = "viewer.back"
+keys = ["escape"]
+context = "Mdf"
+
 # Markdown
 
 [[bind]]

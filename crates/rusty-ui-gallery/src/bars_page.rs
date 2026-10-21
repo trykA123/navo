@@ -123,7 +123,7 @@ pub type DragTreemapBars = (
     Entity<MultiRenamePage>,
     PreviewPages,
     ToolPages,
-    [Entity<RichPage>; 11],
+    [Entity<RichPage>; 12],
 );
 
 pub fn drag_treemap_bars(window: &mut Window, cx: &mut App) -> DragTreemapBars {

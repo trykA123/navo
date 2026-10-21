@@ -20,6 +20,7 @@ mod markdown;
 mod markdown_split;
 mod markdown_table;
 mod marks;
+mod mdf_view;
 mod memory;
 mod memory_image;
 mod menu;

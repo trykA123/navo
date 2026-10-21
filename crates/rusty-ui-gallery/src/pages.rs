@@ -116,6 +116,7 @@ pub enum Page {
     MapNoWho,
     MapNoRowBars,
     ElfStripKeys,
+    MdfTable,
 }
 
 pub struct PageInfo {

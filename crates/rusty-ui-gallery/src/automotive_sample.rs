@@ -146,3 +146,29 @@ fn can_trace() -> String {
     lines.push("End TriggerBlock".to_owned());
     lines.join("\n") + "\n"
 }
+
+pub const DEMO_NAME: &str = "demo.mdf";
+
+const DEMO_MDF: &str = "\
+# invented memory definition for the gallery
+space linear 1 8
+space local 2 8
+chip mpe:pflash0 10 8 0x200000 rom
+chip mpe:pflash1 11 8 0x100000 rom
+chip mpe:dflash0 12 8 0x10000 rom
+chip mpe:dsram0 20 8 0x20000 ram
+chip mpe:psram0 21 8 0x10000 ram
+chip mpe:spare 30 8 0x1000 ram
+map 1 0x80000000 0x200000 10 0
+map 1 0x80200000 0x100000 11 0
+map 1 0xAF000000 0x10000 12 0
+map 1 0x70000000 0x20000 20 0
+map 1 0x70100000 0x10000 21 0
+map 2 0xD0000000 0x20000 20 0
+map 2 0xC0000000 0x4000 99 0
+map 1 0x80100000 0x1000 10 zero
+";
+
+pub fn demo_mdf() -> &'static str {
+    DEMO_MDF
+}

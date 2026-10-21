@@ -249,6 +249,7 @@ viewer.back | escape | MemoryImage
 viewer.back | escape | Elf
 viewer.back | escape | Map
 viewer.back | escape | CanTrace
+viewer.back | escape | Mdf
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
