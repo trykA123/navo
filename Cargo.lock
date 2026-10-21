@@ -6721,6 +6721,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "toml 1.1.8+spec-1.1.0",
+ "tracing",
  "tree-sitter",
  "tree-sitter-asm",
  "tree-sitter-batch",

@@ -1,9 +1,10 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::super::FerriteWindow;
 use crate::command_center::{
-    Cancel, CommandsSnapshot, Hit, HitSink, Notes, Query, RecentSource, Request, ResultSource,
-    Results, Row, Scope,
+    Cancel, CommandsSnapshot, Group, Hit, HitSink, Notes, Query, RecentSource, Request,
+    ResultSource, Results, Row, Scope,
 };
 use crate::prelude::*;
 use gpui_kit::{AsyncWindowContext, WeakEntity};
@@ -11,6 +12,7 @@ use gpui_kit::{AsyncWindowContext, WeakEntity};
 const LIMIT: usize = 500;
 const RECENT_COMMANDS: usize = 5;
 const RECENT_FOLDERS: usize = 8;
+const FILE_DELAY: Duration = Duration::from_millis(40);
 
 pub(super) fn recent(commands: Vec<Hit>, folders: Vec<Hit>) -> Vec<Row> {
     Results::recent(commands, folders)
@@ -30,15 +32,16 @@ impl Search {
     pub(super) fn new(
         sources: Vec<Arc<dyn ResultSource>>,
         (recent, commands): (Arc<RecentSource>, Arc<CommandsSnapshot>),
+        generation: u64,
     ) -> Self {
         Self {
             recent,
             commands,
             sources: sources.into(),
-            generation: 0,
+            generation,
             cancel: Cancel::new(),
-            sink: HitSink::new(0),
-            shown: 0,
+            sink: HitSink::new(generation),
+            shown: generation,
         }
     }
 
@@ -67,59 +70,95 @@ struct Round {
     cancel: Cancel,
 }
 
+fn is_fast(source: &Arc<dyn ResultSource>) -> bool {
+    source.group() == Group::Commands
+}
+
 impl Round {
-    fn active(&self) -> impl Iterator<Item = &Arc<dyn ResultSource>> {
+    fn active(&self, fast: bool) -> impl Iterator<Item = &Arc<dyn ResultSource>> {
         let scope = self.request.query.scope;
         self.sources
             .iter()
-            .filter(move |source| source.scopes().contains(scope))
+            .filter(move |source| source.scopes().contains(scope) && is_fast(source) == fast)
     }
 
-    fn run(&self) -> (Vec<Hit>, Notes) {
-        for source in self.active() {
+    fn run(&self, fast: bool) -> (Vec<Hit>, Notes) {
+        for source in self.active(fast) {
             if self.cancel.is_cancelled() {
                 break;
             }
             source.search(&self.request, &self.sink, &self.cancel);
         }
-        let notes = Notes {
-            capped: self
-                .active()
-                .find_map(|source| source.capped(&self.request)),
-            offline: self
-                .active()
-                .find_map(|source| source.offline(&self.request)),
-        };
+        let notes = if fast { Notes::default() } else { self.notes() };
         (self.sink.drain(self.request.generation), notes)
     }
 
+    fn notes(&self) -> Notes {
+        Notes {
+            capped: self
+                .active(false)
+                .find_map(|source| source.capped(&self.request)),
+            offline: self
+                .active(false)
+                .find_map(|source| source.offline(&self.request)),
+        }
+    }
+
     fn wait_for_more(&self) -> bool {
-        self.active()
+        self.active(false)
             .any(|source| source.wait_for_more(&self.request, &self.cancel))
     }
 }
 
-async fn stream(
+struct Stream {
     round: Round,
     scope: Scope,
     this: WeakEntity<FerriteWindow>,
-    cx: &mut AsyncWindowContext,
-) {
-    let generation = round.request.generation;
-    loop {
-        let step = round.clone();
-        let (hits, notes) = cx
-            .background_executor()
-            .spawn(async move { step.run() })
-            .await;
-        let update = (generation, scope, hits, notes);
-        let shown = this.update_in(cx, |view, window, cx| view.receive_hits(update, window, cx));
-        let step = round.clone();
-        let more = cx
-            .background_executor()
-            .spawn(async move { step.wait_for_more() });
-        if shown.is_err() || !more.await {
+}
+
+impl Stream {
+    async fn publish(&self, (hits, notes): (Vec<Hit>, Notes), cx: &mut AsyncWindowContext) -> bool {
+        if self.round.cancel.is_cancelled() {
+            return false;
+        }
+        let update = (self.round.request.generation, self.scope, hits, notes);
+        self.this
+            .update_in(cx, |view, window, cx| view.receive_hits(update, window, cx))
+            .is_ok()
+    }
+
+    async fn run(&self, fast: bool, cx: &mut AsyncWindowContext) -> (Vec<Hit>, Notes) {
+        let step = self.round.clone();
+        cx.background_executor()
+            .spawn(async move { step.run(fast) })
+            .await
+    }
+
+    async fn go(self, cx: &mut AsyncWindowContext) {
+        let (fast, _) = self.run(true, cx).await;
+        let has_files = self.round.active(false).next().is_some();
+        if (!fast.is_empty() || !has_files)
+            && !self.publish((fast.clone(), Notes::default()), cx).await
+        {
             return;
+        }
+        if !has_files {
+            return;
+        }
+        cx.background_executor().timer(FILE_DELAY).await;
+        loop {
+            let (files, notes) = self.run(false, cx).await;
+            let hits = fast.iter().cloned().chain(files).collect();
+            if !self.publish((hits, notes), cx).await {
+                return;
+            }
+            let step = self.round.clone();
+            let more = cx
+                .background_executor()
+                .spawn(async move { step.wait_for_more() });
+            if !more.await {
+                return;
+            }
         }
     }
 }
@@ -136,6 +175,7 @@ impl FerriteWindow {
             return;
         };
         open.error = None;
+        open.run_when_shown = None;
         let generation = open.search.next();
         if open.step.is_some() || query.trim().is_empty() {
             if open.step.is_some() {
@@ -159,7 +199,7 @@ impl FerriteWindow {
             cancel: search.cancel.clone(),
         };
         cx.spawn_in(window, async move |this, cx| {
-            stream(round, scope, this, cx).await
+            Stream { round, scope, this }.go(cx).await
         })
         .detach();
     }
@@ -211,6 +251,10 @@ impl FerriteWindow {
         open.selection = open.kept_selection(generation, &rows);
         open.search.shown = generation;
         open.rows = rows.into();
+        let run = open.run_when_shown.take();
         self.push_command_center(window, cx);
+        if let Some(new_tab) = run {
+            self.run_selected(new_tab, window, cx);
+        }
     }
 }

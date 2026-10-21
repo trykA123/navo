@@ -29,6 +29,7 @@ pub(super) struct CommandCenterState {
     pub(super) hooks: SearchHooks,
     pub(super) visits: super::visits::Visits,
     pub(super) here: HereWalks,
+    generation: u64,
 }
 
 impl CommandCenterState {
@@ -41,6 +42,7 @@ impl CommandCenterState {
             hooks,
             visits: super::visits::Visits::default(),
             here: HereWalks::new(provider.clone()),
+            generation: 0,
         }
     }
 }
@@ -62,6 +64,7 @@ struct Open {
     keys: HintKeys,
     restore: Option<FocusHandle>,
     search: search::Search,
+    run_when_shown: Option<bool>,
     _events: Subscription,
 }
 
@@ -156,6 +159,7 @@ impl FerriteWindow {
         let keys = HintKeys::of(keymap);
         let snapshot = Arc::new(snapshot);
         let (sources, recent) = self.file_sources(&snapshot);
+        let generation = self.command_center.generation + 1;
         let rows: Rc<[Row]> = search::recent(Vec::new(), Vec::new()).into();
         let anchor = self.command_center_anchor(window, cx);
         let props = CommandCenterProps {
@@ -182,7 +186,8 @@ impl FerriteWindow {
             anchor,
             keys,
             restore,
-            search: search::Search::new(sources, (recent, snapshot)),
+            search: search::Search::new(sources, (recent, snapshot), generation),
+            run_when_shown: None,
             _events: events,
         });
         self.load_recent(window, cx);
@@ -206,6 +211,7 @@ impl FerriteWindow {
             return;
         };
         open.search.cancel();
+        self.command_center.generation = open.search.generation();
         self.command_center.here.cancel();
         match &open.restore {
             Some(handle) => window.focus(handle, cx),

@@ -10,6 +10,7 @@ command-center-folders = Folders
 command-center-files = Files
 command-center-files-capped = Files · First { $count } entries of { $root } · the disk index finds the rest
 command-center-go-to = Go to { $path }
+command-center-action-missing = That command is not available
 command-center-path-offline = { $path } does not answer. Its folders are not listed.
 command-center-show-all = Show all { $count }
 command-center-show-all-commands = commands

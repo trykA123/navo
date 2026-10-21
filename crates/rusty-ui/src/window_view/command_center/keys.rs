@@ -57,10 +57,10 @@ impl FerriteWindow {
                 view.move_selection(Selection::previous_group, window, cx);
             }))
             .on_action(cx.listener(|view, _: &Run, window, cx| {
-                view.run_selected(false, window, cx);
+                view.run_on_enter(false, window, cx);
             }))
             .on_action(cx.listener(|view, _: &RunInNewTab, window, cx| {
-                view.run_selected(true, window, cx);
+                view.run_on_enter(true, window, cx);
             }))
             .on_action(cx.listener(|view, _: &Back, window, cx| {
                 view.command_center_back(window, cx);

@@ -11,6 +11,8 @@ use crate::command_center::{
 };
 use crate::window_view::{FerriteWindow, Frecent};
 
+mod late;
+
 struct Fixed(Vec<Hit>);
 
 impl ResultSource for Fixed {
@@ -79,6 +81,8 @@ impl Rig {
     fn type_query(&self, cx: &mut TestAppContext, text: &str) {
         cx.update_window(self.window, |_, window, cx| window.input(text, cx))
             .expect("window");
+        cx.run_until_parked();
+        cx.executor().advance_clock(Duration::from_millis(100));
         settle(cx, &self.view);
     }
 

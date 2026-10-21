@@ -5,6 +5,7 @@ use super::Step;
 use crate::command_center::{Group, Hit, Query, Row, Target, completion};
 use crate::commands::ArgKind;
 use crate::prelude::*;
+use crate::status_bar::StatusNotice;
 
 const ELLIPSIS: char = '…';
 
@@ -56,6 +57,22 @@ fn split_file(location: &Location) -> Option<(Location, String)> {
 }
 
 impl FerriteWindow {
+    pub(super) fn run_on_enter(
+        &mut self,
+        new_tab: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(open) = self.command_center.open.as_mut() else {
+            return;
+        };
+        if open.step.is_none() && open.search.shown != open.search.generation() {
+            open.run_when_shown = Some(new_tab);
+            return;
+        }
+        self.run_selected(new_tab, window, cx);
+    }
+
     pub(super) fn run_selected(
         &mut self,
         new_tab: bool,
@@ -83,10 +100,7 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         match hit.target {
-            Target::Action(name) => {
-                self.record_command(name, cx);
-                self.run_action(name, window, cx);
-            }
+            Target::Action(name) => self.run_action(name, window, cx),
             Target::Core(command) => self.run_core(&command, window, cx),
             Target::Arg(name, kind) => {
                 let label = hit.title.trim_end_matches(ELLIPSIS).trim_end().to_owned();
@@ -128,9 +142,14 @@ impl FerriteWindow {
             .and_then(|open| open.restore.clone());
         self.close_command_center(window, cx);
         let Ok(action) = cx.build_action(name, None) else {
-            debug_assert!(false, "command center action {name} is not registered");
+            tracing::error!(name, "command center action is not registered");
+            self.show_notice(StatusNotice {
+                text: rusty_l10n::tr("command-center-action-missing").into(),
+                is_error: true,
+            });
             return;
         };
+        self.record_command(name, cx);
         let pane = self.browser.state().focused_pane();
         let focus = restore.unwrap_or_else(|| self.handle(pane, cx));
         window.defer(cx, move |window, cx| {
