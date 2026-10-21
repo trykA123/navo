@@ -1,7 +1,8 @@
-use rusty_core::{Command, Location};
+use rusty_core::Command;
 
 use super::super::FerriteWindow;
 use super::Step;
+use super::open::{Place, Way};
 use crate::command_center::{Group, Hit, Query, Row, Target, completion};
 use crate::commands::ArgKind;
 use crate::prelude::*;
@@ -35,12 +36,6 @@ pub(super) fn argument_command(step: &Step, value: &str) -> Result<Command, Stri
     Command::parse(&text).map_err(|error| error.to_string())
 }
 
-struct Place {
-    location: Location,
-    folder: bool,
-    new_tab: bool,
-}
-
 fn prefix(group: Group) -> Option<char> {
     match group {
         Group::Commands => Some('>'),
@@ -49,61 +44,63 @@ fn prefix(group: Group) -> Option<char> {
     }
 }
 
-fn split_file(location: &Location) -> Option<(Location, String)> {
-    let parent = location.parent()?;
-    let text = location.path().to_text();
-    let name = text.rsplit(['/', '\\']).find(|part| !part.is_empty())?;
-    Some((parent, name.to_owned()))
-}
-
 impl FerriteWindow {
-    pub(super) fn run_on_enter(
-        &mut self,
-        new_tab: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn run_on_enter(&mut self, way: Way, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = self.command_center.open.as_mut() else {
             return;
         };
         if open.step.is_none() && open.search.shown != open.search.generation() {
-            open.run_when_shown = Some(new_tab);
+            open.run_when_shown = Some(way);
             return;
         }
-        self.run_selected(new_tab, window, cx);
+        self.run_selected(way, window, cx);
     }
 
-    pub(super) fn run_selected(
-        &mut self,
-        new_tab: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn run_selected(&mut self, way: Way, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = self.command_center.open.as_ref() else {
             return;
         };
         if let Some(step) = open.step.clone() {
+            if !way.runs_commands() {
+                return;
+            }
             let value = open.center.read(cx).query(cx);
             return self.run_argument((&step, &value), window, cx);
         }
         match open.selection.row(&open.rows).cloned() {
-            Some(Row::TopHit(hit) | Row::Hit(hit)) => self.run_hit((hit, new_tab), window, cx),
-            Some(Row::ShowAll { group, .. }) => self.show_all(group, window, cx),
+            Some(Row::TopHit(hit) | Row::Hit(hit)) => self.run_hit((hit, way), window, cx),
+            Some(Row::ShowAll { group, .. }) if way.runs_commands() => {
+                self.show_all(group, window, cx);
+            }
+            Some(Row::ShowAll { .. }) => {}
             Some(Row::Header(_) | Row::Hint) | None => {}
         }
     }
 
-    fn run_hit(
+    fn run_hit(&mut self, (hit, way): (Hit, Way), window: &mut Window, cx: &mut Context<Self>) {
+        let place = match hit.target {
+            Target::Open { location, folder } => Place { location, folder },
+            Target::GoTo(location) => Place {
+                location,
+                folder: true,
+            },
+            _ if !way.runs_commands() => return,
+            target => return self.run_target((target, hit.title), window, cx),
+        };
+        self.open_place((place, way), window, cx);
+    }
+
+    fn run_target(
         &mut self,
-        (hit, new_tab): (Hit, bool),
+        (target, title): (Target, SharedString),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match hit.target {
+        match target {
             Target::Action(name) => self.run_action(name, window, cx),
             Target::Core(command) => self.run_core(&command, window, cx),
             Target::Arg(name, kind) => {
-                let label = hit.title.trim_end_matches(ELLIPSIS).trim_end().to_owned();
+                let label = title.trim_end_matches(ELLIPSIS).trim_end().to_owned();
                 self.enter_step(
                     Some(Step {
                         name,
@@ -114,23 +111,8 @@ impl FerriteWindow {
                     cx,
                 );
             }
-            Target::Open { location, folder } => {
-                let place = Place {
-                    location,
-                    folder,
-                    new_tab,
-                };
-                self.open_location(&place, window, cx);
-            }
-            Target::GoTo(location) => {
-                let place = Place {
-                    location,
-                    folder: true,
-                    new_tab,
-                };
-                self.open_location(&place, window, cx);
-            }
             Target::ShowAll(group) => self.show_all(group, window, cx),
+            Target::Open { .. } | Target::GoTo(_) => {}
         }
     }
 
@@ -189,39 +171,6 @@ impl FerriteWindow {
                 self.push_command_center(window, cx);
             }
         }
-    }
-
-    fn open_location(&mut self, place: &Place, window: &mut Window, cx: &mut Context<Self>) {
-        let Place {
-            location,
-            folder,
-            new_tab,
-        } = place;
-        let (folder, new_tab) = (*folder, *new_tab);
-        self.close_command_center(window, cx);
-        let opened = match (folder, new_tab) {
-            (true, false) => self
-                .browser
-                .command(&Command::PaneNavigate {
-                    location: location.clone(),
-                })
-                .is_ok(),
-            (true, true) => self.browser.open_tab_at(location.clone(), None),
-            (false, _) => split_file(location).is_some_and(|(parent, name)| {
-                if new_tab {
-                    self.browser.open_tab_at(parent, Some(name))
-                } else {
-                    self.browser.open_at(parent, name)
-                }
-            }),
-        };
-        if opened {
-            if !folder {
-                self.note_file(location, cx);
-            }
-            self.focus_core_pane(window, cx);
-        }
-        cx.notify();
     }
 
     pub(super) fn complete_path(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {

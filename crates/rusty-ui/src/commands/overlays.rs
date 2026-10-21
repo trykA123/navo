@@ -115,6 +115,21 @@ pub(super) const GROUPS: [Group; 13] = [
                 "cmd-command-center-run-in-new-tab",
             ),
             (
+                "command_center::Reveal",
+                "command_center.reveal",
+                "cmd-command-center-reveal",
+            ),
+            (
+                "command_center::OtherPane",
+                "command_center.other_pane",
+                "cmd-command-center-other-pane",
+            ),
+            (
+                "command_center::CopyPath",
+                "command_center.copy_path",
+                "cmd-command-center-copy-path",
+            ),
+            (
                 "command_center::Back",
                 "command_center.back",
                 "cmd-command-center-back",

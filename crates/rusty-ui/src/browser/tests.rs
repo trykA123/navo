@@ -7,7 +7,7 @@ use rusty_fs::{CancelToken, FakeFs, FakeOp, Fault, Provider, ProviderOps};
 
 use super::*;
 
-fn fake() -> Arc<FakeFs> {
+pub(super) fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home/docs");
     fs.add_folder("home/music");
@@ -16,7 +16,7 @@ fn fake() -> Arc<FakeFs> {
     Arc::new(fs)
 }
 
-fn browser_at(fs: &Arc<FakeFs>, path: &str) -> Browser {
+pub(super) fn browser_at(fs: &Arc<FakeFs>, path: &str) -> Browser {
     let state = AppState::new(fs.location(path));
     let provider: Arc<dyn ProviderOps> = fs.clone();
     let mut browser = Browser::new(state, provider, Arc::new(|| {}));
@@ -24,7 +24,7 @@ fn browser_at(fs: &Arc<FakeFs>, path: &str) -> Browser {
     browser
 }
 
-fn settle(browser: &mut Browser) {
+pub(super) fn settle(browser: &mut Browser) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while browser.loading() && Instant::now() < deadline {
         browser.poll();
@@ -42,7 +42,7 @@ fn names(browser: &Browser) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn here(browser: &Browser) -> String {
+pub(super) fn here(browser: &Browser) -> String {
     browser.state().active_tab().location().as_str().to_owned()
 }
 

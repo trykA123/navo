@@ -125,6 +125,9 @@ command_center.next_group | CommandCenter | false
 command_center.previous_group | CommandCenter | false
 command_center.run | CommandCenter | false
 command_center.run_in_new_tab | CommandCenter | false
+command_center.reveal | CommandCenter | false
+command_center.other_pane | CommandCenter | false
+command_center.copy_path | CommandCenter | false
 command_center.back | CommandCenter | false
 app_menu.focus_left | AppMenu | false
 app_menu.focus_right | AppMenu | false

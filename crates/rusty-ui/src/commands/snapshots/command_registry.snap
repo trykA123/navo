@@ -125,6 +125,9 @@ command_center.next_group | Next group | CommandCenter
 command_center.previous_group | Previous group | CommandCenter
 command_center.run | Run or open | CommandCenter
 command_center.run_in_new_tab | Open in new tab | CommandCenter
+command_center.reveal | Show in its folder | CommandCenter
+command_center.other_pane | Open in the other pane | CommandCenter
+command_center.copy_path | Copy full path | CommandCenter
 command_center.back | Clear, back or close | CommandCenter
 app_menu.focus_left | Left | AppMenu
 app_menu.focus_right | Right | AppMenu

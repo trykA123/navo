@@ -1,7 +1,8 @@
 use super::super::FerriteWindow;
+use super::open::Way;
 use crate::command_center::{
-    Back, Down, First, Last, NextGroup, PageDown, PageUp, PreviousGroup, Row, Run, RunInNewTab,
-    Selection, Toggle, Up,
+    Back, CopyPath, Down, First, Last, NextGroup, OtherPane, PageDown, PageUp, PreviousGroup,
+    Reveal, Row, Run, RunInNewTab, Selection, Toggle, Up,
 };
 use crate::prelude::*;
 
@@ -57,10 +58,19 @@ impl FerriteWindow {
                 view.move_selection(Selection::previous_group, window, cx);
             }))
             .on_action(cx.listener(|view, _: &Run, window, cx| {
-                view.run_on_enter(false, window, cx);
+                view.run_on_enter(Way::Open, window, cx);
             }))
             .on_action(cx.listener(|view, _: &RunInNewTab, window, cx| {
-                view.run_on_enter(true, window, cx);
+                view.run_on_enter(Way::NewTab, window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &Reveal, window, cx| {
+                view.run_on_enter(Way::Reveal, window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &OtherPane, window, cx| {
+                view.run_on_enter(Way::OtherPane, window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &CopyPath, window, cx| {
+                view.run_on_enter(Way::CopyPath, window, cx);
             }))
             .on_action(cx.listener(|view, _: &Back, window, cx| {
                 view.command_center_back(window, cx);

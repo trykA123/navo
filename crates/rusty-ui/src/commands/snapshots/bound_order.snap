@@ -381,6 +381,12 @@ command_center.run | enter | CommandCenter
 command_center.run | enter | CommandCenter > Input
 command_center.run_in_new_tab | alt-enter | CommandCenter
 command_center.run_in_new_tab | alt-enter | CommandCenter > Input
+command_center.reveal | shift-enter | CommandCenter
+command_center.reveal | shift-enter | CommandCenter > Input
+command_center.other_pane | ctrl-enter | CommandCenter
+command_center.other_pane | ctrl-enter | CommandCenter > Input
+command_center.copy_path | ctrl-shift-c | CommandCenter
+command_center.copy_path | ctrl-shift-c | CommandCenter > Input
 command_center.back | escape | CommandCenter
 command_center.back | escape | CommandCenter > Input
 [activity_strip]

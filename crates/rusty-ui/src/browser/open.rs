@@ -29,12 +29,16 @@ impl Browser {
         let Ok(location) = tab.location().join(&ProviderPath::from_text(&entry.name)) else {
             return false;
         };
-        if !entry.is_folder && !is_link {
-            (self.launcher)(&location);
-            self.seen.push(Seen::File(location));
-            return true;
+        self.open_location(location, entry.is_folder || is_link)
+    }
+
+    pub fn open_location(&mut self, location: Location, folder: bool) -> bool {
+        if folder {
+            return self.command(&Command::PaneNavigate { location }).is_ok();
         }
-        self.command(&Command::PaneNavigate { location }).is_ok()
+        (self.launcher)(&location);
+        self.seen.push(Seen::File(location));
+        true
     }
 
     pub fn set_launcher(&mut self, launcher: Launcher) {
@@ -88,5 +92,41 @@ impl Browser {
                 .insert(self.state.active_tab().id(), name);
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::super::tests::{browser_at, fake, here, settle};
+    use super::Seen;
+
+    #[test]
+    fn a_folder_opens_in_the_active_pane() {
+        let fs = fake();
+        let mut browser = browser_at(&fs, "home");
+        settle(&mut browser);
+        assert!(browser.open_location(fs.location("home/docs"), true));
+        settle(&mut browser);
+        assert_eq!(here(&browser), fs.location("home/docs").as_str());
+    }
+
+    #[test]
+    fn a_file_launches_with_the_launcher_and_is_recorded() {
+        let fs = fake();
+        let mut browser = browser_at(&fs, "home");
+        settle(&mut browser);
+        let launched = Arc::new(Mutex::new(Vec::new()));
+        let sink = launched.clone();
+        browser.set_launcher(Arc::new(move |location| {
+            sink.lock().unwrap().push(location.as_str().to_owned());
+        }));
+        browser.take_seen();
+        let file = fs.location("home/docs/report.txt");
+        assert!(browser.open_location(file.clone(), false));
+        assert_eq!(*launched.lock().unwrap(), [file.as_str().to_owned()]);
+        assert_eq!(browser.take_seen(), [Seen::File(file)]);
+        assert_eq!(here(&browser), fs.location("home").as_str());
     }
 }

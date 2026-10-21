@@ -253,8 +253,8 @@ impl FerriteWindow {
         open.rows = rows.into();
         let run = open.run_when_shown.take();
         self.push_command_center(window, cx);
-        if let Some(new_tab) = run {
-            self.run_selected(new_tab, window, cx);
+        if let Some(way) = run {
+            self.run_selected(way, window, cx);
         }
     }
 }

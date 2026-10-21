@@ -60,7 +60,7 @@ struct Arrival {
     is_hand_off: bool,
 }
 
-async fn look_up(
+pub(super) async fn look_up(
     provider: Arc<dyn ProviderOps>,
     location: Location,
     cx: &mut AsyncWindowContext,

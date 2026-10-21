@@ -1,4 +1,5 @@
 mod keys;
+mod open;
 mod run;
 mod search;
 
@@ -64,7 +65,7 @@ struct Open {
     keys: HintKeys,
     restore: Option<FocusHandle>,
     search: search::Search,
-    run_when_shown: Option<bool>,
+    run_when_shown: Option<open::Way>,
     _events: Subscription,
 }
 
@@ -265,7 +266,7 @@ impl FerriteWindow {
                 if let Some(open) = self.command_center.open.as_mut() {
                     open.selection = Selection::at(&open.rows, *index);
                 }
-                self.run_selected(modifiers.alt, window, cx);
+                self.run_selected(open::Way::of_click(*modifiers), window, cx);
             }
             CommandCenterEvent::Dismissed => self.close_command_center(window, cx),
         }

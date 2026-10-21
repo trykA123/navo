@@ -647,6 +647,33 @@ keys = ["alt-enter"]
 context = "CommandCenter > Input"
 
 [[bind]]
+command = "command_center.reveal"
+keys = ["shift-enter"]
+
+[[bind]]
+command = "command_center.reveal"
+keys = ["shift-enter"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.other_pane"
+keys = ["ctrl-enter"]
+
+[[bind]]
+command = "command_center.other_pane"
+keys = ["ctrl-enter"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.copy_path"
+keys = ["ctrl-shift-c"]
+
+[[bind]]
+command = "command_center.copy_path"
+keys = ["ctrl-shift-c"]
+context = "CommandCenter > Input"
+
+[[bind]]
 command = "command_center.back"
 keys = ["escape"]
 

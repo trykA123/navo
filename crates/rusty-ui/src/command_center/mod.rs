@@ -44,6 +44,9 @@ gpui_kit::actions!(
         PreviousGroup,
         Run,
         RunInNewTab,
+        Reveal,
+        OtherPane,
+        CopyPath,
         Back
     ]
 );
