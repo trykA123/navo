@@ -8,7 +8,7 @@ pub(super) enum Found {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum DirectoryAction {
     Accept,
-    Repair,
+    Recreate,
     Refuse(&'static str),
 }
 
@@ -17,7 +17,7 @@ pub(super) fn directory_action(found: Found, trusted: bool, install: bool) -> Di
         Found::ReparsePoint => DirectoryAction::Refuse("is a reparse point"),
         Found::Other => DirectoryAction::Refuse("is not a directory"),
         Found::Directory if trusted => DirectoryAction::Accept,
-        Found::Directory if install => DirectoryAction::Repair,
+        Found::Directory if install => DirectoryAction::Recreate,
         Found::Directory => {
             DirectoryAction::Refuse("directory owner or protected ACL failed verification")
         }
@@ -26,8 +26,8 @@ pub(super) fn directory_action(found: Found, trusted: bool, install: bool) -> Di
 
 pub(super) fn apply(
     action: DirectoryAction,
-    path: &std::path::Path,
-    take_ownership: impl FnOnce() -> std::io::Result<()>,
+    move_aside: impl FnOnce() -> std::io::Result<()>,
+    create_fresh: impl FnOnce() -> std::io::Result<()>,
 ) -> std::io::Result<bool> {
     match action {
         DirectoryAction::Accept => Ok(false),
@@ -35,9 +35,9 @@ pub(super) fn apply(
             std::io::ErrorKind::PermissionDenied,
             reason,
         )),
-        DirectoryAction::Repair => {
-            take_ownership()?;
-            super::install_plan::clear_directory(path)?;
+        DirectoryAction::Recreate => {
+            move_aside()?;
+            create_fresh()?;
             Ok(true)
         }
     }

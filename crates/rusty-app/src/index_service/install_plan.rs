@@ -48,11 +48,19 @@ impl CopyPlan {
     }
 
     pub fn restore(&self) -> io::Result<()> {
-        let _ = std::fs::remove_file(&self.temporary);
-        if self.executable.try_exists()? || !self.previous.try_exists()? {
-            return Ok(());
+        let cleanup = self.discard_copy();
+        if !self.previous.try_exists()? {
+            return cleanup;
         }
-        std::fs::rename(&self.previous, &self.executable)
+        std::fs::rename(&self.previous, &self.executable)?;
+        cleanup
+    }
+
+    pub fn discard_copy(&self) -> io::Result<()> {
+        match std::fs::remove_file(&self.temporary) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
     }
 
     pub fn delete_old(&self) -> io::Result<()> {
@@ -82,6 +90,8 @@ pub(super) enum Step {
     Configure,
     Start,
     Restore,
+    DiscardCopy,
+    RestoreConfiguration,
     DeleteOld,
 }
 
@@ -99,29 +109,47 @@ pub(super) fn run_install(
     mut execute: impl FnMut(Step) -> io::Result<()>,
 ) -> io::Result<()> {
     let _ = execute(Step::DeleteOld);
-    match install_steps(exists)
-        .iter()
-        .try_for_each(|&step| execute(step))
-    {
-        Ok(()) => {
-            let _ = execute(Step::DeleteOld);
-            Ok(())
+    let mut completed = Vec::new();
+    for &step in install_steps(exists) {
+        if let Err(error) = execute(step) {
+            return Err(recover(exists, error, &completed, execute));
         }
-        Err(error) => Err(recover(exists, error, execute)),
+        completed.push(step);
     }
+    let _ = execute(Step::DeleteOld);
+    Ok(())
 }
 
 fn recover(
     exists: bool,
     error: io::Error,
+    completed: &[Step],
     mut execute: impl FnMut(Step) -> io::Result<()>,
 ) -> io::Error {
     let mut failures = Vec::new();
-    if let Err(restore) = execute(Step::Restore) {
-        failures.push(format!("restoring the previous executable: {restore}"));
+    let replaced = completed.contains(&Step::Replace);
+    let mut rollback = Vec::new();
+    if exists && replaced {
+        rollback.push((Step::Stop, "stopping the replacement service"));
     }
-    if exists && let Err(start) = execute(Step::Start) {
-        failures.push(format!("restarting the service: {start}"));
+    if completed.contains(&Step::RenameOld) {
+        rollback.push((Step::Restore, "restoring the previous executable"));
+    } else if completed.contains(&Step::Copy) {
+        rollback.push((Step::DiscardCopy, "discarding the temporary copy"));
+    }
+    if exists && replaced {
+        rollback.push((
+            Step::RestoreConfiguration,
+            "restoring service configuration",
+        ));
+    }
+    if exists {
+        rollback.push((Step::Start, "restarting the service"));
+    }
+    for (step, context) in rollback {
+        if let Err(error) = execute(step) {
+            failures.push(format!("{context}: {error}"));
+        }
     }
     if failures.is_empty() {
         return error;

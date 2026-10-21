@@ -17,19 +17,22 @@ use windows_sys::Win32::Security::Authorization::{
 use windows_sys::Win32::Security::{
     ACL, DACL_SECURITY_INFORMATION, GetSecurityDescriptorControl, GetSecurityDescriptorDacl,
     IsWellKnownSid, OWNER_SECURITY_INFORMATION, SE_DACL_PROTECTED, SECURITY_ATTRIBUTES,
-    WinBuiltinAdministratorsSid, WinLocalSystemSid,
+    WinBuiltinAdministratorsSid,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateDirectoryW, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
-    OPEN_EXISTING, READ_CONTROL, WRITE_DAC, WRITE_OWNER,
+    MoveFileExW, OPEN_EXISTING, READ_CONTROL,
 };
 use windows_sys::Win32::System::Com::CoTaskMemFree;
 use windows_sys::Win32::UI::Shell::SHGetKnownFolderPath;
 
-use super::directory_policy::{Found, apply, directory_action};
+use super::directory_policy::{DirectoryAction, Found, apply, directory_action};
 use super::elevation::{LocalAllocation, wide};
+
+#[path = "root.rs"]
+mod root;
 
 #[derive(Clone, Copy)]
 pub(super) enum Policy {
@@ -48,8 +51,18 @@ impl ProtectedDirectory {
             let _ = super::ownership::enable_privileges();
         }
         let mut guards = Vec::new();
+        if let Some(parent) = paths.first().and_then(|path| path.parent()) {
+            let guard = open_directory(parent)?;
+            if found(&guard)? != Found::Directory || !root::is_trusted(&guard)? {
+                return Err(denied(&format!(
+                    "{}: install parent is not trusted",
+                    parent.display()
+                )));
+            }
+            guards.push(guard);
+        }
         for path in paths {
-            let guard = open_verified(path, &descriptor, policy, install).map_err(|error| {
+            let guard = open_verified(path, &descriptor, install).map_err(|error| {
                 io::Error::new(error.kind(), format!("{}: {error}", path.display()))
             })?;
             guards.push(guard);
@@ -69,25 +82,77 @@ impl ProtectedDirectory {
 fn open_verified(
     path: &Path,
     descriptor: &LocalAllocation,
-    policy: Policy,
     install: bool,
 ) -> io::Result<OwnedHandle> {
     if install {
         create_directory(path, descriptor)?;
     }
-    let guard = open_directory(path, install)?;
+    let guard = open_directory(path)?;
     let kind = found(&guard)?;
-    let trusted = kind == Found::Directory && is_trusted(&guard, descriptor, policy)?;
+    let trusted = kind == Found::Directory && is_trusted(&guard, descriptor)?;
     let action = directory_action(kind, trusted, install);
-    let repaired = apply(action, path, || {
-        super::ownership::take_ownership(&guard, descriptor)
-    })?;
-    if repaired && !is_trusted(&guard, descriptor, policy)? {
+    if action == DirectoryAction::Accept {
+        return Ok(guard);
+    }
+    drop(guard);
+    let mut moved = None;
+    apply(
+        action,
+        || {
+            moved = Some(move_aside(path)?);
+            Ok(())
+        },
+        || {
+            if !create_directory(path, descriptor)? {
+                return Err(denied(
+                    "directory appeared while creating a trusted replacement",
+                ));
+            }
+            Ok(())
+        },
+    )?;
+    let guard = open_directory(path)?;
+    if found(&guard)? != Found::Directory || !is_trusted(&guard, descriptor)? {
         return Err(denied(
-            "directory owner or protected ACL failed verification after repair",
+            "fresh directory owner or protected ACL failed verification",
         ));
     }
+    if let Some(moved) = moved {
+        let _ = std::fs::remove_dir_all(moved);
+    }
     Ok(guard)
+}
+
+fn move_aside(path: &Path) -> io::Result<PathBuf> {
+    let mut name = path
+        .file_name()
+        .ok_or_else(|| denied("missing directory name"))?
+        .to_os_string();
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(io::Error::other)?
+        .as_nanos();
+    name.push(format!(".untrusted.{}.{nonce}", std::process::id()));
+    let moved = path.with_file_name(name);
+    let source = path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let destination = moved
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    // SAFETY: both paths are terminated and live; zero flags refuse an existing destination.
+    if unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0) } == 0 {
+        let error = io::Error::last_os_error();
+        return Err(io::Error::new(
+            error.kind(),
+            format!("cannot move untrusted directory aside; install refused: {error}"),
+        ));
+    }
+    Ok(moved)
 }
 
 struct FolderAllocation(*mut std::ffi::c_void);
@@ -147,7 +212,7 @@ fn descriptor(policy: Policy) -> io::Result<LocalAllocation> {
     Ok(descriptor)
 }
 
-fn create_directory(path: &Path, descriptor: &LocalAllocation) -> io::Result<()> {
+fn create_directory(path: &Path, descriptor: &LocalAllocation) -> io::Result<bool> {
     let path = path
         .as_os_str()
         .encode_wide()
@@ -164,12 +229,12 @@ fn create_directory(path: &Path, descriptor: &LocalAllocation) -> io::Result<()>
         if error.raw_os_error() != Some(ERROR_ALREADY_EXISTS as i32) {
             return Err(error);
         }
+        return Ok(false);
     }
-    Ok(())
+    Ok(true)
 }
 
-fn open_directory(path: &Path, install: bool) -> io::Result<OwnedHandle> {
-    let repair = if install { WRITE_OWNER | WRITE_DAC } else { 0 };
+fn open_directory(path: &Path) -> io::Result<OwnedHandle> {
     let path = path
         .as_os_str()
         .encode_wide()
@@ -179,7 +244,7 @@ fn open_directory(path: &Path, install: bool) -> io::Result<OwnedHandle> {
     let raw = unsafe {
         CreateFileW(
             path.as_ptr(),
-            READ_CONTROL | FILE_READ_ATTRIBUTES | repair,
+            READ_CONTROL | FILE_READ_ATTRIBUTES,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             ptr::null(),
             OPEN_EXISTING,
@@ -210,11 +275,7 @@ fn found(handle: &OwnedHandle) -> io::Result<Found> {
     })
 }
 
-fn is_trusted(
-    handle: &OwnedHandle,
-    expected: &LocalAllocation,
-    policy: Policy,
-) -> io::Result<bool> {
+fn is_trusted(handle: &OwnedHandle, expected: &LocalAllocation) -> io::Result<bool> {
     let mut owner = ptr::null_mut();
     let mut actual = LocalAllocation(ptr::null_mut());
     // SAFETY: all outputs are writable; actual owns the returned security descriptor.
@@ -234,11 +295,8 @@ fn is_trusted(
         return Err(io::Error::from_raw_os_error(code as i32));
     }
     // SAFETY: owner refers to the live actual security descriptor.
-    let trusted_owner = !owner.is_null()
-        && unsafe {
-            IsWellKnownSid(owner, WinBuiltinAdministratorsSid) != 0
-                || (matches!(policy, Policy::Data) && IsWellKnownSid(owner, WinLocalSystemSid) != 0)
-        };
+    let trusted_owner =
+        !owner.is_null() && unsafe { IsWellKnownSid(owner, WinBuiltinAdministratorsSid) != 0 };
     let expected =
         protected_acl(expected).ok_or_else(|| denied("expected ACL is not protected"))?;
     Ok(trusted_owner && protected_acl(&actual) == Some(expected))

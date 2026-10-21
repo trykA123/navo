@@ -20,6 +20,8 @@ use super::policy::{FAILURE_DELAYS, RESET_SECONDS, RESTART_CLEAN_STOPS};
 use super::scm::{ServiceHandle, checked, open_manager, service_handle, service_name};
 use super::storage::Storage;
 
+mod configuration;
+
 pub(super) fn install() -> io::Result<()> {
     let config = super::session::installation_config()?;
     let storage = Storage::open(true)?;
@@ -32,6 +34,9 @@ pub(super) fn install() -> io::Result<()> {
     let command = binary_command(&plan);
     let manager = open_manager(SC_MANAGER_CREATE_SERVICE | SC_MANAGER_CONNECT)?;
     let (service, exists) = register(&manager, &command)?;
+    let previous = exists
+        .then(|| configuration::Configuration::read(&service))
+        .transpose()?;
     let result = run_install(exists, |step| match step {
         Step::Stop => stop(&service),
         Step::Copy => plan.copy_from(&std::env::current_exe()?),
@@ -42,6 +47,11 @@ pub(super) fn install() -> io::Result<()> {
             .and_then(|()| storage.write_config(&config)),
         Step::Start => start(&service),
         Step::Restore => plan.restore(),
+        Step::DiscardCopy => plan.discard_copy(),
+        Step::RestoreConfiguration => match &previous {
+            Some(previous) => previous.restore(&service),
+            None => Ok(()),
+        },
         Step::DeleteOld => plan.delete_old(),
     });
     if let Err(error) = result {

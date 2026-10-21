@@ -1,6 +1,6 @@
 #![allow(
     unsafe_code,
-    reason = "taking ownership of a planted directory requires Win32 token and security calls"
+    reason = "reading protected directories requires Win32 token privileges"
 )]
 
 use std::io;
@@ -9,13 +9,10 @@ use std::ptr;
 
 use windows_sys::Win32::Foundation::LUID;
 use windows_sys::Win32::Security::{
-    AdjustTokenPrivileges, DACL_SECURITY_INFORMATION, LUID_AND_ATTRIBUTES, LookupPrivilegeValueW,
-    OWNER_SECURITY_INFORMATION, SE_BACKUP_NAME, SE_PRIVILEGE_ENABLED, SE_RESTORE_NAME,
-    SE_TAKE_OWNERSHIP_NAME, SetKernelObjectSecurity, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES,
+    AdjustTokenPrivileges, LUID_AND_ATTRIBUTES, LookupPrivilegeValueW, SE_BACKUP_NAME,
+    SE_PRIVILEGE_ENABLED, SE_RESTORE_NAME, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-use super::elevation::LocalAllocation;
 
 pub(super) fn enable_privileges() -> io::Result<()> {
     let mut raw = ptr::null_mut();
@@ -25,7 +22,7 @@ pub(super) fn enable_privileges() -> io::Result<()> {
     }
     // SAFETY: OpenProcessToken succeeded and transferred a uniquely owned token handle.
     let token = unsafe { OwnedHandle::from_raw_handle(raw) };
-    for name in [SE_TAKE_OWNERSHIP_NAME, SE_RESTORE_NAME, SE_BACKUP_NAME] {
+    for name in [SE_RESTORE_NAME, SE_BACKUP_NAME] {
         let mut luid = LUID::default();
         // SAFETY: name is a static NUL-terminated privilege name and luid is writable.
         if unsafe { LookupPrivilegeValueW(ptr::null(), name, &mut luid) } == 0 {
@@ -52,24 +49,6 @@ pub(super) fn enable_privileges() -> io::Result<()> {
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
-    }
-    Ok(())
-}
-
-pub(super) fn take_ownership(
-    directory: &OwnedHandle,
-    descriptor: &LocalAllocation,
-) -> io::Result<()> {
-    // SAFETY: the handle has WRITE_OWNER and WRITE_DAC access; descriptor is a live self-relative descriptor whose control marks the DACL protected.
-    let ok = unsafe {
-        SetKernelObjectSecurity(
-            directory.as_raw_handle(),
-            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-            descriptor.0,
-        )
-    };
-    if ok == 0 {
-        return Err(io::Error::last_os_error());
     }
     Ok(())
 }

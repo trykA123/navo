@@ -39,7 +39,13 @@ fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
         assert_eq!(result.unwrap_err().to_string(), "original failure");
         assert_eq!(calls[0], DeleteOld);
         assert_eq!(&calls[1..=end + 1], &steps[..=end]);
-        assert_eq!(&calls[end + 2..], &[Restore, Start], "after {failed:?}");
+        let rollback: &[Step] = match failed {
+            Copy => &[Start],
+            RenameOld => &[DiscardCopy, Start],
+            Replace => &[Restore, Start],
+            _ => &[Stop, Restore, RestoreConfiguration, Start],
+        };
+        assert_eq!(&calls[end + 2..], rollback, "after {failed:?}");
     }
 }
 
@@ -81,7 +87,7 @@ fn replacement_failure_restores_the_previous_executable() {
 }
 
 #[test]
-fn restore_keeps_a_new_image_that_is_already_in_place() {
+fn restore_puts_the_old_image_back_over_the_replacement() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 7);
     std::fs::create_dir_all(&plan.directory).unwrap();
@@ -90,7 +96,93 @@ fn restore_keeps_a_new_image_that_is_already_in_place() {
     plan.rename_old().unwrap();
     plan.replace().unwrap();
     plan.restore().unwrap();
-    assert_eq!(std::fs::read(&plan.executable).unwrap(), b"new");
+    assert_eq!(std::fs::read(&plan.executable).unwrap(), b"old");
+    assert!(!plan.previous.exists());
+}
+
+#[test]
+fn every_failure_after_replace_restores_the_old_image_and_configuration_before_start() {
+    use Step::*;
+    for failed in [Stop, Configure, Start] {
+        let root = tempfile::tempdir().unwrap();
+        let plan = CopyPlan::new(root.path(), 7);
+        std::fs::create_dir_all(&plan.directory).unwrap();
+        std::fs::write(plan.directory.join("new.exe"), b"new").unwrap();
+        std::fs::write(&plan.executable, b"old").unwrap();
+        let previous = previous_service_configuration();
+        let mut configuration = previous.clone();
+        let (mut running, mut injected) = (true, false);
+        let mut calls = Vec::new();
+        let result = run_install(true, |step| {
+            calls.push(step);
+            if step == Start && injected {
+                assert_eq!(std::fs::read(&plan.executable).unwrap(), b"old");
+                assert_eq!(configuration, previous);
+            }
+            execute_install_step(&plan, &mut configuration, &mut running, step)?;
+            if step == failed && !injected {
+                injected = true;
+                return Err(io::Error::other("injected failure"));
+            }
+            Ok(())
+        });
+        assert!(result.is_err(), "after {failed:?}");
+        assert_eq!(
+            std::fs::read(&plan.executable).unwrap(),
+            b"old",
+            "after {failed:?}"
+        );
+        assert_eq!(configuration, previous, "after {failed:?}");
+        assert!(running, "after {failed:?}");
+        assert!(calls.ends_with(&[Restore, RestoreConfiguration, Start]));
+    }
+}
+
+type ServiceConfiguration = (&'static str, u32, Vec<(u32, u32)>, &'static str, bool, bool);
+
+fn previous_service_configuration() -> ServiceConfiguration {
+    (
+        "old path",
+        3,
+        vec![(1, 7000)],
+        "old description",
+        false,
+        true,
+    )
+}
+
+fn execute_install_step(
+    plan: &CopyPlan,
+    configuration: &mut ServiceConfiguration,
+    running: &mut bool,
+    step: Step,
+) -> io::Result<()> {
+    use Step::*;
+    match step {
+        Copy => plan.copy_from(&plan.directory.join("new.exe"))?,
+        RenameOld => plan.rename_old()?,
+        Replace => plan.replace()?,
+        Stop => *running = false,
+        Configure => {
+            *configuration = (
+                "new path",
+                2,
+                vec![(1, 5000)],
+                "new description",
+                true,
+                false,
+            )
+        }
+        Start => *running = true,
+        Restore => {
+            assert!(!*running);
+            plan.restore()?;
+        }
+        RestoreConfiguration => *configuration = previous_service_configuration(),
+        DiscardCopy => plan.discard_copy()?,
+        DeleteOld => plan.delete_old()?,
+    }
+    Ok(())
 }
 
 #[test]
@@ -178,9 +270,9 @@ fn only_a_user_sid_type_is_accepted() {
 }
 
 #[test]
-fn only_install_repairs_a_planted_directory_and_a_reparse_point_is_refused() {
-    use DirectoryAction::{Accept, Refuse, Repair};
-    assert_eq!(directory_action(Found::Directory, false, true), Repair);
+fn only_install_recreates_an_untrusted_directory_and_a_reparse_point_is_refused() {
+    use DirectoryAction::{Accept, Recreate, Refuse};
+    assert_eq!(directory_action(Found::Directory, false, true), Recreate);
     assert!(matches!(
         directory_action(Found::Directory, false, false),
         Refuse(_)
@@ -234,24 +326,64 @@ fn clearing_the_index_never_follows_a_link_out_of_it() {
 }
 
 #[test]
-fn a_repaired_folder_is_emptied_and_a_trusted_folder_is_left_as_is() {
+fn an_untrusted_directory_is_moved_aside_before_a_fresh_directory_is_created() {
     use super::directory_policy::apply;
     let root = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(root.path().join("planted")).unwrap();
-    std::fs::write(root.path().join("service.json"), b"planted").unwrap();
-    assert!(!apply(DirectoryAction::Accept, root.path(), || panic!("no repair")).unwrap());
-    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 2);
-    let mut owned = false;
-    let repaired = apply(DirectoryAction::Repair, root.path(), || {
-        owned = true;
-        Ok(())
-    });
-    assert!(repaired.unwrap() && owned);
-    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    let path = root.path().join("index");
+    let moved = root.path().join("index.untrusted.1");
+    std::fs::create_dir(&path).unwrap();
+    std::fs::write(path.join("service.json"), b"planted").unwrap();
+    assert!(
+        !apply(
+            DirectoryAction::Accept,
+            || panic!("no move"),
+            || panic!("no create")
+        )
+        .unwrap()
+    );
+    let recreated = apply(
+        directory_action(Found::Directory, false, true),
+        || std::fs::rename(&path, &moved),
+        || std::fs::create_dir(&path),
+    );
+    assert!(recreated.unwrap());
+    assert_eq!(std::fs::read_dir(&path).unwrap().count(), 0);
+    assert_eq!(
+        std::fs::read(moved.join("service.json")).unwrap(),
+        b"planted"
+    );
     let refused = apply(
         DirectoryAction::Refuse("is a reparse point"),
-        root.path(),
-        || Ok(()),
+        || panic!("no move"),
+        || panic!("no create"),
     );
     assert_eq!(refused.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+}
+
+#[test]
+fn untrusted_directory_recovery_moves_aside_then_creates_fresh() {
+    let calls = std::cell::RefCell::new(Vec::new());
+    super::directory_policy::apply(
+        directory_action(Found::Directory, false, true),
+        || {
+            calls.borrow_mut().push("move aside");
+            Ok(())
+        },
+        || {
+            calls.borrow_mut().push("create fresh");
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(calls.into_inner(), ["move aside", "create fresh"]);
+}
+
+#[test]
+fn a_failed_move_refuses_install_without_creating_a_directory() {
+    let result = super::directory_policy::apply(
+        DirectoryAction::Recreate,
+        || Err(io::Error::new(io::ErrorKind::PermissionDenied, "held open")),
+        || panic!("must not create after a failed move"),
+    );
+    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
 }
