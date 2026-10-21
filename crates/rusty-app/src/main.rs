@@ -16,6 +16,7 @@ mod drives;
 mod editor;
 mod files;
 mod gui;
+mod index_service;
 mod instance;
 mod jobs;
 mod keymap;
@@ -61,6 +62,7 @@ fn execute(
     }
     let command = match parsed {
         Ok(Command::PdfHelper) => return pdf_helper::run(),
+        Ok(Command::IndexService(action)) => return index_service::run(action),
         Ok(command) => command,
         Err(usage) => {
             eprintln!("{usage}");
@@ -110,6 +112,7 @@ fn execute_command(
         Command::DiagReport(path) => write_report(&path, started, &profile),
         Command::CrashTest(_) => crash_test(&profile),
         Command::PdfHelper => pdf_helper::run(),
+        Command::IndexService(action) => index_service::run(action),
     }
 }
 

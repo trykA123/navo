@@ -54,6 +54,7 @@ fn journal(id: u64, first: i64, next: i64, lowest: i64) -> Vec<u8> {
 }
 
 struct FakeVolume {
+    cancel: Option<crate::pipe::CancelToken>,
     queries: VecDeque<Vec<u8>>,
     buffers: VecDeque<Option<Vec<u8>>>,
     cursors: Vec<u64>,
@@ -65,6 +66,7 @@ struct FakeVolume {
 impl FakeVolume {
     fn new(buffers: Vec<Option<Vec<u8>>>) -> Self {
         Self {
+            cancel: None,
             queries: [journal(7, 10, 100, 1), journal(7, 10, 120, 1)].into(),
             buffers: buffers.into(),
             cursors: Vec::new(),
@@ -82,6 +84,9 @@ impl VolumeIo for FakeVolume {
 
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
         self.cursors.push(cursor);
+        if let Some(cancel) = &self.cancel {
+            cancel.cancel();
+        }
         Ok(self.buffers.pop_front().unwrap())
     }
 
@@ -98,6 +103,18 @@ impl VolumeIo for FakeVolume {
 }
 
 #[test]
+fn enumeration_cancellation_discards_partial_results_before_the_next_batch() {
+    let cancel = crate::pipe::CancelToken::new();
+    let mut volume = FakeVolume::new(vec![Some(bytes(70, &[record(8, ROOT, "first")])), None]);
+    volume.cancel = Some(cancel.clone());
+    assert!(matches!(
+        enumerate_volume(&mut volume, 'C', usize::MAX, &cancel),
+        Err(NtfsError::Cancelled)
+    ));
+    assert_eq!(volume.cursors, [0]);
+}
+
+#[test]
 fn enumeration_uses_header_cursor_and_keeps_children_until_later_buffers() {
     let mut volume = FakeVolume::new(vec![
         Some(bytes(70, &[record(80, 90, "child")])),
@@ -107,7 +124,13 @@ fn enumeration_uses_header_cursor_and_keeps_children_until_later_buffers() {
         )),
         None,
     ]);
-    let result = enumerate_volume(&mut volume, 'c', usize::MAX).unwrap();
+    let result = enumerate_volume(
+        &mut volume,
+        'c',
+        usize::MAX,
+        &crate::pipe::CancelToken::new(),
+    )
+    .unwrap();
     assert_eq!(volume.cursors, [0, 70, 200]);
     assert_eq!(result.index.position, POSITION);
     assert!(result.unresolved.is_empty());
@@ -127,7 +150,13 @@ fn enumeration_uses_header_cursor_and_keeps_children_until_later_buffers() {
 fn enumeration_advances_header_only_buffers_without_treating_them_as_eof() {
     let next = (1u64 << 63) | 100;
     let mut volume = FakeVolume::new(vec![Some(bytes(next, &[])), None]);
-    enumerate_volume(&mut volume, 'C', usize::MAX).unwrap();
+    enumerate_volume(
+        &mut volume,
+        'C',
+        usize::MAX,
+        &crate::pipe::CancelToken::new(),
+    )
+    .unwrap();
     assert_eq!(volume.cursors, [0, next]);
 }
 
@@ -139,7 +168,15 @@ fn enumeration_rejects_stalled_or_backward_cursors_and_truncated_records() {
         vec![Some(vec![0; 7])],
         vec![Some(vec![0; 9])],
     ] {
-        assert!(enumerate_volume(&mut FakeVolume::new(buffers), 'C', usize::MAX).is_err());
+        assert!(
+            enumerate_volume(
+                &mut FakeVolume::new(buffers),
+                'C',
+                usize::MAX,
+                &crate::pipe::CancelToken::new()
+            )
+            .is_err()
+        );
     }
 }
 
@@ -149,7 +186,7 @@ fn enumeration_reports_orphans_at_the_end_and_respects_the_record_limit() {
         100,
         &[record(8, 9, "orphan"), record(10, ROOT, "known")],
     ))]);
-    let result = enumerate_volume(&mut volume, 'C', 1).unwrap();
+    let result = enumerate_volume(&mut volume, 'C', 1, &crate::pipe::CancelToken::new()).unwrap();
     assert_eq!(result.unresolved.len(), 1);
     assert_eq!(result.unresolved[0].missing_reference, 9);
     assert_eq!(result.index.table.len(), 1);
@@ -161,7 +198,12 @@ fn enumeration_requires_a_rebuild_if_the_journal_changes_or_wraps_during_the_sca
         let mut volume = FakeVolume::new(vec![None]);
         volume.queries[1] = state;
         assert!(matches!(
-            enumerate_volume(&mut volume, 'C', usize::MAX),
+            enumerate_volume(
+                &mut volume,
+                'C',
+                usize::MAX,
+                &crate::pipe::CancelToken::new()
+            ),
             Err(NtfsError::Reenumerate)
         ));
     }
@@ -499,7 +541,8 @@ fn windows_system_volume_first_records() {
             .any(|entry| is_root(entry.file_id) && entry.flags.contains(Flags::FOLDER))
     );
 
-    let Enumeration { index, .. } = enumerate_volume(&mut volume, drive, 4096).unwrap();
+    let Enumeration { index, .. } =
+        enumerate_volume(&mut volume, drive, 4096, &crate::pipe::CancelToken::new()).unwrap();
     let root = index.ids[&5];
     assert!(index.table.flags(root).unwrap().contains(Flags::FOLDER));
     let (folder, _) = index

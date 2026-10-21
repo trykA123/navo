@@ -3,8 +3,8 @@
 pub mod file;
 pub mod fuzzy;
 pub mod host;
-#[cfg(any(windows, test))]
 pub mod ntfs;
+pub mod pipe;
 pub mod search;
 pub mod table;
 pub mod usn;

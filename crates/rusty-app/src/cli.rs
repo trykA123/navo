@@ -8,6 +8,7 @@ pub(crate) enum Command {
     DiagReport(PathBuf),
     CrashTest(PathBuf),
     PdfHelper,
+    IndexService(crate::index_service::Action),
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -22,7 +23,13 @@ pub(crate) struct Start {
 
 pub(crate) const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>]]";
 
-const STANDALONE: [&str; 4] = ["--version", "--diag-report", "--pdf-helper", "--crash-test"];
+const STANDALONE: [&str; 5] = [
+    "--version",
+    "--diag-report",
+    "--pdf-helper",
+    "--crash-test",
+    "--index-service",
+];
 const WINDOW_FLAGS: [&str; 5] = ["--view", "--profile", "--metrics", "--left", "--right"];
 
 impl Command {
@@ -30,6 +37,7 @@ impl Command {
         match self {
             Self::Open(start) => start.is_metrics(),
             Self::PdfHelper => false,
+            Self::IndexService(_) => false,
             Self::Version | Self::DiagReport(_) | Self::CrashTest(_) => true,
         }
     }
@@ -86,6 +94,11 @@ fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Co
     let command = match flag {
         "--version" => Command::Version,
         "--pdf-helper" => Command::PdfHelper,
+        "--index-service" => Command::IndexService(crate::index_service::Action::parse(
+            rest.next()
+                .as_deref()
+                .ok_or("--index-service needs a mode")?,
+        )?),
         "--crash-test" => Command::CrashTest(value(flag, rest.next())?),
         _ => Command::DiagReport(value(flag, rest.next())?),
     };

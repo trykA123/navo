@@ -3,9 +3,12 @@ use std::io;
 
 mod snapshot;
 
-use crate::table::{Flags, NO_PARENT, NameTable, TableChange, TableError};
-use crate::usn::{
-    FrnMap, JournalPosition, ParseError, PendingRenames, Resume, UsnBatch, parse_batch,
+use crate::table::{Flags, NameTable, TableChange, TableError};
+use crate::usn::{FrnMap, JournalPosition, ParseError, PendingRenames, UsnBatch};
+#[cfg(any(windows, test))]
+use crate::{
+    table::NO_PARENT,
+    usn::{Resume, parse_batch},
 };
 
 #[cfg(windows)]
@@ -35,6 +38,8 @@ pub enum NtfsError {
     Table(#[from] TableError),
     #[error("the journal changed or wrapped; enumerate the volume again")]
     Reenumerate,
+    #[error("NTFS enumeration cancelled")]
+    Cancelled,
 }
 
 #[derive(Debug)]
@@ -58,6 +63,7 @@ pub struct Enumeration {
 }
 
 impl NtfsIndex {
+    #[cfg(any(windows, test))]
     fn new(drive: char, position: JournalPosition) -> Result<Self, NtfsError> {
         volume_path(drive)?;
         let mut table = NameTable::new();
@@ -91,17 +97,20 @@ impl NtfsIndex {
     }
 }
 
+#[cfg(any(windows, test))]
 trait VolumeIo {
     fn query_journal(&mut self) -> Result<Vec<u8>, NtfsError>;
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError>;
     fn read_journal(&mut self, position: JournalPosition) -> Result<Vec<u8>, NtfsError>;
 }
 
+#[cfg(any(windows, test))]
 struct JournalState {
     position: JournalPosition,
     readable_from: i64,
 }
 
+#[cfg(any(windows, test))]
 impl JournalState {
     fn parse(bytes: &[u8]) -> Result<Self, NtfsError> {
         if bytes.len() < 56 {
@@ -133,10 +142,12 @@ impl JournalState {
     }
 }
 
+#[cfg(any(windows, test))]
 fn enumerate_volume(
     volume: &mut impl VolumeIo,
     drive: char,
     limit: usize,
+    cancel: &crate::pipe::CancelToken,
 ) -> Result<Enumeration, NtfsError> {
     let state = JournalState::parse(&volume.query_journal()?)?;
     let mut index = NtfsIndex::new(drive, state.position)?;
@@ -144,6 +155,9 @@ fn enumerate_volume(
     let mut cursor = 0;
     let mut count = 0;
     while count < limit {
+        if cancel.is_cancelled() {
+            return Err(NtfsError::Cancelled);
+        }
         let Some(bytes) = volume.enumerate(cursor)? else {
             break;
         };
@@ -168,6 +182,9 @@ fn enumerate_volume(
             )?;
         }
     }
+    if cancel.is_cancelled() {
+        return Err(NtfsError::Cancelled);
+    }
     JournalState::parse(&volume.query_journal()?)?.check(state.position)?;
     Ok(Enumeration {
         index,
@@ -175,6 +192,7 @@ fn enumerate_volume(
     })
 }
 
+#[cfg(any(windows, test))]
 fn read_volume_journal(
     volume: &mut impl VolumeIo,
     saved: JournalPosition,
@@ -186,6 +204,7 @@ fn read_volume_journal(
     Ok(batch)
 }
 
+#[cfg(any(windows, test))]
 fn journal_error(error: NtfsError) -> NtfsError {
     const JOURNAL_ENTRY_DELETED: i32 = 1181;
     match error {
@@ -205,6 +224,7 @@ fn validate_journal_cursor(batch: &UsnBatch, saved: JournalPosition) -> Result<(
     Ok(())
 }
 
+#[cfg(any(windows, test))]
 fn field<const N: usize>(bytes: &[u8], offset: usize) -> Result<[u8; N], NtfsError> {
     bytes
         .get(offset..)
@@ -213,6 +233,7 @@ fn field<const N: usize>(bytes: &[u8], offset: usize) -> Result<[u8; N], NtfsErr
         .ok_or(NtfsError::InvalidResponse("truncated metadata field"))
 }
 
+#[cfg(any(windows, test))]
 fn volume_path(drive: char) -> Result<Vec<u16>, NtfsError> {
     if !drive.is_ascii_alphabetic() {
         return Err(NtfsError::InvalidVolume);
@@ -222,6 +243,7 @@ fn volume_path(drive: char) -> Result<Vec<u16>, NtfsError> {
         .collect())
 }
 
+#[cfg(any(windows, test))]
 fn enum_request(cursor: u64) -> Vec<u8> {
     let mut bytes = vec![0; 24];
     bytes[..8].copy_from_slice(&cursor.to_le_bytes());
@@ -229,6 +251,7 @@ fn enum_request(cursor: u64) -> Vec<u8> {
     bytes
 }
 
+#[cfg(any(windows, test))]
 fn journal_request(position: JournalPosition) -> Vec<u8> {
     let mut bytes = vec![0; 40];
     bytes[..8].copy_from_slice(&position.next_usn.to_le_bytes());

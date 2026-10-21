@@ -6,7 +6,8 @@ use windows_sys::Win32::Foundation::{
     CloseHandle, ERROR_HANDLE_EOF, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    CreateFileW, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    GetVolumeInformationByHandleW, OPEN_EXISTING,
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::{
@@ -52,13 +53,40 @@ impl Volume {
         })
     }
 
-    pub fn enumerate(&mut self) -> Result<Enumeration, NtfsError> {
+    pub fn enumerate(
+        &mut self,
+        cancel: &crate::pipe::CancelToken,
+    ) -> Result<Enumeration, NtfsError> {
         let drive = self.drive;
-        enumerate_volume(self, drive, usize::MAX)
+        enumerate_volume(self, drive, usize::MAX, cancel)
     }
 
     pub fn read_journal(&mut self, saved: JournalPosition) -> Result<UsnBatch, NtfsError> {
         read_volume_journal(self, saved)
+    }
+
+    pub fn serial(&self) -> Result<u64, NtfsError> {
+        let mut serial = 0;
+        // SAFETY: the volume handle is live; serial is writable; optional buffers are NULL.
+        let ok = unsafe {
+            GetVolumeInformationByHandleW(
+                self.handle.0,
+                ptr::null_mut(),
+                0,
+                &mut serial,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                0,
+            )
+        };
+        if ok == 0 {
+            return Err(NtfsError::Io {
+                operation: "read opened volume serial",
+                source: io::Error::last_os_error(),
+            });
+        }
+        Ok(u64::from(serial))
     }
 
     fn control(&self, code: u32, input: &[u8], capacity: usize) -> Result<Vec<u8>, NtfsError> {
