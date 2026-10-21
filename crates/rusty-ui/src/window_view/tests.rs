@@ -593,11 +593,13 @@ fn a_program_that_is_not_there_keeps_the_prompt_open(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn shift_f4_lets_you_change_the_editor_and_folders_are_skipped(cx: &mut TestAppContext) {
+fn shift_f4_lets_you_change_the_editor_and_f4_opens_folders_too(cx: &mut TestAppContext) {
     let (window, view, log) = editor_window(cx, Some("vim.exe"));
     press(cx, window, &view, "f4");
     assert!(!prompt_open(cx, &view));
-    assert!(log.borrow().opened.is_empty());
+    let opened = log.borrow().opened.clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, "vim.exe");
     press(cx, window, &view, "down");
     press(cx, window, &view, "shift-f4");
     assert!(prompt_open(cx, &view));

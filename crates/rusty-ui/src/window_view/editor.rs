@@ -33,7 +33,7 @@ impl FerriteWindow {
         let target = tab
             .listing()
             .and_then(|listing| listing.get(row))
-            .filter(|entry| !entry.is_folder)
+            .filter(|entry| entry.name != "..")
             .and_then(|entry| {
                 tab.location()
                     .join(&rusty_core::ProviderPath::from_text(&entry.name))
