@@ -50,15 +50,4 @@ impl Field {
     pub fn is_windows_only(self) -> bool {
         matches!(self, Self::SearchDrives | Self::SearchRemovable)
     }
-
-    pub(super) fn is_unread_search(self) -> bool {
-        matches!(
-            self,
-            Self::SearchIndex
-                | Self::SearchDrives
-                | Self::SearchExclude
-                | Self::SearchNetwork
-                | Self::SearchRemovable
-        )
-    }
 }

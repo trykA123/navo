@@ -1,5 +1,9 @@
 mod service;
 
+mod index;
+
+pub use index::hooks as index_hooks;
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -110,6 +114,7 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
             let cleared = lock(&clear).clear_search_history();
             let _ = cleared.inspect_err(|error| report("clearing", error));
         }),
+        ..SearchHooks::none()
     }
 }
 

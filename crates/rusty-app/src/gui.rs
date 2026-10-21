@@ -85,10 +85,17 @@ pub(crate) fn pane_folders(start: &Start) -> Result<[Option<Location>; 2], Strin
     ])
 }
 
-fn session_state(dirs: Option<&StoreDirs>, home: &Location) -> AppState {
+fn session_state(
+    dirs: Option<&StoreDirs>,
+    home: &Location,
+    panes: [Option<Location>; 2],
+) -> AppState {
     let session = dirs.map(StoreDirs::session_file);
     let no_session = Path::new("");
-    initial_state(session.as_deref().unwrap_or(no_session), home.clone())
+    let mut state = initial_state(session.as_deref().unwrap_or(no_session), home.clone());
+    place_panes(&mut state, panes);
+    metrics::mark("session read");
+    state
 }
 
 pub(crate) fn open(launch: Launch) {
@@ -96,9 +103,7 @@ pub(crate) fn open(launch: Launch) {
     let settings_start = settings::start_from(dirs.as_ref());
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
-    let mut state = session_state(dirs.as_ref(), &home);
-    place_panes(&mut state, launch.panes);
-    metrics::mark("session read");
+    let state = session_state(dirs.as_ref(), &home, launch.panes);
     let memory = open_memory(dirs.as_ref());
     let local = Arc::new(LocalFs::new());
     let (operations, _instance, journal) = operations(dirs.as_ref(), &home, local.as_ref());
@@ -111,6 +116,8 @@ pub(crate) fn open(launch: Launch) {
     let remember = crate::search_hooks::Remember::default();
     let (settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
+    let mut search = crate::search_hooks::hooks(memory.clone(), remember);
+    search.index = crate::search_hooks::index_hooks(dirs.clone(), local.clone());
     tracing::info!(viewer = launch.view.is_some(), "window opening");
     metrics::mark("window opening");
     run(
@@ -122,7 +129,7 @@ pub(crate) fn open(launch: Launch) {
             operations,
             launcher: launch::launcher(),
             editor: editor::hooks(|name| std::env::var(name).ok()),
-            search: crate::search_hooks::hooks(memory.clone(), remember),
+            search,
             files: files::hooks(memory),
             kinds: rusty_ui::window_view::Kinds::builtin(),
             drives: drives::hooks(),

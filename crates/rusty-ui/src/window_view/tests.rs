@@ -61,7 +61,7 @@ use crate::browser::Operations;
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Mode};
 
-pub(super) fn two_panes(fs: &FakeFs) -> AppState {
+pub(crate) fn two_panes(fs: &FakeFs) -> AppState {
     let mut state = AppState::new(fs.location("home"));
     let _ = apply(
         &mut state,
@@ -72,7 +72,7 @@ pub(super) fn two_panes(fs: &FakeFs) -> AppState {
     state
 }
 
-pub(super) fn fake() -> Arc<FakeFs> {
+pub(crate) fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home/docs");
     fs.add_file("home/docs/report.txt", 7);
@@ -110,7 +110,7 @@ pub(super) fn with_fkey_bar(values: Values) -> Values {
     })
 }
 
-pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
+pub(crate) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
     StartOptions {
         state,
         provider: fs,
@@ -141,7 +141,7 @@ pub(super) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
     }
 }
 
-pub(super) fn open_options(
+pub(crate) fn open_options(
     cx: &mut TestAppContext,
     options: StartOptions,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
@@ -257,7 +257,7 @@ pub(super) fn home_beside_dest(fs: &FakeFs) -> AppState {
     state
 }
 
-pub(super) fn press(
+pub(crate) fn press(
     cx: &mut TestAppContext,
     window: AnyWindowHandle,
     view: &Entity<FerriteWindow>,

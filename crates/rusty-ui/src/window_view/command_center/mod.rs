@@ -16,8 +16,9 @@ pub(super) use search::Update;
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
-    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, LEAVE, PathListings, PathsSource,
-    RecentSource, ResultSource, Row, Selection, TabsSnapshot, TabsSource,
+    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource, LEAVE,
+    PathListings, PathsSource, RecentSource, ResultSource, Row, Selection, TabsSnapshot,
+    TabsSource,
 };
 use crate::commands::{self, ArgKind};
 use crate::modifier_hints::HintsMode;
@@ -36,6 +37,7 @@ pub(super) struct CommandCenterState {
     pub(super) here: HereWalks,
     listings: PathListings,
     generation: u64,
+    index_options: Option<IndexOptions>,
 }
 
 impl CommandCenterState {
@@ -50,6 +52,7 @@ impl CommandCenterState {
             here: HereWalks::new(provider.clone()),
             listings: PathListings::new(provider.clone()),
             generation: 0,
+            index_options: None,
         }
     }
 }
@@ -69,6 +72,7 @@ struct Open {
     step: Option<Step>,
     checking: Option<args::Checking>,
     error: Option<SharedString>,
+    indexing: Option<SharedString>,
     anchor: Bounds<Pixels>,
     keys: HintKeys,
     restore: Option<FocusHandle>,
@@ -104,7 +108,11 @@ impl Open {
                 label: step.label.clone(),
                 kind: step.kind,
             }),
-            note: self.checking.as_ref().and_then(args::Checking::note),
+            note: self
+                .checking
+                .as_ref()
+                .and_then(args::Checking::note)
+                .or_else(|| self.indexing.clone()),
             error: self.error.clone(),
             anchor: self.anchor,
             key_hints: has_key_hints.then(|| self.keys.clone()),
@@ -122,6 +130,30 @@ fn focused_contexts(window: &Window) -> Vec<String> {
 }
 
 impl FerriteWindow {
+    pub(super) fn prepare_index(&mut self, window: &mut Window) {
+        let options = IndexOptions::of(&self.values);
+        if self.command_center.index_options.as_ref() == Some(&options) {
+            return;
+        }
+        let state = self.browser.state();
+        if !self.panes().iter().all(|pane| {
+            state
+                .pane(*pane)
+                .is_some_and(|pane| pane.active().listing().is_some())
+        }) {
+            return;
+        }
+        self.command_center.index_options = Some(options.clone());
+        let start = self.command_center.hooks.index.start.clone();
+        window.on_next_frame(move |_, cx| {
+            cx.background_executor()
+                .spawn(async move {
+                    start(&options);
+                })
+                .detach();
+        });
+    }
+
     pub(super) fn toggle_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.command_center.open.is_some() {
             return self.close_command_center(window, cx);
@@ -150,6 +182,11 @@ impl FerriteWindow {
         sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(
             self.browser.state(),
         ))));
+        sources.push(Arc::new(IndexSource::new(
+            IndexOptions::of(&self.values),
+            hooks.index.clone(),
+            hooks.frecent.clone(),
+        )));
         let listings = self.command_center.listings.clone();
         let tab = self.browser.state().active_tab().id();
         let is_pane_offline = self.browser.offline(tab).is_some();
@@ -201,6 +238,7 @@ impl FerriteWindow {
             step: None,
             checking: None,
             error: None,
+            indexing: None,
             anchor,
             keys,
             restore,

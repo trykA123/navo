@@ -409,20 +409,19 @@ impl Field {
     }
 
     pub fn is_applied(self) -> bool {
-        !self.is_unread_search()
-            && !matches!(
-                self,
-                Self::LightTheme
-                    | Self::DarkTheme
-                    | Self::Font
-                    | Self::FontSize
-                    | Self::TerminalProvider
-                    | Self::TerminalCommand
-                    | Self::AutomotiveMemoryStrip
-                    | Self::AutomotiveCharts
-                    | Self::AutomotiveRowBars
-                    | Self::AutomotiveUsageBars
-                    | Self::AutomotiveWhoUses
-            )
+        !matches!(
+            self,
+            Self::LightTheme
+                | Self::DarkTheme
+                | Self::Font
+                | Self::FontSize
+                | Self::TerminalProvider
+                | Self::TerminalCommand
+                | Self::AutomotiveMemoryStrip
+                | Self::AutomotiveCharts
+                | Self::AutomotiveRowBars
+                | Self::AutomotiveUsageBars
+                | Self::AutomotiveWhoUses
+        )
     }
 }

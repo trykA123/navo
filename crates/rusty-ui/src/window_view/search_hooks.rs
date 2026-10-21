@@ -38,6 +38,7 @@ impl ServiceHooks {
 
 #[derive(Clone)]
 pub struct SearchHooks {
+    pub index: crate::command_center::IndexHooks,
     pub command_use: CommandUse,
     pub recent_commands: RecentCommands,
     pub record_command: RecordCommand,
@@ -51,6 +52,7 @@ impl SearchHooks {
     #[must_use]
     pub fn none() -> Self {
         Self {
+            index: crate::command_center::IndexHooks::none(),
             command_use: Arc::new(Vec::new),
             recent_commands: Arc::new(|_| Vec::new()),
             record_command: Arc::new(|_| {}),

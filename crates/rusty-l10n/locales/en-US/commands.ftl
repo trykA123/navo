@@ -355,3 +355,5 @@ cmd-multi-rename-save-preset = Save a preset
 cmd-multi-rename-open-presets = Open a preset
 cmd-multi-rename-reset = Reset every field
 cmd-multi-rename-toggle-row = Exclude or include the row
+
+command-center-indexing = Indexing { $root } · { $count } files

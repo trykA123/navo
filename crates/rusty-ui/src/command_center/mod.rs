@@ -4,6 +4,7 @@ mod commands_source;
 mod context_name;
 mod file_sources;
 pub mod flights;
+pub mod index_source;
 mod query;
 pub mod rank;
 mod results;
@@ -19,6 +20,7 @@ pub use file_sources::{
     Frecents, HereOptions, HereSource, HereWalks, PathListings, PathsSource, RecentSource,
     TabsSnapshot, TabsSource, completion,
 };
+pub use index_source::{IndexHooks, IndexMode, IndexOptions, IndexSource, Indexing};
 pub use query::{Query, Scope, Term};
 pub use results::{Heading, Results, Row};
 pub use selection::Selection;

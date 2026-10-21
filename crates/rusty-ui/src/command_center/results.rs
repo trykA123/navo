@@ -87,7 +87,7 @@ impl Results {
 fn place_of(hit: &Hit) -> Option<&Location> {
     match (&hit.target, hit.source) {
         (Target::GoTo(location), "tabs" | "paths")
-        | (Target::Open { location, .. }, "recent" | "paths" | "here") => Some(location),
+        | (Target::Open { location, .. }, "recent" | "paths" | "here" | "index") => Some(location),
         _ => None,
     }
 }
@@ -125,8 +125,12 @@ fn one_per_place(mut hits: Vec<Hit>) -> Vec<Hit> {
         .filter(|&at| absorb(&mut hits, &kept, at))
         .collect();
     kept.extend(paths);
-    for at in of(&hits, "here") {
-        absorb(&mut hits, &kept, at);
+    for source in ["here", "index"] {
+        for at in of(&hits, source) {
+            if absorb(&mut hits, &kept, at) {
+                kept.push(at);
+            }
+        }
     }
     let mut at = 0;
     hits.retain(|_| {

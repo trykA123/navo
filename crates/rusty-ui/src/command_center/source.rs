@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use gpui_kit::SharedString;
 use rusty_core::{Command, Location};
 
+use super::Indexing;
 use super::query::{Query, Scope};
 use crate::commands::ArgKind;
 
@@ -153,6 +154,7 @@ pub struct Offline {
 pub struct Notes {
     pub capped: Option<Capped>,
     pub offline: Option<Offline>,
+    pub indexing: Option<Indexing>,
 }
 
 pub trait ResultSource: Send + Sync {
@@ -163,6 +165,12 @@ pub trait ResultSource: Send + Sync {
 
     fn wait_for_more(&self, _request: &Request, _cancel: &Cancel) -> bool {
         false
+    }
+
+    fn shown(&self, _hits: &[Hit], _cancel: &Cancel) {}
+
+    fn indexing(&self, _request: &Request) -> Option<Indexing> {
+        None
     }
 
     fn capped(&self, _request: &Request) -> Option<Capped> {

@@ -403,6 +403,7 @@ fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
         &Value::Text("$Recycle.Bin, System Volume Information".into())
     );
     assert!(Field::SearchDrives.is_list() && Field::SearchExclude.is_list());
+    assert!(rows_in(Section::Search).all(|(_, spec)| spec.field.is_applied()));
 }
 
 #[test]

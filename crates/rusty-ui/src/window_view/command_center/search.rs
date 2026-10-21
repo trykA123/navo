@@ -120,9 +120,25 @@ impl Round {
             capped: self
                 .active(false)
                 .find_map(|source| source.capped(&self.request)),
+            indexing: self
+                .active(false)
+                .find_map(|source| source.indexing(&self.request)),
             offline: self
                 .active(false)
                 .find_map(|source| source.offline(&self.request)),
+        }
+    }
+
+    fn load_shown(&self, hits: Vec<Hit>) {
+        let hits = Results::merge(hits, self.request.query.scope)
+            .into_iter()
+            .filter_map(|row| match row {
+                Row::Hit(hit) | Row::TopHit(hit) => Some(hit),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for source in self.active(false) {
+            source.shown(&hits, &self.cancel);
         }
     }
 
@@ -191,10 +207,17 @@ impl Stream {
         cx.background_executor().timer(FILE_DELAY).await;
         loop {
             let (files, notes) = self.run(false, cx).await;
-            let hits = fast.iter().cloned().chain(files).collect();
+            let hits: Vec<_> = fast.iter().cloned().chain(files).collect();
+            let shown = hits.clone();
             if !self.publish((hits, notes), true, cx).await {
                 return;
             }
+            let metadata = self.round.clone();
+            cx.background_executor()
+                .spawn(async move {
+                    metadata.load_shown(shown);
+                })
+                .detach();
             let step = self.round.clone();
             let more = cx
                 .background_executor()
@@ -219,6 +242,7 @@ impl FerriteWindow {
         };
         open.error = None;
         open.checking = None;
+        open.indexing = None;
         open.run_when_shown = None;
         let generation = open.search.next();
         let step = open.step.as_ref().map(|step| step.kind);
@@ -288,6 +312,11 @@ impl FerriteWindow {
             notes,
             settled,
         } = update;
+        if let Some(open) = self.command_center.open.as_mut()
+            && generation == open.search.generation()
+        {
+            open.indexing = notes.indexing.map(|note| note.text());
+        }
         let rows = Results::with_cap(Results::merge(hits, scope), notes.capped);
         let rows = Results::with_offline(rows, notes.offline);
         self.show_rows((generation, rows, settled), window, cx);

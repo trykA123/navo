@@ -99,6 +99,7 @@ impl Watching {
 
 impl FerriteWindow {
     pub(super) fn watch_start(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.prepare_index(window);
         if self.start.is_none() {
             return;
         }
