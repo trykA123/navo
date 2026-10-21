@@ -62,6 +62,8 @@ fn five_reconfigurations_share_one_retirement_worker_and_do_not_restart_a_pendin
         queue: Arc::new(IoQueue::new()),
         roots: Vec::new(),
         desired: Vec::new(),
+        exclude: Vec::new(),
+        configured: Configured::default(),
         retirement: Retirements::new().unwrap(),
     };
     let mut options = IndexOptions {

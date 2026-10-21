@@ -100,8 +100,8 @@ impl<C: Fn() -> bool + Sync, I: Fn(u32) -> bool + Sync> Search<'_, C, I> {
             if (self.cancel)() {
                 break;
             }
-            if (self.include)(id)
-                && let Some(hit) = matchers.score(self.table, id, name)
+            if let Some(hit) = matchers.score(self.table, id, name)
+                && (self.include)(id)
             {
                 keep_hit(&mut hits, (Reverse(hit.score), id, hit.indices), self.limit);
             }

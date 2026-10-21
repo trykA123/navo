@@ -9,7 +9,10 @@ use rusty_index::ntfs::{NtfsError, NtfsIndex, Volume};
 use rusty_index::pipe::{self, CancelToken, Reply, Request, Server, VolumeStatus};
 
 use super::config::{Drive, index_path, select_volumes};
-use super::lifecycle::{SaveClock, guard_worker, restore_or_enumerate};
+use super::lifecycle::{
+    SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, clear_failures, guard_worker,
+    restore_or_enumerate,
+};
 use super::policy::ServiceError;
 use super::search::SearchIndex;
 use super::storage::Storage;
@@ -31,13 +34,13 @@ pub(super) fn run(
     let config = storage.read_config().map_err(ServiceError::Configuration)?;
     let available = super::volumes::discover().map_err(ServiceError::Configuration)?;
     let drives = select_volumes(&config.search, &available).map_err(ServiceError::Configuration)?;
-    let shared = initial_states(&drives);
+    let shared = initial_states(&drives, &config.search);
     std::thread::scope(|scope| {
         let _stop = StopOnDrop(cancel);
         let mut workers = Vec::new();
         for (drive, shared) in drives.iter().zip(&shared) {
-            let mut worker = Worker::new(*drive, Arc::clone(shared), &storage, &config.search)
-                .map_err(ServiceError::Storage)?;
+            let mut worker =
+                Worker::new(*drive, Arc::clone(shared), &storage).map_err(ServiceError::Storage)?;
             let shared = Arc::clone(shared);
             workers.push(
                 std::thread::Builder::new()
@@ -84,7 +87,7 @@ fn serve_pipe(sid: &str, shared: &[Shared], cancel: &CancelToken) -> io::Result<
         .map_err(io::Error::other)
 }
 
-fn initial_states(drives: &[Drive]) -> Vec<Shared> {
+fn initial_states(drives: &[Drive], search: &rusty_store::Search) -> Vec<Shared> {
     drives
         .iter()
         .map(|drive| {
@@ -94,6 +97,7 @@ fn initial_states(drives: &[Drive]) -> Vec<Shared> {
                     progress: Some(0),
                     ..Default::default()
                 },
+                search: SearchIndex::new(search),
                 ..Default::default()
             }))
         })
@@ -131,23 +135,16 @@ struct Worker {
     shared: Shared,
     clock: SaveClock,
     started: Instant,
-    search: rusty_store::Search,
 }
 
 impl Worker {
-    fn new(
-        drive: Drive,
-        shared: Shared,
-        storage: &Storage,
-        search: &rusty_store::Search,
-    ) -> io::Result<Self> {
+    fn new(drive: Drive, shared: Shared, storage: &Storage) -> io::Result<Self> {
         Ok(Self {
             drive,
             shared,
             path: index_path(&storage.program_data, drive.letter)?,
             clock: SaveClock::default(),
             started: Instant::now(),
-            search: search.clone(),
         })
     }
 
@@ -159,11 +156,14 @@ impl Worker {
                 break;
             }
             if let Err(error) = result {
-                self.error(format!("updating volume index: {error}"));
+                self.error(format!("{UPDATE_FAILURE}{error}"));
                 volume = None;
+            } else {
+                self.recover(UPDATE_FAILURE);
             }
-            if let Err(error) = self.save(false) {
-                self.error(format!("saving volume index: {error}"));
+            match self.save(false) {
+                Ok(()) => self.recover(SAVE_FAILURE),
+                Err(error) => self.error(format!("{SAVE_FAILURE}{error}")),
             }
             std::thread::park_timeout(Duration::from_millis(500));
         }
@@ -222,9 +222,6 @@ impl Worker {
         let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
         if let Some(index) = state.index.as_mut() {
             ensure_resolved(index.apply_batch(batch)?)?;
-            if changed {
-                state.search = SearchIndex::new(&index.table, &self.search);
-            }
         }
         if changed {
             self.clock.changed(self.started.elapsed());
@@ -233,11 +230,11 @@ impl Worker {
     }
 
     fn enumerate(&self, volume: &mut Volume, cancel: &CancelToken) -> Result<NtfsIndex, NtfsError> {
-        self.shared
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-            .status
-            .progress = Some(0);
+        {
+            let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
+            state.status.progress = Some(0);
+            clear_failures(&mut state.status.errors, UNRESOLVED);
+        }
         match std::fs::remove_file(&self.path) {
             Ok(()) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -250,7 +247,7 @@ impl Worker {
         }
         let enumerated = volume.enumerate(cancel)?;
         if !enumerated.unresolved.is_empty() {
-            self.error("enumeration has unresolved file references".into());
+            self.error(format!("{UNRESOLVED}file references"));
         }
         Ok(enumerated.index)
     }
@@ -258,7 +255,6 @@ impl Worker {
     fn replace(&mut self, index: NtfsIndex) {
         let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
         state.status.progress = None;
-        state.search = SearchIndex::new(&index.table, &self.search);
         state.index = Some(index);
         self.clock.changed(self.started.elapsed());
     }
@@ -295,6 +291,13 @@ impl Worker {
 
     fn error(&self, message: String) {
         record_error(&self.shared, message);
+    }
+
+    fn recover(&self, prefix: &str) {
+        let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
+        if !state.status.errors.is_empty() {
+            clear_failures(&mut state.status.errors, prefix);
+        }
     }
 }
 

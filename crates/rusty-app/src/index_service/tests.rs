@@ -256,3 +256,18 @@ fn worker_panics_report_the_payload_and_cancel_the_service() {
     assert!(cancel.is_cancelled());
     assert!(errors[0].contains("worker fault"));
 }
+
+#[test]
+fn a_successful_tick_clears_only_its_own_failures() {
+    let mut errors = vec![
+        format!("{}access denied", super::lifecycle::UPDATE_FAILURE),
+        format!("{}disk full", super::lifecycle::SAVE_FAILURE),
+        format!("{}file references", super::lifecycle::UNRESOLVED),
+    ];
+    super::lifecycle::clear_failures(&mut errors, super::lifecycle::UNRESOLVED);
+    super::lifecycle::clear_failures(&mut errors, super::lifecycle::UPDATE_FAILURE);
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0].contains("disk full"));
+    super::lifecycle::clear_failures(&mut errors, super::lifecycle::SAVE_FAILURE);
+    assert!(errors.is_empty());
+}

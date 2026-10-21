@@ -62,6 +62,18 @@ fn round_trip_preserves_header_names_parents_flags_and_removed_slots() {
 }
 
 #[test]
+fn a_removed_non_empty_folder_round_trips() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("names.index");
+    let mut expected = table();
+    expected.push(1, "inside.txt", Flags::NONE).unwrap();
+    assert_eq!(expected.remove(1), 2);
+    save(&path, &header(), &expected).unwrap();
+    let (_, actual) = load(&path).unwrap();
+    assert_table_matches(&expected, &actual);
+}
+
+#[test]
 fn empty_table_round_trips() {
     let folder = tempfile::tempdir().unwrap();
     let path = folder.path().join("empty.index");

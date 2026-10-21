@@ -8,6 +8,14 @@ use rusty_index::pipe::CancelToken;
 use rusty_index::table::NameTable;
 use rusty_index::usn::FrnMap;
 
+pub(super) const UPDATE_FAILURE: &str = "updating volume index: ";
+pub(super) const UNRESOLVED: &str = "enumeration has unresolved ";
+pub(super) const SAVE_FAILURE: &str = "saving volume index: ";
+
+pub(super) fn clear_failures(errors: &mut Vec<String>, prefix: &str) {
+    errors.retain(|message| !message.starts_with(prefix));
+}
+
 pub(super) fn guard_worker(
     cancel: &CancelToken,
     report: impl FnOnce(String),

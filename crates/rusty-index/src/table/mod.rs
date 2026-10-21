@@ -128,18 +128,23 @@ impl NameTable {
         if self.slots() == 0 {
             return true;
         }
-        if self.parents[0] != NO_PARENT
-            || self
-                .flags(0)
-                .is_none_or(|flags| !flags.contains(Flags::FOLDER))
-            || self.parents.iter().enumerate().any(|(id, &parent)| {
-                if parent == NO_PARENT {
-                    return id != 0;
-                }
-                self.flags(parent)
-                    .is_none_or(|flags| !flags.contains(Flags::FOLDER))
-            })
+        let root_live = self.is_live(0);
+        if root_live
+            && (self.parents[0] != NO_PARENT
+                || self
+                    .flags(0)
+                    .is_none_or(|flags| !flags.contains(Flags::FOLDER)))
         {
+            return false;
+        }
+        if self.live_ids().any(|id| {
+            let parent = self.parents[id as usize];
+            if parent == NO_PARENT {
+                return id != 0;
+            }
+            self.flags(parent)
+                .is_none_or(|flags| !flags.contains(Flags::FOLDER))
+        }) {
             return false;
         }
         let mut state = Vec::new();
@@ -147,7 +152,7 @@ impl NameTable {
             return false;
         }
         state.resize(self.parents.len(), 0u8);
-        for start in 0..self.slots() {
+        for start in self.live_ids() {
             let mut id = start;
             while id != NO_PARENT && state[id as usize] == 0 {
                 state[id as usize] = 1;
@@ -294,6 +299,10 @@ impl NameTable {
     ) -> impl Iterator<Item = (u32, Match)> + 'a {
         self.iter_range(range)
             .filter_map(|(id, name)| fuzzy.score(name).map(|hit| (id, hit)))
+    }
+
+    fn live_ids(&self) -> impl Iterator<Item = u32> + '_ {
+        (0..self.slots()).filter(|&id| self.is_live(id))
     }
 
     fn is_live(&self, id: u32) -> bool {

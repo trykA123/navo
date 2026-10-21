@@ -1,6 +1,7 @@
 use super::frames::{self, FrameError, MAX_FRAME_BYTES};
 use super::{Hit, Query, QueryTerm, Request, Response, Status, VolumeStatus};
 
+mod accept;
 mod clients;
 
 fn query(generation: u64) -> Query {
@@ -103,10 +104,13 @@ fn unix_stub_reports_not_available() {
     let mut server = Server {
         pipes: vec![super::unix::Pipe],
     };
-    assert!(matches!(
-        server.serve(&|_, _| super::Reply::default(), &super::CancelToken::new()),
-        Err(PipeError::NotAvailable)
-    ));
+    let cancel = super::CancelToken::new();
+    cancel.cancel();
+    assert!(
+        server
+            .serve(&|_, _| super::Reply::default(), &cancel)
+            .is_ok()
+    );
 }
 
 #[test]

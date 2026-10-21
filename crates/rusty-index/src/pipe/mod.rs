@@ -197,19 +197,64 @@ impl Server {
     }
 }
 
+const ACCEPT_BACKOFF_START: std::time::Duration = std::time::Duration::from_millis(100);
+const ACCEPT_BACKOFF_MAX: std::time::Duration = std::time::Duration::from_secs(5);
+
+fn next_backoff(delay: std::time::Duration, max: std::time::Duration) -> std::time::Duration {
+    (delay * 2).min(max)
+}
+
+fn pause(delay: std::time::Duration, tokens: &[&CancelToken]) {
+    let end = Instant::now() + delay;
+    while Instant::now() < end && !tokens.iter().any(|token| token.is_cancelled()) {
+        std::thread::sleep(
+            end.saturating_duration_since(Instant::now())
+                .min(std::time::Duration::from_millis(20)),
+        );
+    }
+}
+
 fn serve_instance(
     pipe: &impl session::Transport,
     handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
     cancel: &CancelToken,
     stopped: &CancelToken,
 ) -> Result<(), PipeError> {
+    serve_instance_with(
+        pipe,
+        handler,
+        (cancel, stopped),
+        (ACCEPT_BACKOFF_START, ACCEPT_BACKOFF_MAX),
+    )
+}
+
+fn serve_instance_with(
+    pipe: &impl session::Transport,
+    handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
+    (cancel, stopped): (&CancelToken, &CancelToken),
+    (start, max): (std::time::Duration, std::time::Duration),
+) -> Result<(), PipeError> {
     let _stop = StopOnDrop(stopped.clone());
     let tokens = &[cancel, stopped];
+    let mut delay = start;
+    let mut failing = false;
     loop {
         match pipe.accept(&Cancellation::Tokens(tokens)) {
             Err(PipeError::Cancelled) => return Ok(()),
-            Err(error) => return Err::<(), _>(error).and(pipe.disconnect()),
-            Ok(()) => {}
+            Err(error) => {
+                if !failing {
+                    tracing::error!(%error, "index pipe accept failed; retrying");
+                    failing = true;
+                }
+                let _ = pipe.disconnect();
+                pause(delay, tokens);
+                delay = next_backoff(delay, max);
+                continue;
+            }
+            Ok(()) => {
+                failing = false;
+                delay = start;
+            }
         }
         let result = session::serve_session(pipe, handler, tokens);
         if let Err(error) = result.and(pipe.disconnect()) {

@@ -1,34 +1,34 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, PoisonError};
+
 use rusty_index::pipe::{self, CancelToken, Hit, Request};
 use rusty_index::table::NameTable;
 use rusty_store::Search;
 
+const MAX_DEPTH: usize = 4096;
+
 #[derive(Default)]
 pub(super) struct SearchIndex {
-    included: Vec<bool>,
+    config: Search,
 }
 
 impl SearchIndex {
-    pub fn new(table: &NameTable, config: &Search) -> Self {
-        let mut included = vec![None; table.slots() as usize];
-        for (id, _) in table.iter() {
-            select_entry(table, id, config, &mut included);
-        }
+    pub fn new(config: &Search) -> Self {
         Self {
-            included: included
-                .into_iter()
-                .map(|keep| keep == Some(true))
-                .collect(),
+            config: config.clone(),
         }
     }
 
     pub fn hits(&self, table: &NameTable, request: &Request, cancel: &CancelToken) -> Vec<Hit> {
+        let eligibility = Eligibility::new(table, &self.config);
         rusty_index::search::search_filtered(
             table,
             &request.terms(),
             rusty_index::search::SearchOptions {
                 limit: pipe::MAX_HITS,
                 cancel: &|| cancel.is_cancelled(),
-                include: &|id| self.included.get(id as usize) == Some(&true),
+                include: &|id| eligibility.includes(id),
             },
         )
         .into_iter()
@@ -44,29 +44,65 @@ impl SearchIndex {
     }
 }
 
-fn select_entry(table: &NameTable, id: u32, config: &Search, included: &mut [Option<bool>]) {
-    let mut chain = Vec::new();
-    let mut current = id;
-    let keep = loop {
-        if let Some(keep) = included[current as usize] {
-            break keep;
+struct Eligibility<'a> {
+    table: &'a NameTable,
+    config: &'a Search,
+    folders: Mutex<HashMap<u32, bool>>,
+    evaluated: AtomicUsize,
+}
+
+impl<'a> Eligibility<'a> {
+    fn new(table: &'a NameTable, config: &'a Search) -> Self {
+        Self {
+            table,
+            config,
+            folders: Mutex::new(HashMap::new()),
+            evaluated: AtomicUsize::new(0),
         }
-        if chain.contains(&current)
-            || table
-                .name(current)
-                .is_none_or(|name| excluded(table, current, name, &config.exclude))
-        {
-            break false;
+    }
+
+    fn includes(&self, id: u32) -> bool {
+        if self.self_excluded(id) {
+            return false;
         }
-        chain.push(current);
-        let Some(parent) = table.parent(current) else {
-            break selected_root(table, current, &config.drives);
+        match self.table.parent(id) {
+            Some(parent) => self.folder_included(parent),
+            None => selected_root(self.table, id, &self.config.drives),
+        }
+    }
+
+    fn folder_included(&self, start: u32) -> bool {
+        let mut chain = Vec::new();
+        let mut current = start;
+        let keep = loop {
+            if let Some(&known) = self.memo().get(&current) {
+                break known;
+            }
+            chain.push(current);
+            if chain.len() >= MAX_DEPTH || self.self_excluded(current) {
+                break false;
+            }
+            self.evaluated.fetch_add(1, Ordering::Relaxed);
+            match self.table.parent(current) {
+                Some(parent) => current = parent,
+                None => break selected_root(self.table, current, &self.config.drives),
+            }
         };
-        current = parent;
-    };
-    included[current as usize] = Some(keep);
-    for id in chain {
-        included[id as usize] = Some(keep);
+        let mut memo = self.memo();
+        for id in chain {
+            memo.insert(id, keep);
+        }
+        keep
+    }
+
+    fn self_excluded(&self, id: u32) -> bool {
+        self.table
+            .name(id)
+            .is_none_or(|name| excluded(self.table, id, name, &self.config.exclude))
+    }
+
+    fn memo(&self) -> std::sync::MutexGuard<'_, HashMap<u32, bool>> {
+        self.folders.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -118,7 +154,7 @@ mod tests {
                 exclude: vec![exclusion.into()],
                 ..Search::default()
             };
-            let selected = SearchIndex::new(&table, &config);
+            let selected = SearchIndex::new(&config);
             let hits = selected.hits(&table, &request, &CancelToken::new());
             assert_eq!(hits.len(), 3);
             assert!(
@@ -126,6 +162,26 @@ mod tests {
                     .all(|hit| hit.path.starts_with("C:\\match-allowed"))
             );
         }
+    }
+
+    #[test]
+    fn a_query_checks_each_ancestor_once_and_never_scans_every_slot() {
+        let mut table = NameTable::new();
+        let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+        let folder = table.push(root, "work", Flags::FOLDER).unwrap();
+        for _ in 0..5_000 {
+            table.push(folder, "noise", Flags::NONE).unwrap();
+        }
+        let matches: Vec<u32> = (0..300)
+            .map(|_| table.push(folder, "match", Flags::NONE).unwrap())
+            .collect();
+        let config = Search {
+            exclude: vec!["skip".into()],
+            ..Search::default()
+        };
+        let eligibility = Eligibility::new(&table, &config);
+        assert!(matches.iter().all(|&id| eligibility.includes(id)));
+        assert_eq!(eligibility.evaluated.load(Ordering::Relaxed), 2);
     }
 
     #[test]
@@ -142,14 +198,14 @@ mod tests {
             terms: vec![QueryTerm::Name("match".into())],
         };
         assert_eq!(
-            SearchIndex::new(&table, &config)
+            SearchIndex::new(&config)
                 .hits(&table, &request, &CancelToken::new())
                 .len(),
             1
         );
         table.rename(folder, root, "skip").unwrap();
         assert!(
-            SearchIndex::new(&table, &config)
+            SearchIndex::new(&config)
                 .hits(&table, &request, &CancelToken::new())
                 .is_empty()
         );

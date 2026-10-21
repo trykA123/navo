@@ -1,3 +1,4 @@
+mod config;
 mod retirement;
 mod roots;
 mod status;
@@ -5,6 +6,7 @@ mod status;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Instant;
 
 use rusty_core::{Location, ProviderPath};
 use rusty_fs::{IoQueue, Provider};
@@ -16,6 +18,7 @@ use rusty_store::StoreDirs;
 use rusty_ui::command_center::index_source::{IndexMetadata, PipeQueries};
 use rusty_ui::command_center::{Cancel, IndexHooks, IndexMode, IndexOptions};
 
+use config::{Configured, same_options};
 use retirement::Retirements;
 use roots::{exclusions, is_allowed, roots};
 
@@ -32,6 +35,8 @@ struct Hosts {
     queue: Arc<IoQueue>,
     roots: Vec<Root>,
     desired: Vec<Location>,
+    exclude: Vec<String>,
+    configured: Configured,
     retirement: Retirements,
 }
 
@@ -51,6 +56,8 @@ pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks
         queue: Arc::new(IoQueue::new()),
         roots: Vec::new(),
         desired: Vec::new(),
+        exclude: Vec::new(),
+        configured: Configured::default(),
         retirement,
     }));
     let start = hosts.clone();
@@ -62,6 +69,7 @@ pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks
             if service_ready {
                 hosts.retire();
                 hosts.options = None;
+                hosts.configured.reset();
             } else {
                 hosts.configure(options, None);
             }
@@ -130,37 +138,52 @@ impl Hosts {
     }
 
     fn configure(&mut self, options: &IndexOptions, service: Option<&pipe::Status>) {
-        let available = rusty_shell::list_drives();
-        let desired = if matches!(options.mode, IndexMode::Off | IndexMode::Service) {
-            Vec::new()
-        } else {
-            roots(options, &available, self.walk_roots(), service)
-        };
-        let unchanged = self.options.as_ref().is_some_and(|old| {
-            old.mode == options.mode
-                && old.drives == options.drives
-                && old.exclude == options.exclude
-                && old.network == options.network
-                && old.removable == options.removable
-        }) && self.desired == desired;
-        if !unchanged {
-            self.retire();
-            self.options = Some(options.clone());
-            self.desired = desired;
+        self.configure_at(options, service, Instant::now());
+    }
+
+    fn configure_at(
+        &mut self,
+        options: &IndexOptions,
+        service: Option<&pipe::Status>,
+        now: Instant,
+    ) {
+        let service = self.configured.service(service, now);
+        if !self.configured.is_current(options, service.as_ref(), now) {
+            self.reconfigure(options, service, now);
         }
-        let exclude = exclusions(options, &available);
         for location in self.desired.clone() {
             if !self
                 .roots
                 .iter()
                 .any(|root| root.location.same_place(&location))
             {
-                self.start_root(location, &exclude);
+                self.start_root(location);
             }
         }
     }
 
-    fn start_root(&mut self, location: Location, exclude: &[String]) {
+    fn reconfigure(&mut self, options: &IndexOptions, service: Option<pipe::Status>, now: Instant) {
+        let available = rusty_shell::list_drives();
+        let desired = if matches!(options.mode, IndexMode::Off | IndexMode::Service) {
+            Vec::new()
+        } else {
+            roots(options, &available, self.walk_roots(), service.as_ref())
+        };
+        let unchanged = self
+            .options
+            .as_ref()
+            .is_some_and(|old| same_options(old, options))
+            && self.desired == desired;
+        if !unchanged {
+            self.retire();
+            self.options = Some(options.clone());
+            self.desired = desired;
+        }
+        self.exclude = exclusions(options, &available);
+        self.configured.settle(options, service, now);
+    }
+
+    fn start_root(&mut self, location: Location) {
         if self.retirement.pending(&location) {
             return;
         }
@@ -174,7 +197,7 @@ impl Hosts {
             snapshot,
             limits: Limits {
                 max_entries: u32::MAX as usize,
-                exclude: exclude.to_vec(),
+                exclude: self.exclude.clone(),
             },
         });
         match started {

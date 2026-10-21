@@ -87,6 +87,7 @@ fn covered(root: &Location, service: Option<&Status>) -> bool {
     service.is_some_and(|status| {
         status.volumes.iter().any(|volume| {
             volume.errors.is_empty()
+                && (volume.entries > 0 || volume.progress.is_some())
                 && Location::new(drive_root(&volume.root))
                     .is_ok_and(|volume| contains(&volume, root))
         })
@@ -97,6 +98,20 @@ fn covered(root: &Location, service: Option<&Status>) -> bool {
 mod tests {
     use super::*;
     use rusty_index::pipe::VolumeStatus;
+
+    #[test]
+    fn a_volume_without_a_usable_index_is_not_covered() {
+        let root = Location::new(r"C:\").unwrap();
+        let building = |progress| Status {
+            volumes: vec![VolumeStatus {
+                root: "C:".into(),
+                progress,
+                ..Default::default()
+            }],
+        };
+        assert!(covered(&root, Some(&building(Some(0)))));
+        assert!(!covered(&root, Some(&building(None))));
+    }
 
     #[test]
     fn service_coverage_leaves_network_non_ntfs_and_failed_volumes_to_the_walk() {
@@ -113,6 +128,7 @@ mod tests {
             volumes: vec![
                 VolumeStatus {
                     root: "C:".into(),
+                    entries: 10,
                     ..Default::default()
                 },
                 VolumeStatus {
