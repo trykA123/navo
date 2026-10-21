@@ -12,37 +12,66 @@ use crate::prelude::*;
 use crate::tokens::{self, MemKind, Theme};
 
 const BAR_HEIGHT: f32 = 14.;
+const THIN_BAR_HEIGHT: f32 = 6.;
 const SWATCH: f32 = 10.;
 const SHOWN_KINDS: usize = 5;
 
-fn percent(used: u64, total: u64) -> f64 {
+pub(super) fn percent_text(used: u64, total: u64) -> String {
+    if used == 0 {
+        return "0".into();
+    }
     if total == 0 {
-        0.
-    } else {
-        used as f64 * 100. / total as f64
+        return "100".into();
+    }
+    match u128::from(used) * 100 / u128::from(total) {
+        0 => "<1".into(),
+        whole => whole.to_string(),
     }
 }
 
-pub(super) fn percent_text(used: u64, total: u64) -> String {
-    let value = percent(used, total);
-    if value < 10. {
-        format!("{value:.1}")
-    } else {
-        format!("{value:.0}")
-    }
+fn sized_total(region: &Region) -> Option<u64> {
+    region.total.filter(|total| *total > 0)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Part {
+    Kind(usize),
+    Fill,
+    Reserved,
+}
+
+pub(super) fn bar_parts(region: &Region) -> Vec<(Part, f64)> {
+    let shown: u64 = region.by_kind[..SHOWN_KINDS].iter().sum();
+    let fill = region.by_kind[Kind::Fill.index()];
+    let reserved = region.reserved.filter(|_| sized_total(region).is_some());
+    let reserved = reserved.unwrap_or_default();
+    let taken = shown + fill + reserved;
+    let whole = sized_total(region).unwrap_or(taken).max(taken).max(1) as f64;
+    let kinds = (0..SHOWN_KINDS).map(|index| (Part::Kind(index), region.by_kind[index]));
+    kinds
+        .chain([(Part::Fill, fill), (Part::Reserved, reserved)])
+        .filter(|(_, bytes)| *bytes > 0)
+        .map(|(part, bytes)| (part, bytes as f64 / whole))
+        .collect()
 }
 
 pub(super) fn usage_label(region: &Region) -> String {
-    match region.free() {
-        Some(free) => t!(
+    let name = region.name.clone();
+    match (sized_total(region), region.free()) {
+        (Some(total), Some(free)) => t!(
             "space-usage-label",
-            name = region.name.clone(),
-            percent = percent_text(region.used, region.total.unwrap_or_default()),
+            name = name,
+            percent = percent_text(region.used, total),
             free = format::size(free)
         ),
-        None => t!(
+        _ if region.total == Some(0) => t!(
+            "space-usage-label-sizeless",
+            name = name,
+            used = format::size(region.used)
+        ),
+        _ => t!(
             "space-usage-label-unknown",
-            name = region.name.clone(),
+            name = name,
             used = format::size(region.used)
         ),
     }
@@ -50,11 +79,13 @@ pub(super) fn usage_label(region: &Region) -> String {
 
 pub(super) fn usage_lines(region: &Region, reserved: Option<u64>) -> Vec<String> {
     let used = format::size(region.used);
-    let (Some(free), Some(total)) = (region.free(), region.total) else {
-        return vec![
-            t!("space-usage-used", used = used),
-            tr("space-usage-unknown"),
-        ];
+    let (Some(free), Some(total)) = (region.free(), sized_total(region)) else {
+        let used_line = t!("space-usage-used", used = used);
+        return if region.total == Some(0) {
+            vec![used_line]
+        } else {
+            vec![used_line, tr("space-usage-unknown")]
+        };
     };
     let (free, total) = (format::size(free), format::size(total));
     vec![match reserved.filter(|reserved| *reserved > 0) {
@@ -92,6 +123,14 @@ fn fill_segment(t: &Theme, share: f64) -> Div {
     segment(share, t.mem.fill.tint).child(hatch(t))
 }
 
+fn reserved_hatch(t: &Theme) -> Div {
+    div().size_full().bg(pattern_slash(t.mem.free_line, 1., 4.))
+}
+
+fn reserved_segment(t: &Theme, share: f64) -> Div {
+    segment(share, t.mem.free).child(reserved_hatch(t))
+}
+
 #[derive(IntoElement)]
 pub struct UsageBar {
     id: ElementId,
@@ -114,34 +153,32 @@ impl RenderOnce for UsageBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let region = &self.region;
-        let shown: u64 = region.by_kind[..SHOWN_KINDS].iter().sum();
-        let fill = region.by_kind[Kind::Fill.index()];
-        let whole = region.total.unwrap_or(shown).max(shown + fill).max(1) as f64;
-        let label = usage_label(region);
+        let known = sized_total(region).is_some();
         let track = div()
             .id(self.id)
             .role(Role::ProgressIndicator)
-            .aria_label(label)
+            .aria_label(usage_label(region))
             .test_support()
             .flex()
             .w_full()
-            .h(px(BAR_HEIGHT))
             .overflow_hidden()
-            .rounded(t.radii.xs)
-            .border_1()
-            .border_color(t.mem.free_line)
-            .bg(t.mem.free);
-        let used = (0..SHOWN_KINDS)
-            .filter(|index| region.by_kind[*index] > 0)
-            .fold(track, |bar, index| {
-                let color = kind_colours(&t, index).strong;
-                bar.child(segment(region.by_kind[index] as f64 / whole, color))
-            });
-        if fill > 0 {
-            used.child(fill_segment(&t, fill as f64 / whole))
+            .rounded(t.radii.xs);
+        let track = if known {
+            track
+                .h(px(BAR_HEIGHT))
+                .border_1()
+                .border_color(t.mem.free_line)
+                .bg(t.mem.free)
         } else {
-            used
-        }
+            track.h(px(THIN_BAR_HEIGHT))
+        };
+        bar_parts(region)
+            .into_iter()
+            .fold(track, |bar, (part, share)| match part {
+                Part::Kind(index) => bar.child(segment(share, kind_colours(&t, index).strong)),
+                Part::Fill => bar.child(fill_segment(&t, share)),
+                Part::Reserved => bar.child(reserved_segment(&t, share)),
+            })
     }
 }
 
@@ -178,7 +215,7 @@ pub struct RegionHead {
 
 impl RegionHead {
     pub fn new(region: &Region) -> Self {
-        let figure = match region.total {
+        let figure = match sized_total(region) {
             Some(total) => t!(
                 "viewer-space-share",
                 percent = percent_text(region.used, total)
@@ -230,6 +267,7 @@ pub(super) fn swatch(t: &Theme, color: Hsla, outlined: bool) -> Div {
 #[derive(IntoElement, Default)]
 pub struct Legend {
     fill: bool,
+    reserved: bool,
 }
 
 impl Legend {
@@ -239,6 +277,11 @@ impl Legend {
 
     pub fn with_fill(mut self, fill: bool) -> Self {
         self.fill = fill;
+        self
+    }
+
+    pub fn with_reserved(mut self, reserved: bool) -> Self {
+        self.reserved = reserved;
         self
     }
 }
@@ -284,6 +327,12 @@ impl RenderOnce for Legend {
                     .overflow_hidden()
                     .child(hatch(&t));
                 row.child(entry(dot, KIND_TEXTS[Kind::Fill.index()]))
+            })
+            .when(self.reserved, |row| {
+                let dot = swatch(&t, t.mem.free, true)
+                    .overflow_hidden()
+                    .child(reserved_hatch(&t));
+                row.child(entry(dot, "space-kind-reserved"))
             })
             .child(entry(swatch(&t, t.mem.free, true), "space-kind-free"))
     }

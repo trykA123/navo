@@ -1,7 +1,7 @@
 use rusty_automotive::Section;
 use rusty_automotive::space::{Kind, Region, RegionSource};
 
-use super::{FileBytes, FilePart, percent_text, usage_label, usage_lines};
+use super::{FileBytes, FilePart, Part, bar_parts, percent_text, usage_label, usage_lines};
 
 fn region(total: Option<u64>, used: u64) -> Region {
     let mut by_kind = [0; Kind::COUNT];
@@ -66,10 +66,58 @@ fn zero_reserved_bytes_are_not_named() {
 }
 
 #[test]
-fn small_shares_keep_a_decimal() {
-    assert_eq!(percent_text(5, 1000), "0.5");
-    assert_eq!(percent_text(500, 1000), "50");
-    assert_eq!(percent_text(1, 0), "0.0");
+fn percent_never_reads_fuller_or_emptier_than_it_is() {
+    assert_eq!(percent_text(0, 1000), "0");
+    assert_eq!(percent_text(1, 1000), "<1");
+    assert_eq!(percent_text(9, 1000), "<1");
+    assert_eq!(percent_text(10, 1000), "1");
+    assert_eq!(percent_text(990, 1000), "99");
+    assert_eq!(percent_text(995, 1000), "99");
+    assert_eq!(percent_text(9999, 10_000), "99");
+    assert_eq!(percent_text(1000, 1000), "100");
+}
+
+#[test]
+fn a_nearly_full_region_says_99_with_a_sliver_free() {
+    let label = usage_label(&region(Some(10_000), 9_999));
+    assert!(label.contains("99% used"), "{label}");
+}
+
+#[test]
+fn reserved_bytes_get_their_own_segment_after_used() {
+    let mut reserved = region(Some(1000), 250);
+    reserved.reserved = Some(500);
+    let parts = bar_parts(&reserved);
+    assert_eq!(parts, [(Part::Kind(0), 0.25), (Part::Reserved, 0.5)]);
+    let free = reserved.free().unwrap() as f64 / 1000.;
+    assert_eq!(parts.iter().map(|(_, share)| share).sum::<f64>() + free, 1.);
+}
+
+#[test]
+fn no_reserved_bytes_draw_no_reserved_segment() {
+    let parts = bar_parts(&region(Some(1000), 250));
+    assert!(parts.iter().all(|(part, _)| *part != Part::Reserved));
+}
+
+#[test]
+fn a_cluster_bar_is_all_composition_with_no_free_share() {
+    let mut cluster = region(None, 2000);
+    cluster.by_kind[Kind::Rodata.index()] = 2000;
+    cluster.by_kind[Kind::Code.index()] = 6000;
+    let parts = bar_parts(&cluster);
+    assert_eq!(parts, [(Part::Kind(0), 0.75), (Part::Kind(1), 0.25)]);
+}
+
+#[test]
+fn a_zero_size_region_shows_the_used_size_and_no_percent() {
+    let zero = region(Some(0), 2048);
+    assert_eq!(usage_lines(&zero, None), ["2.0 KB used"]);
+    let label = usage_label(&zero);
+    assert!(
+        !label.contains('%') && !label.contains("not known"),
+        "{label}"
+    );
+    assert_eq!(bar_parts(&zero), [(Part::Kind(0), 1.)]);
 }
 
 #[test]

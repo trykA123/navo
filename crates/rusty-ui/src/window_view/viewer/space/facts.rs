@@ -131,7 +131,7 @@ fn block_facts(
         ("space-inspector-region", region.name.clone()),
         ("space-inspector-kind", kind_name(block.kind)),
         ("space-inspector-address", span(block.start, block.size)),
-        ("space-inspector-size", format::size(block.size)),
+        ("space-inspector-size", format::exact_bytes(block.size)),
     ];
     std::iter::once(caption(t, "space-inspector-block").into_any_element())
         .chain(
@@ -160,7 +160,7 @@ fn group_facts(t: &Theme, group: &Group) -> Vec<AnyElement> {
         .map(|child| line(t, child.name.clone(), format::size(child.bytes)));
     let head = [
         caption(t, "space-inspector-group").into_any_element(),
-        fact(t, "space-inspector-size", format::size(group.bytes)).into_any_element(),
+        fact(t, "space-inspector-size", format::exact_bytes(group.bytes)).into_any_element(),
         fact(
             t,
             "space-inspector-items",

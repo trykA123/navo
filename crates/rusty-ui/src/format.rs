@@ -12,6 +12,10 @@ pub fn bytes(count: u64) -> String {
     out
 }
 
+pub fn exact_bytes(count: u64) -> String {
+    format!("{} B", bytes(count))
+}
+
 const UNITS: [&str; 6] = ["KB", "MB", "GB", "TB", "PB", "EB"];
 
 pub fn size(count: u64) -> String {
@@ -88,7 +92,16 @@ pub fn count(amount: u64, one: &str, many: &str) -> String {
 mod tests {
     use chrono::{FixedOffset, Utc};
 
-    use super::{bytes, clock_in, clock_seconds_in, count, date_in, read_time_in, size};
+    use super::{
+        bytes, clock_in, clock_seconds_in, count, date_in, exact_bytes, read_time_in, size,
+    };
+
+    #[test]
+    fn exact_bytes_group_thousands_and_end_in_b() {
+        assert_eq!(exact_bytes(0), "0 B");
+        assert_eq!(exact_bytes(812), "812 B");
+        assert_eq!(exact_bytes(91_592), "91,592 B");
+    }
 
     #[test]
     fn bytes_group_thousands_with_commas() {

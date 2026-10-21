@@ -33,21 +33,18 @@ fn region(name: &str, total: Option<u64>, by_kind: [u64; Kind::COUNT]) -> Region
     }
 }
 
-fn regions() -> [(Region, Option<u64>); 3] {
+fn regions() -> [Region; 4] {
+    let mut pflash = region(
+        "pflash0",
+        Some(4 * MIB),
+        [1_900_000, 620_000, 0, 0, 60_000, 90_000],
+    );
+    pflash.reserved = Some(64 * 1024);
     [
-        (
-            region(
-                "pflash0",
-                Some(4 * MIB),
-                [1_900_000, 620_000, 0, 0, 60_000, 90_000],
-            ),
-            Some(64 * 1024),
-        ),
-        (
-            region("dsram0", Some(MIB), [0, 0, 180_000, 310_000, 0, 0]),
-            None,
-        ),
-        (region("dflash", None, [0, 96_000, 0, 0, 0, 0]), None),
+        pflash,
+        region("dsram0", Some(MIB), [0, 0, 180_000, 310_000, 0, 0]),
+        region("dflash", None, [0, 96_000, 0, 0, 0, 0]),
+        region("empty0", Some(0), [0, 2_048, 0, 0, 0, 0]),
     ]
 }
 
@@ -81,32 +78,29 @@ pub struct BarsPage;
 impl Render for BarsPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let rows = regions()
-            .into_iter()
-            .enumerate()
-            .map(|(index, (region, reserved))| {
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(t.spacing.xl)
-                    .child(
-                        div()
-                            .w(px(220.))
-                            .flex_none()
-                            .child(RegionHead::new(&region)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(t.spacing.xs)
-                            .flex_1()
-                            .min_w(px(260.))
-                            .child(UsageBar::new(("usage-bar", index), &region))
-                            .child(UsageLine::new(&region, reserved)),
-                    )
-            });
+        let rows = regions().into_iter().enumerate().map(|(index, region)| {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(t.spacing.xl)
+                .child(
+                    div()
+                        .w(px(220.))
+                        .flex_none()
+                        .child(RegionHead::new(&region)),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(t.spacing.xs)
+                        .flex_1()
+                        .min_w(px(260.))
+                        .child(UsageBar::new(("usage-bar", index), &region))
+                        .child(UsageLine::new(&region, region.reserved)),
+                )
+        });
         div()
             .flex()
             .flex_col()
@@ -116,7 +110,7 @@ impl Render for BarsPage {
             .gap(t.spacing.xl)
             .p(t.spacing.xl)
             .bg(t.colors.surface)
-            .child(Legend::new().with_fill(true))
+            .child(Legend::new().with_fill(true).with_reserved(true))
             .children(rows)
             .child(FileBytesBar::new(&sections()))
     }

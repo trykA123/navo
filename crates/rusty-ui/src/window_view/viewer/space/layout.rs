@@ -137,6 +137,10 @@ fn panel<V: RichHost>(
         .regions
         .iter()
         .any(|region| region.by_kind[Kind::Fill.index()] > 0);
+    let reserved = model
+        .regions
+        .iter()
+        .any(|region| region.reserved.is_some_and(|bytes| bytes > 0));
     let header = div()
         .flex()
         .flex_wrap()
@@ -152,7 +156,7 @@ fn panel<V: RichHost>(
             div()
                 .flex_1()
                 .min_w_0()
-                .child(Legend::new().with_fill(fill)),
+                .child(Legend::new().with_fill(fill).with_reserved(reserved)),
         )
         .when(look.parts.strip, |header| {
             header.child(scale_switch(t, rich.mode, cx.weak_entity()))

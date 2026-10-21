@@ -37,6 +37,8 @@ const MODULES: [(&str, &str, [&str; 3]); 14] = [
     ("boot_cfg", "Boot", ["Entry", "Verify", "Jump"]),
 ];
 
+const RESERVED: [u64; 4] = [0x8000, 0x2000, 0, 0];
+
 const REGIONS: [(&str, u64, u64); 4] = [
     ("mpe:pflash0", 0x8000_0000, 0x20_0000),
     ("mpe:dflash0", 0xAF00_0000, 0x1_0000),
@@ -181,7 +183,7 @@ fn linker_map() -> String {
     builder.place(
         "stack",
         ("bss", 3, "data"),
-        &[(".bss.stacks".to_owned(), 0x4_000)],
+        &[(".bss.stacks".to_owned(), 0xFF3C)],
     );
     render(&builder)
 }
@@ -233,8 +235,9 @@ fn memory_usage(builder: &Builder) -> String {
         let (code, data) = if at == 0 { (used, 0) } else { (0, used) };
         let _ = writeln!(
             text,
-            "| {name} | {code} | {data} | 0 | {} | {total} |",
-            total - used
+            "| {name} | {code} | {data} | {} | {} | {total} |",
+            RESERVED[at],
+            total - used - RESERVED[at]
         );
     }
     text
