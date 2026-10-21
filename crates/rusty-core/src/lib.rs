@@ -35,7 +35,7 @@ pub use name::{NameError, check_name};
 pub use op_plan::{
     Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, ItemKind, OpKind, OperationPlan,
     PlanRequest, Resolution, Risk, ScannedItem, Step, TEMP_SUFFIX, Totals, drop_op, is_protected,
-    plan,
+    plan, right_button_drag,
 };
 pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection, SpanMode};

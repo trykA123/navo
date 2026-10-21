@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
     rc::{Rc, Weak},
     str::FromStr,
-    sync::{Arc, Once, atomic::AtomicBool},
+    sync::{Arc, Once, OnceLock, atomic::AtomicBool},
     time::{Duration, Instant},
 };
 
@@ -31,6 +31,12 @@ use windows::{
 use crate::direct_manipulation::DirectManipulationHandler;
 use crate::*;
 use gpui::*;
+
+static EXTERNAL_DRAG_HANDLER: OnceLock<fn(isize, &[(PathBuf, bool)]) -> u32> = OnceLock::new();
+
+pub fn set_external_drag_handler(handler: fn(isize, &[(PathBuf, bool)]) -> u32) {
+    let _ = EXTERNAL_DRAG_HANDLER.set(handler);
+}
 
 pub(crate) struct WindowsWindow(pub Rc<WindowsWindowInner>);
 
@@ -61,6 +67,9 @@ pub struct WindowsWindowState {
     pub last_reported_modifiers: Cell<Option<Modifiers>>,
     pub last_reported_capslock: Cell<Option<Capslock>>,
     pub hovered: Cell<bool>,
+    pub drop_effect_hint: Cell<Option<u32>>,
+    pub drag_keys: Cell<u32>,
+    pub external_drag_payload: Cell<Option<ExternalDragPayload>>,
     pub last_visibility: Cell<Option<WindowVisibility>>,
     pub direct_manipulation: DirectManipulationHandler,
 
@@ -176,6 +185,9 @@ impl WindowsWindowState {
             last_reported_modifiers: Cell::new(last_reported_modifiers),
             last_reported_capslock: Cell::new(last_reported_capslock),
             hovered: Cell::new(hovered),
+            drop_effect_hint: Cell::new(None),
+            drag_keys: Cell::new(0),
+            external_drag_payload: Cell::new(None),
             last_visibility: Cell::new(None),
             renderer: RefCell::new(renderer),
             force_render_pending: Cell::new(false),
@@ -391,6 +403,21 @@ impl WindowsWindowInner {
 
     pub(crate) fn system_settings(&self) -> &WindowsSystemSettings {
         &self.system_settings
+    }
+
+    pub(crate) fn handle_external_drag(&self) -> Option<isize> {
+        let Some(ExternalDragPayload::Files(paths)) = self.state.external_drag_payload.take()
+        else {
+            return Some(0);
+        };
+        if let Some(handler) = EXTERNAL_DRAG_HANDLER.get().copied() {
+            handler(self.hwnd.0 as isize, paths.entries());
+        }
+        if let Some(mut callback) = self.state.callbacks.input.take() {
+            callback(PlatformInput::FileDrop(FileDropEvent::Ended));
+            self.state.callbacks.input.set(Some(callback));
+        }
+        Some(0)
     }
 }
 
@@ -1057,6 +1084,34 @@ impl PlatformWindow for WindowsWindow {
         self.0.hwnd
     }
 
+    fn can_start_external_drag(&self) -> bool {
+        EXTERNAL_DRAG_HANDLER.get().is_some()
+    }
+
+    fn start_external_drag(&self, payload: &ExternalDragPayload) -> bool {
+        if !self.can_start_external_drag() {
+            return false;
+        }
+        self.state.external_drag_payload.set(Some(payload.clone()));
+        // SAFETY: This UI thread owns the window, and the posted message carries no pointers.
+        if unsafe {
+            PostMessageW(
+                Some(self.0.hwnd),
+                WM_GPUI_EXTERNAL_DRAG,
+                WPARAM(0),
+                LPARAM(0),
+            )
+        }
+        .context("unable to post external drag")
+        .log_err()
+        .is_none()
+        {
+            self.state.external_drag_payload.set(None);
+            return false;
+        }
+        true
+    }
+
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.state.renderer.borrow().gpu_specs().log_err()
     }
@@ -1151,6 +1206,109 @@ impl WindowsDragDropHandler {
             self.0.state.callbacks.input.set(Some(func));
         }
     }
+
+    fn hinted_effect(&self, allowed: DROPEFFECT) -> DROPEFFECT {
+        let hint = self
+            .0
+            .state
+            .drop_effect_hint
+            .get()
+            .unwrap_or(DROPEFFECT_COPY.0);
+        DROPEFFECT(hint & allowed.0)
+    }
+
+    fn client_position(&self, pt: &POINTL) -> Point<Pixels> {
+        let mut cursor_position = POINT { x: pt.x, y: pt.y };
+        unsafe {
+            ScreenToClient(self.0.hwnd, &mut cursor_position)
+                .ok()
+                .log_err();
+        }
+        let scale_factor = self.0.state.scale_factor.get();
+        logical_point(
+            cursor_position.x as f32,
+            cursor_position.y as f32,
+            scale_factor,
+        )
+    }
+}
+
+fn dropped_paths(data: &IDataObject) -> Option<SmallVec<[PathBuf; 2]>> {
+    let config = FORMATETC {
+        cfFormat: CF_HDROP.0,
+        ptd: std::ptr::null_mut() as _,
+        dwAspect: DVASPECT_CONTENT.0,
+        lindex: -1,
+        tymed: TYMED_HGLOBAL.0 as _,
+    };
+    unsafe {
+        if data.QueryGetData(&config as _) != S_OK {
+            return None;
+        }
+        let mut medium = data.GetData(&config as _).log_err()?;
+        if medium.u.hGlobal.is_invalid() {
+            ReleaseStgMedium(&mut medium);
+            return None;
+        }
+        let hdrop = HDROP(medium.u.hGlobal.0);
+        let mut paths = SmallVec::<[PathBuf; 2]>::new();
+        with_file_names(hdrop, |file_name| {
+            if let Some(path) = PathBuf::from_str(&file_name).log_err() {
+                paths.push(path);
+            }
+        });
+        ReleaseStgMedium(&mut medium);
+        Some(paths)
+    }
+}
+
+fn final_drop_effect(hinted: DROPEFFECT) -> DROPEFFECT {
+    if hinted.0 & DROPEFFECT_MOVE.0 != 0 {
+        DROPEFFECT_NONE
+    } else {
+        DROPEFFECT(hinted.0 & (DROPEFFECT_COPY.0 | DROPEFFECT_LINK.0))
+    }
+}
+
+fn report_nothing_to_delete(data: &IDataObject) {
+    use windows::Win32::System::{
+        DataExchange::RegisterClipboardFormatW,
+        Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock},
+    };
+    unsafe {
+        let format = RegisterClipboardFormatW(CFSTR_PERFORMEDDROPEFFECT);
+        let Ok(cf_format) = u16::try_from(format) else {
+            return;
+        };
+        if cf_format == 0 {
+            return;
+        }
+        let Some(global) = GlobalAlloc(GMEM_MOVEABLE, std::mem::size_of::<u32>()).log_err() else {
+            return;
+        };
+        let ptr = GlobalLock(global);
+        if ptr.is_null() {
+            GlobalFree(Some(global)).ok();
+            return;
+        }
+        std::ptr::write_unaligned(ptr as *mut u32, DROPEFFECT_NONE.0);
+        GlobalUnlock(global).ok();
+        let config = FORMATETC {
+            cfFormat: cf_format,
+            ptd: std::ptr::null_mut() as _,
+            dwAspect: DVASPECT_CONTENT.0,
+            lindex: -1,
+            tymed: TYMED_HGLOBAL.0 as _,
+        };
+        let medium = STGMEDIUM {
+            tymed: TYMED_HGLOBAL.0 as _,
+            u: STGMEDIUM_0 { hGlobal: global },
+            pUnkForRelease: std::mem::ManuallyDrop::new(None),
+        };
+        if data.SetData(&config, &medium, true).log_err().is_none() {
+            GlobalFree(Some(global)).ok();
+        }
+    }
 }
 
 #[allow(non_snake_case)]
@@ -1158,56 +1316,34 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
     fn DragEnter(
         &self,
         pdataobj: windows::core::Ref<IDataObject>,
-        _grfkeystate: MODIFIERKEYS_FLAGS,
+        grfkeystate: MODIFIERKEYS_FLAGS,
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        unsafe {
-            let idata_obj = pdataobj.ok()?;
-            let config = FORMATETC {
-                cfFormat: CF_HDROP.0,
-                ptd: std::ptr::null_mut() as _,
-                dwAspect: DVASPECT_CONTENT.0,
-                lindex: -1,
-                tymed: TYMED_HGLOBAL.0 as _,
-            };
-            let cursor_position = POINT { x: pt.x, y: pt.y };
-            if idata_obj.QueryGetData(&config as _) == S_OK {
-                *pdweffect = DROPEFFECT_COPY;
-                let Some(mut idata) = idata_obj.GetData(&config as _).log_err() else {
-                    return Ok(());
-                };
-                if idata.u.hGlobal.is_invalid() {
-                    return Ok(());
-                }
-                let hdrop = HDROP(idata.u.hGlobal.0);
-                let mut paths = SmallVec::<[PathBuf; 2]>::new();
-                with_file_names(hdrop, |file_name| {
-                    if let Some(path) = PathBuf::from_str(&file_name).log_err() {
-                        paths.push(path);
-                    }
-                });
-                ReleaseStgMedium(&mut idata);
-                let mut cursor_position = cursor_position;
-                ScreenToClient(self.0.hwnd, &mut cursor_position)
-                    .ok()
-                    .log_err();
-                let scale_factor = self.0.state.scale_factor.get();
+        let idata_obj = pdataobj.ok()?;
+        let allowed = unsafe { *pdweffect };
+        self.0.state.drag_keys.set(grfkeystate.0);
+        self.0.state.drop_effect_hint.set(None);
+        let effect = match dropped_paths(idata_obj) {
+            Some(paths) => {
                 let input = PlatformInput::FileDrop(FileDropEvent::Entered {
-                    position: logical_point(
-                        cursor_position.x as f32,
-                        cursor_position.y as f32,
-                        scale_factor,
-                    ),
+                    position: self.client_position(pt),
                     paths: ExternalPaths(paths),
                 });
                 self.handle_drag_drop(input);
-            } else {
-                *pdweffect = DROPEFFECT_NONE;
+                self.hinted_effect(allowed)
             }
+            None => {
+                self.0.state.drop_effect_hint.set(Some(DROPEFFECT_NONE.0));
+                DROPEFFECT_NONE
+            }
+        };
+        let cursor_position = POINT { x: pt.x, y: pt.y };
+        unsafe {
+            *pdweffect = effect;
             self.0
                 .drop_target_helper
-                .DragEnter(self.0.hwnd, idata_obj, &cursor_position, *pdweffect)
+                .DragEnter(self.0.hwnd, idata_obj, &cursor_position, effect)
                 .log_err();
         }
         Ok(())
@@ -1215,31 +1351,25 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
 
     fn DragOver(
         &self,
-        _grfkeystate: MODIFIERKEYS_FLAGS,
+        grfkeystate: MODIFIERKEYS_FLAGS,
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        let mut cursor_position = POINT { x: pt.x, y: pt.y };
-        unsafe {
-            *pdweffect = DROPEFFECT_COPY;
-            self.0
-                .drop_target_helper
-                .DragOver(&cursor_position, *pdweffect)
-                .log_err();
-            ScreenToClient(self.0.hwnd, &mut cursor_position)
-                .ok()
-                .log_err();
-        }
-        let scale_factor = self.0.state.scale_factor.get();
+        let allowed = unsafe { *pdweffect };
+        self.0.state.drag_keys.set(grfkeystate.0);
         let input = PlatformInput::FileDrop(FileDropEvent::Pending {
-            position: logical_point(
-                cursor_position.x as f32,
-                cursor_position.y as f32,
-                scale_factor,
-            ),
+            position: self.client_position(pt),
         });
         self.handle_drag_drop(input);
-
+        let effect = self.hinted_effect(allowed);
+        let cursor_position = POINT { x: pt.x, y: pt.y };
+        unsafe {
+            *pdweffect = effect;
+            self.0
+                .drop_target_helper
+                .DragOver(&cursor_position, effect)
+                .log_err();
+        }
         Ok(())
     }
 
@@ -1249,6 +1379,7 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
         }
         let input = PlatformInput::FileDrop(FileDropEvent::Exited);
         self.handle_drag_drop(input);
+        self.0.state.drop_effect_hint.set(None);
 
         Ok(())
     }
@@ -1256,31 +1387,33 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
     fn Drop(
         &self,
         pdataobj: windows::core::Ref<IDataObject>,
-        _grfkeystate: MODIFIERKEYS_FLAGS,
+        grfkeystate: MODIFIERKEYS_FLAGS,
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
         let idata_obj = pdataobj.ok()?;
-        let mut cursor_position = POINT { x: pt.x, y: pt.y };
-        unsafe {
-            *pdweffect = DROPEFFECT_COPY;
-            self.0
-                .drop_target_helper
-                .Drop(idata_obj, &cursor_position, *pdweffect)
-                .log_err();
-            ScreenToClient(self.0.hwnd, &mut cursor_position)
-                .ok()
-                .log_err();
-        }
-        let scale_factor = self.0.state.scale_factor.get();
+        let allowed = unsafe { *pdweffect };
+        let buttons = MK_LBUTTON.0 | MK_RBUTTON.0 | MK_MBUTTON.0;
+        let held = self.0.state.drag_keys.get() & buttons;
+        self.0.state.drag_keys.set(grfkeystate.0 | held);
         let input = PlatformInput::FileDrop(FileDropEvent::Submit {
-            position: logical_point(
-                cursor_position.x as f32,
-                cursor_position.y as f32,
-                scale_factor,
-            ),
+            position: self.client_position(pt),
         });
         self.handle_drag_drop(input);
+        let hinted = self.hinted_effect(allowed);
+        let effect = final_drop_effect(hinted);
+        if hinted.0 & DROPEFFECT_MOVE.0 != 0 {
+            report_nothing_to_delete(idata_obj);
+        }
+        let cursor_position = POINT { x: pt.x, y: pt.y };
+        unsafe {
+            *pdweffect = effect;
+            self.0
+                .drop_target_helper
+                .Drop(idata_obj, &cursor_position, effect)
+                .log_err();
+        }
+        self.0.state.drop_effect_hint.set(None);
 
         Ok(())
     }
@@ -1483,6 +1616,30 @@ unsafe extern "system" fn window_procedure(
     }
 
     result
+}
+
+pub fn set_drop_effect(hwnd: isize, effect: Option<u32>) {
+    if let Some(window) = own_window_from_raw(hwnd) {
+        window.state.drop_effect_hint.set(effect);
+    }
+}
+
+pub fn drag_key_state(hwnd: isize) -> u32 {
+    own_window_from_raw(hwnd).map_or(0, |window| window.state.drag_keys.get())
+}
+
+fn own_window_from_raw(hwnd: isize) -> Option<Rc<WindowsWindowInner>> {
+    let hwnd = HWND(hwnd as *mut _);
+    let thread = unsafe { GetWindowThreadProcessId(hwnd, None) };
+    if thread == 0 || thread != unsafe { windows::Win32::System::Threading::GetCurrentThreadId() } {
+        return None;
+    }
+    let mut class = [0u16; 64];
+    let len = usize::try_from(unsafe { GetClassNameW(hwnd, &mut class) }).ok()?;
+    if class.get(..len)? != unsafe { WINDOW_CLASS_NAME.as_wide() } {
+        return None;
+    }
+    window_from_hwnd(hwnd)
 }
 
 pub(crate) fn window_from_hwnd(hwnd: HWND) -> Option<Rc<WindowsWindowInner>> {
