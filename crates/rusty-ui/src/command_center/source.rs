@@ -138,9 +138,23 @@ impl HitSink {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Capped {
+    pub cap: usize,
+    pub root: SharedString,
+}
+
 pub trait ResultSource: Send + Sync {
     fn id(&self) -> &'static str;
     fn group(&self) -> Group;
     fn scopes(&self) -> Scopes;
     fn search(&self, request: &Request, sink: &HitSink, cancel: &Cancel);
+
+    fn wait_for_more(&self, _request: &Request, _cancel: &Cancel) -> bool {
+        false
+    }
+
+    fn capped(&self, _request: &Request) -> Option<Capped> {
+        None
+    }
 }

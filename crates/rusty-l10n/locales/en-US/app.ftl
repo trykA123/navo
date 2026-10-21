@@ -8,6 +8,7 @@ command-center-recent = Recent
 command-center-commands = Commands
 command-center-folders = Folders
 command-center-files = Files
+command-center-files-capped = Files · First { $count } entries of { $root } · the disk index finds the rest
 command-center-show-all = Show all { $count }
 command-center-show-all-commands = commands
 command-center-show-all-files = files and folders

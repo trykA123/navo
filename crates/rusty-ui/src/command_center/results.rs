@@ -1,19 +1,21 @@
 use std::collections::BTreeMap;
 
+use gpui_kit::SharedString;
 use rusty_core::Location;
 
 use super::query::Scope;
-use super::source::{Group, Hit, Target};
+use super::source::{Capped, Group, Hit, Target};
 
 const SCOPED_CAP: usize = 500;
 const RECENT_COMMANDS: usize = 5;
 const RECENT_FOLDERS: usize = 8;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Heading {
     TopHit,
     Recent,
     Group(Group),
+    FilesCapped { cap: usize, root: SharedString },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -45,6 +47,17 @@ impl Results {
     }
 
     #[must_use]
+    pub fn with_cap(mut rows: Vec<Row>, capped: Option<Capped>) -> Vec<Row> {
+        let files = Row::Header(Heading::Group(Group::Files));
+        if let Some(Capped { cap, root }) = capped
+            && let Some(header) = rows.iter_mut().find(|row| **row == files)
+        {
+            *header = Row::Header(Heading::FilesCapped { cap, root });
+        }
+        rows
+    }
+
+    #[must_use]
     pub fn recent(commands: Vec<Hit>, folders: Vec<Hit>) -> Vec<Row> {
         let hits: Vec<Row> = commands
             .into_iter()
@@ -64,7 +77,7 @@ impl Results {
 
 fn place_of(hit: &Hit) -> Option<&Location> {
     match (&hit.target, hit.source) {
-        (Target::GoTo(location), "tabs") | (Target::Open { location, .. }, "recent") => {
+        (Target::GoTo(location), "tabs") | (Target::Open { location, .. }, "recent" | "here") => {
             Some(location)
         }
         _ => None,
@@ -72,28 +85,35 @@ fn place_of(hit: &Hit) -> Option<&Location> {
 }
 
 fn one_per_place(mut hits: Vec<Hit>) -> Vec<Hit> {
-    let same = |hits: &[Hit], a: usize, b: usize| match (place_of(&hits[a]), place_of(&hits[b])) {
-        (Some(a), Some(b)) => a.same_place(b),
-        _ => false,
-    };
-    let of = |source: &str| -> Vec<usize> {
+    let of = |hits: &[Hit], source: &str| -> Vec<usize> {
         (0..hits.len())
             .filter(|&at| hits[at].source == source && place_of(&hits[at]).is_some())
             .collect()
     };
-    let (tab_hits, recent_hits) = (of("tabs"), of("recent"));
     let mut dropped = vec![false; hits.len()];
-    let mut kept: Vec<usize> = Vec::new();
-    for at in tab_hits.into_iter().chain(recent_hits) {
-        let first = kept.iter().copied().find(|&tab| same(&hits, tab, at));
-        match first {
-            Some(tab) => {
-                hits[tab].score = hits[tab].score.max(hits[at].score);
-                dropped[at] = true;
-            }
-            None if hits[at].source == "tabs" => kept.push(at),
-            None => {}
+    let mut absorb = |hits: &mut [Hit], kept: &[usize], at: usize| {
+        let winner = kept.iter().copied().find(|&win| {
+            matches!((place_of(&hits[win]), place_of(&hits[at])), (Some(a), Some(b)) if a.same_place(b))
+        });
+        if let Some(win) = winner {
+            hits[win].score = hits[win].score.max(hits[at].score);
+            dropped[at] = true;
         }
+        winner.is_none()
+    };
+    let mut kept: Vec<usize> = Vec::new();
+    for at in of(&hits, "tabs") {
+        if absorb(&mut hits, &kept, at) {
+            kept.push(at);
+        }
+    }
+    let recents: Vec<usize> = of(&hits, "recent")
+        .into_iter()
+        .filter(|&at| absorb(&mut hits, &kept, at))
+        .collect();
+    kept.extend(recents);
+    for at in of(&hits, "here") {
+        absorb(&mut hits, &kept, at);
     }
     let mut at = 0;
     hits.retain(|_| {

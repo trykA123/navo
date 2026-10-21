@@ -1,3 +1,4 @@
+mod here;
 mod recent;
 mod tabs;
 
@@ -9,6 +10,7 @@ use super::query::{Query, Term};
 use super::rank;
 use super::source::{Group, Hit, Target};
 
+pub use here::{HereOptions, HereSource, HereWalks};
 pub use recent::{Frecents, RecentSource};
 pub use tabs::{TabsSnapshot, TabsSource};
 
@@ -37,6 +39,13 @@ impl Place {
             parent,
             folder,
             weight,
+        }
+    }
+
+    fn open_target(&self) -> Target {
+        Target::Open {
+            location: self.location.clone(),
+            folder: self.folder,
         }
     }
 

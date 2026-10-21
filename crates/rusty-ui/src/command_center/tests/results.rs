@@ -90,7 +90,7 @@ fn groups_come_in_fixed_order_whatever_the_scores() {
     let headings: Vec<Heading> = rows
         .iter()
         .filter_map(|row| match row {
-            Row::Header(heading) => Some(*heading),
+            Row::Header(heading) => Some(heading.clone()),
             _ => None,
         })
         .collect();
@@ -360,4 +360,35 @@ fn a_place_found_by_recent_and_tabs_shows_once_as_the_tabs_row_with_the_higher_s
     assert_eq!(shown.len(), 2, "{rows:?}");
     assert_eq!((shown[0].source, shown[0].score), ("tabs", 90));
     assert_eq!(shown[1].source, "recent");
+}
+
+#[test]
+fn tabs_win_over_recent_and_recent_over_here_for_one_place() {
+    let hits = vec![
+        place_hit("here", "/work/a", 70),
+        place_hit("recent", "/work/a", 50),
+        place_hit("here", "/work/b", 40),
+        place_hit("recent", "/work/b", 60),
+        place_hit("here", "/work/c", 30),
+        place_hit("tabs", "/work/c", 20),
+        place_hit("recent", "/work/c", 10),
+        place_hit("here", "/work/d", 5),
+    ];
+    let rows = Results::merge(hits, Scope::Files);
+    let shown: Vec<(&str, &str, i64)> = rows
+        .iter()
+        .filter_map(|row| match row {
+            Row::Hit(hit) => Some((hit.source, hit.title.as_ref(), hit.score)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("recent", "/work/a", 70),
+            ("recent", "/work/b", 60),
+            ("tabs", "/work/c", 30),
+            ("here", "/work/d", 5),
+        ]
+    );
 }

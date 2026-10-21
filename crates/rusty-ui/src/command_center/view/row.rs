@@ -58,7 +58,7 @@ pub(crate) fn highlight_ranges(text: &str, indices: &[u32]) -> Vec<Range<usize>>
 pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool) -> RowElement {
     let t = look.theme;
     match row {
-        Row::Header(heading) => header(t, heading_label(*heading), index),
+        Row::Header(heading) => header(t, heading_label(heading), index),
         Row::TopHit(hit) => top_hit(look, hit, index, is_selected),
         Row::Hit(hit) => hit_row(look, hit, index, is_selected),
         Row::ShowAll { group, total } => show_all(look, (*group, *total), index, is_selected),
@@ -66,14 +66,20 @@ pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool)
     }
 }
 
-fn heading_label(heading: Heading) -> SharedString {
+fn heading_label(heading: &Heading) -> SharedString {
     match heading {
         Heading::TopHit => tr("command-center-top-hit").into(),
         Heading::Recent => tr("command-center-recent").into(),
         Heading::Group(Group::Commands) => tr("command-center-commands").into(),
         Heading::Group(Group::Folders) => tr("command-center-folders").into(),
         Heading::Group(Group::Files) => tr("command-center-files").into(),
-        Heading::Group(Group::Module(name)) => name.into(),
+        Heading::Group(Group::Module(name)) => (*name).into(),
+        Heading::FilesCapped { cap, root } => t!(
+            "command-center-files-capped",
+            count = crate::format::bytes(*cap as u64),
+            root = root.to_string()
+        )
+        .into(),
     }
 }
 
@@ -112,7 +118,7 @@ fn header(t: &Theme, label: SharedString, index: usize) -> RowElement {
         .text_size(t.typography.tiny)
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(t.colors.muted)
-        .child(label)
+        .child(div().min_w_0().truncate().child(label))
 }
 
 fn shown_title(hit: &Hit) -> SharedString {

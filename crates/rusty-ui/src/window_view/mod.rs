@@ -1,5 +1,6 @@
 mod app_menu;
 mod clipboard;
+mod closing;
 mod command_center;
 mod crash;
 mod drag_hover;
@@ -45,6 +46,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use command_center::CommandCenterState;
 use gpui_kit::{FocusHandle, Modifiers, ModifiersChangedEvent, Subscription, WindowAppearance};
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
@@ -195,6 +197,7 @@ impl FerriteWindow {
             kinds: options.kinds,
             viewer: None,
             next_prompt: 0,
+            command_center: CommandCenterState::new(options.search, &options.provider),
             provider: options.provider,
             drives: drives::Drives::new(options.drives),
             drive_menu: None,
@@ -220,7 +223,6 @@ impl FerriteWindow {
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             crash: crash::CrashState::new(options.crash_report, cx),
-            command_center: command_center::CommandCenterState::new(options.search),
             multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
             _watches: Self::watches(window, cx),
@@ -322,33 +324,6 @@ impl FerriteWindow {
         self.show_refusal(result);
         self.focus_core_pane(window, cx);
         cx.notify();
-    }
-
-    fn save(&self) {
-        (self.on_save)(self.browser.state());
-    }
-
-    fn close(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {
-        if self.warn_unsaved(cx) {
-            return false;
-        }
-        let _ = self.browser.shutdown(JOB_STOP_WAIT);
-        self.remember_placement(window, cx);
-        self.save();
-        true
-    }
-
-    fn close_saves_and_quits(window: &mut Window, cx: &mut Context<Self>) {
-        let this = cx.weak_entity();
-        window.on_window_should_close(cx, move |window, cx| {
-            let closing = this
-                .update(cx, |view, cx| view.close(window, cx))
-                .unwrap_or(true);
-            if closing {
-                cx.quit();
-            }
-            closing
-        });
     }
 }
 

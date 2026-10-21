@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use super::super::FerriteWindow;
 use crate::command_center::{
-    Cancel, CommandsSnapshot, Hit, HitSink, Query, RecentSource, Request, ResultSource, Results,
-    Row, Scope, Selection,
+    Cancel, Capped, CommandsSnapshot, Hit, HitSink, Query, RecentSource, Request, ResultSource,
+    Results, Row, Scope,
 };
 use crate::prelude::*;
+use gpui_kit::{AsyncWindowContext, WeakEntity};
 
 const LIMIT: usize = 500;
 const RECENT_COMMANDS: usize = 5;
@@ -22,6 +23,7 @@ pub(super) struct Search {
     generation: u64,
     cancel: Cancel,
     sink: HitSink,
+    pub(super) shown: u64,
 }
 
 impl Search {
@@ -36,6 +38,7 @@ impl Search {
             generation: 0,
             cancel: Cancel::new(),
             sink: HitSink::new(0),
+            shown: 0,
         }
     }
 
@@ -56,21 +59,63 @@ impl Search {
     }
 }
 
-fn run_sources(
-    sources: &[Arc<dyn ResultSource>],
-    request: &Request,
-    sink: &HitSink,
-    cancel: &Cancel,
+#[derive(Clone)]
+struct Round {
+    sources: Arc<[Arc<dyn ResultSource>]>,
+    request: Arc<Request>,
+    sink: HitSink,
+    cancel: Cancel,
+}
+
+impl Round {
+    fn active(&self) -> impl Iterator<Item = &Arc<dyn ResultSource>> {
+        let scope = self.request.query.scope;
+        self.sources
+            .iter()
+            .filter(move |source| source.scopes().contains(scope))
+    }
+
+    fn run(&self) -> (Vec<Hit>, Option<Capped>) {
+        for source in self.active() {
+            if self.cancel.is_cancelled() {
+                break;
+            }
+            source.search(&self.request, &self.sink, &self.cancel);
+        }
+        let capped = self
+            .active()
+            .find_map(|source| source.capped(&self.request));
+        (self.sink.drain(self.request.generation), capped)
+    }
+
+    fn wait_for_more(&self) -> bool {
+        self.active()
+            .any(|source| source.wait_for_more(&self.request, &self.cancel))
+    }
+}
+
+async fn stream(
+    round: Round,
+    scope: Scope,
+    this: WeakEntity<FerriteWindow>,
+    cx: &mut AsyncWindowContext,
 ) {
-    let scope = request.query.scope;
-    for source in sources
-        .iter()
-        .filter(|source| source.scopes().contains(scope))
-    {
-        if cancel.is_cancelled() {
+    let generation = round.request.generation;
+    loop {
+        let step = round.clone();
+        let (hits, capped) = cx
+            .background_executor()
+            .spawn(async move { step.run() })
+            .await;
+        let update = (generation, scope, hits, capped);
+        let shown = this.update_in(cx, |view, window, cx| view.receive_hits(update, window, cx));
+        let step = round.clone();
+        let more = cx
+            .background_executor()
+            .spawn(async move { step.wait_for_more() });
+        if shown.is_err() || !more.await {
             return;
         }
-        source.search(request, sink, cancel);
     }
 }
 
@@ -102,20 +147,14 @@ impl FerriteWindow {
             limit: LIMIT,
         };
         let search = &open.search;
-        let (sources, sink, cancel) = (
-            search.sources.clone(),
-            search.sink.clone(),
-            search.cancel.clone(),
-        );
-        let task = cx.background_executor().spawn(async move {
-            run_sources(&sources, &request, &sink, &cancel);
-            sink.drain(generation)
-        });
+        let round = Round {
+            sources: search.sources.clone(),
+            request: Arc::new(request),
+            sink: search.sink.clone(),
+            cancel: search.cancel.clone(),
+        };
         cx.spawn_in(window, async move |this, cx| {
-            let hits = task.await;
-            let _ = this.update_in(cx, |view, window, cx| {
-                view.receive_hits((generation, scope, hits), window, cx);
-            });
+            stream(round, scope, this, cx).await
         })
         .detach();
     }
@@ -143,11 +182,12 @@ impl FerriteWindow {
 
     pub(in crate::window_view) fn receive_hits(
         &mut self,
-        (generation, scope, hits): (u64, Scope, Vec<Hit>),
+        (generation, scope, hits, capped): (u64, Scope, Vec<Hit>, Option<Capped>),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_rows((generation, Results::merge(hits, scope)), window, cx);
+        let rows = Results::with_cap(Results::merge(hits, scope), capped);
+        self.show_rows((generation, rows), window, cx);
     }
 
     fn show_rows(
@@ -162,7 +202,8 @@ impl FerriteWindow {
         if generation != open.search.generation() {
             return;
         }
-        open.selection = Selection::start(&rows);
+        open.selection = open.kept_selection(generation, &rows);
+        open.search.shown = generation;
         open.rows = rows.into();
         self.push_command_center(window, cx);
     }

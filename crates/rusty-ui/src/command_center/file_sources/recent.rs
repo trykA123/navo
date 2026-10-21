@@ -4,9 +4,7 @@ use rusty_core::Location;
 
 use super::{Matcher, Place};
 use crate::command_center::query::Query;
-use crate::command_center::source::{
-    Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target,
-};
+use crate::command_center::source::{Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes};
 use crate::window_view::Frecent;
 
 pub const RECENT_ROWS: usize = 2_000;
@@ -45,7 +43,7 @@ impl RecentSource {
             .iter()
             .filter(|place| place.folder)
             .take(count)
-            .map(|place| place.hit("recent", (0, Vec::new()), target(place)))
+            .map(|place| place.hit("recent", (0, Vec::new()), place.open_target()))
             .collect()
     }
 
@@ -58,16 +56,9 @@ impl RecentSource {
             .iter()
             .filter_map(|place| {
                 let (score, indices) = matcher.score(place)?;
-                Some(place.hit("recent", (score, indices), target(place)))
+                Some(place.hit("recent", (score, indices), place.open_target()))
             })
             .collect()
-    }
-}
-
-fn target(place: &Place) -> Target {
-    Target::Open {
-        location: place.location.clone(),
-        folder: place.folder,
     }
 }
 
@@ -95,7 +86,7 @@ impl ResultSource for RecentSource {
             if let Some((score, indices)) = matcher.score(place) {
                 sink.push(
                     request.generation,
-                    place.hit("recent", (score, indices), target(place)),
+                    place.hit("recent", (score, indices), place.open_target()),
                 );
             }
         }

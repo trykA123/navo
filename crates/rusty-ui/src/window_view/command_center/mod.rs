@@ -11,8 +11,8 @@ use gpui_kit::{Bounds, FocusHandle, Pixels, Subscription, point, px, size};
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
-    CommandsSource, HintKeys, INPUT_ROW, LEAVE, RecentSource, ResultSource, Row, Selection,
-    TabsSnapshot, TabsSource,
+    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, LEAVE, RecentSource, ResultSource,
+    Row, Selection, TabsSnapshot, TabsSource,
 };
 use crate::commands::{self, ArgKind};
 use crate::modifier_hints::HintsMode;
@@ -28,10 +28,11 @@ pub(super) struct CommandCenterState {
     pub(super) sources: Vec<Arc<dyn ResultSource>>,
     pub(super) hooks: SearchHooks,
     pub(super) visits: super::visits::Visits,
+    pub(super) here: HereWalks,
 }
 
 impl CommandCenterState {
-    pub(super) fn new(hooks: SearchHooks) -> Self {
+    pub(super) fn new(hooks: SearchHooks, provider: &Arc<dyn rusty_fs::ProviderOps>) -> Self {
         Self {
             open: None,
             leaving: None,
@@ -39,6 +40,7 @@ impl CommandCenterState {
             sources: Vec::new(),
             hooks,
             visits: super::visits::Visits::default(),
+            here: HereWalks::new(provider.clone()),
         }
     }
 }
@@ -64,6 +66,24 @@ struct Open {
 }
 
 impl Open {
+    fn kept_selection(&self, generation: u64, rows: &[Row]) -> Selection {
+        let start = Selection::start(rows);
+        let moved = self.selection != Selection::start(&self.rows);
+        if self.search.shown != generation || !moved {
+            return start;
+        }
+        let target = |row: &Row| match row {
+            Row::TopHit(hit) | Row::Hit(hit) => Some((hit.source, hit.target.clone())),
+            _ => None,
+        };
+        let Some(chosen) = self.selection.row(&self.rows).and_then(target) else {
+            return start;
+        };
+        rows.iter()
+            .position(|row| target(row).as_ref() == Some(&chosen))
+            .map_or(start, |at| Selection::at(rows, at))
+    }
+
     fn props(&self, has_key_hints: bool) -> CommandCenterProps {
         CommandCenterProps {
             rows: self.rows.clone(),
@@ -121,6 +141,7 @@ impl FerriteWindow {
         sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(
             self.browser.state(),
         ))));
+        sources.push(Arc::new(HereSource::new(self.command_center.here.clone())));
         sources.extend(self.command_center.sources.iter().cloned());
         let rows: Rc<[Row]> = search::recent(Vec::new(), Vec::new()).into();
         let anchor = self.command_center_anchor(window, cx);
@@ -172,6 +193,7 @@ impl FerriteWindow {
             return;
         };
         open.search.cancel();
+        self.command_center.here.cancel();
         match &open.restore {
             Some(handle) => window.focus(handle, cx),
             None => self.focus_core_pane(window, cx),

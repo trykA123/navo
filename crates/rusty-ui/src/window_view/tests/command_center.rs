@@ -243,6 +243,18 @@ fn typing_finds_commands_of_the_focused_file_list(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn typing_a_file_name_finds_it_in_the_folder_tree_of_the_active_pane(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "report");
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !rig.rows(cx).iter().any(|row| row.starts_with("report.txt")) {
+        assert!(std::time::Instant::now() < deadline, "{:?}", rig.rows(cx));
+        settle(cx, &rig.view);
+    }
+}
+
+#[gpui_kit::test]
 fn arrows_and_tab_move_the_selection(cx: &mut TestAppContext) {
     let folder = Target::Open {
         location: location("dest"),
@@ -340,7 +352,11 @@ fn results_of_an_older_generation_are_dropped(cx: &mut TestAppContext) {
     );
     cx.update_window(rig.window, |_, window, cx| {
         rig.view.update(cx, |view, cx| {
-            view.receive_hits((generation - 1, Scope::Mixed, vec![stale]), window, cx);
+            view.receive_hits(
+                (generation - 1, Scope::Mixed, vec![stale], None),
+                window,
+                cx,
+            );
         });
     })
     .expect("window");
