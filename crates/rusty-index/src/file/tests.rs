@@ -1,7 +1,8 @@
 use std::{fs, path::Path, time::Instant};
 
-use super::{FORMAT_VERSION, FileError, Header, load, save};
+use super::{CHECKSUM_START, FORMAT_VERSION, FileError, HEADER_LEN, Header, load, save};
 use crate::table::{Flags, NO_PARENT, NameTable};
+use crate::usn::FrnMap;
 
 fn header() -> Header {
     Header {
@@ -72,6 +73,108 @@ fn empty_table_round_trips() {
 }
 
 #[test]
+fn frn_map_round_trips_full_width_references_and_root_aliases() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("ntfs.index");
+    let expected = table();
+    let ids: FrnMap = [(5, 0), ((5 << 48) | 5, 0), ((1u128 << 100) | 9, 2)].into();
+    super::save_with_ids(&path, &header(), &expected, &ids).unwrap();
+    let (actual_header, actual, actual_ids) = super::load_with_ids(&path).unwrap();
+    assert_eq!(actual_header, header());
+    assert_table_matches(&expected, &actual);
+    assert_eq!(actual_ids, ids);
+}
+
+#[test]
+fn walk_snapshots_use_the_new_format_with_an_empty_map() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("walk.index");
+    write_fixture(&path);
+    let (_, actual, ids) = super::load_with_ids(&path).unwrap();
+    assert_table_matches(&table(), &actual);
+    assert!(ids.is_empty());
+}
+
+fn write_frn_fixture(path: &Path) -> Vec<u8> {
+    let ids: FrnMap = [(5, 0), ((1u128 << 100) | 9, 2)].into();
+    super::save_with_ids(path, &header(), &table(), &ids).unwrap();
+    fs::read(path).unwrap()
+}
+
+#[test]
+fn every_truncated_frn_snapshot_is_refused() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("ntfs.index");
+    let bytes = write_frn_fixture(&path);
+    for length in 0..bytes.len() {
+        fs::write(&path, &bytes[..length]).unwrap();
+        assert!(
+            super::load_with_ids(&path).is_err(),
+            "accepted {length} bytes"
+        );
+    }
+}
+
+#[test]
+fn loading_refuses_an_out_of_range_entry_id_with_a_valid_checksum() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("ntfs.index");
+    let mut bytes = write_frn_fixture(&path);
+    let at = bytes.len() - 4;
+    bytes[at..].copy_from_slice(&table().slots().to_le_bytes());
+    repair_checksum(&mut bytes);
+    fs::write(&path, bytes).unwrap();
+    assert!(matches!(
+        super::load_with_ids(&path),
+        Err(FileError::InvalidData(_))
+    ));
+}
+
+#[test]
+fn saving_refuses_an_out_of_range_entry_id() {
+    let folder = tempfile::tempdir().unwrap();
+    let ids = [(5, table().slots())].into();
+    assert!(
+        super::save_with_ids(&folder.path().join("ntfs.index"), &header(), &table(), &ids).is_err()
+    );
+}
+
+#[test]
+fn duplicate_file_references_are_refused() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("ntfs.index");
+    let mut bytes = write_frn_fixture(&path);
+    let at = bytes.len() - 40;
+    let first = bytes[at..at + 16].to_vec();
+    bytes[at + 20..at + 36].copy_from_slice(&first);
+    repair_checksum(&mut bytes);
+    fs::write(&path, bytes).unwrap();
+    assert!(matches!(
+        super::load_with_ids(&path),
+        Err(FileError::InvalidData(_))
+    ));
+}
+
+#[test]
+fn section_counts_must_match_the_file_length() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("ntfs.index");
+    let original = write_frn_fixture(&path);
+    for at in [50, 54, 58, 62] {
+        for count in [0u32, 1, u32::MAX] {
+            let mut bytes = original.clone();
+            bytes[at..at + 4].copy_from_slice(&count.to_le_bytes());
+            repair_checksum(&mut bytes);
+            fs::write(&path, bytes).unwrap();
+            assert!(
+                super::load_with_ids(&path).is_err(),
+                "accepted count {count} at {at}"
+            );
+        }
+    }
+}
+
+#[test]
 fn saving_replaces_the_previous_snapshot() {
     let folder = tempfile::tempdir().unwrap();
     let path = folder.path().join("names.index");
@@ -138,16 +241,16 @@ fn changed_name_has_a_bad_checksum() {
     let folder = tempfile::tempdir().unwrap();
     let path = folder.path().join("name.index");
     let mut bytes = write_fixture(&path);
-    bytes[66 + header().root.len()] ^= 1;
+    bytes[HEADER_LEN + header().root.len()] ^= 1;
     fs::write(&path, bytes).unwrap();
     assert!(matches!(load(&path), Err(FileError::BadChecksum)));
 }
 
 fn repair_checksum(bytes: &mut [u8]) {
     let mut checksum = crc32fast::Hasher::new();
-    checksum.update(&bytes[..62]);
-    checksum.update(&bytes[66..]);
-    bytes[62..66].copy_from_slice(&checksum.finalize().to_le_bytes());
+    checksum.update(&bytes[..CHECKSUM_START]);
+    checksum.update(&bytes[HEADER_LEN..]);
+    bytes[CHECKSUM_START..HEADER_LEN].copy_from_slice(&checksum.finalize().to_le_bytes());
 }
 
 #[test]
@@ -155,12 +258,12 @@ fn malformed_data_is_refused_even_with_a_valid_checksum() {
     let folder = tempfile::tempdir().unwrap();
     let path = folder.path().join("malformed.index");
     let original = write_fixture(&path);
-    let names_start = 66 + header().root.len();
+    let names_start = HEADER_LEN + header().root.len();
     let names_len = u32::from_le_bytes(original[54..58].try_into().unwrap()) as usize;
     let offsets_start = names_start + names_len;
     let slots = table().slots() as usize;
     let mutations: &[(usize, &[u8])] = &[
-        (66, &[0xff]),
+        (HEADER_LEN, &[0xff]),
         (names_start, &[0xff]),
         (offsets_start - 1, b"x"),
         (offsets_start, &u32::MAX.to_le_bytes()),
@@ -189,11 +292,11 @@ fn encoded_metadata_and_arrays_are_little_endian() {
     assert_eq!(&bytes[34..42], &expected.next_usn.to_le_bytes());
     assert_eq!(&bytes[42..50], &expected.built_at.to_le_bytes());
     assert_eq!(
-        &bytes[66..66 + expected.root.len()],
+        &bytes[HEADER_LEN..HEADER_LEN + expected.root.len()],
         expected.root.as_bytes()
     );
     let names_len = u32::from_le_bytes(bytes[54..58].try_into().unwrap()) as usize;
-    let offsets_start = 66 + expected.root.len() + names_len;
+    let offsets_start = HEADER_LEN + expected.root.len() + names_len;
     assert_eq!(
         &bytes[offsets_start + 4..offsets_start + 8],
         &8u32.to_le_bytes()

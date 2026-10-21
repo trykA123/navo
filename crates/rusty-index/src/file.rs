@@ -1,10 +1,11 @@
 use std::{fs::File, io::Read as _, path::Path};
 
 use crate::table::NameTable;
+use crate::usn::FrnMap;
 
-pub const FORMAT_VERSION: u16 = 1;
+pub const FORMAT_VERSION: u16 = 2;
 const MAGIC: &[u8; 16] = b"FERRITE-INDEX\0\0\0";
-const HEADER_LEN: usize = 66;
+const HEADER_LEN: usize = 70;
 const CHECKSUM_START: usize = HEADER_LEN - 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,17 +34,40 @@ pub enum FileError {
 }
 
 pub fn save(path: &Path, header: &Header, table: &NameTable) -> Result<(), FileError> {
-    let (names, offsets, parents, flags) = table.raw_parts();
+    save_with_ids(path, header, table, &FrnMap::new())
+}
+
+pub fn save_with_ids(
+    path: &Path,
+    header: &Header,
+    table: &NameTable,
+    ids: &FrnMap,
+) -> Result<(), FileError> {
+    validate_ids(table, ids)?;
     let lengths = Lengths {
         root: u32::try_from(header.root.len()).map_err(|_| FileError::BadLength)?,
-        names: u32::try_from(names.len()).map_err(|_| FileError::BadLength)?,
+        names: u32::try_from(table.raw_parts().0.len()).map_err(|_| FileError::BadLength)?,
         entries: table.slots(),
+        references: u32::try_from(ids.len()).map_err(|_| FileError::BadLength)?,
     };
     let capacity = lengths
         .body_bytes()?
         .checked_add(HEADER_LEN)
         .ok_or(FileError::BadLength)?;
     let mut bytes = Vec::with_capacity(capacity);
+    encode_header(&mut bytes, header, &lengths);
+    encode_table(&mut bytes, table);
+    for (&reference, &id) in ids {
+        bytes.extend_from_slice(&reference.to_le_bytes());
+        bytes.extend_from_slice(&id.to_le_bytes());
+    }
+    let checksum = checksum(&bytes[..CHECKSUM_START], &bytes[HEADER_LEN..]);
+    bytes[CHECKSUM_START..HEADER_LEN].copy_from_slice(&checksum.to_le_bytes());
+    rusty_store::write_atomic(path, &bytes)?;
+    Ok(())
+}
+
+fn encode_header(bytes: &mut Vec<u8>, header: &Header, lengths: &Lengths) {
     bytes.extend_from_slice(MAGIC);
     bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
     bytes.extend_from_slice(&header.volume_serial.to_le_bytes());
@@ -53,8 +77,13 @@ pub fn save(path: &Path, header: &Header, table: &NameTable) -> Result<(), FileE
     bytes.extend_from_slice(&lengths.root.to_le_bytes());
     bytes.extend_from_slice(&lengths.names.to_le_bytes());
     bytes.extend_from_slice(&lengths.entries.to_le_bytes());
+    bytes.extend_from_slice(&lengths.references.to_le_bytes());
     bytes.extend_from_slice(&0u32.to_le_bytes());
     bytes.extend_from_slice(header.root.as_bytes());
+}
+
+fn encode_table(bytes: &mut Vec<u8>, table: &NameTable) {
+    let (names, offsets, parents, flags) = table.raw_parts();
     bytes.extend_from_slice(names.as_bytes());
     for &offset in offsets {
         bytes.extend_from_slice(&offset.to_le_bytes());
@@ -65,13 +94,14 @@ pub fn save(path: &Path, header: &Header, table: &NameTable) -> Result<(), FileE
     for &flag in flags {
         bytes.extend_from_slice(&flag.to_le_bytes());
     }
-    let checksum = checksum(&bytes[..CHECKSUM_START], &bytes[HEADER_LEN..]);
-    bytes[CHECKSUM_START..HEADER_LEN].copy_from_slice(&checksum.to_le_bytes());
-    rusty_store::write_atomic(path, &bytes)?;
-    Ok(())
 }
 
 pub fn load(path: &Path) -> Result<(Header, NameTable), FileError> {
+    let (header, table, _) = load_with_ids(path)?;
+    Ok((header, table))
+}
+
+pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileError> {
     let mut file = File::open(path)?;
     let mut prefix = [0; HEADER_LEN];
     file.read_exact(&mut prefix)?;
@@ -99,34 +129,53 @@ pub fn load(path: &Path) -> Result<(Header, NameTable), FileError> {
     let flags = read_values(&mut input, lengths.entries, u16::from_le_bytes)?;
     let table = NameTable::from_raw_parts(names, offsets, parents, flags)
         .ok_or(FileError::InvalidData("invalid name table"))?;
-    Ok((header, table))
+    let ids = decode_ids(&mut input, lengths.references)?;
+    validate_ids(&table, &ids)?;
+    Ok((header, table, ids))
+}
+
+fn decode_ids(input: &mut &[u8], count: u32) -> Result<FrnMap, FileError> {
+    let mut ids = FrnMap::new();
+    for _ in 0..count {
+        let reference = u128::from_le_bytes(read_array(input)?);
+        let id = u32::from_le_bytes(read_array(input)?);
+        if ids.insert(reference, id).is_some() {
+            return Err(FileError::InvalidData("duplicate file reference"));
+        }
+    }
+    Ok(ids)
+}
+
+pub(crate) fn validate_ids(table: &NameTable, ids: &FrnMap) -> Result<(), FileError> {
+    if ids.values().any(|&id| id >= table.slots()) {
+        return Err(FileError::InvalidData(
+            "file reference entry id is out of range",
+        ));
+    }
+    Ok(())
 }
 
 struct Lengths {
     root: u32,
     names: u32,
     entries: u32,
+    references: u32,
 }
 
 impl Lengths {
     fn body_bytes(&self) -> Result<usize, FileError> {
-        let bytes = u64::from(self.root) + u64::from(self.names) + u64::from(self.entries) * 10;
+        let bytes = u64::from(self.root)
+            + u64::from(self.names)
+            + u64::from(self.entries) * 10
+            + u64::from(self.references) * 20;
         usize::try_from(bytes).map_err(|_| FileError::BadLength)
     }
 }
 
 fn decode_header(prefix: &[u8]) -> Result<(Header, Lengths, u32), FileError> {
     let mut input = prefix;
-    if &read_array::<16>(&mut input)? != MAGIC {
-        return Err(FileError::BadMagic);
-    }
+    let magic = read_array::<16>(&mut input)?;
     let version = u16::from_le_bytes(read_array(&mut input)?);
-    if version != FORMAT_VERSION {
-        return Err(FileError::UnsupportedVersion {
-            found: version,
-            supported: FORMAT_VERSION,
-        });
-    }
     let header = Header {
         volume_serial: u64::from_le_bytes(read_array(&mut input)?),
         journal_id: u64::from_le_bytes(read_array(&mut input)?),
@@ -138,8 +187,18 @@ fn decode_header(prefix: &[u8]) -> Result<(Header, Lengths, u32), FileError> {
         root: u32::from_le_bytes(read_array(&mut input)?),
         names: u32::from_le_bytes(read_array(&mut input)?),
         entries: u32::from_le_bytes(read_array(&mut input)?),
+        references: u32::from_le_bytes(read_array(&mut input)?),
     };
     let checksum = u32::from_le_bytes(read_array(&mut input)?);
+    if &magic != MAGIC {
+        return Err(FileError::BadMagic);
+    }
+    if version != FORMAT_VERSION {
+        return Err(FileError::UnsupportedVersion {
+            found: version,
+            supported: FORMAT_VERSION,
+        });
+    }
     Ok((header, lengths, checksum))
 }
 

@@ -1,6 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::io;
 
+mod snapshot;
+
 use crate::table::{Flags, NO_PARENT, NameTable, TableChange, TableError};
 use crate::usn::{
     FrnMap, JournalPosition, ParseError, PendingRenames, Resume, UsnBatch, parse_batch,
@@ -25,6 +27,8 @@ pub enum NtfsError {
     InvalidVolume,
     #[error("invalid NTFS response: {0}")]
     InvalidResponse(&'static str),
+    #[error(transparent)]
+    Snapshot(#[from] crate::file::FileError),
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
