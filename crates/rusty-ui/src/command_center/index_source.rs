@@ -24,6 +24,7 @@ pub type HostQuery = Arc<dyn Fn(&IndexOptions, &protocol::Query, &Cancel) -> Rep
 #[derive(Clone)]
 pub struct IndexHooks {
     pub start: Arc<dyn Fn(&IndexOptions) + Send + Sync>,
+    pub status: Arc<dyn Fn() -> Option<Indexing> + Send + Sync>,
     pub pipe: PipeQueries,
     pub host: HostQuery,
     pub metadata: IndexMetadata,
@@ -34,6 +35,7 @@ impl IndexHooks {
     pub fn none() -> Self {
         Self {
             start: Arc::new(|_| {}),
+            status: Arc::new(|| None),
             pipe: PipeQueries::new(Arc::new(|_, _, _| Err(protocol::PipeError::NotAvailable))),
             host: Arc::new(|_, _, _| Reply::default()),
             metadata: IndexMetadata::new(Arc::new(|_| {

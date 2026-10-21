@@ -11,6 +11,7 @@ mod editor;
 mod fkeys;
 mod hand_off;
 mod hints;
+mod index_activity;
 mod jobs;
 mod keys;
 mod layout;
@@ -256,6 +257,7 @@ impl FerriteWindow {
         self.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);
         Self::poll_drives(cx);
+        Self::poll_index_activity(cx);
         cx.defer_in(window, move |view, window, cx| {
             view.focus_core_pane(window, cx);
             view.watch_listings(cx);

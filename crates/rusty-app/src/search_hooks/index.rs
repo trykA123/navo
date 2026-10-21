@@ -1,3 +1,5 @@
+mod status;
+
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -49,6 +51,7 @@ pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks
                 hosts.configure(options);
             }
         }),
+        status: status::hook(hosts.clone()),
         pipe: PipeQueries::new(Arc::new(|options, query, cancel| {
             let mut client = pipe::Client::connect()?;
             if cancel.is_cancelled() {

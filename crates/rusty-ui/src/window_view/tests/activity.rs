@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
@@ -8,8 +10,11 @@ use rusty_core::OpKind;
 
 use super::jobs::{Fake, MB, add, key, running};
 use super::{fake, home_beside_dest, open_options_sized, options_for, press, two_panes};
+use crate::activity::ActivityId;
+use crate::activity_strip::key_of;
 use crate::browser::JobStatus;
-use crate::settings::Values;
+use crate::command_center::Indexing;
+use crate::settings::{Change, Field, Value, Values};
 use crate::window_view::FerriteWindow;
 
 fn open_plain(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
@@ -581,4 +586,115 @@ fn down_in_a_long_drawer_keeps_the_selected_row_in_view(cx: &mut TestAppContext)
     let row = bounds(cx, window, ("activity-row", 1u64)).expect("row");
     assert!(row.bottom() <= drawer.bottom(), "{row:?} {drawer:?}");
     assert!(row.top() >= drawer.top(), "{row:?} {drawer:?}");
+}
+
+#[derive(Default)]
+struct IndexStatus {
+    value: Mutex<Option<Indexing>>,
+    polls: AtomicUsize,
+    searches: AtomicUsize,
+}
+
+fn indexing(count: u64) -> Indexing {
+    Indexing {
+        root: "C:".into(),
+        count,
+    }
+}
+
+fn open_index(
+    cx: &mut TestAppContext,
+    off: bool,
+) -> (AnyWindowHandle, Entity<FerriteWindow>, Arc<IndexStatus>) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let mut options = options_for(fs, state);
+    options.settings.values = Values::default();
+    if off {
+        options.settings.values = options.settings.values.with(&Change {
+            field: Field::SearchIndex,
+            value: Value::Pick(3),
+        });
+    }
+    let status = Arc::new(IndexStatus::default());
+    *status.value.lock().unwrap() = Some(indexing(12_345));
+    let polls = status.clone();
+    options.search.index.status = Arc::new(move || {
+        polls.polls.fetch_add(1, Ordering::SeqCst);
+        polls.value.lock().unwrap().clone()
+    });
+    let searches = status.clone();
+    options.search.index.host = Arc::new(move |_, _, _| {
+        searches.searches.fetch_add(1, Ordering::SeqCst);
+        Default::default()
+    });
+    let pipe_searches = status.clone();
+    options.search.index.pipe =
+        crate::command_center::index_source::PipeQueries::new(Arc::new(move |_, _, _| {
+            pipe_searches.searches.fetch_add(1, Ordering::SeqCst);
+            Ok(Default::default())
+        }));
+    let (window, view) = open_options_sized(cx, options, px(1280.));
+    advance(cx, Duration::from_millis(500));
+    (window, view, status)
+}
+
+fn index_title(cx: &mut TestAppContext, window: AnyWindowHandle) -> String {
+    label(
+        cx,
+        window,
+        ("activity-title", key_of(ActivityId::Background(0))),
+    )
+}
+
+#[gpui_kit::test]
+fn index_activity_appears_while_indexing(cx: &mut TestAppContext) {
+    let (window, view, _) = open_index(cx, false);
+    assert!(has(cx, window, "activity-strip"));
+    assert_eq!(index_title(cx, window), indexing(12_345).text().as_ref());
+    view.read_with(cx, |view, _| {
+        let item = view.job_ui.activity.primary().unwrap();
+        assert_eq!(item.id, ActivityId::Background(0));
+        assert_eq!(item.progress, None);
+    });
+}
+
+#[gpui_kit::test]
+fn index_activity_updates_the_count(cx: &mut TestAppContext) {
+    let (window, _, status) = open_index(cx, false);
+    *status.value.lock().unwrap() = Some(indexing(24_690));
+    advance(cx, Duration::from_millis(499));
+    assert_eq!(index_title(cx, window), indexing(12_345).text().as_ref());
+    advance(cx, Duration::from_millis(1));
+    assert_eq!(index_title(cx, window), indexing(24_690).text().as_ref());
+}
+
+#[gpui_kit::test]
+fn index_activity_ends_when_status_is_none(cx: &mut TestAppContext) {
+    let (window, view, status) = open_index(cx, false);
+    *status.value.lock().unwrap() = None;
+    advance(cx, Duration::from_millis(500));
+    assert!(!has(cx, window, "activity-strip"));
+    assert!(view.read_with(cx, |view, _| view.job_ui.activity.is_empty()));
+}
+
+#[gpui_kit::test]
+fn index_activity_shows_nothing_when_off(cx: &mut TestAppContext) {
+    let (window, _, status) = open_index(cx, true);
+    advance(cx, Duration::from_millis(500));
+    assert!(!has(cx, window, "activity-strip"));
+    assert_eq!(status.polls.load(Ordering::SeqCst), 0);
+    assert_eq!(status.searches.load(Ordering::SeqCst), 0);
+}
+
+#[gpui_kit::test]
+fn index_activity_polls_status_twice_a_second_without_searching(cx: &mut TestAppContext) {
+    let (_, _, status) = open_index(cx, false);
+    let before = status.polls.load(Ordering::SeqCst);
+    assert!(before > 0);
+    for _ in 0..4 {
+        advance(cx, Duration::from_millis(500));
+    }
+    assert_eq!(status.polls.load(Ordering::SeqCst) - before, 4);
+    assert_eq!(status.searches.load(Ordering::SeqCst), 0);
 }
