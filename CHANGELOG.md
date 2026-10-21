@@ -2,6 +2,44 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## alpha-2026-10-21b — 2026-10-21
+
+### New
+
+- Multi-rename opens in its own window. Press Ctrl+M, or press F2 with several items marked.
+- Multi-rename also opens from Rename in the context menu, and from Ctrl+K.
+- Build new names with masks and tokens. Press Ctrl+Space to see the tokens.
+- Multi-rename finds and replaces text, changes case and adds a counter.
+- The preview shows old and new names. A clash shows "Already exists", also for hidden files.
+- Press Del to leave a row out of the rename.
+- Enter renames exactly what the preview shows. If the folder changed, Ferrite checks again first.
+- Ctrl+S saves a set of rules as a preset. Ctrl+O opens the preset list.
+- Multi-rename remembers the last pattern you used.
+- Rich ELF view: in Rich mode (View menu, Alt+V), memory regions show their usage, an address strip and a treemap of flash use.
+- The Rich ELF view shows the symbol table beside the map. Pick a block or a group to name it in the inspector and the status line.
+- Linker fill shows as hatched areas. Simple mode looks as before.
+- Rich MAP view: the same screen for linker MAP files. It shows reserved space, groups by module, object file or section, and a table of located sections.
+- A MAP file next to its ELF file takes section kinds from the ELF file.
+- Ctrl+K finds files and folders in the active pane's folder as you type. It stops at 300,000 entries and says so.
+- Ctrl+K path mode: type a path to list its folders. "Go to" appears when the folder exists. Tab completes the name.
+- A network folder that does not answer shows a note. Typing never waits for it.
+- An empty Ctrl+K box lists your last 5 commands, then your most used folders. A place found in several ways shows once.
+- Ctrl+K command rows show where a command applies, such as File list or Viewer. They show the key bound there.
+
+### Fixed
+
+- Ctrl+K: Enter pressed right after typing runs the result for what you typed. Commands show at once, and file results follow.
+- Ctrl+K: highlights mark the right letters in names with combined accents or emoji.
+- Ctrl+K: characters such as ! and ^ match as typed.
+- Ctrl+K: with remember turned off in settings, no history is used or shown.
+- Multi-rename: the [ ] token buttons look the same in both themes.
+
+### Built but not switched on yet
+
+- Multi-rename: the undo journal keeps each batch, also after a restart. Ctrl+Z to undo a batch comes next.
+- Drag and drop with Explorer: Ferrite can take files dropped from Explorer. It can drag files out to Explorer. Explorer never deletes what Ferrite moves. The file list does not use this yet.
+- File index: each drive's index saves its file ids. After a restart it only catches up on changes. The index service comes next.
+
 ## alpha-2026-10-21a — 2026-10-21
 
 ### New
