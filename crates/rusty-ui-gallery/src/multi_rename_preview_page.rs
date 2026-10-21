@@ -54,7 +54,11 @@ const STATES: [(&str, &str, RowState); 15] = [
 ];
 
 fn item(name: &str) -> Option<Item> {
-    let folder = Location::new("/work/projects/photos").ok()?;
+    item_in("/work/projects/photos", name)
+}
+
+fn item_in(folder: &str, name: &str) -> Option<Item> {
+    let folder = Location::new(folder).ok()?;
     let entry = FsEntry {
         name: ProviderPath::from_text(name),
         kind: EntryKind::File,
@@ -66,15 +70,19 @@ fn item(name: &str) -> Option<Item> {
 }
 
 fn states() -> Option<(Vec<Item>, Preview)> {
-    let items: Vec<Item> = STATES
+    let deep = format!("/work/projects/{}", "deeply_nested_folder/".repeat(12));
+    let mut items: Vec<Item> = STATES
         .iter()
         .map(|(old, ..)| item(old))
         .collect::<Option<_>>()?;
+    items.push(item_in(&deep, "notes_2026.txt")?);
     let rows: Vec<PreviewRow> = STATES
         .iter()
+        .copied()
+        .chain([("", "notes_2027.txt", CHANGES)])
         .map(|(_, new, state)| PreviewRow {
-            new: (*new).to_owned(),
-            state: *state,
+            new: new.to_owned(),
+            state,
         })
         .collect();
     let count =
@@ -118,6 +126,9 @@ pub struct MultiRenamePreviewPage {
 impl MultiRenamePreviewPage {
     fn new(is_large: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let view = cx.new(|cx| PreviewView::new(window, cx));
+        let mut form = Form::new();
+        form.rules.find.text = "IMG".to_owned();
+        let compiled = form.compile().ok();
         let sample = if is_large { large() } else { states() };
         let Some((items, preview)) = sample else {
             return Self { view };
@@ -129,6 +140,7 @@ impl MultiRenamePreviewPage {
                     preview: &preview,
                     fold: Fold::Exact,
                     problems_only: false,
+                    matcher: compiled.as_ref(),
                 },
                 cx,
             );

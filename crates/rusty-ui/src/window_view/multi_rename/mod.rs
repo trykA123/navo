@@ -65,6 +65,7 @@ impl Open {
             &blocked
         };
         let items = Arc::clone(&self.source.items);
+        let compiled = self.form.compile().ok();
         let (fold, problems_only) = (self.source.fold, self.form.problems_only);
         self.view.update(cx, |view, cx| {
             view.set_preview(
@@ -73,6 +74,7 @@ impl Open {
                     preview: shown,
                     fold,
                     problems_only,
+                    matcher: compiled.as_ref(),
                 },
                 cx,
             );

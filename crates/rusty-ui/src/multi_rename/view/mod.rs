@@ -1,3 +1,4 @@
+mod cells;
 pub mod fields;
 mod panel;
 mod preview;

@@ -54,8 +54,8 @@ fn sample() -> Option<(Form, Vec<Item>, Preview)> {
     names.push("notes.txt".to_owned());
     let items: Vec<Item> = names.iter().map(|name| photo(&folder, name)).collect();
     let mut form = Form::new();
-    form.set_name_mask("Iceland_[C]");
-    form.rules.counter.digits = 3;
+    form.rules.find.text = "IMG".to_owned();
+    form.rules.find.replace = "Iceland".to_owned();
     form.rules.ext_case = rusty_core::rename::ExtCase::Lower;
     form.toggle_excluded(PHOTOS);
     let mut marked = items.clone();
@@ -64,7 +64,7 @@ fn sample() -> Option<(Form, Vec<Item>, Preview)> {
         names
             .iter()
             .cloned()
-            .chain(["Iceland_007.jpg".to_owned()])
+            .chain(["Iceland_0007.jpg".to_owned()])
             .map(|name| ExistingName {
                 parent: folder.clone(),
                 name,
@@ -102,6 +102,7 @@ impl MultiRenameToolPage {
             (form, Vec::new(), preview)
         });
         let view = cx.new(|cx| PreviewView::new(window, cx));
+        let compiled = form.compile().ok();
         view.update(cx, |view, cx| {
             view.set_preview(
                 Shown {
@@ -109,6 +110,7 @@ impl MultiRenameToolPage {
                     preview: &preview,
                     fold: Fold::Exact,
                     problems_only: false,
+                    matcher: compiled.as_ref(),
                 },
                 cx,
             );

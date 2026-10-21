@@ -2,22 +2,24 @@ use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{EventEmitter, Role, Subscription, WeakEntity};
+use rusty_core::rename::Compiled;
 use rusty_core::rename::check::Fold;
 use rusty_l10n::t;
 
+use super::cells::{Look, found_style, name_cell, status_cell};
 use super::status::{Kind, Line, lines};
 use super::summary::{Footer, footer};
 use crate::multi_rename::{Item, Preview, Summary};
 use crate::prelude::*;
 use crate::primitives::{
     ColumnAlign, ColumnHead, ColumnSet, ColumnSpec, IconName, ListScroll, RowSemantics,
-    VirtualList, fit_name, icon,
+    VirtualList, icon,
 };
 use crate::tokens::{self, Theme};
 
 const OLD: usize = 0;
 const NEW: usize = 1;
-const STATUS: usize = 2;
+pub(super) const STATUS: usize = 2;
 const FIT_ROWS: usize = 200;
 const DIGIT_WIDTH: f32 = 8.;
 const TOGGLE_SIZE: f32 = 18.;
@@ -35,6 +37,7 @@ pub struct Shown<'a> {
     pub preview: &'a Preview,
     pub fold: Fold,
     pub problems_only: bool,
+    pub matcher: Option<&'a Compiled>,
 }
 
 pub struct PreviewView {
@@ -83,7 +86,7 @@ impl PreviewView {
     }
 
     pub fn set_preview(&mut self, shown: Shown<'_>, cx: &mut Context<Self>) {
-        let rows = lines(shown.items, shown.preview, shown.fold);
+        let rows = lines(shown.items, shown.preview, shown.fold, shown.matcher);
         self.shown = Rc::new(shown.preview.visible(shown.problems_only));
         self.summary = shown.preview.summary;
         self.can_run = shown.preview.can_run();
@@ -171,19 +174,6 @@ struct Table {
     lead: Pixels,
 }
 
-fn name_cell(set: &ColumnSet, at: usize, text: &str, look: (Hsla, bool)) -> Div {
-    let fitted = fit_name("", text, set.text_chars(at));
-    let (color, is_struck) = look;
-    set.cell(at).child(
-        div()
-            .min_w_0()
-            .truncate()
-            .text_color(color)
-            .when(is_struck, Styled::line_through)
-            .child(fitted.rest),
-    )
-}
-
 fn toggle(table: &Table, row: usize, line: &Line) -> impl IntoElement {
     let t = &table.t;
     let (glyph, color) = if line.kind() == Kind::Excluded {
@@ -240,6 +230,7 @@ fn row_view(table: &Table, (at, row): (usize, usize), line: &Line, cx: &App) -> 
     let kind = line.kind();
     let color = colors(t, kind);
     let is_struck = kind == Kind::Excluded;
+    let found = found_style(t);
     let view = table.view.clone();
     div()
         .id(("rename-row", row))
@@ -250,17 +241,27 @@ fn row_view(table: &Table, (at, row): (usize, usize), line: &Line, cx: &App) -> 
         .when(at % 2 == 1, |line| line.bg(t.colors.zebra))
         .when(table.cursor == Some(row), |line| line.bg(t.colors.hover))
         .child(lead_cell(table, row, line))
-        .child(name_cell(set, OLD, &line.old, (color.old, is_struck)))
-        .child(name_cell(set, NEW, &line.new, (color.new, is_struck)))
-        .child(
-            set.cell(STATUS).child(
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(color.status)
-                    .child(line.status()),
-            ),
-        )
+        .child(name_cell(
+            set,
+            (OLD, &line.old),
+            Look {
+                color: color.old,
+                is_struck,
+                marks: &line.old_marks,
+                found,
+            },
+        ))
+        .child(name_cell(
+            set,
+            (NEW, &line.new),
+            Look {
+                color: color.new,
+                is_struck,
+                marks: &line.new_marks,
+                found,
+            },
+        ))
+        .child(status_cell(set, t, line, color.status))
         .on_click(move |_, _, cx| {
             let _ = view.update(cx, |view, cx| view.set_cursor(Some(row), cx));
         })

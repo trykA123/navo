@@ -6,12 +6,14 @@ use gpui_kit::{
     AnyWindowHandle, AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled,
     Subscription, TestAppContext, Window, div,
 };
+use rusty_core::rename::Find;
 use rusty_core::rename::check::{Existing, ExistingName, Fold, Problem, RowState};
 use rusty_core::{Location, ProviderPath};
 use rusty_fs::{Attributes, EntryKind, FsEntry};
 
 use crate::multi_rename::{
     Form, Item, Listing, Preview, PreviewEvent, PreviewRow, PreviewView, Shown, Summary,
+    changed_ranges, is_long_path,
 };
 use crate::test_window::open;
 
@@ -111,6 +113,7 @@ fn open_host(
                     preview: &preview,
                     fold: Fold::Exact,
                     problems_only,
+                    matcher: None,
                 },
                 cx,
             );
@@ -234,4 +237,72 @@ fn fifty_thousand_rows_draw_only_the_visible_ones(cx: &mut TestAppContext) {
     let (window, _) = open_host(cx, computed("x_[N]", &names, &[]), false);
     assert!(row_label(window, 0, cx).is_some());
     assert!(row_label(window, 40, cx).is_none());
+}
+
+fn found(find: Find, name: &str) -> Vec<std::ops::Range<usize>> {
+    let mut form = Form::new();
+    form.set_find(find);
+    form.compile().unwrap().match_ranges(name)
+}
+
+fn find(text: &str) -> Find {
+    Find {
+        text: text.to_owned(),
+        ..Find::default()
+    }
+}
+
+#[test]
+fn a_counter_mask_marks_everything_before_the_shared_tail() {
+    let (items, preview) = computed("photo_[C]", &["a.txt", "b.txt"], &[]);
+    for (item, row) in items.iter().zip(&preview.rows) {
+        let ranges = changed_ranges(&item.name, &row.new);
+        assert_eq!(ranges, vec![0..row.new.len() - ".txt".len()]);
+    }
+}
+
+#[test]
+fn a_case_change_marks_only_the_letters_that_differ() {
+    assert_eq!(changed_ranges("Holiday.txt", "holiday.txt"), vec![0..1]);
+    assert_eq!(changed_ranges("Photo.JPG", "photo.jpg"), vec![0..9]);
+    assert_eq!(changed_ranges("ab.txt", "é.txt"), vec![0..2]);
+}
+
+#[test]
+fn an_unchanged_name_marks_nothing() {
+    assert!(changed_ranges("same.txt", "same.txt").is_empty());
+    assert!(changed_ranges("abc.txt", "ab.txt").is_empty());
+}
+
+#[test]
+fn plain_find_marks_every_match_whatever_the_case() {
+    assert_eq!(found(find("img"), "IMG_img.jpg"), vec![0..3, 4..7]);
+    let exact = Find {
+        match_case: true,
+        ..find("img")
+    };
+    assert_eq!(found(exact, "IMG_img.jpg"), vec![4..7]);
+    assert!(found(find(""), "IMG.jpg").is_empty());
+}
+
+#[test]
+fn regex_find_marks_what_the_pattern_matches() {
+    let digits = Find {
+        regex: true,
+        ..find("[0-9]+")
+    };
+    assert_eq!(found(digits, "IMG_0001.jpg"), vec![4..8]);
+}
+
+#[gpui_kit::test]
+fn a_path_over_260_characters_warns_and_still_renames(cx: &mut TestAppContext) {
+    let name = |len: usize| format!("{}.txt", "a".repeat(len - 4));
+    let folder = folder();
+    assert!(!is_long_path(&folder, &name(238)));
+    assert!(is_long_path(&folder, &name(239)));
+    let batch = computed("x[N]", &[&name(238)], &[]);
+    assert!(batch.1.can_run());
+    let (window, _) = open_host(cx, batch, false);
+    let label = row_label(window, 0, cx).unwrap();
+    assert!(label.ends_with("Path is longer than 260 characters"));
 }

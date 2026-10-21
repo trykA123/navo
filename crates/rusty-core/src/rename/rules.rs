@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use serde::{Deserialize, Serialize};
 
 use super::case::{ExtCase, NameCase};
@@ -106,6 +108,15 @@ impl Compiled {
             cleanup: rules.cleanup,
             counter: counter(rules.counter).map_err(|m| fail(RuleField::Counter, m))?,
         })
+    }
+
+    #[must_use]
+    pub fn match_ranges(&self, name: &str) -> Vec<Range<usize>> {
+        if self.name_only {
+            let (stem, _) = split_name(name);
+            return self.search.ranges(stem);
+        }
+        self.search.ranges(name)
     }
 
     #[must_use]

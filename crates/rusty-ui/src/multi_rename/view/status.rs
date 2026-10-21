@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+use std::ops::Range;
 
 use rusty_core::NameError;
+use rusty_core::rename::Compiled;
 use rusty_core::rename::check::{Fold, Problem, RowState, fold_key};
 use rusty_l10n::t;
 
-use crate::multi_rename::{Item, Preview};
+use crate::multi_rename::{Item, Preview, changed_ranges, is_long_path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Kind {
@@ -22,6 +24,9 @@ pub(super) struct Line {
     pub new: String,
     pub state: RowState,
     pub is_swap: bool,
+    pub is_long: bool,
+    pub old_marks: Vec<Range<usize>>,
+    pub new_marks: Vec<Range<usize>>,
 }
 
 impl Line {
@@ -37,6 +42,9 @@ impl Line {
     }
 
     pub fn status(&self) -> String {
+        if self.is_long {
+            return t!("rename-status-long-path");
+        }
         match self.kind() {
             Kind::Renames => String::new(),
             Kind::CaseOnly => t!("rename-status-case-only"),
@@ -60,15 +68,34 @@ fn problem_text(problem: Problem) -> String {
     }
 }
 
-pub(super) fn lines(items: &[Item], preview: &Preview, fold: Fold) -> Vec<Line> {
+pub(super) fn lines(
+    items: &[Item],
+    preview: &Preview,
+    fold: Fold,
+    matcher: Option<&Compiled>,
+) -> Vec<Line> {
     let mut lines: Vec<Line> = items
         .iter()
         .zip(&preview.rows)
-        .map(|(item, row)| Line {
-            old: item.name.clone(),
-            new: row.new.clone(),
-            state: row.state,
-            is_swap: false,
+        .map(|(item, row)| {
+            let is_changed = matches!(row.state, RowState::Changes { .. });
+            let is_excluded = row.state == RowState::Excluded;
+            Line {
+                old: item.name.clone(),
+                new: row.new.clone(),
+                state: row.state,
+                is_swap: false,
+                is_long: is_changed && is_long_path(&item.parent, &row.new),
+                old_marks: matcher
+                    .filter(|_| !is_excluded)
+                    .map(|compiled| compiled.match_ranges(&item.name))
+                    .unwrap_or_default(),
+                new_marks: if is_changed {
+                    changed_ranges(&item.name, &row.new)
+                } else {
+                    Vec::new()
+                },
+            }
         })
         .collect();
     mark_swaps(items, &mut lines, fold);

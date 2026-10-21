@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use regex::{NoExpand, Regex, RegexBuilder};
 
 use super::rules::Find;
@@ -24,6 +26,26 @@ impl Search {
             pairs,
             first_only: find.first_only,
         })
+    }
+
+    pub(super) fn ranges(&self, text: &str) -> Vec<Range<usize>> {
+        let limit = if self.first_only { 1 } else { usize::MAX };
+        let mut found: Vec<Range<usize>> = self
+            .pairs
+            .iter()
+            .flat_map(|pair| pair.regex.find_iter(text).take(limit))
+            .filter(|hit| !hit.is_empty())
+            .map(|hit| hit.range())
+            .collect();
+        found.sort_by_key(|range| (range.start, range.end));
+        let mut merged: Vec<Range<usize>> = Vec::new();
+        for range in found {
+            match merged.last_mut() {
+                Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+                _ => merged.push(range),
+            }
+        }
+        merged
     }
 
     pub(super) fn apply(&self, text: &str) -> String {
