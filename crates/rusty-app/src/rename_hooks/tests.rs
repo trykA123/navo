@@ -48,7 +48,8 @@ fn journal_batch(journal: &SharedJournal, plan: &OperationPlan, fs: &FakeFs) {
         log.step(u32::try_from(seq).unwrap(), StepOutcome::Done)
             .unwrap();
     }
-    log.finish(&JobOutcome::Done, fs as &dyn ProviderOps);
+    log.finish(&JobOutcome::Done, fs as &dyn ProviderOps)
+        .unwrap();
 }
 
 fn offer(hooks: &RenameHooks) -> Option<UndoOffer> {
@@ -87,7 +88,8 @@ fn an_undone_batch_marks_undone_and_the_older_batch_is_offered() {
     let mut log = (hooks.undo_log)(&newest).unwrap();
     log.undone(0, StepOutcome::Done).unwrap();
     log.undone(1, StepOutcome::Done).unwrap();
-    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps);
+    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps)
+        .unwrap();
     let next = offer(&hooks).unwrap();
     assert_ne!(next.job, newest.job);
     assert_eq!(next.plan, older);
@@ -101,7 +103,8 @@ fn the_only_batch_is_gone_once_it_is_undone() {
     let hooks = hooks(Some(journal), None);
     let mut log = (hooks.undo_log)(&offer(&hooks).unwrap()).unwrap();
     log.undone(0, StepOutcome::Done).unwrap();
-    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps);
+    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps)
+        .unwrap();
     assert!(offer(&hooks).is_none());
 }
 
@@ -127,7 +130,8 @@ fn an_undone_batch_stays_gone_after_a_reopen() {
     let first = hooks(Some(journal), None);
     let mut log = (first.undo_log)(&offer(&first).unwrap()).unwrap();
     log.undone(0, StepOutcome::Done).unwrap();
-    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps);
+    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps)
+        .unwrap();
     drop((log, first));
     assert!(offer(&hooks(Some(jobs::open(&file).unwrap()), None)).is_none());
 }
@@ -141,7 +145,8 @@ fn an_undo_stopped_halfway_is_offered_again_as_restore_pending() {
     let mut log = (hooks.undo_log)(&offer(&hooks).unwrap()).unwrap();
     log.undone(0, StepOutcome::Done).unwrap();
     log.undone(1, StepOutcome::Failed).unwrap();
-    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps);
+    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps)
+        .unwrap();
     let again = offer(&hooks).expect("still offered");
     assert!(again.restore_pending);
     assert_eq!(again.done, [1]);

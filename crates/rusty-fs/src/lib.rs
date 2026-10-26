@@ -11,6 +11,7 @@ mod job;
 mod local;
 mod measure;
 mod paged;
+mod protection;
 mod provider;
 mod scan;
 mod snapshot;
@@ -30,7 +31,10 @@ pub use job::{
     copy_workers, is_rename_temporary, job_workers, release_held, roll_back, run_job,
     run_job_parallel, run_rename,
 };
-pub use local::{AutoTuning, LocalFs, make_link, os_path};
+pub use local::{
+    AutoTuning, LocalFs, make_link, mutation_location, native_identity, native_rename_atomic,
+    os_path, save_location,
+};
 pub use measure::{
     FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LIVE_EVERY, LargeFile, LiveHandle,
     LiveRequest, LiveSink, LiveSnapshot, PROGRESS_EVERY, ProfileHandle, ProfileSink, ProfileState,
@@ -39,9 +43,10 @@ pub use measure::{
 pub use paged::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
 };
+pub use protection::check_mutation;
 pub use provider::{
-    Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FileIdentity, FileIdentityKind,
-    FsEntry, ListSink, Provider, ProviderOps,
+    Attributes, CancelToken, Capabilities, CopyControl, EntryBatch, EntryKind, FileIdentity,
+    FileIdentityKind, FsEntry, ListSink, OwnedCopy, Provider, ProviderOps,
 };
 pub use scan::{existing_at, scan};
 pub use snapshot::{FolderSnapshot, load_folder, load_folder_reporting};

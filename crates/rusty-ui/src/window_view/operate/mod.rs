@@ -21,15 +21,28 @@ fn target_text(target: Option<&Location>) -> &str {
     target.map_or("", |target| target.as_str())
 }
 
-pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
+fn oversized_retained_delete(pending: &PendingOp) -> bool {
+    pending
+        .retain_deletes
+        .is_some_and(|policy| rusty_core::retention::delete_exceeds_capacity(&pending.plan, policy))
+}
+
+fn question(pending: &PendingOp) -> (String, String) {
     let count = items(pending.sources.len());
     let target = target_text(pending.target.as_ref());
-    let (title, label) = match pending.plan.kind {
+    match pending.plan.kind {
         OpKind::Copy => (format!("Copy {count} to {target}?"), "Copy".to_owned()),
         OpKind::Move => (format!("Move {count} to {target}?"), "Move".to_owned()),
         OpKind::Recycle => (
             format!("Move {count} to the Recycle Bin?"),
             "Recycle".to_owned(),
+        ),
+        OpKind::Delete if oversized_retained_delete(pending) => {
+            (tr("job-delete-too-large-title"), tr("cmd-files-delete"))
+        }
+        OpKind::Delete if pending.retain_deletes.is_some() => (
+            t!("job-delete-retained-title", items = count.as_str()),
+            tr("job-delete-retained-label"),
         ),
         OpKind::Delete => (
             format!("Delete {count} permanently?"),
@@ -47,7 +60,24 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
             ),
             tr("files-link-label"),
         ),
-    };
+    }
+}
+
+fn capacity_warning(pending: &PendingOp) -> String {
+    if rusty_core::retention::delete_exceeds_limit(&pending.plan) {
+        return t!(
+            "job-delete-too-large-help",
+            limit = rusty_core::retention::MAX_NODES.to_string()
+        );
+    }
+    let limit = pending
+        .retain_deletes
+        .map_or(0, |policy| policy.max_volume_bytes());
+    t!("job-delete-over-capacity-help", limit = format::size(limit))
+}
+
+pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
+    let (title, label) = question(pending);
     let protected = pending.is_protected();
     let props = ConfirmProps {
         title: title.into(),
@@ -57,7 +87,16 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
             .map(|source| source.as_str().to_owned().into())
             .collect(),
         more: 0,
-        summary: summary(&pending.plan, protected).into(),
+        summary: match pending.retain_deletes {
+            _ if oversized_retained_delete(pending) => capacity_warning(pending),
+            Some(policy) if pending.plan.kind == OpKind::Delete => format!(
+                "{} · {}",
+                summary(&pending.plan, protected),
+                t!("job-delete-retained-help", days = policy.days())
+            ),
+            _ => summary(&pending.plan, protected),
+        }
+        .into(),
         confirm_label: label.into(),
         danger: pending.plan.kind == OpKind::Delete || protected,
         typed: protected.then(|| "DELETE".into()),

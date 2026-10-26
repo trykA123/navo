@@ -13,13 +13,23 @@ pub fn profile_hooks(
     journal: Option<SharedJournal>,
     db: Option<SharedDb>,
     dirs: Option<&rusty_store::StoreDirs>,
+    experimental: bool,
 ) -> RenameHooks {
-    RenameHooks {
+    let undo = journal.clone();
+    let mut result = RenameHooks {
         log: Some(crate::rename_log::writer(
             dirs.map(|dirs| dirs.config.join("rename.log")),
         )),
         ..hooks(journal, db)
+    };
+    if let Some(dirs) = dirs.cloned() {
+        result.undo_log = Arc::new(move |offer: &UndoOffer| {
+            let journal = undo.as_ref().ok_or_else(no_journal)?;
+            let job = i64::try_from(offer.job).map_err(|error| error.to_string())?;
+            jobs::profile_undo(journal, JobId(job), &dirs, experimental)
+        });
     }
+    result
 }
 
 pub fn hooks(journal: Option<SharedJournal>, db: Option<SharedDb>) -> RenameHooks {

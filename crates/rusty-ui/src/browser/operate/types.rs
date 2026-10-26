@@ -1,3 +1,4 @@
+use rusty_core::retention::RetentionPolicy;
 use rusty_core::{FsError, Location, OpKind, OperationPlan, Risk, TabId};
 use rusty_fs::{
     CancelToken, CopyMode, DriveClass, HeldFile, JobLog, JobOutcome, Progress, ProviderOps,
@@ -25,7 +26,23 @@ pub enum DropConfirm {
 }
 
 pub trait OpLog: JobLog + Send {
-    fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps);
+    fn check(&mut self, _: LoggedOperation<'_>) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn execute(&mut self, _: LoggedOperation<'_>) -> Option<JobOutcome> {
+        None
+    }
+
+    fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) -> Result<(), String>;
+}
+
+pub struct LoggedOperation<'a> {
+    pub plan: &'a OperationPlan,
+    pub ops: &'a dyn ProviderOps,
+    pub cancel: &'a CancelToken,
+    pub progress: &'a mut dyn FnMut(&Progress),
+    pub retain_deletes: Option<RetentionPolicy>,
 }
 
 pub(in crate::browser) type ClassOf = fn(&Location) -> DriveClass;
@@ -46,10 +63,13 @@ impl Default for Copying {
 }
 
 pub type LogFactory = Arc<dyn Fn(&OperationPlan) -> Result<Box<dyn OpLog>, String> + Send + Sync>;
+pub type WriteFactory = Arc<dyn Fn(&Location) -> Result<Box<dyn Send>, FsError> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Operations {
     pub log: LogFactory,
+    pub write: Option<WriteFactory>,
+    pub retain_deletes: Option<Arc<dyn Fn() -> Option<RetentionPolicy> + Send + Sync>>,
     pub protected: Vec<Location>,
 }
 
@@ -58,6 +78,8 @@ impl Operations {
     pub fn unlogged() -> Self {
         Self {
             log: Arc::new(|_| Ok(Box::new(NoLog))),
+            write: None,
+            retain_deletes: None,
             protected: Vec::new(),
         }
     }
@@ -80,7 +102,9 @@ impl JobLog for NoLog {
 }
 
 impl OpLog for NoLog {
-    fn finish(&mut self, _: &JobOutcome, _: &dyn ProviderOps) {}
+    fn finish(&mut self, _: &JobOutcome, _: &dyn ProviderOps) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +113,7 @@ pub struct PendingOp {
     pub sources: Vec<Location>,
     pub target: Option<Location>,
     pub plan: OperationPlan,
+    pub retain_deletes: Option<RetentionPolicy>,
     pub(crate) source_tab: TabId,
     pub undo: Option<UndoOffer>,
 }
@@ -136,7 +161,7 @@ impl JobView {
 pub(in crate::browser) enum JobUpdate {
     Planned {
         request: OpRequest,
-        result: Result<OperationPlan, FsError>,
+        result: Result<(OperationPlan, Option<RetentionPolicy>), FsError>,
     },
     Progress {
         id: u64,

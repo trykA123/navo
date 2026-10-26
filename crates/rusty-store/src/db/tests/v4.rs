@@ -122,7 +122,12 @@ fn v3_schema_outside_frecency_is_kept() {
     let want = schema(&Connection::open(&path).unwrap());
     let (db, _) = Db::open(&path, false).unwrap();
     let mut got = schema(db.connection());
-    got.retain(|(name, _)| !name.contains("command_use") && !name.contains("rename_preset"));
+    got.retain(|(name, _)| {
+        !name.contains("command_use")
+            && !name.contains("rename_preset")
+            && !name.contains("retained_entry")
+            && name != "sqlite_sequence"
+    });
     assert_eq!(got, want);
 }
 
@@ -241,10 +246,7 @@ fn a_newer_file_with_v4_rows_is_refused_as_too_new() {
     assert!(
         matches!(
             err,
-            DbError::TooNew {
-                found: 6,
-                supported: 5
-            }
+            DbError::TooNew { found, supported } if found == Db::VERSION + 1 && supported == Db::VERSION
         ),
         "{err:?}"
     );

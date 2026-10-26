@@ -454,6 +454,7 @@ pane.reset_split | ctrl-shift-0 | NavoPane
 preview.browse | ctrl-shift-q | NavoPane
 crash_notice.focus | ctrl-shift-r | NavoPane
 activity.focus | alt-j | NavoPane
+crash_notice.open_folder | alt-o | CrashNotice
 crash_notice.save | enter | CrashNotice
 crash_notice.dismiss | escape | CrashNotice
 pane.leave_waiting | escape | PaneWaiting

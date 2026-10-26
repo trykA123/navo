@@ -28,8 +28,8 @@ fn unproved(variable: &str, expected: &str) {
     );
     let after = fs.metadata(&child("a-longer-renamed-file", &root)).unwrap();
     assert_eq!(
-        crate::FileIdentity::fingerprint(&after),
-        crate::FileIdentity::fingerprint(&before)
+        crate::FileIdentity::fingerprint(after.size, after.modified_ms, false),
+        crate::FileIdentity::fingerprint(before.size, before.modified_ms, false)
     );
 }
 

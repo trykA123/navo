@@ -40,6 +40,7 @@ fn failures_after_connecting_are_reported_as_unanswered_requests() {
     ] {
         let mut stream = FailedConnection { writing, kind };
         let request = Request {
+            experimental_retention: false,
             path: None,
             left: None,
             right: None,

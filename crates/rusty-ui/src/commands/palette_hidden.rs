@@ -1,4 +1,5 @@
 pub(super) const HIDDEN: &[&str] = &[
+    "crash_notice.open_folder",
     "app.command_palette",
     "files.mark_pattern",
     "files.unmark_pattern",

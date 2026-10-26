@@ -8,6 +8,8 @@ use crate::cli::Start;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Request {
+    #[serde(default, skip_serializing_if = "disabled")]
+    pub(crate) experimental_retention: bool,
     pub(crate) path: Option<PathBuf>,
     pub(crate) left: Option<PathBuf>,
     pub(crate) right: Option<PathBuf>,
@@ -30,6 +32,7 @@ impl Request {
                 .transpose()
         };
         let request = Self {
+            experimental_retention: start.experimental_retention,
             path: resolve(&start.path)?,
             left: resolve(&start.left)?,
             right: resolve(&start.right)?,
@@ -74,4 +77,8 @@ impl Request {
         }
         Ok(())
     }
+}
+
+fn disabled(value: &bool) -> bool {
+    !value
 }

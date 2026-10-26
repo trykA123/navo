@@ -13,6 +13,7 @@ pub(crate) enum Command {
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Start {
+    pub(crate) experimental_retention: bool,
     pub(crate) path: Option<PathBuf>,
     pub(crate) view: Option<PathBuf>,
     pub(crate) profile: Option<PathBuf>,
@@ -76,7 +77,11 @@ fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
             return standalone(&flag, args);
         }
         is_first = false;
-        if let Some(slot) = start.slot(&flag) {
+        if flag == "--experimental-retention" {
+            if std::mem::replace(&mut start.experimental_retention, true) {
+                return Err(format!("{flag} given twice"));
+            }
+        } else if let Some(slot) = start.slot(&flag) {
             if slot.is_some() {
                 return Err(format!("{flag} given twice"));
             }
@@ -106,7 +111,10 @@ fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Co
         return Ok(command);
     };
     let extra = extra.to_string_lossy();
-    if STANDALONE.contains(&extra.as_ref()) || WINDOW_FLAGS.contains(&extra.as_ref()) {
+    if STANDALONE.contains(&extra.as_ref())
+        || WINDOW_FLAGS.contains(&extra.as_ref())
+        || extra == "--experimental-retention"
+    {
         Err(format!("{flag} stands alone"))
     } else {
         Err(format!("unknown argument {extra}"))

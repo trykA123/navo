@@ -19,6 +19,8 @@ fn a_drop_into_another_folder_moves_on_the_same_volume() {
     let record = Arc::new(Mutex::new(Record::default()));
     let shared = Arc::clone(&record);
     browser.set_operations(Operations {
+        retain_deletes: None,
+        write: None,
         log: Arc::new(move |plan| {
             assert_eq!(plan.kind, OpKind::Move);
             assert!(matches!(plan.steps.as_slice(), [Step::Rename { .. }]));

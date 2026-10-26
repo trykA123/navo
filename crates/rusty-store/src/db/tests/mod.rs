@@ -17,6 +17,8 @@ mod rename_presets;
 mod settings_defaults;
 mod v4;
 mod v5;
+mod v6;
+mod v7;
 mod viewer;
 
 const V1_TABLES: [&str; 7] = [
@@ -29,7 +31,7 @@ const V1_TABLES: [&str; 7] = [
     "undo",
 ];
 
-const TABLES: [&str; 12] = [
+const TABLES: [&str; 14] = [
     "command_use",
     "frecency",
     "history",
@@ -37,8 +39,10 @@ const TABLES: [&str; 12] = [
     "job_step",
     "module_kv",
     "rename_preset",
+    "retained_entry",
     "search_history",
     "settings_defaults",
+    "sqlite_sequence",
     "tags",
     "undo",
     "viewer_memory",

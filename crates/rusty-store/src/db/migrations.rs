@@ -1,4 +1,4 @@
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
 
 const V1: &str = "
 CREATE TABLE history (
@@ -83,4 +83,32 @@ CREATE TABLE rename_preset (
     rules TEXT NOT NULL,
     saved_at INTEGER NOT NULL
 );
+";
+
+const V6: &str = "
+CREATE TABLE retained_entry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER REFERENCES job(id) ON DELETE SET NULL,
+    state TEXT NOT NULL CHECK (state IN ('preparing', 'ready', 'restoring', 'restored', 'purging', 'purged', 'aborted', 'conflict')),
+    record BLOB NOT NULL,
+    target BLOB
+);
+CREATE INDEX retained_entry_job ON retained_entry (job_id);
+";
+
+const V7: &str = "
+ALTER TABLE retained_entry ADD COLUMN source_path TEXT GENERATED ALWAYS AS
+    (CASE WHEN json_valid(record) THEN json_extract(record, '$.source') END) VIRTUAL;
+ALTER TABLE retained_entry ADD COLUMN container_path TEXT GENERATED ALWAYS AS
+    (CASE WHEN json_valid(record) THEN json_extract(record, '$.container') END) VIRTUAL;
+ALTER TABLE retained_entry ADD COLUMN volume_key TEXT GENERATED ALWAYS AS
+    (CASE WHEN json_valid(record) THEN record -> '$.parent_identity.volume' END) VIRTUAL;
+ALTER TABLE retained_entry ADD COLUMN cleanup_pending INTEGER NOT NULL DEFAULT 1
+    CHECK (cleanup_pending IN (0, 1) AND (cleanup_pending = 1 OR state IN ('restored', 'purged', 'aborted')));
+ALTER TABLE retained_entry ADD COLUMN cleanup_round INTEGER NOT NULL DEFAULT 0
+    CHECK (typeof(cleanup_round) = 'integer' AND cleanup_round >= 0);
+CREATE INDEX retained_entry_live_container ON retained_entry (container_path)
+    WHERE state NOT IN ('restored', 'purged', 'aborted');
+CREATE INDEX retained_entry_cleanup ON retained_entry (volume_key, cleanup_round, id)
+    WHERE cleanup_pending = 1 AND state IN ('restored', 'purged', 'aborted');
 ";

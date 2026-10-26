@@ -19,6 +19,7 @@ rusty-fs = { path = "../rusty-fs" }
 rusty-index = { path = "../rusty-index" }
 rusty-l10n = { path = "../rusty-l10n" }
 rusty-pdf = { path = "../rusty-pdf" }
+rusty-retention = { path = "../rusty-retention" }
 rusty-shell = { path = "../rusty-shell" }
 rusty-store = { path = "../rusty-store" }
 rusty-ui = { path = "../rusty-ui" }
@@ -28,6 +29,9 @@ tempfile = "3.27.0"
 thiserror = "2.0.21"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["env-filter", "registry", "std"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.190"
 
 [target.'cfg(windows)'.dependencies]
 gpui-pre-windows = "=0.3.9"

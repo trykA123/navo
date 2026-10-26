@@ -7,6 +7,7 @@ mod pool;
 mod rename;
 mod restore;
 mod run;
+mod temporary;
 mod undo;
 mod workers;
 
@@ -48,6 +49,35 @@ pub struct PlacedFile {
 }
 
 pub trait JobLog {
+    fn preserve_overwrites(&self) -> bool {
+        false
+    }
+    fn temporary_namespace(&self) -> Option<String> {
+        None
+    }
+    fn prepare_temporary(
+        &mut self,
+        _proof: &rusty_core::retention::CopyTemporary,
+    ) -> Result<(), FsError> {
+        Err(FsError::new(rusty_core::FsErrorKind::NotSupportedYet))
+    }
+    fn created_temporary(
+        &mut self,
+        _created: (u32, FileIdentity),
+        _ops: &dyn ProviderOps,
+    ) -> Result<(), FsError> {
+        Err(FsError::new(rusty_core::FsErrorKind::NotSupportedYet))
+    }
+    fn retire_temporary(&mut self, _seq: u32, _ops: &dyn ProviderOps) -> Result<(), FsError> {
+        Err(FsError::new(rusty_core::FsErrorKind::NotSupportedYet))
+    }
+    fn journal_proved_held(
+        &mut self,
+        _held: &HeldFile,
+        _proof: &rusty_core::retention::OverwriteProof,
+    ) -> Result<bool, FsError> {
+        Err(FsError::new(rusty_core::FsErrorKind::NotSupportedYet))
+    }
     fn prepare_rename(&mut self, _seq: u32, _identity: FileIdentity) -> Result<(), FsError> {
         Ok(())
     }

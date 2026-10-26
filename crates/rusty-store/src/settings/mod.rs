@@ -13,6 +13,7 @@ mod following;
 mod model;
 mod parse;
 mod pending;
+mod retention;
 mod saving;
 mod view;
 
@@ -24,7 +25,8 @@ pub use model::{
     Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles, ModifierHints,
     Search, SearchIndex, SelectionSettings, Settings, SortKey, Terminal, ThemeMode,
 };
-pub use parse::{parse, to_toml};
+pub use parse::{parse, parse_retention, to_toml};
+pub use retention::RetentionSettings;
 pub use view::{
     Automotive, AutomotiveView, CopyMode, CopySettings, ImageView, ImageViewer, MarkdownView,
     MarkdownViewer, PreviewView, PreviewViewer, TextView, TextViewer, ViewPreset, WindowSettings,

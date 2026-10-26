@@ -4,6 +4,8 @@ pub(super) fn gated(browser: &mut Browser) -> Arc<AtomicBool> {
     let gate = Arc::new(AtomicBool::new(false));
     let open = Arc::clone(&gate);
     browser.set_operations(Operations {
+        retain_deletes: None,
+        write: None,
         log: Arc::new(move |_: &OperationPlan| {
             let deadline = Instant::now() + Duration::from_secs(5);
             while !open.load(Ordering::Acquire) && Instant::now() < deadline {

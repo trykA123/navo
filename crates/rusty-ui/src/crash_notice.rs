@@ -6,10 +6,14 @@ use gpui_kit::{RenderOnce, Role};
 use crate::commands::Keymap;
 use crate::pane_chrome::card_shadow;
 use crate::prelude::*;
-use crate::primitives::{Button, ButtonVariant, IconName, Kbd, icon};
+use crate::primitives::{Button, ButtonVariant, IconName, Kbd, Tooltip, icon};
 use crate::tokens;
 
-pub const CRASH_TITLE: &str = "Navo closed unexpectedly last time.";
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RecoveryContent {
+    pub title: String,
+    pub details: Vec<String>,
+}
 
 type Press = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -18,6 +22,7 @@ pub struct CrashKeys {
     pub reach: Option<String>,
     pub save: Option<String>,
     pub dismiss: Option<String>,
+    pub folder: Option<String>,
 }
 
 impl CrashKeys {
@@ -28,6 +33,7 @@ impl CrashKeys {
             reach: first("crash_notice.focus"),
             save: first("crash_notice.save"),
             dismiss: first("crash_notice.dismiss"),
+            folder: first("crash_notice.open_folder"),
         }
     }
 }
@@ -40,6 +46,8 @@ pub struct CrashNotice {
     is_saving: bool,
     on_save: Option<Press>,
     on_dismiss: Option<Press>,
+    on_folder: Option<Press>,
+    recovery: Option<RecoveryContent>,
 }
 
 impl CrashNotice {
@@ -52,6 +60,8 @@ impl CrashNotice {
             is_saving: false,
             on_save: None,
             on_dismiss: None,
+            on_folder: None,
+            recovery: None,
         }
     }
 
@@ -84,6 +94,18 @@ impl CrashNotice {
         self.on_dismiss = Some(Rc::new(press));
         self
     }
+
+    #[must_use]
+    pub fn recovery(mut self, recovery: Option<RecoveryContent>) -> Self {
+        self.recovery = recovery;
+        self
+    }
+
+    #[must_use]
+    pub fn on_folder(mut self, press: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_folder = Some(Rc::new(press));
+        self
+    }
 }
 
 fn action(t: &tokens::Theme, button: Button, (press, key): (Option<Press>, Option<Kbd>)) -> Div {
@@ -103,14 +125,41 @@ fn shown_key(id: &'static str, key: Option<&String>, is_shown: bool) -> Option<K
     key.filter(|_| is_shown).and_then(|key| Kbd::new(id, key))
 }
 
-fn text(t: &tokens::Theme, error: Option<SharedString>) -> Div {
+fn text(
+    t: &tokens::Theme,
+    title: String,
+    (details, error): (Vec<String>, Option<SharedString>),
+) -> Div {
     div()
         .flex()
         .flex_col()
         .flex_1()
         .min_w_0()
         .gap(t.spacing.xxs)
-        .child(div().font_weight(FontWeight::MEDIUM).child(CRASH_TITLE))
+        .child(div().font_weight(FontWeight::MEDIUM).child(title))
+        .when(!details.is_empty(), |text| {
+            text.child(
+                div()
+                    .id("crash-recovery-details")
+                    .test_support()
+                    .flex()
+                    .flex_col()
+                    .gap(t.spacing.xxs)
+                    .min_w_0()
+                    .max_h(t.spacing.icon * 8.)
+                    .overflow_y_scroll()
+                    .text_size(t.typography.small)
+                    .text_color(t.colors.muted)
+                    .children(details.into_iter().enumerate().map(|(index, line)| {
+                        let tip = line.clone();
+                        div()
+                            .id(("crash-recovery-line", index))
+                            .truncate()
+                            .child(line)
+                            .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                    })),
+            )
+        })
         .when_some(error, |text, error| {
             text.child(
                 div()
@@ -126,22 +175,46 @@ fn text(t: &tokens::Theme, error: Option<SharedString>) -> Div {
 }
 
 impl CrashNotice {
-    fn actions(self, t: &tokens::Theme) -> [Div; 2] {
+    fn actions(self, t: &tokens::Theme) -> Vec<Div> {
         let keys = &self.keys;
-        let save = Button::new("crash-notice-save", "Save report")
-            .variant(ButtonVariant::Primary)
+        let save = Button::new("crash-notice-save", rusty_l10n::tr("crash-notice-save"))
+            .variant(if self.on_folder.is_some() {
+                ButtonVariant::Secondary
+            } else {
+                ButtonVariant::Primary
+            })
             .disabled(self.is_saving);
-        let dismiss = Button::new("crash-notice-dismiss", "Dismiss").variant(ButtonVariant::Ghost);
+        let dismiss = Button::new(
+            "crash-notice-dismiss",
+            rusty_l10n::tr("crash-notice-dismiss"),
+        )
+        .variant(ButtonVariant::Ghost)
+        .disabled(self.is_saving);
         let save_key = shown_key("crash-notice-save-key", keys.save.as_ref(), self.is_focused);
         let dismiss_key = shown_key(
             "crash-notice-dismiss-key",
             keys.dismiss.as_ref(),
             self.is_focused,
         );
-        [
+        let mut actions = vec![
             action(t, save, (self.on_save, save_key)),
             action(t, dismiss, (self.on_dismiss, dismiss_key)),
-        ]
+        ];
+        if self.on_folder.is_some() {
+            let folder = Button::new(
+                "crash-notice-folder",
+                rusty_l10n::tr("store-recovery-open-folder"),
+            )
+            .variant(ButtonVariant::Primary)
+            .disabled(self.is_saving);
+            let key = shown_key(
+                "crash-notice-folder-key",
+                keys.folder.as_ref(),
+                self.is_focused,
+            );
+            actions.insert(0, action(t, folder, (self.on_folder, key)));
+        }
+        actions
     }
 }
 
@@ -154,11 +227,25 @@ impl RenderOnce for CrashNotice {
             self.keys.reach.as_ref(),
             !is_focused,
         );
-        let text = text(t, self.error.take());
+        let recovery = self.recovery.take();
+        let title = recovery
+            .as_ref()
+            .map(|recovery| recovery.title.clone())
+            .unwrap_or_else(|| rusty_l10n::tr("crash-notice-title"));
+        let text = text(
+            t,
+            title.clone(),
+            (
+                recovery
+                    .map(|recovery| recovery.details)
+                    .unwrap_or_default(),
+                self.error.take(),
+            ),
+        );
         div()
             .id("crash-notice-card")
             .role(Role::Status)
-            .aria_label(CRASH_TITLE)
+            .aria_label(title)
             .test_support()
             .flex()
             .items_center()

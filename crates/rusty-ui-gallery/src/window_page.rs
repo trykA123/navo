@@ -9,7 +9,7 @@ use rusty_fs::FsEntry;
 use rusty_ui::app_menu::{AppMenu, Identity, Install, QuickSettings};
 use rusty_ui::commands::Keymap;
 use rusty_ui::context_menu::{ContextMenu, ContextMenuInput};
-use rusty_ui::crash_notice::{CrashKeys, CrashNotice};
+use rusty_ui::crash_notice::{CrashKeys, CrashNotice, RecoveryContent};
 use rusty_ui::file_list::SortKey;
 use rusty_ui::fkey_bar::{FKeyBar, KeyLayer};
 use rusty_ui::job_card::JobCard;
@@ -104,6 +104,7 @@ pub struct WindowPage {
     jobs: Option<JobsShown>,
     is_menu_open: bool,
     has_crash: bool,
+    recovery: Option<RecoveryContent>,
     sheet: Option<Sheet>,
     rows: Rc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
@@ -127,6 +128,7 @@ impl WindowPage {
             jobs: None,
             is_menu_open: false,
             has_crash: false,
+            recovery: None,
             sheet: None,
             rows: pane_sample::rows(),
             drives: six_drives().iter().take(4).cloned().collect(),
@@ -288,12 +290,17 @@ impl WindowPage {
     }
 
     fn crash_notice(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
+        let mut notice =
+            CrashNotice::new(CrashKeys::of(Keymap::builtin())).recovery(self.recovery.clone());
+        if self.recovery.is_some() {
+            notice = notice.on_folder(|_, _| {});
+        }
         self.has_crash.then(|| {
             div()
                 .flex_none()
                 .mx(t.spacing.xs * 2.)
                 .my(t.spacing.xs)
-                .child(CrashNotice::new(CrashKeys::of(Keymap::builtin())))
+                .child(notice)
         })
     }
 

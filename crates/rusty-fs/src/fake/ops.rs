@@ -1,15 +1,16 @@
 use rusty_core::{FsError, FsErrorKind, Location};
 
+use super::copy::CopyRequest;
 use super::tree::{Tree, fold_text, split_last};
 use super::{FakeFs, FakeOp, Fault, error, lock};
 use crate::{
-    ALREADY_EXISTS_CODES, Attributes, CancelToken, EntryKind, FsEntry, ProviderOps, WatchChange,
+    ALREADY_EXISTS_CODES, Attributes, CancelToken, CopyControl, EntryKind, FsEntry, OwnedCopy,
+    ProviderOps, WatchChange,
 };
 
-const CHUNK: u64 = 4096;
 const DEFAULT_VOLUME: u64 = 1;
 
-fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
+pub(super) fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
     match fault {
         Some(
             Fault::Fail(kind)
@@ -20,7 +21,7 @@ fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
     }
 }
 
-fn vacant(tree: &Tree, path: &str) -> Result<(), FsErrorKind> {
+pub(super) fn vacant(tree: &Tree, path: &str) -> Result<(), FsErrorKind> {
     let (parent, _) = split_last(path).ok_or(FsErrorKind::NameInvalid)?;
     if tree.metadata(path).is_some() {
         return Err(FsErrorKind::Unknown);
@@ -68,36 +69,37 @@ impl FakeFs {
         self.changed(&path, WatchChange::Removed);
         Ok(())
     }
-
-    fn start_copy(&self, source: &Location, target: &Location) -> Result<(String, u64), FsError> {
-        let from = self.own_path(source)?;
-        let to = self.own_path(target)?;
-        let mut tree = self.tree();
-        let entry = tree
-            .metadata(&from)
-            .ok_or_else(|| error(FsErrorKind::NotFound, source))?;
-        if entry.kind != EntryKind::File {
-            return Err(error(FsErrorKind::NameInvalid, source));
-        }
-        vacant(&tree, &to).map_err(|k| error(k, target))?;
-        let (parent, name) =
-            split_last(&to).ok_or_else(|| error(FsErrorKind::NameInvalid, target))?;
-        let size = entry.size;
-        tree.insert(
-            parent,
-            FsEntry {
-                name,
-                size: 0,
-                ..entry
-            },
-        );
-        drop(tree);
-        self.changed(&to, WatchChange::Created);
-        Ok((to, size))
-    }
 }
 
 impl ProviderOps for FakeFs {
+    fn available_space(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        let path = self.own_path(location)?;
+        fail_now(self.record_call(&path, FakeOp::Space), location)?;
+        crate::Provider::metadata(self, location)?;
+        Ok(lock(&self.space).get(&path).copied().flatten())
+    }
+
+    fn supports_atomic_rename(&self) -> bool {
+        true
+    }
+
+    fn rename_atomic(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.rename(source, target)
+    }
+
+    fn mount_identity(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        let path = self.own_path(location)?;
+        fail_now(self.record_call(&path, FakeOp::Mount), location)?;
+        let mounts = lock(&self.mounts);
+        let nearest = mounts
+            .iter()
+            .filter(|(mount, _)| path == **mount || path.starts_with(&format!("{mount}/")))
+            .max_by_key(|(mount, _)| mount.len());
+        match nearest {
+            Some((_, mount)) => Ok(*mount),
+            None => self.volume_serial(location),
+        }
+    }
     fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
         let path = self.own_path(location)?;
         fail_now(self.record_call(&path, FakeOp::Identity), location)?;
@@ -141,34 +143,29 @@ impl ProviderOps for FakeFs {
         progress: &mut dyn FnMut(u64),
         cancel: &CancelToken,
     ) -> Result<u64, FsError> {
-        let from = self.own_path(source)?;
-        let fault = self.record_call(&from, FakeOp::Copy);
-        if cancel.is_cancelled() {
-            return Err(error(FsErrorKind::Cancelled, target));
-        }
-        let limit = match fault {
-            Some(Fault::FailAfterBytes { kind, bytes }) => Some((kind, bytes)),
-            other => {
-                fail_now(other, source)?;
-                None
-            }
-        };
-        let (to, size) = self.start_copy(source, target)?;
-        let end = limit.map_or(size, |(_, bytes)| bytes.min(size));
-        let mut written = 0;
-        while written < end {
-            if cancel.is_cancelled() {
-                return Err(error(FsErrorKind::Cancelled, target));
-            }
-            written = end.min(written.saturating_add(CHUNK));
-            self.tree().resize(&to, written);
-            progress(written);
-        }
-        self.changed(&to, WatchChange::Modified);
-        match limit {
-            Some((kind, _)) => Err(error(kind, target)),
-            None => Ok(written),
-        }
+        self.transfer(
+            CopyRequest {
+                source,
+                target,
+                created: None,
+            },
+            CopyControl { progress, cancel },
+        )
+    }
+
+    fn copy_file_owned(
+        &self,
+        request: OwnedCopy<'_>,
+        control: CopyControl<'_>,
+    ) -> Result<u64, FsError> {
+        self.transfer(
+            CopyRequest {
+                source: request.source,
+                target: request.target,
+                created: Some(request.created),
+            },
+            control,
+        )
     }
 
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {

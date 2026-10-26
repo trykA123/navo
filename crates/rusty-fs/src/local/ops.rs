@@ -1,6 +1,4 @@
 use std::fs::{self, File};
-#[cfg(not(windows))]
-use std::io::{Read, Write};
 
 use rusty_core::{FsError, FsErrorKind, Location};
 
@@ -9,16 +7,49 @@ use super::win_copy::{self, CopyProgress};
 use super::{LocalFs, error, io_error, os_path};
 use crate::{CancelToken, ProviderOps};
 
-#[cfg(not(windows))]
-const CHUNK: usize = 1 << 20;
-
 impl ProviderOps for LocalFs {
+    fn copy_file_owned(
+        &self,
+        request: crate::OwnedCopy<'_>,
+        control: crate::CopyControl<'_>,
+    ) -> Result<u64, FsError> {
+        super::owned::copy(request, control)
+    }
+
+    #[cfg(windows)]
+    fn remove_owned_file(
+        &self,
+        location: &Location,
+        identity: crate::FileIdentity,
+    ) -> Result<(), FsError> {
+        super::owned_windows::remove(&os_path(location)?, identity)
+            .map_err(|error| io_error(&error, location))
+    }
+
+    #[cfg(windows)]
+    fn hide_retained(
+        &self,
+        location: &Location,
+        identity: crate::FileIdentity,
+    ) -> Result<(), FsError> {
+        super::hidden::set(&os_path(location)?, identity)
+            .map_err(|error| io_error(&error, location))
+    }
+    fn available_space(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        super::space::available(&os_path(location)?).map_err(|error| io_error(&error, location))
+    }
+
     fn supports_atomic_rename(&self) -> bool {
         cfg!(any(windows, target_os = "linux"))
     }
+
     fn rename_atomic(&self, source: &Location, target: &Location) -> Result<(), FsError> {
         super::platform::rename_atomic(&os_path(source)?, &os_path(target)?)
             .map_err(|error| io_error(&error, source))
+    }
+
+    fn mount_identity(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        super::identity::mount(&os_path(location)?).map_err(|error| io_error(&error, location))
     }
 
     fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
@@ -71,8 +102,12 @@ impl ProviderOps for LocalFs {
             .create_new(true)
             .open(&target_path)
             .map_err(|e| io_error(&e, target))?;
-        let total = pump(&mut input, &mut output, progress, cancel)
-            .map_err(|failure| failure.located(source, target))?;
+        let total = super::copy_pump::pump(
+            &mut input,
+            &mut output,
+            crate::CopyControl { progress, cancel },
+        )
+        .map_err(|failure| failure.located(source, target))?;
         output.sync_all().map_err(|e| io_error(&e, target))?;
         if let Ok(modified) = metadata.modified() {
             let _ = output.set_modified(modified);
@@ -157,47 +192,5 @@ impl ProviderOps for LocalFs {
         super::platform::volume_serial(&os_path(location)?)
             .map(Some)
             .map_err(|e| io_error(&e, location))
-    }
-}
-
-#[cfg(not(windows))]
-enum PumpError {
-    Read(std::io::Error),
-    Write(std::io::Error),
-    Cancelled,
-}
-
-#[cfg(not(windows))]
-impl PumpError {
-    fn located(self, source: &Location, target: &Location) -> FsError {
-        match self {
-            Self::Read(e) => io_error(&e, source),
-            Self::Write(e) => io_error(&e, target),
-            Self::Cancelled => error(FsErrorKind::Cancelled, target),
-        }
-    }
-}
-
-#[cfg(not(windows))]
-fn pump(
-    input: &mut File,
-    output: &mut File,
-    progress: &mut dyn FnMut(u64),
-    cancel: &CancelToken,
-) -> Result<u64, PumpError> {
-    let mut buffer = vec![0_u8; CHUNK];
-    let mut total = 0_u64;
-    loop {
-        if cancel.is_cancelled() {
-            return Err(PumpError::Cancelled);
-        }
-        let read = input.read(&mut buffer).map_err(PumpError::Read)?;
-        if read == 0 {
-            return Ok(total);
-        }
-        let chunk = buffer.get(..read).unwrap_or_default();
-        output.write_all(chunk).map_err(PumpError::Write)?;
-        total += read as u64;
-        progress(total);
     }
 }

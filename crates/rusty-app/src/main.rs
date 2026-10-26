@@ -182,12 +182,13 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
     perf::install(Instant::now(), &diagnostics);
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
-    crash::note_previous_exit(pending_crash.as_ref());
+    let store = check_store(profile, pending_crash.is_some(), &start);
     let run = start
         .metrics
         .clone()
         .map(|path| metrics::Run::new(path, clock));
     gui::open(gui::Launch {
+        experimental_retention: start.experimental_retention,
         path: start.path,
         view: start.view,
         panes,
@@ -197,10 +198,12 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
         start_watch: run.as_ref().map(metrics::Run::watch),
         instance_requests: requests,
         running,
+        store,
         crash: crash_report::CrashStart {
             pending: pending_crash,
             started: Instant::now(),
             diagnostics,
+            recovery: None,
         },
     });
     if let Err(error) = profile.cleanup().run() {
@@ -208,6 +211,14 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
         return ExitCode::FAILURE;
     }
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
+}
+
+fn check_store(profile: &Profile, unclean: bool, start: &Start) -> crash::store::StoreStart {
+    crash::store::check_store(
+        profile.dirs().map(|dirs| dirs.data.as_path()),
+        unclean,
+        start.experimental_retention,
+    )
 }
 
 fn migrates(start: &Start, profile: &Profile, guarded: bool) -> bool {
@@ -275,7 +286,13 @@ fn prepare_instance(
     };
     match acquired {
         instance::Acquired::First(mut guard) => {
-            guard.serve(move |request| gui::on_instance_request(&sender, request))?;
+            let experimental = start.experimental_retention;
+            guard.serve(move |request| {
+                if request.experimental_retention != experimental {
+                    return instance::Reply::Error;
+                }
+                gui::on_instance_request(&sender, request)
+            })?;
             Ok(first(Some(guard)))
         }
         instance::Acquired::Second(client) => {

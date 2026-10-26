@@ -74,7 +74,12 @@ impl StoreDirs {
 
     #[must_use]
     pub fn journal_file(&self) -> PathBuf {
-        self.data.join(format!("{}.db", brand::SLUG))
+        Self::journal_in(&self.data)
+    }
+
+    #[must_use]
+    pub fn journal_in(data: &Path) -> PathBuf {
+        data.join(format!("{}.db", brand::SLUG))
     }
 
     #[must_use]
@@ -84,7 +89,12 @@ impl StoreDirs {
 
     #[must_use]
     pub fn lock_file(&self) -> PathBuf {
-        self.data.join(format!("{}.lock", brand::SLUG))
+        Self::lock_in(&self.data)
+    }
+
+    #[must_use]
+    pub fn lock_in(data: &Path) -> PathBuf {
+        data.join(format!("{}.lock", brand::SLUG))
     }
 
     #[must_use]

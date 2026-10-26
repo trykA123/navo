@@ -43,24 +43,6 @@ mod samples;
 
 use samples::image_keys;
 
-const TREE_STEPS: [&str; 9] = [
-    "viewer::RowDown",
-    "viewer::RowDown",
-    "viewer::RowDown",
-    "viewer::RowDown",
-    "viewer::ScrollRight",
-    "viewer::RowDown",
-    "viewer::RowDown",
-    "viewer::ScrollRight",
-    "viewer::RowDown",
-];
-const TABLE_STEPS: [&str; 4] = [
-    "viewer::ScrollRight",
-    "viewer::ScrollRight",
-    "viewer_table::SortColumn",
-    "viewer_table::SortColumn",
-];
-
 const PDF_STEPS: [&str; 2] = ["viewer::LeftDrawer", "viewer::RightDrawer"];
 const PDF_SEARCH: &str = "undervoltage";
 
@@ -116,7 +98,7 @@ pub struct Gallery {
     sheet_windows: [Entity<WindowPage>; 9],
     settings_windows: [Entity<WindowPage>; 4],
     hint_windows: [Entity<WindowPage>; 4],
-    crash_window: Entity<WindowPage>,
+    notice_windows: [Entity<WindowPage>; 2],
     parts_windows: [Entity<WindowPage>; 3],
     preview_windows: [Entity<WindowPage>; 4],
     tab: usize,
@@ -169,7 +151,7 @@ impl Gallery {
             sheet_windows: sheet_windows(window, cx),
             settings_windows: settings_windows(window, cx),
             hint_windows: hint_windows(cx),
-            crash_window: cx.new(WindowPage::with_crash),
+            notice_windows: crate::window_samples::notice_windows(cx),
             parts_windows: parts_windows(cx),
             preview_windows: preview_windows(cx),
             tab: 1,
@@ -274,7 +256,7 @@ fn column(t: &Theme) -> Div {
 }
 
 impl Gallery {
-    fn windows(&self) -> [&Entity<WindowPage>; 19] {
+    fn windows(&self) -> [&Entity<WindowPage>; 20] {
         let [
             sheet,
             sheet_left,
@@ -306,7 +288,8 @@ impl Gallery {
             hints_shift,
             hints_alt,
             hints_low,
-            &self.crash_window,
+            &self.notice_windows[0],
+            &self.notice_windows[1],
         ]
     }
 }

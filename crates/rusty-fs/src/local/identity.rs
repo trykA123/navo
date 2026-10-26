@@ -3,16 +3,46 @@ use std::path::Path;
 
 use crate::{FileIdentity, FileIdentityKind};
 
+#[cfg(target_os = "linux")]
+pub(super) fn mount(path: &Path) -> io::Result<Option<u64>> {
+    use rustix::fs::{AtFlags, CWD, StatxFlags, statx};
+    let stat = statx(
+        CWD,
+        path,
+        AtFlags::SYMLINK_NOFOLLOW | AtFlags::NO_AUTOMOUNT,
+        StatxFlags::MNT_ID,
+    )?;
+    Ok((stat.stx_mask & StatxFlags::MNT_ID.bits() != 0).then_some(stat.stx_mnt_id))
+}
+
+#[cfg(windows)]
+pub(super) fn mount(path: &Path) -> io::Result<Option<u64>> {
+    Ok(read(path)?.map(|identity| identity.volume))
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+pub(super) fn mount(_path: &Path) -> io::Result<Option<u64>> {
+    Ok(None)
+}
+
 #[cfg(unix)]
 pub(super) fn read(path: &Path) -> io::Result<Option<FileIdentity>> {
-    use std::os::unix::fs::MetadataExt;
+    Ok(Some(from_metadata(&std::fs::symlink_metadata(path)?)))
+}
 
-    let metadata = std::fs::symlink_metadata(path)?;
-    Ok(Some(FileIdentity {
+#[cfg(unix)]
+pub(super) fn from_file(file: &std::fs::File) -> io::Result<Option<FileIdentity>> {
+    Ok(Some(from_metadata(&file.metadata()?)))
+}
+
+#[cfg(unix)]
+fn from_metadata(metadata: &std::fs::Metadata) -> FileIdentity {
+    use std::os::unix::fs::MetadataExt;
+    FileIdentity {
         volume: metadata.dev(),
         kind: FileIdentityKind::Native,
         file: u128::from(metadata.ino()).to_le_bytes(),
-    }))
+    }
 }
 
 #[cfg(windows)]

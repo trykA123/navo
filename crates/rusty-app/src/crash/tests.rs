@@ -311,7 +311,13 @@ fn save_report_contains_the_normal_report_and_all_crash_files() {
     }
     let _running = Running::start(dir.path()).unwrap();
     let previous = pending(dir.path()).unwrap();
-    let path = save_report(&previous, Instant::now(), &diagnostics, downloads.path()).unwrap();
+    let path = save_report_files(
+        &previous.files,
+        Instant::now(),
+        &diagnostics,
+        downloads.path(),
+    )
+    .unwrap();
     assert_eq!(path.parent(), Some(downloads.path()));
     let name = path.file_name().unwrap().to_str().unwrap();
     assert!(name.starts_with("navo-report-") && name.ends_with(".zip"));
@@ -335,9 +341,18 @@ fn save_report_contains_the_normal_report_and_all_crash_files() {
     }
     assert_no_canaries_in_zip(&mut zip);
     assert!(pending(dir.path()).is_some());
-    let again = save_report(&previous, Instant::now(), &diagnostics, downloads.path()).unwrap();
-    assert_ne!(again, path);
-    assert!(path.exists() && again.exists());
+}
+
+#[test]
+fn consecutive_reports_preserve_the_previous_archive() {
+    let downloads = tempfile::tempdir().unwrap();
+    let diagnostics = diagnostics();
+    let first = save_report_files(&[], Instant::now(), &diagnostics, downloads.path()).unwrap();
+    let bytes = fs::read(&first).unwrap();
+    let second = save_report_files(&[], Instant::now(), &diagnostics, downloads.path()).unwrap();
+    assert_ne!(first, second);
+    assert!(second.exists());
+    assert_eq!(fs::read(first).unwrap(), bytes);
 }
 
 #[test]
@@ -355,7 +370,13 @@ fn save_report_skips_a_crash_file_deleted_after_pending() {
     let previous = pending(dir.path()).unwrap();
     assert_eq!(previous.files, [removed.clone(), remaining.clone()]);
     fs::remove_file(&removed).unwrap();
-    let path = save_report(&previous, Instant::now(), &diagnostics(), downloads.path()).unwrap();
+    let path = save_report_files(
+        &previous.files,
+        Instant::now(),
+        &diagnostics(),
+        downloads.path(),
+    )
+    .unwrap();
     let mut zip = zip::ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
     assert_eq!(zip.len(), 3);
     assert!(zip.by_name("report.json").is_ok());

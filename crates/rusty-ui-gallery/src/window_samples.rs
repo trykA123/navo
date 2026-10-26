@@ -125,7 +125,7 @@ fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 19]) -> Option<AnyElement> {
+pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 20]) -> Option<AnyElement> {
     let [
         main,
         shift,
@@ -143,7 +143,7 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 19]) -> Option<
         invalid,
         hints @ ..,
     ] = windows;
-    let [hints_ctrl, hints_shift, hints_alt, hints_low, crash] = hints;
+    let [hints_ctrl, hints_shift, hints_alt, hints_low, notices @ ..] = hints;
     let shown = match page {
         Page::Window => main,
         Page::WindowShift => shift,
@@ -164,10 +164,19 @@ pub fn window_element(page: Page, windows: [&Entity<WindowPage>; 19]) -> Option<
         Page::HintsShift => hints_shift,
         Page::HintsAlt => hints_alt,
         Page::HintsLow => hints_low,
-        Page::CrashNotice => crash,
+        Page::CrashNotice => notices[0],
+        Page::RecoveryNotice => notices[1],
+        Page::RecoveryNoticeNarrow => return Some(fixed(NARROW, notices[1])),
         _ => return None,
     };
     Some(shown.clone().into_any_element())
+}
+
+pub fn notice_windows(cx: &mut App) -> [Entity<WindowPage>; 2] {
+    [
+        cx.new(WindowPage::with_crash),
+        cx.new(WindowPage::with_recovery),
+    ]
 }
 
 pub fn parts_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {

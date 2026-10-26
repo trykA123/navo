@@ -131,6 +131,7 @@ impl Browser {
             sources,
             target: None,
             plan,
+            retain_deletes: None,
             source_tab: self.state.active_tab().id(),
             undo: None,
         }

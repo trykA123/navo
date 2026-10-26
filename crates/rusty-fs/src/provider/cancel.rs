@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 #[derive(Debug, Default)]
 struct Control {
@@ -53,6 +54,15 @@ impl CancelToken {
                 .wait(paused)
                 .unwrap_or_else(PoisonError::into_inner);
         }
+    }
+
+    pub fn wait_cancelled(&self, timeout: Duration) -> bool {
+        let _wait = self
+            .control
+            .wake
+            .wait_timeout_while(self.paused(), timeout, |_| !self.is_cancelled())
+            .unwrap_or_else(PoisonError::into_inner);
+        self.is_cancelled()
     }
 
     fn paused(&self) -> MutexGuard<'_, bool> {

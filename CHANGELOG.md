@@ -11,6 +11,11 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - Your Ferrite profile moves to Navo by itself on first start. Settings, tabs and history come with it. The old folder is renamed to Ferrite.migrated-to-navo.
 - An installed Ferrite Index service is upgraded to Navo Index. A one-time notice offers an Upgrade button.
 
+### Backend branch
+
+- Startup preserves damaged databases, recovers verified saved data and operations, and keeps a recovery notice with access to preserved files. Native Windows verification remains pending.
+- Added the retention backend. Activation for deletes, overwrites and Recently deleted comes next.
+
 ## alpha-2026-10-26 — 2026-10-26
 
 ### New

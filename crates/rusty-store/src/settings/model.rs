@@ -21,6 +21,7 @@ pub struct Settings {
     pub markdown: MarkdownViewer,
     pub preview: PreviewViewer,
     pub copy: CopySettings,
+    pub retention: super::retention::RetentionSettings,
     pub search: Search,
     pub automotive: Automotive,
     pub experimental: BTreeMap<String, bool>,

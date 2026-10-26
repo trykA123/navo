@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use std::time::Duration;
 
@@ -34,6 +35,18 @@ pub enum DbError {
 
 impl DbError {
     #[must_use]
+    pub fn is_database_corruption(&self) -> bool {
+        match self {
+            Self::Corrupt(_) => true,
+            Self::Sqlite(error) => matches!(
+                error.sqlite_error_code(),
+                Some(rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase)
+            ),
+            _ => false,
+        }
+    }
+
+    #[must_use]
     pub fn is_corruption(&self) -> bool {
         match self {
             Self::Corrupt(_) => true,
@@ -63,6 +76,8 @@ pub struct OpenReport {
 
 pub struct Db {
     conn: Connection,
+    // The connection must close before the access lease is released.
+    _access_guard: Option<Arc<dyn Send + Sync>>,
 }
 
 impl Db {
@@ -72,7 +87,10 @@ impl Db {
         let conn = Connection::open(path)?;
         conn.busy_timeout(BUSY_TIMEOUT)?;
         conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true)?;
-        let mut db = Self { conn };
+        let mut db = Self {
+            conn,
+            _access_guard: None,
+        };
         let from_version = db.version()?;
         if from_version > Self::VERSION {
             return Err(DbError::TooNew {
@@ -98,6 +116,7 @@ impl Db {
     pub fn open_in_memory() -> Result<Self, DbError> {
         let mut db = Self {
             conn: Connection::open_in_memory()?,
+            _access_guard: None,
         };
         db.configure()?;
         db.migrate(0)?;
@@ -113,6 +132,10 @@ impl Db {
     #[must_use]
     pub fn connection(&self) -> &Connection {
         &self.conn
+    }
+
+    pub fn hold_access_guard(&mut self, guard: Arc<dyn Send + Sync>) {
+        self._access_guard = Some(guard);
     }
 
     fn check_integrity(&self) -> Result<(), DbError> {
@@ -136,8 +159,11 @@ impl Db {
         Ok(())
     }
 
-    fn migrate(&mut self, _from_version: u32) -> Result<(), DbError> {
-        for (version, sql) in (1..=Self::VERSION).zip(MIGRATIONS) {
+    fn migrate(&mut self, from_version: u32) -> Result<(), DbError> {
+        for (version, sql) in (1..=Self::VERSION)
+            .zip(MIGRATIONS)
+            .skip(from_version as usize)
+        {
             let transaction = self
                 .conn
                 .transaction_with_behavior(TransactionBehavior::Immediate)?;

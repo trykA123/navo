@@ -1,61 +1,45 @@
 use rusty_core::{FsError, FsErrorKind, Location};
 
-use super::{CancelToken, EntryKind, FsEntry, Provider};
+use super::{CancelToken, CopyControl, EntryKind, OwnedCopy, Provider};
 
-const DST_SHIFT_MS: u64 = 3_600_000;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileIdentityKind {
-    Native,
-    WindowsIndex,
-    Fingerprint { folder: bool },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FileIdentity {
-    pub volume: u64,
-    pub kind: FileIdentityKind,
-    pub file: [u8; 16],
-}
-
-impl FileIdentity {
-    #[must_use]
-    pub fn fingerprint(entry: &FsEntry) -> Self {
-        let mut file = [0; 16];
-        file[..8].copy_from_slice(&entry.size.to_le_bytes());
-        file[8..].copy_from_slice(&entry.modified_ms.unwrap_or(i64::MIN).to_le_bytes());
-        Self {
-            volume: 0,
-            kind: FileIdentityKind::Fingerprint {
-                folder: entry.kind == EntryKind::Folder,
-            },
-            file,
-        }
-    }
-
-    #[must_use]
-    pub fn same_fingerprint(&self, other: &Self) -> bool {
-        if self == other {
-            return true;
-        }
-        let same_shape = matches!(self.kind, FileIdentityKind::Fingerprint { .. })
-            && self.kind == other.kind
-            && self.file[..8] == other.file[..8];
-        same_shape
-            && match (self.modified_ms(), other.modified_ms()) {
-                (Some(left), Some(right)) => left.abs_diff(right) == DST_SHIFT_MS,
-                _ => false,
-            }
-    }
-
-    fn modified_ms(&self) -> Option<i64> {
-        let mut time = [0; 8];
-        time.copy_from_slice(&self.file[8..]);
-        Some(i64::from_le_bytes(time)).filter(|modified| *modified != i64::MIN)
-    }
-}
+pub use rusty_core::{FileIdentity, FileIdentityKind};
 
 pub trait ProviderOps: Provider {
+    fn hide_retained(&self, location: &Location, identity: FileIdentity) -> Result<(), FsError> {
+        if self.matches_identity(location, Some(identity))? {
+            return Ok(());
+        }
+        Err(FsError {
+            location: Some(location.clone()),
+            ..FsError::new(FsErrorKind::IdentityUnavailable)
+        })
+    }
+    fn copy_file_owned(
+        &self,
+        request: OwnedCopy<'_>,
+        _control: CopyControl<'_>,
+    ) -> Result<u64, FsError> {
+        Err(FsError {
+            location: Some(request.target.clone()),
+            ..FsError::new(FsErrorKind::NotSupportedYet)
+        })
+    }
+    fn remove_owned_file(
+        &self,
+        location: &Location,
+        identity: FileIdentity,
+    ) -> Result<(), FsError> {
+        if !self.matches_identity(location, Some(identity))? {
+            return Err(FsError {
+                location: Some(location.clone()),
+                ..FsError::new(FsErrorKind::IdentityUnavailable)
+            });
+        }
+        self.remove_file(location)
+    }
+    fn available_space(&self, _location: &Location) -> Result<Option<u64>, FsError> {
+        Ok(None)
+    }
     fn supports_atomic_rename(&self) -> bool {
         false
     }
@@ -64,6 +48,9 @@ pub trait ProviderOps: Provider {
             location: Some(source.clone()),
             ..FsError::new(FsErrorKind::NotSupportedYet)
         })
+    }
+    fn mount_identity(&self, _location: &Location) -> Result<Option<u64>, FsError> {
+        Ok(None)
     }
     fn file_identity(&self, _location: &Location) -> Result<Option<FileIdentity>, FsError> {
         Ok(None)
@@ -78,7 +65,12 @@ pub trait ProviderOps: Provider {
         };
         if let FileIdentityKind::Fingerprint { .. } = expected.kind {
             return match self.metadata(location) {
-                Ok(entry) => Ok(FileIdentity::fingerprint(&entry).same_fingerprint(&expected)),
+                Ok(entry) => Ok(FileIdentity::fingerprint(
+                    entry.size,
+                    entry.modified_ms,
+                    entry.kind == EntryKind::Folder,
+                )
+                .same_fingerprint(&expected)),
                 Err(error) if error.kind == FsErrorKind::NotFound => Ok(false),
                 Err(error) => Err(error),
             };

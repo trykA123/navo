@@ -54,7 +54,7 @@ fn user_version(path: &Path) -> i64 {
 fn v4_reports_its_starting_version() {
     let dir = tmp();
     let (_, report) = Db::open(&v4_file(&dir), false).unwrap();
-    assert_eq!((report.from_version, report.to_version), (4, 5));
+    assert_eq!((report.from_version, report.to_version), (4, Db::VERSION));
 }
 
 #[test]
@@ -64,7 +64,12 @@ fn v4_rows_survive_v5_value_for_value() {
     let want = every_row(&Connection::open(&path).unwrap());
     let (db, _) = Db::open(&path, false).unwrap();
     let mut got = every_row(db.connection());
-    got.retain(|(table, _)| table != "rename_preset");
+    got.retain(|(table, _)| {
+        !matches!(
+            table.as_str(),
+            "rename_preset" | "retained_entry" | "sqlite_sequence"
+        )
+    });
     assert_eq!(got, want);
 }
 
@@ -122,10 +127,7 @@ fn a_newer_file_than_v5_is_refused_and_left_unchanged() {
     assert!(
         matches!(
             err,
-            DbError::TooNew {
-                found: 6,
-                supported: 5
-            }
+            DbError::TooNew { found, supported } if found == Db::VERSION + 1 && supported == Db::VERSION
         ),
         "{err:?}"
     );

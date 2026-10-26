@@ -78,6 +78,7 @@ context_menu.up | up | ContextMenu
 context_menu.up | up | ContextMenu > Input
 crash_notice.dismiss | escape | CrashNotice
 crash_notice.focus | ctrl-shift-r | NavoPane
+crash_notice.open_folder | alt-o | CrashNotice
 crash_notice.save | enter | CrashNotice
 dialog.next_button | right | DialogButton
 dialog.next_field | tab | Dialog

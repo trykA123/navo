@@ -9,6 +9,19 @@ const EIO: i32 = 5;
 const ENOSYS: i32 = 38;
 const EOPNOTSUPP: i32 = 95;
 
+#[cfg(target_os = "linux")]
+#[test]
+fn an_unsupported_atomic_rename_is_returned_without_a_replacing_fallback() {
+    for code in [22, ENOSYS, EOPNOTSUPP] {
+        assert_eq!(
+            platform::atomic_result(Err(io::Error::from_raw_os_error(code)))
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::Unsupported
+        );
+    }
+}
+
 fn path(dir: &TempDir, name: &str) -> PathBuf {
     dir.path().join(name)
 }

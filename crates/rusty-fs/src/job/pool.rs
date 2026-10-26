@@ -1,10 +1,10 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, SyncSender, sync_channel};
 use std::sync::{Mutex, PoisonError};
 
 use rusty_core::{FsError, FsErrorKind};
 
-use super::copy::{Copied, Copier, CopyStep, copy, failure, remove_if_present, temp_of};
+use super::copy::{Copied, Copier, CopyHooks, CopyStep, copy, failure, remove_if_present, temp_of};
 
 pub(super) struct Task<'p> {
     pub seq: u32,
@@ -12,6 +12,11 @@ pub(super) struct Task<'p> {
 }
 
 pub(super) enum Event {
+    Created {
+        seq: u32,
+        identity: crate::FileIdentity,
+        ack: SyncSender<Result<(), FsError>>,
+    },
     Bytes {
         seq: u32,
         bytes: u64,
@@ -28,14 +33,34 @@ pub(super) fn work(copier: &Copier<'_>, queue: &Mutex<Receiver<Task<'_>>>, event
             let _ = events.send(Event::Bytes { seq, bytes });
             copier.cancel.wait_while_paused();
         };
-        let result = catch_unwind(AssertUnwindSafe(|| copy(copier, &step, &mut on_bytes)))
-            .unwrap_or_else(|_| Err(clean_after_panic(copier, &step)));
+        let mut created = |identity| {
+            let (ack, registered) = sync_channel(1);
+            events
+                .send(Event::Created { seq, identity, ack })
+                .map_err(|_| failure(FsErrorKind::Unknown, step.target))?;
+            registered
+                .recv()
+                .map_err(|_| failure(FsErrorKind::Unknown, step.target))?
+        };
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            copy(
+                copier,
+                &step,
+                CopyHooks {
+                    progress: &mut on_bytes,
+                    created: &mut created,
+                },
+            )
+        }))
+        .unwrap_or_else(|_| Err(clean_after_panic(copier, &step)));
         let _ = events.send(Event::Finished { seq, result });
     }
 }
 
 fn clean_after_panic(copier: &Copier<'_>, step: &CopyStep<'_>) -> FsError {
-    if let Ok(temp) = temp_of(step.target) {
+    if !copier.strict
+        && let Ok(temp) = temp_of(step.target)
+    {
         let _ = remove_if_present(copier.ops, &temp);
     }
     failure(FsErrorKind::Unknown, step.target)

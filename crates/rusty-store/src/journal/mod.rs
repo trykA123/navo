@@ -1,8 +1,12 @@
 use crate::db::{Db, DbError};
+use rusqlite::OptionalExtension;
 
+mod evidence;
 mod held;
+mod retained;
 mod undoable;
 
+pub use evidence::StepEvidence;
 pub use undoable::FinishedJob;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -46,6 +50,8 @@ pub struct UnfinishedJob {
 #[derive(Debug, thiserror::Error)]
 pub enum JournalError {
     #[error(transparent)]
+    Retention(#[from] crate::RetentionStoreError),
+    #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
@@ -53,6 +59,8 @@ pub enum JournalError {
     UnknownJob(JobId),
     #[error("unknown step {seq} of job {job:?}")]
     UnknownStep { job: JobId, seq: u32 },
+    #[error("the durable evidence for step {seq} of job {job:?} changed")]
+    EvidenceChanged { job: JobId, seq: u32 },
     #[error("bad state text {0:?}")]
     BadState(String),
 }
@@ -63,6 +71,7 @@ impl JournalError {
         match self {
             Self::Db(error) => error.is_corruption(),
             Self::Sqlite(error) => crate::db::is_corrupt_sqlite(error),
+            Self::Retention(error) => error.is_corruption(),
             _ => false,
         }
     }
@@ -154,6 +163,39 @@ impl JobJournal {
         self.jobs_in(JobState::RestorePending)
     }
 
+    pub fn read_job(&self, id: JobId) -> Result<(JobState, UnfinishedJob), JournalError> {
+        let (state, kind, plan, created_at): (String, String, Vec<u8>, i64) = self
+            .db
+            .connection()
+            .query_row(
+                "SELECT state, kind, plan, created_at FROM job WHERE id=?1",
+                [id.0],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?
+            .ok_or(JournalError::UnknownJob(id))?;
+        let state = match state.as_str() {
+            "running" => JobState::Running,
+            "done" => JobState::Done,
+            "failed" => JobState::Failed,
+            "cancelled" => JobState::Cancelled,
+            "rolled_back" => JobState::RolledBack,
+            "undone" => JobState::Undone,
+            "restore_pending" => JobState::RestorePending,
+            _ => return Err(JournalError::BadState(state)),
+        };
+        Ok((
+            state,
+            UnfinishedJob {
+                id,
+                kind,
+                plan,
+                created_at,
+                steps: self.steps(id)?,
+            },
+        ))
+    }
+
     fn jobs_in(&self, state: JobState) -> Result<Vec<UnfinishedJob>, JournalError> {
         let mut jobs = self.db.connection().prepare(
             "SELECT id, kind, plan, created_at FROM job WHERE state = ?1
@@ -181,6 +223,8 @@ impl JobJournal {
     pub fn prune(&mut self, keep_finished: u32) -> Result<u32, JournalError> {
         let deleted = self.db.connection().execute(
             "DELETE FROM job WHERE state NOT IN ('running', 'restore_pending')
+             AND id NOT IN (SELECT job_id FROM retained_entry WHERE job_id IS NOT NULL
+                 AND state NOT IN ('restored', 'purged', 'aborted'))
              AND id NOT IN (SELECT job_id FROM undo WHERE job_id IS NOT NULL)
              AND id NOT IN (
                  SELECT id FROM job WHERE state != 'running'

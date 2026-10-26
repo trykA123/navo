@@ -7,6 +7,27 @@ use rusty_fs::{FakeFs, Provider, ProviderOps};
 use super::NameProblem;
 use crate::browser::Browser;
 
+#[test]
+fn creation_lease_refuses_both_new_files_and_folders_before_mutation() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    let mut operations = crate::browser::Operations::unlogged();
+    operations.write = Some(Arc::new(|location| {
+        Err(rusty_core::FsError {
+            location: Some(location.clone()),
+            ..rusty_core::FsError::new(rusty_core::FsErrorKind::AccessDenied)
+        })
+    }));
+    browser.set_operations(operations);
+    browser.new_file("blocked-file").unwrap();
+    settle(&mut browser);
+    browser.new_folder("blocked-folder").unwrap();
+    settle(&mut browser);
+    assert!(fs.metadata(&fs.location("home/blocked-file")).is_err());
+    assert!(fs.metadata(&fs.location("home/blocked-folder")).is_err());
+    assert!(browser.error(browser.state().active_tab().id()).is_some());
+}
+
 fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home/docs");

@@ -7,7 +7,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use rusty_core::Location;
 use rusty_core::encoding::{Encoding, decode, decode_as, encode, looks_binary};
 use rusty_core::line_ends::{DIFF_BUDGET, LineEnds};
-use rusty_store::replace_atomic;
+use rusty_store::{replace_atomic, replace_entry_atomic};
 use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError, Saved};
 
 mod archive;
@@ -21,6 +21,8 @@ mod summary;
 const MAX_VIEW: u64 = 16 * 1024 * 1024;
 const SNIFF: usize = 8 * 1024;
 const MAX_RANGE: usize = 64 * 1024 * 1024;
+
+type Replace = fn(&std::path::Path, &[u8]) -> std::io::Result<()>;
 
 pub use memory::{SharedDb, open as open_memory};
 pub(crate) use memory::{lock, now_ms};
@@ -45,6 +47,30 @@ pub fn hooks(db: Option<SharedDb>) -> FileHooks {
         Some(db) => memory::attach(hooks, db),
         None => hooks,
     }
+}
+
+pub fn profile_hooks(
+    db: Option<SharedDb>,
+    dirs: Option<&rusty_store::StoreDirs>,
+    experimental: bool,
+) -> FileHooks {
+    let mut result = hooks(db);
+    if !experimental {
+        return result;
+    }
+    if let Some(dirs) = dirs.cloned() {
+        result.write = Arc::new(move |location, save| {
+            let target = rusty_fs::save_location(location)
+                .map_err(|error| SaveError::Failed(error.message()))?;
+            let _lease = crate::jobs::claim_write(&dirs, &target, experimental)
+                .map_err(SaveError::Failed)?;
+            write_using(&target, save, (DIFF_BUDGET, replace_entry_atomic))
+        });
+    } else {
+        result.write =
+            Arc::new(|_, _| Err(SaveError::Failed(rusty_l10n::tr("job-profile-unavailable"))));
+    }
+    result
 }
 
 fn path_of(location: &Location) -> Result<PathBuf, String> {
@@ -172,6 +198,14 @@ fn write_within(
     save: &Save<'_>,
     budget: Duration,
 ) -> Result<Saved, SaveError> {
+    write_using(location, save, (budget, replace_atomic))
+}
+
+fn write_using(
+    location: &Location,
+    save: &Save<'_>,
+    (budget, replace): (Duration, Replace),
+) -> Result<Saved, SaveError> {
     let path = path_of(location).map_err(SaveError::Failed)?;
     if let Some(expected) = save.expected
         && stamp_of(&path) != Some(expected)
@@ -187,7 +221,7 @@ fn write_within(
     };
     let bytes = encode(&text, &save.encoding)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
-    replace_atomic(&path, &bytes)
+    replace(&path, &bytes)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
     Ok(Saved {
         stamp: stamp_of(&path),

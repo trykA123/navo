@@ -1,7 +1,15 @@
+#[cfg(not(windows))]
+mod copy_pump;
+mod guard;
+#[cfg(windows)]
+mod hidden;
 mod identity;
 mod link;
 #[cfg(target_os = "linux")]
 mod linux_watch;
+mod owned;
+#[cfg(windows)]
+mod owned_windows;
 #[cfg(target_os = "linux")]
 use linux_watch as platform_watch;
 #[cfg(any(windows, test))]
@@ -15,6 +23,7 @@ mod windows;
 #[cfg(windows)]
 use windows as platform;
 mod ops;
+mod space;
 #[cfg(any(windows, test))]
 mod verbatim;
 #[cfg(windows)]
@@ -41,6 +50,8 @@ use std::time::UNIX_EPOCH;
 
 use rusty_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, ProviderPath};
 
+pub(crate) use guard::refuse_reserved;
+pub use guard::{mutation_location, save_location};
 pub use link::make_link;
 
 #[cfg(any(windows, target_os = "linux"))]
@@ -329,6 +340,17 @@ fn kind_of_io(kind: io::ErrorKind) -> FsErrorKind {
         io::ErrorKind::NotADirectory | io::ErrorKind::InvalidFilename => FsErrorKind::NameInvalid,
         _ => FsErrorKind::Unknown,
     }
+}
+
+pub fn native_identity(path: &std::path::Path) -> std::io::Result<Option<crate::FileIdentity>> {
+    identity::read(path)
+}
+
+pub fn native_rename_atomic(
+    source: &std::path::Path,
+    target: &std::path::Path,
+) -> std::io::Result<()> {
+    platform::rename_atomic(source, target)
 }
 
 #[cfg(test)]

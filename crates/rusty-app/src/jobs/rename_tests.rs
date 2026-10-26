@@ -201,7 +201,8 @@ fn a_failed_put_back_finishes_pending_and_recovery_completes_it() {
     log.finish(
         &JobOutcome::Failed { seq: 2, error },
         &fs as &dyn ProviderOps,
-    );
+    )
+    .unwrap();
     assert_eq!(pending(&journal), 1);
     recover(&journal, &fs).unwrap();
     assert_eq!(
@@ -220,7 +221,8 @@ fn renamed(fs: &FakeFs, journal: &SharedJournal, pairs: &[(&str, &str)]) -> Oper
     let plan = batch(fs, &names, pairs);
     let mut log = log_factory(Arc::clone(journal))(&plan).unwrap();
     assert_eq!(rename_with(fs, &plan, log.as_mut()), RenameOutcome::Done);
-    log.finish(&JobOutcome::Done, fs as &dyn ProviderOps);
+    log.finish(&JobOutcome::Done, fs as &dyn ProviderOps)
+        .unwrap();
     plan
 }
 
@@ -242,7 +244,8 @@ fn an_undo_log_finished_done_marks_the_batch_undone_and_offers_the_older_one() {
     let mut log = undo_log(&journal, job).unwrap();
     log.undone(0, StepOutcome::Done).unwrap();
     log.undone(1, StepOutcome::Skipped).unwrap();
-    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps);
+    log.finish(&JobOutcome::Done, &fs as &dyn ProviderOps)
+        .unwrap();
     assert_eq!(newest(&journal), Some(older));
     assert_eq!(pending(&journal), 0);
 }
@@ -259,7 +262,8 @@ fn an_undo_log_with_a_failed_step_stays_pending() {
     log.finish(
         &JobOutcome::Failed { seq: 1, error },
         &fs as &dyn ProviderOps,
-    );
+    )
+    .unwrap();
     assert_eq!((newest(&journal), pending(&journal)), (Some(job), 1));
 }
 
@@ -339,7 +343,8 @@ fn swap_stuck_on_a_lost_put_back_record(fs: &FakeFs, journal: &SharedJournal) ->
     log.finish(
         &JobOutcome::Failed { seq: 2, error },
         fs as &dyn ProviderOps,
-    );
+    )
+    .unwrap();
     plan
 }
 

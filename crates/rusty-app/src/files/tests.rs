@@ -8,6 +8,7 @@ use super::{bytes, line_endings, mostly_crlf, read, write};
 
 mod chosen;
 mod encodings;
+mod retention;
 
 fn at(path: &std::path::Path) -> Location {
     Location::new(path.to_string_lossy().into_owned()).unwrap()

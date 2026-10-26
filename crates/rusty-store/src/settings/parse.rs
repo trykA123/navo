@@ -14,6 +14,22 @@ pub fn parse(text: &str) -> Result<(Settings, Vec<String>), SettingsError> {
     Ok((settings, unknown))
 }
 
+pub fn parse_retention(
+    text: &str,
+) -> Result<(super::RetentionSettings, Vec<String>), SettingsError> {
+    #[derive(serde::Deserialize, Default)]
+    #[serde(default)]
+    struct Policy {
+        retention: super::RetentionSettings,
+    }
+    let mut unknown = Vec::new();
+    let policy: Policy = toml::de::Deserializer::parse(text)
+        .and_then(|de| serde_ignored::deserialize(de, |path| unknown.push(path.to_string())))
+        .map_err(|error| invalid(text, &error))?;
+    unknown.retain(|key| key.starts_with("retention."));
+    Ok((policy.retention, unknown))
+}
+
 #[must_use]
 pub fn to_toml(settings: &Settings) -> String {
     toml::to_string(settings).unwrap_or_default()

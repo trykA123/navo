@@ -1,3 +1,4 @@
+mod recovery;
 mod table;
 
 pub use table::PAGES;
@@ -121,6 +122,8 @@ pub enum Page {
     MapNoRowBars,
     ElfStripKeys,
     MdfTable,
+    RecoveryNotice,
+    RecoveryNoticeNarrow,
     Palettes,
 }
 

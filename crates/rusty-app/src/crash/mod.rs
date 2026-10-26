@@ -7,13 +7,14 @@ use crate::logging::Diagnostics;
 
 mod downloads;
 mod hook;
+pub(crate) mod store;
 #[cfg(test)]
 pub(crate) mod test_damage;
 mod unclean;
 
 #[cfg(test)]
 pub(crate) use unclean::sentinel_path;
-pub(crate) use unclean::{note_previous_exit, open_db, record_failed_check};
+pub(crate) use unclean::{open_db, record_failed_check};
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -73,8 +74,8 @@ pub(crate) fn clear(pending: &Pending) -> io::Result<()> {
     }
 }
 
-pub(crate) fn save_report(
-    pending: &Pending,
+pub(crate) fn save_report_files(
+    files: &[PathBuf],
     started: Instant,
     diagnostics: &Diagnostics,
     downloads: &Path,
@@ -88,7 +89,7 @@ pub(crate) fn save_report(
             format!("-{attempt}")
         };
         let path = downloads.join(format!("navo-report-{stamp}{suffix}.zip"));
-        match crate::diag::write_with_crashes(&path, started, diagnostics, &pending.files) {
+        match crate::diag::write_with_crashes(&path, started, diagnostics, files) {
             Ok(_) => return Ok(path),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => last = error,
             Err(error) => return Err(error),

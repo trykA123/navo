@@ -86,8 +86,11 @@ fn fingerprint_matches(fs: &FakeFs, path: &str, expected: Option<FileIdentity>) 
 fn a_fingerprint_survives_a_daylight_saving_shift_of_exactly_one_hour() {
     let fs = files(&["a"]);
     stamp(&fs, "d/a", 10, 5 * HOUR_MS);
+    let entry = fs.metadata(&fs.location("d/a")).unwrap();
     let saved = Some(FileIdentity::fingerprint(
-        &fs.metadata(&fs.location("d/a")).unwrap(),
+        entry.size,
+        entry.modified_ms,
+        false,
     ));
     for shifted in [6 * HOUR_MS, 4 * HOUR_MS] {
         stamp(&fs, "d/a", 10, shifted);
@@ -99,8 +102,11 @@ fn a_fingerprint_survives_a_daylight_saving_shift_of_exactly_one_hour() {
 fn a_fingerprint_refuses_other_time_shifts_and_any_size_change() {
     let fs = files(&["a"]);
     stamp(&fs, "d/a", 10, 5 * HOUR_MS);
+    let entry = fs.metadata(&fs.location("d/a")).unwrap();
     let saved = Some(FileIdentity::fingerprint(
-        &fs.metadata(&fs.location("d/a")).unwrap(),
+        entry.size,
+        entry.modified_ms,
+        false,
     ));
     for (size, modified_ms) in [
         (10, 5 * HOUR_MS + HOUR_MS / 2),

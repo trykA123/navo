@@ -63,6 +63,13 @@ largest-files = true
 [copy]
 mode = "auto"
 
+[retention]
+retain-deletes = false
+retain-overwrites = false
+days = 3
+max-volume-mib = 1024
+min-free-mib = 256
+
 [search]
 index = "auto"
 drives = []

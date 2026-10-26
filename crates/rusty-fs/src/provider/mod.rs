@@ -1,5 +1,6 @@
 mod cancel;
 mod ops;
+mod owned;
 
 use std::ops::ControlFlow;
 
@@ -7,6 +8,7 @@ use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 pub use cancel::CancelToken;
 pub use ops::{FileIdentity, FileIdentityKind, ProviderOps};
+pub use owned::{CopyControl, OwnedCopy};
 
 use crate::{Watch, WatchSink};
 

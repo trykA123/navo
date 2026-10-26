@@ -10,6 +10,8 @@ use rusty_store::{Db, JobJournal, StepState};
 
 use super::{SharedJournal, lock, log_factory, open, recover};
 
+mod salvage;
+
 fn journal() -> SharedJournal {
     let db = Db::open_in_memory().unwrap();
     Arc::new(Mutex::new(JobJournal::new(db).unwrap()))
@@ -62,7 +64,7 @@ fn run(fs: &FakeFs, plan: &OperationPlan, journal: &SharedJournal, finish: bool)
     );
     assert_eq!(outcome, JobOutcome::Done);
     if finish {
-        log.finish(&outcome, fs);
+        log.finish(&outcome, fs).unwrap();
     }
 }
 

@@ -23,6 +23,25 @@ fn auto_tuning_defaults_match_the_copy_contract() {
     assert_eq!(tuning.slow_workers, 1);
 }
 
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn atomic_rename_moves_a_directory_and_refuses_an_existing_destination() {
+    let (dir, root) = temp();
+    fs::create_dir(dir.path().join("source")).unwrap();
+    fs::create_dir(dir.path().join("target")).unwrap();
+    fs::write(dir.path().join("source/a"), b"keep").unwrap();
+    let ops = LocalFs::new();
+    assert!(ops.supports_atomic_rename());
+    assert!(
+        ops.rename_atomic(&child(&root, "source"), &child(&root, "target"))
+            .is_err()
+    );
+    assert_eq!(fs::read(dir.path().join("source/a")).unwrap(), b"keep");
+    ops.rename_atomic(&child(&root, "source"), &child(&root, "moved"))
+        .unwrap();
+    assert_eq!(fs::read(dir.path().join("moved/a")).unwrap(), b"keep");
+}
+
 #[test]
 fn copy_file_writes_every_byte_and_reports_progress() {
     let (dir, root) = temp();

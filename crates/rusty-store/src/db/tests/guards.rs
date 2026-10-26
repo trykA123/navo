@@ -134,6 +134,21 @@ fn a_busy_database_is_not_corruption() {
 }
 
 #[test]
+fn only_database_corruption_codes_can_trigger_quarantine() {
+    for code in [rusqlite::ffi::SQLITE_CORRUPT, rusqlite::ffi::SQLITE_NOTADB] {
+        assert!(sqlite_failure(code).is_database_corruption());
+    }
+    for code in [
+        rusqlite::ffi::SQLITE_IOERR_READ,
+        rusqlite::ffi::SQLITE_BUSY,
+        rusqlite::ffi::SQLITE_LOCKED,
+        rusqlite::ffi::SQLITE_CANTOPEN,
+    ] {
+        assert!(!sqlite_failure(code).is_database_corruption());
+    }
+}
+
+#[test]
 fn a_failed_journal_read_from_the_disk_counts_as_corruption() {
     let error = crate::JournalError::Sqlite(rusqlite::Error::SqliteFailure(
         rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR_READ),

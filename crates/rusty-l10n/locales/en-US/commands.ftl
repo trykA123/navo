@@ -25,6 +25,7 @@ cmd-preview-browse = Browse in preview
 cmd-crash-notice-focus = Go to the crash notice
 cmd-crash-notice-save = Save crash report
 cmd-crash-notice-dismiss = Dismiss crash notice
+cmd-crash-notice-open-folder = Open the recovery folder
 cmd-activity-focus = Go to the activity strip
 cmd-activity-previous = Previous activity button
 cmd-activity-next = Next activity button

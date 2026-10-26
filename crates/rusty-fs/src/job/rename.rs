@@ -158,7 +158,14 @@ pub(super) fn prepare(
     };
     let identity = match ctx.ops.file_identity(source)? {
         Some(identity) => identity,
-        None => FileIdentity::fingerprint(&ctx.ops.metadata(source)?),
+        None => {
+            let entry = ctx.ops.metadata(source)?;
+            FileIdentity::fingerprint(
+                entry.size,
+                entry.modified_ms,
+                entry.kind == crate::EntryKind::Folder,
+            )
+        }
     };
     ctx.log.prepare_rename(seq, identity)
 }

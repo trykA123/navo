@@ -6,7 +6,7 @@ use std::thread::{Builder, scope};
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
 use super::aside::Aside;
-use super::copy::{Copied, Copier, CopyStep, failure, place, temp_of};
+use super::copy::{Copied, Copier, CopyStep, failure, place};
 use super::pool::{Event, Task, work};
 use super::run::{Job, apply, counted, current_of, holds_kept, note_kept};
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
@@ -18,14 +18,22 @@ pub(super) fn run(
     workers: usize,
 ) -> JobOutcome {
     let aside = Aside::new();
+    let namespace = if ctx.log.preserve_overwrites() {
+        ctx.log.temporary_namespace()
+    } else {
+        None
+    };
     let job = Job {
         plan,
         aside: &aside,
+        namespace: namespace.as_deref(),
     };
     let copier = Copier {
         plan,
         ops: ctx.ops,
         cancel: ctx.cancel,
+        strict: ctx.log.preserve_overwrites(),
+        namespace: namespace.as_deref(),
     };
     let (tasks, queue) = channel();
     let queue = Mutex::new(queue);
@@ -72,11 +80,16 @@ struct Runner<'p, 'c, 'a> {
     cancelled: bool,
 }
 
-fn names_clash(one: &Location, other: &Location) -> bool {
-    let is_temp_of = |temp: &Location, of: &Location| {
-        temp_of(of).is_ok_and(|candidate| candidate.same_place(temp))
-    };
-    one.same_place(other) || is_temp_of(one, other) || is_temp_of(other, one)
+fn names_clash(
+    (one, seq): (&Location, u32),
+    (other, other_seq): (&Location, u32),
+    namespace: Option<&str>,
+) -> bool {
+    let temporary =
+        |target, seq| rusty_core::retention::copy_temporary(target, seq, namespace).ok();
+    one.same_place(other)
+        || temporary(one, seq).is_some_and(|temp| temp.same_place(other))
+        || temporary(other, other_seq).is_some_and(|temp| temp.same_place(one))
 }
 
 fn room_for(step: &Step, workers: usize) -> usize {
@@ -118,7 +131,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                 self.count(step);
                 continue;
             }
-            self.wait_for_room(step);
+            self.wait_for_room((seq, step));
             if self.stopped() {
                 break;
             }
@@ -143,12 +156,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         self.cancelled || self.failed.is_some()
     }
 
-    fn wait_for_room(&mut self, step: &Step) {
+    fn wait_for_room(&mut self, (seq, step): (u32, &Step)) {
         let room = room_for(step, self.pool.workers);
         loop {
             self.note_pause();
-            let is_busy =
-                self.in_flight.len() > room || self.progress.paused || self.shares_a_name(step);
+            let is_busy = self.in_flight.len() > room
+                || self.progress.paused
+                || self.shares_a_name((seq, step));
             if self.stopped() || !is_busy {
                 return;
             }
@@ -160,20 +174,27 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         }
     }
 
-    fn shares_a_name(&self, step: &Step) -> bool {
+    fn shares_a_name(&self, (seq, step): (u32, &Step)) -> bool {
         let Step::CopyFile { target, .. } = step else {
             return false;
         };
-        self.in_flight.values().any(|(other, _)| match other {
-            Step::CopyFile { target: busy, .. } => names_clash(target, busy),
-            _ => false,
-        })
+        self.in_flight
+            .iter()
+            .any(|(other_seq, (other, _))| match other {
+                Step::CopyFile { target: busy, .. } => {
+                    names_clash((target, seq), (busy, *other_seq), self.job.namespace)
+                }
+                _ => false,
+            })
     }
 
     fn note_pause(&mut self) {
         let cancel = self.ctx.cancel;
-        let paused = cancel.is_paused() && !cancel.is_cancelled();
-        if paused != self.progress.paused {
+        loop {
+            let paused = cancel.is_paused() && !cancel.is_cancelled();
+            if paused == self.progress.paused {
+                return;
+            }
             self.progress.paused = paused;
             self.report();
         }
@@ -190,16 +211,21 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             let result = if holds_kept(step, &self.kept) {
                 Ok(StepOutcome::Skipped)
             } else {
-                apply(self.job, step, self.ctx, &mut self.progress)
+                apply(self.job, (seq, step), self.ctx, &mut self.progress)
             };
             self.settle(seq, step, result);
             return;
         };
         let copy = CopyStep {
+            seq,
             source,
             target,
             size: *size,
         };
+        if let Err(error) = super::temporary::prepare(self.ctx, &copy, self.job.namespace) {
+            self.fail(seq, error);
+            return;
+        }
         self.in_flight.insert(seq, (step, 0));
         if self.pool.tasks.send(Task { seq, step: copy }).is_err() {
             self.in_flight.remove(&seq);
@@ -209,6 +235,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
 
     fn receive(&mut self) {
         match self.pool.events.recv() {
+            Ok(Event::Created { seq, identity, ack }) => {
+                let result = self
+                    .ctx
+                    .log
+                    .created_temporary((seq, identity), self.ctx.ops);
+                let _ = ack.send(result);
+            }
             Ok(Event::Bytes { seq, bytes }) => {
                 if let Some(entry) = self.in_flight.get_mut(&seq) {
                     entry.1 = bytes;
@@ -278,3 +311,6 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         (self.ctx.progress)(&self.progress);
     }
 }
+
+#[cfg(test)]
+mod tests;

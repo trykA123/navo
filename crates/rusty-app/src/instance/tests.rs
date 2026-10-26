@@ -21,6 +21,7 @@ fn second(profile: &Path, runtime: &Path) -> Client {
 fn request() -> Request {
     let cwd = std::env::current_dir().unwrap();
     Request {
+        experimental_retention: false,
         path: Some(cwd.join("work")),
         left: Some(cwd.join("left")),
         right: Some(cwd.join("right")),
@@ -36,6 +37,7 @@ fn requests_serialize_as_one_versioned_json_line_with_absolute_paths() {
     assert!(line.ends_with('\n'));
     let value: serde_json::Value = serde_json::from_str(&line).unwrap();
     assert_eq!(value["v"], 1);
+    assert!(value.get("experimental_retention").is_none());
     assert_eq!(
         value["path"],
         request.path.as_ref().unwrap().to_str().unwrap()
@@ -58,6 +60,7 @@ fn request_paths_resolve_against_the_sending_working_folder() {
     assert_eq!(
         Request::from_start(&start, root.path()).unwrap(),
         Request {
+            experimental_retention: false,
             path: Some(root.path().join("missing")),
             left: Some(root.path().join("left")),
             right: Some(root.path().join("right")),
@@ -340,5 +343,25 @@ fn a_unique_windows_mutex_and_pipe_round_trip() {
     assert_eq!(
         client.send(&request(), Duration::from_secs(2)).unwrap(),
         Reply::Ok
+    );
+}
+
+#[test]
+fn development_mode_survives_forwarding_and_missing_mode_defaults_off() {
+    let root = tempfile::tempdir().unwrap();
+    let start = crate::cli::Start {
+        experimental_retention: true,
+        ..Default::default()
+    };
+    let request = Request::from_start(&start, root.path()).unwrap();
+    assert!(
+        Request::parse(&request.to_line().unwrap())
+            .unwrap()
+            .experimental_retention
+    );
+    assert!(
+        !Request::parse(r#"{"v":1,"path":null,"left":null,"right":null,"view":null}"#)
+            .unwrap()
+            .experimental_retention
     );
 }

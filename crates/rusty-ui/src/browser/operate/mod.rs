@@ -1,3 +1,4 @@
+use rusty_core::retention::RetentionPolicy;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -59,6 +60,7 @@ impl Browser {
             return false;
         };
         self.pending = None;
+        let retain_deletes = self.operations.retain_deletes.clone();
         let (provider, sender, wake) = (
             Arc::clone(&self.provider),
             self.sender.clone(),
@@ -73,7 +75,12 @@ impl Browser {
         self.queue.submit(
             slot,
             Box::new(move |cancel| {
-                let result = plan_for(provider.as_ref(), &request, cancel);
+                let result = plan_for(provider.as_ref(), &request, cancel).map(|plan| {
+                    let retained = (plan.kind == OpKind::Delete)
+                        .then(|| retain_deletes.as_ref().and_then(|active| active()))
+                        .flatten();
+                    (plan, retained)
+                });
                 let _ = sender.send(Message::Job(JobUpdate::Planned { request, result }));
                 wake();
             }),
@@ -259,14 +266,19 @@ impl Browser {
             .map(|pane| pane.active().location().clone())
     }
 
-    fn accept_plan(&mut self, request: OpRequest, result: Result<OperationPlan, FsError>) -> bool {
+    fn accept_plan(
+        &mut self,
+        request: OpRequest,
+        result: Result<(OperationPlan, Option<RetentionPolicy>), FsError>,
+    ) -> bool {
         match result {
-            Ok(plan) => {
+            Ok((plan, retain_deletes)) => {
                 let pending = PendingOp {
                     id: request.id,
                     sources: request.sources,
                     target: request.target,
                     plan,
+                    retain_deletes,
                     source_tab: request.source_tab,
                     undo: None,
                 };
@@ -310,6 +322,7 @@ impl Browser {
             plan: pending.plan,
             ops: Arc::clone(&self.provider),
             factory: Arc::clone(&self.operations.log),
+            retain_deletes: pending.retain_deletes,
             run,
             cancel,
             sender: self.sender.clone(),

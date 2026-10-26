@@ -120,10 +120,11 @@ impl Browser {
             owner: self.owner.id(),
         };
         self.in_flight += 1;
+        let write = self.operations.write.clone();
         self.queue.submit(
             slot,
             Box::new(move |_| {
-                let result = apply_change(ops.as_ref(), &change);
+                let result = apply_change(ops.as_ref(), &change, write.as_ref());
                 let named = Named {
                     tab,
                     folder,
@@ -137,7 +138,13 @@ impl Browser {
     }
 }
 
-fn apply_change(ops: &dyn ProviderOps, change: &Change) -> Result<(), FsError> {
+fn apply_change(
+    ops: &dyn ProviderOps,
+    change: &Change,
+    write: Option<&super::WriteFactory>,
+) -> Result<(), FsError> {
+    let (Change::CreateFolder(target) | Change::CreateFile(target)) = change;
+    let _lease = write.map(|write| write(target)).transpose()?;
     match change {
         Change::CreateFolder(target) => ops.create_folder(target),
         Change::CreateFile(target) => ops.create_file(target),

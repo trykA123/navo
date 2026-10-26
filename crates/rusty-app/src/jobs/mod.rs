@@ -3,21 +3,41 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan};
-use rusty_fs::{
-    CancelToken, FileIdentity, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile,
-    ProviderOps, StepOutcome, clean_up, roll_back,
-};
-use rusty_store::{JobId, JobJournal, JobState, JournalError, StepState, UnfinishedJob};
-use rusty_ui::browser::{LogFactory, OpLog};
+use rusty_core::{FsError, FsErrorKind, OpKind, OperationPlan};
+use rusty_fs::{FileIdentity, HeldFile, JobLog, JobOutcome, PlacedFile, ProviderOps, StepOutcome};
+use rusty_store::{JobId, JobJournal, JobState, JournalError, StepState};
+use rusty_ui::browser::OpLog;
 
+mod deletion;
 mod held;
 mod identity;
+mod maintenance;
+mod mutation_lock;
+#[cfg(test)]
+pub(crate) use mutation_lock::test_file as test_mutation_file;
+#[cfg(test)]
+pub(crate) use mutation_lock::test_isolation as test_mutation_isolation;
+mod overwrite;
 mod pending;
+mod profile;
+mod recovery;
+mod temporary;
 
-pub use pending::{StillPending, still_pending};
+pub use pending::StillPending;
+#[cfg(test)]
+pub use pending::still_pending;
+pub(crate) use profile::{claim_write, retains_deletes, write_factory};
+pub use profile::{experimental_factory, profile_factory};
+pub(crate) fn claim_recovery(experimental: bool) -> Result<Option<File>, String> {
+    experimental.then(|| mutation_lock::claim(None)).transpose()
+}
+pub use recovery::{RecoveryReport, recover_profile};
+#[cfg(test)]
+mod default_profile;
+#[cfg(test)]
+pub use default_profile::{log_factory, recover};
 
-const KEEP_FINISHED: u32 = 50;
+pub(crate) const KEEP_FINISHED: u32 = 50;
 
 pub type SharedJournal = Arc<Mutex<JobJournal>>;
 
@@ -46,6 +66,10 @@ pub struct Instance {
 }
 
 impl Instance {
+    pub fn into_file(self) -> File {
+        self.file
+    }
+
     pub fn share(self) -> Option<File> {
         if self.sole {
             self.file.unlock().ok()?;
@@ -58,6 +82,7 @@ impl Instance {
 pub fn claim(file: &Path) -> Option<Instance> {
     let lock = OpenOptions::new()
         .create(true)
+        .read(true)
         .write(true)
         .truncate(false)
         .open(file)
@@ -75,28 +100,65 @@ pub fn claim(file: &Path) -> Option<Instance> {
     })
 }
 
-pub fn log_factory(journal: SharedJournal) -> LogFactory {
-    Arc::new(move |plan: &OperationPlan| {
-        let bytes = serde_json::to_vec(plan).map_err(|error| error.to_string())?;
-        let steps = u32::try_from(plan.steps.len()).map_err(|error| error.to_string())?;
-        let kind = format!("{:?}", plan.kind).to_lowercase();
-        let job = lock(&journal)
-            .create_job(&kind, &bytes, steps, now_ms())
-            .map_err(|error| error.to_string())?;
-        let mut log = JournalLog::new(Arc::clone(&journal), job, kind);
-        log.renames = plan.kind == OpKind::Rename;
-        Ok(Box::new(log) as Box<dyn OpLog>)
-    })
+fn create_log(
+    journal: &SharedJournal,
+    plan: &OperationPlan,
+    retained: Option<deletion::RetainedJob>,
+) -> Result<JournalLog, String> {
+    let (kind, bytes) = match &retained {
+        Some(job) => (
+            rusty_core::retention::RETAINED_DELETE_KIND.to_owned(),
+            serde_json::to_vec(&job.plan),
+        ),
+        None => (
+            format!("{:?}", plan.kind).to_lowercase(),
+            serde_json::to_vec(plan),
+        ),
+    };
+    let bytes = bytes.map_err(|error| error.to_string())?;
+    let steps = u32::try_from(plan.steps.len()).map_err(|error| error.to_string())?;
+    let job = lock(journal)
+        .create_job(&kind, &bytes, steps, now_ms())
+        .map_err(|error| error.to_string())?;
+    let mut log = JournalLog::new(Arc::clone(journal), job, kind);
+    log.renames = plan.kind == OpKind::Rename;
+    log.retained = retained;
+    Ok(log)
 }
 
 pub fn undo_log(journal: &SharedJournal, job: JobId) -> Result<Box<dyn OpLog>, String> {
+    Ok(Box::new(create_undo(journal, job)?))
+}
+
+pub fn profile_undo(
+    journal: &SharedJournal,
+    job: JobId,
+    dirs: &rusty_store::StoreDirs,
+    experimental: bool,
+) -> Result<Box<dyn OpLog>, String> {
+    let (_, stored) = lock(journal)
+        .read_job(job)
+        .map_err(|error| error.to_string())?;
+    let plan =
+        serde_json::from_slice::<OperationPlan>(&stored.plan).map_err(|error| error.to_string())?;
+    profile::guard(&plan, dirs, experimental)?;
+    let mut log = JournalLog::new(Arc::clone(journal), job, "rename undo".to_owned());
+    log.undoing = true;
+    log.renames = true;
+    log.deferred_undo = true;
+    log.profile = Some(dirs.clone());
+    log.experimental_retention = experimental;
+    Ok(Box::new(log))
+}
+
+fn create_undo(journal: &SharedJournal, job: JobId) -> Result<JournalLog, String> {
     lock(journal)
         .finish(job, JobState::RestorePending)
         .map_err(|error| error.to_string())?;
     let mut log = JournalLog::new(Arc::clone(journal), job, "rename undo".to_owned());
     log.undoing = true;
     log.renames = true;
-    Ok(Box::new(log))
+    Ok(log)
 }
 
 struct JournalLog {
@@ -108,6 +170,13 @@ struct JournalLog {
     put_back_failed: bool,
     undoing: bool,
     renames: bool,
+    retained: Option<deletion::RetainedJob>,
+    delete_policy: Option<rusty_core::retention::RetentionPolicy>,
+    overwrites: Option<overwrite::WriteJob>,
+    global_lease: Option<File>,
+    experimental_retention: bool,
+    deferred_undo: bool,
+    profile: Option<rusty_store::StoreDirs>,
 }
 
 impl JournalLog {
@@ -121,11 +190,112 @@ impl JournalLog {
             put_back_failed: false,
             undoing: false,
             renames: false,
+            retained: None,
+            delete_policy: None,
+            overwrites: None,
+            global_lease: None,
+            experimental_retention: false,
+            deferred_undo: false,
+            profile: None,
+        }
+    }
+}
+
+impl JournalLog {
+    fn claim_lease(
+        &mut self,
+        operation: &rusty_ui::browser::LoggedOperation<'_>,
+    ) -> Result<(), String> {
+        if !self.experimental_retention || self.global_lease.is_some() {
+            return Ok(());
+        }
+        let lease = if self.retained.is_some()
+            || self.overwrites.is_some()
+            || operation.plan.steps.iter().any(|step| {
+                matches!(
+                    step,
+                    rusty_core::Step::Rename { .. }
+                        | rusty_core::Step::Recycle { .. }
+                        | rusty_core::Step::RemoveFolder { .. }
+                )
+            }) {
+            mutation_lock::claim(Some(operation.cancel))?
+        } else {
+            mutation_lock::shared(Some(operation.cancel))?
+        };
+        self.global_lease = Some(lease);
+        Ok(())
+    }
+
+    fn complete(&self, state: JobState, ops: &dyn ProviderOps) -> Result<(), String> {
+        if self.overwrites.is_some() {
+            return overwrite::finish(self, state, ops);
+        }
+        if !self.experimental_retention {
+            self.complete_like_main(state, ops);
+            return Ok(());
+        }
+        lock(&self.journal)
+            .finish(self.job, state)
+            .map_err(|error| error.to_string())?;
+        if !self.stranded {
+            held::release(&self.journal, self.job, &self.held, ops)
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+}
+
+impl JournalLog {
+    fn complete_like_main(&self, state: JobState, ops: &dyn ProviderOps) {
+        if let Err(error) = lock(&self.journal).finish(self.job, state) {
+            tracing::error!(job = self.job.0, %error, "recording the finished job failed");
+            return;
+        }
+        if !self.stranded
+            && let Err(error) = held::release(&self.journal, self.job, &self.held, ops)
+        {
+            tracing::warn!(job = self.job.0, %error, "releasing held files failed");
         }
     }
 }
 
 impl JobLog for JournalLog {
+    fn preserve_overwrites(&self) -> bool {
+        self.overwrites.is_some()
+    }
+
+    fn temporary_namespace(&self) -> Option<String> {
+        self.overwrites
+            .as_ref()
+            .and_then(|request| request.plan.temporary_namespace())
+            .map(str::to_owned)
+    }
+    fn prepare_temporary(
+        &mut self,
+        proof: &rusty_core::retention::CopyTemporary,
+    ) -> Result<(), FsError> {
+        temporary::prepare(self, proof)
+    }
+    fn created_temporary(
+        &mut self,
+        created: (u32, FileIdentity),
+        ops: &dyn ProviderOps,
+    ) -> Result<(), FsError> {
+        temporary::created(self, created, ops)
+    }
+    fn retire_temporary(&mut self, seq: u32, ops: &dyn ProviderOps) -> Result<(), FsError> {
+        temporary::retire(self, seq, ops)
+    }
+    fn journal_proved_held(
+        &mut self,
+        held: &HeldFile,
+        proof: &rusty_core::retention::OverwriteProof,
+    ) -> Result<bool, FsError> {
+        held::record_proved(&self.journal, self.job, (held, proof))?;
+        self.held.push(held.clone());
+        Ok(true)
+    }
     fn prepare_rename(&mut self, seq: u32, identity: FileIdentity) -> Result<(), FsError> {
         identity::record(&self.journal, self.job, (seq, identity))
     }
@@ -141,7 +311,7 @@ impl JobLog for JournalLog {
             StepOutcome::Failed => StepState::Failed,
         };
         let mut journal = lock(&self.journal);
-        let detail = if self.renames {
+        let detail = if self.renames || self.retained.is_some() || self.overwrites.is_some() {
             journal
                 .step_detail(self.job, seq)
                 .map_err(|_| FsError::new(FsErrorKind::Unknown))?
@@ -181,7 +351,34 @@ impl JobLog for JournalLog {
 }
 
 impl OpLog for JournalLog {
-    fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) {
+    fn check(&mut self, operation: rusty_ui::browser::LoggedOperation<'_>) -> Result<(), String> {
+        profile::check_confirmed(self, &operation)?;
+        self.claim_lease(&operation)?;
+        if let Some(dirs) = &self.profile {
+            profile::guard(operation.plan, dirs, self.experimental_retention)?;
+        }
+        if self.experimental_retention {
+            rusty_fs::check_mutation(operation.plan, operation.ops, operation.cancel)
+                .map_err(|error| error.message())?;
+        }
+        if self.overwrites.is_some() && !operation.ops.supports_atomic_rename() {
+            return Err(rusty_l10n::tr("job-retention-unsupported"));
+        }
+        if self.deferred_undo {
+            lock(&self.journal)
+                .finish(self.job, JobState::RestorePending)
+                .map_err(|error| error.to_string())?;
+            self.deferred_undo = false;
+        }
+        Ok(())
+    }
+
+    fn execute(&mut self, operation: rusty_ui::browser::LoggedOperation<'_>) -> Option<JobOutcome> {
+        self.retained.as_ref()?;
+        Some(deletion::execute(self, operation))
+    }
+
+    fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) -> Result<(), String> {
         let state = match outcome {
             _ if self.put_back_failed => JobState::RestorePending,
             JobOutcome::Done if self.undoing => JobState::Undone,
@@ -207,146 +404,9 @@ impl OpLog for JournalLog {
                 "job finished"
             );
         }
-        if lock(&self.journal).finish(self.job, state).is_ok() && !self.stranded {
-            let _ = held::release(&self.journal, self.job, &self.held, ops);
-        }
-    }
-}
-
-struct Recovery<'a> {
-    journal: &'a SharedJournal,
-    job: JobId,
-    kept_beside: u32,
-}
-
-impl JobLog for Recovery<'_> {
-    fn rename_identity(&self, seq: u32) -> Result<Option<FileIdentity>, FsError> {
-        identity::read(self.journal, self.job, seq)
-    }
-
-    fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
+        self.complete(state, ops)?;
+        maintenance::after(self, state, ops);
         Ok(())
-    }
-
-    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
-        if outcome == StepOutcome::Failed {
-            return Ok(());
-        }
-        lock(self.journal)
-            .mark_undone(self.job, seq)
-            .map_err(|_| FsError::new(FsErrorKind::Unknown))
-    }
-
-    fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
-        Ok(false)
-    }
-
-    fn kept_beside(&mut self, _: &HeldFile, _: &Location) {
-        self.kept_beside += 1;
-    }
-}
-
-pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, JournalError> {
-    let unfinished = lock(journal).unfinished()?;
-    let count = u32::try_from(unfinished.len()).unwrap_or(u32::MAX);
-    for job in unfinished.iter().rev() {
-        let state = undo(journal, job, ops)?;
-        lock(journal).finish(job.id, state)?;
-    }
-    let pending = lock(journal).restore_pending()?;
-    for job in pending.iter().rev() {
-        let state = undo(journal, job, ops)?;
-        lock(journal).finish(job.id, state)?;
-    }
-    held::release_finished(journal, ops)?;
-    lock(journal).prune(KEEP_FINISHED)?;
-    Ok(count)
-}
-
-fn left_to_undo(job: &UnfinishedJob) -> Vec<u32> {
-    job.steps
-        .iter()
-        .filter(|step| step.state == StepState::Done && !step.is_undone())
-        .map(|step| step.seq)
-        .collect()
-}
-
-fn undo(
-    journal: &SharedJournal,
-    job: &UnfinishedJob,
-    ops: &dyn ProviderOps,
-) -> Result<JobState, JournalError> {
-    let held = held::held_of(journal, job.id)?;
-    let state = roll_back_job(journal, job, &held, ops);
-    Ok(match state {
-        JobState::RolledBack if held.unreadable > 0 => JobState::RestorePending,
-        other => other,
-    })
-}
-
-fn roll_back_job(
-    journal: &SharedJournal,
-    job: &UnfinishedJob,
-    held: &held::Held,
-    ops: &dyn ProviderOps,
-) -> JobState {
-    let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
-        return unrestored(&held.files, false);
-    };
-    let renames = plan.kind == OpKind::Rename;
-    let done = left_to_undo(job);
-    let _ = clean_up(&plan, &done, ops);
-    let mut log = Recovery {
-        journal,
-        job: job.id,
-        kept_beside: 0,
-    };
-    let outcome = roll_back(
-        &Journaled {
-            plan: &plan,
-            done: &done,
-            held: &held.files,
-            placed: &held.placed,
-            held_unreadable: held.unreadable > 0,
-            unsure: unsure_step(plan.kind, job),
-        },
-        &mut JobContext {
-            ops,
-            log: &mut log,
-            cancel: &CancelToken::new(),
-            progress: &mut |_| {},
-        },
-    );
-    if log.kept_beside > 0 {
-        tracing::warn!(
-            job = job.id.0,
-            files = log.kept_beside,
-            "old files restored beside newer ones as \"(before copy)\""
-        );
-    }
-    match outcome {
-        JobOutcome::Done => JobState::RolledBack,
-        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(&held.files, renames),
-    }
-}
-
-fn unsure_step(kind: OpKind, job: &UnfinishedJob) -> Option<u32> {
-    let step = job
-        .steps
-        .iter()
-        .find(|step| step.state != StepState::Done)?;
-    match kind {
-        OpKind::Rename => Some(step.seq),
-        OpKind::Link if step.state == StepState::Pending => Some(step.seq),
-        _ => None,
-    }
-}
-
-fn unrestored(held: &[HeldFile], renames: bool) -> JobState {
-    if held.is_empty() && !renames {
-        JobState::Failed
-    } else {
-        JobState::RestorePending
     }
 }
 

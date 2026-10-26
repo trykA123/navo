@@ -6,18 +6,21 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
-use super::copy::{failure, journal_placed, temp_of};
+use super::copy::{failure, journal_placed};
 use super::restore::{Restored, keep};
 use super::{FileStamp, HeldFile, JobContext};
 use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, ProviderOps};
+mod retained;
+pub(super) use retained::Replacement;
 
-pub const HELD_PREFIX: &str = ".navo-held-";
+pub const HELD_PREFIX: &str = rusty_core::retention::ADOPTED_CONTAINER_PREFIX;
 
 static RUNS: AtomicU64 = AtomicU64::new(0);
 
 pub(super) struct Aside {
     folder: ProviderPath,
     spellings: Mutex<HashMap<String, Vec<ProviderPath>>>,
+    containers: Mutex<HashMap<Location, crate::FileIdentity>>,
 }
 
 impl Aside {
@@ -30,6 +33,7 @@ impl Aside {
         Self {
             folder: ProviderPath::from_text(&name),
             spellings: Mutex::new(HashMap::new()),
+            containers: Mutex::new(HashMap::new()),
         }
     }
 
@@ -58,35 +62,38 @@ impl Aside {
     pub(super) fn place_over(
         &self,
         ctx: &mut JobContext<'_>,
-        target: &Location,
+        request: Replacement<'_>,
     ) -> Result<(), FsError> {
+        if ctx.log.preserve_overwrites() {
+            return self.place_retained(ctx, request);
+        }
         let ops = ctx.ops;
-        let temp = temp_of(target)?;
+        let (target, temp) = (request.target, request.source);
         match presence(ops, target)? {
             None => {
-                let new = ops.metadata(&temp)?;
+                let new = ops.metadata(temp)?;
                 let stamp = FileStamp {
                     size: new.size,
                     modified_ms: new.modified_ms,
                 };
-                ops.replace(&temp, target)?;
+                ops.replace(temp, target)?;
                 return journal_placed(ctx, target, stamp);
             }
             Some(entry) if matches!(entry.kind, EntryKind::File | EntryKind::Link) => {}
             Some(_) => return Err(failure(FsErrorKind::NameInvalid, target)),
         }
-        let new = ops.metadata(&temp)?;
+        let new = ops.metadata(temp)?;
         let placed = Some(FileStamp {
             size: new.size,
             modified_ms: new.modified_ms,
         });
         let held = self.held_file(ops, &self.on_disk(ops, target), placed)?;
         if !ctx.log.journal_held(&held)? {
-            return ops.replace(&temp, target);
+            return ops.replace(temp, target);
         }
         make_room(ops, &held.held)?;
         ops.rename(&held.original, &held.held)?;
-        ops.replace(&temp, target)
+        ops.replace(temp, target)
             .map_err(|cause| put_back(ctx, &held, cause))
     }
 
@@ -96,6 +103,17 @@ impl Aside {
         source: &Location,
         target: &Location,
     ) -> Result<(), FsError> {
+        if ctx.log.preserve_overwrites() {
+            return self.place_retained(
+                ctx,
+                retained::Replacement {
+                    source,
+                    target,
+                    allow: true,
+                    expected_identity: None,
+                },
+            );
+        }
         let ops = ctx.ops;
         let moving = ops.metadata(source)?;
         let holdable = presence(ops, target)?.is_some_and(|entry| entry.kind == EntryKind::File);

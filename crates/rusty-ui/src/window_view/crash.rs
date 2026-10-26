@@ -4,18 +4,25 @@ use gpui_kit::FocusHandle;
 use rusty_core::Location;
 
 use super::FerriteWindow;
-use super::keys::{CRASH, DismissCrashNotice, FocusCrashNotice, SaveCrashReport};
+use super::keys::{
+    CRASH, DismissCrashNotice, FocusCrashNotice, OpenRecoveryFolder, SaveCrashReport,
+};
 use super::path_edit::last_name;
 use crate::commands::active;
-use crate::crash_notice::{CrashKeys, CrashNotice};
+use crate::crash_notice::{CrashKeys, CrashNotice, RecoveryContent};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 use crate::tokens;
 
-/// Both calls clear the pending crash, so the notice shows once per crash.
 pub trait CrashReportService: Send + Sync {
     fn save(&self) -> Result<Location, String>;
-    fn dismiss(&self);
+    fn dismiss(&self) -> Result<(), String>;
+    fn recovery(&self) -> Option<RecoveryContent> {
+        None
+    }
+    fn folder(&self) -> Option<Location> {
+        None
+    }
 }
 
 pub(super) struct CrashState {
@@ -50,10 +57,11 @@ impl FerriteWindow {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        self.crash.service.as_ref()?;
+        let service = self.crash.service.as_ref()?;
         let t = tokens::current(cx).clone();
-        let (save, dismiss) = (cx.weak_entity(), cx.weak_entity());
+        let (save, dismiss, folder) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
         let notice = CrashNotice::new(CrashKeys::of(active(cx)))
+            .recovery(service.recovery())
             .error(self.crash.error.clone())
             .focused(self.crash.focus.is_focused(window))
             .saving(self.crash.is_saving)
@@ -62,6 +70,11 @@ impl FerriteWindow {
             })
             .on_dismiss(move |window, cx| {
                 let _ = dismiss.update(cx, |view, cx| view.dismiss_crash_notice(window, cx));
+            })
+            .when(service.folder().is_some(), |notice| {
+                notice.on_folder(move |window, cx| {
+                    let _ = folder.update(cx, |view, cx| view.open_recovery_folder(window, cx));
+                })
             });
         let element = div()
             .id("crash-notice")
@@ -72,6 +85,9 @@ impl FerriteWindow {
             }))
             .on_action(cx.listener(|view, _: &DismissCrashNotice, window, cx| {
                 view.dismiss_crash_notice(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &OpenRecoveryFolder, window, cx| {
+                view.open_recovery_folder(window, cx);
             }))
             .flex_none()
             .mx(t.spacing.xs * 2.)
@@ -118,7 +134,14 @@ impl FerriteWindow {
         self.crash.is_saving = false;
         match saved {
             Ok(zip) => {
-                self.crash.service = None;
+                if self
+                    .crash
+                    .service
+                    .as_ref()
+                    .is_none_or(|service| service.recovery().is_none())
+                {
+                    self.crash.service = None;
+                }
                 self.crash.error = None;
                 if let Some((folder, name, text)) = saved_text(&zip) {
                     self.browser.open_tab_at(folder, Some(name));
@@ -138,12 +161,52 @@ impl FerriteWindow {
         if self.crash.is_saving {
             return;
         }
-        let Some(service) = self.crash.service.take() else {
+        let Some(service) = self.crash.service.clone() else {
             return;
         };
-        service.dismiss();
-        self.crash.error = None;
-        self.focus_core_pane(window, cx);
+        self.crash.is_saving = true;
+        let dismissing = cx.background_spawn(async move { service.dismiss() });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = dismissing.await;
+            let _ = this.update_in(cx, |view, window, cx| {
+                view.crash_notice_dismissed(result, window, cx);
+            });
+        })
+        .detach();
         cx.notify();
+    }
+
+    fn crash_notice_dismissed(
+        &mut self,
+        result: Result<(), String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.crash.is_saving = false;
+        match result {
+            Ok(()) => {
+                self.crash.service = None;
+                self.crash.error = None;
+                self.focus_core_pane(window, cx);
+            }
+            Err(error) => self.crash.error = Some(error.into()),
+        }
+        cx.notify();
+    }
+
+    fn open_recovery_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.crash.is_saving {
+            return;
+        }
+        if let Some(folder) = self
+            .crash
+            .service
+            .as_ref()
+            .and_then(|service| service.folder())
+        {
+            self.browser.open_tab_at(folder, None);
+            self.focus_core_pane(window, cx);
+            cx.notify();
+        }
     }
 }

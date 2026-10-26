@@ -1,9 +1,41 @@
 use rusty_core::Location;
-use rusty_fs::FakeFs;
+use rusty_fs::{FakeFs, ProviderOps};
 use rusty_store::StoreDirs;
 
-use super::operations;
 use crate::jobs;
+
+fn operations(
+    dirs: Option<&StoreDirs>,
+    home: &Location,
+    ops: &dyn ProviderOps,
+) -> (
+    rusty_ui::browser::Operations,
+    Option<crate::crash::store::StoreStart>,
+    Option<jobs::SharedJournal>,
+) {
+    operations_mode(dirs, home, ops, false)
+}
+
+fn operations_mode(
+    dirs: Option<&StoreDirs>,
+    home: &Location,
+    ops: &dyn ProviderOps,
+    experimental: bool,
+) -> (
+    rusty_ui::browser::Operations,
+    Option<crate::crash::store::StoreStart>,
+    Option<jobs::SharedJournal>,
+) {
+    let mut start = crate::crash::store::check_with(
+        dirs.map(|dirs| dirs.data.as_path()),
+        false,
+        ops,
+        experimental,
+    );
+    let (operations, journal) = super::operations(dirs, home, experimental);
+    start.share();
+    (operations, dirs.map(|_| start), journal)
+}
 
 fn store(dir: &tempfile::TempDir) -> StoreDirs {
     StoreDirs {
@@ -145,7 +177,7 @@ fn clean_quitter_removes_the_crash_running_marker() {
 }
 
 #[test]
-fn a_failed_integrity_check_on_record_keeps_the_journal_closed_and_the_file_untouched() {
+fn a_recorded_failed_integrity_check_preserves_the_original_and_opens_a_fresh_journal() {
     let dir = tempfile::tempdir().unwrap();
     let dirs = store(&dir);
     one_running_job(&dirs);
@@ -155,14 +187,17 @@ fn a_failed_integrity_check_on_record_keeps_the_journal_closed_and_the_file_unto
     let bytes = std::fs::read(&db).unwrap();
     let sentinel = crate::crash::sentinel_path(&db);
     std::fs::write(&sentinel, b"").unwrap();
-    let (ops, lock, _) = operations(Some(&dirs), &home(), &FakeFs::new());
+    let (ops, lock, _) = operations_mode(Some(&dirs), &home(), &FakeFs::new(), true);
     assert_eq!(ops.protected.len(), 3);
     drop((ops, lock));
-    assert!(sentinel.exists());
-    assert_eq!(std::fs::read(&db).unwrap(), bytes);
+    assert!(!sentinel.exists());
+    assert_eq!(
+        std::fs::read(dirs.data.join("navo.db.corrupt-1")).unwrap(),
+        bytes
+    );
     let (opened, _) = rusty_store::Db::open(&db, false).unwrap();
     let journal = rusty_store::JobJournal::new(opened).unwrap();
-    assert_eq!(journal.unfinished().unwrap().len(), 1);
+    assert_eq!(journal.unfinished().unwrap().len(), 0);
 }
 
 #[test]
@@ -173,6 +208,28 @@ fn a_corrupt_journal_found_during_recovery_is_put_on_record() {
     let db = dirs.journal_file();
     let page = crate::crash::test_damage::root_page(&db, "job");
     crate::crash::test_damage::corrupt_page(&db, page);
-    let _started = operations(Some(&dirs), &home(), &FakeFs::new());
+    let _started = operations_mode(Some(&dirs), &home(), &FakeFs::new(), true);
     assert!(crate::crash::sentinel_path(&db).exists());
 }
+
+#[test]
+fn delete_confirmation_retention_requires_the_flag_and_the_current_setting() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = store(&root);
+    dirs.ensure().unwrap();
+    let _start = crate::crash::store::check_with(Some(&dirs.data), false, &FakeFs::new(), false);
+    std::fs::write(dirs.settings_file(), "[retention]\nretain-deletes = true\n").unwrap();
+    let (normal, _) = super::operations(Some(&dirs), &home(), false);
+    assert!(normal.retain_deletes.is_none());
+    let (experimental, _) = super::operations(Some(&dirs), &home(), true);
+    let active = experimental.retain_deletes.unwrap();
+    assert!(active().is_some());
+    std::fs::write(
+        dirs.settings_file(),
+        "[retention]\nretain-deletes = false\n",
+    )
+    .unwrap();
+    assert!(active().is_none());
+}
+
+mod main_compat;

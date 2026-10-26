@@ -1,3 +1,5 @@
+mod notice;
+
 use super::Group;
 use super::contexts::GLOBAL;
 
@@ -131,21 +133,7 @@ pub(super) const GROUPS: [Group; 8] = [
             ),
         ],
     },
-    Group {
-        context: "CrashNotice",
-        commands: &[
-            (
-                "ferrite_window::SaveCrashReport",
-                "crash_notice.save",
-                "cmd-crash-notice-save",
-            ),
-            (
-                "ferrite_window::DismissCrashNotice",
-                "crash_notice.dismiss",
-                "cmd-crash-notice-dismiss",
-            ),
-        ],
-    },
+    notice::GROUP,
     Group {
         context: "PaneWaiting",
         commands: &[

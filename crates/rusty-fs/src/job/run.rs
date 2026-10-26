@@ -31,14 +31,26 @@ pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
 pub(super) struct Job<'p> {
     pub plan: &'p OperationPlan,
     pub aside: &'p Aside,
+    pub namespace: Option<&'p str>,
 }
 
 pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
     let aside = Aside::new();
+    let namespace = if ctx.log.preserve_overwrites() {
+        ctx.log.temporary_namespace()
+    } else {
+        None
+    };
     let job = Job {
         plan,
         aside: &aside,
+        namespace: namespace.as_deref(),
     };
+    walk(job, done, ctx)
+}
+
+fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
+    let plan = job.plan;
     let mut progress = Progress {
         bytes_done: 0,
         bytes_total: plan.totals.bytes,
@@ -62,7 +74,8 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
         let result = if holds_kept(step, &kept) {
             Ok(StepOutcome::Skipped)
         } else {
-            prepare(seq, (plan.kind, step), ctx).and_then(|()| apply(job, step, ctx, &mut progress))
+            prepare(seq, (plan.kind, step), ctx)
+                .and_then(|()| apply(job, (seq, step), ctx, &mut progress))
         };
         match result {
             Ok(outcome) => {
@@ -115,7 +128,7 @@ fn advance(progress: &mut Progress, kind: OpKind, step: &Step) {
 
 pub(super) fn apply(
     job: Job<'_>,
-    step: &Step,
+    (seq, step): (u32, &Step),
     ctx: &mut JobContext<'_>,
     progress: &mut Progress,
 ) -> Result<StepOutcome, FsError> {
@@ -129,6 +142,7 @@ pub(super) fn apply(
             size,
         } => {
             let step = CopyStep {
+                seq,
                 source,
                 target,
                 size: *size,
@@ -153,7 +167,11 @@ fn rename_step(
     if overwrites(job.plan, target) {
         return job.aside.move_over(ctx, source, target);
     }
-    ctx.ops.rename(source, target)
+    if ctx.log.preserve_overwrites() {
+        ctx.ops.rename_atomic(source, target)
+    } else {
+        ctx.ops.rename(source, target)
+    }
 }
 
 fn copy_in_order(
@@ -162,10 +180,13 @@ fn copy_in_order(
     ctx: &mut JobContext<'_>,
     progress: &mut Progress,
 ) -> Result<StepOutcome, FsError> {
+    super::temporary::prepare(ctx, step, job.namespace)?;
     let copier = Copier {
         plan: job.plan,
         ops: ctx.ops,
         cancel: ctx.cancel,
+        strict: ctx.log.preserve_overwrites(),
+        namespace: job.namespace,
     };
     let base = progress.bytes_done;
     let (cancel, report) = (ctx.cancel, &mut *ctx.progress);
@@ -174,7 +195,15 @@ fn copy_in_order(
         report(progress);
         hold(cancel, progress, report);
     };
-    let copied = copy(&copier, step, &mut on_bytes)?;
+    let mut created = |identity| ctx.log.created_temporary((step.seq, identity), ctx.ops);
+    let copied = copy(
+        &copier,
+        step,
+        super::copy::CopyHooks {
+            progress: &mut on_bytes,
+            created: &mut created,
+        },
+    )?;
     place(job.aside, ctx, copied, step.target)
 }
 

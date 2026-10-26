@@ -8,26 +8,30 @@ use std::os::windows::ffi::OsStrExt;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::path::Path;
 
-use rusty_core::{FsError, FsErrorKind, Location};
+use rusty_core::{FileIdentity, FsError, FsErrorKind, Location};
 use windows_sys::Win32::Foundation::{
     ERROR_INVALID_FUNCTION, ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED, ERROR_REQUEST_ABORTED,
     HANDLE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     COPY_FILE_FAIL_IF_EXISTS, COPY_FILE_NO_BUFFERING, COPYFILE2_CALLBACK_CHUNK_FINISHED,
-    COPYFILE2_CALLBACK_STREAM_FINISHED, COPYFILE2_EXTENDED_PARAMETERS, COPYFILE2_MESSAGE,
-    COPYFILE2_MESSAGE_ACTION, COPYFILE2_PROGRESS_CANCEL, COPYFILE2_PROGRESS_CONTINUE, CopyFile2,
-    FlushFileBuffers,
+    COPYFILE2_CALLBACK_STREAM_FINISHED, COPYFILE2_CALLBACK_STREAM_STARTED,
+    COPYFILE2_EXTENDED_PARAMETERS, COPYFILE2_MESSAGE, COPYFILE2_MESSAGE_ACTION,
+    COPYFILE2_PROGRESS_CANCEL, COPYFILE2_PROGRESS_CONTINUE, CopyFile2, FlushFileBuffers,
 };
 
 use super::{AutoTuning, error, io_error, os_path};
-use crate::CancelToken;
+use crate::{CancelToken, CopyControl, OwnedCopy};
+
+mod registration;
+use registration::Registration;
 
 pub(super) type Flush = fn(HANDLE) -> io::Result<()>;
 
 pub(super) struct CopyProgress<'a> {
     report: &'a mut dyn FnMut(u64),
     cancel: &'a CancelToken,
+    ownership: Option<Registration<'a>>,
     total: u64,
     flush: Flush,
     flushed: bool,
@@ -40,12 +44,24 @@ impl<'a> CopyProgress<'a> {
         Self {
             report,
             cancel,
+            ownership: None,
             total: 0,
             flush: flush_handle,
             flushed: false,
             flush_error: None,
             panic: None,
         }
+    }
+
+    fn with_created(mut self, request: OwnedCopy<'a>) -> Self {
+        self.ownership = Some(Registration::new(request.target, request.created));
+        self
+    }
+
+    fn stopping(&self) -> bool {
+        self.cancel.is_cancelled()
+            || self.panic.is_some()
+            || self.ownership.as_ref().is_some_and(Registration::failed)
     }
 
     #[cfg(test)]
@@ -55,6 +71,14 @@ impl<'a> CopyProgress<'a> {
 
     fn on_message(&mut self, message: &COPYFILE2_MESSAGE) -> bool {
         let (stream, bytes) = match message.Type {
+            COPYFILE2_CALLBACK_STREAM_STARTED => {
+                // SAFETY: Type selects the initialized StreamStarted union member.
+                let info = unsafe { message.Info.StreamStarted };
+                return self
+                    .ownership
+                    .as_mut()
+                    .is_none_or(|owner| owner.register(info.hDestinationFile));
+            }
             COPYFILE2_CALLBACK_CHUNK_FINISHED => {
                 // SAFETY: Type selects the initialized ChunkFinished union member.
                 let info = unsafe { message.Info.ChunkFinished };
@@ -63,7 +87,7 @@ impl<'a> CopyProgress<'a> {
             COPYFILE2_CALLBACK_STREAM_FINISHED => {
                 // SAFETY: Type selects the initialized StreamFinished union member.
                 let info = unsafe { message.Info.StreamFinished };
-                if info.dwStreamNumber == 1
+                if (info.dwStreamNumber == 1 || self.ownership.is_some())
                     && let Err(failure) = (self.flush)(info.hDestinationFile)
                 {
                     self.flush_error = Some(failure);
@@ -119,7 +143,7 @@ pub(super) fn copy(
         target_wide: wide(&target_path),
     };
     let mut flags = COPY_FILE_FAIL_IF_EXISTS;
-    if size >= tuning.unbuffered_from {
+    if progress.ownership.is_none() && size >= tuning.unbuffered_from {
         flags |= COPY_FILE_NO_BUFFERING;
     }
     let mut result = attempt(&paths, flags, &mut progress)?;
@@ -127,11 +151,24 @@ pub(super) fn copy(
         remove_part(&target_path, target)?;
         result = attempt(&paths, flags & !COPY_FILE_NO_BUFFERING, &mut progress)?;
     }
+    if let Some(owner) = progress.ownership.as_mut() {
+        owner.check(result >= 0)?;
+    }
+    finish(result, &source_path, &paths, progress)
+}
+
+fn finish(
+    result: i32,
+    source_path: &Path,
+    paths: &Paths<'_>,
+    mut progress: CopyProgress<'_>,
+) -> Result<u64, FsError> {
+    let target = paths.target;
     if let Some(failure) = progress.flush_error.take() {
         return Err(io_error(&failure, target));
     }
     if result < 0 {
-        return Err(copy_error(win32_code(result), &source_path, &paths));
+        return Err(copy_error(win32_code(result), source_path, paths));
     }
     if progress.cancel.is_cancelled() {
         return Err(error(FsErrorKind::Cancelled, target));
@@ -140,6 +177,27 @@ pub(super) fn copy(
         return Err(error(FsErrorKind::Unknown, target));
     }
     Ok(progress.total)
+}
+
+pub(super) fn copy_owned(request: OwnedCopy<'_>, control: CopyControl<'_>) -> Result<u64, FsError> {
+    let OwnedCopy {
+        source,
+        target,
+        created,
+    } = request;
+    let created: &mut dyn FnMut(FileIdentity) -> Result<(), FsError> = created;
+    let report: &mut dyn FnMut(u64) = control.progress;
+    let request = OwnedCopy {
+        source,
+        target,
+        created,
+    };
+    copy(
+        source,
+        target,
+        &AutoTuning::default(),
+        CopyProgress::new(report, control.cancel).with_created(request),
+    )
 }
 
 fn wide(path: &Path) -> Vec<u16> {
@@ -228,7 +286,7 @@ unsafe extern "system" fn on_progress(
 ) -> COPYFILE2_MESSAGE_ACTION {
     // SAFETY: CopyFile2 returns our live, exclusive CopyProgress pointer for each synchronous callback.
     let progress = unsafe { &mut *context.cast_mut().cast::<CopyProgress<'_>>() };
-    if progress.cancel.is_cancelled() || progress.panic.is_some() {
+    if progress.stopping() {
         return COPYFILE2_PROGRESS_CANCEL;
     }
     // SAFETY: CopyFile2 supplies a valid message for the duration of this callback.

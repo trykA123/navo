@@ -55,10 +55,14 @@ pub(super) fn read(
     let Some(bytes) = lock(journal).step_detail(job, seq).map_err(|_| failure())? else {
         return Ok(None);
     };
+    decode(&bytes)
+}
+
+pub(super) fn decode(bytes: &[u8]) -> Result<Option<FileIdentity>, FsError> {
     if bytes == b"undone" {
         return Ok(None);
     }
-    let record: Record = serde_json::from_slice(&bytes).map_err(|_| failure())?;
+    let record: Record = serde_json::from_slice(bytes).map_err(|_| failure())?;
     let kind = match (
         record.version,
         record.legacy_windows_index,
@@ -147,7 +151,7 @@ mod tests {
         let mut log = log(&journal);
         log.prepare_rename(0, IDENTITY).unwrap();
         log.step(0, StepOutcome::Done).unwrap();
-        log.finish(&JobOutcome::Done, &FakeFs::new());
+        log.finish(&JobOutcome::Done, &FakeFs::new()).unwrap();
         drop((log, journal));
         let reopened = open(&path).unwrap();
         let job = lock(&reopened).last_undoable("rename").unwrap().unwrap();

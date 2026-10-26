@@ -1,28 +1,45 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusty_store::{Db, DbError, OpenReport};
 
-use super::Pending;
-
-static PREVIOUS_EXIT_UNCLEAN: AtomicBool = AtomicBool::new(false);
-
-pub(crate) fn note_previous_exit(left_behind: Option<&Pending>) {
-    PREVIOUS_EXIT_UNCLEAN.store(left_behind.is_some(), Ordering::Relaxed);
-}
-
 pub(crate) fn open_db(path: &Path) -> Result<(Db, OpenReport), DbError> {
-    open_checked(path, PREVIOUS_EXIT_UNCLEAN.load(Ordering::Relaxed))
+    let lease = super::store::access::lease(path)?;
+    if lease.is_none() {
+        return open_legacy(path, false);
+    }
+    let sentinel = sentinel_path(path);
+    match fs::symlink_metadata(&sentinel) {
+        Ok(_) => {
+            return Err(DbError::Corrupt(format!(
+                "database access is disabled after a failed startup check: {}",
+                path.display()
+            )));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+        Err(error) => {
+            return Err(DbError::Corrupt(format!(
+                "reading {}: {error}",
+                sentinel.display()
+            )));
+        }
+    }
+    let (mut db, report) = Db::open(path, false)?;
+    if let Some(lease) = lease {
+        db.hold_access_guard(lease);
+    }
+    Ok((db, report))
 }
 
-fn open_checked(path: &Path, previous_exit_unclean: bool) -> Result<(Db, OpenReport), DbError> {
+pub(super) fn open_legacy(path: &Path, unclean: bool) -> Result<(Db, OpenReport), DbError> {
     let sentinel = sentinel_path(path);
-    let unclean = previous_exit_unclean || sentinel.exists();
-    match Db::open(path, unclean) {
+    match Db::open(path, unclean || sentinel.exists()) {
         Ok((db, report)) => {
-            if report.checked {
-                let _ = fs::remove_file(&sentinel);
+            if report.checked
+                && sentinel.exists()
+                && let Err(error) = fs::remove_file(&sentinel)
+            {
+                tracing::warn!(%error, "could not clear the integrity sentinel");
             }
             Ok((db, report))
         }
@@ -36,8 +53,19 @@ fn open_checked(path: &Path, previous_exit_unclean: bool) -> Result<(Db, OpenRep
 }
 
 pub(crate) fn record_failed_check(db: &Path) {
-    if let Err(write_error) = fs::write(sentinel_path(db), b"") {
-        tracing::error!(%write_error, "could not record the failed integrity check");
+    let sentinel = sentinel_path(db);
+    let write = match fs::symlink_metadata(&sentinel) {
+        Ok(metadata) if !metadata.is_file() => Err(std::io::Error::other(
+            "the integrity sentinel is not a regular file",
+        )),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            rusty_store::replace_atomic(&sentinel, b"")
+        }
+        Err(error) => Err(error),
+    };
+    if let Err(error) = write {
+        tracing::error!(%error, "could not record the failed integrity check");
     }
 }
 
@@ -45,76 +73,4 @@ pub(crate) fn sentinel_path(db: &Path) -> PathBuf {
     let mut name = db.as_os_str().to_owned();
     name.push(".check-failed");
     PathBuf::from(name)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Mutex;
-
-    use super::*;
-    use crate::crash::{Running, pending};
-
-    static GLOBAL: Mutex<()> = Mutex::new(());
-
-    fn checked_after(finish: bool) -> bool {
-        let _lock = GLOBAL
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let data = tempfile::tempdir().unwrap();
-        let running = Running::start(data.path()).unwrap();
-        if finish {
-            running.finish().unwrap();
-        }
-        note_previous_exit(pending(data.path()).as_ref());
-        let (_, report) = open_db(&data.path().join("navo.db")).unwrap();
-        note_previous_exit(None);
-        report.checked
-    }
-
-    #[test]
-    fn the_open_after_an_unclean_exit_runs_the_integrity_check() {
-        assert!(checked_after(false));
-    }
-
-    #[test]
-    fn the_open_after_a_clean_exit_skips_the_integrity_check() {
-        assert!(!checked_after(true));
-    }
-
-    fn broken_db(dir: &tempfile::TempDir) -> PathBuf {
-        let path = dir.path().join("navo.db");
-        std::fs::write(&path, vec![0x5A; 4096]).unwrap();
-        path
-    }
-
-    #[test]
-    fn a_failed_check_is_still_made_at_a_later_clean_start() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("navo.db");
-        crate::crash::test_damage::fill_history(&path);
-        crate::crash::test_damage::corrupt_middle_page(&path);
-        assert!(open_checked(&path, true).is_err());
-        assert!(sentinel_path(&path).exists());
-        assert!(open_checked(&path, false).is_err());
-        assert!(sentinel_path(&path).exists());
-    }
-
-    #[test]
-    fn a_passing_check_removes_the_sentinel() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = broken_db(&dir);
-        assert!(open_checked(&path, true).is_err());
-        std::fs::remove_file(&path).unwrap();
-        let (_, report) = open_checked(&path, false).unwrap();
-        assert!(report.checked);
-        assert!(!sentinel_path(&path).exists());
-    }
-
-    #[test]
-    fn a_healthy_database_leaves_no_sentinel() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("navo.db");
-        open_checked(&path, true).unwrap();
-        assert!(!sentinel_path(&path).exists());
-    }
 }

@@ -218,6 +218,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 copy,
                 automotive,
                 search: Search::default(),
+                retention: Default::default(),
                 experimental,
             },
         )

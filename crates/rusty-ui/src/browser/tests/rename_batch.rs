@@ -152,6 +152,8 @@ impl Journal {
     fn operations(&self) -> Operations {
         let journal = self.clone();
         Operations {
+            retain_deletes: None,
+            write: None,
             log: Arc::new(move |plan: &OperationPlan| {
                 journal.wait_for_gate();
                 let mut book = journal.book();
@@ -243,7 +245,7 @@ impl JobLog for Log {
 }
 
 impl OpLog for Log {
-    fn finish(&mut self, outcome: &JobOutcome, _: &dyn ProviderOps) {
+    fn finish(&mut self, outcome: &JobOutcome, _: &dyn ProviderOps) -> Result<(), String> {
         self.journal.book().jobs[self.job].state = match outcome {
             _ if self.put_back_failed => State::RestorePending,
             JobOutcome::Done if self.undoing => State::Undone,
@@ -252,6 +254,7 @@ impl OpLog for Log {
             JobOutcome::Cancelled => State::Cancelled,
             JobOutcome::Failed { .. } => State::Failed,
         };
+        Ok(())
     }
 }
 

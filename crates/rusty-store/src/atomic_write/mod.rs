@@ -36,6 +36,16 @@ pub fn replace_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let payload = Payload {
         bytes,
         backup: false,
+        follow_links: true,
+    };
+    write_payload(path, &payload, &mut |_| Ok(())).and_then(WriteOutcome::into_result)
+}
+
+pub fn replace_entry_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let payload = Payload {
+        bytes,
+        backup: false,
+        follow_links: false,
     };
     write_payload(path, &payload, &mut |_| Ok(())).and_then(WriteOutcome::into_result)
 }
@@ -43,6 +53,7 @@ pub fn replace_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 struct Payload<'a> {
     bytes: &'a [u8],
     backup: bool,
+    follow_links: bool,
 }
 
 #[must_use]
@@ -58,7 +69,11 @@ pub(crate) fn write_checked(
     backup: bool,
     mut check: impl FnMut() -> io::Result<()>,
 ) -> io::Result<WriteOutcome> {
-    let payload = Payload { bytes, backup };
+    let payload = Payload {
+        bytes,
+        backup,
+        follow_links: true,
+    };
     write_payload(path, &payload, &mut |stage| match stage {
         Stage::TempSynced | Stage::BeforeRename => check(),
         _ => Ok(()),
@@ -73,6 +88,7 @@ pub(crate) fn write_atomic_with(
     let payload = Payload {
         bytes,
         backup: true,
+        follow_links: true,
     };
     write_payload(path, &payload, &mut hook).and_then(WriteOutcome::into_result)
 }
@@ -82,7 +98,11 @@ fn write_payload(
     payload: &Payload<'_>,
     hook: &mut impl FnMut(Stage) -> io::Result<()>,
 ) -> io::Result<WriteOutcome> {
-    let path = &resolve_symlink(path);
+    let path = &if payload.follow_links {
+        resolve_symlink(path)
+    } else {
+        path.to_path_buf()
+    };
     if fs::metadata(path).is_ok_and(|m| m.is_dir()) {
         return Err(io::Error::new(
             io::ErrorKind::IsADirectory,

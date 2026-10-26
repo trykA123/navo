@@ -29,6 +29,7 @@ pane.reset_split | Reset pane split | NavoPane
 preview.browse | Browse in preview | NavoPane
 crash_notice.focus | Go to the crash notice | NavoPane
 activity.focus | Go to the activity strip | NavoPane
+crash_notice.open_folder | Open the recovery folder | CrashNotice
 crash_notice.save | Save crash report | CrashNotice
 crash_notice.dismiss | Dismiss crash notice | CrashNotice
 pane.leave_waiting | Stop waiting | PaneWaiting

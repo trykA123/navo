@@ -116,6 +116,10 @@ keys = ["alt-j"]
 # CrashNotice
 
 [[bind]]
+command = "crash_notice.open_folder"
+keys = ["alt-o"]
+
+[[bind]]
 command = "crash_notice.save"
 keys = ["enter"]
 

@@ -45,7 +45,7 @@ fn finish_and_capture(outcome: &JobOutcome) -> String {
     let subscriber = Registry::default().with(opened.layer);
     tracing::subscriber::with_default(subscriber, || {
         let mut log = log_factory(journal)(&copy_plan(&fs)).unwrap();
-        log.finish(outcome, &fs);
+        log.finish(outcome, &fs).unwrap();
     });
     ring.snapshot().join("\n")
 }

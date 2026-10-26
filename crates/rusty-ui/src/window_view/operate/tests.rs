@@ -31,6 +31,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         sources: vec![at("/home/a"), at("/home/b.txt")],
         target,
         plan,
+        retain_deletes: None,
         source_tab: AppState::new(at("/home")).active_tab().id(),
         undo: None,
     }
@@ -176,4 +177,64 @@ fn only_a_copy_or_a_move_shows_the_mode() {
     );
     assert_eq!(label(OpKind::Delete, CopyMode::Auto), None);
     assert_eq!(label(OpKind::Recycle, CopyMode::Standard), None);
+}
+
+#[test]
+fn oversized_delete_warns_about_recovery_and_keeps_the_protected_confirmation() {
+    let mut large = plan(OpKind::Delete);
+    large.steps = vec![
+        rusty_core::Step::RemoveFile {
+            location: at("/home/item")
+        };
+        rusty_core::retention::MAX_NODES + 1
+    ];
+    large.risks.push(Risk::Protected(at("/home")));
+    let mut pending = pending(large, None);
+    pending.retain_deletes = Some(rusty_core::retention::RetentionPolicy::default());
+    let props = confirm_props(&pending);
+    assert_eq!(props.title, rusty_l10n::tr("job-delete-too-large-title"));
+    assert_eq!(props.confirm_label, rusty_l10n::tr("cmd-files-delete"));
+    assert!(props.summary.contains("100000"));
+    assert!(props.summary.contains("cannot be undone"));
+    assert!(props.danger);
+    assert_eq!(props.typed.as_deref(), Some("DELETE"));
+}
+
+#[test]
+fn oversized_delete_without_retention_uses_the_permanent_delete_confirmation() {
+    let mut large = plan(OpKind::Delete);
+    large.steps = vec![
+        rusty_core::Step::RemoveFile {
+            location: at("/home/item"),
+        };
+        rusty_core::retention::MAX_NODES + 1
+    ];
+    let props = confirm_props(&pending(large, None));
+    assert_eq!(props.title, "Delete 2 items permanently?");
+    assert_eq!(props.confirm_label, "Delete permanently");
+    assert!(!props.summary.contains("100000"));
+}
+
+#[test]
+fn capacity_a_small_node_count_with_excessive_bytes_warns_before_delete() {
+    let mut large = plan(OpKind::Delete);
+    large.steps = vec![rusty_core::Step::RemoveFile {
+        location: at("/fixture/large"),
+    }];
+    large.totals.bytes = u64::MAX;
+    let mut pending = pending(large, None);
+    pending.retain_deletes = Some(rusty_core::retention::RetentionPolicy::default());
+    let props = confirm_props(&pending);
+    assert_eq!(props.title, rusty_l10n::tr("job-delete-too-large-title"));
+    assert!(props.summary.contains("cannot be undone"));
+}
+
+#[test]
+fn a_small_retained_delete_does_not_ask_to_delete_permanently() {
+    let mut pending = pending(plan(OpKind::Delete), None);
+    pending.retain_deletes = Some(rusty_core::retention::RetentionPolicy::default());
+    let props = confirm_props(&pending);
+    assert!(!props.title.contains("permanently"));
+    assert!(!props.confirm_label.contains("permanently"));
+    assert!(!props.summary.contains("cannot be undone"));
 }

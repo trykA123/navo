@@ -19,6 +19,7 @@ gpui_kit::actions!(
         FocusCrashNotice,
         LeaveWaiting,
         NewTab,
+        OpenRecoveryFolder,
         OpenViewMenu,
         RecordPerformance,
         ResetSplit,

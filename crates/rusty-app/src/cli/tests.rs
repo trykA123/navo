@@ -21,6 +21,14 @@ fn no_arguments_open_the_window() {
 }
 
 #[test]
+fn retention_is_a_development_opt_in_for_window_starts_only() {
+    assert!(!start(&[]).experimental_retention);
+    assert!(start(&["--experimental-retention", "--profile", "p"]).experimental_retention);
+    assert!(refusal(&["--experimental-retention", "--experimental-retention"]).contains("twice"));
+    assert!(refusal(&["--version", "--experimental-retention"]).contains("stands alone"));
+}
+
+#[test]
 fn version_flag_prints_the_version() {
     assert_eq!(parse_strs(&["--version"]), Ok(Command::Version));
 }
@@ -115,6 +123,7 @@ fn every_window_flag_is_read_in_any_order() {
     assert_eq!(
         parsed,
         Start {
+            experimental_retention: false,
             path: None,
             view: None,
             profile: Some(PathBuf::from("p")),

@@ -29,6 +29,7 @@ pane.reset_split | NavoPane | true
 preview.browse | NavoPane | true
 crash_notice.focus | NavoPane | true
 activity.focus | NavoPane | true
+crash_notice.open_folder | CrashNotice | false
 crash_notice.save | CrashNotice | true
 crash_notice.dismiss | CrashNotice | true
 pane.leave_waiting | PaneWaiting | true

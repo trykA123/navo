@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
-use super::{Copying, Ended, JobUpdate, LogFactory, OpRequest};
+use super::{Copying, Ended, JobUpdate, LogFactory, LoggedOperation, OpLog, OpRequest};
 use crate::browser::{
     Message, RenameReport, UndoLogFactory, UndoOffer, Waker, WriteRenameLog, run_batch, run_undo,
 };
@@ -106,6 +106,7 @@ pub(super) struct JobWork {
     pub plan: OperationPlan,
     pub ops: Arc<dyn ProviderOps>,
     pub factory: LogFactory,
+    pub retain_deletes: Option<rusty_core::retention::RetentionPolicy>,
     pub run: Run,
     pub cancel: CancelToken,
     pub sender: Sender<Message>,
@@ -173,6 +174,20 @@ impl JobWork {
             Run::Undo { offer, log } => log(offer)?,
             Run::Plain | Run::Rename { .. } => (self.factory)(&self.plan)?,
         };
+        if !self.check_log(log.as_mut(), progress)? {
+            return Ok((JobOutcome::Cancelled, RenameReport::default()));
+        }
+        let custom = if matches!(self.run, Run::Plain) {
+            log.execute(LoggedOperation {
+                plan: &self.plan,
+                ops: self.ops.as_ref(),
+                cancel: &self.cancel,
+                progress,
+                retain_deletes: self.retain_deletes,
+            })
+        } else {
+            None
+        };
         let mut ctx = JobContext {
             ops: self.ops.as_ref(),
             log: log.as_mut(),
@@ -180,12 +195,16 @@ impl JobWork {
             progress,
         };
         let (outcome, mut report) = match &self.run {
-            Run::Plain => (self.run_plain(&mut ctx), RenameReport::default()),
+            Run::Plain => (
+                custom.unwrap_or_else(|| self.run_plain(&mut ctx)),
+                RenameReport::default(),
+            ),
             Run::Rename { .. } => run_batch(&self.plan, &mut ctx),
             Run::Undo { offer, .. } => run_undo(&offer.plan, &offer.done, &mut ctx),
         };
-        log.finish(&outcome, self.ops.as_ref());
+        let finished = log.finish(&outcome, self.ops.as_ref());
         self.write_rename_log(&outcome, &mut report);
+        finished?;
         Ok((outcome, report))
     }
 
@@ -215,6 +234,36 @@ impl JobWork {
         let Copying { mode, class_of } = self.copying;
         let workers = worker_count(mode, self.source.as_ref(), self.target.as_ref(), class_of);
         run_job_parallel(&self.plan, &[], ctx, workers)
+    }
+
+    fn check_log(
+        &self,
+        log: &mut dyn OpLog,
+        progress: &mut dyn FnMut(&Progress),
+    ) -> Result<bool, String> {
+        let checked = log.check(LoggedOperation {
+            plan: &self.plan,
+            ops: self.ops.as_ref(),
+            cancel: &self.cancel,
+            progress,
+            retain_deletes: self.retain_deletes,
+        });
+        let Err(message) = checked else {
+            return Ok(true);
+        };
+        let cancelled = self.cancel.is_cancelled();
+        if !matches!(self.run, Run::Undo { .. }) {
+            let outcome = if cancelled {
+                JobOutcome::Cancelled
+            } else {
+                JobOutcome::Failed {
+                    seq: 0,
+                    error: rusty_core::FsError::new(rusty_core::FsErrorKind::AccessDenied),
+                }
+            };
+            log.finish(&outcome, self.ops.as_ref())?;
+        }
+        if cancelled { Ok(false) } else { Err(message) }
     }
 }
 

@@ -1,5 +1,23 @@
 use super::*;
 
+const TREE_STEPS: [&str; 9] = [
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::ScrollRight",
+    "viewer::RowDown",
+    "viewer::RowDown",
+    "viewer::ScrollRight",
+    "viewer::RowDown",
+];
+const TABLE_STEPS: [&str; 4] = [
+    "viewer::ScrollRight",
+    "viewer::ScrollRight",
+    "viewer_table::SortColumn",
+    "viewer_table::SortColumn",
+];
+
 pub(super) const VIEWER_MENUS: [ViewerMenuShows; 8] = [
     ViewerMenuShows::Text,
     ViewerMenuShows::Tree,

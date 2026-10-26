@@ -40,6 +40,7 @@ fn a_closed_windows_connection_is_reported_as_unanswered() {
         left: None,
         right: None,
         view: None,
+        experimental_retention: false,
     };
     let result = client.send(&request, Duration::from_secs(2));
     server.join().unwrap();

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
@@ -7,6 +7,7 @@ use rusty_core::Location;
 use rusty_fs::FakeFs;
 
 use super::{fake, open_options, options_for, settle, two_panes};
+use crate::crash_notice::RecoveryContent;
 use crate::window_view::{CrashReportService, FerriteWindow, StartOptions};
 
 const ZIP: &str = "ferrite-report-20261019-0815.zip";
@@ -15,6 +16,9 @@ struct FakeReport {
     saved: Result<Location, String>,
     saves: AtomicUsize,
     dismissals: AtomicUsize,
+    recovery: Option<RecoveryContent>,
+    folder: Option<Location>,
+    fail_dismiss: AtomicBool,
 }
 
 impl CrashReportService for FakeReport {
@@ -23,8 +27,20 @@ impl CrashReportService for FakeReport {
         self.saved.clone()
     }
 
-    fn dismiss(&self) {
+    fn dismiss(&self) -> Result<(), String> {
         self.dismissals.fetch_add(1, Ordering::SeqCst);
+        if self.fail_dismiss.load(Ordering::SeqCst) {
+            return Err("The recovery notice could not be saved".into());
+        }
+        Ok(())
+    }
+
+    fn recovery(&self) -> Option<RecoveryContent> {
+        self.recovery.clone()
+    }
+
+    fn folder(&self) -> Option<Location> {
+        self.folder.clone()
     }
 }
 
@@ -36,14 +52,26 @@ pub(super) struct Rig {
 }
 
 fn rig_with(cx: &mut TestAppContext, saved: Option<Result<&str, &str>>) -> Rig {
+    rig_content(cx, saved, None)
+}
+
+fn rig_content(
+    cx: &mut TestAppContext,
+    saved: Option<Result<&str, &str>>,
+    recovery: Option<RecoveryContent>,
+) -> Rig {
     let fs = fake();
     fs.add_folder("home/Downloads");
     fs.add_file(&format!("home/Downloads/{ZIP}"), 2048);
+    fs.add_folder("home/recovery");
     let report = saved.map(|saved| {
         Arc::new(FakeReport {
             saved: saved.map(|path| fs.location(path)).map_err(str::to_owned),
             saves: AtomicUsize::new(0),
             dismissals: AtomicUsize::new(0),
+            folder: recovery.as_ref().map(|_| fs.location("home/recovery")),
+            recovery,
+            fail_dismiss: AtomicBool::new(false),
         })
     });
     let options = StartOptions {
@@ -64,6 +92,20 @@ fn rig_with(cx: &mut TestAppContext, saved: Option<Result<&str, &str>>) -> Rig {
 
 pub(super) fn unclean(cx: &mut TestAppContext) -> Rig {
     rig_with(cx, Some(Ok(&format!("home/Downloads/{ZIP}"))))
+}
+
+fn recovered(cx: &mut TestAppContext) -> Rig {
+    rig_content(
+        cx,
+        Some(Ok(&format!("home/Downloads/{ZIP}"))),
+        Some(RecoveryContent {
+            title: "Ferrite recovered after a database problem.".into(),
+            details: vec![
+                "Preserved: navo.db.corrupt-1".into(),
+                "Reset: folder history".into(),
+            ],
+        }),
+    )
 }
 
 impl Rig {
@@ -217,5 +259,66 @@ fn enter_on_the_focused_notice_saves_the_report(cx: &mut TestAppContext) {
 fn the_reach_key_does_nothing_without_a_notice(cx: &mut TestAppContext) {
     let rig = rig_with(cx, None);
     rig.press(cx, "ctrl-shift-r");
+    assert!(rig.list_has_focus(cx));
+}
+
+#[gpui_kit::test]
+fn saving_a_report_keeps_the_recovery_notice_visible(cx: &mut TestAppContext) {
+    let rig = recovered(cx);
+    rig.click(cx, "crash-notice-save");
+    assert!(rig.is_shown(cx));
+    assert_eq!(rig.report().saves.load(Ordering::SeqCst), 1);
+    assert_eq!(rig.report().dismissals.load(Ordering::SeqCst), 0);
+}
+
+#[gpui_kit::test]
+fn open_folder_reveals_the_recovery_folder_and_keeps_the_notice(cx: &mut TestAppContext) {
+    let rig = recovered(cx);
+    rig.click(cx, "crash-notice-folder");
+    assert_eq!(rig.active_tab(cx).1, rig.fs.location("home/recovery"));
+    assert!(rig.is_shown(cx));
+    assert!(rig.list_has_focus(cx));
+}
+
+#[gpui_kit::test]
+fn the_recovery_folder_action_is_available_from_the_notice_keyboard_context(
+    cx: &mut TestAppContext,
+) {
+    let rig = recovered(cx);
+    rig.press(cx, "ctrl-shift-r");
+    rig.press(cx, "alt-o");
+    assert_eq!(rig.active_tab(cx).1, rig.fs.location("home/recovery"));
+    assert!(rig.is_shown(cx));
+}
+
+#[gpui_kit::test]
+fn a_failed_dismiss_keeps_the_notice_and_reports_the_error(cx: &mut TestAppContext) {
+    let rig = recovered(cx);
+    rig.report().fail_dismiss.store(true, Ordering::SeqCst);
+    rig.click(cx, "crash-notice-dismiss");
+    assert!(rig.is_shown(cx));
+    assert!(rig.has_error(cx));
+}
+
+#[gpui_kit::test]
+fn the_folder_key_does_nothing_on_a_crash_notice_without_a_recovery_folder(
+    cx: &mut TestAppContext,
+) {
+    let rig = unclean(cx);
+    let before = rig.active_tab(cx);
+    rig.press(cx, "ctrl-shift-r");
+    rig.press(cx, "alt-o");
+    assert_eq!(rig.active_tab(cx), before);
+    assert!(rig.is_shown(cx));
+    assert!(!rig.has_error(cx));
+    assert!(!rig.list_has_focus(cx));
+}
+
+#[gpui_kit::test]
+fn the_folder_key_does_nothing_without_a_notice(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, None);
+    let before = rig.active_tab(cx);
+    rig.press(cx, "alt-o");
+    assert_eq!(rig.active_tab(cx), before);
     assert!(rig.list_has_focus(cx));
 }

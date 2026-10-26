@@ -6,6 +6,7 @@ use rusty_fs::{
     Provider, existing_at, run_job, scan,
 };
 use rusty_store::{Db, JobJournal, JobState};
+use rusty_ui::browser::OpLog;
 
 use super::{SharedJournal, lock, log_factory, recover};
 
@@ -72,7 +73,7 @@ pub(super) fn run(fs: &FakeFs, journal: &SharedJournal, finish: bool) {
     );
     assert_eq!(outcome, JobOutcome::Done);
     if finish {
-        log.finish(&outcome, fs);
+        log.finish(&outcome, fs).unwrap();
     }
 }
 
@@ -289,7 +290,13 @@ fn a_failed_finish_write_keeps_the_held_file_for_recovery() {
     let journal = super::open(&file).unwrap();
     let (guard, _) = Db::open(&file, false).unwrap();
     guard.connection().execute_batch(NO_FINISH).unwrap();
-    run(&fs, &journal, true);
+    run(&fs, &journal, false);
+    let job = lock(&journal).unfinished().unwrap()[0].id;
+    let mut log = super::JournalLog::new(journal.clone(), job, "copy".to_owned());
+    assert!(log.finish(&JobOutcome::Done, &fs).is_ok());
+    assert_eq!((holding(&fs).len(), held_rows(&journal)), (1, 1));
+    log.experimental_retention = true;
+    assert!(log.finish(&JobOutcome::Done, &fs).is_err());
     assert_eq!((holding(&fs).len(), held_rows(&journal)), (1, 1));
     guard
         .connection()

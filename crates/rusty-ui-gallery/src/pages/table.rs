@@ -1,6 +1,6 @@
 use super::{Page, PageInfo, info};
 
-pub const PAGES: [PageInfo; 118] = [
+pub const PAGES: [PageInfo; 120] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -393,5 +393,7 @@ pub const PAGES: [PageInfo; 118] = [
     ),
     info(Page::ElfStripKeys, "ELF keys", "p38-c9-elf-keys", false),
     info(Page::MdfTable, "MDF table", "p38-b8-mdf-table", false),
+    super::recovery::NOTICE,
+    super::recovery::NARROW,
     info(Page::Palettes, "Palettes", "navo-palettes", true),
 ];

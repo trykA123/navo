@@ -1,3 +1,4 @@
+mod copy;
 mod ops;
 mod tree;
 mod watch;
@@ -20,6 +21,8 @@ pub enum FakeOp {
     List,
     Metadata,
     Identity,
+    Mount,
+    Space,
     Create,
     Copy,
     Rename,
@@ -49,6 +52,8 @@ pub struct FakeFs {
     recycled: Mutex<Vec<String>>,
     links: Mutex<HashMap<String, String>>,
     volumes: Mutex<HashMap<String, Option<u64>>>,
+    mounts: Mutex<HashMap<String, Option<u64>>>,
+    space: Mutex<HashMap<String, Option<u64>>>,
     batch_size: usize,
     watchable: bool,
     watchers: Watchers,
@@ -82,6 +87,8 @@ impl FakeFs {
             recycled: Mutex::new(Vec::new()),
             links: Mutex::new(HashMap::new()),
             volumes: Mutex::new(HashMap::new()),
+            mounts: Mutex::new(HashMap::new()),
+            space: Mutex::new(HashMap::new()),
             batch_size: DEFAULT_BATCH,
             watchable: false,
             watchers: Watchers::default(),
@@ -181,6 +188,14 @@ impl FakeFs {
 
     pub fn set_volume(&self, path: &str, serial: u64) {
         self.set_volume_serial(path, Some(serial));
+    }
+
+    pub fn set_mount_identity(&self, path: &str, mount: Option<u64>) {
+        lock(&self.mounts).insert(normalize(path).trim_end_matches('/').to_owned(), mount);
+    }
+
+    pub fn set_available_space(&self, path: &str, bytes: Option<u64>) {
+        lock(&self.space).insert(normalize(path).trim_end_matches('/').to_owned(), bytes);
     }
 
     pub fn set_volume_serial(&self, path: &str, serial: Option<u64>) {
