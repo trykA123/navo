@@ -22,8 +22,8 @@ pub use drive_class::{DriveClass, drive_class};
 pub(crate) use exists::{ALREADY_EXISTS_CODES, already_exists};
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use io_queue::{
-    Cancelled, Classifier, IoQueue, Job, JobId, JobSlot, Limits, OwnerGuard, OwnerId, Priority,
-    Scheduler, VolumeId, VolumeKind, volume_of,
+    Cancelled, Classifier, IoQueue, Job, JobId, JobKind, JobSlot, Limits, OwnerGuard, OwnerId,
+    Pools, Priority, Scheduler, VolumeId, VolumeKind, volume_of,
 };
 pub use job::{
     CopyMode, FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOutcome, Journaled,

@@ -1,8 +1,10 @@
+mod pools;
 mod runner;
 mod scheduler;
 
 use rusty_core::Location;
 
+pub use pools::{JobKind, Pools};
 pub use runner::{Classifier, IoQueue, Job, JobSlot, OwnerGuard};
 pub use scheduler::{Cancelled, Scheduler};
 
