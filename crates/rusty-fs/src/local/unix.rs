@@ -54,6 +54,29 @@ pub(super) fn replace(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
+pub(super) fn rename_atomic(from: &Path, to: &Path) -> io::Result<()> {
+    use rustix::fs::{CWD, RenameFlags, renameat_with};
+    atomic_result(
+        renameat_with(CWD, from, CWD, to, RenameFlags::NOREPLACE).map_err(io::Error::from),
+    )
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn atomic_result(result: io::Result<()>) -> io::Result<()> {
+    match result {
+        Err(error) if matches!(error.raw_os_error(), Some(22 | 38 | 95)) => {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+        other => other,
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(super) fn rename_atomic(_from: &Path, _to: &Path) -> io::Result<()> {
+    Err(io::ErrorKind::Unsupported.into())
+}
+
+#[cfg(target_os = "linux")]
 pub(super) fn rename_new(from: &Path, to: &Path) -> io::Result<()> {
     use rustix::fs::{CWD, RenameFlags, renameat_with};
     use rustix::io::Errno;

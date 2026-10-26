@@ -13,12 +13,15 @@ pub(super) struct Batch {
 
 impl Batch {
     pub(super) fn has_items(&self, items: &[Item]) -> bool {
-        self.items.len() == items.len()
+        let shown: HashSet<_> = items
+            .iter()
+            .map(|item| (&item.parent, &item.name))
+            .collect();
+        self.items.len() == shown.len()
             && self
                 .items
                 .iter()
-                .zip(items)
-                .all(|(fresh, shown)| fresh.parent == shown.parent && fresh.name == shown.name)
+                .all(|item| shown.contains(&(&item.parent, &item.name)))
     }
 }
 
@@ -94,3 +97,4 @@ fn bare_entry(name: &str, is_folder: bool) -> FsEntry {
         attributes: Attributes::default(),
     }
 }
+use std::collections::HashSet;

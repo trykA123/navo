@@ -22,5 +22,7 @@ Timeout: The operation took too long.
 Timeout: “C:\Data\report.xlsx” did not answer in time.
 Cancelled: The operation was cancelled.
 Cancelled: The operation on “C:\Data\report.xlsx” was cancelled.
+IdentityUnavailable: This drive cannot confirm file identity.
+IdentityUnavailable: This drive cannot confirm file identity for “C:\Data\report.xlsx”.
 Unknown: Something went wrong.
 Unknown: Something went wrong with “C:\Data\report.xlsx”.

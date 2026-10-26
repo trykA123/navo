@@ -54,6 +54,30 @@ fn open(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     open_bytes(cx, demo().expect("the demo builds"))
 }
 
+#[gpui_kit::test]
+fn configured_module_prefixes_regroup_a_live_elf(cx: &mut TestAppContext) {
+    let (window, view) = open(cx);
+    let values = preset(1).with(&Change::text(Field::AutomotiveModules, "Can_MainFunction"));
+    show(cx, (window, &view), values);
+    assert!(has_group(cx, window, "Can_MainFunction"));
+    assert!(text_of(cx, window, "space-provenance").ends_with("modules: 1 from your list"));
+    show(cx, (window, &view), preset(1));
+    assert!(!has_group(cx, window, "Can_MainFunction"));
+    assert!(!text_of(cx, window, "space-provenance").contains("from your list"));
+}
+
+pub(super) fn has_group(cx: &mut TestAppContext, window: AnyWindowHandle, name: &str) -> bool {
+    for at in 0..22 {
+        if !has(cx, window, ("treemap-tile", at)) {
+            return false;
+        }
+        if label(cx, window, ("treemap-tile", at)).starts_with(&format!("{name}, ")) {
+            return true;
+        }
+    }
+    false
+}
+
 fn open_bytes(cx: &mut TestAppContext, bytes: Vec<u8>) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     open_in(cx, bytes, None)
 }

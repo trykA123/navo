@@ -9,10 +9,24 @@ use crate::jobs::{self, SharedJournal};
 
 const KIND: &str = "rename";
 
+pub fn profile_hooks(
+    journal: Option<SharedJournal>,
+    db: Option<SharedDb>,
+    dirs: Option<&rusty_store::StoreDirs>,
+) -> RenameHooks {
+    RenameHooks {
+        log: Some(crate::rename_log::writer(
+            dirs.map(|dirs| dirs.config.join("rename.log")),
+        )),
+        ..hooks(journal, db)
+    }
+}
+
 pub fn hooks(journal: Option<SharedJournal>, db: Option<SharedDb>) -> RenameHooks {
     let (last, undo) = (journal.clone(), journal);
     let (list, save, delete) = (db.clone(), db.clone(), db);
     RenameHooks {
+        log: None,
         last: Arc::new(move || match &last {
             Some(journal) => offer(journal),
             None => Ok(None),

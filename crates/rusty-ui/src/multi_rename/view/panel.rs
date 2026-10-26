@@ -20,6 +20,7 @@ pub struct RenamePanel {
     title: SharedString,
     fields: Fields,
     preview: AnyElement,
+    tools: Option<AnyElement>,
     problems_only: bool,
     presets_menu: Option<AnyElement>,
     on_problems_only: Option<Pressed>,
@@ -32,6 +33,7 @@ impl RenamePanel {
             title: title.into(),
             fields,
             preview: preview.into_any_element(),
+            tools: None,
             problems_only: false,
             presets_menu: None,
             on_problems_only: None,
@@ -41,6 +43,11 @@ impl RenamePanel {
 
     pub fn problems_only(mut self, is_on: bool) -> Self {
         self.problems_only = is_on;
+        self
+    }
+
+    pub fn tools(mut self, tools: impl IntoElement) -> Self {
+        self.tools = Some(tools.into_any_element());
         self
     }
 
@@ -194,6 +201,7 @@ impl RenderOnce for RenamePanel {
                     .child(self.fields),
             )
             .child(filter)
+            .children(self.tools)
             .child(
                 div()
                     .flex()

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use super::{Copying, Ended, JobUpdate, LogFactory, OpRequest};
 use crate::browser::{
-    Message, RenameReport, UndoLogFactory, UndoOffer, Waker, run_batch, run_undo,
+    Message, RenameReport, UndoLogFactory, UndoOffer, Waker, WriteRenameLog, run_batch, run_undo,
 };
 
 const PROGRESS_EVERY: Duration = Duration::from_millis(50);
@@ -89,7 +89,9 @@ pub(super) fn worker_count(
 
 pub(in crate::browser) enum Run {
     Plain,
-    Rename,
+    Rename {
+        log: Option<WriteRenameLog>,
+    },
     Undo {
         offer: UndoOffer,
         log: UndoLogFactory,
@@ -169,7 +171,7 @@ impl JobWork {
     ) -> Result<(JobOutcome, RenameReport), String> {
         let mut log = match &self.run {
             Run::Undo { offer, log } => log(offer)?,
-            Run::Plain | Run::Rename => (self.factory)(&self.plan)?,
+            Run::Plain | Run::Rename { .. } => (self.factory)(&self.plan)?,
         };
         let mut ctx = JobContext {
             ops: self.ops.as_ref(),
@@ -177,13 +179,36 @@ impl JobWork {
             cancel: &self.cancel,
             progress,
         };
-        let (outcome, report) = match &self.run {
+        let (outcome, mut report) = match &self.run {
             Run::Plain => (self.run_plain(&mut ctx), RenameReport::default()),
-            Run::Rename => run_batch(&self.plan, &mut ctx),
+            Run::Rename { .. } => run_batch(&self.plan, &mut ctx),
             Run::Undo { offer, .. } => run_undo(&offer.plan, &offer.done, &mut ctx),
         };
         log.finish(&outcome, self.ops.as_ref());
+        self.write_rename_log(&outcome, &mut report);
         Ok((outcome, report))
+    }
+
+    fn write_rename_log(&self, outcome: &JobOutcome, report: &mut RenameReport) {
+        let Run::Rename { log: Some(write) } = &self.run else {
+            return;
+        };
+        if *outcome == JobOutcome::Done {
+            report.log_error = write(&self.plan, crate::browser::RenameLogStatus::Complete).err();
+        } else if !report.applied.is_empty() {
+            let mut plan = self.plan.clone();
+            plan.steps = report
+                .applied
+                .iter()
+                .filter_map(|seq| {
+                    usize::try_from(*seq)
+                        .ok()
+                        .and_then(|at| self.plan.steps.get(at))
+                })
+                .cloned()
+                .collect();
+            report.log_error = write(&plan, crate::browser::RenameLogStatus::Incomplete).err();
+        }
     }
 
     fn run_plain(&self, ctx: &mut JobContext<'_>) -> JobOutcome {

@@ -4,7 +4,7 @@ use rusty_automotive::elf_sample::{Spec, build, demo, firmware};
 use rusty_automotive::space::{Grouping, Kind};
 use rusty_automotive::{Elf, ElfReader, Watch, parse_mdf};
 
-use super::build_model;
+use super::{GroupingOptions, build_model};
 use crate::window_view::viewer::space::sibling::{SiblingNames, SiblingProblem, Siblings};
 
 pub(in crate::window_view::viewer) const DEMO_MDF: &str = "\
@@ -34,15 +34,25 @@ fn with_mdf() -> Siblings {
             mdf: Some("app.mdf".into()),
             map: None,
             elf: None,
+            ..SiblingNames::default()
         },
         ..Siblings::default()
     }
 }
 
 #[test]
+fn a_sole_companion_is_named_as_such_in_the_provenance() {
+    let elf = parse(demo().expect("demo"));
+    let mut siblings = with_mdf();
+    siblings.names.only_mdf = true;
+    let model = build_model(&elf, None, &siblings, GroupingOptions::default());
+    assert!(model.provenance.contains("app.mdf, the only .mdf here"));
+}
+
+#[test]
 fn without_a_sibling_regions_are_clusters_with_used_only() {
     let elf = parse(demo().expect("demo"));
-    let model = build_model(&elf, None, &Siblings::default(), None);
+    let model = build_model(&elf, None, &Siblings::default(), GroupingOptions::default());
     assert_eq!(model.regions.len(), 2);
     assert!(model.regions.iter().all(|region| region.total.is_none()));
     assert_eq!(
@@ -55,7 +65,7 @@ fn without_a_sibling_regions_are_clusters_with_used_only() {
 #[test]
 fn an_mdf_sibling_names_the_regions_and_the_provenance() {
     let elf = parse(demo().expect("demo"));
-    let model = build_model(&elf, None, &with_mdf(), None);
+    let model = build_model(&elf, None, &with_mdf(), GroupingOptions::default());
     let names: Vec<&str> = model.regions.iter().map(|r| r.name.as_str()).collect();
     assert_eq!(names, ["pflash", "dsram"]);
     assert_eq!(model.flash, Some(0));
@@ -67,7 +77,7 @@ fn an_mdf_sibling_names_the_regions_and_the_provenance() {
 #[test]
 fn the_treemap_adds_up_to_the_used_bytes_of_the_flash() {
     let elf = parse(demo().expect("demo"));
-    let model = build_model(&elf, None, &with_mdf(), None);
+    let model = build_model(&elf, None, &with_mdf(), GroupingOptions::default());
     let flash = &model.regions[model.flash.expect("a flash region")];
     let (groups, items) = model.treemap();
     let total: u64 = items.iter().map(|item| item.value).sum();
@@ -79,7 +89,7 @@ fn the_treemap_adds_up_to_the_used_bytes_of_the_flash() {
 #[test]
 fn every_part_reaches_the_layout_with_its_own_kinds() {
     let elf = parse(demo().expect("demo"));
-    let model = build_model(&elf, None, &with_mdf(), None);
+    let model = build_model(&elf, None, &with_mdf(), GroupingOptions::default());
     let (groups, items) = model.treemap();
     for (item, group) in items.iter().zip(groups.iter()) {
         let parts: u64 = item.parts.iter().map(|part| part.value).sum();
@@ -93,10 +103,26 @@ fn every_part_reaches_the_layout_with_its_own_kinds() {
 #[test]
 fn an_unusable_grouping_falls_back_to_the_default() {
     let elf = parse(demo().expect("demo"));
-    let model = build_model(&elf, None, &with_mdf(), Some(Grouping::ObjectFile));
+    let model = build_model(
+        &elf,
+        None,
+        &with_mdf(),
+        GroupingOptions {
+            grouping: Some(Grouping::ObjectFile),
+            ..GroupingOptions::default()
+        },
+    );
     assert!(!model.usable[Grouping::ObjectFile as usize]);
     assert_eq!(model.grouping, Grouping::Module);
-    let model = build_model(&elf, None, &with_mdf(), Some(Grouping::Section));
+    let model = build_model(
+        &elf,
+        None,
+        &with_mdf(),
+        GroupingOptions {
+            grouping: Some(Grouping::Section),
+            ..GroupingOptions::default()
+        },
+    );
     assert_eq!(model.grouping, Grouping::Section);
 }
 
@@ -107,7 +133,7 @@ fn a_stripped_file_says_it_has_no_symbol_table() {
         ..firmware(false, false)
     };
     let elf = parse(build(&spec).expect("builds"));
-    let model = build_model(&elf, None, &Siblings::default(), None);
+    let model = build_model(&elf, None, &Siblings::default(), GroupingOptions::default());
     assert!(
         model.provenance.contains("no symbol table"),
         "{}",
@@ -124,7 +150,7 @@ fn sibling_problems_join_the_provenance_line() {
         }],
         ..Siblings::default()
     };
-    let model = build_model(&elf, None, &siblings, None);
+    let model = build_model(&elf, None, &siblings, GroupingOptions::default());
     assert!(
         model
             .provenance

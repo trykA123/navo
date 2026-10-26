@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
+use rusty_core::Location;
 use rusty_core::NameError;
 use rusty_core::rename::Compiled;
 use rusty_core::rename::check::{Fold, Problem, RowState, fold_key};
@@ -20,11 +21,13 @@ pub(super) enum Kind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Line {
+    pub parent: Location,
     pub old: String,
     pub new: String,
     pub state: RowState,
     pub is_swap: bool,
     pub is_long: bool,
+    pub is_edited: bool,
     pub old_marks: Vec<Range<usize>>,
     pub new_marks: Vec<Range<usize>>,
 }
@@ -42,8 +45,14 @@ impl Line {
     }
 
     pub fn status(&self) -> String {
+        if let RowState::Problem(problem) = self.state {
+            return problem_text(problem);
+        }
         if self.is_long {
             return t!("rename-status-long-path");
+        }
+        if self.is_edited && self.state != RowState::Excluded {
+            return t!("rename-status-edited");
         }
         match self.kind() {
             Kind::Renames => String::new(),
@@ -81,11 +90,13 @@ pub(super) fn lines(
             let is_changed = matches!(row.state, RowState::Changes { .. });
             let is_excluded = row.state == RowState::Excluded;
             Line {
+                parent: item.parent.clone(),
                 old: item.name.clone(),
                 new: row.new.clone(),
                 state: row.state,
                 is_swap: false,
                 is_long: is_changed && is_long_path(&item.parent, &row.new),
+                is_edited: false,
                 old_marks: matcher
                     .filter(|_| !is_excluded)
                     .map(|compiled| compiled.match_ranges(&item.name))

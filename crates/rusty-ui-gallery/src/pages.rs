@@ -26,6 +26,7 @@ pub enum Page {
     MenuFiles,
     MenuBackground,
     MenuEmptyFolder,
+    DropMenu,
     ViewerMenuText,
     ViewerMenuTree,
     Tokens,
@@ -150,5 +151,19 @@ impl Page {
 
     pub fn info(self) -> &'static PageInfo {
         &PAGES[self as usize]
+    }
+}
+
+pub(super) const fn info(
+    page: Page,
+    label: &'static str,
+    stem: &'static str,
+    in_switch: bool,
+) -> PageInfo {
+    PageInfo {
+        page,
+        label,
+        stem,
+        in_switch,
     }
 }

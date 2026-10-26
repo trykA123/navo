@@ -50,7 +50,6 @@ pub(super) struct Job {
 
 impl Job {
     pub(super) fn run(self) -> Option<Preview> {
-        let compiled = self.form.compile().ok()?;
         let needed = groups_needed(&self.form.rules).ok()?;
         let mut items = (*self.items).clone();
         self.form.mark_excluded(&mut items);
@@ -61,12 +60,7 @@ impl Job {
             existing: &self.existing,
             fold: self.fold,
         };
-        Some(Preview::compute(
-            &compiled,
-            &items,
-            listing,
-            self.generation,
-        ))
+        Preview::compute_form(&self.form, &items, listing, self.generation)
     }
 
     fn fill_fields(&self, needed: &BTreeSet<String>, items: &mut [Item]) {

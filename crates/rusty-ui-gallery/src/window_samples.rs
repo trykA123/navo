@@ -77,7 +77,7 @@ pub fn settings_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage
     let input = text_field_state("Find a setting by name, key or help", window, cx);
     input.update(cx, |state, cx| state.set_value("sort", window, cx));
     [
-        (Field::TextLineNumbers, false, None, false),
+        (Field::AutomotiveModules, false, None, true),
         (Field::Theme, true, None, false),
         (Field::Sort, false, Some((input, "sort")), false),
         (Field::SearchIndex, false, None, true),

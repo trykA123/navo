@@ -14,6 +14,12 @@ use super::treemap::{TreemapGroup, TreemapPart};
 
 const SHOWN_PARTS: usize = 14;
 
+#[derive(Default)]
+pub(in crate::window_view::viewer) struct GroupingOptions {
+    pub grouping: Option<Grouping>,
+    pub modules: Arc<[String]>,
+}
+
 pub(in crate::window_view::viewer) struct RichModel {
     pub regions: Vec<Arc<Region>>,
     pub outside: u64,
@@ -27,12 +33,38 @@ pub(in crate::window_view::viewer) struct RichModel {
     pub stripped: bool,
     pub from_map: bool,
     pub boundaries: Option<Boundaries>,
+    pub modules: Arc<[String]>,
 }
 
 impl RichModel {
     pub fn outside_note(&self) -> Option<String> {
         let name = self.region_source.clone()?;
         (self.outside > 0).then(|| t!("space-outside", count = self.outside as i64, name = name))
+    }
+
+    fn set_provenance(&mut self, text: String, origin: Origin<'_>) {
+        let count = self
+            .flash
+            .and_then(|at| self.regions.get(at))
+            .filter(|_| !self.modules.is_empty())
+            .map_or(0, |region| {
+                let by = GroupBy {
+                    grouping: Grouping::Module,
+                    modules: &self.modules,
+                };
+                group(&self.owners, origin, region, &by)
+                    .iter()
+                    .filter(|group| group.listed)
+                    .count()
+            });
+        self.provenance = if count > 0 {
+            format!(
+                "{text} · {}",
+                t!("space-modules-listed", count = count as i64)
+            )
+        } else {
+            text
+        };
     }
 
     pub fn treemap(&self) -> (Rc<[TreemapGroup]>, Vec<Item>) {
@@ -82,23 +114,24 @@ pub(super) fn table(siblings: &Siblings) -> Option<RegionTable> {
 pub(super) fn assemble(
     (regions, found): (Regions, Owners),
     origin: Origin<'_>,
-    grouping: Option<Grouping>,
+    options: GroupingOptions,
 ) -> RichModel {
     let flash = flash_region(&regions);
     let region = flash.and_then(|at| regions.items.get(at));
     let usable = region
         .and_then(Region::span)
         .map_or([false; 4], |span| available(&found, span));
-    let grouping = grouping
+    let grouping = options
+        .grouping
         .filter(|grouping| usable[*grouping as usize])
         .unwrap_or_else(|| {
             region.map_or(Grouping::Module, |region| {
-                default_grouping(&found, origin, region, &[])
+                default_grouping(&found, origin, region, &options.modules)
             })
         });
     let by = GroupBy {
         grouping,
-        modules: &[],
+        modules: &options.modules,
     };
     let groups = region.map_or_else(Vec::new, |region| group(&found, origin, region, &by));
     RichModel {
@@ -114,6 +147,7 @@ pub(super) fn assemble(
         region_source: None,
         from_map: matches!(origin, Origin::Map(_)),
         boundaries: None,
+        modules: options.modules,
     }
 }
 
@@ -121,7 +155,7 @@ pub(in crate::window_view::viewer) fn build_model(
     elf: &Elf,
     lines: Option<&Lines>,
     siblings: &Siblings,
-    grouping: Option<Grouping>,
+    options: GroupingOptions,
 ) -> RichModel {
     let map = siblings.map.as_deref();
     let regions = regions_for_elf(elf, table(siblings).as_ref());
@@ -134,18 +168,20 @@ pub(in crate::window_view::viewer) fn build_model(
         [owned, tr("space-from-flags")],
         siblings,
     );
-    RichModel {
-        provenance,
+    let origin = Origin::Elf { elf, map };
+    let mut model = RichModel {
         region_source,
         boundaries: Some(Boundaries::new(elf)),
-        ..assemble((regions, found), Origin::Elf { elf, map }, grouping)
-    }
+        ..assemble((regions, found), origin, options)
+    };
+    model.set_provenance(provenance, origin);
+    model
 }
 
 pub(in crate::window_view::viewer) fn build_map_model(
     map: &MapModel,
     siblings: &Siblings,
-    (name, grouping): (&str, Option<Grouping>),
+    (name, options): (&str, GroupingOptions),
 ) -> RichModel {
     let elf = siblings.elf.as_deref();
     let regions = regions_for_map(map, siblings.mdf.as_ref().map(Mdf::regions).as_ref(), elf);
@@ -163,12 +199,14 @@ pub(in crate::window_view::viewer) fn build_map_model(
         _ => tr("space-from-names"),
     };
     let provenance = provenance(region_source.as_deref(), [owned, kinds], siblings);
-    RichModel {
-        provenance,
+    let origin = Origin::Map(map);
+    let mut model = RichModel {
         region_source,
         stripped: false,
-        ..assemble((regions, found), Origin::Map(map), grouping)
-    }
+        ..assemble((regions, found), origin, options)
+    };
+    model.set_provenance(provenance, origin);
+    model
 }
 
 fn elf_owners_text(found: &Provenance, siblings: &Siblings) -> String {
@@ -209,7 +247,7 @@ fn provenance(
     siblings: &Siblings,
 ) -> String {
     let regions = match region_source {
-        Some(name) => t!("space-from-regions", name = name.to_owned()),
+        Some(name) => region_provenance(name, siblings),
         None => tr("space-from-clusters"),
     };
     [regions, owned, kinds]
@@ -217,6 +255,28 @@ fn provenance(
         .chain(siblings.problems.iter().map(problem_text))
         .collect::<Vec<_>>()
         .join(" · ")
+}
+
+fn region_provenance(name: &str, siblings: &Siblings) -> String {
+    let names = &siblings.names;
+    let extension = if names.only_mdf && names.mdf.as_deref() == Some(name) {
+        Some("mdf")
+    } else if names.only_map && names.map.as_deref() == Some(name) {
+        Some("map")
+    } else {
+        None
+    };
+    let name = extension.map_or_else(
+        || name.to_owned(),
+        |extension| {
+            t!(
+                "space-only-companion",
+                name = name.to_owned(),
+                extension = extension
+            )
+        },
+    );
+    t!("space-from-regions", name = name)
 }
 
 #[cfg(test)]

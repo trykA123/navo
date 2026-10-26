@@ -2,6 +2,14 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## Unreleased — backend branch
+
+- Single and batch renames keep file identities in the undo journal, so recovery leaves replacement files untouched.
+- Rename names can be edited, loaded from a UTF-8 file, pasted and copied. Preview rows can be moved or sorted, with optional counters per folder.
+- An optional rename log records completed batches without affecting undo when logging fails.
+- Rich ELF/MAP views discover an unambiguous memory companion and apply configured module prefixes live.
+- Explorer drag in/out and the right-button drop menu are wired. Native Windows verification remains pending.
+
 ## alpha-2026-10-21d — 2026-10-21
 
 ### New

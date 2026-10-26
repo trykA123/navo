@@ -16,6 +16,10 @@ use crate::settings::{Change, Field, Value, Values};
 use crate::test_pointer::{self, ctrl, dispatch, down, moved, up};
 use crate::window_view::{DriveIcon, DriveInfo, FerriteWindow};
 
+mod external;
+mod outgoing;
+mod spring;
+
 const DOCS: usize = 0;
 const A: usize = 1;
 const B: usize = 2;
@@ -231,7 +235,8 @@ impl Rig {
 
     fn hover(&self, cx: &mut TestAppContext) -> Option<Hover> {
         self.view.read_with(cx, |view, cx| {
-            view.drag_session
+            view.drag
+                .session
                 .as_ref()
                 .and_then(|session| session.state.read(cx).hover.clone())
         })
@@ -239,7 +244,8 @@ impl Rig {
 
     fn carried(&self, cx: &mut TestAppContext) -> Option<usize> {
         self.view.read_with(cx, |view, cx| {
-            view.drag_session
+            view.drag
+                .session
                 .as_ref()
                 .map(|session| session.state.read(cx).count)
         })
@@ -290,7 +296,7 @@ impl Rig {
 
     fn has_session(&self, cx: &mut TestAppContext) -> bool {
         self.view
-            .read_with(cx, |view, _| view.drag_session.is_some())
+            .read_with(cx, |view, _| view.drag.session.is_some())
     }
 
     fn has_drag(&self, cx: &mut TestAppContext) -> bool {
@@ -441,7 +447,8 @@ fn alt_drop_makes_a_shortcut_and_the_badge_says_so(cx: &mut TestAppContext) {
     rig.drag_to(cx, (A, to), alt());
     assert_eq!(rig.hover(cx).and_then(|hover| hover.op), Some(DropOp::Link));
     let head = rig.view.read_with(cx, |view, cx| {
-        view.drag_session
+        view.drag
+            .session
             .as_ref()
             .map(|session| session.state.read(cx).lines().head)
     });

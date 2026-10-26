@@ -6,7 +6,7 @@ use std::ops::ControlFlow;
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 pub use cancel::CancelToken;
-pub use ops::ProviderOps;
+pub use ops::{FileIdentity, FileIdentityKind, ProviderOps};
 
 use crate::{Watch, WatchSink};
 

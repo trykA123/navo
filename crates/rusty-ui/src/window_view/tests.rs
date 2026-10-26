@@ -133,6 +133,7 @@ pub(crate) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
         file_clipboard: None,
+        drop_platform: None,
         start_watch: None,
         open: super::OpenHooks::none(),
         crash_report: None,

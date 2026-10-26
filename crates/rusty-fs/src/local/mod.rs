@@ -1,3 +1,4 @@
+mod identity;
 mod link;
 #[cfg(target_os = "linux")]
 mod linux_watch;

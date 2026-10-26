@@ -21,11 +21,20 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
         if awaits_unreadable_row(job, step, held) {
             continue;
         }
-        let result = if unsure {
-            undo_unsure(ctx.ops, step)
+        let verified = if job.plan.kind == OpKind::Rename {
+            super::rename::verified(seq, step, ctx)
         } else {
-            undo(job, step, held, ctx)
+            Ok(true)
         };
+        let result = verified.and_then(|verified| {
+            if !verified {
+                Ok(StepOutcome::Skipped)
+            } else if unsure {
+                undo_unsure(ctx.ops, step)
+            } else {
+                undo(job, step, held, ctx)
+            }
+        });
         let logged = match result {
             Ok(outcome) => ctx.log.undone(seq, outcome),
             Err(error) => {

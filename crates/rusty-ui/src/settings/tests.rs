@@ -186,7 +186,7 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
         ("Image", 1),
         ("Markdown", 1),
         ("Preview", 2),
-        ("Automotive", 7),
+        ("Automotive", 8),
     ];
     let expected: Vec<Option<&str>> = expected
         .iter()
@@ -213,6 +213,7 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
             "automotive.view.row-bars",
             "automotive.view.usage-bars",
             "automotive.view.who-uses",
+            "automotive.modules",
         ]
     );
     assert!(!Field::AutomotiveCharts.is_applied());

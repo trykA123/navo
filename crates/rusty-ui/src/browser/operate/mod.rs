@@ -336,6 +336,7 @@ impl Browser {
             outcome,
             report,
         } = ended;
+        self.note_rename_error(id, &outcome);
         let status = match outcome {
             Ok(JobOutcome::Done) => JobStatus::Done,
             Ok(JobOutcome::Cancelled) => JobStatus::Cancelled,

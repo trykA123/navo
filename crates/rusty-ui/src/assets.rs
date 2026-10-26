@@ -73,6 +73,7 @@ icon_assets!(
         LayoutGrid,
         Link,
         List,
+        ListOrdered,
         Lock,
         Map,
         MemoryStick,

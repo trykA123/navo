@@ -10,6 +10,18 @@ pub struct FinishedJob {
 }
 
 impl JobJournal {
+    pub fn step_detail(&self, job: JobId, seq: u32) -> Result<Option<Vec<u8>>, JournalError> {
+        match self.db.connection().query_row(
+            "SELECT detail FROM job_step WHERE job_id = ?1 AND seq = ?2",
+            rusqlite::params![job.0, seq],
+            |row| row.get(0),
+        ) {
+            Ok(detail) => Ok(detail),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Err(self.missing(job, seq)?),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     pub fn last_undoable(&self, kind: &str) -> Result<Option<FinishedJob>, JournalError> {
         let row = self.db.connection().query_row(
             "SELECT id, plan, created_at, state = 'restore_pending' FROM job WHERE state IN ('done', 'restore_pending') AND kind = ?1

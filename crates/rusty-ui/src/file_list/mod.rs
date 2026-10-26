@@ -28,7 +28,7 @@ use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
 
 pub use action::{FileListAction, FilterEdit};
-pub use drop::{DropEvent, DropPayload, DropSpot};
+pub use drop::{DropEvent, DropPayload, DropSpot, ListEdge};
 pub use keys::bind_keys;
 pub(crate) use keys::{
     ClearFilter, CopyItems, EditItem, MoveItems, MultiRename, NewFile, NewFolder, OpenRow, Paste,

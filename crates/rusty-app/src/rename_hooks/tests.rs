@@ -9,6 +9,8 @@ use super::hooks;
 use crate::files::SharedDb;
 use crate::jobs::{self, SharedJournal, lock, log_factory};
 
+mod single;
+
 fn memory_journal() -> SharedJournal {
     Arc::new(Mutex::new(
         JobJournal::new(Db::open_in_memory().unwrap()).unwrap(),

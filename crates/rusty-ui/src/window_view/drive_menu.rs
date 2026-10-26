@@ -1,8 +1,13 @@
-use rusty_core::PaneId;
+use rusty_core::{Location, PaneId};
 
 use super::FerriteWindow;
-use crate::pane_chrome::{DriveMenu, DriveMenuEvent};
+use super::drag_hover::Over;
+use crate::file_list::DropPayload;
+use crate::pane_chrome::{DriveMenu, DriveMenuEvent, DrivePill};
 use crate::prelude::*;
+
+type DriveHover = Box<dyn Fn(&Location, bool, &mut Window, &mut App)>;
+type DriveDrop = Box<dyn Fn(&Location, &DropPayload, &mut Window, &mut App)>;
 
 pub(super) struct MenuState {
     pub(super) pane: PaneId,
@@ -10,6 +15,35 @@ pub(super) struct MenuState {
 }
 
 impl FerriteWindow {
+    pub(super) fn wire_drive_drops(
+        pill: DrivePill,
+        pane: PaneId,
+        cx: &mut Context<Self>,
+    ) -> DrivePill {
+        let (hover, drop) = Self::drive_landing(pane, Over::Drive, cx);
+        pill.on_hover(hover).on_drop(drop)
+    }
+
+    fn drive_landing(
+        pane: PaneId,
+        over: fn(PaneId, Location) -> Over,
+        cx: &mut Context<Self>,
+    ) -> (DriveHover, DriveDrop) {
+        let (hover, drop) = (cx.weak_entity(), cx.weak_entity());
+        let on_hover = move |root: &Location, inside, window: &mut Window, cx: &mut App| {
+            let _ = hover.update(cx, |view, cx| {
+                view.place_hover((over(pane, root.clone()), inside), window, cx);
+            });
+        };
+        let on_drop =
+            move |root: &Location, payload: &DropPayload, window: &mut Window, cx: &mut App| {
+                let _ = drop.update(cx, |view, cx| {
+                    view.drop_on((root.clone(), payload), window, cx);
+                });
+            };
+        (Box::new(on_hover), Box::new(on_drop))
+    }
+
     pub(super) fn open_drive_menu(
         &mut self,
         order: usize,
@@ -36,6 +70,20 @@ impl FerriteWindow {
         self.drive_menu = Some(MenuState { pane, selected });
         window.focus(&self.menu_focus, cx);
         cx.notify();
+    }
+
+    pub(super) fn spring_drive_menu(&mut self, pane: PaneId) {
+        let Some(session) = self.drag.session.as_mut() else {
+            return;
+        };
+        let open = self.drive_menu.as_ref().map(|menu| menu.pane);
+        if self.drives.list.is_empty() || open.is_some_and(|open| session.spring.menu != Some(open))
+        {
+            return;
+        }
+        session.spring.menu = Some(pane);
+        let selected = self.current_drive(pane).unwrap_or(0);
+        self.drive_menu = Some(MenuState { pane, selected });
     }
 
     fn menu_event(&mut self, event: DriveMenuEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -75,6 +123,7 @@ impl FerriteWindow {
                     this.menu_event(*event, window, cx);
                 }),
             );
-        Some(view.into_popover(px(0.)))
+        let (hover, drop) = Self::drive_landing(pane, Over::Menu, cx);
+        Some(view.on_hover(hover).on_drop(drop).into_popover(px(0.)))
     }
 }

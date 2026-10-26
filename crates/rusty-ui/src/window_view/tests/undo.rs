@@ -30,6 +30,7 @@ struct Record {
     plan: OperationPlan,
     done: Vec<u32>,
     undone: Vec<u32>,
+    identities: std::collections::HashMap<u32, rusty_fs::FileIdentity>,
 }
 
 #[derive(Clone, Default)]
@@ -44,12 +45,28 @@ impl Journal {
         self.book().last().map(|record| record.state)
     }
 
-    fn add(&self, plan: OperationPlan, done: Vec<u32>, state: State) {
+    fn add(&self, plan: OperationPlan, (done, state): (Vec<u32>, State), fs: &FakeFs) {
+        let identities = (0_u32..)
+            .zip(&plan.steps)
+            .filter_map(|(seq, step)| {
+                let Step::Rename { target, .. } = step else {
+                    return None;
+                };
+                done.contains(&seq)
+                    .then(|| {
+                        fs.file_identity(target)
+                            .unwrap()
+                            .map(|identity| (seq, identity))
+                    })
+                    .flatten()
+            })
+            .collect();
         self.book().push(Record {
             state,
             plan,
             done,
             undone: Vec::new(),
+            identities,
         });
     }
 
@@ -77,6 +94,7 @@ impl Journal {
     fn hooks(&self) -> RenameHooks {
         let (last, undo) = (self.clone(), self.clone());
         RenameHooks {
+            log: None,
             last: Arc::new(move || Ok(last.offer())),
             undo_log: Arc::new(move |offer: &UndoOffer| {
                 let job = usize::try_from(offer.job).map_err(|e| e.to_string())? - 1;
@@ -100,6 +118,7 @@ impl Journal {
                         plan: plan.clone(),
                         done: Vec::new(),
                         undone: Vec::new(),
+                        identities: std::collections::HashMap::new(),
                     });
                     book.len() - 1
                 };
@@ -127,6 +146,21 @@ impl Log {
 }
 
 impl JobLog for Log {
+    fn prepare_rename(
+        &mut self,
+        seq: u32,
+        identity: rusty_fs::FileIdentity,
+    ) -> Result<(), FsError> {
+        self.journal.book()[self.job]
+            .identities
+            .insert(seq, identity);
+        Ok(())
+    }
+
+    fn rename_identity(&self, seq: u32) -> Result<Option<rusty_fs::FileIdentity>, FsError> {
+        Ok(self.journal.book()[self.job].identities.get(&seq).copied())
+    }
+
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         if outcome == StepOutcome::Done {
             self.journal.book()[self.job].done.push(seq);
@@ -264,6 +298,21 @@ const RENAMED: [&str; 5] = ["docs", "d.txt", "xa.txt", "xb.txt", "xc.txt"];
 const ORIGINAL: [&str; 5] = ["docs", "a.txt", "b.txt", "c.txt", "d.txt"];
 
 #[gpui_kit::test]
+fn f2_on_one_file_can_be_undone_with_ctrl_z(cx: &mut TestAppContext) {
+    let journal = Journal::default();
+    let rig = open(cx, files(), &journal);
+    rig.press(cx, &["down", "f2", "ctrl-a"]);
+    rig.type_text(cx, "renamed.txt");
+    rig.press(cx, &["enter"]);
+    assert!(rig.listing(cx).contains(&"renamed.txt".to_owned()));
+    rig.press(cx, &["ctrl-z"]);
+    if rig.is_asking(cx) {
+        rig.press(cx, &["enter"]);
+    }
+    assert_eq!(rig.listing(cx), names(&ORIGINAL));
+}
+
+#[gpui_kit::test]
 fn ctrl_z_while_the_done_item_shows_puts_the_names_back_without_asking(cx: &mut TestAppContext) {
     let journal = Journal::default();
     let rig = open(cx, files(), &journal);
@@ -362,7 +411,7 @@ fn crashed_halfway(fs: &FakeFs, journal: &Journal) {
     let plan = plan_of(fs, &[("a.txt", "x1.txt"), ("b.txt", "x2.txt")]);
     apply(fs, &plan);
     let done = (0..u32::try_from(plan.steps.len()).expect("steps")).collect();
-    journal.add(plan, done, State::Pending);
+    journal.add(plan, (done, State::Pending), fs);
 }
 
 #[gpui_kit::test]
@@ -370,7 +419,7 @@ fn the_next_ctrl_z_asks_before_it_undoes_an_older_batch(cx: &mut TestAppContext)
     let (fs, journal) = (files(), Journal::default());
     let older = plan_of(&fs, &[("d.txt", "x9.txt")]);
     apply(&fs, &older);
-    journal.add(older, vec![0], State::Done);
+    journal.add(older, (vec![0], State::Done), &fs);
     let rig = open(cx, fs, &journal);
     rig.rename_three(cx);
     rig.press(cx, &["ctrl-z"]);
@@ -408,6 +457,7 @@ fn a_restore_pending_batch_gives_a_start_up_notice_and_ctrl_z_finishes_it(cx: &m
 #[gpui_kit::test]
 fn a_hook_error_shows_on_the_status_line(cx: &mut TestAppContext) {
     let hooks = RenameHooks {
+        log: None,
         last: Arc::new(|| Err("disk gone".to_owned())),
         ..Journal::default().hooks()
     };

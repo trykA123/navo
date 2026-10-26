@@ -355,6 +355,13 @@ cmd-multi-rename-previous-problem = Previous problem
 cmd-multi-rename-save-preset = Save a preset
 cmd-multi-rename-open-presets = Open a preset
 cmd-multi-rename-reset = Reset every field
+cmd-multi-rename-edit-names = Edit names
+cmd-multi-rename-load-names = Load names from a file
+cmd-multi-rename-paste-names = Paste names
+cmd-multi-rename-copy-names = Copy new names
+cmd-multi-rename-counter-per-folder = Restart the counter in each folder
+cmd-multi-rename-move-row-up = Move the row up
+cmd-multi-rename-move-row-down = Move the row down
 cmd-multi-rename-toggle-row = Exclude or include the row
 
 command-center-indexing = Indexing { $root } · { $count } files

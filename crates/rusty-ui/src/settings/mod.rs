@@ -2,6 +2,7 @@ mod controls;
 mod fields;
 mod find;
 mod find_bar;
+mod general_fields;
 mod row_state;
 mod search_fields;
 mod search_page;

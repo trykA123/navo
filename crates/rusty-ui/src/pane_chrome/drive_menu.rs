@@ -8,8 +8,12 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Window, deferred, div, point, px,
 };
 
+use rusty_core::Location;
+
 use super::drive_pill::{status_value, usage_bar};
 use super::drives::DriveInfo;
+use crate::drag::Landing;
+use crate::file_list::DropPayload;
 use crate::primitives::icon;
 use crate::tokens::{self, Theme};
 
@@ -41,6 +45,7 @@ pub struct DriveMenu {
     busy: Vec<char>,
     focus: Option<FocusHandle>,
     on_event: Option<EventHandler>,
+    landing: Landing<Location>,
 }
 
 impl DriveMenu {
@@ -53,6 +58,7 @@ impl DriveMenu {
             busy: Vec::new(),
             focus: None,
             on_event: None,
+            landing: Landing::default(),
         }
     }
 
@@ -77,6 +83,22 @@ impl DriveMenu {
         handler: impl Fn(&DriveMenuEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_event = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn on_drop(
+        mut self,
+        handler: impl Fn(&Location, &DropPayload, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_drop(handler);
+        self
+    }
+
+    pub fn on_hover(
+        mut self,
+        handler: impl Fn(&Location, bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.landing.on_hover(handler);
         self
     }
 
@@ -120,9 +142,21 @@ struct RowProps<'a> {
     is_current: bool,
     is_busy: bool,
     send: Option<EventHandler>,
+    landing: &'a Landing<Location>,
 }
 
 fn row(drive: &DriveInfo, props: RowProps) -> AnyElement {
+    let (landing, ring) = (props.landing, props.theme.colors.accent);
+    let el = row_body(drive, props);
+    match drive.connected {
+        true => landing
+            .accept(el, (drive.root.clone(), ring))
+            .into_any_element(),
+        false => el.into_any_element(),
+    }
+}
+
+fn row_body(drive: &DriveInfo, props: RowProps) -> impl InteractiveElement + IntoElement + use<> {
     let t = props.theme;
     let c = &t.colors;
     let index = props.index;
@@ -171,7 +205,6 @@ fn row(drive: &DriveInfo, props: RowProps) -> AnyElement {
                 .text_color(c.muted)
                 .child(drive.status()),
         )
-        .into_any_element()
 }
 
 fn shadow() -> Vec<BoxShadow> {
@@ -257,6 +290,7 @@ impl RenderOnce for DriveMenu {
                     is_current: self.current == Some(index),
                     is_busy: drive.letter.is_some_and(|l| self.busy.contains(&l)),
                     send: self.on_event.clone(),
+                    landing: &self.landing,
                 };
                 row(drive, props)
             })

@@ -405,6 +405,19 @@ fn a_done_rename_batch_names_the_undo_key() {
 }
 
 #[test]
+fn a_completed_rename_reports_a_log_failure_and_keeps_the_undo_hint() {
+    let mut activity = Activity::default();
+    activity.set_undo_key(Some("Ctrl+Z".into()));
+    let mut job = batch(1, 3);
+    job.rename.log_error = Some("disk full".into());
+    activity.sync(&[job], Instant::now());
+    let detail = primary(&activity).detail.as_deref().unwrap();
+    assert!(detail.contains("could not write rename.log: disk full"));
+    assert!(detail.ends_with("Ctrl+Z undo"));
+    assert_eq!(primary(&activity).kind, ActivityKind::Done);
+}
+
+#[test]
 fn an_undo_job_reads_as_an_undo_and_counts_what_it_left() {
     let now = Instant::now();
     let mut activity = Activity::default();

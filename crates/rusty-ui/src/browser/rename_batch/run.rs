@@ -18,9 +18,18 @@ pub(in crate::browser) fn run_batch(
         RenameOutcome::PutBack { seq, error } => {
             (JobOutcome::Failed { seq, error }, RenameReport::default())
         }
-        RenameOutcome::Stuck { error, left } => {
+        RenameOutcome::Stuck {
+            error,
+            left,
+            applied,
+        } => {
             let seq = left.first().map_or(0, |first| seq_of(plan, first));
-            let report = RenameReport { left, skipped: 0 };
+            let report = RenameReport {
+                left,
+                applied,
+                skipped: 0,
+                ..RenameReport::default()
+            };
             (JobOutcome::Failed { seq, error }, report)
         }
     }
@@ -41,6 +50,10 @@ struct Counting<'a> {
 }
 
 impl JobLog for Counting<'_> {
+    fn rename_identity(&self, seq: u32) -> Result<Option<rusty_fs::FileIdentity>, FsError> {
+        self.inner.rename_identity(seq)
+    }
+
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         self.inner.step(seq, outcome)
     }
@@ -100,7 +113,7 @@ pub(in crate::browser) fn run_undo(
         if !done.contains(&seq) {
             continue;
         }
-        let result = match still_undoable(ops, source, target) {
+        let result = match still_undoable(ops, &counting, (seq, source, target)) {
             Ok(true) => ops.rename(target, source).map(|()| StepOutcome::Done),
             Ok(false) => {
                 skipped += usize::from(is_item(step));
@@ -114,7 +127,11 @@ pub(in crate::browser) fn run_undo(
         }
     }
     let (left, unsure) = left_under_temporary_names(plan, ops);
-    let report = RenameReport { left, skipped };
+    let report = RenameReport {
+        left,
+        skipped,
+        ..RenameReport::default()
+    };
     let outcome = first.or(unsure).unwrap_or(JobOutcome::Done);
     (outcome, report)
 }
@@ -144,10 +161,33 @@ fn is_there(ops: &dyn ProviderOps, location: &Location) -> Result<bool, FsError>
 
 fn still_undoable(
     ops: &dyn ProviderOps,
-    source: &Location,
-    target: &Location,
+    log: &Counting<'_>,
+    (seq, source, target): (u32, &Location, &Location),
 ) -> Result<bool, FsError> {
-    Ok(is_there(ops, target)? && !is_there(ops, source)?)
+    if !is_there(ops, target)? {
+        return Ok(false);
+    }
+    let identity = log.rename_identity(seq)?;
+    let matches = ops.matches_identity(target, identity)?;
+    if !matches
+        && identity
+            .is_some_and(|identity| identity.kind == rusty_fs::FileIdentityKind::WindowsIndex)
+    {
+        return Err(FsError {
+            location: Some(target.clone()),
+            ..FsError::new(FsErrorKind::IdentityUnavailable)
+        });
+    }
+    if is_there(ops, source)?
+        && !log
+            .plan
+            .steps
+            .iter()
+            .any(|step| matches!(step, Step::Rename { target, .. } if target.same_place(source)))
+    {
+        return Ok(false);
+    }
+    Ok(matches)
 }
 
 fn left_under_temporary_names(

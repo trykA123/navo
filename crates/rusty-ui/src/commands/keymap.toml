@@ -912,6 +912,34 @@ keys = ["ctrl-r"]
 # MultiRenamePreview
 
 [[bind]]
+command = "multi_rename.edit_names"
+keys = ["ctrl-e"]
+
+[[bind]]
+command = "multi_rename.load_names"
+keys = ["ctrl-shift-o"]
+
+[[bind]]
+command = "multi_rename.paste_names"
+keys = ["ctrl-shift-v"]
+
+[[bind]]
+command = "multi_rename.copy_names"
+keys = ["ctrl-shift-c"]
+
+[[bind]]
+command = "multi_rename.counter_per_folder"
+keys = ["ctrl-shift-f"]
+
+[[bind]]
+command = "multi_rename.move_row_up"
+keys = ["ctrl-shift-up"]
+
+[[bind]]
+command = "multi_rename.move_row_down"
+keys = ["ctrl-shift-down"]
+
+[[bind]]
 command = "multi_rename.toggle_row"
 keys = ["delete"]
 

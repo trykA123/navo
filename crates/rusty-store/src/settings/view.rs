@@ -98,6 +98,7 @@ impl Default for PreviewView {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Automotive {
+    pub modules: Vec<String>,
     pub view: AutomotiveView,
 }
 

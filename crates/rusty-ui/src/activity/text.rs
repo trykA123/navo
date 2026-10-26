@@ -202,7 +202,17 @@ pub(super) fn done_detail(job: &JobInfo, undo_key: Option<&SharedString>) -> Opt
         return None;
     }
     if !job.rename.undo {
-        return undo_key.map(|key| t!("activity-undo-hint", key = key.to_string()));
+        let parts: Vec<_> = [
+            job.rename
+                .log_error
+                .as_ref()
+                .map(|error| t!("activity-rename-log-failed", error = error.to_string())),
+            undo_key.map(|key| t!("activity-undo-hint", key = key.to_string())),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        return (!parts.is_empty()).then(|| parts.join(" · "));
     }
     let skipped = u64::try_from(job.rename.skipped).unwrap_or(u64::MAX);
     let parts: Vec<String> = [

@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    App, Div, DragMoveEvent, Entity, ExternalPaths, InteractiveElement, MouseButton, Stateful,
-    StatefulInteractiveElement, Styled, Window, div,
+    App, Bounds, Div, DragMoveEvent, Entity, ExternalDragPayload, ExternalPaths,
+    InteractiveElement, MouseButton, Pixels, Point, Stateful, StatefulInteractiveElement, Styled,
+    Window, div, px,
 };
 use rusty_core::PaneId;
 use rusty_fs::EntryKind;
@@ -14,8 +15,18 @@ use crate::drag::{DragBadge, FileDrag};
 use crate::tokens::Theme;
 
 type DragStartHandler = Rc<dyn Fn(&FileDrag, &mut Window, &mut App) -> Entity<DragBadge>>;
+type DragOutHandler = Rc<dyn Fn(&FileDrag, &mut Window, &mut App) -> Option<ExternalDragPayload>>;
 type DropHandler = Rc<dyn Fn(&DropEvent, &mut Window, &mut App)>;
 type HoverHandler = Rc<dyn Fn(&Option<DropSpot>, &mut Window, &mut App)>;
+type EdgeHandler = Rc<dyn Fn(&Option<ListEdge>, &mut Window, &mut App)>;
+
+const EDGE_BAND: f32 = 24.;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListEdge {
+    Top,
+    Bottom,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DropPayload {
@@ -40,8 +51,10 @@ pub struct DropEvent {
 pub(super) struct Wiring {
     pane: Option<PaneId>,
     on_drag_start: Option<DragStartHandler>,
+    on_drag_out: Option<DragOutHandler>,
     on_drop: Option<DropHandler>,
     on_hover: Option<HoverHandler>,
+    on_edge: Option<EdgeHandler>,
 }
 
 impl FileList {
@@ -61,6 +74,15 @@ impl FileList {
     }
 
     #[must_use]
+    pub fn on_drag_out(
+        mut self,
+        handler: impl Fn(&FileDrag, &mut Window, &mut App) -> Option<ExternalDragPayload> + 'static,
+    ) -> Self {
+        self.drag.on_drag_out = Some(Rc::new(handler));
+        self
+    }
+
+    #[must_use]
     pub fn on_drop(
         mut self,
         handler: impl Fn(&DropEvent, &mut Window, &mut App) + 'static,
@@ -75,6 +97,15 @@ impl FileList {
         handler: impl Fn(&Option<DropSpot>, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.drag.on_hover = Some(Rc::new(handler));
+        self
+    }
+
+    #[must_use]
+    pub fn on_edge(
+        mut self,
+        handler: impl Fn(&Option<ListEdge>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.drag.on_edge = Some(Rc::new(handler));
         self
     }
 }
@@ -142,6 +173,7 @@ pub(super) fn grip(ctx: &Rc<ListContext>, row: u64) -> Stateful<Div> {
     let name = ctx.name_at(row);
     let (state, pressed) = (ctx.state.clone(), ctx.state.clone());
     let press_name = name.clone();
+    let outgoing = ctx.drag.on_drag_out.clone();
     grip.on_mouse_down(MouseButton::Left, move |_, _, cx| {
         let name = press_name.clone();
         pressed.update(cx, |state, _| state.pressed_name = Some(name));
@@ -160,6 +192,9 @@ pub(super) fn grip(ctx: &Rc<ListContext>, row: u64) -> Stateful<Div> {
             window,
             cx,
         )
+    })
+    .external_drag_payload(move |drag: &FileDrag, window, cx| {
+        outgoing.as_ref()?.as_ref()(drag, window, cx)
     })
 }
 
@@ -203,6 +238,25 @@ fn hover_area<T: 'static>(
     }
 }
 
+fn edge_of(bounds: Bounds<Pixels>, at: Point<Pixels>) -> Option<ListEdge> {
+    let band = px(EDGE_BAND);
+    if !bounds.contains(&at) {
+        None
+    } else if at.y < bounds.top() + band {
+        Some(ListEdge::Top)
+    } else if at.y > bounds.bottom() - band {
+        Some(ListEdge::Bottom)
+    } else {
+        None
+    }
+}
+
+fn edge_area(handler: EdgeHandler) -> impl Fn(&DragMoveEvent<FileDrag>, &mut Window, &mut App) {
+    move |event, window, cx| {
+        handler(&edge_of(event.bounds, event.event.position), window, cx);
+    }
+}
+
 pub(super) fn target(
     cell: Stateful<Div>,
     ctx: &Rc<ListContext>,
@@ -235,6 +289,10 @@ pub(super) fn background(area: Div, ctx: &Rc<ListContext>) -> Div {
         drops::<ExternalPaths, _>(drops::<FileDrag, _>(area, ctx, &spot), ctx, &spot)
     } else {
         area
+    };
+    let area = match ctx.drag.on_edge.clone() {
+        Some(handler) if ctx.accepts() => area.on_drag_move(edge_area(handler)),
+        _ => area,
     };
     if !ctx.hovers() {
         return area;

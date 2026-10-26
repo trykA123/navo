@@ -6472,6 +6472,7 @@ dependencies = [
  "chrono",
  "embed-resource",
  "encoding_rs",
+ "gpui-pre-windows",
  "insta",
  "rusty-cache",
  "rusty-core",

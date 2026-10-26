@@ -19,6 +19,7 @@ folders-first = true
 sort = "name"
 sort-descending = false
 drop-confirm = "never"
+rename-log = false
 
 [selection]
 space-measures-folders = true
@@ -69,6 +70,9 @@ exclude = ["$Recycle.Bin", "System Volume Information"]
 network = false
 removable = false
 remember = true
+
+[automotive]
+modules = []
 
 [automotive.view]
 preset = "simple"

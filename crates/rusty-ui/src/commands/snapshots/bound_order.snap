@@ -98,6 +98,13 @@ multi_rename.previous_problem | alt-up | MultiRename
 multi_rename.save_preset | ctrl-s | MultiRename
 multi_rename.open_presets | ctrl-o | MultiRename
 multi_rename.reset | ctrl-r | MultiRename
+multi_rename.edit_names | ctrl-e | MultiRename
+multi_rename.load_names | ctrl-shift-o | MultiRename
+multi_rename.paste_names | ctrl-shift-v | MultiRename
+multi_rename.copy_names | ctrl-shift-c | MultiRename
+multi_rename.counter_per_folder | ctrl-shift-f | MultiRename
+multi_rename.move_row_up | ctrl-shift-up | MultiRenamePreview
+multi_rename.move_row_down | ctrl-shift-down | MultiRenamePreview
 multi_rename.toggle_row | delete | MultiRenamePreview
 [app_menu]
 app_menu.toggle | f10 | global

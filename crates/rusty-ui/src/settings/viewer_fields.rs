@@ -1,6 +1,6 @@
 use super::fields::{Control, F, FieldSpec, Look, PRESETS, S, SYNTAX_THEMES, spec};
 
-pub(super) const VIEWER_FIELDS: [FieldSpec; 14] = [
+pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
     spec(
         (F::TextLineNumbers, S::Display, "text.view.line-numbers"),
         (
@@ -120,5 +120,10 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 14] = [
         (F::AutomotiveWhoUses, S::Display, "automotive.view.who-uses"),
         ("settings-who-uses", "settings-who-uses-help"),
         Control::Toggle,
+    ),
+    spec(
+        (F::AutomotiveModules, S::Display, "automotive.modules"),
+        ("settings-module-prefixes", "settings-module-prefixes-help"),
+        Control::Text,
     ),
 ];

@@ -5,7 +5,7 @@ use super::ops::{Log, child};
 use super::*;
 use crate::job::{JobContext, Progress, RenameOutcome, run_rename};
 
-fn rename_all(root: &Location, pairs: &[(&str, &str)]) -> RenameOutcome {
+pub(super) fn rename_all(root: &Location, pairs: &[(&str, &str)]) -> RenameOutcome {
     let ops = LocalFs::new();
     let rows: Vec<Row> = pairs
         .iter()

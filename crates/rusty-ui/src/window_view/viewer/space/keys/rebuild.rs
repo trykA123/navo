@@ -72,7 +72,7 @@ fn model(mdf: &str) -> RichModel {
         mdf: Some(parse_mdf(mdf)),
         ..Siblings::default()
     };
-    build_model(&elf(), None, &siblings, None)
+    build_model(&elf(), None, &siblings, Default::default())
 }
 
 fn install(cx: &mut TestAppContext, host: &Entity<Host>, mdf: &str) {

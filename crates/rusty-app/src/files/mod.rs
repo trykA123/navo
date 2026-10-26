@@ -12,6 +12,7 @@ use rusty_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError, Sav
 
 mod archive;
 mod code_page;
+mod companions;
 mod memory;
 mod paged;
 mod pdf;
@@ -26,6 +27,7 @@ pub(crate) use memory::{lock, now_ms};
 
 pub fn hooks(db: Option<SharedDb>) -> FileHooks {
     let hooks = FileHooks {
+        companions: Arc::new(companions::names),
         read: Arc::new(read),
         read_as: Arc::new(read_as),
         write: Arc::new(write),

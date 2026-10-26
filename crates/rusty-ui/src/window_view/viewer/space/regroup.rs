@@ -14,7 +14,7 @@ pub(in crate::window_view::viewer) fn regrouped(
     };
     let by = GroupBy {
         grouping,
-        modules: &[],
+        modules: &model.modules,
     };
     let region = model.flash.and_then(|at| model.regions.get(at));
     RichModel {
@@ -30,5 +30,6 @@ pub(in crate::window_view::viewer) fn regrouped(
         stripped: model.stripped,
         from_map: model.from_map,
         boundaries: model.boundaries.clone(),
+        modules: model.modules.clone(),
     }
 }

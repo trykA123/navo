@@ -354,7 +354,14 @@ multi_rename.previous_problem | Previous problem | MultiRename
 multi_rename.save_preset | Save a preset | MultiRename
 multi_rename.open_presets | Open a preset | MultiRename
 multi_rename.reset | Reset every field | MultiRename
+multi_rename.edit_names | Edit names | MultiRename
+multi_rename.load_names | Load names from a file | MultiRename
+multi_rename.paste_names | Paste names | MultiRename
+multi_rename.copy_names | Copy new names | MultiRename
+multi_rename.counter_per_folder | Restart the counter in each folder | MultiRename
 multi_rename.toggle_row | Exclude or include the row | MultiRenamePreview
+multi_rename.move_row_up | Move the row up | MultiRenamePreview
+multi_rename.move_row_down | Move the row down | MultiRenamePreview
 window.new | New window | global
 workspace.list | Workspaces | global
 help.key_map | Help and key map | global

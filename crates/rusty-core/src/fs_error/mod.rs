@@ -13,6 +13,7 @@ pub enum FsErrorKind {
     Timeout,
     Cancelled,
     NotSupportedYet,
+    IdentityUnavailable,
     Unknown,
 }
 
@@ -116,7 +117,9 @@ impl FsError {
             FsErrorKind::NetworkLost => &[Reconnect, Retry, Cancel],
             FsErrorKind::Timeout => &[Retry, Cancel],
             FsErrorKind::Cancelled => &[],
-            FsErrorKind::NotSupportedYet => &[Skip, SkipAll, Cancel],
+            FsErrorKind::NotSupportedYet | FsErrorKind::IdentityUnavailable => {
+                &[Skip, SkipAll, Cancel]
+            }
             FsErrorKind::Unknown => &[Retry, Skip, Cancel],
         }
     }
@@ -174,6 +177,9 @@ fn with_location(kind: FsErrorKind, place: &str) -> String {
         FsErrorKind::NotSupportedYet => {
             format!("This is not supported yet for \u{201c}{place}\u{201d}.")
         }
+        FsErrorKind::IdentityUnavailable => {
+            format!("This drive cannot confirm file identity for “{place}”.")
+        }
         FsErrorKind::Unknown => format!("Something went wrong with \u{201c}{place}\u{201d}."),
     }
 }
@@ -191,6 +197,7 @@ fn without_location(kind: FsErrorKind) -> &'static str {
         FsErrorKind::Timeout => "The operation took too long.",
         FsErrorKind::Cancelled => "The operation was cancelled.",
         FsErrorKind::NotSupportedYet => "This is not supported yet.",
+        FsErrorKind::IdentityUnavailable => "This drive cannot confirm file identity.",
         FsErrorKind::Unknown => "Something went wrong.",
     }
 }

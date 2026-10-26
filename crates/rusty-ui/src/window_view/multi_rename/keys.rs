@@ -60,6 +60,14 @@ impl FerriteWindow {
                 .on_action(cx.listener(|view, _: &mr::ToggleRow, window, cx| {
                     view.toggle_cursor_row(window, cx);
                 }))
+                .on_action(cx.listener(|view, _: &mr::MoveRowUp, window, cx| {
+                    view.move_rename_row(false, window, cx)
+                }))
+                .on_action(cx.listener(|view, _: &mr::MoveRowDown, window, cx| {
+                    view.move_rename_row(true, window, cx)
+                }))
+                .flex_col()
+                .children(self.rename_names_editor(cx))
                 .child(open.view.clone()),
         )
     }
@@ -75,6 +83,7 @@ impl FerriteWindow {
         let fields = self.with_field_menu(fields, cx);
         let preview = self.rename_preview_area(window, cx)?;
         let panel = RenamePanel::new(open.title.clone(), fields, preview)
+            .tools(self.rename_tools(cx))
             .problems_only(open.form.problems_only)
             .on_problems_only({
                 let weak = cx.weak_entity();
@@ -98,7 +107,8 @@ impl FerriteWindow {
             .key_context(contexts(&["MultiRename", "Dialog"]))
             .track_focus(&open.root)
             .child(panel);
-        Some(Self::rename_actions(root, cx).into_any_element())
+        let root = Self::rename_actions(root, cx);
+        Some(Self::rename_name_actions(root, cx).into_any_element())
     }
 
     fn rename_actions(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -221,6 +231,9 @@ impl FerriteWindow {
             return;
         };
         let mut stops = inputs::stops(&open.inputs, cx);
+        if let Some(editor) = &open.names {
+            stops.push(editor.input.read(cx).focus_handle(cx));
+        }
         stops.push(open.preview_focus.clone());
         dialog_focus::cycle(&stops, forward, window, cx);
         cx.notify();
@@ -231,6 +244,7 @@ impl FerriteWindow {
             return;
         };
         open.form.reset();
+        open.names = None;
         inputs::fill(&open.inputs, &open.form.rules, window, cx);
         self.rules_changed(window, cx);
     }

@@ -22,6 +22,7 @@ pub enum Shows {
     Files,
     Background,
     EmptyFolder,
+    Drop,
 }
 
 const FOLDER_ROWS: usize = 6;
@@ -71,9 +72,16 @@ impl MenuPage {
         FileList::new("menu-page-list", props).track_focus(&self.focus)
     }
 
-    fn build(&self, window: &mut Window, cx: &mut Context<Self>) -> Entity<ContextMenu> {
+    fn menu_input(&self, window: &Window, cx: &App) -> ContextMenuInput {
         let color = tokens::current(cx).colors.kind_archive;
         let (menu, context, anchor) = match self.shows {
+            Shows::Drop => (
+                rusty_core::shell_menu::ShellMenu {
+                    items: rusty_ui::window_view::drop_items(|_| true),
+                },
+                "Projects",
+                Point::new(px(420.), px(300.)),
+            ),
             Shows::Background => (
                 menu_sample::folder_menu(),
                 "commander · 6 items",
@@ -95,17 +103,25 @@ impl MenuPage {
                 Point::new(px(300.), px(360.)),
             ),
         };
-        let input = ContextMenuInput {
+        ContextMenuInput {
             menu,
             context: context.into(),
             anchor,
             bounds: Bounds::new(Point::default(), window.viewport_size()),
             restore: Some(self.focus.clone()),
-        };
+        }
+    }
+
+    fn build(&self, window: &mut Window, cx: &mut Context<Self>) -> Entity<ContextMenu> {
+        let input = self.menu_input(window, cx);
         let shows = self.shows;
         cx.new(|cx| {
             let mut menu = ContextMenu::new(input, window, cx);
             match shows {
+                Shows::Drop => {
+                    menu.hide_classic(cx);
+                    menu.name_ferrite_group("Drop files", cx);
+                }
                 Shows::SevenZip => menu.open_submenu(&[SEVEN_ZIP], cx),
                 Shows::EmptyFolder => menu.open_submenu(&[NEW], cx),
                 Shows::Filter => menu.set_query("ext", window, cx),

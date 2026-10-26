@@ -40,8 +40,8 @@ pub use paged::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
 };
 pub use provider::{
-    Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider,
-    ProviderOps,
+    Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FileIdentity, FileIdentityKind,
+    FsEntry, ListSink, Provider, ProviderOps,
 };
 pub use scan::{existing_at, scan};
 pub use snapshot::{FolderSnapshot, load_folder, load_folder_reporting};

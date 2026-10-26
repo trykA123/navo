@@ -13,6 +13,18 @@ use crate::{CancelToken, ProviderOps};
 const CHUNK: usize = 1 << 20;
 
 impl ProviderOps for LocalFs {
+    fn supports_atomic_rename(&self) -> bool {
+        cfg!(any(windows, target_os = "linux"))
+    }
+    fn rename_atomic(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        super::platform::rename_atomic(&os_path(source)?, &os_path(target)?)
+            .map_err(|error| io_error(&error, source))
+    }
+
+    fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
+        super::identity::read(&os_path(location)?).map_err(|error| io_error(&error, location))
+    }
+
     fn create_folder(&self, location: &Location) -> Result<(), FsError> {
         let path = os_path(location)?;
         fs::create_dir(&path).map_err(|e| io_error(&e, location))

@@ -5,6 +5,7 @@ use rusty_fs::{Attributes, EntryKind, FsEntry};
 use rusty_ui::multi_rename::view::fields::{
     FieldInputs, FieldMenu, Fields, Mask, MenuRow, MenuSlot, menu_tokens,
 };
+use rusty_ui::multi_rename::view::{TextareaState, name_editor, name_tools};
 use rusty_ui::multi_rename::{
     Form, Item, Listing, Preview, PreviewView, RenamePanel, Shown, rename_title, scrim,
 };
@@ -87,6 +88,7 @@ pub struct MultiRenameToolPage {
     rules: RenameRules,
     count: usize,
     has_menu: bool,
+    names: Entity<TextareaState>,
 }
 
 impl MultiRenameToolPage {
@@ -103,6 +105,13 @@ impl MultiRenameToolPage {
         });
         let view = cx.new(|cx| PreviewView::new(window, cx));
         let compiled = form.compile().ok();
+        let text = preview
+            .rows
+            .iter()
+            .map(|row| row.new.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let names = cx.new(|cx| TextareaState::new(window, cx).default_value(text));
         view.update(cx, |view, cx| {
             view.set_preview(
                 Shown {
@@ -111,6 +120,7 @@ impl MultiRenameToolPage {
                     fold: Fold::Exact,
                     problems_only: false,
                     matcher: compiled.as_ref(),
+                    edited: false,
                 },
                 cx,
             );
@@ -124,6 +134,7 @@ impl MultiRenameToolPage {
             rules: form.rules,
             count: items.len(),
             has_menu,
+            names,
         }
     }
 
@@ -142,7 +153,7 @@ impl MultiRenameToolPage {
 }
 
 impl Render for MultiRenameToolPage {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut fields = Fields::new("tool-fields", &self.inputs, &self.rules);
         if self.has_menu {
             fields = fields.menu(MenuSlot::Mask(Mask::Name), self.menu());
@@ -151,8 +162,17 @@ impl Render for MultiRenameToolPage {
         let panel = RenamePanel::new(
             title,
             fields,
-            div().flex().flex_1().min_w_0().child(self.view.clone()),
-        );
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w_0()
+                .when(!self.has_menu, |area| {
+                    area.child(name_editor(&self.names, None, cx))
+                })
+                .child(self.view.clone()),
+        )
+        .tools(name_tools(false, cx));
         div()
             .relative()
             .flex()

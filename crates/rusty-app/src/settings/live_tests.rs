@@ -16,6 +16,16 @@ const NORMAL: &str = "# mine\n[appearance]\ndensity = \"normal\"\n";
 const COMPACT: &str = "# mine\n[appearance]\ndensity = \"compact\"\n";
 const BROKEN: &str = "# mine\n[appearance]\ndensity = \n";
 
+#[test]
+fn module_prefixes_and_rename_logging_follow_live_settings() {
+    let live = live_on("[automotive]\nmodules = [\"Com\"]\n");
+    assert_eq!(live.hooks.values.module_prefixes(), ["Com"]);
+    live.write("[automotive]\nmodules = [\"Dio_Cfg\"]\n[files]\nrename-log = true\n");
+    let values = applied(live.next());
+    assert_eq!(values.module_prefixes(), ["Dio_Cfg"]);
+    assert!(values.flag(rusty_ui::settings::Field::RenameLog));
+}
+
 struct Live {
     _dir: tempfile::TempDir,
     path: PathBuf,

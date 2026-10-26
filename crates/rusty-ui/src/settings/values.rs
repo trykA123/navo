@@ -291,6 +291,18 @@ impl Values {
         self.is_shown(Some(Field::AutomotivePreset), Field::AutomotiveInspector)
     }
 
+    pub fn module_prefixes(&self) -> Vec<String> {
+        match self.get(Field::AutomotiveModules) {
+            Value::Text(text) => text
+                .split(',')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     pub fn quick(&self) -> QuickSettings {
         QuickSettings {
             theme: self.theme(),

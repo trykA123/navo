@@ -14,6 +14,13 @@ gpui_kit::actions!(
         OpenPresets,
         Reset,
         ToggleRow,
+        EditNames,
+        LoadNames,
+        PasteNames,
+        CopyNames,
+        CounterPerFolder,
+        MoveRowUp,
+        MoveRowDown,
     ]
 );
 

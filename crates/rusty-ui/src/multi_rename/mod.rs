@@ -8,7 +8,7 @@ pub mod texts;
 pub mod view;
 
 pub use errors::{counter_error, field_errors};
-pub use form::Form;
+pub use form::{Form, NameCount};
 pub use highlight::{changed_ranges, is_long_path};
 pub use item::Item;
 pub use keys::bind_keys;

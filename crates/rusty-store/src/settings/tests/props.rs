@@ -59,6 +59,7 @@ fn files() -> impl Strategy<Value = Files> {
         sort,
         sort_descending: descending,
         drop_confirm: DropConfirm::default(),
+        rename_log: false,
     })
 }
 
@@ -80,6 +81,7 @@ fn automotive() -> impl Strategy<Value = Automotive> {
                 who_uses,
             ],
         )| Automotive {
+            modules: vec!["Com".to_owned(), "Dio_Cfg".to_owned()],
             view: AutomotiveView {
                 preset,
                 inspector,

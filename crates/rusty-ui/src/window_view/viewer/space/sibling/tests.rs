@@ -51,8 +51,15 @@ impl Folder {
 
     fn hooks(&self) -> FileHooks {
         let files = Arc::new(self.files.clone());
+        let candidates = files.clone();
         let (heads, wholes, reads) = (files.clone(), files, self.reads.clone());
         FileHooks {
+            companions: Arc::new(move |folder, _| {
+                Ok(candidates
+                    .keys()
+                    .filter_map(|path| name_in(path, folder))
+                    .collect())
+            }),
             head: Arc::new(move |location| match heads.get(location.as_str()) {
                 Some(Entry::Text(text) | Entry::Broken(text)) => Ok(Head {
                     bytes: text.as_bytes().iter().copied().take(8192).collect(),
@@ -92,6 +99,14 @@ impl Folder {
     }
 }
 
+fn name_in(path: &str, folder: &Location) -> Option<rusty_core::ProviderPath> {
+    let location = Location::new(path).ok()?;
+    if location.parent().as_ref() != Some(folder) {
+        return None;
+    }
+    location.name()
+}
+
 fn stem(name: &str) -> Stem {
     stem_of(&Location::new(format!("/work/{name}")).expect("location")).expect("stem")
 }
@@ -103,6 +118,124 @@ fn load_with_elf(folder: &Folder, open: &str) -> Siblings {
 
 fn load(folder: &Folder, open: &str) -> Siblings {
     load_siblings(&folder.hooks(), Some(&stem(open)), &AtomicBool::new(false))
+}
+
+#[test]
+fn the_only_mdf_with_a_different_stem_is_used() {
+    let folder = Folder::default().with("memory.mdf", Entry::Text(MDF));
+    let siblings = load(&folder, "demo.elf");
+    assert!(siblings.mdf.is_some());
+    assert_eq!(siblings.names.mdf.as_deref(), Some("memory.mdf"));
+    assert!(siblings.names.only_mdf);
+}
+
+#[test]
+fn the_only_map_with_a_different_stem_is_used() {
+    let folder = Folder::default().with("build.map", Entry::Text(SAMPLE));
+    let siblings = load(&folder, "demo.elf");
+    assert!(siblings.map.is_some());
+    assert_eq!(siblings.names.map.as_deref(), Some("build.map"));
+    assert!(siblings.names.only_map);
+}
+
+#[test]
+fn several_companions_with_the_same_extension_are_ambiguous() {
+    let folder = Folder::default()
+        .with("one.mdf", Entry::Text(MDF))
+        .with("two.MDF", Entry::Text(MDF));
+    let siblings = load(&folder, "demo.elf");
+    assert!(siblings.mdf.is_none());
+    assert!(folder.reads().is_empty());
+}
+
+#[test]
+fn the_same_stem_wins_over_other_companions() {
+    let folder = Folder::default()
+        .with("demo.mdf", Entry::Text(MDF))
+        .with("other.mdf", Entry::Text(MDF));
+    let siblings = load(&folder, "demo.elf");
+    assert_eq!(siblings.names.mdf.as_deref(), Some("demo.mdf"));
+    assert!(!siblings.names.only_mdf);
+}
+
+#[test]
+fn an_oversized_fallback_is_refused_before_the_body_is_read() {
+    let folder = Folder::default().with("memory.mdf", Entry::Sized(MDF_LIMIT + 1));
+    let siblings = load(&folder, "demo.elf");
+    assert!(siblings.mdf.is_none());
+    assert!(matches!(
+        siblings.problems.as_slice(),
+        [SiblingProblem::TooLarge { .. }]
+    ));
+    assert!(folder.reads().is_empty());
+}
+
+#[test]
+fn a_fallback_from_another_toolchain_is_refused_before_the_body_is_read() {
+    let folder = Folder::default().with("build.map", Entry::Text(GNU_MAP));
+    let siblings = load(&folder, "demo.elf");
+    assert!(siblings.map.is_none());
+    assert!(matches!(
+        siblings.problems.as_slice(),
+        [SiblingProblem::NotRecognised { .. }]
+    ));
+    assert!(folder.reads().is_empty());
+}
+
+#[test]
+fn a_different_stem_elf_is_never_guessed() {
+    let folder = Folder::default().with("other.elf", Entry::Binary(tiny_elf()));
+    assert!(load_with_elf(&folder, "demo.map").elf.is_none());
+    assert!(folder.reads().is_empty());
+}
+
+#[test]
+fn cancellation_during_a_folder_scan_stops_before_any_body_is_read() {
+    let folder = Folder::default().with("memory.mdf", Entry::Text(MDF));
+    let cancel = Arc::new(AtomicBool::new(false));
+    let during = cancel.clone();
+    let hooks = FileHooks {
+        companions: Arc::new(move |_, _| {
+            during.store(true, std::sync::atomic::Ordering::Relaxed);
+            Ok(vec![rusty_core::ProviderPath::from_text("memory.mdf")])
+        }),
+        ..folder.hooks()
+    };
+    let siblings = load_siblings(&hooks, Some(&stem("demo.elf")), &cancel);
+    assert!(siblings.mdf.is_none());
+    assert!(folder.reads().is_empty());
+}
+
+#[test]
+fn both_fallbacks_share_one_folder_scan() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let folder = Folder::default()
+        .with("memory.mdf", Entry::Text(MDF))
+        .with("build.map", Entry::Text(SAMPLE));
+    let mut hooks = folder.hooks();
+    let list = hooks.companions.clone();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counted = calls.clone();
+    hooks.companions = Arc::new(move |folder, cancel| {
+        counted.fetch_add(1, Ordering::Relaxed);
+        list(folder, cancel)
+    });
+    let siblings = load_siblings(&hooks, Some(&stem("demo.elf")), &AtomicBool::new(false));
+    assert!(siblings.mdf.is_some() && siblings.map.is_some());
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn a_cancelled_lookup_reads_no_companions() {
+    let folder = Folder::default().with("demo.mdf", Entry::Text(MDF));
+    let siblings = load_siblings(
+        &folder.hooks(),
+        Some(&stem("demo.elf")),
+        &AtomicBool::new(true),
+    );
+    assert!(siblings.mdf.is_none());
+    assert!(folder.reads().is_empty());
 }
 
 #[test]
@@ -202,7 +335,7 @@ fn an_unreadable_sibling_counts_as_absent() {
 
 #[test]
 fn no_sibling_gives_nothing_and_no_problem() {
-    let folder = Folder::default().with("other.map", Entry::Text(SAMPLE));
+    let folder = Folder::default().with("other.txt", Entry::Text(SAMPLE));
     let siblings = load(&folder, "demo.elf");
     assert!(siblings.mdf.is_none() && siblings.map.is_none());
     assert_eq!(siblings.names, super::SiblingNames::default());

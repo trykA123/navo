@@ -6,6 +6,177 @@ use crate::RenameOutcome;
 
 const SEED: u32 = 7;
 
+#[test]
+fn an_unproved_volume_renames_without_a_proved_identity() {
+    let (fs, plan) = simple();
+    fs.set_volume_serial("d", None);
+    assert_eq!(run_batch(&fs, &plan), RenameOutcome::Done);
+    assert_eq!(names(&fs), ["x", "y", "z"]);
+}
+
+#[test]
+fn an_unproved_rollback_puts_back_items_whose_fingerprint_still_matches() {
+    let (fs, plan) = simple();
+    fs.set_volume_serial("d", None);
+    fs.fault(
+        &sources(&plan)[1],
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    let outcome = run_batch(&fs, &plan);
+    assert!(matches!(outcome, RenameOutcome::PutBack { seq: 1, .. }));
+    assert_eq!(names(&fs), ["a", "b", "c"]);
+}
+
+#[test]
+fn an_unproved_rollback_leaves_a_changed_target_where_it_is() {
+    let (fs, plan) = simple();
+    fs.set_volume_serial("d", None);
+    fs.fault(
+        &sources(&plan)[1],
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    let target = fs.location(&targets(&plan)[0]);
+    let mut changed = false;
+    let outcome = crate::run_rename(
+        &plan,
+        &mut JobContext {
+            ops: &fs,
+            log: &mut Log::default(),
+            cancel: &CancelToken::new(),
+            progress: &mut |_| {
+                if !changed && fs.metadata(&target).is_ok() {
+                    changed = true;
+                    let mut entry = fs.metadata(&target).unwrap();
+                    entry.modified_ms = Some(2_000);
+                    fs.remove(&target.path().to_text());
+                    fs.add_entry("d", entry);
+                }
+            },
+        },
+    );
+    assert!(
+        matches!(outcome, RenameOutcome::Stuck { error, .. } if error.kind == FsErrorKind::IdentityUnavailable)
+    );
+    assert_eq!(fs.metadata(&target).unwrap().modified_ms, Some(2_000));
+}
+
+const HOUR_MS: i64 = 3_600_000;
+
+fn stamp(fs: &FakeFs, path: &str, size: u64, modified_ms: i64) {
+    let location = fs.location(path);
+    let mut entry = fs.metadata(&location).unwrap();
+    entry.size = size;
+    entry.modified_ms = Some(modified_ms);
+    fs.remove(path);
+    fs.add_entry(
+        path.rsplit_once('/').map_or("", |(folder, _)| folder),
+        entry,
+    );
+}
+
+fn fingerprint_matches(fs: &FakeFs, path: &str, expected: Option<FileIdentity>) -> bool {
+    fs.matches_identity(&fs.location(path), expected).unwrap()
+}
+
+#[test]
+fn a_fingerprint_survives_a_daylight_saving_shift_of_exactly_one_hour() {
+    let fs = files(&["a"]);
+    stamp(&fs, "d/a", 10, 5 * HOUR_MS);
+    let saved = Some(FileIdentity::fingerprint(
+        &fs.metadata(&fs.location("d/a")).unwrap(),
+    ));
+    for shifted in [6 * HOUR_MS, 4 * HOUR_MS] {
+        stamp(&fs, "d/a", 10, shifted);
+        assert!(fingerprint_matches(&fs, "d/a", saved), "{shifted}");
+    }
+}
+
+#[test]
+fn a_fingerprint_refuses_other_time_shifts_and_any_size_change() {
+    let fs = files(&["a"]);
+    stamp(&fs, "d/a", 10, 5 * HOUR_MS);
+    let saved = Some(FileIdentity::fingerprint(
+        &fs.metadata(&fs.location("d/a")).unwrap(),
+    ));
+    for (size, modified_ms) in [
+        (10, 5 * HOUR_MS + HOUR_MS / 2),
+        (10, 5 * HOUR_MS + 2 * HOUR_MS),
+        (10, 5 * HOUR_MS + HOUR_MS + 1),
+        (11, 6 * HOUR_MS),
+        (11, 5 * HOUR_MS),
+    ] {
+        stamp(&fs, "d/a", size, modified_ms);
+        assert!(
+            !fingerprint_matches(&fs, "d/a", saved),
+            "{size} {modified_ms}"
+        );
+    }
+}
+
+fn inode_of(fs: &FakeFs, path: &str) -> Option<[u8; 16]> {
+    let identity = fs.file_identity(&fs.location(path)).ok().flatten();
+    identity.map(|identity| identity.file)
+}
+
+#[test]
+fn identical_fingerprints_on_an_unproved_volume_roll_back_swaps_and_cycles() {
+    let cases: [&[(&str, &str)]; 2] = [
+        &[("a", "b"), ("b", "a")],
+        &[("a", "b"), ("b", "c"), ("c", "a")],
+    ];
+    for pairs in cases {
+        let fs = files(&["a", "b", "c"]);
+        for name in ["a", "b", "c"] {
+            stamp(&fs, &format!("d/{name}"), 10, 5 * HOUR_MS);
+        }
+        let before: Vec<_> = ["a", "b", "c"]
+            .iter()
+            .map(|name| inode_of(&fs, &format!("d/{name}")))
+            .collect();
+        fs.set_volume_serial("d", None);
+        let plan = batch(&fs, pairs, Fold::Exact);
+        fs.fault(
+            &sources(&plan)[1],
+            FakeOp::Rename,
+            1,
+            Fault::Fail(FsErrorKind::Locked),
+        );
+        let outcome = run_batch(&fs, &plan);
+        assert!(
+            matches!(outcome, RenameOutcome::PutBack { .. }),
+            "{pairs:?}"
+        );
+        assert_eq!(names(&fs), ["a", "b", "c"], "{pairs:?}");
+        fs.set_volume_serial("d", Some(1));
+        let after: Vec<_> = ["a", "b", "c"]
+            .iter()
+            .map(|name| inode_of(&fs, &format!("d/{name}")))
+            .collect();
+        assert_eq!(before, after, "{pairs:?}");
+    }
+}
+
+#[test]
+fn an_identity_read_error_refuses_the_step_and_puts_earlier_renames_back() {
+    let (fs, plan) = simple();
+    fs.fault(
+        "d/b",
+        FakeOp::Identity,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    let outcome = run_batch(&fs, &plan);
+    assert!(
+        matches!(outcome, RenameOutcome::PutBack { seq: 1, error } if error.kind == FsErrorKind::AccessDenied)
+    );
+    assert_eq!(names(&fs), ["a", "b", "c"]);
+    assert_eq!(fs.calls("d/b", FakeOp::Rename), 0);
+}
+
 fn rows(fs: &FakeFs, pairs: &[(&str, &str)]) -> Vec<Row> {
     pairs
         .iter()
@@ -270,11 +441,17 @@ fn a_failure_while_putting_back_stops_there_and_lists_the_files_left() {
         Fault::Fail(FsErrorKind::AccessDenied),
     );
     let outcome = run_batch(&fs, &plan);
-    let RenameOutcome::Stuck { error, left } = outcome else {
+    let RenameOutcome::Stuck {
+        error,
+        left,
+        applied,
+    } = outcome
+    else {
         panic!("expected Stuck, got {outcome:?}");
     };
     assert_eq!(error.kind, FsErrorKind::AccessDenied);
     assert_eq!(left, [fs.location("d/x"), fs.location("d/y")]);
+    assert_eq!(applied, [0, 1]);
     assert_eq!(names(&fs), ["c", "x", "y"]);
 }
 
@@ -428,4 +605,59 @@ fn a_rename_step_counts_as_an_item_only_in_a_rename_job() {
     };
     assert_eq!(crate::job::run::counted(OpKind::Rename, &step), (0, 1));
     assert_eq!(crate::job::run::counted(OpKind::Move, &step), (0, 0));
+}
+
+#[test]
+fn opus_uncertain_rename_that_remains_applied_is_included_in_the_audit() {
+    let (fs, plan) = simple();
+    fs.fault(
+        &sources(&plan)[0],
+        FakeOp::Rename,
+        1,
+        Fault::RenameThenFail(FsErrorKind::Timeout),
+    );
+    fs.fault(
+        &targets(&plan)[0],
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    let outcome = run_batch(&fs, &plan);
+    let RenameOutcome::Stuck { applied, .. } = outcome else {
+        panic!("expected Stuck");
+    };
+    assert_eq!(applied, [0]);
+    assert!(fs.metadata(&fs.location(&targets(&plan)[0])).is_ok());
+}
+
+#[test]
+fn opus_rollback_keeps_an_unconfirmed_target_pending_instead_of_claiming_put_back() {
+    let (fs, plan) = simple();
+    fs.fault(
+        &sources(&plan)[1],
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    let target = fs.location(&targets(&plan)[0]);
+    let mut replaced = false;
+    let outcome = crate::run_rename(
+        &plan,
+        &mut JobContext {
+            ops: &fs,
+            log: &mut Log::default(),
+            cancel: &CancelToken::new(),
+            progress: &mut |_| {
+                if !replaced && fs.metadata(&target).is_ok() {
+                    replaced = true;
+                    fs.remove_file(&target).unwrap();
+                    fs.add_file(&target.path().to_text(), 99);
+                }
+            },
+        },
+    );
+    assert!(
+        matches!(outcome, RenameOutcome::Stuck { error, .. } if error.kind == FsErrorKind::IdentityUnavailable)
+    );
+    assert_eq!(fs.metadata(&target).unwrap().size, 99);
 }

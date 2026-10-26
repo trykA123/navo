@@ -1,5 +1,16 @@
 use super::*;
 
+#[test]
+fn automotive_modules_are_a_typed_list() {
+    let (settings, unknown) = parse("[automotive]\nmodules = [\"Com\", \"Dio_Cfg\"]\n").unwrap();
+    assert!(unknown.is_empty());
+    assert_eq!(
+        settings.value_at("automotive.modules"),
+        Some(SettingValue::List(vec!["Com".into(), "Dio_Cfg".into()]))
+    );
+    assert!(parse("[automotive]\nmodules = [1]\n").is_err());
+}
+
 fn parsed(text: &str) -> Settings {
     parse(text).unwrap().0
 }

@@ -44,7 +44,10 @@ pub(super) const SEARCH_ROWS: [FieldSpec; 6] = [
 
 impl Field {
     pub fn is_list(self) -> bool {
-        matches!(self, Self::SearchDrives | Self::SearchExclude)
+        matches!(
+            self,
+            Self::SearchDrives | Self::SearchExclude | Self::AutomotiveModules
+        )
     }
 
     pub fn is_windows_only(self) -> bool {

@@ -192,3 +192,15 @@ files-path-copied = { $count ->
     [one] Copied path
    *[other] Copied { $count } paths
 }
+activity-rename-log-failed = Renamed, but could not write rename.log: { $error }. Check the profile folder.
+
+drag-refused-platform = These files cannot be dragged here.
+drag-refused-effect = The source does not allow this operation.
+drag-refused-modal = Close the open dialog before dropping files.
+drag-drop-title = Drop files
+drag-drop-copy = Copy here
+drag-drop-move = Move here
+drag-drop-link = Create shortcuts here
+drag-drop-cancel = Cancel
+
+drag-refused-path = Cannot drop { $path }. Only absolute local paths are supported.

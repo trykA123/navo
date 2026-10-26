@@ -11,8 +11,8 @@ use crate::window_view::viewer::background::{Job, spawn_job};
 use crate::window_view::viewer::body::{Host, Key};
 use crate::window_view::viewer::parts::LayoutParts;
 use crate::window_view::viewer::space::{
-    Item as StripItem, Label, Part, Pick, RichHost, RichModel, RichSpace, StripData, build_model,
-    part_keys, regrouped, start_siblings, stem_of,
+    GroupingOptions, Item as StripItem, Label, Part, Pick, RichHost, RichModel, RichSpace,
+    StripData, build_model, part_keys, regrouped, start_siblings, stem_of,
 };
 
 const LARGEST: Order = Order {
@@ -84,15 +84,21 @@ impl ElfView {
             return;
         };
         let (elf, lines, siblings) = (elf.clone(), self.lines.clone(), self.siblings.clone());
-        let grouping = self.rich.grouping;
+        let options = GroupingOptions {
+            grouping: self.rich.grouping,
+            modules: self.rich.modules.clone(),
+        };
         self.model_job = Some(spawn_job(
             cx,
-            move |_, send| send(build_model(&elf, lines.as_deref(), &siblings, grouping)),
+            move |_, send| send(build_model(&elf, lines.as_deref(), &siblings, options)),
             Self::model_ready,
         ));
     }
 
     fn model_ready(&mut self, model: RichModel, cx: &mut Context<Self>) {
+        if model.modules != self.rich.modules {
+            return;
+        }
         let Index::Ready(elf) = &self.index else {
             return;
         };
@@ -130,6 +136,15 @@ impl ElfView {
             },
             Self::model_ready,
         ));
+    }
+
+    pub(super) fn apply_modules(&mut self, modules: Vec<String>, cx: &mut Context<Self>) {
+        if self.rich.modules.as_ref() == modules {
+            return;
+        }
+        self.rich.modules = modules.into();
+        self.regroup_job = None;
+        self.start_model(cx);
     }
 
     pub(super) fn is_rich(&self) -> bool {
@@ -181,7 +196,7 @@ impl ElfView {
         };
         let by = GroupBy {
             grouping: model.grouping,
-            modules: &[],
+            modules: &model.modules,
         };
         model
             .regions

@@ -49,7 +49,7 @@ pub enum RowState {
     Problem(Problem),
 }
 
-pub(super) type Key = (Location, String);
+pub(super) type Key = (String, String);
 
 pub fn fold_key(name: &str, fold: Fold) -> String {
     match fold {
@@ -71,7 +71,7 @@ fn single(mut chars: impl Iterator<Item = char>) -> Option<char> {
 }
 
 pub(super) fn key(parent: &Location, name: &str, fold: Fold) -> Key {
-    (parent.clone(), fold_key(name, fold))
+    (fold_key(parent.as_str(), fold), fold_key(name, fold))
 }
 
 fn is_active(row: &Row) -> bool {

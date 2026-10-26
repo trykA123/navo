@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{EventEmitter, Role, Subscription, WeakEntity};
+use rusty_core::Location;
 use rusty_core::rename::Compiled;
 use rusty_core::rename::check::Fold;
 use rusty_l10n::t;
@@ -12,8 +13,8 @@ use super::summary::{Footer, footer};
 use crate::multi_rename::{Item, Preview, Summary};
 use crate::prelude::*;
 use crate::primitives::{
-    ColumnAlign, ColumnHead, ColumnSet, ColumnSpec, IconName, ListScroll, RowSemantics,
-    VirtualList, icon,
+    ColumnAlign, ColumnEvent, ColumnHead, ColumnSet, ColumnSpec, IconName, ListScroll,
+    RowSemantics, VirtualList, icon,
 };
 use crate::tokens::{self, Theme};
 
@@ -25,11 +26,12 @@ const DIGIT_WIDTH: f32 = 8.;
 const TOGGLE_SIZE: f32 = 18.;
 const PAGE_ROWS: usize = 20;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreviewEvent {
-    RowToggled(usize),
+    RowToggled { parent: Location, name: String },
     Run,
     Cancel,
+    Sort(usize),
 }
 
 pub struct Shown<'a> {
@@ -38,6 +40,7 @@ pub struct Shown<'a> {
     pub fold: Fold,
     pub problems_only: bool,
     pub matcher: Option<&'a Compiled>,
+    pub edited: bool,
 }
 
 pub struct PreviewView {
@@ -48,7 +51,9 @@ pub struct PreviewView {
     summary: Summary,
     can_run: bool,
     cursor: Option<usize>,
+    sorted: Option<(usize, bool)>,
     _redraw: Subscription,
+    _columns: Subscription,
 }
 
 impl EventEmitter<PreviewEvent> for PreviewView {}
@@ -73,6 +78,11 @@ impl PreviewView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let columns = cx.new(|cx| ColumnSet::new(specs(), window, cx));
         let redraw = cx.observe(&columns, |_, _, cx| cx.notify());
+        let events = cx.subscribe(&columns, |_, _, event, cx| {
+            if let ColumnEvent::Sort(column) = event {
+                cx.emit(PreviewEvent::Sort(*column));
+            }
+        });
         Self {
             columns,
             scroll: ListScroll::new(),
@@ -81,13 +91,19 @@ impl PreviewView {
             summary: Summary::default(),
             can_run: false,
             cursor: None,
+            sorted: None,
             _redraw: redraw,
+            _columns: events,
         }
     }
 
     pub fn set_preview(&mut self, shown: Shown<'_>, cx: &mut Context<Self>) {
-        let rows = lines(shown.items, shown.preview, shown.fold, shown.matcher);
+        let mut rows = lines(shown.items, shown.preview, shown.fold, shown.matcher);
+        for row in &mut rows {
+            row.is_edited = shown.edited;
+        }
         self.shown = Rc::new(shown.preview.visible(shown.problems_only));
+        self.cursor = self.cursor.filter(|row| self.shown.contains(row));
         self.summary = shown.preview.summary;
         self.can_run = shown.preview.can_run();
         let sample: Vec<Vec<String>> = self
@@ -107,6 +123,10 @@ impl PreviewView {
     #[must_use]
     pub fn cursor(&self) -> Option<usize> {
         self.cursor
+    }
+
+    pub fn set_sort(&mut self, sorted: Option<(usize, bool)>) {
+        self.sorted = sorted;
     }
 
     pub fn page(&mut self, forward: bool, cx: &mut Context<Self>) {
@@ -182,6 +202,8 @@ fn toggle(table: &Table, row: usize, line: &Line) -> impl IntoElement {
         (IconName::Check, t.colors.accent_text)
     };
     let view = table.view.clone();
+    let parent = line.parent.clone();
+    let name = line.old.clone();
     div()
         .id(("rename-toggle", row))
         .role(Role::CheckBox)
@@ -198,7 +220,12 @@ fn toggle(table: &Table, row: usize, line: &Line) -> impl IntoElement {
         .child(icon(glyph, px(12.), color))
         .on_click(move |_, _, cx| {
             cx.stop_propagation();
-            let _ = view.update(cx, |_, cx| cx.emit(PreviewEvent::RowToggled(row)));
+            let _ = view.update(cx, |_, cx| {
+                cx.emit(PreviewEvent::RowToggled {
+                    parent: parent.clone(),
+                    name: name.clone(),
+                })
+            });
         })
 }
 
@@ -326,10 +353,12 @@ impl Render for PreviewView {
                     .border_color(t.colors.line),
             )
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(ColumnHead::new("rename-head", &self.columns)),
+                div().flex_1().min_w_0().child(
+                    ColumnHead::new("rename-head", &self.columns)
+                        .when_some(self.sorted, |head, (column, descending)| {
+                            head.sorted(column, descending)
+                        }),
+                ),
             );
         let footer = footer(
             &t,

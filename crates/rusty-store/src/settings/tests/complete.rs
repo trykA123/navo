@@ -17,6 +17,7 @@ folders-first = true
 sort = \"name\"
 sort-descending = false
 drop-confirm = \"never\"
+rename-log = false
 
 [selection]
 space-measures-folders = true
@@ -66,6 +67,9 @@ network = false
 removable = false
 remember = true
 
+[automotive]
+modules = []
+
 [automotive.view]
 preset = \"simple\"
 inspector = false
@@ -76,7 +80,7 @@ usage-bars = false
 who-uses = false
 ";
 
-const DEFAULT_KEYS: [(&str, &str); 51] = [
+const DEFAULT_KEYS: [(&str, &str); 53] = [
     ("appearance.mode", "\"system\""),
     ("appearance.light-theme", "\"Ferrite Light\""),
     ("appearance.dark-theme", "\"Ferrite Dark\""),
@@ -91,6 +95,7 @@ const DEFAULT_KEYS: [(&str, &str); 51] = [
     ("files.sort", "\"name\""),
     ("files.sort-descending", "false"),
     ("files.drop-confirm", "\"never\""),
+    ("files.rename-log", "false"),
     ("selection.space-measures-folders", "true"),
     ("selection.patterns-select-folders", "false"),
     ("terminal.provider", "\"windows-terminal\""),
@@ -124,6 +129,7 @@ const DEFAULT_KEYS: [(&str, &str); 51] = [
     ("search.network", "false"),
     ("search.removable", "false"),
     ("search.remember", "true"),
+    ("automotive.modules", "[]"),
     ("automotive.view.preset", "\"simple\""),
     ("automotive.view.inspector", "false"),
     ("automotive.view.memory-strip", "false"),
@@ -180,7 +186,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\ndrop-confirm = \"never\"\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\ndrop-confirm = \"never\"\nrename-log = false\n\n[appearance]\n# the look\nmode = \"dark\"\nlight-theme = \"Ferrite Light\"\ndark-theme = \"Ferrite Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\n\n[automotive]\nmodules = []\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n";
     assert_eq!(completed(before), after);
 }
 
@@ -659,7 +665,7 @@ fn a_hand_set_fkey_bar_stays_on_when_the_other_parts_are_added() {
 }
 
 fn without_automotive() -> String {
-    let at = FULL.find("\n[automotive.view]").unwrap();
+    let at = FULL.find("\n[automotive]").unwrap();
     FULL[..at].to_owned()
 }
 
@@ -667,11 +673,11 @@ fn without_automotive() -> String {
 fn only_the_automotive_section_is_added_to_an_older_complete_file() {
     let after = completed(&without_automotive());
     assert_eq!(after, FULL);
-    assert!(!after.contains("[automotive]\n"), "{after}");
+    assert_eq!(after.matches("[automotive]\n").count(), 1, "{after}");
 }
 
 #[test]
-fn a_trailing_comment_survives_when_only_a_nested_section_is_added() {
+fn a_trailing_comment_survives_when_automotive_sections_are_added() {
     let before = format!("{}# the end\n", without_automotive());
     let after = completed(&before);
     assert_eq!(header_above(&after, "# the end"), "[search]", "{after}");

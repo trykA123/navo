@@ -68,6 +68,7 @@ fn open_big(
         cache_keys: CacheKeys::default(),
         shell_menu: None,
         file_clipboard: None,
+        drop_platform: None,
         start_watch: None,
         open: crate::window_view::OpenHooks::none(),
         crash_report: None,

@@ -1,15 +1,6 @@
-use super::{Page, PageInfo};
+use super::{Page, PageInfo, info};
 
-const fn info(page: Page, label: &'static str, stem: &'static str, in_switch: bool) -> PageInfo {
-    PageInfo {
-        page,
-        label,
-        stem,
-        in_switch,
-    }
-}
-
-pub const PAGES: [PageInfo; 114] = [
+pub const PAGES: [PageInfo; 115] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -47,6 +38,7 @@ pub const PAGES: [PageInfo; 114] = [
         "p17-m8-empty-folder",
         false,
     ),
+    info(Page::DropMenu, "Drop files", "p36-x3-drop-menu", false),
     info(
         Page::ViewerMenuText,
         "Viewer menu",

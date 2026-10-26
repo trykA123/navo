@@ -18,8 +18,8 @@ pub(crate) use open::Seen;
 use operate::JobUpdate;
 pub use operate::*;
 pub use rename_batch::{
-    DeletePreset, LastRename, ListPresets, NamedPreset, RenameHooks, RenamePresetList,
-    RenameReport, SavePreset, UndoLogFactory, UndoOffer,
+    DeletePreset, LastRename, ListPresets, NamedPreset, RenameHooks, RenameLogStatus,
+    RenamePresetList, RenameReport, SavePreset, UndoLogFactory, UndoOffer, WriteRenameLog,
 };
 use rename_batch::{run_batch, run_undo};
 pub use {naming::NameProblem, offline::Offline};
@@ -99,7 +99,7 @@ pub struct Browser {
     profiles: ProfileCache,
     stalls: offline::Stalls,
     prefetches: prefetch::Prefetches,
-    rename_hooks: Option<RenameHooks>,
+    rename_settings: rename_batch::RenameSettings,
 }
 
 impl Browser {
@@ -152,7 +152,7 @@ impl Browser {
             profiles: ProfileCache::default(),
             stalls: offline::Stalls::default(),
             prefetches: prefetch::Prefetches::default(),
-            rename_hooks: None,
+            rename_settings: rename_batch::RenameSettings::default(),
         }
     }
 

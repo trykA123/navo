@@ -13,6 +13,19 @@ use crate::window_view::tests::{press, settle};
 use crate::window_view::viewer::map::tests::SAMPLE;
 use crate::window_view::viewer::{FileHooks, Head, Kinds};
 
+#[gpui_kit::test]
+fn configured_module_prefixes_regroup_a_live_map(cx: &mut TestAppContext) {
+    let sample = SAMPLE.replace("engine.o", "Lamp_Read.o");
+    let (window, view) = open(cx, &sample, None);
+    let values = preset(1).with(&Change::text(Field::AutomotiveModules, "Lamp_Read"));
+    show(cx, (window, &view), values);
+    assert!(super::elf_rich::has_group(cx, window, "Lamp_Read"));
+    assert!(text_of(cx, window, "space-provenance").ends_with("modules: 1 from your list"));
+    show(cx, (window, &view), preset(1));
+    assert!(super::elf_rich::has_group(cx, window, "Lamp"));
+    assert!(!super::elf_rich::has_group(cx, window, "Lamp_Read"));
+}
+
 fn rodata_at(name: &'static str, address: u64, len: usize) -> Part {
     Part {
         name,

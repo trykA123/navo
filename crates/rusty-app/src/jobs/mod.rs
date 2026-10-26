@@ -5,13 +5,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan};
 use rusty_fs::{
-    CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, ProviderOps,
-    StepOutcome, clean_up, roll_back,
+    CancelToken, FileIdentity, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile,
+    ProviderOps, StepOutcome, clean_up, roll_back,
 };
 use rusty_store::{JobId, JobJournal, JobState, JournalError, StepState, UnfinishedJob};
 use rusty_ui::browser::{LogFactory, OpLog};
 
 mod held;
+mod identity;
 mod pending;
 
 pub use pending::{StillPending, still_pending};
@@ -125,14 +126,30 @@ impl JournalLog {
 }
 
 impl JobLog for JournalLog {
+    fn prepare_rename(&mut self, seq: u32, identity: FileIdentity) -> Result<(), FsError> {
+        identity::record(&self.journal, self.job, (seq, identity))
+    }
+
+    fn rename_identity(&self, seq: u32) -> Result<Option<FileIdentity>, FsError> {
+        identity::read(&self.journal, self.job, seq)
+    }
+
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         let state = match outcome {
             StepOutcome::Done => StepState::Done,
             StepOutcome::Skipped => StepState::Skipped,
             StepOutcome::Failed => StepState::Failed,
         };
-        lock(&self.journal)
-            .mark_step(self.job, seq, state, None)
+        let mut journal = lock(&self.journal);
+        let detail = if self.renames {
+            journal
+                .step_detail(self.job, seq)
+                .map_err(|_| FsError::new(FsErrorKind::Unknown))?
+        } else {
+            None
+        };
+        journal
+            .mark_step(self.job, seq, state, detail.as_deref())
             .map_err(|_| FsError::new(FsErrorKind::Unknown))
     }
 
@@ -203,6 +220,10 @@ struct Recovery<'a> {
 }
 
 impl JobLog for Recovery<'_> {
+    fn rename_identity(&self, seq: u32) -> Result<Option<FileIdentity>, FsError> {
+        identity::read(self.journal, self.job, seq)
+    }
+
     fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
         Ok(())
     }

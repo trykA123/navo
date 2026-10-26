@@ -12,8 +12,8 @@ use crate::window_view::viewer::background::{Job, spawn_job};
 use crate::window_view::viewer::body::{Host, Key};
 use crate::window_view::viewer::parts::LayoutParts;
 use crate::window_view::viewer::space::{
-    Item as StripItem, Label, Part, Pick, RichHost, RichModel, RichSpace, StripData,
-    build_map_model, part_keys, regrouped, start_siblings, stem_of,
+    GroupingOptions, Item as StripItem, Label, Part, Pick, RichHost, RichModel, RichSpace,
+    StripData, build_map_model, part_keys, regrouped, start_siblings, stem_of,
 };
 
 const LARGEST: Order = Order {
@@ -84,11 +84,15 @@ impl MapView {
             return;
         };
         let (loaded, siblings) = (loaded.clone(), self.siblings.clone());
-        let (name, grouping) = (self.title.to_string(), self.rich.grouping);
+        let name = self.title.to_string();
+        let options = GroupingOptions {
+            grouping: self.rich.grouping,
+            modules: self.rich.modules.clone(),
+        };
         self.model_job = Some(spawn_job(
             cx,
             move |_, send| {
-                let model = build_map_model(&loaded.model, &siblings, (&name, grouping));
+                let model = build_map_model(&loaded.model, &siblings, (&name, options));
                 send((loaded, model));
             },
             Self::model_ready,
@@ -96,6 +100,9 @@ impl MapView {
     }
 
     fn model_ready(&mut self, (loaded, model): (Arc<Loaded>, RichModel), cx: &mut Context<Self>) {
+        if model.modules != self.rich.modules {
+            return;
+        }
         let data = strip_data(Names {
             loaded,
             owners: model.owners.clone(),
@@ -126,6 +133,15 @@ impl MapView {
             },
             Self::model_ready,
         ));
+    }
+
+    pub(super) fn apply_modules(&mut self, modules: Vec<String>, cx: &mut Context<Self>) {
+        if self.rich.modules.as_ref() == modules {
+            return;
+        }
+        self.rich.modules = modules.into();
+        self.regroup_job = None;
+        self.start_model(cx);
     }
 
     pub(super) fn is_rich(&self) -> bool {
@@ -188,7 +204,7 @@ impl MapView {
         };
         let by = GroupBy {
             grouping: model.grouping,
-            modules: &[],
+            modules: &model.modules,
         };
         model
             .regions

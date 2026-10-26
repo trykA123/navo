@@ -91,6 +91,8 @@ fn pending(journal: &SharedJournal) -> usize {
 
 const SWAP: [&str; 3] = ["a", "b", "x"];
 
+mod identity;
+
 fn steps(fs: &FakeFs, moves: &[(&str, &str)]) -> OperationPlan {
     let at = |name: &str| fs.location(&format!("d/{name}"));
     OperationPlan {
@@ -132,45 +134,8 @@ fn a_put_back_batch_cut_short_before_finish_keeps_the_original_names() {
     );
 }
 
-struct LostWrite {
-    inner: Box<dyn OpLog>,
-    at: u32,
-}
-
-impl JobLog for LostWrite {
-    fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
-        if seq == self.at {
-            return Err(FsError::new(FsErrorKind::Unknown));
-        }
-        self.inner.step(seq, outcome)
-    }
-
-    fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
-        self.inner.undone(seq, outcome)
-    }
-
-    fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError> {
-        self.inner.journal_held(held)
-    }
-}
-
-fn crash_before_the_journal_write(fs: &FakeFs, plan: &OperationPlan, journal: &SharedJournal) {
-    let mut log = LostWrite {
-        inner: log_factory(Arc::clone(journal))(plan).unwrap(),
-        at: 1,
-    };
-    let outcome = run_job(
-        plan,
-        &[],
-        &mut JobContext {
-            ops: fs,
-            log: &mut log,
-            cancel: &CancelToken::new(),
-            progress: &mut |_| {},
-        },
-    );
-    assert!(matches!(outcome, JobOutcome::Failed { seq: 1, .. }));
-}
+mod lost_write;
+use lost_write::crash_before_the_journal_write;
 
 #[test]
 fn a_crash_after_a_rename_before_its_journal_write_is_put_back_at_start() {

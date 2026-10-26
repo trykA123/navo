@@ -167,3 +167,13 @@ fn a_refused_unlink_with_another_file_under_the_old_name_keeps_the_new_name() {
         )
     );
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn strict_atomic_rename_reports_unsupported_without_the_legacy_fallback() {
+    for code in [22, 38, 95] {
+        let error = super::super::unix::atomic_result(Err(std::io::Error::from_raw_os_error(code)))
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
+    }
+}

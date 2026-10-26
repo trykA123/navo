@@ -107,7 +107,7 @@ pub(crate) fn open(launch: Launch) {
     let memory = open_memory(dirs.as_ref());
     let local = Arc::new(LocalFs::new());
     let (operations, _instance, journal) = operations(dirs.as_ref(), &home, local.as_ref());
-    let rename = crate::rename_hooks::hooks(journal, memory.clone());
+    let rename = crate::rename_hooks::profile_hooks(journal, memory.clone(), dirs.as_ref());
     metrics::mark("databases opened");
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
@@ -118,8 +118,7 @@ pub(crate) fn open(launch: Launch) {
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
     let mut search = crate::search_hooks::hooks(memory.clone(), remember);
     search.index = crate::search_hooks::index_hooks(dirs.clone(), local.clone());
-    tracing::info!(viewer = launch.view.is_some(), "window opening");
-    metrics::mark("window opening");
+    mark_window_open(launch.view.is_some());
     run(
         StartOptions {
             state,
@@ -141,6 +140,7 @@ pub(crate) fn open(launch: Launch) {
             cache_keys: keys,
             shell_menu: shell_menu::provider(),
             file_clipboard: Some(clipboard::service()),
+            drop_platform: Some(crate::drag::service()),
             start_watch: launch.start_watch,
             open: open_hooks(launch.path, launch.instance_requests),
             crash_report: launch.crash.service(),
@@ -149,6 +149,11 @@ pub(crate) fn open(launch: Launch) {
         Rc::new(rusty_shell::display_scale),
         quitter(disk, launch.cleanup, launch.running),
     );
+}
+
+fn mark_window_open(viewer: bool) {
+    tracing::info!(viewer, "window opening");
+    metrics::mark("window opening");
 }
 
 fn open_memory(dirs: Option<&StoreDirs>) -> Option<files::SharedDb> {

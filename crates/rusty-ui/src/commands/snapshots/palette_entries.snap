@@ -354,7 +354,14 @@ multi_rename.previous_problem | MultiRename | false
 multi_rename.save_preset | MultiRename | false
 multi_rename.open_presets | MultiRename | false
 multi_rename.reset | MultiRename | false
+multi_rename.edit_names | MultiRename | false
+multi_rename.load_names | MultiRename | false
+multi_rename.paste_names | MultiRename | false
+multi_rename.copy_names | MultiRename | false
+multi_rename.counter_per_folder | MultiRename | false
 multi_rename.toggle_row | MultiRenamePreview | false
+multi_rename.move_row_up | MultiRenamePreview | false
+multi_rename.move_row_down | MultiRenamePreview | false
 window.new | global | true
 workspace.list | global | true
 help.key_map | global | true

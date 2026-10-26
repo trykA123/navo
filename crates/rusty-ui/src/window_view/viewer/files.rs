@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use rusty_core::Location;
 use rusty_core::encoding::{Encoding, TextEncoding};
 use rusty_core::line_ends::LineEnds;
 use rusty_core::marks::{Bookmarks, MarkSet, SearchHistory};
 use rusty_core::paging::{ByteSource, LineIndex, Needle};
+use rusty_core::{Location, ProviderPath};
 use rusty_fs::archive::ArchiveListing;
 
 use super::pdf::{OpenPdf, no_pdf};
@@ -107,9 +107,12 @@ type LoadHistory = Arc<dyn Fn() -> SearchHistory + Send + Sync>;
 type Remember = Arc<dyn Fn(&Needle) + Send + Sync>;
 pub type ReadBytes = Arc<dyn Fn(&Location, u64) -> Result<Vec<u8>, String> + Send + Sync>;
 pub type ReadRange = Arc<dyn Fn(&Location, u64, usize) -> Result<Vec<u8>, String> + Send + Sync>;
+type CompanionNames =
+    Arc<dyn Fn(&Location, &AtomicBool) -> Result<Vec<ProviderPath>, String> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FileHooks {
+    pub companions: CompanionNames,
     pub read: Read,
     pub read_as: ReadAs,
     pub write: Write,
@@ -153,6 +156,7 @@ impl FileHooks {
     #[must_use]
     pub fn none() -> Self {
         Self {
+            companions: Arc::new(|_, _| Ok(Vec::new())),
             read: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             read_as: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
             write: Arc::new(|_, _| {

@@ -6,12 +6,15 @@ use rusty_automotive::map::{MapError, index_map};
 use rusty_automotive::{
     Elf, ElfReader, IndexError, MapModel, Mdf, Watch, parse_mdf, sniff_elf, sniff_map, sniff_mdf,
 };
-use rusty_core::{Location, ProviderPath};
+use rusty_core::Location;
 
 use crate::prelude::*;
 use crate::window_view::viewer::FileHooks;
 use crate::window_view::viewer::background::{Job, spawn_job};
 use crate::window_view::viewer::body::Host;
+
+mod finder;
+use finder::Finder;
 
 pub(in crate::window_view::viewer) const MDF_LIMIT: u64 = 1024 * 1024;
 pub(in crate::window_view::viewer) const MAP_LIMIT: u64 = 64 * 1024 * 1024;
@@ -62,6 +65,8 @@ pub(in crate::window_view::viewer) struct SiblingNames {
     pub mdf: Option<String>,
     pub map: Option<String>,
     pub elf: Option<String>,
+    pub only_mdf: bool,
+    pub only_map: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -133,18 +138,22 @@ pub(in crate::window_view::viewer) fn load_siblings(
     let Some(stem) = stem else {
         return siblings;
     };
-    if let Some((name, bytes)) = find(hooks, stem, Partner::Mdf, &mut siblings.problems) {
-        siblings.mdf = Some(parse_mdf(&String::from_utf8_lossy(&bytes)));
-        siblings.names.mdf = Some(name);
+    let mut finder = Finder::new(hooks, stem, cancel);
+    if let Some(found) = finder.find(Partner::Mdf, &mut siblings.problems) {
+        siblings.mdf = Some(parse_mdf(&String::from_utf8_lossy(&found.bytes)));
+        siblings.names.mdf = Some(found.name);
+        siblings.names.only_mdf = found.only;
     }
     if cancel.load(Ordering::Relaxed) {
         return siblings;
     }
-    if let Some((name, bytes)) = find(hooks, stem, Partner::Map, &mut siblings.problems) {
-        match index_map(bytes.as_slice(), cancel, &mut |_| {}) {
+    if let Some(found) = finder.find(Partner::Map, &mut siblings.problems) {
+        let name = found.name;
+        match index_map(found.bytes.as_slice(), cancel, &mut |_| {}) {
             Ok(model) => {
                 siblings.map = Some(Arc::new(model));
                 siblings.names.map = Some(name);
+                siblings.names.only_map = found.only;
             }
             Err(MapError::Cancelled) => {}
             Err(MapError::UnsupportedFormat) => {
@@ -156,16 +165,17 @@ pub(in crate::window_view::viewer) fn load_siblings(
         }
     }
     if stem.wants_elf && !cancel.load(Ordering::Relaxed) {
-        load_elf(hooks, stem, cancel, &mut siblings);
+        load_elf(&mut finder, cancel, &mut siblings);
     }
     siblings
 }
 
-fn load_elf(hooks: &FileHooks, stem: &Stem, cancel: &AtomicBool, siblings: &mut Siblings) {
-    let Some((name, bytes)) = find(hooks, stem, Partner::Elf, &mut siblings.problems) else {
+fn load_elf(finder: &mut Finder<'_>, cancel: &AtomicBool, siblings: &mut Siblings) {
+    let Some(found) = finder.find(Partner::Elf, &mut siblings.problems) else {
         return;
     };
-    let reader = ElfReader::new(Cursor::new(bytes));
+    let name = found.name;
+    let reader = ElfReader::new(Cursor::new(found.bytes));
     let mut watch = Watch {
         cancel,
         progress: &mut |_| {},
@@ -178,43 +188,6 @@ fn load_elf(hooks: &FileHooks, stem: &Stem, cancel: &AtomicBool, siblings: &mut 
         Err(IndexError::Cancelled) => {}
         Err(IndexError::Read(_) | IndexError::Malformed(_)) => {
             siblings.problems.push(SiblingProblem::Unreadable { name });
-        }
-    }
-}
-
-fn find(
-    hooks: &FileHooks,
-    stem: &Stem,
-    partner: Partner,
-    problems: &mut Vec<SiblingProblem>,
-) -> Option<(String, Vec<u8>)> {
-    if partner
-        .extensions()
-        .iter()
-        .any(|extension| extension.eq_ignore_ascii_case(&stem.extension))
-    {
-        return None;
-    }
-    let (name, location, head) = partner.extensions().iter().find_map(|extension| {
-        let name = format!("{}.{extension}", stem.stem);
-        let location = stem.folder.join(&ProviderPath::from_text(&name)).ok()?;
-        let head = (hooks.head)(&location).ok()?;
-        Some((name, location, head))
-    })?;
-    let limit = partner.limit();
-    if head.len > limit {
-        problems.push(SiblingProblem::TooLarge { name, limit });
-        return None;
-    }
-    if !partner.sniff(&head.bytes) {
-        problems.push(SiblingProblem::NotRecognised { name });
-        return None;
-    }
-    match (hooks.bytes)(&location, limit) {
-        Ok(bytes) => Some((name, bytes)),
-        Err(_) => {
-            problems.push(SiblingProblem::Unreadable { name });
-            None
         }
     }
 }

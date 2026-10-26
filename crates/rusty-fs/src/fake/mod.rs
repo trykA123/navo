@@ -19,6 +19,7 @@ use watch::Watchers;
 pub enum FakeOp {
     List,
     Metadata,
+    Identity,
     Create,
     Copy,
     Rename,
@@ -35,6 +36,7 @@ pub enum Fault {
     FailAfterBytes { kind: FsErrorKind, bytes: u64 },
     Collide,
     LinkThenFail(FsErrorKind),
+    RenameThenFail(FsErrorKind),
 }
 
 type CallKey = (String, FakeOp);
@@ -313,7 +315,9 @@ impl Provider for FakeFs {
                 return Err(error(kind, folder));
             }
             Some(Fault::FailAfterEntries { kind, entries }) => (entries, Some(kind)),
-            Some(Fault::Collide | Fault::LinkThenFail(_)) | None => (usize::MAX, None),
+            Some(Fault::Collide | Fault::LinkThenFail(_) | Fault::RenameThenFail(_)) | None => {
+                (usize::MAX, None)
+            }
         };
         let mut entries = self
             .tree()
@@ -339,7 +343,7 @@ impl Provider for FakeFs {
                 | Fault::FailAfterEntries { kind, .. }
                 | Fault::FailAfterBytes { kind, .. },
             ) => Err(error(kind, location)),
-            Some(Fault::Collide | Fault::LinkThenFail(_)) | None => self
+            Some(Fault::Collide | Fault::LinkThenFail(_) | Fault::RenameThenFail(_)) | None => self
                 .tree()
                 .metadata(&path)
                 .ok_or_else(|| error(FsErrorKind::NotFound, location)),

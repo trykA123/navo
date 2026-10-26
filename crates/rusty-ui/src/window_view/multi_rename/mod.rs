@@ -3,6 +3,10 @@ mod gather;
 mod inputs;
 mod keys;
 mod menu;
+mod names;
+mod names_file;
+mod names_view;
+mod ordering;
 mod presets;
 mod run;
 
@@ -36,6 +40,8 @@ struct Open {
     generation: u64,
     run_waiting_for: Option<Form>,
     menu: Option<menu::Menu>,
+    names: Option<names::Editor>,
+    sorted: Option<(usize, bool)>,
     root: FocusHandle,
     preview_focus: FocusHandle,
     last_field: FocusHandle,
@@ -55,7 +61,9 @@ impl Open {
             return;
         };
         let blocked;
-        let shown = if self.errors == FieldErrors::default() {
+        let shown = if self.errors == FieldErrors::default()
+            && self.form.names_error(self.source.items.len()).is_none()
+        {
             preview
         } else {
             blocked = Preview {
@@ -68,6 +76,7 @@ impl Open {
         let compiled = self.form.compile().ok();
         let (fold, problems_only) = (self.source.fold, self.form.problems_only);
         self.view.update(cx, |view, cx| {
+            view.set_sort(self.sorted);
             view.set_preview(
                 Shown {
                     items: &items,
@@ -75,6 +84,7 @@ impl Open {
                     fold,
                     problems_only,
                     matcher: compiled.as_ref(),
+                    edited: self.form.edited_names().is_some(),
                 },
                 cx,
             );
@@ -145,7 +155,7 @@ impl FerriteWindow {
         let mut subscriptions = inputs::watch(&inputs, window, cx);
         subscriptions.push(
             cx.subscribe_in(&view, window, |this, _, event, window, cx| {
-                this.rename_preview_event(*event, window, cx);
+                this.rename_preview_event(event.clone(), window, cx);
             }),
         );
         let last_field = inputs.name_mask.read(cx).focus_handle(cx);
@@ -166,6 +176,8 @@ impl FerriteWindow {
             generation: 0,
             run_waiting_for: None,
             menu: None,
+            names: None,
+            sorted: None,
             root: cx.focus_handle(),
             preview_focus: cx.focus_handle(),
             last_field,
@@ -220,6 +232,13 @@ impl FerriteWindow {
             return;
         };
         open.generation += 1;
+        if open.form.names_error(open.source.items.len()).is_some() {
+            open.compute = None;
+            open.run_waiting_for = None;
+            open.push_preview(cx);
+            cx.notify();
+            return;
+        }
         let job = open.source.job(&open.form, open.generation);
         open.compute = Some(cx.spawn_in(window, async move |this, cx| {
             if !delay.is_zero() {
@@ -272,9 +291,20 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         match event {
-            PreviewEvent::RowToggled(row) => self.toggle_rename_row(row, window, cx),
+            PreviewEvent::RowToggled { parent, name } => {
+                let row = self.multi_rename.open.as_ref().and_then(|open| {
+                    open.source
+                        .items
+                        .iter()
+                        .position(|item| item.parent == parent && item.name == name)
+                });
+                if let Some(row) = row {
+                    self.toggle_rename_row(row, window, cx);
+                }
+            }
             PreviewEvent::Run => self.run_multi_rename(window, cx),
             PreviewEvent::Cancel => self.close_multi_rename(window, cx),
+            PreviewEvent::Sort(column) => self.sort_rename_rows(column, window, cx),
         }
     }
 

@@ -69,6 +69,7 @@ pub struct WindowsWindowState {
     pub hovered: Cell<bool>,
     pub drop_effect_hint: Cell<Option<u32>>,
     pub drag_keys: Cell<u32>,
+    pub drag_allowed_effects: Cell<u32>,
     pub external_drag_payload: Cell<Option<ExternalDragPayload>>,
     pub last_visibility: Cell<Option<WindowVisibility>>,
     pub direct_manipulation: DirectManipulationHandler,
@@ -187,6 +188,7 @@ impl WindowsWindowState {
             hovered: Cell::new(hovered),
             drop_effect_hint: Cell::new(None),
             drag_keys: Cell::new(0),
+            drag_allowed_effects: Cell::new(0),
             external_drag_payload: Cell::new(None),
             last_visibility: Cell::new(None),
             renderer: RefCell::new(renderer),
@@ -1213,7 +1215,7 @@ impl WindowsDragDropHandler {
             .state
             .drop_effect_hint
             .get()
-            .unwrap_or(DROPEFFECT_COPY.0);
+            .unwrap_or(DROPEFFECT_NONE.0);
         DROPEFFECT(hint & allowed.0)
     }
 
@@ -1322,6 +1324,7 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
     ) -> windows::core::Result<()> {
         let idata_obj = pdataobj.ok()?;
         let allowed = unsafe { *pdweffect };
+        self.0.state.drag_allowed_effects.set(allowed.0);
         self.0.state.drag_keys.set(grfkeystate.0);
         self.0.state.drop_effect_hint.set(None);
         let effect = match dropped_paths(idata_obj) {
@@ -1356,6 +1359,7 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
         let allowed = unsafe { *pdweffect };
+        self.0.state.drag_allowed_effects.set(allowed.0);
         self.0.state.drag_keys.set(grfkeystate.0);
         let input = PlatformInput::FileDrop(FileDropEvent::Pending {
             position: self.client_position(pt),
@@ -1393,6 +1397,7 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
     ) -> windows::core::Result<()> {
         let idata_obj = pdataobj.ok()?;
         let allowed = unsafe { *pdweffect };
+        self.0.state.drag_allowed_effects.set(allowed.0);
         let buttons = MK_LBUTTON.0 | MK_RBUTTON.0 | MK_MBUTTON.0;
         let held = self.0.state.drag_keys.get() & buttons;
         self.0.state.drag_keys.set(grfkeystate.0 | held);
@@ -1622,6 +1627,10 @@ pub fn set_drop_effect(hwnd: isize, effect: Option<u32>) {
     if let Some(window) = own_window_from_raw(hwnd) {
         window.state.drop_effect_hint.set(effect);
     }
+}
+
+pub fn drag_allowed_effects(hwnd: isize) -> u32 {
+    own_window_from_raw(hwnd).map_or(0, |window| window.state.drag_allowed_effects.get())
 }
 
 pub fn drag_key_state(hwnd: isize) -> u32 {

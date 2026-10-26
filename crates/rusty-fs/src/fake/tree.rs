@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use rusty_core::{FsErrorKind, ProviderPath};
 
 use crate::{Attributes, EntryKind, FsEntry};
@@ -10,6 +12,7 @@ pub(super) struct Tree {
 
 #[derive(Debug)]
 struct Node {
+    identity: u64,
     entry: FsEntry,
     children: Vec<Node>,
 }
@@ -26,7 +29,9 @@ impl Node {
     }
 
     fn leaf(entry: FsEntry) -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         Self {
+            identity: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             entry,
             children: Vec::new(),
         }
@@ -190,6 +195,10 @@ impl Tree {
 
     pub(super) fn metadata(&self, path: &str) -> Option<FsEntry> {
         self.find(path).map(|node| node.entry.clone())
+    }
+
+    pub(super) fn identity(&self, path: &str) -> Option<u64> {
+        self.find(path).map(|node| node.identity)
     }
 
     pub(super) fn children(&self, path: &str) -> Result<Vec<FsEntry>, FsErrorKind> {

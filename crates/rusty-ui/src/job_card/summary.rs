@@ -20,6 +20,7 @@ pub struct RenameNote {
     pub undo: bool,
     pub skipped: usize,
     pub left: Vec<SharedString>,
+    pub log_error: Option<SharedString>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

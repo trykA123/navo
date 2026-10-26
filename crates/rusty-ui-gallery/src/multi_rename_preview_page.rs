@@ -141,6 +141,7 @@ impl MultiRenamePreviewPage {
                     fold: Fold::Exact,
                     problems_only: false,
                     matcher: compiled.as_ref(),
+                    edited: false,
                 },
                 cx,
             );

@@ -96,6 +96,14 @@ impl Browser {
                 .any(|(queued, _)| queued == location)
     }
 
+    pub fn refresh_unwatched(&mut self, locations: &[Location]) {
+        for location in locations {
+            if !self.is_watched(location) {
+                self.refresh_folder(location, &Refresh::Full);
+            }
+        }
+    }
+
     pub fn revalidate_unwatched(&mut self) -> bool {
         let fallbacks: Vec<Location> = self
             .watching

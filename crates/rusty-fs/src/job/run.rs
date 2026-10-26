@@ -3,7 +3,7 @@ use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 use super::aside::Aside;
 use super::copy::{Copier, CopyStep, copy, overwrites, place};
 use super::hold::hold;
-use super::rename::is_temporary;
+use super::rename::{is_temporary, prepare};
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
 pub(super) fn current_of(step: &Step) -> Location {
@@ -62,7 +62,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
         let result = if holds_kept(step, &kept) {
             Ok(StepOutcome::Skipped)
         } else {
-            apply(job, step, ctx, &mut progress)
+            prepare(seq, (plan.kind, step), ctx).and_then(|()| apply(job, step, ctx, &mut progress))
         };
         match result {
             Ok(outcome) => {

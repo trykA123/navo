@@ -90,6 +90,7 @@ pub struct Files {
     pub sort: SortKey,
     pub sort_descending: bool,
     pub drop_confirm: DropConfirm,
+    pub rename_log: bool,
 }
 
 impl Default for Files {
@@ -101,6 +102,7 @@ impl Default for Files {
             sort: SortKey::default(),
             sort_descending: false,
             drop_confirm: DropConfirm::default(),
+            rename_log: false,
         }
     }
 }

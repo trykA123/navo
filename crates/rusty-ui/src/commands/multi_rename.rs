@@ -64,14 +64,51 @@ pub(super) const GROUPS: [Group; 2] = [
                 "multi_rename.reset",
                 "cmd-multi-rename-reset",
             ),
+            (
+                "multi_rename::EditNames",
+                "multi_rename.edit_names",
+                "cmd-multi-rename-edit-names",
+            ),
+            (
+                "multi_rename::LoadNames",
+                "multi_rename.load_names",
+                "cmd-multi-rename-load-names",
+            ),
+            (
+                "multi_rename::PasteNames",
+                "multi_rename.paste_names",
+                "cmd-multi-rename-paste-names",
+            ),
+            (
+                "multi_rename::CopyNames",
+                "multi_rename.copy_names",
+                "cmd-multi-rename-copy-names",
+            ),
+            (
+                "multi_rename::CounterPerFolder",
+                "multi_rename.counter_per_folder",
+                "cmd-multi-rename-counter-per-folder",
+            ),
         ],
     },
     Group {
         context: "MultiRenamePreview",
-        commands: &[(
-            "multi_rename::ToggleRow",
-            "multi_rename.toggle_row",
-            "cmd-multi-rename-toggle-row",
-        )],
+        commands: &[
+            (
+                "multi_rename::ToggleRow",
+                "multi_rename.toggle_row",
+                "cmd-multi-rename-toggle-row",
+            ),
+            (
+                "multi_rename::MoveRowUp",
+                "multi_rename.move_row_up",
+                "cmd-multi-rename-move-row-up",
+            ),
+            (
+                "multi_rename::MoveRowDown",
+                "multi_rename.move_row_down",
+                "cmd-multi-rename-move-row-down",
+            ),
+        ],
     },
 ];

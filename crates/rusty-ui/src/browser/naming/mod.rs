@@ -6,13 +6,14 @@ use rusty_fs::{JobSlot, Priority, ProviderOps, volume_of};
 
 use super::{Browser, Message};
 
-const CASE_STEP: &str = ".ferrite-rename";
+mod rename;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NameProblem {
     Invalid(NameError),
     Exists,
     Unchanged,
+    Busy,
 }
 
 impl fmt::Display for NameProblem {
@@ -21,6 +22,7 @@ impl fmt::Display for NameProblem {
             Self::Invalid(error) => error.fmt(f),
             Self::Exists => f.write_str("Something with this name is already here."),
             Self::Unchanged => f.write_str("The name is the same."),
+            Self::Busy => f.write_str(&rusty_l10n::tr("rename-busy")),
         }
     }
 }
@@ -33,36 +35,11 @@ pub(super) struct Named {
 }
 
 enum Change {
-    Rename {
-        from: Location,
-        to: Location,
-        case_only: bool,
-    },
     CreateFolder(Location),
     CreateFile(Location),
 }
 
 impl Browser {
-    pub fn rename(&mut self, from: &str, to: &str) -> Result<(), NameProblem> {
-        if from == to {
-            return Err(NameProblem::Unchanged);
-        }
-        check_name(to).map_err(NameProblem::Invalid)?;
-        if self.taken(to, Some(from)) {
-            return Err(NameProblem::Exists);
-        }
-        let (Some(source), Some(target)) = (self.here(from), self.here(to)) else {
-            return Err(NameProblem::Invalid(NameError::Empty));
-        };
-        let change = Change::Rename {
-            from: source,
-            to: target,
-            case_only: from.to_lowercase() == to.to_lowercase(),
-        };
-        self.submit_change(change, to.to_owned());
-        Ok(())
-    }
-
     pub fn new_folder(&mut self, name: &str) -> Result<(), NameProblem> {
         self.create(name, Change::CreateFolder)
     }
@@ -164,33 +141,7 @@ fn apply_change(ops: &dyn ProviderOps, change: &Change) -> Result<(), FsError> {
     match change {
         Change::CreateFolder(target) => ops.create_folder(target),
         Change::CreateFile(target) => ops.create_file(target),
-        Change::Rename {
-            from,
-            to,
-            case_only: false,
-        } => ops.rename(from, to),
-        Change::Rename {
-            from,
-            to,
-            case_only: true,
-        } => rename_case(ops, from, to),
     }
-}
-
-fn rename_case(ops: &dyn ProviderOps, from: &Location, to: &Location) -> Result<(), FsError> {
-    let step = from.as_str().to_owned() + CASE_STEP;
-    let Ok(step) = Location::new(step) else {
-        return ops.rename(from, to);
-    };
-    ops.rename(from, &step)?;
-    ops.rename(&step, to)
-        .map_err(|error| match ops.rename(&step, from) {
-            Ok(()) => error,
-            Err(_) => FsError {
-                location: Some(step.clone()),
-                ..error
-            },
-        })
 }
 
 #[cfg(test)]

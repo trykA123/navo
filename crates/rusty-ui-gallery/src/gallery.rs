@@ -64,8 +64,9 @@ const TABLE_STEPS: [&str; 4] = [
 const PDF_STEPS: [&str; 2] = ["viewer::LeftDrawer", "viewer::RightDrawer"];
 const PDF_SEARCH: &str = "undervoltage";
 
-const MENU_PAGES: [(Page, MenuShows); 6] = [
+const MENU_PAGES: [(Page, MenuShows); 7] = [
     (Page::Menu, MenuShows::Root),
+    (Page::DropMenu, MenuShows::Drop),
     (Page::MenuSubmenu, MenuShows::SevenZip),
     (Page::MenuFilter, MenuShows::Filter),
     (Page::MenuFiles, MenuShows::Files),
@@ -101,7 +102,7 @@ pub struct Gallery {
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 4],
-    menus: [(Page, Entity<MenuPage>); 6],
+    menus: [(Page, Entity<MenuPage>); 7],
     command_centers: [(Page, Entity<CommandCenterPage>); 7],
     viewer_menus: [Entity<ViewerMenuPage>; 8],
     main_window: Entity<WindowPage>,
@@ -355,7 +356,8 @@ impl Render for Gallery {
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
             Page::Image => root.children(self.image.clone()).child(image_keys()),
-            Page::Menu
+            Page::DropMenu
+            | Page::Menu
             | Page::MenuSubmenu
             | Page::MenuFilter
             | Page::MenuFiles

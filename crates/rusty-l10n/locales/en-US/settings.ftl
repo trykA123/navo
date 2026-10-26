@@ -44,3 +44,7 @@ settings-search-history = Search history
 settings-search-history-help = Forgets the commands and folders Ctrl+K remembers.
 settings-search-history-clear = Clear search history
 settings-search-history-cleared = Cleared
+settings-module-prefixes = Module prefixes
+settings-module-prefixes-help = Group ELF and MAP memory owners by these comma-separated prefixes, using the longest match.
+settings-rename-log = Rename log
+settings-rename-log-help = Append completed rename batches to rename.log in the profile folder.

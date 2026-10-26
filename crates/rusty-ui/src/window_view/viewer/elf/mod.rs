@@ -253,6 +253,7 @@ impl ViewerBody for ElfBody {
         self.0.update(cx, |view, cx| {
             view.opens_inspector = opens;
             view.apply_layout(layout, cx);
+            view.apply_modules(values.module_prefixes(), cx);
         });
     }
 }

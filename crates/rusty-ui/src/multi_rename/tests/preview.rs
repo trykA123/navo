@@ -114,6 +114,7 @@ fn open_host(
                     fold: Fold::Exact,
                     problems_only,
                     matcher: None,
+                    edited: false,
                 },
                 cx,
             );
@@ -121,7 +122,7 @@ fn open_host(
         let events = Rc::new(RefCell::new(Vec::new()));
         let seen = events.clone();
         let subscription = cx.subscribe(&view, move |_, event: &PreviewEvent, _| {
-            seen.borrow_mut().push(*event);
+            seen.borrow_mut().push(event.clone());
         });
         Host {
             view,
@@ -204,7 +205,13 @@ fn problems_only_lists_just_the_problem_rows(cx: &mut TestAppContext) {
 fn the_toggle_reports_its_row_and_nothing_else(cx: &mut TestAppContext) {
     let (window, host) = open_host(cx, computed("x_[N]", &["a.txt", "b.txt"], &[]), false);
     click(window, ("rename-toggle", 1usize), cx);
-    assert_eq!(events(&host, cx), vec![PreviewEvent::RowToggled(1)]);
+    assert_eq!(
+        events(&host, cx),
+        vec![PreviewEvent::RowToggled {
+            parent: folder(),
+            name: "b.txt".into()
+        }]
+    );
     host.read_with(cx, |host, cx| {
         assert_eq!(host.view.read(cx).cursor(), None);
     });

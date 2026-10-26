@@ -277,3 +277,44 @@ proptest! {
         prop_assert_eq!(result.len(), rows.len());
     }
 }
+
+#[test]
+fn insensitive_folder_aliases_share_collision_checks() {
+    let rows = [
+        Row {
+            parent: Location::new(r"C:\Work").unwrap(),
+            ..row("a.txt", "same.txt")
+        },
+        Row {
+            parent: Location::new(r"c:\work").unwrap(),
+            ..row("b.txt", "SAME.txt")
+        },
+    ];
+    assert_eq!(
+        check_rows(&rows, &Existing::default(), Fold::Insensitive),
+        [
+            RowState::Problem(Problem::Duplicate(1)),
+            RowState::Problem(Problem::Duplicate(0)),
+        ]
+    );
+    assert_eq!(
+        check_rows(&rows, &Existing::default(), Fold::Exact),
+        [CHANGES, CHANGES]
+    );
+}
+
+#[test]
+fn insensitive_folder_aliases_include_existing_names() {
+    let rows = [Row {
+        parent: Location::new(r"C:\Work").unwrap(),
+        ..row("a.txt", "taken.txt")
+    }];
+    let existing = Existing::new(vec![ExistingName {
+        parent: Location::new(r"c:\work").unwrap(),
+        name: "TAKEN.txt".into(),
+    }]);
+    assert_eq!(
+        check_rows(&rows, &existing, Fold::Insensitive),
+        [RowState::Problem(Problem::Exists)]
+    );
+}

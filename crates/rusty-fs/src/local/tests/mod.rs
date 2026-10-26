@@ -12,6 +12,8 @@ use crate::{EntryBatch, EntryKind};
 mod copy_windows;
 mod errors;
 mod hostile;
+#[cfg(windows)]
+mod identity_windows;
 mod kept_aside;
 mod links;
 mod listing;

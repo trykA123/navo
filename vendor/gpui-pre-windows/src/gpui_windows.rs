@@ -1,7 +1,8 @@
 // Ferrite patches to gpui-pre-windows 0.3.9:
 // - directx_devices.rs: prefer the low-power GPU; FERRITE_GPU=default|high-performance overrides.
 // - window.rs: the drop target stores grfKeyState, dispatches first, returns the effect the app
-//   set, never returns DROPEFFECT_MOVE from Drop, and exports set_drop_effect and drag_key_state.
+//   set (None without a hint), never returns DROPEFFECT_MOVE from Drop, and exports
+//   set_drop_effect, drag_key_state and drag_allowed_effects.
 // - window.rs, events.rs: set_external_drag_handler registers the drag source; a posted message
 //   starts it outside input dispatch, then sends FileDropEvent::Ended after the handler returns.
 #![cfg(target_os = "windows")]
@@ -45,6 +46,8 @@ pub(crate) use window::*;
 pub(crate) use wrapper::*;
 
 pub use platform::WindowsPlatform;
-pub use window::{drag_key_state, set_drop_effect, set_external_drag_handler};
+pub use window::{
+    drag_allowed_effects, drag_key_state, set_drop_effect, set_external_drag_handler,
+};
 
 pub(crate) use windows::Win32::Foundation::HWND;

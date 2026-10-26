@@ -254,6 +254,7 @@ pub(super) fn options_with(fs: Arc<FakeFs>, files: FileHooks, kinds: super::Kind
         cache_keys: rusty_cache::CacheKeys::default(),
         shell_menu: None,
         file_clipboard: None,
+        drop_platform: None,
         start_watch: None,
         open: crate::window_view::OpenHooks::none(),
         crash_report: None,

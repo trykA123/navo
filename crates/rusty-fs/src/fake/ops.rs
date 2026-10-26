@@ -16,7 +16,7 @@ fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
             | Fault::FailAfterEntries { kind, .. }
             | Fault::FailAfterBytes { kind, .. },
         ) => Err(error(kind, location)),
-        Some(Fault::Collide | Fault::LinkThenFail(_)) | None => Ok(()),
+        Some(Fault::Collide | Fault::LinkThenFail(_) | Fault::RenameThenFail(_)) | None => Ok(()),
     }
 }
 
@@ -98,6 +98,22 @@ impl FakeFs {
 }
 
 impl ProviderOps for FakeFs {
+    fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
+        let path = self.own_path(location)?;
+        fail_now(self.record_call(&path, FakeOp::Identity), location)?;
+        let identity = self
+            .tree()
+            .identity(&path)
+            .ok_or_else(|| error(FsErrorKind::NotFound, location))?;
+        Ok(self
+            .volume_serial(location)?
+            .map(|volume| crate::FileIdentity {
+                volume,
+                kind: crate::FileIdentityKind::Native,
+                file: u128::from(identity).to_le_bytes(),
+            }))
+    }
+
     fn create_folder(&self, location: &Location) -> Result<(), FsError> {
         let path = self.write_call(location, FakeOp::Create)?;
         let mut tree = self.tree();
@@ -159,6 +175,10 @@ impl ProviderOps for FakeFs {
         let from = self.own_path(source)?;
         let fault = self.record_call(&from, FakeOp::Rename);
         let to = self.own_path(target)?;
+        let after = match fault {
+            Some(Fault::RenameThenFail(kind)) => Some(kind),
+            _ => None,
+        };
         let collide = fault == Some(Fault::Collide);
         let linked = match fault {
             Some(Fault::LinkThenFail(kind)) => Some(kind),
@@ -189,6 +209,9 @@ impl ProviderOps for FakeFs {
         drop(tree);
         self.move_links(&from, &to);
         self.moved(&from, &to);
+        if let Some(kind) = after {
+            return Err(error(kind, source));
+        }
         Ok(())
     }
 

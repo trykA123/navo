@@ -14,14 +14,17 @@ impl FerriteWindow {
             return;
         };
         let mut typed = open.form.rules.clone();
-        inputs::read(&open.inputs, &mut typed, cx);
-        if typed != open.form.rules {
+        let valid = inputs::read(&open.inputs, &mut typed, cx);
+        if !valid || typed != open.form.rules {
             self.rules_changed(window, cx);
         }
+        self.sync_rename_names(window, cx);
         let Some(open) = self.multi_rename.open.as_mut() else {
             return;
         };
-        if open.errors != FieldErrors::default() {
+        if open.errors != FieldErrors::default()
+            || open.form.names_error(open.source.items.len()).is_some()
+        {
             return;
         }
         if !open.is_current() {
@@ -82,8 +85,12 @@ impl FerriteWindow {
         }
         if !has_items {
             open.form.clear_excluded();
+            open.form.clear_edited_names();
+            open.names = None;
+            open.source.items = Arc::new(batch.items);
+            open.sorted = None;
+            open.view.update(cx, |view, cx| view.set_cursor(None, cx));
         }
-        open.source.items = Arc::new(batch.items);
         open.source.existing = Arc::new(batch.existing);
         open.source.fields = Arc::default();
         self.schedule_rename_preview(Duration::ZERO, window, cx);

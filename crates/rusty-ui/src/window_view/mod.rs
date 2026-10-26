@@ -7,6 +7,9 @@ mod drag_hover;
 mod drive_menu;
 mod drives;
 mod drop;
+mod drop_external;
+mod drop_menu;
+mod drop_platform;
 mod editor;
 mod fkeys;
 mod hand_off;
@@ -28,6 +31,7 @@ mod settings_news;
 mod settings_save;
 mod settings_sheet;
 mod shell_menu;
+mod spring;
 mod start;
 mod start_watch;
 mod status;
@@ -69,6 +73,8 @@ pub use app_menu::AppMenuHooks;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
 pub use crash::CrashReportService;
 pub use drives::{DriveHooks, DriveIcon, DriveInfo};
+pub use drop_menu::drop_items;
+pub use drop_platform::{DropPlatform, invalid_drop_path};
 pub use editor::EditorHooks;
 pub use fkeys::{
     DELETE_WARNING, FKey, Labels, delete_warning_in, key_labels, key_labels_in, keys_in_layer,
@@ -134,6 +140,7 @@ pub struct StartOptions {
     pub cache_keys: CacheKeys,
     pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
     pub file_clipboard: Option<Rc<dyn FileClipboardService>>,
+    pub drop_platform: Option<Rc<dyn DropPlatform>>,
     pub start_watch: Option<StartWatch>,
     pub open: OpenHooks,
     pub crash_report: Option<Arc<dyn CrashReportService>>,
@@ -155,7 +162,7 @@ pub struct FerriteWindow {
     provider: Arc<dyn ProviderOps>,
     drives: drives::Drives,
     drive_menu: Option<drive_menu::MenuState>,
-    drag_session: Option<drop::DragSession>,
+    drag: drop_platform::DragDrop,
     menu_focus: FocusHandle,
     path_edit: Option<path_edit::PathEdit>,
     waiting: waiting::Waiting,
@@ -214,7 +221,7 @@ impl FerriteWindow {
             provider: options.provider,
             drives: drives::Drives::new(options.drives),
             drive_menu: None,
-            drag_session: None,
+            drag: drop_platform::DragDrop::new(options.drop_platform),
             menu_focus: cx.focus_handle(),
             path_edit: None,
             waiting: waiting::Waiting::default(),
@@ -360,8 +367,6 @@ impl Render for FerriteWindow {
             .children(self.crash_notice_view(window, cx))
             .child(self.body_area(window, cx))
             .children(self.fkey_bar(window, cx));
-        let dialog = self.modal_view(window, cx);
-        let menu = self.app_menu_view(cx);
         let root = div()
             .relative()
             .flex()
@@ -388,11 +393,12 @@ impl Render for FerriteWindow {
                 view.toggle_settings(window, cx);
             }))
             .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.jobs_key(cx)))
-            .children(dialog)
-            .children(menu)
+            .children(self.modal_view(window, cx))
+            .children(self.app_menu_view(cx))
             .children(self.shell_menu_view())
             .children(self.viewer_menu_view())
             .children(self.view_menus());
+        let root = self.drag_layer(root, cx);
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
         self.preview_keys(root, window, cx)

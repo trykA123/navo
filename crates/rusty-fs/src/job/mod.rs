@@ -10,9 +10,9 @@ mod run;
 mod undo;
 mod workers;
 
-use rusty_core::{FsError, Location, OperationPlan};
+use rusty_core::{FsError, Location, OpKind, OperationPlan};
 
-use crate::{CancelToken, ProviderOps};
+use crate::{CancelToken, FileIdentity, ProviderOps};
 
 pub use aside::HELD_PREFIX;
 pub use rename::{RenameOutcome, is_temporary as is_rename_temporary};
@@ -48,6 +48,12 @@ pub struct PlacedFile {
 }
 
 pub trait JobLog {
+    fn prepare_rename(&mut self, _seq: u32, _identity: FileIdentity) -> Result<(), FsError> {
+        Ok(())
+    }
+    fn rename_identity(&self, _seq: u32) -> Result<Option<FileIdentity>, FsError> {
+        Ok(None)
+    }
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError>;
@@ -94,7 +100,7 @@ pub fn run_job_parallel(
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
-    if workers <= 1 {
+    if workers <= 1 || plan.kind == OpKind::Rename {
         return run::run(plan, done, ctx);
     }
     parallel::run(plan, done, ctx, workers)

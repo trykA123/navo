@@ -29,9 +29,9 @@ fn browser(fs: &Arc<FakeFs>) -> Browser {
 
 fn settle(browser: &mut Browser) {
     let deadline = Instant::now() + Duration::from_secs(5);
-    while browser.loading() && Instant::now() < deadline {
+    while (browser.loading() || browser.running()) && Instant::now() < deadline {
         browser.poll();
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::yield_now();
     }
     browser.poll();
 }
@@ -214,7 +214,7 @@ fn a_case_only_rename_that_cannot_finish_puts_the_name_back() {
     use rusty_fs::{FakeOp, Fault};
     let fs = fake();
     let mut browser = browser(&fs);
-    let step = "home/a.txt.ferrite-rename";
+    let step = "home/.ferrite-rename-00000000-0";
     fs.fault(
         step,
         FakeOp::Rename,
@@ -235,7 +235,7 @@ fn a_stranded_case_step_is_listed_and_named_in_the_error() {
     use rusty_fs::{FakeOp, Fault};
     let fs = fake();
     let mut browser = browser(&fs);
-    let step = "home/a.txt.ferrite-rename";
+    let step = "home/.ferrite-rename-00000000-0";
     fs.fault(
         step,
         FakeOp::Rename,
@@ -251,7 +251,7 @@ fn a_stranded_case_step_is_listed_and_named_in_the_error() {
     assert_eq!(browser.rename("a.txt", "A.txt"), Ok(()));
     settle(&mut browser);
     assert!(exists(&fs, step));
-    assert!(names(&browser).contains(&"a.txt.ferrite-rename".to_owned()));
+    assert!(names(&browser).contains(&".ferrite-rename-00000000-0".to_owned()));
     let tab = browser.state().active_tab().id();
     let location = browser.error(tab).and_then(|e| e.location.clone());
     assert_eq!(location, Some(fs.location(step)));
@@ -266,4 +266,16 @@ fn the_same_name_closes_even_when_the_old_name_breaks_the_rules() {
         browser.rename("notes.", "notes."),
         Err(NameProblem::Unchanged)
     );
+}
+
+#[test]
+fn a_second_single_rename_waits_for_the_running_job() {
+    let fs = fake();
+    let mut browser = browser(&fs);
+    assert_eq!(browser.rename("a.txt", "z.txt"), Ok(()));
+    assert_eq!(browser.rename("b.txt", "y.txt"), Err(NameProblem::Busy));
+    settle(&mut browser);
+    assert!(exists(&fs, "home/z.txt"));
+    assert!(exists(&fs, "home/b.txt"));
+    assert!(!exists(&fs, "home/y.txt"));
 }
