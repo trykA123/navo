@@ -52,8 +52,12 @@ fn run(span: &Span, len: usize, look: &RunLook<'_>) -> TextRun {
     if style.has(Style::ITALIC) || style.has(Style::IMAGE) {
         face.style = FontStyle::Italic;
     }
-    let color = color_of(span, look);
     let is_picked = span.link().is_some() && span.link() == look.picked;
+    let color = if is_picked && t.is_contrast {
+        t.colors.on_selection
+    } else {
+        color_of(span, look)
+    };
     let background = if is_picked {
         Some(t.colors.selection)
     } else if style.has(Style::CODE) && !look.is_mono {

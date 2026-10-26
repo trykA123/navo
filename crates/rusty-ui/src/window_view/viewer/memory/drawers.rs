@@ -75,6 +75,8 @@ fn item_row(
     let Some(item) = ready.items.get(at) else {
         return div().id(("memory-item", at)).test_support();
     };
+    let theme = t.selected_content(is_selected);
+    let t = &theme;
     let span = &item.span;
     let name = entries::name(&ready.items, at);
     let size = format::size(span.end - span.start);
@@ -87,6 +89,7 @@ fn item_row(
     };
     let label = format!("{name}, {place}, {size}");
     div()
+        .when(t.is_contrast, |row| row.text_color(t.colors.text))
         .id(("memory-item", at))
         .role(Role::ListItem)
         .aria_label(label)

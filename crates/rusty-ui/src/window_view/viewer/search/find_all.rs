@@ -197,7 +197,10 @@ fn found_row(t: &Theme, row: Option<FoundRow>, is_selected: bool) -> AnyElement 
         && text.is_char_boundary(row.hit.start)
         && text.is_char_boundary(row.hit.end);
     let hit = is_whole.then(|| (row.hit.clone(), hit_style(t)));
+    let theme = t.selected_content(is_selected);
+    let t = &theme;
     div()
+        .when(t.is_contrast, |row| row.text_color(t.colors.text))
         .flex()
         .items_center()
         .gap(t.spacing.xl)

@@ -28,7 +28,7 @@ fn segment(
         .when(is_shown, |segment| {
             segment
                 .bg(t.colors.selection)
-                .text_color(t.colors.text)
+                .text_color(t.colors.on_selection)
                 .font_weight(FontWeight::SEMIBOLD)
         })
         .when(!is_shown, |segment| {

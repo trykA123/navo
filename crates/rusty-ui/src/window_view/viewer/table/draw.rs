@@ -97,7 +97,9 @@ fn cell_view(frame: &Frame<'_>, column: usize, text: &str, is_cursor: bool) -> D
                 .font_features(t.typography.numbers_font_features.clone())
         })
         .when(is_cursor, |cell| {
-            cell.bg(c.selection).shadow(ring(c.accent))
+            cell.bg(c.selection)
+                .shadow(ring(c.accent))
+                .when(t.is_contrast, |cell| cell.text_color(c.on_selection))
         })
         .child(div().min_w_0().truncate().child(text.to_owned()))
 }
@@ -351,5 +353,37 @@ impl Render for TableView {
             .child(header(&t, self.header_parts()))
             .child(head)
             .child(list)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tokens::{Mode, SystemPalette, contrast_theme};
+    use gpui_kit::{black, rgb, white};
+
+    #[test]
+    fn selected_cell_uses_system_highlight_text() {
+        let palette = SystemPalette {
+            window: black(),
+            window_text: white(),
+            highlight: white(),
+            highlight_text: black(),
+            button_face: black(),
+            button_text: white(),
+            gray_text: rgb(0x767676).into(),
+            hot_light: white(),
+        };
+        let theme = contrast_theme(&Theme::new(Mode::Dark), &palette);
+        let frame = Frame {
+            t: &theme,
+            columns: 0..1,
+            widths: &[8],
+            number: px(20.),
+        };
+        let mut selected = cell_view(&frame, 0, "value", true);
+        assert_eq!(selected.text_style().color, Some(palette.highlight_text));
+        let mut plain = cell_view(&frame, 0, "value", false);
+        assert_ne!(plain.text_style().color, Some(palette.highlight_text));
     }
 }

@@ -171,7 +171,15 @@ pub(super) fn text_row(
         .painted
         .hit
         .is_some_and(|hit| span.contains(&hit.start));
+    let runs = look.styled(runs);
+    let theme = look.t.selected_content(is_hit);
+    let look = &RowLook {
+        t: &theme,
+        painted: Painted { ..look.painted },
+        ..*look
+    };
     row_frame(look, index, line.text.clone())
+        .when(look.t.is_contrast, |row| row.text_color(look.t.colors.text))
         .when(is_hit, |row| row.bg(look.t.colors.selection))
         .child(look.gutter(index, look.is_bookmarked(span)))
         .when(text.numbers, |row| {
@@ -190,7 +198,7 @@ pub(super) fn text_row(
                 .flex()
                 .items_center()
                 .gap(look.t.spacing.xs)
-                .child(StyledText::new(shown).with_highlights(look.styled(runs)))
+                .child(StyledText::new(shown).with_highlights(runs))
                 .children(line_end_glyph(look, text.layout.unit(), index, line)),
         )
         .into_any_element()

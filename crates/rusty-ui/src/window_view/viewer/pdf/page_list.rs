@@ -141,8 +141,12 @@ impl PdfView {
         };
         let hits = doc.hits.on(page).len();
         let is_selected = doc.lists.page_row == row;
+        let hit_badge = (hits > 0).then(|| badge(t, hits));
+        let theme = t.selected_content(is_selected);
+        let t = &theme;
         let is_current = doc.current_page() == page;
         div()
+            .when(t.is_contrast, |row| row.text_color(t.colors.text))
             .id(("pdf-page-row", row))
             .role(Role::ListItem)
             .aria_label(format!("Page {}", page + 1))
@@ -172,7 +176,7 @@ impl PdfView {
                             .when(is_current, |label| label.font_weight(FontWeight::SEMIBOLD))
                             .child(format!("Page {}", page + 1)),
                     )
-                    .when(hits > 0, |column| column.child(badge(t, hits))),
+                    .children(hit_badge),
             )
             .into_any_element()
     }

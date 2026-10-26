@@ -124,6 +124,11 @@ fn name_cell(look: &Look) -> Div {
 }
 
 pub(super) fn cells(look: &Look) -> Div {
+    let theme = look.theme.selected_content(look.is_cursor);
+    let look = &Look {
+        theme: &theme,
+        ..*look
+    };
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;

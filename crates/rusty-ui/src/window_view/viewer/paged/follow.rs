@@ -122,6 +122,8 @@ impl PagedView {
     pub(super) fn follow_badge(&self, t: &Theme) -> Option<impl IntoElement> {
         let label = self.follow_label()?;
         let is_live = self.follower.state == Follow::Following;
+        let theme = t.selected_content(is_live);
+        let t = &theme;
         let (text, fill, dot) = if is_live {
             (t.colors.accent_text, t.colors.selection, t.colors.accent)
         } else {

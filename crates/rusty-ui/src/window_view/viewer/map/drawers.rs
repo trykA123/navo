@@ -123,9 +123,12 @@ fn item_row(
     (item, look): (NavItem, ItemLook),
 ) -> ObservedElement<Stateful<Div>> {
     let (name, size, detail) = item_text(loaded, item);
+    let theme = t.selected_content(look.is_selected);
+    let t = &theme;
     let kind = item.kind();
     let is_pickable = item.is_pickable();
     div()
+        .when(t.is_contrast, |row| row.text_color(t.colors.text))
         .id(("map-item", look.at))
         .role(Role::ListItem)
         .aria_label(format!("{kind} {name}, {size}, {detail}"))

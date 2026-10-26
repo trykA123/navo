@@ -60,7 +60,10 @@ impl TraceView {
         let (name, detail, count) = self.item_texts(key);
         let is_selected = at == self.nav.selected;
         let is_active = self.filter.as_ref().map(|filter| filter.key) == key;
+        let theme = t.selected_content(is_selected);
+        let t = &theme;
         div()
+            .when(t.is_contrast, |row| row.text_color(t.colors.text))
             .id(("trace-id", at))
             .role(Role::ListItem)
             .aria_label(format!("{name}, {count}"))

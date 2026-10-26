@@ -22,6 +22,8 @@ pub(in crate::window_view::viewer) fn switch(
     on_pick: OnPick,
 ) -> Div {
     let buttons = choices.into_iter().enumerate().map(|(at, choice)| {
+        let theme = t.selected_content(choice.is_on);
+        let t = &theme;
         let on_pick = on_pick.clone();
         let blocked = choice.blocked.clone();
         div()
@@ -40,7 +42,7 @@ pub(in crate::window_view::viewer) fn switch(
             .when(choice.is_on, |button| {
                 button
                     .bg(t.colors.selection)
-                    .text_color(t.colors.text)
+                    .text_color(t.colors.on_selection)
                     .font_weight(FontWeight::SEMIBOLD)
             })
             .when(!choice.is_on && blocked.is_none(), |button| {

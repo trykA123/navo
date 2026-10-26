@@ -106,6 +106,8 @@ impl PdfView {
             is_current,
         } = shown;
         let is_selected = self.doc().is_some_and(|doc| doc.lists.outline_row == row);
+        let theme = t.selected_content(is_selected);
+        let t = &theme;
         let is_followed = item.target != LinkTarget::Unsupported;
         let page = match item.target {
             LinkTarget::Page { page, .. } => format::bytes(u64::from(page) + 1),
@@ -113,6 +115,7 @@ impl PdfView {
         };
         let full = SharedString::from(item.title.clone());
         div()
+            .when(t.is_contrast, |row| row.text_color(t.colors.text))
             .id(("pdf-outline-row", row))
             .role(Role::ListItem)
             .aria_label(full)

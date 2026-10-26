@@ -210,6 +210,8 @@ fn detail_view(t: &Theme, text: &str, color: Hsla) -> Div {
 }
 
 pub(super) fn tree_row(look: &RowLook<'_>, view: &WeakEntity<TreeView>) -> AnyElement {
+    let theme = look.t.selected_content(look.is_cursor);
+    let look = &RowLook { t: &theme, ..*look };
     let t = look.t;
     let c = &t.colors;
     let node = look.row.node;

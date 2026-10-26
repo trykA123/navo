@@ -111,7 +111,10 @@ fn item_row(
     is_selected: bool,
 ) -> ObservedElement<Stateful<Div>> {
     let (name, size, detail) = item_text(elf, item);
+    let theme = t.selected_content(is_selected);
+    let t = &theme;
     div()
+        .when(t.is_contrast, |row| row.text_color(t.colors.text))
         .id(("elf-item", at))
         .role(Role::ListItem)
         .aria_label(format!("{name}, {size}, {detail}"))

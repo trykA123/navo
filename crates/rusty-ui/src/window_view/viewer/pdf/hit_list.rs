@@ -25,6 +25,7 @@ fn hit_style(t: &Theme) -> HighlightStyle {
     HighlightStyle {
         font_weight: Some(FontWeight::BOLD),
         background_color: Some(t.marks.fills[1]),
+        color: t.is_contrast.then_some(t.colors.text),
         ..HighlightStyle::default()
     }
 }
@@ -133,12 +134,16 @@ impl PdfView {
                 )
             });
         let is_selected = doc.lists.hit_key == Some(hit.key());
+        let hit_style = hit_style(t);
+        let theme = t.selected_content(is_selected);
+        let t = &theme;
         let page = if is_first {
             format!("p. {}", hit.page + 1)
         } else {
             String::new()
         };
         div()
+            .when(t.is_contrast, |row| row.text_color(t.colors.text))
             .id(("pdf-hit-row", row))
             .role(Role::ListItem)
             .aria_label(format!("Page {}: {text}", hit.page + 1))
@@ -160,7 +165,7 @@ impl PdfView {
                     .min_w_0()
                     .line_clamp(2)
                     .text_size(t.typography.small)
-                    .child(StyledText::new(text).with_highlights([(marked, hit_style(t))])),
+                    .child(StyledText::new(text).with_highlights([(marked, hit_style)])),
             )
             .into_any_element()
     }
