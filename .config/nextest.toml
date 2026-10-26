@@ -1,9 +1,15 @@
 [test-groups]
 clipboard = { max-threads = 1 }
+shell = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = "binary(clipboard_windows) | binary(shell_menu_windows)"
 test-group = "clipboard"
+
+[[profile.default.overrides]]
+filter = "binary(shell_menu_pages_windows) | (package(rusty-app) & test(/^shell_menu::/))"
+test-group = "shell"
+retries = 2
 
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 5 }
