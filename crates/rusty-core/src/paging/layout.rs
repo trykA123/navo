@@ -252,6 +252,10 @@ impl<S> Laid<S> {
 }
 
 impl<S: ByteSource> ByteSource for Laid<S> {
+    fn probe_end(&self) -> Result<(), String> {
+        self.inner.probe_end()
+    }
+
     fn len(&self) -> u64 {
         self.inner.len()
     }

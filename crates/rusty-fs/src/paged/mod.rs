@@ -32,6 +32,7 @@ struct Cache {
     pages: Vec<Page>,
     reads: u64,
     end_checked: Option<Instant>,
+    read_end: u64,
 }
 
 pub struct PagedFile {
@@ -67,6 +68,7 @@ impl PagedFile {
             pages: Vec::with_capacity(CACHE_PAGES),
             reads: 0,
             end_checked: None,
+            read_end: 0,
         };
         Ok(Self {
             path: path.to_owned(),
@@ -157,13 +159,25 @@ impl PagedFile {
     }
 
     fn apply(&self, cache: &mut Cache, stat: Option<Stat>) -> bool {
-        let Some(stat) = stat else {
+        let Some(mut stat) = stat else {
             return true;
         };
         if stat.seq < cache.applied {
             return false;
         }
         cache.applied = stat.seq;
+        if stat.replacement.is_some() {
+            cache.read_end = 0;
+        }
+        if stat.len < cache.read_end {
+            let mut byte = [0];
+            if read_file(&self.handle(), cache.read_end - 1, &mut byte).is_ok_and(|read| read != 0)
+            {
+                stat.len = cache.read_end;
+            } else {
+                cache.read_end = 0;
+            }
+        }
         let old_len = self.len.load(Ordering::Acquire);
         let is_rewrite = match stat.replacement {
             Some(file) => {
@@ -173,7 +187,7 @@ impl PagedFile {
             }
             None => false,
         };
-        if stat.len != old_len || stat.modified != cache.modified {
+        if is_rewrite || stat.len != old_len || stat.modified != cache.modified {
             if is_rewrite || self.tail_changed(cache, old_len, stat.len) {
                 self.rewritten.store(true, Ordering::Release);
             }
@@ -183,6 +197,32 @@ impl PagedFile {
             self.changed.store(true, Ordering::Release);
         }
         true
+    }
+
+    fn probe_end_with(&self, stat: Option<Stat>) -> Result<(), String> {
+        let mut cache = self.cache();
+        let old_end = self.len.load(Ordering::Acquire);
+        let is_replaced = stat.as_ref().is_some_and(|stat| stat.replacement.is_some());
+        if !self.apply(&mut cache, stat) {
+            return Ok(());
+        }
+        cache.end_checked = Some(Instant::now());
+        let len = self.len.load(Ordering::Acquire);
+        let offset = if is_replaced { len } else { old_end.min(len) };
+        let mut bytes = vec![0; PAGE_SIZE];
+        let read = read_file(&self.handle(), offset, &mut bytes)?;
+        cache.reads += 1;
+        if read != 0 {
+            let end = offset + read as u64;
+            if self.tail_changed(&cache, offset, end) {
+                self.rewritten.store(true, Ordering::Release);
+            }
+            cache.read_end = end;
+            self.len.store(len.max(end), Ordering::Release);
+            cache.pages.clear();
+            self.changed.store(true, Ordering::Release);
+        }
+        Ok(())
     }
 
     fn past_end(&self, offset: u64) -> bool {
@@ -254,6 +294,10 @@ fn copy_out(page: &[u8], within: usize, buf: &mut [u8]) -> usize {
 }
 
 impl ByteSource for PagedFile {
+    fn probe_end(&self) -> Result<(), String> {
+        self.probe_end_with(self.stat(true))
+    }
+
     fn len(&self) -> u64 {
         self.len.load(Ordering::Acquire)
     }

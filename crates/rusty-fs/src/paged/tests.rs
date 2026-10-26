@@ -226,6 +226,31 @@ fn reading_past_the_end_notices_a_grown_file_whose_tail_is_cached() {
 }
 
 #[test]
+fn a_follow_probe_sees_appends_while_the_writer_stays_open() {
+    let (_dir, path) = file_with(100);
+    let mut writer = OpenOptions::new().append(true).open(&path).unwrap();
+    let file = PagedFile::open(&path).unwrap();
+    assert_eq!(read(&file, 0, 100), expected(0, 100));
+    writer.write_all(b"new lines\n").unwrap();
+
+    let mut byte = [0];
+    assert_eq!(
+        read_file(&file.handle(), 100, &mut byte).unwrap(),
+        1,
+        "appended bytes must already be readable from the held handle"
+    );
+    assert_eq!(&byte, b"n");
+
+    let source = rusty_core::paging::Laid::new(file, Default::default());
+    source.probe_end().unwrap();
+    assert!(source.take_changed());
+    assert_eq!(source.len(), 110);
+    let mut tail = [0; 10];
+    assert_eq!(source.read_at(100, &mut tail).unwrap(), 10);
+    assert_eq!(&tail, b"new lines\n");
+}
+
+#[test]
 fn length_and_change_flag_never_wait_for_a_page_read() {
     let (_dir, path) = file_with(PAGE);
     let file = PagedFile::open(&path).unwrap();
@@ -260,8 +285,7 @@ fn a_file_replaced_by_rename_is_reopened_and_reported() {
     let file = PagedFile::open(&path).unwrap();
     assert_eq!(read(&file, 0, 4), expected(0, 4));
     replace_by_rename(&dir, &path, b"a fresh log line\n");
-    std::thread::sleep(Duration::from_millis(300));
-    let _ = read(&file, file.len(), 1);
+    file.probe_end().unwrap();
     assert!(file.take_changed());
     assert!(file.take_rewritten());
     assert_eq!(file.len(), 17);
@@ -315,4 +339,47 @@ fn page_misses_never_open_the_path_and_end_probes_are_throttled() {
         let _ = read(&file, file.len(), 1);
     }
     assert_eq!(file.path_opens(), 1);
+}
+
+#[test]
+fn a_follow_probe_reads_appends_despite_stale_metadata() {
+    let (_dir, path) = file_with(100);
+    let file = PagedFile::open(&path).unwrap();
+    assert_eq!(read(&file, 0, 100), expected(0, 100));
+    let mut writer = OpenOptions::new().append(true).open(&path).unwrap();
+    writer.write_all(b"new lines\n").unwrap();
+    let stale = || {
+        let mut stat = file.stat(true).unwrap();
+        stat.len = 100;
+        Some(stat)
+    };
+
+    file.probe_end_with(stale()).unwrap();
+    assert!(file.take_changed());
+    assert!(!file.take_rewritten());
+    assert_eq!(file.len(), 110);
+    assert!(file.apply(&mut file.cache(), stale()));
+    assert_eq!(file.len(), 110);
+    assert_eq!(read(&file, 100, 10), b"new lines\n");
+    file.probe_end_with(stale()).unwrap();
+    assert_eq!(file.len(), 110);
+}
+
+#[test]
+fn a_follow_probe_resets_read_confirmed_growth_after_truncation() {
+    let (_dir, path) = file_with(100);
+    let file = PagedFile::open(&path).unwrap();
+    append(&path, b"new lines\n");
+    let mut stale = file.stat(true).unwrap();
+    stale.len = 100;
+    file.probe_end_with(Some(stale)).unwrap();
+    assert_eq!(file.len(), 110);
+    assert!(file.take_changed());
+
+    fs::write(&path, b"fresh\n").unwrap();
+    file.probe_end().unwrap();
+    assert_eq!(file.len(), 6);
+    assert!(file.take_changed());
+    assert!(file.take_rewritten());
+    assert_eq!(read(&file, 0, 100), b"fresh\n");
 }

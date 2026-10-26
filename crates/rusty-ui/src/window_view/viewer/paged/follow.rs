@@ -30,8 +30,7 @@ pub(super) struct Follower {
 }
 
 fn probe_end(source: &SharedSource) {
-    let mut byte = [0u8; 1];
-    let _ = source.read_at(source.len(), &mut byte);
+    let _ = source.probe_end();
 }
 
 async fn poll_once(source: &SharedSource, this: &WeakEntity<PagedView>, cx: &mut AsyncApp) -> bool {

@@ -16,6 +16,10 @@ pub trait ByteSource {
     fn len(&self) -> u64;
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String>;
 
+    fn probe_end(&self) -> Result<(), String> {
+        self.read_at(self.len(), &mut [0]).map(|_| ())
+    }
+
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
