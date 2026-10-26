@@ -9,6 +9,8 @@ use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
 pub(super) fn chip(t: &Theme, argument: &Argument) -> impl IntoElement {
+    let theme = t.selected_content(true);
+    let t = &theme;
     div()
         .id("command-center-chip")
         .role(Role::Label)

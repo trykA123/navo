@@ -150,6 +150,8 @@ fn reset_button(page: &WeakEntity<ShortcutsPage>, name: &'static str) -> IconBut
 fn command_line(t: &Theme, shown_page: &Shown, row: &Row) -> AnyElement {
     let name = row.spec.name;
     let is_selected = shown_page.selected == Some(name);
+    let theme = t.selected_content(is_selected);
+    let t = &theme;
     let page = shown_page.page.clone();
     div()
         .id(named("shortcut", name))
@@ -171,7 +173,10 @@ fn command_line(t: &Theme, shown_page: &Shown, row: &Row) -> AnyElement {
             gpui_kit::transparent_black()
         })
         .cursor_pointer()
-        .when(is_selected, |line| line.bg(t.colors.selection))
+        .when(is_selected, |line| {
+            line.bg(t.colors.selection)
+                .text_color(t.colors.on_selection)
+        })
         .when(!is_selected, |line| {
             line.hover(|line| line.bg(t.colors.hover))
         })

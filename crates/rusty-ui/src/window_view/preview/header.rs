@@ -100,6 +100,8 @@ fn chip(t: &Theme, text: SharedString) -> impl IntoElement {
 }
 
 fn browsing_chip(t: &Theme) -> impl IntoElement {
+    let theme = t.selected_content(true);
+    let t = &theme;
     div()
         .id("preview-browsing")
         .aria_label("Browsing")

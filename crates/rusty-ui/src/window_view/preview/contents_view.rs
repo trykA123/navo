@@ -57,7 +57,10 @@ impl Mark {
         match self {
             Self::Plain => row,
             Self::Passive => row.shadow(inset_ring(t.colors.line)),
-            Self::Active => row.bg(t.surfaces.current).child(cursor_bar(t)),
+            Self::Active => row
+                .bg(t.surfaces.current)
+                .text_color(t.colors.on_selection)
+                .child(cursor_bar(t)),
         }
     }
 }
@@ -222,13 +225,18 @@ fn row_cells(source: &Source<'_>, index: usize, kind: &RowKind<'_>) -> Vec<AnyEl
 }
 
 fn tree_row(view: &WeakEntity<FerriteWindow>, index: usize, source: &Source<'_>) -> AnyElement {
+    let is_spot = source.spot_row == Some(index);
+    let theme = source.t.selected_content(is_spot && source.is_browsing);
+    let source = &Source {
+        t: &theme,
+        ..*source
+    };
     let t = source.t;
     let Some((kind, shape)) = source.contents.row(index) else {
         return div().into_any_element();
     };
     let cells = row_cells(source, index, &kind);
     let hover = t.colors.hover;
-    let is_spot = source.spot_row == Some(index);
     let row = div()
         .id(("preview-node", index))
         .aria_label(spoken(&kind))

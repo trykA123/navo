@@ -85,7 +85,16 @@ impl JobPill {
 }
 
 fn badge(t: &Theme, summary: &JobsSummary, single: Option<rusty_core::OpKind>) -> Div {
-    let glyph = |name, color| icon(name, px(GLYPH), color).into_any_element();
+    let theme = t.selected_content(true);
+    let t = &theme;
+    let glyph = |name, color| {
+        let color = if t.is_contrast {
+            t.colors.on_selection
+        } else {
+            color
+        };
+        icon(name, px(GLYPH), color).into_any_element()
+    };
     let content = match (summary.word(), single) {
         (Some("Failed"), _) => glyph(IconName::TriangleAlert, t.colors.warn),
         (Some("Done"), _) => glyph(IconName::Check, t.colors.ok),
@@ -169,6 +178,7 @@ fn frame(t: &Theme) -> Div {
         .pr(t.spacing.lg)
         .rounded(t.radii.full)
         .bg(t.surfaces.pill)
+        .when(t.is_contrast, |pill| pill.text_color(t.colors.on_button))
         .shadow(t.shadows.pill.clone())
         .overflow_hidden()
         .whitespace_nowrap()
@@ -196,7 +206,13 @@ impl JobPill {
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(t.surfaces.pill_label)
         });
-        let left = left.map(|left| part("job-pill-left", left).text_color(t.colors.muted));
+        let left = left.map(|left| {
+            part("job-pill-left", left).text_color(if t.is_contrast {
+                t.colors.on_button
+            } else {
+                t.colors.muted
+            })
+        });
         let mut parts = vec![badge(t, s, self.single).into_any_element()];
         parts.extend(name.map(IntoElement::into_any_element));
         parts.extend(status.map(IntoElement::into_any_element));

@@ -60,7 +60,8 @@ struct NavItem {
 }
 
 fn nav_item(look: &Look, item: NavItem) -> AnyElement {
-    let t = look.theme;
+    let theme = look.theme.selected_content(item.is_on);
+    let t = &theme;
     let marker = div()
         .absolute()
         .left_0()
@@ -94,6 +95,7 @@ fn nav_item(look: &Look, item: NavItem) -> AnyElement {
         .when(item.is_on, |element| {
             element
                 .bg(t.colors.selection)
+                .text_color(t.colors.on_selection)
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(marker)
         })
@@ -268,6 +270,12 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
 fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     let t = look.theme;
     let is_current = index == look.row;
+    let theme = t.selected_content(is_current);
+    let content_look = Look {
+        theme: &theme,
+        send: look.send.clone(),
+        ..*look
+    };
     let value = look.values.get(spec.field);
     let reset = look
         .values
@@ -277,7 +285,7 @@ fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .flex()
         .items_center()
         .gap(t.spacing.xl)
-        .child(title(look, index, spec))
+        .child(title(&content_look, index, spec))
         .children(reset)
         .children(control(look, spec));
     let row = div()
@@ -300,9 +308,11 @@ fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         } else {
             gpui_kit::transparent_black()
         })
-        .when(is_current, |row| row.bg(t.colors.selection))
+        .when(is_current, |row| {
+            row.bg(t.colors.selection).text_color(t.colors.on_selection)
+        })
         .child(line)
-        .children(pictures(look, spec));
+        .children(pictures(&content_look, spec));
     select_on_click(row, look.send.as_ref(), index).into_any_element()
 }
 
