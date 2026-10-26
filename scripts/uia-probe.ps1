@@ -125,7 +125,7 @@ public static class NavoUiaWindow {
     Write-TreeDump 'File list' $tree
     $lists = @($tree | Where-Object {
         $_.Type -in 'ControlType.List', 'ControlType.DataGrid', 'ControlType.Table' -and
-        $_.Name -like "*$folder*"
+        @(Get-Items $_.Element | Where-Object { $_.Name -like '*uia-alpha.txt*' }).Count -gt 0
     })
     Assert-Probe ($lists.Count -gt 0) 'The fixture file list is exposed'
     foreach ($list in $lists) {

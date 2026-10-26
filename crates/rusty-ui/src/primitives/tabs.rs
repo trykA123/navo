@@ -251,6 +251,7 @@ impl RenderOnce for Tabs {
         div()
             .id(self.id)
             .role(Role::TabList)
+            .aria_label(rusty_l10n::tr("tabs-label"))
             .test_support()
             .flex_1()
             .min_w_0()

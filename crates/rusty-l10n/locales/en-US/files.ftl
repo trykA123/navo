@@ -233,3 +233,4 @@ tabs-more = { $count ->
    *[other] { $count } more tabs
 }
 tabs-hidden-menu = Hidden tabs
+tabs-label = Tabs
