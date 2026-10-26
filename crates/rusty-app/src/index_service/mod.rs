@@ -28,6 +28,8 @@ mod lifecycle;
 mod ownership;
 #[cfg(any(windows, test))]
 mod policy;
+#[cfg(any(windows, test))]
+mod removal;
 #[cfg(windows)]
 mod runtime;
 #[cfg(windows)]

@@ -166,3 +166,106 @@ fn a_failed_restart_keeps_the_original_error_first() {
     assert!(error.to_string().starts_with("original failure; "));
     assert!(error.to_string().contains("start refused"));
 }
+
+#[test]
+fn interrupted_install_restores_the_only_old_image_before_cleanup() {
+    let root = tempfile::tempdir().unwrap();
+    let plan = CopyPlan::new(root.path(), 10);
+    std::fs::create_dir_all(&plan.directory).unwrap();
+    let old = plan.directory.join("ferrite.exe.9.old");
+    std::fs::write(&old, b"only good image").unwrap();
+    plan.recover_old().unwrap();
+    plan.delete_old().unwrap();
+    assert_eq!(std::fs::read(&plan.executable).unwrap(), b"only good image");
+}
+
+#[test]
+fn settings_rollback_replaces_a_partial_write_without_mutating_open_readers() {
+    use std::io::Read;
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("service.json");
+    let original = br#"{"user_sid":"old"}"#;
+    std::fs::write(&path, original).unwrap();
+    let backup = SettingsBackup::capture(&path).unwrap();
+    std::fs::write(&path, b"{").unwrap();
+    let mut reader = std::fs::File::open(&path).unwrap();
+    backup.restore().unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    let mut previous = Vec::new();
+    reader.read_to_end(&mut previous).unwrap();
+    assert_eq!(previous, b"{");
+}
+
+#[test]
+fn a_planted_image_moved_aside_does_not_count_as_a_trusted_previous_image() {
+    let root = tempfile::tempdir().unwrap();
+    let plan = CopyPlan::new(root.path(), 1);
+    std::fs::create_dir_all(&plan.directory).unwrap();
+    std::fs::write(&plan.executable, b"planted").unwrap();
+    let mut fresh = FreshInstall::observe(&plan, &[]);
+    let preserved = root.path().join("untrusted");
+    std::fs::rename(&plan.directory, &preserved).unwrap();
+    std::fs::create_dir_all(&plan.directory).unwrap();
+    fresh.observe_executable(&plan);
+    std::fs::write(&plan.executable, b"new trusted copy").unwrap();
+    fresh.remove_executable(&plan).unwrap();
+    assert!(!plan.executable.exists());
+    assert_eq!(
+        std::fs::read(preserved.join("ferrite.exe")).unwrap(),
+        b"planted"
+    );
+}
+
+#[test]
+fn install_preflight_recovers_the_only_image_before_a_new_copy_fails() {
+    let root = tempfile::tempdir().unwrap();
+    let plan = CopyPlan::new(root.path(), 10);
+    std::fs::create_dir_all(&plan.directory).unwrap();
+    std::fs::write(plan.directory.join("ferrite.exe.9.old"), b"good image").unwrap();
+    let result = run_install(true, false, |step| match step {
+        Step::RecoverOld => plan.recover_old(),
+        Step::DeleteOld => plan.delete_old(),
+        Step::Copy => Err(io::Error::other("copy failed")),
+        _ => Ok(()),
+    });
+    assert!(result.is_err());
+    assert_eq!(std::fs::read(&plan.executable).unwrap(), b"good image");
+}
+
+#[test]
+fn ambiguous_crash_images_are_preserved_without_starting_cleanup() {
+    let root = tempfile::tempdir().unwrap();
+    let plan = CopyPlan::new(root.path(), 10);
+    std::fs::create_dir_all(&plan.directory).unwrap();
+    for nonce in [8, 9] {
+        std::fs::write(
+            plan.directory.join(format!("ferrite.exe.{nonce}.old")),
+            b"preserved",
+        )
+        .unwrap();
+    }
+    let cleaned = Cell::new(false);
+    let result = run_install(true, false, |step| match step {
+        Step::RecoverOld => plan.recover_old(),
+        Step::DeleteOld => {
+            cleaned.set(true);
+            plan.delete_old()
+        }
+        _ => Ok(()),
+    });
+    assert!(result.is_err());
+    assert!(!cleaned.get());
+    assert_eq!(std::fs::read_dir(&plan.directory).unwrap().count(), 2);
+}
+
+#[test]
+fn a_recovered_trusted_image_is_not_removed_as_a_fresh_copy() {
+    let root = tempfile::tempdir().unwrap();
+    let plan = CopyPlan::new(root.path(), 10);
+    std::fs::create_dir_all(&plan.directory).unwrap();
+    std::fs::write(plan.directory.join("ferrite.exe.9.old"), b"good image").unwrap();
+    let mut fresh = FreshInstall::observe(&plan, &[]);
+    fresh.recover_executable(&plan).unwrap();
+    fresh.remove_executable(&plan).unwrap();
+    assert_eq!(std::fs::read(&plan.executable).unwrap(), b"good image");
+}

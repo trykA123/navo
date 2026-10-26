@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, PoisonError};
 
 use rusty_index::pipe::{self, CancelToken, Hit, Request};
 use rusty_index::table::NameTable;
@@ -8,27 +6,43 @@ use rusty_store::Search;
 
 const MAX_DEPTH: usize = 4096;
 
-#[derive(Default)]
 pub(super) struct SearchIndex {
     config: Search,
+    names: Vec<String>,
+    paths: Vec<String>,
+}
+
+impl Default for SearchIndex {
+    fn default() -> Self {
+        Self::new(&Search::default())
+    }
 }
 
 impl SearchIndex {
     pub fn new(config: &Search) -> Self {
+        let (paths, names): (Vec<_>, Vec<_>) = config
+            .exclude
+            .iter()
+            .cloned()
+            .partition(|skip| skip.contains(['\\', '/']));
         Self {
             config: config.clone(),
+            names,
+            paths: paths.iter().map(|path| normalized_path(path)).collect(),
         }
     }
 
     pub fn hits(&self, table: &NameTable, request: &Request, cancel: &CancelToken) -> Vec<Hit> {
-        let eligibility = Eligibility::new(table, &self.config);
-        rusty_index::search::search_filtered(
+        rusty_index::search::search_filtered_with(
             table,
             &request.terms(),
             rusty_index::search::SearchOptions {
                 limit: pipe::MAX_HITS,
                 cancel: &|| cancel.is_cancelled(),
-                include: &|id| eligibility.includes(id),
+                include: &|| {
+                    let mut eligibility = Eligibility::new(table, self);
+                    move |id| eligibility.includes(id)
+                },
             },
         )
         .into_iter()
@@ -46,51 +60,55 @@ impl SearchIndex {
 
 struct Eligibility<'a> {
     table: &'a NameTable,
-    config: &'a Search,
-    folders: Mutex<HashMap<u32, bool>>,
-    evaluated: AtomicUsize,
+    index: &'a SearchIndex,
+    folders: HashMap<u32, bool>,
+    #[cfg(test)]
+    evaluated: usize,
 }
 
 impl<'a> Eligibility<'a> {
-    fn new(table: &'a NameTable, config: &'a Search) -> Self {
+    fn new(table: &'a NameTable, index: &'a SearchIndex) -> Self {
         Self {
             table,
-            config,
-            folders: Mutex::new(HashMap::new()),
-            evaluated: AtomicUsize::new(0),
+            index,
+            folders: HashMap::new(),
+            #[cfg(test)]
+            evaluated: 0,
         }
     }
 
-    fn includes(&self, id: u32) -> bool {
+    fn includes(&mut self, id: u32) -> bool {
         if self.self_excluded(id) {
             return false;
         }
         match self.table.parent(id) {
             Some(parent) => self.folder_included(parent),
-            None => selected_root(self.table, id, &self.config.drives),
+            None => selected_root(self.table, id, &self.index.config.drives),
         }
     }
 
-    fn folder_included(&self, start: u32) -> bool {
+    fn folder_included(&mut self, start: u32) -> bool {
         let mut chain = Vec::new();
         let mut current = start;
         let keep = loop {
-            if let Some(&known) = self.memo().get(&current) {
+            if let Some(&known) = self.folders.get(&current) {
                 break known;
             }
             chain.push(current);
             if chain.len() >= MAX_DEPTH || self.self_excluded(current) {
                 break false;
             }
-            self.evaluated.fetch_add(1, Ordering::Relaxed);
+            #[cfg(test)]
+            {
+                self.evaluated += 1;
+            }
             match self.table.parent(current) {
                 Some(parent) => current = parent,
-                None => break selected_root(self.table, current, &self.config.drives),
+                None => break selected_root(self.table, current, &self.index.config.drives),
             }
         };
-        let mut memo = self.memo();
         for id in chain {
-            memo.insert(id, keep);
+            self.folders.insert(id, keep);
         }
         keep
     }
@@ -98,11 +116,7 @@ impl<'a> Eligibility<'a> {
     fn self_excluded(&self, id: u32) -> bool {
         self.table
             .name(id)
-            .is_none_or(|name| excluded(self.table, id, name, &self.config.exclude))
-    }
-
-    fn memo(&self) -> std::sync::MutexGuard<'_, HashMap<u32, bool>> {
-        self.folders.lock().unwrap_or_else(PoisonError::into_inner)
+            .is_none_or(|name| self.index.excluded(self.table, id, name))
     }
 }
 
@@ -115,14 +129,37 @@ fn selected_root(table: &NameTable, id: u32, drives: &[String]) -> bool {
         })
 }
 
-fn excluded(table: &NameTable, id: u32, name: &str, exclusions: &[String]) -> bool {
-    exclusions.iter().any(|skip| {
-        name.eq_ignore_ascii_case(skip)
-            || (skip.contains(['\\', '/'])
-                && table.path_with(id, '\\').is_some_and(|path| {
-                    path.eq_ignore_ascii_case(skip.replace('/', "\\").trim_end_matches('\\'))
-                }))
-    })
+impl SearchIndex {
+    fn excluded(&self, table: &NameTable, id: u32, name: &str) -> bool {
+        if self
+            .names
+            .iter()
+            .any(|skip| name.eq_ignore_ascii_case(skip))
+        {
+            return true;
+        }
+        !self.paths.is_empty()
+            && table.path_with(id, '\\').is_some_and(|path| {
+                self.paths
+                    .iter()
+                    .any(|skip| path.eq_ignore_ascii_case(skip))
+            })
+    }
+}
+
+#[cfg(test)]
+static NORMALIZATIONS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, usize>>> =
+    std::sync::LazyLock::new(Default::default);
+
+fn normalized_path(path: &str) -> String {
+    #[cfg(test)]
+    {
+        let mut counts = NORMALIZATIONS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *counts.entry(path.to_owned()).or_default() += 1;
+    }
+    path.replace('/', "\\").trim_end_matches('\\').to_owned()
 }
 
 #[cfg(test)]
@@ -179,9 +216,34 @@ mod tests {
             exclude: vec!["skip".into()],
             ..Search::default()
         };
-        let eligibility = Eligibility::new(&table, &config);
+        let index = SearchIndex::new(&config);
+        let mut eligibility = Eligibility::new(&table, &index);
         assert!(matches.iter().all(|&id| eligibility.includes(id)));
-        assert_eq!(eligibility.evaluated.load(Ordering::Relaxed), 2);
+        assert_eq!(eligibility.evaluated, 2);
+    }
+
+    #[test]
+    fn a_million_candidates_normalize_each_path_exclusion_only_once() {
+        let exclusion = "c:/million-candidate-exclusion/";
+        NORMALIZATIONS.lock().unwrap().remove(exclusion);
+        let mut table = NameTable::new();
+        let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+        let folder = table.push(root, "work", Flags::FOLDER).unwrap();
+        for _ in 0..1_000_000 {
+            table.push(folder, "match", Flags::NONE).unwrap();
+        }
+        let index = SearchIndex::new(&Search {
+            exclude: vec![exclusion.into()],
+            ..Search::default()
+        });
+        let request = Request {
+            terms: vec![QueryTerm::Name("match".into())],
+        };
+        assert_eq!(
+            index.hits(&table, &request, &CancelToken::new()).len(),
+            pipe::MAX_HITS
+        );
+        assert_eq!(NORMALIZATIONS.lock().unwrap().get(exclusion), Some(&1));
     }
 
     #[test]
@@ -207,6 +269,30 @@ mod tests {
         assert!(
             SearchIndex::new(&config)
                 .hits(&table, &request, &CancelToken::new())
+                .is_empty()
+        );
+    }
+}
+
+#[cfg(test)]
+mod default_tests {
+    use super::*;
+    use rusty_index::{
+        pipe::QueryTerm,
+        table::{Flags, NO_PARENT},
+    };
+    #[test]
+    fn default_construction_keeps_the_default_folder_exclusions() {
+        let mut table = NameTable::new();
+        let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+        let skipped = table.push(root, "$Recycle.Bin", Flags::FOLDER).unwrap();
+        table.push(skipped, "match", Flags::NONE).unwrap();
+        let query = Request {
+            terms: vec![QueryTerm::Name("match".into())],
+        };
+        assert!(
+            SearchIndex::default()
+                .hits(&table, &query, &CancelToken::new())
                 .is_empty()
         );
     }

@@ -66,6 +66,34 @@ impl CopyPlan {
         }
     }
 
+    pub fn recover_old(&self) -> io::Result<()> {
+        match std::fs::symlink_metadata(&self.executable) {
+            Ok(_) => return Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        let mut previous = None;
+        for entry in std::fs::read_dir(&self.directory)? {
+            let entry = entry?;
+            if !is_old_image(&entry.file_name().to_string_lossy()) {
+                continue;
+            }
+            if !entry.file_type()?.is_file() || previous.is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "previous service image is ambiguous",
+                ));
+            }
+            previous = Some(entry.path());
+        }
+        if let Some(previous) = previous {
+            retry(RESTORE_TRIES, RESTORE_DELAY, || {
+                std::fs::rename(&previous, &self.executable)
+            })?;
+        }
+        Ok(())
+    }
+
     pub fn delete_old(&self) -> io::Result<()> {
         let mut result = Ok(());
         for entry in std::fs::read_dir(&self.directory)? {
@@ -118,7 +146,7 @@ impl SettingsBackup {
 
     pub fn restore(&self) -> io::Result<()> {
         match &self.previous {
-            Some(bytes) => std::fs::write(&self.path, bytes),
+            Some(bytes) => rusty_store::write_atomic(&self.path, bytes),
             None => match std::fs::remove_file(&self.path) {
                 Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
                 result => result,
@@ -142,6 +170,16 @@ impl FreshInstall {
                 .cloned()
                 .collect(),
         }
+    }
+
+    pub fn recover_executable(&mut self, plan: &CopyPlan) -> io::Result<()> {
+        plan.recover_old()?;
+        self.observe_executable(plan);
+        Ok(())
+    }
+
+    pub fn observe_executable(&mut self, plan: &CopyPlan) {
+        self.had_executable = plan.executable.exists();
     }
 
     pub fn remove_executable(&self, plan: &CopyPlan) -> io::Result<()> {
@@ -174,6 +212,7 @@ fn is_old_image(name: &str) -> bool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Step {
+    RecoverOld,
     Stop,
     Copy,
     RenameOld,
@@ -211,6 +250,7 @@ pub(super) fn run_install(
     was_running: bool,
     mut execute: impl FnMut(Step) -> io::Result<()>,
 ) -> io::Result<()> {
+    execute(Step::RecoverOld)?;
     let _ = execute(Step::DeleteOld);
     let mut completed = Vec::new();
     for &step in install_steps(exists) {

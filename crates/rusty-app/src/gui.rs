@@ -16,6 +16,7 @@ use rusty_ui::window_view::{
 };
 
 use crate::cli::Start;
+use crate::search_hooks::index_hooks;
 use crate::startup::{
     home_location, initial_state, path_location, place_panes, save, session_folders,
 };
@@ -125,7 +126,7 @@ pub(crate) fn open(launch: Launch) {
     let (settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
     let mut search = crate::search_hooks::hooks(memory.clone(), remember);
-    search.index = crate::search_hooks::index_hooks(dirs.clone(), local.clone());
+    search.index = index_hooks(dirs.clone(), local.clone(), &mut search.service);
     mark_window_open(launch.view.is_some());
     run(
         StartOptions {

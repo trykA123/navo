@@ -7,7 +7,8 @@ use std::ptr;
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_EXISTS, ERROR_SERVICE_NOT_ACTIVE,
+    ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_EXISTS,
+    ERROR_SERVICE_NOT_ACTIVE,
 };
 use windows_sys::Win32::Storage::FileSystem::DELETE;
 use windows_sys::Win32::System::Services::*;
@@ -38,8 +39,8 @@ pub(super) fn install() -> io::Result<()> {
         data[0].clone(),
         data[1].clone(),
     ];
-    let fresh = FreshInstall::observe(&plan, &directories);
-    let result = install_with(&plan, &config, &fresh);
+    let mut fresh = FreshInstall::observe(&plan, &directories);
+    let result = install_with(&plan, &config, &mut fresh);
     if result.is_err() {
         let _ = fresh.remove_directories();
     }
@@ -49,7 +50,7 @@ pub(super) fn install() -> io::Result<()> {
 fn install_with(
     plan: &CopyPlan,
     config: &super::config::Config,
-    fresh: &FreshInstall,
+    fresh: &mut FreshInstall,
 ) -> io::Result<()> {
     let storage = Storage::open(true)?;
     let parent = plan
@@ -66,6 +67,7 @@ fn install_with(
         .transpose()?;
     let mut settings = None;
     let result = run_install(exists, was_running, |step| match step {
+        Step::RecoverOld => fresh.recover_executable(plan),
         Step::Stop => stop(&service),
         Step::Copy => plan.copy_from(&std::env::current_exe()?),
         Step::RenameOld => plan.rename_old(),
@@ -90,6 +92,10 @@ fn install_with(
         },
         Step::DeleteOld => plan.delete_old(),
     });
+    finish_install(result, exists, &service)
+}
+
+fn finish_install(result: io::Result<()>, exists: bool, service: &ServiceHandle) -> io::Result<()> {
     if let Err(error) = result {
         if !exists {
             // SAFETY: this call rolls back only the service just created here.
@@ -218,6 +224,13 @@ fn configure_recovery(service: &ServiceHandle) -> io::Result<()> {
 }
 
 pub(super) fn remove() -> io::Result<()> {
+    super::removal::run(remove_service, || {
+        let binary = remove_binary();
+        binary.and(remove_data())
+    })
+}
+
+fn remove_service() -> io::Result<()> {
     let manager = open_manager(SC_MANAGER_CONNECT)?;
     let name = service_name();
     // SAFETY: manager and terminated name are live for the call.
@@ -228,13 +241,18 @@ pub(super) fn remove() -> io::Result<()> {
             DELETE | SERVICE_STOP | SERVICE_QUERY_STATUS,
         )
     };
-    let service = service_handle(raw)?;
+    let service = match service_handle(raw) {
+        Ok(service) => service,
+        Err(error) if error.raw_os_error() == Some(ERROR_SERVICE_DOES_NOT_EXIST as i32) => {
+            return Err(io::ErrorKind::NotFound.into());
+        }
+        Err(error) => return Err(error),
+    };
     stop(&service)?;
     // SAFETY: service has DELETE access and is stopped.
     checked(unsafe { DeleteService(service.0) })?;
     drop(service);
-    let binary = remove_binary();
-    binary.and(remove_data())
+    Ok(())
 }
 
 fn remove_binary() -> io::Result<()> {
@@ -246,10 +264,7 @@ fn remove_binary() -> io::Result<()> {
     let Some(mut guard) = open_existing(&[parent, &plan.directory], Policy::Executable)? else {
         return Ok(());
     };
-    match std::fs::remove_file(&plan.executable) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        result => result?,
-    }
+    super::removal::remove_image(|| std::fs::remove_file(&plan.executable))?;
     let _ = plan.delete_old();
     guard.remove_last(&plan.directory)
 }

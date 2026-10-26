@@ -40,36 +40,40 @@ struct Hosts {
     retirement: Retirements,
 }
 
-pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks {
-    let retirement = match Retirements::new() {
-        Ok(retirement) => retirement,
+pub fn hooks(
+    dirs: Option<StoreDirs>,
+    provider: Arc<dyn Provider>,
+    service: &mut rusty_ui::window_view::ServiceHooks,
+) -> IndexHooks {
+    let metadata = provider.clone();
+    let hosts = match create_hosts(dirs, provider) {
+        Ok(hosts) => hosts,
         Err(error) => {
             tracing::warn!(%error, "cannot start walk index retirement worker");
             return IndexHooks::none();
         }
     };
-    let metadata = provider.clone();
-    let hosts = Arc::new(Mutex::new(Hosts {
-        provider,
-        dirs,
-        options: None,
-        queue: Arc::new(IoQueue::new()),
-        roots: Vec::new(),
-        desired: Vec::new(),
-        exclude: Vec::new(),
-        configured: Configured::default(),
-        retirement,
-    }));
+    let reset = hosts.clone();
+    config::reset_after_actions(
+        service,
+        Arc::new(move || {
+            reset
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .configured
+                .reset();
+        }),
+    );
     let start = hosts.clone();
     IndexHooks {
         start: Arc::new(move |options| {
             let service_ready = matches!(options.mode, IndexMode::Auto | IndexMode::Service)
                 && pipe::Client::connect().is_ok();
             let mut hosts = start.lock().unwrap_or_else(PoisonError::into_inner);
+            hosts.configured.reset();
             if service_ready {
                 hosts.retire();
                 hosts.options = None;
-                hosts.configured.reset();
             } else {
                 hosts.configure(options, None);
             }
@@ -83,6 +87,23 @@ pub fn hooks(dirs: Option<StoreDirs>, provider: Arc<dyn Provider>) -> IndexHooks
         }),
         metadata: IndexMetadata::new(Arc::new(move |location| metadata.metadata(location))),
     }
+}
+
+fn create_hosts(
+    dirs: Option<StoreDirs>,
+    provider: Arc<dyn Provider>,
+) -> std::io::Result<Arc<Mutex<Hosts>>> {
+    Ok(Arc::new(Mutex::new(Hosts {
+        provider,
+        dirs,
+        options: None,
+        queue: Arc::new(IoQueue::new()),
+        roots: Vec::new(),
+        desired: Vec::new(),
+        exclude: Vec::new(),
+        configured: Configured::default(),
+        retirement: Retirements::new()?,
+    })))
 }
 
 fn query_pipe(
@@ -147,7 +168,7 @@ impl Hosts {
         service: Option<&pipe::Status>,
         now: Instant,
     ) {
-        let service = self.configured.service(service, now);
+        let service = self.configured.query_reply(service, now);
         if !self.configured.is_current(options, service.as_ref(), now) {
             self.reconfigure(options, service, now);
         }

@@ -25,6 +25,7 @@ fn reinstall_cleans_leftovers_then_deletes_the_old_image_after_start() {
     assert_eq!(
         calls,
         [
+            RecoverOld,
             DeleteOld,
             Copy,
             RenameOld,
@@ -53,8 +54,8 @@ fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
     for (end, failed) in steps.into_iter().enumerate() {
         let (calls, result) = record(true, Some(failed));
         assert_eq!(result.unwrap_err().to_string(), "original failure");
-        assert_eq!(calls[0], DeleteOld);
-        assert_eq!(&calls[1..=end + 1], &steps[..=end]);
+        assert_eq!(&calls[..2], &[RecoverOld, DeleteOld]);
+        assert_eq!(&calls[2..=end + 2], &steps[..=end]);
         let rollback: &[Step] = match failed {
             Copy => &[Start],
             RenameOld => &[DiscardCopy, Start],
@@ -62,7 +63,7 @@ fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
             Stop | BackupSettings => &[Stop, Restore, RestoreConfiguration, Start],
             _ => &[Stop, RestoreSettings, Restore, RestoreConfiguration, Start],
         };
-        assert_eq!(&calls[end + 2..], rollback, "after {failed:?}");
+        assert_eq!(&calls[end + 3..], rollback, "after {failed:?}");
     }
 }
 
@@ -160,6 +161,7 @@ fn execute_install_step(
 ) -> io::Result<()> {
     use Step::*;
     match step {
+        RecoverOld => plan.recover_old()?,
         Copy => plan.copy_from(&plan.directory.join("new.exe"))?,
         RenameOld => plan.rename_old()?,
         Replace => plan.replace()?,

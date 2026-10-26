@@ -51,6 +51,22 @@ pub fn search_filtered(
     query: &[Term<'_>],
     options: SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn(u32) -> bool + Sync>,
 ) -> Vec<TableHit> {
+    search_filtered_with(
+        table,
+        query,
+        SearchOptions {
+            limit: options.limit,
+            cancel: options.cancel,
+            include: &|| |id| (options.include)(id),
+        },
+    )
+}
+
+pub fn search_filtered_with<I: FnMut(u32) -> bool>(
+    table: &NameTable,
+    query: &[Term<'_>],
+    options: SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn() -> I + Sync>,
+) -> Vec<TableHit> {
     let SearchOptions {
         limit,
         cancel,
@@ -63,13 +79,12 @@ pub fn search_filtered(
         table,
         limit,
         cancel,
-        include,
     };
     let hits = (0..table.slots().div_ceil(CHUNK_SIZE))
         .into_par_iter()
         .map_init(
-            || Matchers::new(query),
-            |matchers, chunk| request.scan_chunk(matchers, chunk),
+            || (Matchers::new(query), include()),
+            |(matchers, filter), chunk| request.scan_chunk(matchers, filter, chunk),
         )
         .reduce(Candidates::new, |left, right| request.merge(left, right));
     if cancel() {
@@ -81,15 +96,19 @@ pub fn search_filtered(
         .collect()
 }
 
-struct Search<'a, C, I> {
+struct Search<'a, C> {
     table: &'a NameTable,
     limit: usize,
     cancel: &'a C,
-    include: &'a I,
 }
 
-impl<C: Fn() -> bool + Sync, I: Fn(u32) -> bool + Sync> Search<'_, C, I> {
-    fn scan_chunk(&self, matchers: &mut Matchers<'_>, chunk: u32) -> Candidates {
+impl<C: Fn() -> bool + Sync> Search<'_, C> {
+    fn scan_chunk(
+        &self,
+        matchers: &mut Matchers<'_>,
+        include: &mut impl FnMut(u32) -> bool,
+        chunk: u32,
+    ) -> Candidates {
         if (self.cancel)() {
             return Candidates::new();
         }
@@ -101,7 +120,7 @@ impl<C: Fn() -> bool + Sync, I: Fn(u32) -> bool + Sync> Search<'_, C, I> {
                 break;
             }
             if let Some(hit) = matchers.score(self.table, id, name)
-                && (self.include)(id)
+                && include(id)
             {
                 keep_hit(&mut hits, (Reverse(hit.score), id, hit.indices), self.limit);
             }
@@ -222,3 +241,38 @@ fn name_offset(path: &str, name: &str) -> u32 {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod worker_filter_tests {
+    use super::*;
+    use crate::table::NO_PARENT;
+    #[test]
+    fn worker_filters_keep_private_mutable_state_before_the_result_limit() {
+        let mut table = NameTable::new();
+        let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+        for _ in 0..130_000 {
+            table.push(root, "match", Flags::NONE).unwrap();
+        }
+        let created = std::sync::atomic::AtomicUsize::new(0);
+        let result = search_filtered_with(
+            &table,
+            &[Term::Name("match")],
+            SearchOptions {
+                limit: 500,
+                cancel: &|| false,
+                include: &|| {
+                    created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let mut previous = None;
+                    move |id| {
+                        assert!(previous.is_none_or(|previous| id > previous));
+                        previous = Some(id);
+                        id % 2 == 0
+                    }
+                },
+            },
+        );
+        assert_eq!(result.len(), 500);
+        assert!(result.iter().all(|hit| hit.id % 2 == 0));
+        assert!(created.load(std::sync::atomic::Ordering::Relaxed) >= 1);
+    }
+}
