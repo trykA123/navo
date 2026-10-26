@@ -139,6 +139,7 @@ fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
             "files.unmark_all",
             "pane.reset_split",
             "preview.browse",
+            "tab.clone",
             "crash_notice.focus"
         ]
     );

@@ -10,6 +10,7 @@ gpui_kit::actions!(
         NextTab,
         PreviousTab,
         CloseTab,
+        CloneTab,
         GoToTab1,
         GoToTab2,
         GoToTab3,
@@ -78,6 +79,14 @@ pub(super) fn tab_keys(root: Div, cx: &mut Context<FerriteWindow>) -> Div {
         GoToTab7 => Target::Nth(6),
         GoToTab8 => Target::Nth(7),
         GoToLastTab => Target::Last,
+    );
+    let root = root.on_action(
+        cx.listener(|this: &mut FerriteWindow, _: &CloneTab, window, cx| {
+            let result = this.browser.clone_tab_to_other_pane();
+            this.show_refusal(result);
+            this.focus_core_pane(window, cx);
+            cx.notify();
+        }),
     );
     root.on_action(
         cx.listener(|this: &mut FerriteWindow, _: &CloseTab, window, cx| {

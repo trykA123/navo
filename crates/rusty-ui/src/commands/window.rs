@@ -45,6 +45,7 @@ pub(super) const GROUPS: [Group; 8] = [
                 "cmd-tab-previous",
             ),
             ("ferrite_tabs::CloseTab", "tab.close", "cmd-tab-close"),
+            ("ferrite_tabs::CloneTab", "tab.clone", "cmd-tab-clone"),
             (
                 "ferrite_tabs::GoToTab1",
                 "tab.go_to_first",

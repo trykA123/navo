@@ -11,6 +11,7 @@ app.command_palette | Command center | global
 tab.next | Next tab | NavoPane
 tab.previous | Previous tab | NavoPane
 tab.close | Close tab | NavoPane
+tab.clone | Clone tab to other pane | NavoPane
 tab.go_to_first | Go to tab 1 | NavoPane
 tab.go_to_second | Go to tab 2 | NavoPane
 tab.go_to_third | Go to tab 3 | NavoPane

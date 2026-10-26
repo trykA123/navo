@@ -78,6 +78,10 @@ command = "tab.go_to_last"
 keys = ["ctrl-9"]
 
 [[bind]]
+command = "tab.clone"
+keys = ["ctrl-shift-up"]
+
+[[bind]]
 command = "tab.new"
 keys = ["ctrl-t"]
 

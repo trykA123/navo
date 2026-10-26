@@ -1,5 +1,5 @@
 use rusty_core::ProviderPath;
-use rusty_core::{Command, Location};
+use rusty_core::{Command, CommandError, Direction, Location};
 use rusty_fs::EntryKind;
 
 use super::{Browser, Launcher};
@@ -82,6 +82,33 @@ impl Browser {
         true
     }
 
+    pub(crate) fn clone_tab_to_other_pane(&mut self) -> Result<(), CommandError> {
+        let state = &self.state;
+        let source = state.focused_pane();
+        let direction = state.window(state.focused_window()).and_then(|window| {
+            Direction::ALL
+                .into_iter()
+                .find(|direction| window.layout().neighbour(source, *direction).is_some())
+        });
+        let Some(direction) = direction else {
+            return Ok(());
+        };
+        let tab = state.active_tab();
+        let location = Some(tab.location().clone());
+        let sort = self.sort_key(tab.id());
+        self.command(&Command::LayoutFocus { direction })?;
+        let opened = self.command(&Command::PaneOpenTab { location });
+        if opened.is_ok() {
+            let tab = self.state.active_tab().id();
+            self.sorts.insert(tab, sort);
+            self.resort(tab);
+        }
+        self.command(&Command::LayoutFocus {
+            direction: direction.opposite(),
+        })?;
+        opened
+    }
+
     pub fn open_tab_at(&mut self, folder: Location, name: Option<String>) -> bool {
         let location = Some(folder);
         if self.command(&Command::PaneOpenTab { location }).is_err() {
@@ -101,6 +128,38 @@ mod tests {
 
     use super::super::tests::{browser_at, fake, here, settle};
     use super::Seen;
+
+    #[test]
+    fn cloning_preserves_a_provider_location() {
+        let fs = fake();
+        let mut browser = browser_at(&fs, "home");
+        let location = rusty_core::Location::new("archive://bundle.zip/docs").unwrap();
+        browser
+            .command(&rusty_core::Command::PaneNavigate {
+                location: location.clone(),
+            })
+            .unwrap();
+        browser
+            .command(&rusty_core::Command::LayoutSplit {
+                direction: rusty_core::Direction::Right,
+            })
+            .unwrap();
+        let source = browser.state().focused_pane();
+        browser.clone_tab_to_other_pane().unwrap();
+        assert_eq!(browser.state().focused_pane(), source);
+        let window = browser
+            .state()
+            .window(browser.state().focused_window())
+            .unwrap();
+        let other = window
+            .panes()
+            .into_iter()
+            .find(|pane| pane.id() != source)
+            .unwrap();
+        assert_eq!(other.tabs().len(), 2);
+        assert_eq!(other.active_index(), 1);
+        assert_eq!(other.active().location(), &location);
+    }
 
     #[test]
     fn a_folder_opens_in_the_active_pane() {

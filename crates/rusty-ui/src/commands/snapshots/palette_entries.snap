@@ -11,6 +11,7 @@ app.command_palette | global | false
 tab.next | NavoPane | true
 tab.previous | NavoPane | true
 tab.close | NavoPane | true
+tab.clone | NavoPane | true
 tab.go_to_first | NavoPane | true
 tab.go_to_second | NavoPane | true
 tab.go_to_third | NavoPane | true

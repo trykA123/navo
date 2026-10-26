@@ -34,7 +34,7 @@ impl Browser {
         }
     }
 
-    fn resort(&mut self, tab: TabId) -> bool {
+    pub(super) fn resort(&mut self, tab: TabId) -> bool {
         let key = self.sort_key(tab);
         let Some(full) = self.full.remove(&tab) else {
             return false;

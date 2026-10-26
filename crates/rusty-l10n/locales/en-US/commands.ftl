@@ -6,6 +6,7 @@ cmd-sheet-wider = Wider side sheet
 cmd-tab-next = Next tab
 cmd-tab-previous = Previous tab
 cmd-tab-close = Close tab
+cmd-tab-clone = Clone tab to other pane
 cmd-tab-go-to-first = Go to tab 1
 cmd-tab-go-to-second = Go to tab 2
 cmd-tab-go-to-third = Go to tab 3
