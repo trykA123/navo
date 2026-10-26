@@ -183,7 +183,11 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
     let diagnostics = install_logging(profile);
     migrated.iter().for_each(migration::Report::log);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
-    perf::install(Instant::now(), &diagnostics);
+    perf::install(
+        Instant::now(),
+        &diagnostics,
+        profile.dirs().map(|dirs| dirs.data.as_path()),
+    );
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
     let store = check_store(profile, pending_crash.is_some(), &start);
     let run = start

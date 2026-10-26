@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod disk_use;
 mod event_ring;
 mod log_layer;
 mod memory;
@@ -7,6 +8,7 @@ pub mod perf;
 mod redact;
 mod report;
 
+pub use disk_use::{DiskKind, DiskLocationUse, DiskTotals, DiskUse, scan_disk_use};
 pub use event_ring::{EventRing, RingStats};
 pub use log_layer::{LogConfig, LogLayer, RedactionMisses, is_redacted_path};
 pub use memory::{
@@ -17,6 +19,7 @@ pub use memory::{
 pub use memory::{ProcStatusProbe, parse_proc_status};
 pub use redact::{DriveKind, Identity, LengthClass, PathKind, RedactedPath, Redactor, Salt};
 pub use report::{
-    BuildInfo, DpiAwareness, ErrorRecord, ReportInput, ReportSummary, SystemInfo, write_report,
-    write_report_with_crashes, write_report_with_extras,
+    BuildInfo, DpiAwareness, ErrorRecord, ReportAttachments, ReportInput, ReportSummary,
+    SystemInfo, write_report, write_report_bundle, write_report_with_crashes,
+    write_report_with_extras,
 };

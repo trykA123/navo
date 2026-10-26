@@ -14,7 +14,7 @@ use crate::{
 mod canary;
 mod report;
 
-const SECTIONS: [&str; 7] = [
+const SECTIONS: [&str; 8] = [
     "build",
     "system",
     "configuration",
@@ -22,6 +22,7 @@ const SECTIONS: [&str; 7] = [
     "recent_events",
     "memory",
     "performance",
+    "disk_use",
 ];
 
 fn identity() -> Identity {
@@ -160,4 +161,33 @@ fn summary_text(path: &Path) -> String {
 
 fn file_size(path: &Path) -> u64 {
     fs::metadata(path).unwrap().len()
+}
+
+#[test]
+fn disk_section_contains_redacted_locations_in_text_and_json() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("private-profile.db");
+    fs::write(&source, [0; 17]).unwrap();
+    let disk = crate::scan_disk_use(&[(crate::DiskKind::Journal, source)], &redactor());
+    let path = root.path().join("report.zip");
+    let summary = crate::write_report_bundle(
+        &path,
+        &input(),
+        &redactor(),
+        crate::ReportAttachments {
+            disk_use: disk,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(summary.sections.iter().any(|section| section == "disk_use"));
+    let json = report_json(&path);
+    assert_eq!(json["disk_use"]["total"]["bytes"], 17);
+    assert_eq!(json["disk_use"]["locations"][0]["files"], 1);
+    let text = summary_text(&path);
+    assert!(text.contains("Disk use:") && text.contains("17 bytes"));
+    for text in [text, report_text(&path)] {
+        assert!(!text.contains("private-profile"));
+        assert!(!text.contains(&root.path().to_string_lossy().into_owned()));
+    }
 }

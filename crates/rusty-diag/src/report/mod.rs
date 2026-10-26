@@ -7,7 +7,7 @@ use serde::Serialize;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-use crate::{MemoryReport, Redactor};
+use crate::{DiskUse, MemoryReport, Redactor};
 
 mod document;
 mod summary;
@@ -84,7 +84,15 @@ pub fn write_report_with_crashes(
     redactor: &Redactor,
     crashes: &[PathBuf],
 ) -> io::Result<ReportSummary> {
-    write_zip_report(path, input, redactor, (crashes, &[]))
+    write_report_bundle(
+        path,
+        input,
+        redactor,
+        ReportAttachments {
+            crashes,
+            ..ReportAttachments::default()
+        },
+    )
 }
 
 pub fn write_report_with_extras(
@@ -93,17 +101,44 @@ pub fn write_report_with_extras(
     redactor: &Redactor,
     extras: &[(&str, &[u8])],
 ) -> io::Result<ReportSummary> {
-    write_zip_report(path, input, redactor, (&[], extras))
+    write_report_bundle(
+        path,
+        input,
+        redactor,
+        ReportAttachments {
+            extras,
+            ..ReportAttachments::default()
+        },
+    )
 }
 
-fn write_zip_report(
+#[derive(Default)]
+pub struct ReportAttachments<'a> {
+    pub disk_use: DiskUse,
+    pub crashes: &'a [PathBuf],
+    pub extras: &'a [(&'a str, &'a [u8])],
+}
+
+#[derive(Serialize)]
+struct DiskDocument<'a> {
+    #[serde(flatten)]
+    report: Document,
+    disk_use: &'a DiskUse,
+}
+
+pub fn write_report_bundle(
     path: &Path,
     input: &ReportInput,
     redactor: &Redactor,
-    (crashes, extras): (&[PathBuf], &[(&str, &[u8])]),
+    attachments: ReportAttachments<'_>,
 ) -> io::Result<ReportSummary> {
-    let report = serde_json::to_vec_pretty(&Document::new(input, redactor))?;
-    let summary = summary_text(input, redactor);
+    let report = serde_json::to_vec_pretty(&DiskDocument {
+        report: Document::new(input, redactor),
+        disk_use: &attachments.disk_use,
+    })?;
+    let mut summary = summary_text(input, redactor);
+    let privacy = summary.rfind("\n\n").unwrap_or(summary.len());
+    summary.insert_str(privacy, attachments.disk_use.summary().trim_end());
     if fs::symlink_metadata(path).is_ok() {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
@@ -112,13 +147,23 @@ fn write_zip_report(
     }
     let temp = temp_path(path)?;
     let file = File::create_new(&temp)?;
-    let written = write_zip(file, (&report, summary.as_bytes()), crashes, extras)
-        .and_then(|()| publish(&temp, path))
-        .and_then(|()| fs::metadata(path));
+    let written = write_zip(
+        file,
+        (&report, summary.as_bytes()),
+        attachments.crashes,
+        attachments.extras,
+    )
+    .and_then(|()| publish(&temp, path))
+    .and_then(|()| fs::metadata(path));
     let _ = fs::remove_file(&temp);
     let bytes = written?.len();
     Ok(ReportSummary {
-        sections: SECTIONS.iter().map(|&s| s.to_owned()).collect(),
+        sections: SECTIONS
+            .iter()
+            .copied()
+            .chain(["disk_use"])
+            .map(str::to_owned)
+            .collect(),
         events: input.events.len(),
         errors: input.errors.len(),
         bytes,

@@ -6,15 +6,16 @@ use std::time::Instant;
 
 use rusty_cache::{DiskListings, DiskStats, ListingCache};
 use rusty_diag::{
-    BuildInfo, CacheRegistry, CacheSize, DpiAwareness, EventRing, Identity, MemoryProbe, Redactor,
-    ReportInput, ReportSummary, Salt, SystemInfo, TaskCounters, memory_report,
-    write_report_with_crashes, write_report_with_extras,
+    BuildInfo, CacheRegistry, CacheSize, DiskKind, DiskUse, DpiAwareness, EventRing, Identity,
+    MemoryProbe, Redactor, ReportAttachments, ReportInput, ReportSummary, Salt, SystemInfo,
+    TaskCounters, memory_report, scan_disk_use, write_report_bundle, write_report_with_crashes,
 };
 
 use crate::logging::Diagnostics;
 
 const NO_WINDOW: &str = "unknown (no window)";
 
+#[cfg(test)]
 pub fn write(
     path: &Path,
     started: Instant,
@@ -32,7 +33,16 @@ pub fn write_on_demand(
     if let Some(stats) = data.and_then(|data| DiskListings::stored(&data.join("cache.db"))) {
         listings_on_disk(&diagnostics.caches, stats.budget, move || stats);
     }
-    write(path, started, diagnostics)
+    let input = filled_input(started, diagnostics);
+    write_report_bundle(
+        path,
+        &input,
+        &diagnostics.redactor,
+        ReportAttachments {
+            disk_use: disk_use(data, &diagnostics.redactor),
+            ..ReportAttachments::default()
+        },
+    )
 }
 
 pub(crate) fn write_with_crashes(
@@ -49,10 +59,43 @@ pub(crate) fn write_with_extras(
     path: &Path,
     started: Instant,
     diagnostics: &Diagnostics,
-    extras: &[(&str, &[u8])],
+    attachments: ReportAttachments<'_>,
 ) -> io::Result<()> {
     let input = filled_input(started, diagnostics);
-    write_report_with_extras(path, &input, &diagnostics.redactor, extras).map(drop)
+    write_report_bundle(path, &input, &diagnostics.redactor, attachments).map(drop)
+}
+
+pub(crate) fn disk_use(data: Option<&Path>, redactor: &Redactor) -> DiskUse {
+    let mut locations = Vec::new();
+    if let Some(data) = data {
+        let journal = format!("{}.db", rusty_core::brand::SLUG);
+        for (kind, name) in [
+            (DiskKind::ListingCache, "cache.db"),
+            (DiskKind::Journal, journal.as_str()),
+        ] {
+            for suffix in ["", "-wal", "-shm"] {
+                locations.push((kind, data.join(format!("{name}{suffix}"))));
+            }
+        }
+        locations.extend([
+            (DiskKind::Session, data.join("session.bin")),
+            (DiskKind::Index, data.join("index")),
+            (DiskKind::LogsAndCrashes, data.join("logs")),
+        ]);
+    }
+    #[cfg(windows)]
+    if let Some(root) = std::env::var_os("PROGRAMDATA").filter(|root| !root.is_empty()) {
+        let index = PathBuf::from(root)
+            .join(rusty_core::brand::NAME)
+            .join("index");
+        if !locations.iter().any(|(_, path)| path == &index) {
+            locations.push((DiskKind::Index, index));
+        }
+    }
+    if let Some(desktop) = crate::crash::desktop_dir() {
+        locations.push((DiskKind::PerformanceRecordings, desktop));
+    }
+    scan_disk_use(&locations, redactor)
 }
 
 fn filled_input(started: Instant, diagnostics: &Diagnostics) -> ReportInput {

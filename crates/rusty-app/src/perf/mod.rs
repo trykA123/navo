@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use rusty_diag::ReportAttachments;
 use rusty_diag::perf::{PerfDocument, ProcessSample, Recording, SystemFacts, perf_json};
 use rusty_ui::perf::PerfService;
 
@@ -21,14 +22,16 @@ pub(crate) struct PerfReports {
     started: Instant,
     diagnostics: Diagnostics,
     folder: Option<PathBuf>,
+    data: Option<PathBuf>,
     last_cpu: Mutex<Option<CpuMark>>,
 }
 
-pub(crate) fn install(started: Instant, diagnostics: &Diagnostics) {
+pub(crate) fn install(started: Instant, diagnostics: &Diagnostics, data: Option<&Path>) {
     rusty_ui::perf::install(Arc::new(PerfReports {
         started,
         diagnostics: diagnostics.clone(),
         folder: crate::crash::desktop_dir(),
+        data: data.map(Path::to_path_buf),
         last_cpu: Mutex::new(None),
     }));
 }
@@ -77,12 +80,17 @@ impl PerfService for PerfReports {
         let document = PerfDocument::new(recording, ended, system, &self.diagnostics.redactor);
         let json = perf_json(&document).map_err(|error| error.to_string())?;
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        let disk_use = crate::diag::disk_use(self.data.as_deref(), &self.diagnostics.redactor);
         save_zip(folder, &stamp, |path| {
             crate::diag::write_with_extras(
                 path,
                 self.started,
                 &self.diagnostics,
-                &[("perf.json", &json)],
+                ReportAttachments {
+                    disk_use: disk_use.clone(),
+                    extras: &[("perf.json", &json)],
+                    ..ReportAttachments::default()
+                },
             )
         })
         .map_err(|error| error.to_string())

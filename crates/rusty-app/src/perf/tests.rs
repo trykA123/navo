@@ -46,6 +46,7 @@ fn reports(folder: &Path) -> PerfReports {
             caches: CacheRegistry::default(),
         },
         folder: Some(folder.to_owned()),
+        data: Some(folder.join("data")),
         last_cpu: Mutex::new(None),
     }
 }
@@ -198,4 +199,50 @@ fn a_new_recording_forgets_the_last_cpu_mark() {
     let _ = reports.cpu_percent(now);
     reports.start();
     assert_eq!(reports.cpu_percent(now + Duration::from_secs(600)), None);
+}
+
+#[test]
+fn performance_zip_includes_disk_totals_and_redacted_profile_paths() {
+    let root = tempfile::tempdir().unwrap();
+    let reports = reports(root.path());
+    let data = root.path().join("data");
+    fs::create_dir_all(data.join("index")).unwrap();
+    fs::write(data.join("cache.db-wal"), [0; 7]).unwrap();
+    fs::write(data.join("navo.db-wal"), [0; 11]).unwrap();
+    fs::write(data.join("index/walk.index"), [0; 13]).unwrap();
+    let (recording, system) = seeded_recording();
+    let zip = reports.save(&recording, Instant::now(), &system).unwrap();
+    let diagnostic = root.path().join("diagnostic.zip");
+    crate::diag::write_on_demand(
+        &diagnostic,
+        Instant::now(),
+        &reports.diagnostics,
+        Some(&data),
+    )
+    .unwrap();
+    for zip in [zip, diagnostic] {
+        let entries = entries(&zip);
+        let report = entries
+            .iter()
+            .find(|(name, _)| name == "report.json")
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_str(&report.1).unwrap();
+        let locations = json["disk_use"]["locations"].as_array().unwrap();
+        for (kind, bytes) in [("listing_cache", 7), ("journal", 11), ("index", 13)] {
+            let total: u64 = locations
+                .iter()
+                .filter(|location| location["kind"] == kind)
+                .map(|location| location["bytes"].as_u64().unwrap())
+                .sum();
+            assert_eq!(total, bytes);
+        }
+        let summary = entries
+            .iter()
+            .find(|(name, _)| name == "summary.txt")
+            .unwrap();
+        assert!(summary.1.contains("Disk use:"));
+        for (_, text) in entries {
+            assert!(!text.contains(data.to_str().unwrap()));
+        }
+    }
 }
