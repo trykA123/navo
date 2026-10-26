@@ -97,6 +97,7 @@ pub(in crate::window_view::viewer) fn share_cell(t: &Theme, share: Option<Share>
         .pl(t.spacing.md)
         .pr(t.spacing.xl)
         .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
         .text_size(t.typography.small)
         .child(bar)
         .child(text)

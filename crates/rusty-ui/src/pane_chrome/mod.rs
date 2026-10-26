@@ -1,4 +1,6 @@
 mod card;
+mod collapse;
+mod crumb_menu;
 mod drive_menu;
 mod drive_pill;
 mod drives;
@@ -14,8 +16,8 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    App, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
+    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use rusty_core::Command;
 
@@ -29,11 +31,13 @@ pub use segments::{PathSegment, path_segments};
 
 use crate::drag::Landing;
 use crate::file_list::DropPayload;
+use crate::primitives::popup_menu::PopupMenu;
 use crate::primitives::{IconName, Tab, Tabs, icon};
 use crate::tokens;
 
 pub fn bind_keys(cx: &mut App) {
     drive_menu::bind_keys(cx);
+    crate::primitives::popup_menu::bind_keys(cx);
     path_input::bind_keys(cx);
 }
 
@@ -47,6 +51,7 @@ pub struct PaneTabs {
     is_highlighted: bool,
     on_command: Option<CommandHandler>,
     landing: Landing<usize>,
+    menu: Option<Entity<PopupMenu>>,
 }
 
 impl PaneTabs {
@@ -62,7 +67,13 @@ impl PaneTabs {
             is_highlighted: false,
             on_command: None,
             landing: Landing::default(),
+            menu: None,
         }
+    }
+
+    pub(crate) fn menu(mut self, state: Entity<PopupMenu>) -> Self {
+        self.menu = Some(state);
+        self
     }
 
     pub fn highlighted(mut self, is_highlighted: bool) -> Self {
@@ -124,29 +135,25 @@ fn new_tab_button(handler: Option<CommandHandler>, cx: &App) -> impl IntoElement
 
 impl RenderOnce for PaneTabs {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = tokens::current(cx);
         let tabs = self
             .titles
             .into_iter()
             .map(|title| Tab::new(title).icon(IconName::Folder));
+        let plus = new_tab_button(self.on_command.clone(), cx);
         let mut tabs = Tabs::new(self.id, tabs)
             .selected(self.active)
-            .highlighted(self.is_highlighted);
+            .highlighted(self.is_highlighted)
+            .trailing(plus, t.spacing.tab_height)
+            .when_some(self.menu, Tabs::menu);
         tabs.set_landing(self.landing);
-        let plus = new_tab_button(self.on_command.clone(), cx);
-        let tabs = match self.on_command {
+        match self.on_command {
             Some(handler) => tabs.on_select(move |index, window, cx| {
                 if let Ok(tab) = u32::try_from(*index) {
                     handler(&Command::PaneActivateTab { tab }, window, cx);
                 }
             }),
             None => tabs,
-        };
-        div()
-            .flex()
-            .items_center()
-            .gap(tokens::current(cx).spacing.sm)
-            .min_w_0()
-            .child(tabs)
-            .child(plus)
+        }
     }
 }

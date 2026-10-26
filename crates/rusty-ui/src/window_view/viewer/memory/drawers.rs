@@ -60,6 +60,7 @@ fn item_title(t: &Theme, (name, size): (String, String), is_gap: bool) -> Div {
             div()
                 .flex_none()
                 .font_family(t.typography.numbers_font.clone())
+                .font_features(t.typography.numbers_font_features.clone())
                 .text_color(t.colors.muted)
                 .child(size),
         )
@@ -129,6 +130,7 @@ fn card(t: &Theme, label: &'static str, value: String) -> Div {
             div()
                 .font_weight(FontWeight::SEMIBOLD)
                 .font_family(t.typography.numbers_font.clone())
+                .font_features(t.typography.numbers_font_features.clone())
                 .child(value),
         )
 }
@@ -203,6 +205,7 @@ fn records(t: &Theme, image: &Image) -> Vec<Div> {
                 .child(
                     div()
                         .font_family(t.typography.numbers_font.clone())
+                        .font_features(t.typography.numbers_font_features.clone())
                         .child(format::bytes(image.counts.get(kind))),
                 )
         })
@@ -258,7 +261,12 @@ impl MemoryView {
             .flex()
             .items_baseline()
             .gap(t.spacing.md)
-            .child(div().font_weight(FontWeight::SEMIBOLD).child("Ranges"))
+            .child(
+                div()
+                    .font_family(t.typography.brand_font.clone())
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Ranges"),
+            )
             .child(
                 div()
                     .text_size(t.typography.small)
@@ -348,6 +356,7 @@ impl MemoryView {
             .min_w_0()
             .child(
                 div()
+                    .font_family(t.typography.brand_font.clone())
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(entries::name(&ready.items, self.selected)),
             )

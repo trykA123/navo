@@ -210,6 +210,9 @@ drag-drop-move = Move here
 drag-drop-link = Create shortcuts here
 drag-drop-cancel = Cancel
 
+path-hidden-menu = Hidden folders
+path-hidden-show = Show hidden folders
+
 drag-refused-path = Cannot drop { $path }. Only absolute local paths are supported.
 
 context-menu-type-to-filter = Type to filter
@@ -225,3 +228,8 @@ context-menu-retry = Retry
 context-menu-no-match = No matching commands
 shell-menu-loading = Loading Windows items…
 shell-menu-slow = Windows menu is slow
+tabs-more = { $count ->
+    [one] { $count } more tab
+   *[other] { $count } more tabs
+}
+tabs-hidden-menu = Hidden tabs

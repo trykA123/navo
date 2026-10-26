@@ -3,20 +3,23 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, Role, StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, App, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Pixels, RenderOnce, Role, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use rusty_core::Location;
 
+use super::crumb_menu::{CHEVRON, Hidden, Plan, ellipsis_crumb, hidden_menu, plan};
 use super::segments::{PathSegment, path_segments};
 use crate::drag::Landing;
 use crate::file_list::DropPayload;
+use crate::primitives::fit::Fit;
+use crate::primitives::popup_menu::{PopupMenu, note_items, popup_state};
 use crate::primitives::{IconName, icon};
 use crate::tokens::{self, Theme};
 
-const CRUMB_HEIGHT: f32 = 30.;
+const EDIT_MIN: f32 = 24.;
 
-type NavigateHandler = Rc<dyn Fn(&Location, &mut Window, &mut App)>;
+pub(super) type NavigateHandler = Rc<dyn Fn(&Location, &mut Window, &mut App)>;
 type EditHandler = Rc<dyn Fn(&mut Window, &mut App)>;
 
 #[derive(IntoElement)]
@@ -26,6 +29,7 @@ pub struct PathBar {
     on_navigate: Option<NavigateHandler>,
     on_edit: Option<EditHandler>,
     landing: Landing<Location>,
+    menu: Option<Entity<PopupMenu>>,
 }
 
 impl PathBar {
@@ -36,7 +40,13 @@ impl PathBar {
             on_navigate: None,
             on_edit: None,
             landing: Landing::default(),
+            menu: None,
         }
+    }
+
+    pub(crate) fn menu(mut self, state: Entity<PopupMenu>) -> Self {
+        self.menu = Some(state);
+        self
     }
 
     pub fn on_navigate(
@@ -86,12 +96,18 @@ fn segment(item: PathSegment, props: SegmentProps) -> AnyElement {
         .role(Role::Button)
         .aria_label(item.label.clone())
         .test_support()
-        .flex_none()
+        .when(!props.is_last, |d| d.flex_none())
+        .when(props.is_last, |d| {
+            d.min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .font_weight(FontWeight::SEMIBOLD)
+        })
         .px(t.spacing.xs)
         .rounded(t.radii.xs)
         .cursor_pointer()
         .text_color(if props.is_last { c.text } else { c.muted })
-        .when(props.is_last, |d| d.font_weight(FontWeight::SEMIBOLD))
         .hover(|style| style.bg(c.hover))
         .when_some(props.on_navigate, |d, handler| {
             d.on_click(move |_, window, cx| handler(&target, window, cx))
@@ -118,16 +134,32 @@ fn edit_area(on_edit: Option<EditHandler>) -> impl IntoElement {
         })
 }
 
-impl RenderOnce for PathBar {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+impl PathBar {
+    fn crumbs(&self, plan: Plan, state: &Entity<PopupMenu>, cx: &App) -> Vec<AnyElement> {
         let t = tokens::current(cx);
+        let open = state.read(cx).is_open;
         let c = &t.colors;
-        let segments = path_segments(&self.location);
+        let Plan { segments, hidden } = plan;
         let last = segments.len().saturating_sub(1);
-        let mut crumbs = Vec::with_capacity(segments.len() * 2);
+        let mut items = Vec::with_capacity(segments.len() * 2 + 2);
+        let mut hidden_items = Vec::new();
         for (index, item) in segments.into_iter().enumerate() {
+            if hidden.contains(&index) {
+                hidden_items.push((index, item));
+                continue;
+            }
             if index > 0 {
-                crumbs.push(icon(IconName::ChevronRight, px(12.), c.faint).into_any_element());
+                items.push(icon(IconName::ChevronRight, px(CHEVRON), c.faint).into_any_element());
+            }
+            if index == hidden.end && !hidden.is_empty() {
+                let hidden = Hidden {
+                    items: std::mem::take(&mut hidden_items),
+                    on_navigate: self.on_navigate.clone(),
+                    state: state.clone(),
+                };
+                let menu = open.then(|| hidden_menu(hidden, t, cx));
+                items.push(ellipsis_crumb(t, state, menu, cx));
+                items.push(icon(IconName::ChevronRight, px(CHEVRON), c.faint).into_any_element());
             }
             let props = SegmentProps {
                 theme: t,
@@ -136,10 +168,47 @@ impl RenderOnce for PathBar {
                 on_navigate: self.on_navigate.clone(),
                 landing: self.landing.clone(),
             };
-            crumbs.push(segment(item, props));
+            items.push(segment(item, props));
         }
+        items
+    }
+
+    fn crumb_row(
+        self,
+        (width, state): (Pixels, Entity<PopupMenu>),
+        window: &mut Window,
+        cx: &mut App,
+    ) -> AnyElement {
+        let t = tokens::current(cx).clone();
+        let available = f32::from(width) - EDIT_MIN;
+        let plan = plan(path_segments(&self.location), window, &t, available);
+        note_items(&state, !plan.hidden.is_empty(), cx);
+        let items = self.crumbs(plan, &state, cx);
         div()
-            .id(self.id)
+            .flex()
+            .items_center()
+            .gap(t.spacing.xxs)
+            .size_full()
+            .min_w_0()
+            .overflow_hidden()
+            .children(items)
+            .child(edit_area(self.on_edit))
+            .into_any_element()
+    }
+}
+
+impl RenderOnce for PathBar {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = tokens::current(cx).clone();
+        let c = &t.colors;
+        let id = self.id.clone();
+        let state = match self.menu.take() {
+            Some(state) => state,
+            None => popup_state((id.clone(), "crumbs"), window, cx),
+        };
+        let height = bar_height(&t);
+        div()
+            .id(id)
             .role(Role::Navigation)
             .aria_label("Path")
             .test_support()
@@ -148,21 +217,17 @@ impl RenderOnce for PathBar {
             .flex_none()
             .mx(t.spacing.md)
             .mb(t.spacing.sm)
-            .h(px(CRUMB_HEIGHT))
+            .h(height)
             .px(t.spacing.xs)
             .rounded(t.radii.md)
             .text_color(c.muted)
             .bg(t.surfaces.field)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(t.spacing.xxs)
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .children(crumbs)
-                    .child(edit_area(self.on_edit)),
-            )
+            .child(Fit::new(height, move |width, window, cx| {
+                self.crumb_row((width, state), window, cx)
+            }))
     }
+}
+
+pub(super) fn bar_height(t: &Theme) -> Pixels {
+    t.spacing.path_height + t.spacing.xxs
 }

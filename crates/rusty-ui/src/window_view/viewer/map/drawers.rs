@@ -155,6 +155,7 @@ fn item_row(
                     div()
                         .flex_none()
                         .font_family(t.typography.numbers_font.clone())
+                        .font_features(t.typography.numbers_font_features.clone())
                         .text_color(t.colors.muted)
                         .child(size),
                 ),
@@ -203,6 +204,7 @@ fn size_row(t: &Theme, (name, detail, bytes): (&str, &str, u64)) -> Div {
                     div()
                         .flex_none()
                         .font_family(t.typography.numbers_font.clone())
+                        .font_features(t.typography.numbers_font_features.clone())
                         .child(format::bytes(bytes)),
                 ),
         )
@@ -277,6 +279,7 @@ impl MapView {
         self.loaded()?;
         let this = cx.weak_entity();
         let title = div()
+            .font_family(t.typography.brand_font.clone())
             .font_weight(FontWeight::SEMIBOLD)
             .child("Regions and objects");
         Some(
@@ -341,6 +344,7 @@ impl MapView {
         let title = div()
             .min_w_0()
             .truncate()
+            .font_family(t.typography.brand_font.clone())
             .font_weight(FontWeight::SEMIBOLD)
             .child(name);
         Some(

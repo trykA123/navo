@@ -245,6 +245,7 @@ fn lead_cell(table: &Table, row: usize, line: &Line) -> Div {
                 .flex_1()
                 .text_right()
                 .font_family(t.typography.numbers_font.clone())
+                .font_features(t.typography.numbers_font_features.clone())
                 .text_size(t.typography.small)
                 .text_color(t.colors.muted)
                 .child((row + 1).to_string()),

@@ -2,6 +2,7 @@ mod button;
 mod kbd;
 mod splitter;
 mod tabs;
+mod tabs_menu;
 mod tooltip;
 mod virtual_list;
 

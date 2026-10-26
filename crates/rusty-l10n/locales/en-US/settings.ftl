@@ -60,3 +60,5 @@ settings-color-theme-black-cap = Black cap
 settings-color-theme-fine-mesh = Fine mesh
 settings-color-theme-grain = Grain
 settings-color-theme-ink-and-amber = Ink and amber
+settings-font-unavailable = Font “{ $family }” is not available. Using Inter. Install the font or choose another family.
+settings-font-size-clamped = Font size limited to { $size } px. Choose a size from 10 to 20 px.

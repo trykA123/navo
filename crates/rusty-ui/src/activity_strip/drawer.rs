@@ -128,6 +128,7 @@ impl ActivityDrawer {
                     .flex_none()
                     .w(px(PERCENT_WIDTH))
                     .font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone())
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(percent(progress))
             });

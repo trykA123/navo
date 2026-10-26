@@ -5,9 +5,11 @@ use gpui_kit::base::TestSupportExt;
 use rusty_core::{Command, Location, PaneId, Tab};
 
 use super::FerriteWindow;
+use super::chrome_state::Hidden;
 use super::clipboard::ClipboardEffect;
 use super::keys::{
     BrowsePreview, DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit,
+    ShowHiddenPath, ShowHiddenTabs,
 };
 use super::status::status_of;
 use crate::FocusHandle;
@@ -95,19 +97,16 @@ impl FerriteWindow {
         let has_cursor = is_active && !self.preview.is_browsing(window, cx);
         let props = self.list_props(tab, has_cursor);
         let cover = self.hint_cover(window, cx).filter(|_| has_cursor);
-        let status = StatusBarProps {
-            free_bytes: self.free_on_drive(pane),
-            mark: self.listing_mark(tab),
-            hidden_marks: self.browser.hidden_marks(tab.id()),
-            ..status_of(&props.rows, tab.selection())
-        };
+        let status = self.pane_status(pane, tab, &props.rows);
         let focus = self.handle(pane, cx);
+        let chrome = self.ensure_chrome(pane, window, cx);
         let parts = WindowParts::of(&self.values);
         let path = self.path_row(pane, parts, cx);
         let list = match waited {
             Some(waited) => Self::waiting_view(&waited, &focus, cx),
             None => Self::file_list(pane, props, &focus, cx)
                 .parts(list_parts(parts))
+                .remember_width(chrome.list_width)
                 .lift_above(cover)
                 .into_any_element(),
         };
@@ -132,6 +131,15 @@ impl FerriteWindow {
         pane_card(("pane", pane.get()), label, is_active, cx)
             .child(body)
             .into_any_element()
+    }
+
+    fn pane_status(&self, pane: PaneId, tab: &Tab, rows: &[rusty_fs::FsEntry]) -> StatusBarProps {
+        StatusBarProps {
+            free_bytes: self.free_on_drive(pane),
+            mark: self.listing_mark(tab),
+            hidden_marks: self.browser.hidden_marks(tab.id()),
+            ..status_of(rows, tab.selection())
+        }
     }
 
     fn list_props(&self, tab: &Tab, is_active: bool) -> FileListProps {
@@ -164,8 +172,11 @@ impl FerriteWindow {
             let is_menu_open = self.drive_menu.is_some();
             return is_menu_open.then(|| div().relative().h_0().flex_none().child(drive));
         }
+        let menu = self.chrome.get(pane).map(|chrome| chrome.tabs.clone());
         let tabs = shows_tabs.then(|| {
-            let tabs = Self::tabs(pane, titles, active_index, cx).highlighted(is_active);
+            let tabs = Self::tabs(pane, titles, active_index, cx)
+                .highlighted(is_active)
+                .when_some(menu, |tabs, menu| tabs.menu(menu));
             div().flex_1().min_w_0().child(tabs)
         });
         let header = card_header(&t).children(tabs);
@@ -201,7 +212,9 @@ impl FerriteWindow {
             .pane(pane)
             .map(|p| p.active().location().clone())
             .unwrap_or_else(|| state.active_tab().location().clone());
-        Some(Self::path_bar(pane, location, cx).into_any_element())
+        let menu = self.chrome.get(pane).map(|chrome| chrome.path.clone());
+        let bar = Self::path_bar(pane, location, cx).when_some(menu, |bar, menu| bar.menu(menu));
+        Some(bar.into_any_element())
     }
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
@@ -237,6 +250,16 @@ impl FerriteWindow {
             .on_action(cx.listener(|this: &mut Self, _: &ClearFilter, _, cx| {
                 this.escape_preview(cx);
             }))
+            .on_action(
+                cx.listener(|this: &mut Self, _: &ShowHiddenTabs, window, cx| {
+                    this.show_hidden(Hidden::Tabs, window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this: &mut Self, _: &ShowHiddenPath, window, cx| {
+                    this.show_hidden(Hidden::Path, window, cx);
+                }),
+            )
     }
 
     fn tabs(
@@ -363,6 +386,7 @@ impl FerriteWindow {
     pub(super) fn switch_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let focused = self.browser.state().focused_pane();
         if let Some(other) = self.panes().into_iter().find(|p| *p != focused) {
+            self.close_popups(window, cx);
             self.focus_pane(other);
             self.focus_core_pane(window, cx);
             cx.notify();

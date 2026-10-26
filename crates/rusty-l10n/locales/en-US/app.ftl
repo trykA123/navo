@@ -32,6 +32,7 @@ command-center-context-file-list = File list
 command-center-context-preview = Preview
 command-center-context-path-bar = Path bar
 command-center-context-drive-menu = Drive menu
+command-center-context-menu = Menu
 command-center-context-activity = Activity
 command-center-context-shortcuts = Shortcuts
 command-center-context-dialog = Dialog

@@ -19,6 +19,13 @@ fn frame(t: &Theme, window: &Window, (width, side): (f32, Side)) -> SheetFrame {
     SheetFrame::new(body, px(width), side.other()).covering_passive_card()
 }
 
+fn sheet_title(t: &Theme, text: impl Into<SharedString>) -> Div {
+    div()
+        .font_family(t.typography.brand_font.clone())
+        .font_weight(FontWeight::SEMIBOLD)
+        .child(text.into())
+}
+
 fn caption(t: &Theme, text: impl Into<SharedString>) -> Div {
     div()
         .text_size(t.typography.tiny)
@@ -128,6 +135,7 @@ fn item_row(
                     div()
                         .flex_none()
                         .font_family(t.typography.numbers_font.clone())
+                        .font_features(t.typography.numbers_font_features.clone())
                         .text_color(t.colors.muted)
                         .child(size),
                 ),
@@ -227,7 +235,7 @@ impl ElfView {
             .flex()
             .items_baseline()
             .gap(t.spacing.md)
-            .child(div().font_weight(FontWeight::SEMIBOLD).child("Sections"))
+            .child(sheet_title(t, "Sections"))
             .child(
                 div()
                     .text_size(t.typography.small)
@@ -321,11 +329,7 @@ impl ElfView {
             self.selected()
                 .map_or_else(String::new, |(_, symbol)| elf.name(symbol).to_owned())
         });
-        let title = div()
-            .min_w_0()
-            .truncate()
-            .font_weight(FontWeight::SEMIBOLD)
-            .child(name);
+        let title = sheet_title(t, name).min_w_0().truncate();
         Some(
             SideSheet::new(
                 "elf-inspector",

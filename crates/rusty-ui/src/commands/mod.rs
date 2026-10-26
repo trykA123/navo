@@ -7,6 +7,7 @@ mod overlays;
 mod palette_hidden;
 mod paths;
 mod perf;
+mod popup;
 mod structured;
 mod viewer;
 mod window;
@@ -114,6 +115,7 @@ pub fn entries() -> Vec<CommandEntry> {
 pub fn all() -> impl Iterator<Item = CommandSpec> {
     let bound = [
         window::GROUPS.as_slice(),
+        popup::GROUPS.as_slice(),
         marks::GROUPS.as_slice(),
         paths::GROUPS.as_slice(),
         overlays::GROUPS.as_slice(),

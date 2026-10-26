@@ -92,6 +92,7 @@ impl PdfView {
                     .aria_label(count.clone())
                     .test_support()
                     .font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone())
                     .child(count)
             }))
             .child(self.find_buttons(t, cx))
@@ -161,6 +162,7 @@ impl PdfView {
                     .aria_label(label.clone())
                     .test_support()
                     .font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone())
                     .child(label),
             )
             .child(

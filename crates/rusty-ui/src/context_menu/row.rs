@@ -172,6 +172,7 @@ fn trailing_text(t: &Theme, text: impl Into<SharedString>) -> Div {
         .flex_none()
         .text_size(t.typography.tiny)
         .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
         .text_color(t.colors.muted)
         .child(text.into())
 }

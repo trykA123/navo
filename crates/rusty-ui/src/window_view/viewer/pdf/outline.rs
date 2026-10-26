@@ -63,6 +63,7 @@ fn page_cell(t: &Theme, row: usize, page: String) -> impl IntoElement {
         .text_size(t.typography.small)
         .text_color(t.colors.muted)
         .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
         .child(page)
 }
 

@@ -299,8 +299,6 @@ impl Field {
             self,
             Self::LightTheme
                 | Self::DarkTheme
-                | Self::Font
-                | Self::FontSize
                 | Self::TerminalProvider
                 | Self::TerminalCommand
                 | Self::AutomotiveMemoryStrip

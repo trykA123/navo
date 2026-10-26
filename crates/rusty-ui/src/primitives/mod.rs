@@ -1,7 +1,9 @@
 mod button;
 mod columns;
+pub(crate) mod fit;
 mod icon;
 mod kbd;
+pub(crate) mod popup_menu;
 mod splitter;
 mod tabs;
 mod text_field;

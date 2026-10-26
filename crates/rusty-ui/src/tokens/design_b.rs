@@ -9,8 +9,13 @@ pub(super) fn ok(lightness_pct: f32, chroma: f32, hue: f32) -> Hsla {
 
 pub(super) fn typography() -> Typography {
     Typography {
-        ui_font: "Archivo".into(),
-        numbers_font: "Archivo".into(),
+        ui_font: "Inter".into(),
+        brand_font: "Space Grotesk".into(),
+        numbers_font: "Inter".into(),
+        numbers_font_features: gpui_kit::FontFeatures(std::sync::Arc::new(vec![(
+            "tnum".into(),
+            1,
+        )])),
         mono_font: "JetBrains Mono".into(),
         body: px(13.),
         small: px(12.5),

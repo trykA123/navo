@@ -4,18 +4,26 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Tab as BaseTab, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, App, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
+mod more;
+mod plan;
+
+use super::fit::Fit;
+use super::popup_menu::{PopupMenu, note_items, popup_state};
 use super::{Tooltip, icon};
 use crate::drag::Landing;
 use crate::file_list::DropPayload;
 use crate::file_list::row::inset_ring;
 use crate::tokens::{self, Theme};
+use more::{Hidden, more_tabs};
+use plan::{Budget, plan};
 
 type SelectHandler = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
 
+#[derive(Clone)]
 pub struct Tab {
     label: SharedString,
     icon: Option<IconName>,
@@ -43,6 +51,8 @@ pub struct Tabs {
     is_highlighted: bool,
     on_select: Option<SelectHandler>,
     landing: Landing<usize>,
+    trailing: Option<(AnyElement, Pixels)>,
+    menu: Option<Entity<PopupMenu>>,
 }
 
 impl Tabs {
@@ -54,7 +64,19 @@ impl Tabs {
             is_highlighted: false,
             on_select: None,
             landing: Landing::default(),
+            trailing: None,
+            menu: None,
         }
+    }
+
+    pub(crate) fn menu(mut self, state: Entity<PopupMenu>) -> Self {
+        self.menu = Some(state);
+        self
+    }
+
+    pub fn trailing(mut self, element: impl IntoElement, width: Pixels) -> Self {
+        self.trailing = Some((element.into_any_element(), width));
+        self
     }
 
     pub fn selected(mut self, index: usize) -> Self {
@@ -99,6 +121,7 @@ struct TabProps<'a> {
     count: usize,
     is_selected: bool,
     is_highlighted: bool,
+    min_width: Pixels,
     on_select: Option<SelectHandler>,
     landing: Landing<usize>,
 }
@@ -115,13 +138,15 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
         .gap(t.spacing.sm)
         .h(t.spacing.tab_height)
         .px(t.spacing.lg)
-        .flex_none()
+        .flex_shrink(1.)
+        .min_w(props.min_width)
+        .overflow_hidden()
         .rounded(t.radii.pill)
         .text_color(color)
         .when_some(tab.icon, |base, name| {
             base.child(icon(name, t.spacing.icon - px(1.), color))
         })
-        .child(tab.label)
+        .child(div().min_w_0().truncate().child(tab.label))
         .when(index < 8, |base| {
             base.tooltip(move |window, cx| {
                 Tooltip::new(format!("Ctrl+{}", index + 1)).build(window, cx)
@@ -143,35 +168,95 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
     }
 }
 
+struct Row {
+    tabs: Vec<Tab>,
+    selected: usize,
+    is_highlighted: bool,
+    on_select: Option<SelectHandler>,
+    landing: Landing<usize>,
+    trailing: Option<(AnyElement, Pixels)>,
+    menu: Entity<PopupMenu>,
+}
+
+fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
+    let count = row.tabs.len();
+    let gap = f32::from(tokens::current(cx).spacing.sm);
+    let trailing_width = row.trailing.as_ref().map_or(0., |(_, w)| f32::from(*w));
+    let budget = Budget {
+        width: f32::from(width),
+        trailing: trailing_width,
+        gap,
+    };
+    let plan = plan(count, row.selected, &budget);
+    note_items(&row.menu, plan.shown.len() < count, cx);
+    let t = tokens::current(cx);
+    let mut shown = Vec::new();
+    let mut hidden = Vec::new();
+    for (index, tab) in row.tabs.into_iter().enumerate() {
+        match plan.shown.contains(&index) {
+            true => shown.push((index, tab)),
+            false => hidden.push((index, tab)),
+        }
+    }
+    let tabs = shown.into_iter().map(|(index, tab)| {
+        let props = TabProps {
+            theme: t,
+            index,
+            count,
+            is_selected: index == row.selected,
+            is_highlighted: row.is_highlighted,
+            min_width: px(plan.min_tab),
+            on_select: row.on_select.clone(),
+            landing: row.landing.clone(),
+        };
+        render_tab(tab, props)
+    });
+    let more = (!hidden.is_empty()).then(|| {
+        let hidden = Hidden {
+            state: row.menu.clone(),
+            tabs: hidden,
+            on_select: row.on_select.clone(),
+        };
+        more_tabs(t, hidden, cx)
+    });
+    div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.sm)
+        .w(width)
+        .h(t.spacing.tab_height)
+        .children(tabs)
+        .children(more)
+        .children(row.trailing.map(|(element, _)| element))
+        .into_any_element()
+}
+
 impl RenderOnce for Tabs {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
-        let count = self.tabs.len();
-        let selected = self.selected;
-        let is_highlighted = self.is_highlighted;
-        let on_select = self.on_select;
-        let landing = self.landing;
-        let tabs = self.tabs.into_iter().enumerate().map(|(index, tab)| {
-            let props = TabProps {
-                theme: t,
-                index,
-                count,
-                is_selected: index == selected,
-                is_highlighted,
-                on_select: on_select.clone(),
-                landing: landing.clone(),
-            };
-            render_tab(tab, props)
-        });
+        let height = t.spacing.tab_height;
+        let menu = match self.menu {
+            Some(menu) => menu,
+            None => popup_state((self.id.clone(), "more"), window, cx),
+        };
+        let row = Row {
+            tabs: self.tabs,
+            selected: self.selected,
+            is_highlighted: self.is_highlighted,
+            on_select: self.on_select,
+            landing: self.landing,
+            trailing: self.trailing,
+            menu,
+        };
         div()
             .id(self.id)
             .role(Role::TabList)
             .test_support()
-            .flex()
-            .items_center()
-            .gap(t.spacing.sm)
+            .flex_1()
             .min_w_0()
             .overflow_hidden()
-            .children(tabs)
+            .child(Fit::new(height, move |width, _, cx| {
+                build_row(row, width, cx)
+            }))
     }
 }

@@ -4,10 +4,11 @@ use std::rc::Rc;
 use gpui_kit::AppContext as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    Context, IntoElement, ParentElement, Render, Role, Styled, TestAppContext, Window, div,
+    Context, IntoElement, ParentElement, Render, Role, Styled, TestAppContext, Window, div, px,
 };
 use rusty_core::{Command, Location};
 
+use super::collapse::{Widths, hidden_segments};
 use super::{
     DriveIcon, DriveInfo, PaneTabs, PathBar, card_shadow, current_drive, drive_for_key,
     path_segments,
@@ -193,4 +194,300 @@ fn only_the_active_card_wears_the_accent_ring() {
             Some(t.surfaces.card_edge)
         );
     }
+}
+
+fn hidden(crumbs: &[f32], available: f32) -> std::ops::Range<usize> {
+    let widths = Widths {
+        crumbs,
+        separator: 10.,
+        ellipsis: 20.,
+    };
+    hidden_segments(&widths, available)
+}
+
+#[test]
+fn a_path_that_fits_collapses_nothing() {
+    assert_eq!(hidden(&[20., 40., 40., 60.], 400.), 0..0);
+    assert_eq!(hidden(&[20., 40.], 10.), 0..0);
+}
+
+#[test]
+fn middle_segments_collapse_until_the_rest_fits() {
+    let crumbs = [20., 50., 50., 50., 60.];
+    assert_eq!(hidden(&crumbs, 250.), 1..2);
+    assert_eq!(hidden(&crumbs, 200.), 1..3);
+    assert_eq!(hidden(&crumbs, 150.), 1..4);
+}
+
+#[test]
+fn the_root_and_the_last_segment_stay_even_when_nothing_fits() {
+    let crumbs = [20., 50., 50., 50., 500.];
+    let range = hidden(&crumbs, 100.);
+    assert_eq!(range, 1..4);
+    assert!(!range.contains(&0) && !range.contains(&4));
+}
+
+struct Narrow {
+    visited: Rc<RefCell<Vec<Location>>>,
+    path: &'static str,
+}
+
+impl Render for Narrow {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let visited = self.visited.clone();
+        div().w(px(260.)).child(
+            PathBar::new("path", location(self.path))
+                .on_navigate(move |target, _, _| visited.borrow_mut().push(target.clone())),
+        )
+    }
+}
+
+const DEEP: &str =
+    "/home/admin/vehicle-calibration/powertrain-control/endurance-campaign/thermal-soak";
+
+fn frames(cx: &mut TestAppContext, window: gpui_kit::AnyWindowHandle) {
+    for _ in 0..3 {
+        cx.update_window(window, |_, window, cx| window.render_frame(cx))
+            .expect("window");
+    }
+}
+
+#[gpui_kit::test]
+fn a_long_path_shows_the_root_a_menu_crumb_and_the_last_segment(cx: &mut TestAppContext) {
+    let visited = Rc::default();
+    let (window, _) = open(cx, |_, _| Narrow {
+        visited,
+        path: DEEP,
+    });
+    frames(cx, window);
+    let last = path_segments(&location(DEEP)).len() - 1;
+    cx.update_window(window, |_, window, _| {
+        let path = window.within("path");
+        assert!(path.try_find(("segment", 0usize)).is_some());
+        assert!(path.try_find("path-more").is_some());
+        assert!(path.try_find(("segment", 1usize)).is_none());
+        assert!(path.try_find(("segment", last)).is_some());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn choosing_a_hidden_folder_in_the_menu_navigates_there(cx: &mut TestAppContext) {
+    let visited: Rc<RefCell<Vec<Location>>> = Rc::default();
+    let (window, _) = open(cx, |_, _| Narrow {
+        visited: visited.clone(),
+        path: DEEP,
+    });
+    frames(cx, window);
+    cx.update_window(window, |_, window, cx| {
+        window.within("path").click("path-more", cx);
+    })
+    .expect("window");
+    frames(cx, window);
+    cx.update_window(window, |_, window, cx| {
+        window.within("path").click(("path-hidden", 1usize), cx);
+    })
+    .expect("window");
+    assert_eq!(*visited.borrow(), [location("/home")]);
+    frames(cx, window);
+    cx.update_window(window, |_, window, _| {
+        assert!(
+            window
+                .within("path")
+                .try_find(("path-hidden", 1usize))
+                .is_none()
+        );
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_short_path_has_no_menu_crumb(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, |_, _| Narrow {
+        visited: Rc::default(),
+        path: "/home/admin",
+    });
+    frames(cx, window);
+    cx.update_window(window, |_, window, _| {
+        let path = window.within("path");
+        assert!(path.try_find("path-more").is_none());
+        assert!(path.try_find(("segment", 1usize)).is_some());
+    })
+    .expect("window");
+}
+
+struct Keyed {
+    visited: Rc<RefCell<Vec<Location>>>,
+    path: &'static str,
+    has_bar: bool,
+    list: gpui_kit::FocusHandle,
+}
+
+impl Render for Keyed {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::InteractiveElement as _;
+        use gpui_kit::base::TestSupportExt as _;
+        let visited = self.visited.clone();
+        let bar = self.has_bar.then(|| {
+            PathBar::new("path", location(self.path))
+                .on_navigate(move |target, _, _| visited.borrow_mut().push(target.clone()))
+        });
+        div().w(px(260.)).children(bar).child(
+            div()
+                .id("list")
+                .test_support()
+                .track_focus(&self.list)
+                .size(px(100.)),
+        )
+    }
+}
+
+fn open_keyed(
+    cx: &mut TestAppContext,
+    has_bar: bool,
+) -> (
+    gpui_kit::AnyWindowHandle,
+    gpui_kit::Entity<Keyed>,
+    Rc<RefCell<Vec<Location>>>,
+) {
+    cx.update(crate::primitives::popup_menu::bind_keys);
+    let visited: Rc<RefCell<Vec<Location>>> = Rc::default();
+    let shared = visited.clone();
+    let (window, view) = open(cx, move |_, cx| Keyed {
+        visited: shared,
+        path: DEEP,
+        has_bar,
+        list: cx.focus_handle(),
+    });
+    cx.update_window(window, |_, window, cx| {
+        let list = view.read(cx).list.clone();
+        window.focus(&list, cx);
+    })
+    .expect("window");
+    frames(cx, window);
+    (window, view, visited)
+}
+
+fn is_menu_open(window: &mut Window) -> bool {
+    window.within("path").try_find("path-hidden-menu").is_some()
+}
+
+#[gpui_kit::test]
+fn the_path_menu_opens_focused_and_arrows_and_enter_navigate(cx: &mut TestAppContext) {
+    let (window, _, visited) = open_keyed(cx, true);
+    cx.update_window(window, |_, window, cx| {
+        window.within("path").click("path-more", cx);
+        let path = window.within("path");
+        assert_eq!(path.find("path-hidden-menu").focused(), Some(true));
+        assert_eq!(path.find(("path-hidden", 1usize)).selected(), Some(true));
+        window.press("down", cx);
+        window.press("down", cx);
+        window.press("up", cx);
+        assert_eq!(
+            window
+                .within("path")
+                .find(("path-hidden", 2usize))
+                .selected(),
+            Some(true)
+        );
+        window.press("enter", cx);
+        assert!(!is_menu_open(window));
+        assert_eq!(window.find("list").focused(), Some(true));
+    })
+    .expect("window");
+    assert_eq!(*visited.borrow(), [location("/home/admin")]);
+}
+
+#[gpui_kit::test]
+fn escape_closes_the_path_menu_and_returns_focus(cx: &mut TestAppContext) {
+    let (window, _, visited) = open_keyed(cx, true);
+    cx.update_window(window, |_, window, cx| {
+        window.within("path").click("path-more", cx);
+        window.press("escape", cx);
+        assert!(!is_menu_open(window));
+        assert_eq!(window.find("list").focused(), Some(true));
+    })
+    .expect("window");
+    assert!(visited.borrow().is_empty());
+}
+
+#[gpui_kit::test]
+fn clicking_the_ellipsis_again_closes_the_path_menu(cx: &mut TestAppContext) {
+    let (window, _, _) = open_keyed(cx, true);
+    cx.update_window(window, |_, window, cx| {
+        window.within("path").click("path-more", cx);
+        assert!(is_menu_open(window));
+        window.within("path").click("path-more", cx);
+        window.render_frame(cx);
+        assert!(!is_menu_open(window));
+        assert_eq!(window.find("list").focused(), Some(true));
+        window.within("path").click("path-more", cx);
+        assert!(is_menu_open(window));
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_new_path_bar_never_shows_the_long_path_uncollapsed(cx: &mut TestAppContext) {
+    let (window, view, _) = open_keyed(cx, false);
+    view.update(cx, |view, cx| {
+        view.has_bar = true;
+        cx.notify();
+    });
+    for _ in 0..3 {
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window
+                    .within("path")
+                    .try_find(("segment", 1usize))
+                    .is_none()
+            );
+        })
+        .expect("window");
+    }
+    cx.update_window(window, |_, window, _| {
+        assert!(window.within("path").try_find("path-more").is_some());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_path_change_is_collapsed_in_its_first_frame(cx: &mut TestAppContext) {
+    let (window, view, _) = open_keyed(cx, true);
+    view.update(cx, |view, cx| {
+        view.path = "/home/admin";
+        cx.notify();
+    });
+    frames(cx, window);
+    view.update(cx, |view, cx| {
+        view.path = DEEP;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let path = window.within("path");
+        assert!(path.try_find(("segment", 1usize)).is_none());
+        assert!(path.try_find("path-more").is_some());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn the_path_menu_opens_just_below_the_ellipsis(cx: &mut TestAppContext) {
+    let (window, _, _) = open_keyed(cx, true);
+    cx.update_window(window, |_, window, cx| {
+        window.within("path").click("path-more", cx);
+        let path = window.within("path");
+        let crumb = path.find("path-more").bounds();
+        let menu = path.find("path-hidden-menu").bounds();
+        assert!(
+            menu.top() >= crumb.bottom() && menu.top() <= crumb.bottom() + px(12.),
+            "menu top {:?}, crumb bottom {:?}",
+            menu.top(),
+            crumb.bottom()
+        );
+        assert!((menu.left() - crumb.left()).abs() <= px(8.));
+    })
+    .expect("window");
 }

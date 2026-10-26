@@ -187,7 +187,11 @@ fn heading(t: &Theme, props: &ConfirmProps) -> Div {
         .items_center()
         .gap(t.spacing.md)
         .child(icon(IconName::TriangleAlert, t.spacing.icon, color))
-        .child(label("title", props.title.clone()).font_weight(FontWeight::SEMIBOLD))
+        .child(
+            label("title", props.title.clone())
+                .font_family(t.typography.brand_font.clone())
+                .font_weight(FontWeight::SEMIBOLD),
+        )
 }
 
 fn paths(t: &Theme, props: &ConfirmProps) -> Div {

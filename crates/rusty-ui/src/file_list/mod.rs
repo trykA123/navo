@@ -1,4 +1,5 @@
 mod action;
+mod column_drop;
 mod drop;
 mod header;
 mod icons;
@@ -15,6 +16,7 @@ mod sort;
 #[cfg(test)]
 mod tests;
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
@@ -67,7 +69,10 @@ pub struct FileList {
     cover: Option<crate::modifier_hints::Cover>,
     parts: ListParts,
     drag: drop::Wiring,
+    known_width: Option<KnownWidth>,
 }
+
+type KnownWidth = Rc<Cell<Option<Pixels>>>;
 
 impl FileList {
     pub fn new(id: impl Into<gpui_kit::ElementId>, props: FileListProps) -> Self {
@@ -81,7 +86,13 @@ impl FileList {
             cover: None,
             parts: ListParts::default(),
             drag: drop::Wiring::default(),
+            known_width: None,
         }
+    }
+
+    pub fn remember_width(mut self, width: Rc<Cell<Option<Pixels>>>) -> Self {
+        self.known_width = Some(width);
+        self
     }
 
     #[must_use]
@@ -309,7 +320,7 @@ fn report_scroll(
 }
 
 fn report_page_rows(
-    handler: Option<PageRowsHandler>,
+    (handler, known_width): (Option<PageRowsHandler>, Option<KnownWidth>),
     watch: Watch,
 ) -> impl Fn(Vec<Bounds<Pixels>>, &mut Window, &mut App) + 'static {
     move |bounds, window, cx| {
@@ -322,16 +333,47 @@ fn report_page_rows(
         } else {
             0
         };
-        let is_new = watch.state.update(cx, |state, _| {
+        let is_new = watch.state.update(cx, |state, cx| {
             let is_new = state.page_rows != Some(rows);
             state.page_rows = Some(rows);
+            let was = state.list_bounds.map(|bounds| bounds.size.width);
             state.list_bounds = Some(lift::unshifted(*list, state.lift));
+            if let Some(known) = &known_width {
+                known.set(Some(list.size.width));
+            }
+            if was != Some(list.size.width) {
+                cx.notify();
+            }
             is_new
         });
         if let (true, Some(handler)) = (is_new, handler.clone()) {
             window.defer(cx, move |window, cx| handler(&rows, window, cx));
         }
     }
+}
+
+fn fitted_parts(
+    (state, known): (&Entity<ListState>, Option<&KnownWidth>),
+    parts: ListParts,
+    t: &tokens::Theme,
+    cx: &App,
+) -> ListParts {
+    let width = state
+        .read(cx)
+        .list_bounds
+        .map(|bounds| bounds.size.width)
+        .or_else(|| known.and_then(|known| known.get()));
+    column_drop::fit(width, parts, t)
+}
+
+fn virtual_list(ctx: &Rc<ListContext>, scroll: &ListScroll, row_height: Pixels) -> VirtualList {
+    let semantics = ctx.clone();
+    let label = format!("{} files", ctx.props.folder);
+    VirtualList::new("list", ctx.props.rows.len(), scroll, rows::render_rows(ctx))
+        .row_height(row_height)
+        .label(label)
+        .describe_rows(move |index| row_semantics(&semantics.props, index))
+        .when_some(ctx.focus.clone(), |list, focus| list.track_focus(&focus))
 }
 
 impl RenderOnce for FileList {
@@ -343,29 +385,26 @@ impl RenderOnce for FileList {
         let scroll = follow_scroll(&state, wanted, row_height, cx);
         let lift = lift::lift_for(&state, (self.props.view.cursor, self.cover), row_height, cx);
         let len = self.props.rows.len();
-        let label = format!("{} files", self.props.folder);
         let ctx = Rc::new(ListContext {
             props: self.props,
             state: state.clone(),
             focus: self.focus,
             on_command: self.on_command,
             on_list_action: self.on_list_action,
-            parts: self.parts,
+            parts: fitted_parts((&state, self.known_width.as_ref()), self.parts, &t, cx),
             drag: self.drag,
         });
-        let semantics = ctx.clone();
-        let list = VirtualList::new("list", len, &scroll, rows::render_rows(&ctx))
-            .row_height(row_height)
-            .label(label)
-            .describe_rows(move |index| row_semantics(&semantics.props, index))
-            .when_some(ctx.focus.clone(), |list, focus| list.track_focus(&focus));
+        let list = virtual_list(&ctx, &scroll, row_height);
         let watch = |state| Watch { state, row_height };
         let area = div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
-            .on_children_prepainted(report_page_rows(self.on_page_rows, watch(state.clone())))
+            .on_children_prepainted(report_page_rows(
+                (self.on_page_rows, self.known_width),
+                watch(state.clone()),
+            ))
             .on_scroll_wheel(report_scroll(&ctx, watch(state)))
             .on_mouse_down(MouseButton::Right, press::background_down(&ctx))
             .overflow_hidden()

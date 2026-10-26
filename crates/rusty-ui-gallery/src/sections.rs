@@ -7,6 +7,17 @@ use rusty_ui::primitives::{
 };
 use rusty_ui::tokens::{self, Theme};
 
+const OVERFLOW_WIDTH: f32 = 320.;
+const OVERFLOW_TITLES: [&str; 8] = [
+    "commander",
+    "core",
+    "Downloads",
+    "measurements",
+    "calibration",
+    "thermal-soak",
+    "cold-start",
+    "archive",
+];
 const ROWS: usize = 100_000;
 const CURSOR_ROW: usize = 2;
 const MARKED_ROW: usize = 4;
@@ -97,6 +108,13 @@ pub fn tabs(
     )
     .selected(selected)
     .on_select(on_select);
+    let crowded = Tabs::new(
+        "tabs-overflow",
+        OVERFLOW_TITLES
+            .iter()
+            .map(|title| Tab::new(*title).icon(IconName::Folder)),
+    )
+    .selected(OVERFLOW_TITLES.len() - 1);
     let body = div()
         .border_1()
         .border_color(t.colors.line)
@@ -104,7 +122,13 @@ pub fn tabs(
         .overflow_hidden()
         .child(tabs)
         .child(div().h(t.spacing.row_height * 2.).bg(t.colors.surface));
-    section(t, "TABS: ACTIVE AND INACTIVE", body)
+    let overflow = div()
+        .w(px(OVERFLOW_WIDTH))
+        .border_1()
+        .border_color(t.colors.line)
+        .rounded(t.radii.md)
+        .child(crowded);
+    section(t, "TABS: ACTIVE AND INACTIVE", body).child(section(t, "TABS: OVERFLOW", overflow))
 }
 
 fn file_row(index: usize, cx: &App) -> AnyElement {

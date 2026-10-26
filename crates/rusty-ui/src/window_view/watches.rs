@@ -4,11 +4,13 @@ use super::FerriteWindow;
 use crate::prelude::*;
 
 impl FerriteWindow {
-    pub(super) fn watches(window: &mut Window, cx: &mut Context<Self>) -> [Subscription; 3] {
+    pub(super) fn watches(window: &mut Window, cx: &mut Context<Self>) -> [Subscription; 5] {
         [
             cx.observe_in(&cx.entity(), window, Self::follow_cursor),
             cx.observe_window_activation(window, Self::activation_changed),
             cx.observe_window_appearance(window, Self::appearance_changed),
+            cx.observe_window_bounds(window, Self::viewport_changed),
+            cx.on_focus_lost(window, Self::popup_focus_lost),
         ]
     }
 

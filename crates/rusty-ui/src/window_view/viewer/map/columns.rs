@@ -185,9 +185,9 @@ impl MapView {
                 }
                 let cell = match head.column {
                     Column::Address => cell.font_family(t.typography.mono_font.clone()),
-                    column if is_number(column) => {
-                        cell.font_family(t.typography.numbers_font.clone())
-                    }
+                    column if is_number(column) => cell
+                        .font_family(t.typography.numbers_font.clone())
+                        .font_features(t.typography.numbers_font_features.clone()),
                     _ => cell,
                 };
                 cell.child(div().min_w_0().truncate().child(text.clone()))

@@ -4,7 +4,7 @@ use rusty_ui::prelude::*;
 use rusty_ui::window_view::{ArchiveSource, ArchiveView, FileHooks, FontFace, FontView};
 
 const FONT_ENV: &str = "FERRITE_SAMPLE_FONT";
-const ARCHIVO: &[u8] = include_bytes!("../../rusty-ui/fonts/Archivo-SemiBold.ttf");
+const INTER: &[u8] = include_bytes!("../../rusty-ui/fonts/Inter-SemiBold.ttf");
 
 const ENTRIES: [(&str, u64, u8); 14] = [
     ("ferrite/", 0, 9),
@@ -15,7 +15,7 @@ const ENTRIES: [(&str, u64, u8); 14] = [
     ("ferrite/themes/ferrite-dark.json", 4_382, 7),
     ("ferrite/themes/ferrite-light.json", 4_377, 7),
     ("ferrite/fonts/", 0, 3),
-    ("ferrite/fonts/Archivo-Regular.ttf", 146_520, 3),
+    ("ferrite/fonts/Inter-Regular.ttf", 411_640, 3),
     ("ferrite/fonts/JetBrainsMono-Regular.ttf", 273_900, 3),
     ("ferrite/plugins/sample/plugin.toml", 412, 11),
     ("ferrite/plugins/sample/main.wasm", 1_904_112, 11),
@@ -56,7 +56,7 @@ pub fn archive_view(cx: &mut App) -> Entity<ArchiveView> {
 pub fn font_view(cx: &mut App) -> Option<Entity<FontView>> {
     let bytes = std::env::var_os(FONT_ENV)
         .and_then(|path| std::fs::read(path).ok())
-        .unwrap_or_else(|| ARCHIVO.to_vec());
+        .unwrap_or_else(|| INTER.to_vec());
     let face = FontFace::parse(bytes, &std::sync::atomic::AtomicBool::new(false)).ok()?;
     let title = format!("{}.ttf", face.family.replace(' ', ""));
     Some(cx.new(|cx| FontView::new(title, face, cx)))

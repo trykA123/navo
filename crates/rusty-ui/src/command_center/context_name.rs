@@ -14,6 +14,7 @@ fn key_of(context: &str) -> Option<&'static str> {
         "PreviewBrowse" => "command-center-context-preview",
         "PathInput" => "command-center-context-path-bar",
         "DriveMenu" => "command-center-context-drive-menu",
+        "PopupMenu" => "command-center-context-menu",
         "ActivityStrip" | "ActivityDrawer" => "command-center-context-activity",
         "ConfirmDialog" | "PromptDialog" => "command-center-context-dialog",
         "ContextMenu" => "command-center-context-context-menu",

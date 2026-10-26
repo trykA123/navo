@@ -2,11 +2,30 @@ use super::FerriteWindow;
 use crate::prelude::*;
 use crate::primitives::Splitter;
 use crate::tokens;
+use rusty_core::PaneId;
+
+pub(super) const ONE_PANE_BELOW: Pixels = px(900.);
 
 impl FerriteWindow {
+    pub(super) fn shown_panes(&self, window: &Window) -> Vec<PaneId> {
+        let panes = self.panes();
+        if panes.len() < 2 || window.viewport_size().width >= ONE_PANE_BELOW {
+            return panes;
+        }
+        let shown = self
+            .drive_menu
+            .as_ref()
+            .map(|menu| menu.pane)
+            .unwrap_or_else(|| self.browser.state().focused_pane());
+        match panes.contains(&shown) {
+            true => vec![shown],
+            false => panes.into_iter().take(1).collect(),
+        }
+    }
+
     fn panes_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let t = tokens::current(cx).clone();
-        let panes = self.panes();
+        let panes = self.shown_panes(window);
         let mut views: Vec<AnyElement> = panes
             .iter()
             .map(|pane| {

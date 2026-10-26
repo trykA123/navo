@@ -25,6 +25,8 @@ gpui_kit::actions!(
         ResetSplit,
         RetryListing,
         SaveCrashReport,
+        ShowHiddenPath,
+        ShowHiddenTabs,
         StopRecording,
         ToggleJobs
     ]

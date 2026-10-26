@@ -92,5 +92,6 @@ impl FerriteWindow {
             .or(problem)
             .or_else(|| self.keymap_notice())
             .or_else(|| self.upgrade_notice())
+            .or_else(|| self.saver.font_notice.clone())
     }
 }

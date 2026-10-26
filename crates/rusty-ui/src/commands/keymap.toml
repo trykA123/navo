@@ -461,6 +461,24 @@ keys = ["enter"]
 command = "drive_menu.close"
 keys = ["escape"]
 
+# PopupMenu
+
+[[bind]]
+command = "popup_menu.up"
+keys = ["up"]
+
+[[bind]]
+command = "popup_menu.down"
+keys = ["down"]
+
+[[bind]]
+command = "popup_menu.choose"
+keys = ["enter"]
+
+[[bind]]
+command = "popup_menu.close"
+keys = ["escape"]
+
 # ContextMenu
 
 [[bind]]

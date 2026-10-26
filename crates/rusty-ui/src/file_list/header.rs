@@ -3,11 +3,11 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Role,
+    Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Role,
     StatefulInteractiveElement, Styled, div, px,
 };
 
-use super::row::{check_column, columns, date_column, ext_column};
+use super::row::{check_column, column_width, columns};
 use super::{FileListAction, ListContext, ListParts, SortBy, SortKey};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
@@ -17,38 +17,33 @@ struct Column {
     index: usize,
     label: &'static str,
     keys: &'static str,
-    width: Option<Pixels>,
 }
 
-fn columns_of(t: &Theme) -> [Column; 4] {
+fn columns_of() -> [Column; 4] {
     [
         Column {
             by: SortBy::Name,
             index: 0,
             label: "Name",
             keys: "Ctrl+F3",
-            width: None,
         },
         Column {
             by: SortBy::Ext,
             index: 1,
             label: "Ext",
             keys: "Ctrl+F4",
-            width: Some(ext_column(t)),
         },
         Column {
             by: SortBy::Size,
             index: 2,
             label: "Size",
             keys: "Ctrl+F6",
-            width: Some(t.spacing.size_column),
         },
         Column {
             by: SortBy::Date,
             index: 3,
             label: "Date",
             keys: "Ctrl+F5",
-            width: Some(date_column(t)),
         },
     ]
 }
@@ -124,9 +119,9 @@ fn cell(t: &Theme, column: Column, sorted: &Sorted, ctx: &Rc<ListContext>) -> im
         .items_center()
         .gap(t.spacing.xs)
         .cursor_pointer()
-        .map(|cell| match column.width {
+        .map(|cell| match column_width(t, column.by) {
             Some(width) => cell.w(width).flex_none(),
-            None => cell.flex_1(),
+            None => cell.flex_1().min_w_0(),
         })
         .when(right, |cell| cell.justify_end())
         .when(is_active, |cell| {
@@ -146,7 +141,7 @@ fn cell(t: &Theme, column: Column, sorted: &Sorted, ctx: &Rc<ListContext>) -> im
 
 pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {
     let c = &t.colors;
-    let all = columns_of(t);
+    let all = columns_of();
     let sorted = Sorted::of(sort, &all, ctx.parts);
     columns(t)
         .flex_none()

@@ -85,7 +85,8 @@ impl ImageView {
             .child(
                 labelled(t, "image-zoom", self.zoom_label().into())
                     .role(Role::Status)
-                    .font_family(t.typography.numbers_font.clone()),
+                    .font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone()),
             )
             .child(
                 IconButton::new("image-info-toggle", IconName::Info, "Details (I)")

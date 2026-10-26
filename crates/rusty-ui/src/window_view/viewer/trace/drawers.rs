@@ -93,6 +93,7 @@ impl TraceView {
                 div()
                     .flex_none()
                     .font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone())
                     .text_color(t.colors.muted)
                     .child(count),
             )
@@ -140,7 +141,12 @@ impl TraceView {
                     .flex()
                     .items_baseline()
                     .gap(t.spacing.md)
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("IDs"))
+                    .child(
+                        div()
+                            .font_family(t.typography.brand_font.clone())
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("IDs"),
+                    )
                     .child(small(t).child(format!("{ids} · {sort}"))),
             )
             .child(
@@ -192,7 +198,12 @@ impl TraceView {
             frame(t, window, (INSPECTOR_WIDTH, Side::Right)),
         )
         .label("Inspector")
-        .header(div().font_weight(FontWeight::SEMIBOLD).child(title))
+        .header(
+            div()
+                .font_family(t.typography.brand_font.clone())
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(title),
+        )
         .close("ctrl-i", move |_, cx| {
             let _ = this.update(cx, |view, cx| view.toggle_inspector(cx));
         })

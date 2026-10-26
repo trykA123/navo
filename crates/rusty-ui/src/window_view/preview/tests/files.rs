@@ -18,7 +18,7 @@ use crate::window_view::preview::Shown;
 use crate::window_view::preview::file::read_only;
 use crate::window_view::{FileHooks, FileStamp, FileText, Head, Paged, Save};
 
-const ARCHIVO: &[u8] = include_bytes!("../../../../fonts/Archivo-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../fonts/Inter-Regular.ttf");
 const ZIP_HEAD: &[u8] = b"PK\x03\x04\x14\x00\x00\x00\x08\x00";
 
 struct Bytes(Vec<u8>);
@@ -48,7 +48,7 @@ fn samples() -> Vec<(&'static str, Vec<u8>)> {
             "config.yaml",
             b"name: shop\nitems:\n  - first\n  - second\n".to_vec(),
         ),
-        ("face.ttf", ARCHIVO.to_vec()),
+        ("face.ttf", INTER.to_vec()),
         ("feed.xml", b"<feed><item>first</item></feed>".to_vec()),
         ("notes.txt", b"fn main() {}\nlet second = 2;\n".to_vec()),
         ("photo.png", png()),

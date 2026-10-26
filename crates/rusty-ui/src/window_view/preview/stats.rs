@@ -35,6 +35,7 @@ fn card(t: &Theme, label: &str, value: String) -> Div {
                 .truncate()
                 .font_weight(FontWeight::SEMIBOLD)
                 .font_family(t.typography.numbers_font.clone())
+                .font_features(t.typography.numbers_font_features.clone())
                 .child(value),
         )
 }

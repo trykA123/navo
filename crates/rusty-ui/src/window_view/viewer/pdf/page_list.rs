@@ -23,6 +23,7 @@ fn badge(t: &Theme, hits: usize) -> Div {
         .text_size(t.typography.tiny)
         .text_color(t.colors.text)
         .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
         .child(format::count(hits as u64, "hit", "hits"))
 }
 

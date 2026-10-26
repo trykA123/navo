@@ -61,7 +61,7 @@ fn window_options_hide_the_native_caption_and_keep_the_title() {
 
 #[test]
 fn the_main_window_asks_for_the_system_backdrop() {
-    let options = main_window_options("Ferrite");
+    let options = main_window_options("Ferrite", WindowBounds::default());
     assert_eq!(options.window_background, system_backdrop().window);
     if cfg!(not(windows)) {
         assert_eq!(
@@ -73,6 +73,44 @@ fn the_main_window_asks_for_the_system_backdrop() {
         window_options("Ferrite").window_background,
         WindowBackgroundAppearance::Opaque
     );
+}
+
+#[test]
+fn the_main_window_sets_the_minimum_size() {
+    let options = main_window_options("Ferrite", WindowBounds::default());
+    assert_eq!(options.window_min_size, Some(size(px(480.), px(360.))));
+}
+
+#[test]
+fn restored_window_bounds_are_clamped_to_the_minimum_size() {
+    let restored = Bounds {
+        origin: Point {
+            x: px(50.),
+            y: px(70.),
+        },
+        size: size(px(300.), px(200.)),
+    };
+    let expected = Bounds {
+        size: size(px(480.), px(360.)),
+        ..restored
+    };
+    for (bounds, expected) in [
+        (
+            WindowBounds::Windowed(restored),
+            WindowBounds::Windowed(expected),
+        ),
+        (
+            WindowBounds::Maximized(restored),
+            WindowBounds::Maximized(expected),
+        ),
+        (
+            WindowBounds::Fullscreen(restored),
+            WindowBounds::Fullscreen(expected),
+        ),
+    ] {
+        let options = main_window_options("Ferrite", bounds);
+        assert_eq!(options.window_bounds, Some(expected));
+    }
 }
 
 #[gpui_kit::test]

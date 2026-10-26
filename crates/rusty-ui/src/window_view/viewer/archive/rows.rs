@@ -138,6 +138,7 @@ pub(super) fn cells(look: &Look) -> Div {
         .gap(t.spacing.md)
         .flex_none()
         .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
         .text_size(t.typography.small)
         .text_color(c.muted)
         .child(right(t.spacing.size_column, size_text(entry)))

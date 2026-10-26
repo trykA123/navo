@@ -1,7 +1,7 @@
 use gpui_kit::{DisplayId, point};
 use rusty_core::placement::{MonitorLocalLogicalRect, PhysicalRect};
 
-use super::{Screen, Shown, opening, placement};
+use super::{Screen, Shown, keep_on, opening, placement};
 use crate::prelude::*;
 
 fn logical(x: f32, y: f32, width: f32, height: f32) -> Bounds<Pixels> {
@@ -173,4 +173,24 @@ fn a_window_on_an_unknown_display_is_not_stored() {
         display: Some(DisplayId::new(9)),
     };
     assert_eq!(placement(&office(), shown), None);
+}
+
+#[test]
+fn an_enlarged_window_in_a_display_corner_moves_back_onto_the_display() {
+    let area = office()[1].work_area;
+    let small = WindowBounds::Windowed(logical(-80., 1100., 300., 120.));
+    let WindowBounds::Windowed(kept) = keep_on(crate::title_bar::at_least_minimum(small), area)
+    else {
+        panic!("windowed bounds stay windowed");
+    };
+    assert_eq!(kept.size, size(px(480.), px(360.)));
+    assert!(kept.right() <= area.right() && kept.bottom() <= area.bottom());
+    assert!(kept.left() >= area.left() && kept.top() >= area.top());
+}
+
+#[test]
+fn a_window_inside_its_display_keeps_its_origin() {
+    let area = office()[0].work_area;
+    let inside = WindowBounds::Maximized(logical(100., 80., 900., 600.));
+    assert_eq!(keep_on(inside, area), inside);
 }

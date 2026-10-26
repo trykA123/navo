@@ -26,6 +26,8 @@ pane.drive_menu_second | NavoPane | true
 pane.edit_path | NavoPane | true
 window.view_menu | NavoPane | true
 pane.reset_split | NavoPane | true
+tabs.show_hidden | NavoPane | true
+path.show_hidden | NavoPane | true
 preview.browse | NavoPane | true
 crash_notice.focus | NavoPane | true
 activity.focus | NavoPane | true
@@ -94,6 +96,10 @@ drive_menu.up | DriveMenu | false
 drive_menu.down | DriveMenu | false
 drive_menu.open | DriveMenu | false
 drive_menu.close | DriveMenu | false
+popup_menu.up | PopupMenu | false
+popup_menu.down | PopupMenu | false
+popup_menu.choose | PopupMenu | false
+popup_menu.close | PopupMenu | false
 files.extend_up | FileList | false
 files.extend_down | FileList | false
 files.extend_page_up | FileList | false

@@ -134,6 +134,7 @@ fn every_size_token_is_positive_in_both_themes() {
         let typography = theme.typography;
         for font in [
             &typography.ui_font,
+            &typography.brand_font,
             &typography.numbers_font,
             &typography.mono_font,
         ] {
@@ -152,11 +153,57 @@ fn every_size_token_is_positive_in_both_themes() {
 }
 
 #[test]
-fn the_design_b_fonts_are_archivo_and_jetbrains_mono() {
-    let typography = Theme::new(Mode::Light).typography;
-    assert_eq!(typography.ui_font.as_ref(), "Archivo");
-    assert_eq!(typography.numbers_font.as_ref(), "Archivo");
-    assert_eq!(typography.mono_font.as_ref(), "JetBrains Mono");
+fn every_theme_shares_the_brand_interface_and_tabular_number_fonts() {
+    let expected = Theme::new(Mode::Light).typography;
+    for (label, theme) in every_theme() {
+        let typography = theme.typography;
+        assert_eq!(typography, expected, "{label}");
+        assert_eq!(typography.brand_font.as_ref(), "Space Grotesk");
+        assert_eq!(typography.ui_font.as_ref(), "Inter");
+        assert_eq!(typography.numbers_font.as_ref(), "Inter");
+        assert_eq!(
+            typography.numbers_font_features.tag_value_list(),
+            &[("tnum".to_string(), 1)]
+        );
+        assert_eq!(typography.mono_font.as_ref(), "JetBrains Mono");
+        assert_eq!(typography.body, px(13.));
+    }
+}
+
+#[gpui_kit::test]
+fn size_column_digits_have_equal_advance_with_bundled_inter(cx: &mut TestAppContext) {
+    let platform = gpui_kit::platform::current_platform(true);
+    let cx =
+        TestAppContext::build_with_text_system(cx.dispatcher.clone(), None, platform.text_system());
+    cx.update(|cx| {
+        crate::assets::load_fonts(cx).expect("bundled fonts load");
+        let theme = Theme::new(Mode::Light);
+        let typography = theme.typography;
+        let text_system = gpui_kit::WindowTextSystem::new(cx.text_system().clone());
+        for weight in [gpui_kit::FontWeight::NORMAL, gpui_kit::FontWeight::SEMIBOLD] {
+            let mut font = gpui_kit::font(typography.numbers_font.clone());
+            font.features = typography.numbers_font_features.clone();
+            font.weight = weight;
+            let width = |digit: &str| {
+                let run = gpui_kit::TextRun {
+                    len: digit.len(),
+                    font: font.clone(),
+                    color: theme.colors.text,
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                text_system
+                    .layout_line(digit, typography.small, &[run], None)
+                    .width
+            };
+            let expected = width("0");
+            assert!(expected > px(0.));
+            for digit in ["1", "2", "3", "4", "5", "6", "7", "8", "9"] {
+                assert_eq!(width(digit), expected, "{digit} at {weight:?}");
+            }
+        }
+    });
 }
 
 #[test]

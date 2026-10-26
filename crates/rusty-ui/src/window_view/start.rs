@@ -4,6 +4,7 @@ use rusty_core::AppState;
 
 use super::placement::{self, DisplayScale, DisplayScales};
 use super::{FerriteWindow, StartOptions, bind_app_keys};
+use crate::browser::Browser;
 use crate::prelude::*;
 
 pub fn run(mut options: StartOptions, display_scale: DisplayScale, on_quit: Rc<dyn Fn()>) {
@@ -37,16 +38,34 @@ pub(super) fn main_window_options(state: &AppState, cx: &App) -> WindowOptions {
         .window(state.focused_window())
         .map(rusty_core::Window::placement)
         .unwrap_or_default();
-    let (display_id, bounds) = match placement::opening(&placement::screens(cx), placements) {
-        Some((display, bounds)) => (Some(display), bounds),
+    let screens = placement::screens(cx);
+    let (display_id, bounds) = match placement::opening(&screens, placements) {
+        Some((display, bounds)) => {
+            let bounds = crate::title_bar::at_least_minimum(bounds);
+            let area = screens.iter().find(|screen| screen.id == display);
+            let bounds = area.map_or(bounds, |screen| {
+                placement::keep_on(bounds, screen.work_area)
+            });
+            (Some(display), bounds)
+        }
         None => (
             None,
             WindowBounds::Windowed(Bounds::centered(None, size(px(1280.), px(800.)), cx)),
         ),
     };
     WindowOptions {
-        window_bounds: Some(bounds),
         display_id,
-        ..crate::title_bar::main_window_options(rusty_core::brand::NAME)
+        ..crate::title_bar::main_window_options(rusty_core::brand::NAME, bounds)
+    }
+}
+
+impl FerriteWindow {
+    pub(super) fn browser(options: &StartOptions, cx: &mut Context<Self>) -> Browser {
+        let state = options.state.clone();
+        let mut browser = Browser::new(state, options.provider.clone(), Self::waker(cx));
+        browser.set_operations(options.operations.clone());
+        browser.set_launcher(options.launcher.clone());
+        browser.set_listing_cache(options.listing_cache.clone(), options.cache_keys.clone());
+        browser
     }
 }

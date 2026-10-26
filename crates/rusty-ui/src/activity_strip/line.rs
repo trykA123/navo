@@ -127,6 +127,7 @@ impl ActivityStrip {
                 label(("activity-percent", key), percent(progress).into())
                     .flex_none()
                     .font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone())
                     .font_weight(FontWeight::SEMIBOLD)
             });
         let detail = item.detail.clone().map(|detail| {

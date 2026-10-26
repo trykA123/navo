@@ -76,6 +76,7 @@ pub(super) fn brand(
         .pl(t.spacing.xs)
         .pr(t.spacing.md)
         .rounded(t.radii.card)
+        .font_family(t.typography.brand_font.clone())
         .font_weight(FontWeight::SEMIBOLD)
         .child(icon)
         .child(title)

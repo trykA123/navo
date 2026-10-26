@@ -117,6 +117,16 @@ pub(super) const GROUPS: [Group; 8] = [
                 "cmd-pane-reset-split",
             ),
             (
+                "ferrite_window::ShowHiddenTabs",
+                "tabs.show_hidden",
+                "cmd-tabs-show-hidden",
+            ),
+            (
+                "ferrite_window::ShowHiddenPath",
+                "path.show_hidden",
+                "cmd-path-show-hidden",
+            ),
+            (
                 "ferrite_window::BrowsePreview",
                 "preview.browse",
                 "cmd-preview-browse",

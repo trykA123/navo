@@ -368,6 +368,11 @@ drive_menu.up | up | DriveMenu
 drive_menu.down | down | DriveMenu
 drive_menu.open | enter | DriveMenu
 drive_menu.close | escape | DriveMenu
+[popup_menu]
+popup_menu.up | up | PopupMenu
+popup_menu.down | down | PopupMenu
+popup_menu.choose | enter | PopupMenu
+popup_menu.close | escape | PopupMenu
 [path_input]
 path_input.cancel | escape | PathInput
 [ferrite_tabs]

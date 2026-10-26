@@ -26,6 +26,8 @@ pane.drive_menu_second | Drives of pane 2 | NavoPane
 pane.edit_path | Edit path | NavoPane
 window.view_menu | Window view menu | NavoPane
 pane.reset_split | Reset pane split | NavoPane
+tabs.show_hidden | Show hidden tabs | NavoPane
+path.show_hidden | Show hidden path folders | NavoPane
 preview.browse | Browse in preview | NavoPane
 crash_notice.focus | Go to the crash notice | NavoPane
 activity.focus | Go to the activity strip | NavoPane
@@ -94,6 +96,10 @@ drive_menu.up | Up | DriveMenu
 drive_menu.down | Down | DriveMenu
 drive_menu.open | Open drive | DriveMenu
 drive_menu.close | Close drive menu | DriveMenu
+popup_menu.up | Up | PopupMenu
+popup_menu.down | Down | PopupMenu
+popup_menu.choose | Choose | PopupMenu
+popup_menu.close | Close menu | PopupMenu
 files.extend_up | Extend marks up | FileList
 files.extend_down | Extend marks down | FileList
 files.extend_page_up | Extend marks a page up | FileList

@@ -40,6 +40,7 @@ fn title(t: &Theme) -> Div {
         .child(
             div()
                 .truncate()
+                .font_family(t.typography.brand_font.clone())
                 .font_weight(FontWeight::SEMIBOLD)
                 .child("crates"),
         )

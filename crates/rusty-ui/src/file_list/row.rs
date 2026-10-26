@@ -6,7 +6,7 @@ use gpui_kit::{
 };
 use rusty_fs::{EntryKind, FsEntry};
 
-use super::{ListParts, kind};
+use super::{ListParts, SortBy, kind};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
@@ -21,12 +21,17 @@ pub(super) struct RowLook<'a> {
     pub parts: ListParts,
 }
 
-pub(super) fn ext_column(t: &Theme) -> Pixels {
-    t.spacing.xxl * 3.
+pub(super) fn column_width(t: &Theme, by: SortBy) -> Option<Pixels> {
+    match by {
+        SortBy::Name => None,
+        SortBy::Ext => Some(t.spacing.xxl * 3.),
+        SortBy::Size => Some(t.spacing.size_column),
+        SortBy::Date => Some(t.spacing.date_column + t.spacing.xl),
+    }
 }
 
-pub(super) fn date_column(t: &Theme) -> Pixels {
-    t.spacing.date_column + t.spacing.xl
+fn fixed_width(t: &Theme, by: SortBy) -> Pixels {
+    column_width(t, by).unwrap_or_default()
 }
 
 pub(super) fn check_column(t: &Theme) -> Pixels {
@@ -82,8 +87,10 @@ pub(crate) fn cursor_bar(t: &Theme) -> impl IntoElement + use<> {
         .bg(t.surfaces.card_ring)
 }
 
-fn right_cell(width: Pixels, text: impl Into<SharedString>) -> Div {
+fn right_cell(column: usize, width: Pixels, text: impl Into<SharedString>) -> impl IntoElement {
     div()
+        .id(("cell", column))
+        .test_support()
         .w(width)
         .flex_none()
         .flex()
@@ -108,7 +115,7 @@ fn name_cell(
     look: &RowLook,
     (name, extension): (&str, &str),
     (grip, zone): (Stateful<Div>, Div),
-) -> Div {
+) -> impl IntoElement {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
@@ -122,6 +129,8 @@ fn name_cell(
         .when(entry.attributes.hidden, |d| d.opacity(HIDDEN_ICON_OPACITY))
         .child(icon(glyph, t.spacing.icon - px(1.), glyph_color));
     div()
+        .id(("cell", 0usize))
+        .test_support()
         .flex()
         .items_center()
         .gap(t.spacing.md)
@@ -158,33 +167,49 @@ fn name_color(look: &RowLook) -> Hsla {
     }
 }
 
+fn numbers(look: &RowLook) -> Div {
+    let t = look.theme;
+    let c = &t.colors;
+    let entry = look.entry;
+    let number_color = if look.is_marked { c.mark } else { c.muted };
+    div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.md)
+        .flex_none()
+        .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
+        .text_size(t.typography.small)
+        .text_color(number_color)
+        .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
+        .when(look.parts.size, |d| {
+            d.child(right_cell(
+                2,
+                fixed_width(t, SortBy::Size),
+                kind::size_text(entry),
+            ))
+        })
+        .when(look.parts.date, |d| {
+            d.child(right_cell(
+                3,
+                fixed_width(t, SortBy::Date),
+                kind::date_text(entry),
+            ))
+        })
+}
+
 pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
     let display = entry.name.display();
     let (name, extension) = kind::split_name(&display, entry.kind);
-    let number_color = if look.is_marked { c.mark } else { c.muted };
-    let numbers = div()
-        .flex()
-        .items_center()
-        .gap(t.spacing.md)
-        .flex_none()
-        .font_family(t.typography.numbers_font.clone())
-        .text_size(t.typography.small)
-        .text_color(number_color)
-        .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
-        .when(look.parts.size, |d| {
-            d.child(right_cell(t.spacing.size_column, kind::size_text(entry)))
-        })
-        .when(look.parts.date, |d| {
-            d.child(right_cell(date_column(t), kind::date_text(entry)))
-        });
     let is_active_cursor = look.is_cursor && look.is_active_pane;
     let is_idle_cursor = look.is_cursor && !look.is_active_pane;
     columns(t)
         .relative()
         .flex_1()
+        .min_w_0()
         .h_full()
         .rounded(t.radii.md)
         .text_color(name_color(look))
@@ -197,14 +222,18 @@ pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
         .when(look.parts.ext, |d| {
             d.child(
                 div()
-                    .w(ext_column(t))
+                    .id(("cell", 1usize))
+                    .test_support()
+                    .w(fixed_width(t, SortBy::Ext))
                     .flex_none()
                     .truncate()
                     .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
                     .child(extension.to_owned()),
             )
         })
-        .child(numbers)
+        .when(look.parts.size || look.parts.date, |d| {
+            d.child(numbers(look))
+        })
 }
 
 pub(crate) fn filter_bar(t: &Theme, text: SharedString, shown: usize) -> impl IntoElement {

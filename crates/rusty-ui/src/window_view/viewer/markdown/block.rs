@@ -195,6 +195,7 @@ fn marker(t: &Theme, page: &Page, block: &Block) -> Option<Div> {
         Marker::Bullet => column.child("•"),
         Marker::Number(number) => column
             .font_family(t.typography.numbers_font.clone())
+            .font_features(t.typography.numbers_font_features.clone())
             .child(format!("{number}.")),
         Marker::Task(is_done) => column.child(task_box(t, is_done)),
         Marker::Footnote(label) => column

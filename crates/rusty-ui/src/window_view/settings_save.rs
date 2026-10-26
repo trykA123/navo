@@ -39,6 +39,7 @@ pub(super) struct Saver {
     is_saving: bool,
     pub(super) error: Option<SharedString>,
     pub(super) problem: Option<SharedString>,
+    pub(super) font_notice: Option<crate::status_bar::StatusNotice>,
     #[cfg(test)]
     pub(super) disk_applies: usize,
 }
@@ -55,6 +56,7 @@ impl Saver {
             is_saving: false,
             error,
             problem: None,
+            font_notice: None,
             #[cfg(test)]
             disk_applies: 0,
         }
@@ -147,7 +149,10 @@ impl FerriteWindow {
                 values.syntax_theme(),
             )
         };
-        if looks(&old) != looks(&self.values) {
+        if looks(&old) != looks(&self.values)
+            || old.get(Field::Font) != self.values.get(Field::Font)
+            || old.get(Field::FontSize) != self.values.get(Field::FontSize)
+        {
             self.apply_theme(window, cx);
         }
         steer(&self.values, &mut self.browser);

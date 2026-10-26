@@ -123,10 +123,11 @@ impl AssetSource for Assets {
 
 pub(crate) fn load_fonts(cx: &App) -> Result<(), UiError> {
     let fonts = vec![
-        font!("Archivo-Regular"),
-        font!("Archivo-Medium"),
-        font!("Archivo-SemiBold"),
-        font!("Archivo-Bold"),
+        font!("Inter-Regular"),
+        font!("Inter-Medium"),
+        font!("Inter-SemiBold"),
+        font!("Inter-Bold"),
+        font!("SpaceGrotesk-SemiBold"),
         font!("JetBrainsMono-Regular"),
         font!("JetBrainsMono-Medium"),
         font!("JetBrainsMono-SemiBold"),
@@ -135,4 +136,28 @@ pub(crate) fn load_fonts(cx: &App) -> Result<(), UiError> {
     cx.text_system()
         .add_fonts(fonts)
         .map_err(|error| UiError::Fonts(format!("{error:#}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::TestAppContext;
+
+    #[gpui_kit::test]
+    #[cfg_attr(windows, ignore = "the headless Windows platform has no text system")]
+    fn bundled_fonts_register_the_expected_families(cx: &mut TestAppContext) {
+        let platform = gpui_kit::platform::current_platform(true);
+        let cx = TestAppContext::build_with_text_system(
+            cx.dispatcher.clone(),
+            None,
+            platform.text_system(),
+        );
+        cx.update(|cx| {
+            super::load_fonts(cx).expect("bundled fonts load");
+            let families = cx.text_system().all_font_names();
+            for family in ["Inter", "Space Grotesk", "JetBrains Mono"] {
+                assert!(families.iter().any(|name| name == family), "{families:?}");
+            }
+            assert!(!families.iter().any(|name| name == "Archivo"));
+        });
+    }
 }

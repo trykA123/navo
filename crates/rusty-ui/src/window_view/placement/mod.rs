@@ -77,6 +77,23 @@ pub(super) fn opening(
     Some((screen.id, bounds))
 }
 
+pub(super) fn keep_on(mut bounds: WindowBounds, area: Bounds<Pixels>) -> WindowBounds {
+    let (WindowBounds::Windowed(rect)
+    | WindowBounds::Maximized(rect)
+    | WindowBounds::Fullscreen(rect)) = &mut bounds;
+    rect.origin.x = rect
+        .origin
+        .x
+        .min(area.right() - rect.size.width)
+        .max(area.left());
+    rect.origin.y = rect
+        .origin
+        .y
+        .min(area.bottom() - rect.size.height)
+        .max(area.top());
+    bounds
+}
+
 pub(super) fn placement(screens: &[Screen], shown: Shown) -> Option<(MonitorSetup, Placement)> {
     let setup = setup(screens)?;
     let (bounds, maximized) = match shown.bounds {

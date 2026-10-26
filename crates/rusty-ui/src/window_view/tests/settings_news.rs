@@ -179,3 +179,94 @@ fn a_hand_edit_newer_than_a_save_report_stays_on_screen(cx: &mut TestAppContext)
     assert_eq!(values.density(), Density::Compact);
     assert_eq!(density(cx), Density::Compact);
 }
+
+#[gpui_kit::test]
+fn font_size_applies_at_start_and_scales_text(cx: &mut TestAppContext) {
+    let values = at_start().with(&crate::settings::Change {
+        field: Field::FontSize,
+        value: crate::settings::Value::Number(15),
+    });
+    let _rig = super::app_menu::rig_on(cx, values, None);
+    let typography = cx.read(|cx| tokens::current(cx).typography.clone());
+    let defaults = tokens::Theme::new(tokens::Mode::Light).typography;
+    assert_eq!(typography.body, gpui_kit::px(15.));
+    let ratio = 15. / 13.;
+    assert_eq!(typography.small, defaults.small * ratio);
+    assert_eq!(typography.tiny, defaults.tiny * ratio);
+    assert_eq!(typography.key, defaults.key * ratio);
+    assert_eq!(typography.line_height, defaults.line_height * ratio);
+}
+
+#[gpui_kit::test]
+fn font_only_reload_falls_back_with_a_notice_and_removal_restores_defaults(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig(cx, ThemeChoice::System);
+    let edited = at_start().with(&Change::text(Field::Font, "Nope Sans"));
+    send(cx, &rig, applied(edited, 1));
+    let typography = cx.read(|cx| tokens::current(cx).typography.clone());
+    assert_eq!(typography.ui_font.as_ref(), "Inter");
+    let notice = rig.view.read_with(cx, |view, _| view.status_notice());
+    assert!(notice.is_some_and(|notice| !notice.is_error && !notice.text.is_empty()));
+    send(cx, &rig, applied(at_start(), 2));
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).typography.clone()),
+        tokens::Theme::new(tokens::Mode::Light).typography
+    );
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.status_notice())
+            .is_none()
+    );
+}
+
+#[gpui_kit::test]
+#[cfg_attr(windows, ignore = "the headless Windows platform has no text system")]
+fn font_size_only_reload_survives_theme_switching_and_removal(cx: &mut TestAppContext) {
+    let platform = gpui_kit::platform::current_platform(true);
+    let mut app =
+        TestAppContext::build_with_text_system(cx.dispatcher.clone(), None, platform.text_system());
+    app.update(|cx| crate::assets::load_fonts(cx).expect("bundled fonts"));
+    let cx = &mut app;
+    let rig = rig(cx, ThemeChoice::System);
+    let edited = at_start().with(&Change {
+        field: Field::FontSize,
+        value: crate::settings::Value::Number(15),
+    });
+    send(cx, &rig, applied(edited.clone(), 1));
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).typography.body),
+        gpui_kit::px(15.)
+    );
+    let edited = edited.with(&Change::text(Field::Font, "JetBrains Mono"));
+    send(cx, &rig, applied(edited.clone(), 2));
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).typography.ui_font.clone())
+            .as_ref(),
+        "JetBrains Mono"
+    );
+    send(
+        cx,
+        &rig,
+        applied(edited.with(&Change::theme(ThemeChoice::Dark)), 3),
+    );
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).typography.ui_font.clone())
+            .as_ref(),
+        "JetBrains Mono"
+    );
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).typography.body),
+        gpui_kit::px(15.)
+    );
+    send(cx, &rig, applied(at_start(), 4));
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).typography.ui_font.clone())
+            .as_ref(),
+        "Inter"
+    );
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).typography.body),
+        gpui_kit::px(13.)
+    );
+}

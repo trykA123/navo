@@ -266,6 +266,10 @@ pdf.whole_word | alt-w | Pdf
 pdf.zoom_in | ctrl-= | Pdf
 pdf.zoom_in | ctrl-shift-= | Pdf
 pdf.zoom_out | ctrl-- | Pdf
+popup_menu.choose | enter | PopupMenu
+popup_menu.close | escape | PopupMenu
+popup_menu.down | down | PopupMenu
+popup_menu.up | up | PopupMenu
 preview.browse | ctrl-shift-q | NavoPane
 preview.cursor_down | down | PreviewBrowse
 preview.cursor_up | up | PreviewBrowse

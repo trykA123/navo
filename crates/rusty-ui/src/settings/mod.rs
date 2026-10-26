@@ -128,7 +128,12 @@ impl RenderOnce for SheetTitle {
             .flex()
             .items_center()
             .gap(t.spacing.lg)
-            .child(div().font_weight(FontWeight::SEMIBOLD).child("Settings"))
+            .child(
+                div()
+                    .font_family(t.typography.brand_font.clone())
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Settings"),
+            )
             .child(row_state::live_chip(t))
     }
 }

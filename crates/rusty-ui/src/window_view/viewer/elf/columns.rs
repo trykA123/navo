@@ -142,7 +142,9 @@ impl ElfView {
             let cell = set.cell(at);
             match at {
                 ADDRESS => cell.font_family(t.typography.mono_font.clone()),
-                SIZE => cell.font_family(t.typography.numbers_font.clone()),
+                SIZE => cell
+                    .font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone()),
                 _ => cell,
             }
             .child(div().min_w_0().truncate().child(text))

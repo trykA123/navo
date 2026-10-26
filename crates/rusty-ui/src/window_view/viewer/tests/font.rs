@@ -7,7 +7,7 @@ use crate::window_view::tests::{fake, press, settle, viewer_open};
 use crate::window_view::viewer::font::{SAMPLE, SIZES};
 use crate::window_view::viewer::{FileHooks, Kinds};
 
-const ARCHIVO: &[u8] = include_bytes!("../../../../fonts/Archivo-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../fonts/Inter-Regular.ttf");
 
 type Limits = Arc<Mutex<Vec<u64>>>;
 
@@ -25,7 +25,7 @@ fn font_hooks(bytes: &'static [u8], limits: &Limits) -> FileHooks {
 #[gpui_kit::test]
 fn a_font_shows_its_family_and_sample_lines_after_a_background_read(cx: &mut TestAppContext) {
     let limits = Limits::default();
-    let files = font_hooks(ARCHIVO, &limits);
+    let files = font_hooks(INTER, &limits);
     let (window, view) = window_with(cx, fake(), files, Kinds::builtin());
     press(cx, window, &view, "down");
     press_only(cx, window, "f3");
@@ -33,7 +33,7 @@ fn a_font_shows_its_family_and_sample_lines_after_a_background_read(cx: &mut Tes
     settle(cx, &view);
     redraw(cx, window);
     assert_eq!(*limits.lock().expect("limits"), [32 * 1024 * 1024]);
-    assert_eq!(text_of(cx, window, "font-family"), "Archivo");
+    assert_eq!(text_of(cx, window, "font-family"), "Inter");
     for index in 0..SIZES.len() {
         assert_eq!(label(cx, window, ("font-sample", index)), SAMPLE);
     }
@@ -46,7 +46,7 @@ fn a_font_shows_its_family_and_sample_lines_after_a_background_read(cx: &mut Tes
 #[gpui_kit::test]
 fn a_damaged_font_shows_a_message(cx: &mut TestAppContext) {
     let limits = Limits::default();
-    let mut broken = ARCHIVO[..64].to_vec();
+    let mut broken = INTER[..64].to_vec();
     broken.extend_from_slice(&[0; 64]);
     let broken: &'static [u8] = Box::leak(broken.into_boxed_slice());
     let files = font_hooks(broken, &limits);
@@ -64,7 +64,7 @@ fn be(bytes: &[u8], at: usize, width: usize) -> usize {
 }
 
 fn with_unreadable_last_name() -> &'static [u8] {
-    let mut font = ARCHIVO.to_vec();
+    let mut font = INTER.to_vec();
     let tables = be(&font, 4, 2);
     let name = (0..tables)
         .map(|index| 12 + 16 * index)
@@ -84,7 +84,7 @@ fn a_font_whose_names_cannot_be_rewritten_shows_facts_without_a_preview(cx: &mut
     press(cx, window, &view, "down");
     press(cx, window, &view, "f3");
     redraw(cx, window);
-    assert_eq!(text_of(cx, window, "font-family"), "Archivo");
+    assert_eq!(text_of(cx, window, "font-family"), "Inter");
     assert_eq!(
         text_of(cx, window, "font-note"),
         "Preview not available for this font."

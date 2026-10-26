@@ -82,6 +82,7 @@ pub(in crate::window_view::viewer) fn bar_row(
                 .aria_label(count.clone())
                 .test_support()
                 .font_family(t.typography.numbers_font.clone())
+                .font_features(t.typography.numbers_font_features.clone())
                 .child(count),
         )
     })

@@ -207,7 +207,7 @@ fn svg_stays_an_image_when_the_image_kind_exists() {
     assert!(ids.contains(&"tree"));
 }
 
-const ARCHIVO: &[u8] = include_bytes!("../../../../fonts/Archivo-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../fonts/Inter-Regular.ttf");
 
 fn best(head: &[u8], name: &str) -> &'static str {
     let sniff = Sniff {
@@ -253,7 +253,7 @@ fn archive_magic_and_tar_names_pick_the_archive_view() {
 fn font_magic_picks_the_font_view() {
     let otf = b"OTTO\x00\x0A\x00\x80\x00\x03\x00\x20CFF \x00\x00\x00\x00";
     let cases: [(&[u8], &str); 4] = [
-        (ARCHIVO, "Archivo-Regular.ttf"),
+        (INTER, "Inter-Regular.ttf"),
         (otf, "Display.otf"),
         (b"ttcf\x00\x01\x00\x00\x00\x00\x00\x02", "Family.ttc"),
         (b"wOFF\x00\x01\x00\x00\x00\x00\x10\x00", "Web.woff"),

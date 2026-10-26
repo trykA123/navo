@@ -42,6 +42,7 @@ impl MdfView {
                 cell.font_family(t.typography.mono_font.clone())
             } else if at == 2 {
                 cell.font_family(t.typography.numbers_font.clone())
+                    .font_features(t.typography.numbers_font_features.clone())
             } else {
                 cell
             };
@@ -227,6 +228,7 @@ impl MdfView {
                     div()
                         .min_w_0()
                         .truncate()
+                        .font_family(t.typography.brand_font.clone())
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(name),
                 )

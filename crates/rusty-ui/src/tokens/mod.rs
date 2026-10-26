@@ -120,7 +120,9 @@ pub struct Colors {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Typography {
     pub ui_font: SharedString,
+    pub brand_font: SharedString,
     pub numbers_font: SharedString,
+    pub numbers_font_features: gpui_kit::FontFeatures,
     pub mono_font: SharedString,
     pub body: Pixels,
     pub small: Pixels,

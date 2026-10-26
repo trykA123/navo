@@ -131,6 +131,7 @@ pub(super) fn title_view(
                 .aria_label(title.name.clone())
                 .test_support()
                 .truncate()
+                .font_family(t.typography.brand_font.clone())
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(title.name),
         )

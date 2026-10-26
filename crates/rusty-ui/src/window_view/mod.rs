@@ -1,4 +1,5 @@
 mod app_menu;
+mod chrome_state;
 mod clipboard;
 mod closing;
 mod command_center;
@@ -12,6 +13,7 @@ mod drop_menu;
 mod drop_platform;
 mod editor;
 mod fkeys;
+mod font_settings;
 mod hand_off;
 mod hints;
 mod index_activity;
@@ -189,7 +191,8 @@ pub struct FerriteWindow {
     command_center: command_center::CommandCenterState,
     multi_rename: multi_rename::MultiRenameState,
     start: Option<start_watch::Watching>,
-    _watches: [Subscription; 3],
+    chrome: chrome_state::Chromes,
+    _watches: [Subscription; 5],
 }
 
 fn mode_of(appearance: WindowAppearance) -> Mode {
@@ -201,11 +204,8 @@ fn mode_of(appearance: WindowAppearance) -> Mode {
 
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut browser = Self::browser(&options, cx);
         let (values, saver, settings) = Panel::split(options.settings, &options.search, cx);
-        let mut browser = Browser::new(options.state, options.provider.clone(), Self::waker(cx));
-        browser.set_operations(options.operations);
-        browser.set_launcher(options.launcher);
-        browser.set_listing_cache(options.listing_cache, options.cache_keys);
         settings_save::steer(&values, &mut browser);
         browser.start();
         let view = Self {
@@ -247,6 +247,7 @@ impl FerriteWindow {
             crash: crash::CrashState::new(options.crash_report, cx),
             multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
+            chrome: chrome_state::Chromes::default(),
             _watches: Self::watches(window, cx),
         };
         let after = (options.keymap, options.open, options.view, options.rename);

@@ -94,6 +94,7 @@ fn cell_view(frame: &Frame<'_>, column: usize, text: &str, is_cursor: bool) -> D
         .when(is_number(text), |cell| {
             cell.justify_end()
                 .font_family(t.typography.numbers_font.clone())
+                .font_features(t.typography.numbers_font_features.clone())
         })
         .when(is_cursor, |cell| {
             cell.bg(c.selection).shadow(ring(c.accent))
@@ -116,6 +117,7 @@ fn number_cell(frame: &Frame<'_>, text: String) -> Div {
         .text_size(t.typography.small)
         .text_color(t.colors.muted)
         .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
         .child(text)
 }
 

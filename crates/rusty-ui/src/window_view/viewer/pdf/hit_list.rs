@@ -34,6 +34,7 @@ fn page_column(t: &Theme, page: String) -> Div {
         .flex_none()
         .w(px(PAGE_COLUMN))
         .font_family(t.typography.numbers_font.clone())
+        .font_features(t.typography.numbers_font_features.clone())
         .child(page)
 }
 
@@ -84,7 +85,12 @@ impl PdfView {
             .flex()
             .items_baseline()
             .gap(t.spacing.md)
-            .child(div().font_weight(FontWeight::SEMIBOLD).child("All hits"))
+            .child(
+                div()
+                    .font_family(t.typography.brand_font.clone())
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("All hits"),
+            )
             .children(summary.map(|summary| {
                 small(t)
                     .id("pdf-hits-summary")
