@@ -733,3 +733,17 @@ fn space_groups_children_carry_their_own_kinds() {
             .all(|child| child.by_kind[Kind::Code.index()] == child.bytes)
     );
 }
+
+#[test]
+fn space_groups_flash_region_ranks_huge_code_and_rodata_without_overflow() {
+    let elf = elf_of(vec![text(ROM, 0x100)], None, vec![(0, LOAD_RX)]);
+    let mut regions = regions_for_elf(&elf, Some(&table()));
+    let at = regions
+        .items
+        .iter()
+        .position(|r| r.name == "pflash")
+        .unwrap();
+    regions.items[at].by_kind[Kind::Code.index()] = u64::MAX - 1;
+    regions.items[at].by_kind[Kind::Rodata.index()] = u64::MAX - 1;
+    assert_eq!(flash_region(&regions), Some(at));
+}

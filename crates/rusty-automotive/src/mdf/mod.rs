@@ -1,4 +1,7 @@
+mod names;
 mod parse;
+
+use names::number_copies;
 
 pub use parse::{parse_mdf, sniff_mdf};
 
@@ -62,6 +65,7 @@ pub enum TableOrigin {
     #[default]
     Mdf,
     Map,
+    MapAndMdf,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -88,17 +92,7 @@ impl Mdf {
                 })
             })
             .collect();
-        for at in 1..regions.len() {
-            let base = regions[at].name.clone();
-            let mut copy = 2;
-            while regions[..at]
-                .iter()
-                .any(|other| other.name.eq_ignore_ascii_case(&regions[at].name))
-            {
-                regions[at].name = format!("{base} ({copy})");
-                copy += 1;
-            }
-        }
+        number_copies(&mut regions);
         RegionTable {
             regions,
             origin: TableOrigin::Mdf,

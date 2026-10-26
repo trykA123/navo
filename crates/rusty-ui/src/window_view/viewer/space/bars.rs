@@ -41,11 +41,13 @@ pub(super) enum Part {
 }
 
 pub(super) fn bar_parts(region: &Region) -> Vec<(Part, f64)> {
-    let shown: u64 = region.by_kind[..SHOWN_KINDS].iter().sum();
+    let shown = region.by_kind[..SHOWN_KINDS]
+        .iter()
+        .fold(0u64, |sum, bytes| sum.saturating_add(*bytes));
     let fill = region.by_kind[Kind::Fill.index()];
     let reserved = region.reserved.filter(|_| sized_total(region).is_some());
     let reserved = reserved.unwrap_or_default();
-    let taken = shown + fill + reserved;
+    let taken = shown.saturating_add(fill).saturating_add(reserved);
     let whole = sized_total(region).unwrap_or(taken).max(taken).max(1) as f64;
     let kinds = (0..SHOWN_KINDS).map(|index| (Part::Kind(index), region.by_kind[index]));
     kinds

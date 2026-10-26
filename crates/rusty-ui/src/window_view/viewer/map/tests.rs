@@ -475,7 +475,7 @@ fn a_long_section_name_keeps_its_module_and_a_symbol_its_prefix() {
         ".text.Com.Com_SendSignalGroupArrayWithTimeout",
         24,
     );
-    assert_eq!(section.prefix, "Com.");
+    assert_eq!(section.prefix, ".text.Com.");
     assert!(section.rest.contains('…'));
     let symbol = super::columns::fitted_name(
         Table::Symbols,

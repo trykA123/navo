@@ -164,7 +164,7 @@ pub(in crate::window_view::viewer) fn build_model(
     let region_source = region_source(&regions.items, names);
     let owned = elf_owners_text(&found.provenance, siblings);
     let provenance = provenance(
-        region_source.as_deref(),
+        (region_source.as_deref(), &regions.items),
         [owned, tr("space-from-flags")],
         siblings,
     );
@@ -198,7 +198,11 @@ pub(in crate::window_view::viewer) fn build_map_model(
         }
         _ => tr("space-from-names"),
     };
-    let provenance = provenance(region_source.as_deref(), [owned, kinds], siblings);
+    let provenance = provenance(
+        (region_source.as_deref(), &regions.items),
+        [owned, kinds],
+        siblings,
+    );
     let origin = Origin::Map(map);
     let mut model = RichModel {
         region_source,
@@ -225,7 +229,7 @@ fn elf_owners_text(found: &Provenance, siblings: &Siblings) -> String {
 fn region_source(regions: &[Region], (mdf, map): (Option<&str>, Option<&str>)) -> Option<String> {
     match regions.first()?.source {
         RegionSource::Mdf => mdf,
-        RegionSource::Map => map,
+        RegionSource::Map | RegionSource::MapAndMdf => map,
         RegionSource::Clusters => None,
     }
     .map(str::to_owned)
@@ -242,13 +246,22 @@ fn problem_text(problem: &SiblingProblem) -> String {
 }
 
 fn provenance(
-    region_source: Option<&str>,
+    (region_source, regions): (Option<&str>, &[Region]),
     [owned, kinds]: [String; 2],
     siblings: &Siblings,
 ) -> String {
-    let regions = match region_source {
-        Some(name) => region_provenance(name, siblings),
-        None => tr("space-from-clusters"),
+    let starts = regions
+        .first()
+        .filter(|region| region.source == RegionSource::MapAndMdf)
+        .and(siblings.names.mdf.as_deref());
+    let regions = match (region_source, starts) {
+        (Some(name), Some(starts)) => t!(
+            "space-from-regions-and-starts",
+            name = companion(name, siblings),
+            starts = companion(starts, siblings)
+        ),
+        (Some(name), None) => t!("space-from-regions", name = companion(name, siblings)),
+        (None, _) => tr("space-from-clusters"),
     };
     [regions, owned, kinds]
         .into_iter()
@@ -257,7 +270,7 @@ fn provenance(
         .join(" · ")
 }
 
-fn region_provenance(name: &str, siblings: &Siblings) -> String {
+fn companion(name: &str, siblings: &Siblings) -> String {
     let names = &siblings.names;
     let extension = if names.only_mdf && names.mdf.as_deref() == Some(name) {
         Some("mdf")
@@ -266,7 +279,7 @@ fn region_provenance(name: &str, siblings: &Siblings) -> String {
     } else {
         None
     };
-    let name = extension.map_or_else(
+    extension.map_or_else(
         || name.to_owned(),
         |extension| {
             t!(
@@ -275,8 +288,7 @@ fn region_provenance(name: &str, siblings: &Siblings) -> String {
                 extension = extension
             )
         },
-    );
-    t!("space-from-regions", name = name)
+    )
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ use super::{ElfView, Index, NavItem, Phase};
 use crate::prelude::*;
 use crate::window_view::viewer::background::{Job, Throttle, ranged, spawn_job};
 use crate::window_view::viewer::body::Host;
+use crate::window_view::viewer::space::FileBytes;
 
 const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
@@ -82,6 +83,7 @@ impl ElfView {
             IndexMessage::Progress(phase) => self.phase = phase,
             IndexMessage::Parsed(Ok((elf, selection))) => {
                 self.nav_items = nav_items(&elf);
+                self.file_bytes = Some(FileBytes::of(&elf.sections));
                 self.index = Index::Ready(elf);
                 self.rows = Arc::new(selection.rows);
                 self.hidden = selection.hidden;

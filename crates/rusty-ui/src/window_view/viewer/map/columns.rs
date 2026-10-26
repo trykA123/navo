@@ -168,14 +168,19 @@ impl MapView {
             .map(|(at, (head, text))| {
                 let cell = set.cell(at);
                 if head.column == Column::Name {
-                    let name = fitted_name(table, text, set.text_chars(at));
+                    let name = fitted_name(table, text, set.name_chars(at));
                     return cell.child(
                         div()
                             .id(("map-name", row))
                             .flex()
                             .min_w_0()
-                            .child(div().text_color(t.colors.muted).child(name.prefix))
-                            .child(name.rest),
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .text_color(t.colors.muted)
+                                    .child(name.prefix),
+                            )
+                            .child(div().min_w_0().truncate().child(name.rest)),
                     );
                 }
                 let cell = match head.column {

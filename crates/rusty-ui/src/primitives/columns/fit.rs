@@ -19,16 +19,35 @@ pub fn fit_name(prefix: &str, rest: &str, chars: usize) -> Fitted {
         return fitted(prefix.to_string(), rest.to_string());
     }
     let budget = (width * PREFIX_SHARE / 100).min(width - MIN_REST);
-    let prefix = if prefix_len <= budget {
-        prefix.to_string()
-    } else if budget >= SHORT_PREFIX {
-        let head: String = prefix.chars().take(2).collect();
-        format!("{head}….")
-    } else {
-        String::new()
-    };
+    let prefix = short_prefix(prefix, budget, width - MIN_REST);
     let room = width - prefix.chars().count();
     fitted(prefix, cut_middle(rest, rest_len, room))
+}
+
+fn short_prefix(prefix: &str, budget: usize, most: usize) -> String {
+    let (kind, module) = split_kind(prefix);
+    let kind_len = kind.chars().count();
+    let module_len = module.chars().count();
+    if module_len <= budget && kind_len + module_len <= most {
+        return prefix.to_string();
+    }
+    if budget >= SHORT_PREFIX && kind_len + SHORT_PREFIX <= most {
+        let head: String = module.chars().take(2).collect();
+        return format!("{kind}{head}….");
+    }
+    String::new()
+}
+
+fn split_kind(prefix: &str) -> (&str, &str) {
+    let Some(body) = prefix.strip_prefix('.') else {
+        return ("", prefix);
+    };
+    match body.split_once('.') {
+        Some((kind, module)) if !kind.is_empty() && !module.is_empty() => {
+            prefix.split_at(kind.len() + 2)
+        }
+        _ => ("", prefix),
+    }
 }
 
 fn fitted(prefix: String, rest: String) -> Fitted {
@@ -60,8 +79,7 @@ pub fn map_prefix(name: &str) -> (&str, &str) {
     if kind.is_empty() || module.is_empty() || rest.is_empty() {
         return ("", name);
     }
-    let start = 2 + kind.len();
-    (&name[start..start + module.len() + 1], rest)
+    name.split_at(kind.len() + module.len() + 3)
 }
 
 pub fn symbol_prefix(name: &str) -> (&str, &str) {
@@ -132,10 +150,26 @@ mod tests {
 
     #[test]
     fn map_prefix_takes_the_module() {
-        assert_eq!(map_prefix(".text.Com.Com_Send"), ("Com.", "Com_Send"));
+        assert_eq!(map_prefix(".text.Com.Com_Send"), (".text.Com.", "Com_Send"));
         assert_eq!(map_prefix(".text.main"), ("", ".text.main"));
         assert_eq!(map_prefix("text.Com.x"), ("", "text.Com.x"));
         assert_eq!(map_prefix(".text..x"), ("", ".text..x"));
+    }
+
+    #[test]
+    fn map_names_keep_their_kind_when_the_module_is_shortened() {
+        let (prefix, rest) = map_prefix(".rodata.Lamp_Control.Read");
+        assert_eq!(
+            joined(&fit_name(prefix, rest, 40)),
+            ".rodata.Lamp_Control.Read"
+        );
+        let code = fit_name(".text.Lamp_Control.", "Read_Input_Values", 24);
+        let data = fit_name(".rodata.Lamp_Control.", "Read_Input_Values", 24);
+        assert_eq!(code.prefix, ".text.La….");
+        assert_eq!(data.prefix, ".rodata.La….");
+        assert_ne!(joined(&code), joined(&data));
+        assert!(joined(&data).chars().count() <= 24);
+        assert!(data.rest.starts_with('R') && data.rest.ends_with('s'));
     }
 
     #[test]

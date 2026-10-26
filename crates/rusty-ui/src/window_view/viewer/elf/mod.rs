@@ -24,7 +24,7 @@ use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
 use super::parts::{AUTOMOTIVE_LAYOUT, LayoutParts, PartSet};
 use super::search::bar::GO_TO_KEYS;
-use super::space::{NEXT_PART, RichSpace, Siblings};
+use super::space::{FileBytes, NEXT_PART, RichSpace, Siblings};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
 use crate::settings::Values;
@@ -113,6 +113,7 @@ pub(in crate::window_view::viewer) struct ElfView {
     layout: LayoutParts,
     columns: Option<columns::Columns>,
     rich: RichSpace,
+    file_bytes: Option<FileBytes>,
     siblings: Arc<Siblings>,
     auto_sorted: bool,
     _siblings_job: Job,
@@ -155,6 +156,7 @@ impl ElfView {
             layout: LayoutParts::default(),
             columns: None,
             rich: RichSpace::default(),
+            file_bytes: None,
             siblings: Arc::new(Siblings::default()),
             auto_sorted: false,
             _siblings_job: siblings_job,

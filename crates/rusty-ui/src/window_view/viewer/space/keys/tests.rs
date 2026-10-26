@@ -202,6 +202,32 @@ fn alt_h_hides_the_noise_symbols(cx: &mut TestAppContext) {
     assert!(text_of(cx, window, "elf-noise-bar").starts_with("0 of "));
 }
 
+fn noise_counts(cx: &mut TestAppContext, window: AnyWindowHandle) -> (u64, u64, u64) {
+    let text = text_of(cx, window, "elf-noise-bar");
+    let numbers: Vec<u64> = text
+        .split(|c: char| !c.is_ascii_digit())
+        .filter_map(|word| word.parse().ok())
+        .collect();
+    assert_eq!(numbers.len(), 3, "{text}");
+    (numbers[0], numbers[1], numbers[2])
+}
+
+#[gpui_kit::test]
+fn the_noise_bar_counts_only_the_symbols_that_match_the_filter(cx: &mut TestAppContext) {
+    let mut spec = firmware(false, false);
+    spec.symbols.as_mut().expect("symbols").push(Named {
+        bind: 0,
+        ..func("main_label", 0x0800_0170, 0, 0)
+    });
+    let rig = rich_elf_of(cx, build(&spec).expect("the sample builds"));
+    let window = rig.0;
+    let (_, whole, _) = noise_counts(cx, window);
+    keys(cx, &rig, &["m", "a", "i", "n"]);
+    let (hidden, total, shown) = noise_counts(cx, window);
+    assert_eq!((hidden, total, shown), (1, 2, 1));
+    assert!(total < whole);
+}
+
 #[gpui_kit::test]
 fn the_map_view_takes_the_same_keys(cx: &mut TestAppContext) {
     let (window, view) = map_rich::open_in(cx, SAMPLE, (None, Some(map_rich::preset(1))));

@@ -123,14 +123,19 @@ impl ElfView {
         let t = tokens::current(cx);
         let set = columns.set.read(cx);
         let [name, rest @ ..] = texts(elf, symbol);
-        let name = fitted_name(&name, set.text_chars(NAME));
+        let name = fitted_name(&name, set.name_chars(NAME));
         let name_cell = set.cell(NAME).child(
             div()
                 .id(("elf-name", row))
                 .flex()
                 .min_w_0()
-                .child(div().text_color(t.colors.muted).child(name.prefix))
-                .child(name.rest),
+                .child(
+                    div()
+                        .flex_none()
+                        .text_color(t.colors.muted)
+                        .child(name.prefix),
+                )
+                .child(div().min_w_0().truncate().child(name.rest)),
         );
         let others = rest.into_iter().enumerate().map(|(offset, text)| {
             let at = offset + 1;

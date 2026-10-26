@@ -29,6 +29,7 @@ use crate::mdf::ChipKind;
 pub enum RegionSource {
     Mdf,
     Map,
+    MapAndMdf,
     Clusters,
 }
 

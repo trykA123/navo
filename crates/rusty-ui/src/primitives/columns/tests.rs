@@ -280,5 +280,25 @@ fn text_chars_follow_the_shown_width(cx: &mut TestAppContext) {
         assert_eq!(set.text_chars(0), shown.floor() as usize);
         let fixed = (set.width(1) - set.padding) / set.char_width;
         assert_eq!(set.text_chars(1), fixed.floor() as usize);
+        let named = (name.size.width - set.padding) / set.name_char_width;
+        assert_eq!(set.name_chars(0), named.floor() as usize);
     });
+}
+
+#[gpui_kit::test]
+fn a_second_set_reuses_the_measured_widths(cx: &mut TestAppContext) {
+    let (_, first) = open(cx, table(sample()));
+    let (_, second) = open(cx, table(sample()));
+    let widths = |view: &Entity<Table>, cx: &mut TestAppContext| {
+        view.read_with(cx, |view, cx| {
+            let set = view.set.read(cx);
+            (set.char_width, set.name_char_width)
+        })
+    };
+    assert_eq!(widths(&first, cx), widths(&second, cx));
+    let cached = cx.update(|cx| {
+        cx.try_global::<super::set::MeasuredWidths>()
+            .map(|c| c.0.len())
+    });
+    assert_eq!(cached, Some(2));
 }

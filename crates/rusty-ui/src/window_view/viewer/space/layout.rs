@@ -118,7 +118,13 @@ fn region_row(
         .gap(t.spacing.xs)
         .children(bars)
         .children(strip);
-    let row = div().id(("space-region", at)).flex().gap(t.spacing.xl);
+    let row = div()
+        .id(("space-region", at))
+        .flex()
+        .flex_none()
+        .gap(t.spacing.xl)
+        .px(t.spacing.xl)
+        .pt(t.spacing.sm);
     if is_wide {
         row.child(div().w(px(HEAD_WIDTH)).flex_none().child(head))
             .child(right)
@@ -132,7 +138,7 @@ fn panel<V: RichHost>(
     (rich, model): (&RichSpace, &RichModel),
     look: &RichLook,
     cx: &mut Context<V>,
-) -> Stateful<Div> {
+) -> Vec<AnyElement> {
     let fill = model
         .regions
         .iter()
@@ -142,10 +148,14 @@ fn panel<V: RichHost>(
         .iter()
         .any(|region| region.reserved.is_some_and(|bytes| bytes > 0));
     let header = div()
+        .id("space-panel")
         .flex()
+        .flex_none()
         .flex_wrap()
         .items_center()
         .gap(t.spacing.lg)
+        .px(t.spacing.xl)
+        .pt(t.spacing.sm)
         .child(
             div()
                 .text_size(t.typography.small)
@@ -165,19 +175,16 @@ fn panel<V: RichHost>(
         .regions
         .iter()
         .enumerate()
-        .map(|row| region_row(t, row, rich, look));
-    div()
-        .id("space-panel")
-        .flex()
-        .flex_col()
+        .map(|row| region_row(t, row, rich, look).into_any_element());
+    let end = div()
         .flex_none()
-        .gap(t.spacing.sm)
-        .px(t.spacing.xl)
-        .py(t.spacing.sm)
+        .pt(t.spacing.sm)
         .border_b_1()
-        .border_color(t.colors.line)
-        .child(header)
-        .children(rows)
+        .border_color(t.colors.line);
+    std::iter::once(header.into_any_element())
+        .chain(rows)
+        .chain([end.into_any_element()])
+        .collect()
 }
 
 fn blocked(model: &RichModel, at: usize) -> Option<String> {
@@ -377,10 +384,12 @@ pub(in crate::window_view::viewer) fn rich_layout<V: RichHost>(
         .flex_shrink_0()
         .max_h(relative(TOP_SHARE))
         .overflow_y_scroll()
+        .track_scroll(&rich.top_scroll)
         .when(shows_panel, |top| {
-            top.child(panel(t, (rich, &model), &look, cx))
+            top.children(panel(t, (rich, &model), &look, cx))
         })
-        .children(file_bytes);
+        .children(file_bytes)
+        .test_support();
     root.child(provenance(t, model.provenance.clone()))
         .child(top)
         .child(body(t, (rich, &model), look, cx))

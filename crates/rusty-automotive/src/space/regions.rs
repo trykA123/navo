@@ -81,6 +81,7 @@ fn declared(placed: Vec<Placed<'_>>, table: &RegionTable) -> Regions {
     let source = match table.origin {
         TableOrigin::Mdf => RegionSource::Mdf,
         TableOrigin::Map => RegionSource::Map,
+        TableOrigin::MapAndMdf => RegionSource::MapAndMdf,
     };
     let mut items: Vec<Region> = table
         .regions

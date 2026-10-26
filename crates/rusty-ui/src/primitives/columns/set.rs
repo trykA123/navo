@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use gpui_kit::{
-    App, Div, EventEmitter, Pixels, SharedString, Styled, TextRun, Window, div, font, px,
+    App, Div, EventEmitter, Global, Pixels, SharedString, Styled, TextRun, Window, div, font, px,
 };
 
 use crate::tokens;
 
 const FALLBACK_CHAR_WIDTH: f32 = 7.2;
 const SAMPLE: &str = "0000000000";
+const NAME_SAMPLE: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789";
 const FIT_ROWS: usize = 200;
 const SORT_SLOT: usize = 2;
 
@@ -40,6 +43,7 @@ struct DragStart {
 pub struct ColumnSet {
     pub(super) specs: Vec<ColumnSpec>,
     pub(super) char_width: Pixels,
+    pub(super) name_char_width: Pixels,
     pub(super) padding: Pixels,
     fitted: Vec<Pixels>,
     initial: Vec<Pixels>,
@@ -50,31 +54,48 @@ pub struct ColumnSet {
 
 impl EventEmitter<ColumnEvent> for ColumnSet {}
 
-fn measure_char_width(window: &Window, cx: &App) -> Pixels {
+type WidthKey = (SharedString, u32, &'static str);
+
+#[derive(Default)]
+pub(super) struct MeasuredWidths(pub(super) HashMap<WidthKey, Pixels>);
+
+impl Global for MeasuredWidths {}
+
+fn measure(family: SharedString, sample: &'static str, window: &Window, cx: &mut App) -> Pixels {
     let t = tokens::current(cx);
+    let size = t.typography.body;
+    let key = (family.clone(), f32::from(size).to_bits(), sample);
+    if let Some(width) = cx
+        .try_global::<MeasuredWidths>()
+        .and_then(|cache| cache.0.get(&key))
+    {
+        return *width;
+    }
     let run = TextRun {
-        len: SAMPLE.len(),
-        font: font(t.typography.mono_font.clone()),
+        len: sample.len(),
+        font: font(family),
         color: t.colors.text,
         background_color: None,
         underline: None,
         strikethrough: None,
     };
-    let line = window
-        .text_system()
-        .layout_line(SAMPLE, t.typography.body, &[run], None);
-    let width = line.width / SAMPLE.len() as f32;
-    if width > px(0.) && f32::from(width).is_finite() {
+    let line = window.text_system().layout_line(sample, size, &[run], None);
+    let width = line.width / sample.len() as f32;
+    let width = if width > px(0.) && f32::from(width).is_finite() {
         width
     } else {
         px(FALLBACK_CHAR_WIDTH)
-    }
+    };
+    cx.default_global::<MeasuredWidths>().0.insert(key, width);
+    width
 }
 
 impl ColumnSet {
-    pub fn new(specs: Vec<ColumnSpec>, window: &Window, cx: &App) -> Self {
+    pub fn new(specs: Vec<ColumnSpec>, window: &Window, cx: &mut App) -> Self {
+        let typography = tokens::current(cx).typography.clone();
         let mut set = Self {
-            char_width: measure_char_width(window, cx),
+            char_width: measure(typography.mono_font, SAMPLE, window, cx),
+            name_char_width: measure(typography.ui_font, NAME_SAMPLE, window, cx),
             padding: tokens::current(cx).spacing.md * 2.,
             fitted: Vec::new(),
             initial: Vec::new(),
@@ -131,12 +152,20 @@ impl ColumnSet {
     }
 
     pub fn text_chars(&self, at: usize) -> usize {
+        self.chars_in(at, self.char_width)
+    }
+
+    pub fn name_chars(&self, at: usize) -> usize {
+        self.chars_in(at, self.name_char_width)
+    }
+
+    fn chars_in(&self, at: usize, char_width: Pixels) -> usize {
         let shown = if self.is_flex(at) && self.measured > px(0.) {
             self.measured
         } else {
             self.width(at)
         };
-        let room = (shown - self.padding).max(px(0.)) / self.char_width;
+        let room = (shown - self.padding).max(px(0.)) / char_width;
         room.floor() as usize
     }
 

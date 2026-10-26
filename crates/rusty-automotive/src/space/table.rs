@@ -17,21 +17,25 @@ impl RegionTable {
 
     fn build(map: &MapModel, mdf: Option<&Self>) -> Self {
         let mut regions = totals(map);
+        let mut starts_from_mdf = false;
         for region in &mut regions {
             let chip = mdf.and_then(|table| named(table, &region.name));
             region.kind = chip.and_then(|chip| chip.kind);
             if region.start.is_none() {
                 region.start = chip.and_then(|chip| chip.start);
+                starts_from_mdf |= region.start.is_some();
             }
             if region.start.is_none() {
                 region.start = lowest_section(map, &region.name);
                 region.start_estimated = region.start.is_some();
             }
         }
-        Self {
-            regions,
-            origin: TableOrigin::Map,
-        }
+        let origin = if starts_from_mdf {
+            TableOrigin::MapAndMdf
+        } else {
+            TableOrigin::Map
+        };
+        Self { regions, origin }
     }
 }
 

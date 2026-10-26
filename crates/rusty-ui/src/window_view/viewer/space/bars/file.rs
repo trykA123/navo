@@ -127,9 +127,11 @@ pub struct FileBytesBar {
 
 impl FileBytesBar {
     pub fn new(sections: &[Section]) -> Self {
-        Self {
-            bytes: FileBytes::of(sections),
-        }
+        Self::of(FileBytes::of(sections))
+    }
+
+    pub fn of(bytes: FileBytes) -> Self {
+        Self { bytes }
     }
 }
 

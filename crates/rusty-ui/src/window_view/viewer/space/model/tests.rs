@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicBool;
 
 use rusty_automotive::elf_sample::{Spec, build, demo, firmware};
 use rusty_automotive::space::{Grouping, Kind};
-use rusty_automotive::{Elf, ElfReader, Watch, parse_mdf};
+use rusty_automotive::{Elf, ElfReader, Watch, index_map, parse_mdf};
 
 use super::{GroupingOptions, build_model};
 use crate::window_view::viewer::space::sibling::{SiblingNames, SiblingProblem, Siblings};
@@ -47,6 +47,28 @@ fn a_sole_companion_is_named_as_such_in_the_provenance() {
     siblings.names.only_mdf = true;
     let model = build_model(&elf, None, &siblings, GroupingOptions::default());
     assert!(model.provenance.contains("app.mdf, the only .mdf here"));
+}
+
+#[test]
+fn map_regions_with_mdf_starts_name_both_files() {
+    let elf = parse(demo().expect("demo"));
+    let text = "TASKING VX\n* Memory Usage\n\
+        | Memory | Code | Data | Reserved | Free | Total |\n\
+        | pflash | 256 | 0 | 0 | 65280 | 65536 |\n\
+        | dsram | 0 | 64 | 0 | 32704 | 32768 |\n";
+    let map = index_map(text.as_bytes(), &AtomicBool::new(false), &mut |_| {}).expect("map");
+    let mut siblings = with_mdf();
+    siblings.map = Some(std::sync::Arc::new(map));
+    siblings.names.map = Some("app.map".into());
+    let model = build_model(&elf, None, &siblings, GroupingOptions::default());
+    assert!(
+        model
+            .provenance
+            .starts_with("regions from app.map, starts from app.mdf · "),
+        "{}",
+        model.provenance
+    );
+    assert_eq!(model.region_source.as_deref(), Some("app.map"));
 }
 
 #[test]

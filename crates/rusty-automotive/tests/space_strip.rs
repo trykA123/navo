@@ -446,3 +446,17 @@ fn space_strip_inner_follows_the_zoom_view() {
     assert_eq!(found[0].bytes, 250);
     assert_eq!((found[1].x0, found[1].x1), (50, 100));
 }
+
+#[test]
+fn space_strip_a_region_near_the_top_of_the_address_space_keeps_its_gaps() {
+    let top = u64::MAX - 0x1000;
+    let mut wide = region(
+        Some(top),
+        &[(0, 0x10, Kind::Code), (top - 0x10, 0x10, Kind::Data)],
+    );
+    wide.start = Some(0);
+    let scale = compressed(&wide);
+    assert_eq!(scale.domain(), 0..top);
+    assert_eq!(scale.breaks().len(), 1);
+    assert!(scale.x(top - 0x10) > 0.5);
+}

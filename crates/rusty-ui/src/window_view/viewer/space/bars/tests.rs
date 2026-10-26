@@ -141,3 +141,15 @@ fn file_bytes_sort_sections_by_what_they_are() {
     assert_eq!(bytes.bytes(FilePart::Other), 10);
     assert_eq!(bytes.total(), 1650);
 }
+
+#[test]
+fn bar_parts_of_near_u64_max_kinds_stay_within_the_bar() {
+    let mut huge = region(Some(u64::MAX), u64::MAX - 1);
+    huge.by_kind[Kind::Data.index()] = u64::MAX - 1;
+    huge.by_kind[Kind::Fill.index()] = u64::MAX - 1;
+    huge.reserved = Some(u64::MAX);
+    let parts = bar_parts(&huge);
+    assert_eq!(parts.len(), 4);
+    let total: f64 = parts.iter().map(|(_, share)| share).sum();
+    assert!(total <= 4.0 && parts.iter().all(|(_, share)| share.is_finite()));
+}

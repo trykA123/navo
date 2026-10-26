@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui_kit::{Bounds, FocusHandle, Focusable, Subscription, WeakEntity};
+use gpui_kit::{Bounds, FocusHandle, Focusable, ScrollHandle, Subscription, WeakEntity};
 use rusty_automotive::space::{Grouping, Item, Rect, Region, ScaleMode, TOP_GROUPS, Tile, layout};
 
 use super::keys::Part;
@@ -43,6 +43,7 @@ pub(in crate::window_view::viewer) struct RichSpace {
     pub part: Part,
     pub tile: Option<u32>,
     pub treemap_focus: Option<FocusHandle>,
+    pub top_scroll: ScrollHandle,
     groups: Rc<[TreemapGroup]>,
     items: Vec<Item>,
     tiles: Option<SizedTiles>,
@@ -61,6 +62,7 @@ impl Default for RichSpace {
             part: Part::Table,
             tile: None,
             treemap_focus: None,
+            top_scroll: ScrollHandle::new(),
             groups: Rc::from(Vec::new()),
             items: Vec::new(),
             tiles: None,

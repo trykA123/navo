@@ -165,6 +165,9 @@ fn focus_part<V: RichHost>(view: &mut V, part: Part, window: &mut Window, cx: &m
     };
     let rich = view.rich();
     rich.part = part;
+    if let Part::Strip(at) = part {
+        rich.top_scroll.scroll_to_item(at + 1);
+    }
     if part == Part::Treemap && rich.tile.is_none() {
         rich.tile = match rich.pick {
             Some(Pick::Group(id)) => Some(id),
@@ -346,5 +349,7 @@ pub(in crate::window_view::viewer) fn space_keys<V: RichHost>(
 
 #[cfg(test)]
 mod rebuild;
+#[cfg(test)]
+mod scroll;
 #[cfg(test)]
 mod tests;

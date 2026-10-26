@@ -72,7 +72,7 @@ impl ElfView {
     }
 
     pub(super) fn noise_bar(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let total = self.elf().map_or(0, |elf| elf.symbols.len() as u64);
+        let total = self.hidden.saturating_add(self.rows.len() as u64);
         let hidden = t!(
             "elf-noise-hidden",
             hidden = format::bytes(self.hidden),

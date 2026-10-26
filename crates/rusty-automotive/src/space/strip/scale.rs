@@ -144,7 +144,8 @@ fn extent(region: &Region) -> Range<u64> {
 }
 
 fn long_gaps(region: &Region, domain: &Range<u64>) -> Vec<Range<u64>> {
-    let limit = (domain.end - domain.start) * COMPRESS_OVER_PERCENT / 100;
+    let len = u128::from(domain.end - domain.start);
+    let limit = (len * u128::from(COMPRESS_OVER_PERCENT) / 100) as u64;
     let mut gaps = Vec::new();
     let mut covered = domain.start;
     let mut any = false;

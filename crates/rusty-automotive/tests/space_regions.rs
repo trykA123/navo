@@ -472,7 +472,7 @@ fn space_regions_map_start_comes_from_the_mdf_by_case_insensitive_name() {
     let map = map_of(MAP);
     let mdf = parse_mdf(MAP_MDF).regions();
     let merged = RegionTable::merge(&map, &mdf);
-    assert_eq!(merged.origin, TableOrigin::Map);
+    assert_eq!(merged.origin, TableOrigin::MapAndMdf);
     let rom = &merged.regions[0];
     assert_eq!(rom.name, "mc0_rom");
     assert_eq!(
@@ -484,6 +484,11 @@ fn space_regions_map_start_comes_from_the_mdf_by_case_insensitive_name() {
     assert_eq!(regions.items[1].start, Some(DSPR));
     assert!(!regions.items[1].start_estimated);
     assert_eq!(regions.items[0].used, 288);
+    let unrelated = parse_mdf("space a 1 8\nchip other 1 8 16 rom\nmap 1 0 16 1 0\n").regions();
+    assert_eq!(
+        RegionTable::merge(&map, &unrelated).origin,
+        TableOrigin::Map
+    );
 }
 
 #[test]
@@ -497,7 +502,7 @@ fn space_regions_elf_uses_map_regions_and_mdf_starts_when_both_are_beside_it() {
     let rom = region(&regions, "mc0_rom");
     assert_eq!(
         (rom.source, rom.used, rom.free()),
-        (RegionSource::Map, 0x200, Some(4096 - 0x200))
+        (RegionSource::MapAndMdf, 0x200, Some(4096 - 0x200))
     );
     assert_eq!(region(&regions, "mc0_ram").used, 0x20);
 }

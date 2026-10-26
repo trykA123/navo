@@ -228,8 +228,8 @@ impl ElfView {
     ) -> Stateful<Div> {
         let t = &tokens::current(cx).clone();
         let file_bytes = self
-            .elf()
-            .map(|elf| FileBytesBar::new(&elf.sections).into_any_element());
+            .file_bytes
+            .map(|bytes| FileBytesBar::of(bytes).into_any_element());
         let look = RichLook {
             parts: self.layout,
             width: window.viewport_size().width,

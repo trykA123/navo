@@ -7,7 +7,8 @@ use crate::space::{Kind, Owners, Region, Regions};
 #[must_use]
 pub fn flash_region(regions: &Regions) -> Option<usize> {
     let rank = |region: &Region| {
-        let code = region.by_kind[Kind::Code.index()] + region.by_kind[Kind::Rodata.index()];
+        let code =
+            region.by_kind[Kind::Code.index()].saturating_add(region.by_kind[Kind::Rodata.index()]);
         let is_rom = region.chip == Some(ChipKind::Rom) && code > 0;
         (is_rom, code, region.used)
     };
