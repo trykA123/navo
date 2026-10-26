@@ -31,6 +31,7 @@ mod rename_log;
 mod search_hooks;
 mod settings;
 mod shell_menu;
+mod splash;
 mod startup;
 mod watch_file;
 #[cfg(windows)]
@@ -71,23 +72,29 @@ fn execute(
             return ExitCode::from(2);
         }
     };
-    let panes = match &command {
+    let opening = match &command {
         Command::Open(start) => match gui::pane_folders(start) {
-            Ok(panes) => panes,
+            Ok(panes) => Opening { panes },
             Err(message) => {
                 console::attach();
                 eprintln!("ferrite: {message}\n{}", cli::USAGE);
                 return ExitCode::from(2);
             }
         },
-        _ => [None, None],
+        _ => Opening {
+            panes: [None, None],
+        },
     };
-    execute_command(command, panes, started, detect)
+    execute_command(command, opening, started, detect)
+}
+
+struct Opening {
+    panes: [Option<Location>; 2],
 }
 
 fn execute_command(
     command: Command,
-    panes: [Option<Location>; 2],
+    opening: Opening,
     started: Instant,
     detect: impl FnOnce() -> Option<StoreDirs>,
 ) -> ExitCode {
@@ -105,7 +112,7 @@ fn execute_command(
         }
     };
     match command {
-        Command::Open(start) => open_window(start, panes, &profile, clock),
+        Command::Open(start) => open_window(start, opening, &profile, clock),
         Command::Version => {
             let _diagnostics = install_logging(&profile);
             println!("ferrite {}", env!("CARGO_PKG_VERSION"));
@@ -156,15 +163,11 @@ fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
     }
 }
 
-fn open_window(
-    start: Start,
-    panes: [Option<Location>; 2],
-    profile: &Profile,
-    clock: ProcessClock,
-) -> ExitCode {
+fn open_window(start: Start, opening: Opening, profile: &Profile, clock: ProcessClock) -> ExitCode {
+    let Opening { panes } = opening;
     let (sender, requests) = open_requests();
-    let guard = match prepare_instance(&start, profile, sender) {
-        Ok(ControlFlow::Continue(guard)) => guard,
+    let (guard, splash) = match prepare_instance(&start, profile, sender) {
+        Ok(ControlFlow::Continue(first)) => first,
         Ok(ControlFlow::Break(code)) => return code,
         Err(error) => {
             console::attach();
@@ -184,6 +187,7 @@ fn open_window(
         path: start.path,
         view: start.view,
         panes,
+        splash,
         dirs: profile.dirs().cloned(),
         cleanup: profile.cleanup(),
         start_watch: run.as_ref().map(metrics::Run::watch),
@@ -223,24 +227,32 @@ fn prepare_crash(
     (pending, running)
 }
 
+type First = (Option<instance::Guard>, splash::Splash);
+
+fn first(guard: Option<instance::Guard>) -> ControlFlow<ExitCode, First> {
+    let splash = splash::Splash::start();
+    metrics::mark("splash started");
+    ControlFlow::Continue((guard, splash))
+}
+
 fn prepare_instance(
     start: &Start,
     profile: &Profile,
     sender: OpenSender,
-) -> Result<ControlFlow<ExitCode, Option<instance::Guard>>, instance::Error> {
+) -> Result<ControlFlow<ExitCode, First>, instance::Error> {
     if start.is_metrics() {
-        return Ok(ControlFlow::Continue(None));
+        return Ok(ControlFlow::Continue((None, splash::Splash::none())));
     }
     let Some(dirs) = profile.dirs() else {
-        return Ok(ControlFlow::Continue(None));
+        return Ok(first(None));
     };
     let Some(acquired) = instance::acquire(&dirs.data)? else {
-        return Ok(ControlFlow::Continue(None));
+        return Ok(first(None));
     };
     match acquired {
         instance::Acquired::First(mut guard) => {
             guard.serve(move |request| gui::on_instance_request(&sender, request))?;
-            Ok(ControlFlow::Continue(Some(guard)))
+            Ok(first(Some(guard)))
         }
         instance::Acquired::Second(client) => {
             let request = instance::Request::from_start(start, &std::env::current_dir()?)?;

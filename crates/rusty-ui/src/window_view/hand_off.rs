@@ -71,6 +71,7 @@ pub fn open_requests() -> (OpenSender, OpenInbox) {
 pub struct OpenHooks {
     pub path: Option<Location>,
     pub inbox: Option<OpenInbox>,
+    pub on_shown: Option<Box<dyn FnOnce()>>,
 }
 
 impl OpenHooks {
@@ -147,6 +148,9 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(on_shown) = hooks.on_shown {
+            window.on_next_frame(move |window, _| window.on_next_frame(move |_, _| on_shown()));
+        }
         let provider = self.provider.clone();
         let start = hooks.path.map(|path| OpenRequest {
             path: Some(path),

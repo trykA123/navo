@@ -31,6 +31,7 @@ pub(crate) struct Launch {
     pub(crate) path: Option<PathBuf>,
     pub(crate) view: Option<PathBuf>,
     pub(crate) panes: [Option<Location>; 2],
+    pub(crate) splash: crate::splash::Splash,
     pub(crate) dirs: Option<StoreDirs>,
     pub(crate) cleanup: crate::profile::Cleanup,
     pub(crate) start_watch: Option<StartWatch>,
@@ -89,11 +90,18 @@ fn session_state(
     dirs: Option<&StoreDirs>,
     home: &Location,
     panes: [Option<Location>; 2],
+    splash: &crate::splash::Splash,
 ) -> AppState {
     let session = dirs.map(StoreDirs::session_file);
     let no_session = Path::new("");
     let mut state = initial_state(session.as_deref().unwrap_or(no_session), home.clone());
     place_panes(&mut state, panes);
+    if let Some(saved) = state
+        .window(state.focused_window())
+        .and_then(|window| window.placement().first())
+    {
+        splash.place(saved.monitor);
+    }
     metrics::mark("session read");
     state
 }
@@ -103,7 +111,7 @@ pub(crate) fn open(launch: Launch) {
     let settings_start = settings::start_from(dirs.as_ref());
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
-    let state = session_state(dirs.as_ref(), &home, launch.panes);
+    let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
     let memory = open_memory(dirs.as_ref());
     let local = Arc::new(LocalFs::new());
     let (operations, _instance, journal) = operations(dirs.as_ref(), &home, local.as_ref());
@@ -142,7 +150,7 @@ pub(crate) fn open(launch: Launch) {
             file_clipboard: Some(clipboard::service()),
             drop_platform: Some(crate::drag::service()),
             start_watch: launch.start_watch,
-            open: open_hooks(launch.path, launch.instance_requests),
+            open: open_hooks(launch.path, launch.instance_requests, launch.splash),
             crash_report: launch.crash.service(),
             rename: Some(rename),
         },
@@ -161,10 +169,11 @@ fn open_memory(dirs: Option<&StoreDirs>) -> Option<files::SharedDb> {
         .and_then(|dirs| files::open_memory(&dirs.data.join("ferrite.db")))
 }
 
-fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox) -> OpenHooks {
+fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Splash) -> OpenHooks {
     OpenHooks {
         path: path.and_then(|path| path_location(&path)),
         inbox: Some(inbox),
+        on_shown: splash.on_shown(),
     }
 }
 

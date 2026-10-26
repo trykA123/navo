@@ -1,6 +1,8 @@
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui_kit::{AnyWindowHandle, Entity, TestAppContext, VisualTestContext};
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext, VisualTestContext};
 use rusty_core::Location;
 use rusty_fs::FakeFs;
 
@@ -21,6 +23,7 @@ fn rig_starting_at(cx: &mut TestAppContext, path: Option<&str>) -> Rig {
     let open = OpenHooks {
         path: path.map(|path| fs.location(path)),
         inbox: Some(inbox),
+        on_shown: None,
     };
     let options = crate::window_view::StartOptions {
         open,
@@ -184,4 +187,32 @@ fn a_missing_start_path_opens_the_window_with_the_notice(cx: &mut TestAppContext
     let rig = rig_starting_at(cx, Some("home/nowhere"));
     assert_eq!(rig.active_tabs(cx), (1, rig.at("home")));
     assert_eq!(rig.notice(cx), Some(rig.not_found("home/nowhere")));
+}
+
+fn next_frame(cx: &mut TestAppContext, window: AnyWindowHandle) {
+    cx.update_window(window, |_, window, cx| {
+        window.simulate_next_frame(cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn the_shown_hook_runs_once_after_the_first_frame_is_drawn(cx: &mut TestAppContext) {
+    let fs = fake();
+    let shown = Rc::new(Cell::new(0));
+    let count = shown.clone();
+    let options = crate::window_view::StartOptions {
+        open: OpenHooks {
+            on_shown: Some(Box::new(move || count.set(count.get() + 1))),
+            ..OpenHooks::none()
+        },
+        ..options_for(fs.clone(), two_panes(&fs))
+    };
+    let (window, _view) = open_options(cx, options);
+    next_frame(cx, window);
+    assert_eq!(shown.get(), 0, "the first frame is still being drawn");
+    next_frame(cx, window);
+    next_frame(cx, window);
+    assert_eq!(shown.get(), 1);
 }

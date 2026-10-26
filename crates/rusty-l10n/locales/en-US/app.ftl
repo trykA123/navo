@@ -64,3 +64,4 @@ command-center-key-complete = complete
 command-center-key-go = go
 command-center-key-close = close
 command-center-key-back = back
+splash-slow = Still starting. This can take a moment.

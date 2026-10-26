@@ -193,7 +193,10 @@ fn a_profile_without_dirs_continues_without_an_instance_guard() {
         &crate::profile::Profile::User(None),
         sender,
     );
-    assert!(matches!(result, Ok(std::ops::ControlFlow::Continue(None))));
+    assert!(matches!(
+        result,
+        Ok(std::ops::ControlFlow::Continue((None, _)))
+    ));
 }
 
 #[test]

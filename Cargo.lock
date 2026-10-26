@@ -6479,6 +6479,7 @@ dependencies = [
  "rusty-diag",
  "rusty-fs",
  "rusty-index",
+ "rusty-l10n",
  "rusty-pdf",
  "rusty-shell",
  "rusty-store",
