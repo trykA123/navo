@@ -124,15 +124,12 @@ fn a_move_keeps_the_source_of_a_skipped_case_twin() {
 fn a_name_whose_temporary_file_is_another_target_is_a_conflict() {
     let plan = plan(&PlanRequest {
         policy: ConflictPolicy::Skip,
-        ..copy_into(
-            vec![file("/a/x.ferrite-part", 0, 5), file("/a/x", 0, 6)],
-            "/d",
-        )
+        ..copy_into(vec![file("/a/x.navo-part", 0, 5), file("/a/x", 0, 6)], "/d")
     });
     assert_eq!(
         (plan.steps, plan.conflicts),
         (
-            vec![copy_file("/a/x.ferrite-part", "/d/x.ferrite-part", 5)],
+            vec![copy_file("/a/x.navo-part", "/d/x.navo-part", 5)],
             vec![Conflict {
                 source: loc("/a/x"),
                 target: loc("/d/x"),
@@ -145,7 +142,7 @@ fn a_name_whose_temporary_file_is_another_target_is_a_conflict() {
 #[test]
 fn a_temporary_name_planned_after_its_file_is_no_conflict() {
     let plan = plan(&copy_into(
-        vec![file("/a/x", 0, 6), file("/a/x.ferrite-part", 0, 5)],
+        vec![file("/a/x", 0, 6), file("/a/x.navo-part", 0, 5)],
         "/d",
     ));
     assert_eq!(plan.steps.len(), 2);

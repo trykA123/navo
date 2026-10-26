@@ -8,6 +8,8 @@ use toml::Spanned;
 use super::Bind;
 use crate::commands::{CommandSpec, GLOBAL, by_name, is_within};
 
+const LEGACY_PANE: &str = "FerritePane";
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum KeymapError {
     Syntax(String),
@@ -152,7 +154,10 @@ fn resolve(raw: Raw) -> Result<Bind, KeymapError> {
             command: raw.command,
         });
     };
-    let context = raw.context.unwrap_or_else(|| spec.context.to_owned());
+    let context = raw.context.map_or_else(
+        || spec.context.to_owned(),
+        |context| context.replace(LEGACY_PANE, "NavoPane"),
+    );
     if !allowed(&spec, &context) {
         return Err(KeymapError::ContextNotAllowed {
             command: raw.command,

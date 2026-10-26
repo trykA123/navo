@@ -36,7 +36,7 @@ struct Live {
 
 fn live_on(text: &str) -> Live {
     let dir = tempfile::tempdir().expect("dir");
-    let path = dir.path().join("ferrite.toml");
+    let path = dir.path().join("navo.toml");
     fs::write(&path, text).expect("write");
     let (sender, news) = mpsc::channel();
     let (hooks, watching) = watched(Some(Loaded::load(&path)), move |news| {
@@ -87,7 +87,7 @@ fn invalid(news: SettingsNews) -> String {
 }
 
 fn rename_over(path: &Path, text: &str) {
-    let temp = path.with_file_name("ferrite.toml.swp");
+    let temp = path.with_file_name("navo.toml.swp");
     fs::write(&temp, text).expect("write temp");
     fs::rename(&temp, path).expect("rename over");
 }
@@ -110,7 +110,7 @@ fn an_invalid_edit_keeps_the_last_settings_and_reports_its_line() {
     assert_eq!(applied(live.next()).density(), Density::Compact);
     live.write(BROKEN);
     let message = invalid(live.next());
-    assert!(message.starts_with("ferrite.toml"), "{message}");
+    assert!(message.starts_with("navo.toml"), "{message}");
     assert!(message.contains("line 3"), "{message}");
     let saved = (live.hooks.save)(&[Change::show_hidden(false)]);
     assert!(saved.error.is_some());

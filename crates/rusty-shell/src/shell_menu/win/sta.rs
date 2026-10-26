@@ -17,7 +17,7 @@ use windows::core::{PCWSTR, w};
 use super::shell_error;
 use crate::shell_menu::MenuError;
 
-const CLASS: PCWSTR = w!("FerriteShellMenu");
+const CLASS: PCWSTR = w!("NavoShellMenu");
 pub(super) const WM_WAKE: u32 = WM_APP + 1;
 
 pub(super) enum MenuHandler {

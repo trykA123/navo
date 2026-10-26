@@ -92,8 +92,8 @@ fn hash_of(bytes: &[u8]) -> u64 {
 
 fn preview(sfnt: &[u8], format: FontFormat) -> Option<Preview> {
     let hash = hash_of(sfnt);
-    let family = format!("Ferrite Preview {hash:016x}");
-    let postscript = format!("FerritePreview-{hash:016x}");
+    let family = format!("Navo Preview {hash:016x}");
+    let postscript = format!("NavoPreview-{hash:016x}");
     let directory = match format {
         FontFormat::Collection => usize_at(sfnt, COLLECTION_FIRST_FACE)?,
         _ => 0,
@@ -112,7 +112,7 @@ fn preview(sfnt: &[u8], format: FontFormat) -> Option<Preview> {
 
 impl FontFace {
     pub fn parse(bytes: Vec<u8>, cancel: &AtomicBool) -> Result<Self, String> {
-        let format = font_format(&bytes).ok_or("This is not a font Ferrite can show.")?;
+        let format = font_format(&bytes).ok_or("This is not a font Navo can show.")?;
         let sfnt = match format {
             FontFormat::Woff => woff::to_sfnt(&bytes).ok_or("This WOFF font looks damaged.")?,
             _ => bytes,

@@ -43,6 +43,8 @@ mod session;
 #[cfg(windows)]
 #[path = "storage/windows.rs"]
 mod storage;
+#[cfg(any(windows, test))]
+mod upgrade;
 #[cfg(windows)]
 #[path = "volumes/windows.rs"]
 mod volumes;
@@ -69,7 +71,7 @@ pub(crate) fn run(action: Action) -> std::process::ExitCode {
     match execute(action) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("ferrite: index service: {error}");
+            eprintln!("navo: index service: {error}");
             std::process::ExitCode::FAILURE
         }
     }
@@ -80,9 +82,29 @@ pub(crate) fn request_elevation(action: Action) -> Result<(), ElevationError> {
     elevation::launch(action)
 }
 
+#[cfg(any(windows, test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ServiceQuery {
+    pub running: Option<bool>,
+    pub legacy_present: bool,
+}
+
 #[cfg(windows)]
-pub(crate) fn query_running() -> std::io::Result<Option<bool>> {
-    scm::query_running()
+pub(crate) fn query() -> std::io::Result<ServiceQuery> {
+    Ok(ServiceQuery {
+        running: scm::query_running(install_plan::NAVO)?,
+        legacy_present: scm::query_running(install_plan::FERRITE)?.is_some(),
+    })
+}
+
+#[cfg(windows)]
+pub(crate) fn upgrade_notice_due(marker: Option<std::path::PathBuf>) -> bool {
+    upgrade::UpgradeNotice::new(marker).is_due(query)
+}
+
+#[cfg(windows)]
+pub(crate) fn dismiss_upgrade_notice(marker: Option<std::path::PathBuf>) -> std::io::Result<()> {
+    upgrade::UpgradeNotice::new(marker).dismiss()
 }
 
 #[cfg(windows)]
@@ -112,3 +134,5 @@ mod tests;
 mod install_rollback_tests;
 #[cfg(test)]
 mod reliability_tests;
+#[cfg(test)]
+mod upgrade_tests;

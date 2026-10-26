@@ -195,9 +195,9 @@ fn old_images_are_deleted_and_other_files_are_kept() {
     let plan = CopyPlan::new(root.path(), 123);
     std::fs::create_dir_all(&plan.directory).unwrap();
     for name in [
-        "ferrite.exe.122.old",
-        "ferrite.exe",
-        "ferrite.exe.x.old",
+        "navo.exe.122.old",
+        "navo.exe",
+        "navo.exe.x.old",
         "notes.old",
     ] {
         std::fs::write(plan.directory.join(name), b"x").unwrap();
@@ -208,7 +208,7 @@ fn old_images_are_deleted_and_other_files_are_kept() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     left.sort();
-    assert_eq!(left, ["ferrite.exe", "ferrite.exe.x.old", "notes.old"]);
+    assert_eq!(left, ["navo.exe", "navo.exe.x.old", "notes.old"]);
 }
 
 #[test]
@@ -299,8 +299,8 @@ fn only_install_recreates_an_untrusted_directory_and_a_reparse_point_is_refused(
 #[test]
 fn remove_includes_the_program_data_index_and_its_parent() {
     let [parent, index] = data_directories(Path::new("program-data"));
-    assert_eq!(parent, Path::new("program-data/Ferrite"));
-    assert_eq!(index, Path::new("program-data/Ferrite/index"));
+    assert_eq!(parent, Path::new("program-data/Navo"));
+    assert_eq!(index, Path::new("program-data/Navo/index"));
 }
 
 #[test]

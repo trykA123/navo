@@ -68,7 +68,7 @@ pub(super) fn index_path(program_data: &Path, drive: char) -> io::Result<PathBuf
         return Err(invalid("invalid index drive"));
     }
     Ok(program_data
-        .join("Ferrite")
+        .join("Navo")
         .join("index")
         .join(format!("{}.index", drive.to_ascii_uppercase())))
 }

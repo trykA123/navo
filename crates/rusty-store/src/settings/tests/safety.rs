@@ -42,7 +42,7 @@ fn pending_file(path: &Path) -> PathBuf {
 
 fn crash_completion(store: &mut SettingsStore, db: &Db, defaults: &Settings, stage: Stage) {
     on_stage(move |path, reached| {
-        if path.file_name().unwrap() == "ferrite.toml" && reached == stage {
+        if path.file_name().unwrap() == "navo.toml" && reached == stage {
             panic!("injected crash at {stage:?}");
         }
         Ok(())
@@ -109,8 +109,7 @@ fn a_failed_committed_mark_keeps_keys_following_after_a_sheet_save() {
     store.complete(&db, &Settings::default()).unwrap();
     let mut pending_writes = 0;
     on_stage(move |path, stage| {
-        if path.file_name().unwrap() == "ferrite.toml.defaults-pending"
-            && stage == Stage::TempWritten
+        if path.file_name().unwrap() == "navo.toml.defaults-pending" && stage == Stage::TempWritten
         {
             pending_writes += 1;
             if pending_writes == 2 {
@@ -183,7 +182,7 @@ fn a_failed_pending_discard_keeps_the_original_write_error() {
     let db = ledger();
     let (mut store, _) = SettingsStore::load(&path);
     on_stage(|path, stage| {
-        if path.file_name().unwrap() == "ferrite.toml" && stage == Stage::TempWritten {
+        if path.file_name().unwrap() == "navo.toml" && stage == Stage::TempWritten {
             let pending = pending_file(path);
             fs::remove_file(&pending).unwrap();
             fs::create_dir(&pending).unwrap();
@@ -254,8 +253,7 @@ fn failed_pending_cleanup_replays_committed_rows_idempotently() {
     store.complete(&db, &Settings::default()).unwrap();
     let before = fs::read_to_string(&path).unwrap();
     on_stage(|path, stage| {
-        if path.file_name().unwrap() == "ferrite.toml.defaults-pending" && stage == Stage::Replaced
-        {
+        if path.file_name().unwrap() == "navo.toml.defaults-pending" && stage == Stage::Replaced {
             let pending: toml::Value = toml::from_str(&fs::read_to_string(path).unwrap()).unwrap();
             if pending.get("stage").and_then(toml::Value::as_str) == Some("committed") {
                 fs::rename(path, path.with_extension("held")).unwrap();
@@ -414,7 +412,7 @@ fn a_hand_edit_during_a_sheet_save_is_kept_and_the_save_fails() {
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
         .collect();
-    assert_eq!(left, ["ferrite.toml"]);
+    assert_eq!(left, ["navo.toml"]);
     on_stage(|_, _| Ok(()));
     store.save(MODE, Some(text("dark"))).unwrap();
     assert_eq!(
@@ -431,7 +429,7 @@ fn a_hand_edit_during_completion_is_kept_and_nothing_is_recorded() {
     let db = ledger();
     let (mut store, _) = SettingsStore::load(&path);
     on_stage(|path, stage| {
-        if path.file_name().unwrap() == "ferrite.toml" && stage == Stage::TempWritten {
+        if path.file_name().unwrap() == "navo.toml" && stage == Stage::TempWritten {
             write(path, HAND_EDIT);
         }
         Ok(())

@@ -108,7 +108,7 @@ fn the_only_batch_is_gone_once_it_is_undone() {
 #[test]
 fn the_offer_is_still_there_after_a_reopen() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("ferrite.db");
+    let file = dir.path().join("navo.db");
     let fs = FakeFs::new();
     let batch = plan(&fs, &[("a", "x"), ("b", "y")]);
     journal_batch(&jobs::open(&file).unwrap(), &batch, &fs);
@@ -120,7 +120,7 @@ fn the_offer_is_still_there_after_a_reopen() {
 #[test]
 fn an_undone_batch_stays_gone_after_a_reopen() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("ferrite.db");
+    let file = dir.path().join("navo.db");
     let fs = FakeFs::new();
     let journal = jobs::open(&file).unwrap();
     journal_batch(&journal, &plan(&fs, &[("a", "x")]), &fs);

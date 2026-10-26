@@ -62,7 +62,7 @@ pub struct Identity {
 
 impl Identity {
     fn title(&self) -> String {
-        format!("Ferrite {}", self.version)
+        format!("Navo {}", self.version)
     }
 
     fn subtitle(&self) -> String {
@@ -230,7 +230,7 @@ impl RenderOnce for AppMenu {
         let panel = register(div().id(self.id), self.selected, self.on_event)
             .key_context(CONTEXT)
             .role(Role::Menu)
-            .aria_label("Ferrite menu")
+            .aria_label("Navo menu")
             .test_support()
             .when_some(self.focus.as_ref(), |d, focus| d.track_focus(focus));
         let panel = view::panel(t, panel)

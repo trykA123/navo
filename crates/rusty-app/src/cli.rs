@@ -21,7 +21,7 @@ pub(crate) struct Start {
     pub(crate) right: Option<PathBuf>,
 }
 
-pub(crate) const USAGE: &str = "usage: ferrite [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>]]";
+pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>]]";
 
 const STANDALONE: [&str; 5] = [
     "--version",
@@ -61,7 +61,7 @@ impl Start {
 }
 
 pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, String> {
-    read(args.into_iter()).map_err(|problem| format!("ferrite: {problem}\n{USAGE}"))
+    read(args.into_iter()).map_err(|problem| format!("navo: {problem}\n{USAGE}"))
 }
 
 fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {

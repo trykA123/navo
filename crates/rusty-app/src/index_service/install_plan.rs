@@ -2,21 +2,55 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Product {
+    pub folder: &'static str,
+    pub image: &'static str,
+    pub service: &'static [u8],
+}
+
+pub(super) const NAVO: Product = Product {
+    folder: rusty_core::brand::NAME,
+    image: "navo.exe",
+    service: b"Navo Index",
+};
+
+pub(super) const FERRITE: Product = Product {
+    folder: rusty_core::brand::LEGACY_NAME,
+    image: "ferrite.exe",
+    service: b"Ferrite Index",
+};
+
+impl Product {
+    pub fn data_directories(&self, program_data: &Path) -> [PathBuf; 2] {
+        let parent = program_data.join(self.folder);
+        let index = parent.join("index");
+        [parent, index]
+    }
+}
+
 pub(super) struct CopyPlan {
     pub directory: PathBuf,
     pub temporary: PathBuf,
     pub executable: PathBuf,
     pub previous: PathBuf,
+    image: &'static str,
 }
 
 impl CopyPlan {
     pub fn new(program_files: &Path, nonce: u32) -> Self {
-        let directory = program_files.join("Ferrite").join("Index");
+        Self::of(NAVO, program_files, nonce)
+    }
+
+    pub fn of(product: Product, program_files: &Path, nonce: u32) -> Self {
+        let directory = program_files.join(product.folder).join("Index");
+        let image = product.image;
         Self {
-            temporary: directory.join(format!("ferrite.exe.{nonce}.tmp")),
-            executable: directory.join("ferrite.exe"),
-            previous: directory.join(format!("ferrite.exe.{nonce}.old")),
+            temporary: directory.join(format!("{image}.{nonce}.tmp")),
+            executable: directory.join(image),
+            previous: directory.join(format!("{image}.{nonce}.old")),
             directory,
+            image,
         }
     }
 
@@ -75,7 +109,7 @@ impl CopyPlan {
         let mut previous = None;
         for entry in std::fs::read_dir(&self.directory)? {
             let entry = entry?;
-            if !is_old_image(&entry.file_name().to_string_lossy()) {
+            if !is_old_image(self.image, &entry.file_name().to_string_lossy()) {
                 continue;
             }
             if !entry.file_type()?.is_file() || previous.is_some() {
@@ -98,7 +132,7 @@ impl CopyPlan {
         let mut result = Ok(());
         for entry in std::fs::read_dir(&self.directory)? {
             let entry = entry?;
-            if is_old_image(&entry.file_name().to_string_lossy()) {
+            if is_old_image(self.image, &entry.file_name().to_string_lossy()) {
                 result = result.and(std::fs::remove_file(entry.path()));
             }
         }
@@ -204,8 +238,9 @@ impl FreshInstall {
     }
 }
 
-fn is_old_image(name: &str) -> bool {
-    name.strip_prefix("ferrite.exe.")
+fn is_old_image(image: &str, name: &str) -> bool {
+    name.strip_prefix(image)
+        .and_then(|name| name.strip_prefix('.'))
         .and_then(|name| name.strip_suffix(".old"))
         .is_some_and(|nonce| !nonce.is_empty() && nonce.bytes().all(|byte| byte.is_ascii_digit()))
 }
@@ -307,9 +342,7 @@ fn recover(
 }
 
 pub(super) fn data_directories(program_data: &Path) -> [PathBuf; 2] {
-    let parent = program_data.join("Ferrite");
-    let index = parent.join("index");
-    [parent, index]
+    NAVO.data_directories(program_data)
 }
 
 pub(super) fn clear_directory(path: &Path) -> io::Result<()> {
@@ -335,8 +368,8 @@ mod tests {
     #[test]
     fn binary_is_copied_to_a_temporary_name_then_renamed_in_program_files() {
         let plan = CopyPlan::new(Path::new("program-files"), 123);
-        assert_eq!(plan.directory, Path::new("program-files/Ferrite/Index"));
-        assert_eq!(plan.executable, plan.directory.join("ferrite.exe"));
+        assert_eq!(plan.directory, Path::new("program-files/Navo/Index"));
+        assert_eq!(plan.executable, plan.directory.join("navo.exe"));
         assert_eq!(plan.temporary.parent(), Some(plan.directory.as_path()));
         assert_ne!(plan.temporary, plan.executable);
         let root = tempfile::tempdir().unwrap();

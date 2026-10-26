@@ -33,7 +33,7 @@ fn a_bind_without_a_context_sits_in_the_home_context() {
         .collect();
     assert_eq!(
         placed,
-        [("tab.next", "FerritePane"), ("jobs.toggle", "global")]
+        [("tab.next", "NavoPane"), ("jobs.toggle", "global")]
     );
 }
 
@@ -220,4 +220,21 @@ fn escape_steps_back_in_the_image_view_and_memory_drawers_use_the_shared_keys() 
         placed("image.toggle_info"),
         [("Image".to_owned(), vec!["i".to_owned()])]
     );
+}
+
+#[test]
+fn an_old_pane_context_binds_as_the_new_one() {
+    let text = one("tab.next", "\"ctrl-tab\"", Some("FerritePane"));
+    let keymap = Keymap::parse(&text).expect("keymap");
+    let contexts: Vec<&str> = keymap.binds().iter().map(|b| b.context.as_str()).collect();
+    assert_eq!(contexts, ["NavoPane"]);
+}
+
+#[test]
+fn an_unknown_context_is_still_refused() {
+    let text = one("tab.next", "\"ctrl-tab\"", Some("FerriteOther"));
+    assert!(matches!(
+        error_of(&text),
+        Some(KeymapError::ContextNotAllowed { .. })
+    ));
 }

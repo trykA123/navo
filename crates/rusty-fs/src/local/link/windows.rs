@@ -35,7 +35,7 @@ impl Shortcut {
     ) -> Result<Self, FsError> {
         let _apartment = Apartment::new().map_err(|e| com_error(e, source))?;
         let directory = tempfile::Builder::new()
-            .prefix(".ferrite-link-")
+            .prefix(".navo-link-")
             .tempdir_in(target_dir)
             .map_err(|e| path_error(&e, target_dir))?;
         save(

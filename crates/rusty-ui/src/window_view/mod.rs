@@ -266,6 +266,7 @@ impl FerriteWindow {
         Self::close_saves_and_quits(window, cx);
         Self::poll_drives(cx);
         Self::poll_index_activity(cx);
+        self.check_index_upgrade(cx);
         cx.defer_in(window, move |view, window, cx| {
             view.focus_core_pane(window, cx);
             view.watch_listings(cx);
@@ -366,6 +367,7 @@ impl Render for FerriteWindow {
                 below.bg(t.surfaces.mica())
             })
             .children(self.crash_notice_view(window, cx))
+            .children(self.index_upgrade_view(cx))
             .child(self.body_area(window, cx))
             .children(self.fkey_bar(window, cx));
         let root = div()

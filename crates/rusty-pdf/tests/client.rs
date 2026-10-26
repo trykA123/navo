@@ -106,7 +106,7 @@ fn a_helper_that_writes_garbage_is_a_protocol_error() {
 
 #[test]
 fn a_missing_helper_program_is_reported() {
-    let launcher = Launcher::new("/nonexistent/ferrite-helper", []);
+    let launcher = Launcher::new("/nonexistent/navo-helper", []);
     assert!(matches!(
         open(&launcher, "a.pdf", None).err(),
         Some(PdfError::NoHelper(_))

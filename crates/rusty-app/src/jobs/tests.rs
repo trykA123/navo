@@ -1,7 +1,7 @@
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
-use rusty_core::{ConflictPolicy, OpKind, OperationPlan, PlanRequest, ProviderPath, plan};
+use rusty_core::{ConflictPolicy, OpKind, OperationPlan, PlanRequest, ProviderPath, brand, plan};
 use rusty_fs::{
     Attributes, CancelToken, EntryKind, FakeFs, FsEntry, JobContext, JobOutcome, Progress,
     Provider, run_job, scan,
@@ -129,15 +129,18 @@ fn a_finished_job_is_left_alone() {
 
 #[test]
 fn a_half_written_copy_is_removed() {
-    let fs = fake();
-    let journal = journal();
-    let plan = copy_plan(&fs);
-    let bytes = serde_json::to_vec(&plan).unwrap();
-    let steps = u32::try_from(plan.steps.len()).unwrap();
-    lock(&journal).create_job("copy", &bytes, steps, 0).unwrap();
-    fs.add_file("dest/docs/report.txt.ferrite-part", 3);
-    assert_eq!(recover(&journal, &fs).unwrap(), 1);
-    assert!(!exists(&fs, "dest/docs/report.txt.ferrite-part"));
+    for suffix in [brand::TEMP_SUFFIX, brand::LEGACY_TEMP_SUFFIX] {
+        let fs = fake();
+        let journal = journal();
+        let plan = copy_plan(&fs);
+        let bytes = serde_json::to_vec(&plan).unwrap();
+        let steps = u32::try_from(plan.steps.len()).unwrap();
+        lock(&journal).create_job("copy", &bytes, steps, 0).unwrap();
+        let part = format!("dest/docs/report.txt{suffix}");
+        fs.add_file(&part, 3);
+        assert_eq!(recover(&journal, &fs).unwrap(), 1);
+        assert!(!exists(&fs, &part), "{suffix}");
+    }
 }
 
 #[test]

@@ -15,9 +15,9 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::System::Services::*;
 
+use super::install_plan::{NAVO, Product};
 use super::policy::ServiceError;
 
-const NAME: &[u8] = b"Ferrite Index\0";
 static CANCEL: OnceLock<CancelToken> = OnceLock::new();
 static STATUS: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 static STATE: AtomicU32 = AtomicU32::new(SERVICE_START_PENDING);
@@ -25,9 +25,9 @@ static CHECKPOINT: AtomicU32 = AtomicU32::new(0);
 
 pub(super) struct ServiceHandle(pub SC_HANDLE);
 
-pub(super) fn query_running() -> io::Result<Option<bool>> {
+pub(super) fn query_running(product: Product) -> io::Result<Option<bool>> {
     let manager = open_manager(SC_MANAGER_CONNECT)?;
-    let name = service_name();
+    let name = service_name_of(product);
     // SAFETY: manager and terminated name remain live; only read-only status access is requested.
     let raw = unsafe { OpenServiceW(manager.0, name.as_ptr(), SERVICE_QUERY_STATUS) };
     let service = match service_handle(raw) {
@@ -135,7 +135,17 @@ pub(super) fn stopping() -> io::Result<()> {
 }
 
 pub(super) fn service_name() -> Vec<u16> {
-    NAME.iter().copied().map(u16::from).collect()
+    service_name_of(NAVO)
+}
+
+pub(super) fn service_name_of(product: Product) -> Vec<u16> {
+    product
+        .service
+        .iter()
+        .copied()
+        .map(u16::from)
+        .chain([0])
+        .collect()
 }
 
 pub(super) fn open_manager(access: u32) -> io::Result<ServiceHandle> {

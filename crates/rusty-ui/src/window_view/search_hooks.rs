@@ -10,6 +10,7 @@ pub type RecordVisit = Arc<dyn Fn(&str, bool) + Send + Sync>;
 pub type ClearSearch = Arc<dyn Fn() + Send + Sync>;
 pub type ServiceState = Arc<dyn Fn() -> ServiceStatus + Send + Sync>;
 pub type ServiceAction = Arc<dyn Fn() + Send + Sync>;
+pub type UpgradeDue = Arc<dyn Fn() -> bool + Send + Sync>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frecent {
@@ -23,6 +24,8 @@ pub struct ServiceHooks {
     pub status: ServiceState,
     pub install: ServiceAction,
     pub remove: ServiceAction,
+    pub upgrade_due: UpgradeDue,
+    pub dismiss_upgrade: ServiceAction,
 }
 
 impl ServiceHooks {
@@ -32,6 +35,8 @@ impl ServiceHooks {
             status: Arc::new(|| ServiceStatus::NotAvailable),
             install: Arc::new(|| {}),
             remove: Arc::new(|| {}),
+            upgrade_due: Arc::new(|| false),
+            dismiss_upgrade: Arc::new(|| {}),
         }
     }
 }

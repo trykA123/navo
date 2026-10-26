@@ -220,7 +220,7 @@ impl WindowPage {
     }
 
     fn title_bar(&self, is_menu_open: bool) -> FerriteTitleBar {
-        let bar = FerriteTitleBar::new("Ferrite")
+        let bar = FerriteTitleBar::new(rusty_core::brand::NAME)
             .on_mica()
             .app_button(is_menu_open, |_, _, _| {})
             .trailing(
@@ -367,7 +367,7 @@ impl WindowPage {
         let identity = Identity {
             version: "0.0.1".into(),
             install: Install::Portable,
-            folder: r"D:\Apps\Ferrite".into(),
+            folder: r"D:\Apps\Navo".into(),
         };
         self.is_menu_open
             .then(|| AppMenu::new("app-menu", identity, settings).into_overlay(t))

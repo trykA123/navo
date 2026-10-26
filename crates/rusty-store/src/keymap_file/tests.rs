@@ -285,3 +285,16 @@ fn the_check_gets_the_text_that_is_written() {
         .unwrap();
     assert_eq!(length, fs::read_to_string(&path).unwrap().len());
 }
+
+#[test]
+fn an_entry_with_the_old_pane_context_is_the_home_slot() {
+    let old =
+        "[[bind]]\ncommand = \"tab.next\"\nkeys = [\"ctrl-tab\"]\ncontext = \"FerritePane\"\n";
+    let edit = KeymapEdit::Set {
+        command: "tab.next".to_owned(),
+        context: Some("NavoPane".to_owned()),
+        home: "NavoPane".to_owned(),
+        keys: vec!["f9".to_owned()],
+    };
+    assert_eq!(patched(old, &[edit]), old.replace("ctrl-tab", "f9"));
+}

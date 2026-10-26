@@ -37,7 +37,7 @@ impl Eq for CommandLog {}
 pub enum LogError {
     #[error("the log has version {found}; this build reads up to version {supported}")]
     TooNew { found: u32, supported: u32 },
-    #[error("the text is not a Ferrite command log")]
+    #[error("the text is not a Navo command log")]
     BadHeader,
     #[error("line {line}: {message}")]
     Line { line: usize, message: String },

@@ -117,7 +117,7 @@ pub(super) const GENERAL: [FieldSpec; 22] = [
     ),
     spec(
         (F::TerminalProvider, S::Terminal, "terminal.provider"),
-        ("Terminal", "The terminal Ferrite opens in a folder"),
+        ("Terminal", "The terminal Navo opens in a folder"),
         Control::Text,
     ),
     spec(

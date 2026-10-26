@@ -146,7 +146,7 @@ fn hook_redacts_message_thread_and_events() {
     }
     let record: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(record["version"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(record["commit"], env!("FERRITE_COMMIT"));
+    assert_eq!(record["commit"], env!("NAVO_COMMIT"));
     assert_eq!(record["thread"], "<user>");
     assert!(record["location"].as_str().unwrap().contains("tests.rs:"));
     assert!(!record["backtrace"].as_str().unwrap().is_empty());
@@ -179,16 +179,13 @@ fn hook_keeps_the_five_newest_crash_files() {
         )
         .unwrap();
     }
-    fs::write(logs.join("ferrite.log"), "keep").unwrap();
+    fs::write(logs.join("navo.log"), "keep").unwrap();
     fs::write(logs.join("crash-not-a-record.json"), "keep").unwrap();
     with_hook(dir.path(), &diagnostics(), |_| trigger("test panic"));
     assert_eq!(crash_files(dir.path()).len(), 6);
     assert!(!logs.join("crash-20000101-000002-1.json").exists());
     assert!(logs.join("crash-20000101-000003-1.json").exists());
-    assert_eq!(
-        fs::read_to_string(logs.join("ferrite.log")).unwrap(),
-        "keep"
-    );
+    assert_eq!(fs::read_to_string(logs.join("navo.log")).unwrap(), "keep");
     assert_eq!(
         fs::read_to_string(logs.join("crash-not-a-record.json")).unwrap(),
         "keep"
@@ -268,7 +265,7 @@ fn pending_lists_crash_records_only_after_an_unclean_exit() {
     fs::create_dir(&logs).unwrap();
     let file = logs.join("crash-20261019-120000-1.json");
     fs::write(&file, "{}").unwrap();
-    fs::write(logs.join("ferrite.log"), "log").unwrap();
+    fs::write(logs.join("navo.log"), "log").unwrap();
     assert!(pending(dir.path()).is_none());
     let running = Running::start(dir.path()).unwrap();
     assert_eq!(pending(dir.path()).unwrap().files, [file]);
@@ -317,8 +314,8 @@ fn save_report_contains_the_normal_report_and_all_crash_files() {
     let path = save_report(&previous, Instant::now(), &diagnostics, downloads.path()).unwrap();
     assert_eq!(path.parent(), Some(downloads.path()));
     let name = path.file_name().unwrap().to_str().unwrap();
-    assert!(name.starts_with("ferrite-report-") && name.ends_with(".zip"));
-    assert_eq!(name.len(), "ferrite-report-20261019-1200.zip".len());
+    assert!(name.starts_with("navo-report-") && name.ends_with(".zip"));
+    assert_eq!(name.len(), "navo-report-20261019-1200.zip".len());
     let mut zip = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
     assert_eq!(zip.len(), 5);
     assert!(zip.by_name("summary.txt").is_ok());

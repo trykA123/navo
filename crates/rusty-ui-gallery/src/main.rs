@@ -64,8 +64,8 @@ fn window_options(cx: &App) -> WindowOptions {
     let bounds = Bounds::centered(None, size(px(1280.), px(720.)), cx);
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
-        app_id: Some("ferrite-gallery".into()),
-        ..rusty_ui::window_options("Ferrite components")
+        app_id: Some("navo-gallery".into()),
+        ..rusty_ui::window_options("Navo components")
     }
 }
 

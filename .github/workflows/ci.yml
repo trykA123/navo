@@ -55,7 +55,7 @@ jobs:
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
-      FERRITE_EXPECT_PDFIUM: "1"
+      NAVO_EXPECT_PDFIUM: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
@@ -65,7 +65,7 @@ jobs:
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest@0.9.148
-      - name: Put pdfium.dll next to the test build of ferrite.exe
+      - name: Put pdfium.dll next to the test build of navo.exe
         shell: pwsh
         run: ./.github/scripts/fetch-pdfium.ps1 -Destination target/debug
       - run: cargo nextest run --workspace --profile ci
@@ -75,7 +75,7 @@ jobs:
         timeout-minutes: 10
         shell: pwsh
         run: |
-          $target = Join-Path $env:RUNNER_TEMP 'ferrite-copy-bench'
+          $target = Join-Path $env:RUNNER_TEMP 'navo-copy-bench'
           $table = cargo xtask bench-copy $target --sets 'small,medium' --runs 1
           $benchmarkExit = $LASTEXITCODE
           $table | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
@@ -97,40 +97,40 @@ jobs:
       - run: cargo build --release -p rusty-app
       - name: Binary size (informational until the alpha features are in)
         continue-on-error: true
-        run: cargo xtask binsize target/release/ferrite.exe
+        run: cargo xtask binsize target/release/navo.exe
       - shell: pwsh
         run: |
-          $out = (& target/release/ferrite.exe --version | Out-String).Trim()
-          if ($out -ne 'ferrite 0.0.1') { throw "unexpected output: $out" }
-      - name: Stage ferrite.exe with its PDB, pdfium.dll and licences
+          $out = (& target/release/navo.exe --version | Out-String).Trim()
+          if ($out -ne 'navo 0.0.1') { throw "unexpected output: $out" }
+      - name: Stage navo.exe with its PDB, pdfium.dll and licences
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item -LiteralPath target/release/ferrite.exe -Destination dist
-          Copy-Item -LiteralPath target/release/ferrite.pdb -Destination dist
+          Copy-Item -LiteralPath target/release/navo.exe -Destination dist
+          Copy-Item -LiteralPath target/release/navo.pdb -Destination dist
           ./.github/scripts/fetch-pdfium.ps1 -Destination dist -Licenses dist/licenses/pdfium
       - name: Verify release crash backtrace from the staged distribution
         timeout-minutes: 2
         shell: pwsh
         run: |
-          $crashProfile = Join-Path $env:RUNNER_TEMP ('ferrite-crash-' + [guid]::NewGuid())
-          $env:FERRITE_CRASH_TEST = '1'
-          $exe = (Resolve-Path -LiteralPath dist/ferrite.exe).Path
-          Rename-Item -LiteralPath target/release/ferrite.pdb -NewName ferrite.pdb.saved
+          $crashProfile = Join-Path $env:RUNNER_TEMP ('navo-crash-' + [guid]::NewGuid())
+          $env:NAVO_CRASH_TEST = '1'
+          $exe = (Resolve-Path -LiteralPath dist/navo.exe).Path
+          Rename-Item -LiteralPath target/release/navo.pdb -NewName navo.pdb.saved
           try {
             $probe = Start-Process -FilePath $exe -ArgumentList @('--crash-test', "`"$crashProfile`"") -Wait -PassThru -NoNewWindow
           } finally {
-            Rename-Item -LiteralPath target/release/ferrite.pdb.saved -NewName ferrite.pdb
+            Rename-Item -LiteralPath target/release/navo.pdb.saved -NewName navo.pdb
           }
           if ($probe.ExitCode -ne 101) { throw "unexpected crash probe exit: $($probe.ExitCode)" }
           $records = @(Get-ChildItem -LiteralPath "$crashProfile/data/logs" -Filter 'crash-*.json')
           if ($records.Count -ne 1) { throw "expected one crash record, got $($records.Count)" }
           $record = Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json
-          if ($record.message -ne 'Ferrite CI crash test') { throw 'unexpected panic message' }
-          if ($record.backtrace -notmatch 'ferrite::crash_test\r?\n\s+at [^\r\n]*main\.rs:\d+') { throw 'release backtrace has no Ferrite crash_test frame with its source location' }
+          if ($record.message -ne 'Navo CI crash test') { throw 'unexpected panic message' }
+          if ($record.backtrace -notmatch 'navo::crash_test\r?\n\s+at [^\r\n]*main\.rs:\d+') { throw 'release backtrace has no Navo crash_test frame with its source location' }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ferrite-windows-x64-${{ github.sha }}
+          name: navo-windows-x64-${{ github.sha }}
           path: dist/
       - name: listing benchmark, read_dir vs native, 50k files
         continue-on-error: true
@@ -165,11 +165,11 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ferrite-windows-x64-${{ github.sha }}
-          path: ${{ runner.temp }}/ferrite-perf/bin
+          name: navo-windows-x64-${{ github.sha }}
+          path: ${{ runner.temp }}/navo-perf/bin
       - name: Generate fixed two-pane fixture
         run: |
-          $perfRoot = Join-Path $env:RUNNER_TEMP 'ferrite-perf'
+          $perfRoot = Join-Path $env:RUNNER_TEMP 'navo-perf'
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "PERF_ROOT=$perfRoot"
           New-Item -ItemType Directory -Force -Path "$perfRoot/reports" | Out-Null
           cargo xtask perf-fixture "$perfRoot/fixture"
@@ -177,22 +177,22 @@ jobs:
       - name: First launch
         timeout-minutes: 2
         run: |
-          & "$env:PERF_ROOT/bin/ferrite.exe" --metrics "$env:PERF_ROOT/reports/first.json" --left "$env:PERF_ROOT/fixture/A" --right "$env:PERF_ROOT/fixture/B" --profile "$env:PERF_ROOT/profiles/first" | Out-Host
+          & "$env:PERF_ROOT/bin/navo.exe" --metrics "$env:PERF_ROOT/reports/first.json" --left "$env:PERF_ROOT/fixture/A" --right "$env:PERF_ROOT/fixture/B" --profile "$env:PERF_ROOT/profiles/first" | Out-Host
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path -LiteralPath "$env:PERF_ROOT/reports/first.json")) { throw 'first report missing' }
       - name: Five warm launches
         timeout-minutes: 3
         run: |
           foreach ($i in 1..5) {
-            & "$env:PERF_ROOT/bin/ferrite.exe" --metrics "$env:PERF_ROOT/reports/warm-$i.json" --left "$env:PERF_ROOT/fixture/A" --right "$env:PERF_ROOT/fixture/B" --profile "$env:PERF_ROOT/profiles/warm-$i" | Out-Host
+            & "$env:PERF_ROOT/bin/navo.exe" --metrics "$env:PERF_ROOT/reports/warm-$i.json" --left "$env:PERF_ROOT/fixture/A" --right "$env:PERF_ROOT/fixture/B" --profile "$env:PERF_ROOT/profiles/warm-$i" | Out-Host
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             if (!(Test-Path -LiteralPath "$env:PERF_ROOT/reports/warm-$i.json")) { throw "warm-$i report missing" }
           }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: ferrite-perf-windows-${{ github.sha }}
-          path: ${{ runner.temp }}/ferrite-perf/reports/*.json
+          name: navo-perf-windows-${{ github.sha }}
+          path: ${{ runner.temp }}/navo-perf/reports/*.json
           if-no-files-found: error
       - name: Performance summary (informational until the alpha features are in)
         if: always()
@@ -215,9 +215,9 @@ jobs:
       - run: cargo build --release -p rusty-app
       - name: Binary size (informational until the alpha features are in)
         continue-on-error: true
-        run: cargo xtask binsize target/release/ferrite
-      - run: test "$(target/release/ferrite --version)" = "ferrite 0.0.1"
+        run: cargo xtask binsize target/release/navo
+      - run: test "$(target/release/navo --version)" = "navo 0.0.1"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ferrite-linux-x64-${{ github.sha }}
-          path: target/release/ferrite
+          name: navo-linux-x64-${{ github.sha }}
+          path: target/release/navo

@@ -76,7 +76,7 @@ fn a_failed_configure_rolls_back_service_json_in_both_install_kinds() {
 fn a_failed_fresh_install_removes_the_copied_exe_and_the_folders_it_created() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 1);
-    let top = root.path().join("Ferrite");
+    let top = root.path().join("Navo");
     let fresh = FreshInstall::observe(&plan, &[top.clone(), plan.directory.clone()]);
     std::fs::create_dir_all(&plan.directory).unwrap();
     std::fs::write(&plan.executable, b"copy").unwrap();
@@ -172,7 +172,7 @@ fn interrupted_install_restores_the_only_old_image_before_cleanup() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 10);
     std::fs::create_dir_all(&plan.directory).unwrap();
-    let old = plan.directory.join("ferrite.exe.9.old");
+    let old = plan.directory.join("navo.exe.9.old");
     std::fs::write(&old, b"only good image").unwrap();
     plan.recover_old().unwrap();
     plan.delete_old().unwrap();
@@ -211,7 +211,7 @@ fn a_planted_image_moved_aside_does_not_count_as_a_trusted_previous_image() {
     fresh.remove_executable(&plan).unwrap();
     assert!(!plan.executable.exists());
     assert_eq!(
-        std::fs::read(preserved.join("ferrite.exe")).unwrap(),
+        std::fs::read(preserved.join("navo.exe")).unwrap(),
         b"planted"
     );
 }
@@ -221,7 +221,7 @@ fn install_preflight_recovers_the_only_image_before_a_new_copy_fails() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 10);
     std::fs::create_dir_all(&plan.directory).unwrap();
-    std::fs::write(plan.directory.join("ferrite.exe.9.old"), b"good image").unwrap();
+    std::fs::write(plan.directory.join("navo.exe.9.old"), b"good image").unwrap();
     let result = run_install(true, false, |step| match step {
         Step::RecoverOld => plan.recover_old(),
         Step::DeleteOld => plan.delete_old(),
@@ -239,7 +239,7 @@ fn ambiguous_crash_images_are_preserved_without_starting_cleanup() {
     std::fs::create_dir_all(&plan.directory).unwrap();
     for nonce in [8, 9] {
         std::fs::write(
-            plan.directory.join(format!("ferrite.exe.{nonce}.old")),
+            plan.directory.join(format!("navo.exe.{nonce}.old")),
             b"preserved",
         )
         .unwrap();
@@ -263,9 +263,147 @@ fn a_recovered_trusted_image_is_not_removed_as_a_fresh_copy() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 10);
     std::fs::create_dir_all(&plan.directory).unwrap();
-    std::fs::write(plan.directory.join("ferrite.exe.9.old"), b"good image").unwrap();
+    std::fs::write(plan.directory.join("navo.exe.9.old"), b"good image").unwrap();
     let mut fresh = FreshInstall::observe(&plan, &[]);
     fresh.recover_executable(&plan).unwrap();
     fresh.remove_executable(&plan).unwrap();
     assert_eq!(std::fs::read(&plan.executable).unwrap(), b"good image");
+}
+
+mod upgrade {
+    use super::super::upgrade::{Legacy, UpgradeStep, run_upgrade};
+    use std::io;
+
+    #[derive(Default)]
+    struct World {
+        navo: bool,
+        ferrite_service: bool,
+        ferrite_files: bool,
+        steps: Vec<UpgradeStep>,
+    }
+
+    impl World {
+        fn with_ferrite() -> Self {
+            Self {
+                ferrite_service: true,
+                ferrite_files: true,
+                ..Self::default()
+            }
+        }
+
+        fn legacy(&self) -> Legacy {
+            Legacy {
+                service: self.ferrite_service,
+                files: self.ferrite_files,
+            }
+        }
+
+        fn install(&mut self, fail: Option<UpgradeStep>) -> io::Result<Option<io::Error>> {
+            let legacy = self.legacy();
+            run_upgrade(legacy, |step| self.apply(step, fail))
+        }
+
+        fn apply(&mut self, step: UpgradeStep, fail: Option<UpgradeStep>) -> io::Result<()> {
+            self.steps.push(step);
+            if fail == Some(step) {
+                return Err(io::Error::other("injected"));
+            }
+            match step {
+                UpgradeStep::InstallNew => self.navo = true,
+                UpgradeStep::AwaitNew => {}
+                UpgradeStep::RemoveLegacyService if !self.ferrite_service => {
+                    return Err(io::ErrorKind::NotFound.into());
+                }
+                UpgradeStep::RemoveLegacyService => self.ferrite_service = false,
+                UpgradeStep::RemoveLegacyFiles => self.ferrite_files = false,
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn an_old_service_is_removed_only_after_the_new_one_answers() {
+        let mut world = World::with_ferrite();
+        world.install(None).unwrap();
+        assert_eq!(
+            world.steps,
+            [
+                UpgradeStep::InstallNew,
+                UpgradeStep::AwaitNew,
+                UpgradeStep::RemoveLegacyService,
+                UpgradeStep::RemoveLegacyFiles,
+            ]
+        );
+        assert!(world.navo && !world.legacy().is_present());
+    }
+
+    #[test]
+    fn without_an_old_service_install_does_not_wait_or_remove() {
+        let mut world = World::default();
+        world.install(None).unwrap();
+        assert_eq!(world.steps, [UpgradeStep::InstallNew]);
+    }
+
+    #[test]
+    fn a_failed_new_install_or_a_silent_new_pipe_keeps_the_old_service() {
+        for fail in [UpgradeStep::InstallNew, UpgradeStep::AwaitNew] {
+            let mut world = World::with_ferrite();
+            let error = world.install(Some(fail)).unwrap_err();
+            assert!(world.ferrite_service && world.ferrite_files, "{fail:?}");
+            assert!(!world.steps.contains(&UpgradeStep::RemoveLegacyService));
+            if fail == UpgradeStep::AwaitNew {
+                assert!(error.to_string().contains("Ferrite one was kept"));
+            }
+        }
+    }
+
+    #[test]
+    fn a_crash_after_the_new_install_leaves_the_old_service_detected_and_the_next_install_finishes()
+    {
+        let mut world = World::with_ferrite();
+        let _ = world.install(Some(UpgradeStep::AwaitNew));
+        assert!(world.navo && world.legacy().is_present());
+        world.steps.clear();
+        world.install(None).unwrap();
+        assert!(world.navo && !world.legacy().is_present());
+        assert!(world.steps.contains(&UpgradeStep::RemoveLegacyService));
+    }
+
+    #[test]
+    fn leftover_old_files_are_a_warning_and_the_install_succeeds() {
+        let mut world = World::with_ferrite();
+        let warning = world
+            .install(Some(UpgradeStep::RemoveLegacyFiles))
+            .unwrap()
+            .expect("the leftover files are reported");
+        assert!(warning.to_string().contains("injected"));
+        assert!(world.navo && !world.ferrite_service && world.ferrite_files);
+        world.steps.clear();
+        let again = world.install(Some(UpgradeStep::RemoveLegacyFiles)).unwrap();
+        assert!(again.is_some(), "every later install still succeeds");
+        assert!(world.navo);
+    }
+
+    #[test]
+    fn a_crash_between_service_and_folder_removal_is_finished_by_the_next_install() {
+        let mut world = World::with_ferrite();
+        let _ = world.install(Some(UpgradeStep::RemoveLegacyFiles));
+        assert!(!world.ferrite_service && world.ferrite_files);
+        assert!(world.legacy().is_present());
+        assert!(world.install(None).unwrap().is_none());
+        assert!(world.navo && !world.legacy().is_present());
+    }
+
+    #[test]
+    fn a_failed_old_service_delete_keeps_both_and_reports_the_state() {
+        let mut world = World::with_ferrite();
+        let error = world
+            .install(Some(UpgradeStep::RemoveLegacyService))
+            .unwrap_err();
+        assert!(world.navo, "the new service stays installed");
+        assert!(world.ferrite_service && world.ferrite_files);
+        assert!(!world.steps.contains(&UpgradeStep::RemoveLegacyFiles));
+        let text = error.to_string();
+        assert!(text.contains("new index service runs") && text.contains("injected"));
+    }
 }

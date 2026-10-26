@@ -116,7 +116,7 @@ fn damaged_or_foreign_bytes_give_a_message_not_a_panic() {
     let error = decode_image(b"just words", "notes.txt")
         .err()
         .expect("an error");
-    assert_eq!(error, "This file is not an image Ferrite can show.");
+    assert_eq!(error, "This file is not an image Navo can show.");
     let error = decode_image(b"<svg", "broken.svg").err().expect("an error");
     assert!(error.starts_with("Cannot show this SVG"), "{error}");
 }

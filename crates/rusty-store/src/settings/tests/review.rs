@@ -23,7 +23,7 @@ fn a_retry_refuses_a_hand_edit_to_the_target_key() {
     assert!(
         error
             .to_string()
-            .contains("changed in ferrite.toml while saving")
+            .contains("changed in navo.toml while saving")
     );
     assert_eq!(fs::read_to_string(&path).unwrap(), mine);
 }
@@ -117,7 +117,7 @@ fn a_committed_completion_keeps_state_after_folder_sync_failure() {
     defaults.appearance.font_size = 18;
     let generation = store.generation();
     on_stage(|path, stage| {
-        if path.file_name().unwrap() == "ferrite.toml" && stage == Stage::Replaced {
+        if path.file_name().unwrap() == "navo.toml" && stage == Stage::Replaced {
             Err(io::Error::other("injected folder fsync failure"))
         } else {
             Ok(())
@@ -171,7 +171,7 @@ fn shared_session_serializes_completion_and_sheet_save() {
     let (arrived, resume) = (checked.clone(), release.clone());
     let completion = std::thread::spawn(move || {
         on_stage(move |path, stage| {
-            if path.file_name().unwrap() == "ferrite.toml" && stage == Stage::TempSynced {
+            if path.file_name().unwrap() == "navo.toml" && stage == Stage::TempSynced {
                 arrived.wait();
                 resume.wait();
             }

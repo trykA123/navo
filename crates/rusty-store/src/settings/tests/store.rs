@@ -623,3 +623,43 @@ fn hiding_a_preview_part_writes_its_key_and_keeps_comments() {
     let view = &store.current().preview.view;
     assert!(view.type_bars && !view.largest_files);
 }
+
+#[test]
+fn an_old_theme_value_loads_the_new_name_and_saves_it() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "[appearance]\nlight-theme = \"Ferrite Light\" # mine\ndark-theme = \"Ferrite Dark\"\n",
+    );
+    let (mut store, _) = SettingsStore::load(&path);
+    assert_eq!(store.current().appearance.light_theme, "Navo Light");
+    assert_eq!(store.current().appearance.dark_theme, "Navo Dark");
+    store
+        .save("appearance.font-size", Some(SettingValue::Integer(14)))
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(
+        text.contains("light-theme = \"Navo Light\" # mine"),
+        "{text}"
+    );
+    assert!(text.contains("dark-theme = \"Navo Dark\""), "{text}");
+    assert!(!text.contains("Ferrite"), "{text}");
+}
+
+#[test]
+fn a_custom_theme_value_is_kept() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[appearance]\nlight-theme = \"Paper\"\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    assert_eq!(store.current().appearance.light_theme, "Paper");
+    store
+        .save("appearance.font-size", Some(SettingValue::Integer(14)))
+        .unwrap();
+    assert!(
+        fs::read_to_string(&path)
+            .unwrap()
+            .contains("light-theme = \"Paper\"")
+    );
+}

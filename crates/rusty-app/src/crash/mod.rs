@@ -87,7 +87,7 @@ pub(crate) fn save_report(
         } else {
             format!("-{attempt}")
         };
-        let path = downloads.join(format!("ferrite-report-{stamp}{suffix}.zip"));
+        let path = downloads.join(format!("navo-report-{stamp}{suffix}.zip"));
         match crate::diag::write_with_crashes(&path, started, diagnostics, &pending.files) {
             Ok(_) => return Ok(path),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => last = error,

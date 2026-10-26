@@ -7,7 +7,8 @@ use rusty_ui::browser::{RenameLogStatus, WriteRenameLog};
 
 mod rotation;
 
-const FORMAT: &str = "# ferrite rename log format 1\n";
+const FORMAT: &str = "# navo rename log format 1\n";
+const LEGACY_FORMAT: &str = "# ferrite rename log format 1\n";
 
 pub fn writer(path: Option<PathBuf>) -> WriteRenameLog {
     Arc::new(move |plan, status| {

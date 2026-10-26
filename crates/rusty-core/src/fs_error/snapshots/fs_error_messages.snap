@@ -4,8 +4,8 @@ expression: "lines.join(\"\\n\")"
 ---
 NotFound: The item was not found.
 NotFound: “C:\Data\report.xlsx” was not found.
-AccessDenied: Ferrite is not allowed to do this.
-AccessDenied: Ferrite is not allowed to open “C:\Data\report.xlsx”.
+AccessDenied: Navo is not allowed to do this.
+AccessDenied: Navo is not allowed to open “C:\Data\report.xlsx”.
 SharingViolation: The item is in use by another program.
 SharingViolation: “C:\Data\report.xlsx” is in use by another program.
 Locked: The item is locked.

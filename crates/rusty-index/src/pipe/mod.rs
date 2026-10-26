@@ -18,7 +18,8 @@ use unix as platform;
 #[cfg(windows)]
 use windows as platform;
 
-pub const PIPE_NAME: &str = r"\\.\pipe\ferrite-index";
+pub const PIPE_NAME: &str = r"\\.\pipe\navo-index";
+pub const LEGACY_PIPE_NAME: &str = r"\\.\pipe\ferrite-index";
 pub const MAX_HITS: usize = 500;
 pub const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(50);
 pub const QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(200);

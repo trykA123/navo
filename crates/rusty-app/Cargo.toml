@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "ferrite"
+name = "navo"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,6 +17,7 @@ rusty-core = { path = "../rusty-core" }
 rusty-diag = { path = "../rusty-diag" }
 rusty-fs = { path = "../rusty-fs" }
 rusty-index = { path = "../rusty-index" }
+rusty-l10n = { path = "../rusty-l10n" }
 rusty-pdf = { path = "../rusty-pdf" }
 rusty-shell = { path = "../rusty-shell" }
 rusty-store = { path = "../rusty-store" }
@@ -30,7 +31,6 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 
 [target.'cfg(windows)'.dependencies]
 gpui-pre-windows = "=0.3.9"
-rusty-l10n = { path = "../rusty-l10n" }
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
   "Win32_Globalization",
@@ -50,6 +50,7 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
   "Win32_System_WindowsProgramming",
+  "Win32_UI_Controls",
   "Win32_UI_HiDpi",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",

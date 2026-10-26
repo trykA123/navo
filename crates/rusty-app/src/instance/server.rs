@@ -25,7 +25,7 @@ impl Server {
         let stop = Arc::clone(&self.stop);
         self.thread = Some(
             thread::Builder::new()
-                .name("ferrite-instance".into())
+                .name("navo-instance".into())
                 .spawn(move || run(stop))?,
         );
         Ok(())

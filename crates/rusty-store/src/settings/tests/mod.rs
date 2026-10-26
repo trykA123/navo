@@ -26,7 +26,7 @@ fn tmp() -> TempDir {
 }
 
 fn settings_file(dir: &TempDir) -> PathBuf {
-    dir.path().join("ferrite.toml")
+    dir.path().join("navo.toml")
 }
 
 fn write(path: &Path, text: &str) {

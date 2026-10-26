@@ -2,6 +2,15 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## Unreleased
+
+### New
+
+- The app is now called Navo. It has a new n_ icon and a start-up splash.
+- The splash shows only when start-up takes longer than half a second.
+- Your Ferrite profile moves to Navo by itself on first start. Settings, tabs and history come with it. The old folder is renamed to Ferrite.migrated-to-navo.
+- An installed Ferrite Index service is upgraded to Navo Index. A one-time notice offers an Upgrade button.
+
 ## alpha-2026-10-26 — 2026-10-26
 
 ### New

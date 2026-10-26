@@ -1,4 +1,4 @@
-# Ferrite's built-in keymap. One [[bind]] per command and context.
+# Navo's built-in keymap. One [[bind]] per command and context.
 # keys use GPUI keystroke syntax; context defaults to the command's home context.
 
 # global
@@ -27,7 +27,7 @@ keys = ["ctrl-]"]
 command = "app.command_palette"
 keys = ["ctrl-k"]
 
-# FerritePane
+# NavoPane
 
 [[bind]]
 command = "tab.next"

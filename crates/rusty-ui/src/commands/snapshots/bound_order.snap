@@ -371,20 +371,20 @@ drive_menu.close | escape | DriveMenu
 [path_input]
 path_input.cancel | escape | PathInput
 [ferrite_tabs]
-tab.next | ctrl-tab | FerritePane
-tab.next | ctrl-pagedown | FerritePane
-tab.previous | ctrl-shift-tab | FerritePane
-tab.previous | ctrl-pageup | FerritePane
-tab.close | ctrl-w | FerritePane
-tab.go_to_first | ctrl-1 | FerritePane
-tab.go_to_second | ctrl-2 | FerritePane
-tab.go_to_third | ctrl-3 | FerritePane
-tab.go_to_fourth | ctrl-4 | FerritePane
-tab.go_to_fifth | ctrl-5 | FerritePane
-tab.go_to_sixth | ctrl-6 | FerritePane
-tab.go_to_seventh | ctrl-7 | FerritePane
-tab.go_to_eighth | ctrl-8 | FerritePane
-tab.go_to_last | ctrl-9 | FerritePane
+tab.next | ctrl-tab | NavoPane
+tab.next | ctrl-pagedown | NavoPane
+tab.previous | ctrl-shift-tab | NavoPane
+tab.previous | ctrl-pageup | NavoPane
+tab.close | ctrl-w | NavoPane
+tab.go_to_first | ctrl-1 | NavoPane
+tab.go_to_second | ctrl-2 | NavoPane
+tab.go_to_third | ctrl-3 | NavoPane
+tab.go_to_fourth | ctrl-4 | NavoPane
+tab.go_to_fifth | ctrl-5 | NavoPane
+tab.go_to_sixth | ctrl-6 | NavoPane
+tab.go_to_seventh | ctrl-7 | NavoPane
+tab.go_to_eighth | ctrl-8 | NavoPane
+tab.go_to_last | ctrl-9 | NavoPane
 [side_sheet]
 sheet.narrower | ctrl-[ | global
 sheet.wider | ctrl-] | global
@@ -445,15 +445,15 @@ preview.recount | ctrl-r | PreviewBrowse
 preview.view_menu | alt-v | PreviewBrowse
 [ferrite_window]
 jobs.toggle | ctrl-j | global
-tab.new | ctrl-t | FerritePane
-pane.drive_menu_first | alt-f1 | FerritePane
-pane.drive_menu_second | alt-f2 | FerritePane
-pane.edit_path | ctrl-l | FerritePane
-window.view_menu | alt-v | FerritePane
-pane.reset_split | ctrl-shift-0 | FerritePane
-preview.browse | ctrl-shift-q | FerritePane
-crash_notice.focus | ctrl-shift-r | FerritePane
-activity.focus | alt-j | FerritePane
+tab.new | ctrl-t | NavoPane
+pane.drive_menu_first | alt-f1 | NavoPane
+pane.drive_menu_second | alt-f2 | NavoPane
+pane.edit_path | ctrl-l | NavoPane
+window.view_menu | alt-v | NavoPane
+pane.reset_split | ctrl-shift-0 | NavoPane
+preview.browse | ctrl-shift-q | NavoPane
+crash_notice.focus | ctrl-shift-r | NavoPane
+activity.focus | alt-j | NavoPane
 crash_notice.save | enter | CrashNotice
 crash_notice.dismiss | escape | CrashNotice
 pane.leave_waiting | escape | PaneWaiting

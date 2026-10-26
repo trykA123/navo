@@ -20,7 +20,7 @@ pub fn run(mut options: StartOptions, display_scale: DisplayScale, on_quit: Rc<d
         bind_app_keys(cx);
         cx.set_global(DisplayScales(display_scale));
         let window_options = WindowOptions {
-            app_id: Some("ferrite".into()),
+            app_id: Some(rusty_core::brand::SLUG.into()),
             ..main_window_options(&options.state, cx)
         };
         let opened = crate::open_window(window_options, cx, move |window, cx| {
@@ -47,6 +47,6 @@ pub(super) fn main_window_options(state: &AppState, cx: &App) -> WindowOptions {
     WindowOptions {
         window_bounds: Some(bounds),
         display_id,
-        ..crate::title_bar::main_window_options("Ferrite")
+        ..crate::title_bar::main_window_options(rusty_core::brand::NAME)
     }
 }

@@ -200,7 +200,7 @@ fn nested_contexts_fall_inside_their_parent() {
     assert!(is_within("ContextMenu > Input", "ContextMenu"));
     assert!(is_within("ViewerFind > Input", "Viewer"));
     assert!(is_within("DialogButton", "Dialog"));
-    assert!(!is_within("PreviewBrowse", "FerritePane"));
+    assert!(!is_within("PreviewBrowse", "NavoPane"));
     assert!(!is_within("Viewer", "Tree"));
 }
 

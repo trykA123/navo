@@ -316,7 +316,7 @@ impl Browser {
             wake: Arc::clone(&self.wake),
         };
         std::thread::Builder::new()
-            .name("ferrite-job".to_owned())
+            .name("navo-job".to_owned())
             .spawn(move || work.run())
             .map(|_| ())
             .map_err(|error| error.to_string())

@@ -112,7 +112,7 @@ fn an_unreadable_outline_says_so_and_is_not_empty(cx: &mut TestAppContext) {
     open_outline(cx, &rig);
     assert_eq!(
         text(cx, rig.0, "pdf-outline-note"),
-        "Ferrite could not read this PDF's outline."
+        "Navo could not read this PDF's outline."
     );
     assert!(!shown(cx, rig.0, row(0)));
 }

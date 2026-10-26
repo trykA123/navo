@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn a_prepared_identity_is_durable_before_the_rename_runs() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ferrite.db");
+        let path = dir.path().join("navo.db");
         let journal = open(&path).unwrap();
         let mut log = log(&journal);
         log.prepare_rename(0, IDENTITY).unwrap();
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn a_finished_batch_keeps_its_identity_after_reopening() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ferrite.db");
+        let path = dir.path().join("navo.db");
         let journal = open(&path).unwrap();
         let mut log = log(&journal);
         log.prepare_rename(0, IDENTITY).unwrap();
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn a_legacy_windows_identity_preserves_its_domain_after_reopening() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ferrite.db");
+        let path = dir.path().join("navo.db");
         let journal = open(&path).unwrap();
         let identity = FileIdentity {
             volume: 7,
@@ -183,7 +183,7 @@ mod tests {
 
     fn stored(detail: &[u8]) -> Result<Option<FileIdentity>, rusty_core::FsError> {
         let dir = tempfile::tempdir().unwrap();
-        let journal = open(&dir.path().join("ferrite.db")).unwrap();
+        let journal = open(&dir.path().join("navo.db")).unwrap();
         let log = log(&journal);
         let job = lock(&journal).unfinished().unwrap()[0].id;
         lock(&journal)
@@ -217,7 +217,7 @@ mod tests {
     fn a_fingerprint_keeps_its_own_domain_after_reopening() {
         for folder in [false, true] {
             let dir = tempfile::tempdir().unwrap();
-            let path = dir.path().join("ferrite.db");
+            let path = dir.path().join("navo.db");
             let journal = open(&path).unwrap();
             let identity = FileIdentity {
                 volume: 0,
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn an_unreadable_identity_is_an_error() {
         let dir = tempfile::tempdir().unwrap();
-        let journal = open(&dir.path().join("ferrite.db")).unwrap();
+        let journal = open(&dir.path().join("navo.db")).unwrap();
         let log = log(&journal);
         let job = lock(&journal).unfinished().unwrap()[0].id;
         lock(&journal)

@@ -345,13 +345,13 @@ fn settings_replace_the_preview_drawer_until_they_close(cx: &mut TestAppContext)
 #[gpui_kit::test]
 fn a_failed_save_shows_a_line_in_the_sheet(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: disk full".to_owned());
+    *rig.store.failure.lock().expect("failure") = Some("navo.toml: disk full".to_owned());
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
     rig.press(cx, "right");
     assert_eq!(
         label(cx, &rig, "settings-error").as_deref(),
-        Some("ferrite.toml: disk full")
+        Some("navo.toml: disk full")
     );
     assert_eq!(density(cx), Density::Normal);
 }

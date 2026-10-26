@@ -142,8 +142,8 @@ fn open(path: &Path) -> Result<(File, ArchiveFormat), String> {
         .file_name()
         .map(|name| name.to_string_lossy())
         .unwrap_or_default();
-    let format = detect(&head, &name)
-        .ok_or_else(|| "This is not an archive Ferrite can read.".to_owned())?;
+    let format =
+        detect(&head, &name).ok_or_else(|| "This is not an archive Navo can read.".to_owned())?;
     let file = File::open(path).map_err(|error| format!("Cannot open it: {error}"))?;
     Ok((file, format))
 }

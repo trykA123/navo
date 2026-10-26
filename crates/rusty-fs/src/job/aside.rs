@@ -11,7 +11,7 @@ use super::restore::{Restored, keep};
 use super::{FileStamp, HeldFile, JobContext};
 use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, ProviderOps};
 
-pub const HELD_PREFIX: &str = ".ferrite-held-";
+pub const HELD_PREFIX: &str = ".navo-held-";
 
 static RUNS: AtomicU64 = AtomicU64::new(0);
 

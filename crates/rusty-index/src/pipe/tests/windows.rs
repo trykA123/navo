@@ -17,10 +17,7 @@ fn fixture(label: &str) -> (Server, String) {
         .split_whitespace()
         .find(|field| field.starts_with("S-1-"))
         .unwrap();
-    let name = format!(
-        r"\\.\pipe\ferrite-index-test-{}-{label}",
-        std::process::id()
-    );
+    let name = format!(r"\\.\pipe\navo-index-test-{}-{label}", std::process::id());
     let server = Server {
         pipes: crate::pipe::windows::Pipe::bind_test(&name, sid).unwrap(),
     };

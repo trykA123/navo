@@ -156,7 +156,7 @@ pub(super) fn rig_search(
             identity: Identity {
                 version: "0.0.1".into(),
                 install: Install::Installed,
-                folder: r"C:\Ferrite".into(),
+                folder: r"C:\Navo".into(),
             },
         },
         settings,
@@ -244,10 +244,7 @@ fn the_app_button_opens_the_menu_and_takes_focus(cx: &mut TestAppContext) {
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         let identity = window.find("app-menu-identity");
-        assert_eq!(
-            identity.label(),
-            Some(r"Ferrite 0.0.1, Installed · C:\Ferrite")
-        );
+        assert_eq!(identity.label(), Some(r"Navo 0.0.1, Installed · C:\Navo"));
     })
     .expect("window");
 }

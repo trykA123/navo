@@ -5,7 +5,7 @@ use crate::window_view::FerriteWindow;
 const NO_FILE: &str = "There is no settings file in this session.";
 
 fn missing_note(key: &str) -> SharedString {
-    format!("{key} is not in ferrite.toml; the default applies.").into()
+    format!("{key} is not in navo.toml; the default applies.").into()
 }
 
 impl FerriteWindow {

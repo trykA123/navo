@@ -221,7 +221,7 @@ impl Gallery {
         let toggle = IconButton::new("theme-toggle", glyph, label).on_click(
             cx.listener(|this: &mut Self, _, _, cx| this.set_mode(this.mode.toggled(), cx)),
         );
-        FerriteTitleBar::new("Ferrite")
+        FerriteTitleBar::new(rusty_core::brand::NAME)
             .header(HeaderSearch::new())
             .header(toggle)
     }

@@ -20,7 +20,7 @@ fn no_ledger() -> Mutex<super::LedgerFile> {
 }
 
 fn file_in(dir: &tempfile::TempDir) -> std::path::PathBuf {
-    dir.path().join("ferrite.toml")
+    dir.path().join("navo.toml")
 }
 
 fn other_value(spec: &rusty_ui::settings::FieldSpec, now: &Value) -> Value {
@@ -189,10 +189,10 @@ fn an_invalid_file_is_reported_and_left_byte_identical_by_a_save() {
     fs::write(&file, broken).unwrap();
     let settings = hooks(Some(&file));
     let reported = settings.load_error.clone().unwrap();
-    assert!(reported.contains("ferrite.toml"), "{reported}");
+    assert!(reported.contains("navo.toml"), "{reported}");
     assert!(reported.contains("line 2"), "{reported}");
     let failed = save(&settings, Change::theme(ThemeChoice::Dark)).unwrap_err();
-    assert!(failed.contains("ferrite.toml"), "{failed}");
+    assert!(failed.contains("navo.toml"), "{failed}");
     assert_eq!(fs::read_to_string(&file).unwrap(), broken);
 }
 
@@ -226,7 +226,7 @@ fn the_line_of_a_key_is_read_from_the_file() {
     assert_eq!((settings.line_of)("appearance.mode"), Some(mode));
     let location = settings.file.expect("a settings file");
     let name = Path::new(location.as_str()).file_name();
-    assert_eq!(name.and_then(|name| name.to_str()), Some("ferrite.toml"));
+    assert_eq!(name.and_then(|name| name.to_str()), Some("navo.toml"));
 }
 
 #[test]
@@ -240,7 +240,7 @@ fn a_failed_change_does_not_stop_the_rest_of_the_batch() {
     assert!(
         report
             .error
-            .is_some_and(|message| message.contains("ferrite.toml"))
+            .is_some_and(|message| message.contains("navo.toml"))
     );
     assert_eq!(report.values.theme(), ThemeChoice::Dark);
     assert_eq!(report.values.get(Field::FontSize), &Value::Number(13));

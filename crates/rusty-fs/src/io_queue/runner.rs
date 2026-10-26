@@ -75,7 +75,7 @@ fn spawn_workers(shared: &Arc<Shared>, state: &mut State, volume: &VolumeId) {
     for _ in 0..room {
         let (worker_shared, worker_volume) = (Arc::clone(shared), volume.clone());
         let spawned = thread::Builder::new()
-            .name("ferrite-io".to_owned())
+            .name("navo-io".to_owned())
             .spawn(move || work(&worker_shared, &worker_volume));
         let Ok(handle) = spawned else {
             break;

@@ -20,7 +20,7 @@ pub(super) fn summary_text(input: &ReportInput, redactor: &Redactor) -> String {
         || "not available".to_owned(),
         |m| format!("{} caches, {} task owners", m.caches.len(), m.tasks.len()),
     );
-    let mut text = String::from("Ferrite diagnostic report (report.json)\n\n");
+    let mut text = String::from("Navo diagnostic report (report.json)\n\n");
     let caches = input
         .memory
         .iter()

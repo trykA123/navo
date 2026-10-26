@@ -32,7 +32,7 @@ impl Workspace {
             .map_err(|error| error.to_string())?
             .as_nanos();
         let source = parent.join(format!(
-            ".ferrite-bench-source-{}-{timestamp}",
+            ".navo-bench-source-{}-{timestamp}",
             std::process::id()
         ));
         if source == target {

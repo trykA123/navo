@@ -21,7 +21,7 @@ pub fn initial_state(session_file: &Path, home: Location) -> AppState {
             found,
             supported,
             outcome,
-            "session is from a newer Ferrite; the file is kept as it is"
+            "session is from a newer Navo; the file is kept as it is"
         );
     }
     session

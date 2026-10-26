@@ -2,6 +2,7 @@
 extend-exclude = [
     "target/",
     "design/prototypes/",
+    "design/showreel/",
     "vendor/",
     "crates/rusty-syntax/src/builtin/rules/",
     "*.png",

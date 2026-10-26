@@ -46,7 +46,7 @@ pub(super) fn reset(index: usize, field: Field, send: Option<&Handler>) -> impl 
     Button::new(("settings-reset", index), "Reset")
         .variant(ButtonVariant::Ghost)
         .icon(IconName::RotateCcw)
-        .tooltip("Write the default to ferrite.toml")
+        .tooltip("Write the default to navo.toml")
         .when_some(send, |button, send| {
             let event = SheetEvent::Set(Change::reset(field));
             button.on_click(move |_, window, cx| send(&event, window, cx))
@@ -55,7 +55,7 @@ pub(super) fn reset(index: usize, field: Field, send: Option<&Handler>) -> impl 
 
 pub(super) fn footer(t: &Theme, values: &Values) -> impl IntoElement + use<> {
     let text = format!(
-        "Applied live · Saved to ferrite.toml · {} changed",
+        "Applied live · Saved to navo.toml · {} changed",
         values.changed_count()
     );
     div()

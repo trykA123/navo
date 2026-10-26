@@ -24,6 +24,7 @@ mod keymap;
 mod launch;
 mod logging;
 mod metrics;
+mod migration;
 mod pdf_helper;
 mod profile;
 mod rename_hooks;
@@ -77,7 +78,7 @@ fn execute(
             Ok(panes) => Opening { panes },
             Err(message) => {
                 console::attach();
-                eprintln!("ferrite: {message}\n{}", cli::USAGE);
+                eprintln!("navo: {message}\n{}", cli::USAGE);
                 return ExitCode::from(2);
             }
         },
@@ -107,7 +108,7 @@ fn execute_command(
     let profile = match profile {
         Ok(profile) => profile,
         Err(error) => {
-            eprintln!("ferrite: cannot create a temporary profile for --metrics: {error}");
+            eprintln!("navo: cannot create a temporary profile for --metrics: {error}");
             return ExitCode::FAILURE;
         }
     };
@@ -115,7 +116,7 @@ fn execute_command(
         Command::Open(start) => open_window(start, opening, &profile, clock),
         Command::Version => {
             let _diagnostics = install_logging(&profile);
-            println!("ferrite {}", env!("CARGO_PKG_VERSION"));
+            println!("navo {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         Command::DiagReport(path) => write_report(&path, started, &profile),
@@ -128,13 +129,13 @@ fn execute_command(
 #[inline(never)]
 #[allow(clippy::panic, reason = "an opt-in CI probe exercises the panic hook")]
 fn crash_test(profile: &Profile) -> ExitCode {
-    if std::env::var_os("FERRITE_CRASH_TEST").as_deref() != Some(std::ffi::OsStr::new("1")) {
-        eprintln!("ferrite: --crash-test requires FERRITE_CRASH_TEST=1");
+    if std::env::var_os("NAVO_CRASH_TEST").as_deref() != Some(std::ffi::OsStr::new("1")) {
+        eprintln!("navo: --crash-test requires NAVO_CRASH_TEST=1");
         return ExitCode::from(2);
     }
     let diagnostics = install_logging(profile);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
-    panic!("Ferrite CI crash test");
+    panic!("Navo CI crash test");
 }
 
 fn install_logging(profile: &Profile) -> logging::Diagnostics {
@@ -149,15 +150,11 @@ fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
     let data = profile.dirs().map(|dirs| dirs.data.as_path());
     match diag::write_on_demand(path, started, &diagnostics, data) {
         Ok(summary) => {
-            println!(
-                "ferrite: wrote {} ({} bytes)",
-                path.display(),
-                summary.bytes
-            );
+            println!("navo: wrote {} ({} bytes)", path.display(), summary.bytes);
             ExitCode::SUCCESS
         }
         Err(error) => {
-            eprintln!("ferrite: cannot write {}: {error}", path.display());
+            eprintln!("navo: cannot write {}: {error}", path.display());
             ExitCode::FAILURE
         }
     }
@@ -166,16 +163,21 @@ fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
 fn open_window(start: Start, opening: Opening, profile: &Profile, clock: ProcessClock) -> ExitCode {
     let Opening { panes } = opening;
     let (sender, requests) = open_requests();
-    let (guard, splash) = match prepare_instance(&start, profile, sender) {
+    let (guard, mut splash) = match prepare_instance(&start, profile, sender) {
         Ok(ControlFlow::Continue(first)) => first,
         Ok(ControlFlow::Break(code)) => return code,
         Err(error) => {
             console::attach();
-            eprintln!("ferrite: {error}");
+            eprintln!("navo: {error}");
             return ExitCode::FAILURE;
         }
     };
+    let migrated = match migrate(&start, profile, guard.is_some(), &mut splash) {
+        ControlFlow::Continue(report) => report,
+        ControlFlow::Break(code) => return code,
+    };
     let diagnostics = install_logging(profile);
+    migrated.iter().for_each(migration::Report::log);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
     crash::note_previous_exit(pending_crash.as_ref());
@@ -200,10 +202,30 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
         },
     });
     if let Err(error) = profile.cleanup().run() {
-        eprintln!("ferrite: cannot remove the temporary profile: {error}");
+        eprintln!("navo: cannot remove the temporary profile: {error}");
         return ExitCode::FAILURE;
     }
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
+}
+
+fn migrates(start: &Start, profile: &Profile, guarded: bool) -> bool {
+    !start.is_metrics() && (guarded || matches!(profile, Profile::User(Some(_))))
+}
+
+fn migrate(
+    start: &Start,
+    profile: &Profile,
+    guarded: bool,
+    splash: &mut splash::Splash,
+) -> ControlFlow<ExitCode, Option<migration::Report>> {
+    if !migrates(start, profile, guarded) {
+        return ControlFlow::Continue(None);
+    }
+    let report = migration::start(profile, &mut migration::Dialogs { splash });
+    if matches!(report.settled, migration::Settled::Quit) {
+        return ControlFlow::Break(ExitCode::FAILURE);
+    }
+    ControlFlow::Continue(Some(report))
 }
 
 fn prepare_crash(
@@ -261,7 +283,7 @@ fn prepare_instance(
                 ExitCode::SUCCESS
             } else {
                 console::attach();
-                eprintln!("ferrite: the running Ferrite rejected the request");
+                eprintln!("navo: the running Navo rejected the request");
                 ExitCode::FAILURE
             };
             Ok(ControlFlow::Break(code))

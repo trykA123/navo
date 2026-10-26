@@ -4,14 +4,15 @@ set -euo pipefail
 brand="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../assets/brand" && pwd)"
 mkdir -p "$brand/png"
 
-for n in 16 24 32 48; do
-    rsvg-convert -w "$n" -h "$n" "$brand/ferrite-$n.svg" -o "$brand/png/ferrite-$n.png"
+cp -- "$brand/navo-16.png" "$brand/png/navo-16.png"
+for n in 24 32 48; do
+    rsvg-convert -w "$n" -h "$n" "$brand/navo-$n.svg" -o "$brand/png/navo-$n.png"
 done
 for n in 64 128 256; do
-    rsvg-convert -w "$n" -h "$n" "$brand/ferrite.svg" -o "$brand/png/ferrite-$n.png"
+    rsvg-convert -w "$n" -h "$n" "$brand/navo.svg" -o "$brand/png/navo-$n.png"
 done
 
-python3 -I - "$brand/ferrite.ico" "$brand"/png/ferrite-{16,24,32,48,64,128,256}.png <<'PY'
+python3 -I - "$brand/navo.ico" "$brand"/png/navo-{16,24,32,48,64,128,256}.png <<'PY'
 import struct, sys
 out, pngs = sys.argv[1], sys.argv[2:]
 data = [open(p, "rb").read() for p in pngs]
@@ -24,4 +25,4 @@ with open(out, "wb") as f:
     f.write(struct.pack("<HHH", 0, 1, len(data)) + entries + b"".join(data))
 PY
 
-echo "Wrote $brand/png and $brand/ferrite.ico"
+echo "Wrote $brand/png and $brand/navo.ico"

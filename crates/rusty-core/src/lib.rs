@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod apply;
+pub mod brand;
 mod command;
 mod direction;
 pub mod encoding;
@@ -25,6 +26,7 @@ pub use apply::{
     CommandError, Effect, Event, apply, apply_event, list_active_tabs, list_missing, list_unloaded,
     relist_tab,
 };
+pub use brand::TEMP_SUFFIX;
 pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
 pub use direction::Direction;
 pub use fs_error::{FsError, FsErrorKind, LockHolder, RecoveryAction};
@@ -34,8 +36,8 @@ pub use location::{Location, LocationError, ProviderId, ProviderPath, typed_loca
 pub use name::{NameError, check_name};
 pub use op_plan::{
     Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, ItemKind, OpKind, OperationPlan,
-    PlanRequest, Resolution, Risk, ScannedItem, Step, TEMP_SUFFIX, Totals, drop_op, is_protected,
-    plan, right_button_drag,
+    PlanRequest, Resolution, Risk, ScannedItem, Step, Totals, drop_op, is_protected, plan,
+    right_button_drag,
 };
 pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection, SpanMode};

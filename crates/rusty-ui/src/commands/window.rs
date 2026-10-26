@@ -34,7 +34,7 @@ pub(super) const GROUPS: [Group; 8] = [
         ],
     },
     Group {
-        context: "FerritePane",
+        context: "NavoPane",
         commands: &[
             ("ferrite_tabs::NextTab", "tab.next", "cmd-tab-next"),
             (

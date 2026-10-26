@@ -24,7 +24,7 @@ pub(crate) enum Error {
     Json(#[from] serde_json::Error),
     #[error("invalid instance request")]
     InvalidRequest,
-    #[error("the running Ferrite did not answer")]
+    #[error("the running Navo did not answer")]
     Timeout,
 }
 
@@ -69,6 +69,16 @@ fn acquire_with_runtime(
 
 pub(super) fn acquire_in(profile_dir: &Path, runtime: &Path) -> Result<Acquired, Error> {
     platform::acquire(&naming::profile_hash(profile_dir)?, runtime)
+}
+
+pub(crate) fn profile_hash(profile_dir: &Path) -> Result<String, Error> {
+    naming::profile_hash(profile_dir)
+}
+
+#[cfg(unix)]
+pub(crate) fn runtime_folder(slug: &str) -> std::path::PathBuf {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from);
+    runtime::folder(runtime.as_deref(), &std::env::temp_dir(), slug)
 }
 
 #[cfg(test)]

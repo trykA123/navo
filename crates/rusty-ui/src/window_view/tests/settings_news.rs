@@ -9,7 +9,7 @@ use crate::settings::{Change, FIELDS, Field, Values};
 use crate::tokens::{self, Density, ThemeChoice};
 use crate::window_view::{FerriteWindow, SettingsNews};
 
-const BROKEN: &str = "ferrite.toml: invalid settings at line 3, column 9: expected a value";
+const BROKEN: &str = "navo.toml: invalid settings at line 3, column 9: expected a value";
 
 fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
     cx.executor().advance_clock(Duration::from_secs(1));

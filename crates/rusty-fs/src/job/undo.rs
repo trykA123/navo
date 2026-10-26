@@ -1,7 +1,7 @@
 use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::presence;
-use super::copy::{overwrites, remove_if_present, temp_of};
+use super::copy::{legacy_temp_of, overwrites, remove_if_present, temp_of};
 use super::link::undo_link;
 use super::restore::{
     Restored, gone_or_folder_deleted, is_placed, keep, matches_stamp, restore, surely_absent,
@@ -237,10 +237,10 @@ pub(super) fn clean_up(
         if done.contains(&seq) {
             continue;
         }
-        if let Step::CopyFile { target, .. } = step
-            && remove_if_present(ops, &temp_of(target)?)?
-        {
-            removed += 1;
+        if let Step::CopyFile { target, .. } = step {
+            for temp in [temp_of(target)?, legacy_temp_of(target)?] {
+                removed += u32::from(remove_if_present(ops, &temp)?);
+            }
         }
     }
     Ok(removed)

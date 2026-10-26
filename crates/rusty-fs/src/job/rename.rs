@@ -9,8 +9,6 @@ use super::{
     HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, StepOutcome, roll_back, run,
 };
 
-pub(super) const TEMP_PREFIX: &str = ".ferrite-rename-";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenameOutcome {
     Done,
@@ -29,7 +27,7 @@ pub enum RenameOutcome {
 pub fn is_temporary(target: &Location) -> bool {
     target
         .name()
-        .is_some_and(|name| name.to_text().starts_with(TEMP_PREFIX))
+        .is_some_and(|name| rusty_core::brand::is_rename_temp(&name.to_text()))
 }
 
 struct Tracking<'a> {

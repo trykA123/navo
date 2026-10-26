@@ -288,24 +288,21 @@ fn keep_as_default_saves_the_changed_parts_through_the_settings(cx: &mut TestApp
     assert!(!parts.bars(cx));
     assert_eq!(
         parts.rig.label(cx, "side-sheet-status").as_deref(),
-        Some("Kept as the default in ferrite.toml.")
+        Some("Kept as the default in navo.toml.")
     );
 }
 
 #[gpui_kit::test]
 fn keep_on_a_broken_settings_file_shows_the_problem_and_keeps_the_toggle(cx: &mut TestAppContext) {
     let parts = parts(cx, Values::default());
-    *parts.failure.lock().expect("failure") = Some("ferrite.toml is invalid at line 4.".to_owned());
+    *parts.failure.lock().expect("failure") = Some("navo.toml is invalid at line 4.".to_owned());
     parts.browse(cx);
     parts.rig.key(cx, "alt-v");
     parts.toggle(cx, "Largest files");
     parts.run(cx, "Keep as default");
     parts.settle(cx);
     let shown = parts.rig.label(cx, "side-sheet-status").unwrap_or_default();
-    assert!(
-        shown.contains("ferrite.toml is invalid at line 4."),
-        "{shown}"
-    );
+    assert!(shown.contains("navo.toml is invalid at line 4."), "{shown}");
     assert!(!shown.contains("Kept"), "{shown}");
     assert!(!parts.largest(cx));
     assert_eq!(parts.setting(cx, LARGEST), Value::Flag(true));
@@ -458,7 +455,7 @@ fn mark_two(parts: &Parts, cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn a_failed_keep_shows_over_the_marks_summary(cx: &mut TestAppContext) {
     let parts = parts(cx, Values::default());
-    *parts.failure.lock().expect("failure") = Some("ferrite.toml is invalid at line 4.".to_owned());
+    *parts.failure.lock().expect("failure") = Some("navo.toml is invalid at line 4.".to_owned());
     parts.browse(cx);
     mark_two(&parts, cx);
     let marked = parts.rig.label(cx, "side-sheet-status").unwrap_or_default();
@@ -519,10 +516,7 @@ fn keep_shows_saving_while_the_save_runs(cx: &mut TestAppContext) {
     assert_eq!(note.as_deref(), Some("Saving\u{2026}"));
     parts.settle(cx);
     let note = parts.rig.read(cx, |view| view.preview.view.note());
-    assert_eq!(
-        note.as_deref(),
-        Some("Kept as the default in ferrite.toml.")
-    );
+    assert_eq!(note.as_deref(), Some("Kept as the default in navo.toml."));
 }
 
 fn dispatch(parts: &Parts, cx: &mut TestAppContext, action: Box<dyn gpui_kit::Action>) {

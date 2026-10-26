@@ -63,13 +63,13 @@ const ARGUMENT_COMMANDS: [(&str, &str, &str, ArgKind); 4] = [
     (
         "pane.navigate",
         "command-center-arg-go-to-folder",
-        "FerritePane",
+        "NavoPane",
         ArgKind::Path,
     ),
     (
         "pane.open_tab",
         "command-center-arg-open-folder-in-tab",
-        "FerritePane",
+        "NavoPane",
         ArgKind::Path,
     ),
     (

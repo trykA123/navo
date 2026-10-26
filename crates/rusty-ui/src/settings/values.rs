@@ -99,8 +99,8 @@ fn default_of(spec: &FieldSpec) -> Value {
     let text = |text: &'static str| Value::Text(SharedString::new_static(text));
     match spec.field {
         Field::Density => Value::Pick(1),
-        Field::LightTheme => text("Ferrite Light"),
-        Field::DarkTheme => text("Ferrite Dark"),
+        Field::LightTheme => text("Navo Light"),
+        Field::DarkTheme => text("Navo Dark"),
         Field::Font => text("Inter"),
         Field::FontSize => Value::Number(13),
         Field::ModifierHints => Value::Pick(2),

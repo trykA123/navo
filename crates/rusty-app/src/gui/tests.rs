@@ -18,7 +18,7 @@ fn home() -> Location {
 
 fn one_running_job(dirs: &StoreDirs) {
     dirs.ensure().unwrap();
-    let journal = jobs::open(&dirs.data.join("ferrite.db")).unwrap();
+    let journal = jobs::open(&dirs.journal_file()).unwrap();
     journal
         .lock()
         .unwrap()
@@ -27,7 +27,7 @@ fn one_running_job(dirs: &StoreDirs) {
 }
 
 fn running_jobs(dirs: &StoreDirs) -> usize {
-    let journal = jobs::open(&dirs.data.join("ferrite.db")).unwrap();
+    let journal = jobs::open(&dirs.journal_file()).unwrap();
     let guard = journal.lock().unwrap();
     guard.unfinished().unwrap().len()
 }
@@ -45,7 +45,7 @@ fn store_folders_are_protected_and_get_a_journal() {
     let dirs = store(&dir);
     let (ops, lock, _) = operations(Some(&dirs), &home(), &FakeFs::new());
     assert_eq!(ops.protected.len(), 3);
-    assert!(dirs.data.join("ferrite.db").exists());
+    assert!(dirs.journal_file().exists());
     assert!(lock.is_some());
 }
 
@@ -149,7 +149,7 @@ fn a_failed_integrity_check_on_record_keeps_the_journal_closed_and_the_file_unto
     let dir = tempfile::tempdir().unwrap();
     let dirs = store(&dir);
     one_running_job(&dirs);
-    let db = dirs.data.join("ferrite.db");
+    let db = dirs.journal_file();
     crate::crash::test_damage::fill_history(&db);
     crate::crash::test_damage::corrupt_middle_page(&db);
     let bytes = std::fs::read(&db).unwrap();
@@ -170,7 +170,7 @@ fn a_corrupt_journal_found_during_recovery_is_put_on_record() {
     let dir = tempfile::tempdir().unwrap();
     let dirs = store(&dir);
     one_running_job(&dirs);
-    let db = dirs.data.join("ferrite.db");
+    let db = dirs.journal_file();
     let page = crate::crash::test_damage::root_page(&db, "job");
     crate::crash::test_damage::corrupt_page(&db, page);
     let _started = operations(Some(&dirs), &home(), &FakeFs::new());

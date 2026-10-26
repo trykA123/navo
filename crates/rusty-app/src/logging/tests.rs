@@ -27,20 +27,20 @@ fn emit_into(opened: Opened, emit: impl FnOnce()) {
 
 #[test]
 fn logs_live_in_a_logs_folder_under_the_data_root() {
-    let config = log_config(Some(Path::new("/data/ferrite")));
-    assert_eq!(config.dir, Some(PathBuf::from("/data/ferrite/logs")));
+    let config = log_config(Some(Path::new("/data/navo")));
+    assert_eq!(config.dir, Some(PathBuf::from("/data/navo/logs")));
 }
 
 #[test]
 fn log_files_roll_at_five_mebibytes_and_keep_five() {
-    let config = log_config(Some(Path::new("/data/ferrite")));
+    let config = log_config(Some(Path::new("/data/navo")));
     assert_eq!(
         (
             config.file_stem.as_str(),
             config.max_file_bytes,
             config.files
         ),
-        ("ferrite", 5 * 1024 * 1024, 5)
+        ("navo", 5 * 1024 * 1024, 5)
     );
 }
 
@@ -56,7 +56,7 @@ fn a_writable_folder_receives_the_log_file() {
     let opened = open(log_config(Some(root.path())), &redactor(), &ring);
     assert!(opened.file_error.is_none());
     emit_into(opened, || tracing::info!("hello"));
-    let text = std::fs::read_to_string(root.path().join("logs/ferrite.log")).unwrap();
+    let text = std::fs::read_to_string(root.path().join("logs/navo.log")).unwrap();
     assert!(text.contains("hello"));
 }
 
@@ -78,7 +78,7 @@ fn an_unwritable_folder_falls_back_to_the_ring() {
 
 #[test]
 fn the_default_level_is_info() {
-    let (filter, problem) = filter(None);
+    let (filter, problem) = filter(None, ENV_VAR);
     assert_eq!(
         (filter.max_level_hint(), problem),
         (Some(LevelFilter::INFO), None)
@@ -88,14 +88,14 @@ fn the_default_level_is_info() {
 #[test]
 fn an_empty_variable_keeps_the_default() {
     assert_eq!(
-        filter(Some("  ")).0.max_level_hint(),
+        filter(Some("  "), ENV_VAR).0.max_level_hint(),
         Some(LevelFilter::INFO)
     );
 }
 
 #[test]
-fn ferrite_log_overrides_the_level() {
-    let (filter, problem) = filter(Some("debug"));
+fn navo_log_overrides_the_level() {
+    let (filter, problem) = filter(Some("debug"), ENV_VAR);
     assert_eq!(
         (filter.max_level_hint(), problem),
         (Some(LevelFilter::DEBUG), None)
@@ -103,8 +103,8 @@ fn ferrite_log_overrides_the_level() {
 }
 
 #[test]
-fn ferrite_log_accepts_target_directives() {
-    let (filter, problem) = filter(Some("info,rusty_app=trace"));
+fn navo_log_accepts_target_directives() {
+    let (filter, problem) = filter(Some("info,rusty_app=trace"), ENV_VAR);
     assert_eq!(
         (filter.max_level_hint(), problem),
         (Some(LevelFilter::TRACE), None)
@@ -113,7 +113,7 @@ fn ferrite_log_accepts_target_directives() {
 
 #[test]
 fn a_bad_directive_keeps_info_and_says_why() {
-    let (filter, problem) = filter(Some("rusty_app=loud"));
+    let (filter, problem) = filter(Some("rusty_app=loud"), ENV_VAR);
     assert_eq!(filter.max_level_hint(), Some(LevelFilter::INFO));
     assert!(problem.is_some_and(|text| text.contains(ENV_VAR)));
 }
@@ -135,5 +135,51 @@ fn the_start_event_names_the_version_and_commit() {
             &env!("CARGO_PKG_VERSION").into(),
             true
         )
+    );
+}
+
+#[test]
+fn navo_log_wins_over_the_legacy_variable() {
+    let both = env_value(Some("debug".to_owned()), Some("trace".to_owned()));
+    assert_eq!(both, (Some("debug".to_owned()), ENV_VAR));
+}
+
+#[test]
+fn the_legacy_log_variable_is_read_when_navo_log_is_unset() {
+    let legacy = env_value(None, Some("trace".to_owned()));
+    assert_eq!(legacy, (Some("trace".to_owned()), LEGACY_ENV_VAR));
+    assert_eq!(env_value(None, None), (None, ENV_VAR));
+}
+
+#[test]
+fn the_legacy_variable_warning_reaches_the_log() {
+    let ring = ring();
+    let (_, warnings) = level(None, Some("debug".to_owned()));
+    emit_into(open(log_config(None), &redactor(), &ring), || {
+        warn_all(&warnings);
+    });
+    let lines = ring.snapshot();
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("WARN") && line.contains(LEGACY_ENV_VAR)),
+        "{lines:?}"
+    );
+    assert!(level(Some("debug".to_owned()), None).1.is_empty());
+}
+
+#[test]
+fn a_bad_legacy_value_names_the_legacy_variable() {
+    let (_, warnings) = level(None, Some("rusty_app=loud".to_owned()));
+    assert!(
+        warnings
+            .iter()
+            .any(|text| text.starts_with(&format!("ignoring {LEGACY_ENV_VAR} ")))
+    );
+    let (_, warnings) = level(Some("rusty_app=loud".to_owned()), None);
+    assert!(
+        warnings
+            .iter()
+            .any(|text| text.starts_with(&format!("ignoring {ENV_VAR} ")))
     );
 }

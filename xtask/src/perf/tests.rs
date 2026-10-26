@@ -177,10 +177,8 @@ impl TestRoot {
             .unwrap()
             .as_nanos();
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "ferrite-perf-{}-{timestamp}-{id}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("navo-perf-{}-{timestamp}-{id}", std::process::id()));
         std::fs::create_dir(&path).unwrap();
         Self(path)
     }

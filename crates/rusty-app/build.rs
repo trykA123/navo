@@ -21,14 +21,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .ancestors()
         .nth(2)
         .ok_or("crate is not inside the workspace")?;
-    let icon = root.join("assets").join("brand").join("ferrite.ico");
+    let icon = root.join("assets").join("brand").join("navo.ico");
     if !icon.is_file() {
         return Err(format!("missing {}", icon.display()).into());
     }
     println!("cargo:rerun-if-changed={}", icon.display());
 
     let version = env::var("CARGO_PKG_VERSION")?;
-    let rc = PathBuf::from(env::var("OUT_DIR")?).join("ferrite.rc");
+    let rc = PathBuf::from(env::var("OUT_DIR")?).join("navo.rc");
     fs::write(&rc, resource_script(&icon.display().to_string(), &version))?;
     embed_resource::compile(&rc, embed_resource::NONE).manifest_required()?;
     Ok(())
@@ -40,7 +40,7 @@ fn emit_commit() {
         println!("cargo:rerun-if-changed={dir}/logs/HEAD");
     }
     let commit = git(&["rev-parse", "--short=12", "HEAD"]).unwrap_or_else(|| "unknown".to_owned());
-    println!("cargo:rustc-env=FERRITE_COMMIT={commit}");
+    println!("cargo:rustc-env=NAVO_COMMIT={commit}");
 }
 
 fn git(args: &[&str]) -> Option<String> {
@@ -68,11 +68,11 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "FileDescription", "Ferrite"
+      VALUE "FileDescription", "Navo"
       VALUE "FileVersion", "{version}"
-      VALUE "InternalName", "ferrite"
-      VALUE "OriginalFilename", "ferrite.exe"
-      VALUE "ProductName", "Ferrite"
+      VALUE "InternalName", "navo"
+      VALUE "OriginalFilename", "navo.exe"
+      VALUE "ProductName", "Navo"
       VALUE "ProductVersion", "{version}"
     END
   END

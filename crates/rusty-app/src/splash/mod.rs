@@ -7,19 +7,34 @@ mod windows;
 mod windows_desktop;
 
 use std::sync::mpsc::Sender;
+use std::thread::JoinHandle;
 
 use rusty_core::placement::PhysicalRect;
 use timing::Event;
 
-pub(crate) struct Splash(Option<Sender<Event>>);
+pub(crate) struct Splash {
+    events: Option<Sender<Event>>,
+    thread: Option<JoinHandle<()>>,
+}
 
 impl Splash {
     pub(crate) fn start() -> Self {
-        Self(spawn())
+        let (events, thread) = spawn().unzip();
+        Self { events, thread }
     }
 
     pub(crate) fn none() -> Self {
-        Self(None)
+        Self {
+            events: None,
+            thread: None,
+        }
+    }
+
+    pub(crate) fn close(&mut self) {
+        self.events = None;
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
     }
 
     pub(crate) fn place(&self, near: PhysicalRect) {
@@ -27,31 +42,31 @@ impl Splash {
     }
 
     pub(crate) fn on_shown(self) -> Option<Box<dyn FnOnce()>> {
-        let sender = self.0?;
+        let sender = self.events?;
         Some(Box::new(move || {
             let _ = sender.send(Event::Ready);
         }))
     }
 
     fn send(&self, event: Event) {
-        if let Some(sender) = &self.0 {
+        if let Some(sender) = &self.events {
             let _ = sender.send(event);
         }
     }
 }
 
 #[cfg(windows)]
-fn spawn() -> Option<Sender<Event>> {
+fn spawn() -> Option<(Sender<Event>, JoinHandle<()>)> {
     let (sender, events) = std::sync::mpsc::channel();
-    std::thread::Builder::new()
-        .name("ferrite-splash".to_owned())
+    let thread = std::thread::Builder::new()
+        .name("navo-splash".to_owned())
         .spawn(move || windows::run(&events))
         .ok()?;
-    Some(sender)
+    Some((sender, thread))
 }
 
 #[cfg(not(windows))]
-fn spawn() -> Option<Sender<Event>> {
+fn spawn() -> Option<(Sender<Event>, JoinHandle<()>)> {
     None
 }
 

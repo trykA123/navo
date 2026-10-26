@@ -3,7 +3,7 @@ source: crates/rusty-ui/src/commands/tests.rs
 expression: "lines.join(\"\\n\")"
 ---
 activity.act | enter | ActivityStrip
-activity.focus | alt-j | FerritePane
+activity.focus | alt-j | NavoPane
 activity.leave | escape | ActivityStrip
 activity.next | right | ActivityStrip
 activity.next_item | down | ActivityDrawer
@@ -77,7 +77,7 @@ context_menu.show_classic | shift-f10 | ContextMenu > Input
 context_menu.up | up | ContextMenu
 context_menu.up | up | ContextMenu > Input
 crash_notice.dismiss | escape | CrashNotice
-crash_notice.focus | ctrl-shift-r | FerritePane
+crash_notice.focus | ctrl-shift-r | NavoPane
 crash_notice.save | enter | CrashNotice
 dialog.next_button | right | DialogButton
 dialog.next_field | tab | Dialog
@@ -240,14 +240,14 @@ multi_rename.reset | ctrl-r | MultiRename
 multi_rename.save_preset | ctrl-s | MultiRename
 multi_rename.toggle_row | delete | MultiRenamePreview
 multi_rename.token_menu | ctrl-space | MultiRename
-pane.drive_menu_first | alt-f1 | FerritePane
-pane.drive_menu_second | alt-f2 | FerritePane
-pane.edit_path | ctrl-l | FerritePane
+pane.drive_menu_first | alt-f1 | NavoPane
+pane.drive_menu_second | alt-f2 | NavoPane
+pane.edit_path | ctrl-l | NavoPane
 pane.go_back | alt-left | FileList
 pane.go_forward | alt-right | FileList
 pane.leave_waiting | backspace | PaneWaiting
 pane.leave_waiting | escape | PaneWaiting
-pane.reset_split | ctrl-shift-0 | FerritePane
+pane.reset_split | ctrl-shift-0 | NavoPane
 pane.retry_listing | enter | PaneWaiting
 pane.switch | tab | FileList
 path_input.cancel | escape | PathInput
@@ -265,7 +265,7 @@ pdf.whole_word | alt-w | Pdf
 pdf.zoom_in | ctrl-= | Pdf
 pdf.zoom_in | ctrl-shift-= | Pdf
 pdf.zoom_out | ctrl-- | Pdf
-preview.browse | ctrl-shift-q | FerritePane
+preview.browse | ctrl-shift-q | NavoPane
 preview.cursor_down | down | PreviewBrowse
 preview.cursor_up | up | PreviewBrowse
 preview.fold | left | PreviewBrowse
@@ -331,21 +331,21 @@ space.region_below | down | SpaceStrip
 space.toggle_scale | alt-z | Space
 space.zoom_in | enter | SpaceStrip
 space.zoom_out | backspace | SpaceStrip
-tab.close | ctrl-w | FerritePane
-tab.go_to_eighth | ctrl-8 | FerritePane
-tab.go_to_fifth | ctrl-5 | FerritePane
-tab.go_to_first | ctrl-1 | FerritePane
-tab.go_to_fourth | ctrl-4 | FerritePane
-tab.go_to_last | ctrl-9 | FerritePane
-tab.go_to_second | ctrl-2 | FerritePane
-tab.go_to_seventh | ctrl-7 | FerritePane
-tab.go_to_sixth | ctrl-6 | FerritePane
-tab.go_to_third | ctrl-3 | FerritePane
-tab.new | ctrl-t | FerritePane
-tab.next | ctrl-pagedown | FerritePane
-tab.next | ctrl-tab | FerritePane
-tab.previous | ctrl-pageup | FerritePane
-tab.previous | ctrl-shift-tab | FerritePane
+tab.close | ctrl-w | NavoPane
+tab.go_to_eighth | ctrl-8 | NavoPane
+tab.go_to_fifth | ctrl-5 | NavoPane
+tab.go_to_first | ctrl-1 | NavoPane
+tab.go_to_fourth | ctrl-4 | NavoPane
+tab.go_to_last | ctrl-9 | NavoPane
+tab.go_to_second | ctrl-2 | NavoPane
+tab.go_to_seventh | ctrl-7 | NavoPane
+tab.go_to_sixth | ctrl-6 | NavoPane
+tab.go_to_third | ctrl-3 | NavoPane
+tab.new | ctrl-t | NavoPane
+tab.next | ctrl-pagedown | NavoPane
+tab.next | ctrl-tab | NavoPane
+tab.previous | ctrl-pageup | NavoPane
+tab.previous | ctrl-shift-tab | NavoPane
 table.copy_cell | ctrl-c | Table
 table.copy_row | ctrl-shift-c | Table
 table.first_cell | home | Table
@@ -425,4 +425,4 @@ viewer.show_line_ends | alt-l | Viewer
 viewer.show_rich | alt-5 | Viewer
 viewer.show_text | alt-1 | Viewer
 viewer.view_menu | alt-v | Viewer
-window.view_menu | alt-v | FerritePane
+window.view_menu | alt-v | NavoPane

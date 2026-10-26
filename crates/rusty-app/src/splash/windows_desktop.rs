@@ -19,7 +19,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 use super::canvas::{self, Look};
 use super::timing::Motion;
 
-const CLASS: &str = "FerriteSplash";
+const CLASS: &str = "NavoSplash";
 const BASE_DPI: f32 = 96.0;
 const STATUS_SIZE: f32 = 12.0;
 

@@ -214,7 +214,7 @@ fn a_case_only_rename_that_cannot_finish_puts_the_name_back() {
     use rusty_fs::{FakeOp, Fault};
     let fs = fake();
     let mut browser = browser(&fs);
-    let step = "home/.ferrite-rename-00000000-0";
+    let step = "home/.navo-rename-00000000-0";
     fs.fault(
         step,
         FakeOp::Rename,
@@ -235,7 +235,7 @@ fn a_stranded_case_step_is_listed_and_named_in_the_error() {
     use rusty_fs::{FakeOp, Fault};
     let fs = fake();
     let mut browser = browser(&fs);
-    let step = "home/.ferrite-rename-00000000-0";
+    let step = "home/.navo-rename-00000000-0";
     fs.fault(
         step,
         FakeOp::Rename,
@@ -251,7 +251,7 @@ fn a_stranded_case_step_is_listed_and_named_in_the_error() {
     assert_eq!(browser.rename("a.txt", "A.txt"), Ok(()));
     settle(&mut browser);
     assert!(exists(&fs, step));
-    assert!(names(&browser).contains(&".ferrite-rename-00000000-0".to_owned()));
+    assert!(names(&browser).contains(&".navo-rename-00000000-0".to_owned()));
     let tab = browser.state().active_tab().id();
     let location = browser.error(tab).and_then(|e| e.location.clone());
     assert_eq!(location, Some(fs.location(step)));

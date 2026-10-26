@@ -31,7 +31,9 @@ pub struct Settings {
 pub struct Appearance {
     pub mode: ThemeMode,
     pub color_theme: ColorTheme,
+    #[serde(deserialize_with = "theme_name")]
     pub light_theme: String,
+    #[serde(deserialize_with = "theme_name")]
     pub dark_theme: String,
     pub font: String,
     pub font_size: u16,
@@ -40,13 +42,23 @@ pub struct Appearance {
     pub modifier_hints_delay_ms: u16,
 }
 
+pub(super) fn navo_theme_name(name: &str) -> Option<String> {
+    name.strip_prefix("Ferrite ")
+        .map(|rest| format!("Navo {rest}"))
+}
+
+fn theme_name<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    let name = String::deserialize(deserializer)?;
+    Ok(navo_theme_name(&name).unwrap_or(name))
+}
+
 impl Default for Appearance {
     fn default() -> Self {
         Self {
             mode: ThemeMode::default(),
             color_theme: ColorTheme::default(),
-            light_theme: "Ferrite Light".to_owned(),
-            dark_theme: "Ferrite Dark".to_owned(),
+            light_theme: "Navo Light".to_owned(),
+            dark_theme: "Navo Dark".to_owned(),
             font: "Inter".to_owned(),
             font_size: 13,
             density: Density::default(),

@@ -39,7 +39,7 @@ fn acquire_with(
     hash: &str,
     create: impl FnOnce(&[u16]) -> io::Result<pipe::Pipe>,
 ) -> Result<Acquired, Error> {
-    let mutex_name = wide(&format!("Local\\Ferrite-{hash}"));
+    let mutex_name = wide(&format!("Local\\{}-{hash}", rusty_core::brand::NAME));
     // SAFETY: the name is NUL-terminated; default security and no initial ownership require no other pointers.
     let raw = unsafe { CreateMutexW(null(), 0, mutex_name.as_ptr()) };
     // SAFETY: GetLastError reads this thread's error immediately after CreateMutexW.
@@ -133,7 +133,10 @@ fn pipe_name(hash: &str) -> io::Result<Vec<u16>> {
     if unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session) } == 0 {
         return Err(io::Error::last_os_error());
     }
-    Ok(wide(&format!("\\\\.\\pipe\\Ferrite-{session}-{hash}")))
+    Ok(wide(&format!(
+        "\\\\.\\pipe\\{}-{session}-{hash}",
+        rusty_core::brand::NAME
+    )))
 }
 
 #[cfg(test)]

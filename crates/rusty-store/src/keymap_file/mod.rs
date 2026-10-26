@@ -14,7 +14,7 @@ pub enum KeymapFileError {
     FileInvalid(String),
     #[error("the change was not saved: {0}")]
     Rejected(String),
-    #[error("keymap.toml keeps its keys in a form Ferrite cannot edit; use [[bind]] tables")]
+    #[error("keymap.toml keeps its keys in a form Navo cannot edit; use [[bind]] tables")]
     Layout,
     #[error("keymap file error ({kind}): {message}")]
     Io {

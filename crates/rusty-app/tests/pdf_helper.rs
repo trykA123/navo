@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 use rusty_pdf::protocol::{Bitmap, PdfError, RenderRequest, Rotation};
 use rusty_pdf::{Document, Launcher, library_beside};
 
-const FERRITE: &str = env!("CARGO_BIN_EXE_ferrite");
+const NAVO: &str = env!("CARGO_BIN_EXE_navo");
 
 fn launcher() -> Launcher {
-    let launcher = Launcher::new(FERRITE, [OsString::from("--pdf-helper")]);
+    let launcher = Launcher::new(NAVO, [OsString::from("--pdf-helper")]);
     #[cfg(windows)]
     let launcher = launcher.with_confinement(std::sync::Arc::new(|child: &std::process::Child| {
         let limits = rusty_shell::HelperLimits {
@@ -23,8 +23,8 @@ fn fixture() -> PathBuf {
 }
 
 fn expects_pdfium() -> bool {
-    let beside = Path::new(FERRITE).parent().map(library_beside);
-    std::env::var_os("FERRITE_EXPECT_PDFIUM").is_some() || beside.is_some_and(|path| path.is_file())
+    let beside = Path::new(NAVO).parent().map(library_beside);
+    std::env::var_os("NAVO_EXPECT_PDFIUM").is_some() || beside.is_some_and(|path| path.is_file())
 }
 
 fn pixel(bitmap: &Bitmap, x: u32, y: u32) -> &[u8] {

@@ -22,8 +22,8 @@ struct Paths {
 fn installed() -> Paths {
     let dir = tempfile::tempdir().unwrap();
     let at = Paths {
-        file: dir.path().join("ferrite.toml"),
-        ledger: dir.path().join("ferrite.db"),
+        file: dir.path().join("navo.toml"),
+        ledger: dir.path().join("navo.db"),
         _dir: dir,
     };
     fs::write(&at.file, NOTE).unwrap();

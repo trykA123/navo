@@ -24,8 +24,8 @@ macro_rules! brand_svg {
     };
 }
 
-static ICON_1X: LazyLock<Arc<Image>> = brand_svg!("ferrite-24.svg");
-static ICON_2X: LazyLock<Arc<Image>> = brand_svg!("ferrite-48.svg");
+static ICON_1X: LazyLock<Arc<Image>> = brand_svg!("navo-24.svg");
+static ICON_2X: LazyLock<Arc<Image>> = brand_svg!("navo-48.svg");
 
 const ICON_SIZE: f32 = 24.;
 

@@ -111,7 +111,7 @@ fn identity() -> Identity {
     Identity {
         version: "0.4.2".into(),
         install: Install::Portable,
-        folder: r"D:\Apps\Ferrite".into(),
+        folder: r"D:\Apps\Navo".into(),
     }
 }
 
@@ -201,10 +201,10 @@ fn the_menu_shows_the_identity_three_tiles_and_six_rows(cx: &mut TestAppContext)
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         let menu = window.find("app-menu");
-        assert_eq!(menu.label(), Some("Ferrite menu"));
+        assert_eq!(menu.label(), Some("Navo menu"));
         assert_eq!(
             window.find("app-menu-identity").label(),
-            Some(r"Ferrite 0.4.2, Portable · D:\Apps\Ferrite")
+            Some(r"Navo 0.4.2, Portable · D:\Apps\Navo")
         );
         let tile = window.find(("app-menu-tile", 0usize));
         assert_eq!(tile.label(), Some("Theme"));

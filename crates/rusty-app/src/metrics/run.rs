@@ -38,7 +38,7 @@ impl Run {
         let ui = match ui {
             Ok(ui) => ui,
             Err(error) => {
-                eprintln!("ferrite: start-up metrics failed: {error}");
+                eprintln!("navo: start-up metrics failed: {error}");
                 return;
             }
         };
@@ -58,7 +58,7 @@ impl Run {
         match report.write(&self.destination) {
             Ok(()) => self.written.set(true),
             Err(error) => eprintln!(
-                "ferrite: cannot write the metrics to {}: {error}",
+                "navo: cannot write the metrics to {}: {error}",
                 self.destination.display()
             ),
         }

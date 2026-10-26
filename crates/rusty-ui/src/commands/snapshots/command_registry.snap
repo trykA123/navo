@@ -8,27 +8,27 @@ jobs.toggle | Show or hide jobs | global
 sheet.narrower | Narrower side sheet | global
 sheet.wider | Wider side sheet | global
 app.command_palette | Command center | global
-tab.next | Next tab | FerritePane
-tab.previous | Previous tab | FerritePane
-tab.close | Close tab | FerritePane
-tab.go_to_first | Go to tab 1 | FerritePane
-tab.go_to_second | Go to tab 2 | FerritePane
-tab.go_to_third | Go to tab 3 | FerritePane
-tab.go_to_fourth | Go to tab 4 | FerritePane
-tab.go_to_fifth | Go to tab 5 | FerritePane
-tab.go_to_sixth | Go to tab 6 | FerritePane
-tab.go_to_seventh | Go to tab 7 | FerritePane
-tab.go_to_eighth | Go to tab 8 | FerritePane
-tab.go_to_last | Go to last tab | FerritePane
-tab.new | New tab | FerritePane
-pane.drive_menu_first | Drives of pane 1 | FerritePane
-pane.drive_menu_second | Drives of pane 2 | FerritePane
-pane.edit_path | Edit path | FerritePane
-window.view_menu | Window view menu | FerritePane
-pane.reset_split | Reset pane split | FerritePane
-preview.browse | Browse in preview | FerritePane
-crash_notice.focus | Go to the crash notice | FerritePane
-activity.focus | Go to the activity strip | FerritePane
+tab.next | Next tab | NavoPane
+tab.previous | Previous tab | NavoPane
+tab.close | Close tab | NavoPane
+tab.go_to_first | Go to tab 1 | NavoPane
+tab.go_to_second | Go to tab 2 | NavoPane
+tab.go_to_third | Go to tab 3 | NavoPane
+tab.go_to_fourth | Go to tab 4 | NavoPane
+tab.go_to_fifth | Go to tab 5 | NavoPane
+tab.go_to_sixth | Go to tab 6 | NavoPane
+tab.go_to_seventh | Go to tab 7 | NavoPane
+tab.go_to_eighth | Go to tab 8 | NavoPane
+tab.go_to_last | Go to last tab | NavoPane
+tab.new | New tab | NavoPane
+pane.drive_menu_first | Drives of pane 1 | NavoPane
+pane.drive_menu_second | Drives of pane 2 | NavoPane
+pane.edit_path | Edit path | NavoPane
+window.view_menu | Window view menu | NavoPane
+pane.reset_split | Reset pane split | NavoPane
+preview.browse | Browse in preview | NavoPane
+crash_notice.focus | Go to the crash notice | NavoPane
+activity.focus | Go to the activity strip | NavoPane
 crash_notice.save | Save crash report | CrashNotice
 crash_notice.dismiss | Dismiss crash notice | CrashNotice
 pane.leave_waiting | Stop waiting | PaneWaiting

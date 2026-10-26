@@ -14,6 +14,7 @@ struct Calls {
     clear: AtomicUsize,
     install: AtomicUsize,
     remove: AtomicUsize,
+    dismiss: AtomicUsize,
     status_calls: AtomicUsize,
     status: Mutex<ServiceStatus>,
 }
@@ -38,6 +39,7 @@ fn hooks(calls: &Arc<Calls>) -> SearchHooks {
                 remove.remove.fetch_add(1, Ordering::SeqCst);
                 *remove.status.lock().unwrap() = ServiceStatus::NotInstalled;
             }),
+            ..ServiceHooks::none()
         },
         ..SearchHooks::none()
     }
@@ -197,4 +199,45 @@ fn rendering_uses_cached_status_and_each_search_open_refreshes_once(cx: &mut Tes
     .expect("window");
     cx.run_until_parked();
     assert_eq!(count(&calls.status_calls), 1);
+}
+
+fn upgrade_rig(cx: &mut TestAppContext) -> (Rig, Arc<Calls>) {
+    let calls = Arc::new(Calls::default());
+    *calls.status.lock().unwrap() = ServiceStatus::NotInstalled;
+    let mut search = hooks(&calls);
+    let dismissed = calls.clone();
+    search.service.upgrade_due = Arc::new(|| true);
+    search.service.dismiss_upgrade = Arc::new(move || {
+        dismissed.dismiss.fetch_add(1, Ordering::SeqCst);
+    });
+    let rig = rig_search(cx, Values::default(), None, search);
+    cx.run_until_parked();
+    (rig, calls)
+}
+
+#[gpui_kit::test]
+fn the_upgrade_notice_shows_until_dismissed_and_remembers_it_once(cx: &mut TestAppContext) {
+    let (rig, calls) = upgrade_rig(cx);
+    assert!(label(cx, &rig, "index-upgrade").is_some());
+    rig.click(cx, "index-upgrade-dismiss");
+    cx.run_until_parked();
+    assert!(label(cx, &rig, "index-upgrade").is_none());
+    assert_eq!(count(&calls.dismiss), 1);
+    assert_eq!(count(&calls.install), 0);
+}
+
+#[gpui_kit::test]
+fn upgrade_runs_the_install_hook_and_hides_the_notice(cx: &mut TestAppContext) {
+    let (rig, calls) = upgrade_rig(cx);
+    rig.click(cx, "index-upgrade-run");
+    cx.run_until_parked();
+    assert_eq!(count(&calls.install), 1);
+    assert_eq!(count(&calls.dismiss), 0);
+    assert!(label(cx, &rig, "index-upgrade").is_none());
+}
+
+#[gpui_kit::test]
+fn no_notice_without_the_old_service(cx: &mut TestAppContext) {
+    let (rig, _) = open_search(cx, ServiceStatus::NotInstalled, true);
+    assert!(label(cx, &rig, "index-upgrade").is_none());
 }

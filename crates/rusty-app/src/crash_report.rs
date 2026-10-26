@@ -51,12 +51,8 @@ impl CrashReportService for CrashReport {
         let zip = crash::save_report(&self.pending, self.started, &self.diagnostics, folder)
             .map_err(|error| format!("The report was not saved: {error}"))?;
         self.clear();
-        path_location(&zip).ok_or_else(|| {
-            format!(
-                "Saved {}, but Ferrite cannot open that folder",
-                zip.display()
-            )
-        })
+        path_location(&zip)
+            .ok_or_else(|| format!("Saved {}, but Navo cannot open that folder", zip.display()))
     }
 
     fn dismiss(&self) {

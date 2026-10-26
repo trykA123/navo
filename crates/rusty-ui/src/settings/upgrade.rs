@@ -99,7 +99,7 @@ fn item(t: &Theme, index: usize, moved: &Moved, send: Option<&Handler>) -> AnyEl
     let keep = moved.keep_change().is_some().then(|| {
         let button = Button::new(("settings-keep", index), "Keep old value")
             .variant(ButtonVariant::Secondary)
-            .tooltip("Write the old value to ferrite.toml as your own");
+            .tooltip("Write the old value to navo.toml as your own");
         button_on(button, send, SheetEvent::Keep(moved.field))
     });
     div()
@@ -187,7 +187,7 @@ pub(super) fn card(t: &Theme, items: &[Moved], send: Option<&Handler>) -> AnyEle
         .child(head(t, items.len(), send))
         .child(
             div().text_color(t.colors.muted).child(
-                "These settings follow Ferrite's defaults. Keep an old value to make it yours.",
+                "These settings follow Navo's defaults. Keep an old value to make it yours.",
             ),
         )
         .child(list)

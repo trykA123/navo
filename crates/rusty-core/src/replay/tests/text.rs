@@ -1,6 +1,6 @@
 use super::*;
 
-const SAMPLE: &str = r#"ferrite-log 1
+const SAMPLE: &str = r#"navo-log 1
 home "/home/admin"
 +0 pane.navigate { location: "/home/admin/src" }
 +12 !listing-loaded { tab: 3, request: 1, location: "/home/admin/src", entries: 2 }
@@ -103,7 +103,7 @@ fn sample() -> CommandLog {
 }
 
 fn header(version: &str) -> String {
-    format!("ferrite-log {version}\nhome \"/home/admin\"\n+0 pane.back\n")
+    format!("navo-log {version}\nhome \"/home/admin\"\n+0 pane.back\n")
 }
 
 fn with_body(body: &str) -> String {
@@ -131,8 +131,14 @@ fn the_text_form_parses_back_to_the_log() {
 }
 
 #[test]
+fn a_ferrite_header_still_parses() {
+    let legacy = SAMPLE.replacen("navo-log", "ferrite-log", 1);
+    assert_eq!(CommandLog::parse(&legacy), Ok(sample()));
+}
+
+#[test]
 fn a_wrong_header_is_refused() {
-    let text = header("1").replace("ferrite-log", "ferrite-lg");
+    let text = header("1").replace("navo-log", "navo-lg");
     assert_eq!(CommandLog::parse(&text), Err(LogError::BadHeader));
 }
 
@@ -177,17 +183,17 @@ fn a_huge_entry_count_is_an_error_not_a_crash() {
 
 #[test]
 fn a_missing_home_line_names_line_two() {
-    assert_eq!(error_line("ferrite-log 1\n"), Some(2));
+    assert_eq!(error_line("navo-log 1\n"), Some(2));
 }
 
 #[test]
 fn a_bad_home_line_names_line_two() {
-    assert_eq!(error_line("ferrite-log 1\nhome 5\n"), Some(2));
+    assert_eq!(error_line("navo-log 1\nhome 5\n"), Some(2));
 }
 
 #[test]
 fn an_empty_home_names_line_two() {
-    assert_eq!(error_line("ferrite-log 1\nhome \"\"\n"), Some(2));
+    assert_eq!(error_line("navo-log 1\nhome \"\"\n"), Some(2));
 }
 
 #[test]
@@ -285,10 +291,7 @@ fn a_complete_log_has_no_dropped_line() {
 
 #[test]
 fn a_bad_dropped_count_names_line_three() {
-    assert_eq!(
-        error_line("ferrite-log 1\nhome \"/h\"\ndropped x\n"),
-        Some(3)
-    );
+    assert_eq!(error_line("navo-log 1\nhome \"/h\"\ndropped x\n"), Some(3));
 }
 
 #[test]

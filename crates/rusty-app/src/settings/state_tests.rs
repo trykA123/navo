@@ -18,8 +18,8 @@ struct Paths {
 fn started() -> (Paths, SettingsHooks) {
     let dir = tempfile::tempdir().unwrap();
     let at = Paths {
-        file: dir.path().join("ferrite.toml"),
-        ledger: dir.path().join("ferrite.db"),
+        file: dir.path().join("navo.toml"),
+        ledger: dir.path().join("navo.db"),
         _dir: dir,
     };
     let loaded = start(Some(&at.file), Some(&at.ledger)).loaded;
@@ -64,8 +64,8 @@ fn reset_writes_the_default_and_the_ledger_follows_it() {
 #[test]
 fn a_hand_edit_marks_the_row_changed() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("ferrite.toml");
-    let ledger = dir.path().join("ferrite.db");
+    let file = dir.path().join("navo.toml");
+    let ledger = dir.path().join("navo.db");
     let loaded = start(Some(&file), Some(&ledger)).loaded.unwrap();
     let mut reloader = Reloader::new(Arc::new(Mutex::new(loaded.store)), None);
     let text = fs::read_to_string(&file).unwrap();
@@ -84,8 +84,8 @@ fn a_hand_edit_marks_the_row_changed() {
 #[test]
 fn reset_with_an_unavailable_ledger_writes_the_default_and_reports_the_ledger() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("ferrite.toml");
-    let ledger = dir.path().join("ferrite.db");
+    let file = dir.path().join("navo.toml");
+    let ledger = dir.path().join("navo.db");
     let mut loaded = start(Some(&file), Some(&ledger)).loaded.unwrap();
     loaded.ledger = Some(dir.path().to_owned());
     let settings = hooks(Some(loaded));

@@ -144,6 +144,6 @@ pub fn decode_image(bytes: &[u8], name: &str) -> Result<Picture, String> {
     match guess(bytes, name) {
         Some(format) => raster(bytes, format),
         None if has_svg_tag(bytes) => vector(bytes),
-        None => Err("This file is not an image Ferrite can show.".to_owned()),
+        None => Err("This file is not an image Navo can show.".to_owned()),
     }
 }

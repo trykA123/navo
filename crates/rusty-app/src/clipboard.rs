@@ -44,7 +44,7 @@ fn from_shell(files: FileClipboard) -> Result<ClipboardFiles, ClipboardFault> {
         .iter()
         .map(|path| {
             path_location(path).ok_or_else(|| {
-                ClipboardFault::Failed(format!("Ferrite cannot open {}", path.display()))
+                ClipboardFault::Failed(format!("Navo cannot open {}", path.display()))
             })
         })
         .collect::<Result<_, _>>()?;

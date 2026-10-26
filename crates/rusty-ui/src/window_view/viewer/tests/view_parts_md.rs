@@ -164,16 +164,13 @@ fn keep_as_default_saves_the_split_and_the_next_file_follows_it(cx: &mut TestApp
 #[gpui_kit::test]
 fn keep_on_a_broken_settings_file_shows_the_problem_and_keeps_the_split(cx: &mut TestAppContext) {
     let rig = markdown(cx);
-    *rig.failure.lock().expect("failure") = Some("ferrite.toml is invalid at line 3.".to_owned());
+    *rig.failure.lock().expect("failure") = Some("navo.toml is invalid at line 3.".to_owned());
     rig.press(cx, "ctrl-shift-v");
     rig.press(cx, "alt-v");
     run_item(cx, rig.window, "Keep as default");
     rig.settle(cx);
     let shown = note(cx, rig.window).unwrap_or_default();
-    assert!(
-        shown.contains("ferrite.toml is invalid at line 3."),
-        "{shown}"
-    );
+    assert!(shown.contains("navo.toml is invalid at line 3."), "{shown}");
     assert!(!shown.contains("Kept"), "{shown}");
     assert!(!has_preview(&rig, cx));
     assert_eq!(rig.setting(cx, SPLIT), Value::Flag(true));
@@ -183,7 +180,7 @@ fn keep_on_a_broken_settings_file_shows_the_problem_and_keeps_the_split(cx: &mut
     rig.settle(cx);
     assert_eq!(
         note(cx, rig.window).as_deref(),
-        Some("Kept as the default in ferrite.toml.")
+        Some("Kept as the default in navo.toml.")
     );
     assert_eq!(rig.setting(cx, SPLIT), Value::Flag(false));
 }

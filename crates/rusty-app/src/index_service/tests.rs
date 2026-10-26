@@ -112,7 +112,7 @@ fn index_paths_stay_in_the_programdata_index_folder() {
     let base = std::path::Path::new("program-data");
     assert_eq!(
         index_path(base, 'c').unwrap(),
-        base.join("Ferrite/index/C.index")
+        base.join("Navo/index/C.index")
     );
     assert!(index_path(base, '/').is_err());
 }

@@ -3,6 +3,7 @@ mod service;
 mod index;
 
 pub use index::hooks as index_hooks;
+pub(crate) use service::add_upgrade_notice;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,7 +34,7 @@ impl Remember {
 }
 
 fn report(doing: &str, error: &rusty_store::DbError) {
-    eprintln!("ferrite: search memory: {doing}: {error}");
+    eprintln!("navo: search memory: {doing}: {error}");
 }
 
 fn recent_commands(db: SharedDb, remember: Remember) -> RecentCommands {

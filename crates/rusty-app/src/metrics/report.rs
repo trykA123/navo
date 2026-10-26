@@ -37,7 +37,7 @@ impl Build {
     pub(super) fn current() -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            commit: env!("FERRITE_COMMIT").to_owned(),
+            commit: env!("NAVO_COMMIT").to_owned(),
             exe_bytes: std::env::current_exe()
                 .and_then(std::fs::metadata)
                 .ok()

@@ -54,6 +54,6 @@ fn the_pipe_name_includes_the_current_windows_session() {
     assert_ne!(ok, 0);
     assert_eq!(
         pipe_name("profile-hash").unwrap(),
-        wide(&format!("\\\\.\\pipe\\Ferrite-{session}-profile-hash"))
+        wide(&format!("\\\\.\\pipe\\Navo-{session}-profile-hash"))
     );
 }

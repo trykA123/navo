@@ -286,16 +286,13 @@ pub(super) fn note(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<S
 #[gpui_kit::test]
 fn keep_on_a_broken_settings_file_shows_the_problem_and_keeps_the_toggle(cx: &mut TestAppContext) {
     let rig = rig(cx, ("a.txt", "b.txt"), TEXT);
-    *rig.failure.lock().expect("failure") = Some("ferrite.toml is invalid at line 2.".to_owned());
+    *rig.failure.lock().expect("failure") = Some("navo.toml is invalid at line 2.".to_owned());
     rig.press(cx, "alt-l");
     rig.press(cx, "alt-v");
     run_item(cx, rig.window, "Keep as default");
     rig.settle(cx);
     let shown = note(cx, rig.window).unwrap_or_default();
-    assert!(
-        shown.contains("ferrite.toml is invalid at line 2."),
-        "{shown}"
-    );
+    assert!(shown.contains("navo.toml is invalid at line 2."), "{shown}");
     assert!(!shown.contains("Kept"), "{shown}");
     assert!(rig.line_ends(cx));
     assert_eq!(rig.setting(cx, Field::TextLineEnds), Value::Flag(false));
@@ -305,7 +302,7 @@ fn keep_on_a_broken_settings_file_shows_the_problem_and_keeps_the_toggle(cx: &mu
     rig.settle(cx);
     assert_eq!(
         note(cx, rig.window).as_deref(),
-        Some("Kept as the default in ferrite.toml.")
+        Some("Kept as the default in navo.toml.")
     );
     assert_eq!(rig.setting(cx, Field::TextLineEnds), Value::Flag(true));
     assert!(rig.line_ends(cx));

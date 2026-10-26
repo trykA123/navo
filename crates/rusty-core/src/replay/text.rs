@@ -7,7 +7,7 @@ use crate::{Command, Entry, Event, Listing, Location, PaneId, TabId};
 
 pub(super) fn write(log: &CommandLog) -> String {
     let mut out = format!(
-        "ferrite-log {}\nhome {}\n",
+        "navo-log {}\nhome {}\n",
         CommandLog::VERSION,
         quote(log.home().as_str())
     );
@@ -147,7 +147,8 @@ fn at(line: usize) -> impl Fn(String) -> LogError {
 
 fn check_header(line: &str) -> Result<(), LogError> {
     let version: u32 = line
-        .strip_prefix("ferrite-log ")
+        .strip_prefix("navo-log ")
+        .or_else(|| line.strip_prefix("ferrite-log "))
         .and_then(|v| v.parse().ok())
         .ok_or(LogError::BadHeader)?;
     match version {

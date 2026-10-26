@@ -70,7 +70,7 @@ fn footer(cx: &mut TestAppContext, rig: &Rig) -> Option<String> {
 
 fn footer_for(count: usize) -> Option<String> {
     Some(format!(
-        "Applied live · Saved to ferrite.toml · {count} changed"
+        "Applied live · Saved to navo.toml · {count} changed"
     ))
 }
 

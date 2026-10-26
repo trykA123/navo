@@ -268,7 +268,7 @@ fn an_error_still_shows_with_every_part_hidden(cx: &mut TestAppContext) {
     let rig = rig_full(
         cx,
         QuickSettings::default(),
-        Some("ferrite.toml is invalid at line 2"),
+        Some("navo.toml is invalid at line 2"),
     );
     rig.view
         .update(cx, |view, _| view.values = off(&every_part()));
@@ -281,7 +281,7 @@ fn an_error_still_shows_with_every_part_hidden(cx: &mut TestAppContext) {
                 .and_then(|found| found.label().map(str::to_owned))
         })
         .expect("window");
-    assert_eq!(line.as_deref(), Some("ferrite.toml is invalid at line 2"));
+    assert_eq!(line.as_deref(), Some("navo.toml is invalid at line 2"));
 }
 
 #[gpui_kit::test]

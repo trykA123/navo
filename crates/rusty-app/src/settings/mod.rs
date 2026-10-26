@@ -24,7 +24,7 @@ pub use start::{Loaded, start_from};
 #[cfg(test)]
 use start::{follow_defaults, spawn, start, start_sharing, start_waiting};
 
-const FILE: &str = "ferrite.toml";
+const FILE: &str = "navo.toml";
 
 type Shared = Arc<Mutex<SettingsStore>>;
 
@@ -83,7 +83,7 @@ fn watching(
     reload::receive_late(late, reloader);
     if watching.is_none() {
         tracing::warn!(
-            "the settings folder is not watched; ferrite.toml changes apply at the next start"
+            "the settings folder is not watched; navo.toml changes apply at the next start"
         );
     }
     (hooks, watching)

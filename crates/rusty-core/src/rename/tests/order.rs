@@ -8,7 +8,7 @@ use super::super::check::{Existing, ExistingName, Fold, Problem, Row, RowState, 
 use super::super::order::{BatchPlan, plan_batch};
 
 const SEED: u32 = 42;
-const TEMP: &str = ".ferrite-rename-0000002a";
+const TEMP: &str = ".navo-rename-0000002a";
 
 fn folder(path: &str) -> Location {
     Location::new(path).unwrap()

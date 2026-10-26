@@ -8,7 +8,7 @@ use crate::command_center::{
 };
 use crate::commands::{CommandEntry, Keymap, entries};
 
-const FILES: [&str; 3] = ["Workspace", "FerritePane", "FileList"];
+const FILES: [&str; 3] = ["Workspace", "NavoPane", "FileList"];
 
 fn snapshot_of(entries: &[CommandEntry], stack: &[&str]) -> Arc<CommandsSnapshot> {
     Arc::new(CommandsSnapshot::build(entries, stack, Keymap::builtin()))

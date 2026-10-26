@@ -3,7 +3,7 @@ use toml_edit::{Decor, DocumentMut, Item, Table};
 use super::super::SettingsError;
 use super::plain::edit;
 
-pub const UNUSED_NOTE: &str = "# no longer used by Ferrite";
+pub const UNUSED_NOTE: &str = "# no longer used by Navo";
 
 pub fn mark_unused(text: &str) -> Result<String, SettingsError> {
     let (text, ()) = edit(text, |document, source| {

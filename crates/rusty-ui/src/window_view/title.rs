@@ -45,7 +45,7 @@ impl FerriteWindow {
         let toggle = cx.listener(|view: &mut Self, _: &ClickEvent, window, cx| {
             view.toggle_app_menu(window, cx);
         });
-        let bar = FerriteTitleBar::new("Ferrite")
+        let bar = FerriteTitleBar::new(rusty_core::brand::NAME)
             .on_mica()
             .app_button(self.app_menu.is_some(), toggle);
         let bar = if WindowParts::of(&self.values).title_search {

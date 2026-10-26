@@ -30,7 +30,7 @@ impl Owner {
             CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
                 windows::core::w!("STATIC"),
-                windows::core::w!("Ferrite clipboard"),
+                windows::core::w!("Navo clipboard"),
                 WINDOW_STYLE::default(),
                 0,
                 0,

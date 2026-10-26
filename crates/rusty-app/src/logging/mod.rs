@@ -6,7 +6,8 @@ use rusty_diag::{CacheRegistry, EventRing, LogConfig, LogLayer, RedactionMisses,
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
-pub const ENV_VAR: &str = "FERRITE_LOG";
+pub const ENV_VAR: &str = "NAVO_LOG";
+pub const LEGACY_ENV_VAR: &str = "FERRITE_LOG";
 const DEFAULT_LEVEL: &str = "info";
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const FILES: usize = 5;
@@ -38,21 +39,22 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
     let redactor = Arc::new(crate::diag::redactor());
     let ring = Arc::new(EventRing::new(EventRing::DEFAULT_BUDGET));
     if data.is_none() {
-        eprintln!("ferrite: no per-user data folder; logging to memory only");
+        eprintln!("navo: no per-user data folder; logging to memory only");
     }
     let opened = open(log_config(data), &redactor, &ring);
     if let Some(error) = &opened.file_error {
-        eprintln!("ferrite: cannot open the log folder ({error}); logging to memory only");
+        eprintln!("navo: cannot open the log folder ({error}); logging to memory only");
     }
-    let (filter, problem) = filter(std::env::var(ENV_VAR).ok().as_deref());
-    if let Some(problem) = problem {
-        eprintln!("ferrite: {problem}");
-    }
+    let (filter, warnings) = level(
+        std::env::var(ENV_VAR).ok(),
+        std::env::var(LEGACY_ENV_VAR).ok(),
+    );
     let misses = opened.misses();
     let subscriber = Registry::default().with(filter).with(opened.layer);
     if let Err(error) = tracing::subscriber::set_global_default(subscriber) {
-        eprintln!("ferrite: cannot install logging: {error}");
+        eprintln!("navo: cannot install logging: {error}");
     }
+    warn_all(&warnings);
     let caches = CacheRegistry::default();
     crate::diag::register_events(&caches, &ring);
     Diagnostics {
@@ -66,7 +68,7 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
 pub fn log_start() {
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
-        commit = env!("FERRITE_COMMIT"),
+        commit = env!("NAVO_COMMIT"),
         "app started"
     );
 }
@@ -74,7 +76,7 @@ pub fn log_start() {
 pub fn log_config(data: Option<&Path>) -> LogConfig {
     LogConfig {
         dir: data.map(|root| root.join("logs")),
-        file_stem: "ferrite".to_owned(),
+        file_stem: rusty_core::brand::SLUG.to_owned(),
         max_file_bytes: MAX_FILE_BYTES,
         files: FILES,
     }
@@ -97,7 +99,35 @@ pub fn open(config: LogConfig, redactor: &Arc<Redactor>, ring: &Arc<EventRing>) 
     }
 }
 
-pub fn filter(value: Option<&str>) -> (EnvFilter, Option<String>) {
+pub fn env_value(
+    current: Option<String>,
+    legacy: Option<String>,
+) -> (Option<String>, &'static str) {
+    match (current, legacy) {
+        (Some(value), _) => (Some(value), ENV_VAR),
+        (None, Some(value)) => (Some(value), LEGACY_ENV_VAR),
+        (None, None) => (None, ENV_VAR),
+    }
+}
+
+pub fn level(current: Option<String>, legacy: Option<String>) -> (EnvFilter, Vec<String>) {
+    let (value, var) = env_value(current, legacy);
+    let mut warnings = Vec::new();
+    if var == LEGACY_ENV_VAR {
+        warnings.push(format!("{LEGACY_ENV_VAR} is deprecated; use {ENV_VAR}"));
+    }
+    let (filter, problem) = filter(value.as_deref(), var);
+    warnings.extend(problem);
+    (filter, warnings)
+}
+
+pub fn warn_all(warnings: &[String]) {
+    for warning in warnings {
+        tracing::warn!("{warning}");
+    }
+}
+
+pub fn filter(value: Option<&str>, var: &str) -> (EnvFilter, Option<String>) {
     let Some(directives) = value.map(str::trim).filter(|text| !text.is_empty()) else {
         return (EnvFilter::new(DEFAULT_LEVEL), None);
     };
@@ -105,9 +135,7 @@ pub fn filter(value: Option<&str>) -> (EnvFilter, Option<String>) {
         Ok(filter) => (filter, None),
         Err(error) => (
             EnvFilter::new(DEFAULT_LEVEL),
-            Some(format!(
-                "ignoring {ENV_VAR} ({error}); using {DEFAULT_LEVEL}"
-            )),
+            Some(format!("ignoring {var} ({error}); using {DEFAULT_LEVEL}")),
         ),
     }
 }

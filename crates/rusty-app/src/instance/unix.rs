@@ -28,8 +28,8 @@ pub(super) fn acquire(hash: &str, runtime: &Path) -> Result<Acquired, Error> {
         .write(true)
         .truncate(false)
         .mode(0o600)
-        .open(runtime.join(format!("ferrite-{hash}.lock")))?;
-    let socket = runtime.join(format!("ferrite-{hash}.sock"));
+        .open(runtime.join(format!("{}-{hash}.lock", rusty_core::brand::SLUG)))?;
+    let socket = runtime.join(format!("{}-{hash}.sock", rusty_core::brand::SLUG));
     match lock.try_lock() {
         Ok(()) => (),
         Err(TryLockError::WouldBlock) => return Ok(Acquired::Second(Client { socket })),
@@ -117,7 +117,7 @@ impl Client {
         let request = request.clone();
         let (sender, replies) = mpsc::sync_channel(1);
         std::thread::Builder::new()
-            .name("ferrite-handoff".into())
+            .name("navo-handoff".into())
             .spawn(move || {
                 let _ = sender.send(send_to(&socket, &request, deadline));
             })?;

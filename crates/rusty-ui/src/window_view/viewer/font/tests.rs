@@ -270,7 +270,7 @@ fn the_preview_registers_under_a_private_family_and_keeps_the_real_name() {
     let face = parse(ARCHIVO.to_vec()).unwrap();
     assert_eq!(face.family, "Archivo");
     let preview = face.preview.unwrap();
-    assert!(preview.family.starts_with("Ferrite Preview "));
+    assert!(preview.family.starts_with("Navo Preview "));
     let names = family_names(&preview.bytes);
     assert!(
         names

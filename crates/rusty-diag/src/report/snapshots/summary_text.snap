@@ -2,7 +2,7 @@
 source: crates/rusty-diag/src/report/tests/report.rs
 expression: summary
 ---
-Ferrite diagnostic report (report.json)
+Navo diagnostic report (report.json)
 
 Build: version and commit.
 System: OS, CPU count, RAM, GPU, display scale and DPI awareness.

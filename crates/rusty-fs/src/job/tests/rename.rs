@@ -475,7 +475,12 @@ fn a_failed_put_back_of_a_temporary_name_lists_the_temporary_file() {
         panic!("expected Stuck");
     };
     assert_eq!(left.len(), 1);
-    assert!(left[0].path().to_text().contains(".ferrite-rename-"));
+    assert!(
+        left[0]
+            .path()
+            .to_text()
+            .contains(rusty_core::brand::RENAME_PREFIX)
+    );
 }
 
 #[test]
@@ -581,6 +586,16 @@ fn a_swap_with_a_case_change_works_on_the_case_insensitive_fake() {
 }
 
 #[test]
+fn both_temporary_prefixes_are_recognised() {
+    let fs = files(&[".ferrite-rename-1", ".navo-rename-1", "plain"]);
+    let temporary: Vec<bool> = names(&fs)
+        .iter()
+        .map(|name| crate::is_rename_temporary(&fs.location(&format!("d/{name}"))))
+        .collect();
+    assert_eq!(temporary, [true, true, false]);
+}
+
+#[test]
 fn a_finished_batch_leaves_no_temporary_name() {
     let fs = files(&["a", "b", "c"]);
     let plan = batch(&fs, &[("a", "b"), ("b", "c"), ("c", "a")], Fold::Exact);
@@ -588,7 +603,7 @@ fn a_finished_batch_leaves_no_temporary_name() {
     assert!(
         names(&fs)
             .iter()
-            .all(|name| !name.starts_with(".ferrite-rename"))
+            .all(|name| !rusty_core::brand::is_rename_temp(name))
     );
     assert_eq!(
         [size(&fs, "d/a"), size(&fs, "d/b"), size(&fs, "d/c")],

@@ -5,8 +5,8 @@ expression: to_toml(&Settings::default())
 [appearance]
 mode = "system"
 color-theme = "open-sea"
-light-theme = "Ferrite Light"
-dark-theme = "Ferrite Dark"
+light-theme = "Navo Light"
+dark-theme = "Navo Dark"
 font = "Inter"
 font-size = 13
 density = "normal"

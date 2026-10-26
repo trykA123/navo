@@ -89,14 +89,14 @@ fn error_lines(
 #[gpui_kit::test]
 fn a_failed_save_is_shown_and_the_value_returns_to_the_stored_one(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: disk full".to_owned());
+    *rig.store.failure.lock().expect("failure") = Some("navo.toml: disk full".to_owned());
     rig.press(cx, "f10");
     rig.click(cx, ("app-menu-tile", 1usize));
     assert_eq!(quick(cx, &rig).density, Density::Normal);
     assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Normal);
     let (menu, line) = error_lines(cx, &rig);
-    assert_eq!(menu.as_deref(), Some("ferrite.toml: disk full"));
-    assert_eq!(line.as_deref(), Some("ferrite.toml: disk full"));
+    assert_eq!(menu.as_deref(), Some("navo.toml: disk full"));
+    assert_eq!(line.as_deref(), Some("navo.toml: disk full"));
 }
 
 #[gpui_kit::test]
@@ -105,18 +105,18 @@ fn an_invalid_settings_file_is_reported_at_start(cx: &mut TestAppContext) {
         show_hidden: true,
         ..QuickSettings::default()
     };
-    let rig = rig_full(cx, settings, Some("ferrite.toml is invalid at line 2"));
+    let rig = rig_full(cx, settings, Some("navo.toml is invalid at line 2"));
     let (_, line) = error_lines(cx, &rig);
-    assert_eq!(line.as_deref(), Some("ferrite.toml is invalid at line 2"));
+    assert_eq!(line.as_deref(), Some("navo.toml is invalid at line 2"));
     rig.press(cx, "f10");
     let (menu, _) = error_lines(cx, &rig);
-    assert_eq!(menu.as_deref(), Some("ferrite.toml is invalid at line 2"));
+    assert_eq!(menu.as_deref(), Some("navo.toml is invalid at line 2"));
 }
 
 #[gpui_kit::test]
 fn a_good_save_clears_the_error(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: locked".to_owned());
+    *rig.store.failure.lock().expect("failure") = Some("navo.toml: locked".to_owned());
     rig.press(cx, "f10");
     rig.click(cx, ("app-menu-tile", 1usize));
     *rig.store.failure.lock().expect("failure") = None;
@@ -127,7 +127,7 @@ fn a_good_save_clears_the_error(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn a_failed_theme_keeps_its_error_after_density_saves(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: locked".to_owned());
+    *rig.store.failure.lock().expect("failure") = Some("navo.toml: locked".to_owned());
     *rig.store.failing_field.lock().expect("failing") = Some(crate::settings::Field::Theme);
     rig.press(cx, "f10");
     rig.click(cx, ("app-menu-tile", 0usize));
@@ -136,13 +136,13 @@ fn a_failed_theme_keeps_its_error_after_density_saves(cx: &mut TestAppContext) {
     assert_eq!(now.theme, ThemeChoice::System);
     assert_eq!(now.density, Density::Comfortable);
     let (menu, _) = error_lines(cx, &rig);
-    assert_eq!(menu.as_deref(), Some("ferrite.toml: locked"));
+    assert_eq!(menu.as_deref(), Some("navo.toml: locked"));
 }
 
 #[gpui_kit::test]
 fn every_change_in_a_batch_is_tried_when_one_fails(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    *rig.store.failure.lock().expect("failure") = Some("ferrite.toml: locked".to_owned());
+    *rig.store.failure.lock().expect("failure") = Some("navo.toml: locked".to_owned());
     *rig.store.failing_field.lock().expect("failing") = Some(crate::settings::Field::Theme);
     rig.press(cx, "f10");
     cx.update_window(rig.window, |_, window, cx| {

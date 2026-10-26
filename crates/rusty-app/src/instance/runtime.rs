@@ -15,8 +15,16 @@ pub(super) fn resolve(runtime: Option<&Path>, temp: &Path) -> io::Result<PathBuf
     fallback(temp, unsafe { getuid() })
 }
 
+pub(super) fn folder(runtime: Option<&Path>, temp: &Path, slug: &str) -> PathBuf {
+    runtime.map_or_else(
+        // SAFETY: getuid takes no arguments and returns the calling process's real user id.
+        || temp.join(format!("{slug}-{}", unsafe { getuid() })),
+        Path::to_path_buf,
+    )
+}
+
 pub(super) fn fallback(temp: &Path, uid: u32) -> io::Result<PathBuf> {
-    let folder = temp.join(format!("ferrite-{uid}"));
+    let folder = temp.join(format!("{}-{uid}", rusty_core::brand::SLUG));
     match DirBuilder::new().mode(0o700).create(&folder) {
         Ok(()) => (),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => (),

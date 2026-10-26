@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::brand::RENAME_PREFIX;
 use crate::{Location, OpKind, OperationPlan, ProviderPath, Step, Totals};
 
 use super::check::{Existing, Fold, Key, Row, RowState, check_rows, key};
@@ -187,7 +188,7 @@ impl<'a> Orderer<'a> {
 
     fn temp_name(&mut self, parent: &Location) -> String {
         loop {
-            let name = format!(".ferrite-rename-{:08x}-{}", self.order.seed, self.next_temp);
+            let name = format!("{RENAME_PREFIX}{:08x}-{}", self.order.seed, self.next_temp);
             self.next_temp += 1;
             if self.taken.insert(key(parent, &name, self.order.fold)) {
                 return name;

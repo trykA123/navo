@@ -66,7 +66,7 @@ mod tests {
             running.finish().unwrap();
         }
         note_previous_exit(pending(data.path()).as_ref());
-        let (_, report) = open_db(&data.path().join("ferrite.db")).unwrap();
+        let (_, report) = open_db(&data.path().join("navo.db")).unwrap();
         note_previous_exit(None);
         report.checked
     }
@@ -82,7 +82,7 @@ mod tests {
     }
 
     fn broken_db(dir: &tempfile::TempDir) -> PathBuf {
-        let path = dir.path().join("ferrite.db");
+        let path = dir.path().join("navo.db");
         std::fs::write(&path, vec![0x5A; 4096]).unwrap();
         path
     }
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn a_failed_check_is_still_made_at_a_later_clean_start() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ferrite.db");
+        let path = dir.path().join("navo.db");
         crate::crash::test_damage::fill_history(&path);
         crate::crash::test_damage::corrupt_middle_page(&path);
         assert!(open_checked(&path, true).is_err());
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn a_healthy_database_leaves_no_sentinel() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("ferrite.db");
+        let path = dir.path().join("navo.db");
         open_checked(&path, true).unwrap();
         assert!(!sentinel_path(&path).exists());
     }

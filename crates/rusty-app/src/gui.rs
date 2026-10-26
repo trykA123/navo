@@ -125,8 +125,7 @@ pub(crate) fn open(launch: Launch) {
     let remember = crate::search_hooks::Remember::default();
     let (settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
-    let mut search = crate::search_hooks::hooks(memory.clone(), remember);
-    search.index = index_hooks(dirs.clone(), local.clone(), &mut search.service);
+    let search = search_hooks(memory.clone(), remember, dirs.as_ref(), &local);
     mark_window_open(launch.view.is_some());
     run(
         StartOptions {
@@ -160,6 +159,18 @@ pub(crate) fn open(launch: Launch) {
     );
 }
 
+fn search_hooks(
+    memory: Option<files::SharedDb>,
+    remember: crate::search_hooks::Remember,
+    dirs: Option<&StoreDirs>,
+    local: &Arc<LocalFs>,
+) -> rusty_ui::window_view::SearchHooks {
+    let mut search = crate::search_hooks::hooks(memory, remember);
+    search.index = index_hooks(dirs.cloned(), local.clone(), &mut search.service);
+    crate::search_hooks::add_upgrade_notice(&mut search.service, dirs);
+    search
+}
+
 fn mark_window_open(viewer: bool) {
     tracing::info!(viewer, "window opening");
     metrics::mark("window opening");
@@ -167,7 +178,7 @@ fn mark_window_open(viewer: bool) {
 
 fn open_memory(dirs: Option<&StoreDirs>) -> Option<files::SharedDb> {
     dirs.filter(|dirs| dirs.ensure().is_ok())
-        .and_then(|dirs| files::open_memory(&dirs.data.join("ferrite.db")))
+        .and_then(|dirs| files::open_memory(&dirs.journal_file()))
 }
 
 fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Splash) -> OpenHooks {
@@ -274,13 +285,13 @@ pub(crate) fn operations(
             .into_iter()
             .filter_map(|path| Location::new(path.to_str()?).ok()),
     );
-    let db = dirs.data.join("ferrite.db");
+    let db = dirs.journal_file();
     let journal = dirs.ensure().ok().and_then(|()| {
         jobs::open(&db)
             .inspect_err(|error| tracing::error!(%error, "opening the job journal failed"))
             .ok()
     });
-    let instance = jobs::claim(&dirs.data.join("ferrite.lock"));
+    let instance = jobs::claim(&dirs.lock_file());
     let Some(journal) = journal else {
         let unlogged = Operations {
             protected,

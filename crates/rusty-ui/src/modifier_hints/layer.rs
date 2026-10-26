@@ -6,7 +6,7 @@ use super::groups::{ORDER, place_of};
 use super::runs::folded;
 use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap};
 
-const CONTEXTS: [&str; 3] = [GLOBAL, "FerritePane", "FileList"];
+const CONTEXTS: [&str; 3] = [GLOBAL, "NavoPane", "FileList"];
 
 const CAPS: [(&str, &str); 14] = [
     ("pagedown", "PgDn"),

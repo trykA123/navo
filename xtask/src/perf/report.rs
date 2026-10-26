@@ -64,7 +64,7 @@ pub(super) fn markdown(first: &Report, warm: &[Report], guard: &Result<(), Strin
         |bytes| format!("{bytes} bytes ({:.2} MB)", bytes as f64 / MB),
     );
     let mut output = format!(
-        "\n## Ferrite Windows performance\n\nRenderer: {}\n\nVersion: {} · Commit: {}\n\nExe: {exe}\n\n\
+        "\n## Navo Windows performance\n\nRenderer: {}\n\nVersion: {} · Commit: {}\n\nExe: {exe}\n\n\
          Microsoft Basic Render Driver uses software rendering; frame times are not absolute.\n\n\
          First is the closest this runner gets to cold; warm is five subsequent launches.\n\n\
          MB = 1,000,000 bytes. Memory is sampled after 5 s idle with two panes. N/A means unavailable.\n\n\

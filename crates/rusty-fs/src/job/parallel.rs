@@ -35,7 +35,7 @@ pub(super) fn run(
         for _ in 0..workers {
             let (copier, queue, events) = (&copier, &queue, events.clone());
             let spawned = Builder::new()
-                .name("ferrite-copy".to_owned())
+                .name("navo-copy".to_owned())
                 .spawn_scoped(scope, move || work(copier, queue, &events));
             started += usize::from(spawned.is_ok());
         }

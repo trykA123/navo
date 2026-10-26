@@ -4,7 +4,7 @@ use super::KeymapFileError;
 use crate::text_layout::keep_layout;
 
 const HEADER: &str =
-    "# Your Ferrite shortcuts. Each [[bind]] replaces the built-in keys of one command.\n\n";
+    "# Your Navo shortcuts. Each [[bind]] replaces the built-in keys of one command.\n\n";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeymapEdit {
@@ -63,6 +63,7 @@ fn text_of<'a>(table: &'a Table, name: &str) -> Option<&'a str> {
 
 fn is_slot(table: &Table, slot: &Slot) -> bool {
     let context = text_of(table, "context").unwrap_or(slot.home);
+    let context = context.replace("FerritePane", "NavoPane");
     text_of(table, "command") == Some(slot.command) && context == slot.context.unwrap_or(slot.home)
 }
 

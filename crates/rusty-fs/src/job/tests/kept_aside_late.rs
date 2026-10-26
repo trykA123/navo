@@ -131,7 +131,7 @@ fn windows_style(path: &str) -> Location {
 fn a_held_record_with_the_exact_name_wins_over_a_case_twin() {
     let held = |original: &str| HeldFile {
         original: windows_style(original),
-        held: windows_style(r"C:\dst\.ferrite-held-x\a.txt"),
+        held: windows_style(r"C:\dst\.navo-held-x\a.txt"),
         placed: Some(FileStamp {
             size: 1,
             modified_ms: None,

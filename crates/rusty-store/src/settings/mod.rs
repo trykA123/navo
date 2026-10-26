@@ -52,9 +52,9 @@ pub enum SettingsError {
     Refused,
     #[error("the file changed on disk while saving; nothing was written")]
     ChangedOnDisk,
-    #[error("the setting changed in ferrite.toml while saving; the hand edit was kept")]
+    #[error("the setting changed in navo.toml while saving; the hand edit was kept")]
     FieldChangedOnDisk,
-    #[error("the file is read-only; Ferrite does not change it")]
+    #[error("the file is read-only; Navo does not change it")]
     ReadOnly,
     #[error("settings were saved, but durability could not be confirmed: {0}")]
     Durability(String),

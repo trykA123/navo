@@ -5,8 +5,8 @@ fn appearance_defaults() {
     let a = Settings::default().appearance;
     assert_eq!(a.mode, ThemeMode::System);
     assert_eq!(a.color_theme, ColorTheme::OpenSea);
-    assert_eq!(a.light_theme, "Ferrite Light");
-    assert_eq!(a.dark_theme, "Ferrite Dark");
+    assert_eq!(a.light_theme, "Navo Light");
+    assert_eq!(a.dark_theme, "Navo Dark");
     assert_eq!(a.font, "Inter");
     assert_eq!(a.font_size, 13);
     assert_eq!(a.density, Density::Normal);

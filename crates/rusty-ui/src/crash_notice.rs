@@ -9,7 +9,7 @@ use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, IconName, Kbd, icon};
 use crate::tokens;
 
-pub const CRASH_TITLE: &str = "Ferrite closed unexpectedly last time.";
+pub const CRASH_TITLE: &str = "Navo closed unexpectedly last time.";
 
 type Press = Rc<dyn Fn(&mut Window, &mut App)>;
 

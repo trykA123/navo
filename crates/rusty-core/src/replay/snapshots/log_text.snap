@@ -2,7 +2,7 @@
 source: crates/rusty-core/src/replay/tests/text.rs
 expression: text
 ---
-ferrite-log 1
+navo-log 1
 home "/home/admin"
 +0 pane.navigate { location: "/home/admin/src" }
 +12 !listing-loaded { tab: 3, request: 1, location: "/home/admin/src", entries: 2 }

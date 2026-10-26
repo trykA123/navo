@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Ferrite
+Name=Navo
 GenericName=File Manager
 Comment=Keyboard-first file manager
-Exec=ferrite
-Icon=ferrite
+Exec=navo
+Icon=navo
 Terminal=false
 Categories=System;FileTools;FileManager;
 Keywords=files;folders;commander;

@@ -83,6 +83,7 @@ fn recognized(path: &Path) -> Result<(), String> {
         .and_then(|mut file| file.read(&mut prefix))
         .map_err(|error| error.to_string())?;
     if !prefix[..read].starts_with(super::FORMAT.as_bytes())
+        && !prefix[..read].starts_with(super::LEGACY_FORMAT.as_bytes())
         && !prefix[..read].starts_with(b"# rename batch ")
     {
         return Err("refusing to rotate an unrecognized rename log".to_owned());

@@ -133,7 +133,7 @@ pub fn report_input() -> ReportInput {
     ReportInput {
         build: BuildInfo {
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            commit: env!("FERRITE_COMMIT").to_owned(),
+            commit: env!("NAVO_COMMIT").to_owned(),
         },
         system: SystemInfo {
             os: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),

@@ -3,7 +3,7 @@ use gpui_kit::KeyBinding;
 use crate::commands::{Keymap, for_action, set_active};
 use crate::prelude::*;
 
-pub(super) const PANE: &str = "FerritePane";
+pub(super) const PANE: &str = "NavoPane";
 pub(super) const WAITING: &str = "PaneWaiting";
 pub(super) const CRASH: &str = "CrashNotice";
 

@@ -67,7 +67,7 @@ impl SettingsStore {
         };
         let was_present =
             (base.is_some() || self.generation > 0) && key_line(&source, key).is_some();
-        let patched = edit::patch(&source, key, value)?;
+        let patched = edit::upgrade_legacy_themes(&edit::patch(&source, key, value)?)?;
         let (settings, _) = parse(&patched)?;
         let durability_error = if base != Some(patched.as_str()) {
             self.write(&patched, base, attempt.backup)?

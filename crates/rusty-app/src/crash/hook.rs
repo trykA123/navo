@@ -58,7 +58,7 @@ impl Writer {
         let skip = events.len().saturating_sub(KEEP_EVENTS);
         let record = Record {
             version: env!("CARGO_PKG_VERSION"),
-            commit: env!("FERRITE_COMMIT"),
+            commit: env!("NAVO_COMMIT"),
             thread: self.redactor.text(thread.name().unwrap_or("unnamed")),
             location: info
                 .location()

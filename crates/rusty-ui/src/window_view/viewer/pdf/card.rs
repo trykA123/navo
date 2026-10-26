@@ -24,11 +24,11 @@ pub(super) fn refusal(error: &PdfError) -> (&'static str, String) {
         ),
         PdfError::Timeout => (
             "The PDF took too long to open.",
-            "The PDF helper stopped it. Ferrite and your files are fine.".to_owned(),
+            "The PDF helper stopped it. Navo and your files are fine.".to_owned(),
         ),
         PdfError::HelperDied => (
             "The PDF helper stopped while opening it.",
-            "Ferrite and your files are fine.".to_owned(),
+            "Navo and your files are fine.".to_owned(),
         ),
         PdfError::Unreadable(detail) => ("The file cannot be read.", detail.clone()),
         other => ("The PDF could not be opened.", other.to_string()),
@@ -113,7 +113,7 @@ impl PdfView {
                 t,
                 IconName::TriangleAlert,
                 t.colors.warn,
-                "Ferrite did not open this PDF",
+                "Navo did not open this PDF",
             ))
             .child(
                 div()
@@ -155,7 +155,7 @@ impl PdfView {
                 "This PDF is protected",
             ))
             .child(div().text_color(t.colors.muted).child(format!(
-                "{} needs a password to open. Ferrite keeps it in memory for this view only.",
+                "{} needs a password to open. Navo keeps it in memory for this view only.",
                 self.title
             )))
             .child(

@@ -5,10 +5,10 @@ use std::io::Read;
 use std::process::Command;
 
 #[test]
-fn ferrite_report_has_per_monitor_v2_awareness() {
+fn navo_report_has_per_monitor_v2_awareness() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("report.zip");
-    let output = Command::new(env!("CARGO_BIN_EXE_ferrite"))
+    let output = Command::new(env!("CARGO_BIN_EXE_navo"))
         .arg("--diag-report")
         .arg(&path)
         .env("APPDATA", dir.path().join("config"))

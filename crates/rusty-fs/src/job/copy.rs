@@ -17,9 +17,17 @@ pub(super) struct CopyStep<'a> {
 }
 
 pub(super) fn temp_of(target: &Location) -> Result<Location, FsError> {
+    temp_with(target, TEMP_SUFFIX)
+}
+
+pub(super) fn legacy_temp_of(target: &Location) -> Result<Location, FsError> {
+    temp_with(target, rusty_core::brand::LEGACY_TEMP_SUFFIX)
+}
+
+fn temp_with(target: &Location, suffix: &str) -> Result<Location, FsError> {
     let name = target.name().ok_or_else(|| invalid(target))?;
     let parent = target.parent().ok_or_else(|| invalid(target))?;
-    let temp = rusty_core::ProviderPath::from_text(&format!("{}{TEMP_SUFFIX}", name.to_text()));
+    let temp = rusty_core::ProviderPath::from_text(&format!("{}{suffix}", name.to_text()));
     parent.join(&temp).map_err(|_| invalid(target))
 }
 

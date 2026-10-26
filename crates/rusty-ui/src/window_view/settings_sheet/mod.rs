@@ -1,5 +1,6 @@
 mod edit;
 mod find;
+mod index_upgrade;
 mod locate;
 mod service;
 mod shortcuts;
@@ -83,6 +84,7 @@ pub(super) struct SettingsPanel {
     service_status: ServiceStatus,
     service_generation: u64,
     service_action_pending: bool,
+    index_upgrade_due: bool,
     pub(super) news: Option<SettingsInbox>,
 }
 
@@ -129,6 +131,7 @@ impl SettingsPanel {
             service_status: ServiceStatus::NotAvailable,
             service_generation: 0,
             service_action_pending: false,
+            index_upgrade_due: false,
             news: None,
         }
     }

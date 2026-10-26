@@ -2,15 +2,15 @@ use super::*;
 use crate::{ProviderOps, RenameOutcome};
 
 #[test]
-#[ignore = "requires a mounted Windows exFAT image in FERRITE_EXFAT_ROOT"]
+#[ignore = "requires a mounted Windows exFAT image in NAVO_EXFAT_ROOT"]
 fn native_exfat_renames_without_a_proved_identity() {
-    unproved("FERRITE_EXFAT_ROOT", "exfat");
+    unproved("NAVO_EXFAT_ROOT", "exfat");
 }
 
 #[test]
-#[ignore = "requires a mounted Windows FAT32 image in FERRITE_FAT32_ROOT"]
+#[ignore = "requires a mounted Windows FAT32 image in NAVO_FAT32_ROOT"]
 fn native_fat32_renames_without_a_proved_identity() {
-    unproved("FERRITE_FAT32_ROOT", "fat32");
+    unproved("NAVO_FAT32_ROOT", "fat32");
 }
 
 fn unproved(variable: &str, expected: &str) {
@@ -34,9 +34,9 @@ fn unproved(variable: &str, expected: &str) {
 }
 
 #[test]
-#[ignore = "requires a Windows SMB test share in FERRITE_SMB_ROOT"]
+#[ignore = "requires a Windows SMB test share in NAVO_SMB_ROOT"]
 fn native_smb_identity_and_batch_rename() {
-    let root = std::env::var_os("FERRITE_SMB_ROOT").expect("set FERRITE_SMB_ROOT to a test share");
+    let root = std::env::var_os("NAVO_SMB_ROOT").expect("set NAVO_SMB_ROOT to a test share");
     let dir = tempfile::tempdir_in(root).unwrap();
     exercise(dir.path());
 }

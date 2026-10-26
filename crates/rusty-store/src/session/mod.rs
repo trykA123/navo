@@ -16,7 +16,7 @@ pub const SESSION_VERSION: u16 = 2;
 pub enum SessionFileError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("not a Ferrite session file")]
+    #[error("not a Navo session file")]
     BadMagic,
     #[error("session format {found} is newer than the supported {supported}")]
     TooNew { found: u16, supported: u16 },

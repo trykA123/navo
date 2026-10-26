@@ -19,8 +19,8 @@ struct Paths {
 fn paths() -> Paths {
     let dir = tempfile::tempdir().unwrap();
     Paths {
-        file: dir.path().join("ferrite.toml"),
-        ledger: dir.path().join("ferrite.db"),
+        file: dir.path().join("navo.toml"),
+        ledger: dir.path().join("navo.db"),
         _dir: dir,
     }
 }

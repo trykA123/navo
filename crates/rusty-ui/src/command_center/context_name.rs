@@ -9,7 +9,7 @@ pub(super) fn context_name(context: &str) -> Option<String> {
 fn key_of(context: &str) -> Option<&'static str> {
     Some(match context {
         GLOBAL => "command-center-context-app",
-        "FerritePane" | "PaneWaiting" => "command-center-context-pane",
+        "NavoPane" | "PaneWaiting" => "command-center-context-pane",
         "FileList" => "command-center-context-file-list",
         "PreviewBrowse" => "command-center-context-preview",
         "PathInput" => "command-center-context-path-bar",

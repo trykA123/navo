@@ -22,7 +22,11 @@ impl FerriteWindow {
         }
     }
 
-    fn load_index_service(&mut self, action: Option<ServiceAction>, cx: &mut Context<Self>) {
+    pub(super) fn load_index_service(
+        &mut self,
+        action: Option<ServiceAction>,
+        cx: &mut Context<Self>,
+    ) {
         self.settings.service_action_pending = action.is_some();
         self.settings.service_generation += 1;
         self.settings.service_status = ServiceStatus::NotAvailable;

@@ -7,7 +7,7 @@ use super::search::{Hit, Query, find};
 use super::text::{PageWords, rects};
 use crate::prelude::*;
 
-const NO_MORE_YET: &str = "No more hits yet. Ferrite is still reading the pages.";
+const NO_MORE_YET: &str = "No more hits yet. Navo is still reading the pages.";
 const TYPE_FIRST: &str = "Type the text to find first.";
 const BAND: f32 = 12.;
 const AT_ONCE: usize = 256 * 1024;

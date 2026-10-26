@@ -81,8 +81,8 @@ fn permanent() -> ConfirmProps {
 
 fn protected() -> ConfirmProps {
     ConfirmProps {
-        title: r"Delete C:\Program Files\Ferrite permanently?".into(),
-        lines: vec![r"C:\Program Files\Ferrite".into()],
+        title: r"Delete C:\Program Files\Navo permanently?".into(),
+        lines: vec![r"C:\Program Files\Navo".into()],
         more: 0,
         summary: "This is a protected location · 1 folder · 38,112,004 B".into(),
         confirm_label: "Delete permanently".into(),

@@ -174,7 +174,7 @@ fn session() -> impl Strategy<Value = Vec<(u64, Step)>> {
 
 fn near_log_text() -> impl Strategy<Value = String> {
     let line = prop_oneof![
-        Just("ferrite-log 1".to_owned()),
+        Just("navo-log 1".to_owned()),
         Just("home \"/h\"".to_owned()),
         Just("+0 pane.back".to_owned()),
         Just("+1 !listing-loaded { tab: 3, location: \"/h\", entries: 2 }".to_owned()),

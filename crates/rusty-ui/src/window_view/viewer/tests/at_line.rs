@@ -14,7 +14,7 @@ const TOML: &[u8] = b"# mine\n[appearance]\nmode = \"dark\"\ndensity = \"compact
 
 fn settings_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let fs = fake();
-    let file = fs.location("home/ferrite.toml");
+    let file = fs.location("home/navo.toml");
     let text = String::from_utf8_lossy(TOML).into_owned();
     let options = StartOptions {
         files: hooks(Setup::new(TOML.to_vec()), &Log::default()),
@@ -82,7 +82,7 @@ fn f3_on_a_row_opens_ferrite_toml_at_its_key(cx: &mut TestAppContext) {
     press(cx, window, &view, "down");
     open_at_key(cx, window, &view);
     let location = view.read_with(cx, |view, _| view.viewer_location().cloned());
-    assert!(location.is_some_and(|at| at.as_str().ends_with("ferrite.toml")));
+    assert!(location.is_some_and(|at| at.as_str().ends_with("navo.toml")));
     assert_eq!(cursor_line(cx, &view), Some(3));
 }
 
@@ -169,7 +169,7 @@ type Calls = Arc<std::sync::Mutex<Vec<&'static str>>>;
 
 fn waiting_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>, Calls) {
     let fs = fake();
-    let file = fs.location("home/ferrite.toml");
+    let file = fs.location("home/navo.toml");
     let disk = Arc::new(std::sync::Mutex::new(
         "# mine\n[appearance]\nmode = \"dark\"\n".to_owned(),
     ));

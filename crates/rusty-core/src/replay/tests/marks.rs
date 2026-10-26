@@ -1,7 +1,7 @@
 use super::*;
 
 fn with_body(body: &str) -> String {
-    format!("ferrite-log 1\nhome \"/h\"\n{body}")
+    format!("navo-log 1\nhome \"/h\"\n{body}")
 }
 
 #[test]

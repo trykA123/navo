@@ -47,9 +47,9 @@ fn sharing_violation_names_the_child_holding_the_file() {
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                "$ErrorActionPreference='Stop'; $f=[IO.File]::Open($env:FERRITE_LOCK_TEST_PATH,'Open','ReadWrite','None'); [Console]::Out.WriteLine('locked'); [Console]::Out.Flush(); Start-Sleep 30",
+                "$ErrorActionPreference='Stop'; $f=[IO.File]::Open($env:NAVO_LOCK_TEST_PATH,'Open','ReadWrite','None'); [Console]::Out.WriteLine('locked'); [Console]::Out.Flush(); Start-Sleep 30",
             ])
-            .env("FERRITE_LOCK_TEST_PATH", &path)
+            .env("NAVO_LOCK_TEST_PATH", &path)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .spawn()

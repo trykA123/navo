@@ -6,7 +6,6 @@ use rusty_store::{DefaultChange, LoadReport, SessionBackup, Settings, SettingsSt
 
 use super::{describe, report};
 
-const LEDGER: &str = "ferrite.db";
 const WAIT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
@@ -131,7 +130,7 @@ pub(super) fn start_sharing(
 pub fn start_from(dirs: Option<&StoreDirs>) -> Starting {
     let ledger = dirs
         .filter(|dirs| dirs.ensure().is_ok())
-        .map(|dirs| dirs.data.join(LEDGER));
+        .map(StoreDirs::journal_file);
     start_in_background(dirs.map(StoreDirs::settings_file), ledger)
 }
 

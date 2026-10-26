@@ -246,7 +246,7 @@ fn the_fallback_runtime_is_a_private_per_user_folder() {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     let root = tempfile::tempdir().unwrap();
     let uid = std::fs::metadata(root.path()).unwrap().uid();
-    let fallback = root.path().join(format!("ferrite-{uid}"));
+    let fallback = root.path().join(format!("navo-{uid}"));
     let acquired = super::acquire_with_runtime(root.path(), None, root.path()).unwrap();
     assert!(matches!(acquired, Some(Acquired::First(_))));
     let metadata = std::fs::symlink_metadata(&fallback).unwrap();
@@ -276,7 +276,7 @@ fn a_fallback_runtime_owned_by_another_uid_is_refused() {
         .unwrap()
         .uid()
         .wrapping_add(1);
-    let folder = root.path().join(format!("ferrite-{other_uid}"));
+    let folder = root.path().join(format!("navo-{other_uid}"));
     std::fs::create_dir(&folder).unwrap();
     std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).unwrap();
     assert_eq!(
@@ -294,7 +294,7 @@ fn an_unsafe_fallback_runtime_continues_without_a_lock() {
     for kind in ["shared", "file", "symlink"] {
         let root = tempfile::tempdir().unwrap();
         let uid = std::fs::metadata(root.path()).unwrap().uid();
-        let fallback = root.path().join(format!("ferrite-{uid}"));
+        let fallback = root.path().join(format!("navo-{uid}"));
         match kind {
             "shared" => {
                 std::fs::create_dir(&fallback).unwrap();
@@ -308,6 +308,18 @@ fn an_unsafe_fallback_runtime_continues_without_a_lock() {
         assert!(acquired.is_none(), "{kind}");
         assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn starting_without_a_lock_creates_no_profile_folder() {
+    let root = tempfile::tempdir().unwrap();
+    let temp = root.path().join("temp");
+    std::fs::write(&temp, b"not a folder").unwrap();
+    let profile = root.path().join("local/navo");
+    let acquired = super::acquire_with_runtime(&profile, None, &temp).unwrap();
+    assert!(acquired.is_none());
+    assert!(!root.path().join("local").exists());
 }
 
 #[cfg(windows)]

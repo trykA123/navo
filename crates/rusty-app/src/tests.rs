@@ -64,3 +64,41 @@ fn a_missing_pane_folder_fails_before_opening_a_window() {
     assert_eq!(status, ExitCode::from(2));
     assert!(!report.exists());
 }
+
+#[test]
+fn a_user_profile_migrates_even_without_an_instance_guard() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = StoreDirs::in_profile(root.path());
+    let user = crate::profile::Profile::User(Some(dirs.clone()));
+    let folder = crate::profile::Profile::Folder(dirs);
+    let start = crate::cli::Start::default();
+    let metrics = crate::cli::Start {
+        metrics: Some(root.path().join("metrics.json")),
+        ..crate::cli::Start::default()
+    };
+    assert!(super::migrates(&start, &user, false));
+    assert!(super::migrates(&start, &user, true));
+    assert!(super::migrates(&start, &folder, true));
+    assert!(!super::migrates(&start, &folder, false));
+    assert!(!super::migrates(&metrics, &user, true));
+    assert!(!super::migrates(
+        &start,
+        &crate::profile::Profile::User(None),
+        false
+    ));
+}
+
+#[test]
+fn preparing_the_instance_creates_no_profile_folder_before_the_migration() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = StoreDirs {
+        config: root.path().join("roaming/Navo"),
+        data: root.path().join("local/Navo"),
+    };
+    let profile = crate::profile::Profile::User(Some(dirs.clone()));
+    let (sender, _) = rusty_ui::window_view::open_requests();
+    let prepared = super::prepare_instance(&crate::cli::Start::default(), &profile, sender);
+    assert!(matches!(prepared, Ok(std::ops::ControlFlow::Continue(_))));
+    assert!(!dirs.config.exists() && !dirs.data.exists());
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+}

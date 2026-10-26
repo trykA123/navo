@@ -25,7 +25,7 @@ pub enum FileError {
     Io(#[from] std::io::Error),
     #[error("cannot allocate index snapshot: {0}")]
     Allocation(#[from] std::collections::TryReserveError),
-    #[error("not a Ferrite index file")]
+    #[error("not a Navo index file")]
     BadMagic,
     #[error("index format {found} differs from supported format {supported}")]
     UnsupportedVersion { found: u16, supported: u16 },

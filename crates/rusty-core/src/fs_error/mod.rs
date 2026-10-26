@@ -156,7 +156,7 @@ fn with_location(kind: FsErrorKind, place: &str) -> String {
     match kind {
         FsErrorKind::NotFound => format!("\u{201c}{place}\u{201d} was not found."),
         FsErrorKind::AccessDenied => {
-            format!("Ferrite is not allowed to open \u{201c}{place}\u{201d}.")
+            format!("Navo is not allowed to open \u{201c}{place}\u{201d}.")
         }
         FsErrorKind::SharingViolation => {
             format!("\u{201c}{place}\u{201d} is in use by another program.")
@@ -187,7 +187,7 @@ fn with_location(kind: FsErrorKind, place: &str) -> String {
 fn without_location(kind: FsErrorKind) -> &'static str {
     match kind {
         FsErrorKind::NotFound => "The item was not found.",
-        FsErrorKind::AccessDenied => "Ferrite is not allowed to do this.",
+        FsErrorKind::AccessDenied => "Navo is not allowed to do this.",
         FsErrorKind::SharingViolation => "The item is in use by another program.",
         FsErrorKind::Locked => "The item is locked.",
         FsErrorKind::DiskFull => "There is not enough free space on the drive.",

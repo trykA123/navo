@@ -10,21 +10,47 @@ pub(super) fn hooks() -> ServiceHooks {
     {
         use std::sync::Arc;
 
-        use crate::index_service::{Action, query_running};
+        use crate::index_service::{Action, query};
 
         ServiceHooks {
-            status: Arc::new(|| status_from_query(query_running())),
+            status: Arc::new(|| status_from_query(query())),
             install: Arc::new(|| elevate(Action::Install)),
             remove: Arc::new(|| elevate(Action::Remove)),
+            ..ServiceHooks::none()
         }
     }
     #[cfg(not(windows))]
     ServiceHooks::none()
 }
 
+pub(crate) fn add_upgrade_notice(
+    service: &mut ServiceHooks,
+    dirs: Option<&rusty_store::StoreDirs>,
+) {
+    #[cfg(windows)]
+    {
+        use std::sync::Arc;
+
+        let marker = dirs.map(|dirs| dirs.data.join(UPGRADE_DISMISSED));
+        let dismissed = marker.clone();
+        service.upgrade_due =
+            Arc::new(move || crate::index_service::upgrade_notice_due(marker.clone()));
+        service.dismiss_upgrade = Arc::new(move || {
+            if let Err(error) = crate::index_service::dismiss_upgrade_notice(dismissed.clone()) {
+                tracing::warn!(%error, "cannot remember the dismissed index service notice");
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (service, dirs);
+}
+
+#[cfg(windows)]
+const UPGRADE_DISMISSED: &str = "index-upgrade-dismissed";
+
 #[cfg(any(windows, test))]
-fn status_from_query(query: std::io::Result<Option<bool>>) -> ServiceStatus {
-    match query {
+fn status_from_query(query: std::io::Result<crate::index_service::ServiceQuery>) -> ServiceStatus {
+    match query.map(|query| query.running) {
         Ok(None) => ServiceStatus::NotInstalled,
         Ok(Some(true)) => ServiceStatus::Running,
         Ok(Some(false)) => ServiceStatus::Stopped,
@@ -43,7 +69,7 @@ fn action_outcome(result: Result<(), ElevationError>) -> Result<(), ElevationErr
 #[cfg(windows)]
 fn elevate(action: crate::index_service::Action) {
     if let Err(error) = action_outcome(crate::index_service::request_elevation(action)) {
-        eprintln!("ferrite: index service: {error}");
+        eprintln!("navo: index service: {error}");
     }
 }
 
@@ -53,9 +79,20 @@ mod tests {
 
     #[test]
     fn queried_service_presence_and_state_determine_status() {
-        assert_eq!(status_from_query(Ok(None)), ServiceStatus::NotInstalled);
-        assert_eq!(status_from_query(Ok(Some(true))), ServiceStatus::Running);
-        assert_eq!(status_from_query(Ok(Some(false))), ServiceStatus::Stopped);
+        for legacy_present in [false, true] {
+            let query = |running| {
+                Ok(crate::index_service::ServiceQuery {
+                    running,
+                    legacy_present,
+                })
+            };
+            assert_eq!(status_from_query(query(None)), ServiceStatus::NotInstalled);
+            assert_eq!(status_from_query(query(Some(true))), ServiceStatus::Running);
+            assert_eq!(
+                status_from_query(query(Some(false))),
+                ServiceStatus::Stopped
+            );
+        }
     }
 
     #[test]

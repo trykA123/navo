@@ -30,6 +30,30 @@ pub(super) fn patch(
     keep_layout(text, |plain| patch_plain(plain, key, value))
 }
 
+pub(super) fn upgrade_legacy_themes(text: &str) -> Result<String, SettingsError> {
+    keep_layout(text, |plain| {
+        let mut document: DocumentMut = plain.parse().map_err(|_| SettingsError::FileInvalid)?;
+        let Some(table) = document
+            .get_mut("appearance")
+            .and_then(Item::as_table_like_mut)
+        else {
+            return Ok(plain.to_owned());
+        };
+        for name in ["light-theme", "dark-theme"] {
+            let Some(Item::Value(old)) = table.get_mut(name) else {
+                continue;
+            };
+            let Some(new) = old.as_str().and_then(super::model::navo_theme_name) else {
+                continue;
+            };
+            let mut value = Value::from(new);
+            *value.decor_mut() = old.decor().clone();
+            *old = value;
+        }
+        Ok(document.to_string())
+    })
+}
+
 fn patch_plain(
     text: &str,
     key: &str,

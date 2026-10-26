@@ -5,7 +5,7 @@ use windows_sys::Win32::UI::Shell::FOLDERID_ProgramData;
 
 use super::config::Config;
 use super::directory::{Policy, ProtectedDirectory, known_folder};
-use super::install_plan::data_directories;
+use super::install_plan::{NAVO, Product};
 
 pub(super) struct Storage {
     pub program_data: PathBuf,
@@ -15,8 +15,12 @@ pub(super) struct Storage {
 
 impl Storage {
     pub fn open(create: bool) -> io::Result<Self> {
+        Self::open_for(NAVO, create)
+    }
+
+    pub fn open_for(product: Product, create: bool) -> io::Result<Self> {
         let program_data = known_folder(&FOLDERID_ProgramData)?;
-        let [parent, directory] = data_directories(&program_data);
+        let [parent, directory] = product.data_directories(&program_data);
         let guard = ProtectedDirectory::open(&[&parent, &directory], Policy::Data, create)?;
         Ok(Self {
             program_data,

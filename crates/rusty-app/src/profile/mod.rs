@@ -74,9 +74,7 @@ pub(crate) fn choose(
     if !start.is_metrics() {
         return Ok(Profile::User(detect()));
     }
-    let folder = tempfile::Builder::new()
-        .prefix("ferrite-metrics-")
-        .tempdir()?;
+    let folder = tempfile::Builder::new().prefix("navo-metrics-").tempdir()?;
     let dirs = StoreDirs::in_profile(folder.path());
     Ok(Profile::Temporary {
         dirs,

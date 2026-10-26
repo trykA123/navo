@@ -11,8 +11,6 @@ pub use protect::is_protected;
 
 use crate::Location;
 
-pub const TEMP_SUFFIX: &str = ".ferrite-part";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OpKind {
     Copy,

@@ -17,16 +17,43 @@ use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles}
 use super::directory::{Policy, ProtectedDirectory, known_folder};
 use super::elevation::wide;
 use super::install_plan::{
-    CopyPlan, FreshInstall, SettingsBackup, Step, clear_directory, data_directories, run_install,
+    CopyPlan, FERRITE, FreshInstall, NAVO, Product, SettingsBackup, Step, clear_directory,
+    data_directories, run_install,
 };
 use super::policy::{FAILURE_DELAYS, RESET_SECONDS, RESTART_CLEAN_STOPS};
-use super::scm::{ServiceHandle, checked, open_manager, service_handle, service_name};
+use super::scm::{
+    ServiceHandle, checked, open_manager, service_handle, service_name, service_name_of,
+};
 use super::storage::Storage;
+use super::upgrade::{UpgradeStep, await_answer, remove_both, run_upgrade};
 
 mod configuration;
+mod legacy;
+
+const ANSWER_WAIT: (Duration, Duration) = (Duration::from_secs(30), Duration::from_millis(250));
 
 pub(super) fn install() -> io::Result<()> {
-    let config = super::session::installation_config()?;
+    let legacy = legacy::detect()?;
+    let config = match legacy::carried_config() {
+        Some(config) => config,
+        None => super::session::installation_config()?,
+    };
+    let leftover = run_upgrade(legacy, |step| match step {
+        UpgradeStep::InstallNew => install_current(&config),
+        UpgradeStep::AwaitNew => {
+            await_answer(ANSWER_WAIT, || rusty_index::pipe::Client::connect().is_ok())
+        }
+        UpgradeStep::RemoveLegacyService => remove_service(FERRITE),
+        UpgradeStep::RemoveLegacyFiles => remove_files(FERRITE),
+    })?;
+    if let Some(warning) = leftover {
+        tracing::warn!(%warning, "index service installed with old files left in place");
+        eprintln!("navo: index service: warning: {warning}");
+    }
+    Ok(())
+}
+
+fn install_current(config: &super::config::Config) -> io::Result<()> {
     let plan = CopyPlan::new(&known_folder(&FOLDERID_ProgramFiles)?, std::process::id());
     let data = data_directories(&known_folder(&FOLDERID_ProgramData)?);
     let parent = plan
@@ -40,7 +67,7 @@ pub(super) fn install() -> io::Result<()> {
         data[1].clone(),
     ];
     let mut fresh = FreshInstall::observe(&plan, &directories);
-    let result = install_with(&plan, &config, &mut fresh);
+    let result = install_with(&plan, config, &mut fresh);
     if result.is_err() {
         let _ = fresh.remove_directories();
     }
@@ -224,15 +251,19 @@ fn configure_recovery(service: &ServiceHandle) -> io::Result<()> {
 }
 
 pub(super) fn remove() -> io::Result<()> {
-    super::removal::run(remove_service, || {
-        let binary = remove_binary();
-        binary.and(remove_data())
+    remove_both([NAVO, FERRITE], |product| {
+        super::removal::run(|| remove_service(product), || remove_files(product))
     })
 }
 
-fn remove_service() -> io::Result<()> {
+fn remove_files(product: Product) -> io::Result<()> {
+    let binary = remove_binary(product);
+    binary.and(remove_data(product))
+}
+
+fn remove_service(product: Product) -> io::Result<()> {
     let manager = open_manager(SC_MANAGER_CONNECT)?;
-    let name = service_name();
+    let name = service_name_of(product);
     // SAFETY: manager and terminated name are live for the call.
     let raw = unsafe {
         OpenServiceW(
@@ -255,8 +286,12 @@ fn remove_service() -> io::Result<()> {
     Ok(())
 }
 
-fn remove_binary() -> io::Result<()> {
-    let plan = CopyPlan::new(&known_folder(&FOLDERID_ProgramFiles)?, std::process::id());
+fn remove_binary(product: Product) -> io::Result<()> {
+    let plan = CopyPlan::of(
+        product,
+        &known_folder(&FOLDERID_ProgramFiles)?,
+        std::process::id(),
+    );
     let parent = plan
         .directory
         .parent()
@@ -266,11 +301,12 @@ fn remove_binary() -> io::Result<()> {
     };
     super::removal::remove_image(|| std::fs::remove_file(&plan.executable))?;
     let _ = plan.delete_old();
-    guard.remove_last(&plan.directory)
+    guard.remove_last(&plan.directory)?;
+    guard.remove_last(parent)
 }
 
-fn remove_data() -> io::Result<()> {
-    let [parent, index] = data_directories(&known_folder(&FOLDERID_ProgramData)?);
+fn remove_data(product: Product) -> io::Result<()> {
+    let [parent, index] = product.data_directories(&known_folder(&FOLDERID_ProgramData)?);
     if let Some(mut guard) = open_existing(&[&parent, &index], Policy::Data)? {
         clear_directory(&index)?;
         guard.remove_last(&index)?;

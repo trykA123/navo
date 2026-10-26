@@ -9,7 +9,7 @@ use rusty_ui::window_view::{FileHooks, FileStamp};
 pub type SharedDb = Arc<Mutex<Db>>;
 
 fn report(doing: &str, error: &DbError) {
-    eprintln!("ferrite: viewer memory: {doing}: {error}");
+    eprintln!("navo: viewer memory: {doing}: {error}");
 }
 
 const KEEP_MEMORIES: usize = 10_000;
