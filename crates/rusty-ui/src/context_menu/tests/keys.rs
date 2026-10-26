@@ -11,44 +11,57 @@ fn shell(command: u32) -> ContextMenuEvent {
 }
 
 #[gpui_kit::test]
-fn arrows_skip_headers_separators_and_disabled_rows(cx: &mut TestAppContext) {
+fn arrows_skip_separators_and_disabled_rows(cx: &mut TestAppContext) {
     let menu = open_default(cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("Open"));
+    assert_eq!(menu.selected(cx).as_deref(), Some("Open"));
     menu.press(&["down", "down", "down"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("Move"));
-    menu.press(&["down", "down", "down", "down", "down"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("Classic menu"));
+    assert_eq!(menu.selected(cx).as_deref(), Some("Send to"));
     menu.press(&["down", "down", "down"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("7-Zip"));
-    menu.press(&["up", "up", "up"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("Classic menu"));
+    assert_eq!(menu.selected(cx).as_deref(), Some("Create shortcut"));
+    menu.press(&["up"], cx);
+    assert_eq!(menu.selected(cx).as_deref(), Some("Copy"));
 }
 
 #[gpui_kit::test]
 fn arrows_wrap_and_home_end_jump(cx: &mut TestAppContext) {
     let menu = open_default(cx);
     menu.press(&["up"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("More (2)"));
+    assert_eq!(
+        menu.selected(cx).as_deref(),
+        Some("Restore previous versions")
+    );
     menu.press(&["down"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("Open"));
+    assert_eq!(menu.selected(cx).as_deref(), Some("Open"));
     menu.press(&["end"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("More (2)"));
+    assert_eq!(
+        menu.selected(cx).as_deref(),
+        Some("Restore previous versions")
+    );
     menu.press(&["home"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("Open"));
+    assert_eq!(menu.selected(cx).as_deref(), Some("Open"));
     menu.press(&["pagedown"], cx);
-    assert_ne!(menu.selected(0, cx).as_deref(), Some("Open"));
+    assert_ne!(menu.selected(cx).as_deref(), Some("Open"));
     menu.press(&["pageup"], cx);
-    assert_eq!(menu.selected(0, cx).as_deref(), Some("Open"));
+    assert_eq!(menu.selected(cx).as_deref(), Some("Open"));
 }
 
 #[gpui_kit::test]
 fn enter_emits_the_chosen_command(cx: &mut TestAppContext) {
     let menu = open_default(cx);
-    menu.press(&["down", "down", "enter"], cx);
+    menu.press(&["enter"], cx);
+    assert_eq!(menu.events(), [shell(1)]);
+}
+
+#[gpui_kit::test]
+fn a_hidden_ferrite_action_runs_when_typed(cx: &mut TestAppContext) {
+    let menu = open_default(cx);
+    menu.type_text("rename", cx);
+    assert_eq!(menu.rows(cx), ["Rename"]);
+    menu.press(&["enter"], cx);
     assert_eq!(
         menu.events(),
         [ContextMenuEvent::Chosen(ItemId::Ferrite(
-            FerriteAction::Edit
+            FerriteAction::Rename
         ))]
     );
 }
@@ -73,6 +86,13 @@ fn classic_menu_asks_for_the_native_menu(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn shift_f10_on_a_page_asks_for_the_native_menu(cx: &mut TestAppContext) {
+    let menu = open_default(cx);
+    menu.press(&["down", "down", "right", "shift-f10"], cx);
+    assert_eq!(menu.events(), [ContextMenuEvent::ShowClassic]);
+}
+
+#[gpui_kit::test]
 fn a_menu_without_classic_hides_it_and_ignores_shift_f10(cx: &mut TestAppContext) {
     let menu = open_default(cx);
     menu.menu.update(cx, |menu, cx| menu.hide_classic(cx));
@@ -85,12 +105,10 @@ fn a_menu_without_classic_hides_it_and_ignores_shift_f10(cx: &mut TestAppContext
 #[gpui_kit::test]
 fn disabled_rows_never_emit(cx: &mut TestAppContext) {
     let menu = open_default(cx);
-    menu.click(0, 4, cx);
-    menu.press(&["end"], cx);
-    menu.click(0, 21, cx);
+    menu.click(8, cx);
     assert!(menu.events().is_empty());
     menu.type_text("paste", cx);
-    assert_eq!(menu.rows(0, cx), ["Paste"]);
+    assert_eq!(menu.rows(cx), ["Paste"]);
     menu.press(&["enter"], cx);
     assert!(menu.events().is_empty());
 }
@@ -98,8 +116,8 @@ fn disabled_rows_never_emit(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn a_click_runs_the_row(cx: &mut TestAppContext) {
     let menu = open_default(cx);
-    menu.click(0, 12, cx);
-    assert_eq!(menu.events(), [shell(1)]);
+    menu.click(6, cx);
+    assert_eq!(menu.events(), [shell(7)]);
 }
 
 #[gpui_kit::test]

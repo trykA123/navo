@@ -278,10 +278,7 @@ fn a_right_click_on_a_markdown_link_offers_open_link(cx: &mut TestAppContext) {
         .expect("window");
     let at = block.center();
     right_click(cx, window, at);
-    assert_eq!(
-        rows(cx, window),
-        ["# Ferrite", "Copy", "-", "Open link", "Copy link"]
-    );
+    assert_eq!(rows(cx, window), ["Copy", "-", "Open link", "Copy link"]);
 }
 
 #[gpui_kit::test]

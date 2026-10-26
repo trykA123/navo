@@ -4,7 +4,6 @@ use super::{ItemId, Row};
 pub enum Choice {
     Run(ItemId),
     OpenSubmenu(Vec<usize>),
-    ShowMore,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -47,12 +46,10 @@ impl Selection {
     }
 
     #[must_use]
-    pub fn keep(&self, old: &[Row], new: &[Row]) -> Self {
-        let was_more = matches!(self.index.and_then(|i| old.get(i)), Some(Row::More { .. }));
+    pub fn keep(&self, new: &[Row]) -> Self {
         let found = new.iter().position(|row| match row {
             Row::Item(item) => self.path.as_deref() == Some(item.path.as_slice()),
-            Row::More { .. } => was_more,
-            Row::Header(_) | Row::Separator => false,
+            Row::Back { .. } | Row::Separator => false,
         });
         match found {
             Some(index) if new[index].is_selectable(!has_enabled(new)) => {
@@ -69,7 +66,6 @@ impl Selection {
                 Some(Choice::OpenSubmenu(item.path.clone()))
             }
             Row::Item(item) if item.enabled => Some(Choice::Run(item.id.clone())),
-            Row::More { .. } => Some(Choice::ShowMore),
             _ => None,
         }
     }

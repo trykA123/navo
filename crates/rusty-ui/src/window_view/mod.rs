@@ -93,7 +93,8 @@ pub use settings_save::{SaveReport, SaveSettings};
 use settings_sheet::SettingsPanel as Panel;
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
 pub use shell_menu::{
-    BackgroundLook, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession, background_items,
+    BackgroundLook, MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession,
+    merged_background_menu, merged_file_menu,
 };
 pub use start::run;
 pub use start_watch::{StartReport, StartWatch};

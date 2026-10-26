@@ -1,27 +1,22 @@
-use std::time::Duration;
-
-use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::component::input::Input;
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    Animation, AnimationExt, AnyElement, BoxShadow, ClickEvent, Context, Div, InteractiveElement,
-    IntoElement, MouseButton, ParentElement, Pixels, Role, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, div, point, px,
+    AnyElement, BoxShadow, ClickEvent, Context, Div, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Role, SharedString, Stateful, StatefulInteractiveElement, Styled, div, point,
+    px,
 };
 use rusty_core::shell_menu::Row;
+use rusty_l10n::{t, tr};
 
 use super::ContextMenu;
-use super::motion::RootMotion;
+use super::motion::PanelMotion;
 use super::place::{CONTEXT_LINE, FIELD, FOOTER, Frame, PAD, ROW};
 use super::row::{self, RowElement, RowLook};
-use super::state::{ContextMenuEvent, LevelStatus};
+use super::state::{ContextMenuEvent, MenuState, PageStatus};
 use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::Theme;
 
 const RADIUS: f32 = 10.;
-const RISE: f32 = 4.;
-const FILTER_HINT: &str = "↑↓ move · Enter run · → submenu · Esc clear";
 
 fn shadow() -> Vec<BoxShadow> {
     vec![BoxShadow {
@@ -33,9 +28,9 @@ fn shadow() -> Vec<BoxShadow> {
     }]
 }
 
-fn chrome(t: &Theme, depth: usize) -> ObservedElement<Stateful<Div>> {
+fn chrome(t: &Theme) -> ObservedElement<Stateful<Div>> {
     div()
-        .id(("menu-level", depth))
+        .id(("menu-level", 0usize))
         .role(Role::Menu)
         .test_support()
         .absolute()
@@ -53,39 +48,17 @@ fn chrome(t: &Theme, depth: usize) -> ObservedElement<Stateful<Div>> {
         .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
 }
 
-struct Motion {
-    id: SharedString,
-    top: Pixels,
-    duration: Duration,
-    rise: f32,
-}
-
-fn enter(panel: ObservedElement<Stateful<Div>>, motion: Motion) -> AnyElement {
-    let Motion {
-        id,
-        top,
-        duration,
-        rise,
-    } = motion;
-    let animation = Animation::new(duration).with_easing(ease_out_cubic);
-    panel
-        .with_animation(id, animation, move |panel, delta| {
-            panel.top(top + px(rise * (1. - delta))).opacity(delta)
-        })
-        .into_any_element()
-}
-
 pub(super) struct PanelLook<'a> {
     pub frame: Frame,
     pub theme: &'a Theme,
-    pub reduce_motion: bool,
-    pub root: Option<RootMotion<'a>>,
+    pub motion: PanelMotion<'a>,
+    pub shows_loading: bool,
 }
 
 fn interactive(
     element: RowElement,
     row: &Row,
-    (depth, index): (usize, usize),
+    index: usize,
     cx: &mut Context<ContextMenu>,
 ) -> RowElement {
     if !row.is_selectable(true) {
@@ -94,41 +67,42 @@ fn interactive(
     element
         .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
             if *hovered {
-                this.hovered(depth, index, cx);
+                this.hovered(index, cx);
             }
         }))
         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-            this.clicked((depth, index), window, cx);
+            this.clicked(index, window, cx);
         }))
 }
 
-fn hint(state: &super::MenuState) -> String {
+fn hint(state: &MenuState) -> String {
     if state.is_filtering() {
-        return FILTER_HINT.to_owned();
+        return tr("context-menu-filter-keys");
     }
-    match (state.hidden_count(), state.rare_count()) {
-        (0, 0) => "Type to filter".to_owned(),
-        (hidden, 0) => format!("{hidden} hidden: type to reach"),
-        (0, rare) => format!("{rare} rare: type to reach"),
-        (hidden, rare) => format!("{hidden} hidden, {rare} rare: type to reach"),
+    if !state.page().is_empty() {
+        return tr("context-menu-page-keys");
+    }
+    match state.menu().classic_only_count() {
+        0 => tr("context-menu-type-to-filter"),
+        count => t!("context-menu-classic-only", count = count),
     }
 }
 
+fn trail(state: &MenuState) -> Vec<String> {
+    (1..=state.page().len())
+        .filter_map(|depth| state.menu().item(&state.page()[..depth]))
+        .map(|item| item.text.clone())
+        .collect()
+}
+
 impl ContextMenu {
-    pub(super) fn panel(
-        &self,
-        depth: usize,
-        look: PanelLook,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    pub(super) fn panel(&self, look: PanelLook, cx: &mut Context<Self>) -> AnyElement {
         let PanelLook {
             frame,
             theme: t,
-            reduce_motion,
-            root,
+            motion,
+            shows_loading,
         } = look;
-        let fresh = root.as_ref().and_then(|root| root.fresh);
-        let level = &self.state.levels()[depth];
         let list = div()
             .id("menu-list")
             .flex()
@@ -136,81 +110,84 @@ impl ContextMenu {
             .flex_none()
             .h(frame.list_height)
             .overflow_y_scroll()
-            .track_scroll(&self.scroll(depth))
-            .children(self.rows((depth, fresh), t, cx));
-        let panel = chrome(t, depth)
+            .track_scroll(&self.scroll)
+            .children(self.rows((motion.fresh, shows_loading), t, cx));
+        let back = (!self.state.page().is_empty()).then(|| self.back_row(t, cx));
+        let page = div()
+            .flex()
+            .flex_col()
+            .flex_none()
+            .relative()
+            .left(motion.slide)
+            .opacity(motion.page_opacity)
+            .child(self.context_line(t))
+            .children(back)
+            .child(list);
+        chrome(t)
             .left(frame.bounds.origin.x - self.bounds.origin.x)
+            .top(frame.bounds.origin.y - self.bounds.origin.y + motion.rise)
             .w(frame.bounds.size.width)
             .h(frame.bounds.size.height)
-            .when(depth == 0, |panel| {
-                panel.child(self.filter(t)).child(self.context_line(t))
-            })
-            .child(list)
-            .when(depth == 0, |panel| panel.child(self.footer(t, cx)));
-        let top = frame.bounds.origin.y - self.bounds.origin.y;
-        if let Some(root) = root {
-            return panel
-                .top(top + root.rise)
-                .opacity(root.opacity)
-                .into_any_element();
-        }
-        let motion = Motion {
-            id: SharedString::from(format!("menu-enter-{:?}", level.path)),
-            top,
-            duration: Duration::from_millis(180),
-            rise: if reduce_motion { 0. } else { RISE },
-        };
-        enter(panel, motion)
+            .opacity(motion.opacity)
+            .child(self.filter(t))
+            .child(page)
+            .child(self.footer(t, cx))
+            .into_any_element()
     }
 
     fn rows(
         &self,
-        (depth, fresh): (usize, Option<(&[Row], f32)>),
+        (fresh, shows_loading): (Option<(&[Row], f32)>, bool),
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> Vec<RowElement> {
-        let level = &self.state.levels()[depth];
-        let is_active = self.state.active() == depth;
-        match level.status {
-            LevelStatus::Loading => vec![row::status_row(t, 0, "Loading…", t.colors.muted)],
-            LevelStatus::Failed => vec![
-                row::status_row(t, 0, "Could not load", t.colors.muted),
-                row::retry_row(t, 1, is_active).on_click(
-                    cx.listener(move |this, _: &ClickEvent, _, cx| this.retried(depth, cx)),
+        let muted = t.colors.muted;
+        match self.state.status() {
+            PageStatus::Loading if shows_loading => {
+                vec![row::status_row(t, 0, tr("context-menu-loading"), muted)]
+            }
+            PageStatus::Loading => Vec::new(),
+            PageStatus::Failed => vec![
+                row::status_row(t, 0, tr("context-menu-could-not-load"), muted),
+                row::retry_row(t, 1, true).on_click(
+                    cx.listener(|this, _: &ClickEvent, window, cx| this.retried(window, cx)),
                 ),
             ],
-            LevelStatus::Ready if level.rows.is_empty() => {
-                vec![row::status_row(
-                    t,
-                    0,
-                    "No matching commands",
-                    t.colors.muted,
-                )]
-            }
-            LevelStatus::Ready => {
-                let look = RowLook {
-                    theme: t,
-                    menu: self.state.menu(),
-                    icons: &self.icons,
-                    is_active,
-                    ferrite_header: &self.ferrite_header,
-                };
-                let selected = level.selection.index();
-                level
-                    .rows
-                    .iter()
-                    .enumerate()
-                    .map(|(index, row)| {
-                        let element = row::render(&look, row, index, selected == Some(index));
-                        let element = match fresh {
-                            Some((old, shown)) if !old.contains(row) => element.opacity(shown),
-                            _ => element,
-                        };
-                        interactive(element, row, (depth, index), cx)
-                    })
-                    .collect()
-            }
+            PageStatus::Ready => self.item_rows(fresh, t, cx),
         }
+    }
+
+    fn item_rows(
+        &self,
+        fresh: Option<(&[Row], f32)>,
+        t: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Vec<RowElement> {
+        let offset = usize::from(!self.state.page().is_empty());
+        let listed = &self.state.rows()[offset.min(self.state.rows().len())..];
+        if listed.is_empty() {
+            let text = tr("context-menu-no-match");
+            return vec![row::status_row(t, 0, text, t.colors.muted)];
+        }
+        let look = RowLook {
+            theme: t,
+            menu: self.state.menu(),
+            icons: &self.icons,
+        };
+        let selected = self.state.selection().index();
+        listed
+            .iter()
+            .enumerate()
+            .map(|(shown, row)| {
+                let index = shown + offset;
+                let element = row::render(&look, row, shown, selected == Some(index));
+                let element = match fresh {
+                    Some((old, done)) if !old.contains(row) => element.opacity(done),
+                    _ => element,
+                };
+                interactive(element, row, index, cx)
+            })
+            .collect()
     }
 
     fn filter(&self, t: &Theme) -> Div {
@@ -238,9 +215,49 @@ impl ContextMenu {
             .items_center()
             .h(px(CONTEXT_LINE))
             .px(t.spacing.sm)
+            .font_family(t.typography.mono_font.clone())
             .text_size(t.typography.tiny)
             .text_color(t.colors.muted)
             .child(div().min_w_0().truncate().child(self.context.clone()))
+    }
+
+    fn back_row(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut parts = trail(&self.state);
+        let current = parts.pop().unwrap_or_default();
+        let before = parts
+            .iter()
+            .map(|part| format!("{part} › "))
+            .collect::<String>();
+        div()
+            .id("menu-back")
+            .role(Role::Button)
+            .aria_label(SharedString::from(current.clone()))
+            .test_support()
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(t.spacing.md)
+            .h(px(ROW))
+            .px(t.spacing.sm)
+            .rounded(t.radii.md)
+            .cursor_pointer()
+            .hover(|style| style.bg(t.colors.hover))
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.went_back(window, cx)))
+            .child(row::icon_cell(Some(
+                icon(IconName::ChevronLeft, t.spacing.icon, t.colors.muted).into_any_element(),
+            )))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .font_family(t.typography.mono_font.clone())
+                    .text_size(t.typography.small)
+                    .child(div().flex_none().text_color(t.colors.muted).child(before))
+                    .child(div().min_w_0().text_ellipsis().child(current)),
+            )
     }
 
     fn footer(&self, t: &Theme, cx: &mut Context<Self>) -> Div {

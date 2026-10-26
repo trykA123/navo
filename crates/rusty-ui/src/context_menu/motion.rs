@@ -7,6 +7,7 @@ use rusty_core::shell_menu::Row;
 use crate::tokens::Motion;
 
 const RISE: f32 = 4.;
+const SLIDE: f32 = 16.;
 pub(super) const GROW: Duration = Duration::from_millis(150);
 
 pub(super) fn progress(started: Instant, now: Instant, duration: Duration) -> f32 {
@@ -31,8 +32,23 @@ impl Grow {
     }
 }
 
-pub(super) struct RootMotion<'a> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Slide {
+    pub started: Instant,
+    pub deeper: bool,
+}
+
+impl Slide {
+    pub fn offset(&self, done: f32) -> Pixels {
+        let travel = if self.deeper { SLIDE } else { -SLIDE };
+        px(travel * (1. - done))
+    }
+}
+
+pub(super) struct PanelMotion<'a> {
     pub rise: Pixels,
     pub opacity: f32,
     pub fresh: Option<(&'a [Row], f32)>,
+    pub slide: Pixels,
+    pub page_opacity: f32,
 }

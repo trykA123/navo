@@ -1,4 +1,8 @@
-use rusty_core::shell_menu::{FerriteAction, Group, ItemId, ItemKind, MenuItem, Submenu};
+use rusty_core::shell_menu::{
+    FerriteAction, Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu,
+};
+
+use super::merge::{self, Own};
 
 use crate::file_list::{SortBy, SortKey};
 
@@ -60,21 +64,57 @@ fn sort_menu(current: SortKey) -> MenuItem {
     }
 }
 
-#[must_use]
-pub fn background_items(look: &BackgroundLook) -> Vec<MenuItem> {
-    let mut items = vec![
-        ferrite(FerriteAction::NewFolder, "New folder\tF7", 'N'),
-        ferrite(FerriteAction::NewFile, "New file…\tShift+F7", 'F'),
-        MenuItem {
-            enabled: look.can_paste,
-            ..ferrite(FerriteAction::Paste, "Paste\tCtrl+V", 'P')
-        },
-        ferrite(FerriteAction::Refresh, "Refresh\tCtrl+R", 'R'),
+fn new_folder() -> MenuItem {
+    ferrite(FerriteAction::NewFolder, "New folder\tF7", 'N')
+}
+
+fn new_file() -> MenuItem {
+    ferrite(FerriteAction::NewFile, "New file…\tShift+F7", 'F')
+}
+
+fn paste(look: &BackgroundLook) -> MenuItem {
+    MenuItem {
+        enabled: look.can_paste,
+        ..ferrite(FerriteAction::Paste, "Paste\tCtrl+V", 'P')
+    }
+}
+
+fn refresh() -> MenuItem {
+    ferrite(FerriteAction::Refresh, "Refresh\tCtrl+R", 'R')
+}
+
+fn copy_folder_path() -> MenuItem {
+    ferrite(FerriteAction::CopyPath, "Copy folder path", 'C')
+}
+
+/// With a shell list, Sort by and Refresh lead it and New file follows New ▸, as Explorer places them.
+pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
+    if has_shell {
+        return Own {
+            top: vec![sort_menu(look.sort), refresh()],
+            after_new: vec![new_file()],
+            hidden: vec![new_folder(), paste(look), copy_folder_path()],
+        };
+    }
+    let mut top = vec![
+        new_folder(),
+        new_file(),
+        paste(look),
+        refresh(),
         sort_menu(look.sort),
-        ferrite(FerriteAction::CopyPath, "Copy folder path", 'C'),
+        copy_folder_path(),
     ];
     if look.has_properties {
-        items.push(ferrite(FerriteAction::Properties, "Properties", 'I'));
+        top.push(ferrite(FerriteAction::Properties, "Properties", 'I'));
     }
-    items
+    Own {
+        top,
+        ..Own::default()
+    }
+}
+
+/// The folder menu on Windows: Navo's items placed into the shell list.
+#[must_use]
+pub fn merged_background_menu(shell: &[MenuItem], look: &BackgroundLook) -> ShellMenu {
+    merge::merge(shell, &background_own(look, true)).menu
 }

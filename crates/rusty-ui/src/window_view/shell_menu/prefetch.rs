@@ -1,26 +1,34 @@
-use rusty_core::{Location, PaneId};
+use rusty_core::PaneId;
 
 use super::FerriteWindow;
-use super::provider::{Reply, ShellMenuSession};
+use super::provider::{MenuTarget, Reply, ShellMenuSession};
 use super::targets::{self, Targets};
 
 pub(in crate::window_view) struct Prefetch {
     pane: PaneId,
-    items: Vec<Location>,
+    target: MenuTarget,
+    extended: bool,
     reply: Reply<Box<dyn ShellMenuSession>>,
 }
 
 impl FerriteWindow {
-    pub(in crate::window_view) fn prefetch_shell_menu(&mut self, pane: PaneId, adds_cursor: bool) {
+    pub(in crate::window_view) fn prefetch_shell_menu(
+        &mut self,
+        pane: PaneId,
+        adds_cursor: bool,
+        extended: bool,
+    ) {
         self.prefetch = None;
         let Some(provider) = self.shell_menus.clone() else {
             return;
         };
         if let Some(found) = self.targets_with(pane, adds_cursor) {
-            let reply = provider.open(&found.items);
+            let target = MenuTarget::Items(found.items);
+            let reply = provider.open(&target, extended);
             self.prefetch = Some(Prefetch {
                 pane,
-                items: found.items,
+                target,
+                extended,
                 reply,
             });
         }
@@ -33,10 +41,12 @@ impl FerriteWindow {
     pub(super) fn take_prefetch(
         &mut self,
         pane: PaneId,
-        items: &[Location],
+        target: &MenuTarget,
+        extended: bool,
     ) -> Option<Reply<Box<dyn ShellMenuSession>>> {
         let prefetch = self.prefetch.take()?;
-        (prefetch.pane == pane && prefetch.items == items).then_some(prefetch.reply)
+        let same = (&prefetch.target, prefetch.extended) == (target, extended);
+        (prefetch.pane == pane && same).then_some(prefetch.reply)
     }
 
     pub(super) fn menu_targets(&self, pane: PaneId) -> Option<Targets> {

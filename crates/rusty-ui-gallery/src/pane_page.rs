@@ -99,8 +99,8 @@ impl PanePage {
             | FileListAction::Sort(_)
             | FileListAction::Edit { .. }
             | FileListAction::View(_)
-            | FileListAction::ContextMenu(_)
-            | FileListAction::BackgroundMenu(_)
+            | FileListAction::ContextMenu { .. }
+            | FileListAction::BackgroundMenu { .. }
             | FileListAction::MenuPrefetch { .. }
             | FileListAction::MenuCancel => None,
         };

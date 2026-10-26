@@ -18,6 +18,15 @@ impl Service {
             handle: SessionHandle,
         }))
     }
+
+    pub(super) fn classic_for(
+        &self,
+        _source: MenuSource,
+        _hwnd: WindowHandle,
+        _point: ScreenPoint,
+    ) -> Pending<Option<u32>> {
+        Pending::ready(Err(MenuError::Unsupported))
+    }
 }
 
 pub(super) struct SessionHandle;
@@ -48,7 +57,8 @@ mod tests {
     use rusty_core::shell_menu::{FerriteAction, ItemId};
 
     use crate::shell_menu::{
-        InvokeOptions, MenuError, MenuSession, ScreenPoint, ShellMenuService, WindowHandle,
+        InvokeOptions, MenuError, MenuPaths, MenuSession, ScreenPoint, ShellMenuService,
+        WindowHandle,
     };
 
     fn session() -> MenuSession {
@@ -105,6 +115,30 @@ mod tests {
         let pending = session().classic(WindowHandle(0), ScreenPoint::default());
         let result = pending.wait_timeout(Duration::from_secs(1));
         assert_eq!(result, Some(Err(MenuError::Unsupported)));
+    }
+
+    #[test]
+    fn classic_for_is_unsupported() {
+        let service = ShellMenuService::start().expect("the stub service always starts");
+        let paths = MenuPaths::Items(vec!["/data/a.txt".into()]);
+        let pending = service.classic_for(paths, false, (WindowHandle(0), ScreenPoint::default()));
+        assert_eq!(pending.wait(), Err(MenuError::Unsupported));
+    }
+
+    #[test]
+    fn classic_for_rejects_items_from_two_folders() {
+        let service = ShellMenuService::start().expect("the stub service always starts");
+        let paths = MenuPaths::Items(vec!["/data/a.txt".into(), "/other/b.txt".into()]);
+        let pending = service.classic_for(paths, false, (WindowHandle(0), ScreenPoint::default()));
+        assert_eq!(pending.wait(), Err(MenuError::DifferentFolders));
+    }
+
+    #[test]
+    fn an_extended_menu_opens_like_a_plain_one() {
+        let service = ShellMenuService::start().expect("the stub service always starts");
+        let paths = MenuPaths::Items(vec!["/data/a.txt".into()]);
+        let session = service.open_paths(paths, true).wait();
+        assert!(session.is_ok_and(|session| session.menu().items.is_empty()));
     }
 
     #[test]

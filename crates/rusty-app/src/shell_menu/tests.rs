@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use rusty_core::Location;
 use rusty_core::shell_menu::ShellMenu;
-use rusty_ui::window_view::{Reply, ScreenSpot};
+use rusty_ui::window_view::{MenuTarget, Reply, ScreenSpot};
 
 use super::{provider, shell_form, started};
 
@@ -21,9 +21,19 @@ fn answer<T>(reply: &Reply<T>) -> Result<T, String> {
 fn a_file_outside_the_local_disk_gets_an_empty_menu_without_the_shell() {
     let provider = started().expect("the menu service starts");
     let remote = Location::new("fake://home/a.txt").unwrap();
-    let session = answer(&provider.open(&[remote])).expect("an empty menu");
+    let target = MenuTarget::Items(vec![remote]);
+    let session = answer(&provider.open(&target, false)).expect("an empty menu");
     assert_eq!(*session.menu(), ShellMenu::default());
     let error = answer(&session.classic(ScreenSpot::default())).unwrap_err();
+    assert_eq!(error, "the Windows menu works only on local files");
+}
+
+#[test]
+fn the_classic_menu_of_a_file_outside_the_local_disk_is_refused() {
+    let provider = started().expect("the menu service starts");
+    let remote = Location::new("fake://home/a.txt").unwrap();
+    let target = MenuTarget::Items(vec![remote]);
+    let error = answer(&provider.classic_for(&target, false, ScreenSpot::default())).unwrap_err();
     assert_eq!(error, "the Windows menu works only on local files");
 }
 
@@ -31,7 +41,8 @@ fn a_file_outside_the_local_disk_gets_an_empty_menu_without_the_shell() {
 fn a_folder_outside_the_local_disk_gets_an_empty_background_menu() {
     let provider = started().expect("the menu service starts");
     let remote = Location::new("fake://home").unwrap();
-    let session = answer(&provider.open_background(&remote)).expect("an empty menu");
+    let target = MenuTarget::Background(remote);
+    let session = answer(&provider.open(&target, false)).expect("an empty menu");
     assert_eq!(*session.menu(), ShellMenu::default());
 }
 
@@ -178,6 +189,7 @@ fn a_local_folder_opens_a_windows_menu() {
     std::fs::create_dir_all(&folder).expect("temp folder");
     let location = Location::new(folder.to_str().expect("utf-8")).expect("location");
     let provider = provider().expect("the menu service starts");
-    let session = answer(&provider.open(&[location])).expect("a Windows menu");
+    let target = MenuTarget::Items(vec![location]);
+    let session = answer(&provider.open(&target, true)).expect("a Windows menu");
     assert!(!session.menu().items.is_empty(), "no Windows items");
 }

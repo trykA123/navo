@@ -10,18 +10,16 @@ use rusty_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Subme
 
 use super::super::clipboard::FakeClipboard;
 use super::super::{fake, options_for, settle, two_panes, type_in};
-use super::{Rig, rig, rig_from, rig_on, shell_item};
+use super::{Rig, rig, rig_from, rig_on, rig_with, shell_item};
 use crate::file_list::SortBy;
 use crate::window_view::{ClipboardEffect, ClipboardFiles, FileClipboardService};
 
-const FERRITE_ROWS: [&str; 7] = [
-    "# Ferrite",
-    "New folder",
-    "New file…",
-    "Paste",
-    "Refresh",
+const LOADING_ROWS: [&str; 5] = [
     "Sort by",
-    "Copy folder path",
+    "Refresh",
+    "-",
+    "Loading Windows items…",
+    "New file…",
 ];
 
 fn folder_menu() -> ShellMenu {
@@ -32,8 +30,22 @@ fn folder_menu() -> ShellMenu {
         ])),
         ..shell_item(6, "Ne&w", Group::Other)
     };
+    let properties = MenuItem::new(
+        ItemId::Shell {
+            command: 12,
+            verb: Some("properties".to_owned()),
+        },
+        "&Properties",
+        Group::Other,
+    );
     ShellMenu {
-        items: vec![new, shell_item(9, "Open in Terminal", Group::Open)],
+        items: vec![
+            shell_item(9, "Open in Terminal", Group::Open),
+            MenuItem::separator(Group::Open),
+            new,
+            MenuItem::separator(Group::Other),
+            properties,
+        ],
     }
 }
 
@@ -124,20 +136,11 @@ fn find(items: &[MenuItem], text: &str) -> Option<MenuItem> {
     })
 }
 
-fn with_windows_rows(windows: &[&str]) -> Vec<String> {
-    FERRITE_ROWS
-        .iter()
-        .chain(["# Windows"].iter())
-        .chain(windows)
-        .map(|row| (*row).to_owned())
-        .collect()
-}
-
 #[gpui_kit::test]
 fn a_right_click_below_the_rows_opens_the_folder_menu(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_background(cx);
-    assert_eq!(rig.rows(cx), with_windows_rows(&["Loading Windows items…"]));
+    assert_eq!(rig.rows(cx), LOADING_ROWS);
     assert_eq!(*rig.shell.backgrounds.borrow(), [rig.location("home")]);
     assert!(rig.shell.opened.borrow().is_empty());
 }
@@ -176,7 +179,7 @@ fn the_menu_key_in_an_empty_folder_opens_the_folder_menu(cx: &mut TestAppContext
     let rig = rig_in_empty_folder(cx);
     rig.press(cx, "menu");
     rig.wait(cx, 160);
-    assert_eq!(rig.rows(cx), with_windows_rows(&["Loading Windows items…"]));
+    assert_eq!(rig.rows(cx), LOADING_ROWS);
     assert_eq!(*rig.shell.backgrounds.borrow(), [rig.location("dest")]);
 }
 
@@ -194,13 +197,40 @@ fn a_long_right_press_on_a_row_still_opens_the_item_menu(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
-fn the_windows_folder_items_follow_the_ferrite_section(cx: &mut TestAppContext) {
+fn sort_by_and_refresh_lead_and_new_file_follows_new(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_background(cx);
     rig.answer(cx, Ok(folder_menu()));
     assert_eq!(
         rig.rows(cx),
-        with_windows_rows(&["New", "-", "Open in Terminal"])
+        [
+            "Sort by",
+            "Refresh",
+            "-",
+            "Open in Terminal",
+            "-",
+            "New",
+            "New file…",
+            "-",
+            "Properties",
+        ]
+    );
+}
+
+#[gpui_kit::test]
+fn without_a_windows_menu_the_folder_menu_lists_every_ferrite_item(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, false, &[]);
+    rig.open_background(cx);
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "New folder",
+            "New file…",
+            "Paste",
+            "Refresh",
+            "Sort by",
+            "Copy folder path",
+        ]
     );
 }
 

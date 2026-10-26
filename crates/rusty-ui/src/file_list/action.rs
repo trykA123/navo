@@ -28,8 +28,8 @@ pub enum FileListAction {
     Sort(SortBy),
     Edit { row: u64, choose: bool },
     View(u64),
-    ContextMenu(Point<Pixels>),
-    BackgroundMenu(Point<Pixels>),
-    MenuPrefetch { adds_cursor: bool },
+    ContextMenu { at: Point<Pixels>, extended: bool },
+    BackgroundMenu { at: Point<Pixels>, extended: bool },
+    MenuPrefetch { adds_cursor: bool, extended: bool },
     MenuCancel,
 }

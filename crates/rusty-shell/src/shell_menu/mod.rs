@@ -56,9 +56,24 @@ pub struct InvokeOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum MenuSource {
+pub enum MenuPaths {
     Items(Vec<PathBuf>),
     Background(PathBuf),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MenuSource {
+    paths: MenuPaths,
+    extended: bool,
+}
+
+impl MenuSource {
+    fn checked(paths: MenuPaths, extended: bool) -> Result<Self, MenuError> {
+        if let MenuPaths::Items(items) = &paths {
+            selection::common_parent(items)?;
+        }
+        Ok(Self { paths, extended })
+    }
 }
 
 pub struct ShellMenuService {
@@ -72,16 +87,37 @@ impl ShellMenuService {
 
     #[must_use]
     pub fn open(&self, paths: Vec<PathBuf>) -> Pending<MenuSession> {
-        match selection::common_parent(&paths) {
-            Ok(()) => self.inner.open(MenuSource::Items(paths)),
-            Err(error) => Pending::ready(Err(error)),
-        }
+        self.open_paths(MenuPaths::Items(paths), false)
     }
 
     /// The menu of the folder itself, as Explorer shows it for its empty space.
     #[must_use]
     pub fn open_background(&self, folder: PathBuf) -> Pending<MenuSession> {
-        self.inner.open(MenuSource::Background(folder))
+        self.open_paths(MenuPaths::Background(folder), false)
+    }
+
+    /// `extended` adds the verbs Explorer shows while Shift is held (`CMF_EXTENDEDVERBS`).
+    #[must_use]
+    pub fn open_paths(&self, paths: MenuPaths, extended: bool) -> Pending<MenuSession> {
+        match MenuSource::checked(paths, extended) {
+            Ok(source) => self.inner.open(source),
+            Err(error) => Pending::ready(Err(error)),
+        }
+    }
+
+    /// The native menu without a session: one shell-thread request reads it and tracks it at `point`.
+    /// Poll with `wait_timeout`, never block: the menu and its dialogs call into the UI window.
+    #[must_use]
+    pub fn classic_for(
+        &self,
+        paths: MenuPaths,
+        extended: bool,
+        (hwnd, point): (WindowHandle, ScreenPoint),
+    ) -> Pending<Option<u32>> {
+        match MenuSource::checked(paths, extended) {
+            Ok(source) => self.inner.classic_for(source, hwnd, point),
+            Err(error) => Pending::ready(Err(error)),
+        }
     }
 }
 

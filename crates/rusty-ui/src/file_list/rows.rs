@@ -31,7 +31,7 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
         })
         .on_mouse_down(MouseButton::Right, move |event, window, cx| {
             cx.stop_propagation();
-            right.right_down((row, event.position), window, cx);
+            right.right_down((row, event.position, event.modifiers.shift), window, cx);
         })
         .on_mouse_move(press::drag_over(ctx, row))
         .on_click(move |event, window, cx| click.modified_click((row, event), window, cx));

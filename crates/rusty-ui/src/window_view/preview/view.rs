@@ -164,7 +164,6 @@ impl FerriteWindow {
         let menu = cx.new(|cx| {
             let mut menu = ContextMenu::new(input, window, cx);
             menu.hide_classic(cx);
-            menu.name_ferrite_group(MENU_TITLE, cx);
             menu
         });
         let events = cx.subscribe_in(&menu, window, |this, _, event, window, cx| {

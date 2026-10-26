@@ -8,7 +8,9 @@ use rusty_ui::file_list::{FileList, FileListProps, SortKey};
 use rusty_ui::prelude::*;
 use rusty_ui::tokens;
 
-use crate::menu_sample::{self, NEW, SEVEN_ZIP};
+use rusty_core::shell_menu::Submenu;
+
+use crate::menu_sample::{self, NEW, OPEN_WITH, SEND_TO, SEVEN_ZIP};
 use crate::pane_sample;
 
 const ZIP_ROW: u64 = 11;
@@ -23,6 +25,8 @@ pub enum Shows {
     Background,
     EmptyFolder,
     Drop,
+    Loading,
+    Failed,
 }
 
 const FOLDER_ROWS: usize = 6;
@@ -79,7 +83,7 @@ impl MenuPage {
                 rusty_core::shell_menu::ShellMenu {
                     items: rusty_ui::window_view::drop_items(|_| true),
                 },
-                "Projects",
+                "Drop files · Projects",
                 Point::new(px(420.), px(300.)),
             ),
             Shows::Background => (
@@ -118,12 +122,14 @@ impl MenuPage {
         cx.new(|cx| {
             let mut menu = ContextMenu::new(input, window, cx);
             match shows {
-                Shows::Drop => {
-                    menu.hide_classic(cx);
-                    menu.name_ferrite_group("Drop files", cx);
+                Shows::Drop => menu.hide_classic(cx),
+                Shows::SevenZip => menu.open_submenu(&[SEVEN_ZIP], window, cx),
+                Shows::EmptyFolder => menu.open_submenu(&[NEW], window, cx),
+                Shows::Loading => menu.open_submenu(&[OPEN_WITH], window, cx),
+                Shows::Failed => {
+                    menu.open_submenu(&[SEND_TO], window, cx);
+                    menu.set_submenu(&[SEND_TO], Submenu::Failed, cx);
                 }
-                Shows::SevenZip => menu.open_submenu(&[SEVEN_ZIP], cx),
-                Shows::EmptyFolder => menu.open_submenu(&[NEW], cx),
                 Shows::Filter => menu.set_query("ext", window, cx),
                 Shows::Root | Shows::Files | Shows::Background => {}
             }

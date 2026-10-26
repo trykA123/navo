@@ -1,12 +1,13 @@
 use windows::Win32::UI::Shell::{GCS_VERBW, IContextMenu};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetMenuItemCount, GetMenuItemInfoW, HMENU, MENUITEMINFOW, MFS_CHECKED, MFS_DEFAULT,
-    MFS_DISABLED, MFT_SEPARATOR, MIIM_BITMAP, MIIM_CHECKMARKS, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
-    MIIM_STRING, MIIM_SUBMENU,
+    MFS_DISABLED, MFT_SEPARATOR, MIIM_BITMAP, MIIM_CHECKMARKS, MIIM_DATA, MIIM_FTYPE, MIIM_ID,
+    MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
 };
 use windows::core::{PSTR, PWSTR};
 
 use super::icon;
+use super::sta::MenuHandler;
 use crate::shell_menu::classify::RawItem;
 
 pub(super) const ID_FIRST: u32 = 1;
@@ -19,6 +20,7 @@ pub(super) struct Entry {
 
 pub(super) struct Verbs<'a> {
     pub menu: &'a IContextMenu,
+    pub handler: Option<MenuHandler>,
     pub command_count: u32,
 }
 
@@ -62,7 +64,8 @@ fn read_entry(hmenu: HMENU, position: u32, verbs: &Verbs<'_>) -> Entry {
         | MIIM_SUBMENU
         | MIIM_STRING
         | MIIM_BITMAP
-        | MIIM_CHECKMARKS;
+        | MIIM_CHECKMARKS
+        | MIIM_DATA;
     let Some((item, text)) = read_item(hmenu, position, mask) else {
         return Entry {
             raw: unreadable(),
@@ -80,11 +83,24 @@ fn read_entry(hmenu: HMENU, position: u32, verbs: &Verbs<'_>) -> Entry {
             checked: item.fState.contains(MFS_CHECKED),
             default: item.fState.contains(MFS_DEFAULT),
             separator,
-            icon: (!separator).then(|| icon::of_item(&item)).flatten(),
+            icon: (!separator)
+                .then(|| item_icon(hmenu, &item, verbs))
+                .flatten(),
             text,
         },
         submenu,
     }
+}
+
+fn item_icon(
+    hmenu: HMENU,
+    item: &MENUITEMINFOW,
+    verbs: &Verbs<'_>,
+) -> Option<rusty_core::shell_menu::Icon> {
+    if icon::is_owner_drawn(item) {
+        return icon::drawn(verbs.handler.as_ref()?, hmenu, item);
+    }
+    icon::of_item(item)
 }
 
 fn unreadable() -> RawItem {

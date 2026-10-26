@@ -446,10 +446,10 @@ fn alt_v_opens_the_view_menu_in_the_map_view(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn the_view_menu_header_reads_view(cx: &mut TestAppContext) {
+fn the_view_menu_context_line_reads_view(cx: &mut TestAppContext) {
     let rig = rig(cx, ("a.txt", "b.txt"), TEXT);
     rig.press(cx, "alt-v");
-    assert_eq!(label(cx, rig.window, ("menu-row", 0)), "View");
+    assert_eq!(label(cx, rig.window, ("menu-context", 0)), "View");
 }
 
 #[gpui_kit::test]

@@ -2,12 +2,6 @@ use std::ops::Range;
 
 use super::{ItemId, MenuItem, ShellMenu, filter};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Section {
-    Ferrite,
-    Windows,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemRow {
     pub path: Vec<usize>,
@@ -44,10 +38,9 @@ impl ItemRow {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Row {
-    Header(Section),
+    Back { title: String },
     Separator,
     Item(ItemRow),
-    More { count: usize },
 }
 
 impl Row {
@@ -55,100 +48,52 @@ impl Row {
     pub fn is_selectable(&self, allow_disabled: bool) -> bool {
         match self {
             Self::Item(item) => item.enabled || allow_disabled,
-            Self::More { .. } => true,
-            Self::Header(_) | Self::Separator => false,
+            Self::Back { .. } | Self::Separator => false,
         }
     }
 }
 
+/// The rows of one page: the root for an empty `page`, else the submenu at `page` under a back row.
 #[must_use]
-pub fn rows(menu: &ShellMenu, query: &str) -> Vec<Row> {
-    if query.trim().is_empty() {
-        overview(menu)
+pub fn rows(menu: &ShellMenu, page: &[usize], query: &str) -> Vec<Row> {
+    let (mut out, items) = if page.is_empty() {
+        (Vec::new(), Some(menu.items.as_slice()))
     } else {
-        filter::matches(menu, query)
-    }
-}
-
-#[must_use]
-pub fn submenu_rows(menu: &ShellMenu, path: &[usize]) -> Vec<Row> {
-    let Some(children) = menu.item(path).and_then(MenuItem::children) else {
-        return Vec::new();
+        let Some(item) = menu.item(page) else {
+            return Vec::new();
+        };
+        let back = Row::Back {
+            title: item.text.clone(),
+        };
+        (vec![back], item.children())
     };
-    with_separators(
-        children
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| !item.hidden)
-            .map(|(index, item)| ([path, &[index]].concat(), item)),
-    )
-}
-
-#[must_use]
-pub fn rare_rows(menu: &ShellMenu) -> Vec<Row> {
-    with_separators(
-        top_level(menu).filter(|(_, item)| item.rare && !item.is_ferrite() && !item.hidden),
-    )
-}
-
-fn overview(menu: &ShellMenu) -> Vec<Row> {
-    let mut out = Vec::new();
-    let ferrite =
-        with_separators(top_level(menu).filter(|(_, item)| item.is_ferrite() && !item.hidden));
-    if !ferrite.is_empty() {
-        out.push(Row::Header(Section::Ferrite));
-        out.extend(ferrite);
-    }
-    let shell = with_separators(
-        top_level(menu).filter(|(_, item)| !item.is_ferrite() && !item.hidden && !item.rare),
-    );
-    let rare = rare_rows(menu)
-        .iter()
-        .filter(|row| matches!(row, Row::Item(_)))
-        .count();
-    if shell.is_empty() && rare == 0 {
+    let Some(items) = items else {
         return out;
-    }
-    out.push(Row::Header(Section::Windows));
-    let has_shell = !shell.is_empty();
-    out.extend(shell);
-    if rare > 0 {
-        if has_shell {
-            out.push(Row::Separator);
-        }
-        out.push(Row::More { count: rare });
+    };
+    if query.trim().is_empty() {
+        out.extend(listed(items, page));
+    } else {
+        out.extend(filter::matches(items, page, query));
     }
     out
 }
 
-fn top_level(menu: &ShellMenu) -> impl Iterator<Item = (Vec<usize>, &MenuItem)> {
-    menu.items
-        .iter()
-        .enumerate()
-        .map(|(index, item)| (vec![index], item))
-}
-
-fn with_separators<'a>(items: impl Iterator<Item = (Vec<usize>, &'a MenuItem)>) -> Vec<Row> {
+fn listed(items: &[MenuItem], page: &[usize]) -> Vec<Row> {
     let mut out = Vec::new();
     let mut pending = false;
-    let mut last_group = None;
-    for (path, item) in items {
+    for (index, item) in items.iter().enumerate() {
         if item.is_separator() {
             pending = true;
             continue;
         }
-        if item.text.is_empty() {
+        if item.hidden || item.text.is_empty() {
             continue;
-        }
-        if last_group.is_some_and(|group| group != item.group) {
-            pending = true;
         }
         if pending && !out.is_empty() {
             out.push(Row::Separator);
         }
         pending = false;
-        last_group = Some(item.group);
-        out.push(Row::Item(ItemRow::new(path, item)));
+        out.push(Row::Item(ItemRow::new([page, &[index]].concat(), item)));
     }
     out
 }

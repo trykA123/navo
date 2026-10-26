@@ -309,8 +309,8 @@ impl FerriteWindow {
             FileListAction::Sort(by) => {
                 self.browser.sort_by(*by);
             }
-            FileListAction::ContextMenu(_)
-            | FileListAction::BackgroundMenu(_)
+            FileListAction::ContextMenu { .. }
+            | FileListAction::BackgroundMenu { .. }
             | FileListAction::MenuPrefetch { .. }
             | FileListAction::MenuCancel => {}
         }

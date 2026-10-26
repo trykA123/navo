@@ -11,9 +11,27 @@ pub struct ScreenSpot {
     pub y: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MenuTarget {
+    Items(Vec<Location>),
+    Background(Location),
+}
+
+impl MenuTarget {
+    #[must_use]
+    pub fn locations(&self) -> &[Location] {
+        match self {
+            Self::Items(items) => items,
+            Self::Background(folder) => std::slice::from_ref(folder),
+        }
+    }
+}
+
 pub trait ShellMenuProvider {
-    fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>>;
-    fn open_background(&self, folder: &Location) -> Reply<Box<dyn ShellMenuSession>>;
+    /// `extended` asks for the verbs Explorer adds while Shift is held.
+    fn open(&self, target: &MenuTarget, extended: bool) -> Reply<Box<dyn ShellMenuSession>>;
+    /// The native menu at `at`, read and shown in one go, for when no session could open.
+    fn classic_for(&self, target: &MenuTarget, extended: bool, at: ScreenSpot) -> Reply<()>;
 }
 
 pub trait ShellMenuSession {

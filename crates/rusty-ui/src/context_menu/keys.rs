@@ -74,20 +74,24 @@ impl ContextMenu {
         self.conclude(event, window, cx);
     }
 
-    fn on_right(&mut self, _: &MenuRight, _: &mut Window, cx: &mut Context<Self>) {
-        let event = self.state.right();
-        self.finish(event, cx);
+    fn on_right(&mut self, _: &MenuRight, window: &mut Window, cx: &mut Context<Self>) {
+        match self.state.right() {
+            Some(event) => self.finish(event, window, cx),
+            None => cx.propagate(),
+        }
     }
 
-    fn on_left(&mut self, _: &MenuLeft, _: &mut Window, cx: &mut Context<Self>) {
-        self.state.left();
-        self.finish(None, cx);
+    fn on_left(&mut self, _: &MenuLeft, window: &mut Window, cx: &mut Context<Self>) {
+        if self.state.back() {
+            self.finish(None, window, cx);
+        } else {
+            cx.propagate();
+        }
     }
 
     fn on_escape(&mut self, _: &MenuEscape, window: &mut Window, cx: &mut Context<Self>) {
         match self.state.escape() {
-            Escape::ClosedSubmenu => self.finish(None, cx),
-            Escape::ClearedQuery => self.set_query("", window, cx),
+            Escape::ClearedQuery | Escape::Back => self.finish(None, window, cx),
             Escape::Dismiss => self.conclude(Some(ContextMenuEvent::Dismissed), window, cx),
         }
     }
@@ -100,16 +104,13 @@ impl ContextMenu {
     }
 
     fn step(&mut self, step: Step, cx: &mut Context<Self>) {
-        self.hover = None;
         self.state.move_by(step);
-        self.finish(None, cx);
+        self.settle(cx);
+        cx.notify();
     }
 
     fn page_rows(&self) -> usize {
-        let frames = self.frames();
-        let height = frames
-            .get(self.state.active())
-            .map_or(ROW, |frame| f32::from(frame.list_height));
+        let height = f32::from(self.frame().list_height);
         ((height / ROW).floor() as usize).max(1)
     }
 }

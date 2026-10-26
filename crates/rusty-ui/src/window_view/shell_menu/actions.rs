@@ -54,7 +54,7 @@ impl FerriteWindow {
 
     fn copy_paths(&self, cx: &mut Context<Self>) {
         if let Some(run) = &self.menu_run {
-            put_paths_on_clipboard(&run.items, cx);
+            put_paths_on_clipboard(run.target.locations(), cx);
         }
     }
 }

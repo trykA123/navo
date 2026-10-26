@@ -88,7 +88,7 @@ impl Service {
         })
     }
 
-    pub(super) fn open(&self, source: MenuSource) -> Pending<MenuSession> {
+    fn live_link(&self) -> Link {
         let mut worker = self.worker.lock().unwrap_or_else(PoisonError::into_inner);
         if worker.is_hung()
             && let Ok(fresh) = Worker::spawn()
@@ -97,13 +97,32 @@ impl Service {
             stale.link.retired.store(true, Ordering::Release);
             stale.link.send(Request::Shutdown);
         }
+        worker.link.clone()
+    }
+
+    pub(super) fn classic_for(
+        &self,
+        source: MenuSource,
+        hwnd: WindowHandle,
+        point: ScreenPoint,
+    ) -> Pending<Option<u32>> {
+        self.live_link().ask(|reply| Request::ClassicFor {
+            source,
+            hwnd,
+            point,
+            reply,
+        })
+    }
+
+    pub(super) fn open(&self, source: MenuSource) -> Pending<MenuSession> {
+        let link = self.live_link();
         let (reply, cancel, pending) = Pending::cancellable();
         let request = Request::Open {
             source,
             reply,
             cancel,
         };
-        if worker.link.post(request) {
+        if link.post(request) {
             pending
         } else {
             Pending::ready(Err(MenuError::Stopped))

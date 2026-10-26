@@ -90,7 +90,11 @@ pub(super) fn background_down(
     let ctx = ctx.clone();
     move |event, window, cx| {
         ctx.take_focus(window, cx);
-        ctx.act(FileListAction::BackgroundMenu(event.position), window, cx);
+        let action = FileListAction::BackgroundMenu {
+            at: event.position,
+            extended: event.modifiers.shift,
+        };
+        ctx.act(action, window, cx);
     }
 }
 
@@ -107,7 +111,7 @@ pub(super) fn release_on(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful
 impl ListContext {
     pub(super) fn right_down(
         self: &Rc<Self>,
-        (row, at): (u64, Point<Pixels>),
+        (row, at, extended): (u64, Point<Pixels>, bool),
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -121,17 +125,26 @@ impl ListContext {
             .state
             .update(cx, |state, _| state.press.start(row, mode));
         let adds_cursor = self.adds_pressed_row(row);
-        self.act(FileListAction::MenuPrefetch { adds_cursor }, window, cx);
+        let prefetch = FileListAction::MenuPrefetch {
+            adds_cursor,
+            extended,
+        };
+        self.act(prefetch, window, cx);
         let ctx = self.clone();
         window
             .spawn(cx, async move |cx| {
                 cx.background_executor().timer(LONG_PRESS).await;
-                let _ = cx.update(|window, cx| ctx.long_press((press, at), window, cx));
+                let _ = cx.update(|window, cx| ctx.long_press((press, at, extended), window, cx));
             })
             .detach();
     }
 
-    fn long_press(&self, (press, at): (u64, Point<Pixels>), window: &mut Window, cx: &mut App) {
+    fn long_press(
+        &self,
+        (press, at, extended): (u64, Point<Pixels>, bool),
+        window: &mut Window,
+        cx: &mut App,
+    ) {
         let Some(row) = self.state.update(cx, |state, _| state.press.fire(press)) else {
             return;
         };
@@ -140,7 +153,7 @@ impl ListContext {
         if self.adds_pressed_row(row) {
             self.send(Command::SelectionToggle, window, cx);
         }
-        self.act(FileListAction::ContextMenu(at), window, cx);
+        self.act(FileListAction::ContextMenu { at, extended }, window, cx);
     }
 
     fn right_up(&self, window: &mut Window, cx: &mut App) {
@@ -159,8 +172,14 @@ impl ListContext {
         let anchor = self.cursor_anchor(cx);
         let on_row = self.props.rows.get(row_index(self.props.view.cursor));
         let action = match on_row {
-            Some(_) => FileListAction::ContextMenu(anchor),
-            None => FileListAction::BackgroundMenu(anchor),
+            Some(_) => FileListAction::ContextMenu {
+                at: anchor,
+                extended: false,
+            },
+            None => FileListAction::BackgroundMenu {
+                at: anchor,
+                extended: false,
+            },
         };
         self.act(action, window, cx);
     }

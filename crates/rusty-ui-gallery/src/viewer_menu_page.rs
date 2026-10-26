@@ -34,12 +34,6 @@ pub enum Shows {
     ViewMarkdown,
 }
 
-impl Shows {
-    fn is_view(self) -> bool {
-        !matches!(self, Self::Text | Self::Tree | Self::Encoding)
-    }
-}
-
 pub struct ViewerMenuPage {
     shows: Shows,
     body: Option<Box<dyn ViewerBody>>,
@@ -92,16 +86,9 @@ impl ViewerMenuPage {
             bounds: Bounds::new(Point::default(), window.viewport_size()),
             restore: Some(focus),
         };
-        let is_view = self.shows.is_view();
-        let is_encoding = self.shows == Shows::Encoding;
         self.menu = Some(cx.new(|cx| {
             let mut menu = ContextMenu::new(input, window, cx);
             menu.hide_classic(cx);
-            if is_view {
-                menu.name_ferrite_group("View", cx);
-            } else if is_encoding {
-                menu.name_ferrite_group("Encoding", cx);
-            }
             menu
         }));
         cx.notify();

@@ -1,94 +1,85 @@
 use super::*;
 
-fn header_then(items: Vec<MenuItem>) -> Vec<Row> {
-    rows(&ShellMenu { items }, "")
+fn root(menu: &ShellMenu) -> Vec<Row> {
+    rows(menu, &[], "")
 }
 
 #[test]
-fn first_skips_the_header() {
-    let rows = rows(&zip_menu(), "");
+fn first_selects_the_first_item() {
+    let rows = root(&zip_menu());
+    assert_eq!(Selection::first(&rows).index(), Some(0));
+}
+
+#[test]
+fn first_on_a_page_skips_the_back_row() {
+    let rows = rows(&zip_menu(), &[SEVEN_ZIP], "");
     assert_eq!(Selection::first(&rows).index(), Some(1));
 }
 
 #[test]
 fn next_skips_disabled_and_separators() {
     let mut menu = zip_menu();
-    menu.items[3].enabled = false;
-    let rows = rows(&menu, "");
-    let edit = Selection::first(&rows).next(&rows).next(&rows);
-    assert_eq!(edit.index(), Some(3));
-    assert_eq!(edit.next(&rows).index(), Some(5));
+    menu.items[SEND_TO].enabled = false;
+    let rows = root(&menu);
+    let seven_zip = Selection::first(&rows).next(&rows).next(&rows);
+    assert_eq!(seven_zip.index(), Some(2));
+    assert_eq!(seven_zip.next(&rows).index(), Some(6));
 }
 
 #[test]
 fn next_wraps_from_the_last_row() {
-    let rows = rows(&zip_menu(), "");
+    let rows = root(&zip_menu());
     let last = Selection::first(&rows).previous(&rows);
     assert_eq!(last.index(), Some(rows.len() - 1));
-    assert_eq!(last.next(&rows).index(), Some(1));
-}
-
-#[test]
-fn previous_skips_the_windows_header() {
-    let rows = rows(&zip_menu(), "");
-    let open = rows
-        .iter()
-        .position(|row| {
-            matches!(row, Row::Item(item) if item.text == "Open" && item.id != ItemId::Ferrite(FerriteAction::Open))
-        })
-        .unwrap();
-    let mut selection = Selection::first(&rows);
-    while selection.index() != Some(open) {
-        selection = selection.next(&rows);
-    }
-    assert_eq!(selection.previous(&rows).index(), Some(10));
+    assert_eq!(last.next(&rows).index(), Some(0));
 }
 
 #[test]
 fn enter_runs_a_command() {
-    let rows = rows(&zip_menu(), "");
+    let rows = root(&zip_menu());
     assert_eq!(
         Selection::first(&rows).enter(&rows),
-        Some(Choice::Run(ItemId::Ferrite(FerriteAction::Open)))
+        Some(Choice::Run(ItemId::Shell {
+            command: 1,
+            verb: None
+        }))
     );
 }
 
 #[test]
 fn enter_and_right_open_a_submenu() {
-    let rows = rows(&zip_menu(), "7-zip");
+    let rows = rows(&zip_menu(), &[], "7-zip");
     let selection = Selection::first(&rows);
-    assert_eq!(selection.enter(&rows), Some(Choice::OpenSubmenu(vec![12])));
-    assert_eq!(selection.open_submenu(&rows), Some(vec![12]));
+    assert_eq!(
+        selection.enter(&rows),
+        Some(Choice::OpenSubmenu(vec![SEVEN_ZIP]))
+    );
+    assert_eq!(selection.open_submenu(&rows), Some(vec![SEVEN_ZIP]));
 }
 
 #[test]
 fn right_on_a_command_does_nothing() {
-    let rows = rows(&zip_menu(), "");
+    let rows = root(&zip_menu());
     assert_eq!(Selection::first(&rows).open_submenu(&rows), None);
 }
 
 #[test]
-fn enter_on_more_shows_rare_items() {
-    let rows = rows(&zip_menu(), "");
-    let more = Selection::first(&rows).previous(&rows);
-    assert_eq!(more.enter(&rows), Some(Choice::ShowMore));
-}
-
-#[test]
 fn all_disabled_rows_are_still_reachable() {
-    let rows = header_then(vec![
-        MenuItem {
-            enabled: false,
-            ..shell(1, "A", Group::Open)
-        },
-        MenuItem {
-            enabled: false,
-            ..shell(2, "B", Group::Open)
-        },
-    ]);
+    let rows = root(&ShellMenu {
+        items: vec![
+            MenuItem {
+                enabled: false,
+                ..shell(1, "A", Group::Open)
+            },
+            MenuItem {
+                enabled: false,
+                ..shell(2, "B", Group::Open)
+            },
+        ],
+    });
     let first = Selection::first(&rows);
-    assert_eq!(first.index(), Some(1));
-    assert_eq!(first.next(&rows).index(), Some(2));
+    assert_eq!(first.index(), Some(0));
+    assert_eq!(first.next(&rows).index(), Some(1));
     assert_eq!(first.enter(&rows), None);
 }
 
@@ -102,8 +93,8 @@ fn empty_rows_select_nothing() {
 
 #[test]
 fn stale_index_restarts_from_the_top() {
-    let long = rows(&zip_menu(), "");
-    let short = rows(&zip_menu(), "copy");
+    let long = root(&zip_menu());
+    let short = rows(&zip_menu(), &[], "copy");
     let stale = Selection::first(&long).previous(&long);
     assert_eq!(stale.next(&short).index(), Some(0));
 }
@@ -116,15 +107,15 @@ fn keep_follows_the_command_when_a_lazy_submenu_fills() {
             shell(2, "Delete", Group::Edit),
         ],
     };
-    let old = rows(&menu, "de");
+    let old = rows(&menu, &[], "de");
     let delete = Selection::first(&old);
     assert_eq!(delete.index(), Some(0));
     menu.set_submenu(
         &[0],
         Submenu::Filled(vec![shell(10, "Desktop", Group::Share)]),
     );
-    let new = rows(&menu, "de");
-    let kept = delete.keep(&old, &new);
+    let new = rows(&menu, &[], "de");
+    let kept = delete.keep(&new);
     assert_eq!(kept.index(), Some(1));
     assert_eq!(
         kept.enter(&new),
@@ -138,28 +129,25 @@ fn keep_follows_the_command_when_a_lazy_submenu_fills() {
 #[test]
 fn keep_falls_back_to_first_when_the_command_is_gone() {
     let menu = zip_menu();
-    let old = rows(&menu, "");
-    let rename = Selection::first(&old).next(&old).next(&old);
-    let new = rows(&menu, "copy");
-    assert_eq!(rename.keep(&old, &new), Selection::first(&new));
+    let old = root(&menu);
+    let cut = Selection::pick(&old, 6).unwrap();
+    let new = rows(&menu, &[], "open");
+    assert_eq!(cut.keep(&new), Selection::first(&new));
 }
 
 #[test]
-fn keep_stays_on_more() {
-    let menu = zip_menu();
-    let old = rows(&menu, "");
-    let more = Selection::first(&old).previous(&old);
-    let kept = more.keep(&old, &old);
-    assert_eq!(kept.enter(&old), Some(Choice::ShowMore));
-}
-
-#[test]
-fn pick_selects_an_item_and_refuses_a_header() {
-    let rows = rows(&zip_menu(), "");
-    assert_eq!(Selection::pick(&rows, 3).and_then(|s| s.index()), Some(3));
+fn pick_selects_an_item_and_refuses_a_separator_or_the_back_row() {
+    let rows = root(&zip_menu());
+    assert_eq!(Selection::pick(&rows, 2).and_then(|s| s.index()), Some(2));
     assert_eq!(
-        Selection::pick(&rows, 3).and_then(|s| s.path().map(<[usize]>::to_vec)),
-        Some(vec![2])
+        Selection::pick(&rows, 2).and_then(|s| s.path().map(<[usize]>::to_vec)),
+        Some(vec![SEVEN_ZIP])
     );
-    assert_eq!(Selection::pick(&rows, 0), None);
+    assert_eq!(Selection::pick(&rows, 3), None);
+    let page = rows_of_page();
+    assert_eq!(Selection::pick(&page, 0), None);
+}
+
+fn rows_of_page() -> Vec<Row> {
+    rows(&zip_menu(), &[SEVEN_ZIP], "")
 }

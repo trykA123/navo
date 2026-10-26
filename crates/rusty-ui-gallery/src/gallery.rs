@@ -64,7 +64,7 @@ const TABLE_STEPS: [&str; 4] = [
 const PDF_STEPS: [&str; 2] = ["viewer::LeftDrawer", "viewer::RightDrawer"];
 const PDF_SEARCH: &str = "undervoltage";
 
-const MENU_PAGES: [(Page, MenuShows); 7] = [
+const MENU_PAGES: [(Page, MenuShows); 9] = [
     (Page::Menu, MenuShows::Root),
     (Page::DropMenu, MenuShows::Drop),
     (Page::MenuSubmenu, MenuShows::SevenZip),
@@ -72,6 +72,8 @@ const MENU_PAGES: [(Page, MenuShows); 7] = [
     (Page::MenuFiles, MenuShows::Files),
     (Page::MenuBackground, MenuShows::Background),
     (Page::MenuEmptyFolder, MenuShows::EmptyFolder),
+    (Page::MenuLoading, MenuShows::Loading),
+    (Page::MenuFailed, MenuShows::Failed),
 ];
 
 pub struct Gallery {
@@ -102,7 +104,7 @@ pub struct Gallery {
     marks: Option<Entity<PagedView>>,
     image: Option<Entity<ImageView>>,
     pdf: [Entity<PdfView>; 4],
-    menus: [(Page, Entity<MenuPage>); 7],
+    menus: [(Page, Entity<MenuPage>); 9],
     command_centers: [(Page, Entity<CommandCenterPage>); 7],
     viewer_menus: [Entity<ViewerMenuPage>; 8],
     main_window: Entity<WindowPage>,
@@ -356,13 +358,7 @@ impl Render for Gallery {
             Page::Font => root.children(self.font.clone()),
             Page::Marks => root.child(self.marks_page(window, cx)),
             Page::Image => root.children(self.image.clone()).child(image_keys()),
-            Page::DropMenu
-            | Page::Menu
-            | Page::MenuSubmenu
-            | Page::MenuFilter
-            | Page::MenuFiles
-            | Page::MenuBackground
-            | Page::MenuEmptyFolder => root.children(self.menu_page(self.page)),
+            _ if self.menu_page(self.page).is_some() => root.children(self.menu_page(self.page)),
             _ if self.viewer_menu().is_some() => root.children(self.viewer_menu()),
             _ if self.command_center().is_some() => root.children(self.command_center()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),

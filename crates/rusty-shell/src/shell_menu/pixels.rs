@@ -41,6 +41,42 @@ pub(super) fn icon_from_bgra(width: u32, height: u32, mut data: Vec<u8>) -> Opti
     })
 }
 
+/// An owner-drawn icon, drawn once on black and once on white: the difference gives its alpha.
+pub(super) fn icon_from_two(
+    width: u32,
+    height: u32,
+    on_black: &[u8],
+    on_white: &[u8],
+) -> Option<Icon> {
+    let expected = usize::try_from(u64::from(width) * u64::from(height) * 4).ok()?;
+    if width == 0 || height == 0 || on_black.len() != expected || on_white.len() != expected {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(expected);
+    for (black, white) in on_black
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(on_white.as_chunks::<4>().0)
+    {
+        let spread: u16 = (0..3)
+            .map(|at| u16::from(white[at].saturating_sub(black[at])))
+            .sum();
+        let alpha = u8::try_from(255 - (spread / 3).min(255)).unwrap_or(0);
+        let [blue, green, red] = [black[0], black[1], black[2]].map(|c| unpremultiply(c, alpha));
+        rgba.extend_from_slice(&[red, green, blue, alpha]);
+    }
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
+        .any(|px| px[3] != 0)
+        .then_some(Icon {
+            width,
+            height,
+            rgba,
+        })
+}
+
 fn unpremultiply(channel: u8, alpha: u8) -> u8 {
     if alpha == 0 {
         return 0;
@@ -93,6 +129,33 @@ mod tests {
     fn zero_or_negative_sizes_are_skipped() {
         assert_eq!(icon_size(0, 16), None);
         assert_eq!(icon_size(16, -16), None);
+    }
+
+    #[test]
+    fn an_opaque_drawing_keeps_its_colour() {
+        let pixel = [10, 20, 200, 0];
+        let icon = icon_from_two(1, 1, &pixel, &pixel);
+        assert_eq!(icon.map(|i| i.rgba), Some(vec![200, 20, 10, 255]));
+    }
+
+    #[test]
+    fn the_background_shows_through_as_transparency() {
+        let on_black = [0, 0, 0, 0, 0, 0, 128, 0];
+        let on_white = [255, 255, 255, 0, 127, 127, 255, 0];
+        let icon = icon_from_two(2, 1, &on_black, &on_white).map(|i| i.rgba);
+        assert_eq!(icon, Some(vec![0, 0, 0, 0, 255, 0, 0, 128]));
+    }
+
+    #[test]
+    fn nothing_drawn_gives_no_icon() {
+        let on_black = vec![0; 16];
+        let on_white = vec![255; 16];
+        assert_eq!(icon_from_two(2, 2, &on_black, &on_white), None);
+    }
+
+    #[test]
+    fn two_drawings_of_different_sizes_give_no_icon() {
+        assert_eq!(icon_from_two(1, 1, &[0; 4], &[0; 8]), None);
     }
 
     #[test]

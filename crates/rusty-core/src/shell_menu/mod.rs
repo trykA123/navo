@@ -5,7 +5,7 @@ mod selection;
 mod text;
 
 pub use actions::ferrite_actions;
-pub use rows::{ItemRow, Row, Section, rare_rows, rows, submenu_rows};
+pub use rows::{ItemRow, Row, rows};
 pub use selection::{Choice, Selection};
 pub use text::{CleanText, clean_text};
 
@@ -80,7 +80,6 @@ pub struct MenuItem {
     pub kind: ItemKind,
     pub group: Group,
     pub hidden: bool,
-    pub rare: bool,
 }
 
 impl MenuItem {
@@ -99,7 +98,6 @@ impl MenuItem {
             kind: ItemKind::Command,
             group,
             hidden: false,
-            rare: false,
         }
     }
 
@@ -168,6 +166,29 @@ impl ShellMenu {
             };
         }
         Some(item)
+    }
+
+    /// False when nothing here has text to list, so only the classic menu can show it.
+    #[must_use]
+    pub fn has_named_item(&self) -> bool {
+        self.items
+            .iter()
+            .any(|item| !item.is_separator() && !item.text.is_empty())
+    }
+
+    /// Items the classic menu shows but that have no text to list here (owner-drawn).
+    #[must_use]
+    pub fn classic_only_count(&self) -> usize {
+        fn count(items: &[MenuItem]) -> usize {
+            items
+                .iter()
+                .map(|item| {
+                    let unnamed = !item.is_separator() && item.text.is_empty();
+                    usize::from(unnamed) + item.children().map_or(0, count)
+                })
+                .sum()
+        }
+        count(&self.items)
     }
 
     pub fn set_submenu(&mut self, path: &[usize], submenu: Submenu) -> bool {

@@ -165,7 +165,9 @@ context_menu.choose | enter | ContextMenu > Input
 context_menu.open_submenu | right | ContextMenu
 context_menu.open_submenu | right | ContextMenu > Input
 context_menu.close_submenu | left | ContextMenu
+context_menu.close_submenu | backspace | ContextMenu
 context_menu.close_submenu | left | ContextMenu > Input
+context_menu.close_submenu | backspace | ContextMenu > Input
 context_menu.back | escape | ContextMenu
 context_menu.back | escape | ContextMenu > Input
 context_menu.show_classic | shift-f10 | ContextMenu

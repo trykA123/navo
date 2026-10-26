@@ -25,6 +25,22 @@ pub(super) enum MenuHandler {
     Menu2(IContextMenu2),
 }
 
+impl MenuHandler {
+    /// # Safety
+    /// `wparam` and `lparam` must be what `msg` expects, and any structure they point to must outlive the call.
+    pub(super) unsafe fn send(&self, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+        let mut result = LRESULT(0);
+        // SAFETY: the caller vouches for the message arguments; result outlives the call.
+        let handled = unsafe {
+            match self {
+                Self::Menu3(menu) => menu.HandleMenuMsg2(msg, wparam, lparam, Some(&mut result)),
+                Self::Menu2(menu) => menu.HandleMenuMsg(msg, wparam, lparam),
+            }
+        };
+        handled.ok().map(|()| result)
+    }
+}
+
 thread_local! {
     static ACTIVE: RefCell<Option<MenuHandler>> = const { RefCell::new(None) };
 }
@@ -80,17 +96,8 @@ fn forward_menu_message(msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRES
     ACTIVE
         .try_with(|active| {
             let active = active.try_borrow().ok()?;
-            let mut result = LRESULT(0);
             // SAFETY: a menu message delivered during TrackPopupMenuEx for this handler's menu.
-            let handled = unsafe {
-                match active.as_ref()? {
-                    MenuHandler::Menu3(menu) => {
-                        menu.HandleMenuMsg2(msg, wparam, lparam, Some(&mut result))
-                    }
-                    MenuHandler::Menu2(menu) => menu.HandleMenuMsg(msg, wparam, lparam),
-                }
-            };
-            handled.ok().map(|()| result)
+            unsafe { active.as_ref()?.send(msg, wparam, lparam) }
         })
         .ok()
         .flatten()

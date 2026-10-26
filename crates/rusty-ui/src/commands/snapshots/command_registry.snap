@@ -113,8 +113,8 @@ context_menu.page_up | Page up | ContextMenu
 context_menu.page_down | Page down | ContextMenu
 context_menu.choose | Choose item | ContextMenu
 context_menu.open_submenu | Open submenu | ContextMenu
-context_menu.close_submenu | Close submenu | ContextMenu
-context_menu.back | Back or close | ContextMenu
+context_menu.close_submenu | Back one page | ContextMenu
+context_menu.back | Clear, back or close | ContextMenu
 context_menu.show_classic | Classic menu | ContextMenu
 command_center.up | Up | CommandCenter
 command_center.down | Down | CommandCenter

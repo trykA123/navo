@@ -1,28 +1,30 @@
 mod actions;
 mod background;
+mod merge;
 mod prefetch;
 mod provider;
 mod run;
 mod show;
 mod targets;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use gpui_kit::Point;
+use gpui_kit::{Focusable as _, Point};
 use rusty_core::PaneId;
 use rusty_core::shell_menu::{FerriteAction, ItemId, MenuItem, ShellMenu, ferrite_actions};
 
-pub use background::{BackgroundLook, background_items};
-pub use provider::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use background::{BackgroundLook, merged_background_menu};
+pub use provider::{MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 
 use super::FerriteWindow;
 use crate::context_menu::{ContextMenu, ContextMenuEvent};
 use crate::file_list::FileListAction;
 use crate::prelude::*;
 pub(super) use actions::put_paths_on_clipboard;
+use merge::Own;
 pub(super) use prefetch::Prefetch;
 pub(super) use run::MenuRun;
-use run::{MenuOpen, PendingView, Session, ShellCall, Step};
+use run::{MenuOpen, PendingView, RETRY, Session, ShellCall, Step};
 
 const POLL_EVERY: Duration = Duration::from_millis(16);
 const WAIT_FOR_SHELL: Duration = Duration::from_millis(150);
@@ -32,36 +34,35 @@ const UNNAMED: &str = "Windows menu";
 impl FerriteWindow {
     fn open_shell_menu(
         &mut self,
-        (pane, anchor): (PaneId, Point<Pixels>),
+        (pane, anchor, extended): (PaneId, Point<Pixels>, bool),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(found) = self.menu_targets(pane) else {
             return;
         };
+        let target = MenuTarget::Items(found.items);
+        let session = self.open_session(pane, &target, extended);
         let has_shell = self.shell_menus.is_some();
-        let session = match self.shell_menus.clone() {
-            Some(provider) => Session::Opening(
-                self.take_prefetch(pane, &found.items)
-                    .unwrap_or_else(|| provider.open(&found.items)),
-            ),
-            None => Session::Missing(NO_SHELL.to_owned()),
-        };
         let open = MenuOpen {
             id: self.menu_runs + 1,
             show: self.pending_view((pane, anchor), found.context.into(), cx),
             pane,
-            items: found.items,
+            target,
+            extended,
             spot: targets::screen_spot(window, anchor),
-            ferrite: ferrite_items(has_shell),
+            own: file_own(has_shell),
+            bare: file_own(false),
             session,
+            provider: self.shell_menus.clone(),
+            opened: cx.background_executor().now(),
         };
         self.start_menu_run(open, window, cx);
     }
 
     fn open_background_menu(
         &mut self,
-        (pane, anchor): (PaneId, Point<Pixels>),
+        (pane, anchor, extended): (PaneId, Point<Pixels>, bool),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -78,23 +79,34 @@ impl FerriteWindow {
         let look = BackgroundLook {
             sort: self.browser.sort_key(tab.id()),
             can_paste: self.has_files_to_paste(),
-            has_properties: self.shell_menus.is_some() && folder.is_local(),
+            has_properties: false,
         };
-        let session = match self.shell_menus.clone() {
-            Some(provider) => Session::Opening(provider.open_background(&folder)),
-            None => Session::Missing(NO_SHELL.to_owned()),
-        };
+        let has_shell = self.shell_menus.is_some();
         self.drop_prefetch();
+        let target = MenuTarget::Background(folder);
+        let session = self.open_session(pane, &target, extended);
         let open = MenuOpen {
             id: self.menu_runs + 1,
             show: self.pending_view((pane, anchor), context.into(), cx),
             pane,
-            items: vec![folder],
+            target,
+            extended,
             spot: targets::screen_spot(window, anchor),
-            ferrite: background_items(&look),
+            own: background::background_own(&look, has_shell),
+            bare: background::background_own(&look, false),
             session,
+            provider: self.shell_menus.clone(),
+            opened: cx.background_executor().now(),
         };
         self.start_menu_run(open, window, cx);
+    }
+
+    fn open_session(&mut self, pane: PaneId, target: &MenuTarget, extended: bool) -> Session {
+        let Some(provider) = self.shell_menus.clone() else {
+            return Session::Missing(NO_SHELL.to_owned());
+        };
+        let prefetched = self.take_prefetch(pane, target, extended);
+        Session::Opening(prefetched.unwrap_or_else(|| provider.open(target, extended)))
     }
 
     fn pending_view(
@@ -126,15 +138,16 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) -> bool {
         match action {
-            FileListAction::ContextMenu(anchor) => {
-                self.open_shell_menu((pane, *anchor), window, cx)
+            FileListAction::ContextMenu { at, extended } => {
+                self.open_shell_menu((pane, *at, *extended), window, cx);
             }
-            FileListAction::BackgroundMenu(anchor) => {
-                self.open_background_menu((pane, *anchor), window, cx)
+            FileListAction::BackgroundMenu { at, extended } => {
+                self.open_background_menu((pane, *at, *extended), window, cx);
             }
-            FileListAction::MenuPrefetch { adds_cursor } => {
-                self.prefetch_shell_menu(pane, *adds_cursor);
-            }
+            FileListAction::MenuPrefetch {
+                adds_cursor,
+                extended,
+            } => self.prefetch_shell_menu(pane, *adds_cursor, *extended),
             FileListAction::MenuCancel => self.drop_prefetch(),
             _ => return false,
         }
@@ -163,6 +176,7 @@ impl FerriteWindow {
                 self.close_shell_menu();
                 self.start_shell_call(ShellCall::Classic);
             }
+            ContextMenuEvent::Chosen(ItemId::Action(RETRY)) => self.retry_shell_menu(window, cx),
             ContextMenuEvent::Chosen(ItemId::Ferrite(action)) => {
                 self.close_shell_menu();
                 self.run_ferrite(*action, window, cx);
@@ -184,6 +198,21 @@ impl FerriteWindow {
         self.keep_polling(window, cx);
         self.drop_finished_run();
         cx.notify();
+    }
+
+    fn retry_shell_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let now = cx.background_executor().now();
+        let Some(run) = &mut self.menu_run else {
+            return;
+        };
+        let view = run.view.as_ref().map(|(view, _)| view.clone());
+        if let (Some(menu), Some(view)) = (run.retry(now), view) {
+            view.update(cx, |view, cx| {
+                view.set_menu(menu, cx);
+                view.set_query("", window, cx);
+                window.focus(&view.focus_handle(cx), cx);
+            });
+        }
     }
 
     fn close_shell_menu(&mut self) {
@@ -227,9 +256,10 @@ impl FerriteWindow {
         let Some(run) = self.menu_run.as_mut().filter(|run| run.id == id) else {
             return false;
         };
-        let mut step = run.poll();
-        let pane = run.pane;
         let now = cx.background_executor().now();
+        let mut step = run.poll(now);
+        let pane = run.pane;
+        Self::fall_back(run, &mut step, now);
         self.show_when_ready((id, &mut step, now), window, cx);
         let Some(run) = self.menu_run.as_mut().filter(|run| run.id == id) else {
             return false;
@@ -263,6 +293,18 @@ impl FerriteWindow {
         });
     }
 
+    fn fall_back(run: &mut MenuRun, step: &mut Step, now: Instant) {
+        if step.fallback
+            && let Some(error) = run.fall_back()
+        {
+            step.errors.push(error);
+            step.reopen = true;
+        }
+        if step.reopen {
+            run.reopen(now);
+        }
+    }
+
     fn drop_finished_run(&mut self) {
         if self.menu_run.as_ref().is_some_and(MenuRun::is_done) {
             self.menu_run = None;
@@ -281,6 +323,27 @@ fn ferrite_items(has_shell: bool) -> Vec<MenuItem> {
         });
     }
     items
+}
+
+fn file_own(has_shell: bool) -> Own {
+    let items = ferrite_items(has_shell);
+    if has_shell {
+        Own {
+            hidden: items,
+            ..Own::default()
+        }
+    } else {
+        Own {
+            top: items,
+            ..Own::default()
+        }
+    }
+}
+
+/// The menu a file selection shows on Windows: the shell list, with Navo's actions reached by typing.
+#[must_use]
+pub fn merged_file_menu(shell: &[MenuItem]) -> ShellMenu {
+    merge::merge(shell, &file_own(true)).menu
 }
 
 fn label_of(menu: &ShellMenu, id: &ItemId) -> Option<String> {

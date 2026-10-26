@@ -26,6 +26,8 @@ pub enum Page {
     MenuFiles,
     MenuBackground,
     MenuEmptyFolder,
+    MenuLoading,
+    MenuFailed,
     DropMenu,
     ViewerMenuText,
     ViewerMenuTree,

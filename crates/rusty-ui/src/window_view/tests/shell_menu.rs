@@ -6,14 +6,16 @@ use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Bounds, Entity, InputEvent as _, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Point, Role, TestAppContext, point, px,
+    AnyWindowHandle, AppContext as _, Bounds, Entity, InputEvent as _, Modifiers, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, TestAppContext, point, px,
 };
 use rusty_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
 use rusty_core::{Location, OpKind, PaneId};
 use rusty_fs::FakeFs;
 
-use super::super::shell_menu::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+use super::super::shell_menu::{
+    MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession,
+};
 use super::super::{FerriteWindow, StartOptions};
 use super::{fake, open_options, settle, two_panes};
 
@@ -22,11 +24,16 @@ struct Shell {
     answer: RefCell<Option<Result<ShellMenu, String>>>,
     opened: RefCell<Vec<Vec<Location>>>,
     backgrounds: RefCell<Vec<Location>>,
+    extended: RefCell<Vec<bool>>,
     fills: RefCell<HashMap<Vec<usize>, Submenu>>,
     asked: RefCell<Vec<Vec<usize>>>,
     invoked: RefCell<Vec<ItemId>>,
     invoke_error: RefCell<Option<String>>,
     classic: Cell<usize>,
+    classic_for: Cell<usize>,
+    classic_extended: RefCell<Vec<bool>>,
+    classic_for_error: RefCell<Option<String>>,
+    classic_for_open: Cell<bool>,
     live: Cell<usize>,
 }
 
@@ -62,14 +69,21 @@ impl FakeProvider {
 }
 
 impl ShellMenuProvider for FakeProvider {
-    fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>> {
-        self.0.opened.borrow_mut().push(items.to_vec());
+    fn open(&self, target: &MenuTarget, extended: bool) -> Reply<Box<dyn ShellMenuSession>> {
+        match target {
+            MenuTarget::Items(items) => self.0.opened.borrow_mut().push(items.clone()),
+            MenuTarget::Background(folder) => self.0.backgrounds.borrow_mut().push(folder.clone()),
+        }
+        self.0.extended.borrow_mut().push(extended);
         self.reply()
     }
 
-    fn open_background(&self, folder: &Location) -> Reply<Box<dyn ShellMenuSession>> {
-        self.0.backgrounds.borrow_mut().push(folder.clone());
-        self.reply()
+    fn classic_for(&self, _: &MenuTarget, extended: bool, _: ScreenSpot) -> Reply<()> {
+        self.0.classic_for.set(self.0.classic_for.get() + 1);
+        self.0.classic_extended.borrow_mut().push(extended);
+        let error = self.0.classic_for_error.borrow().clone();
+        let shell = self.0.clone();
+        Box::new(move || (!shell.classic_for_open.get()).then(|| error.clone().map_or(Ok(()), Err)))
     }
 }
 
@@ -220,6 +234,15 @@ impl Rig {
     }
 
     fn right_button(&self, cx: &mut TestAppContext, row: usize, down: bool) {
+        self.right_button_with(cx, (row, down), Modifiers::default());
+    }
+
+    fn right_button_with(
+        &self,
+        cx: &mut TestAppContext,
+        (row, down): (usize, bool),
+        modifiers: Modifiers,
+    ) {
         let pane = self.pane;
         cx.update_window(self.window, |_, window, cx| {
             window.render_frame(cx);
@@ -232,7 +255,7 @@ impl Rig {
                 MouseDownEvent {
                     button: MouseButton::Right,
                     position,
-                    modifiers: Default::default(),
+                    modifiers,
                     click_count: 1,
                     first_mouse: false,
                 }
@@ -241,7 +264,7 @@ impl Rig {
                 MouseUpEvent {
                     button: MouseButton::Right,
                     position,
-                    modifiers: Default::default(),
+                    modifiers,
                     click_count: 1,
                 }
                 .to_platform_input()
@@ -316,24 +339,16 @@ impl Rig {
     }
 
     fn rows(&self, cx: &mut TestAppContext) -> Vec<String> {
-        self.level_rows(cx, 0)
-    }
-
-    fn level_rows(&self, cx: &mut TestAppContext, depth: usize) -> Vec<String> {
         cx.update_window(self.window, |_, window, cx| {
             window.render_frame(cx);
             if window.try_find("context-menu").is_none() {
                 return Vec::new();
             }
             let mut root = window.within("context-menu");
-            let level = root.within(("menu-level", depth));
+            let level = root.within(("menu-level", 0usize));
             (0usize..)
                 .map_while(|index| level.try_find(("menu-row", index)))
-                .map(|row| match (row.role(), row.label()) {
-                    (Some(Role::Heading), Some(label)) => format!("# {label}"),
-                    (_, Some(label)) => label.to_owned(),
-                    (_, None) => "-".to_owned(),
-                })
+                .map(|row| row.label().unwrap_or("-").to_owned())
                 .collect()
         })
         .expect("window")
@@ -465,26 +480,16 @@ fn alt_m_with_nothing_marked_opens_the_menu_for_the_cursor_row(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn ferrite_actions_show_before_the_provider_answers(cx: &mut TestAppContext) {
+fn only_a_loading_row_shows_before_the_provider_answers(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
-    assert_eq!(
-        rig.rows(cx),
-        [
-            "# Ferrite",
-            "Open",
-            "View",
-            "Edit",
-            "Copy",
-            "Move",
-            "Rename",
-            "Delete",
-            "Copy path",
-            "Properties",
-            "Classic menu",
-            "# Windows",
-            "Loading Windows items…",
-        ]
-    );
+    assert_eq!(rig.rows(cx), ["Loading Windows items…"]);
+}
+
+#[gpui_kit::test]
+fn the_windows_list_shows_without_ferrite_rows(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    rig.answer(cx, Ok(windows_menu()));
+    assert_eq!(rig.rows(cx), ["Open", "7-Zip", "Send to", "Cut"]);
 }
 
 #[gpui_kit::test]
@@ -496,7 +501,6 @@ fn without_a_windows_menu_only_working_ferrite_actions_show(cx: &mut TestAppCont
     assert_eq!(
         rig.rows(cx),
         [
-            "# Ferrite",
             "Open",
             "View",
             "Edit",
@@ -526,13 +530,11 @@ fn without_a_windows_menu_only_working_ferrite_actions_show(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
-fn provider_items_merge_in_when_they_arrive(cx: &mut TestAppContext) {
+fn provider_items_replace_the_loading_row(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
-    rig.press(cx, "down");
     rig.answer(cx, Ok(windows_menu()));
     let rows = rig.rows(cx);
     assert!(rows.iter().any(|row| row == "7-Zip"));
-    assert!(rows.iter().any(|row| row == "Cut"));
     assert!(!rows.iter().any(|row| row == "Loading Windows items…"));
     let selected = cx
         .update_window(rig.window, |_, window, _| {
@@ -544,7 +546,7 @@ fn provider_items_merge_in_when_they_arrive(cx: &mut TestAppContext) {
                 .and_then(|row| row.label().map(str::to_owned))
         })
         .expect("window");
-    assert_eq!(selected.as_deref(), Some("View"));
+    assert_eq!(selected.as_deref(), Some("Open"));
 }
 
 #[gpui_kit::test]
@@ -571,12 +573,12 @@ fn retry_shows_the_items_of_a_submenu_that_failed_once(cx: &mut TestAppContext) 
     rig.answer(cx, Ok(windows_menu()));
     rig.type_text(cx, "send");
     rig.press(cx, "right");
-    assert_eq!(rig.level_rows(cx, 1), ["Could not load", "Retry"]);
+    assert_eq!(rig.rows(cx), ["Could not load", "Retry"]);
     let documents = Submenu::Filled(vec![shell_item(50, "Documents", Group::Share)]);
     rig.shell.fills.borrow_mut().insert(vec![2], documents);
     rig.press(cx, "enter");
     rig.wait(cx, 50);
-    assert_eq!(rig.level_rows(cx, 1), ["Documents"]);
+    assert_eq!(rig.rows(cx), ["Documents"]);
 }
 
 #[gpui_kit::test]
@@ -684,15 +686,108 @@ fn a_provider_error_lands_in_the_status_line(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_menu_the_shell_cannot_read_keeps_the_ferrite_actions(cx: &mut TestAppContext) {
+fn an_open_error_starts_the_classic_menu(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
     rig.answer(cx, Err("The device is not ready.".to_owned()));
+    assert_eq!(rig.shell.classic_for.get(), 1);
+    assert!(!rig.is_open(cx));
+    assert_eq!(rig.pane_error(cx), None);
+}
+
+#[gpui_kit::test]
+fn an_empty_windows_menu_starts_the_classic_menu(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    let unnamed = ShellMenu {
+        items: vec![shell_item(1, "", Group::Extensions)],
+    };
+    rig.answer(cx, Ok(unnamed));
+    assert_eq!(rig.shell.classic.get(), 1);
+    assert_eq!(rig.shell.classic_for.get(), 0);
+    assert!(!rig.is_open(cx));
+}
+
+#[gpui_kit::test]
+fn a_failed_fallback_brings_back_the_ferrite_actions(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    *rig.shell.classic_for_error.borrow_mut() = Some("Access is denied.".to_owned());
+    rig.answer(cx, Err("The device is not ready.".to_owned()));
+    rig.wait(cx, 50);
     let rows = rig.rows(cx);
-    assert_eq!(rows.last().map(String::as_str), Some("Classic menu"));
+    assert_eq!(rows.first().map(String::as_str), Some("Open"));
+    assert!(rows.iter().any(|row| row == "Rename"), "{rows:?}");
     assert_eq!(
         rig.pane_error(cx).as_deref(),
         Some("Windows menu: The device is not ready.")
     );
+}
+
+#[gpui_kit::test]
+fn a_slow_windows_menu_offers_classic_and_retry(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    rig.wait(cx, 2000);
+    assert_eq!(
+        rig.rows(cx),
+        ["Windows menu is slow", "Classic menu", "Retry"]
+    );
+    rig.type_text(cx, "retry");
+    rig.press(cx, "enter");
+    assert_eq!(rig.shell.opened.borrow().len(), 2);
+    assert_eq!(rig.rows(cx), ["Loading Windows items…"]);
+    rig.wait(cx, 2000);
+    rig.type_text(cx, "classic");
+    rig.press(cx, "enter");
+    rig.wait(cx, 50);
+    assert_eq!(rig.shell.classic_for.get(), 1);
+    assert!(!rig.is_open(cx));
+}
+
+#[gpui_kit::test]
+fn shift_at_the_press_asks_for_the_extended_verbs(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let shift = Modifiers {
+        shift: true,
+        ..Modifiers::default()
+    };
+    rig.right_button_with(cx, (1, true), shift);
+    rig.wait(cx, 560);
+    assert!(rig.is_open(cx));
+    assert_eq!(*rig.shell.extended.borrow(), [true]);
+}
+
+#[gpui_kit::test]
+fn a_plain_press_and_the_menu_keys_ask_for_the_normal_menu(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.right_button(cx, 1, true);
+    rig.wait(cx, 560);
+    rig.press(cx, "escape");
+    rig.press(cx, "menu");
+    rig.wait(cx, 160);
+    rig.press(cx, "escape");
+    rig.press(cx, "shift-f10");
+    rig.wait(cx, 160);
+    assert_eq!(*rig.shell.extended.borrow(), [false, false, false]);
+}
+
+#[gpui_kit::test]
+fn an_early_classic_carries_shift_and_ignores_a_late_error(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let shift = Modifiers {
+        shift: true,
+        ..Modifiers::default()
+    };
+    rig.shell.classic_for_open.set(true);
+    rig.right_button_with(cx, (1, true), shift);
+    rig.wait(cx, 2560);
+    rig.type_text(cx, "classic");
+    rig.press(cx, "enter");
+    rig.wait(cx, 50);
+    assert_eq!(rig.shell.classic_for.get(), 1);
+    assert_eq!(*rig.shell.classic_extended.borrow(), [true]);
+    rig.answer(cx, Err("The device is not ready.".to_owned()));
+    rig.wait(cx, 50);
+    assert_eq!(rig.shell.classic_for.get(), 1);
+    assert_eq!(rig.shell.classic.get(), 0);
+    assert!(!rig.is_open(cx));
 }
 
 #[gpui_kit::test]
@@ -747,19 +842,13 @@ fn items_in_time_open_the_menu_complete_with_no_loading_row(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
-fn late_items_merge_without_moving_the_ferrite_rows(cx: &mut TestAppContext) {
+fn late_items_take_the_place_of_the_loading_row(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
     reduce_motion(cx);
-    assert!(
-        rig.rows(cx)
-            .iter()
-            .any(|row| row == "Loading Windows items…")
-    );
-    let before: Vec<_> = (1..=10).map(|row| rig.menu_row_bounds(cx, row)).collect();
+    let before = rig.menu_row_bounds(cx, 0);
     rig.answer(cx, Ok(windows_menu()));
     assert!(rig.rows(cx).iter().any(|row| row == "7-Zip"));
-    let after: Vec<_> = (1..=10).map(|row| rig.menu_row_bounds(cx, row)).collect();
-    assert_eq!(after, before);
+    assert_eq!(rig.menu_row_bounds(cx, 0), before);
 }
 
 #[gpui_kit::test]

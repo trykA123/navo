@@ -127,7 +127,7 @@ fn the_image_menu_runs_100_percent(cx: &mut TestAppContext) {
     right_click(cx, window, at);
     assert_eq!(
         rows(cx, window),
-        ["# Ferrite", "Copy image", "Copy path", "-", "Fit", "100 %"]
+        ["Copy image", "Copy path", "-", "Fit", "100 %"]
     );
     run_item(cx, window, "100");
     assert_eq!(text_of(cx, window, "image-zoom"), "100 %");

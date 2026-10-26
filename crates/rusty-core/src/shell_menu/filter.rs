@@ -1,17 +1,17 @@
 use std::ops::Range;
 
-use super::{ItemRow, MenuItem, Row, ShellMenu};
+use super::{ItemRow, MenuItem, Row};
 
-pub(super) fn matches(menu: &ShellMenu, query: &str) -> Vec<Row> {
+pub(super) fn matches(items: &[MenuItem], page: &[usize], query: &str) -> Vec<Row> {
     let mut walk = Walk {
         needle: query.trim().chars().flat_map(char::to_lowercase).collect(),
-        path: Vec::new(),
+        path: page.to_vec(),
         crumb: Vec::new(),
         hits: Vec::new(),
     };
-    walk.visit(&menu.items, Inherited::default());
+    walk.visit(items, Inherited::default());
     let mut hits = walk.hits;
-    hits.sort_by_key(|(is_ferrite, row)| (!row.enabled, !is_ferrite));
+    hits.sort_by_key(|(is_ferrite, row)| (!row.enabled, *is_ferrite));
     hits.into_iter().map(|(_, row)| Row::Item(row)).collect()
 }
 

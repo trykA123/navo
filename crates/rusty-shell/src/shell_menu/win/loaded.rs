@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rusty_core::shell_menu::{Group, MenuItem, ShellMenu, Submenu};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Shell::{
-    CMF_NORMAL, CMF_SYNCCASCADEMENU, IContextMenu, IContextMenu2, IContextMenu3,
+    CMF_EXTENDEDVERBS, CMF_NORMAL, CMF_SYNCCASCADEMENU, IContextMenu, IContextMenu2, IContextMenu3,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, DestroyMenu, HMENU, WM_INITMENUPOPUP,
@@ -14,7 +14,7 @@ use super::read::{Entry, ID_FIRST, ID_LAST, Verbs, has_named_item, read_level};
 use super::sta::MenuHandler;
 use super::{selection, shell_error};
 use crate::shell_menu::classify::{guess_group, is_unfilled, to_menu_item};
-use crate::shell_menu::{MenuError, MenuSource};
+use crate::shell_menu::{MenuError, MenuPaths, MenuSource};
 
 const MAX_DEPTH: usize = 4;
 
@@ -34,9 +34,9 @@ pub(super) struct LoadedMenu {
 
 impl LoadedMenu {
     pub(super) fn query(source: &MenuSource, owner: HWND) -> Result<Self, MenuError> {
-        let menu = match source {
-            MenuSource::Items(paths) => selection::context_menu(paths, owner)?,
-            MenuSource::Background(folder) => selection::background_menu(folder, owner)?,
+        let menu = match &source.paths {
+            MenuPaths::Items(paths) => selection::context_menu(paths, owner)?,
+            MenuPaths::Background(folder) => selection::background_menu(folder, owner)?,
         };
         // SAFETY: a fresh popup menu, owned by the returned value and destroyed in Drop.
         let hmenu = unsafe { CreatePopupMenu() }.map_err(shell_error("CreatePopupMenu"))?;
@@ -46,7 +46,12 @@ impl LoadedMenu {
             command_count: 0,
             submenus: HashMap::new(),
         };
-        let flags = CMF_NORMAL | CMF_SYNCCASCADEMENU;
+        let extended = if source.extended {
+            CMF_EXTENDEDVERBS
+        } else {
+            0
+        };
+        let flags = CMF_NORMAL | CMF_SYNCCASCADEMENU | extended;
         // SAFETY: a live menu handle and a valid id range.
         let result = unsafe {
             loaded
@@ -63,6 +68,7 @@ impl LoadedMenu {
     pub(super) fn verbs(&self) -> Verbs<'_> {
         Verbs {
             menu: &self.menu,
+            handler: self.handler(),
             command_count: self.command_count,
         }
     }

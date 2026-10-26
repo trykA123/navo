@@ -14,7 +14,7 @@ use crate::shell_menu::fill::{self, Background, FillReply, Fills};
 use crate::shell_menu::pending::{Cancel, Reply, answer_unless_cancelled};
 use crate::shell_menu::station::{self, BusySince, Station};
 use crate::shell_menu::{
-    InvokeOptions, MenuError, MenuSession, MenuSource, ScreenPoint, WindowHandle,
+    InvokeOptions, MenuError, MenuPaths, MenuSession, MenuSource, ScreenPoint, WindowHandle,
 };
 
 pub(super) enum Request {
@@ -41,6 +41,12 @@ pub(super) enum Request {
         point: ScreenPoint,
         reply: Reply<Option<u32>>,
     },
+    ClassicFor {
+        source: MenuSource,
+        hwnd: WindowHandle,
+        point: ScreenPoint,
+        reply: Reply<Option<u32>>,
+    },
     Close {
         session: u64,
     },
@@ -49,7 +55,10 @@ pub(super) enum Request {
 
 impl Request {
     fn can_hang(&self) -> bool {
-        !matches!(self, Self::Invoke { .. } | Self::Classic { .. })
+        !matches!(
+            self,
+            Self::Invoke { .. } | Self::Classic { .. } | Self::ClassicFor { .. }
+        )
     }
 }
 
@@ -142,8 +151,16 @@ impl Station for Worker {
 impl Worker {
     fn warm(&self) {
         let folder = std::env::temp_dir();
-        let _ = LoadedMenu::query(&MenuSource::Items(vec![folder.clone()]), HWND::default());
-        let _ = LoadedMenu::query(&MenuSource::Background(folder), HWND::default());
+        for paths in [
+            MenuPaths::Items(vec![folder.clone()]),
+            MenuPaths::Background(folder),
+        ] {
+            let source = MenuSource {
+                paths,
+                extended: false,
+            };
+            let _ = LoadedMenu::query(&source, HWND::default());
+        }
     }
 
     fn serve_request(&mut self, request: Request) -> bool {
@@ -169,10 +186,7 @@ impl Worker {
                     command,
                     verb: verb.as_deref(),
                 };
-                let result = self
-                    .session(session)
-                    .and_then(|menu| invoke::invoke(menu, &target, options));
-                let _ = reply.send(result);
+                let _ = reply.send(self.invoke(session, &target, options));
             }
             Request::Classic {
                 session,
@@ -185,12 +199,30 @@ impl Worker {
                     .and_then(|menu| invoke::classic(menu, hwnd, point));
                 let _ = reply.send(result);
             }
+            Request::ClassicFor {
+                source,
+                hwnd,
+                point,
+                reply,
+            } => {
+                let _ = reply.send(classic_for(&source, hwnd, point));
+            }
             Request::Close { session } => {
                 self.sessions.remove(&session);
             }
             Request::Shutdown => return false,
         }
         true
+    }
+
+    fn invoke(
+        &mut self,
+        session: u64,
+        target: &Target<'_>,
+        options: InvokeOptions,
+    ) -> Result<(), MenuError> {
+        self.session(session)
+            .and_then(|menu| invoke::invoke(menu, target, options))
     }
 
     fn fill(&mut self, session: u64, path: Vec<usize>, reply: FillReply) {
@@ -222,4 +254,12 @@ impl Worker {
     fn session(&mut self, id: u64) -> Result<&mut LoadedMenu, MenuError> {
         self.sessions.get_mut(&id).ok_or(MenuError::Closed)
     }
+}
+
+fn classic_for(
+    source: &MenuSource,
+    hwnd: WindowHandle,
+    point: ScreenPoint,
+) -> Result<Option<u32>, MenuError> {
+    LoadedMenu::query(source, HWND::default()).and_then(|menu| invoke::classic(&menu, hwnd, point))
 }

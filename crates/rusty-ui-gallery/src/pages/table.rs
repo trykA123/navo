@@ -1,6 +1,6 @@
 use super::{Page, PageInfo, info};
 
-pub const PAGES: [PageInfo; 116] = [
+pub const PAGES: [PageInfo; 118] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -38,6 +38,8 @@ pub const PAGES: [PageInfo; 116] = [
         "p17-m8-empty-folder",
         false,
     ),
+    info(Page::MenuLoading, "Menu loading", "p17-menu-loading", false),
+    info(Page::MenuFailed, "Menu failed", "p17-menu-failed", false),
     info(Page::DropMenu, "Drop files", "p36-x3-drop-menu", false),
     info(
         Page::ViewerMenuText,

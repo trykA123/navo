@@ -1,12 +1,12 @@
-use rusty_core::shell_menu::{
-    Group, Icon, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
-};
+use rusty_core::shell_menu::{Group, Icon, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
 use rusty_ui::Hsla;
 use rusty_ui::file_list::SortKey;
-use rusty_ui::window_view::{BackgroundLook, background_items};
+use rusty_ui::window_view::{BackgroundLook, merged_background_menu, merged_file_menu};
 
-pub const SEVEN_ZIP: usize = 12;
-pub const NEW: usize = 7;
+pub const OPEN_WITH: usize = 1;
+pub const SEVEN_ZIP: usize = 2;
+pub const SEND_TO: usize = 5;
+pub const NEW: usize = 9;
 const ICON_SIDE: u32 = 16;
 
 fn shell(command: u32, raw: &str, group: Group) -> MenuItem {
@@ -25,17 +25,6 @@ fn submenu(item: MenuItem, submenu: Submenu) -> MenuItem {
         kind: ItemKind::Submenu(submenu),
         ..item
     }
-}
-
-fn hidden(item: MenuItem) -> MenuItem {
-    MenuItem {
-        hidden: true,
-        ..item
-    }
-}
-
-fn rare(item: MenuItem) -> MenuItem {
-    MenuItem { rare: true, ..item }
 }
 
 fn badge(color: Hsla) -> Icon {
@@ -90,31 +79,42 @@ fn windows_items(target: &str, icon: Icon) -> Vec<MenuItem> {
         },
         submenu(shell(2, "Open wit&h", Group::Open), Submenu::Lazy),
         seven_zip(target, icon),
-        rare(shell(4, "Scan with Microsoft Defender…", Group::Extensions)),
+        shell(4, "Scan with Microsoft Defender…", Group::Extensions),
         MenuItem::separator(Group::Extensions),
         submenu(shell(5, "&Send to", Group::Share), Submenu::Lazy),
-        rare(shell(6, "Give access to", Group::Share)),
-        hidden(shell(7, "Copy as path", Group::Share)),
-        shell(8, "Cu&t\tCtrl+X", Group::Edit),
-        shell(9, "&Copy\tCtrl+C", Group::Edit),
-        shell(10, "&Delete\tDel", Group::Edit),
-        hidden(shell(11, "Rena&me", Group::Edit)),
-        rare(shell(12, "Restore previous versions", Group::Other)),
-        rare(shell(13, "Pin to Quick access", Group::Other)),
-        hidden(shell(14, "&Properties\tAlt+Enter", Group::Other)),
+        submenu(shell(6, "Give access to", Group::Share), Submenu::Lazy),
+        MenuItem::separator(Group::Share),
+        shell(8, "Cu&t", Group::Edit),
+        shell(9, "&Copy", Group::Edit),
+        MenuItem::separator(Group::Edit),
+        shell(15, "Create &shortcut", Group::Edit),
+        shell(10, "&Delete", Group::Edit),
+        shell(11, "Rena&me", Group::Edit),
+        MenuItem::separator(Group::Other),
+        shell(12, "Restore previous versions", Group::Other),
+        shell(13, "Pin to Quick access", Group::Other),
+        MenuItem::separator(Group::Other),
+        properties(14),
     ]
 }
 
+fn properties(command: u32) -> MenuItem {
+    MenuItem::new(
+        ItemId::Shell {
+            command,
+            verb: Some("properties".to_owned()),
+        },
+        "&Properties",
+        Group::Other,
+    )
+}
+
 pub fn zip_menu(icon_color: Hsla) -> ShellMenu {
-    let mut items = ferrite_actions();
-    items.extend(windows_items("ferrite-0.4.2-win64", badge(icon_color)));
-    ShellMenu { items }
+    merged_file_menu(&windows_items("ferrite-0.4.2-win64", badge(icon_color)))
 }
 
 pub fn files_menu(icon_color: Hsla) -> ShellMenu {
-    let mut items = ferrite_actions();
-    items.extend(windows_items("commander", badge(icon_color)));
-    ShellMenu { items }
+    merged_file_menu(&windows_items("commander", badge(icon_color)))
 }
 
 fn disabled(item: MenuItem) -> MenuItem {
@@ -135,15 +135,15 @@ fn folder_items() -> Vec<MenuItem> {
         shell(65, "Compressed (zipped) Folder", Group::Other),
     ];
     vec![
-        submenu(shell(20, "Ne&w", Group::Other), Submenu::Filled(new_types)),
-        shell(21, "Open in Terminal", Group::Open),
         disabled(shell(22, "&Paste", Group::Edit)),
         disabled(shell(23, "Paste &shortcut", Group::Edit)),
-        rare(submenu(
-            shell(24, "Give access to", Group::Share),
-            Submenu::Lazy,
-        )),
-        hidden(shell(25, "&Properties", Group::Other)),
+        MenuItem::separator(Group::Edit),
+        shell(21, "Open in Terminal", Group::Open),
+        submenu(shell(24, "Give access to", Group::Share), Submenu::Lazy),
+        MenuItem::separator(Group::Share),
+        submenu(shell(20, "Ne&w", Group::Other), Submenu::Filled(new_types)),
+        MenuItem::separator(Group::Other),
+        properties(25),
     ]
 }
 
@@ -151,9 +151,7 @@ pub fn folder_menu() -> ShellMenu {
     let look = BackgroundLook {
         sort: SortKey::default(),
         can_paste: false,
-        has_properties: true,
+        has_properties: false,
     };
-    let mut items = background_items(&look);
-    items.extend(folder_items());
-    ShellMenu { items }
+    merged_background_menu(&folder_items(), &look)
 }

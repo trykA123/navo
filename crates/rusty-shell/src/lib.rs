@@ -23,6 +23,6 @@ pub use helper_job::HelperLimits;
 #[cfg(windows)]
 pub use helper_job::{HelperJob, confine_helper};
 pub use shell_menu::{
-    FILL_BUDGET, InvokeOptions, MenuError, MenuSession, Pending, ScreenPoint, ShellMenuService,
-    Show, WindowHandle,
+    FILL_BUDGET, InvokeOptions, MenuError, MenuPaths, MenuSession, Pending, ScreenPoint,
+    ShellMenuService, Show, WindowHandle,
 };

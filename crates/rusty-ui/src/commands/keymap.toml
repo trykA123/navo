@@ -533,11 +533,11 @@ context = "ContextMenu > Input"
 
 [[bind]]
 command = "context_menu.close_submenu"
-keys = ["left"]
+keys = ["left", "backspace"]
 
 [[bind]]
 command = "context_menu.close_submenu"
-keys = ["left"]
+keys = ["left", "backspace"]
 context = "ContextMenu > Input"
 
 [[bind]]

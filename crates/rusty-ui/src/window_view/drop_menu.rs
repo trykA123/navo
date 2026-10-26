@@ -76,7 +76,7 @@ impl FerriteWindow {
         let pane = self.browser.state().focused_pane();
         let input = ContextMenuInput {
             menu: ShellMenu { items },
-            context: target.as_str().to_owned().into(),
+            context: format!("{} · {}", tr("drag-drop-title"), target.as_str()).into(),
             anchor: window.mouse_position(),
             bounds: Bounds::new(Point::default(), window.viewport_size()),
             restore: Some(self.handle(pane, cx)),
@@ -84,7 +84,6 @@ impl FerriteWindow {
         let view = cx.new(|cx| {
             let mut menu = ContextMenu::new(input, window, cx);
             menu.hide_classic(cx);
-            menu.name_ferrite_group(&tr("drag-drop-title"), cx);
             menu
         });
         let events = cx.subscribe_in(&view, window, |view, _, event, _, cx| {

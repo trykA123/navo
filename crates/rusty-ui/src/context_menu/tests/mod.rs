@@ -4,24 +4,27 @@ use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle, InteractiveElement,
-    IntoElement, ParentElement, Pixels, Point, Render, Role, Styled, TestAppContext, Window, div,
-    point, px, size,
+    AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle, InputEvent as _,
+    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, NavigationDirection,
+    ParentElement, Pixels, Point, Render, Styled, TestAppContext, Window, div, point, px, size,
 };
 use rusty_core::shell_menu::{
     Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
 };
 
 use super::{ContextMenu, ContextMenuEvent, ContextMenuInput};
-use crate::test_window::open;
+use crate::test_window::open_sized;
 
 mod filter;
+mod icons;
 mod keys;
 mod motion;
+mod pages;
 mod place;
-mod submenu;
 
 pub(super) const ROOT: &str = "context-menu";
+pub(super) const SEVEN_ZIP: usize = 2;
+pub(super) const SEND_TO: usize = 4;
 
 pub(super) fn shell(command: u32, raw: &str, group: Group) -> MenuItem {
     MenuItem::new(
@@ -34,10 +37,17 @@ pub(super) fn shell(command: u32, raw: &str, group: Group) -> MenuItem {
     )
 }
 
-fn lazy(command: u32, raw: &str, group: Group) -> MenuItem {
+pub(super) fn lazy(command: u32, raw: &str, group: Group) -> MenuItem {
     MenuItem {
         kind: ItemKind::Submenu(Submenu::Lazy),
         ..shell(command, raw, group)
+    }
+}
+
+pub(super) fn filled(command: u32, raw: &str, children: Vec<MenuItem>) -> MenuItem {
+    MenuItem {
+        kind: ItemKind::Submenu(Submenu::Filled(children)),
+        ..shell(command, raw, Group::Extensions)
     }
 }
 
@@ -52,16 +62,21 @@ fn seven_zip() -> MenuItem {
             ..shell(33, "Extract to \"dist\\\"", Group::Extensions)
         },
     ];
-    MenuItem {
-        kind: ItemKind::Submenu(Submenu::Filled(children)),
-        ..shell(3, "7-Zip", Group::Extensions)
-    }
+    filled(3, "7-Zip", children)
+}
+
+pub(super) fn hidden_actions() -> Vec<MenuItem> {
+    ferrite_actions()
+        .into_iter()
+        .map(|item| MenuItem {
+            hidden: true,
+            ..item
+        })
+        .collect()
 }
 
 pub(super) fn zip_menu() -> ShellMenu {
-    let mut items = ferrite_actions();
-    items[3].enabled = false;
-    items.extend([
+    let mut items = vec![
         MenuItem {
             default: true,
             ..shell(1, "&Open", Group::Open)
@@ -74,25 +89,35 @@ pub(super) fn zip_menu() -> ShellMenu {
             hidden: true,
             ..shell(6, "Copy as path", Group::Share)
         },
+        MenuItem::separator(Group::Share),
         shell(7, "Cu&t\tCtrl+X", Group::Edit),
         shell(8, "&Copy\tCtrl+C", Group::Edit),
         MenuItem {
             enabled: false,
             ..shell(9, "&Paste\tCtrl+V", Group::Edit)
         },
-        MenuItem {
-            rare: true,
-            ..shell(10, "Create &shortcut", Group::Other)
-        },
-        MenuItem {
-            rare: true,
-            ..shell(11, "Restore previous versions", Group::Other)
-        },
-    ]);
+        MenuItem::separator(Group::Edit),
+        shell(10, "Create &shortcut", Group::Other),
+        shell(11, "Restore previous versions", Group::Other),
+    ];
+    items.extend(hidden_actions());
     ShellMenu { items }
 }
 
-pub(super) const SEND_TO: usize = 14;
+pub(super) const ROOT_ROWS: [&str; 12] = [
+    "Open",
+    "Open with",
+    "7-Zip",
+    "-",
+    "Send to",
+    "-",
+    "Cut",
+    "Copy",
+    "Paste",
+    "-",
+    "Create shortcut",
+    "Restore previous versions",
+];
 
 pub(super) fn window_bounds() -> Bounds<Pixels> {
     Bounds {
@@ -131,15 +156,23 @@ pub(super) fn open_menu_with(
     anchor: Point<Pixels>,
     menu: ShellMenu,
 ) -> Opened {
+    open_menu_in(cx, (anchor, window_bounds()), menu)
+}
+
+pub(super) fn open_menu_in(
+    cx: &mut TestAppContext,
+    (anchor, bounds): (Point<Pixels>, Bounds<Pixels>),
+    menu: ShellMenu,
+) -> Opened {
     let events: Rc<RefCell<Vec<ContextMenuEvent>>> = Rc::default();
     let sink = events.clone();
-    let (window, harness) = open(cx, move |window, cx| {
+    let (window, harness) = open_sized(cx, bounds.size.width, move |window, cx| {
         let restore = cx.focus_handle();
         let input = ContextMenuInput {
             menu,
             context: "ferrite-0.4.2-win64.zip · 6.8 MB".into(),
             anchor,
-            bounds: window_bounds(),
+            bounds,
             restore: Some(restore.clone()),
         };
         let menu = cx.new(|cx| ContextMenu::new(input, window, cx));
@@ -187,22 +220,49 @@ impl Opened {
         cx.run_until_parked();
     }
 
-    pub fn click(&self, depth: usize, row: usize, cx: &mut TestAppContext) {
+    pub fn click(&self, row: usize, cx: &mut TestAppContext) {
         cx.update_window(self.window, |_, window, cx| {
             window
                 .within(ROOT)
-                .within(("menu-level", depth))
+                .within(("menu-level", 0usize))
                 .click(("menu-row", row), cx);
         })
         .expect("window");
         cx.run_until_parked();
     }
 
-    pub fn hover(&self, depth: usize, row: usize, cx: &mut TestAppContext) {
+    pub fn click_back(&self, cx: &mut TestAppContext) {
         cx.update_window(self.window, |_, window, cx| {
             window
                 .within(ROOT)
-                .within(("menu-level", depth))
+                .within(("menu-level", 0usize))
+                .click("menu-back", cx);
+        })
+        .expect("window");
+        cx.run_until_parked();
+    }
+
+    pub fn mouse_back(&self, cx: &mut TestAppContext) {
+        let position = self.level_bounds(cx).center();
+        cx.update_window(self.window, |_, window, cx| {
+            let event = MouseDownEvent {
+                button: MouseButton::Navigate(NavigationDirection::Back),
+                position,
+                modifiers: Default::default(),
+                click_count: 1,
+                first_mouse: false,
+            };
+            window.dispatch_event(event.to_platform_input(), cx);
+        })
+        .expect("window");
+        cx.run_until_parked();
+    }
+
+    pub fn hover(&self, row: usize, cx: &mut TestAppContext) {
+        cx.update_window(self.window, |_, window, cx| {
+            window
+                .within(ROOT)
+                .within(("menu-level", 0usize))
                 .hover(("menu-row", row), cx);
         })
         .expect("window");
@@ -224,21 +284,17 @@ impl Opened {
         self.events.borrow().clone()
     }
 
-    pub fn rows(&self, depth: usize, cx: &mut TestAppContext) -> Vec<String> {
-        self.with_level(depth, cx, |window| {
+    pub fn rows(&self, cx: &mut TestAppContext) -> Vec<String> {
+        self.with_level(cx, |window| {
             (0usize..)
                 .map_while(|index| window.try_find(("menu-row", index)))
-                .map(|row| match (row.role(), row.label()) {
-                    (Some(Role::Heading), Some(label)) => format!("# {label}"),
-                    (_, Some(label)) => label.to_owned(),
-                    (_, None) => "-".to_owned(),
-                })
+                .map(|row| row.label().unwrap_or("-").to_owned())
                 .collect()
         })
     }
 
-    pub fn selected(&self, depth: usize, cx: &mut TestAppContext) -> Option<String> {
-        self.with_level(depth, cx, |window| {
+    pub fn selected(&self, cx: &mut TestAppContext) -> Option<String> {
+        self.with_level(cx, |window| {
             (0usize..)
                 .map_while(|index| window.try_find(("menu-row", index)))
                 .find(|row| row.selected() == Some(true))
@@ -246,8 +302,16 @@ impl Opened {
         })
     }
 
+    pub fn back_row(&self, cx: &mut TestAppContext) -> Option<String> {
+        self.with_level(cx, |window| {
+            window
+                .try_find("menu-back")
+                .map(|found| found.label().unwrap_or_default().to_owned())
+        })
+    }
+
     pub fn find(&self, id: (&'static str, usize), cx: &mut TestAppContext) -> Option<String> {
-        self.with_level(0, cx, |window| {
+        self.with_level(cx, |window| {
             window
                 .try_find(id)
                 .map(|found| found.label().unwrap_or_default().to_owned())
@@ -258,18 +322,12 @@ impl Opened {
         self.with_root(cx, |window| window.try_find("menu-classic").is_some())
     }
 
-    pub fn has_level(&self, depth: usize, cx: &mut TestAppContext) -> bool {
-        self.with_root(cx, |window| {
-            window.try_find(("menu-level", depth)).is_some()
-        })
-    }
-
     pub fn row_bounds(&self, row: usize, cx: &mut TestAppContext) -> Bounds<Pixels> {
-        self.with_level(0, cx, |window| window.find(("menu-row", row)).bounds())
+        self.with_level(cx, |window| window.find(("menu-row", row)).bounds())
     }
 
-    pub fn level_bounds(&self, depth: usize, cx: &mut TestAppContext) -> Bounds<Pixels> {
-        self.with_root(cx, |window| window.find(("menu-level", depth)).bounds())
+    pub fn level_bounds(&self, cx: &mut TestAppContext) -> Bounds<Pixels> {
+        self.with_root(cx, |window| window.find(("menu-level", 0usize)).bounds())
     }
 
     pub fn filter_text(&self, cx: &mut TestAppContext) -> String {
@@ -291,10 +349,9 @@ impl Opened {
 
     fn with_level<R>(
         &self,
-        depth: usize,
         cx: &mut TestAppContext,
         read: impl FnOnce(&mut gpui_kit::test::ScopedWindow<'_>) -> R,
     ) -> R {
-        self.with_root(cx, |root| read(&mut root.within(("menu-level", depth))))
+        self.with_root(cx, |root| read(&mut root.within(("menu-level", 0usize))))
     }
 }

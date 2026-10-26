@@ -56,6 +56,8 @@ context_menu.back | escape | ContextMenu
 context_menu.back | escape | ContextMenu > Input
 context_menu.choose | enter | ContextMenu
 context_menu.choose | enter | ContextMenu > Input
+context_menu.close_submenu | backspace | ContextMenu
+context_menu.close_submenu | backspace | ContextMenu > Input
 context_menu.close_submenu | left | ContextMenu
 context_menu.close_submenu | left | ContextMenu > Input
 context_menu.down | down | ContextMenu

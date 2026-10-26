@@ -6,9 +6,10 @@ use std::time::Duration;
 use rusty_core::Location;
 use rusty_core::shell_menu::{ItemId, ShellMenu, Submenu};
 use rusty_shell::{
-    InvokeOptions, MenuSession, Pending, ScreenPoint, ShellMenuService, Show, WindowHandle,
+    InvokeOptions, MenuPaths, MenuSession, Pending, ScreenPoint, ShellMenuService, Show,
+    WindowHandle,
 };
-use rusty_ui::window_view::{Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+use rusty_ui::window_view::{MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
 
 const NOT_LOCAL: &str = "the Windows menu works only on local files";
 const TOO_LONG: &str = "the Windows menu cannot open paths longer than 259 characters";
@@ -46,6 +47,17 @@ fn path_of(location: &Location) -> Result<PathBuf, String> {
     rusty_fs::os_path(location)
         .map_err(|error| error.message())
         .and_then(shell_form)
+}
+
+fn paths_of(target: &MenuTarget) -> Result<MenuPaths, String> {
+    match target {
+        MenuTarget::Items(items) => items
+            .iter()
+            .map(path_of)
+            .collect::<Result<_, _>>()
+            .map(MenuPaths::Items),
+        MenuTarget::Background(folder) => path_of(folder).map(MenuPaths::Background),
+    }
 }
 
 fn shell_form(path: PathBuf) -> Result<PathBuf, String> {
@@ -125,19 +137,28 @@ fn unavailable(reason: String) -> Reply<Box<dyn ShellMenuSession>> {
     })
 }
 
+fn spot(at: ScreenSpot) -> (WindowHandle, ScreenPoint) {
+    let window = WindowHandle(at.window.unwrap_or_default());
+    (window, ScreenPoint { x: at.x, y: at.y })
+}
+
+fn refused<T>(reason: String) -> Reply<T> {
+    Box::new(move || Some(Err(reason.clone())))
+}
+
 impl ShellMenuProvider for Provider {
-    fn open(&self, items: &[Location]) -> Reply<Box<dyn ShellMenuSession>> {
-        let paths: Result<Vec<PathBuf>, String> = items.iter().map(path_of).collect();
-        match paths {
-            Ok(paths) => session_reply(self.0.open(paths)),
+    fn open(&self, target: &MenuTarget, extended: bool) -> Reply<Box<dyn ShellMenuSession>> {
+        match paths_of(target) {
+            Ok(paths) => session_reply(self.0.open_paths(paths, extended)),
             Err(reason) => unavailable(reason),
         }
     }
 
-    fn open_background(&self, folder: &Location) -> Reply<Box<dyn ShellMenuSession>> {
-        match path_of(folder) {
-            Ok(path) => session_reply(self.0.open_background(path)),
-            Err(reason) => unavailable(reason),
+    fn classic_for(&self, target: &MenuTarget, extended: bool, at: ScreenSpot) -> Reply<()> {
+        let (window, point) = spot(at);
+        match paths_of(target) {
+            Ok(paths) => reply(self.0.classic_for(paths, extended, (window, point)), |_| ()),
+            Err(reason) => refused(reason),
         }
     }
 }
@@ -156,8 +177,7 @@ impl ShellMenuSession for Session {
     }
 
     fn classic(&self, at: ScreenSpot) -> Reply<()> {
-        let window = WindowHandle(at.window.unwrap_or_default());
-        let point = ScreenPoint { x: at.x, y: at.y };
+        let (window, point) = spot(at);
         reply(self.0.classic(window, point), |_| ())
     }
 }
@@ -182,8 +202,7 @@ impl ShellMenuSession for Unavailable {
 
 impl Unavailable {
     fn refuse<T>(&self) -> Reply<T> {
-        let reason = self.reason.clone();
-        Box::new(move || Some(Err(reason.clone())))
+        refused(self.reason.clone())
     }
 }
 

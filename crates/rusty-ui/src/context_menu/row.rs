@@ -4,10 +4,12 @@ use gpui_kit::{
     Div, FontWeight, Hsla, ImageSource, InteractiveElement, IntoElement, ParentElement, Role,
     SharedString, Stateful, StatefulInteractiveElement, Styled, div, img, px,
 };
-use rusty_core::shell_menu::{ItemId, ItemRow, MenuItem, Row, Section, ShellMenu};
+use rusty_core::shell_menu::{ItemId, ItemRow, MenuItem, Row, ShellMenu};
 
 use super::icons::{ShellIcons, ferrite_icon};
-use super::place::{HEADER, ROW, SEPARATOR};
+use super::place::{ROW, SEPARATOR};
+use rusty_l10n::tr;
+
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
@@ -20,8 +22,6 @@ pub(super) struct RowLook<'a> {
     pub theme: &'a Theme,
     pub menu: &'a ShellMenu,
     pub icons: &'a ShellIcons,
-    pub is_active: bool,
-    pub ferrite_header: &'a SharedString,
 }
 
 fn base(index: usize) -> RowElement {
@@ -33,12 +33,7 @@ fn base(index: usize) -> RowElement {
         .items_center()
 }
 
-fn line(t: &Theme, index: usize, is_selected: bool, is_active: bool) -> RowElement {
-    let highlight = if is_active {
-        t.colors.selection
-    } else {
-        t.colors.hover
-    };
+fn line(t: &Theme, index: usize, is_selected: bool) -> RowElement {
     base(index)
         .role(Role::MenuItem)
         .aria_selected(is_selected)
@@ -46,10 +41,10 @@ fn line(t: &Theme, index: usize, is_selected: bool, is_active: bool) -> RowEleme
         .h(px(ROW))
         .px(t.spacing.sm)
         .rounded(t.radii.md)
-        .when(is_selected, |row| row.bg(highlight))
+        .when(is_selected, |row| row.bg(t.colors.selection))
 }
 
-fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
+pub(super) fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
     div()
         .w(px(ICON_COLUMN))
         .flex_none()
@@ -61,41 +56,13 @@ fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
 pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool) -> RowElement {
     let t = look.theme;
     match row {
-        Row::Header(section) => header(look, *section, index),
         Row::Separator => base(index)
             .h(px(SEPARATOR))
             .px(t.spacing.sm)
             .child(div().h(px(1.)).w_full().bg(t.colors.line)),
         Row::Item(item) => item_row(look, item, index, is_selected),
-        Row::More { count } => line(t, index, is_selected, look.is_active)
-            .aria_label(format!("More ({count})"))
-            .cursor_pointer()
-            .child(icon_cell(Some(
-                icon(IconName::Ellipsis, t.spacing.icon, t.colors.muted).into_any_element(),
-            )))
-            .child(div().flex_1().child("More"))
-            .child(trailing_text(t, format!("{count} rare")))
-            .child(icon(IconName::ChevronDown, t.spacing.icon, t.colors.muted)),
+        Row::Back { title } => base(index).aria_label(title.clone()),
     }
-}
-
-fn header(look: &RowLook, section: Section, index: usize) -> RowElement {
-    let t = look.theme;
-    let label = match section {
-        Section::Ferrite => look.ferrite_header.clone(),
-        Section::Windows => "Windows".into(),
-    };
-    base(index)
-        .role(Role::Heading)
-        .aria_label(label.clone())
-        .items_end()
-        .h(px(HEADER))
-        .px(t.spacing.md)
-        .pb(t.spacing.xs)
-        .text_size(t.typography.tiny)
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(t.colors.muted)
-        .child(label)
 }
 
 fn item_row(look: &RowLook, item: &ItemRow, index: usize, is_selected: bool) -> RowElement {
@@ -107,7 +74,7 @@ fn item_row(look: &RowLook, item: &ItemRow, index: usize, is_selected: bool) -> 
         t.colors.faint
     };
     let accelerator = source.and_then(|item| item.accelerator.clone());
-    line(t, index, is_selected, look.is_active)
+    line(t, index, is_selected)
         .aria_label(item.breadcrumb())
         .text_color(color)
         .when(item.enabled, |row| row.cursor_pointer())
@@ -160,7 +127,13 @@ fn label(t: &Theme, item: &ItemRow, index: usize, is_default: bool) -> Div {
         .when(is_default, |cell| cell.font_weight(FontWeight::BOLD))
         .when(!item.crumb.is_empty(), |cell| {
             let crumb = format!("{} › ", item.crumb.join(" › "));
-            cell.child(div().flex_none().text_color(t.colors.muted).child(crumb))
+            let crumb = div()
+                .flex_none()
+                .font_family(t.typography.mono_font.clone())
+                .text_size(t.typography.small)
+                .text_color(t.colors.muted)
+                .child(crumb);
+            cell.child(crumb)
         });
     let parts = item.matched.clone().and_then(|range| {
         Some((
@@ -203,10 +176,16 @@ fn trailing_text(t: &Theme, text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 
-pub(super) fn status_row(t: &Theme, index: usize, text: &'static str, color: Hsla) -> RowElement {
+pub(super) fn status_row(
+    t: &Theme,
+    index: usize,
+    text: impl Into<SharedString>,
+    color: Hsla,
+) -> RowElement {
+    let text = text.into();
     base(index)
         .role(Role::MenuItem)
-        .aria_label(text)
+        .aria_label(text.clone())
         .gap(t.spacing.md)
         .h(px(ROW))
         .px(t.spacing.sm)
@@ -216,12 +195,13 @@ pub(super) fn status_row(t: &Theme, index: usize, text: &'static str, color: Hsl
 }
 
 pub(super) fn retry_row(t: &Theme, index: usize, is_selected: bool) -> RowElement {
-    line(t, index, is_selected, true)
-        .aria_label("Retry")
+    let text = tr("context-menu-retry");
+    line(t, index, is_selected)
+        .aria_label(text.clone())
         .cursor_pointer()
         .text_color(t.colors.text)
         .child(icon_cell(Some(
             icon(IconName::RotateCw, t.spacing.icon, t.colors.accent).into_any_element(),
         )))
-        .child(div().flex_1().child("Retry"))
+        .child(div().flex_1().child(text))
 }

@@ -1,25 +1,16 @@
 use super::*;
 
+fn root(menu: &ShellMenu) -> Vec<String> {
+    item_texts(&rows(menu, &[], ""))
+}
+
 #[test]
-fn empty_query_shows_sections_groups_and_more() {
+fn the_root_lists_the_shell_items_in_order_with_their_separators() {
     assert_eq!(
-        item_texts(&rows(&zip_menu(), "")),
+        root(&zip_menu()),
         [
-            "# Ferrite",
-            "Open",
-            "View",
-            "Edit",
-            "Copy",
-            "Move",
-            "Rename",
-            "Delete",
-            "Copy path",
-            "Properties",
-            "Classic menu",
-            "# Windows",
             "Open",
             "Open with",
-            "-",
             "7-Zip",
             "-",
             "Send to",
@@ -27,28 +18,31 @@ fn empty_query_shows_sections_groups_and_more() {
             "Cut",
             "Copy",
             "-",
-            "More (2)",
+            "Create shortcut",
+            "Restore previous versions",
         ]
     );
 }
 
 #[test]
 fn whitespace_query_counts_as_empty() {
-    assert_eq!(rows(&zip_menu(), "  "), rows(&zip_menu(), ""));
+    assert_eq!(rows(&zip_menu(), &[], "  "), rows(&zip_menu(), &[], ""));
 }
 
 #[test]
-fn ferrite_only_menu_has_no_windows_header() {
+fn groups_alone_never_add_a_separator() {
     let menu = ShellMenu {
-        items: ferrite_actions(),
+        items: vec![
+            shell(1, "Open", Group::Open),
+            shell(2, "Cut", Group::Edit),
+            shell(3, "Pin", Group::Other),
+        ],
     };
-    let rows = rows(&menu, "");
-    assert!(!rows.contains(&Row::Header(Section::Windows)));
-    assert_eq!(rows.len(), 11);
+    assert_eq!(root(&menu), ["Open", "Cut", "Pin"]);
 }
 
 #[test]
-fn separators_split_the_ferrite_section_into_groups() {
+fn visible_ferrite_items_are_listed_where_they_stand() {
     let action = |name: &'static str| MenuItem::new(ItemId::Action(name), name, Group::Ferrite);
     let menu = ShellMenu {
         items: vec![
@@ -59,25 +53,22 @@ fn separators_split_the_ferrite_section_into_groups() {
             action("Bookmark"),
         ],
     };
-    assert_eq!(
-        item_texts(&rows(&menu, "")),
-        ["# Ferrite", "Copy", "Select all", "-", "Bookmark"]
+    assert_eq!(root(&menu), ["Copy", "Select all", "-", "Bookmark"]);
+}
+
+#[test]
+fn hidden_ferrite_actions_stay_out_of_the_list() {
+    let rename = ItemId::Ferrite(FerriteAction::Rename);
+    let rows = rows(&zip_menu(), &[], "");
+    assert!(
+        !rows
+            .iter()
+            .any(|row| matches!(row, Row::Item(item) if item.id == rename))
     );
 }
 
 #[test]
-fn rare_only_shell_items_show_more_without_separator() {
-    let menu = ShellMenu {
-        items: vec![MenuItem {
-            rare: true,
-            ..shell(1, "Pin", Group::Other)
-        }],
-    };
-    assert_eq!(item_texts(&rows(&menu, "")), ["# Windows", "More (1)"]);
-}
-
-#[test]
-fn leading_and_repeated_source_separators_collapse() {
+fn leading_trailing_and_repeated_separators_collapse() {
     let menu = ShellMenu {
         items: vec![
             MenuItem::separator(Group::Open),
@@ -88,15 +79,12 @@ fn leading_and_repeated_source_separators_collapse() {
             MenuItem::separator(Group::Open),
         ],
     };
-    assert_eq!(
-        item_texts(&rows(&menu, "")),
-        ["# Windows", "Open", "-", "Print"]
-    );
+    assert_eq!(root(&menu), ["Open", "-", "Print"]);
 }
 
 #[test]
 fn item_row_carries_its_path_and_submenu_flag() {
-    let rows = rows(&zip_menu(), "");
+    let rows = rows(&zip_menu(), &[], "");
     let Some(Row::Item(zip)) = rows
         .iter()
         .find(|row| matches!(row, Row::Item(item) if item.text == "7-Zip"))
@@ -104,76 +92,105 @@ fn item_row_carries_its_path_and_submenu_flag() {
         panic!("7-Zip row missing");
     };
     assert!(zip.opens_submenu);
-    assert_eq!(zip_menu().item(&zip.path).unwrap().text, "7-Zip");
+    assert_eq!(zip.path, [SEVEN_ZIP]);
 }
 
 #[test]
-fn submenu_rows_list_children_with_separators() {
-    let menu = zip_menu();
+fn a_page_starts_with_a_back_row_and_lists_its_children() {
     assert_eq!(
-        item_texts(&submenu_rows(&menu, &[12])),
-        ["Open archive", "Extract Here", "-", "Extract to \"dist\\\""]
+        item_texts(&rows(&zip_menu(), &[SEVEN_ZIP], "")),
+        [
+            "< 7-Zip",
+            "Open archive",
+            "Extract Here",
+            "-",
+            "Extract to \"dist\\\""
+        ]
     );
 }
 
 #[test]
-fn submenu_rows_of_a_lazy_submenu_are_empty() {
-    assert!(submenu_rows(&zip_menu(), &[11]).is_empty());
+fn page_rows_carry_full_paths() {
+    let rows = rows(&zip_menu(), &[SEVEN_ZIP], "");
+    let Some(Row::Item(here)) = rows.get(2) else {
+        panic!("Extract Here missing");
+    };
+    assert_eq!(here.path, [SEVEN_ZIP, 1]);
 }
 
 #[test]
-fn rare_rows_list_the_folded_items() {
+fn a_lazy_page_has_only_its_back_row() {
     assert_eq!(
-        item_texts(&rare_rows(&zip_menu())),
-        ["Create shortcut", "Restore previous versions"]
+        item_texts(&rows(&zip_menu(), &[SEND_TO], "")),
+        ["< Send to"]
     );
+}
+
+#[test]
+fn a_page_that_does_not_exist_has_no_rows() {
+    assert!(rows(&zip_menu(), &[99], "").is_empty());
+    assert!(rows(&zip_menu(), &[SEVEN_ZIP, 9], "").is_empty());
 }
 
 #[test]
 fn item_lookup_follows_nested_paths() {
     let menu = zip_menu();
-    assert_eq!(menu.item(&[12, 1]).unwrap().text, "Extract Here");
-    assert!(menu.item(&[12, 9]).is_none());
+    assert_eq!(menu.item(&[SEVEN_ZIP, 1]).unwrap().text, "Extract Here");
+    assert!(menu.item(&[SEVEN_ZIP, 9]).is_none());
     assert!(menu.item(&[]).is_none());
 }
 
 #[test]
-fn items_without_text_are_skipped() {
+fn items_without_text_are_skipped_and_counted_for_the_classic_menu() {
     let menu = ShellMenu {
         items: vec![
             shell(1, "Open", Group::Open),
             shell(2, "  ", Group::Open),
             submenu(3, "Tools", Group::Other, vec![shell(30, "", Group::Other)]),
-            MenuItem {
-                rare: true,
-                ..shell(4, "&", Group::Other)
-            },
+            MenuItem::separator(Group::Other),
         ],
     };
-    assert_eq!(
-        item_texts(&rows(&menu, "")),
-        ["# Windows", "Open", "-", "Tools"]
-    );
-    assert!(submenu_rows(&menu, &[2]).is_empty());
-    assert!(rare_rows(&menu).is_empty());
+    assert_eq!(root(&menu), ["Open", "Tools"]);
+    assert_eq!(item_texts(&rows(&menu, &[2], "")), ["< Tools"]);
+    assert_eq!(menu.classic_only_count(), 2);
 }
 
 #[test]
 fn filled_lazy_submenu_shows_its_children() {
     let mut menu = zip_menu();
     assert!(menu.set_submenu(
-        &[15],
+        &[SEND_TO],
         Submenu::Filled(vec![shell(50, "Documents", Group::Share)])
     ));
-    assert_eq!(item_texts(&rows(&menu, "docu")), ["Send to › Documents"]);
-    assert_eq!(item_texts(&submenu_rows(&menu, &[15])), ["Documents"]);
+    assert_eq!(
+        item_texts(&rows(&menu, &[], "docu")),
+        ["Send to › Documents"]
+    );
+    assert_eq!(
+        item_texts(&rows(&menu, &[SEND_TO], "")),
+        ["< Send to", "Documents"]
+    );
 }
 
 #[test]
 fn set_submenu_refuses_commands_and_bad_paths() {
     let mut menu = zip_menu();
-    assert!(!menu.set_submenu(&[10], Submenu::Loading));
+    assert!(!menu.set_submenu(&[0], Submenu::Loading));
     assert!(!menu.set_submenu(&[129], Submenu::Loading));
-    assert!(menu.set_submenu(&[12], Submenu::Failed));
-    assert!(submenu_rows(&menu, &[12]).is_empty());
+    assert!(menu.set_submenu(&[SEVEN_ZIP], Submenu::Failed));
+    assert_eq!(item_texts(&rows(&menu, &[SEVEN_ZIP], "")), ["< 7-Zip"]);
+}
+
+#[test]
+fn a_tree_of_separators_and_unnamed_items_has_no_named_item() {
+    let unnamed = ShellMenu {
+        items: vec![
+            MenuItem::separator(Group::Open),
+            shell(1, "&", Group::Open),
+            shell(2, "", Group::Other),
+        ],
+    };
+    assert!(!unnamed.has_named_item());
+    assert!(!ShellMenu::default().has_named_item());
+    assert!(zip_menu().has_named_item());
 }

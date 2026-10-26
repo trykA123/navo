@@ -169,7 +169,7 @@ fn copy_in_the_markdown_menu_copies_the_block_under_the_pointer(cx: &mut TestApp
     let (window, _, _) = open_named(cx, "notes.md", Setup::new(source));
     let at = md_block(cx, window, 1);
     right_click(cx, window, at);
-    assert_eq!(rows(cx, window), ["# Ferrite", "Copy"]);
+    assert_eq!(rows(cx, window), ["Copy"]);
     run_item(cx, window, "copy");
     assert_eq!(clipboard(cx).as_deref(), Some("First paragraph."));
 }
@@ -180,10 +180,7 @@ fn copy_link_in_the_markdown_menu_copies_the_link_target(cx: &mut TestAppContext
     let (window, view, _) = open_named(cx, "links.md", Setup::new(source));
     press(cx, window, &view, "tab");
     press_key(cx, window, "menu");
-    assert_eq!(
-        rows(cx, window),
-        ["# Ferrite", "Copy", "-", "Open link", "Copy link"]
-    );
+    assert_eq!(rows(cx, window), ["Copy", "-", "Open link", "Copy link"]);
     run_item(cx, window, "copy link");
     assert_eq!(clipboard(cx).as_deref(), Some("https://example.com/docs"));
 }
@@ -194,10 +191,7 @@ fn copy_path_in_the_image_menu_copies_the_file_path(cx: &mut TestAppContext) {
     open_first(cx, &image);
     let (window, view, _) = &image;
     let shown = open_menu(cx, *window);
-    assert_eq!(
-        shown,
-        ["# Ferrite", "Copy image", "Copy path", "-", "Fit", "100 %"]
-    );
+    assert_eq!(shown, ["Copy image", "Copy path", "-", "Fit", "100 %"]);
     run_item(cx, *window, "copy path");
     let expected = location(cx, view);
     assert!(expected.ends_with("a.txt"), "{expected}");
