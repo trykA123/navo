@@ -1,11 +1,36 @@
 use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::{Hsla, Pixels, Rgba, TestAppContext, px};
 
-use super::{Density, Mode, Radii, Spacing, Theme, ThemeChoice, apply, apply_with, current};
+use super::{
+    ColorTheme, Density, Mode, Radii, Spacing, Theme, ThemeChoice, ThemeLook, apply, apply_look,
+    apply_with, current,
+};
 
 mod surfaces;
 
 const MODES: [Mode; 2] = [Mode::Light, Mode::Dark];
+
+fn themed(color_theme: ColorTheme, mode: Mode) -> Theme {
+    let look = ThemeLook {
+        color_theme,
+        ..ThemeLook::default()
+    };
+    Theme::with_look(mode, look)
+}
+
+pub(super) fn every_theme() -> Vec<(String, Theme)> {
+    ColorTheme::ALL
+        .into_iter()
+        .flat_map(|color_theme| {
+            MODES.into_iter().map(move |mode| {
+                (
+                    format!("{color_theme:?} {mode:?}"),
+                    themed(color_theme, mode),
+                )
+            })
+        })
+        .collect()
+}
 
 fn is_opaque_srgb(color: Hsla) -> bool {
     let rgb = Rgba::from(color);
@@ -89,14 +114,10 @@ fn radius_sizes(radii: Radii) -> Vec<(&'static str, Pixels)> {
 
 #[test]
 fn every_colour_token_is_an_opaque_colour_in_both_themes() {
-    let light = Theme::new(Mode::Light).colors.entries();
-    let dark = Theme::new(Mode::Dark).colors.entries();
-    let names = |entries: &[(&'static str, Hsla)]| {
-        entries.iter().map(|(name, _)| *name).collect::<Vec<_>>()
-    };
-    assert_eq!(names(&light), names(&dark));
-    for (name, color) in light.iter().chain(dark.iter()) {
-        assert!(is_opaque_srgb(*color), "{name} is {color:?}");
+    for (label, theme) in every_theme() {
+        for (name, color) in theme.colors.entries() {
+            assert!(is_opaque_srgb(color), "{label}: {name} is {color:?}");
+        }
     }
 }
 
@@ -140,17 +161,17 @@ fn the_design_b_fonts_are_archivo_and_jetbrains_mono() {
 
 #[test]
 fn every_text_pair_meets_four_and_a_half_to_one() {
-    for mode in MODES {
-        let pairs = Theme::new(mode).colors.text_pairs();
+    for (label, theme) in every_theme() {
+        let pairs = theme.colors.text_pairs();
         assert_eq!(
             pairs.len(),
             28,
-            "{mode:?}: a text pair names an unknown token"
+            "{label}: a text pair names an unknown token"
         );
         for pair in pairs {
             assert!(
                 pair.ratio >= 4.5,
-                "{mode:?}: {} on {} is {:.2}:1",
+                "{label}: {} on {} is {:.2}:1",
                 pair.foreground,
                 pair.background,
                 pair.ratio
@@ -160,11 +181,75 @@ fn every_text_pair_meets_four_and_a_half_to_one() {
 }
 
 #[test]
+fn the_mark_colour_reads_on_selection_background_and_zebra() {
+    for (label, theme) in every_theme() {
+        let c = theme.colors;
+        for (name, ground) in [
+            ("selection", c.selection),
+            ("background", c.background),
+            ("zebra", c.zebra),
+        ] {
+            let ratio = super::contrast_ratio(c.mark, ground);
+            assert!(ratio >= 4.5, "{label}: mark on {name} is {ratio:.2}:1");
+        }
+    }
+}
+
+#[test]
+fn ui_parts_stand_out_three_to_one_from_the_main_surfaces() {
+    for (label, theme) in every_theme() {
+        let c = theme.colors;
+        for (name, part) in [("accent", c.accent), ("faint", c.faint)] {
+            for surface in [c.background, c.surface] {
+                let ratio = super::contrast_ratio(part, surface);
+                assert!(ratio >= 3.0, "{label}: {name} is {ratio:.2}:1");
+            }
+        }
+    }
+}
+
+#[test]
 fn light_and_dark_differ_in_every_colour() {
-    let light = Theme::new(Mode::Light).colors.entries();
-    let dark = Theme::new(Mode::Dark).colors.entries();
-    for ((name, light), (_, dark)) in light.iter().zip(dark.iter()) {
-        assert_ne!(light, dark, "{name} is the same in both themes");
+    for color_theme in ColorTheme::ALL {
+        let light = themed(color_theme, Mode::Light).colors.entries();
+        let dark = themed(color_theme, Mode::Dark).colors.entries();
+        for ((name, light), (_, dark)) in light.iter().zip(dark.iter()) {
+            assert_ne!(light, dark, "{color_theme:?}: {name} is the same in both");
+        }
+    }
+}
+
+#[test]
+fn open_sea_is_the_default_and_every_family_has_its_own_look() {
+    assert_eq!(ColorTheme::default(), ColorTheme::OpenSea);
+    assert_eq!(Theme::new(Mode::Light).color_theme, ColorTheme::OpenSea);
+    for mode in MODES {
+        let looks: Vec<_> = ColorTheme::ALL
+            .iter()
+            .map(|color_theme| themed(*color_theme, mode).colors)
+            .collect();
+        for (at, colors) in looks.iter().enumerate() {
+            assert!(
+                !looks[..at].contains(colors),
+                "{mode:?}: family {at} repeats"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_grain_light_background_is_a_neutral_grey_not_cream() {
+    let grain = super::palette::tokens(ColorTheme::Grain, Mode::Light);
+    for (name, token) in [("bg", grain.bg), ("surface", grain.surface)] {
+        assert!(token.c <= 0.004, "{name} chroma is {}", token.c);
+    }
+}
+
+#[test]
+fn the_toml_names_are_unique() {
+    let names: Vec<_> = ColorTheme::ALL.iter().map(|theme| theme.toml()).collect();
+    for (at, name) in names.iter().enumerate() {
+        assert!(!names[..at].contains(name), "{name} repeats");
     }
 }
 
@@ -229,23 +314,21 @@ fn current_falls_back_to_light_before_any_theme_is_applied(cx: &mut TestAppConte
 
 #[test]
 fn text_reads_at_four_and_a_half_to_one_over_every_mark_fill() {
-    for mode in MODES {
-        let theme = Theme::new(mode);
+    for (label, theme) in every_theme() {
         for (at, fill) in theme.marks.fills.iter().enumerate() {
             let ratio = super::contrast_ratio(theme.colors.text, *fill);
-            assert!(ratio >= 4.5, "{mode:?}: text on mark {at} is {ratio:.2}:1");
+            assert!(ratio >= 4.5, "{label}: text on mark {at} is {ratio:.2}:1");
         }
     }
 }
 
 #[test]
 fn mark_ticks_stand_out_three_to_one_from_the_surfaces() {
-    for mode in MODES {
-        let theme = Theme::new(mode);
+    for (label, theme) in every_theme() {
         for (at, tick) in theme.marks.ticks.iter().enumerate() {
             for surface in [theme.colors.surface, theme.colors.rail] {
                 let ratio = super::contrast_ratio(*tick, surface);
-                assert!(ratio >= 3.0, "{mode:?}: tick {at} is {ratio:.2}:1");
+                assert!(ratio >= 3.0, "{label}: tick {at} is {ratio:.2}:1");
             }
         }
     }
@@ -253,8 +336,7 @@ fn mark_ticks_stand_out_three_to_one_from_the_surfaces() {
 
 #[test]
 fn memory_kind_colours_meet_their_contrast_in_both_themes() {
-    for mode in MODES {
-        let theme = Theme::new(mode);
+    for (label, theme) in every_theme() {
         let ratio = super::contrast_ratio;
         let colors = &theme.colors;
         let mut pairs = vec![(
@@ -271,7 +353,7 @@ fn memory_kind_colours_meet_their_contrast_in_both_themes() {
             pairs.push((name, ratio(colors.text, kind.tint), 4.5));
         }
         for (name, got, need) in pairs {
-            assert!(got >= need, "{mode:?}: {name} is {got:.2}:1, needs {need}");
+            assert!(got >= need, "{label}: {name} is {got:.2}:1, needs {need}");
         }
     }
 }
@@ -314,5 +396,25 @@ fn changing_the_mode_keeps_the_density(cx: &mut TestAppContext) {
         let theme = current(cx);
         assert_eq!(theme.mode, Mode::Dark);
         assert_eq!(theme.density, Density::Compact);
+    });
+}
+
+#[gpui_kit::test]
+fn the_colour_theme_survives_a_mode_change_and_reaches_the_kit(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let look = ThemeLook {
+            color_theme: ColorTheme::Grain,
+            ..ThemeLook::default()
+        };
+        apply_look(Mode::Light, look, cx);
+        apply(Mode::Dark, cx);
+        let ours = themed(ColorTheme::Grain, Mode::Dark);
+        assert_eq!(current(cx).color_theme, ColorTheme::Grain);
+        assert_eq!(current(cx).colors, ours.colors);
+        assert_eq!(
+            KitTheme::global(cx).colors.background,
+            ours.colors.background
+        );
     });
 }

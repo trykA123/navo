@@ -30,6 +30,7 @@ pub struct Settings {
 #[serde(default, rename_all = "kebab-case")]
 pub struct Appearance {
     pub mode: ThemeMode,
+    pub color_theme: ColorTheme,
     pub light_theme: String,
     pub dark_theme: String,
     pub font: String,
@@ -43,6 +44,7 @@ impl Default for Appearance {
     fn default() -> Self {
         Self {
             mode: ThemeMode::default(),
+            color_theme: ColorTheme::default(),
             light_theme: "Ferrite Light".to_owned(),
             dark_theme: "Ferrite Dark".to_owned(),
             font: "Inter".to_owned(),
@@ -61,6 +63,19 @@ pub enum ThemeMode {
     System,
     Light,
     Dark,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ColorTheme {
+    RedBill,
+    BlackCap,
+    FineMesh,
+    Grain,
+    InkAndAmber,
+    #[default]
+    #[serde(other)]
+    OpenSea,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

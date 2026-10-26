@@ -29,7 +29,12 @@ pub(super) struct OpenMenu {
 impl FerriteWindow {
     pub(super) fn apply_theme(&self, window: &Window, cx: &mut App) {
         let mode = self.values.theme().resolve(mode_of(window.appearance()));
-        tokens::apply_look(mode, self.values.density(), self.values.syntax_theme(), cx);
+        let look = tokens::ThemeLook {
+            density: self.values.density(),
+            syntax: self.values.syntax_theme(),
+            color_theme: self.values.color_theme(),
+        };
+        tokens::apply_look(mode, look, cx);
     }
 
     pub(super) fn toggle_app_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {

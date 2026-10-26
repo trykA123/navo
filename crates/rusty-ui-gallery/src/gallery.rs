@@ -367,7 +367,7 @@ impl Render for Gallery {
             _ if self.command_center().is_some() => root.children(self.command_center()),
             Page::Primitives => root.child(self.primitives(&t, window, cx)),
             page if page.is_viewer_sample() => self.sample_page(root, cx),
-            Page::Tokens => root.child(tokens_page::render(&t)),
+            Page::Tokens | Page::Palettes => root.child(tokens_page::render(self.page, &t)),
             Page::PdfCalm | Page::PdfSearch | Page::PdfDrawers | Page::PdfOutline => {
                 root.children(self.pdf_sample().cloned())
             }

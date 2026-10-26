@@ -139,7 +139,14 @@ pub(super) fn steer(values: &Values, browser: &mut Browser) {
 impl FerriteWindow {
     pub(super) fn set_values(&mut self, values: Values, window: &Window, cx: &mut App) {
         let old = std::mem::replace(&mut self.values, values);
-        let looks = |values: &Values| (values.theme(), values.density(), values.syntax_theme());
+        let looks = |values: &Values| {
+            (
+                values.theme(),
+                values.color_theme(),
+                values.density(),
+                values.syntax_theme(),
+            )
+        };
         if looks(&old) != looks(&self.values) {
             self.apply_theme(window, cx);
         }

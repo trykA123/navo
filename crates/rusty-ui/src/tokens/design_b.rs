@@ -1,87 +1,10 @@
 use gpui_kit::component::theme::oklch;
 use gpui_kit::{Hsla, px};
 
-use super::{Colors, Mode, Radii, Spacing, Typography};
+use super::{Radii, Spacing, Typography};
 
 pub(super) fn ok(lightness_pct: f32, chroma: f32, hue: f32) -> Hsla {
     oklch(lightness_pct / 100.0, chroma, hue)
-}
-
-fn light() -> Colors {
-    Colors {
-        background: ok(99.2, 0.002, 260.),
-        surface: ok(99.2, 0.002, 260.),
-        rail: ok(96.2, 0.005, 260.),
-        zebra: ok(97.6, 0.004, 260.),
-        line: ok(88., 0.008, 260.),
-        text: ok(21., 0.012, 260.),
-        muted: ok(46., 0.02, 260.),
-        faint: ok(60., 0.016, 260.),
-        hover: ok(95., 0.008, 260.),
-        selection: ok(93., 0.035, 262.),
-        accent: ok(50., 0.18, 262.),
-        accent_text: ok(46., 0.17, 262.),
-        mark: ok(53., 0.2, 30.),
-        folder: ok(60., 0.13, 80.),
-        kind_code: ok(50., 0.15, 262.),
-        kind_image: ok(52., 0.15, 340.),
-        kind_archive: ok(52., 0.12, 45.),
-        kind_app: ok(50., 0.12, 150.),
-        kind_pdf: ok(51., 0.14, 25.),
-        kind_doc: ok(51., 0.13, 235.),
-        kind_sheet: ok(51., 0.12, 165.),
-        kind_slides: ok(51., 0.12, 75.),
-        kind_audio: ok(51., 0.12, 300.),
-        kind_video: ok(51., 0.11, 195.),
-        kind_auto: ok(51., 0.11, 120.),
-        ok: ok(50., 0.13, 150.),
-        warn: ok(55., 0.13, 70.),
-        terminal_background: ok(97., 0.004, 260.),
-        terminal_text: ok(25., 0.015, 260.),
-        terminal_muted: ok(50., 0.02, 260.),
-    }
-}
-
-fn dark() -> Colors {
-    Colors {
-        background: ok(16., 0.008, 260.),
-        surface: ok(16., 0.008, 260.),
-        rail: ok(19., 0.01, 260.),
-        zebra: ok(18., 0.009, 260.),
-        line: ok(28., 0.012, 260.),
-        text: ok(93., 0.006, 260.),
-        muted: ok(72., 0.016, 260.),
-        faint: ok(58., 0.014, 260.),
-        hover: ok(22., 0.012, 260.),
-        selection: ok(30., 0.07, 262.),
-        accent: ok(72., 0.13, 262.),
-        accent_text: ok(78., 0.11, 262.),
-        mark: ok(72., 0.16, 30.),
-        folder: ok(80., 0.11, 85.),
-        kind_code: ok(76., 0.1, 262.),
-        kind_image: ok(75., 0.11, 340.),
-        kind_archive: ok(75., 0.1, 45.),
-        kind_app: ok(75., 0.1, 150.),
-        kind_pdf: ok(75., 0.12, 25.),
-        kind_doc: ok(75., 0.1, 235.),
-        kind_sheet: ok(75., 0.1, 165.),
-        kind_slides: ok(75., 0.1, 75.),
-        kind_audio: ok(75., 0.1, 300.),
-        kind_video: ok(75., 0.09, 195.),
-        kind_auto: ok(75., 0.09, 120.),
-        ok: ok(76., 0.13, 150.),
-        warn: ok(80., 0.12, 75.),
-        terminal_background: ok(12., 0.008, 260.),
-        terminal_text: ok(90., 0.008, 260.),
-        terminal_muted: ok(66., 0.016, 260.),
-    }
-}
-
-pub(super) fn colors(mode: Mode) -> Colors {
-    match mode {
-        Mode::Light => light(),
-        Mode::Dark => dark(),
-    }
 }
 
 pub(super) fn typography() -> Typography {

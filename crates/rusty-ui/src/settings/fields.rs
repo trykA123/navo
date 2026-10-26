@@ -60,6 +60,7 @@ impl Section {
 pub enum Field {
     Theme,
     Density,
+    ColorTheme,
     LightTheme,
     DarkTheme,
     Font,
@@ -129,6 +130,14 @@ pub const THEMES: [Choice; 3] = [
     choice("Light", "light"),
     choice("Dark", "dark"),
 ];
+pub const COLOR_THEMES: [Choice; 6] = [
+    choice("settings-color-theme-open-sea", "open-sea"),
+    choice("settings-color-theme-red-bill", "red-bill"),
+    choice("settings-color-theme-black-cap", "black-cap"),
+    choice("settings-color-theme-fine-mesh", "fine-mesh"),
+    choice("settings-color-theme-grain", "grain"),
+    choice("settings-color-theme-ink-and-amber", "ink-and-amber"),
+];
 pub const DENSITIES: [Choice; 3] = [
     choice("Compact", "compact"),
     choice("Normal", "normal"),
@@ -166,6 +175,7 @@ pub const SORTS: [Choice; 4] = [
 pub enum Look {
     Segments,
     ThemePictures,
+    ColorPictures,
     DensityPictures,
 }
 
@@ -205,7 +215,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 54] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
+pub const FIELDS: [FieldSpec; 55] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
 
 const fn join<const N: usize>(parts: [&[FieldSpec]; 4]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];

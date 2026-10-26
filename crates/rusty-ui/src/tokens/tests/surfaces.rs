@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use gpui_kit::{Hsla, px};
 
-use super::MODES;
+use super::{MODES, every_theme};
 use crate::tokens::{Mode, Motion, Surfaces, Theme, contrast_ratio};
 
 fn named(surfaces: &Surfaces, name: &str) -> Hsla {
@@ -69,8 +69,7 @@ fn light_and_dark_differ_in_every_surface_token() {
 
 #[test]
 fn text_and_muted_text_read_at_four_and_a_half_to_one_on_every_new_surface() {
-    for mode in MODES {
-        let theme = Theme::new(mode);
+    for (theme_label, theme) in every_theme() {
         for surface in BEHIND_TEXT {
             let background = named(&theme.surfaces, surface);
             for (label, foreground) in [("text", theme.colors.text), ("muted", theme.colors.muted)]
@@ -78,7 +77,7 @@ fn text_and_muted_text_read_at_four_and_a_half_to_one_on_every_new_surface() {
                 let ratio = contrast_ratio(foreground, background);
                 assert!(
                     ratio >= 4.5,
-                    "{mode:?}: {label} on {surface} is {ratio:.2}:1"
+                    "{theme_label}: {label} on {surface} is {ratio:.2}:1"
                 );
             }
         }
@@ -87,28 +86,28 @@ fn text_and_muted_text_read_at_four_and_a_half_to_one_on_every_new_surface() {
 
 #[test]
 fn keycap_and_pill_labels_read_at_four_and_a_half_to_one() {
-    for mode in MODES {
-        let s = Theme::new(mode).surfaces;
+    for (theme_label, theme) in every_theme() {
+        let s = theme.surfaces;
         for (label, face) in [
             (s.keycap_label, s.keycap_face),
             (s.keycap_lit_label, s.keycap_lit),
             (s.pill_label, s.pill),
         ] {
             let ratio = contrast_ratio(label, face);
-            assert!(ratio >= 4.5, "{mode:?}: a label is {ratio:.2}:1");
+            assert!(ratio >= 4.5, "{theme_label}: a label is {ratio:.2}:1");
         }
     }
 }
 
 #[test]
 fn rings_progress_and_lit_keycaps_stand_out_three_to_one() {
-    for mode in MODES {
-        let s = Theme::new(mode).surfaces;
+    for (theme_label, theme) in every_theme() {
+        let s = theme.surfaces;
         for (part, next_to) in UI_PARTS {
             let ratio = contrast_ratio(named(&s, part), named(&s, next_to));
             assert!(
                 ratio >= 3.0,
-                "{mode:?}: {part} on {next_to} is {ratio:.2}:1"
+                "{theme_label}: {part} on {next_to} is {ratio:.2}:1"
             );
         }
     }
@@ -262,8 +261,7 @@ fn the_focus_ring_is_two_pixels_of_the_accent() {
 
 #[test]
 fn app_menu_text_reads_at_four_and_a_half_to_one() {
-    for mode in MODES {
-        let theme = Theme::new(mode);
+    for (theme_label, theme) in every_theme() {
         let (c, s) = (theme.colors, theme.surfaces);
         for (label, foreground, background) in [
             ("text on sheet", c.text, s.sheet),
@@ -276,15 +274,14 @@ fn app_menu_text_reads_at_four_and_a_half_to_one() {
             ("primary row label", c.background, c.accent),
         ] {
             let ratio = contrast_ratio(foreground, background);
-            assert!(ratio >= 4.5, "{mode:?}: {label} is {ratio:.2}:1");
+            assert!(ratio >= 4.5, "{theme_label}: {label} is {ratio:.2}:1");
         }
     }
 }
 
 #[test]
 fn the_focus_ring_and_lit_tile_edge_stand_out_three_to_one() {
-    for mode in MODES {
-        let theme = Theme::new(mode);
+    for (theme_label, theme) in every_theme() {
         let s = theme.surfaces;
         for (label, background) in [
             ("sheet", s.sheet),
@@ -292,7 +289,10 @@ fn the_focus_ring_and_lit_tile_edge_stand_out_three_to_one() {
             ("lit tile", s.layer_tint),
         ] {
             let ratio = contrast_ratio(theme.colors.accent, background);
-            assert!(ratio >= 3.0, "{mode:?}: accent on {label} is {ratio:.2}:1");
+            assert!(
+                ratio >= 3.0,
+                "{theme_label}: accent on {label} is {ratio:.2}:1"
+            );
         }
     }
 }

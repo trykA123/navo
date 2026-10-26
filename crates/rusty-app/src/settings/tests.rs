@@ -2,9 +2,9 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use rusty_store::{Settings, SettingsStore, ThemeMode};
+use rusty_store::{ColorTheme as StoredColorTheme, Settings, SettingsStore, ThemeMode};
 use rusty_ui::settings::{Change, Control, FIELDS, Field, Value, Values};
-use rusty_ui::tokens::{Density, ThemeChoice};
+use rusty_ui::tokens::{ColorTheme, Density, ThemeChoice};
 use rusty_ui::window_view::{KeyLine, SettingsHooks, SettingsNews};
 
 use super::{Loaded, Reloader, values_of};
@@ -102,6 +102,7 @@ fn the_menu_choices_reach_the_file() {
     let settings = hooks(Some(&file));
     let changes = [
         Change::theme(ThemeChoice::Dark),
+        Change::color_theme(ColorTheme::Grain),
         Change::density(Density::Compact),
         Change::show_hidden(false),
     ];
@@ -109,7 +110,12 @@ fn the_menu_choices_reach_the_file() {
     assert_eq!(stored.theme(), ThemeChoice::Dark);
     let (store, _) = SettingsStore::load(&file);
     assert_eq!(store.current().appearance.mode, ThemeMode::Dark);
+    assert_eq!(
+        store.current().appearance.color_theme,
+        StoredColorTheme::Grain
+    );
     let again = hooks(Some(&file)).values;
+    assert_eq!(again.color_theme(), ColorTheme::Grain);
     assert_eq!(again.density(), Density::Compact);
     assert!(!again.show_hidden());
 }

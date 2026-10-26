@@ -22,14 +22,23 @@ fn appearance() -> impl Strategy<Value = Appearance> {
         Just(ModifierHints::Fkeys),
         Just(ModifierHints::Off)
     ];
-    let looks = (mode, TEXT, TEXT, TEXT, any::<u16>(), density);
+    let color_theme = prop_oneof![
+        Just(ColorTheme::OpenSea),
+        Just(ColorTheme::RedBill),
+        Just(ColorTheme::BlackCap),
+        Just(ColorTheme::FineMesh),
+        Just(ColorTheme::Grain),
+        Just(ColorTheme::InkAndAmber)
+    ];
+    let looks = (mode, color_theme, TEXT, TEXT, TEXT, any::<u16>(), density);
     (looks, hints, any::<u16>()).prop_map(
         |(
-            (mode, light_theme, dark_theme, font, font_size, density),
+            (mode, color_theme, light_theme, dark_theme, font, font_size, density),
             modifier_hints,
             modifier_hints_delay_ms,
         )| Appearance {
             mode,
+            color_theme,
             light_theme,
             dark_theme,
             font,

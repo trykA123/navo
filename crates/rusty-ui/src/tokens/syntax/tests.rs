@@ -5,7 +5,9 @@ use rusty_syntax::{LineState, TokenKind, builtin, lex_line};
 
 use super::{FALLBACKS, SyntaxTheme, highlight_theme, roles};
 use crate::languages::HIGHLIGHT_NAMES;
-use crate::tokens::{Density, Mode, Theme, apply, apply_look, contrast_ratio, current};
+use crate::tokens::{
+    ColorTheme, Mode, Theme, ThemeLook, apply, apply_look, contrast_ratio, current,
+};
 
 const MODES: [Mode; 2] = [Mode::Light, Mode::Dark];
 const MINIMUM_CONTRAST: f32 = 4.5;
@@ -25,10 +27,18 @@ const KINDS: [TokenKind; 13] = [
     TokenKind::Delimiter,
 ];
 
-fn built(syntax: SyntaxTheme, mode: Mode) -> (HighlightTheme, Theme) {
-    let theme = Theme::new(mode);
+fn built_in(syntax: SyntaxTheme, mode: Mode, color_theme: ColorTheme) -> (HighlightTheme, Theme) {
+    let look = ThemeLook {
+        color_theme,
+        ..ThemeLook::default()
+    };
+    let theme = Theme::with_look(mode, look);
     let base = HighlightTheme::default_light();
     (highlight_theme(syntax, mode, &theme.colors, &base), theme)
+}
+
+fn built(syntax: SyntaxTheme, mode: Mode) -> (HighlightTheme, Theme) {
+    built_in(syntax, mode, ColorTheme::default())
 }
 
 fn every_name() -> Vec<&'static str> {
@@ -55,19 +65,24 @@ fn each_theme_colours_every_highlight_name_in_both_modes() {
     }
 }
 
+fn assert_readable(syntax: SyntaxTheme, mode: Mode, color_theme: ColorTheme) {
+    let (theme, ours) = built_in(syntax, mode, color_theme);
+    for name in every_name() {
+        let colour = theme.style(name).and_then(|style| style.color);
+        let ratio = colour.map_or(0., |colour| contrast_ratio(colour, ours.colors.background));
+        assert!(
+            ratio >= MINIMUM_CONTRAST,
+            "{syntax:?} {mode:?} {color_theme:?}: {name} is {ratio:.2}:1"
+        );
+    }
+}
+
 #[test]
 fn each_code_token_meets_aa_contrast_on_the_viewer_background() {
     for syntax in SyntaxTheme::ALL {
         for mode in MODES {
-            let (theme, ours) = built(syntax, mode);
-            for name in every_name() {
-                let colour = theme.style(name).and_then(|style| style.color);
-                let ratio =
-                    colour.map_or(0., |colour| contrast_ratio(colour, ours.colors.background));
-                assert!(
-                    ratio >= MINIMUM_CONTRAST,
-                    "{syntax:?} {mode:?}: {name} is {ratio:.2}:1"
-                );
+            for color_theme in ColorTheme::ALL {
+                assert_readable(syntax, mode, color_theme);
             }
         }
     }
@@ -156,7 +171,11 @@ fn applying_a_syntax_theme_installs_it_as_the_kit_highlight_theme(cx: &mut TestA
         gpui_kit::init(cx);
         for syntax in SyntaxTheme::ALL {
             for mode in MODES {
-                apply_look(mode, Density::Normal, syntax, cx);
+                let look = ThemeLook {
+                    syntax,
+                    ..ThemeLook::default()
+                };
+                apply_look(mode, look, cx);
                 let (expected, _) = built(syntax, mode);
                 let installed = &KitTheme::global(cx).highlight_theme;
                 for name in every_name() {
@@ -172,7 +191,11 @@ fn applying_a_syntax_theme_installs_it_as_the_kit_highlight_theme(cx: &mut TestA
 fn changing_the_mode_keeps_the_syntax_theme(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        apply_look(Mode::Light, Density::Normal, SyntaxTheme::Mocha, cx);
+        let look = ThemeLook {
+            syntax: SyntaxTheme::Mocha,
+            ..ThemeLook::default()
+        };
+        apply_look(Mode::Light, look, cx);
         apply(Mode::Dark, cx);
         assert_eq!(current(cx).syntax, SyntaxTheme::Mocha);
         let (expected, _) = built(SyntaxTheme::Mocha, Mode::Dark);

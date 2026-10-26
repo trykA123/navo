@@ -1,9 +1,9 @@
 use super::fields::{
-    COPY_MODES, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec, HIDDEN, HINTS, Look, S, SORTS,
-    THEMES, spec,
+    COLOR_THEMES, COPY_MODES, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec, HIDDEN, HINTS, Look,
+    S, SORTS, THEMES, spec,
 };
 
-pub(super) const GENERAL: [FieldSpec; 21] = [
+pub(super) const GENERAL: [FieldSpec; 22] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -13,6 +13,11 @@ pub(super) const GENERAL: [FieldSpec; 21] = [
         (F::Density, S::Appearance, "appearance.density"),
         ("Density", "Row height in file lists"),
         Control::Choices(&DENSITIES, Look::DensityPictures),
+    ),
+    spec(
+        (F::ColorTheme, S::Appearance, "appearance.color-theme"),
+        ("settings-color-theme", "settings-color-theme-help"),
+        Control::Choices(&COLOR_THEMES, Look::ColorPictures),
     ),
     spec(
         (F::LightTheme, S::Appearance, "appearance.light-theme"),

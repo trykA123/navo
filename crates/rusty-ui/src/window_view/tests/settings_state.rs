@@ -6,7 +6,7 @@ use gpui_kit::{AppContext as _, ElementId, Hsla, TestAppContext};
 
 use super::app_menu::{Rig, rig};
 use crate::settings::{Change, FIELDS, Field, Values};
-use crate::tokens::{self, Density, SyntaxTheme, ThemeChoice};
+use crate::tokens::{self, ColorTheme, Density, SyntaxTheme, ThemeChoice};
 use crate::window_view::SettingsNews;
 
 fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
@@ -108,6 +108,7 @@ fn a_change_in_the_sheet_marks_its_row_changed_with_a_dot_and_reset(cx: &mut Tes
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Changed"));
     assert!(shows(cx, &rig, ("settings-dot", row)));
     assert!(shows(cx, &rig, ("settings-reset", row)));
+    rig.press(cx, "up");
     assert_eq!(state(cx, &rig, Field::Theme).as_deref(), Some("Default"));
     assert_eq!(footer(cx, &rig), footer_for(1));
 }
@@ -264,4 +265,34 @@ fn a_hand_edited_syntax_theme_applies_live(cx: &mut TestAppContext) {
     send(cx, &rig, edited, 1);
     assert_eq!(cx.read(|cx| tokens::current(cx).syntax), SyntaxTheme::Mocha);
     assert_ne!(keyword_colour(cx), iron);
+}
+
+#[gpui_kit::test]
+fn a_colour_theme_pick_in_the_sheet_recolours_the_app_live(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::Light);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::ColorTheme);
+    let sea = cx.read(|cx| tokens::current(cx).colors);
+    rig.press(cx, "right");
+    let red_bill = Change::color_theme(ColorTheme::RedBill);
+    assert_eq!(last_change(&rig), Some(red_bill));
+    assert_eq!(
+        cx.read(|cx| tokens::current(cx).color_theme),
+        ColorTheme::RedBill
+    );
+    assert_ne!(cx.read(|cx| tokens::current(cx).colors.accent), sea.accent);
+    rig.press(cx, "left");
+    assert_eq!(cx.read(|cx| tokens::current(cx).colors), sea);
+}
+
+#[gpui_kit::test]
+fn a_hand_edited_colour_theme_applies_live(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::Dark);
+    let edited = Values::default()
+        .with(&Change::theme(ThemeChoice::Dark))
+        .with(&Change::color_theme(ColorTheme::Grain));
+    send(cx, &rig, edited, 1);
+    let theme = cx.read(|cx| tokens::current(cx).clone());
+    assert_eq!(theme.color_theme, ColorTheme::Grain);
+    assert_eq!(theme.mode, tokens::Mode::Dark);
 }

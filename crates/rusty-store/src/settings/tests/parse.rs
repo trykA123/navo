@@ -46,6 +46,31 @@ fn every_theme_mode_parses() {
 }
 
 #[test]
+fn every_color_theme_parses() {
+    for (name, theme) in [
+        ("open-sea", ColorTheme::OpenSea),
+        ("red-bill", ColorTheme::RedBill),
+        ("black-cap", ColorTheme::BlackCap),
+        ("fine-mesh", ColorTheme::FineMesh),
+        ("grain", ColorTheme::Grain),
+        ("ink-and-amber", ColorTheme::InkAndAmber),
+    ] {
+        let text = format!("[appearance]\ncolor-theme = \"{name}\"\n");
+        assert_eq!(parsed(&text).appearance.color_theme, theme, "{name}");
+    }
+}
+
+#[test]
+fn an_unknown_color_theme_falls_back_to_open_sea_and_the_rest_loads() {
+    let text = "[appearance]\ncolor-theme = \"nope\"\nfont-size = 15\n\n[files]\nhidden-files = \"hidden\"\n";
+    let (settings, unknown) = parse(text).unwrap();
+    assert_eq!(settings.appearance.color_theme, ColorTheme::OpenSea);
+    assert_eq!(settings.appearance.font_size, 15);
+    assert_eq!(settings.files.hidden_files, HiddenFiles::Hidden);
+    assert!(unknown.is_empty(), "{unknown:?}");
+}
+
+#[test]
 fn every_density_parses() {
     for (name, density) in [
         ("compact", Density::Compact),

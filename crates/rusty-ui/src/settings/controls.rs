@@ -8,7 +8,7 @@ use super::values::{Change, Value};
 use super::{Handler, SheetEvent};
 use crate::prelude::*;
 use crate::primitives::{IconName, icon};
-use crate::tokens::{Colors, Density, Mode, Surfaces, Theme};
+use crate::tokens::{ColorTheme, Colors, Density, Mode, Surfaces, Theme, ThemeLook};
 
 const TOGGLE: (f32, f32) = (34., 18.);
 const KNOB: f32 = 10.;
@@ -220,6 +220,22 @@ fn theme_swatch(t: &Theme, index: usize) -> Div {
     }
 }
 
+fn color_swatch(t: &Theme, index: usize) -> Div {
+    let color_theme = ColorTheme::ALL.get(index).copied().unwrap_or_default();
+    let themed = Theme::with_look(
+        t.mode,
+        ThemeLook {
+            color_theme,
+            ..ThemeLook::default()
+        },
+    );
+    let palette = Palette {
+        colors: themed.colors,
+        surfaces: themed.surfaces,
+    };
+    div().flex().size_full().child(swatch_half(t, &palette))
+}
+
 fn density_swatch(t: &Theme, index: usize) -> Div {
     let order = [Density::Compact, Density::Normal, Density::Comfortable];
     let density = order.get(index).copied().unwrap_or_default();
@@ -247,10 +263,12 @@ pub(super) fn pictures(picks: &Picks, look: Look) -> impl IntoElement + use<> {
         let is_on = index == picks.at;
         let swatch = match look {
             Look::DensityPictures => density_swatch(t, index),
+            Look::ColorPictures => color_swatch(t, index),
             _ => theme_swatch(t, index),
         };
         let name = match look {
             Look::DensityPictures => "settings-density",
+            Look::ColorPictures => "settings-color-theme",
             _ => "settings-theme",
         };
         let thumb = div()
@@ -285,6 +303,7 @@ pub(super) fn pictures(picks: &Picks, look: Look) -> impl IntoElement + use<> {
     });
     div()
         .flex()
+        .flex_wrap()
         .gap(t.spacing.lg)
         .pt(t.spacing.sm)
         .children(thumbs)

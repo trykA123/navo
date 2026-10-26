@@ -222,7 +222,7 @@ fn the_drive_pages_show_both_pills_the_menu_and_a_path_error(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn the_tokens_page_renders_in_both_themes(cx: &mut TestAppContext) {
+fn the_tokens_and_palettes_pages_render_in_both_themes(cx: &mut TestAppContext) {
     let (window, gallery) = cx.update(|cx| {
         rusty_ui::init(Mode::Light, cx).expect("bundled fonts load");
         let options = WindowOptions {
@@ -237,10 +237,13 @@ fn the_tokens_page_renders_in_both_themes(cx: &mut TestAppContext) {
         })
         .expect("open the gallery window")
     });
-    for mode in [Mode::Light, Mode::Dark] {
+    for (page, mode) in [Page::Tokens, Page::Palettes]
+        .into_iter()
+        .flat_map(|page| [Mode::Light, Mode::Dark].map(|mode| (page, mode)))
+    {
         cx.update(|cx| {
             gallery.update(cx, |gallery, cx| {
-                gallery.set_page(Page::Tokens, cx);
+                gallery.set_page(page, cx);
                 gallery.set_mode(mode, cx);
             });
         });
@@ -248,7 +251,7 @@ fn the_tokens_page_renders_in_both_themes(cx: &mut TestAppContext) {
             window.render_frame(cx);
             assert!(
                 window.try_find("copy").is_none(),
-                "{mode:?}: still on Parts"
+                "{page:?} {mode:?}: still on Parts"
             );
         })
         .expect("window");

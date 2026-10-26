@@ -1,6 +1,8 @@
 use rusty_ui::prelude::*;
 use rusty_ui::tokens::Theme;
 
+use crate::gallery::Page;
+use crate::palettes_page;
 use crate::sections::section;
 use crate::tokens_sample;
 
@@ -83,7 +85,10 @@ fn sizes(t: &Theme) -> Div {
     section(t, "RADII, MOTION, SHADOWS", body)
 }
 
-pub fn render(t: &Theme) -> Div {
+pub fn render(page: Page, t: &Theme) -> Div {
+    if page == Page::Palettes {
+        return palettes_page::render(t);
+    }
     let tokens = div()
         .flex()
         .flex_col()

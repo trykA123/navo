@@ -5,6 +5,7 @@ mod kit;
 mod marks;
 mod memory;
 mod motion;
+mod palette;
 mod shadows;
 mod surfaces;
 mod syntax;
@@ -18,10 +19,11 @@ use gpui_kit::{App, Global, Hsla, Pixels, SharedString};
 
 pub use contrast::{contrast_ratio, relative_luminance};
 pub use density::{Density, Rows};
-pub use kit::{apply, apply_look, apply_with};
+pub use kit::{ThemeLook, apply, apply_look, apply_with};
 pub use marks::MarkColors;
 pub use memory::{MemColors, MemKind};
 pub use motion::Motion;
+pub use palette::ColorTheme;
 pub use shadows::Shadows;
 pub use surfaces::Surfaces;
 pub use syntax::{SyntaxTheme, highlight_theme};
@@ -167,6 +169,7 @@ pub struct Radii {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Theme {
     pub mode: Mode,
+    pub color_theme: ColorTheme,
     pub colors: Colors,
     pub typography: Typography,
     pub spacing: Spacing,
@@ -189,15 +192,27 @@ impl Theme {
     }
 
     pub fn with_density(mode: Mode, density: Density) -> Self {
-        let colors = design_b::colors(mode);
-        let surfaces = surfaces::surfaces(mode, &colors);
+        Self::with_look(
+            mode,
+            ThemeLook {
+                density,
+                ..ThemeLook::default()
+            },
+        )
+    }
+
+    pub fn with_look(mode: Mode, look: ThemeLook) -> Self {
+        let tokens = palette::tokens(look.color_theme, mode);
+        let colors = palette::colors(&tokens);
+        let surfaces = surfaces::surfaces(mode, &colors, &tokens);
         let spacing = design_b::spacing();
         Self {
             mode,
+            color_theme: look.color_theme,
             colors,
             typography: design_b::typography(),
-            rows: density::rows(density, &spacing),
-            density,
+            rows: density::rows(look.density, &spacing),
+            density: look.density,
             spacing,
             radii: design_b::radii(),
             marks: marks::mark_colors(mode),
@@ -205,7 +220,7 @@ impl Theme {
             shadows: shadows::shadows(mode, &surfaces),
             surfaces,
             motion: motion::motion(),
-            syntax: SyntaxTheme::default(),
+            syntax: look.syntax,
         }
     }
 }

@@ -4,6 +4,7 @@ expression: to_toml(&Settings::default())
 ---
 [appearance]
 mode = "system"
+color-theme = "open-sea"
 light-theme = "Ferrite Light"
 dark-theme = "Ferrite Dark"
 font = "Inter"

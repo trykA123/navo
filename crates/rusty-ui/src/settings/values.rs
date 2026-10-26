@@ -6,7 +6,7 @@ use crate::app_menu::{QuickSettings, Setting};
 use crate::browser::DropConfirm;
 use crate::file_list::{SortBy, SortKey};
 use crate::modifier_hints::HintsMode;
-use crate::tokens::{Density, SyntaxTheme, ThemeChoice};
+use crate::tokens::{ColorTheme, Density, SyntaxTheme, ThemeChoice};
 
 const THEME_ORDER: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
 const DENSITY_ORDER: [Density; 3] = [Density::Compact, Density::Normal, Density::Comfortable];
@@ -41,6 +41,10 @@ impl Change {
 
     pub fn theme(theme: ThemeChoice) -> Self {
         Self::pick(Field::Theme, &THEME_ORDER, theme)
+    }
+
+    pub fn color_theme(theme: ColorTheme) -> Self {
+        Self::pick(Field::ColorTheme, &ColorTheme::ALL, theme)
     }
 
     pub fn density(density: Density) -> Self {
@@ -189,6 +193,13 @@ impl Values {
     pub fn theme(&self) -> ThemeChoice {
         THEME_ORDER
             .get(self.pick(Field::Theme))
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn color_theme(&self) -> ColorTheme {
+        ColorTheme::ALL
+            .get(self.pick(Field::ColorTheme))
             .copied()
             .unwrap_or_default()
     }

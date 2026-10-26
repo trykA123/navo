@@ -20,6 +20,7 @@ mod multi_rename_tool_page;
 mod operate_page;
 mod options;
 mod pages;
+mod palettes_page;
 mod pane_page;
 mod pane_sample;
 mod pdf_sample;

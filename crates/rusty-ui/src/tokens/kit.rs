@@ -3,7 +3,7 @@ use std::sync::Arc;
 use gpui_kit::App;
 use gpui_kit::component::theme::{Theme as KitTheme, ThemeColor, ThemeMode};
 
-use super::{Colors, Density, Mode, SyntaxTheme, Theme, highlight_theme};
+use super::{ColorTheme, Colors, Density, Mode, SyntaxTheme, Theme, highlight_theme};
 
 fn map_colors(c: &Colors, k: &mut ThemeColor) {
     k.background = c.background;
@@ -52,19 +52,37 @@ fn map_colors(c: &Colors, k: &mut ThemeColor) {
     k.tab_active_foreground = c.text;
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct ThemeLook {
+    pub density: Density,
+    pub syntax: SyntaxTheme,
+    pub color_theme: ColorTheme,
+}
+
+impl ThemeLook {
+    fn kept(cx: &App) -> Self {
+        cx.try_global::<Theme>()
+            .map(|theme| Self {
+                density: theme.density,
+                syntax: theme.syntax,
+                color_theme: theme.color_theme,
+            })
+            .unwrap_or_default()
+    }
+}
+
 pub fn apply(mode: Mode, cx: &mut App) {
-    let density = cx.try_global::<Theme>().map(|theme| theme.density);
-    apply_with(mode, density.unwrap_or_default(), cx);
+    apply_look(mode, ThemeLook::kept(cx), cx);
 }
 
 pub fn apply_with(mode: Mode, density: Density, cx: &mut App) {
-    let syntax = cx.try_global::<Theme>().map(|theme| theme.syntax);
-    apply_look(mode, density, syntax.unwrap_or_default(), cx);
+    let kept = ThemeLook::kept(cx);
+    apply_look(mode, ThemeLook { density, ..kept }, cx);
 }
 
-pub fn apply_look(mode: Mode, density: Density, syntax: SyntaxTheme, cx: &mut App) {
-    let mut theme = Theme::with_density(mode, density);
-    theme.syntax = syntax;
+pub fn apply_look(mode: Mode, look: ThemeLook, cx: &mut App) {
+    let syntax = look.syntax;
+    let theme = Theme::with_look(mode, look);
     cx.set_global(theme.clone());
     let kit_mode = if mode.is_dark() {
         ThemeMode::Dark

@@ -119,6 +119,7 @@ pub enum Page {
     MapNoRowBars,
     ElfStripKeys,
     MdfTable,
+    Palettes,
 }
 
 pub struct PageInfo {

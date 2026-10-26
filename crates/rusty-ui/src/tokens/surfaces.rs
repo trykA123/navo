@@ -1,6 +1,6 @@
 use gpui_kit::{Background, ColorSpace, Hsla, linear_color_stop, linear_gradient};
 
-use super::design_b::ok;
+use super::palette::{Tokens, lch};
 use super::{Colors, Mode};
 
 const MICA_ANGLE: f32 = 135.;
@@ -96,67 +96,42 @@ impl Surfaces {
     }
 }
 
-fn light(c: &Colors) -> Surfaces {
-    let (surface, line, accent) = (ok(99.3, 0.002, 250.), ok(88., 0.01, 250.), c.accent);
+fn build(c: &Colors, t: &Tokens, scrim: Hsla) -> Surfaces {
+    let (surface, line, accent) = (c.surface, c.line, c.accent);
     Surfaces {
-        mica_from: ok(93.8, 0.012, 245.),
-        mica_to: ok(94.5, 0.014, 60.),
+        mica_from: c.rail,
+        mica_to: t.bg.mix(t.selected, 0.3).color(),
         card: surface,
         card_edge: line,
-        card_ring: ok(60., 0.14, 262.),
-        current: ok(91.5, 0.045, 262.),
-        field: ok(96.5, 0.006, 250.),
-        keycap_face: ok(99.8, 0.001, 260.),
-        keycap_edge: ok(84., 0.01, 260.),
+        card_ring: t.accent.mix(t.surface, 0.2).color(),
+        current: c.selection,
+        field: c.rail,
+        keycap_face: surface,
+        keycap_edge: line,
         keycap_label: c.text,
-        keycap_lit: c.accent,
+        keycap_lit: accent,
         keycap_lit_label: c.background,
-        layer_tint: ok(94.5, 0.03, 262.),
+        layer_tint: c.hover,
         pill: surface,
         pill_ring: accent,
         pill_label: c.accent_text,
         progress_track: line,
         progress_fill: accent,
-        job_card: ok(98.6, 0.004, 250.),
-        sheet: ok(99.8, 0.001, 260.),
-        scrim: ok(21., 0.012, 260.).opacity(0.16),
-        tile: ok(99.8, 0.001, 260.),
-        tile_edge: ok(92.9, 0.002, 260.),
+        job_card: c.background,
+        sheet: surface,
+        scrim,
+        tile: surface,
+        tile_edge: line,
     }
 }
 
-fn dark(c: &Colors) -> Surfaces {
-    let (surface, line, accent) = (ok(20.5, 0.01, 250.), ok(29., 0.012, 250.), c.accent);
-    Surfaces {
-        mica_from: ok(15.5, 0.014, 250.),
-        mica_to: ok(17., 0.014, 280.),
-        card: surface,
-        card_edge: line,
-        card_ring: ok(54., 0.11, 262.),
-        current: ok(32., 0.07, 262.),
-        field: ok(17.5, 0.01, 250.),
-        keycap_face: ok(24., 0.012, 260.),
-        keycap_edge: ok(11., 0.008, 260.),
-        keycap_label: c.text,
-        keycap_lit: c.accent,
-        keycap_lit_label: c.background,
-        layer_tint: ok(23., 0.05, 262.),
-        pill: surface,
-        pill_ring: accent,
-        pill_label: c.accent_text,
-        progress_track: line,
-        progress_fill: accent,
-        job_card: ok(23., 0.012, 250.),
-        sheet: ok(20.5, 0.011, 260.),
-        scrim: ok(5., 0.005, 260.).opacity(0.42),
-        tile: ok(22.6, 0.012, 260.),
-        tile_edge: ok(31., 0.01, 260.),
-    }
-}
-
-pub(super) fn surfaces(mode: Mode, colors: &Colors) -> Surfaces {
+pub(super) fn surfaces(mode: Mode, colors: &Colors, tokens: &Tokens) -> Surfaces {
     match mode {
-        Mode::Light => light(colors),
-        Mode::Dark => dark(colors),
+        Mode::Light => build(colors, tokens, colors.text.opacity(0.16)),
+        Mode::Dark => build(
+            colors,
+            tokens,
+            lch(5., tokens.bg.c / 2., tokens.bg.h).color().opacity(0.42),
+        ),
     }
 }

@@ -4,6 +4,7 @@ use super::*;
 fn appearance_defaults() {
     let a = Settings::default().appearance;
     assert_eq!(a.mode, ThemeMode::System);
+    assert_eq!(a.color_theme, ColorTheme::OpenSea);
     assert_eq!(a.light_theme, "Ferrite Light");
     assert_eq!(a.dark_theme, "Ferrite Dark");
     assert_eq!(a.font, "Inter");

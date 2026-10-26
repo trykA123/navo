@@ -25,8 +25,8 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle};
 
 pub use fields::{
-    Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look, PRESETS, SORTS,
-    SYNTAX_THEMES, Section, THEMES,
+    COLOR_THEMES, Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look,
+    PRESETS, SORTS, SYNTAX_THEMES, Section, THEMES,
 };
 pub use find::{Filter, Line, lines};
 pub use find_bar::find_field;
