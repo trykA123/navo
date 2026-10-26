@@ -135,6 +135,11 @@ impl FerriteWindow {
 
     pub(super) fn perf_on(root: Div, frame: Option<FrameStart>, cx: &mut Context<Self>) -> Div {
         root.on_action(record_in_root)
+            .on_action(
+                cx.listener(|view, _: &crate::settings::SaveDiagnosticReport, _, cx| {
+                    view.save_diagnostic_report(cx)
+                }),
+            )
             .when(perf::is_recording(), |root| {
                 root.on_action(
                     cx.listener(|view, _: &StopRecording, _, cx| view.stop_recording(cx)),
@@ -345,5 +350,65 @@ fn record_in_root(_: &RecordPerformance, window: &mut Window, cx: &mut App) {
     let view = root.read(cx).view().clone();
     if let Ok(view) = view.downcast::<FerriteWindow>() {
         view.update(cx, |view, cx| view.record_performance(window, cx));
+    }
+}
+
+impl FerriteWindow {
+    pub(super) fn save_diagnostic_report(&mut self, cx: &mut Context<Self>) {
+        if self.settings.is_saving_report {
+            return;
+        }
+        self.settings.is_saving_report = true;
+        let save = self.settings.save_diagnostic_report.clone();
+        let saving = cx.background_spawn(async move { save() });
+        cx.spawn(async move |this, cx| {
+            let result = saving.await;
+            let _ = this.update(cx, |view, cx| {
+                view.settings.is_saving_report = false;
+                let (id, detail, is_error) = match result {
+                    Ok(path) => ("diagnostics-saved", path.display().to_string(), false),
+                    Err(error) => ("diagnostics-failed", error, true),
+                };
+                let mut args = rusty_l10n::FluentArgs::new();
+                args.set("detail", detail);
+                view.show_notice(crate::status_bar::StatusNotice {
+                    text: rusty_l10n::tr_args(id, &args).into(),
+                    is_error,
+                });
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+}
+
+impl FerriteWindow {
+    pub(super) fn refresh_diagnostics(&mut self, cx: &mut Context<Self>) {
+        self.settings.diagnostics_generation += 1;
+        let generation = self.settings.diagnostics_generation;
+        let scan = self.settings.disk_use.clone();
+        let scanning = cx.background_spawn(async move { scan() });
+        cx.spawn(async move |this, cx| {
+            let rows = scanning.await;
+            let _ = this.update(cx, |view, cx| {
+                view.receive_diagnostics(generation, rows, cx);
+            });
+        })
+        .detach();
+    }
+}
+
+impl FerriteWindow {
+    fn receive_diagnostics(
+        &mut self,
+        generation: u64,
+        rows: Vec<crate::settings::DiagnosticRow>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings.diagnostics_generation != generation {
+            return;
+        }
+        self.settings.diagnostics = rows;
+        cx.notify();
     }
 }

@@ -38,6 +38,8 @@ pub struct SettingsHooks {
     pub file: Option<Location>,
     pub line_of: FindLine,
     pub news: Option<SettingsInbox>,
+    pub disk_use: Arc<dyn Fn() -> Vec<crate::settings::DiagnosticRow> + Send + Sync>,
+    pub save_diagnostic_report: Arc<dyn Fn() -> Result<std::path::PathBuf, String> + Send + Sync>,
 }
 
 impl SettingsHooks {
@@ -56,6 +58,8 @@ impl SettingsHooks {
             file: None,
             line_of: Arc::new(|_| None),
             news: None,
+            disk_use: Arc::new(Vec::new),
+            save_diagnostic_report: Arc::new(|| Err(rusty_l10n::tr("diagnostics-unavailable"))),
         }
     }
 }
@@ -85,6 +89,12 @@ pub(super) struct SettingsPanel {
     service_generation: u64,
     service_action_pending: bool,
     index_upgrade_due: bool,
+    pub(super) disk_use: Arc<dyn Fn() -> Vec<crate::settings::DiagnosticRow> + Send + Sync>,
+    pub(super) save_diagnostic_report:
+        Arc<dyn Fn() -> Result<std::path::PathBuf, String> + Send + Sync>,
+    pub(super) diagnostics: Vec<crate::settings::DiagnosticRow>,
+    pub(super) diagnostics_generation: u64,
+    pub(super) is_saving_report: bool,
     pub(super) news: Option<SettingsInbox>,
 }
 
@@ -100,6 +110,8 @@ impl SettingsPanel {
             saver,
             Self {
                 news: hooks.news,
+                disk_use: hooks.disk_use,
+                save_diagnostic_report: hooks.save_diagnostic_report,
                 search: search.clone(),
                 ..Self::new(hooks.file, hooks.line_of, cx)
             },
@@ -133,6 +145,11 @@ impl SettingsPanel {
             service_action_pending: false,
             index_upgrade_due: false,
             news: None,
+            disk_use: Arc::new(Vec::new),
+            save_diagnostic_report: SettingsHooks::none().save_diagnostic_report,
+            diagnostics: Vec::new(),
+            diagnostics_generation: 0,
+            is_saving_report: false,
         }
     }
 
@@ -180,6 +197,9 @@ impl FerriteWindow {
         self.settings.is_open = true;
         if section_of(self.settings.row) == Section::Search {
             self.refresh_index_service(cx);
+        }
+        if section_of(self.settings.row) == Section::Diagnostics {
+            self.refresh_diagnostics(cx);
         }
         self.prepare_find(window, cx);
         self.settings.undo.clear();
@@ -239,6 +259,7 @@ impl FerriteWindow {
             SheetEvent::Find => self.focus_find(window, cx),
             SheetEvent::Keep(field) => self.keep_old(field, window, cx),
             SheetEvent::DismissUpgrade => self.dismiss_upgrade(),
+            SheetEvent::RefreshDiagnostics => self.refresh_diagnostics(cx),
             SheetEvent::ClearHistory => self.clear_search_history(),
             SheetEvent::InstallService => self.install_index_service(cx),
             SheetEvent::RemoveService => self.remove_index_service(cx),
@@ -254,7 +275,7 @@ impl FerriteWindow {
 
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
         let from = section_of(self.settings.row);
-        self.settings.row = row.min(FIELDS.len() - 1);
+        self.settings.row = row.min(FIELDS.len());
         self.settings.notice = None;
         let was_shortcuts = std::mem::take(&mut self.settings.is_shortcuts);
         if was_shortcuts {
@@ -272,6 +293,11 @@ impl FerriteWindow {
             && (from != Section::Search || was_shortcuts)
         {
             self.refresh_index_service(cx);
+        }
+        if section_of(self.settings.row) == Section::Diagnostics
+            && (from != Section::Diagnostics || was_shortcuts)
+        {
+            self.refresh_diagnostics(cx);
         }
         if let Some(child) = child_of(&self.settings.filter, row) {
             self.settings.scroll.scroll_to_item(child);
@@ -329,6 +355,7 @@ impl FerriteWindow {
         let this = cx.weak_entity();
         let error = self.saver.error.clone().or(self.settings.notice.clone());
         let body = SettingsBody::new(self.values.clone(), self.settings.row)
+            .diagnostics(self.settings.diagnostics.clone())
             .error(error)
             .filter(self.settings.filter.clone())
             .find(self.find_bar(&t, cx))
@@ -384,3 +411,6 @@ impl FerriteWindow {
         self.settings.row
     }
 }
+
+#[cfg(test)]
+mod diagnostics_tests;

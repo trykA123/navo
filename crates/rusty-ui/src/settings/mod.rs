@@ -1,4 +1,5 @@
 mod controls;
+mod diagnostics_page;
 mod fields;
 mod find;
 mod find_bar;
@@ -40,6 +41,8 @@ use crate::prelude::*;
 use crate::side_sheet::{SheetFrame, SheetState, SideSheet};
 use crate::tokens;
 
+pub use diagnostics_page::DiagnosticRow;
+
 pub const CONTEXT: &str = "SettingsSheet";
 const LAST_SECTION: Section = Section::ALL[Section::ALL.len() - 1];
 pub const FIELD_CONTEXT: &str = "SettingsField";
@@ -64,7 +67,8 @@ gpui_kit::actions!(
         ClearFind,
         FindToList,
         CloseSettings,
-        CancelEdit
+        CancelEdit,
+        SaveDiagnosticReport
     ]
 );
 
@@ -83,6 +87,7 @@ pub enum SheetEvent {
     Find,
     Keep(Field),
     DismissUpgrade,
+    RefreshDiagnostics,
     ClearHistory,
     InstallService,
     RemoveService,
@@ -149,6 +154,7 @@ pub struct SettingsBody {
     find: Option<AnyElement>,
     upgrade: Vec<Moved>,
     page: SearchPage,
+    diagnostics: Vec<DiagnosticRow>,
     focus: Option<FocusHandle>,
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
@@ -158,7 +164,7 @@ impl SettingsBody {
     pub fn new(values: Values, row: usize) -> Self {
         Self {
             values,
-            row: row.min(FIELDS.len() - 1),
+            row: row.min(FIELDS.len()),
             error: None,
             editor: None,
             shortcuts: None,
@@ -166,6 +172,7 @@ impl SettingsBody {
             find: None,
             upgrade: Vec::new(),
             page: SearchPage::default(),
+            diagnostics: Vec::new(),
             focus: None,
             scroll: None,
             on_event: None,
@@ -211,6 +218,12 @@ impl SettingsBody {
     #[must_use]
     pub fn search_page(mut self, page: SearchPage) -> Self {
         self.page = page;
+        self
+    }
+
+    #[must_use]
+    pub fn diagnostics(mut self, rows: Vec<DiagnosticRow>) -> Self {
+        self.diagnostics = rows;
         self
     }
 
@@ -357,6 +370,7 @@ impl RenderOnce for SettingsBody {
             row: self.row,
             filter: &self.filter,
             page: &self.page,
+            diagnostics: &self.diagnostics,
             send: self.on_event.clone(),
         };
         let shown = self.shortcuts.is_none().then_some(section);

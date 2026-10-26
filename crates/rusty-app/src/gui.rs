@@ -110,7 +110,6 @@ fn session_state(
 }
 
 pub(crate) fn open(launch: Launch) {
-    rusty_ui::tokens::set_system_palette_reader(contrast::system_palette);
     let mut store = launch.store;
     let dirs = launch.dirs;
     let settings_start = settings::start_from(dirs.as_ref());
@@ -125,8 +124,9 @@ pub(crate) fn open(launch: Launch) {
     crate::diag::register_listings(&launch.crash.diagnostics.caches, &cache, disk.as_ref());
     metrics::mark("listing cache read");
     let remember = crate::search_hooks::Remember::default();
-    let (settings, _settings_watch) =
+    let (mut settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
+    settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
     let search = search_hooks(services.memory, remember, dirs.as_ref(), &local);
     let crash_report = finish_startup(&mut store, launch.crash, launch.view.is_some());
     run(
@@ -259,6 +259,7 @@ fn finish_settings(
 ) {
     let loaded = load();
     metrics::mark("settings read");
+    rusty_ui::tokens::set_system_palette_reader(contrast::system_palette);
     settings::live(loaded, remember)
 }
 

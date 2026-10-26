@@ -415,3 +415,29 @@ fn search_lists_land_in_the_file_as_arrays_and_come_back_as_text() {
     let text = fs::read_to_string(&file).unwrap();
     assert!(text.contains("drives = [\"C:\", \"D:\"]"), "{text}");
 }
+
+#[test]
+fn diagnostic_report_uses_the_slug_and_preserves_existing_reports() {
+    let root = tempfile::tempdir().unwrap();
+    let name = format!(
+        "{}-diagnostics-20261027-120000.zip",
+        rusty_core::brand::SLUG
+    );
+    let first = root.path().join(&name);
+    std::fs::write(&first, b"existing report").unwrap();
+    let saved = super::save_on_desktop(root.path(), "20261027-120000", |path| {
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)?
+            .write_all(b"new report")
+    })
+    .unwrap();
+    assert_eq!(
+        saved.file_name().unwrap(),
+        name.replace(".zip", "-2.zip").as_str()
+    );
+    assert_eq!(std::fs::read(first).unwrap(), b"existing report");
+    assert_eq!(std::fs::read(saved).unwrap(), b"new report");
+}

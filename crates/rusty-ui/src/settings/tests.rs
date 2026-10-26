@@ -39,7 +39,13 @@ fn sections_run_in_order_without_gaps() {
             seen.push(section);
         }
     }
-    assert_eq!(seen, Section::ALL);
+    assert_eq!(
+        seen,
+        Section::ALL
+            .into_iter()
+            .filter(|section| *section != Section::Diagnostics)
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -101,13 +107,16 @@ fn tab_jumps_to_the_next_section_and_wraps() {
         section_of(next_section(&Filter::default(), 0, true)),
         Section::Files
     );
-    let last = first_row(Section::Display);
+    let last = first_row(Section::Diagnostics);
     assert_eq!(next_section(&Filter::default(), last, true), 0);
     assert_eq!(
         section_of(next_section(&Filter::default(), 0, false)),
-        Section::Display
+        Section::Diagnostics
     );
-    assert_eq!(next_section(&Filter::default(), FIELDS.len() - 1, true), 0);
+    assert_eq!(
+        section_of(next_section(&Filter::default(), FIELDS.len() - 1, true)),
+        Section::Diagnostics
+    );
 }
 
 #[test]

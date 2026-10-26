@@ -65,3 +65,21 @@ settings-font-size-clamped = Font size limited to { $size } px. Choose a size fr
 
 settings-ui-scale = UI scale
 settings-ui-scale-help = Percent, from 80 to 200
+
+settings-diagnostics = Diagnostics
+settings-diagnostics-empty = No cache or store locations are available.
+settings-diagnostics-refresh = Refresh
+settings-diagnostics-at-least = at least
+settings-diagnostics-entries = Entries
+settings-diagnostics-budget = Budget
+cmd-app-save-diagnostic-report = Save a diagnostic report
+diagnostics-unavailable = Diagnostic reports are unavailable in this session.
+diagnostics-no-desktop = No Desktop or home folder was found.
+diagnostics-saved = Diagnostic report saved to { $detail }
+diagnostics-failed = Could not save the diagnostic report: { $detail }
+diagnostics-listings = Listing cache
+diagnostics-journal = Journal
+diagnostics-session = Session
+diagnostics-index = Index
+diagnostics-logs = Logs and crash reports
+diagnostics-recordings = Performance recordings

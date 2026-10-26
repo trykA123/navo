@@ -40,6 +40,11 @@ impl Filter {
 
     #[must_use]
     pub fn first_in(&self, section: Section) -> Option<usize> {
+        if section == Section::Diagnostics {
+            return self
+                .admits_text("diagnostics cache storage report")
+                .then_some(FIELDS.len());
+        }
         rows_in(section)
             .find(|(_, spec)| self.admits(spec))
             .map(|(index, _)| index)

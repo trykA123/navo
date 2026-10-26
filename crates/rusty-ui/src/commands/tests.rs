@@ -519,3 +519,17 @@ fn the_command_box_copy_path_key_stays_out_of_the_palette() {
         .map(|entry| entry.in_palette);
     assert_eq!((hidden, shown), (Some(false), Some(true)));
 }
+
+#[gpui_kit::test]
+fn diagnostic_report_is_in_the_palette_without_a_default_key(cx: &mut TestAppContext) {
+    let entry = entries()
+        .into_iter()
+        .find(|entry| entry.spec.name == "app.save_diagnostic_report")
+        .unwrap();
+    assert!(entry.enabled && entry.in_palette);
+    assert!(
+        !bound(cx)
+            .iter()
+            .any(|binding| Some(binding.action) == entry.spec.action)
+    );
+}

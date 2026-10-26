@@ -27,6 +27,7 @@ pub(super) struct Look<'a> {
     pub values: &'a Values,
     pub row: usize,
     pub filter: &'a Filter,
+    pub diagnostics: &'a [super::DiagnosticRow],
     pub page: &'a SearchPage,
     pub send: Option<Handler>,
 }
@@ -52,7 +53,7 @@ fn select_on_click<E: StatefulInteractiveElement>(
 
 struct NavItem {
     index: usize,
-    label: &'static str,
+    label: SharedString,
     glyph: IconName,
     is_on: bool,
     is_empty: bool,
@@ -78,7 +79,7 @@ fn nav_item(look: &Look, item: NavItem) -> AnyElement {
     let element = div()
         .id(("settings-section", item.index))
         .role(Role::Tab)
-        .aria_label(item.label)
+        .aria_label(item.label.clone())
         .aria_selected(item.is_on)
         .test_support()
         .relative()
@@ -112,7 +113,7 @@ pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + u
         .enumerate()
         .map(|(index, section)| NavItem {
             index,
-            label: section.label(),
+            label: section_label(*section),
             glyph: section.icon(),
             is_on: current == Some(*section),
             is_empty: look.filter.first_in(*section).is_none(),
@@ -124,7 +125,7 @@ pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + u
         });
     let shortcuts = NavItem {
         index: Section::ALL.len(),
-        label: SHORTCUTS,
+        label: SHORTCUTS.into(),
         glyph: IconName::Keyboard,
         is_on: current.is_none(),
         is_empty: false,
@@ -335,7 +336,7 @@ fn group_heading(t: &Theme, label: &'static str) -> AnyElement {
         .into_any_element()
 }
 
-fn section_heading(t: &Theme, section: Section) -> AnyElement {
+pub(super) fn section_heading(t: &Theme, section: Section) -> AnyElement {
     div()
         .flex_none()
         .px(t.spacing.xl)
@@ -344,7 +345,7 @@ fn section_heading(t: &Theme, section: Section) -> AnyElement {
         .text_size(t.typography.small)
         .text_color(t.colors.muted)
         .font_weight(FontWeight::SEMIBOLD)
-        .child(section.label())
+        .child(section_label(section))
         .into_any_element()
 }
 
@@ -383,6 +384,11 @@ pub(super) fn content(
             Line::History => search_page::history_block(t, look.page, send),
         })
         .collect();
+    if section == Section::Diagnostics
+        || (!look.filter.is_empty() && look.filter.first_in(Section::Diagnostics).is_some())
+    {
+        rows.extend(super::diagnostics_page::render(look));
+    }
     if rows.is_empty() {
         rows.push(no_match(t));
     }
@@ -398,4 +404,12 @@ pub(super) fn content(
         .overflow_y_scroll()
         .when_some(scroll, |list, scroll| list.track_scroll(scroll))
         .children(rows)
+}
+
+fn section_label(section: Section) -> SharedString {
+    if section == Section::Diagnostics {
+        rusty_l10n::tr(section.label()).into()
+    } else {
+        section.label().into()
+    }
 }

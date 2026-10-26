@@ -15,10 +15,11 @@ pub enum Section {
     Copy,
     Search,
     Display,
+    Diagnostics,
 }
 
 impl Section {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
@@ -27,6 +28,7 @@ impl Section {
         Self::Copy,
         Self::Search,
         Self::Display,
+        Self::Diagnostics,
     ];
 
     pub fn label(self) -> &'static str {
@@ -39,6 +41,7 @@ impl Section {
             Self::Copy => "Copy",
             Self::Search => "Search",
             Self::Display => "Display",
+            Self::Diagnostics => "settings-diagnostics",
         }
     }
 
@@ -52,6 +55,7 @@ impl Section {
             Self::Copy => IconName::Copy,
             Self::Search => IconName::Search,
             Self::Display => IconName::Eye,
+            Self::Diagnostics => IconName::Eye,
         }
     }
 }

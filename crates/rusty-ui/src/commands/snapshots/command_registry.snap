@@ -371,6 +371,7 @@ multi_rename.counter_per_folder | Restart the counter in each folder | MultiRena
 multi_rename.toggle_row | Exclude or include the row | MultiRenamePreview
 multi_rename.move_row_up | Move the row up | MultiRenamePreview
 multi_rename.move_row_down | Move the row down | MultiRenamePreview
+app.save_diagnostic_report | Save a diagnostic report | global
 perf.record | Record performance | global
 perf.stop | Stop recording | global
 window.new | New window | global

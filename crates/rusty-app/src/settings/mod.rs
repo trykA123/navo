@@ -1,6 +1,8 @@
-use std::fs;
+use rusty_cache::DiskListings;
+use rusty_diag::{DiskKind, Redactor};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::{fs, io};
 
 use rusty_core::Location;
 use rusty_fs::Watch;
@@ -123,6 +125,7 @@ fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
         file: path.as_deref().and_then(location_of),
         line_of: line_finder(path),
         news: None,
+        ..SettingsHooks::none()
     };
     (hooks, shared)
 }
@@ -274,3 +277,84 @@ mod start_tests;
 mod state_tests;
 #[cfg(test)]
 mod tests;
+
+pub(crate) fn wire_diagnostics(
+    hooks: &mut rusty_ui::window_view::SettingsHooks,
+    crash: &crate::crash_report::CrashStart,
+    dirs: Option<&rusty_store::StoreDirs>,
+) {
+    let started = crash.started;
+    let diagnostics = &crash.diagnostics;
+    let data = dirs.map(|dirs| dirs.data.clone());
+    let scan_data = data.clone();
+    let scan_diagnostics = diagnostics.clone();
+    hooks.disk_use =
+        Arc::new(move || diagnostic_rows(scan_data.as_deref(), &scan_diagnostics.redactor));
+    let diagnostics = diagnostics.clone();
+    hooks.save_diagnostic_report = Arc::new(move || {
+        let folder =
+            crate::crash::desktop_dir().ok_or_else(|| rusty_l10n::tr("diagnostics-no-desktop"))?;
+        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        save_on_desktop(&folder, &stamp, |path| {
+            crate::diag::write_on_demand(path, started, &diagnostics, data.as_deref()).map(drop)
+        })
+        .map_err(|error| error.to_string())
+    });
+}
+
+fn diagnostic_rows(
+    data: Option<&Path>,
+    redactor: &Redactor,
+) -> Vec<rusty_ui::settings::DiagnosticRow> {
+    let mut stats = data.and_then(|data| DiskListings::stored(&data.join("cache.db")));
+    crate::diag::disk_use(data, redactor)
+        .locations
+        .into_iter()
+        .map(|location| {
+            let id = match location.kind {
+                DiskKind::ListingCache => "diagnostics-listings",
+                DiskKind::Journal => "diagnostics-journal",
+                DiskKind::Session => "diagnostics-session",
+                DiskKind::Index => "diagnostics-index",
+                DiskKind::LogsAndCrashes => "diagnostics-logs",
+                DiskKind::PerformanceRecordings => "diagnostics-recordings",
+            };
+            let stats = matches!(location.kind, DiskKind::ListingCache)
+                .then(|| stats.take())
+                .flatten();
+            rusty_ui::settings::DiagnosticRow {
+                name: rusty_l10n::tr(id).into(),
+                path: location.path.into(),
+                bytes: location.usage.bytes,
+                at_least: location.usage.at_least,
+                entries: stats.map(|stats| stats.entries),
+                budget: stats.map(|stats| stats.budget),
+            }
+        })
+        .collect()
+}
+
+fn save_on_desktop(
+    folder: &Path,
+    stamp: &str,
+    write: impl Fn(&Path) -> io::Result<()>,
+) -> io::Result<PathBuf> {
+    let mut last = io::Error::from(io::ErrorKind::AlreadyExists);
+    for attempt in 1..=9 {
+        let suffix = if attempt == 1 {
+            String::new()
+        } else {
+            format!("-{attempt}")
+        };
+        let path = folder.join(format!(
+            "{}-diagnostics-{stamp}{suffix}.zip",
+            rusty_core::brand::SLUG
+        ));
+        match write(&path) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => last = error,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last)
+}

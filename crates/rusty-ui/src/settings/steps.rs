@@ -58,12 +58,18 @@ pub fn moved(filter: &Filter, row: usize, down: bool) -> usize {
 }
 
 pub fn section_of(row: usize) -> Section {
+    if row == FIELDS.len() {
+        return Section::Diagnostics;
+    }
     FIELDS
         .get(row)
         .map_or(Section::Appearance, |spec| spec.section)
 }
 
 pub fn first_row(section: Section) -> usize {
+    if section == Section::Diagnostics {
+        return FIELDS.len();
+    }
     FIELDS
         .iter()
         .position(|spec| spec.section == section)

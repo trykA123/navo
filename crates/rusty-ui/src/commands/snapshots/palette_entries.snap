@@ -371,6 +371,7 @@ multi_rename.counter_per_folder | MultiRename | false
 multi_rename.toggle_row | MultiRenamePreview | false
 multi_rename.move_row_up | MultiRenamePreview | false
 multi_rename.move_row_down | MultiRenamePreview | false
+app.save_diagnostic_report | global | true
 perf.record | global | true
 perf.stop | global | true
 window.new | global | true
