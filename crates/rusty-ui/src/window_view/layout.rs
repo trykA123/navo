@@ -44,7 +44,7 @@ impl FerriteWindow {
             (Some(only), None) => only,
             _ => div().into_any_element(),
         };
-        self.viewer_view(cx).unwrap_or(body)
+        self.viewer_view(window, cx).unwrap_or(body)
     }
 
     pub(super) fn body_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {

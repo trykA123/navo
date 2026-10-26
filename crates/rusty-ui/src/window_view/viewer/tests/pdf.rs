@@ -562,3 +562,18 @@ fn a_page_whose_text_fails_is_named_in_the_status_line(cx: &mut TestAppContext) 
     let count = text(cx, rig.0, "pdf-find-count");
     assert!(count.ends_with("some pages skipped"), "{count}");
 }
+
+#[gpui_kit::test]
+fn the_page_focus_ring_follows_the_cursor_only_while_focused(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    keys(cx, &rig, &["ctrl-b"]);
+    assert!(shown(cx, rig.0, ("pdf-page-focus-ring", 0usize)));
+    keys(cx, &rig, &["down"]);
+    assert!(!shown(cx, rig.0, ("pdf-page-focus-ring", 0usize)));
+    assert!(shown(cx, rig.0, ("pdf-page-focus-ring", 1usize)));
+    cx.update_window(rig.0, |_, window, cx| window.blur(cx))
+        .expect("window");
+    keys(cx, &rig, &[]);
+    assert!(!shown(cx, rig.0, ("pdf-page-focus-ring", 1usize)));
+    assert!(shown(cx, rig.0, ("pdf-page-row", 1usize)));
+}

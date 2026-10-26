@@ -364,3 +364,27 @@ fn a_preview_sweep_over_pdfs_opens_one_helper_at_a_time_and_skips_passed_files()
     assert_eq!(opens.count.load(Ordering::SeqCst), 2);
     assert_eq!(opens.most.load(Ordering::SeqCst), 1);
 }
+
+#[gpui_kit::test]
+fn the_waiting_viewer_focus_ring_appears_only_with_root_focus(cx: &mut TestAppContext) {
+    use gpui_kit::AppContext as _;
+
+    let (window, view, _) = super::text_window(cx, Setup::new(b"hello\n".to_vec()));
+    assert!(!super::visible(cx, window, "viewer-focus-ring"));
+    let focus = view.update(cx, |view, cx| {
+        let viewer = view.viewer.as_mut().expect("viewer");
+        viewer.body = None;
+        let focus = viewer.focus.clone();
+        cx.notify();
+        focus
+    });
+    cx.update_window(window, |_, window, cx| window.focus(&focus, cx))
+        .expect("window");
+    redraw(cx, window);
+    assert!(super::visible(cx, window, "viewer-focus-ring"));
+    cx.update_window(window, |_, window, cx| window.blur(cx))
+        .expect("window");
+    redraw(cx, window);
+    assert!(!super::visible(cx, window, "viewer-focus-ring"));
+    assert!(super::visible(cx, window, "viewer-status"));
+}

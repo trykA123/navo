@@ -47,6 +47,17 @@ fn thumb_frame(t: &Theme, doc: &Doc, page: u32, is_current: bool) -> Div {
         })
 }
 
+fn page_focus_ring(t: &Theme, row: usize) -> impl IntoElement {
+    div()
+        .id(("pdf-page-focus-ring", row))
+        .test_support()
+        .absolute()
+        .inset_0()
+        .m(t.spacing.xxs)
+        .rounded(t.radii.md)
+        .shadow(t.shadows.focus.clone())
+}
+
 impl PdfView {
     pub(super) fn left_tabs(&self, _: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.weak_entity();
@@ -119,7 +130,12 @@ impl PdfView {
         self.go_to_page(page, cx);
     }
 
-    fn page_row(&self, t: &Theme, (row, page): (usize, u32), cx: &mut Context<Self>) -> AnyElement {
+    fn page_row(
+        &self,
+        t: &Theme,
+        (row, page, is_focused): (usize, u32, bool),
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let Some(doc) = self.doc() else {
             return div().into_any_element();
         };
@@ -132,6 +148,7 @@ impl PdfView {
             .aria_label(format!("Page {}", page + 1))
             .aria_selected(is_selected)
             .test_support()
+            .relative()
             .flex()
             .items_center()
             .gap(t.spacing.lg)
@@ -140,6 +157,9 @@ impl PdfView {
             .px(t.spacing.lg)
             .rounded(t.radii.md)
             .when(is_selected, |row| row.bg(t.colors.selection))
+            .when(is_selected && is_focused, |frame| {
+                frame.child(page_focus_ring(t, row))
+            })
             .on_click(cx.listener(move |view, _, _, cx| view.go_to_page_row(row, cx)))
             .child(thumb_frame(t, doc, page, is_current))
             .child(
@@ -179,9 +199,10 @@ impl PdfView {
             if moved {
                 window.on_next_frame(move |_, cx| cx.notify(entity));
             }
+            let is_focused = view.pages_focus.is_focused(window);
             range
                 .zip(shown.to_vec())
-                .map(|shown| view.page_row(&t, shown, cx))
+                .map(|(row, page)| view.page_row(&t, (row, page, is_focused), cx))
                 .collect()
         })
     }

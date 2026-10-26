@@ -6,8 +6,9 @@ use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::FerriteWindow;
 
-fn header(t: &Theme, viewer: &Viewer) -> Div {
+fn header(t: &Theme, viewer: &Viewer, window: &Window) -> Div {
     div()
+        .relative()
         .flex()
         .items_center()
         .gap(t.spacing.md)
@@ -16,6 +17,18 @@ fn header(t: &Theme, viewer: &Viewer) -> Div {
         .border_b_1()
         .border_color(t.colors.line)
         .bg(t.colors.rail)
+        .when(viewer.focus.is_focused(window), |header| {
+            header.child(
+                div()
+                    .id("viewer-focus-ring")
+                    .test_support()
+                    .absolute()
+                    .inset_0()
+                    .m(t.spacing.xxs)
+                    .rounded(t.radii.sm)
+                    .shadow(t.shadows.focus.clone()),
+            )
+        })
         .child(
             div()
                 .id("viewer-title")
@@ -59,7 +72,11 @@ fn waiting(t: &Theme, viewer: &Viewer) -> impl IntoElement {
 }
 
 impl FerriteWindow {
-    pub(in crate::window_view) fn viewer_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(in crate::window_view) fn viewer_view(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let viewer = self.viewer.as_ref()?;
         let t = tokens::current(cx).clone();
         let save = cx.listener(|view, _: &SaveFile, _, cx| view.save_viewer(cx));
@@ -88,7 +105,9 @@ impl FerriteWindow {
             .bg(t.colors.surface);
         let root = match &viewer.body {
             Some(body) => root.child(body.view()),
-            None => root.child(header(&t, viewer)).child(waiting(&t, viewer)),
+            None => root
+                .child(header(&t, viewer, window))
+                .child(waiting(&t, viewer)),
         };
         Some(root.into_any_element())
     }
