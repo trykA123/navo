@@ -92,3 +92,66 @@ fn inner_captions_appear_only_on_tiles_above_the_text_threshold() {
             .all(|(tile, shown)| tile.text == *shown)
     );
 }
+
+#[test]
+fn a_picked_tile_keeps_its_group_background() {
+    use super::{Treemap, TreemapGroup};
+    use crate::prelude::*;
+
+    for mode in [Mode::Light, Mode::Dark] {
+        let theme = Theme::new(mode);
+        let tile = tile(Target::Item(7), true);
+        let groups = vec![TreemapGroup {
+            id: 7,
+            name: "Group".into(),
+            by_kind: [0; rusty_automotive::space::Kind::COUNT],
+            parts: Vec::new(),
+        }];
+        let map =
+            Treemap::new("map", groups.clone().into(), vec![tile.clone()].into()).selected(Some(7));
+        let colours = palette(1, mode);
+        let mut cell = map.tile(&theme, &tile, (Some(&groups[0]), Some(&colours[0])));
+        let background = cell
+            .style()
+            .background
+            .as_ref()
+            .and_then(|fill| fill.color());
+        assert_eq!(background, Some(colours[0].base().bg.into()));
+        assert_ne!(background, Some(theme.colors.accent.into()));
+    }
+}
+
+#[test]
+fn the_selection_outline_sits_outside_the_tile() {
+    use super::{SELECTED_WIDTH, place, selection_outline};
+    use crate::prelude::*;
+
+    for mode in [Mode::Light, Mode::Dark] {
+        let theme = Theme::new(mode);
+        let rect = Rect::new(20., 30., 100., 50.);
+        let mut cell = place(rect);
+        let cell = cell.style().clone();
+        let mut outline = selection_outline(&theme, rect);
+        let outline = outline.style();
+        assert_eq!(
+            outline.inset.left,
+            Some(px(rect.x as f32 - SELECTED_WIDTH).into())
+        );
+        assert_eq!(
+            outline.inset.top,
+            Some(px(rect.y as f32 - SELECTED_WIDTH).into())
+        );
+        assert_eq!(
+            outline.size.width,
+            Some(px(rect.w as f32 - super::GAP + 2. * SELECTED_WIDTH).into())
+        );
+        assert_eq!(
+            outline.size.height,
+            Some(px(rect.h as f32 - super::GAP + 2. * SELECTED_WIDTH).into())
+        );
+        assert_ne!(outline.inset.left, cell.inset.left);
+        assert_ne!(outline.inset.top, cell.inset.top);
+        assert_eq!(outline.border_widths.left, Some(px(SELECTED_WIDTH).into()));
+        assert!(outline.background.is_none());
+    }
+}

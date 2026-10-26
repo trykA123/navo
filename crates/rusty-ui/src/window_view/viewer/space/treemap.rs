@@ -156,6 +156,19 @@ fn place(rect: Rect) -> Div {
         .overflow_hidden()
 }
 
+fn selection_outline(t: &Theme, rect: Rect) -> Div {
+    let width = f64::from(SELECTED_WIDTH);
+    place(Rect::new(
+        rect.x - width,
+        rect.y - width,
+        rect.w + 2. * width,
+        rect.h + 2. * width,
+    ))
+    .border(px(SELECTED_WIDTH))
+    .border_color(t.colors.accent)
+    .rounded(t.radii.xs)
+}
+
 fn label(t: &Theme, color: Hsla, (name, detail): (String, String), detail_line: bool) -> Div {
     let head = div()
         .truncate()
@@ -232,7 +245,7 @@ impl Treemap {
         t: &Theme,
         tile: &Tile,
         (group, colours): (Option<&TreemapGroup>, Option<&GroupColours>),
-    ) -> AnyElement {
+    ) -> impl IntoElement + Styled + use<> {
         let more = matches!(tile.target, Target::More { .. });
         let shade = shade_of(t, tile, (colours, None));
         let name = name_of(tile, group, false);
@@ -276,7 +289,6 @@ impl Treemap {
                     emit(&on_event, TreemapEvent::Pick(id), window, cx);
                 })
             })
-            .into_any_element()
     }
 
     fn inner_tile(&self, t: &Theme, tile: &Tile, (parent, rank): (&Parent<'_>, usize)) -> Div {
@@ -370,12 +382,7 @@ impl RenderOnce for Treemap {
         let ring = self.cursor_ring(&t, window);
         root.children(tiles)
             .when_some(outline, |root, tile| {
-                root.child(
-                    place(tile.rect)
-                        .border(px(SELECTED_WIDTH))
-                        .border_color(t.colors.accent)
-                        .rounded(t.radii.xs),
-                )
+                root.child(selection_outline(&t, tile.rect))
             })
             .children(ring)
     }
