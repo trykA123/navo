@@ -14,9 +14,11 @@ use super::{Rig, rig, rig_from, rig_on, rig_with, shell_item};
 use crate::file_list::SortBy;
 use crate::window_view::{ClipboardEffect, ClipboardFiles, FileClipboardService};
 
-const LOADING_ROWS: [&str; 5] = [
+const LOADING_ROWS: [&str; 7] = [
     "Sort by",
     "Refresh",
+    "Copy folder path",
+    "Open terminal here",
     "-",
     "Loading Windows items…",
     "New file…",
@@ -206,6 +208,8 @@ fn sort_by_and_refresh_lead_and_new_file_follows_new(cx: &mut TestAppContext) {
         [
             "Sort by",
             "Refresh",
+            "Copy folder path",
+            "Open terminal here",
             "-",
             "Open in Terminal",
             "-",
@@ -230,6 +234,7 @@ fn without_a_windows_menu_the_folder_menu_lists_every_ferrite_item(cx: &mut Test
             "Refresh",
             "Sort by",
             "Copy folder path",
+            "Open terminal here",
         ]
     );
 }

@@ -375,3 +375,11 @@ cmd-multi-rename-move-row-down = Move the row down
 cmd-multi-rename-toggle-row = Exclude or include the row
 
 command-center-indexing = Indexing { $root } · { $count } files
+
+cmd-files-open-terminal = Open terminal here
+terminal-local-only = A terminal opens only in a local folder.
+terminal-not-configured = Terminals are not set up.
+terminal-command-empty = Set a terminal command in settings.
+terminal-provider-unknown = Choose a terminal provider in settings.
+terminal-command-quotes = Close the quotation marks in the terminal command.
+terminal-spawn-error = Could not start the terminal: { $error }

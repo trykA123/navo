@@ -57,6 +57,7 @@ fn open_big(
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: super::super::EditorHooks::none(),
+        terminal: super::super::TerminalHooks::none(),
         files: super::super::FileHooks::none(),
         kinds: super::super::Kinds::builtin(),
         drives: super::super::DriveHooks::none(),

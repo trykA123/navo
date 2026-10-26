@@ -242,6 +242,7 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: super::super::EditorHooks::none(),
+        terminal: super::super::TerminalHooks::none(),
         files: super::super::FileHooks::none(),
         kinds: super::super::Kinds::builtin(),
         drives: DriveHooks {

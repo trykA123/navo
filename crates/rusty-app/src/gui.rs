@@ -21,7 +21,7 @@ use crate::startup::{
 };
 use crate::{
     app_menu, clipboard, drives, editor, files, jobs, keymap, launch, metrics, rename_hooks,
-    settings, shell_menu,
+    settings, shell_menu, terminal,
 };
 
 const START_READ: Duration = Duration::from_millis(50);
@@ -136,6 +136,7 @@ pub(crate) fn open(launch: Launch) {
             mode: Mode::Light,
             operations: services.operations,
             launcher: launch::launcher(),
+            terminal: terminal::hooks(&settings.values),
             editor: editor::hooks(|name| std::env::var(name).ok()),
             search,
             files: services.files,

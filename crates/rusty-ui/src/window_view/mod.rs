@@ -41,6 +41,7 @@ mod status;
 mod strip;
 mod strip_keys;
 mod tab_keys;
+mod terminal;
 mod title;
 mod undo;
 mod user_keymap;
@@ -53,10 +54,9 @@ mod window_menu;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
 
 use command_center::CommandCenterState;
-use gpui_kit::{FocusHandle, Modifiers, ModifiersChangedEvent, Subscription, WindowAppearance};
+use gpui_kit::{FocusHandle, Modifiers, ModifiersChangedEvent, Subscription};
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
@@ -69,8 +69,6 @@ use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
 use crate::title_bar::{GradientLayer, system_backdrop};
 use crate::tokens::{self, Mode};
-
-const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 pub use app_menu::AppMenuHooks;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
@@ -101,6 +99,7 @@ pub use shell_menu::{
 };
 pub use start::run;
 pub use start_watch::{StartReport, StartWatch};
+pub use terminal::TerminalHooks;
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -133,6 +132,7 @@ pub struct StartOptions {
     pub operations: Operations,
     pub launcher: Launcher,
     pub editor: EditorHooks,
+    pub terminal: TerminalHooks,
     pub files: FileHooks,
     pub kinds: Kinds,
     pub drives: DriveHooks,
@@ -159,6 +159,7 @@ pub struct FerriteWindow {
     on_save: SaveSession,
     prompt: Option<prompt::Prompt>,
     editor: EditorHooks,
+    terminal: TerminalHooks,
     files: FileHooks,
     kinds: viewer::Kinds,
     viewer: Option<viewer::Viewer>,
@@ -195,13 +196,6 @@ pub struct FerriteWindow {
     _watches: [Subscription; 5],
 }
 
-fn mode_of(appearance: WindowAppearance) -> Mode {
-    match appearance {
-        WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
-        WindowAppearance::Light | WindowAppearance::VibrantLight => Mode::Light,
-    }
-}
-
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut browser = Self::browser(&options, cx);
@@ -215,6 +209,7 @@ impl FerriteWindow {
             on_save: options.on_save,
             prompt: None,
             editor: options.editor,
+            terminal: options.terminal,
             files: options.files,
             kinds: options.kinds,
             viewer: None,

@@ -243,6 +243,7 @@ pub(super) fn options_with(fs: Arc<FakeFs>, files: FileHooks, kinds: super::Kind
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: crate::window_view::EditorHooks::none(),
+        terminal: crate::window_view::TerminalHooks::none(),
         files,
         kinds,
         drives: crate::window_view::DriveHooks::none(),

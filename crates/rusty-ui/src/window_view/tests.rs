@@ -55,6 +55,7 @@ mod shell_menu;
 pub(in crate::window_view) mod shortcuts;
 mod start_watch;
 mod tabs;
+mod terminal;
 mod typed;
 mod undo;
 mod visits;
@@ -123,6 +124,7 @@ pub(crate) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         operations: Operations::unlogged(),
         launcher: Arc::new(|_| {}),
         editor: super::EditorHooks::none(),
+        terminal: super::TerminalHooks::none(),
         files: super::FileHooks::none(),
         kinds: super::Kinds::builtin(),
         drives: super::DriveHooks::none(),
@@ -242,10 +244,10 @@ fn closing_the_window_saves_the_session(cx: &mut TestAppContext) {
 #[test]
 fn every_system_appearance_maps_to_a_theme_mode() {
     use gpui_kit::WindowAppearance as A;
-    assert_eq!(super::mode_of(A::Light), Mode::Light);
-    assert_eq!(super::mode_of(A::VibrantLight), Mode::Light);
-    assert_eq!(super::mode_of(A::Dark), Mode::Dark);
-    assert_eq!(super::mode_of(A::VibrantDark), Mode::Dark);
+    assert_eq!(super::font_settings::mode_of(A::Light), Mode::Light);
+    assert_eq!(super::font_settings::mode_of(A::VibrantLight), Mode::Light);
+    assert_eq!(super::font_settings::mode_of(A::Dark), Mode::Dark);
+    assert_eq!(super::font_settings::mode_of(A::VibrantDark), Mode::Dark);
 }
 
 pub(super) fn home_beside_dest(fs: &FakeFs) -> AppState {

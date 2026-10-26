@@ -1,5 +1,9 @@
-use super::{FerriteWindow, JOB_STOP_WAIT};
+use std::time::Duration;
+
+use super::FerriteWindow;
 use crate::prelude::*;
+
+const JOB_STOP_WAIT: Duration = Duration::from_secs(10);
 
 impl FerriteWindow {
     pub(super) fn save(&self) {

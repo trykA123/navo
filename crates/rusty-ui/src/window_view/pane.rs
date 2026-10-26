@@ -220,6 +220,12 @@ impl FerriteWindow {
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
         super::tab_keys::tab_keys(root, cx)
             .on_action(
+                cx.listener(|this: &mut Self, _: &super::keys::OpenTerminal, _, cx| {
+                    this.open_terminal();
+                    cx.notify();
+                }),
+            )
+            .on_action(
                 cx.listener(|this: &mut Self, _: &DriveMenuFirst, window, cx| {
                     this.open_drive_menu(0, window, cx);
                 }),

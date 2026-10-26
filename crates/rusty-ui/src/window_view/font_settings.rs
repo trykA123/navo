@@ -1,10 +1,11 @@
+use gpui_kit::WindowAppearance;
 use gpui_kit::component::theme::Theme as KitTheme;
 
-use super::{FerriteWindow, mode_of};
+use super::FerriteWindow;
 use crate::prelude::*;
 use crate::settings::{Field, Value, Values};
 use crate::status_bar::StatusNotice;
-use crate::tokens::{self, Typography};
+use crate::tokens::{self, Mode, Typography};
 
 const MIN_FONT_SIZE: i64 = 10;
 const MAX_FONT_SIZE: i64 = 20;
@@ -79,6 +80,13 @@ fn apply_typography(
         text: notices.join(" · ").into(),
         is_error: false,
     })
+}
+
+pub(super) fn mode_of(appearance: WindowAppearance) -> Mode {
+    match appearance {
+        WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
+        WindowAppearance::Light | WindowAppearance::VibrantLight => Mode::Light,
+    }
 }
 
 #[cfg(test)]

@@ -142,6 +142,11 @@ pub(super) const GROUPS: [Group; 8] = [
                 "activity.focus",
                 "cmd-activity-focus",
             ),
+            (
+                "ferrite_window::OpenTerminal",
+                "files.open_terminal",
+                "cmd-files-open-terminal",
+            ),
         ],
     },
     notice::GROUP,

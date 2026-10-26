@@ -36,6 +36,7 @@ mod settings;
 mod shell_menu;
 mod splash;
 mod startup;
+mod terminal;
 mod watch_file;
 #[cfg(windows)]
 mod windows_memory;
@@ -182,12 +183,7 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
     };
     let diagnostics = install_logging(profile);
     migrated.iter().for_each(migration::Report::log);
-    crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
-    perf::install(
-        Instant::now(),
-        &diagnostics,
-        profile.dirs().map(|dirs| dirs.data.as_path()),
-    );
+    install_reporters(profile, &diagnostics);
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
     let store = check_store(profile, pending_crash.is_some(), &start);
     let run = start
@@ -218,6 +214,12 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
         return ExitCode::FAILURE;
     }
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
+}
+
+fn install_reporters(profile: &Profile, diagnostics: &logging::Diagnostics) {
+    let data = profile.dirs().map(|dirs| dirs.data.as_path());
+    crash::install(data, diagnostics);
+    perf::install(Instant::now(), diagnostics, data);
 }
 
 fn check_store(profile: &Profile, unclean: bool, start: &Start) -> crash::store::StoreStart {

@@ -20,6 +20,7 @@ gpui_kit::actions!(
         LeaveWaiting,
         NewTab,
         OpenRecoveryFolder,
+        OpenTerminal,
         OpenViewMenu,
         RecordPerformance,
         ResetSplit,

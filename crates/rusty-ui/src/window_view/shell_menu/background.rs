@@ -83,6 +83,14 @@ fn refresh() -> MenuItem {
     ferrite(FerriteAction::Refresh, "Refresh\tCtrl+R", 'R')
 }
 
+fn open_terminal() -> MenuItem {
+    MenuItem::new(
+        ItemId::Action("ferrite_window::OpenTerminal"),
+        &rusty_l10n::tr("cmd-files-open-terminal"),
+        Group::Ferrite,
+    )
+}
+
 fn copy_folder_path() -> MenuItem {
     ferrite(FerriteAction::CopyPath, "Copy folder path", 'C')
 }
@@ -91,9 +99,14 @@ fn copy_folder_path() -> MenuItem {
 pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
     if has_shell {
         return Own {
-            top: vec![sort_menu(look.sort), refresh()],
+            top: vec![
+                sort_menu(look.sort),
+                refresh(),
+                copy_folder_path(),
+                open_terminal(),
+            ],
             after_new: vec![new_file()],
-            hidden: vec![new_folder(), paste(look), copy_folder_path()],
+            hidden: vec![new_folder(), paste(look)],
         };
     }
     let mut top = vec![
@@ -103,6 +116,7 @@ pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
         refresh(),
         sort_menu(look.sort),
         copy_folder_path(),
+        open_terminal(),
     ];
     if look.has_properties {
         top.push(ferrite(FerriteAction::Properties, "Properties", 'I'));
