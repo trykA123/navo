@@ -2,13 +2,29 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
-## Unreleased — backend branch
+## alpha-2026-10-26 — 2026-10-26
 
-- Single and batch renames keep file identities in the undo journal, so recovery leaves replacement files untouched.
-- Rename names can be edited, loaded from a UTF-8 file, pasted and copied. Preview rows can be moved or sorted, with optional counters per folder.
-- An optional rename log records completed batches without affecting undo when logging fails.
-- Rich ELF/MAP views discover an unambiguous memory companion and apply configured module prefixes live.
-- Explorer drag in/out and the right-button drop menu are wired. Native Windows verification remains pending.
+### New
+
+- You can drag files from Ferrite into Explorer and other apps, and from them into Ferrite.
+- Drop with the right mouse button to choose copy, move or shortcut.
+- The file list scrolls by itself when you drag near its top or bottom edge.
+- Folders, tabs and drives open when you hold a drag over them.
+- Multi-rename names can be edited, loaded from a UTF-8 file, pasted and copied.
+- Preview rows can be moved or sorted. Counters can restart in each folder.
+- An optional rename log records finished batches.
+- Rename works on FAT and exFAT drives, such as USB sticks.
+- Rich ELF and MAP views find the memory companion file when only one fits. They apply module prefixes at once.
+
+### Fixed
+
+- Undo and crash recovery after a rename put back exactly the files that were renamed. A file that replaced one of them is left alone.
+- On FAT and exFAT drives, undo acts only when the file size, time and kind still match. Otherwise it leaves the file and says why.
+- A failed rename log never stops undo from working.
+
+### Known problems
+
+- Linux external drops are Copy-only.
 
 ## alpha-2026-10-21d — 2026-10-21
 

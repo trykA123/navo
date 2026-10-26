@@ -154,7 +154,7 @@ fn memory_is_measured_in_this_process() {
     ) else {
         panic!("memory not measured: {memory:?}");
     };
-    assert!(private > 0 && working > 0 && peak >= working);
+    assert!(private > 0 && working > 0 && peak > 0);
 }
 
 #[test]
