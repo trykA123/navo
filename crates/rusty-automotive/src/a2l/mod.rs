@@ -1,9 +1,11 @@
 mod convert;
+mod rows;
 mod scan;
 
 use crate::DescriptionReport;
 use std::sync::Arc;
 
+pub use rows::rows;
 pub use scan::index_a2l;
 pub const A2L_EXTENSIONS: [&str; 1] = ["a2l"];
 
@@ -40,6 +42,7 @@ pub struct Characteristic {
     pub line: u64,
     pub name: String,
     pub kind: String,
+    pub axes: Vec<AxisDescription>,
     pub address: u32,
     pub record_layout: String,
     pub conversion: String,
@@ -49,11 +52,19 @@ pub struct Characteristic {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AxisDescription {
+    pub input_quantity: String,
+    pub conversion: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CompuMethod {
     pub module: usize,
     pub line: u64,
     pub name: String,
     pub conversion_type: String,
+    pub coeffs: Option<[f64; 6]>,
+    pub coeffs_linear: Option<[f64; 2]>,
     pub unit: Arc<str>,
 }
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use a2lfile::{A2lError, A2lObjectName};
 
-use super::{A2lModel, Characteristic, CompuMethod, Measurement};
+use super::{A2lModel, AxisDescription, Characteristic, CompuMethod, Measurement};
 
 pub(super) struct Block {
     pub kind: String,
@@ -109,6 +109,15 @@ impl A2lModel {
             row.get_name().len()
                 + row.conversion.len()
                 + row.deposit.len()
+                + row
+                    .axis_descr
+                    .iter()
+                    .map(|axis| {
+                        axis.input_quantity.len()
+                            + axis.conversion.len()
+                            + std::mem::size_of::<AxisDescription>()
+                    })
+                    .sum::<usize>()
                 + row.phys_unit.as_ref().map_or(0, |unit| unit.unit.len()),
         ) {
             return;
@@ -118,6 +127,14 @@ impl A2lModel {
             line,
             name: row.get_name().to_owned(),
             kind: row.characteristic_type.to_string(),
+            axes: row
+                .axis_descr
+                .into_iter()
+                .map(|axis| AxisDescription {
+                    input_quantity: axis.input_quantity,
+                    conversion: axis.conversion,
+                })
+                .collect(),
             address: row.address,
             record_layout: row.deposit,
             conversion: row.conversion,
@@ -137,6 +154,10 @@ impl A2lModel {
                 line,
                 name: row.get_name().to_owned(),
                 conversion_type: row.conversion_type.to_string(),
+                coeffs: row
+                    .coeffs
+                    .map(|coeffs| [coeffs.a, coeffs.b, coeffs.c, coeffs.d, coeffs.e, coeffs.f]),
+                coeffs_linear: row.coeffs_linear.map(|coeffs| [coeffs.a, coeffs.b]),
                 unit: row.unit.into(),
             });
         }
