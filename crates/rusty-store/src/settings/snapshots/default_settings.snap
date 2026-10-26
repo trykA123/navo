@@ -9,6 +9,7 @@ light-theme = "Navo Light"
 dark-theme = "Navo Dark"
 font = "Inter"
 font-size = 13
+ui-scale = 100
 density = "normal"
 modifier-hints = "all"
 modifier-hints-delay-ms = 400

@@ -43,6 +43,7 @@ fn appearance() -> impl Strategy<Value = Appearance> {
             dark_theme,
             font,
             font_size,
+            ui_scale: 100,
             density,
             modifier_hints,
             modifier_hints_delay_ms,

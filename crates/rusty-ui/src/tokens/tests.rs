@@ -465,3 +465,26 @@ fn the_colour_theme_survives_a_mode_change_and_reaches_the_kit(cx: &mut TestAppC
         );
     });
 }
+
+#[test]
+fn ui_scale_multiplies_dimensions_and_preserves_defaults_at_100_percent() {
+    let themes = MODES.into_iter().flat_map(|mode| {
+        [Density::Compact, Density::Normal, Density::Comfortable]
+            .map(|density| Theme::with_density(mode, density))
+    });
+    for defaults in themes {
+        for percent in [80, 100, 150] {
+            let mut scaled = defaults.clone();
+            scaled.scale(percent);
+            let factor = f32::from(percent) / 100.;
+            assert_eq!(scaled.typography.body, defaults.typography.body * factor);
+            assert_eq!(scaled.spacing.md, defaults.spacing.md * factor);
+            assert_eq!(scaled.spacing.icon, defaults.spacing.icon * factor);
+            assert_eq!(scaled.radii.md, defaults.radii.md * factor);
+            assert_eq!(scaled.rows.height, defaults.rows.height * factor);
+            if percent == 100 {
+                assert_eq!(scaled, defaults);
+            }
+        }
+    }
+}

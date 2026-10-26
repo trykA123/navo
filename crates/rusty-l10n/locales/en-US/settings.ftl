@@ -62,3 +62,6 @@ settings-color-theme-grain = Grain
 settings-color-theme-ink-and-amber = Ink and amber
 settings-font-unavailable = Font “{ $family }” is not available. Using Inter. Install the font or choose another family.
 settings-font-size-clamped = Font size limited to { $size } px. Choose a size from 10 to 20 px.
+
+settings-ui-scale = UI scale
+settings-ui-scale-help = Percent, from 80 to 200

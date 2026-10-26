@@ -3,7 +3,7 @@ use super::fields::{
     S, SORTS, THEMES, spec,
 };
 
-pub(super) const GENERAL: [FieldSpec; 22] = [
+pub(super) const GENERAL: [FieldSpec; 23] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -37,6 +37,11 @@ pub(super) const GENERAL: [FieldSpec; 22] = [
     spec(
         (F::FontSize, S::Appearance, "appearance.font-size"),
         ("Font size", "In pixels"),
+        Control::Number,
+    ),
+    spec(
+        (F::UiScale, S::Appearance, "appearance.ui-scale"),
+        ("settings-ui-scale", "settings-ui-scale-help"),
         Control::Number,
     ),
     spec(

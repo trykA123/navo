@@ -152,6 +152,7 @@ impl FerriteWindow {
         if looks(&old) != looks(&self.values)
             || old.get(Field::Font) != self.values.get(Field::Font)
             || old.get(Field::FontSize) != self.values.get(Field::FontSize)
+            || old.get(Field::UiScale) != self.values.get(Field::UiScale)
         {
             self.apply_theme(window, cx);
         }

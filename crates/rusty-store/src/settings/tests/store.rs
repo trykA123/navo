@@ -663,3 +663,26 @@ fn a_custom_theme_value_is_kept() {
             .contains("light-theme = \"Paper\"")
     );
 }
+
+#[test]
+fn ui_scale_rejects_out_of_range_values_without_changing_the_store() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let (mut store, _) = SettingsStore::load(&path);
+    for percent in [70, 210] {
+        let error = store.save("appearance.ui-scale", Some(SettingValue::Integer(percent)));
+        assert!(matches!(error, Err(SettingsError::Invalid { .. })));
+        assert_eq!(store.current().appearance.ui_scale, 100);
+        assert!(!path.exists());
+    }
+    for percent in [80, 100, 150, 200] {
+        store
+            .save("appearance.ui-scale", Some(SettingValue::Integer(percent)))
+            .unwrap();
+        assert_eq!(store.current().appearance.ui_scale, percent as u16);
+        assert_eq!(
+            SettingsStore::load(&path).0.current().appearance.ui_scale,
+            percent as u16
+        );
+    }
+}

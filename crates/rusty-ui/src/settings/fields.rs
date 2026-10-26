@@ -65,6 +65,7 @@ pub enum Field {
     DarkTheme,
     Font,
     FontSize,
+    UiScale,
     ModifierHints,
     ModifierHintsDelay,
     HiddenFiles,
@@ -215,7 +216,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 55] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
+pub const FIELDS: [FieldSpec; 56] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
 
 const fn join<const N: usize>(parts: [&[FieldSpec]; 4]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];

@@ -425,3 +425,18 @@ fn the_search_page_ends_with_the_service_and_history_blocks() {
         [Line::Section(Section::Search), Line::History]
     );
 }
+
+#[test]
+fn ui_scale_is_next_to_font_size_and_steps_by_ten() {
+    assert_eq!(Field::UiScale.index(), Field::FontSize.index() + 1);
+    assert_eq!(Values::default().get(Field::UiScale), &Value::Number(100));
+    let scale = spec(Field::UiScale);
+    assert_eq!(
+        nudged(scale, &Value::Number(100), Nudge::Forward),
+        Some(Value::Number(110))
+    );
+    assert_eq!(
+        nudged(scale, &Value::Number(100), Nudge::Back),
+        Some(Value::Number(90))
+    );
+}

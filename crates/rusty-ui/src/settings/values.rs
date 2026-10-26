@@ -103,6 +103,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::DarkTheme => text("Navo Dark"),
         Field::Font => text("Inter"),
         Field::FontSize => Value::Number(13),
+        Field::UiScale => Value::Number(100),
         Field::ModifierHints => Value::Pick(2),
         Field::ModifierHintsDelay => Value::Number(400),
         Field::FoldersFirst

@@ -270,3 +270,28 @@ fn font_size_only_reload_survives_theme_switching_and_removal(cx: &mut TestAppCo
         gpui_kit::px(13.)
     );
 }
+
+#[gpui_kit::test]
+fn ui_scale_applies_live_and_composes_with_font_size(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    for (generation, scale, size) in [(1, 150, 13), (2, 150, 16), (3, 80, 16), (4, 100, 13)] {
+        let values = at_start()
+            .with(&Change {
+                field: Field::UiScale,
+                value: crate::settings::Value::Number(scale),
+            })
+            .with(&Change {
+                field: Field::FontSize,
+                value: crate::settings::Value::Number(size),
+            });
+        send(cx, &rig, applied(values, generation));
+        assert_eq!(
+            cx.read(|cx| tokens::current(cx).typography.body),
+            gpui_kit::px(size as f32 * (scale as f32 / 100.))
+        );
+        assert_eq!(
+            cx.read(|cx| cx.global::<gpui_kit::component::theme::Theme>().font_size),
+            gpui_kit::px(size as f32 * (scale as f32 / 100.))
+        );
+    }
+}

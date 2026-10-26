@@ -25,11 +25,16 @@ impl FerriteWindow {
         self.saver.font_notice = apply_typography(&self.values, &families, &mut theme.typography);
         let ratio = theme.typography.body / base;
         scale_heights(&mut theme, ratio);
+        if let Value::Number(percent) = self.values.get(Field::UiScale) {
+            theme.scale((*percent).clamp(80, 200) as u16);
+        }
         let typography = theme.typography.clone();
+        let radius = theme.radii.md;
         *cx.global_mut::<tokens::Theme>() = theme;
         KitTheme::update(cx, |kit| {
             kit.font_family = typography.ui_font;
             kit.font_size = typography.body;
+            kit.radius = radius;
         });
     }
 }

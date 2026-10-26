@@ -1,4 +1,4 @@
-use super::fields::{Control, FIELDS, FieldSpec, Section};
+use super::fields::{Control, FIELDS, Field, FieldSpec, Section};
 use super::find::{Filter, Line, lines};
 use super::values::Value;
 
@@ -30,9 +30,10 @@ pub fn nudged(spec: &FieldSpec, value: &Value, nudge: Nudge) -> Option<Value> {
             (to != *on).then_some(Value::Flag(to))
         }
         (Control::Number, Value::Number(number)) => {
+            let step = if spec.field == Field::UiScale { 10 } else { 1 };
             let to = match nudge {
-                Nudge::Back => number - 1,
-                Nudge::Forward | Nudge::Flip => number + 1,
+                Nudge::Back => number.checked_sub(step)?,
+                Nudge::Forward | Nudge::Flip => number.checked_add(step)?,
             };
             (1..=i64::from(u16::MAX))
                 .contains(&to)

@@ -7,6 +7,7 @@ light-theme = \"Navo Light\"
 dark-theme = \"Navo Dark\"
 font = \"Inter\"
 font-size = 13
+ui-scale = 100
 density = \"normal\"
 modifier-hints = \"all\"
 modifier-hints-delay-ms = 400
@@ -88,13 +89,14 @@ usage-bars = false
 who-uses = false
 ";
 
-const DEFAULT_KEYS: [(&str, &str); 59] = [
+const DEFAULT_KEYS: [(&str, &str); 60] = [
     ("appearance.mode", "\"system\""),
     ("appearance.color-theme", "\"open-sea\""),
     ("appearance.light-theme", "\"Navo Light\""),
     ("appearance.dark-theme", "\"Navo Dark\""),
     ("appearance.font", "\"Inter\""),
     ("appearance.font-size", "13"),
+    ("appearance.ui-scale", "100"),
     ("appearance.density", "\"normal\""),
     ("appearance.modifier-hints", "\"all\""),
     ("appearance.modifier-hints-delay-ms", "400"),
@@ -200,7 +202,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\ndrop-confirm = \"never\"\nrename-log = false\n\n[appearance]\n# the look\nmode = \"dark\"\ncolor-theme = \"open-sea\"\nlight-theme = \"Navo Light\"\ndark-theme = \"Navo Dark\"\nfont = \"Inter\"\nfont-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[retention]\nretain-deletes = false\nretain-overwrites = false\ndays = 3\nmax-volume-mib = 1024\nmin-free-mib = 256\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\n\n[automotive]\nmodules = []\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\ndrop-confirm = \"never\"\nrename-log = false\n\n[appearance]\n# the look\nmode = \"dark\"\ncolor-theme = \"open-sea\"\nlight-theme = \"Navo Light\"\ndark-theme = \"Navo Dark\"\nfont = \"Inter\"\nfont-size = 13\nui-scale = 100\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[retention]\nretain-deletes = false\nretain-overwrites = false\ndays = 3\nmax-volume-mib = 1024\nmin-free-mib = 256\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\n\n[automotive]\nmodules = []\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n";
     assert_eq!(completed(before), after);
 }
 
@@ -418,8 +420,8 @@ fn reconcile_updates_following_keys_and_adds_missing_ones_together() {
     let before = FULL.replace("font-size = 13\n", "");
     let done = reconcile(&before, &ledger, &sorted_by_date()).unwrap();
     let expected = FULL.replace("sort = \"name\"", "sort = \"date\"").replace(
-        "font-size = 13\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n",
-        "density = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\nfont-size = 13\n",
+        "font-size = 13\nui-scale = 100\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n",
+        "ui-scale = 100\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\nfont-size = 13\n",
     );
     assert_eq!(done.text, expected);
     assert_eq!(

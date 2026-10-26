@@ -38,6 +38,8 @@ pub struct Appearance {
     pub dark_theme: String,
     pub font: String,
     pub font_size: u16,
+    #[serde(deserialize_with = "ui_scale")]
+    pub ui_scale: u16,
     pub density: Density,
     pub modifier_hints: ModifierHints,
     pub modifier_hints_delay_ms: u16,
@@ -46,6 +48,16 @@ pub struct Appearance {
 pub(super) fn navo_theme_name(name: &str) -> Option<String> {
     name.strip_prefix("Ferrite ")
         .map(|rest| format!("Navo {rest}"))
+}
+
+fn ui_scale<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u16, D::Error> {
+    let percent = u16::deserialize(deserializer)?;
+    if !(80..=200).contains(&percent) {
+        return Err(serde::de::Error::custom(
+            "appearance.ui-scale must be from 80 to 200 percent",
+        ));
+    }
+    Ok(percent)
 }
 
 fn theme_name<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
@@ -62,6 +74,7 @@ impl Default for Appearance {
             dark_theme: "Navo Dark".to_owned(),
             font: "Inter".to_owned(),
             font_size: 13,
+            ui_scale: 100,
             density: Density::default(),
             modifier_hints: ModifierHints::default(),
             modifier_hints_delay_ms: 400,
