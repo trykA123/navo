@@ -3,6 +3,7 @@
 mod event_ring;
 mod log_layer;
 mod memory;
+pub mod perf;
 mod redact;
 mod report;
 
@@ -17,5 +18,5 @@ pub use memory::{ProcStatusProbe, parse_proc_status};
 pub use redact::{DriveKind, Identity, LengthClass, PathKind, RedactedPath, Redactor, Salt};
 pub use report::{
     BuildInfo, DpiAwareness, ErrorRecord, ReportInput, ReportSummary, SystemInfo, write_report,
-    write_report_with_crashes,
+    write_report_with_crashes, write_report_with_extras,
 };

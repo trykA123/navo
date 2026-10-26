@@ -125,6 +125,7 @@ impl FerriteWindow {
     }
 
     fn start_menu_run(&mut self, open: MenuOpen, window: &mut Window, cx: &mut Context<Self>) {
+        crate::perf::begin(crate::perf::Latency::ContextMenu);
         self.menu_runs = open.id;
         self.menu_run = Some(MenuRun::new(open));
         self.poll_shell_menu(self.menu_runs, window, cx);
@@ -216,6 +217,7 @@ impl FerriteWindow {
     }
 
     fn close_shell_menu(&mut self) {
+        crate::perf::cancel(crate::perf::Latency::ContextMenu);
         if let Some(run) = &mut self.menu_run {
             run.view = None;
         }
@@ -268,6 +270,9 @@ impl FerriteWindow {
         let pending = run.is_pending();
         run.polling &= pending;
         let has_errors = !step.errors.is_empty();
+        if has_errors || step.fallback {
+            crate::perf::cancel(crate::perf::Latency::ContextMenu);
+        }
         Self::apply_step(view, &step, cx);
         for error in step.errors {
             self.report_pane_error(pane, error.into());
@@ -307,6 +312,7 @@ impl FerriteWindow {
 
     fn drop_finished_run(&mut self) {
         if self.menu_run.as_ref().is_some_and(MenuRun::is_done) {
+            crate::perf::cancel(crate::perf::Latency::ContextMenu);
             self.menu_run = None;
         }
     }

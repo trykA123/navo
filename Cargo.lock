@@ -6718,6 +6718,7 @@ dependencies = [
  "rusty-automotive",
  "rusty-cache",
  "rusty-core",
+ "rusty-diag",
  "rusty-fs",
  "rusty-index",
  "rusty-l10n",

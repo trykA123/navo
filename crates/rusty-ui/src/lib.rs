@@ -22,6 +22,7 @@ pub mod languages;
 pub mod modifier_hints;
 pub mod multi_rename;
 pub mod pane_chrome;
+pub mod perf;
 pub mod prelude;
 pub mod primitives;
 pub mod prompt_dialog;

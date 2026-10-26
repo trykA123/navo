@@ -1,0 +1,118 @@
+use std::io;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
+
+use rusty_diag::perf::{PerfDocument, ProcessSample, Recording, SystemFacts, perf_json};
+use rusty_ui::perf::PerfService;
+
+use crate::logging::Diagnostics;
+
+mod process;
+mod system;
+
+#[derive(Clone, Copy)]
+struct CpuMark {
+    at: Instant,
+    used: Duration,
+}
+
+pub(crate) struct PerfReports {
+    started: Instant,
+    diagnostics: Diagnostics,
+    folder: Option<PathBuf>,
+    last_cpu: Mutex<Option<CpuMark>>,
+}
+
+pub(crate) fn install(started: Instant, diagnostics: &Diagnostics) {
+    rusty_ui::perf::install(Arc::new(PerfReports {
+        started,
+        diagnostics: diagnostics.clone(),
+        folder: crate::crash::desktop_dir(),
+        last_cpu: Mutex::new(None),
+    }));
+}
+
+impl PerfReports {
+    fn cpu_percent(&self, now: Instant) -> Option<f32> {
+        let used = process::cpu_time()?;
+        let mut last = self.last_cpu.lock().unwrap_or_else(PoisonError::into_inner);
+        let previous = last.replace(CpuMark { at: now, used })?;
+        let wall = now.saturating_duration_since(previous.at).as_secs_f32();
+        let busy = used.saturating_sub(previous.used).as_secs_f32();
+        (wall > 0.0).then(|| busy / wall * 100.0)
+    }
+}
+
+impl PerfService for PerfReports {
+    fn start(&self) {
+        *self.last_cpu.lock().unwrap_or_else(PoisonError::into_inner) = None;
+    }
+
+    fn sample(&self) -> ProcessSample {
+        let memory = crate::diag::probe().sample().ok();
+        ProcessSample {
+            at_ms: 0.0,
+            cpu_percent: self.cpu_percent(Instant::now()),
+            working_set_bytes: memory.map(|memory| memory.resident_bytes),
+            private_bytes: memory.map(|memory| memory.private_bytes),
+            threads: process::threads(),
+        }
+    }
+
+    fn system(&self) -> SystemFacts {
+        system::facts()
+    }
+
+    fn save(
+        &self,
+        recording: &Recording,
+        ended: Instant,
+        system: &SystemFacts,
+    ) -> Result<PathBuf, String> {
+        let folder = self
+            .folder
+            .as_deref()
+            .ok_or("no Desktop or home folder was found")?;
+        let document = PerfDocument::new(recording, ended, system, &self.diagnostics.redactor);
+        let json = perf_json(&document).map_err(|error| error.to_string())?;
+        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        save_zip(folder, &stamp, |path| {
+            crate::diag::write_with_extras(
+                path,
+                self.started,
+                &self.diagnostics,
+                &[("perf.json", &json)],
+            )
+        })
+        .map_err(|error| error.to_string())
+    }
+}
+
+fn save_zip(
+    folder: &Path,
+    stamp: &str,
+    write: impl Fn(&Path) -> io::Result<()>,
+) -> io::Result<PathBuf> {
+    let mut last = io::Error::from(io::ErrorKind::AlreadyExists);
+    for attempt in 1..=9 {
+        let suffix = if attempt == 1 {
+            String::new()
+        } else {
+            format!("-{attempt}")
+        };
+        let path = folder.join(format!(
+            "{}-performance-{stamp}{suffix}.zip",
+            rusty_core::brand::SLUG
+        ));
+        match write(&path) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => last = error,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last)
+}
+
+#[cfg(test)]
+mod tests;

@@ -22,6 +22,7 @@ mod multi_rename;
 mod operate;
 mod pane;
 mod path_edit;
+mod perf_recording;
 mod placement;
 mod preview;
 mod prompt;
@@ -353,23 +354,32 @@ impl FerriteWindow {
     }
 }
 
-impl Render for FerriteWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.watch_start(window, cx);
-        let t = tokens::current(cx).clone();
+impl FerriteWindow {
+    fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let mica = tokens::current(cx).surfaces.mica();
         let gradient = system_backdrop().gradient;
-        let below_title_bar = div()
+        div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
             .when(gradient == GradientLayer::BelowTitleBar, |below| {
-                below.bg(t.surfaces.mica())
+                below.bg(mica)
             })
             .children(self.crash_notice_view(window, cx))
             .children(self.index_upgrade_view(cx))
             .child(self.body_area(window, cx))
-            .children(self.fkey_bar(window, cx));
+            .children(self.fkey_bar(window, cx))
+    }
+}
+
+impl Render for FerriteWindow {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let frame = self.perf_frame(window);
+        self.watch_start(window, cx);
+        let t = tokens::current(cx).clone();
+        let gradient = system_backdrop().gradient;
+        let below_title_bar = self.below_title_bar(window, cx);
         let root = div()
             .relative()
             .flex()
@@ -396,12 +406,12 @@ impl Render for FerriteWindow {
                 view.toggle_settings(window, cx);
             }))
             .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.jobs_key(cx)))
-            .children(self.modal_view(window, cx))
+            .children(Self::noted_modal(self.modal_view(window, cx)))
             .children(self.app_menu_view(cx))
             .children(self.shell_menu_view())
             .children(self.viewer_menu_view())
             .children(self.view_menus());
-        let root = self.drag_layer(root, cx);
+        let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
         self.preview_keys(root, window, cx)

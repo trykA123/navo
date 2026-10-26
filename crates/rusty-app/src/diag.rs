@@ -8,7 +8,7 @@ use rusty_cache::{DiskListings, DiskStats, ListingCache};
 use rusty_diag::{
     BuildInfo, CacheRegistry, CacheSize, DpiAwareness, EventRing, Identity, MemoryProbe, Redactor,
     ReportInput, ReportSummary, Salt, SystemInfo, TaskCounters, memory_report,
-    write_report_with_crashes,
+    write_report_with_crashes, write_report_with_extras,
 };
 
 use crate::logging::Diagnostics;
@@ -41,6 +41,21 @@ pub(crate) fn write_with_crashes(
     diagnostics: &Diagnostics,
     crashes: &[PathBuf],
 ) -> io::Result<ReportSummary> {
+    let input = filled_input(started, diagnostics);
+    write_report_with_crashes(path, &input, &diagnostics.redactor, crashes)
+}
+
+pub(crate) fn write_with_extras(
+    path: &Path,
+    started: Instant,
+    diagnostics: &Diagnostics,
+    extras: &[(&str, &[u8])],
+) -> io::Result<()> {
+    let input = filled_input(started, diagnostics);
+    write_report_with_extras(path, &input, &diagnostics.redactor, extras).map(drop)
+}
+
+fn filled_input(started: Instant, diagnostics: &Diagnostics) -> ReportInput {
     let mut input = report_input();
     input.events = diagnostics.ring.snapshot();
     input.redaction_misses = diagnostics.misses.count();
@@ -53,7 +68,7 @@ pub(crate) fn write_with_crashes(
         "report".to_owned(),
         started.elapsed().as_secs_f64() * 1000.0,
     )];
-    write_report_with_crashes(path, &input, &diagnostics.redactor, crashes)
+    input
 }
 
 pub(crate) fn register_listings(

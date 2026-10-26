@@ -12,6 +12,7 @@ const DEFAULT_LEVEL: &str = "info";
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const FILES: usize = 5;
 
+#[derive(Clone)]
 pub struct Diagnostics {
     pub redactor: Arc<Redactor>,
     pub ring: Arc<EventRing>,

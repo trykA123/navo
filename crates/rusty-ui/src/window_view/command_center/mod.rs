@@ -205,6 +205,7 @@ impl FerriteWindow {
     }
 
     fn open_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::perf::begin(crate::perf::Latency::CommandCenterOpen);
         let restore = window.focused(cx);
         let stack = focused_contexts(window);
         let stack: Vec<&str> = stack.iter().map(String::as_str).collect();

@@ -63,6 +63,7 @@ resvg = "=0.46.0"
 rusty-automotive = { path = "../rusty-automotive" }
 rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }
+rusty-diag = { path = "../rusty-diag" }
 rusty-fs = { path = "../rusty-fs" }
 rusty-index = { path = "../rusty-index" }
 rusty-l10n = { path = "../rusty-l10n" }

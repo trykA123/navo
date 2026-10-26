@@ -224,6 +224,7 @@ impl FerriteWindow {
         };
         match item.kind {
             ActivityKind::Job if item.can_cancel => self.run_act(item.id, Act::Cancel, cx),
+            ActivityKind::Background if item.can_cancel => self.run_act(item.id, Act::Stop, cx),
             ActivityKind::Failure | ActivityKind::Done => self.run_act(item.id, Act::Dismiss, cx),
             ActivityKind::Job | ActivityKind::Drag | ActivityKind::Background => {}
         }
@@ -268,18 +269,26 @@ impl FerriteWindow {
 
     fn run_act(&mut self, id: ActivityId, act: Act, cx: &mut Context<Self>) {
         let ActivityId::Job(job) = id else {
-            if act == Act::Dismiss {
-                self.job_ui.activity.dismiss(id);
-                self.refresh_activity(cx);
+            match act {
+                Act::Dismiss => {
+                    self.job_ui.activity.dismiss(id);
+                    self.perf_dismissed(id);
+                    self.refresh_activity(cx);
+                }
+                Act::Stop => self.stop_recording(cx),
+                Act::OpenFolder => self.open_perf_folder(cx),
+                Act::Retry => self.retry_perf_save(cx),
+                Act::Pause | Act::Resume | Act::Cancel | Act::Show => {}
             }
             return;
         };
         match act {
             Act::Pause => self.pause_job(job, cx),
             Act::Resume => self.resume_job(job, cx),
-            Act::Cancel => self.cancel_job(job, cx),
+            Act::Cancel | Act::Stop => self.cancel_job(job, cx),
             Act::Show => self.show_job_card(cx),
             Act::Dismiss => self.dismiss_job(job, cx),
+            Act::OpenFolder | Act::Retry => {}
         }
     }
 }

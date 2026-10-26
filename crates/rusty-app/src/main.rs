@@ -26,6 +26,7 @@ mod logging;
 mod metrics;
 mod migration;
 mod pdf_helper;
+mod perf;
 mod profile;
 mod rename_hooks;
 mod rename_log;
@@ -179,6 +180,7 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
     let diagnostics = install_logging(profile);
     migrated.iter().for_each(migration::Report::log);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
+    perf::install(Instant::now(), &diagnostics);
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
     crash::note_previous_exit(pending_crash.as_ref());
     let run = start

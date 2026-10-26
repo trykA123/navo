@@ -165,13 +165,15 @@ fn look(sheet: &SideSheet, window: &mut Window, cx: &mut App) -> Option<Look> {
         Phase::Closed => None,
         Phase::Open => {
             let since = entered_at(sheet, opened, window, cx);
-            Some(motion::entering(
-                motion::elapsed(since, now, speed.slow),
-                reduce,
-            ))
+            let look = motion::entering(motion::elapsed(since, now, speed.slow), reduce);
+            crate::perf::animating(crate::perf::Latency::DrawerOpen, !look.is_settled);
+            Some(look)
         }
         Phase::Leaving(since) => {
             let look = motion::leaving(motion::elapsed(since, now, speed.base), reduce);
+            if !look.is_settled {
+                crate::perf::note(crate::perf::UiFlag::Animation);
+            }
             (!look.is_settled).then_some(look)
         }
     }
@@ -197,6 +199,7 @@ impl RenderOnce for SideSheet {
         if !look.is_settled {
             window.request_animation_frame();
         }
+        crate::perf::note(crate::perf::UiFlag::Drawer);
         let t = tokens::current(cx);
         let side = self.frame.side();
         let width = self.state.read(cx).width(&self.frame);

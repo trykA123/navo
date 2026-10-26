@@ -10,6 +10,7 @@ impl FerriteWindow {
         if self.warn_unsaved(cx) {
             return false;
         }
+        self.save_recording_on_close(cx);
         let _ = self.browser.shutdown(JOB_STOP_WAIT);
         self.remember_placement(window, cx);
         self.save();

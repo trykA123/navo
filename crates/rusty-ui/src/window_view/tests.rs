@@ -38,6 +38,7 @@ mod marks;
 mod mouse_marks;
 mod multi_rename;
 mod offline;
+mod perf_recording;
 mod placement;
 mod prefetch;
 mod settings_find;

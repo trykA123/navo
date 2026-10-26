@@ -26,6 +26,11 @@ pub(super) fn enter(
     let animation = Animation::new(motion.fast).with_easing(ease_out_cubic);
     panel
         .with_animation("command-center-enter", animation, move |panel, delta| {
+            crate::perf::note(crate::perf::UiFlag::CommandCenter);
+            crate::perf::ready(crate::perf::Latency::CommandCenterOpen);
+            if delta < 1. {
+                crate::perf::note(crate::perf::UiFlag::Animation);
+            }
             panel.mt(rise * (delta - 1.)).opacity(delta)
         })
         .into_any_element()

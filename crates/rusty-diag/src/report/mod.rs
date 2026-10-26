@@ -84,6 +84,24 @@ pub fn write_report_with_crashes(
     redactor: &Redactor,
     crashes: &[PathBuf],
 ) -> io::Result<ReportSummary> {
+    write_zip_report(path, input, redactor, (crashes, &[]))
+}
+
+pub fn write_report_with_extras(
+    path: &Path,
+    input: &ReportInput,
+    redactor: &Redactor,
+    extras: &[(&str, &[u8])],
+) -> io::Result<ReportSummary> {
+    write_zip_report(path, input, redactor, (&[], extras))
+}
+
+fn write_zip_report(
+    path: &Path,
+    input: &ReportInput,
+    redactor: &Redactor,
+    (crashes, extras): (&[PathBuf], &[(&str, &[u8])]),
+) -> io::Result<ReportSummary> {
     let report = serde_json::to_vec_pretty(&Document::new(input, redactor))?;
     let summary = summary_text(input, redactor);
     if fs::symlink_metadata(path).is_ok() {
@@ -94,7 +112,7 @@ pub fn write_report_with_crashes(
     }
     let temp = temp_path(path)?;
     let file = File::create_new(&temp)?;
-    let written = write_zip(file, &report, summary.as_bytes(), crashes)
+    let written = write_zip(file, (&report, summary.as_bytes()), crashes, extras)
         .and_then(|()| publish(&temp, path))
         .and_then(|()| fs::metadata(path));
     let _ = fs::remove_file(&temp);
@@ -128,13 +146,22 @@ fn temp_path(path: &Path) -> io::Result<PathBuf> {
     Ok(path.with_file_name(temp))
 }
 
-fn write_zip(file: File, report: &[u8], summary: &[u8], crashes: &[PathBuf]) -> io::Result<()> {
+fn write_zip(
+    file: File,
+    (report, summary): (&[u8], &[u8]),
+    crashes: &[PathBuf],
+    extras: &[(&str, &[u8])],
+) -> io::Result<()> {
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     let mut zip = ZipWriter::new(file);
     zip.start_file("report.json", options)?;
     zip.write_all(report)?;
     zip.start_file("summary.txt", options)?;
     zip.write_all(summary)?;
+    for (name, bytes) in extras {
+        zip.start_file(*name, options)?;
+        zip.write_all(bytes)?;
+    }
     for path in crashes {
         let mut crash = match File::open(path) {
             Ok(file) => file,

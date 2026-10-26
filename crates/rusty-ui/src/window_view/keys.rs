@@ -20,9 +20,11 @@ gpui_kit::actions!(
         LeaveWaiting,
         NewTab,
         OpenViewMenu,
+        RecordPerformance,
         ResetSplit,
         RetryListing,
         SaveCrashReport,
+        StopRecording,
         ToggleJobs
     ]
 );

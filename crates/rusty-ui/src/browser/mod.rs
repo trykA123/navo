@@ -166,13 +166,38 @@ impl Browser {
             return Ok(());
         }
         let focused = self.state.focused_pane();
+        let before = crate::perf::is_recording().then(|| self.shown_folder());
         let effects = self.apply_keeping_hidden_marks(command)?;
         self.drop_stale_filters();
         self.run(effects);
         if self.state.focused_pane() != focused {
             self.revalidate_focused();
         }
+        if let Some(before) = before {
+            self.note_navigation(&before);
+        }
         Ok(())
+    }
+
+    fn note_navigation(&self, (tab, location): &(TabId, Location)) {
+        let shown = self.state.active_tab();
+        if shown.id() != *tab {
+            crate::perf::cancel(crate::perf::Latency::FolderOpen);
+        } else if shown.location() != location {
+            crate::perf::begin(crate::perf::Latency::FolderOpen);
+            self.note_folder_shown();
+        }
+    }
+
+    fn shown_folder(&self) -> (TabId, Location) {
+        let tab = self.state.active_tab();
+        (tab.id(), tab.location().clone())
+    }
+
+    fn note_folder_shown(&self) {
+        if self.state.active_tab().pending_request().is_none() {
+            crate::perf::ready(crate::perf::Latency::FolderOpen);
+        }
     }
 
     pub fn event(&mut self, event: Event) {
@@ -195,6 +220,9 @@ impl Browser {
                 Message::Recheck(location) => self.accept_recheck(&location),
                 Message::Prefetched(id) => self.prefetched(id),
             };
+        }
+        if changed && crate::perf::is_recording() {
+            self.note_folder_shown();
         }
         changed
     }

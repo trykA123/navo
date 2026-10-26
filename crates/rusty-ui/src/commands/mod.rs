@@ -6,6 +6,7 @@ mod multi_rename;
 mod overlays;
 mod palette_hidden;
 mod paths;
+mod perf;
 mod structured;
 mod viewer;
 mod window;
@@ -119,6 +120,7 @@ pub fn all() -> impl Iterator<Item = CommandSpec> {
         viewer::GROUPS.as_slice(),
         structured::GROUPS.as_slice(),
         multi_rename::GROUPS.as_slice(),
+        perf::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group

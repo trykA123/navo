@@ -101,5 +101,9 @@ pub(crate) fn downloads_dir() -> Option<PathBuf> {
     downloads::resolve()
 }
 
+pub(crate) fn desktop_dir() -> Option<PathBuf> {
+    downloads::resolve_desktop()
+}
+
 #[cfg(test)]
 mod tests;

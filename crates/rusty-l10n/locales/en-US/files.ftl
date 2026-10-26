@@ -162,6 +162,13 @@ activity-resume = Resume
 activity-cancel = Cancel
 activity-show = Show
 activity-dismiss = Dismiss
+activity-stop = Stop
+activity-open-folder = Open folder
+activity-retry = Retry
+perf-recording = Recording performance · { $time }
+perf-saved = Performance recording saved
+perf-not-saved = Performance recording not saved
+perf-no-service = this build cannot save recordings
 activity-all = All { $count }
 activity-drawer-title = { $count ->
     [one] { $items } activity

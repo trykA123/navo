@@ -7,6 +7,9 @@ pub enum Act {
     Cancel,
     Show,
     Dismiss,
+    Stop,
+    OpenFolder,
+    Retry,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,7 +40,10 @@ pub fn acts_of(item: &ActivityItem) -> Vec<Act> {
             acts.extend(item.can_cancel.then_some(Act::Cancel));
             acts
         }
+        ActivityKind::Failure if item.can_retry => vec![Act::Retry, Act::Dismiss],
         ActivityKind::Failure => vec![Act::Show, Act::Dismiss],
+        ActivityKind::Background if item.can_cancel => vec![Act::Stop],
+        ActivityKind::Done if item.can_open => vec![Act::OpenFolder, Act::Dismiss],
         ActivityKind::Drag | ActivityKind::Done | ActivityKind::Background => Vec::new(),
     }
 }

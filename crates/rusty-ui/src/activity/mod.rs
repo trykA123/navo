@@ -44,6 +44,8 @@ pub struct ActivityItem {
     pub paused: bool,
     pub can_pause: bool,
     pub can_cancel: bool,
+    pub can_open: bool,
+    pub can_retry: bool,
 }
 
 impl ActivityItem {
@@ -60,6 +62,8 @@ impl ActivityItem {
             paused: false,
             can_pause: false,
             can_cancel: false,
+            can_open: false,
+            can_retry: false,
         }
     }
 
@@ -278,6 +282,40 @@ impl Activity {
                 ActivityId::Background(id),
                 ActivityKind::Background,
                 String::new(),
+            )
+        };
+        self.put(item, Life::Lasting);
+    }
+
+    pub fn set_stoppable(&mut self, id: u64, title: SharedString) {
+        let item = ActivityItem {
+            can_cancel: true,
+            ..ActivityItem::new(
+                ActivityId::Background(id),
+                ActivityKind::Background,
+                title.into(),
+            )
+        };
+        self.put(item, Life::Lasting);
+    }
+
+    pub fn finish_background(&mut self, id: u64, title: SharedString, detail: SharedString) {
+        let item = ActivityItem {
+            detail: Some(detail),
+            can_open: true,
+            ..ActivityItem::new(ActivityId::Background(id), ActivityKind::Done, title.into())
+        };
+        self.put(item, Life::Lasting);
+    }
+
+    pub fn fail_background(&mut self, id: u64, title: SharedString, detail: SharedString) {
+        let item = ActivityItem {
+            detail: Some(detail),
+            can_retry: true,
+            ..ActivityItem::new(
+                ActivityId::Background(id),
+                ActivityKind::Failure,
+                title.into(),
             )
         };
         self.put(item, Life::Lasting);

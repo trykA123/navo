@@ -240,6 +240,7 @@ impl FerriteWindow {
         let Some(open) = self.command_center.open.as_mut() else {
             return;
         };
+        crate::perf::begin(crate::perf::Latency::CommandCenterKey);
         open.error = None;
         open.checking = None;
         open.indexing = None;
@@ -337,6 +338,7 @@ impl FerriteWindow {
         open.selection = open.kept_selection(generation, &rows);
         open.search.shown = generation;
         open.rows = rows.into();
+        crate::perf::ready(crate::perf::Latency::CommandCenterKey);
         let run = if settled {
             open.search.settled = generation;
             open.run_when_shown.take()

@@ -20,6 +20,7 @@ pub(super) struct JobUi {
     pub(super) meter: SpeedMeter,
     pub(super) activity: Activity,
     pub(super) strip: StripUi,
+    pub(super) perf: super::perf_recording::PerfUi,
     is_sampling: bool,
 }
 
@@ -30,6 +31,7 @@ impl JobUi {
             meter: SpeedMeter::default(),
             activity: Activity::default(),
             strip: StripUi::new(window, cx),
+            perf: super::perf_recording::PerfUi::default(),
             is_sampling: false,
         }
     }

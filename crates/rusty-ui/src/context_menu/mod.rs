@@ -113,6 +113,7 @@ impl ContextMenu {
             _field: subscription,
         };
         menu.settle(cx);
+        crate::perf::ready(crate::perf::Latency::ContextMenu);
         menu
     }
 
@@ -344,9 +345,12 @@ impl Render for ContextMenu {
             self.slide = None;
         }
         let entering = now.saturating_duration_since(self.opened) < t.motion.fast;
-        if self.grow.is_some() || self.slide.is_some() || entering {
+        let is_moving = self.grow.is_some() || self.slide.is_some() || entering;
+        if is_moving {
             window.request_animation_frame();
         }
+        crate::perf::note(crate::perf::UiFlag::ContextMenu);
+        crate::perf::animating(crate::perf::Latency::MenuOpen, is_moving);
         let mut frame = self.frame();
         let motion = self.motion(&mut frame, now, cx);
         let look = PanelLook {

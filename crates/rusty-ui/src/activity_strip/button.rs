@@ -29,6 +29,9 @@ fn act_face(act: Act) -> (&'static str, Option<IconName>, Option<&'static str>) 
         Act::Cancel => ("activity-cancel", Some(IconName::X), None),
         Act::Show => ("activity-show", None, Some("enter")),
         Act::Dismiss => ("activity-dismiss", None, Some("delete")),
+        Act::Stop => ("activity-stop", Some(IconName::Square), None),
+        Act::OpenFolder => ("activity-open-folder", Some(IconName::FolderOpen), None),
+        Act::Retry => ("activity-retry", Some(IconName::RotateCw), None),
     }
 }
 

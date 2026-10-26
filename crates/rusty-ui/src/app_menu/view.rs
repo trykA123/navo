@@ -60,6 +60,8 @@ pub(super) fn enter(
     let animation = Animation::new(t.motion.fast).with_easing(ease_out_cubic);
     panel
         .with_animation("app-menu-enter", animation, move |panel, delta| {
+            crate::perf::note(crate::perf::UiFlag::AppMenu);
+            crate::perf::animating(crate::perf::Latency::MenuOpen, delta < 1.);
             panel.top(rise * (1. - delta)).opacity(delta)
         })
         .into_any_element()
