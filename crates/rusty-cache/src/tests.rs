@@ -3,6 +3,7 @@ mod support;
 mod budget;
 mod disk;
 mod disk_start;
+mod disk_stress;
 mod keys;
 mod patch;
 mod profiles;

@@ -118,7 +118,8 @@ impl CacheDb {
              CREATE TABLE IF NOT EXISTS blob (
                  tbl TEXT, key BLOB, value BLOB, size INTEGER, accessed INTEGER,
                  PRIMARY KEY(tbl, key)
-             );",
+             );
+             CREATE INDEX IF NOT EXISTS blob_age ON blob (tbl, accessed, key, size);",
         )?;
         let clock = conn.query_row("SELECT COALESCE(MAX(accessed), 0) FROM blob", [], |row| {
             row.get(0)

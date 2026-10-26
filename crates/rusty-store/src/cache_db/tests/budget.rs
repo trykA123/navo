@@ -180,3 +180,18 @@ fn usage_gives_the_bytes_and_rows_of_one_table() {
     cache.put("other", b"x", b"y").unwrap();
     assert_eq!(cache.usage(T).unwrap(), (30, 3));
 }
+
+#[test]
+fn budget_queries_read_the_age_index_instead_of_the_blobs() {
+    let cache = mem_with_budget(T, 30);
+    for sql in [
+        "SELECT COALESCE(SUM(size), 0) FROM blob WHERE tbl = 'thumbs'",
+        "SELECT key FROM blob WHERE tbl = 'thumbs' ORDER BY accessed, key LIMIT 1",
+    ] {
+        let plan: String = cache
+            .conn
+            .query_row(&format!("EXPLAIN QUERY PLAN {sql}"), [], |row| row.get(3))
+            .unwrap();
+        assert!(plan.contains("COVERING INDEX blob_age"), "{sql}: {plan}");
+    }
+}
