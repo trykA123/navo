@@ -1,5 +1,6 @@
 use super::*;
 
+mod classifier;
 mod props;
 mod runner;
 mod scheduler;

@@ -4,10 +4,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 
-use super::{JobId, OwnerId, Priority, Scheduler, VolumeId, VolumeKind};
+use super::{JobId, Limits, OwnerId, Priority, Scheduler, VolumeId, VolumeKind};
 use crate::provider::CancelToken;
+use crate::{DriveClass, drive_class};
 
 pub type Job = Box<dyn FnOnce(&CancelToken) + Send + 'static>;
+pub type Classifier = Arc<dyn Fn(&VolumeId) -> VolumeKind + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobSlot {
@@ -26,11 +28,11 @@ struct State {
     closed: bool,
 }
 
-#[derive(Default)]
 struct Shared {
     state: Mutex<State>,
     idle: Condvar,
     next_owner: AtomicU64,
+    classifier: Classifier,
 }
 
 pub struct IoQueue {
@@ -85,7 +87,17 @@ fn spawn_workers(shared: &Arc<Shared>, state: &mut State, volume: &VolumeId) {
     }
 }
 
-fn work(shared: &Shared, volume: &VolumeId) {
+fn classify_volume(shared: &Arc<Shared>, volume: &VolumeId) {
+    let kind = catch_unwind(AssertUnwindSafe(|| (shared.classifier)(volume)))
+        .unwrap_or(VolumeKind::Unknown);
+    let mut state = shared.lock();
+    state.scheduler.set_volume(volume.clone(), kind);
+    if !state.closed {
+        spawn_workers(shared, &mut state, volume);
+    }
+}
+
+fn work(shared: &Arc<Shared>, volume: &VolumeId) {
     loop {
         let mut state = shared.lock();
         let next = if state.closed {
@@ -103,7 +115,11 @@ fn work(shared: &Shared, volume: &VolumeId) {
         let token = CancelToken::new();
         state.tokens.insert(id, token.clone());
         let job = state.jobs.remove(&id);
+        let classify = state.scheduler.take_classification(volume);
         drop(state);
+        if classify {
+            classify_volume(shared, volume);
+        }
         if let Some(job) = job {
             let _ = catch_unwind(AssertUnwindSafe(|| job(&token)));
         }
@@ -116,8 +132,21 @@ fn work(shared: &Shared, volume: &VolumeId) {
 impl IoQueue {
     #[must_use]
     pub fn new() -> Self {
+        Self::with(Limits::LISTING, Arc::new(default_classifier))
+    }
+
+    #[must_use]
+    pub fn with(limits: Limits, classifier: Classifier) -> Self {
         Self {
-            shared: Arc::new(Shared::default()),
+            shared: Arc::new(Shared {
+                state: Mutex::new(State {
+                    scheduler: Scheduler::with(limits),
+                    ..State::default()
+                }),
+                idle: Condvar::new(),
+                next_owner: AtomicU64::new(0),
+                classifier,
+            }),
         }
     }
 
@@ -182,6 +211,18 @@ impl IoQueue {
                 let _ = handle.join();
             }
         }
+    }
+}
+
+fn default_classifier(volume: &VolumeId) -> VolumeKind {
+    let Some(root) = volume.root() else {
+        return VolumeKind::Unknown;
+    };
+    match drive_class(&root) {
+        DriveClass::Ssd => VolumeKind::Ssd,
+        DriveClass::Hdd => VolumeKind::Hdd,
+        DriveClass::Network => VolumeKind::Network,
+        DriveClass::Unknown => VolumeKind::Unknown,
     }
 }
 

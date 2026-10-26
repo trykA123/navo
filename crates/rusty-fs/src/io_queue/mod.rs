@@ -3,7 +3,7 @@ mod scheduler;
 
 use rusty_core::Location;
 
-pub use runner::{IoQueue, Job, JobSlot, OwnerGuard};
+pub use runner::{Classifier, IoQueue, Job, JobSlot, OwnerGuard};
 pub use scheduler::{Cancelled, Scheduler};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -25,11 +25,33 @@ pub enum VolumeKind {
 impl VolumeKind {
     #[must_use]
     pub fn limit(self) -> usize {
-        match self {
-            Self::Ssd => 8,
-            Self::Network => 4,
-            Self::Removable => 2,
-            Self::Hdd | Self::Unknown => 1,
+        Limits::LISTING.limit(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Limits {
+    pub ssd: usize,
+    pub hdd: usize,
+    pub network: usize,
+    pub removable: usize,
+}
+
+impl Limits {
+    pub const LISTING: Self = Self {
+        ssd: 8,
+        hdd: 1,
+        network: 4,
+        removable: 2,
+    };
+
+    #[must_use]
+    pub fn limit(self, kind: VolumeKind) -> usize {
+        match kind {
+            VolumeKind::Ssd => self.ssd,
+            VolumeKind::Network => self.network,
+            VolumeKind::Removable => self.removable,
+            VolumeKind::Hdd | VolumeKind::Unknown => self.hdd,
         }
     }
 }
@@ -41,6 +63,19 @@ impl VolumeId {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    #[must_use]
+    pub fn root(&self) -> Option<Location> {
+        if self.0.contains("://") {
+            return None;
+        }
+        let root = if self.0 == "/" {
+            self.0.clone()
+        } else {
+            format!("{}\\", self.0)
+        };
+        Location::new(root).ok()
     }
 }
 

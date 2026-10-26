@@ -11,6 +11,28 @@ fn push_many(scheduler: &mut Scheduler, volume: &str, count: usize) -> Vec<JobId
 }
 
 #[test]
+fn custom_limits_apply_to_each_volume_kind() {
+    let limits = Limits {
+        ssd: 3,
+        hdd: 2,
+        network: 5,
+        removable: 4,
+    };
+    for (kind, expected) in [
+        (VolumeKind::Ssd, 3),
+        (VolumeKind::Hdd, 2),
+        (VolumeKind::Network, 5),
+        (VolumeKind::Removable, 4),
+        (VolumeKind::Unknown, 2),
+    ] {
+        let mut scheduler = Scheduler::with(limits);
+        scheduler.set_volume(vol("V:"), kind);
+        push_many(&mut scheduler, "V:", 10);
+        assert_eq!(start_all(&mut scheduler, "V:").len(), expected);
+    }
+}
+
+#[test]
 fn higher_priority_starts_first() {
     let mut s = scheduler_with("C:", VolumeKind::Ssd);
     let idle = s.push(vol("C:"), Priority::Idle, A);

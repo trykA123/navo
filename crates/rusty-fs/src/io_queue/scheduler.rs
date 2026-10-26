@@ -1,7 +1,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{JobId, OwnerId, Priority, VolumeId, VolumeKind};
+use super::{JobId, Limits, OwnerId, Priority, VolumeId, VolumeKind};
 
 type Slot = (Reverse<Priority>, JobId);
 
@@ -10,6 +10,7 @@ struct Volume {
     kind: VolumeKind,
     queued: BTreeSet<Slot>,
     running: usize,
+    classified: bool,
 }
 
 impl Default for Volume {
@@ -18,13 +19,14 @@ impl Default for Volume {
             kind: VolumeKind::Unknown,
             queued: BTreeSet::new(),
             running: 0,
+            classified: false,
         }
     }
 }
 
 impl Volume {
-    fn has_room(&self) -> bool {
-        self.running < self.kind.limit()
+    fn has_room(&self, limits: Limits) -> bool {
+        self.running < limits.limit(self.kind)
     }
 }
 
@@ -36,8 +38,9 @@ struct JobInfo {
     running: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Scheduler {
+    limits: Limits,
     next_id: u64,
     volumes: BTreeMap<VolumeId, Volume>,
     jobs: BTreeMap<JobId, JobInfo>,
@@ -52,11 +55,30 @@ pub struct Cancelled {
 impl Scheduler {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self::with(Limits::LISTING)
+    }
+
+    #[must_use]
+    pub fn with(limits: Limits) -> Self {
+        Self {
+            limits,
+            next_id: 0,
+            volumes: BTreeMap::new(),
+            jobs: BTreeMap::new(),
+        }
     }
 
     pub fn set_volume(&mut self, volume: VolumeId, kind: VolumeKind) {
-        self.volumes.entry(volume).or_default().kind = kind;
+        let volume = self.volumes.entry(volume).or_default();
+        volume.kind = kind;
+        volume.classified = true;
+    }
+
+    pub(super) fn take_classification(&mut self, volume: &VolumeId) -> bool {
+        let Some(volume) = self.volumes.get_mut(volume) else {
+            return false;
+        };
+        !std::mem::replace(&mut volume.classified, true) && volume.kind == VolumeKind::Unknown
     }
 
     pub fn push(&mut self, volume: VolumeId, priority: Priority, owner: OwnerId) -> JobId {
@@ -78,7 +100,7 @@ impl Scheduler {
         let (volume, _) = self
             .volumes
             .iter()
-            .filter(|(_, v)| v.has_room())
+            .filter(|(_, v)| v.has_room(self.limits))
             .filter_map(|(id, v)| v.queued.first().map(|slot| (id, *slot)))
             .min_by_key(|&(_, slot)| slot)?;
         let volume = volume.clone();
@@ -88,7 +110,7 @@ impl Scheduler {
 
     pub fn start_next_on(&mut self, volume: &VolumeId) -> Option<JobId> {
         let slots = self.volumes.get_mut(volume)?;
-        if !slots.has_room() {
+        if !slots.has_room(self.limits) {
             return None;
         }
         let (_, job) = slots.queued.pop_first()?;
@@ -159,9 +181,16 @@ impl Scheduler {
     }
 
     pub(super) fn limit(&self, volume: &VolumeId) -> usize {
-        self.volumes
+        let kind = self
+            .volumes
             .get(volume)
-            .map_or(VolumeKind::Unknown, |v| v.kind)
-            .limit()
+            .map_or(VolumeKind::Unknown, |v| v.kind);
+        self.limits.limit(kind)
+    }
+}
+
+impl Default for Scheduler {
+    fn default() -> Self {
+        Self::new()
     }
 }

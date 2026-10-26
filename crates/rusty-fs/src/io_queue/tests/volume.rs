@@ -71,3 +71,38 @@ fn other_provider_gives_its_root() {
 fn same_share_in_different_case_gives_same_volume() {
     assert_eq!(volume(r"\\SRV\share\a"), volume(r"\\srv\SHARE\b"));
 }
+
+#[test]
+fn listing_limits_preserve_the_existing_limits() {
+    for kind in [
+        VolumeKind::Ssd,
+        VolumeKind::Hdd,
+        VolumeKind::Network,
+        VolumeKind::Removable,
+        VolumeKind::Unknown,
+    ] {
+        assert_eq!(Limits::LISTING.limit(kind), limit_of(kind));
+    }
+}
+
+#[test]
+fn volume_roots_are_absolute_local_locations() {
+    for (path, root) in [
+        (r"c:\folder", "C:\\"),
+        (r"\\?\D:\folder", "D:\\"),
+        (r"\\Server\Share\folder", "\\\\server\\share\\"),
+        ("/home/admin", "/"),
+    ] {
+        let location = Location::new(path).expect("valid test location");
+        assert_eq!(
+            volume_of(&location).root(),
+            Some(Location::new(root).expect("valid test root"))
+        );
+    }
+}
+
+#[test]
+fn other_provider_has_no_local_root() {
+    let location = Location::new("fake://folder").expect("valid test location");
+    assert_eq!(volume_of(&location).root(), None);
+}
