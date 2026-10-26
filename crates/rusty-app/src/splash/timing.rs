@@ -8,11 +8,12 @@ use std::time::Duration;
 
 use rusty_core::placement::PhysicalRect;
 
-const SHOW_AFTER: Duration = Duration::from_millis(200);
+const SHOW_AFTER: Duration = Duration::from_millis(500);
 const MIN_SHOWN: Duration = Duration::from_millis(700);
 const MAX_SHOWN: Duration = Duration::from_secs(20);
 const SLOW_AFTER: Duration = Duration::from_secs(3);
 const FADE: Duration = Duration::from_millis(1800);
+const FADE_OUT: Duration = Duration::from_millis(150);
 const FRAME: Duration = Duration::from_millis(33);
 const STILL: Duration = Duration::from_millis(100);
 const DIMMEST: f32 = 0.3;
@@ -39,12 +40,14 @@ pub(super) trait Surface {
     fn wait(&mut self, timeout: Duration);
     fn paint(&mut self, frame: Frame);
     fn place(&mut self, near: PhysicalRect);
+    fn fade(&mut self, alpha: u8);
     fn lower(&mut self);
 }
 
 enum Step {
     Hidden(Duration),
     Visible(Frame, Duration),
+    Fading(u8, Duration),
     Closed,
 }
 
@@ -57,6 +60,7 @@ struct Timing {
     motion: Motion,
     shown_at: Option<Duration>,
     close_at: Option<Duration>,
+    fade_from: Option<Duration>,
 }
 
 impl Timing {
@@ -72,15 +76,18 @@ impl Timing {
     }
 
     fn step(&mut self, now: Duration) -> Step {
+        if let Some(from) = self.fade_from {
+            return self.fading(now - from);
+        }
         if self.close_at.is_some_and(|at| at <= now) {
-            return Step::Closed;
+            return self.close(now);
         }
         let Some(shown) = self.shown_at.or((now >= SHOW_AFTER).then_some(now)) else {
             return Step::Hidden(SHOW_AFTER - now);
         };
         self.shown_at = Some(shown);
         if now >= shown + MAX_SHOWN {
-            return Step::Closed;
+            return self.close(now);
         }
         let frame = Frame {
             bar: self.bar(now - shown),
@@ -101,6 +108,22 @@ impl Timing {
         .min()
         .unwrap_or(tick);
         Step::Visible(frame, next)
+    }
+
+    fn close(&mut self, now: Duration) -> Step {
+        if self.shown_at.is_none() || self.motion == Motion::Still {
+            return Step::Closed;
+        }
+        self.fade_from = Some(now);
+        self.fading(Duration::ZERO)
+    }
+
+    fn fading(&self, elapsed: Duration) -> Step {
+        if elapsed >= FADE_OUT {
+            return Step::Closed;
+        }
+        let left = 1.0 - elapsed.as_secs_f32() / FADE_OUT.as_secs_f32();
+        Step::Fading((255.0 * left).round() as u8, FRAME.min(FADE_OUT - elapsed))
     }
 
     fn bar(&self, shown_for: Duration) -> f32 {
@@ -124,6 +147,7 @@ pub(super) fn drive(
         motion,
         shown_at: None,
         close_at: None,
+        fade_from: None,
     };
     loop {
         receive(events, &mut timing, &clock, surface);
@@ -131,6 +155,10 @@ pub(super) fn drive(
             Step::Hidden(wait) => surface.wait(wait),
             Step::Visible(frame, next) => {
                 surface.paint(frame);
+                surface.wait(next);
+            }
+            Step::Fading(alpha, next) => {
+                surface.fade(alpha);
                 surface.wait(next);
             }
             Step::Closed => return,

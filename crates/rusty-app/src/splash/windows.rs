@@ -65,6 +65,12 @@ impl Surface for Native {
         }
     }
 
+    fn fade(&mut self, alpha: u8) {
+        if let Some(window) = &self.window {
+            window.present(alpha);
+        }
+    }
+
     fn lower(&mut self) {
         if let Some(window) = &self.window {
             window.lower();
@@ -197,7 +203,7 @@ impl Window {
         if frame.is_slow && before.is_none_or(|before| !before.is_slow) {
             self.draw_status();
         }
-        self.present();
+        self.present(255);
     }
 
     fn draw_status(&mut self) {
@@ -233,7 +239,7 @@ impl Window {
         }
     }
 
-    fn present(&self) {
+    fn present(&self, alpha: u8) {
         let size = SIZE {
             cx: self.canvas.width() as i32,
             cy: self.canvas.height() as i32,
@@ -242,7 +248,7 @@ impl Window {
         let blend = BLENDFUNCTION {
             BlendOp: AC_SRC_OVER as u8,
             BlendFlags: 0,
-            SourceConstantAlpha: 255,
+            SourceConstantAlpha: alpha,
             AlphaFormat: AC_SRC_ALPHA as u8,
         };
         // SAFETY: the window is layered and owned by this thread; the DC holds a premultiplied DIB of `size`.

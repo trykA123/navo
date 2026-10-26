@@ -21,6 +21,7 @@ struct Fake {
     cues: Vec<(Duration, Cue)>,
     sender: Option<Sender<Event>>,
     paints: Vec<(Duration, Frame)>,
+    fades: Vec<(Duration, u8)>,
     lowered: Vec<Duration>,
 }
 
@@ -57,6 +58,10 @@ impl Surface for Fake {
         self.paints.push((self.now.get(), frame));
     }
 
+    fn fade(&mut self, alpha: u8) {
+        self.fades.push((self.now.get(), alpha));
+    }
+
     fn place(&mut self, _: PhysicalRect) {}
 
     fn lower(&mut self) {
@@ -66,6 +71,7 @@ impl Surface for Fake {
 
 struct Run {
     paints: Vec<(Duration, Frame)>,
+    fades: Vec<(Duration, u8)>,
     lowered: Vec<Duration>,
     closed_at: Duration,
 }
@@ -84,6 +90,7 @@ fn run(motion: Motion, cues: Vec<(Duration, Cue)>) -> Run {
         cues,
         sender: Some(sender),
         paints: Vec::new(),
+        fades: Vec::new(),
         lowered: Vec::new(),
     };
     fake.deliver();
@@ -91,6 +98,7 @@ fn run(motion: Motion, cues: Vec<(Duration, Cue)>) -> Run {
     drive(motion, move || clock.get(), &events, &mut fake);
     Run {
         paints: fake.paints,
+        fades: fake.fades,
         lowered: fake.lowered,
         closed_at: now.get(),
     }
@@ -101,37 +109,42 @@ fn ready_at(at: u64) -> Vec<(Duration, Cue)> {
 }
 
 const LATE: Duration = Duration::from_millis(40);
+const FADE: Duration = Duration::from_millis(150);
 
 #[test]
-fn a_start_ready_at_150_ms_never_shows_the_splash() {
-    let run = run(Motion::Animated, ready_at(150));
+fn a_start_ready_at_450_ms_never_shows_the_splash() {
+    let run = run(Motion::Animated, ready_at(450));
     assert!(run.paints.is_empty());
-    assert!(run.closed_at <= ms(200) + LATE);
+    assert!(run.closed_at <= ms(500) + LATE);
 }
 
 #[test]
-fn a_start_not_ready_by_200_ms_shows_the_splash_at_200_ms() {
+fn a_start_not_ready_by_500_ms_shows_the_splash_at_500_ms() {
     let run = run(Motion::Animated, ready_at(1500));
     let shown = run.first_paint().unwrap();
-    assert!(shown >= ms(200) && shown < ms(200) + LATE, "{shown:?}");
+    assert!(shown >= ms(500) && shown < ms(500) + LATE, "{shown:?}");
 }
 
 #[test]
 fn a_shown_splash_stays_at_least_700_ms() {
-    let run = run(Motion::Animated, ready_at(260));
+    let run = run(Motion::Animated, ready_at(560));
     let shown = run.first_paint().unwrap();
-    assert!(run.closed_at >= shown + ms(700), "{:?}", run.closed_at);
     assert!(
-        run.closed_at < shown + ms(700) + LATE,
+        run.closed_at >= shown + ms(700) + FADE,
+        "{:?}",
+        run.closed_at
+    );
+    assert!(
+        run.closed_at < shown + ms(700) + FADE + LATE,
         "{:?}",
         run.closed_at
     );
 }
 
 #[test]
-fn ready_after_the_minimum_closes_at_once() {
+fn ready_after_the_minimum_fades_out_and_closes() {
     let run = run(Motion::Animated, ready_at(2000));
-    assert!(run.closed_at >= ms(2000) && run.closed_at < ms(2000) + LATE);
+    assert!(run.closed_at >= ms(2000) + FADE && run.closed_at < ms(2000) + FADE + LATE);
 }
 
 #[test]
@@ -168,50 +181,81 @@ fn the_bar_breathes_between_full_and_dim() {
 }
 
 #[test]
-fn the_main_thread_ending_early_closes_the_splash_at_once() {
-    let run = run(Motion::Animated, vec![(ms(500), Cue::Hang)]);
+fn the_main_thread_ending_early_fades_the_splash_out() {
+    let run = run(Motion::Animated, vec![(ms(800), Cue::Hang)]);
     assert!(run.first_paint().is_some());
-    assert!(run.closed_at < ms(500) + LATE);
+    assert!(run.closed_at < ms(800) + FADE + LATE);
 }
 
 #[test]
-fn the_main_thread_ending_before_200_ms_never_shows_the_splash() {
+fn the_main_thread_ending_before_500_ms_never_shows_the_splash() {
     let run = run(Motion::Animated, vec![(ms(120), Cue::Hang)]);
     assert!(run.paints.is_empty());
 }
 
 #[test]
 fn ready_then_hang_up_still_keeps_the_minimum() {
-    let cues = vec![(ms(260), Cue::Send(Event::Ready)), (ms(270), Cue::Hang)];
+    let cues = vec![(ms(560), Cue::Send(Event::Ready)), (ms(570), Cue::Hang)];
     let run = run(Motion::Animated, cues);
     let shown = run.first_paint().unwrap();
-    assert!(run.closed_at >= shown + ms(700));
+    assert!(run.closed_at >= shown + ms(700) + FADE);
 }
 
 #[test]
 fn ready_while_shown_lowers_the_splash_below_the_main_window() {
-    let run = run(Motion::Animated, ready_at(260));
+    let run = run(Motion::Animated, ready_at(560));
     assert_eq!(run.lowered.len(), 1);
-    assert!(run.lowered[0] >= ms(260) && run.lowered[0] < ms(260) + LATE);
+    assert!(run.lowered[0] >= ms(560) && run.lowered[0] < ms(560) + LATE);
     assert!(run.closed_at > run.lowered[0]);
 }
 
 #[test]
 fn ready_before_the_splash_appears_lowers_nothing() {
-    let run = run(Motion::Animated, ready_at(150));
+    let run = run(Motion::Animated, ready_at(450));
     assert!(run.lowered.is_empty());
 }
 
 #[test]
 fn a_splash_without_ready_closes_20_s_after_it_appeared() {
-    for motion in [Motion::Animated, Motion::Still] {
+    for (motion, fade) in [(Motion::Animated, FADE), (Motion::Still, Duration::ZERO)] {
         let run = run(motion, Vec::new());
         let shown = run.first_paint().unwrap();
-        assert!(run.closed_at >= shown + ms(20_000), "{:?}", run.closed_at);
         assert!(
-            run.closed_at < shown + ms(20_000) + LATE,
+            run.closed_at >= shown + ms(20_000) + fade,
+            "{:?}",
+            run.closed_at
+        );
+        assert!(
+            run.closed_at < shown + ms(20_000) + fade + LATE,
             "{:?}",
             run.closed_at
         );
     }
+}
+
+#[test]
+fn closing_a_shown_splash_fades_alpha_down_within_150_ms() {
+    let run = run(Motion::Animated, ready_at(2000));
+    let alphas: Vec<u8> = run.fades.iter().map(|(_, alpha)| *alpha).collect();
+    assert_eq!(alphas.first(), Some(&255));
+    assert!(alphas.len() > 2);
+    assert!(
+        alphas.windows(2).all(|pair| pair[1] < pair[0]),
+        "{alphas:?}"
+    );
+    assert!(run.fades.iter().all(|(at, _)| *at < ms(2000) + FADE + LATE));
+    assert!(run.closed_at <= ms(2000) + FADE + LATE);
+}
+
+#[test]
+fn reduced_motion_closes_at_once_without_a_fade() {
+    let run = run(Motion::Still, ready_at(2000));
+    assert!(run.fades.is_empty());
+    assert!(run.closed_at >= ms(2000) && run.closed_at < ms(2000) + LATE);
+}
+
+#[test]
+fn a_splash_that_never_showed_does_not_fade() {
+    let run = run(Motion::Animated, ready_at(450));
+    assert!(run.fades.is_empty());
 }
