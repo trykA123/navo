@@ -28,13 +28,21 @@ impl FerriteWindow {
         if let Value::Number(percent) = self.values.get(Field::UiScale) {
             theme.scale((*percent).clamp(80, 200) as u16);
         }
+        let theme = tokens::with_system_palette(&theme, tokens::system_palette);
+        let backdrop = if theme.is_contrast {
+            gpui_kit::WindowBackgroundAppearance::Opaque
+        } else {
+            crate::title_bar::system_backdrop().window
+        };
+        window.set_background_appearance(backdrop);
         let typography = theme.typography.clone();
         let radius = theme.radii.md;
-        *cx.global_mut::<tokens::Theme>() = theme;
+        *cx.global_mut::<tokens::Theme>() = theme.clone();
         KitTheme::update(cx, |kit| {
             kit.font_family = typography.ui_font;
             kit.font_size = typography.body;
             kit.radius = radius;
+            tokens::map_contrast_colors(&theme, &mut kit.colors);
         });
     }
 }

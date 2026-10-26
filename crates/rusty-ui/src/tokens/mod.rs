@@ -9,6 +9,7 @@ mod palette;
 mod shadows;
 mod surfaces;
 mod syntax;
+mod system_palette;
 
 #[cfg(test)]
 mod tests;
@@ -27,6 +28,10 @@ pub use palette::ColorTheme;
 pub use shadows::Shadows;
 pub use surfaces::Surfaces;
 pub use syntax::{SyntaxTheme, highlight_theme};
+pub use system_palette::{
+    SystemPalette, contrast_theme, from_colorref, set_system_palette_reader, system_palette,
+};
+pub(crate) use system_palette::{map_contrast_colors, with_system_palette};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Mode {
@@ -95,6 +100,8 @@ pub struct Colors {
     pub faint: Hsla,
     pub hover: Hsla,
     pub selection: Hsla,
+    pub on_selection: Hsla,
+    pub on_button: Hsla,
     pub accent: Hsla,
     pub accent_text: Hsla,
     pub mark: Hsla,
@@ -171,6 +178,7 @@ pub struct Radii {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Theme {
     pub mode: Mode,
+    pub is_contrast: bool,
     pub color_theme: ColorTheme,
     pub colors: Colors,
     pub typography: Typography,
@@ -210,6 +218,7 @@ impl Theme {
         let spacing = design_b::spacing();
         Self {
             mode,
+            is_contrast: false,
             color_theme: look.color_theme,
             colors,
             typography: design_b::typography(),
@@ -251,7 +260,7 @@ const FILLED_PAIRS: [(&str, &str); 4] = [
 ];
 
 impl Colors {
-    fn base_entries(&self) -> [(&'static str, Hsla); 23] {
+    fn base_entries(&self) -> [(&'static str, Hsla); 25] {
         let Self {
             background,
             surface,
@@ -286,6 +295,8 @@ impl Colors {
             ("faint", faint),
             ("hover", hover),
             ("selection", selection),
+            ("on_selection", self.on_selection),
+            ("on_button", self.on_button),
             ("accent", accent),
             ("accent_text", accent_text),
             ("mark", mark),

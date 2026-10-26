@@ -212,6 +212,20 @@ struct RowColors {
 
 fn row_colors(t: &Theme, spec: &RowSpec, is_selected: bool) -> RowColors {
     let c = &t.colors;
+    if t.is_contrast && is_selected {
+        return RowColors {
+            text: c.on_selection,
+            icon: c.on_selection,
+            trailing: c.on_selection,
+        };
+    }
+    if t.is_contrast && spec.command.is_primary() && spec.command.is_available() {
+        return RowColors {
+            text: c.on_button,
+            icon: c.on_button,
+            trailing: c.on_button,
+        };
+    }
     match (spec.command.is_available(), spec.command.is_primary()) {
         (false, _) => RowColors {
             text: c.faint,
@@ -233,6 +247,12 @@ fn row_colors(t: &Theme, spec: &RowSpec, is_selected: bool) -> RowColors {
 
 fn row_fill(t: &Theme, spec: &RowSpec, is_selected: bool) -> Option<Hsla> {
     let c = &t.colors;
+    if t.is_contrast && is_selected {
+        return Some(c.selection);
+    }
+    if t.is_contrast && spec.command.is_primary() && spec.command.is_available() {
+        return Some(t.surfaces.keycap_face);
+    }
     match (spec.command.is_primary(), spec.command.is_available()) {
         (true, true) => Some(c.accent),
         (true, false) if !is_selected => Some(t.surfaces.layer_tint),

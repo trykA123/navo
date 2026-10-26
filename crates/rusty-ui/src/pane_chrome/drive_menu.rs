@@ -157,7 +157,8 @@ fn row(drive: &DriveInfo, props: RowProps) -> AnyElement {
 }
 
 fn row_body(drive: &DriveInfo, props: RowProps) -> impl InteractiveElement + IntoElement + use<> {
-    let t = props.theme;
+    let theme = props.theme.selected_content(props.is_selected);
+    let t = &theme;
     let c = &t.colors;
     let index = props.index;
     let letter = drive.letter.map(|l| format!("{l}:")).unwrap_or_default();
@@ -316,7 +317,7 @@ impl RenderOnce for DriveMenu {
             .border_1()
             .border_color(c.line)
             .bg(c.surface)
-            .shadow(shadow())
+            .when(!t.is_contrast, |menu| menu.shadow(shadow()))
             .text_color(c.text)
             .text_size(t.typography.small)
             .children(rows)

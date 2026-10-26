@@ -70,6 +70,11 @@ fn hidden_row(index: usize, item: PathSegment, props: RowProps) -> AnyElement {
     let t = props.theme;
     let c = &t.colors;
     let (state, on_choose, position) = (props.state, props.on_choose, props.position);
+    let hover = if props.is_selected && t.is_contrast {
+        c.selection
+    } else {
+        c.hover
+    };
     div()
         .id(("path-hidden", index))
         .role(Role::MenuItem)
@@ -82,8 +87,10 @@ fn hidden_row(index: usize, item: PathSegment, props: RowProps) -> AnyElement {
         .items_center()
         .rounded(t.radii.xs)
         .cursor_pointer()
-        .when(props.is_selected, |d| d.bg(c.selection))
-        .hover(|style| style.bg(c.hover))
+        .when(props.is_selected, |d| {
+            d.bg(c.selection).text_color(c.on_selection)
+        })
+        .hover(|style| style.bg(hover))
         .truncate()
         .child(item.label)
         .on_click(move |_, window, cx| choose(&state, (position, &on_choose), window, cx))
@@ -141,7 +148,7 @@ pub(super) fn hidden_menu(hidden: Hidden, t: &Theme, cx: &App) -> AnyElement {
         .border_1()
         .border_color(c.line)
         .bg(c.surface)
-        .shadow(menu_shadow())
+        .when(!t.is_contrast, |menu| menu.shadow(menu_shadow()))
         .text_color(c.text)
         .text_size(t.typography.small)
         .children(rows);

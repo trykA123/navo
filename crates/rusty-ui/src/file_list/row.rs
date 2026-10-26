@@ -126,7 +126,9 @@ fn name_cell(
         .id("row-icon")
         .test_support()
         .flex_none()
-        .when(entry.attributes.hidden, |d| d.opacity(HIDDEN_ICON_OPACITY))
+        .when(entry.attributes.hidden && !t.is_contrast, |d| {
+            d.opacity(HIDDEN_ICON_OPACITY)
+        })
         .child(icon(glyph, t.spacing.icon - px(1.), glyph_color));
     div()
         .id(("cell", 0usize))
@@ -199,6 +201,13 @@ fn numbers(look: &RowLook) -> Div {
 }
 
 pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
+    let theme = look
+        .theme
+        .selected_content(look.is_cursor && look.is_active_pane);
+    let look = &RowLook {
+        theme: &theme,
+        ..*look
+    };
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;

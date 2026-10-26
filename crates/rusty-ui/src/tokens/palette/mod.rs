@@ -103,6 +103,8 @@ pub(super) fn colors(t: &Tokens) -> Colors {
         faint: t.border_strong.color(),
         hover: t.surface.mix(t.selected, 0.5).color(),
         selection: t.selected.color(),
+        on_selection: t.text.color(),
+        on_button: t.text.color(),
         accent: t.accent.color(),
         accent_text: t.accent_text.color(),
         mark: lch(t.accent_text.l, t.danger.c, t.danger.h).color(),

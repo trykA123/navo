@@ -132,8 +132,14 @@ struct RowProps<'a> {
 }
 
 fn row((index, tab): (usize, Tab), props: RowProps) -> AnyElement {
-    let t = props.theme;
-    let (hover, muted) = (t.colors.hover, t.colors.muted);
+    let theme = props.theme.selected_content(props.is_selected);
+    let t = &theme;
+    let hover = if props.is_selected && t.is_contrast {
+        t.colors.selection
+    } else {
+        t.colors.hover
+    };
+    let muted = t.colors.muted;
     let (state, on_choose, position) = (props.state, props.on_choose, props.position);
     let label: SharedString = tab.label.clone();
     div()
@@ -149,7 +155,9 @@ fn row((index, tab): (usize, Tab), props: RowProps) -> AnyElement {
         .px(t.spacing.md)
         .rounded(t.radii.sm)
         .cursor_pointer()
-        .when(props.is_selected, |d| d.bg(t.colors.selection))
+        .when(props.is_selected, |d| {
+            d.bg(t.colors.selection).text_color(t.colors.on_selection)
+        })
         .hover(move |style| style.bg(hover))
         .on_click(move |_, window: &mut Window, cx| {
             choose(&state, (position, &on_choose), window, cx);

@@ -116,7 +116,7 @@ fn line(t: &Theme, index: usize, row: MenuRow) -> Stateful<Div> {
         .rounded(t.radii.sm)
         .font_weight(weight)
         .truncate()
-        .hover(|line| line.bg(t.colors.hover))
+        .hover(|line| line.bg(t.colors.hover).text_color(t.colors.text))
         .child(row.text)
 }
 
@@ -137,7 +137,10 @@ impl RenderOnce for FieldMenu {
             .enumerate()
             .map(|(index, row)| {
                 line(&t, index, row)
-                    .when(index == self.selected, |line| line.bg(t.colors.selection))
+                    .when(index == self.selected, |line| {
+                        line.bg(t.colors.selection)
+                            .text_color(t.colors.on_selection)
+                    })
                     .on_click(picked(self.on_pick.clone(), index))
             })
             .collect();
@@ -154,7 +157,7 @@ impl RenderOnce for FieldMenu {
             .border_1()
             .border_color(t.colors.line)
             .bg(t.colors.surface)
-            .shadow(shadow())
+            .when(!t.is_contrast, |menu| menu.shadow(shadow()))
             .text_color(t.colors.text)
             .text_size(t.typography.small)
             .children(filter)

@@ -20,8 +20,8 @@ use crate::startup::{
     home_location, initial_state, path_location, place_panes, save, session_folders,
 };
 use crate::{
-    app_menu, clipboard, drives, editor, files, jobs, keymap, launch, metrics, rename_hooks,
-    settings, shell_menu, terminal,
+    app_menu, clipboard, contrast, drives, editor, files, jobs, keymap, launch, metrics,
+    rename_hooks, settings, shell_menu, terminal,
 };
 
 const START_READ: Duration = Duration::from_millis(50);
@@ -110,6 +110,7 @@ fn session_state(
 }
 
 pub(crate) fn open(launch: Launch) {
+    rusty_ui::tokens::set_system_palette_reader(contrast::system_palette);
     let mut store = launch.store;
     let dirs = launch.dirs;
     let settings_start = settings::start_from(dirs.as_ref());

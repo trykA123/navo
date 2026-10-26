@@ -352,16 +352,16 @@ impl FerriteWindow {
 
 impl FerriteWindow {
     fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let mica = tokens::current(cx).surfaces.mica();
-        let gradient = system_backdrop().gradient;
+        let theme = tokens::current(cx);
+        let mica = theme.surfaces.mica();
+        let has_mica =
+            !theme.is_contrast && system_backdrop().gradient == GradientLayer::BelowTitleBar;
         div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
-            .when(gradient == GradientLayer::BelowTitleBar, |below| {
-                below.bg(mica)
-            })
+            .when(has_mica, |below| below.bg(mica))
             .children(self.crash_notice_view(window, cx))
             .children(self.index_upgrade_view(cx))
             .child(self.body_area(window, cx))
@@ -381,9 +381,10 @@ impl Render for FerriteWindow {
             .flex()
             .flex_col()
             .size_full()
-            .when(gradient == GradientLayer::Root, |root| {
+            .when(!t.is_contrast && gradient == GradientLayer::Root, |root| {
                 root.bg(t.surfaces.mica())
             })
+            .when(t.is_contrast, |root| root.bg(t.colors.background))
             .text_color(t.colors.text)
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)

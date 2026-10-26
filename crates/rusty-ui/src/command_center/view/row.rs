@@ -56,6 +56,11 @@ pub(crate) fn highlight_ranges(text: &str, indices: &[u32]) -> Vec<Range<usize>>
 }
 
 pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool) -> RowElement {
+    let theme = look.theme.selected_content(is_selected);
+    let look = &RowLook {
+        theme: &theme,
+        ..*look
+    };
     let t = look.theme;
     match row {
         Row::Header(heading) => header(t, heading_label(heading), index),
@@ -105,7 +110,9 @@ fn option(look: &RowLook, index: usize, is_selected: bool, height: f32) -> RowEl
         .pr(t.spacing.md + look.gutter)
         .rounded(t.radii.card)
         .cursor_pointer()
-        .when(is_selected, |row| row.bg(t.colors.selection))
+        .when(is_selected, |row| {
+            row.bg(t.colors.selection).text_color(t.colors.on_selection)
+        })
 }
 
 fn header(t: &Theme, label: SharedString, index: usize) -> RowElement {

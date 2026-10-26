@@ -10,6 +10,7 @@ mod bench;
 mod cli;
 mod clipboard;
 mod console;
+mod contrast;
 mod crash;
 mod crash_report;
 mod diag;

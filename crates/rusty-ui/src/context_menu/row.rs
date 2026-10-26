@@ -54,6 +54,11 @@ pub(super) fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
 }
 
 pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool) -> RowElement {
+    let theme = look.theme.selected_content(is_selected);
+    let look = &RowLook {
+        theme: &theme,
+        ..*look
+    };
     let t = look.theme;
     match row {
         Row::Separator => base(index)
@@ -196,6 +201,8 @@ pub(super) fn status_row(
 }
 
 pub(super) fn retry_row(t: &Theme, index: usize, is_selected: bool) -> RowElement {
+    let theme = t.selected_content(is_selected);
+    let t = &theme;
     let text = tr("context-menu-retry");
     line(t, index, is_selected)
         .aria_label(text.clone())

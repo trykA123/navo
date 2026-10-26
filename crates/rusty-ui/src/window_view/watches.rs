@@ -21,7 +21,9 @@ impl FerriteWindow {
 
     fn activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.track_modifiers(window.modifiers(), window, cx);
-        if window.is_window_active() && self.browser.revalidate_unwatched() {
+        if window.is_window_active() {
+            self.apply_theme(window, cx);
+            self.browser.revalidate_unwatched();
             cx.notify();
         }
     }
