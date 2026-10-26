@@ -1,4 +1,5 @@
 mod archive;
+mod description;
 mod elf;
 mod font;
 mod hex;
@@ -163,6 +164,8 @@ impl Kinds {
             Arc::new(elf::ElfKind),
             Arc::new(map::MapKind),
             Arc::new(mdf::MdfKind),
+            Arc::new(description::DbcKind),
+            Arc::new(description::A2lKind),
             Arc::new(trace::TraceKind),
             Arc::new(pdf::Pdf),
         ])
