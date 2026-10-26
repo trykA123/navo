@@ -228,3 +228,17 @@ fn a_flag_that_is_not_unicode_is_refused_without_a_panic() {
     let odd = OsString::from_vec(vec![b'-', b'-', 0xff]);
     assert!(parse([odd]).is_err());
 }
+
+#[test]
+fn bench_is_a_console_subcommand_only_in_first_place() {
+    let Ok(command) = parse_strs(&["bench", "--root", "fixture", "--files", "5000"]) else {
+        panic!("bench should parse");
+    };
+    assert!(command.uses_console());
+    assert!(matches!(command, Command::Bench(options) if options.files == 5_000));
+    assert_eq!(
+        start(&["--left", "a", "bench"]).path,
+        Some(PathBuf::from("bench"))
+    );
+    assert!(refusal(&["bench"]).contains("--root"));
+}

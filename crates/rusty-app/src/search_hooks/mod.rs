@@ -3,6 +3,7 @@ mod service;
 mod index;
 
 pub use index::hooks as index_hooks;
+pub(crate) use index::search_table;
 pub(crate) use service::add_upgrade_notice;
 
 use std::sync::Arc;

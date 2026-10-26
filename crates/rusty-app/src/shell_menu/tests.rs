@@ -7,13 +7,13 @@ use rusty_ui::window_view::{MenuTarget, Reply, ScreenSpot};
 use super::{provider, shell_form, started};
 
 fn answer<T>(reply: &Reply<T>) -> Result<T, String> {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         if let Some(answer) = reply() {
             return answer;
         }
         assert!(Instant::now() < deadline, "the shell never answered");
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 

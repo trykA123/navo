@@ -5,7 +5,7 @@ mod status;
 
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::Instant;
 
 use rusty_core::{Location, ProviderPath};
@@ -13,6 +13,7 @@ use rusty_fs::{IoQueue, Provider};
 use rusty_index::host::{Host, HostOptions, HostStatus};
 use rusty_index::pipe::{self, Reply, VolumeStatus};
 use rusty_index::search;
+use rusty_index::table::NameTable;
 use rusty_index::walker::Limits;
 use rusty_store::StoreDirs;
 use rusty_ui::command_center::index_source::{IndexMetadata, PipeQueries};
@@ -151,7 +152,12 @@ impl Hosts {
                 progress: pending.then_some(0),
                 errors: root.status.errors.clone(),
             });
-            reply.hits.extend(search_root(root, query, cancel));
+            reply.hits.extend(search_root(
+                &root.location,
+                &root.host.table(),
+                query,
+                cancel,
+            ));
         }
         reply.hits.sort_by_key(|hit| std::cmp::Reverse(hit.score));
         reply.hits.truncate(pipe::MAX_HITS);
@@ -280,23 +286,34 @@ impl Drop for Hosts {
     }
 }
 
-fn search_root(root: &Root, query: &pipe::Query, cancel: &Cancel) -> Vec<pipe::Hit> {
-    let table = root.host.table();
+pub(crate) fn search_root(
+    root: &Location,
+    table: &RwLock<NameTable>,
+    query: &pipe::Query,
+    cancel: &Cancel,
+) -> Vec<pipe::Hit> {
     let Ok(table) = table.try_read() else {
         return Vec::new();
     };
-    search::search(&table, &query.request.terms(), pipe::MAX_HITS, &|| {
+    search_table(root, &table, query, cancel)
+}
+
+pub(crate) fn search_table(
+    root: &Location,
+    table: &NameTable,
+    query: &pipe::Query,
+    cancel: &Cancel,
+) -> Vec<pipe::Hit> {
+    search::search(table, &query.request.terms(), pipe::MAX_HITS, &|| {
         cancel.is_cancelled()
     })
     .into_iter()
     .filter_map(|found| {
         table.parent(found.id)?;
         let path = table.path_with(found.id, if cfg!(windows) { '\\' } else { '/' })?;
-        let location = Location::with_provider(
-            root.location.provider().clone(),
-            ProviderPath::from_text(&path),
-        )
-        .ok()?;
+        let location =
+            Location::with_provider(root.provider().clone(), ProviderPath::from_text(&path))
+                .ok()?;
         Some(pipe::Hit {
             path: location.as_str().to_owned(),
             flags: table.flags(found.id)?.bits(),

@@ -9,6 +9,7 @@ pub(crate) enum Command {
     CrashTest(PathBuf),
     PdfHelper,
     IndexService(crate::index_service::Action),
+    Bench(crate::bench::Options),
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -22,7 +23,7 @@ pub(crate) struct Start {
     pub(crate) right: Option<PathBuf>,
 }
 
-pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>]]";
+pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
 
 const STANDALONE: [&str; 5] = [
     "--version",
@@ -39,7 +40,7 @@ impl Command {
             Self::Open(start) => start.is_metrics(),
             Self::PdfHelper => false,
             Self::IndexService(_) => false,
-            Self::Version | Self::DiagReport(_) | Self::CrashTest(_) => true,
+            Self::Version | Self::DiagReport(_) | Self::CrashTest(_) | Self::Bench(_) => true,
         }
     }
 }
@@ -70,6 +71,9 @@ fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
     let mut is_first = true;
     while let Some(arg) = args.next() {
         let flag = arg.to_string_lossy();
+        if is_first && flag == "bench" {
+            return crate::bench::parse(args).map(Command::Bench);
+        }
         if STANDALONE.contains(&flag.as_ref()) {
             if !is_first {
                 return Err(format!("{flag} stands alone"));

@@ -6,6 +6,7 @@
 )]
 
 mod app_menu;
+mod bench;
 mod cli;
 mod clipboard;
 mod console;
@@ -68,6 +69,7 @@ fn execute(
     let command = match parsed {
         Ok(Command::PdfHelper) => return pdf_helper::run(),
         Ok(Command::IndexService(action)) => return index_service::run(action),
+        Ok(Command::Bench(options)) => return bench::run(&options),
         Ok(command) => command,
         Err(usage) => {
             eprintln!("{usage}");
@@ -124,6 +126,7 @@ fn execute_command(
         Command::CrashTest(_) => crash_test(&profile),
         Command::PdfHelper => pdf_helper::run(),
         Command::IndexService(action) => index_service::run(action),
+        Command::Bench(options) => bench::run(&options),
     }
 }
 

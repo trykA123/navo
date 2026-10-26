@@ -6,6 +6,7 @@ mod run;
 
 pub(crate) use clock::ProcessClock;
 pub(crate) use marks::mark;
+pub(crate) use memory::Memory;
 pub(crate) use run::Run;
 
 #[cfg(test)]
