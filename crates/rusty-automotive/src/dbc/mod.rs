@@ -1,10 +1,12 @@
 mod convert;
+mod rows;
 mod scan;
 
 use crate::{CanId, DescriptionReport, Endian};
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
+pub use rows::rows;
 pub use scan::index_dbc;
 pub const DBC_EXTENSIONS: [&str; 1] = ["dbc"];
 

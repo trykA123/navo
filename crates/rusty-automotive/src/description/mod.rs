@@ -1,6 +1,8 @@
 mod lexer;
+mod rows;
 
 pub(crate) use lexer::{Lexer, Token, TokenKind};
+pub use rows::DescRow;
 
 pub const MAX_PROBLEMS: usize = 1000;
 pub(crate) const MAX_RECORD: usize = 256 * 1024;
