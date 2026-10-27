@@ -210,6 +210,8 @@ fn memory() -> impl Strategy<Value = MemoryReport> {
             budget: 2,
         }],
         tasks: vec![(owner, 1)],
+        heap: None,
+        components: Vec::new(),
     })
 }
 

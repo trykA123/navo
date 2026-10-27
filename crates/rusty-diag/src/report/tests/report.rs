@@ -304,3 +304,27 @@ fn summary_shows_every_cache_against_its_budget() {
     let summary = summary_text(&written.path);
     with_snapshot_dir(|| insta::assert_snapshot!("summary_text", summary));
 }
+
+#[test]
+fn rust_heap_and_components_are_reported_beside_process_memory() {
+    let written = write(&input());
+    let report = report_json(&written.path);
+    let memory = &report["memory"];
+    let heap = ["live_bytes", "peak_bytes", "allocations"]
+        .map(|field| format!("rust_heap.{field}: {}", memory["rust_heap"][field]));
+    let components = memory["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|c| ["name", "bytes", "items", "busy"].map(|f| format!("{f}: {}", c[f])));
+    let shape: Vec<String> = [format!(
+        "private_bytes: {}",
+        memory["process"]["private_bytes"]
+    )]
+    .into_iter()
+    .chain(heap)
+    .chain(components)
+    .collect();
+    let shape = shape.join("\n");
+    with_snapshot_dir(|| insta::assert_snapshot!("memory_heap_components", shape));
+}

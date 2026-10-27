@@ -4,12 +4,16 @@ use serde::Serialize;
 
 mod document;
 mod latencies;
+mod memory;
 mod ring;
 mod summary;
 mod threads;
 
 pub use document::{GpuFacts, MonitorFacts, PerfDocument, SystemFacts, perf_json};
 pub use latencies::Latencies;
+pub use memory::{
+    ComponentSummary, MemoryRecord, MemoryRow, MemorySummary, MemoryTrack, memory_text,
+};
 pub use ring::Ring;
 pub use summary::Summary;
 pub use threads::{
@@ -240,6 +244,8 @@ pub fn ms(duration: Duration) -> f32 {
     duration.as_secs_f32() * 1000.0
 }
 
+#[cfg(test)]
+mod memory_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

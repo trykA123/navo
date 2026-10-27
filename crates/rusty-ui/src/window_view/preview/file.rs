@@ -2,6 +2,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::Task;
+use rusty_diag::components::Held;
 use rusty_fs::{JobSlot, OwnerGuard, Priority, volume_of};
 
 use super::follow::Target;
@@ -9,8 +10,8 @@ use super::{Preview, Shown};
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
 use crate::window_view::viewer::{
-    Attach, FileHooks, Host, Kind, Opened, Picked, Request, SaveError, Turn, ViewerBody,
-    sniff_and_load,
+    Attach, FileHooks, Host, Kind, Opened, PREVIEW_BODY, Picked, Request, SaveError, Sniff, Turn,
+    ViewerBody, hold_memory, sniff_and_load,
 };
 
 const READ_ONLY: &str = "The preview is read-only.";
@@ -27,6 +28,7 @@ pub(in crate::window_view) struct FilePreview {
     pub body: Option<Box<dyn ViewerBody>>,
     pub message: Option<SharedString>,
     loading: Option<Loading>,
+    _memory: Option<Held>,
 }
 
 impl FilePreview {
@@ -106,6 +108,7 @@ impl FerriteWindow {
             kind: None,
             body: None,
             message: None,
+            _memory: None,
             loading: Some(Loading {
                 _owner: owner,
                 _task: task,
@@ -140,8 +143,8 @@ impl FerriteWindow {
             return;
         };
         file.loading = None;
-        let Picked { kind, loaded, note } = match opened {
-            Ok(opened) => opened.picked,
+        let (Picked { kind, loaded, note }, head) = match opened {
+            Ok(opened) => (opened.picked, opened.head),
             Err(message) => {
                 file.message = Some(message.into());
                 cx.notify();
@@ -162,6 +165,13 @@ impl FerriteWindow {
                     body.set_note(note.into(), cx);
                 }
                 file.body = Some(body);
+                let name = target.name();
+                let sniff = Sniff {
+                    head: &head.bytes,
+                    name: &name,
+                    len: head.len,
+                };
+                file._memory = Some(hold_memory(&PREVIEW_BODY, &kind, &sniff));
             }
             Err(message) => file.message = Some(message.into()),
         }

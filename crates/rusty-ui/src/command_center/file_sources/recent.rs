@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
 use rusty_core::Location;
+use rusty_diag::components::{Held, MemoryUse, Tally};
 
 use super::{Matcher, Place};
 use crate::command_center::query::Query;
@@ -9,11 +10,14 @@ use crate::window_view::Frecent;
 
 pub const RECENT_ROWS: usize = 2_000;
 
+static HISTORY_MEMORY: Tally = Tally::new("command center history");
+
 pub type Frecents = std::sync::Arc<dyn Fn(usize) -> Vec<Frecent> + Send + Sync>;
 
 pub struct RecentSource {
     load: Frecents,
     places: OnceLock<Vec<Place>>,
+    memory: OnceLock<Held>,
 }
 
 impl RecentSource {
@@ -22,19 +26,25 @@ impl RecentSource {
         Self {
             load,
             places: OnceLock::new(),
+            memory: OnceLock::new(),
         }
     }
 
     fn places(&self) -> &[Place] {
-        self.places.get_or_init(|| {
-            (self.load)(RECENT_ROWS)
-                .into_iter()
-                .filter_map(|row| {
-                    let location = Location::new(row.location).ok()?;
-                    Some(Place::new(location, row.is_folder, row.weight))
-                })
-                .collect()
-        })
+        let places = self.places.get_or_init(|| self.load_places());
+        self.memory
+            .get_or_init(|| HISTORY_MEMORY.hold(memory_use(places)));
+        places
+    }
+
+    fn load_places(&self) -> Vec<Place> {
+        (self.load)(RECENT_ROWS)
+            .into_iter()
+            .filter_map(|row| {
+                let location = Location::new(row.location).ok()?;
+                Some(Place::new(location, row.is_folder, row.weight))
+            })
+            .collect()
     }
 
     #[must_use]
@@ -59,6 +69,17 @@ impl RecentSource {
                 Some(place.hit("recent", (score, indices), place.open_target()))
             })
             .collect()
+    }
+}
+
+fn memory_use(places: &[Place]) -> MemoryUse {
+    let text: usize = places
+        .iter()
+        .map(|place| place.location.as_str().len() + place.name.len() + place.parent.len())
+        .sum();
+    MemoryUse {
+        bytes: (text + size_of_val(places)) as u64,
+        items: places.len() as u64,
     }
 }
 

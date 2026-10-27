@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::{BuildInfo, ErrorRecord, ReportInput, SystemInfo};
+use crate::heap::HeapStats;
 use crate::{MemoryReport, Redactor};
 
 #[derive(Serialize)]
@@ -33,6 +34,16 @@ struct Memory {
     probe_error: Option<String>,
     caches: Vec<Cache>,
     tasks: Vec<Task>,
+    rust_heap: Option<HeapStats>,
+    components: Vec<Component>,
+}
+
+#[derive(Serialize)]
+struct Component {
+    name: String,
+    bytes: u64,
+    items: u64,
+    busy: bool,
 }
 
 #[derive(Serialize)]
@@ -165,6 +176,17 @@ fn memory(report: &MemoryReport, redactor: &Redactor) -> Memory {
             .map(|(owner, count)| Task {
                 owner: redactor.text(owner),
                 count: *count,
+            })
+            .collect(),
+        rust_heap: report.heap,
+        components: report
+            .components
+            .iter()
+            .map(|c| Component {
+                name: redactor.text(c.name),
+                bytes: c.bytes,
+                items: c.items,
+                busy: c.busy,
             })
             .collect(),
     }

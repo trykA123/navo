@@ -5,6 +5,9 @@ use std::collections::BTreeMap;
 use std::io;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use crate::components::ComponentUse;
+use crate::heap::HeapStats;
+
 #[cfg(target_os = "linux")]
 pub use linux::{ProcStatusProbe, parse_proc_status};
 
@@ -144,6 +147,8 @@ pub struct MemoryReport {
     pub probe_error: Option<String>,
     pub caches: Vec<CacheUsage>,
     pub tasks: Vec<(String, usize)>,
+    pub heap: Option<HeapStats>,
+    pub components: Vec<ComponentUse>,
 }
 
 pub fn memory_report(
@@ -160,6 +165,8 @@ pub fn memory_report(
         probe_error,
         caches: caches.usage(),
         tasks: tasks.snapshot(),
+        heap: None,
+        components: Vec::new(),
     }
 }
 

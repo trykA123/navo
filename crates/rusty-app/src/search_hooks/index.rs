@@ -1,4 +1,5 @@
 mod config;
+mod memory;
 mod retirement;
 mod roots;
 mod status;
@@ -54,6 +55,8 @@ pub fn hooks(
             return IndexHooks::none();
         }
     };
+    let weak = Arc::downgrade(&hosts);
+    rusty_diag::components::register(memory::NAME, move || memory::read(&weak));
     let reset = hosts.clone();
     config::reset_after_actions(
         service,

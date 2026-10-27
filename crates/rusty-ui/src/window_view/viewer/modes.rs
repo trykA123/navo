@@ -64,6 +64,7 @@ impl Viewer {
 
     fn clear_body(&mut self) {
         self.body = None;
+        self.memory = None;
         self.leaving = None;
         self.switching = None;
         self.message = None;
@@ -138,7 +139,12 @@ impl FerriteWindow {
         viewer.carried = None;
         viewer.clear_body();
         match attached {
-            Ok(body) => viewer.body = Some(body),
+            Ok(body) => {
+                viewer.body = Some(body);
+                viewer.memory = viewer.kind.as_ref().map(|kind| {
+                    super::hold_memory(&super::VIEWER_DOCUMENTS, kind, &viewer.sniff())
+                });
+            }
             Err(message) => viewer.message = Some(message.into()),
         }
         if let (Some(line), Some(body)) = (viewer.start_line.take(), &viewer.body) {

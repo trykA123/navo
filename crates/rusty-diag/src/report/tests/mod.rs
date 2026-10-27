@@ -6,6 +6,9 @@ use std::sync::Arc;
 use serde_json::Value;
 use tempfile::TempDir;
 
+use crate::components::ComponentUse;
+use crate::heap::HeapStats;
+
 use super::{BuildInfo, ErrorRecord, ReportInput, ReportSummary, SystemInfo, write_report};
 use crate::{
     CacheSize, CacheUsage, DpiAwareness, Identity, MemoryReport, ProcessMemory, Redactor, Salt,
@@ -75,6 +78,25 @@ fn memory() -> MemoryReport {
             },
         ],
         tasks: vec![("listing".to_owned(), 2)],
+        heap: Some(HeapStats {
+            live_bytes: 41_943_040,
+            peak_bytes: 52_428_800,
+            allocations: 1_000,
+        }),
+        components: vec![
+            ComponentUse {
+                name: "walk index",
+                bytes: 20_971_520,
+                items: 300_000,
+                busy: false,
+            },
+            ComponentUse {
+                name: "command center results",
+                bytes: 0,
+                items: 0,
+                busy: true,
+            },
+        ],
     }
 }
 

@@ -392,3 +392,13 @@ fn tabs_win_over_recent_and_recent_over_here_for_one_place() {
         ]
     );
 }
+
+#[test]
+fn result_memory_counts_rows_and_their_text() {
+    let mut long = hit("src", Group::Files, &"x".repeat(1_000), 1);
+    long.indices = vec![0; 10];
+    let rows = [Row::Hint, Row::Hit(long)];
+    let used = Results::memory_use(&rows);
+    assert_eq!(used.items, 2);
+    assert_eq!(used.bytes, (1_040 + 2 * size_of::<Row>()) as u64);
+}

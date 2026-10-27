@@ -338,6 +338,7 @@ impl FerriteWindow {
         open.selection = open.kept_selection(generation, &rows);
         open.search.shown = generation;
         open.rows = rows.into();
+        open.rows_memory.set(Results::memory_use(&open.rows));
         crate::perf::ready(crate::perf::Latency::CommandCenterKey);
         let run = if settled {
             open.search.settled = generation;

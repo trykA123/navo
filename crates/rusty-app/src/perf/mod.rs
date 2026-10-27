@@ -5,7 +5,8 @@ use std::time::{Duration, Instant};
 
 use rusty_diag::ReportAttachments;
 use rusty_diag::perf::{
-    PerfDocument, ProcessSample, Recording, SystemFacts, ThreadCpu, perf_json, threads_text,
+    MemoryRecord, MemoryTrack, PerfDocument, ProcessSample, Recording, SystemFacts, ThreadCpu,
+    memory_text, perf_json, threads_text,
 };
 use rusty_ui::perf::PerfService;
 
@@ -28,6 +29,7 @@ pub(crate) struct PerfReports {
     data: Option<PathBuf>,
     last_cpu: Mutex<Option<CpuMark>>,
     threads: Mutex<ThreadCpu>,
+    memory: Mutex<MemoryTrack>,
 }
 
 pub(crate) fn install(started: Instant, diagnostics: &Diagnostics, data: Option<&Path>) {
@@ -38,6 +40,7 @@ pub(crate) fn install(started: Instant, diagnostics: &Diagnostics, data: Option<
         data: data.map(Path::to_path_buf),
         last_cpu: Mutex::new(None),
         threads: Mutex::new(ThreadCpu::default()),
+        memory: Mutex::new(MemoryTrack::default()),
     }));
 }
 
@@ -57,17 +60,42 @@ impl PerfReports {
         let mut tracker = self.threads.lock().unwrap_or_else(PoisonError::into_inner);
         tracker.record(now, &sampled);
     }
+
+    fn sample_memory(&self) {
+        let heap = rusty_diag::heap::stats();
+        let components = rusty_diag::components::usage();
+        let mut track = self.memory.lock().unwrap_or_else(PoisonError::into_inner);
+        track.record(Instant::now(), heap, components);
+    }
+
+    fn memory_files(&self, recording: &Recording) -> (MemoryRecord, String) {
+        let redactor = &self.diagnostics.redactor;
+        let record = self
+            .memory
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .record_since(recording.started(), redactor);
+        let private = recording
+            .process
+            .iter()
+            .filter_map(|p| p.private_bytes)
+            .last();
+        let text = memory_text(&record, private);
+        (record, text)
+    }
 }
 
 impl PerfService for PerfReports {
     fn start(&self) {
         *self.last_cpu.lock().unwrap_or_else(PoisonError::into_inner) = None;
         *self.threads.lock().unwrap_or_else(PoisonError::into_inner) = ThreadCpu::default();
+        *self.memory.lock().unwrap_or_else(PoisonError::into_inner) = MemoryTrack::default();
     }
 
     fn sample(&self) -> ProcessSample {
         let memory = crate::diag::probe().sample().ok();
         self.sample_threads();
+        self.sample_memory();
         ProcessSample {
             at_ms: 0.0,
             cpu_percent: self.cpu_percent(Instant::now()),
@@ -97,8 +125,10 @@ impl PerfService for PerfReports {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .report();
-        let document =
-            PerfDocument::new(recording, ended, system, redactor).with_threads(&report, redactor);
+        let (memory, memory_text) = self.memory_files(recording);
+        let document = PerfDocument::new(recording, ended, system, redactor)
+            .with_threads(&report, redactor)
+            .with_memory(memory);
         let json = perf_json(&document).map_err(|error| error.to_string())?;
         let text = threads_text(&report, redactor);
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
@@ -110,7 +140,11 @@ impl PerfService for PerfReports {
                 &self.diagnostics,
                 ReportAttachments {
                     disk_use: disk_use.clone(),
-                    extras: &[("perf.json", &json), ("perf-threads.txt", text.as_bytes())],
+                    extras: &[
+                        ("perf.json", &json),
+                        ("perf-threads.txt", text.as_bytes()),
+                        ("perf-memory.txt", memory_text.as_bytes()),
+                    ],
                     ..ReportAttachments::default()
                 },
             )

@@ -19,6 +19,7 @@ mod drives;
 mod editor;
 mod files;
 mod gui;
+mod heap;
 mod index_service;
 mod instance;
 mod jobs;
@@ -55,6 +56,7 @@ use rusty_store::StoreDirs;
 use rusty_ui::window_view::{OpenSender, open_requests};
 
 fn main() -> ExitCode {
+    heap::install();
     execute(std::env::args_os().skip(1), StoreDirs::detect)
 }
 

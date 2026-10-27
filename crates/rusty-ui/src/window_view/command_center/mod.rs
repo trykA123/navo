@@ -17,13 +17,14 @@ use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
     CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource,
-    PathListings, PathsSource, RecentSource, ResultSource, Row, Selection, TabsSnapshot,
-    TabsSource,
+    PathListings, PathsSource, RESULTS_MEMORY, RecentSource, ResultSource, Results, Row, Selection,
+    TabsSnapshot, TabsSource,
 };
 use crate::commands::{self, ArgKind};
 use crate::modifier_hints::HintsMode;
 use crate::prelude::*;
 use crate::tokens;
+use rusty_diag::components::Held;
 
 pub(super) type Anchor = Rc<Cell<Option<Bounds<Pixels>>>>;
 
@@ -78,6 +79,7 @@ struct Open {
     restore: Option<FocusHandle>,
     search: search::Search,
     run_when_shown: Option<open::Way>,
+    rows_memory: Held,
     _events: Subscription,
 }
 
@@ -232,6 +234,7 @@ impl FerriteWindow {
             view.command_center_event(event, window, cx);
         });
         self.command_center.leaving = None;
+        let rows_memory = RESULTS_MEMORY.hold(Results::memory_use(&rows));
         self.command_center.open = Some(Open {
             center,
             selection: Selection::start(&rows),
@@ -245,6 +248,7 @@ impl FerriteWindow {
             restore,
             search: search::Search::new(sources, (recent, snapshot), generation),
             run_when_shown: None,
+            rows_memory,
             _events: events,
         });
         self.load_recent(window, cx);

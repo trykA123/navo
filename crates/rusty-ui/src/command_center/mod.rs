@@ -22,7 +22,7 @@ pub use file_sources::{
 };
 pub use index_source::{IndexHooks, IndexMode, IndexOptions, IndexSource, Indexing};
 pub use query::{Query, Scope, Term};
-pub use results::{Heading, Results, Row};
+pub use results::{Heading, RESULTS_MEMORY, Results, Row};
 pub use selection::Selection;
 pub use source::{
     Cancel, Capped, Group, Hit, HitSink, Notes, Offline, Request, ResultSource, Scopes, Target,

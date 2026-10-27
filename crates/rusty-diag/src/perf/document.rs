@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use super::{
-    FrameSample, IndexSample, Latency, LatencySample, ProcessSample, Recording, SLOW_FRAME_MS,
-    Summary, ThreadReport, TopThread, VERY_SLOW_FRAME_MS, ms,
+    FrameSample, IndexSample, Latency, LatencySample, MemoryRecord, MemoryRow, MemorySummary,
+    ProcessSample, Recording, SLOW_FRAME_MS, Summary, ThreadReport, TopThread, VERY_SLOW_FRAME_MS,
+    ms,
 };
 use crate::Redactor;
 
@@ -87,6 +88,7 @@ struct Summaries {
     threads_max: Option<u32>,
     last_index: Option<IndexSample>,
     top_threads: Vec<TopThread>,
+    memory: MemorySummary,
 }
 
 #[derive(Debug, Serialize)]
@@ -95,6 +97,7 @@ struct Dropped {
     latencies: u64,
     process: u64,
     index: u64,
+    memory: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -113,6 +116,7 @@ struct Samples {
     latencies: Vec<LatencySample>,
     process: Vec<ProcessSample>,
     index: Vec<IndexSample>,
+    memory: Vec<MemoryRow>,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,6 +148,7 @@ impl PerfDocument {
                 latencies: recording.latencies.dropped(),
                 process: recording.process.dropped(),
                 index: recording.index.dropped(),
+                memory: 0,
             },
             threads: ThreadReport::default(),
             samples: samples(recording),
@@ -156,6 +161,14 @@ impl PerfDocument {
     pub fn with_threads(mut self, threads: &ThreadReport, redactor: &Redactor) -> Self {
         self.threads = threads.clone().redacted(redactor);
         self.summary.top_threads = self.threads.top();
+        self
+    }
+
+    #[must_use]
+    pub fn with_memory(mut self, memory: MemoryRecord) -> Self {
+        self.summary.memory = memory.summary;
+        self.samples.memory = memory.samples;
+        self.dropped.memory = memory.dropped;
         self
     }
 }
@@ -196,6 +209,7 @@ fn summaries(recording: &Recording) -> Summaries {
         threads_max: process().filter_map(|p| p.threads).max(),
         last_index: recording.index.iter().last().copied(),
         top_threads: Vec::new(),
+        memory: MemorySummary::default(),
     }
 }
 
@@ -219,6 +233,7 @@ fn samples(recording: &Recording) -> Samples {
         latencies,
         process: recording.process.iter().copied().collect(),
         index: recording.index.iter().copied().collect(),
+        memory: Vec::new(),
     }
 }
 

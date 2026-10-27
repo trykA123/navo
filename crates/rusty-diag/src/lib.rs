@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 
+pub mod components;
 mod disk_use;
 mod event_ring;
+pub mod heap;
 mod log_layer;
 mod memory;
 pub mod perf;

@@ -13,6 +13,7 @@ mod document;
 mod summary;
 
 use document::Document;
+pub(crate) use summary::amount;
 use summary::{SECTIONS, summary_text};
 
 #[derive(Debug, Clone, Default, Serialize)]

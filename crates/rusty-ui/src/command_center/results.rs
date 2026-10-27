@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use gpui_kit::SharedString;
 use rusty_core::Location;
+use rusty_diag::components::{MemoryUse, Tally};
 
 use super::query::Scope;
 use super::source::{Capped, Group, Hit, Offline, Target};
@@ -9,6 +10,8 @@ use super::source::{Capped, Group, Hit, Offline, Target};
 const SCOPED_CAP: usize = 500;
 const RECENT_COMMANDS: usize = 5;
 const RECENT_FOLDERS: usize = 8;
+
+pub static RESULTS_MEMORY: Tally = Tally::new("command center results");
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Heading {
@@ -67,6 +70,21 @@ impl Results {
     }
 
     #[must_use]
+    pub fn memory_use(rows: &[Row]) -> MemoryUse {
+        let text = |hit: &Hit| hit.title.len() + hit.detail.len() + hit.indices.len() * 4;
+        let bytes: usize = rows
+            .iter()
+            .map(|row| match row {
+                Row::TopHit(hit) | Row::Hit(hit) => text(hit),
+                _ => 0,
+            })
+            .sum();
+        MemoryUse {
+            bytes: (bytes + size_of_val(rows)) as u64,
+            items: rows.len() as u64,
+        }
+    }
+
     pub fn recent(commands: Vec<Hit>, folders: Vec<Hit>) -> Vec<Row> {
         let hits: Vec<Row> = commands
             .into_iter()

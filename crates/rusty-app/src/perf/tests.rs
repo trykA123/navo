@@ -4,9 +4,11 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use rusty_diag::components::ComponentUse;
+use rusty_diag::heap::HeapStats;
 use rusty_diag::perf::{
-    FrameSample, GpuFacts, Latency, ProcessSample, Recording, SystemFacts, ThreadCpu, ThreadTime,
-    UiState,
+    FrameSample, GpuFacts, Latency, MemoryTrack, ProcessSample, Recording, SystemFacts, ThreadCpu,
+    ThreadTime, UiState,
 };
 use rusty_diag::{CacheRegistry, EventRing, Identity, Redactor, Salt};
 use rusty_ui::perf::PerfService;
@@ -50,7 +52,25 @@ fn reports(folder: &Path) -> PerfReports {
         data: Some(folder.join("data")),
         last_cpu: Mutex::new(None),
         threads: Mutex::new(seeded_threads()),
+        memory: Mutex::new(seeded_memory()),
     }
+}
+
+fn seeded_memory() -> MemoryTrack {
+    let mut track = MemoryTrack::default();
+    let heap = HeapStats {
+        live_bytes: 3 << 20,
+        peak_bytes: 5 << 20,
+        allocations: 40,
+    };
+    let walk = ComponentUse {
+        name: "walk index",
+        bytes: 2 << 20,
+        items: 9,
+        busy: false,
+    };
+    track.record(Instant::now(), Some(heap), vec![walk]);
+    track
 }
 
 fn seeded_threads() -> ThreadCpu {
@@ -130,11 +150,31 @@ fn the_zip_on_the_desktop_holds_the_diag_report_and_perf_json() {
             "report.json",
             "summary.txt",
             "perf.json",
-            "perf-threads.txt"
+            "perf-threads.txt",
+            "perf-memory.txt"
         ]
     );
-    let (_, text) = entries(&zip).pop().unwrap();
-    assert!(text.contains("(7): 700 ms total, peak 70.0 %"), "{text}");
+    let mut entries = entries(&zip);
+    let (_, memory) = entries.pop().unwrap();
+    assert!(
+        memory.contains("Rust heap: 3.0 MiB live, 5.0 MiB peak"),
+        "{memory}"
+    );
+    assert!(
+        memory.contains("walk index: 2.0 MiB in 9 items"),
+        "{memory}"
+    );
+    let (_, threads) = entries.pop().unwrap();
+    assert!(
+        threads.contains("(7): 700 ms total, peak 70.0 %"),
+        "{threads}"
+    );
+    let (_, json) = entries.pop().unwrap();
+    let json: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        json["samples"]["memory"][0]["components"]["walk index"],
+        2 << 20
+    );
 }
 
 #[test]

@@ -12,6 +12,9 @@ Recent events: 2.
 Memory: 2 caches, 1 task owners.
   listings in memory: 67.0 MiB of 64.0 MiB budget (3.0 MiB pinned, 64.0 MiB unpinned), 1204 entries.
   thumbnails: 4.0 KiB of 64.0 KiB budget (0.0 KiB pinned, 4.0 KiB unpinned), 3 entries.
+  Rust heap: 40.0 MiB live, 50.0 MiB peak (process private 94.2 MiB).
+  walk index: 20.0 MiB in 300000 items.
+  command center results: busy.
 Performance: 2 start-up marks.
 Redaction misses: 3.
 Disk use:

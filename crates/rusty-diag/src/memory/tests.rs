@@ -293,6 +293,8 @@ mod reports {
                 probe_error: None,
                 caches: vec![usage("icons", size(3, 0, 1), 8 * KB)],
                 tasks: owners(&[("watcher", 1)]),
+                heap: None,
+                components: Vec::new(),
             }
         );
     }

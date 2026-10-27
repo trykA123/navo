@@ -5,10 +5,13 @@ use std::sync::Arc;
 use gpui_kit::{App, Global, RenderImage};
 use image::{Frame, RgbaImage};
 use rusty_core::shell_menu::{FerriteAction, Icon, MenuItem, ShellMenu};
+use rusty_diag::components::{Held, MemoryUse, Tally};
 
 use crate::primitives::IconName;
 
 pub(super) const CACHED_ICONS: usize = 256;
+
+static ICON_MEMORY: Tally = Tally::new("shell menu icons");
 
 pub(super) fn ferrite_icon(action: FerriteAction) -> IconName {
     match action {
@@ -40,6 +43,7 @@ pub(super) struct IconCache {
 struct Cached {
     image: Arc<RenderImage>,
     used: u64,
+    _memory: Held,
 }
 
 impl Global for IconCache {}
@@ -74,6 +78,10 @@ impl IconCache {
         let cached = Cached {
             image: image.clone(),
             used: self.tick,
+            _memory: ICON_MEMORY.hold(MemoryUse {
+                bytes: icon.rgba.len() as u64,
+                items: 1,
+            }),
         };
         self.images.insert(key, cached);
         Some(image)

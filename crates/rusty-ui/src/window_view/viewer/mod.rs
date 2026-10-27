@@ -8,6 +8,7 @@ mod elf;
 mod encoding;
 mod files;
 mod font;
+mod footprint;
 mod image;
 mod keys;
 mod keys_bar;
@@ -47,6 +48,7 @@ pub use files::{
     Saved, SharedSource,
 };
 pub use font::{FontFace, FontView};
+pub(in crate::window_view) use footprint::{PREVIEW_BODY, VIEWER_DOCUMENTS, hold as hold_memory};
 pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
 pub use keys::bind_keys;
 use keys::*;
@@ -102,6 +104,7 @@ pub(super) struct Viewer {
     encoding: Option<&'static Encoding>,
     detected: Option<TextEncoding>,
     reencoding: Option<u64>,
+    memory: Option<rusty_diag::components::Held>,
 }
 
 fn merged_note(load: Option<&'static str>, start: Option<SharedString>) -> Option<SharedString> {
@@ -143,6 +146,7 @@ impl Viewer {
             encoding: None,
             detected: None,
             reencoding: None,
+            memory: None,
         }
     }
 

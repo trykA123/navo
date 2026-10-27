@@ -102,11 +102,14 @@ fn filled_input(started: Instant, diagnostics: &Diagnostics) -> ReportInput {
     let mut input = report_input();
     input.events = diagnostics.ring.snapshot();
     input.redaction_misses = diagnostics.misses.count();
-    input.memory = Some(memory_report(
+    let mut memory = memory_report(
         probe().as_ref(),
         &diagnostics.caches,
         &TaskCounters::default(),
-    ));
+    );
+    memory.heap = rusty_diag::heap::stats();
+    memory.components = rusty_diag::components::usage();
+    input.memory = Some(memory);
     input.startup_ms = vec![(
         "report".to_owned(),
         started.elapsed().as_secs_f64() * 1000.0,

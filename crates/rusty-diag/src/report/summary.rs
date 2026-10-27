@@ -1,7 +1,8 @@
 use std::fmt::Write;
 
 use super::ReportInput;
-use crate::{CacheUsage, Redactor};
+use crate::components::ComponentUse;
+use crate::{CacheUsage, MemoryReport, Redactor};
 
 pub(super) const SECTIONS: [&str; 7] = [
     "build",
@@ -25,7 +26,8 @@ pub(super) fn summary_text(input: &ReportInput, redactor: &Redactor) -> String {
         .memory
         .iter()
         .flat_map(|m| &m.caches)
-        .map(|cache| cache_line(cache, redactor));
+        .map(|cache| cache_line(cache, redactor))
+        .chain(input.memory.iter().flat_map(|m| heap_lines(m, redactor)));
     let lines = [
         "Build: version and commit.".to_owned(),
         "System: OS, CPU count, RAM, GPU, display scale and DPI awareness.".to_owned(),
@@ -63,7 +65,41 @@ fn cache_line(cache: &CacheUsage, redactor: &Redactor) -> String {
     )
 }
 
-fn amount(bytes: u64) -> String {
+fn heap_lines(memory: &MemoryReport, redactor: &Redactor) -> Vec<String> {
+    let private = memory
+        .process
+        .map_or_else(|| "not measured".to_owned(), |p| amount(p.private_bytes));
+    let heap = memory.heap.map_or_else(
+        || format!("  Rust heap: not counted (process private {private})."),
+        |heap| {
+            format!(
+                "  Rust heap: {} live, {} peak (process private {private}).",
+                amount(heap.live_bytes),
+                amount(heap.peak_bytes)
+            )
+        },
+    );
+    let components = memory
+        .components
+        .iter()
+        .map(|component| component_line(component, redactor));
+    std::iter::once(heap).chain(components).collect()
+}
+
+fn component_line(component: &ComponentUse, redactor: &Redactor) -> String {
+    let name = redactor.text(component.name);
+    if component.busy {
+        format!("  {name}: busy.")
+    } else {
+        format!(
+            "  {name}: {} in {} items.",
+            amount(component.bytes),
+            component.items
+        )
+    }
+}
+
+pub(crate) fn amount(bytes: u64) -> String {
     const KIB: f64 = 1024.0;
     let bytes = bytes as f64;
     if bytes < KIB * KIB {

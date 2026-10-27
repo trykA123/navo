@@ -1,0 +1,16 @@
+---
+source: crates/rusty-diag/src/report/tests/report.rs
+expression: shape
+---
+private_bytes: 98765432
+rust_heap.live_bytes: 41943040
+rust_heap.peak_bytes: 52428800
+rust_heap.allocations: 1000
+name: "walk index"
+bytes: 20971520
+items: 300000
+busy: false
+name: "command center results"
+bytes: 0
+items: 0
+busy: true
