@@ -279,13 +279,8 @@ impl Browser {
     }
 
     fn other_location(&self) -> Option<Location> {
-        let state = &self.state;
-        let focused = state.focused_pane();
-        state
-            .window(state.focused_window())?
-            .panes()
-            .into_iter()
-            .find(|pane| pane.id() != focused)
+        self.state
+            .pane(self.target_pane()?)
             .map(|pane| pane.active().location().clone())
     }
 

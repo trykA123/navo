@@ -145,6 +145,33 @@ fn prepare_plans_the_cursor_row_into_the_other_pane() {
 }
 
 #[test]
+fn copy_targets_the_last_focused_other_pane_with_three_panes() {
+    let fs = fake();
+    fs.add_folder("last");
+    let mut state = home_beside_dest(&fs);
+    state.focus_number(2).unwrap();
+    apply(
+        &mut state,
+        &Command::LayoutSplit {
+            direction: Direction::Right,
+        },
+    )
+    .unwrap();
+    apply(
+        &mut state,
+        &Command::PaneNavigate {
+            location: fs.location("last"),
+        },
+    )
+    .unwrap();
+    state.focus_number(1).unwrap();
+    let mut browser = browser(&fs, state);
+    assert!(browser.prepare(OpKind::Copy));
+    settle(&mut browser);
+    assert_eq!(browser.pending().unwrap().target, Some(fs.location("last")));
+}
+
+#[test]
 fn marked_rows_win_over_the_cursor() {
     let fs = fake();
     let mut browser = browser(&fs, home_beside_dest(&fs));

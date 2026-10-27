@@ -6,8 +6,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use rusty_cache::{CacheKeys, ListingCache, ProfileCache};
 use rusty_core::placement::{MonitorSetup, Placement};
 use rusty_core::{
-    AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location, TabId,
-    apply_event, list_missing,
+    AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location, PaneId,
+    TabId, apply_event, list_missing,
 };
 use rusty_fs::{
     FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, WatchEvent, volume_of,
@@ -256,6 +256,11 @@ impl Browser {
     #[must_use]
     pub fn state(&self) -> &AppState {
         &self.state
+    }
+
+    #[must_use]
+    pub fn target_pane(&self) -> Option<PaneId> {
+        self.state.window(self.state.focused_window())?.target()
     }
 
     pub fn remember_placement(&mut self, setup: &MonitorSetup, placement: Placement) {

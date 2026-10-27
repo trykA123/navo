@@ -1,5 +1,5 @@
 use rusty_core::ProviderPath;
-use rusty_core::{Command, CommandError, Direction, Location};
+use rusty_core::{Command, CommandError, Location, StateError};
 use rusty_fs::EntryKind;
 
 use super::{Browser, Launcher};
@@ -84,28 +84,35 @@ impl Browser {
 
     pub(crate) fn clone_tab_to_other_pane(&mut self) -> Result<(), CommandError> {
         let state = &self.state;
-        let source = state.focused_pane();
-        let direction = state.window(state.focused_window()).and_then(|window| {
-            Direction::ALL
-                .into_iter()
-                .find(|direction| window.layout().neighbour(source, *direction).is_some())
-        });
-        let Some(direction) = direction else {
+        let Some(target) = self.target_pane() else {
             return Ok(());
         };
+        let window = state
+            .window(state.focused_window())
+            .ok_or(StateError::UnknownWindow(state.focused_window()))?;
+        let panes = window.layout().numbered();
+        let number = |pane| {
+            panes
+                .iter()
+                .position(|&id| id == pane)
+                .map(|index| index + 1)
+                .ok_or(StateError::UnknownPane(pane))
+        };
+        let source = number(state.focused_pane())?;
+        let target = number(target)?;
         let tab = state.active_tab();
         let location = Some(tab.location().clone());
         let sort = self.sort_key(tab.id());
-        self.command(&Command::LayoutFocus { direction })?;
+        self.state.focus_number(target)?;
+        self.revalidate_focused();
         let opened = self.command(&Command::PaneOpenTab { location });
         if opened.is_ok() {
             let tab = self.state.active_tab().id();
             self.sorts.insert(tab, sort);
             self.resort(tab);
         }
-        self.command(&Command::LayoutFocus {
-            direction: direction.opposite(),
-        })?;
+        self.state.focus_number(source)?;
+        self.revalidate_focused();
         opened
     }
 
@@ -159,6 +166,37 @@ mod tests {
         assert_eq!(other.tabs().len(), 2);
         assert_eq!(other.active_index(), 1);
         assert_eq!(other.active().location(), &location);
+    }
+
+    #[test]
+    fn cloning_opens_in_the_last_focused_other_pane_with_three_panes() {
+        let fs = fake();
+        let mut browser = browser_at(&fs, "home");
+        for _ in 0..2 {
+            browser
+                .command(&rusty_core::Command::LayoutSplit {
+                    direction: rusty_core::Direction::Right,
+                })
+                .unwrap();
+        }
+        let target = browser.state().focused_pane();
+        browser.state.focus_number(1).unwrap();
+        let source = browser.state().focused_pane();
+        browser
+            .command(&rusty_core::Command::PaneNavigate {
+                location: fs.location("home/docs"),
+            })
+            .unwrap();
+        browser.clone_tab_to_other_pane().unwrap();
+        assert_eq!(browser.state().focused_pane(), source);
+        let window = browser
+            .state()
+            .window(browser.state().focused_window())
+            .unwrap();
+        let pane = window.pane(target).unwrap();
+        assert_eq!(pane.tabs().len(), 2);
+        assert_eq!(pane.active().location(), &fs.location("home/docs"));
+        assert_eq!(window.panes()[1].tabs().len(), 1);
     }
 
     #[test]
