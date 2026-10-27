@@ -13,6 +13,7 @@ fn each_kind_has_its_own_limits() {
     assert_eq!((preview.ssd, preview.network), (2, 2));
     assert_eq!(JobKind::Size.limits().network, 1);
     assert_eq!(JobKind::Module.limits().ssd, 1);
+    assert_eq!(JobKind::Prefetch.limits(), JobKind::Preview.limits());
 }
 
 #[test]

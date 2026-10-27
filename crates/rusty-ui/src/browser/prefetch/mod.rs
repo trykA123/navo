@@ -2,7 +2,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use rusty_core::{FsError, Location, ProviderPath, TabId};
-use rusty_fs::{CancelToken, IoQueue, JobSlot, OwnerGuard, Priority, volume_of};
+use rusty_fs::{CancelToken, JobKind, JobSlot, OwnerGuard, Priority, volume_of};
 
 use super::cached::{Fetch, Fresh};
 use super::offline::Progress;
@@ -60,7 +60,6 @@ impl Running {
 
 #[derive(Default)]
 pub(super) struct Prefetches {
-    queue: IoQueue,
     running: Vec<Running>,
     next_id: u64,
 }
@@ -170,7 +169,8 @@ impl Browser {
     fn start_prefetch(&mut self, location: Location) {
         self.prefetches.next_id += 1;
         let id = self.prefetches.next_id;
-        let owner = self.prefetches.queue.owner();
+        let queue = self.pools.queue(JobKind::Prefetch);
+        let owner = queue.owner();
         let (handoff, progress) = (Arc::new(Handoff::default()), Progress::default());
         let fetch = Fetch {
             provider: Arc::clone(&self.provider),
@@ -207,7 +207,7 @@ impl Browser {
             handoff,
             progress,
         });
-        self.prefetches.queue.submit(slot, job);
+        queue.submit(slot, job);
     }
 }
 

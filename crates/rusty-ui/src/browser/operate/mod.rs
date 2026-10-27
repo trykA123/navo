@@ -3,7 +3,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use rusty_core::{Command, FsError, Location, OpKind, OperationPlan, ProviderPath};
-use rusty_fs::{CancelToken, CopyMode, JobOutcome, JobSlot, Priority, Progress, volume_of};
+use rusty_fs::{
+    CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, Progress, volume_of,
+};
 
 use super::{Browser, Message, RenameReport};
 
@@ -72,7 +74,7 @@ impl Browser {
             owner: self.owner.id(),
         };
         self.in_flight += 1;
-        self.queue.submit(
+        self.pools.queue(JobKind::Listing).submit(
             slot,
             Box::new(move |cancel| {
                 let result = plan_for(provider.as_ref(), &request, cancel).map(|plan| {

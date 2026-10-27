@@ -10,7 +10,7 @@ use rusty_core::{
     apply_event, list_missing,
 };
 use rusty_fs::{
-    FsEntry, IoQueue, JobSlot, OwnerGuard, Priority, ProviderOps, WatchEvent, volume_of,
+    FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, WatchEvent, volume_of,
 };
 
 pub(crate) use measure::Measured;
@@ -59,9 +59,8 @@ impl Message {
 pub struct Browser {
     state: AppState,
     provider: Arc<dyn ProviderOps>,
-    queue: IoQueue,
+    pools: &'static Pools,
     owner: OwnerGuard,
-    sizes: IoQueue,
     sizes_owner: OwnerGuard,
     sender: Sender<Message>,
     receiver: Receiver<Message>,
@@ -104,17 +103,27 @@ pub struct Browser {
 
 impl Browser {
     pub fn new(state: AppState, provider: Arc<dyn ProviderOps>, wake: Waker) -> Self {
-        let queue = IoQueue::new();
-        let owner = queue.owner();
-        let sizes = IoQueue::new();
-        let sizes_owner = sizes.owner();
+        #[cfg(not(test))]
+        let pools = Pools::shared();
+        #[cfg(test)]
+        let pools = Box::leak(Box::new(Pools::new()));
+        Self::with_pools(state, provider, wake, pools)
+    }
+
+    fn with_pools(
+        state: AppState,
+        provider: Arc<dyn ProviderOps>,
+        wake: Waker,
+        pools: &'static Pools,
+    ) -> Self {
+        let owner = pools.queue(JobKind::Listing).owner();
+        let sizes_owner = pools.queue(JobKind::Size).owner();
         let (sender, receiver) = mpsc::channel();
         Self {
             state,
             provider,
-            queue,
+            pools,
             owner,
-            sizes,
             sizes_owner,
             sender,
             receiver,
@@ -310,7 +319,7 @@ impl Browser {
             owner: self.owner.id(),
         };
         self.in_flight += 1;
-        self.queue.submit(
+        self.pools.queue(JobKind::Listing).submit(
             slot,
             Box::new(move |cancel| {
                 let result = fetch.run(cancel);

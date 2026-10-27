@@ -2,7 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use rusty_core::{FsError, Location, NameError, ProviderPath, TabId, check_name};
-use rusty_fs::{JobSlot, Priority, ProviderOps, volume_of};
+use rusty_fs::{JobKind, JobSlot, Priority, ProviderOps, volume_of};
 
 use super::{Browser, Message};
 
@@ -121,7 +121,7 @@ impl Browser {
         };
         self.in_flight += 1;
         let write = self.operations.write.clone();
-        self.queue.submit(
+        self.pools.queue(JobKind::Listing).submit(
             slot,
             Box::new(move |_| {
                 let result = apply_change(ops.as_ref(), &change, write.as_ref());

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use rusty_core::{Location, ProviderPath, TabId};
-use rusty_fs::{JobSlot, Priority, folder_size, volume_of};
+use rusty_fs::{JobKind, JobSlot, Priority, folder_size, volume_of};
 
 use super::{Browser, Message};
 
@@ -32,7 +32,7 @@ impl Browser {
             owner: self.sizes_owner.id(),
         };
         self.in_flight += 1;
-        self.sizes.submit(
+        self.pools.queue(JobKind::Size).submit(
             slot,
             Box::new(move |cancel| {
                 let bytes = folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes);
