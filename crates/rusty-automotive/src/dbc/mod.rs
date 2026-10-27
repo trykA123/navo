@@ -1,4 +1,5 @@
 mod convert;
+mod outline;
 mod rows;
 mod scan;
 
@@ -6,6 +7,7 @@ use crate::{CanId, DescriptionReport, Endian};
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
+pub use outline::outline;
 pub use rows::rows;
 pub use scan::index_dbc;
 pub const DBC_EXTENSIONS: [&str; 1] = ["dbc"];
@@ -35,6 +37,7 @@ pub enum Multiplexing {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
+    pub line: u64,
     pub name: String,
     pub start_bit: u64,
     pub length: u64,

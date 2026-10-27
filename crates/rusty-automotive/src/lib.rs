@@ -19,7 +19,9 @@ use std::sync::atomic::AtomicBool;
 
 pub use a2l::{A2lModel, index_a2l, sniff_a2l};
 pub use dbc::{DbcModel, index_dbc, sniff_dbc};
-pub use description::{DescRow, DescriptionError, DescriptionProblem, DescriptionReport};
+pub use description::{
+    DescRow, DescriptionError, DescriptionProblem, DescriptionReport, ItemRef, Outline, OutlineRow,
+};
 #[cfg(feature = "sample")]
 pub use elf::sample as elf_sample;
 pub use elf::{

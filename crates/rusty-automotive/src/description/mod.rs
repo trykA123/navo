@@ -1,7 +1,9 @@
 mod lexer;
+mod outline;
 mod rows;
 
 pub(crate) use lexer::{Lexer, Token, TokenKind};
+pub use outline::{ItemRef, Outline, OutlineRow};
 pub use rows::DescRow;
 
 pub const MAX_PROBLEMS: usize = 1000;

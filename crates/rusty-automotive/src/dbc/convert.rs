@@ -30,8 +30,9 @@ fn number(value: NumericValue) -> Number {
     }
 }
 
-fn signal(value: can_dbc::Signal) -> Signal {
+fn signal(value: can_dbc::Signal, line: u64) -> Signal {
     Signal {
+        line,
         name: value.name,
         start_bit: value.start_bit,
         length: value.size,
@@ -211,7 +212,7 @@ impl DbcModel {
             if let Some(message) = current.and_then(|at| self.messages.get_mut(at)) {
                 message
                     .signals
-                    .extend(value.signals.into_iter().map(signal));
+                    .extend(value.signals.into_iter().map(|value| signal(value, line)));
             } else {
                 self.report.problem(line, "signal has no retained message");
             }
@@ -232,7 +233,11 @@ impl DbcModel {
             dlc: value.size,
             sender: value.transmitter,
             cycle_time_ms: None,
-            signals: value.signals.into_iter().map(signal).collect(),
+            signals: value
+                .signals
+                .into_iter()
+                .map(|value| signal(value, line))
+                .collect(),
         });
     }
 }
