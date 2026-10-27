@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{FocusHandle, Task};
-use rusty_fs::{IoQueue, PROGRESS_EVERY};
+use rusty_fs::{IoQueue, JobKind, PROGRESS_EVERY, Pools};
 
 use crate::browser::Waker;
 
@@ -69,12 +69,22 @@ pub(in crate::window_view) struct Preview {
     shown: Option<Shown>,
     trail: Vec<nest::Crumb>,
     view: view::PreviewView,
-    reads: IoQueue,
+    reads: Arc<IoQueue>,
     scans: Arc<IoQueue>,
     inbox: inbox::Inbox,
     every: Duration,
     ids: u64,
     loads: u64,
+}
+
+#[cfg(not(test))]
+fn pools() -> &'static Pools {
+    Pools::shared()
+}
+
+#[cfg(test)]
+fn pools() -> &'static Pools {
+    Box::leak(Box::new(Pools::new()))
 }
 
 impl Preview {
@@ -89,8 +99,8 @@ impl Preview {
             shown: None,
             trail: Vec::new(),
             view: view::PreviewView::default(),
-            reads: IoQueue::new(),
-            scans: Arc::new(IoQueue::new()),
+            reads: Arc::clone(pools().queue(JobKind::Preview)),
+            scans: Arc::clone(pools().queue(JobKind::Size)),
             inbox: inbox::Inbox::new(wake),
             every: PROGRESS_EVERY,
             ids: 0,
