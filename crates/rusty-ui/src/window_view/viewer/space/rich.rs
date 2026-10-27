@@ -31,6 +31,12 @@ pub(in crate::window_view::viewer) trait RichHost:
     fn table_focus(&self) -> FocusHandle;
     fn picked(&mut self, pick: Pick, cx: &mut Context<Self>);
     fn regroup(&mut self, grouping: Grouping, cx: &mut Context<Self>);
+    fn enter_module(&mut self, _: u32, _: &mut Context<Self>) -> bool {
+        false
+    }
+    fn leave_module(&mut self, _: &mut Context<Self>) -> bool {
+        false
+    }
 }
 
 pub(in crate::window_view::viewer) struct RichSpace {
@@ -39,6 +45,7 @@ pub(in crate::window_view::viewer) struct RichSpace {
     pub mode: ScaleMode,
     pub grouping: Option<Grouping>,
     pub modules: Arc<[String]>,
+    pub module: Option<String>,
     pub pick: Option<Pick>,
     pub part: Part,
     pub tile: Option<u32>,
@@ -58,6 +65,7 @@ impl Default for RichSpace {
             mode: ScaleMode::Compressed,
             grouping: None,
             modules: Arc::default(),
+            module: None,
             pick: None,
             part: Part::Table,
             tile: None,
@@ -179,6 +187,9 @@ impl RichSpace {
     }
 
     pub fn wants_regroup(&self) -> Option<Grouping> {
+        if self.module.is_some() {
+            return None;
+        }
         let model = self.model.as_ref()?;
         let wanted = self.grouping?;
         (model.grouping != wanted && model.usable[wanted as usize]).then_some(wanted)

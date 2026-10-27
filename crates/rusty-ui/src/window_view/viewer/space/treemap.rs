@@ -339,7 +339,8 @@ impl Treemap {
         Some(
             place(rect)
                 .rounded(t.radii.xs)
-                .shadow(t.shadows.focus.clone()),
+                .border(px(SELECTED_WIDTH))
+                .border_color(t.colors.accent),
         )
     }
 }

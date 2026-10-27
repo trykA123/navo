@@ -1667,6 +1667,11 @@ command = "space.pick_group"
 keys = ["enter"]
 context = "SpaceTreemap"
 
+[[bind]]
+command = "space.zoom_out"
+keys = ["backspace"]
+context = "SpaceTreemap"
+
 # CanTrace
 
 [[bind]]

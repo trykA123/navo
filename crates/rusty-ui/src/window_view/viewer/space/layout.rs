@@ -239,18 +239,22 @@ fn treemap_box<V: RichHost>(rich: &RichSpace, model: &RichModel, cx: &mut Contex
         _ => None,
     };
     let picker = cx.weak_entity();
+    let on_pick = move |TreemapEvent::Pick(id), window: &mut Window, cx: &mut App| {
+        let _ = picker.update(cx, |view, cx| {
+            let rich = view.rich();
+            rich.part = Part::Treemap;
+            rich.tile = Some(id);
+            if let Some(focus) = &rich.treemap_focus {
+                window.focus(focus, cx);
+            }
+            view.picked(Pick::Group(id), cx);
+        });
+    };
     let map = rich.tiles().filter(|_| !stripped).map(|tiles| {
         Treemap::new("space-treemap", rich.groups(), tiles)
             .selected(selected)
             .focus(rich.treemap_focus.clone(), rich.tile)
-            .on_event(move |TreemapEvent::Pick(id), _, cx| {
-                let _ = picker.update(cx, |view, cx| {
-                    let rich = view.rich();
-                    rich.part = Part::Treemap;
-                    rich.tile = Some(id);
-                    view.picked(Pick::Group(id), cx);
-                });
-            })
+            .on_event(on_pick)
     });
     let note = stripped
         .then(|| Treemap::new("space-treemap", rich.groups(), Rc::from(Vec::new())).stripped(true));
@@ -261,6 +265,19 @@ fn treemap_box<V: RichHost>(rich: &RichSpace, model: &RichModel, cx: &mut Contex
         .child(ruler)
         .children(map)
         .children(note)
+}
+
+fn module_path(t: &Theme, name: &str) -> impl IntoElement {
+    let name = SharedString::from(name.to_owned());
+    div()
+        .id("space-module-path")
+        .role(Role::Label)
+        .aria_label(name.clone())
+        .test_support()
+        .truncate()
+        .text_size(t.typography.small)
+        .text_color(t.colors.text)
+        .child(name)
 }
 
 fn who_panel<V: RichHost>(
@@ -310,6 +327,7 @@ fn who_panel<V: RichHost>(
         .p(t.spacing.md)
         .min_h_0()
         .child(title)
+        .children(rich.module.as_ref().map(|name| module_path(t, name)))
         .child(treemap_box(rich, model, cx))
 }
 

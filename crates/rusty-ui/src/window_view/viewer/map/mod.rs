@@ -7,6 +7,7 @@ mod go_to;
 mod jobs;
 mod keys;
 mod loaded;
+mod module;
 mod nav;
 mod rich;
 mod rich_view;
@@ -72,6 +73,8 @@ struct GoTo {
 
 pub(in crate::window_view::viewer) struct MapView {
     title: SharedString,
+    location: rusty_core::Location,
+    module_model: Option<Arc<crate::window_view::viewer::space::RichModel>>,
     len: u64,
     focus: FocusHandle,
     scroll: ListScroll,
@@ -110,8 +113,12 @@ impl MapView {
     fn new(file: &MapFile, host: &Host, cx: &mut Context<Self>) -> Self {
         let job = jobs::start_index(host, file.len, cx);
         let siblings_job = rich::start_siblings_of(host, cx);
+        let mut rich = RichSpace::default();
+        rich.module = module::recall(&host.location, cx);
         Self {
             title: host.title.clone(),
+            location: host.location.clone(),
+            module_model: None,
             len: file.len,
             focus: cx.focus_handle(),
             scroll: ListScroll::new(),
@@ -138,7 +145,7 @@ impl MapView {
             opens_inspector: false,
             layout: LayoutParts::default(),
             columns: None,
-            rich: RichSpace::default(),
+            rich,
             siblings: Arc::new(Siblings::default()),
             shows_sections_for_rich: false,
             _siblings_job: siblings_job,

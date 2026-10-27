@@ -20,6 +20,7 @@ pub(in crate::window_view::viewer) struct GroupingOptions {
     pub modules: Arc<[String]>,
 }
 
+#[derive(Clone)]
 pub(in crate::window_view::viewer) struct RichModel {
     pub regions: Vec<Arc<Region>>,
     pub outside: u64,

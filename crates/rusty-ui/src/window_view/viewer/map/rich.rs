@@ -99,10 +99,15 @@ impl MapView {
         ));
     }
 
-    fn model_ready(&mut self, (loaded, model): (Arc<Loaded>, RichModel), cx: &mut Context<Self>) {
+    pub(super) fn model_ready(
+        &mut self,
+        (loaded, model): (Arc<Loaded>, RichModel),
+        cx: &mut Context<Self>,
+    ) {
         if model.modules != self.rich.modules {
             return;
         }
+        let model = self.scope_module(model, &loaded.model, cx);
         let data = strip_data(Names {
             loaded,
             owners: model.owners.clone(),
@@ -223,6 +228,14 @@ impl MapView {
 }
 
 impl RichHost for MapView {
+    fn enter_module(&mut self, id: u32, cx: &mut Context<Self>) -> bool {
+        self.open_module(id, cx)
+    }
+
+    fn leave_module(&mut self, cx: &mut Context<Self>) -> bool {
+        self.close_module(cx)
+    }
+
     fn rich(&mut self) -> &mut RichSpace {
         &mut self.rich
     }
@@ -247,6 +260,7 @@ impl RichHost for MapView {
     }
 
     fn regroup(&mut self, grouping: Grouping, cx: &mut Context<Self>) {
+        self.close_module(cx);
         self.rich.grouping = Some(grouping);
         self.start_regroup(cx);
     }

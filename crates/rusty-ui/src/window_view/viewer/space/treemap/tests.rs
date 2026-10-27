@@ -155,3 +155,45 @@ fn the_selection_outline_sits_outside_the_tile() {
         assert!(outline.background.is_none());
     }
 }
+
+#[gpui_kit::test]
+fn a_focused_module_outline_never_paints_over_its_children(cx: &mut gpui_kit::TestAppContext) {
+    use super::{Treemap, TreemapGroup};
+    use crate::prelude::*;
+
+    let (window, _) = crate::window_view::viewer::tests::map_rich::open_in(
+        cx,
+        crate::window_view::viewer::map::tests::SAMPLE,
+        (None, None),
+    );
+    for mode in [Mode::Light, Mode::Dark] {
+        cx.update_window(window, |_, window, cx| {
+            let focus = cx.focus_handle();
+            window.focus(&focus, cx);
+            let group = TreemapGroup {
+                id: 7,
+                name: "Module".into(),
+                by_kind: [0; rusty_automotive::space::Kind::COUNT],
+                parts: Vec::new(),
+            };
+            let mut module = tile(Target::Item(7), true);
+            module.inner.push(tile(Target::Item(0), true));
+            let map = Treemap::new("map", vec![group].into(), vec![module].into())
+                .selected(Some(7))
+                .focus(Some(focus), Some(7));
+            let mut ring = map
+                .cursor_ring(&Theme::new(mode), window)
+                .expect("focused module");
+            assert!(ring.style().background.is_none());
+            assert!(
+                ring.style().box_shadow.as_ref().is_none_or(Vec::is_empty),
+                "a shadow on a transparent overlay fills its interior"
+            );
+            assert_eq!(
+                ring.style().border_widths.left,
+                Some(px(super::SELECTED_WIDTH).into())
+            );
+        })
+        .expect("window");
+    }
+}

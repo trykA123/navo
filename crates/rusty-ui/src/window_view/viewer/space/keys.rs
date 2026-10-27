@@ -1,5 +1,8 @@
+use std::sync::LazyLock;
+
 use gpui_kit::{Focusable, KeyContext, Stateful};
 use rusty_automotive::space::{ScaleMode, Target, Tile};
+use rusty_l10n::tr;
 
 use super::layout::GROUPINGS;
 use super::rich::{Pick, RichHost, RichSpace};
@@ -12,6 +15,8 @@ pub(in crate::window_view::viewer) const CONTEXT: &str = "Space";
 pub(super) const STRIP_CONTEXT: &str = "SpaceStrip";
 pub(super) const TREEMAP_CONTEXT: &str = "SpaceTreemap";
 pub(in crate::window_view::viewer) const NEXT_PART: Key = ("Tab", "Parts");
+static OPEN_MODULE: LazyLock<String> = LazyLock::new(|| tr("space-open-module"));
+static ALL_MODULES: LazyLock<String> = LazyLock::new(|| tr("space-all-modules"));
 
 gpui_kit::actions!(
     space_view,
@@ -72,12 +77,29 @@ pub(in crate::window_view::viewer) fn part_keys(rich: &RichSpace, cx: &App) -> O
                 NEXT_PART,
             ])
         }
-        Part::Treemap => Some(vec![
-            ("Arrows", "Tile"),
-            ("Enter", "Select"),
-            ("Alt+G", "Grouping"),
-            NEXT_PART,
-        ]),
+        Part::Treemap => Some(
+            vec![
+                ("Arrows", "Tile"),
+                (
+                    "Enter",
+                    if rich.module.is_none()
+                        && rich.model.as_ref().is_some_and(|model| {
+                            model.from_map
+                                && model.grouping == rusty_automotive::space::Grouping::Module
+                        })
+                    {
+                        OPEN_MODULE.as_str()
+                    } else {
+                        "Select"
+                    },
+                ),
+                ("Alt+G", "Grouping"),
+                NEXT_PART,
+            ]
+            .into_iter()
+            .chain(rich.module.as_ref().map(|_| ("Bksp", ALL_MODULES.as_str())))
+            .collect(),
+        ),
     }
 }
 
@@ -250,7 +272,11 @@ fn change_region<V: RichHost>(view: &mut V, below: bool, window: &mut Window, cx
 }
 
 fn zoom<V: RichHost>(view: &mut V, out: bool, window: &Window, cx: &mut Context<V>) {
-    let strip = match current(view, window, cx) {
+    let part = current(view, window, cx);
+    if out && matches!(part, Some((_, Part::Treemap))) && view.leave_module(cx) {
+        return;
+    }
+    let strip = match part {
         Some((_, Part::Strip(at))) => view.rich().strips.get(at).cloned(),
         _ => None,
     };
@@ -274,7 +300,9 @@ fn pick_group<V: RichHost>(view: &mut V, window: &Window, cx: &mut Context<V>) {
     let Some((_, Part::Treemap)) = current(view, window, cx) else {
         return cx.propagate();
     };
-    if let Some(id) = view.rich().tile {
+    if let Some(id) = view.rich().tile
+        && !view.enter_module(id, cx)
+    {
         view.picked(Pick::Group(id), cx);
     }
 }

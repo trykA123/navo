@@ -504,3 +504,59 @@ fn each_table_keeps_its_own_widths(cx: &mut TestAppContext) {
     settle_motion(cx, window, &view);
     assert!(column_width(cx, &view, 1, 2) > sections);
 }
+
+#[gpui_kit::test]
+fn enter_fills_the_map_with_module_files_and_backspace_restores_the_pick(cx: &mut TestAppContext) {
+    let sample = SAMPLE
+        .replace("engine.o", "Engine_Main.o")
+        .replace("lunar.o", "Engine_Turn.o")
+        .replace("|| .data.tune (3)", "| obj/Other.o | .data.tune (3)");
+    let (window, view) =
+        super::map_rich::open_in(cx, &sample, (None, Some(super::map_rich::preset(1))));
+    let before = label(cx, window, ("treemap-tile", 0));
+    assert!(before.starts_with("Engine, "), "{before}");
+    assert!(label(cx, window, ("treemap-tile", 1)).starts_with("Other, "));
+    click(cx, window, &view, ("treemap-tile", 0));
+    keys(cx, window, &view, &["enter"]);
+    assert_eq!(text_of(cx, window, "space-module-path"), "Engine");
+    let files: Vec<_> = (0..2)
+        .map(|at| label(cx, window, ("treemap-tile", at)))
+        .collect();
+    assert!(
+        files
+            .iter()
+            .any(|file| file.starts_with("obj/Engine_Main.o, ")),
+        "{files:?}"
+    );
+    assert!(
+        files
+            .iter()
+            .any(|file| file.starts_with("obj/Engine_Turn.o, ")),
+        "{files:?}"
+    );
+    assert!(
+        cx.update_window(window, |_, window, _| {
+            window.try_find(("treemap-tile", 2usize)).is_none()
+        })
+        .expect("window")
+    );
+    keys(cx, window, &view, &["right", "enter", "backspace"]);
+    assert!(!visible(cx, window, "space-module-path"));
+    assert_eq!(label(cx, window, ("treemap-tile", 0)), before);
+    assert_eq!(text_of(cx, window, "map-inspector-name"), "Engine");
+}
+
+#[gpui_kit::test]
+fn reopening_a_map_remembers_its_module_without_scoping_another_file(cx: &mut TestAppContext) {
+    let (window, view) =
+        super::map_rich::open_in(cx, SAMPLE, (None, Some(super::map_rich::preset(1))));
+    let module = first_cell(label(cx, window, ("treemap-tile", 0)));
+    keys(cx, window, &view, &["shift-tab", "enter"]);
+    assert_eq!(text_of(cx, window, "space-module-path"), module);
+    keys(cx, window, &view, &["escape", "escape", "f3"]);
+    settle_motion(cx, window, &view);
+    assert_eq!(text_of(cx, window, "space-module-path"), module);
+    let (other_window, other_view) = open_text(cx, "other.map", SAMPLE);
+    super::map_rich::show(cx, (other_window, &other_view), super::map_rich::preset(1));
+    assert!(!visible(cx, other_window, "space-module-path"));
+}
