@@ -121,13 +121,12 @@ fn a_plain_click_moves_the_cursor_on_mouse_down(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_plain_click_below_the_last_row_unmarks_all(cx: &mut TestAppContext) {
+fn a_click_below_the_last_row_sends_nothing(cx: &mut TestAppContext) {
     let (window, harness) = open_list(cx, props(sample_rows()));
     let at = below(cx, window);
     test_pointer::click(cx, window, (at, ctrl()));
-    assert_eq!(commands(&harness, cx), []);
     test_pointer::click(cx, window, (at, Modifiers::default()));
-    assert_eq!(commands(&harness, cx), [Command::SelectionClear]);
+    assert_eq!(commands(&harness, cx), []);
 }
 
 fn right_drag(cx: &mut TestAppContext, window: AnyWindowHandle, rows: &[usize]) {

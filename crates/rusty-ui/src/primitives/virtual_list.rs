@@ -34,6 +34,15 @@ impl ListScroll {
         self.0.0.borrow().base_handle.offset().y
     }
 
+    pub fn is_at_bottom(&self) -> bool {
+        let state = self.0.0.borrow();
+        let Some(size) = state.last_item_size else {
+            return false;
+        };
+        let max = size.contents.height - size.item.height;
+        max > px(0.) && -state.base_handle.offset().y >= max - px(0.5)
+    }
+
     pub fn top_row(&self, row_height: Pixels) -> usize {
         if row_height <= px(0.) {
             return 0;

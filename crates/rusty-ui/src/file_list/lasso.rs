@@ -25,7 +25,6 @@ struct Lasso {
     to: Point<Pixels>,
     start: Start,
     mode: SpanMode,
-    is_plain: bool,
     is_drawn: bool,
     far: Option<u64>,
 }
@@ -93,7 +92,6 @@ impl Held {
             } else {
                 SpanMode::Mark
             },
-            is_plain: !modifiers.modified(),
             is_drawn: false,
             far: None,
         });
@@ -178,8 +176,6 @@ impl ListContext {
         };
         if lasso.is_drawn {
             window.refresh();
-        } else if lasso.start == Start::Below && lasso.is_plain {
-            self.send(Command::SelectionClear, window, cx);
         }
     }
 }

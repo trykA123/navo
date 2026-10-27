@@ -116,16 +116,19 @@ fn shift_click_marks_the_range_from_the_cursor(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_click_below_the_last_row_unmarks_all_and_slash_restores(cx: &mut TestAppContext) {
+fn a_plain_click_moves_the_cursor_and_keeps_the_marks(cx: &mut TestAppContext) {
     let rig = rig(cx);
-    rig.click(cx, 1, ctrl());
-    rig.click(cx, 2, ctrl());
+    rig.press(cx, &["space", "down", "space", "down", "space"]);
+    let marked = rig.marked(cx);
+    assert_eq!(marked.len(), 3);
+    rig.click(cx, 4, Modifiers::default());
+    assert_eq!(rig.marked(cx), marked);
+    assert_eq!(rig.cursor(cx), 4);
     let at = rig.below(cx);
     rig.send(cx, down(MouseButton::Left, at, Modifiers::default()));
     rig.send(cx, up(MouseButton::Left, at, Modifiers::default()));
-    assert_eq!(rig.marked(cx), Vec::<u64>::new());
-    rig.press(cx, &["/"]);
-    assert_eq!(rig.marked(cx), [1, 2]);
+    assert_eq!(rig.marked(cx), marked);
+    assert_eq!(rig.cursor(cx), 4);
 }
 
 #[gpui_kit::test]

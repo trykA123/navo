@@ -24,6 +24,7 @@ pub(in crate::window_view) mod clipboard;
 mod column_widths;
 mod command_center;
 mod crash_notice;
+mod cursor_follow;
 mod delete_dialog;
 mod disk_start;
 mod drive_fs;

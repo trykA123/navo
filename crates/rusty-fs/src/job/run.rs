@@ -28,7 +28,10 @@ pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
 }
 
 pub(super) fn moved_bytes(plan: &OperationPlan) -> u64 {
-    plan.steps.iter().map(|step| counted(plan.kind, step).0).sum()
+    plan.steps
+        .iter()
+        .map(|step| counted(plan.kind, step).0)
+        .sum()
 }
 
 #[derive(Clone, Copy)]

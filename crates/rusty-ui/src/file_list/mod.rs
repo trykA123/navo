@@ -143,6 +143,7 @@ impl FileList {
 struct ListState {
     scroll: ListScroll,
     followed_scroll: Option<(u64, usize, Pixels)>,
+    synced_top: Option<(u64, u64)>,
     page_rows: Option<u64>,
     list_bounds: Option<Bounds<Pixels>>,
     lift: Pixels,
@@ -332,7 +333,7 @@ impl RenderOnce for FileList {
             .flex_1()
             .min_h_0()
             .on_children_prepainted(watch::report_page_rows(
-                (self.on_page_rows, self.known_width),
+                (ctx.clone(), self.on_page_rows, self.known_width),
                 watch(state.clone()),
             ))
             .on_scroll_wheel(watch::report_scroll(&ctx, watch(state)))
