@@ -36,7 +36,7 @@ struct Loaded {
 
 enum Message {
     Loaded(Loaded),
-    Measured(measure::Measured),
+    Measured(rusty_fs::OwnerId, measure::Measured),
     Job(JobUpdate),
     Named(naming::Named),
     Watched(Location, WatchEvent),
@@ -49,6 +49,7 @@ impl Message {
         !matches!(
             self,
             Self::Job(JobUpdate::Progress { .. } | JobUpdate::Done { .. })
+                | Self::Measured(..)
                 | Self::Watched(..)
                 | Self::Recheck(_)
                 | Self::Prefetched(_)
@@ -61,7 +62,8 @@ pub struct Browser {
     provider: Arc<dyn ProviderOps>,
     pools: &'static Pools,
     owner: OwnerGuard,
-    sizes_owner: OwnerGuard,
+    size_owners: HashMap<TabId, OwnerGuard>,
+    size_work: HashMap<TabId, measure::SizeWork>,
     sender: Sender<Message>,
     receiver: Receiver<Message>,
     wake: Waker,
@@ -117,14 +119,14 @@ impl Browser {
         pools: &'static Pools,
     ) -> Self {
         let owner = pools.queue(JobKind::Listing).owner();
-        let sizes_owner = pools.queue(JobKind::Size).owner();
         let (sender, receiver) = mpsc::channel();
         Self {
             state,
             provider,
             pools,
             owner,
-            sizes_owner,
+            size_owners: HashMap::new(),
+            size_work: HashMap::new(),
             sender,
             receiver,
             wake,
@@ -222,7 +224,7 @@ impl Browser {
             }
             changed |= match message {
                 Message::Loaded(loaded) => self.accept(loaded),
-                Message::Measured(measured) => self.show_folder_size(&measured),
+                Message::Measured(owner, measured) => self.accept_size(owner, &measured),
                 Message::Job(update) => self.accept_job(update),
                 Message::Named(named) => self.accept_named(named),
                 Message::Watched(location, event) => self.accept_watched(&location, event),
@@ -243,7 +245,7 @@ impl Browser {
 
     #[must_use]
     pub fn loading(&self) -> bool {
-        self.in_flight > 0
+        self.in_flight > 0 || self.measuring()
     }
 
     #[must_use]
@@ -278,6 +280,7 @@ impl Browser {
     }
 
     fn run(&mut self, effects: Vec<Effect>) {
+        self.retain_size_owners();
         for effect in effects {
             match effect {
                 Effect::ListFolder {
@@ -300,6 +303,7 @@ impl Browser {
     }
 
     fn list(&mut self, tab: TabId, location: Location, request: u64) {
+        self.start_size_visit(tab, &location);
         if let Some(progress) = self.adopt_prefetch(tab, &location, request) {
             self.stalls.begin(tab, request, progress);
             self.in_flight += 1;

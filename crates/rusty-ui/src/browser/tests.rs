@@ -339,6 +339,7 @@ fn a_folder_marked_then_unmarked_keeps_its_size() {
 struct Gated {
     fs: Arc<FakeFs>,
     open: std::sync::atomic::AtomicBool,
+    walks: Option<std::sync::mpsc::Sender<measure::Walk>>,
 }
 
 impl Provider for Gated {
@@ -356,6 +357,12 @@ impl Provider for Gated {
         sink: &mut dyn rusty_fs::ListSink,
         cancel: &CancelToken,
     ) -> Result<(), FsError> {
+        if folder.as_str().ends_with("docs")
+            && let Some(walks) = &self.walks
+        {
+            measure::gate_walk(cancel, walks);
+            return self.fs.list(folder, sink, cancel);
+        }
         let deadline = Instant::now() + Duration::from_secs(5);
         while folder.as_str().ends_with("docs")
             && !self.open.load(std::sync::atomic::Ordering::Acquire)
@@ -421,6 +428,7 @@ fn a_running_folder_size_does_not_hold_up_the_next_listing() {
     let gated = Arc::new(Gated {
         fs: fs.clone(),
         open: std::sync::atomic::AtomicBool::new(false),
+        walks: None,
     });
     let provider: Arc<dyn ProviderOps> = gated.clone();
     let mut browser = Browser::new(
@@ -465,6 +473,7 @@ fn a_link_to_a_file_is_not_opened_as_a_folder() {
     assert_eq!(here(&browser), fs.location("home").as_str());
 }
 
+mod measure;
 mod rename_batch;
 
 #[test]

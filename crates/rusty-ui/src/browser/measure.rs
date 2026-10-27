@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use rusty_core::{Location, ProviderPath, TabId};
-use rusty_fs::{JobKind, JobSlot, Priority, folder_size, volume_of};
+use rusty_fs::{JobKind, JobSlot, OwnerId, Priority, folder_size, volume_of};
 
 use super::{Browser, Message};
 
@@ -12,15 +12,55 @@ pub(crate) struct Measured {
     pub(crate) bytes: u64,
 }
 
+pub(super) struct SizeWork {
+    location: Location,
+    pending: usize,
+}
+
 impl Browser {
     pub fn set_space_measures_folders(&mut self, measures: bool) {
         self.measures_folders = measures;
+    }
+
+    pub(super) fn retain_size_owners(&mut self) {
+        self.size_owners
+            .retain(|tab, _| self.state.tab(*tab).is_some());
+        self.size_work
+            .retain(|tab, _| self.size_owners.contains_key(tab));
+    }
+
+    pub(super) fn start_size_visit(&mut self, tab: TabId, location: &Location) {
+        if self
+            .size_work
+            .get(&tab)
+            .is_some_and(|w| &w.location == location)
+        {
+            return;
+        }
+        self.size_owners
+            .insert(tab, self.pools.queue(JobKind::Size).owner());
+        self.size_work.insert(
+            tab,
+            SizeWork {
+                location: location.clone(),
+                pending: 0,
+            },
+        );
+    }
+
+    pub(super) fn measuring(&self) -> bool {
+        self.size_work.values().any(|work| work.pending > 0)
     }
 
     pub(super) fn measure(&mut self, tab: TabId, folder: Location, name: String) {
         let Ok(target) = folder.join(&ProviderPath::from_text(&name)) else {
             return;
         };
+        let (Some(owner), Some(work)) = (self.size_owners.get(&tab), self.size_work.get_mut(&tab))
+        else {
+            return;
+        };
+        let owner = owner.id();
         let (provider, sender, wake) = (
             Arc::clone(&self.provider),
             self.sender.clone(),
@@ -29,22 +69,35 @@ impl Browser {
         let slot = JobSlot {
             volume: volume_of(&target),
             priority: Priority::Idle,
-            owner: self.sizes_owner.id(),
+            owner,
         };
-        self.in_flight += 1;
-        self.pools.queue(JobKind::Size).submit(
+        work.pending += 1;
+        self.pools.queue(JobKind::Size).submit_then(
             slot,
-            Box::new(move |cancel| {
+            move |cancel| {
                 let bytes = folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes);
-                let _ = sender.send(Message::Measured(Measured {
+                Measured {
                     tab,
                     folder,
                     name,
                     bytes,
-                }));
+                }
+            },
+            move |measured| {
+                let _ = sender.send(Message::Measured(owner, measured));
                 wake();
-            }),
+            },
         );
+    }
+
+    pub(super) fn accept_size(&mut self, owner: OwnerId, measured: &Measured) -> bool {
+        if self.size_owners.get(&measured.tab).map(|o| o.id()) != Some(owner) {
+            return false;
+        }
+        if let Some(work) = self.size_work.get_mut(&measured.tab) {
+            work.pending = work.pending.saturating_sub(1);
+        }
+        self.show_folder_size(measured)
     }
 
     pub(crate) fn show_folder_size(&mut self, measured: &Measured) -> bool {
