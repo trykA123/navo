@@ -23,7 +23,7 @@ pub use edit::{SettingValue, key_line, section_line};
 
 pub use model::{
     Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles, ModifierHints,
-    Search, SearchIndex, SelectionSettings, Settings, SortKey, Terminal, ThemeMode,
+    Search, SearchIndex, SelectionSettings, Settings, SizeMode, SortKey, Terminal, ThemeMode,
 };
 pub use parse::{parse, parse_retention, to_toml};
 pub use retention::RetentionSettings;

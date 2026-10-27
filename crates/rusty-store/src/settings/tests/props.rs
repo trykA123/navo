@@ -58,19 +58,24 @@ fn files() -> impl Strategy<Value = Files> {
         Just(SortKey::Date),
         Just(SortKey::Kind)
     ];
-    (any::<[bool; 4]>(), sort).prop_map(|([hidden, system, folders, descending], sort)| Files {
-        hidden_files: if hidden {
-            HiddenFiles::Hidden
-        } else {
-            HiddenFiles::Shown
+    let size_mode = prop_oneof![Just(SizeMode::Apparent), Just(SizeMode::OnDisk)];
+    (any::<[bool; 5]>(), sort, size_mode).prop_map(
+        |([hidden, system, folders, descending, measure_shown_folders], sort, size_mode)| Files {
+            hidden_files: if hidden {
+                HiddenFiles::Hidden
+            } else {
+                HiddenFiles::Shown
+            },
+            show_system: system,
+            folders_first: folders,
+            sort,
+            sort_descending: descending,
+            size_mode,
+            measure_shown_folders,
+            drop_confirm: DropConfirm::default(),
+            rename_log: false,
         },
-        show_system: system,
-        folders_first: folders,
-        sort,
-        sort_descending: descending,
-        drop_confirm: DropConfirm::default(),
-        rename_log: false,
-    })
+    )
 }
 
 fn automotive() -> impl Strategy<Value = Automotive> {

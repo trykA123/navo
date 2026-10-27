@@ -130,6 +130,8 @@ pub struct Files {
     pub folders_first: bool,
     pub sort: SortKey,
     pub sort_descending: bool,
+    pub size_mode: SizeMode,
+    pub measure_shown_folders: bool,
     pub drop_confirm: DropConfirm,
     pub rename_log: bool,
 }
@@ -142,10 +144,20 @@ impl Default for Files {
             folders_first: true,
             sort: SortKey::default(),
             sort_descending: false,
+            size_mode: SizeMode::default(),
+            measure_shown_folders: false,
             drop_confirm: DropConfirm::default(),
             rename_log: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SizeMode {
+    #[default]
+    Apparent,
+    OnDisk,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

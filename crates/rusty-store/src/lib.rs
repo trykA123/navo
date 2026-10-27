@@ -37,8 +37,8 @@ pub use settings::{
     DefaultChange, Density, DropConfirm, Editor, Files, HiddenFiles, ImageView, ImageViewer,
     LoadReport, MarkdownView, MarkdownViewer, ModifierHints, PreviewView, PreviewViewer,
     RetentionSettings, Saved, Search, SearchIndex, SelectionSettings, SessionBackup, SettingValue,
-    Settings, SettingsError, SettingsStore, SortKey, Terminal, TextView, TextViewer, ThemeMode,
-    ViewPreset, WindowSettings, WindowView, key_line as settings_key_line, parse as parse_settings,
-    parse_retention as parse_retention_settings, section_line as settings_section_line,
-    to_toml as settings_to_toml,
+    Settings, SettingsError, SettingsStore, SizeMode, SortKey, Terminal, TextView, TextViewer,
+    ThemeMode, ViewPreset, WindowSettings, WindowView, key_line as settings_key_line,
+    parse as parse_settings, parse_retention as parse_retention_settings,
+    section_line as settings_section_line, to_toml as settings_to_toml,
 };

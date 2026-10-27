@@ -37,6 +37,8 @@ fn files_defaults() {
     assert!(!f.show_system);
     assert!(f.folders_first);
     assert_eq!(f.sort, SortKey::Name);
+    assert_eq!(f.size_mode, crate::SizeMode::Apparent);
+    assert!(!f.measure_shown_folders);
     assert!(!f.sort_descending);
     assert_eq!(f.drop_confirm, DropConfirm::Never);
 }
@@ -281,4 +283,52 @@ fn unknown_search_keys_follow_the_existing_warning_path() {
     let (settings, unknown) = parse("[search]\nremember = false\nfuture = true\n").unwrap();
     assert!(!settings.search.remember);
     assert_eq!(unknown, ["search.future"]);
+}
+
+#[test]
+fn file_size_settings_parse_and_round_trip() {
+    for (name, mode) in [
+        ("apparent", crate::SizeMode::Apparent),
+        ("on-disk", crate::SizeMode::OnDisk),
+    ] {
+        for measure in [false, true] {
+            let text =
+                format!("[files]\nsize-mode = \"{name}\"\nmeasure-shown-folders = {measure}\n");
+            let (settings, unknown) = parse(&text).unwrap();
+            assert!(unknown.is_empty(), "{unknown:?}");
+            assert_eq!(settings.files.size_mode, mode);
+            assert_eq!(settings.files.measure_shown_folders, measure);
+            assert_eq!(
+                settings.value_at("files.size-mode"),
+                Some(SettingValue::Text(name.to_owned()))
+            );
+            assert_eq!(
+                settings.value_at("files.measure-shown-folders"),
+                Some(SettingValue::Bool(measure))
+            );
+            assert_eq!(parse(&to_toml(&settings)).unwrap().0, settings);
+        }
+    }
+}
+
+#[test]
+fn an_unknown_size_mode_is_rejected() {
+    let error = parse("[files]\nsize-mode = \"allocated\"\n").unwrap_err();
+    assert!(invalid_at(2, 13)(&error), "{error:?}");
+}
+
+#[test]
+fn an_unknown_size_mode_keeps_defaults_and_reports_on_initial_load() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "[files]\nsize-mode = \"allocated\"\nmeasure-shown-folders = true\n",
+    );
+    let (store, report) = SettingsStore::load(&path);
+    assert_eq!(store.current(), &Settings::default());
+    assert!(
+        report.error.as_ref().is_some_and(invalid_at(2, 13)),
+        "{report:?}"
+    );
 }

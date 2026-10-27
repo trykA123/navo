@@ -20,6 +20,8 @@ show-system = false
 folders-first = true
 sort = "name"
 sort-descending = false
+size-mode = "apparent"
+measure-shown-folders = false
 drop-confirm = "never"
 rename-log = false
 
