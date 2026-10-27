@@ -10,16 +10,18 @@ pub enum JobKind {
     Size,
     Hash,
     Module,
+    Find,
 }
 
 impl JobKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Listing,
         Self::Prefetch,
         Self::Preview,
         Self::Size,
         Self::Hash,
         Self::Module,
+        Self::Find,
     ];
 
     #[must_use]
@@ -27,7 +29,7 @@ impl JobKind {
         let (ssd, hdd, network, removable) = match self {
             Self::Listing => return Limits::LISTING,
             Self::Prefetch | Self::Preview => (2, 1, 2, 1),
-            Self::Size | Self::Hash => (2, 1, 1, 1),
+            Self::Size | Self::Hash | Self::Find => (2, 1, 1, 1),
             Self::Module => (1, 1, 1, 1),
         };
         Limits {
@@ -44,7 +46,7 @@ impl JobKind {
 }
 
 pub struct Pools {
-    queues: [Arc<IoQueue>; 6],
+    queues: [Arc<IoQueue>; 7],
 }
 
 impl Pools {
