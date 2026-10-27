@@ -29,6 +29,7 @@ fn a_missing_file_is_written_whole_and_every_default_recorded() {
         read(&path),
         to_toml(&Settings::default())
             .replace("\n[editor]\n", "")
+            .replace("\n[layout]\n", "")
             .replace("\n\n[experimental]\n", "\n")
     );
     let recorded = db.settings_defaults().unwrap();

@@ -51,6 +51,8 @@ ext-width = 0
 size-width = 0
 date-width = 0
 
+[layout]
+
 [text.view]
 line-numbers = true
 line-ends = false

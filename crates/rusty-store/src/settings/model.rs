@@ -16,6 +16,7 @@ pub struct Settings {
     pub terminal: Terminal,
     pub editor: Editor,
     pub window: WindowSettings,
+    pub layout: super::layout::LayoutSettings,
     pub text: TextViewer,
     pub image: ImageViewer,
     pub markdown: MarkdownViewer,
