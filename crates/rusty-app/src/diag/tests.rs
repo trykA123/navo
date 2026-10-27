@@ -44,7 +44,7 @@ fn env_of(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
 fn identity_reads_the_windows_names() {
     let id = identity(env_of(&[
         ("USERNAME", "admin"),
-        ("COMPUTERNAME", "WORK-PC"),
+        ("COMPUTERNAME", "BENCH-PC"),
         ("USERDOMAIN", "CORP"),
         ("USERPROFILE", r"C:\Users\admin"),
     ]));
@@ -52,7 +52,7 @@ fn identity_reads_the_windows_names() {
         (id.user, id.computer, id.domain, id.profile),
         (
             Some("admin".to_owned()),
-            Some("WORK-PC".to_owned()),
+            Some("BENCH-PC".to_owned()),
             Some("CORP".to_owned()),
             Some(r"C:\Users\admin".to_owned())
         )
