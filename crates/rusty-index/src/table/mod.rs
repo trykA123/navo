@@ -1,4 +1,5 @@
 mod change;
+mod children;
 mod flags;
 
 use std::ops::Range;
@@ -6,6 +7,7 @@ use std::ops::Range;
 use crate::fuzzy::{Fuzzy, Match};
 
 pub use change::TableChange;
+use children::Children;
 pub use flags::Flags;
 
 pub const NO_PARENT: u32 = u32::MAX;
@@ -30,6 +32,7 @@ pub struct NameTable {
     offsets: Vec<u32>,
     parents: Vec<u32>,
     flags: Vec<u16>,
+    children: Children,
     live: usize,
 }
 
@@ -48,6 +51,7 @@ impl NameTable {
             offsets: Vec::with_capacity(entries),
             parents: Vec::with_capacity(entries),
             flags: Vec::with_capacity(entries),
+            children: Children::with_capacity(entries),
             live: 0,
         }
     }
@@ -69,6 +73,7 @@ impl NameTable {
             + self.offsets.capacity() * size_of::<u32>()
             + self.parents.capacity() * size_of::<u32>()
             + self.flags.capacity() * size_of::<u16>()
+            + self.children.memory_bytes()
     }
 
     pub fn shrink_to_fit(&mut self) {
@@ -76,6 +81,7 @@ impl NameTable {
         self.offsets.shrink_to_fit();
         self.parents.shrink_to_fit();
         self.flags.shrink_to_fit();
+        self.children.shrink_to_fit();
     }
 
     pub(crate) fn raw_parts(&self) -> (&str, &[u32], &[u32], &[u16]) {
@@ -114,14 +120,19 @@ impl NameTable {
             .iter()
             .filter(|&&bits| bits & Flags::DELETED == 0)
             .count();
-        let table = Self {
+        let mut table = Self {
             names,
             offsets,
             parents,
             flags,
+            children: Children::default(),
             live,
         };
-        table.valid_structure().then_some(table)
+        if !table.valid_structure() {
+            return None;
+        }
+        table.relink();
+        Some(table)
     }
 
     pub(crate) fn valid_structure(&self) -> bool {
@@ -182,6 +193,7 @@ impl NameTable {
         self.offsets.push(offset);
         self.parents.push(parent);
         self.flags.push(Flags::from_stored(flags.bits()).bits());
+        self.children.add(id, &self.parents);
         self.live += 1;
         Ok(id)
     }
@@ -197,7 +209,8 @@ impl NameTable {
         if self.name(id) != Some(name) {
             self.offsets[id as usize] = self.append_name(name)?;
         }
-        self.parents[id as usize] = parent;
+        let from = std::mem::replace(&mut self.parents[id as usize], parent);
+        self.children.reparent(id, from, parent);
         Ok(())
     }
 
@@ -205,13 +218,17 @@ impl NameTable {
         if !self.is_live(id) {
             return 0;
         }
-        let was_folder = self.flags[id as usize] & Flags::FOLDER.bits() != 0;
-        self.mark_deleted(id);
-        if was_folder {
-            1 + self.remove_orphans()
-        } else {
-            1
+        self.children.detach(id, self.parents[id as usize]);
+        let mut subtree = vec![id];
+        let mut removed = 0;
+        while let Some(at) = subtree.pop() {
+            if self.is_live(at) {
+                self.mark_deleted(at);
+                removed += 1;
+                subtree.extend(self.children.of(at));
+            }
         }
+        removed
     }
 
     pub fn compact(&mut self) -> Vec<Option<u32>> {
@@ -241,6 +258,7 @@ impl NameTable {
             fresh.flags.push(self.flags[id as usize]);
         }
         fresh.live = next as usize;
+        fresh.relink();
         fresh.shrink_to_fit();
         *self = fresh;
         map
@@ -311,14 +329,10 @@ impl NameTable {
             .is_some_and(|bits| bits & Flags::DELETED == 0)
     }
 
-    fn remove_orphans(&mut self) -> usize {
-        let orphans: Vec<u32> = (0..self.slots())
-            .filter(|&id| self.is_live(id) && self.has_deleted_ancestor(id))
-            .collect();
-        for &id in &orphans {
-            self.mark_deleted(id);
-        }
-        orphans.len()
+    fn relink(&mut self) {
+        let flags = &self.flags;
+        self.children =
+            Children::rebuild(&self.parents, |id| flags[id as usize] & Flags::DELETED == 0);
     }
 
     fn mark_deleted(&mut self, id: u32) {
@@ -351,18 +365,6 @@ impl NameTable {
             }
             match self.parents.get(current as usize) {
                 Some(&parent) => current = parent,
-                None => return false,
-            }
-        }
-        false
-    }
-
-    fn has_deleted_ancestor(&self, id: u32) -> bool {
-        let mut current = self.parents[id as usize];
-        for _ in 0..MAX_DEPTH {
-            match self.flags.get(current as usize) {
-                Some(bits) if bits & Flags::DELETED != 0 => return true,
-                Some(_) => current = self.parents[current as usize],
                 None => return false,
             }
         }

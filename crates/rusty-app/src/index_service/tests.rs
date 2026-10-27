@@ -271,3 +271,23 @@ fn a_successful_tick_clears_only_its_own_failures() {
     super::lifecycle::clear_failures(&mut errors, super::lifecycle::SAVE_FAILURE);
     assert!(errors.is_empty());
 }
+
+#[test]
+fn only_an_enabled_navo_service_covers_volumes_and_a_legacy_one_does_not() {
+    let removable = Drive {
+        letter: 'E',
+        fixed: false,
+        ..DRIVE
+    };
+    let discover = || Ok(vec![DRIVE, removable]);
+    let only = |wanted: super::install_plan::Product| {
+        move |product| Ok((product == wanted).then_some(true))
+    };
+    let search = Search::default();
+    let legacy = super::service_volume_roots(only(super::install_plan::FERRITE), discover, &search);
+    assert_eq!(legacy.unwrap(), None);
+    let navo = super::service_volume_roots(only(super::install_plan::NAVO), discover, &search);
+    assert_eq!(navo.unwrap(), Some(vec![r"C:\".to_owned()]));
+    let disabled = super::service_volume_roots(|_| Ok(Some(false)), discover, &search);
+    assert_eq!(disabled.unwrap(), None);
+}

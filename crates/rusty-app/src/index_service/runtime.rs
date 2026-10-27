@@ -1,13 +1,14 @@
 use std::cell::RefCell;
 use std::io;
 use std::path::PathBuf;
-use std::sync::{Arc, PoisonError, RwLock};
+use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rusty_index::file::{self, Header};
 use rusty_index::ntfs::{NtfsError, NtfsIndex, Volume};
-use rusty_index::pipe::{self, CancelToken, Reply, Request, Server, VolumeStatus};
+use rusty_index::pipe::{CancelToken, Server, VolumeStatus};
 
+use super::answer::{Shared, SharedVolume, State, answer};
 use super::config::{Drive, index_path, select_volumes};
 use super::lifecycle::{
     SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, clear_failures, guard_worker,
@@ -17,15 +18,6 @@ use super::policy::ServiceError;
 use super::search::SearchIndex;
 use super::storage::Storage;
 
-#[derive(Default)]
-struct State {
-    index: Option<NtfsIndex>,
-    status: VolumeStatus,
-    search: SearchIndex,
-}
-
-type Shared = Arc<RwLock<State>>;
-
 pub(super) fn run(
     cancel: &CancelToken,
     ready: impl FnOnce() -> io::Result<()>,
@@ -34,14 +26,14 @@ pub(super) fn run(
     let config = storage.read_config().map_err(ServiceError::Configuration)?;
     let available = super::volumes::discover().map_err(ServiceError::Configuration)?;
     let drives = select_volumes(&config.search, &available).map_err(ServiceError::Configuration)?;
-    let shared = initial_states(&drives, &config.search);
+    let volumes = initial_volumes(&drives, &config.search);
     std::thread::scope(|scope| {
         let _stop = StopOnDrop(cancel);
         let mut workers = Vec::new();
-        for (drive, shared) in drives.iter().zip(&shared) {
-            let mut worker =
-                Worker::new(*drive, Arc::clone(shared), &storage).map_err(ServiceError::Storage)?;
-            let shared = Arc::clone(shared);
+        for (drive, volume) in drives.iter().zip(&volumes) {
+            let mut worker = Worker::new(*drive, Arc::clone(&volume.shared), &storage)
+                .map_err(ServiceError::Storage)?;
+            let shared = Arc::clone(&volume.shared);
             workers.push(
                 std::thread::Builder::new()
                     .name("ntfs-index".into())
@@ -56,7 +48,7 @@ pub(super) fn run(
             );
         }
         ready().map_err(ServiceError::Unexpected)?;
-        let result = serve_pipe(&config.sid, &shared, cancel);
+        let result = serve_pipe(&config.sid, &volumes, cancel);
         cancel.cancel();
         result
             .and(join_workers(workers))
@@ -64,14 +56,14 @@ pub(super) fn run(
     })
 }
 
-fn serve_pipe(sid: &str, shared: &[Shared], cancel: &CancelToken) -> io::Result<()> {
+fn serve_pipe(sid: &str, volumes: &[SharedVolume], cancel: &CancelToken) -> io::Result<()> {
     let server = super::bind_retry::bind_with_retry(
         cancel,
         || Server::bind(sid),
         |message| {
             tracing::error!("{message}");
-            for state in shared {
-                record_error(state, message.clone());
+            for volume in volumes {
+                record_error(&volume.shared, message.clone());
             }
         },
         |delay| super::bind_retry::wait_for_retry(cancel, delay),
@@ -81,17 +73,17 @@ fn serve_pipe(sid: &str, shared: &[Shared], cancel: &CancelToken) -> io::Result<
     };
     server
         .serve(
-            &|request, query_cancel| answer(shared, request, query_cancel),
+            &|request, query_cancel| answer(volumes, request, query_cancel),
             cancel,
         )
         .map_err(io::Error::other)
 }
 
-fn initial_states(drives: &[Drive], search: &rusty_store::Search) -> Vec<Shared> {
+fn initial_volumes(drives: &[Drive], search: &rusty_store::Search) -> Vec<SharedVolume> {
     drives
         .iter()
         .map(|drive| {
-            Arc::new(RwLock::new(State {
+            SharedVolume::new(State {
                 status: VolumeStatus {
                     root: format!("{}:", drive.letter),
                     progress: Some(0),
@@ -99,7 +91,7 @@ fn initial_states(drives: &[Drive], search: &rusty_store::Search) -> Vec<Shared>
                 },
                 search: SearchIndex::new(search),
                 ..Default::default()
-            }))
+            })
         })
         .collect()
 }
@@ -320,30 +312,4 @@ fn ensure_resolved(changes: Vec<rusty_index::ntfs::UnresolvedChange>) -> Result<
     } else {
         Err(NtfsError::Reenumerate)
     }
-}
-
-fn answer(volumes: &[Shared], request: &Request, cancel: &CancelToken) -> Reply {
-    let mut reply = Reply::default();
-    for shared in volumes {
-        if cancel.is_cancelled() {
-            break;
-        }
-        let state = shared.read().unwrap_or_else(PoisonError::into_inner);
-        let mut status = state.status.clone();
-        if let Some(index) = &state.index {
-            status.entries = index.table.len() as u64;
-            reply
-                .hits
-                .extend(state.search.hits(&index.table, request, cancel));
-        }
-        reply.status.volumes.push(status);
-    }
-    reply.hits.sort_by(|left, right| {
-        right
-            .score
-            .cmp(&left.score)
-            .then_with(|| left.path.cmp(&right.path))
-    });
-    reply.hits.truncate(pipe::MAX_HITS);
-    reply
 }

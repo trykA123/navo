@@ -89,9 +89,12 @@ impl NtfsIndex {
         validate_journal_cursor(&batch, self.position)?;
         let next_usn = batch.next_usn;
         let mut pending = Pending::default();
-        for change in batch.into_changes(&mut self.renames) {
-            pending.push(self, change)?;
-        }
+        let applied = batch
+            .into_changes(&mut self.renames)
+            .into_iter()
+            .try_for_each(|change| pending.push(self, change));
+        pending.forget_removed(self);
+        applied?;
         self.position.next_usn = next_usn;
         Ok(pending.finish())
     }
@@ -270,6 +273,7 @@ struct Pending {
     blocked: HashMap<u128, Blocked>,
     waiters: HashMap<u128, Vec<u128>>,
     reported: Vec<UnresolvedChange>,
+    removed_subtree: bool,
 }
 
 impl Pending {
@@ -298,8 +302,11 @@ impl Pending {
         while let Some(change) = changes.pop_front() {
             let change = recover_rename(index, change);
             let file_id = change_file_id(&change);
-            match index.table.apply(change.clone(), &mut index.ids) {
-                Ok(()) => self.wake(index, file_id, ready),
+            match index.table.apply_in_batch(change.clone(), &mut index.ids) {
+                Ok(removed) => {
+                    self.removed_subtree |= removed > 1;
+                    self.wake(index, file_id, ready);
+                }
                 Err(TableError::UnknownFileReference(missing))
                     if matches!(change, TableChange::Attributes { .. }) =>
                 {
@@ -333,6 +340,12 @@ impl Pending {
             if let Some(blocked) = self.blocked.remove(&waiting) {
                 ready.push_back(blocked.changes);
             }
+        }
+    }
+
+    fn forget_removed(&mut self, index: &mut NtfsIndex) {
+        if std::mem::take(&mut self.removed_subtree) {
+            index.table.forget_removed(&mut index.ids);
         }
     }
 

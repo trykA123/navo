@@ -233,13 +233,33 @@ fn serve_instance_with(
     pipe: &impl session::Transport,
     handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
     (cancel, stopped): (&CancelToken, &CancelToken),
-    (start, max): (std::time::Duration, std::time::Duration),
+    backoff: (std::time::Duration, std::time::Duration),
 ) -> Result<(), PipeError> {
     let _stop = StopOnDrop(stopped.clone());
-    let tokens = &[cancel, stopped];
+    std::thread::scope(|scope| {
+        let (answers, jobs) = std::sync::mpsc::channel();
+        let answering = scope.spawn(move || session::answer_jobs(jobs, handler));
+        let gone = || answering.is_finished();
+        let served = accept_sessions(pipe, (&answers, &gone), &[cancel, stopped], backoff);
+        drop(answers);
+        let joined = answering.join().map_err(|_| PipeError::NotAvailable);
+        served.and(joined)
+    })
+}
+
+fn accept_sessions(
+    pipe: &impl session::Transport,
+    (answers, answer_gone): (&std::sync::mpsc::Sender<session::Job>, &dyn Fn() -> bool),
+    tokens: &[&CancelToken],
+    (start, max): (std::time::Duration, std::time::Duration),
+) -> Result<(), PipeError> {
     let mut delay = start;
     let mut failing = false;
     loop {
+        if answer_gone() {
+            tracing::error!("index pipe answer thread stopped; closing this pipe instance");
+            return Err(PipeError::NotAvailable);
+        }
         match pipe.accept(&Cancellation::Tokens(tokens)) {
             Err(PipeError::Cancelled) => return Ok(()),
             Err(error) => {
@@ -257,7 +277,7 @@ fn serve_instance_with(
                 delay = start;
             }
         }
-        let result = session::serve_session(pipe, handler, tokens);
+        let result = session::serve_session(pipe, answers, tokens);
         if let Err(error) = result.and(pipe.disconnect()) {
             tracing::debug!(%error, "index pipe client disconnected");
         }

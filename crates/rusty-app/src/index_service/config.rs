@@ -39,7 +39,7 @@ impl Config {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Drive {
+pub(crate) struct Drive {
     pub letter: char,
     pub serial: u64,
     pub fixed: bool,

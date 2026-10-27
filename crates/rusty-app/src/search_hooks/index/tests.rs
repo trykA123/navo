@@ -53,6 +53,7 @@ fn hosts(provider: Arc<dyn Provider>, dirs: Option<StoreDirs>) -> Hosts {
         exclude: Vec::new(),
         configured: Configured::default(),
         retirement: Retirements::new().unwrap(),
+        presence: ServicePresence::system(),
     }
 }
 
@@ -136,6 +137,56 @@ fn five_reconfigurations_share_one_retirement_worker_and_do_not_restart_a_pendin
     waiting.recv_timeout(WAIT).unwrap();
     assert_eq!(hosts.roots.len(), 1);
     assert_eq!(provider.starts.load(Ordering::SeqCst), 2);
+    release.send(()).unwrap();
+    drop(hosts);
+}
+
+struct NotInstalled(Mutex<mpsc::Receiver<()>>);
+
+impl presence::ServiceManager for NotInstalled {
+    fn installed_volume_roots(
+        &self,
+        _: &presence::Selection,
+    ) -> std::io::Result<Option<Vec<String>>> {
+        let _ = self.0.lock().unwrap().recv_timeout(WAIT);
+        Ok(None)
+    }
+}
+
+#[test]
+fn auto_walks_nothing_until_the_service_manager_has_answered_in_the_background() {
+    let folder = tempfile::tempdir().unwrap();
+    let (entered, waiting) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let provider = Arc::new(Blocked {
+        fs: FakeFs::new(),
+        entered,
+        release: Mutex::new(released),
+        starts: AtomicUsize::new(0),
+    });
+    provider.fs.add_folder("tree");
+    let root = provider.fs.location("tree");
+    let mut hosts = hosts(provider.clone(), Some(StoreDirs::in_profile(folder.path())));
+    let (answer, answered) = mpsc::channel();
+    hosts.presence = ServicePresence::new(Arc::new(NotInstalled(Mutex::new(answered))));
+    let options = IndexOptions {
+        mode: IndexMode::Auto,
+        drives: vec![root.as_str().into()],
+        ..IndexOptions::default()
+    };
+    let started = std::time::Instant::now();
+    hosts.configure(&options, None);
+    assert!(started.elapsed() < Duration::from_millis(100));
+    assert!(hosts.roots.is_empty());
+    answer.send(()).unwrap();
+    let deadline = std::time::Instant::now() + WAIT;
+    while hosts.roots.is_empty() {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::yield_now();
+        hosts.configure(&options, None);
+    }
+    waiting.recv_timeout(WAIT).unwrap();
+    assert_eq!(provider.starts.load(Ordering::SeqCst), 1);
     release.send(()).unwrap();
     drop(hosts);
 }

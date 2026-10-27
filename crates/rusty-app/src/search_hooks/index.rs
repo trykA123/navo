@@ -1,5 +1,7 @@
 mod config;
+mod drives;
 mod memory;
+mod presence;
 mod retirement;
 mod roots;
 mod status;
@@ -21,8 +23,10 @@ use rusty_ui::command_center::index_source::{IndexMetadata, PipeQueries};
 use rusty_ui::command_center::{Cancel, IndexHooks, IndexMode, IndexOptions};
 
 use config::{Configured, same_options};
+use drives::DriveCache;
+use presence::{Selection, ServicePresence};
 use retirement::Retirements;
-use roots::{exclusions, is_allowed, roots};
+use roots::{Service, exclusions, is_allowed, roots};
 
 struct Root {
     location: Location,
@@ -40,6 +44,7 @@ struct Hosts {
     exclude: Vec<String>,
     configured: Configured,
     retirement: Retirements,
+    presence: ServicePresence,
 }
 
 pub fn hooks(
@@ -72,9 +77,14 @@ pub fn hooks(
     IndexHooks {
         start: Arc::new(move |options| {
             let service_ready = matches!(options.mode, IndexMode::Auto | IndexMode::Service)
-                && service_running(&pipe::Client::connect());
+                && service_running(&connect_logged());
             let mut hosts = start.lock().unwrap_or_else(PoisonError::into_inner);
             hosts.configured.reset();
+            if options.mode == IndexMode::Auto {
+                hosts
+                    .presence
+                    .refresh_in_background(&Selection::of(options));
+            }
             if service_ready {
                 hosts.retire();
                 hosts.options = None;
@@ -83,7 +93,7 @@ pub fn hooks(
             }
         }),
         status: status::hook(hosts.clone()),
-        pipe: PipeQueries::new(Arc::new(query_pipe)),
+        pipe: pipe_queries(),
         host: Arc::new(move |options, query, cancel, service| {
             let mut hosts = hosts.lock().unwrap_or_else(PoisonError::into_inner);
             hosts.configure(options, service);
@@ -107,27 +117,40 @@ fn create_hosts(
         exclude: Vec::new(),
         configured: Configured::default(),
         retirement: Retirements::new()?,
+        presence: ServicePresence::system(),
     })))
 }
 
-fn query_pipe(
-    options: &IndexOptions,
-    query: &pipe::Query,
-    cancel: &Cancel,
-) -> Result<Reply, pipe::PipeError> {
+fn pipe_queries() -> PipeQueries {
+    let drives = DriveCache::new(Arc::new(rusty_shell::list_drives));
+    drives.refresh_in_background();
+    PipeQueries::new(Arc::new(move |options, query, cancel| {
+        let mut reply = query_pipe(query, cancel)?;
+        let available = drives.drives();
+        reply.hits.retain(|hit| {
+            Location::new(&hit.path).is_ok_and(|path| is_allowed(options, &path, &available))
+        });
+        Ok(reply)
+    }))
+}
+
+fn query_pipe(query: &pipe::Query, cancel: &Cancel) -> Result<Reply, pipe::PipeError> {
     let mut client = pipe::Client::connect()?;
     if cancel.is_cancelled() {
         return Err(pipe::PipeError::Cancelled);
     }
     client.send_query(query).map_err(after_connect)?;
-    let mut reply = client
+    client
         .receive(&|| cancel.is_cancelled())
-        .map_err(after_connect)?;
-    let available = rusty_shell::list_drives();
-    reply.hits.retain(|hit| {
-        Location::new(&hit.path).is_ok_and(|path| is_allowed(options, &path, &available))
-    });
-    Ok(reply)
+        .map_err(after_connect)
+}
+
+fn connect_logged() -> Result<pipe::Client, pipe::PipeError> {
+    let connected = pipe::Client::connect();
+    if let Err(error) = &connected {
+        tracing::warn!(%error, ?error, "cannot connect to the index service pipe");
+    }
+    connected
 }
 
 fn service_running<T>(connected: &Result<T, pipe::PipeError>) -> bool {
@@ -207,10 +230,19 @@ impl Hosts {
 
     fn reconfigure(&mut self, options: &IndexOptions, service: Option<pipe::Status>, now: Instant) {
         let available = rusty_shell::list_drives();
-        let desired = if matches!(options.mode, IndexMode::Off | IndexMode::Service) {
-            Vec::new()
-        } else {
-            roots(options, &available, self.walk_roots(), service.as_ref())
+        let volumes = match options.mode {
+            IndexMode::Auto => self.presence.volumes(&Selection::of(options)),
+            _ => Some(None),
+        };
+        let desired = match (options.mode, &volumes) {
+            (IndexMode::Off | IndexMode::Service, _) | (_, None) => Vec::new(),
+            (_, Some(volumes)) => {
+                let service = Service {
+                    reply: service.as_ref(),
+                    volumes: volumes.as_deref(),
+                };
+                roots(options, &available, self.walk_roots(), service)
+            }
         };
         let unchanged = self
             .options
@@ -223,7 +255,9 @@ impl Hosts {
             self.desired = desired;
         }
         self.exclude = exclusions(options, &available);
-        self.configured.settle(options, service, now);
+        if volumes.is_some() {
+            self.configured.settle(options, service, now);
+        }
     }
 
     fn start_root(&mut self, location: Location) {

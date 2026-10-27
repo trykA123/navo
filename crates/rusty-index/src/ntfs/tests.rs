@@ -555,3 +555,103 @@ fn windows_system_volume_first_records() {
     let batch = volume.read_journal(index.position).unwrap();
     assert!(batch.next_usn >= index.position.next_usn);
 }
+
+fn two_million_entry_index() -> (NtfsIndex, Vec<(u128, Vec<u128>)>) {
+    let mut index = NtfsIndex::new('C', POSITION).unwrap();
+    let mut next_id = 100u128;
+    let mut leaves = Vec::new();
+    let mut level = vec![(ROOT_REFERENCE, 0u32)];
+    for depth in 0..5 {
+        let mut children = Vec::new();
+        for &(_, parent) in &level {
+            for slot in 0..10 {
+                let id = index
+                    .table
+                    .push(parent, &format!("folder-{depth}-{slot}"), Flags::FOLDER)
+                    .unwrap();
+                index.ids.insert(next_id, id);
+                children.push((next_id, id));
+                next_id += 1;
+            }
+        }
+        level = children;
+    }
+    for &(folder_ref, folder) in &level {
+        let mut files = Vec::new();
+        for slot in 0..19 {
+            let id = index
+                .table
+                .push(folder, &format!("report-{slot}.docx"), Flags::NONE)
+                .unwrap();
+            index.ids.insert(next_id, id);
+            files.push(next_id);
+            next_id += 1;
+        }
+        leaves.push((folder_ref, files));
+    }
+    assert!(index.table.len() > 2_000_000);
+    (index, leaves)
+}
+
+#[test]
+fn a_journal_read_that_deletes_thirty_folders_applies_within_50ms_on_a_two_million_entry_index() {
+    let (mut index, leaves) = two_million_entry_index();
+    let mut records = Vec::new();
+    for (folder, files) in leaves.iter().take(30) {
+        for &file in files {
+            let mut deleted = record(file, *folder, "report.docx");
+            deleted.reason = FILE_DELETE_REASON;
+            records.push(deleted);
+        }
+        let mut deleted = record(*folder, ROOT, "folder");
+        deleted.reason = FILE_DELETE_REASON;
+        records.push(deleted);
+    }
+    let started = std::time::Instant::now();
+    index
+        .apply_batch(UsnBatch {
+            next_usn: 110,
+            records,
+        })
+        .unwrap();
+    let held = started.elapsed();
+    assert!(
+        held < std::time::Duration::from_millis(50),
+        "the write lock would be held for {held:?}"
+    );
+}
+
+const FILE_DELETE_REASON: u32 = 0x200;
+
+#[test]
+fn removing_a_folder_with_twenty_thousand_entries_from_a_two_million_entry_index_takes_under_50ms()
+{
+    let (mut index, _) = two_million_entry_index();
+    let before = index.table.len();
+    let folder = index.ids[&110];
+    let started = std::time::Instant::now();
+    let removed = index.table.remove(folder);
+    let held = started.elapsed();
+    assert_eq!(removed, 1 + 10 + 100 + 1_000 + 19_000);
+    assert_eq!(before - index.table.len(), removed);
+    assert!(
+        held < std::time::Duration::from_millis(50),
+        "the write lock would be held for {held:?}"
+    );
+}
+
+#[test]
+fn a_journal_read_that_deletes_a_folder_drops_the_file_references_of_its_subtree() {
+    let (mut index, leaves) = two_million_entry_index();
+    let (folder, files) = &leaves[0];
+    let mut deleted = record(*folder, ROOT, "folder");
+    deleted.reason = FILE_DELETE_REASON;
+    index
+        .apply_batch(UsnBatch {
+            next_usn: 110,
+            records: vec![deleted],
+        })
+        .unwrap();
+    assert!(files.iter().all(|file| !index.ids.contains_key(file)));
+    assert!(index.ids.values().all(|&id| index.table.name(id).is_some()));
+}

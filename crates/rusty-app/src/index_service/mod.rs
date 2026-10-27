@@ -1,6 +1,8 @@
 #![deny(unsafe_code)]
 
 #[cfg(any(windows, test))]
+mod answer;
+#[cfg(any(windows, test))]
 mod bind_retry;
 #[cfg(any(windows, test))]
 mod config;
@@ -95,6 +97,39 @@ pub(crate) fn query() -> std::io::Result<ServiceQuery> {
         running: scm::query_running(install_plan::NAVO)?,
         legacy_present: scm::query_running(install_plan::FERRITE)?.is_some(),
     })
+}
+
+#[cfg(any(windows, test))]
+pub(crate) use config::Drive as ServiceDrive;
+
+#[cfg(windows)]
+pub(crate) fn installed_volume_roots(
+    search: &rusty_store::Search,
+) -> std::io::Result<Option<Vec<String>>> {
+    service_volume_roots(scm::query_enabled, volumes::discover, search)
+}
+
+#[cfg(any(windows, test))]
+fn service_volume_roots(
+    enabled: impl FnOnce(install_plan::Product) -> std::io::Result<Option<bool>>,
+    discover: impl FnOnce() -> std::io::Result<Vec<ServiceDrive>>,
+    search: &rusty_store::Search,
+) -> std::io::Result<Option<Vec<String>>> {
+    if enabled(install_plan::NAVO)? != Some(true) {
+        return Ok(None);
+    }
+    selected_roots(search, &discover()?).map(Some)
+}
+
+#[cfg(any(windows, test))]
+pub(crate) fn selected_roots(
+    search: &rusty_store::Search,
+    available: &[ServiceDrive],
+) -> std::io::Result<Vec<String>> {
+    Ok(config::select_volumes(search, available)?
+        .into_iter()
+        .map(|drive| format!("{}:\\", drive.letter))
+        .collect())
 }
 
 #[cfg(windows)]

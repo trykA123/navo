@@ -1,6 +1,6 @@
 use std::{
     sync::{PoisonError, mpsc},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use super::{
@@ -24,6 +24,32 @@ impl Pending {
         self.cancel = CancelToken::new();
         self.generation = Some(query.generation);
         self.query = Some(query);
+    }
+}
+
+const REPLY_POLL: Duration = Duration::from_millis(5);
+
+pub(super) struct Job {
+    request: Request,
+    cancel: CancelToken,
+    reply: mpsc::SyncSender<Reply>,
+}
+
+pub(super) fn answer_jobs(
+    jobs: mpsc::Receiver<Job>,
+    handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
+) {
+    for job in jobs {
+        if !job.cancel.is_cancelled() {
+            let answered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                answer_request(&job.request, handler, &job.cancel)
+            }));
+            let reply = answered.unwrap_or_else(|_| {
+                tracing::error!("index pipe answer handler panicked");
+                error_reply("index search failed")
+            });
+            let _ = job.reply.send(reply);
+        }
     }
 }
 
@@ -60,7 +86,7 @@ impl Transport for platform::Pipe {
 
 pub(super) fn serve_session(
     pipe: &impl Transport,
-    handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
+    answers: &mpsc::Sender<Job>,
     tokens: &[&CancelToken],
 ) -> Result<(), PipeError> {
     let session = Session::default();
@@ -68,7 +94,7 @@ pub(super) fn serve_session(
     std::thread::scope(|scope| {
         let _stop = StopOnDrop(session.stopped.clone());
         let reader = scope.spawn(|| read_queries(pipe, &session, tokens, wake));
-        let result = send_replies(pipe, handler, &session, events);
+        let result = send_replies(pipe, answers, &session, events);
         session.stopped.cancel();
         let read_result = reader.join().map_err(|_| PipeError::NotAvailable)?;
         result.and(read_result)
@@ -106,7 +132,7 @@ fn read_queries(
 
 fn send_replies(
     pipe: &impl Transport,
-    handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
+    answers: &mpsc::Sender<Job>,
     session: &Session,
     events: mpsc::Receiver<()>,
 ) -> Result<(), PipeError> {
@@ -130,10 +156,17 @@ fn send_replies(
         if cancel.is_cancelled() || session.stopped.is_cancelled() {
             continue;
         }
-        let mut reply = answer_request(&query.request, handler, &cancel);
-        if cancel.is_cancelled() || session.stopped.is_cancelled() {
+        let (reply, answered) = mpsc::sync_channel(1);
+        answers
+            .send(Job {
+                request: query.request,
+                cancel: cancel.clone(),
+                reply,
+            })
+            .map_err(|_| PipeError::NotAvailable)?;
+        let Some(mut reply) = wait_for_reply(&answered, &cancel, session) else {
             continue;
-        }
+        };
         let hits = prepare_hits(query.generation, &mut reply)?;
         let deadline = Instant::now() + QUERY_TIMEOUT;
         pipe.write_response(&hits, deadline)?;
@@ -148,6 +181,23 @@ fn send_replies(
     Ok(())
 }
 
+fn wait_for_reply(
+    answered: &mpsc::Receiver<Reply>,
+    cancel: &CancelToken,
+    session: &Session,
+) -> Option<Reply> {
+    loop {
+        match answered.recv_timeout(REPLY_POLL) {
+            Ok(reply) if !cancel.is_cancelled() && !session.stopped.is_cancelled() => {
+                return Some(reply);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout)
+                if !cancel.is_cancelled() && !session.stopped.is_cancelled() => {}
+            _ => return None,
+        }
+    }
+}
+
 pub(super) fn answer_request(
     request: &Request,
     handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
@@ -156,11 +206,15 @@ pub(super) fn answer_request(
     if request.within_limits() {
         return handler(request, cancel);
     }
+    error_reply("index pipe request exceeds limits")
+}
+
+fn error_reply(message: &str) -> Reply {
     Reply {
         hits: Vec::new(),
         status: Status {
             volumes: vec![VolumeStatus {
-                errors: vec!["index pipe request exceeds limits".into()],
+                errors: vec![message.into()],
                 ..VolumeStatus::default()
             }],
         },

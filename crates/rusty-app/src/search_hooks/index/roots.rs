@@ -4,22 +4,36 @@ use rusty_shell::{Drive, DriveKind};
 use rusty_ui::command_center::IndexOptions;
 use rusty_ui::command_center::index_source::drive_root;
 
+#[derive(Clone, Copy, Default)]
+pub(super) struct Service<'a> {
+    pub(super) reply: Option<&'a Status>,
+    pub(super) volumes: Option<&'a [Location]>,
+}
+
+impl Service<'_> {
+    fn indexes(&self, root: &Location) -> bool {
+        self.volumes
+            .is_some_and(|volumes| volumes.iter().any(|volume| contains(volume, root)))
+    }
+}
+
 pub(super) fn roots(
     options: &IndexOptions,
     available: &[Drive],
     explicit: Vec<String>,
-    service: Option<&Status>,
+    service: Service<'_>,
 ) -> Vec<Location> {
     let requested = if !explicit.is_empty() {
         explicit
     } else if !options.drives.is_empty() {
         options.drives.iter().map(|root| drive_root(root)).collect()
-    } else if service.is_some() {
+    } else if service.reply.is_some() || service.volumes.is_some() {
         available
             .iter()
             .map(|drive| drive.root.clone())
             .chain(
                 service
+                    .reply
                     .into_iter()
                     .flat_map(|status| &status.volumes)
                     .filter(|volume| !volume.errors.is_empty())
@@ -39,7 +53,8 @@ pub(super) fn roots(
             continue;
         };
         if is_allowed(options, &root, available)
-            && !covered(&root, service)
+            && !covered(&root, service.reply)
+            && !service.indexes(&root)
             && !roots.iter().any(|old: &Location| contains(old, &root))
         {
             roots.retain(|old| !contains(&root, old));
@@ -99,6 +114,105 @@ mod tests {
     use super::*;
     use rusty_index::pipe::VolumeStatus;
 
+    fn replied(status: &Status) -> Service<'_> {
+        Service {
+            reply: Some(status),
+            volumes: None,
+        }
+    }
+
+    #[test]
+    fn an_installed_service_that_does_not_answer_leaves_no_local_ntfs_root_to_walk() {
+        let available = rusty_shell::assemble(&rusty_shell::RawDrives {
+            mask: 0b11100,
+            kinds: vec![
+                ('C', DriveKind::Fixed),
+                ('D', DriveKind::Fixed),
+                ('E', DriveKind::Network),
+            ],
+            ..Default::default()
+        });
+        let ntfs = [Location::new(r"C:\").unwrap()];
+        let installed = Service {
+            reply: None,
+            volumes: Some(&ntfs),
+        };
+        let options = IndexOptions {
+            network: true,
+            ..IndexOptions::default()
+        };
+        assert_eq!(
+            roots(&options, &available, Vec::new(), installed),
+            [
+                Location::new(r"D:\").unwrap(),
+                Location::new(r"E:\").unwrap()
+            ]
+        );
+        let home = vec![r"C:\Users\admin".to_owned()];
+        assert!(roots(&options, &available, home, installed).is_empty());
+    }
+
+    #[test]
+    fn drives_the_service_does_not_select_are_still_walked_in_auto() {
+        use crate::index_service::{ServiceDrive, selected_roots};
+        let available = rusty_shell::assemble(&rusty_shell::RawDrives {
+            mask: 0b11100,
+            kinds: vec![
+                ('C', DriveKind::Fixed),
+                ('D', DriveKind::Fixed),
+                ('E', DriveKind::Removable),
+            ],
+            ..Default::default()
+        });
+        let service_drives =
+            [('C', true), ('D', true), ('E', false)].map(|(letter, fixed)| ServiceDrive {
+                letter,
+                serial: 1,
+                fixed,
+                ntfs: true,
+            });
+        let covered = |options: &IndexOptions| -> Vec<Location> {
+            let search = super::super::presence::Selection::of(options).search();
+            selected_roots(&search, &service_drives)
+                .unwrap()
+                .iter()
+                .map(|root| Location::new(root).unwrap())
+                .collect()
+        };
+        let walked = |options: &IndexOptions, explicit: Vec<String>| {
+            let volumes = covered(options);
+            let service = Service {
+                reply: None,
+                volumes: Some(&volumes),
+            };
+            roots(options, &available, explicit, service)
+        };
+        let mut options = IndexOptions {
+            removable: true,
+            ..IndexOptions::default()
+        };
+        assert_eq!(
+            walked(&options, Vec::new()),
+            [Location::new(r"E:\").unwrap()]
+        );
+        options.drives = vec!["E:".into()];
+        assert_eq!(
+            walked(&options, vec![r"C:\Work".into(), r"E:\Photos".into()]),
+            [Location::new(r"C:\Work").unwrap()]
+        );
+    }
+
+    #[test]
+    fn without_the_service_the_walk_falls_back_to_the_home_folder() {
+        let found = roots(
+            &IndexOptions::default(),
+            &[],
+            Vec::new(),
+            Service::default(),
+        );
+        assert_eq!(found.len(), 1);
+    }
+
     #[test]
     fn a_volume_without_a_usable_index_is_not_covered() {
         let root = Location::new(r"C:\").unwrap();
@@ -139,7 +253,7 @@ mod tests {
             ],
         };
         let mut options = IndexOptions::default();
-        let found = roots(&options, &available, Vec::new(), Some(&status));
+        let found = roots(&options, &available, Vec::new(), replied(&status));
         assert_eq!(
             found,
             [
@@ -148,7 +262,7 @@ mod tests {
             ]
         );
         options.network = true;
-        let found = roots(&options, &available, Vec::new(), Some(&status));
+        let found = roots(&options, &available, Vec::new(), replied(&status));
         assert_eq!(found.len(), 3);
         assert!(
             found
@@ -157,7 +271,7 @@ mod tests {
         );
         options.drives = vec!["D:".into()];
         assert_eq!(
-            roots(&options, &available, Vec::new(), Some(&status)),
+            roots(&options, &available, Vec::new(), replied(&status)),
             [Location::new(r"D:\").unwrap()]
         );
     }

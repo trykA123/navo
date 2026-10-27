@@ -418,3 +418,37 @@ fn memory_per_entry_stays_within_budget_on_a_million_entries() {
 fn memory_per_entry_stays_within_budget_on_two_million_entries() {
     assert_budget(2_000_000);
 }
+
+#[test]
+fn a_moved_entry_leaves_with_its_new_folder_and_not_its_old_one() {
+    let (mut t, [root, users, ann, notes, docs]) = tree();
+    t.rename(notes, docs, "notes.txt").unwrap();
+    t.rename(docs, users, "docs").unwrap();
+    assert_eq!(t.remove(ann), 1);
+    assert_eq!(
+        win(&t, notes).as_deref(),
+        Some("C:\\Users\\docs\\notes.txt")
+    );
+    assert_eq!(t.remove(users), 3);
+    assert_eq!(t.len(), 1);
+    assert_eq!(t.name(root), Some("C:"));
+}
+
+#[test]
+fn removal_finds_the_subtree_after_compaction_and_after_loading_raw_parts() {
+    let (mut t, [_, users, _, notes, _]) = tree();
+    t.remove(notes);
+    let map = t.compact();
+    let (names, offsets, parents, flags) = t.raw_parts();
+    let mut loaded = NameTable::from_raw_parts(
+        names.to_owned(),
+        offsets.to_vec(),
+        parents.to_vec(),
+        flags.to_vec(),
+    )
+    .unwrap();
+    let users = map[users as usize].unwrap();
+    assert_eq!(t.remove(users), 3);
+    assert_eq!(loaded.remove(users), 3);
+    assert_eq!((t.len(), loaded.len()), (1, 1));
+}

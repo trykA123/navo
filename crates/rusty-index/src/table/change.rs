@@ -27,6 +27,19 @@ pub enum TableChange {
 
 impl NameTable {
     pub fn apply(&mut self, change: TableChange, ids: &mut FrnMap) -> Result<(), TableError> {
+        if self.apply_in_batch(change, ids)? > 1 {
+            self.forget_removed(ids);
+        }
+        Ok(())
+    }
+
+    /// Returns how many entries the change removed; call `forget_removed` once the batch ends.
+    pub fn apply_in_batch(
+        &mut self,
+        change: TableChange,
+        ids: &mut FrnMap,
+    ) -> Result<usize, TableError> {
+        let mut removed = 0;
         match change {
             TableChange::Add {
                 file_id,
@@ -51,7 +64,9 @@ impl NameTable {
                 self.rename(id, parent, &name)?;
                 self.flags[id as usize] = flags.bits();
             }
-            TableChange::Remove { file_id } => self.remove_file(file_id, ids),
+            TableChange::Remove { file_id } => {
+                removed = ids.remove(&file_id).map_or(0, |id| self.remove(id));
+            }
             TableChange::Attributes { file_id, flags } => {
                 let id = self.resolve_file(file_id, ids)?;
                 self.flags[id as usize] = flags.bits();
@@ -61,7 +76,11 @@ impl NameTable {
                 ids.clear();
             }
         }
-        Ok(())
+        Ok(removed)
+    }
+
+    pub fn forget_removed(&self, ids: &mut FrnMap) {
+        ids.retain(|_, id| self.is_live(*id));
     }
 
     fn upsert(&mut self, id: Option<u32>, parent: u32, name: &str) -> Result<u32, TableError> {
@@ -91,13 +110,5 @@ impl NameTable {
             return Ok(NO_PARENT);
         }
         self.resolve_file(parent_id, ids)
-    }
-
-    fn remove_file(&mut self, file_id: u128, ids: &mut FrnMap) {
-        if let Some(id) = ids.remove(&file_id)
-            && self.remove(id) > 1
-        {
-            ids.retain(|_, id| self.is_live(*id));
-        }
     }
 }

@@ -43,6 +43,35 @@ pub(super) fn query_running(product: Product) -> io::Result<Option<bool>> {
     Ok(Some(status.dwCurrentState == SERVICE_RUNNING))
 }
 
+pub(super) fn query_enabled(product: Product) -> io::Result<Option<bool>> {
+    const CONFIG_BYTES: usize = 8 * 1024;
+    let manager = open_manager(SC_MANAGER_CONNECT)?;
+    let name = service_name_of(product);
+    // SAFETY: manager and terminated name remain live; only read-only configuration access is requested.
+    let raw = unsafe { OpenServiceW(manager.0, name.as_ptr(), SERVICE_QUERY_CONFIG) };
+    let service = match service_handle(raw) {
+        Ok(service) => service,
+        Err(error) if error.raw_os_error() == Some(ERROR_SERVICE_DOES_NOT_EXIST as i32) => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+    let mut buffer = vec![0usize; CONFIG_BYTES / size_of::<usize>()];
+    let mut needed = 0;
+    // SAFETY: buffer is aligned writable storage of CONFIG_BYTES, the documented maximum configuration size.
+    checked(unsafe {
+        QueryServiceConfigW(
+            service.0,
+            buffer.as_mut_ptr().cast(),
+            CONFIG_BYTES as u32,
+            &mut needed,
+        )
+    })?;
+    // SAFETY: QueryServiceConfigW initialized the aligned buffer with a QUERY_SERVICE_CONFIGW.
+    let config = unsafe { &*buffer.as_ptr().cast::<QUERY_SERVICE_CONFIGW>() };
+    Ok(Some(config.dwStartType != SERVICE_DISABLED))
+}
+
 pub(super) fn dispatch() -> io::Result<()> {
     let mut name = service_name();
     let table = [

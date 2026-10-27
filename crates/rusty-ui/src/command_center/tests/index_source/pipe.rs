@@ -109,3 +109,37 @@ fn a_hung_pipe_does_not_delay_command_rows(cx: &mut gpui_kit::TestAppContext) {
     gate.1.notify_all();
     assert!(commands_remain);
 }
+
+#[test]
+fn an_updating_volume_without_hits_is_asked_again_and_then_shows_its_hits() {
+    use rusty_index::pipe::{Status, VolumeStatus};
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = calls.clone();
+    let mut hooks = hooks();
+    hooks.pipe = PipeQueries::new(Arc::new(move |_, _, _| {
+        if counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) > 0 {
+            return Ok(super::reply());
+        }
+        Ok(Reply {
+            hits: Vec::new(),
+            status: Status {
+                volumes: vec![VolumeStatus {
+                    root: "C:".into(),
+                    entries: 10,
+                    progress: Some(100),
+                    ..VolumeStatus::default()
+                }],
+            },
+        })
+    }));
+    let source = source(IndexMode::Service, hooks);
+    let request = request(1);
+    let cancel = Cancel::new();
+    let sink = HitSink::new(1);
+    source.search(&request, &sink, &cancel);
+    assert!(sink.drain(1).is_empty());
+    assert!(source.wait_for_more(&request, &cancel));
+    source.search(&request, &sink, &cancel);
+    assert_eq!(sink.drain(1).len(), 1);
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+}
