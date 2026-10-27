@@ -4,6 +4,10 @@ use std::path::PathBuf;
 pub(super) enum Target {
     List,
     Size,
+    Walk,
+    Search,
+    Save,
+    Load,
 }
 
 impl Target {
@@ -11,6 +15,10 @@ impl Target {
         match self {
             Self::List => "list",
             Self::Size => "size",
+            Self::Walk => "walk",
+            Self::Search => "search",
+            Self::Save => "save",
+            Self::Load => "load",
         }
     }
 }
@@ -66,10 +74,19 @@ fn number(value: &str, flag: &str, minimum: usize) -> Result<usize, String> {
 
 fn parse_targets(value: &str) -> Result<Vec<Target>, String> {
     let mut targets = Vec::new();
+    let value = if value == "index" {
+        "walk,search,save,load"
+    } else {
+        value
+    };
     for name in value.split(',') {
         let target = match name {
             "list" => Target::List,
             "size" => Target::Size,
+            "walk" => Target::Walk,
+            "search" => Target::Search,
+            "save" => Target::Save,
+            "load" => Target::Load,
             _ => return Err(format!("unknown target: {name}")),
         };
         if targets.contains(&target) {
@@ -134,6 +151,32 @@ mod tests {
     }
 
     #[test]
+    fn accepts_index_targets_and_shorthand() {
+        let expected = vec![Target::Walk, Target::Search, Target::Save, Target::Load];
+        for value in ["walk,search,save,load", "index"] {
+            assert_eq!(
+                parse_values(&["fixture", "--targets", value])
+                    .unwrap()
+                    .targets,
+                expected
+            );
+        }
+        assert_eq!(
+            parse_values(&["fixture", "--targets", "load,list,save,size,search,walk"])
+                .unwrap()
+                .targets,
+            vec![
+                Target::Load,
+                Target::List,
+                Target::Save,
+                Target::Size,
+                Target::Search,
+                Target::Walk
+            ]
+        );
+    }
+
+    #[test]
     fn rejects_missing_bad_unknown_and_repeated_arguments() {
         for values in [
             vec![],
@@ -149,7 +192,7 @@ mod tests {
             vec!["fixture", "--warmup", "x"],
             vec!["fixture", "--prepare", " "],
             vec!["fixture", "--unknown", "1"],
-            vec!["fixture", "--targets", "index"],
+            vec!["fixture", "--targets", "unknown"],
             vec!["fixture", "--targets", ""],
             vec!["fixture", "--targets", "list,"],
             vec!["fixture", "--targets", "list,list"],

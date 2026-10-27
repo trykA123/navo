@@ -1,3 +1,4 @@
+mod index;
 mod options;
 
 use std::{
@@ -20,12 +21,12 @@ pub(crate) fn run(args: &[String]) -> ExitCode {
         Err(error) => {
             eprintln!("bench-walk: {error}");
             eprintln!(
-                "usage: cargo xtask bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size]"
+                "usage: cargo xtask bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size,walk,search,save,load|index]"
             );
             return ExitCode::from(2);
         }
     };
-    match benchmark(&options, (5_000, 1_000, 99)) {
+    match benchmark(&options, (5_000, 1_000, 99), 1_000_000) {
         Ok(report) => {
             print!("{report}");
             ExitCode::SUCCESS
@@ -37,36 +38,54 @@ pub(crate) fn run(args: &[String]) -> ExitCode {
     }
 }
 
-fn benchmark(options: &Options, sizes: (usize, usize, usize)) -> Result<String, String> {
+fn benchmark(
+    options: &Options,
+    sizes: (usize, usize, usize),
+    names: usize,
+) -> Result<String, String> {
     let mut report = format!(
         "Bench-walk: informational only. Times in milliseconds. Warm-ups: {} (not recorded); runs: {}.\n\n",
         options.warmup, options.runs
     );
     for &target in &options.targets {
+        if !matches!(target, Target::List | Target::Size) {
+            report.push_str(&index::benchmark(options, target, sizes, names)?);
+            continue;
+        }
         let path = options.root.join(match target {
             Target::List => "A",
             Target::Size => "size-tree",
+            _ => return Err("expected a filesystem target".to_owned()),
         });
         let fresh = fixture(&path, target, sizes)?;
         let location = location(&fs::canonicalize(&path).map_err(|error| error.to_string())?)?;
-        let mut cold = Vec::new();
-        if let Some(command) = &options.prepare {
-            for _ in 0..options.runs {
-                prepare(command)?;
-                cold.push(measure(target, &location)?);
-            }
-        } else if fresh {
-            cold.push(measure(target, &location)?);
-        }
-        for _ in 0..options.warmup {
-            measure(target, &location)?;
-        }
-        let warm = (0..options.runs)
-            .map(|_| measure(target, &location))
-            .collect::<Result<Vec<_>, _>>()?;
+        let (cold, warm) = samples(options, fresh, || measure(target, &location))?;
         report.push_str(&markdown(target, &cold, &warm, options.prepare.is_some()));
     }
     Ok(report)
+}
+
+fn samples(
+    options: &Options,
+    fresh: bool,
+    mut measure: impl FnMut() -> Result<f64, String>,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    let mut cold = Vec::new();
+    if let Some(command) = &options.prepare {
+        for _ in 0..options.runs {
+            prepare(command)?;
+            cold.push(measure()?);
+        }
+    } else if fresh {
+        cold.push(measure()?);
+    }
+    for _ in 0..options.warmup {
+        measure()?;
+    }
+    let warm = (0..options.runs)
+        .map(|_| measure())
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((cold, warm))
 }
 
 fn measure(target: Target, location: &Location) -> Result<f64, String> {
@@ -85,6 +104,7 @@ fn measure(target: Target, location: &Location) -> Result<f64, String> {
         Target::Size => rusty_fs::folder_size(&provider, location, &cancel).map(|size| {
             std::hint::black_box(size);
         }),
+        _ => return Err("expected a filesystem target".to_owned()),
     }
     .map_err(|error| format!("{}: {}", target.name(), error.message()))?;
     Ok(started.elapsed().as_secs_f64() * 1_000.0)
@@ -120,13 +140,14 @@ fn fixture(path: &Path, target: Target, sizes: (usize, usize, usize)) -> Result<
     let fresh = !path.try_exists().map_err(|error| error.to_string())?;
     let result = match target {
         Target::List => files(path, sizes.0),
-        Target::Size => {
+        Target::Size | Target::Walk => {
             directory(path)?;
             for index in 0..sizes.1 {
                 files(&path.join(format!("folder-{index:03}")), sizes.2)?;
             }
             check_count(path, sizes.1)
         }
+        _ => return Err("expected a filesystem fixture".to_owned()),
     };
     result.map_err(|error| format!("fixture {}: {error}", path.display()))?;
     Ok(fresh)
@@ -241,7 +262,7 @@ mod tests {
             prepare: None,
             targets: vec![Target::List, Target::Size],
         };
-        let report = benchmark(&options, (5, 2, 3)).unwrap();
+        let report = benchmark(&options, (5, 2, 3), 10).unwrap();
         assert_eq!(report.matches("| cold | 1 |").count(), 2);
         check_count(&path.join("A"), 5).unwrap();
         check_count(&path.join("size-tree"), 2).unwrap();
@@ -250,7 +271,7 @@ mod tests {
         let size = rusty_fs::folder_size(&LocalFs::new(), &tree, &CancelToken::new()).unwrap();
         assert_eq!((size.files, size.folders, size.skipped), (6, 2, 0));
         assert_eq!(
-            benchmark(&options, (5, 2, 3))
+            benchmark(&options, (5, 2, 3), 10)
                 .unwrap()
                 .matches("cold (fixture reused)")
                 .count(),
@@ -277,13 +298,13 @@ mod tests {
             prepare: Some(format!("echo ready >> '{}'", marker.display())),
             targets: vec![Target::List],
         };
-        let report = benchmark(&options, (2, 1, 1)).unwrap();
+        let report = benchmark(&options, (2, 1, 1), 10).unwrap();
         assert!(report.contains("| cold | 3 |"));
         assert!(report.contains("| warm | 3 |"));
         assert_eq!(fs::read_to_string(marker).unwrap().lines().count(), 3);
         options.prepare = Some("exit 7".to_owned());
         assert!(
-            benchmark(&options, (2, 1, 1))
+            benchmark(&options, (2, 1, 1), 10)
                 .unwrap_err()
                 .contains("--prepare failed")
         );

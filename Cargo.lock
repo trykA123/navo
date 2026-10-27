@@ -10022,6 +10022,7 @@ dependencies = [
  "fluent-syntax",
  "rusty-core",
  "rusty-fs",
+ "rusty-index",
  "serde",
  "serde_json",
  "toml 1.1.8+spec-1.1.0",
