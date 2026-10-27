@@ -8,7 +8,7 @@ mod workspace;
 use std::collections::BTreeMap;
 
 use crate::placement::{MonitorSetup, Placement};
-use crate::{Direction, LayoutError, Location, PaneId, TabId, WindowId};
+use crate::{Applied, Direction, LayoutError, Location, PaneId, SplitPath, TabId, Tiles, WindowId};
 pub use history::History;
 pub use listing::{Entry, Listing};
 pub use pane::Pane;
@@ -33,6 +33,10 @@ pub enum StateError {
     UnknownWindow(WindowId),
     #[error("pane {} does not exist", .0.get())]
     UnknownPane(PaneId),
+    #[error("there is no pane at number {0}")]
+    NoSuchPane(usize),
+    #[error("Four panes is the most in this version.")]
+    TooManyPanes,
     #[error("the last window cannot be closed")]
     LastWindow,
     #[error("the last tab cannot be closed")]
@@ -228,6 +232,33 @@ impl AppState {
 
     pub(crate) fn focus_direction(&mut self, direction: Direction) -> Result<PaneId, StateError> {
         self.focused.focus_direction(direction)
+    }
+
+    pub fn apply_tiles(&mut self, tiles: &Tiles) -> Applied {
+        let location = self.active_tab().location().clone();
+        let next_id = &mut self.next_id;
+        self.focused.apply_tiles(tiles, &mut || {
+            let pane = PaneId::new(*next_id);
+            let tab = Tab::new(TabId::new(*next_id + 1), location.clone());
+            *next_id += 2;
+            Pane::new(pane, tab)
+        })
+    }
+
+    pub fn swap(&mut self, a: PaneId, b: PaneId) -> Result<(), StateError> {
+        self.focused.swap(a, b)
+    }
+
+    pub fn set_ratio(&mut self, split: &SplitPath, ratio: u16) -> Result<(), StateError> {
+        self.focused.set_ratio(split, ratio)
+    }
+
+    pub fn even(&mut self) {
+        self.focused.even();
+    }
+
+    pub fn focus_number(&mut self, n: usize) -> Result<(), StateError> {
+        self.focused.focus_number(n)
     }
 
     pub(crate) fn open_window(&mut self, location: Location) -> WindowId {

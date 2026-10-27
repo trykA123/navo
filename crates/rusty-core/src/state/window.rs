@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use super::{Pane, StateError, Workspace};
 use crate::placement::{MonitorSetup, Placement};
-use crate::{Direction, Layout, PaneId, WindowId};
+use crate::{Applied, Direction, Layout, MAX_PANES, PaneId, SplitPath, Tiles, WindowId};
 
 pub(super) const MAX_LAST_MARKS: usize = 100_000;
 
@@ -12,6 +12,7 @@ pub struct Window {
     pub(super) layout: Layout,
     pub(super) focused: Pane,
     pub(super) others: BTreeMap<PaneId, Pane>,
+    pub(super) target: Option<PaneId>,
     placement: Vec<Placement>,
     pub(super) last_marks: Option<Vec<String>>,
     pub(super) workspaces: Vec<Workspace>,
@@ -28,6 +29,11 @@ impl Window {
     #[must_use]
     pub fn layout(&self) -> &Layout {
         &self.layout
+    }
+
+    #[must_use]
+    pub fn target(&self) -> Option<PaneId> {
+        self.target
     }
 
     #[must_use]
@@ -81,6 +87,7 @@ impl Window {
             layout,
             focused,
             others,
+            target: None,
             placement,
             last_marks: None,
             workspaces: Vec::new(),
@@ -97,6 +104,7 @@ impl Window {
             layout: Layout::new(pane.id()),
             focused: pane,
             others: BTreeMap::new(),
+            target: None,
             placement: Vec::new(),
             last_marks: None,
             workspaces: Vec::new(),
@@ -108,6 +116,7 @@ impl Window {
     }
 
     fn initialize_workspace(&mut self) {
+        self.repair_target();
         self.workspaces.push(Workspace {
             name: "Workspace 1".into(),
             saved: self.snapshot(),
@@ -143,8 +152,12 @@ impl Window {
     }
 
     pub(super) fn split(&mut self, direction: Direction, pane: Pane) -> Result<(), StateError> {
+        if self.others.len() + 1 >= MAX_PANES {
+            return Err(StateError::TooManyPanes);
+        }
         self.layout.split(direction, pane.id())?;
         let old = std::mem::replace(&mut self.focused, pane);
+        self.target = Some(old.id());
         self.others.insert(old.id(), old);
         Ok(())
     }
@@ -152,29 +165,106 @@ impl Window {
     pub(super) fn close(&mut self, id: PaneId) -> Result<(), StateError> {
         let mut layout = self.layout.clone();
         layout.close(id)?;
-        if id == self.focused.id() {
-            let next = layout.focused();
-            self.focused = self
-                .others
-                .remove(&next)
-                .ok_or(StateError::UnknownPane(next))?;
-        } else {
-            self.others.remove(&id);
-        }
         self.layout = layout;
+        self.sync_focus();
+        self.merge_tabs(std::iter::once(id));
+        self.repair_target();
         Ok(())
     }
 
     pub(super) fn focus_direction(&mut self, direction: Direction) -> Result<PaneId, StateError> {
-        let mut layout = self.layout.clone();
-        let next = layout.focus_direction(direction)?;
+        let next = self.layout.focus_direction(direction)?;
+        self.sync_focus();
+        Ok(next)
+    }
+
+    pub fn apply_tiles(&mut self, tiles: &Tiles, make_pane: &mut dyn FnMut() -> Pane) -> Applied {
+        let applied = self.layout.apply(tiles, &mut || {
+            let pane = make_pane();
+            let id = pane.id();
+            self.others.insert(id, pane);
+            id
+        });
+        self.sync_focus();
+        self.merge_tabs(applied.removed.iter().rev().copied());
+        self.repair_target();
+        applied
+    }
+
+    pub fn swap(&mut self, a: PaneId, b: PaneId) -> Result<(), StateError> {
+        self.layout.swap_panes(a, b)?;
+        Ok(())
+    }
+
+    pub fn set_ratio(&mut self, split: &SplitPath, ratio: u16) -> Result<(), StateError> {
+        self.layout.set_ratio(split, ratio)?;
+        Ok(())
+    }
+
+    pub fn even(&mut self) {
+        self.layout.even();
+    }
+
+    pub fn focus_number(&mut self, n: usize) -> Result<(), StateError> {
+        let id = n
+            .checked_sub(1)
+            .and_then(|index| self.layout.numbered().get(index).copied())
+            .ok_or(StateError::NoSuchPane(n))?;
+        self.layout.focus(id)?;
+        self.sync_focus();
+        Ok(())
+    }
+
+    #[expect(clippy::expect_used, reason = "layout panes are owned by the window")]
+    fn sync_focus(&mut self) {
+        let next = self.layout.focused();
+        if next == self.focused.id() {
+            return;
+        }
         let pane = self
             .others
             .remove(&next)
-            .ok_or(StateError::UnknownPane(next))?;
+            .expect("the layout's focused pane exists in the window");
         let old = std::mem::replace(&mut self.focused, pane);
+        self.target = Some(old.id());
         self.others.insert(old.id(), old);
-        self.layout = layout;
-        Ok(next)
+    }
+
+    #[expect(clippy::expect_used, reason = "layout panes are owned by the window")]
+    fn merge_tabs(&mut self, removed: impl Iterator<Item = PaneId>) {
+        let tabs: Vec<_> = removed
+            .flat_map(|id| {
+                self.others
+                    .remove(&id)
+                    .expect("a removed layout pane exists outside the focused pane")
+                    .take_tabs()
+            })
+            .collect();
+        if tabs.is_empty() {
+            return;
+        }
+        let last = *self.layout.numbered().last().expect("a layout has a pane");
+        let pane = if last == self.focused.id() {
+            &mut self.focused
+        } else {
+            self.others
+                .get_mut(&last)
+                .expect("the last layout pane exists in the window")
+        };
+        pane.append_tabs(tabs);
+    }
+
+    fn repair_target(&mut self) {
+        if self
+            .target
+            .is_some_and(|id| id != self.focused.id() && self.layout.contains(id))
+        {
+            return;
+        }
+        self.target = self
+            .layout
+            .numbered()
+            .into_iter()
+            .find(|&id| id != self.focused.id());
     }
 }

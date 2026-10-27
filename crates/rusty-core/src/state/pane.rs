@@ -104,6 +104,14 @@ impl Pane {
         self.tabs.insert(self.active, tab);
     }
 
+    pub(super) fn take_tabs(self) -> Vec<Tab> {
+        self.tabs
+    }
+
+    pub(super) fn append_tabs(&mut self, tabs: Vec<Tab>) {
+        self.tabs.extend(tabs);
+    }
+
     pub(crate) fn close_tab(&mut self, index: usize) -> Result<(), StateError> {
         if index >= self.tabs.len() {
             return Err(StateError::NoSuchTab(index));

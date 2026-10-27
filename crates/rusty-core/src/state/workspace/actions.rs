@@ -85,6 +85,7 @@ impl AppState {
             panes.push(pane);
         }
         let focused = mapping[&snapshot.layout.focused()];
+        snapshot.target = snapshot.target.map(|id| mapping[&id]);
         let mut layout = snapshot.layout.to_state();
         remap_layout(&mut layout, &mapping);
         snapshot.layout =

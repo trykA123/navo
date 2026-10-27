@@ -14,6 +14,7 @@ pub struct Snapshot {
     pub(super) layout: Layout,
     pub(super) focused: Pane,
     pub(super) others: BTreeMap<PaneId, Pane>,
+    pub(super) target: Option<PaneId>,
     pub(super) last_marks: Option<Vec<String>>,
 }
 
@@ -40,6 +41,11 @@ impl Snapshot {
     #[must_use]
     pub fn layout(&self) -> &Layout {
         &self.layout
+    }
+
+    #[must_use]
+    pub fn target(&self) -> Option<PaneId> {
+        self.target
     }
 
     #[must_use]
@@ -92,6 +98,7 @@ impl Window {
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             layout: self.layout.clone(),
+            target: self.target,
             focused: self.focused.workspace_snapshot(),
             others: self
                 .others
@@ -125,6 +132,7 @@ impl Window {
         self.layout = snapshot.layout;
         self.focused = snapshot.focused;
         self.others = snapshot.others;
+        self.target = snapshot.target;
         self.last_marks = snapshot.last_marks;
     }
 
