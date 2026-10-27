@@ -2,6 +2,7 @@ mod layout;
 mod pane;
 mod select;
 mod window;
+mod workspace;
 
 use crate::{AppState, Command, Listing, Location, PaneId, PatternError, StateError, TabId};
 use select::Marking;
@@ -76,6 +77,10 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
     ) {
         state.active_tab_mut().selection_mut().end_span();
     }
+    dispatch(state, command)
+}
+
+fn dispatch(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, CommandError> {
     match command {
         Command::PaneOpenTab { location } => Ok(pane::open_tab(state, location.as_ref())),
         Command::PaneCloseTab { tab } => pane::close_tab(state, *tab),
@@ -93,19 +98,12 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::SelectionExtend { to, mode } => select::extend(state, *to, *mode),
         Command::SelectionExtension { mark } => select::extension(state, *mark),
         Command::SelectionRestore => select::restore(state),
-        Command::SelectionAddPattern { pattern, folders } => select::pattern(
+        Command::SelectionAddPattern { pattern, folders }
+        | Command::SelectionRemovePattern { pattern, folders } => select::pattern(
             state,
             pattern,
             Marking {
-                mark: true,
-                folders: *folders,
-            },
-        ),
-        Command::SelectionRemovePattern { pattern, folders } => select::pattern(
-            state,
-            pattern,
-            Marking {
-                mark: false,
+                mark: matches!(command, Command::SelectionAddPattern { .. }),
                 folders: *folders,
             },
         ),
@@ -118,6 +116,14 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
         Command::WindowOpen { location } => Ok(window::open(state, location.as_ref())),
         Command::WindowClose { window } => window::close(state, *window),
         Command::WindowFocus { window } => window::focus(state, *window),
+        Command::WorkspaceSwitch { .. }
+        | Command::WorkspaceNew { .. }
+        | Command::WorkspaceRename { .. }
+        | Command::WorkspaceMove { .. }
+        | Command::WorkspaceDelete { .. }
+        | Command::WorkspaceRestore
+        | Command::WorkspaceSave
+        | Command::WorkspaceDiscard { .. } => workspace::apply(state, command),
         Command::AppSaveSession => Ok(vec![Effect::SaveSession]),
     }
 }

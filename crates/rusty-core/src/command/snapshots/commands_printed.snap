@@ -29,4 +29,12 @@ layout.focus { direction: up }
 window.open { location: "D:\\Work" }
 window.close { window: 3 }
 window.focus { window: 1 }
+workspace.switch { n: 2 }
+workspace.new { name: "Project" }
+workspace.rename { n: 1, name: "Work" }
+workspace.move { n: 2, by: -1 }
+workspace.delete { n: 2 }
+workspace.restore
+workspace.save
+workspace.discard { n: 1 }
 app.save-session

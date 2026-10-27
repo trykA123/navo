@@ -29,6 +29,14 @@ pub enum CommandId {
     WindowOpen,
     WindowClose,
     WindowFocus,
+    WorkspaceSwitch,
+    WorkspaceNew,
+    WorkspaceRename,
+    WorkspaceMove,
+    WorkspaceDelete,
+    WorkspaceRestore,
+    WorkspaceSave,
+    WorkspaceDiscard,
     AppSaveSession,
 }
 
@@ -61,6 +69,14 @@ impl CommandId {
         Self::WindowOpen,
         Self::WindowClose,
         Self::WindowFocus,
+        Self::WorkspaceSwitch,
+        Self::WorkspaceNew,
+        Self::WorkspaceRename,
+        Self::WorkspaceMove,
+        Self::WorkspaceDelete,
+        Self::WorkspaceRestore,
+        Self::WorkspaceSave,
+        Self::WorkspaceDiscard,
         Self::AppSaveSession,
     ];
 
@@ -94,6 +110,14 @@ impl CommandId {
             Self::WindowOpen => "window.open",
             Self::WindowClose => "window.close",
             Self::WindowFocus => "window.focus",
+            Self::WorkspaceSwitch => "workspace.switch",
+            Self::WorkspaceNew => "workspace.new",
+            Self::WorkspaceRename => "workspace.rename",
+            Self::WorkspaceMove => "workspace.move",
+            Self::WorkspaceDelete => "workspace.delete",
+            Self::WorkspaceRestore => "workspace.restore",
+            Self::WorkspaceSave => "workspace.save",
+            Self::WorkspaceDiscard => "workspace.discard",
             Self::AppSaveSession => "app.save-session",
         }
     }

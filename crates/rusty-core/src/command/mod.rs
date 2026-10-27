@@ -38,6 +38,14 @@ pub enum Command {
     WindowOpen { location: Option<Location> },
     WindowClose { window: Option<u64> },
     WindowFocus { window: u64 },
+    WorkspaceSwitch { n: usize },
+    WorkspaceNew { name: Option<String> },
+    WorkspaceRename { n: usize, name: String },
+    WorkspaceMove { n: usize, by: i8 },
+    WorkspaceDelete { n: usize },
+    WorkspaceRestore,
+    WorkspaceSave,
+    WorkspaceDiscard { n: usize },
     AppSaveSession,
 }
 
@@ -111,6 +119,14 @@ impl Command {
             Self::WindowOpen { .. } => Id::WindowOpen,
             Self::WindowClose { .. } => Id::WindowClose,
             Self::WindowFocus { .. } => Id::WindowFocus,
+            Self::WorkspaceSwitch { .. } => Id::WorkspaceSwitch,
+            Self::WorkspaceNew { .. } => Id::WorkspaceNew,
+            Self::WorkspaceRename { .. } => Id::WorkspaceRename,
+            Self::WorkspaceMove { .. } => Id::WorkspaceMove,
+            Self::WorkspaceDelete { .. } => Id::WorkspaceDelete,
+            Self::WorkspaceRestore => Id::WorkspaceRestore,
+            Self::WorkspaceSave => Id::WorkspaceSave,
+            Self::WorkspaceDiscard { .. } => Id::WorkspaceDiscard,
             Self::AppSaveSession => Id::AppSaveSession,
         }
     }

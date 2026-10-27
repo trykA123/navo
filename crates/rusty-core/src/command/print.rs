@@ -5,6 +5,7 @@ use super::{Command, CursorMove};
 enum Shown<'a> {
     Str(&'a str),
     Int(u64),
+    Signed(i8),
     Word(&'static str),
 }
 
@@ -66,6 +67,32 @@ fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
         Command::LayoutSplit { direction } | Command::LayoutFocus { direction } => {
             vec![("direction", Shown::Word(direction.keyword()))]
         }
+        Command::WorkspaceSwitch { .. }
+        | Command::WorkspaceNew { .. }
+        | Command::WorkspaceRename { .. }
+        | Command::WorkspaceMove { .. }
+        | Command::WorkspaceDelete { .. }
+        | Command::WorkspaceRestore
+        | Command::WorkspaceSave
+        | Command::WorkspaceDiscard { .. } => workspace_fields(command),
+        _ => Vec::new(),
+    }
+}
+
+fn workspace_fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
+    match command {
+        Command::WorkspaceSwitch { n }
+        | Command::WorkspaceDelete { n }
+        | Command::WorkspaceDiscard { n } => vec![("n", Shown::Int(*n as u64))],
+        Command::WorkspaceNew { name } => {
+            name.iter().map(|name| ("name", Shown::Str(name))).collect()
+        }
+        Command::WorkspaceRename { n, name } => {
+            vec![("n", Shown::Int(*n as u64)), ("name", Shown::Str(name))]
+        }
+        Command::WorkspaceMove { n, by } => {
+            vec![("n", Shown::Int(*n as u64)), ("by", Shown::Signed(*by))]
+        }
         _ => Vec::new(),
     }
 }
@@ -80,6 +107,7 @@ fn cursor_value(to: CursorMove) -> Shown<'static> {
 fn write_value(f: &mut fmt::Formatter<'_>, value: &Shown<'_>) -> fmt::Result {
     match value {
         Shown::Str(text) => write_string(f, text),
+        Shown::Signed(n) => write!(f, "{n}"),
         Shown::Int(n) => write!(f, "{n}"),
         Shown::Word(word) => f.write_str(word),
     }

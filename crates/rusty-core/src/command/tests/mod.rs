@@ -9,6 +9,7 @@ mod props;
 mod round_trip;
 mod selection;
 mod snapshots;
+mod workspace;
 
 fn location(text: &str) -> Location {
     Location::new(text).unwrap()
@@ -54,6 +55,14 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     r#"window.open { location: "D:\\Work" }"#,
     "window.close { window: 3 }",
     "window.focus { window: 1 }",
+    "workspace.switch { n: 2 }",
+    r#"workspace.new { name: "Project" }"#,
+    r#"workspace.rename { n: 1, name: "Work" }"#,
+    "workspace.move { n: 2, by: -1 }",
+    "workspace.delete { n: 2 }",
+    "workspace.restore",
+    "workspace.save",
+    "workspace.discard { n: 1 }",
     "app.save-session",
 ];
 

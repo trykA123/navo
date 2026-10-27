@@ -1,3 +1,5 @@
+mod workspace;
+
 use super::lexer::{Lexer, Value};
 use super::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
 use crate::{Direction, Location, SpanMode};
@@ -116,6 +118,12 @@ pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
             &["pattern", "folders"]
         }
         CommandId::LayoutSplit | CommandId::LayoutFocus => &["direction"],
+        CommandId::WorkspaceSwitch | CommandId::WorkspaceDelete | CommandId::WorkspaceDiscard => {
+            &["n"]
+        }
+        CommandId::WorkspaceNew => &["name"],
+        CommandId::WorkspaceRename => &["n", "name"],
+        CommandId::WorkspaceMove => &["n", "by"],
         _ => &[],
     }
 }
@@ -123,30 +131,16 @@ pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
 fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
     use CommandId as Id;
     Ok(match fields.command {
-        Id::PaneOpenTab => Command::PaneOpenTab {
-            location: fields.optional("location", location)?,
-        },
-        Id::PaneCloseTab => Command::PaneCloseTab {
-            tab: fields.optional("tab", unsigned::<u32>)?,
-        },
-        Id::PaneNavigate => Command::PaneNavigate {
-            location: fields.required("location", location)?,
-        },
-        Id::PaneGoDrive => Command::PaneGoDrive {
-            root: fields.required("root", location)?,
-        },
-        Id::PaneBack => Command::PaneBack,
-        Id::PaneForward => Command::PaneForward,
-        Id::PaneRefresh => Command::PaneRefresh,
-        Id::PaneCursorMove => Command::PaneCursorMove {
-            to: fields.required("to", cursor_move)?,
-        },
-        Id::PaneActivateTab => Command::PaneActivateTab {
-            tab: fields.required("tab", unsigned::<u32>)?,
-        },
-        Id::PaneScroll => Command::PaneScroll {
-            to: fields.required("to", unsigned::<u64>)?,
-        },
+        Id::PaneOpenTab
+        | Id::PaneCloseTab
+        | Id::PaneNavigate
+        | Id::PaneGoDrive
+        | Id::PaneBack
+        | Id::PaneForward
+        | Id::PaneRefresh
+        | Id::PaneCursorMove
+        | Id::PaneActivateTab
+        | Id::PaneScroll => pane_command(&mut fields)?,
         Id::SelectionToggle => Command::SelectionToggle,
         Id::SelectionToggleDown => Command::SelectionToggleDown,
         Id::SelectionRange => Command::SelectionRange {
@@ -167,7 +161,44 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
             direction: fields.required("direction", direction)?,
         },
         Id::WindowOpen | Id::WindowClose | Id::WindowFocus => window_command(&mut fields)?,
+        Id::WorkspaceSwitch
+        | Id::WorkspaceNew
+        | Id::WorkspaceRename
+        | Id::WorkspaceMove
+        | Id::WorkspaceDelete
+        | Id::WorkspaceRestore
+        | Id::WorkspaceSave
+        | Id::WorkspaceDiscard => workspace::build(&mut fields)?,
         Id::AppSaveSession => Command::AppSaveSession,
+    })
+}
+
+fn pane_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
+    Ok(match fields.command {
+        CommandId::PaneOpenTab => Command::PaneOpenTab {
+            location: fields.optional("location", location)?,
+        },
+        CommandId::PaneCloseTab => Command::PaneCloseTab {
+            tab: fields.optional("tab", unsigned::<u32>)?,
+        },
+        CommandId::PaneNavigate => Command::PaneNavigate {
+            location: fields.required("location", location)?,
+        },
+        CommandId::PaneGoDrive => Command::PaneGoDrive {
+            root: fields.required("root", location)?,
+        },
+        CommandId::PaneBack => Command::PaneBack,
+        CommandId::PaneForward => Command::PaneForward,
+        CommandId::PaneRefresh => Command::PaneRefresh,
+        CommandId::PaneCursorMove => Command::PaneCursorMove {
+            to: fields.required("to", cursor_move)?,
+        },
+        CommandId::PaneActivateTab => Command::PaneActivateTab {
+            tab: fields.required("tab", unsigned::<u32>)?,
+        },
+        _ => Command::PaneScroll {
+            to: fields.required("to", unsigned::<u64>)?,
+        },
     })
 }
 
