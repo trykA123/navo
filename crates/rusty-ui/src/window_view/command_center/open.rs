@@ -112,7 +112,8 @@ impl FerriteWindow {
             _ => folder,
         };
         if way == Way::OtherPane {
-            self.focus_other_pane();
+            let result = self.browser.focus_target_pane();
+            self.show_refusal(result);
         }
         let opened = self.open_way(&location, folder, way);
         if opened {
@@ -136,13 +137,6 @@ impl FerriteWindow {
                 None => folder && self.browser.open_location(location.clone(), true),
             },
             _ => self.browser.open_location(location.clone(), folder),
-        }
-    }
-
-    fn focus_other_pane(&mut self) {
-        let focused = self.browser.state().focused_pane();
-        if let Some(other) = self.panes().into_iter().find(|pane| *pane != focused) {
-            self.focus_pane(other);
         }
     }
 }

@@ -385,10 +385,10 @@ impl FerriteWindow {
     }
 
     pub(super) fn switch_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let focused = self.browser.state().focused_pane();
-        if let Some(other) = self.panes().into_iter().find(|p| *p != focused) {
+        if self.browser.target_pane().is_some() {
             self.close_popups(window, cx);
-            self.focus_pane(other);
+            let result = self.browser.focus_target_pane();
+            self.show_refusal(result);
             self.focus_core_pane(window, cx);
             cx.notify();
         }

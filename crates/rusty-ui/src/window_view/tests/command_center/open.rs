@@ -140,6 +140,31 @@ fn ctrl_enter_on_a_folder_opens_it_in_the_other_pane(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn ctrl_enter_opens_in_the_target_with_three_panes(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = super::super::tiles::three_panes(&fs);
+    let start = state.focused_pane();
+    let panes = state.window(state.focused_window()).expect("window");
+    let target = panes.target().expect("target");
+    let untouched = panes.layout().numbered()[0];
+    let (window, view) = open_options(cx, options_for(fs, state));
+    view.update(cx, |view, _| {
+        view.command_center.sources.push(Arc::new(Fixed(vec![hit(
+            "result",
+            Group::Folders,
+            folder("home/docs"),
+        )])));
+    });
+    let rig = Rig { window, view };
+    let before = (rig.at(cx, start), rig.at(cx, untouched));
+    run(cx, &rig, "ctrl-enter");
+    assert_eq!(rig.focused(cx), target);
+    assert_eq!(rig.at(cx, target), here("home/docs"));
+    assert_eq!((rig.at(cx, start), rig.at(cx, untouched)), before);
+    assert!(rig.pane_has_focus(cx));
+}
+
+#[gpui_kit::test]
 fn ctrl_enter_on_a_file_shows_it_in_the_other_pane(cx: &mut TestAppContext) {
     let (rig, launched) = rig_on(cx, file("home/docs/report.txt"));
     let other = rig.other(cx);

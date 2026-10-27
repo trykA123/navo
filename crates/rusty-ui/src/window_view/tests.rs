@@ -59,6 +59,7 @@ pub(in crate::window_view) mod shortcuts;
 mod start_watch;
 mod tabs;
 mod terminal;
+mod tiles;
 mod typed;
 mod undo;
 mod visits;

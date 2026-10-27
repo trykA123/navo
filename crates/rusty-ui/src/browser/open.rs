@@ -81,6 +81,26 @@ impl Browser {
         true
     }
 
+    pub(crate) fn focus_target_pane(&mut self) -> Result<(), CommandError> {
+        let Some(target) = self.target_pane() else {
+            return Ok(());
+        };
+        let window = self
+            .state
+            .window(self.state.focused_window())
+            .ok_or(StateError::UnknownWindow(self.state.focused_window()))?;
+        let number = window
+            .layout()
+            .numbered()
+            .iter()
+            .position(|&pane| pane == target)
+            .ok_or(StateError::UnknownPane(target))?
+            + 1;
+        self.state.focus_number(number)?;
+        self.revalidate_focused();
+        Ok(())
+    }
+
     pub(crate) fn clone_tab_to_other_pane(&mut self) -> Result<(), CommandError> {
         let state = &self.state;
         let Some(target) = self.target_pane() else {
