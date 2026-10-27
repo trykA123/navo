@@ -54,6 +54,8 @@ pub(crate) use guard::refuse_reserved;
 pub use guard::{mutation_location, save_location};
 pub use link::make_link;
 
+#[cfg(unix)]
+use crate::SizeEntry;
 #[cfg(any(windows, target_os = "linux"))]
 use crate::watch::Depth;
 use crate::{CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider};
@@ -185,6 +187,37 @@ impl Provider for LocalFs {
         }
     }
 
+    #[cfg(unix)]
+    fn list_sizes(
+        &self,
+        folder: &Location,
+        sink: &mut dyn FnMut(SizeEntry) -> std::ops::ControlFlow<()>,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        let path = os_path(folder)?;
+        let mut children = fs::read_dir(&path)
+            .map_err(|e| open_failure(&e, &path, folder))?
+            .filter_map(|child| {
+                std_entry_with(child, folder, |entry, metadata, _| {
+                    unix::size_entry(entry, metadata)
+                })
+            })
+            .peekable();
+        loop {
+            let entries: Vec<_> = children
+                .by_ref()
+                .take(self.batch_size)
+                .collect::<Result<_, _>>()?;
+            let last = children.peek().is_none();
+            if cancel.is_cancelled() {
+                return Err(error(FsErrorKind::Cancelled, folder));
+            }
+            if entries.into_iter().try_for_each(&mut *sink).is_break() || last {
+                return Ok(());
+            }
+        }
+    }
+
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
         let path = os_path(location)?;
         let metadata = fs::symlink_metadata(&path).map_err(|e| io_error(&e, location))?;
@@ -232,17 +265,31 @@ fn open_failure(failure: &io::Error, path: &Path, folder: &Location) -> FsError 
 }
 
 fn std_entry(child: io::Result<DirEntry>, folder: &Location) -> Option<Result<FsEntry, FsError>> {
+    std_entry_with(child, folder, |entry, _, child| {
+        followed(entry, &child.path())
+    })
+}
+
+fn std_entry_with<T>(
+    child: io::Result<DirEntry>,
+    folder: &Location,
+    convert: impl FnOnce(FsEntry, Option<&Metadata>, &DirEntry) -> T,
+) -> Option<Result<T, FsError>> {
     let child = match child {
         Ok(child) => child,
         Err(e) => return Some(Err(io_error(&e, folder))),
     };
     let name = child.file_name();
-    let found = match child.metadata() {
-        Ok(metadata) => entry(platform::entry_name(&name), &name, &metadata),
+    let metadata = match child.metadata() {
+        Ok(metadata) => Some(metadata),
         Err(e) if e.kind() == io::ErrorKind::NotFound => return None,
-        Err(_) => bare_entry(&child, &name)?,
+        Err(_) => None,
     };
-    Some(Ok(followed(found, &child.path())))
+    let found = match &metadata {
+        Some(metadata) => entry(platform::entry_name(&name), &name, metadata),
+        None => bare_entry(&child, &name)?,
+    };
+    Some(Ok(convert(found, metadata.as_ref(), &child)))
 }
 
 fn entry(name: ProviderPath, os_name: &OsStr, metadata: &Metadata) -> FsEntry {

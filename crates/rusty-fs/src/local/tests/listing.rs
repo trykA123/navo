@@ -225,3 +225,125 @@ fn a_read_only_file_is_readonly() {
     fs::set_permissions(&path, permissions).unwrap();
     assert!(entry_named(&folder, "ro").attributes.readonly);
 }
+
+#[cfg(unix)]
+mod sizes {
+    use super::*;
+    use crate::{LinkKey, SizeEntry};
+    use std::os::unix::fs::MetadataExt;
+
+    fn list(folder: &Location) -> Vec<SizeEntry> {
+        let mut entries = Vec::new();
+        LocalFs::new()
+            .list_sizes(
+                folder,
+                &mut |entry| {
+                    entries.push(entry);
+                    ControlFlow::Continue(())
+                },
+                &CancelToken::new(),
+            )
+            .unwrap();
+        entries.sort_by_key(|entry| entry.name.to_text());
+        entries
+    }
+
+    #[test]
+    fn hard_links_share_the_inode_and_volume_key() {
+        let (dir, folder) = temp();
+        write_file(dir.path(), "first", 7);
+        fs::hard_link(dir.path().join("first"), dir.path().join("second")).unwrap();
+        let metadata = fs::metadata(dir.path().join("first")).unwrap();
+        let entries = list(&folder);
+        let key = Some(LinkKey(u128::from(metadata.ino()), metadata.dev()));
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().all(|entry| entry.link == key));
+    }
+
+    #[test]
+    fn plain_file_has_no_link_key_and_reports_allocated_blocks() {
+        let (dir, folder) = temp();
+        write_file(dir.path(), "plain", 7);
+        let metadata = fs::metadata(dir.path().join("plain")).unwrap();
+        let entries = list(&folder);
+        assert_eq!(entries[0].link, None);
+        assert_eq!(entries[0].on_disk, Some(metadata.blocks() * 512));
+        assert_eq!(entries[0].on_disk.unwrap() % 512, 0);
+    }
+
+    #[test]
+    fn sparse_file_uses_less_disk_space_than_its_apparent_size() {
+        let (dir, folder) = temp();
+        fs::File::create(dir.path().join("sparse"))
+            .unwrap()
+            .set_len(64 * 1024 * 1024)
+            .unwrap();
+        let entries = list(&folder);
+        assert_eq!(entries[0].size, 64 * 1024 * 1024);
+        assert!(entries[0].on_disk.unwrap() < entries[0].size);
+    }
+
+    #[test]
+    fn folders_and_symlinks_keep_the_listing_kind_and_zero_size() {
+        let (dir, folder) = temp();
+        fs::create_dir(dir.path().join("folder")).unwrap();
+        std::os::unix::fs::symlink("missing", dir.path().join("link")).unwrap();
+        let entries = list(&folder);
+        assert_eq!((entries[0].kind, entries[0].size), (EntryKind::Folder, 0));
+        assert_eq!((entries[1].kind, entries[1].size), (EntryKind::Link, 0));
+        let metadata = fs::symlink_metadata(dir.path().join("link")).unwrap();
+        assert_eq!(entries[1].on_disk, Some(metadata.blocks() * 512));
+    }
+
+    #[test]
+    fn cancellation_before_listing_sends_no_entries() {
+        let (_dir, folder) = with_files(3);
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let mut seen = 0;
+        let result = LocalFs::new().list_sizes(
+            &folder,
+            &mut |_| {
+                seen += 1;
+                ControlFlow::Continue(())
+            },
+            &cancel,
+        );
+        assert_eq!(kind_of(result), Some(FsErrorKind::Cancelled));
+        assert_eq!(seen, 0);
+    }
+
+    #[test]
+    fn cancellation_in_sink_stops_before_the_next_batch() {
+        let (_dir, folder) = with_files(3);
+        let cancel = CancelToken::new();
+        let mut seen = 0;
+        let result = LocalFs::new().with_batch_size(1).list_sizes(
+            &folder,
+            &mut |_| {
+                seen += 1;
+                cancel.cancel();
+                ControlFlow::Continue(())
+            },
+            &cancel,
+        );
+        assert_eq!(kind_of(result), Some(FsErrorKind::Cancelled));
+        assert_eq!(seen, 1);
+    }
+
+    #[test]
+    fn breaking_from_sink_stops_with_ok() {
+        let (_dir, folder) = with_files(3);
+        let mut seen = 0;
+        let result = LocalFs::new().list_sizes(
+            &folder,
+            &mut |_| {
+                seen += 1;
+                ControlFlow::Break(())
+            },
+            &CancelToken::new(),
+        );
+        assert_eq!(result, Ok(()));
+        assert_eq!(seen, 1);
+    }
+}

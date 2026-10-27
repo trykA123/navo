@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use rusty_core::{FsErrorKind, ProviderPath};
 
-use crate::{ALREADY_EXISTS_CODES, Attributes};
+use crate::{ALREADY_EXISTS_CODES, Attributes, FsEntry, LinkKey, SizeEntry};
 
 const OWNER_WRITE: u32 = 0o200;
 
@@ -23,6 +23,18 @@ pub(super) fn os_path(path: &ProviderPath) -> Option<PathBuf> {
 
 pub(super) fn entry_name(name: &OsStr) -> ProviderPath {
     ProviderPath::from_bytes(name.as_bytes())
+}
+
+pub(super) fn size_entry(entry: FsEntry, metadata: Option<&Metadata>) -> SizeEntry {
+    SizeEntry {
+        name: entry.name,
+        kind: entry.kind,
+        size: entry.size,
+        on_disk: metadata.map(|metadata| metadata.blocks() * 512),
+        link: metadata
+            .filter(|metadata| metadata.nlink() > 1)
+            .map(|metadata| LinkKey(u128::from(metadata.ino()), metadata.dev())),
+    }
 }
 
 pub(super) fn attributes(name: &OsStr, metadata: &Metadata) -> Attributes {
