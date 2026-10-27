@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use gpui_kit::RenderImage;
-use image::{Frame, RgbaImage};
+use image::RgbaImage;
 use rusty_pdf::protocol::{
     Bitmap, OutlineItem, PageLinks, PageText, PdfError, RenderRequest, Rotation,
 };
@@ -34,7 +33,7 @@ impl Job {
 pub(super) struct Picture {
     pub width: u32,
     pub height: u32,
-    pub image: Arc<RenderImage>,
+    pub bgra: RgbaImage,
 }
 
 pub(super) enum Done {
@@ -55,7 +54,7 @@ fn to_image(bitmap: Bitmap) -> Result<Picture, PdfError> {
     Ok(Picture {
         width,
         height,
-        image: Arc::new(RenderImage::new(vec![Frame::new(rgba)])),
+        bgra: rgba,
     })
 }
 

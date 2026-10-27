@@ -3,8 +3,7 @@ use std::io::Read;
 use std::sync::{Arc, LazyLock};
 
 use flate2::read::GzDecoder;
-use gpui_kit::RenderImage;
-use image::{Frame, RgbaImage};
+use image::RgbaImage;
 use resvg::{tiny_skia, usvg};
 
 use super::decode::{IMAGE_LIMIT, Picture, display_size};
@@ -158,7 +157,6 @@ fn rendered(bytes: &[u8], size: u64) -> Result<Picture, String> {
         .for_each(unpremultiply);
     let buffer = RgbaImage::from_raw(pixels_wide, pixels_tall, data)
         .ok_or_else(|| "Cannot show this SVG.".to_owned())?;
-    let pixels = Arc::new(RenderImage::new(vec![Frame::new(buffer)]));
     Ok(Picture {
         width: width.round().max(1.) as u32,
         height: height.round().max(1.) as u32,
@@ -166,6 +164,6 @@ fn rendered(bytes: &[u8], size: u64) -> Result<Picture, String> {
         bytes: size,
         vector: true,
         exif: Vec::new(),
-        pixels,
+        pixels: buffer,
     })
 }

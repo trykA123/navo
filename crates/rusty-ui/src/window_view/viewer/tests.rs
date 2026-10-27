@@ -33,6 +33,7 @@ mod pdf_find;
 mod pdf_links;
 mod pdf_outline;
 mod rebound;
+mod release;
 mod save;
 mod search;
 pub(in crate::window_view::viewer) mod structured;

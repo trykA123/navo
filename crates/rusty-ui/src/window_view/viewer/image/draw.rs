@@ -104,7 +104,7 @@ impl ImageView {
         let viewport = self.viewport.clone();
         let entity = cx.entity_id();
         let zoom = self.zoom;
-        let pixels = self.picture.pixels.clone();
+        let pixels = self.pixels.clone();
         let checker = Checker {
             base: t.colors.rail,
             square: t.colors.line,

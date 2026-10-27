@@ -104,7 +104,7 @@ pub(super) struct Viewer {
     encoding: Option<&'static Encoding>,
     detected: Option<TextEncoding>,
     reencoding: Option<u64>,
-    memory: Option<rusty_diag::components::Held>,
+    memory: Option<crate::primitives::AppHeld>,
 }
 
 fn merged_note(load: Option<&'static str>, start: Option<SharedString>) -> Option<SharedString> {

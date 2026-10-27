@@ -2,12 +2,12 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::Task;
-use rusty_diag::components::Held;
 use rusty_fs::{JobSlot, OwnerGuard, Priority, volume_of};
 
 use super::follow::Target;
 use super::{Preview, Shown};
 use crate::prelude::*;
+use crate::primitives::AppHeld;
 use crate::window_view::FerriteWindow;
 use crate::window_view::viewer::{
     Attach, FileHooks, Host, Kind, Opened, PREVIEW_BODY, Picked, Request, SaveError, Sniff, Turn,
@@ -28,7 +28,7 @@ pub(in crate::window_view) struct FilePreview {
     pub body: Option<Box<dyn ViewerBody>>,
     pub message: Option<SharedString>,
     loading: Option<Loading>,
-    _memory: Option<Held>,
+    _memory: Option<AppHeld>,
 }
 
 impl FilePreview {
@@ -171,7 +171,7 @@ impl FerriteWindow {
                     name: &name,
                     len: head.len,
                 };
-                file._memory = Some(hold_memory(&PREVIEW_BODY, &kind, &sniff));
+                file._memory = Some(hold_memory(&PREVIEW_BODY, &kind, &sniff, cx));
             }
             Err(message) => file.message = Some(message.into()),
         }

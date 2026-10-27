@@ -1,6 +1,8 @@
-use rusty_diag::components::{Held, MemoryUse, Tally};
+use gpui_kit::App;
+use rusty_diag::components::{MemoryUse, Tally};
 
 use super::kinds::{Kind, Sniff};
+use crate::primitives::{AppHeld, AppTally};
 
 pub(in crate::window_view) static VIEWER_DOCUMENTS: Tally = Tally::new("viewer documents");
 pub(in crate::window_view) static PREVIEW_BODY: Tally = Tally::new("preview body");
@@ -17,11 +19,17 @@ fn loaded_bytes(kind: &Kind, sniff: &Sniff<'_>) -> u64 {
     }
 }
 
-pub(in crate::window_view) fn hold(tally: &'static Tally, kind: &Kind, sniff: &Sniff<'_>) -> Held {
-    tally.hold(MemoryUse {
+pub(in crate::window_view) fn hold(
+    tally: &'static Tally,
+    kind: &Kind,
+    sniff: &Sniff<'_>,
+    cx: &mut App,
+) -> AppHeld {
+    let held = MemoryUse {
         bytes: loaded_bytes(kind, sniff),
         items: 1,
-    })
+    };
+    AppTally::of(tally, cx).hold(tally, held)
 }
 
 #[cfg(test)]
@@ -45,8 +53,8 @@ mod tests {
         assert_eq!(estimate("huge.log", b"hello\n", 900 << 20), PAGED_BYTES);
     }
 
-    #[test]
-    fn a_held_document_leaves_the_tally_when_dropped() {
+    #[gpui_kit::test]
+    fn a_held_document_leaves_the_tally_when_dropped(cx: &mut gpui_kit::TestAppContext) {
         let sniff = Sniff {
             head: b"hello\n",
             name: "notes.txt",
@@ -54,7 +62,7 @@ mod tests {
         };
         let kind = Kinds::builtin().choose(&sniff).remove(0);
         static TALLY: Tally = Tally::new("footprint test");
-        let held = hold(&TALLY, &kind, &sniff);
+        let held = cx.update(|cx| hold(&TALLY, &kind, &sniff, cx));
         assert_eq!(
             TALLY.read(),
             MemoryUse {

@@ -142,7 +142,7 @@ impl FerriteWindow {
             Ok(body) => {
                 viewer.body = Some(body);
                 viewer.memory = viewer.kind.as_ref().map(|kind| {
-                    super::hold_memory(&super::VIEWER_DOCUMENTS, kind, &viewer.sniff())
+                    super::hold_memory(&super::VIEWER_DOCUMENTS, kind, &viewer.sniff(), cx)
                 });
             }
             Err(message) => viewer.message = Some(message.into()),

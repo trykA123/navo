@@ -3,11 +3,11 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use gpui_kit::{App, Global, RenderImage};
-use image::{Frame, RgbaImage};
+use image::RgbaImage;
 use rusty_core::shell_menu::{FerriteAction, Icon, MenuItem, ShellMenu};
 use rusty_diag::components::{Held, MemoryUse, Tally};
 
-use crate::primitives::IconName;
+use crate::primitives::{AppTally, IconName};
 
 pub(super) const CACHED_ICONS: usize = 256;
 
@@ -58,6 +58,7 @@ impl IconCache {
         &mut self,
         icon: &Icon,
         evicted: &mut Vec<Arc<RenderImage>>,
+        gpu: &AppTally,
     ) -> Option<Arc<RenderImage>> {
         let key = key_of(icon);
         self.tick += 1;
@@ -65,7 +66,7 @@ impl IconCache {
             cached.used = self.tick;
             return Some(cached.image.clone());
         }
-        let image = to_image(icon)?;
+        let image = to_image(icon, gpu)?;
         if self.images.len() >= CACHED_ICONS
             && let Some(oldest) = self
                 .images
@@ -148,21 +149,22 @@ fn collect<'a>(
 
 fn resolve(found: Vec<(Vec<usize>, &Icon)>, cx: &mut App) -> Vec<(Vec<usize>, Arc<RenderImage>)> {
     let mut evicted = Vec::new();
+    let gpu = crate::primitives::gpu_images(cx);
     let cache = cx.default_global::<IconCache>();
     let images = found
         .into_iter()
-        .filter_map(|(path, icon)| Some((path, cache.image(icon, &mut evicted)?)))
+        .filter_map(|(path, icon)| Some((path, cache.image(icon, &mut evicted, &gpu)?)))
         .collect();
     for image in evicted {
-        cx.drop_image(image, None);
+        crate::primitives::release_image(image, cx);
     }
     images
 }
 
-fn to_image(icon: &Icon) -> Option<Arc<RenderImage>> {
+fn to_image(icon: &Icon, gpu: &AppTally) -> Option<Arc<RenderImage>> {
     let mut pixels = RgbaImage::from_raw(icon.width, icon.height, icon.rgba.clone())?;
     for pixel in pixels.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
     }
-    Some(Arc::new(RenderImage::new(vec![Frame::new(pixels)])))
+    Some(crate::primitives::new_image(pixels, gpu))
 }

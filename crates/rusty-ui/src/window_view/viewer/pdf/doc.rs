@@ -15,7 +15,7 @@ use super::source::PdfPages;
 use super::text::{Boxes, Kept, PageWords, TextIndex};
 use super::trail::Trail;
 use super::trouble::{Trouble, Verdict};
-use crate::primitives::ListScroll;
+use crate::primitives::{AppTally, ListScroll};
 
 const MARGIN: u32 = 1;
 const MAX_WIDTH: u32 = 4096;
@@ -263,14 +263,15 @@ impl Doc {
         }
     }
 
-    pub(super) fn apply(&mut self, done: Done) -> Applied {
+    pub(super) fn apply(&mut self, done: Done, gpu: &AppTally) -> Applied {
         let keep = self.keep();
         let mut applied = Applied::default();
         match done {
             Done::Drawn(job, picture) => {
                 self.trouble.succeeded();
                 self.drawn(job, picture.width, picture.height);
-                let shot = Shot::new(picture.width, picture.height, picture.image);
+                let image = crate::primitives::new_image(picture.bgra, gpu);
+                let shot = Shot::new(picture.width, picture.height, image);
                 applied.dropped = match job {
                     Job::Thumb { page, .. } => self.thumbs.insert(page, shot, &(0..0)),
                     _ => self.shots.insert(job.page(), shot, &keep),
@@ -360,15 +361,19 @@ mod tests {
     fn link_and_outline_errors_are_failures_that_keep_helper_deaths() {
         let mut doc = Doc::new(Box::new(Blank), false);
         let shared = doc.shared();
+        let gpu = AppTally::default();
         let verdicts: Vec<_> = (0..3)
-            .map(|page| doc.apply(jobs::run(&shared, Job::Links { page })).verdict)
+            .map(|page| {
+                doc.apply(jobs::run(&shared, Job::Links { page }), &gpu)
+                    .verdict
+            })
             .collect();
         assert_eq!(
             verdicts,
             [None, None, Some(Verdict::Refuse(PdfError::HelperDied))]
         );
         assert!(doc.trouble.broken.is_empty());
-        doc.apply(jobs::run(&shared, Job::Outline));
+        doc.apply(jobs::run(&shared, Job::Outline), &gpu);
         assert!(doc.trouble.outline_lost && !doc.chapters.is_read());
     }
 

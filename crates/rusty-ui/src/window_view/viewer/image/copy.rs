@@ -36,7 +36,7 @@ fn png_of(pixels: &RenderImage) -> Option<Png> {
 
 impl ImageView {
     pub(super) fn copy_image(&mut self, cx: &mut Context<Self>) {
-        let pixels = self.picture.pixels.clone();
+        let pixels = self.pixels.clone();
         self.copying = Some(cx.spawn(async move |this, cx| {
             let png = cx.background_spawn(async move { png_of(&pixels) }).await;
             let _ = this.update(cx, |view, cx| {

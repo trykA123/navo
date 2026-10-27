@@ -66,6 +66,7 @@ pub(in crate::window_view) struct Preview {
     seen: Option<Key>,
     is_stale: bool,
     wait: Option<Task<()>>,
+    forget: Option<Task<()>>,
     shown: Option<Shown>,
     trail: Vec<nest::Crumb>,
     view: view::PreviewView,
@@ -96,6 +97,7 @@ impl Preview {
             seen: None,
             is_stale: false,
             wait: None,
+            forget: None,
             shown: None,
             trail: Vec::new(),
             view: view::PreviewView::default(),
@@ -126,6 +128,7 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         self.preview.is_open = true;
+        self.preview.forget = None;
         self.preview.sheet.update(cx, |sheet, cx| sheet.open(cx));
         self.preview.shown = None;
         self.preview.seen = self.cursor_target().map(|target| target.key());
@@ -141,6 +144,19 @@ impl FerriteWindow {
         self.preview.clear_marks();
         self.preview.view.reset();
         self.preview.stop_loading();
+        let fade = crate::tokens::current(cx).motion.fade;
+        self.preview.forget = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(fade).await;
+            let _ = this.update(cx, |view, cx| view.forget_preview(cx));
+        }));
+    }
+
+    fn forget_preview(&mut self, cx: &mut Context<Self>) {
+        self.preview.forget = None;
+        if !self.preview.is_open {
+            self.preview.shown = None;
+            cx.notify();
+        }
     }
 
     pub(in crate::window_view) fn follow_cursor(

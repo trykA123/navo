@@ -42,6 +42,7 @@ impl PdfView {
     }
 
     fn finish(&mut self, done: Done, cx: &mut Context<Self>) {
+        let gpu = crate::primitives::gpu_images(cx);
         let Some(doc) = self.doc_mut() else {
             return;
         };
@@ -50,9 +51,9 @@ impl PdfView {
             read,
             dropped,
             verdict,
-        } = doc.apply(done);
+        } = doc.apply(done, &gpu);
         for image in dropped {
-            cx.drop_image(image, None);
+            crate::primitives::release_image(image, cx);
         }
         if let Some(page) = read {
             self.search_page(page);
@@ -71,7 +72,7 @@ impl PdfView {
             .map(super::doc::Doc::drain_images)
             .unwrap_or_default();
         for image in images {
-            cx.drop_image(image, None);
+            crate::primitives::release_image(image, cx);
         }
         self.drawers.clear();
         self.searching = None;

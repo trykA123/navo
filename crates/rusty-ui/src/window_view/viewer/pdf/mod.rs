@@ -121,7 +121,7 @@ impl PdfView {
         cx.on_release(|view: &mut Self, cx| {
             let images = view.doc_mut().map(Doc::drain_images).unwrap_or_default();
             for image in images {
-                cx.drop_image(image, None);
+                crate::primitives::release_image(image, cx);
             }
         })
         .detach();

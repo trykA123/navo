@@ -259,9 +259,25 @@ fn perf_json_holds_no_paths_names_or_search_text(cx: &mut TestAppContext) {
         &redactor,
     ))
     .unwrap();
-    let text = String::from_utf8(json).unwrap().to_lowercase();
+    let value: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    let mut texts = Vec::new();
+    strings_in(&value, &mut texts);
+    let text = texts.join("\n").to_lowercase();
     for needle in ["canary", "7731", "budget", "salary", "plans", "home/"] {
         assert!(!text.contains(needle), "{needle} leaked into perf.json");
+    }
+}
+
+// Timings are numbers and may contain the digits by chance; only text can leak.
+fn strings_in(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(text) => out.push(text.clone()),
+        serde_json::Value::Array(items) => items.iter().for_each(|item| strings_in(item, out)),
+        serde_json::Value::Object(map) => map.iter().for_each(|(key, item)| {
+            out.push(key.clone());
+            strings_in(item, out);
+        }),
+        _ => {}
     }
 }
 

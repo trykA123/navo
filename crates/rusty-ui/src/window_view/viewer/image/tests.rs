@@ -9,8 +9,8 @@ use super::svg::unzipped;
 use super::zoom::{Viewport, Zoom};
 
 fn pixel(picture: &Picture, x: u32, y: u32) -> [u8; 3] {
-    let width = picture.pixels.size(0).width.0 as u32;
-    let bytes = picture.pixels.as_bytes(0).expect("one frame");
+    let width = picture.pixels.width();
+    let bytes = picture.pixels.as_raw();
     let at = ((y * width + x) * 4) as usize;
     [bytes[at + 2], bytes[at + 1], bytes[at]]
 }
@@ -61,10 +61,9 @@ fn svg_renders_from_its_name_or_its_tag_with_the_intrinsic_size() {
             (24, 12, "SVG")
         );
         assert!(picture.vector);
-        let shown = picture.pixels.size(0);
-        assert_eq!((shown.width.0, shown.height.0), (2048, 1024));
+        assert_eq!(picture.pixels.dimensions(), (2048, 1024));
         assert!(near(pixel(&picture, 100, 500), RED));
-        let right = picture.pixels.as_bytes(0).expect("frame");
+        let right = picture.pixels.as_raw();
         let at = ((500 * 2048 + 1900) * 4) as usize;
         assert_eq!(right[at + 3], 0, "the right half is transparent");
     }
@@ -126,8 +125,7 @@ fn a_huge_image_is_shrunk_for_display_but_keeps_its_size() {
     let bytes = encoded(ImageFormat::Png, 9000, 10);
     let picture = decode_image(&bytes, "strip.png").expect("png");
     assert_eq!((picture.width, picture.height), (9000, 10));
-    let shown = picture.pixels.size(0);
-    assert_eq!(shown.width.0, 8192);
+    assert_eq!(picture.pixels.width(), 8192);
 }
 
 fn viewport(width: f32, height: f32) -> Viewport {

@@ -9,8 +9,9 @@ mod zoom;
 use std::any::Any;
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
 
-use gpui_kit::{AnyView, FocusHandle, Focusable, Task, point};
+use gpui_kit::{AnyView, FocusHandle, Focusable, RenderImage, Task, point};
 
 pub use decode::{IMAGE_LIMIT, Picture, decode_image};
 pub use exif::ExifEntry;
@@ -35,6 +36,7 @@ const IMAGE_KEYS: [Key; 6] = [
 pub struct ImageView {
     title: SharedString,
     picture: Picture,
+    pixels: Arc<RenderImage>,
     pub(super) zoom: Zoom,
     viewport: Rc<Cell<Viewport>>,
     pub(super) info: bool,
@@ -47,13 +49,24 @@ pub struct ImageView {
 impl ImageView {
     pub const KEYS: [Key; 6] = IMAGE_KEYS;
 
-    pub fn new(title: impl Into<SharedString>, picture: Picture, cx: &mut Context<Self>) -> Self {
-        cx.on_release(|view: &mut Self, cx| cx.drop_image(view.picture.pixels.clone(), None))
-            .detach();
+    pub fn new(
+        title: impl Into<SharedString>,
+        mut picture: Picture,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        cx.on_release(|view: &mut Self, cx| {
+            crate::primitives::release_image(view.pixels.clone(), cx);
+        })
+        .detach();
+        let pixels = crate::primitives::new_image(
+            std::mem::take(&mut picture.pixels),
+            &crate::primitives::gpu_images(cx),
+        );
         let zoom = Zoom::new(picture.width, picture.height, picture.vector);
         Self {
             title: title.into(),
             picture,
+            pixels,
             zoom,
             viewport: Rc::default(),
             info: false,
@@ -118,8 +131,8 @@ impl ImageView {
         self.zoom.pan
     }
 
-    pub(super) fn pixels(&self) -> std::sync::Arc<gpui_kit::RenderImage> {
-        self.picture.pixels.clone()
+    pub(super) fn pixels(&self) -> Arc<RenderImage> {
+        self.pixels.clone()
     }
 }
 

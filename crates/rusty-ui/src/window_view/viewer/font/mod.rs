@@ -7,9 +7,10 @@ mod sfnt;
 mod woff;
 
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use gpui_kit::{FocusHandle, Global, ScrollHandle, point};
+use rusty_diag::components::{Held, MemoryUse, Tally};
 
 pub(super) use body::FontBody;
 #[cfg(test)]
@@ -22,8 +23,10 @@ use crate::prelude::*;
 const LINE_STEP: f32 = 40.;
 const NO_PREVIEW: &str = "Preview not available for this font.";
 
+static FONT_MEMORY: Tally = Tally::new("viewer fonts");
+
 #[derive(Default)]
-struct Registered(HashSet<u64>);
+struct Registered(HashMap<u64, Held>);
 
 impl Global for Registered {}
 
@@ -37,13 +40,21 @@ pub struct FontView {
 }
 
 fn register(preview: Preview, cx: &mut App) -> Result<bool, String> {
-    if cx.default_global::<Registered>().0.contains(&preview.hash) {
+    if cx
+        .default_global::<Registered>()
+        .0
+        .contains_key(&preview.hash)
+    {
         return Ok(false);
     }
+    let bytes = preview.bytes.len() as u64;
     cx.text_system()
         .add_fonts(vec![Cow::Owned(preview.bytes)])
         .map_err(|error| format!("Cannot render this font: {error:#}"))?;
-    cx.default_global::<Registered>().0.insert(preview.hash);
+    let held = FONT_MEMORY.hold(MemoryUse { bytes, items: 1 });
+    cx.default_global::<Registered>()
+        .0
+        .insert(preview.hash, held);
     Ok(true)
 }
 

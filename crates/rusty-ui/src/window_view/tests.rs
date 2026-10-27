@@ -32,6 +32,7 @@ mod drives;
 mod drop;
 mod fkeys;
 mod hand_off;
+pub(in crate::window_view) mod held;
 mod hints;
 mod jobs;
 mod keymap;

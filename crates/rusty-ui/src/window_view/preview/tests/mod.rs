@@ -8,6 +8,7 @@ mod keys;
 mod live;
 mod marks;
 mod nest;
+mod release;
 mod toggle;
 mod view_parts;
 

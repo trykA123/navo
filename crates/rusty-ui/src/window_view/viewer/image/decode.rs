@@ -1,11 +1,9 @@
 use std::io::Cursor;
-use std::sync::Arc;
 
-use gpui_kit::RenderImage;
 use image::metadata::Orientation;
 use image::{
-    DynamicImage, Frame, GenericImageView, ImageDecoder, ImageError, ImageFormat, ImageReader,
-    Limits, RgbaImage,
+    DynamicImage, GenericImageView, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits,
+    RgbaImage,
 };
 
 use super::exif::{self, ExifEntry};
@@ -24,7 +22,7 @@ pub struct Picture {
     pub bytes: u64,
     pub vector: bool,
     pub exif: Vec<ExifEntry>,
-    pub pixels: Arc<RenderImage>,
+    pub pixels: RgbaImage,
 }
 
 fn extension(name: &str) -> Option<String> {
@@ -72,11 +70,11 @@ pub(super) fn display_size(width: f32, height: f32) -> (u32, u32) {
     )
 }
 
-fn to_bgra(mut rgba: RgbaImage) -> Arc<RenderImage> {
+fn to_bgra(mut rgba: RgbaImage) -> RgbaImage {
     for pixel in rgba.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
     }
-    Arc::new(RenderImage::new(vec![Frame::new(rgba)]))
+    rgba
 }
 
 fn shrunk(image: DynamicImage) -> RgbaImage {
