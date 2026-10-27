@@ -12,6 +12,65 @@ fn new_tab_has_its_id_and_location() {
 }
 
 #[test]
+fn entry_location_joins_relative_segments_under_the_base() {
+    let mut t = tab(1, "find:1");
+    t.set_base(Some(loc(r"C:\work")));
+    for name in [r"src\a.c", "src/a.c", r"src/nested\a.c"] {
+        let expected = format!(r"C:\work\{}", name.replace('/', r"\"));
+        assert_eq!(t.entry_location(name), Ok(loc(&expected)));
+    }
+}
+
+#[test]
+fn absolute_entry_locations_ignore_the_base() {
+    let mut t = tab(1, "find:1");
+    for base in [Some(loc(r"C:\work")), Some(loc("/"))] {
+        t.set_base(base);
+        for name in [r"D:\x\y.c", "D:/x/y.c", r"\\server\share\x\y.c"] {
+            assert_eq!(t.entry_location(name), Ok(loc(name)));
+        }
+    }
+}
+
+#[test]
+fn ordinary_entry_location_uses_the_tabs_folder() {
+    let mut t = tab(1, r"C:\work");
+    assert_eq!(t.base_or_location(), t.location());
+    assert_eq!(t.entry_location("a.c"), Ok(loc(r"C:\work\a.c")));
+    t.set_base(Some(loc(r"D:\other")));
+    t.set_base(None);
+    assert_eq!(t.entry_location("a.c"), Ok(loc(r"C:\work\a.c")));
+}
+
+#[test]
+fn entry_location_refuses_empty_and_dot_segments() {
+    let mut t = tab(1, "find:1");
+    t.set_base(Some(loc(r"C:\work")));
+    for name in [
+        "",
+        ".",
+        "..",
+        r"src\..\a.c",
+        "src/./a.c",
+        "src//a.c",
+        "src/",
+    ] {
+        assert!(t.entry_location(name).is_err(), "{name:?}");
+    }
+}
+
+#[test]
+fn session_round_trip_drops_the_runtime_base() {
+    let mut state = crate::AppState::new(loc(r"C:\work"));
+    state.active_tab_mut().set_base(Some(loc(r"D:\results")));
+    let bytes = postcard::to_stdvec(&state.to_session(0)).unwrap();
+    let saved = postcard::from_bytes(&bytes).unwrap();
+    let restored = crate::AppState::from_session(saved).unwrap();
+    assert_eq!(restored, crate::AppState::new(loc(r"C:\work")));
+    assert_eq!(restored.active_tab().base_or_location(), &loc(r"C:\work"));
+}
+
+#[test]
 fn new_tab_has_the_default_view() {
     assert_eq!(tab(1, "/home").view(), ViewState::default());
 }

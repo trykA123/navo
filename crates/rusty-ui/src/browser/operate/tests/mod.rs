@@ -18,6 +18,18 @@ mod queue;
 mod retention;
 mod slow;
 
+#[test]
+fn selected_sources_resolve_a_based_tab_under_its_base() {
+    let fs = fake();
+    let browser = browser(&fs, AppState::new(fs.location("home/docs")));
+    let mut tab = browser.state().active_tab().clone();
+    tab.set_base(Some(fs.location("dest")));
+    assert_eq!(
+        super::selected_sources(&tab),
+        [fs.location("dest/report.txt")]
+    );
+}
+
 fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home/docs");

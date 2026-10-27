@@ -211,11 +211,7 @@ impl FerriteWindow {
         tab.listing()
             .and_then(|listing| listing.get(row))
             .filter(|entry| !entry.is_folder)
-            .and_then(|entry| {
-                tab.location()
-                    .join(&rusty_core::ProviderPath::from_text(&entry.name))
-                    .ok()
-            })
+            .and_then(|entry| tab.entry_location(&entry.name).ok())
     }
 
     pub(in crate::window_view) fn view_location(

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{History, Listing, StateError};
-use crate::{Location, Selection, TabId};
+use crate::{Location, LocationError, ProviderPath, Selection, TabId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ViewState {
@@ -13,6 +13,7 @@ pub struct ViewState {
 pub struct Tab {
     pub(super) id: TabId,
     location: Location,
+    base: Option<Location>,
     view: ViewState,
     listing: Option<Listing>,
     pending: Option<u64>,
@@ -32,6 +33,29 @@ impl Tab {
     #[must_use]
     pub fn location(&self) -> &Location {
         &self.location
+    }
+
+    #[must_use]
+    pub fn base_or_location(&self) -> &Location {
+        self.base.as_ref().unwrap_or(&self.location)
+    }
+
+    pub fn set_base(&mut self, base: Option<Location>) {
+        self.base = base;
+    }
+
+    pub fn entry_location(&self, name: &str) -> Result<Location, LocationError> {
+        let Some(base) = &self.base else {
+            return self.location.join(&ProviderPath::from_text(name));
+        };
+        let drive_rooted = matches!(name.as_bytes(), [drive, b':', b'\\' | b'/', ..] if drive.is_ascii_alphabetic());
+        if drive_rooted || name.starts_with(r"\\") {
+            return Location::new(name);
+        }
+        name.split(['\\', '/'])
+            .try_fold(base.clone(), |location, segment| {
+                location.join(&ProviderPath::from_text(segment))
+            })
     }
 
     #[must_use]
@@ -69,6 +93,7 @@ impl Tab {
         Self {
             id,
             location,
+            base: None,
             view: ViewState::default(),
             listing: None,
             pending: None,

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rusty_core::{Command, FsError, Location, OpKind, ProviderPath};
+use rusty_core::{Command, FsError, Location, OpKind, Tab};
 use rusty_fs::{
     CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, Progress, volume_of,
 };
@@ -226,24 +226,7 @@ impl Browser {
 
     #[must_use]
     pub fn selected_sources(&self) -> Vec<Location> {
-        let tab = self.state.active_tab();
-        let Some(listing) = tab.listing() else {
-            return Vec::new();
-        };
-        let marked = tab.selection().marked();
-        let rows = if marked.is_empty() {
-            vec![tab.view().cursor]
-        } else {
-            marked
-        };
-        rows.into_iter()
-            .filter_map(|row| listing.get(row))
-            .filter_map(|entry| {
-                tab.location()
-                    .join(&ProviderPath::from_text(&entry.name))
-                    .ok()
-            })
-            .collect()
+        selected_sources(self.state.active_tab())
     }
 
     fn op_request(&mut self, kind: OpKind) -> Option<OpRequest> {
@@ -380,6 +363,22 @@ impl Browser {
         self.release_job(id);
         true
     }
+}
+
+fn selected_sources(tab: &Tab) -> Vec<Location> {
+    let Some(listing) = tab.listing() else {
+        return Vec::new();
+    };
+    let marked = tab.selection().marked();
+    let rows = if marked.is_empty() {
+        vec![tab.view().cursor]
+    } else {
+        marked
+    };
+    rows.into_iter()
+        .filter_map(|row| listing.get(row))
+        .filter_map(|entry| tab.entry_location(&entry.name).ok())
+        .collect()
 }
 
 #[cfg(test)]

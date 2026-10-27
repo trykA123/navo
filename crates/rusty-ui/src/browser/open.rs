@@ -1,4 +1,3 @@
-use rusty_core::ProviderPath;
 use rusty_core::{Command, CommandError, Location, StateError};
 use rusty_fs::EntryKind;
 
@@ -26,7 +25,7 @@ impl Browser {
             .is_some_and(|detail| {
                 detail.kind == EntryKind::Link && detail.attributes.link_to_folder
             });
-        let Ok(location) = tab.location().join(&ProviderPath::from_text(&entry.name)) else {
+        let Ok(location) = tab.entry_location(&entry.name) else {
             return false;
         };
         self.open_location(location, entry.is_folder || is_link)
