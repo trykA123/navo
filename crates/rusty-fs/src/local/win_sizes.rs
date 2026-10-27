@@ -191,12 +191,12 @@ impl Directory {
         };
         loop {
             let next = u32::from_le_bytes(read(bytes, 0)?) as usize;
+            if !next.is_multiple_of(8) {
+                return Err(invalid_record());
+            }
             let record = if next == 0 {
                 bytes
             } else {
-                if !next.is_multiple_of(8) {
-                    return Err(invalid_record());
-                }
                 bytes.get(..next).ok_or_else(invalid_record)?
             };
             if let Some(entry) = self.entry(record)?
@@ -275,8 +275,10 @@ impl Directory {
         Ok(bytes
             .get(offset..end)
             .ok_or_else(invalid_record)?
-            .chunks_exact(2)
-            .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|unit| u16::from_le_bytes(*unit))
             .collect())
     }
 
