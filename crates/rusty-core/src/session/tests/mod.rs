@@ -9,6 +9,7 @@ mod props;
 mod round_trip;
 mod rows;
 mod to_session;
+mod workspace;
 
 fn loc(text: &str) -> Location {
     Location::new(text).unwrap()
@@ -113,6 +114,8 @@ fn valid() -> SessionState {
         windows: vec![WindowState {
             id: 1,
             placement: Vec::new(),
+            workspaces: Vec::new(),
+            active_workspace: 0,
             layout: split_state(true, LayoutState::Pane(2), LayoutState::Pane(4)),
             focused_pane: 4,
             panes: vec![

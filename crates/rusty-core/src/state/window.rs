@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::{Pane, StateError};
+use super::{Pane, StateError, Workspace};
 use crate::placement::{MonitorSetup, Placement};
 use crate::{Direction, Layout, PaneId, WindowId};
 
@@ -9,11 +9,14 @@ pub(super) const MAX_LAST_MARKS: usize = 100_000;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Window {
     id: WindowId,
-    layout: Layout,
-    focused: Pane,
-    others: BTreeMap<PaneId, Pane>,
+    pub(super) layout: Layout,
+    pub(super) focused: Pane,
+    pub(super) others: BTreeMap<PaneId, Pane>,
     placement: Vec<Placement>,
-    last_marks: Option<Vec<String>>,
+    pub(super) last_marks: Option<Vec<String>>,
+    pub(super) workspaces: Vec<Workspace>,
+    pub(super) active: usize,
+    pub(super) deleted_workspace: Option<(usize, Workspace)>,
 }
 
 impl Window {
@@ -73,25 +76,43 @@ impl Window {
         let focused = others
             .remove(&layout.focused())
             .ok_or_else(|| format!("window {} has no focused pane", id.get()))?;
-        Ok(Self {
+        let mut window = Self {
             id,
             layout,
             focused,
             others,
             placement,
             last_marks: None,
-        })
+            workspaces: Vec::new(),
+            active: 0,
+            deleted_workspace: None,
+        };
+        window.initialize_workspace();
+        Ok(window)
     }
 
     pub(super) fn new(id: WindowId, pane: Pane) -> Self {
-        Self {
+        let mut window = Self {
             id,
             layout: Layout::new(pane.id()),
             focused: pane,
             others: BTreeMap::new(),
             placement: Vec::new(),
             last_marks: None,
-        }
+            workspaces: Vec::new(),
+            active: 0,
+            deleted_workspace: None,
+        };
+        window.initialize_workspace();
+        window
+    }
+
+    fn initialize_workspace(&mut self) {
+        self.workspaces.push(Workspace {
+            name: "Workspace 1".into(),
+            saved: self.snapshot(),
+            live: None,
+        });
     }
 
     pub(super) fn last_marks(&self) -> Option<&[String]> {

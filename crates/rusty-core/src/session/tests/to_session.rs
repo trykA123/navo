@@ -6,14 +6,25 @@ fn initial_state_saves_one_window_one_pane_one_tab() {
         windows: vec![WindowState {
             id: 1,
             placement: Vec::new(),
+            workspaces: vec![WorkspaceState {
+                name: "Workspace 1".into(),
+                saved: SnapshotState {
+                    layout: LayoutState::Pane(2),
+                    focused_pane: 2,
+                    panes: vec![pane_state(2, vec![tab_state(3, "C:/start")])],
+                    last_marks: None,
+                },
+                live: None,
+            }],
+            active_workspace: 0,
             layout: LayoutState::Pane(2),
             focused_pane: 2,
-            panes: vec![pane_state(2, vec![tab_state(3, "/home")])],
+            panes: vec![pane_state(2, vec![tab_state(3, "C:/start")])],
         }],
         focused_window: 1,
         next_id: 4,
     };
-    assert_eq!(home().to_session(100), expected);
+    assert_eq!(AppState::new(loc("C:/start")).to_session(100), expected);
 }
 
 #[test]

@@ -25,8 +25,8 @@ pub mod shell_menu;
 mod state;
 
 pub use apply::{
-    CommandError, Effect, Event, apply, apply_event, list_active_tabs, list_missing, list_unloaded,
-    relist_tab,
+    CommandError, Effect, Event, apply, apply_event, apply_workspace, list_active_tabs,
+    list_missing, list_unloaded, relist_tab,
 };
 pub use brand::TEMP_SUFFIX;
 pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
@@ -46,6 +46,9 @@ pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection, SpanMode};
 pub use session::{
     EntryState, LayoutState, MAX_LAYOUT_DEPTH, PaneState, RowsState, SessionError, SessionState,
-    TabState, WindowState,
+    SnapshotState, TabState, WindowState, WorkspaceState,
 };
-pub use state::{AppState, Entry, History, Listing, Pane, StateError, Tab, ViewState, Window};
+pub use state::{
+    AppState, Entry, History, Listing, MAX_WORKSPACES, Pane, SAVE_ON_SWITCH, Snapshot, StateError,
+    Tab, ViewState, Window, Workspace, WorkspaceAction, changes,
+};

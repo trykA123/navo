@@ -6,8 +6,8 @@ const DEFAULT_PAGE_ROWS: u64 = 20;
 // Invariant: `tabs` is never empty and `active < tabs.len()`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pane {
-    id: PaneId,
-    tabs: Vec<Tab>,
+    pub(super) id: PaneId,
+    pub(super) tabs: Vec<Tab>,
     active: usize,
     page_rows: u64,
 }
@@ -36,6 +36,15 @@ impl Pane {
     #[must_use]
     pub fn page_rows(&self) -> u64 {
         self.page_rows
+    }
+
+    pub(super) fn workspace_snapshot(&self) -> Self {
+        Self {
+            id: self.id,
+            tabs: self.tabs.iter().map(Tab::workspace_snapshot).collect(),
+            active: self.active,
+            page_rows: self.page_rows,
+        }
     }
 
     pub(crate) fn set_page_rows(&mut self, rows: u64) {

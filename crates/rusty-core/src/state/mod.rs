@@ -3,6 +3,7 @@ mod listing;
 mod pane;
 mod tab;
 mod window;
+mod workspace;
 
 use std::collections::BTreeMap;
 
@@ -13,6 +14,10 @@ pub use listing::{Entry, Listing};
 pub use pane::Pane;
 pub use tab::{Tab, ViewState};
 pub use window::Window;
+pub(crate) use workspace::workspace_name;
+pub use workspace::{
+    MAX_WORKSPACES, SAVE_ON_SWITCH, Snapshot, Workspace, WorkspaceAction, changes,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppState {
@@ -38,6 +43,20 @@ pub enum StateError {
     NothingBack,
     #[error("there is nothing to go forward to")]
     NothingForward,
+    #[error("There is no workspace {0}.")]
+    NoWorkspace(usize),
+    #[error("a window can have at most nine workspaces")]
+    WorkspaceLimit,
+    #[error("the last workspace cannot be deleted")]
+    LastWorkspace,
+    #[error("a workspace name must contain 1 to 40 characters")]
+    InvalidWorkspaceName,
+    #[error("a workspace can only move by -1 or 1")]
+    InvalidWorkspaceMove,
+    #[error("there is no deleted workspace to restore")]
+    NothingToRestore,
+    #[error("invalid workspace: {0}")]
+    InvalidWorkspace(String),
     #[error(transparent)]
     Layout(#[from] LayoutError),
 }

@@ -131,18 +131,14 @@ fn saved_marks_are_isolated_between_windows() {
 }
 
 #[test]
-fn saved_marks_are_not_in_the_session() {
+fn saved_marks_survive_the_session_in_the_workspace_snapshot() {
     let mut state = at_work(files(3));
     run(&mut state, Command::SelectionAll);
-    let before = state.to_session(100);
     run(&mut state, Command::SelectionClear);
-    assert_eq!(state.to_session(100), before);
     let mut restored = AppState::from_session(state.to_session(100)).unwrap();
     load(&mut restored, files(3));
-    assert_eq!(
-        fail(&mut restored, Command::SelectionRestore),
-        CommandError::NothingToRestore
-    );
+    run(&mut restored, Command::SelectionRestore);
+    assert_eq!(marked(&restored), vec![0, 1, 2]);
 }
 
 #[test]

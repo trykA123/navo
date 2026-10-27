@@ -16,6 +16,7 @@ mod select;
 mod select_restore;
 mod select_span;
 mod window;
+mod workspace;
 
 fn loc(text: &str) -> Location {
     Location::new(text).unwrap()

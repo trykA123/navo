@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::{EntryState, PaneState, RowsState, SessionState, TabState, WindowState};
 use crate::{
     AppState, History, Layout, Location, Pane, PaneId, Tab, TabId, ViewState, Window, WindowId,
@@ -25,19 +23,25 @@ fn save_window(window: &Window, rows_per_pane: usize) -> WindowState {
         placement: window.placement().to_vec(),
         layout: window.layout().to_state(),
         focused_pane: window.layout().focused().get(),
+        workspaces: super::workspaces::save(window),
+        active_workspace: window.active_workspace() as u8,
         panes: window
             .panes()
             .into_iter()
-            .map(|pane| PaneState {
-                id: pane.id().get(),
-                active: pane.active_index(),
-                page_rows: pane.page_rows(),
-                tabs: pane
-                    .tabs()
-                    .iter()
-                    .map(|t| save_tab(t, rows_per_pane))
-                    .collect(),
-            })
+            .map(|pane| save_pane(pane, rows_per_pane))
+            .collect(),
+    }
+}
+
+pub(super) fn save_pane(pane: &Pane, rows_per_pane: usize) -> PaneState {
+    PaneState {
+        id: pane.id().get(),
+        active: pane.active_index(),
+        page_rows: pane.page_rows(),
+        tabs: pane
+            .tabs()
+            .iter()
+            .map(|t| save_tab(t, rows_per_pane))
             .collect(),
     }
 }
@@ -76,7 +80,7 @@ pub(super) fn restore(session: &SessionState) -> Result<AppState, String> {
     if session.windows.is_empty() {
         return Err("the session has no windows".to_owned());
     }
-    check_ids(session)?;
+    super::workspaces::check_ids(session)?;
     let windows = session
         .windows
         .iter()
@@ -89,31 +93,6 @@ pub(super) fn restore(session: &SessionState) -> Result<AppState, String> {
     )
 }
 
-const MAX_NEXT_ID: u64 = 1 << 62;
-
-fn check_ids(session: &SessionState) -> Result<(), String> {
-    if session.next_id > MAX_NEXT_ID {
-        return Err(format!("next_id {} is implausibly large", session.next_id));
-    }
-    let mut seen = HashSet::new();
-    let ids = session.windows.iter().flat_map(|w| {
-        std::iter::once(w.id).chain(
-            w.panes
-                .iter()
-                .flat_map(|p| std::iter::once(p.id).chain(p.tabs.iter().map(|t| t.id))),
-        )
-    });
-    for id in ids {
-        if !seen.insert(id) {
-            return Err(format!("id {id} is used twice"));
-        }
-        if id >= session.next_id {
-            return Err(format!("id {id} is not below next_id {}", session.next_id));
-        }
-    }
-    Ok(())
-}
-
 fn restore_window(window: &WindowState) -> Result<Window, String> {
     let layout = Layout::from_state(&window.layout, PaneId::new(window.focused_pane))?;
     let panes = window
@@ -121,15 +100,17 @@ fn restore_window(window: &WindowState) -> Result<Window, String> {
         .iter()
         .map(restore_pane)
         .collect::<Result<Vec<_>, _>>()?;
-    Window::restore(
+    let mut restored = Window::restore(
         WindowId::new(window.id),
         layout,
         panes,
         window.placement.clone(),
-    )
+    )?;
+    super::workspaces::restore(&mut restored, window)?;
+    Ok(restored)
 }
 
-fn restore_pane(pane: &PaneState) -> Result<Pane, String> {
+pub(super) fn restore_pane(pane: &PaneState) -> Result<Pane, String> {
     let tabs = pane
         .tabs
         .iter()

@@ -11,7 +11,7 @@ pub struct ViewState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tab {
-    id: TabId,
+    pub(super) id: TabId,
     location: Location,
     view: ViewState,
     listing: Option<Listing>,
@@ -52,6 +52,17 @@ impl Tab {
     #[must_use]
     pub fn history(&self) -> &History {
         &self.history
+    }
+
+    pub(super) fn workspace_snapshot(&self) -> Self {
+        Self {
+            view: self.view,
+            history: self.history.clone(),
+            views: self.views.clone(),
+            names: self.names.clone(),
+            restore: self.restore.clone(),
+            ..Self::new(self.id, self.location.clone())
+        }
     }
 
     pub(crate) fn new(id: TabId, location: Location) -> Self {

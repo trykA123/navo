@@ -122,6 +122,30 @@ pub fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Com
     }
 }
 
+pub fn apply_workspace(
+    state: &mut AppState,
+    action: &crate::WorkspaceAction,
+) -> Result<Vec<Effect>, StateError> {
+    let visible_changed = state.change_workspace(action)?;
+    let mut effects = if visible_changed {
+        state
+            .window(state.focused_window())
+            .into_iter()
+            .flat_map(|w| w.panes())
+            .map(|p| p.active().id())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|tab| list_tab(state, tab))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if !matches!(action, crate::WorkspaceAction::Switch { .. }) || visible_changed {
+        effects.push(Effect::SaveSession);
+    }
+    Ok(effects)
+}
+
 pub fn apply_event(state: &mut AppState, event: Event) -> Vec<Effect> {
     match event {
         Event::ListingLoaded {

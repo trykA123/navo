@@ -1,4 +1,5 @@
 mod convert;
+mod workspaces;
 
 use std::cell::Cell;
 
@@ -21,8 +22,28 @@ pub struct WindowState {
     pub layout: LayoutState,
     pub focused_pane: u64,
     pub panes: Vec<PaneState>,
+    #[serde(default)]
+    pub workspaces: Vec<WorkspaceState>,
+    #[serde(default)]
+    pub active_workspace: u8,
     #[serde(default, deserialize_with = "crate::placement::deserialize_placements")]
     pub placement: Vec<Placement>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceState {
+    pub name: String,
+    pub saved: SnapshotState,
+    pub live: Option<SnapshotState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnapshotState {
+    pub layout: LayoutState,
+    pub focused_pane: u64,
+    pub panes: Vec<PaneState>,
+    #[serde(default)]
+    pub last_marks: Option<Vec<String>>,
 }
 
 impl WindowState {
