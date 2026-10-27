@@ -44,7 +44,7 @@ fn line(t: &Theme, index: usize, is_selected: bool) -> RowElement {
         .when(is_selected, |row| row.bg(t.colors.selection))
 }
 
-pub(super) fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
+fn icon_cell(child: Option<gpui_kit::AnyElement>) -> Div {
     div()
         .w(px(ICON_COLUMN))
         .flex_none()
@@ -66,7 +66,6 @@ pub(super) fn render(look: &RowLook, row: &Row, index: usize, is_selected: bool)
             .px(t.spacing.sm)
             .child(div().h(px(1.)).w_full().bg(t.colors.line)),
         Row::Item(item) => item_row(look, item, index, is_selected),
-        Row::Back { title } => base(index).aria_label(title.clone()),
     }
 }
 

@@ -7,9 +7,8 @@ fn hits(query: &str) -> Vec<ItemRow> {
 fn hits_in(page: &[usize], query: &str) -> Vec<ItemRow> {
     rows(&zip_menu(), page, query)
         .into_iter()
-        .filter_map(|row| match row {
-            Row::Item(item) => Some(item),
-            Row::Back { .. } => None,
+        .map(|row| match row {
+            Row::Item(item) => item,
             Row::Separator => panic!("a filtered list holds a separator"),
         })
         .collect()
@@ -72,10 +71,10 @@ fn a_query_inside_a_page_finds_only_its_descendants() {
 }
 
 #[test]
-fn a_page_query_keeps_the_back_row_and_full_paths() {
+fn a_page_query_keeps_full_paths() {
     let rows = rows(&zip_menu(), &[SEVEN_ZIP], "here");
-    assert_eq!(item_texts(&rows), ["< 7-Zip", "Extract Here"]);
-    let Some(Row::Item(here)) = rows.get(1) else {
+    assert_eq!(item_texts(&rows), ["Extract Here"]);
+    let Some(Row::Item(here)) = rows.first() else {
         panic!("Extract Here missing");
     };
     assert_eq!(here.path, [SEVEN_ZIP, 1]);
@@ -97,7 +96,7 @@ fn crumbs_inside_a_page_start_below_it() {
     };
     children.push(deep);
     let rows = rows(&menu, &[SEVEN_ZIP], "bench");
-    assert_eq!(item_texts(&rows), ["< 7-Zip", "More › Benchmark"]);
+    assert_eq!(item_texts(&rows), ["More › Benchmark"]);
 }
 
 #[test]

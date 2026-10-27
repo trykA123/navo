@@ -99,7 +99,6 @@ fn zip_menu() -> ShellMenu {
 fn item_texts(rows: &[Row]) -> Vec<String> {
     rows.iter()
         .map(|row| match row {
-            Row::Back { title } => format!("< {title}"),
             Row::Separator => "-".to_owned(),
             Row::Item(item) => item.breadcrumb(),
         })

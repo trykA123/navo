@@ -1,5 +1,9 @@
+mod aim;
+mod flyout;
+mod hover;
 mod icons;
 mod keys;
+mod levels;
 mod motion;
 mod panel;
 mod place;
@@ -9,17 +13,16 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-use std::time::{Duration, Instant};
-
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::{
-    AnchoredPositionMode, App, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, NavigationDirection,
-    ParentElement, Pixels, Point, Render, ScrollHandle, SharedString, Styled, Subscription, Task,
-    Window, anchored, deferred, div, px,
+    AnchoredPositionMode, AnyElement, App, Bounds, Context, Entity, EventEmitter, FocusHandle,
+    Focusable, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, NavigationDirection,
+    ParentElement, Pixels, Point, Render, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Task, Window, anchored, deferred, div, px,
 };
 use rusty_core::shell_menu::{ShellMenu, Submenu};
+use rusty_l10n::tr;
 
 pub use keys::bind_keys;
 pub(crate) use keys::{MenuDown, MenuEnter, MenuEscape, MenuUp};
@@ -28,14 +31,13 @@ pub use state::ContextMenuEvent;
 use crate::primitives::{TextFieldState, text_field_state};
 use crate::tokens;
 use icons::ShellIcons;
+use levels::LevelView;
 use panel::PanelLook;
-use place::{Frame, Panel};
-use state::{MenuState, PageStatus};
+use place::Panel;
+use state::{MenuState, Spot};
 
 const CONTEXT: &str = "ContextMenu";
 const ROOT: &str = "context-menu";
-const PLACEHOLDER: &str = "Type to filter commands";
-const LOADING_DELAY: Duration = Duration::from_millis(120);
 
 pub struct ContextMenuInput {
     pub menu: ShellMenu,
@@ -50,15 +52,14 @@ pub struct ContextMenu {
     context: SharedString,
     bounds: Bounds<Pixels>,
     field: Entity<TextFieldState>,
-    scroll: ScrollHandle,
     icons: ShellIcons,
     restore: Option<FocusHandle>,
-    opened: Instant,
     origin: Point<Pixels>,
     width: Pixels,
-    shown_page: Vec<usize>,
-    page_since: Instant,
-    loading: Option<Task<()>>,
+    views: Vec<LevelView>,
+    intent: Option<Task<()>>,
+    pointer: Option<Point<Pixels>>,
+    settled: Option<Spot>,
     has_classic: bool,
     _field: Subscription,
 }
@@ -73,7 +74,7 @@ impl Focusable for ContextMenu {
 
 impl ContextMenu {
     pub fn new(input: ContextMenuInput, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let field = text_field_state(PLACEHOLDER, window, cx);
+        let field = text_field_state(tr("context-menu-type-to-filter"), window, cx);
         let subscription = cx.subscribe(&field, |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 this.field_changed(cx);
@@ -82,28 +83,26 @@ impl ContextMenu {
         window.focus(&field.focus_handle(cx), cx);
         let icons = ShellIcons::build(&input.menu, cx);
         let state = MenuState::new(input.menu);
-        let width = px(place::page_width(state.rows(), state.menu()));
+        let root = state.root();
+        let width = px(place::page_width(root.rows(), state.menu()).max(place::MIN_WIDTH));
         let panel = Panel {
             origin: input.anchor,
             width,
-            list: place::list_height(state.rows(), state.status()),
-            has_back: false,
+            list: place::list_height(root.rows(), root.status()),
         };
-        let now = cx.background_executor().now();
         let mut menu = Self {
             icons,
             origin: place::opening_origin(panel, input.anchor, input.bounds),
             width,
             state,
-            opened: now,
-            shown_page: Vec::new(),
-            page_since: now,
-            loading: None,
+            views: Vec::new(),
+            intent: None,
+            pointer: None,
+            settled: None,
             has_classic: true,
             context: input.context,
             bounds: input.bounds,
             field,
-            scroll: ScrollHandle::new(),
             restore: input.restore,
             _field: subscription,
         };
@@ -152,14 +151,16 @@ impl ContextMenu {
         changed
     }
 
+    /// Opens the flyouts along `path` and focuses the deepest one.
     pub fn open_submenu(&mut self, path: &[usize], window: &mut Window, cx: &mut Context<Self>) {
-        let event = self.state.drill(path.to_vec());
+        let event = self.state.open_path(path);
         self.finish(event, window, cx);
     }
 
     fn field_changed(&mut self, cx: &mut Context<Self>) {
         let query = self.field.read(cx).value();
         self.state.set_query(&query);
+        self.intent = None;
         self.settle(cx);
         cx.notify();
     }
@@ -170,6 +171,8 @@ impl ContextMenu {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.intent = None;
+        self.settled = None;
         let query = self.state.query().to_owned();
         if self.field.read(cx).value() != query {
             self.field
@@ -183,30 +186,20 @@ impl ContextMenu {
     }
 
     fn settle(&mut self, cx: &mut Context<Self>) {
-        if self.state.page() != self.shown_page {
-            self.turn_page(cx);
-        }
+        self.sync_levels(cx);
         if !self.state.is_filtering() {
-            let wanted = px(place::page_width(self.state.rows(), self.state.menu()));
-            self.width = self.width.max(wanted);
+            self.width = self.width.max(px(self.root_width()));
         }
-        let offset = usize::from(!self.state.page().is_empty());
-        if let Some(index) = self.state.selection().index() {
-            self.scroll.scroll_to_item(index.saturating_sub(offset));
+        for (view, level) in self.views.iter_mut().zip(self.state.levels()) {
+            let index = level.selection().index();
+            if view.selected == index {
+                continue;
+            }
+            view.selected = index;
+            if let Some(index) = index {
+                view.scroll.scroll_to_item(index);
+            }
         }
-    }
-
-    fn turn_page(&mut self, cx: &mut Context<Self>) {
-        let now = cx.background_executor().now();
-        self.shown_page = self.state.page().to_vec();
-        self.scroll = ScrollHandle::new();
-        self.page_since = now;
-        self.loading = (self.state.status() == PageStatus::Loading).then(|| {
-            cx.spawn(async move |this, cx| {
-                cx.background_executor().timer(LOADING_DELAY).await;
-                let _ = this.update(cx, |_, cx| cx.notify());
-            })
-        });
     }
 
     fn conclude(
@@ -229,73 +222,64 @@ impl ContextMenu {
         self.finish(event, window, cx);
     }
 
-    fn hovered(&mut self, row: usize, cx: &mut Context<Self>) {
-        if self.state.hover(row) {
-            cx.notify();
-        }
-    }
-
-    fn clicked(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let event = self.state.click(row);
-        self.conclude(event, window, cx);
-    }
-
-    fn retried(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let event = self.state.retry();
+    fn retried(&mut self, level: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let event = self.state.retry(level);
         self.finish(event, window, cx);
     }
 
-    fn went_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state.set_query("");
-        self.state.back();
-        self.finish(None, window, cx);
-    }
-
     fn back_click(&mut self, _: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.went_back(window, cx);
+        if self.state.close_innermost() {
+            self.finish(None, window, cx);
+        }
     }
 
     fn dismiss_click(&mut self, _: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.conclude(Some(ContextMenuEvent::Dismissed), window, cx);
     }
 
-    fn frame(&self) -> Frame {
-        let panel = Panel {
-            origin: self.origin,
-            width: self.width,
-            list: place::list_height(self.state.rows(), self.state.status()),
-            has_back: !self.state.page().is_empty(),
-        };
-        place::panel_frame(panel, self.bounds)
-    }
-
-    fn is_loading_shown(&self, now: Instant) -> bool {
-        now.saturating_duration_since(self.page_since) >= LOADING_DELAY
-    }
-
-    fn opacity(&self, now: Instant, cx: &App) -> f32 {
-        motion::progress(self.opened, now, tokens::current(cx).motion.fade)
+    fn panels(
+        &self,
+        t: &tokens::Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let now = cx.background_executor().now();
+        let fade = t.motion.fade;
+        let reduce = cx.reduce_motion();
+        let mut is_moving = false;
+        let mut panels = Vec::new();
+        for (level, (placed, view)) in self.frames().into_iter().zip(&self.views).enumerate() {
+            let opacity = motion::progress(view.opened, now, fade);
+            let loading = flyout::bar_for(view, now, fade, reduce);
+            if level == 0 {
+                crate::perf::animating(crate::perf::Latency::MenuOpen, opacity < 1.);
+            }
+            is_moving |= opacity < 1. || loading.is_some_and(flyout::Bar::is_moving);
+            let look = PanelLook {
+                level,
+                frame: placed.frame,
+                theme: t,
+                opacity,
+                loading,
+            };
+            panels.push(if level == 0 {
+                self.panel(look, cx)
+            } else {
+                self.flyout(look, cx)
+            });
+        }
+        if is_moving {
+            window.request_animation_frame();
+        }
+        panels
     }
 }
 
 impl Render for ContextMenu {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let now = cx.background_executor().now();
-        let opacity = self.opacity(now, cx);
-        let is_fading = opacity < 1.;
-        if is_fading {
-            window.request_animation_frame();
-        }
         crate::perf::note(crate::perf::UiFlag::ContextMenu);
-        crate::perf::animating(crate::perf::Latency::MenuOpen, is_fading);
-        let look = PanelLook {
-            frame: self.frame(),
-            theme: &t,
-            opacity,
-            shows_loading: self.is_loading_shown(now),
-        };
-        let panel = self.panel(look, cx);
+        let panels = self.panels(&t, window, cx);
         let area = self.bounds;
         let layer = div()
             .id(ROOT)
@@ -306,13 +290,18 @@ impl Render for ContextMenu {
             .w(area.size.width)
             .h(area.size.height)
             .font_family(t.typography.ui_font.clone())
+            .on_hover(cx.listener(|this, hovered: &bool, window, _| {
+                if !*hovered {
+                    this.pointer_left(window.mouse_position());
+                }
+            }))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::dismiss_click))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::dismiss_click))
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(Self::back_click),
             )
-            .child(panel);
+            .children(panels);
         let layer = keys::register(layer, cx);
         deferred(
             anchored()

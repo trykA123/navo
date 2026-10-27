@@ -96,34 +96,25 @@ fn item_row_carries_its_path_and_submenu_flag() {
 }
 
 #[test]
-fn a_page_starts_with_a_back_row_and_lists_its_children() {
+fn a_page_lists_its_children() {
     assert_eq!(
         item_texts(&rows(&zip_menu(), &[SEVEN_ZIP], "")),
-        [
-            "< 7-Zip",
-            "Open archive",
-            "Extract Here",
-            "-",
-            "Extract to \"dist\\\""
-        ]
+        ["Open archive", "Extract Here", "-", "Extract to \"dist\\\""]
     );
 }
 
 #[test]
 fn page_rows_carry_full_paths() {
     let rows = rows(&zip_menu(), &[SEVEN_ZIP], "");
-    let Some(Row::Item(here)) = rows.get(2) else {
+    let Some(Row::Item(here)) = rows.get(1) else {
         panic!("Extract Here missing");
     };
     assert_eq!(here.path, [SEVEN_ZIP, 1]);
 }
 
 #[test]
-fn a_lazy_page_has_only_its_back_row() {
-    assert_eq!(
-        item_texts(&rows(&zip_menu(), &[SEND_TO], "")),
-        ["< Send to"]
-    );
+fn a_lazy_page_has_no_rows() {
+    assert!(rows(&zip_menu(), &[SEND_TO], "").is_empty());
 }
 
 #[test]
@@ -151,7 +142,7 @@ fn items_without_text_are_skipped_and_counted_for_the_classic_menu() {
         ],
     };
     assert_eq!(root(&menu), ["Open", "Tools"]);
-    assert_eq!(item_texts(&rows(&menu, &[2], "")), ["< Tools"]);
+    assert!(rows(&menu, &[2], "").is_empty());
     assert_eq!(menu.classic_only_count(), 2);
 }
 
@@ -166,10 +157,7 @@ fn filled_lazy_submenu_shows_its_children() {
         item_texts(&rows(&menu, &[], "docu")),
         ["Send to › Documents"]
     );
-    assert_eq!(
-        item_texts(&rows(&menu, &[SEND_TO], "")),
-        ["< Send to", "Documents"]
-    );
+    assert_eq!(item_texts(&rows(&menu, &[SEND_TO], "")), ["Documents"]);
 }
 
 #[test]
@@ -178,7 +166,7 @@ fn set_submenu_refuses_commands_and_bad_paths() {
     assert!(!menu.set_submenu(&[0], Submenu::Loading));
     assert!(!menu.set_submenu(&[129], Submenu::Loading));
     assert!(menu.set_submenu(&[SEVEN_ZIP], Submenu::Failed));
-    assert_eq!(item_texts(&rows(&menu, &[SEVEN_ZIP], "")), ["< 7-Zip"]);
+    assert!(rows(&menu, &[SEVEN_ZIP], "").is_empty());
 }
 
 #[test]

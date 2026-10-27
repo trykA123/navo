@@ -339,13 +339,20 @@ impl Rig {
     }
 
     fn rows(&self, cx: &mut TestAppContext) -> Vec<String> {
+        self.rows_in(cx, 0)
+    }
+
+    fn rows_in(&self, cx: &mut TestAppContext, level: usize) -> Vec<String> {
         cx.update_window(self.window, |_, window, cx| {
             window.render_frame(cx);
             if window.try_find("context-menu").is_none() {
                 return Vec::new();
             }
             let mut root = window.within("context-menu");
-            let level = root.within(("menu-level", 0usize));
+            if root.try_find(("menu-level", level)).is_none() {
+                return Vec::new();
+            }
+            let level = root.within(("menu-level", level));
             (0usize..)
                 .map_while(|index| level.try_find(("menu-row", index)))
                 .map(|row| row.label().unwrap_or("-").to_owned())
@@ -573,12 +580,12 @@ fn retry_shows_the_items_of_a_submenu_that_failed_once(cx: &mut TestAppContext) 
     rig.answer(cx, Ok(windows_menu()));
     rig.type_text(cx, "send");
     rig.press(cx, "right");
-    assert_eq!(rig.rows(cx), ["Could not load", "Retry"]);
+    assert_eq!(rig.rows_in(cx, 1), ["Could not load", "Retry"]);
     let documents = Submenu::Filled(vec![shell_item(50, "Documents", Group::Share)]);
     rig.shell.fills.borrow_mut().insert(vec![2], documents);
     rig.press(cx, "enter");
     rig.wait(cx, 50);
-    assert_eq!(rig.rows(cx), ["Documents"]);
+    assert_eq!(rig.rows_in(cx, 1), ["Documents"]);
 }
 
 #[gpui_kit::test]

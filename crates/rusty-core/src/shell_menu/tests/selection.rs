@@ -11,9 +11,9 @@ fn first_selects_the_first_item() {
 }
 
 #[test]
-fn first_on_a_page_skips_the_back_row() {
+fn first_on_a_page_selects_its_first_child() {
     let rows = rows(&zip_menu(), &[SEVEN_ZIP], "");
-    assert_eq!(Selection::first(&rows).index(), Some(1));
+    assert_eq!(Selection::first(&rows).index(), Some(0));
 }
 
 #[test]
@@ -136,7 +136,7 @@ fn keep_falls_back_to_first_when_the_command_is_gone() {
 }
 
 #[test]
-fn pick_selects_an_item_and_refuses_a_separator_or_the_back_row() {
+fn pick_selects_an_item_and_refuses_a_separator() {
     let rows = root(&zip_menu());
     assert_eq!(Selection::pick(&rows, 2).and_then(|s| s.index()), Some(2));
     assert_eq!(
@@ -144,10 +144,4 @@ fn pick_selects_an_item_and_refuses_a_separator_or_the_back_row() {
         Some(vec![SEVEN_ZIP])
     );
     assert_eq!(Selection::pick(&rows, 3), None);
-    let page = rows_of_page();
-    assert_eq!(Selection::pick(&page, 0), None);
-}
-
-fn rows_of_page() -> Vec<Row> {
-    rows(&zip_menu(), &[SEVEN_ZIP], "")
 }

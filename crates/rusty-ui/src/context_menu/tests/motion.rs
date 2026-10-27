@@ -64,14 +64,21 @@ fn a_menu_placed_above_its_anchor_grows_without_moving(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
-fn a_submenu_and_the_way_back_show_in_place_at_once(cx: &mut TestAppContext) {
+fn the_root_stays_still_while_a_flyout_opens_and_closes(cx: &mut TestAppContext) {
     let menu = open_menu_with(cx, point(px(40.), px(20.)), zip_menu());
     menu.wait(200, cx);
-    let resting = menu.row_bounds(0, cx).origin.x;
+    let resting = menu.level_bounds(cx);
     menu.press(&["down", "down", "right"], cx);
-    menu.frame(cx);
-    assert_eq!(menu.row_bounds(0, cx).origin.x, resting);
+    assert_eq!(menu.level_bounds(cx), resting);
     menu.press(&["left"], cx);
-    menu.frame(cx);
-    assert_eq!(menu.row_bounds(0, cx).origin.x, resting);
+    assert_eq!(menu.level_bounds(cx), resting);
+}
+
+#[gpui_kit::test]
+fn a_flyout_shows_in_place_on_its_first_frame(cx: &mut TestAppContext) {
+    let menu = open_menu_with(cx, point(px(40.), px(20.)), zip_menu());
+    menu.press(&["down", "down", "right"], cx);
+    let first = menu.level_bounds_in(1, cx);
+    menu.wait(40, cx);
+    assert_eq!(menu.level_bounds_in(1, cx), first);
 }

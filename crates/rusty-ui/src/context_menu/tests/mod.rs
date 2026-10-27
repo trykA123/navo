@@ -5,8 +5,9 @@ use std::time::Duration;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle, InputEvent as _,
-    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, NavigationDirection,
-    ParentElement, Pixels, Point, Render, Styled, TestAppContext, Window, div, point, px, size,
+    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
+    NavigationDirection, ParentElement, Pixels, Point, Render, Styled, TestAppContext, Window, div,
+    point, px, size,
 };
 use rusty_core::shell_menu::{
     Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu, ferrite_actions,
@@ -16,10 +17,12 @@ use super::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::test_window::open_sized;
 
 mod filter;
+mod flyout;
+mod hover;
 mod icons;
 mod keys;
+mod loading;
 mod motion;
-mod pages;
 mod place;
 
 pub(super) const ROOT: &str = "context-menu";
@@ -221,22 +224,15 @@ impl Opened {
     }
 
     pub fn click(&self, row: usize, cx: &mut TestAppContext) {
-        cx.update_window(self.window, |_, window, cx| {
-            window
-                .within(ROOT)
-                .within(("menu-level", 0usize))
-                .click(("menu-row", row), cx);
-        })
-        .expect("window");
-        cx.run_until_parked();
+        self.click_in(0, row, cx);
     }
 
-    pub fn click_back(&self, cx: &mut TestAppContext) {
+    pub fn click_in(&self, level: usize, row: usize, cx: &mut TestAppContext) {
         cx.update_window(self.window, |_, window, cx| {
             window
                 .within(ROOT)
-                .within(("menu-level", 0usize))
-                .click("menu-back", cx);
+                .within(("menu-level", level))
+                .click(("menu-row", row), cx);
         })
         .expect("window");
         cx.run_until_parked();
@@ -259,11 +255,29 @@ impl Opened {
     }
 
     pub fn hover(&self, row: usize, cx: &mut TestAppContext) {
+        self.hover_in(0, row, cx);
+    }
+
+    pub fn hover_in(&self, level: usize, row: usize, cx: &mut TestAppContext) {
         cx.update_window(self.window, |_, window, cx| {
             window
                 .within(ROOT)
-                .within(("menu-level", 0usize))
+                .within(("menu-level", level))
                 .hover(("menu-row", row), cx);
+        })
+        .expect("window");
+        cx.run_until_parked();
+    }
+
+    pub fn move_to(&self, position: Point<Pixels>, cx: &mut TestAppContext) {
+        cx.update_window(self.window, |_, window, cx| {
+            window.render_frame(cx);
+            let event = MouseMoveEvent {
+                position,
+                pressed_button: None,
+                modifiers: Default::default(),
+            };
+            window.dispatch_event(event.to_platform_input(), cx);
         })
         .expect("window");
         cx.run_until_parked();
@@ -285,7 +299,11 @@ impl Opened {
     }
 
     pub fn rows(&self, cx: &mut TestAppContext) -> Vec<String> {
-        self.with_level(cx, |window| {
+        self.rows_in(0, cx)
+    }
+
+    pub fn rows_in(&self, level: usize, cx: &mut TestAppContext) -> Vec<String> {
+        self.with_level(level, cx, |window| {
             (0usize..)
                 .map_while(|index| window.try_find(("menu-row", index)))
                 .map(|row| row.label().unwrap_or("-").to_owned())
@@ -294,7 +312,11 @@ impl Opened {
     }
 
     pub fn selected(&self, cx: &mut TestAppContext) -> Option<String> {
-        self.with_level(cx, |window| {
+        self.selected_in(0, cx)
+    }
+
+    pub fn selected_in(&self, level: usize, cx: &mut TestAppContext) -> Option<String> {
+        self.with_level(level, cx, |window| {
             (0usize..)
                 .map_while(|index| window.try_find(("menu-row", index)))
                 .find(|row| row.selected() == Some(true))
@@ -302,16 +324,32 @@ impl Opened {
         })
     }
 
-    pub fn back_row(&self, cx: &mut TestAppContext) -> Option<String> {
-        self.with_level(cx, |window| {
+    pub fn levels(&self, cx: &mut TestAppContext) -> usize {
+        self.with_root(cx, |window| {
+            (0usize..)
+                .take_while(|level| window.try_find(("menu-level", *level)).is_some())
+                .count()
+        })
+    }
+
+    pub fn loading_bar(&self, level: usize, cx: &mut TestAppContext) -> Option<Bounds<Pixels>> {
+        self.with_level(level, cx, |window| {
             window
-                .try_find("menu-back")
-                .map(|found| found.label().unwrap_or_default().to_owned())
+                .try_find(("menu-loading", level))
+                .map(|found| found.bounds())
+        })
+    }
+
+    pub fn sweep(&self, level: usize, cx: &mut TestAppContext) -> Option<Bounds<Pixels>> {
+        self.with_level(level, cx, |window| {
+            window
+                .try_find(("menu-loading-sweep", level))
+                .map(|found| found.bounds())
         })
     }
 
     pub fn find(&self, id: (&'static str, usize), cx: &mut TestAppContext) -> Option<String> {
-        self.with_level(cx, |window| {
+        self.with_level(0, cx, |window| {
             window
                 .try_find(id)
                 .map(|found| found.label().unwrap_or_default().to_owned())
@@ -323,11 +361,24 @@ impl Opened {
     }
 
     pub fn row_bounds(&self, row: usize, cx: &mut TestAppContext) -> Bounds<Pixels> {
-        self.with_level(cx, |window| window.find(("menu-row", row)).bounds())
+        self.row_bounds_in(0, row, cx)
+    }
+
+    pub fn row_bounds_in(
+        &self,
+        level: usize,
+        row: usize,
+        cx: &mut TestAppContext,
+    ) -> Bounds<Pixels> {
+        self.with_level(level, cx, |window| window.find(("menu-row", row)).bounds())
     }
 
     pub fn level_bounds(&self, cx: &mut TestAppContext) -> Bounds<Pixels> {
-        self.with_root(cx, |window| window.find(("menu-level", 0usize)).bounds())
+        self.level_bounds_in(0, cx)
+    }
+
+    pub fn level_bounds_in(&self, level: usize, cx: &mut TestAppContext) -> Bounds<Pixels> {
+        self.with_root(cx, |window| window.find(("menu-level", level)).bounds())
     }
 
     pub fn filter_text(&self, cx: &mut TestAppContext) -> String {
@@ -349,9 +400,10 @@ impl Opened {
 
     fn with_level<R>(
         &self,
+        level: usize,
         cx: &mut TestAppContext,
         read: impl FnOnce(&mut gpui_kit::test::ScopedWindow<'_>) -> R,
     ) -> R {
-        self.with_root(cx, |root| read(&mut root.within(("menu-level", 0usize))))
+        self.with_root(cx, |root| read(&mut root.within(("menu-level", level))))
     }
 }

@@ -77,12 +77,13 @@ impl ContextMenu {
     fn on_right(&mut self, _: &MenuRight, window: &mut Window, cx: &mut Context<Self>) {
         match self.state.right() {
             Some(event) => self.finish(event, window, cx),
-            None => cx.propagate(),
+            None if self.state.active() == 0 => cx.propagate(),
+            None => {}
         }
     }
 
     fn on_left(&mut self, _: &MenuLeft, window: &mut Window, cx: &mut Context<Self>) {
-        if self.state.back() {
+        if self.state.left() {
             self.finish(None, window, cx);
         } else {
             cx.propagate();
@@ -91,7 +92,7 @@ impl ContextMenu {
 
     fn on_escape(&mut self, _: &MenuEscape, window: &mut Window, cx: &mut Context<Self>) {
         match self.state.escape() {
-            Escape::ClearedQuery | Escape::Back => self.finish(None, window, cx),
+            Escape::ClearedQuery | Escape::Closed => self.finish(None, window, cx),
             Escape::Dismiss => self.conclude(Some(ContextMenuEvent::Dismissed), window, cx),
         }
     }
@@ -105,12 +106,18 @@ impl ContextMenu {
 
     fn step(&mut self, step: Step, cx: &mut Context<Self>) {
         self.state.move_by(step);
+        self.intent = None;
+        self.settled = None;
         self.settle(cx);
         cx.notify();
     }
 
     fn page_rows(&self) -> usize {
-        let height = f32::from(self.frame().list_height);
+        let frames = self.frames();
+        let Some(placed) = frames.get(self.state.active()) else {
+            return 1;
+        };
+        let height = f32::from(placed.frame.list_height);
         ((height / ROW).floor() as usize).max(1)
     }
 }

@@ -38,7 +38,6 @@ impl ItemRow {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Row {
-    Back { title: String },
     Separator,
     Item(ItemRow),
 }
@@ -48,34 +47,27 @@ impl Row {
     pub fn is_selectable(&self, allow_disabled: bool) -> bool {
         match self {
             Self::Item(item) => item.enabled || allow_disabled,
-            Self::Back { .. } | Self::Separator => false,
+            Self::Separator => false,
         }
     }
 }
 
-/// The rows of one page: the root for an empty `page`, else the submenu at `page` under a back row.
+/// The rows of one panel: the root for an empty `page`, else the submenu at `page`.
 #[must_use]
 pub fn rows(menu: &ShellMenu, page: &[usize], query: &str) -> Vec<Row> {
-    let (mut out, items) = if page.is_empty() {
-        (Vec::new(), Some(menu.items.as_slice()))
+    let items = if page.is_empty() {
+        Some(menu.items.as_slice())
     } else {
-        let Some(item) = menu.item(page) else {
-            return Vec::new();
-        };
-        let back = Row::Back {
-            title: item.text.clone(),
-        };
-        (vec![back], item.children())
+        menu.item(page).and_then(MenuItem::children)
     };
     let Some(items) = items else {
-        return out;
+        return Vec::new();
     };
     if query.trim().is_empty() {
-        out.extend(listed(items, page));
+        listed(items, page)
     } else {
-        out.extend(filter::matches(items, page, query));
+        filter::matches(items, page, query)
     }
-    out
 }
 
 fn listed(items: &[MenuItem], page: &[usize]) -> Vec<Row> {

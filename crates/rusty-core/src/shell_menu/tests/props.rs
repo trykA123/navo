@@ -44,10 +44,7 @@ fn menu() -> impl Strategy<Value = ShellMenu> {
 }
 
 fn separators_are_clean(rows: &[Row]) -> bool {
-    let items = match rows.first() {
-        Some(Row::Back { .. }) => &rows[1..],
-        _ => rows,
-    };
+    let items = rows;
     let first_ok = !matches!(items.first(), Some(Row::Separator));
     let last_ok = !matches!(items.last(), Some(Row::Separator));
     let no_pairs = items
@@ -73,7 +70,6 @@ proptest! {
             for row in rows(&menu, &page, &query) {
                 let item = match row {
                     Row::Item(item) => item,
-                    Row::Back { .. } => continue,
                     Row::Separator => return Err(TestCaseError::fail("filtered list holds a separator")),
                 };
                 prop_assert!(item.path.starts_with(&page));
