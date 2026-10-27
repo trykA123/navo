@@ -6,7 +6,7 @@ use rusty_core::{OpKind, OperationPlan, Totals};
 
 use super::*;
 use crate::recovery::SalvageOutcome;
-use crate::{JobJournal, quarantine_database};
+use crate::{CollectionKind, JobJournal, NewCollection, quarantine_database};
 
 fn populated(path: &Path) {
     let (db, _) = Db::open(path, false).unwrap();
@@ -56,6 +56,98 @@ fn count(db: &Db, table: &str) -> i64 {
             row.get(0)
         })
         .unwrap()
+}
+
+fn populate_collections(db: &Db) {
+    for (name, kind, query, base) in [
+        (
+            "Sources",
+            CollectionKind::Search,
+            Some("ext:rs"),
+            Some("/work"),
+        ),
+        ("Archive", CollectionKind::Snapshot, None, Some("/archive")),
+        ("Picked", CollectionKind::Manual, None, None),
+    ] {
+        let id = db
+            .create_collection(
+                &NewCollection {
+                    name,
+                    kind,
+                    query,
+                    base,
+                },
+                100,
+            )
+            .unwrap();
+        if kind != CollectionKind::Search {
+            db.add_collection_items(id, &["/z-last", "/a-first"], 200)
+                .unwrap();
+            db.add_collection_items(id, &["/m-middle"], 300).unwrap();
+        }
+    }
+}
+
+#[test]
+fn collections_and_ordered_items_survive_damage_in_another_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ferrite.db");
+    populated(&path);
+    let (db, _) = Db::open(&path, false).unwrap();
+    populate_collections(&db);
+    let collections = db.list_collections().unwrap();
+    let items = collections
+        .iter()
+        .map(|collection| (collection.id, db.collection_items(collection.id).unwrap()))
+        .collect::<Vec<_>>();
+    drop(db);
+    corrupt_table(&path, "history");
+    let source = quarantined(&path);
+    let fresh = Db::open_in_memory().unwrap();
+    let report = salvage_database(&source, &fresh).unwrap();
+    assert_eq!(fresh.list_collections().unwrap(), collections);
+    for (id, expected) in items {
+        assert_eq!(fresh.collection_items(id).unwrap(), expected);
+    }
+    for (name, rows) in [("collections", 3), ("collection_items", 6)] {
+        assert!(report.tables.iter().any(|table| table.name == name
+            && table.outcome == SalvageOutcome::Copied { rows }));
+    }
+}
+
+#[test]
+fn damaged_or_missing_collection_tables_are_reported_without_aborting_salvage() {
+    for table in ["collections", "collection_items"] {
+        for missing in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("ferrite.db");
+            populated(&path);
+            let (db, _) = Db::open(&path, false).unwrap();
+            populate_collections(&db);
+            drop(db);
+            if missing {
+                Connection::open(&path)
+                    .unwrap()
+                    .execute_batch(&format!("PRAGMA foreign_keys=OFF; DROP TABLE {table};"))
+                    .unwrap();
+            } else {
+                corrupt_table(&path, table);
+            }
+            let source = quarantined(&path);
+            let fresh = Db::open_in_memory().unwrap();
+            let report = salvage_database(&source, &fresh).unwrap();
+            assert!(report.tables.iter().any(
+                |row| row.name == table && matches!(row.outcome, SalvageOutcome::Reset { .. })
+            ));
+            assert_eq!(count(&fresh, "tags"), 1);
+            assert_eq!(count(&fresh, "history"), 2000);
+            assert_eq!(count(&fresh, "collection_items"), 0);
+            assert_eq!(
+                count(&fresh, "collections"),
+                if table == "collections" { 0 } else { 3 }
+            );
+        }
+    }
 }
 
 fn plan() -> Vec<u8> {
@@ -198,7 +290,7 @@ fn an_unreadable_schema_returns_reset_and_manual_recovery_information() {
     fs::write(&path, [0x5a; 4096]).unwrap();
     let fresh = Db::open_in_memory().unwrap();
     let report = salvage_database(&path, &fresh).unwrap();
-    assert_eq!(report.tables.len(), 13);
+    assert_eq!(report.tables.len(), 15);
     assert!(
         report
             .tables

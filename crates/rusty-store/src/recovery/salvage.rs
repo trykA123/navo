@@ -25,6 +25,8 @@ const GROUPS: &[&[&str]] = &[
     &["viewer_memory"],
     &["command_use"],
     &["rename_preset"],
+    &["collections"],
+    &["collection_items"],
     RETAINED,
 ];
 
