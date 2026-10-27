@@ -64,6 +64,7 @@ windows-sys = { version = "0.61.2", features = [
 
 [dev-dependencies]
 insta = "1.49.0"
+rusty-index = { path = "../rusty-index", features = ["test-support"] }
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
 
 [build-dependencies]

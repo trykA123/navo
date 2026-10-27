@@ -4,14 +4,21 @@ use std::io;
 #[cfg(any(windows, test))]
 mod record_size;
 mod snapshot;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, test, feature = "test-support"))]
+#[cfg_attr(
+    all(not(windows), not(test)),
+    allow(
+        dead_code,
+        reason = "test-support uses enumeration without Windows journal I/O"
+    )
+)]
 mod volume_io;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, test, feature = "test-support"))]
 use volume_io::*;
 
 use crate::table::{Flags, NameTable, TableChange, TableError};
 use crate::usn::{FrnMap, JournalPosition, ParseError, PendingRenames, UsnBatch};
-#[cfg(any(windows, test))]
+#[cfg(any(windows, test, feature = "test-support"))]
 use crate::{
     table::NO_PARENT,
     usn::{Resume, parse_batch},
@@ -72,7 +79,7 @@ pub struct Enumeration {
 }
 
 impl NtfsIndex {
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, test, feature = "test-support"))]
     pub(crate) fn new(drive: char, position: JournalPosition) -> Result<Self, NtfsError> {
         volume_path(drive)?;
         let mut table = NameTable::new();
@@ -287,5 +294,7 @@ fn recover_rename(index: &NtfsIndex, change: TableChange) -> TableChange {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 #[cfg(test)]
 mod tests;
