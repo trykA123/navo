@@ -8,12 +8,14 @@ use rusqlite::{Connection, TransactionBehavior};
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
+mod collections;
 mod frecency;
 mod migrations;
 mod rename_presets;
 mod settings_defaults;
 mod viewer;
 
+pub use collections::{Collection, CollectionItem, CollectionKind, NewCollection};
 pub use frecency::Frecent;
 use migrations::MIGRATIONS;
 pub use rename_presets::{RenamePreset, RenamePresets};
@@ -31,6 +33,8 @@ pub enum DbError {
     Encode(String),
     #[error("a rename preset needs a name")]
     BlankPresetName,
+    #[error("a collection name must contain 1–60 characters and cannot be blank")]
+    InvalidCollectionName,
 }
 
 impl DbError {

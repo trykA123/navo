@@ -14,7 +14,10 @@ mod text_layout;
 
 pub use atomic_write::{backup_path, replace_atomic, replace_entry_atomic, write_atomic};
 pub use cache_db::{CacheDb, CacheError, CacheOpen};
-pub use db::{Db, DbError, FileMemory, Frecent, OpenReport, RenamePreset, RenamePresets, Stamp};
+pub use db::{
+    Collection, CollectionItem, CollectionKind, Db, DbError, FileMemory, Frecent, NewCollection,
+    OpenReport, RenamePreset, RenamePresets, Stamp,
+};
 pub use dirs::StoreDirs;
 pub use journal::{
     FinishedJob, JobId, JobJournal, JobState, JournalError, JournalStep, StepEvidence, StepState,

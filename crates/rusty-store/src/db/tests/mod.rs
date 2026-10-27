@@ -6,6 +6,7 @@ use tempfile::TempDir;
 
 use super::*;
 
+mod collections;
 mod fixtures;
 mod frecency;
 mod fresh;
@@ -31,7 +32,9 @@ const V1_TABLES: [&str; 7] = [
     "undo",
 ];
 
-const TABLES: [&str; 14] = [
+const TABLES: [&str; 16] = [
+    "collection_items",
+    "collections",
     "command_use",
     "frecency",
     "history",

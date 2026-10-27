@@ -18,7 +18,7 @@ fn migration_from_v6_preserves_rows_and_adds_indexed_cleanup_projections() {
     .unwrap();
     drop(conn);
     let (db, report) = Db::open(&path, false).unwrap();
-    assert_eq!((report.from_version, report.to_version), (6, 7));
+    assert_eq!((report.from_version, report.to_version), (6, Db::VERSION));
     assert_eq!(
         db.connection()
             .query_row("SELECT count(*) FROM tags", [], |row| row.get::<_, i64>(0))

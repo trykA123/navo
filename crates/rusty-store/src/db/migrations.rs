@@ -1,4 +1,4 @@
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
 
 const V1: &str = "
 CREATE TABLE history (
@@ -111,4 +111,22 @@ CREATE INDEX retained_entry_live_container ON retained_entry (container_path)
     WHERE state NOT IN ('restored', 'purged', 'aborted');
 CREATE INDEX retained_entry_cleanup ON retained_entry (volume_key, cleanup_round, id)
     WHERE cleanup_pending = 1 AND state IN ('restored', 'purged', 'aborted');
+";
+
+const V8: &str = "
+CREATE TABLE collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE CHECK (length(name) BETWEEN 1 AND 60 AND length(trim(name)) > 0),
+    kind TEXT NOT NULL CHECK (kind IN ('search', 'snapshot', 'manual')),
+    query TEXT,
+    base TEXT,
+    created_ms INTEGER NOT NULL,
+    updated_ms INTEGER NOT NULL
+);
+CREATE TABLE collection_items (
+    collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    location TEXT NOT NULL,
+    added_ms INTEGER NOT NULL,
+    PRIMARY KEY (collection_id, location)
+);
 ";

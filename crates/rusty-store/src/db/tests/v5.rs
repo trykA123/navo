@@ -67,7 +67,11 @@ fn v4_rows_survive_v5_value_for_value() {
     got.retain(|(table, _)| {
         !matches!(
             table.as_str(),
-            "rename_preset" | "retained_entry" | "sqlite_sequence"
+            "collection_items"
+                | "collections"
+                | "rename_preset"
+                | "retained_entry"
+                | "sqlite_sequence"
         )
     });
     assert_eq!(got, want);

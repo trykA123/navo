@@ -123,7 +123,8 @@ fn v3_schema_outside_frecency_is_kept() {
     let (db, _) = Db::open(&path, false).unwrap();
     let mut got = schema(db.connection());
     got.retain(|(name, _)| {
-        !name.contains("command_use")
+        !name.contains("collection")
+            && !name.contains("command_use")
             && !name.contains("rename_preset")
             && !name.contains("retained_entry")
             && name != "sqlite_sequence"
