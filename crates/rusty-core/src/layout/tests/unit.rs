@@ -438,3 +438,143 @@ fn resize_skips_splits_of_the_other_axis() {
         ],
     );
 }
+
+#[test]
+fn numbering_follows_reading_order_for_all_builtin_shapes() {
+    let side = side_by_side();
+    let mut columns = side_by_side();
+    columns.split(Direction::Right, p(3)).unwrap();
+    columns
+        .set_ratio(&crate::layout::SplitPath(vec![]), 330)
+        .unwrap();
+    let mut wide = Layout::new(p(1));
+    wide.split(Direction::Down, p(2)).unwrap();
+    wide.split(Direction::Right, p(3)).unwrap();
+    wide.set_ratio(&crate::layout::SplitPath(vec![]), 520)
+        .unwrap();
+    let mut grid = l_shape();
+    grid.focus(p(1)).unwrap();
+    grid.split(Direction::Down, p(4)).unwrap();
+    let mut main = l_shape();
+    main.split(Direction::Down, p(4)).unwrap();
+    main.set_ratio(&crate::layout::SplitPath(vec![]), 600)
+        .unwrap();
+    main.set_ratio(&crate::layout::SplitPath(vec![true]), 330)
+        .unwrap();
+    for (layout, expected) in [
+        (side, vec![p(1), p(2)]),
+        (columns, vec![p(1), p(2), p(3)]),
+        (wide, vec![p(1), p(2), p(3)]),
+        (grid, vec![p(1), p(2), p(4), p(3)]),
+        (main, vec![p(1), p(2), p(3), p(4)]),
+    ] {
+        assert_eq!(layout.numbered(), expected);
+    }
+}
+
+#[test]
+fn numbering_treats_nearly_aligned_rows_as_equal() {
+    let mut layout = Layout::new(p(5));
+    layout.split(Direction::Down, p(1)).unwrap();
+    layout.split(Direction::Right, p(2)).unwrap();
+    layout.split(Direction::Down, p(3)).unwrap();
+    layout.focus(p(1)).unwrap();
+    layout.split(Direction::Down, p(4)).unwrap();
+    layout
+        .set_ratio(&crate::layout::SplitPath(vec![true, true]), 501)
+        .unwrap();
+    assert_eq!(layout.numbered(), vec![p(5), p(1), p(2), p(4), p(3)]);
+}
+
+#[test]
+fn swap_panes_exchanges_any_two_leaves_and_keeps_focus() {
+    let mut layout = l_shape();
+    layout.swap_panes(p(1), p(3)).unwrap();
+    assert_eq!(layout.numbered(), vec![p(3), p(2), p(1)]);
+    assert_eq!(layout.focused(), p(3));
+    let before = layout.clone();
+    layout.swap_panes(p(3), p(3)).unwrap();
+    assert_eq!(layout, before);
+}
+
+#[test]
+fn swap_panes_rejects_unknown_ids_without_mutating() {
+    let mut layout = l_shape();
+    let before = layout.clone();
+    for (a, b) in [(p(9), p(1)), (p(1), p(9)), (p(9), p(9))] {
+        assert_eq!(layout.swap_panes(a, b), Err(LayoutError::UnknownPane(p(9))));
+        assert_eq!(layout, before);
+    }
+}
+
+#[test]
+fn set_ratio_rejects_leaf_and_missing_paths_without_mutating() {
+    use crate::layout::SplitPath;
+    let mut layout = l_shape();
+    let before = layout.clone();
+    for path in [SplitPath(vec![false]), SplitPath(vec![false, true])] {
+        assert_eq!(
+            layout.set_ratio(&path, 700),
+            Err(LayoutError::InvalidSplitPath(path))
+        );
+        assert_eq!(layout, before);
+    }
+    let mut single = Layout::new(p(1));
+    assert!(single.set_ratio(&SplitPath(vec![]), 700).is_err());
+}
+
+#[test]
+fn splits_expose_paths_axes_ratios_and_containing_rectangles() {
+    use crate::layout::{Axis, SplitInfo, SplitPath};
+    assert!(Layout::new(p(1)).splits().is_empty());
+    assert_eq!(
+        l_shape().splits(),
+        vec![
+            SplitInfo {
+                path: SplitPath(vec![]),
+                axis: Axis::SideBySide,
+                ratio: 500,
+                rect: rect(0.0, 0.0, 1.0, 1.0)
+            },
+            SplitInfo {
+                path: SplitPath(vec![true]),
+                axis: Axis::Stacked,
+                ratio: 500,
+                rect: rect(0.5, 0.0, 0.5, 1.0)
+            },
+        ]
+    );
+}
+
+#[test]
+fn set_ratio_clamps_both_bounds_and_changes_only_the_selected_split() {
+    use crate::layout::SplitPath;
+    let mut layout = l_shape();
+    for (requested, expected) in [(0, 100), (u16::MAX, 900), (700, 700)] {
+        layout.set_ratio(&SplitPath(vec![true]), requested).unwrap();
+        let splits = layout.splits();
+        assert_eq!(splits[0].ratio, 500);
+        assert_eq!(splits[1].ratio, expected);
+    }
+}
+
+#[test]
+fn even_weights_splits_by_leaf_count() {
+    use crate::layout::SplitPath;
+    let mut layout = side_by_side();
+    layout.split(Direction::Right, p(3)).unwrap();
+    layout.set_ratio(&SplitPath(vec![]), 700).unwrap();
+    let focused = layout.focused();
+    layout.even();
+    assert_eq!(
+        layout.splits().iter().map(|s| s.ratio).collect::<Vec<_>>(),
+        vec![333, 500]
+    );
+    assert_eq!(layout.focused(), focused);
+    let before = layout.clone();
+    layout.even();
+    assert_eq!(layout, before);
+    let mut single = Layout::new(p(1));
+    single.even();
+    assert_eq!(single, Layout::new(p(1)));
+}

@@ -3,7 +3,8 @@ mod tree;
 
 use crate::session::LayoutState;
 use crate::{Direction, PaneId};
-use tree::{Axis, Node, Side};
+pub use tree::Axis;
+use tree::{Node, Side};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
@@ -19,8 +20,21 @@ pub struct Rect {
     pub height: f64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SplitPath(pub Vec<bool>);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SplitInfo {
+    pub path: SplitPath,
+    pub axis: Axis,
+    pub ratio: u16,
+    pub rect: Rect,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum LayoutError {
+    #[error("invalid split path {0:?}")]
+    InvalidSplitPath(SplitPath),
     #[error("pane {} is not in the layout", .0.get())]
     UnknownPane(PaneId),
     #[error("pane {} is already in the layout", .0.get())]
@@ -71,6 +85,45 @@ impl Layout {
         let mut out = Vec::new();
         geometry::rects(&self.root, UNIT, &mut out);
         out
+    }
+
+    #[must_use]
+    pub fn numbered(&self) -> Vec<PaneId> {
+        let mut rects = self.rects();
+        let row = |rect: &Rect| (rect.y * 1000.0).round();
+        rects.sort_by(|(_, a), (_, b)| row(a).total_cmp(&row(b)).then(a.x.total_cmp(&b.x)));
+        rects.into_iter().map(|(pane, _)| pane).collect()
+    }
+
+    pub fn swap_panes(&mut self, a: PaneId, b: PaneId) -> Result<(), LayoutError> {
+        self.path_to(a)?;
+        self.path_to(b)?;
+        self.root.exchange(a, b);
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn splits(&self) -> Vec<SplitInfo> {
+        let mut out = Vec::new();
+        geometry::splits(&self.root, UNIT, &mut out);
+        out
+    }
+
+    pub fn set_ratio(&mut self, path: &SplitPath, ratio: u16) -> Result<(), LayoutError> {
+        let sides: Vec<_> = path
+            .0
+            .iter()
+            .map(|second| if *second { Side::Second } else { Side::First })
+            .collect();
+        let Some(Node::Split { ratio: current, .. }) = self.root.at_mut(&sides) else {
+            return Err(LayoutError::InvalidSplitPath(path.clone()));
+        };
+        *current = ratio.clamp(tree::MIN_RATIO, tree::MAX_RATIO);
+        Ok(())
+    }
+
+    pub fn even(&mut self) {
+        self.root.even();
     }
 
     pub fn split(&mut self, direction: Direction, new_pane: PaneId) -> Result<(), LayoutError> {

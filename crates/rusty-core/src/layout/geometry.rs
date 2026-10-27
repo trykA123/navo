@@ -1,5 +1,5 @@
-use super::Rect;
 use super::tree::{Axis, Node};
+use super::{Rect, SplitInfo, SplitPath};
 use crate::{Direction, PaneId};
 
 const EPS: f64 = 1e-9;
@@ -17,6 +17,32 @@ pub(super) fn rects(node: &Node, area: Rect, out: &mut Vec<(PaneId, Rect)>) {
             let (a, b) = divide(area, *axis, f64::from(*ratio) / PERMILLE);
             rects(first, a, out);
             rects(second, b, out);
+        }
+    }
+}
+
+pub(super) fn splits(node: &Node, area: Rect, out: &mut Vec<SplitInfo>) {
+    let Node::Split {
+        axis,
+        ratio,
+        first,
+        second,
+    } = node
+    else {
+        return;
+    };
+    out.push(SplitInfo {
+        path: SplitPath(Vec::new()),
+        axis: *axis,
+        ratio: *ratio,
+        rect: area,
+    });
+    let (a, b) = divide(area, *axis, f64::from(*ratio) / PERMILLE);
+    for (is_second, child, rect) in [(false, first, a), (true, second, b)] {
+        let start = out.len();
+        splits(child, rect, out);
+        for split in &mut out[start..] {
+            split.path.0.insert(0, is_second);
         }
     }
 }

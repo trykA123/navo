@@ -6,7 +6,7 @@ pub(super) const MAX_RATIO: u16 = 900;
 const HALF: u16 = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Axis {
+pub enum Axis {
     SideBySide,
     Stacked,
 }
@@ -139,6 +139,25 @@ impl Node {
             } else {
                 ratio.saturating_sub(delta).max(MIN_RATIO)
             };
+        }
+    }
+
+    pub(super) fn even(&mut self) -> u32 {
+        match self {
+            Self::Leaf(_) => 1,
+            Self::Split {
+                ratio,
+                first,
+                second,
+                ..
+            } => {
+                let first_count = first.even();
+                let total = first_count + second.even();
+                *ratio = u16::try_from(first_count * 1000 / total)
+                    .unwrap_or(MAX_RATIO)
+                    .clamp(MIN_RATIO, MAX_RATIO);
+                total
+            }
         }
     }
 
