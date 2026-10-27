@@ -146,7 +146,7 @@ fn entry_of(data: &WIN32_FIND_DATAW) -> Option<FsEntry> {
     })
 }
 
-fn kind_of(bits: u32, reparse_tag: u32) -> EntryKind {
+pub(super) fn kind_of(bits: u32, reparse_tag: u32) -> EntryKind {
     if bits & FILE_ATTRIBUTE_REPARSE_POINT != 0 && reparse_tag & NAME_SURROGATE != 0 {
         EntryKind::Link
     } else if bits & FILE_ATTRIBUTE_DIRECTORY != 0 {

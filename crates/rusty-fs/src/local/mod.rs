@@ -35,6 +35,8 @@ mod win_lock;
 #[cfg(windows)]
 mod win_replace;
 #[cfg(windows)]
+mod win_sizes;
+#[cfg(windows)]
 mod win_volume;
 #[cfg(windows)]
 mod win_watch;
@@ -54,7 +56,7 @@ pub(crate) use guard::refuse_reserved;
 pub use guard::{mutation_location, save_location};
 pub use link::make_link;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::SizeEntry;
 #[cfg(any(windows, target_os = "linux"))]
 use crate::watch::Depth;
@@ -194,28 +196,17 @@ impl Provider for LocalFs {
         sink: &mut dyn FnMut(SizeEntry) -> std::ops::ControlFlow<()>,
         cancel: &CancelToken,
     ) -> Result<(), FsError> {
-        let path = os_path(folder)?;
-        let mut children = fs::read_dir(&path)
-            .map_err(|e| open_failure(&e, &path, folder))?
-            .filter_map(|child| {
-                std_entry_with(child, folder, |entry, metadata, _| {
-                    unix::size_entry(entry, metadata)
-                })
-            })
-            .peekable();
-        loop {
-            let entries: Vec<_> = children
-                .by_ref()
-                .take(self.batch_size)
-                .collect::<Result<_, _>>()?;
-            let last = children.peek().is_none();
-            if cancel.is_cancelled() {
-                return Err(error(FsErrorKind::Cancelled, folder));
-            }
-            if entries.into_iter().try_for_each(&mut *sink).is_break() || last {
-                return Ok(());
-            }
-        }
+        unix::list_sizes(self.batch_size, folder, sink, cancel)
+    }
+
+    #[cfg(windows)]
+    fn list_sizes(
+        &self,
+        folder: &Location,
+        sink: &mut dyn FnMut(SizeEntry) -> std::ops::ControlFlow<()>,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        win_sizes::list_sizes(self, folder, sink, cancel)
     }
 
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {

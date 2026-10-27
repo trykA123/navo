@@ -1,13 +1,14 @@
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
 use std::io;
+use std::ops::ControlFlow;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use rusty_core::{FsErrorKind, ProviderPath};
+use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
-use crate::{ALREADY_EXISTS_CODES, Attributes, FsEntry, LinkKey, SizeEntry};
+use crate::{ALREADY_EXISTS_CODES, Attributes, CancelToken, FsEntry, LinkKey, SizeEntry};
 
 const OWNER_WRITE: u32 = 0o200;
 
@@ -23,6 +24,36 @@ pub(super) fn os_path(path: &ProviderPath) -> Option<PathBuf> {
 
 pub(super) fn entry_name(name: &OsStr) -> ProviderPath {
     ProviderPath::from_bytes(name.as_bytes())
+}
+
+pub(super) fn list_sizes(
+    batch_size: usize,
+    folder: &Location,
+    sink: &mut dyn FnMut(SizeEntry) -> ControlFlow<()>,
+    cancel: &CancelToken,
+) -> Result<(), FsError> {
+    let path = super::os_path(folder)?;
+    let mut children = fs::read_dir(&path)
+        .map_err(|e| super::open_failure(&e, &path, folder))?
+        .filter_map(|child| {
+            super::std_entry_with(child, folder, |entry, metadata, _| {
+                size_entry(entry, metadata)
+            })
+        })
+        .peekable();
+    loop {
+        let entries: Vec<_> = children
+            .by_ref()
+            .take(batch_size)
+            .collect::<Result<_, _>>()?;
+        let last = children.peek().is_none();
+        if cancel.is_cancelled() {
+            return Err(super::error(FsErrorKind::Cancelled, folder));
+        }
+        if entries.into_iter().try_for_each(&mut *sink).is_break() || last {
+            return Ok(());
+        }
+    }
 }
 
 pub(super) fn size_entry(entry: FsEntry, metadata: Option<&Metadata>) -> SizeEntry {
