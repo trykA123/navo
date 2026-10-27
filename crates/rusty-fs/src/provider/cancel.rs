@@ -31,6 +31,11 @@ impl CancelToken {
         self.control.cancelled.load(Ordering::Acquire)
     }
 
+    #[must_use]
+    pub fn as_atomic_bool(&self) -> &AtomicBool {
+        &self.control.cancelled
+    }
+
     pub fn pause(&self) {
         *self.paused() = true;
     }

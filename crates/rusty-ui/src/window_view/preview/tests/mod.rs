@@ -1,4 +1,5 @@
 mod browse;
+mod file_loads;
 mod files;
 mod folders;
 mod follow;
@@ -36,6 +37,7 @@ pub(super) fn open_on(
     provider: Arc<dyn ProviderOps>,
     files: FileHooks,
 ) -> Rig {
+    cx.executor().allow_parking();
     let state: AppState = two_panes(fs);
     let options = StartOptions {
         provider,

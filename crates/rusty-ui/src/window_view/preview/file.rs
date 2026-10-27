@@ -1,8 +1,8 @@
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui_kit::Task;
+use rusty_fs::{JobSlot, OwnerGuard, Priority, volume_of};
 
 use super::follow::Target;
 use super::{Preview, Shown};
@@ -15,17 +15,9 @@ use crate::window_view::viewer::{
 
 const READ_ONLY: &str = "The preview is read-only.";
 
-struct CancelOnDrop(Arc<AtomicBool>);
-
-impl Drop for CancelOnDrop {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-}
-
 struct Loading {
+    _owner: OwnerGuard,
     _task: Task<()>,
-    _cancel: CancelOnDrop,
     _alive: Arc<()>,
 }
 
@@ -79,18 +71,32 @@ impl FerriteWindow {
             encoding: None,
         };
         let kinds = self.kinds.clone();
-        let flag = Arc::new(AtomicBool::new(false));
+        let owner = self.preview.reads.owner();
+        let slot = JobSlot {
+            volume: volume_of(&target.location),
+            priority: Priority::Visible,
+            owner: owner.id(),
+        };
+        let (sender, receiver) = futures::channel::oneshot::channel();
         let alive = Arc::new(());
-        let (weak, worker_flag) = (Arc::downgrade(&alive), flag.clone());
-        let work = cx.background_spawn(async move {
-            let turn = Turn {
-                alive: &weak,
-                cancel: &worker_flag,
-            };
-            sniff_and_load(&request, &kinds, turn)
-        });
+        let weak = Arc::downgrade(&alive);
+        self.preview.reads.submit_then(
+            slot,
+            move |cancel| {
+                let turn = Turn {
+                    alive: &weak,
+                    cancel: cancel.as_atomic_bool(),
+                };
+                sniff_and_load(&request, &kinds, turn)
+            },
+            move |opened| {
+                let _ = sender.send(opened);
+            },
+        );
         let task = cx.spawn_in(window, async move |this, cx| {
-            let opened = work.await;
+            let Ok(opened) = receiver.await else {
+                return;
+            };
             let _ = this.update_in(cx, |view, window, cx| {
                 view.preview_opened(opened, window, cx)
             });
@@ -101,8 +107,8 @@ impl FerriteWindow {
             body: None,
             message: None,
             loading: Some(Loading {
+                _owner: owner,
                 _task: task,
-                _cancel: CancelOnDrop(flag),
                 _alive: alive,
             }),
         }
