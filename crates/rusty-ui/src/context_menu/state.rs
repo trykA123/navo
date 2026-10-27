@@ -298,7 +298,7 @@ impl MenuState {
 
     fn open(&mut self, parent: usize, path: Vec<usize>, focus: bool) -> Option<ContextMenuEvent> {
         let is_lazy = match &self.menu.item(&path)?.kind {
-            ItemKind::Submenu(Submenu::Lazy) => true,
+            ItemKind::Submenu(Submenu::Lazy | Submenu::Failed) => true,
             ItemKind::Submenu(_) => false,
             ItemKind::Command | ItemKind::Separator => return None,
         };

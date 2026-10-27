@@ -1,8 +1,7 @@
-use std::sync::PoisonError;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use super::{BusySince, HUNG_AFTER, Station, is_hung, serve};
+use super::{HUNG_AFTER, Health, IDLE_GRACE, Station, serve};
 
 enum Request {
     Fill,
@@ -10,15 +9,13 @@ enum Request {
     Shutdown,
 }
 
-fn is_marked(busy: &BusySince) -> bool {
-    busy.lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .is_some()
+fn is_marked(busy: &Health) -> bool {
+    busy.marks().busy.is_some()
 }
 
 struct FakeStation {
     requests: Sender<Request>,
-    busy: BusySince,
+    busy: Health,
     pumps_left: Option<usize>,
     pumped: usize,
     log: Vec<&'static str>,
@@ -76,7 +73,7 @@ fn fake() -> (FakeStation, Receiver<Request>) {
     let (requests, receiver) = mpsc::channel();
     let station = FakeStation {
         requests,
-        busy: BusySince::default(),
+        busy: Health::default(),
         pumps_left: None,
         pumped: 0,
         log: Vec::new(),
@@ -159,7 +156,7 @@ fn a_dispatch_that_blocks_in_a_background_slice_is_seen_as_hung() {
     let (release_tx, release) = mpsc::channel();
     let (requests, receiver) = mpsc::channel();
     requests.send(Request::Fill).unwrap();
-    let busy = BusySince::default();
+    let busy = Health::default();
     let serving = {
         let busy = busy.clone();
         std::thread::spawn(move || {
@@ -173,15 +170,127 @@ fn a_dispatch_that_blocks_in_a_background_slice_is_seen_as_hung() {
     };
     entered_rx.recv().unwrap();
     let later = Instant::now() + HUNG_AFTER + Duration::from_millis(1);
-    assert!(is_hung(&busy, later));
+    assert!(busy.is_hung(later));
     release_tx.send(()).unwrap();
     serving.join().unwrap();
-    assert!(!is_hung(&busy, later));
+    assert!(!busy.is_hung(later));
 }
 
 #[test]
 fn a_short_busy_spell_is_not_hung() {
-    let busy = BusySince::default();
-    super::mark(&busy, true);
-    assert!(!is_hung(&busy, Instant::now()));
+    let busy = Health::default();
+    busy.mark(true);
+    assert!(!busy.is_hung(Instant::now()));
+}
+
+struct IdleStation {
+    requests: Sender<Request>,
+    busy: Health,
+    idle: Vec<&'static str>,
+    log: Vec<&'static str>,
+    hung_checks: Vec<(bool, bool)>,
+}
+
+impl Station for IdleStation {
+    type Request = Request;
+
+    fn can_hang(request: &Request) -> bool {
+        matches!(request, Request::Fill)
+    }
+
+    fn handle(&mut self, request: Request) -> bool {
+        self.log.push(match request {
+            Request::Fill => "fill",
+            Request::Invoke => "invoke",
+            Request::Shutdown => return false,
+        });
+        true
+    }
+
+    fn settle_fills(&mut self) -> Option<Duration> {
+        None
+    }
+
+    fn pump(&mut self, timeout: Option<Duration>) -> bool {
+        timeout.is_some()
+    }
+
+    fn run_idle(&mut self) -> bool {
+        if self.idle.is_empty() {
+            return false;
+        }
+        let step = self.idle.remove(0);
+        self.log.push(step);
+        if step == "warm 1" {
+            self.requests.send(Request::Fill).unwrap();
+        }
+        if step == "asked" {
+            self.busy.note_waiting(Instant::now());
+            self.requests.send(Request::Invoke).unwrap();
+        }
+        let now = Instant::now();
+        let soon = now + HUNG_AFTER + Duration::from_millis(1);
+        let much_later = now + HUNG_AFTER + IDLE_GRACE + Duration::from_millis(1);
+        let checks = (self.busy.is_hung(soon), self.busy.is_hung(much_later));
+        self.hung_checks.push(checks);
+        true
+    }
+}
+
+fn idle_station(steps: &[&'static str]) -> (IdleStation, Receiver<Request>) {
+    let (requests, receiver) = mpsc::channel();
+    let station = IdleStation {
+        requests,
+        busy: Health::default(),
+        idle: steps.to_vec(),
+        log: Vec::new(),
+        hung_checks: Vec::new(),
+    };
+    (station, receiver)
+}
+
+#[test]
+fn a_request_that_arrives_during_idle_work_runs_before_the_next_idle_step() {
+    let (mut station, receiver) = idle_station(&["warm 1", "warm 2", "warm 3"]);
+    let busy = station.busy.clone();
+    serve(&mut station, &receiver, &busy);
+    assert_eq!(station.log, ["warm 1", "fill", "warm 2", "warm 3"]);
+}
+
+#[test]
+fn waiting_requests_run_before_any_idle_work() {
+    let (mut station, receiver) = idle_station(&["warm 2"]);
+    station.requests.send(Request::Invoke).unwrap();
+    let busy = station.busy.clone();
+    serve(&mut station, &receiver, &busy);
+    assert_eq!(station.log, ["invoke", "warm 2"]);
+}
+
+#[test]
+fn slow_idle_work_is_not_hung_until_its_grace_ends() {
+    let (mut station, receiver) = idle_station(&["warm 1", "warm 2"]);
+    let busy = station.busy.clone();
+    serve(&mut station, &receiver, &busy);
+    assert_eq!(station.hung_checks, [(false, true), (false, true)]);
+    assert!(!is_marked(&busy));
+}
+
+#[test]
+fn a_request_waiting_2_s_behind_idle_work_marks_it_hung() {
+    let (mut station, receiver) = idle_station(&["asked", "warm 2"]);
+    let busy = station.busy.clone();
+    serve(&mut station, &receiver, &busy);
+    assert_eq!(station.log, ["asked", "invoke", "warm 2"]);
+    assert_eq!(station.hung_checks, [(true, true), (false, true)]);
+}
+
+#[test]
+fn a_waiting_request_counts_only_behind_idle_work() {
+    let busy = Health::default();
+    let now = Instant::now();
+    busy.note_waiting(now);
+    let later = now + HUNG_AFTER + Duration::from_millis(1);
+    assert!(!busy.is_hung(later));
+    busy.mark_idle();
+    assert!(busy.is_hung(later));
 }

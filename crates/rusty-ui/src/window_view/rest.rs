@@ -22,6 +22,7 @@ impl Rest {
             _changes: cx.observe_self(|view, cx| {
                 view.watch_listings(cx);
                 view.watch_rest(cx);
+                view.watch_menu_rest(cx);
             }),
         }
     }

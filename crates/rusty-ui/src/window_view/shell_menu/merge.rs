@@ -73,17 +73,15 @@ fn is_properties(item: &MenuItem) -> bool {
     matches!(&item.id, ItemId::Shell { verb: Some(verb), .. } if verb.eq_ignore_ascii_case(PROPERTIES_VERB))
 }
 
-pub(super) fn mark_loading(items: &mut [MenuItem], parent: &[usize]) -> Vec<Vec<usize>> {
+/// The paths of submenus the shell has yet to fill, in `items` and the filled submenus below them.
+pub(super) fn lazy_paths(items: &[MenuItem], parent: &[usize]) -> Vec<Vec<usize>> {
     let mut lazy = Vec::new();
-    for (index, item) in items.iter_mut().enumerate() {
+    for (index, item) in items.iter().enumerate() {
         let path = [parent, &[index]].concat();
-        match &mut item.kind {
-            ItemKind::Submenu(submenu @ Submenu::Lazy) => {
-                *submenu = Submenu::Loading;
-                lazy.push(path);
-            }
+        match &item.kind {
+            ItemKind::Submenu(Submenu::Lazy) => lazy.push(path),
             ItemKind::Submenu(Submenu::Filled(children)) => {
-                lazy.extend(mark_loading(children, &path));
+                lazy.extend(lazy_paths(children, &path));
             }
             _ => {}
         }

@@ -73,6 +73,12 @@ pub(super) struct MenuOpen {
     pub opened: Instant,
 }
 
+struct Fill {
+    path: Vec<usize>,
+    reply: Reply<Submenu>,
+    is_prefill: bool,
+}
+
 struct Call {
     label: String,
     reply: Reply<()>,
@@ -97,7 +103,8 @@ pub(in crate::window_view) struct MenuRun {
     open_error: Option<String>,
     opened_at: Instant,
     is_slow: bool,
-    fills: Vec<(Vec<usize>, Reply<Submenu>)>,
+    fills: Vec<Fill>,
+    to_prefill: Vec<Vec<usize>>,
     calls: Vec<Call>,
     waiting: Vec<ShellCall>,
 }
@@ -123,6 +130,7 @@ impl MenuRun {
             open_error: None,
             is_slow: false,
             fills: Vec::new(),
+            to_prefill: Vec::new(),
             calls: Vec::new(),
             waiting: Vec::new(),
         }
@@ -132,6 +140,7 @@ impl MenuRun {
         self.show.is_some()
             || matches!(self.session, Session::Opening(_))
             || !self.fills.is_empty()
+            || !self.to_prefill.is_empty()
             || !self.calls.is_empty()
     }
 
@@ -214,6 +223,7 @@ impl MenuRun {
         self.opened_at = now;
         self.is_slow = false;
         self.fills.clear();
+        self.to_prefill.clear();
         Some(self.first_menu())
     }
 
@@ -234,12 +244,42 @@ impl MenuRun {
         merged.menu
     }
 
+    /// A submenu the user opened: asked now, or moved ahead of the other prefills.
     pub(super) fn fill(&mut self, path: &[usize]) {
-        let is_asked = self.fills.iter().any(|(asked, _)| asked == path);
-        if let (false, Session::Ready(session)) = (is_asked, &self.session)
-            && let Some(shell_path) = merge::shell_path(&self.layout, path)
-        {
-            self.fills.push((path.to_vec(), session.fill(&shell_path)));
+        let Session::Ready(session) = &self.session else {
+            return;
+        };
+        let Some(shell_path) = merge::shell_path(&self.layout, path) else {
+            return;
+        };
+        match self.fills.iter_mut().find(|fill| fill.path == path) {
+            Some(fill) if fill.is_prefill => {
+                fill.reply = session.fill(&shell_path);
+                fill.is_prefill = false;
+            }
+            Some(_) => {}
+            None => self.fills.push(Fill {
+                path: path.to_vec(),
+                reply: session.fill(&shell_path),
+                is_prefill: false,
+            }),
+        }
+    }
+
+    /// Runs once the menu shows: the shell fills its submenus while idle, so they open at once.
+    fn start_prefills(&mut self) {
+        let Session::Ready(session) = &self.session else {
+            return;
+        };
+        for path in mem::take(&mut self.to_prefill) {
+            let is_asked = self.fills.iter().any(|fill| fill.path == path);
+            if let (false, Some(shell_path)) = (is_asked, merge::shell_path(&self.layout, &path)) {
+                self.fills.push(Fill {
+                    reply: session.prefill(&shell_path),
+                    path,
+                    is_prefill: true,
+                });
+            }
         }
     }
 
@@ -252,6 +292,9 @@ impl MenuRun {
         }
         self.poll_fills(&mut step);
         self.poll_calls(&mut step);
+        if self.view.is_some() {
+            self.start_prefills();
+        }
         step
     }
 
@@ -264,12 +307,11 @@ impl MenuRun {
         };
         match answer {
             Ok(session) if session.menu().has_named_item() => {
-                let mut merged = merge::merge(&session.menu().items, &self.own);
-                let lazy = merge::mark_loading(&mut merged.menu.items, &[]);
+                let merged = merge::merge(&session.menu().items, &self.own);
+                self.to_prefill = merge::lazy_paths(&merged.menu.items, &[]);
                 self.layout = merged.shell_at;
                 step.menu = Some(merged.menu);
                 self.session = Session::Ready(session);
-                lazy.iter().for_each(|path| self.fill(path));
             }
             Ok(session) => {
                 self.session = Session::Ready(session);
@@ -290,19 +332,18 @@ impl MenuRun {
     }
 
     fn poll_fills(&mut self, step: &mut Step) {
-        let mut lazy = Vec::new();
-        for (path, reply) in mem::take(&mut self.fills) {
-            match reply() {
-                None | Some(Ok(Submenu::Loading)) => self.fills.push((path, reply)),
-                Some(Ok(Submenu::Filled(mut items))) => {
-                    lazy.extend(merge::mark_loading(&mut items, &path));
-                    step.submenus.push((path, Submenu::Filled(items)));
+        for fill in mem::take(&mut self.fills) {
+            match (fill.reply)() {
+                None | Some(Ok(Submenu::Loading)) => self.fills.push(fill),
+                Some(Ok(Submenu::Filled(items))) => {
+                    self.to_prefill
+                        .extend(merge::lazy_paths(&items, &fill.path));
+                    step.submenus.push((fill.path, Submenu::Filled(items)));
                 }
-                Some(Ok(other)) => step.submenus.push((path, other)),
-                Some(Err(_)) => step.submenus.push((path, Submenu::Failed)),
+                Some(Ok(other)) => step.submenus.push((fill.path, other)),
+                Some(Err(_)) => step.submenus.push((fill.path, Submenu::Failed)),
             }
         }
-        lazy.iter().for_each(|path| self.fill(path));
     }
 
     fn poll_calls(&mut self, step: &mut Step) {

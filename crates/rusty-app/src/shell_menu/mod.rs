@@ -9,7 +9,9 @@ use rusty_shell::{
     InvokeOptions, MenuPaths, MenuSession, Pending, ScreenPoint, ShellMenuService, Show,
     WindowHandle,
 };
-use rusty_ui::window_view::{MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+use rusty_ui::window_view::{
+    MenuTarget, Reply, ScreenSpot, ShellHealth, ShellMenuProvider, ShellMenuSession,
+};
 
 const NOT_LOCAL: &str = "the Windows menu works only on local files";
 const TOO_LONG: &str = "the Windows menu cannot open paths longer than 259 characters";
@@ -161,6 +163,14 @@ impl ShellMenuProvider for Provider {
             Err(reason) => refused(reason),
         }
     }
+
+    fn health(&self) -> ShellHealth {
+        let health = self.0.health();
+        ShellHealth {
+            replaced: health.replaced,
+            can_read_ahead: health.can_read_ahead,
+        }
+    }
 }
 
 impl ShellMenuSession for Session {
@@ -170,6 +180,10 @@ impl ShellMenuSession for Session {
 
     fn fill(&self, path: &[usize]) -> Reply<Submenu> {
         reply(self.0.fill(path), |submenu| submenu)
+    }
+
+    fn prefill(&self, path: &[usize]) -> Reply<Submenu> {
+        reply(self.0.prefill(path), |submenu| submenu)
     }
 
     fn invoke(&self, id: &ItemId, at: ScreenSpot) -> Reply<()> {
@@ -188,6 +202,10 @@ impl ShellMenuSession for Unavailable {
     }
 
     fn fill(&self, _: &[usize]) -> Reply<Submenu> {
+        self.refuse()
+    }
+
+    fn prefill(&self, _: &[usize]) -> Reply<Submenu> {
         self.refuse()
     }
 

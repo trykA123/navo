@@ -95,8 +95,8 @@ pub use settings_save::{SaveReport, SaveSettings};
 use settings_sheet::SettingsPanel as Panel;
 pub use settings_sheet::{FindLine, KeyLine, SettingsHooks};
 pub use shell_menu::{
-    BackgroundLook, MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession,
-    merged_background_menu, merged_file_menu,
+    BackgroundLook, MenuTarget, Reply, ScreenSpot, ShellHealth, ShellMenuProvider,
+    ShellMenuSession, merged_background_menu, merged_file_menu,
 };
 pub use start::run;
 pub use start_watch::{StartReport, StartWatch};
@@ -183,7 +183,7 @@ pub struct FerriteWindow {
     settings: settings_sheet::SettingsPanel,
     shell_menus: Option<Rc<dyn ShellMenuProvider>>,
     menu_run: Option<shell_menu::MenuRun>,
-    prefetch: Option<shell_menu::Prefetch>,
+    prefetch: shell_menu::Prefetches,
     menu_runs: u64,
     preview: preview::Preview,
     job_ui: jobs::JobUi,
@@ -234,7 +234,7 @@ impl FerriteWindow {
             settings,
             shell_menus: options.shell_menu,
             menu_run: None,
-            prefetch: None,
+            prefetch: shell_menu::Prefetches::default(),
             menu_runs: 0,
             preview: preview::Preview::new(Self::waker(cx), cx),
             job_ui: jobs::JobUi::new(window, cx),

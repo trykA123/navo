@@ -2,6 +2,7 @@ use rusty_core::shell_menu::{ShellMenu, Submenu};
 
 use super::{
     InvokeOptions, MenuError, MenuSession, MenuSource, Pending, ScreenPoint, WindowHandle,
+    WorkerHealth,
 };
 
 pub(super) struct Service;
@@ -19,6 +20,13 @@ impl Service {
         }))
     }
 
+    pub(super) fn health(&self) -> WorkerHealth {
+        WorkerHealth {
+            replaced: 0,
+            can_read_ahead: true,
+        }
+    }
+
     pub(super) fn classic_for(
         &self,
         _source: MenuSource,
@@ -33,6 +41,10 @@ pub(super) struct SessionHandle;
 
 impl SessionHandle {
     pub(super) fn fill(&self, _path: Vec<usize>) -> Pending<Submenu> {
+        Pending::ready(Err(MenuError::Unsupported))
+    }
+
+    pub(super) fn prefill(&self, _path: Vec<usize>) -> Pending<Submenu> {
         Pending::ready(Err(MenuError::Unsupported))
     }
 
@@ -144,5 +156,10 @@ mod tests {
     #[test]
     fn fill_is_unsupported() {
         assert_eq!(session().fill(&[0]).wait(), Err(MenuError::Unsupported));
+    }
+
+    #[test]
+    fn prefill_is_unsupported() {
+        assert_eq!(session().prefill(&[0]).wait(), Err(MenuError::Unsupported));
     }
 }

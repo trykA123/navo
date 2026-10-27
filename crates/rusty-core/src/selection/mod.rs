@@ -5,7 +5,7 @@ pub use pattern::{Pattern, PatternError};
 
 const WORD: u64 = 64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpanMode {
     Mark,
     Unmark,
@@ -33,14 +33,14 @@ impl SpanMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Span {
     anchor: u64,
     base: Vec<u64>,
     mode: SpanMode,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Selection {
     len: u64,
     bits: Vec<u64>,

@@ -24,5 +24,5 @@ pub use helper_job::HelperLimits;
 pub use helper_job::{HelperJob, confine_helper};
 pub use shell_menu::{
     FILL_BUDGET, InvokeOptions, MenuError, MenuPaths, MenuSession, Pending, ScreenPoint,
-    ShellMenuService, Show, WindowHandle,
+    ShellMenuService, Show, WindowHandle, WorkerHealth,
 };

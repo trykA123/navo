@@ -14,7 +14,9 @@ use rusty_core::PaneId;
 use rusty_core::shell_menu::{FerriteAction, ItemId, MenuItem, ShellMenu, ferrite_actions};
 
 pub use background::{BackgroundLook, merged_background_menu};
-pub use provider::{MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession};
+pub use provider::{
+    MenuTarget, Reply, ScreenSpot, ShellHealth, ShellMenuProvider, ShellMenuSession,
+};
 
 use super::FerriteWindow;
 use crate::context_menu::{ContextMenu, ContextMenuEvent};
@@ -22,7 +24,7 @@ use crate::file_list::FileListAction;
 use crate::prelude::*;
 pub(super) use actions::put_paths_on_clipboard;
 use merge::Own;
-pub(super) use prefetch::Prefetch;
+pub(super) use prefetch::Prefetches;
 pub(super) use run::MenuRun;
 use run::{MenuOpen, PendingView, RETRY, Session, ShellCall, Step};
 
@@ -82,7 +84,6 @@ impl FerriteWindow {
             has_properties: false,
         };
         let has_shell = self.shell_menus.is_some();
-        self.drop_prefetch();
         let target = MenuTarget::Background(folder);
         let session = self.open_session(pane, &target, extended);
         let open = MenuOpen {

@@ -273,6 +273,23 @@ fn a_failed_flyout_offers_a_retry(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn reopening_a_failed_flyout_loads_it_again(cx: &mut TestAppContext) {
+    let menu = open_default(cx);
+    menu.type_text("send", cx);
+    menu.press(&["right"], cx);
+    menu.menu.update(cx, |menu, cx| {
+        menu.set_submenu(&[SEND_TO], Submenu::Failed, cx);
+    });
+    menu.press(&["left", "right"], cx);
+    assert_eq!(
+        menu.events(),
+        vec![ContextMenuEvent::OpenSubmenu(vec![SEND_TO]); 2]
+    );
+    menu.wait(200, cx);
+    assert_eq!(menu.rows_in(1, cx), ["Loading…"]);
+}
+
+#[gpui_kit::test]
 fn mouse_button_four_closes_the_innermost_flyout(cx: &mut TestAppContext) {
     let menu = on_seven_zip(cx);
     menu.mouse_back(cx);

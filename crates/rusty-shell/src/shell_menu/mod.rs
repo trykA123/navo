@@ -3,9 +3,13 @@ mod classify;
 mod error;
 #[cfg(any(windows, test))]
 mod fill;
+#[cfg(any(windows, test))]
+mod idle;
 mod pending;
 #[cfg(any(windows, test))]
 mod pixels;
+#[cfg(any(windows, test))]
+mod replaced;
 mod selection;
 #[cfg(any(windows, test))]
 mod station;
@@ -13,6 +17,8 @@ mod station;
 mod stub;
 #[cfg(any(windows, test))]
 mod verb_fallback;
+#[cfg(any(windows, test))]
+mod warm;
 #[cfg(windows)]
 mod win;
 
@@ -76,6 +82,15 @@ impl MenuSource {
     }
 }
 
+/// Whether the shell threads are healthy enough to read menus nobody asked for yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorkerHealth {
+    /// Counts the shell threads replaced because they hung; a read sent before a change may never answer.
+    pub replaced: u64,
+    /// `false` while a replaced thread still runs: another read ahead could leave one more stuck.
+    pub can_read_ahead: bool,
+}
+
 pub struct ShellMenuService {
     inner: platform::Service,
 }
@@ -103,6 +118,11 @@ impl ShellMenuService {
             Ok(source) => self.inner.open(source),
             Err(error) => Pending::ready(Err(error)),
         }
+    }
+
+    #[must_use]
+    pub fn health(&self) -> WorkerHealth {
+        self.inner.health()
     }
 
     /// The native menu without a session: one shell-thread request reads it and tracks it at `point`.
@@ -136,6 +156,12 @@ impl MenuSession {
     #[must_use]
     pub fn fill(&self, path: &[usize]) -> Pending<Submenu> {
         self.handle.fill(path.to_vec())
+    }
+
+    /// Like `fill`, but the shell thread starts it only when idle; a later `fill` of `path` moves it to the front.
+    #[must_use]
+    pub fn prefill(&self, path: &[usize]) -> Pending<Submenu> {
+        self.handle.prefill(path.to_vec())
     }
 
     /// Poll with `wait_timeout`, never block: dialogs owned by the UI window call into it.

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rusty_core::shell_menu::Submenu;
@@ -11,10 +12,12 @@ use super::loaded::LoadedMenu;
 use super::sta::{self, Ole, Window};
 use super::{Link, SessionHandle};
 use crate::shell_menu::fill::{self, Background, FillReply, Fills};
+use crate::shell_menu::idle::{self, Idle, Job, Prefill};
 use crate::shell_menu::pending::{Cancel, Reply, answer_unless_cancelled};
-use crate::shell_menu::station::{self, BusySince, Station};
+use crate::shell_menu::station::{self, Health, Station};
+use crate::shell_menu::warm::{self, Warm};
 use crate::shell_menu::{
-    InvokeOptions, MenuError, MenuPaths, MenuSession, MenuSource, ScreenPoint, WindowHandle,
+    InvokeOptions, MenuError, MenuSession, MenuSource, ScreenPoint, WindowHandle,
 };
 
 pub(super) enum Request {
@@ -27,6 +30,15 @@ pub(super) enum Request {
         session: u64,
         path: Vec<usize>,
         reply: FillReply,
+    },
+    Prefill {
+        session: u64,
+        path: Vec<usize>,
+        reply: FillReply,
+    },
+    Promote {
+        session: u64,
+        path: Vec<usize>,
     },
     Invoke {
         session: u64,
@@ -62,23 +74,24 @@ impl Request {
     }
 }
 
-pub(super) fn spawn(busy: BusySince) -> Result<Link, MenuError> {
+/// `warms` loads shell extensions while idle; a worker that replaces a hung one skips it.
+pub(super) fn spawn(warms: bool) -> Result<(Link, JoinHandle<()>), MenuError> {
     let (sender, receiver) = mpsc::channel();
     let (ready_sender, ready) = mpsc::channel();
-    std::thread::Builder::new()
+    let thread = std::thread::Builder::new()
         .name("shell-menu".to_owned())
-        .spawn(move || run(&receiver, sender, &busy, &ready_sender))
+        .spawn(move || run(&receiver, (sender, warms), &ready_sender))
         .map_err(|error| MenuError::Shell {
             context: "starting the shell menu thread",
             message: error.to_string(),
         })?;
-    ready.recv().unwrap_or(Err(MenuError::Stopped))
+    let link = ready.recv().unwrap_or(Err(MenuError::Stopped))?;
+    Ok((link, thread))
 }
 
 fn run(
     receiver: &Receiver<Request>,
-    sender: Sender<Request>,
-    busy: &BusySince,
+    (sender, warms): (Sender<Request>, bool),
     ready: &Sender<Result<Link, MenuError>>,
 ) {
     let started = Ole::init().and_then(|ole| Window::message_only().map(|window| (ole, window)));
@@ -93,18 +106,22 @@ fn run(
         sender,
         window: window.hwnd().0 as isize,
         retired: Arc::default(),
+        health: Health::default(),
     };
+    let health = link.health.clone();
     let _ = ready.send(Ok(link.clone()));
     let mut worker = Worker {
         link,
         sessions: HashMap::new(),
         next_session: 1,
         background: Vec::new(),
+        idle: if warms {
+            Idle::warming(warm::first_steps(&std::env::temp_dir()))
+        } else {
+            Idle::default()
+        },
     };
-    station::mark(busy, true);
-    worker.warm();
-    station::mark(busy, false);
-    station::serve(&mut worker, receiver, busy);
+    station::serve(&mut worker, receiver, &health);
 }
 
 struct Worker {
@@ -112,6 +129,7 @@ struct Worker {
     sessions: HashMap<u64, LoadedMenu>,
     next_session: u64,
     background: Vec<Background>,
+    idle: Idle,
 }
 
 impl Station for Worker {
@@ -146,21 +164,41 @@ impl Station for Worker {
             None => sta::wait_message(),
         }
     }
+
+    fn run_idle(&mut self) -> bool {
+        match self.idle.next() {
+            Some(Job::Prefill(prefill)) => self.run_prefill(prefill),
+            Some(Job::Warm(step)) => self.warm(step),
+            None => return false,
+        }
+        true
+    }
 }
 
 impl Worker {
-    fn warm(&self) {
-        let folder = std::env::temp_dir();
-        for paths in [
-            MenuPaths::Items(vec![folder.clone()]),
-            MenuPaths::Background(folder),
-        ] {
-            let source = MenuSource {
-                paths,
-                extended: false,
-            };
-            let _ = LoadedMenu::query(&source, HWND::default());
+    fn warm(&mut self, step: Warm) {
+        match step {
+            Warm::Open { source, scratch } => {
+                let Ok(mut loaded) = LoadedMenu::query(&source, HWND::default()) else {
+                    return;
+                };
+                let menu = loaded.walk();
+                let session = self.keep(loaded);
+                for path in idle::lazy_tops(&menu) {
+                    self.idle.warm_later(Warm::Fill { session, path });
+                }
+                self.idle.warm_later(Warm::Close { session, scratch });
+            }
+            Warm::Fill { session, path } => self.fill(session, path, FillReply::unread()),
+            Warm::Close { session, scratch } => {
+                self.sessions.remove(&session);
+                drop(scratch);
+            }
         }
+    }
+
+    fn run_prefill(&mut self, prefill: Prefill) {
+        self.fill(prefill.session, prefill.path, prefill.reply);
     }
 
     fn serve_request(&mut self, request: Request) -> bool {
@@ -175,6 +213,20 @@ impl Worker {
                 path,
                 reply,
             } => self.fill(session, path, reply),
+            Request::Prefill {
+                session,
+                path,
+                reply,
+            } => self.idle.prefill(Prefill {
+                session,
+                path,
+                reply,
+            }),
+            Request::Promote { session, path } => {
+                if let Some(prefill) = self.idle.promote(session, &path) {
+                    self.run_prefill(prefill);
+                }
+            }
             Request::Invoke {
                 session,
                 command,
@@ -209,6 +261,7 @@ impl Worker {
             }
             Request::Close { session } => {
                 self.sessions.remove(&session);
+                self.idle.close(session);
             }
             Request::Shutdown => return false,
         }
@@ -238,9 +291,7 @@ impl Worker {
     fn open(&mut self, source: &MenuSource) -> Result<MenuSession, MenuError> {
         let mut loaded = LoadedMenu::query(source, HWND::default())?;
         let menu = loaded.walk();
-        let id = self.next_session;
-        self.next_session += 1;
-        self.sessions.insert(id, loaded);
+        let id = self.keep(loaded);
         Ok(MenuSession {
             menu,
             handle: SessionHandle {
@@ -249,6 +300,13 @@ impl Worker {
                 fills: Fills::default(),
             },
         })
+    }
+
+    fn keep(&mut self, loaded: LoadedMenu) -> u64 {
+        let id = self.next_session;
+        self.next_session += 1;
+        self.sessions.insert(id, loaded);
+        id
     }
 
     fn session(&mut self, id: u64) -> Result<&mut LoadedMenu, MenuError> {

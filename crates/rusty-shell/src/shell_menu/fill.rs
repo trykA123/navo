@@ -33,6 +33,19 @@ impl FillReply {
     pub(super) fn send(&self, result: FillResult) {
         self.0.finish(result);
     }
+
+    /// A reply nobody reads, for fills the worker starts on its own.
+    #[cfg(windows)]
+    pub(super) fn unread() -> Self {
+        Self(Arc::default())
+    }
+}
+
+/// What a session sends to the worker: a fill now, a fill when idle, or an idle fill moved to the front.
+pub(super) enum FillAsk {
+    Now(Vec<usize>, FillReply),
+    Later(Vec<usize>, FillReply),
+    Promote(Vec<usize>),
 }
 
 impl Drop for FillReply {
@@ -45,10 +58,26 @@ impl Drop for FillReply {
 struct Asked {
     slot: Arc<Slot>,
     deadline: Instant,
-    give_up: Instant,
+    /// `None` for a prefill: it may wait in the idle queue for long; the worker's own limit starts with the job.
+    give_up: Option<Instant>,
+    is_later: bool,
 }
 
 impl Asked {
+    fn new(now: Instant, limit: Duration, is_later: bool) -> Self {
+        let deadline = now + FILL_BUDGET;
+        Self {
+            slot: Arc::default(),
+            deadline,
+            give_up: (!is_later).then_some(deadline + limit),
+            is_later,
+        }
+    }
+
+    fn is_past_give_up(&self) -> bool {
+        self.give_up.is_some_and(|at| Instant::now() >= at)
+    }
+
     fn answer(&self, timeout: Duration) -> Option<FillResult> {
         let deadline = self.deadline;
         let now = Instant::now();
@@ -68,9 +97,23 @@ impl Asked {
             .unwrap_or_else(PoisonError::into_inner);
         match slot.as_ref() {
             Some(result) => Some(result.clone()),
-            None if Instant::now() >= self.give_up => Some(Ok(Submenu::Failed)),
+            None if self.is_past_give_up() => Some(Ok(Submenu::Failed)),
             None => (Instant::now() >= deadline).then_some(Ok(Submenu::Loading)),
         }
+    }
+
+    /// Makes a prefill an asked fill with a fresh budget; `true` while the worker still has to fill it.
+    fn promote(&mut self, limit: Duration) -> bool {
+        *self = Self {
+            slot: self.slot.clone(),
+            ..Self::new(Instant::now(), limit, false)
+        };
+        let slot = self
+            .slot
+            .result
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        slot.is_none()
     }
 
     fn has_failed(&self) -> bool {
@@ -81,7 +124,7 @@ impl Asked {
             .unwrap_or_else(PoisonError::into_inner);
         match slot.as_ref() {
             Some(result) => matches!(result, Ok(Submenu::Failed) | Err(_)),
-            None => Instant::now() >= self.give_up,
+            None => self.is_past_give_up(),
         }
     }
 
@@ -113,23 +156,36 @@ impl Fills {
         }
     }
 
-    pub(super) fn ask(
+    pub(super) fn ask(&self, path: Vec<usize>, send: impl FnOnce(FillAsk)) -> Pending<Submenu> {
+        self.ask_as(path, false, send)
+    }
+
+    /// Like `ask`, but the worker fills it when idle; a later `ask` of the same path promotes it.
+    pub(super) fn prefill(&self, path: Vec<usize>, send: impl FnOnce(FillAsk)) -> Pending<Submenu> {
+        self.ask_as(path, true, send)
+    }
+
+    fn ask_as(
         &self,
         path: Vec<usize>,
-        send: impl FnOnce(Vec<usize>, FillReply),
+        is_later: bool,
+        send: impl FnOnce(FillAsk),
     ) -> Pending<Submenu> {
         let mut asked = self.asked.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(earlier) = asked.get(&path).filter(|earlier| !earlier.has_failed()) {
+        if let Some(earlier) = asked.get_mut(&path).filter(|earlier| !earlier.has_failed()) {
+            if earlier.is_later && !is_later && earlier.promote(self.limit) {
+                send(FillAsk::Promote(path));
+            }
             return earlier.clone().pending();
         }
-        let deadline = Instant::now() + FILL_BUDGET;
-        let fresh = Asked {
-            slot: Arc::default(),
-            deadline,
-            give_up: deadline + self.limit,
-        };
+        let fresh = Asked::new(Instant::now(), self.limit, is_later);
         asked.insert(path.clone(), fresh.clone());
-        send(path, FillReply(fresh.slot.clone()));
+        let reply = FillReply(fresh.slot.clone());
+        send(if is_later {
+            FillAsk::Later(path, reply)
+        } else {
+            FillAsk::Now(path, reply)
+        });
         fresh.pending()
     }
 }

@@ -14,7 +14,7 @@ use rusty_core::{Location, OpKind, PaneId};
 use rusty_fs::FakeFs;
 
 use super::super::shell_menu::{
-    MenuTarget, Reply, ScreenSpot, ShellMenuProvider, ShellMenuSession,
+    MenuTarget, Reply, ScreenSpot, ShellHealth, ShellMenuProvider, ShellMenuSession,
 };
 use super::super::{FerriteWindow, StartOptions};
 use super::{fake, open_options, settle, two_panes};
@@ -27,6 +27,7 @@ struct Shell {
     extended: RefCell<Vec<bool>>,
     fills: RefCell<HashMap<Vec<usize>, Submenu>>,
     asked: RefCell<Vec<Vec<usize>>>,
+    prefilled: RefCell<Vec<Vec<usize>>>,
     invoked: RefCell<Vec<ItemId>>,
     invoke_error: RefCell<Option<String>>,
     classic: Cell<usize>,
@@ -35,6 +36,8 @@ struct Shell {
     classic_for_error: RefCell<Option<String>>,
     classic_for_open: Cell<bool>,
     live: Cell<usize>,
+    replaced: Cell<u64>,
+    is_read_ahead_blocked: Cell<bool>,
 }
 
 impl Shell {
@@ -85,11 +88,26 @@ impl ShellMenuProvider for FakeProvider {
         let shell = self.0.clone();
         Box::new(move || (!shell.classic_for_open.get()).then(|| error.clone().map_or(Ok(()), Err)))
     }
+
+    fn health(&self) -> ShellHealth {
+        ShellHealth {
+            replaced: self.0.replaced.get(),
+            can_read_ahead: !self.0.is_read_ahead_blocked.get(),
+        }
+    }
 }
 
 impl Drop for FakeSession {
     fn drop(&mut self) {
         self.shell.live.set(self.shell.live.get() - 1);
+    }
+}
+
+impl FakeSession {
+    fn answer_fill(&self, path: &[usize]) -> Reply<Submenu> {
+        let shell = self.shell.clone();
+        let path = path.to_vec();
+        Box::new(move || shell.fills.borrow().get(&path).cloned().map(Ok))
     }
 }
 
@@ -100,9 +118,12 @@ impl ShellMenuSession for FakeSession {
 
     fn fill(&self, path: &[usize]) -> Reply<Submenu> {
         self.shell.asked.borrow_mut().push(path.to_vec());
-        let shell = self.shell.clone();
-        let path = path.to_vec();
-        Box::new(move || shell.fills.borrow().get(&path).cloned().map(Ok))
+        self.answer_fill(path)
+    }
+
+    fn prefill(&self, path: &[usize]) -> Reply<Submenu> {
+        self.shell.prefilled.borrow_mut().push(path.to_vec());
+        self.answer_fill(path)
     }
 
     fn invoke(&self, id: &ItemId, _: ScreenSpot) -> Reply<()> {
@@ -561,7 +582,7 @@ fn a_loading_submenu_fills_when_the_shell_answers(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
     rig.answer(cx, Ok(windows_menu()));
     let send_to = vec![2];
-    assert_eq!(*rig.shell.asked.borrow(), [vec![2]]);
+    assert_eq!(*rig.shell.prefilled.borrow(), [vec![2]]);
     rig.type_text(cx, "docu");
     assert_eq!(rig.rows(cx), ["No matching commands"]);
     let documents = Submenu::Filled(vec![shell_item(50, "Documents", Group::Share)]);
@@ -580,6 +601,7 @@ fn retry_shows_the_items_of_a_submenu_that_failed_once(cx: &mut TestAppContext) 
     rig.answer(cx, Ok(windows_menu()));
     rig.type_text(cx, "send");
     rig.press(cx, "right");
+    rig.wait(cx, 50);
     assert_eq!(rig.rows_in(cx, 1), ["Could not load", "Retry"]);
     let documents = Submenu::Filled(vec![shell_item(50, "Documents", Group::Share)]);
     rig.shell.fills.borrow_mut().insert(vec![2], documents);
@@ -818,8 +840,8 @@ fn a_short_click_drops_the_prefetch_and_its_session(cx: &mut TestAppContext) {
     rig.right_button(cx, 1, true);
     assert_eq!(rig.shell.live.get(), 1);
     rig.right_button(cx, 1, false);
-    rig.wait(cx, 500);
     assert_eq!(rig.shell.live.get(), 0);
+    rig.wait(cx, 500);
     assert!(!rig.is_open(cx));
 }
 
@@ -864,9 +886,9 @@ fn a_drag_to_another_row_drops_the_prefetch_and_opens_no_menu(cx: &mut TestAppCo
     *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
     rig.right_button(cx, 1, true);
     rig.right_drag_to(cx, 0);
+    assert_eq!(rig.shell.live.get(), 0);
     rig.wait(cx, 500);
     assert!(!rig.is_open(cx));
-    assert_eq!(rig.shell.live.get(), 0);
 }
 
 #[gpui_kit::test]
@@ -960,3 +982,5 @@ fn a_right_release_outside_the_list_toggles_once(cx: &mut TestAppContext) {
 }
 
 mod background;
+mod prefill;
+mod preload;

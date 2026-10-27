@@ -9,15 +9,18 @@ mod worker;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
+use std::thread::JoinHandle;
 use std::time::Instant;
 
 use rusty_core::shell_menu::Submenu;
 use windows::Win32::Foundation::HWND;
 
-use super::fill::Fills;
-use super::station::{self, BusySince};
+use super::fill::{FillAsk, Fills};
+use super::replaced::Replaced;
+use super::station::Health;
 use super::{
     InvokeOptions, MenuError, MenuSession, MenuSource, Pending, ScreenPoint, WindowHandle,
+    WorkerHealth,
 };
 use worker::Request;
 
@@ -37,6 +40,7 @@ struct Link {
     sender: Sender<Request>,
     window: isize,
     retired: Arc<AtomicBool>,
+    health: Health,
 }
 
 impl Link {
@@ -45,7 +49,11 @@ impl Link {
     }
 
     fn post(&self, request: Request) -> bool {
-        !self.retired.load(Ordering::Acquire) && self.send(request)
+        if self.retired.load(Ordering::Acquire) {
+            return false;
+        }
+        self.health.note_waiting(Instant::now());
+        self.send(request)
     }
 
     fn ask<T: Send + 'static>(
@@ -63,41 +71,57 @@ impl Link {
 
 struct Worker {
     link: Link,
-    busy: BusySince,
+    thread: JoinHandle<()>,
 }
 
 impl Worker {
-    fn spawn() -> Result<Self, MenuError> {
-        let busy = BusySince::default();
-        worker::spawn(busy.clone()).map(|link| Self { link, busy })
+    fn spawn(warms: bool) -> Result<Self, MenuError> {
+        worker::spawn(warms).map(|(link, thread)| Self { link, thread })
     }
 
     fn is_hung(&self) -> bool {
-        station::is_hung(&self.busy, Instant::now())
+        self.link.health.is_hung(Instant::now())
     }
 }
 
+struct Workers {
+    current: Worker,
+    replaced: Replaced,
+}
+
 pub(super) struct Service {
-    worker: Mutex<Worker>,
+    workers: Mutex<Workers>,
 }
 
 impl Service {
     pub(super) fn start() -> Result<Self, MenuError> {
-        Worker::spawn().map(|worker| Self {
-            worker: Mutex::new(worker),
+        Worker::spawn(true).map(|current| Self {
+            workers: Mutex::new(Workers {
+                current,
+                replaced: Replaced::default(),
+            }),
         })
     }
 
+    fn workers(&self) -> std::sync::MutexGuard<'_, Workers> {
+        self.workers.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn live_link(&self) -> Link {
-        let mut worker = self.worker.lock().unwrap_or_else(PoisonError::into_inner);
-        if worker.is_hung()
-            && let Ok(fresh) = Worker::spawn()
+        let mut workers = self.workers();
+        if workers.current.is_hung()
+            && let Ok(fresh) = Worker::spawn(false)
         {
-            let stale = std::mem::replace(&mut *worker, fresh);
+            let stale = std::mem::replace(&mut workers.current, fresh);
             stale.link.retired.store(true, Ordering::Release);
             stale.link.send(Request::Shutdown);
+            workers.replaced.add(stale.thread);
         }
-        worker.link.clone()
+        workers.current.link.clone()
+    }
+
+    pub(super) fn health(&self) -> WorkerHealth {
+        self.workers().replaced.health()
     }
 
     pub(super) fn classic_for(
@@ -132,8 +156,7 @@ impl Service {
 
 impl Drop for Service {
     fn drop(&mut self) {
-        let worker = self.worker.lock().unwrap_or_else(PoisonError::into_inner);
-        worker.link.send(Request::Shutdown);
+        self.workers().current.link.send(Request::Shutdown);
     }
 }
 
@@ -145,14 +168,28 @@ pub(super) struct SessionHandle {
 
 impl SessionHandle {
     pub(super) fn fill(&self, path: Vec<usize>) -> Pending<Submenu> {
+        self.fills.ask(path, |ask| self.send_fill(ask))
+    }
+
+    pub(super) fn prefill(&self, path: Vec<usize>) -> Pending<Submenu> {
+        self.fills.prefill(path, |ask| self.send_fill(ask))
+    }
+
+    fn send_fill(&self, ask: FillAsk) {
         let session = self.id;
-        self.fills.ask(path, |path, reply| {
-            self.link.post(Request::Fill {
+        self.link.post(match ask {
+            FillAsk::Now(path, reply) => Request::Fill {
                 session,
                 path,
                 reply,
-            });
-        })
+            },
+            FillAsk::Later(path, reply) => Request::Prefill {
+                session,
+                path,
+                reply,
+            },
+            FillAsk::Promote(path) => Request::Promote { session, path },
+        });
     }
 
     pub(super) fn invoke(
@@ -193,7 +230,7 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, mpsc};
 
-    use super::{InvokeOptions, Link, MenuError, Request};
+    use super::{Health, InvokeOptions, Link, MenuError, Request};
 
     #[test]
     fn a_retired_link_answers_stopped_without_sending() {
@@ -202,6 +239,7 @@ mod tests {
             sender,
             window: 0,
             retired: Arc::new(AtomicBool::new(true)),
+            health: Health::default(),
         };
         let pending = link.ask(|reply| Request::Invoke {
             session: 1,
