@@ -4,14 +4,15 @@ mod tree;
 mod watch;
 
 use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 use crate::watch::Depth;
 use crate::{
-    CancelToken, Capabilities, EntryBatch, FsEntry, ListSink, Provider, Watch, WatchChange,
-    WatchSink,
+    CancelToken, Capabilities, EntryBatch, FsEntry, LinkKey, ListSink, Provider, SizeEntry, Watch,
+    WatchChange, WatchSink,
 };
 use tree::Tree;
 use watch::Watchers;
@@ -44,6 +45,12 @@ pub enum Fault {
 
 type CallKey = (String, FakeOp);
 
+#[derive(Debug, Clone, Copy, Default)]
+struct SizeMetadata {
+    on_disk: Option<u64>,
+    link: Option<LinkKey>,
+}
+
 #[derive(Debug)]
 pub struct FakeFs {
     tree: Mutex<Tree>,
@@ -54,6 +61,7 @@ pub struct FakeFs {
     volumes: Mutex<HashMap<String, Option<u64>>>,
     mounts: Mutex<HashMap<String, Option<u64>>>,
     space: Mutex<HashMap<String, Option<u64>>>,
+    sizes: Mutex<HashMap<u64, SizeMetadata>>,
     batch_size: usize,
     watchable: bool,
     watchers: Watchers,
@@ -89,6 +97,7 @@ impl FakeFs {
             volumes: Mutex::new(HashMap::new()),
             mounts: Mutex::new(HashMap::new()),
             space: Mutex::new(HashMap::new()),
+            sizes: Mutex::new(HashMap::new()),
             batch_size: DEFAULT_BATCH,
             watchable: false,
             watchers: Watchers::default(),
@@ -184,6 +193,18 @@ impl FakeFs {
             .get(&(normalize(path).to_owned(), op))
             .copied()
             .unwrap_or(0)
+    }
+
+    pub fn set_on_disk(&self, path: &str, bytes: u64) {
+        if let Some(id) = self.tree().identity(path) {
+            lock(&self.sizes).entry(id).or_default().on_disk = Some(bytes);
+        }
+    }
+
+    pub fn set_link(&self, path: &str, key: LinkKey) {
+        if let Some(id) = self.tree().identity(path) {
+            lock(&self.sizes).entry(id).or_default().link = Some(key);
+        }
     }
 
     pub fn set_volume(&self, path: &str, serial: u64) {
@@ -348,6 +369,35 @@ impl Provider for FakeFs {
             Some(kind) => Err(error(kind, folder)),
             None => Ok(()),
         }
+    }
+
+    fn list_sizes(
+        &self,
+        folder: &Location,
+        sink: &mut dyn FnMut(SizeEntry) -> ControlFlow<()>,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        let path = self.own_path(folder)?;
+        self.list(
+            folder,
+            &mut |batch: EntryBatch| {
+                batch.entries.into_iter().try_for_each(|entry| {
+                    let child = format!("{path}/{}", entry.name.to_text());
+                    let id = self.tree().identity(&child);
+                    let SizeMetadata { on_disk, link } = id
+                        .and_then(|id| lock(&self.sizes).get(&id).copied())
+                        .unwrap_or_default();
+                    sink(SizeEntry {
+                        name: entry.name,
+                        kind: entry.kind,
+                        size: entry.size,
+                        on_disk,
+                        link,
+                    })
+                })
+            },
+            cancel,
+        )
     }
 
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {

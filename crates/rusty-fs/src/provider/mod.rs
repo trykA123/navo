@@ -36,6 +36,18 @@ pub struct FsEntry {
     pub attributes: Attributes,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LinkKey(pub u128, pub u64);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SizeEntry {
+    pub name: ProviderPath,
+    pub kind: EntryKind,
+    pub size: u64,
+    pub on_disk: Option<u64>,
+    pub link: Option<LinkKey>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntryBatch {
     pub entries: Vec<FsEntry>,
@@ -69,6 +81,28 @@ pub trait Provider: Send + Sync {
         sink: &mut dyn ListSink,
         cancel: &CancelToken,
     ) -> Result<(), FsError>;
+    fn list_sizes(
+        &self,
+        folder: &Location,
+        sink: &mut dyn FnMut(SizeEntry) -> ControlFlow<()>,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        self.list(
+            folder,
+            &mut |batch: EntryBatch| {
+                batch.entries.into_iter().try_for_each(|entry| {
+                    sink(SizeEntry {
+                        name: entry.name,
+                        kind: entry.kind,
+                        size: entry.size,
+                        on_disk: None,
+                        link: None,
+                    })
+                })
+            },
+            cancel,
+        )
+    }
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError>;
     fn watch(&self, folder: &Location, _sink: WatchSink) -> Result<Watch, FsError> {
         Err(FsError {
