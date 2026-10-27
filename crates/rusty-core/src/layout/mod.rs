@@ -14,6 +14,12 @@ pub struct Layout {
     focused: PaneId,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Applied {
+    pub removed: Vec<PaneId>,
+    pub added: Vec<PaneId>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
     pub x: f64,
@@ -126,6 +132,38 @@ impl Layout {
 
     pub fn even(&mut self) {
         self.root.even();
+    }
+
+    pub fn apply(&mut self, tiles: &Tiles, new_pane: &mut dyn FnMut() -> PaneId) -> Applied {
+        let numbered = self.numbered();
+        let mut remaining = numbered.iter().copied();
+        let mut added = Vec::new();
+        let root = tiles_node(tiles, &mut || {
+            remaining.next().unwrap_or_else(|| {
+                let pane = new_pane();
+                added.push(pane);
+                pane
+            })
+        });
+        let removed = remaining.rev().collect();
+        self.root = root;
+        for (number, pane) in numbered
+            .into_iter()
+            .chain(added.iter().copied())
+            .take(self.panes().len())
+            .enumerate()
+        {
+            self.root.exchange(self.numbered()[number], pane);
+        }
+        if !self.contains(self.focused) {
+            self.focused = self.numbered()[0];
+        }
+        Applied { removed, added }
+    }
+
+    #[must_use]
+    pub fn to_tiles(&self) -> Tiles {
+        node_tiles(&self.root)
     }
 
     pub fn split(&mut self, direction: Direction, new_pane: PaneId) -> Result<(), LayoutError> {
@@ -250,6 +288,40 @@ impl Layout {
         self.root
             .path_to(pane)
             .ok_or(LayoutError::UnknownPane(pane))
+    }
+}
+
+fn tiles_node(tiles: &Tiles, next: &mut dyn FnMut() -> PaneId) -> Node {
+    match tiles {
+        Tiles::Pane => Node::Leaf(next()),
+        Tiles::Split {
+            axis,
+            percent,
+            first,
+            second,
+        } => Node::Split {
+            axis: *axis,
+            ratio: u16::from(*percent) * 10,
+            first: Box::new(tiles_node(first, next)),
+            second: Box::new(tiles_node(second, next)),
+        },
+    }
+}
+
+fn node_tiles(node: &Node) -> Tiles {
+    match node {
+        Node::Leaf(_) => Tiles::Pane,
+        Node::Split {
+            axis,
+            ratio,
+            first,
+            second,
+        } => Tiles::Split {
+            axis: *axis,
+            percent: (ratio / 10) as u8,
+            first: Box::new(node_tiles(first)),
+            second: Box::new(node_tiles(second)),
+        },
     }
 }
 

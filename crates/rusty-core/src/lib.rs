@@ -36,7 +36,8 @@ pub use file_identity::{FileIdentity, FileIdentityKind};
 pub use fs_error::{FsError, FsErrorKind, LockHolder, RecoveryAction};
 pub use id::{PaneId, TabId, WindowId};
 pub use layout::{
-    Axis, Layout, LayoutError, MAX_PANES, Preset, Rect, SplitInfo, SplitPath, Tiles, TilesError,
+    Applied, Axis, Layout, LayoutError, MAX_PANES, Preset, Rect, SplitInfo, SplitPath, Tiles,
+    TilesError,
 };
 pub use location::{Location, LocationError, ProviderId, ProviderPath, typed_location};
 pub use name::{NameError, check_name};
