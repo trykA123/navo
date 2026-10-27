@@ -47,6 +47,13 @@ impl Limits {
         removable: 2,
     };
 
+    pub const BACKGROUND: Self = Self {
+        ssd: 1,
+        hdd: 1,
+        network: 1,
+        removable: 1,
+    };
+
     #[must_use]
     pub fn limit(self, kind: VolumeKind) -> usize {
         match kind {

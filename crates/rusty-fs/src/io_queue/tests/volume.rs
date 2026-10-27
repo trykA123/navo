@@ -106,3 +106,16 @@ fn other_provider_has_no_local_root() {
     let location = Location::new("fake://folder").expect("valid test location");
     assert_eq!(volume_of(&location).root(), None);
 }
+
+#[test]
+fn background_work_gets_one_worker_on_every_kind_of_drive() {
+    for kind in [
+        VolumeKind::Ssd,
+        VolumeKind::Hdd,
+        VolumeKind::Network,
+        VolumeKind::Removable,
+        VolumeKind::Unknown,
+    ] {
+        assert_eq!(Limits::BACKGROUND.limit(kind), 1);
+    }
+}

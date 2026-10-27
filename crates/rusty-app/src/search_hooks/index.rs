@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::Instant;
 
 use rusty_core::{Location, ProviderPath};
-use rusty_fs::{IoQueue, Provider};
+use rusty_fs::{IoQueue, Limits as IoLimits, Provider};
 use rusty_index::host::{Host, HostOptions, HostStatus};
 use rusty_index::pipe::{self, Reply, VolumeStatus};
 use rusty_index::search;
@@ -98,7 +98,7 @@ fn create_hosts(
         provider,
         dirs,
         options: None,
-        queue: Arc::new(IoQueue::new()),
+        queue: Arc::new(IoQueue::with_limits(IoLimits::BACKGROUND)),
         roots: Vec::new(),
         desired: Vec::new(),
         exclude: Vec::new(),

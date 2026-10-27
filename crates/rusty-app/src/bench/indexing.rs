@@ -5,7 +5,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rusty_core::Location;
-use rusty_fs::{IoQueue, LocalFs};
+use rusty_fs::{IoQueue, Limits as IoLimits, LocalFs};
 use rusty_index::file::{self, Header};
 use rusty_index::host::{Host, HostOptions, HostStatus};
 use rusty_index::walker::Limits;
@@ -67,7 +67,7 @@ pub(super) fn run(root: &Location, index: &Path) -> Result<(Host, Index), String
     let started = Instant::now();
     let host = Host::start(HostOptions {
         provider: Arc::new(LocalFs::new()),
-        queue: Arc::new(IoQueue::new()),
+        queue: Arc::new(IoQueue::with_limits(IoLimits::BACKGROUND)),
         root: root.clone(),
         snapshot: index.join("walk.index"),
         limits: Limits {
