@@ -92,7 +92,7 @@ impl Benchmark<'_> {
         plan: &OperationPlan,
         method: Method,
         runs: usize,
-    ) -> Result<f64, String> {
+    ) -> Result<Vec<f64>, String> {
         let mut samples = Vec::new();
         for run in 1..=runs {
             eprintln!("bench-copy: {} run {run}/{runs}", method.name());
@@ -105,7 +105,7 @@ impl Benchmark<'_> {
             samples.push(started.elapsed().as_secs_f64());
             self.workspace.reset_target()?;
         }
-        report::median(&mut samples).ok_or_else(|| "no benchmark samples".to_owned())
+        Ok(samples)
     }
 
     fn run_copy(&self, plan: &OperationPlan, method: Method) -> Result<(), String> {

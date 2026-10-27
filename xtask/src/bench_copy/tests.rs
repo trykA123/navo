@@ -5,7 +5,7 @@ use rusty_fs::DriveClass;
 use super::{
     fixture::{self, DATA_SETS},
     options::{self, Options},
-    report::{Measurement, markdown, median},
+    report::{Measurement, markdown},
     workspace::{Workspace, simplified},
 };
 
@@ -90,37 +90,24 @@ fn fixture_content_is_repeatable_nonzero_and_changes_between_blocks() {
 }
 
 #[test]
-fn median_sorts_samples_and_averages_the_middle_pair() {
-    assert_eq!(median(&mut [9.0, 1.0, 3.0]), Some(3.0));
-    assert_eq!(median(&mut [9.0, 1.0, 5.0, 3.0]), Some(4.0));
-    assert_eq!(median(&mut [2.0]), Some(2.0));
-    assert_eq!(median(&mut []), None);
-}
-
-#[test]
-fn markdown_reports_drive_classes_medians_and_decimal_megabytes_per_second() {
+fn markdown_reports_medians_mean_sd_outliers_and_decimal_megabytes_per_second() {
     let rows = [
         Measurement {
             set: DATA_SETS[0],
             method: "Standard",
-            seconds: 2.0,
+            seconds: vec![1.0, 2.0, 3.0],
         },
         Measurement {
             set: DATA_SETS[0],
             method: "Auto",
-            seconds: 1.0,
+            seconds: vec![1.0],
         },
     ];
-    assert_eq!(
-        markdown(&rows, [DriveClass::Ssd, DriveClass::Network], 8, 3),
-        "Drive classes: source Ssd; target Network. Auto workers: 8.\n\n\
-         3 run(s) per method; median elapsed time. MB = 1,000,000 bytes.\n\n\
-         The destination is removed between runs; OS caches are not flushed.\n\n\
-         | Set | Method | Median seconds | MB/s |\n\
-         | --- | --- | ---: | ---: |\n\
-         | small | Standard | 2.000 | 20.48 |\n\
-         | small | Auto | 1.000 | 40.96 |\n"
-    );
+    let report = markdown(&rows, [DriveClass::Ssd, DriveClass::Network], 8, 3);
+    assert!(report.contains("source Ssd; target Network. Auto workers: 8."));
+    assert!(report.contains("| Median seconds | MB/s | Mean ± σ seconds | Outliers |"));
+    assert!(report.contains("| small | Standard | 2.000 | 20.48 | 2.000 ± 1.000 | 0 |"));
+    assert!(report.contains("| small | Auto | 1.000 | 40.96 | 1.000 ± 0.000 | 0 |"));
 }
 
 struct TestRoot(PathBuf);

@@ -12,6 +12,7 @@ mod gate;
 mod l10n;
 mod perf;
 mod size;
+pub mod stats;
 
 use std::process::ExitCode;
 
