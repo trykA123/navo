@@ -7,7 +7,7 @@ pub(crate) mod print;
 pub use error::{ParseError, ParseErrorKind};
 pub use id::CommandId;
 
-use crate::{Direction, Location, SpanMode};
+use crate::{Direction, Location, SpanMode, SplitPath, Tiles};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -33,6 +33,13 @@ pub enum Command {
     SelectionAll,
     SelectionClear,
     LayoutSplit { direction: Direction },
+    LayoutPreset { tiles: Tiles },
+    LayoutSwap { a: usize, b: usize },
+    LayoutSwapToward { direction: Direction },
+    LayoutResize { direction: Direction },
+    LayoutRatio { split: SplitPath, ratio: u16 },
+    LayoutEven,
+    LayoutFocusPane { n: usize },
     LayoutClose,
     LayoutFocus { direction: Direction },
     WindowOpen { location: Option<Location> },
@@ -114,6 +121,13 @@ impl Command {
             Self::SelectionAll => Id::SelectionAll,
             Self::SelectionClear => Id::SelectionClear,
             Self::LayoutSplit { .. } => Id::LayoutSplit,
+            Self::LayoutPreset { .. } => Id::LayoutPreset,
+            Self::LayoutSwap { .. } => Id::LayoutSwap,
+            Self::LayoutSwapToward { .. } => Id::LayoutSwapToward,
+            Self::LayoutResize { .. } => Id::LayoutResize,
+            Self::LayoutRatio { .. } => Id::LayoutRatio,
+            Self::LayoutEven => Id::LayoutEven,
+            Self::LayoutFocusPane { .. } => Id::LayoutFocusPane,
             Self::LayoutClose => Id::LayoutClose,
             Self::LayoutFocus { .. } => Id::LayoutFocus,
             Self::WindowOpen { .. } => Id::WindowOpen,

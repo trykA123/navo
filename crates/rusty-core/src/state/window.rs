@@ -196,6 +196,16 @@ impl Window {
         Ok(())
     }
 
+    pub fn swap_toward(&mut self, direction: Direction) -> Result<(), StateError> {
+        self.layout.swap(direction)?;
+        Ok(())
+    }
+
+    pub fn resize(&mut self, direction: Direction, delta: u16) -> Result<(), StateError> {
+        self.layout.resize(direction, delta)?;
+        Ok(())
+    }
+
     pub fn set_ratio(&mut self, split: &SplitPath, ratio: u16) -> Result<(), StateError> {
         self.layout.set_ratio(split, ratio)?;
         Ok(())

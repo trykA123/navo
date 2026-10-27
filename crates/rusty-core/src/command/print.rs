@@ -6,6 +6,7 @@ enum Shown<'a> {
     Str(&'a str),
     Int(u64),
     Signed(i8),
+    Owned(String),
     Word(&'static str),
 }
 
@@ -64,9 +65,6 @@ fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
             }
             shown
         }
-        Command::LayoutSplit { direction } | Command::LayoutFocus { direction } => {
-            vec![("direction", Shown::Word(direction.keyword()))]
-        }
         Command::WorkspaceSwitch { .. }
         | Command::WorkspaceNew { .. }
         | Command::WorkspaceRename { .. }
@@ -75,6 +73,34 @@ fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
         | Command::WorkspaceRestore
         | Command::WorkspaceSave
         | Command::WorkspaceDiscard { .. } => workspace_fields(command),
+        _ => layout_fields(command),
+    }
+}
+
+fn layout_fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
+    match command {
+        Command::LayoutSplit { direction }
+        | Command::LayoutFocus { direction }
+        | Command::LayoutSwapToward { direction }
+        | Command::LayoutResize { direction } => {
+            vec![("direction", Shown::Word(direction.keyword()))]
+        }
+        Command::LayoutPreset { tiles } => vec![("tiles", Shown::Owned(tiles.print()))],
+        Command::LayoutSwap { a, b } => {
+            vec![("a", Shown::Int(*a as u64)), ("b", Shown::Int(*b as u64))]
+        }
+        Command::LayoutRatio { split, ratio } => vec![
+            (
+                "split",
+                if split.0.is_empty() {
+                    Shown::Word("root")
+                } else {
+                    Shown::Owned(split.to_string())
+                },
+            ),
+            ("ratio", Shown::Int(u64::from(*ratio))),
+        ],
+        Command::LayoutFocusPane { n } => vec![("n", Shown::Int(*n as u64))],
         _ => Vec::new(),
     }
 }
@@ -107,6 +133,7 @@ fn cursor_value(to: CursorMove) -> Shown<'static> {
 fn write_value(f: &mut fmt::Formatter<'_>, value: &Shown<'_>) -> fmt::Result {
     match value {
         Shown::Str(text) => write_string(f, text),
+        Shown::Owned(text) => write_string(f, text),
         Shown::Signed(n) => write!(f, "{n}"),
         Shown::Int(n) => write!(f, "{n}"),
         Shown::Word(word) => f.write_str(word),

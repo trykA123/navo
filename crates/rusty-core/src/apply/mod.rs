@@ -5,7 +5,6 @@ mod window;
 mod workspace;
 
 use crate::{AppState, Command, Listing, Location, PaneId, PatternError, StateError, TabId};
-use select::Marking;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Effect {
@@ -98,21 +97,12 @@ fn dispatch(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Comm
         Command::SelectionExtend { to, mode } => select::extend(state, *to, *mode),
         Command::SelectionExtension { mark } => select::extension(state, *mark),
         Command::SelectionRestore => select::restore(state),
-        Command::SelectionAddPattern { pattern, folders }
-        | Command::SelectionRemovePattern { pattern, folders } => select::pattern(
-            state,
-            pattern,
-            Marking {
-                mark: matches!(command, Command::SelectionAddPattern { .. }),
-                folders: *folders,
-            },
-        ),
+        Command::SelectionAddPattern { .. } | Command::SelectionRemovePattern { .. } => {
+            select::pattern_command(state, command)
+        }
         Command::SelectionInvert => select::invert(state),
         Command::SelectionAll => select::all(state),
         Command::SelectionClear => Ok(select::clear(state)),
-        Command::LayoutSplit { direction } => layout::split(state, *direction),
-        Command::LayoutClose => layout::close(state),
-        Command::LayoutFocus { direction } => layout::focus(state, *direction),
         Command::WindowOpen { location } => Ok(window::open(state, location.as_ref())),
         Command::WindowClose { window } => window::close(state, *window),
         Command::WindowFocus { window } => window::focus(state, *window),
@@ -125,6 +115,16 @@ fn dispatch(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Comm
         | Command::WorkspaceSave
         | Command::WorkspaceDiscard { .. } => workspace::apply(state, command),
         Command::AppSaveSession => Ok(vec![Effect::SaveSession]),
+        Command::LayoutSplit { .. }
+        | Command::LayoutClose
+        | Command::LayoutFocus { .. }
+        | Command::LayoutPreset { .. }
+        | Command::LayoutSwap { .. }
+        | Command::LayoutSwapToward { .. }
+        | Command::LayoutResize { .. }
+        | Command::LayoutRatio { .. }
+        | Command::LayoutEven
+        | Command::LayoutFocusPane { .. } => layout::apply(state, command),
     }
 }
 

@@ -24,6 +24,13 @@ selection.invert
 selection.all
 selection.clear
 layout.split { direction: right }
+layout.preset { tiles: "row(50, pane, pane)" }
+layout.swap { a: 1, b: 4 }
+layout.swap-toward { direction: left }
+layout.resize { direction: right }
+layout.ratio { split: root, ratio: 700 }
+layout.even
+layout.focus-pane { n: 4 }
 layout.close
 layout.focus { direction: up }
 window.open { location: "D:\\Work" }

@@ -266,7 +266,9 @@ fn split_opens_the_new_pane_at_the_same_location() {
 #[test]
 fn split_lists_the_new_pane_tab() {
     let mut state = home();
+    super::load(&mut state, super::files(1));
     navigate(&mut state, "/work");
+    super::load(&mut state, super::files(1));
     let effects = split(&mut state, Direction::Left);
     assert_eq!(
         effects,
@@ -290,6 +292,7 @@ fn close_removes_the_focused_pane() {
 #[test]
 fn close_has_no_effects() {
     let mut state = home();
+    super::load(&mut state, super::files(1));
     split(&mut state, Direction::Right);
     assert_eq!(run(&mut state, Command::LayoutClose), vec![]);
 }
@@ -319,6 +322,7 @@ fn focus_moves_to_the_neighbour() {
 #[test]
 fn focus_has_no_effects() {
     let mut state = home();
+    super::load(&mut state, super::files(1));
     split(&mut state, Direction::Right);
     assert_eq!(
         run(
@@ -359,4 +363,136 @@ fn save_session_leaves_the_state_alone() {
     let before = state.clone();
     run(&mut state, Command::AppSaveSession);
     assert_eq!(state, before);
+}
+
+#[test]
+fn preset_command_lists_new_panes_without_relisting_loaded_tabs() {
+    let mut state = home();
+    super::load(&mut state, super::files(1));
+    let original = state.active_tab().id();
+    let effects = run(
+        &mut state,
+        Command::LayoutPreset {
+            tiles: crate::Tiles::builtin()[3].tiles.clone(),
+        },
+    );
+    let mut expected: Vec<_> = numbered(&state)
+        .into_iter()
+        .map(|id| state.pane(id).unwrap().active().id())
+        .filter(|&id| id != original)
+        .collect();
+    let mut listed: Vec<_> = effects
+        .iter()
+        .map(|effect| match effect {
+            Effect::ListFolder { tab, .. } => *tab,
+            _ => panic!("expected folder listing"),
+        })
+        .collect();
+    listed.sort_unstable();
+    expected.sort_unstable();
+    assert_eq!(listed, expected);
+}
+
+#[test]
+fn swap_command_uses_reading_order_numbers() {
+    let mut state = home();
+    preset(&mut state, 3);
+    let ids = numbered(&state);
+    let focused = state.focused_pane();
+    assert!(run(&mut state, Command::LayoutSwap { a: 1, b: 4 }).is_empty());
+    assert_eq!(numbered(&state), vec![ids[3], ids[1], ids[2], ids[0]]);
+    assert_eq!(state.focused_pane(), focused);
+}
+
+#[test]
+fn swap_toward_command_moves_focused_pane_without_changing_focus() {
+    let mut state = home();
+    preset(&mut state, 0);
+    let ids = numbered(&state);
+    assert!(
+        run(
+            &mut state,
+            Command::LayoutSwapToward {
+                direction: Direction::Right
+            }
+        )
+        .is_empty()
+    );
+    assert_eq!(numbered(&state), vec![ids[1], ids[0]]);
+    assert_eq!(state.focused_pane(), ids[0]);
+}
+
+#[test]
+fn resize_command_moves_split_by_fifty_permille() {
+    let mut state = home();
+    preset(&mut state, 0);
+    assert!(
+        run(
+            &mut state,
+            Command::LayoutResize {
+                direction: Direction::Right
+            }
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        state
+            .window(state.focused_window())
+            .unwrap()
+            .layout()
+            .splits()[0]
+            .ratio,
+        550
+    );
+}
+
+#[test]
+fn focus_pane_command_lists_only_when_moving_to_an_unlisted_tab() {
+    let mut state = home();
+    preset(&mut state, 0);
+    let ids = numbered(&state);
+    let effects = run(&mut state, Command::LayoutFocusPane { n: 2 });
+    assert_eq!(state.focused_pane(), ids[1]);
+    assert!(
+        matches!(&effects[..], [Effect::ListFolder { tab, .. }] if *tab == state.active_tab().id())
+    );
+    assert!(run(&mut state, Command::LayoutFocusPane { n: 2 }).is_empty());
+    super::load(&mut state, super::files(1));
+    run(&mut state, Command::LayoutFocusPane { n: 1 });
+    assert!(run(&mut state, Command::LayoutFocusPane { n: 2 }).is_empty());
+}
+
+#[test]
+fn ratio_and_even_commands_update_splits() {
+    let mut state = home();
+    preset(&mut state, 0);
+    assert!(
+        run(
+            &mut state,
+            Command::LayoutRatio {
+                split: crate::SplitPath(vec![]),
+                ratio: 700
+            }
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        state
+            .window(state.focused_window())
+            .unwrap()
+            .layout()
+            .splits()[0]
+            .ratio,
+        700
+    );
+    assert!(run(&mut state, Command::LayoutEven).is_empty());
+    assert_eq!(
+        state
+            .window(state.focused_window())
+            .unwrap()
+            .layout()
+            .splits()[0]
+            .ratio,
+        500
+    );
 }

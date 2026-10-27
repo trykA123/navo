@@ -72,14 +72,9 @@ fn requests_count_up() {
 #[test]
 fn list_unloaded_asks_for_every_active_tab_without_a_listing() {
     let mut state = home();
-    run(
-        &mut state,
-        Command::LayoutSplit {
-            direction: Direction::Right,
-        },
-    );
+    state.split(Direction::Right).unwrap();
     let effects = list_unloaded(&mut state);
-    assert_eq!(effects.len(), 1);
+    assert_eq!(effects.len(), 2);
 }
 
 #[test]
@@ -124,13 +119,13 @@ fn listing_loaded_for_a_closed_tab_is_ignored() {
 fn listing_loaded_reaches_a_tab_in_another_pane() {
     let mut state = home();
     let first = state.active_tab().id();
-    let request = request_of(&list_unloaded(&mut state));
     run(
         &mut state,
         Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
+    let request = find_tab(&state, first).unwrap().pending_request().unwrap();
     let _ = apply_event(&mut state, loaded(first, "/home", request, 3));
     assert_eq!(find_tab(&state, first).unwrap().listing(), Some(&files(3)));
 }

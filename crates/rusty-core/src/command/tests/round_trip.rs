@@ -233,3 +233,48 @@ fn canonical_examples_print_unchanged() {
         .collect();
     assert_eq!(printed, expected);
 }
+
+#[test]
+fn layout_commands_round_trip() {
+    for text in super::CANONICAL_EXAMPLES
+        .iter()
+        .copied()
+        .filter(|s| s.starts_with("layout."))
+        .chain([
+            "layout.ratio { split: \"21\", ratio: 100 }",
+            "layout.ratio { split: 21, ratio: 900 }",
+        ])
+    {
+        let command = parse(text).unwrap();
+        assert_eq!(parse(&command.to_string()).unwrap(), command);
+    }
+    assert_eq!(
+        parse("layout.ratio { split: root, ratio: 900 }").unwrap(),
+        Command::LayoutRatio {
+            split: crate::SplitPath(vec![]),
+            ratio: 900
+        }
+    );
+    assert_eq!(
+        parse("layout.ratio { split: \"21\", ratio: 100 }").unwrap(),
+        Command::LayoutRatio {
+            split: crate::SplitPath(vec![true, false]),
+            ratio: 100
+        }
+    );
+}
+
+#[test]
+fn layout_commands_reject_invalid_values() {
+    for text in [
+        "layout.focus-pane { n: 5 }",
+        "layout.swap { a: 0, b: 1 }",
+        "layout.ratio { split: \"3\", ratio: 500 }",
+        "layout.ratio { split: 3, ratio: 500 }",
+        "layout.ratio { split: \"\", ratio: 500 }",
+        "layout.ratio { split: root, ratio: 99 }",
+        "layout.ratio { split: root, ratio: 901 }",
+    ] {
+        assert!(parse(text).is_err(), "{text}");
+    }
+}

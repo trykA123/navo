@@ -249,6 +249,14 @@ impl AppState {
         self.focused.swap(a, b)
     }
 
+    pub fn swap_toward(&mut self, direction: Direction) -> Result<(), StateError> {
+        self.focused.swap_toward(direction)
+    }
+
+    pub fn resize(&mut self, direction: Direction, delta: u16) -> Result<(), StateError> {
+        self.focused.resize(direction, delta)
+    }
+
     pub fn set_ratio(&mut self, split: &SplitPath, ratio: u16) -> Result<(), StateError> {
         self.focused.set_ratio(split, ratio)
     }

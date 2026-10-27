@@ -117,7 +117,14 @@ pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
         CommandId::SelectionAddPattern | CommandId::SelectionRemovePattern => {
             &["pattern", "folders"]
         }
-        CommandId::LayoutSplit | CommandId::LayoutFocus => &["direction"],
+        CommandId::LayoutSplit
+        | CommandId::LayoutFocus
+        | CommandId::LayoutSwapToward
+        | CommandId::LayoutResize => &["direction"],
+        CommandId::LayoutPreset => &["tiles"],
+        CommandId::LayoutSwap => &["a", "b"],
+        CommandId::LayoutRatio => &["split", "ratio"],
+        CommandId::LayoutFocusPane => &["n"],
         CommandId::WorkspaceSwitch | CommandId::WorkspaceDelete | CommandId::WorkspaceDiscard => {
             &["n"]
         }
@@ -156,6 +163,13 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::LayoutSplit => Command::LayoutSplit {
             direction: fields.required("direction", direction)?,
         },
+        Id::LayoutPreset
+        | Id::LayoutSwap
+        | Id::LayoutSwapToward
+        | Id::LayoutResize
+        | Id::LayoutRatio
+        | Id::LayoutEven
+        | Id::LayoutFocusPane => layout_command(&mut fields)?,
         Id::LayoutClose => Command::LayoutClose,
         Id::LayoutFocus => Command::LayoutFocus {
             direction: fields.required("direction", direction)?,
@@ -170,6 +184,35 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         | Id::WorkspaceSave
         | Id::WorkspaceDiscard => workspace::build(&mut fields)?,
         Id::AppSaveSession => Command::AppSaveSession,
+    })
+}
+
+fn layout_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
+    use CommandId as Id;
+    Ok(match fields.command {
+        Id::LayoutPreset => Command::LayoutPreset {
+            tiles: fields.required("tiles", |v| {
+                crate::Tiles::parse(&string(v)?).map_err(|e| Problem::Invalid(e.to_string()))
+            })?,
+        },
+        Id::LayoutSwap => Command::LayoutSwap {
+            a: fields.required("a", pane_number)?,
+            b: fields.required("b", pane_number)?,
+        },
+        Id::LayoutSwapToward => Command::LayoutSwapToward {
+            direction: fields.required("direction", direction)?,
+        },
+        Id::LayoutResize => Command::LayoutResize {
+            direction: fields.required("direction", direction)?,
+        },
+        Id::LayoutRatio => Command::LayoutRatio {
+            split: fields.required("split", split_path)?,
+            ratio: fields.required("ratio", |v| bounded_number(v, 100, 900).map(|n| n as u16))?,
+        },
+        Id::LayoutEven => Command::LayoutEven,
+        _ => Command::LayoutFocusPane {
+            n: fields.required("n", pane_number)?,
+        },
     })
 }
 
@@ -350,4 +393,27 @@ fn cursor_move(value: Value<'_>) -> Result<CursorMove, Problem> {
         Value::Int(_) => unsigned::<u64>(value).map(CursorMove::Row),
         Value::Str(_) => Err(Problem::WrongType("keyword or integer")),
     }
+}
+
+fn bounded_number(value: Value<'_>, min: usize, max: usize) -> Result<usize, Problem> {
+    let Value::Int(text) = value else {
+        return Err(Problem::WrongType("integer"));
+    };
+    text.parse()
+        .ok()
+        .filter(|n| (min..=max).contains(n))
+        .ok_or_else(|| Problem::Invalid(format!("expected a whole number from {min} to {max}")))
+}
+
+fn pane_number(value: Value<'_>) -> Result<usize, Problem> {
+    bounded_number(value, 1, crate::MAX_PANES)
+}
+
+fn split_path(value: Value<'_>) -> Result<crate::SplitPath, Problem> {
+    let text = match &value {
+        Value::Str(text) => text.as_str(),
+        Value::Int(text) | Value::Word(text) => text,
+    };
+    text.parse()
+        .map_err(|reason: &str| Problem::Invalid(reason.to_owned()))
 }

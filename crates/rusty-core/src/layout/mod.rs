@@ -31,6 +31,39 @@ pub struct Rect {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SplitPath(pub Vec<bool>);
 
+impl std::str::FromStr for SplitPath {
+    type Err = &'static str;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if text == "root" {
+            return Ok(Self(Vec::new()));
+        }
+        if text.is_empty() {
+            return Err("expected root or a path of 1 and 2");
+        }
+        text.chars()
+            .map(|c| match c {
+                '1' => Ok(false),
+                '2' => Ok(true),
+                _ => Err("expected root or a path of 1 and 2"),
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Self)
+    }
+}
+
+impl std::fmt::Display for SplitPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.is_empty() {
+            return f.write_str("root");
+        }
+        for second in &self.0 {
+            f.write_str(if *second { "2" } else { "1" })?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SplitInfo {
     pub path: SplitPath,

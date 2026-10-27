@@ -1,5 +1,5 @@
 use super::{CommandError, Effect, last_row, loaded_listing};
-use crate::{AppState, CursorMove, Pattern, SpanMode, TabId};
+use crate::{AppState, Command, CursorMove, Pattern, SpanMode, TabId};
 
 pub(super) fn toggle(state: &mut AppState) -> Result<Vec<Effect>, CommandError> {
     last_row(state)?;
@@ -97,6 +97,30 @@ pub(super) fn restore(state: &mut AppState) -> Result<Vec<Effect>, CommandError>
 pub(super) struct Marking {
     pub mark: bool,
     pub folders: bool,
+}
+
+pub(super) fn pattern_command(
+    state: &mut AppState,
+    command: &Command,
+) -> Result<Vec<Effect>, CommandError> {
+    let (text, marking) = match command {
+        Command::SelectionAddPattern { pattern, folders } => (
+            pattern,
+            Marking {
+                mark: true,
+                folders: *folders,
+            },
+        ),
+        Command::SelectionRemovePattern { pattern, folders } => (
+            pattern,
+            Marking {
+                mark: false,
+                folders: *folders,
+            },
+        ),
+        _ => return Ok(Vec::new()),
+    };
+    pattern(state, text, marking)
 }
 
 pub(super) fn pattern(
