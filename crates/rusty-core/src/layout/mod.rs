@@ -1,8 +1,10 @@
 mod geometry;
+mod tiles;
 mod tree;
 
 use crate::session::LayoutState;
 use crate::{Direction, PaneId};
+pub use tiles::{MAX_PANES, Preset, Tiles, TilesError};
 pub use tree::Axis;
 use tree::{Node, Side};
 
