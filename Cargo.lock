@@ -6578,16 +6578,19 @@ dependencies = [
 name = "rusty-fs"
 version = "0.0.1"
 dependencies = [
+ "crc32fast",
  "encoding_rs",
  "flate2",
  "inotify",
  "lzma-rust2",
+ "md-5",
  "proptest",
  "rustix",
  "rusty-core",
  "ruzstd",
  "same-file",
  "sevenz-rust2",
+ "sha2 0.10.9",
  "tar",
  "tempfile",
  "thiserror 2.0.21",

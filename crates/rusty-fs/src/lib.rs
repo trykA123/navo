@@ -5,6 +5,7 @@ mod code_page;
 mod drive_class;
 mod exists;
 mod fake;
+pub mod hash;
 pub mod hostile_names;
 mod io_queue;
 mod job;
