@@ -6,6 +6,7 @@ mod command;
 mod direction;
 pub mod encoding;
 mod file_identity;
+pub mod find;
 mod fs_error;
 mod id;
 mod layout;
