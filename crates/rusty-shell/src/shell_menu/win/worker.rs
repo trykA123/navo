@@ -227,6 +227,18 @@ impl Worker {
                     self.run_prefill(prefill);
                 }
             }
+            Request::Close { session } => {
+                self.sessions.remove(&session);
+                self.idle.close(session);
+            }
+            Request::Shutdown => return false,
+            request => self.serve_command(request),
+        }
+        true
+    }
+
+    fn serve_command(&mut self, request: Request) {
+        match request {
             Request::Invoke {
                 session,
                 command,
@@ -259,13 +271,8 @@ impl Worker {
             } => {
                 let _ = reply.send(classic_for(&source, hwnd, point));
             }
-            Request::Close { session } => {
-                self.sessions.remove(&session);
-                self.idle.close(session);
-            }
-            Request::Shutdown => return false,
+            _ => {}
         }
-        true
     }
 
     fn invoke(
