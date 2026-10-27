@@ -16,7 +16,7 @@ fn old_session() -> SessionState {
     session.windows.push(other);
     session.focused_window = 4;
     session.next_id = 7;
-    session
+    AppState::from_session(session).unwrap().to_session(0)
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn upgrading_a_v1_main_keeps_the_original_bytes_as_backup() {
     assert_eq!(read_session_file(&path).unwrap(), old_session());
     assert_eq!(
         u16::from_le_bytes(fs::read(&path).unwrap()[16..18].try_into().unwrap()),
-        2
+        3
     );
 }
 
@@ -112,4 +112,153 @@ fn placements_round_trip_through_the_current_session_file() {
     );
     write_session(&path, &session).unwrap();
     assert_eq!(load_session(&path).0, Some(session));
+}
+
+#[derive(serde::Serialize)]
+struct LegacySession {
+    windows: Vec<LegacyWindow>,
+    focused_window: u64,
+    next_id: u64,
+}
+
+#[derive(serde::Serialize)]
+struct LegacyWindow {
+    id: u64,
+    layout: LayoutState,
+    focused_pane: u64,
+    panes: Vec<PaneState>,
+    placement: Vec<Placement>,
+}
+
+#[test]
+fn v2_golden_bytes_preserve_panes_placements_and_focus() {
+    let bounds = PhysicalRect {
+        x: -1920,
+        y: 0,
+        width: 1920,
+        height: 1080,
+    };
+    let setup = MonitorSetup::new(vec![Monitor {
+        bounds,
+        work_area: bounds,
+        scale: 1.25,
+        primary: true,
+    }])
+    .unwrap();
+    let placement = Placement {
+        setup: setup.fingerprint(),
+        bounds: MonitorLocalLogicalRect {
+            x: 10.0,
+            y: 20.0,
+            width: 800.0,
+            height: 600.0,
+        },
+        monitor: bounds,
+        maximized: true,
+    };
+    let mut expected = old_session();
+    expected.windows[1].placement = vec![placement];
+    let legacy = LegacySession {
+        windows: expected
+            .windows
+            .iter()
+            .map(|window| LegacyWindow {
+                id: window.id,
+                layout: window.layout.clone(),
+                focused_pane: window.focused_pane,
+                panes: window.panes.clone(),
+                placement: window.placement.clone(),
+            })
+            .collect(),
+        focused_window: expected.focused_window,
+        next_id: expected.next_id,
+    };
+    let bytes = framed(2, &postcard::to_stdvec(&legacy).unwrap());
+    assert_eq!(bytes, V2_SESSION);
+    let dir = tmp();
+    let path = session_file(&dir);
+    fs::write(&path, bytes).unwrap();
+    assert_eq!(load_session(&path).0, Some(expected));
+}
+
+const V2_SESSION: &[u8] = include_bytes!("../../../tests/fixtures/session/v2.session");
+
+#[test]
+fn v3_round_trip_preserves_workspaces_and_drafts() {
+    use rusty_core::{Location, WorkspaceAction, apply_workspace};
+    let mut state = AppState::new(Location::new("C:/start").unwrap());
+    apply_workspace(
+        &mut state,
+        &WorkspaceAction::New {
+            name: Some("Project".into()),
+        },
+    )
+    .unwrap();
+    state.remember_marks(vec!["draft.txt".into()]);
+    apply_workspace(&mut state, &WorkspaceAction::Switch { n: 1 }).unwrap();
+    let expected = state.to_session(0);
+    assert!(expected.windows[0].workspaces[1].live.is_some());
+    let dir = tmp();
+    let path = session_file(&dir);
+    write_session(&path, &expected).unwrap();
+    let loaded = load_session(&path).0.unwrap();
+    assert_eq!(loaded, expected);
+    assert_eq!(
+        AppState::from_session(loaded).unwrap().to_session(0),
+        expected
+    );
+}
+
+#[test]
+fn v1_golden_bytes_match_the_original_shape() {
+    let expected = old_session();
+    let windows: Vec<_> = expected
+        .windows
+        .iter()
+        .map(|window| {
+            (
+                window.id,
+                &window.layout,
+                window.focused_pane,
+                &window.panes,
+            )
+        })
+        .collect();
+    let body = postcard::to_stdvec(&(windows, expected.focused_window, expected.next_id)).unwrap();
+    assert_eq!(framed(1, &body), V1_SESSION);
+}
+
+#[test]
+fn v3_keeps_the_first_nine_workspaces() {
+    use rusty_core::{Location, WorkspaceAction, apply_workspace};
+    let mut state = AppState::new(Location::new("C:/start").unwrap());
+    for _ in 1..9 {
+        apply_workspace(&mut state, &WorkspaceAction::New { name: None }).unwrap();
+    }
+    let mut session = state.to_session(0);
+    let expected = session.clone();
+    let extra = session.windows[0].workspaces[0].clone();
+    session.windows[0]
+        .workspaces
+        .extend([extra.clone(), extra.clone(), extra]);
+    let dir = tmp();
+    let path = session_file(&dir);
+    put(&path, &session);
+    assert_eq!(load_session(&path).0, Some(expected));
+}
+
+#[test]
+fn v3_drops_broken_workspaces_and_remaps_the_active_index() {
+    use rusty_core::{Location, WorkspaceAction, apply_workspace};
+    let mut state = AppState::new(Location::new("C:/start").unwrap());
+    apply_workspace(&mut state, &WorkspaceAction::New { name: None }).unwrap();
+    let mut session = state.to_session(0);
+    let retained = session.windows[0].workspaces[1].clone();
+    session.windows[0].workspaces[0].name = "x".repeat(41);
+    let dir = tmp();
+    let path = session_file(&dir);
+    put(&path, &session);
+    let loaded = load_session(&path).0.unwrap();
+    assert_eq!(loaded.windows[0].workspaces, vec![retained]);
+    assert_eq!(loaded.windows[0].active_workspace, 0);
 }

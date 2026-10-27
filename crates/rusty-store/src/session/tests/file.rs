@@ -9,12 +9,12 @@ fn written_session_reads_back_equal() {
 }
 
 #[test]
-fn file_starts_with_magic_then_version_two() {
+fn file_starts_with_magic_then_version_three() {
     let dir = tmp();
     let path = session_file(&dir);
     write_session(&path, &first()).unwrap();
     let bytes = fs::read(&path).unwrap();
-    assert_eq!(&bytes[..18], b"FERRITE-SESSION\n\x02\x00");
+    assert_eq!(&bytes[..18], b"FERRITE-SESSION\n\x03\x00");
 }
 
 #[test]
