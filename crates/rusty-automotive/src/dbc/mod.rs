@@ -1,3 +1,4 @@
+mod bits;
 mod convert;
 mod outline;
 mod rows;
@@ -7,6 +8,7 @@ use crate::{CanId, DescriptionReport, Endian};
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
+pub use bits::{BitCell, BitLayout, bit_layout, formula};
 pub use outline::outline;
 pub use rows::rows;
 pub use scan::index_dbc;
