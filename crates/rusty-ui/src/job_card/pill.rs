@@ -19,7 +19,6 @@ const BADGE: f32 = 17.;
 const GLYPH: f32 = 12.;
 const NAME_WIDTH: f32 = 80.;
 const BAR_HEIGHT: f32 = 2.;
-const SLIDE: f32 = 6.;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PillFit {
@@ -240,11 +239,9 @@ impl RenderOnce for JobPill {
             (_, true) => pill.into_any_element(),
             (Some(over), false) => fade_out(pill, "job-pill-fade", over, |pill| pill),
             (None, false) => {
-                let enter = Animation::new(t.motion.base).with_easing(ease_out_cubic);
-                pill.with_animation("job-pill-enter", enter, |pill, delta| {
-                    pill.left(px(-SLIDE * (1. - delta))).opacity(delta)
-                })
-                .into_any_element()
+                let enter = Animation::new(t.motion.fade).with_easing(ease_out_cubic);
+                pill.with_animation("job-pill-enter", enter, |pill, delta| pill.opacity(delta))
+                    .into_any_element()
             }
         };
         div()

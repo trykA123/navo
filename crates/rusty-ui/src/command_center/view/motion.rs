@@ -1,37 +1,31 @@
-use std::time::Duration;
-
 use gpui_kit::base::ObservedElement;
 use gpui_kit::base::animation::{ease_in_cubic, ease_out_cubic};
-use gpui_kit::{Animation, AnimationExt, AnyElement, Div, IntoElement, Stateful, Styled, px};
+use gpui_kit::{Animation, AnimationExt, AnyElement, Div, IntoElement, Stateful, Styled};
 
 use crate::tokens::Motion;
-
-const RISE: f32 = 4.;
-pub const LEAVE: Duration = Duration::from_millis(90);
 
 pub(super) fn enter(
     panel: ObservedElement<Stateful<Div>>,
     motion: &Motion,
-    (reduce_motion, is_leaving): (bool, bool),
+    is_leaving: bool,
 ) -> AnyElement {
     if is_leaving {
-        let animation = Animation::new(LEAVE).with_easing(ease_in_cubic);
+        let animation = Animation::new(motion.fade).with_easing(ease_in_cubic);
         return panel
             .with_animation("command-center-leave", animation, |panel, delta| {
                 panel.opacity(1. - delta)
             })
             .into_any_element();
     }
-    let rise = Motion::travel(px(RISE), reduce_motion);
-    let animation = Animation::new(motion.fast).with_easing(ease_out_cubic);
+    let animation = Animation::new(motion.fade).with_easing(ease_out_cubic);
     panel
-        .with_animation("command-center-enter", animation, move |panel, delta| {
+        .with_animation("command-center-enter", animation, |panel, delta| {
             crate::perf::note(crate::perf::UiFlag::CommandCenter);
             crate::perf::ready(crate::perf::Latency::CommandCenterOpen);
             if delta < 1. {
                 crate::perf::note(crate::perf::UiFlag::Animation);
             }
-            panel.mt(rise * (delta - 1.)).opacity(delta)
+            panel.opacity(delta)
         })
         .into_any_element()
 }

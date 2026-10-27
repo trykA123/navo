@@ -7,7 +7,7 @@ use rusty_l10n::{t, tr};
 
 use super::button::{self, Face};
 use super::stops::{Stop, acts_of};
-use super::{FILL_ALPHA, HoverHandler, StopHandler, fade_away, fill_color, glyph, key_of, rise_in};
+use super::{FILL_ALPHA, HoverHandler, StopHandler, fade_away, fade_in, fill_color, glyph, key_of};
 use crate::activity::{ActivityItem, ActivityKind, percent};
 use crate::prelude::*;
 use crate::primitives::icon;
@@ -157,7 +157,7 @@ impl ActivityStrip {
             .children(buttons)
     }
 
-    fn chips(&self, t: &Theme, reduce_motion: bool) -> Div {
+    fn chips(&self, t: &Theme) -> Div {
         let chips = self.items.iter().skip(1).map(|item| {
             let face = button::chip(item, self.selected);
             let chip = div().relative().min_w_0().child(button::render(
@@ -166,12 +166,7 @@ impl ActivityStrip {
                 Stop::Chip(item.id),
                 self.on_stop.as_ref(),
             ));
-            rise_in(
-                chip,
-                ("activity-chip-enter", key_of(item.id)),
-                t,
-                reduce_motion,
-            )
+            fade_in(chip, ("activity-chip-enter", key_of(item.id)), t)
         });
         let shown = self.chips_shown.clone();
         div()
@@ -221,12 +216,7 @@ fn fitting(bounds: &[Bounds<Pixels>]) -> usize {
 }
 
 impl ActivityStrip {
-    fn band(
-        &self,
-        t: &Theme,
-        primary: &ActivityItem,
-        reduce_motion: bool,
-    ) -> impl IntoElement + use<> {
+    fn band(&self, t: &Theme, primary: &ActivityItem) -> impl IntoElement + use<> {
         let content = self.content(t, primary);
         let is_ringed = self.is_focused && self.selected.is_none();
         let band = div()
@@ -247,13 +237,8 @@ impl ActivityStrip {
             .bg(t.surfaces.card)
             .overflow_hidden()
             .children(fill(t, primary))
-            .child(rise_in(
-                content,
-                ("activity-line", key_of(primary.id)),
-                t,
-                reduce_motion,
-            ))
-            .child(self.chips(t, reduce_motion))
+            .child(fade_in(content, ("activity-line", key_of(primary.id)), t))
+            .child(self.chips(t))
             .children(self.all_button(t));
         button::ring(t, band, is_ringed)
     }
@@ -262,11 +247,10 @@ impl ActivityStrip {
 impl RenderOnce for ActivityStrip {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let reduce_motion = cx.reduce_motion();
         let Some(primary) = self.items.first().cloned() else {
             return div().into_any_element();
         };
-        let band = self.band(&t, &primary, reduce_motion);
+        let band = self.band(&t, &primary);
         let id = if self.is_leaving {
             "activity-strip-leaving"
         } else {
@@ -290,9 +274,9 @@ impl RenderOnce for ActivityStrip {
             })
             .child(band);
         if self.is_leaving {
-            fade_away(row, "activity-strip-leave", &t, reduce_motion)
+            fade_away(row, "activity-strip-leave", &t)
         } else {
-            rise_in(row, "activity-strip-enter", &t, reduce_motion)
+            fade_in(row, "activity-strip-enter", &t)
         }
     }
 }

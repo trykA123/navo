@@ -35,7 +35,6 @@ use crate::primitives::{
 use crate::tokens::Theme;
 use chip::chip;
 use footer::FooterLook;
-pub use motion::LEAVE;
 use motion::enter;
 pub use place::INPUT_ROW;
 use row::{ROW, RowElement, RowLook};
@@ -389,11 +388,7 @@ impl Render for CommandCenter {
             anchored()
                 .position_mode(AnchoredPositionMode::Window)
                 .position(frame.origin)
-                .child(enter(
-                    panel,
-                    &t.motion,
-                    (cx.reduce_motion(), self.props.is_leaving),
-                )),
+                .child(enter(panel, &t.motion, self.props.is_leaving)),
         )
         .with_priority(2)
     }

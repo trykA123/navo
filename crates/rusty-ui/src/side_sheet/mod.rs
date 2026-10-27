@@ -159,18 +159,17 @@ fn look(sheet: &SideSheet, window: &mut Window, cx: &mut App) -> Option<Look> {
         (state.phase(), state.opened())
     };
     let now = cx.background_executor().now();
-    let reduce = cx.reduce_motion();
-    let speed = tokens::current(cx).motion;
+    let fade = tokens::current(cx).motion.fade;
     match phase {
         Phase::Closed => None,
         Phase::Open => {
             let since = entered_at(sheet, opened, window, cx);
-            let look = motion::entering(motion::elapsed(since, now, speed.slow), reduce);
+            let look = motion::entering(motion::elapsed(since, now, fade));
             crate::perf::animating(crate::perf::Latency::DrawerOpen, !look.is_settled);
             Some(look)
         }
         Phase::Leaving(since) => {
-            let look = motion::leaving(motion::elapsed(since, now, speed.base), reduce);
+            let look = motion::leaving(motion::elapsed(since, now, fade));
             if !look.is_settled {
                 crate::perf::note(crate::perf::UiFlag::Animation);
             }
@@ -180,11 +179,10 @@ fn look(sheet: &SideSheet, window: &mut Window, cx: &mut App) -> Option<Look> {
 }
 
 fn place(t: &Theme, side: Side, look: Look) -> gpui_kit::Div {
-    let edge = -look.outward;
     let sheet = div().absolute().top_0().bottom_0();
     match side {
-        Side::Right => sheet.right(edge),
-        Side::Left => sheet.left(edge),
+        Side::Right => sheet.right_0(),
+        Side::Left => sheet.left_0(),
     }
     .opacity(look.opacity)
     .rounded(t.radii.sheet)

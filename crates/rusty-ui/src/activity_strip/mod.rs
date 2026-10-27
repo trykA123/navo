@@ -15,7 +15,7 @@ use rusty_core::OpKind;
 use crate::activity::{ActivityId, ActivityItem, ActivityKind};
 use crate::prelude::*;
 use crate::primitives::IconName;
-use crate::tokens::{Motion, Theme};
+use crate::tokens::Theme;
 
 pub use drawer::ActivityDrawer;
 pub use line::{ActivityStrip, ChipsShown};
@@ -48,7 +48,6 @@ pub type StopHandler = Rc<dyn Fn(Stop, &mut Window, &mut App)>;
 pub type HoverHandler = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
 const FILL_ALPHA: f32 = 0.11;
-const RISE: f32 = 6.;
 const BACKGROUND_KEYS: u64 = 1 << 62;
 
 #[must_use]
@@ -82,18 +81,14 @@ fn fill_color(t: &Theme, item: &ActivityItem) -> Hsla {
     }
 }
 
-fn rise_in<E: IntoElement + Styled + 'static>(
+fn fade_in<E: IntoElement + Styled + 'static>(
     element: E,
     id: impl Into<ElementId>,
     t: &Theme,
-    reduce_motion: bool,
 ) -> AnyElement {
-    let travel = Motion::travel(px(RISE), reduce_motion);
-    let enter = Animation::new(t.motion.base).with_easing(ease_out_cubic);
+    let enter = Animation::new(t.motion.fade).with_easing(ease_out_cubic);
     element
-        .with_animation(id, enter, move |element, delta| {
-            element.top(travel * (1. - delta)).opacity(delta)
-        })
+        .with_animation(id, enter, |element, delta| element.opacity(delta))
         .into_any_element()
 }
 
@@ -101,15 +96,13 @@ fn fade_away<E: IntoElement + Styled + 'static>(
     element: E,
     id: impl Into<ElementId>,
     t: &Theme,
-    reduce_motion: bool,
 ) -> AnyElement {
-    let travel = Motion::travel(px(RISE), reduce_motion);
     element
-        .with_animation(id, Animation::new(t.motion.fast), move |element, delta| {
+        .with_animation(id, Animation::new(t.motion.fade), |element, delta| {
             if delta >= 1. {
                 element.invisible()
             } else {
-                element.top(travel * delta).opacity(1. - delta)
+                element.opacity(1. - delta)
             }
         })
         .into_any_element()

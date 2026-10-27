@@ -28,7 +28,7 @@ pub use source::{
     Cancel, Capped, Group, Hit, HitSink, Notes, Offline, Request, ResultSource, Scopes, Target,
 };
 pub use view::{
-    Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, HintKeys, INPUT_ROW, LEAVE,
+    Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, HintKeys, INPUT_ROW,
 };
 
 pub use crate::commands::ArgKind;

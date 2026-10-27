@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui_kit::{Hsla, px};
 
 use super::{MODES, every_theme};
-use crate::tokens::{Mode, Motion, Surfaces, Theme, contrast_ratio};
+use crate::tokens::{Mode, Surfaces, Theme, contrast_ratio};
 
 fn named(surfaces: &Surfaces, name: &str) -> Hsla {
     surfaces
@@ -223,18 +223,8 @@ fn new_radii_are_card_8_pill_15_keycap_6_sheet_and_job_card_12() {
 }
 
 #[test]
-fn motion_runs_fast_120_base_180_slow_280_ms() {
-    let motion = Theme::new(MODES[1]).motion;
-    assert_eq!(
-        [motion.fast, motion.base, motion.slow],
-        [120, 180, 280].map(Duration::from_millis)
-    );
-}
-
-#[test]
-fn reduced_motion_keeps_the_fade_but_drops_the_travel() {
-    assert_eq!(Motion::travel(px(6.), false), px(6.));
-    assert_eq!(Motion::travel(px(6.), true), px(0.));
+fn every_animation_is_one_80_ms_fade() {
+    assert_eq!(Theme::new(MODES[1]).motion.fade, Duration::from_millis(80));
 }
 
 #[test]

@@ -28,7 +28,6 @@ pub use state::ContextMenuEvent;
 use crate::primitives::{TextFieldState, text_field_state};
 use crate::tokens;
 use icons::ShellIcons;
-use motion::{GROW, Grow, PanelMotion, Slide};
 use panel::PanelLook;
 use place::{Frame, Panel};
 use state::{MenuState, PageStatus};
@@ -57,8 +56,6 @@ pub struct ContextMenu {
     opened: Instant,
     origin: Point<Pixels>,
     width: Pixels,
-    grow: Option<Grow>,
-    slide: Option<Slide>,
     shown_page: Vec<usize>,
     page_since: Instant,
     loading: Option<Task<()>>,
@@ -99,8 +96,6 @@ impl ContextMenu {
             width,
             state,
             opened: now,
-            grow: None,
-            slide: None,
             shown_page: Vec::new(),
             page_since: now,
             loading: None,
@@ -137,16 +132,7 @@ impl ContextMenu {
 
     pub fn set_menu(&mut self, menu: ShellMenu, cx: &mut Context<Self>) {
         self.icons = ShellIcons::build(&menu, cx);
-        let now = cx.background_executor().now();
-        let grows = self.state.page().is_empty() && !cx.reduce_motion();
-        let from = self.list_height(now);
-        let rows = self.state.rows().to_vec();
         self.state.set_menu(menu);
-        self.grow = grows.then_some(Grow {
-            from,
-            rows,
-            started: now,
-        });
         self.settle(cx);
         cx.notify();
     }
@@ -212,15 +198,9 @@ impl ContextMenu {
 
     fn turn_page(&mut self, cx: &mut Context<Self>) {
         let now = cx.background_executor().now();
-        let deeper = self.state.page().len() > self.shown_page.len();
         self.shown_page = self.state.page().to_vec();
         self.scroll = ScrollHandle::new();
-        self.grow = None;
         self.page_since = now;
-        self.slide = (!cx.reduce_motion()).then_some(Slide {
-            started: now,
-            deeper,
-        });
         self.loading = (self.state.status() == PageStatus::Loading).then(|| {
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(LOADING_DELAY).await;
@@ -279,27 +259,6 @@ impl ContextMenu {
         self.conclude(Some(ContextMenuEvent::Dismissed), window, cx);
     }
 
-    fn grow_done(&self, now: Instant) -> f32 {
-        self.grow
-            .as_ref()
-            .map_or(1., |grow| motion::progress(grow.started, now, GROW))
-    }
-
-    fn slide_done(&self, now: Instant, cx: &App) -> f32 {
-        let span = tokens::current(cx).motion.base;
-        self.slide
-            .as_ref()
-            .map_or(1., |slide| motion::progress(slide.started, now, span))
-    }
-
-    fn list_height(&self, now: Instant) -> Pixels {
-        let to = self.frame().list_height;
-        match &self.grow {
-            Some(grow) => grow.height(to, self.grow_done(now)),
-            None => to,
-        }
-    }
-
     fn frame(&self) -> Frame {
         let panel = Panel {
             origin: self.origin,
@@ -314,49 +273,26 @@ impl ContextMenu {
         now.saturating_duration_since(self.page_since) >= LOADING_DELAY
     }
 
-    fn motion<'a>(&'a self, frame: &mut Frame, now: Instant, cx: &App) -> PanelMotion<'a> {
-        let entered = motion::progress(self.opened, now, tokens::current(cx).motion.fast);
-        let done = self.grow_done(now);
-        if let Some(grow) = &self.grow {
-            let height = grow.height(frame.list_height, done);
-            frame.bounds.size.height += height - frame.list_height;
-            frame.list_height = height;
-        }
-        let turned = self.slide_done(now, cx);
-        PanelMotion {
-            rise: motion::rise(entered, cx.reduce_motion()),
-            opacity: entered,
-            fresh: self.grow.as_ref().map(|grow| (grow.rows.as_slice(), done)),
-            slide: self.slide.map_or(px(0.), |slide| slide.offset(turned)),
-            page_opacity: turned,
-        }
+    fn opacity(&self, now: Instant, cx: &App) -> f32 {
+        motion::progress(self.opened, now, tokens::current(cx).motion.fade)
     }
 }
 
 impl Render for ContextMenu {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        let reduce_motion = cx.reduce_motion();
         let now = cx.background_executor().now();
-        if reduce_motion || self.grow_done(now) >= 1. {
-            self.grow = None;
-        }
-        if reduce_motion || self.slide_done(now, cx) >= 1. {
-            self.slide = None;
-        }
-        let entering = now.saturating_duration_since(self.opened) < t.motion.fast;
-        let is_moving = self.grow.is_some() || self.slide.is_some() || entering;
-        if is_moving {
+        let opacity = self.opacity(now, cx);
+        let is_fading = opacity < 1.;
+        if is_fading {
             window.request_animation_frame();
         }
         crate::perf::note(crate::perf::UiFlag::ContextMenu);
-        crate::perf::animating(crate::perf::Latency::MenuOpen, is_moving);
-        let mut frame = self.frame();
-        let motion = self.motion(&mut frame, now, cx);
+        crate::perf::animating(crate::perf::Latency::MenuOpen, is_fading);
         let look = PanelLook {
-            frame,
+            frame: self.frame(),
             theme: &t,
-            motion,
+            opacity,
             shows_loading: self.is_loading_shown(now),
         };
         let panel = self.panel(look, cx);

@@ -13,7 +13,6 @@ const HEADER_HEIGHT: f32 = 24.;
 const CHIP_HEIGHT: f32 = 22.;
 const CAP_HEIGHT: f32 = 20.;
 const CAP_WIDTH: f32 = 22.;
-const RISE: f32 = 12.;
 
 pub type TurnOff = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -279,10 +278,9 @@ impl RenderOnce for HintsDrawer {
         if cx.reduce_motion() {
             return card.into_any_element();
         }
-        let rise = px(RISE);
-        let enter = Animation::new(t.motion.fast).with_easing(ease_out_cubic);
-        card.with_animation("modifier-hints-enter", enter, move |card, delta| {
-            card.top(rise * (1. - delta)).opacity(delta)
+        let enter = Animation::new(t.motion.fade).with_easing(ease_out_cubic);
+        card.with_animation("modifier-hints-enter", enter, |card, delta| {
+            card.opacity(delta)
         })
         .into_any_element()
     }

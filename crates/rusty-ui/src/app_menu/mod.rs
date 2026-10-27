@@ -238,6 +238,6 @@ impl RenderOnce for AppMenu {
             .children(self.error.map(|message| view::error_line(t, message)))
             .child(tiles)
             .children(rows);
-        view::enter(panel, t, cx.reduce_motion())
+        view::enter(panel, t)
     }
 }

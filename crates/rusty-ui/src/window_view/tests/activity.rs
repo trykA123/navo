@@ -482,29 +482,20 @@ fn centre_offset(cx: &mut TestAppContext, window: AnyWindowHandle, id: ElementId
 }
 
 #[gpui_kit::test]
-fn with_reduced_motion_nothing_travels(cx: &mut TestAppContext) {
+fn a_new_line_and_chip_sit_in_place_while_they_fade_in(cx: &mut TestAppContext) {
     let (window, view) = open_plain(cx);
-    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update(|cx| {
+        let mut theme = crate::tokens::current(cx).clone();
+        theme.motion.fade = Duration::from_secs(600);
+        cx.set_global(theme);
+    });
     add(cx, &view, running(1, 100 * MB));
     add(cx, &view, running(2, 0));
+    std::thread::sleep(Duration::from_millis(250));
     let title = centre_offset(cx, window, ("activity-title", 2u64).into());
     let chip = centre_offset(cx, window, ("activity-chip", 1u64).into());
     assert!(title < 0.5, "{title}");
     assert!(chip < 0.5, "{chip}");
-}
-
-#[gpui_kit::test]
-fn without_reduced_motion_a_new_line_rises(cx: &mut TestAppContext) {
-    let (window, view) = open_plain(cx);
-    cx.update(|cx| {
-        let mut theme = crate::tokens::current(cx).clone();
-        theme.motion.base = Duration::from_secs(600);
-        cx.set_global(theme);
-    });
-    add(cx, &view, running(1, 100 * MB));
-    std::thread::sleep(Duration::from_millis(250));
-    let title = centre_offset(cx, window, ("activity-title", 1u64).into());
-    assert!(title > 3., "{title}");
 }
 
 fn six_jobs(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) {

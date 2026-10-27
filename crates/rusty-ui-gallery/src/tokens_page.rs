@@ -70,14 +70,8 @@ fn sizes(t: &Theme) -> Div {
         ))
         .child(figure(
             t,
-            format!(
-                "motion fast {} · base {} · slow {} ms",
-                m.fast.as_millis(),
-                m.base.as_millis(),
-                m.slow.as_millis()
-            ),
+            format!("motion: fade {} ms, no travel", m.fade.as_millis()),
         ))
-        .child(figure(t, "reduced motion: fade only, no travel".to_owned()))
         .child(figure(
             t,
             "shadows card, card_active, job_card, pill, keycap, menu, chip, sheet".to_owned(),

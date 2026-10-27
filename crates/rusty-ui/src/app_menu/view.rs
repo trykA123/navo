@@ -15,14 +15,13 @@ use super::{AppMenuEvent, Identity, event_for, item_at};
 use crate::commands::Keymap;
 use crate::primitives::{IconName, icon};
 use crate::title_bar::logo;
-use crate::tokens::{Motion, Theme};
+use crate::tokens::Theme;
 
 const WIDTH: f32 = 380.;
 const LOGO: f32 = 36.;
 const TILE_HEIGHT: f32 = 70.;
 const ROW_HEIGHT: f32 = 30.;
 const ICON_COLUMN: f32 = 18.;
-const RISE: f32 = 4.;
 
 type Handler = Rc<dyn Fn(&AppMenuEvent, &mut Window, &mut App)>;
 
@@ -51,18 +50,13 @@ pub(super) fn panel(
         .text_size(t.typography.body)
 }
 
-pub(super) fn enter(
-    panel: ObservedElement<Stateful<Div>>,
-    t: &Theme,
-    reduce_motion: bool,
-) -> AnyElement {
-    let rise = Motion::travel(px(RISE), reduce_motion);
-    let animation = Animation::new(t.motion.fast).with_easing(ease_out_cubic);
+pub(super) fn enter(panel: ObservedElement<Stateful<Div>>, t: &Theme) -> AnyElement {
+    let animation = Animation::new(t.motion.fade).with_easing(ease_out_cubic);
     panel
-        .with_animation("app-menu-enter", animation, move |panel, delta| {
+        .with_animation("app-menu-enter", animation, |panel, delta| {
             crate::perf::note(crate::perf::UiFlag::AppMenu);
             crate::perf::animating(crate::perf::Latency::MenuOpen, delta < 1.);
-            panel.top(rise * (1. - delta)).opacity(delta)
+            panel.opacity(delta)
         })
         .into_any_element()
 }

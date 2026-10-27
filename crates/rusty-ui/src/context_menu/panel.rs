@@ -9,7 +9,6 @@ use rusty_core::shell_menu::Row;
 use rusty_l10n::{t, tr};
 
 use super::ContextMenu;
-use super::motion::PanelMotion;
 use super::place::{CONTEXT_LINE, FIELD, FOOTER, Frame, PAD, ROW};
 use super::row::{self, RowElement, RowLook};
 use super::state::{ContextMenuEvent, MenuState, PageStatus};
@@ -51,7 +50,7 @@ fn chrome(t: &Theme) -> ObservedElement<Stateful<Div>> {
 pub(super) struct PanelLook<'a> {
     pub frame: Frame,
     pub theme: &'a Theme,
-    pub motion: PanelMotion<'a>,
+    pub opacity: f32,
     pub shows_loading: bool,
 }
 
@@ -100,7 +99,7 @@ impl ContextMenu {
         let PanelLook {
             frame,
             theme: t,
-            motion,
+            opacity,
             shows_loading,
         } = look;
         let list = div()
@@ -111,36 +110,29 @@ impl ContextMenu {
             .h(frame.list_height)
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
-            .children(self.rows((motion.fresh, shows_loading), t, cx));
+            .children(self.rows(shows_loading, t, cx));
         let back = (!self.state.page().is_empty()).then(|| self.back_row(t, cx));
         let page = div()
             .flex()
             .flex_col()
             .flex_none()
             .relative()
-            .left(motion.slide)
-            .opacity(motion.page_opacity)
             .child(self.context_line(t))
             .children(back)
             .child(list);
         chrome(t)
             .left(frame.bounds.origin.x - self.bounds.origin.x)
-            .top(frame.bounds.origin.y - self.bounds.origin.y + motion.rise)
+            .top(frame.bounds.origin.y - self.bounds.origin.y)
             .w(frame.bounds.size.width)
             .h(frame.bounds.size.height)
-            .opacity(motion.opacity)
+            .opacity(opacity)
             .child(self.filter(t))
             .child(page)
             .child(self.footer(t, cx))
             .into_any_element()
     }
 
-    fn rows(
-        &self,
-        (fresh, shows_loading): (Option<(&[Row], f32)>, bool),
-        t: &Theme,
-        cx: &mut Context<Self>,
-    ) -> Vec<RowElement> {
+    fn rows(&self, shows_loading: bool, t: &Theme, cx: &mut Context<Self>) -> Vec<RowElement> {
         let muted = t.colors.muted;
         match self.state.status() {
             PageStatus::Loading if shows_loading => {
@@ -153,16 +145,11 @@ impl ContextMenu {
                     cx.listener(|this, _: &ClickEvent, window, cx| this.retried(window, cx)),
                 ),
             ],
-            PageStatus::Ready => self.item_rows(fresh, t, cx),
+            PageStatus::Ready => self.item_rows(t, cx),
         }
     }
 
-    fn item_rows(
-        &self,
-        fresh: Option<(&[Row], f32)>,
-        t: &Theme,
-        cx: &mut Context<Self>,
-    ) -> Vec<RowElement> {
+    fn item_rows(&self, t: &Theme, cx: &mut Context<Self>) -> Vec<RowElement> {
         let offset = usize::from(!self.state.page().is_empty());
         let listed = &self.state.rows()[offset.min(self.state.rows().len())..];
         if listed.is_empty() {
@@ -181,10 +168,6 @@ impl ContextMenu {
             .map(|(shown, row)| {
                 let index = shown + offset;
                 let element = row::render(&look, row, shown, selected == Some(index));
-                let element = match fresh {
-                    Some((old, done)) if !old.contains(row) => element.opacity(done),
-                    _ => element,
-                };
                 interactive(element, row, index, cx)
             })
             .collect()

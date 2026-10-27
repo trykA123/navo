@@ -15,7 +15,6 @@ use crate::tokens::{self, Theme};
 
 const CARD_WIDTH: f32 = 400.;
 const BAR_HEIGHT: f32 = 6.;
-const RISE: f32 = 8.;
 const FROM_SHRINK: f32 = 100.;
 
 #[derive(IntoElement)]
@@ -307,9 +306,9 @@ impl RenderOnce for JobCard {
             (_, true) => card.occlude().into_any_element(),
             (Some(over), false) => fade_out(card, "job-card-fade", over, |card| card.occlude()),
             (None, false) => {
-                let enter = Animation::new(t.motion.base).with_easing(ease_out_cubic);
+                let enter = Animation::new(t.motion.fade).with_easing(ease_out_cubic);
                 card.with_animation("job-card-enter", enter, |card, delta| {
-                    card.occlude().top(px(RISE * (1. - delta))).opacity(delta)
+                    card.occlude().opacity(delta)
                 })
                 .into_any_element()
             }

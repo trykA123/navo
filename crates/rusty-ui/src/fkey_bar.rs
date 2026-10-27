@@ -9,12 +9,11 @@ use gpui_kit::{
 use crate::FluentBuilder as _;
 use crate::job_card::PillFit;
 use crate::primitives::{IconName, Tooltip, icon};
-use crate::tokens::{self, Motion, Theme};
+use crate::tokens::{self, Theme};
 
 const KEY_HEIGHT: f32 = 24.;
 const CHIP_HEIGHT: f32 = 18.;
 const CHIP_WIDTH: f32 = 24.;
-const LABEL_RISE: f32 = 4.;
 const DIMMED: f32 = 0.45;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -213,7 +212,6 @@ struct Sizers {
 #[derive(Clone, Copy)]
 struct LabelMotion {
     layer: Option<KeyLayer>,
-    rise: f32,
 }
 
 fn warning_icon(t: &Theme) -> impl IntoElement {
@@ -246,18 +244,16 @@ fn sizer(t: &Theme, sizers: Sizers) -> Div {
 }
 
 fn animated(text: Div, index: usize, motion: Option<LabelMotion>, t: &Theme) -> AnyElement {
-    let Some(LabelMotion { layer, rise }) = motion else {
+    let Some(LabelMotion { layer }) = motion else {
         return text.into_any_element();
     };
     let id = SharedString::from(format!(
         "fkey-label-{}-{index}",
         layer.map_or("base", KeyLayer::name)
     ));
-    let animation = Animation::new(t.motion.fast).with_easing(ease_out_cubic);
-    text.with_animation(id, animation, move |text, delta| {
-        text.top(px(rise * (1. - delta))).opacity(delta)
-    })
-    .into_any_element()
+    let animation = Animation::new(t.motion.fade).with_easing(ease_out_cubic);
+    text.with_animation(id, animation, |text, delta| text.opacity(delta))
+        .into_any_element()
 }
 
 fn label_area(t: &Theme, cell: &Cell, shown: Div) -> AnyElement {
@@ -349,7 +345,6 @@ struct Frame {
     held: Option<KeyLayer>,
     labels: Option<Vec<[SharedString; 4]>>,
     warning: Option<Warning>,
-    rise: f32,
 }
 
 impl Frame {
@@ -370,10 +365,7 @@ impl Frame {
                 icon_in: warning.as_ref().map(|w| layer_slot(w.layer)),
             }),
             warning: warning.filter(|w| held == w.layer).map(|w| w.spoken),
-            motion: self.labels.is_some().then_some(LabelMotion {
-                layer: held,
-                rise: self.rise,
-            }),
+            motion: self.labels.is_some().then_some(LabelMotion { layer: held }),
         }
     }
 }
@@ -396,7 +388,6 @@ impl RenderOnce for FKeyBar {
             held,
             labels: self.layers.map(|layers| layers.labels),
             warning: self.warning,
-            rise: Motion::travel(px(LABEL_RISE), cx.reduce_motion()) / px(1.),
         };
         let cells = self
             .keys

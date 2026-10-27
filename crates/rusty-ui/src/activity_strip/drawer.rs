@@ -6,7 +6,7 @@ use rusty_l10n::{t, tr};
 
 use super::button;
 use super::stops::{Stop, acts_of};
-use super::{FILL_ALPHA, StopHandler, fill_color, glyph, key_of, rise_in};
+use super::{FILL_ALPHA, StopHandler, fade_in, fill_color, glyph, key_of};
 use crate::activity::{ActivityItem, ActivityKind, percent};
 use crate::format;
 use crate::prelude::*;
@@ -215,6 +215,6 @@ impl RenderOnce for ActivityDrawer {
             .occlude()
             .child(Self::header(&t, self.items.len()))
             .children(rows);
-        rise_in(drawer, "activity-drawer-enter", &t, cx.reduce_motion())
+        fade_in(drawer, "activity-drawer-enter", &t)
     }
 }

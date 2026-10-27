@@ -118,7 +118,7 @@ impl FerriteWindow {
         strip.is_hovered = false;
         strip.is_drawer_open = false;
         if !gone.is_empty() {
-            let at = now + tokens::current(cx).motion.fast;
+            let at = now + tokens::current(cx).motion.fade;
             strip.leaving = Some(gone);
             strip.leave_timer = Some(wake_at(now, at, Self::end_leaving, cx));
         }

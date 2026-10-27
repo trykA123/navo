@@ -16,7 +16,7 @@ pub(super) use search::Update;
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
-    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource, LEAVE,
+    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource,
     PathListings, PathsSource, RecentSource, ResultSource, Row, Selection, TabsSnapshot,
     TabsSource,
 };
@@ -287,7 +287,9 @@ impl FerriteWindow {
         let center = open.center;
         center.update(cx, |center, cx| center.set_props(props, window, cx));
         self.command_center.leaving = Some(center.clone());
-        let timer = cx.background_executor().timer(LEAVE);
+        let timer = cx
+            .background_executor()
+            .timer(tokens::current(cx).motion.fade);
         cx.spawn(async move |this, cx| {
             timer.await;
             let _ = this.update(cx, |view, cx| view.forget_leaving(&center, cx));

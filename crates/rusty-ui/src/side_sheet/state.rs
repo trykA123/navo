@@ -53,7 +53,7 @@ impl SheetState {
             Phase::Open => true,
             Phase::Leaving(since) => {
                 let now = cx.background_executor().now();
-                !motion::has_left(since, now, tokens::current(cx).motion.base)
+                !motion::has_left(since, now, tokens::current(cx).motion.fade)
             }
         }
     }
