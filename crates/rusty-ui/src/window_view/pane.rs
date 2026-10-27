@@ -209,6 +209,7 @@ impl FerriteWindow {
     }
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
+        let root = super::workspace_keys::workspace_keys(root, cx);
         column_keys(super::tab_keys::tab_keys(root, cx), cx)
             .on_action(
                 cx.listener(|this: &mut Self, _: &super::keys::OpenTerminal, _, cx| {

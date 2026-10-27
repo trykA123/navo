@@ -43,7 +43,8 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
             "Files",
             "Pane",
             "View",
-            "Window"
+            "Window",
+            "Other"
         ]
     );
     assert_eq!(
@@ -71,7 +72,7 @@ fn the_ctrl_layer_groups_follow_the_fixed_order() {
             "files.sort_by_size"
         ]
     );
-    assert_eq!(layer.count(), 24);
+    assert_eq!(layer.count(), 25);
 }
 
 #[test]
@@ -79,7 +80,7 @@ fn the_alt_and_shift_layers_map_their_commands_to_groups() {
     let alt = layer_in(Keymap::builtin(), Combo::ALT);
     assert_eq!(
         names(&alt),
-        ["Files", "Pane", "View", "Navigation", "Window"]
+        ["Files", "Pane", "View", "Navigation", "Window", "Other"]
     );
     assert_eq!(
         commands(&group(&alt, "Navigation").entries),

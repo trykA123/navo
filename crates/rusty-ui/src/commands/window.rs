@@ -1,10 +1,12 @@
 mod notice;
 mod waiting;
+mod workspaces;
 
 use super::Group;
 use super::contexts::GLOBAL;
 
-pub(super) const GROUPS: [Group; 8] = [
+pub(super) const GROUPS: [Group; 9] = [
+    workspaces::GROUP,
     Group {
         context: GLOBAL,
         commands: &[

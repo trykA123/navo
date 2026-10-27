@@ -65,6 +65,7 @@ mod visits;
 mod watched;
 mod window_menu;
 mod window_parts;
+mod workspaces;
 use crate::browser::Operations;
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Mode};

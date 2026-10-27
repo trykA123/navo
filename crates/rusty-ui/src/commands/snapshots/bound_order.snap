@@ -1,5 +1,6 @@
 ---
 source: crates/rusty-ui/src/commands/tests.rs
+assertion_line: 315
 expression: "lines.join(\"\\n\")"
 ---
 [file_list]
@@ -467,3 +468,17 @@ crash_notice.dismiss | escape | CrashNotice
 pane.leave_waiting | escape | PaneWaiting
 pane.leave_waiting | backspace | PaneWaiting
 pane.retry_listing | enter | PaneWaiting
+workspace.preview_first | alt-1 | FileList
+workspace.preview_second | alt-2 | FileList
+workspace.preview_third | alt-3 | FileList
+workspace.preview_fourth | alt-4 | FileList
+workspace.preview_fifth | alt-5 | FileList
+workspace.preview_sixth | alt-6 | FileList
+workspace.preview_seventh | alt-7 | FileList
+workspace.preview_eighth | alt-8 | FileList
+workspace.preview_ninth | alt-9 | FileList
+workspace.cancel_preview | alt-escape | FileList
+workspace.new | alt-n | FileList
+workspace.save | ctrl-s | FileList
+workspace.move_left | alt-shift-left | FileList
+workspace.move_right | alt-shift-right | FileList

@@ -51,20 +51,20 @@ mod visits;
 mod waiting;
 mod watches;
 mod window_menu;
+mod workspace_keys;
 
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use command_center::CommandCenterState;
-use gpui_kit::{FocusHandle, Modifiers, ModifiersChangedEvent, Subscription};
+use gpui_kit::{FocusHandle, ModifiersChangedEvent, Subscription};
 use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
 use crate::app_menu::{Identity, ToggleAppMenu};
 use crate::browser::{Browser, Launcher, Operations, RenameHooks, Waker};
-use crate::fkey_bar::KeyLayer;
 use crate::prelude::*;
 use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
@@ -194,6 +194,7 @@ pub struct FerriteWindow {
     multi_rename: multi_rename::MultiRenameState,
     start: Option<start_watch::Watching>,
     chrome: chrome_state::Chromes,
+    workspace_keys: workspace_keys::WorkspaceKeys,
     _watches: [Subscription; 5],
 }
 
@@ -203,7 +204,6 @@ impl FerriteWindow {
         let totals = options.search.folder_totals.clone();
         let (values, saver, settings) = Panel::split(options.settings, &options.search, cx);
         settings_save::steer(&values, &mut browser);
-        browser.start();
         let view = Self {
             browser,
             focus: HashMap::new(),
@@ -245,6 +245,7 @@ impl FerriteWindow {
             multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
             chrome: chrome_state::Chromes::default(),
+            workspace_keys: workspace_keys::WorkspaceKeys::new(window, cx),
             _watches: Self::watches(window, cx),
         };
         let after = (options.keymap, options.open, options.view, options.rename);
@@ -257,6 +258,7 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        self.browser.start();
         self.browser.set_rename_hooks(rename);
         self.listen_files(keymap, window, cx);
         self.tell_pending_undo(cx);
@@ -332,16 +334,6 @@ impl FerriteWindow {
         }
     }
 
-    fn track_modifiers(&mut self, modifiers: Modifiers, window: &Window, cx: &mut Context<Self>) {
-        let held = KeyLayer::held(&modifiers).filter(|_| window.is_window_active());
-        if held != self.hints.held {
-            self.hints.held = held;
-            cx.notify();
-        }
-        self.hint_modifiers(modifiers, window, cx);
-        self.drag_modifiers(&modifiers, cx);
-    }
-
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
         let result = self.browser.command(command);
         self.drag_list_changed(cx);
@@ -373,6 +365,7 @@ impl FerriteWindow {
 
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_workspaces(window);
         let frame = self.perf_frame(window);
         self.watch_start(window, cx);
         let t = tokens::current(cx).clone();

@@ -314,6 +314,62 @@ command = "files.delete"
 keys = ["shift-delete", "shift-f8"]
 
 [[bind]]
+command = "workspace.preview_first"
+keys = ["alt-1"]
+
+[[bind]]
+command = "workspace.preview_second"
+keys = ["alt-2"]
+
+[[bind]]
+command = "workspace.preview_third"
+keys = ["alt-3"]
+
+[[bind]]
+command = "workspace.preview_fourth"
+keys = ["alt-4"]
+
+[[bind]]
+command = "workspace.preview_fifth"
+keys = ["alt-5"]
+
+[[bind]]
+command = "workspace.preview_sixth"
+keys = ["alt-6"]
+
+[[bind]]
+command = "workspace.preview_seventh"
+keys = ["alt-7"]
+
+[[bind]]
+command = "workspace.preview_eighth"
+keys = ["alt-8"]
+
+[[bind]]
+command = "workspace.preview_ninth"
+keys = ["alt-9"]
+
+[[bind]]
+command = "workspace.cancel_preview"
+keys = ["alt-escape"]
+
+[[bind]]
+command = "workspace.new"
+keys = ["alt-n"]
+
+[[bind]]
+command = "workspace.save"
+keys = ["ctrl-s"]
+
+[[bind]]
+command = "workspace.move_left"
+keys = ["alt-shift-left"]
+
+[[bind]]
+command = "workspace.move_right"
+keys = ["alt-shift-right"]
+
+[[bind]]
 command = "pane.go_back"
 keys = ["alt-left"]
 

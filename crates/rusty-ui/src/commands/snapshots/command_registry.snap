@@ -1,7 +1,22 @@
 ---
 source: crates/rusty-ui/src/commands/tests.rs
+assertion_line: 254
 expression: "lines.join(\"\\n\")"
 ---
+workspace.preview_first | Preview workspace 1 | FileList
+workspace.preview_second | Preview workspace 2 | FileList
+workspace.preview_third | Preview workspace 3 | FileList
+workspace.preview_fourth | Preview workspace 4 | FileList
+workspace.preview_fifth | Preview workspace 5 | FileList
+workspace.preview_sixth | Preview workspace 6 | FileList
+workspace.preview_seventh | Preview workspace 7 | FileList
+workspace.preview_eighth | Preview workspace 8 | FileList
+workspace.preview_ninth | Preview workspace 9 | FileList
+workspace.cancel_preview | Cancel workspace preview | FileList
+workspace.new | New workspace from current layout | FileList
+workspace.save | Save workspace | FileList
+workspace.move_left | Move workspace left | FileList
+workspace.move_right | Move workspace right | FileList
 app_menu.toggle | App menu | global
 settings.toggle | All settings | global
 jobs.toggle | Show or hide jobs | global

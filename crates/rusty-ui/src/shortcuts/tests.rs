@@ -88,7 +88,7 @@ fn lines_group_rows_by_area_in_order_of_first_use() {
             Line::Row(_) => None,
         })
         .collect();
-    assert_eq!(areas.first(), Some(&"app_menu"));
+    assert_eq!(areas.first(), Some(&"workspace"));
     assert_eq!(areas.iter().filter(|area| **area == "pane").count(), 1);
     assert_eq!(areas.iter().filter(|area| **area == "files").count(), 1);
     let at = |area: &str| areas.iter().position(|shown| *shown == area);
