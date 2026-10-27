@@ -158,6 +158,8 @@ impl Patch {
         let totals = &mut self.profile.totals;
         totals.files += 1;
         totals.bytes = totals.bytes.saturating_add(entry.size);
+        totals.on_disk = totals.on_disk.saturating_add(entry.size);
+        totals.on_disk_known = false;
         let name = leaf(path, self.separator);
         add_kind(
             &mut self.profile.kinds,
@@ -172,6 +174,8 @@ impl Patch {
         let totals = &mut self.profile.totals;
         totals.files = totals.files.saturating_sub(1);
         totals.bytes = totals.bytes.saturating_sub(bytes);
+        totals.on_disk = totals.on_disk.saturating_sub(bytes);
+        totals.on_disk_known = totals.files == 0;
         let name = leaf(path, self.separator);
         take_kind(
             &mut self.profile.kinds,
@@ -186,6 +190,10 @@ impl Patch {
     fn resize(&mut self, path: &str, old: u64, entry: &FsEntry) {
         let totals = &mut self.profile.totals;
         totals.bytes = totals.bytes.saturating_sub(old).saturating_add(entry.size);
+        totals.on_disk = totals
+            .on_disk
+            .saturating_sub(old)
+            .saturating_add(entry.size);
         let name = leaf(path, self.separator);
         let (kinds, other) = (&mut self.profile.kinds, &mut self.profile.other);
         take_kind(

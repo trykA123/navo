@@ -26,17 +26,40 @@ fn now_ms() -> i64 {
         .unwrap_or_default()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FolderSize {
     pub bytes: u64,
+    pub on_disk: u64,
+    pub on_disk_known: bool,
     pub files: u64,
     pub folders: u64,
     pub skipped: u64,
+    pub links_merged: u64,
+    pub links_unchecked: bool,
+}
+
+impl Default for FolderSize {
+    fn default() -> Self {
+        Self {
+            bytes: 0,
+            on_disk: 0,
+            on_disk_known: true,
+            files: 0,
+            folders: 0,
+            skipped: 0,
+            links_merged: 0,
+            links_unchecked: false,
+        }
+    }
 }
 
 struct SizeOnly;
 
 impl Visit for SizeOnly {
+    fn needs_fs_entries(&self) -> bool {
+        false
+    }
+
     fn file(&mut self, _folder: &Location, _entry: &FsEntry) {}
     fn batch_end(&mut self, _totals: &FolderSize) {}
 }
