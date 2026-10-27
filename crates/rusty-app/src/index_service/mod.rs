@@ -17,6 +17,8 @@ mod elevation;
 #[cfg(any(windows, test))]
 mod elevation_result;
 #[cfg(any(windows, test))]
+mod memory;
+#[cfg(any(windows, test))]
 mod totals;
 #[cfg(any(windows, test))]
 pub(crate) use elevation_result::ElevationError;

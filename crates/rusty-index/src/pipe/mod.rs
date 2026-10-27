@@ -1,5 +1,6 @@
 mod cancel;
 pub mod frames;
+mod memory;
 mod session;
 mod totals;
 #[cfg(not(windows))]
@@ -44,9 +45,10 @@ pub enum PipeError {
 }
 
 pub use frames::{
-    FolderTotals, FolderTotalsReply, Hit, Query, QueryTerm, Reply, Request, Response, Status,
-    VolumeStatus,
+    FolderTotals, FolderTotalsReply, Hit, MemoryPart, MemoryReport, Query, QueryTerm, Reply,
+    Request, Response, Status, VolumeStatus,
 };
+pub use memory::Part;
 
 pub use totals::folder_paths_within_limits;
 
@@ -62,10 +64,13 @@ impl Request {
         if let Some(paths) = self.folder_paths() {
             return folder_paths_within_limits(paths);
         }
+        if self.wants_memory() {
+            return true;
+        }
         self.terms.len() <= 64
             && self.terms.iter().all(|term| match term {
                 QueryTerm::Name(text) | QueryTerm::Path(text) => text.len() <= 1024,
-                QueryTerm::FolderTotalsV1(_) => false,
+                QueryTerm::FolderTotalsV1(_) | QueryTerm::MemoryV1 => false,
                 QueryTerm::Ext(extensions) => {
                     extensions.len() <= 1024
                         && extensions.iter().map(String::len).sum::<usize>()
@@ -83,7 +88,7 @@ impl Request {
                     QueryTerm::Name(text) => crate::search::Term::Name(text),
                     QueryTerm::Path(text) => crate::search::Term::Path(text),
                     QueryTerm::Ext(extensions) => crate::search::Term::Ext(extensions),
-                    QueryTerm::FolderTotalsV1(_) => return None,
+                    QueryTerm::FolderTotalsV1(_) | QueryTerm::MemoryV1 => return None,
                 })
             })
             .collect()
@@ -166,9 +171,9 @@ impl Client {
             }
         }
         Ok(Reply {
-            totals: None,
             hits: hits.unwrap_or_default(),
             status: status.unwrap_or_default(),
+            ..Reply::default()
         })
     }
 

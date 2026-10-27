@@ -2,6 +2,7 @@ mod change;
 mod children;
 mod flags;
 mod folder_lookup;
+mod memory;
 mod totals;
 
 use std::ops::Range;
@@ -12,6 +13,7 @@ pub use change::TableChange;
 use children::Children;
 pub use flags::Flags;
 pub use folder_lookup::{FolderLookup, FolderLookupExpired};
+pub use memory::TableMemory;
 pub use totals::Totals;
 
 pub const NO_PARENT: u32 = u32::MAX;
@@ -74,16 +76,6 @@ impl NameTable {
 
     pub fn slots(&self) -> u32 {
         self.offsets.len() as u32
-    }
-
-    pub fn memory_bytes(&self) -> usize {
-        self.names.capacity()
-            + self.offsets.capacity() * size_of::<u32>()
-            + self.parents.capacity() * size_of::<u32>()
-            + self.flags.capacity() * size_of::<u16>()
-            + self.children.memory_bytes()
-            + self.bytes.capacity() * size_of::<u64>()
-            + self.counts.capacity() * size_of::<(u32, [u32; 2])>()
     }
 
     pub fn shrink_to_fit(&mut self) {

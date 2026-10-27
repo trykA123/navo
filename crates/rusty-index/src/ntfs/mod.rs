@@ -73,7 +73,7 @@ pub struct Enumeration {
 
 impl NtfsIndex {
     #[cfg(any(windows, test))]
-    fn new(drive: char, position: JournalPosition) -> Result<Self, NtfsError> {
+    pub(crate) fn new(drive: char, position: JournalPosition) -> Result<Self, NtfsError> {
         volume_path(drive)?;
         let mut table = NameTable::new();
         let root = table.push(
@@ -87,6 +87,10 @@ impl NtfsIndex {
             position,
             renames: PendingRenames::default(),
         })
+    }
+
+    pub fn pending_renames(&self) -> &PendingRenames {
+        &self.renames
     }
 
     pub fn restart_at(&mut self, position: JournalPosition) {

@@ -212,6 +212,51 @@ fn totals_v1_round_trip_and_legacy_queries_share_a_session() {
     });
 }
 
+#[test]
+fn memory_v1_answers_in_one_frame_and_counts_the_open_session() {
+    use crate::pipe::{MemoryReport, Part, QueryTerm, Request};
+    let (pipe, listener) = fixture();
+    let client = connect(&listener);
+    let cancel = CancelToken::new();
+    let stopped = CancelToken::new();
+    let handler = |request: &Request, _: &CancelToken| {
+        let mut report = MemoryReport::default();
+        report.add_sessions();
+        Reply {
+            memory: request.wants_memory().then_some(report),
+            ..Reply::default()
+        }
+    };
+    thread::scope(|scope| {
+        let _cancel = StopOnDrop(cancel.clone());
+        let worker = scope.spawn(|| serve_instance(&pipe, &handler, &cancel, &stopped));
+        let request = Request {
+            terms: vec![QueryTerm::MemoryV1],
+        };
+        send_query(
+            &client,
+            &Query {
+                request,
+                generation: 1,
+            },
+        );
+        let Response::MemoryV1 {
+            generation: 1,
+            report,
+        } = receive_response(&client)
+        else {
+            panic!("expected one memory frame");
+        };
+        let (part, sessions) = report.known().next().unwrap();
+        assert_eq!(part, Part::Sessions);
+        assert!(sessions.items >= 1 && sessions.bytes > 0);
+        send_query(&client, &super::query(2));
+        assert_legacy_reply(&client);
+        cancel.cancel();
+        worker.join().unwrap().unwrap();
+    });
+}
+
 fn send_query(client: &Client, query: &Query) {
     client.queries.send(frames::encode(query).unwrap()).unwrap();
 }

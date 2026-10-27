@@ -41,6 +41,18 @@ impl PendingRenames {
         self.waiting.clear();
     }
 
+    pub fn len(&self) -> usize {
+        self.waiting.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.waiting.is_empty()
+    }
+
+    pub fn memory_bytes(&self) -> usize {
+        self.waiting.capacity() * size_of::<(u128, u32)>()
+    }
+
     fn settle(&mut self, mut open: HashSet<u128>, seen: &[u128], aged: bool) -> Vec<TableChange> {
         let mut removed = Vec::new();
         for (file_id, reads) in std::mem::take(&mut self.waiting) {

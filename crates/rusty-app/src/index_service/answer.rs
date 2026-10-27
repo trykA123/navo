@@ -37,6 +37,9 @@ pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &Cance
     if let Some(paths) = request.folder_paths() {
         return super::totals::answer(volumes, paths);
     }
+    if request.wants_memory() {
+        return super::memory::answer(volumes);
+    }
     let deadline = Instant::now() + READ_WAIT;
     let mut reply = Reply::default();
     for volume in volumes {

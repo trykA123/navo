@@ -13,6 +13,7 @@ use rusty_ui::perf::PerfService;
 use crate::logging::Diagnostics;
 
 mod process;
+mod service_memory;
 mod system;
 mod threads;
 
@@ -63,7 +64,8 @@ impl PerfReports {
 
     fn sample_memory(&self) {
         let heap = rusty_diag::heap::stats();
-        let components = rusty_diag::components::usage();
+        let mut components = rusty_diag::components::usage();
+        components.extend(service_memory::usage());
         let mut track = self.memory.lock().unwrap_or_else(PoisonError::into_inner);
         track.record(Instant::now(), heap, components);
     }

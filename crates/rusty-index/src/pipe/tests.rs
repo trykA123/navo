@@ -137,6 +137,7 @@ mod windows;
 fn oversized_hits_drop_from_the_tail_using_the_wire_size() {
     let mut reply = super::Reply {
         totals: None,
+        memory: None,
         hits: (1..=3)
             .map(|score| Hit {
                 path: "x".repeat(MAX_FRAME_BYTES / 2 - 16),

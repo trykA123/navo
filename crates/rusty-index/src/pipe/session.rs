@@ -1,5 +1,9 @@
 use std::{
-    sync::{PoisonError, mpsc},
+    sync::{
+        PoisonError,
+        atomic::{AtomicUsize, Ordering::Relaxed},
+        mpsc,
+    },
     time::{Duration, Instant},
 };
 
@@ -59,6 +63,28 @@ struct Session {
     stopped: CancelToken,
 }
 
+static OPEN_SESSIONS: AtomicUsize = AtomicUsize::new(0);
+
+struct Open;
+
+impl Open {
+    fn count() -> Self {
+        OPEN_SESSIONS.fetch_add(1, Relaxed);
+        Self
+    }
+}
+
+impl Drop for Open {
+    fn drop(&mut self) {
+        OPEN_SESSIONS.fetch_sub(1, Relaxed);
+    }
+}
+
+pub(super) fn memory() -> (usize, usize) {
+    let open = OPEN_SESSIONS.load(Relaxed);
+    (open * size_of::<Session>(), open)
+}
+
 pub(super) trait Transport: Sync {
     fn accept(&self, cancel: &Cancellation<'_>) -> Result<(), PipeError>;
     fn disconnect(&self) -> Result<(), PipeError>;
@@ -89,6 +115,7 @@ pub(super) fn serve_session(
     answers: &mpsc::Sender<Job>,
     tokens: &[&CancelToken],
 ) -> Result<(), PipeError> {
+    let _open = Open::count();
     let session = Session::default();
     let (wake, events) = mpsc::sync_channel(1);
     std::thread::scope(|scope| {
@@ -184,6 +211,9 @@ fn write_reply(pipe: &impl Transport, generation: u64, mut reply: Reply) -> Resu
         )?;
         return Ok(());
     }
+    if let Some(report) = reply.memory {
+        return pipe.write_response(&Response::MemoryV1 { generation, report }, deadline);
+    }
     let hits = prepare_hits(generation, &mut reply)?;
     let deadline = Instant::now() + QUERY_TIMEOUT;
     pipe.write_response(&hits, deadline)?;
@@ -227,14 +257,13 @@ pub(super) fn answer_request(
 
 fn error_reply(message: &str) -> Reply {
     Reply {
-        totals: None,
-        hits: Vec::new(),
         status: Status {
             volumes: vec![VolumeStatus {
                 errors: vec![message.into()],
                 ..VolumeStatus::default()
             }],
         },
+        ..Reply::default()
     }
 }
 
