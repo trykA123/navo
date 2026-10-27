@@ -2,9 +2,38 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
 use rusty_core::{Location, ProviderPath, TabId};
-use rusty_fs::{JobKind, JobSlot, OwnerId, Priority, folder_size, volume_of};
+use rusty_fs::{
+    CancelToken, JobKind, JobSlot, OwnerId, Priority, Provider, folder_size, volume_of,
+};
+pub use rusty_index::pipe::FolderTotals;
 
 use super::{Browser, Message};
+
+pub type FolderTotalsQuery = Arc<dyn Fn(&Location) -> Option<FolderTotals> + Send + Sync>;
+
+#[must_use]
+pub fn no_folder_totals() -> FolderTotalsQuery {
+    Arc::new(|_| None)
+}
+
+pub(crate) fn complete_bytes(query: &FolderTotalsQuery, folder: &Location) -> Option<u64> {
+    query(folder)
+        .filter(|totals| totals.complete)
+        .map(|totals| totals.bytes)
+}
+
+pub(crate) fn folder_bytes(
+    query: &FolderTotalsQuery,
+    provider: &dyn Provider,
+    folder: &Location,
+    cancel: &CancelToken,
+) -> Option<u64> {
+    complete_bytes(query, folder).or_else(|| {
+        folder_size(provider, folder, cancel)
+            .ok()
+            .map(|size| size.bytes)
+    })
+}
 
 pub(crate) struct Measured {
     pub(crate) tab: TabId,
@@ -21,6 +50,10 @@ pub(super) struct SizeWork {
 impl Browser {
     pub fn set_space_measures_folders(&mut self, measures: bool) {
         self.measures_folders = measures;
+    }
+
+    pub fn set_folder_totals(&mut self, query: FolderTotalsQuery) {
+        self.folder_totals = query;
     }
 
     pub(super) fn retain_size_owners(&mut self) {
@@ -67,6 +100,7 @@ impl Browser {
             self.sender.clone(),
             Arc::clone(&self.wake),
         );
+        let totals = Arc::clone(&self.folder_totals);
         let slot = JobSlot {
             volume: volume_of(&target),
             priority: Priority::Idle,
@@ -77,7 +111,7 @@ impl Browser {
             slot,
             move |cancel| {
                 let bytes = catch_unwind(AssertUnwindSafe(|| {
-                    folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes)
+                    folder_bytes(&totals, provider.as_ref(), &target, cancel).unwrap_or(0)
                 }))
                 .ok();
                 Measured {

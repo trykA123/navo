@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::browser::{FolderTotalsQuery, no_folder_totals};
 pub use crate::settings::ServiceStatus;
 
 pub type CommandUse = Arc<dyn Fn() -> Vec<(String, f64)> + Send + Sync>;
@@ -51,6 +52,7 @@ pub struct SearchHooks {
     pub record_visit: RecordVisit,
     pub clear: ClearSearch,
     pub service: ServiceHooks,
+    pub folder_totals: FolderTotalsQuery,
 }
 
 impl SearchHooks {
@@ -65,6 +67,7 @@ impl SearchHooks {
             record_visit: Arc::new(|_, _| {}),
             clear: Arc::new(|| {}),
             service: ServiceHooks::none(),
+            folder_totals: no_folder_totals(),
         }
     }
 }

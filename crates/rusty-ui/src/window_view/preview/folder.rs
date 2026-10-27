@@ -15,7 +15,7 @@ use super::marks::Marks;
 use super::scan::{Scan, Snapshots};
 use super::spot::{Restore, Spot};
 use super::{Preview, Shown};
-use crate::browser::Measured;
+use crate::browser::{FolderTotals, Measured};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
 use crate::settings::Field;
@@ -37,14 +37,17 @@ pub(in crate::window_view) struct FolderPreview {
     pub restore: Option<Restore>,
     pub marks: Marks,
     pub hides_largest: bool,
-    load: u64,
+    pub index: Option<FolderTotals>,
+    pub(super) load: u64,
     reads: Vec<Read>,
+    asking: Option<OwnerGuard>,
 }
 
 impl FolderPreview {
     pub(super) fn stop(&mut self) -> bool {
         let had_reads = !self.reads.is_empty();
         self.reads.clear();
+        self.asking = None;
         self.scan.end() || had_reads
     }
 }
@@ -145,6 +148,9 @@ impl FerriteWindow {
         let load = self.preview.next_id();
         let contents = Contents::new(target.location.clone());
         let scan = carried.unwrap_or_else(|| self.start_scan(&target));
+        let asking = scan
+            .is_counting()
+            .then(|| self.preview.ask_totals(load, target.location.clone()));
         let reads = contents
             .root()
             .map(|(node, location)| self.read_folder(load, node, location))
@@ -160,8 +166,10 @@ impl FerriteWindow {
             restore: None,
             marks: Marks::default(),
             hides_largest: !self.preview_shows(Field::PreviewLargestFiles),
+            index: None,
             load,
             reads,
+            asking,
         }
     }
 
@@ -205,6 +213,7 @@ impl FerriteWindow {
                 Arrival::Read(done) => self.folder_read(done),
                 Arrival::Snapshot { run, snapshot } => self.profile_arrived(run, snapshot),
                 Arrival::Counted { location, bytes } => self.folder_counted(&location, bytes),
+                Arrival::Totals { load, totals } => self.totals_arrived(load, totals),
             };
         }
         changed
@@ -296,7 +305,7 @@ impl FerriteWindow {
         true
     }
 
-    fn show_size(&mut self, target: &Target, bytes: u64) {
+    pub(super) fn show_size(&mut self, target: &Target, bytes: u64) {
         let _ = self.browser.show_folder_size(&Measured {
             tab: target.tab,
             folder: target.folder.clone(),

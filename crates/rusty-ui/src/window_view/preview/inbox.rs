@@ -4,7 +4,7 @@ use rusty_core::Location;
 use rusty_fs::{FsEntry, LiveSnapshot};
 use rusty_structured::NodeId;
 
-use crate::browser::Waker;
+use crate::browser::{FolderTotals, Waker};
 
 pub(super) struct ReadDone {
     pub load: u64,
@@ -17,6 +17,7 @@ pub(super) enum Arrival {
     Read(ReadDone),
     Snapshot { run: u64, snapshot: LiveSnapshot },
     Counted { location: Location, bytes: u64 },
+    Totals { load: u64, totals: FolderTotals },
 }
 
 pub(super) struct Inbox {

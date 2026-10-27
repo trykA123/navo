@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use rusty_core::Location;
-use rusty_fs::{JobSlot, OwnerGuard, Priority, Provider, folder_size, volume_of};
+use rusty_fs::{JobSlot, OwnerGuard, Priority, Provider, volume_of};
 
 use super::inbox::Arrival;
 use super::{Preview, Shown};
+use crate::browser::folder_bytes;
 use crate::format;
 use crate::prelude::*;
 use crate::window_view::FerriteWindow;
@@ -91,15 +92,16 @@ impl Preview {
         };
         let (send, wake) = (self.inbox.send.clone(), Arc::clone(&self.inbox.wake));
         let folder = location.clone();
+        let totals = Arc::clone(&self.totals);
         self.scans.submit(
             slot,
             Box::new(move |cancel| {
-                let Ok(size) = folder_size(provider.as_ref(), &folder, cancel) else {
+                let Some(bytes) = folder_bytes(&totals, provider.as_ref(), &folder, cancel) else {
                     return;
                 };
                 let arrival = Arrival::Counted {
                     location: folder,
-                    bytes: size.bytes,
+                    bytes,
                 };
                 if send.send(arrival).is_ok() {
                     wake();

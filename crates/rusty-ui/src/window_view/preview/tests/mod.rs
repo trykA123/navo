@@ -10,6 +10,7 @@ mod marks;
 mod nest;
 mod release;
 mod toggle;
+mod totals;
 mod view_parts;
 
 use std::sync::Arc;

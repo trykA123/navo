@@ -14,6 +14,7 @@ mod sheet;
 mod spot;
 mod stats;
 mod summary;
+mod totals;
 mod view;
 
 use std::sync::Arc;
@@ -22,7 +23,7 @@ use std::time::Duration;
 use gpui_kit::{FocusHandle, Task};
 use rusty_fs::{IoQueue, JobKind, PROGRESS_EVERY, Pools};
 
-use crate::browser::Waker;
+use crate::browser::{FolderTotalsQuery, Waker};
 
 use super::FerriteWindow;
 use crate::prelude::*;
@@ -73,6 +74,7 @@ pub(in crate::window_view) struct Preview {
     reads: Arc<IoQueue>,
     scans: Arc<IoQueue>,
     inbox: inbox::Inbox,
+    totals: FolderTotalsQuery,
     every: Duration,
     ids: u64,
     loads: u64,
@@ -89,7 +91,7 @@ fn pools() -> &'static Pools {
 }
 
 impl Preview {
-    pub(super) fn new(wake: Waker, cx: &mut App) -> Self {
+    pub(super) fn new(wake: Waker, totals: FolderTotalsQuery, cx: &mut App) -> Self {
         Self {
             sheet: cx.new(|_| SheetState::new()),
             browse: cx.focus_handle(),
@@ -104,6 +106,7 @@ impl Preview {
             reads: Arc::clone(pools().queue(JobKind::Preview)),
             scans: Arc::clone(pools().queue(JobKind::Size)),
             inbox: inbox::Inbox::new(wake),
+            totals,
             every: PROGRESS_EVERY,
             ids: 0,
             loads: 0,

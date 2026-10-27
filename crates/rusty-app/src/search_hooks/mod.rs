@@ -1,10 +1,5 @@
 mod folder_totals;
 mod service;
-#[cfg_attr(
-    not(test),
-    expect(unused_imports, reason = "IX8 backend API precedes UI integration")
-)]
-pub use folder_totals::folder_totals;
 
 mod index;
 
@@ -91,6 +86,7 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
     let Some(db) = db else {
         return SearchHooks {
             service: service::hooks(),
+            folder_totals: folder_totals::query(),
             ..SearchHooks::none()
         };
     };
@@ -101,6 +97,7 @@ pub fn hooks(db: Option<SharedDb>, remember: Remember) -> SearchHooks {
     let (remember_command, remember_visit) = (remember.clone(), remember);
     SearchHooks {
         service: service::hooks(),
+        folder_totals: folder_totals::query(),
         command_use,
         recent_commands,
         record_command: Arc::new(move |name| {

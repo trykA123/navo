@@ -13,7 +13,8 @@ use rusty_fs::{
     FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, WatchEvent, volume_of,
 };
 
-pub(crate) use measure::Measured;
+pub use measure::{FolderTotals, FolderTotalsQuery, no_folder_totals};
+pub(crate) use measure::{Measured, folder_bytes};
 pub(crate) use open::Seen;
 use operate::JobUpdate;
 pub use operate::*;
@@ -84,6 +85,7 @@ pub struct Browser {
     show_hidden: bool,
     show_system: bool,
     measures_folders: bool,
+    folder_totals: FolderTotalsQuery,
     default_sort: crate::file_list::SortKey,
     folders_first: bool,
     copying: operate::Copying,
@@ -148,6 +150,7 @@ impl Browser {
             show_hidden: true,
             show_system: true,
             measures_folders: true,
+            folder_totals: no_folder_totals(),
             default_sort: crate::file_list::SortKey::default(),
             folders_first: true,
             copying: operate::Copying::default(),

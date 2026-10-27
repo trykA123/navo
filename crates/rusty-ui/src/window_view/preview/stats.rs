@@ -180,9 +180,9 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) -> Div {
         let profile = folder.scan.profile.as_ref();
-        let totals = profile.map(|profile| profile.totals).unwrap_or_default();
+        let (totals, is_final) = folder.shown_totals();
         let is_done = matches!(folder.scan.phase, Phase::Done { .. });
-        let size_label = if is_done {
+        let size_label = if is_final {
             "Total size"
         } else {
             "Total size so far"
@@ -198,7 +198,7 @@ impl FerriteWindow {
         if totals.skipped > 0 {
             folders_sub.push_str(&format!(" · {} skipped", format::bytes(totals.skipped)));
         }
-        let level = if is_done { "all levels" } else { "so far" };
+        let level = if is_final { "all levels" } else { "so far" };
         let files = card(t, "Files", format::bytes(totals.files)).child(sub(t, level.to_owned()));
         let folders = card(t, "Folders", format::bytes(totals.folders)).child(sub(t, folders_sub));
         let changed = Self::changed_card(folder, profile, is_done, t);

@@ -200,6 +200,7 @@ pub struct FerriteWindow {
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut browser = Self::browser(&options, cx);
+        let totals = options.search.folder_totals.clone();
         let (values, saver, settings) = Panel::split(options.settings, &options.search, cx);
         settings_save::steer(&values, &mut browser);
         browser.start();
@@ -236,7 +237,7 @@ impl FerriteWindow {
             menu_run: None,
             prefetch: shell_menu::Prefetches::default(),
             menu_runs: 0,
-            preview: preview::Preview::new(Self::waker(cx), cx),
+            preview: preview::Preview::new(Self::waker(cx), totals, cx),
             job_ui: jobs::JobUi::new(window, cx),
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),

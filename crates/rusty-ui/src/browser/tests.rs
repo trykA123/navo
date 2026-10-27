@@ -309,6 +309,51 @@ fn marking_a_folder_does_not_measure_it_when_measuring_is_off() {
     assert_ne!(browser.details(tab)[0].size, 7);
 }
 
+fn index_answers(folder: Location, complete: bool) -> FolderTotalsQuery {
+    Arc::new(move |asked| {
+        (asked == &folder).then_some(FolderTotals {
+            bytes: 42,
+            files: 1,
+            folders: 0,
+            complete,
+        })
+    })
+}
+
+fn measured_docs(fs: &Arc<FakeFs>, query: FolderTotalsQuery) -> u64 {
+    let mut browser = browser_at(fs, "home");
+    browser.set_folder_totals(query);
+    settle(&mut browser);
+    browser.command(&Command::SelectionToggle).unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    browser.details(tab)[0].size
+}
+
+#[test]
+fn marking_a_folder_takes_a_complete_index_total_without_walking_it() {
+    let fs = fake();
+    let size = measured_docs(&fs, index_answers(fs.location("home/docs"), true));
+    assert_eq!(size, 42);
+    assert_eq!(fs.calls("home/docs", FakeOp::List), 0);
+}
+
+#[test]
+fn marking_a_folder_walks_it_when_the_index_is_still_building() {
+    let fs = fake();
+    let size = measured_docs(&fs, index_answers(fs.location("home/docs"), false));
+    assert_eq!(size, 7);
+    assert_eq!(fs.calls("home/docs", FakeOp::List), 1);
+}
+
+#[test]
+fn marking_a_folder_the_index_does_not_cover_walks_it() {
+    let fs = fake();
+    let size = measured_docs(&fs, index_answers(fs.location("home/music"), true));
+    assert_eq!(size, 7);
+    assert_eq!(fs.calls("home/docs", FakeOp::List), 1);
+}
+
 #[test]
 fn a_size_for_a_folder_left_behind_is_ignored() {
     let fs = fake();
