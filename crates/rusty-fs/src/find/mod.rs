@@ -165,7 +165,7 @@ impl<'a> Filters<'a> {
             .any(|filter| filter.attribute == attribute && !filter.excluded)
     }
 
-    fn file(&self, location: &Location, entry: &FsEntry) -> bool {
+    fn file(&self, location: Option<&Location>, entry: &FsEntry) -> bool {
         let name = entry.name.to_text();
         if !self.query.ext.is_empty()
             && !name.rsplit_once('.').is_some_and(|(_, ext)| {
@@ -193,10 +193,13 @@ impl<'a> Filters<'a> {
                 Attribute::Hidden => entry.attributes.hidden,
                 Attribute::Readonly => entry.attributes.readonly,
                 Attribute::System => entry.attributes.system,
-                Attribute::Archive => match LocalFs::new().details(location) {
-                    Ok(details) => details.attributes.archive,
-                    Err(_) => return false,
-                },
+                Attribute::Archive => {
+                    match location.map(|location| LocalFs::new().details(location)) {
+                        Some(Ok(details)) => details.attributes.archive,
+                        Some(Err(_)) => return false,
+                        None => false,
+                    }
+                }
             };
             value != filter.excluded
         })

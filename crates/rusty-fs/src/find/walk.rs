@@ -1,3 +1,5 @@
+mod archives;
+
 use std::fs::File;
 use std::io::{self, Read};
 use std::ops::ControlFlow;
@@ -133,6 +135,9 @@ impl<'a> Walk<'a> {
                 entry,
                 hits: FileHits::default(),
             };
+            if self.filters.query.archives {
+                self.archive(&location, &found, compiled)?;
+            }
             self.file(location, found, compiled)?;
         }
         self.flush_if_due()?;
@@ -147,7 +152,7 @@ impl<'a> Walk<'a> {
     ) -> Result<(), FindError> {
         self.progress.scanned += 1;
         self.progress.current = Some(location.clone());
-        if !self.filters.file(&location, &found.entry) {
+        if !self.filters.file(Some(&location), &found.entry) {
             return Ok(());
         }
         if found.entry.size > FILE_LIMIT && self.filters.query.size.is_none() {
@@ -160,6 +165,10 @@ impl<'a> Walk<'a> {
             };
             found.hits = hits;
         }
+        self.record(found)
+    }
+
+    fn record(&mut self, found: FoundFile) -> Result<(), FindError> {
         if found.hits.skipped == Some(Skip::Cancelled) {
             return Err(FindError::Cancelled);
         }

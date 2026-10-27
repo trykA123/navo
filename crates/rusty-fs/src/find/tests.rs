@@ -1,3 +1,5 @@
+mod archives;
+
 use std::fs::{self, File, FileTimes};
 use std::ops::ControlFlow;
 use std::time::{Duration, UNIX_EPOCH};
