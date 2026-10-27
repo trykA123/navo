@@ -1,4 +1,3 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::thread::scope;
 use std::time::Duration;
@@ -186,9 +185,11 @@ fn a_delete_whose_root_parent_is_renamed_mid_job_fails_and_skips_nothing() {
             existing: Vec::new(),
             ..request(&fs, OpKind::Delete, &["top/src"], "dst")
         });
-        let calls = AtomicUsize::new(0);
+        let calls = Mutex::new(0_usize);
         let rename_parent = |_: &Location| {
-            if calls.fetch_add(1, Ordering::SeqCst) == 5 {
+            let mut calls = calls.lock().unwrap();
+            *calls += 1;
+            if *calls == 6 {
                 fs.rename_entry("top", "moved");
             }
         };
