@@ -2,8 +2,10 @@ mod aside;
 mod copy;
 mod hold;
 mod link;
+mod marks;
 mod parallel;
 mod pool;
+mod remove;
 mod rename;
 mod restore;
 mod run;
@@ -85,6 +87,11 @@ pub trait JobLog {
         Ok(None)
     }
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
+    fn steps(&mut self, marks: &[(u32, StepOutcome)]) -> Result<(), FsError> {
+        marks
+            .iter()
+            .try_for_each(|&(seq, outcome)| self.step(seq, outcome))
+    }
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError>;
     fn journal_placed(&mut self, _placed: &PlacedFile) -> Result<(), FsError> {

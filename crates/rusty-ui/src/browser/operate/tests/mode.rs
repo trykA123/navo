@@ -6,6 +6,7 @@ use std::thread::ThreadId;
 use super::concurrent::{counting_browser, many_files};
 use super::pause::gated;
 use super::*;
+use crate::browser::operate::Copying;
 use crate::browser::operate::work::worker_count;
 
 fn network(_: &rusty_core::Location) -> DriveClass {
@@ -16,9 +17,39 @@ fn network(_: &rusty_core::Location) -> DriveClass {
 fn the_job_runner_gets_one_worker_in_standard_mode() {
     let fs = fake();
     let place = fs.location("dest");
-    let count = |mode| worker_count(mode, Some(&place), Some(&place), network);
+    let count = |mode| {
+        let copying = Copying {
+            mode,
+            class_of: network,
+        };
+        worker_count(copying, OpKind::Copy, Some(&place), Some(&place))
+    };
     assert_eq!(count(CopyMode::Standard), 1);
     assert_eq!(count(CopyMode::Auto), 8);
+}
+
+fn ssd(_: &rusty_core::Location) -> DriveClass {
+    DriveClass::Ssd
+}
+
+fn on_ssd(kind: OpKind) -> usize {
+    let fs = fake();
+    let place = fs.location("dest");
+    let copying = Copying {
+        mode: CopyMode::Auto,
+        class_of: ssd,
+    };
+    worker_count(copying, kind, Some(&place), None)
+}
+
+#[test]
+fn a_delete_without_a_target_gets_the_workers_of_its_source_drive() {
+    assert_eq!(on_ssd(OpKind::Delete), 4);
+}
+
+#[test]
+fn a_recycle_keeps_one_worker() {
+    assert_eq!(on_ssd(OpKind::Recycle), 1);
 }
 
 #[test]

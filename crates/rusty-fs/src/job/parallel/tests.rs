@@ -44,6 +44,7 @@ fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers
         progress: &mut report,
     };
     let aside = Aside::new();
+    let removals = Removals::of(&plan);
     let (tasks, _queue) = channel();
     let (_sender, events) = channel();
     let pool = Pool {
@@ -56,6 +57,7 @@ fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers
             plan: &plan,
             aside: &aside,
             namespace: None,
+            removals: &removals,
         },
         &mut ctx,
         pool,

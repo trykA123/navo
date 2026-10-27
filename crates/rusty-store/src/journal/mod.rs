@@ -144,6 +144,20 @@ impl JobJournal {
         Ok(())
     }
 
+    pub fn mark_steps(
+        &mut self,
+        job: JobId,
+        steps: &[(u32, StepState)],
+    ) -> Result<(), JournalError> {
+        let transaction = self.db.connection().unchecked_transaction()?;
+        let unknown = mark_each(&transaction, job, steps)?;
+        if let Some(seq) = unknown {
+            return Err(self.missing(job, seq)?);
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn finish(&mut self, job: JobId, state: JobState) -> Result<(), JournalError> {
         let changed = self.db.connection().execute(
             "UPDATE job SET state = ?2 WHERE id = ?1",
@@ -276,6 +290,22 @@ impl JobJournal {
             JournalError::UnknownJob(job)
         })
     }
+}
+
+fn mark_each(
+    transaction: &rusqlite::Transaction<'_>,
+    job: JobId,
+    steps: &[(u32, StepState)],
+) -> Result<Option<u32>, JournalError> {
+    let mut update = transaction.prepare_cached(
+        "UPDATE job_step SET state = ?3, detail = NULL WHERE job_id = ?1 AND seq = ?2",
+    )?;
+    for &(seq, state) in steps {
+        if update.execute(rusqlite::params![job.0, seq, step_text(state)])? == 0 {
+            return Ok(Some(seq));
+        }
+    }
+    Ok(None)
 }
 
 fn step_text(state: StepState) -> &'static str {

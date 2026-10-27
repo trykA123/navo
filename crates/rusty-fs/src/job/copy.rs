@@ -10,6 +10,7 @@ pub(super) struct Copier<'a> {
     pub cancel: &'a CancelToken,
     pub strict: bool,
     pub namespace: Option<&'a str>,
+    pub removals: &'a super::remove::Removals<'a>,
 }
 
 pub(super) struct CopyStep<'a> {

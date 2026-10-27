@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::thread::{Builder, scope};
 
-use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
+use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::Aside;
 use super::copy::{Copied, Copier, CopyStep, failure, place};
+use super::marks::{Marks, is_removal};
 use super::pool::{Event, Task, work};
+use super::remove::Removals;
 use super::run::{Job, apply, counted, current_of, holds_kept, note_kept};
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
@@ -18,6 +20,7 @@ pub(super) fn run(
     workers: usize,
 ) -> JobOutcome {
     let aside = Aside::new();
+    let removals = Removals::of(plan);
     let namespace = if ctx.log.preserve_overwrites() {
         ctx.log.temporary_namespace()
     } else {
@@ -27,6 +30,7 @@ pub(super) fn run(
         plan,
         aside: &aside,
         namespace: namespace.as_deref(),
+        removals: &removals,
     };
     let copier = Copier {
         plan,
@@ -34,6 +38,7 @@ pub(super) fn run(
         cancel: ctx.cancel,
         strict: ctx.log.preserve_overwrites(),
         namespace: namespace.as_deref(),
+        removals: &removals,
     };
     let (tasks, queue) = channel();
     let queue = Mutex::new(queue);
@@ -76,6 +81,7 @@ struct Runner<'p, 'c, 'a> {
     settled: u64,
     progress: Progress,
     kept: Vec<Location>,
+    marks: Marks,
     failed: Option<(u32, FsError)>,
     cancelled: bool,
 }
@@ -94,10 +100,20 @@ fn names_clash(
 
 fn room_for(step: &Step, workers: usize) -> usize {
     match step {
-        Step::CopyFile { .. } => workers.saturating_sub(1),
-        Step::MakeFolder { .. } => usize::MAX,
+        Step::CopyFile { .. } | Step::RemoveFile { .. } | Step::RemoveLink { .. } => {
+            workers.saturating_sub(1)
+        }
+        Step::MakeFolder { .. } | Step::RemoveFolder { .. } => usize::MAX,
         _ => 0,
     }
+}
+
+fn runs_on_the_pool_as_a_removal(kind: OpKind, step: &Step) -> bool {
+    kind == OpKind::Delete && matches!(step, Step::RemoveFile { .. } | Step::RemoveLink { .. })
+}
+
+fn inside(child: &Location, folder: &Location) -> bool {
+    std::iter::successors(child.parent(), Location::parent).any(|up| up.same_place(folder))
 }
 
 impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
@@ -112,6 +128,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             settled: 0,
             progress,
             kept: Vec::new(),
+            marks: Marks::new(plan.kind),
             failed: None,
             cancelled: false,
         }
@@ -134,6 +151,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             self.receive();
             self.note_pause();
         }
+        self.flush_marks();
+    }
+
+    fn flush_marks(&mut self) {
+        if let Err((seq, error)) = self.marks.flush(self.ctx.log) {
+            self.fail(seq, error);
+        }
     }
 
     fn outcome(self) -> JobOutcome {
@@ -155,11 +179,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             self.note_pause();
             let is_busy = self.in_flight.len() > room
                 || self.progress.paused
-                || self.shares_a_name((seq, step));
+                || self.shares_a_name((seq, step))
+                || self.waits_for_others(step);
             if self.stopped() || !is_busy {
                 return;
             }
             if self.in_flight.is_empty() {
+                self.flush_marks();
                 self.ctx.cancel.wait_while_paused();
             } else {
                 self.receive();
@@ -181,6 +207,20 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             })
     }
 
+    fn waits_for_others(&self, step: &Step) -> bool {
+        let mut busy = self.in_flight.values().map(|(other, _)| *other);
+        match step {
+            Step::CopyFile { .. } => busy.any(is_removal),
+            Step::RemoveFile { .. } | Step::RemoveLink { .. } => {
+                busy.any(|other| !is_removal(other))
+            }
+            Step::RemoveFolder { location } => busy.any(|other| {
+                !is_removal(other) || inside(&super::run::current_of(other), location)
+            }),
+            _ => false,
+        }
+    }
+
     fn note_pause(&mut self) {
         let cancel = self.ctx.cancel;
         loop {
@@ -189,12 +229,20 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                 return;
             }
             self.progress.paused = paused;
+            if paused {
+                self.flush_marks();
+            }
             self.report();
         }
     }
 
     fn start(&mut self, seq: u32, step: &'p Step) {
         self.progress.current = Some(current_of(step));
+        if runs_on_the_pool_as_a_removal(self.job.plan.kind, step) && !holds_kept(step, &self.kept)
+        {
+            self.dispatch(seq, step, Task::Remove { seq, step });
+            return;
+        }
         let Step::CopyFile {
             source,
             target,
@@ -219,15 +267,27 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             self.fail(seq, error);
             return;
         }
+        self.dispatch(seq, step, Task::Copy { seq, step: copy });
+    }
+
+    fn dispatch(&mut self, seq: u32, step: &'p Step, task: Task<'p>) {
         self.in_flight.insert(seq, (step, 0));
-        if self.pool.tasks.send(Task { seq, step: copy }).is_err() {
+        if self.pool.tasks.send(task).is_err() {
             self.in_flight.remove(&seq);
-            self.fail(seq, failure(FsErrorKind::Unknown, target));
+            self.fail(seq, failure(FsErrorKind::Unknown, &current_of(step)));
         }
     }
 
     fn receive(&mut self) {
-        match self.pool.events.recv() {
+        let event = match self.marks.due_in() {
+            Some(wait) => self.pool.events.recv_timeout(wait),
+            None => self
+                .pool
+                .events
+                .recv()
+                .map_err(|_| RecvTimeoutError::Disconnected),
+        };
+        match event {
             Ok(Event::Created { seq, identity, ack }) => {
                 let result = self
                     .ctx
@@ -247,7 +307,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                     self.settle(seq, step, result);
                 }
             }
-            Err(_) => {
+            Ok(Event::Removed { seq, result }) => {
+                if let Some((step, _)) = self.in_flight.remove(&seq) {
+                    self.settle(seq, step, result);
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => self.flush_marks(),
+            Err(RecvTimeoutError::Disconnected) => {
                 let lost: Vec<u32> = self.in_flight.drain().map(|(seq, _)| seq).collect();
                 for seq in lost {
                     self.fail(seq, FsError::new(FsErrorKind::Unknown));
@@ -267,7 +333,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         match result {
             Ok(outcome) => {
                 note_kept(step, outcome, &mut self.kept);
-                if let Err(error) = self.ctx.log.step(seq, outcome) {
+                if let Err((seq, error)) = self.marks.record(self.ctx.log, (seq, step), outcome) {
                     self.fail(seq, error);
                     return;
                 }
@@ -280,7 +346,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                 self.cancelled = true;
             }
             Err(error) => {
-                let _ = self.ctx.log.step(seq, StepOutcome::Failed);
+                self.marks.failed(self.ctx.log, seq);
                 self.fail(seq, error);
             }
         }

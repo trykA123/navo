@@ -1,6 +1,6 @@
-use rusty_core::{ConflictPolicy, FsError, Location, OperationPlan, PlanRequest, plan};
+use rusty_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan};
 use rusty_fs::{
-    AutoTuning, CancelToken, CopyMode, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
+    AutoTuning, CancelToken, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
     WorkerCounts, existing_at, job_workers, run_job_parallel, scan,
 };
 
@@ -70,12 +70,16 @@ pub(super) fn plan_for(
 }
 
 pub(super) fn worker_count(
-    mode: CopyMode,
+    Copying { mode, class_of }: Copying,
+    kind: OpKind,
     source: Option<&Location>,
     target: Option<&Location>,
-    class_of: impl Fn(&Location) -> DriveClass,
 ) -> usize {
-    let class = |place: Option<&Location>| place.map_or(DriveClass::Unknown, &class_of);
+    let class = |place: Option<&Location>| place.map_or(DriveClass::Unknown, class_of);
+    let target = match kind {
+        OpKind::Delete => target.or(source),
+        _ => target,
+    };
     let counts = WorkerCounts::from(&AutoTuning::default());
     job_workers(mode, class(source), class(target), counts)
 }
@@ -224,8 +228,12 @@ impl JobWork {
     }
 
     fn run_plain(&self, ctx: &mut JobContext<'_>) -> JobOutcome {
-        let Copying { mode, class_of } = self.copying;
-        let workers = worker_count(mode, self.source.as_ref(), self.target.as_ref(), class_of);
+        let workers = worker_count(
+            self.copying,
+            self.plan.kind,
+            self.source.as_ref(),
+            self.target.as_ref(),
+        );
         run_job_parallel(&self.plan, &[], ctx, workers)
     }
 

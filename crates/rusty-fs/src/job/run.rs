@@ -3,6 +3,8 @@ use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 use super::aside::Aside;
 use super::copy::{Copier, CopyStep, copy, overwrites, place};
 use super::hold::hold;
+use super::marks::Marks;
+use super::remove::{Removals, remove};
 use super::rename::{is_temporary, prepare};
 use super::{JobContext, JobOutcome, Progress, StepOutcome};
 
@@ -39,10 +41,12 @@ pub(super) struct Job<'p> {
     pub plan: &'p OperationPlan,
     pub aside: &'p Aside,
     pub namespace: Option<&'p str>,
+    pub removals: &'p Removals<'p>,
 }
 
 pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
     let aside = Aside::new();
+    let removals = Removals::of(plan);
     let namespace = if ctx.log.preserve_overwrites() {
         ctx.log.temporary_namespace()
     } else {
@@ -52,11 +56,27 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
         plan,
         aside: &aside,
         namespace: namespace.as_deref(),
+        removals: &removals,
     };
     walk(job, done, ctx)
 }
 
 fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
+    let mut marks = Marks::new(job.plan.kind);
+    let outcome = walk_marking((job, done), ctx, &mut marks);
+    match marks.flush(ctx.log) {
+        Err((seq, error)) if !matches!(outcome, JobOutcome::Failed { .. }) => {
+            JobOutcome::Failed { seq, error }
+        }
+        _ => outcome,
+    }
+}
+
+fn walk_marking(
+    (job, done): (Job<'_>, &[u32]),
+    ctx: &mut JobContext<'_>,
+    marks: &mut Marks,
+) -> JobOutcome {
     let plan = job.plan;
     let mut progress = Progress::start(plan);
     let mut kept = Vec::new();
@@ -64,6 +84,11 @@ fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
         if done.contains(&seq) {
             advance(&mut progress, plan.kind, step);
             continue;
+        }
+        if ctx.cancel.is_paused()
+            && let Err((seq, error)) = marks.flush(ctx.log)
+        {
+            return JobOutcome::Failed { seq, error };
         }
         hold(ctx.cancel, &mut progress, ctx.progress);
         if ctx.cancel.is_cancelled() {
@@ -80,7 +105,7 @@ fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
         match result {
             Ok(outcome) => {
                 note_kept(step, outcome, &mut kept);
-                if let Err(error) = ctx.log.step(seq, outcome) {
+                if let Err((seq, error)) = marks.record(ctx.log, (seq, step), outcome) {
                     return JobOutcome::Failed { seq, error };
                 }
                 progress.bytes_done = start;
@@ -91,7 +116,7 @@ fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
                 return JobOutcome::Cancelled;
             }
             Err(error) => {
-                let _ = ctx.log.step(seq, StepOutcome::Failed);
+                marks.failed(ctx.log, seq);
                 return JobOutcome::Failed { seq, error };
             }
         }
@@ -151,9 +176,9 @@ pub(super) fn apply(
         }
         Step::Rename { source, target } => done(rename_step(job, ctx, source, target)),
         Step::Recycle { location } => done(ops.recycle(location)),
-        Step::RemoveFile { location } => done(ops.remove_file(location)),
-        Step::RemoveLink { location } => done(ops.remove_link(location)),
-        Step::RemoveFolder { location } => done(ops.remove_empty_folder(location)),
+        Step::RemoveFile { .. } | Step::RemoveLink { .. } | Step::RemoveFolder { .. } => {
+            remove(ops, job.removals, step)
+        }
         Step::MakeLink { target_of, at } => done(ops.make_link(target_of, at)),
     }
 }
@@ -187,6 +212,7 @@ fn copy_in_order(
         cancel: ctx.cancel,
         strict: ctx.log.preserve_overwrites(),
         namespace: job.namespace,
+        removals: job.removals,
     };
     let base = progress.bytes_done;
     let (cancel, report) = (ctx.cancel, &mut *ctx.progress);

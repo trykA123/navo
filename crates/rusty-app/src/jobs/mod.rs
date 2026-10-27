@@ -5,13 +5,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, OpKind, OperationPlan};
 use rusty_fs::{FileIdentity, HeldFile, JobLog, JobOutcome, PlacedFile, ProviderOps, StepOutcome};
-use rusty_store::{JobId, JobJournal, JobState, JournalError, StepState};
+use rusty_store::{JobId, JobJournal, JobState, JournalError};
 use rusty_ui::browser::OpLog;
 
 mod deletion;
 mod held;
 mod identity;
 mod maintenance;
+mod marks;
 mod mutation_lock;
 #[cfg(test)]
 pub(crate) use mutation_lock::test_file as test_mutation_file;
@@ -305,22 +306,11 @@ impl JobLog for JournalLog {
     }
 
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
-        let state = match outcome {
-            StepOutcome::Done => StepState::Done,
-            StepOutcome::Skipped => StepState::Skipped,
-            StepOutcome::Failed => StepState::Failed,
-        };
-        let mut journal = lock(&self.journal);
-        let detail = if self.renames || self.retained.is_some() || self.overwrites.is_some() {
-            journal
-                .step_detail(self.job, seq)
-                .map_err(|_| FsError::new(FsErrorKind::Unknown))?
-        } else {
-            None
-        };
-        journal
-            .mark_step(self.job, seq, state, detail.as_deref())
-            .map_err(|_| FsError::new(FsErrorKind::Unknown))
+        marks::mark(self, seq, outcome)
+    }
+
+    fn steps(&mut self, marks: &[(u32, StepOutcome)]) -> Result<(), FsError> {
+        marks::mark_all(self, marks)
     }
 
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
@@ -436,3 +426,9 @@ mod rename_tests;
 
 #[cfg(test)]
 mod link_tests;
+
+#[cfg(test)]
+mod delete_bench;
+
+#[cfg(test)]
+mod delete_tests;

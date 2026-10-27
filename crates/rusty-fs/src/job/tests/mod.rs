@@ -17,6 +17,7 @@ mod copy;
 mod crash;
 mod crashing;
 mod delete;
+mod delete_races;
 mod faults;
 mod journal;
 mod kept_aside;
@@ -29,6 +30,7 @@ mod move_over;
 mod move_over_crash;
 mod move_over_race;
 mod parallel;
+mod parallel_delete;
 mod parallel_pause;
 mod parallel_props;
 mod pause;
@@ -52,6 +54,7 @@ struct Log {
     unjournaled: bool,
     beside: Vec<rusty_core::Location>,
     stranded: Vec<HeldFile>,
+    writes: usize,
 }
 
 fn log_error() -> FsError {
@@ -66,7 +69,17 @@ impl JobLog for Log {
         if self.fail_on == Some(seq) {
             return Err(log_error());
         }
+        self.writes += 1;
         self.entries.push((seq, outcome));
+        Ok(())
+    }
+
+    fn steps(&mut self, marks: &[(u32, StepOutcome)]) -> Result<(), FsError> {
+        if marks.iter().any(|(seq, _)| self.fail_on == Some(*seq)) {
+            return Err(log_error());
+        }
+        self.writes += 1;
+        self.entries.extend_from_slice(marks);
         Ok(())
     }
 

@@ -68,6 +68,10 @@ impl<'a> Crashing<'a> {
         }
     }
 
+    pub(super) fn is_dead(&self) -> bool {
+        self.dead.load(Ordering::SeqCst)
+    }
+
     fn alive(&self) -> Result<(), FsError> {
         if self.dead.load(Ordering::SeqCst) {
             return Err(died());

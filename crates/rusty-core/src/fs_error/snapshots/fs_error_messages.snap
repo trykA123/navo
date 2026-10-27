@@ -24,5 +24,7 @@ Cancelled: The operation was cancelled.
 Cancelled: The operation on “C:\Data\report.xlsx” was cancelled.
 IdentityUnavailable: This drive cannot confirm file identity.
 IdentityUnavailable: This drive cannot confirm file identity for “C:\Data\report.xlsx”.
+JournalWriteFailed: Navo could not save the job's progress to its journal.
+JournalWriteFailed: Navo could not save the job's progress to its journal.
 Unknown: Something went wrong.
 Unknown: Something went wrong with “C:\Data\report.xlsx”.
