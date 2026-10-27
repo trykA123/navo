@@ -42,7 +42,7 @@ impl JobKind {
 }
 
 pub struct Pools {
-    queues: [IoQueue; 5],
+    queues: [Arc<IoQueue>; 5],
 }
 
 impl Pools {
@@ -55,19 +55,20 @@ impl Pools {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            queues: JobKind::ALL.map(|kind| IoQueue::with_limits(kind.limits())),
+            queues: JobKind::ALL.map(|kind| Arc::new(IoQueue::with_limits(kind.limits()))),
         }
     }
 
     #[must_use]
     pub fn with(classifier: &Classifier) -> Self {
         Self {
-            queues: JobKind::ALL.map(|kind| IoQueue::with(kind.limits(), Arc::clone(classifier))),
+            queues: JobKind::ALL
+                .map(|kind| Arc::new(IoQueue::with(kind.limits(), Arc::clone(classifier)))),
         }
     }
 
     #[must_use]
-    pub fn queue(&self, kind: JobKind) -> &IoQueue {
+    pub fn queue(&self, kind: JobKind) -> &Arc<IoQueue> {
         &self.queues[kind.index()]
     }
 }
