@@ -14,6 +14,7 @@ mod concurrent;
 mod drop;
 mod mode;
 mod pause;
+mod queue;
 mod retention;
 
 fn fake() -> Arc<FakeFs> {

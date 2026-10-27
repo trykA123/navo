@@ -973,7 +973,7 @@ fn a_rename_batch_waits_while_an_undo_runs() {
 }
 
 #[test]
-fn an_undo_job_cannot_be_cancelled_or_paused() {
+fn a_running_undo_job_cannot_be_cancelled_or_paused() {
     let fs = home(&NAMES);
     let journal = Journal::new();
     let mut browser = open(&fs, &journal);
@@ -981,6 +981,13 @@ fn an_undo_job_cannot_be_cancelled_or_paused() {
     let offer = journal.offer().unwrap();
     journal.book().gate = false;
     assert!(browser.undo_rename(offer));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while last_job(&browser).status == JobStatus::Queued {
+        assert!(Instant::now() < deadline, "undo did not start");
+        browser.poll();
+        std::thread::yield_now();
+    }
+    assert_eq!(last_job(&browser).status, JobStatus::Running);
     let id = last_job(&browser).id;
     assert!(!browser.cancel_job(id));
     assert!(!browser.pause_job(id));

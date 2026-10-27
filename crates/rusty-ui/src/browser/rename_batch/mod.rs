@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use rusty_core::{Location, OpKind, OperationPlan, Step, TabId};
 
+use super::Browser;
 use super::operate::{PendingOp, Run};
-use super::{Browser, JobStatus};
 
 mod hooks;
 mod run;
@@ -114,7 +114,7 @@ impl Browser {
     pub fn renaming(&self) -> bool {
         self.jobs
             .iter()
-            .any(|job| job.kind == OpKind::Rename && job.status == JobStatus::Running)
+            .any(|job| job.kind == OpKind::Rename && job.status.is_active())
     }
 
     pub(super) fn land_on(&mut self, tab: TabId, folder: &Location, name: String) {
@@ -134,6 +134,7 @@ impl Browser {
             retain_deletes: None,
             source_tab: self.state.active_tab().id(),
             undo: None,
+            slow_volumes: None,
         }
     }
 }

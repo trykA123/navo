@@ -68,19 +68,25 @@ impl ActivityItem {
     }
 
     fn job(job: &JobInfo) -> Self {
+        let (title, chip, detail) = if job.state == JobRowState::Queued {
+            let queued = rusty_l10n::tr("job-queued");
+            (job.heading(), queued.clone(), queued)
+        } else {
+            (
+                text::job_title(job),
+                text::job_chip(job),
+                text::job_detail(job),
+            )
+        };
         Self {
             op: Some(job.kind),
-            chip: text::job_chip(job).into(),
-            detail: Some(text::job_detail(job).into()),
-            progress: Some(job.fraction()),
-            paused: job.pause != Pause::Off,
-            can_pause: true,
+            chip: chip.into(),
+            detail: Some(detail.into()),
+            progress: (job.state == JobRowState::Running).then(|| job.fraction()),
+            paused: job.state == JobRowState::Running && job.pause != Pause::Off,
+            can_pause: job.state == JobRowState::Running,
             can_cancel: true,
-            ..Self::new(
-                ActivityId::Job(job.id),
-                ActivityKind::Job,
-                text::job_title(job),
-            )
+            ..Self::new(ActivityId::Job(job.id), ActivityKind::Job, title)
         }
     }
 
@@ -169,7 +175,7 @@ impl Activity {
             return;
         }
         let (item, life) = match &job.state {
-            JobRowState::Running => (ActivityItem::job(job), Life::Lasting),
+            JobRowState::Queued | JobRowState::Running => (ActivityItem::job(job), Life::Lasting),
             JobRowState::Done => {
                 self.note_batch(job);
                 (

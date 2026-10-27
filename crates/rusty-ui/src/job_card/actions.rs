@@ -68,6 +68,12 @@ fn render(job: &JobInfo, act: Act, is_compact: bool) -> AnyElement {
 
 pub(super) fn job_actions(job: &JobInfo, actions: &Actions) -> Vec<AnyElement> {
     let acts = match job.state {
+        JobRowState::Queued => vec![
+            actions
+                .cancel
+                .clone()
+                .map(|handler| Act::new("job-cancel", "Cancel", handler)),
+        ],
         JobRowState::Running => vec![
             pause_or_resume(job, actions),
             actions

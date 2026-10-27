@@ -22,3 +22,4 @@ job-delete-retained-help = Kept in Recently deleted for { $days ->
    *[other] { $days } days
 }
 job-retention-changed = This delete can no longer run as you confirmed it. Nothing was deleted. Check the retention settings, then delete again.
+job-queued = Queued

@@ -142,7 +142,7 @@ fn progress_bar(t: &Theme, job: &JobInfo) -> impl IntoElement {
         JobRowState::Done => t.colors.ok,
         JobRowState::Failed(_) => t.colors.warn,
         JobRowState::Cancelled => t.colors.faint,
-        JobRowState::Running => t.surfaces.progress_fill,
+        JobRowState::Queued | JobRowState::Running => t.surfaces.progress_fill,
     };
     div()
         .id(("job-bar", job.id))

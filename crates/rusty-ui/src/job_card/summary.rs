@@ -103,7 +103,7 @@ impl JobInfo {
         let verb = match self.state {
             JobRowState::Running => running,
             JobRowState::Done => done,
-            JobRowState::Failed(_) | JobRowState::Cancelled => name,
+            JobRowState::Queued | JobRowState::Failed(_) | JobRowState::Cancelled => name,
         };
         format!("{verb} {}", self.items_text())
     }
@@ -120,7 +120,7 @@ impl JobInfo {
     }
 
     pub fn is_running(&self) -> bool {
-        self.state == JobRowState::Running
+        matches!(self.state, JobRowState::Queued | JobRowState::Running)
     }
 
     pub fn fraction(&self) -> f32 {
@@ -151,11 +151,12 @@ impl JobInfo {
     }
 
     pub fn is_paused(&self) -> bool {
-        self.is_running() && self.pause == Pause::On
+        self.state == JobRowState::Running && self.pause == Pause::On
     }
 
     fn live_speed(&self) -> Option<u64> {
-        self.speed.filter(|_| self.pause == Pause::Off)
+        self.speed
+            .filter(|_| self.state == JobRowState::Running && self.pause == Pause::Off)
     }
 
     pub fn left(&self) -> Option<Duration> {
@@ -166,6 +167,7 @@ impl JobInfo {
 
     pub fn status_text(&self) -> String {
         match &self.state {
+            JobRowState::Queued => return tr("job-queued"),
             JobRowState::Running => {}
             JobRowState::Done => return "Done".to_owned(),
             JobRowState::Cancelled => return "Cancelled".to_owned(),

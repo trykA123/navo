@@ -194,7 +194,7 @@ impl FerriteWindow {
         let status = |id: u64| jobs.iter().find(|job| job.id == id).map(|job| &job.status);
         let (ended, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.clipboard.cuts)
             .into_iter()
-            .partition(|(id, _)| status(*id).is_some_and(|s| *s != JobStatus::Running));
+            .partition(|(id, _)| status(*id).is_some_and(|s| !s.is_active()));
         let done: Vec<ClipboardFiles> = ended
             .into_iter()
             .filter(|(id, _)| status(*id) == Some(&JobStatus::Done))

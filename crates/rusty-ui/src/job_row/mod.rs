@@ -19,6 +19,7 @@ type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobRowState {
+    Queued,
     Running,
     Done,
     Failed(SharedString),
@@ -61,6 +62,7 @@ impl JobRowProps {
 
     fn status_text(&self) -> String {
         match self.state {
+            JobRowState::Queued => rusty_l10n::tr("job-queued"),
             JobRowState::Running => self.percent_text(),
             JobRowState::Done => "Done".to_owned(),
             JobRowState::Failed(_) => "Failed".to_owned(),
@@ -109,7 +111,7 @@ impl JobRow {
 
 fn state_color(t: &Theme, state: &JobRowState) -> Hsla {
     match state {
-        JobRowState::Running => t.colors.accent,
+        JobRowState::Queued | JobRowState::Running => t.colors.accent,
         JobRowState::Done => t.colors.ok,
         JobRowState::Failed(_) => t.colors.warn,
         JobRowState::Cancelled => t.colors.faint,
@@ -188,7 +190,7 @@ fn lines(t: &Theme, props: &JobRowProps) -> Div {
 
 fn status(t: &Theme, props: &JobRowProps) -> impl IntoElement {
     let color = match props.state {
-        JobRowState::Running => t.colors.text,
+        JobRowState::Queued | JobRowState::Running => t.colors.text,
         JobRowState::Cancelled => t.colors.muted,
         _ => state_color(t, &props.state),
     };
@@ -203,7 +205,9 @@ fn status(t: &Theme, props: &JobRowProps) -> impl IntoElement {
 
 fn action(props: &JobRowProps, on_cancel: Option<Handler>, on_dismiss: Option<Handler>) -> Div {
     let button = match props.state {
-        JobRowState::Running => on_cancel.map(|handler| ("cancel", "Cancel", handler)),
+        JobRowState::Queued | JobRowState::Running => {
+            on_cancel.map(|handler| ("cancel", "Cancel", handler))
+        }
         JobRowState::Failed(_) => on_dismiss.map(|handler| ("dismiss", "Dismiss", handler)),
         JobRowState::Done | JobRowState::Cancelled => None,
     };

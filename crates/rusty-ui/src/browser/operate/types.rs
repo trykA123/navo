@@ -7,7 +7,10 @@ use rusty_fs::{
 
 use std::sync::Arc;
 
+use super::queue::SlowVolumes;
 use crate::browser::{RenameReport, UndoOffer};
+
+pub(super) type PlannedOp = (OperationPlan, Option<RetentionPolicy>, SlowVolumes);
 
 #[derive(Debug, Clone)]
 pub struct DropRequest {
@@ -116,6 +119,7 @@ pub struct PendingOp {
     pub retain_deletes: Option<RetentionPolicy>,
     pub(crate) source_tab: TabId,
     pub undo: Option<UndoOffer>,
+    pub(crate) slow_volumes: Option<SlowVolumes>,
 }
 
 impl PendingOp {
@@ -129,10 +133,18 @@ impl PendingOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobStatus {
+    Queued,
     Running,
     Done,
     Cancelled,
     Failed(String),
+}
+
+impl JobStatus {
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        matches!(self, Self::Queued | Self::Running)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -161,7 +173,11 @@ impl JobView {
 pub(in crate::browser) enum JobUpdate {
     Planned {
         request: OpRequest,
-        result: Result<(OperationPlan, Option<RetentionPolicy>), FsError>,
+        result: Result<PlannedOp, FsError>,
+    },
+    Classified {
+        id: u64,
+        volumes: SlowVolumes,
     },
     Progress {
         id: u64,

@@ -34,6 +34,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         retain_deletes: None,
         source_tab: AppState::new(at("/home")).active_tab().id(),
         undo: None,
+        slow_volumes: None,
     }
 }
 

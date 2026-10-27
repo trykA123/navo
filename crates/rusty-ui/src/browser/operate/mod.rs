@@ -1,8 +1,7 @@
-use rusty_core::retention::RetentionPolicy;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rusty_core::{Command, FsError, Location, OpKind, OperationPlan, ProviderPath};
+use rusty_core::{Command, FsError, Location, OpKind, ProviderPath};
 use rusty_fs::{
     CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, Progress, volume_of,
 };
@@ -10,13 +9,15 @@ use rusty_fs::{
 use super::{Browser, Message, RenameReport};
 
 mod paste;
+pub(in crate::browser) mod queue;
 mod types;
 mod work;
 
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
+pub use queue::SlowVolume;
 pub use types::*;
 pub(in crate::browser) use work::Run;
-use work::{JobWork, lands_inside, plan_for, start_progress};
+use work::{lands_inside, plan_for, start_progress};
 
 impl Browser {
     pub fn set_operations(&mut self, operations: Operations) {
@@ -49,7 +50,7 @@ impl Browser {
 
     #[must_use]
     pub fn running(&self) -> bool {
-        self.jobs.iter().any(|job| job.status == JobStatus::Running)
+        self.jobs.iter().any(|job| job.status.is_active())
     }
 
     pub fn prepare(&mut self, kind: OpKind) -> bool {
@@ -63,6 +64,7 @@ impl Browser {
         };
         self.pending = None;
         let retain_deletes = self.operations.retain_deletes.clone();
+        let slow = self.slow_volume();
         let (provider, sender, wake) = (
             Arc::clone(&self.provider),
             self.sender.clone(),
@@ -81,7 +83,14 @@ impl Browser {
                     let retained = (plan.kind == OpKind::Delete)
                         .then(|| retain_deletes.as_ref().and_then(|active| active()))
                         .flatten();
-                    (plan, retained)
+                    (
+                        plan,
+                        retained,
+                        queue::slow_volumes(
+                            request.sources.iter().chain(request.target.iter()),
+                            &slow,
+                        ),
+                    )
                 });
                 let _ = sender.send(Message::Job(JobUpdate::Planned { request, result }));
                 wake();
@@ -112,29 +121,36 @@ impl Browser {
         first_new: Option<String>,
     ) {
         self.jobs
-            .retain(|job| matches!(job.status, JobStatus::Running | JobStatus::Failed(_)));
+            .retain(|job| job.status.is_active() || matches!(job.status, JobStatus::Failed(_)));
         let cancel = CancelToken::new();
-        let mut view = JobView {
+        let view = JobView {
             id: pending.id,
             kind: pending.plan.kind,
             from: pending.sources.first().and_then(Location::parent),
             target: pending.target.clone(),
             sources: pending.sources.len(),
             progress: start_progress(&pending.plan),
-            status: JobStatus::Running,
+            status: JobStatus::Queued,
             cancel: cancel.clone(),
             source_tab: pending.source_tab,
             undo: matches!(run, Run::Undo { .. }),
             report: RenameReport::default(),
             first_new,
         };
-        if let Err(error) = self.spawn_job(pending, run, cancel) {
-            view.status = JobStatus::Failed(error);
-        }
         self.jobs.push(view);
+        self.enqueue_job(pending, run, cancel);
     }
 
     pub fn shutdown(&mut self, wait: Duration) -> bool {
+        let queued: Vec<_> = self
+            .jobs
+            .iter()
+            .filter(|job| job.status == JobStatus::Queued)
+            .map(|job| job.id)
+            .collect();
+        for id in queued {
+            self.cancel_queued(id);
+        }
         for job in &self.jobs {
             if job.status == JobStatus::Running {
                 job.cancel.cancel();
@@ -161,7 +177,7 @@ impl Browser {
     pub fn forget_jobs(&mut self, ids: &[u64]) -> bool {
         let before = self.jobs.len();
         self.jobs
-            .retain(|job| job.status == JobStatus::Running || !ids.contains(&job.id));
+            .retain(|job| job.status.is_active() || !ids.contains(&job.id));
         self.jobs.len() != before
     }
 
@@ -170,6 +186,10 @@ impl Browser {
     }
 
     pub fn cancel_job(&mut self, id: u64) -> bool {
+        if self.cancel_queued(id) {
+            self.start_queued();
+            return true;
+        }
         let Some(job) = self.jobs.iter().find(|job| job.id == id && !job.undo) else {
             return false;
         };
@@ -196,6 +216,7 @@ impl Browser {
     pub(super) fn accept_job(&mut self, update: JobUpdate) -> bool {
         match update {
             JobUpdate::Planned { request, result } => self.accept_plan(request, result),
+            JobUpdate::Classified { id, volumes } => self.accept_classified(id, volumes),
             JobUpdate::Progress { id, progress } => {
                 self.with_job(id, |job| job.progress = progress)
             }
@@ -271,10 +292,10 @@ impl Browser {
     fn accept_plan(
         &mut self,
         request: OpRequest,
-        result: Result<(OperationPlan, Option<RetentionPolicy>), FsError>,
+        result: Result<types::PlannedOp, FsError>,
     ) -> bool {
         match result {
-            Ok((plan, retain_deletes)) => {
+            Ok((plan, retain_deletes, slow_volumes)) => {
                 let pending = PendingOp {
                     id: request.id,
                     sources: request.sources,
@@ -283,6 +304,7 @@ impl Browser {
                     retain_deletes,
                     source_tab: request.source_tab,
                     undo: None,
+                    slow_volumes: Some(slow_volumes),
                 };
                 let asks = request.asks || pending.is_protected();
                 self.pending = Some(pending);
@@ -313,28 +335,6 @@ impl Browser {
             }),
         }
         true
-    }
-
-    fn spawn_job(&self, pending: PendingOp, run: Run, cancel: CancelToken) -> Result<(), String> {
-        let work = JobWork {
-            id: pending.id,
-            copying: self.copying,
-            source: pending.sources.first().cloned(),
-            target: pending.target,
-            plan: pending.plan,
-            ops: Arc::clone(&self.provider),
-            factory: Arc::clone(&self.operations.log),
-            retain_deletes: pending.retain_deletes,
-            run,
-            cancel,
-            sender: self.sender.clone(),
-            wake: Arc::clone(&self.wake),
-        };
-        std::thread::Builder::new()
-            .name("navo-job".to_owned())
-            .spawn(move || work.run())
-            .map(|_| ())
-            .map_err(|error| error.to_string())
     }
 
     fn with_job(&mut self, id: u64, change: impl FnOnce(&mut JobView)) -> bool {
@@ -382,6 +382,7 @@ impl Browser {
             let _ = self.command(&Command::SelectionClear);
         }
         self.relist_answering();
+        self.release_job(id);
         true
     }
 }

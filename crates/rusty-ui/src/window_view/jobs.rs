@@ -60,6 +60,7 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
         files_done: progress.files_done,
         files_total: progress.files_total,
         state: match &job.status {
+            JobStatus::Queued => JobRowState::Queued,
             JobStatus::Running => JobRowState::Running,
             JobStatus::Done => JobRowState::Done,
             JobStatus::Cancelled => JobRowState::Cancelled,
