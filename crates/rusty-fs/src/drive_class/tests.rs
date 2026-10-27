@@ -127,3 +127,15 @@ fn unc_path_is_network() {
         assert_eq!(drive_class(&location), DriveClass::Network);
     }
 }
+
+#[test]
+fn probing_does_not_hold_the_cache_lock() {
+    let cache = Mutex::new(HashMap::new());
+    let location = Location::new(r"D:\first").expect("valid test location");
+    let class = cached_class(&cache, volume_of(&location), |_| {
+        assert!(cache.try_lock().is_ok());
+        DriveClass::Hdd
+    });
+    assert_eq!(class, DriveClass::Hdd);
+    assert_eq!(cache.lock().unwrap().len(), 1);
+}

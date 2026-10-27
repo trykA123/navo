@@ -202,3 +202,23 @@ fn a_file_load_error_clears_loading_and_shows_the_error_state(cx: &mut TestAppCo
     )));
     assert!(rig.shows(cx, "preview-message"));
 }
+
+#[gpui_kit::test]
+fn a_crashed_file_load_shows_an_error_instead_of_loading(cx: &mut TestAppContext) {
+    let fs = Arc::new(FakeFs::new());
+    fs.add_file("home/crash.txt", 4);
+    let rig = open_on(
+        cx,
+        &fs,
+        fs.clone(),
+        FileHooks {
+            head: Arc::new(|_| panic!("the load crashed on purpose")),
+            ..FileHooks::none()
+        },
+    );
+    rig.open(cx);
+    assert!(rig.wait_until(cx, |view| matches!(
+        view.preview.shown(),
+        Some(Shown::File(file)) if file.message.is_some() && !file.is_loading()
+    )));
+}

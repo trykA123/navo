@@ -94,9 +94,9 @@ impl FerriteWindow {
             },
         );
         let task = cx.spawn_in(window, async move |this, cx| {
-            let Ok(opened) = receiver.await else {
-                return;
-            };
+            let opened = receiver
+                .await
+                .unwrap_or_else(|_| Err(rusty_l10n::tr("preview-load-failed")));
             let _ = this.update_in(cx, |view, window, cx| {
                 view.preview_opened(opened, window, cx)
             });

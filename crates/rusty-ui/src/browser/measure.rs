@@ -1,3 +1,4 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
 use rusty_core::{Location, ProviderPath, TabId};
@@ -9,7 +10,7 @@ pub(crate) struct Measured {
     pub(crate) tab: TabId,
     pub(crate) folder: Location,
     pub(crate) name: String,
-    pub(crate) bytes: u64,
+    pub(crate) bytes: Option<u64>,
 }
 
 pub(super) struct SizeWork {
@@ -75,7 +76,10 @@ impl Browser {
         self.pools.queue(JobKind::Size).submit_then(
             slot,
             move |cancel| {
-                let bytes = folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes);
+                let bytes = catch_unwind(AssertUnwindSafe(|| {
+                    folder_size(provider.as_ref(), &target, cancel).map_or(0, |s| s.bytes)
+                }))
+                .ok();
                 Measured {
                     tab,
                     folder,
@@ -105,10 +109,10 @@ impl Browser {
             .state
             .tab(measured.tab)
             .is_some_and(|tab| tab.location() == &measured.folder);
-        if !here {
+        let (true, Some(bytes)) = (here, measured.bytes) else {
             return false;
-        }
-        self.remember_size(measured.tab, &measured.name, measured.bytes);
+        };
+        self.remember_size(measured.tab, &measured.name, bytes);
         let Some(tab) = self.state.tab(measured.tab) else {
             return false;
         };
@@ -125,7 +129,7 @@ impl Browser {
         let Some(entry) = rows.get_mut(row) else {
             return false;
         };
-        entry.size = measured.bytes;
+        entry.size = bytes;
         self.details.insert(measured.tab, rows.into());
         true
     }

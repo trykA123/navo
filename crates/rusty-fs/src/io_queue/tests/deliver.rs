@@ -139,3 +139,32 @@ fn delivering_may_cancel_its_own_owner_without_a_deadlock() {
     );
     assert_eq!(rx.recv_timeout(WAIT), Ok(()));
 }
+
+#[test]
+fn delivering_on_one_queue_still_waits_for_another_queues_delivery() {
+    let (first, second) = (ssd_queue(), ssd_queue());
+    let (first_owner, second_owner) = (first.owner(), second.owner());
+    let delivered = Arc::new(AtomicBool::new(false));
+    let finished = Arc::clone(&delivered);
+    let (entered_tx, entered) = mpsc::channel();
+    second.submit_then(
+        slot(second_owner.id()),
+        |_| (),
+        move |()| {
+            entered_tx.send(()).unwrap();
+            std::thread::sleep(Duration::from_millis(100));
+            finished.store(true, Ordering::SeqCst);
+        },
+    );
+    entered.recv_timeout(WAIT).unwrap();
+    let (tx, rx) = mpsc::channel();
+    first.submit_then(
+        slot(first_owner.id()),
+        |_| (),
+        move |()| {
+            drop(second_owner);
+            tx.send(delivered.load(Ordering::SeqCst)).unwrap();
+        },
+    );
+    assert_eq!(rx.recv_timeout(WAIT), Ok(true));
+}

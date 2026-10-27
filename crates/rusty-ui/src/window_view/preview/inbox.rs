@@ -6,20 +6,17 @@ use rusty_structured::NodeId;
 
 use crate::browser::Waker;
 
+pub(super) struct ReadDone {
+    pub load: u64,
+    pub read: u64,
+    pub node: NodeId,
+    pub listed: Result<(Vec<FsEntry>, usize), String>,
+}
+
 pub(super) enum Arrival {
-    Read {
-        load: u64,
-        node: NodeId,
-        listed: Result<(Vec<FsEntry>, usize), String>,
-    },
-    Snapshot {
-        run: u64,
-        snapshot: LiveSnapshot,
-    },
-    Counted {
-        location: Location,
-        bytes: u64,
-    },
+    Read(ReadDone),
+    Snapshot { run: u64, snapshot: LiveSnapshot },
+    Counted { location: Location, bytes: u64 },
 }
 
 pub(super) struct Inbox {

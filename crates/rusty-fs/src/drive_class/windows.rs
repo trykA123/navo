@@ -17,7 +17,7 @@ use windows_sys::Win32::{
             PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceSeekPenaltyProperty,
             StorageDeviceTrimProperty,
         },
-        WindowsProgramming::{DRIVE_NO_ROOT_DIR, DRIVE_REMOTE, DRIVE_UNKNOWN},
+        WindowsProgramming::{DRIVE_NO_ROOT_DIR, DRIVE_REMOTE, DRIVE_REMOVABLE, DRIVE_UNKNOWN},
     },
 };
 
@@ -43,6 +43,7 @@ pub(super) fn probe(volume: &str) -> DriveClass {
     // SAFETY: root is a NUL-terminated drive root.
     match unsafe { GetDriveTypeW(root.as_ptr()) } {
         DRIVE_REMOTE => classify(true, None, None),
+        DRIVE_REMOVABLE => DriveClass::Removable,
         DRIVE_UNKNOWN | DRIVE_NO_ROOT_DIR => DriveClass::Unknown,
         _ => storage_class(volume),
     }

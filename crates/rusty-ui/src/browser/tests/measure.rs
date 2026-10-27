@@ -16,6 +16,10 @@ impl Walk {
         self.release.send(wait_cancelled).unwrap();
         self.observed.recv_timeout(WAIT).unwrap()
     }
+
+    fn crash(self) {
+        drop(self.release);
+    }
 }
 
 pub(super) fn gate_walk(cancel: &CancelToken, walks: &Sender<Walk>) {
@@ -28,8 +32,12 @@ pub(super) fn gate_walk(cancel: &CancelToken, walks: &Sender<Walk>) {
             observed: result,
         })
         .unwrap();
-    if gate.recv_timeout(WAIT).unwrap_or(false) {
-        let _ = cancel.wait_cancelled(WAIT);
+    match gate.recv_timeout(WAIT) {
+        Ok(true) => {
+            let _ = cancel.wait_cancelled(WAIT);
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => panic!("size walk crashed on purpose"),
+        Ok(false) | Err(mpsc::RecvTimeoutError::Timeout) => {}
     }
     let _ = observed.send(cancel.is_cancelled());
 }
@@ -168,4 +176,14 @@ fn tabs_measuring_at_once_do_not_cancel_each_other() {
     let tab = browser.state().active_tab().id();
     assert_eq!(browser.details(tab)[0].size, 7);
     assert!(!browser.loading());
+}
+
+#[test]
+fn a_crashed_size_walk_ends_the_spinner_and_shows_no_size() {
+    let (mut browser, _, started, _) = measuring();
+    started.recv_timeout(WAIT).unwrap().crash();
+    settle(&mut browser);
+    assert!(!browser.loading());
+    let tab = browser.state().active_tab().id();
+    assert_eq!(browser.details(tab)[0].size, 0);
 }

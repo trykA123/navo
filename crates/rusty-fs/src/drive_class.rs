@@ -17,6 +17,7 @@ pub enum DriveClass {
     Ssd,
     Hdd,
     Network,
+    Removable,
     Unknown,
 }
 
@@ -47,13 +48,20 @@ fn cached_class(
     volume: VolumeId,
     probe: impl FnOnce(&str) -> DriveClass,
 ) -> DriveClass {
-    let mut cache = cache.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(class) = cache.get(&volume) {
-        return *class;
+    let known = cache
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&volume)
+        .copied();
+    if let Some(class) = known {
+        return class;
     }
     let class = probe(volume.as_str());
-    cache.insert(volume, class);
-    class
+    *cache
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .entry(volume)
+        .or_insert(class)
 }
 
 #[cfg(any(windows, test))]

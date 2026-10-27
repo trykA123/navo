@@ -16,6 +16,7 @@ mod mode;
 mod pause;
 mod queue;
 mod retention;
+mod slow;
 
 fn fake() -> Arc<FakeFs> {
     let fs = FakeFs::new();

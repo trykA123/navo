@@ -4,6 +4,8 @@ mod scheduler;
 
 use rusty_core::Location;
 
+use crate::DriveClass;
+
 pub use pools::{JobKind, Pools};
 pub use runner::{Classifier, IoQueue, Job, JobSlot, OwnerGuard};
 pub use scheduler::{Cancelled, Scheduler};
@@ -28,6 +30,18 @@ impl VolumeKind {
     #[must_use]
     pub fn limit(self) -> usize {
         Limits::LISTING.limit(self)
+    }
+}
+
+impl From<DriveClass> for VolumeKind {
+    fn from(class: DriveClass) -> Self {
+        match class {
+            DriveClass::Ssd => Self::Ssd,
+            DriveClass::Hdd => Self::Hdd,
+            DriveClass::Network => Self::Network,
+            DriveClass::Removable => Self::Removable,
+            DriveClass::Unknown => Self::Unknown,
+        }
     }
 }
 

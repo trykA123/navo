@@ -10,7 +10,7 @@ use rusty_structured::NodeId;
 
 use super::contents::{CHILD_LIMIT, Contents};
 use super::follow::Target;
-use super::inbox::Arrival;
+use super::inbox::{Arrival, ReadDone};
 use super::marks::Marks;
 use super::scan::{Scan, Snapshots};
 use super::spot::{Restore, Spot};
@@ -22,6 +22,7 @@ use crate::settings::Field;
 use crate::window_view::FerriteWindow;
 
 struct Read {
+    id: u64,
     node: NodeId,
     _owner: OwnerGuard,
 }
@@ -81,6 +82,7 @@ impl Preview {
     fn read(&self, provider: Arc<dyn Provider>, request: ReadRequest) -> Read {
         let ReadRequest {
             load,
+            read,
             node,
             location,
             show_hidden,
@@ -107,12 +109,19 @@ impl Preview {
                         (entries, hidden)
                     })
                     .map_err(|error| error.message());
-                if send.send(Arrival::Read { load, node, listed }).is_ok() {
+                let arrival = Arrival::Read(ReadDone {
+                    load,
+                    read,
+                    node,
+                    listed,
+                });
+                if send.send(arrival).is_ok() {
                     wake();
                 }
             }),
         );
         Read {
+            id: read,
             node,
             _owner: owner,
         }
@@ -121,6 +130,7 @@ impl Preview {
 
 struct ReadRequest {
     load: u64,
+    read: u64,
     node: NodeId,
     location: Location,
     show_hidden: bool,
@@ -177,9 +187,10 @@ impl FerriteWindow {
         }
     }
 
-    fn read_folder(&self, load: u64, node: NodeId, location: Location) -> Read {
+    fn read_folder(&mut self, load: u64, node: NodeId, location: Location) -> Read {
         let request = ReadRequest {
             load,
+            read: self.preview.next_id(),
             node,
             location,
             show_hidden: self.values.show_hidden(),
@@ -191,7 +202,7 @@ impl FerriteWindow {
         let mut changed = false;
         for arrival in self.preview.inbox.take() {
             changed |= match arrival {
-                Arrival::Read { load, node, listed } => self.folder_read(load, node, listed),
+                Arrival::Read(done) => self.folder_read(done),
                 Arrival::Snapshot { run, snapshot } => self.profile_arrived(run, snapshot),
                 Arrival::Counted { location, bytes } => self.folder_counted(&location, bytes),
             };
@@ -199,12 +210,13 @@ impl FerriteWindow {
         changed
     }
 
-    fn folder_read(
-        &mut self,
-        load: u64,
-        node: NodeId,
-        listed: Result<(Vec<FsEntry>, usize), String>,
-    ) -> bool {
+    fn folder_read(&mut self, done: ReadDone) -> bool {
+        let ReadDone {
+            load,
+            read,
+            node,
+            listed,
+        } = done;
         let Some(folder) = self
             .preview
             .folder_mut()
@@ -212,7 +224,11 @@ impl FerriteWindow {
         else {
             return false;
         };
-        if !folder.reads.iter().any(|read| read.node == node) {
+        if !folder
+            .reads
+            .iter()
+            .any(|at| at.id == read && at.node == node)
+        {
             return false;
         }
         let deeper = folder.contents.attach(node, listed);
@@ -231,6 +247,9 @@ impl FerriteWindow {
             .map(|(node, location)| self.read_folder(load, node, location))
             .collect();
         if let Some(folder) = self.preview.folder_mut() {
+            folder
+                .reads
+                .retain(|old| reads.iter().all(|new| new.node != old.node));
             folder.reads.extend(reads);
         }
     }
@@ -282,7 +301,7 @@ impl FerriteWindow {
             tab: target.tab,
             folder: target.folder.clone(),
             name: target.name(),
-            bytes,
+            bytes: Some(bytes),
         });
     }
 
@@ -339,3 +358,6 @@ impl FerriteWindow {
         cx.notify();
     }
 }
+
+#[cfg(test)]
+mod tests;

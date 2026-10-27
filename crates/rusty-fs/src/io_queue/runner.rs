@@ -1,13 +1,14 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::ptr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 
 use super::{JobId, Limits, OwnerId, Priority, Scheduler, VolumeId, VolumeKind};
+use crate::drive_class;
 use crate::provider::CancelToken;
-use crate::{DriveClass, drive_class};
 
 pub type Job = Box<dyn FnOnce(&CancelToken) + Send + 'static>;
 pub type Classifier = Arc<dyn Fn(&VolumeId) -> VolumeKind + Send + Sync>;
@@ -47,7 +48,7 @@ pub struct OwnerGuard {
 }
 
 thread_local! {
-    static DELIVERING: Cell<bool> = const { Cell::new(false) };
+    static DELIVERING: Cell<*const Shared> = const { Cell::new(ptr::null()) };
 }
 
 impl Shared {
@@ -56,7 +57,7 @@ impl Shared {
     }
 
     fn delivery_gate(&self) -> Option<MutexGuard<'_, ()>> {
-        if DELIVERING.get() {
+        if ptr::eq(DELIVERING.get(), self) {
             return None;
         }
         Some(self.delivery.lock().unwrap_or_else(PoisonError::into_inner))
@@ -265,9 +266,9 @@ fn deliver_unless_cancelled<T>(
     if token.is_cancelled() {
         return;
     }
-    DELIVERING.set(true);
+    let outer = DELIVERING.replace(shared);
     let delivered = catch_unwind(AssertUnwindSafe(|| deliver(value)));
-    DELIVERING.set(false);
+    DELIVERING.set(outer);
     if let Err(panic) = delivered {
         std::panic::resume_unwind(panic);
     }
@@ -277,12 +278,7 @@ fn default_classifier(volume: &VolumeId) -> VolumeKind {
     let Some(root) = volume.root() else {
         return VolumeKind::Unknown;
     };
-    match drive_class(&root) {
-        DriveClass::Ssd => VolumeKind::Ssd,
-        DriveClass::Hdd => VolumeKind::Hdd,
-        DriveClass::Network => VolumeKind::Network,
-        DriveClass::Unknown => VolumeKind::Unknown,
-    }
+    VolumeKind::from(drive_class(&root))
 }
 
 impl Default for IoQueue {

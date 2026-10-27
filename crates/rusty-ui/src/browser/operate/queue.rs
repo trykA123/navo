@@ -35,8 +35,16 @@ impl Default for JobQueue {
     }
 }
 
-fn is_slow(location: &Location) -> bool {
-    location.is_local() && matches!(drive_class(location), DriveClass::Hdd | DriveClass::Unknown)
+pub(in crate::browser) fn is_slow(location: &Location) -> bool {
+    location.is_local() && slow_class(drive_class(location))
+}
+
+pub(in crate::browser) fn slow_class(class: DriveClass) -> bool {
+    match class {
+        DriveClass::Hdd | DriveClass::Removable => true,
+        DriveClass::Unknown => cfg!(windows),
+        DriveClass::Ssd | DriveClass::Network => false,
+    }
 }
 
 pub(super) fn slow_volumes<'a>(

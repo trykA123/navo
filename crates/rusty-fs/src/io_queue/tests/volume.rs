@@ -119,3 +119,11 @@ fn background_work_gets_one_worker_on_every_kind_of_drive() {
         assert_eq!(Limits::BACKGROUND.limit(kind), 1);
     }
 }
+
+#[test]
+fn a_removable_drive_gets_the_removable_limit() {
+    assert_eq!(
+        VolumeKind::from(crate::DriveClass::Removable),
+        VolumeKind::Removable
+    );
+}

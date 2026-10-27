@@ -37,10 +37,12 @@ impl From<&AutoTuning> for WorkerCounts {
 #[must_use]
 pub fn copy_workers(source: DriveClass, target: DriveClass, counts: WorkerCounts) -> usize {
     let sides = [source, target];
-    let count = if sides
-        .iter()
-        .any(|side| matches!(side, DriveClass::Hdd | DriveClass::Unknown))
-    {
+    let count = if sides.iter().any(|side| {
+        matches!(
+            side,
+            DriveClass::Hdd | DriveClass::Removable | DriveClass::Unknown
+        )
+    }) {
         counts.slow
     } else if sides.contains(&DriveClass::Network) {
         counts.network
