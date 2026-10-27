@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use super::{
     FrameSample, IndexSample, Latency, LatencySample, ProcessSample, Recording, SLOW_FRAME_MS,
-    Summary, VERY_SLOW_FRAME_MS, ms,
+    Summary, ThreadReport, TopThread, VERY_SLOW_FRAME_MS, ms,
 };
 use crate::Redactor;
 
@@ -86,6 +86,7 @@ struct Summaries {
     private_bytes: Option<Summary>,
     threads_max: Option<u32>,
     last_index: Option<IndexSample>,
+    top_threads: Vec<TopThread>,
 }
 
 #[derive(Debug, Serialize)]
@@ -121,6 +122,7 @@ pub struct PerfDocument {
     system: SystemFacts,
     summary: Summaries,
     dropped: Dropped,
+    threads: ThreadReport,
     samples: Samples,
 }
 
@@ -143,8 +145,18 @@ impl PerfDocument {
                 process: recording.process.dropped(),
                 index: recording.index.dropped(),
             },
+            threads: ThreadReport::default(),
             samples: samples(recording),
         }
+    }
+}
+
+impl PerfDocument {
+    #[must_use]
+    pub fn with_threads(mut self, threads: &ThreadReport, redactor: &Redactor) -> Self {
+        self.threads = threads.clone().redacted(redactor);
+        self.summary.top_threads = self.threads.top();
+        self
     }
 }
 
@@ -183,6 +195,7 @@ fn summaries(recording: &Recording) -> Summaries {
         private_bytes: Summary::of(process().filter_map(|p| p.private_bytes.map(wide))),
         threads_max: process().filter_map(|p| p.threads).max(),
         last_index: recording.index.iter().last().copied(),
+        top_threads: Vec::new(),
     }
 }
 

@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use rusty_diag::perf::{
-    FrameSample, GpuFacts, Latency, ProcessSample, Recording, SystemFacts, UiState,
+    FrameSample, GpuFacts, Latency, ProcessSample, Recording, SystemFacts, ThreadCpu, ThreadTime,
+    UiState,
 };
 use rusty_diag::{CacheRegistry, EventRing, Identity, Redactor, Salt};
 use rusty_ui::perf::PerfService;
@@ -48,7 +49,22 @@ fn reports(folder: &Path) -> PerfReports {
         folder: Some(folder.to_owned()),
         data: Some(folder.join("data")),
         last_cpu: Mutex::new(None),
+        threads: Mutex::new(seeded_threads()),
     }
+}
+
+fn seeded_threads() -> ThreadCpu {
+    let start = Instant::now();
+    let mut threads = ThreadCpu::default();
+    for (second, ms) in [(0, 0), (1, 700)] {
+        let sample = ThreadTime {
+            id: 7,
+            name: Some(format!("{FOLDER} reader")),
+            cpu: Duration::from_millis(ms),
+        };
+        threads.record(start + Duration::from_secs(second), &[sample]);
+    }
+    threads
 }
 
 fn seeded_recording() -> (Recording, SystemFacts) {
@@ -108,7 +124,17 @@ fn the_zip_on_the_desktop_holds_the_diag_report_and_perf_json() {
         "{name}"
     );
     let names: Vec<String> = entries(&zip).into_iter().map(|(name, _)| name).collect();
-    assert_eq!(names, ["report.json", "summary.txt", "perf.json"]);
+    assert_eq!(
+        names,
+        [
+            "report.json",
+            "summary.txt",
+            "perf.json",
+            "perf-threads.txt"
+        ]
+    );
+    let (_, text) = entries(&zip).pop().unwrap();
+    assert!(text.contains("(7): 700 ms total, peak 70.0 %"), "{text}");
 }
 
 #[test]

@@ -149,9 +149,11 @@ pub fn hooks(values: &Values) -> TerminalHooks {
             let mut child = command.spawn().map_err(|error| {
                 rusty_l10n::t!("terminal-spawn-error", error = error.to_string())
             })?;
-            std::thread::spawn(move || {
-                let _ = child.wait();
-            });
+            let _ = std::thread::Builder::new()
+                .name("navo-terminal-wait".to_owned())
+                .spawn(move || {
+                    let _ = child.wait();
+                });
             Ok(())
         }),
     }

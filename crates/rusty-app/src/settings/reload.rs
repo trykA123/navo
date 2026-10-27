@@ -51,12 +51,17 @@ pub(super) fn announce(delivery: &Mutex<Delivery>, changes: &[DefaultChange]) {
 
 pub(super) fn receive_late(receiver: Option<Receiver<Started>>, delivery: Arc<Mutex<Delivery>>) {
     let Some(receiver) = receiver else { return };
-    std::thread::spawn(move || {
-        if let Ok(started) = receiver.recv() {
-            deliver(&delivery);
-            announce(&delivery, &started.default_changes);
-        }
-    });
+    let spawned = std::thread::Builder::new()
+        .name("navo-settings-late".to_owned())
+        .spawn(move || {
+            if let Ok(started) = receiver.recv() {
+                deliver(&delivery);
+                announce(&delivery, &started.default_changes);
+            }
+        });
+    if let Err(error) = spawned {
+        tracing::warn!(%error, "late settings thread could not start");
+    }
 }
 
 pub struct Reloader {

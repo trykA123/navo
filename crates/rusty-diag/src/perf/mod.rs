@@ -6,11 +6,15 @@ mod document;
 mod latencies;
 mod ring;
 mod summary;
+mod threads;
 
 pub use document::{GpuFacts, MonitorFacts, PerfDocument, SystemFacts, perf_json};
 pub use latencies::Latencies;
 pub use ring::Ring;
 pub use summary::Summary;
+pub use threads::{
+    THREAD_CAP, ThreadCpu, ThreadReport, ThreadStat, ThreadTime, TopThread, threads_text,
+};
 
 pub const RECORD_FOR: Duration = Duration::from_secs(120);
 pub const SLOW_FRAME_MS: f32 = 16.7;
@@ -238,3 +242,5 @@ pub fn ms(duration: Duration) -> f32 {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod thread_tests;

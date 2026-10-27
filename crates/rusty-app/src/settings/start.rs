@@ -161,13 +161,18 @@ pub(super) fn spawn(
     let backup = SessionBackup::default();
     let shared = backup.clone();
     let (sender, receiver) = mpsc::channel();
-    std::thread::spawn(move || {
-        let started = work(shared);
-        let followed = started.default_changes.len();
-        if sender.send(started).is_err() {
-            tracing::info!(followed, "settings completion finished after the start");
-        }
-    });
+    let spawned = std::thread::Builder::new()
+        .name("navo-settings-start".to_owned())
+        .spawn(move || {
+            let started = work(shared);
+            let followed = started.default_changes.len();
+            if sender.send(started).is_err() {
+                tracing::info!(followed, "settings completion finished after the start");
+            }
+        });
+    if let Err(error) = spawned {
+        tracing::warn!(%error, "settings start thread could not start");
+    }
     Starting {
         receiver,
         file,
