@@ -143,6 +143,7 @@ fn valid_snapshot_restores_and_resumes_without_enumeration() {
             index.apply_batch(UsnBatch {
                 next_usn: 110,
                 records: vec![UsnRecord {
+                    size: None,
                     file_id: 9,
                     parent_id: 5,
                     usn: 101,
@@ -208,6 +209,7 @@ fn save_waits_for_quiet_and_never_saves_a_pending_rename_even_on_stop() {
         .apply_batch(UsnBatch {
             next_usn: 110,
             records: vec![UsnRecord {
+                size: None,
                 file_id: 5,
                 parent_id: 5,
                 usn: 101,
@@ -290,4 +292,14 @@ fn only_an_enabled_navo_service_covers_volumes_and_a_legacy_one_does_not() {
     assert_eq!(navo.unwrap(), Some(vec![r"C:\".to_owned()]));
     let disabled = super::service_volume_roots(|_| Ok(Some(false)), discover, &search);
     assert_eq!(disabled.unwrap(), None);
+}
+
+#[test]
+fn unknown_sizes_are_reported_once_per_volume_with_the_count() {
+    let mut errors = vec!["unrelated error".to_owned()];
+    super::lifecycle::report_unknown_sizes(&mut errors, 7);
+    super::lifecycle::report_unknown_sizes(&mut errors, 7);
+    assert_eq!(errors, ["unrelated error", "sizes unknown: 7"]);
+    super::lifecycle::report_unknown_sizes(&mut errors, 0);
+    assert_eq!(errors, ["unrelated error"]);
 }

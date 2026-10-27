@@ -136,6 +136,7 @@ mod windows;
 #[test]
 fn oversized_hits_drop_from_the_tail_using_the_wire_size() {
     let mut reply = super::Reply {
+        totals: None,
         hits: (1..=3)
             .map(|score| Hit {
                 path: "x".repeat(MAX_FRAME_BYTES / 2 - 16),
@@ -206,4 +207,88 @@ fn oversized_requests_return_empty_hits_and_an_error_without_running_the_handler
         &super::CancelToken::new(),
     );
     assert!(called.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+enum LegacyTerm {
+    Name(String),
+    Path(String),
+    Ext(Vec<String>),
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+struct LegacyRequest {
+    terms: Vec<LegacyTerm>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+struct LegacyQuery {
+    request: LegacyRequest,
+    generation: u64,
+}
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+enum LegacyResponse {
+    Hits {
+        generation: u64,
+        hits: Vec<super::Hit>,
+    },
+    Status {
+        generation: u64,
+        status: super::Status,
+    },
+}
+#[test]
+fn legacy_search_query_and_response_wire_bytes_are_unchanged() {
+    let old = LegacyQuery {
+        request: LegacyRequest {
+            terms: vec![
+                LegacyTerm::Name("notes".into()),
+                LegacyTerm::Path("C:".into()),
+                LegacyTerm::Ext(vec!["txt".into()]),
+            ],
+        },
+        generation: 7,
+    };
+    let bytes = frames::encode(&old).unwrap();
+    let decoded: Query = frames::decode(&bytes).unwrap();
+    assert_eq!(frames::encode(&decoded).unwrap(), bytes);
+    let new = [
+        Response::Hits {
+            generation: 7,
+            hits: Vec::new(),
+        },
+        Response::Status {
+            generation: 7,
+            status: super::Status::default(),
+        },
+    ];
+    for response in new {
+        let bytes = frames::encode(&response).unwrap();
+        let decoded: LegacyResponse = frames::decode(&bytes).unwrap();
+        assert_eq!(frames::encode(&decoded).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn totals_requests_reject_mixed_terms_large_batches_and_embedded_nuls() {
+    for terms in [
+        vec![
+            QueryTerm::FolderTotalsV1(vec!["C:".into()]),
+            QueryTerm::Name("x".into()),
+        ],
+        vec![QueryTerm::FolderTotalsV1(vec![String::new(); 65])],
+        vec![QueryTerm::FolderTotalsV1(vec![
+            "C:/".to_owned()
+                + &"a/".repeat(64);
+            64
+        ])],
+        vec![QueryTerm::FolderTotalsV1(vec!["C:\\bad\0path".into()])],
+    ] {
+        let called = std::sync::atomic::AtomicBool::new(false);
+        let handler = |_: &Request, _: &super::CancelToken| {
+            called.store(true, std::sync::atomic::Ordering::Relaxed);
+            super::Reply::default()
+        };
+        let reply = super::answer_request(&Request { terms }, &handler, &super::CancelToken::new());
+        assert!(!called.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!reply.status.volumes[0].errors.is_empty());
+    }
 }

@@ -121,6 +121,7 @@ fn an_updating_volume_without_hits_is_asked_again_and_then_shows_its_hits() {
             return Ok(super::reply());
         }
         Ok(Reply {
+            totals: None,
             hits: Vec::new(),
             status: Status {
                 volumes: vec![VolumeStatus {

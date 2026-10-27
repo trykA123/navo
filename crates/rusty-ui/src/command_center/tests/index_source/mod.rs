@@ -24,6 +24,7 @@ fn request(generation: u64) -> Request {
 
 fn reply() -> Reply {
     Reply {
+        totals: None,
         hits: vec![IndexHit {
             path: r"C:\Docs\budget.xlsx".into(),
             flags: Flags::NONE.bits(),

@@ -163,3 +163,92 @@ fn client_that_never_reads_is_disconnected_without_stopping_other_instances() {
 fn bad_frame_disconnects_only_its_client_and_accepts_again() {
     assert_client_failure_is_isolated(vec![1, 0, 0, 0, 255]);
 }
+
+#[test]
+fn totals_v1_round_trip_and_legacy_queries_share_a_session() {
+    use crate::pipe::{QueryTerm, Request};
+    let (pipe, listener) = fixture();
+    let client = connect(&listener);
+    let cancel = CancelToken::new();
+    let stopped = CancelToken::new();
+    let expected = totals_reply();
+    let handler = |request: &Request, _: &CancelToken| {
+        if request.folder_paths().is_some() {
+            Reply {
+                totals: Some(expected.clone()),
+                ..Reply::default()
+            }
+        } else {
+            Reply::default()
+        }
+    };
+    thread::scope(|scope| {
+        let _cancel = StopOnDrop(cancel.clone());
+        let worker = scope.spawn(|| serve_instance(&pipe, &handler, &cancel, &stopped));
+        send_query(
+            &client,
+            &Query {
+                request: Request {
+                    terms: vec![QueryTerm::FolderTotalsV1(vec![
+                        "C:\\folder".into(),
+                        "D:\\missing".into(),
+                    ])],
+                },
+                generation: 1,
+            },
+        );
+        let response: Response = receive_response(&client);
+        assert_eq!(
+            response,
+            Response::FolderTotalsV1 {
+                generation: 1,
+                reply: expected.clone()
+            }
+        );
+        send_query(&client, &super::query(2));
+        assert_legacy_reply(&client);
+        cancel.cancel();
+        worker.join().unwrap().unwrap();
+    });
+}
+
+fn send_query(client: &Client, query: &Query) {
+    client.queries.send(frames::encode(query).unwrap()).unwrap();
+}
+
+fn receive_response(client: &Client) -> Response {
+    frames::decode(
+        &client
+            .responses
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+fn totals_reply() -> crate::pipe::FolderTotalsReply {
+    use crate::pipe::{FolderTotals, FolderTotalsReply};
+    FolderTotalsReply {
+        totals: vec![
+            Some(FolderTotals {
+                bytes: 123,
+                files: 2,
+                folders: 1,
+                complete: false,
+            }),
+            None,
+        ],
+        busy: false,
+    }
+}
+
+fn assert_legacy_reply(client: &Client) {
+    for status in [false, true] {
+        let response: Response = receive_response(client);
+        assert!(match response {
+            Response::Hits { generation: 2, .. } => !status,
+            Response::Status { generation: 2, .. } => status,
+            _ => false,
+        });
+    }
+}

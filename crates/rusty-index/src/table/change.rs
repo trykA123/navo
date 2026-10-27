@@ -22,6 +22,10 @@ pub enum TableChange {
         file_id: u128,
         flags: Flags,
     },
+    Size {
+        file_id: u128,
+        bytes: u64,
+    },
     JournalReset,
 }
 
@@ -49,7 +53,7 @@ impl NameTable {
             } => {
                 let parent = self.resolve_parent(file_id, parent_id, ids)?;
                 let previous = ids.get(&file_id).copied().filter(|&id| self.is_live(id));
-                let id = self.upsert(previous, parent, &name)?;
+                let id = self.upsert(previous, parent, (&name, flags))?;
                 self.flags[id as usize] = flags.bits();
                 ids.insert(file_id, id);
             }
@@ -71,6 +75,10 @@ impl NameTable {
                 let id = self.resolve_file(file_id, ids)?;
                 self.flags[id as usize] = flags.bits();
             }
+            TableChange::Size { file_id, bytes } => {
+                let id = self.resolve_file(file_id, ids)?;
+                self.set_size(id, bytes)?;
+            }
             TableChange::JournalReset => {
                 *self = Self::new();
                 ids.clear();
@@ -83,13 +91,18 @@ impl NameTable {
         ids.retain(|_, id| self.is_live(*id));
     }
 
-    fn upsert(&mut self, id: Option<u32>, parent: u32, name: &str) -> Result<u32, TableError> {
+    fn upsert(
+        &mut self,
+        id: Option<u32>,
+        parent: u32,
+        (name, flags): (&str, Flags),
+    ) -> Result<u32, TableError> {
         match id {
             Some(id) => {
                 self.rename(id, parent, name)?;
                 Ok(id)
             }
-            None => self.push(parent, name, Flags::NONE),
+            None => self.push(parent, name, flags),
         }
     }
 

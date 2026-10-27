@@ -19,6 +19,7 @@ pub struct UsnRecord {
     pub reason: u32,
     pub flags: Flags,
     pub name: String,
+    pub size: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,11 +70,16 @@ impl UsnBatch {
         let mut old_ids = Vec::new();
         let aged = !self.records.is_empty();
         for record in self.records {
+            let size = record.size.map(|bytes| TableChange::Size {
+                file_id: record.file_id,
+                bytes,
+            });
             if record.reason & RENAME_OLD_NAME != 0 {
                 old_ids.push(record.file_id);
             }
             if let Some(change) = map_record(record, &mut pending) {
                 changes.push(change);
+                changes.extend(size);
             }
         }
         changes.extend(renames.settle(pending, &old_ids, aged));
@@ -244,6 +250,7 @@ fn parse_named_record(bytes: &[u8], version: u16) -> Result<UsnRecord, ParseErro
         reason: u32::from_le_bytes(read(bytes, reason_at)?),
         flags: attribute_flags(u32::from_le_bytes(read(bytes, reason_at + 12)?)),
         name: ProviderPath::from_wide(&units).to_text(),
+        size: None,
     })
 }
 

@@ -1,4 +1,10 @@
+mod folder_totals;
 mod service;
+#[cfg_attr(
+    not(test),
+    expect(unused_imports, reason = "IX8 backend API precedes UI integration")
+)]
+pub use folder_totals::folder_totals;
 
 mod index;
 

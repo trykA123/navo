@@ -34,6 +34,9 @@ impl SharedVolume {
 }
 
 pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &CancelToken) -> Reply {
+    if let Some(paths) = request.folder_paths() {
+        return super::totals::answer(volumes, paths);
+    }
     let deadline = Instant::now() + READ_WAIT;
     let mut reply = Reply::default();
     for volume in volumes {
@@ -79,7 +82,10 @@ fn search(
     status
 }
 
-fn read_before<T>(lock: &RwLock<T>, deadline: Instant) -> Option<RwLockReadGuard<'_, T>> {
+pub(super) fn read_before<T>(
+    lock: &RwLock<T>,
+    deadline: Instant,
+) -> Option<RwLockReadGuard<'_, T>> {
     loop {
         match lock.try_read() {
             Ok(guard) => return Some(guard),

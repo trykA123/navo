@@ -53,6 +53,7 @@ pub enum QueryTerm {
     Name(String),
     Path(String),
     Ext(Vec<String>),
+    FolderTotalsV1(Vec<String>),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,12 +90,37 @@ pub struct Status {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Response {
-    Hits { generation: u64, hits: Vec<Hit> },
-    Status { generation: u64, status: Status },
+    Hits {
+        generation: u64,
+        hits: Vec<Hit>,
+    },
+    Status {
+        generation: u64,
+        status: Status,
+    },
+    FolderTotalsV1 {
+        generation: u64,
+        reply: FolderTotalsReply,
+    },
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderTotals {
+    pub bytes: u64,
+    pub files: u32,
+    pub folders: u32,
+    pub complete: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderTotalsReply {
+    pub totals: Vec<Option<FolderTotals>>,
+    pub busy: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Reply {
+    pub totals: Option<FolderTotalsReply>,
     pub hits: Vec<Hit>,
     pub status: Status,
 }

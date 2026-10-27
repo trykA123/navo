@@ -54,7 +54,11 @@ impl Default for Incoming {
 
 impl Pipe {
     pub(super) fn connect(name: &str) -> Result<Self, PipeError> {
-        let pipe = Self::open(name)?;
+        Self::connect_before(name, Instant::now() + CONNECT_TIMEOUT)
+    }
+
+    pub(super) fn connect_before(name: &str, deadline: Instant) -> Result<Self, PipeError> {
+        let pipe = Self::open_before(name, deadline)?;
         pipe.verify_owner()?;
         Ok(pipe)
     }
@@ -68,9 +72,13 @@ impl Pipe {
         Self::open(name)
     }
 
+    #[cfg(test)]
     fn open(name: &str) -> Result<Self, PipeError> {
+        Self::open_before(name, Instant::now() + CONNECT_TIMEOUT)
+    }
+
+    fn open_before(name: &str, deadline: Instant) -> Result<Self, PipeError> {
         let name = wide(name);
-        let deadline = Instant::now() + CONNECT_TIMEOUT;
         loop {
             // SAFETY: name is NUL-terminated; optional pointers are NULL; the returned handle is uniquely owned.
             let handle = unsafe {

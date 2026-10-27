@@ -1,6 +1,8 @@
 mod change;
 mod children;
 mod flags;
+mod folder_lookup;
+mod totals;
 
 use std::ops::Range;
 
@@ -9,6 +11,8 @@ use crate::fuzzy::{Fuzzy, Match};
 pub use change::TableChange;
 use children::Children;
 pub use flags::Flags;
+pub use folder_lookup::{FolderLookup, FolderLookupExpired};
+pub use totals::Totals;
 
 pub const NO_PARENT: u32 = u32::MAX;
 const MAX_DEPTH: usize = 4096;
@@ -33,6 +37,8 @@ pub struct NameTable {
     parents: Vec<u32>,
     flags: Vec<u16>,
     children: Children,
+    bytes: Vec<u64>,
+    counts: Vec<(u32, [u32; 2])>,
     live: usize,
 }
 
@@ -52,6 +58,8 @@ impl NameTable {
             parents: Vec::with_capacity(entries),
             flags: Vec::with_capacity(entries),
             children: Children::with_capacity(entries),
+            bytes: Vec::with_capacity(entries),
+            counts: Vec::new(),
             live: 0,
         }
     }
@@ -74,6 +82,8 @@ impl NameTable {
             + self.parents.capacity() * size_of::<u32>()
             + self.flags.capacity() * size_of::<u16>()
             + self.children.memory_bytes()
+            + self.bytes.capacity() * size_of::<u64>()
+            + self.counts.capacity() * size_of::<(u32, [u32; 2])>()
     }
 
     pub fn shrink_to_fit(&mut self) {
@@ -82,6 +92,8 @@ impl NameTable {
         self.parents.shrink_to_fit();
         self.flags.shrink_to_fit();
         self.children.shrink_to_fit();
+        self.bytes.shrink_to_fit();
+        self.counts.shrink_to_fit();
     }
 
     pub(crate) fn raw_parts(&self) -> (&str, &[u32], &[u32], &[u16]) {
@@ -121,6 +133,8 @@ impl NameTable {
             .filter(|&&bits| bits & Flags::DELETED == 0)
             .count();
         let mut table = Self {
+            bytes: vec![0; offsets.len()],
+            counts: Vec::new(),
             names,
             offsets,
             parents,
@@ -132,6 +146,7 @@ impl NameTable {
             return None;
         }
         table.relink();
+        table.rebuild_totals();
         Some(table)
     }
 
@@ -193,8 +208,25 @@ impl NameTable {
         self.offsets.push(offset);
         self.parents.push(parent);
         self.flags.push(Flags::from_stored(flags.bits()).bits());
+        self.bytes.push(0);
+        if flags.contains(Flags::FOLDER) {
+            self.counts.push((id, [0; 2]));
+        }
         self.children.add(id, &self.parents);
         self.live += 1;
+        let mut descendants = Totals::default();
+        for child in self.children.of(id) {
+            let totals = self.contribution(child);
+            descendants.bytes += totals.bytes;
+            descendants.files += totals.files;
+            descendants.folders += totals.folders;
+        }
+        self.bytes[id as usize] = descendants.bytes;
+        if let Some(counts) = self.folder_counts_mut(id) {
+            *counts = [descendants.files, descendants.folders];
+        }
+        let contribution = self.contribution(id);
+        self.adjust_ancestors(parent, contribution, true);
         Ok(id)
     }
 
@@ -209,8 +241,11 @@ impl NameTable {
         if self.name(id) != Some(name) {
             self.offsets[id as usize] = self.append_name(name)?;
         }
+        let contribution = self.contribution(id);
+        self.adjust_ancestors(self.parents[id as usize], contribution, false);
         let from = std::mem::replace(&mut self.parents[id as usize], parent);
         self.children.reparent(id, from, parent);
+        self.adjust_ancestors(parent, contribution, true);
         Ok(())
     }
 
@@ -218,6 +253,7 @@ impl NameTable {
         if !self.is_live(id) {
             return 0;
         }
+        self.adjust_ancestors(self.parents[id as usize], self.contribution(id), false);
         self.children.detach(id, self.parents[id as usize]);
         let mut subtree = vec![id];
         let mut removed = 0;
@@ -256,6 +292,12 @@ impl NameTable {
             fresh.names.push(NAME_END);
             fresh.parents.push(parent);
             fresh.flags.push(self.flags[id as usize]);
+            fresh.bytes.push(self.bytes[id as usize]);
+            if self.flags[id as usize] & Flags::FOLDER.bits() != 0 {
+                fresh
+                    .counts
+                    .push((fresh.slots() - 1, self.folder_counts(id)));
+            }
         }
         fresh.live = next as usize;
         fresh.relink();
@@ -337,6 +379,10 @@ impl NameTable {
 
     fn mark_deleted(&mut self, id: u32) {
         self.flags[id as usize] |= Flags::DELETED;
+        self.bytes[id as usize] = 0;
+        if let Some(counts) = self.folder_counts_mut(id) {
+            *counts = [0; 2];
+        }
         self.live -= 1;
     }
 

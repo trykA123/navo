@@ -18,6 +18,10 @@ impl Pipe {
         Err(PipeError::NotAvailable)
     }
 
+    pub(super) fn connect_before(_name: &str, _deadline: Instant) -> Result<Self, PipeError> {
+        Err(PipeError::NotAvailable)
+    }
+
     pub(super) fn bind_instances(_name: &str, _sid: &str) -> Result<Vec<Self>, PipeError> {
         Err(PipeError::NotAvailable)
     }

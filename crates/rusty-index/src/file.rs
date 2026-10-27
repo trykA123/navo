@@ -3,7 +3,7 @@ use std::{fs::File, io::Read as _, path::Path};
 use crate::table::NameTable;
 use crate::usn::FrnMap;
 
-pub const FORMAT_VERSION: u16 = 2;
+pub const FORMAT_VERSION: u16 = 3;
 const MAGIC: &[u8; 16] = b"FERRITE-INDEX\0\0\0";
 const HEADER_LEN: usize = 70;
 const CHECKSUM_START: usize = HEADER_LEN - 4;
@@ -99,6 +99,14 @@ fn encode_table(bytes: &mut Vec<u8>, table: &NameTable) {
     for &flag in flags {
         bytes.extend_from_slice(&flag.to_le_bytes());
     }
+    let (sizes, counts) = table.stored_totals();
+    for &size in sizes {
+        bytes.extend_from_slice(&size.to_le_bytes());
+    }
+    for [files, folders] in counts {
+        bytes.extend_from_slice(&files.to_le_bytes());
+        bytes.extend_from_slice(&folders.to_le_bytes());
+    }
 }
 
 pub fn load(path: &Path) -> Result<(Header, NameTable), FileError> {
@@ -128,8 +136,18 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
     let offsets = read_values(&mut input, lengths.entries, u32::from_le_bytes)?;
     let parents = read_values(&mut input, lengths.entries, u32::from_le_bytes)?;
     let flags = read_values(&mut input, lengths.entries, u16::from_le_bytes)?;
-    let table = NameTable::from_raw_parts(names, offsets, parents, flags)
+    let sizes = read_values(&mut input, lengths.entries, u64::from_le_bytes)?;
+    let counts = read_values(&mut input, lengths.entries, |bytes: [u8; 8]| {
+        [
+            u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
+            u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+        ]
+    })?;
+    let mut table = NameTable::from_raw_parts(names, offsets, parents, flags)
         .ok_or(FileError::InvalidData("invalid name table"))?;
+    if !table.restore_totals(sizes, counts) {
+        return Err(FileError::InvalidData("invalid subtree totals"));
+    }
     validate_root(&header, &table)?;
     let ids = decode_ids(&mut input, lengths.references)?;
     validate_ids(&table, &ids)?;
@@ -196,7 +214,7 @@ impl Lengths {
         }
         let bytes = u64::from(self.root)
             + u64::from(self.names)
-            + u64::from(self.entries) * 10
+            + u64::from(self.entries) * 26
             + u64::from(self.references) * 20;
         usize::try_from(bytes).map_err(|_| FileError::BadLength)
     }

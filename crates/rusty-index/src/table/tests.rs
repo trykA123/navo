@@ -401,7 +401,13 @@ fn assert_budget(count: u32) {
     let t = synthetic(count);
     assert_eq!(t.len(), count as usize);
     let per_entry = t.memory_bytes() as f64 / t.len() as f64;
-    assert!(per_entry <= 50.0, "{per_entry} bytes per entry");
+    use std::io::Write as _;
+    writeln!(
+        std::io::stdout(),
+        "{count} entries: {per_entry:.6} bytes/entry"
+    )
+    .unwrap();
+    assert!(per_entry <= 54.0, "{per_entry} bytes per entry");
     let last = count - 1;
     assert!(
         t.path_with(last, '\\')

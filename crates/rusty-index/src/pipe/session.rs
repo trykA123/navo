@@ -164,20 +164,36 @@ fn send_replies(
                 reply,
             })
             .map_err(|_| PipeError::NotAvailable)?;
-        let Some(mut reply) = wait_for_reply(&answered, &cancel, session) else {
+        let Some(reply) = wait_for_reply(&answered, &cancel, session) else {
             continue;
         };
-        let hits = prepare_hits(query.generation, &mut reply)?;
-        let deadline = Instant::now() + QUERY_TIMEOUT;
-        pipe.write_response(&hits, deadline)?;
+        write_reply(pipe, query.generation, reply)?;
+    }
+    Ok(())
+}
+
+fn write_reply(pipe: &impl Transport, generation: u64, mut reply: Reply) -> Result<(), PipeError> {
+    let deadline = Instant::now() + QUERY_TIMEOUT;
+    if let Some(totals) = reply.totals {
         pipe.write_response(
-            &Response::Status {
-                generation: query.generation,
-                status: reply.status,
+            &Response::FolderTotalsV1 {
+                generation,
+                reply: totals,
             },
             deadline,
         )?;
+        return Ok(());
     }
+    let hits = prepare_hits(generation, &mut reply)?;
+    let deadline = Instant::now() + QUERY_TIMEOUT;
+    pipe.write_response(&hits, deadline)?;
+    pipe.write_response(
+        &Response::Status {
+            generation,
+            status: reply.status,
+        },
+        deadline,
+    )?;
     Ok(())
 }
 
@@ -211,6 +227,7 @@ pub(super) fn answer_request(
 
 fn error_reply(message: &str) -> Reply {
     Reply {
+        totals: None,
         hits: Vec::new(),
         status: Status {
             volumes: vec![VolumeStatus {

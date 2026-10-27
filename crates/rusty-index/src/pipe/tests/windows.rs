@@ -36,6 +36,7 @@ fn pipe_round_trip_returns_top_500_paths_flags_and_status_in_order() {
     let (mut server, mut client, _) = connection("round-trip");
     let stop = CancelToken::new();
     let handler = |_: &Request, _: &CancelToken| Reply {
+        totals: None,
         hits: (0..501)
             .map(|score| Hit {
                 path: format!(r"C:\work\file-{score}.rs"),
@@ -112,6 +113,7 @@ fn pipe_newer_generation_cancels_an_older_search_on_the_same_connection() {
             cancelled.send(()).unwrap();
         }
         Reply {
+            totals: None,
             hits: vec![Hit {
                 path: r"C:\new.rs".into(),
                 flags: 0,

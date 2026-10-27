@@ -56,6 +56,7 @@ mod tests {
 
     fn record(file_id: u128, parent_id: u128, reason: u32, name: &str) -> UsnRecord {
         UsnRecord {
+            size: None,
             file_id,
             parent_id,
             usn: 100,

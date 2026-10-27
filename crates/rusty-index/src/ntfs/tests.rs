@@ -11,6 +11,7 @@ const POSITION: JournalPosition = JournalPosition {
 
 fn record(file_id: u128, parent_id: u128, name: &str) -> UsnRecord {
     UsnRecord {
+        size: None,
         file_id,
         parent_id,
         usn: 90,
@@ -32,7 +33,14 @@ fn bytes(cursor: u64, records: &[UsnRecord]) -> Vec<u8> {
         wire[16..24].copy_from_slice(&(record.parent_id as u64).to_le_bytes());
         wire[24..32].copy_from_slice(&record.usn.to_le_bytes());
         wire[40..44].copy_from_slice(&record.reason.to_le_bytes());
-        wire[52..56].copy_from_slice(&0x10u32.to_le_bytes());
+        wire[52..56].copy_from_slice(
+            &(if record.flags.contains(Flags::FOLDER) {
+                0x10u32
+            } else {
+                0
+            })
+            .to_le_bytes(),
+        );
         wire[56..58].copy_from_slice(&((name.len() * 2) as u16).to_le_bytes());
         wire[58..60].copy_from_slice(&60u16.to_le_bytes());
         let (pairs, _) = wire[60..].as_chunks_mut::<2>();
@@ -61,6 +69,12 @@ struct FakeVolume {
     reads: Vec<JournalPosition>,
     read: Vec<u8>,
     read_error: Option<i32>,
+    sizes: HashMap<u128, u64>,
+    size_errors: HashMap<u128, Option<i32>>,
+    fallback_error: Option<i32>,
+    fallback_reads: Vec<u128>,
+    size_reads: Vec<u128>,
+    gone: std::collections::HashSet<u128>,
 }
 
 impl FakeVolume {
@@ -73,11 +87,46 @@ impl FakeVolume {
             reads: Vec::new(),
             read: bytes(120, &[]),
             read_error: None,
+            sizes: HashMap::new(),
+            size_errors: HashMap::new(),
+            fallback_error: None,
+            fallback_reads: Vec::new(),
+            size_reads: Vec::new(),
+            gone: std::collections::HashSet::new(),
         }
     }
 }
 
 impl VolumeIo for FakeVolume {
+    fn file_size(&mut self, file_id: u128) -> Result<u64, NtfsError> {
+        self.size_reads.push(file_id);
+        if self.gone.contains(&file_id) {
+            return Err(NtfsError::FileGone);
+        }
+        if let Some(code) = self.size_errors.get(&file_id) {
+            return Err(match code {
+                Some(code) => NtfsError::Io {
+                    operation: "fake size read",
+                    source: std::io::Error::from_raw_os_error(*code),
+                },
+                None => NtfsError::InvalidResponse("malformed file record"),
+            });
+        }
+        Ok(self.sizes.get(&file_id).copied().unwrap_or(file_id as u64))
+    }
+    fn current_file_size(&mut self, file_id: u128) -> Result<u64, NtfsError> {
+        self.fallback_reads.push(file_id);
+        if let Some(code) = self.fallback_error {
+            return Err(NtfsError::Io {
+                operation: "fake fallback",
+                source: std::io::Error::from_raw_os_error(code),
+            });
+        }
+        if self.size_errors.get(&file_id).is_some_and(Option::is_none) {
+            return Ok(self.sizes.get(&file_id).copied().unwrap_or(file_id as u64));
+        }
+        self.file_size(file_id)
+    }
     fn query_journal(&mut self) -> Result<Vec<u8>, NtfsError> {
         Ok(self.queries.pop_front().unwrap())
     }
@@ -654,4 +703,233 @@ fn a_journal_read_that_deletes_a_folder_drops_the_file_references_of_its_subtree
         .unwrap();
     assert!(files.iter().all(|file| !index.ids.contains_key(file)));
     assert!(index.ids.values().all(|&id| index.table.name(id).is_some()));
+}
+
+fn sized_index() -> (FakeVolume, NtfsIndex, UsnRecord) {
+    let mut file = record(20, 8, "file");
+    file.flags = Flags::NONE;
+    let mut volume = FakeVolume::new(vec![
+        Some(bytes(
+            100,
+            &[file.clone(), record(8, ROOT, "old"), record(9, ROOT, "new")],
+        )),
+        None,
+    ]);
+    volume.sizes.insert(20, 1000);
+    let index = enumerate_volume(
+        &mut volume,
+        'C',
+        usize::MAX,
+        &crate::pipe::CancelToken::new(),
+    )
+    .unwrap()
+    .index;
+    (volume, index, file)
+}
+
+#[test]
+fn mft_build_and_journal_events_keep_totals_current() {
+    let (mut volume, mut index, mut file) = sized_index();
+    volume.queries = vec![journal(7, 10, 200, 1); 5].into();
+    for (reason, size) in [(1, 20), (2, 2000), (4, 10)] {
+        let mut resized = file.clone();
+        resized.reason = reason;
+        volume.sizes.insert(20, size);
+        let next = index.position.next_usn + 10;
+        volume.read = bytes(next as u64, &[resized]);
+        let batch = read_volume_journal(&mut volume, index.position).unwrap();
+        index.apply_batch(batch).unwrap();
+        assert_eq!(index.table.totals(0).unwrap().bytes, size);
+    }
+    let mut moved = record(8, 9, "moved");
+    moved.reason = 0x2000;
+    let mut old = record(8, ROOT, "old");
+    old.reason = 0x1000;
+    index
+        .apply_batch(UsnBatch {
+            next_usn: 150,
+            records: vec![old, moved],
+        })
+        .unwrap();
+    assert_eq!(
+        index.table.totals(index.ids[&9]).unwrap(),
+        crate::table::Totals {
+            bytes: 10,
+            files: 1,
+            folders: 1
+        }
+    );
+    let mut created = file.clone();
+    created.file_id = 21;
+    created.reason = 0x100;
+    volume.sizes.insert(21, 50);
+    volume.read = bytes(160, &[created]);
+    let batch = read_volume_journal(&mut volume, index.position).unwrap();
+    index.apply_batch(batch).unwrap();
+    assert_eq!(index.table.totals(0).unwrap().bytes, 60);
+    file.reason = 0x200 | 7;
+    volume.read = bytes(170, &[file]);
+    let batch = read_volume_journal(&mut volume, index.position).unwrap();
+    index.apply_batch(batch).unwrap();
+    assert_eq!(index.table.totals(0).unwrap().bytes, 50);
+    assert_eq!(volume.size_reads, [20, 20, 20, 20, 21]);
+}
+
+#[test]
+fn mft_build_includes_file_sizes_in_folder_totals() {
+    let (_, index, _) = sized_index();
+    assert_eq!(
+        index.table.totals(0).unwrap(),
+        crate::table::Totals {
+            bytes: 1000,
+            files: 1,
+            folders: 2
+        }
+    );
+}
+
+#[test]
+fn files_deleted_during_size_reads_do_not_abort_build_or_journal_follow() {
+    let mut file = record(20, ROOT, "gone");
+    file.flags = Flags::NONE;
+    let mut volume = FakeVolume::new(vec![Some(bytes(100, &[file.clone()])), None]);
+    volume.gone.insert(20);
+    let built = enumerate_volume(
+        &mut volume,
+        'C',
+        usize::MAX,
+        &crate::pipe::CancelToken::new(),
+    )
+    .unwrap();
+    assert!(built.unresolved.is_empty());
+    assert_eq!(built.index.table.len(), 1);
+    file.reason = 0x100;
+    volume.queries.push_back(journal(7, 10, 110, 1));
+    volume.read = bytes(110, &[file]);
+    let batch = read_volume_journal(&mut volume, POSITION).unwrap();
+    assert!(matches!(
+        batch
+            .into_changes(&mut PendingRenames::default())
+            .as_slice(),
+        [TableChange::Remove { file_id: 20 }]
+    ));
+}
+
+#[test]
+fn a_journal_batch_reads_each_surviving_size_once_and_skips_deleted_files() {
+    let mut file = record(20, ROOT, "file");
+    file.flags = Flags::NONE;
+    file.reason = 1;
+    let mut deleted = file.clone();
+    deleted.file_id = 21;
+    let mut deletion = deleted.clone();
+    deletion.reason = 0x200;
+    let mut volume = FakeVolume::new(vec![]);
+    volume.gone.insert(21);
+    volume.read = bytes(110, &[file.clone(), file, deleted, deletion]);
+    let batch = read_volume_journal(&mut volume, POSITION).unwrap();
+    assert_eq!(volume.size_reads, [20]);
+    assert_eq!(batch.records[0].size, Some(20));
+    assert_eq!(batch.records[1].size, Some(20));
+}
+
+#[test]
+fn malformed_record_and_denied_fallback_do_not_stop_enumeration() {
+    let mut file = record(20, ROOT, "unknown");
+    file.flags = Flags::NONE;
+    let mut later = file.clone();
+    later.file_id = 21;
+    let mut volume = FakeVolume::new(vec![Some(bytes(100, &[file, later])), None]);
+    volume.size_errors.insert(20, None);
+    volume.fallback_error = Some(5);
+    let built = enumerate_volume(
+        &mut volume,
+        'C',
+        usize::MAX,
+        &crate::pipe::CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(built.index.table.len(), 3);
+    assert_eq!(built.index.table.size(built.index.ids[&20]), Some(0));
+    assert_eq!(built.index.table.size(built.index.ids[&21]), Some(21));
+    assert_eq!(volume.fallback_reads, [20]);
+    assert_eq!(built.sizes_unknown, 1);
+}
+
+#[test]
+fn per_file_journal_errors_keep_the_reason_and_finish_the_batch() {
+    for code in [5, 303, 1234] {
+        let mut file = record(20, ROOT, "unknown");
+        file.flags = Flags::NONE;
+        file.reason = 0x100;
+        let mut volume = FakeVolume::new(vec![]);
+        volume.size_errors.insert(20, Some(code));
+        volume.read = bytes(110, &[file.clone(), file]);
+        let batch = read_volume_journal(&mut volume, POSITION).unwrap();
+        assert!(
+            batch
+                .records
+                .iter()
+                .all(|record| record.size.is_none() && record.reason == 0x100)
+        );
+        assert_eq!(volume.size_reads, [20]);
+    }
+}
+
+#[test]
+fn per_file_io_errors_do_not_stop_enumeration() {
+    for code in [5, 303, 1234] {
+        let mut file = record(20, ROOT, "unknown");
+        file.flags = Flags::NONE;
+        let mut volume = FakeVolume::new(vec![Some(bytes(100, &[file])), None]);
+        volume.size_errors.insert(20, Some(code));
+        let built = enumerate_volume(
+            &mut volume,
+            'C',
+            usize::MAX,
+            &crate::pipe::CancelToken::new(),
+        )
+        .unwrap();
+        assert_eq!(built.index.table.size(built.index.ids[&20]), Some(0));
+        assert!(volume.fallback_reads.is_empty());
+        assert_eq!(built.sizes_unknown, 1);
+    }
+}
+
+#[test]
+fn missing_invalid_or_inaccessible_file_references_become_deletions() {
+    for code in [2, 3, 87, 1920] {
+        let mut file = record(20, ROOT, "gone");
+        file.flags = Flags::NONE;
+        file.reason = 0x100;
+        let mut volume = FakeVolume::new(vec![]);
+        volume.size_errors.insert(20, Some(code));
+        volume.read = bytes(110, &[file]);
+        let batch = read_volume_journal(&mut volume, POSITION).unwrap();
+        assert!(matches!(
+            batch
+                .into_changes(&mut PendingRenames::default())
+                .as_slice(),
+            [TableChange::Remove { file_id: 20 }]
+        ));
+    }
+}
+
+#[test]
+fn malformed_record_uses_the_current_file_size_when_available() {
+    let mut file = record(20, ROOT, "fallback");
+    file.flags = Flags::NONE;
+    let mut volume = FakeVolume::new(vec![Some(bytes(100, &[file])), None]);
+    volume.size_errors.insert(20, None);
+    volume.sizes.insert(20, 123);
+    let built = enumerate_volume(
+        &mut volume,
+        'C',
+        usize::MAX,
+        &crate::pipe::CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(built.index.table.size(built.index.ids[&20]), Some(123));
+    assert_eq!(volume.fallback_reads, [20]);
+    assert_eq!(built.sizes_unknown, 0);
 }

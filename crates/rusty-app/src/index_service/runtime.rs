@@ -12,7 +12,7 @@ use super::answer::{Shared, SharedVolume, State, answer};
 use super::config::{Drive, index_path, select_volumes};
 use super::lifecycle::{
     SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, clear_failures, guard_worker,
-    restore_or_enumerate,
+    report_unknown_sizes, restore_or_enumerate,
 };
 use super::policy::ServiceError;
 use super::search::SearchIndex;
@@ -238,6 +238,15 @@ impl Worker {
             }
         }
         let enumerated = volume.enumerate(cancel)?;
+        report_unknown_sizes(
+            &mut self
+                .shared
+                .write()
+                .unwrap_or_else(PoisonError::into_inner)
+                .status
+                .errors,
+            enumerated.sizes_unknown,
+        );
         if !enumerated.unresolved.is_empty() {
             self.error(format!("{UNRESOLVED}file references"));
         }

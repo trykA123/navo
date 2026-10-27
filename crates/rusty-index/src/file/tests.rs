@@ -463,3 +463,57 @@ fn two_million_entries_save_and_load() {
     assert_eq!(actual_header, header());
     assert_table_matches(&expected, &actual);
 }
+
+#[test]
+fn sizes_and_subtree_totals_round_trip_and_continue_updating() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("totals.index");
+    let mut expected = table();
+    expected.set_size(2, 1234567890123).unwrap();
+    expected.set_size(4, 20).unwrap();
+    save(&path, &header(), &expected).unwrap();
+    let (_, mut actual) = load(&path).unwrap();
+    for id in 0..expected.slots() {
+        assert_eq!(actual.size(id), expected.size(id));
+        assert_eq!(actual.totals(id), expected.totals(id));
+    }
+    actual.set_size(2, 5).unwrap();
+    assert_eq!(actual.totals(0).unwrap().bytes, 25);
+    actual.remove(4);
+    assert_eq!(actual.totals(0).unwrap().bytes, 5);
+}
+
+#[test]
+fn size_less_snapshots_require_reenumeration() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("old.index");
+    let mut bytes = write_fixture(&path);
+    bytes[16..18].copy_from_slice(&2u16.to_le_bytes());
+    repair_checksum(&mut bytes);
+    fs::write(&path, bytes).unwrap();
+    assert!(matches!(
+        load(&path),
+        Err(FileError::UnsupportedVersion {
+            found: 2,
+            supported: 3
+        })
+    ));
+}
+
+#[test]
+fn corrupted_totals_are_refused_even_with_a_valid_checksum() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("totals.index");
+    let mut bytes = write_fixture(&path);
+    let sizes = HEADER_LEN
+        + header().root.len()
+        + table().raw_parts().0.len()
+        + table().slots() as usize * 10;
+    bytes[sizes..sizes + 8].copy_from_slice(&1u64.to_le_bytes());
+    repair_checksum(&mut bytes);
+    fs::write(&path, bytes).unwrap();
+    assert!(matches!(
+        load(&path),
+        Err(FileError::InvalidData("invalid subtree totals"))
+    ));
+}

@@ -1,7 +1,13 @@
 use std::collections::{HashMap, VecDeque};
 use std::io;
 
+#[cfg(any(windows, test))]
+mod record_size;
 mod snapshot;
+#[cfg(any(windows, test))]
+mod volume_io;
+#[cfg(any(windows, test))]
+use volume_io::*;
 
 use crate::table::{Flags, NameTable, TableChange, TableError};
 use crate::usn::{FrnMap, JournalPosition, ParseError, PendingRenames, UsnBatch};
@@ -38,6 +44,8 @@ pub enum NtfsError {
     Table(#[from] TableError),
     #[error("the journal changed or wrapped; enumerate the volume again")]
     Reenumerate,
+    #[error("the file reference was deleted or reused")]
+    FileGone,
     #[error("NTFS enumeration cancelled")]
     Cancelled,
 }
@@ -60,6 +68,7 @@ pub struct UnresolvedChange {
 pub struct Enumeration {
     pub index: NtfsIndex,
     pub unresolved: Vec<UnresolvedChange>,
+    pub sizes_unknown: u64,
 }
 
 impl NtfsIndex {
@@ -100,124 +109,6 @@ impl NtfsIndex {
     }
 }
 
-#[cfg(any(windows, test))]
-trait VolumeIo {
-    fn query_journal(&mut self) -> Result<Vec<u8>, NtfsError>;
-    fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError>;
-    fn read_journal(&mut self, position: JournalPosition) -> Result<Vec<u8>, NtfsError>;
-}
-
-#[cfg(any(windows, test))]
-struct JournalState {
-    position: JournalPosition,
-    readable_from: i64,
-}
-
-#[cfg(any(windows, test))]
-impl JournalState {
-    fn parse(bytes: &[u8]) -> Result<Self, NtfsError> {
-        if bytes.len() < 56 {
-            return Err(NtfsError::InvalidResponse("truncated journal metadata"));
-        }
-        let journal_id = u64::from_le_bytes(field(bytes, 0)?);
-        let first = i64::from_le_bytes(field(bytes, 8)?);
-        let next_usn = i64::from_le_bytes(field(bytes, 16)?);
-        let lowest = i64::from_le_bytes(field(bytes, 24)?);
-        if first < 0 || lowest < 0 || next_usn < first.max(lowest) {
-            return Err(NtfsError::InvalidResponse("invalid journal bounds"));
-        }
-        Ok(Self {
-            position: JournalPosition {
-                journal_id,
-                next_usn,
-            },
-            readable_from: first.max(lowest),
-        })
-    }
-
-    fn check(&self, saved: JournalPosition) -> Result<(), NtfsError> {
-        if saved.resume(self.position.journal_id, self.readable_from) == Resume::Reenumerate
-            || saved.next_usn > self.position.next_usn
-        {
-            return Err(NtfsError::Reenumerate);
-        }
-        Ok(())
-    }
-}
-
-#[cfg(any(windows, test))]
-fn enumerate_volume(
-    volume: &mut impl VolumeIo,
-    drive: char,
-    limit: usize,
-    cancel: &crate::pipe::CancelToken,
-) -> Result<Enumeration, NtfsError> {
-    let state = JournalState::parse(&volume.query_journal()?)?;
-    let mut index = NtfsIndex::new(drive, state.position)?;
-    let mut pending = Pending::default();
-    let mut cursor = 0;
-    let mut count = 0;
-    while count < limit {
-        if cancel.is_cancelled() {
-            return Err(NtfsError::Cancelled);
-        }
-        let Some(bytes) = volume.enumerate(cursor)? else {
-            break;
-        };
-        let batch = parse_batch(&bytes)?;
-        let next = batch.next_usn.cast_unsigned();
-        if next <= cursor {
-            return Err(NtfsError::InvalidResponse(
-                "enumeration cursor did not advance",
-            ));
-        }
-        cursor = next;
-        for record in batch.records.into_iter().take(limit - count) {
-            count += 1;
-            pending.push(
-                &mut index,
-                TableChange::Add {
-                    file_id: record.file_id,
-                    parent_id: record.parent_id,
-                    name: record.name,
-                    flags: record.flags,
-                },
-            )?;
-        }
-    }
-    if cancel.is_cancelled() {
-        return Err(NtfsError::Cancelled);
-    }
-    JournalState::parse(&volume.query_journal()?)?.check(state.position)?;
-    Ok(Enumeration {
-        index,
-        unresolved: pending.finish(),
-    })
-}
-
-#[cfg(any(windows, test))]
-fn read_volume_journal(
-    volume: &mut impl VolumeIo,
-    saved: JournalPosition,
-) -> Result<UsnBatch, NtfsError> {
-    JournalState::parse(&volume.query_journal()?)?.check(saved)?;
-    let bytes = volume.read_journal(saved).map_err(journal_error)?;
-    let batch = parse_batch(&bytes)?;
-    validate_journal_cursor(&batch, saved)?;
-    Ok(batch)
-}
-
-#[cfg(any(windows, test))]
-fn journal_error(error: NtfsError) -> NtfsError {
-    const JOURNAL_ENTRY_DELETED: i32 = 1181;
-    match error {
-        NtfsError::Io { source, .. } if source.raw_os_error() == Some(JOURNAL_ENTRY_DELETED) => {
-            NtfsError::Reenumerate
-        }
-        other => other,
-    }
-}
-
 fn validate_journal_cursor(batch: &UsnBatch, saved: JournalPosition) -> Result<(), NtfsError> {
     if batch.next_usn < saved.next_usn
         || (batch.next_usn == saved.next_usn && !batch.records.is_empty())
@@ -225,42 +116,6 @@ fn validate_journal_cursor(batch: &UsnBatch, saved: JournalPosition) -> Result<(
         return Err(NtfsError::InvalidResponse("journal cursor did not advance"));
     }
     Ok(())
-}
-
-#[cfg(any(windows, test))]
-fn field<const N: usize>(bytes: &[u8], offset: usize) -> Result<[u8; N], NtfsError> {
-    bytes
-        .get(offset..)
-        .and_then(|tail| tail.get(..N))
-        .and_then(|value| value.try_into().ok())
-        .ok_or(NtfsError::InvalidResponse("truncated metadata field"))
-}
-
-#[cfg(any(windows, test))]
-fn volume_path(drive: char) -> Result<Vec<u16>, NtfsError> {
-    if !drive.is_ascii_alphabetic() {
-        return Err(NtfsError::InvalidVolume);
-    }
-    Ok(format!("\\\\.\\{}:\0", drive.to_ascii_uppercase())
-        .encode_utf16()
-        .collect())
-}
-
-#[cfg(any(windows, test))]
-fn enum_request(cursor: u64) -> Vec<u8> {
-    let mut bytes = vec![0; 24];
-    bytes[..8].copy_from_slice(&cursor.to_le_bytes());
-    bytes[16..24].copy_from_slice(&i64::MAX.to_le_bytes());
-    bytes
-}
-
-#[cfg(any(windows, test))]
-fn journal_request(position: JournalPosition) -> Vec<u8> {
-    let mut bytes = vec![0; 40];
-    bytes[..8].copy_from_slice(&position.next_usn.to_le_bytes());
-    bytes[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
-    bytes[32..40].copy_from_slice(&position.journal_id.to_le_bytes());
-    bytes
 }
 
 struct Blocked {
@@ -308,7 +163,10 @@ impl Pending {
                     self.wake(index, file_id, ready);
                 }
                 Err(TableError::UnknownFileReference(missing))
-                    if matches!(change, TableChange::Attributes { .. }) =>
+                    if matches!(
+                        change,
+                        TableChange::Attributes { .. } | TableChange::Size { .. }
+                    ) =>
                 {
                     self.reported.push(UnresolvedChange {
                         missing_reference: missing,
@@ -367,6 +225,7 @@ fn change_file_id(change: &TableChange) -> u128 {
     match change {
         TableChange::Add { file_id, .. }
         | TableChange::Rename { file_id, .. }
+        | TableChange::Size { file_id, .. }
         | TableChange::Remove { file_id }
         | TableChange::Attributes { file_id, .. } => *file_id,
         TableChange::JournalReset => ROOT_REFERENCE,

@@ -1,6 +1,7 @@
 mod cancel;
 pub mod frames;
 mod session;
+mod totals;
 #[cfg(not(windows))]
 mod unix;
 #[cfg(windows)]
@@ -42,13 +43,29 @@ pub enum PipeError {
     Io(#[from] std::io::Error),
 }
 
-pub use frames::{Hit, Query, QueryTerm, Reply, Request, Response, Status, VolumeStatus};
+pub use frames::{
+    FolderTotals, FolderTotalsReply, Hit, Query, QueryTerm, Reply, Request, Response, Status,
+    VolumeStatus,
+};
+
+pub use totals::folder_paths_within_limits;
 
 impl Request {
+    pub fn folder_paths(&self) -> Option<&[String]> {
+        match self.terms.as_slice() {
+            [QueryTerm::FolderTotalsV1(paths)] => Some(paths),
+            _ => None,
+        }
+    }
+
     fn within_limits(&self) -> bool {
+        if let Some(paths) = self.folder_paths() {
+            return folder_paths_within_limits(paths);
+        }
         self.terms.len() <= 64
             && self.terms.iter().all(|term| match term {
                 QueryTerm::Name(text) | QueryTerm::Path(text) => text.len() <= 1024,
+                QueryTerm::FolderTotalsV1(_) => false,
                 QueryTerm::Ext(extensions) => {
                     extensions.len() <= 1024
                         && extensions.iter().map(String::len).sum::<usize>()
@@ -61,10 +78,13 @@ impl Request {
     pub fn terms(&self) -> Vec<crate::search::Term<'_>> {
         self.terms
             .iter()
-            .map(|term| match term {
-                QueryTerm::Name(text) => crate::search::Term::Name(text),
-                QueryTerm::Path(text) => crate::search::Term::Path(text),
-                QueryTerm::Ext(extensions) => crate::search::Term::Ext(extensions),
+            .filter_map(|term| {
+                Some(match term {
+                    QueryTerm::Name(text) => crate::search::Term::Name(text),
+                    QueryTerm::Path(text) => crate::search::Term::Path(text),
+                    QueryTerm::Ext(extensions) => crate::search::Term::Ext(extensions),
+                    QueryTerm::FolderTotalsV1(_) => return None,
+                })
             })
             .collect()
     }
@@ -146,6 +166,7 @@ impl Client {
             }
         }
         Ok(Reply {
+            totals: None,
             hits: hits.unwrap_or_default(),
             status: status.unwrap_or_default(),
         })

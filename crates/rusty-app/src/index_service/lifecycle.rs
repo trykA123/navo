@@ -16,6 +16,14 @@ pub(super) fn clear_failures(errors: &mut Vec<String>, prefix: &str) {
     errors.retain(|message| !message.starts_with(prefix));
 }
 
+pub(super) fn report_unknown_sizes(errors: &mut Vec<String>, count: u64) {
+    const PREFIX: &str = "sizes unknown: ";
+    clear_failures(errors, PREFIX);
+    if count != 0 {
+        errors.push(format!("{PREFIX}{count}"));
+    }
+}
+
 pub(super) fn guard_worker(
     cancel: &CancelToken,
     report: impl FnOnce(String),
