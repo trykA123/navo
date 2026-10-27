@@ -336,6 +336,7 @@ space.region_below | down | SpaceStrip
 space.toggle_scale | alt-z | Space
 space.zoom_in | enter | SpaceStrip
 space.zoom_out | backspace | SpaceStrip
+space.zoom_out | backspace | SpaceTreemap
 tab.clone | ctrl-shift-up | NavoPane
 tab.close | ctrl-w | NavoPane
 tab.go_to_eighth | ctrl-8 | NavoPane

@@ -339,6 +339,7 @@ space.previous_item | up | SpaceTreemap
 space.next_item | right | SpaceTreemap
 space.next_item | down | SpaceTreemap
 space.pick_group | enter | SpaceTreemap
+space.zoom_out | backspace | SpaceTreemap
 [can_trace]
 trace.filter_by_id | enter | CanTrace
 trace.sort_ids | alt-s | CanTrace
