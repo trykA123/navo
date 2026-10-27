@@ -1,10 +1,12 @@
 mod convert;
+mod outline;
 mod rows;
 mod scan;
 
 use crate::DescriptionReport;
 use std::sync::Arc;
 
+pub use outline::{Links, links, outline};
 pub use rows::rows;
 pub use scan::index_a2l;
 pub const A2L_EXTENSIONS: [&str; 1] = ["a2l"];
