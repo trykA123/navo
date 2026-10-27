@@ -24,6 +24,10 @@ use super::win_list::{kind_of, modified_ms};
 use super::windows::file_attributes;
 use crate::{DetailAttributes, EntryKind, FileDetails};
 
+#[cfg(windows)]
+#[path = "win_security.rs"]
+mod security;
+
 pub(super) fn read(path: &Path) -> io::Result<FileDetails> {
     let data = read_attributes(path)?;
     let file = OpenOptions::new()
@@ -34,7 +38,7 @@ pub(super) fn read(path: &Path) -> io::Result<FileDetails> {
     let kind = kind_of(bits, reparse_tag(&file, bits)?);
     let attributes = file_attributes(bits);
     let is_file = kind == EntryKind::File;
-    Ok(FileDetails {
+    let mut details = FileDetails {
         kind,
         size: if is_file {
             (u64::from(data.nFileSizeHigh) << 32) | u64::from(data.nFileSizeLow)
@@ -58,7 +62,10 @@ pub(super) fn read(path: &Path) -> io::Result<FileDetails> {
         owner: None,
         acl: Vec::new(),
         inherited_from: None,
-    })
+        security_note: None,
+    };
+    security::read(path, &mut details);
+    Ok(details)
 }
 
 fn read_attributes(path: &Path) -> io::Result<WIN32_FILE_ATTRIBUTE_DATA> {

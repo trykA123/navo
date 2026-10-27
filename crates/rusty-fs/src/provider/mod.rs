@@ -62,6 +62,7 @@ pub struct FileDetails {
     pub owner: Option<String>,
     pub acl: Vec<AclRow>,
     pub inherited_from: Option<String>,
+    pub security_note: Option<String>,
 }
 
 impl From<FsEntry> for FileDetails {
@@ -82,6 +83,7 @@ impl From<FsEntry> for FileDetails {
             owner: None,
             acl: Vec::new(),
             inherited_from: None,
+            security_note: None,
         }
     }
 }

@@ -1,3 +1,11 @@
+#![cfg_attr(
+    target_os = "linux",
+    allow(
+        unsafe_code,
+        reason = "Linux account names require reentrant libc lookups"
+    )
+)]
+
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
 use std::io;
@@ -36,7 +44,142 @@ pub(super) fn details(path: &Path) -> io::Result<FileDetails> {
     details.on_disk = Some(metadata.blocks() * 512);
     details.created_ms = created_ms(path, &metadata);
     details.accessed_ms = timestamp_ms(metadata.accessed());
+    #[cfg(target_os = "linux")]
+    read_security(&mut details, &metadata);
     Ok(details)
+}
+
+#[cfg(target_os = "linux")]
+fn read_security(details: &mut FileDetails, metadata: &Metadata) {
+    let names = account_name(metadata.uid(), false)
+        .map_err(|error| security_note("Owner", error))
+        .and_then(|owner| {
+            account_name(metadata.gid(), true)
+                .map(|group| (owner, group))
+                .map_err(|error| security_note("Group", error))
+        });
+    let (owner, group) = match names {
+        Ok(names) => names,
+        Err(note) => {
+            details.security_note = Some(note);
+            return;
+        }
+    };
+    details.owner = Some(owner.clone());
+    details.acl = [owner, group, "Others".into()]
+        .into_iter()
+        .zip([6, 3, 0])
+        .map(|(who, shift)| {
+            let mode = metadata.mode() >> shift;
+            crate::AclRow {
+                who,
+                rights: [(4, 'r'), (2, 'w'), (1, 'x')]
+                    .map(|(bit, letter)| if mode & bit != 0 { letter } else { '-' })
+                    .into_iter()
+                    .collect(),
+            }
+        })
+        .collect();
+}
+
+#[cfg(target_os = "linux")]
+fn security_note(subject: &str, error: io::Error) -> String {
+    if error.kind() == io::ErrorKind::PermissionDenied {
+        "Access denied".into()
+    } else {
+        format!("{subject} lookup failed: {error}")
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[repr(C)]
+#[derive(Default)]
+struct Passwd {
+    name: *mut std::ffi::c_char,
+    password: *mut std::ffi::c_char,
+    uid: u32,
+    gid: u32,
+    gecos: *mut std::ffi::c_char,
+    directory: *mut std::ffi::c_char,
+    shell: *mut std::ffi::c_char,
+}
+
+#[cfg(target_os = "linux")]
+#[repr(C)]
+#[derive(Default)]
+struct Group {
+    name: *mut std::ffi::c_char,
+    password: *mut std::ffi::c_char,
+    gid: u32,
+    members: *mut *mut std::ffi::c_char,
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn getpwuid_r(
+        uid: u32,
+        record: *mut Passwd,
+        buffer: *mut std::ffi::c_char,
+        length: usize,
+        result: *mut *mut Passwd,
+    ) -> std::ffi::c_int;
+    fn getgrgid_r(
+        gid: u32,
+        record: *mut Group,
+        buffer: *mut std::ffi::c_char,
+        length: usize,
+        result: *mut *mut Group,
+    ) -> std::ffi::c_int;
+}
+
+#[cfg(target_os = "linux")]
+fn account_name(id: u32, is_group: bool) -> io::Result<String> {
+    let mut buffer = vec![0_u8; 1_024];
+    loop {
+        let (code, name) = if is_group {
+            let mut record = Group::default();
+            let mut result = std::ptr::null_mut();
+            // SAFETY: the Linux group layout and writable buffer match getgrgid_r's ABI.
+            let code = unsafe {
+                getgrgid_r(
+                    id,
+                    &raw mut record,
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len(),
+                    &raw mut result,
+                )
+            };
+            (code, (!result.is_null()).then_some(record.name))
+        } else {
+            let mut record = Passwd::default();
+            let mut result = std::ptr::null_mut();
+            // SAFETY: the Linux passwd layout and writable buffer match getpwuid_r's ABI.
+            let code = unsafe {
+                getpwuid_r(
+                    id,
+                    &raw mut record,
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len(),
+                    &raw mut result,
+                )
+            };
+            (code, (!result.is_null()).then_some(record.name))
+        };
+        if code == rustix::io::Errno::RANGE.raw_os_error() && buffer.len() < 1_048_576 {
+            buffer.resize(buffer.len() * 2, 0);
+            continue;
+        }
+        if code != 0 {
+            return Err(io::Error::from_raw_os_error(code));
+        }
+        let name = name
+            .filter(|name| !name.is_null())
+            .ok_or(io::ErrorKind::NotFound)?;
+        // SAFETY: a successful reentrant lookup returned a terminated name in the live buffer.
+        return Ok(unsafe { std::ffi::CStr::from_ptr(name) }
+            .to_string_lossy()
+            .into_owned());
+    }
 }
 
 fn timestamp_ms(time: io::Result<SystemTime>) -> Option<i64> {
