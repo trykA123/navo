@@ -10,6 +10,7 @@ use crate::{EntryBatch, EntryKind};
 
 #[cfg(windows)]
 mod copy_windows;
+mod details;
 mod errors;
 mod hostile;
 #[cfg(windows)]

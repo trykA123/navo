@@ -156,7 +156,7 @@ pub(super) fn kind_of(bits: u32, reparse_tag: u32) -> EntryKind {
     }
 }
 
-fn modified_ms(time: FILETIME) -> Option<i64> {
+pub(super) fn modified_ms(time: FILETIME) -> Option<i64> {
     let ticks = (i128::from(time.dwHighDateTime) << 32) | i128::from(time.dwLowDateTime);
     i64::try_from((ticks - UNIX_EPOCH_TICKS) / TICKS_PER_MS).ok()
 }

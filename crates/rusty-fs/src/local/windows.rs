@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use rusty_core::{FsErrorKind, ProviderPath};
 
 use super::verbatim::verbatim;
+pub(super) use super::win_details::read as details;
 pub(super) use super::win_replace::rename_new as rename_atomic;
 pub(super) use super::win_replace::{rename_new, replace};
 pub(super) use super::win_volume::volume_serial;

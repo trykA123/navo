@@ -29,6 +29,8 @@ mod verbatim;
 #[cfg(windows)]
 mod win_copy;
 #[cfg(windows)]
+mod win_details;
+#[cfg(windows)]
 mod win_list;
 #[cfg(windows)]
 mod win_lock;
@@ -217,6 +219,10 @@ impl Provider for LocalFs {
             None => entry(location.path().clone(), path.as_os_str(), &metadata),
         };
         Ok(followed(entry, &path))
+    }
+
+    fn details(&self, location: &Location) -> Result<crate::FileDetails, FsError> {
+        platform::details(&os_path(location)?).map_err(|e| io_error(&e, location))
     }
 
     #[cfg(any(windows, target_os = "linux"))]

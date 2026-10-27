@@ -36,6 +36,56 @@ pub struct FsEntry {
     pub attributes: Attributes,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DetailAttributes {
+    pub readonly: bool,
+    pub hidden: bool,
+    pub system: bool,
+    pub archive: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AclRow {
+    pub who: String,
+    pub rights: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileDetails {
+    pub kind: EntryKind,
+    pub size: u64,
+    pub on_disk: Option<u64>,
+    pub created_ms: Option<i64>,
+    pub modified_ms: Option<i64>,
+    pub accessed_ms: Option<i64>,
+    pub attributes: DetailAttributes,
+    pub owner: Option<String>,
+    pub acl: Vec<AclRow>,
+    pub inherited_from: Option<String>,
+}
+
+impl From<FsEntry> for FileDetails {
+    fn from(entry: FsEntry) -> Self {
+        Self {
+            kind: entry.kind,
+            size: entry.size,
+            on_disk: None,
+            created_ms: None,
+            modified_ms: entry.modified_ms,
+            accessed_ms: None,
+            attributes: DetailAttributes {
+                readonly: entry.attributes.readonly,
+                hidden: entry.attributes.hidden,
+                system: entry.attributes.system,
+                archive: false,
+            },
+            owner: None,
+            acl: Vec::new(),
+            inherited_from: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LinkKey(pub u128, pub u64);
 
@@ -104,6 +154,9 @@ pub trait Provider: Send + Sync {
         )
     }
     fn metadata(&self, location: &Location) -> Result<FsEntry, FsError>;
+    fn details(&self, location: &Location) -> Result<FileDetails, FsError> {
+        self.metadata(location).map(FileDetails::from)
+    }
     fn watch(&self, folder: &Location, _sink: WatchSink) -> Result<Watch, FsError> {
         Err(FsError {
             location: Some(folder.clone()),

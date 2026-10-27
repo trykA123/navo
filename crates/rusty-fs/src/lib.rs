@@ -46,8 +46,9 @@ pub use paged::{
 };
 pub use protection::check_mutation;
 pub use provider::{
-    Attributes, CancelToken, Capabilities, CopyControl, EntryBatch, EntryKind, FileIdentity,
-    FileIdentityKind, FsEntry, LinkKey, ListSink, OwnedCopy, Provider, ProviderOps, SizeEntry,
+    AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
+    EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, LinkKey, ListSink, OwnedCopy,
+    Provider, ProviderOps, SizeEntry,
 };
 pub use scan::{existing_at, scan};
 pub use snapshot::{FolderSnapshot, load_folder, load_folder_reporting};

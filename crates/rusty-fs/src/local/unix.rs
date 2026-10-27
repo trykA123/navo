@@ -5,10 +5,13 @@ use std::ops::ControlFlow;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
-use crate::{ALREADY_EXISTS_CODES, Attributes, CancelToken, FsEntry, LinkKey, SizeEntry};
+use crate::{
+    ALREADY_EXISTS_CODES, Attributes, CancelToken, FileDetails, FsEntry, LinkKey, SizeEntry,
+};
 
 const OWNER_WRITE: u32 = 0o200;
 
@@ -24,6 +27,50 @@ pub(super) fn os_path(path: &ProviderPath) -> Option<PathBuf> {
 
 pub(super) fn entry_name(name: &OsStr) -> ProviderPath {
     ProviderPath::from_bytes(name.as_bytes())
+}
+
+pub(super) fn details(path: &Path) -> io::Result<FileDetails> {
+    let metadata = fs::symlink_metadata(path)?;
+    let name = path.file_name().unwrap_or(path.as_os_str());
+    let mut details = FileDetails::from(super::entry(entry_name(name), name, &metadata));
+    details.on_disk = Some(metadata.blocks() * 512);
+    details.created_ms = created_ms(path, &metadata);
+    details.accessed_ms = timestamp_ms(metadata.accessed());
+    Ok(details)
+}
+
+fn timestamp_ms(time: io::Result<SystemTime>) -> Option<i64> {
+    match time.ok()?.duration_since(UNIX_EPOCH) {
+        Ok(after) => i64::try_from(after.as_millis()).ok(),
+        Err(before) => i64::try_from(before.duration().as_millis())
+            .ok()
+            .map(i64::wrapping_neg),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn created_ms(path: &Path, _metadata: &Metadata) -> Option<i64> {
+    use rustix::fs::{AtFlags, CWD, StatxFlags, statx};
+
+    let stat = statx(
+        CWD,
+        path,
+        AtFlags::SYMLINK_NOFOLLOW | AtFlags::NO_AUTOMOUNT,
+        StatxFlags::BTIME,
+    )
+    .ok()?;
+    if stat.stx_mask & StatxFlags::BTIME.bits() == 0 {
+        return None;
+    }
+    stat.stx_btime
+        .tv_sec
+        .checked_mul(1_000)?
+        .checked_add(i64::from(stat.stx_btime.tv_nsec / 1_000_000))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn created_ms(_path: &Path, metadata: &Metadata) -> Option<i64> {
+    timestamp_ms(metadata.created())
 }
 
 pub(super) fn list_sizes(
