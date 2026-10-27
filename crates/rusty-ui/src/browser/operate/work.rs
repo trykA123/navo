@@ -31,14 +31,7 @@ pub(super) fn lands_inside(target: &Location, folder: &Location, sources: &[Loca
 }
 
 pub(super) fn start_progress(plan: &OperationPlan) -> Progress {
-    Progress {
-        bytes_done: 0,
-        bytes_total: plan.totals.bytes,
-        files_done: 0,
-        files_total: plan.totals.files,
-        current: None,
-        paused: false,
-    }
+    Progress::start(plan)
 }
 
 pub(super) fn plan_for(

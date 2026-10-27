@@ -104,6 +104,28 @@ pub struct Progress {
     pub paused: bool,
 }
 
+impl Progress {
+    pub fn start(plan: &OperationPlan) -> Self {
+        Self {
+            bytes_done: 0,
+            bytes_total: run::moved_bytes(plan),
+            files_done: 0,
+            files_total: plan.totals.files,
+            current: None,
+            paused: false,
+        }
+    }
+
+    pub fn finished(plan: &OperationPlan) -> Self {
+        let start = Self::start(plan);
+        Self {
+            bytes_done: start.bytes_total,
+            files_done: start.files_total,
+            ..start
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobOutcome {
     Done,

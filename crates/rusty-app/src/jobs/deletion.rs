@@ -93,14 +93,7 @@ fn capture_all(
 }
 
 fn initial_progress(plan: &rusty_core::OperationPlan) -> Progress {
-    Progress {
-        bytes_done: 0,
-        bytes_total: plan.totals.bytes,
-        files_done: 0,
-        files_total: plan.totals.files,
-        current: None,
-        paused: false,
-    }
+    Progress::start(plan)
 }
 
 fn mark_steps(log: &mut JournalLog, operation: &mut LoggedOperation<'_>) -> Result<(), String> {
@@ -111,14 +104,7 @@ fn mark_steps(log: &mut JournalLog, operation: &mut LoggedOperation<'_>) -> Resu
         log.step(seq, StepOutcome::Done)
             .map_err(|error| format!("{error:?}"))?;
     }
-    (operation.progress)(&Progress {
-        bytes_done: operation.plan.totals.bytes,
-        bytes_total: operation.plan.totals.bytes,
-        files_done: operation.plan.totals.files,
-        files_total: operation.plan.totals.files,
-        current: None,
-        paused: false,
-    });
+    (operation.progress)(&Progress::finished(operation.plan));
     if operation.cancel.is_cancelled() {
         return Err("delete cancelled".to_owned());
     }

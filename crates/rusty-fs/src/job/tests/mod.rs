@@ -16,6 +16,7 @@ mod conflicts;
 mod copy;
 mod crash;
 mod crashing;
+mod delete;
 mod faults;
 mod journal;
 mod kept_aside;

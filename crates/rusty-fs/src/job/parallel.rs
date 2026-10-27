@@ -103,14 +103,7 @@ fn room_for(step: &Step, workers: usize) -> usize {
 impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
     fn new(job: Job<'p>, ctx: &'c mut JobContext<'a>, pool: Pool<'p>) -> Self {
         let plan = job.plan;
-        let progress = Progress {
-            bytes_done: 0,
-            bytes_total: plan.totals.bytes,
-            files_done: 0,
-            files_total: plan.totals.files,
-            current: None,
-            paused: false,
-        };
+        let progress = Progress::start(plan);
         Self {
             job,
             ctx,

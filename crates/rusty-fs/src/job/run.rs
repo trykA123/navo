@@ -27,6 +27,10 @@ pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
     }
 }
 
+pub(super) fn moved_bytes(plan: &OperationPlan) -> u64 {
+    plan.steps.iter().map(|step| counted(plan.kind, step).0).sum()
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct Job<'p> {
     pub plan: &'p OperationPlan,
@@ -51,14 +55,7 @@ pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) 
 
 fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
     let plan = job.plan;
-    let mut progress = Progress {
-        bytes_done: 0,
-        bytes_total: plan.totals.bytes,
-        files_done: 0,
-        files_total: plan.totals.files,
-        current: None,
-        paused: false,
-    };
+    let mut progress = Progress::start(plan);
     let mut kept = Vec::new();
     for (seq, step) in (0_u32..).zip(&plan.steps) {
         if done.contains(&seq) {
