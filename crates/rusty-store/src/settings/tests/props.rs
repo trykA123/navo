@@ -176,12 +176,19 @@ fn markdown_and_preview() -> impl Strategy<Value = (MarkdownViewer, PreviewViewe
     let markdown = any::<bool>().prop_map(|preview_split| MarkdownViewer {
         view: MarkdownView { preview_split },
     });
-    let preview = any::<[bool; 2]>().prop_map(|[type_bars, largest_files]| PreviewViewer {
-        view: PreviewView {
-            type_bars,
-            largest_files,
+    let preview = (any::<[bool; 4]>(), 280u16..=560).prop_map(
+        |([type_bars, largest_files, inspector, inspector_properties], inspector_width)| {
+            PreviewViewer {
+                inspector,
+                inspector_width,
+                inspector_properties,
+                view: PreviewView {
+                    type_bars,
+                    largest_files,
+                },
+            }
         },
-    });
+    );
     (markdown, preview)
 }
 
@@ -241,5 +248,34 @@ proptest! {
     fn settings_survive_to_toml_then_parse(settings in settings()) {
         let text = to_toml(&settings);
         prop_assert_eq!(parse(&text).unwrap(), (settings, Vec::new()));
+    }
+}
+
+#[test]
+fn inspector_defaults_are_used_when_keys_are_missing() {
+    for text in ["", "[preview.view]\ntype-bars = false\n"] {
+        let (settings, unknown) = parse(text).unwrap();
+        assert!(unknown.is_empty());
+        assert!(!settings.preview.inspector);
+        assert_eq!(settings.preview.inspector_width, 360);
+        assert!(settings.preview.inspector_properties);
+    }
+}
+
+#[test]
+fn inspector_width_is_clamped_when_parsed() {
+    for (width, expected) in [
+        (0, 280),
+        (279, 280),
+        (280, 280),
+        (420, 420),
+        (560, 560),
+        (561, 560),
+        (u16::MAX, 560),
+    ] {
+        let text = format!("[preview]\ninspector-width = {width}\n");
+        let (settings, unknown) = parse(&text).unwrap();
+        assert!(unknown.is_empty());
+        assert_eq!(settings.preview.inspector_width, expected);
     }
 }

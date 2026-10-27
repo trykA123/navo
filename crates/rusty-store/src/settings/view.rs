@@ -73,10 +73,29 @@ impl Default for MarkdownView {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct PreviewViewer {
+    pub inspector: bool,
+    #[serde(deserialize_with = "inspector_width")]
+    pub inspector_width: u16,
+    pub inspector_properties: bool,
     pub view: PreviewView,
+}
+
+impl Default for PreviewViewer {
+    fn default() -> Self {
+        Self {
+            inspector: false,
+            inspector_width: 360,
+            inspector_properties: true,
+            view: PreviewView::default(),
+        }
+    }
+}
+
+fn inspector_width<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u16, D::Error> {
+    Ok(u16::deserialize(deserializer)?.clamp(280, 560))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

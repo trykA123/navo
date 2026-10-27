@@ -62,6 +62,11 @@ details = false
 [markdown.view]
 preview-split = true
 
+[preview]
+inspector = false
+inspector-width = 360
+inspector-properties = true
+
 [preview.view]
 type-bars = true
 largest-files = true
