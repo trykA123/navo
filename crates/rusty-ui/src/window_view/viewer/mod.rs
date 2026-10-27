@@ -3,6 +3,7 @@ mod archive;
 mod background;
 mod body;
 mod cancel;
+mod description;
 mod editor;
 mod elf;
 mod encoding;

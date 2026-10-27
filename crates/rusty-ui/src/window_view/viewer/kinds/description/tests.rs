@@ -1,5 +1,7 @@
 use std::sync::atomic::AtomicBool;
 
+use rusty_automotive::dbc;
+
 use super::*;
 use crate::window_view::viewer::Kinds;
 
@@ -46,7 +48,11 @@ fn a_description_extension_without_matching_content_stays_text() {
     }
 }
 
-fn load_table(kind: &dyn ViewerKind, bytes: &[u8], cancel: bool) -> Result<TableFile, String> {
+fn load_description(
+    kind: &dyn ViewerKind,
+    bytes: &[u8],
+    cancel: bool,
+) -> Result<DescriptionFile, String> {
     let data = bytes.to_vec();
     let hooks = crate::window_view::viewer::FileHooks {
         range: std::sync::Arc::new(move |_, offset, len| {
@@ -63,40 +69,39 @@ fn load_table(kind: &dyn ViewerKind, bytes: &[u8], cancel: bool) -> Result<Table
     };
     let cancel = AtomicBool::new(cancel);
     let loaded = kind.load(Load::new(&hooks, &location, &sniff, &cancel))?;
-    Ok(*loaded.downcast::<TableFile>().expect("table file"))
+    Ok(*loaded
+        .downcast::<DescriptionFile>()
+        .expect("description file"))
 }
 
 #[test]
-fn dbc_load_flattens_message_and_indented_signal_with_headers() {
-    let file = load_table(&DbcKind, DBC, false).expect("DBC loads");
-    let TableLoad::Memory { table, .. } = file.load else {
-        panic!("in-memory table")
-    };
+fn dbc_load_keeps_the_model_and_builds_its_outline() {
+    let file = load_description(&DbcKind, DBC, false).expect("DBC loads");
     assert_eq!(file.len, DBC.len() as u64);
-    assert_eq!(table.header.len(), 16);
-    assert_eq!(table.columns, 16);
-    assert_eq!(table.rows.len(), 2);
-    assert_eq!(&table.rows[0][..4], ["Frame", "0x2A", "8", "Sender"]);
-    assert_eq!(table.rows[1][0], "  Speed");
-    assert!(table.rows.iter().all(|row| row.len() == table.header.len()));
+    let DescModel::Dbc(model) = file.model.as_ref() else {
+        panic!("DBC model")
+    };
+    assert_eq!(model.messages[0].name, "Frame");
+    assert_eq!(file.outline.as_ref(), &dbc::outline(model));
+    assert_eq!(file.outline.rows[2].label.as_ref(), "Speed");
 }
 
 #[test]
-fn a2l_load_flattens_group_and_indented_measurement_with_headers() {
-    let file = load_table(&A2lKind, A2L, false).expect("A2L loads");
-    let TableLoad::Memory { table, .. } = file.load else {
-        panic!("in-memory table")
+fn a2l_load_keeps_the_model_links_and_module_outline() {
+    let file = load_description(&A2lKind, A2L, false).expect("A2L loads");
+    assert_eq!(file.len, A2L.len() as u64);
+    let DescModel::A2l(model, links) = file.model.as_ref() else {
+        panic!("A2L model")
     };
-    assert_eq!(table.header.len(), 9);
-    assert_eq!(table.columns, 9);
-    assert_eq!(table.rows.len(), 2);
-    assert_eq!(table.rows[0][0], "Measurements (1)");
-    assert_eq!(&table.rows[1][..3], ["  Speed", "0x1234", "UWORD"]);
-    assert!(table.rows.iter().all(|row| row.len() == table.header.len()));
+    assert_eq!(model.measurements[0].name, "Speed");
+    assert!(links.missing.is_empty());
+    assert_eq!(links.users.len(), model.compu_methods.len());
+    assert_eq!(file.outline.as_ref(), &a2l::outline(model));
+    assert!(file.outline.rows[0].label.starts_with("Module Demo"));
 }
 
 #[test]
 fn cancelled_description_loads_decline() {
-    assert!(load_table(&DbcKind, DBC, true).is_err());
-    assert!(load_table(&A2lKind, A2L, true).is_err());
+    assert!(load_description(&DbcKind, DBC, true).is_err());
+    assert!(load_description(&A2lKind, A2L, true).is_err());
 }

@@ -196,6 +196,16 @@ pub(in crate::window_view) const AUTOMOTIVE_TABLE: PartSet = PartSet {
     right_drawer: None,
 };
 
+pub(in crate::window_view) const AUTOMOTIVE_OUTLINE: PartSet = PartSet {
+    preset: Some(Field::AutomotivePreset),
+    parts: &[Part {
+        field: Field::AutomotiveInspector,
+        action: || Box::new(ToggleOpensInspector),
+    }],
+    family: AUTOMOTIVE_FAMILY,
+    right_drawer: Some(Field::AutomotiveInspector),
+};
+
 fn preset_at(toml: &str) -> usize {
     PRESETS
         .iter()
