@@ -208,6 +208,7 @@ fn props(shows: Shows, rows: Vec<Row>, viewport: Bounds<Pixels>) -> CommandCente
             Indexing {
                 root: "C:".into(),
                 count: 12_345,
+                busy: false,
             }
             .text()
         }),

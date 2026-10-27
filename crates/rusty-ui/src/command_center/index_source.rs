@@ -17,7 +17,7 @@ use super::{Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target, 
 pub use metadata::IndexMetadata;
 use metadata::Shown;
 pub use options::{IndexMode, IndexOptions, drive_root};
-pub use pipe::PipeQueries;
+pub use pipe::{PipeAnswer, PipeQueries};
 
 pub type HostQuery = Arc<
     dyn Fn(&IndexOptions, &protocol::Query, &Cancel, Option<&protocol::Status>) -> Reply
@@ -58,11 +58,23 @@ impl IndexHooks {
 pub struct Indexing {
     pub root: SharedString,
     pub count: u64,
+    pub busy: bool,
 }
 
 impl Indexing {
+    fn busy() -> Self {
+        Self {
+            root: SharedString::default(),
+            count: 0,
+            busy: true,
+        }
+    }
+
     #[must_use]
     pub fn text(&self) -> SharedString {
+        if self.busy {
+            return rusty_l10n::t!("command-center-index-busy").into();
+        }
         rusty_l10n::t!(
             "command-center-indexing",
             root = self.root.to_string(),
@@ -107,7 +119,7 @@ impl IndexSource {
             .map_or(0.0, |(_, weight)| *weight)
     }
 
-    fn query(&self, request: &Request, cancel: &Cancel) -> Reply {
+    fn query(&self, request: &Request, cancel: &Cancel) -> Option<Reply> {
         let query = protocol::Query {
             generation: request.generation,
             request: protocol::Request {
@@ -123,17 +135,22 @@ impl IndexSource {
                     .collect(),
             },
         };
-        let reply = match self.options.mode {
+        let answer = match self.options.mode {
             IndexMode::Auto | IndexMode::Service => {
                 self.hooks
                     .pipe
                     .query(self.options.clone(), query.clone(), cancel)
             }
-            IndexMode::Walk | IndexMode::Off => None,
+            IndexMode::Walk | IndexMode::Off => PipeAnswer::Absent,
+        };
+        let reply = match answer {
+            PipeAnswer::Replied(reply) => Some(reply),
+            PipeAnswer::Silent if self.options.mode == IndexMode::Auto => return None,
+            PipeAnswer::Silent | PipeAnswer::Absent => None,
         };
         if cancel.is_cancelled() || !matches!(self.options.mode, IndexMode::Auto | IndexMode::Walk)
         {
-            return reply.unwrap_or_default();
+            return Some(reply.unwrap_or_default());
         }
         let walked = (self.hooks.host)(
             &self.options,
@@ -144,7 +161,7 @@ impl IndexSource {
         let mut reply = reply.unwrap_or_default();
         reply.hits.extend(walked.hits);
         reply.status.volumes.extend(walked.status.volumes);
-        reply
+        Some(reply)
     }
 
     fn hit(&self, found: protocol::Hit, words: &str) -> Option<Hit> {
@@ -174,7 +191,7 @@ impl IndexSource {
         })
     }
 
-    fn remember_note(&self, generation: u64, status: protocol::Status) {
+    fn remember_status(&self, generation: u64, status: protocol::Status) {
         let note = status
             .volumes
             .into_iter()
@@ -189,8 +206,13 @@ impl IndexSource {
                     }
                     .into(),
                     count: volume.entries,
+                    busy: false,
                 }
             });
+        self.remember_note(generation, note);
+    }
+
+    fn remember_note(&self, generation: u64, note: Option<Indexing>) {
         let mut seen = self.note.lock().unwrap_or_else(PoisonError::into_inner);
         if seen.as_ref().is_none_or(|(old, _)| *old <= generation) {
             *seen = Some((generation, note));
@@ -227,7 +249,11 @@ impl ResultSource for IndexSource {
         if cancel.is_cancelled() {
             return;
         }
-        self.remember_note(request.generation, reply.status);
+        let Some(reply) = reply else {
+            self.remember_note(request.generation, Some(Indexing::busy()));
+            return;
+        };
+        self.remember_status(request.generation, reply.status);
         let words = request
             .query
             .terms
@@ -261,7 +287,7 @@ impl ResultSource for IndexSource {
     }
 
     fn wait_for_more(&self, request: &Request, cancel: &Cancel) -> bool {
-        if self.indexing(request).is_none() {
+        if self.indexing(request).is_none_or(|note| note.busy) {
             return false;
         }
         for _ in 0..10 {

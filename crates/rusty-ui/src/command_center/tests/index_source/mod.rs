@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rusty_index::pipe::{Hit as IndexHit, PipeError, Reply, Status, VolumeStatus};
 use rusty_index::table::Flags;
 
+use crate::command_center::index_source::PipeQueries;
 use crate::command_center::{
     Cancel, Group, Hit, HitSink, IndexHooks, IndexMode, IndexOptions, IndexSource, Indexing, Query,
     RecentSource, Request, ResultSource, Results, Row, Scope, Target,
@@ -59,17 +60,31 @@ fn run(source: &IndexSource) -> Vec<Hit> {
 }
 
 #[test]
-fn auto_falls_back_when_the_pipe_is_absent_or_refuses() {
-    for error in [PipeError::NotAvailable, PipeError::InvalidResponse] {
+fn auto_walks_only_when_the_index_service_is_absent() {
+    let mut hooks = hooks();
+    hooks.pipe = PipeQueries::new(Arc::new(|_, _, _| Err(PipeError::NotAvailable)));
+    let hits = run(&source(IndexMode::Auto, hooks));
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].source, "index");
+}
+
+#[test]
+fn auto_never_walks_when_a_running_service_does_not_answer() {
+    for error in [
+        PipeError::TimedOut,
+        PipeError::InvalidResponse,
+        PipeError::Io(std::io::ErrorKind::BrokenPipe.into()),
+    ] {
         let error = std::sync::Mutex::new(Some(error));
         let mut hooks = hooks();
-        hooks.pipe =
-            crate::command_center::index_source::PipeQueries::new(Arc::new(move |_, _, _| {
-                Err(error.lock().unwrap().take().unwrap())
-            }));
-        let hits = run(&source(IndexMode::Auto, hooks));
-        assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].source, "index");
+        hooks.host = Arc::new(|_, _, _, _| panic!("a running service must not start the walk"));
+        hooks.pipe = PipeQueries::new(Arc::new(move |_, _, _| {
+            Err(error.lock().unwrap().take().unwrap())
+        }));
+        let source = source(IndexMode::Auto, hooks);
+        assert!(run(&source).is_empty());
+        assert!(source.indexing(&request(1)).is_some_and(|note| note.busy));
+        assert!(!source.wait_for_more(&request(1), &Cancel::new()));
     }
 }
 
@@ -174,7 +189,8 @@ fn indexing_note_uses_the_count_without_a_percentage() {
         note,
         Indexing {
             root: "C:".into(),
-            count: 12_345
+            count: 12_345,
+            busy: false,
         }
     );
     assert!(note.text().contains("12,345"));

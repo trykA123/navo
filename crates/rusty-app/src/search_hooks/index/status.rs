@@ -31,6 +31,7 @@ impl Hosts {
                     .to_owned()
                     .into(),
                 count: progress.entries as u64,
+                busy: false,
             })
         })
     }

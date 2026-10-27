@@ -42,6 +42,60 @@ impl Provider for Blocked {
     }
 }
 
+fn hosts(provider: Arc<dyn Provider>, dirs: Option<StoreDirs>) -> Hosts {
+    Hosts {
+        provider,
+        dirs,
+        options: None,
+        queue: Arc::new(IoQueue::new()),
+        roots: Vec::new(),
+        desired: Vec::new(),
+        exclude: Vec::new(),
+        configured: Configured::default(),
+        retirement: Retirements::new().unwrap(),
+    }
+}
+
+#[test]
+fn a_busy_or_slow_pipe_still_counts_as_a_running_service() {
+    assert!(service_running(&Err::<(), _>(pipe::PipeError::TimedOut)));
+    assert!(service_running(&Ok::<_, pipe::PipeError>(())));
+    assert!(!service_running(&Err::<(), _>(
+        pipe::PipeError::NotAvailable
+    )));
+}
+
+#[test]
+fn a_pipe_that_breaks_after_connecting_is_not_reported_as_absent() {
+    assert!(!matches!(
+        after_connect(pipe::PipeError::NotAvailable),
+        pipe::PipeError::NotAvailable
+    ));
+    assert!(matches!(
+        after_connect(pipe::PipeError::TimedOut),
+        pipe::PipeError::TimedOut
+    ));
+}
+
+#[test]
+fn the_status_hook_answers_while_a_walker_holds_the_hosts_lock() {
+    let shared = Arc::new(Mutex::new(hosts(Arc::new(FakeFs::new()), None)));
+    let status = status::hook(shared.clone());
+    let (locked, held) = mpsc::channel();
+    let (release, released) = mpsc::channel::<()>();
+    let holder = std::thread::spawn(move || {
+        let _guard = shared.lock().unwrap();
+        locked.send(()).unwrap();
+        let _ = released.recv_timeout(WAIT);
+    });
+    held.recv_timeout(WAIT).unwrap();
+    let started = std::time::Instant::now();
+    assert!(status().is_none());
+    assert!(started.elapsed() < Duration::from_millis(50));
+    release.send(()).unwrap();
+    holder.join().unwrap();
+}
+
 #[test]
 fn five_reconfigurations_share_one_retirement_worker_and_do_not_restart_a_pending_root() {
     let folder = tempfile::tempdir().unwrap();
@@ -55,17 +109,7 @@ fn five_reconfigurations_share_one_retirement_worker_and_do_not_restart_a_pendin
     });
     provider.fs.add_folder("tree");
     let root = provider.fs.location("tree");
-    let mut hosts = Hosts {
-        provider: provider.clone(),
-        dirs: Some(StoreDirs::in_profile(folder.path())),
-        options: None,
-        queue: Arc::new(IoQueue::new()),
-        roots: Vec::new(),
-        desired: Vec::new(),
-        exclude: Vec::new(),
-        configured: Configured::default(),
-        retirement: Retirements::new().unwrap(),
-    };
+    let mut hosts = hosts(provider.clone(), Some(StoreDirs::in_profile(folder.path())));
     let mut options = IndexOptions {
         mode: IndexMode::Walk,
         drives: vec![root.as_str().into()],

@@ -375,6 +375,7 @@ cmd-multi-rename-move-row-down = Move the row down
 cmd-multi-rename-toggle-row = Exclude or include the row
 
 command-center-indexing = Indexing { $root } · { $count } files
+command-center-index-busy = Index service is busy · type to try again
 
 cmd-files-open-terminal = Open terminal here
 terminal-local-only = A terminal opens only in a local folder.

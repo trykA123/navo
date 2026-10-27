@@ -599,6 +599,7 @@ fn indexing(count: u64) -> Indexing {
     Indexing {
         root: "C:".into(),
         count,
+        busy: false,
     }
 }
 

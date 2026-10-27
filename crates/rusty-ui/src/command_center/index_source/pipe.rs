@@ -10,6 +10,13 @@ pub type PipeQuery =
     Arc<dyn Fn(&IndexOptions, &pipe::Query, &Cancel) -> Result<Reply, PipeError> + Send + Sync>;
 const POLL: Duration = Duration::from_millis(5);
 
+#[derive(Debug)]
+pub enum PipeAnswer {
+    Replied(Reply),
+    Silent,
+    Absent,
+}
+
 #[derive(Clone)]
 pub struct PipeQueries {
     query: PipeQuery,
@@ -46,14 +53,14 @@ impl PipeQueries {
         options: IndexOptions,
         query: pipe::Query,
         cancel: &Cancel,
-    ) -> Option<Reply> {
+    ) -> PipeAnswer {
         let deadline = Instant::now() + pipe::CONNECT_TIMEOUT + pipe::QUERY_TIMEOUT;
         if cancel.is_cancelled() {
-            return None;
+            return PipeAnswer::Silent;
         }
         while self.busy.swap(true, Ordering::AcqRel) {
             if cancel.is_cancelled() || Instant::now() >= deadline {
-                return None;
+                return PipeAnswer::Silent;
             }
             std::thread::park_timeout(POLL);
         }
@@ -62,22 +69,27 @@ impl PipeQueries {
         let child = stopped.0.clone();
         let query_pipe = self.query.clone();
         let (sender, receiver) = mpsc::sync_channel(1);
-        std::thread::Builder::new()
+        let spawned = std::thread::Builder::new()
             .name("index-pipe-query".into())
             .spawn(move || {
                 let _running = running;
                 let _ = sender.send(query_pipe(&options, &query, &child));
-            })
-            .ok()?;
+            });
+        if spawned.is_err() {
+            return PipeAnswer::Silent;
+        }
         while !cancel.is_cancelled() && Instant::now() < deadline {
             match receiver
                 .recv_timeout(POLL.min(deadline.saturating_duration_since(Instant::now())))
             {
-                Ok(reply) => return reply.ok(),
-                Err(mpsc::RecvTimeoutError::Disconnected) => return None,
+                Ok(Ok(reply)) => return PipeAnswer::Replied(reply),
+                Ok(Err(PipeError::NotAvailable)) => return PipeAnswer::Absent,
+                Ok(Err(_)) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return PipeAnswer::Silent;
+                }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
         }
-        None
+        PipeAnswer::Silent
     }
 }

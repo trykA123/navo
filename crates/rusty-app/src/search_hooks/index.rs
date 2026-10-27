@@ -69,7 +69,7 @@ pub fn hooks(
     IndexHooks {
         start: Arc::new(move |options| {
             let service_ready = matches!(options.mode, IndexMode::Auto | IndexMode::Service)
-                && pipe::Client::connect().is_ok();
+                && service_running(&pipe::Client::connect());
             let mut hosts = start.lock().unwrap_or_else(PoisonError::into_inner);
             hosts.configured.reset();
             if service_ready {
@@ -116,13 +116,26 @@ fn query_pipe(
     if cancel.is_cancelled() {
         return Err(pipe::PipeError::Cancelled);
     }
-    client.send_query(query)?;
-    let mut reply = client.receive(&|| cancel.is_cancelled())?;
+    client.send_query(query).map_err(after_connect)?;
+    let mut reply = client
+        .receive(&|| cancel.is_cancelled())
+        .map_err(after_connect)?;
     let available = rusty_shell::list_drives();
     reply.hits.retain(|hit| {
         Location::new(&hit.path).is_ok_and(|path| is_allowed(options, &path, &available))
     });
     Ok(reply)
+}
+
+fn service_running<T>(connected: &Result<T, pipe::PipeError>) -> bool {
+    !matches!(connected, Err(pipe::PipeError::NotAvailable))
+}
+
+fn after_connect(error: pipe::PipeError) -> pipe::PipeError {
+    match error {
+        pipe::PipeError::NotAvailable => pipe::PipeError::Io(std::io::ErrorKind::BrokenPipe.into()),
+        error => error,
+    }
 }
 
 impl Hosts {

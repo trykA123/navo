@@ -8,11 +8,12 @@ use crate::command_center::index_source::PipeQueries;
 use crate::command_center::{Cancel, HitSink, IndexMode, ResultSource};
 
 #[test]
-fn a_hung_pipe_expires_and_auto_returns_host_rows() {
+fn a_hung_pipe_expires_and_auto_returns_no_rows_without_walking() {
     let (entered, started) = mpsc::channel();
     let gate = Arc::new((Mutex::new(false), Condvar::new()));
     let held = gate.clone();
     let mut hooks = hooks();
+    hooks.host = Arc::new(|_, _, _, _| panic!("a hung service must not start the walk"));
     hooks.pipe = PipeQueries::new(Arc::new(move |_, _, _| {
         entered.send(()).unwrap();
         let (lock, wake) = &*held;
@@ -30,7 +31,7 @@ fn a_hung_pipe_expires_and_auto_returns_host_rows() {
     let hits = received.recv_timeout(Duration::from_secs(2));
     *gate.0.lock().unwrap() = true;
     gate.1.notify_all();
-    assert_eq!(hits.unwrap().len(), 1);
+    assert!(hits.unwrap().is_empty());
 }
 
 #[test]
