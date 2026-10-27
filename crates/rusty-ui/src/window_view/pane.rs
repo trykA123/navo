@@ -11,11 +11,10 @@ use super::keys::{
     BrowsePreview, DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit,
     ShowHiddenPath, ShowHiddenTabs,
 };
+use super::list_columns::{column_keys, list_parts, user_widths};
 use super::status::status_of;
 use crate::FocusHandle;
-use crate::file_list::{
-    ClearFilter, FileList, FileListAction, FileListProps, FilterEdit, ListParts,
-};
+use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
 use crate::pane_chrome::{PaneTabs, PathBar, card_header, pane_card, path_segments};
 use crate::prelude::*;
 use crate::settings::WindowParts;
@@ -39,15 +38,6 @@ fn error_line(t: &tokens::Theme, pane: PaneId, message: SharedString) -> impl In
         .py(t.spacing.sm)
         .text_color(t.colors.mark)
         .child(message)
-}
-
-fn list_parts(parts: WindowParts) -> ListParts {
-    ListParts {
-        ext: parts.ext_column,
-        size: parts.size_column,
-        date: parts.date_column,
-        icons: parts.icons,
-    }
 }
 
 fn footer_parts(parts: WindowParts) -> FooterParts {
@@ -106,6 +96,7 @@ impl FerriteWindow {
             Some(waited) => Self::waiting_view(&waited, &focus, cx),
             None => Self::file_list(pane, props, &focus, cx)
                 .parts(list_parts(parts))
+                .column_widths(user_widths(&self.values))
                 .remember_width(chrome.list_width)
                 .lift_above(cover)
                 .into_any_element(),
@@ -218,7 +209,7 @@ impl FerriteWindow {
     }
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
-        super::tab_keys::tab_keys(root, cx)
+        column_keys(super::tab_keys::tab_keys(root, cx), cx)
             .on_action(
                 cx.listener(|this: &mut Self, _: &super::keys::OpenTerminal, _, cx| {
                     this.open_terminal();
@@ -337,6 +328,9 @@ impl FerriteWindow {
             FileListAction::View(row) => return self.view_or_preview(*row, window, cx),
             FileListAction::Sort(by) => {
                 self.browser.sort_by(*by);
+            }
+            FileListAction::ResizeColumn { by, width } => {
+                self.resize_column((*by, *width), window, cx)
             }
             FileListAction::ContextMenu { .. }
             | FileListAction::BackgroundMenu { .. }

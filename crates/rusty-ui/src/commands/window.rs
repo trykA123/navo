@@ -1,4 +1,5 @@
 mod notice;
+mod waiting;
 
 use super::Group;
 use super::contexts::GLOBAL;
@@ -147,24 +148,15 @@ pub(super) const GROUPS: [Group; 8] = [
                 "files.open_terminal",
                 "cmd-files-open-terminal",
             ),
+            (
+                "ferrite_window::ResetColumnWidths",
+                "files.reset_column_widths",
+                "cmd-files-reset-column-widths",
+            ),
         ],
     },
     notice::GROUP,
-    Group {
-        context: "PaneWaiting",
-        commands: &[
-            (
-                "ferrite_window::LeaveWaiting",
-                "pane.leave_waiting",
-                "cmd-pane-leave-waiting",
-            ),
-            (
-                "ferrite_window::RetryListing",
-                "pane.retry_listing",
-                "cmd-pane-retry-listing",
-            ),
-        ],
-    },
+    waiting::GROUP,
     Group {
         context: "PreviewBrowse",
         commands: &[

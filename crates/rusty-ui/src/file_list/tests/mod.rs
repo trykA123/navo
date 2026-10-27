@@ -7,6 +7,7 @@ mod marks;
 mod mouse;
 mod parts;
 mod render;
+mod resize;
 
 use std::rc::Rc;
 

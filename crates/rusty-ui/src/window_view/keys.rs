@@ -23,6 +23,7 @@ gpui_kit::actions!(
         OpenTerminal,
         OpenViewMenu,
         RecordPerformance,
+        ResetColumnWidths,
         ResetSplit,
         RetryListing,
         SaveCrashReport,

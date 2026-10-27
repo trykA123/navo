@@ -97,6 +97,7 @@ impl PanePage {
             | FileListAction::NewFile
             | FileListAction::SelectPattern { .. }
             | FileListAction::Sort(_)
+            | FileListAction::ResizeColumn { .. }
             | FileListAction::Edit { .. }
             | FileListAction::View(_)
             | FileListAction::ContextMenu { .. }

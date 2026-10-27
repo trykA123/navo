@@ -1,6 +1,6 @@
 use super::fields::{Control, F, FieldSpec, S, spec};
 
-pub(super) const WINDOW_FIELDS: [FieldSpec; 12] = [
+pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
     spec(
         (
             F::WindowTabsWithOne,
@@ -101,5 +101,20 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 12] = [
             "Shows the file and folder count and the total size in the pane footer.",
         ),
         Control::Toggle,
+    ),
+    spec(
+        (F::WindowExtWidth, S::Display, "window.view.ext-width"),
+        ("settings-ext-width", "settings-column-width-help"),
+        Control::Number,
+    ),
+    spec(
+        (F::WindowSizeWidth, S::Display, "window.view.size-width"),
+        ("settings-size-width", "settings-column-width-help"),
+        Control::Number,
+    ),
+    spec(
+        (F::WindowDateWidth, S::Display, "window.view.date-width"),
+        ("settings-date-width", "settings-column-width-help"),
+        Control::Number,
     ),
 ];

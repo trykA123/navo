@@ -33,6 +33,7 @@ preview.browse | NavoPane | true
 crash_notice.focus | NavoPane | true
 activity.focus | NavoPane | true
 files.open_terminal | NavoPane | true
+files.reset_column_widths | NavoPane | true
 crash_notice.open_folder | CrashNotice | false
 crash_notice.save | CrashNotice | true
 crash_notice.dismiss | CrashNotice | true

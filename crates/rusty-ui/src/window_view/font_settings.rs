@@ -25,9 +25,7 @@ impl FerriteWindow {
         self.saver.font_notice = apply_typography(&self.values, &families, &mut theme.typography);
         let ratio = theme.typography.body / base;
         scale_heights(&mut theme, ratio);
-        if let Value::Number(percent) = self.values.get(Field::UiScale) {
-            theme.scale((*percent).clamp(80, 200) as u16);
-        }
+        theme.scale(ui_scale(&self.values));
         let theme = tokens::with_system_palette(&theme, tokens::system_palette);
         let backdrop = if theme.is_contrast {
             gpui_kit::WindowBackgroundAppearance::Opaque
@@ -44,6 +42,13 @@ impl FerriteWindow {
             kit.radius = radius;
             tokens::map_contrast_colors(&theme, &mut kit.colors);
         });
+    }
+}
+
+pub(super) fn ui_scale(values: &Values) -> u16 {
+    match values.get(Field::UiScale) {
+        Value::Number(percent) => (*percent).clamp(80, 200) as u16,
+        _ => 100,
     }
 }
 

@@ -111,7 +111,7 @@ fn automotive() -> impl Strategy<Value = Automotive> {
 }
 
 fn window() -> impl Strategy<Value = WindowSettings> {
-    any::<[bool; 12]>().prop_map(|flags| {
+    (any::<[bool; 12]>(), any::<[u16; 3]>()).prop_map(|(flags, widths)| {
         let [
             tabs_with_one,
             path_bar,
@@ -126,6 +126,7 @@ fn window() -> impl Strategy<Value = WindowSettings> {
             marked_totals,
             contents,
         ] = flags;
+        let [ext_width, size_width, date_width] = widths;
         WindowSettings {
             view: WindowView {
                 tabs_with_one,
@@ -140,6 +141,9 @@ fn window() -> impl Strategy<Value = WindowSettings> {
                 free_space,
                 marked_totals,
                 contents,
+                ext_width,
+                size_width,
+                date_width,
             },
         }
     })

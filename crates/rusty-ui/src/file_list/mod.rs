@@ -9,9 +9,12 @@ mod lasso;
 mod lift;
 mod parts;
 mod press;
+mod resize;
 pub(crate) mod row;
 mod rows;
 mod sort;
+mod watch;
+mod widths;
 
 #[cfg(test)]
 mod tests;
@@ -23,8 +26,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, Keystroke,
-    MouseButton, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, Styled, Window,
-    div,
+    MouseButton, ParentElement, Pixels, RenderOnce, SharedString, Styled, Window, div,
 };
 use rusty_core::{Command, Selection, ViewState};
 use rusty_fs::FsEntry;
@@ -39,6 +41,7 @@ pub(crate) use keys::{
 pub use parts::ListParts;
 pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
+pub use widths::UserWidths;
 
 use crate::primitives::{ListScroll, RowSemantics, VirtualList};
 use crate::tokens;
@@ -70,6 +73,7 @@ pub struct FileList {
     parts: ListParts,
     drag: drop::Wiring,
     known_width: Option<KnownWidth>,
+    user_widths: UserWidths,
 }
 
 type KnownWidth = Rc<Cell<Option<Pixels>>>;
@@ -87,6 +91,7 @@ impl FileList {
             parts: ListParts::default(),
             drag: drop::Wiring::default(),
             known_width: None,
+            user_widths: UserWidths::default(),
         }
     }
 
@@ -98,6 +103,12 @@ impl FileList {
     #[must_use]
     pub fn parts(mut self, parts: ListParts) -> Self {
         self.parts = parts;
+        self
+    }
+
+    #[must_use]
+    pub fn column_widths(mut self, widths: UserWidths) -> Self {
+        self.user_widths = widths;
         self
     }
 
@@ -140,6 +151,7 @@ struct ListState {
     drop_spot: Option<DropSpot>,
     hover_queued: bool,
     pressed_name: Option<SharedString>,
+    resize: Option<resize::Resize>,
 }
 
 struct ListContext {
@@ -149,6 +161,7 @@ struct ListContext {
     on_command: Option<CommandHandler>,
     on_list_action: Option<ActionHandler>,
     parts: ListParts,
+    widths: widths::ColumnWidths,
     drag: drop::Wiring,
 }
 
@@ -280,92 +293,6 @@ fn row_semantics(props: &FileListProps, index: usize) -> RowSemantics {
     }
 }
 
-fn follow_scroll(
-    state: &Entity<ListState>,
-    (wanted, len): (u64, usize),
-    row_height: Pixels,
-    cx: &mut App,
-) -> ListScroll {
-    state.update(cx, |state, _| {
-        let key = (wanted, len, row_height);
-        if len > 0 && state.followed_scroll != Some(key) {
-            state.followed_scroll = Some(key);
-            if row_number(state.scroll.top_row(row_height)) != wanted {
-                state.scroll.scroll_to_top(row_index(wanted));
-            }
-        }
-        state.scroll.clone()
-    })
-}
-
-struct Watch {
-    state: Entity<ListState>,
-    row_height: Pixels,
-}
-
-fn report_scroll(
-    ctx: &Rc<ListContext>,
-    watch: Watch,
-) -> impl Fn(&ScrollWheelEvent, &mut Window, &mut App) + 'static {
-    let ctx = ctx.clone();
-    move |_, window, cx| {
-        let state = watch.state.read(cx);
-        let page = state.page_rows.map_or(1, row_index).max(1);
-        let last_top = ctx.props.rows.len().saturating_sub(page);
-        let top = row_number(state.scroll.top_row(watch.row_height).min(last_top));
-        if top != ctx.props.view.scroll {
-            ctx.send(Command::PaneScroll { to: top }, window, cx);
-        }
-    }
-}
-
-fn report_page_rows(
-    (handler, known_width): (Option<PageRowsHandler>, Option<KnownWidth>),
-    watch: Watch,
-) -> impl Fn(Vec<Bounds<Pixels>>, &mut Window, &mut App) + 'static {
-    move |bounds, window, cx| {
-        let Some(list) = bounds.first() else {
-            return;
-        };
-        let rows = (list.size.height / watch.row_height).floor();
-        let rows = if rows.is_finite() && rows > 0. {
-            rows as u64
-        } else {
-            0
-        };
-        let is_new = watch.state.update(cx, |state, cx| {
-            let is_new = state.page_rows != Some(rows);
-            state.page_rows = Some(rows);
-            let was = state.list_bounds.map(|bounds| bounds.size.width);
-            state.list_bounds = Some(lift::unshifted(*list, state.lift));
-            if let Some(known) = &known_width {
-                known.set(Some(list.size.width));
-            }
-            if was != Some(list.size.width) {
-                cx.notify();
-            }
-            is_new
-        });
-        if let (true, Some(handler)) = (is_new, handler.clone()) {
-            window.defer(cx, move |window, cx| handler(&rows, window, cx));
-        }
-    }
-}
-
-fn fitted_parts(
-    (state, known): (&Entity<ListState>, Option<&KnownWidth>),
-    parts: ListParts,
-    t: &tokens::Theme,
-    cx: &App,
-) -> ListParts {
-    let width = state
-        .read(cx)
-        .list_bounds
-        .map(|bounds| bounds.size.width)
-        .or_else(|| known.and_then(|known| known.get()));
-    column_drop::fit(width, parts, t)
-}
-
 fn virtual_list(ctx: &Rc<ListContext>, scroll: &ListScroll, row_height: Pixels) -> VirtualList {
     let semantics = ctx.clone();
     let label = format!("{} files", ctx.props.folder);
@@ -382,30 +309,33 @@ impl RenderOnce for FileList {
         let row_height = t.rows.height;
         let state = window.use_keyed_state(self.id.clone(), cx, |_, _| ListState::default());
         let wanted = (self.props.view.scroll, self.props.rows.len());
-        let scroll = follow_scroll(&state, wanted, row_height, cx);
+        let scroll = watch::follow_scroll(&state, wanted, row_height, cx);
         let lift = lift::lift_for(&state, (self.props.view.cursor, self.cover), row_height, cx);
         let len = self.props.rows.len();
+        let shown = (self.parts, self.user_widths);
+        let (parts, widths) = resize::shown((&state, self.known_width.as_ref()), shown, window, cx);
         let ctx = Rc::new(ListContext {
             props: self.props,
             state: state.clone(),
             focus: self.focus,
             on_command: self.on_command,
             on_list_action: self.on_list_action,
-            parts: fitted_parts((&state, self.known_width.as_ref()), self.parts, &t, cx),
+            parts,
+            widths,
             drag: self.drag,
         });
         let list = virtual_list(&ctx, &scroll, row_height);
-        let watch = |state| Watch { state, row_height };
+        let watch = |state| watch::Watch { state, row_height };
         let area = div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
-            .on_children_prepainted(report_page_rows(
+            .on_children_prepainted(watch::report_page_rows(
                 (self.on_page_rows, self.known_width),
                 watch(state.clone()),
             ))
-            .on_scroll_wheel(report_scroll(&ctx, watch(state)))
+            .on_scroll_wheel(watch::report_scroll(&ctx, watch(state)))
             .on_mouse_down(MouseButton::Right, press::background_down(&ctx))
             .overflow_hidden()
             .child(lift::lifted(list, lift));

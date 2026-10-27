@@ -20,6 +20,7 @@ mod index_activity;
 mod jobs;
 mod keys;
 mod layout;
+mod list_columns;
 mod multi_rename;
 mod operate;
 mod pane;

@@ -135,6 +135,9 @@ pub struct WindowView {
     pub free_space: bool,
     pub marked_totals: bool,
     pub contents: bool,
+    pub ext_width: u16,
+    pub size_width: u16,
+    pub date_width: u16,
 }
 
 impl Default for WindowView {
@@ -152,6 +155,9 @@ impl Default for WindowView {
             free_space: true,
             marked_totals: true,
             contents: true,
+            ext_width: 0,
+            size_width: 0,
+            date_width: 0,
         }
     }
 }

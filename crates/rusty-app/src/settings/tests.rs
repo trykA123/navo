@@ -353,6 +353,37 @@ fn a_hidden_window_part_lands_in_the_window_view_table_and_keeps_comments() {
 }
 
 #[test]
+fn a_column_width_survives_a_restart_and_its_reset_brings_back_fitting() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    let settings = hooks(Some(&file));
+    assert_eq!(
+        settings.values.get(Field::WindowDateWidth),
+        &Value::Number(0)
+    );
+    let wide = Change {
+        field: Field::WindowDateWidth,
+        value: Value::Number(164),
+    };
+    save(&settings, wide).unwrap();
+    assert!(
+        fs::read_to_string(&file)
+            .unwrap()
+            .contains("date-width = 164")
+    );
+    let again = hooks(Some(&file));
+    assert_eq!(
+        again.values.get(Field::WindowDateWidth),
+        &Value::Number(164)
+    );
+    assert!(again.values.is_changed(Field::WindowDateWidth));
+    let stored = save(&again, Change::reset(Field::WindowDateWidth)).unwrap();
+    assert_eq!(stored.get(Field::WindowDateWidth), &Value::Number(0));
+    let last = hooks(Some(&file));
+    assert!(!last.values.is_changed(Field::WindowDateWidth));
+}
+
+#[test]
 fn resetting_a_window_part_brings_the_default_back() {
     let dir = tempfile::tempdir().unwrap();
     let file = file_in(&dir);

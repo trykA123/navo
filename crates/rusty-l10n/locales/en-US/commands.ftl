@@ -378,6 +378,7 @@ command-center-indexing = Indexing { $root } · { $count } files
 command-center-index-busy = Index service is busy · type to try again
 
 cmd-files-open-terminal = Open terminal here
+cmd-files-reset-column-widths = Reset column widths
 terminal-local-only = A terminal opens only in a local folder.
 terminal-not-configured = Terminals are not set up.
 terminal-command-empty = Set a terminal command in settings.

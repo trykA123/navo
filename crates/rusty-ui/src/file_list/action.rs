@@ -26,6 +26,7 @@ pub enum FileListAction {
     CopyPath,
     SelectPattern { add: bool },
     Sort(SortBy),
+    ResizeColumn { by: SortBy, width: Pixels },
     Edit { row: u64, choose: bool },
     View(u64),
     ContextMenu { at: Point<Pixels>, extended: bool },

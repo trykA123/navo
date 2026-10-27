@@ -7,8 +7,8 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, div, px,
 };
 
-use super::row::{check_column, column_width, columns};
-use super::{FileListAction, ListContext, ListParts, SortBy, SortKey};
+use super::row::{check_column, columns};
+use super::{FileListAction, ListContext, ListParts, SortBy, SortKey, resize};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
@@ -19,33 +19,37 @@ struct Column {
     keys: &'static str,
 }
 
+pub(super) fn label(by: SortBy) -> &'static str {
+    match by {
+        SortBy::Name => "Name",
+        SortBy::Ext => "Ext",
+        SortBy::Size => "Size",
+        SortBy::Date => "Date",
+    }
+}
+
+pub(super) fn index_of(by: SortBy) -> usize {
+    match by {
+        SortBy::Name => 0,
+        SortBy::Ext => 1,
+        SortBy::Size => 2,
+        SortBy::Date => 3,
+    }
+}
+
 fn columns_of() -> [Column; 4] {
     [
-        Column {
-            by: SortBy::Name,
-            index: 0,
-            label: "Name",
-            keys: "Ctrl+F3",
-        },
-        Column {
-            by: SortBy::Ext,
-            index: 1,
-            label: "Ext",
-            keys: "Ctrl+F4",
-        },
-        Column {
-            by: SortBy::Size,
-            index: 2,
-            label: "Size",
-            keys: "Ctrl+F6",
-        },
-        Column {
-            by: SortBy::Date,
-            index: 3,
-            label: "Date",
-            keys: "Ctrl+F5",
-        },
+        (SortBy::Name, "Ctrl+F3"),
+        (SortBy::Ext, "Ctrl+F4"),
+        (SortBy::Size, "Ctrl+F6"),
+        (SortBy::Date, "Ctrl+F5"),
     ]
+    .map(|(by, keys)| Column {
+        by,
+        index: index_of(by),
+        label: label(by),
+        keys,
+    })
 }
 
 struct Sorted {
@@ -107,6 +111,8 @@ fn cell(t: &Theme, column: Column, sorted: &Sorted, ctx: &Rc<ListContext>) -> im
     let is_active = sorted.marks(&column);
     let right = matches!(column.by, SortBy::Size | SortBy::Date);
     let by = column.by;
+    let width = ctx.widths.of(by);
+    let handle = width.map(|_| resize::handle(t, by, ctx));
     let ctx = ctx.clone();
     div()
         .id(("sort", column.index))
@@ -118,8 +124,9 @@ fn cell(t: &Theme, column: Column, sorted: &Sorted, ctx: &Rc<ListContext>) -> im
         .flex()
         .items_center()
         .gap(t.spacing.xs)
+        .relative()
         .cursor_pointer()
-        .map(|cell| match column_width(t, column.by) {
+        .map(|cell| match width {
             Some(width) => cell.w(width).flex_none(),
             None => cell.flex_1().min_w_0(),
         })
@@ -133,10 +140,13 @@ fn cell(t: &Theme, column: Column, sorted: &Sorted, ctx: &Rc<ListContext>) -> im
             div()
                 .id(("sort-label", column.index))
                 .test_support()
+                .min_w_0()
+                .truncate()
                 .child(column.label),
         )
         .children(sorted.note(t, &column))
         .child(arrow_slot(t, sorted, is_active))
+        .children(handle)
 }
 
 pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {

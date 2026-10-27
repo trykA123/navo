@@ -21,6 +21,7 @@ mod applied;
 mod cached;
 mod cards;
 pub(in crate::window_view) mod clipboard;
+mod column_widths;
 mod command_center;
 mod crash_notice;
 mod delete_dialog;

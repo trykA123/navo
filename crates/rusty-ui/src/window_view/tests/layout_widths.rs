@@ -10,17 +10,17 @@ use crate::window_view::FerriteWindow;
 
 const DEEP: &str = "home/vehicle-calibration-measurements-2026/powertrain-control-unit-variants/endurance-test-campaign-exports/thermal-soak-and-cold-start-logs";
 const COLUMNS: [&str; 4] = ["Name", "Ext", "Size", "Date"];
-const ROWS: usize = 30;
+pub(super) const ROWS: usize = 30;
 const TABS: usize = 20;
 const SLACK: f32 = 1.;
 
-type Box2 = Bounds<Pixels>;
+pub(super) type Box2 = Bounds<Pixels>;
 
-struct PaneProbe {
-    name: &'static str,
-    card: Box2,
-    header: [Option<Box2>; 4],
-    rows: Vec<(usize, [Option<Box2>; 4])>,
+pub(super) struct PaneProbe {
+    pub name: &'static str,
+    pub card: Box2,
+    pub header: [Option<Box2>; 4],
+    pub rows: Vec<(usize, [Option<Box2>; 4])>,
 }
 
 fn x(value: Pixels) -> f32 {
@@ -64,13 +64,16 @@ fn open_at(cx: &mut TestAppContext, width: f32) -> (AnyWindowHandle, Entity<Ferr
     (window, view)
 }
 
-fn panes(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> (Vec<PaneId>, PaneId) {
+pub(super) fn panes(
+    cx: &mut TestAppContext,
+    view: &Entity<FerriteWindow>,
+) -> (Vec<PaneId>, PaneId) {
     view.read_with(cx, |view, _| {
         (view.panes(), view.browser.state().focused_pane())
     })
 }
 
-fn pane_name(index: usize) -> &'static str {
+pub(super) fn pane_name(index: usize) -> &'static str {
     if index == 0 {
         "left pane"
     } else {
@@ -94,7 +97,11 @@ fn row_cells(window: &mut Window, pane: PaneId, row: usize) -> Option<[Option<Bo
     }))
 }
 
-fn probe_pane(window: &mut Window, pane: PaneId, name: &'static str) -> Option<PaneProbe> {
+pub(super) fn probe_pane(
+    window: &mut Window,
+    pane: PaneId,
+    name: &'static str,
+) -> Option<PaneProbe> {
     let card = visible_card(window, pane)?;
     let header = {
         let list = window.within(("list", pane.get()));
@@ -198,7 +205,7 @@ fn columns_line_up(cx: &mut TestAppContext, width: f32) {
     lined_up(width, probe(cx, width));
 }
 
-fn lined_up(width: f32, probes: Vec<PaneProbe>) {
+pub(super) fn lined_up(width: f32, probes: Vec<PaneProbe>) {
     let mut failures = Vec::new();
     for pane in probes {
         if pane.rows.is_empty() {
@@ -223,7 +230,7 @@ fn lined_up(width: f32, probes: Vec<PaneProbe>) {
     report(width, "header and row columns differ", &failures);
 }
 
-fn outside(card: Box2, cell: Box2) -> bool {
+pub(super) fn outside(card: Box2, cell: Box2) -> bool {
     x(cell.left()) < x(card.left()) - SLACK || x(cell.right()) > x(card.right()) + SLACK
 }
 
@@ -443,7 +450,7 @@ fn a_1280_px_window_shows_both_panes(cx: &mut TestAppContext) {
     );
 }
 
-fn drop_order_breaks(pane: &PaneProbe) -> Option<String> {
+pub(super) fn drop_order_breaks(pane: &PaneProbe) -> Option<String> {
     let [_, ext, size, date] = pane.header.map(|cell| cell.is_some());
     let broken = (ext && !(date && size)) || (date && !size);
     broken.then(|| format!("{} shows Ext {ext}, Date {date}, Size {size}", pane.name))

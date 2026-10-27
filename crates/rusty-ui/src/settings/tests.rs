@@ -190,7 +190,7 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
         .collect();
     let groups: Vec<Option<&str>> = keys.iter().map(|(group, _)| *group).collect();
     let expected = [
-        ("Window", 12),
+        ("Window", 15),
         ("Text", 3),
         ("Image", 1),
         ("Markdown", 1),
@@ -208,6 +208,9 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
     assert_eq!(
         keys[12..],
         [
+            "window.view.ext-width",
+            "window.view.size-width",
+            "window.view.date-width",
             "text.view.line-numbers",
             "text.view.line-ends",
             "text.view.syntax-theme",
@@ -331,9 +334,10 @@ fn only_the_twelve_window_fields_are_window_parts() {
     assert!(
         FIELDS
             .iter()
-            .filter(|spec| spec.key.starts_with("window."))
+            .filter(|spec| spec.key.starts_with("window.") && spec.control == Control::Toggle)
             .all(|spec| spec.field.is_window_part())
     );
+    assert!(!Field::WindowDateWidth.is_window_part());
 }
 
 #[test]
@@ -347,8 +351,8 @@ fn the_scroll_child_of_a_row_counts_the_group_headings_above_it() {
     assert_eq!(child(Field::Theme), Some(1));
     assert_eq!(child(Field::WindowTabsWithOne), Some(2));
     assert_eq!(child(Field::WindowContents), Some(13));
-    assert_eq!(child(Field::TextLineNumbers), Some(15));
-    assert_eq!(child(Field::ImageDetails), Some(19));
+    assert_eq!(child(Field::TextLineNumbers), Some(18));
+    assert_eq!(child(Field::ImageDetails), Some(22));
 }
 
 #[test]

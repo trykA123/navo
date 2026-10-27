@@ -21,6 +21,7 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
         is_marked: ctx.props.marked.is_marked(row),
         is_active_pane: ctx.props.is_active,
         parts: ctx.parts,
+        widths: ctx.widths,
     };
     let (left, right, click) = (ctx.clone(), ctx.clone(), ctx.clone());
     let zones = (drop::grip(ctx, row), lasso::start_zone(ctx, row));

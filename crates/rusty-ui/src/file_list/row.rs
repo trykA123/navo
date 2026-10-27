@@ -6,6 +6,7 @@ use gpui_kit::{
 };
 use rusty_fs::{EntryKind, FsEntry};
 
+use super::widths::ColumnWidths;
 use super::{ListParts, SortBy, kind};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
@@ -19,19 +20,11 @@ pub(super) struct RowLook<'a> {
     pub is_marked: bool,
     pub is_active_pane: bool,
     pub parts: ListParts,
+    pub widths: ColumnWidths,
 }
 
-pub(super) fn column_width(t: &Theme, by: SortBy) -> Option<Pixels> {
-    match by {
-        SortBy::Name => None,
-        SortBy::Ext => Some(t.spacing.xxl * 3.),
-        SortBy::Size => Some(t.spacing.size_column),
-        SortBy::Date => Some(t.spacing.date_column + t.spacing.xl),
-    }
-}
-
-fn fixed_width(t: &Theme, by: SortBy) -> Pixels {
-    column_width(t, by).unwrap_or_default()
+fn fixed_width(look: &RowLook, by: SortBy) -> Pixels {
+    look.widths.of(by).unwrap_or_default()
 }
 
 pub(super) fn check_column(t: &Theme) -> Pixels {
@@ -96,7 +89,14 @@ fn right_cell(column: usize, width: Pixels, text: impl Into<SharedString>) -> im
         .flex()
         .justify_end()
         .overflow_hidden()
-        .child(text.into())
+        .child(
+            div()
+                .id(("cell-text", column))
+                .test_support()
+                .min_w_0()
+                .truncate()
+                .child(text.into()),
+        )
 }
 
 pub(super) fn name_text(
@@ -187,14 +187,14 @@ fn numbers(look: &RowLook) -> Div {
         .when(look.parts.size, |d| {
             d.child(right_cell(
                 2,
-                fixed_width(t, SortBy::Size),
+                fixed_width(look, SortBy::Size),
                 kind::size_text(entry),
             ))
         })
         .when(look.parts.date, |d| {
             d.child(right_cell(
                 3,
-                fixed_width(t, SortBy::Date),
+                fixed_width(look, SortBy::Date),
                 kind::date_text(entry),
             ))
         })
@@ -233,7 +233,7 @@ pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
                 div()
                     .id(("cell", 1usize))
                     .test_support()
-                    .w(fixed_width(t, SortBy::Ext))
+                    .w(fixed_width(look, SortBy::Ext))
                     .flex_none()
                     .truncate()
                     .when(look.is_marked, |d| d.font_weight(FontWeight::SEMIBOLD))
