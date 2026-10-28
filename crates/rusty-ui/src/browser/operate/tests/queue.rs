@@ -180,6 +180,7 @@ fn local_job(browser: &mut Browser, source: &str, target: Option<&str>) -> u64 {
             source_tab: browser.state.active_tab().id(),
             undo: None,
             slow_volumes: None,
+            structure: None,
         },
         Run::Plain,
         None,

@@ -74,6 +74,7 @@ impl Browser {
             protected: self.operations.protected.clone(),
             source_tab,
             asks,
+            structure: None,
         };
         let id = request.id;
         if self.submit_plan(request) {

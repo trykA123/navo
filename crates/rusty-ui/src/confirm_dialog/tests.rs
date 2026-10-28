@@ -4,7 +4,7 @@ use gpui_kit::{
     SharedString, Styled, TestAppContext, Window, div,
 };
 
-use super::{ConfirmDialog, ConfirmProps};
+use super::{Choice, ConfirmDialog, ConfirmProps};
 use crate::test_window::open;
 
 const DIALOG: &str = "dialog";
@@ -21,6 +21,7 @@ fn props(lines: usize, more: u64) -> ConfirmProps {
         danger: true,
         typed: None,
         mode: None,
+        choice: None,
     }
 }
 
@@ -28,6 +29,7 @@ fn props(lines: usize, more: u64) -> ConfirmProps {
 struct Counts {
     confirmed: usize,
     cancelled: usize,
+    toggled: usize,
 }
 
 struct Harness {
@@ -39,9 +41,11 @@ impl Render for Harness {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let confirm = cx.entity();
         let cancel = cx.entity();
+        let toggle = cx.entity();
         let dialog = ConfirmDialog::new(DIALOG, self.props.clone())
             .on_confirm(move |_, cx| confirm.update(cx, |this, _| this.counts.confirmed += 1))
-            .on_cancel(move |_, cx| cancel.update(cx, |this, _| this.counts.cancelled += 1));
+            .on_cancel(move |_, cx| cancel.update(cx, |this, _| this.counts.cancelled += 1))
+            .on_toggle(move |_, cx| toggle.update(cx, |this, _| this.counts.toggled += 1));
         div().size_full().child(dialog)
     }
 }
@@ -243,7 +247,7 @@ fn hidden_counts_the_cut_lines_and_the_rest() {
 
 fn focused(window: AnyWindowHandle, cx: &mut TestAppContext) -> Vec<&'static str> {
     cx.update_window(window, |_, window, _| {
-        ["typed", "confirm", "cancel"]
+        ["typed", "choice", "confirm", "cancel"]
             .into_iter()
             .filter(|id| {
                 window
@@ -349,4 +353,59 @@ fn a_copy_dialog_shows_its_mode_as_a_small_label(cx: &mut TestAppContext) {
 fn a_dialog_without_a_mode_has_no_mode_label(cx: &mut TestAppContext) {
     let (window, _) = open_dialog(cx, props(1, 0));
     assert_eq!(label(window, "mode", cx), None);
+}
+
+fn with_choice() -> ConfirmProps {
+    let mut safe = props(1, 0);
+    safe.danger = false;
+    safe.choice = Some(Choice {
+        label: "Keep folder structure".into(),
+        on: true,
+    });
+    safe
+}
+
+fn toggled(harness: &Entity<Harness>, cx: &mut TestAppContext) -> usize {
+    harness.read_with(cx, |harness, _| harness.counts.toggled)
+}
+
+#[gpui_kit::test]
+fn a_choice_is_a_checkbox_stop_before_the_buttons(cx: &mut TestAppContext) {
+    let (window, harness) = open_dialog(cx, with_choice());
+    assert_eq!(focused(window, cx), ["confirm"]);
+    cx.update_window(window, |_, window, _| {
+        assert_eq!(
+            window.within(DIALOG).find("choice").role(),
+            Some(Role::CheckBox)
+        );
+    })
+    .expect("window");
+    press(window, &["shift-tab"], cx);
+    assert_eq!(focused(window, cx), ["choice"]);
+    press(window, &["space"], cx);
+    assert_eq!(toggled(&harness, cx), 1);
+    assert_eq!(focused(window, cx), ["choice"]);
+    assert_eq!(counts(&harness, cx), (0, 0));
+    press(window, &["tab", "enter"], cx);
+    assert_eq!(counts(&harness, cx), (1, 0));
+}
+
+#[gpui_kit::test]
+fn a_click_on_the_choice_toggles_it(cx: &mut TestAppContext) {
+    let (window, harness) = open_dialog(cx, with_choice());
+    cx.update_window(window, |_, window, cx| {
+        window.within(DIALOG).click("choice", cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    assert_eq!(toggled(&harness, cx), 1);
+}
+
+#[gpui_kit::test]
+fn without_a_choice_tab_skips_straight_to_the_buttons(cx: &mut TestAppContext) {
+    let mut safe = props(1, 0);
+    safe.danger = false;
+    let (window, _) = open_dialog(cx, safe);
+    press(window, &["shift-tab"], cx);
+    assert_eq!(focused(window, cx), ["cancel"]);
 }

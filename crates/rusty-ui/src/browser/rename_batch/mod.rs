@@ -135,6 +135,7 @@ impl Browser {
             source_tab: self.state.active_tab().id(),
             undo: None,
             slow_volumes: None,
+            structure: None,
         }
     }
 }

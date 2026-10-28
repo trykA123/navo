@@ -76,6 +76,7 @@ fn permanent() -> ConfirmProps {
         danger: true,
         typed: None,
         mode: None,
+        choice: None,
     }
 }
 
@@ -89,6 +90,7 @@ fn protected() -> ConfirmProps {
         danger: true,
         typed: Some("DELETE".into()),
         mode: None,
+        choice: None,
     }
 }
 

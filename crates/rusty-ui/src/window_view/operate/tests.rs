@@ -3,7 +3,7 @@ use rusty_fs::{CancelToken, Progress};
 
 use super::super::jobs::job_info;
 use super::{confirm_props, mode_label};
-use crate::browser::{JobStatus, JobView, PendingOp, RenameReport};
+use crate::browser::{JobStatus, JobView, PendingOp, RenameReport, Structure};
 use crate::job_row::JobRowState;
 use rusty_fs::CopyMode;
 
@@ -35,6 +35,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         source_tab: AppState::new(at("/home")).active_tab().id(),
         undo: None,
         slow_volumes: None,
+        structure: None,
     }
 }
 
@@ -239,4 +240,21 @@ fn a_small_retained_delete_does_not_ask_to_delete_permanently() {
     assert!(!props.title.contains("permanently"));
     assert!(!props.confirm_label.contains("permanently"));
     assert!(!props.summary.contains("cannot be undone"));
+}
+
+#[test]
+fn the_keep_structure_choice_shows_only_when_the_pending_op_offers_it() {
+    let plain = pending(plan(OpKind::Copy), Some(at("/dest")));
+    assert_eq!(confirm_props(&plain).choice, None);
+    let mut from_results = pending(plan(OpKind::Copy), Some(at("/dest")));
+    from_results.structure = Some(Structure {
+        base: at("/w"),
+        keep: true,
+        planning: false,
+        same_volume: false,
+    });
+    let choice = confirm_props(&from_results).choice.expect("a choice");
+    assert!(choice.on);
+    from_results.structure.as_mut().unwrap().keep = false;
+    assert!(!confirm_props(&from_results).choice.unwrap().on);
 }

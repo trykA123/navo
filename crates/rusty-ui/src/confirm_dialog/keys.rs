@@ -22,8 +22,10 @@ pub(super) struct Keys {
     pub confirm: FocusHandle,
     pub can_confirm: bool,
     pub cancel: FocusHandle,
+    pub choice: Option<FocusHandle>,
     pub on_confirm: Option<Handler>,
     pub on_cancel: Option<Handler>,
+    pub on_toggle: Option<Handler>,
 }
 
 impl Keys {
@@ -39,8 +41,20 @@ impl Keys {
         }
     }
 
+    pub(super) fn toggle(&self, window: &mut Window, cx: &mut App) {
+        if let Some(handler) = &self.on_toggle {
+            handler(window, cx);
+        }
+    }
+
     fn activate(&self, window: &mut Window, cx: &mut App) {
-        if self.cancel.contains_focused(window, cx) {
+        if self
+            .choice
+            .as_ref()
+            .is_some_and(|choice| choice.contains_focused(window, cx))
+        {
+            self.toggle(window, cx);
+        } else if self.cancel.contains_focused(window, cx) {
             self.cancel(window, cx);
         } else if self.can_confirm && self.confirm.contains_focused(window, cx) {
             self.confirm(window, cx);

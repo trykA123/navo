@@ -108,6 +108,7 @@ pub fn layout_ask_props(edit: &LayoutEdit) -> Option<ConfirmProps> {
         danger,
         typed: None,
         mode: None,
+        choice: None,
     })
 }
 

@@ -10,7 +10,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight, InteractiveElement,
     IntoElement, ParentElement, RenderOnce, Role, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
+    StatefulInteractiveElement, Styled, Subscription, Toggled, Window, div, px,
 };
 
 pub use keys::bind_keys;
@@ -36,6 +36,13 @@ pub struct ConfirmProps {
     pub danger: bool,
     pub typed: Option<SharedString>,
     pub mode: Option<SharedString>,
+    pub choice: Option<Choice>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Choice {
+    pub label: SharedString,
+    pub on: bool,
 }
 
 impl ConfirmProps {
@@ -56,6 +63,7 @@ pub struct ConfirmDialog {
     props: ConfirmProps,
     on_confirm: Option<Handler>,
     on_cancel: Option<Handler>,
+    on_toggle: Option<Handler>,
 }
 
 impl ConfirmDialog {
@@ -65,6 +73,7 @@ impl ConfirmDialog {
             props,
             on_confirm: None,
             on_cancel: None,
+            on_toggle: None,
         }
     }
 
@@ -77,12 +86,18 @@ impl ConfirmDialog {
         self.on_cancel = Some(Rc::new(handler));
         self
     }
+
+    pub fn on_toggle(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_toggle = Some(Rc::new(handler));
+        self
+    }
 }
 
 struct DialogState {
     root: FocusHandle,
     confirm: FocusHandle,
     cancel: FocusHandle,
+    choice: FocusHandle,
     field: Option<Entity<TextFieldState>>,
     has_started: bool,
     _field_changes: Option<Subscription>,
@@ -103,6 +118,7 @@ impl DialogState {
             root: cx.focus_handle(),
             confirm: cx.focus_handle(),
             cancel: cx.focus_handle(),
+            choice: cx.focus_handle(),
             field,
             has_started: false,
             _field_changes: changes,
@@ -149,9 +165,11 @@ fn start_focus(
 fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &App) -> Keys {
     let confirm = can_confirm.then(|| state.confirm.clone());
     let buttons: Vec<FocusHandle> = confirm.into_iter().chain([state.cancel.clone()]).collect();
+    let choice = dialog.props.choice.is_some().then(|| state.choice.clone());
     let stops = state
         .field_focus(cx)
         .into_iter()
+        .chain(choice.clone())
         .chain(buttons.clone())
         .collect();
     Keys {
@@ -160,8 +178,10 @@ fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &
         confirm: state.confirm.clone(),
         can_confirm,
         cancel: state.cancel.clone(),
+        choice,
         on_confirm: dialog.on_confirm,
         on_cancel: dialog.on_cancel,
+        on_toggle: dialog.on_toggle,
     }
 }
 
@@ -243,6 +263,59 @@ fn summary_row(t: &Theme, props: &ConfirmProps) -> Div {
         })
 }
 
+fn choice_row(
+    t: &Theme,
+    choice: Choice,
+    keys: &Rc<Keys>,
+    window: &Window,
+) -> Option<impl IntoElement> {
+    let handle = keys.choice.as_ref()?;
+    let ring = if handle.is_focused(window) {
+        t.colors.accent
+    } else {
+        gpui_kit::transparent_black()
+    };
+    let toggle = keys.clone();
+    let mark = div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(16.))
+        .rounded(t.radii.sm)
+        .border_1()
+        .border_color(t.colors.line)
+        .when(choice.on, |mark| {
+            mark.child(icon(IconName::Check, px(12.), t.colors.accent_text))
+        });
+    Some(
+        div()
+            .id("choice")
+            .role(Role::CheckBox)
+            .aria_label(choice.label.clone())
+            .aria_toggled(if choice.on {
+                Toggled::True
+            } else {
+                Toggled::False
+            })
+            .test_support()
+            .key_context(keys::BUTTON)
+            .track_focus(handle)
+            .flex()
+            .items_center()
+            .gap(t.spacing.sm)
+            .px(t.spacing.xs)
+            .py(t.spacing.xxs)
+            .rounded(t.radii.md)
+            .border_2()
+            .border_color(ring)
+            .cursor_pointer()
+            .child(mark)
+            .child(choice.label)
+            .on_click(move |_, window, cx| toggle.toggle(window, cx)),
+    )
+}
+
 fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) -> Div {
     let variant = if props.danger {
         ButtonVariant::Danger
@@ -316,6 +389,12 @@ impl RenderOnce for ConfirmDialog {
             .child(heading(&t, &props))
             .child(paths(&t, &props))
             .child(summary_row(&t, &props))
+            .children(
+                props
+                    .choice
+                    .clone()
+                    .and_then(|choice| choice_row(&t, choice, &keys, window)),
+            )
             .when_some(field, |dialog, field| {
                 dialog.child(TextField::new("typed", &field, "Confirmation word"))
             })

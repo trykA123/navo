@@ -6,6 +6,7 @@ mod risks;
 
 use serde::{Deserialize, Serialize};
 
+pub use build::relative_folders;
 pub use drop::{DropKeys, DropOp, drop_op, right_button_drag};
 pub use protect::is_protected;
 
@@ -146,7 +147,16 @@ impl OperationPlan {
 
 #[must_use]
 pub fn plan(request: &PlanRequest) -> OperationPlan {
-    let mut walk = build::Walk::new(request);
+    plan_with(request, None)
+}
+
+#[must_use]
+pub fn plan_keeping(request: &PlanRequest, base: &Location) -> OperationPlan {
+    plan_with(request, Some(base))
+}
+
+fn plan_with(request: &PlanRequest, base: Option<&Location>) -> OperationPlan {
+    let mut walk = build::Walk::new(request, base);
     match (&request.kind, &request.target) {
         (OpKind::Copy, Some(target)) => walk.copy(target),
         (OpKind::Move, Some(target)) if request.same_volume => walk.rename_tops(target),

@@ -1,4 +1,7 @@
+mod keep;
 mod link;
+
+pub use keep::relative_folders;
 
 use std::collections::HashMap;
 
@@ -10,6 +13,8 @@ use crate::{Conflict, Location};
 
 pub(super) struct Walk<'a> {
     request: &'a PlanRequest,
+    base: Option<&'a Location>,
+    made: Vec<Location>,
     existing: HashMap<String, Vec<&'a ExistingItem>>,
     planned: HashMap<String, Vec<Location>>,
     pub(super) steps: Vec<Step>,
@@ -20,13 +25,15 @@ pub(super) struct Walk<'a> {
 }
 
 impl<'a> Walk<'a> {
-    pub(super) fn new(request: &'a PlanRequest) -> Self {
+    pub(super) fn new(request: &'a PlanRequest, base: Option<&'a Location>) -> Self {
         let mut existing: HashMap<String, Vec<&'a ExistingItem>> = HashMap::new();
         for item in &request.existing {
             existing.entry(key(&item.location)).or_default().push(item);
         }
         Self {
             request,
+            base,
+            made: Vec::new(),
             existing,
             planned: HashMap::new(),
             steps: Vec::new(),
@@ -39,6 +46,7 @@ impl<'a> Walk<'a> {
 
     pub(super) fn copy(&mut self, target: &Location) {
         let mut names = Vec::new();
+        let mut root = None;
         let mut skip_below: Option<u32> = None;
         for (index, item) in self.request.items.iter().enumerate() {
             if skip_below.is_some_and(|depth| item.depth > depth) {
@@ -50,13 +58,16 @@ impl<'a> Walk<'a> {
                 skip_below = Some(0);
                 continue;
             }
+            if item.depth == 0 {
+                root = self.root_for(item, target);
+            }
             names.truncate(item.depth as usize);
             let Some(name) = name_of(&item.location) else {
                 skip_below = Some(item.depth);
                 continue;
             };
             names.push(name);
-            let Some(destination) = join_all(target, &names) else {
+            let Some(destination) = root.as_ref().and_then(|root| join_all(root, &names)) else {
                 skip_below = Some(item.depth);
                 continue;
             };
@@ -261,7 +272,9 @@ impl Walk<'_> {
                 self.into_itself.push(item.location.clone());
                 continue;
             }
-            let Some(destination) = name_of(&item.location).and_then(|n| target.join(&n).ok())
+            let Some(destination) = self
+                .root_for(item, target)
+                .and_then(|root| root.join(&name_of(&item.location)?).ok())
             else {
                 continue;
             };

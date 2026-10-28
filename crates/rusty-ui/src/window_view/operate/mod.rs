@@ -7,7 +7,7 @@ use rusty_l10n::{t, tr};
 use super::FerriteWindow;
 use crate::activity::ActivityId;
 use crate::browser::{PendingOp, UndoOffer};
-use crate::confirm_dialog::{ConfirmDialog, ConfirmProps};
+use crate::confirm_dialog::{Choice, ConfirmDialog, ConfirmProps};
 use crate::format;
 use crate::prelude::*;
 
@@ -101,6 +101,10 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         danger: pending.plan.kind == OpKind::Delete || protected,
         typed: protected.then(|| "DELETE".into()),
         mode: None,
+        choice: pending.structure.as_ref().map(|structure| Choice {
+            label: tr("files-keep-structure").into(),
+            on: structure.keep,
+        }),
     };
     match &pending.undo {
         Some(offer) => super::undo::ask_props(props, offer),
@@ -136,13 +140,19 @@ impl FerriteWindow {
         let pending = self.browser.pending()?;
         let mut props = confirm_props(pending);
         props.mode = mode_label(pending.plan.kind, self.browser.copy_mode());
-        let (confirm, cancel) = (cx.weak_entity(), cx.weak_entity());
+        let (confirm, cancel, toggle) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
         let dialog = ConfirmDialog::new(("confirm", pending.id), props)
             .on_confirm(move |window, cx| {
                 let _ = confirm.update(cx, |view, cx| view.close_dialog(true, window, cx));
             })
             .on_cancel(move |window, cx| {
                 let _ = cancel.update(cx, |view, cx| view.close_dialog(false, window, cx));
+            })
+            .on_toggle(move |_, cx| {
+                let _ = toggle.update(cx, |view, cx| {
+                    view.browser.toggle_structure();
+                    cx.notify();
+                });
             });
         Some(
             div()
@@ -160,6 +170,9 @@ impl FerriteWindow {
     }
 
     fn close_dialog(&mut self, confirmed: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if confirmed && self.browser.pending().is_some_and(PendingOp::is_planning) {
+            return;
+        }
         if confirmed {
             let undone = self.browser.pending().and_then(|op| op.undo.as_ref());
             let undone = undone.map(UndoOffer::items);

@@ -121,9 +121,23 @@ pub struct PendingOp {
     pub(crate) source_tab: TabId,
     pub undo: Option<UndoOffer>,
     pub(crate) slow_volumes: Option<SlowVolumes>,
+    pub structure: Option<Structure>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Structure {
+    pub base: Location,
+    pub keep: bool,
+    pub(crate) planning: bool,
+    pub(crate) same_volume: bool,
 }
 
 impl PendingOp {
+    #[must_use]
+    pub fn is_planning(&self) -> bool {
+        self.structure.as_ref().is_some_and(|s| s.planning)
+    }
+
     #[must_use]
     pub fn is_protected(&self) -> bool {
         self.plan.risks.iter().any(
@@ -166,6 +180,31 @@ pub struct JobView {
 }
 
 impl JobView {
+    pub(super) fn plan_failed(request: OpRequest, message: String) -> Self {
+        Self {
+            id: request.id,
+            kind: request.kind,
+            from: request.sources.first().and_then(Location::parent),
+            target: request.target,
+            sources: request.sources.len(),
+            progress: Progress {
+                bytes_done: 0,
+                bytes_total: 0,
+                files_done: 0,
+                files_total: 0,
+                current: None,
+                paused: false,
+            },
+            status: JobStatus::Failed(message),
+            is_waiting: false,
+            cancel: CancelToken::new(),
+            source_tab: request.source_tab,
+            undo: false,
+            report: RenameReport::default(),
+            first_new: None,
+        }
+    }
+
     pub(super) fn landing(&self) -> Option<(TabId, Location, String)> {
         let name = self.first_new.clone()?;
         Some((self.source_tab, self.from.clone()?, name))
@@ -210,4 +249,5 @@ pub(in crate::browser) struct OpRequest {
     pub(super) protected: Vec<Location>,
     pub(super) source_tab: TabId,
     pub(super) asks: bool,
+    pub(super) structure: Option<Structure>,
 }

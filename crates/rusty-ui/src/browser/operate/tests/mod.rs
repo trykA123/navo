@@ -15,6 +15,7 @@ mod drop;
 mod mode;
 mod pause;
 mod queue;
+mod results;
 mod retention;
 mod slow;
 

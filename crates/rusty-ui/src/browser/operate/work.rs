@@ -1,4 +1,6 @@
-use rusty_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan};
+use rusty_core::{
+    ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan, plan_keeping,
+};
 use rusty_fs::{
     AutoTuning, CancelToken, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
     WorkerCounts, existing_at, job_workers, run_job_parallel, scan,
@@ -9,6 +11,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
+use super::keep::existing_kept;
 use super::{Copying, Ended, JobUpdate, LogFactory, LoggedOperation, OpLog, OpRequest};
 use crate::browser::{
     Message, RenameReport, UndoLogFactory, UndoOffer, Waker, WriteRenameLog, run_batch, run_undo,
@@ -40,9 +43,15 @@ pub(super) fn plan_for(
     cancel: &CancelToken,
 ) -> Result<OperationPlan, FsError> {
     let items = scan(provider, &request.sources, cancel)?;
-    let existing = match &request.target {
-        Some(target) => existing_at(provider, &items, target, cancel)?,
-        None => Vec::new(),
+    let kept = request
+        .structure
+        .as_ref()
+        .filter(|s| s.keep)
+        .map(|s| &s.base);
+    let existing = match (&request.target, kept) {
+        (Some(target), Some(base)) => existing_kept(provider, &items, (target, base), cancel)?,
+        (Some(target), None) => existing_at(provider, &items, target, cancel)?,
+        (None, _) => Vec::new(),
     };
     let same_volume = if request.same_volume
         && let Some(source) = request.sources.first().and_then(Location::parent)
@@ -58,7 +67,7 @@ pub(super) fn plan_for(
     } else {
         request.same_volume
     };
-    Ok(plan(&PlanRequest {
+    let plan_request = PlanRequest {
         kind: request.kind,
         items,
         target: request.target.clone(),
@@ -66,7 +75,11 @@ pub(super) fn plan_for(
         policy: ConflictPolicy::Ask,
         same_volume,
         protected: request.protected.clone(),
-    }))
+    };
+    Ok(match kept {
+        Some(base) => plan_keeping(&plan_request, base),
+        None => plan(&plan_request),
+    })
 }
 
 pub(super) fn worker_count(
@@ -302,6 +315,7 @@ mod tests {
             protected: Vec::new(),
             source_tab: state.active_tab().id(),
             asks: true,
+            structure: None,
         };
         plan_for(&fs, &request, &CancelToken::new()).unwrap()
     }

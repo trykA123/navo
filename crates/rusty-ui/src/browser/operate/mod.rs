@@ -2,12 +2,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use rusty_core::{Command, FsError, Location, OpKind, Tab};
-use rusty_fs::{
-    CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, Progress, volume_of,
-};
+use rusty_fs::{CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, volume_of};
 
 use super::{Browser, Message, RenameReport};
 
+mod keep;
 mod paste;
 pub(in crate::browser) mod queue;
 mod types;
@@ -62,7 +61,9 @@ impl Browser {
         let Some(volume) = request.sources.first().map(volume_of) else {
             return false;
         };
-        self.pending = None;
+        if !request.structure.as_ref().is_some_and(|s| s.planning) {
+            self.pending = None;
+        }
         let retain_deletes = self.operations.retain_deletes.clone();
         let slow = self.slow_volume();
         let (provider, sender, wake) = (
@@ -104,6 +105,9 @@ impl Browser {
     }
 
     pub fn confirm(&mut self) -> bool {
+        if self.pending.as_ref().is_some_and(PendingOp::is_planning) {
+            return false;
+        }
         let Some(pending) = self.pending.take() else {
             return false;
         };
@@ -250,7 +254,8 @@ impl Browser {
         }
         let same_volume = target
             .as_ref()
-            .is_some_and(|t| volume_of(t) == volume_of(tab.location()));
+            .is_some_and(|t| volume_of(t) == volume_of(tab.base_or_location()));
+        let structure = keep::structure_for(tab, kind, same_volume);
         let source_tab = tab.id();
         self.next_op += 1;
         Some(OpRequest {
@@ -262,6 +267,7 @@ impl Browser {
             protected: self.operations.protected.clone(),
             source_tab,
             asks: true,
+            structure,
         })
     }
 
@@ -276,6 +282,9 @@ impl Browser {
         request: OpRequest,
         result: Result<types::PlannedOp, FsError>,
     ) -> bool {
+        if self.is_stale_replan(&request) {
+            return false;
+        }
         match result {
             Ok((plan, retain_deletes, slow_volumes)) => {
                 let pending = PendingOp {
@@ -287,6 +296,10 @@ impl Browser {
                     source_tab: request.source_tab,
                     undo: None,
                     slow_volumes: Some(slow_volumes),
+                    structure: request.structure.map(|s| Structure {
+                        planning: false,
+                        ..s
+                    }),
                 };
                 let asks = request.asks || pending.is_protected();
                 self.pending = Some(pending);
@@ -294,28 +307,13 @@ impl Browser {
                     self.confirm();
                 }
             }
-            Err(error) => self.jobs.push(JobView {
-                id: request.id,
-                kind: request.kind,
-                from: request.sources.first().and_then(Location::parent),
-                target: request.target,
-                sources: request.sources.len(),
-                progress: Progress {
-                    bytes_done: 0,
-                    bytes_total: 0,
-                    files_done: 0,
-                    files_total: 0,
-                    current: None,
-                    paused: false,
-                },
-                status: JobStatus::Failed(error.message()),
-                is_waiting: false,
-                cancel: CancelToken::new(),
-                source_tab: request.source_tab,
-                undo: false,
-                report: RenameReport::default(),
-                first_new: None,
-            }),
+            Err(error) => {
+                if request.structure.as_ref().is_some_and(|s| s.planning) {
+                    self.pending = None;
+                }
+                self.jobs
+                    .push(JobView::plan_failed(request, error.message()));
+            }
         }
         true
     }
@@ -372,18 +370,9 @@ impl Browser {
 }
 
 fn selected_sources(tab: &Tab) -> Vec<Location> {
-    let Some(listing) = tab.listing() else {
-        return Vec::new();
-    };
-    let marked = tab.selection().marked();
-    let rows = if marked.is_empty() {
-        vec![tab.view().cursor]
-    } else {
-        marked
-    };
-    rows.into_iter()
-        .filter_map(|row| listing.get(row))
-        .filter_map(|entry| tab.entry_location(&entry.name).ok())
+    keep::selected_names(tab)
+        .into_iter()
+        .filter_map(|name| tab.entry_location(name).ok())
         .collect()
 }
 

@@ -114,6 +114,7 @@ activity-dragging = Dragging { $count ->
 activity-drag-keys = Ctrl copy · Shift move · Alt shortcut · Esc cancel
 files-link-confirm = Create shortcuts for { $items } in { $target }?
 files-link-label = Create shortcuts
+files-keep-structure = Keep folder structure
 link-verb = Create shortcuts for
 link-verb-running = Creating shortcuts for
 link-verb-done = Created shortcuts for
