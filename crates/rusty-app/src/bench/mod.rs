@@ -1,5 +1,6 @@
 mod fixture;
 mod incremental;
+pub(crate) mod index;
 mod indexing;
 mod listing;
 mod report;

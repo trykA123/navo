@@ -242,3 +242,32 @@ fn bench_is_a_console_subcommand_only_in_first_place() {
     );
     assert!(refusal(&["bench"]).contains("--root"));
 }
+
+#[test]
+fn index_bench_accepts_plain_text_and_json_as_console_commands() {
+    for args in [vec!["--bench", "index"], vec!["--bench", "index", "--json"]] {
+        let command = parse_strs(&args).unwrap();
+        assert!(command.uses_console());
+        assert_eq!(
+            command,
+            Command::BenchIndex {
+                json: args.contains(&"--json"),
+            }
+        );
+    }
+}
+
+#[test]
+fn index_bench_rejects_missing_modes_and_unrelated_arguments() {
+    for args in [
+        vec!["--bench"],
+        vec!["--bench", "other"],
+        vec!["--bench", "index", "--root", "fixture"],
+        vec!["--bench", "index", "--json", "--json"],
+        vec!["--bench", "index", "extra"],
+        vec!["--left", "fixture", "--bench", "index"],
+        vec!["--json", "--bench", "index"],
+    ] {
+        assert!(parse_strs(&args).is_err(), "{args:?}");
+    }
+}
