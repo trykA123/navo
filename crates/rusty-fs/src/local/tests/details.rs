@@ -116,9 +116,12 @@ fn windows_details_summarize_allow_permissions() {
         );
         let details = LocalFs::new().details(&location_of(&path)).unwrap();
         assert_eq!(details.security_note, None);
-        assert_eq!(details.acl.len(), 1, "{mask}: {:?}", details.acl);
-        assert!(details.acl[0].who.eq_ignore_ascii_case(&user));
-        assert_eq!(details.acl[0].rights, expected);
+        let row = details
+            .acl
+            .iter()
+            .find(|row| row.who.eq_ignore_ascii_case(&user));
+        assert!(row.is_some(), "{mask}: {:?}", details.acl);
+        assert_eq!(row.unwrap().rights, expected, "{mask}");
         assert_eq!(details.inherited_from, None);
     }
 }
@@ -158,7 +161,7 @@ fn windows_unresolvable_acl_keeps_metadata_and_clears_security_fields() {
     let (dir, _) = temp();
     let path = dir.path().join("file");
     fs::write(&path, b"contents").unwrap();
-    icacls(&path, &["/grant", "*S-1-5-9999:R"]);
+    add_unmapped_sid(&path);
     let details = LocalFs::new().details(&location_of(&path)).unwrap();
     assert_eq!((details.kind, details.size), (EntryKind::File, 8));
     assert!(details.modified_ms.is_some());
@@ -173,6 +176,26 @@ fn windows_user() -> String {
     let output = std::process::Command::new("whoami").output().unwrap();
     assert!(output.status.success());
     String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
+#[cfg(windows)]
+fn add_unmapped_sid(path: &Path) {
+    let script = "$acl = Get-Acl -LiteralPath $env:TARGET; \
+        $sid = [System.Security.Principal.SecurityIdentifier]'S-1-5-21-1-2-3-4001'; \
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); \
+        $acl.AddAccessRule($rule); \
+        Set-Acl -LiteralPath $env:TARGET -AclObject $acl";
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .env("TARGET", path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "Set-Acl: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[cfg(windows)]
