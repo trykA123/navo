@@ -17,7 +17,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         (F::WindowPathBar, S::Display, "window.view.path-bar"),
         (
             "Path bar",
-            "Shows the folder path above the file list, and Ctrl+L opens the path field without it.",
+            "Shows the folder path above the file list, and Alt+D opens the path field without it.",
         ),
         Control::Toggle,
     ),

@@ -58,6 +58,7 @@ impl FerriteWindow {
         if !self.browser.rename_batch(plan, first_new.as_deref()) {
             return self.notify_rename("rename-nothing", cx);
         }
+        self.forget_clipboard_notice();
         self.save_last_used(&rules, cx);
         self.refresh_activity(cx);
         self.close_multi_rename(window, cx);

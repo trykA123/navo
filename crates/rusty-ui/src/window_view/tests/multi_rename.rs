@@ -197,6 +197,23 @@ fn enter_with_a_conflict_renames_nothing_and_moves_to_it(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn a_successful_rename_clears_an_earlier_nothing_to_rename_notice(cx: &mut TestAppContext) {
+    let rig = opened(cx);
+    rig.press(cx, &["enter"]);
+    let shown = rig.view.read_with(cx, |view, _| {
+        view.status_notice().map(|n| n.text.to_string())
+    });
+    assert_eq!(shown.as_deref(), Some("Nothing to rename."));
+    rig.type_text(cx, "[N]_[C2]");
+    rig.press(cx, &["enter"]);
+    assert!(!rig.is_open(cx));
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.status_notice().is_none())
+    );
+}
+
+#[gpui_kit::test]
 fn escape_closes_with_no_change_and_returns_focus(cx: &mut TestAppContext) {
     let rig = opened(cx);
     rig.type_text(cx, "[N]_[C2]");
