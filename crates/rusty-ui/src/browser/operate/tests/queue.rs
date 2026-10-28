@@ -279,6 +279,7 @@ fn undo_offer(fs: &FakeFs, restore_pending: bool) -> crate::browser::UndoOffer {
         done: vec![0],
         created_at: 0,
         restore_pending,
+        kind: crate::browser::UndoKind::Rename,
     }
 }
 
@@ -320,6 +321,7 @@ fn undo_hooks(browser: &mut Browser, fs: &FakeFs) -> mpsc::Receiver<()> {
             entered.send(()).unwrap();
             Ok(Box::new(UndoLog(identity)) as Box<dyn OpLog>)
         }),
+        retire: Arc::new(|_| Ok(())),
         presets: Arc::new(|| Ok(crate::browser::RenamePresetList::default())),
         save: Arc::new(|_, _| Ok(())),
         delete: Arc::new(|_| Ok(())),

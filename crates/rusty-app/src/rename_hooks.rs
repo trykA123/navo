@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use rusty_core::OperationPlan;
-use rusty_store::{FinishedJob, JobId, StepState};
-use rusty_ui::browser::{NamedPreset, RenameHooks, RenamePresetList, UndoOffer};
+use rusty_core::retention::{COPY_RETAINED_KIND, MOVE_RETAINED_KIND, RETAINED_DELETE_KIND};
+use rusty_store::{FinishedJob, JobId, StepState, UndoKinds, Undoable};
+use rusty_ui::browser::{NamedPreset, RenameHooks, RenamePresetList, UndoKind, UndoOffer};
 
 use crate::files::{SharedDb, lock as lock_db, now_ms};
 use crate::jobs::{self, SharedJournal};
 
 const KIND: &str = "rename";
+const RETAINED: [&str; 3] = [RETAINED_DELETE_KIND, COPY_RETAINED_KIND, MOVE_RETAINED_KIND];
 
 pub fn profile_hooks(
     journal: Option<SharedJournal>,
@@ -33,7 +35,7 @@ pub fn profile_hooks(
 }
 
 pub fn hooks(journal: Option<SharedJournal>, db: Option<SharedDb>) -> RenameHooks {
-    let (last, undo) = (journal.clone(), journal);
+    let (last, undo, retire) = (journal.clone(), journal.clone(), journal);
     let (list, save, delete) = (db.clone(), db.clone(), db);
     RenameHooks {
         log: None,
@@ -45,6 +47,10 @@ pub fn hooks(journal: Option<SharedJournal>, db: Option<SharedDb>) -> RenameHook
             let journal = undo.as_ref().ok_or_else(no_journal)?;
             let job = i64::try_from(offer.job).map_err(|error| error.to_string())?;
             jobs::undo_log(journal, JobId(job))
+        }),
+        retire: Arc::new(move |offer: &UndoOffer| {
+            let journal = retire.as_ref().ok_or_else(no_journal)?;
+            retire_job(journal, offer)
         }),
         presets: Arc::new(move || presets(list.as_ref().ok_or_else(no_database)?)),
         save: Arc::new(move |name, rules| {
@@ -63,10 +69,38 @@ fn no_database() -> String {
 }
 
 fn offer(journal: &SharedJournal) -> Result<Option<UndoOffer>, String> {
-    let job = jobs::lock(journal)
-        .last_undoable(KIND)
+    let kinds = UndoKinds {
+        rename: KIND,
+        retained: &RETAINED,
+        now_ms: now_ms(),
+    };
+    let newest = jobs::lock(journal)
+        .newest_undoable(kinds)
         .map_err(|error| error.to_string())?;
-    job.map(decode).transpose()
+    match newest {
+        None => Ok(None),
+        Some(Undoable::Rename(job)) => decode(job).map(Some),
+        Some(Undoable::Retained {
+            id,
+            created_at,
+            entries,
+        }) => {
+            let job = u64::try_from(id.0).map_err(|error| error.to_string())?;
+            Ok(Some(UndoOffer::retained(job, created_at, entries)))
+        }
+    }
+}
+
+fn retire_job(journal: &SharedJournal, offer: &UndoOffer) -> Result<(), String> {
+    if !matches!(offer.kind, UndoKind::Retained(_)) {
+        return Err("only a retained job is retired before its undo".to_owned());
+    }
+    let job = i64::try_from(offer.job).map_err(|error| error.to_string())?;
+    jobs::lock(journal)
+        .mark_job_undone(JobId(job))
+        .map_err(|error| error.to_string())?;
+    tracing::info!(job, "retained undo retired the job");
+    Ok(())
 }
 
 fn decode(job: FinishedJob) -> Result<UndoOffer, String> {
@@ -84,6 +118,7 @@ fn decode(job: FinishedJob) -> Result<UndoOffer, String> {
         done,
         created_at: job.created_at,
         restore_pending: job.restore_pending,
+        kind: UndoKind::Rename,
     })
 }
 

@@ -3,10 +3,12 @@ use rusqlite::OptionalExtension;
 
 mod evidence;
 mod held;
+mod newest_undo;
 mod retained;
 mod undoable;
 
 pub use evidence::StepEvidence;
+pub use newest_undo::{UndoKinds, Undoable};
 pub use undoable::FinishedJob;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

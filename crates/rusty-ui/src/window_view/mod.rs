@@ -52,6 +52,7 @@ mod terminal;
 mod tiles;
 mod title;
 mod undo;
+mod undo_retained;
 mod user_keymap;
 mod viewer;
 mod visits;
@@ -355,7 +356,9 @@ impl FerriteWindow {
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
         let result = self.browser.command(command);
         self.drag_list_changed(cx);
-        self.forget_clipboard_notice();
+        if !matches!(command, Command::PaneScroll { .. }) {
+            self.forget_clipboard_notice();
+        }
         self.show_refusal(result);
         self.focus_core_pane(window, cx);
         cx.notify();

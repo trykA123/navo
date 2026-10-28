@@ -14,11 +14,11 @@ use rusty_fs::{
 
 use super::{options_for, press, settle};
 use crate::activity::ActivityKind;
-use crate::browser::{OpLog, Operations, RenameHooks, RenamePresetList, UndoOffer};
+use crate::browser::{OpLog, Operations, RenameHooks, RenamePresetList, UndoKind, UndoOffer};
 use crate::window_view::FerriteWindow;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum State {
+pub(super) enum State {
     Open,
     Done,
     Undone,
@@ -33,12 +33,59 @@ struct Record {
     identities: std::collections::HashMap<u32, rusty_fs::FileIdentity>,
 }
 
+pub(super) struct Kept {
+    pub(super) job: usize,
+    pub(super) location: rusty_core::Location,
+    pub(super) is_live: bool,
+}
+
 #[derive(Clone, Default)]
-struct Journal(Arc<Mutex<Vec<Record>>>);
+pub(super) struct Journal {
+    book: Arc<Mutex<Vec<Record>>>,
+    kept: Arc<Mutex<Vec<Kept>>>,
+}
 
 impl Journal {
     fn book(&self) -> MutexGuard<'_, Vec<Record>> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.book.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(super) fn kept(&self) -> MutexGuard<'_, Vec<Kept>> {
+        self.kept.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(super) fn states(&self) -> Vec<State> {
+        self.book().iter().map(|record| record.state).collect()
+    }
+
+    fn live(&self, job: usize) -> Vec<rusty_core::retention::RetentionId> {
+        (1_i64..)
+            .zip(self.kept().iter())
+            .filter(|(_, kept)| kept.job == job && kept.is_live)
+            .map(|(id, _)| rusty_core::retention::RetentionId(id))
+            .collect()
+    }
+
+    fn keep_removed(&self, job: usize) {
+        let removed: Vec<_> = {
+            let book = self.book();
+            let record = &book[job];
+            record
+                .done
+                .iter()
+                .filter_map(
+                    |seq| match record.plan.steps.get(usize::try_from(*seq).ok()?) {
+                        Some(Step::RemoveFile { location }) => Some(location.clone()),
+                        _ => None,
+                    },
+                )
+                .collect()
+        };
+        self.kept().extend(removed.into_iter().map(|location| Kept {
+            job,
+            location,
+            is_live: true,
+        }));
     }
 
     fn state(&self) -> Option<State> {
@@ -72,11 +119,14 @@ impl Journal {
 
     fn offer(&self) -> Option<UndoOffer> {
         let book = self.book();
-        let (at, record) = book
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, record)| matches!(record.state, State::Done | State::Pending))?;
+        let (at, record) = book.iter().enumerate().rev().find(|(at, record)| {
+            matches!(record.state, State::Done | State::Pending)
+                && (record.plan.kind == OpKind::Rename || !self.live(*at).is_empty())
+        })?;
+        let job = u64::try_from(at + 1).ok()?;
+        if record.plan.kind != OpKind::Rename {
+            return Some(UndoOffer::retained(job, 0, self.live(at)));
+        }
         Some(UndoOffer {
             job: u64::try_from(at + 1).ok()?,
             plan: record.plan.clone(),
@@ -88,11 +138,12 @@ impl Journal {
                 .collect(),
             created_at: 0,
             restore_pending: record.state == State::Pending,
+            kind: UndoKind::Rename,
         })
     }
 
-    fn hooks(&self) -> RenameHooks {
-        let (last, undo) = (self.clone(), self.clone());
+    pub(super) fn hooks(&self) -> RenameHooks {
+        let (last, undo, retire) = (self.clone(), self.clone(), self.clone());
         RenameHooks {
             log: None,
             last: Arc::new(move || Ok(last.offer())),
@@ -101,13 +152,18 @@ impl Journal {
                 undo.book()[job].state = State::Pending;
                 Ok(Box::new(Log::new(&undo, job, true)) as Box<dyn OpLog>)
             }),
+            retire: Arc::new(move |offer: &UndoOffer| {
+                let job = usize::try_from(offer.job).map_err(|e| e.to_string())? - 1;
+                retire.book()[job].state = State::Undone;
+                Ok(())
+            }),
             presets: Arc::new(|| Ok(RenamePresetList::default())),
             save: Arc::new(|_, _| Ok(())),
             delete: Arc::new(|_| Ok(())),
         }
     }
 
-    fn operations(&self) -> Operations {
+    pub(super) fn operations(&self) -> Operations {
         let journal = self.clone();
         Operations {
             retain_deletes: None,
@@ -191,16 +247,19 @@ impl OpLog for Log {
             _ => State::Open,
         };
         self.journal.book()[self.job].state = state;
+        if state == State::Done {
+            self.journal.keep_removed(self.job);
+        }
         Ok(())
     }
 }
 
-struct Rig {
-    window: AnyWindowHandle,
-    view: Entity<FerriteWindow>,
+pub(super) struct Rig {
+    pub(super) window: AnyWindowHandle,
+    pub(super) view: Entity<FerriteWindow>,
 }
 
-fn files() -> Arc<FakeFs> {
+pub(super) fn files() -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home/docs");
     for name in ["a.txt", "b.txt", "c.txt", "d.txt"] {
@@ -213,7 +272,7 @@ fn open(cx: &mut TestAppContext, fs: Arc<FakeFs>, journal: &Journal) -> Rig {
     open_with(cx, fs, journal.operations(), journal.hooks())
 }
 
-fn open_with(
+pub(super) fn open_with(
     cx: &mut TestAppContext,
     fs: Arc<FakeFs>,
     operations: Operations,
@@ -227,14 +286,14 @@ fn open_with(
 }
 
 impl Rig {
-    fn press(&self, cx: &mut TestAppContext, keys: &[&str]) {
+    pub(super) fn press(&self, cx: &mut TestAppContext, keys: &[&str]) {
         for key in keys {
             press(cx, self.window, &self.view, key);
             self.wait(cx, Duration::from_millis(200));
         }
     }
 
-    fn wait(&self, cx: &mut TestAppContext, time: Duration) {
+    pub(super) fn wait(&self, cx: &mut TestAppContext, time: Duration) {
         cx.executor().advance_clock(time);
         cx.run_until_parked();
         settle(cx, &self.view);
@@ -252,7 +311,7 @@ impl Rig {
         self.press(cx, &["enter"]);
     }
 
-    fn listing(&self, cx: &mut TestAppContext) -> Vec<String> {
+    pub(super) fn listing(&self, cx: &mut TestAppContext) -> Vec<String> {
         self.view.read_with(cx, |view, _| {
             let tab = view.browser.state().active_tab();
             tab.listing()
@@ -269,7 +328,7 @@ impl Rig {
         })
     }
 
-    fn notice(&self, cx: &mut TestAppContext) -> Option<String> {
+    pub(super) fn notice(&self, cx: &mut TestAppContext) -> Option<String> {
         self.view.read_with(cx, |view, _| {
             view.status_notice().map(|n| n.text.to_string())
         })
@@ -293,12 +352,12 @@ impl Rig {
     }
 }
 
-fn names(list: &[&str]) -> Vec<String> {
+pub(super) fn names(list: &[&str]) -> Vec<String> {
     list.iter().map(|name| (*name).to_owned()).collect()
 }
 
 const RENAMED: [&str; 5] = ["docs", "d.txt", "xa.txt", "xb.txt", "xc.txt"];
-const ORIGINAL: [&str; 5] = ["docs", "a.txt", "b.txt", "c.txt", "d.txt"];
+pub(super) const ORIGINAL: [&str; 5] = ["docs", "a.txt", "b.txt", "c.txt", "d.txt"];
 
 #[gpui_kit::test]
 fn f2_on_one_file_can_be_undone_with_ctrl_z(cx: &mut TestAppContext) {
@@ -473,8 +532,8 @@ fn a_hook_error_shows_on_the_status_line(cx: &mut TestAppContext) {
 }
 
 impl Rig {
-    fn rename_first(&self, cx: &mut TestAppContext) {
-        self.press(cx, &["down", "f2", "ctrl-a"]);
+    pub(super) fn rename_first(&self, cx: &mut TestAppContext) {
+        self.press(cx, &["home", "down", "f2", "ctrl-a"]);
         self.type_text(cx, "renamed.txt");
         self.press(cx, &["enter"]);
     }
@@ -503,7 +562,7 @@ impl Rig {
         self.wait(cx, Duration::from_millis(200));
     }
 
-    fn undo(&self, cx: &mut TestAppContext) {
+    pub(super) fn undo(&self, cx: &mut TestAppContext) {
         self.press(cx, &["ctrl-z"]);
         if self.is_asking(cx) {
             self.press(cx, &["enter"]);

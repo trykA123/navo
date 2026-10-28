@@ -257,6 +257,7 @@ fn memory_hooks(store: &Arc<Mutex<Vec<NamedPreset>>>) -> RenameHooks {
         log: None,
         last: Arc::new(|| Ok(None)),
         undo_log: Arc::new(|_| Err("none".to_owned())),
+        retire: Arc::new(|_| Ok(())),
         presets: Arc::new(move || {
             let named = list.lock().map(|named| named.clone()).unwrap_or_default();
             Ok(RenamePresetList {

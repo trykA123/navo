@@ -21,6 +21,7 @@ pub(super) struct JobUi {
     pub(super) activity: Activity,
     pub(super) strip: StripUi,
     pub(super) perf: super::perf_recording::PerfUi,
+    pub(super) is_restoring: bool,
     is_sampling: bool,
 }
 
@@ -32,6 +33,7 @@ impl JobUi {
             activity: Activity::default(),
             strip: StripUi::new(window, cx),
             perf: super::perf_recording::PerfUi::default(),
+            is_restoring: false,
             is_sampling: false,
         }
     }

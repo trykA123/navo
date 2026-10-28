@@ -21,7 +21,7 @@ pub use db::{
 pub use dirs::StoreDirs;
 pub use journal::{
     FinishedJob, JobId, JobJournal, JobState, JournalError, JournalStep, StepEvidence, StepState,
-    UnfinishedJob,
+    UndoKinds, Undoable, UnfinishedJob,
 };
 pub use keymap_file::{KeymapEdit, KeymapFile, KeymapFileError, patch_keymap};
 pub use recovery::{

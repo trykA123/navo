@@ -64,6 +64,7 @@ mod terminal;
 mod tiles;
 mod typed;
 mod undo;
+mod undo_retained;
 mod visits;
 mod watched;
 mod window_menu;

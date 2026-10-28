@@ -16,6 +16,7 @@ fn no_hooks() -> RenameHooks {
         log: None,
         last: Arc::new(|| Ok(None)),
         undo_log: Arc::new(|_| Err("no journal".to_owned())),
+        retire: Arc::new(|_| Ok(())),
         presets: Arc::new(|| Ok(RenamePresetList::default())),
         save: Arc::new(|_, _| Ok(())),
         delete: Arc::new(|_| Ok(())),

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use rusty_core::{Location, OperationPlan, Step};
+use rusty_core::retention::RetentionId;
+use rusty_core::{Location, OpKind, OperationPlan, Step, Totals};
 use rusty_fs::is_rename_temporary;
 
 use crate::browser::OpLog;
@@ -13,9 +14,39 @@ pub struct UndoOffer {
     pub done: Vec<u32>,
     pub created_at: i64,
     pub restore_pending: bool,
+    pub kind: UndoKind,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum UndoKind {
+    #[default]
+    Rename,
+    Retained(Vec<RetentionId>),
 }
 
 impl UndoOffer {
+    #[must_use]
+    pub fn retained(job: u64, created_at: i64, ids: Vec<RetentionId>) -> Self {
+        Self {
+            job,
+            plan: OperationPlan {
+                kind: OpKind::Delete,
+                steps: Vec::new(),
+                totals: Totals {
+                    files: 0,
+                    folders: 0,
+                    bytes: 0,
+                },
+                conflicts: Vec::new(),
+                risks: Vec::new(),
+            },
+            done: Vec::new(),
+            created_at,
+            restore_pending: false,
+            kind: UndoKind::Retained(ids),
+        }
+    }
+
     #[must_use]
     pub fn items(&self) -> usize {
         self.item_targets().count()
@@ -62,6 +93,7 @@ pub type LastRename = Arc<dyn Fn() -> Result<Option<UndoOffer>, String> + Send +
 /// this returns, so a crash mid-undo is finished at start. `undone(seq, Done | Skipped)` marks the
 /// step undone; `undone(seq, Failed)` leaves it. `finish(Done)` marks the job undone; any other
 /// end, or a failed step, leaves it restore-pending.
+pub type RetireUndo = Arc<dyn Fn(&UndoOffer) -> Result<(), String> + Send + Sync>;
 pub type UndoLogFactory = Arc<dyn Fn(&UndoOffer) -> Result<Box<dyn OpLog>, String> + Send + Sync>;
 pub type ListPresets = Arc<dyn Fn() -> Result<RenamePresetList, String> + Send + Sync>;
 pub type SavePreset = Arc<dyn Fn(&str, &str) -> Result<(), String> + Send + Sync>;
@@ -79,6 +111,7 @@ pub type WriteRenameLog =
 pub struct RenameHooks {
     pub last: LastRename,
     pub undo_log: UndoLogFactory,
+    pub retire: RetireUndo,
     pub presets: ListPresets,
     pub save: SavePreset,
     pub delete: DeletePreset,

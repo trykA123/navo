@@ -21,7 +21,8 @@ use operate::JobUpdate;
 pub use operate::*;
 pub use rename_batch::{
     DeletePreset, LastRename, ListPresets, NamedPreset, RenameHooks, RenameLogStatus,
-    RenamePresetList, RenameReport, SavePreset, UndoLogFactory, UndoOffer, WriteRenameLog,
+    RenamePresetList, RenameReport, RetireUndo, SavePreset, UndoKind, UndoLogFactory, UndoOffer,
+    WriteRenameLog,
 };
 use rename_batch::{run_batch, run_undo};
 pub use retained::{NoRetained, RetainedHooks, RetainedKind, RetainedRow, RetainedState};

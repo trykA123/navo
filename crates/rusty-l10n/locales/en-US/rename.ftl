@@ -120,7 +120,18 @@ rename-nothing = Nothing to rename.
 rename-folder-changed = The folder changed. Check the preview, then press Enter again.
 rename-presets-failed = The preset could not be stored: { $reason }
 undo-nothing = Nothing to undo
-undo-read-failed = The rename history could not be read: { $reason }
+undo-read-failed = The undo history could not be read: { $reason }
+undo-retained-busy = Wait until the last undo ends
+undo-retained-done = Restored { $count ->
+    [one] { $count } item
+   *[other] { $count } items
+}
+undo-retained-partial = Restored { $restored } of { $total } items. { $failed } could not be restored: { $reason }
+undo-retained-none = { $total ->
+    [one] The item
+   *[other] The { $total } items
+} could not be restored: { $reason }
+undo-retained-start-failed = The undo could not start: { $reason }
 undo-ask = Undo the rename of { $count ->
     [one] { $items } item
    *[other] { $items } items

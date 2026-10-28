@@ -179,6 +179,7 @@ fn a_journal_that_cannot_be_read_is_an_error_not_a_missing_offer() {
             done: Vec::new(),
             created_at: 0,
             restore_pending: false,
+            kind: rusty_ui::browser::UndoKind::Rename,
         })
         .is_err()
     );

@@ -8,6 +8,7 @@ mod evidence;
 mod finish;
 mod held;
 mod mark;
+mod newest_undo;
 mod prune;
 mod settings;
 mod undoable;

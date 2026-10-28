@@ -1,12 +1,13 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rusty_core::retention::RetentionPolicy;
+use rusty_core::retention::{RetentionId, RetentionPolicy};
 use rusty_core::{ConflictPolicy, Location, OpKind, OperationPlan, PlanRequest, plan};
 use rusty_fs::{CancelToken, FakeFs, JobOutcome, Provider, ProviderOps, scan};
 use rusty_store::StoreDirs;
 use rusty_ui::browser::{
-    LoggedOperation, OpLog, RetainedHooks, RetainedKind, RetainedRow, RetainedState,
+    LoggedOperation, OpLog, RetainedHooks, RetainedKind, RetainedRow, RetainedState, UndoKind,
+    UndoOffer,
 };
 
 use super::hooks;
@@ -243,4 +244,75 @@ fn safe_mode_or_no_profile_gives_no_retained_hooks() {
             .unwrap()
             .is_empty()
     );
+}
+
+fn undo_hooks(profile: &Profile) -> rusty_ui::browser::RenameHooks {
+    let journal = crate::jobs::open(&profile.dirs.journal_file()).unwrap();
+    crate::rename_hooks::hooks(Some(journal), None)
+}
+
+fn retained_offer(undo: &rusty_ui::browser::RenameHooks) -> (UndoOffer, Vec<RetentionId>) {
+    let offer = (undo.last)().unwrap().expect("an undo offer");
+    let UndoKind::Retained(ids) = offer.kind.clone() else {
+        panic!("a retained offer, got {offer:?}");
+    };
+    (offer, ids)
+}
+
+fn deleted_together(names: &[&str]) -> Profile {
+    let profile = Profile::new();
+    for name in names {
+        profile.fs.add_file(name, 8);
+    }
+    profile.delete(names);
+    profile
+}
+
+#[test]
+fn the_ctrl_z_offer_for_a_retained_delete_survives_a_restart_and_restores_both() {
+    let profile = deleted_together(&["home/a", "home/b"]);
+    let undo = undo_hooks(&profile);
+    let (offer, ids) = retained_offer(&undo);
+    assert_eq!(ids.len(), 2);
+    (undo.retire)(&offer).unwrap();
+    let vault = profile.hooks();
+    for id in ids {
+        vault.restore(id).unwrap();
+    }
+    assert!(profile.exists("home/a") && profile.exists("home/b"));
+    assert_eq!((undo.last)().unwrap(), None);
+}
+
+#[test]
+fn a_partial_restore_retires_the_job_and_leaves_the_rest_in_recently_deleted() {
+    let profile = deleted_together(&["home/a", "home/b"]);
+    let undo = undo_hooks(&profile);
+    let (offer, ids) = retained_offer(&undo);
+    (undo.retire)(&offer).unwrap();
+    profile.hooks().restore(ids[0]).unwrap();
+    assert_eq!((undo.last)().unwrap(), None);
+    let left = profile.hooks().list(None, 10).unwrap();
+    assert_eq!(left.iter().map(|row| row.id).collect::<Vec<_>>(), [ids[1]]);
+}
+
+#[test]
+fn a_job_whose_entries_were_all_purged_is_not_offered() {
+    let profile = deleted_together(&["home/a"]);
+    let undo = undo_hooks(&profile);
+    let (_, ids) = retained_offer(&undo);
+    profile.hooks().purge(ids[0]).unwrap();
+    assert_eq!((undo.last)().unwrap(), None);
+}
+
+#[test]
+fn a_rename_offer_is_never_retired_by_the_retained_path() {
+    let profile = deleted_together(&["home/a"]);
+    let undo = undo_hooks(&profile);
+    let (offer, _) = retained_offer(&undo);
+    let rename = UndoOffer {
+        kind: UndoKind::Rename,
+        ..offer.clone()
+    };
+    assert!((undo.retire)(&rename).is_err());
+    assert_eq!((undo.last)().unwrap(), Some(offer));
 }

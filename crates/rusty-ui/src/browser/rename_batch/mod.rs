@@ -10,7 +10,8 @@ mod run;
 
 pub use hooks::{
     DeletePreset, LastRename, ListPresets, NamedPreset, RenameHooks, RenameLogStatus,
-    RenamePresetList, RenameReport, SavePreset, UndoLogFactory, UndoOffer, WriteRenameLog,
+    RenamePresetList, RenameReport, RetireUndo, SavePreset, UndoKind, UndoLogFactory, UndoOffer,
+    WriteRenameLog,
 };
 pub(super) use run::{run_batch, run_undo};
 

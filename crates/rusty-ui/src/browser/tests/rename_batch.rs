@@ -122,6 +122,7 @@ impl Journal {
                 .collect(),
             created_at: 0,
             restore_pending: job.state == State::RestorePending,
+            kind: crate::browser::UndoKind::Rename,
         })
     }
 
@@ -143,6 +144,7 @@ impl Journal {
                 undo.book().jobs[job].state = State::RestorePending;
                 Ok(Box::new(Log::new(&undo, job, true)) as _)
             }),
+            retire: Arc::new(|_| Ok(())),
             presets: Arc::new(|| Ok(RenamePresetList::default())),
             save: Arc::new(|_, _| Ok(())),
             delete: Arc::new(|_| Ok(())),
@@ -851,6 +853,7 @@ fn undo_without_hooks_does_nothing() {
         done: vec![0, 1, 2],
         created_at: 0,
         restore_pending: false,
+        kind: crate::browser::UndoKind::Rename,
     };
     assert!(!browser.undo_rename(offer));
     assert_eq!(listed(&browser), NAMES);

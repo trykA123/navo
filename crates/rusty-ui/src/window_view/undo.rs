@@ -3,7 +3,8 @@ use rusty_l10n::{t, tr};
 
 use super::FerriteWindow;
 use super::strip::undo_key;
-use crate::browser::UndoOffer;
+use super::undo_retained::RetainedUndo;
+use crate::browser::{UndoKind, UndoOffer};
 use crate::confirm_dialog::ConfirmProps;
 use crate::file_list::UndoLast;
 use crate::format;
@@ -72,7 +73,14 @@ impl FerriteWindow {
         if self.restores_workspace() {
             return self.restore_workspace(window, cx);
         }
-        let Some(last) = self.browser.rename_hooks().map(|hooks| hooks.last.clone()) else {
+        if self.job_ui.is_restoring {
+            return self.tell_undo(tr("undo-retained-busy"), cx);
+        }
+        let Some((last, retire)) = self
+            .browser
+            .rename_hooks()
+            .map(|hooks| (hooks.last.clone(), hooks.retire.clone()))
+        else {
             return self.tell_undo(tr("undo-nothing"), cx);
         };
         let offer = match last() {
@@ -80,6 +88,9 @@ impl FerriteWindow {
             Ok(None) => return self.tell_undo(tr("undo-nothing"), cx),
             Err(reason) => return self.tell_undo(t!("undo-read-failed", reason = reason), cx),
         };
+        if let UndoKind::Retained(ids) = offer.kind.clone() {
+            return self.undo_retained(RetainedUndo { offer, ids, retire }, cx);
+        }
         if self.browser.renaming() {
             return self.tell_undo(tr("rename-busy"), cx);
         }
