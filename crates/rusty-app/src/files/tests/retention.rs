@@ -53,7 +53,6 @@ fn editor_save_refuses_files_inside_retained_folders() {
 
 #[test]
 fn review_editor_saves_can_run_beside_another_ordinary_mutation() {
-    let _isolation = crate::jobs::test_mutation_isolation();
     let dir = tempfile::tempdir().unwrap();
     let dirs = rusty_store::StoreDirs::in_profile(dir.path());
     dirs.ensure().unwrap();
@@ -73,18 +72,40 @@ fn review_editor_saves_can_run_beside_another_ordinary_mutation() {
 
 #[test]
 fn default_editor_save_ignores_an_exclusive_experimental_lease() {
-    let _isolation = crate::jobs::test_mutation_isolation();
     let root = tempfile::tempdir().unwrap();
     let dirs = rusty_store::StoreDirs::in_profile(root.path());
     dirs.ensure().unwrap();
     let path = root.path().join("a.txt");
     std::fs::write(&path, b"original").unwrap();
     let location = Location::new(path.to_string_lossy().into_owned()).unwrap();
-    let exclusive = crate::jobs::test_mutation_file();
+    let exclusive = crate::jobs::test_mutation_file(&dirs.data);
     exclusive.try_lock().unwrap();
     std::fs::rename(&dirs.config, root.path().join("parked-config")).unwrap();
     let hooks = super::super::profile_hooks(None, Some(&dirs), false);
     (hooks.write)(&location, &save()).unwrap();
+    assert_eq!(std::fs::read(path).unwrap(), b"replacement");
+}
+
+#[test]
+fn editor_save_waits_for_a_held_exclusive_lease_then_saves() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = rusty_store::StoreDirs::in_profile(root.path());
+    dirs.ensure().unwrap();
+    let path = root.path().join("a.txt");
+    std::fs::write(&path, b"original").unwrap();
+    let location = Location::new(path.to_string_lossy().into_owned()).unwrap();
+    let _journal = crate::jobs::open(&dirs.journal_file()).unwrap();
+    let exclusive = crate::jobs::test_mutation_file(&dirs.data);
+    exclusive.try_lock().unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        drop(exclusive);
+    });
+    let started = std::time::Instant::now();
+    let hooks = super::super::profile_hooks(None, Some(&dirs), true);
+    (hooks.write)(&location, &save()).unwrap();
+    assert!(started.elapsed() >= std::time::Duration::from_millis(200));
+    release.join().unwrap();
     assert_eq!(std::fs::read(path).unwrap(), b"replacement");
 }
 

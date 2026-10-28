@@ -2,7 +2,6 @@ use super::*;
 
 #[test]
 fn default_jobs_never_acquire_a_user_wide_lease() {
-    let _isolation = crate::jobs::test_mutation_isolation();
     let (_root, dirs, journal) = setup();
     let fs = FakeFs::new();
     let copy = copy(&fs);
@@ -34,7 +33,7 @@ fn default_jobs_never_acquire_a_user_wide_lease() {
     for plan in plans {
         let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
         check(log.as_mut(), &plan, &fs, &CancelToken::new()).unwrap();
-        let other = super::super::super::mutation_lock::test_file();
+        let other = super::super::super::mutation_lock::test_file(&dirs.data);
         assert!(
             other.try_lock().is_ok(),
             "default {:?} held a global lease",
@@ -55,15 +54,18 @@ fn default_guard_ignores_unavailable_profile_directories_and_database() {
 
 #[test]
 fn default_writers_and_recovery_ignore_an_exclusive_experimental_lease() {
-    let _isolation = crate::jobs::test_mutation_isolation();
     let (root, dirs, _journal) = setup();
-    let exclusive = crate::jobs::test_mutation_file();
+    let exclusive = crate::jobs::test_mutation_file(&dirs.data);
     exclusive.try_lock().unwrap();
     let target = crate::startup::path_location(&root.path().join("new.txt")).unwrap();
     assert!(claim_write(&dirs, &target, false).unwrap().is_none());
     let _create = write_factory(dirs.clone(), false)(&target).unwrap();
     LocalFs::new().create_file(&target).unwrap();
-    assert!(crate::jobs::claim_recovery(false).unwrap().is_none());
+    assert!(
+        crate::jobs::claim_recovery(&dirs.data, false)
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -100,7 +102,6 @@ fn experimental_mode_protects_reserved_directories() {
 
 #[test]
 fn default_rename_undo_never_acquires_a_user_wide_lease() {
-    let _isolation = crate::jobs::test_mutation_isolation();
     let (_root, dirs, journal) = setup();
     let fs = FakeFs::new();
     let mut plan = copy(&fs);
@@ -117,5 +118,9 @@ fn default_rename_undo_never_acquires_a_user_wide_lease() {
         .unwrap();
     let mut undo = crate::jobs::profile_undo(&journal, job, &dirs, false).unwrap();
     check(undo.as_mut(), &plan, &fs, &CancelToken::new()).unwrap();
-    assert!(crate::jobs::test_mutation_file().try_lock().is_ok());
+    assert!(
+        crate::jobs::test_mutation_file(&dirs.data)
+            .try_lock()
+            .is_ok()
+    );
 }

@@ -180,6 +180,7 @@ impl JobWork {
                 ops: self.ops.as_ref(),
                 cancel: &self.cancel,
                 progress,
+                waiting: &mut |is_waiting| self.report_waiting(is_waiting),
                 retain_deletes: self.retain_deletes,
             })
         } else {
@@ -237,6 +238,14 @@ impl JobWork {
         run_job_parallel(&self.plan, &[], ctx, workers)
     }
 
+    fn report_waiting(&self, is_waiting: bool) {
+        let id = self.id;
+        let _ = self
+            .sender
+            .send(Message::Job(JobUpdate::Waiting { id, is_waiting }));
+        (self.wake)();
+    }
+
     fn check_log(
         &self,
         log: &mut dyn OpLog,
@@ -247,6 +256,7 @@ impl JobWork {
             ops: self.ops.as_ref(),
             cancel: &self.cancel,
             progress,
+            waiting: &mut |is_waiting| self.report_waiting(is_waiting),
             retain_deletes: self.retain_deletes,
         });
         let Err(message) = checked else {

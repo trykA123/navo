@@ -13,6 +13,7 @@ pub enum Pause {
     Off,
     Asked,
     On,
+    Waiting,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -181,6 +182,7 @@ impl JobInfo {
             }
             Pause::Asked => parts.push("Pausing…".to_owned()),
             Pause::On => parts.push("Paused".to_owned()),
+            Pause::Waiting => parts.push(tr("job-waiting")),
         }
         parts.join(" · ")
     }

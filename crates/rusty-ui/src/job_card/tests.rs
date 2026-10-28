@@ -257,6 +257,14 @@ fn a_paused_job_says_paused_instead_of_speed_and_time_left() {
 }
 
 #[test]
+fn a_waiting_job_says_so_and_is_neither_paused_nor_timed() {
+    let job = paused(Pause::Waiting);
+    assert!(job.status_text().ends_with(&rusty_l10n::tr("job-waiting")));
+    assert!(!job.is_paused());
+    assert_eq!(job.left(), None);
+}
+
+#[test]
 fn a_job_asked_to_pause_says_pausing() {
     assert_eq!(
         paused(Pause::Asked).status_text(),

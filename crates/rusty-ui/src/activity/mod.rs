@@ -83,8 +83,9 @@ impl ActivityItem {
             chip: chip.into(),
             detail: Some(detail.into()),
             progress: (job.state == JobRowState::Running).then(|| job.fraction()),
-            paused: job.state == JobRowState::Running && job.pause != Pause::Off,
-            can_pause: job.state == JobRowState::Running,
+            paused: job.state == JobRowState::Running
+                && matches!(job.pause, Pause::Asked | Pause::On),
+            can_pause: job.state == JobRowState::Running && job.pause != Pause::Waiting,
             can_cancel: true,
             ..Self::new(ActivityId::Job(job.id), ActivityKind::Job, title)
         }

@@ -131,6 +131,7 @@ impl Browser {
             sources: pending.sources.len(),
             progress: start_progress(&pending.plan),
             status: JobStatus::Queued,
+            is_waiting: false,
             cancel: cancel.clone(),
             source_tab: pending.source_tab,
             undo: matches!(run, Run::Undo { .. }),
@@ -220,6 +221,9 @@ impl Browser {
             JobUpdate::Progress { id, progress } => {
                 self.with_job(id, |job| job.progress = progress)
             }
+            JobUpdate::Waiting { id, is_waiting } => {
+                self.with_job(id, |job| job.is_waiting = is_waiting)
+            }
             JobUpdate::Done { id, ended } => self.finish_job(id, ended),
         }
     }
@@ -305,6 +309,7 @@ impl Browser {
                     paused: false,
                 },
                 status: JobStatus::Failed(error.message()),
+                is_waiting: false,
                 cancel: CancelToken::new(),
                 source_tab: request.source_tab,
                 undo: false,
@@ -348,6 +353,7 @@ impl Browser {
                 job.progress = progress;
             }
             job.status = status;
+            job.is_waiting = false;
             job.report = report;
             source_tab = Some(job.source_tab);
             landing = job.landing();

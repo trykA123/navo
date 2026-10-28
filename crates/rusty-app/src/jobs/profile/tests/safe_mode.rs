@@ -80,6 +80,7 @@ fn refusal(rig: &Rig, plan: &OperationPlan) -> String {
                 ops: &ops,
                 cancel: &CancelToken::new(),
                 progress: &mut |_| {},
+                waiting: &mut |_| {},
                 retain_deletes: None,
             })
             .unwrap_err(),
@@ -95,6 +96,7 @@ fn run(rig: &Rig, plan: &OperationPlan) {
         ops: &ops,
         cancel: &cancel,
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: None,
     })
     .unwrap();

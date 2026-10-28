@@ -24,6 +24,7 @@ fn checked(
         ops: &rusty_fs::LocalFs::new(),
         cancel: &rusty_fs::CancelToken::new(),
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: None,
     })
 }

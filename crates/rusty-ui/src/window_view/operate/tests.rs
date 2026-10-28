@@ -107,6 +107,7 @@ fn job(kind: OpKind, status: JobStatus) -> JobView {
             paused: false,
         },
         status,
+        is_waiting: false,
         cancel: CancelToken::new(),
         source_tab: AppState::new(at("/home")).active_tab().id(),
         undo: false,

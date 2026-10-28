@@ -68,6 +68,7 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
         },
         speed,
         pause: match (job.cancel.is_paused(), progress.paused) {
+            _ if job.is_waiting => Pause::Waiting,
             (false, _) => Pause::Off,
             (true, false) => Pause::Asked,
             (true, true) => Pause::On,

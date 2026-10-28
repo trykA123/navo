@@ -50,6 +50,7 @@ fn execute(log: &mut dyn OpLog, plan: &OperationPlan, ops: &dyn ProviderOps) -> 
         ops,
         cancel: &CancelToken::new(),
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: None,
     })
     .unwrap();
@@ -181,6 +182,7 @@ fn execute_partial(
         ops: fs,
         cancel: &cancel,
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: None,
     })
     .unwrap();

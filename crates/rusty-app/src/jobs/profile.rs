@@ -6,6 +6,7 @@ use rusty_core::{Location, OpKind, OperationPlan, Step};
 use rusty_store::{RetentionCatalog, RetentionSettings, StoreDirs};
 use rusty_ui::browser::{LogFactory, OpLog, WriteFactory};
 
+use super::mutation_lock::{self, LeaseError, Mode, Wait};
 use super::{JournalLog, SharedJournal, create_log, deletion, overwrite};
 
 pub fn profile_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
@@ -93,23 +94,34 @@ pub(crate) fn claim_write(
     target: &Location,
     experimental: bool,
 ) -> Result<Option<File>, String> {
+    write_lease(dirs, target, experimental, Wait::bounded()).map_err(String::from)
+}
+
+fn write_lease(
+    dirs: &StoreDirs,
+    target: &Location,
+    experimental: bool,
+    wait: Wait<'_>,
+) -> Result<Option<File>, LeaseError> {
     let lease = experimental
-        .then(|| super::mutation_lock::shared(None))
+        .then(|| mutation_lock::lease(&dirs.data, Mode::Shared, wait))
         .transpose()?;
-    let resolved = rusty_fs::mutation_location(target).map_err(|error| error.message())?;
-    guard_paths(&[resolved], dirs, experimental)?;
+    let resolved =
+        rusty_fs::mutation_location(target).map_err(|error| LeaseError::Failed(error.message()))?;
+    guard_paths(&[resolved], dirs, experimental).map_err(LeaseError::Failed)?;
     Ok(lease)
 }
 
 pub(crate) fn write_factory(dirs: StoreDirs, experimental: bool) -> WriteFactory {
     Arc::new(move |target| {
-        claim_write(&dirs, target, experimental)
+        write_lease(&dirs, target, experimental, Wait::bounded())
             .map(|lease| Box::new(lease) as Box<dyn Send>)
             .map_err(|error| {
-                tracing::warn!(%error, "file creation refused");
+                let kind = error.kind();
+                tracing::warn!(error = %String::from(error), "file creation refused");
                 rusty_core::FsError {
                     location: Some(target.clone()),
-                    ..rusty_core::FsError::new(rusty_core::FsErrorKind::AccessDenied)
+                    ..rusty_core::FsError::new(kind)
                 }
             })
     })

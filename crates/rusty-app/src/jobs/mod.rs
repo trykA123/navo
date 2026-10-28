@@ -15,10 +15,9 @@ mod identity;
 mod maintenance;
 mod marks;
 mod mutation_lock;
+pub(crate) use mutation_lock::claim_recovery;
 #[cfg(test)]
 pub(crate) use mutation_lock::test_file as test_mutation_file;
-#[cfg(test)]
-pub(crate) use mutation_lock::test_isolation as test_mutation_isolation;
 mod overwrite;
 mod pending;
 mod profile;
@@ -31,9 +30,6 @@ pub use pending::StillPending;
 pub use pending::still_pending;
 pub(crate) use profile::{claim_write, retains_deletes, write_factory};
 pub use profile::{experimental_factory, profile_factory};
-pub(crate) fn claim_recovery(experimental: bool) -> Result<Option<File>, String> {
-    experimental.then(|| mutation_lock::claim(None)).transpose()
-}
 pub use recovery::{RecoveryReport, recover_profile};
 #[cfg(test)]
 mod default_profile;
@@ -205,31 +201,6 @@ impl JournalLog {
 }
 
 impl JournalLog {
-    fn claim_lease(
-        &mut self,
-        operation: &rusty_ui::browser::LoggedOperation<'_>,
-    ) -> Result<(), String> {
-        if !self.experimental_retention || self.global_lease.is_some() {
-            return Ok(());
-        }
-        let lease = if self.retained.is_some()
-            || self.overwrites.is_some()
-            || operation.plan.steps.iter().any(|step| {
-                matches!(
-                    step,
-                    rusty_core::Step::Rename { .. }
-                        | rusty_core::Step::Recycle { .. }
-                        | rusty_core::Step::RemoveFolder { .. }
-                )
-            }) {
-            mutation_lock::claim(Some(operation.cancel))?
-        } else {
-            mutation_lock::shared(Some(operation.cancel))?
-        };
-        self.global_lease = Some(lease);
-        Ok(())
-    }
-
     fn complete(&self, state: JobState, ops: &dyn ProviderOps) -> Result<(), String> {
         if self.overwrites.is_some() {
             return overwrite::finish(self, state, ops);
@@ -343,9 +314,12 @@ impl JobLog for JournalLog {
 }
 
 impl OpLog for JournalLog {
-    fn check(&mut self, operation: rusty_ui::browser::LoggedOperation<'_>) -> Result<(), String> {
+    fn check(
+        &mut self,
+        mut operation: rusty_ui::browser::LoggedOperation<'_>,
+    ) -> Result<(), String> {
         profile::check_confirmed(self, &operation)?;
-        self.claim_lease(&operation)?;
+        self.claim_lease(&mut operation)?;
         if let Some(dirs) = &self.profile {
             profile::guard(operation.plan, dirs, self.experimental_retention)?;
         }

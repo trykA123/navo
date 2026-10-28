@@ -51,8 +51,9 @@ impl Message {
     fn is_queued(&self) -> bool {
         !matches!(
             self,
-            Self::Job(JobUpdate::Progress { .. } | JobUpdate::Done { .. })
-                | Self::Measured(..)
+            Self::Job(
+                JobUpdate::Progress { .. } | JobUpdate::Waiting { .. } | JobUpdate::Done { .. }
+            ) | Self::Measured(..)
                 | Self::Found(..)
                 | Self::Watched(..)
                 | Self::Recheck(_)

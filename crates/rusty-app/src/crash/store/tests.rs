@@ -340,9 +340,8 @@ fn resumed_candidate_cleanup_preserves_an_unverified_replacement() {
 
 #[test]
 fn default_startup_recovery_ignores_another_profiles_mutation_lease() {
-    let _isolation = crate::jobs::test_mutation_isolation();
     let data = tempfile::tempdir().unwrap();
-    let exclusive = crate::jobs::test_mutation_file();
+    let exclusive = crate::jobs::test_mutation_file(data.path());
     exclusive.try_lock().unwrap();
     let start = check_with(Some(data.path()), false, &FakeFs::new(), false);
     assert!(start.notice.is_none());

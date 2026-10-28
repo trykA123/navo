@@ -46,6 +46,7 @@ fn execute_confirmed(
         ops,
         cancel: &CancelToken::new(),
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: confirmed,
     })
     .unwrap();
@@ -54,6 +55,7 @@ fn execute_confirmed(
         ops,
         cancel: &CancelToken::new(),
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: confirmed,
     })
     .unwrap()
@@ -109,6 +111,7 @@ fn another_profile_cannot_move_or_recycle_a_folder_with_retained_children() {
                 ops: &fs,
                 cancel: &CancelToken::new(),
                 progress: &mut |_| {},
+                waiting: &mut |_| {},
                 retain_deletes: Some(rusty_core::retention::RetentionPolicy::default()),
             })
             .is_err()
@@ -207,6 +210,7 @@ fn cancellation_after_capture_restores_the_original_and_leaves_no_live_payload()
                     cancel.cancel();
                 }
             },
+            waiting: &mut |_| {},
             retain_deletes: Some(rusty_core::retention::RetentionPolicy::default()),
         })
         .unwrap();
@@ -387,6 +391,7 @@ fn finished_rename(
         ops: fs,
         cancel: &CancelToken::new(),
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: Some(rusty_core::retention::RetentionPolicy::default()),
     })
     .unwrap();
@@ -431,6 +436,7 @@ fn refused_undo_checks_the_current_target_and_keeps_the_finished_job_terminal() 
             ops: &fs,
             cancel: &CancelToken::new(),
             progress: &mut |_| {},
+            waiting: &mut |_| {},
             retain_deletes: Some(rusty_core::retention::RetentionPolicy::default()),
         })
         .is_err()

@@ -45,6 +45,7 @@ pub struct LoggedOperation<'a> {
     pub ops: &'a dyn ProviderOps,
     pub cancel: &'a CancelToken,
     pub progress: &'a mut dyn FnMut(&Progress),
+    pub waiting: &'a mut dyn FnMut(bool),
     pub retain_deletes: Option<RetentionPolicy>,
 }
 
@@ -156,6 +157,7 @@ pub struct JobView {
     pub sources: usize,
     pub progress: Progress,
     pub status: JobStatus,
+    pub is_waiting: bool,
     pub(crate) cancel: CancelToken,
     pub(crate) source_tab: TabId,
     pub undo: bool,
@@ -182,6 +184,10 @@ pub(in crate::browser) enum JobUpdate {
     Progress {
         id: u64,
         progress: Progress,
+    },
+    Waiting {
+        id: u64,
+        is_waiting: bool,
     },
     Done {
         id: u64,

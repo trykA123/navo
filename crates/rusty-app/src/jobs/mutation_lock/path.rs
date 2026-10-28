@@ -1,14 +1,16 @@
 use std::fs::{self, File, OpenOptions};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-pub(super) fn open() -> Result<File, String> {
-    let directory = directory()?;
+use rusty_core::brand;
+
+pub(super) fn open(data: &Path) -> Result<File, String> {
+    let directory = data.join(format!("{}runtime", brand::MUTATIONS_PREFIX));
     private(&directory).map_err(|error| error.to_string())?;
     let path = directory.join("mutations.lock");
     match fs::symlink_metadata(&path) {
         Ok(metadata) if !metadata.is_file() => {
-            return Err("the shared mutation lock is not a regular file".into());
+            return Err("the profile mutation lock is not a regular file".into());
         }
         Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error.to_string()),
         _ => (),
@@ -23,49 +25,10 @@ pub(super) fn open() -> Result<File, String> {
     options.open(path).map_err(|error| error.to_string())
 }
 
-#[cfg(not(test))]
-fn directory() -> Result<PathBuf, String> {
-    super::anchor::directory()
-        .map_err(|error| format!("{}: {error}", rusty_l10n::tr("job-user-unavailable")))
-}
-
-#[cfg(test)]
-thread_local! {
-    static ISOLATED: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
-}
-
-#[cfg(test)]
-pub(super) struct Isolation {
-    _root: tempfile::TempDir,
-}
-
-#[cfg(test)]
-impl Isolation {
-    pub(super) fn new() -> Self {
-        let root = tempfile::tempdir().unwrap();
-        ISOLATED.with(|isolated| *isolated.borrow_mut() = Some(root.path().join("runtime")));
-        Self { _root: root }
-    }
-}
-
-#[cfg(test)]
-impl Drop for Isolation {
-    fn drop(&mut self) {
-        ISOLATED.with(|isolated| *isolated.borrow_mut() = None);
-    }
-}
-
-#[cfg(test)]
-fn directory() -> Result<PathBuf, String> {
-    if let Some(path) = ISOLATED.with(|isolated| isolated.borrow().clone()) {
-        return Ok(path);
-    }
-    static ROOT: std::sync::OnceLock<Result<tempfile::TempDir, String>> =
-        std::sync::OnceLock::new();
-    ROOT.get_or_init(|| tempfile::tempdir().map_err(|error| error.to_string()))
-        .as_ref()
-        .map(|root| root.path().join("runtime"))
-        .map_err(Clone::clone)
+#[cfg(unix)]
+fn uid() -> u32 {
+    // SAFETY: geteuid takes no arguments and returns the calling process's effective user ID.
+    unsafe { libc::geteuid() }
 }
 
 fn private(path: &Path) -> io::Result<()> {
@@ -86,7 +49,7 @@ fn private(path: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        if metadata.uid() != super::anchor::uid() || metadata.permissions().mode() & 0o077 != 0 {
+        if metadata.uid() != uid() || metadata.permissions().mode() & 0o077 != 0 {
             return Err(io::Error::other(
                 "mutation lock directory is not private to this user",
             ));
@@ -100,19 +63,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_test_lock_directory_is_isolated_and_shared_within_the_process() {
-        let directory = directory().unwrap();
-        assert_ne!(directory, super::super::anchor::directory().unwrap());
-        assert_eq!(
-            std::thread::spawn(|| super::directory().unwrap())
-                .join()
-                .unwrap(),
-            directory
-        );
-        let _isolation = Isolation::new();
-        let first = open().unwrap();
+    fn the_lock_lives_in_a_reserved_folder_of_the_profile() {
+        let root = tempfile::tempdir().unwrap();
+        let first = open(root.path()).unwrap();
         first.try_lock().unwrap();
-        assert!(open().unwrap().try_lock().is_err());
+        assert!(open(root.path()).unwrap().try_lock().is_err());
+        let folder = fs::read_dir(root.path()).unwrap().next().unwrap().unwrap();
+        assert!(brand::is_reserved_name(
+            &folder.file_name().to_string_lossy()
+        ));
     }
 
     #[cfg(unix)]

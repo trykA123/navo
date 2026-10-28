@@ -97,3 +97,67 @@ fn an_ended_job_cannot_be_paused_or_resumed() {
         (false, false)
     );
 }
+
+struct WaitingLog;
+
+impl JobLog for WaitingLog {
+    fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), rusty_core::FsError> {
+        Ok(())
+    }
+
+    fn undone(&mut self, _: u32, _: StepOutcome) -> Result<(), rusty_core::FsError> {
+        Ok(())
+    }
+
+    fn journal_held(&mut self, _: &rusty_fs::HeldFile) -> Result<bool, rusty_core::FsError> {
+        Ok(false)
+    }
+}
+
+impl OpLog for WaitingLog {
+    fn check(&mut self, operation: super::super::LoggedOperation<'_>) -> Result<(), String> {
+        (operation.waiting)(true);
+        operation.cancel.wait_cancelled(Duration::from_secs(5));
+        (operation.waiting)(false);
+        Err("cancelled while waiting".to_owned())
+    }
+
+    fn finish(&mut self, _: &JobOutcome, _: &dyn ProviderOps) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+fn reports_waiting(browser: &mut Browser) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        browser.poll();
+        if browser.jobs()[0].is_waiting {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    false
+}
+
+#[test]
+fn a_job_waiting_for_another_operation_shows_it_until_cancelled() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.set_operations(Operations {
+        retain_deletes: None,
+        write: None,
+        log: Arc::new(|_: &OperationPlan| Ok(Box::new(WaitingLog) as Box<dyn OpLog>)),
+        protected: Vec::new(),
+    });
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    browser.confirm();
+    let id = browser.jobs()[0].id;
+    assert!(reports_waiting(&mut browser));
+    assert_eq!(browser.jobs()[0].status, JobStatus::Running);
+    assert!(browser.cancel_job(id));
+    settle(&mut browser);
+    assert_eq!(browser.jobs()[0].status, JobStatus::Cancelled);
+    assert!(!browser.jobs()[0].is_waiting);
+    assert!(!exists(&fs, "dest/docs"));
+}

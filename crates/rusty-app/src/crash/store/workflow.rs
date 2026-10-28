@@ -37,7 +37,7 @@ pub(super) fn run(
         }
         return Ok(RecoveryNotice::loaded(data, &state));
     }
-    let _mutations = crate::jobs::claim_recovery(experimental).map_err(Error::Invalid)?;
+    let _mutations = crate::jobs::claim_recovery(data, experimental).map_err(Error::Invalid)?;
     if state.pending.is_none() {
         clear_completed_receipt(data, &state)?;
         if artifacts(&path)? {

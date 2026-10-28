@@ -100,6 +100,7 @@ fn cancel_copy(log: &mut dyn OpLog, plan: &OperationPlan, fs: &LocalFs) -> JobOu
         ops: fs,
         cancel: &cancel,
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: None,
     })
     .unwrap();

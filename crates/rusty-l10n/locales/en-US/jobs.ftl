@@ -1,8 +1,8 @@
 job-journal-unavailable = The job journal is unavailable. Restart Navo after resolving the database recovery notice.
 job-profile-unavailable = A writable profile is required before changing files. Restart Navo with a valid profile.
-job-wait-cancelled = The operation was cancelled while waiting for another profile.
-job-user-unavailable = Cannot coordinate file changes for this user. Restart Navo with a valid home folder.
-job-profile-busy = Another file operation is using this profile. Wait for it to finish and retry.
+job-wait-cancelled = The operation was cancelled while it waited for another operation.
+job-profile-busy = Another file operation is still using this profile. Try again when it finishes.
+job-waiting = Waiting for another operation…
 job-settings-read = Cannot read retention settings: { $error }
 job-settings-invalid = Fix navo.toml before changing files: { $error }
 job-settings-unknown = Fix unknown retention keys in navo.toml before changing files.

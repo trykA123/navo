@@ -37,6 +37,7 @@ fn add_running_copy(cx: &mut TestAppContext, rig: &Rig) {
                 paused: false,
             },
             status: JobStatus::Running,
+            is_waiting: false,
             cancel: CancelToken::new(),
             source_tab,
             undo: false,

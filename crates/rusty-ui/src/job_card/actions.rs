@@ -46,6 +46,7 @@ fn pause_or_resume(job: &JobInfo, actions: &Actions) -> Option<Act> {
         Pause::Asked | Pause::On => {
             Act::new("job-resume", "Resume", actions.resume.clone()?).with_glyph(IconName::Play)
         }
+        Pause::Waiting => return None,
     };
     Some(act)
 }

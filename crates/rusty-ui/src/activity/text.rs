@@ -68,6 +68,7 @@ pub(super) fn job_detail(job: &JobInfo) -> String {
         }
         Pause::Asked => parts.push(tr("activity-pausing")),
         Pause::On => parts.push(tr("activity-paused")),
+        Pause::Waiting => parts.push(tr("job-waiting")),
     }
     parts.join(" · ")
 }
@@ -151,7 +152,7 @@ pub(super) fn job_chip(job: &JobInfo) -> String {
     };
     let chip = t!(id, percent = percent(job.fraction()));
     match job.pause {
-        Pause::Off => chip,
+        Pause::Off | Pause::Waiting => chip,
         Pause::Asked | Pause::On => t!("activity-chip-paused", chip = chip),
     }
 }

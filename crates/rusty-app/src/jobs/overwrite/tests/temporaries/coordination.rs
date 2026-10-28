@@ -20,6 +20,7 @@ fn sequential_failure_retires_its_proved_partial_and_allows_retry() {
         ops: &fs,
         cancel: &CancelToken::new(),
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: None,
     })
     .unwrap();

@@ -36,6 +36,7 @@ fn check(
         ops: fs,
         cancel,
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: None,
     })
 }
@@ -122,7 +123,10 @@ fn structural_renames_exclude_writers_until_the_holder_cleanup_finishes() {
     let mut log = experimental_factory(journal, dirs.clone())(&plan).unwrap();
     check(log.as_mut(), &plan, &fs, &CancelToken::new()).unwrap();
     let target = crate::startup::path_location(&root.path().join("new.txt")).unwrap();
-    assert!(claim_write(&dirs, &target, true).is_err());
+    assert_eq!(
+        write_lease(&dirs, &target, true, waiting::short()).unwrap_err(),
+        LeaseError::Busy
+    );
     drop(log);
     assert!(claim_write(&dirs, &target, true).is_ok());
 }
@@ -134,3 +138,5 @@ mod activation;
 mod main_compat;
 
 mod safe_mode;
+
+mod waiting;

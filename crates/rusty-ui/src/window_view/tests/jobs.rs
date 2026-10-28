@@ -59,6 +59,7 @@ pub(super) fn add(cx: &mut TestAppContext, view: &Entity<FerriteWindow>, job: Fa
                 paused: false,
             },
             status: job.status,
+            is_waiting: false,
             cancel: CancelToken::new(),
             source_tab,
             undo: false,

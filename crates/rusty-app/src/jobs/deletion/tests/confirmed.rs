@@ -34,6 +34,7 @@ fn checked_sized(
         ops: &fs,
         cancel: &CancelToken::new(),
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: confirmed,
     });
     if result.is_err() {
@@ -91,6 +92,7 @@ fn an_oversized_delete_confirmed_as_permanent_runs_and_deletes_permanently() {
         ops: &fs,
         cancel: &cancel,
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: confirmed,
     })
     .unwrap();
@@ -99,6 +101,7 @@ fn an_oversized_delete_confirmed_as_permanent_runs_and_deletes_permanently() {
         ops: &fs,
         cancel: &cancel,
         progress: &mut |_| {},
+        waiting: &mut |_| {},
         retain_deletes: confirmed,
     });
     assert!(retained.is_none());
