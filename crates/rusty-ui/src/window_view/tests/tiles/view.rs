@@ -113,6 +113,46 @@ fn dragging_previews_then_saves_the_root_ratio_and_double_click_evens_it(cx: &mu
     assert_eq!(session_ratio(cx, &view), 500);
 }
 
+fn first_pane_width(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    pane: u64,
+) -> gpui_kit::Pixels {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.find(("pane", pane)).bounds().size.width
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn a_drag_moves_only_the_divider_and_resizes_the_panes_on_release(cx: &mut TestAppContext) {
+    let (window, view) = open_tiles(cx, 0);
+    let first = view.read_with(cx, |view, _| view.panes()[0].get());
+    let before = first_pane_width(cx, window, first);
+    let (from, to) = cx
+        .update_window(window, |_, window, _| {
+            let area = window.find("tiles").bounds();
+            let from = window.find("divider-root").bounds().center();
+            (from, point(area.left() + area.size.width * 0.7, from.y))
+        })
+        .expect("window");
+    let mut visual = VisualTestContext::from_window(window, cx);
+    visual.simulate_mouse_down(from, MouseButton::Left, Default::default());
+    visual.simulate_mouse_move(to, MouseButton::Left, Default::default());
+    assert!((first_pane_width(cx, window, first) - before).abs() <= px(1.));
+    cx.update_window(window, |_, window, _| {
+        assert!((window.find("divider-root").bounds().center().x - to.x).abs() <= px(1.));
+    })
+    .expect("window");
+    VisualTestContext::from_window(window, cx).simulate_mouse_up(
+        to,
+        MouseButton::Left,
+        Default::default(),
+    );
+    assert!(first_pane_width(cx, window, first) > before + px(100.));
+}
+
 #[gpui_kit::test]
 fn a_drag_stops_at_the_last_ratio_that_keeps_every_pane_visible(cx: &mut TestAppContext) {
     let (window, view) = open_tiles(cx, 0);

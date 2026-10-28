@@ -87,14 +87,25 @@ impl FerriteWindow {
     }
 
     pub(super) fn tiles_layout(&self) -> Layout {
-        let mut layout = self
-            .core_layout()
+        self.core_layout()
             .cloned()
-            .unwrap_or_else(|| Layout::new(self.browser.state().focused_pane()));
+            .unwrap_or_else(|| Layout::new(self.browser.state().focused_pane()))
+    }
+
+    fn dragged_layout(&self) -> Layout {
+        let mut layout = self.tiles_layout();
         if let Some(drag) = &self.tiles.drag {
             let _ = layout.set_ratio(&drag.split.path, drag.ratio);
         }
         layout
+    }
+
+    fn dragged_split(&self, split: &SplitInfo) -> Option<SplitInfo> {
+        let drag = self.tiles.drag.as_ref()?;
+        (drag.split.path == split.path).then(|| SplitInfo {
+            ratio: drag.ratio,
+            ..split.clone()
+        })
     }
 
     pub(super) fn tiles_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -154,7 +165,9 @@ impl FerriteWindow {
     fn divider(&self, split: &SplitInfo, cx: &mut Context<Self>) -> AnyElement {
         let t = tokens::current(cx);
         let gap = t.spacing.xs;
-        let line = divider_line(t, split.axis);
+        let dragged = self.dragged_split(split);
+        let line = divider_line(t, split.axis, dragged.is_some());
+        let split = dragged.as_ref().unwrap_or(split);
         positioned(split.rect)
             .id(SharedString::from(format!("divider-{}", split.path)))
             .role(Role::Splitter)
@@ -251,7 +264,7 @@ impl FerriteWindow {
         let previous = drag.ratio;
         drag.has_moved = true;
         drag.move_to(event.position);
-        if !self.tiles.fits(&self.tiles_layout())
+        if !self.tiles.fits(&self.dragged_layout())
             && let Some(drag) = &mut self.tiles.drag
         {
             drag.ratio = previous;
@@ -303,10 +316,13 @@ fn divider_position(
     }
 }
 
-fn divider_line(t: &tokens::Theme, axis: Axis) -> Div {
+fn divider_line(t: &tokens::Theme, axis: Axis, is_dragged: bool) -> Div {
     let accent = t.colors.accent;
     div()
-        .bg(gpui_kit::transparent_black())
+        .bg(match is_dragged {
+            true => accent,
+            false => gpui_kit::transparent_black(),
+        })
         .group_hover("tile-divider", move |style| style.bg(accent))
         .when(axis == Axis::SideBySide, |line| {
             line.w(t.spacing.xxs / 2.).h_full()
