@@ -116,7 +116,7 @@ fn windows_details_summarize_allow_permissions() {
         );
         let details = LocalFs::new().details(&location_of(&path)).unwrap();
         assert_eq!(details.security_note, None);
-        assert_eq!(details.acl.len(), 1);
+        assert_eq!(details.acl.len(), 1, "{mask}: {:?}", details.acl);
         assert!(details.acl[0].who.eq_ignore_ascii_case(&user));
         assert_eq!(details.acl[0].rights, expected);
         assert_eq!(details.inherited_from, None);
@@ -182,7 +182,12 @@ fn icacls(path: &Path, args: &[&str]) {
         .args(args)
         .output()
         .unwrap();
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "icacls {args:?}: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
