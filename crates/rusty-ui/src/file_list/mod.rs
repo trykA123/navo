@@ -1,6 +1,7 @@
 mod action;
 mod column_drop;
 mod drop;
+mod find;
 mod header;
 mod icons;
 mod keys;
@@ -74,6 +75,7 @@ pub struct FileList {
     drag: drop::Wiring,
     known_width: Option<KnownWidth>,
     user_widths: UserWidths,
+    find_results: Option<bool>,
 }
 
 type KnownWidth = Rc<Cell<Option<Pixels>>>;
@@ -92,7 +94,32 @@ impl FileList {
             drag: drop::Wiring::default(),
             known_width: None,
             user_widths: UserWidths::default(),
+            find_results: None,
         }
+    }
+
+    #[must_use]
+    pub(crate) fn find_results(mut self, running: Option<bool>) -> Self {
+        self.find_results = running;
+        self
+    }
+
+    fn fit_columns(
+        &self,
+        state: &Entity<ListState>,
+        window: &Window,
+        cx: &mut App,
+    ) -> (ListParts, widths::ColumnWidths) {
+        let mut parts = self.parts;
+        if self.find_results.is_some() {
+            parts.ext = false;
+        }
+        resize::shown(
+            (state, self.known_width.as_ref()),
+            (parts, self.user_widths),
+            window,
+            cx,
+        )
     }
 
     pub fn remember_width(mut self, width: Rc<Cell<Option<Pixels>>>) -> Self {
@@ -163,6 +190,7 @@ struct ListContext {
     on_list_action: Option<ActionHandler>,
     parts: ListParts,
     widths: widths::ColumnWidths,
+    find_results: Option<bool>,
     drag: drop::Wiring,
 }
 
@@ -214,7 +242,7 @@ impl ListContext {
     }
 
     fn clear_filter(&self, window: &mut Window, cx: &mut App) {
-        if self.props.filter.is_some() {
+        if self.find_results == Some(true) || self.props.filter.is_some() {
             self.act(FileListAction::Filter(FilterEdit::Clear), window, cx);
         } else {
             cx.propagate();
@@ -313,8 +341,7 @@ impl RenderOnce for FileList {
         let scroll = watch::follow_scroll(&state, wanted, row_height, cx);
         let lift = lift::lift_for(&state, (self.props.view.cursor, self.cover), row_height, cx);
         let len = self.props.rows.len();
-        let shown = (self.parts, self.user_widths);
-        let (parts, widths) = resize::shown((&state, self.known_width.as_ref()), shown, window, cx);
+        let (parts, widths) = self.fit_columns(&state, window, cx);
         let ctx = Rc::new(ListContext {
             props: self.props,
             state: state.clone(),
@@ -324,6 +351,7 @@ impl RenderOnce for FileList {
             parts,
             widths,
             drag: self.drag,
+            find_results: self.find_results,
         });
         let list = virtual_list(&ctx, &scroll, row_height);
         let watch = |state| watch::Watch { state, row_height };

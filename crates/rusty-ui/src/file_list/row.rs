@@ -21,6 +21,7 @@ pub(super) struct RowLook<'a> {
     pub is_active_pane: bool,
     pub parts: ListParts,
     pub widths: ColumnWidths,
+    pub is_find: bool,
 }
 
 fn fixed_width(look: &RowLook, by: SortBy) -> Pixels {
@@ -149,6 +150,9 @@ fn name_cell(
                 .when(look.parts.icons, |d| d.child(glyph))
                 .child(
                     div()
+                        .id("find-name")
+                        .aria_label(text.clone())
+                        .test_support()
                         .min_w_0()
                         .truncate()
                         .when(is_folder || look.is_marked, |d| {
@@ -212,7 +216,12 @@ pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
     let c = &t.colors;
     let entry = look.entry;
     let display = entry.name.display();
-    let (name, extension) = kind::split_name(&display, entry.kind);
+    let (display, folder) = if look.is_find {
+        super::find::split(&display)
+    } else {
+        (display.as_ref(), "")
+    };
+    let (name, extension) = kind::split_name(display, entry.kind);
     let is_active_cursor = look.is_cursor && look.is_active_pane;
     let is_idle_cursor = look.is_cursor && !look.is_active_pane;
     columns(t)
@@ -228,6 +237,9 @@ pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
         .when(is_idle_cursor, |d| d.shadow(inset_ring(c.line)))
         .child(check_cell(look))
         .child(name_cell(look, (name, extension), zones))
+        .when(look.is_find, |d| {
+            d.child(super::find::folder_cell("find-folder", folder, t))
+        })
         .when(look.parts.ext, |d| {
             d.child(
                 div()

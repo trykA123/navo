@@ -12,6 +12,7 @@ mod drop_external;
 mod drop_menu;
 mod drop_platform;
 mod editor;
+mod find_tab;
 mod fkeys;
 mod font_settings;
 mod hand_off;

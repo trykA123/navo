@@ -26,6 +26,7 @@ type EditHandler = Rc<dyn Fn(&mut Window, &mut App)>;
 pub struct PathBar {
     id: ElementId,
     location: Location,
+    search: Option<(gpui_kit::SharedString, bool)>,
     on_navigate: Option<NavigateHandler>,
     on_edit: Option<EditHandler>,
     landing: Landing<Location>,
@@ -37,11 +38,17 @@ impl PathBar {
         Self {
             id: id.into(),
             location,
+            search: None,
             on_navigate: None,
             on_edit: None,
             landing: Landing::default(),
             menu: None,
         }
+    }
+
+    pub(crate) fn search(mut self, text: gpui_kit::SharedString, running: bool) -> Self {
+        self.search = Some((text, running));
+        self
     }
 
     pub(crate) fn menu(mut self, state: Entity<PopupMenu>) -> Self {
@@ -199,6 +206,9 @@ impl PathBar {
 
 impl RenderOnce for PathBar {
     fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        if let Some(search) = self.search.take() {
+            return super::search_path::render(self.id, search, window, cx);
+        }
         let t = tokens::current(cx).clone();
         let c = &t.colors;
         let id = self.id.clone();
@@ -225,6 +235,7 @@ impl RenderOnce for PathBar {
             .child(Fit::new(height, move |width, window, cx| {
                 self.crumb_row((width, state), window, cx)
             }))
+            .into_any_element()
     }
 }
 

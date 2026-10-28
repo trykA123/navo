@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
-use rusty_core::{Command, Location, PaneId, Tab};
+use rusty_core::{Command, PaneId, Tab};
 
 use super::FerriteWindow;
 use super::chrome_state::Hidden;
@@ -15,7 +15,7 @@ use super::list_columns::{column_keys, list_parts, user_widths};
 use super::status::status_of;
 use crate::FocusHandle;
 use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
-use crate::pane_chrome::{PaneTabs, PathBar, pane_card, path_segments, target_outline};
+use crate::pane_chrome::{PaneTabs, pane_card, path_segments, target_outline};
 use crate::prelude::*;
 use crate::settings::WindowParts;
 use crate::status_bar::{FooterParts, StatusBar, StatusBarProps};
@@ -51,6 +51,9 @@ fn footer_parts(parts: WindowParts) -> FooterParts {
 impl FerriteWindow {
     pub(super) fn filter(&mut self, edit: FilterEdit) {
         if self.prompt.is_some() {
+            return;
+        }
+        if edit == FilterEdit::Clear && self.stop_find() {
             return;
         }
         let _ = match edit {
@@ -93,7 +96,8 @@ impl FerriteWindow {
         let path = self.path_row(pane, parts, cx);
         let list = match waited {
             Some(waited) => Self::waiting_view(&waited, &focus, cx),
-            None => Self::file_list(pane, props, &focus, cx)
+            None => self
+                .file_list((pane, props), &focus, cx)
                 .parts(list_parts(parts))
                 .column_widths(user_widths(&self.values))
                 .remember_width(chrome.list_width)
@@ -135,6 +139,7 @@ impl FerriteWindow {
             .parts(footer_parts(WindowParts::of(&self.values)))
             .notice(self.status_notice().filter(|_| is_active))
             .workspace(is_active.then(|| self.workspace_button(cx)).flatten())
+            .summary(self.find_status(pane))
     }
 
     fn pane_status(&self, pane: PaneId, tab: &Tab, rows: &[rusty_fs::FsEntry]) -> StatusBarProps {
@@ -148,7 +153,7 @@ impl FerriteWindow {
 
     fn list_props(&self, tab: &Tab, is_active: bool) -> FileListProps {
         FileListProps {
-            folder: title_of(tab),
+            folder: self.tab_title(tab),
             rows: self.browser.details(tab.id()),
             view: tab.view(),
             marked: Rc::new(tab.selection().clone()),
@@ -168,28 +173,6 @@ impl FerriteWindow {
             (2, Some(1)) => "Right pane",
             _ => "Pane",
         }
-    }
-
-    fn path_row(
-        &self,
-        pane: PaneId,
-        parts: WindowParts,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        if let Some(input) = self.path_input(pane, cx) {
-            return Some(input.into_any_element());
-        }
-        if !parts.path_bar {
-            return None;
-        }
-        let state = self.browser.state();
-        let location = state
-            .pane(pane)
-            .map(|p| p.active().location().clone())
-            .unwrap_or_else(|| state.active_tab().location().clone());
-        let menu = self.chrome.get(pane).map(|chrome| chrome.path.clone());
-        let bar = Self::path_bar(pane, location, cx).when_some(menu, |bar, menu| bar.menu(menu));
-        Some(bar.into_any_element())
     }
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
@@ -260,27 +243,6 @@ impl FerriteWindow {
         Self::wire_tab_drops(tabs, pane, cx)
     }
 
-    fn path_bar(pane: PaneId, location: Location, cx: &mut Context<Self>) -> PathBar {
-        let edit = cx.weak_entity();
-        let bar = PathBar::new(("path", pane.get()), location);
-        Self::wire_crumb_drops(bar, pane, cx)
-            .on_navigate(
-                cx.listener(move |this: &mut Self, location: &Location, window, cx| {
-                    let command = Command::PaneNavigate {
-                        location: location.clone(),
-                    };
-                    this.focus_pane(pane);
-                    this.apply(&command, window, cx);
-                }),
-            )
-            .on_edit(move |_, cx| {
-                let _ = edit.update(cx, |view, cx| {
-                    view.focus_pane(pane);
-                    view.open_path_edit(pane, cx);
-                });
-            })
-    }
-
     fn list_action(
         &mut self,
         action: &FileListAction,
@@ -330,12 +292,20 @@ impl FerriteWindow {
     }
 
     fn file_list(
-        pane: PaneId,
-        props: FileListProps,
+        &self,
+        (pane, props): (PaneId, FileListProps),
         focus: &FocusHandle,
         cx: &mut Context<Self>,
     ) -> FileList {
-        let list = FileList::new(("list", pane.get()), props).track_focus(focus);
+        let find = self
+            .browser
+            .state()
+            .pane(pane)
+            .and_then(|pane| self.browser.find_results(pane.active().id()))
+            .map(crate::browser::FindResults::running);
+        let list = FileList::new(("list", pane.get()), props)
+            .track_focus(focus)
+            .find_results(find);
         Self::wire_drops(list, pane, cx)
             .on_command(
                 cx.listener(move |this: &mut Self, command: &Command, window, cx| {

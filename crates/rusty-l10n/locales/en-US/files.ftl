@@ -265,3 +265,10 @@ recently-deleted-delete-confirm = Delete now
 command-center-content-footer = Enter open hit · Ctrl+Enter results to pane · Alt+R regex · Alt+C case
 command-center-content-case = Case
 command-center-content-regex = Regex
+
+find-title-empty = Search
+find-path = search: { $text }
+find-path-filtered = search: { $text } · { $filters }
+find-counts = { $hits } hits in { $files } files
+find-searching = Searching · { $counts } · Esc stop
+find-column-folder = Folder

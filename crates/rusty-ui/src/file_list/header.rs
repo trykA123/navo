@@ -12,6 +12,7 @@ use super::{FileListAction, ListContext, ListParts, SortBy, SortKey, resize};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
+#[derive(Clone, Copy)]
 struct Column {
     by: SortBy,
     index: usize,
@@ -159,8 +160,13 @@ pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {
         .text_size(t.typography.small)
         .text_color(c.muted)
         .child(div().w(check_column(t)).flex_none())
+        .child(cell(t, all[0], &sorted, ctx))
+        .when(ctx.find_results.is_some(), |header| {
+            header.child(super::find::folder_header(t))
+        })
         .children(
             all.into_iter()
+                .skip(1)
                 .filter(|column| ctx.parts.shows(column.by))
                 .map(|column| cell(t, column, &sorted, ctx)),
         )

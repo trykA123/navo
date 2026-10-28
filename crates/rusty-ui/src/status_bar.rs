@@ -135,6 +135,7 @@ pub struct StatusBar {
     notice: Option<StatusNotice>,
     parts: FooterParts,
     workspace: Option<WorkspaceButton>,
+    summary: Option<SharedString>,
 }
 
 impl StatusBar {
@@ -145,7 +146,22 @@ impl StatusBar {
             notice: None,
             parts: FooterParts::default(),
             workspace: None,
+            summary: None,
         }
+    }
+
+    #[must_use]
+    pub(crate) fn summary(mut self, summary: Option<SharedString>) -> Self {
+        if summary.is_some() {
+            self.props = StatusBarProps::default();
+            self.parts = FooterParts {
+                contents: true,
+                free_space: false,
+                marked_totals: false,
+            };
+        }
+        self.summary = summary;
+        self
     }
 
     #[must_use]
@@ -156,7 +172,7 @@ impl StatusBar {
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.props.text_in(self.parts).is_empty() && self.notice.is_none()
+        self.summary.is_none() && self.props.text_in(self.parts).is_empty() && self.notice.is_none()
     }
 
     #[must_use]
@@ -170,6 +186,23 @@ impl StatusBar {
         self.workspace = workspace;
         self
     }
+
+    fn text(&self) -> (String, String) {
+        let text = self
+            .summary
+            .as_ref()
+            .map_or_else(|| self.props.text_in(self.parts), ToString::to_string);
+        let contents = self
+            .summary
+            .as_ref()
+            .map_or_else(|| self.props.contents_text(), |text| text.to_string());
+        let label = match &self.notice {
+            Some(notice) if text.is_empty() => notice.text.to_string(),
+            Some(notice) => format!("{} · {}", notice.text, text),
+            None => text,
+        };
+        (label, contents)
+    }
 }
 
 impl RenderOnce for StatusBar {
@@ -178,12 +211,7 @@ impl RenderOnce for StatusBar {
         let c = &t.colors;
         let props = self.props;
         let parts = self.parts;
-        let text = props.text_in(parts);
-        let label = match &self.notice {
-            Some(notice) if text.is_empty() => notice.text.to_string(),
-            Some(notice) => format!("{} · {}", notice.text, text),
-            None => text,
-        };
+        let (label, contents) = self.text();
         let more = parts.contents || props.mark.text().is_some() || parts.free_space;
         let hidden = props.hidden_text().filter(|_| parts.marked_totals);
         div()
@@ -214,7 +242,7 @@ impl RenderOnce for StatusBar {
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .when(parts.contents, |d| d.child(props.contents_text())),
+                    .when(parts.contents, |d| d.child(contents)),
             )
             .when_some(props.mark.text(), |d, mark| {
                 d.child(div().flex_none().child(mark))

@@ -6,6 +6,7 @@ mod drive_pill;
 mod drives;
 mod path_bar;
 mod path_input;
+mod search_path;
 mod segments;
 
 #[cfg(test)]
@@ -50,6 +51,7 @@ type CommandHandler = Rc<dyn Fn(&Command, &mut Window, &mut App)>;
 pub struct PaneTabs {
     id: ElementId,
     titles: Vec<SharedString>,
+    search_tabs: Vec<usize>,
     active: usize,
     is_highlighted: bool,
     is_on_accent: bool,
@@ -68,12 +70,18 @@ impl PaneTabs {
             id: id.into(),
             titles: titles.into_iter().map(Into::into).collect(),
             active,
+            search_tabs: Vec::new(),
             is_highlighted: false,
             is_on_accent: false,
             on_command: None,
             landing: Landing::default(),
             menu: None,
         }
+    }
+
+    pub(crate) fn search_tabs(mut self, indices: Vec<usize>) -> Self {
+        self.search_tabs = indices;
+        self
     }
 
     pub(crate) fn menu(mut self, state: Entity<PopupMenu>) -> Self {
@@ -146,10 +154,14 @@ impl RenderOnce for PaneTabs {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
         let bar = self.is_on_accent.then(|| on_accent(t));
-        let tabs = self
-            .titles
-            .into_iter()
-            .map(|title| Tab::new(title).icon(IconName::Folder));
+        let tabs = self.titles.into_iter().enumerate().map(|(index, title)| {
+            let glyph = if self.search_tabs.contains(&index) {
+                IconName::Search
+            } else {
+                IconName::Folder
+            };
+            Tab::new(title).icon(glyph)
+        });
         let plus = new_tab_button(bar.as_ref().unwrap_or(t), self.on_command.clone());
         let mut tabs = Tabs::new(self.id, tabs)
             .selected(self.active)

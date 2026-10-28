@@ -1,7 +1,6 @@
 use rusty_core::PaneId;
 
 use super::FerriteWindow;
-use super::pane::title_of;
 use crate::pane_chrome::{PaneMarks, marked_header, marker_tag};
 use crate::prelude::*;
 use crate::settings::WindowParts;
@@ -33,7 +32,12 @@ impl FerriteWindow {
             .browser
             .state()
             .pane(pane)
-            .map(|p| (p.tabs().iter().map(title_of).collect(), p.active_index()))
+            .map(|p| {
+                (
+                    p.tabs().iter().map(|tab| self.tab_title(tab)).collect(),
+                    p.active_index(),
+                )
+            })
             .unwrap_or_default();
         let shows_tabs = parts.tabs_with_one || titles.len() > 1;
         let drive = self.drive_pill(pane, parts.drive_button, cx);
@@ -44,6 +48,7 @@ impl FerriteWindow {
         let menu = self.chrome.get(pane).map(|chrome| chrome.tabs.clone());
         let tabs = shows_tabs.then(|| {
             let tabs = Self::tabs(pane, titles, active_index, cx)
+                .search_tabs(self.search_tabs(pane))
                 .highlighted(is_active)
                 .on_accent(marks.is_filled)
                 .when_some(menu, |tabs, menu| tabs.menu(menu));

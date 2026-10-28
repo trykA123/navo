@@ -72,6 +72,11 @@ pub(super) fn walker() -> FindWalk {
 }
 
 impl Browser {
+    #[cfg(test)]
+    pub(crate) fn set_find_walk(&mut self, walk: FindWalk) {
+        self.find_walk = walk;
+    }
+
     pub(super) fn list(&mut self, tab: TabId, location: Location, request: u64) {
         if self.keep_find_listing(tab, &location, request) {
             return;
