@@ -10,6 +10,14 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - The splash shows only when start-up takes longer than half a second.
 - Your Ferrite profile moves to Navo by itself on first start. Settings, tabs and history come with it. The old folder is renamed to Ferrite.migrated-to-navo.
 - An installed Ferrite Index service is upgraded to Navo Index. A one-time notice offers an Upgrade button.
+- Workspaces: Alt+1 to Alt+9 switch between up to nine named workspaces. Holding Alt shows a tray with a card for each one. Alt+N makes a new one from the current layout.
+- Each workspace keeps its own layout, target pane and tabs, also after a restart. Unsaved changes stay as a draft. Ctrl+S saves it, or Discard drops it.
+- You can rename, move and delete workspaces from the tray. Ctrl+Z restores a deleted one. A workspace button in the status bar keeps the tray open.
+- Tiled panes: up to four panes. Ctrl+L opens a layout switcher with five built-in layouts and room for your own, set in navo.toml or saved with Ctrl+S.
+- In the layout switcher, V and S split, X closes, Shift+arrows swap, Ctrl+arrows resize and = evens the splits.
+- Ctrl+Shift+1 to 4 focus a pane. Tab switches to the target pane. The target has a dashed outline for F5 and F6.
+- Shift+drag on a pane header swaps two panes. Dragging a divider shows a guide line. Double-click a divider to even it. Ctrl+Alt+0 resets the split.
+- Narrow windows show one pane with a strip of pane buttons. Editing the path moved from Ctrl+L to Alt+D.
 
 ### Backend branch
 
