@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use super::config::Drive;
 
-use rusty_index::file::{FileError, Header};
+use rusty_index::file::{self, FileError, Header};
 use rusty_index::ntfs::{NtfsError, NtfsIndex};
 use rusty_index::pipe::CancelToken;
 use rusty_index::table::NameTable;
@@ -48,7 +48,6 @@ pub(super) fn guard_worker(
 pub(super) fn restore_or_enumerate(
     saved: Result<(Header, NameTable, FrnMap), FileError>,
     drive: Drive,
-    resume: impl FnOnce(&mut NtfsIndex) -> Result<(), NtfsError>,
     enumerate: impl FnOnce() -> Result<NtfsIndex, NtfsError>,
 ) -> Result<NtfsIndex, NtfsError> {
     let restored = saved
@@ -58,9 +57,7 @@ pub(super) fn restore_or_enumerate(
             let journal_id = saved.0.journal_id;
             NtfsIndex::restore(saved, drive.serial, journal_id).ok()
         });
-    if let Some(mut index) = restored
-        && resume(&mut index).is_ok()
-    {
+    if let Some(index) = restored {
         return Ok(index);
     }
     enumerate()
@@ -71,6 +68,7 @@ pub(super) struct SaveClock {
     changed: Option<Duration>,
     retry_at: Option<Duration>,
     failed: bool,
+    large_batch: bool,
 }
 
 impl SaveClock {
@@ -78,12 +76,20 @@ impl SaveClock {
         self.changed = Some(now);
     }
 
+    pub fn batch(&mut self, now: Duration, records: usize) {
+        self.changed(now);
+        self.large_batch |= records > 10_000;
+    }
+
     pub fn due<T>(&self, now: Duration, snapshot: Option<T>, stopping: bool) -> bool {
         snapshot.is_some()
             && self.changed.is_some_and(|changed| {
                 stopping
                     || self.retry_at.map_or_else(
-                        || now.saturating_sub(changed) >= Duration::from_secs(30),
+                        || {
+                            self.large_batch
+                                || now.saturating_sub(changed) >= Duration::from_secs(30)
+                        },
                         |retry| now >= retry,
                     )
             })
@@ -93,10 +99,26 @@ impl SaveClock {
         self.changed = None;
         self.retry_at = None;
         self.failed = false;
+        self.large_batch = false;
     }
 
     pub fn failed(&mut self, now: Duration) {
         self.retry_at = Some(now + Duration::from_secs(if self.failed { 300 } else { 30 }));
         self.failed = true;
+    }
+
+    pub fn save(
+        &mut self,
+        path: &std::path::Path,
+        snapshot: (Header, &NameTable, &FrnMap),
+        now: Duration,
+    ) -> Result<(), FileError> {
+        let (header, table, ids) = snapshot;
+        if let Err(error) = file::save_with_ids(path, &header, table, ids) {
+            self.failed(now);
+            return Err(error);
+        }
+        self.saved();
+        Ok(())
     }
 }

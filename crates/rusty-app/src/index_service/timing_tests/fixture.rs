@@ -118,14 +118,3 @@ pub(super) fn within(case: &str, elapsed: Duration, budget: Duration) {
         "IX1 {case}: {elapsed:?} exceeds {budget:?}"
     );
 }
-
-pub(super) fn measure_within(case: &str, metrics: &[(&str, Duration)]) {
-    for &(metric, elapsed) in metrics {
-        report(case, metric, elapsed);
-    }
-    let slow: Vec<_> = metrics
-        .iter()
-        .filter(|(_, elapsed)| *elapsed > ANSWER_BUDGET)
-        .collect();
-    assert!(slow.is_empty(), "IX1 {case}: exceeds 50 ms: {slow:?}");
-}

@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError};
@@ -167,26 +166,23 @@ impl Worker {
 
     fn tick(&mut self, volume: &mut Option<Volume>, cancel: &CancelToken) -> Result<(), NtfsError> {
         if volume.is_none() {
-            let opened = Volume::open(self.drive.letter)?;
+            let mut opened = Volume::open(self.drive.letter)?;
             self.drive.serial = opened.serial()?;
-            let opened = RefCell::new(opened);
-            let index = restore_or_enumerate(
-                file::load_with_ids(&self.path),
-                self.drive,
-                |index| resume(&mut opened.borrow_mut(), index),
-                || self.enumerate(&mut opened.borrow_mut(), cancel),
-            )?;
+            let index = restore_or_enumerate(file::load_with_ids(&self.path), self.drive, || {
+                self.enumerate(&mut opened, cancel)
+            })?;
             self.replace(index);
-            *volume = Some(opened.into_inner());
+            *volume = Some(opened);
         }
         let Some(volume) = volume else {
             return Ok(());
         };
         if let Err(error) = self.follow(volume) {
-            self.shared
-                .write()
-                .unwrap_or_else(PoisonError::into_inner)
-                .index = None;
+            {
+                let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
+                state.index = None;
+                state.status.progress = Some(0);
+            }
             self.clock.saved();
             if matches!(error, NtfsError::Reenumerate) {
                 let index = self.enumerate(volume, cancel)?;
@@ -209,15 +205,22 @@ impl Worker {
         let Some(position) = position else {
             return Ok(());
         };
+        self.shared
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .status
+            .progress = Some(100);
         let batch = volume.read_journal(position)?;
+        let records = batch.records.len();
         let changed = batch.next_usn != position.next_usn;
         let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
         if let Some(index) = state.index.as_mut() {
             ensure_resolved(index.apply_batch(batch)?)?;
         }
         if changed {
-            self.clock.changed(self.started.elapsed());
+            self.clock.batch(self.started.elapsed(), records);
         }
+        state.status.progress = None;
         Ok(())
     }
 
@@ -282,12 +285,9 @@ impl Worker {
                 .unwrap_or_default()
                 .as_secs() as i64,
         };
-        if let Err(error) = file::save_with_ids(&self.path, &header, table, ids) {
-            self.clock.failed(self.started.elapsed());
-            return Err(io::Error::other(error));
-        }
-        self.clock.saved();
-        Ok(())
+        self.clock
+            .save(&self.path, (header, table, ids), self.started.elapsed())
+            .map_err(io::Error::other)
     }
 
     fn error(&self, message: String) {
@@ -308,11 +308,6 @@ fn record_error(shared: &Shared, message: String) {
         state.status.errors.truncate(3);
         state.status.errors.push(message);
     }
-}
-
-fn resume(volume: &mut Volume, index: &mut NtfsIndex) -> Result<(), NtfsError> {
-    let batch = volume.read_journal(index.position)?;
-    ensure_resolved(index.apply_batch(batch)?)
 }
 
 fn ensure_resolved(changes: Vec<rusty_index::ntfs::UnresolvedChange>) -> Result<(), NtfsError> {

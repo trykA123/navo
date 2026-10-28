@@ -448,9 +448,8 @@ fn removal_finds_the_subtree_after_compaction_and_after_loading_raw_parts() {
     let (names, offsets, parents, flags) = t.raw_parts();
     let mut loaded = NameTable::from_raw_parts(
         names.to_owned(),
-        offsets.to_vec(),
-        parents.to_vec(),
-        flags.to_vec(),
+        (offsets.to_vec(), parents.to_vec(), flags.to_vec()),
+        (t.stored_totals().0.to_vec(), t.stored_totals().1.collect()),
     )
     .unwrap();
     let users = map[users as usize].unwrap();

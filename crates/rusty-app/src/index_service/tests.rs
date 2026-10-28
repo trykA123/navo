@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use rusty_index::file::{self, Header};
-use rusty_index::ntfs::{NtfsError, NtfsIndex};
+use rusty_index::ntfs::NtfsIndex;
 use rusty_index::table::{Flags, NO_PARENT, NameTable};
 use rusty_index::usn::{UsnBatch, UsnRecord};
 use rusty_store::Search;
@@ -135,28 +135,25 @@ fn snapshot() -> (Header, NameTable, rusty_index::usn::FrnMap) {
 
 #[test]
 fn valid_snapshot_restores_and_resumes_without_enumeration() {
-    let result = restore_or_enumerate(
-        Ok(snapshot()),
-        DRIVE,
-        |index| {
-            assert_eq!(index.position.next_usn, 100);
-            index.apply_batch(UsnBatch {
-                next_usn: 110,
-                records: vec![UsnRecord {
-                    size: None,
-                    file_id: 9,
-                    parent_id: 5,
-                    usn: 101,
-                    reason: 0x100,
-                    flags: Flags::NONE,
-                    name: "later.rs".into(),
-                }],
-            })?;
-            Ok(())
-        },
-        || panic!("a valid snapshot must resume"),
-    )
+    let mut result = restore_or_enumerate(Ok(snapshot()), DRIVE, || {
+        panic!("a valid snapshot must resume")
+    })
     .unwrap();
+    assert_eq!(result.position.next_usn, 100);
+    result
+        .apply_batch(UsnBatch {
+            next_usn: 110,
+            records: vec![UsnRecord {
+                size: None,
+                file_id: 9,
+                parent_id: 5,
+                usn: 101,
+                reason: 0x100,
+                flags: Flags::NONE,
+                name: "later.rs".into(),
+            }],
+        })
+        .unwrap();
     assert_eq!(result.position.next_usn, 110);
     assert_eq!(
         result.table.path_with(result.ids[&9], '\\').as_deref(),
@@ -173,29 +170,24 @@ fn invalid_old_or_changed_snapshots_enumerate() {
             supported: 2,
         }),
     ] {
-        let result = restore_or_enumerate(
-            saved,
-            DRIVE,
-            |_| panic!("invalid file"),
-            || NtfsIndex::restore(snapshot(), 42, 7),
-        )
-        .unwrap();
+        let result =
+            restore_or_enumerate(saved, DRIVE, || NtfsIndex::restore(snapshot(), 42, 7)).unwrap();
         assert_eq!(result.position.next_usn, 100);
     }
-    for serial in [42, 43] {
-        let mut enumerated = false;
-        restore_or_enumerate(
-            Ok(snapshot()),
-            Drive { serial, ..DRIVE },
-            |_| Err(NtfsError::Reenumerate),
-            || {
-                enumerated = true;
-                NtfsIndex::restore(snapshot(), 42, 7)
-            },
-        )
-        .unwrap();
-        assert!(enumerated);
-    }
+    let mut enumerated = false;
+    restore_or_enumerate(
+        Ok(snapshot()),
+        Drive {
+            serial: 43,
+            ..DRIVE
+        },
+        || {
+            enumerated = true;
+            NtfsIndex::restore(snapshot(), 42, 7)
+        },
+    )
+    .unwrap();
+    assert!(enumerated);
 }
 
 #[test]

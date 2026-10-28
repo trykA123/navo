@@ -94,10 +94,10 @@ impl NameTable {
 
     pub(crate) fn from_raw_parts(
         names: String,
-        offsets: Vec<u32>,
-        parents: Vec<u32>,
-        flags: Vec<u16>,
+        arrays: (Vec<u32>, Vec<u32>, Vec<u16>),
+        totals: (Vec<u64>, Vec<[u32; 2]>),
     ) -> Option<Self> {
+        let (offsets, parents, flags) = arrays;
         let valid_flags = Flags::FOLDER.bits()
             | Flags::HIDDEN.bits()
             | Flags::SYSTEM.bits()
@@ -105,6 +105,8 @@ impl NameTable {
             | Flags::DELETED;
         if offsets.len() != parents.len()
             || offsets.len() != flags.len()
+            || offsets.len() != totals.0.len()
+            || offsets.len() != totals.1.len()
             || u32::try_from(offsets.len()).is_err()
             || u32::try_from(names.len()).is_err()
             || (!names.is_empty() && !names.ends_with(NAME_END))
@@ -138,7 +140,9 @@ impl NameTable {
             return None;
         }
         table.relink();
-        table.rebuild_totals();
+        if !table.restore_totals(totals.0, totals.1) {
+            return None;
+        }
         Some(table)
     }
 

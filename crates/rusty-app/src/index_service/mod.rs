@@ -172,6 +172,8 @@ mod tests;
 #[cfg(test)]
 mod install_rollback_tests;
 #[cfg(test)]
+mod persistence_tests;
+#[cfg(test)]
 mod reliability_tests;
 #[cfg(test)]
 mod timing_tests;

@@ -125,8 +125,10 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
     }
     let mut body = Vec::new();
     body.try_reserve_exact(body_len)?;
-    body.resize(body_len, 0);
-    file.read_exact(&mut body)?;
+    file.take(body_len as u64).read_to_end(&mut body)?;
+    if body.len() != body_len {
+        return Err(FileError::BadLength);
+    }
     if checksum(&prefix[..CHECKSUM_START], &body) != expected_checksum {
         return Err(FileError::BadChecksum);
     }
@@ -143,11 +145,10 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
             u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
         ]
     })?;
-    let mut table = NameTable::from_raw_parts(names, offsets, parents, flags)
-        .ok_or(FileError::InvalidData("invalid name table"))?;
-    if !table.restore_totals(sizes, counts) {
-        return Err(FileError::InvalidData("invalid subtree totals"));
-    }
+    let table = NameTable::from_raw_parts(names, (offsets, parents, flags), (sizes, counts))
+        .ok_or(FileError::InvalidData(
+            "invalid name table or subtree totals",
+        ))?;
     validate_root(&header, &table)?;
     let ids = decode_ids(&mut input, lengths.references)?;
     validate_ids(&table, &ids)?;
@@ -274,9 +275,8 @@ fn read_values<const N: usize, T>(
 ) -> Result<Vec<T>, FileError> {
     let mut values = Vec::new();
     values.try_reserve_exact(count as usize)?;
-    for _ in 0..count {
-        values.push(decode(read_array(input)?));
-    }
+    let bytes = take(input, count as usize * N)?;
+    values.extend(bytes.as_chunks::<N>().0.iter().copied().map(decode));
     Ok(values)
 }
 
