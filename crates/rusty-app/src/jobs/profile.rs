@@ -1,9 +1,10 @@
 use std::fs::{self, File};
 use std::io;
+use std::path::Path;
 use std::sync::Arc;
 
-use rusty_core::{Location, OpKind, OperationPlan, Step};
-use rusty_store::{RetentionCatalog, RetentionSettings, StoreDirs};
+use rusty_core::{Location, OpKind, OperationPlan, Resolution, Step};
+use rusty_store::{RetentionCatalog, RetentionSettings, SettingsError, StoreDirs};
 use rusty_ui::browser::{LogFactory, OpLog, WriteFactory};
 
 use super::mutation_lock::{self, LeaseError, Mode, Wait};
@@ -22,7 +23,7 @@ fn factory(journal: SharedJournal, dirs: StoreDirs, experimental: bool) -> LogFa
         guard(plan, &dirs, experimental)?;
         let settings =
             if experimental && matches!(plan.kind, OpKind::Copy | OpKind::Move | OpKind::Delete) {
-                settings(&dirs)?
+                retention_for(plan, &dirs)?
             } else {
                 RetentionSettings::default()
             };
@@ -137,8 +138,27 @@ pub(crate) fn retains_deletes(dirs: &StoreDirs) -> Option<rusty_core::retention:
     }
 }
 
+fn retention_for(plan: &OperationPlan, dirs: &StoreDirs) -> Result<RetentionSettings, String> {
+    settings(dirs).or_else(|error| {
+        let overwrites = plan
+            .conflicts
+            .iter()
+            .any(|conflict| conflict.resolution == Resolution::Overwrite);
+        if plan.kind == OpKind::Delete || overwrites {
+            Err(error)
+        } else {
+            Ok(RetentionSettings::default())
+        }
+    })
+}
+
 pub(super) fn settings(dirs: &StoreDirs) -> Result<RetentionSettings, String> {
-    let text = match fs::read_to_string(dirs.settings_file()) {
+    read_retention(&dirs.settings_file())
+}
+
+pub(crate) fn read_retention(path: &Path) -> Result<RetentionSettings, String> {
+    let file = path.display().to_string();
+    let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             return Ok(RetentionSettings::default());
@@ -146,14 +166,29 @@ pub(super) fn settings(dirs: &StoreDirs) -> Result<RetentionSettings, String> {
         Err(error) => {
             return Err(rusty_l10n::t!(
                 "job-settings-read",
+                file = file,
                 error = error.to_string()
             ));
         }
     };
-    let (settings, unknown) = rusty_store::parse_retention_settings(&text)
-        .map_err(|error| rusty_l10n::t!("job-settings-invalid", error = error.to_string()))?;
+    let (settings, unknown) =
+        rusty_store::parse_retention_settings(&text).map_err(|error| match error {
+            SettingsError::Invalid { line, message, .. } => {
+                rusty_l10n::t!(
+                    "job-settings-invalid",
+                    file = file.clone(),
+                    line = line,
+                    error = message
+                )
+            }
+            other => rusty_l10n::t!(
+                "job-settings-read",
+                file = file.clone(),
+                error = other.to_string()
+            ),
+        })?;
     if unknown.iter().any(|key| key.starts_with("retention.")) {
-        return Err(rusty_l10n::tr("job-settings-unknown"));
+        return Err(rusty_l10n::t!("job-settings-unknown", file = file));
     }
     Ok(settings)
 }

@@ -87,3 +87,4 @@ settings-ext-width = Ext column width
 settings-size-width = Size column width
 settings-date-width = Date column width
 settings-column-width-help = Width in pixels at 100 % scale, where 0 fits the column to its values.
+settings-deletes-paused = { $problem }. Deletes and overwrites are paused until the file is fixed.

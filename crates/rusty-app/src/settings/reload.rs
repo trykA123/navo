@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -6,7 +7,7 @@ use rusty_ui::settings::DefaultShift;
 use rusty_ui::window_view::SettingsNews;
 
 use super::start::Started;
-use super::{describe, report, values_of};
+use super::{paused, report, values_of};
 use crate::search_hooks::Remember;
 
 pub(super) struct Delivery {
@@ -68,6 +69,7 @@ pub struct Reloader {
     store: Arc<Mutex<SettingsStore>>,
     problem: Option<String>,
     remember: Option<Remember>,
+    guarded: Option<PathBuf>,
 }
 
 impl Reloader {
@@ -77,6 +79,7 @@ impl Reloader {
             store,
             problem,
             remember: None,
+            guarded: None,
         }
     }
 
@@ -86,11 +89,17 @@ impl Reloader {
         self
     }
 
+    #[must_use]
+    pub(super) fn guarding(mut self, guarded: Option<PathBuf>) -> Self {
+        self.guarded = guarded;
+        self
+    }
+
     pub fn reload(&mut self) -> Option<SettingsNews> {
         let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
         let before = store.current().clone();
         if let Some(error) = store.reload().error {
-            let message = describe(&error);
+            let message = paused::describe(&error, self.guarded.as_deref());
             if self.problem.as_ref() == Some(&message) {
                 return None;
             }

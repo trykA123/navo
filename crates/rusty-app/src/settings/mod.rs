@@ -18,6 +18,7 @@ use crate::watch_file::watch_file;
 use ledger::LedgerFile;
 
 mod ledger;
+mod paused;
 mod reload;
 mod start;
 
@@ -69,13 +70,16 @@ fn watching(
         .as_mut()
         .map(|loaded| std::mem::take(&mut loaded.default_changes))
         .unwrap_or_default();
+    let guarded = paused::guarded(loaded.as_ref());
     let (hooks, shared) = parts(loaded);
     let Some((path, store)) = shared else {
         return (hooks, None);
     };
     let problem = hooks.load_error.as_ref().map(ToString::to_string);
-    let reloader =
-        reload::Delivery::new(Reloader::new(store, problem).remembering(remember), on_news);
+    let reloader = Reloader::new(store, problem)
+        .remembering(remember)
+        .guarding(guarded);
+    let reloader = reload::Delivery::new(reloader, on_news);
     let watched = reloader.clone();
     let watching = watch_file(&path, move || {
         reload::deliver(&watched);
@@ -93,13 +97,14 @@ fn watching(
 
 fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
     let path = loaded.as_ref().map(|loaded| loaded.path.clone());
+    let guarded = paused::guarded(loaded.as_ref());
     let ledger = Mutex::new(LedgerFile::new(
         loaded.as_ref().and_then(|loaded| loaded.ledger.clone()),
     ));
     let load_error = loaded
         .as_ref()
         .and_then(|loaded| loaded.report.error.as_ref())
-        .map(describe);
+        .map(|error| paused::describe(error, guarded.as_deref()));
     if let Some(message) = &load_error {
         report(message);
     }
@@ -271,6 +276,8 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
 mod live_tests;
 #[cfg(test)]
 mod notice_tests;
+#[cfg(test)]
+mod paused_tests;
 #[cfg(test)]
 mod start_tests;
 #[cfg(test)]

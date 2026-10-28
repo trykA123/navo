@@ -112,7 +112,7 @@ fn session_state(
 pub(crate) fn open(launch: Launch) {
     let mut store = launch.store;
     let dirs = launch.dirs;
-    let settings_start = settings::start_from(dirs.as_ref());
+    let settings_start = settings::start_from(dirs.as_ref(), launch.experimental_retention);
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);

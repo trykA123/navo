@@ -16,6 +16,7 @@ pub struct Loaded {
     pub ledger: Option<PathBuf>,
     pub default_changes: Vec<DefaultChange>,
     pub(super) late: Option<Receiver<Started>>,
+    pub(super) guards_deletes: bool,
 }
 
 impl Loaded {
@@ -34,7 +35,15 @@ impl Loaded {
             ledger: None,
             default_changes: Vec::new(),
             late: None,
+            guards_deletes: false,
         }
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub fn guarding_deletes(mut self, guards: bool) -> Self {
+        self.guards_deletes = guards;
+        self
     }
 }
 
@@ -59,12 +68,14 @@ pub struct Starting {
     ledger: Option<PathBuf>,
     backup: SessionBackup,
     wait: Duration,
+    guards_deletes: bool,
 }
 
 impl Starting {
     #[must_use]
     pub fn finish(self) -> Started {
-        let started = match self.receiver.recv_timeout(self.wait) {
+        let guards = self.guards_deletes;
+        let mut started = match self.receiver.recv_timeout(self.wait) {
             Ok(started) => started,
             Err(RecvTimeoutError::Timeout) => {
                 tracing::warn!("settings completion is slow; loading the file as it is");
@@ -79,6 +90,9 @@ impl Starting {
             followed = started.default_changes.len(),
             "settings defaults checked"
         );
+        if let Some(loaded) = &mut started.loaded {
+            loaded.guards_deletes = guards;
+        }
         started
     }
 
@@ -127,11 +141,13 @@ pub(super) fn start_sharing(
 }
 
 #[must_use]
-pub fn start_from(dirs: Option<&StoreDirs>) -> Starting {
+pub fn start_from(dirs: Option<&StoreDirs>, guards_deletes: bool) -> Starting {
     let ledger = dirs
         .filter(|dirs| dirs.ensure().is_ok())
         .map(StoreDirs::journal_file);
-    start_in_background(dirs.map(StoreDirs::settings_file), ledger)
+    let mut starting = start_in_background(dirs.map(StoreDirs::settings_file), ledger);
+    starting.guards_deletes = guards_deletes;
+    starting
 }
 
 #[must_use]
@@ -179,6 +195,7 @@ pub(super) fn spawn(
         ledger: None,
         backup,
         wait,
+        guards_deletes: false,
     }
 }
 

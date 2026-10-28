@@ -131,6 +131,8 @@ fn structural_renames_exclude_writers_until_the_holder_cleanup_finishes() {
     assert!(claim_write(&dirs, &target, true).is_ok());
 }
 
+mod broken_settings;
+
 mod large_delete;
 
 mod activation;
