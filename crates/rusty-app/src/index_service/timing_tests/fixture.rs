@@ -84,7 +84,7 @@ pub(super) fn volume(index: Option<NtfsIndex>) -> SharedVolume {
             progress: index.is_none().then_some(0),
             ..VolumeStatus::default()
         },
-        index,
+        index: index.map(std::sync::Arc::new),
         ..State::default()
     })
 }

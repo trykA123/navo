@@ -12,7 +12,7 @@ const UPDATING: u8 = 100;
 
 #[derive(Default)]
 pub(super) struct State {
-    pub(super) index: Option<NtfsIndex>,
+    pub(super) index: Option<Arc<NtfsIndex>>,
     pub(super) status: VolumeStatus,
     pub(super) search: SearchIndex,
 }

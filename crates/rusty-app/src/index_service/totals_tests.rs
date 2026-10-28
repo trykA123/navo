@@ -22,7 +22,7 @@ fn volume() -> SharedVolume {
     };
     let index = NtfsIndex::restore((header, table, [(5, 0), (8, 1), (9, 2)].into()), 1, 2).unwrap();
     SharedVolume::new(State {
-        index: Some(index),
+        index: Some(std::sync::Arc::new(index)),
         status: rusty_index::pipe::VolumeStatus {
             root: "C:".into(),
             ..Default::default()
@@ -121,13 +121,7 @@ fn total_path_components_are_capped_before_taking_the_read_lock() {
 #[test]
 fn service_folder_paths_match_unicode_names() {
     let volume = volume();
-    volume
-        .shared
-        .write()
-        .unwrap()
-        .index
-        .as_mut()
-        .unwrap()
+    std::sync::Arc::make_mut(volume.shared.write().unwrap().index.as_mut().unwrap())
         .table
         .rename(1, 0, "Ä")
         .unwrap();

@@ -57,7 +57,7 @@ pub enum NtfsError {
     Cancelled,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NtfsIndex {
     pub table: NameTable,
     pub ids: FrnMap,
@@ -106,17 +106,74 @@ impl NtfsIndex {
     }
 
     pub fn apply_batch(&mut self, batch: UsnBatch) -> Result<Vec<UnresolvedChange>, NtfsError> {
-        validate_journal_cursor(&batch, self.position)?;
-        let next_usn = batch.next_usn;
-        let mut pending = Pending::default();
-        let applied = batch
-            .into_changes(&mut self.renames)
-            .into_iter()
-            .try_for_each(|change| pending.push(self, change));
-        pending.forget_removed(self);
-        applied?;
-        self.position.next_usn = next_usn;
-        Ok(pending.finish())
+        let mut applying = self.begin_batch(batch)?;
+        while applying.step(self, usize::MAX)? {}
+        applying.finish(self)
+    }
+
+    pub fn begin_batch(&self, batch: UsnBatch) -> Result<BatchApply, NtfsError> {
+        BatchApply::new(batch, self.position, self.renames.clone())
+    }
+}
+
+pub struct BatchApply {
+    position: JournalPosition,
+    next_usn: i64,
+    renames: Option<PendingRenames>,
+    changes: std::iter::Peekable<std::vec::IntoIter<TableChange>>,
+    pending: Pending,
+}
+
+impl BatchApply {
+    pub fn new(
+        batch: UsnBatch,
+        position: JournalPosition,
+        mut renames: PendingRenames,
+    ) -> Result<Self, NtfsError> {
+        validate_journal_cursor(&batch, position)?;
+        Ok(Self {
+            position,
+            next_usn: batch.next_usn,
+            changes: batch.into_changes(&mut renames).into_iter().peekable(),
+            renames: Some(renames),
+            pending: Pending::default(),
+        })
+    }
+
+    pub fn step(&mut self, index: &mut NtfsIndex, limit: usize) -> Result<bool, NtfsError> {
+        if index.position != self.position {
+            return Err(NtfsError::InvalidResponse(
+                "the index moved during a journal batch",
+            ));
+        }
+        if let Some(renames) = self.renames.take() {
+            index.renames = renames;
+        }
+        let mut applied = 0;
+        while let Some(change) = self.changes.next() {
+            let file_id = change_file_id(&change);
+            let pushed = self.pending.push(index, change);
+            if pushed.is_err() {
+                self.pending.forget_removed(index);
+                pushed?;
+            }
+            applied += 1;
+            let size_follows = matches!(
+                self.changes.peek(),
+                Some(TableChange::Size { file_id: next, .. }) if *next == file_id
+            );
+            if applied >= limit && !size_follows {
+                break;
+            }
+        }
+        self.pending.forget_removed(index);
+        Ok(self.changes.peek().is_some())
+    }
+
+    pub fn finish(mut self, index: &mut NtfsIndex) -> Result<Vec<UnresolvedChange>, NtfsError> {
+        while self.step(index, usize::MAX)? {}
+        index.position.next_usn = self.next_usn;
+        Ok(self.pending.finish())
     }
 }
 
@@ -294,6 +351,8 @@ fn recover_rename(index: &NtfsIndex, change: TableChange) -> TableChange {
     }
 }
 
+#[cfg(test)]
+mod batch_tests;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]

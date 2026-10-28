@@ -213,14 +213,15 @@ impl Worker {
         let batch = volume.read_journal(position)?;
         let records = batch.records.len();
         let changed = batch.next_usn != position.next_usn;
-        let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
-        if let Some(index) = state.index.as_mut() {
-            ensure_resolved(index.apply_batch(batch)?)?;
-        }
+        ensure_resolved(super::batch::apply_batch(&self.shared, batch)?)?;
         if changed {
             self.clock.batch(self.started.elapsed(), records);
         }
-        state.status.progress = None;
+        self.shared
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .status
+            .progress = None;
         Ok(())
     }
 
@@ -259,13 +260,12 @@ impl Worker {
     fn replace(&mut self, index: NtfsIndex) {
         let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
         state.status.progress = None;
-        state.index = Some(index);
+        state.index = Some(Arc::new(index));
         self.clock.changed(self.started.elapsed());
     }
 
     fn save(&mut self, stopping: bool) -> io::Result<()> {
-        let state = self.shared.read().unwrap_or_else(PoisonError::into_inner);
-        let Some(index) = &state.index else {
+        let Some(index) = super::batch::published(&self.shared) else {
             return Ok(());
         };
         let snapshot = index.snapshot();

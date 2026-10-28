@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use crate::fuzzy::{Fuzzy, Match};
 use crate::table::{Flags, NameTable};
 
-const CHUNK_SIZE: u32 = 64 * 1024;
+const CHUNK_SIZE: u32 = 16 * 1024;
 type Candidates = BinaryHeap<(Reverse<u32>, u32, Vec<u32>)>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,6 +75,9 @@ pub fn search_filtered_with<I: FnMut(u32) -> bool>(
     if limit == 0 || table.is_empty() || cancel() {
         return Vec::new();
     }
+    if query.is_empty() {
+        return first_included(table, limit, include());
+    }
     let request = Search {
         table,
         limit,
@@ -93,6 +96,23 @@ pub fn search_filtered_with<I: FnMut(u32) -> bool>(
     hits.into_sorted_vec()
         .into_iter()
         .map(|(Reverse(score), id, indices)| TableHit { id, score, indices })
+        .collect()
+}
+
+fn first_included(
+    table: &NameTable,
+    limit: usize,
+    mut include: impl FnMut(u32) -> bool,
+) -> Vec<TableHit> {
+    table
+        .iter()
+        .filter(|&(id, _)| include(id))
+        .take(limit)
+        .map(|(id, _)| TableHit {
+            id,
+            score: 0,
+            indices: Vec::new(),
+        })
         .collect()
 }
 

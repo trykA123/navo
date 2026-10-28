@@ -98,3 +98,37 @@ fn every_term_must_match() {
     assert!(f.score("New tab").is_some());
     assert!(f.score("New window").is_none());
 }
+
+#[test]
+fn the_ascii_prefilter_never_changes_a_result() {
+    let queries = [
+        "rdm", "readme", "Readme", "RDM", "tab new", "ee", "needle", "e-1", "a.b", "[x]", "zz",
+    ];
+    let names = [
+        "README.md",
+        "readme.md",
+        "entry-0000001.txt",
+        "needle.txt",
+        "New tab",
+        "a b.c",
+        "ab",
+        "",
+        "x",
+        "[x].txt",
+        "Éte.txt",
+        "Über_ünd",
+        "e-1-e",
+        "aXbYc.rs",
+    ];
+    for query in queries {
+        let mut filtered = Fuzzy::new(query, false);
+        let mut unfiltered = Fuzzy::unfiltered(query);
+        for name in names {
+            assert_eq!(
+                filtered.score(name),
+                unfiltered.score(name),
+                "{query} in {name}"
+            );
+        }
+    }
+}

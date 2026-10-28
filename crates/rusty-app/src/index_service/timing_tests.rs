@@ -1,4 +1,5 @@
-use std::sync::{Barrier, mpsc};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Barrier, mpsc};
 use std::time::{Duration, Instant};
 
 use rusty_index::file;
@@ -6,7 +7,8 @@ use rusty_index::ntfs::{NtfsIndex, test_support::MftFixture};
 use rusty_index::pipe::{Reply, Request};
 use rusty_index::usn::Resume;
 
-use super::answer::SharedVolume;
+use super::answer::{Shared, SharedVolume};
+use super::batch::{apply_batch, published};
 use super::config::Drive;
 use super::lifecycle::restore_or_enumerate;
 
@@ -62,7 +64,7 @@ impl StartupFixture {
         reached.send(()).unwrap();
         continued.recv_timeout(WAIT).unwrap();
         let mut state = shared.write().unwrap();
-        let index = state.index.as_mut().unwrap();
+        let index = Arc::make_mut(state.index.as_mut().unwrap());
         assert_eq!(index.position.next_usn, 100);
         if matches!(self.case, Start::Stale) {
             assert!(index.apply_batch(self.catchup).unwrap().is_empty());
@@ -167,7 +169,7 @@ fn verify_startup(case: Start, replies: [Reply; 4], elapsed: [Duration; 7]) {
 fn publish(shared: &super::answer::Shared, index: NtfsIndex, progress: Option<u8>) -> Duration {
     let mut state = shared.write().unwrap();
     let started = Instant::now();
-    state.index = Some(index);
+    state.index = Some(Arc::new(index));
     state.status.progress = progress;
     drop(state);
     started.elapsed()
@@ -186,38 +188,91 @@ fn stale_snapshot_first_populated_answer_within_one_second() {
 }
 
 #[test]
-#[ignore = "IX1: journal reset requires a full MFT read before serving the current index"]
+#[ignore = "timing, fails: a journal reset needs a full MFT read (about 4.5 s at 1 M entries) before the first populated answer"]
 fn reset_journal_first_populated_answer_within_one_second() {
     startup(Start::JournalReset);
+}
+
+struct During {
+    elapsed: Duration,
+    query: Reply,
+    answers: [Duration; 2],
+    longest_wait: Duration,
+}
+
+struct SetOnDrop<'a>(&'a AtomicBool);
+
+impl Drop for SetOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+
+fn longest_reader_wait(shared: &Shared, done: &AtomicBool) -> Duration {
+    let mut longest = Duration::ZERO;
+    while !done.load(Ordering::Acquire) {
+        let started = Instant::now();
+        drop(shared.read().unwrap());
+        longest = longest.max(started.elapsed());
+        std::thread::sleep(Duration::from_micros(200));
+    }
+    longest
 }
 
 fn during_operation(
     volume: &SharedVolume,
     label: &str,
     operation: impl FnOnce(&Barrier) -> Duration + Send,
-) -> (Duration, [Duration; 2]) {
+) -> During {
     let entries = volume.shared.read().unwrap().status.entries;
-    let begin = Barrier::new(3);
-    let (hold, query, status) = std::thread::scope(|scope| {
-        let begin = &begin;
-        let worker = scope.spawn(move || operation(begin));
+    let begin = Barrier::new(4);
+    let done = AtomicBool::new(false);
+    let (elapsed, query, status, longest_wait) = std::thread::scope(|scope| {
+        let (begin, done) = (&begin, &done);
+        let worker = scope.spawn(move || {
+            let _done = SetOnDrop(done);
+            operation(begin)
+        });
         let status = scope.spawn(move || {
             begin.wait();
             timed_answer(volume, &Request::default())
         });
+        let probe = scope.spawn(move || {
+            begin.wait();
+            longest_reader_wait(&volume.shared, done)
+        });
         begin.wait();
         let query = timed_answer(volume, &query());
-        (worker.join().unwrap(), query, status.join().unwrap())
+        (
+            worker.join().unwrap(),
+            query,
+            status.join().unwrap(),
+            probe.join().unwrap(),
+        )
     });
     let (query, query_elapsed) = query;
     let (status, status_elapsed) = status;
     report(label, "query answer", query_elapsed);
     report(label, "status answer", status_elapsed);
+    report(label, "longest reader wait", longest_wait);
     assert_eq!(query.status.volumes[0].root, "C:");
     assert_eq!(status.status.volumes[0].root, "C:");
     assert_eq!(query.status.volumes[0].entries, entries);
     assert_eq!(status.status.volumes[0].entries, entries);
-    (hold, [query_elapsed, status_elapsed])
+    During {
+        elapsed,
+        query,
+        answers: [query_elapsed, status_elapsed],
+        longest_wait,
+    }
+}
+
+fn within_answer_budget(label: &str, during: &During) {
+    assert_eq!(during.query.hits[0].path, "C:\\needle.txt", "{label}");
+    for elapsed in during.answers {
+        within(label, elapsed, ANSWER_BUDGET);
+    }
+    within(label, during.longest_wait, ANSWER_BUDGET);
 }
 
 #[test]
@@ -240,66 +295,58 @@ fn usn_batch(records: u32) {
     let volume = volume(Some(synthetic_index()));
     let batch = batch(records);
     let label = format!("USN {records} records");
-    let (hold, answers) = during_operation(&volume, &label, |begin| {
-        let mut state = volume.shared.write().unwrap();
+    let during = during_operation(&volume, &label, |begin| {
         begin.wait();
         let started = Instant::now();
-        let unresolved = state.index.as_mut().unwrap().apply_batch(batch).unwrap();
-        drop(state);
+        let unresolved = apply_batch(&volume.shared, batch).unwrap();
         let elapsed = started.elapsed();
         assert!(unresolved.is_empty());
         elapsed
     });
-    report(&label, "write lock held (excluding rendezvous)", hold);
+    report(&label, "batch applied in", during.elapsed);
     let state = volume.shared.read().unwrap();
     let index = state.index.as_ref().unwrap();
     assert_eq!(index.position.next_usn, 100 + i64::from(records));
-    for elapsed in answers {
-        within(&label, elapsed, ANSWER_BUDGET);
-    }
-    within(&label, hold, ANSWER_BUDGET);
+    let last = index.ids[&(u128::from(records) + 100)];
+    assert_eq!(index.table.size(last), Some(u64::from(records)));
+    assert!(index.pending_renames().is_empty());
+    within_answer_budget(&label, &during);
 }
 
 #[test]
-#[ignore = "IX1: a 64KiB-sized USN batch releases the lock before the unbounded search finishes"]
+#[ignore = "timing: needs a quiet machine; run with --run-ignored all -j 1 timing_tests"]
 fn usn_512_records_lock_and_pipe_answers_within_50ms() {
     usn_batch(512);
 }
 
 #[test]
-#[ignore = "IX1: synthetic 200K-record stress batch holds the write lock over 50 ms"]
+#[ignore = "timing: needs a quiet machine; run with --run-ignored all -j 1 timing_tests"]
 fn stress_usn_batch_lock_and_pipe_answers_within_50ms() {
     usn_batch(RECORDS);
 }
 
 #[test]
-#[ignore = "IX1: snapshot save read lock and concurrent searches exceed 50 ms at 1M entries"]
+#[ignore = "timing: needs a quiet machine; run with --run-ignored all -j 1 timing_tests"]
 fn snapshot_save_lock_and_pipe_answers_within_50ms() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("c.index");
     let volume = volume(Some(synthetic_index()));
-    let (hold, answers) = during_operation(&volume, "snapshot save", |begin| {
-        let state = volume.shared.read().unwrap();
+    let during = during_operation(&volume, "snapshot save", |begin| {
         begin.wait();
         let started = Instant::now();
-        save(&path, state.index.as_ref().unwrap());
-        drop(state);
+        let index = published(&volume.shared).unwrap();
+        let held = started.elapsed();
+        report("snapshot save", "read lock held", held);
+        within("snapshot save read lock", held, ANSWER_BUDGET);
+        save(&path, &index);
         started.elapsed()
     });
-    report("snapshot save", "write lock held", Duration::ZERO);
-    report(
-        "snapshot save",
-        "read lock held (excluding rendezvous)",
-        hold,
-    );
+    report("snapshot save", "save finished in", during.elapsed);
     assert_eq!(
         file::load_with_ids(&path).unwrap().1.len(),
         ENTRIES as usize
     );
-    for elapsed in answers {
-        within("snapshot save answer", elapsed, ANSWER_BUDGET);
-    }
-    within("snapshot save read lock", hold, ANSWER_BUDGET);
+    within_answer_budget("snapshot save", &during);
 }
 
 #[test]
@@ -307,7 +354,7 @@ fn snapshot_save_lock_and_pipe_answers_within_50ms() {
 fn first_mft_read_releases_table_lock_and_pipe_answers_within_50ms() {
     let mft = MftFixture::new(ENTRIES, 7);
     let volume = volume(None);
-    let (elapsed, answers) = during_operation(&volume, "first MFT read", |begin| {
+    let during = during_operation(&volume, "first MFT read", |begin| {
         begin.wait();
         let started = Instant::now();
         let enumerated = mft.read();
@@ -319,19 +366,19 @@ fn first_mft_read_releases_table_lock_and_pipe_answers_within_50ms() {
         within("MFT publish", held, ANSWER_BUDGET);
         elapsed
     });
-    report("first MFT read", "enumeration", elapsed);
-    report(
-        "first MFT read",
-        "write lock held during I/O",
-        Duration::ZERO,
-    );
-    for elapsed in answers {
+    report("first MFT read", "enumeration", during.elapsed);
+    for elapsed in during.answers {
         within("first MFT read answer", elapsed, ANSWER_BUDGET);
     }
+    within(
+        "first MFT read reader wait",
+        during.longest_wait,
+        ANSWER_BUDGET,
+    );
 }
 
 #[test]
-#[ignore = "IX1: ready status scans 1M entries; informational baseline sits near the 50 ms budget"]
+#[ignore = "timing: needs a quiet machine; run with --run-ignored all -j 1 timing_tests"]
 fn ready_status_pipe_answers_within_50ms() {
     let volume = volume(Some(synthetic_index()));
     let (reply, elapsed) = timed_answer(&volume, &Request::default());

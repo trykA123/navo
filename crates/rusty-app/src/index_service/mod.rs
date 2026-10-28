@@ -3,6 +3,8 @@
 #[cfg(any(windows, test))]
 mod answer;
 #[cfg(any(windows, test))]
+mod batch;
+#[cfg(any(windows, test))]
 mod bind_retry;
 #[cfg(any(windows, test))]
 mod config;

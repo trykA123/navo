@@ -135,7 +135,7 @@ fn search_equal_scores_keep_table_order_across_chunks() {
     let mut table = NameTable::new();
     let mut expected = Vec::new();
     for id in 0..140_000 {
-        let name = if matches!(id, 7 | 65_537 | 131_073) {
+        let name = if matches!(id, 7 | 16_385 | 131_073) {
             expected.push(id);
             "readme.rs"
         } else {
@@ -171,6 +171,37 @@ fn search_empty_query_keeps_live_table_order() {
         hits.iter()
             .all(|hit| hit.score == 0 && hit.indices.is_empty())
     );
+}
+
+#[test]
+fn search_empty_query_returns_the_first_included_entries_across_chunks() {
+    let mut table = NameTable::new();
+    for id in 0..40_000 {
+        table
+            .push(NO_PARENT, &format!("entry-{id}"), Flags::NONE)
+            .unwrap();
+    }
+    table.remove(3);
+    let hits = super::search_filtered(
+        &table,
+        &[],
+        super::SearchOptions {
+            limit: 4,
+            cancel: &|| false,
+            include: &|id| id % 2 == 1 || id > 30_000,
+        },
+    );
+    assert_eq!(ids(&hits), vec![1, 5, 7, 9]);
+    let all = super::search_filtered(
+        &table,
+        &[],
+        super::SearchOptions {
+            limit: 3,
+            cancel: &|| false,
+            include: &|id| id >= 33_000,
+        },
+    );
+    assert_eq!(ids(&all), vec![33_000, 33_001, 33_002]);
 }
 
 #[test]
