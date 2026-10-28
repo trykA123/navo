@@ -248,7 +248,7 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
     });
     let name = div()
         .flex()
-        .items_center()
+        .items_baseline()
         .gap(t.spacing.md)
         .child(div().font_weight(FontWeight::MEDIUM).child(spec.label()))
         .child(row_state::tag(t, index, look.values.is_changed(spec.field)));

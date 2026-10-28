@@ -9,6 +9,7 @@ use crate::primitives::{Button, ButtonVariant, IconName, icon};
 use crate::tokens::Theme;
 
 const DOT: f32 = 6.;
+const DOT_LIFT: f32 = 5.;
 const DEFAULT: &str = "Default";
 const CHANGED: &str = "Changed";
 const LIVE: &str = "Live";
@@ -24,6 +25,8 @@ pub(super) fn tag(t: &Theme, index: usize, is_changed: bool) -> impl IntoElement
         .test_support()
         .flex_none()
         .size(px(DOT))
+        .relative()
+        .top(px(-DOT_LIFT))
         .rounded(t.radii.full)
         .bg(t.colors.accent);
     div()
@@ -33,7 +36,7 @@ pub(super) fn tag(t: &Theme, index: usize, is_changed: bool) -> impl IntoElement
         .test_support()
         .flex()
         .flex_none()
-        .items_center()
+        .items_baseline()
         .gap(t.spacing.xs)
         .text_size(t.typography.small)
         .text_color(color)
