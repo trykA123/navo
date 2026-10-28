@@ -478,7 +478,7 @@ fn ctrl_comma_closes_the_drive_menu(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn ctrl_comma_closes_the_path_editor(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    rig.press(cx, "ctrl-l");
+    rig.press(cx, "alt-d");
     assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_some()));
     open(cx, &rig);
     assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_none()));

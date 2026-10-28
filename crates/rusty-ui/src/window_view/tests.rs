@@ -36,6 +36,7 @@ pub(in crate::window_view) mod held;
 mod hints;
 mod jobs;
 mod keymap;
+mod layout_switcher;
 mod layout_widths;
 mod look_up;
 mod marks;

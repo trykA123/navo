@@ -17,6 +17,7 @@ workspace.new | FileList | true
 workspace.save | FileList | true
 workspace.move_left | FileList | true
 workspace.move_right | FileList | true
+layout.switcher | FileList | true
 app_menu.toggle | global | true
 settings.toggle | global | true
 jobs.toggle | global | true

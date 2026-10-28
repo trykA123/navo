@@ -73,5 +73,10 @@ pub(super) const GROUP: Group = Group {
             "workspace.move_right",
             "cmd-workspace-move-right",
         ),
+        (
+            "ferrite_window::ShowLayoutSwitcher",
+            "layout.switcher",
+            "cmd-layout-switcher",
+        ),
     ],
 };

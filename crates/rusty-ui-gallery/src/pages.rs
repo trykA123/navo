@@ -1,3 +1,4 @@
+mod command_center;
 mod recovery;
 mod table;
 mod tray;
@@ -128,6 +129,8 @@ pub enum Page {
     Palettes,
     WorkspaceTray,
     WorkspaceTrayPhone,
+    LayoutSwitcher,
+    LayoutSwitcherPhone,
 }
 
 pub struct PageInfo {

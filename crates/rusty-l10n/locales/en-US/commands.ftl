@@ -19,6 +19,7 @@ cmd-tab-go-to-last = Go to last tab
 cmd-tab-new = New tab
 cmd-pane-drive-menu-first = Drives of pane 1
 cmd-pane-drive-menu-second = Drives of pane 2
+cmd-layout-switcher = Switch layout
 cmd-pane-edit-path = Edit path
 cmd-window-view-menu = Window view menu
 cmd-pane-reset-split = Reset pane split

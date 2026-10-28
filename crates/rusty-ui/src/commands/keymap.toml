@@ -95,7 +95,7 @@ keys = ["alt-f2"]
 
 [[bind]]
 command = "pane.edit_path"
-keys = ["ctrl-l"]
+keys = ["alt-d"]
 
 [[bind]]
 command = "window.view_menu"
@@ -368,6 +368,10 @@ keys = ["alt-shift-left"]
 [[bind]]
 command = "workspace.move_right"
 keys = ["alt-shift-right"]
+
+[[bind]]
+command = "layout.switcher"
+keys = ["ctrl-l"]
 
 [[bind]]
 command = "pane.go_back"

@@ -1,6 +1,8 @@
 use rusty_ui::prelude::*;
 use rusty_ui::tokens::Theme;
-use rusty_ui::window_view::{TrayCard, TrayTile, WorkspaceTray};
+use rusty_ui::window_view::{
+    LayoutSwitcher, TrayCard, TrayTile, WorkspaceTray, builtin_layout_presets,
+};
 
 use crate::gallery::Page;
 
@@ -60,6 +62,7 @@ fn cards() -> Vec<TrayCard> {
 
 pub fn element(page: Page, t: &Theme) -> Option<AnyElement> {
     let width = match page {
+        Page::LayoutSwitcher | Page::LayoutSwitcherPhone => return Some(layout_switcher(page, t)),
         Page::WorkspaceTray => WIDE,
         Page::WorkspaceTrayPhone => PHONE,
         _ => return None,
@@ -81,4 +84,25 @@ pub fn element(page: Page, t: &Theme) -> Option<AnyElement> {
             )
             .into_any_element(),
     )
+}
+
+fn layout_switcher(page: Page, t: &Theme) -> AnyElement {
+    div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .flex_none()
+        .w_full()
+        .when(page == Page::LayoutSwitcherPhone, |sample| {
+            sample.w(px(PHONE))
+        })
+        .h_full()
+        .p(t.spacing.md)
+        .bg(t.colors.background)
+        .child(LayoutSwitcher::new(
+            builtin_layout_presets(),
+            rusty_core::Tiles::builtin()[0].tiles.clone(),
+            |_, _, _| {},
+        ))
+        .into_any_element()
 }

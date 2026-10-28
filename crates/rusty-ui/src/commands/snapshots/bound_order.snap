@@ -455,7 +455,7 @@ jobs.toggle | ctrl-j | global
 tab.new | ctrl-t | NavoPane
 pane.drive_menu_first | alt-f1 | NavoPane
 pane.drive_menu_second | alt-f2 | NavoPane
-pane.edit_path | ctrl-l | NavoPane
+pane.edit_path | alt-d | NavoPane
 window.view_menu | alt-v | NavoPane
 pane.reset_split | ctrl-alt-0 | NavoPane
 pane.reset_split | ctrl-shift-0 | NavoPane
@@ -482,3 +482,4 @@ workspace.new | alt-n | FileList
 workspace.save | ctrl-s | FileList
 workspace.move_left | alt-shift-left | FileList
 workspace.move_right | alt-shift-right | FileList
+layout.switcher | ctrl-l | FileList

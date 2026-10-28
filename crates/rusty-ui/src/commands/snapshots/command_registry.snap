@@ -17,6 +17,7 @@ workspace.new | New workspace from current layout | FileList
 workspace.save | Save workspace | FileList
 workspace.move_left | Move workspace left | FileList
 workspace.move_right | Move workspace right | FileList
+layout.switcher | Switch layout | FileList
 app_menu.toggle | App menu | global
 settings.toggle | All settings | global
 jobs.toggle | Show or hide jobs | global

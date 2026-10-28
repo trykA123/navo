@@ -185,11 +185,11 @@ fn a_footer_with_every_part_hidden_is_not_drawn(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn ctrl_l_edits_the_path_while_the_path_bar_is_hidden(cx: &mut TestAppContext) {
+fn alt_d_edits_the_path_while_the_path_bar_is_hidden(cx: &mut TestAppContext) {
     let rig = rig_on(cx, off(&[Field::WindowPathBar]), None);
     let pane = pane_of(cx, &rig.view);
     assert!(!is_drawn(cx, rig.window, ("path", pane.get())));
-    rig.press(cx, "ctrl-l");
+    rig.press(cx, "alt-d");
     let edit = rig
         .view
         .read_with(cx, |view, _| view.path_edit.as_ref().map(|edit| edit.id));

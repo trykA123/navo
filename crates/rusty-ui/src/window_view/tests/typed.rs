@@ -12,16 +12,16 @@ fn editing(rig: &Rig, cx: &mut TestAppContext) -> bool {
 }
 
 fn type_path(rig: &Rig, cx: &mut TestAppContext, text: &str) {
-    press(cx, rig.window, &rig.view, "ctrl-l");
+    press(cx, rig.window, &rig.view, "alt-d");
     assert!(editing(rig, cx));
     type_in(cx, rig.window, &rig.view, text);
     press(cx, rig.window, &rig.view, "enter");
 }
 
 #[gpui_kit::test]
-fn ctrl_l_opens_the_path_input_on_the_current_path(cx: &mut TestAppContext) {
+fn alt_d_opens_the_path_input_on_the_current_path(cx: &mut TestAppContext) {
     let rig = drive_window(cx, Setup::default());
-    press(cx, rig.window, &rig.view, "ctrl-l");
+    press(cx, rig.window, &rig.view, "alt-d");
     assert!(editing(&rig, cx));
     rig.frame(cx, |window, _| {
         assert_eq!(window.find("path-field").value(), Some(r"C:\home"));

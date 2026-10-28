@@ -1,6 +1,6 @@
 use super::{Page, PageInfo, info};
 
-pub const PAGES: [PageInfo; 122] = [
+pub const PAGES: [PageInfo; 124] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -275,43 +275,13 @@ pub const PAGES: [PageInfo; 122] = [
     info(Page::MouseMarks, "Mouse marks", "p36-k5-mouse-marks", false),
     info(Page::FileKinds, "File types", "p36-file-kinds", false),
     info(Page::Columns, "Columns", "p38-columns", false),
-    info(Page::CommandCenter, "Command center", "p40-a7-mixed", false),
-    info(
-        Page::CommandCenterRecent,
-        "Command center, recent",
-        "p40-a7-recent",
-        false,
-    ),
-    info(
-        Page::CommandCenterCommands,
-        "Command center, commands",
-        "p40-a7-commands",
-        false,
-    ),
-    info(
-        Page::CommandCenterPath,
-        "Command center, path",
-        "p40-a7-path",
-        false,
-    ),
-    info(
-        Page::CommandCenterArgument,
-        "Command center, argument",
-        "p40-a7-argument",
-        false,
-    ),
-    info(
-        Page::CommandCenterNoMatch,
-        "Command center, no match",
-        "p40-a7-no-match",
-        false,
-    ),
-    info(
-        Page::CommandCenterIndexing,
-        "Command center, indexing",
-        "p40-a7-indexing",
-        false,
-    ),
+    super::command_center::MIXED,
+    super::command_center::RECENT,
+    super::command_center::COMMANDS,
+    super::command_center::PATH,
+    super::command_center::ARGUMENT,
+    super::command_center::NO_MATCH,
+    super::command_center::INDEXING,
     info(Page::Drag, "Drag badge", "p36-d4-drag-badge", false),
     info(
         Page::MemoryStrip,
@@ -398,4 +368,16 @@ pub const PAGES: [PageInfo; 122] = [
     info(Page::Palettes, "Palettes", "navo-palettes", true),
     super::tray::WIDE,
     super::tray::PHONE,
+    info(
+        Page::LayoutSwitcher,
+        "Layout switcher",
+        "tl12-switcher",
+        false,
+    ),
+    info(
+        Page::LayoutSwitcherPhone,
+        "Layout switcher, 390",
+        "tl12-switcher-390",
+        false,
+    ),
 ];

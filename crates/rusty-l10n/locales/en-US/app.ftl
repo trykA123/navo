@@ -1,3 +1,10 @@
+layout-switcher-title = Layouts
+layout-switcher-hint = 1–5 apply · Arrows choose · Enter applies · Esc closes
+layout-preset-1 = Side by side
+layout-preset-2 = Three columns
+layout-preset-3 = Wide + 2
+layout-preset-4 = Two by two
+layout-preset-5 = Main + 3
 workspace-tray-title = Workspaces
 workspace-tray-hint = Hold Alt, press a number to preview, release Alt to switch. Esc stays.
 workspace-tray-close = Close workspaces

@@ -20,6 +20,7 @@ mod index_activity;
 mod jobs;
 mod keys;
 mod layout;
+mod layout_switcher;
 mod list_columns;
 mod multi_rename;
 mod operate;
@@ -89,6 +90,7 @@ pub use fkeys::{
 pub use hand_off::{OpenHooks, OpenInbox, OpenRequest, OpenSender, open_requests};
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
+pub use layout_switcher::{LayoutSwitcher, LayoutSwitcherAction, builtin_layout_presets};
 pub use placement::DisplayScale;
 pub use preview::folder_summary;
 pub use search_hooks::{
@@ -394,6 +396,7 @@ impl Render for FerriteWindow {
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);
         let root = self.pane_swap_layer(root, cx);
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
+        let root = Self::layout_switcher_on(root, cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
         self.preview_keys(root, window, cx)
     }

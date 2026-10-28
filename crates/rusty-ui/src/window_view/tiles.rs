@@ -27,6 +27,7 @@ pub(super) struct TilesState {
     area: Bounds<Pixels>,
     gap: Pixels,
     drag: Option<DividerDrag>,
+    pub(super) switcher: Option<super::layout_switcher::SwitcherState>,
 }
 
 impl TilesState {

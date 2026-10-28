@@ -190,6 +190,7 @@ image.zoom_in | = | Image
 image.zoom_in | shift-= | Image
 image.zoom_out | - | Image
 jobs.toggle | ctrl-j | global
+layout.switcher | ctrl-l | FileList
 lister.find_next | enter | Viewer
 lister.page_or_next_image | space | Viewer
 lister.previous_image | backspace | Viewer
@@ -243,7 +244,7 @@ multi_rename.toggle_row | delete | MultiRenamePreview
 multi_rename.token_menu | ctrl-space | MultiRename
 pane.drive_menu_first | alt-f1 | NavoPane
 pane.drive_menu_second | alt-f2 | NavoPane
-pane.edit_path | ctrl-l | NavoPane
+pane.edit_path | alt-d | NavoPane
 pane.go_back | alt-left | FileList
 pane.go_forward | alt-right | FileList
 pane.leave_waiting | backspace | PaneWaiting
