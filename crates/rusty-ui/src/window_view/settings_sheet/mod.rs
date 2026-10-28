@@ -40,6 +40,7 @@ pub struct SettingsHooks {
     pub news: Option<SettingsInbox>,
     pub disk_use: Arc<dyn Fn() -> Vec<crate::settings::DiagnosticRow> + Send + Sync>,
     pub save_diagnostic_report: Arc<dyn Fn() -> Result<std::path::PathBuf, String> + Send + Sync>,
+    pub edit_layout: super::EditLayout,
 }
 
 impl SettingsHooks {
@@ -60,6 +61,7 @@ impl SettingsHooks {
             news: None,
             disk_use: Arc::new(Vec::new),
             save_diagnostic_report: Arc::new(|| Err(rusty_l10n::tr("diagnostics-unavailable"))),
+            edit_layout: super::no_layout_edits(),
         }
     }
 }
@@ -104,7 +106,8 @@ impl SettingsPanel {
         search: &SearchHooks,
         cx: &mut App,
     ) -> (Values, Saver, Self) {
-        let saver = Saver::new(hooks.save, hooks.load_error, hooks.values.clone());
+        let saver = Saver::new(hooks.save, hooks.load_error, hooks.values.clone())
+            .editing_layout(hooks.edit_layout);
         (
             hooks.values,
             saver,

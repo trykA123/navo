@@ -40,6 +40,7 @@ pub(super) struct Saver {
     pub(super) error: Option<SharedString>,
     pub(super) problem: Option<SharedString>,
     pub(super) font_notice: Option<crate::status_bar::StatusNotice>,
+    pub(super) edit_layout: super::EditLayout,
     #[cfg(test)]
     pub(super) disk_applies: usize,
 }
@@ -57,9 +58,15 @@ impl Saver {
             error,
             problem: None,
             font_notice: None,
+            edit_layout: super::no_layout_edits(),
             #[cfg(test)]
             disk_applies: 0,
         }
+    }
+
+    pub(super) fn editing_layout(mut self, edit_layout: super::EditLayout) -> Self {
+        self.edit_layout = edit_layout;
+        self
     }
 
     pub(super) fn disk_valid(&mut self) {

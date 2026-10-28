@@ -1,6 +1,6 @@
 use super::{Page, PageInfo, info};
 
-pub const PAGES: [PageInfo; 124] = [
+pub const PAGES: [PageInfo; 126] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
     info(Page::Pane, "Pane", "p7-pane", true),
     info(Page::Operate, "Operate", "p8-confirm", true),
@@ -380,4 +380,6 @@ pub const PAGES: [PageInfo; 124] = [
         "tl12-switcher-390",
         false,
     ),
+    info(Page::LayoutSave, "Save layout", "tl14-save", false),
+    info(Page::LayoutRemove, "Remove layout", "tl14-remove", false),
 ];

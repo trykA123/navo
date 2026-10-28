@@ -6,6 +6,7 @@ use super::{fake, open_options, options_for, press, two_panes};
 use crate::window_view::{FerriteWindow, SettingsNews};
 
 mod mode;
+mod presets;
 
 #[gpui_kit::test]
 fn ctrl_l_opens_the_switcher_and_four_applies_two_by_two(cx: &mut TestAppContext) {

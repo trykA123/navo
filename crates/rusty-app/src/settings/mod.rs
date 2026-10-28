@@ -17,6 +17,7 @@ use crate::search_hooks::Remember;
 use crate::watch_file::watch_file;
 use ledger::LedgerFile;
 
+mod layout_edit;
 mod ledger;
 mod paused;
 mod reload;
@@ -113,6 +114,7 @@ fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
         .map_or_else(Values::default, |loaded| values_of(&loaded.store));
     let store = loaded.map(|loaded| Arc::new(Mutex::new(loaded.store)));
     let shared = path.clone().zip(store.clone());
+    let edit_layout = layout_edit::hook(store.clone());
     let session = Arc::new(Mutex::new(values.clone()));
     let hooks = SettingsHooks {
         values,
@@ -130,6 +132,7 @@ fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
         file: path.as_deref().and_then(location_of),
         line_of: line_finder(path),
         news: None,
+        edit_layout,
         ..SettingsHooks::none()
     };
     (hooks, shared)
@@ -279,6 +282,8 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
     }
 }
 
+#[cfg(test)]
+mod layout_edit_tests;
 #[cfg(test)]
 mod live_tests;
 #[cfg(test)]

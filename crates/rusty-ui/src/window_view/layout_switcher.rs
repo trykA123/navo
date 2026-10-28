@@ -227,7 +227,10 @@ impl RenderOnce for LayoutSwitcher {
                     .track_scroll(&self.scroll)
                     .children((0..self.presets.len()).map(|index| self.card(t, index))),
             )
-            .child(super::layout_mode::key_bar(t))
+            .child(super::layout_mode::key_bar(
+                t,
+                self.focused >= Tiles::builtin().len(),
+            ))
     }
 }
 
@@ -243,7 +246,7 @@ impl FerriteWindow {
         layout_presets(self.values.layout_presets())
     }
 
-    fn switcher_focus(&self, state: &SwitcherState) -> usize {
+    pub(super) fn switcher_focus(&self, state: &SwitcherState) -> usize {
         let count = Tiles::builtin().len() + self.values.layout_presets().len();
         state.focused.min(count.saturating_sub(1))
     }

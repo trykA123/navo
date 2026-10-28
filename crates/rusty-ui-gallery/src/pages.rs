@@ -131,6 +131,8 @@ pub enum Page {
     WorkspaceTrayPhone,
     LayoutSwitcher,
     LayoutSwitcherPhone,
+    LayoutSave,
+    LayoutRemove,
 }
 
 pub struct PageInfo {

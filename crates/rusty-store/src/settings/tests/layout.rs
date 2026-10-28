@@ -73,3 +73,95 @@ fn layout_preset_edits_refuse_duplicates_overflow_invalid_values_and_missing_nam
     assert!(save_layout_preset("", "Broken", "grid").is_err());
     assert!(remove_layout_preset(&original, "Missing").is_err());
 }
+
+#[test]
+fn replacing_a_layout_preset_keeps_its_place_and_comments() {
+    let original = "# Settings\n".to_owned()
+        + &preset("First", "pane")
+        + "[[layout.presets]]\nname = \"Second\"\ntiles = \"pane\" # keep\n"
+        + "\n[files]\nshow-system = true # also\n";
+    let replaced = replace_layout_preset(&original, "Second", "row(50, pane, pane)").unwrap();
+    assert_eq!(
+        replaced,
+        original.replace(
+            "tiles = \"pane\" # keep",
+            "tiles = \"row(50, pane, pane)\" # keep"
+        )
+    );
+    let inline = "[layout]\npresets = [{name='A', tiles='pane'}, {name='B', tiles='pane'}]\n";
+    let replaced = replace_layout_preset(inline, "A", "col(40, pane, pane)").unwrap();
+    let presets = parse(&replaced).unwrap().0.layout.presets;
+    assert_eq!(presets[0].tiles, "col(40, pane, pane)");
+    assert_eq!(presets[1].name, "B");
+    assert!(replace_layout_preset(&original, "Missing", "pane").is_err());
+    assert!(replace_layout_preset(&original, "First", "grid").is_err());
+}
+
+#[test]
+fn a_text_edit_writes_the_file_and_keeps_unrelated_comments() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "# Mine\n[files]\nshow-system = true # keep\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    let before = store.generation();
+    store
+        .edit_text(|text| save_layout_preset(text, "Mine", "row(50, pane, pane)"))
+        .unwrap();
+    let saved = fs::read_to_string(&path).unwrap();
+    assert!(saved.starts_with("# Mine\n[files]\nshow-system = true # keep\n"));
+    assert!(saved.contains("[[layout.presets]]\nname = \"Mine\""));
+    assert_eq!(store.current().layout.presets[0].name, "Mine");
+    assert!(store.generation() > before);
+}
+
+#[test]
+fn a_failed_text_edit_leaves_the_file_and_the_store_unchanged() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    let original = preset("Kept", "pane");
+    write(&path, &original);
+    let (mut store, _) = SettingsStore::load(&path);
+    let refused = store.edit_text(|text| save_layout_preset(text, "Kept", "pane"));
+    assert_eq!(refused.unwrap_err(), SettingsError::Refused);
+    let mut permissions = fs::metadata(&path).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions.clone()).unwrap();
+    let read_only = store.edit_text(|text| save_layout_preset(text, "New", "pane"));
+    assert_eq!(read_only.unwrap_err(), SettingsError::ReadOnly);
+    #[allow(
+        clippy::permissions_set_readonly_false,
+        reason = "lets the temp dir clean up"
+    )]
+    permissions.set_readonly(false);
+    fs::set_permissions(&path, permissions).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    assert_eq!(store.current().layout.presets.len(), 1);
+    write(&path, "[files\n");
+    let invalid = store.edit_text(|text| save_layout_preset(text, "New", "pane"));
+    assert_eq!(invalid.unwrap_err(), SettingsError::FileInvalid);
+    assert_eq!(fs::read_to_string(&path).unwrap(), "[files\n");
+}
+
+#[test]
+fn a_text_edit_retries_once_when_the_file_changed_under_it() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[files]\nshow-system = true\n");
+    let (mut store, _) = SettingsStore::load(&path);
+    let mut is_first = true;
+    let changer = path.clone();
+    store
+        .edit_text(|text| {
+            if std::mem::take(&mut is_first) {
+                write(&changer, "[files]\nshow-system = false # hand\n");
+            }
+            save_layout_preset(text, "Mine", "pane")
+        })
+        .unwrap();
+    let saved = fs::read_to_string(&path).unwrap();
+    assert!(
+        saved.starts_with("[files]\nshow-system = false # hand\n"),
+        "{saved}"
+    );
+    assert!(saved.contains("name = \"Mine\""));
+}

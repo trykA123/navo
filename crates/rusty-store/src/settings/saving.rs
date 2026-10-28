@@ -51,6 +51,46 @@ impl SettingsStore {
         }
     }
 
+    pub fn edit_text(
+        &mut self,
+        mut edit: impl FnMut(&str) -> Result<String, SettingsError>,
+    ) -> Result<Saved, SettingsError> {
+        let session = self.backup.clone();
+        let mut backup = session.0.lock().unwrap_or_else(PoisonError::into_inner);
+        match self.edit_once(&mut edit, &mut backup) {
+            Err(SettingsError::ChangedOnDisk) => self.edit_once(&mut edit, &mut backup),
+            done => done,
+        }
+    }
+
+    fn edit_once(
+        &mut self,
+        edit: &mut impl FnMut(&str) -> Result<String, SettingsError>,
+        backup: &mut bool,
+    ) -> Result<Saved, SettingsError> {
+        let base = read(&self.path)?;
+        if let Some(text) = &base {
+            parse(text).map_err(|_| SettingsError::FileInvalid)?;
+        }
+        let source = match base.as_deref() {
+            Some(text) => Cow::Borrowed(text),
+            None => Cow::Owned(complete::complete_text("", &self.current)?.text),
+        };
+        let edited = edit(&source)?;
+        let (settings, _) = parse(&edited)?;
+        let durability_error = if base.as_deref() == Some(edited.as_str()) {
+            None
+        } else {
+            self.write(&edited, base.as_deref(), backup)?
+        };
+        self.take(settings);
+        Ok(Saved {
+            was_present: true,
+            durability_error,
+            ledger_error: None,
+        })
+    }
+
     fn save_from(
         &mut self,
         key: &str,

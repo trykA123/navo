@@ -1,6 +1,11 @@
+use rusty_ui::confirm_dialog::ConfirmDialog;
 use rusty_ui::prelude::*;
+use rusty_ui::prompt_dialog::PromptDialog;
 use rusty_ui::tokens::Theme;
-use rusty_ui::window_view::{LayoutSwitcher, TrayCard, TrayTile, WorkspaceTray, layout_presets};
+use rusty_ui::window_view::{
+    LayoutEdit, LayoutSwitcher, TrayCard, TrayTile, WorkspaceTray, layout_ask_props,
+    layout_presets, save_layout_props,
+};
 
 use crate::gallery::Page;
 
@@ -60,7 +65,10 @@ fn cards() -> Vec<TrayCard> {
 
 pub fn element(page: Page, t: &Theme) -> Option<AnyElement> {
     let width = match page {
-        Page::LayoutSwitcher | Page::LayoutSwitcherPhone => return Some(layout_switcher(page, t)),
+        Page::LayoutSwitcher
+        | Page::LayoutSwitcherPhone
+        | Page::LayoutSave
+        | Page::LayoutRemove => return Some(layout_switcher(page, t)),
         Page::WorkspaceTray => WIDE,
         Page::WorkspaceTrayPhone => PHONE,
         _ => return None,
@@ -84,8 +92,36 @@ pub fn element(page: Page, t: &Theme) -> Option<AnyElement> {
     )
 }
 
+fn preset_dialog(page: Page, t: &Theme) -> Option<AnyElement> {
+    let dialog = match page {
+        Page::LayoutSave => {
+            PromptDialog::new("layout-save", save_layout_props(&user_presets(), None))
+                .into_any_element()
+        }
+        Page::LayoutRemove => {
+            let remove = LayoutEdit::Remove {
+                name: "Review".to_owned(),
+            };
+            ConfirmDialog::new("layout-ask", layout_ask_props(&remove)?).into_any_element()
+        }
+        _ => return None,
+    };
+    Some(
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(t.surfaces.scrim)
+            .child(dialog)
+            .into_any_element(),
+    )
+}
+
 fn layout_switcher(page: Page, t: &Theme) -> AnyElement {
     div()
+        .relative()
         .flex()
         .items_center()
         .justify_center()
@@ -97,11 +133,15 @@ fn layout_switcher(page: Page, t: &Theme) -> AnyElement {
         .h_full()
         .p(t.spacing.md)
         .bg(t.colors.background)
-        .child(LayoutSwitcher::new(
-            layout_presets(&user_presets()),
-            rusty_core::Tiles::builtin()[0].tiles.clone(),
-            |_, _, _| {},
-        ))
+        .child(
+            LayoutSwitcher::new(
+                layout_presets(&user_presets()),
+                rusty_core::Tiles::builtin()[0].tiles.clone(),
+                |_, _, _| {},
+            )
+            .focused(if page == Page::LayoutRemove { 5 } else { 0 }),
+        )
+        .children(preset_dialog(page, t))
         .into_any_element()
 }
 

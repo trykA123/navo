@@ -29,6 +29,7 @@ pub(super) struct TilesState {
     drag: Option<DividerDrag>,
     pub(super) switcher: Option<super::layout_switcher::SwitcherState>,
     pub(super) fades: super::layout_mode::Fades,
+    pub(super) presets: super::preset_edit::PresetDialog,
 }
 
 impl TilesState {

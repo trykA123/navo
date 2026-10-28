@@ -51,6 +51,7 @@ impl FerriteWindow {
             .children(self.workspace_tray(cx))
             .children(self.activity_drawer_layer(window, cx))
             .children(self.layout_switcher_view(cx))
+            .children(self.preset_dialog_view(cx))
     }
 
     pub(super) fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {

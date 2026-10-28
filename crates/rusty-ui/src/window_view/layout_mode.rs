@@ -10,9 +10,13 @@ use crate::tokens::Theme;
 enum ModeKey {
     Core(Command),
     SwitchPane,
+    Save,
+    Remove,
 }
 
-const HINTS: [(&[&str], &str); 8] = [
+const REMOVE_HINT: usize = 8;
+
+const HINTS: [(&[&str], &str); 10] = [
     (&["1", "9"], "layout-key-apply"),
     (&["v"], "layout-key-split-right"),
     (&["s"], "layout-key-split-below"),
@@ -20,6 +24,8 @@ const HINTS: [(&[&str], &str); 8] = [
     (&["shift-←", "→"], "layout-key-swap"),
     (&["ctrl-←", "→"], "layout-key-resize"),
     (&["="], "layout-key-even"),
+    (&["ctrl-s"], "layout-key-save"),
+    (&["delete"], "layout-key-remove"),
     (&["escape"], "layout-key-done"),
 ];
 
@@ -41,6 +47,8 @@ fn mode_key(keystroke: &Keystroke) -> Option<ModeKey> {
     }
     let command = match (modifiers.control, modifiers.shift, key) {
         (false, _, "tab") => return Some(ModeKey::SwitchPane),
+        (true, false, "s") => return Some(ModeKey::Save),
+        (false, false, "delete") => return Some(ModeKey::Remove),
         (false, _, "=") => Command::LayoutEven,
         (false, false, "v") => Command::LayoutSplit {
             direction: Direction::Right,
@@ -121,7 +129,7 @@ impl Fades {
     }
 }
 
-pub(super) fn key_bar(t: &Theme) -> Div {
+pub(super) fn key_bar(t: &Theme, can_remove: bool) -> Div {
     div()
         .flex()
         .flex_wrap()
@@ -130,19 +138,27 @@ pub(super) fn key_bar(t: &Theme) -> Div {
         .gap_y(t.spacing.xs)
         .text_size(t.typography.small)
         .text_color(t.colors.muted)
-        .children(HINTS.iter().enumerate().map(|(index, (keys, label))| {
-            div()
-                .flex()
-                .items_center()
-                .gap(t.spacing.xxs)
-                .children(keys.iter().enumerate().flat_map(|(at, key)| {
-                    let dash = (index == 0 && at == 1).then(|| div().child("–").into_any_element());
-                    let cap = Kbd::new(("layout-key", index * 2 + at), key)
-                        .map(IntoElement::into_any_element);
-                    dash.into_iter().chain(cap)
-                }))
-                .child(div().ml(t.spacing.xxs).child(rusty_l10n::tr(label)))
+        .children(
+            HINTS
+                .iter()
+                .enumerate()
+                .filter(move |(index, _)| can_remove || *index != REMOVE_HINT)
+                .map(|(index, hint)| hint_view(t, index, hint)),
+        )
+}
+
+fn hint_view(t: &Theme, index: usize, (keys, label): &(&[&str], &str)) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.xxs)
+        .children(keys.iter().enumerate().flat_map(|(at, key)| {
+            let dash = (index == 0 && at == 1).then(|| div().child("–").into_any_element());
+            let cap =
+                Kbd::new(("layout-key", index * 2 + at), key).map(IntoElement::into_any_element);
+            dash.into_iter().chain(cap)
         }))
+        .child(div().ml(t.spacing.xxs).child(rusty_l10n::tr(label)))
 }
 
 pub(super) fn intercept_mode_keys(cx: &mut Context<FerriteWindow>) -> Subscription {
@@ -171,6 +187,13 @@ impl FerriteWindow {
         match key {
             ModeKey::Core(command) => self.apply(&command, window, cx),
             ModeKey::SwitchPane => self.switch_pane(window, cx),
+            ModeKey::Save => return self.ask_save_layout(cx),
+            ModeKey::Remove => {
+                if let Some(state) = &self.tiles.switcher {
+                    self.ask_remove_layout(self.switcher_focus(state), cx);
+                }
+                return;
+            }
         }
         if !cx.reduce_motion() {
             self.tiles.fades.note(&before, &self.tiles_layout());

@@ -1,6 +1,6 @@
 use rusty_core::Tiles;
 use serde::{Deserialize, Serialize};
-use toml_edit::{ArrayOfTables, DocumentMut, Item, Table};
+use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, Value};
 
 use super::{SettingsError, parse};
 use crate::text_layout::keep_layout;
@@ -92,6 +92,42 @@ pub fn save_layout_preset(text: &str, name: &str, tiles: &str) -> Result<String,
         } else {
             return Err(SettingsError::FileInvalid);
         }
+        Ok(with_final_newline(plain, document.to_string()))
+    })
+}
+
+pub fn replace_layout_preset(text: &str, name: &str, tiles: &str) -> Result<String, SettingsError> {
+    let (mut settings, _) = parse(text)?;
+    let index = settings
+        .layout
+        .presets
+        .iter()
+        .position(|preset| preset.name == name)
+        .ok_or(SettingsError::Refused)?;
+    tiles.clone_into(&mut settings.layout.presets[index].tiles);
+    settings.layout.validate(&super::to_toml(&settings))?;
+    keep_layout(text, |plain| {
+        let mut document: DocumentMut = plain.parse().map_err(|_| SettingsError::FileInvalid)?;
+        let presets = document
+            .get_mut("layout")
+            .and_then(|layout| layout.get_mut("presets"))
+            .ok_or(SettingsError::FileInvalid)?;
+        let slot = if let Some(tables) = presets.as_array_of_tables_mut() {
+            tables
+                .get_mut(index)
+                .and_then(|table| table.get_mut("tiles"))
+                .and_then(Item::as_value_mut)
+        } else {
+            presets
+                .as_array_mut()
+                .and_then(|array| array.get_mut(index))
+                .and_then(Value::as_inline_table_mut)
+                .and_then(|table| table.get_mut("tiles"))
+        };
+        let slot = slot.ok_or(SettingsError::FileInvalid)?;
+        let decor = slot.decor().clone();
+        *slot = tiles.into();
+        *slot.decor_mut() = decor;
         Ok(with_final_newline(plain, document.to_string()))
     })
 }

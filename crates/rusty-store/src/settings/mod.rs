@@ -22,7 +22,9 @@ pub use complete::DefaultChange;
 use complete::{Ledger, reconcile};
 pub use edit::{SettingValue, key_line, section_line};
 
-pub use layout::{LayoutPreset, LayoutSettings, remove_layout_preset, save_layout_preset};
+pub use layout::{
+    LayoutPreset, LayoutSettings, remove_layout_preset, replace_layout_preset, save_layout_preset,
+};
 pub use model::{
     Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles, ModifierHints,
     Search, SearchIndex, SelectionSettings, Settings, SizeMode, SortKey, Terminal, ThemeMode,

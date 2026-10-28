@@ -32,6 +32,7 @@ mod pane_swap;
 mod path_edit;
 mod perf_recording;
 mod placement;
+mod preset_edit;
 mod preview;
 mod prompt;
 mod rest;
@@ -95,6 +96,10 @@ pub use layout_switcher::{
     LayoutSwitcher, LayoutSwitcherAction, builtin_layout_presets, layout_presets,
 };
 pub use placement::DisplayScale;
+pub use preset_edit::{
+    EditLayout, LayoutEdit, MAX_LAYOUT_PRESETS, layout_ask_props, no_layout_edits,
+    save_layout_props,
+};
 pub use preview::folder_summary;
 pub use search_hooks::{
     CommandUse, Frecent, Frecents, RecentCommands, SearchHooks, ServiceHooks, ServiceStatus,
