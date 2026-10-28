@@ -245,7 +245,13 @@ fn fill_on_a_command_gives_no_submenu() {
         .iter()
         .position(|item| item.kind == ItemKind::Command)
         .unwrap();
-    let result = session.fill(&[position]).wait_timeout(ANSWER).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let result = loop {
+        match session.fill(&[position]).wait_timeout(ANSWER).unwrap() {
+            Ok(Submenu::Loading) if Instant::now() < deadline => std::thread::sleep(POLL),
+            other => break other,
+        }
+    };
     assert_eq!(result, Err(MenuError::NoSubmenu(vec![position])));
 }
 
