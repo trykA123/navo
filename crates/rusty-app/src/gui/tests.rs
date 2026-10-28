@@ -207,7 +207,12 @@ fn settings_read_is_marked_after_loading_finishes() {
 fn clean_quitter_removes_the_crash_running_marker() {
     let dir = tempfile::tempdir().unwrap();
     let running = crate::crash::Running::start(dir.path()).unwrap();
-    let quit = super::quitter(None, crate::profile::Cleanup::default(), Some(running));
+    let quit = super::quitter(
+        None,
+        crate::profile::Cleanup::default(),
+        Some(running),
+        crate::jobs::maintenance::MaintenanceTimer::default(),
+    );
     quit();
     assert!(!dir.path().join("running").exists());
     assert!(crate::crash::pending(dir.path()).is_none());

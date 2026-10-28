@@ -9,6 +9,10 @@ use rusty_store::JobState;
 
 use super::JournalLog;
 
+mod timer;
+
+pub(crate) use timer::MaintenanceTimer;
+
 pub(super) fn after(log: &JournalLog, state: JobState, ops: &dyn ProviderOps) {
     if log.global_lease.is_none()
         || !matches!(

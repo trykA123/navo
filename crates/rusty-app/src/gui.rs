@@ -15,6 +15,7 @@ use rusty_ui::window_view::{
 };
 
 use crate::cli::Start;
+use crate::jobs::maintenance::MaintenanceTimer;
 use crate::search_hooks::index_hooks;
 use crate::startup::{
     home_location, initial_state, path_location, place_panes, save, session_folders,
@@ -158,7 +159,7 @@ pub(crate) fn open(launch: Launch) {
             retained: services.retained,
         },
         Rc::new(rusty_shell::display_scale),
-        quitter(disk, launch.cleanup, launch.running),
+        quitter(disk, launch.cleanup, launch.running, services.maintenance),
     );
 }
 
@@ -168,6 +169,7 @@ struct ProfileServices {
     operations: Operations,
     rename: rusty_ui::browser::RenameHooks,
     retained: Arc<dyn rusty_ui::browser::RetainedHooks>,
+    maintenance: MaintenanceTimer,
 }
 
 fn profile_services(
@@ -186,6 +188,7 @@ fn profile_services(
         operations,
         rename,
         retained: retained_hooks::hooks(dirs, experimental, local.clone()),
+        maintenance: MaintenanceTimer::start(dirs, experimental, local.clone()),
     }
 }
 
@@ -240,8 +243,10 @@ fn quitter(
     disk: Option<DiskListings>,
     cleanup: crate::profile::Cleanup,
     running: Option<crate::crash::Running>,
+    maintenance: MaintenanceTimer,
 ) -> Rc<dyn Fn()> {
     Rc::new(move || {
+        maintenance.stop();
         if let Some(disk) = &disk {
             let _ = disk.close(EXIT_CLOSE);
         }

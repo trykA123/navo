@@ -12,7 +12,7 @@ mod deletion;
 mod guard_log;
 mod held;
 mod identity;
-mod maintenance;
+pub(crate) mod maintenance;
 mod marks;
 mod mutation_lock;
 #[cfg(test)]

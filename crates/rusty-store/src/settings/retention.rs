@@ -47,6 +47,10 @@ impl RetentionSettings {
         }
     }
 
+    pub fn policy(&self) -> RetentionPolicy {
+        self.policy
+    }
+
     pub fn maintenance_policy(&self) -> Option<RetentionPolicy> {
         (self.retain_deletes || self.retain_overwrites).then_some(self.policy)
     }
