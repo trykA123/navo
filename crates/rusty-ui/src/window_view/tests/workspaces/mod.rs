@@ -9,6 +9,7 @@ use super::{FerriteWindow, fake, open_with, press, two_panes};
 
 mod actions;
 mod button;
+mod polish;
 
 const ALT: Modifiers = Modifiers {
     alt: true,

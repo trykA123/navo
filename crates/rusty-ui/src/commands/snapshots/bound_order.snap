@@ -1,6 +1,5 @@
 ---
 source: crates/rusty-ui/src/commands/tests.rs
-assertion_line: 315
 expression: "lines.join(\"\\n\")"
 ---
 [file_list]
@@ -458,6 +457,7 @@ pane.drive_menu_first | alt-f1 | NavoPane
 pane.drive_menu_second | alt-f2 | NavoPane
 pane.edit_path | ctrl-l | NavoPane
 window.view_menu | alt-v | NavoPane
+pane.reset_split | ctrl-alt-0 | NavoPane
 pane.reset_split | ctrl-shift-0 | NavoPane
 preview.browse | ctrl-shift-q | NavoPane
 crash_notice.focus | ctrl-shift-r | NavoPane

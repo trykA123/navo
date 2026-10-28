@@ -1,250 +1,42 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
-use gpui_kit::component::Selectable;
-use gpui_kit::component::button::{Button as KitButton, ButtonVariants};
-use gpui_kit::{Animation, AnimationExt, KeyDownEvent, Role};
+use gpui_kit::{Animation, AnimationExt, Role};
 use rusty_core::{Command, Snapshot};
 
+mod card;
 mod foot;
 mod rename;
 
+pub use card::{OnTrayAction, TrayAction, TrayCard, TrayTile, WorkspaceTray};
 pub(super) use rename::TrayEdit;
 
-use self::foot::{Foot, card_foot};
 use super::FerriteWindow;
 use super::workspace_keys::Preview;
 use crate::prelude::*;
-use crate::primitives::{IconButton, IconName, Kbd, icon};
 use crate::tokens::{self, Theme};
 
-struct Card<'a> {
-    n: usize,
-    name: &'a str,
-    snapshot: &'a Snapshot,
-    active: bool,
-    preview: bool,
-    count: usize,
-    draft: u16,
-}
-
-fn miniature(t: &Theme, snapshot: &Snapshot) -> Div {
+fn tiles(snapshot: &Snapshot) -> Vec<TrayTile> {
     let panes = snapshot.panes();
-    div().relative().w_full().h(t.spacing.xxl * 5.).children(
-        snapshot
-            .layout()
-            .rects()
-            .into_iter()
-            .filter_map(|(id, rect)| {
-                let pane = panes.iter().find(|pane| pane.id() == id)?;
-                let folder = pane.active().location();
-                let label = folder.name().map_or_else(
-                    || folder.path().display().into_owned(),
-                    |name| name.display().into_owned(),
-                );
-                Some(
-                    div()
-                        .absolute()
-                        .left(relative(rect.x as f32))
-                        .top(relative(rect.y as f32))
-                        .w(relative(rect.width as f32))
-                        .h(relative(rect.height as f32))
-                        .p(t.spacing.xxs)
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .size_full()
-                                .px(t.spacing.xs)
-                                .rounded(t.radii.sm)
-                                .border_1()
-                                .border_color(t.surfaces.card_edge)
-                                .bg(t.surfaces.field)
-                                .text_size(t.typography.small)
-                                .text_color(t.colors.muted)
-                                .child(div().min_w_0().truncate().child(label)),
-                        ),
-                )
-            }),
-    )
-}
-
-fn metadata(t: &Theme, card: &Card) -> Div {
-    let open = rusty_l10n::tr("workspace-open");
-    div()
-        .flex()
-        .items_center()
-        .gap(t.spacing.sm)
-        .w_full()
-        .children(Kbd::new(("workspace-key", card.n), &card.n.to_string()))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .child(card.name.to_owned()),
-        )
-        .when(card.active, |row| {
-            row.child(
-                div()
-                    .id("workspace-open")
-                    .role(Role::Label)
-                    .aria_label(open.clone())
-                    .test_support()
-                    .text_size(t.typography.small)
-                    .text_color(t.colors.accent_text)
-                    .child(open),
-            )
+    snapshot
+        .layout()
+        .rects()
+        .into_iter()
+        .filter_map(|(id, rect)| {
+            let pane = panes.iter().find(|pane| pane.id() == id)?;
+            let folder = pane.active().location();
+            let label = folder.name().map_or_else(
+                || folder.path().display().into_owned(),
+                |name| name.display().into_owned(),
+            );
+            Some(TrayTile {
+                x: rect.x as f32,
+                y: rect.y as f32,
+                width: rect.width as f32,
+                height: rect.height as f32,
+                label: label.into(),
+            })
         })
-}
-
-fn card_button(t: &Theme, id: impl Into<ElementId>, label: String) -> KitButton {
-    KitButton::new(id)
-        .outline()
-        .accessibility_label(label)
-        .flex_none()
-        .w(card_width(t))
-        .h_full()
-        .p(t.spacing.md)
-        .rounded(t.radii.card)
-        .bg(t.surfaces.card)
-        .border_color(t.surfaces.card_edge)
-        .text_color(t.colors.text)
-}
-
-fn card_width(t: &Theme) -> Pixels {
-    t.spacing.xxl * 14.
-}
-
-fn card_main(t: &Theme, card: &Card, cx: &mut Context<FerriteWindow>) -> AnyElement {
-    let n = card.n;
-    KitButton::new(("workspace-switch", n))
-        .ghost()
-        .accessibility_label(card.name.to_owned())
-        .w_full()
-        .flex_1()
-        .min_h_0()
-        .p(t.spacing.xs)
-        .rounded(t.radii.sm)
-        .text_color(t.colors.text)
-        .selected(card.preview)
-        .on_click(cx.listener(move |view, _, window, cx| {
-            view.choose_workspace(Command::WorkspaceSwitch { n }, window, cx);
-        }))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(t.spacing.md)
-                .size_full()
-                .child(miniature(t, card.snapshot))
-                .child(metadata(t, card)),
-        )
-        .into_any_element()
-}
-
-fn card_frame(t: &Theme, card: &Card) -> gpui_kit::Stateful<Div> {
-    div()
-        .id(("workspace-card", card.n))
-        .role(Role::Group)
-        .aria_selected(card.preview)
-        .flex()
-        .flex_col()
-        .flex_none()
-        .gap(t.spacing.sm)
-        .w(card_width(t))
-        .p(t.spacing.sm)
-        .rounded(t.radii.card)
-        .border_1()
-        .border_color(if card.preview {
-            t.colors.accent
-        } else {
-            t.surfaces.card_edge
-        })
-        .bg(t.surfaces.card)
-        .text_color(t.colors.text)
-}
-
-fn new_card(t: &Theme, preview: bool, cx: &mut Context<FerriteWindow>) -> AnyElement {
-    let label = rusty_l10n::tr("workspace-new-from-layout");
-    let button = card_button(t, "workspace-new-switch", label.clone())
-        .selected(preview)
-        .when(preview, |button| button.border_color(t.colors.accent))
-        .on_click(cx.listener(|view, _, window, cx| {
-            view.choose_workspace(Command::WorkspaceNew { name: None }, window, cx);
-        }))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(t.spacing.md)
-                .size_full()
-                .child(icon(IconName::Plus, t.spacing.icon, t.colors.muted))
-                .child(label)
-                .children(Kbd::new("workspace-new-key", "alt-n")),
-        );
-    div()
-        .id("workspace-new")
-        .role(Role::Group)
-        .aria_selected(preview)
-        .test_support()
-        .flex()
-        .flex_none()
-        .child(button)
-        .into_any_element()
-}
-
-fn header(t: &Theme, cx: &mut Context<FerriteWindow>) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .gap(t.spacing.md)
-        .child(
-            div()
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(rusty_l10n::tr("workspace-tray-title")),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_size(t.typography.small)
-                .text_color(t.colors.muted)
-                .child(rusty_l10n::tr("workspace-tray-hint")),
-        )
-        .child(
-            IconButton::new(
-                "workspace-close",
-                IconName::X,
-                rusty_l10n::tr("workspace-tray-close"),
-            )
-            .on_click(cx.listener(|view, _, window, cx| {
-                view.workspace_keys.cancel();
-                view.end_workspace_rename(window, cx);
-            })),
-        )
-}
-
-fn tray_surface(t: &Theme, bottom: Pixels) -> gpui_kit::Stateful<Div> {
-    div()
-        .id("workspace-tray")
-        .role(Role::Group)
-        .aria_label(rusty_l10n::tr("workspace-tray-title"))
-        .occlude()
-        .absolute()
-        .left_0()
-        .right_0()
-        .bottom(bottom)
-        .flex()
-        .flex_col()
-        .gap(t.spacing.md)
-        .p(t.spacing.lg)
-        .bg(t.surfaces.sheet)
-        .border_t_1()
-        .border_color(t.surfaces.card_edge)
-        .shadow(t.shadows.up.clone())
+        .collect()
 }
 
 impl FerriteWindow {
@@ -253,124 +45,91 @@ impl FerriteWindow {
         self.apply(&command, window, cx);
     }
 
-    fn workspace_card(&self, t: &Theme, card: &Card, cx: &mut Context<Self>) -> AnyElement {
-        let n = card.n;
-        let main = self.workspace_rename_row(t, n, cx).map_or_else(
-            || card_main(t, card, cx),
-            |row| {
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(t.spacing.md)
-                    .w_full()
-                    .flex_1()
-                    .min_h_0()
-                    .p(t.spacing.xs)
-                    .child(miniature(t, card.snapshot))
-                    .child(row)
-                    .into_any_element()
-            },
-        );
-        let foot = Foot {
-            n,
-            name: card.name,
-            count: card.count,
-            draft: card.draft,
-            active: card.active,
-        };
-        card_frame(t, card)
-            .test_support()
-            .track_focus(&self.workspace_keys.edit.cards[n - 1])
-            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                if event.keystroke.key == "f2" && !event.keystroke.modifiers.modified() {
-                    cx.stop_propagation();
-                    view.start_workspace_rename(n, window, cx);
-                }
-            }))
-            .child(main)
-            .child(card_foot(t, &foot, cx))
-            .into_any_element()
+    fn tray_action(&mut self, action: TrayAction, window: &mut Window, cx: &mut Context<Self>) {
+        match action {
+            TrayAction::Switch(n) => {
+                self.choose_workspace(Command::WorkspaceSwitch { n }, window, cx);
+            }
+            TrayAction::New => {
+                self.workspace_keys.cancel();
+                self.create_workspace(window, cx);
+            }
+            TrayAction::Close => {
+                self.workspace_keys.cancel();
+                self.end_workspace_rename(window, cx);
+            }
+            TrayAction::Rename(n) => self.start_workspace_rename(n, window, cx),
+            TrayAction::Move { n, by } => {
+                self.apply(&Command::WorkspaceMove { n, by }, window, cx);
+            }
+            TrayAction::Delete(n) => self.delete_workspace(n, window, cx),
+            TrayAction::Save => self.apply(&Command::WorkspaceSave, window, cx),
+            TrayAction::Discard(n) => self.apply(&Command::WorkspaceDiscard { n }, window, cx),
+        }
     }
 
-    fn workspace_cards(&self, t: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn tray_cards(&self, t: &Theme, cx: &mut Context<Self>) -> Vec<TrayCard> {
         let state = self.browser.state();
         let Some(core) = state.window(state.focused_window()) else {
             return Vec::new();
         };
         let current = core.snapshot();
-        let count = core.workspaces().len();
         core.workspaces()
             .iter()
             .enumerate()
             .map(|(index, workspace)| {
+                let n = index + 1;
                 let active = index == core.active_workspace();
                 let snapshot = if active {
                     &current
                 } else {
                     workspace.live.as_ref().unwrap_or(&workspace.saved)
                 };
-                self.workspace_card(
-                    t,
-                    &Card {
-                        n: index + 1,
-                        name: &workspace.name,
-                        snapshot,
-                        active,
-                        preview: self.workspace_keys.preview == Some(Preview::Existing(index + 1)),
-                        count,
-                        draft: rusty_core::changes(&workspace.saved, snapshot),
-                    },
-                    cx,
-                )
+                TrayCard {
+                    name: workspace.name.clone().into(),
+                    tiles: tiles(snapshot),
+                    active,
+                    preview: self.workspace_keys.preview == Some(Preview::Existing(n)),
+                    draft: rusty_core::changes(&workspace.saved, snapshot),
+                    focus: self.workspace_keys.edit.cards.get(index).cloned(),
+                    rename: self.workspace_rename_row(t, n, cx),
+                }
             })
             .collect()
     }
 
-    pub(super) fn workspace_tray(
-        &self,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
+    pub(super) fn workspace_tray(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if !self.workspace_keys.visible {
             return None;
         }
         let t = tokens::current(cx).clone();
-        let strip = self.fkey_strip_height(&t);
-        let inset = if strip > px(0.) { px(0.) } else { t.spacing.md };
-        let bottom = self
-            .hint_cover(window, cx)
-            .map_or(t.spacing.status_height + t.spacing.xs + inset, |cover| {
-                window.viewport_size().height - strip - cover.top
-            });
-        let cards = self.workspace_cards(&t, cx);
-        let tray = tray_surface(&t, bottom)
-            .test_support()
-            .child(header(&t, cx))
-            .child(
-                div()
-                    .id("workspace-cards")
-                    .test_support()
-                    .flex()
-                    .min_w_0()
-                    .w_full()
-                    .gap(t.spacing.md)
-                    .overflow_x_scroll()
-                    .children(cards)
-                    .child(new_card(
-                        &t,
-                        self.workspace_keys.preview == Some(Preview::New),
-                        cx,
-                    )),
-            );
-        Some(if cx.reduce_motion() {
-            tray.into_any_element()
+        let inset = if self.fkey_strip_height(&t) > px(0.) {
+            px(0.)
         } else {
-            tray.with_animation(
-                "workspace-tray-enter",
-                Animation::new(t.motion.fade).with_easing(ease_out_cubic),
-                |tray, delta| tray.opacity(delta),
-            )
-            .into_any_element()
+            t.spacing.md
+        };
+        let on_action = cx.listener(|view, action: &TrayAction, window, cx| {
+            view.tray_action(*action, window, cx);
+        });
+        let tray = WorkspaceTray::new(self.tray_cards(&t, cx), on_action)
+            .new_preview(self.workspace_keys.preview == Some(Preview::New));
+        let layer = div()
+            .id("workspace-tray-layer")
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(t.spacing.status_height + t.spacing.xs + inset)
+            .child(tray);
+        Some(if cx.reduce_motion() {
+            layer.into_any_element()
+        } else {
+            layer
+                .with_animation(
+                    "workspace-tray-enter",
+                    Animation::new(t.motion.fade).with_easing(ease_out_cubic),
+                    |layer, delta| layer.opacity(delta),
+                )
+                .into_any_element()
         })
     }
 

@@ -103,7 +103,7 @@ keys = ["alt-v"]
 
 [[bind]]
 command = "pane.reset_split"
-keys = ["ctrl-shift-0"]
+keys = ["ctrl-alt-0", "ctrl-shift-0"]
 
 [[bind]]
 command = "preview.browse"

@@ -118,6 +118,7 @@ pub use viewer::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use viewer::{Treemap, TreemapEvent, TreemapGroup, TreemapPart};
 pub use viewer::{bind_keys as bind_viewer_keys, encoding_picker, view_menu, viewer_menu};
 pub use window_menu::window_view_menu;
+pub use workspace_tray::{OnTrayAction, TrayAction, TrayCard, TrayTile, WorkspaceTray};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 

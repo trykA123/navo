@@ -1,5 +1,6 @@
 mod recovery;
 mod table;
+mod tray;
 
 pub use table::PAGES;
 
@@ -125,6 +126,8 @@ pub enum Page {
     RecoveryNotice,
     RecoveryNoticeNarrow,
     Palettes,
+    WorkspaceTray,
+    WorkspaceTrayPhone,
 }
 
 pub struct PageInfo {

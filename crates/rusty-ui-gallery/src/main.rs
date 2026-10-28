@@ -35,6 +35,7 @@ mod strip_page;
 mod structured_sample;
 mod tokens_page;
 mod tokens_sample;
+mod tray_page;
 mod treemap_page;
 mod viewer_menu_page;
 mod viewer_sample;

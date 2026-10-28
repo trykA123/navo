@@ -199,12 +199,12 @@ impl FerriteWindow {
             return;
         }
         if released {
-            if let Some(preview) = self.workspace_keys.release() {
-                let command = match preview {
-                    Preview::Existing(n) => Command::WorkspaceSwitch { n },
-                    Preview::New => Command::WorkspaceNew { name: None },
-                };
-                self.apply(&command, window, cx);
+            match self.workspace_keys.release() {
+                Some(Preview::Existing(n)) => {
+                    self.apply(&Command::WorkspaceSwitch { n }, window, cx);
+                }
+                Some(Preview::New) => self.create_workspace(window, cx),
+                None => {}
             }
             cx.notify();
         }
@@ -296,7 +296,10 @@ pub(super) fn workspace_keys(root: Div, cx: &mut Context<FerriteWindow>) -> Div 
         cx.notify();
     }))
     .on_action(cx.listener(|view, _: &NewWorkspace, window, cx| {
-        view.workspace_command(Command::WorkspaceNew { name: None }, window, cx);
+        if view.workspaces_allowed(window) {
+            view.workspace_keys.cancel();
+            view.create_workspace(window, cx);
+        }
     }))
     .on_action(cx.listener(|view, _: &SaveWorkspace, window, cx| {
         view.workspace_command(Command::WorkspaceSave, window, cx);

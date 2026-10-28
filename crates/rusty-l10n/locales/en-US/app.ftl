@@ -15,6 +15,8 @@ workspace-name = Workspace name
 workspace-name-invalid = A workspace name has 1 to 40 characters.
 workspace-deleted = Deleted { $name }
 workspace-deleted-key = Deleted { $name } · { $key } restores it
+workspace-created = Created { $name }
+workspace-created-key = Created { $name } · { $key } switches to it
 workspace-button = Workspaces: { $name }, { $n } of { $total }
 workspace-button-count = { $n }/{ $total }
 

@@ -101,20 +101,22 @@ fn the_passive_pane_keeps_its_tabs(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn ctrl_shift_zero_centres_the_splitter(cx: &mut TestAppContext) {
-    let (window, view) = open(cx, Rc::default());
-    view.update(cx, |view, cx| {
-        view.browser
-            .command(&rusty_core::Command::LayoutRatio {
-                split: rusty_core::SplitPath(Vec::new()),
-                ratio: 300,
-            })
-            .expect("ratio");
-        cx.notify();
-    });
-    press(cx, window, &view, "ctrl-shift-0");
-    let ratio = view.read_with(cx, |view, _| view.root_ratio());
-    assert_eq!(ratio, 0.5);
+fn ctrl_alt_zero_and_ctrl_shift_zero_centre_the_splitter(cx: &mut TestAppContext) {
+    for key in ["ctrl-alt-0", "ctrl-shift-0"] {
+        let (window, view) = open(cx, Rc::default());
+        view.update(cx, |view, cx| {
+            view.browser
+                .command(&rusty_core::Command::LayoutRatio {
+                    split: rusty_core::SplitPath(Vec::new()),
+                    ratio: 300,
+                })
+                .expect("ratio");
+            cx.notify();
+        });
+        press(cx, window, &view, key);
+        let ratio = view.read_with(cx, |view, _| view.root_ratio());
+        assert_eq!(ratio, 0.5, "{key}");
+    }
 }
 
 fn prepare_clone(

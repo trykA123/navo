@@ -91,7 +91,7 @@ impl FerriteWindow {
             .hints
             .hold
             .shown()
-            .filter(|_| self.hints_allowed(window))?;
+            .filter(|_| self.hints_allowed(window) && !self.workspace_keys.visible)?;
         let focus = self.focus.get(&self.browser.state().focused_pane())?;
         let is_handled = |spec: &CommandSpec| {
             spec.action

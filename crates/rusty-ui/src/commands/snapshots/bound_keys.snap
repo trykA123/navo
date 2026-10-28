@@ -1,6 +1,5 @@
 ---
 source: crates/rusty-ui/src/commands/tests.rs
-assertion_line: 326
 expression: "lines.join(\"\\n\")"
 ---
 activity.act | enter | ActivityStrip
@@ -249,6 +248,7 @@ pane.go_back | alt-left | FileList
 pane.go_forward | alt-right | FileList
 pane.leave_waiting | backspace | PaneWaiting
 pane.leave_waiting | escape | PaneWaiting
+pane.reset_split | ctrl-alt-0 | NavoPane
 pane.reset_split | ctrl-shift-0 | NavoPane
 pane.retry_listing | enter | PaneWaiting
 pane.switch | tab | FileList

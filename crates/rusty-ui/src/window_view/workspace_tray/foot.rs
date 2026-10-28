@@ -5,9 +5,11 @@ use rusty_l10n::{t, tr};
 
 use super::super::FerriteWindow;
 use super::super::strip::undo_key;
+use super::card::{OnTrayAction, TrayAction};
 use super::rename::Deleted;
+use crate::commands::active;
 use crate::prelude::*;
-use crate::primitives::{Button, ButtonVariant, IconButton, IconName};
+use crate::primitives::{Button, ButtonVariant, IconButton, IconName, Kbd};
 use crate::status_bar::StatusNotice;
 use crate::tokens::Theme;
 
@@ -19,21 +21,29 @@ pub(super) struct Foot<'a> {
     pub(super) active: bool,
 }
 
-fn draft_foot(t: &Theme, foot: &Foot, cx: &mut Context<FerriteWindow>) -> Div {
+pub(super) fn run(
+    act: &OnTrayAction,
+    action: TrayAction,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    let act = act.clone();
+    move |_, window, cx| act(&action, window, cx)
+}
+
+fn draft_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
     let n = foot.n;
     let label = t!("workspace-draft", count = foot.draft);
     div()
         .flex()
-        .items_center()
-        .gap(t.spacing.sm)
+        .flex_col()
+        .gap(t.spacing.xs)
         .w_full()
+        .min_w_0()
         .child(
             div()
                 .id(("workspace-draft", n))
                 .role(Role::Status)
                 .aria_label(label.clone())
                 .test_support()
-                .flex_1()
                 .min_w_0()
                 .truncate()
                 .text_size(t.typography.small)
@@ -41,62 +51,58 @@ fn draft_foot(t: &Theme, foot: &Foot, cx: &mut Context<FerriteWindow>) -> Div {
                 .child(label),
         )
         .child(
-            Button::new(("workspace-save", n), tr("workspace-save"))
-                .variant(ButtonVariant::Primary)
-                .disabled(!foot.active)
-                .on_click(cx.listener(|view, _, window, cx| {
-                    view.apply(&Command::WorkspaceSave, window, cx);
-                })),
-        )
-        .child(
-            Button::new(("workspace-discard", n), tr("workspace-discard")).on_click(cx.listener(
-                move |view, _, window, cx| {
-                    view.apply(&Command::WorkspaceDiscard { n }, window, cx);
-                },
-            )),
+            div()
+                .flex()
+                .items_center()
+                .justify_end()
+                .gap(t.spacing.xs)
+                .min_w_0()
+                .child(
+                    Button::new(("workspace-save", n), tr("workspace-save"))
+                        .variant(ButtonVariant::Primary)
+                        .disabled(!foot.active)
+                        .on_click(run(act, TrayAction::Save)),
+                )
+                .child(
+                    Button::new(("workspace-discard", n), tr("workspace-discard"))
+                        .on_click(run(act, TrayAction::Discard(n))),
+                ),
         )
 }
 
-fn tools_foot(t: &Theme, foot: &Foot, cx: &mut Context<FerriteWindow>) -> Div {
+fn tools_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
     let n = foot.n;
-    let mover = |id: &'static str, icon, label: &str, by: i8, is_disabled: bool| {
-        IconButton::new((id, n), icon, tr(label))
+    let mover = |id: &'static str, icon, by: i8, is_disabled: bool| {
+        IconButton::new((id, n), icon, tr(id))
             .disabled(is_disabled)
-            .on_click(cx.listener(move |view, _, window, cx| {
-                view.apply(&Command::WorkspaceMove { n, by }, window, cx);
-            }))
+            .on_click(run(act, TrayAction::Move { n, by }))
     };
-    let left = mover(
-        "workspace-move-left",
-        IconName::ChevronLeft,
-        "workspace-move-left",
-        -1,
-        n == 1,
-    );
-    let right = mover(
-        "workspace-move-right",
-        IconName::ChevronRight,
-        "workspace-move-right",
-        1,
-        n == foot.count,
-    );
     div()
         .flex()
         .items_center()
         .justify_end()
         .gap(t.spacing.xxs)
+        .min_w_0()
         .child(
             IconButton::new(
                 ("workspace-rename", n),
                 IconName::Pencil,
                 t!("workspace-rename", name = foot.name.to_owned()),
             )
-            .on_click(cx.listener(move |view, _, window, cx| {
-                view.start_workspace_rename(n, window, cx);
-            })),
+            .on_click(run(act, TrayAction::Rename(n))),
         )
-        .child(left)
-        .child(right)
+        .child(mover(
+            "workspace-move-left",
+            IconName::ChevronLeft,
+            -1,
+            n == 1,
+        ))
+        .child(mover(
+            "workspace-move-right",
+            IconName::ChevronRight,
+            1,
+            n == foot.count,
+        ))
         .child(
             IconButton::new(
                 ("workspace-delete", n),
@@ -104,18 +110,17 @@ fn tools_foot(t: &Theme, foot: &Foot, cx: &mut Context<FerriteWindow>) -> Div {
                 t!("workspace-delete", name = foot.name.to_owned()),
             )
             .disabled(foot.count <= 1)
-            .on_click(cx.listener(move |view, _, window, cx| {
-                view.delete_workspace(n, window, cx);
-            })),
+            .on_click(run(act, TrayAction::Delete(n))),
         )
 }
 
-pub(super) fn card_foot(t: &Theme, foot: &Foot, cx: &mut Context<FerriteWindow>) -> Div {
-    if foot.draft > 0 {
-        draft_foot(t, foot, cx)
+pub(super) fn card_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
+    let row = if foot.draft > 0 {
+        draft_foot(t, foot, act)
     } else {
-        tools_foot(t, foot, cx)
-    }
+        tools_foot(t, foot, act)
+    };
+    row.px(t.spacing.xs)
 }
 
 impl FerriteWindow {
@@ -158,6 +163,28 @@ impl FerriteWindow {
         cx.notify();
     }
 
+    pub(in crate::window_view) fn create_workspace(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let count = self.workspace_count();
+        self.apply(&Command::WorkspaceNew { name: None }, window, cx);
+        let n = self.workspace_count();
+        let Some(name) = self.workspace_name(n).filter(|_| n > count) else {
+            return;
+        };
+        let text = match preview_key(n, cx) {
+            Some(key) => t!("workspace-created-key", name = name, key = key.to_string()),
+            None => t!("workspace-created", name = name),
+        };
+        self.show_notice(StatusNotice {
+            text: text.into(),
+            is_error: false,
+        });
+        cx.notify();
+    }
+
     pub(in crate::window_view) fn restores_workspace(&self) -> bool {
         self.workspace_keys
             .edit
@@ -174,4 +201,13 @@ impl FerriteWindow {
         self.workspace_keys.edit.deleted = None;
         self.apply(&Command::WorkspaceRestore, window, cx);
     }
+}
+
+fn preview_key(n: usize, cx: &App) -> Option<SharedString> {
+    const ORDINALS: [&str; 9] = [
+        "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+    ];
+    let command = format!("workspace.preview_{}", ORDINALS.get(n.checked_sub(1)?)?);
+    let key = active(cx).keys_of(&command).next()?;
+    Kbd::new("workspace-created-key", key).map(|kbd| kbd.text().into())
 }

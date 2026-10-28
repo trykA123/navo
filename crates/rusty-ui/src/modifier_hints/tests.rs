@@ -108,8 +108,8 @@ fn the_alt_and_shift_layers_map_their_commands_to_groups() {
 
 #[test]
 fn a_command_without_a_group_goes_to_other() {
-    let keymap = user("[[bind]]\ncommand = \"workspace.list\"\nkeys = [\"ctrl-alt-w\"]\n");
-    let layer = layer_where(&keymap, Combo::new(true, true, false), &|_| true);
+    let keymap = user("[[bind]]\ncommand = \"workspace.list\"\nkeys = [\"ctrl-alt-shift-w\"]\n");
+    let layer = layer_where(&keymap, Combo::new(true, true, true), &|_| true);
     assert_eq!(names(&layer), ["Other"]);
     assert_eq!(layer.groups[0].entries[0].label, "Workspaces");
 }
@@ -155,7 +155,7 @@ fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
 
 #[test]
 fn a_layer_without_bindings_is_empty() {
-    let layer = layer_in(Keymap::builtin(), Combo::new(true, true, false));
+    let layer = layer_in(Keymap::builtin(), Combo::new(true, true, true));
     assert!(layer.is_empty());
     assert_eq!(layer.count(), 0);
     assert!(layer.groups.is_empty());

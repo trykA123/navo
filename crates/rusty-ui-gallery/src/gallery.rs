@@ -318,7 +318,10 @@ impl Render for Gallery {
             Page::SearchSettings => return root.child(search.clone()),
             _ => {}
         }
-        if let Some(page) = self.window_page() {
+        if let Some(page) = self
+            .window_page()
+            .or_else(|| crate::tray_page::element(self.page, &t))
+        {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
         }
