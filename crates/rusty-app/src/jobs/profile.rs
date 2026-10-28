@@ -210,6 +210,12 @@ pub(super) fn mutated_paths(plan: &OperationPlan) -> Result<Vec<Location>, Strin
         .map_err(|error| error.message())
 }
 
+fn canonical_ancestor(path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let existing = path.ancestors().find(|ancestor| ancestor.exists())?;
+    let rest = path.strip_prefix(existing).ok()?;
+    Some(std::fs::canonicalize(existing).ok()?.join(rest))
+}
+
 fn guard_paths(paths: &[Location], dirs: &StoreDirs, experimental: bool) -> Result<(), String> {
     if paths.iter().any(reserved) {
         return Err(rusty_l10n::tr("job-retained-protected"));
@@ -220,7 +226,8 @@ fn guard_paths(paths: &[Location], dirs: &StoreDirs, experimental: bool) -> Resu
             Ok(resolved) => {
                 Some(crate::startup::path_location(&resolved).ok_or("invalid profile path")?)
             }
-            Err(_) if !experimental => None,
+            Err(_) if !experimental => canonical_ancestor(path)
+                .and_then(|resolved| crate::startup::path_location(&resolved)),
             Err(error) => return Err(error.to_string()),
         };
         if paths.iter().any(|path| {
