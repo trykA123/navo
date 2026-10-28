@@ -56,6 +56,7 @@ impl Browser {
             sources,
             target: self.state.active_tab().location().clone(),
             confirm: DropConfirm::Never,
+            source_tab: None,
         })
     }
 
@@ -65,11 +66,14 @@ impl Browser {
             sources,
             target,
             confirm,
+            source_tab,
         } = request;
         if let Some(refused) = drop_refusal(&target, &sources) {
             return Err(refused);
         }
-        let source_tab = self.drop_source_tab(&sources);
+        let source_tab = source_tab
+            .filter(|tab| self.state.tab(*tab).is_some())
+            .unwrap_or_else(|| self.drop_source_tab(&sources));
         let same_volume = sources
             .first()
             .is_some_and(|source| same_volume(source, &target));

@@ -9,6 +9,7 @@ fn request(fs: &FakeFs, kind: OpKind, confirm: DropConfirm) -> DropRequest {
         sources: vec![fs.location("home/docs")],
         target: fs.location("dest"),
         confirm,
+        source_tab: None,
     }
 }
 

@@ -1,9 +1,9 @@
 use gpui_kit::{AnyWindowHandle, Modifiers, Subscription};
-use rusty_core::{DropKeys, DropOp, Location, OpKind, PaneId, ProviderPath, Tab, drop_op};
+use rusty_core::{DropKeys, DropOp, Location, PaneId, Tab, TabId, drop_op};
 
 use super::FerriteWindow;
 use super::drag_hover::Over;
-use crate::browser::{DropRequest, PasteRefusal, drop_refusal, same_volume};
+use crate::browser::{PasteRefusal, same_volume};
 use crate::drag::{DragBadge, DragState, FileDrag, Refusal};
 use crate::file_list::{DropEvent, DropPayload, DropSpot, FileList, ListEdge};
 use crate::modifier_hints::HintsMode;
@@ -33,6 +33,7 @@ pub(super) struct Carried {
     pub(super) parents: Vec<Location>,
     pub(super) folders: Vec<Location>,
     pub(super) first: SharedString,
+    pub(super) tab: Option<TabId>,
 }
 
 pub(super) type Target = Result<Location, Refusal>;
@@ -141,14 +142,14 @@ impl FerriteWindow {
             .into_iter()
             .filter_map(|row| listing.get(row))
             .collect();
-        let folder = tab.location();
-        let join = |name: &str| folder.join(&ProviderPath::from_text(name)).ok();
+        let join = |name: &str| tab.entry_location(name).ok();
+        let sources: Vec<Location> = entries
+            .iter()
+            .filter_map(|entry| join(&entry.name))
+            .collect();
         Some(Carried {
-            sources: entries
-                .iter()
-                .filter_map(|entry| join(&entry.name))
-                .collect(),
-            parents: vec![folder.clone()],
+            parents: parents_of(tab, &sources),
+            sources,
             folders: entries
                 .iter()
                 .filter(|entry| entry.is_folder)
@@ -158,6 +159,7 @@ impl FerriteWindow {
                 .first()
                 .map(|entry| SharedString::from(entry.name.clone()))
                 .unwrap_or_default(),
+            tab: Some(tab.id()),
         })
     }
 
@@ -326,32 +328,19 @@ impl FerriteWindow {
             });
         if matches { self.end_drag() } else { None }
     }
+}
 
-    pub(super) fn run_drop(&mut self, sources: Vec<Location>, target: Location, op: DropOp) {
-        if let Some(refused) = drop_refusal(&target, &sources).and_then(refusal_of) {
-            self.show_notice(info(refused.text()));
-            return;
-        }
-        let kind = match op {
-            DropOp::Copy => OpKind::Copy,
-            DropOp::Move => OpKind::Move,
-            DropOp::Link => OpKind::Link,
-        };
-        let request = DropRequest {
-            kind,
-            sources,
-            target,
-            confirm: self.values.drop_confirm(),
-        };
-        match self.browser.drop_into(request) {
-            Ok(_) => self.forget_clipboard_notice(),
-            Err(refused) => {
-                if let Some(refused) = refusal_of(refused) {
-                    self.show_notice(info(refused.text()));
-                }
-            }
+fn parents_of(tab: &Tab, sources: &[Location]) -> Vec<Location> {
+    if tab.base_or_location() == tab.location() {
+        return vec![tab.location().clone()];
+    }
+    let mut parents: Vec<Location> = Vec::new();
+    for parent in sources.iter().filter_map(Location::parent) {
+        if !parents.contains(&parent) {
+            parents.push(parent);
         }
     }
+    parents
 }
 
 fn row_target(tab: &Tab, spot: &DropSpot) -> Option<Target> {

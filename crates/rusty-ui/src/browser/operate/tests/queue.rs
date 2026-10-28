@@ -67,6 +67,7 @@ fn copy(browser: &mut Browser, fs: &FakeFs, source: &str) -> u64 {
             sources: vec![fs.location(source)],
             target: fs.location("dest"),
             confirm: DropConfirm::Never,
+            source_tab: None,
         })
         .unwrap();
     wait_for(browser, |browser| {

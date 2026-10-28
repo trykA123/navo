@@ -259,3 +259,12 @@ fn a_drop_or_paste_onto_a_results_tab_is_refused() {
     assert!(browser.jobs().is_empty());
     assert!(exists(&fs, "home/a.txt"));
 }
+
+#[test]
+fn the_clipboard_sources_of_results_are_the_real_files() {
+    let (fs, browser) = results(&TWINS);
+    assert_eq!(
+        browser.selected_sources(),
+        [fs.location("w/src/can/a.c"), fs.location("w/lib/a.c")]
+    );
+}

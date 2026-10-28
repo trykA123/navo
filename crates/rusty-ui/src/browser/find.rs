@@ -268,6 +268,36 @@ impl Browser {
     }
 }
 
+#[cfg(test)]
+impl Browser {
+    pub(crate) fn find_only(&mut self, relative: &'static [&'static str]) {
+        use rusty_core::ProviderPath;
+        use rusty_fs::find::FoundFile;
+        use rusty_fs::{Attributes, EntryKind, FsEntry};
+        self.find_walk = Arc::new(move |_, _, _, sink| {
+            let files = relative
+                .iter()
+                .map(|name| FoundFile {
+                    relative: ProviderPath::from_text(name),
+                    entry: FsEntry {
+                        name: ProviderPath::from_text(name),
+                        kind: EntryKind::File,
+                        size: 1,
+                        modified_ms: None,
+                        attributes: Attributes::default(),
+                    },
+                    hits: FileHits::default(),
+                })
+                .collect();
+            let _ = sink(FoundBatch {
+                files,
+                progress: FindProgress::default(),
+            });
+            Ok(FindProgress::default())
+        });
+    }
+}
+
 fn apply_empty(state: &mut rusty_core::AppState, tab: TabId, location: Location) {
     rusty_core::apply_event(
         state,

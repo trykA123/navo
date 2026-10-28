@@ -104,6 +104,7 @@ impl FerriteWindow {
             parents: Vec::new(),
             folders: Vec::new(),
             first: SharedString::default(),
+            tab: None,
         });
         let state = cx.new(|_| DragState {
             count: carried.sources.len(),
@@ -148,6 +149,7 @@ impl FerriteWindow {
                 .map(|source| source.as_str().to_owned().into())
                 .unwrap_or_default(),
             sources,
+            tab: None,
         })
     }
 

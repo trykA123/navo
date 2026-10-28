@@ -23,6 +23,7 @@ pub struct DropRequest {
     pub sources: Vec<Location>,
     pub target: Location,
     pub confirm: DropConfirm,
+    pub source_tab: Option<TabId>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

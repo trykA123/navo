@@ -1,18 +1,19 @@
 use gpui_kit::{Bounds, Point, Subscription};
 use rusty_core::shell_menu::{Group, ItemId, MenuItem, ShellMenu};
-use rusty_core::{DropOp, Location};
+use rusty_core::{DropOp, Location, OpKind, TabId};
 use rusty_l10n::tr;
 
 use super::FerriteWindow;
 use super::drop::{DragSession, op_for};
 use super::drop_external::NativeDrop;
+use crate::browser::DropRequest;
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 
 pub(super) struct DropMenu {
     view: Entity<ContextMenu>,
-    sources: Vec<Location>,
+    sources: (Vec<Location>, Option<TabId>),
     target: Location,
     native: NativeDrop,
     _events: Subscription,
@@ -24,6 +25,40 @@ impl FerriteWindow {
             text: text.into(),
             is_error: false,
         });
+    }
+
+    fn run_drop(
+        &mut self,
+        (sources, source_tab): (Vec<Location>, Option<TabId>),
+        target: Location,
+        op: DropOp,
+    ) {
+        if let Some(refused) =
+            crate::browser::drop_refusal(&target, &sources).and_then(super::drop::refusal_of)
+        {
+            self.drop_notice(refused.text());
+            return;
+        }
+        let kind = match op {
+            DropOp::Copy => OpKind::Copy,
+            DropOp::Move => OpKind::Move,
+            DropOp::Link => OpKind::Link,
+        };
+        let request = DropRequest {
+            kind,
+            sources,
+            target,
+            confirm: self.values.drop_confirm(),
+            source_tab,
+        };
+        match self.browser.drop_into(request) {
+            Ok(_) => self.forget_clipboard_notice(),
+            Err(refused) => {
+                if let Some(refused) = super::drop::refusal_of(refused) {
+                    self.drop_notice(refused.text());
+                }
+            }
+        }
     }
 
     pub(super) fn finish_drop(
@@ -54,7 +89,8 @@ impl FerriteWindow {
         }
         if let Some(native) = session.native {
             if native.right {
-                self.open_drop_menu((session.carried.sources, target, native), window, cx);
+                let sources = (session.carried.sources, session.carried.tab);
+                self.open_drop_menu((sources, target, native), window, cx);
                 return;
             }
             if !native.allows(op) {
@@ -63,12 +99,12 @@ impl FerriteWindow {
             }
         }
         self.set_drop_effect(Some(op), window);
-        self.run_drop(session.carried.sources, target, op);
+        self.run_drop((session.carried.sources, session.carried.tab), target, op);
     }
 
     fn open_drop_menu(
         &mut self,
-        (sources, target, native): (Vec<Location>, Location, NativeDrop),
+        (sources, target, native): ((Vec<Location>, Option<TabId>), Location, NativeDrop),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
