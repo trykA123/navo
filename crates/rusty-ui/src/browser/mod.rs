@@ -13,6 +13,7 @@ use rusty_fs::{
     FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, WatchEvent, volume_of,
 };
 
+pub use find::FindResults;
 pub use measure::{FolderTotals, FolderTotalsQuery, no_folder_totals};
 pub(crate) use measure::{Measured, folder_bytes};
 pub(crate) use open::Seen;
@@ -38,6 +39,7 @@ struct Loaded {
 enum Message {
     Loaded(Loaded),
     Measured(rusty_fs::OwnerId, measure::Measured),
+    Found(TabId, rusty_fs::OwnerId, find::Update),
     Job(JobUpdate),
     Named(naming::Named),
     Watched(Location, WatchEvent),
@@ -51,6 +53,7 @@ impl Message {
             self,
             Self::Job(JobUpdate::Progress { .. } | JobUpdate::Done { .. })
                 | Self::Measured(..)
+                | Self::Found(..)
                 | Self::Watched(..)
                 | Self::Recheck(_)
                 | Self::Prefetched(_)
@@ -64,6 +67,8 @@ pub struct Browser {
     pools: &'static Pools,
     owner: OwnerGuard,
     size_owners: HashMap<TabId, OwnerGuard>,
+    finds: HashMap<TabId, find::FindResults>,
+    find_walk: find::FindWalk,
     size_work: HashMap<TabId, measure::SizeWork>,
     sender: Sender<Message>,
     receiver: Receiver<Message>,
@@ -121,14 +126,15 @@ impl Browser {
         wake: Waker,
         pools: &'static Pools,
     ) -> Self {
-        let owner = pools.queue(JobKind::Listing).owner();
         let (sender, receiver) = mpsc::channel();
         Self {
             state,
             provider,
             pools,
-            owner,
+            owner: pools.queue(JobKind::Listing).owner(),
             size_owners: HashMap::new(),
+            finds: HashMap::new(),
+            find_walk: find::walker(),
             size_work: HashMap::new(),
             sender,
             receiver,
@@ -230,6 +236,7 @@ impl Browser {
             changed |= match message {
                 Message::Loaded(loaded) => self.accept(loaded),
                 Message::Measured(owner, measured) => self.accept_size(owner, &measured),
+                Message::Found(tab, owner, update) => self.accept_find(tab, owner, update),
                 Message::Job(update) => self.accept_job(update),
                 Message::Named(named) => self.accept_named(named),
                 Message::Watched(location, event) => self.accept_watched(&location, event),
@@ -250,7 +257,7 @@ impl Browser {
 
     #[must_use]
     pub fn loading(&self) -> bool {
-        self.in_flight > 0 || self.measuring()
+        self.in_flight > 0 || self.measuring() || self.finds.values().any(FindResults::running)
     }
 
     #[must_use]
@@ -291,6 +298,7 @@ impl Browser {
 
     fn run(&mut self, effects: Vec<Effect>) {
         self.retain_size_owners();
+        self.retain_finds();
         for effect in effects {
             match effect {
                 Effect::ListFolder {
@@ -308,18 +316,6 @@ impl Browser {
         self.sync_pins();
         self.sync_disk_folders();
         self.sync_watches();
-    }
-
-    fn list(&mut self, tab: TabId, location: Location, request: u64) {
-        self.start_size_visit(tab, &location);
-        if let Some(progress) = self.adopt_prefetch(tab, &location, request) {
-            self.stalls.begin(tab, request, progress);
-            self.in_flight += 1;
-            return;
-        }
-        self.stalls
-            .begin(tab, request, offline::Progress::default());
-        self.submit(tab, location, request);
     }
 
     fn submit(&mut self, tab: TabId, location: Location, request: u64) {
@@ -413,6 +409,7 @@ impl Browser {
 
 mod cached;
 mod filter;
+mod find;
 mod measure;
 mod naming;
 mod offline;

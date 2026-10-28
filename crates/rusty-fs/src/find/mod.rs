@@ -71,11 +71,56 @@ pub fn find_files(
     queue.submit(
         slot,
         Box::new(move |_| {
-            let result = walk::Walk::new(&query, &signal, &send).run(&root, &compiled);
+            let result = walk::Walk::new(&query, &signal, &mut |batch| {
+                if send.send(Event::Batch(batch)).is_ok() {
+                    ControlFlow::Continue(())
+                } else {
+                    ControlFlow::Break(())
+                }
+            })
+            .run(&root, &compiled);
             let _ = send.send(Event::Done(result));
         }),
     );
     receive_batches(receive, cancel, sink)
+}
+
+pub fn walk_files(
+    base: &Location,
+    query: &FindQuery,
+    cancel: &CancelToken,
+    mut sink: impl FnMut(FoundBatch) -> ControlFlow<()>,
+) -> Result<FindProgress, FindError> {
+    let root = scope(base, query)?;
+    if cancel.is_cancelled() {
+        return Err(FindError::Cancelled);
+    }
+    let compiled = rusty_core::find::Compiled::new(query).map_err(FindError::Invalid)?;
+    walk::Walk::new(query, cancel, &mut |batch| {
+        sink(rebase_batch(batch, base, &root))
+    })
+    .run(&root, &compiled)
+}
+
+fn rebase_batch(mut batch: FoundBatch, base: &Location, root: &Location) -> FoundBatch {
+    if base == root {
+        return batch;
+    }
+    let base = base.as_str().trim_end_matches(['\\', '/']);
+    let prefix = root
+        .as_str()
+        .strip_prefix(base)
+        .and_then(|rest| rest.strip_prefix(['\\', '/']))
+        .unwrap_or_else(|| root.as_str());
+    for file in &mut batch.files {
+        file.relative = ProviderPath::from_text(&format!(
+            "{}{}{}",
+            prefix.trim_end_matches(['\\', '/']),
+            std::path::MAIN_SEPARATOR,
+            file.relative.to_text()
+        ));
+    }
+    batch
 }
 
 fn receive_batches(

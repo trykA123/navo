@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use super::{History, Listing, StateError};
-use crate::{Location, LocationError, ProviderPath, Selection, TabId};
+use super::{AppState, History, Listing, StateError};
+use crate::{Location, LocationError, PaneId, ProviderPath, Selection, TabId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ViewState {
@@ -22,6 +22,28 @@ pub struct Tab {
     views: HashMap<Location, ViewState>,
     names: HashMap<Location, String>,
     restore: Option<String>,
+}
+
+impl AppState {
+    pub fn open_results_tab(&mut self, pane: PaneId, base: Location) -> Result<TabId, StateError> {
+        if self.pane(pane).is_none() {
+            return Err(StateError::UnknownPane(pane));
+        }
+        let id = TabId::new(self.take_ids(1));
+        #[expect(
+            clippy::expect_used,
+            reason = "a fixed provider and numeric id form a valid URL"
+        )]
+        let location = Location::new(format!("find://{}", id.get()))
+            .expect("a numeric find URL is a valid location");
+        let mut tab = Tab::new(id, location);
+        tab.set_base(Some(base));
+        tab.set_listing(Listing::new(Vec::new()));
+        self.pane_mut(pane)
+            .ok_or(StateError::UnknownPane(pane))?
+            .open_tab(tab);
+        Ok(id)
+    }
 }
 
 impl Tab {
@@ -49,7 +71,7 @@ impl Tab {
             return self.location.join(&ProviderPath::from_text(name));
         };
         let drive_rooted = matches!(name.as_bytes(), [drive, b':', b'\\' | b'/', ..] if drive.is_ascii_alphabetic());
-        if drive_rooted || name.starts_with(r"\\") {
+        if drive_rooted || name.starts_with(r"\\") || name.starts_with('/') {
             return Location::new(name);
         }
         name.split(['\\', '/'])

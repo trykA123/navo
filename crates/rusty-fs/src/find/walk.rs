@@ -3,13 +3,12 @@ mod archives;
 use std::fs::File;
 use std::io::{self, Read};
 use std::ops::ControlFlow;
-use std::sync::mpsc::SyncSender;
 use std::time::{Duration, Instant};
 
 use rusty_core::find::{Compiled, FileHits, FindQuery, Skip, scan};
 use rusty_core::{Location, ProviderPath};
 
-use super::{Event, Filters, FindError, FindProgress, FoundBatch, FoundFile};
+use super::{Filters, FindError, FindProgress, FoundBatch, FoundFile};
 use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, LocalFs, Provider, os_path};
 
 const FILE_LIMIT: u64 = 64 * 1024 * 1024;
@@ -19,7 +18,7 @@ const BATCH_TIME: Duration = Duration::from_millis(100);
 pub(super) struct Walk<'a> {
     filters: Filters<'a>,
     cancel: &'a CancelToken,
-    send: &'a SyncSender<Event>,
+    sink: &'a mut dyn FnMut(FoundBatch) -> ControlFlow<()>,
     progress: FindProgress,
     files: Vec<FoundFile>,
     last: Instant,
@@ -30,12 +29,12 @@ impl<'a> Walk<'a> {
     pub(super) fn new(
         query: &'a FindQuery,
         cancel: &'a CancelToken,
-        send: &'a SyncSender<Event>,
+        sink: &'a mut dyn FnMut(FoundBatch) -> ControlFlow<()>,
     ) -> Self {
         Self {
             filters: Filters::new(query),
             cancel,
-            send,
+            sink,
             progress: FindProgress::default(),
             files: Vec::new(),
             last: Instant::now(),
@@ -234,7 +233,7 @@ impl<'a> Walk<'a> {
             files: std::mem::take(&mut self.files),
             progress: self.progress.clone(),
         };
-        if self.send.send(Event::Batch(batch)).is_err() {
+        if (self.sink)(batch).is_break() {
             self.cancel.cancel();
             return Err(FindError::Cancelled);
         }

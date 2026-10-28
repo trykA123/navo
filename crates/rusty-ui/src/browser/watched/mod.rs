@@ -277,6 +277,7 @@ impl Browser {
             .into_iter()
             .filter_map(|window| self.state.window(window))
             .flat_map(|window| window.panes())
+            .filter(|pane| !super::find::is_results(pane.active().location()))
             .map(|pane| (pane.active().id(), pane.active().location().clone()))
             .collect()
     }
