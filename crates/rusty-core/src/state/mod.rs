@@ -2,6 +2,7 @@ mod history;
 mod listing;
 mod pane;
 mod tab;
+mod tab_move;
 mod window;
 mod workspace;
 
@@ -13,6 +14,7 @@ pub use history::History;
 pub use listing::{Entry, Listing};
 pub use pane::Pane;
 pub use tab::{Tab, ViewState};
+pub use tab_move::TabMove;
 pub use window::Window;
 pub(crate) use workspace::workspace_name;
 pub use workspace::{

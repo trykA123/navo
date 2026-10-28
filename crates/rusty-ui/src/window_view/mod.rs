@@ -49,6 +49,7 @@ mod start_watch;
 mod status;
 mod strip;
 mod strip_keys;
+mod tab_drag;
 mod tab_keys;
 mod terminal;
 mod tiles;
@@ -170,6 +171,7 @@ pub struct FerriteWindow {
     focus: HashMap<PaneId, FocusHandle>,
     tiles: tiles::TilesState,
     pane_swap: pane_swap::PaneSwap,
+    tab_drag: tab_drag::TabDrag,
     on_save: SaveSession,
     prompt: Option<prompt::Prompt>,
     editor: EditorHooks,
@@ -223,6 +225,7 @@ impl FerriteWindow {
             focus: HashMap::new(),
             tiles: tiles::TilesState::default(),
             pane_swap: pane_swap::PaneSwap::default(),
+            tab_drag: tab_drag::TabDrag::default(),
             on_save: options.on_save,
             prompt: None,
             editor: options.editor,
@@ -378,6 +381,7 @@ impl Render for FerriteWindow {
             .children(self.view_menus());
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);
         let root = self.pane_swap_layer(root, cx);
+        let root = self.tab_drag_layer(root, window, cx);
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
         let root = Self::layout_switcher_on(root, cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);

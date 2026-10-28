@@ -29,6 +29,12 @@ impl PaneSwap {
     pub(super) fn is_dragging(&self) -> bool {
         self.drag.is_some()
     }
+
+    pub(super) fn contains(&self, pane: PaneId, position: Point<Pixels>) -> bool {
+        self.bounds
+            .get(&pane)
+            .is_some_and(|bounds| bounds.contains(&position))
+    }
 }
 
 impl FerriteWindow {
@@ -41,6 +47,7 @@ impl FerriteWindow {
             .flex()
             .flex_col()
             .flex_none()
+            .child(Self::tab_bounds_reset(pane, cx))
             .children(header)
             .children(path)
             .capture_any_mouse_down(
@@ -49,8 +56,11 @@ impl FerriteWindow {
                         .path_edit
                         .as_ref()
                         .is_some_and(|edit| edit.pane == pane);
+                    if !event.modifiers.shift {
+                        this.press_tab((pane, event), window, cx);
+                        return;
+                    }
                     if event.button != MouseButton::Left
-                        || !event.modifiers.shift
                         || is_editing
                         || this.drops_blocked()
                         || cx.has_active_drag()
@@ -83,12 +93,9 @@ impl FerriteWindow {
     }
 
     fn pane_under_pointer(&self, position: Point<Pixels>, window: &Window) -> Option<PaneId> {
-        self.shown_panes(window).into_iter().find(|pane| {
-            self.pane_swap
-                .bounds
-                .get(pane)
-                .is_some_and(|bounds| bounds.contains(&position))
-        })
+        self.shown_panes(window)
+            .into_iter()
+            .find(|pane| self.pane_swap.contains(*pane, position))
     }
 
     pub(super) fn pane_swap_target(
@@ -100,7 +107,7 @@ impl FerriteWindow {
         let t = tokens::current(cx);
         let is_over = self.pane_swap.drag.as_ref().is_some_and(|drag| {
             drag.started && self.pane_under_pointer(drag.position, window) == Some(pane)
-        });
+        }) || self.tab_drag_over_body(pane, window);
         let measure = cx.listener(move |this, bounds: &Bounds<Pixels>, _, _| {
             this.pane_swap.bounds.insert(pane, *bounds);
         });

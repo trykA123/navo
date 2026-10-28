@@ -240,6 +240,10 @@ impl FerriteWindow {
                 this.apply(command, window, cx);
             },
         ));
+        let this = cx.weak_entity();
+        let tabs = tabs.on_tab_bounds(move |index, bounds, _, cx| {
+            let _ = this.update(cx, |view, _| view.note_tab_bounds(pane, index, bounds));
+        });
         Self::wire_tab_drops(tabs, pane, cx)
     }
 

@@ -7,6 +7,7 @@ mod listing;
 mod pane;
 mod props;
 mod tab;
+mod tab_move;
 mod windows;
 
 fn loc(text: &str) -> Location {

@@ -113,17 +113,27 @@ impl Pane {
     }
 
     pub(crate) fn close_tab(&mut self, index: usize) -> Result<(), StateError> {
+        self.take_tab(index).map(drop)
+    }
+
+    pub(super) fn take_tab(&mut self, index: usize) -> Result<Tab, StateError> {
         if index >= self.tabs.len() {
             return Err(StateError::NoSuchTab(index));
         }
         if self.tabs.len() == 1 {
             return Err(StateError::LastTab);
         }
-        self.tabs.remove(index);
+        let tab = self.tabs.remove(index);
         if index < self.active || self.active == self.tabs.len() {
             self.active -= 1;
         }
-        Ok(())
+        Ok(tab)
+    }
+
+    pub(super) fn insert_tab(&mut self, at: usize, tab: Tab) {
+        let at = at.min(self.tabs.len());
+        self.tabs.insert(at, tab);
+        self.active = at;
     }
 
     pub(crate) fn activate(&mut self, index: usize) -> Result<(), StateError> {

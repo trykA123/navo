@@ -4,8 +4,9 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Tab as BaseTab, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, App, Bounds, ElementId, Entity, FontWeight, InteractiveElement, IntoElement,
+    ParentElement, Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
+    Window, canvas, div, px,
 };
 
 mod more;
@@ -22,6 +23,7 @@ use more::{Hidden, more_tabs};
 use plan::{Budget, plan};
 
 type SelectHandler = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
+type BoundsHandler = Rc<dyn Fn(usize, Bounds<Pixels>, &mut Window, &mut App)>;
 
 #[derive(Clone)]
 pub struct Tab {
@@ -50,6 +52,7 @@ pub struct Tabs {
     selected: usize,
     is_highlighted: bool,
     on_select: Option<SelectHandler>,
+    on_bounds: Option<BoundsHandler>,
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
     menu: Option<Entity<PopupMenu>>,
@@ -64,6 +67,7 @@ impl Tabs {
             selected: 0,
             is_highlighted: false,
             on_select: None,
+            on_bounds: None,
             landing: Landing::default(),
             trailing: None,
             menu: None,
@@ -101,6 +105,11 @@ impl Tabs {
         self
     }
 
+    pub(crate) fn on_bounds(mut self, handler: Option<BoundsHandler>) -> Self {
+        self.on_bounds = handler;
+        self
+    }
+
     pub(crate) fn set_landing(&mut self, landing: Landing<usize>) {
         self.landing = landing;
     }
@@ -130,7 +139,22 @@ struct TabProps<'a> {
     is_highlighted: bool,
     min_width: Pixels,
     on_select: Option<SelectHandler>,
+    on_bounds: Option<BoundsHandler>,
     landing: Landing<usize>,
+}
+
+fn measured(base: BaseTab, handler: Option<BoundsHandler>, index: usize) -> BaseTab {
+    let Some(handler) = handler else {
+        return base;
+    };
+    base.relative().child(
+        canvas(
+            move |bounds, window, cx| handler(index, bounds, window, cx),
+            |_, (), _, _| {},
+        )
+        .absolute()
+        .size_full(),
+    )
 }
 
 fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
@@ -165,6 +189,7 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
         .when_some(props.on_select, |base, handler| {
             base.on_click(move |_, window, cx| handler(&index, window, cx))
         });
+    let base = measured(base, props.on_bounds, index);
     let base = props.landing.accept(base, (index, c.accent));
     match (props.is_selected, props.is_highlighted) {
         (false, _) => base.hover(|style| style.bg(c.hover)),
@@ -183,6 +208,7 @@ struct Row {
     selected: usize,
     is_highlighted: bool,
     on_select: Option<SelectHandler>,
+    on_bounds: Option<BoundsHandler>,
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
     menu: Entity<PopupMenu>,
@@ -217,6 +243,7 @@ fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
             is_highlighted: row.is_highlighted,
             min_width: px(plan.min_tab),
             on_select: row.on_select.clone(),
+            on_bounds: row.on_bounds.clone(),
             landing: row.landing.clone(),
         };
         render_tab(tab, props)
@@ -254,6 +281,7 @@ impl RenderOnce for Tabs {
             selected: self.selected,
             is_highlighted: self.is_highlighted,
             on_select: self.on_select,
+            on_bounds: self.on_bounds,
             landing: self.landing,
             trailing: self.trailing,
             menu,
@@ -307,6 +335,7 @@ mod tests {
                     is_highlighted,
                     min_width: px(88.),
                     on_select: None,
+                    on_bounds: None,
                     landing: Landing::default(),
                 },
             );

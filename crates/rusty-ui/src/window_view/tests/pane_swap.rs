@@ -155,7 +155,7 @@ fn shift_drag_from_tabs_or_path_swaps_folders_in_both_themes(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn header_drag_without_shift_does_not_swap(cx: &mut TestAppContext) {
+fn header_drag_without_shift_moves_the_tab_not_the_pane(cx: &mut TestAppContext) {
     let rig = rig(cx);
     let before = rig.folders(cx);
     let from = rig.origin(cx, false);
@@ -163,7 +163,10 @@ fn header_drag_without_shift_does_not_swap(cx: &mut TestAppContext) {
     rig.start(cx, (from, to), Modifiers::default());
     assert!(!rig.has_chip(cx));
     rig.release(cx, to, Modifiers::default());
-    assert_eq!(rig.folders(cx), before);
+    assert_eq!(
+        rig.folders(cx),
+        [before[0].clone(), before[1].clone(), before[0].clone()]
+    );
 }
 
 #[gpui_kit::test]

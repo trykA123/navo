@@ -1,4 +1,4 @@
-use rusty_core::{Command, CommandError, Location, StateError};
+use rusty_core::{Command, CommandError, Location, StateError, TabMove, list_unloaded};
 use rusty_fs::EntryKind;
 
 use super::{Browser, Launcher};
@@ -10,6 +10,17 @@ pub enum Seen {
 }
 
 impl Browser {
+    pub fn move_tab(&mut self, change: TabMove) -> Result<(), StateError> {
+        let focused = self.state.focused_pane();
+        self.state.move_tab(change)?;
+        let effects = list_unloaded(&mut self.state);
+        self.run(effects);
+        if self.state.focused_pane() != focused {
+            self.revalidate_focused();
+        }
+        Ok(())
+    }
+
     pub fn take_seen(&mut self) -> Vec<Seen> {
         std::mem::take(&mut self.seen)
     }

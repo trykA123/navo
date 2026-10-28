@@ -61,6 +61,7 @@ mod settings_upgrade;
 mod shell_menu;
 pub(in crate::window_view) mod shortcuts;
 mod start_watch;
+mod tab_drag;
 mod tabs;
 mod terminal;
 mod tiles;

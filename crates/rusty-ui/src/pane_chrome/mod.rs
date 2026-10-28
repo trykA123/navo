@@ -17,8 +17,8 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    App, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    App, Bounds, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
+    RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use rusty_core::Command;
 
@@ -46,6 +46,7 @@ pub fn bind_keys(cx: &mut App) {
 }
 
 type CommandHandler = Rc<dyn Fn(&Command, &mut Window, &mut App)>;
+type BoundsHandler = Rc<dyn Fn(usize, Bounds<Pixels>, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 pub struct PaneTabs {
@@ -57,6 +58,7 @@ pub struct PaneTabs {
     is_on_accent: bool,
     on_command: Option<CommandHandler>,
     landing: Landing<usize>,
+    on_bounds: Option<BoundsHandler>,
     menu: Option<Entity<PopupMenu>>,
 }
 
@@ -75,6 +77,7 @@ impl PaneTabs {
             is_on_accent: false,
             on_command: None,
             landing: Landing::default(),
+            on_bounds: None,
             menu: None,
         }
     }
@@ -112,6 +115,14 @@ impl PaneTabs {
         handler: impl Fn(&usize, &DropPayload, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.landing.on_drop(handler);
+        self
+    }
+
+    pub(crate) fn on_tab_bounds(
+        mut self,
+        handler: impl Fn(usize, Bounds<Pixels>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_bounds = Some(Rc::new(handler));
         self
     }
 
@@ -168,6 +179,7 @@ impl RenderOnce for PaneTabs {
             .highlighted(self.is_highlighted)
             .trailing(plus, t.spacing.tab_height)
             .when_some(self.menu, Tabs::menu)
+            .on_bounds(self.on_bounds)
             .when_some(bar, Tabs::bar_theme);
         tabs.set_landing(self.landing);
         match self.on_command {

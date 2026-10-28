@@ -56,5 +56,5 @@ pub use session::{
 };
 pub use state::{
     AppState, Entry, History, Listing, MAX_WORKSPACES, Pane, SAVE_ON_SWITCH, Snapshot, StateError,
-    Tab, ViewState, Window, Workspace, WorkspaceAction, changes,
+    Tab, TabMove, ViewState, Window, Workspace, WorkspaceAction, changes,
 };
