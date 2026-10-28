@@ -43,6 +43,8 @@ gpui_kit::actions!(
         PageDown,
         First,
         Last,
+        NextMode,
+        PreviousMode,
         NextGroup,
         PreviousGroup,
         Run,
@@ -56,4 +58,40 @@ gpui_kit::actions!(
 
 pub fn bind_keys(cx: &mut App) {
     crate::commands::bind_namespace(cx, "command_center");
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mode {
+    #[default]
+    Names,
+    Content,
+    Commands,
+    Collections,
+}
+
+impl Mode {
+    pub(crate) const ALL: [Self; 4] = [
+        Self::Names,
+        Self::Content,
+        Self::Commands,
+        Self::Collections,
+    ];
+
+    pub(crate) fn cycle(self, is_previous: bool) -> Self {
+        let at = Self::ALL.iter().position(|mode| *mode == self).unwrap_or(0);
+        Self::ALL[(at + if is_previous { 3 } else { 1 }) % Self::ALL.len()]
+    }
+
+    pub(crate) fn has_results(self) -> bool {
+        matches!(self, Self::Names | Self::Commands)
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Names => "command-center-mode-names",
+            Self::Content => "command-center-mode-content",
+            Self::Commands => "command-center-commands",
+            Self::Collections => "command-center-mode-collections",
+        }
+    }
 }

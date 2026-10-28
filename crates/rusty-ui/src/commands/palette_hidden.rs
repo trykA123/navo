@@ -87,6 +87,8 @@ pub(super) const HIDDEN: &[&str] = &[
     "command_center.page_down",
     "command_center.first",
     "command_center.last",
+    "command_center.next_mode",
+    "command_center.previous_mode",
     "command_center.next_group",
     "command_center.previous_group",
     "command_center.run",

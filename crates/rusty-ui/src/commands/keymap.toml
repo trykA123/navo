@@ -717,21 +717,39 @@ keys = ["ctrl-end"]
 context = "CommandCenter > Input"
 
 [[bind]]
-command = "command_center.next_group"
+command = "command_center.next_mode"
 keys = ["tab"]
 
 [[bind]]
-command = "command_center.next_group"
+command = "command_center.next_mode"
 keys = ["tab"]
 context = "CommandCenter > Input"
 
 [[bind]]
-command = "command_center.previous_group"
+command = "command_center.previous_mode"
 keys = ["shift-tab"]
 
 [[bind]]
-command = "command_center.previous_group"
+command = "command_center.previous_mode"
 keys = ["shift-tab"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.next_group"
+keys = ["ctrl-down"]
+
+[[bind]]
+command = "command_center.next_group"
+keys = ["ctrl-down"]
+context = "CommandCenter > Input"
+
+[[bind]]
+command = "command_center.previous_group"
+keys = ["ctrl-up"]
+
+[[bind]]
+command = "command_center.previous_group"
+keys = ["ctrl-up"]
 context = "CommandCenter > Input"
 
 [[bind]]

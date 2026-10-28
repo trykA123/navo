@@ -80,6 +80,7 @@ fn mixed_rows() -> Vec<Row> {
 fn props(rows: Vec<Row>) -> CommandCenterProps {
     let selection = Selection::start(&rows);
     CommandCenterProps {
+        mode: crate::command_center::Mode::Names,
         rows: rows.into(),
         selection,
         argument: None,
@@ -379,7 +380,7 @@ fn the_footer_counts_every_match_and_shows_the_keys(cx: &mut TestAppContext) {
     );
     assert_eq!(
         center.label("command-center-hints", cx).as_deref(),
-        Some("Enter run · Tab next group · Esc close")
+        Some("Enter run · Ctrl+Down next group · Esc close · Tab mode")
     );
 }
 
@@ -422,30 +423,23 @@ fn hints_follow_the_selected_row_kind() {
         total: 20,
     }];
     assert_eq!(
-        keys(&hints(rows.get(1), None, false)),
+        keys(&hints(rows.get(1), None)),
+        ["enter", "ctrl-down", "escape", "tab"]
+    );
+    assert_eq!(
+        keys(&hints(files.first(), None)),
+        ["enter", "shift-enter", "ctrl-enter", "alt-enter", "tab"]
+    );
+    assert_eq!(
+        keys(&hints(show_all.first(), None)),
+        ["enter", "ctrl-down", "tab"]
+    );
+    assert_eq!(keys(&hints(None, None)), ["escape", "tab"]);
+    assert_eq!(
+        keys(&hints(None, Some(ArgKind::Path))),
         ["enter", "tab", "escape"]
     );
-    assert_eq!(
-        keys(&hints(files.first(), None, false)),
-        ["enter", "shift-enter", "ctrl-enter", "alt-enter"]
-    );
-    assert_eq!(
-        keys(&hints(files.first(), None, true)),
-        ["enter", "tab", "shift-enter", "ctrl-enter", "alt-enter"]
-    );
-    assert_eq!(
-        keys(&hints(show_all.first(), None, false)),
-        ["enter", "tab"]
-    );
-    assert_eq!(keys(&hints(None, None, false)), ["escape"]);
-    assert_eq!(
-        keys(&hints(None, Some(ArgKind::Path), false)),
-        ["enter", "tab", "escape"]
-    );
-    assert_eq!(
-        keys(&hints(None, Some(ArgKind::Text), false)),
-        ["enter", "escape"]
-    );
+    assert_eq!(keys(&hints(None, Some(ArgKind::Text))), ["enter", "escape"]);
 }
 
 #[test]

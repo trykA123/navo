@@ -151,6 +151,8 @@ command_center.page_up | Page up | CommandCenter
 command_center.page_down | Page down | CommandCenter
 command_center.first | First result | CommandCenter
 command_center.last | Last result | CommandCenter
+command_center.next_mode | Next mode | CommandCenter
+command_center.previous_mode | Previous mode | CommandCenter
 command_center.next_group | Next group | CommandCenter
 command_center.previous_group | Previous group | CommandCenter
 command_center.run | Run or open | CommandCenter

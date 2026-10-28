@@ -185,3 +185,10 @@ bench-index-windows = Navo Index service is not installed (requires Windows).
 bench-index-service-error = Navo Index service is unavailable: { $error }
 bench-index-query-error = querying Navo Index service: { $error }
 bench-index-memory-error = reading Navo Index service memory: { $error }
+
+command-center-mode-names = Names
+command-center-mode-content = Content
+command-center-mode-collections = Collections
+command-center-empty-content = Type to search inside files
+command-center-empty-collections = No collections yet
+command-center-key-mode = mode

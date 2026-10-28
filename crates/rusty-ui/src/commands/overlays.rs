@@ -95,6 +95,16 @@ pub(super) const GROUPS: [Group; 13] = [
                 "cmd-command-center-last",
             ),
             (
+                "command_center::NextMode",
+                "command_center.next_mode",
+                "cmd-command-center-next-mode",
+            ),
+            (
+                "command_center::PreviousMode",
+                "command_center.previous_mode",
+                "cmd-command-center-previous-mode",
+            ),
+            (
                 "command_center::NextGroup",
                 "command_center.next_group",
                 "cmd-command-center-next-group",

@@ -25,7 +25,7 @@ pub(crate) use place::place;
 #[cfg(test)]
 pub(crate) use row::highlight_ranges;
 
-use super::query::Query;
+use super::Mode;
 use super::results::Row;
 use super::selection::Selection;
 use crate::commands::ArgKind;
@@ -55,6 +55,7 @@ pub struct Argument {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandCenterProps {
+    pub mode: Mode,
     pub rows: Rc<[Row]>,
     pub selection: Selection,
     pub argument: Option<Argument>,
@@ -68,6 +69,7 @@ pub struct CommandCenterProps {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CommandCenterEvent {
     QueryChanged(SharedString),
+    ModeChanged(Mode),
     Moved(usize),
     Run(usize, Modifiers),
     Dismissed,
@@ -114,6 +116,14 @@ impl CommandCenter {
             scroll: ScrollHandle::new(),
             list: ListScroll::new(),
             _field: subscription,
+        }
+    }
+
+    pub fn mode(&self, cx: &App) -> Mode {
+        if self.props.argument.is_none() && self.query(cx).starts_with('>') {
+            Mode::Commands
+        } else {
+            self.props.mode
         }
     }
 
@@ -319,6 +329,9 @@ impl CommandCenter {
     }
 
     fn body(&self, paint: Paint, query: &str) -> Option<AnyElement> {
+        if self.props.argument.is_none() && !self.props.mode.has_results() {
+            return Some(footer::mode_empty(&paint.theme, self.props.mode).into_any_element());
+        }
         if !paint.rows.is_empty() {
             return Some(self.list(paint));
         }
@@ -326,22 +339,29 @@ impl CommandCenter {
         let has_query =
             !query.trim().is_empty() && kind != Some(ArgKind::Text) && self.props.error.is_none();
         let is_path = kind == Some(ArgKind::Path);
-        has_query.then(|| footer::empty_message(&paint.theme, query, is_path).into_any_element())
+        let query = if kind.is_none() && self.props.mode == Mode::Commands {
+            format!(">{}", query.trim_start_matches('>'))
+        } else {
+            query.to_owned()
+        };
+        has_query.then(|| footer::empty_message(&paint.theme, &query, is_path).into_any_element())
     }
 
     fn footer(&self, t: &Theme, query: &str) -> Div {
         let props = &self.props;
         let argument = props.argument.as_ref().map(|argument| argument.kind);
-        let is_counted = argument.is_some() || !query.trim().is_empty();
-        let is_path = Query::parse(query).path.is_some();
-        let selected = props.selection.row(&props.rows);
+        let is_active = argument.is_some() || props.mode.has_results();
+        let is_counted = is_active && (argument.is_some() || !query.trim().is_empty());
+        let selected = is_active
+            .then(|| props.selection.row(&props.rows))
+            .flatten();
         let keys = props.key_hints.as_ref();
         footer::render(FooterLook {
             theme: t,
-            note: props.note.clone(),
-            error: props.error.clone(),
+            note: is_active.then(|| props.note.clone()).flatten(),
+            error: is_active.then(|| props.error.clone()).flatten(),
             count: (is_counted && !props.rows.is_empty()).then(|| result_count(&props.rows)),
-            hints: keys.map(|keys| (hints(selected, argument, is_path), keys)),
+            hints: keys.map(|keys| (hints(selected, argument), keys)),
         })
     }
 }
@@ -382,6 +402,7 @@ impl Render for CommandCenter {
             .line_height(t.typography.line_height)
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(CommandCenterEvent::Dismissed)))
             .child(self.input_row(&t))
+            .children(self.mode_row(&t, cx))
             .children(self.body(paint, &query))
             .child(self.footer(&t, &query));
         deferred(

@@ -262,7 +262,7 @@ fn typing_a_file_name_finds_it_in_the_folder_tree_of_the_active_pane(cx: &mut Te
 }
 
 #[gpui_kit::test]
-fn arrows_and_tab_move_the_selection(cx: &mut TestAppContext) {
+fn arrows_and_ctrl_down_up_move_the_selection(cx: &mut TestAppContext) {
     let folder = Target::Open {
         location: location("dest"),
         folder: true,
@@ -276,9 +276,9 @@ fn arrows_and_tab_move_the_selection(cx: &mut TestAppContext) {
     assert!(second > first);
     rig.press(cx, "up");
     assert_eq!(rig.selection(cx), Some(first));
-    rig.press(cx, "tab");
+    rig.press(cx, "ctrl-down");
     assert!(rig.selection(cx) > Some(first));
-    rig.press(cx, "shift-tab");
+    rig.press(cx, "ctrl-up");
     assert_eq!(rig.selection(cx), Some(first));
 }
 
@@ -424,4 +424,133 @@ fn copy_full_path_from_the_box_copies_the_cursor_item_of_the_focused_pane(cx: &m
     cx.run_until_parked();
     let copied = cx.read_from_clipboard().and_then(|item| item.text());
     assert_eq!(copied, Some(location("home/a.txt").as_str().to_owned()));
+}
+
+fn pressed_mode(rig: &Rig, cx: &mut TestAppContext) -> Vec<usize> {
+    rig.read(cx, |window| {
+        (0usize..4)
+            .filter(|index| window.find(("command-center-mode", *index)).checked() == Some(true))
+            .collect()
+    })
+}
+
+#[gpui_kit::test]
+fn tab_cycles_modes_and_shift_tab_reverses(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-k");
+    assert_eq!(pressed_mode(&rig, cx), [0]);
+    for expected in [1, 2, 3, 0] {
+        rig.press(cx, "tab");
+        assert_eq!(pressed_mode(&rig, cx), [expected]);
+    }
+    for expected in [3, 2, 1, 0] {
+        rig.press(cx, "shift-tab");
+        assert_eq!(pressed_mode(&rig, cx), [expected]);
+    }
+}
+
+#[gpui_kit::test]
+fn the_command_prefix_selects_commands_and_tab_can_leave_it(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, ">switch pane");
+    assert_eq!(pressed_mode(&rig, cx), [2]);
+    assert!(
+        rig.rows(cx)
+            .iter()
+            .any(|row| row.starts_with("Switch pane"))
+    );
+    rig.press(cx, "tab");
+    assert_eq!(pressed_mode(&rig, cx), [3]);
+}
+
+#[gpui_kit::test]
+fn placeholder_modes_show_no_results_and_do_not_search_or_run(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "switch pane");
+    let pane = rig
+        .view
+        .read_with(cx, |view, _| view.browser.state().focused_pane());
+    for (key, message) in [
+        ("tab", "Type to search inside files"),
+        ("shift-tab", "No collections yet"),
+    ] {
+        rig.press(cx, key);
+        let generation = rig
+            .view
+            .read_with(cx, |view, _| view.command_center_generation());
+        rig.type_query(cx, "more");
+        assert_eq!(
+            rig.view
+                .read_with(cx, |view, _| view.command_center_generation()),
+            generation
+        );
+        assert!(rig.rows(cx).is_empty());
+        assert_eq!(
+            rig.label(cx, "command-center-empty").as_deref(),
+            Some(message)
+        );
+        rig.press(cx, "enter");
+        assert!(rig.is_open(cx));
+        assert_eq!(
+            rig.view
+                .read_with(cx, |view, _| view.browser.state().focused_pane()),
+            pane
+        );
+        rig.press(cx, "shift-tab");
+    }
+}
+
+#[gpui_kit::test]
+fn clicking_a_mode_updates_its_pressed_state_and_keeps_typing_in_the_input(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-k");
+    rig.read(cx, |_| ());
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click(("command-center-mode", 2usize), cx);
+    })
+    .expect("window");
+    settle(cx, &rig.view);
+    assert_eq!(pressed_mode(&rig, cx), [2]);
+    rig.type_query(cx, "switch pane");
+    assert!(
+        rig.rows(cx)
+            .iter()
+            .any(|row| row.starts_with("Switch pane"))
+    );
+    assert!(
+        !rig.rows(cx)
+            .iter()
+            .any(|row| row == "# Folders" || row == "# Files")
+    );
+}
+
+#[gpui_kit::test]
+fn escape_clears_a_placeholder_query_without_starting_a_search(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-k");
+    rig.press(cx, "tab");
+    rig.type_query(cx, "report");
+    let generation = rig
+        .view
+        .read_with(cx, |view, _| view.command_center_generation());
+    rig.press(cx, "escape");
+    assert_eq!(
+        rig.view
+            .read_with(cx, |view, _| view.command_center_generation()),
+        generation
+    );
+    assert_eq!(pressed_mode(&rig, cx), [1]);
+    assert!(rig.rows(cx).is_empty());
+    assert_eq!(
+        rig.view
+            .read_with(cx, |view, cx| view.command_center_query(cx))
+            .as_deref(),
+        Some("")
+    );
+    rig.press(cx, "escape");
+    assert!(!rig.is_open(cx));
 }

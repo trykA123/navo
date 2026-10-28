@@ -1,5 +1,6 @@
 ---
 source: crates/rusty-ui/src/commands/tests.rs
+assertion_line: 506
 expression: "lines.join(\"\\n\")"
 ---
 workspace.preview_first | FileList | false
@@ -151,6 +152,8 @@ command_center.page_up | CommandCenter | false
 command_center.page_down | CommandCenter | false
 command_center.first | CommandCenter | false
 command_center.last | CommandCenter | false
+command_center.next_mode | CommandCenter | false
+command_center.previous_mode | CommandCenter | false
 command_center.next_group | CommandCenter | false
 command_center.previous_group | CommandCenter | false
 command_center.run | CommandCenter | false

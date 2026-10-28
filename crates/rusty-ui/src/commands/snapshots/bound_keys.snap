@@ -33,16 +33,20 @@ command_center.first | ctrl-home | CommandCenter
 command_center.first | ctrl-home | CommandCenter > Input
 command_center.last | ctrl-end | CommandCenter
 command_center.last | ctrl-end | CommandCenter > Input
-command_center.next_group | tab | CommandCenter
-command_center.next_group | tab | CommandCenter > Input
+command_center.next_group | ctrl-down | CommandCenter
+command_center.next_group | ctrl-down | CommandCenter > Input
+command_center.next_mode | tab | CommandCenter
+command_center.next_mode | tab | CommandCenter > Input
 command_center.other_pane | ctrl-enter | CommandCenter
 command_center.other_pane | ctrl-enter | CommandCenter > Input
 command_center.page_down | pagedown | CommandCenter
 command_center.page_down | pagedown | CommandCenter > Input
 command_center.page_up | pageup | CommandCenter
 command_center.page_up | pageup | CommandCenter > Input
-command_center.previous_group | shift-tab | CommandCenter
-command_center.previous_group | shift-tab | CommandCenter > Input
+command_center.previous_group | ctrl-up | CommandCenter
+command_center.previous_group | ctrl-up | CommandCenter > Input
+command_center.previous_mode | shift-tab | CommandCenter
+command_center.previous_mode | shift-tab | CommandCenter > Input
 command_center.reveal | shift-enter | CommandCenter
 command_center.reveal | shift-enter | CommandCenter > Input
 command_center.run | enter | CommandCenter

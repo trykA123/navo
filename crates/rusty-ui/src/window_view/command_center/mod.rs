@@ -16,7 +16,7 @@ pub(super) use search::Update;
 use super::{FerriteWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
-    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource,
+    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource, Mode,
     PathListings, PathsSource, RESULTS_MEMORY, RecentSource, ResultSource, Results, Row, Selection,
     TabsSnapshot, TabsSource,
 };
@@ -67,6 +67,7 @@ struct Step {
 }
 
 struct Open {
+    mode: Mode,
     center: Entity<CommandCenter>,
     rows: Rc<[Row]>,
     selection: Selection,
@@ -104,6 +105,7 @@ impl Open {
 
     fn props(&self, has_key_hints: bool) -> CommandCenterProps {
         CommandCenterProps {
+            mode: self.mode,
             rows: self.rows.clone(),
             selection: self.selection,
             argument: self.step.as_ref().map(|step| Argument {
@@ -220,6 +222,7 @@ impl FerriteWindow {
         let rows: Rc<[Row]> = search::recent(Vec::new(), Vec::new()).into();
         let anchor = self.command_center_anchor(window, cx);
         let props = CommandCenterProps {
+            mode: Mode::Names,
             rows: rows.clone(),
             selection: Selection::start(&rows),
             argument: None,
@@ -236,6 +239,7 @@ impl FerriteWindow {
         self.command_center.leaving = None;
         let rows_memory = RESULTS_MEMORY.hold(Results::memory_use(&rows));
         self.command_center.open = Some(Open {
+            mode: Mode::Names,
             center,
             selection: Selection::start(&rows),
             rows,
@@ -316,7 +320,8 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         match event {
-            CommandCenterEvent::QueryChanged(query) => self.query_changed(query, window, cx),
+            CommandCenterEvent::QueryChanged(query) => self.mode_query_changed(query, window, cx),
+            CommandCenterEvent::ModeChanged(mode) => self.change_mode(*mode, window, cx),
             CommandCenterEvent::Moved(index) => {
                 if let Some(open) = self.command_center.open.as_mut() {
                     open.selection = Selection::at(&open.rows, *index);

@@ -1,16 +1,20 @@
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Role, SharedString,
+    Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Role, SharedString,
     StatefulInteractiveElement, Styled, div, px,
 };
 use rusty_l10n::{t, tr};
 
+use super::super::Mode;
 use super::super::query::{Query, Scope};
 use super::super::results::Row;
 use super::super::source::{Group, Hit, Target};
+use super::{CommandCenter, CommandCenterEvent};
 use crate::commands::{ArgKind, Keymap};
 use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::Theme;
@@ -57,15 +61,21 @@ const NEW_TAB: Hint = hint(
     "command_center.run_in_new_tab",
     "command-center-key-new-tab",
 );
-const NEXT_GROUP: Hint = hint("tab", NEXT_COMMAND, "command-center-key-next-group");
-const COMPLETE: Hint = hint("tab", NEXT_COMMAND, "command-center-key-complete");
+const NEXT_GROUP: Hint = hint("ctrl-down", NEXT_COMMAND, "command-center-key-next-group");
+const MODE: Hint = hint("tab", "command_center.next_mode", "command-center-key-mode");
+const ARG_COMPLETE: Hint = hint(
+    "tab",
+    "command_center.next_mode",
+    "command-center-key-complete",
+);
 const CLOSE: Hint = hint("escape", BACK_COMMAND, "command-center-key-close");
 const BACK: Hint = hint("escape", BACK_COMMAND, "command-center-key-back");
 
-const HINTED: [&str; 6] = [
+const HINTED: [&str; 7] = [
     RUN_COMMAND,
     "command_center.run_in_new_tab",
     NEXT_COMMAND,
+    "command_center.next_mode",
     BACK_COMMAND,
     "command_center.reveal",
     "command_center.other_pane",
@@ -96,21 +106,22 @@ impl HintKeys {
     }
 }
 
-pub(crate) fn hints(row: Option<&Row>, argument: Option<ArgKind>, is_path: bool) -> Vec<Hint> {
-    match (argument, row) {
+pub(crate) fn hints(row: Option<&Row>, argument: Option<ArgKind>) -> Vec<Hint> {
+    let mut hints = match (argument, row) {
         (Some(ArgKind::Text), _) => vec![RUN, BACK],
-        (Some(ArgKind::Path), _) => vec![GO, COMPLETE, BACK],
+        (Some(ArgKind::Path), _) => vec![GO, ARG_COMPLETE, BACK],
         (None, Some(Row::ShowAll { .. })) => vec![SHOW_ALL, NEXT_GROUP],
-        (None, Some(Row::TopHit(hit) | Row::Hit(hit))) => hit_hints(hit, is_path),
+        (None, Some(Row::TopHit(hit) | Row::Hit(hit))) => hit_hints(hit),
         (None, _) => vec![CLOSE],
+    };
+    if argument.is_none() {
+        hints.push(MODE);
     }
+    hints
 }
 
-fn hit_hints(hit: &Hit, is_path: bool) -> Vec<Hint> {
+fn hit_hints(hit: &Hit) -> Vec<Hint> {
     match hit.target {
-        Target::Open { .. } | Target::GoTo(_) if is_path => {
-            vec![OPEN, COMPLETE, REVEAL, OTHER_PANE, NEW_TAB]
-        }
         Target::Open { .. } | Target::GoTo(_) => vec![OPEN, REVEAL, OTHER_PANE, NEW_TAB],
         Target::ShowAll(_) => vec![SHOW_ALL, NEXT_GROUP],
         Target::Arg(..) => vec![CHOOSE, NEXT_GROUP, CLOSE],
@@ -269,4 +280,52 @@ pub(super) fn render(look: FooterLook) -> Div {
         .when_some(look.hints.as_ref(), |footer, (hints, keys)| {
             footer.child(key_hints(t, hints, keys))
         })
+}
+
+impl CommandCenter {
+    pub(super) fn mode_row(&self, t: &Theme, cx: &mut Context<Self>) -> Option<Div> {
+        if self.props.argument.is_some() {
+            return None;
+        }
+        let current = self.mode(cx);
+        Some(
+            div()
+                .flex()
+                .items_center()
+                .gap(t.spacing.xs)
+                .px(t.spacing.md)
+                .pb(t.spacing.xs)
+                .children(Mode::ALL.into_iter().enumerate().map(|(index, mode)| {
+                    Button::new(("command-center-mode", index))
+                        .label(tr(mode.label()))
+                        .ghost()
+                        .small()
+                        .selected(mode == current)
+                        .toggled(mode == current)
+                        .text_size(t.typography.small)
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            cx.emit(CommandCenterEvent::ModeChanged(mode));
+                        }))
+                })),
+        )
+    }
+}
+
+pub(super) fn mode_empty(t: &Theme, mode: Mode) -> impl IntoElement {
+    let label = tr(if mode == Mode::Content {
+        "command-center-empty-content"
+    } else {
+        "command-center-empty-collections"
+    });
+    div()
+        .id("command-center-empty")
+        .role(Role::Status)
+        .aria_label(label.clone())
+        .test_support()
+        .px(t.spacing.md)
+        .py(t.spacing.xl)
+        .border_t_1()
+        .border_color(t.colors.line)
+        .text_color(t.colors.muted)
+        .child(label)
 }

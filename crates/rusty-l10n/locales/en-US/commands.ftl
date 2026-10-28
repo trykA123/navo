@@ -405,3 +405,6 @@ cmd-workspace-new = New workspace from current layout
 cmd-workspace-save = Save workspace
 cmd-workspace-move-left = Move workspace left
 cmd-workspace-move-right = Move workspace right
+
+cmd-command-center-next-mode = Next mode
+cmd-command-center-previous-mode = Previous mode
