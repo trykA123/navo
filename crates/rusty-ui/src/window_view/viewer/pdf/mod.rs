@@ -111,7 +111,10 @@ fn phase_of(opened: Result<Box<dyn PdfPages>, PdfError>, is_preview: bool) -> Ph
     match opened {
         Ok(pages) => Phase::Ready(Box::new(Doc::new(pages, is_preview))),
         Err(PdfError::NeedsPassword) => Phase::Locked { error: None },
-        Err(error) => Phase::Refused(error),
+        Err(error) => {
+            tracing::warn!(?error, "a PDF was refused");
+            Phase::Refused(error)
+        }
     }
 }
 

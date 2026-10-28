@@ -188,6 +188,7 @@ impl FerriteWindow {
         if self.settings.is_open || is_busy || self.viewer.is_some() {
             return;
         }
+        self.close_command_center(window, cx);
         self.close_recently_deleted(window, cx);
         if self.app_menu.is_some() {
             self.close_app_menu(window, cx);

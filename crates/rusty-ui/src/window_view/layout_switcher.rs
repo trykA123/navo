@@ -261,6 +261,7 @@ impl FerriteWindow {
             .unwrap_or(0);
         let focus = cx.focus_handle();
         self.workspace_keys.cancel();
+        self.close_command_center(window, cx);
         window.focus(&focus, cx);
         let scroll = ScrollHandle::new();
         scroll.scroll_to_item(focused);

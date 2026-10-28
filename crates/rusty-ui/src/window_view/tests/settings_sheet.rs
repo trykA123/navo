@@ -487,6 +487,40 @@ fn ctrl_comma_closes_the_path_editor(cx: &mut TestAppContext) {
     assert!(sheet_has_focus(cx, &rig));
 }
 
+fn command_center_shows(cx: &mut TestAppContext, rig: &Rig) -> bool {
+    settle_motion(cx, rig);
+    shows(cx, rig, "command-center")
+}
+
+#[gpui_kit::test]
+fn ctrl_comma_closes_the_command_center_and_focuses_settings(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "ctrl-k");
+    assert!(command_center_shows(cx, &rig));
+    open(cx, &rig);
+    assert!(!command_center_shows(cx, &rig));
+    assert!(is_open(cx, &rig));
+    assert!(sheet_has_focus(cx, &rig));
+}
+
+#[gpui_kit::test]
+fn the_command_center_closes_back_into_the_open_settings(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    rig.press(cx, "down");
+    open(cx, &rig);
+    rig.press(cx, "ctrl-k");
+    assert!(command_center_shows(cx, &rig));
+    rig.press(cx, "escape");
+    assert!(!command_center_shows(cx, &rig));
+    assert!(is_open(cx, &rig));
+    assert!(sheet_has_focus(cx, &rig));
+    rig.press(cx, "f8");
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.browser.pending().is_none())
+    );
+}
+
 #[gpui_kit::test]
 fn the_display_section_groups_the_viewer_parts_and_flips_one(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);

@@ -1,5 +1,6 @@
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{Action, Role, Stateful};
+use rusty_l10n::t;
 use rusty_pdf::protocol::PdfError;
 
 use super::{PdfView, Phase};
@@ -12,8 +13,8 @@ const CARD_WIDTH: f32 = 480.;
 
 pub(super) fn refusal(error: &PdfError) -> (&'static str, String) {
     match error {
-        PdfError::NoEngine(detail) => ("The PDF engine is missing.", detail.clone()),
-        PdfError::NoHelper(detail) => ("The PDF helper did not start.", detail.clone()),
+        PdfError::NoEngine(_) => ("The PDF engine is missing.", t!("pdf-no-engine-detail")),
+        PdfError::NoHelper(_) => ("The PDF helper did not start.", t!("pdf-no-helper-detail")),
         PdfError::Corrupt => (
             "The file is damaged.",
             "Its structure cannot be read, so its pages cannot be found.".to_owned(),

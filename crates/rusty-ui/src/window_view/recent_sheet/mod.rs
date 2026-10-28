@@ -54,6 +54,10 @@ impl RecentPanel {
         }
     }
 
+    pub(super) fn is_open(&self) -> bool {
+        self.is_open
+    }
+
     fn current(&self) -> Option<&RetainedRow> {
         self.model.row_at(self.cursor)
     }
@@ -113,6 +117,7 @@ pub fn load_all(hooks: &dyn RetainedHooks) -> Result<Vec<RetainedRow>, String> {
 impl FerriteWindow {
     pub(super) fn open_recently_deleted(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.recent.is_open {
+            self.close_command_center(window, cx);
             self.focus_recent(window, cx);
             return;
         }
@@ -124,6 +129,7 @@ impl FerriteWindow {
         if is_busy {
             return;
         }
+        self.close_command_center(window, cx);
         if self.app_menu.is_some() {
             self.close_app_menu(window, cx);
         }
@@ -159,7 +165,7 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    fn focus_recent(&self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn focus_recent(&self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.recent.focus, cx);
     }
 

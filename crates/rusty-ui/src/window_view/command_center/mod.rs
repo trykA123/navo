@@ -287,9 +287,15 @@ impl FerriteWindow {
         open.search.cancel();
         open.content_flight = None;
         self.command_center.generation = open.search.generation();
-        match &open.restore {
-            Some(handle) => window.focus(handle, cx),
-            None => self.focus_core_pane(window, cx),
+        if self.settings.is_open() {
+            self.focus_settings(window, cx);
+        } else if self.recent.is_open() {
+            self.focus_recent(window, cx);
+        } else {
+            match &open.restore {
+                Some(handle) => window.focus(handle, cx),
+                None => self.focus_core_pane(window, cx),
+            }
         }
         if !cx.reduce_motion() {
             self.leave(open, window, cx);

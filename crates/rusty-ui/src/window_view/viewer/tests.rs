@@ -33,6 +33,7 @@ mod pdf;
 mod pdf_find;
 mod pdf_links;
 mod pdf_outline;
+mod pdf_refused;
 mod rebound;
 mod release;
 mod save;
