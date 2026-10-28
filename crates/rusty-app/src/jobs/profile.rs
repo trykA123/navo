@@ -25,7 +25,7 @@ fn factory(journal: SharedJournal, dirs: StoreDirs, experimental: bool) -> LogFa
             if experimental && matches!(plan.kind, OpKind::Copy | OpKind::Move | OpKind::Delete) {
                 retention_for(plan, &dirs)?
             } else {
-                RetentionSettings::default()
+                RetentionSettings::off()
             };
         let retained = delete_job(plan, &settings, &dirs)?;
         let mut log = if matches!(plan.kind, OpKind::Copy | OpKind::Move)
@@ -147,7 +147,7 @@ fn retention_for(plan: &OperationPlan, dirs: &StoreDirs) -> Result<RetentionSett
         if plan.kind == OpKind::Delete || overwrites {
             Err(error)
         } else {
-            Ok(RetentionSettings::default())
+            Ok(RetentionSettings::off())
         }
     })
 }

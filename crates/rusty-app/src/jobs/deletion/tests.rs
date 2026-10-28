@@ -92,16 +92,22 @@ fn another_profile_cannot_move_or_recycle_a_folder_with_retained_children() {
     drop(log);
     let (_other_profile, other, journal) = setup();
     let mut plan = plan.clone();
-    plan.kind = OpKind::Move;
-    for step in [
-        Step::Rename {
-            source: fs.location("home/docs"),
-            target: fs.location("home/moved"),
-        },
-        Step::Recycle {
-            location: fs.location("home/docs"),
-        },
+    for (kind, step) in [
+        (
+            OpKind::Move,
+            Step::Rename {
+                source: fs.location("home/docs"),
+                target: fs.location("home/moved"),
+            },
+        ),
+        (
+            OpKind::Recycle,
+            Step::Recycle {
+                location: fs.location("home/docs"),
+            },
+        ),
     ] {
+        plan.kind = kind;
         plan.steps = vec![step];
         let mut log =
             super::super::experimental_factory(journal.clone(), other.clone())(&plan).unwrap();

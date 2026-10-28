@@ -102,3 +102,65 @@ fn preparing_the_instance_creates_no_profile_folder_before_the_migration() {
     assert!(!dirs.config.exists() && !dirs.data.exists());
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
 }
+
+#[test]
+fn a_second_instance_in_another_retention_mode_is_refused_with_a_message() {
+    for running in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let profile = crate::profile::Profile::Folder(StoreDirs::in_profile(root.path()));
+        let first = crate::cli::Start {
+            retention: running,
+            ..Default::default()
+        };
+        let (sender, _requests) = rusty_ui::window_view::open_requests();
+        let Ok(std::ops::ControlFlow::Continue((guard, mut splash))) =
+            super::prepare_instance(&first, &profile, sender)
+        else {
+            panic!("expected the first instance");
+        };
+        assert!(guard.is_some());
+        splash.close();
+        for retention in [!running, running] {
+            let start = crate::cli::Start {
+                retention,
+                ..Default::default()
+            };
+            let shown = Cell::new(None);
+            let (sender, _) = rusty_ui::window_view::open_requests();
+            let reply = super::prepare_instance_with_notice(&start, &profile, sender, |message| {
+                shown.set(Some(message.to_owned()));
+            })
+            .unwrap();
+            let std::ops::ControlFlow::Break(code) = reply else {
+                panic!("a second instance must exit");
+            };
+            let refused = retention != running;
+            let expected = if refused {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            };
+            assert_eq!(code, expected, "running {running}, request {retention}");
+            assert_eq!(
+                shown.take(),
+                refused.then(|| rusty_l10n::tr("instance-mode-mismatch"))
+            );
+        }
+    }
+}
+
+#[test]
+fn the_store_check_follows_the_retention_mode() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = StoreDirs::in_profile(root.path());
+    std::fs::write(&dirs.data, b"not a folder").unwrap();
+    let profile = crate::profile::Profile::Folder(dirs);
+    for retention in [true, false] {
+        let start = crate::cli::Start {
+            retention,
+            ..Default::default()
+        };
+        let store = super::check_store(&profile, false, &start);
+        assert_eq!(store.notice.is_some(), retention, "retention {retention}");
+    }
+}

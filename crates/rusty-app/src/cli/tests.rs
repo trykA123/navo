@@ -21,11 +21,76 @@ fn no_arguments_open_the_window() {
 }
 
 #[test]
-fn retention_is_a_development_opt_in_for_window_starts_only() {
-    assert!(!start(&[]).experimental_retention);
-    assert!(start(&["--experimental-retention", "--profile", "p"]).experimental_retention);
-    assert!(refusal(&["--experimental-retention", "--experimental-retention"]).contains("twice"));
+fn retention_is_enabled_by_default() {
+    assert!(Start::default().retention);
+    assert!(start(&[]).retention);
+}
+
+#[test]
+fn no_retention_disables_retention_regardless_of_the_legacy_flag_order() {
+    for args in [
+        &["--no-retention"][..],
+        &["--experimental-retention", "--no-retention"],
+        &["--no-retention", "--experimental-retention"],
+    ] {
+        assert!(!start(args).retention, "{args:?}");
+    }
+    assert!(refusal(&["--no-retention", "--no-retention"]).contains("twice"));
+}
+
+#[test]
+fn the_legacy_retention_flag_is_ignored_and_logged() {
+    use std::sync::Arc;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let ring = Arc::new(rusty_diag::EventRing::new(4096));
+    let redactor = Arc::new(crate::diag::redactor());
+    let opened = crate::logging::open(crate::logging::log_config(None), &redactor, &ring);
+    let subscriber = tracing_subscriber::Registry::default().with(opened.layer);
+    tracing::subscriber::with_default(subscriber, || {
+        let parsed = start(&["--experimental-retention"]);
+        assert!(parsed.retention);
+        parsed.log_deprecated_flags();
+        assert_eq!(start(&["--experimental-retention"; 2]), parsed);
+    });
+    assert!(
+        ring.snapshot()
+            .iter()
+            .any(|line| { line.contains("--experimental-retention") && line.contains("ignored") })
+    );
+}
+
+#[test]
+fn the_retention_mode_reaches_launch() {
+    let root = tempfile::tempdir().unwrap();
+    let metrics = root.path().join("metrics.json");
+    let metrics = metrics.to_str().unwrap();
+    for (args, expected) in [
+        (vec!["--metrics", metrics], true),
+        (vec!["--no-retention", "--metrics", metrics], false),
+    ] {
+        let clock = crate::metrics::ProcessClock::detect(std::time::Instant::now(), || None);
+        let launched = std::cell::Cell::new(None);
+        crate::open_window(
+            start(&args),
+            (
+                crate::Opening {
+                    panes: [None, None],
+                },
+                clock,
+            ),
+            &crate::profile::Profile::User(None),
+            |launch| launched.set(Some(launch.experimental_retention)),
+        );
+        assert_eq!(launched.get(), Some(expected), "{args:?}");
+    }
+}
+
+#[test]
+fn retention_flags_only_accompany_window_starts() {
     assert!(refusal(&["--version", "--experimental-retention"]).contains("stands alone"));
+    assert!(refusal(&["--version", "--no-retention"]).contains("stands alone"));
+    assert!(refusal(&["--no-retention", "--version"]).contains("stands alone"));
 }
 
 #[test]
@@ -123,7 +188,8 @@ fn every_window_flag_is_read_in_any_order() {
     assert_eq!(
         parsed,
         Start {
-            experimental_retention: false,
+            retention: true,
+            legacy_retention_flag: false,
             path: None,
             view: None,
             profile: Some(PathBuf::from("p")),

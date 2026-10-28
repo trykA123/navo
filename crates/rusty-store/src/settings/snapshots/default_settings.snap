@@ -77,8 +77,8 @@ largest-files = true
 mode = "auto"
 
 [retention]
-retain-deletes = false
-retain-overwrites = false
+retain-deletes = true
+retain-overwrites = true
 days = 3
 max-volume-mib = 1024
 min-free-mib = 256

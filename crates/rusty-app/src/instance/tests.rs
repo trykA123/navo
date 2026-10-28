@@ -60,7 +60,7 @@ fn request_paths_resolve_against_the_sending_working_folder() {
     assert_eq!(
         Request::from_start(&start, root.path()).unwrap(),
         Request {
-            experimental_retention: false,
+            experimental_retention: true,
             path: Some(root.path().join("missing")),
             left: Some(root.path().join("left")),
             right: Some(root.path().join("right")),
@@ -347,13 +347,13 @@ fn a_unique_windows_mutex_and_pipe_round_trip() {
 }
 
 #[test]
-fn development_mode_survives_forwarding_and_missing_mode_defaults_off() {
+fn retention_mode_survives_forwarding_with_the_existing_wire_name_and_default() {
     let root = tempfile::tempdir().unwrap();
-    let start = crate::cli::Start {
-        experimental_retention: true,
-        ..Default::default()
-    };
+    let start = crate::cli::Start::default();
     let request = Request::from_start(&start, root.path()).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&request.to_line().unwrap()).unwrap();
+    assert_eq!(value["experimental_retention"], true);
+    assert!(value.get("retention").is_none());
     assert!(
         Request::parse(&request.to_line().unwrap())
             .unwrap()

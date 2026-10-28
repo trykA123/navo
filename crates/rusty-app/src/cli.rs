@@ -13,9 +13,10 @@ pub(crate) enum Command {
     BenchIndex { json: bool },
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Start {
-    pub(crate) experimental_retention: bool,
+    pub(crate) retention: bool,
+    pub(crate) legacy_retention_flag: bool,
     pub(crate) path: Option<PathBuf>,
     pub(crate) view: Option<PathBuf>,
     pub(crate) profile: Option<PathBuf>,
@@ -24,7 +25,7 @@ pub(crate) struct Start {
     pub(crate) right: Option<PathBuf>,
 }
 
-pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
+pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
 
 const STANDALONE: [&str; 6] = [
     "--version",
@@ -51,9 +52,32 @@ impl Command {
     }
 }
 
+impl Default for Start {
+    fn default() -> Self {
+        Self {
+            retention: true,
+            legacy_retention_flag: false,
+            path: None,
+            view: None,
+            profile: None,
+            metrics: None,
+            left: None,
+            right: None,
+        }
+    }
+}
+
 impl Start {
     pub(crate) fn is_metrics(&self) -> bool {
         self.metrics.is_some()
+    }
+
+    pub(crate) fn log_deprecated_flags(&self) {
+        if self.legacy_retention_flag {
+            tracing::warn!(
+                "--experimental-retention is deprecated and ignored; retention is enabled by default; use --no-retention to disable it"
+            );
+        }
     }
 
     fn slot(&mut self, flag: &str) -> Option<&mut Option<PathBuf>> {
@@ -88,7 +112,9 @@ fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
         }
         is_first = false;
         if flag == "--experimental-retention" {
-            if std::mem::replace(&mut start.experimental_retention, true) {
+            start.legacy_retention_flag = true;
+        } else if flag == "--no-retention" {
+            if !std::mem::replace(&mut start.retention, false) {
                 return Err(format!("{flag} given twice"));
             }
         } else if let Some(slot) = start.slot(&flag) {
@@ -127,6 +153,7 @@ fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Co
     if STANDALONE.contains(&extra.as_ref())
         || WINDOW_FLAGS.contains(&extra.as_ref())
         || extra == "--experimental-retention"
+        || extra == "--no-retention"
     {
         Err(format!("{flag} stands alone"))
     } else {

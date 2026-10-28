@@ -45,7 +45,11 @@ impl RecoveryNotice {
         if let Some(error) = &self.error {
             return RecoveryContent {
                 title: rusty_l10n::tr("store-recovery-blocked"),
-                details: vec![rusty_l10n::tr("store-recovery-restart"), error.clone()],
+                details: vec![
+                    rusty_l10n::tr("store-recovery-restart"),
+                    error.clone(),
+                    rusty_l10n::tr("retention-safe-mode-help"),
+                ],
             };
         }
         let mut details = Vec::new();

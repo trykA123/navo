@@ -10,6 +10,19 @@ fn save() -> Save<'static> {
     }
 }
 
+#[test]
+fn editor_save_without_a_profile_offers_safe_mode_and_preserves_the_file() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("file.txt");
+    std::fs::write(&path, b"original").unwrap();
+    let hooks = super::super::profile_hooks(None, None, true);
+    let Err(SaveError::Failed(message)) = (hooks.write)(&at(&path), &save()) else {
+        panic!("saving without a profile must remain blocked");
+    };
+    assert!(message.ends_with(&rusty_l10n::tr("retention-safe-mode-help")));
+    assert_eq!(std::fs::read(path).unwrap(), b"original");
+}
+
 #[cfg(unix)]
 #[test]
 fn editor_save_refuses_alias_ancestors_and_leaf_links_to_retained_bytes() {

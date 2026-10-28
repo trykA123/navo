@@ -72,6 +72,14 @@ fn a_failed_preflight_blocks_opens_even_if_the_sentinel_cannot_be_written() {
     fs::create_dir(super::super::sentinel_path(&database(data.path()))).unwrap();
     let start = check_with(Some(data.path()), true, &FakeFs::new(), true);
     assert!(start.notice.is_some());
+    let content = start.notice.as_ref().unwrap().content();
+    assert!(
+        content
+            .details
+            .last()
+            .unwrap()
+            .ends_with(&rusty_l10n::tr("retention-safe-mode-help"))
+    );
     assert!(super::super::open_db(&database(data.path())).is_err());
     assert!(!database(data.path()).exists());
     assert_eq!(

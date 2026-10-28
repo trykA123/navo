@@ -100,6 +100,9 @@ command-center-context-dialog = Dialog
 command-center-context-context-menu = Context menu
 command-center-context-crash-notice = Crash notice
 
+instance-mode-mismatch = Navo is already running in another mode. Close it, then start Navo again.
+retention-safe-mode-help = Start Navo with --no-retention to work without the safety net.
+
 store-recovery-title = Navo recovered after a database problem.
 store-recovery-blocked = Navo could not safely open its saved data.
 store-recovery-restart = The checks could not be completed. Close Navo, inspect the recovery folder, then restart to retry.

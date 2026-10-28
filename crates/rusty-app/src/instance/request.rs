@@ -32,7 +32,7 @@ impl Request {
                 .transpose()
         };
         let request = Self {
-            experimental_retention: start.experimental_retention,
+            experimental_retention: start.retention,
             path: resolve(&start.path)?,
             left: resolve(&start.left)?,
             right: resolve(&start.right)?,

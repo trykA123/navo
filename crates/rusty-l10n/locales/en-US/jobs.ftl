@@ -1,5 +1,5 @@
-job-journal-unavailable = The job journal is unavailable. Restart Navo after resolving the database recovery notice.
-job-profile-unavailable = A writable profile is required before changing files. Restart Navo with a valid profile.
+job-journal-unavailable = The job journal is unavailable. Restart Navo after resolving the database recovery notice. { retention-safe-mode-help }
+job-profile-unavailable = A writable profile is required before changing files. Restart Navo with a valid profile. { retention-safe-mode-help }
 job-wait-cancelled = The operation was cancelled while it waited for another operation.
 job-profile-busy = Another file operation is still using this profile. Try again when it finishes.
 job-waiting = Waiting for another operation…

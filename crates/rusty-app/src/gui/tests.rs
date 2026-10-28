@@ -72,6 +72,33 @@ fn without_store_folders_only_home_is_protected() {
 }
 
 #[test]
+fn unavailable_journal_and_profile_notices_offer_safe_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let dirs = store(&dir);
+    dirs.ensure().unwrap();
+    std::fs::create_dir(dirs.journal_file()).unwrap();
+    for profile in [None, Some(&dirs)] {
+        let (operations, journal) = super::operations(profile, &home(), true);
+        assert!(journal.is_none());
+        let plan = rusty_core::OperationPlan {
+            kind: rusty_core::OpKind::Copy,
+            steps: Vec::new(),
+            totals: rusty_core::Totals {
+                files: 0,
+                folders: 0,
+                bytes: 0,
+            },
+            risks: Vec::new(),
+            conflicts: Vec::new(),
+        };
+        let Err(message) = (operations.log)(&plan) else {
+            panic!("file changes must remain blocked");
+        };
+        assert!(message.ends_with(&rusty_l10n::tr("retention-safe-mode-help")));
+    }
+}
+
+#[test]
 fn store_folders_are_protected_and_get_a_journal() {
     let dir = tempfile::tempdir().unwrap();
     let dirs = store(&dir);

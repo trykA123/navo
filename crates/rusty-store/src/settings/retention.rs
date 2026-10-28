@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 const MIB: u64 = 1024 * 1024;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "RetentionData", into = "RetentionData")]
 pub struct RetentionSettings {
     retain_deletes: bool,
@@ -27,7 +27,26 @@ impl Default for RetentionData {
     }
 }
 
+impl Default for RetentionSettings {
+    fn default() -> Self {
+        Self {
+            retain_deletes: true,
+            retain_overwrites: true,
+            policy: RetentionPolicy::default(),
+        }
+    }
+}
+
 impl RetentionSettings {
+    #[must_use]
+    pub fn off() -> Self {
+        Self {
+            retain_deletes: false,
+            retain_overwrites: false,
+            policy: RetentionPolicy::default(),
+        }
+    }
+
     pub fn maintenance_policy(&self) -> Option<RetentionPolicy> {
         (self.retain_deletes || self.retain_overwrites).then_some(self.policy)
     }
@@ -75,26 +94,53 @@ impl From<RetentionSettings> for RetentionData {
 #[cfg(test)]
 mod tests {
     use super::super::{Settings, parse, to_toml};
+    use super::{MIB, RetentionSettings};
 
     #[test]
-    fn deletes_require_explicit_valid_opt_in() {
-        assert!(Settings::default().retention.delete_policy().is_none());
-        let (settings, unknown) = parse("[retention]\nretain-deletes = true\ndays = 7\n").unwrap();
-        assert!(unknown.is_empty());
-        assert!(settings.retention.delete_policy().is_some());
-        assert_eq!(parse(&to_toml(&settings)).unwrap().0, settings);
+    fn deletes_and_overwrites_are_retained_by_default_for_three_days() {
+        let defaults = Settings::default().retention;
+        let policy = defaults.delete_policy().unwrap();
+        assert_eq!(defaults.overwrite_policy(), Some(policy));
+        assert_eq!(
+            (
+                policy.days(),
+                policy.max_volume_bytes(),
+                policy.min_free_bytes()
+            ),
+            (3, 1024 * MIB, 256 * MIB)
+        );
+        assert_eq!(parse("").unwrap().0.retention, defaults);
+        assert_eq!(
+            parse("[retention]\ndays = 7\n")
+                .unwrap()
+                .0
+                .retention
+                .delete_policy()
+                .unwrap()
+                .days(),
+            7
+        );
     }
 
     #[test]
-    fn overwrite_retention_requires_an_independent_opt_in() {
-        assert!(Settings::default().retention.overwrite_policy().is_none());
-        let (settings, unknown) = parse("[retention]\nretain-overwrites = true\n").unwrap();
+    fn off_retains_nothing() {
+        let off = RetentionSettings::off();
+        assert!(off.delete_policy().is_none());
+        assert!(off.overwrite_policy().is_none());
+        assert!(off.maintenance_policy().is_none());
+    }
+
+    #[test]
+    fn deletes_and_overwrites_turn_off_independently() {
+        let (settings, unknown) = parse("[retention]\nretain-deletes = false\n").unwrap();
         assert!(unknown.is_empty());
-        assert!(settings.retention.overwrite_policy().is_some());
         assert!(settings.retention.delete_policy().is_none());
+        assert!(settings.retention.overwrite_policy().is_some());
         assert_eq!(parse(&to_toml(&settings)).unwrap().0, settings);
-        let (settings, _) = parse("[retention]\nretain-deletes = true\n").unwrap();
+        let (settings, _) = parse("[retention]\nretain-overwrites = false\n").unwrap();
         assert!(settings.retention.overwrite_policy().is_none());
+        assert!(settings.retention.delete_policy().is_some());
+        assert_eq!(parse(&to_toml(&settings)).unwrap().0, settings);
     }
 
     #[test]

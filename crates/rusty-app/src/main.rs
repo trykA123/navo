@@ -121,7 +121,7 @@ fn execute_command(
         }
     };
     match command {
-        Command::Open(start) => open_window(start, opening, &profile, clock),
+        Command::Open(start) => open_window(start, (opening, clock), &profile, gui::open),
         Command::Version => {
             let _diagnostics = install_logging(&profile);
             println!("navo {}", env!("CARGO_PKG_VERSION"));
@@ -170,8 +170,13 @@ fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
     }
 }
 
-fn open_window(start: Start, opening: Opening, profile: &Profile, clock: ProcessClock) -> ExitCode {
-    let Opening { panes } = opening;
+fn open_window(
+    start: Start,
+    opening: (Opening, ProcessClock),
+    profile: &Profile,
+    open: impl FnOnce(gui::Launch),
+) -> ExitCode {
+    let (Opening { panes }, clock) = opening;
     let (sender, requests) = open_requests();
     let (guard, mut splash) = match prepare_instance(&start, profile, sender) {
         Ok(ControlFlow::Continue(first)) => first,
@@ -187,6 +192,7 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
         ControlFlow::Break(code) => return code,
     };
     let diagnostics = install_logging(profile);
+    start.log_deprecated_flags();
     migrated.iter().for_each(migration::Report::log);
     install_reporters(profile, &diagnostics);
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
@@ -195,8 +201,8 @@ fn open_window(start: Start, opening: Opening, profile: &Profile, clock: Process
         .metrics
         .clone()
         .map(|path| metrics::Run::new(path, clock));
-    gui::open(gui::Launch {
-        experimental_retention: start.experimental_retention,
+    open(gui::Launch {
+        experimental_retention: start.retention,
         path: start.path,
         view: start.view,
         panes,
@@ -231,7 +237,7 @@ fn check_store(profile: &Profile, unclean: bool, start: &Start) -> crash::store:
     crash::store::check_store(
         profile.dirs().map(|dirs| dirs.data.as_path()),
         unclean,
-        start.experimental_retention,
+        start.retention,
     )
 }
 
@@ -289,6 +295,15 @@ fn prepare_instance(
     profile: &Profile,
     sender: OpenSender,
 ) -> Result<ControlFlow<ExitCode, First>, instance::Error> {
+    prepare_instance_with_notice(start, profile, sender, console::show_mode_mismatch)
+}
+
+fn prepare_instance_with_notice(
+    start: &Start,
+    profile: &Profile,
+    sender: OpenSender,
+    show_notice: impl FnOnce(&str),
+) -> Result<ControlFlow<ExitCode, First>, instance::Error> {
     if start.is_metrics() {
         return Ok(ControlFlow::Continue((None, splash::Splash::none())));
     }
@@ -300,9 +315,9 @@ fn prepare_instance(
     };
     match acquired {
         instance::Acquired::First(mut guard) => {
-            let experimental = start.experimental_retention;
+            let retention = start.retention;
             guard.serve(move |request| {
-                if request.experimental_retention != experimental {
+                if request.experimental_retention != retention {
                     return instance::Reply::Error;
                 }
                 gui::on_instance_request(&sender, request)
@@ -310,6 +325,10 @@ fn prepare_instance(
             Ok(first(Some(guard)))
         }
         instance::Acquired::Second(client) => {
+            if start.legacy_retention_flag {
+                let _diagnostics = install_logging(profile);
+                start.log_deprecated_flags();
+            }
             let request = instance::Request::from_start(start, &std::env::current_dir()?)?;
             let reply = client.send(&request, std::time::Duration::from_secs(2))?;
             let code = if reply == instance::Reply::Ok {
@@ -317,6 +336,7 @@ fn prepare_instance(
             } else {
                 console::attach();
                 eprintln!("navo: the running Navo rejected the request");
+                show_notice(&rusty_l10n::tr("instance-mode-mismatch"));
                 ExitCode::FAILURE
             };
             Ok(ControlFlow::Break(code))

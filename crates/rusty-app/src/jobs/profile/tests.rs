@@ -68,19 +68,19 @@ fn ordinary_copy_jobs_save_and_f7_share_access_with_invalid_settings() {
 }
 
 #[test]
-fn retention_keys_need_the_explicit_development_factory() {
-    let (_root, dirs, journal) = setup();
-    std::fs::write(
-        dirs.settings_file(),
-        "[retention]\nretain-overwrites = true\n",
-    )
-    .unwrap();
-    let fs = FakeFs::new();
-    let plan = copy(&fs);
-    let normal = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
-    assert!(!normal.preserve_overwrites());
-    let experimental = experimental_factory(journal, dirs)(&plan).unwrap();
-    assert!(experimental.preserve_overwrites());
+fn overwrites_are_retained_by_default_only_outside_safe_mode() {
+    for settings in [None, Some("[retention]\nretain-overwrites = true\n")] {
+        let (_root, dirs, journal) = setup();
+        if let Some(text) = settings {
+            std::fs::write(dirs.settings_file(), text).unwrap();
+        }
+        let fs = FakeFs::new();
+        let plan = copy(&fs);
+        let safe = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+        assert!(!safe.preserve_overwrites(), "{settings:?}");
+        let coordinated = experimental_factory(journal, dirs)(&plan).unwrap();
+        assert!(coordinated.preserve_overwrites(), "{settings:?}");
+    }
 }
 
 #[test]
