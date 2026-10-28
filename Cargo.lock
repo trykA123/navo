@@ -6742,6 +6742,7 @@ dependencies = [
  "rusty-index",
  "rusty-l10n",
  "rusty-pdf",
+ "rusty-retention",
  "rusty-structured",
  "rusty-syntax",
  "serde",

@@ -3,7 +3,8 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
-use rusty_core::{AncestorMemo, Location, OpKind, OperationPlan, ProviderPath, Resolution};
+use rusty_core::{AncestorMemo, Location, OpKind, OperationPlan, ProviderPath, Resolution, Step};
+use rusty_fs::ProviderOps;
 use rusty_store::{RetentionCatalog, RetentionSettings, SettingsError, StoreDirs};
 use rusty_ui::browser::{LogFactory, OpLog, WriteFactory};
 
@@ -11,14 +12,31 @@ use super::mutation_lock::{self, LeaseError, Mode, Wait};
 use super::{JournalLog, SharedJournal, create_log, deletion, overwrite};
 
 pub fn profile_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
-    factory(journal, dirs, false)
+    factory(journal, dirs, None)
 }
 
+pub fn retaining_factory(
+    journal: SharedJournal,
+    dirs: StoreDirs,
+    drive: Arc<dyn ProviderOps>,
+) -> LogFactory {
+    factory(journal, dirs, Some(Drive::Probed(drive)))
+}
+
+#[cfg(test)]
 pub fn experimental_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
-    factory(journal, dirs, true)
+    factory(journal, dirs, Some(Drive::Unprobed))
 }
 
-fn factory(journal: SharedJournal, dirs: StoreDirs, experimental: bool) -> LogFactory {
+#[derive(Clone)]
+enum Drive {
+    Probed(Arc<dyn ProviderOps>),
+    #[cfg(test)]
+    Unprobed,
+}
+
+fn factory(journal: SharedJournal, dirs: StoreDirs, drive: Option<Drive>) -> LogFactory {
+    let experimental = drive.is_some();
     Arc::new(move |plan| {
         guard(plan, &dirs, experimental)?;
         let settings =
@@ -26,6 +44,12 @@ fn factory(journal: SharedJournal, dirs: StoreDirs, experimental: bool) -> LogFa
                 retention_for(plan, &dirs)?
             } else {
                 RetentionSettings::off()
+            };
+        let settings =
+            if settings.maintenance_policy().is_some() && !drive_retains(drive.as_ref(), plan) {
+                RetentionSettings::off()
+            } else {
+                settings
             };
         let retained = delete_job(plan, &settings, &dirs)?;
         let mut log = if matches!(plan.kind, OpKind::Copy | OpKind::Move)
@@ -88,6 +112,35 @@ fn delete_job(
         Err(rusty_core::retention::RetentionError::DeleteTooLarge) => Ok(None),
         Err(error) => Err(error.to_string()),
     }
+}
+
+fn drive_retains(drive: Option<&Drive>, plan: &OperationPlan) -> bool {
+    let ops = match drive {
+        Some(Drive::Probed(ops)) => ops,
+        #[cfg(test)]
+        Some(Drive::Unprobed) => return true,
+        None => return false,
+    };
+    let probe = match plan.kind {
+        OpKind::Delete => plan.steps.iter().find_map(|step| match step {
+            Step::RemoveFile { location }
+            | Step::RemoveLink { location }
+            | Step::RemoveFolder { location } => Some(location),
+            _ => None,
+        }),
+        OpKind::Copy | OpKind::Move => {
+            let overwritten = plan
+                .conflicts
+                .iter()
+                .find(|conflict| conflict.resolution == Resolution::Overwrite);
+            let Some(conflict) = overwritten else {
+                return true;
+            };
+            Some(&conflict.target)
+        }
+        _ => return true,
+    };
+    probe.is_some_and(|at| rusty_retention::can_retain(ops.as_ref(), at))
 }
 
 pub(crate) fn claim_write(

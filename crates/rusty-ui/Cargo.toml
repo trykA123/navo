@@ -68,6 +68,7 @@ rusty-fs = { path = "../rusty-fs" }
 rusty-index = { path = "../rusty-index" }
 rusty-l10n = { path = "../rusty-l10n" }
 rusty-pdf = { path = "../rusty-pdf" }
+rusty-retention = { path = "../rusty-retention" }
 rusty-structured = { path = "../rusty-structured" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

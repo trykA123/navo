@@ -16,6 +16,7 @@ use std::path::Path;
 
 pub use adopt::AdoptJob;
 pub use maintenance::{MaintenanceReport, MaintenanceRequest};
+pub use proof::can_retain;
 use rusty_core::retention::{RetentionEntry, RetentionError, RetentionId, RetentionPolicy};
 use rusty_core::{FsError, Location};
 use rusty_fs::{CancelToken, ProviderOps};

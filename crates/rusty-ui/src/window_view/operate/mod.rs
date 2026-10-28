@@ -94,6 +94,11 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
                 summary(&pending.plan, protected),
                 t!("job-delete-retained-help", days = policy.days())
             ),
+            None if pending.cannot_retain && pending.plan.kind == OpKind::Delete => format!(
+                "{} · {}",
+                summary(&pending.plan, protected),
+                tr("delete-cannot-retain")
+            ),
             _ => summary(&pending.plan, protected),
         }
         .into(),

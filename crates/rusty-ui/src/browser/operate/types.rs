@@ -10,7 +10,12 @@ use std::sync::Arc;
 use super::queue::SlowVolumes;
 use crate::browser::{RenameReport, UndoOffer};
 
-pub(super) type PlannedOp = (OperationPlan, Option<RetentionPolicy>, SlowVolumes);
+pub(in crate::browser) struct PlannedOp {
+    pub plan: OperationPlan,
+    pub retain_deletes: Option<RetentionPolicy>,
+    pub cannot_retain: bool,
+    pub slow_volumes: SlowVolumes,
+}
 
 #[derive(Debug, Clone)]
 pub struct DropRequest {
@@ -67,13 +72,14 @@ impl Default for Copying {
 }
 
 pub type LogFactory = Arc<dyn Fn(&OperationPlan) -> Result<Box<dyn OpLog>, String> + Send + Sync>;
+pub type RetainDeletes = Arc<dyn Fn() -> Option<RetentionPolicy> + Send + Sync>;
 pub type WriteFactory = Arc<dyn Fn(&Location) -> Result<Box<dyn Send>, FsError> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Operations {
     pub log: LogFactory,
     pub write: Option<WriteFactory>,
-    pub retain_deletes: Option<Arc<dyn Fn() -> Option<RetentionPolicy> + Send + Sync>>,
+    pub retain_deletes: Option<RetainDeletes>,
     pub protected: Vec<Location>,
 }
 
@@ -118,6 +124,7 @@ pub struct PendingOp {
     pub target: Option<Location>,
     pub plan: OperationPlan,
     pub retain_deletes: Option<RetentionPolicy>,
+    pub cannot_retain: bool,
     pub(crate) source_tab: TabId,
     pub undo: Option<UndoOffer>,
     pub(crate) slow_volumes: Option<SlowVolumes>,

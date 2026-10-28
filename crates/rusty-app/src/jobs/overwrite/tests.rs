@@ -395,5 +395,6 @@ fn native_shared_holder_restores_each_version_without_removing_its_neighbor() {
 }
 
 mod boundaries;
+mod drive;
 
 mod temporaries;

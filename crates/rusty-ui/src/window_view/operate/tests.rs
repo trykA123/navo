@@ -32,6 +32,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         target,
         plan,
         retain_deletes: None,
+        cannot_retain: false,
         source_tab: AppState::new(at("/home")).active_tab().id(),
         undo: None,
         slow_volumes: None,
@@ -64,6 +65,20 @@ fn a_permanent_delete_is_dangerous_without_a_typed_word() {
     assert!(props.danger);
     assert!(props.typed.is_none());
     assert_eq!(props.confirm_label, "Delete permanently");
+}
+
+#[test]
+fn a_drive_that_cannot_retain_says_so_in_the_permanent_delete_dialog() {
+    let line = rusty_l10n::tr("delete-cannot-retain");
+    let plain = confirm_props(&pending(plan(OpKind::Delete), None));
+    let props = confirm_props(&PendingOp {
+        cannot_retain: true,
+        ..pending(plan(OpKind::Delete), None)
+    });
+    assert_eq!(props.title, plain.title);
+    assert_eq!(props.confirm_label, "Delete permanently");
+    assert!(props.summary.contains(line.as_str()));
+    assert!(!plain.summary.contains(line.as_str()));
 }
 
 #[test]

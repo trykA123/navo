@@ -9,11 +9,13 @@ use super::{Browser, Message, RenameReport};
 mod keep;
 mod paste;
 pub(in crate::browser) mod queue;
+mod retain;
 mod types;
 mod work;
 
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
 pub use queue::SlowVolume;
+use types::PlannedOp;
 pub use types::*;
 pub(in crate::browser) use work::Run;
 use work::{lands_inside, plan_for, start_progress};
@@ -81,17 +83,21 @@ impl Browser {
             slot,
             Box::new(move |cancel| {
                 let result = plan_for(provider.as_ref(), &request, cancel).map(|plan| {
-                    let retained = (plan.kind == OpKind::Delete)
-                        .then(|| retain_deletes.as_ref().and_then(|active| active()))
-                        .flatten();
-                    (
+                    let (retain_deletes, cannot_retain) = retain::delete_retention(
+                        provider.as_ref(),
+                        &plan,
+                        &request.sources,
+                        retain_deletes.as_ref(),
+                    );
+                    PlannedOp {
                         plan,
-                        retained,
-                        queue::slow_volumes(
+                        retain_deletes,
+                        cannot_retain,
+                        slow_volumes: queue::slow_volumes(
                             request.sources.iter().chain(request.target.iter()),
                             &slow,
                         ),
-                    )
+                    }
                 });
                 let _ = sender.send(Message::Job(JobUpdate::Planned { request, result }));
                 wake();
@@ -277,25 +283,22 @@ impl Browser {
             .map(|pane| pane.active().location().clone())
     }
 
-    fn accept_plan(
-        &mut self,
-        request: OpRequest,
-        result: Result<types::PlannedOp, FsError>,
-    ) -> bool {
+    fn accept_plan(&mut self, request: OpRequest, result: Result<PlannedOp, FsError>) -> bool {
         if self.is_stale_replan(&request) {
             return false;
         }
         match result {
-            Ok((plan, retain_deletes, slow_volumes)) => {
+            Ok(planned) => {
                 let pending = PendingOp {
                     id: request.id,
                     sources: request.sources,
                     target: request.target,
-                    plan,
-                    retain_deletes,
+                    plan: planned.plan,
+                    retain_deletes: planned.retain_deletes,
+                    cannot_retain: planned.cannot_retain,
                     source_tab: request.source_tab,
                     undo: None,
-                    slow_volumes: Some(slow_volumes),
+                    slow_volumes: Some(planned.slow_volumes),
                     structure: request.structure.map(|s| Structure {
                         planning: false,
                         ..s

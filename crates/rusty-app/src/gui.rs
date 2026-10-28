@@ -116,8 +116,8 @@ pub(crate) fn open(launch: Launch) {
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
-    let services = profile_services(dirs.as_ref(), &home, launch.experimental_retention);
     let local = Arc::new(LocalFs::new());
+    let services = profile_services(dirs.as_ref(), &home, launch.experimental_retention, &local);
     metrics::mark("databases opened");
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
@@ -173,9 +173,10 @@ fn profile_services(
     dirs: Option<&StoreDirs>,
     home: &Location,
     experimental: bool,
+    local: &Arc<LocalFs>,
 ) -> ProfileServices {
     let (memory, files) = open_files(dirs, experimental);
-    let (operations, journal) = operations(dirs, home, experimental);
+    let (operations, journal) = operations(dirs, home, experimental, local);
     let rename = rename_hooks::profile_hooks(journal, memory.clone(), dirs, experimental);
     ProfileServices {
         memory,
@@ -315,6 +316,7 @@ pub(crate) fn operations(
     dirs: Option<&StoreDirs>,
     home: &Location,
     experimental: bool,
+    local: &Arc<LocalFs>,
 ) -> (Operations, Option<jobs::SharedJournal>) {
     let mut protected = vec![home.clone()];
     let Some(dirs) = dirs else {
@@ -350,7 +352,7 @@ pub(crate) fn operations(
         }),
         write: Some(jobs::write_factory(dirs.clone(), experimental)),
         log: if experimental {
-            jobs::experimental_factory(Arc::clone(&journal), dirs.clone())
+            jobs::retaining_factory(Arc::clone(&journal), dirs.clone(), local.clone())
         } else {
             jobs::profile_factory(Arc::clone(&journal), dirs.clone())
         },

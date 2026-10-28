@@ -33,6 +33,14 @@ pub(super) fn present(ops: &dyn ProviderOps, at: &Location) -> Result<Option<FsE
     }
 }
 
+#[must_use]
+pub fn can_retain(ops: &dyn ProviderOps, at: &Location) -> bool {
+    let has_identity = |at: &Location| matches!(ops.file_identity(at), Ok(Some(_)));
+    ops.supports_atomic_rename()
+        && has_identity(at)
+        && at.parent().is_some_and(|parent| has_identity(&parent))
+}
+
 pub(super) fn identity(ops: &dyn ProviderOps, at: &Location) -> Result<FileIdentity, Error> {
     ops.file_identity(at)?
         .ok_or_else(|| Error::Unsupported(at.clone()))

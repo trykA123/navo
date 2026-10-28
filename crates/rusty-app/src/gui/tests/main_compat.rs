@@ -40,7 +40,12 @@ fn safe_mode_without_a_profile_or_journal_runs_guarded_jobs_and_creation() {
     std::fs::write(files.join(".navo-retained-ab/payload/a"), b"kept").unwrap();
     let at = |path: &std::path::Path| crate::startup::path_location(path).unwrap();
     for profile in [None, Some(&dirs)] {
-        let (operations, journal) = super::super::operations(profile, &home(), false);
+        let (operations, journal) = super::super::operations(
+            profile,
+            &home(),
+            false,
+            &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+        );
         assert!(journal.is_none());
         checked(&operations, &bare(rusty_core::OpKind::Copy, vec![])).unwrap();
         let reserved = [
@@ -82,7 +87,12 @@ fn safe_mode_without_a_journal_protects_the_profile_folder() {
     let dirs = store(&root);
     dirs.ensure().unwrap();
     std::fs::create_dir(dirs.journal_file()).unwrap();
-    let (operations, journal) = super::super::operations(Some(&dirs), &home(), false);
+    let (operations, journal) = super::super::operations(
+        Some(&dirs),
+        &home(),
+        false,
+        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+    );
     assert!(journal.is_none());
     let profile_delete = bare(
         rusty_core::OpKind::Delete,

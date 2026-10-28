@@ -189,3 +189,14 @@ fn a_same_volume_mount_is_rejected_before_listing_its_contents() {
     assert!(vault.list_after(0, 10).unwrap().is_empty());
     assert!(fs.metadata(&fs.location("home/tree/bind/a")).is_ok());
 }
+
+#[test]
+fn a_drive_retains_only_with_identity_for_the_file_and_its_folder() {
+    let fs = FakeFs::new();
+    fs.add_file("home/a", 7);
+    let source = fs.location("home/a");
+    assert!(crate::can_retain(&fs, &source));
+    assert!(!crate::can_retain(&fs, &fs.location("home/missing")));
+    fs.set_volume_serial("home", None);
+    assert!(!crate::can_retain(&fs, &source));
+}

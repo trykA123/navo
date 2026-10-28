@@ -32,7 +32,12 @@ fn operations_mode(
         ops,
         experimental,
     );
-    let (operations, journal) = super::operations(dirs, home, experimental);
+    let (operations, journal) = super::operations(
+        dirs,
+        home,
+        experimental,
+        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+    );
     start.share();
     (operations, dirs.map(|_| start), journal)
 }
@@ -78,7 +83,12 @@ fn unavailable_journal_and_profile_notices_offer_safe_mode() {
     dirs.ensure().unwrap();
     std::fs::create_dir(dirs.journal_file()).unwrap();
     for profile in [None, Some(&dirs)] {
-        let (operations, journal) = super::operations(profile, &home(), true);
+        let (operations, journal) = super::operations(
+            profile,
+            &home(),
+            true,
+            &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+        );
         assert!(journal.is_none());
         let plan = rusty_core::OperationPlan {
             kind: rusty_core::OpKind::Copy,
@@ -246,9 +256,19 @@ fn delete_confirmation_retention_requires_the_flag_and_the_current_setting() {
     dirs.ensure().unwrap();
     let _start = crate::crash::store::check_with(Some(&dirs.data), false, &FakeFs::new(), false);
     std::fs::write(dirs.settings_file(), "[retention]\nretain-deletes = true\n").unwrap();
-    let (normal, _) = super::operations(Some(&dirs), &home(), false);
+    let (normal, _) = super::operations(
+        Some(&dirs),
+        &home(),
+        false,
+        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+    );
     assert!(normal.retain_deletes.is_none());
-    let (experimental, _) = super::operations(Some(&dirs), &home(), true);
+    let (experimental, _) = super::operations(
+        Some(&dirs),
+        &home(),
+        true,
+        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+    );
     let active = experimental.retain_deletes.unwrap();
     assert!(active().is_some());
     std::fs::write(

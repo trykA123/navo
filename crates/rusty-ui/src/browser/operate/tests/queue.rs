@@ -177,6 +177,7 @@ fn local_job(browser: &mut Browser, source: &str, target: Option<&str>) -> u64 {
                 },
             },
             retain_deletes: None,
+            cannot_retain: false,
             source_tab: browser.state.active_tab().id(),
             undo: None,
             slow_volumes: None,

@@ -28,8 +28,10 @@ pub(crate) use guard_log::{guard_factory, guard_write};
 pub use pending::StillPending;
 #[cfg(test)]
 pub use pending::still_pending;
+#[cfg(test)]
+pub use profile::experimental_factory;
 pub(crate) use profile::{claim_write, read_retention, retains_deletes, write_factory};
-pub use profile::{experimental_factory, profile_factory};
+pub use profile::{profile_factory, retaining_factory};
 pub use recovery::{RecoveryReport, recover_profile};
 #[cfg(test)]
 mod default_profile;

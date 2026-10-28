@@ -8,6 +8,7 @@ use rusty_ui::browser::OpLog;
 use super::*;
 
 mod confirmed;
+mod drive;
 
 fn setup() -> (tempfile::TempDir, StoreDirs, SharedJournal) {
     let profile = tempfile::tempdir().unwrap();
