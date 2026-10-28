@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 
 use crate::global::Reported;
-use crate::{Catalog, CatalogError, FILES, FluentArgs, LookupError, catalog, tr, tr_args};
+use crate::{
+    Catalog, CatalogError, FILES, FluentArgs, LookupError, Platform, catalog, tr, tr_args,
+};
 
 pub(crate) const FIXTURE: &str = "\
 fixture-greeting = Hello, { $name }!
@@ -128,4 +130,41 @@ fn a_message_defined_twice_is_reported() {
         errors.as_slice(),
         [CatalogError::Redefined { file, .. }] if file == "two.ftl"
     ));
+}
+
+fn embedded_on(platform: Platform) -> Catalog {
+    let (catalog, errors) = Catalog::build_on(&FILES, platform);
+    assert_eq!(errors, Vec::new());
+    catalog
+}
+
+#[test]
+fn delete_texts_name_the_recycle_bin_on_windows_and_the_trash_elsewhere() {
+    for (platform, bin) in [
+        (Platform::Windows, "Recycle Bin"),
+        (Platform::Other, "Trash"),
+    ] {
+        let catalog = embedded_on(platform);
+        let text = |id| catalog.lookup(id, None).unwrap();
+        assert_eq!(text("cmd-files-recycle"), format!("Move to {bin}"));
+        let mut args = FluentArgs::new();
+        args.set("from", String::from("docs"));
+        let route = catalog.lookup("job-route-recycle", Some(&args)).unwrap();
+        assert_eq!(route, format!("docs → {bin}"));
+        args.set("items", String::from("2 items"));
+        let title = catalog
+            .lookup("files-recycle-confirm", Some(&args))
+            .unwrap();
+        assert_eq!(title, format!("Move 2 items to the {bin}?"));
+    }
+}
+
+#[test]
+fn the_current_platform_picks_the_catalog_wording() {
+    let bin = if cfg!(windows) {
+        "Recycle Bin"
+    } else {
+        "Trash"
+    };
+    assert_eq!(tr("cmd-files-recycle"), format!("Move to {bin}"));
 }

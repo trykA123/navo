@@ -34,7 +34,7 @@ fn question(pending: &PendingOp) -> (String, String) {
         OpKind::Copy => (format!("Copy {count} to {target}?"), "Copy".to_owned()),
         OpKind::Move => (format!("Move {count} to {target}?"), "Move".to_owned()),
         OpKind::Recycle => (
-            format!("Move {count} to the Recycle Bin?"),
+            t!("files-recycle-confirm", items = count.as_str()),
             "Recycle".to_owned(),
         ),
         OpKind::Delete if oversized_retained_delete(pending) => {

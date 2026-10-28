@@ -1,3 +1,7 @@
+-bin = { PLATFORM() ->
+    [windows] Recycle Bin
+   *[other] Trash
+}
 files-marks-restore-none = No saved marks match this folder
 files-marks-hidden = { $count ->
     [one] { $count } marked not shown
@@ -14,7 +18,7 @@ activity-moving = Moving { $count ->
 activity-recycling = Moving { $count ->
     [one] { $files } file
    *[other] { $files } files
-} to the Recycle Bin
+} to the { -bin }
 activity-deleting = Deleting { $count ->
     [one] { $files } file
    *[other] { $files } files
@@ -40,8 +44,8 @@ activity-move-failed = { $count ->
    *[other] { $files } files could not be moved
 }
 activity-recycle-failed = { $count ->
-    [one] { $files } file could not be moved to the Recycle Bin
-   *[other] { $files } files could not be moved to the Recycle Bin
+    [one] { $files } file could not be moved to the { -bin }
+   *[other] { $files } files could not be moved to the { -bin }
 }
 activity-delete-failed = { $count ->
     [one] { $files } file could not be deleted
@@ -94,7 +98,7 @@ activity-moved = Moved { $count ->
 activity-recycled = Moved { $count ->
     [one] { $items } item
    *[other] { $items } items
-} to the Recycle Bin
+} to the { -bin }
 activity-deleted = Deleted { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -272,3 +276,5 @@ find-path-filtered = search: { $text } · { $filters }
 find-counts = { $hits } hits in { $files } files
 find-searching = Searching · { $counts } · Esc stop
 find-column-folder = Folder
+files-recycle-confirm = Move { $items } to the { -bin }?
+job-route-recycle = { $from } → { -bin }

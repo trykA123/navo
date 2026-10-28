@@ -688,7 +688,7 @@ fn delete_asks_to_move_the_items_to_the_recycle_bin(cx: &mut TestAppContext) {
                 .and_then(|found| found.label().map(str::to_owned))
         })
         .expect("window");
-    assert_eq!(title.as_deref(), Some("Move 1 item to the Recycle Bin?"));
+    assert_eq!(title, Some(format!("Move 1 item to the {BIN}?")));
 }
 
 #[gpui_kit::test]
@@ -904,6 +904,11 @@ fn a_long_press_on_an_unmarked_row_adds_it_to_the_marked_rows(cx: &mut TestAppCo
     assert_eq!(*rig.shell.opened.borrow(), [both]);
 }
 
+const BIN: &str = if cfg!(windows) {
+    "Recycle Bin"
+} else {
+    "Trash"
+};
 const MORE_FILES: [&str; 3] = ["home/b.txt", "home/c.txt", "home/d.txt"];
 
 #[gpui_kit::test]

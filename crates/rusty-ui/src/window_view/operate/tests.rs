@@ -7,6 +7,12 @@ use crate::browser::{JobStatus, JobView, PendingOp, RenameReport, Structure};
 use crate::job_row::JobRowState;
 use rusty_fs::CopyMode;
 
+const BIN: &str = if cfg!(windows) {
+    "Recycle Bin"
+} else {
+    "Trash"
+};
+
 fn at(path: &str) -> Location {
     Location::new(path).unwrap()
 }
@@ -55,7 +61,10 @@ fn a_copy_asks_plainly_and_names_the_target() {
 fn each_kind_has_its_own_title() {
     let title = |kind| confirm_props(&pending(plan(kind), Some(at("/dest")))).title;
     assert_eq!(title(OpKind::Move), "Move 2 items to /dest?");
-    assert_eq!(title(OpKind::Recycle), "Move 2 items to the Recycle Bin?");
+    assert_eq!(
+        title(OpKind::Recycle),
+        format!("Move 2 items to the {BIN}?")
+    );
     assert_eq!(title(OpKind::Delete), "Delete 2 items permanently?");
 }
 

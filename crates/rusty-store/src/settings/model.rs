@@ -215,7 +215,7 @@ pub struct Terminal {
 impl Default for Terminal {
     fn default() -> Self {
         Self {
-            provider: "windows-terminal".to_owned(),
+            provider: "system".to_owned(),
             command: None,
         }
     }

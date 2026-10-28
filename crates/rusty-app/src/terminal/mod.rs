@@ -7,6 +7,8 @@ use std::str::Chars;
 use rusty_ui::settings::{Field, Value, Values};
 use rusty_ui::window_view::TerminalHooks;
 
+mod system;
+
 pub fn command_line(
     provider: &str,
     template: Option<&str>,
@@ -109,10 +111,8 @@ fn launch_command(
     template: Option<&str>,
     folder: &Path,
 ) -> Result<Command, String> {
-    let (program, args) = if cfg!(unix) && provider != "custom" {
-        let terminal =
-            std::env::var("TERMINAL").unwrap_or_else(|_| "x-terminal-emulator".to_owned());
-        command_line("custom", Some(&terminal), folder)?
+    let (program, args) = if provider == "system" || (cfg!(unix) && provider != "custom") {
+        system::terminal_command(folder)?
     } else {
         command_line(provider, template, folder)?
     };
@@ -122,16 +122,15 @@ fn launch_command(
 }
 
 pub fn hooks(values: &Values) -> TerminalHooks {
-    let text = |field| match values.get(field) {
+    let provider = values.terminal_provider();
+    let template = match values.get(Field::TerminalCommand) {
         Value::Text(text) => Some(text.to_string()),
         _ => None,
     };
-    let provider = text(Field::TerminalProvider).unwrap_or_else(|| "windows-terminal".to_owned());
-    let template = text(Field::TerminalCommand);
     TerminalHooks {
         open: Rc::new(move |folder| {
             let mut command =
-                launch_command(&provider, template.as_deref(), Path::new(folder.as_str()))?;
+                launch_command(provider, template.as_deref(), Path::new(folder.as_str()))?;
             command
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())

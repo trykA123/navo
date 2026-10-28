@@ -121,7 +121,6 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
         Field::WindowFkeyBar => Value::Flag(false),
         field if field.is_window_part() => Value::Flag(true),
-        Field::TerminalProvider => text("windows-terminal"),
         _ => match spec.control {
             Control::Choices(..) => Value::Pick(0),
             Control::Toggle => Value::Flag(false),
@@ -310,6 +309,16 @@ impl Values {
             .get(self.pick(Field::CopyMode))
             .copied()
             .unwrap_or_default()
+    }
+
+    pub fn terminal_provider(&self) -> &'static str {
+        let field = Field::TerminalProvider;
+        match (self.get(field), field.spec().control) {
+            (Value::Pick(at), Control::Choices(options, _)) => {
+                options.get(*at).map_or("system", |option| option.toml)
+            }
+            _ => "system",
+        }
     }
 
     pub fn editor_path(&self) -> Option<String> {

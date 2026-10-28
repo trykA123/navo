@@ -248,7 +248,10 @@ fn no_command_toggles_the_preview() {
 #[test]
 fn the_command_list_matches_the_snapshot() {
     let lines: Vec<String> = all()
-        .map(|spec| format!("{} | {} | {}", spec.name, tr(spec.label), spec.context))
+        .map(|spec| {
+            let label = tr(spec.label).replace("Trash", "Recycle Bin");
+            format!("{} | {} | {}", spec.name, label, spec.context)
+        })
         .collect();
     insta::with_settings!({ prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!("command_registry", lines.join("\n"));

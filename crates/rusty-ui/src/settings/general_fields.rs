@@ -1,7 +1,18 @@
 use super::fields::{
-    COLOR_THEMES, COPY_MODES, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec, HIDDEN, HINTS, Look,
-    S, SORTS, THEMES, spec,
+    COLOR_THEMES, COPY_MODES, Choice, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec, HIDDEN,
+    HINTS, Look, S, SORTS, THEMES, choice, spec,
 };
+
+const TERMINAL_PROVIDERS: [Choice; 5] = [
+    choice("settings-terminal-provider-system", "system"),
+    choice(
+        "settings-terminal-provider-windows-terminal",
+        "windows-terminal",
+    ),
+    choice("settings-terminal-provider-powershell", "powershell"),
+    choice("settings-terminal-provider-cmd", "cmd"),
+    choice("settings-terminal-provider-custom", "custom"),
+];
 
 pub(super) const GENERAL: [FieldSpec; 28] = [
     spec(
@@ -123,7 +134,7 @@ pub(super) const GENERAL: [FieldSpec; 28] = [
     spec(
         (F::TerminalProvider, S::Terminal, "terminal.provider"),
         ("Terminal", "The terminal Navo opens in a folder"),
-        Control::Text,
+        Control::Choices(&TERMINAL_PROVIDERS, Look::Segments),
     ),
     spec(
         (F::TerminalCommand, S::Terminal, "terminal.command"),

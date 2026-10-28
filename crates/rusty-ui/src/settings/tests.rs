@@ -396,6 +396,28 @@ fn files_has_the_drop_confirm_row_defaulting_to_never() {
 }
 
 #[test]
+fn the_terminal_provider_defaults_to_the_system_default_listed_first() {
+    let row = spec(Field::TerminalProvider);
+    let Control::Choices(options, Look::Segments) = row.control else {
+        panic!("terminal provider is not segments: {:?}", row.control);
+    };
+    let toml: Vec<&str> = options.iter().map(|option| option.toml).collect();
+    assert_eq!(
+        toml,
+        ["system", "windows-terminal", "powershell", "cmd", "custom"]
+    );
+    assert_eq!(options[0].text(), "System default");
+    let values = Values::default();
+    assert_eq!(values.get(Field::TerminalProvider), &Value::Pick(0));
+    assert_eq!(values.terminal_provider(), "system");
+    let explicit = values.with(&Change {
+        field: Field::TerminalProvider,
+        value: Value::Pick(1),
+    });
+    assert_eq!(explicit.terminal_provider(), "windows-terminal");
+}
+
+#[test]
 fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
     let keys: Vec<&str> = rows_in(Section::Search).map(|(_, spec)| spec.key).collect();
     assert_eq!(

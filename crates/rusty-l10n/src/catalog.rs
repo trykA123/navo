@@ -1,4 +1,4 @@
-use fluent_bundle::{FluentArgs, FluentResource, concurrent::FluentBundle};
+use fluent_bundle::{FluentArgs, FluentResource, FluentValue, concurrent::FluentBundle};
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
@@ -22,6 +22,27 @@ pub const FILES: [(&str, &str); 10] = [
 ];
 
 const LOCALE: &str = "en-US";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Platform {
+    Windows,
+    Other,
+}
+
+impl Platform {
+    pub const CURRENT: Self = if cfg!(windows) {
+        Self::Windows
+    } else {
+        Self::Other
+    };
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Windows => "windows",
+            Self::Other => "other",
+        }
+    }
+}
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CatalogError {
@@ -48,9 +69,17 @@ pub struct Catalog {
 impl Catalog {
     #[must_use]
     pub fn build(sources: &[(&str, &str)]) -> (Self, Vec<CatalogError>) {
+        Self::build_on(sources, Platform::CURRENT)
+    }
+
+    #[must_use]
+    pub fn build_on(sources: &[(&str, &str)], platform: Platform) -> (Self, Vec<CatalogError>) {
         let language: LanguageIdentifier = LOCALE.parse().unwrap_or_default();
         let mut bundle = FluentBundle::new_concurrent(vec![language]);
         bundle.set_use_isolating(false);
+        let name = platform.name();
+        let added = bundle.add_function("PLATFORM", move |_, _| FluentValue::from(name));
+        debug_assert!(added.is_ok(), "l10n: PLATFORM is registered once");
         let mut errors = Vec::new();
         for &(file, source) in sources {
             let resource = FluentResource::try_new(source.to_owned()).unwrap_or_else(|failed| {

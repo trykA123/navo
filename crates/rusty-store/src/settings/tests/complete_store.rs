@@ -47,7 +47,7 @@ fn an_empty_file_is_completed_and_backed_up_first() {
     write(&path, "");
     let (mut store, _) = SettingsStore::load(&path);
     store.complete(&ledger(), &Settings::default()).unwrap();
-    assert!(read(&path).contains("[terminal]\nprovider = \"windows-terminal\"\n"));
+    assert!(read(&path).contains("[terminal]\nprovider = \"system\"\n"));
     assert_eq!(read(&backup_path(&path)), "");
 }
 

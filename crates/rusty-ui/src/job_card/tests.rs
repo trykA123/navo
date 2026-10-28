@@ -10,6 +10,12 @@ use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::test_window::open;
 
+const BIN: &str = if cfg!(windows) {
+    "Recycle Bin"
+} else {
+    "Trash"
+};
+
 const MB: u64 = 1024 * 1024;
 
 fn copy() -> JobInfo {
@@ -67,7 +73,7 @@ fn the_route_reads_from_to() {
         target: None,
         ..copy()
     };
-    assert_eq!(recycle.route().as_deref(), Some("commander → Recycle Bin"));
+    assert_eq!(recycle.route(), Some(format!("commander → {BIN}")));
     let delete = JobInfo {
         kind: OpKind::Delete,
         target: None,

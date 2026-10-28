@@ -3,7 +3,7 @@
 mod catalog;
 mod global;
 
-pub use catalog::{Catalog, CatalogError, FILES, LookupError};
+pub use catalog::{Catalog, CatalogError, FILES, LookupError, Platform};
 pub use fluent_bundle::FluentArgs;
 pub use global::{catalog, tr, tr_args};
 

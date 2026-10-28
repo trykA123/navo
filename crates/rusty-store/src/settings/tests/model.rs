@@ -53,7 +53,7 @@ fn selection_defaults() {
 #[test]
 fn terminal_defaults() {
     let t = Settings::default().terminal;
-    assert_eq!(t.provider, "windows-terminal");
+    assert_eq!(t.provider, "system");
     assert_eq!(t.command, None);
 }
 

@@ -6,6 +6,11 @@ use super::{Activity, ActivityId, ActivityItem, ActivityKind, DONE_FOR};
 use crate::job_card::{JobInfo, Pause, RenameNote};
 use crate::job_row::JobRowState;
 
+const BIN: &str = if cfg!(windows) {
+    "Recycle Bin"
+} else {
+    "Trash"
+};
 const MB: u64 = 1024 * 1024;
 
 fn copy(id: u64) -> JobInfo {
@@ -269,7 +274,7 @@ fn recycle_and_delete_read_without_a_target() {
     activity.sync(&[recycled], Instant::now());
     assert_eq!(
         primary(&activity).title.as_ref(),
-        "Moved 1 item to the Recycle Bin"
+        format!("Moved 1 item to the {BIN}")
     );
     let deleting = JobInfo {
         kind: OpKind::Delete,
@@ -279,7 +284,7 @@ fn recycle_and_delete_read_without_a_target() {
     activity.sync(&[deleting], Instant::now());
     let titles: Vec<_> = activity.rest().map(|item| item.title.clone()).collect();
     assert_eq!(primary(&activity).title.as_ref(), "Deleting 128 files");
-    assert_eq!(titles, ["Moved 1 item to the Recycle Bin"]);
+    assert_eq!(titles, [format!("Moved 1 item to the {BIN}")]);
 }
 
 #[test]

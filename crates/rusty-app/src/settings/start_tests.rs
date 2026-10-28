@@ -38,7 +38,7 @@ fn a_fresh_start_writes_every_setting_and_records_the_defaults() {
     for key in [
         "mode = \"system\"",
         "sort = \"name\"",
-        "provider = \"windows-terminal\"",
+        "provider = \"system\"",
         "[text.view]\nline-numbers = true",
         "[copy]\nmode = \"auto\"",
         "[automotive.view]\npreset = \"simple\"",

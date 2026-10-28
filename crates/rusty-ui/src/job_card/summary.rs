@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui_kit::SharedString;
 use rusty_core::OpKind;
 
-use rusty_l10n::tr;
+use rusty_l10n::{t, tr};
 
 use crate::format;
 use crate::job_row::JobRowState;
@@ -112,7 +112,7 @@ impl JobInfo {
     pub fn route(&self) -> Option<String> {
         let from = self.from.as_deref();
         match (self.kind, from, self.target.as_deref()) {
-            (OpKind::Recycle, Some(from), _) => Some(format!("{from} → Recycle Bin")),
+            (OpKind::Recycle, Some(from), _) => Some(t!("job-route-recycle", from = from)),
             (OpKind::Delete, Some(from), _) => Some(format!("in {from}")),
             (_, Some(from), Some(to)) => Some(format!("{from} → {to}")),
             (_, None, Some(to)) => Some(format!("to {to}")),

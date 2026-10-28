@@ -28,7 +28,7 @@ space-measures-folders = true
 patterns-select-folders = false
 
 [terminal]
-provider = \"windows-terminal\"
+provider = \"system\"
 
 [window.view]
 tabs-with-one = true
@@ -121,7 +121,7 @@ const DEFAULT_KEYS: [(&str, &str); 68] = [
     ("files.rename-log", "false"),
     ("selection.space-measures-folders", "true"),
     ("selection.patterns-select-folders", "false"),
-    ("terminal.provider", "\"windows-terminal\""),
+    ("terminal.provider", "\"system\""),
     ("window.view.tabs-with-one", "true"),
     ("window.view.path-bar", "true"),
     ("window.view.drive-button", "true"),
@@ -220,7 +220,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\nsize-mode = \"apparent\"\nmeasure-shown-folders = false\ndrop-confirm = \"never\"\nrename-log = false\n\n[appearance]\n# the look\nmode = \"dark\"\ncolor-theme = \"open-sea\"\nlight-theme = \"Navo Light\"\ndark-theme = \"Navo Dark\"\nfont = \"Inter\"\nfont-size = 13\nui-scale = 100\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"windows-terminal\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\next-width = 0\nsize-width = 0\ndate-width = 0\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview]\ninspector = false\ninspector-width = 360\ninspector-properties = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[retention]\nretain-deletes = true\nretain-overwrites = true\ndays = 3\nmax-volume-mib = 1024\nmin-free-mib = 256\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\n\n[automotive]\nmodules = []\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\nsize-mode = \"apparent\"\nmeasure-shown-folders = false\ndrop-confirm = \"never\"\nrename-log = false\n\n[appearance]\n# the look\nmode = \"dark\"\ncolor-theme = \"open-sea\"\nlight-theme = \"Navo Light\"\ndark-theme = \"Navo Dark\"\nfont = \"Inter\"\nfont-size = 13\nui-scale = 100\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\n\n[terminal]\nprovider = \"system\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\next-width = 0\nsize-width = 0\ndate-width = 0\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview]\ninspector = false\ninspector-width = 360\ninspector-properties = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\n\n[retention]\nretain-deletes = true\nretain-overwrites = true\ndays = 3\nmax-volume-mib = 1024\nmin-free-mib = 256\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\n\n[automotive]\nmodules = []\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n";
     assert_eq!(completed(before), after);
 }
 
@@ -247,6 +247,20 @@ fn existing_values_are_never_changed_even_when_they_differ_from_the_default() {
     let settings = parse(&after).unwrap().0;
     assert_eq!(settings.appearance.font_size, 15);
     assert_eq!(settings.appearance.mode, ThemeMode::Dark);
+}
+
+#[test]
+fn an_old_file_keeps_the_windows_terminal_provider() {
+    let before = "[terminal]\nprovider = \"windows-terminal\"\n";
+    let after = completed(before);
+    assert!(after.starts_with(before), "{after}");
+    assert_eq!(
+        parse(&after).unwrap().0.terminal.provider,
+        "windows-terminal"
+    );
+    let kept = upgrade_text(before, &Ledger::new(), &Settings::default()).unwrap();
+    assert_eq!(kept.text, before);
+    assert_eq!(kept.changes, []);
 }
 
 #[test]

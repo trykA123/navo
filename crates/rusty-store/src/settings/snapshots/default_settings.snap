@@ -30,7 +30,7 @@ space-measures-folders = true
 patterns-select-folders = false
 
 [terminal]
-provider = "windows-terminal"
+provider = "system"
 
 [editor]
 
