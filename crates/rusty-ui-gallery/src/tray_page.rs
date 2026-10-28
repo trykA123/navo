@@ -1,8 +1,6 @@
 use rusty_ui::prelude::*;
 use rusty_ui::tokens::Theme;
-use rusty_ui::window_view::{
-    LayoutSwitcher, TrayCard, TrayTile, WorkspaceTray, builtin_layout_presets,
-};
+use rusty_ui::window_view::{LayoutSwitcher, TrayCard, TrayTile, WorkspaceTray, layout_presets};
 
 use crate::gallery::Page;
 
@@ -100,9 +98,19 @@ fn layout_switcher(page: Page, t: &Theme) -> AnyElement {
         .p(t.spacing.md)
         .bg(t.colors.background)
         .child(LayoutSwitcher::new(
-            builtin_layout_presets(),
+            layout_presets(&user_presets()),
             rusty_core::Tiles::builtin()[0].tiles.clone(),
             |_, _, _| {},
         ))
         .into_any_element()
+}
+
+fn user_presets() -> Vec<(SharedString, rusty_core::Tiles)> {
+    [
+        ("Review", "row(70, pane, pane)"),
+        ("Logs", "col(40, pane, pane)"),
+    ]
+    .into_iter()
+    .filter_map(|(name, tiles)| Some((name.into(), rusty_core::Tiles::parse(tiles).ok()?)))
+    .collect()
 }

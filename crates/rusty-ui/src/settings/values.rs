@@ -1,4 +1,5 @@
 use gpui_kit::SharedString;
+use rusty_core::Tiles;
 use rusty_fs::CopyMode;
 
 use super::fields::{Control, FIELDS, Field, FieldSpec, PRESETS};
@@ -93,6 +94,7 @@ impl Change {
 pub struct Values {
     values: Vec<Value>,
     changed: Vec<bool>,
+    layouts: Vec<(SharedString, Tiles)>,
 }
 
 fn default_of(spec: &FieldSpec) -> Value {
@@ -140,7 +142,33 @@ impl Values {
             .zip(&values)
             .map(|(spec, value)| *value != default_of(spec))
             .collect();
-        Self { values, changed }
+        Self {
+            values,
+            changed,
+            layouts: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_layout_presets<'a>(
+        mut self,
+        presets: impl IntoIterator<Item = (&'a str, &'a str)>,
+    ) -> Self {
+        self.layouts = presets
+            .into_iter()
+            .filter_map(|(name, tiles)| match Tiles::parse(tiles) {
+                Ok(tiles) => Some((SharedString::from(name.to_owned()), tiles)),
+                Err(error) => {
+                    tracing::warn!(preset = name, %error, "layout preset skipped");
+                    None
+                }
+            })
+            .collect();
+        self
+    }
+
+    pub fn layout_presets(&self) -> &[(SharedString, Tiles)] {
+        &self.layouts
     }
 
     #[must_use]

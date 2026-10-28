@@ -253,6 +253,13 @@ pub fn values_of(store: &SettingsStore) -> Values {
             .unwrap_or_else(|| defaults.get(spec.field).clone())
     })
     .marked(|spec| store.is_users(spec.key, &built_in))
+    .with_layout_presets(
+        settings
+            .layout
+            .presets
+            .iter()
+            .map(|preset| (preset.name.as_str(), preset.tiles.as_str())),
+    )
 }
 
 fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {

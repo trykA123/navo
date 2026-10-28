@@ -29,6 +29,12 @@ pub fn builtin_layout_presets() -> Vec<(SharedString, Tiles)> {
         .collect()
 }
 
+pub fn layout_presets(user: &[(SharedString, Tiles)]) -> Vec<(SharedString, Tiles)> {
+    let mut presets = builtin_layout_presets();
+    presets.extend_from_slice(user);
+    presets
+}
+
 #[derive(Clone, Copy)]
 pub enum LayoutSwitcherAction {
     Apply(usize),
@@ -177,10 +183,11 @@ impl LayoutSwitcher {
                     .flex()
                     .items_center()
                     .gap(t.spacing.sm)
-                    .children(Kbd::new(
-                        ("layout-digit", index + 1),
-                        &(index + 1).to_string(),
-                    ))
+                    .children(if index < 9 {
+                        Kbd::new(("layout-digit", index + 1), &(index + 1).to_string())
+                    } else {
+                        None
+                    })
                     .child(name.clone()),
             )
     }
@@ -228,15 +235,23 @@ impl RenderOnce for LayoutSwitcher {
 }
 
 pub(super) struct SwitcherState {
-    presets: Vec<(SharedString, Tiles)>,
     focused: usize,
     focus: FocusHandle,
     scroll: ScrollHandle,
 }
 
 impl FerriteWindow {
+    fn switcher_presets(&self) -> Vec<(SharedString, Tiles)> {
+        layout_presets(self.values.layout_presets())
+    }
+
+    fn switcher_focus(&self, state: &SwitcherState) -> usize {
+        let count = Tiles::builtin().len() + self.values.layout_presets().len();
+        state.focused.min(count.saturating_sub(1))
+    }
+
     fn open_layout_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let presets = builtin_layout_presets();
+        let presets = self.switcher_presets();
         let current = self.tiles_layout().to_tiles();
         let focused = presets
             .iter()
@@ -248,7 +263,6 @@ impl FerriteWindow {
         let scroll = ScrollHandle::new();
         scroll.scroll_to_item(focused);
         self.tiles.switcher = Some(SwitcherState {
-            presets,
             focused,
             focus,
             scroll,
@@ -262,25 +276,24 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let mut presets = self.switcher_presets();
         let Some(state) = self.tiles.switcher.as_mut() else {
             return;
         };
         match action {
             LayoutSwitcherAction::Apply(index) => {
-                let Some((_, tiles)) = state.presets.get(index) else {
+                if index >= presets.len() {
                     return;
-                };
-                let command = Command::LayoutPreset {
-                    tiles: tiles.clone(),
-                };
+                }
+                let (_, tiles) = presets.swap_remove(index);
                 self.tiles.switcher = None;
-                self.apply(&command, window, cx);
+                self.apply(&Command::LayoutPreset { tiles }, window, cx);
             }
             LayoutSwitcherAction::Move(by) => {
                 state.focused = state
                     .focused
                     .saturating_add_signed(isize::from(by))
-                    .min(state.presets.len().saturating_sub(1));
+                    .min(presets.len().saturating_sub(1));
                 state.scroll.scroll_to_item(state.focused);
                 cx.notify();
             }
@@ -309,7 +322,7 @@ impl FerriteWindow {
             _ if key.modifiers.modified() => return,
             "left" | "up" => LayoutSwitcherAction::Move(-1),
             "right" | "down" => LayoutSwitcherAction::Move(1),
-            "enter" => LayoutSwitcherAction::Apply(state.focused),
+            "enter" => LayoutSwitcherAction::Apply(self.switcher_focus(state)),
             digit => {
                 let Some(index) = digit.parse::<usize>().ok().and_then(|n| n.checked_sub(1)) else {
                     return;
@@ -342,13 +355,13 @@ impl FerriteWindow {
             .target()
             .and_then(|id| numbered.iter().position(|pane| *pane == id));
         let switcher = LayoutSwitcher::new(
-            state.presets.clone(),
+            self.switcher_presets(),
             layout.to_tiles(),
             cx.listener(|view, action: &LayoutSwitcherAction, window, cx| {
                 view.switch_layout(*action, window, cx)
             }),
         )
-        .focused(state.focused)
+        .focused(self.switcher_focus(state))
         .slots(focused, target)
         .scroll(state.scroll.clone());
         let t = tokens::current(cx);

@@ -90,7 +90,9 @@ pub use fkeys::{
 pub use hand_off::{OpenHooks, OpenInbox, OpenRequest, OpenSender, open_requests};
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
-pub use layout_switcher::{LayoutSwitcher, LayoutSwitcherAction, builtin_layout_presets};
+pub use layout_switcher::{
+    LayoutSwitcher, LayoutSwitcherAction, builtin_layout_presets, layout_presets,
+};
 pub use placement::DisplayScale;
 pub use preview::folder_summary;
 pub use search_hooks::{

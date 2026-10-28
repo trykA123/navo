@@ -1,5 +1,5 @@
 layout-switcher-title = Layouts
-layout-switcher-hint = 1–5 apply · Arrows choose · Enter applies · Esc closes
+layout-switcher-hint = 1–9 apply · Arrows choose · Enter applies · Esc closes
 layout-preset-1 = Side by side
 layout-preset-2 = Three columns
 layout-preset-3 = Wide + 2

@@ -26,6 +26,30 @@ fn module_prefixes_and_rename_logging_follow_live_settings() {
     assert!(values.flag(rusty_ui::settings::Field::RenameLog));
 }
 
+#[test]
+fn layout_presets_follow_live_settings() {
+    let preset = |name: &str, tiles: &str| {
+        format!("[[layout.presets]]\nname = \"{name}\"\ntiles = \"{tiles}\"\n")
+    };
+    let live = live_on(&preset("Review", "row(70, pane, pane)"));
+    let names = |values: &Values| -> Vec<String> {
+        values
+            .layout_presets()
+            .iter()
+            .map(|(name, _)| name.to_string())
+            .collect()
+    };
+    assert_eq!(names(&live.hooks.values), ["Review"]);
+    let both = preset("Review", "row(70, pane, pane)") + &preset("Logs", "col(40, pane, pane)");
+    live.write(&both);
+    let values = applied(live.next());
+    assert_eq!(names(&values), ["Review", "Logs"]);
+    assert_eq!(
+        values.layout_presets()[1].1,
+        rusty_core::Tiles::parse("col(40, pane, pane)").expect("tiles")
+    );
+}
+
 struct Live {
     _dir: tempfile::TempDir,
     path: PathBuf,
