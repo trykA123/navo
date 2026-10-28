@@ -1,6 +1,5 @@
 use super::FerriteWindow;
 use crate::prelude::*;
-use crate::primitives::Splitter;
 use crate::tokens;
 use rusty_core::PaneId;
 
@@ -9,7 +8,10 @@ pub(super) const ONE_PANE_BELOW: Pixels = px(900.);
 impl FerriteWindow {
     pub(super) fn shown_panes(&self, window: &Window) -> Vec<PaneId> {
         let panes = self.panes();
-        if panes.len() < 2 || window.viewport_size().width >= ONE_PANE_BELOW {
+        if panes.len() < 2
+            || (window.viewport_size().width >= ONE_PANE_BELOW
+                && self.tiles.fits(&self.tiles_layout()))
+        {
             return panes;
         }
         let shown = self
@@ -24,26 +26,7 @@ impl FerriteWindow {
     }
 
     fn panes_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let t = tokens::current(cx).clone();
-        let panes = self.shown_panes(window);
-        let mut views: Vec<AnyElement> = panes
-            .iter()
-            .map(|pane| {
-                let card = self.pane_view(*pane, window, cx);
-                div()
-                    .size_full()
-                    .p(t.spacing.xs)
-                    .child(card)
-                    .into_any_element()
-            })
-            .collect();
-        let body = match (views.pop(), views.pop()) {
-            (Some(second), Some(first)) => Splitter::new("panes", &self.split, first, second)
-                .line_on_hover()
-                .into_any_element(),
-            (Some(only), None) => only,
-            _ => div().into_any_element(),
-        };
+        let body = self.tiles_view(window, cx);
         self.viewer_view(window, cx).unwrap_or(body)
     }
 

@@ -8,12 +8,12 @@ impl FerriteWindow {
         &self,
         t: &Theme,
         window: &Window,
-        cx: &App,
+        _cx: &App,
     ) -> SheetFrame {
         let viewport = window.viewport_size().width;
         let body = viewport - t.spacing.md * 2.;
         let split = viewport - t.spacing.xs * 2.;
-        let ratio = self.split.read(cx).ratio();
+        let ratio = self.root_ratio();
         let focused = self.browser.state().focused_pane();
         let panes = self.panes();
         let (active, passive_share) = match panes.iter().position(|pane| *pane == focused) {

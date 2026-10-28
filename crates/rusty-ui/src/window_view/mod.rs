@@ -43,6 +43,7 @@ mod strip;
 mod strip_keys;
 mod tab_keys;
 mod terminal;
+mod tiles;
 mod title;
 mod undo;
 mod user_keymap;
@@ -66,7 +67,6 @@ use rusty_fs::ProviderOps;
 use crate::app_menu::{Identity, ToggleAppMenu};
 use crate::browser::{Browser, Launcher, Operations, RenameHooks, Waker};
 use crate::prelude::*;
-use crate::primitives::SplitterState;
 use crate::settings::{ToggleSettings, Values};
 use crate::title_bar::{GradientLayer, system_backdrop};
 use crate::tokens::{self, Mode};
@@ -156,7 +156,7 @@ pub struct StartOptions {
 pub struct FerriteWindow {
     browser: Browser,
     focus: HashMap<PaneId, FocusHandle>,
-    split: Entity<SplitterState>,
+    tiles: tiles::TilesState,
     on_save: SaveSession,
     prompt: Option<prompt::Prompt>,
     editor: EditorHooks,
@@ -207,7 +207,7 @@ impl FerriteWindow {
         let view = Self {
             browser,
             focus: HashMap::new(),
-            split: cx.new(|_| SplitterState::new(0.5)),
+            tiles: tiles::TilesState::default(),
             on_save: options.on_save,
             prompt: None,
             editor: options.editor,

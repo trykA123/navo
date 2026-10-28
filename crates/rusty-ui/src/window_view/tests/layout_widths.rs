@@ -122,10 +122,15 @@ fn expected_panes(width: f32) -> usize {
     if width < 900. { 1 } else { 2 }
 }
 
-fn probe_split(cx: &mut TestAppContext, width: f32, ratio: f32) -> Vec<PaneProbe> {
+fn probe_split(cx: &mut TestAppContext, width: f32, ratio: f32, expected: usize) -> Vec<PaneProbe> {
     let (window, view) = open_at(cx, width);
     view.update(cx, |view, cx| {
-        view.split.update(cx, |split, _| split.set_ratio(ratio));
+        view.browser
+            .command(&Command::LayoutRatio {
+                split: rusty_core::SplitPath(Vec::new()),
+                ratio: (ratio * 1000.).round() as u16,
+            })
+            .expect("ratio");
         cx.notify();
     });
     let (panes, _) = panes(cx, &view);
@@ -140,7 +145,6 @@ fn probe_split(cx: &mut TestAppContext, width: f32, ratio: f32) -> Vec<PaneProbe
                 .collect()
         })
         .expect("window");
-    let expected = expected_panes(width);
     assert_eq!(
         probes.len(),
         expected,
@@ -163,7 +167,7 @@ fn probe_split(cx: &mut TestAppContext, width: f32, ratio: f32) -> Vec<PaneProbe
 }
 
 fn probe(cx: &mut TestAppContext, width: f32) -> Vec<PaneProbe> {
-    probe_split(cx, width, 0.5)
+    probe_split(cx, width, 0.5, expected_panes(width))
 }
 
 fn report(width: f32, what: &str, failures: &[String]) {
@@ -514,7 +518,7 @@ fn shown_columns(pane: &PaneProbe) -> [bool; 3] {
 
 #[gpui_kit::test]
 fn a_narrowed_pane_drops_date_and_keeps_size(cx: &mut TestAppContext) {
-    let probes = probe_split(cx, 1000., 0.35);
+    let probes = probe_split(cx, 1000., 0.35, 2);
     assert_eq!(
         shown_columns(&probes[0]),
         [false, false, true],
@@ -526,12 +530,12 @@ fn a_narrowed_pane_drops_date_and_keeps_size(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_very_narrow_pane_keeps_only_the_name(cx: &mut TestAppContext) {
-    let probes = probe_split(cx, 1000., 0.22);
+fn an_undersized_layout_restores_full_width_columns(cx: &mut TestAppContext) {
+    let probes = probe_split(cx, 1000., 0.22, 1);
     assert_eq!(
         shown_columns(&probes[0]),
-        [false, false, false],
-        "left pane {:?}",
+        [true, true, true],
+        "shown pane {:?}",
         probes[0].card.size.width
     );
     lined_up(1000., probes);

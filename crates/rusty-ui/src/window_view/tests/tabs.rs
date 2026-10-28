@@ -104,10 +104,16 @@ fn the_passive_pane_keeps_its_tabs(cx: &mut TestAppContext) {
 fn ctrl_shift_zero_centres_the_splitter(cx: &mut TestAppContext) {
     let (window, view) = open(cx, Rc::default());
     view.update(cx, |view, cx| {
-        view.split.update(cx, |split, _| split.set_ratio(0.3));
+        view.browser
+            .command(&rusty_core::Command::LayoutRatio {
+                split: rusty_core::SplitPath(Vec::new()),
+                ratio: 300,
+            })
+            .expect("ratio");
+        cx.notify();
     });
     press(cx, window, &view, "ctrl-shift-0");
-    let ratio = view.read_with(cx, |view, cx| view.split.read(cx).ratio());
+    let ratio = view.read_with(cx, |view, _| view.root_ratio());
     assert_eq!(ratio, 0.5);
 }
 

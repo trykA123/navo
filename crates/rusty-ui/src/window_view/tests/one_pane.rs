@@ -85,14 +85,20 @@ fn widening_from_800_to_1280_px_restores_both_panes_and_the_ratio(cx: &mut TestA
     let (window, view) = open_at(cx, 1280.);
     let panes = view.read_with(cx, |view, _| view.panes());
     view.update(cx, |view, cx| {
-        view.split.update(cx, |split, _| split.set_ratio(0.3));
+        view.browser
+            .command(&rusty_core::Command::LayoutRatio {
+                split: rusty_core::SplitPath(Vec::new()),
+                ratio: 300,
+            })
+            .expect("ratio");
+        cx.notify();
     });
     resize(cx, window, 800.);
     assert_eq!(shown(cx, window, &panes).len(), 1);
     press(cx, window, &view, "tab");
     resize(cx, window, 1280.);
     assert_eq!(shown(cx, window, &panes), panes);
-    let ratio = view.read_with(cx, |view, cx| view.split.read(cx).ratio());
+    let ratio = view.read_with(cx, |view, _| view.root_ratio());
     assert!((ratio - 0.3).abs() < f32::EPSILON);
     let (left, right) = cx
         .update_window(window, |_, window, _| {

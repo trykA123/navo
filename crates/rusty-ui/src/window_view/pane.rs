@@ -230,11 +230,12 @@ impl FerriteWindow {
             .on_action(cx.listener(|this: &mut Self, _: &NewTab, window, cx| {
                 this.apply(&Command::PaneOpenTab { location: None }, window, cx);
             }))
-            .on_action(cx.listener(|this: &mut Self, _: &ResetSplit, _, cx| {
-                this.split.update(cx, |split, cx| {
-                    split.reset();
-                    cx.notify();
-                });
+            .on_action(cx.listener(|this: &mut Self, _: &ResetSplit, window, cx| {
+                let command = Command::LayoutRatio {
+                    split: rusty_core::SplitPath(Vec::new()),
+                    ratio: 500,
+                };
+                this.apply(&command, window, cx);
             }))
             .on_action(cx.listener(|this: &mut Self, _: &EditPath, _, cx| {
                 let pane = this.browser.state().focused_pane();
