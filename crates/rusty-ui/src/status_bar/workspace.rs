@@ -20,7 +20,6 @@ pub struct WorkspaceSummary {
     pub name: SharedString,
     pub n: usize,
     pub total: usize,
-    pub draft: u16,
 }
 
 #[derive(IntoElement)]
@@ -91,14 +90,7 @@ impl RenderOnce for WorkspaceButton {
                     .child(icon(IconName::LayoutGrid, t.spacing.icon, c.muted)),
             )
             .child(part("workspace-button-name", s.name.to_string(), c.text))
-            .child(part("workspace-button-count", count, c.muted))
-            .when(s.draft > 0, |row| {
-                row.child(part(
-                    "workspace-button-draft",
-                    t!("workspace-draft", count = s.draft),
-                    c.warn,
-                ))
-            });
+            .child(part("workspace-button-count", count, c.muted));
         KitButton::new("workspace-button")
             .ghost()
             .accessibility_label(label)

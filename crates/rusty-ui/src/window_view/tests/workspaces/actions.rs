@@ -48,13 +48,6 @@ fn has(cx: &mut TestAppContext, window: AnyWindowHandle, card: usize, id: &'stat
     .expect("window")
 }
 
-fn tabs(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> usize {
-    view.read_with(cx, |view, _| {
-        let state = view.browser.state();
-        state.pane(state.focused_pane()).expect("pane").tabs().len()
-    })
-}
-
 fn rename_second_by_f2(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let (window, view) = rig(cx);
     show_tray(cx, window, &view);
@@ -124,10 +117,9 @@ fn delete_then_ctrl_z_restores_at_the_same_number(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn delete_is_disabled_for_the_last_workspace(cx: &mut TestAppContext) {
+fn delete_leaves_the_last_workspace(cx: &mut TestAppContext) {
     let fs = fake();
-    let mut state = super::super::two_panes(&fs);
-    rusty_core::apply(&mut state, &rusty_core::Command::WorkspaceSave).expect("save");
+    let state = super::super::two_panes(&fs);
     let (window, view) = open_with(cx, fs, state, Rc::default());
     hold(cx, window, Modifiers::default());
     show_tray(cx, window, &view);
@@ -136,25 +128,36 @@ fn delete_is_disabled_for_the_last_workspace(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn save_clears_the_draft(cx: &mut TestAppContext) {
+fn navigation_keeps_card_tools_visible_and_delete_enabled_with_two_workspaces(
+    cx: &mut TestAppContext,
+) {
     let (window, view) = rig(cx);
     press(cx, window, &view, "ctrl-t");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.apply(
+                &rusty_core::Command::PaneNavigate {
+                    location: fake().location("home/docs"),
+                },
+                window,
+                cx,
+            );
+        });
+    })
+    .expect("window");
+    super::super::settle(cx, &view);
     show_tray(cx, window, &view);
-    assert!(has(cx, window, 1, "workspace-draft"));
-    assert!(!has(cx, window, 1, "workspace-rename"));
-    click(cx, window, 1, "workspace-save");
-    assert!(!has(cx, window, 1, "workspace-draft"));
-    assert!(has(cx, window, 1, "workspace-rename"));
-}
-
-#[gpui_kit::test]
-fn discard_restores_the_saved_tabs(cx: &mut TestAppContext) {
-    let (window, view) = rig(cx);
-    let saved = tabs(cx, &view);
-    press(cx, window, &view, "ctrl-t");
-    assert_eq!(tabs(cx, &view), saved + 1);
-    show_tray(cx, window, &view);
-    click(cx, window, 1, "workspace-discard");
-    assert_eq!(tabs(cx, &view), saved);
-    assert!(!has(cx, window, 1, "workspace-draft"));
+    for id in ["workspace-draft", "workspace-save", "workspace-discard"] {
+        assert!(!has(cx, window, 1, id));
+    }
+    for id in [
+        "workspace-rename",
+        "workspace-move-left",
+        "workspace-move-right",
+        "workspace-delete",
+    ] {
+        assert!(has(cx, window, 1, id));
+    }
+    click(cx, window, 1, "workspace-delete");
+    assert_eq!(names(cx, &view).len(), 1);
 }

@@ -10,19 +10,15 @@ pub(super) fn save(window: &Window) -> Vec<WorkspaceState> {
         .iter()
         .enumerate()
         .map(|(index, workspace)| {
-            let live = if index == window.active_workspace() {
-                (current != workspace.saved).then_some(&current)
+            let saved = if index == window.active_workspace() {
+                save_snapshot(&current)
             } else {
-                workspace.live.as_ref()
+                save_snapshot(workspace.live.as_ref().unwrap_or(&workspace.saved))
             };
-            let saved = save_snapshot(&workspace.saved);
-            let live = live
-                .map(save_snapshot)
-                .filter(|snapshot| snapshot != &saved);
             WorkspaceState {
                 name: workspace.name.clone(),
                 saved,
-                live,
+                live: None,
             }
         })
         .collect()
@@ -51,10 +47,11 @@ pub(super) fn restore(window: &mut Window, state: &WindowState) -> Result<(), St
         .iter()
         .map(|workspace| {
             let name = crate::state::workspace_name(&workspace.name).map_err(|e| e.to_string())?;
+            let snapshot = workspace.live.as_ref().unwrap_or(&workspace.saved);
             Ok(Workspace {
                 name,
-                saved: restore_snapshot(&workspace.saved)?,
-                live: workspace.live.as_ref().map(restore_snapshot).transpose()?,
+                saved: restore_snapshot(snapshot)?,
+                live: None,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;

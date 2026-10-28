@@ -37,7 +37,6 @@ pub struct TrayCard {
     pub tiles: Vec<TrayTile>,
     pub active: bool,
     pub preview: bool,
-    pub draft: u16,
     pub focus: Option<FocusHandle>,
     pub rename: Option<AnyElement>,
 }
@@ -208,8 +207,6 @@ fn workspace_card(
         n,
         name: card.name.as_ref(),
         count,
-        draft: card.draft,
-        active: card.active,
     };
     let rename = act.clone();
     card_frame(t, ("workspace-card", n), card.preview)

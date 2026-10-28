@@ -22,13 +22,12 @@ fn tile(x: f32, width: f32, (y, height): (f32, f32), label: &str) -> TrayTile {
     }
 }
 
-fn card(name: &str, tiles: Vec<TrayTile>, draft: u16) -> TrayCard {
+fn card(name: &str, tiles: Vec<TrayTile>) -> TrayCard {
     TrayCard {
         name: name.to_owned().into(),
         tiles,
         active: false,
         preview: false,
-        draft,
         focus: None,
         rename: None,
     }
@@ -44,10 +43,9 @@ fn cards() -> Vec<TrayCard> {
                 tile(0., 0.5, full, "commander"),
                 tile(0.5, 0.5, full, "2026-10"),
             ],
-            2,
         )
     };
-    let reports = card("Reports", vec![tile(0., 1., full, "Downloads")], 0);
+    let reports = card("Reports", vec![tile(0., 1., full, "Downloads")]);
     let logs = TrayCard {
         preview: true,
         ..card(
@@ -57,7 +55,6 @@ fn cards() -> Vec<TrayCard> {
                 tile(0.5, 0.5, (0., 0.5), "photos"),
                 tile(0.5, 0.5, (0.5, 0.5), "archive"),
             ],
-            0,
         )
     };
     vec![main, reports, logs]

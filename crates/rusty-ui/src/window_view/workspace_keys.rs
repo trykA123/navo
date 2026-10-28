@@ -143,12 +143,13 @@ impl FerriteWindow {
             self.workspace_keys.cancel();
             self.end_workspace_rename(window, cx);
         } else {
-            self.pin_workspaces(cx);
+            self.pin_workspaces(window, cx);
         }
     }
 
-    pub(super) fn pin_workspaces(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn pin_workspaces(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.workspace_keys.pin();
+        self.focus_core_pane(window, cx);
         cx.notify();
     }
 
@@ -170,7 +171,6 @@ impl FerriteWindow {
             name: workspace.name.clone().into(),
             n: active + 1,
             total: core.workspaces().len(),
-            draft: rusty_core::changes(&workspace.saved, &core.snapshot()),
         };
         Some(
             WorkspaceButton::new(summary)

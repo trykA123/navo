@@ -184,7 +184,7 @@ fn v2_golden_bytes_preserve_panes_placements_and_focus() {
 const V2_SESSION: &[u8] = include_bytes!("../../../tests/fixtures/session/v2.session");
 
 #[test]
-fn v3_round_trip_preserves_workspaces_and_drafts() {
+fn v3_round_trip_keeps_workspaces_and_writes_no_drafts() {
     use rusty_core::{Location, WorkspaceAction, apply_workspace};
     let mut state = AppState::new(Location::new("C:/start").unwrap());
     apply_workspace(
@@ -197,7 +197,12 @@ fn v3_round_trip_preserves_workspaces_and_drafts() {
     state.remember_marks(vec!["draft.txt".into()]);
     apply_workspace(&mut state, &WorkspaceAction::Switch { n: 1 }).unwrap();
     let expected = state.to_session(0);
-    assert!(expected.windows[0].workspaces[1].live.is_some());
+    assert!(
+        expected.windows[0]
+            .workspaces
+            .iter()
+            .all(|w| w.live.is_none())
+    );
     let dir = tmp();
     let path = session_file(&dir);
     write_session(&path, &expected).unwrap();
@@ -296,7 +301,13 @@ fn frozen_v3_file_loads_its_workspaces_with_fallback_targets() {
             snapshot.target = None;
         }
     }
-    assert_eq!(session, expected);
+    let mut promoted = session.clone();
+    for workspace in &mut promoted.windows[0].workspaces {
+        if let Some(live) = workspace.live.take() {
+            workspace.saved = live;
+        }
+    }
+    assert_eq!(promoted, expected);
     let restored = AppState::from_session(session).unwrap();
     let window = restored.window(restored.focused_window()).unwrap();
     assert_eq!(window.workspaces().len(), 2);

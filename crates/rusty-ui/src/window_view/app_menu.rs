@@ -80,7 +80,7 @@ impl FerriteWindow {
             MenuCommand::Quit if self.close(window, cx) => cx.quit(),
             MenuCommand::AllSettings => self.open_settings(window, cx),
             MenuCommand::CommandPalette => self.toggle_command_center(window, cx),
-            MenuCommand::Workspaces => self.pin_workspaces(cx),
+            MenuCommand::Workspaces => self.pin_workspaces(window, cx),
             _ => {}
         }
     }

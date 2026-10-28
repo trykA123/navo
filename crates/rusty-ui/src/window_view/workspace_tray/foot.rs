@@ -1,5 +1,3 @@
-use gpui_kit::Role;
-use gpui_kit::base::TestSupportExt;
 use rusty_core::Command;
 use rusty_l10n::{t, tr};
 
@@ -9,7 +7,7 @@ use super::card::{OnTrayAction, TrayAction};
 use super::rename::Deleted;
 use crate::commands::active;
 use crate::prelude::*;
-use crate::primitives::{Button, ButtonVariant, IconButton, IconName, Kbd};
+use crate::primitives::{IconButton, IconName, Kbd};
 use crate::status_bar::StatusNotice;
 use crate::tokens::Theme;
 
@@ -17,8 +15,6 @@ pub(super) struct Foot<'a> {
     pub(super) n: usize,
     pub(super) name: &'a str,
     pub(super) count: usize,
-    pub(super) draft: u16,
-    pub(super) active: bool,
 }
 
 pub(super) fn run(
@@ -27,47 +23,6 @@ pub(super) fn run(
 ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
     let act = act.clone();
     move |_, window, cx| act(&action, window, cx)
-}
-
-fn draft_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
-    let n = foot.n;
-    let label = t!("workspace-draft", count = foot.draft);
-    div()
-        .flex()
-        .flex_col()
-        .gap(t.spacing.xs)
-        .w_full()
-        .min_w_0()
-        .child(
-            div()
-                .id(("workspace-draft", n))
-                .role(Role::Status)
-                .aria_label(label.clone())
-                .test_support()
-                .min_w_0()
-                .truncate()
-                .text_size(t.typography.small)
-                .text_color(t.colors.warn)
-                .child(label),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_end()
-                .gap(t.spacing.xs)
-                .min_w_0()
-                .child(
-                    Button::new(("workspace-save", n), tr("workspace-save"))
-                        .variant(ButtonVariant::Primary)
-                        .disabled(!foot.active)
-                        .on_click(run(act, TrayAction::Save)),
-                )
-                .child(
-                    Button::new(("workspace-discard", n), tr("workspace-discard"))
-                        .on_click(run(act, TrayAction::Discard(n))),
-                ),
-        )
 }
 
 fn tools_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
@@ -115,12 +70,7 @@ fn tools_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
 }
 
 pub(super) fn card_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
-    let row = if foot.draft > 0 {
-        draft_foot(t, foot, act)
-    } else {
-        tools_foot(t, foot, act)
-    };
-    row.px(t.spacing.xs)
+    tools_foot(t, foot, act).px(t.spacing.xs)
 }
 
 impl FerriteWindow {

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use super::{Pane, Window};
 use crate::{Layout, PaneId};
 
-pub const SAVE_ON_SWITCH: bool = false;
+pub const SAVE_ON_SWITCH: bool = true;
 pub const MAX_WORKSPACES: usize = 9;
 
 #[derive(Debug, Clone, PartialEq)]

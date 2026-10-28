@@ -67,7 +67,7 @@ fn the_hints_drawer_stays_hidden_while_the_tray_shows(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn card_feet_fit_inside_cards_of_one_height_with_a_draft(cx: &mut TestAppContext) {
+fn card_feet_fit_inside_cards_of_one_height_after_navigation(cx: &mut TestAppContext) {
     let (window, view) = rig(cx);
     press(cx, window, &view, "ctrl-t");
     show(cx, &view);
@@ -75,7 +75,7 @@ fn card_feet_fit_inside_cards_of_one_height_with_a_draft(cx: &mut TestAppContext
         resize(cx, window, width);
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
-            assert!(window.try_find(("workspace-draft", 1usize)).is_some());
+            assert!(window.try_find(("workspace-draft", 1usize)).is_none());
             let new = window.find("workspace-new").bounds();
             for n in 1..=2usize {
                 let card = window.find(("workspace-card", n)).bounds();

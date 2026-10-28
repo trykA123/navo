@@ -2,7 +2,7 @@ use super::*;
 use crate::{WorkspaceAction as W, apply_workspace};
 
 #[test]
-fn workspace_session_round_trip_keeps_saved_drafts_and_active_state() {
+fn workspace_session_round_trip_saves_folders_tabs_and_active_state() {
     let mut state = AppState::new(loc("C:/start"));
     apply_workspace(
         &mut state,
@@ -11,20 +11,35 @@ fn workspace_session_round_trip_keeps_saved_drafts_and_active_state() {
         },
     )
     .unwrap();
-    navigate(&mut state, "C:/draft");
+    navigate(&mut state, "C:/work");
+    run(
+        &mut state,
+        Command::PaneOpenTab {
+            location: Some(loc("C:/other")),
+        },
+    );
     state.remember_marks(vec!["keep.txt".into()]);
     apply_workspace(&mut state, &W::Switch { n: 1 }).unwrap();
     navigate(&mut state, "C:/active");
     let session = state.to_session(0);
+    assert!(
+        session.windows[0]
+            .workspaces
+            .iter()
+            .all(|workspace| workspace.live.is_none())
+    );
     let bytes = postcard::to_stdvec(&session).unwrap();
     let decoded = postcard::from_bytes(&bytes).unwrap();
     let mut restored = AppState::from_session(decoded).unwrap();
     assert_eq!(restored.to_session(0), session);
     apply_workspace(&mut restored, &W::Switch { n: 2 }).unwrap();
-    assert_eq!(restored.active_tab().location(), &loc("C:/draft"));
+    assert_eq!(restored.active_tab().location(), &loc("C:/other"));
+    let pane = restored.pane(restored.focused_pane()).unwrap();
+    assert_eq!(pane.tabs().len(), 2);
+    assert_eq!(pane.tabs()[0].location(), &loc("C:/work"));
     assert_eq!(restored.last_marks(), Some(["keep.txt".into()].as_slice()));
     apply_workspace(&mut restored, &W::Discard { n: 2 }).unwrap();
-    assert_eq!(restored.active_tab().location(), &loc("C:/start"));
+    assert_eq!(restored.active_tab().location(), &loc("C:/other"));
 }
 
 #[test]
@@ -131,5 +146,33 @@ fn workspace_session_replaces_a_target_that_is_not_a_leaf() {
         assert_eq!(target, fallback, "{stale}");
         let window = restored.window(restored.focused_window()).unwrap();
         assert!(window.layout().contains(target.unwrap()));
+    }
+}
+
+#[test]
+fn workspace_session_promotes_old_active_and_inactive_drafts_to_saved_state() {
+    let mut state = AppState::new(loc("C:/first"));
+    apply_workspace(&mut state, &W::New { name: None }).unwrap();
+    navigate(&mut state, "C:/second");
+    let mut session = state.to_session(0);
+    for workspace in &mut session.windows[0].workspaces {
+        workspace.live = Some(workspace.saved.clone());
+        workspace.saved.panes[0].tabs[0].location = "C:/obsolete".into();
+    }
+    let bytes = postcard::to_stdvec(&session).unwrap();
+    let mut restored = AppState::from_session(postcard::from_bytes(&bytes).unwrap()).unwrap();
+    for (n, path) in [(2, "C:/second"), (1, "C:/first")] {
+        apply_workspace(&mut restored, &W::Switch { n }).unwrap();
+        assert_eq!(restored.active_tab().location(), &loc(path));
+        let window = restored.window(restored.focused_window()).unwrap();
+        assert_eq!(window.workspaces()[n - 1].saved, window.snapshot());
+        assert!(
+            window
+                .workspaces()
+                .iter()
+                .all(|workspace| workspace.live.is_none())
+        );
+        apply_workspace(&mut restored, &W::Discard { n }).unwrap();
+        assert_eq!(restored.active_tab().location(), &loc(path));
     }
 }

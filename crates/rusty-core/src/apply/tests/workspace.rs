@@ -57,35 +57,36 @@ fn workspace_switch_restores_tabs_focus_layout_and_marks_without_listings() {
 }
 
 #[test]
-fn workspace_draft_survives_switch_and_save_clears_it() {
+fn workspace_switch_saves_navigated_folders_and_tabs_without_a_save_step() {
     let mut state = state();
     action(&mut state, W::New { name: None });
     action(&mut state, W::Switch { n: 1 });
     run(
         &mut state,
-        Command::PaneOpenTab {
-            location: Some(loc("C:/draft")),
+        Command::PaneNavigate {
+            location: loc("C:/work"),
         },
     );
-    action(&mut state, W::Switch { n: 2 });
-    let window = state.window(state.focused_window()).unwrap();
-    let workspace = &window.workspaces()[0];
-    assert_eq!(
-        changes(&workspace.saved, workspace.live.as_ref().unwrap()),
-        1
+    run(
+        &mut state,
+        Command::PaneOpenTab {
+            location: Some(loc("C:/other")),
+        },
     );
-    action(&mut state, W::Switch { n: 1 });
-    action(&mut state, W::Save);
+    let before = state.window(state.focused_window()).unwrap().snapshot();
     action(&mut state, W::Switch { n: 2 });
-    assert!(
-        state.window(state.focused_window()).unwrap().workspaces()[0]
-            .live
-            .is_none()
+    let workspace = &state.window(state.focused_window()).unwrap().workspaces()[0];
+    assert_eq!(workspace.saved, before);
+    assert!(workspace.live.is_none());
+    action(&mut state, W::Switch { n: 1 });
+    assert_eq!(
+        state.window(state.focused_window()).unwrap().snapshot(),
+        before
     );
 }
 
 #[test]
-fn workspace_discard_restores_saved_tabs_and_clears_inactive_draft() {
+fn workspace_discard_restores_active_saved_tabs_and_keeps_saved_inactive_tabs() {
     let mut state = state();
     let id = state.active_tab().id();
     run(&mut state, Command::PaneOpenTab { location: None });
@@ -96,7 +97,7 @@ fn workspace_discard_restores_saved_tabs_and_clears_inactive_draft() {
     action(&mut state, W::Switch { n: 1 });
     action(&mut state, W::Discard { n: 2 });
     action(&mut state, W::Switch { n: 2 });
-    assert_eq!(state.pane(state.focused_pane()).unwrap().tabs().len(), 1);
+    assert_eq!(state.pane(state.focused_pane()).unwrap().tabs().len(), 2);
 }
 
 #[test]

@@ -255,21 +255,16 @@ impl Render for WithWorkspace {
     }
 }
 
-fn summary(draft: u16) -> WorkspaceSummary {
+fn summary() -> WorkspaceSummary {
     WorkspaceSummary {
         name: "Reports".into(),
         n: 2,
         total: 4,
-        draft,
     }
 }
 
-fn with_workspace<R>(
-    draft: u16,
-    cx: &mut TestAppContext,
-    check: impl FnOnce(&mut Window) -> R,
-) -> R {
-    let (window, _) = open(cx, move |_, _| WithWorkspace(summary(draft)));
+fn with_workspace<R>(cx: &mut TestAppContext, check: impl FnOnce(&mut Window) -> R) -> R {
+    let (window, _) = open(cx, move |_, _| WithWorkspace(summary()));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         check(window)
@@ -279,7 +274,7 @@ fn with_workspace<R>(
 
 #[gpui_kit::test]
 fn the_workspace_button_ends_the_status_with_its_name_and_count(cx: &mut TestAppContext) {
-    with_workspace(0, cx, |window| {
+    with_workspace(cx, |window| {
         let status = window.find("status").bounds();
         let button = window.find("workspace-button").bounds();
         assert!(button.right() <= status.right());
@@ -292,27 +287,12 @@ fn the_workspace_button_ends_the_status_with_its_name_and_count(cx: &mut TestApp
 }
 
 #[gpui_kit::test]
-fn a_draft_shows_its_change_count_in_the_button(cx: &mut TestAppContext) {
-    let expected = rusty_l10n::t!("workspace-draft", count = 3u16);
-    with_workspace(3, cx, |window| {
-        assert_eq!(
-            window.find("workspace-button-draft").label(),
-            Some(expected.as_str())
-        );
-    });
-}
-
-#[gpui_kit::test]
 fn the_button_icon_and_labels_share_one_centre_line(cx: &mut TestAppContext) {
-    with_workspace(3, cx, |window| {
+    with_workspace(cx, |window| {
         let icon = window.find("workspace-button-icon").bounds();
         assert!(icon.size.height > gpui_kit::px(0.));
         let centre = icon.center().y;
-        for id in [
-            "workspace-button-name",
-            "workspace-button-count",
-            "workspace-button-draft",
-        ] {
+        for id in ["workspace-button-name", "workspace-button-count"] {
             let offset = f32::from(window.find(id).bounds().center().y - centre).abs();
             assert!(offset <= 1., "{id} is {offset} px off the icon centre");
         }
@@ -323,6 +303,6 @@ fn the_button_icon_and_labels_share_one_centre_line(cx: &mut TestAppContext) {
 fn the_workspace_button_alone_does_not_keep_a_hidden_footer() {
     let bar = StatusBar::new("status", busy_props(ListingMark::Fresh))
         .parts(none())
-        .workspace(Some(WorkspaceButton::new(summary(0))));
+        .workspace(Some(WorkspaceButton::new(summary())));
     assert!(bar.is_empty());
 }

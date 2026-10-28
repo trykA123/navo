@@ -90,7 +90,6 @@ impl FerriteWindow {
                     tiles: tiles(snapshot),
                     active,
                     preview: self.workspace_keys.preview == Some(Preview::Existing(n)),
-                    draft: rusty_core::changes(&workspace.saved, snapshot),
                     focus: self.workspace_keys.edit.cards.get(index).cloned(),
                     rename: self.workspace_rename_row(t, n, cx),
                 }
