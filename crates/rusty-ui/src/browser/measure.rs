@@ -1,7 +1,7 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
-use rusty_core::{Location, ProviderPath, TabId};
+use rusty_core::{Location, Tab, TabId};
 use rusty_fs::{
     CancelToken, JobKind, JobSlot, OwnerId, Priority, Provider, folder_size, volume_of,
 };
@@ -86,10 +86,19 @@ impl Browser {
         self.size_work.values().any(|work| work.pending > 0)
     }
 
-    pub(super) fn measure(&mut self, tab: TabId, folder: Location, name: String) {
-        let Ok(target) = folder.join(&ProviderPath::from_text(&name)) else {
+    pub(super) fn measure(&mut self, tab: TabId, name: String) {
+        let Some(tab) = self.state.tab(tab).cloned() else {
             return;
         };
+        self.measure_entry(&tab, name);
+    }
+
+    pub(super) fn measure_entry(&mut self, tab: &Tab, name: String) {
+        let Ok(target) = tab.entry_location(&name) else {
+            return;
+        };
+        let folder = tab.location().clone();
+        let tab = tab.id();
         let (Some(owner), Some(work)) = (self.size_owners.get(&tab), self.size_work.get_mut(&tab))
         else {
             return;

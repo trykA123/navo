@@ -1,4 +1,4 @@
-use rusty_core::{Location, PaneId, TabId};
+use rusty_core::{Location, PaneId, Tab, TabId};
 use rusty_fs::{EntryKind, FsEntry};
 
 use crate::window_view::FerriteWindow;
@@ -60,19 +60,65 @@ impl FerriteWindow {
         let state = self.browser.state();
         let pane = state.focused_pane();
         let tab = state.pane(pane)?.active();
-        let row = tab.view().cursor;
-        let listed = tab.listing()?.get(row)?;
-        let details = self.browser.details(tab.id());
-        let entry = details.get(usize::try_from(row).ok()?)?;
-        if entry.name.to_text() != listed.name {
-            return None;
-        }
-        Some(Target {
-            pane,
-            tab: tab.id(),
-            folder: tab.location().clone(),
-            location: tab.location().join(&entry.name).ok()?,
-            entry: entry.clone(),
-        })
+        cursor_target(pane, tab, &self.browser.details(tab.id()))
+    }
+}
+
+fn cursor_target(pane: PaneId, tab: &Tab, details: &[FsEntry]) -> Option<Target> {
+    let row = tab.view().cursor;
+    let listed = tab.listing()?.get(row)?;
+    let entry = details.get(usize::try_from(row).ok()?)?;
+    if entry.name.to_text() != listed.name {
+        return None;
+    }
+    Some(Target {
+        pane,
+        tab: tab.id(),
+        folder: tab.location().clone(),
+        location: tab.entry_location(&entry.name.to_text()).ok()?,
+        entry: entry.clone(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use rusty_core::{
+        AppState, Entry, Event, Listing, Location, ProviderPath, apply_event, list_missing,
+    };
+    use rusty_fs::{Attributes, EntryKind, FsEntry};
+
+    #[test]
+    fn preview_resolves_a_results_entry_under_its_base() {
+        let location = Location::new(r"C:\shown").unwrap();
+        let mut state = AppState::new(location.clone());
+        list_missing(&mut state);
+        let id = state.active_tab().id();
+        let request = state.active_tab().pending_request().unwrap();
+        apply_event(
+            &mut state,
+            Event::ListingLoaded {
+                tab: id,
+                request,
+                location,
+                listing: Listing::new(vec![Entry {
+                    name: r"sub\a.txt".to_owned(),
+                    is_folder: false,
+                }]),
+            },
+        );
+        let mut tab = state.active_tab().clone();
+        tab.set_base(Some(Location::new(r"C:\base").unwrap()));
+        let entry = FsEntry {
+            name: ProviderPath::from_text(r"sub\a.txt"),
+            kind: EntryKind::File,
+            size: 1,
+            modified_ms: None,
+            attributes: Attributes::default(),
+        };
+        let target = super::cursor_target(state.focused_pane(), &tab, &[entry]).unwrap();
+        assert_eq!(
+            target.location,
+            Location::new(r"C:\base\sub\a.txt").unwrap()
+        );
     }
 }

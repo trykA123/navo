@@ -299,11 +299,9 @@ impl Browser {
                     request,
                 } => self.list(tab, location, request),
                 Effect::SaveSession => self.save_requested = true,
-                Effect::MeasureFolder {
-                    tab,
-                    location,
-                    name,
-                } if self.measures_folders => self.measure(tab, location, name),
+                Effect::MeasureFolder { tab, name, .. } if self.measures_folders => {
+                    self.measure(tab, name);
+                }
                 Effect::MeasureFolder { .. } => {}
             }
         }

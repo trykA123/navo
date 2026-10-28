@@ -187,3 +187,29 @@ fn a_crashed_size_walk_ends_the_spinner_and_shows_no_size() {
     let tab = browser.state().active_tab().id();
     assert_eq!(browser.details(tab)[0].size, 0);
 }
+
+#[test]
+fn measurement_resolves_a_results_folder_under_its_base() {
+    use rusty_core::ProviderPath;
+    use rusty_fs::{Attributes, EntryKind, FsEntry};
+    let fs = Arc::new(FakeFs::new());
+    fs.add_entry(
+        "shown",
+        FsEntry {
+            name: ProviderPath::from_text(r"sub\a.txt"),
+            kind: EntryKind::Folder,
+            size: 0,
+            modified_ms: None,
+            attributes: Attributes::default(),
+        },
+    );
+    fs.add_file("base/sub/a.txt/child.bin", 13);
+    let mut browser = browser_at(&fs, "shown");
+    settle(&mut browser);
+    let mut tab = browser.state().active_tab().clone();
+    tab.set_base(Some(fs.location("base")));
+    browser.measure_entry(&tab, r"sub\a.txt".to_owned());
+    settle(&mut browser);
+    assert_eq!(browser.details(tab.id())[0].size, 13);
+    assert_eq!(fs.calls("base/sub/a.txt", FakeOp::List), 1);
+}

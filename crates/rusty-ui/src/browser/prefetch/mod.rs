@@ -1,7 +1,7 @@
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use rusty_core::{FsError, Location, ProviderPath, TabId};
+use rusty_core::{FsError, Location, Tab, TabId};
 use rusty_fs::{CancelToken, JobKind, JobSlot, OwnerGuard, Priority, volume_of};
 
 use super::cached::{Fetch, Fresh};
@@ -94,14 +94,7 @@ impl Drop for Finished {
 impl Browser {
     #[must_use]
     pub fn cursor_folder(&self) -> Option<Location> {
-        let tab = self.state.active_tab();
-        let entry = tab.listing()?.get(tab.view().cursor)?;
-        if !entry.is_folder || entry.name == ".." {
-            return None;
-        }
-        tab.location()
-            .join(&ProviderPath::from_text(&entry.name))
-            .ok()
+        cursor_folder(self.state.active_tab())
     }
 
     pub fn leave_prefetches(&mut self, kept: Option<&Location>) {
@@ -209,6 +202,14 @@ impl Browser {
         });
         queue.submit(slot, job);
     }
+}
+
+fn cursor_folder(tab: &Tab) -> Option<Location> {
+    let entry = tab.listing()?.get(tab.view().cursor)?;
+    if !entry.is_folder || entry.name == ".." {
+        return None;
+    }
+    tab.entry_location(&entry.name).ok()
 }
 
 #[cfg(test)]

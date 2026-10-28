@@ -287,3 +287,31 @@ fn back_stays_warm_while_prefetches_fill_a_small_cache() {
     assert!(browser.is_cached(browser.state().active_tab().id()));
     assert_eq!(names(&browser)[0], "alpha");
 }
+
+#[test]
+fn prefetch_resolves_a_results_folder_under_its_base() {
+    use rusty_core::{Entry, Event, Listing, Location, apply_event, list_missing};
+    let location = Location::new(r"C:\shown").unwrap();
+    let mut state = AppState::new(location.clone());
+    list_missing(&mut state);
+    let id = state.active_tab().id();
+    let request = state.active_tab().pending_request().unwrap();
+    apply_event(
+        &mut state,
+        Event::ListingLoaded {
+            tab: id,
+            request,
+            location,
+            listing: Listing::new(vec![Entry {
+                name: r"sub\a.txt".to_owned(),
+                is_folder: true,
+            }]),
+        },
+    );
+    let mut tab = state.active_tab().clone();
+    tab.set_base(Some(Location::new(r"C:\base").unwrap()));
+    assert_eq!(
+        super::cursor_folder(&tab),
+        Some(Location::new(r"C:\base\sub\a.txt").unwrap())
+    );
+}
