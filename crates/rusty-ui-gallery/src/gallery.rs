@@ -24,6 +24,7 @@ use crate::mouse_page::MousePage;
 use crate::operate_page::OperatePage;
 pub use crate::pages::{PAGES, Page};
 use crate::pane_page::PanePage;
+use crate::recent_page::RecentPage;
 use crate::strip_page::StripPage;
 use crate::structured_sample::{
     self as structured, CODE, CODE_NAME, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE,
@@ -101,6 +102,7 @@ pub struct Gallery {
     notice_windows: [Entity<WindowPage>; 2],
     parts_windows: [Entity<WindowPage>; 3],
     preview_windows: [Entity<WindowPage>; 4],
+    recent: [Entity<RecentPage>; 2],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -108,6 +110,7 @@ pub struct Gallery {
 }
 
 impl Gallery {
+    #[expect(clippy::too_many_lines, reason = "one field per gallery page")]
     pub fn new(mode: Mode, window: &mut Window, cx: &mut App) -> Self {
         shortcuts_sample::use_user_keymap(cx);
         Self {
@@ -154,6 +157,7 @@ impl Gallery {
             notice_windows: crate::window_samples::notice_windows(cx),
             parts_windows: parts_windows(cx),
             preview_windows: preview_windows(cx),
+            recent: crate::recent_page::pages(cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -321,6 +325,7 @@ impl Render for Gallery {
         if let Some(page) = self
             .window_page()
             .or_else(|| crate::tray_page::element(self.page, &t))
+            .or_else(|| crate::recent_page::element(self.page, &self.recent))
         {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);

@@ -49,6 +49,7 @@ mod pane_swap;
 mod perf_recording;
 mod placement;
 mod prefetch;
+mod recent_sheet;
 mod settings_find;
 mod settings_layer;
 mod settings_news;

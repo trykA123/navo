@@ -236,3 +236,27 @@ tabs-more = { $count ->
 }
 tabs-hidden-menu = Hidden tabs
 tabs-label = Tabs
+
+recently-deleted-title = Recently deleted
+recently-deleted-loading = Loading…
+recently-deleted-empty-title = Nothing deleted recently
+recently-deleted-empty-body = Deleted files wait here by day, then go for good.
+recently-deleted-today = Today
+recently-deleted-yesterday = Yesterday
+recently-deleted-summary = { $count ->
+    [one] { $count } item
+   *[other] { $count } items
+} · { $size }
+recently-deleted-expires = expires in { $span }
+recently-deleted-expiring = expiring now
+recently-deleted-in-use = In use
+recently-deleted-attention = Needs attention
+recently-deleted-working = Working…
+recently-deleted-replaced = Replaced
+recently-deleted-restore = Restore
+recently-deleted-delete = Delete now
+recently-deleted-restored = Restored { $name } to { $folder }
+recently-deleted-purged = Deleted { $name } for good
+recently-deleted-delete-title = Delete { $name } now?
+recently-deleted-delete-summary = { $size } leaves Recently deleted for good. This cannot be undone.
+recently-deleted-delete-confirm = Delete now

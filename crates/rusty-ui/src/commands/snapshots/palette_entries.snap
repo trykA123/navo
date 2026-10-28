@@ -397,6 +397,7 @@ multi_rename.move_row_down | MultiRenamePreview | false
 app.save_diagnostic_report | global | true
 perf.record | global | true
 perf.stop | global | true
+files.recently_deleted | global | true
 window.new | global | true
 workspace.list | global | true
 help.key_map | global | true

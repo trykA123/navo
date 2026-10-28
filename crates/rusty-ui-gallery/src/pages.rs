@@ -133,6 +133,8 @@ pub enum Page {
     LayoutSwitcherPhone,
     LayoutSave,
     LayoutRemove,
+    RecentlyDeleted,
+    RecentlyDeletedPhone,
 }
 
 pub struct PageInfo {

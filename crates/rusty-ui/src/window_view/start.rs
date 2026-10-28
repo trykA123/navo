@@ -3,8 +3,8 @@ use std::rc::Rc;
 use rusty_core::AppState;
 
 use super::placement::{self, DisplayScale, DisplayScales};
-use super::{FerriteWindow, StartOptions, bind_app_keys};
-use crate::browser::Browser;
+use super::{FerriteWindow, KeymapHooks, OpenHooks, StartOptions, bind_app_keys, settings_save};
+use crate::browser::{Browser, RenameHooks};
 use crate::prelude::*;
 
 pub fn run(mut options: StartOptions, display_scale: DisplayScale, on_quit: Rc<dyn Fn()>) {
@@ -69,5 +69,41 @@ impl FerriteWindow {
         browser.set_folder_totals(options.search.folder_totals.clone());
         browser.set_retained_hooks(options.retained.clone());
         browser
+    }
+}
+
+pub(super) type AfterOpen = (
+    KeymapHooks,
+    OpenHooks,
+    Option<rusty_core::Location>,
+    Option<RenameHooks>,
+);
+
+impl FerriteWindow {
+    pub(super) fn after_open(
+        mut self,
+        (keymap, open, start_view, rename): AfterOpen,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        settings_save::steer(&self.values, &mut self.browser);
+        self.browser.start();
+        self.browser.set_rename_hooks(rename);
+        self.listen_files(keymap, window, cx);
+        self.tell_pending_undo(cx);
+        self.listen_open(open, window, cx);
+        self.apply_theme(window, cx);
+        Self::close_saves_and_quits(window, cx);
+        Self::poll_drives(cx);
+        Self::poll_index_activity(cx);
+        self.check_index_upgrade(cx);
+        cx.defer_in(window, move |view, window, cx| {
+            view.focus_core_pane(window, cx);
+            view.watch_listings(cx);
+            if let Some(location) = start_view {
+                view.view_location(location, window, cx);
+            }
+        });
+        self
     }
 }

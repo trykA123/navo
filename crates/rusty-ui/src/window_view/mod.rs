@@ -35,6 +35,7 @@ mod placement;
 mod preset_edit;
 mod preview;
 mod prompt;
+mod recent_sheet;
 mod rest;
 mod search_hooks;
 mod settings_news;
@@ -134,13 +135,6 @@ pub use workspace_tray::{OnTrayAction, TrayAction, TrayCard, TrayTile, Workspace
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
 
-type AfterOpen = (
-    KeymapHooks,
-    OpenHooks,
-    Option<rusty_core::Location>,
-    Option<RenameHooks>,
-);
-
 pub struct StartOptions {
     pub state: AppState,
     pub provider: Arc<dyn ProviderOps>,
@@ -199,6 +193,7 @@ pub struct FerriteWindow {
     identity: Identity,
     saver: settings_save::Saver,
     settings: settings_sheet::SettingsPanel,
+    recent: recent_sheet::RecentPanel,
     shell_menus: Option<Rc<dyn ShellMenuProvider>>,
     menu_run: Option<shell_menu::MenuRun>,
     prefetch: shell_menu::Prefetches,
@@ -217,6 +212,7 @@ pub struct FerriteWindow {
 }
 
 impl FerriteWindow {
+    #[expect(clippy::too_many_lines, reason = "one field per window part")]
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let browser = Self::browser(&options, cx);
         let totals = options.search.folder_totals.clone();
@@ -251,6 +247,7 @@ impl FerriteWindow {
             identity: options.app_menu.identity,
             saver,
             settings,
+            recent: recent_sheet::RecentPanel::new(cx),
             shell_menus: options.shell_menu,
             menu_run: None,
             prefetch: shell_menu::Prefetches::default(),
@@ -268,33 +265,6 @@ impl FerriteWindow {
         };
         let after = (options.keymap, options.open, options.view, options.rename);
         view.after_open(after, window, cx)
-    }
-
-    fn after_open(
-        mut self,
-        (keymap, open, start_view, rename): AfterOpen,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        settings_save::steer(&self.values, &mut self.browser);
-        self.browser.start();
-        self.browser.set_rename_hooks(rename);
-        self.listen_files(keymap, window, cx);
-        self.tell_pending_undo(cx);
-        self.listen_open(open, window, cx);
-        self.apply_theme(window, cx);
-        Self::close_saves_and_quits(window, cx);
-        Self::poll_drives(cx);
-        Self::poll_index_activity(cx);
-        self.check_index_upgrade(cx);
-        cx.defer_in(window, move |view, window, cx| {
-            view.focus_core_pane(window, cx);
-            view.watch_listings(cx);
-            if let Some(location) = start_view {
-                view.view_location(location, window, cx);
-            }
-        });
-        self
     }
 
     #[cfg(not(test))]

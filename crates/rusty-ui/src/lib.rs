@@ -26,6 +26,7 @@ pub mod perf;
 pub mod prelude;
 pub mod primitives;
 pub mod prompt_dialog;
+pub mod recently_deleted;
 pub mod rename;
 pub mod settings;
 pub mod shortcuts;

@@ -8,6 +8,7 @@ mod palette_hidden;
 mod paths;
 mod perf;
 mod popup;
+mod retained;
 mod structured;
 mod viewer;
 mod window;
@@ -123,6 +124,7 @@ pub fn all() -> impl Iterator<Item = CommandSpec> {
         structured::GROUPS.as_slice(),
         multi_rename::GROUPS.as_slice(),
         perf::GROUPS.as_slice(),
+        retained::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group

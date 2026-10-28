@@ -24,6 +24,7 @@ mod palettes_page;
 mod pane_page;
 mod pane_sample;
 mod pdf_sample;
+mod recent_page;
 mod rich_page;
 mod rich_sample;
 mod screenshot;

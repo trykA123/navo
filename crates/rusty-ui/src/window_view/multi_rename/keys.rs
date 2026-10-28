@@ -26,6 +26,7 @@ impl FerriteWindow {
     ) -> Option<AnyElement> {
         self.dialog(cx)
             .or_else(|| self.prompt_view(cx))
+            .or_else(|| self.recent_ask_view(cx))
             .or_else(|| self.multi_rename_view(window, cx))
     }
 

@@ -44,9 +44,15 @@ impl FerriteWindow {
             .px(t.spacing.xs)
             .when(!has_strip, |area| area.pb(t.spacing.md))
             .child(body)
+            .on_action(
+                cx.listener(|view, _: &super::keys::OpenRecentlyDeleted, window, cx| {
+                    view.open_recently_deleted(window, cx);
+                }),
+            )
             .children(self.job_card_layer(cx))
             .children(self.preview_layer(window, cx))
             .children(self.settings_layer(window, cx))
+            .children(self.recent_layer(window, cx))
             .children(self.hints_layer(window, cx))
             .children(self.workspace_tray(cx))
             .children(self.activity_drawer_layer(window, cx))

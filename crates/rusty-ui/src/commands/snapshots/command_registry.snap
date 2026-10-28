@@ -397,6 +397,7 @@ multi_rename.move_row_down | Move the row down | MultiRenamePreview
 app.save_diagnostic_report | Save a diagnostic report | global
 perf.record | Record performance | global
 perf.stop | Stop recording | global
+files.recently_deleted | Recently deleted | global
 window.new | New window | global
 workspace.list | Workspaces | global
 help.key_map | Help and key map | global
