@@ -472,3 +472,51 @@ fn diagnostic_report_uses_the_slug_and_preserves_existing_reports() {
     assert_eq!(std::fs::read(first).unwrap(), b"existing report");
     assert_eq!(std::fs::read(saved).unwrap(), b"new report");
 }
+
+#[test]
+fn a_safety_net_change_writes_its_retention_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    let settings = hooks(Some(&file));
+    save(
+        &settings,
+        Change {
+            field: Field::RetentionDays,
+            value: Value::Number(5),
+        },
+    )
+    .unwrap();
+    save(
+        &settings,
+        Change {
+            field: Field::RetainDeletes,
+            value: Value::Flag(false),
+        },
+    )
+    .unwrap();
+    let text = fs::read_to_string(&file).unwrap();
+    assert!(text.contains("[retention]"), "{text}");
+    assert!(text.contains("days = 5"), "{text}");
+    assert!(text.contains("retain-deletes = false"), "{text}");
+}
+
+#[test]
+fn an_invalid_retention_cap_shows_the_stores_error_and_leaves_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = file_in(&dir);
+    fs::write(&file, "[retention]\ndays = 2\n").unwrap();
+    let settings = hooks(Some(&file));
+    let problem = save(
+        &settings,
+        Change {
+            field: Field::RetentionCapMib,
+            value: Value::Number(0),
+        },
+    )
+    .unwrap_err();
+    assert!(problem.starts_with("navo.toml: "), "{problem}");
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        "[retention]\ndays = 2\n"
+    );
+}

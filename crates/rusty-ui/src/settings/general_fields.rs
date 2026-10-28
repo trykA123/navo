@@ -3,7 +3,7 @@ use super::fields::{
     S, SORTS, THEMES, spec,
 };
 
-pub(super) const GENERAL: [FieldSpec; 23] = [
+pub(super) const GENERAL: [FieldSpec; 28] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "Follow Windows, or keep light or dark"),
@@ -142,5 +142,40 @@ pub(super) const GENERAL: [FieldSpec; 23] = [
             "Auto copies several files at once where the drives allow; Standard copies one file at a time.",
         ),
         Control::Choices(&COPY_MODES, Look::Segments),
+    ),
+    spec(
+        (F::RetainDeletes, S::Safety, "retention.retain-deletes"),
+        ("settings-retain-deletes", "settings-retain-deletes-help"),
+        Control::Toggle,
+    ),
+    spec(
+        (
+            F::RetainOverwrites,
+            S::Safety,
+            "retention.retain-overwrites",
+        ),
+        (
+            "settings-retain-overwrites",
+            "settings-retain-overwrites-help",
+        ),
+        Control::Toggle,
+    ),
+    spec(
+        (F::RetentionDays, S::Safety, "retention.days"),
+        ("settings-retention-days", "settings-retention-days-help"),
+        Control::Number,
+    ),
+    spec(
+        (F::RetentionCapMib, S::Safety, "retention.max-volume-mib"),
+        ("settings-retention-cap", "settings-retention-cap-help"),
+        Control::Number,
+    ),
+    spec(
+        (F::RetentionMinFreeMib, S::Safety, "retention.min-free-mib"),
+        (
+            "settings-retention-min-free",
+            "settings-retention-min-free-help",
+        ),
+        Control::Number,
     ),
 ];

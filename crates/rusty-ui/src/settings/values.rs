@@ -105,6 +105,9 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::DarkTheme => text("Navo Dark"),
         Field::Font => text("Inter"),
         Field::FontSize => Value::Number(13),
+        Field::RetentionDays => Value::Number(3),
+        Field::RetentionCapMib => Value::Number(1024),
+        Field::RetentionMinFreeMib => Value::Number(256),
         Field::UiScale => Value::Number(100),
         Field::ModifierHints => Value::Pick(2),
         Field::ModifierHintsDelay => Value::Number(400),
@@ -114,7 +117,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::MarkdownPreviewSplit
         | Field::PreviewTypeBars
         | Field::PreviewLargestFiles => Value::Flag(true),
-        Field::SearchRemember => Value::Flag(true),
+        Field::SearchRemember | Field::RetainDeletes | Field::RetainOverwrites => Value::Flag(true),
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
         Field::WindowFkeyBar => Value::Flag(false),
         field if field.is_window_part() => Value::Flag(true),

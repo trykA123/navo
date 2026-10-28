@@ -93,3 +93,14 @@ settings-layout-presets-skipped = Skipped { $count ->
    *[other] { $count } layout presets
 } in navo.toml: { $details }
 settings-layout-preset-skipped = line { $line } “{ $name }” — { $problem }
+settings-retain-deletes = Keep deleted files
+settings-retain-deletes-help = Move deleted files to a hidden folder on the same drive so Ctrl+Z can bring them back.
+settings-retain-overwrites = Keep overwritten files
+settings-retain-overwrites-help = Keep the old version of a file that a copy or move replaces, so Ctrl+Z can restore it.
+settings-retention-days = Keep for days
+settings-retention-days-help = From 1 to 7 days. Not a backup: kept files go after this time or when space runs short.
+settings-retention-cap = Space per drive
+settings-retention-cap-help = The most kept files may use on one drive, in MiB. The oldest go first.
+settings-retention-min-free = Stop below free space
+settings-retention-min-free-help = Keeping stops when a drive has less free space than this, in MiB.
+settings-safety = Safety net

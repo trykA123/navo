@@ -19,6 +19,7 @@ fn every_key_is_unique_and_lives_in_its_section() {
     for spec in &FIELDS {
         let home = match spec.section {
             Section::Display => spec.group().map(str::to_lowercase),
+            Section::Safety => Some("retention".to_owned()),
             section => Some(section.label().to_lowercase()),
         };
         assert_eq!(Some(spec.table().to_owned()), home, "{}", spec.key);
@@ -452,4 +453,25 @@ fn ui_scale_is_next_to_font_size_and_steps_by_ten() {
         nudged(scale, &Value::Number(100), Nudge::Back),
         Some(Value::Number(90))
     );
+}
+
+#[test]
+fn the_safety_net_section_lists_its_five_retention_fields() {
+    let keys: Vec<&str> = FIELDS
+        .iter()
+        .filter(|spec| spec.section == Section::Safety)
+        .map(|spec| spec.key)
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            "retention.retain-deletes",
+            "retention.retain-overwrites",
+            "retention.days",
+            "retention.max-volume-mib",
+            "retention.min-free-mib",
+        ]
+    );
+    assert_eq!(Section::Safety.label(), "settings-safety");
+    assert!(spec(Field::RetentionDays).help().contains("Not a backup"));
 }

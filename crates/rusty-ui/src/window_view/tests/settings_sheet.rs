@@ -208,6 +208,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         "Terminal",
         "Editor",
         "Copy",
+        "Safety net",
         "Search",
         "Display",
         "Diagnostics",
@@ -218,7 +219,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         rig.press(cx, "tab");
         let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
         assert!(in_sheet, "after tab {step}");
-        let current = (0..10usize).find(|index| {
+        let current = (0..11usize).find(|index| {
             cx.update_window(rig.window, |_, window, cx| {
                 window.render_frame(cx);
                 window.find(("settings-section", *index)).selected() == Some(true)

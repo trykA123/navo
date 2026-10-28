@@ -407,7 +407,7 @@ pub(super) fn content(
 }
 
 fn section_label(section: Section) -> SharedString {
-    if section == Section::Diagnostics {
+    if matches!(section, Section::Diagnostics | Section::Safety) {
         rusty_l10n::tr(section.label()).into()
     } else {
         section.label().into()

@@ -13,19 +13,21 @@ pub enum Section {
     Terminal,
     Editor,
     Copy,
+    Safety,
     Search,
     Display,
     Diagnostics,
 }
 
 impl Section {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
         Self::Terminal,
         Self::Editor,
         Self::Copy,
+        Self::Safety,
         Self::Search,
         Self::Display,
         Self::Diagnostics,
@@ -39,6 +41,7 @@ impl Section {
             Self::Terminal => "Terminal",
             Self::Editor => "Editor",
             Self::Copy => "Copy",
+            Self::Safety => "settings-safety",
             Self::Search => "Search",
             Self::Display => "Display",
             Self::Diagnostics => "settings-diagnostics",
@@ -53,6 +56,7 @@ impl Section {
             Self::Terminal => IconName::SquareTerminal,
             Self::Editor => IconName::FilePen,
             Self::Copy => IconName::Copy,
+            Self::Safety => IconName::Undo2,
             Self::Search => IconName::Search,
             Self::Display => IconName::Eye,
             Self::Diagnostics => IconName::Eye,
@@ -85,6 +89,11 @@ pub enum Field {
     TerminalCommand,
     EditorPath,
     CopyMode,
+    RetainDeletes,
+    RetainOverwrites,
+    RetentionDays,
+    RetentionCapMib,
+    RetentionMinFreeMib,
     SearchIndex,
     SearchDrives,
     SearchExclude,
@@ -223,7 +232,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 59] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
+pub const FIELDS: [FieldSpec; 64] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
 
 const fn join<const N: usize>(parts: [&[FieldSpec]; 4]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];
