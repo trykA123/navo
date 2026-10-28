@@ -6,6 +6,7 @@ use super::workspace_tray::TrayEdit;
 use crate::fkey_bar::KeyLayer;
 use crate::modifier_hints::{Arm, Combo, Delay, Hold};
 use crate::prelude::*;
+use crate::status_bar::{WorkspaceButton, WorkspaceSummary};
 
 gpui_kit::actions!(
     ferrite_window,
@@ -37,6 +38,7 @@ pub(super) struct WorkspaceKeys {
     pub(super) visible: bool,
     pub(super) preview: Option<Preview>,
     pub(super) edit: TrayEdit,
+    pub(super) pinned: bool,
     alt: bool,
     hold: Hold,
     timer: Option<Task<()>>,
@@ -62,6 +64,7 @@ impl WorkspaceKeys {
             visible: false,
             preview: None,
             edit: TrayEdit::new(cx),
+            pinned: false,
             alt: false,
             hold: Hold::default(),
             timer: None,
@@ -72,8 +75,23 @@ impl WorkspaceKeys {
     pub(super) fn cancel(&mut self) {
         self.preview = None;
         self.visible = false;
+        self.pinned = false;
         self.hold.cancel();
         self.timer = None;
+    }
+
+    fn pin(&mut self) {
+        self.pinned = true;
+        self.visible = true;
+    }
+
+    fn release(&mut self) -> Option<Preview> {
+        let (preview, is_pinned) = (self.preview, self.pinned);
+        self.cancel();
+        if is_pinned {
+            self.pin();
+        }
+        preview
     }
 }
 
@@ -95,7 +113,7 @@ impl FerriteWindow {
     }
 
     pub(super) fn sync_workspaces(&mut self, window: &Window, cx: &App) {
-        if !self.workspaces_allowed(window) && !self.workspace_keys.edit.has_focus(window, cx) {
+        if !self.workspaces_allowed(window) && !self.tray_kept(window, cx) {
             self.workspace_keys.cancel();
             self.workspace_keys.alt = false;
             self.workspace_keys.edit.drop_rename();
@@ -103,13 +121,64 @@ impl FerriteWindow {
     }
 
     pub(super) fn workspaces_allowed(&self, window: &Window) -> bool {
+        window.is_window_active() && self.pane_has_focus(window)
+    }
+
+    fn pane_has_focus(&self, window: &Window) -> bool {
         let pane = self.browser.state().focused_pane();
-        window.is_window_active()
-            && self.viewer.is_none()
+        self.viewer.is_none()
             && self
                 .focus
                 .get(&pane)
                 .is_some_and(|focus| focus.is_focused(window))
+    }
+
+    fn tray_kept(&self, window: &Window, cx: &App) -> bool {
+        self.workspace_keys.edit.has_focus(window, cx)
+            || (self.workspace_keys.pinned && self.pane_has_focus(window))
+    }
+
+    pub(super) fn toggle_workspace_pin(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_keys.pinned {
+            self.workspace_keys.cancel();
+            self.end_workspace_rename(window, cx);
+        } else {
+            self.pin_workspaces(cx);
+        }
+    }
+
+    pub(super) fn pin_workspaces(&mut self, cx: &mut Context<Self>) {
+        self.workspace_keys.pin();
+        cx.notify();
+    }
+
+    pub(super) fn escape_pane(&mut self, cx: &mut Context<Self>) {
+        if self.workspace_keys.pinned {
+            self.workspace_keys.cancel();
+            cx.notify();
+        } else {
+            self.escape_preview(cx);
+        }
+    }
+
+    pub(super) fn workspace_button(&self, cx: &mut Context<Self>) -> Option<WorkspaceButton> {
+        let state = self.browser.state();
+        let core = state.window(state.focused_window())?;
+        let active = core.active_workspace();
+        let workspace = core.workspaces().get(active)?;
+        let summary = WorkspaceSummary {
+            name: workspace.name.clone().into(),
+            n: active + 1,
+            total: core.workspaces().len(),
+            draft: rusty_core::changes(&workspace.saved, &core.snapshot()),
+        };
+        Some(
+            WorkspaceButton::new(summary)
+                .pinned(self.workspace_keys.pinned)
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.toggle_workspace_pin(window, cx);
+                })),
+        )
     }
 
     pub(super) fn workspace_modifiers(
@@ -121,16 +190,16 @@ impl FerriteWindow {
         let released = self.workspace_keys.alt && !modifiers.alt;
         self.workspace_keys.alt = modifiers.alt;
         if !self.workspaces_allowed(window) {
-            if !self.workspace_keys.edit.has_focus(window, cx) {
+            if self.tray_kept(window, cx) {
+                self.workspace_keys.preview = None;
+            } else {
                 self.workspace_keys.cancel();
                 self.workspace_keys.alt = false;
             }
             return;
         }
         if released {
-            let preview = self.workspace_keys.preview;
-            self.workspace_keys.cancel();
-            if let Some(preview) = preview {
+            if let Some(preview) = self.workspace_keys.release() {
                 let command = match preview {
                     Preview::Existing(n) => Command::WorkspaceSwitch { n },
                     Preview::New => Command::WorkspaceNew { name: None },

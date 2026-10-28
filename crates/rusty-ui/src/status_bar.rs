@@ -11,8 +11,10 @@ use crate::format;
 use crate::tokens;
 
 mod chips;
+mod workspace;
 
 use chips::{marked_chip, marked_part, notice_text};
+pub use workspace::{WorkspaceButton, WorkspaceSummary};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ListingMark {
@@ -132,6 +134,7 @@ pub struct StatusBar {
     props: StatusBarProps,
     notice: Option<StatusNotice>,
     parts: FooterParts,
+    workspace: Option<WorkspaceButton>,
 }
 
 impl StatusBar {
@@ -141,6 +144,7 @@ impl StatusBar {
             props,
             notice: None,
             parts: FooterParts::default(),
+            workspace: None,
         }
     }
 
@@ -158,6 +162,12 @@ impl StatusBar {
     #[must_use]
     pub fn notice(mut self, notice: Option<StatusNotice>) -> Self {
         self.notice = notice;
+        self
+    }
+
+    #[must_use]
+    pub fn workspace(mut self, workspace: Option<WorkspaceButton>) -> Self {
+        self.workspace = workspace;
         self
     }
 }
@@ -212,6 +222,7 @@ impl RenderOnce for StatusBar {
             .when(parts.free_space, |d| {
                 d.child(div().flex_none().child(props.free_text()))
             })
+            .children(self.workspace)
     }
 }
 

@@ -8,6 +8,7 @@ use super::fkeys::hold;
 use super::{FerriteWindow, fake, open_with, press, two_panes};
 
 mod actions;
+mod button;
 
 const ALT: Modifiers = Modifiers {
     alt: true,

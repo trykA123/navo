@@ -105,7 +105,11 @@ impl FerriteWindow {
         self.end_workspace_rename(window, cx);
     }
 
-    pub(super) fn end_workspace_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::window_view) fn end_workspace_rename(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.workspace_keys.edit.rename.take().is_some() {
             self.focus_core_pane(window, cx);
         }

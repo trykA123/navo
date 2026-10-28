@@ -110,7 +110,7 @@ pub(super) const ROWS: [RowSpec; 6] = [
 
 impl MenuCommand {
     pub fn is_available(self) -> bool {
-        matches!(self, Self::Quit | Self::AllSettings)
+        matches!(self, Self::Workspaces | Self::Quit | Self::AllSettings)
     }
 
     pub(super) fn is_primary(self) -> bool {

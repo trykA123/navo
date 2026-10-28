@@ -104,7 +104,8 @@ impl FerriteWindow {
         let header = self.pane_header(pane, is_active, cx);
         let footer = StatusBar::new(("status", pane.get()), status)
             .parts(footer_parts(parts))
-            .notice(self.status_notice().filter(|_| is_active));
+            .notice(self.status_notice().filter(|_| is_active))
+            .workspace(is_active.then(|| self.workspace_button(cx)).flatten());
         let body = Self::pane_keys(div().key_context(PANE), cx)
             .flex()
             .flex_col()
@@ -247,7 +248,7 @@ impl FerriteWindow {
                 }),
             )
             .on_action(cx.listener(|this: &mut Self, _: &ClearFilter, _, cx| {
-                this.escape_preview(cx);
+                this.escape_pane(cx);
             }))
             .on_action(
                 cx.listener(|this: &mut Self, _: &ShowHiddenTabs, window, cx| {

@@ -89,7 +89,7 @@ fn the_tiles_come_first_then_the_six_rows() {
 }
 
 #[test]
-fn quit_and_all_settings_run_today() {
+fn workspaces_quit_and_all_settings_run_today() {
     let available: Vec<MenuCommand> = (0..ITEM_COUNT)
         .filter_map(item_at)
         .filter_map(|item| match item {
@@ -97,7 +97,14 @@ fn quit_and_all_settings_run_today() {
             _ => None,
         })
         .collect();
-    assert_eq!(available, [MenuCommand::Quit, MenuCommand::AllSettings]);
+    assert_eq!(
+        available,
+        [
+            MenuCommand::Workspaces,
+            MenuCommand::Quit,
+            MenuCommand::AllSettings
+        ]
+    );
 }
 
 struct Shell {
@@ -248,7 +255,7 @@ fn unavailable_rows_are_shown_and_marked(cx: &mut TestAppContext) {
         for index in 3..ITEM_COUNT {
             let row = window.find(("app-menu-row", index));
             assert!(row.visible(), "row {index} is hidden");
-            let expected = (index < 7).then_some("Not available yet");
+            let expected = (index < 7 && index != 5).then_some("Not available yet");
             assert_eq!(row.value(), expected, "row {index}");
         }
     })
@@ -329,7 +336,7 @@ fn clicking_the_tile_toggles_it(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn unavailable_rows_do_nothing_when_activated(cx: &mut TestAppContext) {
     let rig = open(cx);
-    for index in [3usize, 4, 5, 6] {
+    for index in [3usize, 4, 6] {
         rig.click(cx, ("app-menu-row", index));
         rig.press(cx, "enter");
     }

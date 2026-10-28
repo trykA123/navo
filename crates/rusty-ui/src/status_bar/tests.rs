@@ -3,7 +3,10 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{Context, IntoElement, Render, Role, TestAppContext, Window};
 
 use super::chips::marked_part;
-use super::{FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice};
+use super::{
+    FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice, WorkspaceButton,
+    WorkspaceSummary,
+};
 use crate::format;
 use crate::test_window::open;
 
@@ -241,4 +244,85 @@ fn a_notice_alone_has_no_dangling_separator(cx: &mut TestAppContext) {
 fn marked_totals_alone_end_without_a_separator() {
     assert_eq!(marked_part("2 marked".into(), false), "2 marked");
     assert_eq!(marked_part("2 marked".into(), true), "2 marked ·");
+}
+
+struct WithWorkspace(WorkspaceSummary);
+
+impl Render for WithWorkspace {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        StatusBar::new("status", busy_props(ListingMark::Fresh))
+            .workspace(Some(WorkspaceButton::new(self.0.clone())))
+    }
+}
+
+fn summary(draft: u16) -> WorkspaceSummary {
+    WorkspaceSummary {
+        name: "Reports".into(),
+        n: 2,
+        total: 4,
+        draft,
+    }
+}
+
+fn with_workspace<R>(
+    draft: u16,
+    cx: &mut TestAppContext,
+    check: impl FnOnce(&mut Window) -> R,
+) -> R {
+    let (window, _) = open(cx, move |_, _| WithWorkspace(summary(draft)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        check(window)
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn the_workspace_button_ends_the_status_with_its_name_and_count(cx: &mut TestAppContext) {
+    with_workspace(0, cx, |window| {
+        let status = window.find("status").bounds();
+        let button = window.find("workspace-button").bounds();
+        assert!(button.right() <= status.right());
+        assert!(button.left() > status.center().x);
+        let name = window.find("workspace-button-name");
+        assert_eq!(name.label(), Some("Reports"));
+        assert_eq!(window.find("workspace-button-count").label(), Some("2/4"));
+        assert!(window.try_find("workspace-button-draft").is_none());
+    });
+}
+
+#[gpui_kit::test]
+fn a_draft_shows_its_change_count_in_the_button(cx: &mut TestAppContext) {
+    let expected = rusty_l10n::t!("workspace-draft", count = 3u16);
+    with_workspace(3, cx, |window| {
+        assert_eq!(
+            window.find("workspace-button-draft").label(),
+            Some(expected.as_str())
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn the_button_icon_and_labels_share_one_centre_line(cx: &mut TestAppContext) {
+    with_workspace(3, cx, |window| {
+        let icon = window.find("workspace-button-icon").bounds();
+        assert!(icon.size.height > gpui_kit::px(0.));
+        let centre = icon.center().y;
+        for id in [
+            "workspace-button-name",
+            "workspace-button-count",
+            "workspace-button-draft",
+        ] {
+            let offset = f32::from(window.find(id).bounds().center().y - centre).abs();
+            assert!(offset <= 1., "{id} is {offset} px off the icon centre");
+        }
+    });
+}
+
+#[test]
+fn the_workspace_button_alone_does_not_keep_a_hidden_footer() {
+    let bar = StatusBar::new("status", busy_props(ListingMark::Fresh))
+        .parts(none())
+        .workspace(Some(WorkspaceButton::new(summary(0))));
+    assert!(bar.is_empty());
 }
