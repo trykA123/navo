@@ -300,3 +300,15 @@ fn a_second_single_rename_waits_for_the_running_job() {
     assert!(exists(&fs, "home/b.txt"));
     assert!(!exists(&fs, "home/y.txt"));
 }
+
+#[test]
+fn naming_resolves_a_results_entry_under_its_base() {
+    let fs = fake();
+    let browser = browser(&fs);
+    let mut tab = browser.state().active_tab().clone();
+    tab.set_base(Some(rusty_core::Location::new(r"C:\base").unwrap()));
+    assert_eq!(
+        super::entry_target(&tab, r"sub\a.txt"),
+        Some(rusty_core::Location::new(r"C:\base\sub\a.txt").unwrap())
+    );
+}

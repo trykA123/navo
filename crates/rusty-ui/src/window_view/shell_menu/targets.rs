@@ -22,7 +22,7 @@ pub(super) fn targets(tab: &Tab, details: &[FsEntry], adds_cursor: bool) -> Targ
         .into_iter()
         .filter_map(|row| {
             let entry = details.get(usize::try_from(row).ok()?)?;
-            let location = tab.location().join(&entry.name).ok()?;
+            let location = tab.entry_location(&entry.name.to_text()).ok()?;
             Some((location, entry))
         })
         .collect();
@@ -56,5 +56,29 @@ fn native_handle(window: &Window) -> Option<isize> {
     match HasWindowHandle::window_handle(window).ok()?.as_raw() {
         RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rusty_core::{AppState, Location, ProviderPath};
+    use rusty_fs::{Attributes, EntryKind, FsEntry};
+
+    #[test]
+    fn context_menu_resolves_a_results_entry_under_its_base() {
+        let state = AppState::new(Location::new(r"C:\shown").unwrap());
+        let mut tab = state.active_tab().clone();
+        tab.set_base(Some(Location::new(r"C:\base").unwrap()));
+        let entry = FsEntry {
+            name: ProviderPath::from_text(r"sub\a.txt"),
+            kind: EntryKind::File,
+            size: 1,
+            modified_ms: None,
+            attributes: Attributes::default(),
+        };
+        assert_eq!(
+            super::targets(&tab, &[entry], false).items,
+            [Location::new(r"C:\base\sub\a.txt").unwrap()]
+        );
     }
 }

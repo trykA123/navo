@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusty_core::Location;
+use rusty_core::{Location, Tab};
 
 use super::FerriteWindow;
 use super::prompt::PromptKind;
@@ -30,15 +30,7 @@ impl EditorHooks {
 impl FerriteWindow {
     pub(super) fn edit_row(&mut self, row: u64, choose: bool) {
         let tab = self.browser.state().active_tab();
-        let target = tab
-            .listing()
-            .and_then(|listing| listing.get(row))
-            .filter(|entry| entry.name != "..")
-            .and_then(|entry| {
-                tab.location()
-                    .join(&rusty_core::ProviderPath::from_text(&entry.name))
-                    .ok()
-            });
+        let target = edit_target(tab, row);
         let Some(target) = target else {
             return;
         };
@@ -77,5 +69,48 @@ impl FerriteWindow {
         let opened = (self.editor.open)(&program, target).map_err(Some);
         self.change_setting(Change::text(Field::EditorPath, program), window, cx);
         opened
+    }
+}
+
+fn edit_target(tab: &Tab, row: u64) -> Option<Location> {
+    tab.listing()
+        .and_then(|listing| listing.get(row))
+        .filter(|entry| entry.name != "..")
+        .and_then(|entry| tab.entry_location(&entry.name).ok())
+}
+
+#[cfg(test)]
+mod tests {
+
+    fn based_tab() -> rusty_core::Tab {
+        use rusty_core::{AppState, Entry, Event, Listing, Location, apply_event, list_missing};
+        let location = Location::new(r"C:\shown").unwrap();
+        let mut state = AppState::new(location.clone());
+        list_missing(&mut state);
+        let tab = state.active_tab().id();
+        let request = state.active_tab().pending_request().unwrap();
+        apply_event(
+            &mut state,
+            Event::ListingLoaded {
+                tab,
+                request,
+                location,
+                listing: Listing::new(vec![Entry {
+                    name: r"sub\a.txt".to_owned(),
+                    is_folder: false,
+                }]),
+            },
+        );
+        let mut tab = state.active_tab().clone();
+        tab.set_base(Some(Location::new(r"C:\base").unwrap()));
+        tab
+    }
+
+    #[test]
+    fn editor_resolves_a_results_entry_under_its_base() {
+        assert_eq!(
+            super::edit_target(&based_tab(), 0),
+            Some(rusty_core::Location::new(r"C:\base\sub\a.txt").unwrap())
+        );
     }
 }

@@ -1,5 +1,5 @@
 use gpui_kit::{AnyWindowHandle, Modifiers, Subscription};
-use rusty_core::{DropKeys, DropOp, Location, OpKind, PaneId, ProviderPath, drop_op};
+use rusty_core::{DropKeys, DropOp, Location, OpKind, PaneId, ProviderPath, Tab, drop_op};
 
 use super::FerriteWindow;
 use super::drag_hover::Over;
@@ -205,21 +205,7 @@ impl FerriteWindow {
 
     pub(super) fn drop_target(&self, pane: PaneId, spot: &DropSpot) -> Option<Target> {
         let tab = self.browser.state().pane(pane)?.active();
-        let folder = tab.location();
-        let DropSpot::Row(row, name) = spot else {
-            return Some(Ok(folder.clone()));
-        };
-        let entry = tab
-            .listing()
-            .and_then(|listing| listing.get(*row))
-            .filter(|entry| entry.is_folder && entry.name == name.as_ref());
-        match entry {
-            Some(entry) => folder
-                .join(&ProviderPath::from_text(&entry.name))
-                .ok()
-                .map(Ok),
-            None => Some(Err(Refusal::ListChanged)),
-        }
+        row_target(tab, spot)
     }
 
     pub(super) fn wire_tab_drops(tabs: PaneTabs, pane: PaneId, cx: &mut Context<Self>) -> PaneTabs {
@@ -364,5 +350,57 @@ impl FerriteWindow {
                 }
             }
         }
+    }
+}
+
+fn row_target(tab: &Tab, spot: &DropSpot) -> Option<Target> {
+    let folder = tab.location();
+    let DropSpot::Row(row, name) = spot else {
+        return Some(Ok(folder.clone()));
+    };
+    let entry = tab
+        .listing()
+        .and_then(|listing| listing.get(*row))
+        .filter(|entry| entry.is_folder && entry.name == name.as_ref());
+    match entry {
+        Some(entry) => tab.entry_location(&entry.name).ok().map(Ok),
+        None => Some(Err(Refusal::ListChanged)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    fn based_tab() -> rusty_core::Tab {
+        use rusty_core::{AppState, Entry, Event, Listing, Location, apply_event, list_missing};
+        let location = Location::new(r"C:\shown").unwrap();
+        let mut state = AppState::new(location.clone());
+        list_missing(&mut state);
+        let tab = state.active_tab().id();
+        let request = state.active_tab().pending_request().unwrap();
+        apply_event(
+            &mut state,
+            Event::ListingLoaded {
+                tab,
+                request,
+                location,
+                listing: Listing::new(vec![Entry {
+                    name: r"sub\a.txt".to_owned(),
+                    is_folder: true,
+                }]),
+            },
+        );
+        let mut tab = state.active_tab().clone();
+        tab.set_base(Some(Location::new(r"C:\base").unwrap()));
+        tab
+    }
+
+    #[test]
+    fn folder_row_drop_resolves_a_results_entry_under_its_base() {
+        let spot = crate::file_list::DropSpot::Row(0, r"sub\a.txt".into());
+        assert_eq!(
+            super::row_target(&based_tab(), &spot),
+            Some(Ok(rusty_core::Location::new(r"C:\base\sub\a.txt").unwrap()))
+        );
     }
 }

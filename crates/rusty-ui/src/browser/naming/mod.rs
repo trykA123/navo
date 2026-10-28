@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use rusty_core::{FsError, Location, NameError, ProviderPath, TabId, check_name};
+use rusty_core::{FsError, Location, NameError, Tab, TabId, check_name};
 use rusty_fs::{JobKind, JobSlot, Priority, ProviderOps, volume_of};
 
 use super::{Browser, Message};
@@ -83,11 +83,7 @@ impl Browser {
     }
 
     fn here(&self, name: &str) -> Option<Location> {
-        self.state
-            .active_tab()
-            .location()
-            .join(&ProviderPath::from_text(name))
-            .ok()
+        entry_target(self.state.active_tab(), name)
     }
 
     fn taken(&self, name: &str, except: Option<&str>) -> bool {
@@ -149,6 +145,10 @@ fn apply_change(
         Change::CreateFolder(target) => ops.create_folder(target),
         Change::CreateFile(target) => ops.create_file(target),
     }
+}
+
+fn entry_target(tab: &Tab, name: &str) -> Option<Location> {
+    tab.entry_location(name).ok()
 }
 
 #[cfg(test)]
