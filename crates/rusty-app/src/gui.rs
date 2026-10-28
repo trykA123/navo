@@ -319,7 +319,7 @@ pub(crate) fn operations(
     let mut protected = vec![home.clone()];
     let Some(dirs) = dirs else {
         let unavailable =
-            unavailable_operations(protected, "job-profile-unavailable", experimental);
+            unavailable_operations(protected, None, "job-profile-unavailable", experimental);
         return (unavailable, None);
     };
     protected.extend(
@@ -334,8 +334,12 @@ pub(crate) fn operations(
             .ok()
     });
     let Some(journal) = journal else {
-        let unavailable =
-            unavailable_operations(protected, "job-journal-unavailable", experimental);
+        let unavailable = unavailable_operations(
+            protected,
+            Some(dirs),
+            "job-journal-unavailable",
+            experimental,
+        );
         return (unavailable, None);
     };
     let retention_dirs = dirs.clone();
@@ -357,12 +361,15 @@ pub(crate) fn operations(
 
 fn unavailable_operations(
     protected: Vec<Location>,
+    dirs: Option<&StoreDirs>,
     message: &'static str,
     experimental: bool,
 ) -> Operations {
     if !experimental {
         return Operations {
             protected,
+            log: jobs::guard_factory(dirs.cloned()),
+            write: Some(jobs::guard_write(dirs.cloned())),
             ..Operations::unlogged()
         };
     }

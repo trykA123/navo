@@ -45,7 +45,7 @@ pub use measure::{
 pub use paged::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
 };
-pub use protection::check_mutation;
+pub use protection::{check_mutation, check_relocation};
 pub use provider::{
     AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
     EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, LinkKey, ListSink, OwnedCopy,

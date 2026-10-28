@@ -93,9 +93,6 @@ pub(crate) fn claim_write(
     target: &Location,
     experimental: bool,
 ) -> Result<Option<File>, String> {
-    if !experimental {
-        return Ok(None);
-    }
     let lease = experimental
         .then(|| super::mutation_lock::shared(None))
         .transpose()?;
@@ -154,36 +151,42 @@ pub(super) fn guard(
     dirs: &StoreDirs,
     experimental: bool,
 ) -> Result<(), String> {
-    if !experimental {
-        return Ok(());
-    }
-    let paths = plan
-        .steps
+    guard_paths(&mutated_paths(plan)?, dirs, experimental)
+}
+
+pub(super) fn mutated_paths(plan: &OperationPlan) -> Result<Vec<Location>, String> {
+    plan.steps
         .iter()
         .flat_map(mutated)
         .map(rusty_fs::mutation_location)
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.message())?;
-    guard_paths(&paths, dirs, experimental)
+        .map_err(|error| error.message())
 }
 
 fn guard_paths(paths: &[Location], dirs: &StoreDirs, experimental: bool) -> Result<(), String> {
-    if !experimental {
-        return Ok(());
-    }
     if paths.iter().any(reserved) {
         return Err(rusty_l10n::tr("job-retained-protected"));
     }
     for path in [&dirs.config, &dirs.data] {
         let location = crate::startup::path_location(path).ok_or("invalid profile path")?;
-        let resolved = std::fs::canonicalize(path).map_err(|error| error.to_string())?;
-        let resolved = crate::startup::path_location(&resolved).ok_or("invalid profile path")?;
-        if paths
-            .iter()
-            .any(|path| intersects(path, &location) || intersects(path, &resolved))
-        {
+        let resolved = match std::fs::canonicalize(path) {
+            Ok(resolved) => {
+                Some(crate::startup::path_location(&resolved).ok_or("invalid profile path")?)
+            }
+            Err(_) if !experimental => None,
+            Err(error) => return Err(error.to_string()),
+        };
+        if paths.iter().any(|path| {
+            intersects(path, &location)
+                || resolved
+                    .as_ref()
+                    .is_some_and(|resolved| intersects(path, resolved))
+        }) {
             return Err(rusty_l10n::tr("job-profile-protected"));
         }
+    }
+    if !experimental {
+        return Ok(());
     }
     let (db, _) = crate::crash::open_db(&dirs.journal_file()).map_err(|error| error.to_string())?;
     let catalog = RetentionCatalog::new(db).map_err(|error| error.to_string())?;

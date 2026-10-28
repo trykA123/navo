@@ -9,6 +9,7 @@ use rusty_store::{JobId, JobJournal, JobState, JournalError};
 use rusty_ui::browser::OpLog;
 
 mod deletion;
+mod guard_log;
 mod held;
 mod identity;
 mod maintenance;
@@ -24,6 +25,7 @@ mod profile;
 mod recovery;
 mod temporary;
 
+pub(crate) use guard_log::{guard_factory, guard_write};
 pub use pending::StillPending;
 #[cfg(test)]
 pub use pending::still_pending;
@@ -349,6 +351,9 @@ impl OpLog for JournalLog {
         }
         if self.experimental_retention {
             rusty_fs::check_mutation(operation.plan, operation.ops, operation.cancel)
+                .map_err(|error| error.message())?;
+        } else if self.profile.is_some() {
+            rusty_fs::check_relocation(operation.plan, operation.ops, operation.cancel)
                 .map_err(|error| error.message())?;
         }
         if self.overwrites.is_some() && !operation.ops.supports_atomic_rename() {

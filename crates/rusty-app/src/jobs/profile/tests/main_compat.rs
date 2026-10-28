@@ -49,8 +49,35 @@ fn stale_holder_steps(kind: OpKind, fs: &FakeFs) -> Vec<Step> {
     }
 }
 
+fn refusal(dirs: &StoreDirs, journal: SharedJournal, plan: &OperationPlan, fs: &FakeFs) -> String {
+    match profile_factory(journal, dirs.clone())(plan) {
+        Err(error) => error,
+        Ok(mut log) => check(log.as_mut(), plan, fs, &CancelToken::new()).unwrap_err(),
+    }
+}
+
+fn reserved_error(fs: &FakeFs, path: &str) -> String {
+    rusty_fs::mutation_location(&fs.location(path))
+        .unwrap_err()
+        .message()
+}
+
+fn bare(kind: OpKind, steps: Vec<Step>) -> OperationPlan {
+    OperationPlan {
+        kind,
+        steps,
+        totals: rusty_core::Totals {
+            files: 0,
+            folders: 0,
+            bytes: 0,
+        },
+        conflicts: vec![],
+        risks: vec![],
+    }
+}
+
 #[test]
-fn main_compat_default_jobs_allow_stale_holders_without_tree_scans() {
+fn safe_mode_refuses_jobs_that_touch_stale_holders() {
     for kind in [
         OpKind::Recycle,
         OpKind::Move,
@@ -60,56 +87,97 @@ fn main_compat_default_jobs_allow_stale_holders_without_tree_scans() {
         let (_root, dirs, journal) = setup();
         let fs = FakeFs::new();
         fs.add_file("home/docs/.ferrite-held-ab/a", 2);
+        fs.add_folder("dest");
+        let plan = bare(kind, stale_holder_steps(kind, &fs));
+        let expected = if kind == OpKind::Delete {
+            reserved_error(&fs, "home/docs/.ferrite-held-ab/a")
+        } else {
+            reserved_error(&fs, "home/docs/.ferrite-held-ab")
+        };
+        assert_eq!(refusal(&dirs, journal, &plan, &fs), expected, "{kind:?}");
+        assert_eq!(
+            fs.metadata(&fs.location("home/docs/.ferrite-held-ab/a"))
+                .unwrap()
+                .size,
+            2
+        );
+    }
+}
+
+#[test]
+fn safe_mode_moves_ordinary_folders_and_deletes_without_tree_scans() {
+    for kind in [
+        OpKind::Recycle,
+        OpKind::Move,
+        OpKind::Rename,
+        OpKind::Delete,
+    ] {
+        let (_root, dirs, journal) = setup();
+        let fs = FakeFs::new();
+        fs.add_file("home/docs/notes/a", 2);
         fs.add_folder("home/docs/unreadable");
         fs.add_folder("dest");
-        let steps = stale_holder_steps(kind, &fs);
-        let plan = OperationPlan {
-            kind,
-            steps,
-            totals: rusty_core::Totals {
-                files: 0,
-                folders: 0,
-                bytes: 0,
-            },
-            conflicts: vec![],
-            risks: vec![],
+        let steps = match kind {
+            OpKind::Delete => vec![
+                Step::RemoveFile {
+                    location: fs.location("home/docs/notes/a"),
+                },
+                Step::RemoveFolder {
+                    location: fs.location("home/docs/notes"),
+                },
+                Step::RemoveFolder {
+                    location: fs.location("home/docs/unreadable"),
+                },
+                Step::RemoveFolder {
+                    location: fs.location("home/docs"),
+                },
+            ],
+            _ => stale_holder_steps(kind, &fs),
         };
-        fs.fault(
-            "home/docs/unreadable",
-            FakeOp::List,
-            1,
-            Fault::Fail(rusty_core::FsErrorKind::AccessDenied),
-        );
+        if kind == OpKind::Delete {
+            fs.fault(
+                "home/docs/unreadable",
+                FakeOp::List,
+                1,
+                Fault::Fail(rusty_core::FsErrorKind::AccessDenied),
+            );
+        }
+        let plan = bare(kind, steps);
         let mut log = profile_factory(journal, dirs)(&plan).unwrap();
         execute_default(log.as_mut(), &plan, &fs);
-        assert_eq!(fs.calls("home/docs/unreadable", FakeOp::List), 0);
+        assert_eq!(
+            fs.calls("home/docs/unreadable", FakeOp::List),
+            u32::from(kind != OpKind::Delete),
+            "{kind:?}"
+        );
         assert!(fs.metadata(&fs.location("home/docs")).is_err());
     }
 }
 
 #[test]
-fn main_compat_default_moves_a_stranded_held_file_out() {
+fn safe_mode_refuses_moving_a_held_file_out() {
     let (_root, dirs, journal) = setup();
     let fs = FakeFs::new();
     fs.add_file("home/.ferrite-held-ab/a", 2);
     fs.add_folder("dest");
-    let plan = OperationPlan {
-        kind: OpKind::Move,
-        steps: vec![Step::Rename {
+    let plan = bare(
+        OpKind::Move,
+        vec![Step::Rename {
             source: fs.location("home/.ferrite-held-ab/a"),
             target: fs.location("dest/a"),
         }],
-        totals: rusty_core::Totals {
-            files: 0,
-            folders: 0,
-            bytes: 0,
-        },
-        conflicts: vec![],
-        risks: vec![],
-    };
-    let mut log = profile_factory(journal, dirs)(&plan).unwrap();
-    execute_default(log.as_mut(), &plan, &fs);
-    assert_eq!(fs.metadata(&fs.location("dest/a")).unwrap().size, 2);
+    );
+    assert_eq!(
+        refusal(&dirs, journal, &plan, &fs),
+        reserved_error(&fs, "home/.ferrite-held-ab/a")
+    );
+    assert_eq!(
+        fs.metadata(&fs.location("home/.ferrite-held-ab/a"))
+            .unwrap()
+            .size,
+        2
+    );
+    assert!(fs.metadata(&fs.location("dest/a")).is_err());
 }
 
 #[test]

@@ -119,3 +119,33 @@ fn main_compat_default_save_keeps_the_link_and_writes_its_target() {
     );
     assert_eq!(std::fs::read(target).unwrap(), b"replacement");
 }
+
+#[test]
+fn safe_mode_editor_save_refuses_containers_and_the_profile_but_saves_ordinary_files() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = rusty_store::StoreDirs::in_profile(&root.path().join("profile"));
+    dirs.ensure().unwrap();
+    std::fs::write(dirs.settings_file(), b"original settings").unwrap();
+    let held = root.path().join(".navo-retained-ab/payload");
+    std::fs::create_dir_all(&held).unwrap();
+    std::fs::write(held.join("a"), b"original retained bytes").unwrap();
+    let hooks = super::super::profile_hooks(None, Some(&dirs), false);
+    for path in [held.join("a"), held.join("new"), dirs.settings_file()] {
+        let at = crate::startup::path_location(&path).unwrap();
+        assert!((hooks.write)(&at, &save()).is_err(), "{path:?}");
+    }
+    assert_eq!(
+        std::fs::read(held.join("a")).unwrap(),
+        b"original retained bytes"
+    );
+    assert!(!held.join("new").exists());
+    assert_eq!(
+        std::fs::read(dirs.settings_file()).unwrap(),
+        b"original settings"
+    );
+    let ordinary = root.path().join("notes.txt");
+    std::fs::write(&ordinary, b"old").unwrap();
+    let at = crate::startup::path_location(&ordinary).unwrap();
+    (hooks.write)(&at, &save()).unwrap();
+    assert_eq!(std::fs::read(ordinary).unwrap(), b"replacement");
+}
