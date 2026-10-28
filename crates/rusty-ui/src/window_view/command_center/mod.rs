@@ -68,6 +68,7 @@ struct Step {
 
 struct Open {
     mode: Mode,
+    scope: Option<rusty_core::Location>,
     center: Entity<CommandCenter>,
     rows: Rc<[Row]>,
     selection: Selection,
@@ -106,6 +107,7 @@ impl Open {
     fn props(&self, has_key_hints: bool) -> CommandCenterProps {
         CommandCenterProps {
             mode: self.mode,
+            scope: self.scope.clone(),
             rows: self.rows.clone(),
             selection: self.selection,
             argument: self.step.as_ref().map(|step| Argument {
@@ -221,17 +223,11 @@ impl FerriteWindow {
         let generation = self.command_center.generation + 1;
         let rows: Rc<[Row]> = search::recent(Vec::new(), Vec::new()).into();
         let anchor = self.command_center_anchor(window, cx);
-        let props = CommandCenterProps {
-            mode: Mode::Names,
-            rows: rows.clone(),
-            selection: Selection::start(&rows),
-            argument: None,
-            note: None,
-            error: None,
+        let props = initial_props(
+            rows.clone(),
             anchor,
-            key_hints: self.has_key_hints().then(|| keys.clone()),
-            is_leaving: false,
-        };
+            self.has_key_hints().then(|| keys.clone()),
+        );
         let center = cx.new(|cx| CommandCenter::new(props, window, cx));
         let events = cx.subscribe_in(&center, window, |view, _, event, window, cx| {
             view.command_center_event(event, window, cx);
@@ -240,6 +236,7 @@ impl FerriteWindow {
         let rows_memory = RESULTS_MEMORY.hold(Results::memory_use(&rows));
         self.command_center.open = Some(Open {
             mode: Mode::Names,
+            scope: None,
             center,
             selection: Selection::start(&rows),
             rows,
@@ -335,6 +332,12 @@ impl FerriteWindow {
                 let way = self.click_way(*modifiers);
                 self.run_selected(way, window, cx);
             }
+            CommandCenterEvent::ScopeRemoved => {
+                if let Some(open) = self.command_center.open.as_mut() {
+                    open.scope = None;
+                }
+                self.push_command_center(window, cx);
+            }
             CommandCenterEvent::Dismissed => self.close_command_center(window, cx),
         }
     }
@@ -370,5 +373,24 @@ impl FerriteWindow {
     pub(super) fn command_center_query(&self, cx: &App) -> Option<String> {
         let open = self.command_center.open.as_ref()?;
         Some(open.center.read(cx).query(cx).to_string())
+    }
+}
+
+fn initial_props(
+    rows: Rc<[Row]>,
+    anchor: Bounds<Pixels>,
+    key_hints: Option<HintKeys>,
+) -> CommandCenterProps {
+    CommandCenterProps {
+        mode: Mode::Names,
+        scope: None,
+        selection: Selection::start(&rows),
+        rows,
+        argument: None,
+        note: None,
+        error: None,
+        anchor,
+        key_hints,
+        is_leaving: false,
     }
 }

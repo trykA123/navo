@@ -1,6 +1,5 @@
 ---
 source: crates/rusty-ui/src/commands/tests.rs
-assertion_line: 506
 expression: "lines.join(\"\\n\")"
 ---
 workspace.preview_first | FileList | false
@@ -76,6 +75,7 @@ preview.recount | PreviewBrowse | true
 preview.view_menu | PreviewBrowse | true
 preview.type_bars | PreviewBrowse | true
 preview.largest_files | PreviewBrowse | true
+command_center.find_content | FileList | true
 files.cursor_up | FileList | false
 files.cursor_down | FileList | false
 files.page_up | FileList | false

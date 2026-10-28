@@ -229,6 +229,11 @@ pub(super) const GROUPS: [Group; 9] = [
         context: "FileList",
         commands: &[
             (
+                "command_center::FindContent",
+                "command_center.find_content",
+                "cmd-command-center-find-content",
+            ),
+            (
                 "file_list::CursorUp",
                 "files.cursor_up",
                 "cmd-files-cursor-up",

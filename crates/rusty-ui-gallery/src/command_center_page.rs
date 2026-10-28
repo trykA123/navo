@@ -199,6 +199,7 @@ fn props(shows: Shows, rows: Vec<Row>, viewport: Bounds<Pixels>) -> CommandCente
     let center = viewport.size.width / 2.;
     CommandCenterProps {
         mode: rusty_ui::command_center::Mode::Names,
+        scope: None,
         rows: rows.into(),
         selection,
         argument: (shows == Shows::Argument).then(|| Argument {

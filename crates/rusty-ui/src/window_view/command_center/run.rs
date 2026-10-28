@@ -20,7 +20,11 @@ impl FerriteWindow {
         let Some(open) = self.command_center.open.as_mut() else {
             return;
         };
-        if open.search.settled != open.search.generation() {
+        let is_content = matches!(open.selection.row(&open.rows),
+            Some(Row::Hit(hit) | Row::TopHit(hit)) if hit.target == Target::Action("command_center::FindContent"));
+        if !(is_content && open.search.shown == open.search.generation())
+            && open.search.settled != open.search.generation()
+        {
             open.run_when_shown = Some(way);
             return;
         }
@@ -79,6 +83,9 @@ impl FerriteWindow {
     }
 
     fn run_action(&mut self, name: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        if name == "command_center::FindContent" {
+            return self.open_content(window, cx);
+        }
         let restore = self
             .command_center
             .open

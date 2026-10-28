@@ -14,6 +14,7 @@ use crate::window_view::{FerriteWindow, Frecent};
 
 mod args;
 mod late;
+mod modes;
 mod open;
 
 struct Fixed(Vec<Hit>);

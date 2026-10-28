@@ -7,7 +7,7 @@ mod row;
 use std::rc::Rc;
 
 use gpui_kit::base::{Scrollbar, TestSupportExt};
-use gpui_kit::component::input::{Input, InputEvent};
+use gpui_kit::component::input::InputEvent;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnchoredPositionMode, AnyElement, App, Bounds, ClickEvent, Context, Div, Entity, EventEmitter,
@@ -30,10 +30,9 @@ use super::results::Row;
 use super::selection::Selection;
 use crate::commands::ArgKind;
 use crate::primitives::{
-    IconName, Kbd, ListScroll, RowSemantics, TextFieldState, VirtualList, icon, text_field_state,
+    Kbd, ListScroll, RowSemantics, TextFieldState, VirtualList, text_field_state,
 };
 use crate::tokens::Theme;
-use chip::chip;
 use footer::FooterLook;
 use motion::enter;
 pub use place::INPUT_ROW;
@@ -43,8 +42,6 @@ const ROOT: &str = "command-center";
 const CONTEXT: &str = "CommandCenter";
 const VISIBLE_ROWS: f32 = 12.;
 const VIRTUAL_FROM: usize = 64;
-const FIELD: f32 = 32.;
-const CHIP: f32 = 22.;
 const CHAR_WIDTH: f32 = 14.;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,6 +53,7 @@ pub struct Argument {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandCenterProps {
     pub mode: Mode,
+    pub scope: Option<rusty_core::Location>,
     pub rows: Rc<[Row]>,
     pub selection: Selection,
     pub argument: Option<Argument>,
@@ -70,6 +68,7 @@ pub struct CommandCenterProps {
 pub enum CommandCenterEvent {
     QueryChanged(SharedString),
     ModeChanged(Mode),
+    ScopeRemoved,
     Moved(usize),
     Run(usize, Modifiers),
     Dismissed,
@@ -234,41 +233,6 @@ impl Paint {
 }
 
 impl CommandCenter {
-    fn input_row(&self, t: &Theme) -> Div {
-        let input = Input::new(&self.field)
-            .id("command-center-input")
-            .aria_label(tr("command-center"))
-            .appearance(false)
-            .h(px(FIELD))
-            .text_size(t.typography.body);
-        let field = div()
-            .flex()
-            .flex_1()
-            .min_w_0()
-            .items_center()
-            .gap(t.spacing.md)
-            .h(px(FIELD))
-            .pl(t.spacing.xl)
-            .pr(t.spacing.xs)
-            .rounded(t.radii.full)
-            .border_1()
-            .border_color(t.colors.accent)
-            .bg(t.surfaces.field)
-            .child(icon(IconName::Search, t.spacing.icon, t.colors.muted))
-            .when_some(self.props.argument.as_ref(), |field, argument| {
-                field.child(chip(t, argument))
-            })
-            .child(div().flex_1().min_w_0().child(input))
-            .children(self.escape_key());
-        div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .h(px(INPUT_ROW))
-            .p(t.spacing.xs)
-            .child(field)
-    }
-
     fn escape_key(&self) -> Option<Kbd> {
         let key = match &self.props.key_hints {
             Some(keys) => keys.key(footer::BACK_COMMAND)?,
@@ -400,6 +364,7 @@ impl Render for CommandCenter {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
+            .capture_key_down(cx.listener(Self::remove_scope))
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(CommandCenterEvent::Dismissed)))
             .child(self.input_row(&t))
             .children(self.mode_row(&t, cx))

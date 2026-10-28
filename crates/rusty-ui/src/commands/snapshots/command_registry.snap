@@ -75,6 +75,7 @@ preview.recount | Recount folder | PreviewBrowse
 preview.view_menu | Preview view menu | PreviewBrowse
 preview.type_bars | Show or hide type bars | PreviewBrowse
 preview.largest_files | Show or hide the largest files | PreviewBrowse
+command_center.find_content | Search inside files | FileList
 files.cursor_up | Up | FileList
 files.cursor_down | Down | FileList
 files.page_up | Page up | FileList

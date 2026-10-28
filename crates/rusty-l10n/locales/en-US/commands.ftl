@@ -408,3 +408,5 @@ cmd-workspace-move-right = Move workspace right
 
 cmd-command-center-next-mode = Next mode
 cmd-command-center-previous-mode = Previous mode
+
+cmd-command-center-find-content = Search inside files

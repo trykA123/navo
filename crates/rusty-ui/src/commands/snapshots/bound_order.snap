@@ -397,6 +397,7 @@ sheet.narrower | ctrl-[ | global
 sheet.wider | ctrl-] | global
 [command_center]
 app.command_palette | ctrl-k | global
+command_center.find_content | alt-f7 | FileList
 command_center.up | up | CommandCenter
 command_center.up | up | CommandCenter > Input
 command_center.down | down | CommandCenter

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::super::FerriteWindow;
 use crate::command_center::{
-    Cancel, CommandsSnapshot, Group, Hit, HitSink, Notes, Query, RecentSource, Request,
+    Cancel, CommandsSnapshot, Group, Hit, HitSink, Mode, Notes, Query, RecentSource, Request,
     ResultSource, Results, Row, Scope,
 };
 use crate::commands::ArgKind;
@@ -315,6 +315,7 @@ impl FerriteWindow {
         } = update;
         if let Some(open) = self.command_center.open.as_mut()
             && generation == open.search.generation()
+            && !open.search.cancel.is_cancelled()
         {
             open.indexing = notes.indexing.map(|note| note.text());
         }
@@ -325,15 +326,22 @@ impl FerriteWindow {
 
     fn show_rows(
         &mut self,
-        (generation, rows, settled): (u64, Vec<Row>, bool),
+        (generation, mut rows, settled): (u64, Vec<Row>, bool),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(open) = self.command_center.open.as_mut() else {
             return;
         };
-        if generation != open.search.generation() {
+        if generation != open.search.generation() || open.search.cancel.is_cancelled() {
             return;
+        }
+        let query = open.center.read(cx).query(cx);
+        if open.mode == Mode::Names && open.step.is_none() && !query.trim().is_empty() {
+            rows.push(crate::command_center::content_row(
+                query,
+                self.browser.state().active_tab().location(),
+            ));
         }
         open.selection = open.kept_selection(generation, &rows);
         open.search.shown = generation;

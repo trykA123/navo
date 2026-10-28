@@ -242,6 +242,10 @@ keys = ["alt-v"]
 # FileList
 
 [[bind]]
+command = "command_center.find_content"
+keys = ["alt-f7"]
+
+[[bind]]
 command = "files.cursor_up"
 keys = ["up"]
 

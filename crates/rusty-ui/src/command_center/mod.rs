@@ -37,6 +37,7 @@ gpui_kit::actions!(
     command_center,
     [
         Toggle,
+        FindContent,
         Up,
         Down,
         PageUp,
@@ -94,4 +95,29 @@ impl Mode {
             Self::Collections => "command-center-mode-collections",
         }
     }
+}
+
+pub(crate) fn scope_name(scope: &rusty_core::Location) -> String {
+    scope.name().map_or_else(
+        || scope.as_str().to_owned(),
+        |name| name.display().into_owned(),
+    )
+}
+
+pub(crate) fn content_row(query: SharedString, scope: &rusty_core::Location) -> Row {
+    Row::Hit(Hit {
+        source: "content-mode",
+        group: Group::Commands,
+        title: rusty_l10n::t!(
+            "command-center-search-content",
+            query = query.to_string(),
+            folder = scope_name(scope)
+        )
+        .into(),
+        detail: SharedString::default(),
+        score: 0,
+        indices: Vec::new(),
+        target: Target::Action("command_center::FindContent"),
+        shortcut: None,
+    })
 }

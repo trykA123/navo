@@ -3,8 +3,9 @@ use gpui_kit::Focusable;
 use super::super::FerriteWindow;
 use super::open::Way;
 use crate::command_center::{
-    Back, CopyPath, Down, First, Last, Mode, NextGroup, NextMode, OtherPane, PageDown, PageUp,
-    PreviousGroup, PreviousMode, Results, Reveal, Row, Run, RunInNewTab, Selection, Toggle, Up,
+    Back, CopyPath, Down, FindContent, First, Last, Mode, NextGroup, NextMode, OtherPane, PageDown,
+    PageUp, PreviousGroup, PreviousMode, Results, Reveal, Row, Run, RunInNewTab, Selection, Toggle,
+    Up,
 };
 use crate::prelude::*;
 
@@ -61,6 +62,9 @@ impl FerriteWindow {
 
     fn command_center_navigation(&self, root: Div, cx: &mut Context<Self>) -> Div {
         root.children(self.command_center_view())
+            .on_action(cx.listener(|view, _: &FindContent, window, cx| {
+                view.open_content(window, cx);
+            }))
             .on_action(cx.listener(|view, _: &Toggle, window, cx| {
                 view.toggle_command_center(window, cx);
             }))
@@ -88,6 +92,17 @@ impl FerriteWindow {
             .on_action(cx.listener(|view, _: &PreviousGroup, window, cx| {
                 view.move_selection(Selection::previous_group, window, cx);
             }))
+    }
+
+    pub(super) fn open_content(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.command_center.open.is_none() {
+            self.toggle_command_center(window, cx);
+        }
+        let scope = self.browser.state().active_tab().location().clone();
+        if let Some(open) = self.command_center.open.as_mut() {
+            open.scope = Some(scope);
+        }
+        self.change_mode(Mode::Content, window, cx);
     }
 
     fn back_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -136,6 +151,10 @@ impl FerriteWindow {
         }
         let query = open.center.read(cx).query(cx);
         let query = query.strip_prefix('>').unwrap_or(&query).to_owned();
+        open.search.cancel();
+        open.run_when_shown = None;
+        open.error = None;
+        open.indexing = None;
         open.mode = mode;
         open.rows = Default::default();
         open.rows_memory.set(Results::memory_use(&open.rows));
@@ -163,6 +182,9 @@ impl FerriteWindow {
         }
         if !open.mode.has_results() {
             open.search.cancel();
+            open.rows = Default::default();
+            open.rows_memory.set(Results::memory_use(&open.rows));
+            open.selection = Selection::start(&open.rows);
             open.run_when_shown = None;
             self.push_command_center(window, cx);
             return;

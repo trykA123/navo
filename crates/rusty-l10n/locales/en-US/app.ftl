@@ -192,3 +192,6 @@ command-center-mode-collections = Collections
 command-center-empty-content = Type to search inside files
 command-center-empty-collections = No collections yet
 command-center-key-mode = mode
+
+command-center-scope = in: { $folder }
+command-center-search-content = Search inside files for “{ $query }” in { $folder }

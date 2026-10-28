@@ -29,6 +29,7 @@ command_center.copy_path | ctrl-shift-c | CommandCenter
 command_center.copy_path | ctrl-shift-c | CommandCenter > Input
 command_center.down | down | CommandCenter
 command_center.down | down | CommandCenter > Input
+command_center.find_content | alt-f7 | FileList
 command_center.first | ctrl-home | CommandCenter
 command_center.first | ctrl-home | CommandCenter > Input
 command_center.last | ctrl-end | CommandCenter
