@@ -26,6 +26,7 @@ pub(super) struct Fetch {
     pub(super) shown: Option<Arc<CachedListing>>,
     pub(super) touched: Option<Vec<WatchChange>>,
     pub(super) is_watched: bool,
+    pub(super) is_kept_on_disk: bool,
     pub(super) progress: Progress,
 }
 
@@ -74,7 +75,7 @@ impl Fetch {
                 complete: true,
             };
             self.cache.put(key.clone(), listing);
-            self.cache.persist(&key);
+            persist_if(&self.cache, &key, self.is_kept_on_disk);
         }
         Ok(match unchanged {
             Some(_) => Fresh::Unchanged,
@@ -117,6 +118,12 @@ impl Fetch {
     }
 }
 
+fn persist_if(cache: &ListingCache, key: &CacheKey, is_kept_on_disk: bool) {
+    if is_kept_on_disk {
+        cache.persist(key);
+    }
+}
+
 pub(super) struct Sorted {
     source: Arc<[FsEntry]>,
     key: SortKey,
@@ -155,6 +162,7 @@ impl Browser {
             shown,
             touched: self.take_patch(tab),
             is_watched: self.is_settled(location),
+            is_kept_on_disk: true,
             progress: self.stalls.progress(tab),
         }
     }

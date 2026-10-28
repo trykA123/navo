@@ -987,5 +987,5 @@ fn a_right_release_outside_the_list_toggles_once(cx: &mut TestAppContext) {
 }
 
 mod background;
+mod on_demand;
 mod prefill;
-mod preload;

@@ -12,10 +12,9 @@ use super::loaded::LoadedMenu;
 use super::sta::{self, Ole, Window};
 use super::{Link, SessionHandle};
 use crate::shell_menu::fill::{self, Background, FillReply, Fills};
-use crate::shell_menu::idle::{self, Idle, Job, Prefill};
+use crate::shell_menu::idle::{Idle, Prefill};
 use crate::shell_menu::pending::{Cancel, Reply, answer_unless_cancelled};
 use crate::shell_menu::station::{self, Health, Station};
-use crate::shell_menu::warm::{self, Warm};
 use crate::shell_menu::{
     InvokeOptions, MenuError, MenuSession, MenuSource, ScreenPoint, WindowHandle,
 };
@@ -74,13 +73,12 @@ impl Request {
     }
 }
 
-/// `warms` loads shell extensions while idle; a worker that replaces a hung one skips it.
-pub(super) fn spawn(warms: bool) -> Result<(Link, JoinHandle<()>), MenuError> {
+pub(super) fn spawn() -> Result<(Link, JoinHandle<()>), MenuError> {
     let (sender, receiver) = mpsc::channel();
     let (ready_sender, ready) = mpsc::channel();
     let thread = std::thread::Builder::new()
         .name("shell-menu".to_owned())
-        .spawn(move || run(&receiver, (sender, warms), &ready_sender))
+        .spawn(move || run(&receiver, sender, &ready_sender))
         .map_err(|error| MenuError::Shell {
             context: "starting the shell menu thread",
             message: error.to_string(),
@@ -91,7 +89,7 @@ pub(super) fn spawn(warms: bool) -> Result<(Link, JoinHandle<()>), MenuError> {
 
 fn run(
     receiver: &Receiver<Request>,
-    (sender, warms): (Sender<Request>, bool),
+    sender: Sender<Request>,
     ready: &Sender<Result<Link, MenuError>>,
 ) {
     let started = Ole::init().and_then(|ole| Window::message_only().map(|window| (ole, window)));
@@ -115,11 +113,7 @@ fn run(
         sessions: HashMap::new(),
         next_session: 1,
         background: Vec::new(),
-        idle: if warms {
-            Idle::warming(warm::first_steps(&std::env::temp_dir()))
-        } else {
-            Idle::default()
-        },
+        idle: Idle::default(),
     };
     station::serve(&mut worker, receiver, &health);
 }
@@ -167,8 +161,7 @@ impl Station for Worker {
 
     fn run_idle(&mut self) -> bool {
         match self.idle.next() {
-            Some(Job::Prefill(prefill)) => self.run_prefill(prefill),
-            Some(Job::Warm(step)) => self.warm(step),
+            Some(prefill) => self.run_prefill(prefill),
             None => return false,
         }
         true
@@ -176,27 +169,6 @@ impl Station for Worker {
 }
 
 impl Worker {
-    fn warm(&mut self, step: Warm) {
-        match step {
-            Warm::Open { source, scratch } => {
-                let Ok(mut loaded) = LoadedMenu::query(&source, HWND::default()) else {
-                    return;
-                };
-                let menu = loaded.walk();
-                let session = self.keep(loaded);
-                for path in idle::lazy_tops(&menu) {
-                    self.idle.warm_later(Warm::Fill { session, path });
-                }
-                self.idle.warm_later(Warm::Close { session, scratch });
-            }
-            Warm::Fill { session, path } => self.fill(session, path, FillReply::unread()),
-            Warm::Close { session, scratch } => {
-                self.sessions.remove(&session);
-                drop(scratch);
-            }
-        }
-    }
-
     fn run_prefill(&mut self, prefill: Prefill) {
         self.fill(prefill.session, prefill.path, prefill.reply);
     }

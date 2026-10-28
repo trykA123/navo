@@ -1,6 +1,7 @@
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use rusty_cache::{CacheKeys, ListingCache};
 use rusty_core::{FsError, Location, Tab, TabId};
 use rusty_fs::{CancelToken, JobKind, JobSlot, OwnerGuard, Priority, volume_of};
 
@@ -66,6 +67,8 @@ pub(super) struct Prefetches {
 
 struct Finished {
     id: u64,
+    cache: ListingCache,
+    keys: CacheKeys,
     sender: Sender<Message>,
     wake: Waker,
 }
@@ -73,6 +76,9 @@ struct Finished {
 impl Finished {
     fn hand_over(self, handoff: &Handoff, location: Location, result: Result<Fresh, FsError>) {
         if let Some((tab, request)) = handoff.close() {
+            if let Some(key) = self.keys.key(&location) {
+                self.cache.persist(&key);
+            }
             let loaded = Loaded {
                 tab,
                 location,
@@ -105,13 +111,14 @@ impl Browser {
             .for_each(|running| running.owner = None);
     }
 
-    pub fn prefetch(&mut self, location: Location) {
+    pub fn prefetch(&mut self, location: Location) -> bool {
         let running = &self.prefetches.running;
-        if running.iter().filter(|r| r.is_live()).count() < IN_FLIGHT
-            && self.wants_prefetch(&location)
-        {
+        let is_wanted = running.iter().filter(|r| r.is_live()).count() < IN_FLIGHT
+            && self.wants_prefetch(&location);
+        if is_wanted {
             self.start_prefetch(location);
         }
+        is_wanted
     }
 
     #[must_use]
@@ -173,10 +180,13 @@ impl Browser {
             shown: None,
             touched: None,
             is_watched: false,
+            is_kept_on_disk: false,
             progress: progress.clone(),
         };
         let finished = Finished {
             id,
+            cache: self.cache.clone(),
+            keys: self.keys.clone(),
             sender: self.sender.clone(),
             wake: Arc::clone(&self.wake),
         };

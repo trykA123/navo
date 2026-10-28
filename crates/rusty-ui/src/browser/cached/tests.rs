@@ -183,6 +183,7 @@ fn a_slower_stale_revalidation_never_overwrites_a_newer_one() {
         shown: None,
         touched: None,
         is_watched: false,
+        is_kept_on_disk: true,
         progress: Progress::default(),
     };
     let slow = fetch(gate.clone());

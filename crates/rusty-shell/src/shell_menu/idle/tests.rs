@@ -1,8 +1,7 @@
-use rusty_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
+use rusty_core::shell_menu::Submenu;
 
-use super::{Idle, Job, Prefill, lazy_tops};
+use super::{Idle, Prefill};
 use crate::shell_menu::fill::{FillAsk, Fills};
-use crate::shell_menu::warm::Warm;
 use crate::shell_menu::{MenuError, Pending};
 
 fn prefill(session: u64, path: &[usize]) -> (Prefill, Pending<Submenu>) {
@@ -19,28 +18,23 @@ fn prefill(session: u64, path: &[usize]) -> (Prefill, Pending<Submenu>) {
     (sent.expect("a prefill is sent for later"), pending)
 }
 
-fn warm_fill(session: u64) -> Warm {
-    Warm::Fill {
-        session,
-        path: vec![0],
-    }
-}
-
-fn describe(job: Job) -> (u64, Vec<usize>, bool) {
-    match job {
-        Job::Prefill(prefill) => (prefill.session, prefill.path, true),
-        Job::Warm(Warm::Fill { session, path }) => (session, path, false),
-        Job::Warm(Warm::Close { session, scratch }) => (session, Vec::new(), scratch.is_some()),
-        Job::Warm(Warm::Open { .. }) => panic!("unexpected warm step"),
-    }
+fn describe(prefill: Prefill) -> (u64, Vec<usize>) {
+    (prefill.session, prefill.path)
 }
 
 #[test]
-fn prefills_of_an_open_menu_run_before_warming() {
-    let mut idle = Idle::warming(vec![warm_fill(1)]);
+fn a_new_idle_queue_has_no_work_so_nothing_loads_before_the_first_menu() {
+    let mut idle = Idle::default();
+    assert!(idle.next().is_none());
+}
+
+#[test]
+fn prefills_of_an_open_menu_run_in_the_order_they_came() {
+    let mut idle = Idle::default();
     idle.prefill(prefill(5, &[2]).0);
+    idle.prefill(prefill(5, &[1]).0);
     let order: Vec<_> = std::iter::from_fn(|| idle.next()).map(describe).collect();
-    assert_eq!(order, [(5, vec![2], true), (1, vec![0], false)]);
+    assert_eq!(order, [(5, vec![2]), (5, vec![1])]);
 }
 
 #[test]
@@ -52,7 +46,7 @@ fn closing_a_menu_drops_its_waiting_prefills_and_answers_them_stopped() {
     idle.close(5);
     assert_eq!(answer.wait(), Err(MenuError::Stopped));
     let left: Vec<_> = std::iter::from_fn(|| idle.next()).map(describe).collect();
-    assert_eq!(left, [(6, vec![1], true)]);
+    assert_eq!(left, [(6, vec![1])]);
 }
 
 #[test]
@@ -66,42 +60,5 @@ fn promoting_takes_only_the_matching_prefill_out_of_the_queue() {
     assert!(idle.promote(5, &[2]).is_none());
     assert!(idle.promote(6, &[1]).is_none());
     let left: Vec<_> = std::iter::from_fn(|| idle.next()).map(describe).collect();
-    assert_eq!(left, [(5, vec![1], true)]);
-}
-
-#[test]
-fn warm_steps_added_later_run_after_the_first_ones() {
-    let mut idle = Idle::warming(vec![warm_fill(1)]);
-    idle.warm_later(Warm::Close {
-        session: 1,
-        scratch: None,
-    });
-    let order: Vec<_> = std::iter::from_fn(|| idle.next()).map(describe).collect();
-    assert_eq!(order, [(1, vec![0], false), (1, Vec::new(), false)]);
-}
-
-#[test]
-fn only_lazy_top_level_submenus_are_warmed() {
-    let item = |kind| MenuItem {
-        kind,
-        ..MenuItem::new(
-            ItemId::Shell {
-                command: 1,
-                verb: None,
-            },
-            "x",
-            Group::Other,
-        )
-    };
-    let menu = ShellMenu {
-        items: vec![
-            item(ItemKind::Command),
-            item(ItemKind::Submenu(Submenu::Lazy)),
-            item(ItemKind::Submenu(Submenu::Filled(vec![item(
-                ItemKind::Submenu(Submenu::Lazy),
-            )]))),
-            item(ItemKind::Submenu(Submenu::Lazy)),
-        ],
-    };
-    assert_eq!(lazy_tops(&menu), [vec![1], vec![3]]);
+    assert_eq!(left, [(5, vec![1])]);
 }

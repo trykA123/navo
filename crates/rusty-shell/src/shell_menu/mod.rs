@@ -17,8 +17,6 @@ mod station;
 mod stub;
 #[cfg(any(windows, test))]
 mod verb_fallback;
-#[cfg(any(windows, test))]
-mod warm;
 #[cfg(windows)]
 mod win;
 

@@ -33,12 +33,6 @@ impl FillReply {
     pub(super) fn send(&self, result: FillResult) {
         self.0.finish(result);
     }
-
-    /// A reply nobody reads, for fills the worker starts on its own.
-    #[cfg(windows)]
-    pub(super) fn unread() -> Self {
-        Self(Arc::default())
-    }
 }
 
 /// What a session sends to the worker: a fill now, a fill when idle, or an idle fill moved to the front.

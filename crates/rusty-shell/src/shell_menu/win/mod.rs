@@ -75,8 +75,8 @@ struct Worker {
 }
 
 impl Worker {
-    fn spawn(warms: bool) -> Result<Self, MenuError> {
-        worker::spawn(warms).map(|(link, thread)| Self { link, thread })
+    fn spawn() -> Result<Self, MenuError> {
+        worker::spawn().map(|(link, thread)| Self { link, thread })
     }
 
     fn is_hung(&self) -> bool {
@@ -95,7 +95,7 @@ pub(super) struct Service {
 
 impl Service {
     pub(super) fn start() -> Result<Self, MenuError> {
-        Worker::spawn(true).map(|current| Self {
+        Worker::spawn().map(|current| Self {
             workers: Mutex::new(Workers {
                 current,
                 replaced: Replaced::default(),
@@ -110,7 +110,7 @@ impl Service {
     fn live_link(&self) -> Link {
         let mut workers = self.workers();
         if workers.current.is_hung()
-            && let Ok(fresh) = Worker::spawn(false)
+            && let Ok(fresh) = Worker::spawn()
         {
             let stale = std::mem::replace(&mut workers.current, fresh);
             stale.link.retired.store(true, Ordering::Release);

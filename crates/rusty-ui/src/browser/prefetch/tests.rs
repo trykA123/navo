@@ -1,7 +1,8 @@
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rusty_cache::{CacheKeys, ListingCache};
+use rusty_cache::{CacheKeys, DiskListings, ListingCache, Warm};
 use rusty_core::{AppState, Command, CursorMove};
 use rusty_fs::{FakeFs, FakeOp, ProviderOps};
 
@@ -73,6 +74,24 @@ fn rest_on(browser: &mut Browser, name: &str) {
     }
 }
 
+fn on_disk(provider: Arc<dyn ProviderOps>, fs: &FakeFs, db: &Path) -> (Browser, DiskListings) {
+    let cache = ListingCache::default();
+    let warm = Warm {
+        cache: cache.clone(),
+        keys: CacheKeys::default(),
+        folders: Vec::new(),
+        deadline: Instant::now() + Duration::from_secs(5),
+    };
+    let disk = DiskListings::open(db, warm);
+    let browser = browser_with(provider, fs, cache.with_disk(disk.clone()));
+    (browser, disk)
+}
+
+fn written(disk: &DiskListings) -> u64 {
+    assert!(disk.flush(Duration::from_secs(5)));
+    disk.stats().entries
+}
+
 fn is_cached_at(browser: &Browser, fs: &FakeFs, path: &str) -> bool {
     let key = browser.keys.key(&fs.location(path)).unwrap();
     browser.cache.get(&key).is_some()
@@ -87,6 +106,39 @@ fn a_rested_folder_is_listed_into_the_cache() {
     assert!(is_cached_at(&browser, &fs, "home/alpha"));
     assert_eq!(fs.calls("home/alpha", FakeOp::List), 1);
     assert!(!browser.loading());
+}
+
+#[test]
+fn a_rested_folder_stays_in_memory_and_is_not_written_to_the_disk_cache() {
+    let fs = fake();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut browser, disk) = on_disk(fs.clone(), &fs, &dir.path().join("cache.db"));
+    let before = written(&disk);
+    put_cursor_on(&mut browser, "alpha");
+    browser.cache.keep_on_disk([&fs.location("home/alpha")]);
+    let target = browser.cursor_folder();
+    browser.leave_prefetches(target.as_ref());
+    browser.prefetch(target.unwrap());
+    settle(&mut browser);
+    assert!(is_cached_at(&browser, &fs, "home/alpha"));
+    assert_eq!(written(&disk), before);
+}
+
+#[test]
+fn entering_a_folder_still_prefetching_writes_it_to_the_disk_cache() {
+    let fs = fake();
+    let held = Held::new(&fs, &["home/alpha"]);
+    let dir = tempfile::tempdir().unwrap();
+    let (mut browser, disk) = on_disk(held.clone(), &fs, &dir.path().join("cache.db"));
+    let before = written(&disk);
+    rest_on(&mut browser, "alpha");
+    held.wait_until_held(1);
+    let row = browser.state().active_tab().view().cursor;
+    assert!(browser.open_row(row));
+    held.release();
+    settle(&mut browser);
+    assert_eq!(names(&browser), ["one.txt", "two.txt"]);
+    assert_eq!(written(&disk), before + 1);
 }
 
 #[test]
