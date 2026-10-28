@@ -10,7 +10,7 @@ use rusty_core::{AppState, SessionState};
 use crate::{backup_path, write_atomic};
 
 pub const SESSION_MAGIC: &[u8; 16] = b"FERRITE-SESSION\n";
-pub const SESSION_VERSION: u16 = 3;
+pub const SESSION_VERSION: u16 = 4;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionFileError {

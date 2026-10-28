@@ -38,6 +38,7 @@ fn save_snapshot(snapshot: &Snapshot) -> SnapshotState {
             .map(|pane| super::convert::save_pane(pane, 0))
             .collect(),
         last_marks: snapshot.last_marks().map(<[String]>::to_vec),
+        target: snapshot.target().map(PaneId::get),
     }
 }
 
@@ -67,7 +68,8 @@ fn restore_snapshot(snapshot: &SnapshotState) -> Result<Snapshot, String> {
         .iter()
         .map(super::convert::restore_pane)
         .collect::<Result<Vec<_>, _>>()?;
-    Snapshot::from_parts(layout, panes, snapshot.last_marks.clone())
+    let target = snapshot.target.map(PaneId::new);
+    Snapshot::from_parts(layout, panes, target, snapshot.last_marks.clone())
 }
 
 type Owner = (usize, usize, bool);

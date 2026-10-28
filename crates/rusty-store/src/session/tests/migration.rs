@@ -74,7 +74,7 @@ fn upgrading_a_v1_main_keeps_the_original_bytes_as_backup() {
     assert_eq!(read_session_file(&path).unwrap(), old_session());
     assert_eq!(
         u16::from_le_bytes(fs::read(&path).unwrap()[16..18].try_into().unwrap()),
-        3
+        SESSION_VERSION
     );
 }
 
@@ -261,4 +261,46 @@ fn v3_drops_broken_workspaces_and_remaps_the_active_index() {
     let loaded = load_session(&path).0.unwrap();
     assert_eq!(loaded.windows[0].workspaces, vec![retained]);
     assert_eq!(loaded.windows[0].active_workspace, 0);
+}
+
+fn three_panes_two_workspaces() -> AppState {
+    use rusty_core::{Command, Direction, Location, WorkspaceAction, apply, apply_workspace};
+    let mut state = AppState::new(Location::new("C:/start").unwrap());
+    let split = Command::LayoutSplit {
+        direction: Direction::Right,
+    };
+    apply(&mut state, &split).unwrap();
+    apply(&mut state, &split).unwrap();
+    apply_workspace(&mut state, &WorkspaceAction::New { name: None }).unwrap();
+    apply(&mut state, &split).unwrap();
+    apply_workspace(&mut state, &WorkspaceAction::Switch { n: 1 }).unwrap();
+    state
+}
+
+const V3_SESSION: &[u8] = include_bytes!("../../../tests/fixtures/session/v3.session");
+
+#[test]
+fn frozen_v3_file_loads_its_workspaces_with_fallback_targets() {
+    let dir = tmp();
+    let path = session_file(&dir);
+    fs::write(&path, V3_SESSION).unwrap();
+    let (session, source, errors) = load_session(&path);
+    assert_eq!(source, SessionSource::Main);
+    assert!(errors.is_empty());
+    let session = session.unwrap();
+    let mut expected = three_panes_two_workspaces().to_session(0);
+    let window = &mut expected.windows[0];
+    window.target = None;
+    for workspace in &mut window.workspaces {
+        for snapshot in std::iter::once(&mut workspace.saved).chain(workspace.live.as_mut()) {
+            snapshot.target = None;
+        }
+    }
+    assert_eq!(session, expected);
+    let restored = AppState::from_session(session).unwrap();
+    let window = restored.window(restored.focused_window()).unwrap();
+    assert_eq!(window.workspaces().len(), 2);
+    assert_eq!(window.layout().numbered().len(), 3);
+    assert!(window.target().is_some());
+    assert_eq!(fs::read(&path).unwrap(), V3_SESSION);
 }

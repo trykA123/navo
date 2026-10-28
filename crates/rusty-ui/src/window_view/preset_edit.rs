@@ -45,6 +45,13 @@ impl PresetDialog {
         matches!(self.dialog, Some(Dialog::Name { .. }))
     }
 
+    pub(super) fn name_error(&self) -> Option<String> {
+        match &self.dialog {
+            Some(Dialog::Name { error }) => error.as_ref().map(ToString::to_string),
+            _ => None,
+        }
+    }
+
     pub(super) fn asking(&self) -> Option<&LayoutEdit> {
         match &self.dialog {
             Some(Dialog::Ask(edit)) => Some(edit),
@@ -149,14 +156,6 @@ impl FerriteWindow {
     }
 
     pub(super) fn ask_save_layout(&mut self, cx: &mut Context<Self>) {
-        if self.values.layout_presets().len() >= MAX_LAYOUT_PRESETS {
-            self.show_notice(StatusNotice {
-                text: rusty_l10n::tr("layout-presets-full").into(),
-                is_error: true,
-            });
-            cx.notify();
-            return;
-        }
         self.open_preset_dialog(Dialog::Name { error: None }, cx);
     }
 
@@ -183,6 +182,10 @@ impl FerriteWindow {
         if exists {
             let edit = LayoutEdit::Replace { name, tiles };
             self.open_preset_dialog(Dialog::Ask(edit), cx);
+        } else if self.values.layout_presets().len() >= MAX_LAYOUT_PRESETS {
+            let error = Some(rusty_l10n::tr("layout-presets-full").into());
+            self.tiles.presets.dialog = Some(Dialog::Name { error });
+            cx.notify();
         } else {
             self.run_layout_edit(LayoutEdit::Save { name, tiles }, window, cx);
         }

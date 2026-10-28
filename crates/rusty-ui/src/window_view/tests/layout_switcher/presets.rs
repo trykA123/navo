@@ -205,17 +205,29 @@ fn a_write_error_shows_in_the_status_line_and_changes_nothing(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
-fn the_twenty_first_save_is_refused(cx: &mut TestAppContext) {
+fn at_twenty_a_new_name_is_refused_but_a_taken_name_replaces(cx: &mut TestAppContext) {
     let names: Vec<String> = (1..=20).map(|n| format!("Preset {n}")).collect();
     let presets: Vec<(&str, &str)> = names.iter().map(|n| (n.as_str(), REVIEW)).collect();
     let rig = rig(cx, &presets);
-    rig.press(cx, &["ctrl-s"]);
-    assert!(!rig.is_naming(cx));
+    rig.press(cx, &["ctrl-s", "enter"]);
+    assert!(rig.is_naming(cx));
+    let error = rig
+        .view
+        .read_with(cx, |view, _| view.tiles.presets.name_error());
     assert_eq!(
-        rig.notice(cx).as_deref(),
+        error.as_deref(),
         Some(rusty_l10n::tr("layout-presets-full").as_str())
     );
     assert!(rig.edits().is_empty());
+    type_in(cx, rig.window, &rig.view, "Preset 20");
+    rig.press(cx, &["enter"]);
+    let replace = LayoutEdit::Replace {
+        name: "Preset 20".to_owned(),
+        tiles: current_tiles(cx, &rig.view).print(),
+    };
+    assert_eq!(rig.asking(cx), Some(replace.clone()));
+    rig.press(cx, &["enter"]);
+    assert_eq!(rig.edits(), [replace]);
 }
 
 #[gpui_kit::test]

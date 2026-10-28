@@ -71,9 +71,11 @@ impl Snapshot {
     pub(crate) fn from_parts(
         layout: Layout,
         panes: Vec<Pane>,
+        target: Option<PaneId>,
         last_marks: Option<Vec<String>>,
     ) -> Result<Self, String> {
-        let window = Window::restore(crate::WindowId::new(0), layout, panes, Vec::new())?;
+        let mut window = Window::restore(crate::WindowId::new(0), layout, panes, Vec::new())?;
+        window.restore_target(target);
         let mut snapshot = window.snapshot();
         snapshot.last_marks = last_marks.map(|mut names| {
             names.truncate(super::window::MAX_LAST_MARKS);

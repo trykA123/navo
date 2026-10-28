@@ -25,6 +25,7 @@ fn save_window(window: &Window, rows_per_pane: usize) -> WindowState {
         focused_pane: window.layout().focused().get(),
         workspaces: super::workspaces::save(window),
         active_workspace: window.active_workspace() as u8,
+        target: window.target().map(PaneId::get),
         panes: window
             .panes()
             .into_iter()
@@ -106,6 +107,7 @@ fn restore_window(window: &WindowState) -> Result<Window, String> {
         panes,
         window.placement.clone(),
     )?;
+    restored.restore_target(window.target.map(PaneId::new));
     super::workspaces::restore(&mut restored, window)?;
     Ok(restored)
 }

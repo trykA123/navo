@@ -19,57 +19,106 @@ pub struct LayoutPreset {
     pub tiles: String,
 }
 
+const MAX_PRESETS: usize = 20;
+
+type Problem = (&'static str, String);
+
 impl LayoutSettings {
-    pub(super) fn validate(&self, text: &str) -> Result<(), SettingsError> {
-        if self.presets.is_empty() {
-            return Ok(());
+    pub(super) fn drop_invalid(&mut self, text: &str) -> Vec<String> {
+        let verdicts = verdicts(&self.presets);
+        if verdicts.iter().all(Option::is_none) {
+            return Vec::new();
         }
-        let document = toml_edit::Document::parse(text).map_err(|_| SettingsError::FileInvalid)?;
-        for (index, preset) in self.presets.iter().enumerate() {
-            let problem = if !(1..=40).contains(&preset.name.chars().count()) {
-                Some((
-                    "name",
-                    "layout preset names must contain 1–40 characters".to_owned(),
-                ))
-            } else if index >= 20 {
-                Some(("name", "at most 20 layout presets are allowed".to_owned()))
-            } else if self.presets[..index].iter().any(|p| p.name == preset.name) {
-                Some(("name", "layout preset names must be unique".to_owned()))
-            } else {
-                Tiles::parse(&preset.tiles)
-                    .err()
-                    .map(|error| ("tiles", error.to_string()))
+        let document = toml_edit::Document::parse(text).ok();
+        let mut lines = Vec::new();
+        let presets = std::mem::take(&mut self.presets);
+        for (index, (preset, verdict)) in presets.into_iter().zip(verdicts).enumerate() {
+            let Some((key, message)) = verdict else {
+                self.presets.push(preset);
+                continue;
             };
-            if let Some((key, message)) = problem {
-                let offset = document
-                    .get("layout")
-                    .and_then(|item| item.get("presets"))
-                    .and_then(|item| item.get(index))
-                    .and_then(|item| item.get(key).and_then(Item::span).or_else(|| item.span()))
-                    .map_or(0, |span| span.start);
-                return Err(super::parse::invalid_value(text, offset, message));
-            }
+            let offset = document
+                .as_ref()
+                .and_then(|document| document.get("layout"))
+                .and_then(|item| item.get("presets"))
+                .and_then(|item| item.get(index))
+                .and_then(|item| item.get(key).and_then(Item::span).or_else(|| item.span()))
+                .map_or(0, |span| span.start);
+            let line = super::parse::line_of(text, offset);
+            lines.push(format!(
+                "layout.presets[{}] {:?} (line {line}) was dropped: {message}",
+                index + 1,
+                preset.name
+            ));
         }
-        Ok(())
+        lines
     }
 }
 
+fn verdicts(presets: &[LayoutPreset]) -> Vec<Option<Problem>> {
+    let mut kept: Vec<&str> = Vec::new();
+    presets
+        .iter()
+        .map(|preset| {
+            let problem = problem(&kept, &preset.name, &preset.tiles);
+            if problem.is_none() {
+                kept.push(&preset.name);
+            }
+            problem
+        })
+        .collect()
+}
+
+fn problem(kept: &[&str], name: &str, tiles: &str) -> Option<Problem> {
+    if !(1..=40).contains(&name.chars().count()) {
+        Some((
+            "name",
+            "layout preset names must contain 1–40 characters".to_owned(),
+        ))
+    } else if kept.contains(&name) {
+        Some(("name", "layout preset names must be unique".to_owned()))
+    } else if kept.len() >= MAX_PRESETS {
+        Some(("name", "at most 20 layout presets are allowed".to_owned()))
+    } else {
+        Tiles::parse(tiles)
+            .err()
+            .map(|error| ("tiles", error.to_string()))
+    }
+}
+
+fn document_index(text: &str, name: &str) -> Result<usize, SettingsError> {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Raw {
+        layout: LayoutSettings,
+    }
+    parse(text)?;
+    let raw: Raw = toml::from_str(text).map_err(|_| SettingsError::FileInvalid)?;
+    verdicts(&raw.layout.presets)
+        .iter()
+        .zip(&raw.layout.presets)
+        .position(|(verdict, preset)| verdict.is_none() && preset.name == name)
+        .ok_or(SettingsError::Refused)
+}
+
+fn refuse(text: &str, (_, message): Problem) -> SettingsError {
+    super::parse::invalid_value(text, 0, message)
+}
+
 pub fn save_layout_preset(text: &str, name: &str, tiles: &str) -> Result<String, SettingsError> {
-    let (mut settings, _) = parse(text)?;
-    if settings
+    let (settings, _) = parse(text)?;
+    let names: Vec<&str> = settings
         .layout
         .presets
         .iter()
-        .any(|preset| preset.name == name)
-    {
+        .map(|preset| preset.name.as_str())
+        .collect();
+    if names.contains(&name) {
         return Err(SettingsError::Refused);
     }
-    settings.layout.presets.push(LayoutPreset {
-        name: name.to_owned(),
-        tiles: tiles.to_owned(),
-    });
-    let candidate = super::to_toml(&settings);
-    settings.layout.validate(&candidate)?;
+    if let Some(problem) = problem(&names, name, tiles) {
+        return Err(refuse(text, problem));
+    }
     keep_layout(text, |plain| {
         let mut document: DocumentMut = plain.parse().map_err(|_| SettingsError::FileInvalid)?;
         let layout = document.entry("layout").or_insert_with(|| {
@@ -97,15 +146,10 @@ pub fn save_layout_preset(text: &str, name: &str, tiles: &str) -> Result<String,
 }
 
 pub fn replace_layout_preset(text: &str, name: &str, tiles: &str) -> Result<String, SettingsError> {
-    let (mut settings, _) = parse(text)?;
-    let index = settings
-        .layout
-        .presets
-        .iter()
-        .position(|preset| preset.name == name)
-        .ok_or(SettingsError::Refused)?;
-    tiles.clone_into(&mut settings.layout.presets[index].tiles);
-    settings.layout.validate(&super::to_toml(&settings))?;
+    let index = document_index(text, name)?;
+    if let Err(error) = Tiles::parse(tiles) {
+        return Err(refuse(text, ("tiles", error.to_string())));
+    }
     keep_layout(text, |plain| {
         let mut document: DocumentMut = plain.parse().map_err(|_| SettingsError::FileInvalid)?;
         let presets = document
@@ -133,13 +177,7 @@ pub fn replace_layout_preset(text: &str, name: &str, tiles: &str) -> Result<Stri
 }
 
 pub fn remove_layout_preset(text: &str, name: &str) -> Result<String, SettingsError> {
-    let (settings, _) = parse(text)?;
-    let index = settings
-        .layout
-        .presets
-        .iter()
-        .position(|preset| preset.name == name)
-        .ok_or(SettingsError::Refused)?;
+    let index = document_index(text, name)?;
     keep_layout(text, |plain| {
         let mut document: DocumentMut = plain.parse().map_err(|_| SettingsError::FileInvalid)?;
         let layout = document

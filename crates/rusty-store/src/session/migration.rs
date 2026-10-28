@@ -1,5 +1,7 @@
 use rusty_core::placement::Placement;
-use rusty_core::{LayoutState, PaneState, SessionState, WindowState};
+use rusty_core::{
+    LayoutState, PaneState, SessionState, SnapshotState, WindowState, WorkspaceState,
+};
 use serde::Deserialize;
 
 use super::SessionFileError;
@@ -36,6 +38,85 @@ struct WindowV2 {
     placement: Vec<Placement>,
 }
 
+#[derive(Deserialize)]
+struct SessionV3 {
+    windows: Vec<WindowV3>,
+    focused_window: u64,
+    next_id: u64,
+}
+
+#[derive(Deserialize)]
+struct WindowV3 {
+    id: u64,
+    layout: LayoutState,
+    focused_pane: u64,
+    panes: Vec<PaneState>,
+    workspaces: Vec<WorkspaceV3>,
+    active_workspace: u8,
+    #[serde(deserialize_with = "deserialize_placements")]
+    placement: Vec<Placement>,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceV3 {
+    name: String,
+    saved: SnapshotV3,
+    live: Option<SnapshotV3>,
+}
+
+#[derive(Deserialize)]
+struct SnapshotV3 {
+    layout: LayoutState,
+    focused_pane: u64,
+    panes: Vec<PaneState>,
+    last_marks: Option<Vec<String>>,
+}
+
+impl From<SnapshotV3> for SnapshotState {
+    fn from(snapshot: SnapshotV3) -> Self {
+        Self {
+            layout: snapshot.layout,
+            focused_pane: snapshot.focused_pane,
+            panes: snapshot.panes,
+            last_marks: snapshot.last_marks,
+            target: None,
+        }
+    }
+}
+
+impl From<SessionV3> for SessionState {
+    fn from(old: SessionV3) -> Self {
+        Self {
+            windows: old.windows.into_iter().map(WindowState::from).collect(),
+            focused_window: old.focused_window,
+            next_id: old.next_id,
+        }
+    }
+}
+
+impl From<WindowV3> for WindowState {
+    fn from(window: WindowV3) -> Self {
+        Self {
+            id: window.id,
+            layout: window.layout,
+            focused_pane: window.focused_pane,
+            panes: window.panes,
+            workspaces: window
+                .workspaces
+                .into_iter()
+                .map(|workspace| WorkspaceState {
+                    name: workspace.name,
+                    saved: workspace.saved.into(),
+                    live: workspace.live.map(Into::into),
+                })
+                .collect(),
+            active_workspace: window.active_workspace,
+            placement: window.placement,
+            target: None,
+        }
+    }
+}
+
 fn deserialize_placements<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Vec<Placement>, D::Error> {
@@ -53,6 +134,7 @@ impl From<WindowV2> for WindowState {
             panes: window.panes,
             workspaces: Vec::new(),
             active_workspace: 0,
+            target: None,
             placement: window.placement,
         }
     }
@@ -61,7 +143,13 @@ impl From<WindowV2> for WindowState {
 pub(super) fn decode(version: u16, body: &[u8]) -> Result<SessionState, SessionFileError> {
     let decode_error = |error: postcard::Error| SessionFileError::Decode(error.to_string());
     if version >= 3 {
-        let mut session = postcard::from_bytes(body).map_err(decode_error)?;
+        let mut session = if version == 3 {
+            postcard::from_bytes::<SessionV3>(body)
+                .map_err(decode_error)?
+                .into()
+        } else {
+            postcard::from_bytes(body).map_err(decode_error)?
+        };
         sanitize_workspaces(&mut session);
         return Ok(session);
     }
@@ -157,4 +245,5 @@ fn load_active_snapshot(window: &mut WindowState) {
     window.layout = snapshot.layout.clone();
     window.focused_pane = snapshot.focused_pane;
     window.panes = snapshot.panes.clone();
+    window.target = snapshot.target;
 }

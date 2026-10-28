@@ -16,30 +16,98 @@ fn two_layout_presets_load_and_round_trip() {
 }
 
 #[test]
-fn invalid_layout_presets_report_their_line_through_settings_problems() {
-    for (text, line) in [
-        (preset("Broken", "row(99, pane, pane)"), 3),
-        (preset("", "pane"), 2),
-        (preset(&"x".repeat(41), "pane"), 2),
-        (preset("Same", "pane") + &preset("Same", "pane"), 5),
-        (
-            (0..21)
-                .map(|n| preset(&format!("Preset {n}"), "pane"))
-                .collect(),
-            62,
-        ),
+fn invalid_layout_presets_are_dropped_with_a_problem_line_and_the_rest_loads() {
+    for (bad, line) in [
+        (preset("Broken", "row(95, pane, pane)"), 9),
+        (preset("", "pane"), 8),
+        (preset(&"x".repeat(41), "pane"), 8),
+        (preset("Good", "col(50, pane, pane)"), 8),
     ] {
+        let text = "[files]\nshow-system = true\n\n".to_owned()
+            + &preset("Good", "row(50, pane, pane)")
+            + &bad
+            + "[retention]\nretain-deletes = true\n";
         let dir = tmp();
         let path = settings_file(&dir);
         write(&path, &text);
         let (store, report) = SettingsStore::load(&path);
-        assert_eq!(store.current(), &Settings::default());
-        assert!(
-            matches!(report.error, Some(SettingsError::Invalid { line: actual, .. }) if actual == line),
-            "{report:?}"
-        );
+        assert_eq!(report.error, None);
+        let settings = store.current();
+        assert!(settings.files.show_system);
+        assert!(settings.retention.delete_policy().is_some());
+        assert_eq!(settings.layout.presets.len(), 1);
+        assert_eq!(settings.layout.presets[0].tiles, "row(50, pane, pane)");
+        assert_eq!(report.unknown_keys.len(), 1, "{:?}", report.unknown_keys);
+        let problem = &report.unknown_keys[0];
+        assert!(problem.starts_with("layout.presets[2]"), "{problem}");
+        assert!(problem.contains(&format!("(line {line})")), "{problem}");
     }
-    assert!(parse(&preset(&"é".repeat(40), "pane")).is_ok());
+    let many: String = (0..22)
+        .map(|n| preset(&format!("Preset {n}"), "pane"))
+        .collect();
+    let (settings, problems) = parse(&many).unwrap();
+    assert_eq!(settings.layout.presets.len(), 20);
+    assert_eq!(problems.len(), 2);
+    assert!(
+        problems[0].starts_with("layout.presets[21]"),
+        "{problems:?}"
+    );
+    assert!(
+        parse(&preset(&"é".repeat(40), "pane"))
+            .unwrap()
+            .1
+            .is_empty()
+    );
+    assert!(parse("[[layout.presets]]\nname = 5\n").is_err());
+}
+
+#[test]
+fn edits_find_the_right_table_when_an_earlier_entry_was_dropped() {
+    let original = preset("Same", "grid")
+        + &preset("Same", "pane")
+        + &preset("", "pane")
+        + &preset("Other", "pane");
+    let replaced = replace_layout_preset(&original, "Same", "row(50, pane, pane)").unwrap();
+    assert_eq!(
+        replaced,
+        preset("Same", "grid")
+            + &preset("Same", "row(50, pane, pane)")
+            + &preset("", "pane")
+            + &preset("Other", "pane")
+    );
+    let removed = remove_layout_preset(&original, "Other").unwrap();
+    assert_eq!(
+        removed,
+        preset("Same", "grid") + &preset("Same", "pane") + &preset("", "pane")
+    );
+    let removed = remove_layout_preset(&original, "Same").unwrap();
+    assert_eq!(
+        removed,
+        preset("Same", "grid") + &preset("", "pane") + &preset("Other", "pane")
+    );
+    assert!(remove_layout_preset(&original, "").is_err());
+    let saved = save_layout_preset(&original, "New", "pane").unwrap();
+    let names: Vec<String> = parse(&saved)
+        .unwrap()
+        .0
+        .layout
+        .presets
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    assert_eq!(names, ["Same", "Other", "New"]);
+}
+
+#[test]
+fn a_full_list_still_replaces_but_refuses_a_new_name() {
+    let full: String = (0..20)
+        .map(|n| preset(&format!("Preset {n}"), "pane"))
+        .collect();
+    let replaced = replace_layout_preset(&full, "Preset 19", "col(50, pane, pane)").unwrap();
+    let presets = parse(&replaced).unwrap().0.layout.presets;
+    assert_eq!(presets.len(), 20);
+    assert_eq!(presets[19].tiles, "col(50, pane, pane)");
+    assert!(save_layout_preset(&full, "Preset 20", "pane").is_err());
 }
 
 #[test]

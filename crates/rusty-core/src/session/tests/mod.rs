@@ -116,6 +116,7 @@ fn valid() -> SessionState {
             placement: Vec::new(),
             workspaces: Vec::new(),
             active_workspace: 0,
+            target: None,
             layout: split_state(true, LayoutState::Pane(2), LayoutState::Pane(4)),
             focused_pane: 4,
             panes: vec![

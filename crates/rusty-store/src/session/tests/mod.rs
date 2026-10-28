@@ -54,6 +54,7 @@ fn one_pane(location: &str) -> SessionState {
             placement: Vec::new(),
             workspaces: Vec::new(),
             active_workspace: 0,
+            target: None,
             layout: LayoutState::Pane(2),
             focused_pane: 2,
             panes: vec![pane(2, tab(3, location))],
@@ -117,6 +118,7 @@ fn three_panes_of_100_rows() -> SessionState {
             placement: Vec::new(),
             workspaces: Vec::new(),
             active_workspace: 0,
+            target: None,
             layout: split(
                 LayoutState::Pane(2),
                 split(LayoutState::Pane(4), LayoutState::Pane(6)),

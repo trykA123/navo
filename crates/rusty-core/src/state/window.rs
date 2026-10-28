@@ -115,6 +115,11 @@ impl Window {
         window
     }
 
+    pub(crate) fn restore_target(&mut self, target: Option<PaneId>) {
+        self.target = target;
+        self.repair_target();
+    }
+
     fn initialize_workspace(&mut self) {
         self.repair_target();
         self.workspaces.push(Workspace {

@@ -28,6 +28,8 @@ pub struct WindowState {
     pub active_workspace: u8,
     #[serde(default, deserialize_with = "crate::placement::deserialize_placements")]
     pub placement: Vec<Placement>,
+    #[serde(default)]
+    pub target: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -44,6 +46,8 @@ pub struct SnapshotState {
     pub panes: Vec<PaneState>,
     #[serde(default)]
     pub last_marks: Option<Vec<String>>,
+    #[serde(default)]
+    pub target: Option<u64>,
 }
 
 impl WindowState {
