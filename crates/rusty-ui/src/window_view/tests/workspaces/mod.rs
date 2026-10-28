@@ -7,6 +7,8 @@ use rusty_core::{Command, apply};
 use super::fkeys::hold;
 use super::{FerriteWindow, fake, open_with, press, two_panes};
 
+mod actions;
+
 const ALT: Modifiers = Modifiers {
     alt: true,
     control: false,

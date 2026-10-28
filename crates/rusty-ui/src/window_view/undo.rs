@@ -49,7 +49,9 @@ pub(super) fn ask_props(props: ConfirmProps, offer: &UndoOffer) -> ConfirmProps 
 
 impl FerriteWindow {
     pub(super) fn undo_on(root: Div, cx: &mut Context<Self>) -> Div {
-        root.on_action(cx.listener(|view, _: &UndoLast, _, cx| view.undo_last(cx)))
+        root.on_action(cx.listener(|view, _: &UndoLast, window, cx| {
+            view.undo_last(window, cx);
+        }))
     }
 
     fn tell_undo(&mut self, text: String, cx: &mut Context<Self>) {
@@ -60,12 +62,15 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    fn undo_last(&mut self, cx: &mut Context<Self>) {
+    fn undo_last(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let is_busy = self.prompt.is_some()
             || self.browser.pending().is_some()
             || self.is_multi_rename_open();
         if is_busy {
             return;
+        }
+        if self.restores_workspace() {
+            return self.restore_workspace(window, cx);
         }
         let Some(last) = self.browser.rename_hooks().map(|hooks| hooks.last.clone()) else {
             return self.tell_undo(tr("undo-nothing"), cx);

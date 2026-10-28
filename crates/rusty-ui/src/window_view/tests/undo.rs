@@ -471,3 +471,69 @@ fn a_hook_error_shows_on_the_status_line(cx: &mut TestAppContext) {
             .is_some_and(|text| text.contains("disk gone"))
     );
 }
+
+impl Rig {
+    fn rename_first(&self, cx: &mut TestAppContext) {
+        self.press(cx, &["down", "f2", "ctrl-a"]);
+        self.type_text(cx, "renamed.txt");
+        self.press(cx, &["enter"]);
+    }
+
+    fn workspaces(&self, cx: &mut TestAppContext) -> usize {
+        self.view.read_with(cx, |view, _| {
+            let state = view.browser.state();
+            state
+                .window(state.focused_window())
+                .map_or(0, |core| core.workspaces().len())
+        })
+    }
+
+    fn add_and_delete_workspace(&self, cx: &mut TestAppContext) {
+        cx.update_window(self.window, |_, window, cx| {
+            self.view.update(cx, |view, cx| {
+                view.apply(
+                    &rusty_core::Command::WorkspaceNew { name: None },
+                    window,
+                    cx,
+                );
+                view.delete_workspace(2, window, cx);
+            });
+        })
+        .expect("window");
+        self.wait(cx, Duration::from_millis(200));
+    }
+
+    fn undo(&self, cx: &mut TestAppContext) {
+        self.press(cx, &["ctrl-z"]);
+        if self.is_asking(cx) {
+            self.press(cx, &["enter"]);
+        }
+    }
+}
+
+#[gpui_kit::test]
+fn ctrl_z_restores_a_workspace_deleted_after_a_rename_then_undoes_the_rename(
+    cx: &mut TestAppContext,
+) {
+    let rig = open(cx, files(), &Journal::default());
+    rig.rename_first(cx);
+    rig.add_and_delete_workspace(cx);
+    assert_eq!(rig.workspaces(cx), 1);
+    rig.undo(cx);
+    assert_eq!(rig.workspaces(cx), 2);
+    assert!(rig.listing(cx).contains(&"renamed.txt".to_owned()));
+    rig.undo(cx);
+    assert_eq!(rig.listing(cx), names(&ORIGINAL));
+}
+
+#[gpui_kit::test]
+fn ctrl_z_undoes_a_rename_made_after_a_workspace_delete_first(cx: &mut TestAppContext) {
+    let rig = open(cx, files(), &Journal::default());
+    rig.add_and_delete_workspace(cx);
+    rig.rename_first(cx);
+    rig.undo(cx);
+    assert_eq!(rig.listing(cx), names(&ORIGINAL));
+    assert_eq!(rig.workspaces(cx), 1);
+    rig.undo(cx);
+    assert_eq!(rig.workspaces(cx), 2);
+}

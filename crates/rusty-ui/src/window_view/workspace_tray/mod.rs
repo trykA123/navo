@@ -1,10 +1,16 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::component::Selectable;
-use gpui_kit::component::button::Button as KitButton;
-use gpui_kit::{Animation, AnimationExt, Role};
+use gpui_kit::component::button::{Button as KitButton, ButtonVariants};
+use gpui_kit::{Animation, AnimationExt, KeyDownEvent, Role};
 use rusty_core::{Command, Snapshot};
 
+mod foot;
+mod rename;
+
+pub(super) use rename::TrayEdit;
+
+use self::foot::{Foot, card_foot};
 use super::FerriteWindow;
 use super::workspace_keys::Preview;
 use crate::prelude::*;
@@ -17,6 +23,8 @@ struct Card<'a> {
     snapshot: &'a Snapshot,
     active: bool,
     preview: bool,
+    count: usize,
+    draft: u16,
 }
 
 fn miniature(t: &Theme, snapshot: &Snapshot) -> Div {
@@ -95,8 +103,8 @@ fn card_button(t: &Theme, id: impl Into<ElementId>, label: String) -> KitButton 
         .outline()
         .accessibility_label(label)
         .flex_none()
-        .w(t.spacing.xxl * 14.)
-        .h(t.spacing.xxl * 8.)
+        .w(card_width(t))
+        .h_full()
         .p(t.spacing.md)
         .rounded(t.radii.card)
         .bg(t.surfaces.card)
@@ -104,11 +112,22 @@ fn card_button(t: &Theme, id: impl Into<ElementId>, label: String) -> KitButton 
         .text_color(t.colors.text)
 }
 
-fn workspace_card(t: &Theme, card: Card, cx: &mut Context<FerriteWindow>) -> AnyElement {
+fn card_width(t: &Theme) -> Pixels {
+    t.spacing.xxl * 14.
+}
+
+fn card_main(t: &Theme, card: &Card, cx: &mut Context<FerriteWindow>) -> AnyElement {
     let n = card.n;
-    let button = card_button(t, ("workspace-switch", n), card.name.to_owned())
+    KitButton::new(("workspace-switch", n))
+        .ghost()
+        .accessibility_label(card.name.to_owned())
+        .w_full()
+        .flex_1()
+        .min_h_0()
+        .p(t.spacing.xs)
+        .rounded(t.radii.sm)
+        .text_color(t.colors.text)
         .selected(card.preview)
-        .when(card.preview, |button| button.border_color(t.colors.accent))
         .on_click(cx.listener(move |view, _, window, cx| {
             view.choose_workspace(Command::WorkspaceSwitch { n }, window, cx);
         }))
@@ -119,17 +138,31 @@ fn workspace_card(t: &Theme, card: Card, cx: &mut Context<FerriteWindow>) -> Any
                 .gap(t.spacing.md)
                 .size_full()
                 .child(miniature(t, card.snapshot))
-                .child(metadata(t, &card)),
-        );
+                .child(metadata(t, card)),
+        )
+        .into_any_element()
+}
+
+fn card_frame(t: &Theme, card: &Card) -> gpui_kit::Stateful<Div> {
     div()
-        .id(("workspace-card", n))
+        .id(("workspace-card", card.n))
         .role(Role::Group)
         .aria_selected(card.preview)
-        .test_support()
         .flex()
+        .flex_col()
         .flex_none()
-        .child(button)
-        .into_any_element()
+        .gap(t.spacing.sm)
+        .w(card_width(t))
+        .p(t.spacing.sm)
+        .rounded(t.radii.card)
+        .border_1()
+        .border_color(if card.preview {
+            t.colors.accent
+        } else {
+            t.surfaces.card_edge
+        })
+        .bg(t.surfaces.card)
+        .text_color(t.colors.text)
 }
 
 fn new_card(t: &Theme, preview: bool, cx: &mut Context<FerriteWindow>) -> AnyElement {
@@ -187,9 +220,9 @@ fn header(t: &Theme, cx: &mut Context<FerriteWindow>) -> Div {
                 IconName::X,
                 rusty_l10n::tr("workspace-tray-close"),
             )
-            .on_click(cx.listener(|view, _, _, cx| {
+            .on_click(cx.listener(|view, _, window, cx| {
                 view.workspace_keys.cancel();
-                cx.notify();
+                view.end_workspace_rename(window, cx);
             })),
         )
 }
@@ -220,12 +253,52 @@ impl FerriteWindow {
         self.apply(&command, window, cx);
     }
 
+    fn workspace_card(&self, t: &Theme, card: &Card, cx: &mut Context<Self>) -> AnyElement {
+        let n = card.n;
+        let main = self.workspace_rename_row(t, n, cx).map_or_else(
+            || card_main(t, card, cx),
+            |row| {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(t.spacing.md)
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .p(t.spacing.xs)
+                    .child(miniature(t, card.snapshot))
+                    .child(row)
+                    .into_any_element()
+            },
+        );
+        let foot = Foot {
+            n,
+            name: card.name,
+            count: card.count,
+            draft: card.draft,
+            active: card.active,
+        };
+        card_frame(t, card)
+            .test_support()
+            .track_focus(&self.workspace_keys.edit.cards[n - 1])
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "f2" && !event.keystroke.modifiers.modified() {
+                    cx.stop_propagation();
+                    view.start_workspace_rename(n, window, cx);
+                }
+            }))
+            .child(main)
+            .child(card_foot(t, &foot, cx))
+            .into_any_element()
+    }
+
     fn workspace_cards(&self, t: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let state = self.browser.state();
         let Some(core) = state.window(state.focused_window()) else {
             return Vec::new();
         };
         let current = core.snapshot();
+        let count = core.workspaces().len();
         core.workspaces()
             .iter()
             .enumerate()
@@ -236,14 +309,16 @@ impl FerriteWindow {
                 } else {
                     workspace.live.as_ref().unwrap_or(&workspace.saved)
                 };
-                workspace_card(
+                self.workspace_card(
                     t,
-                    Card {
+                    &Card {
                         n: index + 1,
                         name: &workspace.name,
                         snapshot,
                         active,
                         preview: self.workspace_keys.preview == Some(Preview::Existing(index + 1)),
+                        count,
+                        draft: rusty_core::changes(&workspace.saved, snapshot),
                     },
                     cx,
                 )

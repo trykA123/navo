@@ -367,7 +367,7 @@ impl FerriteWindow {
 
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.sync_workspaces(window);
+        self.sync_workspaces(window, cx);
         let frame = self.perf_frame(window);
         self.watch_start(window, cx);
         let t = tokens::current(cx).clone();

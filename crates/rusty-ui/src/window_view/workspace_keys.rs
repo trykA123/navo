@@ -2,6 +2,7 @@ use gpui_kit::{AnyWindowHandle, Modifiers, Subscription, Task};
 use rusty_core::Command;
 
 use super::FerriteWindow;
+use super::workspace_tray::TrayEdit;
 use crate::fkey_bar::KeyLayer;
 use crate::modifier_hints::{Arm, Combo, Delay, Hold};
 use crate::prelude::*;
@@ -35,6 +36,7 @@ pub(super) enum Preview {
 pub(super) struct WorkspaceKeys {
     pub(super) visible: bool,
     pub(super) preview: Option<Preview>,
+    pub(super) edit: TrayEdit,
     alt: bool,
     hold: Hold,
     timer: Option<Task<()>>,
@@ -59,6 +61,7 @@ impl WorkspaceKeys {
         Self {
             visible: false,
             preview: None,
+            edit: TrayEdit::new(cx),
             alt: false,
             hold: Hold::default(),
             timer: None,
@@ -91,10 +94,11 @@ impl FerriteWindow {
         self.drag_modifiers(&modifiers, cx);
     }
 
-    pub(super) fn sync_workspaces(&mut self, window: &Window) {
-        if !self.workspaces_allowed(window) {
+    pub(super) fn sync_workspaces(&mut self, window: &Window, cx: &App) {
+        if !self.workspaces_allowed(window) && !self.workspace_keys.edit.has_focus(window, cx) {
             self.workspace_keys.cancel();
             self.workspace_keys.alt = false;
+            self.workspace_keys.edit.drop_rename();
         }
     }
 
@@ -117,8 +121,10 @@ impl FerriteWindow {
         let released = self.workspace_keys.alt && !modifiers.alt;
         self.workspace_keys.alt = modifiers.alt;
         if !self.workspaces_allowed(window) {
-            self.workspace_keys.cancel();
-            self.workspace_keys.alt = false;
+            if !self.workspace_keys.edit.has_focus(window, cx) {
+                self.workspace_keys.cancel();
+                self.workspace_keys.alt = false;
+            }
             return;
         }
         if released {

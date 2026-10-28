@@ -4,6 +4,17 @@ workspace-tray-close = Close workspaces
 workspace-open = open
 workspace-new-from-layout = New from current layout
 workspace-preview-ribbon = Previewing { $name } · release Alt to switch · Esc to stay
+workspace-draft = Draft · { $count }
+workspace-save = Save
+workspace-discard = Discard
+workspace-rename = Rename { $name }
+workspace-move-left = Move left
+workspace-move-right = Move right
+workspace-delete = Delete { $name }
+workspace-name = Workspace name
+workspace-name-invalid = A workspace name has 1 to 40 characters.
+workspace-deleted = Deleted { $name }
+workspace-deleted-key = Deleted { $name } · { $key } restores it
 
 pane-strip-title = Panes
 pane-strip-button = Pane { $n }: { $name }
