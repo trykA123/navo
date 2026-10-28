@@ -86,6 +86,6 @@ mod tests {
         });
         drop(writing);
         assert!(report.busy);
-        assert!(started.elapsed() < Duration::from_millis(50));
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 }

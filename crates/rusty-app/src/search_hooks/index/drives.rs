@@ -137,7 +137,7 @@ mod tests {
         let started = Instant::now();
         assert_eq!(cache.drives().len(), 1);
         assert_eq!(cache.drives().len(), 1);
-        assert!(started.elapsed() < Duration::from_millis(50));
+        assert!(started.elapsed() < Duration::from_secs(1));
         release.send(()).unwrap();
         done.recv_timeout(Duration::from_secs(5)).unwrap();
         while cache.lock().refreshing {

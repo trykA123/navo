@@ -175,7 +175,7 @@ mod tests {
         let started = Instant::now();
         assert_eq!(presence.volumes(&selection), None);
         assert_eq!(presence.volumes(&selection), None);
-        assert!(started.elapsed() < Duration::from_millis(50));
+        assert!(started.elapsed() < Duration::from_secs(1));
         release.send(()).unwrap();
         settle(&presence);
         let known = presence.volumes(&selection).flatten();

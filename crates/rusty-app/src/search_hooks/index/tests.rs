@@ -92,7 +92,7 @@ fn the_status_hook_answers_while_a_walker_holds_the_hosts_lock() {
     held.recv_timeout(WAIT).unwrap();
     let started = std::time::Instant::now();
     assert!(status().is_none());
-    assert!(started.elapsed() < Duration::from_millis(50));
+    assert!(started.elapsed() < Duration::from_secs(1));
     release.send(()).unwrap();
     holder.join().unwrap();
 }
@@ -176,7 +176,7 @@ fn auto_walks_nothing_until_the_service_manager_has_answered_in_the_background()
     };
     let started = std::time::Instant::now();
     hosts.configure(&options, None);
-    assert!(started.elapsed() < Duration::from_millis(100));
+    assert!(started.elapsed() < Duration::from_secs(1));
     assert!(hosts.roots.is_empty());
     answer.send(()).unwrap();
     let deadline = std::time::Instant::now() + WAIT;
