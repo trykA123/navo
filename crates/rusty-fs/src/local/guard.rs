@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use rusty_core::{FsError, FsErrorKind, Location};
+use rusty_core::{AncestorMemo, FsError, FsErrorKind, Location, ProviderPath};
 
 use super::{error, io_error, os_path, platform};
 
@@ -10,16 +10,29 @@ pub fn mutation_location(location: &Location) -> Result<Location, FsError> {
     MutationLocations::default().resolve(location)
 }
 
-#[derive(Default)]
+type LevelCheck = fn(&Location, Option<&ProviderPath>) -> bool;
+
 pub struct MutationLocations {
     parents: HashMap<PathBuf, PathBuf>,
+    reserved: AncestorMemo<LevelCheck>,
     #[cfg(test)]
     canonicalize_calls: Vec<PathBuf>,
 }
 
+impl Default for MutationLocations {
+    fn default() -> Self {
+        Self {
+            parents: HashMap::new(),
+            reserved: AncestorMemo::new(reserved_level),
+            #[cfg(test)]
+            canonicalize_calls: Vec::new(),
+        }
+    }
+}
+
 impl MutationLocations {
     pub fn resolve(&mut self, location: &Location) -> Result<Location, FsError> {
-        refuse_reserved(location)?;
+        self.refuse_reserved(location)?;
         if !location.is_local() {
             return Ok(location.clone());
         }
@@ -33,8 +46,15 @@ impl MutationLocations {
         .map_err(|failure| io_error(&failure, location))?;
         let resolved = Location::local(platform::entry_name(resolved.as_os_str()))
             .map_err(|_| error(FsErrorKind::NameInvalid, location))?;
-        refuse_reserved(&resolved)?;
+        self.refuse_reserved(&resolved)?;
         Ok(resolved)
+    }
+
+    fn refuse_reserved(&mut self, location: &Location) -> Result<(), FsError> {
+        if self.reserved.any(location) {
+            return Err(error(FsErrorKind::AccessDenied, location));
+        }
+        Ok(())
     }
 
     fn resolve_parent(&mut self, path: &Path) -> io::Result<PathBuf> {
@@ -90,6 +110,10 @@ pub fn save_location(location: &Location) -> Result<Location, FsError> {
         .map_err(|_| error(FsErrorKind::NameInvalid, location))?;
     refuse_reserved(&resolved)?;
     Ok(resolved)
+}
+
+fn reserved_level(_: &Location, name: Option<&ProviderPath>) -> bool {
+    name.is_some_and(|name| rusty_core::brand::is_reserved_name(&name.to_text()))
 }
 
 pub(crate) fn refuse_reserved(location: &Location) -> Result<(), FsError> {

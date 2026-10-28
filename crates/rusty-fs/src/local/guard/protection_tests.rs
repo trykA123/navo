@@ -69,3 +69,48 @@ fn cached_aliases_preserve_refusals_and_do_not_resolve_the_leaf() {
         assert_eq!(cached.resolve(&location).is_ok(), name == "alias");
     }
 }
+
+fn reserved_samples() -> Vec<Location> {
+    let roots = ["/", "fake://", r"C:\", r"\\srv\share\", r"\\?\C:\"];
+    let parents = [
+        "docs",
+        ".NAVO-RETAINED-ab",
+        "navo-retained-ab",
+        ".ferrite-held-ab",
+    ];
+    let leaves = [
+        "new",
+        ".navo-held-1-2",
+        "notes.navo-held-1",
+        ".navo-mutations-x",
+    ];
+    let mut samples = vec![];
+    for root in roots {
+        for (parent, leaf) in parents
+            .iter()
+            .flat_map(|parent| leaves.map(|leaf| (parent, leaf)))
+        {
+            for suffix in ["", "/", "/deep/file"] {
+                samples.push(Location::new(format!("{root}{parent}/{leaf}{suffix}")).unwrap());
+            }
+        }
+    }
+    samples
+}
+
+#[test]
+fn cached_reserved_walk_matches_the_original_for_all_path_forms() {
+    let mut cached = MutationLocations::default();
+    let samples = reserved_samples();
+    for location in samples.iter().rev().chain(&samples) {
+        let expected = std::iter::successors(Some(location.clone()), Location::parent)
+            .filter_map(|path| path.name())
+            .any(|name| rusty_core::brand::is_reserved_name(&name.to_text()));
+        assert_eq!(refuse_reserved(location).is_err(), expected, "{location:?}");
+        assert_eq!(
+            cached.refuse_reserved(location),
+            refuse_reserved(location),
+            "{location:?}"
+        );
+    }
+}

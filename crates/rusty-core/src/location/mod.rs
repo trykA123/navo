@@ -1,9 +1,11 @@
+mod ancestors;
 mod parent;
 mod path;
 mod provider;
 mod serde_impl;
 mod typed;
 
+pub use ancestors::AncestorMemo;
 pub use path::ProviderPath;
 pub use provider::ProviderId;
 pub use typed::typed_location;

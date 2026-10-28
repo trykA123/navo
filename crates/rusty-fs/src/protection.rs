@@ -5,15 +5,48 @@ use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
 use crate::{CancelToken, EntryBatch, EntryKind, MutationLocations, ProviderOps, scan};
 
+pub struct ResolvedPlan<'a> {
+    plan: &'a OperationPlan,
+    paths: Vec<Location>,
+}
+
+impl<'a> ResolvedPlan<'a> {
+    pub fn new(plan: &'a OperationPlan) -> Result<Self, FsError> {
+        let mut locations = MutationLocations::default();
+        let paths = plan
+            .steps
+            .iter()
+            .flat_map(mutated)
+            .map(|path| locations.resolve(path))
+            .collect::<Result<_, _>>()?;
+        Ok(Self { plan, paths })
+    }
+
+    #[must_use]
+    pub fn paths(&self) -> &[Location] {
+        &self.paths
+    }
+
+    #[must_use]
+    pub fn into_paths(self) -> Vec<Location> {
+        self.paths
+    }
+}
+
 pub fn check_mutation(
     plan: &OperationPlan,
     ops: &dyn ProviderOps,
     cancel: &CancelToken,
 ) -> Result<(), FsError> {
-    let mut locations = MutationLocations::default();
-    for path in plan.steps.iter().flat_map(mutated) {
-        locations.resolve(path)?;
-    }
+    check_resolved_mutation(&ResolvedPlan::new(plan)?, ops, cancel)
+}
+
+pub fn check_resolved_mutation(
+    resolved: &ResolvedPlan<'_>,
+    ops: &dyn ProviderOps,
+    cancel: &CancelToken,
+) -> Result<(), FsError> {
+    let plan = resolved.plan;
     let candidates: HashSet<_> = plan
         .steps
         .iter()

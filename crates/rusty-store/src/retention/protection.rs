@@ -1,4 +1,4 @@
-use rusty_core::Location;
+use rusty_core::{AncestorMemo, Location, ProviderPath};
 
 use super::{RetentionCatalog, RetentionStoreError};
 
@@ -19,6 +19,7 @@ impl RetentionCatalog {
         if paths.is_empty() {
             return Ok(false);
         }
+        let parents: Vec<_> = paths.iter().map(Location::parent).collect();
         let mut statement = self.db.connection().prepare(LIVE)?;
         let mut rows = statement.query([])?;
         while let Some(row) = rows.next()? {
@@ -26,7 +27,16 @@ impl RetentionCatalog {
             let container = Location::new(container).map_err(|_| {
                 rusty_core::retention::RetentionError::Invalid("invalid container projection")
             })?;
-            if paths.iter().any(|path| intersects(path, &container)) {
+            let below: Vec<_> =
+                std::iter::successors(Some(container.clone()), Location::parent).collect();
+            let mut above = AncestorMemo::new(|level: &Location, _: Option<&ProviderPath>| {
+                level.same_place(&container)
+            });
+            if paths.iter().zip(&parents).any(|(path, parent)| {
+                path.same_place(&container)
+                    || parent.as_ref().is_some_and(|parent| above.any(parent))
+                    || below.iter().any(|level| level.same_place(path))
+            }) {
                 return Ok(true);
             }
         }
@@ -34,14 +44,64 @@ impl RetentionCatalog {
     }
 }
 
-fn intersects(a: &Location, b: &Location) -> bool {
-    std::iter::successors(Some(a.clone()), Location::parent).any(|path| path.same_place(b))
-        || std::iter::successors(Some(b.clone()), Location::parent).any(|path| path.same_place(a))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn intersects(a: &Location, b: &Location) -> bool {
+        std::iter::successors(Some(a.clone()), Location::parent).any(|path| path.same_place(b))
+            || std::iter::successors(Some(b.clone()), Location::parent)
+                .any(|path| path.same_place(a))
+    }
+
+    #[test]
+    fn grouped_paths_match_individual_intersections_without_refusing_siblings() {
+        let catalog = RetentionCatalog::new(crate::Db::open_in_memory().unwrap()).unwrap();
+        for text in ["/files/one/.navo-held-ab", r"C:\Données\.navo-held-ab"] {
+            catalog
+                .db
+                .connection()
+                .execute("DELETE FROM retained_entry", [])
+                .unwrap();
+            let record = serde_json::json!({ "container": text });
+            catalog
+                .db
+                .connection()
+                .execute(
+                    "INSERT INTO retained_entry (state, record) VALUES ('ready', ?1)",
+                    [serde_json::to_vec(&record).unwrap()],
+                )
+                .unwrap();
+            let container = Location::new(text).unwrap();
+            let paths: Vec<_> = [
+                "/files/one/a",
+                "/files/one/b",
+                "/files/two/a",
+                "/files/one",
+                "/files/one/.navo-held-ab/payload/a",
+                "/files/one/.navo-held-ab",
+                "/",
+                "/files/one/lookalike",
+                r"c:\DONNÉES\a",
+                r"c:\DONNÉES\b",
+                r"c:\DONNÉES",
+                r"c:\DONNÉES\.NAVO-HELD-ab\payload",
+                r"C:\",
+            ]
+            .into_iter()
+            .map(|text| Location::new(text).unwrap())
+            .collect();
+            let batches = (0..paths.len())
+                .flat_map(|first| (first + 1..=paths.len()).map(move |last| first..last));
+            for batch in batches.map(|range| &paths[range]) {
+                assert_eq!(
+                    catalog.intersects_live(batch).unwrap(),
+                    batch.iter().any(|path| intersects(path, &container)),
+                    "{batch:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn live_existence_uses_the_v7_index_without_decoding_records() {

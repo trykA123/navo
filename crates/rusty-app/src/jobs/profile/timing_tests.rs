@@ -41,9 +41,10 @@ fn measure(kind: OpKind, folders: usize, files: usize) {
     assert_eq!(plan.totals.files, u64::try_from(folders * files).unwrap());
     for experimental in [false, true] {
         let started = Instant::now();
-        guard(&plan, &dirs, experimental).unwrap();
+        let resolved = resolve(&plan).unwrap();
+        guard_paths(resolved.paths(), &dirs, experimental).unwrap();
         if experimental {
-            rusty_fs::check_mutation(&plan, &ops, &cancel).unwrap();
+            rusty_fs::check_resolved_mutation(&resolved, &ops, &cancel).unwrap();
         } else {
             rusty_fs::check_relocation(&plan, &ops, &cancel).unwrap();
         }

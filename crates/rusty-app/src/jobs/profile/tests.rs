@@ -1,5 +1,5 @@
 use super::*;
-use rusty_core::{ConflictPolicy, PlanRequest, ProviderPath, plan};
+use rusty_core::{ConflictPolicy, PlanRequest, ProviderPath, Step, plan};
 use rusty_fs::{CancelToken, FakeFs, LocalFs, Provider, ProviderOps, scan};
 use rusty_ui::browser::LoggedOperation;
 

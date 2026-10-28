@@ -59,7 +59,15 @@ fn push_literal(out: &mut String, c: char) {
     out.push(c);
 }
 
+// Every escape character is in plane 16, and only plane-16 characters start with byte 0xF4 in UTF-8.
+fn has_escapes(text: &str) -> bool {
+    text.as_bytes().contains(&0xF4)
+}
+
 fn quote_literals(text: &str) -> String {
+    if !has_escapes(text) {
+        return text.to_owned();
+    }
     let mut out = String::with_capacity(text.len());
     text.chars().for_each(|c| push_literal(&mut out, c));
     out
@@ -68,6 +76,9 @@ fn quote_literals(text: &str) -> String {
 impl ProviderPath {
     #[must_use]
     pub fn from_text(text: &str) -> Self {
+        if !has_escapes(text) {
+            return Self(Repr::Text(text.to_owned()));
+        }
         let pieces = pieces(text);
         let wide = pieces.iter().any(|p| matches!(p, Piece::Wide(_)));
         let bytes = pieces.iter().any(|p| matches!(p, Piece::Byte(_)));

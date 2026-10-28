@@ -320,16 +320,7 @@ impl OpLog for JournalLog {
     ) -> Result<(), String> {
         profile::check_confirmed(self, &operation)?;
         self.claim_lease(&mut operation)?;
-        if let Some(dirs) = &self.profile {
-            profile::guard(operation.plan, dirs, self.experimental_retention)?;
-        }
-        if self.experimental_retention {
-            rusty_fs::check_mutation(operation.plan, operation.ops, operation.cancel)
-                .map_err(|error| error.message())?;
-        } else if self.profile.is_some() {
-            rusty_fs::check_relocation(operation.plan, operation.ops, operation.cancel)
-                .map_err(|error| error.message())?;
-        }
+        profile::check_plan(self, &operation)?;
         if self.overwrites.is_some() && !operation.ops.supports_atomic_rename() {
             return Err(rusty_l10n::tr("job-retention-unsupported"));
         }

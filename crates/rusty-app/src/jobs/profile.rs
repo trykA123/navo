@@ -3,7 +3,7 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
-use rusty_core::{Location, OpKind, OperationPlan, Resolution, Step};
+use rusty_core::{AncestorMemo, Location, OpKind, OperationPlan, ProviderPath, Resolution};
 use rusty_store::{RetentionCatalog, RetentionSettings, SettingsError, StoreDirs};
 use rusty_ui::browser::{LogFactory, OpLog, WriteFactory};
 
@@ -198,17 +198,34 @@ pub(super) fn guard(
     dirs: &StoreDirs,
     experimental: bool,
 ) -> Result<(), String> {
-    guard_paths(&mutated_paths(plan)?, dirs, experimental)
+    guard_paths(resolve(plan)?.paths(), dirs, experimental)
+}
+
+pub(super) fn check_plan(
+    log: &JournalLog,
+    operation: &rusty_ui::browser::LoggedOperation<'_>,
+) -> Result<(), String> {
+    if log.profile.is_none() && !log.experimental_retention {
+        return Ok(());
+    }
+    let resolved = resolve(operation.plan)?;
+    if let Some(dirs) = &log.profile {
+        guard_paths(resolved.paths(), dirs, log.experimental_retention)?;
+    }
+    if log.experimental_retention {
+        rusty_fs::check_resolved_mutation(&resolved, operation.ops, operation.cancel)
+    } else {
+        rusty_fs::check_relocation(operation.plan, operation.ops, operation.cancel)
+    }
+    .map_err(|error| error.message())
+}
+
+fn resolve(plan: &OperationPlan) -> Result<rusty_fs::ResolvedPlan<'_>, String> {
+    rusty_fs::ResolvedPlan::new(plan).map_err(|error| error.message())
 }
 
 pub(super) fn mutated_paths(plan: &OperationPlan) -> Result<Vec<Location>, String> {
-    let mut locations = rusty_fs::MutationLocations::default();
-    plan.steps
-        .iter()
-        .flat_map(mutated)
-        .map(|path| locations.resolve(path))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.message())
+    resolve(plan).map(rusty_fs::ResolvedPlan::into_paths)
 }
 
 fn canonical_ancestor(path: &std::path::Path) -> Option<std::path::PathBuf> {
@@ -218,7 +235,8 @@ fn canonical_ancestor(path: &std::path::Path) -> Option<std::path::PathBuf> {
 }
 
 fn guard_paths(paths: &[Location], dirs: &StoreDirs, experimental: bool) -> Result<(), String> {
-    if paths.iter().any(reserved) {
+    let mut retained = AncestorMemo::new(retained_level);
+    if paths.iter().any(|path| retained.any(path)) {
         return Err(rusty_l10n::tr("job-retained-protected"));
     }
     for path in [&dirs.config, &dirs.data] {
@@ -231,12 +249,7 @@ fn guard_paths(paths: &[Location], dirs: &StoreDirs, experimental: bool) -> Resu
                 .and_then(|resolved| crate::startup::path_location(&resolved)),
             Err(error) => return Err(error.to_string()),
         };
-        if paths.iter().any(|path| {
-            intersects(path, &location)
-                || resolved
-                    .as_ref()
-                    .is_some_and(|resolved| intersects(path, resolved))
-        }) {
+        if touches_any(paths, &[Some(location), resolved]) {
             return Err(rusty_l10n::tr("job-profile-protected"));
         }
     }
@@ -257,27 +270,22 @@ fn guard_paths(paths: &[Location], dirs: &StoreDirs, experimental: bool) -> Resu
     Ok(())
 }
 
-fn mutated(step: &Step) -> Vec<&Location> {
-    match step {
-        Step::Rename { source, target } => vec![source, target],
-        Step::CopyFile { target, .. } | Step::MakeFolder { target } => vec![target],
-        Step::MakeLink { at, .. } => vec![at],
-        Step::Recycle { location }
-        | Step::RemoveFile { location }
-        | Step::RemoveLink { location }
-        | Step::RemoveFolder { location } => vec![location],
-    }
+fn retained_level(_: &Location, name: Option<&ProviderPath>) -> bool {
+    name.is_some_and(|name| rusty_core::brand::is_retained_container(&name.to_text()))
 }
 
-fn reserved(path: &Location) -> bool {
-    std::iter::successors(Some(path.clone()), Location::parent)
-        .filter_map(|path| path.name())
-        .any(|name| rusty_core::brand::is_retained_container(&name.to_text()))
-}
-
-fn intersects(a: &Location, b: &Location) -> bool {
-    std::iter::successors(Some(a.clone()), Location::parent).any(|path| path.same_place(b))
-        || std::iter::successors(Some(b.clone()), Location::parent).any(|path| path.same_place(a))
+fn touches_any(paths: &[Location], targets: &[Option<Location>]) -> bool {
+    let targets: Vec<_> = targets.iter().flatten().collect();
+    let below: Vec<_> = targets
+        .iter()
+        .flat_map(|target| std::iter::successors(Some((*target).clone()), Location::parent))
+        .collect();
+    let mut above = AncestorMemo::new(|level: &Location, _: Option<&ProviderPath>| {
+        targets.iter().any(|target| level.same_place(target))
+    });
+    paths
+        .iter()
+        .any(|path| above.any(path) || below.iter().any(|level| level.same_place(path)))
 }
 
 #[cfg(test)]

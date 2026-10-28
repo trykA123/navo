@@ -39,7 +39,9 @@ pub use layout::{
     Applied, Axis, Layout, LayoutError, MAX_PANES, Preset, Rect, SplitInfo, SplitPath, Tiles,
     TilesError,
 };
-pub use location::{Location, LocationError, ProviderId, ProviderPath, typed_location};
+pub use location::{
+    AncestorMemo, Location, LocationError, ProviderId, ProviderPath, typed_location,
+};
 pub use name::{NameError, check_name};
 pub use op_plan::{
     Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, ItemKind, OpKind, OperationPlan,

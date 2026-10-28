@@ -3,10 +3,21 @@ use super::{Location, ProviderPath, windows_style};
 impl Location {
     #[must_use]
     pub fn name(&self) -> Option<ProviderPath> {
-        let parent = self.parent()?;
-        let rest = self.as_str().strip_prefix(parent.as_str())?;
-        let name = rest.trim_start_matches(['\\', '/']);
-        (!name.is_empty()).then(|| ProviderPath::from_text(name))
+        self.parent_and_name().1
+    }
+
+    #[must_use]
+    pub fn parent_and_name(&self) -> (Option<Self>, Option<ProviderPath>) {
+        let Some(parent) = self.parent() else {
+            return (None, None);
+        };
+        let name = self
+            .as_str()
+            .strip_prefix(parent.as_str())
+            .map(|rest| rest.trim_start_matches(['\\', '/']))
+            .filter(|name| !name.is_empty())
+            .map(ProviderPath::from_text);
+        (Some(parent), name)
     }
 
     #[must_use]
