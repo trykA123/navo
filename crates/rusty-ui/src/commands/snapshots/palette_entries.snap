@@ -21,6 +21,10 @@ layout.focus_pane_first | FileList | true
 layout.focus_pane_second | FileList | true
 layout.focus_pane_third | FileList | true
 layout.focus_pane_fourth | FileList | true
+layout.split_right | FileList | true
+layout.split_below | FileList | true
+layout.close_pane | FileList | true
+layout.save | FileList | true
 app_menu.toggle | global | true
 settings.toggle | global | true
 jobs.toggle | global | true
@@ -87,6 +91,7 @@ files.toggle_mark_down | FileList | true
 files.open | FileList | true
 files.open_parent | FileList | true
 pane.switch | FileList | true
+pane.switch_back | FileList | true
 files.copy | FileList | true
 files.move | FileList | true
 files.clipboard_copy | FileList | true

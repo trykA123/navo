@@ -1,4 +1,5 @@
 mod notice;
+mod path_bar;
 mod waiting;
 mod workspaces;
 
@@ -276,6 +277,11 @@ pub(super) const GROUPS: [Group; 9] = [
                 "cmd-files-open-parent",
             ),
             ("file_list::SwitchPane", "pane.switch", "cmd-pane-switch"),
+            (
+                "ferrite_window::PreviousPane",
+                "pane.switch_back",
+                "cmd-pane-switch-back",
+            ),
             ("file_list::CopyItems", "files.copy", "cmd-files-copy"),
             ("file_list::MoveItems", "files.move", "cmd-files-move"),
             (
@@ -369,33 +375,6 @@ pub(super) const GROUPS: [Group; 9] = [
             ),
         ],
     },
-    Group {
-        context: "PathInput",
-        commands: &[(
-            "path_input::CancelPath",
-            "path_input.cancel",
-            "cmd-path-input-cancel",
-        )],
-    },
-    Group {
-        context: "DriveMenu",
-        commands: &[
-            ("drive_menu::MenuUp", "drive_menu.up", "cmd-drive-menu-up"),
-            (
-                "drive_menu::MenuDown",
-                "drive_menu.down",
-                "cmd-drive-menu-down",
-            ),
-            (
-                "drive_menu::MenuOpen",
-                "drive_menu.open",
-                "cmd-drive-menu-open",
-            ),
-            (
-                "drive_menu::MenuClose",
-                "drive_menu.close",
-                "cmd-drive-menu-close",
-            ),
-        ],
-    },
+    path_bar::PATH_INPUT,
+    path_bar::DRIVE_MENU,
 ];

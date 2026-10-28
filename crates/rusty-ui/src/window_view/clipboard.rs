@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusty_core::{CommandError, Location, OpKind, StateError};
+use rusty_core::{CommandError, LayoutError, Location, OpKind, StateError};
 
 use super::FerriteWindow;
 use super::shell_menu::put_paths_on_clipboard;
@@ -124,6 +124,9 @@ impl FerriteWindow {
         let key = match result {
             Err(CommandError::NothingToRestore) => "files-marks-restore-none",
             Err(CommandError::State(StateError::TooManyPanes)) => "layout-too-many-panes",
+            Err(CommandError::State(StateError::Layout(LayoutError::LastPane))) => {
+                "layout-last-pane"
+            }
             _ => return,
         };
         self.show_notice(StatusNotice {

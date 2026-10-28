@@ -98,5 +98,25 @@ pub(super) const GROUP: Group = Group {
             "layout.focus_pane_fourth",
             "cmd-layout-focus-pane-fourth",
         ),
+        (
+            "ferrite_window::SplitPaneRight",
+            "layout.split_right",
+            "cmd-layout-split-right",
+        ),
+        (
+            "ferrite_window::SplitPaneBelow",
+            "layout.split_below",
+            "cmd-layout-split-below",
+        ),
+        (
+            "ferrite_window::ClosePane",
+            "layout.close_pane",
+            "cmd-layout-close-pane",
+        ),
+        (
+            "ferrite_window::SaveLayout",
+            "layout.save",
+            "cmd-layout-save",
+        ),
     ],
 };

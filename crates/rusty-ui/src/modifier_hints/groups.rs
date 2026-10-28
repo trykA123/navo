@@ -87,9 +87,13 @@ const GROUPS: [(&str, &[&str]); 8] = [
             "files.refresh",
             "files.clear_filter",
             "pane.switch",
+            "pane.switch_back",
             "pane.drive_menu_first",
             "pane.drive_menu_second",
             "pane.reset_split",
+            "layout.split_right",
+            "layout.split_below",
+            "layout.close_pane",
         ],
     ),
     (

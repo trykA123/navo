@@ -343,12 +343,33 @@ impl FerriteWindow {
     }
 
     pub(super) fn switch_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.browser.target_pane().is_some() {
-            self.close_popups(window, cx);
-            let result = self.browser.focus_target_pane();
-            self.show_refusal(result);
-            self.focus_core_pane(window, cx);
-            cx.notify();
-        }
+        self.step_pane(PaneStep::Next, window, cx);
     }
+
+    pub(super) fn step_pane(
+        &mut self,
+        step: PaneStep,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.browser.target_pane().is_none() {
+            return;
+        }
+        self.close_popups(window, cx);
+        let result = match step {
+            PaneStep::Next => self.browser.focus_next_pane(false),
+            PaneStep::Previous => self.browser.focus_next_pane(true),
+            PaneStep::Target => self.browser.focus_target_pane(),
+        };
+        self.show_refusal(result);
+        self.focus_core_pane(window, cx);
+        cx.notify();
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum PaneStep {
+    Next,
+    Previous,
+    Target,
 }

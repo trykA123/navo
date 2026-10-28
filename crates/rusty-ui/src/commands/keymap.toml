@@ -394,6 +394,22 @@ command = "layout.focus_pane_fourth"
 keys = ["ctrl-shift-4"]
 
 [[bind]]
+command = "layout.split_right"
+keys = ["ctrl-alt-v"]
+
+[[bind]]
+command = "layout.split_below"
+keys = ["ctrl-alt-b"]
+
+[[bind]]
+command = "layout.close_pane"
+keys = ["ctrl-alt-w"]
+
+[[bind]]
+command = "pane.switch_back"
+keys = ["shift-tab"]
+
+[[bind]]
 command = "pane.go_back"
 keys = ["alt-left"]
 

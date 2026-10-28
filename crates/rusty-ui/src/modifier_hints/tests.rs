@@ -87,7 +87,11 @@ fn the_alt_and_shift_layers_map_their_commands_to_groups() {
         ["pane.go_back", "pane.go_forward"]
     );
     let shift = layer_in(Keymap::builtin(), Combo::SHIFT);
-    assert_eq!(names(&shift), ["Files"]);
+    assert_eq!(names(&shift), ["Files", "Pane"]);
+    assert_eq!(
+        commands(&group(&shift, "Pane").entries),
+        ["pane.switch_back"]
+    );
     assert_eq!(
         commands(&group(&shift, "Files").entries),
         [

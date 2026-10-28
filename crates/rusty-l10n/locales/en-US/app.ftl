@@ -26,6 +26,7 @@ layout-presets-full = 20 layout presets is the most. Remove one first.
 layout-presets-failed = Layout presets not changed: { $detail }
 layout-presets-unavailable = Layout presets need a settings file.
 layout-too-many-panes = Four panes is the most in this version.
+layout-last-pane = The last pane stays open.
 layout-preset-1 = Side by side
 layout-preset-2 = Three columns
 layout-preset-3 = Wide + 2

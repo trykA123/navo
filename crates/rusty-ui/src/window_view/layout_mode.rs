@@ -3,13 +3,24 @@ use gpui_kit::{Animation, AnimationExt, Keystroke, Subscription};
 use rusty_core::{Command, Direction, Layout, PaneId};
 
 use super::FerriteWindow;
+use super::pane::PaneStep;
 use crate::prelude::*;
 use crate::primitives::Kbd;
 use crate::tokens::Theme;
 
 gpui_kit::actions!(
     ferrite_window,
-    [FocusPane1, FocusPane2, FocusPane3, FocusPane4]
+    [
+        ClosePane,
+        FocusPane1,
+        FocusPane2,
+        FocusPane3,
+        FocusPane4,
+        PreviousPane,
+        SaveLayout,
+        SplitPaneBelow,
+        SplitPaneRight
+    ]
 );
 
 enum ModeKey {
@@ -195,7 +206,7 @@ impl FerriteWindow {
         let before = self.tiles_layout();
         match key {
             ModeKey::Core(command) => self.apply(&command, window, cx),
-            ModeKey::SwitchPane => self.switch_pane(window, cx),
+            ModeKey::SwitchPane => self.step_pane(PaneStep::Target, window, cx),
             ModeKey::Save => return self.ask_save_layout(cx),
             ModeKey::Remove => {
                 if let Some(state) = &self.tiles.switcher {
@@ -224,6 +235,30 @@ macro_rules! pane_number_keys {
     };
 }
 
-pub(super) fn pane_number_keys(root: Div, cx: &mut Context<FerriteWindow>) -> Div {
-    pane_number_keys!(root, cx, FocusPane1 => 1, FocusPane2 => 2, FocusPane3 => 3, FocusPane4 => 4)
+macro_rules! layout_command_keys {
+    ($root:expr, $cx:expr, $($action:ident => $command:expr),+ $(,)?) => {
+        $root$(.on_action($cx.listener(|view: &mut FerriteWindow, _: &$action, window, cx| {
+            view.layout_mode_key(ModeKey::Core($command), window, cx);
+        })))+
+    };
+}
+
+pub(super) fn layout_keys(root: Div, cx: &mut Context<FerriteWindow>) -> Div {
+    let root = pane_number_keys!(root, cx,
+        FocusPane1 => 1,
+        FocusPane2 => 2,
+        FocusPane3 => 3,
+        FocusPane4 => 4,
+    );
+    let root = layout_command_keys!(root, cx,
+        SplitPaneRight => Command::LayoutSplit { direction: Direction::Right },
+        SplitPaneBelow => Command::LayoutSplit { direction: Direction::Down },
+        ClosePane => Command::LayoutClose,
+    );
+    root.on_action(cx.listener(|view, _: &PreviousPane, window, cx| {
+        view.step_pane(PaneStep::Previous, window, cx);
+    }))
+    .on_action(cx.listener(|view, _: &SaveLayout, _, cx| {
+        view.ask_save_layout(cx);
+    }))
 }

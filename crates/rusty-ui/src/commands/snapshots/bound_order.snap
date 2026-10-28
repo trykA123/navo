@@ -492,3 +492,7 @@ layout.focus_pane_first | ctrl-shift-1 | FileList
 layout.focus_pane_second | ctrl-shift-2 | FileList
 layout.focus_pane_third | ctrl-shift-3 | FileList
 layout.focus_pane_fourth | ctrl-shift-4 | FileList
+layout.split_right | ctrl-alt-v | FileList
+layout.split_below | ctrl-alt-b | FileList
+layout.close_pane | ctrl-alt-w | FileList
+pane.switch_back | shift-tab | FileList

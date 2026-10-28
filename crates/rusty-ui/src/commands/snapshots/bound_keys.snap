@@ -195,10 +195,13 @@ image.zoom_in | = | Image
 image.zoom_in | shift-= | Image
 image.zoom_out | - | Image
 jobs.toggle | ctrl-j | global
+layout.close_pane | ctrl-alt-w | FileList
 layout.focus_pane_first | ctrl-shift-1 | FileList
 layout.focus_pane_fourth | ctrl-shift-4 | FileList
 layout.focus_pane_second | ctrl-shift-2 | FileList
 layout.focus_pane_third | ctrl-shift-3 | FileList
+layout.split_below | ctrl-alt-b | FileList
+layout.split_right | ctrl-alt-v | FileList
 layout.switcher | ctrl-l | FileList
 lister.find_next | enter | Viewer
 lister.page_or_next_image | space | Viewer
@@ -262,6 +265,7 @@ pane.reset_split | ctrl-alt-0 | NavoPane
 pane.reset_split | ctrl-shift-0 | NavoPane
 pane.retry_listing | enter | PaneWaiting
 pane.switch | tab | FileList
+pane.switch_back | shift-tab | FileList
 path_input.cancel | escape | PathInput
 pdf.actual_size | ctrl-1 | Pdf
 pdf.all_hits | ctrl-shift-f | Pdf

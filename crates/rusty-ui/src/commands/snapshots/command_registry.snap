@@ -21,6 +21,10 @@ layout.focus_pane_first | Go to pane 1 | FileList
 layout.focus_pane_second | Go to pane 2 | FileList
 layout.focus_pane_third | Go to pane 3 | FileList
 layout.focus_pane_fourth | Go to pane 4 | FileList
+layout.split_right | Split pane right | FileList
+layout.split_below | Split pane below | FileList
+layout.close_pane | Close pane | FileList
+layout.save | Save layout as… | FileList
 app_menu.toggle | App menu | global
 settings.toggle | All settings | global
 jobs.toggle | Show or hide jobs | global
@@ -87,6 +91,7 @@ files.toggle_mark_down | Mark and move down | FileList
 files.open | Open | FileList
 files.open_parent | Open parent folder | FileList
 pane.switch | Switch pane | FileList
+pane.switch_back | Switch to previous pane | FileList
 files.copy | Copy | FileList
 files.move | Move | FileList
 files.clipboard_copy | Copy to clipboard | FileList

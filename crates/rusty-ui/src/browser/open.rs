@@ -101,6 +101,24 @@ impl Browser {
         Ok(())
     }
 
+    pub(crate) fn focus_next_pane(&mut self, back: bool) -> Result<(), CommandError> {
+        let window = self
+            .state
+            .window(self.state.focused_window())
+            .ok_or(StateError::UnknownWindow(self.state.focused_window()))?;
+        let numbered = window.layout().numbered();
+        let focused = self.state.focused_pane();
+        let at = numbered
+            .iter()
+            .position(|&pane| pane == focused)
+            .ok_or(StateError::UnknownPane(focused))?;
+        let count = numbered.len();
+        let next = if back { at + count - 1 } else { at + 1 } % count;
+        self.state.focus_number(next + 1)?;
+        self.revalidate_focused();
+        Ok(())
+    }
+
     pub(crate) fn clone_tab_to_other_pane(&mut self) -> Result<(), CommandError> {
         let state = &self.state;
         let Some(target) = self.target_pane() else {

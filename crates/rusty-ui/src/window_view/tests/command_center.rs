@@ -550,3 +550,25 @@ fn escape_clears_a_content_query_and_invalidates_its_preview(cx: &mut TestAppCon
     rig.press(cx, "escape");
     assert!(!rig.is_open(cx));
 }
+
+#[gpui_kit::test]
+fn layout_commands_appear_in_ctrl_k_and_save_opens_the_layout_prompt(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    for label in [
+        "cmd-layout-split-right",
+        "cmd-layout-split-below",
+        "cmd-layout-close-pane",
+        "cmd-layout-save",
+    ] {
+        rig.press(cx, "ctrl-k");
+        let title = rusty_l10n::tr(label);
+        rig.type_query(cx, &format!(">{title}"));
+        assert!(rig.rows(cx).iter().any(|row| row.starts_with(&title)));
+        rig.press(cx, "enter");
+        assert!(!rig.is_open(cx));
+    }
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.tiles.presets.is_naming())
+    );
+}
