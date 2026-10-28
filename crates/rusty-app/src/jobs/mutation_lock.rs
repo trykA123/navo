@@ -85,6 +85,10 @@ pub(crate) fn lease(data: &Path, mode: Mode, wait: Wait<'_>) -> Result<File, Lea
     acquire(path::open(data).map_err(LeaseError::Failed)?, mode, wait)
 }
 
+pub(crate) fn claim_exclusive(data: &Path) -> Result<File, String> {
+    lease(data, Mode::Exclusive, Wait::bounded()).map_err(String::from)
+}
+
 pub(crate) fn claim_recovery(data: &Path, experimental: bool) -> Result<Option<File>, String> {
     experimental
         .then(|| lease(data, Mode::Exclusive, Wait::bounded()))

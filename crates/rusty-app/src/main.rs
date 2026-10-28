@@ -33,6 +33,7 @@ mod perf;
 mod profile;
 mod rename_hooks;
 mod rename_log;
+mod retained_hooks;
 mod search_hooks;
 mod settings;
 mod shell_menu;

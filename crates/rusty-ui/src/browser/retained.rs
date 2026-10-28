@@ -1,5 +1,10 @@
+use std::sync::Arc;
+
 use rusty_core::Location;
 use rusty_core::retention::RetentionId;
+
+use super::Browser;
+use super::rename_batch::RenameSettings;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetainedKind {
@@ -45,6 +50,31 @@ impl RetainedHooks for NoRetained {
 
     fn purge(&self, _id: RetentionId) -> Result<(), String> {
         Err(rusty_l10n::tr("retained-unavailable"))
+    }
+}
+
+pub(super) struct HookSlots {
+    pub rename: RenameSettings,
+    pub retained: Arc<dyn RetainedHooks>,
+}
+
+impl Default for HookSlots {
+    fn default() -> Self {
+        Self {
+            rename: RenameSettings::default(),
+            retained: Arc::new(NoRetained),
+        }
+    }
+}
+
+impl Browser {
+    pub fn set_retained_hooks(&mut self, hooks: Arc<dyn RetainedHooks>) {
+        self.hooks.retained = hooks;
+    }
+
+    #[must_use]
+    pub fn retained_hooks(&self) -> Arc<dyn RetainedHooks> {
+        Arc::clone(&self.hooks.retained)
     }
 }
 

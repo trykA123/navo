@@ -22,16 +22,16 @@ pub(super) struct RenameSettings {
 
 impl Browser {
     pub fn set_rename_logging(&mut self, enabled: bool) {
-        self.rename_settings.logging = enabled;
+        self.hooks.rename.logging = enabled;
     }
 
     pub fn set_rename_hooks(&mut self, hooks: Option<RenameHooks>) {
-        self.rename_settings.hooks = hooks;
+        self.hooks.rename.hooks = hooks;
     }
 
     #[must_use]
     pub fn rename_hooks(&self) -> Option<&RenameHooks> {
-        self.rename_settings.hooks.as_ref()
+        self.hooks.rename.hooks.as_ref()
     }
 
     #[must_use]
@@ -61,10 +61,11 @@ impl Browser {
         }
         let pending = self.pending_for(sources, plan);
         let log = self
-            .rename_settings
+            .hooks
+            .rename
             .hooks
             .as_ref()
-            .filter(|_| self.rename_settings.logging)
+            .filter(|_| self.hooks.rename.logging)
             .and_then(|hooks| hooks.log.clone());
         self.start_job(pending, Run::Rename { log }, first_new.map(str::to_owned));
         true
@@ -86,7 +87,7 @@ impl Browser {
     }
 
     pub(super) fn start_undo(&mut self, pending: PendingOp) -> bool {
-        let (Some(offer), Some(hooks)) = (pending.undo.clone(), &self.rename_settings.hooks) else {
+        let (Some(offer), Some(hooks)) = (pending.undo.clone(), &self.hooks.rename.hooks) else {
             return false;
         };
         if self.renaming() {
@@ -98,7 +99,7 @@ impl Browser {
     }
 
     fn undo_pending(&mut self, offer: UndoOffer) -> Option<PendingOp> {
-        self.rename_settings.hooks.as_ref()?;
+        self.hooks.rename.hooks.as_ref()?;
         let items = offer.items();
         if (items == 0 && !offer.restore_pending) || self.renaming() {
             return None;

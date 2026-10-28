@@ -15,9 +15,9 @@ mod identity;
 mod maintenance;
 mod marks;
 mod mutation_lock;
-pub(crate) use mutation_lock::claim_recovery;
 #[cfg(test)]
 pub(crate) use mutation_lock::test_file as test_mutation_file;
+pub(crate) use mutation_lock::{claim_exclusive, claim_recovery};
 mod overwrite;
 mod pending;
 mod profile;

@@ -67,6 +67,7 @@ impl FerriteWindow {
         browser.set_launcher(options.launcher.clone());
         browser.set_listing_cache(options.listing_cache.clone(), options.cache_keys.clone());
         browser.set_folder_totals(options.search.folder_totals.clone());
+        browser.set_retained_hooks(options.retained.clone());
         browser
     }
 }

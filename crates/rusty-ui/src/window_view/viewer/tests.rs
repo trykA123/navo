@@ -262,6 +262,7 @@ pub(super) fn options_with(fs: Arc<FakeFs>, files: FileHooks, kinds: super::Kind
         crash_report: None,
         search: crate::window_view::SearchHooks::none(),
         rename: None,
+        retained: std::sync::Arc::new(crate::browser::NoRetained),
     }
 }
 

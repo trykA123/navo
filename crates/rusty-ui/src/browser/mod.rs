@@ -110,7 +110,7 @@ pub struct Browser {
     profiles: ProfileCache,
     stalls: offline::Stalls,
     prefetches: prefetch::Prefetches,
-    rename_settings: rename_batch::RenameSettings,
+    hooks: retained::HookSlots,
 }
 
 impl Browser {
@@ -176,7 +176,7 @@ impl Browser {
             profiles: ProfileCache::default(),
             stalls: offline::Stalls::default(),
             prefetches: prefetch::Prefetches::default(),
-            rename_settings: rename_batch::RenameSettings::default(),
+            hooks: retained::HookSlots::default(),
         }
     }
 

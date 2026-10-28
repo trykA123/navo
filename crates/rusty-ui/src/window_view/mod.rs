@@ -72,7 +72,7 @@ use rusty_core::{AppState, Command, Direction, PaneId};
 use rusty_fs::ProviderOps;
 
 use crate::app_menu::{Identity, ToggleAppMenu};
-use crate::browser::{Browser, Launcher, Operations, RenameHooks, Waker};
+use crate::browser::{Browser, Launcher, Operations, RenameHooks, RetainedHooks, Waker};
 use crate::prelude::*;
 use crate::settings::{ToggleSettings, Values};
 use crate::title_bar::{GradientLayer, system_backdrop};
@@ -166,6 +166,7 @@ pub struct StartOptions {
     pub crash_report: Option<Arc<dyn CrashReportService>>,
     pub search: SearchHooks,
     pub rename: Option<RenameHooks>,
+    pub retained: Arc<dyn RetainedHooks>,
 }
 
 pub struct FerriteWindow {

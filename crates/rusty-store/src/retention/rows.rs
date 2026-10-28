@@ -34,11 +34,30 @@ pub(super) fn list(
     after: i64,
     limit: u32,
 ) -> Result<Vec<RetentionEntry>, RetentionStoreError> {
+    page(conn, (after, limit), "")
+}
+
+pub(super) fn live(
+    conn: &Connection,
+    after: i64,
+    limit: u32,
+) -> Result<Vec<RetentionEntry>, RetentionStoreError> {
+    page(conn, (after, limit), LIVE)
+}
+
+const LIVE: &str = "AND e.state NOT IN ('restored', 'purged', 'aborted')";
+
+fn page(
+    conn: &Connection,
+    (after, limit): (i64, u32),
+    filter: &str,
+) -> Result<Vec<RetentionEntry>, RetentionStoreError> {
     if after < 0 || !(1..=1000).contains(&limit) {
         return Err(RetentionError::Invalid("invalid catalog page bounds").into());
     }
-    let mut statement =
-        conn.prepare(&format!("{SELECT} WHERE e.id > ?1 ORDER BY e.id LIMIT ?2"))?;
+    let mut statement = conn.prepare(&format!(
+        "{SELECT} WHERE e.id > ?1 {filter} ORDER BY e.id LIMIT ?2"
+    ))?;
     let rows = statement
         .query_map(rusqlite::params![after, limit], read)?
         .collect::<Result<Vec<_>, _>>()?;
@@ -70,7 +89,7 @@ pub(super) fn summaries(
         return Err(RetentionError::Invalid("invalid catalog page bounds").into());
     }
     let mut statement = conn.prepare(&format!(
-        "{SELECT} WHERE e.id > ?1 AND e.state NOT IN ('restored', 'purged', 'aborted') ORDER BY e.id LIMIT ?2"
+        "{SELECT} WHERE e.id > ?1 {LIVE} ORDER BY e.id LIMIT ?2"
     ))?;
     let mut rows = statement.query(rusqlite::params![after, limit])?;
     let mut inventory = Vec::new();

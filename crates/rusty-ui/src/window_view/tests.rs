@@ -152,6 +152,7 @@ pub(crate) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         crash_report: None,
         search: crate::window_view::SearchHooks::none(),
         rename: None,
+        retained: Arc::new(crate::browser::NoRetained),
     }
 }
 

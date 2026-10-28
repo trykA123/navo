@@ -75,6 +75,7 @@ fn open_big(
         crash_report: None,
         search: crate::window_view::SearchHooks::none(),
         rename: None,
+        retained: std::sync::Arc::new(crate::browser::NoRetained),
     };
     let (window, view) = open_options(cx, options);
     (window, view, fs)

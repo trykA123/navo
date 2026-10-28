@@ -21,7 +21,7 @@ use crate::startup::{
 };
 use crate::{
     app_menu, clipboard, contrast, drives, editor, files, jobs, keymap, launch, metrics,
-    rename_hooks, settings, shell_menu, terminal,
+    rename_hooks, retained_hooks, settings, shell_menu, terminal,
 };
 
 const START_READ: Duration = Duration::from_millis(50);
@@ -118,7 +118,6 @@ pub(crate) fn open(launch: Launch) {
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
     let local = Arc::new(LocalFs::new());
     let services = profile_services(dirs.as_ref(), &home, launch.experimental_retention, &local);
-    metrics::mark("databases opened");
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
     crate::diag::register_listings(&launch.crash.diagnostics.caches, &cache, disk.as_ref());
@@ -156,6 +155,7 @@ pub(crate) fn open(launch: Launch) {
             open: open_hooks(launch.path, launch.instance_requests, launch.splash),
             crash_report,
             rename: Some(services.rename),
+            retained: services.retained,
         },
         Rc::new(rusty_shell::display_scale),
         quitter(disk, launch.cleanup, launch.running),
@@ -167,6 +167,7 @@ struct ProfileServices {
     files: rusty_ui::window_view::FileHooks,
     operations: Operations,
     rename: rusty_ui::browser::RenameHooks,
+    retained: Arc<dyn rusty_ui::browser::RetainedHooks>,
 }
 
 fn profile_services(
@@ -178,11 +179,13 @@ fn profile_services(
     let (memory, files) = open_files(dirs, experimental);
     let (operations, journal) = operations(dirs, home, experimental, local);
     let rename = rename_hooks::profile_hooks(journal, memory.clone(), dirs, experimental);
+    metrics::mark("databases opened");
     ProfileServices {
         memory,
         files,
         operations,
         rename,
+        retained: retained_hooks::hooks(dirs, experimental, local.clone()),
     }
 }
 

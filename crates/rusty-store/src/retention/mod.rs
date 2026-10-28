@@ -65,6 +65,14 @@ impl RetentionCatalog {
         rows::list(self.db.connection(), after, limit)
     }
 
+    pub fn live_after(
+        &self,
+        after: i64,
+        limit: u32,
+    ) -> Result<Vec<RetentionEntry>, RetentionStoreError> {
+        rows::live(self.db.connection(), after, limit)
+    }
+
     pub fn transaction(&mut self) -> Result<RetentionTransaction<'_>, RetentionStoreError> {
         Ok(RetentionTransaction {
             inner: Transaction::new_unchecked(

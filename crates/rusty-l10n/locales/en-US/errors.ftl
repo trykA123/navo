@@ -1,1 +1,9 @@
 retained-unavailable = The safety net is not available.
+retained-busy = A running file operation is using this item. Try again when it finishes.
+retained-not-ready = This item needs attention before it can be restored or deleted. Restart Navo to check it again.
+retained-missing = This item is no longer in Recently deleted.
+retained-open-failed = Recently deleted cannot be opened: { $error }
+retained-list-failed = Recently deleted cannot be read: { $error }
+retained-restore-failed = { $name } was not restored: { $error }
+retained-purge-failed = { $name } was not deleted: { $error }
+retained-name-taken = { $name } was not restored: every “(restored)” name in its folder is taken.
