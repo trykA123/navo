@@ -138,7 +138,8 @@ fn maintenance_timer_startup_pass_runs_at_once_and_then_every_six_hours() {
         Pass::Ran {
             volumes: 0,
             purged: 0,
-            bytes: 0
+            bytes: 0,
+            pruned: 0
         }
     );
 }
@@ -185,7 +186,8 @@ fn maintenance_timer_pass_purges_an_expired_entry_but_not_a_fresh_one() {
         Pass::Ran {
             volumes: 1,
             purged: 0,
-            bytes: 0
+            bytes: 0,
+            pruned: 0
         }
     );
     assert_eq!(profile.live(), 1);
@@ -195,11 +197,46 @@ fn maintenance_timer_pass_purges_an_expired_entry_but_not_a_fresh_one() {
         Pass::Ran {
             volumes: 1,
             purged: 1,
-            bytes: 8
+            bytes: 8,
+            pruned: 0
         }
     );
     assert_eq!(profile.live(), 0);
     assert!(profile.fs.metadata(&container).is_err());
+}
+
+#[test]
+fn maintenance_timer_pass_prunes_a_purged_row_after_thirty_days() {
+    let profile = Profile::new();
+    profile.delete("home/old.txt");
+    let now = super::super::super::now_ms();
+    assert!(matches!(
+        profile.pass(now + 4 * DAY_MS),
+        Pass::Ran {
+            purged: 1,
+            pruned: 0,
+            ..
+        }
+    ));
+    let rows = || {
+        let (db, _) = crate::crash::open_db(&profile.dirs.journal_file()).unwrap();
+        RetentionCatalog::new(db)
+            .unwrap()
+            .list_after(0, 1000)
+            .unwrap()
+            .len()
+    };
+    assert_eq!(rows(), 1);
+    assert!(matches!(
+        profile.pass(now + 29 * DAY_MS),
+        Pass::Ran { pruned: 0, .. }
+    ));
+    assert_eq!(rows(), 1);
+    assert!(matches!(
+        profile.pass(now + 31 * DAY_MS),
+        Pass::Ran { pruned: 1, .. }
+    ));
+    assert_eq!(rows(), 0);
 }
 
 #[test]
@@ -220,7 +257,8 @@ fn maintenance_timer_pass_expires_old_entries_when_both_flags_are_off() {
         Pass::Ran {
             volumes: 1,
             purged: 0,
-            bytes: 0
+            bytes: 0,
+            pruned: 0
         }
     );
     assert_eq!(fresh.live(), 1);
@@ -229,7 +267,8 @@ fn maintenance_timer_pass_expires_old_entries_when_both_flags_are_off() {
         Pass::Ran {
             volumes: 1,
             purged: 1,
-            bytes: 8
+            bytes: 8,
+            pruned: 0
         }
     );
     assert_eq!(profile.live(), 0);

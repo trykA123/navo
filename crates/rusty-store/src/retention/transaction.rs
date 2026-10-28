@@ -113,7 +113,10 @@ impl RetentionTransaction<'_> {
         let record = encode(&entry.record)?;
         let target = entry.target.as_ref().map(encode).transpose()?;
         self.inner.execute(
-            "UPDATE retained_entry SET state = ?2, record = ?3, target = ?4 WHERE id = ?1",
+            "UPDATE retained_entry SET state = ?2, record = ?3, target = ?4,
+             terminal_ms = CASE WHEN ?2 IN ('restored', 'purged', 'aborted')
+                 THEN CAST(unixepoch('subsec') * 1000 AS INTEGER) END
+             WHERE id = ?1",
             rusqlite::params![entry.id.0, entry.state.as_str(), record, target],
         )?;
         Ok(())

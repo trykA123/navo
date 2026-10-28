@@ -189,7 +189,8 @@ impl RetentionTransaction<'_> {
             });
             entry.validate()?;
             self.inner.execute(
-                "UPDATE retained_entry SET state = 'restored', target = ?2 WHERE id = ?1",
+                "UPDATE retained_entry SET state = 'restored', target = ?2,
+                 terminal_ms = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE id = ?1",
                 rusqlite::params![entry.id.0, encode(&entry.target)?],
             )?;
         }

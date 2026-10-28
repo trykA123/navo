@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use rusty_core::retention::MAX_RECORD_BYTES;
 
-use super::copy::{CopyError, read_error};
+use super::copy::{CopyError, read_error, write_error};
 use crate::{RetentionStoreError, SalvageReport, UnrecoveredRetained};
 
 pub(super) fn is_legacy_empty(source: &Connection, version: u32) -> Result<bool, rusqlite::Error> {
@@ -21,6 +21,17 @@ pub(super) fn validate(source: &Connection) -> Result<(), CopyError> {
         RetentionStoreError::Sqlite(error) => read_error(error),
         error => CopyError::Untrusted(error.to_string()),
     })
+}
+
+pub(super) fn stamp_terminal(target: &Connection) -> Result<(), CopyError> {
+    target
+        .execute(
+            "UPDATE retained_entry SET terminal_ms = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+             WHERE terminal_ms IS NULL AND state IN ('restored', 'purged', 'aborted')",
+            [],
+        )
+        .map_err(write_error)?;
+    Ok(())
 }
 
 pub(super) fn summarize(source: &Connection, report: &mut SalvageReport) {

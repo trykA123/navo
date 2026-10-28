@@ -42,6 +42,7 @@ pub(crate) enum Pass {
         volumes: usize,
         purged: usize,
         bytes: u64,
+        pruned: usize,
     },
     Busy,
     Failed,
@@ -208,16 +209,35 @@ fn maintain(
             Err(error) => tracing::warn!(%error, "retention volume maintenance deferred"),
         }
     }
+    drop(vault);
+    let pruned = prune(dirs, now);
     tracing::info!(
         volumes = volumes.len(),
         purged,
         bytes,
+        pruned,
         "retention maintenance pass finished"
     );
     Ok(Pass::Ran {
         volumes: volumes.len(),
         purged,
         bytes,
+        pruned,
+    })
+}
+
+fn prune(dirs: &StoreDirs, now: i64) -> usize {
+    let pruned = crate::crash::open_db(&dirs.journal_file())
+        .map_err(|error| error.to_string())
+        .and_then(|(db, _)| RetentionCatalog::new(db).map_err(|error| error.to_string()))
+        .and_then(|mut catalog| {
+            catalog
+                .prune_terminal(now)
+                .map_err(|error| error.to_string())
+        });
+    pruned.unwrap_or_else(|error| {
+        tracing::warn!(%error, "retention terminal rows not pruned");
+        0
     })
 }
 

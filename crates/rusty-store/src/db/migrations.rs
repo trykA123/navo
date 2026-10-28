@@ -1,4 +1,4 @@
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
 
 const V1: &str = "
 CREATE TABLE history (
@@ -129,4 +129,14 @@ CREATE TABLE collection_items (
     added_ms INTEGER NOT NULL,
     PRIMARY KEY (collection_id, location)
 );
+";
+
+const V9: &str = "
+ALTER TABLE retained_entry ADD COLUMN terminal_ms INTEGER
+    CHECK (terminal_ms IS NULL OR (typeof(terminal_ms) = 'integer' AND terminal_ms >= 0
+        AND state IN ('restored', 'purged', 'aborted')));
+UPDATE retained_entry SET terminal_ms = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+    WHERE state IN ('restored', 'purged', 'aborted');
+CREATE INDEX retained_entry_prunable ON retained_entry (terminal_ms, id)
+    WHERE cleanup_pending = 0;
 ";

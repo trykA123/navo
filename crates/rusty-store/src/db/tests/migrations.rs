@@ -26,6 +26,6 @@ fn first_migration_creates_every_v1_table() {
 }
 
 #[test]
-fn version_is_eight() {
-    assert_eq!(Db::VERSION, 8);
+fn version_is_nine() {
+    assert_eq!(Db::VERSION, 9);
 }

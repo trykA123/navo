@@ -1,6 +1,9 @@
-use rusty_core::retention::{RetentionError, RetentionId};
+use rusty_core::retention::{DAY_MS, RetentionError, RetentionId};
 
 use super::{RetentionCatalog, RetentionStoreError};
+
+const PRUNE_AGE_MS: i64 = 30 * DAY_MS;
+const PRUNE_LIMIT: u32 = 1000;
 
 impl RetentionCatalog {
     pub fn pending_cleanup(
@@ -48,5 +51,22 @@ impl RetentionCatalog {
             [id.0],
         )?;
         tx.commit()
+    }
+
+    pub fn prune_terminal(&mut self, now: i64) -> Result<usize, RetentionStoreError> {
+        if now < 0 {
+            return Err(RetentionError::Invalid("negative prune time").into());
+        }
+        let tx = self.transaction()?;
+        let pruned = tx.inner.execute(
+            "DELETE FROM retained_entry WHERE id IN (SELECT e.id FROM retained_entry e
+             WHERE e.state IN ('restored', 'purged', 'aborted') AND e.cleanup_pending = 0
+             AND e.terminal_ms < ?1 AND NOT EXISTS (SELECT 1 FROM retained_entry l
+                 WHERE l.job_id = e.job_id AND l.state NOT IN ('restored', 'purged', 'aborted'))
+             ORDER BY e.terminal_ms, e.id LIMIT ?2)",
+            rusqlite::params![now - PRUNE_AGE_MS, PRUNE_LIMIT],
+        )?;
+        tx.commit()?;
+        Ok(pruned)
     }
 }

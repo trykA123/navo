@@ -20,6 +20,7 @@ mod v4;
 mod v5;
 mod v6;
 mod v7;
+mod v9;
 mod viewer;
 
 const V1_TABLES: [&str; 7] = [

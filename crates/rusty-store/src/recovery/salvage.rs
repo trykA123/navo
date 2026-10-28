@@ -153,6 +153,9 @@ fn recover_group(
             })
         })
         .collect::<Result<Vec<_>, CopyError>>()?;
+    if tables == RETAINED {
+        retention::stamp_terminal(&transaction)?;
+    }
     transaction.commit().map_err(copy::write_error)?;
     Ok(copied)
 }

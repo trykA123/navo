@@ -151,7 +151,7 @@ fn migration_from_v7_preserves_existing_data_and_enables_collections() {
         )
         .unwrap();
     let (db, report) = Db::open(&path, false).unwrap();
-    assert_eq!((report.from_version, report.to_version), (7, 8));
+    assert_eq!((report.from_version, report.to_version), (7, Db::VERSION));
     assert_eq!(db.presets().unwrap().named[0].name, "existing");
     assert!(db.list_collections().unwrap().is_empty());
     let id = create(&db, "Migrated", CollectionKind::Manual);
