@@ -188,6 +188,7 @@ fn add_unmapped_sid(path: &Path) {
     let output = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .env("TARGET", path)
+        .env_remove("PSModulePath")
         .output()
         .unwrap();
     assert!(
