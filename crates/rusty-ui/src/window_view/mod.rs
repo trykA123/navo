@@ -24,6 +24,7 @@ mod list_columns;
 mod multi_rename;
 mod operate;
 mod pane;
+mod pane_header;
 mod pane_strip;
 mod path_edit;
 mod perf_recording;

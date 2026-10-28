@@ -21,7 +21,10 @@ use gpui_kit::{
 };
 use rusty_core::Command;
 
-pub use card::{card_header, card_shadow, pane_card};
+pub use card::{
+    PaneMarks, card_header, card_shadow, marked_header, marker_tag, on_accent, pane_card,
+    target_outline,
+};
 pub use drive_menu::{DriveMenu, DriveMenuEvent, drive_for_key};
 pub use drive_pill::DrivePill;
 pub use drives::{DriveIcon, DriveInfo, current_drive};
@@ -49,6 +52,7 @@ pub struct PaneTabs {
     titles: Vec<SharedString>,
     active: usize,
     is_highlighted: bool,
+    is_on_accent: bool,
     on_command: Option<CommandHandler>,
     landing: Landing<usize>,
     menu: Option<Entity<PopupMenu>>,
@@ -65,6 +69,7 @@ impl PaneTabs {
             titles: titles.into_iter().map(Into::into).collect(),
             active,
             is_highlighted: false,
+            is_on_accent: false,
             on_command: None,
             landing: Landing::default(),
             menu: None,
@@ -78,6 +83,11 @@ impl PaneTabs {
 
     pub fn highlighted(mut self, is_highlighted: bool) -> Self {
         self.is_highlighted = is_highlighted;
+        self
+    }
+
+    pub fn on_accent(mut self, is_on_accent: bool) -> Self {
+        self.is_on_accent = is_on_accent;
         self
     }
 
@@ -106,8 +116,7 @@ impl PaneTabs {
     }
 }
 
-fn new_tab_button(handler: Option<CommandHandler>, cx: &App) -> impl IntoElement {
-    let t = tokens::current(cx);
+fn new_tab_button(t: &tokens::Theme, handler: Option<CommandHandler>) -> impl IntoElement {
     div()
         .id("new-tab")
         .role(Role::Button)
@@ -136,16 +145,18 @@ fn new_tab_button(handler: Option<CommandHandler>, cx: &App) -> impl IntoElement
 impl RenderOnce for PaneTabs {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
+        let bar = self.is_on_accent.then(|| on_accent(t));
         let tabs = self
             .titles
             .into_iter()
             .map(|title| Tab::new(title).icon(IconName::Folder));
-        let plus = new_tab_button(self.on_command.clone(), cx);
+        let plus = new_tab_button(bar.as_ref().unwrap_or(t), self.on_command.clone());
         let mut tabs = Tabs::new(self.id, tabs)
             .selected(self.active)
             .highlighted(self.is_highlighted)
             .trailing(plus, t.spacing.tab_height)
-            .when_some(self.menu, Tabs::menu);
+            .when_some(self.menu, Tabs::menu)
+            .when_some(bar, Tabs::bar_theme);
         tabs.set_landing(self.landing);
         match self.on_command {
             Some(handler) => tabs.on_select(move |index, window, cx| {

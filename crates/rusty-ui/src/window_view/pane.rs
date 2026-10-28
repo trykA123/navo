@@ -15,7 +15,7 @@ use super::list_columns::{column_keys, list_parts, user_widths};
 use super::status::status_of;
 use crate::FocusHandle;
 use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
-use crate::pane_chrome::{PaneTabs, PathBar, card_header, pane_card, path_segments};
+use crate::pane_chrome::{PaneTabs, PathBar, pane_card, path_segments, target_outline};
 use crate::prelude::*;
 use crate::settings::WindowParts;
 use crate::status_bar::{FooterParts, StatusBar, StatusBarProps};
@@ -101,11 +101,9 @@ impl FerriteWindow {
                 .lift_above(cover)
                 .into_any_element(),
         };
-        let header = self.pane_header(pane, is_active, cx);
-        let footer = StatusBar::new(("status", pane.get()), status)
-            .parts(footer_parts(parts))
-            .notice(self.status_notice().filter(|_| is_active))
-            .workspace(is_active.then(|| self.workspace_button(cx)).flatten());
+        let marks = self.pane_marks(pane, window);
+        let header = self.pane_header(pane, marks, cx);
+        let footer = self.pane_footer(pane, status, cx);
         let body = Self::pane_keys(div().key_context(PANE), cx)
             .flex()
             .flex_col()
@@ -122,7 +120,21 @@ impl FerriteWindow {
             .children((!footer.is_empty()).then_some(footer));
         pane_card(("pane", pane.get()), label, is_active, cx)
             .child(body)
+            .children(marks.is_target.then(|| target_outline(&t, pane.get())))
             .into_any_element()
+    }
+
+    fn pane_footer(
+        &self,
+        pane: PaneId,
+        status: StatusBarProps,
+        cx: &mut Context<Self>,
+    ) -> StatusBar {
+        let is_active = self.browser.state().focused_pane() == pane;
+        StatusBar::new(("status", pane.get()), status)
+            .parts(footer_parts(WindowParts::of(&self.values)))
+            .notice(self.status_notice().filter(|_| is_active))
+            .workspace(is_active.then(|| self.workspace_button(cx)).flatten())
     }
 
     fn pane_status(&self, pane: PaneId, tab: &Tab, rows: &[rusty_fs::FsEntry]) -> StatusBarProps {
@@ -147,35 +159,6 @@ impl FerriteWindow {
                 .map(|text| text.to_owned().into()),
             sort: self.browser.sort_key(tab.id()),
         }
-    }
-
-    fn pane_header(&self, pane: PaneId, is_active: bool, cx: &mut Context<Self>) -> Option<Div> {
-        let t = tokens::current(cx).clone();
-        let parts = WindowParts::of(&self.values);
-        let (titles, active_index): (Vec<SharedString>, usize) = self
-            .browser
-            .state()
-            .pane(pane)
-            .map(|p| (p.tabs().iter().map(title_of).collect(), p.active_index()))
-            .unwrap_or_default();
-        let shows_tabs = parts.tabs_with_one || titles.len() > 1;
-        let drive = self.drive_pill(pane, parts.drive_button, cx);
-        if !shows_tabs && !parts.drive_button {
-            let is_menu_open = self.drive_menu.is_some();
-            return is_menu_open.then(|| div().relative().h_0().flex_none().child(drive));
-        }
-        let menu = self.chrome.get(pane).map(|chrome| chrome.tabs.clone());
-        let tabs = shows_tabs.then(|| {
-            let tabs = Self::tabs(pane, titles, active_index, cx)
-                .highlighted(is_active)
-                .when_some(menu, |tabs, menu| tabs.menu(menu));
-            div().flex_1().min_w_0().child(tabs)
-        });
-        let header = card_header(&t).children(tabs);
-        Some(match shows_tabs {
-            true => header.child(drive),
-            false => header.justify_end().child(drive),
-        })
     }
 
     fn card_label(&self, pane: PaneId) -> &'static str {
@@ -262,7 +245,7 @@ impl FerriteWindow {
             )
     }
 
-    fn tabs(
+    pub(super) fn tabs(
         pane: PaneId,
         titles: Vec<SharedString>,
         active: usize,

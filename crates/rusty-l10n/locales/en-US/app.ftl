@@ -22,6 +22,7 @@ pane-strip-title = Panes
 pane-strip-button = Pane { $n }: { $name }
 pane-strip-active = Active
 pane-strip-target = F5/F6
+pane-target-here = F5/F6 → here
 
 command-center = Command center
 command-center-results-label = Results

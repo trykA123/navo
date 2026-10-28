@@ -491,3 +491,5 @@ fn the_path_menu_opens_just_below_the_ellipsis(cx: &mut TestAppContext) {
     })
     .expect("window");
 }
+
+mod markers;

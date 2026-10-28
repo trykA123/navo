@@ -26,11 +26,11 @@ pub(super) struct Hidden {
     pub on_select: Option<SelectHandler>,
 }
 
-pub(super) fn more_tabs(t: &Theme, hidden: Hidden, cx: &App) -> AnyElement {
+pub(super) fn more_tabs(t: &Theme, bar: &Theme, hidden: Hidden, cx: &App) -> AnyElement {
     let count = hidden.tabs.len();
     let toggle_state = hidden.state.clone();
     let is_open = hidden.state.read(cx).is_open;
-    let hover = t.colors.hover;
+    let hover = bar.colors.hover;
     let button = div()
         .id("tab-more")
         .role(Role::Button)
@@ -45,7 +45,7 @@ pub(super) fn more_tabs(t: &Theme, hidden: Hidden, cx: &App) -> AnyElement {
         .w(px(MORE_WIDTH))
         .h(t.spacing.tab_height)
         .rounded(t.radii.pill)
-        .text_color(t.colors.muted)
+        .text_color(bar.colors.muted)
         .cursor_pointer()
         .when(is_open, |d| d.bg(hover))
         .hover(move |style| style.bg(hover))

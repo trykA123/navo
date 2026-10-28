@@ -53,6 +53,7 @@ pub struct Tabs {
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
     menu: Option<Entity<PopupMenu>>,
+    bar: Option<Theme>,
 }
 
 impl Tabs {
@@ -66,11 +67,17 @@ impl Tabs {
             landing: Landing::default(),
             trailing: None,
             menu: None,
+            bar: None,
         }
     }
 
     pub(crate) fn menu(mut self, state: Entity<PopupMenu>) -> Self {
         self.menu = Some(state);
+        self
+    }
+
+    pub fn bar_theme(mut self, theme: Theme) -> Self {
+        self.bar = Some(theme);
         self
     }
 
@@ -179,6 +186,7 @@ struct Row {
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
     menu: Entity<PopupMenu>,
+    bar: Option<Theme>,
 }
 
 fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
@@ -193,20 +201,19 @@ fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
     let plan = plan(count, row.selected, &budget);
     note_items(&row.menu, plan.shown.len() < count, cx);
     let t = tokens::current(cx);
-    let mut shown = Vec::new();
-    let mut hidden = Vec::new();
-    for (index, tab) in row.tabs.into_iter().enumerate() {
-        match plan.shown.contains(&index) {
-            true => shown.push((index, tab)),
-            false => hidden.push((index, tab)),
-        }
-    }
+    let bar = row.bar.as_ref().unwrap_or(t);
+    let (shown, hidden): (Vec<_>, Vec<_>) = row
+        .tabs
+        .into_iter()
+        .enumerate()
+        .partition(|(index, _)| plan.shown.contains(index));
     let tabs = shown.into_iter().map(|(index, tab)| {
+        let is_selected = index == row.selected;
         let props = TabProps {
-            theme: t,
+            theme: if is_selected { t } else { bar },
             index,
             count,
-            is_selected: index == row.selected,
+            is_selected,
             is_highlighted: row.is_highlighted,
             min_width: px(plan.min_tab),
             on_select: row.on_select.clone(),
@@ -220,7 +227,7 @@ fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
             tabs: hidden,
             on_select: row.on_select.clone(),
         };
-        more_tabs(t, hidden, cx)
+        more_tabs(t, bar, hidden, cx)
     });
     div()
         .flex()
@@ -250,6 +257,7 @@ impl RenderOnce for Tabs {
             landing: self.landing,
             trailing: self.trailing,
             menu,
+            bar: self.bar,
         };
         div()
             .id(self.id)

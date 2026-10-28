@@ -41,4 +41,5 @@ fn tab_toggles_between_active_and_target_with_three_panes(cx: &mut TestAppContex
     );
 }
 
+mod markers;
 mod view;
