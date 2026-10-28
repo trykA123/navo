@@ -237,6 +237,7 @@ impl RenderOnce for LayoutSwitcher {
 pub(super) struct SwitcherState {
     focused: usize,
     pub(super) focus: FocusHandle,
+    pub(super) edited: bool,
     scroll: ScrollHandle,
     _keys: Subscription,
 }
@@ -266,6 +267,7 @@ impl FerriteWindow {
         self.tiles.switcher = Some(SwitcherState {
             focused,
             focus,
+            edited: false,
             scroll,
             _keys: super::layout_mode::intercept_mode_keys(cx),
         });
@@ -292,6 +294,7 @@ impl FerriteWindow {
                 self.apply(&Command::LayoutPreset { tiles }, window, cx);
             }
             LayoutSwitcherAction::Move(by) => {
+                state.edited = false;
                 state.focused = state
                     .focused
                     .saturating_add_signed(isize::from(by))
@@ -323,6 +326,7 @@ impl FerriteWindow {
             _ if key.modifiers.modified() => return,
             "left" | "up" => LayoutSwitcherAction::Move(-1),
             "right" | "down" => LayoutSwitcherAction::Move(1),
+            "enter" if state.edited => LayoutSwitcherAction::Close,
             "enter" => LayoutSwitcherAction::Apply(self.switcher_focus(state)),
             digit => {
                 let Some(index) = digit.parse::<usize>().ok().and_then(|n| n.checked_sub(1)) else {

@@ -228,3 +228,28 @@ fn deleting_the_file_keeps_the_current_settings() {
     live.write(NORMAL);
     assert_eq!(applied(live.next()).density(), Density::Normal);
 }
+
+#[cfg(any(windows, target_os = "linux"))]
+#[test]
+fn dropped_layout_presets_reach_the_notice_at_start_and_on_reload() {
+    let good = "[[layout.presets]]\nname = \"Review\"\ntiles = \"row(70, pane, pane)\"\n";
+    let bad = "[[layout.presets]]\nname = \"Broken\"\ntiles = \"row(70, pane\"\n";
+    let live = live_on(&format!("{good}{bad}"));
+    let notice = live.hooks.load_error.as_ref().map(ToString::to_string);
+    let notice = notice.unwrap_or_default();
+    assert!(
+        notice.contains("line 6") && notice.contains("“Broken”"),
+        "{notice}"
+    );
+    assert_eq!(live.hooks.values.layout_presets().len(), 1);
+    assert!(live.is_quiet());
+    rename_over(&live.path, &format!("{bad}{good}"));
+    let moved = invalid(live.next());
+    assert!(
+        moved.contains("line 3") && moved.contains("“Broken”"),
+        "{moved}"
+    );
+    rename_over(&live.path, good);
+    assert_eq!(applied(live.next()).layout_presets().len(), 1);
+    assert!(live.is_quiet());
+}

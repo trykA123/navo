@@ -374,6 +374,22 @@ command = "layout.switcher"
 keys = ["ctrl-l"]
 
 [[bind]]
+command = "layout.focus_pane_first"
+keys = ["ctrl-shift-1"]
+
+[[bind]]
+command = "layout.focus_pane_second"
+keys = ["ctrl-shift-2"]
+
+[[bind]]
+command = "layout.focus_pane_third"
+keys = ["ctrl-shift-3"]
+
+[[bind]]
+command = "layout.focus_pane_fourth"
+keys = ["ctrl-shift-4"]
+
+[[bind]]
 command = "pane.go_back"
 keys = ["alt-left"]
 

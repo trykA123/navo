@@ -78,5 +78,25 @@ pub(super) const GROUP: Group = Group {
             "layout.switcher",
             "cmd-layout-switcher",
         ),
+        (
+            "ferrite_window::FocusPane1",
+            "layout.focus_pane_first",
+            "cmd-layout-focus-pane-first",
+        ),
+        (
+            "ferrite_window::FocusPane2",
+            "layout.focus_pane_second",
+            "cmd-layout-focus-pane-second",
+        ),
+        (
+            "ferrite_window::FocusPane3",
+            "layout.focus_pane_third",
+            "cmd-layout-focus-pane-third",
+        ),
+        (
+            "ferrite_window::FocusPane4",
+            "layout.focus_pane_fourth",
+            "cmd-layout-focus-pane-fourth",
+        ),
     ],
 };

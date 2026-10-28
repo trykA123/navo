@@ -7,6 +7,11 @@ use crate::prelude::*;
 use crate::primitives::Kbd;
 use crate::tokens::Theme;
 
+gpui_kit::actions!(
+    ferrite_window,
+    [FocusPane1, FocusPane2, FocusPane3, FocusPane4]
+);
+
 enum ModeKey {
     Core(Command),
     SwitchPane,
@@ -15,8 +20,9 @@ enum ModeKey {
 }
 
 const REMOVE_HINT: usize = 8;
+const RANGE_HINTS: [usize; 2] = [0, 10];
 
-const HINTS: [(&[&str], &str); 10] = [
+const HINTS: [(&[&str], &str); 12] = [
     (&["1", "9"], "layout-key-apply"),
     (&["v"], "layout-key-split-right"),
     (&["s"], "layout-key-split-below"),
@@ -26,6 +32,8 @@ const HINTS: [(&[&str], &str); 10] = [
     (&["="], "layout-key-even"),
     (&["ctrl-s"], "layout-key-save"),
     (&["delete"], "layout-key-remove"),
+    (&["tab"], "layout-key-target"),
+    (&["ctrl-shift-1", "4"], "layout-key-pane"),
     (&["escape"], "layout-key-done"),
 ];
 
@@ -153,7 +161,8 @@ fn hint_view(t: &Theme, index: usize, (keys, label): &(&[&str], &str)) -> Div {
         .items_center()
         .gap(t.spacing.xxs)
         .children(keys.iter().enumerate().flat_map(|(at, key)| {
-            let dash = (index == 0 && at == 1).then(|| div().child("–").into_any_element());
+            let dash = (RANGE_HINTS.contains(&index) && at == 1)
+                .then(|| div().child("–").into_any_element());
             let cap =
                 Kbd::new(("layout-key", index * 2 + at), key).map(IntoElement::into_any_element);
             dash.into_iter().chain(cap)
@@ -195,12 +204,26 @@ impl FerriteWindow {
                 return;
             }
         }
-        if !cx.reduce_motion() {
-            self.tiles.fades.note(&before, &self.tiles_layout());
+        let after = self.tiles_layout();
+        if !cx.reduce_motion() && !self.is_one_pane(window) {
+            self.tiles.fades.note(&before, &after);
         }
-        if let Some(state) = &self.tiles.switcher {
+        if let Some(state) = &mut self.tiles.switcher {
+            state.edited |= before.rects() != after.rects();
             window.focus(&state.focus, cx);
         }
         cx.notify();
     }
+}
+
+macro_rules! pane_number_keys {
+    ($root:expr, $cx:expr, $($action:ident => $n:literal),+ $(,)?) => {
+        $root$(.on_action($cx.listener(|view: &mut FerriteWindow, _: &$action, window, cx| {
+            view.apply(&Command::LayoutFocusPane { n: $n }, window, cx);
+        })))+
+    };
+}
+
+pub(super) fn pane_number_keys(root: Div, cx: &mut Context<FerriteWindow>) -> Div {
+    pane_number_keys!(root, cx, FocusPane1 => 1, FocusPane2 => 2, FocusPane3 => 3, FocusPane4 => 4)
 }

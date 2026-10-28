@@ -280,6 +280,7 @@ macro_rules! preview_keys {
 }
 
 pub(super) fn workspace_keys(root: Div, cx: &mut Context<FerriteWindow>) -> Div {
+    let root = super::layout_mode::pane_number_keys(root, cx);
     let root = preview_keys!(root, cx,
         PreviewWorkspace1 => 1,
         PreviewWorkspace2 => 2,

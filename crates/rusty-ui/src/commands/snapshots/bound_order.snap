@@ -483,3 +483,7 @@ workspace.save | ctrl-s | FileList
 workspace.move_left | alt-shift-left | FileList
 workspace.move_right | alt-shift-right | FileList
 layout.switcher | ctrl-l | FileList
+layout.focus_pane_first | ctrl-shift-1 | FileList
+layout.focus_pane_second | ctrl-shift-2 | FileList
+layout.focus_pane_third | ctrl-shift-3 | FileList
+layout.focus_pane_fourth | ctrl-shift-4 | FileList

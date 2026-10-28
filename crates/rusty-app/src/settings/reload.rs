@@ -7,7 +7,7 @@ use rusty_ui::settings::DefaultShift;
 use rusty_ui::window_view::SettingsNews;
 
 use super::start::Started;
-use super::{paused, report, values_of};
+use super::{paused, report, skipped, values_of};
 use crate::search_hooks::Remember;
 
 pub(super) struct Delivery {
@@ -29,7 +29,7 @@ impl Delivery {
 
 pub(super) fn deliver(delivery: &Mutex<Delivery>) {
     let mut delivery = delivery.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(news) = delivery.reloader.reload() {
+    for news in delivery.reloader.reload_all() {
         (delivery.on_news)(news);
     }
 }
@@ -70,6 +70,7 @@ pub struct Reloader {
     problem: Option<String>,
     remember: Option<Remember>,
     guarded: Option<PathBuf>,
+    skipped: Option<String>,
 }
 
 impl Reloader {
@@ -80,6 +81,7 @@ impl Reloader {
             problem,
             remember: None,
             guarded: None,
+            skipped: None,
         }
     }
 
@@ -95,26 +97,51 @@ impl Reloader {
         self
     }
 
+    #[must_use]
+    pub(super) fn skipping(mut self, skipped: Option<String>) -> Self {
+        self.skipped = skipped;
+        self
+    }
+
+    #[cfg(test)]
     pub fn reload(&mut self) -> Option<SettingsNews> {
+        self.reload_all().into_iter().next()
+    }
+
+    fn reload_all(&mut self) -> Vec<SettingsNews> {
         let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
         let before = store.current().clone();
-        if let Some(error) = store.reload().error {
+        let loaded = store.reload();
+        if let Some(error) = loaded.error {
             let message = paused::describe(&error, self.guarded.as_deref());
             if self.problem.as_ref() == Some(&message) {
-                return None;
+                return Vec::new();
             }
             report(&message);
             self.problem = Some(message.clone());
-            return Some(SettingsNews::Invalid(message));
+            return vec![SettingsNews::Invalid(message)];
         }
         if let Some(remember) = &self.remember {
             remember.set(store.current().search.remember);
         }
+        let skipped = skipped::message(&loaded.unknown_keys);
         let was_broken = self.problem.take().is_some();
+        let is_cleared = skipped.is_none() && self.skipped.is_some();
         let is_same = store.current() == &before;
-        (was_broken || !is_same).then(|| SettingsNews::Applied {
+        let applied = (was_broken || is_cleared || !is_same).then(|| SettingsNews::Applied {
             values: values_of(&store),
             generation: store.generation(),
-        })
+        });
+        let notice = skipped
+            .clone()
+            .filter(|message| applied.is_some() || self.skipped.as_ref() != Some(message));
+        if let Some(message) = &notice {
+            report(message);
+        }
+        self.skipped = skipped;
+        applied
+            .into_iter()
+            .chain(notice.map(SettingsNews::Invalid))
+            .collect()
     }
 }

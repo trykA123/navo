@@ -171,3 +171,32 @@ fn a_new_pane_fades_in_unless_motion_is_reduced(cx: &mut TestAppContext) {
     assert_eq!(numbered(cx, &view).len(), 4);
     assert_eq!(view.read_with(cx, |view, _| view.tiles.fades.count()), 1);
 }
+
+#[gpui_kit::test]
+fn enter_after_a_mode_edit_keeps_the_edited_layout(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, two_panes);
+    press(cx, window, &view, "v");
+    let edited = view.read_with(cx, |view, _| view.tiles_layout().to_tiles());
+    assert_eq!(numbered(cx, &view).len(), 3);
+    press(cx, window, &view, "enter");
+    assert!(!is_open(cx, &view));
+    assert_eq!(numbered(cx, &view).len(), 3);
+    assert_eq!(
+        view.read_with(cx, |view, _| view.tiles_layout().to_tiles()),
+        edited
+    );
+}
+
+#[gpui_kit::test]
+fn an_arrow_after_a_mode_edit_lets_enter_apply_the_focused_preset(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, two_panes);
+    press(cx, window, &view, "v");
+    press(cx, window, &view, "right");
+    press(cx, window, &view, "left");
+    press(cx, window, &view, "enter");
+    assert!(!is_open(cx, &view));
+    assert_eq!(
+        view.read_with(cx, |view, _| view.tiles_layout().to_tiles()),
+        rusty_core::Tiles::builtin()[0].tiles
+    );
+}

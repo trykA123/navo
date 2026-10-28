@@ -244,3 +244,35 @@ fn strip_number_name_and_tag_share_one_centre_line(cx: &mut TestAppContext) {
         .expect("window");
     }
 }
+
+fn focused_number(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> usize {
+    view.read_with(cx, |view, _| {
+        number_of(view, Some(view.browser.state().focused_pane()))
+    })
+}
+
+#[gpui_kit::test]
+fn ctrl_shift_3_focuses_pane_3_wide_and_in_one_pane_mode(cx: &mut TestAppContext) {
+    for width in [1280., 800.] {
+        let (window, view) = open_preset(cx, Tiles::builtin()[1].tiles.clone(), width);
+        let panes = view.read_with(cx, |view, _| view.tiles_layout().numbered());
+        assert_eq!(panes.len(), 3);
+        assert_ne!(focused_number(cx, &view), 3);
+        press(cx, window, &view, "ctrl-shift-3");
+        assert_eq!(focused_number(cx, &view), 3);
+        press(cx, window, &view, "ctrl-shift-4");
+        assert_eq!(focused_number(cx, &view), 3);
+        if width < 900. {
+            assert_eq!(shown(cx, window, &panes), vec![panes[2]]);
+        }
+    }
+}
+
+#[gpui_kit::test]
+fn a_split_in_one_pane_mode_draws_no_fade_cover(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 800.);
+    press(cx, window, &view, "ctrl-l");
+    press(cx, window, &view, "v");
+    assert_eq!(view.read_with(cx, |view, _| view.panes().len()), 3);
+    assert_eq!(view.read_with(cx, |view, _| view.tiles.fades.count()), 0);
+}

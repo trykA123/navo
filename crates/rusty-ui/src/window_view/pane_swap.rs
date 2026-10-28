@@ -24,6 +24,13 @@ pub(super) struct PaneSwap {
     drag: Option<PaneDrag>,
 }
 
+impl PaneSwap {
+    #[cfg(test)]
+    pub(super) fn is_dragging(&self) -> bool {
+        self.drag.is_some()
+    }
+}
+
 impl FerriteWindow {
     pub(super) fn pane_swap_header(
         pane: PaneId,
@@ -38,8 +45,13 @@ impl FerriteWindow {
             .children(path)
             .capture_any_mouse_down(
                 cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    let is_editing = this
+                        .path_edit
+                        .as_ref()
+                        .is_some_and(|edit| edit.pane == pane);
                     if event.button != MouseButton::Left
                         || !event.modifiers.shift
+                        || is_editing
                         || this.drops_blocked()
                         || cx.has_active_drag()
                     {
@@ -52,8 +64,6 @@ impl FerriteWindow {
                         started: false,
                         _escape: Self::pane_swap_escape(window, cx),
                     });
-                    window.prevent_default();
-                    cx.stop_propagation();
                 }),
             )
     }
@@ -176,8 +186,10 @@ impl FerriteWindow {
         let Some(drag) = self.pane_swap.drag.take() else {
             return;
         };
-        if drag.started
-            && !self.drops_blocked()
+        if !drag.started {
+            return;
+        }
+        if !self.drops_blocked()
             && let Some(target) = self.pane_under_pointer(event.position, window)
             && target != drag.pane
         {

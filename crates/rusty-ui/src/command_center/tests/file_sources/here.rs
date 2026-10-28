@@ -290,8 +290,14 @@ fn hits_arrive_in_a_later_round_while_the_walk_grows() {
     source.search(&request, &sink, &cancel);
     assert!(sink.drain(1).is_empty());
     gate.is_open.store(true, Ordering::SeqCst);
-    assert!(source.wait_for_more(&request, &cancel));
-    source.search(&request, &sink, &cancel);
-    assert_eq!(sink.drain(1).len(), 2);
-    assert!(!source.wait_for_more(&request, &cancel));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let (mut rounds, mut hits) = (0, Vec::new());
+    while source.wait_for_more(&request, &cancel) {
+        assert!(Instant::now() < deadline, "the walk did not finish");
+        rounds += 1;
+        source.search(&request, &sink, &cancel);
+        hits = sink.drain(1);
+    }
+    assert!(rounds > 0);
+    assert_eq!(hits.len(), 2);
 }

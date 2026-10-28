@@ -21,6 +21,7 @@ mod layout_edit;
 mod ledger;
 mod paused;
 mod reload;
+mod skipped;
 mod start;
 
 pub use reload::Reloader;
@@ -72,14 +73,17 @@ fn watching(
         .map(|loaded| std::mem::take(&mut loaded.default_changes))
         .unwrap_or_default();
     let guarded = paused::guarded(loaded.as_ref());
+    let skipped = loaded.as_ref().and_then(start_skipped);
     let (hooks, shared) = parts(loaded);
     let Some((path, store)) = shared else {
         return (hooks, None);
     };
     let problem = hooks.load_error.as_ref().map(ToString::to_string);
+    let problem = problem.filter(|_| skipped.is_none());
     let reloader = Reloader::new(store, problem)
         .remembering(remember)
-        .guarding(guarded);
+        .guarding(guarded)
+        .skipping(skipped);
     let reloader = reload::Delivery::new(reloader, on_news);
     let watched = reloader.clone();
     let watching = watch_file(&path, move || {
@@ -105,7 +109,8 @@ fn parts(loaded: Option<Loaded>) -> (SettingsHooks, Option<(PathBuf, Shared)>) {
     let load_error = loaded
         .as_ref()
         .and_then(|loaded| loaded.report.error.as_ref())
-        .map(|error| paused::describe(error, guarded.as_deref()));
+        .map(|error| paused::describe(error, guarded.as_deref()))
+        .or_else(|| loaded.as_ref().and_then(start_skipped));
     if let Some(message) = &load_error {
         report(message);
     }
@@ -193,6 +198,10 @@ fn remember(session: &Mutex<Values>, changes: &[Change]) -> Values {
         .iter()
         .fold(values.clone(), |all, one| all.with(one));
     values.clone()
+}
+
+fn start_skipped(loaded: &Loaded) -> Option<String> {
+    skipped::message(&loaded.report.unknown_keys)
 }
 
 fn location_of(path: &Path) -> Option<Location> {

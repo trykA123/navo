@@ -7,7 +7,7 @@ use gpui_kit::{
 use rusty_core::{Command, Location, PaneId, Tiles, apply};
 
 use super::{fake, open_options_sized, options_for, press, settle, two_panes};
-use crate::test_pointer::{dispatch, down, moved, shift, up};
+use crate::test_pointer::{click, dispatch, down, moved, shift, up};
 use crate::tokens::{self, Mode};
 use crate::window_view::FerriteWindow;
 
@@ -222,4 +222,47 @@ fn shift_drag_on_a_file_row_starts_a_file_drag(cx: &mut TestAppContext) {
     );
     assert_eq!(rig.folders(cx), before);
     press(cx, rig.window, &rig.view, "escape");
+}
+
+#[gpui_kit::test]
+fn shift_click_in_the_path_field_extends_the_text_selection(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    press(cx, rig.window, &rig.view, "alt-d");
+    let field = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("path-field").bounds()
+        })
+        .expect("window");
+    let start = point(field.left() + px(2.), field.center().y);
+    let end = point(start.x + px(20.), start.y);
+    click(cx, rig.window, (start, Modifiers::default()));
+    click(cx, rig.window, (end, shift()));
+    settle(cx, &rig.view);
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| !view.pane_swap.is_dragging())
+    );
+    assert!(!rig.has_chip(cx));
+    press(cx, rig.window, &rig.view, "ctrl-c");
+    let copied = cx.read_from_clipboard().and_then(|item| item.text());
+    assert!(copied.is_some_and(|text| !text.is_empty()));
+    assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_some()));
+}
+
+#[gpui_kit::test]
+fn shift_click_on_a_crumb_still_opens_it_and_starts_no_swap(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    let before = rig.folders(cx);
+    let from = rig.origin(cx, true);
+    click(cx, rig.window, (from, shift()));
+    settle(cx, &rig.view);
+    assert!(
+        !rig.view
+            .read_with(cx, |view, _| view.pane_swap.is_dragging())
+    );
+    assert!(!rig.has_chip(cx));
+    let after = rig.folders(cx);
+    assert_ne!(after[0], before[0]);
+    assert_eq!(after[1..], before[1..]);
 }

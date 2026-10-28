@@ -111,12 +111,19 @@ impl FerriteWindow {
         })
     }
 
+    pub(super) fn is_one_pane(&self, window: &Window) -> bool {
+        self.shown_panes(window).len() == 1 && self.tiles_layout().panes().len() > 1
+    }
+
     pub(super) fn tiles_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let gap = tokens::current(cx).spacing.xs;
         let layout = self.tiles_layout();
-        let covers = self.tiles.fades.covers(tokens::current(cx), &layout);
         let shown = self.shown_panes(window);
         let is_one_pane = shown.len() == 1 && layout.panes().len() > 1;
+        let covers = match is_one_pane {
+            true => Vec::new(),
+            false => self.tiles.fades.covers(tokens::current(cx), &layout),
+        };
         let panes: Vec<_> = layout
             .rects()
             .into_iter()

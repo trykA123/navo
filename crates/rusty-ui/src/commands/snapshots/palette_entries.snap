@@ -1,6 +1,5 @@
 ---
 source: crates/rusty-ui/src/commands/tests.rs
-assertion_line: 506
 expression: "lines.join(\"\\n\")"
 ---
 workspace.preview_first | FileList | false
@@ -18,6 +17,10 @@ workspace.save | FileList | true
 workspace.move_left | FileList | true
 workspace.move_right | FileList | true
 layout.switcher | FileList | true
+layout.focus_pane_first | FileList | true
+layout.focus_pane_second | FileList | true
+layout.focus_pane_third | FileList | true
+layout.focus_pane_fourth | FileList | true
 app_menu.toggle | global | true
 settings.toggle | global | true
 jobs.toggle | global | true
