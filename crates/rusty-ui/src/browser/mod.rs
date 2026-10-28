@@ -24,6 +24,7 @@ pub use rename_batch::{
     RenamePresetList, RenameReport, SavePreset, UndoLogFactory, UndoOffer, WriteRenameLog,
 };
 use rename_batch::{run_batch, run_undo};
+pub use retained::{NoRetained, RetainedHooks, RetainedKind, RetainedRow, RetainedState};
 pub use {naming::NameProblem, offline::Offline};
 
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -418,6 +419,7 @@ mod open;
 mod operate;
 mod prefetch;
 mod rename_batch;
+mod retained;
 mod sort;
 #[cfg(test)]
 mod tests;
