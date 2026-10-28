@@ -4,11 +4,12 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, AppContext as _, Entity, TestAppContext, VisualTestContext, Window, px, size,
 };
-use rusty_core::{OpKind, PaneId};
+use rusty_core::{Command, OpKind, PaneId, Tiles, apply};
 use rusty_fs::FakeFs;
 
 use super::drive_fs::{Setup, drive_window};
 use super::{fake, home_beside_dest, open_options_sized, options_for, press};
+use crate::tokens::{self, Mode};
 use crate::window_view::FerriteWindow;
 
 fn open_at(cx: &mut TestAppContext, width: f32) -> (AnyWindowHandle, Entity<FerriteWindow>) {
@@ -127,4 +128,119 @@ fn alt_f1_at_800_px_shows_the_hidden_pane_while_its_drive_menu_is_open(cx: &mut 
     assert_eq!(shown(cx, rig.window, &panes), vec![start]);
     press(cx, rig.window, &rig.view, "tab");
     assert_eq!(shown(cx, rig.window, &panes), vec![panes[0]]);
+}
+
+fn open_preset(
+    cx: &mut TestAppContext,
+    tiles: Tiles,
+    width: f32,
+) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    let fs = fake();
+    let mut state = home_beside_dest(&fs);
+    apply(&mut state, &Command::LayoutPreset { tiles }).expect("preset");
+    let opened = open_options_sized(cx, options_for(fs, state), px(width));
+    VisualTestContext::from_window(opened.0, cx).simulate_resize(size(px(width), px(800.)));
+    cx.run_until_parked();
+    opened
+}
+
+fn strip_buttons(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<usize> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.render_frame(cx);
+        window.try_find("pane-strip").map(|_| {
+            (1..=4usize)
+                .filter(|n| window.try_find(("pane-strip-button", *n)).is_some())
+                .count()
+        })
+    })
+    .expect("window")
+}
+
+fn number_of(view: &FerriteWindow, pane: Option<PaneId>) -> usize {
+    let numbered = view.core_layout().expect("layout").numbered();
+    numbered
+        .iter()
+        .position(|id| Some(*id) == pane)
+        .expect("numbered pane")
+        + 1
+}
+
+fn two_by_two() -> Tiles {
+    Tiles::builtin()[3].tiles.clone()
+}
+
+#[gpui_kit::test]
+fn four_panes_at_800_px_show_a_strip_with_four_buttons(cx: &mut TestAppContext) {
+    let (window, _) = open_preset(cx, two_by_two(), 800.);
+    assert_eq!(strip_buttons(cx, window), Some(4));
+}
+
+#[gpui_kit::test]
+fn a_pane_under_280_px_at_1280_px_shows_the_strip(cx: &mut TestAppContext) {
+    let tiles = Tiles::parse("row(15, pane, pane)").expect("tiles");
+    let (window, _) = open_preset(cx, tiles, 1280.);
+    assert_eq!(strip_buttons(cx, window), Some(2));
+}
+
+#[gpui_kit::test]
+fn two_panes_at_1280_px_show_no_strip(cx: &mut TestAppContext) {
+    let (window, _) = open_at(cx, 1280.);
+    assert_eq!(strip_buttons(cx, window), None);
+}
+
+#[gpui_kit::test]
+fn clicking_button_3_focuses_pane_3_and_moves_the_tags(cx: &mut TestAppContext) {
+    let (window, view) = open_preset(cx, two_by_two(), 800.);
+    let before = view.read_with(cx, |view, _| {
+        number_of(view, Some(view.browser.state().focused_pane()))
+    });
+    assert_ne!(before, 3);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click(("pane-strip-button", 3usize), cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    let (focused, target) = view.read_with(cx, |view, _| {
+        let state = view.browser.state();
+        (
+            number_of(view, Some(state.focused_pane())),
+            number_of(view, view.browser.target_pane()),
+        )
+    });
+    assert_eq!(focused, 3);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find(("pane-strip-active", 3usize)).is_some());
+        assert!(window.try_find(("pane-strip-active", before)).is_none());
+        assert!(window.try_find(("pane-strip-target", target)).is_some());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn strip_number_name_and_tag_share_one_centre_line(cx: &mut TestAppContext) {
+    let (window, view) = open_preset(cx, two_by_two(), 800.);
+    let (active, target) = view.read_with(cx, |view, _| {
+        (
+            number_of(view, Some(view.browser.state().focused_pane())),
+            number_of(view, view.browser.target_pane()),
+        )
+    });
+    for mode in [Mode::Light, Mode::Dark] {
+        cx.update(|cx| tokens::apply(mode, cx));
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            for (n, tag) in [(active, "pane-strip-active"), (target, "pane-strip-target")] {
+                let centre = |id: &'static str| window.find((id, n)).bounds().center().y;
+                let number = centre("pane-strip-number");
+                let button = window.find(("pane-strip-button", n)).bounds().center().y;
+                for other in [centre("pane-strip-name"), centre(tag), button] {
+                    assert!((number - other).abs() <= px(1.), "{number:?} vs {other:?}");
+                }
+            }
+        })
+        .expect("window");
+    }
 }

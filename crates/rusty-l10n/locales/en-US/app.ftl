@@ -5,6 +5,11 @@ workspace-open = open
 workspace-new-from-layout = New from current layout
 workspace-preview-ribbon = Previewing { $name } · release Alt to switch · Esc to stay
 
+pane-strip-title = Panes
+pane-strip-button = Pane { $n }: { $name }
+pane-strip-active = Active
+pane-strip-target = F5/F6
+
 command-center = Command center
 command-center-results-label = Results
 command-center-placeholder = Search files and commands

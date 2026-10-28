@@ -1,6 +1,6 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{DispatchPhase, Role, canvas};
-use rusty_core::{Axis, Command, Layout, Rect, SplitInfo};
+use rusty_core::{Axis, Command, Layout, PaneId, Rect, SplitInfo};
 
 use super::FerriteWindow;
 use crate::prelude::*;
@@ -8,6 +8,12 @@ use crate::tokens;
 
 const MIN_PANE_WIDTH: Pixels = px(280.);
 const MIN_PANE_HEIGHT: Pixels = px(160.);
+const FULL: Rect = Rect {
+    x: 0.,
+    y: 0.,
+    width: 1.,
+    height: 1.,
+};
 
 struct DividerDrag {
     split: SplitInfo,
@@ -95,25 +101,17 @@ impl FerriteWindow {
         let gap = tokens::current(cx).spacing.xs;
         let layout = self.tiles_layout();
         let shown = self.shown_panes(window);
+        let is_one_pane = shown.len() == 1 && layout.panes().len() > 1;
         let panes: Vec<_> = layout
             .rects()
             .into_iter()
             .filter(|(pane, _)| shown.contains(pane))
-            .map(|(pane, rect)| {
-                let rect = if shown.len() == 1 {
-                    Rect {
-                        x: 0.,
-                        y: 0.,
-                        width: 1.,
-                        height: 1.,
-                    }
-                } else {
-                    rect
-                };
-                positioned(rect)
+            .map(|(pane, rect)| match is_one_pane {
+                true => self.one_pane_tile(pane, window, cx),
+                false => positioned(rect)
                     .p(gap / 2.)
                     .overflow_hidden()
-                    .child(self.pane_view(pane, window, cx))
+                    .child(self.pane_view(pane, window, cx)),
             })
             .collect();
         let dividers: Vec<_> = layout
@@ -133,6 +131,24 @@ impl FerriteWindow {
             .children(dividers)
             .child(self.tiles_events(gap, cx))
             .into_any_element()
+    }
+
+    fn one_pane_tile(&mut self, pane: PaneId, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let gap = tokens::current(cx).spacing.xs;
+        let strip = self.pane_strip(&self.tiles_layout(), cx);
+        positioned(FULL)
+            .p(gap / 2.)
+            .flex()
+            .flex_col()
+            .child(strip)
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(self.pane_view(pane, window, cx)),
+            )
     }
 
     fn divider(&self, split: &SplitInfo, cx: &mut Context<Self>) -> AnyElement {
