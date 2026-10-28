@@ -1,6 +1,7 @@
 [test-groups]
 clipboard = { max-threads = 1 }
 shell = { max-threads = 1 }
+timing = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = "binary(clipboard_windows) | binary(shell_menu_windows)"
@@ -11,11 +12,16 @@ filter = "binary(shell_menu_pages_windows) | (package(rusty-app) & test(/^shell_
 test-group = "shell"
 retries = 2
 
+[[profile.default.overrides]]
+filter = "package(rusty-app) & test(/^index_service::timing_tests::/)"
+test-group = "timing"
+
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 5 }
 
 [profile.ci]
 fail-fast = false
+default-filter = "not (package(rusty-app) & test(/^index_service::timing_tests::/))"
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 [profile.ci.junit]
