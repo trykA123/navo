@@ -127,3 +127,35 @@ fn an_unreadable_folder_or_cancel_refuses_the_relocation() {
         FsErrorKind::Cancelled
     );
 }
+
+#[test]
+fn overlapping_sources_list_each_descendant_folder_once() {
+    for mutation in [false, true] {
+        let fs = FakeFs::new();
+        fs.add_file("home/docs/sub/deep/a", 1);
+        fs.add_file("other/b", 1);
+        let mut steps = vec![];
+        for source in ["home/docs", "home/docs/sub", "home/docs", "other"] {
+            steps.push(Step::Rename {
+                source: fs.location(source),
+                target: fs.location("dest/moved"),
+            });
+        }
+        steps.push(Step::Recycle {
+            location: fs.location("home/docs/sub/deep"),
+        });
+        steps.push(Step::RemoveFolder {
+            location: fs.location("home/docs/sub"),
+        });
+        let plan = plan(OpKind::Move, steps);
+        let check = if mutation {
+            check_mutation
+        } else {
+            check_relocation
+        };
+        check(&plan, &fs, &CancelToken::new()).unwrap();
+        for folder in ["home/docs", "home/docs/sub", "home/docs/sub/deep", "other"] {
+            assert_eq!(fs.calls(folder, FakeOp::List), 1, "{folder}");
+        }
+    }
+}

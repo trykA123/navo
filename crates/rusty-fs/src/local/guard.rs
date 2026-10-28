@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -6,20 +7,75 @@ use rusty_core::{FsError, FsErrorKind, Location};
 use super::{error, io_error, os_path, platform};
 
 pub fn mutation_location(location: &Location) -> Result<Location, FsError> {
-    refuse_reserved(location)?;
-    if !location.is_local() {
-        return Ok(location.clone());
+    MutationLocations::default().resolve(location)
+}
+
+#[derive(Default)]
+pub struct MutationLocations {
+    parents: HashMap<PathBuf, PathBuf>,
+    #[cfg(test)]
+    canonicalize_calls: Vec<PathBuf>,
+}
+
+impl MutationLocations {
+    pub fn resolve(&mut self, location: &Location) -> Result<Location, FsError> {
+        refuse_reserved(location)?;
+        if !location.is_local() {
+            return Ok(location.clone());
+        }
+        let path = os_path(location)?;
+        let resolved = match (path.parent(), path.file_name()) {
+            (Some(parent), Some(name)) => {
+                self.resolve_parent(parent).map(|parent| parent.join(name))
+            }
+            _ => self.canonicalize(&path),
+        }
+        .map_err(|failure| io_error(&failure, location))?;
+        let resolved = Location::local(platform::entry_name(resolved.as_os_str()))
+            .map_err(|_| error(FsErrorKind::NameInvalid, location))?;
+        refuse_reserved(&resolved)?;
+        Ok(resolved)
     }
-    let path = os_path(location)?;
-    let resolved = match (path.parent(), path.file_name()) {
-        (Some(parent), Some(name)) => resolve(parent).map(|parent| parent.join(name)),
-        _ => std::fs::canonicalize(&path),
+
+    fn resolve_parent(&mut self, path: &Path) -> io::Result<PathBuf> {
+        let mut missing = Vec::new();
+        let mut parent = path;
+        let mut resolved = loop {
+            match self.canonicalize(parent) {
+                Ok(resolved) => break resolved,
+                Err(failure)
+                    if failure.kind() == io::ErrorKind::NotFound
+                        && std::fs::symlink_metadata(parent).is_err() =>
+                {
+                    parent.file_name().ok_or(failure)?;
+                    missing.push(parent.to_path_buf());
+                    parent = parent
+                        .parent()
+                        .ok_or_else(|| io::Error::other("no existing mutation parent"))?;
+                }
+                Err(failure) => return Err(failure),
+            }
+        };
+        for part in missing.iter().rev() {
+            resolved.push(
+                part.file_name()
+                    .ok_or_else(|| io::Error::other("no existing mutation parent"))?,
+            );
+            self.parents.insert(part.clone(), resolved.clone());
+        }
+        Ok(resolved)
     }
-    .map_err(|failure| io_error(&failure, location))?;
-    let resolved = Location::local(platform::entry_name(resolved.as_os_str()))
-        .map_err(|_| error(FsErrorKind::NameInvalid, location))?;
-    refuse_reserved(&resolved)?;
-    Ok(resolved)
+
+    fn canonicalize(&mut self, path: &Path) -> io::Result<PathBuf> {
+        if let Some(resolved) = self.parents.get(path) {
+            return Ok(resolved.clone());
+        }
+        #[cfg(test)]
+        self.canonicalize_calls.push(path.to_path_buf());
+        let resolved = std::fs::canonicalize(path)?;
+        self.parents.insert(path.to_path_buf(), resolved.clone());
+        Ok(resolved)
+    }
 }
 
 pub fn save_location(location: &Location) -> Result<Location, FsError> {
@@ -27,36 +83,13 @@ pub fn save_location(location: &Location) -> Result<Location, FsError> {
     if !location.is_local() {
         return Ok(location.clone());
     }
-    let resolved = resolve(&os_path(location)?).map_err(|failure| io_error(&failure, location))?;
+    let resolved = MutationLocations::default()
+        .resolve_parent(&os_path(location)?)
+        .map_err(|failure| io_error(&failure, location))?;
     let resolved = Location::local(platform::entry_name(resolved.as_os_str()))
         .map_err(|_| error(FsErrorKind::NameInvalid, location))?;
     refuse_reserved(&resolved)?;
     Ok(resolved)
-}
-
-fn resolve(path: &Path) -> io::Result<PathBuf> {
-    let mut missing = Vec::new();
-    let mut parent = path;
-    loop {
-        match std::fs::canonicalize(parent) {
-            Ok(mut resolved) => {
-                for part in missing.iter().rev() {
-                    resolved.push(part);
-                }
-                return Ok(resolved);
-            }
-            Err(failure) if failure.kind() == io::ErrorKind::NotFound => {
-                if std::fs::symlink_metadata(parent).is_ok() {
-                    return Err(failure);
-                }
-                missing.push(parent.file_name().ok_or(failure)?);
-                parent = parent
-                    .parent()
-                    .ok_or_else(|| io::Error::other("no existing mutation parent"))?;
-            }
-            Err(failure) => return Err(failure),
-        }
-    }
 }
 
 pub(crate) fn refuse_reserved(location: &Location) -> Result<(), FsError> {
@@ -68,6 +101,9 @@ pub(crate) fn refuse_reserved(location: &Location) -> Result<(), FsError> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod protection_tests;
 
 #[cfg(test)]
 mod tests {

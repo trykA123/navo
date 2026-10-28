@@ -142,3 +142,5 @@ mod main_compat;
 mod safe_mode;
 
 mod waiting;
+
+mod cache;

@@ -34,8 +34,8 @@ pub use job::{
     run_job_parallel, run_rename,
 };
 pub use local::{
-    AutoTuning, LocalFs, make_link, mutation_location, native_identity, native_rename_atomic,
-    os_path, save_location,
+    AutoTuning, LocalFs, MutationLocations, make_link, mutation_location, native_identity,
+    native_rename_atomic, os_path, save_location,
 };
 pub use measure::{
     FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LIVE_EVERY, LargeFile, LiveHandle,

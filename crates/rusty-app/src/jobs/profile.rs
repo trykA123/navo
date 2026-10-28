@@ -202,10 +202,11 @@ pub(super) fn guard(
 }
 
 pub(super) fn mutated_paths(plan: &OperationPlan) -> Result<Vec<Location>, String> {
+    let mut locations = rusty_fs::MutationLocations::default();
     plan.steps
         .iter()
         .flat_map(mutated)
-        .map(rusty_fs::mutation_location)
+        .map(|path| locations.resolve(path))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.message())
 }
@@ -281,3 +282,6 @@ fn intersects(a: &Location, b: &Location) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod timing_tests;

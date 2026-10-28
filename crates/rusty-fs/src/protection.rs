@@ -3,15 +3,16 @@ use std::ops::ControlFlow;
 
 use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
 
-use crate::{CancelToken, EntryBatch, EntryKind, ProviderOps, mutation_location, scan};
+use crate::{CancelToken, EntryBatch, EntryKind, MutationLocations, ProviderOps, scan};
 
 pub fn check_mutation(
     plan: &OperationPlan,
     ops: &dyn ProviderOps,
     cancel: &CancelToken,
 ) -> Result<(), FsError> {
+    let mut locations = MutationLocations::default();
     for path in plan.steps.iter().flat_map(mutated) {
-        mutation_location(path)?;
+        locations.resolve(path)?;
     }
     let candidates: HashSet<_> = plan
         .steps

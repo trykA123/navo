@@ -55,7 +55,7 @@ use std::time::UNIX_EPOCH;
 use rusty_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, ProviderPath};
 
 pub(crate) use guard::refuse_reserved;
-pub use guard::{mutation_location, save_location};
+pub use guard::{MutationLocations, mutation_location, save_location};
 pub use link::make_link;
 
 #[cfg(any(unix, windows))]
