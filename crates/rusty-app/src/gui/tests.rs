@@ -36,7 +36,8 @@ fn operations_mode(
         dirs,
         home,
         experimental,
-        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+        &(std::sync::Arc::new(rusty_fs::LocalFs::new())
+            as std::sync::Arc<dyn rusty_fs::ProviderOps>),
     );
     start.share();
     (operations, dirs.map(|_| start), journal)
@@ -87,7 +88,8 @@ fn unavailable_journal_and_profile_notices_offer_safe_mode() {
             profile,
             &home(),
             true,
-            &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+            &(std::sync::Arc::new(rusty_fs::LocalFs::new())
+                as std::sync::Arc<dyn rusty_fs::ProviderOps>),
         );
         assert!(journal.is_none());
         let plan = rusty_core::OperationPlan {
@@ -265,14 +267,16 @@ fn delete_confirmation_retention_requires_the_flag_and_the_current_setting() {
         Some(&dirs),
         &home(),
         false,
-        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+        &(std::sync::Arc::new(rusty_fs::LocalFs::new())
+            as std::sync::Arc<dyn rusty_fs::ProviderOps>),
     );
     assert!(normal.retain_deletes.is_none());
     let (experimental, _) = super::operations(
         Some(&dirs),
         &home(),
         true,
-        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+        &(std::sync::Arc::new(rusty_fs::LocalFs::new())
+            as std::sync::Arc<dyn rusty_fs::ProviderOps>),
     );
     let active = experimental.retain_deletes.unwrap();
     assert!(active().is_some());

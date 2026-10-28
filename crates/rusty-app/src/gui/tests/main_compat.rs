@@ -44,7 +44,8 @@ fn safe_mode_without_a_profile_or_journal_runs_guarded_jobs_and_creation() {
             profile,
             &home(),
             false,
-            &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+            &(std::sync::Arc::new(rusty_fs::LocalFs::new())
+                as std::sync::Arc<dyn rusty_fs::ProviderOps>),
         );
         assert!(journal.is_none());
         checked(&operations, &bare(rusty_core::OpKind::Copy, vec![])).unwrap();
@@ -91,7 +92,8 @@ fn safe_mode_without_a_journal_protects_the_profile_folder() {
         Some(&dirs),
         &home(),
         false,
-        &std::sync::Arc::new(rusty_fs::LocalFs::new()),
+        &(std::sync::Arc::new(rusty_fs::LocalFs::new())
+            as std::sync::Arc<dyn rusty_fs::ProviderOps>),
     );
     assert!(journal.is_none());
     let profile_delete = bare(

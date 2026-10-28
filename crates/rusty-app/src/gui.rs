@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use rusty_cache::{CacheKeys, DiskListings, DriveIdentity, ListingCache, Warm};
 use rusty_core::{AppState, Location};
-use rusty_fs::LocalFs;
+use rusty_fs::{LocalFs, ProviderOps, SlowFs};
 use rusty_shell::VolumeIdentity;
 use rusty_store::StoreDirs;
 use rusty_ui::browser::Operations;
@@ -110,6 +110,15 @@ fn session_state(
     state
 }
 
+fn local_provider() -> Arc<dyn ProviderOps> {
+    let slow_fs_ms = std::env::var("NAVO_SLOW_FS_MS").ok();
+    let local: Arc<dyn ProviderOps> = Arc::new(LocalFs::new());
+    match SlowFs::parse_delay_ms(slow_fs_ms.as_deref()) {
+        Some(delay) => Arc::new(SlowFs::new(local, delay)),
+        None => local,
+    }
+}
+
 pub(crate) fn open(launch: Launch) {
     let mut store = launch.store;
     let dirs = launch.dirs;
@@ -117,7 +126,7 @@ pub(crate) fn open(launch: Launch) {
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
-    let local = Arc::new(LocalFs::new());
+    let local = local_provider();
     let services = profile_services(dirs.as_ref(), &home, launch.experimental_retention, &local);
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
@@ -176,7 +185,7 @@ fn profile_services(
     dirs: Option<&StoreDirs>,
     home: &Location,
     experimental: bool,
-    local: &Arc<LocalFs>,
+    local: &Arc<dyn ProviderOps>,
 ) -> ProfileServices {
     let (memory, files) = open_files(dirs, experimental);
     let (operations, journal) = operations(dirs, home, experimental, local);
@@ -196,7 +205,7 @@ fn search_hooks(
     memory: Option<files::SharedDb>,
     remember: crate::search_hooks::Remember,
     dirs: Option<&StoreDirs>,
-    local: &Arc<LocalFs>,
+    local: &Arc<dyn ProviderOps>,
 ) -> rusty_ui::window_view::SearchHooks {
     let mut search = crate::search_hooks::hooks(memory, remember);
     search.index = index_hooks(dirs.cloned(), local.clone(), &mut search.service);
@@ -324,7 +333,7 @@ pub(crate) fn operations(
     dirs: Option<&StoreDirs>,
     home: &Location,
     experimental: bool,
-    local: &Arc<LocalFs>,
+    local: &Arc<dyn ProviderOps>,
 ) -> (Operations, Option<jobs::SharedJournal>) {
     let mut protected = vec![home.clone()];
     let Some(dirs) = dirs else {

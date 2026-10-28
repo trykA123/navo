@@ -16,6 +16,7 @@ mod paged;
 mod protection;
 mod provider;
 mod scan;
+mod slow;
 mod snapshot;
 mod watch;
 
@@ -52,5 +53,6 @@ pub use provider::{
     Provider, ProviderOps, SizeEntry,
 };
 pub use scan::{existing_at, scan};
+pub use slow::SlowFs;
 pub use snapshot::{FolderSnapshot, load_folder, load_folder_reporting};
 pub use watch::{WATCH_MAX_DELAY, WATCH_QUIET, Watch, WatchChange, WatchEvent, WatchSink};
