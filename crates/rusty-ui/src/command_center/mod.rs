@@ -1,7 +1,9 @@
 use crate::prelude::*;
 
 mod commands_source;
+pub(crate) mod content_source;
 mod context_name;
+pub use content_source::{ContentQuery, ContentSource};
 mod file_sources;
 pub mod flights;
 pub mod index_source;
@@ -84,7 +86,7 @@ impl Mode {
     }
 
     pub(crate) fn has_results(self) -> bool {
-        matches!(self, Self::Names | Self::Commands)
+        matches!(self, Self::Names | Self::Content | Self::Commands)
     }
 
     fn label(self) -> &'static str {

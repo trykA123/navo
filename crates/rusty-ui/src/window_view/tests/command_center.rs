@@ -13,6 +13,7 @@ use crate::window_view::command_center::Update;
 use crate::window_view::{FerriteWindow, Frecent};
 
 mod args;
+mod content;
 mod late;
 mod modes;
 mod open;
@@ -466,41 +467,35 @@ fn the_command_prefix_selects_commands_and_tab_can_leave_it(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
-fn placeholder_modes_show_no_results_and_do_not_search_or_run(cx: &mut TestAppContext) {
+fn collections_shows_no_results_and_does_not_search_or_run(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.press(cx, "ctrl-k");
     rig.type_query(cx, "switch pane");
     let pane = rig
         .view
         .read_with(cx, |view, _| view.browser.state().focused_pane());
-    for (key, message) in [
-        ("tab", "Type to search inside files"),
-        ("shift-tab", "No collections yet"),
-    ] {
-        rig.press(cx, key);
-        let generation = rig
-            .view
-            .read_with(cx, |view, _| view.command_center_generation());
-        rig.type_query(cx, "more");
-        assert_eq!(
-            rig.view
-                .read_with(cx, |view, _| view.command_center_generation()),
-            generation
-        );
-        assert!(rig.rows(cx).is_empty());
-        assert_eq!(
-            rig.label(cx, "command-center-empty").as_deref(),
-            Some(message)
-        );
-        rig.press(cx, "enter");
-        assert!(rig.is_open(cx));
-        assert_eq!(
-            rig.view
-                .read_with(cx, |view, _| view.browser.state().focused_pane()),
-            pane
-        );
-        rig.press(cx, "shift-tab");
-    }
+    rig.press(cx, "shift-tab");
+    let generation = rig
+        .view
+        .read_with(cx, |view, _| view.command_center_generation());
+    rig.type_query(cx, "more");
+    assert_eq!(
+        rig.view
+            .read_with(cx, |view, _| view.command_center_generation()),
+        generation
+    );
+    assert!(rig.rows(cx).is_empty());
+    assert_eq!(
+        rig.label(cx, "command-center-empty").as_deref(),
+        Some("No collections yet")
+    );
+    rig.press(cx, "enter");
+    assert!(rig.is_open(cx));
+    assert_eq!(
+        rig.view
+            .read_with(cx, |view, _| view.browser.state().focused_pane()),
+        pane
+    );
 }
 
 #[gpui_kit::test]
@@ -530,7 +525,7 @@ fn clicking_a_mode_updates_its_pressed_state_and_keeps_typing_in_the_input(
 }
 
 #[gpui_kit::test]
-fn escape_clears_a_placeholder_query_without_starting_a_search(cx: &mut TestAppContext) {
+fn escape_clears_a_content_query_and_invalidates_its_preview(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.press(cx, "ctrl-k");
     rig.press(cx, "tab");
@@ -542,7 +537,7 @@ fn escape_clears_a_placeholder_query_without_starting_a_search(cx: &mut TestAppC
     assert_eq!(
         rig.view
             .read_with(cx, |view, _| view.command_center_generation()),
-        generation
+        generation.map(|generation| generation + 1)
     );
     assert_eq!(pressed_mode(&rig, cx), [1]);
     assert!(rig.rows(cx).is_empty());

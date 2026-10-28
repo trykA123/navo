@@ -49,6 +49,20 @@ impl CommandCenter {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.props.mode == Mode::Content
+            && event.keystroke.modifiers
+                == (Modifiers {
+                    alt: true,
+                    ..Modifiers::default()
+                })
+            && matches!(event.keystroke.key.as_str(), "c" | "r")
+        {
+            cx.emit(CommandCenterEvent::ToggleContentFlag(
+                event.keystroke.key == "r",
+            ));
+            cx.stop_propagation();
+            return;
+        }
         if event.keystroke.key == "backspace"
             && event.keystroke.modifiers == Modifiers::default()
             && self.props.mode == Mode::Content

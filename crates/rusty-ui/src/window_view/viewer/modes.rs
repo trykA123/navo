@@ -147,6 +147,13 @@ impl FerriteWindow {
             }
             Err(message) => viewer.message = Some(message.into()),
         }
+        if let (Some(entry), Some(body)) = (viewer.start_entry.take(), &viewer.body)
+            && let Some(archive) = body.as_any().downcast_ref::<super::archive::ArchiveBody>()
+        {
+            archive
+                .0
+                .update(cx, |archive, cx| archive.select_entry(&entry, cx));
+        }
         if let (Some(line), Some(body)) = (viewer.start_line.take(), &viewer.body) {
             body.go_to_line(line, window, cx);
         }

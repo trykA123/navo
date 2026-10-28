@@ -82,6 +82,7 @@ fn props(rows: Vec<Row>) -> CommandCenterProps {
     CommandCenterProps {
         mode: crate::command_center::Mode::Names,
         scope: None,
+        content: Default::default(),
         rows: rows.into(),
         selection,
         argument: None,

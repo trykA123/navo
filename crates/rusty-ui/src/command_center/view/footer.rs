@@ -122,7 +122,9 @@ pub(crate) fn hints(row: Option<&Row>, argument: Option<ArgKind>) -> Vec<Hint> {
 
 fn hit_hints(hit: &Hit) -> Vec<Hint> {
     match hit.target {
-        Target::Open { .. } | Target::GoTo(_) => vec![OPEN, REVEAL, OTHER_PANE, NEW_TAB],
+        Target::Content { .. } | Target::Open { .. } | Target::GoTo(_) => {
+            vec![OPEN, REVEAL, OTHER_PANE, NEW_TAB]
+        }
         Target::ShowAll(_) => vec![SHOW_ALL, NEXT_GROUP],
         Target::Arg(..) => vec![CHOOSE, NEXT_GROUP, CLOSE],
         Target::Action(_) | Target::Core(_) => vec![RUN, NEXT_GROUP, CLOSE],
@@ -328,4 +330,23 @@ pub(super) fn mode_empty(t: &Theme, mode: Mode) -> impl IntoElement {
         .border_color(t.colors.line)
         .text_color(t.colors.muted)
         .child(label)
+}
+
+pub(super) fn content_footer(t: &Theme, error: Option<SharedString>) -> Div {
+    div()
+        .flex_none()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap(t.spacing.sm)
+        .min_h(px(HEIGHT))
+        .px(t.spacing.md)
+        .border_t_1()
+        .border_color(t.colors.line)
+        .text_size(t.typography.tiny)
+        .text_color(t.colors.muted)
+        .when_some(error, |footer, error| {
+            footer.child(div().text_color(t.colors.mark).child(error))
+        })
+        .child(tr("command-center-content-footer"))
 }

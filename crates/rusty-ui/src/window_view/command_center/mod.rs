@@ -1,4 +1,5 @@
 mod args;
+mod content;
 mod keys;
 mod open;
 mod run;
@@ -30,6 +31,7 @@ pub(super) type Anchor = Rc<Cell<Option<Bounds<Pixels>>>>;
 
 pub(super) struct CommandCenterState {
     open: Option<Open>,
+    pub(super) content_source: crate::command_center::ContentSource,
     leaving: Option<Entity<CommandCenter>>,
     pub(super) anchor: Anchor,
     pub(super) sources: Vec<Arc<dyn ResultSource>>,
@@ -45,6 +47,7 @@ impl CommandCenterState {
     pub(super) fn new(hooks: SearchHooks, provider: &Arc<dyn rusty_fs::ProviderOps>) -> Self {
         Self {
             open: None,
+            content_source: Default::default(),
             leaving: None,
             anchor: Anchor::default(),
             sources: Vec::new(),
@@ -68,6 +71,10 @@ struct Step {
 
 struct Open {
     mode: Mode,
+    content: crate::command_center::ContentQuery,
+    case: bool,
+    regex: bool,
+    content_flight: Option<content::Flight>,
     scope: Option<rusty_core::Location>,
     center: Entity<CommandCenter>,
     rows: Rc<[Row]>,
@@ -107,6 +114,7 @@ impl Open {
     fn props(&self, has_key_hints: bool) -> CommandCenterProps {
         CommandCenterProps {
             mode: self.mode,
+            content: self.content.clone(),
             scope: self.scope.clone(),
             rows: self.rows.clone(),
             selection: self.selection,
@@ -236,6 +244,10 @@ impl FerriteWindow {
         let rows_memory = RESULTS_MEMORY.hold(Results::memory_use(&rows));
         self.command_center.open = Some(Open {
             mode: Mode::Names,
+            content: Default::default(),
+            case: false,
+            regex: false,
+            content_flight: None,
             scope: None,
             center,
             selection: Selection::start(&rows),
@@ -269,10 +281,11 @@ impl FerriteWindow {
     }
 
     pub(super) fn close_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(open) = self.command_center.open.take() else {
+        let Some(mut open) = self.command_center.open.take() else {
             return;
         };
         open.search.cancel();
+        open.content_flight = None;
         self.command_center.generation = open.search.generation();
         match &open.restore {
             Some(handle) => window.focus(handle, cx),
@@ -332,11 +345,16 @@ impl FerriteWindow {
                 let way = self.click_way(*modifiers);
                 self.run_selected(way, window, cx);
             }
+            CommandCenterEvent::ToggleContentFlag(regex) => {
+                self.toggle_content_flag(*regex, window, cx)
+            }
             CommandCenterEvent::ScopeRemoved => {
-                if let Some(open) = self.command_center.open.as_mut() {
-                    open.scope = None;
-                }
-                self.push_command_center(window, cx);
+                let Some(open) = self.command_center.open.as_mut() else {
+                    return;
+                };
+                open.scope = None;
+                let query = open.center.read(cx).query(cx);
+                self.mode_query_changed(&query, window, cx);
             }
             CommandCenterEvent::Dismissed => self.close_command_center(window, cx),
         }
@@ -383,6 +401,7 @@ fn initial_props(
 ) -> CommandCenterProps {
     CommandCenterProps {
         mode: Mode::Names,
+        content: Default::default(),
         scope: None,
         selection: Selection::start(&rows),
         rows,

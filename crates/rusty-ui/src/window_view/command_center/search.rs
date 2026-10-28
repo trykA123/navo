@@ -52,7 +52,7 @@ impl Search {
         self.cancel.cancel();
     }
 
-    fn next(&mut self) -> u64 {
+    pub(super) fn next(&mut self) -> u64 {
         self.cancel.cancel();
         self.cancel = Cancel::new();
         self.generation += 1;

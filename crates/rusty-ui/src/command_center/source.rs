@@ -21,7 +21,15 @@ pub enum Target {
     Action(&'static str),
     Core(Command),
     Arg(&'static str, ArgKind),
-    Open { location: Location, folder: bool },
+    Open {
+        location: Location,
+        folder: bool,
+    },
+    Content {
+        location: Location,
+        line: u64,
+        entry: Option<String>,
+    },
     GoTo(Location),
     ShowAll(Group),
 }

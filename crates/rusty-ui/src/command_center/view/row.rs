@@ -160,7 +160,7 @@ fn hit_icon(t: &Theme, hit: &Hit) -> (IconName, Hsla) {
             (IconName::SquareChevronRight, t.colors.accent_text)
         }
         Target::Open { folder: true, .. } | Target::GoTo(_) => (IconName::Folder, t.colors.folder),
-        Target::Open { folder: false, .. } => {
+        Target::Content { .. } | Target::Open { folder: false, .. } => {
             let (_, extension) = kind::split_name(&hit.title, EntryKind::File);
             kind::icon(EntryKind::File, extension, &t.colors)
         }

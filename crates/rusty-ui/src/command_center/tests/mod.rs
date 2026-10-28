@@ -1,4 +1,5 @@
 mod commands_source;
+mod content;
 mod file_sources;
 mod index_source;
 mod query;

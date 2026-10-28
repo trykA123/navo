@@ -32,6 +32,15 @@ impl FerriteWindow {
     }
 
     pub(super) fn run_selected(&mut self, way: Way, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .command_center
+            .open
+            .as_ref()
+            .is_some_and(|open| open.mode == super::Mode::Content)
+        {
+            return self.run_content(way, window, cx);
+        }
+
         let Some(open) = self.command_center.open.as_ref() else {
             return;
         };
@@ -78,7 +87,7 @@ impl FerriteWindow {
             Target::Core(command) => self.run_core(&command, window, cx),
             Target::Arg(name, kind) => self.choose_argument((name, kind, &title), window, cx),
             Target::ShowAll(group) => self.show_all(group, window, cx),
-            Target::Open { .. } | Target::GoTo(_) => {}
+            Target::Content { .. } | Target::Open { .. } | Target::GoTo(_) => {}
         }
     }
 

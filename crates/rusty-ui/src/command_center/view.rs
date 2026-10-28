@@ -1,4 +1,5 @@
 mod chip;
+mod content_chips;
 mod footer;
 mod motion;
 mod place;
@@ -53,6 +54,7 @@ pub struct Argument {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandCenterProps {
     pub mode: Mode,
+    pub content: super::ContentQuery,
     pub scope: Option<rusty_core::Location>,
     pub rows: Rc<[Row]>,
     pub selection: Selection,
@@ -69,6 +71,7 @@ pub enum CommandCenterEvent {
     QueryChanged(SharedString),
     ModeChanged(Mode),
     ScopeRemoved,
+    ToggleContentFlag(bool),
     Moved(usize),
     Run(usize, Modifiers),
     Dismissed,
@@ -312,6 +315,9 @@ impl CommandCenter {
     }
 
     fn footer(&self, t: &Theme, query: &str) -> Div {
+        if self.props.mode == Mode::Content {
+            return footer::content_footer(t, self.props.error.clone());
+        }
         let props = &self.props;
         let argument = props.argument.as_ref().map(|argument| argument.kind);
         let is_active = argument.is_some() || props.mode.has_results();
@@ -367,6 +373,7 @@ impl Render for CommandCenter {
             .capture_key_down(cx.listener(Self::remove_scope))
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(CommandCenterEvent::Dismissed)))
             .child(self.input_row(&t))
+            .children((self.props.mode == Mode::Content).then(|| self.content_chips(&t)))
             .children(self.mode_row(&t, cx))
             .children(self.body(paint, &query))
             .child(self.footer(&t, &query));

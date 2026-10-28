@@ -101,6 +101,7 @@ pub(super) struct Viewer {
     parts: parts::ViewParts,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     start_line: Option<u64>,
+    start_entry: Option<String>,
     start_note: Option<SharedString>,
     encoding: Option<&'static Encoding>,
     detected: Option<TextEncoding>,
@@ -143,6 +144,7 @@ impl Viewer {
             parts: parts::ViewParts::default(),
             bounds: Rc::default(),
             start_line: None,
+            start_entry: None,
             start_note: None,
             encoding: None,
             detected: None,
@@ -223,6 +225,12 @@ impl FerriteWindow {
         let mut viewer = Viewer::new(location, cx.focus_handle());
         viewer.opening = Some(self.open_file(&viewer, window, cx));
         self.show_viewer(viewer, window, cx);
+    }
+
+    pub(in crate::window_view) fn select_archive_entry(&mut self, path: String) {
+        if let Some(viewer) = &mut self.viewer {
+            viewer.start_entry = Some(path);
+        }
     }
 
     pub(in crate::window_view) fn open_viewer_at_line(

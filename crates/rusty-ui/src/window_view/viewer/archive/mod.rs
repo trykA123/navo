@@ -107,6 +107,16 @@ impl ArchiveView {
         }
     }
 
+    pub fn select_entry(&mut self, path: &str, cx: &mut Context<Self>) {
+        let path = path.replace('\\', "/");
+        let row = self
+            .shown
+            .iter()
+            .position(|index| self.listing.entries[*index].name.replace('\\', "/") == path)
+            .unwrap_or(0);
+        self.move_to(row, cx);
+    }
+
     fn entry_at(&self, row: usize) -> Option<(usize, &ArchiveEntry)> {
         let index = *self.shown.get(row)?;
         self.listing.entries.get(index).map(|entry| (index, entry))
@@ -274,6 +284,11 @@ impl ArchiveView {
 
 #[cfg(test)]
 impl ArchiveView {
+    pub(in crate::window_view::viewer) fn selected_entry(&self) -> &str {
+        self.entry_at(self.cursor)
+            .map_or("", |(_, entry)| entry.name.as_str())
+    }
+
     pub(in crate::window_view::viewer) fn reading_flag(
         &self,
     ) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {

@@ -122,6 +122,14 @@ impl FerriteWindow {
             .command_center
             .open
             .as_ref()
+            .is_some_and(|open| open.mode == Mode::Content)
+        {
+            return self.run_content(way, window, cx);
+        }
+        if self
+            .command_center
+            .open
+            .as_ref()
             .is_some_and(|open| open.step.is_some() || open.mode.has_results())
         {
             self.run_on_enter(way, window, cx);
@@ -152,6 +160,7 @@ impl FerriteWindow {
         let query = open.center.read(cx).query(cx);
         let query = query.strip_prefix('>').unwrap_or(&query).to_owned();
         open.search.cancel();
+        open.content_flight = None;
         open.run_when_shown = None;
         open.error = None;
         open.indexing = None;
@@ -177,8 +186,12 @@ impl FerriteWindow {
         if open.step.is_some() {
             return self.query_changed(query, window, cx);
         }
+        open.content_flight = None;
         if query.starts_with('>') {
             open.mode = Mode::Commands;
+        }
+        if open.mode == Mode::Content {
+            return self.search_content(query, window, cx);
         }
         if !open.mode.has_results() {
             open.search.cancel();
