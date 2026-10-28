@@ -178,14 +178,19 @@ fn cancellation_keeps_delivered_hits_and_stops_at_a_batch_boundary() {
         &FindQuery::parse("needle"),
         &cancel,
         |batch| {
+            let has_hits = !batch.files.is_empty();
             batches.push(batch);
-            ControlFlow::Break(())
+            if has_hits {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
         },
     );
     assert!(matches!(result, Err(FindError::Cancelled)));
     assert!(cancel.is_cancelled());
     assert!(!names(&batches).is_empty());
-    assert!(batches[0].progress.scanned <= 200);
+    assert!(batches.last().unwrap().progress.scanned <= 200);
 }
 
 #[test]
