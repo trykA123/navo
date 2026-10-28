@@ -147,7 +147,19 @@ impl FerriteWindow {
         }
     }
 
+    fn overlay_owns_focus(&self) -> bool {
+        self.settings.is_open()
+            || self.recent.is_open()
+            || self.command_center.is_open()
+            || self.viewer.is_some()
+            || self.prompt.is_some()
+            || self.is_multi_rename_open()
+    }
+
     pub(super) fn pin_workspaces(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.overlay_owns_focus() {
+            return;
+        }
         self.workspace_keys.pin();
         self.focus_core_pane(window, cx);
         cx.notify();

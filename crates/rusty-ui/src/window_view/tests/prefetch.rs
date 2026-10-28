@@ -180,8 +180,16 @@ fn only_the_drive_holding_the_folder_decides_whether_it_is_far() {
     assert!(!is_far(&drives, &at(r"C:\work\a")));
     assert!(is_far(&drives, &at(r"D:\work\a")));
     assert!(is_far(&drives, &at(r"Z:\work\a")));
-    assert!(!is_far(&[], &at(r"Z:\work\a")));
+    assert!(is_far(&[], &at(r"Z:\work\a")));
     assert!(is_far(&[], &at(r"\\server\share\work")));
+    assert!(!is_far(&[], &at("/home/admin/work")));
+}
+
+#[test]
+fn a_drive_listed_as_local_is_not_far() {
+    let at = |text: &str| Location::new(text).unwrap();
+    let drives = [drive_of(at(r"Z:\"), DriveIcon::Fixed)];
+    assert!(!is_far(&drives, &at(r"Z:\work")));
 }
 
 #[test]

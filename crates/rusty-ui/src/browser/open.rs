@@ -1,4 +1,4 @@
-use rusty_core::{Command, CommandError, Location, StateError, TabMove, list_unloaded};
+use rusty_core::{Command, CommandError, Effect, Location, StateError, TabMove, list_unloaded};
 use rusty_fs::EntryKind;
 
 use super::{Browser, Launcher};
@@ -9,11 +9,29 @@ pub enum Seen {
     File(Location),
 }
 
+pub(super) fn save_request(command: &Command) -> Option<Effect> {
+    matches!(
+        command,
+        Command::PaneOpenTab { .. }
+            | Command::PaneCloseTab { .. }
+            | Command::PaneNavigate { .. }
+            | Command::PaneGoDrive { .. }
+            | Command::PaneBack
+            | Command::PaneForward
+            | Command::PaneActivateTab { .. }
+            | Command::LayoutSplit { .. }
+            | Command::LayoutClose
+            | Command::LayoutPreset { .. }
+    )
+    .then_some(Effect::SaveSession)
+}
+
 impl Browser {
     pub fn move_tab(&mut self, change: TabMove) -> Result<(), StateError> {
         let focused = self.state.focused_pane();
         self.state.move_tab(change)?;
-        let effects = list_unloaded(&mut self.state);
+        let mut effects = list_unloaded(&mut self.state);
+        effects.push(Effect::SaveSession);
         self.run(effects);
         if self.state.focused_pane() != focused {
             self.revalidate_focused();

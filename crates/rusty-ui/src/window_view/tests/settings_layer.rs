@@ -18,6 +18,17 @@ fn open_settings(cx: &mut TestAppContext, rig: &Rig) {
     cx.run_until_parked();
 }
 
+#[gpui_kit::test]
+fn the_workspaces_menu_entry_leaves_focus_alone_while_settings_is_open(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open_settings(cx, &rig);
+    rig.press(cx, "f10");
+    rig.press(cx, "w");
+    rig.press(cx, "enter");
+    assert!(!rig.pane_has_focus(cx));
+    assert!(!rig.view.read_with(cx, |view, _| view.workspace_keys.pinned));
+}
+
 fn add_running_copy(cx: &mut TestAppContext, rig: &Rig) {
     let at = |path: &str| Location::new(path).expect("location");
     rig.view.update(cx, |view, cx| {

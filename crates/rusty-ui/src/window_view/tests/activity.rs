@@ -13,7 +13,7 @@ use super::{fake, home_beside_dest, open_options_sized, options_for, press, two_
 use crate::activity::ActivityId;
 use crate::activity_strip::key_of;
 use crate::browser::JobStatus;
-use crate::command_center::Indexing;
+use crate::command_center::{IndexOptions, Indexing};
 use crate::settings::{Change, Field, Value, Values};
 use crate::window_view::FerriteWindow;
 
@@ -598,6 +598,14 @@ fn open_index(
     cx: &mut TestAppContext,
     off: bool,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>, Arc<IndexStatus>) {
+    open_index_status(cx, off, Some(indexing(12_345)))
+}
+
+fn open_index_status(
+    cx: &mut TestAppContext,
+    off: bool,
+    indexing: Option<Indexing>,
+) -> (AnyWindowHandle, Entity<FerriteWindow>, Arc<IndexStatus>) {
     let fs = fake();
     let state = home_beside_dest(&fs);
     let mut options = options_for(fs, state);
@@ -609,7 +617,7 @@ fn open_index(
         });
     }
     let status = Arc::new(IndexStatus::default());
-    *status.value.lock().unwrap() = Some(indexing(12_345));
+    *status.value.lock().unwrap() = indexing;
     let polls = status.clone();
     options.search.index.status = Arc::new(move || {
         polls.polls.fetch_add(1, Ordering::SeqCst);
@@ -671,10 +679,13 @@ fn index_activity_ends_when_status_is_none(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn index_activity_shows_nothing_when_off(cx: &mut TestAppContext) {
-    let (window, _, status) = open_index(cx, true);
+fn index_activity_schedules_nothing_when_off(cx: &mut TestAppContext) {
+    let (window, view, status) = open_index(cx, true);
     advance(cx, Duration::from_millis(500));
     assert!(!has(cx, window, "activity-strip"));
+    assert!(!view.read_with(cx, |view, _| {
+        view.command_center.index_activity.is_polling()
+    }));
     assert_eq!(status.polls.load(Ordering::SeqCst), 0);
     assert_eq!(status.searches.load(Ordering::SeqCst), 0);
 }
@@ -689,4 +700,118 @@ fn index_activity_polls_status_twice_a_second_without_searching(cx: &mut TestApp
     }
     assert_eq!(status.polls.load(Ordering::SeqCst) - before, 4);
     assert_eq!(status.searches.load(Ordering::SeqCst), 0);
+}
+
+#[gpui_kit::test]
+fn index_activity_stops_after_the_first_idle_report(cx: &mut TestAppContext) {
+    let (_, view, status) = open_index_status(cx, false, None);
+    assert_eq!(status.polls.load(Ordering::SeqCst), 1);
+    assert!(!view.read_with(cx, |view, _| {
+        view.command_center.index_activity.is_polling()
+    }));
+    for _ in 0..4 {
+        advance(cx, Duration::from_millis(500));
+    }
+    assert_eq!(status.polls.load(Ordering::SeqCst), 1);
+}
+
+#[gpui_kit::test]
+fn index_activity_restarts_when_a_job_starts(cx: &mut TestAppContext) {
+    let (window, view, status) = open_index_status(cx, false, None);
+    let (start, options) = view.read_with(cx, |view, _| {
+        (
+            view.command_center.hooks.index.start.clone(),
+            IndexOptions::of(&view.values),
+        )
+    });
+    *status.value.lock().unwrap() = Some(indexing(24_690));
+    start(&options);
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |view, _| {
+        view.command_center.index_activity.is_polling()
+    }));
+    advance(cx, Duration::from_millis(500));
+    assert_eq!(status.polls.load(Ordering::SeqCst), 2);
+    assert_eq!(index_title(cx, window), indexing(24_690).text().as_ref());
+}
+
+#[gpui_kit::test]
+fn index_activity_cancels_polling_when_switched_off(cx: &mut TestAppContext) {
+    let (window, view, status) = open_index(cx, false);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.change_setting(
+                Change {
+                    field: Field::SearchIndex,
+                    value: Value::Pick(3),
+                },
+                window,
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let before = status.polls.load(Ordering::SeqCst);
+    assert!(!view.read_with(cx, |view, _| {
+        view.command_center.index_activity.is_polling()
+    }));
+    advance(cx, Duration::from_millis(500));
+    assert_eq!(status.polls.load(Ordering::SeqCst), before);
+    assert!(view.read_with(cx, |view, _| view.job_ui.activity.is_empty()));
+}
+
+#[gpui_kit::test]
+fn index_activity_restarts_when_switched_on(cx: &mut TestAppContext) {
+    let (window, view, status) = open_index(cx, true);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.change_setting(
+                Change {
+                    field: Field::SearchIndex,
+                    value: Value::Pick(0),
+                },
+                window,
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    advance(cx, Duration::from_millis(500));
+    assert_eq!(status.polls.load(Ordering::SeqCst), 1);
+    assert_eq!(index_title(cx, window), indexing(12_345).text().as_ref());
+}
+
+#[gpui_kit::test]
+fn index_activity_restarts_on_window_activation(cx: &mut TestAppContext) {
+    let (window, _, status) = open_index_status(cx, false, None);
+    *status.value.lock().unwrap() = Some(indexing(24_690));
+    let mut visual = gpui_kit::VisualTestContext::from_window(window, cx);
+    visual.deactivate_window();
+    visual.update(|window, _| window.activate_window());
+    visual.run_until_parked();
+    advance(cx, Duration::from_millis(500));
+    assert_eq!(status.polls.load(Ordering::SeqCst), 2);
+}
+
+#[gpui_kit::test]
+fn index_activity_restarts_for_an_index_search(cx: &mut TestAppContext) {
+    let (window, view, status) = open_index_status(cx, false, None);
+    *status.value.lock().unwrap() = Some(indexing(24_690));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.toggle_command_center(window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| window.input("needle", cx))
+        .unwrap();
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |view, _| {
+        view.command_center.index_activity.is_polling()
+    }));
+    advance(cx, Duration::from_millis(500));
+    assert!(status.polls.load(Ordering::SeqCst) > 1);
 }

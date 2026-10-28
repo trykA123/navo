@@ -193,7 +193,8 @@ impl Browser {
         }
         let focused = self.state.focused_pane();
         let before = crate::perf::is_recording().then(|| self.shown_folder());
-        let effects = self.apply_keeping_hidden_marks(command)?;
+        let mut effects = self.apply_keeping_hidden_marks(command)?;
+        effects.extend(open::save_request(command));
         self.drop_stale_filters();
         self.run(effects);
         if self.state.focused_pane() != focused {

@@ -136,6 +136,7 @@ pub use window_menu::window_view_menu;
 pub use workspace_tray::{OnTrayAction, TrayAction, TrayCard, TrayTile, WorkspaceTray};
 
 pub type SaveSession = Rc<dyn Fn(&AppState)>;
+pub type BackgroundSaveSession = Arc<dyn Fn(&AppState) + Send + Sync>;
 
 pub struct StartOptions {
     pub state: AppState,
@@ -173,6 +174,7 @@ pub struct FerriteWindow {
     pane_swap: pane_swap::PaneSwap,
     tab_drag: tab_drag::TabDrag,
     on_save: SaveSession,
+    autosave: closing::Autosave,
     prompt: Option<prompt::Prompt>,
     editor: EditorHooks,
     terminal: TerminalHooks,
@@ -227,6 +229,7 @@ impl FerriteWindow {
             pane_swap: pane_swap::PaneSwap::default(),
             tab_drag: tab_drag::TabDrag::default(),
             on_save: options.on_save,
+            autosave: closing::Autosave::observe(cx),
             prompt: None,
             editor: options.editor,
             terminal: options.terminal,

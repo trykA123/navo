@@ -41,10 +41,16 @@ pub(super) struct CommandCenterState {
     listings: PathListings,
     generation: u64,
     index_options: Option<IndexOptions>,
+    pub(super) index_activity: super::index_activity::Activity,
 }
 
 impl CommandCenterState {
-    pub(super) fn new(hooks: SearchHooks, provider: &Arc<dyn rusty_fs::ProviderOps>) -> Self {
+    pub(super) fn is_open(&self) -> bool {
+        self.open.is_some()
+    }
+
+    pub(super) fn new(mut hooks: SearchHooks, provider: &Arc<dyn rusty_fs::ProviderOps>) -> Self {
+        let index_activity = super::index_activity::Activity::new(&mut hooks.index);
         Self {
             open: None,
             content_source: Default::default(),
@@ -57,6 +63,7 @@ impl CommandCenterState {
             listings: PathListings::new(provider.clone()),
             generation: 0,
             index_options: None,
+            index_activity,
         }
     }
 }

@@ -273,6 +273,12 @@ impl FerriteWindow {
             sink: search.sink.clone(),
             cancel: search.cancel.clone(),
         };
+        if round.request.query.path.is_none()
+            && !round.request.query.terms.is_empty()
+            && round.active(false).any(|source| source.id() == "index")
+        {
+            self.restart_index_activity(cx);
+        }
         cx.spawn_in(window, async move |this, cx| {
             Stream { round, scope, this }.go(cx).await
         })

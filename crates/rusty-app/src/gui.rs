@@ -11,7 +11,8 @@ use rusty_store::StoreDirs;
 use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
 use rusty_ui::window_view::{
-    OpenHooks, OpenInbox, OpenRequest, OpenSender, SaveSession, StartOptions, StartWatch, run,
+    BackgroundSaveSession, OpenHooks, OpenInbox, OpenRequest, OpenSender, SaveSession,
+    StartOptions, StartWatch, run,
 };
 
 use crate::cli::Start;
@@ -119,8 +120,7 @@ fn local_provider() -> Arc<dyn ProviderOps> {
     }
 }
 
-pub(crate) fn open(launch: Launch) {
-    let mut store = launch.store;
+pub(crate) fn open(mut launch: Launch) {
     let dirs = launch.dirs;
     let settings_start = settings::start_from(dirs.as_ref(), launch.experimental_retention);
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
@@ -137,12 +137,12 @@ pub(crate) fn open(launch: Launch) {
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
     let search = search_hooks(services.memory, remember, dirs.as_ref(), &local);
-    let crash_report = finish_startup(&mut store, launch.crash, launch.view.is_some());
+    let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     run(
         StartOptions {
             state,
             provider: local,
-            on_save: session_saver(dirs, disk.clone(), cache.clone(), keys.clone()),
+            on_save: save,
             mode: Mode::Light,
             operations: services.operations,
             launcher: launch::launcher(),
@@ -155,6 +155,7 @@ pub(crate) fn open(launch: Launch) {
             app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
             settings,
             keymap,
+            crash_report: finish_startup(&mut launch.store, launch.crash, launch.view.is_some()),
             view: launch.view.and_then(|path| path_location(&path)),
             listing_cache: cache,
             cache_keys: keys,
@@ -163,12 +164,12 @@ pub(crate) fn open(launch: Launch) {
             drop_platform: Some(crate::drag::service()),
             start_watch: launch.start_watch,
             open: open_hooks(launch.path, launch.instance_requests, launch.splash),
-            crash_report,
             rename: Some(services.rename),
             retained: services.retained,
         },
         Rc::new(rusty_shell::display_scale),
         quitter(disk, launch.cleanup, launch.running, services.maintenance),
+        autosave,
     );
 }
 
@@ -286,21 +287,26 @@ fn session_saver(
     disk: Option<DiskListings>,
     cache: ListingCache,
     keys: CacheKeys,
-) -> SaveSession {
-    Rc::new(move |state: &AppState| {
+) -> (SaveSession, BackgroundSaveSession) {
+    let session: BackgroundSaveSession = Arc::new(move |state: &AppState| {
         if let Some(dirs) = dirs.as_ref()
             && dirs.ensure().is_ok()
             && let Err(error) = save(state, &dirs.session_file())
         {
             tracing::warn!(%error, "saving the session failed");
         }
+    });
+    let autosave = session.clone();
+    let on_close = Rc::new(move |state: &AppState| {
+        session(state);
         if let Some(disk) = &disk {
             disk.save_folders(&cache, &keys, &session_folders(state));
             if !disk.flush(EXIT_WRITE) {
                 tracing::warn!("listing cache writes skipped at exit");
             }
         }
-    })
+    });
+    (on_close, autosave)
 }
 
 fn listing_cache(

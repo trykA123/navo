@@ -7,7 +7,12 @@ use super::{FerriteWindow, KeymapHooks, OpenHooks, StartOptions, bind_app_keys, 
 use crate::browser::{Browser, RenameHooks};
 use crate::prelude::*;
 
-pub fn run(mut options: StartOptions, display_scale: DisplayScale, on_quit: Rc<dyn Fn()>) {
+pub fn run(
+    mut options: StartOptions,
+    display_scale: DisplayScale,
+    on_quit: Rc<dyn Fn()>,
+    on_autosave: super::BackgroundSaveSession,
+) {
     crate::application().run(move |cx| {
         cx.on_app_quit(move |_| {
             let on_quit = on_quit.clone();
@@ -25,7 +30,11 @@ pub fn run(mut options: StartOptions, display_scale: DisplayScale, on_quit: Rc<d
             ..main_window_options(&options.state, cx)
         };
         let opened = crate::open_window(window_options, cx, move |window, cx| {
-            cx.new(|cx| FerriteWindow::new(options, window, cx))
+            cx.new(|cx| {
+                let mut view = FerriteWindow::new(options, window, cx);
+                view.autosave.save = Some(on_autosave);
+                view
+            })
         });
         if opened.is_err() {
             cx.quit();

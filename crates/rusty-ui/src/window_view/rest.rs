@@ -37,14 +37,19 @@ pub(super) fn is_far(drives: &[DriveInfo], location: &Location) -> bool {
     if text.starts_with(r"\\") || text.starts_with("//") {
         return true;
     }
-    current_drive(drives, location)
-        .and_then(|index| drives.get(index))
-        .is_some_and(|drive| {
-            matches!(
-                drive.icon,
-                DriveIcon::Network | DriveIcon::Removable | DriveIcon::Optical
-            )
-        })
+    let drive = current_drive(drives, location).and_then(|index| drives.get(index));
+    match drive {
+        Some(drive) => matches!(
+            drive.icon,
+            DriveIcon::Network | DriveIcon::Removable | DriveIcon::Optical
+        ),
+        None => has_drive_letter(text),
+    }
+}
+
+fn has_drive_letter(text: &str) -> bool {
+    let mut chars = text.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.next() == Some(':')
 }
 
 pub(super) struct Rest {
@@ -79,14 +84,14 @@ impl FerriteWindow {
         self.rest.wait = target.map(|location| {
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(REST_AFTER).await;
-                let _ = this.update(cx, |view, _| view.prefetch_rested(location));
+                let _ = this.update(cx, |view, cx| view.prefetch_rested(location, cx));
             })
         });
     }
 
-    fn prefetch_rested(&mut self, location: Location) {
+    fn prefetch_rested(&mut self, location: Location, cx: &Context<Self>) {
         self.rest.wait = None;
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         let is_allowed = self.rest.target.as_ref() == Some(&location)
             && !is_far(&self.drives.list, &location)
             && self.rest.budget.has_room(now);
