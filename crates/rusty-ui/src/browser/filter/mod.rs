@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusty_core::{Event, Listing, Location, Pattern, TabId};
+use rusty_core::{Entry, Event, Listing, Location, Pattern, TabId};
 use rusty_fs::FsEntry;
 
 use super::Browser;
@@ -230,8 +230,13 @@ fn is_visible(entry: Option<&FsEntry>, shows: Visibility) -> bool {
     })
 }
 
+fn is_reserved(entry: &Entry) -> bool {
+    rusty_core::brand::is_reserved_name(&entry.name)
+}
+
 fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
-    if text.is_empty() && shows.hidden && shows.system {
+    let has_reserved = full.listing.entries().iter().any(is_reserved);
+    if text.is_empty() && shows.hidden && shows.system && !has_reserved {
         return Some(Shown {
             listing: full.listing.clone(),
             details: full.details.clone(),
@@ -247,6 +252,7 @@ fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
         .entries()
         .iter()
         .enumerate()
+        .filter(|(_, entry)| !is_reserved(entry))
         .filter(|(index, _)| is_visible(full.details.get(*index), shows))
         .filter(|(_, entry)| pattern.as_ref().is_none_or(|p| p.matches(&entry.name)))
         .map(|(index, _)| index)

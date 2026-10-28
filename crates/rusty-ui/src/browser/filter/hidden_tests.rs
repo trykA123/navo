@@ -208,3 +208,15 @@ fn system_files_hide_when_system_is_off_even_with_hidden_shown() {
         ["docs", "a.txt", "b-secret.txt", "c-boot.ini", "d.txt"]
     );
 }
+
+#[test]
+fn reserved_entries_never_show_even_with_hidden_on() {
+    let fs = FakeFs::new();
+    for name in [".navo-retained-abc", ".NAVO-HELD-x", ".ferrite-retained-y"] {
+        fs.add_entry("home", entry(name, Attributes::default()));
+    }
+    fs.add_entry("home", entry(".config", hidden()));
+    let browser = browser(&Arc::new(fs));
+    assert!(browser.shows_hidden());
+    assert_eq!(names(&browser), [".config"]);
+}

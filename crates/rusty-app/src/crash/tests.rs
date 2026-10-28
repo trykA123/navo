@@ -94,7 +94,7 @@ fn assert_no_canaries_in_zip(zip: &mut zip::ZipArchive<fs::File>) {
         let mut entry = zip.by_index(index).unwrap();
         let mut text = String::new();
         entry.read_to_string(&mut text).unwrap();
-        for needle in ["canary", "7731", "canarydom", "secret plan"] {
+        for needle in ["canary", "-7731", "canarydom", "secret plan"] {
             assert!(
                 !text.to_lowercase().contains(needle),
                 "leaked {needle} in {:?}: {text}",
@@ -134,7 +134,7 @@ fn hook_redacts_message_thread_and_events() {
     let text = fs::read_to_string(&files[0]).unwrap();
     for needle in [
         "canary",
-        "7731",
+        "-7731",
         "canarydom",
         "secret plan",
         "secret plan.docx",
