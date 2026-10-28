@@ -1,5 +1,13 @@
 layout-switcher-title = Layouts
-layout-switcher-hint = 1–9 apply · Arrows choose · Enter applies · Esc closes
+layout-key-apply = Apply
+layout-key-split-right = Split right
+layout-key-split-below = Split below
+layout-key-close = Close
+layout-key-swap = Swap
+layout-key-resize = Resize
+layout-key-even = Even
+layout-key-done = Done
+layout-too-many-panes = Four panes is the most in this version.
 layout-preset-1 = Side by side
 layout-preset-2 = Three columns
 layout-preset-3 = Wide + 2

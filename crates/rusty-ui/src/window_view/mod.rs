@@ -20,6 +20,7 @@ mod index_activity;
 mod jobs;
 mod keys;
 mod layout;
+mod layout_mode;
 mod layout_switcher;
 mod list_columns;
 mod multi_rename;

@@ -4,7 +4,9 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::component::Selectable;
 use gpui_kit::component::button::{Button as KitButton, ButtonVariants};
-use gpui_kit::{Animation, AnimationExt, FocusHandle, KeyDownEvent, RenderOnce, Role};
+use gpui_kit::{
+    Animation, AnimationExt, FocusHandle, KeyDownEvent, RenderOnce, Role, Subscription,
+};
 use rusty_core::{Command, Layout, PaneId, Tiles};
 
 use super::FerriteWindow;
@@ -225,19 +227,15 @@ impl RenderOnce for LayoutSwitcher {
                     .track_scroll(&self.scroll)
                     .children((0..self.presets.len()).map(|index| self.card(t, index))),
             )
-            .child(
-                div()
-                    .text_size(t.typography.small)
-                    .text_color(t.colors.muted)
-                    .child(rusty_l10n::tr("layout-switcher-hint")),
-            )
+            .child(super::layout_mode::key_bar(t))
     }
 }
 
 pub(super) struct SwitcherState {
     focused: usize,
-    focus: FocusHandle,
+    pub(super) focus: FocusHandle,
     scroll: ScrollHandle,
+    _keys: Subscription,
 }
 
 impl FerriteWindow {
@@ -266,6 +264,7 @@ impl FerriteWindow {
             focused,
             focus,
             scroll,
+            _keys: super::layout_mode::intercept_mode_keys(cx),
         });
         cx.notify();
     }
@@ -318,7 +317,6 @@ impl FerriteWindow {
         let key = &event.keystroke;
         let action = match key.key.as_str() {
             "escape" => LayoutSwitcherAction::Close,
-            "tab" => LayoutSwitcherAction::Move(if key.modifiers.shift { -1 } else { 1 }),
             _ if key.modifiers.modified() => return,
             "left" | "up" => LayoutSwitcherAction::Move(-1),
             "right" | "down" => LayoutSwitcherAction::Move(1),

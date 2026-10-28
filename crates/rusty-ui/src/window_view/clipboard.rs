@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusty_core::{CommandError, Location, OpKind};
+use rusty_core::{CommandError, Location, OpKind, StateError};
 
 use super::FerriteWindow;
 use super::shell_menu::put_paths_on_clipboard;
@@ -120,12 +120,15 @@ impl FerriteWindow {
     }
 
     pub(super) fn show_refusal(&mut self, result: Result<(), CommandError>) {
-        if result == Err(CommandError::NothingToRestore) {
-            self.show_notice(StatusNotice {
-                text: rusty_l10n::tr("files-marks-restore-none").into(),
-                is_error: true,
-            });
-        }
+        let key = match result {
+            Err(CommandError::NothingToRestore) => "files-marks-restore-none",
+            Err(CommandError::State(StateError::TooManyPanes)) => "layout-too-many-panes",
+            _ => return,
+        };
+        self.show_notice(StatusNotice {
+            text: rusty_l10n::tr(key).into(),
+            is_error: true,
+        });
     }
 
     pub(super) fn forget_clipboard_notice(&mut self) {

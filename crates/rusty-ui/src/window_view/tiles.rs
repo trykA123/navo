@@ -28,6 +28,7 @@ pub(super) struct TilesState {
     gap: Pixels,
     drag: Option<DividerDrag>,
     pub(super) switcher: Option<super::layout_switcher::SwitcherState>,
+    pub(super) fades: super::layout_mode::Fades,
 }
 
 impl TilesState {
@@ -59,7 +60,7 @@ impl DividerDrag {
     }
 }
 
-fn positioned(rect: Rect) -> Div {
+pub(super) fn positioned(rect: Rect) -> Div {
     div()
         .absolute()
         .left(relative(rect.x as f32))
@@ -112,6 +113,7 @@ impl FerriteWindow {
     pub(super) fn tiles_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let gap = tokens::current(cx).spacing.xs;
         let layout = self.tiles_layout();
+        let covers = self.tiles.fades.covers(tokens::current(cx), &layout);
         let shown = self.shown_panes(window);
         let is_one_pane = shown.len() == 1 && layout.panes().len() > 1;
         let panes: Vec<_> = layout
@@ -140,6 +142,7 @@ impl FerriteWindow {
             .min_w_0()
             .min_h_0()
             .children(panes)
+            .children(covers)
             .children(dividers)
             .child(self.tiles_events(gap, cx))
             .into_any_element()
