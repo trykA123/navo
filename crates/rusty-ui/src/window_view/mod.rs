@@ -53,6 +53,7 @@ mod waiting;
 mod watches;
 mod window_menu;
 mod workspace_keys;
+mod workspace_tray;
 
 use std::collections::HashMap;
 use std::rc::Rc;

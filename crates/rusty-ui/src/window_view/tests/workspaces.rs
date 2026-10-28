@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, Modifiers, TestAppContext};
 use rusty_core::{Command, apply};
 
@@ -23,6 +24,122 @@ fn rig(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     let (window, view) = open_with(cx, fs, state, Rc::default());
     hold(cx, window, Modifiers::default());
     (window, view)
+}
+
+fn three_workspaces(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<FerriteWindow>) {
+    let (window, view) = rig(cx);
+    view.update(cx, |view, cx| {
+        view.browser
+            .command(&Command::WorkspaceNew { name: None })
+            .expect("third workspace");
+        view.browser
+            .command(&Command::WorkspaceSwitch { n: 1 })
+            .expect("first workspace");
+        cx.notify();
+    });
+    hold(cx, window, ALT);
+    press(cx, window, &view, "alt-2");
+    (window, view)
+}
+
+#[gpui_kit::test]
+fn three_workspaces_render_three_cards_and_new(cx: &mut TestAppContext) {
+    let (window, _) = three_workspaces(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("workspace-tray").bounds().size.width,
+            window.viewport_size().width
+        );
+        let tray = window.within("workspace-tray");
+        for n in 1..=3usize {
+            assert!(tray.find(("workspace-card", n)).visible());
+        }
+        assert!(tray.try_find(("workspace-card", 4usize)).is_none());
+        assert!(tray.find("workspace-new").visible());
+    })
+    .expect("window");
+    gpui_kit::VisualTestContext::from_window(window, cx)
+        .simulate_resize(gpui_kit::size(gpui_kit::px(390.), gpui_kit::px(600.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let first = window.find(("workspace-card", 1usize));
+        assert!(first.visible());
+        assert!(first.bounds().size.width < window.viewport_size().width);
+        let before = window.find(("workspace-card", 3usize)).bounds().origin.x;
+        window.scroll(
+            "workspace-cards",
+            gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(-600.), gpui_kit::px(0.))),
+            cx,
+        );
+        let after = window.find(("workspace-card", 3usize)).bounds().origin.x;
+        assert!(after < before);
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn the_active_workspace_card_says_open(cx: &mut TestAppContext) {
+    let (window, _) = three_workspaces(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let mut tray = window.within("workspace-tray");
+        assert_eq!(
+            tray.within(("workspace-card", 1usize))
+                .find("workspace-open")
+                .label(),
+            Some(rusty_l10n::tr("workspace-open").as_str())
+        );
+        assert!(
+            tray.within(("workspace-card", 2usize))
+                .try_find("workspace-open")
+                .is_none()
+        );
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn alt_two_marks_the_second_card_and_shows_the_title_ribbon(cx: &mut TestAppContext) {
+    let (window, view) = three_workspaces(cx);
+    let expected = view.read_with(cx, |view, _| {
+        let state = view.browser.state();
+        let core = state.window(state.focused_window()).expect("core window");
+        rusty_l10n::t!(
+            "workspace-preview-ribbon",
+            name = core.workspaces()[1].name.clone()
+        )
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let tray = window.within("workspace-tray");
+        assert_eq!(
+            tray.find(("workspace-card", 1usize)).selected(),
+            Some(false)
+        );
+        assert_eq!(tray.find(("workspace-card", 2usize)).selected(), Some(true));
+        let ribbon = window.find("workspace-preview-ribbon");
+        assert!(ribbon.visible());
+        assert_eq!(ribbon.label(), Some(expected.as_str()));
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn clicking_the_third_workspace_switches_and_closes_the_tray(cx: &mut TestAppContext) {
+    let (window, view) = three_workspaces(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .within("workspace-tray")
+            .click(("workspace-card", 3usize), cx);
+    })
+    .expect("window");
+    assert_eq!(shape(cx, &view), (2, 3));
+    assert!(!tray(cx, &view));
+    hold(cx, window, Modifiers::default());
+    assert_eq!(shape(cx, &view), (2, 3));
 }
 
 fn shape(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> (usize, usize) {

@@ -47,6 +47,7 @@ impl FerriteWindow {
             .children(self.preview_layer(window, cx))
             .children(self.settings_layer(window, cx))
             .children(self.hints_layer(window, cx))
+            .children(self.workspace_tray(window, cx))
             .children(self.activity_drawer_layer(window, cx))
     }
 }

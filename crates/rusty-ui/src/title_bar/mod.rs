@@ -67,6 +67,7 @@ pub(crate) fn main_window_options(
 pub struct FerriteTitleBar {
     title: SharedString,
     header: Vec<AnyElement>,
+    header_inset: Pixels,
     trailing: Vec<AnyElement>,
     is_on_mica: bool,
     on_close: Option<CloseHandler>,
@@ -78,6 +79,7 @@ impl FerriteTitleBar {
         Self {
             title: title.into(),
             header: Vec::new(),
+            header_inset: px(CENTRE_INSET),
             trailing: Vec::new(),
             is_on_mica: false,
             on_close: None,
@@ -87,6 +89,11 @@ impl FerriteTitleBar {
 
     pub fn header(mut self, content: impl IntoElement) -> Self {
         self.header.push(content.into_any_element());
+        self
+    }
+
+    pub(crate) fn header_inset(mut self, inset: Pixels) -> Self {
+        self.header_inset = inset;
         self
     }
 
@@ -123,7 +130,7 @@ fn held(item: AnyElement) -> impl IntoElement {
     div().flex().min_w_0().occlude().child(item)
 }
 
-fn centre_area(t: &Theme, item: AnyElement) -> impl IntoElement {
+fn centre_area(t: &Theme, item: AnyElement, inset: Pixels) -> impl IntoElement {
     div()
         .id("title-bar-header")
         .test_support()
@@ -135,7 +142,7 @@ fn centre_area(t: &Theme, item: AnyElement) -> impl IntoElement {
         .flex()
         .items_center()
         .justify_center()
-        .px(px(CENTRE_INSET))
+        .px(inset)
         .gap(t.spacing.md)
         .child(held(item))
 }
@@ -176,7 +183,7 @@ impl RenderOnce for FerriteTitleBar {
                 window.scale_factor(),
                 self.app_button,
             ))
-            .children(centre.map(|item| centre_area(t, item)))
+            .children(centre.map(|item| centre_area(t, item, self.header_inset)))
             .child(header_area(t, items.chain(self.trailing)))
             .when_some(self.on_close, |bar, handler| {
                 bar.on_close_window(move |_, window, cx| {

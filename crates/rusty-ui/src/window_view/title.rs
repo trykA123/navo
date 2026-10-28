@@ -48,7 +48,11 @@ impl FerriteWindow {
         let bar = FerriteTitleBar::new(rusty_core::brand::NAME)
             .on_mica()
             .app_button(self.app_menu.is_some(), toggle);
-        let bar = if WindowParts::of(&self.values).title_search {
+        let bar = if let Some(ribbon) = self.workspace_ribbon(cx) {
+            self.command_center.anchor.set(None);
+            bar.header(ribbon)
+                .header_inset(crate::tokens::current(cx).spacing.xxl * 8.)
+        } else if WindowParts::of(&self.values).title_search {
             bar.header(self.search_field(cx))
         } else {
             self.command_center.anchor.set(None);

@@ -1,3 +1,10 @@
+workspace-tray-title = Workspaces
+workspace-tray-hint = Hold Alt, press a number to preview, release Alt to switch. Esc stays.
+workspace-tray-close = Close workspaces
+workspace-open = open
+workspace-new-from-layout = New from current layout
+workspace-preview-ribbon = Previewing { $name } · release Alt to switch · Esc to stay
+
 command-center = Command center
 command-center-results-label = Results
 command-center-placeholder = Search files and commands
