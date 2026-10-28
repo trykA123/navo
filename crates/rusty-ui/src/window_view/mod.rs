@@ -26,6 +26,7 @@ mod operate;
 mod pane;
 mod pane_header;
 mod pane_strip;
+mod pane_swap;
 mod path_edit;
 mod perf_recording;
 mod placement;
@@ -161,6 +162,7 @@ pub struct FerriteWindow {
     browser: Browser,
     focus: HashMap<PaneId, FocusHandle>,
     tiles: tiles::TilesState,
+    pane_swap: pane_swap::PaneSwap,
     on_save: SaveSession,
     prompt: Option<prompt::Prompt>,
     editor: EditorHooks,
@@ -204,14 +206,14 @@ pub struct FerriteWindow {
 
 impl FerriteWindow {
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut browser = Self::browser(&options, cx);
+        let browser = Self::browser(&options, cx);
         let totals = options.search.folder_totals.clone();
         let (values, saver, settings) = Panel::split(options.settings, &options.search, cx);
-        settings_save::steer(&values, &mut browser);
         let view = Self {
             browser,
             focus: HashMap::new(),
             tiles: tiles::TilesState::default(),
+            pane_swap: pane_swap::PaneSwap::default(),
             on_save: options.on_save,
             prompt: None,
             editor: options.editor,
@@ -262,6 +264,7 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        settings_save::steer(&self.values, &mut self.browser);
         self.browser.start();
         self.browser.set_rename_hooks(rename);
         self.listen_files(keymap, window, cx);
@@ -348,25 +351,6 @@ impl FerriteWindow {
     }
 }
 
-impl FerriteWindow {
-    fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let theme = tokens::current(cx);
-        let mica = theme.surfaces.mica();
-        let has_mica =
-            !theme.is_contrast && system_backdrop().gradient == GradientLayer::BelowTitleBar;
-        div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h_0()
-            .when(has_mica, |below| below.bg(mica))
-            .children(self.crash_notice_view(window, cx))
-            .children(self.index_upgrade_view(cx))
-            .child(self.body_area(window, cx))
-            .children(self.fkey_bar(window, cx))
-    }
-}
-
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_workspaces(window, cx);
@@ -408,6 +392,7 @@ impl Render for FerriteWindow {
             .children(self.viewer_menu_view())
             .children(self.view_menus());
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);
+        let root = self.pane_swap_layer(root, cx);
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
         self.preview_keys(root, window, cx)

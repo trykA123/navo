@@ -44,6 +44,7 @@ mod multi_rename;
 mod offline;
 mod one_pane;
 mod pane_popups;
+mod pane_swap;
 mod perf_recording;
 mod placement;
 mod prefetch;

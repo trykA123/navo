@@ -75,7 +75,6 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let t = tokens::current(cx).clone();
-        let label = self.card_label(pane);
         let state = self.browser.state();
         let Some(core_pane) = state.pane(pane) else {
             return div().into_any_element();
@@ -111,16 +110,17 @@ impl FerriteWindow {
             .size_full()
             .min_w_0()
             .min_h_0()
-            .children(header)
-            .children(path)
+            .child(Self::pane_swap_header(pane, (header, path), cx))
             .when_some(error, |this, message| {
                 this.child(error_line(&t, pane, message))
             })
             .child(list)
             .children((!footer.is_empty()).then_some(footer));
-        pane_card(("pane", pane.get()), label, is_active, cx)
+        pane_card(("pane", pane.get()), self.card_label(pane), is_active, cx)
+            .relative()
             .child(body)
             .children(marks.is_target.then(|| target_outline(&t, pane.get())))
+            .child(self.pane_swap_target(pane, window, cx))
             .into_any_element()
     }
 

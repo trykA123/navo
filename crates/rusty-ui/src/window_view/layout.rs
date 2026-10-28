@@ -1,5 +1,6 @@
 use super::FerriteWindow;
 use crate::prelude::*;
+use crate::title_bar::{GradientLayer, system_backdrop};
 use crate::tokens;
 use rusty_core::PaneId;
 
@@ -49,5 +50,22 @@ impl FerriteWindow {
             .children(self.hints_layer(window, cx))
             .children(self.workspace_tray(cx))
             .children(self.activity_drawer_layer(window, cx))
+    }
+
+    pub(super) fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let theme = tokens::current(cx);
+        let mica = theme.surfaces.mica();
+        let has_mica =
+            !theme.is_contrast && system_backdrop().gradient == GradientLayer::BelowTitleBar;
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .when(has_mica, |below| below.bg(mica))
+            .children(self.crash_notice_view(window, cx))
+            .children(self.index_upgrade_view(cx))
+            .child(self.body_area(window, cx))
+            .children(self.fkey_bar(window, cx))
     }
 }
