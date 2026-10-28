@@ -94,6 +94,7 @@ pub enum Refusal {
     SameFolder,
     IntoItself,
     ListChanged,
+    Results,
 }
 
 impl Refusal {
@@ -103,6 +104,7 @@ impl Refusal {
             Self::SameFolder => "drag-refused-same-folder",
             Self::IntoItself => "drag-refused-into-itself",
             Self::ListChanged => "drag-refused-list-changed",
+            Self::Results => "drag-refused-results",
         };
         tr(id).into()
     }

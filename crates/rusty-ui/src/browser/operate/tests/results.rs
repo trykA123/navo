@@ -6,6 +6,7 @@ use rusty_fs::find::{FindProgress, FoundBatch, FoundFile};
 use rusty_fs::{Attributes, EntryKind, FsEntry};
 
 use super::*;
+use crate::browser::{PasteRefusal, drop_refusal};
 
 const TWINS: [&str; 2] = ["src/can/a.c", "lib/a.c"];
 
@@ -164,4 +165,97 @@ fn the_choice_is_offered_only_for_results_with_relative_folders() {
 
 fn browser_at_home(fs: &Arc<FakeFs>) -> Browser {
     browser(fs, home_beside_dest(fs))
+}
+
+fn rows(browser: &Browser) -> Vec<String> {
+    let tab = browser.state.active_tab();
+    let listing = tab.listing().expect("a results listing");
+    listing.entries().iter().map(|e| e.name.clone()).collect()
+}
+
+fn run(browser: &mut Browser, kind: OpKind) {
+    planned(browser, kind);
+    assert!(browser.confirm());
+    settle(browser);
+}
+
+#[test]
+fn a_move_from_results_drops_the_moved_rows_and_keeps_a_failed_one() {
+    let (fs, mut browser) = results(&TWINS);
+    fs.fault(
+        "w/lib/a.c",
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    browser.set_copy_mode(rusty_fs::CopyMode::Standard);
+    run(&mut browser, OpKind::Move);
+    assert!(exists(&fs, "w/lib/a.c"));
+    assert!(!exists(&fs, "w/src/can/a.c"));
+    assert_eq!(rows(&browser), ["lib/a.c"]);
+    let tab = browser.state.active_tab().id();
+    let hits = browser.find_results(tab).map(|r| r.hits.len());
+    assert_eq!(hits, Some(1));
+}
+
+#[test]
+fn a_delete_from_results_removes_the_real_file_and_its_row() {
+    let (fs, mut browser) = results(&TWINS);
+    browser.command(&Command::SelectionClear).unwrap();
+    run(&mut browser, OpKind::Delete);
+    assert!(!exists(&fs, "w/lib/a.c"));
+    assert!(exists(&fs, "w/src/can/a.c"));
+    assert_eq!(rows(&browser), ["src/can/a.c"]);
+}
+
+#[test]
+fn a_recycle_from_results_drops_every_recycled_row() {
+    let (fs, mut browser) = results(&TWINS);
+    run(&mut browser, OpKind::Recycle);
+    assert!(!exists(&fs, "w/lib/a.c"));
+    assert!(!exists(&fs, "w/src/can/a.c"));
+    assert!(rows(&browser).is_empty());
+}
+
+#[test]
+fn a_copy_from_results_keeps_every_row() {
+    let (fs, mut browser) = results(&TWINS);
+    run(&mut browser, OpKind::Copy);
+    assert!(exists(&fs, "dest/lib/a.c"));
+    assert_eq!(rows(&browser), TWINS);
+}
+
+#[test]
+fn copy_into_a_results_tab_is_refused() {
+    let (fs, mut browser) = results(&TWINS);
+    browser.state.focus_number(2).unwrap();
+    assert_eq!(browser.state.active_tab().location(), &fs.location("dest"));
+    assert_eq!(
+        browser.operate_refusal(OpKind::Copy),
+        Some(PasteRefusal::IntoResults)
+    );
+    assert!(!browser.prepare(OpKind::Copy));
+    assert!(!browser.prepare(OpKind::Move));
+    settle(&mut browser);
+    assert!(browser.pending().is_none());
+    assert!(browser.jobs().is_empty());
+    assert_eq!(browser.operate_refusal(OpKind::Recycle), None);
+}
+
+#[test]
+fn a_drop_or_paste_onto_a_results_tab_is_refused() {
+    let (fs, mut browser) = results(&TWINS);
+    let results = browser.state.active_tab().location().clone();
+    let sources = vec![fs.location("home/a.txt")];
+    assert_eq!(
+        drop_refusal(&results, &sources),
+        Some(PasteRefusal::IntoResults)
+    );
+    assert_eq!(
+        browser.paste(OpKind::Copy, sources),
+        Err(PasteRefusal::IntoResults)
+    );
+    settle(&mut browser);
+    assert!(browser.jobs().is_empty());
+    assert!(exists(&fs, "home/a.txt"));
 }

@@ -88,11 +88,12 @@ fn info(text: impl Into<SharedString>) -> StatusNotice {
     }
 }
 
-fn refusal_text(refused: PasteRefusal) -> &'static str {
+fn refusal_text(refused: PasteRefusal) -> SharedString {
     match refused {
-        PasteRefusal::Nothing => NOTHING_TO_PASTE,
-        PasteRefusal::AlreadyHere => "The files are already in this folder",
-        PasteRefusal::IntoItself => "Cannot paste a folder into itself",
+        PasteRefusal::Nothing => NOTHING_TO_PASTE.into(),
+        PasteRefusal::AlreadyHere => "The files are already in this folder".into(),
+        PasteRefusal::IntoItself => "Cannot paste a folder into itself".into(),
+        PasteRefusal::IntoResults => crate::drag::Refusal::Results.text(),
     }
 }
 
@@ -129,6 +130,10 @@ impl FerriteWindow {
             text: rusty_l10n::tr(key).into(),
             is_error: true,
         });
+    }
+
+    pub(super) fn refuse_paste(&mut self, refused: PasteRefusal) {
+        self.clipboard.notice = Some(info(refusal_text(refused)));
     }
 
     pub(super) fn forget_clipboard_notice(&mut self) {

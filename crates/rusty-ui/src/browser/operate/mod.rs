@@ -149,6 +149,10 @@ impl Browser {
             first_new,
         };
         self.jobs.push(view);
+        if matches!(run, Run::Plain) {
+            let job = (pending.id, pending.plan.kind);
+            self.note_leaving(job, &pending.sources, pending.source_tab);
+        }
         self.enqueue_job(pending, run, cancel);
     }
 
@@ -252,6 +256,7 @@ impl Browser {
             OpKind::Rename => return None,
         };
         if sources.is_empty()
+            || self.operate_refusal(kind).is_some()
             || target
                 .as_ref()
                 .is_some_and(|t| lands_inside(t, tab.location(), &sources))
@@ -367,6 +372,7 @@ impl Browser {
             let _ = self.command(&Command::SelectionClear);
         }
         self.relist_answering();
+        self.check_left(id);
         self.release_job(id);
         true
     }

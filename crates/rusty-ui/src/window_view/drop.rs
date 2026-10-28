@@ -54,6 +54,7 @@ pub(super) fn refusal_of(refused: PasteRefusal) -> Option<Refusal> {
     match refused {
         PasteRefusal::AlreadyHere => Some(Refusal::SameFolder),
         PasteRefusal::IntoItself => Some(Refusal::IntoItself),
+        PasteRefusal::IntoResults => Some(Refusal::Results),
         PasteRefusal::Nothing => None,
     }
 }
@@ -393,6 +394,26 @@ mod tests {
         let mut tab = state.active_tab().clone();
         tab.set_base(Some(Location::new(r"C:\base").unwrap()));
         tab
+    }
+
+    #[test]
+    fn a_drop_onto_a_results_tab_is_refused_with_the_message() {
+        use crate::browser::{PasteRefusal, drop_refusal, refusal_from};
+        use rusty_core::Location;
+        let results = Location::new("find://7").unwrap();
+        let parents = [Location::new(r"C:\w").unwrap()];
+        let sources = [Location::new(r"C:\w\a.c").unwrap()];
+        let refused = drop_refusal(&results, &sources);
+        assert_eq!(refused, Some(PasteRefusal::IntoResults));
+        assert_eq!(
+            refusal_from(&results, (&parents, &[])),
+            Some(PasteRefusal::IntoResults)
+        );
+        let text = refused.and_then(super::refusal_of).map(|r| r.text());
+        assert_eq!(
+            text.as_deref(),
+            Some("Search results are not a folder. Choose a real folder.")
+        );
     }
 
     #[test]

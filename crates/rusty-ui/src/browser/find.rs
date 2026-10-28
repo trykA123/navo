@@ -16,6 +16,7 @@ pub struct FindResults {
     pub progress: FindProgress,
     pub error: Option<FindError>,
     owner: Option<OwnerGuard>,
+    leaving: HashMap<u64, Vec<Location>>,
 }
 
 impl FindResults {
@@ -124,6 +125,7 @@ impl Browser {
                 progress: FindProgress::default(),
                 error: None,
                 owner: None,
+                leaving: HashMap::new(),
             },
         );
         self.rerun_find(tab);
@@ -247,6 +249,10 @@ impl Browser {
             listing: Listing::new(entries),
             details: details.into(),
         };
+        self.show_full(tab, location, full);
+    }
+
+    fn show_full(&mut self, tab: TabId, location: Location, full: Full) {
         let (listing, details) = self.narrow(tab, &location, full);
         self.details.insert(tab, details);
         self.event(Event::ListingFiltered {
@@ -267,6 +273,8 @@ fn apply_empty(state: &mut rusty_core::AppState, tab: TabId, location: Location)
         },
     );
 }
+
+mod leave;
 
 #[cfg(test)]
 mod tests;

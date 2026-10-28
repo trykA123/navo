@@ -8,6 +8,7 @@ pub enum PasteRefusal {
     Nothing,
     AlreadyHere,
     IntoItself,
+    IntoResults,
 }
 
 #[must_use]
@@ -29,6 +30,9 @@ pub fn refusal_from(
     target: &Location,
     (parents, folders): (&[Location], &[Location]),
 ) -> Option<PasteRefusal> {
+    if crate::browser::find::is_results(target) {
+        return Some(PasteRefusal::IntoResults);
+    }
     if parents.iter().any(|parent| parent.same_place(target)) {
         return Some(PasteRefusal::AlreadyHere);
     }
@@ -38,6 +42,14 @@ pub fn refusal_from(
 }
 
 impl Browser {
+    #[must_use]
+    pub fn operate_refusal(&self, kind: OpKind) -> Option<PasteRefusal> {
+        let targets = matches!(kind, OpKind::Copy | OpKind::Move | OpKind::Link);
+        self.other_location()
+            .filter(|target| targets && crate::browser::find::is_results(target))
+            .map(|_| PasteRefusal::IntoResults)
+    }
+
     pub fn paste(&mut self, kind: OpKind, sources: Vec<Location>) -> Result<u64, PasteRefusal> {
         self.drop_into(DropRequest {
             kind,

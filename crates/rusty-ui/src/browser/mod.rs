@@ -47,6 +47,7 @@ enum Message {
     Watched(Location, WatchEvent),
     Recheck(Location),
     Prefetched(u64),
+    Left(TabId, Vec<Location>),
 }
 
 impl Message {
@@ -245,6 +246,7 @@ impl Browser {
                 Message::Watched(location, event) => self.accept_watched(&location, event),
                 Message::Recheck(location) => self.accept_recheck(&location),
                 Message::Prefetched(id) => self.prefetched(id),
+                Message::Left(tab, gone) => self.accept_left(tab, &gone),
             };
         }
         if changed && crate::perf::is_recording() {

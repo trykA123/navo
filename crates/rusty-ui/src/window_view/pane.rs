@@ -296,9 +296,12 @@ impl FerriteWindow {
                 self.browser.go_up();
             }
             FileListAction::SwitchPane => self.switch_pane(window, cx),
-            FileListAction::Operate(kind) => {
-                self.browser.prepare(*kind);
-            }
+            FileListAction::Operate(kind) => match self.browser.operate_refusal(*kind) {
+                Some(refused) => self.refuse_paste(refused),
+                None => {
+                    self.browser.prepare(*kind);
+                }
+            },
             FileListAction::CopyToClipboard => self.put_on_clipboard(ClipboardEffect::Copy),
             FileListAction::CutToClipboard => self.put_on_clipboard(ClipboardEffect::Move),
             FileListAction::Paste => self.paste(),
