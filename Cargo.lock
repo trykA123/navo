@@ -6759,6 +6759,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-compare"
+version = "0.0.1"
+dependencies = [
+ "rusty-core",
+]
+
+[[package]]
 name = "rusty-core"
 version = "0.0.1"
 dependencies = [
