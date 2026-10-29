@@ -29,6 +29,7 @@ pub use memory::SharedDb;
 pub use memory::open as open_memory;
 pub(crate) use memory::prune as prune_memory;
 pub(crate) use memory::{lock, now_ms};
+pub(crate) use pdf::{prewarm_after as prewarm_pdf, shutdown as stop_pdf};
 
 pub fn hooks(db: Option<SharedDb>) -> FileHooks {
     let hooks = FileHooks {

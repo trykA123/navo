@@ -45,6 +45,7 @@ fn every_request_survives_a_round_trip() {
         Request::Text { page: 7 },
         Request::Links { page: u32::MAX },
         Request::Close,
+        Request::Prepare,
     ];
     for request in &requests {
         assert_eq!(&round_trip_request(request), request);

@@ -1,23 +1,36 @@
 use std::io::{BufReader, BufWriter};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use super::Launcher;
+use super::{Launcher, reaper};
 use crate::protocol::{CodecError, PdfError, Request, Response, read_response, write_request};
 
 type Reply = Result<Response, CodecError>;
 
+const CANCEL_SLICE: Duration = Duration::from_millis(25);
+
+pub(super) enum Prepared {
+    Waiting,
+    Ready,
+    Failed,
+}
+
 pub(super) struct Helper {
-    child: Child,
+    pub(super) child: Option<Child>,
     input: BufWriter<ChildStdin>,
     replies: Receiver<Reply>,
+    pub(super) shutdowns: Arc<AtomicU64>,
+    born: u64,
     _confinement: Option<Box<dyn Send>>,
 }
 
 impl Helper {
-    pub(super) fn spawn(launcher: &Launcher) -> Result<Self, PdfError> {
+    pub(super) fn spawn(launcher: &Launcher, born: u64) -> Result<Self, PdfError> {
+        launcher.check_generation(born)?;
         let mut child = Command::new(&launcher.program)
             .args(&launcher.args)
             .stdin(Stdio::piped())
@@ -29,28 +42,56 @@ impl Helper {
             None => None,
             Some(Ok(guard)) => Some(guard),
             Some(Err(error)) => {
-                stop(&mut child);
+                reaper::dispose(child, launcher.shutdowns.clone());
                 return Err(PdfError::NoHelper(format!("cannot confine it: {error}")));
             }
         };
         let (Some(input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
-            stop(&mut child);
+            reaper::dispose(child, launcher.shutdowns.clone());
             return Err(PdfError::NoHelper("its pipes are missing".into()));
         };
         let (sender, replies) = mpsc::sync_channel(1);
-        thread::Builder::new()
+        let reader = thread::Builder::new()
             .name("pdf-helper-reader".into())
             .spawn(move || forward_replies(output, &sender))
-            .map_err(|error| {
-                stop(&mut child);
-                PdfError::NoHelper(error.to_string())
-            })?;
-        Ok(Self {
-            child,
+            .map_err(|error| PdfError::NoHelper(error.to_string()));
+        if let Err(error) = reader {
+            reaper::dispose(child, launcher.shutdowns.clone());
+            return Err(error);
+        }
+        let helper = Self {
+            child: Some(child),
             input: BufWriter::new(input),
             replies,
+            shutdowns: launcher.shutdowns.clone(),
+            born,
             _confinement: confinement,
-        })
+        };
+        launcher.check_generation(born)?;
+        Ok(helper)
+    }
+
+    pub(super) fn prepare(&mut self, timeout: Duration) -> Result<(), PdfError> {
+        match self.call(&Request::Prepare, timeout)? {
+            Response::Closed => Ok(()),
+            Response::Failed(error) => Err(error),
+            other => Err(super::unexpected_reply(&other)),
+        }
+    }
+
+    pub(super) fn begin_prepare(&mut self) -> Result<(), PdfError> {
+        self.send(&Request::Prepare)
+    }
+
+    pub(super) fn poll_prepare(&mut self) -> Prepared {
+        if self.cancelled() {
+            return Prepared::Failed;
+        }
+        match self.replies.try_recv() {
+            Ok(Ok(Response::Closed)) => Prepared::Ready,
+            Err(TryRecvError::Empty) => Prepared::Waiting,
+            _ => Prepared::Failed,
+        }
     }
 
     pub(super) fn call(
@@ -58,23 +99,45 @@ impl Helper {
         request: &Request,
         timeout: Duration,
     ) -> Result<Response, PdfError> {
+        self.send(request)?;
+        let deadline = Instant::now() + timeout;
+        loop {
+            if self.cancelled() {
+                return Err(PdfError::HelperDied);
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            match self.replies.recv_timeout(left.min(CANCEL_SLICE)) {
+                Ok(Ok(response)) if !self.cancelled() => return Ok(response),
+                Ok(Ok(_)) => return Err(PdfError::HelperDied),
+                Ok(Err(CodecError::Io(_) | CodecError::Truncated))
+                | Err(RecvTimeoutError::Disconnected) => return Err(PdfError::HelperDied),
+                Ok(Err(error)) => return Err(PdfError::Protocol(error.to_string())),
+                Err(RecvTimeoutError::Timeout) if left > CANCEL_SLICE => {}
+                Err(RecvTimeoutError::Timeout) => return Err(PdfError::Timeout),
+            }
+        }
+    }
+
+    pub(super) fn cancelled(&self) -> bool {
+        self.shutdowns.load(Ordering::SeqCst) != self.born
+    }
+
+    fn send(&mut self, request: &Request) -> Result<(), PdfError> {
+        if self.cancelled() {
+            return Err(PdfError::HelperDied);
+        }
         write_request(&mut self.input, request).map_err(|error| match error {
             CodecError::Io(_) => PdfError::HelperDied,
             other => PdfError::Protocol(other.to_string()),
-        })?;
-        match self.replies.recv_timeout(timeout) {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(CodecError::Io(_) | CodecError::Truncated))
-            | Err(RecvTimeoutError::Disconnected) => Err(PdfError::HelperDied),
-            Ok(Err(error)) => Err(PdfError::Protocol(error.to_string())),
-            Err(RecvTimeoutError::Timeout) => Err(PdfError::Timeout),
-        }
+        })
     }
 }
 
 impl Drop for Helper {
     fn drop(&mut self) {
-        stop(&mut self.child);
+        if let Some(child) = self.child.take() {
+            reaper::dispose(child, self.shutdowns.clone());
+        }
     }
 }
 
@@ -91,9 +154,4 @@ fn forward_replies(output: ChildStdout, sender: &SyncSender<Reply>) {
             return;
         }
     }
-}
-
-fn stop(child: &mut Child) {
-    let _ = child.kill();
-    let _ = child.wait();
 }

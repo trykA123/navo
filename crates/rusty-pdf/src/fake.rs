@@ -1,3 +1,5 @@
+use std::io::{Read, Write};
+use std::net::TcpStream;
 use std::thread;
 use std::time::Duration;
 
@@ -15,9 +17,32 @@ pub const PASSWORD: &str = "secret";
 #[derive(Default)]
 pub struct FakeEngine {
     is_open: bool,
+    prepares: u32,
+    dies_on_second_prepare: bool,
+    prepare_pause: Duration,
+    prepare_watch: Option<TcpStream>,
+    prepare_gate: Option<u32>,
 }
 
 impl Engine for FakeEngine {
+    fn prepare(&mut self) -> Result<(), PdfError> {
+        self.prepares += 1;
+        if let Some(watch) = &mut self.prepare_watch {
+            watch.write_all(b"P").map_err(|_| PdfError::HelperDied)?;
+            if self.prepare_gate == Some(self.prepares) {
+                wait_for_prepare_release(watch)?;
+            }
+        }
+        if self.prepare_gate != Some(self.prepares) {
+            thread::sleep(self.prepare_pause);
+        }
+        if self.dies_on_second_prepare && self.prepares == 2 {
+            std::process::exit(3);
+        }
+        self.close();
+        Ok(())
+    }
+
     fn open(&mut self, path: &str, password: Option<&str>) -> Result<u32, PdfError> {
         if path.ends_with("broken.pdf") {
             return Err(PdfError::Corrupt);
@@ -41,7 +66,7 @@ impl Engine for FakeEngine {
     fn render(&mut self, request: &RenderRequest) -> Result<Bitmap, PdfError> {
         self.check_page(request.page)?;
         match request.page {
-            HANG_PAGE => thread::sleep(Duration::from_secs(3600)),
+            HANG_PAGE => thread::sleep(Duration::from_secs(5)),
             CRASH_PAGE => std::process::exit(3),
             _ => {}
         }
@@ -131,6 +156,29 @@ impl Engine for FakeEngine {
 }
 
 impl FakeEngine {
+    #[must_use]
+    pub fn dying_on_second_prepare() -> Self {
+        Self {
+            dies_on_second_prepare: true,
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn pausing_prepare(pause: Duration) -> Self {
+        Self {
+            prepare_pause: pause.min(Duration::from_secs(5)),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn watching_prepare(mut self, watch: Option<TcpStream>, gate: Option<u32>) -> Self {
+        self.prepare_watch = watch;
+        self.prepare_gate = gate;
+        self
+    }
+
     fn check_open(&self) -> Result<(), PdfError> {
         if self.is_open {
             Ok(())
@@ -147,4 +195,22 @@ impl FakeEngine {
             Err(PdfError::NoSuchPage { page, count: PAGES })
         }
     }
+}
+
+pub fn wait_for_idle(launcher: &crate::Launcher, timeout: Duration) -> bool {
+    launcher.wait_for_idle(timeout)
+}
+
+fn wait_for_prepare_release(watch: &mut TcpStream) -> Result<(), PdfError> {
+    watch
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .map_err(|_| PdfError::HelperDied)?;
+    let mut release = [0];
+    watch
+        .read_exact(&mut release)
+        .map_err(|_| PdfError::HelperDied)?;
+    if release != *b"R" {
+        return Err(PdfError::HelperDied);
+    }
+    Ok(())
 }

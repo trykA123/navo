@@ -206,3 +206,80 @@ fn the_document_outline_crosses_the_fake_helper_pipe() {
     assert_eq!(items[3].target, LinkTarget::Unsupported);
     document.close();
 }
+
+fn counting(launcher: Launcher) -> (Launcher, Arc<AtomicUsize>) {
+    let starts = Arc::new(AtomicUsize::new(0));
+    let counter = starts.clone();
+    let counted = launcher.with_confinement(Arc::new(move |_child| {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(()))
+    }));
+    (counted, starts)
+}
+
+#[test]
+fn the_first_open_reuses_the_warm_helper() {
+    let (launcher, starts) = counting(launcher());
+    launcher.prewarm().unwrap();
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+    let mut document = open(&launcher, "a.pdf", None).unwrap();
+    assert_eq!(document.page_count().unwrap(), PAGES);
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn warming_twice_starts_one_helper() {
+    let (launcher, starts) = counting(launcher());
+    launcher.prewarm().unwrap();
+    launcher.prewarm().unwrap();
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_dead_warm_helper_falls_back_to_a_fresh_one() {
+    let (launcher, starts) = counting(launcher_with("--dies-on-second-prepare"));
+    let launcher = launcher.with_timeout(Duration::from_secs(10));
+    launcher.prewarm().unwrap();
+    let mut document = open(&launcher, "a.pdf", None).unwrap();
+    assert_eq!(document.page_count().unwrap(), PAGES);
+    assert_eq!(starts.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn a_failed_warm_is_not_repeated_and_opens_still_work() {
+    let (launcher, starts) = counting(launcher_with("--silent"));
+    assert_eq!(launcher.prewarm(), Err(PdfError::Timeout));
+    assert_eq!(launcher.prewarm(), Ok(()));
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_missing_program_fails_the_warm_without_a_helper() {
+    let launcher = Launcher::new("/nonexistent/navo-helper", []);
+    assert!(matches!(launcher.prewarm(), Err(PdfError::NoHelper(_))));
+}
+
+#[test]
+fn a_closed_document_hands_its_helper_to_the_next_open() {
+    let (launcher, starts) = counting(launcher());
+    let mut first = open(&launcher, "a.pdf", None).unwrap();
+    first.page_count().unwrap();
+    first.close();
+    assert!(rusty_pdf::fake::wait_for_idle(
+        &launcher,
+        Duration::from_secs(10)
+    ));
+    let mut second = open(&launcher, "a.pdf", None).unwrap();
+    assert_eq!(second.render(page(1)).unwrap().width(), 40);
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn shutdown_drops_the_warm_helper_and_stops_warming() {
+    let (launcher, starts) = counting(launcher());
+    launcher.prewarm().unwrap();
+    launcher.shutdown();
+    let mut document = open(&launcher, "a.pdf", None).unwrap();
+    assert_eq!(document.page_count().unwrap(), PAGES);
+    assert_eq!(starts.load(Ordering::SeqCst), 2);
+}

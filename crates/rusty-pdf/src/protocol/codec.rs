@@ -34,6 +34,7 @@ pub fn encode_request(request: &Request) -> Result<Vec<u8>, CodecError> {
             put_u32(&mut out, *page);
         }
         Request::Outline => out.push(7),
+        Request::Prepare => out.push(8),
     }
     Ok(out)
 }
@@ -55,6 +56,7 @@ pub fn decode_request(bytes: &[u8]) -> Result<Request, CodecError> {
         5 => Request::Close,
         6 => Request::Links { page: input.u32()? },
         7 => Request::Outline,
+        8 => Request::Prepare,
         _ => return Err(CodecError::Malformed("unknown request")),
     };
     input.finish(request)

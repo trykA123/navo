@@ -1,13 +1,17 @@
 mod helper;
+mod pool;
+mod reaper;
 
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::Arc;
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 use helper::Helper;
+use pool::Pool;
 
 use crate::protocol::{
     Bitmap, Outline, PageLinks, PageText, PdfError, RenderRequest, Request, Response,
@@ -17,12 +21,18 @@ pub type Confine = Arc<dyn Fn(&Child) -> io::Result<Box<dyn Send>> + Send + Sync
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 
+const WARM_WAIT: Duration = Duration::from_secs(2);
+const SHUTDOWN_WAIT: Duration = Duration::from_millis(500);
+
 #[derive(Clone)]
 pub struct Launcher {
     program: PathBuf,
     args: Vec<OsString>,
     timeout: Duration,
+    warm_wait: Duration,
     confine: Option<Confine>,
+    pool: Arc<Pool<Helper>>,
+    shutdowns: Arc<AtomicU64>,
 }
 
 impl Launcher {
@@ -31,13 +41,67 @@ impl Launcher {
             program: program.into(),
             args: args.into_iter().collect(),
             timeout: DEFAULT_TIMEOUT,
+            warm_wait: WARM_WAIT,
             confine: None,
+            pool: Arc::default(),
+            shutdowns: Arc::default(),
+        }
+    }
+
+    pub fn prewarm(&self) -> Result<(), PdfError> {
+        let born = self.shutdowns.load(Ordering::SeqCst);
+        self.pool.warm(|| {
+            let mut helper = Helper::spawn(self, born)?;
+            helper.prepare(self.timeout)?;
+            self.check_generation(born)?;
+            Ok(helper)
+        })
+    }
+
+    fn helper(&self) -> Result<Helper, PdfError> {
+        let born = self.shutdowns.load(Ordering::SeqCst);
+        if let Some(mut warm) = self.pool.take(self.warm_wait)
+            && warm.prepare(self.timeout).is_ok()
+        {
+            self.check_generation(born)?;
+            return Ok(warm);
+        }
+        Helper::spawn(self, born)
+    }
+
+    fn check_generation(&self, born: u64) -> Result<(), PdfError> {
+        if self.shutdowns.load(Ordering::SeqCst) != born {
+            return Err(PdfError::HelperDied);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn wait_for_idle(&self, wait: Duration) -> bool {
+        self.pool.wait_for_idle(wait)
+    }
+
+    pub fn shutdown(&self) {
+        let deadline = Instant::now() + SHUTDOWN_WAIT;
+        self.shutdowns.fetch_add(1, Ordering::SeqCst);
+        self.pool.close();
+        let finished = reaper::shutdown(self.shutdowns.clone(), deadline);
+        self.pool
+            .settle(deadline.saturating_duration_since(Instant::now()));
+        if let Some(finished) = finished {
+            let _ = finished.recv_timeout(deadline.saturating_duration_since(Instant::now()));
         }
     }
 
     #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_warm_wait(mut self, wait: Duration) -> Self {
+        self.warm_wait = wait;
         self
     }
 
@@ -113,14 +177,10 @@ impl Document {
         }
     }
 
-    pub fn close(mut self) {
-        if let Some(helper) = self.helper.as_mut() {
-            let _ = helper.call(&Request::Close, self.launcher.timeout);
-        }
-    }
+    pub fn close(self) {}
 
     fn start(&mut self, password: Option<&str>) -> Result<&mut Helper, PdfError> {
-        let mut helper = Helper::spawn(&self.launcher)?;
+        let mut helper = self.launcher.helper()?;
         let open = Request::Open {
             path: self.path.clone(),
             password: password.map(str::to_owned),
@@ -152,6 +212,14 @@ impl Document {
     fn unexpected(&mut self, response: &Response) -> PdfError {
         self.helper = None;
         unexpected_reply(response)
+    }
+}
+
+impl Drop for Document {
+    fn drop(&mut self) {
+        if let Some(helper) = self.helper.take() {
+            reaper::recycle(helper, self.launcher.timeout, self.launcher.pool.clone());
+        }
     }
 }
 

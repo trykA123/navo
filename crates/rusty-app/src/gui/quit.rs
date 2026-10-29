@@ -24,6 +24,7 @@ pub(super) fn quitter(
             visits.stop();
         }
         maintenance.stop();
+        crate::files::stop_pdf();
         if let Some(disk) = &disk {
             let _ = disk.close(EXIT_CLOSE);
         }

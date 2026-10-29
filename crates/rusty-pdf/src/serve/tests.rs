@@ -117,6 +117,25 @@ fn close_answers_and_ends_the_loop() {
 }
 
 #[test]
+fn prepare_answers_keeps_serving_and_forgets_the_open_document() {
+    let replies = exchange(
+        &mut FakeEngine::default(),
+        &[open("a.pdf"), Request::Prepare, Request::PageCount],
+    );
+    assert_eq!(replies.len(), 3);
+    assert_eq!(replies[1], Response::Closed);
+    assert_eq!(replies[2], Response::Failed(PdfError::NotOpen));
+}
+
+#[test]
+fn prepare_reports_a_missing_engine() {
+    assert_eq!(
+        exchange(&mut Unavailable::new("no pdfium"), &[Request::Prepare]),
+        [Response::Failed(PdfError::NoEngine("no pdfium".into()))]
+    );
+}
+
+#[test]
 fn a_garbled_request_is_answered_with_a_protocol_error_and_stops() {
     let mut output = Vec::new();
     let result = serve(

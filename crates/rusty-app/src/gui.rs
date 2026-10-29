@@ -34,6 +34,7 @@ use crate::{
 
 const START_READ: Duration = Duration::from_millis(50);
 const EXIT_WRITE: Duration = Duration::from_millis(300);
+const PDF_WARM_DELAY: Duration = Duration::from_secs(3);
 
 pub(crate) struct Launch {
     pub(crate) trace: Option<rusty_ui::window_view::InputTrace>,
@@ -159,6 +160,7 @@ pub(crate) fn open(mut launch: Launch) {
     let (search, visits) = search_hooks(services.memory.clone(), remember, dirs.as_ref(), &local);
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     let exit = (disk, visits, services.memory.clone());
+    files::prewarm_pdf(PDF_WARM_DELAY);
     run(
         StartOptions {
             state,

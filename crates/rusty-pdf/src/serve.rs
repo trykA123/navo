@@ -7,6 +7,11 @@ use crate::protocol::{
 };
 
 pub trait Engine {
+    fn prepare(&mut self) -> Result<(), PdfError> {
+        self.close();
+        Ok(())
+    }
+
     fn open(&mut self, path: &str, password: Option<&str>) -> Result<u32, PdfError>;
     fn page_count(&self) -> Result<u32, PdfError>;
     fn render(&mut self, request: &RenderRequest) -> Result<Bitmap, PdfError>;
@@ -25,6 +30,10 @@ impl Unavailable {
 }
 
 impl Engine for Unavailable {
+    fn prepare(&mut self) -> Result<(), PdfError> {
+        Err(PdfError::NoEngine(self.0.clone()))
+    }
+
     fn open(&mut self, _path: &str, _password: Option<&str>) -> Result<u32, PdfError> {
         Err(PdfError::NoEngine(self.0.clone()))
     }
@@ -84,6 +93,7 @@ fn answer(engine: &mut dyn Engine, request: Request) -> Response {
         Request::Open { path, password } => engine
             .open(&path, password.as_deref())
             .map(|pages| Response::Opened { pages }),
+        Request::Prepare => engine.prepare().map(|()| Response::Closed),
         Request::PageCount => engine.page_count().map(Response::PageCount),
         Request::Render(render) => engine.render(&render).map(Response::Page),
         Request::Text { page } => engine.text(page).map(Response::Text),

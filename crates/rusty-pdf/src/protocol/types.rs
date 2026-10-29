@@ -18,6 +18,7 @@ pub enum Request {
     },
     Outline,
     Close,
+    Prepare,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
