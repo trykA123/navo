@@ -63,8 +63,6 @@ impl FerriteWindow {
                 self.apply(&Command::WorkspaceMove { n, by }, window, cx);
             }
             TrayAction::Delete(n) => self.delete_workspace(n, window, cx),
-            TrayAction::Save => self.apply(&Command::WorkspaceSave, window, cx),
-            TrayAction::Discard(n) => self.apply(&Command::WorkspaceDiscard { n }, window, cx),
         }
     }
 

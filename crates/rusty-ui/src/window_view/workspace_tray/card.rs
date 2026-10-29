@@ -18,8 +18,6 @@ pub enum TrayAction {
     Rename(usize),
     Move { n: usize, by: i8 },
     Delete(usize),
-    Save,
-    Discard(usize),
 }
 
 pub type OnTrayAction = Rc<dyn Fn(&TrayAction, &mut Window, &mut App)>;
