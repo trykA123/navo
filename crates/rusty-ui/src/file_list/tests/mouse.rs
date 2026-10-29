@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::AppContext as _;
 use gpui_kit::test::TestWindowExt;
@@ -167,7 +167,7 @@ fn a_right_drag_from_a_marked_row_unmarks(cx: &mut TestAppContext) {
     let mut marked = props(sample_rows());
     let mut selection = Selection::new(6);
     selection.toggle(1);
-    marked.marked = Rc::new(selection);
+    marked.marked = Arc::new(selection);
     let (window, harness) = open_list(cx, marked);
     right_drag(cx, window, &[1, 3]);
     assert_eq!(

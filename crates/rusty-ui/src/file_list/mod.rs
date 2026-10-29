@@ -57,7 +57,7 @@ pub struct FileListProps {
     pub folder: SharedString,
     pub rows: Arc<[FsEntry]>,
     pub view: ViewState,
-    pub marked: Rc<Selection>,
+    pub marked: Arc<Selection>,
     pub is_active: bool,
     pub filter: Option<SharedString>,
     pub sort: SortKey,

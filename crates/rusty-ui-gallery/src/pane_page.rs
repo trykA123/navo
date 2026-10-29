@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use rusty_core::{
@@ -126,7 +125,7 @@ impl PanePage {
             folder,
             rows: self.rows.clone(),
             view: tab.view(),
-            marked: Rc::new(tab.selection().clone()),
+            marked: Arc::new(tab.selection().clone()),
             is_active: true,
             filter: None,
             sort: rusty_ui::file_list::SortKey::default(),

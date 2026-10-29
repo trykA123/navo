@@ -9,7 +9,6 @@ mod parts;
 mod render;
 mod resize;
 
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::test::TestWindowExt;
@@ -61,7 +60,7 @@ pub(super) fn props(rows: Arc<[FsEntry]>) -> FileListProps {
         folder: "core".into(),
         rows,
         view: ViewState::default(),
-        marked: Rc::new(Selection::new(len)),
+        marked: Arc::new(Selection::new(len)),
         is_active: true,
         filter: None,
         sort: crate::file_list::SortKey::default(),

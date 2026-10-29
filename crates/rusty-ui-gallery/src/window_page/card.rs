@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Selection, ViewState};
 use rusty_ui::file_list::{FileList, FileListProps, ListParts};
@@ -11,7 +11,7 @@ use super::{SIDES, Side, WindowPage, location};
 use crate::pane_page::status_of;
 
 impl WindowPage {
-    fn list(&self, index: usize, side: &Side, marked: Rc<Selection>) -> FileList {
+    fn list(&self, index: usize, side: &Side, marked: Arc<Selection>) -> FileList {
         let folder = side.tabs.first().copied().unwrap_or_default();
         let props = FileListProps {
             folder: folder.into(),
@@ -85,7 +85,7 @@ impl WindowPage {
                 card.child(PathBar::new(("path", index), location(side.path)))
             })
             .child(
-                self.list(index, side, Rc::new(marked.clone()))
+                self.list(index, side, Arc::new(marked.clone()))
                     .lift_above(self.cover(index, window, cx)),
             )
             .children((!footer.is_empty()).then_some(footer));

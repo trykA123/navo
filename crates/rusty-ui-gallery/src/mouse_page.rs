@@ -98,7 +98,7 @@ impl MousePage {
             folder: "commander".into(),
             rows: self.rows.clone(),
             view: tab.view(),
-            marked: Rc::new(tab.selection().clone()),
+            marked: Arc::new(tab.selection().clone()),
             is_active: true,
             filter: None,
             sort: SortKey::default(),

@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use rusty_core::{Location, Selection as Marks, ViewState};
@@ -266,7 +265,7 @@ impl CommandCenterPage {
                 cursor: 0,
                 scroll: 0,
             },
-            marked: Rc::new(Marks::new(self.rows.len() as u64)),
+            marked: Arc::new(Marks::new(self.rows.len() as u64)),
             is_active: true,
             filter: None,
             sort: SortKey::default(),

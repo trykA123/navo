@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use super::{AppState, History, Listing, StateError};
 use crate::{Location, LocationError, PaneId, ProviderPath, Selection, TabId};
@@ -17,7 +18,7 @@ pub struct Tab {
     view: ViewState,
     listing: Option<Listing>,
     pending: Option<u64>,
-    selection: Selection,
+    selection: Arc<Selection>,
     history: History,
     views: HashMap<Location, ViewState>,
     names: HashMap<Location, String>,
@@ -98,6 +99,11 @@ impl Tab {
     }
 
     #[must_use]
+    pub fn selection_arc(&self) -> &Arc<Selection> {
+        &self.selection
+    }
+
+    #[must_use]
     pub fn history(&self) -> &History {
         &self.history
     }
@@ -133,7 +139,7 @@ impl Tab {
             view: ViewState::default(),
             listing: None,
             pending: None,
-            selection: Selection::new(0),
+            selection: Arc::new(Selection::new(0)),
             history: History::default(),
             views: HashMap::new(),
             names: HashMap::new(),
@@ -201,7 +207,7 @@ impl Tab {
     }
 
     pub(crate) fn selection_mut(&mut self) -> &mut Selection {
-        &mut self.selection
+        Arc::make_mut(&mut self.selection)
     }
 
     #[must_use]
@@ -319,11 +325,11 @@ impl Tab {
             .filter(|row| listing.get(*row).is_some_and(|e| marked.contains(&e.name)))
             .collect();
         self.set_listing(listing);
-        self.selection.mark_rows(keep);
+        Arc::make_mut(&mut self.selection).mark_rows(keep);
     }
 
     pub(crate) fn set_listing(&mut self, listing: Listing) {
-        self.selection = Selection::new(listing.len());
+        self.selection = Arc::new(Selection::new(listing.len()));
         self.listing = Some(listing);
         self.view.cursor = self.clamp(self.view.cursor);
         self.view.scroll = self.clamp(self.view.scroll);
@@ -345,7 +351,7 @@ impl Tab {
         }
         self.listing = None;
         self.pending = None;
-        self.selection = Selection::new(0);
+        self.selection = Arc::new(Selection::new(0));
         (std::mem::replace(&mut self.location, target), marks)
     }
 

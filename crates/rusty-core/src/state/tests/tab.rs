@@ -324,6 +324,23 @@ fn new_tab_has_an_empty_selection() {
 }
 
 #[test]
+fn cloning_a_tab_then_marking_leaves_the_clone_unchanged() {
+    let mut t = tab(1, "/a");
+    t.set_listing(listing(4));
+    let before = t.clone();
+    assert!(std::sync::Arc::ptr_eq(
+        t.selection_arc(),
+        before.selection_arc()
+    ));
+    t.selection_mut().toggle(1);
+    assert_eq!((t.selection().count(), before.selection().count()), (1, 0));
+    assert!(!std::sync::Arc::ptr_eq(
+        t.selection_arc(),
+        before.selection_arc()
+    ));
+}
+
+#[test]
 fn set_listing_gives_a_fresh_selection_of_its_length() {
     let mut t = tab(1, "/a");
     t.set_listing(listing(4));

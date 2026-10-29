@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::AppContext as _;
 use gpui_kit::test::TestWindowExt;
@@ -52,7 +52,7 @@ fn rows_carry_their_name_and_marked_state(cx: &mut TestAppContext) {
     let mut selection = Selection::new(6);
     selection.toggle(1);
     selection.toggle(3);
-    marked.marked = Rc::new(selection);
+    marked.marked = Arc::new(selection);
     let (window, _) = open_list(cx, marked);
     let date = format::date(MODIFIED_MS);
     cx.update_window(window, |_, window, cx| {

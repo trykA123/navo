@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use rusty_core::{ProviderPath, Selection, ViewState};
@@ -77,7 +76,7 @@ impl Render for KindsPage {
                 cursor: 0,
                 scroll: 0,
             },
-            marked: Rc::new(Selection::new(self.rows.len() as u64)),
+            marked: Arc::new(Selection::new(self.rows.len() as u64)),
             is_active: true,
             filter: None,
             sort: SortKey::default(),

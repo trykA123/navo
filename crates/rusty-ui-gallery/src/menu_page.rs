@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use rusty_core::{Selection, ViewState};
@@ -69,7 +68,7 @@ impl MenuPage {
             folder: "commander".into(),
             rows: self.rows.clone(),
             view: ViewState { cursor, scroll: 0 },
-            marked: Rc::new(marked),
+            marked: Arc::new(marked),
             is_active: true,
             filter: None,
             sort: SortKey::default(),

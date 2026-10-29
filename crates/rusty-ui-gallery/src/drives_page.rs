@@ -125,7 +125,7 @@ impl DrivesPage {
                 cursor: 4,
                 scroll: 0,
             },
-            marked: Rc::new(Selection::new(self.rows.len() as u64)),
+            marked: Arc::new(Selection::new(self.rows.len() as u64)),
             is_active: side == 0,
             filter: None,
             sort: SortKey::default(),

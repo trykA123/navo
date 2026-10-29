@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::Role;
@@ -170,7 +169,7 @@ impl FerriteWindow {
             folder: self.tab_title(tab),
             rows: self.browser.details(tab.id()),
             view: tab.view(),
-            marked: Rc::new(tab.selection().clone()),
+            marked: Arc::clone(tab.selection_arc()),
             is_active,
             filter: self
                 .browser
