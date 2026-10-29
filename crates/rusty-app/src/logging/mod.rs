@@ -3,6 +3,8 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use rusty_diag::{CacheRegistry, EventRing, LogConfig, LogLayer, RedactionMisses, Redactor};
+#[cfg(feature = "tracy")]
+use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
@@ -72,7 +74,12 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
     );
     let misses = opened.misses();
     let flush = opened.layer.as_ref().map(LogLayer::flush_handle);
+    #[cfg(not(feature = "tracy"))]
     let subscriber = Registry::default().with(filter).with(opened.layer);
+    #[cfg(feature = "tracy")]
+    let subscriber = Registry::default()
+        .with(opened.layer.with_filter(filter))
+        .with(rusty_diag::profiling::tracy_layer());
     if let Err(error) = tracing::subscriber::set_global_default(subscriber) {
         eprintln!("navo: cannot install logging: {error}");
     } else if let Some(flush) = flush {

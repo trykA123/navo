@@ -183,3 +183,16 @@ fn a_bad_legacy_value_names_the_legacy_variable() {
             .any(|text| text.starts_with(&format!("ignoring {ENV_VAR} ")))
     );
 }
+
+#[test]
+fn install_writes_an_info_event_to_the_ring() {
+    let diagnostics = install(None);
+    tracing::info!("install probe");
+    assert!(
+        diagnostics
+            .ring
+            .snapshot()
+            .iter()
+            .any(|line| line.contains("install probe"))
+    );
+}

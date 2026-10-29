@@ -7,6 +7,7 @@ pub mod heap;
 mod log_layer;
 mod memory;
 pub mod perf;
+pub mod profiling;
 mod redact;
 mod report;
 

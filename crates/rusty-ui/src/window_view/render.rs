@@ -9,6 +9,7 @@ use crate::tokens;
 
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        rusty_diag::profiling::frame_mark();
         #[cfg(test)]
         super::tests::mouse_cost::note_render();
         let trace = input_trace::frame(window, cx);
