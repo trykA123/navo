@@ -10,7 +10,7 @@ fn actual_local_bytes_and_file_identity_survive_capture_and_reopen_restore() {
     let fs = LocalFs::new();
     let source = location(&path);
     let before = fs.file_identity(&source).unwrap();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &source);
     assert_eq!(
         fs.file_identity(&entry.record.held().unwrap()).unwrap(),
@@ -18,7 +18,7 @@ fn actual_local_bytes_and_file_identity_survive_capture_and_reopen_restore() {
     );
     assert!(!path.exists());
     drop(vault);
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     restore(&mut vault, entry.id, &source).unwrap();
     assert_eq!(std::fs::read(path).unwrap(), bytes);
     assert_eq!(fs.file_identity(&source).unwrap(), before);
@@ -32,7 +32,7 @@ fn actual_nested_directories_are_removed_only_by_explicit_purge() {
     std::fs::create_dir_all(tree.join("nested")).unwrap();
     std::fs::write(tree.join("nested/a"), b"old").unwrap();
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &location(&tree));
     let held = Path::new(entry.record.container.as_str()).join("payload");
     assert_eq!(std::fs::read(held.join("nested/a")).unwrap(), b"old");
@@ -51,7 +51,7 @@ fn retained_symlinks_are_never_followed_during_capture_or_purge() {
     std::fs::create_dir(&tree).unwrap();
     std::os::unix::fs::symlink(&target, tree.join("link")).unwrap();
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &location(&tree));
     purge(&mut vault, entry.id).unwrap();
     assert_eq!(std::fs::read(target).unwrap(), b"keep outside target");
@@ -64,7 +64,7 @@ fn an_in_place_payload_edit_prevents_automatic_purge() {
     let path = files.path().join("sample");
     std::fs::write(&path, b"old").unwrap();
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &location(&path));
     let held = Path::new(entry.record.container.as_str()).join("payload");
     std::fs::write(&held, b"modified retained bytes").unwrap();
@@ -80,7 +80,7 @@ fn a_restored_file_edited_before_notice_commit_is_still_recognized_by_identity()
     std::fs::write(&path, b"old").unwrap();
     let source = location(&path);
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &source);
     begin_restore(&mut vault, entry.id, &source);
     fs.rename(&entry.record.held().unwrap(), &source).unwrap();
@@ -103,7 +103,7 @@ fn a_parent_replaced_with_a_link_during_purge_cannot_delete_the_moved_tree() {
     std::fs::create_dir(&outside).unwrap();
     std::fs::write(tree.join("sub/a"), b"keep moved contents").unwrap();
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &location(&tree));
     let held = Path::new(entry.record.container.as_str()).join("payload");
     let child = location(&held.join("sub/a"));
@@ -137,7 +137,7 @@ fn a_target_created_after_restore_preflight_is_never_overwritten() {
     std::fs::write(&path, b"old").unwrap();
     let source = location(&path);
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &source);
     let mut visits = 0;
     let mut progress = |progress: RetentionProgress| {
@@ -173,7 +173,7 @@ fn a_payload_replaced_after_restore_preflight_stays_in_its_original_location() {
     std::fs::write(&path, b"old").unwrap();
     let source = location(&path);
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &source);
     let held = Path::new(entry.record.container.as_str()).join("payload");
     let moved = files.path().join("moved-original");
@@ -214,7 +214,7 @@ fn a_native_capture_interrupted_after_rename_reconciles_after_reopening() {
     let fs = LocalFs::new();
     let source = location(&tree);
     let original = fs.file_identity(&source).unwrap();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let mut progress = |progress: RetentionProgress| {
         if progress
             .current
@@ -241,7 +241,7 @@ fn a_native_capture_interrupted_after_rename_reconciles_after_reopening() {
     assert_eq!(entry.state, RetainedState::Preparing);
     assert!(!tree.exists());
     drop(vault);
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let ready = reconcile(&mut vault, entry.id).unwrap();
     assert_eq!(ready.state, RetainedState::Ready);
     assert_eq!(

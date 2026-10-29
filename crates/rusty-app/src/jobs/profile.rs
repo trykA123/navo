@@ -25,18 +25,28 @@ pub fn retaining_factory(
 
 #[cfg(test)]
 pub fn experimental_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
-    factory(journal, dirs, Some(Drive::Unprobed))
+    factory(journal, dirs, Some(Drive::Unprobed(None)))
+}
+
+#[cfg(test)]
+pub fn confined_factory(journal: SharedJournal, dirs: StoreDirs, ceiling: Location) -> LogFactory {
+    factory(journal, dirs, Some(Drive::Unprobed(Some(ceiling))))
 }
 
 #[derive(Clone)]
 enum Drive {
     Probed(Arc<dyn ProviderOps>),
     #[cfg(test)]
-    Unprobed,
+    Unprobed(Option<Location>),
 }
 
 fn factory(journal: SharedJournal, dirs: StoreDirs, drive: Option<Drive>) -> LogFactory {
     let experimental = drive.is_some();
+    #[cfg(test)]
+    let ceiling = match &drive {
+        Some(Drive::Unprobed(ceiling)) => ceiling.clone(),
+        _ => None,
+    };
     Arc::new(move |plan| {
         guard(plan, &dirs, experimental)?;
         let settings =
@@ -52,6 +62,11 @@ fn factory(journal: SharedJournal, dirs: StoreDirs, drive: Option<Drive>) -> Log
                 settings
             };
         let retained = delete_job(plan, &settings, &dirs)?;
+        #[cfg(test)]
+        let retained = retained.map(|job| deletion::RetainedJob {
+            ceiling: ceiling.clone(),
+            ..job
+        });
         let mut log = if matches!(plan.kind, OpKind::Copy | OpKind::Move)
             && let Some(policy) = settings.overwrite_policy()
         {
@@ -108,6 +123,8 @@ fn delete_job(
         Ok(plan) => Ok(Some(deletion::RetainedJob {
             data: dirs.data.clone(),
             plan,
+            #[cfg(test)]
+            ceiling: None,
         })),
         Err(rusty_core::retention::RetentionError::DeleteTooLarge) => Ok(None),
         Err(error) => Err(error.to_string()),
@@ -118,7 +135,7 @@ fn drive_retains(drive: Option<&Drive>, plan: &OperationPlan) -> bool {
     let ops = match drive {
         Some(Drive::Probed(ops)) => ops,
         #[cfg(test)]
-        Some(Drive::Unprobed) => return true,
+        Some(Drive::Unprobed(_)) => return true,
         None => return false,
     };
     let probe = match plan.kind {

@@ -61,6 +61,56 @@ impl ProviderOps for LocalFs {
         fs::create_dir(&path).map_err(|e| io_error(&e, location))
     }
 
+    #[cfg(unix)]
+    fn create_private_folder(&self, location: &Location) -> Result<(), FsError> {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new()
+            .mode(0o700)
+            .create(os_path(location)?)
+            .map_err(|e| io_error(&e, location))
+    }
+
+    #[cfg(unix)]
+    fn restrict_to_owner(&self, location: &Location) -> Result<(), FsError> {
+        use std::os::unix::fs::PermissionsExt;
+        let path = os_path(location)?;
+        let found = fs::symlink_metadata(&path).map_err(|e| io_error(&e, location))?;
+        if !found.is_dir() {
+            return Err(FsError {
+                location: Some(location.clone()),
+                ..FsError::new(FsErrorKind::NameInvalid)
+            });
+        }
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
+            .map_err(|e| io_error(&e, location))
+    }
+
+    #[cfg(unix)]
+    fn unix_access(&self, location: &Location) -> Result<Option<crate::UnixAccess>, FsError> {
+        use std::os::unix::fs::MetadataExt;
+        let found = fs::symlink_metadata(os_path(location)?).map_err(|e| io_error(&e, location))?;
+        Ok(Some(crate::UnixAccess {
+            owner: found.uid(),
+            mode: found.mode(),
+        }))
+    }
+
+    #[cfg(windows)]
+    fn owned_by_current_user(&self, location: &Location) -> Result<Option<bool>, FsError> {
+        super::win_owner::of_path(&os_path(location)?).map_err(|e| io_error(&e, location))
+    }
+
+    #[cfg(windows)]
+    fn volume_root(&self, location: &Location) -> Result<Option<Location>, FsError> {
+        let mount = super::win_volume::mount_point(&os_path(location)?)
+            .map_err(|e| io_error(&e, location))?;
+        Ok(
+            std::iter::successors(Some(location.clone()), Location::parent).find(|level| {
+                os_path(level).is_ok_and(|path| super::win_volume::is_mount_point(&path, &mount))
+            }),
+        )
+    }
+
     fn create_file(&self, location: &Location) -> Result<(), FsError> {
         File::options()
             .write(true)

@@ -8,7 +8,7 @@ impl Vault<'_> {
         id: RetentionId,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
-        let entry = self.catalog.get(id)?;
+        let entry = self.get(id)?;
         match entry.state {
             RetainedState::Preparing => self.settle_preparing(id, run),
             RetainedState::Restoring => self.settle_restoring(id, run),
@@ -101,11 +101,7 @@ fn unrecorded_state(
     }
     run.visit(&record.container)?;
     let identity = proof::identity(ops, &record.container)?;
-    let parent = record
-        .source
-        .parent()
-        .ok_or_else(|| Error::Changed(record.source.clone()))?;
-    let scope = proof::scope(ops, &parent)?;
+    let scope = proof::scope(ops, &proof::anchor(record)?)?;
     proof::on_scope(ops, &record.container, scope)?;
     let mut occupied = false;
     ops.list(

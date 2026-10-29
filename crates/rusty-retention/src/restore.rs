@@ -63,6 +63,7 @@ impl Vault<'_> {
             .ok_or_else(|| Error::Unsupported(request.target.clone()))?;
         let parent_identity = proof::identity(self.ops, &parent)?;
         proof::folder(self.ops, &parent, parent_identity)?;
+        self.get(request.id)?;
         let mut tx = self.catalog.transaction()?;
         let mut entry = tx.get(request.id)?;
         if entry.state != RetainedState::Ready {

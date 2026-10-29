@@ -30,6 +30,7 @@ impl Profile {
         let fs = Arc::new(FakeFs::new());
         fs.add_folder("home");
         fs.set_available_space("home", Some(1 << 40));
+        fs.set_available_space(rusty_core::brand::VAULT_NAME, Some(1 << 40));
         Self {
             _root: root,
             dirs,

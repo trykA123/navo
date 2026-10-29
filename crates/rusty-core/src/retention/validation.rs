@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::{
     ADOPTED_CONTAINER_PREFIX, CONTAINER_PREFIX, DAY_MS, MAX_NODES, RetainedKind, RetainedState,
-    RetentionEntry, RetentionError, RetentionRecord,
+    RetentionEntry, RetentionError, RetentionRecord, VAULT_RECORD_VERSION,
 };
 use crate::{Location, brand};
 
@@ -18,7 +18,7 @@ pub(super) fn clean_path(location: &Location) -> bool {
 
 impl RetentionRecord {
     pub fn validate(&self) -> Result<(), RetentionError> {
-        if !matches!(self.version, 1 | 2)
+        if !matches!(self.version, 1..=VAULT_RECORD_VERSION)
             || !is_absolute(&self.source)
             || !clean_path(&self.source)
             || self.source.parent().is_none()
@@ -45,7 +45,7 @@ impl RetentionRecord {
     }
 
     fn validate_container(&self) -> Result<(), RetentionError> {
-        let prefixes = if self.version == 1 {
+        let prefixes = if self.version != 2 {
             [CONTAINER_PREFIX, brand::LEGACY_RETAINED_PREFIX]
         } else {
             [ADOPTED_CONTAINER_PREFIX, brand::LEGACY_HELD_PREFIX]
@@ -63,17 +63,62 @@ impl RetentionRecord {
                             .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
                 })
         });
-        if !valid_name || self.container.parent() != self.source.parent() {
+        let placed = if self.version == VAULT_RECORD_VERSION {
+            self.in_vault()
+        } else {
+            self.container.parent() == self.source.parent()
+        };
+        if !valid_name || !placed {
             return Err(RetentionError::Invalid(
-                "container is not a reserved sibling",
+                "container is not in a vault or a reserved sibling",
             ));
         }
         Ok(())
     }
 
+    pub fn validate_in(&self, data: Option<&Location>) -> Result<(), RetentionError> {
+        self.validate()?;
+        let vault = self.container.parent();
+        let in_profile_vault = self.version == VAULT_RECORD_VERSION
+            && vault.as_ref().and_then(name_of).as_deref() == Some(brand::VAULT_FALLBACK_NAMES[0]);
+        if in_profile_vault
+            && !data.is_some_and(|data| {
+                vault
+                    .and_then(|vault| vault.parent())
+                    .is_some_and(|home| home.same_place(data))
+            })
+        {
+            return Err(RetentionError::Invalid(
+                "profile vault is outside this profile",
+            ));
+        }
+        Ok(())
+    }
+
+    fn in_vault(&self) -> bool {
+        let named = self
+            .container
+            .parent()
+            .is_some_and(|vault| match name_of(&vault).as_deref() {
+                Some(name) if name.eq_ignore_ascii_case(brand::VAULT_NAME) => true,
+                Some(name) if name == brand::VAULT_FALLBACK_NAMES[1] => vault
+                    .parent()
+                    .and_then(|trash| name_of(&trash))
+                    .is_some_and(|trash| is_user_trash(&trash)),
+                Some(name) => name == brand::VAULT_FALLBACK_NAMES[0],
+                None => false,
+            });
+        named
+            && self.container.provider() == self.source.provider()
+            && is_absolute(&self.container)
+            && clean_path(&self.container)
+            && !std::iter::successors(Some(self.container.clone()), Location::parent)
+                .any(|level| level.same_place(&self.source))
+    }
+
     fn validate_payload(&self) -> Result<(), RetentionError> {
         let valid = match self.version {
-            1 => self.payload_name.is_none(),
+            1 | VAULT_RECORD_VERSION => self.payload_name.is_none(),
             2 => {
                 self.container_identity.is_some()
                     && self.nodes.len() == 1
@@ -162,4 +207,13 @@ impl RetentionEntry {
         }
         Ok(())
     }
+}
+
+fn name_of(location: &Location) -> Option<String> {
+    location.name().map(|name| name.to_text())
+}
+
+fn is_user_trash(name: &str) -> bool {
+    name.strip_prefix(".Trash-")
+        .is_some_and(|user| !user.is_empty() && user.bytes().all(|byte| byte.is_ascii_digit()))
 }

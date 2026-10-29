@@ -12,6 +12,8 @@ pub const RETAINED_PREFIX: &str = ".navo-retained-";
 pub const LEGACY_RETAINED_PREFIX: &str = ".ferrite-retained-";
 pub const HELD_PREFIX: &str = ".navo-held-";
 pub const LEGACY_HELD_PREFIX: &str = ".ferrite-held-";
+pub const VAULT_NAME: &str = ".navo-vault";
+pub const VAULT_FALLBACK_NAMES: [&str; 2] = ["vault", "navo-vault"];
 pub const MUTATIONS_PREFIX: &str = ".navo-mutations-";
 pub const LEGACY_MUTATIONS_PREFIX: &str = ".ferrite-mutations-";
 
@@ -24,15 +26,16 @@ pub fn is_rename_temp(name: &str) -> bool {
 }
 
 pub fn is_retained_container(name: &str) -> bool {
-    starts_with_any(
-        name,
-        &[
-            RETAINED_PREFIX,
-            LEGACY_RETAINED_PREFIX,
-            HELD_PREFIX,
-            LEGACY_HELD_PREFIX,
-        ],
-    )
+    name.eq_ignore_ascii_case(VAULT_NAME)
+        || starts_with_any(
+            name,
+            &[
+                RETAINED_PREFIX,
+                LEGACY_RETAINED_PREFIX,
+                HELD_PREFIX,
+                LEGACY_HELD_PREFIX,
+            ],
+        )
 }
 
 pub fn is_reserved_name(name: &str) -> bool {

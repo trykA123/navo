@@ -10,8 +10,13 @@ rusty-core = { path = "../rusty-core" }
 rusty-fs = { path = "../rusty-fs" }
 rusty-store = { path = "../rusty-store" }
 thiserror = "2.0.21"
+tracing = "0.1.44"
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.5", features = ["process"] }
 
 [dev-dependencies]
+serde_json = "1.0.154"
 tempfile = "3.27.0"
 
 [lints]

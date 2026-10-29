@@ -6,7 +6,7 @@ use rusty_core::{FsError, Location, ProviderId};
 
 use crate::{
     CancelToken, Capabilities, CopyControl, FileDetails, FileIdentity, FsEntry, ListSink,
-    OwnedCopy, Provider, ProviderOps, SizeEntry, Watch, WatchSink,
+    OwnedCopy, Provider, ProviderOps, SizeEntry, UnixAccess, Watch, WatchSink,
 };
 
 pub struct SlowFs {
@@ -144,6 +144,31 @@ impl ProviderOps for SlowFs {
     fn create_folder(&self, location: &Location) -> Result<(), FsError> {
         self.sleep();
         self.inner.create_folder(location)
+    }
+
+    fn create_private_folder(&self, location: &Location) -> Result<(), FsError> {
+        self.sleep();
+        self.inner.create_private_folder(location)
+    }
+
+    fn unix_access(&self, location: &Location) -> Result<Option<UnixAccess>, FsError> {
+        self.sleep();
+        self.inner.unix_access(location)
+    }
+
+    fn restrict_to_owner(&self, location: &Location) -> Result<(), FsError> {
+        self.sleep();
+        self.inner.restrict_to_owner(location)
+    }
+
+    fn owned_by_current_user(&self, location: &Location) -> Result<Option<bool>, FsError> {
+        self.sleep();
+        self.inner.owned_by_current_user(location)
+    }
+
+    fn volume_root(&self, location: &Location) -> Result<Option<Location>, FsError> {
+        self.sleep();
+        self.inner.volume_root(location)
     }
 
     fn create_file(&self, location: &Location) -> Result<(), FsError> {

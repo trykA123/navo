@@ -15,6 +15,8 @@ pub(super) use recovery::recover;
 pub(super) struct RetainedJob {
     pub data: PathBuf,
     pub plan: RetainedDeletePlan,
+    #[cfg(test)]
+    pub ceiling: Option<rusty_core::Location>,
 }
 
 pub(super) fn execute(log: &mut JournalLog, mut operation: LoggedOperation<'_>) -> JobOutcome {
@@ -59,6 +61,10 @@ fn capture_all(
     let (db, _) = crate::crash::open_db(&rusty_store::StoreDirs::journal_in(&job.data))
         .map_err(|error| error.to_string())?;
     let mut vault = Vault::new(db, &job.data, operation.ops).map_err(|error| error.to_string())?;
+    #[cfg(test)]
+    if let Some(ceiling) = &job.ceiling {
+        vault.limit_vaults_to(ceiling.clone());
+    }
     let mut progress = initial_progress(operation.plan);
     for (seq, root) in job.plan.root_steps() {
         let identity = operation

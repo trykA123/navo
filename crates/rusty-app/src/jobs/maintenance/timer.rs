@@ -262,7 +262,7 @@ fn live(dirs: &StoreDirs, ops: &dyn ProviderOps) -> Result<Live, String> {
             if volumes.contains_key(&expected.volume) {
                 continue;
             }
-            let Some(parent) = entry.record.source.parent() else {
+            let Some(parent) = entry.record.anchor() else {
                 continue;
             };
             if ops.file_identity(&parent).ok().flatten() == Some(expected) {

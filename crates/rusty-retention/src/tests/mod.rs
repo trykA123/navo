@@ -6,16 +6,27 @@ use rusty_fs::{FakeFs, FakeOp, Fault, LocalFs, Provider};
 
 use super::*;
 
+mod budget;
 mod capture;
+mod legacy;
 mod local;
 mod maintenance;
 mod owner;
+mod placement;
+mod privacy;
 mod purge;
 mod restart;
+mod vault;
 
 fn open<'a>(profile: &Path, ops: &'a dyn ProviderOps) -> Vault<'a> {
     let (db, _) = Db::open(&profile.join("ferrite.db"), false).unwrap();
     Vault::new(db, profile, ops).unwrap()
+}
+
+fn open_within<'a>(profile: &Path, ops: &'a dyn ProviderOps, ceiling: &Path) -> Vault<'a> {
+    let mut vault = open(profile, ops);
+    vault.places.ceiling = Some(location(ceiling));
+    vault
 }
 
 fn run<R>(action: impl FnOnce(&mut RetentionRun<'_>) -> R) -> R {

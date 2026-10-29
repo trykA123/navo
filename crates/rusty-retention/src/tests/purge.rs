@@ -52,16 +52,17 @@ fn a_replaced_payload_is_not_purged_or_restored() {
 }
 
 #[test]
-fn an_unavailable_parent_does_not_mean_the_retained_data_was_deleted() {
+fn an_unavailable_vault_does_not_mean_the_retained_data_was_deleted() {
     let profile = tempfile::tempdir().unwrap();
     let fs = FakeFs::new();
     fs.add_file("home/a", 7);
     let mut vault = open(profile.path(), &fs);
     let entry = capture(&mut vault, &fs.location("home/a"));
+    let anchor = entry.record.anchor().unwrap().path().to_text();
     fs.fault(
-        "home",
+        &anchor,
         FakeOp::Metadata,
-        fs.calls("home", FakeOp::Metadata) + 1,
+        fs.calls(&anchor, FakeOp::Metadata) + 1,
         Fault::Fail(FsErrorKind::NetworkLost),
     );
     assert!(purge(&mut vault, entry.id).is_err());

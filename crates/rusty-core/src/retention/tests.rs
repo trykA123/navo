@@ -41,6 +41,69 @@ fn containers_keep_validating_under_the_legacy_brand_but_not_across_kinds() {
     assert!(held.validate().is_err());
 }
 
+#[test]
+fn vault_records_accept_only_containers_inside_a_named_vault() {
+    let mut vaulted = entry(1, 7, 100);
+    vaulted.record.version = VAULT_RECORD_VERSION;
+    for vault in [
+        "/.navo-vault",
+        "/home/.local/share/navo/vault",
+        "/.Trash-1000/navo-vault",
+    ] {
+        vaulted.record.container =
+            crate::Location::new(format!("{vault}/{CONTAINER_PREFIX}1")).unwrap();
+        vaulted.validate().unwrap();
+        assert_eq!(
+            vaulted.record.anchor().unwrap().as_str(),
+            vault,
+            "the vault anchors the proof"
+        );
+    }
+    for container in [
+        format!("/sample/{CONTAINER_PREFIX}1"),
+        format!("/sample/a/.navo-vault/{CONTAINER_PREFIX}1"),
+        format!("/.navo-vault/{}1", crate::brand::HELD_PREFIX),
+    ] {
+        vaulted.record.container = crate::Location::new(container.clone()).unwrap();
+        assert!(vaulted.validate().is_err(), "{container}");
+    }
+    let sibling = entry(1, 7, 100);
+    assert_eq!(sibling.record.anchor().unwrap().as_str(), "/sample");
+}
+
+#[test]
+fn vault_lookalikes_are_rejected() {
+    let mut vaulted = entry(1, 7, 100);
+    vaulted.record.version = VAULT_RECORD_VERSION;
+    let at = |vault: &str| crate::Location::new(format!("{vault}/{CONTAINER_PREFIX}1")).unwrap();
+    for vault in ["/sample/.NAVO-VAULT", "/media/usb/.Trash-1000/navo-vault"] {
+        vaulted.record.container = at(vault);
+        vaulted.validate().unwrap();
+    }
+    for vault in [
+        "/sample/navo-vault",
+        "/media/usb/.Trash-x/navo-vault",
+        "/media/usb/.Trash-/navo-vault",
+        "/sample/Vault",
+        "/sample/.navo-vault-old",
+    ] {
+        vaulted.record.container = at(vault);
+        assert!(vaulted.validate().is_err(), "{vault}");
+    }
+    let data = crate::Location::new("/home/u/.local/share/navo").unwrap();
+    vaulted.record.container = at("/home/u/.local/share/navo/vault");
+    vaulted.record.validate_in(Some(&data)).unwrap();
+    assert!(
+        vaulted.record.validate_in(None).is_err(),
+        "no profile, no profile vault"
+    );
+    vaulted.record.container = at("/sample/vault");
+    assert!(
+        vaulted.record.validate_in(Some(&data)).is_err(),
+        "vault outside the profile"
+    );
+}
+
 fn entry(id: i64, size: u64, created_at: i64) -> RetentionEntry {
     let identity = FileIdentity {
         kind: crate::FileIdentityKind::Native,

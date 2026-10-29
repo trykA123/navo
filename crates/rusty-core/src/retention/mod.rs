@@ -22,6 +22,7 @@ pub use writing::{COPY_RETAINED_KIND, MOVE_RETAINED_KIND, RetainedWritePlan, is_
 
 pub const CONTAINER_PREFIX: &str = crate::brand::RETAINED_PREFIX;
 pub const ADOPTED_CONTAINER_PREFIX: &str = crate::brand::HELD_PREFIX;
+pub const VAULT_RECORD_VERSION: u32 = 3;
 pub const MAX_NODES: usize = 100_000;
 pub const MAX_RECORD_BYTES: usize = 32 * 1024 * 1024;
 pub const DAY_MS: i64 = 86_400_000;
@@ -83,6 +84,15 @@ pub struct RetentionRecord {
 }
 
 impl RetentionRecord {
+    #[must_use]
+    pub fn anchor(&self) -> Option<Location> {
+        if self.version == VAULT_RECORD_VERSION {
+            self.container.parent()
+        } else {
+            self.source.parent()
+        }
+    }
+
     pub fn held(&self) -> Result<Location, RetentionError> {
         self.container
             .join(&ProviderPath::from_text(

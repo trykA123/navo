@@ -4,7 +4,7 @@ use rusty_fs::{EntryKind, FsEntry, ProviderOps};
 
 use crate::Error;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct Scope {
     pub volume: u64,
     pub mount: u64,
@@ -58,12 +58,14 @@ pub(super) fn folder(
     Ok(())
 }
 
+pub(super) fn anchor(record: &RetentionRecord) -> Result<Location, Error> {
+    record
+        .anchor()
+        .ok_or_else(|| Error::Changed(record.container.clone()))
+}
+
 pub(super) fn parent(ops: &dyn ProviderOps, record: &RetentionRecord) -> Result<(), Error> {
-    let parent = record
-        .source
-        .parent()
-        .ok_or_else(|| Error::Changed(record.source.clone()))?;
-    folder(ops, &parent, record.parent_identity)
+    folder(ops, &anchor(record)?, record.parent_identity)
 }
 
 pub(super) fn owned(ops: &dyn ProviderOps, record: &RetentionRecord) -> Result<Scope, Error> {
@@ -72,11 +74,7 @@ pub(super) fn owned(ops: &dyn ProviderOps, record: &RetentionRecord) -> Result<S
         .container_identity
         .ok_or_else(|| Error::Changed(record.container.clone()))?;
     folder(ops, &record.container, expected)?;
-    let source_parent = record
-        .source
-        .parent()
-        .ok_or_else(|| Error::Changed(record.source.clone()))?;
-    let scope = scope(ops, &source_parent)?;
+    let scope = scope(ops, &anchor(record)?)?;
     on_scope(ops, &record.container, scope)?;
     Ok(scope)
 }

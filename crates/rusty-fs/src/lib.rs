@@ -50,7 +50,7 @@ pub use protection::{ResolvedPlan, check_mutation, check_relocation, check_resol
 pub use provider::{
     AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
     EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, LinkKey, ListSink, OwnedCopy,
-    Provider, ProviderOps, SizeEntry,
+    Provider, ProviderOps, SizeEntry, UnixAccess,
 };
 pub use scan::{existing_at, scan};
 pub use slow::SlowFs;

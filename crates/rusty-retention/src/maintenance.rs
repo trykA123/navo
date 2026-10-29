@@ -18,6 +18,7 @@ pub struct MaintenanceRequest<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaintenanceReport {
     pub purged: Vec<RetentionId>,
+    pub skipped: Vec<RetentionId>,
     pub remaining_bytes: u128,
     pub quota_unmet: bool,
     pub low_space: bool,
@@ -56,20 +57,10 @@ impl Vault<'_> {
         run: &mut RetentionRun<'_>,
         protected: &HashSet<RetentionId>,
     ) -> Result<MaintenanceReport, Error> {
-        if request.now < 0 || !(1..=256).contains(&request.max_purges) {
-            return Err(rusty_core::retention::RetentionError::Invalid(
-                "invalid maintenance bounds",
-            )
-            .into());
-        }
-        run.visit(request.at)?;
-        let observed = Observation {
-            at: request.at,
-            identity: proof::identity(self.ops, request.at)?,
-            mount: proof::scope(self.ops, request.at)?.mount,
-        };
+        let observed = self.observe(&request, run)?;
         let mut inventory = self.inventory((request.at, run), protected)?;
-        self.cleanup_terminal(&observed, (u32::from(request.max_purges), run))?;
+        let (mut skipped, mut attempts) =
+            self.cleanup_terminal(&observed, (request.max_purges, run))?;
         let mut purged = Vec::new();
         loop {
             let space = observed.measure(self.ops)?;
@@ -86,35 +77,70 @@ impl Vault<'_> {
                 .find(|entry| entry.resumes_purge(space.volume))
                 .map(|entry| entry.id());
             let next = resume.or_else(|| plan.choices.first().map(|choice| choice.id));
-            if next.is_none() || purged.len() == usize::from(request.max_purges) {
+            let Some(id) = next.filter(|_| attempts < request.max_purges) else {
                 let mut result = report(purged, &inventory, (&request, space, next.is_some()));
+                result.skipped = skipped;
                 result.cleanup_pending = !self.catalog.pending_cleanup(space.volume, 1)?.is_empty();
                 return Ok(result);
-            }
-            let id = next.ok_or(rusty_core::retention::RetentionError::Invalid(
-                "missing maintenance candidate",
-            ))?;
-            let completed = if resume.is_some() {
-                self.reconcile(id, run)?
-            } else {
-                self.purge(id, run)?
             };
-            if completed.state != rusty_core::retention::RetainedState::Purged {
-                return Err(Error::State(id));
+            attempts += 1;
+            if self.expire(id, resume.is_some(), run)? {
+                purged.push(id);
+                inventory.retain(|entry| entry.id() != id);
+            } else {
+                skipped.push(id);
+                exclude_from_selection(&mut inventory, id);
             }
-            inventory.retain(|entry| entry.id() != id);
-            purged.push(id);
+        }
+    }
+
+    fn observe<'r>(
+        &self,
+        request: &MaintenanceRequest<'r>,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<Observation<'r>, Error> {
+        if request.now < 0 || !(1..=256).contains(&request.max_purges) {
+            return Err(rusty_core::retention::RetentionError::Invalid(
+                "invalid maintenance bounds",
+            )
+            .into());
+        }
+        run.visit(request.at)?;
+        Ok(Observation {
+            at: request.at,
+            identity: proof::identity(self.ops, request.at)?,
+            mount: proof::scope(self.ops, request.at)?.mount,
+        })
+    }
+
+    fn expire(
+        &mut self,
+        id: RetentionId,
+        resume: bool,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<bool, Error> {
+        let completed = if resume {
+            self.reconcile(id, run)
+        } else {
+            self.purge(id, run)
+        };
+        match completed {
+            Ok(entry) if entry.state == rusty_core::retention::RetainedState::Purged => Ok(true),
+            Ok(_) => skip(id, Error::State(id), run).map(|()| false),
+            Err(error) => skip(id, error, run).map(|()| false),
         }
     }
 
     fn cleanup_terminal(
         &mut self,
         observed: &Observation<'_>,
-        (limit, run): (u32, &mut RetentionRun<'_>),
-    ) -> Result<(), Error> {
+        (limit, run): (u16, &mut RetentionRun<'_>),
+    ) -> Result<(Vec<RetentionId>, u16), Error> {
         let ids = self
             .catalog
-            .pending_cleanup(observed.identity.volume, limit)?;
+            .pending_cleanup(observed.identity.volume, u32::from(limit))?;
+        let mut skipped = Vec::new();
+        let mut attempts = 0;
         for id in ids {
             let entry = self.catalog.get(id)?;
             if entry.record.parent_identity.volume != observed.identity.volume {
@@ -122,10 +148,14 @@ impl Vault<'_> {
             }
             run.visit(&entry.record.container)?;
             observed.measure(self.ops)?;
+            attempts += 1;
             self.catalog.begin_cleanup_attempt(id)?;
-            self.cleanup(&entry)?;
+            if let Err(error) = self.check_home(&entry).and_then(|()| self.cleanup(&entry)) {
+                skip(id, error, run)?;
+                skipped.push(id);
+            }
         }
-        Ok(())
+        Ok((skipped, attempts))
     }
 
     fn inventory(
@@ -181,6 +211,22 @@ impl Observation<'_> {
     }
 }
 
+pub(super) fn skip(id: RetentionId, error: Error, run: &RetentionRun<'_>) -> Result<(), Error> {
+    let cancelled = run.cancel.is_cancelled()
+        || matches!(&error, Error::Fs(fs) if fs.kind == rusty_core::FsErrorKind::Cancelled);
+    if cancelled || matches!(error, Error::Catalog(_) | Error::Lock(_)) {
+        return Err(error);
+    }
+    tracing::warn!(id = id.0, %error, "retained entry skipped by maintenance");
+    Ok(())
+}
+
+fn exclude_from_selection(inventory: &mut [RetentionSummary], id: RetentionId) {
+    for entry in inventory.iter_mut().filter(|entry| entry.id() == id) {
+        entry.protect();
+    }
+}
+
 fn report(
     purged: Vec<RetentionId>,
     inventory: &[RetentionSummary],
@@ -192,6 +238,7 @@ fn report(
         .sum();
     MaintenanceReport {
         purged,
+        skipped: Vec::new(),
         remaining_bytes,
         quota_unmet: remaining_bytes > u128::from(request.policy.max_volume_bytes()),
         low_space: space.free_bytes < request.policy.min_free_bytes(),

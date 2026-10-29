@@ -6594,6 +6594,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror 2.0.21",
+ "tracing",
  "trash",
  "windows 0.62.2",
  "windows-sys 0.61.2",
@@ -6645,11 +6646,14 @@ version = "0.0.1"
 name = "rusty-retention"
 version = "0.0.1"
 dependencies = [
+ "rustix",
  "rusty-core",
  "rusty-fs",
  "rusty-store",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

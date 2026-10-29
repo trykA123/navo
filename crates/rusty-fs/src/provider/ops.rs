@@ -4,6 +4,12 @@ use super::{CancelToken, CopyControl, EntryKind, OwnedCopy, Provider};
 
 pub use rusty_core::{FileIdentity, FileIdentityKind};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnixAccess {
+    pub owner: u32,
+    pub mode: u32,
+}
+
 pub trait ProviderOps: Provider {
     fn hide_retained(&self, location: &Location, identity: FileIdentity) -> Result<(), FsError> {
         if self.matches_identity(location, Some(identity))? {
@@ -86,6 +92,21 @@ pub trait ProviderOps: Provider {
         }
     }
     fn create_folder(&self, location: &Location) -> Result<(), FsError>;
+    fn create_private_folder(&self, location: &Location) -> Result<(), FsError> {
+        self.create_folder(location)
+    }
+    fn unix_access(&self, _location: &Location) -> Result<Option<UnixAccess>, FsError> {
+        Ok(None)
+    }
+    fn restrict_to_owner(&self, _location: &Location) -> Result<(), FsError> {
+        Ok(())
+    }
+    fn owned_by_current_user(&self, _location: &Location) -> Result<Option<bool>, FsError> {
+        Ok(None)
+    }
+    fn volume_root(&self, _location: &Location) -> Result<Option<Location>, FsError> {
+        Ok(None)
+    }
     fn create_file(&self, location: &Location) -> Result<(), FsError>;
     #[expect(
         clippy::too_many_arguments,

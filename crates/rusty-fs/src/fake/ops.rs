@@ -17,6 +17,10 @@ pub(super) fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), 
             | Fault::FailAfterEntries { kind, .. }
             | Fault::FailAfterBytes { kind, .. },
         ) => Err(error(kind, location)),
+        Some(Fault::FailOs { kind, code }) => Err(FsError {
+            os_code: Some(code),
+            ..error(kind, location)
+        }),
         Some(Fault::Collide | Fault::LinkThenFail(_) | Fault::RenameThenFail(_)) | None => Ok(()),
     }
 }
@@ -114,6 +118,30 @@ impl ProviderOps for FakeFs {
                 kind: crate::FileIdentityKind::Native,
                 file: u128::from(identity).to_le_bytes(),
             }))
+    }
+
+    fn hide_retained(
+        &self,
+        location: &Location,
+        identity: crate::FileIdentity,
+    ) -> Result<(), FsError> {
+        self.record_secure(location)?;
+        if self.matches_identity(location, Some(identity))? {
+            return Ok(());
+        }
+        Err(error(FsErrorKind::IdentityUnavailable, location))
+    }
+
+    fn unix_access(&self, location: &Location) -> Result<Option<crate::UnixAccess>, FsError> {
+        self.access_of(location)
+    }
+
+    fn restrict_to_owner(&self, location: &Location) -> Result<(), FsError> {
+        self.restrict(location)
+    }
+
+    fn owned_by_current_user(&self, location: &Location) -> Result<Option<bool>, FsError> {
+        self.owner_of(location)
     }
 
     fn create_folder(&self, location: &Location) -> Result<(), FsError> {

@@ -11,7 +11,7 @@ impl Vault<'_> {
         id: RetentionId,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
-        let mut entry = self.catalog.get(id)?;
+        let mut entry = self.get(id)?;
         if entry.pinned {
             return Err(Error::Pinned(id));
         }

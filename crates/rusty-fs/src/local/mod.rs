@@ -35,6 +35,8 @@ mod win_list;
 #[cfg(windows)]
 mod win_lock;
 #[cfg(windows)]
+mod win_owner;
+#[cfg(windows)]
 mod win_replace;
 #[cfg(windows)]
 mod win_sizes;

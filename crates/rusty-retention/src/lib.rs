@@ -5,6 +5,7 @@ mod ancestry;
 mod capture;
 mod locking;
 mod maintenance;
+mod place;
 mod proof;
 mod purge;
 mod reconcile;
@@ -108,6 +109,7 @@ impl<'a> RetentionRun<'a> {
 pub struct Vault<'a> {
     catalog: RetentionCatalog,
     ops: &'a dyn ProviderOps,
+    places: place::Config,
     _lock: File,
 }
 
@@ -117,12 +119,24 @@ impl<'a> Vault<'a> {
         Ok(Self {
             catalog: RetentionCatalog::new(db)?,
             ops,
+            places: place::config(profile),
             _lock: guard,
         })
     }
 
     pub fn get(&self, id: RetentionId) -> Result<RetentionEntry, Error> {
-        Ok(self.catalog.get(id)?)
+        let entry = self.catalog.get(id)?;
+        self.check_home(&entry)?;
+        Ok(entry)
+    }
+
+    pub fn limit_vaults_to(&mut self, ceiling: Location) {
+        self.places.ceiling = Some(ceiling);
+    }
+
+    fn check_home(&self, entry: &RetentionEntry) -> Result<(), Error> {
+        let data = self.places.fallback.as_ref().and_then(Location::parent);
+        Ok(entry.record.validate_in(data.as_ref())?)
     }
 
     pub fn list_after(&self, after: i64, limit: u32) -> Result<Vec<RetentionEntry>, Error> {

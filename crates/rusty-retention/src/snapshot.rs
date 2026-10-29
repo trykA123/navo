@@ -81,11 +81,11 @@ pub(super) fn verify(
     if missing && proof::present(ops, root)?.is_none() {
         return Ok(());
     }
-    let parent = record
-        .source
-        .parent()
-        .ok_or_else(|| Error::Changed(record.source.clone()))?;
-    let found = read(ops, (root, proof::scope(ops, &parent)?), run)?;
+    let found = read(
+        ops,
+        (root, proof::scope(ops, &proof::anchor(record)?)?),
+        run,
+    )?;
     let expected: HashMap<_, _> = record.nodes.iter().map(|node| (&node.path, node)).collect();
     for node in &found {
         if expected.get(&node.path).copied() != Some(node) {

@@ -17,6 +17,7 @@ alege = "alege"
 rela = "rela"
 
 [default.extend-identifiers]
+BA = "BA"
 BA_ = "BA_"
 BA_DEF_ = "BA_DEF_"
 BA_DEF_DEF_ = "BA_DEF_DEF_"

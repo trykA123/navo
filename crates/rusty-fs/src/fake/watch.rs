@@ -121,6 +121,7 @@ impl FakeFs {
         }
         if let Some(
             Fault::Fail(kind)
+            | Fault::FailOs { kind, .. }
             | Fault::FailAfterEntries { kind, .. }
             | Fault::FailAfterBytes { kind, .. },
         ) = self.record_call(&path, FakeOp::Watch)

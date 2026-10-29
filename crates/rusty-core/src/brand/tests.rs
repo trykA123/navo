@@ -40,3 +40,14 @@ fn mutation_anchors_are_reserved_but_not_retained() {
     }
     assert!(!is_reserved_name("mutations"));
 }
+
+#[test]
+fn the_vault_folder_is_reserved_in_any_case_but_lookalikes_are_not() {
+    for name in [".navo-vault", ".NAVO-VAULT", ".Navo-Vault"] {
+        assert!(is_retained_container(name), "{name}");
+        assert!(is_reserved_name(name), "{name}");
+    }
+    for name in ["navo-vault", ".navo-vault-old", "vault"] {
+        assert!(!is_reserved_name(name), "{name}");
+    }
+}

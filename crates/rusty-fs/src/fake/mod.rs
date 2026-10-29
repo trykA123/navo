@@ -1,5 +1,6 @@
 mod copy;
 mod ops;
+mod permissions;
 mod tree;
 mod watch;
 
@@ -30,12 +31,14 @@ pub enum FakeOp {
     Replace,
     Remove,
     Recycle,
+    Secure,
     Watch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fault {
     Fail(FsErrorKind),
+    FailOs { kind: FsErrorKind, code: i32 },
     FailAfterEntries { kind: FsErrorKind, entries: usize },
     FailAfterBytes { kind: FsErrorKind, bytes: u64 },
     Collide,
@@ -62,6 +65,7 @@ pub struct FakeFs {
     mounts: Mutex<HashMap<String, Option<u64>>>,
     space: Mutex<HashMap<String, Option<u64>>>,
     sizes: Mutex<HashMap<u64, SizeMetadata>>,
+    permissions: Mutex<permissions::Permissions>,
     batch_size: usize,
     watchable: bool,
     watchers: Watchers,
@@ -98,6 +102,7 @@ impl FakeFs {
             mounts: Mutex::new(HashMap::new()),
             space: Mutex::new(HashMap::new()),
             sizes: Mutex::new(HashMap::new()),
+            permissions: Mutex::default(),
             batch_size: DEFAULT_BATCH,
             watchable: false,
             watchers: Watchers::default(),
@@ -347,7 +352,9 @@ impl Provider for FakeFs {
             return Err(error(FsErrorKind::Cancelled, folder));
         }
         let (limit, failure) = match fault {
-            Some(Fault::Fail(kind) | Fault::FailAfterBytes { kind, .. }) => {
+            Some(
+                Fault::Fail(kind) | Fault::FailOs { kind, .. } | Fault::FailAfterBytes { kind, .. },
+            ) => {
                 return Err(error(kind, folder));
             }
             Some(Fault::FailAfterEntries { kind, entries }) => (entries, Some(kind)),
@@ -405,6 +412,7 @@ impl Provider for FakeFs {
         match self.record_call(&path, FakeOp::Metadata) {
             Some(
                 Fault::Fail(kind)
+                | Fault::FailOs { kind, .. }
                 | Fault::FailAfterEntries { kind, .. }
                 | Fault::FailAfterBytes { kind, .. },
             ) => Err(error(kind, location)),

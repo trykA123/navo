@@ -86,11 +86,16 @@ fn another_profile_cannot_move_or_recycle_a_folder_with_retained_children() {
     let (_profile, dirs, journal) = setup();
     let fs = FakeFs::new();
     fs.add_file("home/docs/a", 8);
+    fs.set_volume("home/docs", 5);
     let plan = delete(&fs, &[fs.location("home/docs/a")]);
-    let mut log = super::super::experimental_factory(journal, dirs)(&plan).unwrap();
+    let mut log = super::super::experimental_factory(journal, dirs.clone())(&plan).unwrap();
     assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);
     log.finish(&JobOutcome::Done, &fs).unwrap();
     drop(log);
+    assert_eq!(
+        entries(&dirs)[0].record.anchor(),
+        Some(fs.location("home/docs/.navo-vault"))
+    );
     let (_other_profile, other, journal) = setup();
     let mut plan = plan.clone();
     for (kind, step) in [
@@ -336,8 +341,9 @@ fn profile_lease_and_private_containers_block_other_mutations() {
     log.finish(&JobOutcome::Done, &fs).unwrap();
     drop(log);
     let container = entries(&dirs)[0].record.container.clone();
+    let vault = container.parent().unwrap();
     assert!(factory(&delete(&fs, &[container])).is_err());
-    assert!(factory(&delete(&fs, &[fs.location("home")])).is_err());
+    assert!(factory(&delete(&fs, &[vault])).is_err());
 }
 
 #[test]
@@ -371,7 +377,10 @@ fn native_tree_keeps_exact_bytes_and_restores_through_startup_preflight() {
     let fs = LocalFs::new();
     let source = Location::new(tree.to_string_lossy().into_owned()).unwrap();
     let plan = delete(&fs, std::slice::from_ref(&source));
-    let mut log = super::super::experimental_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+    let ceiling = Location::new(files.path().to_string_lossy().into_owned()).unwrap();
+    let mut log =
+        super::super::confined_factory(journal.clone(), dirs.clone(), ceiling.clone())(&plan)
+            .unwrap();
     assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);
     drop((log, journal));
     assert!(!tree.exists());
@@ -385,6 +394,14 @@ fn native_tree_keeps_exact_bytes_and_restores_through_startup_preflight() {
     );
     assert_eq!(entries(&dirs)[0].state, RetainedState::Restored);
     drop(started);
+    assert_eq!(
+        saved[0].record.anchor(),
+        ceiling
+            .join(&rusty_core::ProviderPath::from_text(
+                rusty_core::brand::VAULT_NAME
+            ))
+            .ok()
+    );
 }
 
 fn finished_rename(
@@ -430,6 +447,7 @@ fn refused_undo_checks_the_current_target_and_keeps_the_finished_job_terminal() 
         target: fs.location("home/renamed"),
     }];
     let job = finished_rename(&fs, &rename, (&other_journal, &other));
+    fs.set_volume("home/renamed", 5);
     let (_profile, dirs, journal) = setup();
     let plan = delete(&fs, &[fs.location("home/renamed/a")]);
     let mut log = super::super::experimental_factory(journal, dirs)(&plan).unwrap();

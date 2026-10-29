@@ -1,12 +1,26 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusty_core::ProviderPath;
-use rusty_core::retention::{CONTAINER_PREFIX, RetainedState, RetentionEntry, RetentionRecord};
+use rusty_core::retention::{
+    CONTAINER_PREFIX, RetainedNode, RetainedState, RetentionEntry, RetentionRecord,
+    VAULT_RECORD_VERSION,
+};
+use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
 
-use crate::{CaptureRequest, Error, RetentionRun, Vault, proof, snapshot};
+use crate::{CaptureRequest, Error, RetentionRun, Vault, place, proof, snapshot};
 
 static CAPTURES: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(windows)]
+pub(super) const CROSS_DEVICE: i32 = 17;
+#[cfg(not(windows))]
+pub(super) const CROSS_DEVICE: i32 = 18;
+
+struct Source {
+    parent: Location,
+    scope: proof::Scope,
+    nodes: Vec<RetainedNode>,
+}
 
 impl Vault<'_> {
     pub fn capture(
@@ -14,31 +28,20 @@ impl Vault<'_> {
         request: CaptureRequest<'_>,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
-        let record = self.prepare_record(&request, run)?;
-        let mut tx = self.catalog.transaction()?;
-        let entry = tx.insert(&record, request.job)?;
-        tx.commit()?;
-        self.ops.create_folder(&record.container)?;
-        let mut tx = self.catalog.transaction()?;
-        let mut entry = tx.get(entry.id)?;
-        entry.record.container_identity = Some(proof::identity(self.ops, &record.container)?);
-        tx.save(&entry, RetainedState::Preparing)?;
-        tx.commit()?;
-        self.ops.hide_retained(
-            &entry.record.container,
-            entry
-                .record
-                .container_identity
-                .ok_or(Error::State(entry.id))?,
-        )?;
-        self.complete_capture(entry, run)
+        let source = self.inspect(&request, run)?;
+        for chain in place::chains(self.ops, (&source.parent, source.scope), &self.places)? {
+            if let Some(entry) = self.capture_in(&chain, (&request, &source), run)? {
+                return Ok(entry);
+            }
+        }
+        Err(Error::Unsupported(request.source.clone()))
     }
 
-    fn prepare_record(
+    fn inspect(
         &self,
         request: &CaptureRequest<'_>,
         run: &mut RetentionRun<'_>,
-    ) -> Result<RetentionRecord, Error> {
+    ) -> Result<Source, Error> {
         if !self.ops.supports_atomic_rename() {
             return Err(Error::Unsupported(request.source.clone()));
         }
@@ -46,33 +49,104 @@ impl Vault<'_> {
             .source
             .parent()
             .ok_or_else(|| Error::Unsupported(request.source.clone()))?;
-        let parent_identity = proof::identity(self.ops, &parent)?;
-        proof::folder(self.ops, &parent, parent_identity)?;
-        let container = new_container(&parent)?;
+        proof::folder(self.ops, &parent, proof::identity(self.ops, &parent)?)?;
+        let scope = proof::scope(self.ops, &parent)?;
+        let nodes = snapshot::read(self.ops, (request.source, scope), run)?;
+        Ok(Source {
+            parent,
+            scope,
+            nodes,
+        })
+    }
+
+    fn capture_in(
+        &mut self,
+        chain: &[Location],
+        (request, source): (&CaptureRequest<'_>, &Source),
+        run: &mut RetentionRun<'_>,
+    ) -> Result<Option<RetentionEntry>, Error> {
+        let mut created = place::Created::new();
+        let registered = place::ensure_chain(self.ops, (chain, source.scope), &mut created)
+            .map(|placed| self.register(request, source, &placed))
+            .transpose();
+        let entry = match registered {
+            Ok(Some(entry)) => entry,
+            outcome => {
+                place::discard(self.ops, &created);
+                return outcome.map(|_| None);
+            }
+        };
+        let id = entry.id;
+        match self.fill(entry, run)? {
+            Some(entry) => Ok(Some(entry)),
+            None => self.withdraw(id, run),
+        }
+    }
+
+    fn register(
+        &mut self,
+        request: &CaptureRequest<'_>,
+        source: &Source,
+        placed: &place::Placed,
+    ) -> Result<RetentionEntry, Error> {
         let record = RetentionRecord {
-            version: 1,
+            version: VAULT_RECORD_VERSION,
             payload_name: None,
             source: request.source.clone(),
-            container,
-            parent_identity,
+            container: new_container(&placed.vault)?,
+            parent_identity: placed.identity,
             container_identity: None,
-            nodes: snapshot::read(
-                self.ops,
-                (request.source, proof::scope(self.ops, &parent)?),
-                run,
-            )?,
+            nodes: source.nodes.clone(),
             created_at: request.created_at,
             expires_at: request.policy.expires_at(request.created_at)?,
         };
         record.validate()?;
-        Ok(record)
+        let mut tx = self.catalog.transaction()?;
+        let entry = tx.insert(&record, request.job)?;
+        tx.commit()?;
+        Ok(entry)
+    }
+
+    fn fill(
+        &mut self,
+        entry: RetentionEntry,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<Option<RetentionEntry>, Error> {
+        match self.ops.create_private_folder(&entry.record.container) {
+            Err(error) if error.kind == FsErrorKind::AccessDenied => return Ok(None),
+            created => created?,
+        }
+        let mut tx = self.catalog.transaction()?;
+        let mut entry = tx.get(entry.id)?;
+        let identity = proof::identity(self.ops, &entry.record.container)?;
+        entry.record.container_identity = Some(identity);
+        tx.save(&entry, RetainedState::Preparing)?;
+        tx.commit()?;
+        self.ops.hide_retained(&entry.record.container, identity)?;
+        self.complete_capture(entry, run)
+    }
+
+    fn withdraw(
+        &mut self,
+        id: rusty_core::retention::RetentionId,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<Option<RetentionEntry>, Error> {
+        let settled = self.reconcile(id, run)?;
+        if settled.state != RetainedState::Aborted {
+            return Err(Error::State(id));
+        }
+        tracing::info!(
+            id = id.0,
+            "vault refused the capture; trying the next vault"
+        );
+        Ok(None)
     }
 
     fn complete_capture(
         &mut self,
         entry: RetentionEntry,
         run: &mut RetentionRun<'_>,
-    ) -> Result<RetentionEntry, Error> {
+    ) -> Result<Option<RetentionEntry>, Error> {
         let mut entry = self.catalog.get(entry.id)?;
         if entry.state != RetainedState::Preparing {
             return Err(Error::State(entry.id));
@@ -84,8 +158,13 @@ impl Vault<'_> {
         if !proof::node(self.ops, &entry.record.source, &entry.record.nodes[0])? {
             return Err(Error::Changed(entry.record.source.clone()));
         }
-        self.ops
-            .rename_atomic(&entry.record.source, &entry.record.held()?)?;
+        match self
+            .ops
+            .rename_atomic(&entry.record.source, &entry.record.held()?)
+        {
+            Err(error) if crosses_devices(&error) => return Ok(None),
+            moved => moved?,
+        }
         tx.commit()?;
         snapshot::verify(self.ops, &entry.record, (&entry.record.held()?, false), run)?;
         let mut tx = self.catalog.checked_transaction(&entry)?;
@@ -96,11 +175,15 @@ impl Vault<'_> {
         entry.state = RetainedState::Ready;
         tx.save(&entry, RetainedState::Preparing)?;
         tx.commit()?;
-        Ok(entry)
+        Ok(Some(entry))
     }
 }
 
-fn new_container(parent: &rusty_core::Location) -> Result<rusty_core::Location, Error> {
+fn crosses_devices(error: &FsError) -> bool {
+    error.os_code == Some(CROSS_DEVICE)
+}
+
+fn new_container(parent: &Location) -> Result<Location, Error> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |value| value.as_nanos());

@@ -210,7 +210,7 @@ fn native_maintenance_removes_expired_payload_and_preserves_new_user_file() {
     let source = files.path().join("a");
     std::fs::write(&source, b"old version").unwrap();
     let fs = LocalFs::new();
-    let mut vault = open(profile.path(), &fs);
+    let mut vault = open_within(profile.path(), &fs, files.path());
     let entry = capture(&mut vault, &location(&source));
     std::fs::write(&source, b"new user version").unwrap();
     let at = location(files.path());
@@ -275,10 +275,10 @@ fn maintenance_retries_empty_holder_cleanup_after_the_purge_state_was_committed(
         Fault::Fail(FsErrorKind::Locked),
     );
     let at = fs.location("home");
-    assert!(
+    let first =
         run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
-            .is_err()
-    );
+            .unwrap();
+    assert!(first.cleanup_pending);
     assert_eq!(vault.get(entry.id).unwrap().state, RetainedState::Purged);
     assert!(fs.metadata(&entry.record.container).is_ok());
     run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
@@ -308,7 +308,7 @@ fn a_failed_cleanup_does_not_starve_later_empty_holders_on_the_next_pass() {
         max_purges: 1,
         ..request(&at, 100, RetentionPolicy::default())
     };
-    assert!(run(|run| vault.maintain_volume(args(), run)).is_err());
+    run(|run| vault.maintain_volume(args(), run)).unwrap();
     let result = run(|run| vault.maintain_volume(args(), run)).unwrap();
     assert!(result.cleanup_pending);
     assert!(fs.metadata(&extra).is_ok());
