@@ -203,7 +203,7 @@ fn a_profile_without_dirs_continues_without_an_instance_guard() {
 }
 
 #[test]
-fn dropping_the_guard_stops_an_idle_server_within_250_ms() {
+fn dropping_the_guard_stops_an_idle_server_within_100_ms() {
     let root = tempfile::tempdir().unwrap();
     let mut guard = first(root.path(), root.path());
     guard.serve(|_| Reply::Ok).unwrap();
@@ -215,7 +215,41 @@ fn dropping_the_guard_stops_an_idle_server_within_250_ms() {
     );
     let started = Instant::now();
     drop(guard);
-    assert!(started.elapsed() < Duration::from_millis(250));
+    assert!(started.elapsed() < Duration::from_millis(100));
+}
+
+#[test]
+fn shutdown_without_any_client_stops_the_listener_within_100_ms() {
+    let root = tempfile::tempdir().unwrap();
+    let mut guard = first(root.path(), root.path());
+    guard.serve(|_| Reply::Ok).unwrap();
+    let started = Instant::now();
+    drop(guard);
+    assert!(started.elapsed() < Duration::from_millis(100));
+}
+
+#[test]
+fn a_second_client_connects_after_the_first_finishes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut guard = first(root.path(), root.path());
+    let (sent, received) = mpsc::channel();
+    guard
+        .serve(move |request| {
+            sent.send(request).unwrap();
+            Reply::Ok
+        })
+        .unwrap();
+    for _ in 0..2 {
+        let client = second(root.path(), root.path());
+        assert_eq!(
+            client.send(&request(), Duration::from_secs(2)).unwrap(),
+            Reply::Ok
+        );
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(1)).unwrap(),
+            request()
+        );
+    }
 }
 
 #[cfg(unix)]
@@ -340,10 +374,30 @@ fn a_unique_windows_mutex_and_pipe_round_trip() {
         );
     }
     super::platform::connect_and_close(&profile);
+    let started = Instant::now();
     assert_eq!(
-        client.send(&request(), Duration::from_secs(2)).unwrap(),
+        client.send(&request(), Duration::from_secs(1)).unwrap(),
         Reply::Ok
     );
+    assert!(started.elapsed() < Duration::from_secs(1));
+}
+
+#[cfg(windows)]
+#[test]
+fn three_closed_windows_connections_allow_the_next_request_within_one_second() {
+    let root = tempfile::tempdir().unwrap();
+    let mut guard = first(root.path(), root.path());
+    guard.serve(|_| Reply::Ok).unwrap();
+    let client = second(root.path(), root.path());
+    for _ in 0..3 {
+        super::platform::connect_and_close(root.path());
+    }
+    let started = Instant::now();
+    assert_eq!(
+        client.send(&request(), Duration::from_secs(1)).unwrap(),
+        Reply::Ok
+    );
+    assert!(started.elapsed() < Duration::from_secs(1));
 }
 
 #[test]

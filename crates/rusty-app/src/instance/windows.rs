@@ -4,9 +4,10 @@ mod pipe;
 mod security;
 
 use std::io;
-use std::os::windows::io::{FromRawHandle, OwnedHandle};
+use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::path::Path;
 use std::ptr::null;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -15,7 +16,7 @@ use windows_sys::Win32::Foundation::{
     INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
-use windows_sys::Win32::System::Threading::{CreateMutexW, GetCurrentProcessId};
+use windows_sys::Win32::System::Threading::{CreateMutexW, GetCurrentProcessId, SetEvent};
 use windows_sys::Win32::UI::WindowsAndMessaging::{ASFW_ANY, AllowSetForegroundWindow};
 
 use super::server::Server;
@@ -70,13 +71,27 @@ impl Guard {
         &mut self,
         handler: impl Fn(Request) -> Reply + Send + 'static,
     ) -> Result<(), Error> {
+        let stop_event = match pipe::event() {
+            Ok(event) => Arc::new(event),
+            Err(error) => {
+                tracing::warn!(%error, "cannot create instance stop event; starting without instance server");
+                return Ok(());
+            }
+        };
         let Some(mut pipe) = self.pipe.take() else {
             return Ok(());
         };
-        if let Err(error) = self
-            .server
-            .start(move |stop| serve_connections(&mut pipe, &handler, &stop))
-        {
+        let signal = Arc::clone(&stop_event);
+        if let Err(error) = self.server.start(
+            move |stop| serve_connections(&mut pipe, &stop_event, &handler, &stop),
+            move || {
+                // SAFETY: signal owns a live manual-reset event until this call completes.
+                if unsafe { SetEvent(signal.as_raw_handle()) } == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            },
+        ) {
             tracing::warn!(%error, "cannot start instance server; keeping instance mutex");
         }
         Ok(())
@@ -85,16 +100,20 @@ impl Guard {
 
 fn serve_connections(
     pipe: &mut pipe::Pipe,
+    stop_event: &OwnedHandle,
     handler: &impl Fn(Request) -> Reply,
     stop: &AtomicBool,
 ) {
     while !stop.load(Ordering::Acquire) {
-        match pipe.connect() {
+        match pipe.connect(stop_event) {
             Ok(true) => {
-                protocol::serve(pipe, handler, stop);
-                pipe.finish(stop);
+                let deadline = Instant::now() + protocol::TIMEOUT;
+                let mut connection = pipe.connection(stop_event, deadline);
+                protocol::serve_until(&mut connection, handler, stop, deadline);
+                connection.finish();
             }
-            Ok(false) => std::thread::park_timeout(protocol::IDLE_POLL),
+            Ok(false) => break,
+            Err(error) if error.kind() == io::ErrorKind::ConnectionAborted => break,
             Err(error) => {
                 tracing::error!(%error, "instance pipe failed");
                 break;
@@ -118,7 +137,6 @@ impl Client {
                 Err(error) => return Err(error.into()),
             }
         };
-        pipe.set_nonblocking().map_err(|_| Error::Timeout)?;
         protocol::exchange(&mut pipe, request, deadline)
     }
 }
@@ -165,7 +183,3 @@ fn owned(raw: HANDLE) -> io::Result<OwnedHandle> {
     // SAFETY: the API returned a valid, uniquely owned kernel handle; OwnedHandle closes it exactly once.
     Ok(unsafe { OwnedHandle::from_raw_handle(raw) })
 }
-
-#[cfg(test)]
-#[path = "windows_tests.rs"]
-mod tests;

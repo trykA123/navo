@@ -1,5 +1,6 @@
 use std::fs::{File, OpenOptions, TryLockError};
-use std::io;
+use std::io::{self, Write};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::{FileTypeExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -64,23 +65,38 @@ impl Guard {
         &mut self,
         handler: impl Fn(Request) -> Reply + Send + 'static,
     ) -> Result<(), Error> {
+        let (wake, mut signal) = UnixStream::pair()?;
         let listener = self.listener.take().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::AlreadyExists,
                 "instance server already started",
             )
         })?;
-        self.server
-            .start(move |stop| serve_connections(&listener, &handler, &stop))
+        self.server.start(
+            move |stop| serve_connections(&listener, &wake, &handler, &stop),
+            move || match signal.write_all(&[1]) {
+                Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+                result => result,
+            },
+        )
     }
 }
 
 fn serve_connections(
     listener: &UnixListener,
+    wake: &UnixStream,
     handler: &impl Fn(Request) -> Reply,
     stop: &AtomicBool,
 ) {
     while !stop.load(Ordering::Acquire) {
+        match wait_for_connection(listener, wake) {
+            Ok(true) if !stop.load(Ordering::Acquire) => (),
+            Ok(_) => break,
+            Err(error) => {
+                tracing::error!(%error, "instance listener wait failed");
+                break;
+            }
+        }
         match listener.accept() {
             Ok((mut stream, _)) => {
                 if let Err(error) = stream.set_nonblocking(true) {
@@ -89,15 +105,42 @@ fn serve_connections(
                 }
                 protocol::serve(&mut stream, handler, stop);
             }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                std::thread::park_timeout(protocol::IDLE_POLL);
-            }
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => (),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+                ) => {}
             Err(error) => {
                 tracing::error!(%error, "instance listener failed");
                 break;
             }
         }
+    }
+}
+
+fn wait_for_connection(listener: &UnixListener, wake: &UnixStream) -> io::Result<bool> {
+    let mut events = [listener.as_raw_fd(), wake.as_raw_fd()].map(|fd| libc::pollfd {
+        fd,
+        events: libc::POLLIN,
+        revents: 0,
+    });
+    loop {
+        // SAFETY: both descriptors stay open and events contains two writable pollfd entries.
+        let ready = unsafe { libc::poll(events.as_mut_ptr(), 2, -1) };
+        if ready < 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error);
+        }
+        if events[1].revents != 0 {
+            return Ok(false);
+        }
+        if events[0].revents & libc::POLLIN != 0 {
+            return Ok(true);
+        }
+        return Err(io::Error::other("instance listener is unavailable"));
     }
 }
 

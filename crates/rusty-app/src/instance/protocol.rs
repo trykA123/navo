@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use super::{Error, Reply, Request};
 
 pub(super) const TIMEOUT: Duration = Duration::from_secs(2);
-pub(super) const IDLE_POLL: Duration = Duration::from_millis(200);
+const CONNECT_RETRY: Duration = Duration::from_millis(200);
 pub(super) const IO_POLL: Duration = Duration::from_millis(5);
 const MAX_LINE: usize = 1024 * 1024;
 
@@ -14,7 +14,7 @@ pub(super) fn pause(deadline: Instant, stop: &AtomicBool) -> Result<(), Error> {
 }
 
 pub(super) fn wait_for_connection(deadline: Instant) -> Result<(), Error> {
-    pause_for(deadline, &AtomicBool::new(false), IDLE_POLL)
+    pause_for(deadline, &AtomicBool::new(false), CONNECT_RETRY)
 }
 
 fn pause_for(deadline: Instant, stop: &AtomicBool, poll: Duration) -> Result<(), Error> {
@@ -98,12 +98,21 @@ fn unanswered(error: Error) -> Error {
     }
 }
 
+#[cfg(unix)]
 pub(super) fn serve(
     stream: &mut (impl Read + Write),
     handler: &impl Fn(Request) -> Reply,
     stop: &AtomicBool,
 ) {
-    let deadline = Instant::now() + TIMEOUT;
+    serve_until(stream, handler, stop, Instant::now() + TIMEOUT);
+}
+
+pub(super) fn serve_until(
+    stream: &mut (impl Read + Write),
+    handler: &impl Fn(Request) -> Reply,
+    stop: &AtomicBool,
+    deadline: Instant,
+) {
     let reply = read_line(stream, deadline, stop)
         .and_then(|line| Request::parse(&line))
         .map_or(Reply::Error, handler);
