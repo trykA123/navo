@@ -15,7 +15,7 @@ use gpui_kit::{
     Stateful, list,
 };
 use rusty_core::Location;
-use rusty_structured::markdown::Document;
+use rusty_structured::markdown::{BlockKind, Document};
 
 use super::background::{Job, spawn_job};
 use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
@@ -137,6 +137,7 @@ impl MarkdownView {
                 cx.open_url(&url);
                 self.say(format!("Opened {label}"), cx);
             }
+            links::Link::Anchor(anchor) => self.go_to_heading(&anchor, &label, cx),
             links::Link::Local(segments) => match links::resolve(&self.host.location, &segments) {
                 Some(target) => self.open_if_found(target, cx),
                 None => self.say(format!("Cannot open {label}: not a file name."), cx),
@@ -147,6 +148,26 @@ impl MarkdownView {
                     cx,
                 );
             }
+        }
+    }
+
+    fn go_to_heading(&mut self, anchor: &str, label: &str, cx: &mut Context<Self>) {
+        let doc = &self.doc;
+        let found = doc.blocks().iter().position(|block| {
+            matches!(block.kind, BlockKind::Heading(_)) && links::slug(doc.text(block)) == anchor
+        });
+        match found {
+            Some(item_ix) => {
+                self.list.scroll_to(ListOffset {
+                    item_ix,
+                    offset_in_item: px(0.),
+                });
+                cx.notify();
+            }
+            None => self.say(
+                rusty_l10n::t!("viewer-markdown-heading-missing", name = label),
+                cx,
+            ),
         }
     }
 
@@ -321,6 +342,11 @@ impl MarkdownBody {
     #[cfg(test)]
     pub(super) fn rendered(&self, cx: &App) -> String {
         self.0.read(cx).rendered()
+    }
+
+    #[cfg(test)]
+    pub(super) fn top_text(&self, cx: &App) -> String {
+        self.0.read(cx).top_text()
     }
 
     #[cfg(test)]

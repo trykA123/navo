@@ -211,7 +211,7 @@ pub(super) fn start<T: Send + 'static>(
 impl FerriteWindow {
     pub(super) fn request(&self, viewer: &Viewer) -> Request {
         Request {
-            hooks: self.files.clone(),
+            hooks: viewer.guide.clone().unwrap_or_else(|| self.files.clone()),
             location: viewer.location.clone(),
             name: viewer.title.to_string(),
             encoding: viewer.encoding,

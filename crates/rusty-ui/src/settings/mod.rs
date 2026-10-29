@@ -4,6 +4,7 @@ mod fields;
 mod find;
 mod find_bar;
 mod general_fields;
+mod help_page;
 mod row_state;
 mod search_fields;
 mod search_page;
@@ -32,7 +33,9 @@ pub use fields::{
 pub use find::{Filter, Line, lines};
 pub use find_bar::find_field;
 pub use search_page::{SearchPage, ServiceStatus};
-pub use steps::{Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of};
+pub use steps::{
+    HELP_ROW, Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of,
+};
 pub use upgrade::{DefaultShift, Moved};
 pub use values::{Change, Value, Values};
 pub use window::WindowParts;
@@ -88,6 +91,7 @@ pub enum SheetEvent {
     Keep(Field),
     DismissUpgrade,
     RefreshDiagnostics,
+    OpenGuide,
     ClearHistory,
     InstallService,
     RemoveService,
@@ -155,6 +159,7 @@ pub struct SettingsBody {
     upgrade: Vec<Moved>,
     page: SearchPage,
     diagnostics: Vec<DiagnosticRow>,
+    version: SharedString,
     focus: Option<FocusHandle>,
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
@@ -164,7 +169,7 @@ impl SettingsBody {
     pub fn new(values: Values, row: usize) -> Self {
         Self {
             values,
-            row: row.min(FIELDS.len()),
+            row: row.min(HELP_ROW),
             error: None,
             editor: None,
             shortcuts: None,
@@ -173,6 +178,7 @@ impl SettingsBody {
             upgrade: Vec::new(),
             page: SearchPage::default(),
             diagnostics: Vec::new(),
+            version: SharedString::default(),
             focus: None,
             scroll: None,
             on_event: None,
@@ -224,6 +230,12 @@ impl SettingsBody {
     #[must_use]
     pub fn diagnostics(mut self, rows: Vec<DiagnosticRow>) -> Self {
         self.diagnostics = rows;
+        self
+    }
+
+    #[must_use]
+    pub fn version(mut self, version: SharedString) -> Self {
+        self.version = version;
         self
     }
 
@@ -371,6 +383,7 @@ impl RenderOnce for SettingsBody {
             filter: &self.filter,
             page: &self.page,
             diagnostics: &self.diagnostics,
+            version: &self.version,
             send: self.on_event.clone(),
         };
         let shown = self.shortcuts.is_none().then_some(section);

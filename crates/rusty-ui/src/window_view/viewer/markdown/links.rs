@@ -5,6 +5,7 @@ const WEB_SCHEMES: [&str; 3] = ["http", "https", "mailto"];
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Link {
     Web,
+    Anchor(String),
     Local(Vec<String>),
     Refused,
 }
@@ -33,8 +34,21 @@ fn segments(path: &str) -> Option<Vec<String>> {
     (!kept.is_empty()).then_some(kept)
 }
 
+pub(super) fn slug(heading: &str) -> String {
+    heading
+        .trim()
+        .chars()
+        .filter(|ch| ch.is_alphanumeric() || matches!(ch, ' ' | '-' | '_'))
+        .flat_map(char::to_lowercase)
+        .map(|ch| if ch == ' ' { '-' } else { ch })
+        .collect()
+}
+
 pub(super) fn classify(url: &str) -> Link {
     let url = url.trim();
+    if let Some(anchor) = url.strip_prefix('#').filter(|anchor| !anchor.is_empty()) {
+        return Link::Anchor(anchor.to_lowercase());
+    }
     if let Some(scheme) = scheme(url) {
         let is_web = WEB_SCHEMES
             .iter()
@@ -58,7 +72,7 @@ pub(super) fn resolve(file: &Location, segments: &[String]) -> Option<Location> 
 mod tests {
     use rusty_core::Location;
 
-    use super::{Link, classify, resolve};
+    use super::{Link, classify, resolve, slug};
 
     fn local(parts: &[&str]) -> Link {
         Link::Local(parts.iter().map(|part| (*part).to_owned()).collect())
@@ -83,12 +97,23 @@ mod tests {
             "\\\\server\\share\\x.md",
             "../secret.md",
             "docs/../../up.md",
-            "#top",
             "",
         ];
         for url in refused {
             assert_eq!(classify(url), Link::Refused, "{url}");
         }
+    }
+
+    #[test]
+    fn a_fragment_link_names_a_heading_on_the_same_page() {
+        assert_eq!(
+            classify("#Start-Here"),
+            Link::Anchor("start-here".to_owned())
+        );
+        assert_eq!(
+            slug("Layouts, panes and workspaces"),
+            "layouts-panes-and-workspaces"
+        );
     }
 
     #[test]

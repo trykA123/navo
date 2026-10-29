@@ -1,6 +1,7 @@
 use super::fields::{FIELDS, FieldSpec, Section};
+use super::help_page::WORDS;
 use super::search_page::{HISTORY_WORDS, SERVICE_WORDS};
-use super::steps::rows_in;
+use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, rows_in};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter(Vec<String>);
@@ -40,10 +41,14 @@ impl Filter {
 
     #[must_use]
     pub fn first_in(&self, section: Section) -> Option<usize> {
-        if section == Section::Diagnostics {
-            return self
-                .admits_text("diagnostics cache storage report")
-                .then_some(FIELDS.len());
+        match section {
+            Section::Diagnostics => {
+                return self
+                    .admits_text("diagnostics cache storage report")
+                    .then_some(DIAGNOSTICS_ROW);
+            }
+            Section::Help => return self.admits_text(WORDS).then_some(HELP_ROW),
+            _ => {}
         }
         rows_in(section)
             .find(|(_, spec)| self.admits(spec))

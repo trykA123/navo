@@ -41,10 +41,9 @@ struct Group {
     commands: &'static [(&'static str, &'static str, &'static str)],
 }
 
-const MENU_ONLY: [(&str, &str); 4] = [
+const MENU_ONLY: [(&str, &str); 3] = [
     ("window.new", "cmd-window-new"),
     ("workspace.list", "cmd-workspace-list"),
-    ("help.key_map", "cmd-help-key-map"),
     ("app.quit", "cmd-app-quit"),
 ];
 

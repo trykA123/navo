@@ -54,6 +54,7 @@ mod placement;
 mod prefetch;
 mod recent_sheet;
 mod settings_find;
+mod settings_help;
 mod settings_layer;
 mod settings_news;
 mod settings_search;

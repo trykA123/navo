@@ -184,6 +184,8 @@ find.previous | shift-f3 | Viewer
 find.result_down | down | FindAll
 find.result_up | up | FindAll
 find.selection | ctrl-f3 | Viewer
+help.key_map | f1 | global
+help.user_guide | shift-f1 | global
 image.actual_size | 1 | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image

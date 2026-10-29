@@ -81,6 +81,7 @@ impl FerriteWindow {
             MenuCommand::AllSettings => self.open_settings(window, cx),
             MenuCommand::CommandPalette => self.toggle_command_center(window, cx),
             MenuCommand::Workspaces => self.pin_workspaces(window, cx),
+            MenuCommand::Help => self.open_key_map(window, cx),
             _ => {}
         }
     }

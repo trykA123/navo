@@ -128,6 +128,7 @@ const GROUPS: [(&str, &[&str]); 8] = [
             "app_menu.toggle",
             "window.new",
             "help.key_map",
+            "help.user_guide",
             "app.quit",
         ],
     ),

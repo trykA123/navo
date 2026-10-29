@@ -17,10 +17,11 @@ pub enum Section {
     Search,
     Display,
     Diagnostics,
+    Help,
 }
 
 impl Section {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
@@ -31,6 +32,7 @@ impl Section {
         Self::Search,
         Self::Display,
         Self::Diagnostics,
+        Self::Help,
     ];
 
     pub fn label(self) -> &'static str {
@@ -45,7 +47,12 @@ impl Section {
             Self::Search => "Search",
             Self::Display => "Display",
             Self::Diagnostics => "settings-diagnostics",
+            Self::Help => "settings-help",
         }
+    }
+
+    pub fn is_translated(self) -> bool {
+        matches!(self, Self::Diagnostics | Self::Safety | Self::Help)
     }
 
     pub fn icon(self) -> IconName {
@@ -60,6 +67,7 @@ impl Section {
             Self::Search => IconName::Search,
             Self::Display => IconName::Eye,
             Self::Diagnostics => IconName::Eye,
+            Self::Help => IconName::BookOpen,
         }
     }
 }

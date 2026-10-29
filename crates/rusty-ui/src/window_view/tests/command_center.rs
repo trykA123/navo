@@ -572,3 +572,15 @@ fn layout_commands_appear_in_ctrl_k_and_save_opens_the_layout_prompt(cx: &mut Te
             .read_with(cx, |view, _| view.tiles.presets.is_naming())
     );
 }
+
+#[gpui_kit::test]
+fn typing_user_guide_lists_the_guide_command(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-k");
+    rig.type_query(cx, "user guide");
+    let rows = rig.rows(cx);
+    assert!(
+        rows.iter().any(|row| row.starts_with("User guide")),
+        "{rows:?}"
+    );
+}

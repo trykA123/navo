@@ -57,9 +57,15 @@ pub fn moved(filter: &Filter, row: usize, down: bool) -> usize {
     found.unwrap_or(row)
 }
 
+pub const DIAGNOSTICS_ROW: usize = FIELDS.len();
+pub const HELP_ROW: usize = FIELDS.len() + 1;
+
 pub fn section_of(row: usize) -> Section {
-    if row == FIELDS.len() {
+    if row == DIAGNOSTICS_ROW {
         return Section::Diagnostics;
+    }
+    if row >= HELP_ROW {
+        return Section::Help;
     }
     FIELDS
         .get(row)
@@ -67,8 +73,10 @@ pub fn section_of(row: usize) -> Section {
 }
 
 pub fn first_row(section: Section) -> usize {
-    if section == Section::Diagnostics {
-        return FIELDS.len();
+    match section {
+        Section::Diagnostics => return DIAGNOSTICS_ROW,
+        Section::Help => return HELP_ROW,
+        _ => {}
     }
     FIELDS
         .iter()

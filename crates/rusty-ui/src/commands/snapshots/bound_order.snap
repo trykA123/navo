@@ -457,6 +457,8 @@ preview.recount | ctrl-r | PreviewBrowse
 preview.view_menu | alt-v | PreviewBrowse
 [ferrite_window]
 jobs.toggle | ctrl-j | global
+help.key_map | f1 | global
+help.user_guide | shift-f1 | global
 tab.new | ctrl-t | NavoPane
 pane.drive_menu_first | alt-f1 | NavoPane
 pane.drive_menu_second | alt-f2 | NavoPane

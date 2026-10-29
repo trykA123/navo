@@ -144,6 +144,7 @@ pub(crate) fn open(mut launch: Launch) {
     let (mut settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
+    settings::wire_guide_hint(&mut settings, dirs.as_ref());
     let (search, visits) = search_hooks(services.memory, remember, dirs.as_ref(), &local);
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     let exit = (disk, visits);

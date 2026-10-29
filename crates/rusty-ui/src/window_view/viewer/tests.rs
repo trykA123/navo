@@ -10,6 +10,7 @@ mod find;
 mod find_all;
 mod follow;
 mod font;
+mod guide;
 mod image;
 mod key_bar;
 mod kind;

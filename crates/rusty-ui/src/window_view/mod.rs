@@ -16,6 +16,7 @@ mod find_tab;
 mod fkeys;
 mod font_settings;
 mod hand_off;
+mod help;
 mod hints;
 mod index_activity;
 mod input_trace;
@@ -398,7 +399,7 @@ impl Render for FerriteWindow {
         let root = self.pane_swap_layer(root, cx);
         let root = self.tab_drag_layer(root, window, cx);
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
-        let root = Self::layout_switcher_on(root, cx);
+        let root = Self::help_on(Self::layout_switcher_on(root, cx), cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
         self.preview_keys(root, window, cx)
     }

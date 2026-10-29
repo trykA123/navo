@@ -17,6 +17,7 @@ use crate::search_hooks::Remember;
 use crate::watch_file::watch_file;
 use ledger::LedgerFile;
 
+mod guide_hint;
 mod layout_edit;
 mod ledger;
 mod paused;
@@ -24,6 +25,7 @@ mod reload;
 mod skipped;
 mod start;
 
+pub(crate) use guide_hint::wire as wire_guide_hint;
 pub use reload::Reloader;
 pub use start::{Loaded, start_from};
 #[cfg(test)]

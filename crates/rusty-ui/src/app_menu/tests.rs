@@ -101,6 +101,7 @@ fn workspaces_quit_and_all_settings_run_today() {
         available,
         [
             MenuCommand::Workspaces,
+            MenuCommand::Help,
             MenuCommand::Quit,
             MenuCommand::AllSettings
         ]
@@ -255,7 +256,7 @@ fn unavailable_rows_are_shown_and_marked(cx: &mut TestAppContext) {
         for index in 3..ITEM_COUNT {
             let row = window.find(("app-menu-row", index));
             assert!(row.visible(), "row {index} is hidden");
-            let expected = (index < 7 && index != 5).then_some("Not available yet");
+            let expected = (index < 5).then_some("Not available yet");
             assert_eq!(row.value(), expected, "row {index}");
         }
     })
@@ -336,7 +337,7 @@ fn clicking_the_tile_toggles_it(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn unavailable_rows_do_nothing_when_activated(cx: &mut TestAppContext) {
     let rig = open(cx);
-    for index in [3usize, 4, 6] {
+    for index in [3usize, 4] {
         rig.click(cx, ("app-menu-row", index));
         rig.press(cx, "enter");
     }

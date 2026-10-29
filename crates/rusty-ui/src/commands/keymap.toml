@@ -27,6 +27,14 @@ keys = ["ctrl-]"]
 command = "app.command_palette"
 keys = ["ctrl-k"]
 
+[[bind]]
+command = "help.key_map"
+keys = ["f1"]
+
+[[bind]]
+command = "help.user_guide"
+keys = ["shift-f1"]
+
 # NavoPane
 
 [[bind]]
@@ -1853,10 +1861,6 @@ keys = ["ctrl-c"]
 [[bind]]
 command = "window.new"
 keys = ["ctrl-n"]
-
-[[bind]]
-command = "help.key_map"
-keys = ["f1"]
 
 [[bind]]
 command = "app.quit"

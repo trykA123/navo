@@ -31,6 +31,8 @@ jobs.toggle | global | true
 sheet.narrower | global | true
 sheet.wider | global | true
 app.command_palette | global | false
+help.key_map | global | true
+help.user_guide | global | true
 tab.next | NavoPane | true
 tab.previous | NavoPane | true
 tab.close | NavoPane | true
@@ -405,7 +407,6 @@ perf.stop | global | true
 files.recently_deleted | global | true
 window.new | global | true
 workspace.list | global | true
-help.key_map | global | true
 app.quit | global | true
 pane.navigate | NavoPane | true
 pane.open_tab | NavoPane | true

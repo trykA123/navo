@@ -143,6 +143,13 @@ impl MarkdownView {
         let texts: Vec<&str> = doc.blocks().iter().map(|block| doc.text(block)).collect();
         texts.join("\n")
     }
+
+    #[cfg(test)]
+    pub(in crate::window_view::viewer) fn top_text(&self) -> String {
+        let top = self.list.logical_scroll_top().item_ix;
+        let block = self.doc.blocks().get(top);
+        block.map_or_else(String::new, |block| self.doc.text(block).to_owned())
+    }
 }
 
 #[cfg(test)]

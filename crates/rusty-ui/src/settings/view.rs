@@ -28,6 +28,7 @@ pub(super) struct Look<'a> {
     pub row: usize,
     pub filter: &'a Filter,
     pub diagnostics: &'a [super::DiagnosticRow],
+    pub version: &'a SharedString,
     pub page: &'a SearchPage,
     pub send: Option<Handler>,
 }
@@ -384,10 +385,11 @@ pub(super) fn content(
             Line::History => search_page::history_block(t, look.page, send),
         })
         .collect();
-    if section == Section::Diagnostics
-        || (!look.filter.is_empty() && look.filter.first_in(Section::Diagnostics).is_some())
-    {
+    if is_page_shown(look, section, Section::Diagnostics) {
         rows.extend(super::diagnostics_page::render(look));
+    }
+    if is_page_shown(look, section, Section::Help) {
+        rows.extend(super::help_page::render(look));
     }
     if rows.is_empty() {
         rows.push(no_match(t));
@@ -406,8 +408,12 @@ pub(super) fn content(
         .children(rows)
 }
 
+fn is_page_shown(look: &Look, section: Section, page: Section) -> bool {
+    section == page || (!look.filter.is_empty() && look.filter.first_in(page).is_some())
+}
+
 fn section_label(section: Section) -> SharedString {
-    if matches!(section, Section::Diagnostics | Section::Safety) {
+    if section.is_translated() {
         rusty_l10n::tr(section.label()).into()
     } else {
         section.label().into()

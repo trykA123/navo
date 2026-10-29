@@ -76,9 +76,9 @@ impl FerriteWindow {
         let this = cx.weak_entity();
         let open = Self::open_later(this.clone(), window.window_handle());
         Host {
-            title: viewer.title.clone(),
+            title: viewer.shown_title(),
             location: viewer.location.clone(),
-            hooks: self.files.clone(),
+            hooks: viewer.guide.clone().unwrap_or_else(|| self.files.clone()),
             carried: viewer.carried.clone(),
             is_preview: false,
             on_saved: Rc::new(move |cx| {

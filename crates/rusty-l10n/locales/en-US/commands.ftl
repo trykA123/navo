@@ -359,6 +359,7 @@ cmd-perf-stop = Stop recording
 cmd-window-new = New window
 cmd-workspace-list = Workspaces
 cmd-help-key-map = Help and key map
+cmd-help-user-guide = User guide
 cmd-app-quit = Quit
 
 cmd-files-multi-rename = Rename several items

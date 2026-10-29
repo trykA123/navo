@@ -67,6 +67,10 @@ settings-ui-scale = UI scale
 settings-ui-scale-help = Percent, from 80 to 200
 
 settings-diagnostics = Diagnostics
+settings-help = Help
+settings-help-guide = User guide
+settings-help-keys = Keyboard shortcuts
+settings-help-version = Navo { $version }
 settings-diagnostics-empty = No cache or store locations are available.
 settings-diagnostics-refresh = Refresh
 settings-diagnostics-at-least = at least

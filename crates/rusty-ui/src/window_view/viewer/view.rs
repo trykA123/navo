@@ -34,7 +34,7 @@ fn header(t: &Theme, viewer: &Viewer, window: &Window) -> Div {
                 .id("viewer-title")
                 .test_support()
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(viewer.title.clone()),
+                .child(viewer.shown_title()),
         )
         .child(div().flex_1())
         .when_some(viewer.message.clone(), |d, message| {

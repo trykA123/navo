@@ -10,6 +10,7 @@ mod encoding;
 mod files;
 mod font;
 mod footprint;
+mod guide;
 mod image;
 mod keys;
 mod keys_bar;
@@ -107,6 +108,7 @@ pub(super) struct Viewer {
     detected: Option<TextEncoding>,
     reencoding: Option<u64>,
     memory: Option<crate::primitives::AppHeld>,
+    guide: Option<FileHooks>,
 }
 
 fn merged_note(load: Option<&'static str>, start: Option<SharedString>) -> Option<SharedString> {
@@ -150,6 +152,7 @@ impl Viewer {
             detected: None,
             reencoding: None,
             memory: None,
+            guide: None,
         }
     }
 
@@ -162,6 +165,9 @@ impl Viewer {
     }
 
     fn editable_kind(&self) -> Option<Kind> {
+        if self.is_guide() {
+            return None;
+        }
         let sniff = self.sniff();
         self.kinds
             .iter()

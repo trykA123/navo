@@ -37,6 +37,16 @@ pub(super) const GROUPS: [Group; 9] = [
                 "app.command_palette",
                 "cmd-app-command-palette",
             ),
+            (
+                "ferrite_window::OpenKeyMap",
+                "help.key_map",
+                "cmd-help-key-map",
+            ),
+            (
+                "ferrite_window::OpenUserGuide",
+                "help.user_guide",
+                "cmd-help-user-guide",
+            ),
         ],
     },
     Group {

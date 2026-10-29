@@ -115,6 +115,7 @@ impl FerriteWindow {
         self.watch_drives(cx);
         Self::poll_index_activity(cx);
         self.check_index_upgrade(cx);
+        self.show_guide_hint(cx);
         cx.defer_in(window, move |view, window, cx| {
             view.focus_core_pane(window, cx);
             view.watch_listings(cx);

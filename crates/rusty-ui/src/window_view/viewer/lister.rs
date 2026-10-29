@@ -55,6 +55,11 @@ impl FerriteWindow {
         let Some(viewer) = &mut self.viewer else {
             return;
         };
+        if viewer.is_guide() {
+            viewer.say(rusty_l10n::tr("viewer-guide-read-only"), cx);
+            cx.notify();
+            return;
+        }
         let started = viewer
             .body
             .as_ref()
@@ -97,6 +102,9 @@ impl FerriteWindow {
     }
 
     fn next_file_row(&self, forward: bool) -> Option<u64> {
+        if self.viewer.as_ref().is_some_and(Viewer::is_guide) {
+            return None;
+        }
         let images_only = self.showing_image();
         let tab = self.browser.state().active_tab();
         let cursor = tab.view().cursor;

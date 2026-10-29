@@ -137,3 +137,8 @@ viewer-find-total = { $count ->
     [one] { $shown } match
    *[other] { $shown } matches
 }
+viewer-guide-title = Navo user guide
+viewer-guide-read-only = The user guide is read-only.
+viewer-guide-formatted-only = The user guide opens in the formatted view only.
+guide-hint = New to Navo? Shift+F1 opens the user guide.
+viewer-markdown-heading-missing = Not found: { $name }

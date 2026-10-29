@@ -17,8 +17,8 @@ use super::settings_save::{SaveReport, SaveSettings, Saver};
 use super::{FerriteWindow, SearchHooks};
 use crate::prelude::*;
 use crate::settings::{
-    Change, FIELDS, Field, Filter, SearchPage, Section, ServiceStatus, SettingsBody, SheetEvent,
-    Values, child_of, section_of,
+    Change, FIELDS, Field, Filter, HELP_ROW, SearchPage, Section, ServiceStatus, SettingsBody,
+    SheetEvent, Values, child_of, section_of,
 };
 use crate::side_sheet::SheetState;
 use crate::tokens;
@@ -40,6 +40,7 @@ pub struct SettingsHooks {
     pub news: Option<SettingsInbox>,
     pub disk_use: Arc<dyn Fn() -> Vec<crate::settings::DiagnosticRow> + Send + Sync>,
     pub save_diagnostic_report: Arc<dyn Fn() -> Result<std::path::PathBuf, String> + Send + Sync>,
+    pub take_guide_hint: Arc<dyn Fn() -> bool + Send + Sync>,
     pub edit_layout: super::EditLayout,
 }
 
@@ -61,6 +62,7 @@ impl SettingsHooks {
             news: None,
             disk_use: Arc::new(Vec::new),
             save_diagnostic_report: Arc::new(|| Err(rusty_l10n::tr("diagnostics-unavailable"))),
+            take_guide_hint: Arc::new(|| false),
             edit_layout: super::no_layout_edits(),
         }
     }
@@ -97,6 +99,7 @@ pub(super) struct SettingsPanel {
     pub(super) diagnostics: Vec<crate::settings::DiagnosticRow>,
     pub(super) diagnostics_generation: u64,
     pub(super) is_saving_report: bool,
+    pub(super) take_guide_hint: Arc<dyn Fn() -> bool + Send + Sync>,
     pub(super) news: Option<SettingsInbox>,
 }
 
@@ -115,6 +118,7 @@ impl SettingsPanel {
                 news: hooks.news,
                 disk_use: hooks.disk_use,
                 save_diagnostic_report: hooks.save_diagnostic_report,
+                take_guide_hint: hooks.take_guide_hint,
                 search: search.clone(),
                 ..Self::new(hooks.file, hooks.line_of, cx)
             },
@@ -150,6 +154,7 @@ impl SettingsPanel {
             news: None,
             disk_use: Arc::new(Vec::new),
             save_diagnostic_report: SettingsHooks::none().save_diagnostic_report,
+            take_guide_hint: SettingsHooks::none().take_guide_hint,
             diagnostics: Vec::new(),
             diagnostics_generation: 0,
             is_saving_report: false,
@@ -265,6 +270,7 @@ impl FerriteWindow {
             SheetEvent::Keep(field) => self.keep_old(field, window, cx),
             SheetEvent::DismissUpgrade => self.dismiss_upgrade(),
             SheetEvent::RefreshDiagnostics => self.refresh_diagnostics(cx),
+            SheetEvent::OpenGuide => self.open_guide_from_settings(window, cx),
             SheetEvent::ClearHistory => self.clear_search_history(),
             SheetEvent::InstallService => self.install_index_service(cx),
             SheetEvent::RemoveService => self.remove_index_service(cx),
@@ -280,7 +286,7 @@ impl FerriteWindow {
 
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
         let from = section_of(self.settings.row);
-        self.settings.row = row.min(FIELDS.len());
+        self.settings.row = row.min(HELP_ROW);
         self.settings.notice = None;
         let was_shortcuts = std::mem::take(&mut self.settings.is_shortcuts);
         if was_shortcuts {
@@ -361,6 +367,7 @@ impl FerriteWindow {
         let error = self.saver.error.clone().or(self.settings.notice.clone());
         let body = SettingsBody::new(self.values.clone(), self.settings.row)
             .diagnostics(self.settings.diagnostics.clone())
+            .version(self.identity.version.clone())
             .error(error)
             .filter(self.settings.filter.clone())
             .find(self.find_bar(&t, cx))

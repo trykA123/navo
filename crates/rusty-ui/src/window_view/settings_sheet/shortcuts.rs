@@ -12,6 +12,23 @@ pub(super) struct ShortcutsPanel {
 }
 
 impl FerriteWindow {
+    pub(in crate::window_view) fn open_key_map(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_settings(window, cx);
+        if self.settings.is_open {
+            self.show_shortcuts(window, cx);
+            cx.notify();
+        }
+    }
+
+    pub(super) fn open_guide_from_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_settings(window, cx);
+        self.open_user_guide(window, cx);
+    }
+
     pub(super) fn show_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let page = self.shortcuts_entity(window, cx);
         self.settings.is_shortcuts = true;
@@ -94,6 +111,10 @@ impl FerriteWindow {
 
 #[cfg(test)]
 impl FerriteWindow {
+    pub(in crate::window_view) fn is_showing_shortcuts(&self) -> bool {
+        self.shown_shortcuts().is_some()
+    }
+
     pub(in crate::window_view) fn shortcuts_page(&self) -> Option<Entity<ShortcutsPage>> {
         self.settings
             .shortcuts

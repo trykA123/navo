@@ -44,7 +44,7 @@ fn sections_run_in_order_without_gaps() {
         seen,
         Section::ALL
             .into_iter()
-            .filter(|section| *section != Section::Diagnostics)
+            .filter(|section| !matches!(section, Section::Diagnostics | Section::Help))
             .collect::<Vec<_>>()
     );
 }
@@ -108,15 +108,23 @@ fn tab_jumps_to_the_next_section_and_wraps() {
         section_of(next_section(&Filter::default(), 0, true)),
         Section::Files
     );
-    let last = first_row(Section::Diagnostics);
+    let last = first_row(Section::Help);
     assert_eq!(next_section(&Filter::default(), last, true), 0);
     assert_eq!(
         section_of(next_section(&Filter::default(), 0, false)),
-        Section::Diagnostics
+        Section::Help
     );
     assert_eq!(
         section_of(next_section(&Filter::default(), FIELDS.len() - 1, true)),
         Section::Diagnostics
+    );
+    assert_eq!(
+        section_of(next_section(
+            &Filter::default(),
+            first_row(Section::Diagnostics),
+            true
+        )),
+        Section::Help
     );
 }
 

@@ -318,7 +318,7 @@ fn the_saved_theme_applies_at_start(cx: &mut TestAppContext) {
 fn unavailable_rows_neither_act_nor_close_the_menu(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "f10");
-    for key in ["c", "n", "h"] {
+    for key in ["c", "n"] {
         rig.press(cx, key);
         rig.press(cx, "enter");
         assert!(rig.is_open(cx), "{key} closed the menu");
