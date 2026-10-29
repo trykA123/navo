@@ -24,9 +24,15 @@ fn guarded_crash_test_writes_a_record_in_the_given_profile() {
         .arg("--crash-test")
         .arg(root.path())
         .env("NAVO_CRASH_TEST", "1")
+        .env("NAVO_LOG", "info")
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(101), "{output:?}");
+    let log = fs::read_to_string(root.path().join("data/logs/navo.log")).unwrap();
+    assert!(
+        log.contains("app started"),
+        "the panic hook must flush buffered logs"
+    );
     let records: Vec<_> = fs::read_dir(root.path().join("data/logs"))
         .unwrap()
         .map(|entry| entry.unwrap().path())

@@ -111,7 +111,12 @@ impl Reloader {
     fn reload_all(&mut self) -> Vec<SettingsNews> {
         let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
         let before = store.current().clone();
-        let loaded = store.reload();
+        let Some(loaded) = store.reload_watched() else {
+            if let Some(remember) = &self.remember {
+                remember.set(store.current().search.remember);
+            }
+            return Vec::new();
+        };
         if let Some(error) = loaded.error {
             let message = paused::describe(&error, self.guarded.as_deref());
             if self.problem.as_ref() == Some(&message) {
@@ -143,5 +148,50 @@ impl Reloader {
             .into_iter()
             .chain(notice.map(SettingsNews::Invalid))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rusty_store::SettingValue;
+
+    use super::*;
+
+    #[test]
+    fn an_own_save_does_not_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("navo.toml");
+        std::fs::write(&path, "[appearance]\nmode = \"light\"\n").unwrap();
+        let store = Arc::new(Mutex::new(SettingsStore::load(&path).0));
+        let mut reloader = Reloader::new(store.clone(), None);
+        store
+            .lock()
+            .unwrap()
+            .save_preserving_edits("appearance.mode", Some(SettingValue::Text("dark".into())))
+            .unwrap();
+        let saved = store.lock().unwrap().generation();
+        assert!(reloader.reload().is_none());
+        assert!(reloader.reload().is_none());
+        assert_eq!(store.lock().unwrap().generation(), saved);
+    }
+
+    #[test]
+    fn an_outside_edit_after_an_own_save_reloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("navo.toml");
+        let store = Arc::new(Mutex::new(SettingsStore::load(&path).0));
+        let mut reloader = Reloader::new(store.clone(), None);
+        store
+            .lock()
+            .unwrap()
+            .save_preserving_edits("appearance.mode", Some(SettingValue::Text("dark".into())))
+            .unwrap();
+        let saved = store.lock().unwrap().generation();
+        std::fs::write(&path, "[appearance]\nmode = \"light\"\n").unwrap();
+        assert!(matches!(
+            reloader.reload(),
+            Some(SettingsNews::Applied { .. })
+        ));
+        assert!(store.lock().unwrap().generation() > saved);
     }
 }

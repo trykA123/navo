@@ -97,6 +97,7 @@ pub struct SettingsStore {
     generation: u64,
     backup: SessionBackup,
     followed: Ledger,
+    last_written: Option<String>,
 }
 
 impl SettingsStore {
@@ -111,6 +112,7 @@ impl SettingsStore {
             generation: 0,
             backup,
             followed: Ledger::new(),
+            last_written: None,
         };
         let report = store.reload();
         (store, report)
@@ -127,14 +129,23 @@ impl SettingsStore {
     }
 
     pub fn reload(&mut self) -> LoadReport {
+        self.reload_watched().unwrap_or_default()
+    }
+
+    pub fn reload_watched(&mut self) -> Option<LoadReport> {
         let text = match read(&self.path) {
             Ok(text) => text,
-            Err(error) => return failed(error),
+            Err(error) => return Some(failed(error)),
         };
         let Some(text) = text else {
-            return LoadReport::default();
+            self.last_written = None;
+            return Some(LoadReport::default());
         };
-        match parse(&text) {
+        if self.last_written.as_deref() == Some(&text) {
+            return None;
+        }
+        self.last_written = None;
+        Some(match parse(&text) {
             Ok((settings, unknown_keys)) => {
                 self.take(settings);
                 LoadReport {
@@ -143,7 +154,7 @@ impl SettingsStore {
                 }
             }
             Err(error) => failed(error),
-        }
+        })
     }
 
     pub fn complete(
@@ -199,7 +210,7 @@ impl SettingsStore {
     }
 
     fn write(
-        &self,
+        &mut self,
         text: &str,
         base: Option<&str>,
         backup: &mut bool,
@@ -219,6 +230,7 @@ impl SettingsStore {
         match write_checked(&self.path, text.as_bytes(), !*backup, check) {
             Ok(outcome) => {
                 *backup = true;
+                self.last_written = Some(text.to_owned());
                 Ok(match outcome {
                     WriteOutcome::Durable => None,
                     WriteOutcome::Committed(error) => {

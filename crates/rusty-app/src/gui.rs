@@ -1,3 +1,5 @@
+mod quit;
+
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -15,9 +17,10 @@ use rusty_ui::window_view::{
     StartOptions, StartWatch, run,
 };
 
+use self::quit::quitter;
 use crate::cli::Start;
 use crate::jobs::maintenance::MaintenanceTimer;
-use crate::search_hooks::index_hooks;
+use crate::search_hooks::{Visits, index_hooks};
 use crate::startup::{
     home_location, initial_state, path_location, place_panes, save, session_folders,
 };
@@ -28,7 +31,6 @@ use crate::{
 
 const START_READ: Duration = Duration::from_millis(50);
 const EXIT_WRITE: Duration = Duration::from_millis(300);
-const EXIT_CLOSE: Duration = Duration::from_secs(1);
 
 pub(crate) struct Launch {
     pub(crate) trace: Option<rusty_ui::window_view::InputTrace>,
@@ -142,8 +144,9 @@ pub(crate) fn open(mut launch: Launch) {
     let (mut settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
-    let search = search_hooks(services.memory, remember, dirs.as_ref(), &local);
+    let (search, visits) = search_hooks(services.memory, remember, dirs.as_ref(), &local);
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
+    let exit = (disk, visits);
     run(
         StartOptions {
             state,
@@ -175,7 +178,7 @@ pub(crate) fn open(mut launch: Launch) {
         },
         Rc::new(rusty_shell::display_scale),
         RunHooks {
-            on_quit: quitter(disk, launch.cleanup, launch.running, services.maintenance),
+            on_quit: quitter(exit, launch.cleanup, launch.running, services.maintenance),
             on_autosave: autosave,
             trace: launch.trace,
         },
@@ -216,11 +219,11 @@ fn search_hooks(
     remember: crate::search_hooks::Remember,
     dirs: Option<&StoreDirs>,
     local: &Arc<dyn ProviderOps>,
-) -> rusty_ui::window_view::SearchHooks {
-    let mut search = crate::search_hooks::hooks(memory, remember);
+) -> (rusty_ui::window_view::SearchHooks, Option<Arc<Visits>>) {
+    let (mut search, visits) = crate::search_hooks::with_visits(memory, remember);
     search.index = index_hooks(dirs.cloned(), local.clone(), &mut search.service);
     crate::search_hooks::add_upgrade_notice(&mut search.service, dirs);
-    search
+    (search, visits)
 }
 
 fn finish_startup(
@@ -256,26 +259,6 @@ fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Sp
         inbox: Some(inbox),
         on_shown: splash.on_shown(),
     }
-}
-
-fn quitter(
-    disk: Option<DiskListings>,
-    cleanup: crate::profile::Cleanup,
-    running: Option<crate::crash::Running>,
-    maintenance: MaintenanceTimer,
-) -> Rc<dyn Fn()> {
-    Rc::new(move || {
-        maintenance.stop();
-        if let Some(disk) = &disk {
-            let _ = disk.close(EXIT_CLOSE);
-        }
-        if let Some(running) = &running
-            && let Err(error) = running.finish()
-        {
-            tracing::warn!(%error, "cannot remove the running marker");
-        }
-        cleanup.on_quit();
-    })
 }
 
 fn finish_settings(

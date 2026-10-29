@@ -1,4 +1,4 @@
-use rusqlite::{Transaction, params};
+use rusqlite::{Transaction, TransactionBehavior, params};
 
 use super::{Db, DbError};
 
@@ -41,18 +41,29 @@ impl Db {
         is_folder: bool,
         now_ms: i64,
     ) -> Result<(), DbError> {
-        let transaction = self.connection().unchecked_transaction()?;
-        decay(&transaction, "frecency")?;
-        transaction.execute(
-            "INSERT INTO frecency (location, score, last_at, is_folder) VALUES (?1, 1.0, ?2, ?3)
-             ON CONFLICT (location) DO UPDATE SET score = score + 1.0, last_at = excluded.last_at,
-                 is_folder = excluded.is_folder",
-            params![location, now_ms, is_folder],
-        )?;
-        transaction.execute(
-            "INSERT INTO history (location, visited_at) VALUES (?1, ?2)",
-            params![location, now_ms],
-        )?;
+        self.record_visits(&[(location.to_owned(), is_folder, now_ms)])
+    }
+
+    pub fn record_visits(&self, visits: &[(String, bool, i64)]) -> Result<(), DbError> {
+        if visits.is_empty() {
+            return Ok(());
+        }
+        let transaction =
+            Transaction::new_unchecked(self.connection(), TransactionBehavior::Immediate)?;
+        {
+            let mut frecency = transaction.prepare_cached(
+                "INSERT INTO frecency (location, score, last_at, is_folder) VALUES (?1, 1.0, ?2, ?3)
+                 ON CONFLICT (location) DO UPDATE SET score = score + 1.0, last_at = excluded.last_at,
+                     is_folder = excluded.is_folder",
+            )?;
+            let mut history = transaction
+                .prepare_cached("INSERT INTO history (location, visited_at) VALUES (?1, ?2)")?;
+            for (location, is_folder, now_ms) in visits {
+                decay(&transaction, "frecency")?;
+                frecency.execute(params![location, now_ms, is_folder])?;
+                history.execute(params![location, now_ms])?;
+            }
+        }
         transaction.execute(
             "DELETE FROM history WHERE id <=
              (SELECT id FROM history ORDER BY id DESC LIMIT 1 OFFSET ?1)",
@@ -121,5 +132,34 @@ impl Db {
         )?;
         transaction.commit()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    #[test]
+    fn ten_visits_commit_in_one_transaction() {
+        let db = Db::open_in_memory().unwrap();
+        let commits = Arc::new(AtomicUsize::new(0));
+        let counted = commits.clone();
+        db.connection()
+            .commit_hook(Some(move || {
+                counted.fetch_add(1, Ordering::Relaxed);
+                false
+            }))
+            .unwrap();
+        let visits = (0..10)
+            .map(|n| (format!("/{n}"), true, n * 200))
+            .collect::<Vec<_>>();
+        db.record_visits(&visits).unwrap();
+        assert_eq!(commits.load(Ordering::Relaxed), 1);
+        assert_eq!(db.frecent(10, 3000).unwrap().len(), 10);
+        db.record_visits(&[]).unwrap();
+        assert_eq!(commits.load(Ordering::Relaxed), 1);
     }
 }

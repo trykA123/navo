@@ -34,6 +34,14 @@ struct Record {
 }
 
 pub(super) fn install(data: Option<&Path>, diagnostics: &Diagnostics) {
+    install_with_flush(data, diagnostics, crate::logging::try_flush);
+}
+
+pub(super) fn install_with_flush(
+    data: Option<&Path>,
+    diagnostics: &Diagnostics,
+    flush: impl Fn() + Send + Sync + 'static,
+) {
     let Some(data) = data else { return };
     let writer = Writer {
         logs: data.join("logs"),
@@ -47,6 +55,7 @@ pub(super) fn install(data: Option<&Path>, diagnostics: &Diagnostics) {
             let _lock = serial.lock().unwrap_or_else(PoisonError::into_inner);
             let _ = writer.write(info);
         }
+        flush();
         previous(info);
     }));
 }

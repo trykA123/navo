@@ -1,6 +1,6 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
 use tracing::{Event, Subscriber};
@@ -8,13 +8,16 @@ use tracing_subscriber::layer::{Context, Layer};
 
 use crate::{EventRing, Redactor};
 
+mod buffered;
 mod json;
 mod path_check;
 mod rolling;
 mod visitor;
 
+pub use buffered::LogFlush;
 pub use path_check::is_redacted_path;
 
+use buffered::BufferedFile;
 use json::Line;
 use rolling::RollingFile;
 use visitor::FieldVisitor;
@@ -49,7 +52,7 @@ pub struct LogLayer {
     redactor: Arc<Redactor>,
     ring: Arc<EventRing>,
     misses: RedactionMisses,
-    file: Option<Mutex<RollingFile>>,
+    file: Option<Arc<BufferedFile>>,
     started: Instant,
 }
 
@@ -62,10 +65,11 @@ impl LogLayer {
         let file = config
             .dir
             .map(|dir| {
-                RollingFile::open(dir, config.file_stem, config.max_file_bytes, config.files)
+                let file =
+                    RollingFile::open(dir, config.file_stem, config.max_file_bytes, config.files)?;
+                BufferedFile::new(file)
             })
-            .transpose()?
-            .map(Mutex::new);
+            .transpose()?;
         Ok(Self {
             redactor,
             ring,
@@ -78,6 +82,14 @@ impl LogLayer {
     #[must_use]
     pub fn misses(&self) -> RedactionMisses {
         self.misses.clone()
+    }
+
+    #[must_use]
+    pub fn flush_handle(&self) -> LogFlush {
+        self.file
+            .as_ref()
+            .map(|file| file.handle())
+            .unwrap_or_default()
     }
 
     fn render(&self, event: &Event<'_>) -> String {
@@ -101,9 +113,7 @@ impl<S: Subscriber> Layer<S> for LogLayer {
         let line = self.render(event);
         self.ring.push(&line);
         if let Some(file) = &self.file {
-            file.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .write_line(&line);
+            file.write_line(&line, *event.metadata().level() <= tracing::Level::WARN);
         }
     }
 }

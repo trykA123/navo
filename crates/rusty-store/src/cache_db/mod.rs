@@ -1,13 +1,16 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 mod budget;
 mod connection;
 
 const DEFAULT_BUDGET: u64 = 64 * 1024 * 1024;
+const MAX_PENDING_ACCESSES: usize = 4096;
+const ACCESS_BUSY_TIMEOUT: Duration = Duration::from_millis(100);
 
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
@@ -29,6 +32,7 @@ pub struct CacheDb {
     budgets: HashMap<String, u64>,
     clock: Cell<i64>,
     budget_error: Cell<Option<rusqlite::Error>>,
+    accesses: RefCell<HashMap<(String, Vec<u8>), i64>>,
 }
 
 impl CacheDb {
@@ -43,7 +47,10 @@ impl CacheDb {
 
     pub fn set_budget(&mut self, table: &str, bytes: u64) {
         self.budgets.insert(table.to_owned(), bytes);
-        if let Err(error) = budget::enforce(&mut self.conn, table, bytes) {
+        let result = self
+            .flush_accesses()
+            .and_then(|()| budget::enforce(&mut self.conn, table, bytes));
+        if let Err(error) = result {
             self.budget_error.set(Some(error));
         }
     }
@@ -51,14 +58,26 @@ impl CacheDb {
     pub fn get(&self, table: &str, key: &[u8]) -> Result<Option<Vec<u8>>, CacheError> {
         self.check_budget_error()?;
         let accessed = self.next_access()?;
-        Ok(self
+        let value = self
             .conn
             .query_row(
-                "UPDATE blob SET accessed = ?3 WHERE tbl = ?1 AND key = ?2 RETURNING value",
-                params![table, key, accessed],
+                "SELECT value FROM blob WHERE tbl = ?1 AND key = ?2",
+                params![table, key],
                 |row| row.get(0),
             )
-            .optional()?)
+            .optional()?;
+        if value.is_some() {
+            self.accesses
+                .borrow_mut()
+                .insert((table.to_owned(), key.to_vec()), accessed);
+            if self.accesses.borrow().len() >= MAX_PENDING_ACCESSES
+                && let Err(error) = self.flush_accesses_briefly()
+            {
+                tracing::debug!(%error, "cache access ages could not be saved at capacity");
+                self.drop_oldest_accesses();
+            }
+        }
+        Ok(value)
     }
 
     pub fn put(&mut self, table: &str, key: &[u8], value: &[u8]) -> Result<(), CacheError> {
@@ -66,7 +85,10 @@ impl CacheDb {
         let bytes = self.budgets.get(table).copied().unwrap_or(DEFAULT_BUDGET);
         let size = (key.len() as u64).saturating_add(value.len() as u64);
         let accessed = self.next_access()?;
-        let transaction = self.conn.transaction()?;
+        let transaction = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        write_accesses(&transaction, self.accesses.get_mut())?;
         if size > bytes {
             transaction.execute(
                 "DELETE FROM blob WHERE tbl = ?1 AND key = ?2",
@@ -83,15 +105,20 @@ impl CacheDb {
             budget::evict(&transaction, table, bytes)?;
         }
         transaction.commit()?;
+        self.accesses.get_mut().clear();
         Ok(())
     }
 
     pub fn remove(&mut self, table: &str, key: &[u8]) -> Result<bool, CacheError> {
         self.check_budget_error()?;
-        Ok(self.conn.execute(
+        let removed = self.conn.execute(
             "DELETE FROM blob WHERE tbl = ?1 AND key = ?2",
             params![table, key],
-        )? > 0)
+        )? > 0;
+        self.accesses
+            .get_mut()
+            .remove(&(table.to_owned(), key.to_vec()));
+        Ok(removed)
     }
 
     pub fn used_bytes(&self, table: &str) -> Result<u64, CacheError> {
@@ -108,6 +135,9 @@ impl CacheDb {
         self.check_budget_error()?;
         self.conn
             .execute("DELETE FROM blob WHERE tbl = ?1", [table])?;
+        self.accesses
+            .get_mut()
+            .retain(|(pending_table, _), _| pending_table != table);
         Ok(())
     }
 
@@ -129,6 +159,7 @@ impl CacheDb {
             budgets: HashMap::new(),
             clock: Cell::new(clock),
             budget_error: Cell::new(None),
+            accesses: RefCell::new(HashMap::new()),
         })
     }
 
@@ -142,12 +173,72 @@ impl CacheDb {
         Ok(accessed)
     }
 
+    fn flush_accesses(&self) -> Result<(), rusqlite::Error> {
+        let mut pending = self.accesses.borrow_mut();
+        if pending.is_empty() {
+            return Ok(());
+        }
+        let transaction = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        write_accesses(&transaction, &pending)?;
+        transaction.commit()?;
+        pending.clear();
+        Ok(())
+    }
+
+    fn flush_accesses_briefly(&self) -> Result<(), rusqlite::Error> {
+        if self.accesses.borrow().is_empty() {
+            return Ok(());
+        }
+        let timeout: i64 = self
+            .conn
+            .pragma_query_value(None, "busy_timeout", |row| row.get(0))?;
+        let timeout = u64::try_from(timeout).unwrap_or(0);
+        self.conn
+            .busy_timeout(ACCESS_BUSY_TIMEOUT.min(Duration::from_millis(timeout)))?;
+        let result = self.flush_accesses();
+        let restored = self.conn.busy_timeout(Duration::from_millis(timeout));
+        result?;
+        restored
+    }
+
+    fn drop_oldest_accesses(&self) {
+        let mut pending = self.accesses.borrow_mut();
+        let mut ages: Vec<_> = pending.values().copied().collect();
+        ages.sort_unstable();
+        let keep_from = ages[ages.len() / 2];
+        pending.retain(|_, age| *age >= keep_from);
+    }
+
     fn check_budget_error(&self) -> Result<(), CacheError> {
         match self.budget_error.take() {
             Some(error) => Err(error.into()),
             None => Ok(()),
         }
     }
+}
+
+impl Drop for CacheDb {
+    fn drop(&mut self) {
+        if let Err(error) = self.flush_accesses_briefly() {
+            tracing::debug!(%error, "cache access ages could not be saved at exit");
+        }
+    }
+}
+
+fn write_accesses(
+    conn: &Connection,
+    pending: &HashMap<(String, Vec<u8>), i64>,
+) -> Result<(), rusqlite::Error> {
+    if pending.is_empty() {
+        return Ok(());
+    }
+    let mut statement = conn.prepare_cached(
+        "UPDATE blob SET accessed = MAX(accessed, ?3) WHERE tbl = ?1 AND key = ?2",
+    )?;
+    for ((table, key), accessed) in pending {
+        statement.execute(params![table, key, accessed])?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ mod report;
 
 pub use disk_use::{DiskKind, DiskLocationUse, DiskTotals, DiskUse, scan_disk_use};
 pub use event_ring::{EventRing, RingStats};
-pub use log_layer::{LogConfig, LogLayer, RedactionMisses, is_redacted_path};
+pub use log_layer::{LogConfig, LogFlush, LogLayer, RedactionMisses, is_redacted_path};
 pub use memory::{
     CacheRegistry, CacheSize, CacheUsage, FakeProbe, MemoryProbe, MemoryReport, ProcessMemory,
     TaskCounters, TaskGuard, memory_report,

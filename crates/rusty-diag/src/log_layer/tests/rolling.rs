@@ -142,3 +142,109 @@ fn ring_only_config_writes_no_files() {
         file_names(dir.path())
     );
 }
+
+fn layer(dir: &Path) -> super::LogLayer {
+    super::LogLayer::new(
+        config(Some(dir), 1024 * 1024),
+        redactor(),
+        std::sync::Arc::new(super::EventRing::new(super::EventRing::DEFAULT_BUDGET)),
+    )
+    .unwrap()
+}
+
+#[test]
+fn warning_flushes_info_and_itself_before_returning() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let dir = TempDir::new().unwrap();
+    let subscriber = tracing_subscriber::Registry::default().with(layer(dir.path()));
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(target: TARGET, "buffered info");
+        tracing::warn!(target: TARGET, "urgent warning");
+        let lines = file_lines(dir.path(), "ferrite.log");
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("buffered info"));
+        assert!(lines[1].contains("urgent warning"));
+    });
+}
+
+#[test]
+fn error_is_on_disk_before_returning() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let dir = TempDir::new().unwrap();
+    let subscriber = tracing_subscriber::Registry::default().with(layer(dir.path()));
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::error!(target: TARGET, "urgent error");
+        assert!(file_lines(dir.path(), "ferrite.log")[0].contains("urgent error"));
+    });
+}
+
+#[test]
+fn explicit_flush_writes_buffered_info() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let dir = TempDir::new().unwrap();
+    let layer = layer(dir.path());
+    let flush = layer.flush_handle();
+    let subscriber = tracing_subscriber::Registry::default().with(layer);
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(target: TARGET, "buffered info");
+        flush.flush();
+        assert!(file_lines(dir.path(), "ferrite.log")[0].contains("buffered info"));
+    });
+}
+
+#[test]
+fn background_flush_writes_info_within_one_interval() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let dir = TempDir::new().unwrap();
+    let subscriber = tracing_subscriber::Registry::default().with(layer(dir.path()));
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(target: TARGET, "background info");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while file_lines(dir.path(), "ferrite.log").is_empty() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "background flush timed out"
+            );
+            std::thread::yield_now();
+        }
+        assert!(file_lines(dir.path(), "ferrite.log")[0].contains("background info"));
+    });
+}
+
+#[test]
+fn shutdown_flushes_info_and_joins_the_worker() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let dir = TempDir::new().unwrap();
+    let layer = layer(dir.path());
+    let flush = layer.flush_handle();
+    let subscriber = tracing_subscriber::Registry::default().with(layer);
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(target: TARGET, "shutdown info");
+        flush.shutdown();
+        flush.shutdown();
+        assert!(file_lines(dir.path(), "ferrite.log")[0].contains("shutdown info"));
+    });
+}
+
+#[test]
+fn info_lines_share_a_buffer_until_flush() {
+    let dir = TempDir::new().unwrap();
+    let mut file = super::super::rolling::RollingFile::open(
+        dir.path().to_owned(),
+        "ferrite".to_owned(),
+        1024 * 1024,
+        3,
+    )
+    .unwrap();
+    for _ in 0..10 {
+        file.write_line("info").unwrap();
+    }
+    assert!(file_lines(dir.path(), "ferrite.log").is_empty());
+    file.flush().unwrap();
+    assert_eq!(file_lines(dir.path(), "ferrite.log").len(), 10);
+}

@@ -58,7 +58,9 @@ use rusty_ui::window_view::{OpenSender, open_requests};
 
 fn main() -> ExitCode {
     heap::install();
-    execute(std::env::args_os().skip(1), StoreDirs::detect)
+    let result = execute(std::env::args_os().skip(1), StoreDirs::detect);
+    logging::shutdown();
+    result
 }
 
 fn execute(

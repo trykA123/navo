@@ -210,7 +210,7 @@ fn clean_quitter_removes_the_crash_running_marker() {
     let dir = tempfile::tempdir().unwrap();
     let running = crate::crash::Running::start(dir.path()).unwrap();
     let quit = super::quitter(
-        None,
+        (None, None),
         crate::profile::Cleanup::default(),
         Some(running),
         crate::jobs::maintenance::MaintenanceTimer::default(),

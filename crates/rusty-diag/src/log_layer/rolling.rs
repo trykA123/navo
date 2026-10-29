@@ -1,5 +1,5 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 
 pub(super) struct RollingFile {
@@ -8,7 +8,7 @@ pub(super) struct RollingFile {
     max_bytes: u64,
     files: usize,
     size: u64,
-    file: Option<File>,
+    file: Option<BufWriter<File>>,
 }
 
 impl RollingFile {
@@ -31,24 +31,31 @@ impl RollingFile {
         Ok(rolling)
     }
 
-    pub(super) fn write_line(&mut self, line: &str) {
+    pub(super) fn write_line(&mut self, line: &str) -> io::Result<()> {
         let bytes = u64::try_from(line.len())
             .unwrap_or(u64::MAX)
             .saturating_add(1);
         if self.size > 0 && self.size.saturating_add(bytes) > self.max_bytes {
-            self.rotate();
+            self.rotate()?;
         }
-        if self.file.is_none() && self.reopen().is_err() {
-            return;
+        if self.file.is_none() {
+            self.reopen()?;
         }
         let mut buffer = String::with_capacity(line.len() + 1);
         buffer.push_str(line);
         buffer.push('\n');
-        if let Some(file) = self.file.as_mut()
-            && file.write_all(buffer.as_bytes()).is_ok()
-        {
+        if let Some(file) = self.file.as_mut() {
+            file.write_all(buffer.as_bytes())?;
             self.size = self.size.saturating_add(bytes);
         }
+        Ok(())
+    }
+
+    pub(super) fn flush(&mut self) -> io::Result<()> {
+        if let Some(file) = self.file.as_mut() {
+            file.flush()?;
+        }
+        Ok(())
     }
 
     fn reopen(&mut self) -> io::Result<()> {
@@ -57,11 +64,12 @@ impl RollingFile {
             .append(true)
             .open(self.path(0))?;
         self.size = file.metadata()?.len();
-        self.file = Some(file);
+        self.file = Some(BufWriter::new(file));
         Ok(())
     }
 
-    fn rotate(&mut self) {
+    fn rotate(&mut self) -> io::Result<()> {
+        self.flush()?;
         self.file = None;
         self.size = 0;
         let last = self.files - 1;
@@ -69,6 +77,7 @@ impl RollingFile {
         for index in (0..last).rev() {
             let _ = fs::rename(self.path(index), self.path(index + 1));
         }
+        Ok(())
     }
 
     fn path(&self, index: usize) -> PathBuf {

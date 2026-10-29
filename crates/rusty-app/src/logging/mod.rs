@@ -1,6 +1,6 @@
 use std::io;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use rusty_diag::{CacheRegistry, EventRing, LogConfig, LogLayer, RedactionMisses, Redactor};
 use tracing_subscriber::layer::SubscriberExt;
@@ -11,6 +11,26 @@ pub const LEGACY_ENV_VAR: &str = "FERRITE_LOG";
 const DEFAULT_LEVEL: &str = "info";
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const FILES: usize = 5;
+
+static FLUSH: OnceLock<rusty_diag::LogFlush> = OnceLock::new();
+
+pub fn flush() {
+    if let Some(writer) = FLUSH.get() {
+        writer.flush();
+    }
+}
+
+pub fn try_flush() {
+    if let Some(writer) = FLUSH.get() {
+        writer.try_flush();
+    }
+}
+
+pub fn shutdown() {
+    if let Some(writer) = FLUSH.get() {
+        writer.shutdown();
+    }
+}
 
 #[derive(Clone)]
 pub struct Diagnostics {
@@ -51,9 +71,12 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
         std::env::var(LEGACY_ENV_VAR).ok(),
     );
     let misses = opened.misses();
+    let flush = opened.layer.as_ref().map(LogLayer::flush_handle);
     let subscriber = Registry::default().with(filter).with(opened.layer);
     if let Err(error) = tracing::subscriber::set_global_default(subscriber) {
         eprintln!("navo: cannot install logging: {error}");
+    } else if let Some(flush) = flush {
+        let _ = FLUSH.set(flush);
     }
     warn_all(&warnings);
     let caches = CacheRegistry::default();

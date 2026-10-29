@@ -40,6 +40,15 @@ fn diagnostics() -> Diagnostics {
 }
 
 fn with_hook(data: &Path, diagnostics: &Diagnostics, run: impl FnOnce(Arc<AtomicUsize>)) {
+    with_flush_hook(data, diagnostics, crate::logging::try_flush, run);
+}
+
+fn with_flush_hook(
+    data: &Path,
+    diagnostics: &Diagnostics,
+    flush: impl Fn() + Send + Sync + 'static,
+    run: impl FnOnce(Arc<AtomicUsize>),
+) {
     let _lock = HOOK_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -49,7 +58,7 @@ fn with_hook(data: &Path, diagnostics: &Diagnostics, run: impl FnOnce(Arc<Atomic
     panic::set_hook(Box::new(move |_| {
         counter.fetch_add(1, Ordering::Relaxed);
     }));
-    install(Some(data), diagnostics);
+    hook::install_with_flush(Some(data), diagnostics, flush);
     let installed = panic::take_hook();
     let elsewhere = previous.clone();
     panic::set_hook(Box::new(move |info| {
@@ -165,6 +174,37 @@ fn hook_chains_to_the_previous_hook() {
         trigger("test panic");
         assert_eq!(calls.load(Ordering::Relaxed), 1);
     });
+}
+
+#[test]
+fn panic_with_the_log_mutex_held_writes_the_record_before_flushing() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join("logs")).unwrap();
+    let log = Arc::new(Mutex::new(()));
+    let flushing = log.clone();
+    let logs = dir.path().join("logs");
+    let (finished, received) = std::sync::mpsc::channel();
+    with_flush_hook(
+        dir.path(),
+        &diagnostics(),
+        move || {
+            let record_written = !hook::files(&logs).is_empty();
+            let locked = flushing.try_lock().is_err();
+            let _ = finished.send((record_written, locked));
+        },
+        |calls| {
+            let thread = std::thread::spawn(move || {
+                own_thread();
+                let _guard = log.lock().unwrap();
+                panic!("panic while writing the log");
+            });
+            let result = received.recv_timeout(std::time::Duration::from_secs(2));
+            assert_eq!(result.unwrap(), (true, true));
+            assert!(thread.join().is_err());
+            assert_eq!(calls.load(Ordering::Relaxed), 1);
+        },
+    );
+    assert_eq!(crash_files(dir.path()).len(), 1);
 }
 
 #[test]

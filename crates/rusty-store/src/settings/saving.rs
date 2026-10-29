@@ -2,12 +2,13 @@ use std::borrow::Cow;
 use std::sync::PoisonError;
 
 use super::{
-    Saved, SettingValue, SettingsError, SettingsStore, complete, edit, key_line, parse, read,
+    Saved, SettingValue, SettingsError, SettingsStore, complete, edit::SaveDocument, parse, read,
 };
 
 struct Attempt<'a> {
     base: Option<String>,
     backup: &'a mut bool,
+    document: SaveDocument,
 }
 
 impl SettingsStore {
@@ -19,10 +20,7 @@ impl SettingsStore {
     ) -> Result<Saved, SettingsError> {
         let session = self.backup.clone();
         let mut backup = session.0.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut attempt = Attempt {
-            base: read(&self.path)?,
-            backup: &mut backup,
-        };
+        let mut attempt = self.attempt(key, &mut backup)?;
         self.save_from(key, value, &mut attempt)
     }
 
@@ -33,16 +31,13 @@ impl SettingsStore {
     ) -> Result<Saved, SettingsError> {
         let session = self.backup.clone();
         let mut backup = session.0.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut attempt = Attempt {
-            base: read(&self.path)?,
-            backup: &mut backup,
-        };
-        let before = edit::key_source(attempt.base.as_deref().unwrap_or_default(), key)?;
+        let mut attempt = self.attempt(key, &mut backup)?;
+        let before = attempt.document.key_source.clone();
         match self.save_from(key, value.clone(), &mut attempt) {
             Err(SettingsError::ChangedOnDisk) => {
-                attempt.base = read(&self.path)?;
-                let after = edit::key_source(attempt.base.as_deref().unwrap_or_default(), key)?;
-                if before != after {
+                attempt = self.attempt(key, &mut backup)?;
+                let after = &attempt.document.key_source;
+                if &before != after {
                     return Err(SettingsError::FieldChangedOnDisk);
                 }
                 self.save_from(key, value, &mut attempt)
@@ -91,6 +86,20 @@ impl SettingsStore {
         })
     }
 
+    fn attempt<'a>(&self, key: &str, backup: &'a mut bool) -> Result<Attempt<'a>, SettingsError> {
+        let base = read(&self.path)?;
+        let source = match base.as_deref() {
+            Some(text) => Cow::Borrowed(text),
+            None => Cow::Owned(complete::complete_text("", &self.current)?.text),
+        };
+        let document = SaveDocument::parse(&source, key)?;
+        Ok(Attempt {
+            base,
+            backup,
+            document,
+        })
+    }
+
     fn save_from(
         &mut self,
         key: &str,
@@ -98,17 +107,11 @@ impl SettingsStore {
         attempt: &mut Attempt<'_>,
     ) -> Result<Saved, SettingsError> {
         let base = attempt.base.as_deref();
-        if let Some(text) = base {
-            parse(text).map_err(|_| SettingsError::FileInvalid)?;
-        }
-        let source = match base {
-            Some(text) => Cow::Borrowed(text),
-            None => Cow::Owned(complete::complete_text("", &self.current)?.text),
-        };
         let was_present =
-            (base.is_some() || self.generation > 0) && key_line(&source, key).is_some();
-        let patched = edit::upgrade_legacy_themes(&edit::patch(&source, key, value)?)?;
-        let (settings, _) = parse(&patched)?;
+            (base.is_some() || self.generation > 0) && attempt.document.key_source.is_some();
+        attempt.document.patch(key, value)?;
+        let settings = attempt.document.settings()?;
+        let patched = attempt.document.text();
         let durability_error = if base != Some(patched.as_str()) {
             self.write(&patched, base, attempt.backup)?
         } else {
@@ -120,5 +123,33 @@ impl SettingsStore {
             durability_error,
             ledger_error: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_save_parses_the_source_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("navo.toml");
+        std::fs::write(
+            &path,
+            r#"[appearance]
+mode = "light"
+"#,
+        )
+        .unwrap();
+        let (mut store, _) = SettingsStore::load(&path);
+        super::super::edit::SAVE_PARSES.with(|count| count.set(0));
+        store
+            .save_preserving_edits("appearance.mode", Some(SettingValue::Text("dark".into())))
+            .unwrap();
+        super::super::edit::SAVE_PARSES.with(|count| assert_eq!(count.get(), 1));
+        assert_eq!(
+            store.current().appearance.mode,
+            super::super::ThemeMode::Dark
+        );
     }
 }

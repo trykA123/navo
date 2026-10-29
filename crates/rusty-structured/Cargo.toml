@@ -8,7 +8,7 @@ publish.workspace = true
 [dependencies]
 csv = "=1.4.0"
 csv-core = "=0.1.13"
-pulldown-cmark = { version = "=0.13.4", default-features = false }
+pulldown-cmark = { version = "=0.13.5", default-features = false }
 quick-xml = "=0.41.0"
 saphyr-parser = "=0.2.2"
 serde = "=1.0.229"
