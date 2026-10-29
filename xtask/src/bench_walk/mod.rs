@@ -1,5 +1,6 @@
 mod index;
 mod options;
+mod walkers;
 
 use std::{
     fs::{self, OpenOptions},
@@ -21,7 +22,7 @@ pub(crate) fn run(args: &[String]) -> ExitCode {
         Err(error) => {
             eprintln!("bench-walk: {error}");
             eprintln!(
-                "usage: cargo xtask bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size,walk,search,save,load|index]"
+                "usage: cargo xtask bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size,walk,walk-dua,walk-ignore,search,save,load|index]"
             );
             return ExitCode::from(2);
         }
@@ -48,8 +49,12 @@ fn benchmark(
         options.warmup, options.runs
     );
     for &target in &options.targets {
+        if matches!(target, Target::Walk | Target::WalkDua | Target::WalkIgnore) {
+            report.push_str(&walkers::benchmark(options, target, sizes)?);
+            continue;
+        }
         if !matches!(target, Target::List | Target::Size) {
-            report.push_str(&index::benchmark(options, target, sizes, names)?);
+            report.push_str(&index::benchmark(options, target, names)?);
             continue;
         }
         let path = options.root.join(match target {
@@ -60,7 +65,12 @@ fn benchmark(
         let fresh = fixture(&path, target, sizes)?;
         let location = location(&fs::canonicalize(&path).map_err(|error| error.to_string())?)?;
         let (cold, warm) = samples(options, fresh, || measure(target, &location))?;
-        report.push_str(&markdown(target, &cold, &warm, options.prepare.is_some()));
+        report.push_str(&markdown(
+            target,
+            (&cold, &warm),
+            options.prepare.is_some(),
+            None,
+        ));
     }
     Ok(report)
 }
@@ -140,7 +150,7 @@ fn fixture(path: &Path, target: Target, sizes: (usize, usize, usize)) -> Result<
     let fresh = !path.try_exists().map_err(|error| error.to_string())?;
     let result = match target {
         Target::List => files(path, sizes.0),
-        Target::Size | Target::Walk => {
+        Target::Size | Target::Walk | Target::WalkDua | Target::WalkIgnore => {
             directory(path)?;
             for index in 0..sizes.1 {
                 files(&path.join(format!("folder-{index:03}")), sizes.2)?;
@@ -202,31 +212,40 @@ fn check_count(path: &Path, expected: usize) -> Result<(), String> {
     Ok(())
 }
 
-fn markdown(target: Target, cold: &[f64], warm: &[f64], prepared: bool) -> String {
+fn markdown(
+    target: Target,
+    samples: (&[f64], &[f64]),
+    prepared: bool,
+    files: Option<usize>,
+) -> String {
     let cache = if prepared {
         "prepare command ran before each cold sample"
     } else {
         "cache not flushed; cold only available for a freshly generated fixture"
     };
     let mut report = format!(
-        "### {}\n\n{cache}.\n\n| Run | Count | Mean ± σ (ms) | Median (ms) | Min (ms) | Max (ms) | Outliers |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+        "### {}\n\n{cache}.\n\n| Run | Count | Mean ± σ (ms) | Median (ms) | Min (ms) | Max (ms) | Outliers | Files/s |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
         target.name()
     );
-    for (name, samples) in [("cold", cold), ("warm", warm)] {
+    for (name, samples) in [("cold", samples.0), ("warm", samples.1)] {
         if let Some(summary) = Summary::of(samples) {
             report.push_str(&format!(
-                "| {name} | {} | {:.3} ± {:.3} | {:.3} | {:.3} | {:.3} | {} |\n",
+                "| {name} | {} | {:.3} ± {:.3} | {:.3} | {:.3} | {:.3} | {} | {} |\n",
                 summary.count,
                 summary.mean,
                 summary.sd,
                 summary.median,
                 summary.min,
                 summary.max,
-                summary.outliers.len()
+                summary.outliers.len(),
+                files.map_or_else(
+                    || "N/A".to_owned(),
+                    |files| format!("{:.0}", files as f64 * 1_000.0 / summary.median)
+                )
             ));
         } else {
             report.push_str(&format!(
-                "| {name} (fixture reused) | 0 | N/A | N/A | N/A | N/A | 0 |\n"
+                "| {name} (fixture reused) | 0 | N/A | N/A | N/A | N/A | 0 | N/A |\n"
             ));
         }
     }
@@ -240,13 +259,18 @@ mod tests {
 
     #[test]
     fn report_renders_fixed_sample_statistics() {
-        let report = markdown(Target::List, &[1.0], &[1.0, 2.0, 3.0], false);
+        let report = markdown(Target::List, (&[1.0], &[1.0, 2.0, 3.0]), false, Some(6));
         assert!(report.contains(
             "| Run | Count | Mean ± σ (ms) | Median (ms) | Min (ms) | Max (ms) | Outliers |"
         ));
-        assert!(report.contains("| warm | 3 | 2.000 ± 1.000 | 2.000 | 1.000 | 3.000 | 0 |"));
+        assert!(report.contains("| warm | 3 | 2.000 ± 1.000 | 2.000 | 1.000 | 3.000 | 0 | 3000 |"));
         assert!(report.contains("cache not flushed"));
-        let report = markdown(Target::Size, &[], &[10.0, 100.0, 11.0, 9.0, 12.0], false);
+        let report = markdown(
+            Target::Size,
+            (&[], &[10.0, 100.0, 11.0, 9.0, 12.0]),
+            false,
+            None,
+        );
         assert!(report.contains("cold (fixture reused) | 0 | N/A"));
         assert!(report.contains("| 9.000 | 100.000 | 1 |"));
     }

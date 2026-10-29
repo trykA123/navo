@@ -5,6 +5,8 @@ pub(super) enum Target {
     List,
     Size,
     Walk,
+    WalkDua,
+    WalkIgnore,
     Search,
     Save,
     Load,
@@ -16,6 +18,8 @@ impl Target {
             Self::List => "list",
             Self::Size => "size",
             Self::Walk => "walk",
+            Self::WalkDua => "walk-dua",
+            Self::WalkIgnore => "walk-ignore",
             Self::Search => "search",
             Self::Save => "save",
             Self::Load => "load",
@@ -84,6 +88,8 @@ fn parse_targets(value: &str) -> Result<Vec<Target>, String> {
             "list" => Target::List,
             "size" => Target::Size,
             "walk" => Target::Walk,
+            "walk-dua" => Target::WalkDua,
+            "walk-ignore" => Target::WalkIgnore,
             "search" => Target::Search,
             "save" => Target::Save,
             "load" => Target::Load,
@@ -152,6 +158,12 @@ mod tests {
 
     #[test]
     fn accepts_index_targets_and_shorthand() {
+        assert_eq!(
+            parse_values(&["fixture", "--targets", "walk,walk-dua,walk-ignore"])
+                .unwrap()
+                .targets,
+            vec![Target::Walk, Target::WalkDua, Target::WalkIgnore]
+        );
         let expected = vec![Target::Walk, Target::Search, Target::Save, Target::Load];
         for value in ["walk,search,save,load", "index"] {
             assert_eq!(

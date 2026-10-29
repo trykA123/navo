@@ -1,24 +1,14 @@
 use std::{fs, hint::black_box, path::Path, time::Instant};
 
-use rusty_fs::{CancelToken, LocalFs};
 use rusty_index::{
     file::{self, Header},
     search::{self, Term},
     table::{Flags, NO_PARENT, NameTable},
-    walker::{self, Limits, Outcome},
 };
 
-use super::{Options, Target, fixture, location, markdown, samples};
+use super::{Options, Target, markdown, samples};
 
-pub(super) fn benchmark(
-    options: &Options,
-    target: Target,
-    sizes: (usize, usize, usize),
-    names: usize,
-) -> Result<String, String> {
-    if target == Target::Walk {
-        return walk(options, sizes);
-    }
+pub(super) fn benchmark(options: &Options, target: Target, names: usize) -> Result<String, String> {
     let table = synthetic_names(names, target != Target::Search)?;
     if target == Target::Search {
         let (cold, warm) = samples(options, true, || {
@@ -28,37 +18,14 @@ pub(super) fn benchmark(
             }
             Ok(started.elapsed().as_secs_f64() * 1_000.0)
         })?;
-        return Ok(markdown(target, &cold, &warm, options.prepare.is_some()));
+        return Ok(markdown(
+            target,
+            (&cold, &warm),
+            options.prepare.is_some(),
+            None,
+        ));
     }
     snapshot(options, target, &table)
-}
-
-fn walk(options: &Options, sizes: (usize, usize, usize)) -> Result<String, String> {
-    let target = Target::Walk;
-    let path = options.root.join("size-tree");
-    let fresh = fixture(&path, target, sizes)?;
-    let root = location(&fs::canonicalize(&path).map_err(|error| error.to_string())?)?;
-    let (cold, warm) = samples(options, fresh, || {
-        let started = Instant::now();
-        let result = walker::walk(
-            &LocalFs::new(),
-            &root,
-            Limits {
-                max_entries: usize::MAX,
-                exclude: Vec::new(),
-            },
-            &CancelToken::new(),
-            |_, _| {},
-        )
-        .map_err(|error| format!("walk: {error}"))?;
-        let elapsed = started.elapsed().as_secs_f64() * 1_000.0;
-        if result.outcome != Outcome::Complete || result.progress.skipped != 0 {
-            return Err(format!("walk incomplete: {:?}", result.progress));
-        }
-        black_box(result);
-        Ok(elapsed)
-    })?;
-    Ok(markdown(target, &cold, &warm, options.prepare.is_some()))
 }
 
 fn synthetic_names(count: usize, rooted: bool) -> Result<NameTable, String> {
@@ -104,7 +71,12 @@ fn snapshot(options: &Options, target: Target, table: &NameTable) -> Result<Stri
         let (cold, warm) = samples(options, true, || {
             measure_snapshot(target, &path, &header, table)
         })?;
-        Ok(markdown(target, &cold, &warm, options.prepare.is_some()))
+        Ok(markdown(
+            target,
+            (&cold, &warm),
+            options.prepare.is_some(),
+            None,
+        ))
     })();
     fs::remove_dir_all(&directory)
         .map_err(|error| format!("removing {}: {error}", directory.display()))?;
@@ -147,9 +119,18 @@ mod tests {
                 runs: 2,
                 warmup: 1,
                 prepare: None,
-                targets: vec![target],
+                targets: if target == Target::Walk {
+                    vec![Target::Walk, Target::WalkDua, Target::WalkIgnore]
+                } else {
+                    vec![target]
+                },
             };
             let report = super::super::benchmark(&options, (5, 2, 3), 10).unwrap();
+            if target == Target::Walk {
+                print!("{report}");
+                assert!(report.contains("### walk-dua\n"));
+                assert!(report.contains("### walk-ignore\n"));
+            }
             assert!(report.contains(&format!("### {}\n", target.name())));
             assert!(report.contains("| cold | 1 |"));
             assert!(report.contains("| warm | 2 |"));
