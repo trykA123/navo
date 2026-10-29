@@ -20,7 +20,7 @@ use windows::Win32::{
     UI::WindowsAndMessaging::PostMessageW,
 };
 
-use crate::{HWND, SafeHwnd, WM_GPUI_TASK_DISPATCHED_ON_MAIN_THREAD};
+use crate::{HWND, SafeHwnd, VSYNC_WAKE, WM_GPUI_TASK_DISPATCHED_ON_MAIN_THREAD};
 use gpui::{
     PlatformDispatcher, Priority, PriorityQueueSender, RunnableVariant, TimerResolutionGuard,
 };
@@ -119,6 +119,7 @@ impl PlatformDispatcher for WindowsDispatcher {
         match self.main_sender.send(priority, runnable) {
             Ok(_) => {
                 if !self.wake_posted.swap(true, Ordering::AcqRel) {
+                    VSYNC_WAKE.signal();
                     unsafe {
                         PostMessageW(
                             Some(self.platform_window_handle.as_raw()),

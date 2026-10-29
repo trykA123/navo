@@ -43,6 +43,7 @@ use gpui::*;
 struct TrackedWindow {
     handle: SafeHwnd,
     frame_signal: Arc<PlatformFrameSignal>,
+    vsync_paint_pending: Arc<AtomicBool>,
 }
 
 impl TrackedWindow {
@@ -466,9 +467,10 @@ impl WindowsPlatform {
             .spawn(move || {
                 let vsync_provider = VSyncProvider::new();
                 let wanted = || {
-                    all_windows.upgrade().is_none_or(|all_windows| {
+                    let has_visible_window = all_windows.upgrade().is_none_or(|all_windows| {
                         vsync_wanted(all_windows.read().iter().map(TrackedWindow::show))
-                    })
+                    });
+                    !VSYNC_WAKE.should_park(has_visible_window, std::time::Instant::now())
                 };
                 run_vsync_loop(&VSYNC_WAKE, &stop, wanted, || {
                     let signal_source = vsync_provider.wait_for_vsync();
@@ -476,6 +478,7 @@ impl WindowsPlatform {
                     if stop.load(Ordering::Acquire) {
                         return ControlFlow::Break(());
                     }
+                    // Device loss while parked recovers on the next wake, including WM_DISPLAYCHANGE.
                     if check_device_lost(&directx_device.device)
                         || invalidate_devices.fetch_and(false, Ordering::Acquire)
                     {
@@ -504,6 +507,7 @@ impl WindowsPlatform {
                                     hwnd.frame_signal.take();
                                 }
                             }
+                            hwnd.vsync_paint_pending.store(true, Ordering::Release);
                             RedrawWindow(Some(hwnd.as_raw()), None, None, RDW_INVALIDATE)
                                 .ok()
                                 .log_err();
@@ -791,6 +795,7 @@ impl Platform for WindowsPlatform {
         self.raw_window_handles.write().push(TrackedWindow {
             handle: handle.into(),
             frame_signal: window.state.frame_signal.clone(),
+            vsync_paint_pending: window.state.vsync_paint_pending.clone(),
         });
         VSYNC_WAKE.signal();
 
@@ -1303,6 +1308,7 @@ impl WindowsPlatformInner {
     fn run_foreground_task(&self) -> Option<isize> {
         const MAIN_TASK_TIMEOUT: u128 = 10;
 
+        let _activity = VSYNC_WAKE.activity();
         let start = std::time::Instant::now();
         'tasks: loop {
             'timeout_loop: loop {
@@ -1797,6 +1803,7 @@ unsafe extern "system" fn window_procedure(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    let _activity = VSYNC_WAKE.activity();
     if msg == WM_NCCREATE {
         let params = unsafe { &*(lparam.0 as *const CREATESTRUCTW) };
         let creation_context = params.lpCreateParams as *mut PlatformWindowCreateContext;

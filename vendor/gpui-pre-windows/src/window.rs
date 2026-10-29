@@ -61,6 +61,7 @@ pub struct WindowsWindowState {
 
     pub callbacks: Callbacks,
     pub frame_signal: Arc<PlatformFrameSignal>,
+    pub(crate) vsync_paint_pending: Arc<AtomicBool>,
     pub input_handler: Cell<Option<PlatformInputHandler>>,
     pub ime_enabled: Cell<bool>,
     pub pending_surrogate: Cell<Option<u16>>,
@@ -180,6 +181,7 @@ impl WindowsWindowState {
             min_size,
             callbacks,
             frame_signal: Arc::new(PlatformFrameSignal::new()),
+            vsync_paint_pending: Arc::new(AtomicBool::new(false)),
             input_handler: Cell::new(input_handler),
             ime_enabled: Cell::new(true),
             pending_surrogate: Cell::new(pending_surrogate),
@@ -661,6 +663,10 @@ impl Drop for WindowsWindow {
 }
 
 impl PlatformWindow for WindowsWindow {
+    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
+        Some(Rc::new(|| VSYNC_WAKE.signal()))
+    }
+
     fn bounds(&self) -> Bounds<Pixels> {
         self.state.bounds()
     }
@@ -1203,6 +1209,7 @@ struct WindowsDragDropHandler(pub Rc<WindowsWindowInner>);
 
 impl WindowsDragDropHandler {
     fn handle_drag_drop(&self, input: PlatformInput) {
+        let _activity = VSYNC_WAKE.activity();
         if let Some(mut func) = self.0.state.callbacks.input.take() {
             func(input);
             self.0.state.callbacks.input.set(Some(func));
@@ -1584,6 +1591,7 @@ unsafe extern "system" fn window_procedure(
     lparam: LPARAM,
 ) -> LRESULT {
     if msg == WM_NCCREATE {
+        let _activity = VSYNC_WAKE.activity();
         let window_params = unsafe { &*(lparam.0 as *const CREATESTRUCTW) };
         let window_creation_context = window_params.lpCreateParams as *mut WindowCreateContext;
         let window_creation_context = unsafe { &mut *window_creation_context };
@@ -1603,15 +1611,23 @@ unsafe extern "system" fn window_procedure(
 
     let ptr = unsafe { get_window_long(hwnd, GWLP_USERDATA) } as *mut Weak<WindowsWindowInner>;
     if ptr.is_null() {
+        let _activity = VSYNC_WAKE.activity();
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
     let inner = unsafe { &*ptr };
     let result = if let Some(inner) = inner.upgrade() {
+        let polled_paint = msg == WM_PAINT
+            && inner
+                .state
+                .vsync_paint_pending
+                .swap(false, std::sync::atomic::Ordering::AcqRel);
+        let _activity = VSYNC_WAKE.window_message(polled_paint);
         if msg == WM_NCDESTROY {
             inner.dialog_owner.close();
         }
         inner.handle_msg(hwnd, msg, wparam, lparam)
     } else {
+        let _activity = VSYNC_WAKE.activity();
         unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
     };
 

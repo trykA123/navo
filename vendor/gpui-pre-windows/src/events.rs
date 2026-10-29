@@ -92,12 +92,8 @@ impl WindowsWindowInner {
         } else {
             0
         };
-        if wakes_vsync(msg, wparam.0, flags) {
-            if matches!(msg, WM_SHOWWINDOW | WM_WINDOWPOSCHANGED) {
-                self.executor.spawn(async { VSYNC_WAKE.signal() }).detach();
-            } else {
-                VSYNC_WAKE.signal();
-            }
+        if defers_vsync_wake(msg, wparam.0, flags) {
+            self.executor.spawn(async { VSYNC_WAKE.signal() }).detach();
         }
         let handled = match msg {
             // `DefWindowProc` answers `MA_NOACTIVATE` for a left click on `HTCAPTION`.

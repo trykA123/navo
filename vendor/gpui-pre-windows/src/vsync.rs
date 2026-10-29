@@ -15,9 +15,7 @@ use windows::Win32::{
     Foundation::HWND,
     Graphics::Dwm::{DWM_TIMING_INFO, DwmFlush, DwmGetCompositionTimingInfo},
     System::Performance::QueryPerformanceFrequency,
-    UI::WindowsAndMessaging::{
-        SIZE_MINIMIZED, SWP_SHOWWINDOW, WM_ACTIVATE, WM_SHOWWINDOW, WM_SIZE, WM_WINDOWPOSCHANGED,
-    },
+    UI::WindowsAndMessaging::{SWP_SHOWWINDOW, WM_SHOWWINDOW, WM_WINDOWPOSCHANGED},
 };
 
 static QPC_TICKS_PER_SECOND: LazyLock<u64> = LazyLock::new(|| {
@@ -77,29 +75,61 @@ pub(crate) fn vsync_wanted(mut windows: impl Iterator<Item = WindowShow>) -> boo
     windows.any(|window| window.visible && !window.minimized)
 }
 
-pub(crate) fn wakes_vsync(msg: u32, wparam: usize, flags: u32) -> bool {
+pub(crate) fn defers_vsync_wake(msg: u32, wparam: usize, flags: u32) -> bool {
     match msg {
         WM_SHOWWINDOW => wparam != 0,
         WM_WINDOWPOSCHANGED => flags & SWP_SHOWWINDOW.0 != 0,
-        WM_SIZE => wparam != SIZE_MINIMIZED as usize,
-        WM_ACTIVATE => true,
         _ => false,
     }
 }
 
-pub(crate) static VSYNC_WAKE: VSyncWake = VSyncWake::new();
+const IDLE_TIMEOUT: Duration = Duration::from_millis(500);
+
+#[derive(Clone, Copy)]
+struct IdleGate {
+    last_present: Instant,
+    last_activity: Instant,
+}
+
+impl IdleGate {
+    fn new(now: Instant) -> Self {
+        Self {
+            last_present: now,
+            last_activity: now,
+        }
+    }
+
+    fn should_park(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.last_present) >= IDLE_TIMEOUT
+            && now.saturating_duration_since(self.last_activity) >= IDLE_TIMEOUT
+    }
+}
+
+fn should_park(has_visible_window: bool, gate: &IdleGate, now: Instant) -> bool {
+    !has_visible_window || gate.should_park(now)
+}
+
+struct WakeState {
+    pending: bool,
+    gate: IdleGate,
+}
+
+pub(crate) static VSYNC_WAKE: LazyLock<VSyncWake> = LazyLock::new(VSyncWake::new);
 
 pub(crate) struct VSyncWake {
-    pending: Mutex<bool>,
+    state: Mutex<WakeState>,
     condvar: Condvar,
     #[cfg(test)]
     parked: Mutex<Option<std::sync::mpsc::Sender<()>>>,
 }
 
 impl VSyncWake {
-    const fn new() -> Self {
+    fn new() -> Self {
         Self {
-            pending: Mutex::new(false),
+            state: Mutex::new(WakeState {
+                pending: false,
+                gate: IdleGate::new(Instant::now()),
+            }),
             condvar: Condvar::new(),
             #[cfg(test)]
             parked: Mutex::new(None),
@@ -107,20 +137,60 @@ impl VSyncWake {
     }
 
     pub(crate) fn signal(&self) {
-        *self.pending.lock() = true;
+        let mut state = self.state.lock();
+        let now = Instant::now();
+        state.gate.last_activity = now;
+        state.pending = true;
         self.condvar.notify_all();
     }
 
+    pub(crate) fn presented(&self) {
+        let mut state = self.state.lock();
+        let now = Instant::now();
+        state.gate.last_present = now;
+        state.pending = true;
+        self.condvar.notify_all();
+    }
+
+    pub(crate) fn activity(&self) -> VSyncActivity<'_> {
+        self.signal();
+        VSyncActivity(self)
+    }
+
+    pub(crate) fn window_message(&self, polled_paint: bool) -> Option<VSyncActivity<'_>> {
+        if polled_paint {
+            None
+        } else {
+            Some(self.activity())
+        }
+    }
+
+    fn consume_signal(&self) {
+        self.state.lock().pending = false;
+    }
+
+    pub(crate) fn should_park(&self, has_visible_window: bool, now: Instant) -> bool {
+        should_park(has_visible_window, &self.state.lock().gate, now)
+    }
+
     fn park(&self, stop: &AtomicBool) {
-        let mut pending = self.pending.lock();
-        while !*pending && !stop.load(Ordering::Acquire) {
+        let mut state = self.state.lock();
+        while !state.pending && !stop.load(Ordering::Acquire) {
             #[cfg(test)]
             if let Some(parked) = self.parked.lock().as_ref() {
                 parked.send(()).unwrap();
             }
-            self.condvar.wait(&mut pending);
+            self.condvar.wait(&mut state);
         }
-        *pending = false;
+        state.pending = false;
+    }
+}
+
+pub(crate) struct VSyncActivity<'a>(&'a VSyncWake);
+
+impl Drop for VSyncActivity<'_> {
+    fn drop(&mut self) {
+        self.0.signal();
     }
 }
 
@@ -131,6 +201,7 @@ pub(crate) fn run_vsync_loop(
     mut frame: impl FnMut() -> ControlFlow<()>,
 ) {
     loop {
+        wake.consume_signal();
         if !wanted() {
             wake.park(stop);
         }
@@ -168,11 +239,11 @@ fn retrieve_duration(counts: u64, ticks_per_second: u64) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, mpsc};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        SIZE_MAXIMIZED, SIZE_RESTORED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WA_ACTIVE,
-        WA_CLICKACTIVE, WA_INACTIVE,
+    use std::{
+        rc::Rc,
+        sync::{Arc, mpsc},
     };
+    use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
 
     const BOUND: Duration = Duration::from_secs(2);
 
@@ -230,23 +301,51 @@ mod tests {
     }
 
     #[test]
-    fn window_messages_wake_vsync_when_needed() {
-        assert!(wakes_vsync(WM_SHOWWINDOW, 1, 0));
-        assert!(!wakes_vsync(WM_SHOWWINDOW, 0, 0));
-        let flags = (SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE).0;
-        assert!(wakes_vsync(
-            WM_WINDOWPOSCHANGED,
-            0,
-            flags | SWP_SHOWWINDOW.0
-        ));
-        assert!(!wakes_vsync(WM_WINDOWPOSCHANGED, 0, flags));
-        assert!(wakes_vsync(WM_SIZE, SIZE_RESTORED as usize, 0));
-        assert!(wakes_vsync(WM_SIZE, SIZE_MAXIMIZED as usize, 0));
-        assert!(!wakes_vsync(WM_SIZE, SIZE_MINIMIZED as usize, 0));
-        for activation in [WA_ACTIVE, WA_CLICKACTIVE, WA_INACTIVE] {
-            assert!(wakes_vsync(WM_ACTIVATE, activation as usize, 0));
+    fn fresh_present_runs() {
+        let start = Instant::now();
+        let gate = IdleGate {
+            last_present: start + Duration::from_millis(550),
+            ..IdleGate::new(start)
+        };
+        assert!(!gate.should_park(start + Duration::from_millis(600)));
+    }
+
+    #[test]
+    fn idle_after_600ms_parks() {
+        let start = Instant::now();
+        assert!(IdleGate::new(start).should_park(start + Duration::from_millis(600)));
+    }
+
+    #[test]
+    fn both_deadlines_must_expire() {
+        let start = Instant::now();
+        let mut gate = IdleGate::new(start);
+        assert!(!gate.should_park(start + IDLE_TIMEOUT - Duration::from_nanos(1)));
+        assert!(gate.should_park(start + IDLE_TIMEOUT));
+        gate.last_activity = start + IDLE_TIMEOUT;
+        assert!(!gate.should_park(start + IDLE_TIMEOUT));
+        assert!(!gate.should_park(start));
+    }
+
+    #[test]
+    fn activity_after_park_runs() {
+        let start = Instant::now();
+        let mut gate = IdleGate::new(start);
+        let now = start + Duration::from_millis(600);
+        assert!(gate.should_park(now));
+        gate.last_activity = now;
+        assert!(!gate.should_park(now));
+    }
+
+    #[test]
+    fn animations_run_hidden_windows_park() {
+        let start = Instant::now();
+        let mut gate = IdleGate::new(start);
+        for tick in 1..100 {
+            gate.last_present = start + Duration::from_millis(tick * 16);
+            assert!(!should_park(true, &gate, gate.last_present));
+            assert!(should_park(false, &gate, gate.last_present));
         }
-        assert!(!wakes_vsync(0, 0, 0));
     }
 
     #[test]
@@ -270,6 +369,7 @@ mod tests {
         frames: mpsc::Receiver<()>,
         resume: mpsc::Sender<()>,
         done: mpsc::Receiver<()>,
+        now: Instant,
         thread: std::thread::JoinHandle<()>,
     }
 
@@ -283,13 +383,14 @@ mod tests {
             let (frame_tx, frame_rx) = mpsc::channel();
             let (resume_tx, resume_rx) = mpsc::channel();
             let (done_tx, done_rx) = mpsc::channel();
+            let now = Instant::now();
             let thread = std::thread::spawn({
                 let (wake, stop, windows) = (wake.clone(), stop.clone(), windows.clone());
                 move || {
                     run_vsync_loop(
                         &wake,
                         &stop,
-                        || vsync_wanted(windows.lock().iter().copied()),
+                        || !wake.should_park(vsync_wanted(windows.lock().iter().copied()), now),
                         || {
                             frame_tx.send(()).unwrap();
                             resume_rx.recv_timeout(BOUND).expect("frame did not finish");
@@ -307,6 +408,7 @@ mod tests {
                 frames: frame_rx,
                 resume: resume_tx,
                 done: done_rx,
+                now,
                 thread,
             }
         }
@@ -315,7 +417,7 @@ mod tests {
             self.parked.recv_timeout(BOUND).expect("loop did not park");
             drop(
                 self.wake
-                    .pending
+                    .state
                     .try_lock_for(BOUND)
                     .expect("loop did not release the park mutex"),
             );
@@ -356,17 +458,213 @@ mod tests {
         let test = TestLoop::new();
         test.wait_for_park();
         test.windows.lock().push(show(false, false));
-        let flags = SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE;
+        drop(test.wake.window_message(false));
+        test.wait_for_frame();
+        test.resume.send(()).unwrap();
+        test.wait_for_park();
+
+        let flags = SWP_NOACTIVATE.0 | SWP_NOSIZE.0 | SWP_NOMOVE.0;
+        assert!(!defers_vsync_wake(WM_WINDOWPOSCHANGED, 0, flags));
+        assert!(!defers_vsync_wake(WM_SHOWWINDOW, 0, 0));
+        assert!(defers_vsync_wake(WM_SHOWWINDOW, 1, 0));
+        assert!(!defers_vsync_wake(0, 0, 0));
+        assert!(defers_vsync_wake(
+            WM_WINDOWPOSCHANGED,
+            0,
+            flags | SWP_SHOWWINDOW.0
+        ));
         test.windows.lock()[0].visible = true;
-        if wakes_vsync(WM_WINDOWPOSCHANGED, 0, flags.0) {
+        if defers_vsync_wake(WM_WINDOWPOSCHANGED, 0, flags | SWP_SHOWWINDOW.0) {
             test.wake.signal();
         }
         test.wait_for_frame();
-
         test.windows.lock()[0].visible = false;
         test.resume.send(()).unwrap();
         test.wait_for_park();
         test.stop_while_parked();
+    }
+
+    #[test]
+    fn visible_idle_dispatch_wakes() {
+        let test = TestLoop::new();
+        test.wait_for_park();
+        test.windows.lock().push(show(true, false));
+        test.wake.signal();
+        test.wait_for_frame();
+        expire_gate(&test.wake, test.now);
+        test.resume.send(()).unwrap();
+        test.wait_for_park();
+
+        let activity = test.wake.activity();
+        test.wait_for_frame();
+        expire_gate(&test.wake, test.now);
+        drop(activity);
+        test.resume.send(()).unwrap();
+        test.wait_for_frame();
+        expire_gate(&test.wake, test.now);
+        test.resume.send(()).unwrap();
+        test.wait_for_park();
+        test.stop_while_parked();
+    }
+
+    #[test]
+    fn poll_does_not_extend_deadline() {
+        let wake = VSyncWake::new();
+        expire_gate(&wake, Instant::now());
+        let gate = wake.state.lock().gate;
+        drop(wake.window_message(true));
+        assert_eq!(wake.state.lock().gate.last_activity, gate.last_activity);
+        assert!(wake.should_park(true, Instant::now()));
+        assert!(!wake.state.lock().pending);
+        drop(wake.window_message(false));
+        let last_activity = wake.state.lock().gate.last_activity;
+        assert!(!wake.should_park(true, last_activity));
+        assert!(wake.state.lock().pending);
+    }
+
+    #[test]
+    fn polled_paint_does_not_wake() {
+        let test = TestLoop::new();
+        test.wait_for_park();
+        test.windows.lock().push(show(true, false));
+        test.wake.signal();
+        test.wait_for_frame();
+        expire_gate(&test.wake, test.now);
+        test.resume.send(()).unwrap();
+        test.wait_for_park();
+
+        let state = test
+            .wake
+            .state
+            .try_lock_for(BOUND)
+            .expect("loop did not release the park mutex");
+        assert!(test.wake.window_message(true).is_none());
+        assert_eq!(
+            test.wake.condvar.notify_all(),
+            1,
+            "a polled paint must leave the waiter parked"
+        );
+        drop(state);
+        test.wait_for_park();
+        test.stop_while_parked();
+    }
+
+    #[test]
+    fn frame_waker_wakes_parked_loop() {
+        let test = TestLoop::new();
+        test.wait_for_park();
+        test.windows.lock().push(show(true, false));
+        test.wake.signal();
+        test.wait_for_frame();
+        expire_gate(&test.wake, test.now);
+        test.resume.send(()).unwrap();
+        test.wait_for_park();
+
+        let frame_waker: Rc<dyn Fn()> = Rc::new({
+            let wake = test.wake.clone();
+            move || wake.signal()
+        });
+        frame_waker();
+        test.wait_for_frame();
+        expire_gate(&test.wake, test.now);
+        test.resume.send(()).unwrap();
+        test.wait_for_park();
+        test.stop_while_parked();
+    }
+
+    #[test]
+    fn present_wakes() {
+        let test = TestLoop::new();
+        test.wait_for_park();
+        test.windows.lock().push(show(true, false));
+        test.wake.presented();
+        test.wait_for_frame();
+        expire_gate(&test.wake, test.now);
+        test.resume.send(()).unwrap();
+        test.wait_for_park();
+        test.stop_while_parked();
+    }
+
+    #[test]
+    fn activity_before_park_is_retained() {
+        let wake = Arc::new(VSyncWake::new());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (checked_tx, checked_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let (frame_tx, frame_rx) = mpsc::channel();
+        let thread = std::thread::spawn({
+            let (wake, stop) = (wake.clone(), stop.clone());
+            move || {
+                run_vsync_loop(
+                    &wake,
+                    &stop,
+                    || {
+                        checked_tx.send(()).unwrap();
+                        resume_rx
+                            .recv_timeout(BOUND)
+                            .expect("visibility check did not resume");
+                        false
+                    },
+                    || {
+                        frame_tx.send(()).unwrap();
+                        ControlFlow::Break(())
+                    },
+                );
+            }
+        });
+        checked_rx
+            .recv_timeout(BOUND)
+            .expect("visibility was not checked");
+        drop(wake.window_message(false));
+        resume_tx.send(()).unwrap();
+        frame_rx
+            .recv_timeout(BOUND)
+            .expect("activity before parking was lost");
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn registration_before_park_is_retained() {
+        let wake = Arc::new(VSyncWake::new());
+        let windows = Arc::new(Mutex::new(Vec::<WindowShow>::new()));
+        let (checked_tx, checked_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let (frame_tx, frame_rx) = mpsc::channel();
+        let thread = std::thread::spawn({
+            let (wake, windows) = (wake.clone(), windows.clone());
+            move || {
+                run_vsync_loop(
+                    &wake,
+                    &AtomicBool::new(false),
+                    || {
+                        let visible = vsync_wanted(windows.lock().iter().copied());
+                        checked_tx.send(()).unwrap();
+                        resume_rx
+                            .recv_timeout(BOUND)
+                            .expect("registration did not finish");
+                        !wake.should_park(visible, Instant::now())
+                    },
+                    || {
+                        frame_tx.send(()).unwrap();
+                        ControlFlow::Break(())
+                    },
+                );
+            }
+        });
+        checked_rx
+            .recv_timeout(BOUND)
+            .expect("visibility was not checked");
+        windows.lock().push(show(true, false));
+        wake.signal();
+        resume_tx.send(()).unwrap();
+        frame_rx
+            .recv_timeout(BOUND)
+            .expect("registration wake was lost");
+        thread.join().unwrap();
+    }
+
+    fn expire_gate(wake: &VSyncWake, now: Instant) {
+        wake.state.lock().gate = IdleGate::new(now - Duration::from_millis(600));
     }
 
     #[test]
