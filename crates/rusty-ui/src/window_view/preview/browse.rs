@@ -92,7 +92,7 @@ impl FerriteWindow {
     }
 
     pub(in crate::window_view) fn escape_preview(&mut self, cx: &mut Context<Self>) {
-        if self.stop_scan(cx) || !self.preview.is_open {
+        if !self.preview.is_open {
             return;
         }
         self.close_preview(cx);

@@ -34,6 +34,19 @@ enum Target {
 }
 
 impl FerriteWindow {
+    pub(super) fn has_only_tab(&self) -> bool {
+        let state = self.browser.state();
+        self.panes().len() == 1
+            && state
+                .pane(state.focused_pane())
+                .is_some_and(|pane| pane.tabs().len() == 1)
+    }
+
+    pub(super) fn replace_only_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.apply(&Command::PaneOpenTab { location: None }, window, cx);
+        self.apply(&Command::PaneCloseTab { tab: Some(0) }, window, cx);
+    }
+
     fn go_to_tab(&mut self, target: Target, window: &mut Window, cx: &mut Context<Self>) {
         let state = self.browser.state();
         let Some(pane) = state.pane(state.focused_pane()) else {

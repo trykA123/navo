@@ -56,6 +56,9 @@ impl FerriteWindow {
                         .path_edit
                         .as_ref()
                         .is_some_and(|edit| edit.pane == pane);
+                    if event.button == MouseButton::Left {
+                        this.activate_from_header(pane, window, cx);
+                    }
                     if !event.modifiers.shift {
                         this.press_tab((pane, event), window, cx);
                         return;
@@ -76,6 +79,18 @@ impl FerriteWindow {
                     });
                 }),
             )
+    }
+
+    fn activate_from_header(&mut self, pane: PaneId, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_pane(pane);
+        let is_editing = self
+            .path_edit
+            .as_ref()
+            .is_some_and(|edit| edit.pane == pane);
+        if !is_editing {
+            self.focus_core_pane(window, cx);
+        }
+        cx.notify();
     }
 
     fn pane_swap_escape(window: &Window, cx: &mut Context<Self>) -> Subscription {

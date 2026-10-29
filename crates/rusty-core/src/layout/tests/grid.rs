@@ -1,4 +1,4 @@
-use super::{p, rect};
+use super::p;
 use crate::session::LayoutState;
 use crate::{Direction, Layout, Tiles};
 
@@ -41,21 +41,15 @@ fn widths(layout: &Layout) -> Vec<f64> {
 }
 
 #[test]
-fn an_old_shared_divider_loads_into_both_rows() {
-    let old = split(
+fn a_saved_two_column_layout_loads_unchanged() {
+    let columns = split(
         true,
         300,
         Box::new(split(false, 600, leaf(1), leaf(2))),
         Box::new(split(false, 400, leaf(3), leaf(4))),
     );
-    let layout = Layout::from_state(&old, p(1)).unwrap();
-    let rects: Vec<_> = layout.rects();
-    let find = |id| rects.iter().find(|(pane, _)| *pane == p(id)).unwrap().1;
-    assert_eq!(find(1), rect(0.0, 0.0, 0.3, 0.6));
-    assert_eq!(find(3), rect(0.3, 0.0, 0.7, 0.6));
-    assert_eq!(find(2), rect(0.0, 0.6, 0.3, 0.4));
-    assert_eq!(find(4), rect(0.3, 0.6, 0.7, 0.4));
-    assert_eq!(layout.splits().len(), 3);
+    let layout = Layout::from_state(&columns, p(1)).unwrap();
+    assert_eq!(layout.to_state(), columns);
 }
 
 #[test]

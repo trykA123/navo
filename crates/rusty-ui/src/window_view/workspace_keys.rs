@@ -1,8 +1,9 @@
-use gpui_kit::{AnyWindowHandle, Modifiers, Subscription, Task};
+use gpui_kit::{AnyWindowHandle, KeystrokeEvent, Modifiers, Subscription, Task, WeakEntity};
 use rusty_core::Command;
 
 use super::FerriteWindow;
 use super::workspace_tray::TrayEdit;
+use crate::file_list::FilterEdit;
 use crate::fkey_bar::KeyLayer;
 use crate::modifier_hints::{Arm, Combo, Delay, Hold};
 use crate::prelude::*;
@@ -45,20 +46,32 @@ pub(super) struct WorkspaceKeys {
     _keys: Subscription,
 }
 
+fn intercept_key(
+    (this, own): (&WeakEntity<FerriteWindow>, AnyWindowHandle),
+    event: &KeystrokeEvent,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let key = event.keystroke.key.as_str();
+    let is_modifier = matches!(
+        key,
+        "control" | "shift" | "alt" | "platform" | "function" | "capslock"
+    );
+    if window.window_handle() != own || is_modifier {
+        return;
+    }
+    let is_unfocused_escape = key == "escape" && window.focused(cx).is_none();
+    let _ = this.update(cx, |view, cx| {
+        view.note_key(is_unfocused_escape, window, cx);
+    });
+}
+
 impl WorkspaceKeys {
     pub(super) fn new(window: &Window, cx: &mut Context<FerriteWindow>) -> Self {
         let this = cx.weak_entity();
         let own: AnyWindowHandle = window.window_handle();
         let keys = cx.intercept_keystrokes(move |event, window, cx| {
-            let key = event.keystroke.key.as_str();
-            if window.window_handle() == own
-                && !matches!(
-                    key,
-                    "control" | "shift" | "alt" | "platform" | "function" | "capslock"
-                )
-            {
-                let _ = this.update(cx, |view, _| view.workspace_keys.hold.key_pressed());
-            }
+            intercept_key((&this, own), event, window, cx);
         });
         Self {
             visible: false,
@@ -162,6 +175,27 @@ impl FerriteWindow {
         }
         self.workspace_keys.pin();
         self.focus_core_pane(window, cx);
+        cx.notify();
+    }
+
+    fn note_key(&mut self, is_unfocused_escape: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.workspace_keys.hold.key_pressed();
+        if is_unfocused_escape {
+            self.escape_unfocused(window, cx);
+        }
+    }
+
+    fn escape_unfocused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.overlay_owns_focus() || !self.preview.is_open() {
+            return;
+        }
+        self.focus_core_pane(window, cx);
+        let tab = self.browser.state().active_tab().id();
+        if self.browser.filter_text(tab).is_some() {
+            self.filter(FilterEdit::Clear);
+        } else if !self.stop_find() {
+            self.escape_pane(cx);
+        }
         cx.notify();
     }
 

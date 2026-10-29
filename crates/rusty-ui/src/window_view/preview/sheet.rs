@@ -117,10 +117,6 @@ impl FerriteWindow {
 
     fn footer(&self, sheet: SideSheet, is_browsing: bool, is_folder: bool) -> SideSheet {
         let is_nested = !self.preview.trail.is_empty();
-        let is_counting = self
-            .preview
-            .folder()
-            .is_some_and(|folder| folder.scan.is_counting());
         let sheet = match (is_browsing, is_folder) {
             (true, true) => sheet
                 .hint(&["enter"], "Open")
@@ -134,11 +130,7 @@ impl FerriteWindow {
             (true, false, true) => sheet.hint(&["ctrl-r"], "Recount"),
             _ => sheet,
         };
-        let sheet = if !is_browsing && is_counting {
-            sheet.hint(&["escape"], "Stop scan")
-        } else {
-            sheet.hint(&["escape"], "Close")
-        };
+        let sheet = sheet.hint(&["escape"], "Close");
         let note = self.preview.view.note().map(|note| note.to_string());
         let summary = self.preview.folder().and_then(|f| f.marks.summary());
         match note.or(summary) {

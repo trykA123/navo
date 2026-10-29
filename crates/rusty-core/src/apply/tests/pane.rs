@@ -1,5 +1,5 @@
 use super::{at_work, fail, files, home, load, loc, marked, navigate, run};
-use crate::{AppState, Command, CommandError, Effect, StateError, TabId};
+use crate::{AppState, Command, CommandError, Direction, Effect, StateError, TabId};
 
 fn open_tab(location: Option<&str>) -> Command {
     Command::PaneOpenTab {
@@ -91,6 +91,26 @@ fn close_tab_refuses_the_last_tab() {
         fail(&mut state, Command::PaneCloseTab { tab: None }),
         CommandError::State(StateError::LastTab)
     );
+}
+
+#[test]
+fn close_tab_on_the_last_tab_of_a_tiled_pane_drops_the_pane_and_its_tab() {
+    let mut state = home();
+    run(
+        &mut state,
+        Command::LayoutSplit {
+            direction: Direction::Right,
+        },
+    );
+    let closing = state.active_tab().id();
+    run(&mut state, Command::PaneCloseTab { tab: None });
+    let state = &state;
+    assert_eq!(
+        state.window(state.focused_window()).unwrap().panes().len(),
+        1
+    );
+    assert!(state.tab(closing).is_none());
+    assert_eq!(tab_ids(state).len(), 1);
 }
 
 #[test]

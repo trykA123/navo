@@ -229,6 +229,24 @@ fn click_on_a_tab_still_activates_it(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn click_on_the_empty_header_bar_activates_that_pane(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    assert_eq!(rig.active(cx), (rig.left, 0));
+    let last = rig.tab(cx, rig.right, 1);
+    let card = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find(("pane", rig.right.get())).bounds()
+        })
+        .expect("window");
+    let at = point((last.right() + card.right()) / 2., last.center().y);
+    click(cx, rig.window, (at, Modifiers::default()));
+    settle(cx, &rig.view);
+    assert_eq!(rig.active(cx).0, rig.right);
+    assert_eq!(rig.folders(cx, rig.right), ["dest", "home"]);
+}
+
+#[gpui_kit::test]
 fn shift_drag_on_a_tab_still_swaps_panes(cx: &mut TestAppContext) {
     let rig = rig(cx);
     let left = rig.folders(cx, rig.left);

@@ -142,9 +142,9 @@ fn the_size_counter_grows_while_the_scan_runs(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn escape_stops_the_scan_and_resume_counts_again(cx: &mut TestAppContext) {
+fn the_stop_button_stops_the_scan_and_resume_counts_again(cx: &mut TestAppContext) {
     let (rig, gate) = gated(cx);
-    rig.key(cx, "escape");
+    rig.click(cx, "preview-stop");
     assert_eq!(
         rig.label(cx, "preview-scan").as_deref(),
         Some("Stopped, partial")
@@ -160,7 +160,7 @@ fn escape_stops_the_scan_and_resume_counts_again(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn escape_clears_a_filter_then_stops_a_scan_then_closes_the_sheet(cx: &mut TestAppContext) {
+fn escape_clears_a_filter_then_closes_the_sheet_while_the_scan_runs(cx: &mut TestAppContext) {
     let (rig, gate) = gated(cx);
     rig.key(cx, "p");
     let filtered = rig.read(cx, |view| {
@@ -177,17 +177,22 @@ fn escape_clears_a_filter_then_stops_a_scan_then_closes_the_sheet(cx: &mut TestA
     assert!(rig.read(cx, |view| {
         view.preview.folder().is_some_and(|f| f.scan.is_counting())
     }));
-    rig.key(cx, "escape");
-    assert_eq!(
-        rig.label(cx, "preview-scan").as_deref(),
-        Some("Stopped, partial")
-    );
-    gate.release();
-    assert!(gate.wait_until_done());
     assert!(rig.read(cx, |view| view.preview.is_open()));
     rig.key(cx, "escape");
     assert!(!rig.read(cx, |view| view.preview.is_open()));
     assert!(rig.list_has_focus(cx));
+    gate.release();
+}
+
+#[gpui_kit::test]
+fn escape_closes_the_sheet_while_the_scan_runs_even_with_no_focus(cx: &mut TestAppContext) {
+    let (rig, gate) = gated(cx);
+    cx.update_window(rig.window, |_, window, cx| window.blur(cx))
+        .expect("window");
+    rig.key(cx, "escape");
+    assert!(!rig.read(cx, |view| view.preview.is_open()));
+    assert!(rig.list_has_focus(cx));
+    gate.release();
 }
 
 #[gpui_kit::test]
@@ -307,11 +312,11 @@ fn the_section_heading_stays_pinned_and_opaque_while_the_summary_scrolls(cx: &mu
 }
 
 #[gpui_kit::test]
-fn while_a_folder_is_counted_escape_names_only_stop_scan(cx: &mut TestAppContext) {
+fn while_a_folder_is_counted_escape_still_names_close(cx: &mut TestAppContext) {
     let (rig, gate) = gated(cx);
     let hints: Vec<String> = (0..5usize)
         .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
         .collect();
-    assert_eq!(hints, ["Browse", "Open", "[ ]", "Stop scan"]);
+    assert_eq!(hints, ["Browse", "Open", "[ ]", "Close"]);
     gate.release();
 }

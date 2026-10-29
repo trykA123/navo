@@ -300,7 +300,7 @@ impl Layout {
 
     pub(crate) fn from_state(state: &LayoutState, focused: PaneId) -> Result<Self, String> {
         let layout = Self {
-            root: Node::from_state(state)?.into_rows(),
+            root: Node::from_state(state)?,
             focused,
         };
         let mut panes = layout.panes();

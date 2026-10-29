@@ -333,6 +333,9 @@ impl FerriteWindow {
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(command, Command::PaneCloseTab { .. }) && self.has_only_tab() {
+            return self.replace_only_tab(window, cx);
+        }
         let result = self.browser.command(command);
         self.drag_list_changed(cx);
         if !matches!(command, Command::PaneScroll { .. }) {

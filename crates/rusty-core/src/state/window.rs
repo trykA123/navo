@@ -168,11 +168,23 @@ impl Window {
     }
 
     pub(super) fn close(&mut self, id: PaneId) -> Result<(), StateError> {
+        self.close_pane(id, true)
+    }
+
+    pub(super) fn close_discarding_tabs(&mut self, id: PaneId) -> Result<(), StateError> {
+        self.close_pane(id, false)
+    }
+
+    fn close_pane(&mut self, id: PaneId, is_keeping_tabs: bool) -> Result<(), StateError> {
         let mut layout = self.layout.clone();
         layout.close(id)?;
         self.layout = layout;
         self.sync_focus();
-        self.merge_tabs(std::iter::once(id));
+        if is_keeping_tabs {
+            self.merge_tabs(std::iter::once(id));
+        } else {
+            self.others.remove(&id);
+        }
         self.repair_target();
         Ok(())
     }

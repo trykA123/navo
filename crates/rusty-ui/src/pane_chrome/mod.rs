@@ -182,13 +182,19 @@ impl RenderOnce for PaneTabs {
             .on_bounds(self.on_bounds)
             .when_some(bar, Tabs::bar_theme);
         tabs.set_landing(self.landing);
-        match self.on_command {
-            Some(handler) => tabs.on_select(move |index, window, cx| {
-                if let Ok(tab) = u32::try_from(*index) {
-                    handler(&Command::PaneActivateTab { tab }, window, cx);
-                }
-            }),
-            None => tabs,
-        }
+        let Some(handler) = self.on_command else {
+            return tabs;
+        };
+        let close = handler.clone();
+        tabs.on_select(move |index, window, cx| {
+            if let Ok(tab) = u32::try_from(*index) {
+                handler(&Command::PaneActivateTab { tab }, window, cx);
+            }
+        })
+        .on_close(move |index, window, cx| {
+            if let Ok(tab) = u32::try_from(*index) {
+                close(&Command::PaneCloseTab { tab: Some(tab) }, window, cx);
+            }
+        })
     }
 }

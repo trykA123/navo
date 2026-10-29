@@ -1,4 +1,4 @@
-use super::{CommandError, Effect, last_row, list_active};
+use super::{CommandError, Effect, last_row, layout, list_active};
 use crate::{AppState, CursorMove, Location, PaneId, TabId};
 
 pub(super) fn open_tab(state: &mut AppState, location: Option<&Location>) -> Vec<Effect> {
@@ -14,10 +14,17 @@ pub(super) fn close_tab(
     state: &mut AppState,
     tab: Option<u32>,
 ) -> Result<Vec<Effect>, CommandError> {
+    let is_tiled = state
+        .window(state.focused_window())
+        .is_some_and(|window| window.panes().len() > 1);
     let pane = state.focused_pane_mut();
     let index = tab.map_or(pane.active_index(), |t| {
         usize::try_from(t).unwrap_or(usize::MAX)
     });
+    if is_tiled && pane.tabs().len() == 1 && index == 0 {
+        let id = pane.id();
+        return layout::close_discarding_tabs(state, id);
+    }
     pane.close_tab(index)?;
     Ok(Vec::new())
 }

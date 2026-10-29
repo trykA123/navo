@@ -5,8 +5,8 @@ use gpui_kit::base::{Tab as BaseTab, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Bounds, ElementId, Entity, FontWeight, InteractiveElement, IntoElement,
-    ParentElement, Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
-    Window, canvas, div, px,
+    MouseButton, ParentElement, Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement,
+    Styled, Window, canvas, div, px,
 };
 
 mod more;
@@ -52,6 +52,7 @@ pub struct Tabs {
     selected: usize,
     is_highlighted: bool,
     on_select: Option<SelectHandler>,
+    on_close: Option<SelectHandler>,
     on_bounds: Option<BoundsHandler>,
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
@@ -67,6 +68,7 @@ impl Tabs {
             selected: 0,
             is_highlighted: false,
             on_select: None,
+            on_close: None,
             on_bounds: None,
             landing: Landing::default(),
             trailing: None,
@@ -105,6 +107,11 @@ impl Tabs {
         self
     }
 
+    pub fn on_close(mut self, handler: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
+        self.on_close = Some(Rc::new(handler));
+        self
+    }
+
     pub(crate) fn on_bounds(mut self, handler: Option<BoundsHandler>) -> Self {
         self.on_bounds = handler;
         self
@@ -139,6 +146,7 @@ struct TabProps<'a> {
     is_highlighted: bool,
     min_width: Pixels,
     on_select: Option<SelectHandler>,
+    on_close: Option<SelectHandler>,
     on_bounds: Option<BoundsHandler>,
     landing: Landing<usize>,
 }
@@ -155,6 +163,46 @@ fn measured(base: BaseTab, handler: Option<BoundsHandler>, index: usize) -> Base
         .absolute()
         .size_full(),
     )
+}
+
+fn close_button(t: &Theme, index: usize, is_selected: bool, handler: SelectHandler) -> AnyElement {
+    let group = SharedString::from(format!("tab-{index}"));
+    let hover = t.colors.hover;
+    div()
+        .id(("tab-close", index))
+        .role(Role::Button)
+        .aria_label(rusty_l10n::tr("tabs-close"))
+        .test_support()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(t.spacing.icon + t.spacing.xs)
+        .rounded(t.radii.pill)
+        .cursor_pointer()
+        .when(!is_selected, |close| {
+            close
+                .opacity(0.)
+                .group_hover(group, |style| style.opacity(1.))
+        })
+        .hover(move |style| style.bg(hover))
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(move |_, window, cx| handler(&index, window, cx))
+        .child(icon(IconName::X, t.spacing.icon - px(3.), t.colors.muted))
+        .into_any_element()
+}
+
+fn closable(
+    base: BaseTab,
+    (t, index, is_selected): (&Theme, usize, bool),
+    close: SelectHandler,
+) -> BaseTab {
+    let middle = close.clone();
+    base.group(format!("tab-{index}"))
+        .child(close_button(t, index, is_selected, close))
+        .on_mouse_down(MouseButton::Middle, move |_, window, cx| {
+            middle(&index, window, cx)
+        })
 }
 
 fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
@@ -181,6 +229,9 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
             base.child(icon(name, t.spacing.icon - px(1.), color))
         })
         .child(div().min_w_0().truncate().child(tab.label))
+        .when_some(props.on_close.clone(), |base, handler| {
+            closable(base, (t, index, props.is_selected), handler)
+        })
         .when(index < 8, |base| {
             base.tooltip(move |window, cx| {
                 Tooltip::new(format!("Ctrl+{}", index + 1)).build(window, cx)
@@ -208,6 +259,7 @@ struct Row {
     selected: usize,
     is_highlighted: bool,
     on_select: Option<SelectHandler>,
+    on_close: Option<SelectHandler>,
     on_bounds: Option<BoundsHandler>,
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
@@ -217,12 +269,10 @@ struct Row {
 
 fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
     let count = row.tabs.len();
-    let gap = f32::from(tokens::current(cx).spacing.sm);
-    let trailing_width = row.trailing.as_ref().map_or(0., |(_, w)| f32::from(*w));
     let budget = Budget {
         width: f32::from(width),
-        trailing: trailing_width,
-        gap,
+        trailing: row.trailing.as_ref().map_or(0., |(_, w)| f32::from(*w)),
+        gap: f32::from(tokens::current(cx).spacing.sm),
     };
     let plan = plan(count, row.selected, &budget);
     note_items(&row.menu, plan.shown.len() < count, cx);
@@ -243,6 +293,7 @@ fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
             is_highlighted: row.is_highlighted,
             min_width: px(plan.min_tab),
             on_select: row.on_select.clone(),
+            on_close: row.on_close.clone(),
             on_bounds: row.on_bounds.clone(),
             landing: row.landing.clone(),
         };
@@ -281,6 +332,7 @@ impl RenderOnce for Tabs {
             selected: self.selected,
             is_highlighted: self.is_highlighted,
             on_select: self.on_select,
+            on_close: self.on_close,
             on_bounds: self.on_bounds,
             landing: self.landing,
             trailing: self.trailing,
@@ -335,6 +387,7 @@ mod tests {
                     is_highlighted,
                     min_width: px(88.),
                     on_select: None,
+                    on_close: None,
                     on_bounds: None,
                     landing: Landing::default(),
                 },

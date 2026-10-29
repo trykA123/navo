@@ -241,6 +241,7 @@ tabs-more = { $count ->
 }
 tabs-hidden-menu = Hidden tabs
 tabs-label = Tabs
+tabs-close = Close tab
 
 recently-deleted-title = Recently deleted
 recently-deleted-loading = Loading…

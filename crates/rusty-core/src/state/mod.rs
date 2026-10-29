@@ -232,6 +232,10 @@ impl AppState {
             .close(pane)
     }
 
+    pub(crate) fn close_pane_discarding_tabs(&mut self, pane: PaneId) -> Result<(), StateError> {
+        self.focused.close_discarding_tabs(pane)
+    }
+
     pub(crate) fn focus_direction(&mut self, direction: Direction) -> Result<PaneId, StateError> {
         self.focused.focus_direction(direction)
     }

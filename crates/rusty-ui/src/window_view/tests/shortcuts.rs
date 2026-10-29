@@ -346,6 +346,20 @@ const CTRL_F5: [&str; 3] = [
 ];
 
 #[gpui_kit::test]
+fn the_page_lists_the_split_and_close_pane_keys(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.open_page(cx);
+    for (typed, command) in [
+        ("ctrl+alt+v", "layout.split_right"),
+        ("ctrl+alt+b", "layout.split_below"),
+        ("ctrl+alt+w", "layout.close_pane"),
+    ] {
+        rig.search(cx, typed);
+        assert!(rig.visible(cx).contains(&command), "{typed}");
+    }
+}
+
+#[gpui_kit::test]
 fn search_finds_the_command_bound_to_a_typed_key(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_page(cx);

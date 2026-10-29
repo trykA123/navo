@@ -7,7 +7,7 @@ use super::scan::{Phase, Scan};
 use crate::file_list::row::inset_ring;
 use crate::format;
 use crate::prelude::*;
-use crate::primitives::{IconName, Kbd, icon};
+use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 use crate::window_view::FerriteWindow;
 
@@ -141,11 +141,11 @@ impl FerriteWindow {
         };
         let action = match phase {
             Phase::Counting { .. } => Some(
-                mini(t, "preview-stop", IconName::Square, "Stop")
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                mini(t, "preview-stop", IconName::Square, "Stop").on_click(cx.listener(
+                    |this, _: &ClickEvent, _, cx| {
                         this.stop_scan(cx);
-                    }))
-                    .children(Kbd::new("preview-stop-key", "escape")),
+                    },
+                )),
             ),
             Phase::Stopped => Some(
                 mini(t, "preview-resume", IconName::Play, "Resume").on_click(cx.listener(
