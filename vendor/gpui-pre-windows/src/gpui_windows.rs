@@ -5,6 +5,8 @@
 //   set_drop_effect, drag_key_state and drag_allowed_effects.
 // - window.rs, events.rs: set_external_drag_handler registers the drag source; a posted message
 //   starts it outside input dispatch, then sends FileDropEvent::Ended after the handler returns.
+// - vsync.rs, platform.rs, events.rs: the VSync thread parks while every window is hidden or
+//   minimised; showing, restoring, activating or stopping wakes it.
 #![cfg(target_os = "windows")]
 
 mod clipboard;

@@ -1,6 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     ffi::{OsStr, OsString},
+    ops::ControlFlow,
     os::windows::ffi::{OsStrExt as _, OsStringExt as _},
     path::{Path, PathBuf},
     rc::{Rc, Weak},
@@ -47,6 +48,15 @@ struct TrackedWindow {
 impl TrackedWindow {
     fn as_raw(&self) -> HWND {
         self.handle.as_raw()
+    }
+
+    fn show(&self) -> WindowShow {
+        unsafe {
+            WindowShow {
+                visible: IsWindowVisible(self.as_raw()).as_bool(),
+                minimized: IsIconic(self.as_raw()).as_bool(),
+            }
+        }
     }
 }
 
@@ -427,6 +437,7 @@ impl WindowsPlatform {
             // Not joined: the thread can be sending this thread a message. It exits after its
             // next vsync, and drops its reference to the devices then.
             stop.store(true, Ordering::Release);
+            VSYNC_WAKE.signal();
         }
         if let Some(text_system) = &self.direct_write_text_system {
             text_system.release_gpu();
@@ -454,11 +465,16 @@ impl WindowsPlatform {
             .name("VSyncProvider".to_owned())
             .spawn(move || {
                 let vsync_provider = VSyncProvider::new();
-                loop {
+                let wanted = || {
+                    all_windows.upgrade().is_none_or(|all_windows| {
+                        vsync_wanted(all_windows.read().iter().map(TrackedWindow::show))
+                    })
+                };
+                run_vsync_loop(&VSYNC_WAKE, &stop, wanted, || {
                     let signal_source = vsync_provider.wait_for_vsync();
                     let signal_at = PlatformFrameSignal::capture(scheduler::Instant::now);
                     if stop.load(Ordering::Acquire) {
-                        break;
+                        return ControlFlow::Break(());
                     }
                     if check_device_lost(&directx_device.device)
                         || invalidate_devices.fetch_and(false, Ordering::Acquire)
@@ -474,7 +490,7 @@ impl WindowsPlatform {
                         }
                     }
                     let Some(all_windows) = all_windows.upgrade() else {
-                        break;
+                        return ControlFlow::Break(());
                     };
                     for hwnd in all_windows.read().iter() {
                         unsafe {
@@ -493,7 +509,8 @@ impl WindowsPlatform {
                                 .log_err();
                         }
                     }
-                }
+                    ControlFlow::Continue(())
+                });
             })
             .unwrap();
     }
@@ -775,6 +792,7 @@ impl Platform for WindowsPlatform {
             handle: handle.into(),
             frame_signal: window.state.frame_signal.clone(),
         });
+        VSYNC_WAKE.signal();
 
         Ok(Box::new(window))
     }
@@ -1405,6 +1423,7 @@ impl Drop for WindowsPlatform {
     fn drop(&mut self) {
         if let Some(stop) = self.vsync_stop.borrow_mut().take() {
             stop.store(true, Ordering::Release);
+            VSYNC_WAKE.signal();
         }
         unsafe {
             if let Some(notification) = self.suspend_resume_notification.borrow_mut().take() {

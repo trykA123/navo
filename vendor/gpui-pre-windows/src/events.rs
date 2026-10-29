@@ -87,6 +87,18 @@ impl WindowsWindowInner {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> LRESULT {
+        let flags = if msg == WM_WINDOWPOSCHANGED {
+            unsafe { (*(lparam.0 as *const WINDOWPOS)).flags.0 }
+        } else {
+            0
+        };
+        if wakes_vsync(msg, wparam.0, flags) {
+            if matches!(msg, WM_SHOWWINDOW | WM_WINDOWPOSCHANGED) {
+                self.executor.spawn(async { VSYNC_WAKE.signal() }).detach();
+            } else {
+                VSYNC_WAKE.signal();
+            }
+        }
         let handled = match msg {
             // `DefWindowProc` answers `MA_NOACTIVATE` for a left click on `HTCAPTION`.
             // The activation is only triggered when `DefWindowProc` handles the following `WM_NCLBUTTONDOWN`.
@@ -235,7 +247,6 @@ impl WindowsWindowInner {
                 .set(self.state.callbacks.request_frame.take());
             return Some(0);
         }
-
         let width = lparam.loword().max(1) as i32;
         let height = lparam.hiword().max(1) as i32;
         let new_size = size(DevicePixels(width), DevicePixels(height));
