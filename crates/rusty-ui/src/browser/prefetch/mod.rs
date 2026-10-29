@@ -182,6 +182,7 @@ impl Browser {
             is_watched: false,
             is_kept_on_disk: false,
             progress: progress.clone(),
+            sort: None,
         };
         let finished = Finished {
             id,

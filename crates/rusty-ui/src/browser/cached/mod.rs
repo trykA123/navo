@@ -9,13 +9,32 @@ use rusty_fs::{CancelToken, FsEntry, ProviderOps, WatchChange, load_folder_repor
 use super::Browser;
 use super::filter::Full;
 use super::offline::Progress;
+use super::sort::sorted_full;
 use crate::file_list::SortKey;
 
 const KEEP_SORTED: usize = 2;
 
+pub(super) struct WorkerSorted {
+    key: SortKey,
+    folders_first: bool,
+    full: Full,
+}
+
 pub(super) enum Fresh {
-    Rows(Arc<[FsEntry]>),
+    Rows {
+        rows: Arc<[FsEntry]>,
+        full: Option<WorkerSorted>,
+    },
     Unchanged,
+}
+
+fn fresh_rows(rows: Arc<[FsEntry]>, sort: Option<(SortKey, bool)>) -> Fresh {
+    let full = sort.map(|(key, folders_first)| WorkerSorted {
+        key,
+        folders_first,
+        full: sorted_full(&rows, key, folders_first),
+    });
+    Fresh::Rows { rows, full }
 }
 
 pub(super) struct Fetch {
@@ -28,10 +47,12 @@ pub(super) struct Fetch {
     pub(super) is_watched: bool,
     pub(super) is_kept_on_disk: bool,
     pub(super) progress: Progress,
+    pub(super) sort: Option<(SortKey, bool)>,
 }
 
 impl Fetch {
     pub(super) fn run(self, cancel: &CancelToken) -> Result<Fresh, FsError> {
+        let _span = tracing::debug_span!("listing.load").entered();
         let read_at = SystemTime::now();
         let folder = self.provider.metadata(&self.location).ok();
         if folder.is_some() {
@@ -55,7 +76,7 @@ impl Fetch {
             .as_deref()
             .and_then(|changes| self.patched(changes))
         {
-            return Ok(Fresh::Rows(rows));
+            return Ok(fresh_rows(rows, self.sort));
         }
         let progress = &self.progress;
         let snapshot =
@@ -79,7 +100,7 @@ impl Fetch {
         }
         Ok(match unchanged {
             Some(_) => Fresh::Unchanged,
-            None => Fresh::Rows(rows),
+            None => fresh_rows(rows, self.sort),
         })
     }
 
@@ -164,6 +185,7 @@ impl Browser {
             is_watched: self.is_settled(location),
             is_kept_on_disk: true,
             progress: self.stalls.progress(tab),
+            sort: Some((self.sort_key(tab), self.folders_first)),
         }
     }
 
@@ -174,8 +196,22 @@ impl Browser {
         fresh: Fresh,
     ) -> Listing {
         match fresh {
-            Fresh::Rows(rows) => {
-                let full = self.sorted_full(tab, &rows);
+            Fresh::Rows { rows, full } => {
+                let current = (self.sort_key(tab), self.folders_first);
+                let full = match full {
+                    Some(sorted) if (sorted.key, sorted.folders_first) == current => {
+                        self.remember(
+                            tab,
+                            Sorted {
+                                source: Arc::clone(&rows),
+                                key: sorted.key,
+                                full: sorted.full.clone(),
+                            },
+                        );
+                        sorted.full
+                    }
+                    _ => self.sorted_full(tab, &rows),
+                };
                 let (listing, details) = self.narrow(tab, location, full);
                 self.details.insert(tab, details);
                 listing
@@ -201,17 +237,21 @@ impl Browser {
             return full;
         }
         let full = self.full_of(tab, rows);
-        let memo = self.sorted.entry(tab).or_default();
-        memo.insert(
-            0,
+        self.remember(
+            tab,
             Sorted {
                 source: Arc::clone(rows),
                 key,
                 full: full.clone(),
             },
         );
-        memo.truncate(KEEP_SORTED);
         full
+    }
+
+    fn remember(&mut self, tab: TabId, sorted: Sorted) {
+        let memo = self.sorted.entry(tab).or_default();
+        memo.insert(0, sorted);
+        memo.truncate(KEEP_SORTED);
     }
 
     fn show_cached(&mut self, tab: TabId, request: u64, rows: &Arc<[FsEntry]>) -> bool {

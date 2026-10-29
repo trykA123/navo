@@ -57,6 +57,8 @@ impl Browser {
     }
 
     pub(super) fn full_of(&self, tab: TabId, rows: &[FsEntry]) -> Full {
+        #[cfg(test)]
+        ui_sorts::bump();
         sorted_rows(rows, self.sort_key(tab), self.folders_first)
     }
 }
@@ -65,7 +67,6 @@ fn sorted(full: Full, key: SortKey, folders_first: bool) -> Full {
     sorted_rows(&full.details, key, folders_first)
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "worker call in SP7g"))]
 pub(super) fn sorted_full(rows: &Arc<[FsEntry]>, key: SortKey, folders_first: bool) -> Full {
     sorted_rows(rows, key, folders_first)
 }
@@ -88,6 +89,21 @@ pub(super) fn listing_of(rows: &[FsEntry]) -> Listing {
             })
             .collect(),
     )
+}
+
+#[cfg(test)]
+pub(super) mod ui_sorts {
+    use std::cell::Cell;
+
+    thread_local!(static COUNT: Cell<usize> = const { Cell::new(0) });
+
+    pub(in crate::browser) fn bump() {
+        COUNT.with(|count| count.set(count.get() + 1));
+    }
+
+    pub(in crate::browser) fn take() -> usize {
+        COUNT.with(Cell::take)
+    }
 }
 
 #[cfg(test)]

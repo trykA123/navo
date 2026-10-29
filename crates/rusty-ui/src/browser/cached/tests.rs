@@ -184,16 +184,17 @@ fn a_slower_stale_revalidation_never_overwrites_a_newer_one() {
         is_watched: false,
         is_kept_on_disk: true,
         progress: Progress::default(),
+        sort: None,
     };
     let slow = fetch(gate.clone());
     let older = std::thread::spawn(move || slow.run(&CancelToken::new()));
     gate.wait_until_held();
     fs.add_file("home/new.txt", 1);
-    let Ok(Fresh::Rows(newer)) = fetch(fs.clone()).run(&CancelToken::new()) else {
+    let Ok(Fresh::Rows { rows: newer, .. }) = fetch(fs.clone()).run(&CancelToken::new()) else {
         panic!("the newer listing has rows");
     };
     gate.release();
-    assert!(matches!(older.join().unwrap(), Ok(Fresh::Rows(rows)) if rows.len() == 5));
+    assert!(matches!(older.join().unwrap(), Ok(Fresh::Rows { rows, .. }) if rows.len() == 5));
     let stored = cache.get(&key).unwrap();
     assert_eq!(stored.rows, newer);
     assert!(
@@ -352,4 +353,42 @@ fn filler(rows: usize) -> CachedListing {
         folder_changed: None,
         complete: true,
     }
+}
+
+fn big_fake(rows: usize) -> Arc<FakeFs> {
+    let fs = FakeFs::new();
+    fs.add_folder("home");
+    for index in 0..rows {
+        fs.add_file(&format!("home/f{index:05}.txt"), (rows - index) as u64);
+    }
+    Arc::new(fs)
+}
+
+fn started(fs: &Arc<FakeFs>) -> Browser {
+    let state = AppState::new(fs.location("home"));
+    let mut browser = Browser::new(state, fs.clone(), Arc::new(|| {}));
+    browser.set_listing_cache(ListingCache::default(), CacheKeys::default());
+    browser
+}
+
+#[test]
+fn a_big_first_load_is_sorted_on_the_worker_not_the_ui_thread() {
+    let fs = big_fake(30_000);
+    let mut browser = started(&fs);
+    crate::browser::sort::ui_sorts::take();
+    browser.start();
+    settle(&mut browser);
+    assert_eq!(names(&browser).len(), 30_000);
+    assert_eq!(crate::browser::sort::ui_sorts::take(), 0);
+}
+
+#[test]
+fn a_sort_change_during_the_load_still_shows_the_new_order() {
+    let fs = big_fake(2_000);
+    let mut browser = started(&fs);
+    browser.start();
+    browser.sort_by(SortBy::Size);
+    settle(&mut browser);
+    let shown = names(&browser);
+    assert_eq!(shown.first().map(String::as_str), Some("f01999.txt"));
 }
