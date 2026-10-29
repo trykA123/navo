@@ -198,9 +198,9 @@ fn panic_with_the_log_mutex_held_writes_the_record_before_flushing() {
                 let _guard = log.lock().unwrap();
                 panic!("panic while writing the log");
             });
-            let result = received.recv_timeout(std::time::Duration::from_secs(2));
-            assert_eq!(result.unwrap(), (true, true));
             assert!(thread.join().is_err());
+            let result = received.try_recv();
+            assert_eq!(result.unwrap(), (true, true));
             assert_eq!(calls.load(Ordering::Relaxed), 1);
         },
     );
