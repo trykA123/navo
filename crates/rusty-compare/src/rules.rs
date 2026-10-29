@@ -144,12 +144,12 @@ impl IgnoreRules {
         let mut ignored = false;
         for depth in 0..path.len() {
             if let Some(matcher) = self.levels.get(&normalized[..depth]) {
-                let relative = path[depth..].join("/");
+                let relative = matcher_path(&path[depth..]);
                 apply(&mut ignored, matcher.matched(relative, is_dir));
             }
         }
         if let Some(user) = &self.user {
-            apply(&mut ignored, user.matched(path.join("/"), is_dir));
+            apply(&mut ignored, user.matched(matcher_path(path), is_dir));
         }
         ignored
     }
@@ -293,6 +293,23 @@ fn segments(rel: &RelPath) -> Vec<String> {
         .filter(|segment| !segment.is_empty())
         .map(str::to_owned)
         .collect()
+}
+
+fn matcher_path(path: &[String]) -> String {
+    let mut joined = String::new();
+    for (index, segment) in path.iter().enumerate() {
+        if index > 0 {
+            joined.push('/');
+        }
+        for character in segment.chars() {
+            joined.push(if character == '\\' {
+                '\u{f05c}'
+            } else {
+                character
+            });
+        }
+    }
+    joined
 }
 
 fn has_git_segment(path: &[String], case: CaseRule) -> bool {

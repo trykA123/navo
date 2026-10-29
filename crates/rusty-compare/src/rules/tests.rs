@@ -138,6 +138,18 @@ fn a_literal_backslash_is_not_a_separator() {
 }
 
 #[test]
+fn a_backslash_name_matches_as_one_segment() {
+    let star = rules(&[("", "a*\n")], &[], false, CaseRule::Sensitive);
+    assert!(star.is_ignored(&rel(r"a\b"), false));
+
+    let anchored = rules(&[("", "/a\n")], &[], false, CaseRule::Sensitive);
+    assert!(!anchored.is_ignored(&rel(r"a\b"), false));
+
+    let user = rules(&[], &["a*"], false, CaseRule::Sensitive);
+    assert!(user.is_ignored(&rel(r"a\b"), false));
+}
+
+#[test]
 fn many_nested_sources_keep_their_folder_scope() {
     let mut sources = Vec::new();
     let mut folder = String::new();
