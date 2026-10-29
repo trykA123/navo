@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
@@ -77,7 +76,7 @@ pub struct Browser {
     sender: Sender<Message>,
     receiver: Receiver<Message>,
     wake: Waker,
-    details: HashMap<TabId, Rc<[FsEntry]>>,
+    details: HashMap<TabId, Arc<[FsEntry]>>,
     errors: HashMap<TabId, FsError>,
     late_errors: HashMap<TabId, FsError>,
     focus_after_load: HashMap<TabId, String>,
@@ -281,12 +280,12 @@ impl Browser {
     }
 
     #[must_use]
-    pub fn details(&self, tab: TabId) -> Rc<[FsEntry]> {
+    pub fn details(&self, tab: TabId) -> Arc<[FsEntry]> {
         self.details
             .get(&tab)
             .filter(|_| self.is_loaded(tab))
             .cloned()
-            .unwrap_or_else(|| Rc::from([]))
+            .unwrap_or_else(|| Arc::from([]))
     }
 
     #[must_use]

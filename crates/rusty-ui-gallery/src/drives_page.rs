@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Location, ProviderId, Selection, ViewState};
 use rusty_fs::FsEntry;
@@ -23,7 +24,7 @@ pub enum Shows {
 
 pub struct DrivesPage {
     shows: Shows,
-    rows: Rc<[FsEntry]>,
+    rows: Arc<[FsEntry]>,
     focus: [FocusHandle; 2],
     menu_focus: FocusHandle,
 }

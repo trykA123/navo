@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Selection, ViewState};
 use rusty_fs::FsEntry;
@@ -33,7 +34,7 @@ const FOLDER_ROWS: usize = 6;
 
 pub struct MenuPage {
     shows: Shows,
-    rows: Rc<[FsEntry]>,
+    rows: Arc<[FsEntry]>,
     focus: FocusHandle,
     menu: Option<Entity<ContextMenu>>,
 }
@@ -41,9 +42,9 @@ pub struct MenuPage {
 impl MenuPage {
     pub fn new(shows: Shows, cx: &mut Context<Self>) -> Self {
         let all = pane_sample::rows();
-        let rows: Rc<[FsEntry]> = match shows {
+        let rows: Arc<[FsEntry]> = match shows {
             Shows::Background => all.iter().take(FOLDER_ROWS).cloned().collect(),
-            Shows::EmptyFolder => Rc::from([]),
+            Shows::EmptyFolder => Arc::from([]),
             _ => all,
         };
         Self {

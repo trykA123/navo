@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Entry, Listing, ProviderPath};
 use rusty_fs::{Attributes, EntryKind, FsEntry};
@@ -31,7 +31,7 @@ fn entry(name: &str, kind: EntryKind, size: u64, minutes_ago: i64) -> FsEntry {
     }
 }
 
-pub fn rows() -> Rc<[FsEntry]> {
+pub fn rows() -> Arc<[FsEntry]> {
     let file = EntryKind::File;
     vec![
         entry("src", EntryKind::Folder, 0, 120),

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Command, CursorMove, Entry, Event, Listing, Location, TabId};
 use rusty_fs::FsEntry;
@@ -17,12 +17,12 @@ pub(super) struct Filter {
 #[derive(Clone)]
 pub(super) struct Full {
     pub(super) listing: Listing,
-    pub(super) details: Rc<[FsEntry]>,
+    pub(super) details: Arc<[FsEntry]>,
 }
 
 struct Shown {
     listing: Listing,
-    details: Rc<[FsEntry]>,
+    details: Arc<[FsEntry]>,
 }
 
 impl Browser {
@@ -149,7 +149,7 @@ impl Browser {
         tab: TabId,
         location: &Location,
         full: Full,
-    ) -> (Listing, Rc<[FsEntry]>) {
+    ) -> (Listing, Arc<[FsEntry]>) {
         let shown = match self.filters.get(&tab) {
             Some(filter) if &filter.location == location => {
                 shown(&full, &filter.text, self.visibility())

@@ -22,6 +22,7 @@ mod tests;
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
@@ -54,7 +55,7 @@ type PageRowsHandler = Rc<dyn Fn(&u64, &mut Window, &mut App)>;
 #[derive(Clone, Debug)]
 pub struct FileListProps {
     pub folder: SharedString,
-    pub rows: Rc<[FsEntry]>,
+    pub rows: Arc<[FsEntry]>,
     pub view: ViewState,
     pub marked: Rc<Selection>,
     pub is_active: bool,

@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{ProviderPath, Selection, ViewState};
 use rusty_fs::{Attributes, EntryKind, FsEntry};
@@ -43,7 +44,7 @@ const NAMES: [&str; 30] = [
 ];
 
 pub struct KindsPage {
-    rows: Rc<[FsEntry]>,
+    rows: Arc<[FsEntry]>,
     focus: FocusHandle,
 }
 

@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{
     AppState, Command, CursorMove, Effect, Event, Location, ProviderId, Selection, apply,
@@ -19,7 +20,7 @@ const FREE_BYTES: u64 = 512_110_190_592;
 
 pub struct PanePage {
     state: AppState,
-    rows: Rc<[FsEntry]>,
+    rows: Arc<[FsEntry]>,
     focus: FocusHandle,
 }
 

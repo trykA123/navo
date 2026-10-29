@@ -3,6 +3,7 @@ mod builders;
 mod card;
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Location, ProviderId};
 use rusty_fs::FsEntry;
@@ -106,7 +107,7 @@ pub struct WindowPage {
     has_crash: bool,
     recovery: Option<RecoveryContent>,
     sheet: Option<Sheet>,
-    rows: Rc<[FsEntry]>,
+    rows: Arc<[FsEntry]>,
     drives: Rc<[DriveInfo]>,
     split: Entity<SplitterState>,
     parts: WindowParts,

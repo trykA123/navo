@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -291,7 +290,7 @@ fn back_reuses_the_sorted_rows_of_the_last_visit() {
     let tab = browser.state().active_tab().id();
     let first = browser.details(tab);
     into_docs_and_back(&mut browser, &fs, || {});
-    assert!(Rc::ptr_eq(&first, &browser.details(tab)));
+    assert!(Arc::ptr_eq(&first, &browser.details(tab)));
 }
 
 #[test]
@@ -302,7 +301,7 @@ fn an_unchanged_fresh_listing_keeps_the_shown_rows() {
     into_docs_and_back(&mut browser, &fs, || {});
     let cached = browser.details(tab);
     settle(&mut browser);
-    assert!(Rc::ptr_eq(&cached, &browser.details(tab)));
+    assert!(Arc::ptr_eq(&cached, &browser.details(tab)));
     assert!(!is_cached(&browser));
 }
 

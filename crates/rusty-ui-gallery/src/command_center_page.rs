@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Location, Selection as Marks, ViewState};
 use rusty_fs::FsEntry;
@@ -227,7 +228,7 @@ fn props(shows: Shows, rows: Vec<Row>, viewport: Bounds<Pixels>) -> CommandCente
 
 pub struct CommandCenterPage {
     shows: Shows,
-    rows: Rc<[FsEntry]>,
+    rows: Arc<[FsEntry]>,
     focus: FocusHandle,
     center: Option<Entity<CommandCenter>>,
 }

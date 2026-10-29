@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{AppState, Command, CursorMove};
 use rusty_fs::FsEntry;
@@ -24,7 +25,7 @@ struct Panel {
 }
 
 pub struct MousePage {
-    rows: Rc<[FsEntry]>,
+    rows: Arc<[FsEntry]>,
     panels: [Panel; 3],
     is_driven: bool,
 }

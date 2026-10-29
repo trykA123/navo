@@ -10,6 +10,7 @@ mod render;
 mod resize;
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
@@ -34,7 +35,7 @@ pub(super) fn entry(name: &str, kind: EntryKind, size: u64) -> FsEntry {
     }
 }
 
-pub(super) fn sample_rows() -> Rc<[FsEntry]> {
+pub(super) fn sample_rows() -> Arc<[FsEntry]> {
     let mut hidden = entry(".env", EntryKind::File, 512);
     hidden.attributes.hidden = true;
     vec![
@@ -48,13 +49,13 @@ pub(super) fn sample_rows() -> Rc<[FsEntry]> {
     .into()
 }
 
-pub(super) fn generated_rows(count: usize) -> Rc<[FsEntry]> {
+pub(super) fn generated_rows(count: usize) -> Arc<[FsEntry]> {
     (0..count)
         .map(|index| entry(&format!("bulk_{index:06}.jpg"), EntryKind::File, 4_096))
         .collect()
 }
 
-pub(super) fn props(rows: Rc<[FsEntry]>) -> FileListProps {
+pub(super) fn props(rows: Arc<[FsEntry]>) -> FileListProps {
     let len = rows.len() as u64;
     FileListProps {
         folder: "core".into(),
