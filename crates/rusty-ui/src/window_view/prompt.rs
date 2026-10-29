@@ -110,6 +110,7 @@ impl FerriteWindow {
     }
 
     pub(super) fn open_prompt(&mut self, kind: PromptKind) {
+        self.browser.dialog_opened();
         self.next_prompt += 1;
         self.prompt = Some(Prompt {
             id: self.next_prompt,

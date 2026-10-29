@@ -242,3 +242,19 @@ fn presets_without_a_database_are_errors() {
     assert!((hooks.save)("mine", RULES).is_err());
     assert!((hooks.delete)("mine").is_err());
 }
+
+#[test]
+fn stale_undo_offer_cannot_claim_an_older_or_already_undone_job() {
+    let fs = FakeFs::new();
+    let journal = memory_journal();
+    let hooks = hooks(Some(journal.clone()), None);
+    journal_batch(&journal, &plan(&fs, &[("a", "x")]), &fs);
+    let stale = offer(&hooks).unwrap();
+    journal_batch(&journal, &plan(&fs, &[("b", "y")]), &fs);
+    assert!((hooks.undo_log)(&stale).is_err());
+    let current = offer(&hooks).unwrap();
+    let mut log = (hooks.undo_log)(&current).unwrap();
+    log.finish(&JobOutcome::Done, &fs).unwrap();
+    assert!((hooks.undo_log)(&current).is_err());
+    assert_eq!(offer(&hooks).unwrap().job, stale.job);
+}

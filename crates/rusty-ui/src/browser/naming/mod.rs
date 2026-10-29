@@ -61,6 +61,7 @@ impl Browser {
     }
 
     pub(super) fn accept_named(&mut self, named: Named) -> bool {
+        self.invalidate_undo();
         let Named {
             tab,
             folder,
@@ -103,6 +104,7 @@ impl Browser {
     }
 
     fn submit_change(&mut self, change: Change, name: String) {
+        self.invalidate_undo();
         let tab = self.state.active_tab();
         let (tab, folder) = (tab.id(), tab.location().clone());
         let (ops, sender, wake) = (

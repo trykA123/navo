@@ -87,6 +87,7 @@ fn parents(places: &[Location]) -> Vec<Location> {
 
 impl FerriteWindow {
     pub(super) fn undo_retained(&mut self, undo: RetainedUndo, cx: &mut Context<Self>) {
+        self.browser.invalidate_undo();
         self.job_ui.is_restoring = true;
         let hooks = self.browser.retained_hooks();
         let restoring = cx.background_spawn(async move { restore_all(&undo, hooks.as_ref()) });
@@ -98,6 +99,7 @@ impl FerriteWindow {
     }
 
     fn retained_restored(&mut self, restored: &Result<Restored, String>, cx: &mut Context<Self>) {
+        self.browser.invalidate_undo();
         self.job_ui.is_restoring = false;
         if let Ok(done) = restored {
             self.browser.refresh_unwatched(&parents(&done.places));

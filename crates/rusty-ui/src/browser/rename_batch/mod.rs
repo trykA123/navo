@@ -19,9 +19,29 @@ pub(super) use run::{run_batch, run_undo};
 pub(super) struct RenameSettings {
     pub hooks: Option<RenameHooks>,
     pub logging: bool,
+    generation: u64,
+    dialog_generation: u64,
 }
 
 impl Browser {
+    pub(crate) fn undo_generation(&self) -> u64 {
+        self.hooks.rename.generation
+    }
+
+    pub(crate) fn invalidate_undo(&mut self) -> u64 {
+        self.hooks.rename.generation += 1;
+        self.undo_generation()
+    }
+
+    pub(crate) fn dialog_generation(&self) -> u64 {
+        self.hooks.rename.dialog_generation
+    }
+
+    pub(crate) fn dialog_opened(&mut self) {
+        self.hooks.rename.dialog_generation += 1;
+        self.invalidate_undo();
+    }
+
     pub fn set_rename_logging(&mut self, enabled: bool) {
         self.hooks.rename.logging = enabled;
     }
@@ -83,6 +103,7 @@ impl Browser {
         let Some(pending) = self.undo_pending(offer) else {
             return false;
         };
+        self.dialog_opened();
         self.pending = Some(pending);
         true
     }
@@ -94,7 +115,13 @@ impl Browser {
         if self.renaming() {
             return false;
         }
-        let log = Arc::clone(&hooks.undo_log);
+        let (last, log) = (hooks.last.clone(), hooks.undo_log.clone());
+        let log = Arc::new(move |offer: &UndoOffer| {
+            if !last()?.is_some_and(|latest| latest.job == offer.job) {
+                return Err(rusty_l10n::tr("undo-nothing"));
+            }
+            log(offer)
+        });
         self.start_job(pending, Run::Undo { offer, log }, None);
         true
     }

@@ -46,6 +46,7 @@ pub(super) fn is_folder(entry: &FsEntry) -> bool {
 impl FerriteWindow {
     pub(super) fn open_path_edit(&mut self, pane: PaneId, cx: &mut Context<Self>) {
         self.drive_menu = None;
+        self.browser.dialog_opened();
         self.next_prompt += 1;
         self.path_edit = Some(PathEdit {
             pane,

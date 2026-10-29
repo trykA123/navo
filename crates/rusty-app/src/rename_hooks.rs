@@ -8,6 +8,9 @@ use rusty_ui::browser::{NamedPreset, RenameHooks, RenamePresetList, UndoKind, Un
 use crate::files::{SharedDb, lock as lock_db, now_ms};
 use crate::jobs::{self, SharedJournal};
 
+mod claim;
+pub(crate) use claim::claim_undo;
+
 const KIND: &str = "rename";
 const RETAINED: [&str; 3] = [RETAINED_DELETE_KIND, COPY_RETAINED_KIND, MOVE_RETAINED_KIND];
 
@@ -46,7 +49,7 @@ pub fn hooks(journal: Option<SharedJournal>, db: Option<SharedDb>) -> RenameHook
         undo_log: Arc::new(move |offer: &UndoOffer| {
             let journal = undo.as_ref().ok_or_else(no_journal)?;
             let job = i64::try_from(offer.job).map_err(|error| error.to_string())?;
-            jobs::undo_log(journal, JobId(job))
+            jobs::claim_undo_log(journal, JobId(job))
         }),
         retire: Arc::new(move |offer: &UndoOffer| {
             let journal = retire.as_ref().ok_or_else(no_journal)?;
@@ -96,9 +99,7 @@ fn retire_job(journal: &SharedJournal, offer: &UndoOffer) -> Result<(), String> 
         return Err("only a retained job is retired before its undo".to_owned());
     }
     let job = i64::try_from(offer.job).map_err(|error| error.to_string())?;
-    jobs::lock(journal)
-        .mark_job_undone(JobId(job))
-        .map_err(|error| error.to_string())?;
+    claim_undo(journal, JobId(job), rusty_store::JobState::Undone)?;
     tracing::info!(job, "retained undo retired the job");
     Ok(())
 }

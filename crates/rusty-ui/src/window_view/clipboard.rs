@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{CommandError, LayoutError, Location, OpKind, StateError};
 
@@ -57,7 +57,7 @@ impl ClipboardFault {
 }
 
 /// Calls may block for up to about 100 ms while another program holds the clipboard.
-pub trait FileClipboardService {
+pub trait FileClipboardService: Send + Sync {
     fn write(&self, files: &ClipboardFiles) -> Result<(), ClipboardFault>;
     fn read(&self) -> Result<Option<ClipboardFiles>, ClipboardFault>;
     /// Never blocks: only asks whether files are offered, without reading them.
@@ -67,13 +67,13 @@ pub trait FileClipboardService {
 
 #[derive(Default)]
 pub(super) struct ClipboardState {
-    service: Option<Rc<dyn FileClipboardService>>,
+    service: Option<Arc<dyn FileClipboardService>>,
     notice: Option<StatusNotice>,
     cuts: Vec<(u64, ClipboardFiles)>,
 }
 
 impl ClipboardState {
-    pub(super) fn new(service: Option<Rc<dyn FileClipboardService>>) -> Self {
+    pub(super) fn new(service: Option<Arc<dyn FileClipboardService>>) -> Self {
         Self {
             service,
             ..Self::default()
@@ -105,7 +105,7 @@ fn fault(fault: &ClipboardFault) -> StatusNotice {
 }
 
 impl FerriteWindow {
-    fn file_clipboard(&self) -> Result<Rc<dyn FileClipboardService>, ClipboardFault> {
+    fn file_clipboard(&self) -> Result<Arc<dyn FileClipboardService>, ClipboardFault> {
         self.clipboard
             .service
             .clone()
@@ -149,9 +149,15 @@ impl FerriteWindow {
             return;
         }
         let files = ClipboardFiles { items, effect };
-        let written = self
-            .file_clipboard()
-            .and_then(|service| service.write(&files));
+        let service = self.file_clipboard();
+        self.lane.push(Box::new(move || {
+            let written = service.and_then(|service| service.write(&files));
+            Box::new(move |view, _, _| view.clipboard_written(files, written))
+        }));
+    }
+
+    fn clipboard_written(&mut self, files: ClipboardFiles, written: Result<(), ClipboardFault>) {
+        let effect = files.effect;
         self.clipboard.notice = Some(match written {
             Ok(()) => {
                 let count = u64::try_from(files.items.len()).unwrap_or(u64::MAX);
@@ -162,14 +168,18 @@ impl FerriteWindow {
         });
     }
 
-    pub(super) fn copy_full_paths(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn copy_full_paths(&mut self, _: &mut Context<Self>) {
         let items = self.browser.selected_sources();
         if items.is_empty() {
             return;
         }
-        put_paths_on_clipboard(&items, cx);
-        let count = u64::try_from(items.len()).unwrap_or(u64::MAX);
-        self.clipboard.notice = Some(info(t!("files-path-copied", count = count)));
+        self.lane.push(Box::new(move || {
+            Box::new(move |view, _, cx| {
+                put_paths_on_clipboard(&items, cx);
+                let count = u64::try_from(items.len()).unwrap_or(u64::MAX);
+                view.clipboard.notice = Some(info(t!("files-path-copied", count = count)));
+            })
+        }));
     }
 
     pub(super) fn has_files_to_paste(&self) -> bool {
@@ -178,7 +188,19 @@ impl FerriteWindow {
     }
 
     pub(super) fn paste(&mut self) {
-        let read = self.file_clipboard().and_then(|service| service.read());
+        let service = self.file_clipboard();
+        let target = self.browser.state().active_tab().location().clone();
+        self.lane.push(Box::new(move || {
+            let read = service.and_then(|service| service.read());
+            Box::new(move |view, _, _| view.clipboard_read(target, read))
+        }));
+    }
+
+    fn clipboard_read(
+        &mut self,
+        target: Location,
+        read: Result<Option<ClipboardFiles>, ClipboardFault>,
+    ) {
         let files = match read {
             Ok(Some(files)) if !files.items.is_empty() => files,
             Ok(_) => {
@@ -191,7 +213,14 @@ impl FerriteWindow {
             }
         };
         self.clipboard.notice = None;
-        match self.browser.paste(files.effect.kind(), files.items.clone()) {
+        let request = crate::browser::DropRequest {
+            kind: files.effect.kind(),
+            sources: files.items.clone(),
+            target,
+            confirm: crate::browser::DropConfirm::Never,
+            source_tab: None,
+        };
+        match self.browser.drop_into(request) {
             Ok(id) if files.effect == ClipboardEffect::Move => {
                 self.clipboard.cuts.push((id, files))
             }
@@ -213,12 +242,17 @@ impl FerriteWindow {
             .collect();
         self.clipboard.cuts = waiting;
         for files in done {
-            let cleared = self
-                .file_clipboard()
-                .and_then(|service| service.clear_if_same(&files));
-            if let Err(error) = cleared {
-                self.clipboard.notice = Some(fault(&error));
-            }
+            let service = self.file_clipboard();
+            self.lane.push(Box::new(move || {
+                let cleared = service.and_then(|service| service.clear_if_same(&files));
+                Box::new(move |view, _, _| view.clipboard_cleared(cleared))
+            }));
+        }
+    }
+
+    fn clipboard_cleared(&mut self, cleared: Result<bool, ClipboardFault>) {
+        if let Err(error) = cleared {
+            self.clipboard.notice = Some(fault(&error));
         }
     }
 }

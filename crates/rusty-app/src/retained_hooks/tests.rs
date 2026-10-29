@@ -316,3 +316,17 @@ fn a_rename_offer_is_never_retired_by_the_retained_path() {
     assert!((undo.retire)(&rename).is_err());
     assert_eq!((undo.last)().unwrap(), Some(offer));
 }
+
+#[test]
+fn stale_retained_offer_cannot_retire_an_older_or_already_retired_job() {
+    let profile = deleted_together(&["home/a"]);
+    let undo = undo_hooks(&profile);
+    let (stale, _) = retained_offer(&undo);
+    profile.fs.add_file("home/b", 8);
+    profile.delete(&["home/b"]);
+    assert!((undo.retire)(&stale).is_err());
+    let (current, _) = retained_offer(&undo);
+    (undo.retire)(&current).unwrap();
+    assert!((undo.retire)(&current).is_err());
+    assert_eq!(retained_offer(&undo).0.job, stale.job);
+}

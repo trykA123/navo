@@ -4,12 +4,45 @@ use rusty_l10n::{t, tr};
 use super::FerriteWindow;
 use super::strip::undo_key;
 use super::undo_retained::RetainedUndo;
-use crate::browser::{UndoKind, UndoOffer};
+use crate::browser::{RenameHooks, RetireUndo, UndoKind, UndoOffer};
 use crate::confirm_dialog::ConfirmProps;
 use crate::file_list::UndoLast;
 use crate::format;
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
+
+enum UndoQuery {
+    Workspace,
+    Files {
+        offer: Result<Option<UndoOffer>, String>,
+        retire: RetireUndo,
+    },
+    Nothing,
+}
+
+fn query(hooks: Option<RenameHooks>, after: Option<Option<u64>>) -> UndoQuery {
+    let offer = hooks.as_ref().map_or(Ok(None), |hooks| (hooks.last)());
+    let job = offer
+        .as_ref()
+        .ok()
+        .and_then(|offer| offer.as_ref())
+        .map(|offer| offer.job);
+    if after.is_some_and(|after| after == job) {
+        return UndoQuery::Workspace;
+    }
+    match hooks {
+        Some(hooks) => UndoQuery::Files {
+            offer,
+            retire: std::sync::Arc::new(move |offer| {
+                if !(hooks.last)()?.is_some_and(|latest| latest.job == offer.job) {
+                    return Err(tr("undo-nothing"));
+                }
+                (hooks.retire)(offer)
+            }),
+        },
+        None => UndoQuery::Nothing,
+    }
+}
 
 fn folder_of(offer: &UndoOffer) -> String {
     offer
@@ -64,30 +97,58 @@ impl FerriteWindow {
     }
 
     fn undo_last(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let generation = self.browser.invalidate_undo();
         let is_busy = self.prompt.is_some()
             || self.browser.pending().is_some()
             || self.is_multi_rename_open();
         if is_busy {
             return;
         }
-        if self.restores_workspace() {
+        let hooks = self.browser.rename_hooks().cloned();
+        let after = self.workspace_undo_after();
+        self.run_off_thread(
+            Box::new(move || {
+                let result = query(hooks, after);
+                Box::new(move |view, window, cx| {
+                    view.undo_queried((generation, result), window, cx);
+                })
+            }),
+            window,
+            cx,
+        );
+    }
+
+    fn undo_queried(
+        &mut self,
+        (generation, result): (u64, UndoQuery),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if generation != self.browser.undo_generation()
+            || self.prompt.is_some()
+            || self.browser.pending().is_some()
+            || self.is_multi_rename_open()
+        {
+            return;
+        }
+        if matches!(result, UndoQuery::Workspace) {
             return self.restore_workspace(window, cx);
         }
         if self.job_ui.is_restoring {
             return self.tell_undo(tr("undo-retained-busy"), cx);
         }
-        let Some((last, retire)) = self
-            .browser
-            .rename_hooks()
-            .map(|hooks| (hooks.last.clone(), hooks.retire.clone()))
-        else {
+        let UndoQuery::Files { offer, retire } = result else {
             return self.tell_undo(tr("undo-nothing"), cx);
         };
-        let offer = match last() {
+        let offer = match offer {
             Ok(Some(offer)) => offer,
             Ok(None) => return self.tell_undo(tr("undo-nothing"), cx),
             Err(reason) => return self.tell_undo(t!("undo-read-failed", reason = reason), cx),
         };
+        self.apply_undo_offer(offer, retire, cx);
+    }
+
+    fn apply_undo_offer(&mut self, offer: UndoOffer, retire: RetireUndo, cx: &mut Context<Self>) {
         if let UndoKind::Retained(ids) = offer.kind.clone() {
             return self.undo_retained(RetainedUndo { offer, ids, retire }, cx);
         }
@@ -110,11 +171,22 @@ impl FerriteWindow {
         self.refresh_activity(cx);
     }
 
-    pub(super) fn tell_pending_undo(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn tell_pending_undo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(last) = self.browser.rename_hooks().map(|hooks| hooks.last.clone()) else {
             return;
         };
-        if !matches!(last(), Ok(Some(offer)) if offer.restore_pending) {
+        self.run_off_thread(
+            Box::new(move || {
+                let pending = matches!(last(), Ok(Some(offer)) if offer.restore_pending);
+                Box::new(move |view, _, cx| view.show_pending_undo(pending, cx))
+            }),
+            window,
+            cx,
+        );
+    }
+
+    fn show_pending_undo(&mut self, pending: bool, cx: &mut Context<Self>) {
+        if !pending {
             return;
         }
         let text = match undo_key(cx) {

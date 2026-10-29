@@ -67,6 +67,7 @@ impl FerriteWindow {
         let Some(name) = self.workspace_name(n) else {
             return;
         };
+        self.browser.dialog_opened();
         let input = text_field_state(rusty_l10n::tr("workspace-name"), window, cx);
         input.update(cx, |field, cx| {
             field.set_value(name, window, cx);

@@ -1,8 +1,14 @@
+mod clipboard;
+mod undo;
+
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gpui_kit::test::TestWindowExt as _;
-use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
+use gpui_kit::{
+    AnyWindowHandle, AppContext as _, Entity, InputEvent as _, KeyDownEvent, KeyUpEvent, Keystroke,
+    TestAppContext,
+};
 
 use super::terminal::open_terminal;
 use super::{fake, home_beside_dest, open_options, options_for, press, settle};
@@ -128,4 +134,67 @@ fn the_terminal_returns_at_once_and_starts_after_the_worker_finishes(cx: &mut Te
     assert_eq!(*started.lock().unwrap(), 0);
     cx.run_until_parked();
     assert_eq!(*started.lock().unwrap(), 1);
+}
+
+fn key(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let keystroke = Keystroke::parse(key).unwrap();
+        let down = KeyDownEvent {
+            keystroke: keystroke.clone(),
+            is_held: false,
+            prefer_character_input: false,
+        };
+        let up = KeyUpEvent { keystroke };
+        let before = Instant::now();
+        window.dispatch_event(down.to_platform_input(), cx);
+        window.dispatch_event(up.to_platform_input(), cx);
+        assert!(before.elapsed() < ONE_FRAME);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn editor_discovery_returns_at_once_and_fills_the_editor_prompt(cx: &mut TestAppContext) {
+    let fs = fake();
+    let mut options = options_for(fs.clone(), home_beside_dest(&fs));
+    options.editor.suggestion = Arc::new(|| {
+        std::thread::sleep(SLOW);
+        Some("discovered.exe".to_owned())
+    });
+    let resolved = Arc::new(Mutex::new(Vec::new()));
+    let log = resolved.clone();
+    options.editor.resolve = Arc::new(move |program| {
+        log.lock().unwrap().push(program.to_owned());
+        Err("missing".to_owned())
+    });
+    let (window, view) = open_options(cx, options);
+    key(cx, window, "f4");
+    assert!(view.read_with(cx, |view, _| view.prompt.is_none()));
+    settle(cx, &view);
+    press(cx, window, &view, "enter");
+    assert_eq!(*resolved.lock().unwrap(), ["discovered.exe"]);
+}
+
+#[gpui_kit::test]
+fn editor_discovery_preserves_a_newer_folder_prompt_and_input(cx: &mut TestAppContext) {
+    let fs = fake();
+    let mut options = options_for(fs.clone(), home_beside_dest(&fs));
+    options.editor.suggestion = Arc::new(|| Some("discovered.exe".to_owned()));
+    let (window, view) = open_options(cx, options);
+    key(cx, window, "f4");
+    key(cx, window, "f7");
+    let prompt = view.read_with(cx, |view, _| view.prompt.as_ref().unwrap().id);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.input("kept-folder", cx);
+    })
+    .unwrap();
+    settle(cx, &view);
+    assert_eq!(
+        view.read_with(cx, |view, _| view.prompt.as_ref().unwrap().id),
+        prompt
+    );
+    press(cx, window, &view, "enter");
+    assert!(rusty_fs::Provider::metadata(fs.as_ref(), &fs.location("home/kept-folder")).is_ok());
 }

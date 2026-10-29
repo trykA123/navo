@@ -130,6 +130,7 @@ impl Browser {
         run: Run,
         first_new: Option<String>,
     ) {
+        self.invalidate_undo();
         self.jobs
             .retain(|job| job.status.is_active() || matches!(job.status, JobStatus::Failed(_)));
         let cancel = CancelToken::new();
@@ -292,6 +293,7 @@ impl Browser {
         if self.is_stale_replan(&request) {
             return false;
         }
+        self.invalidate_undo();
         match result {
             Ok(planned) => {
                 let pending = PendingOp {
@@ -310,6 +312,7 @@ impl Browser {
                     }),
                 };
                 let asks = request.asks || pending.is_protected();
+                self.dialog_opened();
                 self.pending = Some(pending);
                 if !asks {
                     self.confirm();
@@ -335,6 +338,7 @@ impl Browser {
     }
 
     fn finish_job(&mut self, id: u64, ended: Ended) -> bool {
+        self.invalidate_undo();
         let Ended {
             progress,
             outcome,

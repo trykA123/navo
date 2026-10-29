@@ -139,6 +139,7 @@ impl FerriteWindow {
             self.close_preview(cx);
             self.recent.restore_preview = true;
         }
+        self.browser.dialog_opened();
         self.recent.is_open = true;
         self.recent.phase = Phase::Loading;
         self.recent.rows.clear();

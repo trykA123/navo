@@ -136,6 +136,7 @@ impl FerriteWindow {
         };
         let open = self.build_open(batch, window, cx);
         let first = open.inputs.name_mask.clone();
+        self.browser.dialog_opened();
         self.multi_rename.open = Some(open);
         first.update(cx, |field, cx| field.select_all(window, cx));
         window.focus(&first.read(cx).focus_handle(cx), cx);

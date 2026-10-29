@@ -75,3 +75,13 @@ fn the_editor_starts_with_the_file() {
     let file = Location::new("/tmp").unwrap();
     assert_eq!((editor.open)("true", &file), Ok(()));
 }
+
+#[test]
+fn editor_discovery_is_lazy_and_keeps_its_first_result() {
+    let dir = tempfile::tempdir().unwrap();
+    let discover = super::suggest(vec![dir.path().join("edit.exe")]);
+    let program = exe(dir.path(), "edit.exe");
+    assert_eq!(discover(), Some(program.clone()));
+    fs::remove_file(dir.path().join("edit.exe")).unwrap();
+    assert_eq!(discover(), Some(program));
+}

@@ -2,6 +2,7 @@ use std::ffi::OsString;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::PathBuf;
 use std::ptr;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use windows::Win32::Foundation::HWND;
@@ -10,8 +11,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows_sys::Win32::Foundation::{GlobalFree, HGLOBAL};
 use windows_sys::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
-    RegisterClipboardFormatW, SetClipboardData,
+    CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardSequenceNumber,
+    IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
 };
 use windows_sys::Win32::System::Memory::{
     GMEM_MOVEABLE, GMEM_ZEROINIT, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
@@ -20,6 +21,8 @@ use windows_sys::Win32::System::Ole::CF_HDROP;
 use windows_sys::Win32::UI::Shell::SHAnsiToUnicode;
 
 use super::{ClipboardError, Effect, FileClipboard, decode_drop_files, encode_drop_files};
+
+static WRITTEN_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 
 struct Owner(HWND);
 
@@ -134,6 +137,8 @@ pub fn write_files(files: &FileClipboard) -> Result<(), ClipboardError> {
         .and_then(|()| paths.publish(u32::from(CF_HDROP)));
     if published.is_err() {
         let _ = empty();
+    } else {
+        WRITTEN_SEQUENCE.store(sequence(), Ordering::Relaxed);
     }
     published
 }
@@ -154,11 +159,21 @@ pub fn clear_if_same(files: &FileClipboard) -> Result<bool, ClipboardError> {
     let Some(current) = read_open()? else {
         return Ok(false);
     };
-    if current.paths != files.paths {
+    if !super::model::matches_write(
+        files,
+        &current,
+        Some(WRITTEN_SEQUENCE.load(Ordering::Relaxed)),
+        Some(sequence()),
+    ) {
         return Ok(false);
     }
     empty()?;
     Ok(true)
+}
+
+fn sequence() -> u32 {
+    // SAFETY: the sequence query takes no pointers and does not render clipboard data.
+    unsafe { GetClipboardSequenceNumber() }
 }
 
 fn read_open() -> Result<Option<FileClipboard>, ClipboardError> {

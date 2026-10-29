@@ -310,14 +310,22 @@ impl OpLog for UndoLog {
     }
 }
 
-fn undo_hooks(browser: &mut Browser, fs: &FakeFs) -> mpsc::Receiver<()> {
+type LatestUndo = Arc<Mutex<Option<crate::browser::UndoOffer>>>;
+
+fn undo_hooks(
+    browser: &mut Browser,
+    fs: &FakeFs,
+    offer: crate::browser::UndoOffer,
+) -> (mpsc::Receiver<()>, LatestUndo) {
     let identity = fs
         .file_identity(&fs.location("home/renamed.txt"))
         .unwrap()
         .unwrap();
     let (entered, started) = mpsc::channel();
+    let latest = Arc::new(Mutex::new(Some(offer)));
+    let query = latest.clone();
     browser.set_rename_hooks(Some(crate::browser::RenameHooks {
-        last: Arc::new(|| Ok(None)),
+        last: Arc::new(move || Ok(query.lock().unwrap().clone())),
         undo_log: Arc::new(move |_| {
             entered.send(()).unwrap();
             Ok(Box::new(UndoLog(identity)) as Box<dyn OpLog>)
@@ -328,7 +336,7 @@ fn undo_hooks(browser: &mut Browser, fs: &FakeFs) -> mpsc::Receiver<()> {
         delete: Arc::new(|_| Ok(())),
         log: None,
     }));
-    started
+    (started, latest)
 }
 
 #[test]
@@ -341,7 +349,7 @@ fn undo_and_restore_wait_for_the_running_job() {
         copy(&mut browser, &fs, "home/docs");
         started.recv_timeout(Duration::from_secs(5)).unwrap();
         let offer = undo_offer(&fs, restore);
-        let undo_started = undo_hooks(&mut browser, &fs);
+        let (undo_started, _) = undo_hooks(&mut browser, &fs, offer.clone());
         assert!(browser.undo_rename(offer));
         wait_for(&mut browser, |browser| !browser.loading());
         assert_eq!(browser.jobs()[1].status, JobStatus::Queued);
@@ -365,7 +373,7 @@ fn cancelling_queued_undo_never_opens_its_log_or_changes_files() {
     copy(&mut browser, &fs, "home/docs");
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     let offer = undo_offer(&fs, true);
-    let undo_started = undo_hooks(&mut browser, &fs);
+    let (undo_started, _) = undo_hooks(&mut browser, &fs, offer.clone());
     assert!(browser.undo_rename(offer));
     let id = browser.jobs()[1].id;
     assert!(browser.cancel_job(id));
@@ -457,4 +465,25 @@ fn queued_card_only_offers_cancel_in_both_themes(cx: &mut gpui_kit::TestAppConte
         })
         .unwrap();
     }
+}
+
+#[test]
+fn queued_undo_revalidates_the_offer_before_execution() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.set_slow_volume(Arc::new(|_| true));
+    let (gate, started) = gated(&mut browser, false);
+    copy(&mut browser, &fs, "home/docs");
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    let offer = undo_offer(&fs, false);
+    let (undo_started, latest) = undo_hooks(&mut browser, &fs, offer.clone());
+    assert!(browser.undo_rename(offer));
+    wait_for(&mut browser, |browser| !browser.loading());
+    *latest.lock().unwrap() = None;
+    gate.release();
+    settle(&mut browser);
+    assert!(undo_started.try_recv().is_err());
+    assert!(exists(&fs, "home/renamed.txt"));
+    assert!(!exists(&fs, "home/original.txt"));
+    assert_eq!(fs.calls("home/renamed.txt", FakeOp::Rename), 0);
 }

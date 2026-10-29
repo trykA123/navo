@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use rusty_core::Location;
 use rusty_ui::window_view::EditorHooks;
@@ -29,26 +29,37 @@ pub fn hooks(var: impl Fn(&str) -> Option<String>) -> EditorHooks {
         path: var("PATH").unwrap_or_default(),
         extensions: var("PATHEXT").unwrap_or_else(|| DEFAULT_EXTENSIONS.to_owned()),
     };
+    let candidates = candidates(&var);
     EditorHooks {
-        suggestion: suggest(&var),
+        suggestion: Arc::new(suggest(candidates)),
         resolve: Arc::new(move |program| found(program, &search)),
         open: Arc::new(|program, file| open(&clean(program), file)),
     }
 }
 
-fn suggest(var: &impl Fn(&str) -> Option<String>) -> Option<String> {
-    let found = if cfg!(windows) {
+fn candidates(var: &impl Fn(&str) -> Option<String>) -> Vec<PathBuf> {
+    if cfg!(windows) {
         WINDOWS_CANDIDATES
             .iter()
             .filter_map(|(root, rest)| Some(PathBuf::from(var(root)?).join(rest)))
-            .find(|path| path.is_file())
+            .collect()
     } else {
-        UNIX_CANDIDATES
-            .iter()
-            .map(PathBuf::from)
-            .find(|path| path.is_file())
-    };
-    found.map(|path| path.to_string_lossy().into_owned())
+        UNIX_CANDIDATES.iter().map(PathBuf::from).collect()
+    }
+}
+
+fn suggest(candidates: Vec<PathBuf>) -> impl Fn() -> Option<String> + Send + Sync {
+    let found = OnceLock::new();
+    move || {
+        found
+            .get_or_init(|| {
+                candidates
+                    .iter()
+                    .find(|path| path.is_file())
+                    .map(|path| path.to_string_lossy().into_owned())
+            })
+            .clone()
+    }
 }
 
 pub fn resolve(program: &str, search: &Search) -> Option<PathBuf> {

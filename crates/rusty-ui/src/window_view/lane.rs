@@ -9,23 +9,38 @@ pub(super) type Reply =
     Box<dyn FnOnce(&mut FerriteWindow, &mut Window, &mut Context<FerriteWindow>) + Send>;
 pub(super) type Job = Box<dyn FnOnce() -> Reply + Send>;
 
-#[derive(Default)]
 pub(super) struct Lane {
-    sender: Option<UnboundedSender<Job>>,
-    task: Option<Task<()>>,
+    sender: UnboundedSender<Job>,
+    _task: Task<()>,
+    pending: usize,
+}
+
+impl Lane {
+    pub(super) fn new(window: &mut Window, cx: &mut Context<FerriteWindow>) -> Self {
+        let (sender, jobs) = unbounded::<Job>();
+        let task = cx.spawn_in(window, async move |this, cx| drain(jobs, this, cx).await);
+        Self {
+            sender,
+            _task: task,
+            pending: 0,
+        }
+    }
+
+    pub(super) fn push(&mut self, job: Job) {
+        if self.sender.unbounded_send(job).is_ok() {
+            self.pending += 1;
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn is_pending(&self) -> bool {
+        self.pending != 0
+    }
 }
 
 impl FerriteWindow {
-    pub(super) fn run_off_thread(&mut self, job: Job, window: &mut Window, cx: &mut Context<Self>) {
-        let lane = &mut self.lane;
-        let sender = lane.sender.get_or_insert_with(|| {
-            let (sender, jobs) = unbounded::<Job>();
-            lane.task = Some(cx.spawn_in(window, async move |this, cx| {
-                drain(jobs, this, cx).await;
-            }));
-            sender
-        });
-        let _ = sender.unbounded_send(job);
+    pub(super) fn run_off_thread(&mut self, job: Job, _: &mut Window, _: &mut Context<Self>) {
+        self.lane.push(job);
     }
 }
 
@@ -37,6 +52,7 @@ async fn drain(
     while let Some(job) = jobs.next().await {
         let reply = cx.background_executor().spawn(async move { job() }).await;
         let shown = this.update_in(cx, |view, window, cx| {
+            view.lane.pending -= 1;
             reply(view, window, cx);
             cx.notify();
         });

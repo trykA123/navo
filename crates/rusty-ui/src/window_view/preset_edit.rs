@@ -151,6 +151,7 @@ fn scrim(dialog: impl IntoElement, reduce_motion: bool, cx: &App) -> AnyElement 
 
 impl FerriteWindow {
     fn open_preset_dialog(&mut self, dialog: Dialog, cx: &mut Context<Self>) {
+        self.browser.dialog_opened();
         self.tiles.presets.id += 1;
         self.tiles.presets.dialog = Some(dialog);
         cx.notify();

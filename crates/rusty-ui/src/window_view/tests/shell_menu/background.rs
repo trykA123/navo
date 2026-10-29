@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
@@ -309,11 +309,11 @@ fn choosing_the_checked_order_reverses_it_and_the_menu_says_so(cx: &mut TestAppC
 fn paste_is_enabled_when_the_clipboard_holds_files(cx: &mut TestAppContext) {
     let fs = fake();
     let clipboard = FakeClipboard::default();
-    *clipboard.held.borrow_mut() = Some(ClipboardFiles {
+    *clipboard.held.lock().unwrap() = Some(ClipboardFiles {
         items: vec![fs.location("dest")],
         effect: ClipboardEffect::Copy,
     });
-    let shared: Rc<dyn FileClipboardService> = Rc::new(clipboard);
+    let shared: Arc<dyn FileClipboardService> = Arc::new(clipboard);
     let options = crate::window_view::StartOptions {
         file_clipboard: Some(shared),
         ..options_for(fs.clone(), two_panes(&fs))

@@ -226,6 +226,7 @@ impl FerriteWindow {
     }
 
     fn open_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.browser.dialog_opened();
         crate::perf::begin(crate::perf::Latency::CommandCenterOpen);
         let restore = window.focused(cx);
         let stack = focused_contexts(window);

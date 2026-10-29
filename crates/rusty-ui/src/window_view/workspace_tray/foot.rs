@@ -135,12 +135,12 @@ impl FerriteWindow {
         cx.notify();
     }
 
-    pub(in crate::window_view) fn restores_workspace(&self) -> bool {
+    pub(in crate::window_view) fn workspace_undo_after(&self) -> Option<Option<u64>> {
         self.workspace_keys
             .edit
             .deleted
             .as_ref()
-            .is_some_and(|deleted| deleted.after_job == self.last_undo_job())
+            .map(|deleted| deleted.after_job)
     }
 
     pub(in crate::window_view) fn restore_workspace(

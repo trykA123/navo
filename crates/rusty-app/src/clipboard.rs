@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::Location;
 use rusty_shell::{ClipboardError, Effect, FileClipboard};
@@ -10,8 +10,8 @@ use rusty_ui::window_view::{
 use crate::shell_menu::without_verbatim;
 use crate::startup::path_location;
 
-pub fn service() -> Rc<dyn FileClipboardService> {
-    Rc::new(ShellClipboard)
+pub fn service() -> Arc<dyn FileClipboardService> {
+    Arc::new(ShellClipboard)
 }
 
 struct ShellClipboard;

@@ -144,3 +144,18 @@ fn path_from_units(units: &[u16]) -> Result<PathBuf, ClipboardError> {
         .map(PathBuf::from)
         .map_err(|_| ClipboardError::Malformed)
 }
+
+#[cfg(any(windows, test))]
+pub(super) fn matches_write(
+    expected: &FileClipboard,
+    current: &FileClipboard,
+    written_sequence: Option<u32>,
+    current_sequence: Option<u32>,
+) -> bool {
+    let same_sequence = match (written_sequence, current_sequence) {
+        (None, None) => true,
+        (Some(written), Some(current)) => written != 0 && written == current,
+        _ => false,
+    };
+    same_sequence && expected == current
+}

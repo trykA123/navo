@@ -212,7 +212,7 @@ pub(super) fn settle(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) {
         view.update(cx, |view, cx| view.wake(cx));
         cx.run_until_parked();
         let loading = view.read_with(cx, |view, _| {
-            view.browser.loading() || view.browser.running()
+            view.browser.loading() || view.browser.running() || view.lane.is_pending()
         });
         if !loading || Instant::now() > deadline {
             break;
@@ -534,7 +534,7 @@ fn editor_window(
     let state = home_beside_dest(&fs);
     let options = StartOptions {
         editor: super::EditorHooks {
-            suggestion: Some("code.exe".to_owned()),
+            suggestion: Arc::new(|| Some("code.exe".to_owned())),
             resolve: Arc::new(move |program| {
                 if program.ends_with(".exe") {
                     remembered

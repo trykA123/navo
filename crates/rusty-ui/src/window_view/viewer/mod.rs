@@ -265,6 +265,7 @@ impl FerriteWindow {
     }
 
     fn show_viewer(&mut self, viewer: Viewer, window: &mut Window, cx: &mut Context<Self>) {
+        self.browser.dialog_opened();
         let focus = viewer.focus.clone();
         window.defer(cx, move |window, cx| window.focus(&focus, cx));
         self.viewer = Some(viewer);

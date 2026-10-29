@@ -192,11 +192,13 @@ impl Browser {
             self.job_queue
                 .running
                 .insert(id, pending.slow_volumes.clone().unwrap_or_default());
+            self.invalidate_undo();
             match self.spawn_job(pending, run, cancel) {
                 Ok(()) => {
                     self.with_job(id, |job| job.status = JobStatus::Running);
                 }
                 Err(error) => {
+                    self.invalidate_undo();
                     self.job_queue.running.remove(&id);
                     self.with_job(id, |job| job.status = JobStatus::Failed(error));
                     return self.start_queued();
@@ -219,6 +221,7 @@ impl Browser {
         else {
             return false;
         };
+        self.invalidate_undo();
         self.job_queue.waiting.remove(index);
         self.with_job(id, |job| {
             job.cancel.cancel();

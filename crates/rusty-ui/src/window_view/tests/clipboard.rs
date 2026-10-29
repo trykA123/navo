@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
@@ -14,9 +12,9 @@ use crate::window_view::{
 
 #[derive(Default)]
 pub(in crate::window_view) struct FakeClipboard {
-    pub held: RefCell<Option<ClipboardFiles>>,
-    pub writes: RefCell<Vec<ClipboardFiles>>,
-    pub clears: RefCell<Vec<ClipboardFiles>>,
+    pub held: std::sync::Mutex<Option<ClipboardFiles>>,
+    pub writes: std::sync::Mutex<Vec<ClipboardFiles>>,
+    pub clears: std::sync::Mutex<Vec<ClipboardFiles>>,
     pub unsupported: bool,
 }
 
@@ -25,8 +23,8 @@ impl FileClipboardService for FakeClipboard {
         if self.unsupported {
             return Err(ClipboardFault::Unsupported);
         }
-        self.writes.borrow_mut().push(files.clone());
-        *self.held.borrow_mut() = Some(files.clone());
+        self.writes.lock().unwrap().push(files.clone());
+        *self.held.lock().unwrap() = Some(files.clone());
         Ok(())
     }
 
@@ -34,11 +32,11 @@ impl FileClipboardService for FakeClipboard {
         if self.unsupported {
             return Err(ClipboardFault::Unsupported);
         }
-        Ok(self.held.borrow().clone())
+        Ok(self.held.lock().unwrap().clone())
     }
 
     fn has_files(&self) -> bool {
-        let held = self.held.borrow();
+        let held = self.held.lock().unwrap();
         !self.unsupported && held.as_ref().is_some_and(|files| !files.items.is_empty())
     }
 
@@ -46,8 +44,8 @@ impl FileClipboardService for FakeClipboard {
         if self.unsupported {
             return Err(ClipboardFault::Unsupported);
         }
-        self.clears.borrow_mut().push(files.clone());
-        let mut held = self.held.borrow_mut();
+        self.clears.lock().unwrap().push(files.clone());
+        let mut held = self.held.lock().unwrap();
         let is_same = held.as_ref() == Some(files);
         if is_same {
             *held = None;
@@ -60,7 +58,7 @@ struct Rig {
     window: AnyWindowHandle,
     view: Entity<FerriteWindow>,
     fs: Arc<FakeFs>,
-    clipboard: Rc<FakeClipboard>,
+    clipboard: Arc<FakeClipboard>,
 }
 
 fn rig(cx: &mut TestAppContext, clipboard: FakeClipboard) -> Rig {
@@ -69,8 +67,8 @@ fn rig(cx: &mut TestAppContext, clipboard: FakeClipboard) -> Rig {
 
 fn rig_guarding(cx: &mut TestAppContext, clipboard: FakeClipboard, protected: &[&str]) -> Rig {
     let fs = fake();
-    let clipboard = Rc::new(clipboard);
-    let shared: Rc<dyn FileClipboardService> = clipboard.clone();
+    let clipboard = Arc::new(clipboard);
+    let shared: Arc<dyn FileClipboardService> = clipboard.clone();
     let operations = Operations {
         protected: protected.iter().map(|path| fs.location(path)).collect(),
         ..Operations::unlogged()
@@ -101,7 +99,7 @@ impl Rig {
     }
 
     fn writes(&self) -> Vec<ClipboardFiles> {
-        self.clipboard.writes.borrow().clone()
+        self.clipboard.writes.lock().unwrap().clone()
     }
 
     fn at(&self, path: &str) -> Location {
@@ -110,7 +108,7 @@ impl Rig {
 
     fn hold(&self, paths: &[&str], effect: ClipboardEffect) {
         let items = paths.iter().map(|path| self.at(path)).collect();
-        *self.clipboard.held.borrow_mut() = Some(ClipboardFiles { items, effect });
+        *self.clipboard.held.lock().unwrap() = Some(ClipboardFiles { items, effect });
     }
 
     fn jobs(&self, cx: &mut TestAppContext) -> Vec<(OpKind, Option<Location>, JobStatus)> {
@@ -203,7 +201,7 @@ fn ctrl_v_with_copied_files_copies_them_into_the_active_folder(cx: &mut TestAppC
     );
     assert!(rig.exists("dest/a.txt"));
     assert!(rig.exists("home/a.txt"));
-    assert!(rig.clipboard.clears.borrow().is_empty());
+    assert!(rig.clipboard.clears.lock().unwrap().is_empty());
 }
 
 #[gpui_kit::test]
@@ -223,8 +221,8 @@ fn ctrl_v_with_cut_files_moves_them_and_empties_the_clipboard(cx: &mut TestAppCo
         items: vec![rig.at("home/a.txt")],
         effect: ClipboardEffect::Move,
     };
-    assert_eq!(*rig.clipboard.clears.borrow(), [cut]);
-    assert_eq!(*rig.clipboard.held.borrow(), None);
+    assert_eq!(*rig.clipboard.clears.lock().unwrap(), [cut]);
+    assert_eq!(*rig.clipboard.held.lock().unwrap(), None);
 }
 
 #[gpui_kit::test]
@@ -295,7 +293,7 @@ fn pasting_a_folder_into_itself_is_refused_with_a_message(cx: &mut TestAppContex
     );
     assert!(rig.jobs(cx).is_empty());
     assert!(!rig.has_pending(cx));
-    assert!(rig.clipboard.clears.borrow().is_empty());
+    assert!(rig.clipboard.clears.lock().unwrap().is_empty());
 }
 
 fn copied_text(cx: &mut TestAppContext) -> Option<String> {

@@ -108,7 +108,7 @@ impl FerriteWindow {
         self.browser.start();
         self.browser.set_rename_hooks(rename);
         self.listen_files(keymap, window, cx);
-        self.tell_pending_undo(cx);
+        self.tell_pending_undo(window, cx);
         self.listen_open(open, window, cx);
         self.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);

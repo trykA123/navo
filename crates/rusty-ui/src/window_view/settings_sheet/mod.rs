@@ -204,6 +204,7 @@ impl FerriteWindow {
             self.close_preview(cx);
             self.settings.restore_preview = true;
         }
+        self.browser.dialog_opened();
         self.settings.is_open = true;
         if section_of(self.settings.row) == Section::Search {
             self.refresh_index_service(cx);

@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::str::Chars;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use rusty_ui::settings::{Field, Value, Values};
 use rusty_ui::window_view::TerminalHooks;
@@ -18,15 +18,8 @@ pub fn command_line(
     let (program, args) = match provider {
         "windows-terminal" => ("wt.exe", vec!["-d".to_owned(), ".".to_owned()]),
         "powershell" => {
-            let search = crate::editor::Search {
-                path: std::env::var("PATH").unwrap_or_default(),
-                extensions: ".EXE".to_owned(),
-            };
-            let program = if crate::editor::resolve("pwsh.exe", &search).is_some() {
-                "pwsh.exe"
-            } else {
-                "powershell.exe"
-            };
+            static PROGRAM: OnceLock<&str> = OnceLock::new();
+            let program = *PROGRAM.get_or_init(powershell);
             (program, vec!["-NoExit".to_owned()])
         }
         "cmd" => ("cmd.exe", vec![]),
@@ -34,6 +27,18 @@ pub fn command_line(
         _ => return Err(rusty_l10n::tr("terminal-provider-unknown")),
     };
     Ok((program.to_owned(), args))
+}
+
+fn powershell() -> &'static str {
+    let search = crate::editor::Search {
+        path: std::env::var("PATH").unwrap_or_default(),
+        extensions: ".EXE".to_owned(),
+    };
+    if crate::editor::resolve("pwsh.exe", &search).is_some() {
+        "pwsh.exe"
+    } else {
+        "powershell.exe"
+    }
 }
 
 fn custom_command(template: &str, folder: &str) -> Result<(String, Vec<String>), String> {

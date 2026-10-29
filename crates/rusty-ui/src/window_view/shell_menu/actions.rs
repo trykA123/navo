@@ -52,9 +52,12 @@ impl FerriteWindow {
         }
     }
 
-    fn copy_paths(&self, cx: &mut Context<Self>) {
+    fn copy_paths(&mut self, _: &mut Context<Self>) {
         if let Some(run) = &self.menu_run {
-            put_paths_on_clipboard(run.target.locations(), cx);
+            let items = run.target.locations().to_vec();
+            self.lane.push(Box::new(move || {
+                Box::new(move |_, _, cx| put_paths_on_clipboard(&items, cx))
+            }));
         }
     }
 }

@@ -127,40 +127,11 @@ fn create_log(
     Ok(log)
 }
 
-pub fn undo_log(journal: &SharedJournal, job: JobId) -> Result<Box<dyn OpLog>, String> {
-    Ok(Box::new(create_undo(journal, job)?))
-}
-
-pub fn profile_undo(
-    journal: &SharedJournal,
-    job: JobId,
-    dirs: &rusty_store::StoreDirs,
-    experimental: bool,
-) -> Result<Box<dyn OpLog>, String> {
-    let (_, stored) = lock(journal)
-        .read_job(job)
-        .map_err(|error| error.to_string())?;
-    let plan =
-        serde_json::from_slice::<OperationPlan>(&stored.plan).map_err(|error| error.to_string())?;
-    profile::guard(&plan, dirs, experimental)?;
-    let mut log = JournalLog::new(Arc::clone(journal), job, "rename undo".to_owned());
-    log.undoing = true;
-    log.renames = true;
-    log.deferred_undo = true;
-    log.profile = Some(dirs.clone());
-    log.experimental_retention = experimental;
-    Ok(Box::new(log))
-}
-
-fn create_undo(journal: &SharedJournal, job: JobId) -> Result<JournalLog, String> {
-    lock(journal)
-        .finish(job, JobState::RestorePending)
-        .map_err(|error| error.to_string())?;
-    let mut log = JournalLog::new(Arc::clone(journal), job, "rename undo".to_owned());
-    log.undoing = true;
-    log.renames = true;
-    Ok(log)
-}
+mod undo;
+pub(crate) use undo::claim_undo_log;
+pub use undo::profile_undo;
+#[cfg(test)]
+pub use undo::undo_log;
 
 struct JournalLog {
     journal: SharedJournal,
@@ -327,9 +298,7 @@ impl OpLog for JournalLog {
             return Err(rusty_l10n::tr("job-retention-unsupported"));
         }
         if self.deferred_undo {
-            lock(&self.journal)
-                .finish(self.job, JobState::RestorePending)
-                .map_err(|error| error.to_string())?;
+            crate::rename_hooks::claim_undo(&self.journal, self.job, JobState::RestorePending)?;
             self.deferred_undo = false;
         }
         Ok(())

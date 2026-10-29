@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::OnceLock;
 
 use crate::editor::{Search, resolve};
 
@@ -43,10 +44,18 @@ pub(super) fn windows_provider(
 }
 
 pub(super) fn terminal_command(folder: &Path) -> Result<(String, Vec<String>), String> {
+    static CHOSEN: OnceLock<(&str, Option<String>)> = OnceLock::new();
+    let (provider, template) = CHOSEN.get_or_init(discover);
+    super::command_line(provider, template.as_deref(), folder)
+}
+
+fn discover() -> (&'static str, Option<String>) {
     let path = std::env::var("PATH").unwrap_or_default();
     if cfg!(windows) {
-        let provider = windows_provider(delegation().as_deref(), has_windows_terminal(&path));
-        return super::command_line(provider, None, folder);
+        return (
+            windows_provider(delegation().as_deref(), has_windows_terminal(&path)),
+            None,
+        );
     }
     let search = Search {
         path,
@@ -55,7 +64,7 @@ pub(super) fn terminal_command(folder: &Path) -> Result<(String, Vec<String>), S
     let terminal = unix_terminal(std::env::var("TERMINAL").ok().as_deref(), |name| {
         resolve(name, &search).is_some()
     });
-    super::command_line("custom", Some(&terminal), folder)
+    ("custom", Some(terminal))
 }
 
 fn has_windows_terminal(path: &str) -> bool {

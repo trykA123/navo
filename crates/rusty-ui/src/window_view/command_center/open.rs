@@ -75,7 +75,9 @@ impl FerriteWindow {
     ) {
         if way == Way::CopyPath {
             let text = place.location.as_str().to_owned();
-            cx.write_to_clipboard(ClipboardItem::new_string(text));
+            self.lane.push(Box::new(move || {
+                Box::new(move |_, _, cx| cx.write_to_clipboard(ClipboardItem::new_string(text)))
+            }));
             return self.close_command_center(window, cx);
         }
         self.close_command_center(window, cx);

@@ -11,7 +11,7 @@ type Resolve = Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>;
 type OpenWith = Arc<dyn Fn(&str, &Location) -> Result<(), String> + Send + Sync>;
 
 pub struct EditorHooks {
-    pub suggestion: Option<String>,
+    pub suggestion: Arc<dyn Fn() -> Option<String> + Send + Sync>,
     pub resolve: Resolve,
     pub open: OpenWith,
 }
@@ -20,7 +20,7 @@ impl EditorHooks {
     #[must_use]
     pub fn none() -> Self {
         Self {
-            suggestion: None,
+            suggestion: Arc::new(|| None),
             resolve: Arc::new(|_| Err("Editors are not set up.".to_owned())),
             open: Arc::new(|_, _| Err("Editors are not set up.".to_owned())),
         }
@@ -40,7 +40,7 @@ impl FerriteWindow {
         };
         match self.values.editor_path().filter(|_| !choose) {
             Some(program) => self.open_in_editor((program, target), window, cx),
-            None => self.ask_editor(target, None),
+            None => self.ask_editor((target, None), window, cx),
         }
     }
 
@@ -54,32 +54,63 @@ impl FerriteWindow {
         self.run_off_thread(
             Box::new(move || {
                 let opened = open(&program, &target);
-                Box::new(move |view, _, _| view.editor_started(target, opened))
+                Box::new(move |view, window, cx| view.editor_started((target, opened), window, cx))
             }),
             window,
             cx,
         );
     }
 
-    fn editor_started(&mut self, target: Location, opened: Result<(), String>) {
+    fn editor_started(
+        &mut self,
+        (target, opened): (Location, Result<(), String>),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Err(error) = opened {
-            self.ask_editor(target, Some(error));
+            self.ask_editor((target, Some(error)), window, cx);
         }
     }
 
-    fn ask_editor(&mut self, target: Location, error: Option<String>) {
-        let program = self.editor_value();
+    fn ask_editor(
+        &mut self,
+        (target, error): (Location, Option<String>),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(program) = self.values.editor_path() {
+            return self.show_editor_prompt((target, program, error));
+        }
+        self.next_prompt += 1;
+        let identity = (self.next_prompt, self.browser.dialog_generation());
+        let suggestion = self.editor.suggestion.clone();
+        self.run_off_thread(
+            Box::new(move || {
+                let program = suggestion().unwrap_or_default();
+                Box::new(move |view, _, _| {
+                    view.editor_discovered(identity, (target, program, error));
+                })
+            }),
+            window,
+            cx,
+        );
+    }
+
+    fn editor_discovered(
+        &mut self,
+        identity: (u64, u64),
+        prompt: (Location, String, Option<String>),
+    ) {
+        if identity == (self.next_prompt, self.browser.dialog_generation()) {
+            self.show_editor_prompt(prompt);
+        }
+    }
+
+    fn show_editor_prompt(&mut self, (target, program, error): (Location, String, Option<String>)) {
         self.open_prompt(PromptKind::ChooseEditor { target, program });
         if let Some(prompt) = &mut self.prompt {
             prompt.error = error.map(SharedString::from);
         }
-    }
-
-    pub(super) fn editor_value(&self) -> String {
-        self.values
-            .editor_path()
-            .or_else(|| self.editor.suggestion.clone())
-            .unwrap_or_default()
     }
 
     pub(super) fn choose_editor(
@@ -129,7 +160,7 @@ impl FerriteWindow {
         if is_open {
             self.close_prompt(window, cx);
         }
-        self.editor_started(chosen.target, opened);
+        self.editor_started((chosen.target, opened), window, cx);
     }
 }
 

@@ -147,3 +147,28 @@ fn busy_errors_are_readable() {
         "The clipboard is in use by another program"
     );
 }
+
+#[test]
+fn cut_cleanup_keeps_a_later_copy_of_the_same_paths() {
+    let cut = super::FileClipboard {
+        paths: vec![PathBuf::from("one.txt")],
+        effect: Effect::Move,
+    };
+    let copy = super::FileClipboard {
+        effect: Effect::Copy,
+        ..cut.clone()
+    };
+    assert!(!super::model::matches_write(&cut, &copy, None, None));
+    assert!(super::model::matches_write(&cut, &cut, None, None));
+}
+
+#[test]
+fn cut_cleanup_keeps_identical_paths_and_effect_from_a_new_sequence() {
+    let cut = super::FileClipboard {
+        paths: vec![PathBuf::from("one.txt")],
+        effect: Effect::Move,
+    };
+    assert!(!super::model::matches_write(&cut, &cut, Some(7), Some(8)));
+    assert!(!super::model::matches_write(&cut, &cut, Some(0), Some(0)));
+    assert!(super::model::matches_write(&cut, &cut, Some(7), Some(7)));
+}

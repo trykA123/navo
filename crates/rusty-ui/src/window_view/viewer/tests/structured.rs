@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -320,8 +319,8 @@ fn a_short_row_fetch_is_not_asked_again_on_every_frame(cx: &mut TestAppContext) 
 
 #[gpui_kit::test]
 fn ctrl_c_in_the_table_viewer_copies_the_cell_not_the_file(cx: &mut TestAppContext) {
-    let files = Rc::new(FakeClipboard::default());
-    let shared: Rc<dyn crate::window_view::FileClipboardService> = files.clone();
+    let files = Arc::new(FakeClipboard::default());
+    let shared: Arc<dyn crate::window_view::FileClipboardService> = files.clone();
     let options = crate::window_view::StartOptions {
         file_clipboard: Some(shared),
         ..super::options_with(
@@ -338,7 +337,7 @@ fn ctrl_c_in_the_table_viewer_copies_the_cell_not_the_file(cx: &mut TestAppConte
     press(cx, window, &view, "ctrl-c");
     let copied = cx.read_from_clipboard().and_then(|item| item.text());
     assert_eq!(copied.as_deref(), Some("10"));
-    assert!(files.writes.borrow().is_empty());
+    assert!(files.writes.lock().unwrap().is_empty());
 }
 
 #[gpui_kit::test]
