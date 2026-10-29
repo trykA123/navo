@@ -134,10 +134,12 @@ impl Overview {
 
     pub(in crate::window_view::viewer) fn element(
         &self,
-        look: StripLook<'_>,
+        look: &StripLook<'_>,
         on_click: impl Fn(Pixels, &mut Window, &mut App) + 'static,
     ) -> AnyElement {
-        let StripLook { t, shown, entity } = look;
+        let t = look.t;
+        let shown = look.shown;
+        let entity = look.entity;
         let measured = self.0.clone();
         let measure = canvas(
             move |bounds, window, _| {

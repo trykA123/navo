@@ -89,9 +89,9 @@ fn woff_of(sfnt: &[u8]) -> Vec<u8> {
     woff_from(&sfnt[..4], &packed_tables(sfnt))
 }
 
-fn with_table(sfnt: &[u8], tag: &[u8; 4], data: Vec<u8>) -> Vec<u8> {
+fn with_table(sfnt: &[u8], tag: [u8; 4], data: Vec<u8>) -> Vec<u8> {
     let (flavor, mut tables) = sfnt::tables(sfnt, 0).unwrap();
-    let tag = u32::from_be_bytes(*tag);
+    let tag = u32::from_be_bytes(tag);
     tables.retain(|table| table.tag != tag);
     tables.push(Table {
         tag,
@@ -201,7 +201,7 @@ fn cmap_mapping_everything() -> Vec<u8> {
 
 #[test]
 fn a_cmap_group_spanning_every_code_point_stops_at_the_grid_size() {
-    let font = with_table(INTER, b"cmap", cmap_mapping_everything());
+    let font = with_table(INTER, *b"cmap", cmap_mapping_everything());
     let face = parse(font).unwrap();
     assert_eq!(face.chars.len(), 256);
     assert_eq!(face.chars[0], '!');
@@ -243,7 +243,7 @@ fn format_13_at_the_last_code_point(groups: usize) -> Vec<u8> {
 fn a_hostile_cmap_is_walked_once_and_quickly() {
     let subtable = format_13_at_the_last_code_point(2_000);
     for records in [1, u16::MAX] {
-        let font = with_table(INTER, b"cmap", cmap_of(records, &subtable));
+        let font = with_table(INTER, *b"cmap", cmap_of(records, &subtable));
         let started = Instant::now();
         let face = parse(font).unwrap();
         assert!(
@@ -259,7 +259,7 @@ fn a_cancelled_parse_stops_walking_the_cmap() {
     let mut groups = vec![[0xD800, 0xDFFF, 1]; 500];
     groups.push([0x41, 0x5A, 1]);
     let cmap = cmap_of(1, &groups_subtable(12, &groups));
-    let font = with_table(INTER, b"cmap", cmap);
+    let font = with_table(INTER, *b"cmap", cmap);
     assert_eq!(parse(font.clone()).unwrap().chars.len(), 26);
     let cancelled = AtomicBool::new(true);
     assert!(FontFace::parse(font, &cancelled).unwrap().chars.is_empty());
@@ -308,7 +308,7 @@ fn a_name_table_that_cannot_be_rewritten_leaves_no_preview() {
         .find(|at| !NAME_IDS.contains(&(be16(&name, at + 6) as u16)))
         .unwrap();
     name[record + 8..record + 10].copy_from_slice(&u16::MAX.to_be_bytes());
-    let face = parse(with_table(INTER, b"name", name)).unwrap();
+    let face = parse(with_table(INTER, *b"name", name)).unwrap();
     assert_eq!(face.family, "Inter");
     assert!(face.preview.is_none());
 }

@@ -46,21 +46,21 @@ pub struct GroupColours {
 }
 
 impl GroupColours {
-    pub fn base(&self) -> Shade {
+    pub fn base(self) -> Shade {
         self.shade(0.)
     }
 
-    pub fn part(&self, rank: usize) -> Shade {
+    pub fn part(self, rank: usize) -> Shade {
         self.shade(LEVELS[rank % LEVELS.len()])
     }
 
     #[cfg(test)]
-    pub fn lightness(&self, rank: usize) -> f32 {
+    pub fn lightness(self, rank: usize) -> f32 {
         let look = look(self.mode);
         look.lightness + look.amplitude * LEVELS[rank % LEVELS.len()]
     }
 
-    fn shade(&self, level: f32) -> Shade {
+    fn shade(self, level: f32) -> Shade {
         let look = look(self.mode);
         Shade {
             bg: oklch(

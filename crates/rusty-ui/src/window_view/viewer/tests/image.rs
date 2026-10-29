@@ -257,7 +257,7 @@ fn next_and_previous_skip_files_that_are_not_images_and_stop_at_the_ends(cx: &mu
     let png = encoded(ImageFormat::Png, 8, 8);
     let files = [
         ("a.txt", b"hello\n".to_vec()),
-        ("b.png", png.clone()),
+        ("b.png", png),
         ("c.txt", b"words\n".to_vec()),
         ("d.jpg", encoded(ImageFormat::Jpeg, 8, 8)),
         ("e.txt", b"more\n".to_vec()),

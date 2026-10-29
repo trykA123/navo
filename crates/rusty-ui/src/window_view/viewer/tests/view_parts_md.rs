@@ -204,7 +204,7 @@ fn a_settings_change_reaches_the_open_editor_unless_the_split_was_toggled_there(
     let rig = markdown(cx);
     let off = Values::default().with(&split_value(false));
     assert!(rig.news.send(SettingsNews::Applied {
-        values: off.clone(),
+        values: off,
         generation: 1,
     }));
     rig.settle(cx);

@@ -83,7 +83,7 @@ impl Marking {
         };
         match update {
             ScanUpdate::Running(total) if !run.tally.counted.done => {
-                run.tally.counted.total = total
+                run.tally.counted.total = total;
             }
             ScanUpdate::Landed(scanned) if scanned.needle == run.tally.needle => {
                 run.tally.land(scanned);

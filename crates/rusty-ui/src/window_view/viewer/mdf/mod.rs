@@ -138,8 +138,8 @@ impl MdfView {
 pub(in crate::window_view::viewer) struct MdfBody(pub Entity<MdfView>);
 
 impl MdfBody {
-    pub(in crate::window_view::viewer) fn new(file: MdfFile, host: Host, cx: &mut App) -> Self {
-        Self(cx.new(|cx| MdfView::new(&file, &host, cx)))
+    pub(in crate::window_view::viewer) fn new(file: &MdfFile, host: &Host, cx: &mut App) -> Self {
+        Self(cx.new(|cx| MdfView::new(file, host, cx)))
     }
 }
 

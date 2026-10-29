@@ -256,14 +256,14 @@ impl PagedView {
             SearchMessage::Progress(done) => progress.done = done,
             SearchMessage::Done(result) => {
                 if let Some(search) = self.find.progress.take() {
-                    self.found(result, search, cx);
+                    self.found(result, &search, cx);
                 }
             }
         }
         cx.notify();
     }
 
-    fn found(&mut self, result: Result<Found, String>, search: Progress, cx: &mut Context<Self>) {
+    fn found(&mut self, result: Result<Found, String>, search: &Progress, cx: &mut Context<Self>) {
         match result {
             Ok(Found::At(at)) => {
                 self.follow_moved(Move::Offset(at));
@@ -295,7 +295,7 @@ impl PagedView {
             kind: self.needle_kind(),
             input: &input,
         };
-        if let Some(Some(match_case)) = self.marking.history.recall_into(recall, window, cx) {
+        if let Some(Some(match_case)) = self.marking.history.recall_into(&recall, window, cx) {
             self.find.match_case = match_case;
         }
         cx.notify();

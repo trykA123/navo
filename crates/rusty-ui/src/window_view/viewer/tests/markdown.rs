@@ -84,8 +84,8 @@ fn html_and_math_render_as_literal_text(cx: &mut TestAppContext) {
     );
 }
 
-fn opens_as_text_with(cx: &mut TestAppContext, name: &str, source: String, note: &str) {
-    let (window, view) = open(cx, name, &source);
+fn opens_as_text_with(cx: &mut TestAppContext, name: &str, source: &str, note: &str) {
+    let (window, view) = open(cx, name, source);
     assert!(has_editor(cx, &view), "{name} opens in the text view");
     assert_eq!(text_of(cx, window, "viewer-message"), note);
 }
@@ -93,21 +93,21 @@ fn opens_as_text_with(cx: &mut TestAppContext, name: &str, source: String, note:
 #[gpui_kit::test]
 fn markdown_over_1_mib_opens_as_text_with_a_note(cx: &mut TestAppContext) {
     let source = "a line\n".repeat(160_000);
-    opens_as_text_with(cx, "big.md", source, "Large Markdown: shown as text.");
+    opens_as_text_with(cx, "big.md", &source, "Large Markdown: shown as text.");
 }
 
 #[gpui_kit::test]
 fn markdown_with_too_many_blocks_opens_as_text_with_a_note(cx: &mut TestAppContext) {
     let source = "- a\n".repeat(200_001);
     let note = "Markdown with over 200,000 blocks: shown as text.";
-    opens_as_text_with(cx, "many.md", source, note);
+    opens_as_text_with(cx, "many.md", &source, note);
 }
 
 #[gpui_kit::test]
 fn markdown_with_too_many_footnotes_opens_as_text_with_a_note(cx: &mut TestAppContext) {
     let source = "[^a]: b\n".repeat(2_001);
     let note = "Markdown with over 2,000 footnote lines: shown as text.";
-    opens_as_text_with(cx, "notes.md", source, note);
+    opens_as_text_with(cx, "notes.md", &source, note);
 }
 
 #[gpui_kit::test]

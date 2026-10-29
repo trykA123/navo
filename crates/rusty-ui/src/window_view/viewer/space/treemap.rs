@@ -286,7 +286,7 @@ impl Treemap {
             .test_support()
             .when_some(pick_of(tile), |cell, id| {
                 cell.cursor_pointer().on_click(move |_, window, cx| {
-                    emit(&on_event, TreemapEvent::Pick(id), window, cx);
+                    emit(on_event.as_ref(), TreemapEvent::Pick(id), window, cx);
                 })
             })
     }
@@ -314,7 +314,7 @@ impl Treemap {
     }
 }
 
-fn emit(on_event: &Option<OnEvent>, event: TreemapEvent, window: &mut Window, cx: &mut App) {
+fn emit(on_event: Option<&OnEvent>, event: TreemapEvent, window: &mut Window, cx: &mut App) {
     if let Some(f) = on_event {
         f(event, window, cx);
     }

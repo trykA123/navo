@@ -49,6 +49,6 @@ impl ViewerKind for MapKind {
             .loaded
             .downcast::<MapFile>()
             .map_err(|_| "The linker map view got data it cannot show.".to_owned())?;
-        Ok(Box::new(MapBody::new(*file, attach.host, cx)))
+        Ok(Box::new(MapBody::new(&file, &attach.host, cx)))
     }
 }

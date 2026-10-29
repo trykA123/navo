@@ -45,6 +45,6 @@ impl ViewerKind for ElfKind {
             .loaded
             .downcast::<ElfFile>()
             .map_err(|_| "The ELF view got data it cannot show.".to_owned())?;
-        Ok(Box::new(ElfBody::new(*file, attach.host, cx)))
+        Ok(Box::new(ElfBody::new(&file, &attach.host, cx)))
     }
 }

@@ -45,9 +45,8 @@ fn badge_text(tree: &Tree, node: NodeId) -> String {
 fn kind_color(c: &Colors, kind: NodeKind) -> Hsla {
     match kind {
         NodeKind::Object | NodeKind::Array => c.kind_archive,
-        NodeKind::Element => c.kind_code,
+        NodeKind::Element | NodeKind::Number => c.kind_code,
         NodeKind::String => c.kind_app,
-        NodeKind::Number => c.kind_code,
         NodeKind::Bool => c.kind_image,
         NodeKind::Null => c.muted,
     }

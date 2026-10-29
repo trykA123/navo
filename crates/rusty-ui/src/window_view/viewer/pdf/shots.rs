@@ -194,7 +194,7 @@ mod tests {
         let mut other = Shots::new(PAGE_BUDGET, pool.clone());
         other.insert(0, shot(100), &(0..1));
         other.insert(1, shot(100), &(0..2));
-        let mut thumbs = Shots::new(PAGE_BUDGET, pool.clone());
+        let mut thumbs = Shots::new(PAGE_BUDGET, pool);
         thumbs.insert(0, shot(100), &(0..0));
         let dropped = thumbs.insert(1, shot(100), &(0..0));
         assert_eq!((dropped.len(), thumbs.pages()), (1, vec![1]));

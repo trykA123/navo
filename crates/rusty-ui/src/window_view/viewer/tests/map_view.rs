@@ -56,7 +56,7 @@ fn row(cx: &mut TestAppContext, window: AnyWindowHandle, row: usize) -> String {
     label(cx, window, ("map-row", row))
 }
 
-fn first_cell(text: String) -> String {
+fn first_cell(text: &str) -> String {
     text.split(", ").next().unwrap_or_default().to_owned()
 }
 
@@ -133,28 +133,28 @@ fn clicking_a_table_name_shows_that_table(cx: &mut TestAppContext) {
 fn sort_keys_and_header_clicks_sort_and_again_reverse(cx: &mut TestAppContext) {
     let (window, view) = open(cx);
     keys(cx, window, &view, &["alt-t", "alt-t", "ctrl-f3"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "engine_init");
+    assert_eq!(first_cell(&row(cx, window, 0)), "engine_init");
     keys(cx, window, &view, &["ctrl-f3"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "turn_right");
+    assert_eq!(first_cell(&row(cx, window, 0)), "turn_right");
     keys(cx, window, &view, &["ctrl-f6"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "tune_table");
+    assert_eq!(first_cell(&row(cx, window, 0)), "tune_table");
     keys(cx, window, &view, &["ctrl-f6"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "rx_buffer");
+    assert_eq!(first_cell(&row(cx, window, 0)), "rx_buffer");
     click(cx, window, &view, ("column-title", 1));
-    assert_eq!(first_cell(row(cx, window, 0)), "rx_buffer");
+    assert_eq!(first_cell(&row(cx, window, 0)), "rx_buffer");
     click(cx, window, &view, ("column-title", 1));
-    assert_eq!(first_cell(row(cx, window, 0)), "tune_table");
+    assert_eq!(first_cell(&row(cx, window, 0)), "tune_table");
     keys(cx, window, &view, &["ctrl-f4"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "engine_init");
+    assert_eq!(first_cell(&row(cx, window, 0)), "engine_init");
 }
 
 #[gpui_kit::test]
 fn the_memory_sort_keys_use_used_percent_for_the_second_key(cx: &mut TestAppContext) {
     let (window, view) = open(cx);
     keys(cx, window, &view, &["ctrl-f4"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "mpe:pflash1");
+    assert_eq!(first_cell(&row(cx, window, 0)), "mpe:pflash1");
     keys(cx, window, &view, &["ctrl-f3"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "mpe:dsram0");
+    assert_eq!(first_cell(&row(cx, window, 0)), "mpe:dsram0");
 }
 
 #[gpui_kit::test]
@@ -162,7 +162,7 @@ fn every_letter_and_digit_types_into_the_filter_and_escape_clears_it(cx: &mut Te
     let (window, view) = open(cx);
     keys(cx, window, &view, &["alt-t", "alt-t"]);
     keys(cx, window, &view, &["t", "u", "r", "n", "_"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "turn_left");
+    assert_eq!(first_cell(&row(cx, window, 0)), "turn_left");
     assert!(!has_row(cx, window, 2), "two rows match");
     assert!(text_of(cx, window, "filter").starts_with("Filter turn_, 2 items"));
     keys(
@@ -236,8 +236,8 @@ fn enter_on_an_object_filters_to_what_it_contributes(cx: &mut TestAppContext) {
     assert!(text_of(cx, window, "map-scope").starts_with("Showing object obj/lunar.o"));
     assert_eq!(text_of(cx, window, "map-count"), "1 of 4 sections");
     keys(cx, window, &view, &["alt-t"]);
-    assert_eq!(first_cell(row(cx, window, 0)), "turn_left");
-    assert_eq!(first_cell(row(cx, window, 1)), "turn_right");
+    assert_eq!(first_cell(&row(cx, window, 0)), "turn_left");
+    assert_eq!(first_cell(&row(cx, window, 1)), "turn_right");
     assert!(!has_row(cx, window, 2));
 }
 
@@ -403,7 +403,7 @@ fn a_sort_chosen_while_the_map_loads_orders_the_rows_when_it_is_ready(cx: &mut T
     let (window, view) = open(cx);
     sort_by_size_then_finish_parsing(cx, &view);
     settle_motion(cx, window, &view);
-    assert_eq!(first_cell(row(cx, window, 0)), "mpe:pflash1");
+    assert_eq!(first_cell(&row(cx, window, 0)), "mpe:pflash1");
 }
 
 #[gpui_kit::test]
@@ -550,7 +550,7 @@ fn enter_fills_the_map_with_module_files_and_backspace_restores_the_pick(cx: &mu
 fn reopening_a_map_remembers_its_module_without_scoping_another_file(cx: &mut TestAppContext) {
     let (window, view) =
         super::map_rich::open_in(cx, SAMPLE, (None, Some(super::map_rich::preset(1))));
-    let module = first_cell(label(cx, window, ("treemap-tile", 0)));
+    let module = first_cell(&label(cx, window, ("treemap-tile", 0)));
     keys(cx, window, &view, &["shift-tab", "enter"]);
     assert_eq!(text_of(cx, window, "space-module-path"), module);
     keys(cx, window, &view, &["escape", "escape", "f3"]);

@@ -117,15 +117,15 @@ impl PdfView {
         cx.notify();
     }
 
-    fn hit_row(&self, t: &Theme, shown_row: HitRow, cx: &mut Context<Self>) -> AnyElement {
-        let HitRow { row, hit, is_first } = shown_row;
+    fn hit_row(&self, t: &Theme, shown_row: &HitRow, cx: &mut Context<Self>) -> AnyElement {
+        let (row, hit, is_first) = (shown_row.row, &shown_row.hit, shown_row.is_first);
         let Some(doc) = self.doc() else {
             return div().into_any_element();
         };
         let (text, marked) = doc
             .index
             .get(hit.page)
-            .map(|words| snippet(&words.chars, &hit))
+            .map(|words| snippet(&words.chars, hit))
             .map_or_else(Default::default, |shown| {
                 let marked = shown.before.len()..shown.before.len() + shown.hit.len();
                 (
@@ -195,7 +195,7 @@ impl PdfView {
                 .map(|(row, hit)| {
                     let is_first = previous != Some(hit.page);
                     previous = Some(hit.page);
-                    view.hit_row(&t, HitRow { row, hit, is_first }, cx)
+                    view.hit_row(&t, &HitRow { row, hit, is_first }, cx)
                 })
                 .collect()
         })

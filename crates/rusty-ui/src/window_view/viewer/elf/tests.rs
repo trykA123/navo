@@ -66,7 +66,7 @@ fn the_status_names_machine_class_entry_totals_and_problems() {
 fn without_dwarf_the_source_says_so() {
     let elf = parse(false);
     assert_eq!(
-        source(&elf, None, Spot::Symbol(0)),
+        source(&elf, None, &Spot::Symbol(0)),
         "No DWARF line info in this file"
     );
 }

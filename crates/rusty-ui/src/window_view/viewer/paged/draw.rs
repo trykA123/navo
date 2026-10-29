@@ -119,7 +119,7 @@ impl PagedView {
             shown: self.marking.ticks(),
             entity: cx.entity_id(),
         };
-        self.overview.element(look, move |y, _, cx| {
+        self.overview.element(&look, move |y, _, cx| {
             let _ = this.update(cx, |view, cx| view.overview_click(y, &theme, cx));
         })
     }

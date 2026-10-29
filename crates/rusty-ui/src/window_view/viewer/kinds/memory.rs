@@ -48,6 +48,6 @@ impl ViewerKind for MemoryKind {
             .loaded
             .downcast::<MemoryFile>()
             .map_err(|_| "The memory image view got data it cannot show.".to_owned())?;
-        Ok(Box::new(MemoryBody::new(*file, attach.host, cx)))
+        Ok(Box::new(MemoryBody::new(&file, attach.host, cx)))
     }
 }

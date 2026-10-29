@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -153,11 +154,12 @@ fn json_over_64_mb_opens_as_paged_text_and_the_header_says_why(cx: &mut TestAppC
 pub(in crate::window_view::viewer) fn big_xml() -> Vec<u8> {
     let mut text = String::from("<?xml version=\"1.0\"?>\n<AUTOSAR>\n");
     for package in 0..3 {
-        text.push_str(&format!("<AR-PACKAGE N=\"{package}\">\n"));
+        let _ = writeln!(text, "<AR-PACKAGE N=\"{package}\">");
         for element in 0..40 {
-            text.push_str(&format!(
-                "  <ELEMENT><SHORT-NAME>S{element}</SHORT-NAME></ELEMENT>\n"
-            ));
+            let _ = writeln!(
+                text,
+                "  <ELEMENT><SHORT-NAME>S{element}</SHORT-NAME></ELEMENT>"
+            );
         }
         text.push_str("</AR-PACKAGE>\n");
     }
@@ -204,7 +206,7 @@ fn f3_on_csv_shows_the_header_and_cells_and_a_header_click_sorts(cx: &mut TestAp
     assert_eq!(label(cx, window, ("table-head", 1)), "qty");
     assert_eq!(label(cx, window, ("table-row", 0)), "1: Pear, 10");
     cx.update_window(window, |_, window, cx| {
-        window.click(("table-head", 1usize), cx)
+        window.click(("table-head", 1usize), cx);
     })
     .expect("window");
     settle(cx, &view);
@@ -237,7 +239,7 @@ fn csv_over_16_mb_reads_rows_on_demand_and_says_sort_is_off(cx: &mut TestAppCont
     assert_eq!(label(cx, window, ("table-head", 0)), "name");
     assert_eq!(label(cx, window, ("table-row", 1)), "2: Apple, 9");
     cx.update_window(window, |_, window, cx| {
-        window.click(("table-head", 1usize), cx)
+        window.click(("table-head", 1usize), cx);
     })
     .expect("window");
     settle(cx, &view);

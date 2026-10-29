@@ -159,7 +159,7 @@ impl EditorView {
             shown: self.marking.ticks(),
             entity: cx.entity_id(),
         };
-        let strip = self.overview.element(strip_look, move |y, _, cx| {
+        let strip = self.overview.element(&strip_look, move |y, _, cx| {
             let _ = this.update(cx, |view, cx| view.overview_click(y, &theme, cx));
         });
         div()

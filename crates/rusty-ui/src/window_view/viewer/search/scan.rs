@@ -89,9 +89,8 @@ impl Tally {
 
     pub(in crate::window_view::viewer) fn take_scan(&mut self) -> Option<Scan> {
         let from = match self.need.take()? {
-            Need::Full => 0,
             Need::Tail if self.counted.done => self.resume_from(),
-            Need::Tail => 0,
+            Need::Full | Need::Tail => 0,
         };
         Some(Scan {
             needle: self.needle.clone(),
@@ -169,9 +168,9 @@ fn scan_all(source: &Reopen, scans: Vec<Scan>, cancel: &AtomicBool, send: &dyn F
     let opened = match source() {
         Ok(opened) => opened,
         Err(_) => {
-            scans
-                .into_iter()
-                .for_each(|scan| send(ScanUpdate::Failed(scan.needle)));
+            for scan in scans {
+                send(ScanUpdate::Failed(scan.needle));
+            }
             return send(ScanUpdate::Finished);
         }
     };

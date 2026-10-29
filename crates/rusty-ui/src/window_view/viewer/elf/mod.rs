@@ -122,7 +122,7 @@ pub(in crate::window_view::viewer) struct ElfView {
 }
 
 impl ElfView {
-    fn new(file: ElfFile, host: &Host, cx: &mut Context<Self>) -> Self {
+    fn new(file: &ElfFile, host: &Host, cx: &mut Context<Self>) -> Self {
         let job = jobs::start_index(host, file.len, cx);
         let siblings_job = rich::start_siblings_of(host, cx);
         Self {
@@ -194,8 +194,8 @@ impl ElfView {
 pub(in crate::window_view::viewer) struct ElfBody(pub Entity<ElfView>);
 
 impl ElfBody {
-    pub(in crate::window_view::viewer) fn new(file: ElfFile, host: Host, cx: &mut App) -> Self {
-        Self(cx.new(|cx| ElfView::new(file, &host, cx)))
+    pub(in crate::window_view::viewer) fn new(file: &ElfFile, host: &Host, cx: &mut App) -> Self {
+        Self(cx.new(|cx| ElfView::new(file, host, cx)))
     }
 }
 

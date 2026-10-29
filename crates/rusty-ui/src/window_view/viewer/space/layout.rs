@@ -74,7 +74,7 @@ fn scale_switch<V: RichHost>(t: &Theme, mode: ScaleMode, view: WeakEntity<V>) ->
         t,
         "space-scale",
         options,
-        Rc::new(move |at, _, cx| {
+        &Rc::new(move |at: usize, _: &mut Window, cx: &mut App| {
             let mode = choices[at].0;
             let _ = view.update(cx, |view, cx| {
                 view.rich().set_mode(mode, cx);
@@ -213,7 +213,7 @@ fn grouping_switch<V: RichHost>(t: &Theme, model: &RichModel, view: WeakEntity<V
         t,
         "space-grouping",
         options,
-        Rc::new(move |at, _, cx| {
+        &Rc::new(move |at: usize, _: &mut Window, cx: &mut App| {
             let _ = view.update(cx, |view, cx| view.regroup(GROUPINGS[at].0, cx));
         }),
     )

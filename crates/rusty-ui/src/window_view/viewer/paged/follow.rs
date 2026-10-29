@@ -90,8 +90,8 @@ impl PagedView {
 
     pub(super) fn follow_moved(&mut self, to: Move) {
         self.follower.state = match (self.follower.state, to) {
-            (Follow::Paused, Move::End) => Follow::Following,
-            (Follow::Following, Move::End | Move::Rows(1..)) => Follow::Following,
+            (Follow::Paused | Follow::Following, Move::End)
+            | (Follow::Following, Move::Rows(1..)) => Follow::Following,
             (Follow::Following, _) => Follow::Paused,
             (state, _) => state,
         };

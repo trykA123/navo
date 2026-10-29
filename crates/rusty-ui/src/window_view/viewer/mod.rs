@@ -53,7 +53,18 @@ pub use font::{FontFace, FontView};
 pub(in crate::window_view) use footprint::{PREVIEW_BODY, VIEWER_DOCUMENTS, hold as hold_memory};
 pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
 pub use keys::bind_keys;
-use keys::*;
+use keys::{
+    ActualSize, Back, ChooseEncoding, ClearMarks, CloseViewer, CopyFilePath, CopyImage,
+    CopyPathLine, EditFile, FindAll, FindNext, FindOnEnter, FindPrevious, FindSelection, FitImage,
+    FocusPreview, GoEnd, GoStart, LeavePreview, LeftDrawer, ListClose, ListDown, ListGo, ListUp,
+    ListerHex, ListerRich, ListerText, Mark1, Mark2, Mark3, Mark4, Mark5, Mark6, Mark7, Mark8,
+    MatchCase, NewerSearch, NextBookmark, NextFile, OlderSearch, OpenFind, OpenGoTo, PageUp,
+    PreviousBookmark, PreviousFile, RightDrawer, RowDown, RowUp, SaveFile, ScrollLeft, ScrollRight,
+    ShowHex, ShowLineEnds, ShowMenu, ShowRich, ShowText, SpaceKey, ToggleBookmark, ToggleCharts,
+    ToggleFollow, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector,
+    TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewCustom, ViewMenu, ViewRich,
+    ViewSimple, ZoomIn, ZoomOut,
+};
 pub(in crate::window_view) use keys::{BackspaceKey, KeepViewDefault, PageDown, ResetView};
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use menu::viewer_menu;

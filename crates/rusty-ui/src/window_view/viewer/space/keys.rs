@@ -358,11 +358,9 @@ pub(in crate::window_view::viewer) fn space_keys<V: RichHost>(
         .on_action(
             cx.listener(|view, _: &RegionBelow, window, cx| change_region(view, true, window, cx)),
         )
-        .on_action(
-            cx.listener(|view, _: &FirstBlock, window, cx| {
-                step_strip(view, Step::First, window, cx)
-            }),
-        )
+        .on_action(cx.listener(|view, _: &FirstBlock, window, cx| {
+            step_strip(view, Step::First, window, cx);
+        }))
         .on_action(
             cx.listener(|view, _: &LastBlock, window, cx| step_strip(view, Step::Last, window, cx)),
         )

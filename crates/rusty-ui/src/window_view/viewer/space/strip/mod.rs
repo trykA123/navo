@@ -242,7 +242,7 @@ impl MemoryStrip {
 
     fn tip(&self, hit: &Hit, factor: f32) -> AnyElement {
         let text = tip::text(&self.data, &hit.over);
-        let shown = text.clone();
+        let shown = text;
         div()
             .id(("strip-tip", hit.x.start as usize))
             .absolute()

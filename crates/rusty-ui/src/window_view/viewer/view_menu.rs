@@ -207,7 +207,7 @@ impl FerriteWindow {
                 viewer.parts.toggle(set, field, &values);
                 Vec::new()
             }
-            ViewOp::Toggle(_) => return,
+            ViewOp::Toggle(_) | ViewOp::Encoding => return,
             ViewOp::Preset(at) => {
                 viewer.parts.choose(set, at, &values);
                 Vec::new()
@@ -216,7 +216,6 @@ impl FerriteWindow {
                 viewer.parts.reset();
                 Vec::new()
             }
-            ViewOp::Encoding => return,
             ViewOp::Keep => {
                 let kept = viewer.parts.keep(&values);
                 let note = empty_keep_note(&viewer.parts);

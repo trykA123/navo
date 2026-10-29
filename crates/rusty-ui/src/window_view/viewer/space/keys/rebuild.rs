@@ -151,7 +151,7 @@ fn esc_clears_a_picked_group_and_the_inspector_stays_until_the_next_esc(cx: &mut
     let name = label(cx, window, ("treemap-tile", 0));
     let name = name.split(", ").next().expect("a name").to_owned();
     cx.update_window(window, |_, window, cx| {
-        window.click(("treemap-tile", 0usize), cx)
+        window.click(("treemap-tile", 0usize), cx);
     })
     .expect("window");
     keys(cx, &rig, &[]);

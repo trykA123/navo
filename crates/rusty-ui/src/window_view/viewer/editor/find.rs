@@ -232,7 +232,7 @@ impl EditorView {
             kind: NeedleKind::Text,
             input: &input,
         };
-        let recalled = self.marking.history.recall_into(recall, window, cx);
+        let recalled = self.marking.history.recall_into(&recall, window, cx);
         if let Some(Some(match_case)) = recalled {
             self.find.match_case = match_case;
         }

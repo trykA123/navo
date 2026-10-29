@@ -302,7 +302,7 @@ fn picking_a_group_names_it_in_full_in_the_status_and_the_inspector(cx: &mut Tes
     let tile = label(cx, window, ("treemap-tile", 0));
     let name = tile.split(", ").next().expect("a name").to_owned();
     cx.update_window(window, |_, window, cx| {
-        window.click(("treemap-tile", 0usize), cx)
+        window.click(("treemap-tile", 0usize), cx);
     })
     .expect("window");
     settle_all(cx, window, &view);

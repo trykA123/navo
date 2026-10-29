@@ -248,7 +248,7 @@ impl RenderOnce for RegionHead {
                 div()
                     .text_size(t.typography.body * 2.)
                     .font_family(t.typography.numbers_font.clone())
-                    .font_features(t.typography.numbers_font_features.clone())
+                    .font_features(t.typography.numbers_font_features)
                     .child(self.figure),
             )
     }

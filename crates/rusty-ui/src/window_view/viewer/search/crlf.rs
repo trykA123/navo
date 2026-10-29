@@ -9,9 +9,9 @@ fn collect(starts: impl Iterator<Item = u64>) -> Bookmarks {
     let mut starts: Vec<u64> = starts.collect();
     starts.dedup();
     let mut bookmarks = Bookmarks::default();
-    starts.into_iter().for_each(|at| {
+    for at in starts {
         bookmarks.toggle(at);
-    });
+    }
     bookmarks
 }
 
@@ -60,9 +60,9 @@ mod tests {
 
     fn bookmarks(starts: &[u64]) -> Bookmarks {
         let mut bookmarks = Bookmarks::default();
-        starts.iter().for_each(|at| {
+        for at in starts {
             bookmarks.toggle(*at);
-        });
+        }
         bookmarks
     }
 

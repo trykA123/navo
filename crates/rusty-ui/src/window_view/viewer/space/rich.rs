@@ -145,7 +145,7 @@ fn recover_focus<V: RichHost>(lost: Vec<FocusHandle>, cx: &mut Context<V>) {
     cx.defer(move |cx| {
         for window in cx.windows() {
             let _ = window.update(cx, |_, window, cx| {
-                refocus_table((&view, &lost), window, cx)
+                refocus_table((&view, &lost), window, cx);
             });
         }
     });

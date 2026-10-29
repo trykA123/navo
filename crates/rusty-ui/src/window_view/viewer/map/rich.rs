@@ -134,7 +134,7 @@ impl MapView {
             cx,
             move |_, send| {
                 let model = regrouped(&model, Origin::Map(&loaded.model), grouping);
-                send((loaded.clone(), model));
+                send((loaded, model));
             },
             Self::model_ready,
         ));

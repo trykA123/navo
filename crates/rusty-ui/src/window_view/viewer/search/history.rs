@@ -83,7 +83,7 @@ impl History {
 
     pub(in crate::window_view::viewer) fn recall_into(
         &mut self,
-        recall: Recall<'_>,
+        recall: &Recall<'_>,
         window: &mut Window,
         cx: &mut App,
     ) -> Option<Option<bool>> {

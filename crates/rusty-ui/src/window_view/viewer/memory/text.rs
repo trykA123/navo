@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::ops::Range;
 
 use rusty_automotive::{Image, Problem, Start};
@@ -40,7 +41,9 @@ pub(super) fn hex_cells(bytes: &[Option<u8>]) -> (String, Vec<Range<usize>>) {
             text.push_str(if at % 8 == 0 { "  " } else { " " });
         }
         match byte {
-            Some(byte) => text.push_str(&format!("{byte:02X}")),
+            Some(byte) => {
+                let _ = write!(text, "{byte:02X}");
+            }
             None => {
                 missing.push(text.len()..text.len() + 2);
                 text.push_str("--");

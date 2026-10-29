@@ -178,8 +178,8 @@ impl MapView {
 pub(in crate::window_view::viewer) struct MapBody(pub Entity<MapView>);
 
 impl MapBody {
-    pub(in crate::window_view::viewer) fn new(file: MapFile, host: Host, cx: &mut App) -> Self {
-        Self(cx.new(|cx| MapView::new(&file, &host, cx)))
+    pub(in crate::window_view::viewer) fn new(file: &MapFile, host: &Host, cx: &mut App) -> Self {
+        Self(cx.new(|cx| MapView::new(file, host, cx)))
     }
 }
 

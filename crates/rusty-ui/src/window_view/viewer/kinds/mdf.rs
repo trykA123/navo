@@ -50,6 +50,6 @@ impl ViewerKind for MdfKind {
             .loaded
             .downcast::<MdfFile>()
             .map_err(|_| t!("viewer-mdf-bad-data"))?;
-        Ok(Box::new(MdfBody::new(*file, attach.host, cx)))
+        Ok(Box::new(MdfBody::new(&file, &attach.host, cx)))
     }
 }

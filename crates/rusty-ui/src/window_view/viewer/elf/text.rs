@@ -113,7 +113,7 @@ pub(super) enum Spot {
     Address(u64),
 }
 
-pub(super) fn source(elf: &Elf, lines: Option<&Lines>, spot: Spot) -> String {
+pub(super) fn source(elf: &Elf, lines: Option<&Lines>, spot: &Spot) -> String {
     if !elf.has_dwarf() {
         return "No DWARF line info in this file".to_owned();
     }
@@ -121,8 +121,8 @@ pub(super) fn source(elf: &Elf, lines: Option<&Lines>, spot: Spot) -> String {
         return "Reading DWARF lines…".to_owned();
     };
     let found = match spot {
-        Spot::Symbol(at) => lines.get(at),
-        Spot::Address(at) => lines.at(at),
+        Spot::Symbol(at) => lines.get(*at),
+        Spot::Address(at) => lines.at(*at),
     };
     match found {
         Some((file, 0)) => file.to_owned(),

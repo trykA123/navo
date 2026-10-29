@@ -195,9 +195,9 @@ fn editor_marks_stay_in_the_session_when_its_text_is_not_the_file_bytes(cx: &mut
 
 fn bookmarks(starts: &[u64]) -> Bookmarks {
     let mut bookmarks = Bookmarks::default();
-    starts.iter().for_each(|at| {
+    for at in starts {
         bookmarks.toggle(*at);
-    });
+    }
     bookmarks
 }
 

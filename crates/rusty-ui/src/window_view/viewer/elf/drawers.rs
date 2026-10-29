@@ -310,7 +310,7 @@ impl ElfView {
             facts.push(pair(t, ("Went to", address(at, wide))));
         }
         let spot = self.go_address.map_or(Spot::Symbol(at), Spot::Address);
-        let line = source(elf, self.lines.as_deref(), spot);
+        let line = source(elf, self.lines.as_deref(), &spot);
         let source_line = div()
             .id("elf-inspector-source")
             .aria_label(line.clone())

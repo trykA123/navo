@@ -100,7 +100,7 @@ fn a_simple_preset_hides_every_part_whatever_its_flag() {
         Value::Flag(true),
     );
     assert!(!parts.is_shown(&AUTOMOTIVE, Field::AutomotiveInspector, &settings));
-    let mut chosen = parts.clone();
+    let mut chosen = parts;
     chosen.choose(&AUTOMOTIVE, 1, &settings);
     assert!(chosen.is_shown(&AUTOMOTIVE, Field::AutomotiveRowBars, &settings));
 }

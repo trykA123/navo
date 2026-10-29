@@ -70,7 +70,7 @@ fn recall(link: &MemoryLink) -> Remembered {
     Remembered { history, memory }
 }
 
-fn merge_marks(into: &mut MarkSet, loaded: MarkSet) {
+fn merge_marks(into: &mut MarkSet, loaded: &MarkSet) {
     for mark in loaded.iter() {
         if into.colour_of(&mark.needle).is_none() {
             let _ = into.set(mark.needle.clone(), mark.colour);
@@ -180,7 +180,7 @@ fn remembered_loaded<V: Marked>(view: &mut V, remembered: Remembered, cx: &mut C
     marking.memory.loading = None;
     marking.history.merge_older(remembered.history);
     if let Some((marks, bookmarks)) = remembered.memory {
-        merge_marks(&mut marking.marks.set, marks);
+        merge_marks(&mut marking.marks.set, &marks);
         match (&mut marking.memory.frozen, &marking.memory.link) {
             (Some(frozen), _) => merge_bookmarks(frozen, &bookmarks),
             (None, Some(link)) => {
@@ -243,7 +243,7 @@ mod tests {
         let mut loaded = MarkSet::default();
         loaded.set(word("alpha"), 5).expect("room");
         loaded.set(word("beta"), 2).expect("room");
-        merge_marks(&mut current, loaded);
+        merge_marks(&mut current, &loaded);
         assert_eq!(current.colour_of(&word("alpha")), Some(1));
         assert_eq!(current.colour_of(&word("beta")), Some(2));
         let mut marked = Bookmarks::default();

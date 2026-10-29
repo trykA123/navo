@@ -13,18 +13,16 @@ pub(in crate::window_view::viewer) struct Choice {
     pub blocked: Option<String>,
 }
 
-type OnPick = Rc<dyn Fn(usize, &mut Window, &mut App)>;
-
-pub(in crate::window_view::viewer) fn switch(
+pub(in crate::window_view::viewer) fn switch<F: Fn(usize, &mut Window, &mut App) + 'static>(
     t: &Theme,
     id: &'static str,
     choices: Vec<Choice>,
-    on_pick: OnPick,
+    on_pick: &Rc<F>,
 ) -> Div {
     let buttons = choices.into_iter().enumerate().map(|(at, choice)| {
         let theme = t.selected_content(choice.is_on);
         let t = &theme;
-        let on_pick = on_pick.clone();
+        let on_pick = Rc::clone(on_pick);
         let blocked = choice.blocked.clone();
         div()
             .id((id, at))

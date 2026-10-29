@@ -97,7 +97,7 @@ pub(in crate::window_view::viewer) struct MemoryView {
 }
 
 impl MemoryView {
-    fn new(file: MemoryFile, host: Host, cx: &mut Context<Self>) -> Self {
+    fn new(file: &MemoryFile, host: Host, cx: &mut Context<Self>) -> Self {
         let job = jobs::start_index(&host, file.len, file.format, cx);
         Self {
             title: host.title.clone(),
@@ -168,7 +168,7 @@ impl MemoryView {
 pub(in crate::window_view::viewer) struct MemoryBody(pub Entity<MemoryView>);
 
 impl MemoryBody {
-    pub(in crate::window_view::viewer) fn new(file: MemoryFile, host: Host, cx: &mut App) -> Self {
+    pub(in crate::window_view::viewer) fn new(file: &MemoryFile, host: Host, cx: &mut App) -> Self {
         Self(cx.new(|cx| MemoryView::new(file, host, cx)))
     }
 }

@@ -137,14 +137,14 @@ pub fn nested_svg(depth: usize) -> Vec<u8> {
     svg.into_bytes()
 }
 
-fn chunk(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+fn chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
     let mut crc = flate2::Crc::new();
-    crc.update(kind);
+    crc.update(&kind);
     crc.update(data);
     let length = u32::try_from(data.len()).expect("short chunk");
     [
         &length.to_be_bytes()[..],
-        kind,
+        &kind,
         data,
         &crc.sum().to_be_bytes(),
     ]
@@ -160,9 +160,9 @@ pub fn png_claiming(width: u32, height: u32) -> Vec<u8> {
     .concat();
     [
         &b"\x89PNG\r\n\x1a\n"[..],
-        &chunk(b"IHDR", &header),
-        &chunk(b"IDAT", &[0x78, 0x9c, 0x03, 0x00]),
-        &chunk(b"IEND", &[]),
+        &chunk(*b"IHDR", &header),
+        &chunk(*b"IDAT", &[0x78, 0x9c, 0x03, 0x00]),
+        &chunk(*b"IEND", &[]),
     ]
     .concat()
 }
