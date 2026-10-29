@@ -70,6 +70,7 @@ fn clipboard_move_round_trips_and_clear_requires_matching_paths() {
     assert!(!clear_if_same(&same_paths).unwrap());
 }
 
+#[expect(clippy::expect_used, reason = "a failed test setup must stop the test")]
 fn replace_files(files: &FileClipboard) {
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DestroyWindow, HWND_MESSAGE, WINDOW_EX_STYLE, WINDOW_STYLE,
