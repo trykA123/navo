@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use gpui_kit::{FocusHandle, Size};
+use gpui_kit::{FocusHandle, Size, Subscription};
 use rusty_core::PaneId;
 
 use super::FerriteWindow;
@@ -14,6 +14,7 @@ pub(super) struct PaneChrome {
     pub(super) tabs: Entity<PopupMenu>,
     pub(super) path: Entity<PopupMenu>,
     pub(super) list_width: Rc<Cell<Option<Pixels>>>,
+    _menu_watches: Rc<[Subscription; 2]>,
 }
 
 #[derive(Default)]
@@ -53,10 +54,18 @@ impl FerriteWindow {
             .panes
             .values()
             .find_map(|chrome| chrome.list_width.get());
-        let chrome = self.chrome.panes.entry(pane).or_insert_with(|| PaneChrome {
-            tabs: cx.new(|cx| PopupMenu::new(cx)),
-            path: cx.new(|cx| PopupMenu::new(cx)),
-            list_width: Rc::default(),
+        let chrome = self.chrome.panes.entry(pane).or_insert_with(|| {
+            let tabs = cx.new(|cx| PopupMenu::new(cx));
+            let path = cx.new(|cx| PopupMenu::new(cx));
+            let watch = |menu: &Entity<PopupMenu>, cx: &mut Context<Self>| {
+                cx.observe(menu, |_, _, cx| cx.notify())
+            };
+            PaneChrome {
+                _menu_watches: Rc::new([watch(&tabs, cx), watch(&path, cx)]),
+                tabs,
+                path,
+                list_width: Rc::default(),
+            }
         });
         if is_alone && chrome.list_width.get().is_none() {
             chrome.list_width.set(known);

@@ -14,7 +14,7 @@ use crate::window_view::FerriteWindow;
 
 const DEEP: &str = "home/calibration-measurements/powertrain-variants/endurance-exports";
 const TABS: usize = 6;
-const NARROW: f32 = 480.;
+pub(super) const NARROW: f32 = 480.;
 const WIDE: f32 = 1600.;
 
 fn popup_fs() -> Arc<FakeFs> {
@@ -43,15 +43,15 @@ fn popup_state(fs: &FakeFs) -> AppState {
     state
 }
 
-struct Rig {
-    window: AnyWindowHandle,
-    view: Entity<FerriteWindow>,
-    pane: PaneId,
+pub(super) struct Rig {
+    pub(super) window: AnyWindowHandle,
+    pub(super) view: Entity<FerriteWindow>,
+    pub(super) pane: PaneId,
     fs: Arc<FakeFs>,
 }
 
 impl Rig {
-    fn open(cx: &mut TestAppContext, width: f32) -> Self {
+    pub(super) fn open(cx: &mut TestAppContext, width: f32) -> Self {
         let fs = popup_fs();
         let state = popup_state(&fs);
         let (window, view) = open_options_sized(cx, options_for(fs.clone(), state), px(width));
@@ -82,7 +82,7 @@ impl Rig {
         (bar, self.pane.get()).into()
     }
 
-    fn click(&self, cx: &mut TestAppContext, bar: &'static str, id: &'static str) {
+    pub(super) fn click(&self, cx: &mut TestAppContext, bar: &'static str, id: &'static str) {
         let scope = self.scope(bar);
         self.frame(cx, |window, cx| window.within(scope).click(id, cx));
     }

@@ -129,11 +129,11 @@ impl FerriteWindow {
             .into_iter()
             .filter(|(pane, _)| shown.contains(pane))
             .map(|(pane, rect)| match is_one_pane {
-                true => self.one_pane_tile(pane, window, cx),
+                true => self.one_pane_tile(pane, cx),
                 false => positioned(rect)
                     .p(gap / 2.)
                     .overflow_hidden()
-                    .child(self.pane_view(pane, window, cx)),
+                    .child(self.cached_pane(pane, cx)),
             })
             .collect();
         let dividers: Vec<_> = layout
@@ -156,7 +156,7 @@ impl FerriteWindow {
             .into_any_element()
     }
 
-    fn one_pane_tile(&mut self, pane: PaneId, window: &mut Window, cx: &mut Context<Self>) -> Div {
+    fn one_pane_tile(&mut self, pane: PaneId, cx: &mut Context<Self>) -> Div {
         let gap = tokens::current(cx).spacing.xs;
         let strip = self.pane_strip(&self.tiles_layout(), cx);
         positioned(FULL)
@@ -170,7 +170,7 @@ impl FerriteWindow {
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
-                    .child(self.pane_view(pane, window, cx)),
+                    .child(self.cached_pane(pane, cx)),
             )
     }
 

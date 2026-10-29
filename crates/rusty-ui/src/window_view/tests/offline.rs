@@ -12,7 +12,7 @@ use crate::format;
 
 const READ_AT_MS: i64 = 1_791_920_400_000;
 
-fn stalled(cx: &mut TestAppContext) -> (Rig, PaneId) {
+pub(super) fn stalled(cx: &mut TestAppContext) -> (Rig, PaneId) {
     let setup = Setup {
         slow: Some("D/slow"),
         ..Setup::default()
@@ -31,11 +31,11 @@ fn enter(rig: &Rig, cx: &mut TestAppContext, path: &str) {
     cx.run_until_parked();
 }
 
-fn enter_slow(rig: &Rig, cx: &mut TestAppContext) {
+pub(super) fn enter_slow(rig: &Rig, cx: &mut TestAppContext) {
     enter(rig, cx, r"D:\slow");
 }
 
-fn wait(cx: &mut TestAppContext, seconds: u64) {
+pub(super) fn wait(cx: &mut TestAppContext, seconds: u64) {
     cx.executor().advance_clock(Duration::from_secs(seconds));
     cx.run_until_parked();
 }
@@ -65,7 +65,7 @@ fn has_listing(rig: &Rig, cx: &mut TestAppContext) -> bool {
     })
 }
 
-fn fail_first_then_answer(rig: &Rig, cx: &mut TestAppContext) {
+pub(super) fn fail_first_then_answer(rig: &Rig, cx: &mut TestAppContext) {
     rig.fs.fail_list("D/slow", 1, FsErrorKind::NetworkLost);
     rig.fs.release();
     rig.settle_until(cx, |view| !view.browser.loading());

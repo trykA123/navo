@@ -40,6 +40,11 @@ impl FerriteWindow {
             )
     }
 
+    pub(super) fn search_anchor(&self, cx: &App) -> Option<Bounds<Pixels>> {
+        let is_ribbon = self.workspace_ribbon(cx).is_some();
+        self.command_center.anchor.get().filter(|_| !is_ribbon)
+    }
+
     pub(super) fn title_bar(&self, cx: &mut Context<Self>) -> FerriteTitleBar {
         let this = cx.weak_entity();
         let toggle = cx.listener(|view: &mut Self, _: &ClickEvent, window, cx| {

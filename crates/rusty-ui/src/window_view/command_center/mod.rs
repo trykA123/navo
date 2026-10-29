@@ -276,7 +276,7 @@ impl FerriteWindow {
     }
 
     fn command_center_anchor(&self, window: &Window, cx: &App) -> Bounds<Pixels> {
-        self.command_center.anchor.get().unwrap_or_else(|| {
+        self.search_anchor(cx).unwrap_or_else(|| {
             let top = tokens::current(cx).spacing.header_height;
             let width = window.viewport_size().width;
             Bounds::new(point(px(0.), top), size(width, px(INPUT_ROW)))
