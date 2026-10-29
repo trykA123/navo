@@ -22,6 +22,9 @@ use crate::status_bar::{FooterParts, StatusBar, StatusBarProps};
 use crate::tokens;
 
 pub(super) fn title_of(tab: &Tab) -> SharedString {
+    if let Some(label) = tab.label() {
+        return label.to_owned().into();
+    }
     path_segments(tab.location())
         .pop()
         .map(|segment| segment.label)
@@ -242,6 +245,12 @@ impl FerriteWindow {
         let this = cx.weak_entity();
         let tabs = tabs.on_tab_bounds(move |index, bounds, _, cx| {
             let _ = this.update(cx, |view, _| view.note_tab_bounds(pane, index, bounds));
+        });
+        let weak = cx.weak_entity();
+        let tabs = tabs.on_menu(move |index, position, window, cx| {
+            let _ = weak.update(cx, |this, cx| {
+                this.open_tab_menu(pane, index, position, window, cx)
+            });
         });
         Self::wire_tab_drops(tabs, pane, cx)
     }

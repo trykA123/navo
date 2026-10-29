@@ -37,6 +37,7 @@ pub(super) fn spacing() -> Spacing {
         icon: px(15.),
         row_height: px(24.),
         tab_height: px(28.),
+        pinned_tab_label: px(96.),
         path_height: px(28.),
         header_height: px(46.),
         status_height: px(30.),

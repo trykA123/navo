@@ -199,3 +199,22 @@ command-center-key-mode = mode
 
 command-center-scope = in: { $folder }
 command-center-search-content = Search inside files for “{ $query }” in { $folder }
+
+tab-menu-title = Tab
+tab-menu-pin = Pin tab
+tab-menu-unpin = Unpin tab
+tab-menu-rename = Rename tab…
+tab-menu-label = Tab label
+tab-menu-confirm-rename = Rename
+tab-menu-duplicate = Duplicate tab
+tab-menu-clone = Clone to other pane
+tab-menu-workspaces = Move to workspace
+tab-menu-new-workspace = New workspace
+tab-menu-panes = Move to pane
+tab-menu-pane-number = Pane { $number }
+tab-menu-new-pane = New pane
+tab-menu-copy = Copy path
+tab-menu-close = Close tab
+tab-menu-close-others = Close other tabs
+tab-menu-close-right = Close tabs to the right
+tab-menu-reopen = Reopen closed tab

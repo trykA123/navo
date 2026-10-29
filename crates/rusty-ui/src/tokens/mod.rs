@@ -150,6 +150,7 @@ pub struct Spacing {
     pub icon: Pixels,
     pub row_height: Pixels,
     pub tab_height: Pixels,
+    pub pinned_tab_label: Pixels,
     pub path_height: Pixels,
     pub header_height: Pixels,
     pub status_height: Pixels,

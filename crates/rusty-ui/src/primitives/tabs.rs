@@ -5,8 +5,8 @@ use gpui_kit::base::{Tab as BaseTab, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Bounds, ElementId, Entity, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Pixels, RenderOnce, Role, SharedString, StatefulInteractiveElement,
-    Styled, Window, canvas, div, px,
+    MouseButton, ParentElement, Pixels, Point, RenderOnce, Role, SharedString,
+    StatefulInteractiveElement, Styled, Window, canvas, div, px,
 };
 
 mod more;
@@ -20,15 +20,17 @@ use crate::file_list::DropPayload;
 use crate::file_list::row::inset_ring;
 use crate::tokens::{self, Theme};
 use more::{Hidden, more_tabs};
-use plan::{Budget, plan};
+use plan::{Budget, MIN_PINNED_TAB, plan};
 
 type SelectHandler = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
+type MenuHandler = Rc<dyn Fn(usize, Point<Pixels>, &mut Window, &mut App)>;
 type BoundsHandler = Rc<dyn Fn(usize, Bounds<Pixels>, &mut Window, &mut App)>;
 
 #[derive(Clone)]
 pub struct Tab {
     label: SharedString,
     icon: Option<IconName>,
+    pinned: bool,
 }
 
 impl Tab {
@@ -36,7 +38,13 @@ impl Tab {
         Self {
             label: label.into(),
             icon: None,
+            pinned: false,
         }
+    }
+
+    pub fn pinned(mut self, pinned: bool) -> Self {
+        self.pinned = pinned;
+        self
     }
 
     pub fn icon(mut self, icon: IconName) -> Self {
@@ -54,6 +62,7 @@ pub struct Tabs {
     on_select: Option<SelectHandler>,
     on_close: Option<SelectHandler>,
     on_bounds: Option<BoundsHandler>,
+    on_menu: Option<MenuHandler>,
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
     menu: Option<Entity<PopupMenu>>,
@@ -70,6 +79,7 @@ impl Tabs {
             on_select: None,
             on_close: None,
             on_bounds: None,
+            on_menu: None,
             landing: Landing::default(),
             trailing: None,
             menu: None,
@@ -112,6 +122,11 @@ impl Tabs {
         self
     }
 
+    pub(crate) fn on_menu(mut self, handler: Option<MenuHandler>) -> Self {
+        self.on_menu = handler;
+        self
+    }
+
     pub(crate) fn on_bounds(mut self, handler: Option<BoundsHandler>) -> Self {
         self.on_bounds = handler;
         self
@@ -148,6 +163,7 @@ struct TabProps<'a> {
     on_select: Option<SelectHandler>,
     on_close: Option<SelectHandler>,
     on_bounds: Option<BoundsHandler>,
+    on_menu: Option<MenuHandler>,
     landing: Landing<usize>,
 }
 
@@ -205,6 +221,7 @@ fn closable(
         })
 }
 
+#[expect(clippy::too_many_lines, reason = "tab rendering remains together")]
 fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
     let theme = props
         .theme
@@ -228,13 +245,26 @@ fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
         .when_some(tab.icon, |base, name| {
             base.child(icon(name, t.spacing.icon - px(1.), color))
         })
-        .child(div().min_w_0().truncate().child(tab.label))
-        .when_some(props.on_close.clone(), |base, handler| {
-            closable(base, (t, index, props.is_selected), handler)
-        })
+        .child(
+            div()
+                .min_w_0()
+                .when(tab.pinned, |d| d.max_w(t.spacing.pinned_tab_label))
+                .truncate()
+                .child(tab.label),
+        )
+        .when_some(
+            props.on_close.clone().filter(|_| !tab.pinned),
+            |base, handler| closable(base, (t, index, props.is_selected), handler),
+        )
         .when(index < 8, |base| {
             base.tooltip(move |window, cx| {
                 Tooltip::new(format!("Ctrl+{}", index + 1)).build(window, cx)
+            })
+        })
+        .when_some(props.on_menu, |base, handler| {
+            base.on_mouse_up(MouseButton::Right, move |event, window, cx| {
+                cx.stop_propagation();
+                handler(index, event.position, window, cx);
             })
         })
         .when_some(props.on_select, |base, handler| {
@@ -261,12 +291,14 @@ struct Row {
     on_select: Option<SelectHandler>,
     on_close: Option<SelectHandler>,
     on_bounds: Option<BoundsHandler>,
+    on_menu: Option<MenuHandler>,
     landing: Landing<usize>,
     trailing: Option<(AnyElement, Pixels)>,
     menu: Entity<PopupMenu>,
     bar: Option<Theme>,
 }
 
+#[expect(clippy::too_many_lines, reason = "tab layout remains together")]
 fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
     let count = row.tabs.len();
     let budget = Budget {
@@ -274,7 +306,8 @@ fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
         trailing: row.trailing.as_ref().map_or(0., |(_, w)| f32::from(*w)),
         gap: f32::from(tokens::current(cx).spacing.sm),
     };
-    let plan = plan(count, row.selected, &budget);
+    let pinned: Vec<_> = row.tabs.iter().map(|tab| tab.pinned).collect();
+    let plan = plan(&pinned, row.selected, &budget);
     note_items(&row.menu, plan.shown.len() < count, cx);
     let t = tokens::current(cx);
     let bar = row.bar.as_ref().unwrap_or(t);
@@ -283,7 +316,13 @@ fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
         .into_iter()
         .enumerate()
         .partition(|(index, _)| plan.shown.contains(index));
-    let tabs = shown.into_iter().map(|(index, tab)| {
+    let pinned_end = shown
+        .iter()
+        .filter(|(_, tab)| tab.pinned)
+        .map(|(index, _)| *index)
+        .max();
+    let has_unpinned = shown.iter().any(|(_, tab)| !tab.pinned);
+    let tabs = shown.into_iter().flat_map(|(index, tab)| {
         let is_selected = index == row.selected;
         let props = TabProps {
             theme: if is_selected { t } else { bar },
@@ -291,13 +330,28 @@ fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
             count,
             is_selected,
             is_highlighted: row.is_highlighted,
-            min_width: px(plan.min_tab),
+            min_width: px(if tab.pinned {
+                plan.min_tab.min(MIN_PINNED_TAB)
+            } else {
+                plan.min_tab
+            }),
             on_select: row.on_select.clone(),
             on_close: row.on_close.clone(),
             on_bounds: row.on_bounds.clone(),
+            on_menu: row.on_menu.clone(),
             landing: row.landing.clone(),
         };
-        render_tab(tab, props)
+        let divider = (pinned_end == Some(index) && has_unpinned).then(|| {
+            div()
+                .flex_none()
+                .w(px(1.))
+                .h(t.spacing.icon)
+                .bg(bar.surfaces.card_edge)
+                .into_any_element()
+        });
+        [Some(render_tab(tab, props).into_any_element()), divider]
+            .into_iter()
+            .flatten()
     });
     let more = (!hidden.is_empty()).then(|| {
         let hidden = Hidden {
@@ -334,6 +388,7 @@ impl RenderOnce for Tabs {
             on_select: self.on_select,
             on_close: self.on_close,
             on_bounds: self.on_bounds,
+            on_menu: self.on_menu,
             landing: self.landing,
             trailing: self.trailing,
             menu,
@@ -354,45 +409,4 @@ impl RenderOnce for Tabs {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tokens::{Mode, SystemPalette, contrast_theme};
-    use gpui_kit::{black, rgb, white};
-
-    #[test]
-    fn highlighted_tab_uses_the_system_selection_foreground() {
-        let palette = SystemPalette {
-            window: black(),
-            window_text: white(),
-            highlight: white(),
-            highlight_text: black(),
-            button_face: rgb(0x222222).into(),
-            button_text: white(),
-            gray_text: rgb(0x767676).into(),
-            hot_light: rgb(0xffff00).into(),
-        };
-        let theme = contrast_theme(&Theme::new(Mode::Dark), &palette);
-        for (is_selected, is_highlighted, expected) in [
-            (true, true, palette.highlight_text),
-            (true, false, palette.window_text),
-            (false, true, palette.gray_text),
-        ] {
-            let mut tab = render_tab(
-                Tab::new("Folder"),
-                TabProps {
-                    theme: &theme,
-                    index: 0,
-                    count: 1,
-                    is_selected,
-                    is_highlighted,
-                    min_width: px(88.),
-                    on_select: None,
-                    on_close: None,
-                    on_bounds: None,
-                    landing: Landing::default(),
-                },
-            );
-            assert_eq!(tab.style().text.color, Some(expected));
-        }
-    }
-}
+mod tests;

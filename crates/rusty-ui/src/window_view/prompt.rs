@@ -7,6 +7,10 @@ pub(super) enum PromptKind {
     Rename {
         from: String,
     },
+    RenameTab {
+        tab: rusty_core::TabId,
+        label: String,
+    },
     NewFolder,
     NewFile,
     Select {
@@ -33,6 +37,7 @@ pub(super) fn stem_end(name: &str) -> usize {
     name.rfind('.').filter(|dot| *dot > 0).unwrap_or(name.len())
 }
 
+#[expect(clippy::too_many_lines, reason = "prompt variants are kept together")]
 pub(super) fn prompt_props(kind: &PromptKind, error: Option<SharedString>) -> PromptProps {
     match kind {
         PromptKind::Rename { from } => PromptProps {
@@ -41,6 +46,14 @@ pub(super) fn prompt_props(kind: &PromptKind, error: Option<SharedString>) -> Pr
             value: from.clone().into(),
             select: 0..stem_end(from),
             confirm_label: "Rename".into(),
+            error,
+        },
+        PromptKind::RenameTab { label, .. } => PromptProps {
+            title: rusty_l10n::tr("tab-menu-rename").into(),
+            label: rusty_l10n::tr("tab-menu-label").into(),
+            value: label.clone().into(),
+            select: 0..label.len(),
+            confirm_label: rusty_l10n::tr("tab-menu-confirm-rename").into(),
             error,
         },
         PromptKind::NewFolder => PromptProps {
@@ -156,6 +169,15 @@ impl FerriteWindow {
                 crate::browser::NameProblem::Unchanged => None,
                 other => Some(other.to_string()),
             }),
+            PromptKind::RenameTab { tab, .. } => {
+                let command = rusty_core::Command::Tab(rusty_core::TabCommand::Rename {
+                    tab: Some(*tab),
+                    label: value.to_owned(),
+                });
+                self.browser
+                    .command(&command)
+                    .map_err(|error| Some(error.to_string()))
+            }
             PromptKind::NewFolder => self
                 .browser
                 .new_folder(value)

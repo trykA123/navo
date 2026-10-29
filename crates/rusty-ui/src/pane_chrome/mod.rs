@@ -17,7 +17,7 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    App, Bounds, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
+    App, Bounds, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels, Point,
     RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use rusty_core::Command;
@@ -46,6 +46,7 @@ pub fn bind_keys(cx: &mut App) {
 }
 
 type CommandHandler = Rc<dyn Fn(&Command, &mut Window, &mut App)>;
+type MenuHandler = Rc<dyn Fn(usize, Point<Pixels>, &mut Window, &mut App)>;
 type BoundsHandler = Rc<dyn Fn(usize, Bounds<Pixels>, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
@@ -53,6 +54,8 @@ pub struct PaneTabs {
     id: ElementId,
     titles: Vec<SharedString>,
     search_tabs: Vec<usize>,
+    pinned_tabs: Vec<usize>,
+    on_menu: Option<MenuHandler>,
     active: usize,
     is_highlighted: bool,
     is_on_accent: bool,
@@ -73,6 +76,8 @@ impl PaneTabs {
             titles: titles.into_iter().map(Into::into).collect(),
             active,
             search_tabs: Vec::new(),
+            pinned_tabs: Vec::new(),
+            on_menu: None,
             is_highlighted: false,
             is_on_accent: false,
             on_command: None,
@@ -80,6 +85,19 @@ impl PaneTabs {
             on_bounds: None,
             menu: None,
         }
+    }
+
+    pub(crate) fn pinned_tabs(mut self, indices: Vec<usize>) -> Self {
+        self.pinned_tabs = indices;
+        self
+    }
+
+    pub(crate) fn on_menu(
+        mut self,
+        handler: impl Fn(usize, Point<Pixels>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_menu = Some(Rc::new(handler));
+        self
     }
 
     pub(crate) fn search_tabs(mut self, indices: Vec<usize>) -> Self {
@@ -171,7 +189,9 @@ impl RenderOnce for PaneTabs {
             } else {
                 IconName::Folder
             };
-            Tab::new(title).icon(glyph)
+            Tab::new(title)
+                .icon(glyph)
+                .pinned(self.pinned_tabs.contains(&index))
         });
         let plus = new_tab_button(bar.as_ref().unwrap_or(t), self.on_command.clone());
         let mut tabs = Tabs::new(self.id, tabs)
@@ -180,6 +200,7 @@ impl RenderOnce for PaneTabs {
             .trailing(plus, t.spacing.tab_height)
             .when_some(self.menu, Tabs::menu)
             .on_bounds(self.on_bounds)
+            .on_menu(self.on_menu)
             .when_some(bar, Tabs::bar_theme);
         tabs.set_landing(self.landing);
         let Some(handler) = self.on_command else {

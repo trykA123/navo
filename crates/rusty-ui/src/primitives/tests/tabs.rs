@@ -193,3 +193,56 @@ fn choosing_a_hidden_tab_activates_and_shows_it(cx: &mut TestAppContext) {
     .expect("window");
     assert_eq!(view.read_with(cx, |view, _| view.selected), 8);
 }
+
+struct PinnedTabs {
+    closed: bool,
+}
+
+impl Render for PinnedTabs {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        Tabs::new("pinned-tabs", [Tab::new("Renamed folder").pinned(true)]).on_close(cx.listener(
+            |this, _: &usize, _, cx| {
+                this.closed = true;
+                cx.notify();
+            },
+        ))
+    }
+}
+
+#[gpui_kit::test]
+fn pinned_tab_shows_label_without_close_and_ignores_middle_click(cx: &mut TestAppContext) {
+    use gpui_kit::{InputEvent as _, Modifiers, MouseButton, MouseDownEvent};
+    let (window, view) = open(cx, |_, _| PinnedTabs { closed: false });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let tabs = window.within("pinned-tabs");
+        assert_eq!(tabs.find(0usize).label(), Some("Renamed folder"));
+        assert!(tabs.try_find(("tab-close", 0usize)).is_none());
+        let position = tabs.find(0usize).bounds().center();
+        window.dispatch_event(
+            MouseDownEvent {
+                button: MouseButton::Middle,
+                position,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                first_mouse: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+    })
+    .unwrap();
+    assert!(!view.read_with(cx, |view, _| view.closed));
+}
+
+#[gpui_kit::test]
+fn crowded_mixed_labels_keep_tab_minimum_widths(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, |_, _| narrow(400., 4, 0));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        for index in shown_tabs(window, 4) {
+            assert!(tab_width(window, index) >= 88.);
+        }
+    })
+    .unwrap();
+}

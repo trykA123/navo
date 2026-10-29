@@ -49,6 +49,19 @@ impl FerriteWindow {
         let tabs = shows_tabs.then(|| {
             let tabs = Self::tabs(pane, titles, active_index, cx)
                 .search_tabs(self.search_tabs(pane))
+                .pinned_tabs(
+                    self.browser
+                        .state()
+                        .pane(pane)
+                        .map(|p| {
+                            p.tabs()
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(i, t)| t.is_pinned().then_some(i))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                )
                 .highlighted(is_active)
                 .on_accent(marks.is_filled)
                 .when_some(menu, |tabs, menu| tabs.menu(menu));

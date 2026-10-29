@@ -1,4 +1,6 @@
-use rusty_core::{Command, CommandError, Effect, Location, StateError, TabMove, list_unloaded};
+use rusty_core::{
+    Command, CommandError, Effect, Location, StateError, TabId, TabMove, list_unloaded,
+};
 use rusty_fs::EntryKind;
 
 use super::{Browser, Launcher};
@@ -149,10 +151,11 @@ impl Browser {
     }
 
     pub(crate) fn clone_tab_to_other_pane(&mut self) -> Result<(), CommandError> {
+        self.clone_tab_to_other_pane_of(self.state.active_tab().id())
+    }
+
+    pub(crate) fn clone_tab_to_other_pane_of(&mut self, id: TabId) -> Result<(), CommandError> {
         let state = &self.state;
-        let Some(target) = self.target_pane() else {
-            return Ok(());
-        };
         let window = state
             .window(state.focused_window())
             .ok_or(StateError::UnknownWindow(state.focused_window()))?;
@@ -164,9 +167,23 @@ impl Browser {
                 .map(|index| index + 1)
                 .ok_or(StateError::UnknownPane(pane))
         };
+        let source_pane = window
+            .panes()
+            .into_iter()
+            .find(|pane| pane.tabs().iter().any(|tab| tab.id() == id))
+            .ok_or(StateError::UnknownTab(id))?
+            .id();
+        let target_pane = if source_pane == state.focused_pane() {
+            window.target()
+        } else {
+            Some(state.focused_pane())
+        };
+        let Some(target_pane) = target_pane else {
+            return Ok(());
+        };
         let source = number(state.focused_pane())?;
-        let target = number(target)?;
-        let tab = state.active_tab();
+        let target = number(target_pane)?;
+        let tab = state.tab(id).ok_or(StateError::UnknownTab(id))?;
         let location = Some(tab.location().clone());
         let sort = self.sort_key(tab.id());
         self.state.focus_number(target)?;
@@ -263,6 +280,28 @@ mod tests {
         assert_eq!(pane.tabs().len(), 2);
         assert_eq!(pane.active().location(), &fs.location("home/docs"));
         assert_eq!(window.panes()[1].tabs().len(), 1);
+    }
+
+    #[test]
+    fn cloning_uses_the_requested_inactive_tab() {
+        let fs = fake();
+        let mut browser = browser_at(&fs, "home");
+        let source_tab = browser.state().active_tab().id();
+        browser
+            .command(&rusty_core::Command::PaneOpenTab {
+                location: Some(fs.location("home/docs")),
+            })
+            .unwrap();
+        browser
+            .command(&rusty_core::Command::LayoutSplit {
+                direction: rusty_core::Direction::Right,
+            })
+            .unwrap();
+        let focused = browser.state().focused_pane();
+        browser.clone_tab_to_other_pane_of(source_tab).unwrap();
+        let target = browser.state().pane(focused).unwrap();
+        assert_eq!(target.active().location(), &fs.location("home"));
+        assert_eq!(browser.state().focused_pane(), focused);
     }
 
     #[test]

@@ -32,6 +32,11 @@ pub(crate) fn tab_label(text: &str) -> Result<Option<String>, StateError> {
 }
 
 impl AppState {
+    #[must_use]
+    pub fn can_reopen_tab(&self) -> bool {
+        !self.focused.closed.is_empty()
+    }
+
     pub(crate) fn find_tab(&self, id: TabId) -> Result<(PaneId, usize), StateError> {
         self.focused
             .panes()

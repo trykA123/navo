@@ -35,6 +35,7 @@ impl Render for FerriteWindow {
             .children(Self::noted_modal(self.modal_view(window, cx)))
             .children(self.app_menu_view(cx))
             .children(self.shell_menu_view())
+            .children(self.tab_menu_view())
             .children(self.viewer_menu_view())
             .children(self.view_menus());
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);

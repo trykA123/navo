@@ -59,6 +59,7 @@ mod strip_keys;
 mod tab_actions;
 mod tab_drag;
 mod tab_keys;
+mod tab_menu;
 mod terminal;
 mod tiles;
 mod title;
@@ -205,6 +206,7 @@ pub struct FerriteWindow {
     app_menu_focus: FocusHandle,
     values: Values,
     window_menu: window_menu::WindowMenu,
+    tab_menu: tab_menu::TabMenu,
     identity: Identity,
     saver: settings_save::Saver,
     settings: settings_sheet::SettingsPanel,
@@ -265,6 +267,7 @@ impl FerriteWindow {
             app_menu_focus: cx.focus_handle(),
             values,
             window_menu: window_menu::WindowMenu::default(),
+            tab_menu: tab_menu::TabMenu::default(),
             identity: options.app_menu.identity,
             saver,
             settings,

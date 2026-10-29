@@ -39,6 +39,9 @@ impl FerriteWindow {
     }
 
     pub(super) fn tab_title(&self, tab: &Tab) -> SharedString {
+        if let Some(label) = tab.label() {
+            return label.to_owned().into();
+        }
         match self.browser.find_results(tab.id()) {
             Some(results) if results.query.text.is_empty() => t!("find-title-empty").into(),
             Some(results) => results.query.text.clone().into(),

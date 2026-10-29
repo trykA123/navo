@@ -132,3 +132,13 @@ fn reopen_after_the_source_pane_left_the_workspace_uses_the_focused_pane() {
     apply_workspace(&mut state, &WorkspaceAction::Switch { n: 1 }).unwrap();
     assert_eq!(pane_folders(&state, source), ["/a"]);
 }
+
+#[test]
+fn can_reopen_tracks_the_focused_window_stack() {
+    let mut state = with_tabs(&["/a", "/b"]);
+    assert!(!state.can_reopen_tab());
+    close(&mut state, 1);
+    assert!(state.can_reopen_tab());
+    tab_command(&mut state, TabCommand::Reopen);
+    assert!(!state.can_reopen_tab());
+}
