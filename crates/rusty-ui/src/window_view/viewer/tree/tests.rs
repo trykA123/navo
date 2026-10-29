@@ -5,9 +5,9 @@ use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
 
 use super::{TreeBody, TreeState, TreeView};
 use crate::window_view::FerriteWindow;
-use crate::window_view::tests::{press, settle, viewer_open};
+use crate::window_view::tests::{press, settle, type_in, viewer_open};
 use crate::window_view::viewer::tests::structured::{big_xml, open_named};
-use crate::window_view::viewer::tests::{Setup, label, redraw, text_of};
+use crate::window_view::viewer::tests::{Setup, has_editor, label, redraw, text_of};
 
 const NESTED: &[u8] =
     br#"{"a": {"b": {"c": {"d": {"e": {"f": {"g": {"h": {"i": {"j": {"k": 1}}}}}}}}}}, "z": [1, 2]}"#;
@@ -189,4 +189,34 @@ fn opening_an_indexed_xml_tree_reads_nothing_more(cx: &mut TestAppContext) {
     press(cx, window, &view, "ctrl-9");
     assert!(log.lock().expect("reads").is_empty());
     assert_ne!(text_of(cx, window, "tree-status"), "Loading…");
+}
+
+fn find_query(cx: &mut TestAppContext, tree: &Opened) -> String {
+    tree.tree.read_with(cx, |tree, cx| {
+        tree.find
+            .as_ref()
+            .map(|find| find.input.read(cx).value().to_string())
+            .unwrap_or_default()
+    })
+}
+
+#[gpui_kit::test]
+fn a_find_match_inside_a_folded_node_opens_its_ancestors_and_selects_it(cx: &mut TestAppContext) {
+    let tree = Opened::json(cx, NESTED);
+    assert_eq!(tree.rows(cx), 3);
+    tree.press(cx, &["ctrl-f"]);
+    type_in(cx, tree.window, &tree.view, "k");
+    assert_eq!(tree.path(cx), "$.a.b.c.d.e.f.g.h.i.j.k");
+    assert_eq!(text_of(cx, tree.window, "find-count"), "1 of 1");
+    assert_eq!(tree.rows(cx), 13);
+}
+
+#[gpui_kit::test]
+fn digits_typed_into_the_find_bar_stay_in_the_field_and_keep_the_tree(cx: &mut TestAppContext) {
+    let tree = Opened::json(cx, NESTED);
+    tree.press(cx, &["ctrl-f", "1", "3"]);
+    assert_eq!(find_query(cx, &tree), "13");
+    assert!(!has_editor(cx, &tree.view));
+    assert_eq!(text_of(cx, tree.window, "find-count"), "No matches");
+    assert!(viewer_open(cx, &tree.view));
 }

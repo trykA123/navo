@@ -125,16 +125,18 @@ impl TreeView {
         self.follow(step, cx);
     }
 
-    fn type_or_pass(&mut self, ch: char, cx: &mut Context<Self>) {
-        if self.is_filtering() {
+    fn type_or_pass(&mut self, ch: char, window: &Window, cx: &mut Context<Self>) {
+        if self.is_filtering() && !self.is_typing_in_bar(window, cx) {
             self.type_char(ch, cx);
         } else {
             cx.propagate();
         }
     }
 
-    fn expand_subtree(&mut self, cx: &mut Context<Self>) {
-        if self.is_filtering() {
+    fn expand_subtree(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if self.is_typing_in_bar(window, cx) {
+            cx.propagate();
+        } else if self.is_filtering() {
             self.type_char('*', cx);
         } else if let Some(ready) = self.ready_mut() {
             let step = ready.outline.expand_subtree(&ready.tree);
@@ -142,8 +144,10 @@ impl TreeView {
         }
     }
 
-    fn collapse_all(&mut self, cx: &mut Context<Self>) {
-        if self.is_filtering() {
+    fn collapse_all(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if self.is_typing_in_bar(window, cx) {
+            cx.propagate();
+        } else if self.is_filtering() {
             self.type_char('-', cx);
         } else if let Some(ready) = self.ready_mut() {
             ready.outline.collapse_all(&ready.tree);
@@ -165,7 +169,10 @@ impl TreeView {
         }
     }
 
-    fn back(&mut self, cx: &mut Context<Self>) {
+    fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.close_bar(window, cx) {
+            return;
+        }
         if self.is_filtering() {
             self.clear_filter(cx);
         } else if !self.stop_indexing(cx) {
@@ -180,8 +187,8 @@ impl TreeView {
         }
     }
 
-    fn type_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        if !matches!(self.state, TreeState::Ready(_)) {
+    fn type_key(&mut self, event: &KeyDownEvent, window: &Window, cx: &mut Context<Self>) {
+        if !matches!(self.state, TreeState::Ready(_)) || self.is_typing_in_bar(window, cx) {
             return;
         }
         if let Some(ch) = typed_char(&event.keystroke) {
@@ -206,19 +213,35 @@ impl TreeView {
     }
 
     pub(super) fn commands(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
-        root.on_action(cx.listener(|view, _: &ExpandSubtree, _, cx| view.expand_subtree(cx)))
-            .on_action(cx.listener(|view, _: &CollapseAll, _, cx| view.collapse_all(cx)))
-            .on_action(cx.listener(|view, _: &CopyPath, _, cx| view.copy_path(cx)))
-            .on_action(cx.listener(|view, _: &CopyValue, _, cx| view.copy_value(cx)))
-            .on_action(cx.listener(|view, _: &CopyKey, _, cx| view.copy_key(cx)))
-            .on_action(cx.listener(|view, _: &FilterBack, _, cx| view.filter_back(cx)))
-            .on_action(cx.listener(|view, _: &Back, _, cx| view.back(cx)))
-            .on_action(cx.listener(|view, _: &TypeN, _, cx| view.type_or_pass('n', cx)))
-            .on_action(cx.listener(|view, _: &TypeP, _, cx| view.type_or_pass('p', cx)))
-            .on_action(cx.listener(|view, _: &TypeOne, _, cx| view.type_or_pass('1', cx)))
-            .on_action(cx.listener(|view, _: &TypeThree, _, cx| view.type_or_pass('3', cx)))
-            .on_action(cx.listener(|view, _: &TypeFive, _, cx| view.type_or_pass('5', cx)))
-            .on_key_down(cx.listener(|view, event, _, cx| view.type_key(event, cx)))
+        root.on_action(cx.listener(|view, _: &ExpandSubtree, window, cx| {
+            view.expand_subtree(window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &CollapseAll, window, cx| {
+            view.collapse_all(window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &CopyPath, _, cx| view.copy_path(cx)))
+        .on_action(cx.listener(|view, _: &CopyValue, _, cx| view.copy_value(cx)))
+        .on_action(cx.listener(|view, _: &CopyKey, _, cx| view.copy_key(cx)))
+        .on_action(cx.listener(|view, _: &FilterBack, window, cx| {
+            view.filter_back(window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
+        .on_action(cx.listener(|view, _: &TypeN, window, cx| {
+            view.type_or_pass('n', window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &TypeP, window, cx| {
+            view.type_or_pass('p', window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &TypeOne, window, cx| {
+            view.type_or_pass('1', window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &TypeThree, window, cx| {
+            view.type_or_pass('3', window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &TypeFive, window, cx| {
+            view.type_or_pass('5', window, cx);
+        }))
+        .on_key_down(cx.listener(|view, event, window, cx| view.type_key(event, window, cx)))
     }
 
     pub(super) fn folds(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {

@@ -12,6 +12,7 @@ use crate::prelude::*;
 use crate::primitives::{IconName, VirtualList, icon};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
+use crate::window_view::viewer::search::view_find::{find_strip, hit_tint};
 
 const CHAR_WIDTH: f32 = 7.2;
 
@@ -230,9 +231,14 @@ impl TableView {
             .when(index == row, |line| line.bg(c.hover))
             .child(number_cell(frame, number.to_string()))
             .children(frame.columns.clone().zip(cells).map(|(at, text)| {
-                cell_view(frame, at, text, index == row && at == column)
+                let is_cursor = index == row && at == column;
+                cell_view(frame, at, text, is_cursor)
                     .id(("table-cell", at))
                     .test_support()
+                    .when(!is_cursor, |cell| match self.found_cell((index, at)) {
+                        Some(is_current) => cell.bg(hit_tint(t, is_current)),
+                        None => cell,
+                    })
                     .on_click(select_cell::<ClickEvent>(view.clone(), (index, at)))
                     .on_mouse_down(
                         MouseButton::Right,
@@ -342,7 +348,7 @@ impl Render for TableView {
             .id("table")
             .key_context(CONTEXT)
             .track_focus(&self.focus);
-        Self::keys(root, cx)
+        Self::find_keys(Self::keys(root, cx), cx)
             .flex()
             .flex_col()
             .flex_1()
@@ -351,6 +357,7 @@ impl Render for TableView {
             .bg(t.colors.surface)
             .text_size(t.typography.body)
             .child(header(&t, self.header_parts()))
+            .children(self.find.as_ref().map(|find| find_strip(&t, find)))
             .child(head)
             .child(list)
     }

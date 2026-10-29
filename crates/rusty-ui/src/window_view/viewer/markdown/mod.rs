@@ -1,5 +1,6 @@
 mod block;
 mod copy;
+mod find;
 mod links;
 mod preview;
 mod runs;
@@ -19,6 +20,7 @@ use rusty_structured::markdown::Document;
 use super::background::{Job, spawn_job};
 use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
 use super::rich_header::{HeaderParts, header};
+use super::search::view_find::{ViewFind, find_strip};
 use super::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ScrollLeft, ScrollRight};
 use crate::prelude::*;
 use crate::tokens;
@@ -59,6 +61,7 @@ pub(super) struct MarkdownView {
     doc: Rc<Document>,
     list: ListState,
     picked: Option<u32>,
+    find: Option<ViewFind<usize>>,
     pointed: Option<u32>,
     pointed_block: Option<usize>,
     menu_block: Option<usize>,
@@ -83,6 +86,7 @@ impl MarkdownView {
             doc: Rc::new(file.doc),
             list: ListState::new(count, ListAlignment::Top, px(OVERDRAW)),
             picked: None,
+            find: None,
             pointed: None,
             pointed_block: None,
             menu_block: None,
@@ -240,10 +244,14 @@ impl MarkdownView {
     fn blocks(&self, page: Page) -> impl IntoElement {
         #[cfg(test)]
         let drawn = self.drawn.clone();
-        list(self.list.clone(), move |index, window, _| {
+        list(self.list.clone(), move |index, window, cx| {
             #[cfg(test)]
             drawn.set(drawn.get() + 1);
-            draw_block(&page, index, window)
+            let shown = draw_block(&page, index, window);
+            match page.view.upgrade() {
+                Some(view) => view.read(cx).tint_found(&page.t, index, shown),
+                None => shown,
+            }
         })
         .size_full()
     }
@@ -274,7 +282,7 @@ impl Render for MarkdownView {
             .id("markdown")
             .key_context(CONTEXT)
             .track_focus(&self.focus);
-        Self::keys(Self::forget_pointed(root, cx), cx)
+        Self::find_keys(Self::keys(Self::forget_pointed(root, cx), cx), cx)
             .flex()
             .flex_col()
             .flex_1()
@@ -285,6 +293,7 @@ impl Render for MarkdownView {
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
             .when(!self.is_preview, |root| root.child(header(&t, parts)))
+            .children(self.find.as_ref().map(|find| find_strip(&t, find)))
             .child(
                 div()
                     .id("markdown-body")
@@ -337,7 +346,10 @@ impl ViewerBody for MarkdownBody {
         ])
     }
 
-    fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
+    fn find_again(&self, backward: bool, window: &mut Window, cx: &mut App) {
+        self.0
+            .update(cx, |view, cx| view.find_next(backward, window, cx));
+    }
 
     fn menu(&self, by_pointer: bool, cx: &mut App) -> Vec<MenuEntry> {
         self.0.update(cx, |view, _| view.menu_entries(by_pointer))

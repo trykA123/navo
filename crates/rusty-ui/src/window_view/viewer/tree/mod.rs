@@ -1,6 +1,7 @@
 mod copy;
 mod draw;
 mod filter;
+mod find;
 mod jobs;
 mod keys;
 mod row;
@@ -17,6 +18,7 @@ pub(super) use keys::bind_keys;
 
 use super::background::Job;
 use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
+use super::search::view_find::ViewFind;
 use crate::prelude::*;
 use crate::primitives::ListScroll;
 
@@ -97,6 +99,7 @@ pub(in crate::window_view::viewer) struct TreeView {
     page: usize,
     path: Option<SharedString>,
     filter: String,
+    find: Option<ViewFind<NodeId>>,
     filter_wait: Option<Task<()>>,
     filter_job: Option<Job>,
     pending: Vec<(NodeId, Children)>,
@@ -124,6 +127,7 @@ impl TreeView {
             page: 1,
             path: None,
             filter: String::new(),
+            find: None,
             filter_wait: None,
             filter_job: None,
             pending: Vec::new(),
@@ -214,7 +218,10 @@ impl ViewerBody for TreeBody {
         })
     }
 
-    fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
+    fn find_again(&self, backward: bool, window: &mut Window, cx: &mut App) {
+        self.0
+            .update(cx, |view, cx| view.find_next(backward, window, cx));
+    }
 
     fn menu(&self, _: bool, cx: &mut App) -> Vec<MenuEntry> {
         match self.0.read(cx).state {

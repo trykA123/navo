@@ -1,4 +1,5 @@
 mod draw;
+mod find;
 mod jobs;
 mod keys;
 mod rows;
@@ -13,6 +14,7 @@ pub(super) use keys::bind_keys;
 
 use super::background::Job;
 use super::body::{BodyKeys, Host, MenuEntry, ViewerBody};
+use super::search::view_find::ViewFind;
 use crate::prelude::*;
 use crate::primitives::ListScroll;
 use rows::{Indexed, Rows};
@@ -46,6 +48,7 @@ pub(in crate::window_view::viewer) struct TableView {
     dialect: Dialect,
     rows: Rows,
     cursor: (usize, usize),
+    find: Option<ViewFind<(usize, usize)>>,
     left: usize,
     sort: Option<SortKey>,
     sorting: Option<Job>,
@@ -87,6 +90,7 @@ impl TableView {
             dialect,
             rows,
             cursor: (0, 0),
+            find: None,
             left: 0,
             sort: None,
             sorting: None,
@@ -150,7 +154,10 @@ impl ViewerBody for TableBody {
         ])
     }
 
-    fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
+    fn find_again(&self, backward: bool, window: &mut Window, cx: &mut App) {
+        self.0
+            .update(cx, |view, cx| view.find_next(backward, window, cx));
+    }
 
     fn menu(&self, _: bool, _: &mut App) -> Vec<MenuEntry> {
         keys::menu_entries()

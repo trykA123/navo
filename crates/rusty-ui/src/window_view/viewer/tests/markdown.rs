@@ -4,7 +4,7 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, ScrollDelta, TestAppCon
 use super::structured::open_named;
 use super::{Setup, editor_text, has_editor, redraw, text_of};
 use crate::window_view::FerriteWindow;
-use crate::window_view::tests::press;
+use crate::window_view::tests::{press, type_in};
 use crate::window_view::viewer::markdown::MarkdownBody;
 
 fn with_body<T>(
@@ -269,4 +269,17 @@ fn the_reviewer_probes_render_on_a_small_stack() {
             assert!(!rendered.contains('\\'), "{name} shows no escapes");
         }
     });
+}
+
+#[gpui_kit::test]
+fn ctrl_f_in_markdown_counts_matching_blocks_and_f3_steps_through_them(cx: &mut TestAppContext) {
+    let source = "# Notes\n\nA quiet needle here.\n\nNothing else.\n\nAnother Needle at the end.\n";
+    let (window, view) = open(cx, "notes.md", source);
+    press(cx, window, &view, "ctrl-f");
+    type_in(cx, window, &view, "needle");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 2");
+    press(cx, window, &view, "f3");
+    assert_eq!(text_of(cx, window, "find-count"), "2 of 2");
+    press(cx, window, &view, "shift-f3");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 2");
 }

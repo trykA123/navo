@@ -8,6 +8,7 @@ pub(in crate::window_view::viewer) mod marks;
 pub(in crate::window_view::viewer) mod memory;
 pub(in crate::window_view::viewer) mod overview;
 pub(in crate::window_view::viewer) mod scan;
+pub(in crate::window_view::viewer) mod view_find;
 
 use std::ops::Range;
 

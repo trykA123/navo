@@ -9,7 +9,7 @@ use rusty_fs::FakeFs;
 use super::{Log, Setup, editor_text, has_editor, hooks, label, press_only, redraw, text_of};
 use crate::window_view::FerriteWindow;
 use crate::window_view::tests::clipboard::FakeClipboard;
-use crate::window_view::tests::{press, settle};
+use crate::window_view::tests::{press, settle, type_in, viewer_open};
 use crate::window_view::viewer::{FileHooks, Kinds, PagedKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -339,4 +339,21 @@ fn ctrl_c_in_the_table_viewer_copies_the_cell_not_the_file(cx: &mut TestAppConte
     let copied = cx.read_from_clipboard().and_then(|item| item.text());
     assert_eq!(copied.as_deref(), Some("10"));
     assert!(files.writes.borrow().is_empty());
+}
+
+#[gpui_kit::test]
+fn ctrl_f_in_the_table_counts_matching_cells_and_enter_steps_through_them(cx: &mut TestAppContext) {
+    let csv = b"name,qty\nPear,10\nApple,9\nFig,100\nPeach,1\n";
+    let (window, view, _) = open_named(cx, "fruit.csv", Setup::new(csv.to_vec()));
+    press(cx, window, &view, "ctrl-f");
+    type_in(cx, window, &view, "p");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 3");
+    press(cx, window, &view, "enter");
+    assert_eq!(text_of(cx, window, "find-count"), "2 of 3");
+    assert_eq!(text_of(cx, window, "table-cell"), "Row 2 · name");
+    press(cx, window, &view, "shift-enter");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 3");
+    press(cx, window, &view, "escape");
+    assert_eq!(text_of(cx, window, "find-count"), "");
+    assert!(viewer_open(cx, &view));
 }

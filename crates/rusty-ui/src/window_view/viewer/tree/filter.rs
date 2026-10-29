@@ -17,8 +17,8 @@ impl TreeView {
         self.schedule_filter(cx);
     }
 
-    pub(super) fn filter_back(&mut self, cx: &mut Context<Self>) {
-        if self.filter.pop().is_none() {
+    pub(super) fn filter_back(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if self.is_typing_in_bar(window, cx) || self.filter.pop().is_none() {
             cx.propagate();
         } else if self.filter.is_empty() {
             self.clear_filter(cx);

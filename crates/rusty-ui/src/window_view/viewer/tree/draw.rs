@@ -10,6 +10,7 @@ use crate::prelude::*;
 use crate::primitives::{Kbd, VirtualList};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::rich_header::{HeaderParts, header};
+use crate::window_view::viewer::search::view_find::find_strip;
 
 const PAGE_MARGIN_ROWS: usize = 4;
 
@@ -130,7 +131,7 @@ impl TreeView {
                         is_open: ready.outline.is_open(row.node),
                         is_loading: this.loads.iter().any(|(node, _)| *node == row.node),
                     };
-                    Some(tree_row(&look, &view))
+                    Some(this.tint_found(&t, row.node, tree_row(&look, &view)))
                 })
                 .collect()
         })
@@ -199,6 +200,7 @@ impl Render for TreeView {
             .key_context(CONTEXT)
             .track_focus(&self.focus);
         let root = Self::folds(Self::commands(Self::moves(root, cx), cx), cx);
+        let root = Self::find_keys(root, cx);
         root.flex()
             .flex_col()
             .flex_1()
@@ -207,6 +209,7 @@ impl Render for TreeView {
             .bg(t.colors.surface)
             .text_size(t.typography.body)
             .child(header(&t, parts))
+            .children(self.find.as_ref().map(|find| find_strip(&t, find)))
             .children(self.filter_view(&t))
             .child(self.body(&t, cx))
     }
