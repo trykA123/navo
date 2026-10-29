@@ -8,9 +8,9 @@ fn three_slot_cache() -> ListingCache {
 #[test]
 fn oldest_entry_is_evicted_first() {
     let cache = three_slot_cache();
-    ["a", "b", "c", "d"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["a", "b", "c", "d"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     assert!(cache.get(&key("a")).is_none());
     assert!(cache.get(&key("d")).is_some());
     assert_eq!(cache.stats().evictions, 1);
@@ -19,9 +19,9 @@ fn oldest_entry_is_evicted_first() {
 #[test]
 fn get_refreshes_recency() {
     let cache = three_slot_cache();
-    ["a", "b", "c"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["a", "b", "c"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     let _ = cache.get(&key("a"));
     cache.put(key("d"), listing(&["x"]));
     assert!(cache.get(&key("a")).is_some());
@@ -48,9 +48,9 @@ fn oversized_put_drops_the_old_listing() {
 fn pinned_entries_are_never_evicted() {
     let cache = three_slot_cache();
     cache.pin(&key("a"));
-    ["a", "b", "c", "d", "e"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["a", "b", "c", "d", "e"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     assert!(cache.get(&key("a")).is_some());
 }
 
@@ -59,9 +59,9 @@ fn pin_before_put_applies_to_the_later_listing() {
     let cache = three_slot_cache();
     cache.pin(&key("a"));
     cache.put(key("a"), listing(&["x"]));
-    ["b", "c", "d"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["b", "c", "d"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     assert!(cache.get(&key("a")).is_some());
 }
 
@@ -69,7 +69,9 @@ fn pin_before_put_applies_to_the_later_listing() {
 fn pinned_entries_over_budget_block_other_puts() {
     let one = cost(&key("a"), &listing(&["x"]));
     let cache = ListingCache::new(one * 2);
-    ["a", "b"].iter().for_each(|name| cache.pin(&key(name)));
+    for name in ["a", "b"] {
+        cache.pin(&key(name));
+    }
     cache.put(key("a"), listing(&["x"]));
     cache.put(key("b"), listing(&["x", "y"]));
     cache.put(key("c"), listing(&["x"]));
@@ -81,9 +83,9 @@ fn pinned_entries_over_budget_block_other_puts() {
 fn unpin_makes_an_entry_evictable_again() {
     let cache = three_slot_cache();
     cache.pin(&key("a"));
-    ["a", "b", "c", "d"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["a", "b", "c", "d"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     cache.unpin(&key("a"));
     cache.put(key("e"), listing(&["x"]));
     assert!(cache.get(&key("a")).is_none());
@@ -96,9 +98,9 @@ fn pins_are_counted() {
     cache.pin(&key("a"));
     cache.put(key("a"), listing(&["x"]));
     cache.unpin(&key("a"));
-    ["b", "c", "d", "e"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["b", "c", "d", "e"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     assert!(cache.get(&key("a")).is_some());
 }
 
@@ -106,10 +108,10 @@ fn pins_are_counted() {
 fn unpin_over_budget_evicts_down_to_the_budget() {
     let one = cost(&key("a"), &listing(&["x"]));
     let cache = ListingCache::new(one * 2);
-    ["a", "b", "c"].iter().for_each(|name| {
+    for name in ["a", "b", "c"] {
         cache.pin(&key(name));
         cache.put(key(name), listing(&["x"]));
-    });
+    }
     cache.unpin(&key("a"));
     assert!(cache.get(&key("a")).is_none());
     assert_eq!(cache.stats().bytes, one * 2);
@@ -125,9 +127,9 @@ fn unpin_of_an_unknown_key_is_ignored() {
 #[test]
 fn growing_patch_evicts_older_entries() {
     let cache = three_slot_cache();
-    ["a", "b", "c"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["a", "b", "c"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     cache.patch(&key("c"), at(1), [crate::Change::Added(super::entry("y"))]);
     assert!(cache.get(&key("a")).is_none());
     assert!(cache.get(&key("c")).is_some());
@@ -146,12 +148,12 @@ fn patch_past_the_budget_drops_the_entry() {
 fn stats_report_pinned_bytes_and_entries() {
     let one = cost(&key("a"), &listing(&["x"]));
     let cache = three_slot_cache();
-    ["a", "b", "c"]
-        .iter()
-        .for_each(|name| cache.pin(&key(name)));
-    ["a", "b", "d"]
-        .iter()
-        .for_each(|name| cache.put(key(name), listing(&["x"])));
+    for name in ["a", "b", "c"] {
+        cache.pin(&key(name));
+    }
+    for name in ["a", "b", "d"] {
+        cache.put(key(name), listing(&["x"]));
+    }
     let stats = cache.stats();
     assert_eq!(
         (stats.pinned_bytes, stats.pinned_entries, stats.entries),

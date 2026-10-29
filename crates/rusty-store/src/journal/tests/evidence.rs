@@ -8,17 +8,17 @@ fn indexed_replacement_uses_exact_old_evidence_and_preserves_other_records() {
         .unwrap();
     journal.record_held(job, b"overwrite", 1).unwrap();
     journal
-        .replace_step_detail(job, change(0, None, Some(b"intent")))
+        .replace_step_detail(job, &change(0, None, Some(b"intent")))
         .unwrap();
     journal
-        .replace_step_detail(job, change(1, None, Some(b"other")))
+        .replace_step_detail(job, &change(1, None, Some(b"other")))
         .unwrap();
     journal
-        .replace_step_detail(job, change(0, Some(b"intent"), Some(b"created")))
+        .replace_step_detail(job, &change(0, Some(b"intent"), Some(b"created")))
         .unwrap();
     assert!(
         journal
-            .replace_step_detail(job, change(0, Some(b"intent"), None))
+            .replace_step_detail(job, &change(0, Some(b"intent"), None))
             .is_err()
     );
     assert_eq!(
@@ -46,7 +46,7 @@ fn retirement_keeps_other_step_and_undo_evidence_and_never_changes_state() {
         .mark_step(job, 1, StepState::Done, Some(b"other"))
         .unwrap();
     journal
-        .replace_step_detail(job, change(0, Some(b"created"), None))
+        .replace_step_detail(job, &change(0, Some(b"created"), None))
         .unwrap();
     assert!(journal.step_detail(job, 0).unwrap().is_none());
     assert_eq!(

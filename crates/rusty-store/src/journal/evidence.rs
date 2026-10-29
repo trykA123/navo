@@ -10,7 +10,7 @@ impl JobJournal {
     pub fn replace_step_detail(
         &mut self,
         job: JobId,
-        change: StepEvidence<'_>,
+        change: &StepEvidence<'_>,
     ) -> Result<(), JournalError> {
         let changed = self.db.connection().execute(
             "UPDATE job_step SET detail = ?4 WHERE job_id = ?1 AND seq = ?2 AND detail IS ?3",

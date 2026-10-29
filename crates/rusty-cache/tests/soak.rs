@@ -139,16 +139,20 @@ impl<'a> Soak<'a> {
         }
     }
 
-    fn navigate(&mut self, tab: usize, folder: Location) {
+    fn navigate(&mut self, tab: usize, folder: &Location) {
         let pins: Vec<CacheKey> = std::iter::once(folder.clone())
             .chain(folder.parent())
             .map(|location| self.key(&location))
             .collect();
-        pins.iter().for_each(|key| self.cache.pin(key));
+        for key in &pins {
+            self.cache.pin(key);
+        }
         let old = std::mem::replace(&mut self.tabs[tab].pins, pins);
-        old.iter().for_each(|key| self.cache.unpin(key));
+        for key in &old {
+            self.cache.unpin(key);
+        }
         self.tabs[tab].folder = folder.clone();
-        self.show(&folder);
+        self.show(folder);
         self.check();
     }
 
@@ -158,12 +162,14 @@ impl<'a> Soak<'a> {
             folder: folder.clone(),
             pins: Vec::new(),
         });
-        self.navigate(self.tabs.len() - 1, folder);
+        self.navigate(self.tabs.len() - 1, &folder);
     }
 
     fn close_tab(&mut self, tab: usize) {
         let closed = self.tabs.swap_remove(tab);
-        closed.pins.iter().for_each(|key| self.cache.unpin(key));
+        for key in &closed.pins {
+            self.cache.unpin(key);
+        }
         self.check();
     }
 
@@ -172,14 +178,14 @@ impl<'a> Soak<'a> {
         match self.rng.below(6) {
             0 => {
                 let up = here.parent().unwrap_or(here);
-                self.navigate(tab, up);
+                self.navigate(tab, &up);
             }
             1 => self.prefetch_sibling(),
             2 => self.patch(&here),
             3 => self.cache.invalidate(&self.key(&here)),
             _ => {
                 let next = self.random_leaf();
-                self.navigate(tab, next);
+                self.navigate(tab, &next);
             }
         }
         self.check();

@@ -67,7 +67,7 @@ fn key_positions(text: &str) -> Vec<String> {
     let mut keys = Vec::new();
     for line in text.lines().map(str::trim) {
         if let Some(header) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            table = header.trim().to_owned();
+            header.trim().clone_into(&mut table);
             keys.push(table.clone());
         } else if let Some((key, _)) = line.split_once('=') {
             let key = key.trim();

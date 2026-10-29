@@ -44,7 +44,7 @@ impl Vault<'_> {
         Ok(self
             .catalog
             .transaction()?
-            .complete_overwrites(RetainedCompletion {
+            .complete_overwrites(&RetainedCompletion {
                 job: request.job,
                 state: request.state,
                 records: &records,

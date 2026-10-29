@@ -232,7 +232,9 @@ fn sanitize_workspaces(session: &mut SessionState) {
             }
             checked = trial;
         }
-        window.workspaces = checked.windows[index].workspaces.clone();
+        window
+            .workspaces
+            .clone_from(&checked.windows[index].workspaces);
         window.active_workspace = active.unwrap_or(0);
         if active.is_none() && !window.workspaces.is_empty() {
             load_active_snapshot(window);

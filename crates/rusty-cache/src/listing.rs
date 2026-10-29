@@ -28,7 +28,9 @@ impl CachedListing {
 
     pub(crate) fn patched(&self, changes: &[Change], changed_at: SystemTime) -> Self {
         let mut rows = IndexedRows::new(&self.rows);
-        changes.iter().for_each(|change| rows.apply(change));
+        for change in changes {
+            rows.apply(change);
+        }
         Self {
             rows: rows.into_rows(),
             read_at: changed_at.max(self.read_at),

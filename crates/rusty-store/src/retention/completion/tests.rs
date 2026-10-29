@@ -43,7 +43,7 @@ fn refuses_completion(path: &std::path::Path, job: JobId) {
         catalog
             .transaction()
             .unwrap()
-            .complete_overwrites(RetainedCompletion {
+            .complete_overwrites(&RetainedCompletion {
                 job,
                 state: JobState::Done,
                 records: &[],

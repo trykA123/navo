@@ -351,9 +351,9 @@ fn a_full_queue_drops_writes() {
     let keys = serial_keys(42);
     let folders: Vec<Location> = (0..40).map(|i| folder(&format!(r"C:\f{i}"))).collect();
     let cache = ListingCache::default();
-    folders
-        .iter()
-        .for_each(|location| cache.put(settled(&keys, location), listing(&["x"])));
+    for location in &folders {
+        cache.put(settled(&keys, location), listing(&["x"]));
+    }
     let disk = DiskListings::open(&db_in(&dir), warm(&ListingCache::default(), &keys, vec![]));
     let release = disk.stall();
     disk.save_folders(&cache, &keys, &folders);

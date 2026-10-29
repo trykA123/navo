@@ -73,6 +73,7 @@ fn read(path: &Path) -> Result<Option<String>, KeymapFileError> {
     }
 }
 
+#[expect(clippy::needless_pass_by_value, reason = "used as a map_err callback")]
 fn io_error(error: io::Error) -> KeymapFileError {
     KeymapFileError::Io {
         kind: error.kind(),

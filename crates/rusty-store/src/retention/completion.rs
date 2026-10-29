@@ -27,10 +27,10 @@ struct Owner {
 impl RetentionTransaction<'_> {
     pub fn complete_overwrites(
         self,
-        request: RetainedCompletion<'_>,
+        request: &RetainedCompletion<'_>,
     ) -> Result<Vec<RetentionEntry>, RetentionStoreError> {
-        let owner = self.validate_request(&request)?;
-        let entries = self.complete_entries(&request, &owner)?;
+        let owner = self.validate_request(request)?;
+        let entries = self.complete_entries(request, &owner)?;
         self.inner.execute(
             "UPDATE job SET state = ?2 WHERE id = ?1",
             rusqlite::params![request.job.0, state_text(request.state)?],

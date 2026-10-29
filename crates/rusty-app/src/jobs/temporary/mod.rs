@@ -22,7 +22,7 @@ pub(super) fn prepare(log: &JournalLog, proof: &CopyTemporary) -> Result<(), FsE
     lock(&log.journal)
         .replace_step_detail(
             log.job,
-            StepEvidence {
+            &StepEvidence {
                 seq: proof.seq,
                 before: None,
                 after: Some(&bytes),
@@ -56,7 +56,7 @@ pub(super) fn created(
     lock(&log.journal)
         .replace_step_detail(
             log.job,
-            StepEvidence {
+            &StepEvidence {
                 seq,
                 before: Some(&bytes),
                 after: Some(&created),
@@ -111,7 +111,7 @@ fn clear(journal: &SharedJournal, job: JobId, (seq, before): (u32, &[u8])) -> Re
     lock(journal)
         .replace_step_detail(
             job,
-            StepEvidence {
+            &StepEvidence {
                 seq,
                 before: Some(before),
                 after: None,

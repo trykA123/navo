@@ -99,7 +99,7 @@ fn patch_keeps_the_listing_metadata() {
     let mut start = listing(&["a"]);
     start.complete = false;
     let cache = ListingCache::new(1 << 20);
-    cache.put(key("a"), start.clone());
+    cache.put(key("a"), start);
     cache.patch(&key("a"), at(1), [Change::Added(entry("b"))]);
     let out = cache.get(&key("a")).unwrap();
     assert_eq!((out.read_at, out.complete), (at(1), false));

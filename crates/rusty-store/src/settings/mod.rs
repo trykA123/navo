@@ -273,6 +273,7 @@ fn is_read_only(path: &Path) -> bool {
     fs::metadata(path).is_ok_and(|meta| meta.permissions().readonly())
 }
 
+#[expect(clippy::needless_pass_by_value, reason = "used as a map_err callback")]
 fn ledger_error(error: DbError) -> SettingsError {
     SettingsError::Ledger(error.to_string())
 }
@@ -285,6 +286,7 @@ fn now() -> i64 {
         })
 }
 
+#[expect(clippy::needless_pass_by_value, reason = "used as a map_err callback")]
 fn io_error(error: io::Error) -> SettingsError {
     SettingsError::Io {
         kind: error.kind(),

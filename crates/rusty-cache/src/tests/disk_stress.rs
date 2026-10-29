@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
 use rusty_core::Location;
@@ -16,7 +17,7 @@ fn stress_listing() -> CachedListing {
                 state ^= state << 13;
                 state ^= state >> 7;
                 state ^= state << 17;
-                name.push_str(&format!("{state:016x}"));
+                write!(name, "{state:016x}").unwrap();
             }
             name
         })
@@ -58,9 +59,9 @@ fn stress_50_000_disk_listings_stay_within_budget_and_match_database_usage() {
         disk.save_folders(&cache, &keys, batch);
         assert!(disk.flush(deadline.saturating_duration_since(Instant::now())));
         assert!(disk.stats().bytes <= DISK_BUDGET);
-        batch
-            .iter()
-            .for_each(|at| cache.invalidate(&keys.key(at).unwrap()));
+        for at in batch {
+            cache.invalidate(&keys.key(at).unwrap());
+        }
     }
     let newest = keys.key(locations.last().unwrap()).unwrap();
     assert_eq!(
