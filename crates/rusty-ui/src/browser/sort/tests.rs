@@ -252,3 +252,61 @@ fn a_default_sort_set_before_start_orders_the_first_listing() {
     settle(&mut browser);
     assert_eq!(names(&browser), ["alpha", "zeta", "C.md", "a.rs", "b.txt"]);
 }
+
+fn oracle_order(rows: &[FsEntry], key: SortKey, folders_first: bool) -> Vec<String> {
+    let lower = |e: &FsEntry| e.name.display().to_lowercase();
+    let is_file = |e: &FsEntry| e.kind != EntryKind::Folder;
+    let ext = |e: &FsEntry| match lower(e).rsplit_once('.') {
+        Some((stem, ext)) if is_file(e) && !stem.is_empty() => ext.to_owned(),
+        _ => String::new(),
+    };
+    let mut rows: Vec<&FsEntry> = rows.iter().collect();
+    rows.sort_by(|a, b| {
+        let groups = if folders_first {
+            is_file(a).cmp(&is_file(b))
+        } else {
+            std::cmp::Ordering::Equal
+        };
+        groups.then_with(|| {
+            let by = match key.by {
+                SortBy::Name => lower(a).cmp(&lower(b)),
+                SortBy::Ext => ext(a).cmp(&ext(b)).then_with(|| lower(a).cmp(&lower(b))),
+                SortBy::Size => a.size.cmp(&b.size),
+                SortBy::Date => a.modified_ms.cmp(&b.modified_ms),
+            };
+            let by = if key.descending { by.reverse() } else { by };
+            by.then_with(|| lower(a).cmp(&lower(b)))
+        })
+    });
+    rows.into_iter().map(|e| e.name.to_text()).collect()
+}
+
+#[test]
+fn a_25k_row_sort_equals_the_previous_comparator() {
+    let rows: Arc<[FsEntry]> = (0..25_000u64)
+        .map(|i| {
+            let name = format!(
+                "f{}.{}",
+                (i * 7919) % 5003,
+                ["rs", "md", "txt"][(i % 3) as usize]
+            );
+            let mut entry = file(
+                &name,
+                (i * 31) % 977,
+                i64::try_from((i * 17) % 1013).unwrap_or(0),
+            );
+            if i % 11 == 0 {
+                entry.kind = EntryKind::Folder;
+            }
+            entry
+        })
+        .collect();
+    for by in [SortBy::Name, SortBy::Ext, SortBy::Size, SortBy::Date] {
+        for descending in [false, true] {
+            let key = SortKey { by, descending };
+            let got = super::sorted_full(&rows, key, true);
+            let names: Vec<String> = got.details.iter().map(|e| e.name.to_text()).collect();
+            assert_eq!(names, oracle_order(&rows, key, true));
+        }
+    }
+}

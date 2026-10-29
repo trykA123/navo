@@ -1,7 +1,8 @@
-use std::cmp::Ordering;
+use std::sync::Arc;
 
 use rusty_core::{Entry, Listing, TabId};
-use rusty_fs::{EntryKind, FsEntry};
+use rusty_fs::view::{materialize, sort_order};
+use rusty_fs::{CancelToken, EntryKind, FsEntry};
 
 use super::Browser;
 use super::filter::Full;
@@ -60,77 +61,33 @@ impl Browser {
     }
 }
 
-struct Keyed {
-    is_file: bool,
-    lower: String,
-    extension: String,
-    entry: FsEntry,
-}
-
-fn keyed(entry: FsEntry) -> Keyed {
-    let lower = entry.name.display().to_lowercase();
-    let is_file = entry.kind != EntryKind::Folder;
-    let extension = match lower.rsplit_once('.') {
-        Some((stem, ext)) if is_file && !stem.is_empty() => ext.to_owned(),
-        _ => String::new(),
-    };
-    Keyed {
-        is_file,
-        lower,
-        extension,
-        entry,
-    }
-}
-
 fn sorted(full: Full, key: SortKey, folders_first: bool) -> Full {
     sorted_rows(&full.details, key, folders_first)
 }
 
+#[cfg_attr(not(test), expect(dead_code, reason = "worker call in SP7g"))]
+pub(super) fn sorted_full(rows: &Arc<[FsEntry]>, key: SortKey, folders_first: bool) -> Full {
+    sorted_rows(rows, key, folders_first)
+}
+
 fn sorted_rows(rows: &[FsEntry], key: SortKey, folders_first: bool) -> Full {
-    let mut rows: Vec<Keyed> = rows.iter().cloned().map(keyed).collect();
-    rows.sort_by(|a, b| compare(a, b, key, folders_first));
-    let rows: Vec<FsEntry> = rows.into_iter().map(|row| row.entry).collect();
-    let listing = Listing::new(
+    let order = sort_order(rows, key, folders_first, &CancelToken::new()).unwrap_or_default();
+    let rows = materialize(rows, &order);
+    Full {
+        listing: listing_of(&rows),
+        details: rows.into(),
+    }
+}
+
+pub(super) fn listing_of(rows: &[FsEntry]) -> Listing {
+    Listing::new(
         rows.iter()
             .map(|entry| Entry {
                 name: entry.name.to_text(),
                 is_folder: entry.kind == EntryKind::Folder,
             })
             .collect(),
-    );
-    Full {
-        listing,
-        details: rows.into(),
-    }
-}
-
-fn compare(a: &Keyed, b: &Keyed, key: SortKey, folders_first: bool) -> Ordering {
-    let groups = if folders_first {
-        a.is_file.cmp(&b.is_file)
-    } else {
-        Ordering::Equal
-    };
-    groups.then_with(|| {
-        let by_key = by(a, b, key.by);
-        let by_key = if key.descending {
-            by_key.reverse()
-        } else {
-            by_key
-        };
-        by_key.then_with(|| a.lower.cmp(&b.lower))
-    })
-}
-
-fn by(a: &Keyed, b: &Keyed, sort: SortBy) -> Ordering {
-    match sort {
-        SortBy::Name => a.lower.cmp(&b.lower),
-        SortBy::Ext => a
-            .extension
-            .cmp(&b.extension)
-            .then_with(|| a.lower.cmp(&b.lower)),
-        SortBy::Size => a.entry.size.cmp(&b.entry.size),
-        SortBy::Date => a.entry.modified_ms.cmp(&b.entry.modified_ms),
-    }
+    )
 }
 
 #[cfg(test)]

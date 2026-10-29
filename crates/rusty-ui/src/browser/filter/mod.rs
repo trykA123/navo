@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use rusty_core::{Command, CursorMove, Entry, Event, Listing, Location, TabId};
-use rusty_fs::FsEntry;
+use rusty_fs::view::{ViewFilter, filter_order, materialize};
+use rusty_fs::{CancelToken, FsEntry};
 
 use super::Browser;
+use super::sort::listing_of;
 use crate::name_match::{Needle, Scratch};
 
 mod marks;
@@ -244,14 +246,6 @@ struct Visibility {
     system: bool,
 }
 
-fn is_visible(entry: Option<&FsEntry>, shows: Visibility) -> bool {
-    entry.is_none_or(|e| {
-        let is_hidden = e.attributes.hidden || e.attributes.system;
-        let is_system = e.attributes.system;
-        (shows.hidden || !is_hidden) && (shows.system || !is_system)
-    })
-}
-
 fn is_reserved(entry: &Entry) -> bool {
     rusty_core::brand::is_reserved_name(&entry.name)
 }
@@ -265,34 +259,19 @@ fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
         });
     }
     let needle = (!text.is_empty()).then(|| Needle::parse(text));
-    let mut scratch = Scratch::default();
-    let keep: Vec<usize> = full
-        .listing
-        .entries()
-        .iter()
-        .enumerate()
-        .filter(|(_, entry)| !is_reserved(entry))
-        .filter(|(index, _)| is_visible(full.details.get(*index), shows))
-        .filter(|(_, entry)| {
-            needle
-                .as_ref()
-                .is_none_or(|n| n.matches(&entry.name, &mut scratch))
-        })
-        .map(|(index, _)| index)
-        .collect();
+    let filter = ViewFilter {
+        needle: needle.as_ref(),
+        show_hidden: shows.hidden,
+        show_system: shows.system,
+    };
+    let identity: Vec<u32> = (0..u32::try_from(full.details.len()).ok()?).collect();
+    let keep = filter_order(&full.details, &identity, &filter, &CancelToken::new())?;
     if keep.is_empty() && needle.is_some() {
         return None;
     }
-    let entries = keep
-        .iter()
-        .filter_map(|&index| full.listing.entries().get(index).cloned())
-        .collect();
-    let details: Vec<FsEntry> = keep
-        .iter()
-        .filter_map(|&index| full.details.get(index).cloned())
-        .collect();
+    let details = materialize(&full.details, &keep);
     Some(Shown {
-        listing: Listing::new(entries),
+        listing: listing_of(&details),
         details: details.into(),
     })
 }
