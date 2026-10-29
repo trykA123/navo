@@ -182,7 +182,7 @@ fn open_window(
 ) -> ExitCode {
     let (Opening { panes }, clock) = opening;
     let (sender, requests) = open_requests();
-    let (guard, mut splash) = match prepare_instance(&start, profile, sender) {
+    let (guard, mut splash) = match prepare_instance(&start, profile, sender.clone()) {
         Ok(ControlFlow::Continue(first)) => first,
         Ok(ControlFlow::Break(code)) => return code,
         Err(error) => {
@@ -205,17 +205,12 @@ fn open_window(
         Ok(started) => started,
         Err(code) => return code,
     };
-    open(gui::Launch {
+    let inputs = LaunchInputs {
         trace,
-        experimental_retention: start.retention,
-        path: start.path,
-        view: start.view,
         panes,
         splash,
-        dirs: profile.dirs().cloned(),
-        cleanup: profile.cleanup(),
-        start_watch: run.as_ref().map(metrics::Run::watch),
-        instance_requests: requests,
+        requests,
+        resident: guard.is_some().then_some(sender),
         running,
         store,
         crash: crash_report::CrashStart {
@@ -224,12 +219,48 @@ fn open_window(
             diagnostics,
             recovery: None,
         },
-    });
+    };
+    open(launch(start, profile, run.as_ref(), inputs));
     if let Err(error) = profile.cleanup().run() {
         eprintln!("navo: cannot remove the temporary profile: {error}");
         return ExitCode::FAILURE;
     }
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
+}
+
+struct LaunchInputs {
+    trace: Option<rusty_ui::window_view::InputTrace>,
+    panes: [Option<Location>; 2],
+    splash: splash::Splash,
+    requests: rusty_ui::window_view::OpenInbox,
+    resident: Option<OpenSender>,
+    running: Option<crash::Running>,
+    store: crash::store::StoreStart,
+    crash: crash_report::CrashStart,
+}
+
+fn launch(
+    start: Start,
+    profile: &Profile,
+    run: Option<&metrics::Run>,
+    inputs: LaunchInputs,
+) -> gui::Launch {
+    gui::Launch {
+        trace: inputs.trace,
+        experimental_retention: start.retention,
+        path: start.path,
+        view: start.view,
+        panes: inputs.panes,
+        splash: inputs.splash,
+        dirs: profile.dirs().cloned(),
+        cleanup: profile.cleanup(),
+        start_watch: run.map(metrics::Run::watch),
+        instance_requests: inputs.requests,
+        resident: inputs.resident,
+        running: inputs.running,
+        store: inputs.store,
+        crash: inputs.crash,
+    }
 }
 
 fn instrumentation(

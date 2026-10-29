@@ -47,6 +47,7 @@ pub(crate) struct Launch {
     pub(crate) cleanup: crate::profile::Cleanup,
     pub(crate) start_watch: Option<StartWatch>,
     pub(crate) instance_requests: OpenInbox,
+    pub(crate) resident: Option<OpenSender>,
     pub(crate) running: Option<crate::crash::Running>,
     pub(crate) crash: crate::crash_report::CrashStart,
     pub(crate) store: crate::crash::store::StoreStart,
@@ -79,6 +80,7 @@ fn open_request(request: &crate::instance::Request) -> OpenRequest {
         right: location(&request.right),
         view: location(&request.view),
         quit: false,
+        summoned_at: None,
     }
 }
 
@@ -158,6 +160,10 @@ pub(crate) fn open(mut launch: Launch) {
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
     settings::wire_guide_hint(&mut settings, dirs.as_ref());
+    let resident = launch
+        .resident
+        .take()
+        .map(|sender| crate::resident::ResidentHandle::start(sender, &settings.values));
     let (search, visits) = search_hooks(services.memory.clone(), remember, dirs.as_ref(), &local);
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     let exit = (disk, visits, services.memory.clone());
@@ -187,17 +193,37 @@ pub(crate) fn open(mut launch: Launch) {
             file_clipboard: Some(clipboard::service()),
             drop_platform: Some(crate::drag::service()),
             start_watch: launch.start_watch,
-            open: open_hooks(launch.path, launch.instance_requests, launch.splash),
+            open: OpenHooks {
+                resident: resident
+                    .as_ref()
+                    .map(crate::resident::ResidentHandle::hooks),
+                ..open_hooks(launch.path, launch.instance_requests, launch.splash)
+            },
             rename: Some(services.rename),
             retained: services.retained,
         },
         Rc::new(rusty_shell::display_scale),
         RunHooks {
-            on_quit: quitter(exit, launch.cleanup, launch.running, services.maintenance),
+            on_quit: stop_first(
+                resident,
+                quitter(exit, launch.cleanup, launch.running, services.maintenance),
+            ),
             on_autosave: autosave,
             trace: launch.trace,
         },
     );
+}
+
+fn stop_first(
+    resident: Option<crate::resident::ResidentHandle>,
+    on_quit: Rc<dyn Fn()>,
+) -> Rc<dyn Fn()> {
+    Rc::new(move || {
+        if let Some(resident) = &resident {
+            resident.stop();
+        }
+        on_quit();
+    })
 }
 
 fn search_hooks(
@@ -234,6 +260,7 @@ fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Sp
         inbox: Some(inbox),
         on_shown: splash.on_shown(),
         window_shown: crate::resident::window_shown(),
+        resident: None,
     }
 }
 

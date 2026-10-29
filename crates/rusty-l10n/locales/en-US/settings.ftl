@@ -124,3 +124,4 @@ settings-summon-key-help = Shows Navo from anywhere; leave empty for none
 settings-summon-key-unknown-modifier = Use Win, Ctrl, Alt or Shift before the key.
 settings-summon-key-no-modifier = Add Win, Ctrl, Alt or Shift, like Win+Alt+N.
 settings-summon-key-bad-key = End with one letter or digit, like Win+Alt+N.
+settings-summon-key-taken = Taken by another app

@@ -13,6 +13,7 @@ const DOT_LIFT: f32 = 5.;
 const DEFAULT: &str = "Default";
 const CHANGED: &str = "Changed";
 const LIVE: &str = "Live";
+const NOT_APPLIED: &str = "Not applied yet";
 
 pub(super) fn tag(t: &Theme, index: usize, is_changed: bool) -> impl IntoElement + use<> {
     let (text, color) = if is_changed {
@@ -105,4 +106,36 @@ pub(super) fn live_chip(t: &Theme) -> impl IntoElement + use<> {
                 .bg(t.colors.ok),
         )
         .child(LIVE)
+}
+
+pub(super) fn notes(
+    t: &Theme,
+    field: Field,
+    key_taken: bool,
+) -> impl Iterator<Item = AnyElement> + use<> {
+    let pending = (!field.is_applied()).then(|| {
+        note(
+            t,
+            "settings-not-applied",
+            NOT_APPLIED.into(),
+            t.colors.muted,
+        )
+    });
+    let taken = (field == Field::SummonKey && key_taken).then(|| {
+        let text = rusty_l10n::tr("settings-summon-key-taken").into();
+        note(t, "settings-summon-taken", text, t.colors.mark)
+    });
+    [pending, taken].into_iter().flatten()
+}
+
+fn note(t: &Theme, id: &'static str, text: SharedString, color: Hsla) -> AnyElement {
+    div()
+        .id(id)
+        .role(Role::Note)
+        .aria_label(text.clone())
+        .test_support()
+        .text_size(t.typography.small)
+        .text_color(color)
+        .child(text)
+        .into_any_element()
 }

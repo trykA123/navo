@@ -51,6 +51,7 @@ pub struct OpenRequest {
     pub right: Option<Location>,
     pub view: Option<Location>,
     pub quit: bool,
+    pub summoned_at: Option<Instant>,
 }
 
 #[derive(Clone, Debug)]
@@ -72,12 +73,19 @@ pub fn open_requests() -> (OpenSender, OpenInbox) {
 
 pub type WindowShown = Arc<dyn Fn(Option<RawWindowHandle>, bool) -> bool + Send + Sync>;
 
+pub trait ResidentHooks {
+    fn apply(&self, values: &crate::settings::Values);
+    fn key_taken(&self) -> bool;
+    fn has_tray(&self) -> bool;
+}
+
 #[derive(Default)]
 pub struct OpenHooks {
     pub path: Option<Location>,
     pub inbox: Option<OpenInbox>,
     pub on_shown: Option<Box<dyn FnOnce()>>,
     pub window_shown: Option<WindowShown>,
+    pub resident: Option<std::rc::Rc<dyn ResidentHooks>>,
 }
 
 impl OpenHooks {
@@ -147,6 +155,12 @@ async fn deliver(
     }
 }
 
+fn log_summon(at: Instant) {
+    let _span = tracing::debug_span!("resident.summon").entered();
+    let summon_ms = u64::try_from(at.elapsed().as_millis()).unwrap_or(u64::MAX);
+    tracing::info!(summon_ms, "summoned");
+}
+
 impl FerriteWindow {
     pub(super) fn listen_open(
         &mut self,
@@ -155,6 +169,7 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) {
         self.window_shown = hooks.window_shown;
+        self.resident = hooks.resident;
         if let Some(on_shown) = hooks.on_shown {
             window.on_next_frame(move |window, _| window.on_next_frame(move |_, _| on_shown()));
         }
@@ -172,6 +187,12 @@ impl FerriteWindow {
             deliver(arrivals, provider, this, cx).await;
         })
         .detach();
+    }
+
+    pub(super) fn summon_key_taken(&self) -> bool {
+        self.resident
+            .as_ref()
+            .is_some_and(|resident| resident.key_taken())
     }
 
     pub(super) fn set_window_shown(&self, window: &Window, shown: bool) -> bool {
@@ -205,6 +226,9 @@ impl FerriteWindow {
         if is_hand_off {
             self.set_window_shown(window, true);
             window.activate_window();
+        }
+        if let Some(at) = request.summoned_at {
+            window.on_next_frame(move |_, _| log_summon(at));
         }
         cx.notify();
     }

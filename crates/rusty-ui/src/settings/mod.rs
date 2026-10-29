@@ -1,3 +1,4 @@
+mod body;
 mod controls;
 mod diagnostics_page;
 mod fields;
@@ -166,103 +167,10 @@ pub struct SettingsBody {
     focus: Option<FocusHandle>,
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
+    summon_key_taken: bool,
 }
 
 impl SettingsBody {
-    pub fn new(values: Values, row: usize) -> Self {
-        Self {
-            values,
-            row: row.min(HELP_ROW),
-            error: None,
-            editor: None,
-            shortcuts: None,
-            filter: Filter::default(),
-            find: None,
-            upgrade: Vec::new(),
-            page: SearchPage::default(),
-            diagnostics: Vec::new(),
-            version: SharedString::default(),
-            focus: None,
-            scroll: None,
-            on_event: None,
-        }
-    }
-
-    #[must_use]
-    pub fn error(mut self, message: Option<SharedString>) -> Self {
-        self.error = message;
-        self
-    }
-
-    #[must_use]
-    pub fn editor(mut self, editor: Option<AnyElement>) -> Self {
-        self.editor = editor;
-        self
-    }
-
-    #[must_use]
-    pub fn shortcuts(mut self, page: Option<AnyElement>) -> Self {
-        self.shortcuts = page;
-        self
-    }
-
-    #[must_use]
-    pub fn filter(mut self, filter: Filter) -> Self {
-        self.filter = filter;
-        self
-    }
-
-    #[must_use]
-    pub fn find(mut self, bar: Option<AnyElement>) -> Self {
-        self.find = bar;
-        self
-    }
-
-    #[must_use]
-    pub fn upgrade(mut self, items: Vec<Moved>) -> Self {
-        self.upgrade = items;
-        self
-    }
-
-    #[must_use]
-    pub fn search_page(mut self, page: SearchPage) -> Self {
-        self.page = page;
-        self
-    }
-
-    #[must_use]
-    pub fn diagnostics(mut self, rows: Vec<DiagnosticRow>) -> Self {
-        self.diagnostics = rows;
-        self
-    }
-
-    #[must_use]
-    pub fn version(mut self, version: SharedString) -> Self {
-        self.version = version;
-        self
-    }
-
-    #[must_use]
-    pub fn track_focus(mut self, focus: &FocusHandle) -> Self {
-        self.focus = Some(focus.clone());
-        self
-    }
-
-    #[must_use]
-    pub fn track_scroll(mut self, scroll: &ScrollHandle) -> Self {
-        self.scroll = Some(scroll.clone());
-        self
-    }
-
-    #[must_use]
-    pub fn on_event(
-        mut self,
-        handler: impl Fn(&SheetEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_event = Some(Rc::new(handler));
-        self
-    }
-
     fn shown_spec(&self) -> Option<&'static FieldSpec> {
         FIELDS.get(self.row).filter(|spec| self.filter.admits(spec))
     }
@@ -388,6 +296,7 @@ impl RenderOnce for SettingsBody {
             diagnostics: &self.diagnostics,
             version: &self.version,
             send: self.on_event.clone(),
+            summon_key_taken: self.summon_key_taken,
         };
         let shown = self.shortcuts.is_none().then_some(section);
         let notice = shown

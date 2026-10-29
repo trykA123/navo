@@ -103,7 +103,8 @@ pub use fkeys::{
     layer_keys, layer_keys_in, settings_labels_in,
 };
 pub use hand_off::{
-    OpenHooks, OpenInbox, OpenRequest, OpenSender, RawWindowHandle, WindowShown, open_requests,
+    OpenHooks, OpenInbox, OpenRequest, OpenSender, RawWindowHandle, ResidentHooks, WindowShown,
+    open_requests,
 };
 pub use input_trace::InputTrace;
 pub use keys::bind_keys;
@@ -187,6 +188,7 @@ pub struct FerriteWindow {
     tab_drag: tab_drag::TabDrag,
     on_save: SaveSession,
     window_shown: Option<WindowShown>,
+    resident: Option<Rc<dyn ResidentHooks>>,
     autosave: closing::Autosave,
     prompt: Option<prompt::Prompt>,
     dialog_input: dialog_input::DialogInput,
@@ -249,6 +251,7 @@ impl FerriteWindow {
             tab_drag: tab_drag::TabDrag::default(),
             on_save: options.on_save,
             window_shown: None,
+            resident: None,
             autosave: closing::Autosave::observe(cx),
             prompt: None,
             dialog_input: dialog_input::DialogInput::default(),

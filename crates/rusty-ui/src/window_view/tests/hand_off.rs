@@ -25,6 +25,7 @@ fn rig_starting_at(cx: &mut TestAppContext, path: Option<&str>) -> Rig {
         inbox: Some(inbox),
         on_shown: None,
         window_shown: None,
+        resident: None,
     };
     let options = crate::window_view::StartOptions {
         open,

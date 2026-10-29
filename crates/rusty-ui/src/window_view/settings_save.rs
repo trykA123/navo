@@ -164,6 +164,9 @@ impl FerriteWindow {
             self.apply_theme(window, cx);
         }
         steer(&self.values, &mut self.browser);
+        if let Some(resident) = &self.resident {
+            resident.apply(&self.values);
+        }
         self.show_parts(cx);
         self.apply_preview_parts();
         self.refresh_window_menu(cx);

@@ -89,7 +89,11 @@ impl FerriteWindow {
     }
 
     pub(super) fn close_or_hide(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {
-        if !self.values.keeps_in_tray() || self.window_shown.is_none() {
+        let has_tray = self
+            .resident
+            .as_ref()
+            .is_some_and(|resident| resident.has_tray());
+        if !self.values.keeps_in_tray() || self.window_shown.is_none() || !has_tray {
             return self.close(window, cx);
         }
         self.save_now(window, cx);
