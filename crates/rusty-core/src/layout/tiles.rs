@@ -86,10 +86,10 @@ impl Tiles {
             Preset {
                 name: "Two by two",
                 tiles: split(
-                    Row,
+                    Col,
                     50,
-                    split(Col, 50, Self::Pane, Self::Pane),
-                    split(Col, 50, Self::Pane, Self::Pane),
+                    split(Row, 50, Self::Pane, Self::Pane),
+                    split(Row, 50, Self::Pane, Self::Pane),
                 ),
             },
             Preset {
@@ -214,7 +214,7 @@ mod tests {
             ("Wide + 2", "col(52, pane, row(50, pane, pane))"),
             (
                 "Two by two",
-                "row(50, col(50, pane, pane), col(50, pane, pane))",
+                "col(50, row(50, pane, pane), row(50, pane, pane))",
             ),
             (
                 "Main + 3",

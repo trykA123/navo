@@ -242,7 +242,7 @@ impl PdfView {
             }))
             .when(has_hits, |frame| {
                 frame.child(
-                    div().flex().px(t.spacing.lg).pb(t.spacing.sm).child(
+                    div().flex().px(t.spacing.xl).py(t.spacing.sm).child(
                         Button::new("pdf-pages-with-hits", "Only pages with hits")
                             .variant(variant)
                             .on_click(cx.listener(|view, _, _, cx| view.toggle_with_hits(cx))),

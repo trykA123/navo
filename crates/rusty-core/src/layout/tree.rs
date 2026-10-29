@@ -161,6 +161,47 @@ impl Node {
         }
     }
 
+    fn stacked_pair(&self) -> Option<(u16, PaneId, PaneId)> {
+        match self {
+            Self::Split {
+                axis: Axis::Stacked,
+                ratio,
+                first,
+                second,
+            } => match (&**first, &**second) {
+                (Self::Leaf(top), Self::Leaf(bottom)) => Some((*ratio, *top, *bottom)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub(super) fn into_rows(self) -> Self {
+        if let Self::Split {
+            axis: Axis::SideBySide,
+            ratio,
+            first,
+            second,
+        } = &self
+            && let (Some((rows_ratio, a, b)), Some((_, c, d))) =
+                (first.stacked_pair(), second.stacked_pair())
+        {
+            let row = |left, right| Self::Split {
+                axis: Axis::SideBySide,
+                ratio: *ratio,
+                first: Box::new(Self::Leaf(left)),
+                second: Box::new(Self::Leaf(right)),
+            };
+            return Self::Split {
+                axis: Axis::Stacked,
+                ratio: rows_ratio,
+                first: Box::new(row(a, c)),
+                second: Box::new(row(b, d)),
+            };
+        }
+        self
+    }
+
     pub(super) fn to_state(&self) -> LayoutState {
         match self {
             Self::Leaf(pane) => LayoutState::Pane(pane.get()),

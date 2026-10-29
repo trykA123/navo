@@ -179,3 +179,31 @@ fn drawers_never_cover_the_status_line(cx: &mut TestAppContext) {
     }
     assert_eq!(stage.size.width, bounds(cx, rig.0, "pdf").size.width);
 }
+
+#[gpui_kit::test]
+fn the_only_pages_with_hits_chip_is_inset_from_the_drawer_and_the_divider(cx: &mut TestAppContext) {
+    let rig = rig(cx, "a-book.pdf");
+    find(cx, &rig, "volt");
+    keys(cx, &rig, &["ctrl-p"]);
+    let t = cx.update(|cx| crate::tokens::current(cx).clone());
+    let drawer = bounds(cx, rig.0, "pdf-left-drawer");
+    let tabs = bounds(cx, rig.0, "pdf-left-tabs");
+    let chip = bounds(cx, rig.0, "pdf-pages-with-hits");
+    assert!(
+        chip.left() - drawer.left() >= t.spacing.xl,
+        "{chip:?} {drawer:?}"
+    );
+    assert!(
+        drawer.right() - chip.right() >= t.spacing.xl,
+        "{chip:?} {drawer:?}"
+    );
+    assert!(
+        chip.top() - tabs.bottom() >= t.spacing.lg + t.spacing.sm,
+        "{chip:?} {tabs:?}"
+    );
+    let rows = bounds(cx, rig.0, "pdf-pages");
+    assert!(
+        rows.top() - chip.bottom() >= t.spacing.sm,
+        "{chip:?} {rows:?}"
+    );
+}

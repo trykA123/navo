@@ -5,7 +5,7 @@ use gpui_kit::{
 };
 use rusty_core::{Command, LayoutState, SplitPath, Tiles, apply};
 
-use super::super::{fake, open_options_sized, options_for, two_panes};
+use super::super::{fake, open_options_sized, options_for, press, two_panes};
 use crate::tokens::{self, Mode};
 use crate::window_view::FerriteWindow;
 
@@ -207,45 +207,90 @@ fn an_undersized_layout_shows_only_the_focused_pane(cx: &mut TestAppContext) {
     .expect("window");
 }
 
-#[gpui_kit::test]
-fn a_nested_stacked_divider_changes_only_its_split(cx: &mut TestAppContext) {
-    let (window, view) = open_tiles(cx, 3);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        let area = window.find("tiles").bounds();
-        let from = window.find("divider-1").bounds().center();
-        let to = point(from.x, area.top() + area.size.height * 0.7);
-        window.drag(from, to, cx);
-    })
-    .expect("window");
-    let ratios = view.read_with(cx, |view, _| {
+fn split_ratios(cx: &mut TestAppContext, view: &Entity<FerriteWindow>) -> Vec<(String, u16)> {
+    view.read_with(cx, |view, _| {
         view.core_layout()
             .unwrap()
             .splits()
             .into_iter()
             .map(|split| (split.path.to_string(), split.ratio))
-            .collect::<Vec<_>>()
-    });
+            .collect()
+    })
+}
+
+fn pane_widths(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<FerriteWindow>,
+) -> Vec<gpui_kit::Pixels> {
+    let panes = view.read_with(cx, |view, _| view.tiles_layout().panes());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        panes
+            .iter()
+            .map(|pane| window.find(("pane", pane.get())).bounds().size.width)
+            .collect()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn each_row_of_a_two_by_two_grid_has_its_own_divider(cx: &mut TestAppContext) {
+    let (window, view) = open_tiles(cx, 3);
+    let before = pane_widths(cx, window, &view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let area = window.find("tiles").bounds();
+        let from = window.find("divider-1").bounds().center();
+        let to = point(area.left() + area.size.width * 0.7, from.y);
+        window.drag(from, to, cx);
+    })
+    .expect("window");
     assert_eq!(
-        ratios,
+        split_ratios(cx, &view),
         [
             ("root".to_owned(), 500),
             ("1".to_owned(), 700),
             ("2".to_owned(), 500)
         ]
     );
+    let after = pane_widths(cx, window, &view);
+    assert!(after[0] > before[0] + px(100.));
+    assert!(after[1] < before[1] - px(100.));
+    assert!((after[2] - before[2]).abs() <= px(1.));
+    assert!((after[3] - before[3]).abs() <= px(1.));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.double_click("divider-1", cx);
     })
     .expect("window");
-    assert!(view.read_with(cx, |view, _| {
-        view.core_layout()
-            .unwrap()
-            .splits()
+    assert!(
+        split_ratios(cx, &view)
             .iter()
-            .all(|split| split.ratio == 500)
-    }));
+            .all(|(_, ratio)| *ratio == 500)
+    );
+}
+
+#[gpui_kit::test]
+fn ctrl_alt_zero_resets_both_row_dividers_of_a_grid(cx: &mut TestAppContext) {
+    let (window, view) = open_tiles(cx, 3);
+    view.update(cx, |view, cx| {
+        for (path, ratio) in [("1", 300), ("2", 700), ("root", 400)] {
+            view.browser
+                .command(&Command::LayoutRatio {
+                    split: path.parse().unwrap(),
+                    ratio,
+                })
+                .unwrap();
+        }
+        cx.notify();
+    });
+    press(cx, window, &view, "ctrl-alt-0");
+    assert!(
+        split_ratios(cx, &view)
+            .iter()
+            .all(|(_, ratio)| *ratio == 500)
+    );
 }
 
 #[gpui_kit::test]
