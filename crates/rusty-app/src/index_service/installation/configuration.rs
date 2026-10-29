@@ -1,7 +1,12 @@
 use std::{io, ptr};
 
 use windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
-use windows_sys::Win32::System::Services::*;
+use windows_sys::Win32::System::Services::{
+    ChangeServiceConfig2W, ChangeServiceConfigW, QUERY_SERVICE_CONFIGW, QueryServiceConfig2W,
+    QueryServiceConfigW, SC_ACTION, SERVICE_CONFIG, SERVICE_CONFIG_DELAYED_AUTO_START_INFO,
+    SERVICE_CONFIG_DESCRIPTION, SERVICE_CONFIG_FAILURE_ACTIONS,
+    SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW,
+};
 
 use super::super::scm::{ServiceHandle, checked};
 

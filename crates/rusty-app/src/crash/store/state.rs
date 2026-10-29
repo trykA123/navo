@@ -165,6 +165,10 @@ pub(super) fn details(data: &Path, case: u64, attempt: u64) -> PathBuf {
     data.join(format!("{}-recovery-{case}-{attempt}.jsonl", brand::SLUG))
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if takes a reference"
+)]
 fn native_kind(value: &rusty_core::FileIdentityKind) -> bool {
     *value == rusty_core::FileIdentityKind::Native
 }

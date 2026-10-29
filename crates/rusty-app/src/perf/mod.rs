@@ -140,7 +140,7 @@ impl PerfService for PerfReports {
                 path,
                 self.started,
                 &self.diagnostics,
-                ReportAttachments {
+                &ReportAttachments {
                     disk_use: disk_use.clone(),
                     extras: &[
                         ("perf.json", &json),

@@ -13,7 +13,15 @@ use rusty_index::pipe::CancelToken;
 use windows_sys::Win32::Foundation::{
     ERROR_CALL_NOT_IMPLEMENTED, ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_SPECIFIC_ERROR,
 };
-use windows_sys::Win32::System::Services::*;
+use windows_sys::Win32::System::Services::{
+    CloseServiceHandle, OpenSCManagerW, OpenServiceW, QUERY_SERVICE_CONFIGW, QueryServiceConfigW,
+    QueryServiceStatus, RegisterServiceCtrlHandlerExW, SC_HANDLE, SC_MANAGER_CONNECT,
+    SERVICE_ACCEPT_SHUTDOWN, SERVICE_ACCEPT_STOP, SERVICE_CONTROL_INTERROGATE,
+    SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP, SERVICE_DISABLED, SERVICE_QUERY_CONFIG,
+    SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START_PENDING, SERVICE_STATUS,
+    SERVICE_STOP_PENDING, SERVICE_STOPPED, SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
+    SetServiceStatus, StartServiceCtrlDispatcherW,
+};
 
 use super::install_plan::{NAVO, Product};
 use super::policy::ServiceError;

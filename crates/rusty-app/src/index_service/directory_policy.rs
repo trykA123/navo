@@ -5,7 +5,7 @@ pub(super) enum Found {
     Other,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DirectoryAction {
     Accept,
     Recreate,

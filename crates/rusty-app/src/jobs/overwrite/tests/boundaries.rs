@@ -86,7 +86,7 @@ fn returned_originals_leave_no_empty_holder_after_failed_placement() {
     let original = fs.file_identity(&fs.location("dest/a")).unwrap();
     let plan = overwrite(
         &fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Move,
     );
@@ -148,7 +148,7 @@ fn retained_completion_preserves_its_own_entries_and_the_next_job_enforces_quota
     fs.set_available_space("dest", Some(u64::MAX));
     let plan = overwrite(
         &fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Copy,
     );
@@ -202,11 +202,11 @@ fn maintenance_uses_the_new_cap_if_settings_change_while_a_copy_runs() {
     fs.set_available_space("dest", Some(u64::MAX));
     let plan = overwrite(
         &fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Copy,
     );
-    let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+    let mut log = profile_factory(journal, dirs.clone())(&plan).unwrap();
     assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);
     std::fs::write(
         dirs.settings_file(),
@@ -282,7 +282,7 @@ fn a_terminal_owner_cannot_return_another_jobs_proved_version() {
     drop(first);
     let plan = overwrite(
         &fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Copy,
     );

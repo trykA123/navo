@@ -14,7 +14,7 @@ fn native_cancel_leaves_only_a_proved_partial_and_recovery_cleans_it_before_retr
     std::fs::create_dir(&dest).unwrap();
     std::fs::write(dest.join("source"), b"old bytes").unwrap();
     let fs = LocalFs::new();
-    let plan = overwrite(&fs, vec![at(&source)], at(&dest), OpKind::Copy);
+    let plan = overwrite(&fs, &[at(&source)], at(&dest), OpKind::Copy);
     let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
     let outcome = cancel_copy(log.as_mut(), &plan, &fs);
     assert_eq!(outcome, JobOutcome::Cancelled);

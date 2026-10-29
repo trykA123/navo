@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -67,7 +68,7 @@ fn append(path: &Path, plan: &OperationPlan, status: RenameLogStatus) -> Result<
     for (source, target) in pairs {
         let source = serde_json::to_string(source.as_str()).map_err(|error| error.to_string())?;
         let target = serde_json::to_string(target.as_str()).map_err(|error| error.to_string())?;
-        batch.push_str(&format!("{source} → {target}\n"));
+        writeln!(batch, "{source} → {target}").map_err(|error| error.to_string())?;
         if batch.len() as u64 > rotation::MAX_BYTES {
             return Err("rename log batch exceeds the size limit".to_owned());
         }

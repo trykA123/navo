@@ -40,7 +40,7 @@ fn quit_checkpoints_the_shared_journal_after_flushing_visits() {
     let root = tempfile::tempdir().unwrap();
     let dirs = store(&root);
     let start = crate::crash::store::check_with(Some(&dirs.data), false, &FakeFs::new(), false);
-    let journal = start.journal.clone().unwrap();
+    let journal = start.journal.unwrap();
     let auto: u32 = jobs::lock(&journal)
         .database()
         .connection()

@@ -27,7 +27,7 @@ fn header(next_usn: i64) -> Header {
 
 fn save(clock: &mut SaveClock, path: &Path, index: &NtfsIndex, stopping: bool) {
     let snapshot = index.snapshot();
-    if !clock.due(Duration::ZERO, snapshot, stopping) {
+    if !clock.due(Duration::ZERO, snapshot.as_ref(), stopping) {
         return;
     }
     let (table, ids, position) = snapshot.unwrap();
@@ -64,15 +64,15 @@ fn a_batch_over_ten_thousand_records_saves_before_the_timer() {
     assert!(index.apply_batch(batch).unwrap().is_empty());
     save(&mut clock, &path, &index, false);
     assert_eq!(file::load_with_ids(&path).unwrap().0.next_usn, 10_101);
-    assert!(!clock.due(Duration::ZERO, index.snapshot(), false));
+    assert!(!clock.due(Duration::ZERO, index.snapshot().as_ref(), false));
 }
 
 #[test]
 fn a_ten_thousand_record_batch_waits_for_the_timer() {
     let mut clock = SaveClock::default();
     clock.batch(Duration::ZERO, 10_000);
-    assert!(!clock.due(Duration::ZERO, Some(()), false));
-    assert!(clock.due(Duration::from_secs(30), Some(()), false));
+    assert!(!clock.due(Duration::ZERO, Some(&()), false));
+    assert!(clock.due(Duration::from_secs(30), Some(&()), false));
 }
 
 #[test]
@@ -111,8 +111,8 @@ fn a_failed_large_batch_save_keeps_the_retry_backoff() {
             .is_err()
     );
     clock.batch(Duration::from_secs(1), 10_001);
-    assert!(!clock.due(Duration::from_secs(29), index.snapshot(), false));
-    assert!(clock.due(Duration::from_secs(30), index.snapshot(), false));
+    assert!(!clock.due(Duration::from_secs(29), index.snapshot().as_ref(), false));
+    assert!(clock.due(Duration::from_secs(30), index.snapshot().as_ref(), false));
 }
 
 fn fallback_after_damage(damage: impl FnOnce(&mut [u8])) {

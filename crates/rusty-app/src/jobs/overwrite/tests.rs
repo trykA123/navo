@@ -27,11 +27,11 @@ fn setup() -> (tempfile::TempDir, StoreDirs, SharedJournal) {
 
 fn overwrite(
     ops: &dyn ProviderOps,
-    sources: Vec<Location>,
+    sources: &[Location],
     target: Location,
     kind: OpKind,
 ) -> OperationPlan {
-    let items = scan(ops, &sources, &CancelToken::new()).unwrap();
+    let items = scan(ops, sources, &CancelToken::new()).unwrap();
     let existing = existing_at(ops, &items, &target, &CancelToken::new()).unwrap();
     plan(&PlanRequest {
         kind,
@@ -83,12 +83,7 @@ fn copy_and_move_preserve_old_versions_after_completion_and_restart() {
         fs.add_file("source/a", 7);
         fs.add_file("dest/a", 2);
         let old = fs.file_identity(&fs.location("dest/a")).unwrap();
-        let plan = overwrite(
-            &fs,
-            vec![fs.location("source/a")],
-            fs.location("dest"),
-            kind,
-        );
+        let plan = overwrite(&fs, &[fs.location("source/a")], fs.location("dest"), kind);
         let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
         assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);
         assert!(entries(&dirs).is_empty());
@@ -129,7 +124,7 @@ fn interrupted_overwrite_preserves_both_versions_and_completes_as_failed() {
     fs.add_file("dest/a", 2);
     let plan = overwrite(
         &fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Copy,
     );
@@ -165,7 +160,7 @@ fn pair(fs: &FakeFs) -> OperationPlan {
     }
     overwrite(
         fs,
-        vec![fs.location("source/a"), fs.location("source/b")],
+        &[fs.location("source/a"), fs.location("source/b")],
         fs.location("dest"),
         OpKind::Copy,
     )
@@ -258,7 +253,7 @@ fn proof_journal_failure_keeps_the_original_target_and_no_adopted_versions() {
     let original = fs.file_identity(&fs.location("dest/a")).unwrap();
     let plan = overwrite(
         &fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Copy,
     );
@@ -280,7 +275,7 @@ fn failed_completion_rolls_back_catalog_and_preserves_all_held_evidence() {
     fs.add_file("dest/a", 2);
     let plan = overwrite(
         &fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Copy,
     );
@@ -361,7 +356,7 @@ fn native_shared_holder_restores_each_version_without_removing_its_neighbor() {
     let fs = LocalFs::new();
     let plan = overwrite(
         &fs,
-        vec![location(&source.join("a")), location(&source.join("b"))],
+        &[location(&source.join("a")), location(&source.join("b"))],
         location(&dest),
         OpKind::Copy,
     );

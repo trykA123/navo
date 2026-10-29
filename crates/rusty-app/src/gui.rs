@@ -54,10 +54,10 @@ pub(crate) struct Launch {
 
 pub(crate) fn on_instance_request(
     sender: &OpenSender,
-    request: crate::instance::Request,
+    request: &crate::instance::Request,
 ) -> crate::instance::Reply {
     tracing::info!("instance request received");
-    if sender.send(open_request(&request)) {
+    if sender.send(open_request(request)) {
         crate::instance::Reply::Ok
     } else {
         tracing::warn!("window no longer accepts instance requests");
@@ -217,7 +217,7 @@ fn finish_startup(
     viewer: bool,
 ) -> Option<Arc<dyn rusty_ui::window_view::CrashReportService>> {
     store.share();
-    crash.recovery = store.notice.clone();
+    crash.recovery.clone_from(&store.notice);
     mark_window_open(viewer);
     crash.service()
 }

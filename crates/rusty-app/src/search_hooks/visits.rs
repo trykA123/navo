@@ -29,7 +29,7 @@ impl Visits {
         let (sender, receiver) = mpsc::sync_channel(256);
         let worker = std::thread::Builder::new()
             .name("navo-visits".into())
-            .spawn(move || run(db, receiver))?;
+            .spawn(move || run(&db, &receiver))?;
         Ok(Self {
             sender,
             worker: Mutex::new(Some(worker)),
@@ -135,11 +135,11 @@ impl Batch {
     }
 }
 
-fn run(db: SharedDb, receiver: mpsc::Receiver<Message>) {
+fn run(db: &SharedDb, receiver: &mpsc::Receiver<Message>) {
     let mut batch = Batch::default();
     loop {
-        batch.flush_due(&db, Instant::now());
-        if let Err(error) = batch.wait_for_capacity(&db) {
+        batch.flush_due(db, Instant::now());
+        if let Err(error) = batch.wait_for_capacity(db) {
             super::report("saving a full visit batch", &error);
             return;
         }
@@ -155,20 +155,18 @@ fn run(db: SharedDb, receiver: mpsc::Receiver<Message>) {
         match message {
             Ok(Message::Visit(visit)) => batch.record(visit, Instant::now()),
             Ok(Message::Rank(limit, now, reply)) => {
-                let ranked = batch
-                    .flush(&db)
-                    .and_then(|()| lock(&db).frecent(limit, now));
+                let ranked = batch.flush(db).and_then(|()| lock(db).frecent(limit, now));
                 let _ = reply.send(ranked);
             }
             Ok(Message::Clear(reply)) => {
-                let cleared = lock(&db).clear_search_history();
+                let cleared = lock(db).clear_search_history();
                 if cleared.is_ok() {
                     batch = Batch::default();
                 }
                 let _ = reply.send(cleared);
             }
             Ok(Message::Stop) | Err(mpsc::RecvTimeoutError::Disconnected) => {
-                if let Err(error) = batch.flush(&db) {
+                if let Err(error) = batch.flush(db) {
                     super::report("saving visits at exit", &error);
                 }
                 return;

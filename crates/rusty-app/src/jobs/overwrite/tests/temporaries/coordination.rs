@@ -50,7 +50,7 @@ fn parallel_registration_failures_drain_every_waiting_worker_without_copying_byt
     let plan = pair(&fs);
     let (db, _) = Db::open(&dirs.journal_file(), false).unwrap();
     db.connection().execute_batch("CREATE TRIGGER refuse_created_temporary BEFORE UPDATE OF detail ON job_step WHEN NEW.detail IS NOT NULL AND json_valid(NEW.detail) AND json_extract(NEW.detail, '$.identity') IS NOT NULL BEGIN SELECT RAISE(ABORT, 'registration refused'); END;").unwrap();
-    let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+    let mut log = profile_factory(journal.clone(), dirs)(&plan).unwrap();
     let outcome = execute(log.as_mut(), &plan, &fs);
     assert!(matches!(outcome, JobOutcome::Failed { .. }));
     assert!(log.finish(&outcome, &fs).is_err());

@@ -156,7 +156,7 @@ fn pick_parent(count: usize, rng: &mut Rng) -> usize {
 pub(super) fn create(root: &Path, plan: &Plan) -> io::Result<()> {
     for folder in &plan.folders {
         let path = root.join(&folder.path);
-        fs::create_dir_all(&path).map_err(|error| context("creating folder", &path, error))?;
+        fs::create_dir_all(&path).map_err(|error| context("creating folder", &path, &error))?;
     }
     let units: Vec<(&Folder, usize)> = plan
         .folders
@@ -209,12 +209,12 @@ fn create_files(root: &Path, folder: &Folder, at: usize) -> io::Result<()> {
             .write(true)
             .create_new(true)
             .open(&file)
-            .map_err(|error| context("creating file", &file, error))?;
+            .map_err(|error| context("creating file", &file, &error))?;
     }
     Ok(())
 }
 
-pub(super) fn context(doing: &str, path: &Path, error: io::Error) -> io::Error {
+pub(super) fn context(doing: &str, path: &Path, error: &io::Error) -> io::Error {
     io::Error::new(error.kind(), format!("{doing} {}: {error}", path.display()))
 }
 

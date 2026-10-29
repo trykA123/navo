@@ -225,7 +225,7 @@ fn the_completed_receipt_is_acknowledged_on_the_next_start() {
     built(data.path());
     workflow::run(
         data.path(),
-        workflow::Mode {
+        &workflow::Mode {
             unclean: false,
             experimental: false,
             sole: true,

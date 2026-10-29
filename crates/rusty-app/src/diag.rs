@@ -59,10 +59,10 @@ pub(crate) fn write_with_extras(
     path: &Path,
     started: Instant,
     diagnostics: &Diagnostics,
-    attachments: ReportAttachments<'_>,
+    attachments: &ReportAttachments<'_>,
 ) -> io::Result<()> {
     let input = filled_input(started, diagnostics);
-    write_report_bundle(path, &input, &diagnostics.redactor, &attachments).map(drop)
+    write_report_bundle(path, &input, &diagnostics.redactor, attachments).map(drop)
 }
 
 pub(crate) fn disk_use(data: Option<&Path>, redactor: &Redactor) -> DiskUse {

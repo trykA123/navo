@@ -82,6 +82,10 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Option<FileIdentity>, FsError> {
     }))
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if takes a reference"
+)]
 fn is_false(value: &bool) -> bool {
     !value
 }

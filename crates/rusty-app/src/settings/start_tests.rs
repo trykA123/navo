@@ -243,7 +243,7 @@ fn late_completion_before_watcher_registration_reaches_the_live_store() {
     let (read_worker, replace_worker, committed_worker) =
         (read.clone(), replace.clone(), committed.clone());
     let (file, ledger) = (at.file.clone(), at.ledger.clone());
-    let starting = spawn(Some(at.file.clone()), Duration::ZERO, move |backup| {
+    let starting = spawn(Some(at.file), Duration::ZERO, move |backup| {
         let mut started = start_sharing(Some(&file), None, backup);
         read_worker.wait();
         replace_worker.wait();
@@ -290,7 +290,7 @@ fn late_completion_reaches_the_live_store_without_a_watch_event() {
     let release = Arc::new(Barrier::new(2));
     let (read_worker, gate) = (read.clone(), release.clone());
     let (file, ledger) = (at.file.clone(), at.ledger.clone());
-    let starting = spawn(Some(at.file.clone()), Duration::ZERO, move |backup| {
+    let starting = spawn(Some(at.file), Duration::ZERO, move |backup| {
         let mut started = start_sharing(Some(&file), None, backup);
         read_worker.wait();
         gate.wait();

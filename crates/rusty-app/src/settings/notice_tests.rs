@@ -57,7 +57,7 @@ fn next_defaults(news: &Receiver<SettingsNews>) -> Vec<DefaultShift> {
 fn the_start_up_default_changes_reach_the_notice() {
     let at = installed();
     let (file, ledger) = (at.file.clone(), at.ledger.clone());
-    let starting = spawn(Some(at.file.clone()), WAIT, move |backup| {
+    let starting = spawn(Some(at.file), WAIT, move |backup| {
         let mut started = start_sharing(Some(&file), None, backup);
         started.default_changes = follow_defaults(
             &mut started.loaded.as_mut().unwrap().store,
@@ -81,7 +81,7 @@ fn a_late_completion_still_reaches_the_notice() {
     let release = Arc::new(Barrier::new(2));
     let (read_worker, gate) = (read.clone(), release.clone());
     let (file, ledger) = (at.file.clone(), at.ledger.clone());
-    let starting = spawn(Some(at.file.clone()), Duration::ZERO, move |backup| {
+    let starting = spawn(Some(at.file), Duration::ZERO, move |backup| {
         let mut started = start_sharing(Some(&file), None, backup);
         read_worker.wait();
         gate.wait();
@@ -150,7 +150,7 @@ fn keep_old_value_writes_the_old_value_as_the_users_and_the_file_shows_it() {
 #[test]
 fn a_kept_value_is_not_followed_again_and_raises_no_notice() {
     let at = installed();
-    let (file, ledger) = (at.file.clone(), at.ledger.clone());
+    let (file, ledger) = (at.file.clone(), at.ledger);
     let defaults = newer_defaults();
     let mut started = start_sharing(Some(&file), None, rusty_store::SessionBackup::default());
     let changes = follow_defaults(

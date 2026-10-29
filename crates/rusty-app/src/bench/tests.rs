@@ -196,7 +196,7 @@ fn a_query_run_while_the_index_table_is_write_locked_still_reports_its_results()
         })
     };
     ready.recv().unwrap();
-    let during = first(search::run(&root, table.clone()));
+    let during = first(search::run(&root, table));
     writer.join().unwrap();
     assert_eq!(
         during, 1,

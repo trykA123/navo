@@ -25,7 +25,7 @@ pub(super) fn runtime_rollback(log: &JournalLog, data: &Path, ops: &dyn Provider
             .map_err(|error| error.to_string())?;
         restore_job(
             db,
-            Restore {
+            &Restore {
                 job: &job,
                 journal: &log.journal,
                 ops,
@@ -51,7 +51,7 @@ pub(in crate::jobs) fn recover(
             db.defer_checkpoint().map_err(|error| error.to_string())?;
             restore_job(
                 db,
-                Restore {
+                &Restore {
                     job,
                     journal,
                     ops,
@@ -68,7 +68,7 @@ pub(in crate::jobs) fn recover(
     }
 }
 
-fn restore_job(db: Db, scope: Restore<'_>) -> Result<(), String> {
+fn restore_job(db: Db, scope: &Restore<'_>) -> Result<(), String> {
     let plan: RetainedDeletePlan =
         serde_json::from_slice(&scope.job.plan).map_err(|error| error.to_string())?;
     let roots: HashMap<_, _> = plan

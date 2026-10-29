@@ -38,7 +38,7 @@ fn to_shell(files: &ClipboardFiles) -> Result<FileClipboard, ClipboardFault> {
     Ok(FileClipboard { paths, effect })
 }
 
-fn from_shell(files: FileClipboard) -> Result<ClipboardFiles, ClipboardFault> {
+fn from_shell(files: &FileClipboard) -> Result<ClipboardFiles, ClipboardFault> {
     let items = files
         .paths
         .iter()
@@ -63,7 +63,7 @@ impl FileClipboardService for ShellClipboard {
     fn read(&self) -> Result<Option<ClipboardFiles>, ClipboardFault> {
         rusty_shell::read_files()
             .map_err(fault)?
-            .map(from_shell)
+            .map(|files| from_shell(&files))
             .transpose()
     }
 

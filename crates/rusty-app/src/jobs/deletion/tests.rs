@@ -186,7 +186,7 @@ fn ordinary_delete_keeps_a_complete_tree_with_its_durable_policy() {
     fs.add_file("home/docs/nested/a", 8);
     let source = fs.location("home/docs");
     let plan = delete(&fs, std::slice::from_ref(&source));
-    let mut log = super::super::experimental_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+    let mut log = super::super::experimental_factory(journal, dirs.clone())(&plan).unwrap();
     assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);
     let saved = entries(&dirs);
     assert_eq!(saved.len(), 1);
@@ -210,7 +210,7 @@ fn cancellation_after_capture_restores_the_original_and_leaves_no_live_payload()
     fs.add_file("home/a", 8);
     let source = fs.location("home/a");
     let plan = delete(&fs, std::slice::from_ref(&source));
-    let mut log = super::super::experimental_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+    let mut log = super::super::experimental_factory(journal, dirs.clone())(&plan).unwrap();
     let cancel = CancelToken::new();
     let outcome = log
         .execute(LoggedOperation {
@@ -334,7 +334,7 @@ fn profile_lease_and_private_containers_block_other_mutations() {
     let fs = FakeFs::new();
     fs.add_file("home/a", 8);
     let plan = delete(&fs, &[fs.location("home/a")]);
-    let factory = super::super::experimental_factory(journal.clone(), dirs.clone());
+    let factory = super::super::experimental_factory(journal, dirs.clone());
     let mut log = factory(&plan).unwrap();
     assert!(factory(&plan).is_ok());
     assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);

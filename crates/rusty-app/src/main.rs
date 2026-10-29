@@ -351,7 +351,7 @@ fn prepare_instance_with_notice(
                 if request.experimental_retention != retention {
                     return instance::Reply::Error;
                 }
-                gui::on_instance_request(&sender, request)
+                gui::on_instance_request(&sender, &request)
             })?;
             Ok(first(Some(guard)))
         }

@@ -82,7 +82,7 @@ fn offer(journal: &SharedJournal) -> Result<Option<UndoOffer>, String> {
         .map_err(|error| error.to_string())?;
     match newest {
         None => Ok(None),
-        Some(Undoable::Rename(job)) => decode(job).map(Some),
+        Some(Undoable::Rename(job)) => decode(&job).map(Some),
         Some(Undoable::Retained {
             id,
             created_at,
@@ -104,7 +104,7 @@ fn retire_job(journal: &SharedJournal, offer: &UndoOffer) -> Result<(), String> 
     Ok(())
 }
 
-fn decode(job: FinishedJob) -> Result<UndoOffer, String> {
+fn decode(job: &FinishedJob) -> Result<UndoOffer, String> {
     let plan: OperationPlan =
         serde_json::from_slice(&job.plan).map_err(|error| error.to_string())?;
     let done = job

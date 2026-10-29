@@ -79,6 +79,10 @@ impl Request {
     }
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if takes a reference"
+)]
 fn disabled(value: &bool) -> bool {
     !value
 }

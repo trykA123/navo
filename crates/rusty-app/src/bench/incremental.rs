@@ -48,16 +48,16 @@ pub(super) fn apply(fixture: &Path, changes: Changes) -> io::Result<()> {
             .write(true)
             .create_new(true)
             .open(&path)
-            .map_err(|error| context("creating", &path, error))?;
+            .map_err(|error| context("creating", &path, &error))?;
     }
     for index in 0..changes.renamed {
         let from = folder.join(victim_name(index));
         let to = folder.join(format!("{RENAMED}{index:05}.c"));
-        fs::rename(&from, &to).map_err(|error| context("renaming", &from, error))?;
+        fs::rename(&from, &to).map_err(|error| context("renaming", &from, &error))?;
     }
     for index in changes.renamed..changes.renamed + changes.deleted {
         let path = folder.join(victim_name(index));
-        fs::remove_file(&path).map_err(|error| context("deleting", &path, error))?;
+        fs::remove_file(&path).map_err(|error| context("deleting", &path, &error))?;
     }
     Ok(())
 }

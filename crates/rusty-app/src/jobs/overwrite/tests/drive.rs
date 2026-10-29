@@ -18,7 +18,7 @@ fn overwrite_on(
     }
     let plan = overwrite(
         fs.as_ref(),
-        vec![fs.location("src/a")],
+        &[fs.location("src/a")],
         fs.location("dest"),
         kind,
     );

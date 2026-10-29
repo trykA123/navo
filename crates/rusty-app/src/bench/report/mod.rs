@@ -121,7 +121,7 @@ pub(super) fn paths(out: Option<&Path>, stamp: &str) -> io::Result<(PathBuf, Pat
 
 pub(super) fn write(report: &Report, json: &Path, md: &Path) -> io::Result<()> {
     let text = serde_json::to_string_pretty(report).map_err(io::Error::other)?;
-    std::fs::write(json, text).map_err(|error| super::fixture::context("writing", json, error))?;
+    std::fs::write(json, text).map_err(|error| super::fixture::context("writing", json, &error))?;
     std::fs::write(md, markdown(report))
-        .map_err(|error| super::fixture::context("writing", md, error))
+        .map_err(|error| super::fixture::context("writing", md, &error))
 }

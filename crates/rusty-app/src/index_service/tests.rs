@@ -195,8 +195,8 @@ fn save_waits_for_quiet_and_never_saves_a_pending_rename_even_on_stop() {
     let mut index = NtfsIndex::restore(snapshot(), 42, 7).unwrap();
     let mut clock = SaveClock::default();
     clock.changed(Duration::ZERO);
-    assert!(!clock.due(Duration::from_secs(29), index.snapshot(), false));
-    assert!(clock.due(Duration::from_secs(30), index.snapshot(), false));
+    assert!(!clock.due(Duration::from_secs(29), index.snapshot().as_ref(), false));
+    assert!(clock.due(Duration::from_secs(30), index.snapshot().as_ref(), false));
     index
         .apply_batch(UsnBatch {
             next_usn: 110,
@@ -212,9 +212,9 @@ fn save_waits_for_quiet_and_never_saves_a_pending_rename_even_on_stop() {
         })
         .unwrap();
     assert!(index.snapshot().is_none());
-    assert!(!clock.due(Duration::from_secs(60), index.snapshot(), true));
+    assert!(!clock.due(Duration::from_secs(60), index.snapshot().as_ref(), true));
     clock.saved();
-    assert!(!clock.due(Duration::from_secs(60), Some(()), true));
+    assert!(!clock.due(Duration::from_secs(60), Some(&()), true));
 }
 
 #[test]
@@ -223,18 +223,18 @@ fn failed_saves_back_off_thirty_seconds_then_five_minutes() {
     let seconds = Duration::from_secs;
     clock.changed(Duration::ZERO);
     clock.failed(seconds(30));
-    assert!(!clock.due(seconds(59), Some(()), false));
+    assert!(!clock.due(seconds(59), Some(&()), false));
     clock.changed(seconds(58));
-    assert!(clock.due(seconds(60), Some(()), false));
+    assert!(clock.due(seconds(60), Some(&()), false));
     clock.failed(seconds(60));
-    assert!(!clock.due(seconds(359), Some(()), false));
-    assert!(clock.due(seconds(360), Some(()), false));
-    assert!(clock.due(seconds(61), Some(()), true));
+    assert!(!clock.due(seconds(359), Some(&()), false));
+    assert!(clock.due(seconds(360), Some(&()), false));
+    assert!(clock.due(seconds(61), Some(&()), true));
     clock.saved();
     clock.changed(seconds(400));
-    assert!(clock.due(seconds(430), Some(()), false));
+    assert!(clock.due(seconds(430), Some(&()), false));
     clock.failed(seconds(430));
-    assert!(clock.due(seconds(460), Some(()), false));
+    assert!(clock.due(seconds(460), Some(&()), false));
 }
 
 #[test]

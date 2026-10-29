@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn changed_drive_settings_are_unknown_until_asked_again() {
         let (manager, release) = gated();
-        let presence = ServicePresence::new(manager.clone());
+        let presence = ServicePresence::new(manager);
         release.send(()).unwrap();
         presence.volumes(&Selection::default());
         settle(&presence);

@@ -110,7 +110,7 @@ fn startup(case: Start) {
         };
         verify_startup(
             case,
-            [first, during, status, populated],
+            &[first, during, status, populated],
             [
                 first_elapsed,
                 during_query,
@@ -124,7 +124,7 @@ fn startup(case: Start) {
     });
 }
 
-fn verify_startup(case: Start, replies: [Reply; 4], elapsed: [Duration; 7]) {
+fn verify_startup(case: Start, replies: &[Reply; 4], elapsed: [Duration; 7]) {
     assert_eq!(replies[0].status.volumes[0].progress, Some(0));
     assert!(replies[0].hits.is_empty());
     for reply in &replies[1..3] {

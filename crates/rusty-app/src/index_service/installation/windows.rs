@@ -11,7 +11,16 @@ use windows_sys::Win32::Foundation::{
     ERROR_SERVICE_NOT_ACTIVE,
 };
 use windows_sys::Win32::Storage::FileSystem::DELETE;
-use windows_sys::Win32::System::Services::*;
+use windows_sys::Win32::System::Services::{
+    ChangeServiceConfig2W, ChangeServiceConfigW, ControlService, CreateServiceW, DeleteService,
+    OpenServiceW, QueryServiceStatus, SC_ACTION, SC_ACTION_NONE, SC_ACTION_RESTART,
+    SC_MANAGER_CONNECT, SC_MANAGER_CREATE_SERVICE, SERVICE_ALL_ACCESS, SERVICE_AUTO_START,
+    SERVICE_CONFIG_DELAYED_AUTO_START_INFO, SERVICE_CONFIG_FAILURE_ACTIONS,
+    SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_CONTROL_STOP, SERVICE_DELAYED_AUTO_START_INFO,
+    SERVICE_ERROR_NORMAL, SERVICE_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW,
+    SERVICE_QUERY_STATUS, SERVICE_STATUS, SERVICE_STOP, SERVICE_STOP_PENDING, SERVICE_STOPPED,
+    SERVICE_WIN32_OWN_PROCESS, StartServiceW,
+};
 use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles};
 
 use super::directory::{Policy, ProtectedDirectory, known_folder};

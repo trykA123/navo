@@ -13,7 +13,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use super::*;
 use crate::logging::{Diagnostics, Opened, log_config, open};
 
-fn diagnostics(opened: Opened) -> Diagnostics {
+fn diagnostics(opened: &Opened) -> Diagnostics {
     Diagnostics {
         redactor: Arc::new(redactor()),
         ring: Arc::new(EventRing::new(EventRing::DEFAULT_BUDGET)),
@@ -111,7 +111,7 @@ fn dpi_awareness_is_unknown_without_windows() {
 fn the_report_holds_build_system_memory_and_timing() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("report.zip");
-    write(&path, Instant::now(), &diagnostics(Opened::default())).unwrap();
+    write(&path, Instant::now(), &diagnostics(&Opened::default())).unwrap();
     let mut zip = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
     let mut text = String::new();
     zip.by_name("report.json")
@@ -127,7 +127,7 @@ fn the_report_holds_build_system_memory_and_timing() {
 
 #[test]
 fn the_report_carries_the_recent_events_and_the_miss_count() {
-    let mut diagnostics = diagnostics(Opened::default());
+    let mut diagnostics = diagnostics(&Opened::default());
     let opened = open(log_config(None), &diagnostics.redactor, &diagnostics.ring);
     diagnostics.misses = opened.misses();
     let subscriber = Registry::default().with(opened.layer);
@@ -153,7 +153,7 @@ fn cache_named<'a>(report: &'a Value, name: &str) -> &'a Value {
 
 #[test]
 fn the_report_shows_the_listing_cache_against_its_budget() {
-    let diagnostics = diagnostics(Opened::default());
+    let diagnostics = diagnostics(&Opened::default());
     let cache = rusty_cache::ListingCache::default();
     let key = rusty_cache::CacheKey::new(rusty_core::Location::new("other://open").unwrap(), None);
     cache.pin(&key);
@@ -180,7 +180,7 @@ fn the_report_shows_the_listing_cache_against_its_budget() {
 
 #[test]
 fn the_report_shows_the_event_ring_against_its_budget() {
-    let diagnostics = diagnostics(Opened::default());
+    let diagnostics = diagnostics(&Opened::default());
     register_events(&diagnostics.caches, &diagnostics.ring);
     diagnostics.ring.push("one event");
     let dir = tempfile::tempdir().unwrap();
@@ -199,7 +199,7 @@ fn the_report_shows_the_event_ring_against_its_budget() {
 
 #[test]
 fn the_report_shows_cache_db_against_its_budget() {
-    let diagnostics = diagnostics(Opened::default());
+    let diagnostics = diagnostics(&Opened::default());
     let dir = tempfile::tempdir().unwrap();
     let cache = rusty_cache::ListingCache::default();
     let warm = rusty_cache::Warm {
@@ -221,7 +221,7 @@ fn the_report_shows_cache_db_against_its_budget() {
 
 #[test]
 fn the_on_demand_report_reads_cache_db_from_the_data_folder() {
-    let diagnostics = diagnostics(Opened::default());
+    let diagnostics = diagnostics(&Opened::default());
     let dir = tempfile::tempdir().unwrap();
     let keys = rusty_cache::CacheKeys::default();
     let folder = rusty_core::Location::new("other://open").unwrap();

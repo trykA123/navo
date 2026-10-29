@@ -16,14 +16,14 @@ pub(super) struct Mode {
 
 pub(super) fn run(
     data: &Path,
-    mode: Mode,
+    mode: &Mode,
     ops: &dyn ProviderOps,
 ) -> Result<(Option<RecoveryNotice>, Option<crate::jobs::SharedJournal>), Error> {
     let Mode {
         unclean,
         experimental,
         sole,
-    } = mode;
+    } = *mode;
     let mut state = State::load(data)?;
     let path = rusty_store::StoreDirs::journal_in(data);
     if !sole {

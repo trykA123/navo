@@ -81,11 +81,11 @@ impl Configured {
         })
     }
 
-    pub fn settle(&mut self, options: &IndexOptions, service: Option<Status>, now: Instant) {
+    pub fn settle(&mut self, options: &IndexOptions, service: Option<&Status>, now: Instant) {
         self.settled = Some(Settled {
             at: now,
             options: options.clone(),
-            service: service.as_ref().map(coverage),
+            service: service.map(coverage),
         });
     }
 
@@ -107,8 +107,9 @@ impl Configured {
 
 pub(super) fn reset_after_actions(
     service: &mut rusty_ui::window_view::ServiceHooks,
-    reset: std::sync::Arc<dyn Fn() + Send + Sync>,
+    reset: impl Fn() + Send + Sync + 'static,
 ) {
+    let reset: std::sync::Arc<dyn Fn() + Send + Sync> = std::sync::Arc::new(reset);
     for action in [&mut service.install, &mut service.remove] {
         let original = action.clone();
         let reset = reset.clone();
@@ -196,7 +197,7 @@ mod review_tests {
         let now = Instant::now();
         let options = IndexOptions::default();
         let mut changed = available();
-        configured.settle(&options, Some(changed.clone()), now);
+        configured.settle(&options, Some(&changed), now);
         changed.volumes[0].entries += 10;
         changed.volumes[0].progress = Some(50);
         assert!(configured.is_current(&options, Some(&changed), now));
@@ -228,10 +229,7 @@ mod action_tests {
         let action = events.clone();
         service.remove = Arc::new(move || action.lock().unwrap().push("remove"));
         let reset = events.clone();
-        reset_after_actions(
-            &mut service,
-            Arc::new(move || reset.lock().unwrap().push("reset")),
-        );
+        reset_after_actions(&mut service, move || reset.lock().unwrap().push("reset"));
         (service.install)();
         (service.remove)();
         assert_eq!(
@@ -265,10 +263,10 @@ mod coverage_change_tests {
                 ..Default::default()
             }],
         };
-        cache.settle(&options, Some(status.clone()), now);
+        cache.settle(&options, Some(&status), now);
         status.volumes[0].errors.push("error".into());
         assert!(!cache.is_current(&options, Some(&status), now));
-        cache.settle(&options, Some(status.clone()), now);
+        cache.settle(&options, Some(&status), now);
         status.volumes[0].errors[0] = "another error".into();
         assert!(cache.is_current(&options, Some(&status), now));
         status.volumes[0].root = "D:".into();

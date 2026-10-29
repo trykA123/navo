@@ -63,16 +63,13 @@ pub fn hooks(
     let weak = Arc::downgrade(&hosts);
     rusty_diag::components::register(memory::NAME, move || memory::read(&weak));
     let reset = hosts.clone();
-    config::reset_after_actions(
-        service,
-        Arc::new(move || {
-            reset
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .configured
-                .reset();
-        }),
-    );
+    config::reset_after_actions(service, move || {
+        reset
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .configured
+            .reset();
+    });
     let start = hosts.clone();
     IndexHooks {
         start: Arc::new(move |options| {
@@ -215,7 +212,7 @@ impl Hosts {
     ) {
         let service = self.configured.query_reply(service, now);
         if !self.configured.is_current(options, service.as_ref(), now) {
-            self.reconfigure(options, service, now);
+            self.reconfigure(options, service.as_ref(), now);
         }
         for location in self.desired.clone() {
             if !self
@@ -228,7 +225,12 @@ impl Hosts {
         }
     }
 
-    fn reconfigure(&mut self, options: &IndexOptions, service: Option<pipe::Status>, now: Instant) {
+    fn reconfigure(
+        &mut self,
+        options: &IndexOptions,
+        service: Option<&pipe::Status>,
+        now: Instant,
+    ) {
         let available = rusty_shell::list_drives();
         let volumes = match options.mode {
             IndexMode::Auto => self.presence.volumes(&Selection::of(options)),
@@ -238,7 +240,7 @@ impl Hosts {
             (IndexMode::Off | IndexMode::Service, _) | (_, None) => Vec::new(),
             (_, Some(volumes)) => {
                 let service = Service {
-                    reply: service.as_ref(),
+                    reply: service,
                     volumes: volumes.as_deref(),
                 };
                 roots(options, &available, self.walk_roots(), service)

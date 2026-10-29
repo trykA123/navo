@@ -95,7 +95,7 @@ pub(crate) fn check_with(
     access::register(&path, &locks);
     let outcome = workflow::run(
         data,
-        workflow::Mode {
+        &workflow::Mode {
             unclean,
             experimental,
             sole: locks.sole,

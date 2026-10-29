@@ -49,8 +49,7 @@ impl Command {
     pub(crate) fn uses_console(&self) -> bool {
         match self {
             Self::Open(start) => start.is_metrics(),
-            Self::PdfHelper => false,
-            Self::IndexService(_) => false,
+            Self::PdfHelper | Self::IndexService(_) => false,
             Self::Version
             | Self::DiagReport(_)
             | Self::CrashTest(_)

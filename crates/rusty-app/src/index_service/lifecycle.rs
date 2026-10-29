@@ -81,7 +81,7 @@ impl SaveClock {
         self.large_batch |= records > 10_000;
     }
 
-    pub fn due<T>(&self, now: Duration, snapshot: Option<T>, stopping: bool) -> bool {
+    pub fn due<T>(&self, now: Duration, snapshot: Option<&T>, stopping: bool) -> bool {
         snapshot.is_some()
             && self.changed.is_some_and(|changed| {
                 stopping

@@ -51,6 +51,7 @@ enum Step {
     Closed,
 }
 
+#[derive(Clone, Copy)]
 enum Signal {
     Ready,
     HungUp,

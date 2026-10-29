@@ -5,7 +5,7 @@ fn single(fs: &FakeFs) -> OperationPlan {
     fs.add_file("dest/a", 2);
     overwrite(
         fs,
-        vec![fs.location("source/a")],
+        &[fs.location("source/a")],
         fs.location("dest"),
         OpKind::Copy,
     )
@@ -279,7 +279,7 @@ fn identity_registration_failure_leaves_no_unregistered_copied_bytes() {
     let plan = single(&fs);
     let (db, _) = Db::open(&dirs.journal_file(), false).unwrap();
     db.connection().execute_batch("CREATE TRIGGER refuse_created_temporary BEFORE UPDATE OF detail ON job_step WHEN NEW.detail IS NOT NULL AND json_valid(NEW.detail) AND json_extract(NEW.detail, '$.identity') IS NOT NULL BEGIN SELECT RAISE(ABORT, 'registration refused'); END;").unwrap();
-    let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+    let mut log = profile_factory(journal.clone(), dirs)(&plan).unwrap();
     let failed = execute(log.as_mut(), &plan, &fs);
     assert!(matches!(failed, JobOutcome::Failed { .. }));
     assert!(log.finish(&failed, &fs).is_err());

@@ -174,7 +174,7 @@ fn execute_install_step(
                 "new description",
                 true,
                 false,
-            )
+            );
         }
         Start => *running = true,
         Restore => {
