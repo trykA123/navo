@@ -323,3 +323,20 @@ pub trait HashCache: Send + Sync {
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaseRule {
+    Sensitive,
+    Insensitive,
+}
+
+impl CaseRule {
+    #[must_use]
+    pub const fn for_sides(left_case_sensitive: bool, right_case_sensitive: bool) -> Self {
+        if left_case_sensitive && right_case_sensitive {
+            Self::Sensitive
+        } else {
+            Self::Insensitive
+        }
+    }
+}

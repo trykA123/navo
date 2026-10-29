@@ -4,24 +4,9 @@ use std::sync::Arc;
 
 use rusty_core::{ProviderPath, WindowsFoldKey};
 
-use crate::model::{ContentClass, EntryKind, Generation, RelPath, Row, SideEntry, Status};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CaseRule {
-    Sensitive,
-    Insensitive,
-}
-
-impl CaseRule {
-    #[must_use]
-    pub const fn for_sides(left_case_sensitive: bool, right_case_sensitive: bool) -> Self {
-        if left_case_sensitive && right_case_sensitive {
-            Self::Sensitive
-        } else {
-            Self::Insensitive
-        }
-    }
-}
+use crate::model::{
+    CaseRule, ContentClass, EntryKind, Generation, RelPath, Row, SideEntry, Status,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum GroupKey {
