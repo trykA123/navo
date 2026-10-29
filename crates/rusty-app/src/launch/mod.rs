@@ -1,49 +1,54 @@
-use std::process::Command;
 use std::sync::{Arc, mpsc};
 
 use rusty_core::Location;
 use rusty_ui::browser::Launcher;
 
-pub fn launcher() -> Launcher {
-    queued(|mut command| {
-        let _ = command.spawn();
-    })
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows::start;
+#[cfg(not(windows))]
+mod xdg;
+#[cfg(not(windows))]
+use xdg::start;
+
+#[derive(Debug, PartialEq, Eq)]
+struct LaunchRequest {
+    file: String,
+    directory: Option<String>,
 }
 
-fn queued(start: impl Fn(Command) + Send + 'static) -> Launcher {
-    let (sender, commands) = mpsc::channel::<Command>();
+pub fn launcher() -> Launcher {
+    queued(start)
+}
+
+fn queued(start: impl Fn(LaunchRequest) + Send + 'static) -> Launcher {
+    let (sender, requests) = mpsc::channel::<LaunchRequest>();
     let worker = std::thread::Builder::new()
         .name("navo-launch".to_owned())
         .spawn(move || {
-            for command in commands {
-                start(command);
+            for request in requests {
+                start(request);
             }
         });
     if let Err(error) = worker {
         tracing::warn!(%error, "could not start the launch worker");
     }
     Arc::new(move |location: &Location| {
-        if let Some(command) = command_for(location) {
-            let _ = sender.send(command);
+        if let Some(request) = request_for(location) {
+            let _ = sender.send(request);
         }
     })
 }
 
-fn opener() -> &'static str {
-    if cfg!(windows) {
-        "explorer"
-    } else {
-        "xdg-open"
-    }
-}
-
-fn command_for(location: &Location) -> Option<Command> {
+fn request_for(location: &Location) -> Option<LaunchRequest> {
     if !location.is_local() {
         return None;
     }
-    let mut command = Command::new(opener());
-    command.arg(location.as_str());
-    Some(command)
+    Some(LaunchRequest {
+        file: location.as_str().to_owned(),
+        directory: location.parent().map(|parent| parent.as_str().to_owned()),
+    })
 }
 
 #[cfg(test)]
