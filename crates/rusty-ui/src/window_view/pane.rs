@@ -50,7 +50,10 @@ fn footer_parts(parts: WindowParts) -> FooterParts {
 
 impl FerriteWindow {
     pub(super) fn filter(&mut self, edit: FilterEdit) {
-        if self.prompt.is_some() {
+        if self.prompt.is_some()
+            || matches!(edit, FilterEdit::Push(_))
+                && (self.dialog_is_open() || self.dialog_input.blocked)
+        {
             return;
         }
         if edit == FilterEdit::Clear && self.stop_find() {

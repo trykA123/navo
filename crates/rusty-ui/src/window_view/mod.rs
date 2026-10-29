@@ -4,6 +4,7 @@ mod clipboard;
 mod closing;
 mod command_center;
 mod crash;
+mod dialog_input;
 mod drag_hover;
 mod drive_menu;
 mod drives;
@@ -180,6 +181,7 @@ pub struct FerriteWindow {
     on_save: SaveSession,
     autosave: closing::Autosave,
     prompt: Option<prompt::Prompt>,
+    dialog_input: dialog_input::DialogInput,
     editor: EditorHooks,
     terminal: TerminalHooks,
     files: FileHooks,
@@ -218,7 +220,7 @@ pub struct FerriteWindow {
     start: Option<start_watch::Watching>,
     chrome: chrome_state::Chromes,
     workspace_keys: workspace_keys::WorkspaceKeys,
-    _watches: [Subscription; 5],
+    _watches: [Subscription; 6],
 }
 
 impl FerriteWindow {
@@ -236,6 +238,7 @@ impl FerriteWindow {
             on_save: options.on_save,
             autosave: closing::Autosave::observe(cx),
             prompt: None,
+            dialog_input: dialog_input::DialogInput::default(),
             editor: options.editor,
             terminal: options.terminal,
             files: options.files,
@@ -396,6 +399,7 @@ impl Render for FerriteWindow {
             .children(self.viewer_menu_view())
             .children(self.view_menus());
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);
+        let root = Self::dialog_input_on(root, cx);
         let root = self.pane_swap_layer(root, cx);
         let root = self.tab_drag_layer(root, window, cx);
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);

@@ -66,7 +66,10 @@ pub(super) fn register(root: Stateful<Div>, keys: &Rc<Keys>) -> Stateful<Div> {
     let (next_button, previous_button) = (keys.clone(), keys.clone());
     root.key_context(KEY_CONTEXT)
         .on_action(move |_: &Dismiss, window, cx| dismiss.cancel(window, cx))
-        .on_action(move |_: &Press, window, cx| press.press(window, cx))
+        .on_action(move |_: &Press, window, cx| {
+            press.press(window, cx);
+            cx.stop_propagation();
+        })
         .on_action(move |_: &Next, window, cx| {
             dialog_focus::cycle(&next.stops(), true, window, cx);
         })

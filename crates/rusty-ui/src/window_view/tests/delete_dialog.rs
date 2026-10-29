@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
+use gpui_kit::{AnyWindowHandle, Entity, InputEvent as _, TestAppContext};
 use rusty_fs::{FakeFs, Provider};
 
 use super::{fake, home_beside_dest, open_with, press, settle};
@@ -149,4 +149,78 @@ fn enter_after_the_window_tab_order_moved_focus_still_presses(cx: &mut TestAppCo
         rig.docs_exists() || rig.jobs(cx) == 1,
         "one button was pressed"
     );
+}
+
+fn typing_dialog(cx: &mut TestAppContext, button: &str) -> Rig {
+    let fs = fake();
+    fs.add_file("home/bab.txt", 1);
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    let rig = Rig { fs, window, view };
+    rig.press(cx, &["space", "delete"]);
+    if rig.focused(cx) != [button] {
+        rig.press(cx, &["tab"]);
+    }
+    assert_eq!(rig.focused(cx), [button]);
+    rig
+}
+
+fn key_down(rig: &Rig, cx: &mut TestAppContext, key: &str, is_held: bool) {
+    rig.window
+        .update(cx, |_, window, cx| {
+            window.dispatch_event(
+                gpui_kit::KeyDownEvent {
+                    keystroke: gpui_kit::Keystroke::parse(key)
+                        .expect("key")
+                        .with_simulated_ime(),
+                    is_held,
+                    prefer_character_input: false,
+                }
+                .to_platform_input(),
+                cx,
+            );
+        })
+        .expect("window");
+    settle(cx, &rig.view);
+}
+
+fn assert_no_filter(rig: &Rig, cx: &TestAppContext) {
+    assert!(rig.view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        view.browser.filter_text(tab).is_none()
+    }));
+}
+
+#[gpui_kit::test]
+fn dialog_typing_does_not_filter_after_space_cancels(cx: &mut TestAppContext) {
+    let rig = typing_dialog(cx, "cancel");
+    rig.press(cx, &["a"]);
+    key_down(&rig, cx, "b", false);
+    rig.press(cx, &["space"]);
+    key_down(&rig, cx, "space", true);
+    key_down(&rig, cx, "b", true);
+    assert_cancelled(&rig, cx);
+    assert_no_filter(&rig, cx);
+}
+
+#[gpui_kit::test]
+fn fresh_typing_filters_after_space_confirms_without_leaking_dialog_keys(cx: &mut TestAppContext) {
+    let rig = typing_dialog(cx, "confirm");
+    rig.press(cx, &["a"]);
+    key_down(&rig, cx, "b", false);
+    rig.press(cx, &["space"]);
+    key_down(&rig, cx, "b", true);
+    assert_confirmed(&rig, cx);
+    assert_no_filter(&rig, cx);
+    rig.press(cx, &["a"]);
+    key_down(&rig, cx, "b", true);
+    rig.view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        assert_eq!(view.browser.filter_text(tab), Some("a"));
+    });
+    rig.press(cx, &["b"]);
+    rig.view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        assert_eq!(view.browser.filter_text(tab), Some("ab"));
+    });
 }
