@@ -18,7 +18,9 @@ fn memory_journal() -> SharedJournal {
 }
 
 fn memory_db() -> SharedDb {
-    Arc::new(Mutex::new(Db::open_in_memory().unwrap()))
+    Arc::new(Mutex::new(
+        rusty_store::JobJournal::new(Db::open_in_memory().unwrap()).unwrap(),
+    ))
 }
 
 fn plan(fs: &FakeFs, moves: &[(&str, &str)]) -> OperationPlan {

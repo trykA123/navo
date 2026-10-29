@@ -203,3 +203,31 @@ fn shared_session_serializes_completion_and_sheet_save() {
     );
     assert_eq!(fs::read_to_string(backup_path(&path)).unwrap(), old);
 }
+
+#[test]
+fn settings_completion_releases_journal_during_durable_writes() {
+    use std::sync::{Arc, Mutex};
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(&path, "[appearance]\nmode = \"light\"\n");
+    let journal = Arc::new(Mutex::new(
+        crate::JobJournal::new(Db::open_in_memory().unwrap()).unwrap(),
+    ));
+    let shared = journal.clone();
+    let stages = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = stages.clone();
+    on_stage(move |_, _| {
+        assert!(
+            shared.try_lock().is_ok(),
+            "filesystem writes must release the shared journal"
+        );
+        observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    });
+    let (mut store, _) = SettingsStore::load(&path);
+    store
+        .complete(journal.as_ref(), &Settings::default())
+        .unwrap();
+    on_stage(|_, _| Ok(()));
+    assert!(stages.load(std::sync::atomic::Ordering::SeqCst) > 0);
+}

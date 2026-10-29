@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn non_windows_hooks_are_unavailable_and_actions_stay_disabled() {
         let db = std::sync::Arc::new(std::sync::Mutex::new(
-            rusty_store::Db::open_in_memory().unwrap(),
+            rusty_store::JobJournal::new(rusty_store::Db::open_in_memory().unwrap()).unwrap(),
         ));
         for db in [None, Some(db)] {
             let hooks = super::super::hooks(db, super::super::Remember::default());

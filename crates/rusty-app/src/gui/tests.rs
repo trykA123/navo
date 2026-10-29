@@ -33,7 +33,7 @@ fn operations_mode(
         experimental,
     );
     let (operations, journal) = super::operations(
-        dirs,
+        (dirs, start.journal.clone()),
         home,
         experimental,
         &(std::sync::Arc::new(rusty_fs::LocalFs::new())
@@ -85,7 +85,7 @@ fn unavailable_journal_and_profile_notices_offer_safe_mode() {
     std::fs::create_dir(dirs.journal_file()).unwrap();
     for profile in [None, Some(&dirs)] {
         let (operations, journal) = super::operations(
-            profile,
+            (profile, None),
             &home(),
             true,
             &(std::sync::Arc::new(rusty_fs::LocalFs::new())
@@ -210,7 +210,7 @@ fn clean_quitter_removes_the_crash_running_marker() {
     let dir = tempfile::tempdir().unwrap();
     let running = crate::crash::Running::start(dir.path()).unwrap();
     let quit = super::quitter(
-        (None, None),
+        (None, None, None),
         crate::profile::Cleanup::default(),
         Some(running),
         crate::jobs::maintenance::MaintenanceTimer::default(),
@@ -264,7 +264,7 @@ fn delete_confirmation_retention_requires_the_flag_and_the_current_setting() {
     let _start = crate::crash::store::check_with(Some(&dirs.data), false, &FakeFs::new(), false);
     std::fs::write(dirs.settings_file(), "[retention]\nretain-deletes = true\n").unwrap();
     let (normal, _) = super::operations(
-        Some(&dirs),
+        (Some(&dirs), None),
         &home(),
         false,
         &(std::sync::Arc::new(rusty_fs::LocalFs::new())
@@ -272,7 +272,7 @@ fn delete_confirmation_retention_requires_the_flag_and_the_current_setting() {
     );
     assert!(normal.retain_deletes.is_none());
     let (experimental, _) = super::operations(
-        Some(&dirs),
+        (Some(&dirs), None),
         &home(),
         true,
         &(std::sync::Arc::new(rusty_fs::LocalFs::new())
@@ -289,3 +289,5 @@ fn delete_confirmation_retention_requires_the_flag_and_the_current_setting() {
 }
 
 mod main_compat;
+
+mod startup;

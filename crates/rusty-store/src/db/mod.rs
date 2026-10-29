@@ -89,6 +89,9 @@ impl Db {
 
     pub fn open(path: &Path, unclean_exit: bool) -> Result<(Self, OpenReport), DbError> {
         let conn = Connection::open(path)?;
+        #[cfg(feature = "test-support")]
+        crate::test_support::record_open(path);
+        tracing::debug!(database = %path.display(), "database connection opened");
         conn.busy_timeout(BUSY_TIMEOUT)?;
         conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true)?;
         let mut db = Self {
@@ -142,6 +145,27 @@ impl Db {
         self._access_guard = Some(guard);
     }
 
+    pub fn defer_checkpoint(&self) -> Result<(), DbError> {
+        self.conn
+            .set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, false)?;
+        self.conn.pragma_update(None, "wal_autocheckpoint", 1000)?;
+        Ok(())
+    }
+
+    pub fn checkpoint(&self) -> Result<(), DbError> {
+        let busy: i32 = self
+            .conn
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| row.get(0))?;
+        if busy != 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+                Some("journal checkpoint is busy".into()),
+            )
+            .into());
+        }
+        Ok(())
+    }
+
     fn check_integrity(&self) -> Result<(), DbError> {
         let mut statement = self.conn.prepare("PRAGMA integrity_check")?;
         let messages = statement
@@ -158,6 +182,7 @@ impl Db {
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;
+             PRAGMA journal_size_limit = 67108864;
 ",
         )?;
         Ok(())

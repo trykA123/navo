@@ -70,7 +70,15 @@ impl RetentionCatalog {
         after: i64,
         limit: u32,
     ) -> Result<Vec<RetentionEntry>, RetentionStoreError> {
-        rows::live(self.db.connection(), after, limit)
+        Self::live_in(&self.db, after, limit)
+    }
+
+    pub fn live_in(
+        db: &Db,
+        after: i64,
+        limit: u32,
+    ) -> Result<Vec<RetentionEntry>, RetentionStoreError> {
+        rows::live(db.connection(), after, limit)
     }
 
     pub fn transaction(&mut self) -> Result<RetentionTransaction<'_>, RetentionStoreError> {

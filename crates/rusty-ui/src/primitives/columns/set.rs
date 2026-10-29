@@ -92,6 +92,7 @@ fn measure(family: SharedString, sample: &'static str, window: &Window, cx: &mut
 
 impl ColumnSet {
     pub fn new(specs: Vec<ColumnSpec>, window: &Window, cx: &mut App) -> Self {
+        crate::assets::load_mono_fonts(cx);
         let typography = tokens::current(cx).typography.clone();
         let mut set = Self {
             char_width: measure(typography.mono_font, SAMPLE, window, cx),

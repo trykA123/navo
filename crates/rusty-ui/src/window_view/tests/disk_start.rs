@@ -58,7 +58,8 @@ fn seed_last_session(db: &Path, folder: &Location) {
 
 fn disk_names(db: &Path, folder: &Location) -> Vec<String> {
     let cache = ListingCache::default();
-    let _disk = DiskListings::open(db, warm(&cache, vec![folder.clone()]));
+    let disk = DiskListings::open(db, warm(&cache, vec![folder.clone()]));
+    assert!(disk.flush(PATIENT));
     let key = CacheKeys::default().key(folder).unwrap();
     cache.get(&key).map_or_else(Vec::new, |listing| {
         listing
@@ -77,6 +78,7 @@ fn open_from_disk(
     let big = fs.location("big");
     let cache = ListingCache::default();
     let disk = DiskListings::open(db, warm(&cache, vec![big.clone()]));
+    assert!(disk.flush(PATIENT));
     let options = StartOptions {
         state: AppState::new(big),
         provider: fs.clone(),

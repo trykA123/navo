@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    SettingsError,
+    SettingsError, SettingsLedger,
     complete::{Ledger, Reconciled},
     io_error, ledger_error, now, read,
 };
-use crate::{Db, replace_atomic};
+use crate::replace_atomic;
 
 #[derive(Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -30,7 +30,10 @@ fn path(file: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-pub(super) fn recover(file: &Path, ledger: &Db) -> Result<Option<SettingsError>, SettingsError> {
+pub(super) fn recover(
+    file: &Path,
+    ledger: &impl SettingsLedger,
+) -> Result<Option<SettingsError>, SettingsError> {
     let Some(text) = read(&path(file))? else {
         return Ok(None);
     };
@@ -85,7 +88,11 @@ pub(super) fn prepare(
     Ok(pending)
 }
 
-pub(super) fn commit(file: &Path, ledger: &Db, mut pending: Pending) -> Result<(), SettingsError> {
+pub(super) fn commit(
+    file: &Path,
+    ledger: &impl SettingsLedger,
+    mut pending: Pending,
+) -> Result<(), SettingsError> {
     pending.stage = Stage::Committed;
     let marked = save(file, &pending);
     finish(file, ledger, &pending.rows)?;
@@ -98,7 +105,7 @@ fn save(file: &Path, pending: &Pending) -> Result<(), SettingsError> {
     replace_atomic(&path(file), text.as_bytes()).map_err(io_error)
 }
 
-fn finish(file: &Path, ledger: &Db, rows: &Ledger) -> Result<(), SettingsError> {
+fn finish(file: &Path, ledger: &impl SettingsLedger, rows: &Ledger) -> Result<(), SettingsError> {
     let recorded = ledger.settings_defaults().map_err(ledger_error)?;
     let changed: Vec<_> = rows
         .iter()

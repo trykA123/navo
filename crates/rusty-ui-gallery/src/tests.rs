@@ -260,8 +260,9 @@ fn the_tokens_and_palettes_pages_render_in_both_themes(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
-fn init_registers_the_extra_grammars(cx: &mut TestAppContext) {
+fn first_use_registers_the_extra_grammars(cx: &mut TestAppContext) {
     cx.update(|cx| rusty_ui::init(Mode::Light, cx).expect("bundled fonts load"));
+    rusty_ui::languages::register_languages();
     let registry = gpui_kit::component::highlighter::LanguageRegistry::singleton();
     for name in ["xml", "powershell", "sql", "ini"] {
         let config = registry.language(name);

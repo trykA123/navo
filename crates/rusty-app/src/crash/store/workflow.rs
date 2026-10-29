@@ -18,7 +18,7 @@ pub(super) fn run(
     data: &Path,
     mode: Mode,
     ops: &dyn ProviderOps,
-) -> Result<Option<RecoveryNotice>, Error> {
+) -> Result<(Option<RecoveryNotice>, Option<crate::jobs::SharedJournal>), Error> {
     let Mode {
         unclean,
         experimental,
@@ -35,7 +35,7 @@ pub(super) fn run(
                 "another database session prevents recovery; close Navo and restart".into(),
             ));
         }
-        return Ok(RecoveryNotice::loaded(data, &state));
+        return Ok((RecoveryNotice::loaded(data, &state), None));
     }
     let _mutations = crate::jobs::claim_recovery(data, experimental).map_err(Error::Invalid)?;
     if state.pending.is_none() {
@@ -53,7 +53,7 @@ pub(super) fn run(
                 refresh::update(data, &mut state, &report, &journal)?;
                 crate::jobs::lock(&journal).prune(crate::jobs::KEEP_FINISHED)?;
                 clear_sentinel(&path)?;
-                return Ok(RecoveryNotice::loaded(data, &state));
+                return Ok((RecoveryNotice::loaded(data, &state), Some(journal)));
             }
             Err(error) if error.is_database_corruption() => state.begin(data)?,
             Err(error) => return Err(error.into()),
@@ -61,7 +61,7 @@ pub(super) fn run(
     }
     resume(data, &mut state, ops)?;
     clear_sentinel(&path)?;
-    Ok(RecoveryNotice::loaded(data, &state))
+    Ok((RecoveryNotice::loaded(data, &state), None))
 }
 
 fn artifacts(path: &Path) -> Result<bool, Error> {
@@ -116,6 +116,7 @@ fn resume(data: &Path, state: &mut State, ops: &dyn ProviderOps) -> Result<(), E
                 build::preserved(data, notice.slot)?;
                 promote::install(data, &notice, &identity)?;
                 let (db, _) = Db::open(&rusty_store::StoreDirs::journal_in(data), true)?;
+                db.defer_checkpoint()?;
                 let journal = JobJournal::new(db)?;
                 let attempted = journal
                     .unfinished()?
@@ -174,6 +175,7 @@ fn recover(
     ops: &dyn ProviderOps,
     scope: (&Path, &[JobId]),
 ) -> Result<(crate::jobs::SharedJournal, crate::jobs::RecoveryReport), Error> {
+    db.defer_checkpoint()?;
     let journal = Arc::new(Mutex::new(JobJournal::new(db)?));
     let report = crate::jobs::recover_profile(&journal, ops, scope, true)?;
     tracing::info!(

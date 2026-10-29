@@ -17,21 +17,31 @@ pub(super) fn start(data: Option<&Path>, unclean: bool, ops: &dyn ProviderOps) -
     let Some(instance) = crate::jobs::claim(&rusty_store::StoreDirs::lock_in(data)) else {
         return StoreStart::default();
     };
-    if instance.sole
-        && let Err(error) = recover(data, unclean, ops)
-    {
-        if error.is_corruption() {
-            super::super::record_failed_check(&rusty_store::StoreDirs::journal_in(data));
-        }
-        tracing::error!(%error, "recovering unfinished jobs failed");
-    }
+    let opened = if instance.sole {
+        recover(data, unclean, ops)
+    } else {
+        crate::jobs::open(&rusty_store::StoreDirs::journal_in(data))
+    };
+    let journal = opened
+        .inspect_err(|error| {
+            if error.is_corruption() {
+                super::super::record_failed_check(&rusty_store::StoreDirs::journal_in(data));
+            }
+            tracing::error!(%error, "recovering unfinished jobs failed");
+        })
+        .ok();
     StoreStart {
         _legacy: instance.share(),
+        journal,
         ..StoreStart::default()
     }
 }
 
-fn recover(data: &Path, unclean: bool, ops: &dyn ProviderOps) -> Result<(), JournalError> {
+fn recover(
+    data: &Path,
+    unclean: bool,
+    ops: &dyn ProviderOps,
+) -> Result<crate::jobs::SharedJournal, JournalError> {
     let (db, _) =
         super::super::unclean::open_legacy(&rusty_store::StoreDirs::journal_in(data), unclean)?;
     let journal = Arc::new(Mutex::new(JobJournal::new(db)?));
@@ -44,5 +54,5 @@ fn recover(data: &Path, unclean: bool, ops: &dyn ProviderOps) -> Result<(), Jour
             "files not yet put back after recovery"
         );
     }
-    Ok(())
+    Ok(journal)
 }

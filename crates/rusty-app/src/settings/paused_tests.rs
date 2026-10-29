@@ -77,7 +77,7 @@ fn the_profile_start_carries_the_guard_to_the_notice() {
     dirs.ensure().expect("dirs");
     fs::write(dirs.settings_file(), BROKEN).expect("write");
     let started = |guards| {
-        let loaded = super::start_from(Some(&dirs), guards)
+        let loaded = super::start_from((Some(&dirs), None), guards)
             .finish()
             .into_loaded();
         hooks(loaded).load_error.map(|text| text.to_string())

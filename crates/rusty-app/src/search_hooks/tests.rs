@@ -4,8 +4,10 @@ use rusty_store::Db;
 
 use super::hooks;
 
-fn shared() -> Arc<Mutex<Db>> {
-    Arc::new(Mutex::new(Db::open_in_memory().unwrap()))
+fn shared() -> crate::files::SharedDb {
+    Arc::new(Mutex::new(
+        rusty_store::JobJournal::new(Db::open_in_memory().unwrap()).unwrap(),
+    ))
 }
 
 fn remembering() -> super::Remember {
@@ -35,8 +37,7 @@ fn clearing_forgets_command_use() {
 #[test]
 fn a_failed_write_is_swallowed_and_without_a_database_nothing_happens() {
     let db = shared();
-    db.lock()
-        .unwrap()
+    crate::files::lock(&db)
         .connection()
         .execute_batch("DROP TABLE command_use")
         .unwrap();

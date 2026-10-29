@@ -24,7 +24,10 @@ const MAX_RANGE: usize = 64 * 1024 * 1024;
 
 type Replace = fn(&std::path::Path, &[u8]) -> std::io::Result<()>;
 
-pub use memory::{SharedDb, open as open_memory};
+pub use memory::SharedDb;
+#[cfg(test)]
+pub use memory::open as open_memory;
+pub(crate) use memory::prune as prune_memory;
 pub(crate) use memory::{lock, now_ms};
 
 pub fn hooks(db: Option<SharedDb>) -> FileHooks {

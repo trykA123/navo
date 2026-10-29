@@ -4,13 +4,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::DbError;
 use crate::atomic_write::{WriteOutcome, write_checked};
-use crate::{Db, DbError};
 
 mod complete;
 mod edit;
 mod following;
 mod layout;
+mod ledger;
 mod model;
 mod parse;
 mod pending;
@@ -21,6 +22,7 @@ mod view;
 pub use complete::DefaultChange;
 use complete::{Ledger, reconcile};
 pub use edit::{SettingValue, key_line, section_line};
+pub use ledger::SettingsLedger;
 
 pub use layout::{
     LayoutPreset, LayoutSettings, remove_layout_preset, replace_layout_preset, save_layout_preset,
@@ -159,7 +161,7 @@ impl SettingsStore {
 
     pub fn complete(
         &mut self,
-        ledger: &Db,
+        ledger: &impl SettingsLedger,
         defaults: &Settings,
     ) -> Result<Completion, SettingsError> {
         let session = self.backup.clone();

@@ -87,6 +87,14 @@ pub struct JobJournal {
 }
 
 impl JobJournal {
+    pub fn hold_access_guard(&mut self, guard: std::sync::Arc<dyn Send + Sync>) {
+        self.db.hold_access_guard(guard);
+    }
+
+    pub fn database(&self) -> &Db {
+        &self.db
+    }
+
     pub fn new(db: Db) -> Result<Self, JournalError> {
         db.connection().execute_batch(
             "PRAGMA synchronous = FULL;

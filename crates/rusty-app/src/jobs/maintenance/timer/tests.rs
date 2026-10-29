@@ -10,6 +10,8 @@ use rusty_ui::browser::{LoggedOperation, OpLog};
 use super::super::super::mutation_lock::{Mode, Wait, lease};
 use super::{MaintenanceTimer, Pass, Schedule, cycle, pass};
 
+mod startup;
+
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 const START_MS: i64 = 1_000;
 
@@ -44,7 +46,11 @@ impl Profile {
     }
 
     fn delete(&self, path: &str) {
-        self.fs.add_file(path, 8);
+        self.delete_size(path, 8);
+    }
+
+    fn delete_size(&self, path: &str, size: u64) {
+        self.fs.add_file(path, size);
         let ops = self.fs.as_ref() as &dyn ProviderOps;
         let plan = delete_plan(ops, &[self.at(path)]);
         let factory = crate::jobs::experimental_factory(self.journal.clone(), self.dirs.clone());
@@ -111,7 +117,7 @@ fn schedule(now: i64) -> Schedule {
 }
 
 #[test]
-fn maintenance_timer_startup_pass_runs_at_once_and_then_every_six_hours() {
+fn maintenance_timer_first_pass_waits_sixty_seconds_then_runs_every_six_hours() {
     let profile = Profile::new();
     let (mut delays, mut passes) = (Vec::new(), Vec::new());
     cycle(
@@ -128,7 +134,7 @@ fn maintenance_timer_startup_pass_runs_at_once_and_then_every_six_hours() {
     assert_eq!(
         delays,
         [
-            Duration::ZERO,
+            Duration::from_secs(60),
             Duration::from_secs(6 * 3600),
             Duration::from_secs(6 * 3600)
         ]
@@ -168,7 +174,7 @@ fn maintenance_timer_held_lease_defers_the_pass_and_retries_after_ten_minutes() 
     assert_eq!(
         delays,
         [
-            Duration::ZERO,
+            Duration::from_secs(60),
             Duration::from_secs(600),
             Duration::from_secs(6 * 3600)
         ]
@@ -286,7 +292,7 @@ fn maintenance_timer_failed_pass_retries_after_ten_minutes() {
         },
         |_| Pass::Failed,
     );
-    assert_eq!(delays, [Duration::ZERO, Duration::from_secs(600)]);
+    assert_eq!(delays, [Duration::from_secs(60), Duration::from_secs(600)]);
 }
 
 #[test]
@@ -298,20 +304,97 @@ fn maintenance_timer_does_not_start_with_no_retention_or_without_a_profile() {
 }
 
 #[test]
-fn maintenance_timer_thread_runs_the_startup_pass_and_stops_at_once() {
+fn maintenance_timer_stops_during_the_startup_delay() {
     let profile = Profile::new();
     profile.delete("home/old.txt");
     let later = super::super::super::now_ms() + 4 * DAY_MS;
     let timer = MaintenanceTimer::with(Some(&profile.dirs), profile.fs.clone(), schedule(later));
     assert!(timer.is_running());
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while profile.live() > 0 && Instant::now() < deadline {
-        std::thread::park_timeout(Duration::from_millis(20));
-    }
-    assert_eq!(profile.live(), 0);
+    assert_eq!(profile.live(), 1);
     let stopping = Instant::now();
     timer.stop();
     assert!(stopping.elapsed() < Duration::from_millis(500));
     assert!(!timer.is_running());
     timer.stop();
+}
+
+#[gpui_kit::test]
+fn maintenance_first_pass_uses_the_sixty_second_startup_delay(cx: &mut gpui_kit::TestAppContext) {
+    let executor = cx.update(|cx| cx.background_executor().clone());
+    let started = executor.now();
+    let passes = std::cell::Cell::new(0);
+    cycle(
+        &schedule(START_MS),
+        |delay| {
+            if passes.get() > 0 {
+                return false;
+            }
+            executor.advance_clock(delay);
+            true
+        },
+        |_| {
+            assert!(executor.now() - started >= Duration::from_secs(60));
+            passes.set(passes.get() + 1);
+            Pass::Ran {
+                volumes: 0,
+                purged: 0,
+                bytes: 0,
+                pruned: 0,
+            }
+        },
+    );
+    assert_eq!(passes.get(), 1);
+}
+
+#[gpui_kit::test]
+fn viewer_memory_prunes_after_the_startup_delay_without_retention(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    let profile = Profile::new();
+    crate::jobs::lock(&profile.journal)
+        .database()
+        .connection()
+        .execute_batch(
+            "WITH RECURSIVE rows(n) AS (VALUES(1) UNION ALL SELECT n + 1 FROM rows WHERE n < 10001)
+         INSERT INTO viewer_memory (path, size, modified, marks, bookmarks, saved_at)
+         SELECT '/file/' || n, 0, 0, X'', X'', n FROM rows;",
+        )
+        .unwrap();
+    let count = || {
+        crate::jobs::lock(&profile.journal)
+            .database()
+            .connection()
+            .query_row("SELECT count(*) FROM viewer_memory", [], |row| {
+                row.get::<_, u32>(0)
+            })
+            .unwrap()
+    };
+    let mut schedule = Schedule {
+        memory: Some(profile.journal.clone()),
+        retention: false,
+        ..schedule(START_MS)
+    };
+    let executor = cx.executor();
+    let started = executor.now();
+    let token = CancelToken::new();
+    cycle(
+        &schedule.clone(),
+        |delay| {
+            if token.is_cancelled() {
+                return false;
+            }
+            assert_eq!(count(), 10001);
+            executor.advance_clock(delay);
+            true
+        },
+        |now| {
+            assert!(executor.now() - started >= Duration::from_secs(60));
+            super::scheduled_pass(
+                (&profile.dirs, profile.fs.as_ref()),
+                &mut schedule,
+                (now, &token),
+            )
+        },
+    );
+    assert_eq!(count(), 10000);
 }

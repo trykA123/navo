@@ -46,7 +46,8 @@ fn seed(path: &Path, keys: &CacheKeys, location: &Location, stored: CachedListin
 
 fn stored_on_disk(path: &Path, keys: &CacheKeys, folders: &[Location]) -> ListingCache {
     let reread = ListingCache::default();
-    let _disk = DiskListings::open(path, warm(&reread, keys, folders.to_vec()));
+    let disk = DiskListings::open(path, warm(&reread, keys, folders.to_vec()));
+    assert!(disk.flush(PATIENT));
     reread
 }
 
@@ -85,7 +86,8 @@ fn start_loads_saved_session_folders_marked_untrusted() {
 
     let cache = ListingCache::default();
     let keys = serial_keys(42);
-    let _disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
+    let disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
+    assert!(disk.flush(PATIENT));
     let loaded = cache.get(&settled(&keys, &work)).expect("loaded at start");
     assert_eq!(names(&loaded), ["a.txt", "b.txt"]);
     assert_eq!(loaded.read_at, at(1_000));
@@ -105,7 +107,8 @@ fn start_skips_a_remapped_drive() {
 
     let cache = ListingCache::default();
     let keys = serial_keys(2);
-    let _disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
+    let disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
+    assert!(disk.flush(PATIENT));
     assert!(cache.get(&settled(&keys, &work)).is_none());
 }
 
@@ -121,7 +124,8 @@ fn start_stops_reading_at_its_deadline() {
         deadline: Instant::now(),
         ..warm(&cache, &keys, vec![work])
     };
-    let _disk = DiskListings::open(&db_in(&dir), late);
+    let disk = DiskListings::open(&db_in(&dir), late);
+    assert!(disk.flush(PATIENT));
     assert_eq!(cache.stats().entries, 0);
 }
 
@@ -158,7 +162,8 @@ fn persist_writes_the_cached_listing_to_disk() {
     drop((cache, disk));
 
     let reread = ListingCache::default();
-    let _disk = DiskListings::open(&db_in(&dir), warm(&reread, &keys, vec![work]));
+    let disk = DiskListings::open(&db_in(&dir), warm(&reread, &keys, vec![work]));
+    assert!(disk.flush(PATIENT));
     assert_eq!(names(&reread.get(&key).unwrap()), ["fresh.txt"]);
 }
 
@@ -176,7 +181,8 @@ fn save_folders_writes_each_cached_session_folder() {
     drop(disk);
 
     let reread = ListingCache::default();
-    let _disk = DiskListings::open(&db_in(&dir), warm(&reread, &keys, vec![one, two]));
+    let disk = DiskListings::open(&db_in(&dir), warm(&reread, &keys, vec![one, two]));
+    assert!(disk.flush(PATIENT));
     assert_eq!(reread.stats().entries, 2);
 }
 
@@ -201,6 +207,29 @@ fn key_within_does_not_restart_a_probe_that_found_nothing() {
 }
 
 #[test]
+fn opening_the_disk_cache_does_not_wait_for_a_stalled_warm_up() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = db_in(&dir);
+    let (keys, release) = stalled_x_drive();
+    let cache = ListingCache::default();
+    let start = Warm {
+        deadline: Instant::now() + Duration::from_secs(60),
+        ..warm(&cache, &keys, vec![folder(r"X:\offline")])
+    };
+    let (returned, received) = mpsc::sync_channel(1);
+    let worker = std::thread::spawn(move || {
+        let disk = DiskListings::open(&path, start);
+        returned.send(()).unwrap();
+        disk
+    });
+    let opened = received.recv_timeout(PATIENT);
+    release.send(()).unwrap();
+    let disk = worker.join().unwrap();
+    assert!(opened.is_ok(), "opening waited for the blocked drive probe");
+    assert!(disk.close(PATIENT));
+}
+
+#[test]
 fn one_stalled_drive_does_not_starve_the_others() {
     let dir = tempfile::tempdir().unwrap();
     let work = folder(r"C:\work");
@@ -212,7 +241,8 @@ fn one_stalled_drive_does_not_starve_the_others() {
         deadline: Instant::now() + Duration::from_secs(1),
         ..warm(&cache, &keys, vec![folder(r"X:\offline"), work.clone()])
     };
-    let _disk = DiskListings::open(&db_in(&dir), start);
+    let disk = DiskListings::open(&db_in(&dir), start);
+    assert!(disk.flush(PATIENT));
     assert!(cache.get(&settled(&keys, &work)).is_some());
 }
 
@@ -229,7 +259,8 @@ fn warm_up_keeps_a_listing_already_in_memory() {
     let mut fresh = listing(&["in-memory"]);
     fresh.read_at = at(1);
     cache.put(settled(&keys, &work), fresh);
-    let _disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
+    let disk = DiskListings::open(&db_in(&dir), warm(&cache, &keys, vec![work.clone()]));
+    assert!(disk.flush(PATIENT));
     assert_eq!(
         names(&cache.get(&settled(&keys, &work)).unwrap()),
         ["in-memory"]
@@ -405,6 +436,7 @@ fn stats_count_the_stored_listings_against_the_disk_budget() {
     seed(&path, &keys, &folder(r"C:\work"), listing(&["a", "b"]));
     seed(&path, &keys, &folder(r"C:\docs"), listing(&["c"]));
     let disk = DiskListings::open(&path, warm(&ListingCache::default(), &keys, Vec::new()));
+    assert!(disk.flush(PATIENT));
     let stats = disk.stats();
     assert_eq!((stats.entries, stats.budget), (2, crate::DISK_BUDGET));
     assert!(stats.bytes > 0, "{stats:?}");

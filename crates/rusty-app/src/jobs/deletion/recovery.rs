@@ -48,6 +48,7 @@ pub(in crate::jobs) fn recover(
     let result = Db::open(&rusty_store::StoreDirs::journal_in(data), false)
         .map_err(|error| error.to_string())
         .and_then(|(db, _)| {
+            db.defer_checkpoint().map_err(|error| error.to_string())?;
             restore_job(
                 db,
                 Restore {

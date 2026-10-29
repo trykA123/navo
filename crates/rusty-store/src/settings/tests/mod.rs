@@ -7,7 +7,7 @@ use super::complete::{
     Ledger, Reconciled, UNUSED_NOTE, complete_text, mark_unused, reconcile, upgrade_text,
 };
 use super::*;
-use crate::backup_path;
+use crate::{Db, backup_path};
 
 mod complete;
 mod complete_props;

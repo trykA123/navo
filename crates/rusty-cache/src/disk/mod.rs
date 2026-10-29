@@ -88,23 +88,12 @@ impl DiskListings {
     pub fn open(path: &Path, warm: Warm) -> Self {
         let (jobs, inbox) = mpsc::sync_channel(QUEUE);
         let shared = Arc::<Shared>::default();
-        let deadline = warm.deadline;
         let (path, writer_shared) = (path.to_path_buf(), Arc::clone(&shared));
         let spawned = std::thread::Builder::new()
             .name("listing-disk".to_owned())
             .spawn(move || run(&path, warm, inbox, &writer_shared));
         let thread = match spawned {
-            Ok(thread) => {
-                let left = deadline.saturating_duration_since(Instant::now());
-                let progress = lock(&shared.progress);
-                let _ = shared
-                    .moved
-                    .wait_timeout_while(progress, left, |progress| {
-                        !progress.is_loaded && !progress.is_gone
-                    })
-                    .unwrap_or_else(PoisonError::into_inner);
-                Some(thread)
-            }
+            Ok(thread) => Some(thread),
             Err(error) => {
                 tracing::warn!(%error, "listing cache writer did not start");
                 lock(&shared.progress).is_gone = true;
@@ -168,10 +157,10 @@ impl DiskListings {
             .shared
             .moved
             .wait_timeout_while(progress, timeout, |progress| {
-                !progress.is_gone && progress.finished < target
+                !progress.is_gone && (!progress.is_loaded || progress.finished < target)
             })
             .unwrap_or_else(PoisonError::into_inner);
-        !progress.is_gone && progress.finished >= target
+        !progress.is_gone && progress.is_loaded && progress.finished >= target
     }
 
     #[must_use]

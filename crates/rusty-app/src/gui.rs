@@ -1,4 +1,9 @@
+mod profile;
 mod quit;
+
+#[cfg(test)]
+use profile::operations;
+use profile::profile_services;
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -10,7 +15,6 @@ use rusty_core::{AppState, Location};
 use rusty_fs::{LocalFs, ProviderOps, SlowFs};
 use rusty_shell::VolumeIdentity;
 use rusty_store::StoreDirs;
-use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
 use rusty_ui::window_view::{
     BackgroundSaveSession, OpenHooks, OpenInbox, OpenRequest, OpenSender, RunHooks, SaveSession,
@@ -19,14 +23,13 @@ use rusty_ui::window_view::{
 
 use self::quit::quitter;
 use crate::cli::Start;
-use crate::jobs::maintenance::MaintenanceTimer;
 use crate::search_hooks::{Visits, index_hooks};
 use crate::startup::{
     home_location, initial_state, path_location, place_panes, save, session_folders,
 };
 use crate::{
-    app_menu, clipboard, contrast, drives, editor, files, jobs, keymap, launch, metrics,
-    rename_hooks, retained_hooks, settings, shell_menu, terminal,
+    app_menu, clipboard, contrast, drives, editor, files, keymap, launch, metrics, settings,
+    shell_menu, terminal,
 };
 
 const START_READ: Duration = Duration::from_millis(50);
@@ -130,12 +133,20 @@ fn local_provider(trace: Option<&rusty_ui::window_view::InputTrace>) -> Arc<dyn 
 #[expect(clippy::too_many_lines, reason = "one field per window service")]
 pub(crate) fn open(mut launch: Launch) {
     let dirs = launch.dirs;
-    let settings_start = settings::start_from(dirs.as_ref(), launch.experimental_retention);
+    let settings_start = settings::start_from(
+        (dirs.as_ref(), launch.store.journal.clone()),
+        launch.experimental_retention,
+    );
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
     let local = local_provider(launch.trace.as_ref());
-    let services = profile_services(dirs.as_ref(), &home, launch.experimental_retention, &local);
+    let services = profile_services(
+        (dirs.as_ref(), launch.store.journal.clone()),
+        &home,
+        launch.experimental_retention,
+        &local,
+    );
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
     crate::diag::register_listings(&launch.crash.diagnostics.caches, &cache, disk.as_ref());
@@ -145,9 +156,9 @@ pub(crate) fn open(mut launch: Launch) {
         finish_settings(|| settings_start.finish().into_loaded(), &remember);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
     settings::wire_guide_hint(&mut settings, dirs.as_ref());
-    let (search, visits) = search_hooks(services.memory, remember, dirs.as_ref(), &local);
+    let (search, visits) = search_hooks(services.memory.clone(), remember, dirs.as_ref(), &local);
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
-    let exit = (disk, visits);
+    let exit = (disk, visits, services.memory.clone());
     run(
         StartOptions {
             state,
@@ -186,35 +197,6 @@ pub(crate) fn open(mut launch: Launch) {
     );
 }
 
-struct ProfileServices {
-    memory: Option<files::SharedDb>,
-    files: rusty_ui::window_view::FileHooks,
-    operations: Operations,
-    rename: rusty_ui::browser::RenameHooks,
-    retained: Arc<dyn rusty_ui::browser::RetainedHooks>,
-    maintenance: MaintenanceTimer,
-}
-
-fn profile_services(
-    dirs: Option<&StoreDirs>,
-    home: &Location,
-    experimental: bool,
-    local: &Arc<dyn ProviderOps>,
-) -> ProfileServices {
-    let (memory, files) = open_files(dirs, experimental);
-    let (operations, journal) = operations(dirs, home, experimental, local);
-    let rename = rename_hooks::profile_hooks(journal, memory.clone(), dirs, experimental);
-    metrics::mark("databases opened");
-    ProfileServices {
-        memory,
-        files,
-        operations,
-        rename,
-        retained: retained_hooks::hooks(dirs, experimental, local.clone()),
-        maintenance: MaintenanceTimer::start(dirs, experimental, local.clone()),
-    }
-}
-
 fn search_hooks(
     memory: Option<files::SharedDb>,
     remember: crate::search_hooks::Remember,
@@ -241,17 +223,6 @@ fn finish_startup(
 fn mark_window_open(viewer: bool) {
     tracing::info!(viewer, "window opening");
     metrics::mark("window opening");
-}
-
-fn open_files(
-    dirs: Option<&StoreDirs>,
-    experimental: bool,
-) -> (Option<files::SharedDb>, rusty_ui::window_view::FileHooks) {
-    let memory = dirs
-        .filter(|dirs| dirs.ensure().is_ok())
-        .and_then(|dirs| files::open_memory(&dirs.journal_file()));
-    let hooks = files::profile_hooks(memory.clone(), dirs, experimental);
-    (memory, hooks)
 }
 
 fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Splash) -> OpenHooks {
@@ -326,82 +297,6 @@ fn drive_identity(letter: char) -> Option<DriveIdentity> {
         VolumeIdentity::Serial(serial) => DriveIdentity::Serial(serial),
         VolumeIdentity::Remote(remote) => DriveIdentity::Remote(remote),
     })
-}
-
-pub(crate) fn operations(
-    dirs: Option<&StoreDirs>,
-    home: &Location,
-    experimental: bool,
-    local: &Arc<dyn ProviderOps>,
-) -> (Operations, Option<jobs::SharedJournal>) {
-    let mut protected = vec![home.clone()];
-    let Some(dirs) = dirs else {
-        let unavailable =
-            unavailable_operations(protected, None, "job-profile-unavailable", experimental);
-        return (unavailable, None);
-    };
-    protected.extend(
-        [&dirs.config, &dirs.data]
-            .into_iter()
-            .filter_map(|path| Location::new(path.to_str()?).ok()),
-    );
-    let db = dirs.journal_file();
-    let journal = dirs.ensure().ok().and_then(|()| {
-        jobs::open(&db)
-            .inspect_err(|error| tracing::error!(%error, "opening the job journal failed"))
-            .ok()
-    });
-    let Some(journal) = journal else {
-        let unavailable = unavailable_operations(
-            protected,
-            Some(dirs),
-            "job-journal-unavailable",
-            experimental,
-        );
-        return (unavailable, None);
-    };
-    let retention_dirs = dirs.clone();
-    let logged = Operations {
-        retain_deletes: experimental.then(|| {
-            Arc::new(move || jobs::retains_deletes(&retention_dirs))
-                as Arc<dyn Fn() -> Option<rusty_core::retention::RetentionPolicy> + Send + Sync>
-        }),
-        write: Some(jobs::write_factory(dirs.clone(), experimental)),
-        log: if experimental {
-            jobs::retaining_factory(Arc::clone(&journal), dirs.clone(), local.clone())
-        } else {
-            jobs::profile_factory(Arc::clone(&journal), dirs.clone())
-        },
-        protected,
-    };
-    (logged, Some(journal))
-}
-
-fn unavailable_operations(
-    protected: Vec<Location>,
-    dirs: Option<&StoreDirs>,
-    message: &'static str,
-    experimental: bool,
-) -> Operations {
-    if !experimental {
-        return Operations {
-            protected,
-            log: jobs::guard_factory(dirs.cloned()),
-            write: Some(jobs::guard_write(dirs.cloned())),
-            ..Operations::unlogged()
-        };
-    }
-    Operations {
-        retain_deletes: None,
-        protected,
-        log: Arc::new(move |_| Err(rusty_l10n::tr(message))),
-        write: Some(Arc::new(|location| {
-            Err(rusty_core::FsError {
-                location: Some(location.clone()),
-                ..rusty_core::FsError::new(rusty_core::FsErrorKind::AccessDenied)
-            })
-        })),
-    }
 }
 
 #[cfg(test)]

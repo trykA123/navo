@@ -10,7 +10,11 @@ use crate::search_hooks::Visits;
 const EXIT_CLOSE: Duration = Duration::from_secs(1);
 
 pub(super) fn quitter(
-    (disk, visits): (Option<DiskListings>, Option<Arc<Visits>>),
+    (disk, visits, journal): (
+        Option<DiskListings>,
+        Option<Arc<Visits>>,
+        Option<crate::jobs::SharedJournal>,
+    ),
     cleanup: crate::profile::Cleanup,
     running: Option<crate::crash::Running>,
     maintenance: MaintenanceTimer,
@@ -22,6 +26,11 @@ pub(super) fn quitter(
         maintenance.stop();
         if let Some(disk) = &disk {
             let _ = disk.close(EXIT_CLOSE);
+        }
+        if let Some(journal) = &journal
+            && let Err(error) = crate::jobs::lock(journal).database().checkpoint()
+        {
+            tracing::warn!(%error, "journal checkpoint failed at quit");
         }
         if let Some(running) = &running
             && let Err(error) = running.finish()

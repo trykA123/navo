@@ -118,10 +118,19 @@ pub fn start(file: Option<&Path>, ledger: Option<&Path>) -> Started {
     start_sharing(file, ledger, SessionBackup::default())
 }
 
+#[cfg(test)]
 pub(super) fn start_sharing(
     file: Option<&Path>,
     ledger: Option<&Path>,
     backup: SessionBackup,
+) -> Started {
+    start_shared((file, ledger), backup, None)
+}
+
+fn start_shared(
+    (file, ledger): (Option<&Path>, Option<&Path>),
+    backup: SessionBackup,
+    journal: Option<crate::jobs::SharedJournal>,
 ) -> Started {
     let Some(file) = file else {
         return Started::default();
@@ -129,9 +138,12 @@ pub(super) fn start_sharing(
     let mut loaded = Loaded::load_sharing(file, backup);
     loaded.ledger = ledger.map(Path::to_owned);
     let default_changes = match ledger {
-        Some(ledger) if loaded.report.error.is_none() => {
-            follow_defaults(&mut loaded.store, ledger, &Settings::default())
-        }
+        Some(ledger) if loaded.report.error.is_none() => match journal {
+            Some(journal) => {
+                complete_defaults(&mut loaded.store, journal.as_ref(), &Settings::default())
+            }
+            None => follow_defaults(&mut loaded.store, ledger, &Settings::default()),
+        },
         _ => Vec::new(),
     };
     Started {
@@ -141,29 +153,41 @@ pub(super) fn start_sharing(
 }
 
 #[must_use]
-pub fn start_from(dirs: Option<&StoreDirs>, guards_deletes: bool) -> Starting {
+pub fn start_from(
+    (dirs, journal): (Option<&StoreDirs>, Option<crate::jobs::SharedJournal>),
+    guards_deletes: bool,
+) -> Starting {
     let ledger = dirs
         .filter(|dirs| dirs.ensure().is_ok())
         .map(StoreDirs::journal_file);
-    let mut starting = start_in_background(dirs.map(StoreDirs::settings_file), ledger);
+    let mut starting =
+        start_with_journal((dirs.map(StoreDirs::settings_file), ledger), WAIT, journal);
     starting.guards_deletes = guards_deletes;
     starting
 }
 
-#[must_use]
-pub fn start_in_background(file: Option<PathBuf>, ledger: Option<PathBuf>) -> Starting {
-    start_waiting(file, ledger, WAIT)
-}
-
+#[cfg(test)]
 pub(super) fn start_waiting(
     file: Option<PathBuf>,
     ledger: Option<PathBuf>,
     wait: Duration,
 ) -> Starting {
+    start_with_journal((file, ledger), wait, None)
+}
+
+fn start_with_journal(
+    (file, ledger): (Option<PathBuf>, Option<PathBuf>),
+    wait: Duration,
+    journal: Option<crate::jobs::SharedJournal>,
+) -> Starting {
     let worker_file = file.clone();
     let worker_ledger = ledger.clone();
     let mut starting = spawn(file, wait, move |backup| {
-        start_sharing(worker_file.as_deref(), worker_ledger.as_deref(), backup)
+        start_shared(
+            (worker_file.as_deref(), worker_ledger.as_deref()),
+            backup,
+            journal,
+        )
     });
     starting.ledger = ledger;
     starting
@@ -211,7 +235,15 @@ pub(super) fn follow_defaults(
             return Vec::new();
         }
     };
-    match store.complete(&db, defaults) {
+    complete_defaults(store, &db, defaults)
+}
+
+fn complete_defaults(
+    store: &mut SettingsStore,
+    db: &impl rusty_store::SettingsLedger,
+    defaults: &Settings,
+) -> Vec<DefaultChange> {
+    match store.complete(db, defaults) {
         Ok(done) => {
             if let Some(error) = &done.durability_error {
                 report(&describe(error));

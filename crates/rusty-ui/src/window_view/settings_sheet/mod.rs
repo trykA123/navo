@@ -1,5 +1,6 @@
 mod edit;
 mod find;
+mod history;
 mod index_upgrade;
 mod locate;
 mod service;
@@ -278,11 +279,6 @@ impl FerriteWindow {
             SheetEvent::Close => self.escape_settings(window, cx),
         }
         cx.notify();
-    }
-
-    fn clear_search_history(&mut self) {
-        (self.settings.search.clear)();
-        self.settings.is_history_cleared = true;
     }
 
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {

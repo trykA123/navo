@@ -25,6 +25,7 @@ pub(crate) fn open_db(path: &Path) -> Result<(Db, OpenReport), DbError> {
         }
     }
     let (mut db, report) = Db::open(path, false)?;
+    db.defer_checkpoint()?;
     if let Some(lease) = lease {
         db.hold_access_guard(lease);
     }
@@ -35,6 +36,7 @@ pub(super) fn open_legacy(path: &Path, unclean: bool) -> Result<(Db, OpenReport)
     let sentinel = sentinel_path(path);
     match Db::open(path, unclean || sentinel.exists()) {
         Ok((db, report)) => {
+            db.defer_checkpoint()?;
             if report.checked
                 && sentinel.exists()
                 && let Err(error) = fs::remove_file(&sentinel)

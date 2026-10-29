@@ -241,3 +241,41 @@ fn no_notice_without_the_old_service(cx: &mut TestAppContext) {
     let (rig, _) = open_search(cx, ServiceStatus::NotInstalled, true);
     assert!(label(cx, &rig, "index-upgrade").is_none());
 }
+
+#[gpui_kit::test]
+fn held_journal_lock_does_not_block_clear_history_on_the_ui_thread(cx: &mut TestAppContext) {
+    let journal = Arc::new(Mutex::new(()));
+    let worker_journal = journal.clone();
+    let search = SearchHooks {
+        clear: Arc::new(move || {
+            let _guard = worker_journal
+                .try_lock()
+                .expect("the UI call must return before the worker acquires the journal");
+        }),
+        ..SearchHooks::none()
+    };
+    let rig = rig_search(cx, Values::default(), None, search);
+    cx.update_window(rig.window, |_, window, cx| {
+        rig.view.update(cx, |view, cx| {
+            view.open_settings_at(Field::SearchIndex, window, cx)
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_secs(1));
+    cx.run_until_parked();
+    label(cx, &rig, "settings-service-status");
+    rig.view
+        .read_with(cx, |view, _| view.scroll_settings_to_end());
+    label(cx, &rig, "settings-clear-history");
+    let held = journal.lock().unwrap();
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click("settings-clear-history", cx);
+        rig.view
+            .read_with(cx, |view, _| assert!(view.lane.is_pending()));
+    })
+    .unwrap();
+    assert!(label(cx, &rig, "settings-history-cleared").is_none());
+    drop(held);
+    cx.run_until_parked();
+    assert!(label(cx, &rig, "settings-history-cleared").is_some());
+}

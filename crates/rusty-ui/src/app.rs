@@ -26,7 +26,6 @@ pub fn application() -> Application {
 
 pub fn init(mode: Mode, cx: &mut App) -> Result<(), UiError> {
     gpui_kit::init(cx);
-    crate::languages::register_languages();
     let fonts = load_fonts(cx);
     tokens::apply(mode, cx);
     fonts

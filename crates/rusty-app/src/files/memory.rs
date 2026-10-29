@@ -1,12 +1,24 @@
+use std::ops::Deref;
+#[cfg(test)]
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::marks::SearchHistory;
 use rusty_store::{Db, DbError, FileMemory, Stamp};
 use rusty_ui::window_view::{FileHooks, FileStamp};
 
-pub type SharedDb = Arc<Mutex<Db>>;
+pub type SharedDb = crate::jobs::SharedJournal;
+
+pub(crate) struct MemoryGuard<'a>(MutexGuard<'a, rusty_store::JobJournal>);
+
+impl Deref for MemoryGuard<'_> {
+    type Target = Db;
+
+    fn deref(&self) -> &Db {
+        self.0.database()
+    }
+}
 
 fn report(doing: &str, error: &DbError) {
     eprintln!("navo: viewer memory: {doing}: {error}");
@@ -14,22 +26,32 @@ fn report(doing: &str, error: &DbError) {
 
 const KEEP_MEMORIES: usize = 10_000;
 
+#[cfg(test)]
 pub fn open(file: &Path) -> Option<SharedDb> {
     open_keeping(file, KEEP_MEMORIES)
 }
 
+#[cfg(test)]
 fn open_keeping(file: &Path, keep: usize) -> Option<SharedDb> {
-    let (db, _) = crate::crash::open_db(file)
-        .inspect_err(|error| report(&format!("opening {}", file.display()), error))
+    let journal = crate::jobs::open(file)
+        .inspect_err(|error| tracing::warn!(%error, "opening viewer memory failed"))
         .ok()?;
-    let _ = db
-        .prune_viewer_memory(keep)
-        .inspect_err(|error| report("pruning", error));
-    Some(Arc::new(Mutex::new(db)))
+    prune_keeping(&journal, keep);
+    Some(journal)
 }
 
-pub(crate) fn lock(db: &SharedDb) -> MutexGuard<'_, Db> {
-    db.lock().unwrap_or_else(PoisonError::into_inner)
+pub(crate) fn prune(db: &SharedDb) {
+    prune_keeping(db, KEEP_MEMORIES);
+}
+
+fn prune_keeping(db: &SharedDb, keep: usize) {
+    let _ = lock(db)
+        .prune_viewer_memory(keep)
+        .inspect_err(|error| report("pruning", error));
+}
+
+pub(crate) fn lock(db: &SharedDb) -> MemoryGuard<'_> {
+    MemoryGuard(crate::jobs::lock(db))
 }
 
 pub(crate) fn now_ms() -> i64 {

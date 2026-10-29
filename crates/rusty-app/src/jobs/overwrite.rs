@@ -78,7 +78,10 @@ pub(super) fn recover(
 ) -> JobState {
     let result = Db::open(&rusty_store::StoreDirs::journal_in(data), false)
         .map_err(|error| error.to_string())
-        .and_then(|(db, _)| adopt(db, journal, job, (JobState::Failed, data, ops)));
+        .and_then(|(db, _)| {
+            db.defer_checkpoint().map_err(|error| error.to_string())?;
+            adopt(db, journal, job, (JobState::Failed, data, ops))
+        });
     match result {
         Ok(()) => JobState::Failed,
         Err(error) => {

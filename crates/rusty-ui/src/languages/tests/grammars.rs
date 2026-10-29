@@ -152,3 +152,28 @@ fn every_new_grammar_colours_a_sample() {
         );
     }
 }
+
+#[gpui_kit::test]
+fn startup_leaves_grammars_lazy_and_the_first_highlight_has_colour(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    register_languages();
+    let registry = super::super::grammars::GrammarRegistry::new();
+    assert_eq!(registry.registered_count(), 0);
+    cx.update(|cx| crate::init(crate::tokens::Mode::Light, cx).unwrap());
+    assert_eq!(registry.registered_count(), 0);
+    registry.register();
+    assert_eq!(registry.registered_count(), 13);
+    let text = "$y = \"hi\"\n";
+    let mut highlighter = SyntaxHighlighter::new("powershell");
+    highlighter.update(None, &Rope::from(text), None);
+    let theme = HighlightTheme::default_dark();
+    assert!(
+        highlighter
+            .styles(&(0..text.len()), &*theme)
+            .iter()
+            .any(|(_, style)| style.color.is_some())
+    );
+    registry.register();
+    assert_eq!(registry.registered_count(), 13);
+}

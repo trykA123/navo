@@ -1,7 +1,8 @@
 use std::borrow::Cow;
+use std::sync::OnceLock;
 
 use gpui_kit::assets::{Assets as KitAssets, icon_assets};
-use gpui_kit::{App, AssetSource, SharedString};
+use gpui_kit::{App, AssetSource, Global, SharedString};
 
 use crate::UiError;
 
@@ -121,21 +122,43 @@ impl AssetSource for Assets {
     }
 }
 
-pub(crate) fn load_fonts(cx: &App) -> Result<(), UiError> {
+pub(crate) fn load_fonts(cx: &mut App) -> Result<(), UiError> {
     let fonts = vec![
         font!("Inter-Regular"),
         font!("Inter-Medium"),
         font!("Inter-SemiBold"),
         font!("Inter-Bold"),
         font!("SpaceGrotesk-SemiBold"),
-        font!("JetBrainsMono-Regular"),
-        font!("JetBrainsMono-Medium"),
-        font!("JetBrainsMono-SemiBold"),
-        font!("JetBrainsMono-Bold"),
     ];
     cx.text_system()
         .add_fonts(fonts)
-        .map_err(|error| UiError::Fonts(format!("{error:#}")))
+        .map_err(|error| UiError::Fonts(format!("{error:#}")))?;
+    cx.set_global(MonoFonts::default());
+    Ok(())
+}
+
+#[derive(Default)]
+struct MonoFonts(OnceLock<Result<(), UiError>>);
+
+impl Global for MonoFonts {}
+
+pub(crate) fn load_mono_fonts(cx: &App) {
+    let Some(fonts) = cx.try_global::<MonoFonts>() else {
+        return;
+    };
+    let _ = fonts.0.get_or_init(|| {
+        cx.text_system()
+            .add_fonts(vec![
+                font!("JetBrainsMono-Regular"),
+                font!("JetBrainsMono-Medium"),
+                font!("JetBrainsMono-SemiBold"),
+                font!("JetBrainsMono-Bold"),
+            ])
+            .map_err(|error| {
+                tracing::error!(%error, "loading bundled monospace fonts failed");
+                UiError::Fonts(format!("{error:#}"))
+            })
+    });
 }
 
 #[cfg(test)]
@@ -153,6 +176,14 @@ mod tests {
         );
         cx.update(|cx| {
             super::load_fonts(cx).expect("bundled fonts load");
+            assert!(cx.global::<super::MonoFonts>().0.get().is_none());
+            super::load_mono_fonts(cx);
+            assert!(
+                cx.global::<super::MonoFonts>()
+                    .0
+                    .get()
+                    .is_some_and(Result::is_ok)
+            );
             let families = cx.text_system().all_font_names();
             for family in ["Inter", "Space Grotesk", "JetBrains Mono"] {
                 assert!(families.iter().any(|name| name == family), "{families:?}");

@@ -100,6 +100,7 @@ fn read_only_state(
     window: &mut Window,
     cx: &mut Context<EditorState>,
 ) -> EditorState {
+    crate::languages::register_languages();
     let mut state = EditorState::new(window, cx)
         .language(language)
         .default_value(text);

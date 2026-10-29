@@ -187,7 +187,9 @@ mod tests {
     use super::*;
 
     fn shared() -> SharedDb {
-        Arc::new(Mutex::new(Db::open_in_memory().unwrap()))
+        Arc::new(Mutex::new(
+            rusty_store::JobJournal::new(Db::open_in_memory().unwrap()).unwrap(),
+        ))
     }
 
     fn history(db: &SharedDb) -> i64 {
@@ -219,7 +221,7 @@ mod tests {
     fn pending_visits_persist_at_clean_exit() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("visits.db");
-        let db = Arc::new(Mutex::new(Db::open(&path, false).unwrap().0));
+        let db = crate::jobs::open(&path).unwrap();
         let visits = Visits::start(db.clone()).unwrap();
         visits.record("/pending", true, 1000);
         visits.stop();

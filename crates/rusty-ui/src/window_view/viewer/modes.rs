@@ -129,6 +129,7 @@ impl FerriteWindow {
                 host,
                 edit: shown.edit,
             };
+            crate::assets::load_mono_fonts(cx);
             kind.attach(attach, window, cx)
         });
         let Some(viewer) = &mut self.viewer else {

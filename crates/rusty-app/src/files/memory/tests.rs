@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::sync::PoisonError;
 
 use rusty_core::Location;
 use rusty_core::marks::{Bookmarks, MarkSet};
@@ -77,8 +76,7 @@ fn search_history_persists_newest_first() {
 fn a_failing_db_yields_no_memory_and_no_panic() {
     let dir = tempfile::tempdir().unwrap();
     let db = open(&dir.path().join("ferrite.db")).unwrap();
-    db.lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    super::lock(&db)
         .connection()
         .execute_batch("DROP TABLE viewer_memory; DROP TABLE search_history;")
         .unwrap();

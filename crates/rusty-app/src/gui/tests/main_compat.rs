@@ -41,7 +41,7 @@ fn safe_mode_without_a_profile_or_journal_runs_guarded_jobs_and_creation() {
     let at = |path: &std::path::Path| crate::startup::path_location(path).unwrap();
     for profile in [None, Some(&dirs)] {
         let (operations, journal) = super::super::operations(
-            profile,
+            (profile, None),
             &home(),
             false,
             &(std::sync::Arc::new(rusty_fs::LocalFs::new())
@@ -89,7 +89,7 @@ fn safe_mode_without_a_journal_protects_the_profile_folder() {
     dirs.ensure().unwrap();
     std::fs::create_dir(dirs.journal_file()).unwrap();
     let (operations, journal) = super::super::operations(
-        Some(&dirs),
+        (Some(&dirs), None),
         &home(),
         false,
         &(std::sync::Arc::new(rusty_fs::LocalFs::new())

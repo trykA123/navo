@@ -189,7 +189,6 @@ pub(super) fn open_unsettled(
 ) -> (AnyWindowHandle, Entity<FerriteWindow>) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::languages::register_languages();
         tokens::apply(Mode::Light, cx);
         super::bind_app_keys(cx);
         let window_options = WindowOptions {

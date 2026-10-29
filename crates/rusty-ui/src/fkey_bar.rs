@@ -381,6 +381,7 @@ fn layer_slot(layer: Option<KeyLayer>) -> usize {
 
 impl RenderOnce for FKeyBar {
     fn render(self, _: &mut Window, cx: &mut gpui_kit::App) -> impl IntoElement {
+        crate::assets::load_mono_fonts(cx);
         let t = tokens::current(cx);
         let is_layered = self.layers.is_some();
         let held = self.layers.as_ref().and_then(|layers| layers.held);

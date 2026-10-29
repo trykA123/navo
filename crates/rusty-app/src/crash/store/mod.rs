@@ -40,6 +40,7 @@ pub(crate) struct StoreStart {
     locks: Option<Arc<locks::Locks>>,
     _legacy: Option<std::fs::File>,
     pub notice: Option<RecoveryNotice>,
+    pub journal: Option<crate::jobs::SharedJournal>,
 }
 
 impl StoreStart {
@@ -87,6 +88,7 @@ pub(crate) fn check_with(
                 locks: None,
                 _legacy: None,
                 notice: Some(RecoveryNotice::failed(data, &error.to_string())),
+                journal: None,
             };
         }
     };
@@ -100,23 +102,47 @@ pub(crate) fn check_with(
         },
         ops,
     );
-    let notice = match outcome {
-        Ok(notice) => {
+    let (notice, journal) = match outcome {
+        Ok((notice, journal)) => {
             access::allow(&path);
-            notice
+            match share_journal(&path, journal, &locks) {
+                Ok(journal) => (notice, Some(journal)),
+                Err(error) => return failed_start(&path, locks, &error.to_string()),
+            }
         }
-        Err(error) => {
-            access::block(&path, &error.to_string());
-            super::record_failed_check(&path);
-            tracing::error!(%error, database = %path.display(), "database startup recovery stopped");
-            Some(RecoveryNotice::failed(data, &error.to_string()))
-        }
+        Err(error) => return failed_start(&path, locks, &error.to_string()),
     };
     StoreStart {
         path: Some(path),
         locks: Some(locks),
         _legacy: None,
         notice,
+        journal,
+    }
+}
+
+fn share_journal(
+    path: &Path,
+    journal: Option<crate::jobs::SharedJournal>,
+    locks: &Arc<locks::Locks>,
+) -> Result<crate::jobs::SharedJournal, JournalError> {
+    let journal = journal.map(Ok).unwrap_or_else(|| crate::jobs::open(path))?;
+    crate::jobs::lock(&journal).hold_access_guard(locks.clone());
+    Ok(journal)
+}
+
+fn failed_start(path: &Path, locks: Arc<locks::Locks>, message: &str) -> StoreStart {
+    access::block(path, message);
+    super::record_failed_check(path);
+    tracing::error!(error = message, database = %path.display(), "database startup recovery stopped");
+    StoreStart {
+        path: Some(path.to_owned()),
+        locks: Some(locks),
+        notice: Some(RecoveryNotice::failed(
+            path.parent().unwrap_or(Path::new(".")),
+            message,
+        )),
+        ..StoreStart::default()
     }
 }
 

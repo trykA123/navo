@@ -91,20 +91,46 @@ pub(crate) fn grammars() -> impl Iterator<Item = Grammar> {
     })
 }
 
-pub fn register_languages() {
-    static REGISTERED: Once = Once::new();
-    REGISTERED.call_once(|| {
-        let registry = LanguageRegistry::singleton();
-        for grammar in grammars() {
-            let config = GrammarConfig::new(
-                grammar.name,
-                grammar.language,
-                Vec::new(),
-                &grammar.highlights,
-                "",
-                "",
-            );
-            registry.register(grammar.name, &config);
+pub(super) struct GrammarRegistry {
+    registered: Once,
+}
+
+impl GrammarRegistry {
+    pub(super) const fn new() -> Self {
+        Self {
+            registered: Once::new(),
         }
-    });
+    }
+
+    pub(super) fn register(&self) {
+        self.registered.call_once(|| {
+            let registry = LanguageRegistry::singleton();
+            for grammar in grammars() {
+                let config = GrammarConfig::new(
+                    grammar.name,
+                    grammar.language,
+                    Vec::new(),
+                    &grammar.highlights,
+                    "",
+                    "",
+                );
+                registry.register(grammar.name, &config);
+            }
+        });
+    }
+
+    #[cfg(test)]
+    pub(super) fn registered_count(&self) -> usize {
+        if self.registered.is_completed() {
+            GRAMMARS.len()
+        } else {
+            0
+        }
+    }
+}
+
+static LANGUAGES: GrammarRegistry = GrammarRegistry::new();
+
+pub fn register_languages() {
+    LANGUAGES.register();
 }

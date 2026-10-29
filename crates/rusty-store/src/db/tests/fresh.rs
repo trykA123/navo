@@ -70,3 +70,28 @@ fn open_sets_busy_timeout_to_five_seconds() {
     let (db, _) = open_fresh(&dir);
     assert_eq!(pragma::<i64>(&db, "busy_timeout"), 5000);
 }
+
+#[test]
+fn deferred_checkpoints_keep_many_writes_within_the_wal_bound() {
+    let dir = tmp();
+    let (db, _) = open_fresh(&dir);
+    db.defer_checkpoint().unwrap();
+    db.connection()
+        .execute_batch("CREATE TABLE wal_load (value BLOB NOT NULL) STRICT")
+        .unwrap();
+    let wal = db_path(&dir).with_extension("db-wal");
+    let mut insert = db
+        .connection()
+        .prepare("INSERT INTO wal_load VALUES (zeroblob(262144))")
+        .unwrap();
+    for _ in 0..320 {
+        insert.execute([]).unwrap();
+        assert!(
+            fs::metadata(&wal).unwrap().len() <= 64 * 1024 * 1024,
+            "automatic checkpoints must bound WAL growth during a session"
+        );
+    }
+    assert_eq!(pragma::<i64>(&db, "journal_size_limit"), 64 * 1024 * 1024);
+    db.checkpoint().unwrap();
+    assert_eq!(fs::metadata(wal).unwrap().len(), 0);
+}

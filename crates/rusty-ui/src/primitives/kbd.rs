@@ -29,6 +29,7 @@ impl Kbd {
 
 impl RenderOnce for Kbd {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        crate::assets::load_mono_fonts(cx);
         let t = tokens::current(cx);
         let text = self.text();
         let key = KitKbd::new(self.keystroke)
