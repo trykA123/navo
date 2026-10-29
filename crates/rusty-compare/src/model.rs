@@ -200,6 +200,7 @@ pub enum Reason {
     Submodule,
     Unsupported,
     ChangedOnDisk,
+    WorkerPanicked,
 }
 
 impl Reason {
@@ -214,6 +215,7 @@ impl Reason {
             Self::Submodule => "compare-reason-submodule",
             Self::Unsupported => "compare-reason-unsupported",
             Self::ChangedOnDisk => "compare-reason-changed-on-disk",
+            Self::WorkerPanicked => "compare-reason-worker-panicked",
         })
     }
 }

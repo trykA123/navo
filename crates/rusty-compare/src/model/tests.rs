@@ -267,6 +267,7 @@ fn every_status_and_reason_has_its_own_message() {
         Reason::Submodule,
         Reason::Unsupported,
         Reason::ChangedOnDisk,
+        Reason::WorkerPanicked,
     ];
 
     let mut ids = HashSet::new();
