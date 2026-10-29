@@ -67,12 +67,14 @@ impl Pane {
         if active >= tabs.len() {
             return Err(format!("pane {} has no tab at index {active}", id.get()));
         }
-        Ok(Self {
+        let mut pane = Self {
             id,
             tabs,
             active,
             page_rows: page_rows.max(1),
-        })
+        };
+        pane.keep_pinned_first();
+        Ok(pane)
     }
 
     pub(crate) fn new(id: PaneId, first: Tab) -> Self {
@@ -102,6 +104,7 @@ impl Pane {
     pub(crate) fn open_tab(&mut self, tab: Tab) {
         self.active += 1;
         self.tabs.insert(self.active, tab);
+        self.keep_pinned_first();
     }
 
     pub(super) fn take_tabs(self) -> Vec<Tab> {
@@ -110,8 +113,10 @@ impl Pane {
 
     pub(super) fn append_tabs(&mut self, tabs: Vec<Tab>) {
         self.tabs.extend(tabs);
+        self.keep_pinned_first();
     }
 
+    #[cfg(test)]
     pub(crate) fn close_tab(&mut self, index: usize) -> Result<(), StateError> {
         self.take_tab(index).map(drop)
     }
@@ -134,6 +139,29 @@ impl Pane {
         let at = at.min(self.tabs.len());
         self.tabs.insert(at, tab);
         self.active = at;
+        self.keep_pinned_first();
+    }
+
+    #[must_use]
+    pub fn pinned_count(&self) -> usize {
+        self.tabs.iter().take_while(|tab| tab.is_pinned()).count()
+    }
+
+    pub(super) fn keep_pinned_first(&mut self) {
+        if self.tabs.is_empty() {
+            return;
+        }
+        let active = self.tabs[self.active].id();
+        let (mut tabs, unpinned): (Vec<Tab>, Vec<Tab>) = std::mem::take(&mut self.tabs)
+            .into_iter()
+            .partition(Tab::is_pinned);
+        tabs.extend(unpinned);
+        self.tabs = tabs;
+        self.active = self.position(active).unwrap_or(0);
+    }
+
+    pub(super) fn position(&self, id: TabId) -> Option<usize> {
+        self.tabs.iter().position(|tab| tab.id() == id)
     }
 
     pub(crate) fn activate(&mut self, index: usize) -> Result<(), StateError> {

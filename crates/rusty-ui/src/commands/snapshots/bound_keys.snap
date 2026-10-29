@@ -370,6 +370,7 @@ tab.next | ctrl-pagedown | NavoPane
 tab.next | ctrl-tab | NavoPane
 tab.previous | ctrl-pageup | NavoPane
 tab.previous | ctrl-shift-tab | NavoPane
+tab.reopen_closed | ctrl-shift-t | NavoPane
 table.copy_cell | ctrl-c | Table
 table.copy_row | ctrl-shift-c | Table
 table.first_cell | home | Table

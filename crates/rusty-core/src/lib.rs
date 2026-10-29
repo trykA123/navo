@@ -30,7 +30,7 @@ pub use apply::{
     list_missing, list_unloaded, relist_tab,
 };
 pub use brand::TEMP_SUFFIX;
-pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind};
+pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind, TabCommand};
 pub use direction::Direction;
 pub use file_identity::{FileIdentity, FileIdentityKind};
 pub use fs_error::{FsError, FsErrorKind, LockHolder, RecoveryAction};

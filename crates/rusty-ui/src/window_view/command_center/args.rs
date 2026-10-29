@@ -54,11 +54,20 @@ fn quoted(text: &str) -> String {
     out
 }
 
-pub(super) fn argument_command(step: &Step, value: &str) -> Result<Command, String> {
-    let field = match step.kind {
+const TEXT_FIELDS: [(&str, &str); 1] = [("tab.rename", "label")];
+
+fn field(step: &Step) -> &'static str {
+    match step.kind {
         ArgKind::Path => "location",
-        ArgKind::Text => "pattern",
-    };
+        ArgKind::Text => TEXT_FIELDS
+            .iter()
+            .find(|(name, _)| *name == step.name)
+            .map_or("pattern", |(_, field)| field),
+    }
+}
+
+pub(super) fn argument_command(step: &Step, value: &str) -> Result<Command, String> {
+    let field = field(step);
     let id = step.name.replace('_', "-");
     let text = format!("{id} {{ {field}: {} }}", quoted(value.trim()));
     Command::parse(&text).map_err(|error| error.to_string())
@@ -90,7 +99,7 @@ fn resolve(
     (step, value): (&Step, Value),
     here: &Location,
 ) -> Result<(Command, Option<Location>), String> {
-    if matches!(&value, Value::Typed(text) if text.trim().is_empty()) {
+    if field(step) != "label" && matches!(&value, Value::Typed(text) if text.trim().is_empty()) {
         return Err(match step.kind {
             ArgKind::Path => tr("command-center-arg-empty-path"),
             ArgKind::Text => tr("command-center-arg-empty-text"),
@@ -365,5 +374,24 @@ mod tests {
             Ok(Command::PaneNavigate { location }) => assert_eq!(location.as_str(), text),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn rename_tab_targets_the_active_tab_label_and_allows_empty_to_reset() {
+        use rusty_core::TabCommand;
+        let step = step("tab.rename", ArgKind::Text);
+        let rename = |label: &str| {
+            Command::Tab(TabCommand::Rename {
+                tab: None,
+                label: label.into(),
+            })
+        };
+        assert_eq!(
+            argument_command(&step, r#" Logs "x" "#),
+            Ok(rename(r#"Logs "x""#))
+        );
+        let here = Location::new("/home").unwrap();
+        let resolved = resolve((&step, Value::Typed("  ".into())), &here);
+        assert_eq!(resolved, Ok((rename(""), None)));
     }
 }

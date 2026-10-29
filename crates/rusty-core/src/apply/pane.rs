@@ -1,5 +1,5 @@
 use super::{CommandError, Effect, last_row, layout, list_active};
-use crate::{AppState, CursorMove, Location, PaneId, TabId};
+use crate::{AppState, CursorMove, Location, PaneId, StateError, TabId};
 
 pub(super) fn open_tab(state: &mut AppState, location: Option<&Location>) -> Vec<Effect> {
     let location = location
@@ -21,12 +21,17 @@ pub(super) fn close_tab(
     let index = tab.map_or(pane.active_index(), |t| {
         usize::try_from(t).unwrap_or(usize::MAX)
     });
-    if is_tiled && pane.tabs().len() == 1 && index == 0 {
-        let id = pane.id();
-        return layout::close_discarding_tabs(state, id);
+    let id = pane
+        .tabs()
+        .get(index)
+        .ok_or(StateError::NoSuchTab(index))?
+        .id();
+    if !is_tiled && pane.tabs().len() == 1 {
+        return Err(StateError::LastTab.into());
     }
-    pane.close_tab(index)?;
-    Ok(Vec::new())
+    let before = pane.id();
+    state.close_tab(id)?;
+    Ok(layout::list_focused_missing(state, before))
 }
 
 pub(super) fn navigate(state: &mut AppState, location: &Location) -> Vec<Effect> {

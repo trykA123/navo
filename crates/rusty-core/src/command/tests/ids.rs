@@ -26,8 +26,8 @@ fn matches_id_grammar(name: &str) -> bool {
 }
 
 #[test]
-fn all_holds_forty_three_ids() {
-    assert_eq!(CommandId::ALL.len(), 43);
+fn all_holds_fifty_four_ids() {
+    assert_eq!(CommandId::ALL.len(), 54);
 }
 
 #[test]

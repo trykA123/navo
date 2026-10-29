@@ -15,6 +15,7 @@ mod props;
 mod select;
 mod select_restore;
 mod select_span;
+mod tab_menu;
 mod window;
 mod workspace;
 

@@ -58,7 +58,7 @@ impl AppState {
         Ok(id)
     }
 
-    fn focus_pane_id(&mut self, pane: PaneId) -> Result<(), StateError> {
+    pub(super) fn focus_pane_id(&mut self, pane: PaneId) -> Result<(), StateError> {
         let n = self
             .focused
             .layout()
@@ -70,16 +70,18 @@ impl AppState {
     }
 }
 
-fn copy_of(source: &Tab) -> Tab {
+pub(super) fn copy_of(source: &Tab) -> Tab {
     let base = source.base_or_location();
     if base == source.location() {
-        source.workspace_snapshot()
-    } else {
-        Tab::restore(
-            source.id(),
-            base.clone(),
-            source.history().clone(),
-            ViewState::default(),
-        )
+        return source.workspace_snapshot();
     }
+    let mut copy = Tab::restore(
+        source.id(),
+        base.clone(),
+        source.history().clone(),
+        ViewState::default(),
+    );
+    copy.set_pinned(source.is_pinned());
+    copy.set_label(source.label().map(str::to_owned));
+    copy
 }

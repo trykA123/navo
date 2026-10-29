@@ -143,6 +143,10 @@ pub struct TabState {
     pub cursor: u64,
     pub scroll: u64,
     pub rows: Option<RowsState>,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

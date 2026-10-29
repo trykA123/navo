@@ -15,14 +15,6 @@ pub(super) fn close(state: &mut AppState) -> Result<Vec<Effect>, CommandError> {
     Ok(list_focused_missing(state, pane))
 }
 
-pub(super) fn close_discarding_tabs(
-    state: &mut AppState,
-    pane: crate::PaneId,
-) -> Result<Vec<Effect>, CommandError> {
-    state.close_pane_discarding_tabs(pane)?;
-    Ok(list_focused_missing(state, pane))
-}
-
 pub(super) fn focus(
     state: &mut AppState,
     direction: Direction,
@@ -65,7 +57,7 @@ pub(super) fn apply(state: &mut AppState, command: &Command) -> Result<Vec<Effec
     Ok(list_focused_missing(state, before))
 }
 
-fn list_focused_missing(state: &mut AppState, before: crate::PaneId) -> Vec<Effect> {
+pub(super) fn list_focused_missing(state: &mut AppState, before: crate::PaneId) -> Vec<Effect> {
     if state.focused_pane() != before && state.active_tab().listing().is_none() {
         list_active(state)
     } else {

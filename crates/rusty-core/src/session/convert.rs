@@ -1,4 +1,5 @@
 use super::{EntryState, PaneState, RowsState, SessionState, TabState, WindowState};
+use crate::state::tab_label;
 use crate::{
     AppState, History, Layout, Location, Pane, PaneId, Tab, TabId, ViewState, Window, WindowId,
 };
@@ -56,6 +57,8 @@ fn save_tab(tab: &Tab, rows_per_pane: usize) -> TabState {
         forward: strings(tab.history().forward()),
         cursor: tab.view().cursor,
         scroll: tab.view().scroll,
+        pinned: tab.is_pinned(),
+        label: tab.label().map(str::to_owned),
         rows: tab.listing().map(|listing| {
             let entries = listing.entries();
             let first = usize::try_from(tab.view().scroll)
@@ -130,10 +133,12 @@ fn restore_tab(tab: &TabState) -> Result<Tab, String> {
         cursor: tab.cursor,
         scroll: tab.scroll,
     };
-    Ok(Tab::restore(
-        TabId::new(tab.id),
-        location(&tab.location)?,
-        history,
-        view,
-    ))
+    let mut restored = Tab::restore(TabId::new(tab.id), location(&tab.location)?, history, view);
+    restored.set_pinned(tab.pinned);
+    restored.set_label(
+        tab.label
+            .as_deref()
+            .and_then(|label| tab_label(label).ok().flatten()),
+    );
+    Ok(restored)
 }

@@ -10,6 +10,7 @@ mod perf;
 mod popup;
 mod retained;
 mod structured;
+mod tab_menu;
 mod viewer;
 mod window;
 
@@ -61,7 +62,7 @@ pub struct CommandEntry {
     pub arg: Option<ArgKind>,
 }
 
-const ARGUMENT_COMMANDS: [(&str, &str, &str, ArgKind); 4] = [
+const ARGUMENT_COMMANDS: [(&str, &str, &str, ArgKind); 5] = [
     (
         "pane.navigate",
         "command-center-arg-go-to-folder",
@@ -73,6 +74,12 @@ const ARGUMENT_COMMANDS: [(&str, &str, &str, ArgKind); 4] = [
         "command-center-arg-open-folder-in-tab",
         "NavoPane",
         ArgKind::Path,
+    ),
+    (
+        "tab.rename",
+        "command-center-arg-rename-tab",
+        "NavoPane",
+        ArgKind::Text,
     ),
     (
         "selection.add_pattern",
@@ -115,6 +122,7 @@ pub fn entries() -> Vec<CommandEntry> {
 pub fn all() -> impl Iterator<Item = CommandSpec> {
     let bound = [
         window::GROUPS.as_slice(),
+        tab_menu::GROUPS.as_slice(),
         popup::GROUPS.as_slice(),
         marks::GROUPS.as_slice(),
         paths::GROUPS.as_slice(),

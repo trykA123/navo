@@ -56,6 +56,7 @@ mod start_watch;
 mod status;
 mod strip;
 mod strip_keys;
+mod tab_actions;
 mod tab_drag;
 mod tab_keys;
 mod terminal;

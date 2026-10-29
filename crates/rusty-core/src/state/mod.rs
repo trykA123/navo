@@ -2,7 +2,9 @@ mod history;
 mod listing;
 mod pane;
 mod tab;
+mod tab_menu;
 mod tab_move;
+mod tab_relocate;
 mod window;
 mod workspace;
 
@@ -14,6 +16,8 @@ pub use history::History;
 pub use listing::{Entry, Listing};
 pub use pane::Pane;
 pub use tab::{Tab, ViewState};
+use tab_menu::ClosedTab;
+pub(crate) use tab_menu::tab_label;
 pub use tab_move::TabMove;
 pub use window::Window;
 pub(crate) use workspace::workspace_name;
@@ -45,6 +49,12 @@ pub enum StateError {
     LastTab,
     #[error("there is no tab at index {0}")]
     NoSuchTab(usize),
+    #[error("tab {} does not exist", .0.get())]
+    UnknownTab(TabId),
+    #[error("a tab name can have at most 40 characters")]
+    InvalidTabLabel,
+    #[error("there is no closed tab to reopen")]
+    NothingToReopen,
     #[error("there is nothing to go back to")]
     NothingBack,
     #[error("there is nothing to go forward to")]
@@ -230,10 +240,6 @@ impl AppState {
             .find(|w| w.contains(pane))
             .ok_or(StateError::UnknownPane(pane))?
             .close(pane)
-    }
-
-    pub(crate) fn close_pane_discarding_tabs(&mut self, pane: PaneId) -> Result<(), StateError> {
-        self.focused.close_discarding_tabs(pane)
     }
 
     pub(crate) fn focus_direction(&mut self, direction: Direction) -> Result<PaneId, StateError> {

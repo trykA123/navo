@@ -3,9 +3,11 @@ mod id;
 pub(crate) mod lexer;
 mod parse;
 pub(crate) mod print;
+mod tab;
 
 pub use error::{ParseError, ParseErrorKind};
 pub use id::CommandId;
+pub use tab::TabCommand;
 
 use crate::{Direction, Location, SpanMode, SplitPath, Tiles};
 
@@ -53,6 +55,7 @@ pub enum Command {
     WorkspaceRestore,
     WorkspaceSave,
     WorkspaceDiscard { n: usize },
+    Tab(TabCommand),
     AppSaveSession,
 }
 
@@ -141,6 +144,7 @@ impl Command {
             Self::WorkspaceRestore => Id::WorkspaceRestore,
             Self::WorkspaceSave => Id::WorkspaceSave,
             Self::WorkspaceDiscard { .. } => Id::WorkspaceDiscard,
+            Self::Tab(command) => command.id(),
             Self::AppSaveSession => Id::AppSaveSession,
         }
     }

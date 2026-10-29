@@ -475,6 +475,7 @@ fn every_entry_is_enabled_and_only_the_asking_ones_take_an_argument() {
         [
             "pane.navigate",
             "pane.open_tab",
+            "tab.rename",
             "selection.add_pattern",
             "selection.remove_pattern"
         ]

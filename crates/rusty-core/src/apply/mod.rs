@@ -1,6 +1,7 @@
 mod layout;
 mod pane;
 mod select;
+mod tab;
 mod window;
 mod workspace;
 
@@ -115,6 +116,7 @@ fn dispatch(state: &mut AppState, command: &Command) -> Result<Vec<Effect>, Comm
         | Command::WorkspaceSave
         | Command::WorkspaceDiscard { .. } => workspace::apply(state, command),
         Command::AppSaveSession => Ok(vec![Effect::SaveSession]),
+        Command::Tab(command) => tab::apply(state, command),
         Command::LayoutSplit { .. }
         | Command::LayoutClose
         | Command::LayoutFocus { .. }

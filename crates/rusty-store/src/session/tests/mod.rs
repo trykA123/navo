@@ -15,6 +15,7 @@ mod keep;
 mod load;
 mod migration;
 mod speed;
+mod tabs;
 
 const HEADER_LEN: usize = 26;
 
@@ -35,6 +36,8 @@ fn tab(id: u64, location: &str) -> TabState {
         cursor: 3,
         scroll: 1,
         rows: None,
+        pinned: false,
+        label: None,
     }
 }
 

@@ -1,10 +1,9 @@
 use rusty_core::placement::Placement;
-use rusty_core::{
-    LayoutState, PaneState, SessionState, SnapshotState, WindowState, WorkspaceState,
-};
+use rusty_core::{LayoutState, SessionState, SnapshotState, WindowState, WorkspaceState};
 use serde::Deserialize;
 
 use super::SessionFileError;
+use super::legacy::{PaneV4, SessionV4, panes};
 
 #[derive(Deserialize)]
 struct SessionV1 {
@@ -18,7 +17,7 @@ struct WindowV1 {
     id: u64,
     layout: LayoutState,
     focused_pane: u64,
-    panes: Vec<PaneState>,
+    panes: Vec<PaneV4>,
 }
 
 #[derive(Deserialize)]
@@ -33,7 +32,7 @@ struct WindowV2 {
     id: u64,
     layout: LayoutState,
     focused_pane: u64,
-    panes: Vec<PaneState>,
+    panes: Vec<PaneV4>,
     #[serde(default, deserialize_with = "deserialize_placements")]
     placement: Vec<Placement>,
 }
@@ -50,7 +49,7 @@ struct WindowV3 {
     id: u64,
     layout: LayoutState,
     focused_pane: u64,
-    panes: Vec<PaneState>,
+    panes: Vec<PaneV4>,
     workspaces: Vec<WorkspaceV3>,
     active_workspace: u8,
     #[serde(deserialize_with = "deserialize_placements")]
@@ -68,7 +67,7 @@ struct WorkspaceV3 {
 struct SnapshotV3 {
     layout: LayoutState,
     focused_pane: u64,
-    panes: Vec<PaneState>,
+    panes: Vec<PaneV4>,
     last_marks: Option<Vec<String>>,
 }
 
@@ -77,7 +76,7 @@ impl From<SnapshotV3> for SnapshotState {
         Self {
             layout: snapshot.layout,
             focused_pane: snapshot.focused_pane,
-            panes: snapshot.panes,
+            panes: panes(snapshot.panes),
             last_marks: snapshot.last_marks,
             target: None,
         }
@@ -100,7 +99,7 @@ impl From<WindowV3> for WindowState {
             id: window.id,
             layout: window.layout,
             focused_pane: window.focused_pane,
-            panes: window.panes,
+            panes: panes(window.panes),
             workspaces: window
                 .workspaces
                 .into_iter()
@@ -117,7 +116,7 @@ impl From<WindowV3> for WindowState {
     }
 }
 
-fn deserialize_placements<'de, D: serde::Deserializer<'de>>(
+pub(super) fn deserialize_placements<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Vec<Placement>, D::Error> {
     let mut placements = Vec::<Placement>::deserialize(deserializer)?;
@@ -131,7 +130,7 @@ impl From<WindowV2> for WindowState {
             id: window.id,
             layout: window.layout,
             focused_pane: window.focused_pane,
-            panes: window.panes,
+            panes: panes(window.panes),
             workspaces: Vec::new(),
             active_workspace: 0,
             target: None,
@@ -143,13 +142,7 @@ impl From<WindowV2> for WindowState {
 pub(super) fn decode(version: u16, body: &[u8]) -> Result<SessionState, SessionFileError> {
     let decode_error = |error: postcard::Error| SessionFileError::Decode(error.to_string());
     if version >= 3 {
-        let mut session = if version == 3 {
-            postcard::from_bytes::<SessionV3>(body)
-                .map_err(decode_error)?
-                .into()
-        } else {
-            postcard::from_bytes(body).map_err(decode_error)?
-        };
+        let mut session = decode_with_workspaces(version, body).map_err(decode_error)?;
         sanitize_workspaces(&mut session);
         return Ok(session);
     }
@@ -191,6 +184,14 @@ pub(super) fn decode(version: u16, body: &[u8]) -> Result<SessionState, SessionF
         }
     }
     Ok(session)
+}
+
+fn decode_with_workspaces(version: u16, body: &[u8]) -> Result<SessionState, postcard::Error> {
+    Ok(match version {
+        3 => postcard::from_bytes::<SessionV3>(body)?.into(),
+        4 => postcard::from_bytes::<SessionV4>(body)?.into(),
+        _ => postcard::from_bytes(body)?,
+    })
 }
 
 fn sanitize_workspaces(session: &mut SessionState) {

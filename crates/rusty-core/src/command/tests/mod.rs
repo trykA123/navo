@@ -9,6 +9,7 @@ mod props;
 mod round_trip;
 mod selection;
 mod snapshots;
+mod tab;
 mod workspace;
 
 fn location(text: &str) -> Location {
@@ -70,6 +71,17 @@ const CANONICAL_EXAMPLES: &[&str] = &[
     "workspace.restore",
     "workspace.save",
     "workspace.discard { n: 1 }",
+    "tab.pin { tab: 7, pinned: true }",
+    r#"tab.rename { tab: 7, label: "Logs" }"#,
+    "tab.duplicate { tab: 7 }",
+    "tab.close { tab: 7 }",
+    "tab.close-others { tab: 7 }",
+    "tab.close-right { tab: 7 }",
+    "tab.move-to-workspace { tab: 7, n: 2 }",
+    "tab.move-to-new-workspace { tab: 7 }",
+    "tab.move-to-pane { tab: 7, n: 3 }",
+    "tab.move-to-new-pane { tab: 7 }",
+    "tab.reopen",
     "app.save-session",
 ];
 

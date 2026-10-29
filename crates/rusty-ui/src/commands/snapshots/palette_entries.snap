@@ -126,6 +126,14 @@ drive_menu.up | DriveMenu | false
 drive_menu.down | DriveMenu | false
 drive_menu.open | DriveMenu | false
 drive_menu.close | DriveMenu | false
+tab.toggle_pin | NavoPane | true
+tab.duplicate | NavoPane | true
+tab.close_others | NavoPane | true
+tab.close_right | NavoPane | true
+tab.reopen_closed | NavoPane | true
+tab.move_to_new_workspace | NavoPane | true
+tab.move_to_new_pane | NavoPane | true
+tab.copy_path | NavoPane | true
 popup_menu.up | PopupMenu | false
 popup_menu.down | PopupMenu | false
 popup_menu.choose | PopupMenu | false
@@ -410,5 +418,6 @@ workspace.list | global | true
 app.quit | global | true
 pane.navigate | NavoPane | true
 pane.open_tab | NavoPane | true
+tab.rename | NavoPane | true
 selection.add_pattern | FileList | true
 selection.remove_pattern | FileList | true

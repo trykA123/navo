@@ -44,6 +44,17 @@ pub enum CommandId {
     WorkspaceRestore,
     WorkspaceSave,
     WorkspaceDiscard,
+    TabPin,
+    TabRename,
+    TabDuplicate,
+    TabClose,
+    TabCloseOthers,
+    TabCloseRight,
+    TabMoveToWorkspace,
+    TabMoveToNewWorkspace,
+    TabMoveToPane,
+    TabMoveToNewPane,
+    TabReopen,
     AppSaveSession,
 }
 
@@ -91,10 +102,22 @@ impl CommandId {
         Self::WorkspaceRestore,
         Self::WorkspaceSave,
         Self::WorkspaceDiscard,
+        Self::TabPin,
+        Self::TabRename,
+        Self::TabDuplicate,
+        Self::TabClose,
+        Self::TabCloseOthers,
+        Self::TabCloseRight,
+        Self::TabMoveToWorkspace,
+        Self::TabMoveToNewWorkspace,
+        Self::TabMoveToPane,
+        Self::TabMoveToNewPane,
+        Self::TabReopen,
         Self::AppSaveSession,
     ];
 
     #[must_use]
+    #[expect(clippy::too_many_lines, reason = "one arm per command id")]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PaneOpenTab => "pane.open-tab",
@@ -139,6 +162,17 @@ impl CommandId {
             Self::WorkspaceRestore => "workspace.restore",
             Self::WorkspaceSave => "workspace.save",
             Self::WorkspaceDiscard => "workspace.discard",
+            Self::TabPin => "tab.pin",
+            Self::TabRename => "tab.rename",
+            Self::TabDuplicate => "tab.duplicate",
+            Self::TabClose => "tab.close",
+            Self::TabCloseOthers => "tab.close-others",
+            Self::TabCloseRight => "tab.close-right",
+            Self::TabMoveToWorkspace => "tab.move-to-workspace",
+            Self::TabMoveToNewWorkspace => "tab.move-to-new-workspace",
+            Self::TabMoveToPane => "tab.move-to-pane",
+            Self::TabMoveToNewPane => "tab.move-to-new-pane",
+            Self::TabReopen => "tab.reopen",
             Self::AppSaveSession => "app.save-session",
         }
     }

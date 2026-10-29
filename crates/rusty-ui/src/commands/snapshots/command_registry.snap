@@ -126,6 +126,14 @@ drive_menu.up | Up | DriveMenu
 drive_menu.down | Down | DriveMenu
 drive_menu.open | Open drive | DriveMenu
 drive_menu.close | Close drive menu | DriveMenu
+tab.toggle_pin | Pin or unpin tab | NavoPane
+tab.duplicate | Duplicate tab | NavoPane
+tab.close_others | Close other tabs | NavoPane
+tab.close_right | Close tabs to the right | NavoPane
+tab.reopen_closed | Reopen closed tab | NavoPane
+tab.move_to_new_workspace | Move tab to new workspace | NavoPane
+tab.move_to_new_pane | Move tab to new pane | NavoPane
+tab.copy_path | Copy tab folder path | NavoPane
 popup_menu.up | Up | PopupMenu
 popup_menu.down | Down | PopupMenu
 popup_menu.choose | Choose | PopupMenu

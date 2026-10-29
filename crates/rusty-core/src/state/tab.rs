@@ -22,6 +22,8 @@ pub struct Tab {
     views: HashMap<Location, ViewState>,
     names: HashMap<Location, String>,
     restore: Option<String>,
+    pub(super) pinned: bool,
+    pub(super) label: Option<String>,
 }
 
 impl AppState {
@@ -100,6 +102,16 @@ impl Tab {
         &self.history
     }
 
+    #[must_use]
+    pub fn is_pinned(&self) -> bool {
+        self.pinned
+    }
+
+    #[must_use]
+    pub fn label(&self) -> Option<&str> {
+        self.label.as_deref()
+    }
+
     pub(super) fn workspace_snapshot(&self) -> Self {
         Self {
             view: self.view,
@@ -107,6 +119,8 @@ impl Tab {
             views: self.views.clone(),
             names: self.names.clone(),
             restore: self.restore.clone(),
+            pinned: self.pinned,
+            label: self.label.clone(),
             ..Self::new(self.id, self.location.clone())
         }
     }
@@ -124,6 +138,8 @@ impl Tab {
             views: HashMap::new(),
             names: HashMap::new(),
             restore: None,
+            pinned: false,
+            label: None,
         }
     }
 

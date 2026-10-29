@@ -27,7 +27,7 @@ pub(super) fn build(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
     })
 }
 
-fn number(value: &Value<'_>) -> Result<usize, Problem> {
+pub(super) fn number(value: &Value<'_>) -> Result<usize, Problem> {
     let Value::Int(text) = value else {
         return Err(Problem::WrongType("integer"));
     };

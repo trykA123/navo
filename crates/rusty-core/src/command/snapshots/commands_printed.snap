@@ -44,4 +44,15 @@ workspace.delete { n: 2 }
 workspace.restore
 workspace.save
 workspace.discard { n: 1 }
+tab.pin { tab: 7, pinned: true }
+tab.rename { tab: 7, label: "Logs" }
+tab.duplicate { tab: 7 }
+tab.close { tab: 7 }
+tab.close-others { tab: 7 }
+tab.close-right { tab: 7 }
+tab.move-to-workspace { tab: 7, n: 2 }
+tab.move-to-new-workspace { tab: 7 }
+tab.move-to-pane { tab: 7, n: 3 }
+tab.move-to-new-pane { tab: 7 }
+tab.reopen
 app.save-session

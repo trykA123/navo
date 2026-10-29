@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
-use super::{Pane, StateError, Workspace};
+use super::{ClosedTab, Pane, StateError, Workspace};
 use crate::placement::{MonitorSetup, Placement};
 use crate::{Applied, Direction, Layout, MAX_PANES, PaneId, SplitPath, Tiles, WindowId};
 
@@ -18,6 +18,7 @@ pub struct Window {
     pub(super) workspaces: Vec<Workspace>,
     pub(super) active: usize,
     pub(super) deleted_workspace: Option<(usize, Workspace)>,
+    pub(super) closed: VecDeque<ClosedTab>,
 }
 
 impl Window {
@@ -93,6 +94,7 @@ impl Window {
             workspaces: Vec::new(),
             active: 0,
             deleted_workspace: None,
+            closed: VecDeque::new(),
         };
         window.initialize_workspace();
         Ok(window)
@@ -110,6 +112,7 @@ impl Window {
             workspaces: Vec::new(),
             active: 0,
             deleted_workspace: None,
+            closed: VecDeque::new(),
         };
         window.initialize_workspace();
         window

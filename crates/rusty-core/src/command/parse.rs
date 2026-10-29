@@ -1,3 +1,4 @@
+mod tab;
 mod workspace;
 
 use super::lexer::{Lexer, Value};
@@ -131,7 +132,7 @@ pub(super) const fn field_names(command: CommandId) -> &'static [&'static str] {
         CommandId::WorkspaceNew => &["name"],
         CommandId::WorkspaceRename => &["n", "name"],
         CommandId::WorkspaceMove => &["n", "by"],
-        _ => &[],
+        _ => tab::field_names(command),
     }
 }
 
@@ -184,6 +185,7 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         | Id::WorkspaceSave
         | Id::WorkspaceDiscard => workspace::build(&mut fields)?,
         Id::AppSaveSession => Command::AppSaveSession,
+        _ => tab::build(&mut fields)?,
     })
 }
 

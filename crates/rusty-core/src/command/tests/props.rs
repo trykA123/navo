@@ -1,6 +1,7 @@
 use proptest::prelude::*;
 
 use super::*;
+use crate::{TabCommand, TabId};
 
 fn tricky_char() -> impl Strategy<Value = char> {
     prop_oneof![
@@ -89,6 +90,24 @@ fn any_command() -> impl Strategy<Value = Command> {
         prop::option::of(any::<u64>()).prop_map(|window| Command::WindowClose { window }),
         any::<u64>().prop_map(|window| Command::WindowFocus { window }),
         Just(Command::AppSaveSession),
+        any_tab_command().prop_map(Command::Tab),
+    ]
+}
+
+fn any_tab_command() -> impl Strategy<Value = TabCommand> {
+    let tab = || prop::option::of(any::<u64>().prop_map(TabId::new));
+    prop_oneof![
+        (tab(), any::<bool>()).prop_map(|(tab, pinned)| TabCommand::Pin { tab, pinned }),
+        (tab(), any_text(0)).prop_map(|(tab, label)| TabCommand::Rename { tab, label }),
+        tab().prop_map(|tab| TabCommand::Duplicate { tab }),
+        tab().prop_map(|tab| TabCommand::Close { tab }),
+        tab().prop_map(|tab| TabCommand::CloseOthers { tab }),
+        tab().prop_map(|tab| TabCommand::CloseRight { tab }),
+        (tab(), 1..=9usize).prop_map(|(tab, n)| TabCommand::MoveToWorkspace { tab, n }),
+        tab().prop_map(|tab| TabCommand::MoveToNewWorkspace { tab }),
+        (tab(), 1..=4usize).prop_map(|(tab, n)| TabCommand::MoveToPane { tab, n }),
+        tab().prop_map(|tab| TabCommand::MoveToNewPane { tab }),
+        Just(TabCommand::Reopen),
     ]
 }
 

@@ -183,3 +183,67 @@ fn bad_tab_or_pane_changes_nothing() {
     }
     assert_eq!(state, before);
 }
+
+fn pin(state: &mut AppState, pane: PaneId, index: usize) {
+    let id = ids(state, pane)[index];
+    state.tab_mut(id).unwrap().set_pinned(true);
+    state.pane_mut(pane).unwrap().keep_pinned_first();
+}
+
+fn pinned_flags(state: &AppState, pane: PaneId) -> Vec<bool> {
+    let pane = state.pane(pane).unwrap();
+    pane.tabs().iter().map(crate::Tab::is_pinned).collect()
+}
+
+#[test]
+fn dragging_an_unpinned_tab_before_the_pinned_group_lands_after_it() {
+    let (mut state, left, _) = rig();
+    pin(&mut state, left, 0);
+    let before = ids(&state, left);
+    state.move_tab(change((left, 2), (left, 0), false)).unwrap();
+    assert_eq!(ids(&state, left), [before[0], before[2], before[1]]);
+    assert_eq!(pinned_flags(&state, left), [true, false, false]);
+    let pane = state.pane(left).unwrap();
+    assert_eq!(pane.active().id(), before[2]);
+}
+
+#[test]
+fn dragging_a_pinned_tab_past_unpinned_tabs_stays_in_the_pinned_group() {
+    let (mut state, left, _) = rig();
+    pin(&mut state, left, 0);
+    pin(&mut state, left, 1);
+    let before = ids(&state, left);
+    state.move_tab(change((left, 0), (left, 3), false)).unwrap();
+    assert_eq!(ids(&state, left), [before[1], before[0], before[2]]);
+    assert_eq!(pinned_flags(&state, left), [true, true, false]);
+    assert_eq!(state.pane(left).unwrap().active().id(), before[0]);
+}
+
+#[test]
+fn dragging_an_unpinned_tab_to_the_front_of_another_panes_pinned_group_lands_after_it() {
+    let (mut state, left, right) = rig();
+    pin(&mut state, right, 0);
+    let moved = ids(&state, left)[1];
+    let pinned = ids(&state, right)[0];
+    state
+        .move_tab(change((left, 1), (right, 0), false))
+        .unwrap();
+    assert_eq!(ids(&state, right), [pinned, moved]);
+    assert_eq!(pinned_flags(&state, right), [true, false]);
+    assert_eq!(state.pane(right).unwrap().active().id(), moved);
+}
+
+#[test]
+fn dragging_a_pinned_tab_to_the_end_of_another_pane_joins_its_pinned_group() {
+    let (mut state, left, right) = rig();
+    pin(&mut state, left, 0);
+    let moved = ids(&state, left)[0];
+    let other = ids(&state, right)[0];
+    state
+        .move_tab(change((left, 0), (right, 9), false))
+        .unwrap();
+    assert_eq!(ids(&state, right), [moved, other]);
+    assert_eq!(pinned_flags(&state, right), [true, false]);
+    assert_eq!(state.pane(right).unwrap().active().id(), moved);
+    assert_eq!(pinned_flags(&state, left), [false, false]);
+}

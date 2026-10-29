@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{Command, CursorMove};
+use super::{Command, CursorMove, TabCommand};
 
 enum Shown<'a> {
     Str(&'a str),
@@ -47,7 +47,7 @@ fn fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
             ("mode", Shown::Word(mode.keyword())),
         ],
         Command::SelectionExtension { mark } => {
-            vec![("mark", Shown::Word(if *mark { "true" } else { "false" }))]
+            vec![("mark", Shown::Word(flag(*mark)))]
         }
         Command::SelectionRange { to } | Command::PaneScroll { to } => {
             vec![("to", Shown::Int(*to))]
@@ -101,8 +101,30 @@ fn layout_fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {
             ("ratio", Shown::Int(u64::from(*ratio))),
         ],
         Command::LayoutFocusPane { n } => vec![("n", Shown::Int(*n as u64))],
+        Command::Tab(command) => tab_fields(command),
         _ => Vec::new(),
     }
+}
+
+fn tab_fields(command: &TabCommand) -> Vec<(&'static str, Shown<'_>)> {
+    let rest = match command {
+        TabCommand::Pin { pinned, .. } => Some(("pinned", Shown::Word(flag(*pinned)))),
+        TabCommand::Rename { label, .. } => Some(("label", Shown::Str(label))),
+        TabCommand::MoveToWorkspace { n, .. } | TabCommand::MoveToPane { n, .. } => {
+            Some(("n", Shown::Int(*n as u64)))
+        }
+        _ => None,
+    };
+    command
+        .tab()
+        .iter()
+        .map(|tab| ("tab", Shown::Int(tab.get())))
+        .chain(rest)
+        .collect()
+}
+
+fn flag(value: bool) -> &'static str {
+    if value { "true" } else { "false" }
 }
 
 fn workspace_fields(command: &Command) -> Vec<(&'static str, Shown<'_>)> {

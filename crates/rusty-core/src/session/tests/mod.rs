@@ -8,6 +8,7 @@ mod invalid;
 mod props;
 mod round_trip;
 mod rows;
+mod tab_marks;
 mod to_session;
 mod workspace;
 
@@ -87,6 +88,8 @@ fn tab_state(id: u64, location: &str) -> TabState {
         cursor: 0,
         scroll: 0,
         rows: None,
+        pinned: false,
+        label: None,
     }
 }
 

@@ -124,6 +124,8 @@ impl FerriteWindow {
         let key = match result {
             Err(CommandError::NothingToRestore) => "files-marks-restore-none",
             Err(CommandError::State(StateError::TooManyPanes)) => "layout-too-many-panes",
+            Err(CommandError::State(StateError::InvalidTabLabel)) => "tab-label-too-long",
+            Err(CommandError::State(StateError::WorkspaceLimit)) => "workspace-limit",
             Err(CommandError::State(StateError::Layout(LayoutError::LastPane))) => {
                 "layout-last-pane"
             }

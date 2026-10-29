@@ -101,9 +101,10 @@ pub(super) fn tab_keys(root: Div, cx: &mut Context<FerriteWindow>) -> Div {
             cx.notify();
         }),
     );
-    root.on_action(
+    let root = root.on_action(
         cx.listener(|this: &mut FerriteWindow, _: &CloseTab, window, cx| {
             this.apply(&Command::PaneCloseTab { tab: None }, window, cx);
         }),
-    )
+    );
+    super::tab_actions::tab_actions(root, cx)
 }

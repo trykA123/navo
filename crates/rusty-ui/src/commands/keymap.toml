@@ -94,6 +94,10 @@ command = "tab.new"
 keys = ["ctrl-t"]
 
 [[bind]]
+command = "tab.reopen_closed"
+keys = ["ctrl-shift-t"]
+
+[[bind]]
 command = "pane.drive_menu_first"
 keys = ["alt-f1"]
 

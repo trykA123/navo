@@ -109,3 +109,11 @@ fn closing_a_tab_after_the_active_one_keeps_the_active_tab() {
     pane.close_tab(2).unwrap();
     assert_eq!(pane.active().id(), TabId::new(10));
 }
+
+#[test]
+fn keeping_pinned_tabs_first_in_an_empty_pane_does_nothing() {
+    let mut pane = pane_with(1);
+    pane.tabs.clear();
+    pane.keep_pinned_first();
+    assert!(pane.tabs().is_empty());
+}

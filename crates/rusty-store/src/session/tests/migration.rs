@@ -126,7 +126,7 @@ struct LegacyWindow {
     id: u64,
     layout: LayoutState,
     focused_pane: u64,
-    panes: Vec<PaneState>,
+    panes: Vec<crate::session::legacy::PaneV4>,
     placement: Vec<Placement>,
 }
 
@@ -166,7 +166,7 @@ fn v2_golden_bytes_preserve_panes_placements_and_focus() {
                 id: window.id,
                 layout: window.layout.clone(),
                 focused_pane: window.focused_pane,
-                panes: window.panes.clone(),
+                panes: super::tabs::v4_panes(&window.panes),
                 placement: window.placement.clone(),
             })
             .collect(),
@@ -225,7 +225,7 @@ fn v1_golden_bytes_match_the_original_shape() {
                 window.id,
                 &window.layout,
                 window.focused_pane,
-                &window.panes,
+                super::tabs::v4_panes(&window.panes),
             )
         })
         .collect();
