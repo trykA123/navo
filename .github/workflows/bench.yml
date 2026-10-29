@@ -1,0 +1,52 @@
+name: bench
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "crates/rusty-fs/**"
+      - "crates/rusty-core/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  listing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends valgrind
+      - run: cargo install gungraun-runner --version 0.20.0 --locked
+      - name: Measure the base commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          git checkout --force "$BASE_SHA"
+          if [ -f crates/rusty-fs/benches/listing.rs ]; then
+            cargo bench -p rusty-fs --bench listing -- --save-baseline=base
+            echo "BASE_MEASURED=1" >> "$GITHUB_ENV"
+          fi
+      - name: Compare the head commit
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          git checkout --force "$HEAD_SHA"
+          if [ "${BASE_MEASURED:-0}" = "1" ]; then
+            cargo bench -p rusty-fs --bench listing -- --baseline=base
+          else
+            cargo bench -p rusty-fs --bench listing -- --save-baseline=base
+          fi
