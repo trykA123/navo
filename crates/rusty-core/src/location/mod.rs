@@ -6,7 +6,7 @@ mod serde_impl;
 mod typed;
 
 pub use ancestors::AncestorMemo;
-pub use path::ProviderPath;
+pub use path::{ProviderPath, WindowsFoldKey};
 pub use provider::ProviderId;
 pub use typed::typed_location;
 

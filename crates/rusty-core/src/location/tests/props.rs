@@ -77,4 +77,19 @@ proptest! {
         let (a, b) = (ProviderPath::from_text(&a), ProviderPath::from_text(&b));
         prop_assert_eq!(a.windows_eq(&b), b.windows_eq(&a));
     }
+
+    #[test]
+    fn windows_eq_agrees_with_the_fold_key_for_utf16(
+        units_a in prop::collection::vec(any::<u16>(), 0..24),
+        units_b in prop::collection::vec(any::<u16>(), 0..24),
+    ) {
+        let a = ProviderPath::from_wide(&units_a);
+        let b = ProviderPath::from_wide(&units_b);
+        prop_assert_eq!(a.windows_eq(&b), a.windows_fold_key() == b.windows_fold_key());
+    }
+
+    #[test]
+    fn windows_eq_agrees_with_the_fold_key_for_every_path(a in any_path(), b in any_path()) {
+        prop_assert_eq!(a.windows_eq(&b), a.windows_fold_key() == b.windows_fold_key());
+    }
 }

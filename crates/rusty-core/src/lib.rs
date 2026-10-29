@@ -40,7 +40,7 @@ pub use layout::{
     TilesError,
 };
 pub use location::{
-    AncestorMemo, Location, LocationError, ProviderId, ProviderPath, typed_location,
+    AncestorMemo, Location, LocationError, ProviderId, ProviderPath, WindowsFoldKey, typed_location,
 };
 pub use name::{NameError, check_name};
 pub use op_plan::{

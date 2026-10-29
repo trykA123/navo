@@ -18,6 +18,15 @@ enum Repr {
     Bytes(Box<[u8]>),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct WindowsFoldKey(WindowsFoldRepr);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum WindowsFoldRepr {
+    Wide(Vec<u16>),
+    Bytes(Vec<u8>),
+}
+
 enum Piece {
     Char(char),
     Wide(u16),
@@ -159,13 +168,21 @@ impl ProviderPath {
     }
 
     #[must_use]
-    pub fn windows_eq(&self, other: &Self) -> bool {
-        match (self.to_wide(), other.to_wide()) {
-            (Some(a), Some(b)) => {
-                a.len() == b.len() && a.iter().zip(&b).all(|(x, y)| upcase(*x) == upcase(*y))
-            }
-            _ => self == other,
+    pub fn windows_fold_key(&self) -> WindowsFoldKey {
+        match &self.0 {
+            Repr::Text(text) => WindowsFoldKey(WindowsFoldRepr::Wide(
+                text.encode_utf16().map(upcase).collect(),
+            )),
+            Repr::Wide(units) => WindowsFoldKey(WindowsFoldRepr::Wide(
+                units.iter().copied().map(upcase).collect(),
+            )),
+            Repr::Bytes(bytes) => WindowsFoldKey(WindowsFoldRepr::Bytes(bytes.to_vec())),
         }
+    }
+
+    #[must_use]
+    pub fn windows_eq(&self, other: &Self) -> bool {
+        self.windows_fold_key() == other.windows_fold_key()
     }
 
     pub(super) fn contains_ascii(&self, byte: u8) -> bool {
