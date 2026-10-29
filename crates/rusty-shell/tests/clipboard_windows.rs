@@ -93,7 +93,7 @@ fn replace_files(files: &FileClipboard) {
             None,
         )
     }
-    .unwrap();
+    .expect("message-only owner window");
     // SAFETY: owner is a live window created on this thread.
     assert_ne!(unsafe { OpenClipboard(owner.0) }, 0);
     // SAFETY: this thread has opened the clipboard.
@@ -110,7 +110,7 @@ fn replace_files(files: &FileClipboard) {
     // SAFETY: this thread opened the clipboard above.
     assert_ne!(unsafe { CloseClipboard() }, 0);
     // SAFETY: this thread created the owner, and the clipboard has been closed.
-    unsafe { DestroyWindow(owner) }.unwrap();
+    unsafe { DestroyWindow(owner) }.expect("destroy the owner window");
 }
 
 fn publish(format: u32, bytes: &[u8]) {
