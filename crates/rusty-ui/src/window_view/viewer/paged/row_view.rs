@@ -10,6 +10,7 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 
 const SHOWN_CHARS: usize = 1000;
+const MATCH_OPACITY: f32 = 0.3;
 
 pub(super) struct RowLook<'a> {
     pub t: &'a Theme,
@@ -29,15 +30,16 @@ pub(super) struct TextLook {
 impl RowLook<'_> {
     fn style(&self, paint: Paint) -> HighlightStyle {
         let (background, color) = match paint {
-            Paint::Hit => (self.t.colors.accent, self.t.colors.background),
+            Paint::Hit => (self.t.colors.accent, Some(self.t.colors.background)),
             Paint::Mark(colour) => (
                 self.t.marks.fills[usize::from(colour) % self.t.marks.fills.len()],
-                self.t.colors.text,
+                Some(self.t.colors.text),
             ),
+            Paint::Match => (self.t.colors.accent.opacity(MATCH_OPACITY), None),
         };
         HighlightStyle {
             background_color: Some(background),
-            color: Some(color),
+            color,
             ..HighlightStyle::default()
         }
     }

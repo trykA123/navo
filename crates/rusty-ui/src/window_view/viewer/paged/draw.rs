@@ -15,6 +15,7 @@ const MIN_DIGITS: usize = 4;
 struct ScreenMarks {
     marks: Vec<(std::ops::Range<u64>, u8)>,
     bookmarks: Vec<u64>,
+    matches: Vec<std::ops::Range<u64>>,
 }
 
 impl PagedView {
@@ -32,8 +33,9 @@ impl PagedView {
             .filter(|at| span.contains(at))
             .collect();
         ScreenMarks {
-            marks: self.marking.marks.ranges_in(span),
+            marks: self.marking.marks.ranges_in(span.clone()),
             bookmarks,
+            matches: self.marking.match_ranges(span),
         }
     }
 
@@ -45,6 +47,7 @@ impl PagedView {
             painted: Painted {
                 hit: self.find.hit.as_ref(),
                 marks: &marks.marks,
+                matches: &marks.matches,
             },
             bookmarks: &marks.bookmarks,
             line_ends: self.marking.line_ends,

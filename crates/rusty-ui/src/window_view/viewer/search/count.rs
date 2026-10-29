@@ -1,7 +1,9 @@
+use std::ops::Range;
 use std::time::Duration;
 
 use gpui_kit::Task;
 use rusty_core::paging::{Counted, Needle, ordinal};
+use rusty_l10n::t;
 
 use super::jobs::Job;
 use super::scan::{ScanUpdate, Tally, start_scans};
@@ -21,14 +23,18 @@ pub(in crate::window_view::viewer) struct CountRun {
 pub(in crate::window_view::viewer) fn count_label(counted: &Counted, hit: Option<u64>) -> String {
     let total = format::bytes(counted.total);
     if !counted.done {
-        return format!("… of {total}");
+        return t!("viewer-find-counting", total = total);
     }
     if counted.total == 0 {
-        return "No matches".to_owned();
+        return t!("viewer-find-none");
     }
     match hit.and_then(|at| ordinal(counted, at)) {
-        Some(place) => format!("{} of {total}", format::bytes(place)),
-        None => format!("of {total}"),
+        Some(place) => t!(
+            "viewer-find-place",
+            place = format::bytes(place),
+            total = total
+        ),
+        None => t!("viewer-find-total", count = counted.total, shown = total),
     }
 }
 
@@ -43,7 +49,27 @@ impl CountRun {
     }
 }
 
+pub(in crate::window_view::viewer) fn ranges_in(
+    starts: &[u64],
+    width: u64,
+    span: Range<u64>,
+) -> Vec<Range<u64>> {
+    let first = starts.partition_point(|start| start + width <= span.start);
+    starts[first..]
+        .iter()
+        .take_while(|start| **start < span.end)
+        .map(|start| *start..start + width)
+        .collect()
+}
+
 impl Marking {
+    pub(in crate::window_view::viewer) fn match_ranges(&self, span: Range<u64>) -> Vec<Range<u64>> {
+        match self.count.as_ref().filter(|run| !run.failed) {
+            Some(run) => ranges_in(&run.tally.counted.starts, run.tally.width(), span),
+            None => Vec::new(),
+        }
+    }
+
     pub(in crate::window_view::viewer) fn counted(&self) -> Option<&Counted> {
         self.count
             .as_ref()
@@ -160,7 +186,7 @@ pub(in crate::window_view::viewer) fn count_source_changed<V: Marked>(
 mod tests {
     use rusty_core::paging::Counted;
 
-    use super::count_label;
+    use super::{count_label, ranges_in};
 
     fn counted(total: u64, starts: Vec<u64>, done: bool) -> Counted {
         Counted {
@@ -185,8 +211,13 @@ mod tests {
     #[test]
     fn a_hit_past_the_kept_starts_shows_only_the_total() {
         let counted = counted(1248, vec![4, 9], true);
-        assert_eq!(count_label(&counted, Some(500)), "of 1,248");
-        assert_eq!(count_label(&counted, None), "of 1,248");
+        assert_eq!(count_label(&counted, Some(500)), "1,248 matches");
+        assert_eq!(count_label(&counted, None), "1,248 matches");
+    }
+
+    #[test]
+    fn one_match_is_singular() {
+        assert_eq!(count_label(&counted(1, vec![4], true), None), "1 match");
     }
 
     #[test]
@@ -195,5 +226,16 @@ mod tests {
             count_label(&counted(0, Vec::new(), true), None),
             "No matches"
         );
+    }
+
+    #[test]
+    fn ranges_in_a_span_keep_the_matches_that_reach_into_it() {
+        let starts = [2, 10, 20, 30];
+        assert_eq!(ranges_in(&starts, 4, 12..30), [10..14, 20..24]);
+        assert_eq!(
+            ranges_in(&starts, 4, 14..20),
+            Vec::<std::ops::Range<u64>>::new()
+        );
+        assert_eq!(ranges_in(&starts, 4, 0..3).first(), Some(&(2..6)));
     }
 }

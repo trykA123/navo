@@ -130,3 +130,10 @@ viewer-description-pick-dbc = Pick a message or a signal.
 viewer-description-pick-a2l = Pick a characteristic or a measurement.
 viewer-description-bad-data = The description view got data it cannot show.
 space-modules-listed = modules: { $count } from your list
+viewer-find-place = { $place } of { $total }
+viewer-find-counting = … of { $total }
+viewer-find-none = No matches
+viewer-find-total = { $count ->
+    [one] { $shown } match
+   *[other] { $shown } matches
+}

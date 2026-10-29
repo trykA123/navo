@@ -103,6 +103,26 @@ fn the_text_editor_counts_matches_in_its_find_bar(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn the_find_count_moves_to_two_of_five_after_one_next(cx: &mut TestAppContext) {
+    let (window, view, _) = text_window(cx, Setup::new(b"x x x x x\n".to_vec()));
+    search_for(cx, window, &view, "x");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 5");
+    press(cx, window, &view, "enter");
+    assert_eq!(text_of(cx, window, "find-count"), "2 of 5");
+}
+
+#[gpui_kit::test]
+fn the_find_count_wraps_to_the_last_match_on_previous(cx: &mut TestAppContext) {
+    let (window, view, _) = text_window(cx, Setup::new(b"x x x x x\n".to_vec()));
+    search_for(cx, window, &view, "x");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 5");
+    press(cx, window, &view, "shift-enter");
+    assert_eq!(text_of(cx, window, "find-count"), "5 of 5");
+    press(cx, window, &view, "enter");
+    assert_eq!(text_of(cx, window, "find-count"), "1 of 5");
+}
+
+#[gpui_kit::test]
 fn a_new_query_cancels_the_running_count(cx: &mut TestAppContext) {
     let (window, view, log) = text_window(cx, Setup::huge(numbered_lines()));
     press(cx, window, &view, "ctrl-f");
@@ -133,7 +153,7 @@ fn a_hit_past_the_kept_starts_shows_only_the_total(cx: &mut TestAppContext) {
     press(cx, window, &view, "ctrl-f");
     type_in(cx, window, &view, "61");
     press(cx, window, &view, "shift-enter");
-    assert_eq!(text_of(cx, window, "find-count"), "of 149,999");
+    assert_eq!(text_of(cx, window, "find-count"), "149,999 matches");
 }
 
 fn history_hooks(log: &Log, remembered: &Arc<Mutex<Vec<Needle>>>) -> FileHooks {
@@ -205,7 +225,7 @@ fn the_paged_count_follows_the_typed_text_after_a_short_pause(cx: &mut TestAppCo
     pause(cx, window, &view, 100);
     assert_eq!(text_of(cx, window, "find-count"), "");
     pause(cx, window, &view, 60);
-    assert_eq!(text_of(cx, window, "find-count"), "of 2");
+    assert_eq!(text_of(cx, window, "find-count"), "2 matches");
     type_in(cx, window, &view, "x");
     pause(cx, window, &view, 160);
     assert_eq!(text_of(cx, window, "find-count"), "No matches");
@@ -220,7 +240,7 @@ fn the_editor_count_follows_the_typed_text_and_clears_when_empty(cx: &mut TestAp
     press(cx, window, &view, "ctrl-f");
     type_in(cx, window, &view, "one");
     pause(cx, window, &view, 160);
-    assert_eq!(text_of(cx, window, "find-count"), "of 3");
+    assert_eq!(text_of(cx, window, "find-count"), "3 matches");
     for _ in 0..3 {
         press(cx, window, &view, "backspace");
     }

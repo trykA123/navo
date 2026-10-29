@@ -4,6 +4,7 @@ use rusty_core::marks::{MarkError, MarkSet};
 use rusty_core::paging::{Counted, Needle, TextLayout};
 
 use super::Marked;
+use super::count::ranges_in;
 use super::jobs::Job;
 use super::scan::{ScanUpdate, Tally, start_scans};
 use crate::prelude::*;
@@ -31,12 +32,8 @@ impl MarkLayer {
             let Some(colour) = self.colour_of(hits) else {
                 continue;
             };
-            let (starts, width) = (&hits.counted.starts, hits.width());
-            let first = starts.partition_point(|start| start + width <= span.start);
-            let inside = starts[first..]
-                .iter()
-                .take_while(|start| **start < span.end);
-            ranges.extend(inside.map(|start| (*start..start + width, colour)));
+            let found = ranges_in(&hits.counted.starts, hits.width(), span.clone());
+            ranges.extend(found.into_iter().map(|range| (range, colour)));
         }
         ranges
     }

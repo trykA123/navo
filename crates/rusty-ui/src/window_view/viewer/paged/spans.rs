@@ -6,16 +6,19 @@ use rusty_core::paging::{HEX_WIDTH, TextLayout};
 pub(super) enum Paint {
     Hit,
     Mark(u8),
+    Match,
 }
 
 pub(super) struct Painted<'a> {
     pub hit: Option<&'a Range<u64>>,
     pub marks: &'a [(Range<u64>, u8)],
+    pub matches: &'a [Range<u64>],
 }
 
 struct RowPaint<'a> {
     hit: Option<&'a Range<u64>>,
     marks: Vec<&'a (Range<u64>, u8)>,
+    matches: Vec<&'a Range<u64>>,
 }
 
 impl<'a> Painted<'a> {
@@ -28,6 +31,11 @@ impl<'a> Painted<'a> {
                 .iter()
                 .filter(|(range, _)| overlaps(range))
                 .collect(),
+            matches: self
+                .matches
+                .iter()
+                .filter(|range| overlaps(range))
+                .collect(),
         }
     }
 }
@@ -37,10 +45,14 @@ impl RowPaint<'_> {
         if self.hit.is_some_and(|hit| hit.contains(&offset)) {
             return Some(Paint::Hit);
         }
-        self.marks
+        let marked = self.marks.iter().find(|(range, _)| range.contains(&offset));
+        if let Some((_, colour)) = marked {
+            return Some(Paint::Mark(*colour));
+        }
+        self.matches
             .iter()
-            .find(|(range, _)| range.contains(&offset))
-            .map(|(_, colour)| Paint::Mark(*colour))
+            .any(|range| range.contains(&offset))
+            .then_some(Paint::Match)
     }
 }
 
@@ -119,6 +131,7 @@ mod tests {
         let painted = Painted {
             hit: Some(&hit),
             marks: &marks,
+            matches: &[],
         };
         let (shown, runs) = shown_text("abcdefghijkl", &cut(100), &painted);
         assert_eq!(shown, "abcdefghijkl");
@@ -139,6 +152,7 @@ mod tests {
         let painted = Painted {
             hit: Some(&hit),
             marks: &marks,
+            matches: &[],
         };
         let (_, runs) = shown_text("abcd", &cut(0), &painted);
         assert_eq!(runs, [(0..2, Paint::Mark(0)), (2..4, Paint::Hit)]);
@@ -150,6 +164,7 @@ mod tests {
         let painted = Painted {
             hit: None,
             marks: &marks,
+            matches: &[],
         };
         let (shown, runs) = shown_text("a\tb", &cut(0), &painted);
         assert_eq!(shown, "a b");
@@ -162,10 +177,53 @@ mod tests {
         let painted = Painted {
             hit: None,
             marks: &marks,
+            matches: &[],
         };
         assert_eq!(
             hex_slots(16, &painted),
             [(0, Paint::Mark(2)), (1, Paint::Mark(2))]
+        );
+    }
+
+    #[test]
+    fn matches_paint_text_below_the_hit_and_the_marks() {
+        let marks = [(4..6, 2)];
+        let matches = [0..2, 4..8];
+        let hit = 1..2;
+        let painted = Painted {
+            hit: Some(&hit),
+            marks: &marks,
+            matches: &matches,
+        };
+        let (_, runs) = shown_text("abcdefgh", &cut(0), &painted);
+        assert_eq!(
+            runs,
+            [
+                (0..1, Paint::Match),
+                (1..2, Paint::Hit),
+                (4..6, Paint::Mark(2)),
+                (6..8, Paint::Match)
+            ]
+        );
+    }
+
+    #[test]
+    fn hex_slots_paint_matched_bytes_and_the_hit_in_both_columns() {
+        let matches = [14..18, 20..22];
+        let hit = 20..21;
+        let painted = Painted {
+            hit: Some(&hit),
+            marks: &[],
+            matches: &matches,
+        };
+        assert_eq!(
+            hex_slots(16, &painted),
+            [
+                (0, Paint::Match),
+                (1, Paint::Match),
+                (4, Paint::Hit),
+                (5, Paint::Match)
+            ]
         );
     }
 
