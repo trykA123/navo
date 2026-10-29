@@ -200,3 +200,24 @@ fn an_arrow_after_a_mode_edit_lets_enter_apply_the_focused_preset(cx: &mut TestA
         rusty_core::Tiles::builtin()[0].tiles
     );
 }
+
+#[cfg(target_os = "linux")]
+#[gpui_kit::test]
+fn linux_shifted_digit_keystroke_jumps_to_the_pane(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, |fs| {
+        let mut state = two_panes(fs);
+        state.focus_number(2).expect("second pane");
+        state
+    });
+    let panes = numbered(cx, &view);
+    for (key, pane) in [("ctrl-!", 0), ("ctrl-@", 1), ("ctrl-!", 0), ("ctrl-\"", 1)] {
+        press(cx, window, &view, key);
+        assert_eq!(focused(cx, &view), panes[pane], "{key}");
+    }
+    press(cx, window, &view, "escape");
+    assert!(!is_open(cx, &view));
+    for (key, pane) in [("ctrl-!", 0), ("ctrl-@", 1)] {
+        press(cx, window, &view, key);
+        assert_eq!(focused(cx, &view), panes[pane], "{key}");
+    }
+}

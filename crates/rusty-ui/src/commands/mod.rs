@@ -22,7 +22,7 @@ use crate::app_menu::MenuCommand;
 
 #[cfg(test)]
 use bind::key_bindings;
-pub(crate) use bind::{bind_namespace, bind_user_keys};
+pub(crate) use bind::{bind_namespace, bind_user_keys, shifted_digit};
 pub use contexts::{GLOBAL, is_within};
 pub use keymap::{
     Bind, Keymap, KeymapError, KeymapWarning, Overlaid, UserKeymapError, normal_key, shown,

@@ -79,6 +79,11 @@ fn mode_key(keystroke: &Keystroke) -> Option<ModeKey> {
         (false, true, key) => Command::LayoutSwapToward {
             direction: direction(key)?,
         },
+        (true, false, symbol) if crate::commands::shifted_digit(symbol).is_some() => {
+            Command::LayoutFocusPane {
+                n: crate::commands::shifted_digit(symbol)?,
+            }
+        }
         (true, false, key) => Command::LayoutResize {
             direction: direction(key)?,
         },

@@ -66,6 +66,7 @@ fn triples(cx: &mut TestAppContext, bind: impl FnOnce(&mut App)) -> Vec<String> 
         let keymap = keymap.borrow();
         keymap
             .bindings()
+            .filter(|binding| !is_alias(binding))
             .map(|binding| {
                 let name = for_action(binding.action().name()).map_or("?", |spec| spec.name);
                 let keys: Vec<String> = binding
@@ -83,6 +84,15 @@ fn triples(cx: &mut TestAppContext, bind: impl FnOnce(&mut App)) -> Vec<String> 
     lines.sort();
     lines.dedup();
     lines
+}
+
+fn is_alias(binding: &gpui_kit::KeyBinding) -> bool {
+    let keys: Vec<String> = binding
+        .keystrokes()
+        .iter()
+        .map(|key| key.inner().unparse())
+        .collect();
+    super::bind::is_shifted_digit_alias(&keys.join(" "))
 }
 
 fn ours(cx: &mut TestAppContext) -> Vec<&'static str> {
@@ -273,6 +283,7 @@ fn in_bound_order(cx: &mut TestAppContext) -> Vec<String> {
         let keymap = keymap.borrow();
         keymap
             .bindings()
+            .filter(|binding| !is_alias(binding))
             .map(|binding| {
                 let action = binding.action().name();
                 let space = action.split_once("::").map_or(action, |(space, _)| space);
