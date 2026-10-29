@@ -102,7 +102,9 @@ pub use fkeys::{
     DELETE_WARNING, FKey, Labels, delete_warning_in, key_labels, key_labels_in, keys_in_layer,
     layer_keys, layer_keys_in, settings_labels_in,
 };
-pub use hand_off::{OpenHooks, OpenInbox, OpenRequest, OpenSender, open_requests};
+pub use hand_off::{
+    OpenHooks, OpenInbox, OpenRequest, OpenSender, RawWindowHandle, WindowShown, open_requests,
+};
 pub use input_trace::InputTrace;
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
@@ -184,6 +186,7 @@ pub struct FerriteWindow {
     pane_swap: pane_swap::PaneSwap,
     tab_drag: tab_drag::TabDrag,
     on_save: SaveSession,
+    window_shown: Option<WindowShown>,
     autosave: closing::Autosave,
     prompt: Option<prompt::Prompt>,
     dialog_input: dialog_input::DialogInput,
@@ -245,6 +248,7 @@ impl FerriteWindow {
             pane_swap: pane_swap::PaneSwap::default(),
             tab_drag: tab_drag::TabDrag::default(),
             on_save: options.on_save,
+            window_shown: None,
             autosave: closing::Autosave::observe(cx),
             prompt: None,
             dialog_input: dialog_input::DialogInput::default(),

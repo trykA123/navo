@@ -78,6 +78,7 @@ fn open_request(request: &crate::instance::Request) -> OpenRequest {
         left: location(&request.left),
         right: location(&request.right),
         view: location(&request.view),
+        quit: false,
     }
 }
 
@@ -232,6 +233,7 @@ fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Sp
         path: path.and_then(|path| path_location(&path)),
         inbox: Some(inbox),
         on_shown: splash.on_shown(),
+        window_shown: crate::resident::window_shown(),
     }
 }
 

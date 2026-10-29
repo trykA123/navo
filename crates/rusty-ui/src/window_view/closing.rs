@@ -74,6 +74,11 @@ impl FerriteWindow {
         }
         self.save_recording_on_close(cx);
         let _ = self.browser.shutdown(JOB_STOP_WAIT);
+        self.save_now(window, cx);
+        true
+    }
+
+    fn save_now(&mut self, window: &Window, cx: &mut Context<Self>) {
         self.remember_placement(window, cx);
         self.autosave.wait = None;
         self.browser.take_save_request();
@@ -81,14 +86,21 @@ impl FerriteWindow {
             cx.foreground_executor().block_on(task);
         }
         self.save();
-        true
+    }
+
+    pub(super) fn close_or_hide(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {
+        if !self.values.keeps_in_tray() || self.window_shown.is_none() {
+            return self.close(window, cx);
+        }
+        self.save_now(window, cx);
+        !self.set_window_shown(window, false) && self.close(window, cx)
     }
 
     pub(super) fn close_saves_and_quits(window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.weak_entity();
         window.on_window_should_close(cx, move |window, cx| {
             let closing = this
-                .update(cx, |view, cx| view.close(window, cx))
+                .update(cx, |view, cx| view.close_or_hide(window, cx))
                 .unwrap_or(true);
             if closing {
                 cx.quit();

@@ -70,7 +70,7 @@ impl FerriteWindow {
         };
         bar.on_close(move |window, cx| {
             if this
-                .update(cx, |view, cx| view.close(window, cx))
+                .update(cx, |view, cx| view.close_or_hide(window, cx))
                 .unwrap_or(true)
             {
                 cx.quit();

@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gpui_kit::{AsyncWindowContext, Global, WeakEntity};
+use raw_window_handle::HasWindowHandle;
+pub use raw_window_handle::RawWindowHandle;
 use rusty_core::{Command, FsError, FsErrorKind, Location};
 use rusty_fs::{FsEntry, Provider, ProviderOps};
 
@@ -48,6 +50,7 @@ pub struct OpenRequest {
     pub left: Option<Location>,
     pub right: Option<Location>,
     pub view: Option<Location>,
+    pub quit: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -67,11 +70,14 @@ pub fn open_requests() -> (OpenSender, OpenInbox) {
     (OpenSender(sender), OpenInbox(receiver))
 }
 
+pub type WindowShown = Arc<dyn Fn(Option<RawWindowHandle>, bool) -> bool + Send + Sync>;
+
 #[derive(Default)]
 pub struct OpenHooks {
     pub path: Option<Location>,
     pub inbox: Option<OpenInbox>,
     pub on_shown: Option<Box<dyn FnOnce()>>,
+    pub window_shown: Option<WindowShown>,
 }
 
 impl OpenHooks {
@@ -148,6 +154,7 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.window_shown = hooks.window_shown;
         if let Some(on_shown) = hooks.on_shown {
             window.on_next_frame(move |window, _| window.on_next_frame(move |_, _| on_shown()));
         }
@@ -167,12 +174,25 @@ impl FerriteWindow {
         .detach();
     }
 
+    pub(super) fn set_window_shown(&self, window: &Window, shown: bool) -> bool {
+        let handle = HasWindowHandle::window_handle(window)
+            .ok()
+            .map(|handle| handle.as_raw());
+        self.window_shown
+            .as_ref()
+            .is_some_and(|hook| hook(handle, shown))
+    }
+
     fn take_arrival(&mut self, arrival: Arrival, window: &mut Window, cx: &mut Context<Self>) {
         let Arrival {
             request,
             found,
             is_hand_off,
         } = arrival;
+        if request.quit {
+            self.quit_on_request(window, cx);
+            return;
+        }
         self.navigate_sides([request.left, request.right]);
         if let Some(path) = request.path {
             self.open_request_path(path, found);
@@ -183,9 +203,20 @@ impl FerriteWindow {
             self.focus_core_pane(window, cx);
         }
         if is_hand_off {
+            self.set_window_shown(window, true);
             window.activate_window();
         }
         cx.notify();
+    }
+
+    pub(super) fn quit_on_request(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.close(window, cx) {
+            cx.quit();
+        } else {
+            self.set_window_shown(window, true);
+            window.activate_window();
+            cx.notify();
+        }
     }
 
     fn navigate_sides(&mut self, folders: [Option<Location>; 2]) {

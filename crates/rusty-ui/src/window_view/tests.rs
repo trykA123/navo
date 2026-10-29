@@ -70,6 +70,7 @@ mod tab_drag;
 mod tabs;
 mod terminal;
 mod tiles;
+mod tray;
 mod typed;
 mod undo;
 mod undo_retained;
