@@ -117,7 +117,7 @@ impl Progress {
             bytes_done: 0,
             bytes_total: run::moved_bytes(plan),
             files_done: 0,
-            files_total: plan.totals.files,
+            files_total: run::progress_files(plan),
             current: None,
             paused: false,
         }

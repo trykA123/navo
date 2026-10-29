@@ -48,14 +48,18 @@ impl JobJournal {
     }
 
     fn newest_job(&self, kinds: UndoKinds<'_>) -> Result<Option<Newest>, JournalError> {
-        let marks = (3..kinds.retained.len() + 3)
+        let marks = (4..kinds.retained.len() + 4)
             .map(|at| format!("?{at}"))
             .collect::<Vec<_>>()
             .join(", ");
         let sql = format!(
             "SELECT j.id, CASE WHEN j.kind = ?1 THEN j.plan END, j.created_at, j.state = 'restore_pending'
              FROM job j
-             WHERE (j.kind = ?1 AND j.state IN ('done', 'restore_pending'))
+             WHERE (j.kind = ?1
+                AND j.state IN ('done', 'restore_pending', 'failed')
+                AND EXISTS
+                    (SELECT 1 FROM job_step s WHERE s.job_id = j.id AND s.state = 'done'
+                        AND (s.detail IS NULL OR s.detail <> ?3)))
                 OR (j.state = 'done' AND j.kind IN ({marks}) AND EXISTS
                     (SELECT 1 FROM retained_entry e WHERE e.job_id = j.id AND {LIVE_ENTRY}))
              ORDER BY j.created_at DESC, j.id DESC LIMIT 1"
@@ -63,6 +67,7 @@ impl JobJournal {
         let mut values = vec![
             Value::from(kinds.rename.to_owned()),
             Value::from(kinds.now_ms),
+            Value::Blob(b"undone".to_vec()),
         ];
         values.extend(
             kinds

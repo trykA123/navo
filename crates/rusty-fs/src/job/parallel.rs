@@ -40,6 +40,16 @@ pub(super) fn run(
         namespace: namespace.as_deref(),
         removals: &removals,
     };
+    coordinate((job, copier), ctx, done, workers)
+}
+
+fn coordinate<'p>(
+    (job, copier): (Job<'p>, Copier<'p>),
+    ctx: &mut JobContext<'_>,
+    done: &[u32],
+    workers: usize,
+) -> JobOutcome {
+    let plan = job.plan;
     let (tasks, queue) = channel();
     let queue = Mutex::new(queue);
     let (events, finished) = channel();
@@ -83,6 +93,7 @@ struct Runner<'p, 'c, 'a> {
     kept: Vec<Location>,
     marks: Marks,
     failed: Option<(u32, FsError)>,
+    partial: Option<(u32, FsError)>,
     cancelled: bool,
 }
 
@@ -130,6 +141,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             kept: Vec::new(),
             marks: Marks::new(plan.kind),
             failed: None,
+            partial: None,
             cancelled: false,
         }
     }
@@ -161,9 +173,11 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
     }
 
     fn outcome(self) -> JobOutcome {
-        match self.failed {
+        if self.cancelled {
+            return JobOutcome::Cancelled;
+        }
+        match self.failed.or(self.partial) {
             Some((seq, error)) => JobOutcome::Failed { seq, error },
-            None if self.cancelled => JobOutcome::Cancelled,
             None => JobOutcome::Done,
         }
     }
@@ -345,10 +359,26 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             {
                 self.cancelled = true;
             }
-            Err(error) => {
-                self.marks.failed(self.ctx.log, seq);
-                self.fail(seq, error);
-            }
+            Err(error) => self.settle_failure(seq, error),
+        }
+    }
+
+    fn settle_failure(&mut self, seq: u32, error: FsError) {
+        if error.kind == FsErrorKind::Cancelled || self.ctx.cancel.is_cancelled() {
+            self.cancelled = true;
+            return;
+        }
+        self.marks.failed(self.ctx.log, seq);
+        if self.job.plan.kind == OpKind::Recycle {
+            self.note_failure(seq, error);
+            return;
+        }
+        self.fail(seq, error);
+    }
+
+    fn note_failure(&mut self, seq: u32, error: FsError) {
+        if self.partial.as_ref().is_none_or(|(first, _)| seq < *first) {
+            self.partial = Some((seq, error));
         }
     }
 

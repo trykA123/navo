@@ -20,6 +20,12 @@ fn finished(journal: &mut JobJournal, kind: &str, at: i64, state: JobState) -> J
     job
 }
 
+fn with_done_step(journal: &mut JobJournal, kind: &str, at: i64, state: JobState) -> JobId {
+    let job = finished(journal, kind, at, state);
+    journal.mark_step(job, 0, StepState::Done, None).unwrap();
+    job
+}
+
 fn entry(journal: &JobJournal, job: JobId, state: &str, expires_at: i64) -> RetentionId {
     let record = serde_json::json!({ "source": "/home/a.txt", "expires_at": expires_at });
     conn(journal)
@@ -45,7 +51,7 @@ fn job_of(undoable: Option<Undoable>) -> Option<JobId> {
 #[test]
 fn the_newest_job_of_either_kind_is_offered_first() {
     let mut journal = journal();
-    let rename = finished(&mut journal, "rename", 100, JobState::Done);
+    let rename = with_done_step(&mut journal, "rename", 100, JobState::Done);
     let delete = finished(&mut journal, DELETE, 200, JobState::Done);
     let (first, second) = (
         entry(&journal, delete, "ready", NOW + 1),
@@ -61,14 +67,14 @@ fn the_newest_job_of_either_kind_is_offered_first() {
     );
     journal.mark_job_undone(delete).unwrap();
     assert!(matches!(newest(&journal), Some(Undoable::Rename(job)) if job.id == rename));
-    let later = finished(&mut journal, "rename", 300, JobState::Done);
+    let later = with_done_step(&mut journal, "rename", 300, JobState::Done);
     assert_eq!(job_of(newest(&journal)), Some(later));
 }
 
 #[test]
 fn a_retained_job_with_nothing_left_to_restore_is_skipped() {
     let mut journal = journal();
-    let rename = finished(&mut journal, "rename", 100, JobState::Done);
+    let rename = with_done_step(&mut journal, "rename", 100, JobState::Done);
     let delete = finished(&mut journal, DELETE, 200, JobState::Done);
     for state in ["restored", "purged", "aborted"] {
         entry(&journal, delete, state, NOW + 1);
@@ -108,7 +114,7 @@ fn only_live_unexpired_entries_are_offered() {
 #[test]
 fn a_corrupt_record_is_not_offered_and_does_not_break_the_query() {
     let mut journal = journal();
-    let rename = finished(&mut journal, "rename", 100, JobState::Done);
+    let rename = with_done_step(&mut journal, "rename", 100, JobState::Done);
     let delete = finished(&mut journal, DELETE, 200, JobState::Done);
     conn(&journal)
         .execute(
@@ -139,13 +145,20 @@ fn unfinished_failed_and_other_kinds_are_not_offered() {
 #[test]
 fn a_rename_keeps_its_plan_steps_and_restore_pending_flag() {
     let mut journal = journal();
-    let stuck = finished(&mut journal, "rename", 100, JobState::RestorePending);
+    let stuck = with_done_step(&mut journal, "rename", 100, JobState::RestorePending);
     let Some(Undoable::Rename(job)) = newest(&journal) else {
         panic!("a rename offer");
     };
     assert_eq!((job.id, job.restore_pending), (stuck, true));
     assert_eq!(job.plan, b"plan".to_vec());
-    assert_eq!(job.steps, vec![pending(0)]);
+    assert_eq!(
+        job.steps,
+        vec![JournalStep {
+            seq: 0,
+            state: StepState::Done,
+            detail: None,
+        }]
+    );
 }
 
 #[test]
@@ -166,4 +179,41 @@ fn the_retained_offer_survives_reopen() {
             entries: vec![live],
         })
     );
+}
+
+#[test]
+fn a_failed_job_with_a_live_done_step_is_offered() {
+    let mut journal = journal();
+    let failed = finished(&mut journal, "rename", 100, JobState::Failed);
+    journal
+        .mark_step(failed, 0, StepState::Done, Some(b"identity"))
+        .unwrap();
+    assert_eq!(job_of(newest(&journal)), Some(failed));
+}
+
+#[test]
+fn a_fully_undone_failed_job_does_not_hide_an_older_live_job() {
+    let mut journal = journal();
+    let older = with_done_step(&mut journal, "rename", 100, JobState::Done);
+    let failed = with_done_step(&mut journal, "rename", 200, JobState::Failed);
+    journal.mark_undone(failed, 0).unwrap();
+    assert_eq!(job_of(newest(&journal)), Some(older));
+}
+
+#[test]
+fn a_fully_undone_done_job_does_not_hide_an_older_live_job() {
+    let mut journal = journal();
+    let older = with_done_step(&mut journal, "rename", 100, JobState::Done);
+    let newer = with_done_step(&mut journal, "rename", 200, JobState::Done);
+    journal.mark_undone(newer, 0).unwrap();
+    assert_eq!(job_of(newest(&journal)), Some(older));
+}
+
+#[test]
+fn a_fully_undone_restore_pending_job_does_not_hide_an_older_live_job() {
+    let mut journal = journal();
+    let older = with_done_step(&mut journal, "rename", 100, JobState::Done);
+    let newer = with_done_step(&mut journal, "rename", 200, JobState::RestorePending);
+    journal.mark_undone(newer, 0).unwrap();
+    assert_eq!(job_of(newest(&journal)), Some(older));
 }

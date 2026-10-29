@@ -114,6 +114,9 @@ fn default_rename_undo_never_acquires_a_user_wide_lease() {
         .create_job("rename", &serde_json::to_vec(&plan).unwrap(), 1, 0)
         .unwrap();
     crate::jobs::lock(&journal)
+        .mark_step(job, 0, rusty_store::StepState::Done, None)
+        .unwrap();
+    crate::jobs::lock(&journal)
         .finish(job, rusty_store::JobState::Done)
         .unwrap();
     let mut undo = crate::jobs::profile_undo(&journal, job, &dirs, false).unwrap();

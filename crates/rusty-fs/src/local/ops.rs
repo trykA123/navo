@@ -7,6 +7,16 @@ use super::win_copy::{self, CopyProgress};
 use super::{LocalFs, error, io_error, os_path};
 use crate::{CancelToken, ProviderOps};
 
+#[cfg(any(windows, test))]
+fn shell_drops_trailing_dot_or_space(path: &std::path::Path) -> bool {
+    path.components().any(|component| {
+        matches!(
+            component.as_os_str().as_encoded_bytes().last(),
+            Some(b'.' | b' ')
+        )
+    })
+}
+
 impl ProviderOps for LocalFs {
     fn copy_file_owned(
         &self,
@@ -223,7 +233,12 @@ impl ProviderOps for LocalFs {
     }
 
     fn recycle(&self, location: &Location) -> Result<(), FsError> {
-        trash::delete(os_path(location)?).map_err(|_| error(FsErrorKind::Unknown, location))
+        let path = os_path(location)?;
+        #[cfg(windows)]
+        if shell_drops_trailing_dot_or_space(&path) {
+            return Err(error(FsErrorKind::NameInvalid, location));
+        }
+        trash::delete(path).map_err(|_| error(FsErrorKind::Unknown, location))
     }
 
     fn make_link(&self, target_of: &Location, at: &Location) -> Result<(), FsError> {
@@ -242,5 +257,52 @@ impl ProviderOps for LocalFs {
         super::platform::volume_serial(&os_path(location)?)
             .map(Some)
             .map_err(|e| io_error(&e, location))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::shell_drops_trailing_dot_or_space;
+
+    #[test]
+    fn a_name_ending_in_a_dot_cannot_be_spelled_by_the_shell() {
+        assert!(shell_drops_trailing_dot_or_space(Path::new(
+            "/tmp/trailingdot."
+        )));
+    }
+
+    #[test]
+    fn a_name_ending_in_a_space_cannot_be_spelled_by_the_shell() {
+        assert!(shell_drops_trailing_dot_or_space(Path::new(
+            "/tmp/trailing space "
+        )));
+    }
+
+    #[test]
+    fn an_ordinary_name_can_be_spelled_by_the_shell() {
+        assert!(!shell_drops_trailing_dot_or_space(Path::new(
+            "/tmp/ordinary.txt"
+        )));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_trailing_dot_ancestor_folder_cannot_be_spelled_by_the_shell() {
+        assert!(shell_drops_trailing_dot_or_space(Path::new(
+            r"\\?\C:\dotted.\ordinary.txt"
+        )));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_trailing_dot_unc_path_cannot_be_spelled_by_the_shell() {
+        assert!(shell_drops_trailing_dot_or_space(Path::new(
+            r"\\?\UNC\server\share\trailingdot."
+        )));
+        assert!(!shell_drops_trailing_dot_or_space(Path::new(
+            r"\\?\UNC\server\share\ordinary.txt"
+        )));
     }
 }

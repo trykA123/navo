@@ -35,6 +35,7 @@ mod parallel_pause;
 mod parallel_props;
 mod pause;
 mod placed;
+mod recycle;
 mod rename;
 mod replace;
 mod roll_back;
@@ -126,6 +127,7 @@ struct Harness {
     log: Log,
     cancel: CancelToken,
     cancel_after_bytes: Option<u64>,
+    cancel_after_files: Option<u64>,
     progress: Vec<Progress>,
     workers: usize,
     keeps_held: bool,
@@ -197,11 +199,14 @@ impl Harness {
         job: impl FnOnce(&mut JobContext<'_>) -> JobOutcome,
     ) -> JobOutcome {
         let cancel = &self.cancel;
-        let limit = self.cancel_after_bytes;
+        let bytes_limit = self.cancel_after_bytes;
+        let files_limit = self.cancel_after_files;
         let seen = &mut self.progress;
         let mut on_progress = |progress: &Progress| {
             seen.push(progress.clone());
-            if limit.is_some_and(|bytes| progress.bytes_done > bytes) {
+            if bytes_limit.is_some_and(|bytes| progress.bytes_done > bytes)
+                || files_limit.is_some_and(|files| progress.files_done >= files)
+            {
                 cancel.cancel();
             }
         };

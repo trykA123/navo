@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use rusty_core::{OpKind, OperationPlan, Step, Totals};
 use rusty_fs::{FakeFs, JobOutcome, ProviderOps, StepOutcome};
-use rusty_store::{Db, JobJournal, JobState};
+use rusty_store::{Db, JobJournal, JobState, StepState};
 use rusty_ui::browser::{RenameHooks, UndoOffer};
 
 use super::hooks;
@@ -171,6 +171,9 @@ fn a_journal_that_cannot_be_read_is_an_error_not_a_missing_offer() {
     let journal = memory_journal();
     let job = lock(&journal)
         .create_job("rename", b"not json", 1, 1)
+        .unwrap();
+    lock(&journal)
+        .mark_step(job, 0, StepState::Done, None)
         .unwrap();
     lock(&journal).finish(job, JobState::Done).unwrap();
     assert!((hooks(Some(journal), None).last)().is_err());

@@ -23,10 +23,17 @@ pub(super) fn current_of(step: &Step) -> Location {
 pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
     match step {
         Step::CopyFile { size, .. } => (*size, 1),
-        Step::RemoveFile { .. } | Step::MakeLink { .. } => (0, 1),
+        Step::RemoveFile { .. } | Step::MakeLink { .. } | Step::Recycle { .. } => (0, 1),
         Step::Rename { target, .. } if kind == OpKind::Rename && !is_temporary(target) => (0, 1),
         _ => (0, 0),
     }
+}
+
+pub(super) fn progress_files(plan: &OperationPlan) -> u64 {
+    if plan.kind == OpKind::Recycle {
+        return u64::try_from(plan.steps.len()).unwrap_or(u64::MAX);
+    }
+    plan.totals.files
 }
 
 pub(super) fn moved_bytes(plan: &OperationPlan) -> u64 {
@@ -80,6 +87,7 @@ fn walk_marking(
     let plan = job.plan;
     let mut progress = Progress::start(plan);
     let mut kept = Vec::new();
+    let mut failed = None;
     for (seq, step) in (0_u32..).zip(&plan.steps) {
         if done.contains(&seq) {
             advance(&mut progress, plan.kind, step);
@@ -96,12 +104,7 @@ fn walk_marking(
         }
         progress.current = Some(current_of(step));
         let start = progress.bytes_done;
-        let result = if holds_kept(step, &kept) {
-            Ok(StepOutcome::Skipped)
-        } else {
-            prepare(seq, (plan.kind, step), ctx)
-                .and_then(|()| apply(job, (seq, step), ctx, &mut progress))
-        };
+        let result = attempt_step(job, (seq, step), &kept, (ctx, &mut progress));
         match result {
             Ok(outcome) => {
                 note_kept(step, outcome, &mut kept);
@@ -112,16 +115,46 @@ fn walk_marking(
                 advance(&mut progress, plan.kind, step);
                 (ctx.progress)(&progress);
             }
-            Err(error) if error.kind == FsErrorKind::Cancelled || ctx.cancel.is_cancelled() => {
-                return JobOutcome::Cancelled;
-            }
             Err(error) => {
-                marks.failed(ctx.log, seq);
-                return JobOutcome::Failed { seq, error };
+                if let Some(outcome) = step_failure(plan, (seq, error), (marks, ctx), &mut failed) {
+                    return outcome;
+                }
             }
         }
     }
-    JobOutcome::Done
+    match failed {
+        Some((seq, error)) => JobOutcome::Failed { seq, error },
+        None => JobOutcome::Done,
+    }
+}
+
+fn attempt_step(
+    job: Job<'_>,
+    (seq, step): (u32, &Step),
+    kept: &[Location],
+    (ctx, progress): (&mut JobContext<'_>, &mut Progress),
+) -> Result<StepOutcome, FsError> {
+    if holds_kept(step, kept) {
+        return Ok(StepOutcome::Skipped);
+    }
+    prepare(seq, (job.plan.kind, step), ctx).and_then(|()| apply(job, (seq, step), ctx, progress))
+}
+
+fn step_failure(
+    plan: &OperationPlan,
+    (seq, error): (u32, FsError),
+    (marks, ctx): (&mut Marks, &mut JobContext<'_>),
+    failed: &mut Option<(u32, FsError)>,
+) -> Option<JobOutcome> {
+    if error.kind == FsErrorKind::Cancelled || ctx.cancel.is_cancelled() {
+        return Some(JobOutcome::Cancelled);
+    }
+    marks.failed(ctx.log, seq);
+    if plan.kind != OpKind::Recycle {
+        return Some(JobOutcome::Failed { seq, error });
+    }
+    failed.get_or_insert((seq, error));
+    None
 }
 
 pub(super) fn note_kept(step: &Step, outcome: StepOutcome, kept: &mut Vec<Location>) {

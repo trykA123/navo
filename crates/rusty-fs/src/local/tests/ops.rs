@@ -304,3 +304,40 @@ fn the_platform_rename_moves_a_folder_and_refuses_an_existing_one() {
     platform::rename_new(&path(&dir, "x"), &path(&dir, "z")).unwrap();
     assert!(!path(&dir, "x").exists() && path(&dir, "z").exists());
 }
+
+#[cfg(windows)]
+#[test]
+fn recycle_refuses_a_trailing_dot_name_without_touching_it() {
+    let (dir, _) = temp();
+    let dotted = dir.path().join("trailingdot.");
+    let verbatim = format!(r"\\?\{}", dotted.display());
+    fs::write(&verbatim, b"keep").unwrap();
+    let location = location_of(Path::new(&verbatim));
+    assert_eq!(
+        LocalFs::new()
+            .recycle(&location)
+            .map_err(|error| error.kind),
+        Err(FsErrorKind::NameInvalid)
+    );
+    assert_eq!(fs::read(&verbatim).unwrap(), b"keep");
+}
+
+#[cfg(windows)]
+#[test]
+fn recycle_refuses_a_trailing_dot_ancestor_without_touching_it() {
+    let (dir, _) = temp();
+    let dotted = dir.path().join("dotted.");
+    let file = dotted.join("file.txt");
+    let folder = format!(r"\\?\{}", dotted.display());
+    let verbatim = format!(r"\\?\{}", file.display());
+    fs::create_dir(&folder).unwrap();
+    fs::write(&verbatim, b"keep").unwrap();
+    let location = location_of(Path::new(&verbatim));
+    assert_eq!(
+        LocalFs::new()
+            .recycle(&location)
+            .map_err(|error| error.kind),
+        Err(FsErrorKind::NameInvalid)
+    );
+    assert_eq!(fs::read(&verbatim).unwrap(), b"keep");
+}
