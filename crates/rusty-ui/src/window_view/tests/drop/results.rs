@@ -84,3 +84,39 @@ fn a_drag_move_from_results_moves_the_real_files_and_their_rows_leave(cx: &mut T
     settle(cx, &rig.view);
     assert!(rows(&rig, cx).is_empty());
 }
+
+fn footer(rig: &Rig, cx: &mut TestAppContext) -> String {
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .find(("status", rig.home.get()))
+            .label()
+            .map(str::to_owned)
+    })
+    .expect("window")
+    .expect("label")
+}
+
+#[gpui_kit::test]
+fn the_footer_of_a_results_listing_follows_rows_that_leave(cx: &mut TestAppContext) {
+    const THREE: [&str; 3] = ["a.txt", "deep/b.txt", "docs/report.txt"];
+    let rig = rig(cx);
+    rig.fs.add_file("home/deep/b.txt", 4);
+    rig.view.update(cx, |view, _| {
+        view.browser.find_only(&THREE);
+        let base = rig.fs.location("home");
+        view.browser
+            .start_find(rig.home, FindQuery::parse("x"), base);
+    });
+    settle(cx, &rig.view);
+    rig.second_tab(cx, rig.dest, "home/deep");
+    let before = footer(&rig, cx);
+    assert!(before.contains("0 hits in 3 files"), "{before}");
+    rig.mark(cx, &[1]);
+    let to = rig.list_spot(cx, rig.dest);
+    rig.drop_on(cx, (1, to), Modifiers::default());
+    settle(cx, &rig.view);
+    let after = footer(&rig, cx);
+    assert!(after.contains("0 hits in 2 files"), "{after}");
+    assert_ne!(before, after);
+}

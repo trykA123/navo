@@ -84,7 +84,12 @@ impl Browser {
                 entries.push(entry.clone());
                 details.push(detail.clone());
             } else if let Some(results) = self.finds.get_mut(&tab) {
-                results.hits.remove(&entry.name);
+                let total = results
+                    .hits
+                    .remove(&entry.name)
+                    .map_or(0, |hits| hits.total);
+                results.progress.matched = results.progress.matched.saturating_sub(1);
+                results.progress.hits = results.progress.hits.saturating_sub(u64::from(total));
             }
         }
         let location = shown.location().clone();

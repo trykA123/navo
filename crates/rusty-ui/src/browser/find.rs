@@ -289,11 +289,15 @@ impl Browser {
                     hits: FileHits::default(),
                 })
                 .collect();
+            let progress = FindProgress {
+                matched: relative.len() as u64,
+                ..FindProgress::default()
+            };
             let _ = sink(FoundBatch {
                 files,
-                progress: FindProgress::default(),
+                progress: progress.clone(),
             });
-            Ok(FindProgress::default())
+            Ok(progress)
         });
     }
 }

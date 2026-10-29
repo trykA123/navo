@@ -62,6 +62,7 @@ impl FerriteWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.refresh_drives(cx);
         if self.drives.list.is_empty() {
             return;
         }

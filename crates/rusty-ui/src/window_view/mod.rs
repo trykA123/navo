@@ -86,7 +86,7 @@ use crate::tokens::{self, Mode};
 pub use app_menu::AppMenuHooks;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
 pub use crash::CrashReportService;
-pub use drives::{DriveHooks, DriveIcon, DriveInfo};
+pub use drives::{DriveChanges, DriveHooks, DriveIcon, DriveInfo, DriveSignal};
 pub use drop_menu::drop_items;
 pub use drop_platform::{DropPlatform, invalid_drop_path};
 pub use editor::EditorHooks;

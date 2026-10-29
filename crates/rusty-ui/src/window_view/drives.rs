@@ -1,8 +1,11 @@
+use std::any::Any;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
+use futures::{FutureExt as _, StreamExt as _};
 use gpui_kit::{AsyncApp, WeakEntity};
 use rusty_core::{Command, Location, PaneId, Tab};
 
@@ -12,7 +15,8 @@ use crate::prelude::*;
 
 pub use crate::pane_chrome::{DriveIcon, DriveInfo};
 
-const DRIVE_POLL: Duration = Duration::from_secs(2);
+const DRIVE_SETTLE: Duration = Duration::from_millis(300);
+const DRIVE_MAX_WAIT: Duration = Duration::from_secs(2);
 
 type Refresh = Arc<dyn Fn() -> Vec<DriveInfo> + Send + Sync>;
 type Reconnect = Arc<dyn Fn(char, &str) -> Result<(), String> + Send + Sync>;
@@ -20,6 +24,7 @@ type Reconnect = Arc<dyn Fn(char, &str) -> Result<(), String> + Send + Sync>;
 pub struct DriveHooks {
     pub refresh: Refresh,
     pub reconnect: Reconnect,
+    pub changes: Option<DriveChanges>,
 }
 
 impl DriveHooks {
@@ -28,6 +33,41 @@ impl DriveHooks {
         Self {
             refresh: Arc::new(Vec::new),
             reconnect: Arc::new(|_, _| Err("Drives are not set up.".to_owned())),
+            changes: None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct DriveSignal(UnboundedSender<()>);
+
+impl DriveSignal {
+    pub fn send(&self) {
+        let _ = self.0.unbounded_send(());
+    }
+}
+
+pub struct DriveChanges {
+    signals: Option<UnboundedReceiver<()>>,
+    _watch: Option<Box<dyn Any>>,
+}
+
+impl DriveChanges {
+    #[must_use]
+    pub fn channel() -> (DriveSignal, Self) {
+        let (sender, signals) = unbounded();
+        let changes = Self {
+            signals: Some(signals),
+            _watch: None,
+        };
+        (DriveSignal(sender), changes)
+    }
+
+    #[must_use]
+    pub fn keeping(self, watch: Box<dyn Any>) -> Self {
+        Self {
+            _watch: Some(watch),
+            ..self
         }
     }
 }
@@ -37,6 +77,15 @@ pub(super) struct Drives {
     pub(super) list: Rc<[DriveInfo]>,
     pub(super) reconnecting: Vec<char>,
     errors: HashMap<PaneId, (Location, usize, SharedString)>,
+    refresh: RefreshState,
+}
+
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+enum RefreshState {
+    #[default]
+    Idle,
+    Running,
+    Again,
 }
 
 impl Drives {
@@ -46,6 +95,7 @@ impl Drives {
             list: Rc::from([]),
             reconnecting: Vec::new(),
             errors: HashMap::new(),
+            refresh: RefreshState::Idle,
         }
     }
 
@@ -66,23 +116,74 @@ struct Reconnected {
     result: Result<(), String>,
 }
 
-impl FerriteWindow {
-    pub(super) fn poll_drives(cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
-            while Self::refresh_drives(&this, cx).await {
-                cx.background_executor().timer(DRIVE_POLL).await;
+async fn settle_drive_changes(signals: &mut UnboundedReceiver<()>, cx: &AsyncApp) {
+    let started = cx.background_executor().now();
+    let maximum = started + DRIVE_MAX_WAIT;
+    let mut deadline = started + DRIVE_SETTLE;
+    loop {
+        let now = cx.background_executor().now();
+        if now >= deadline {
+            break;
+        }
+        let timer = cx.background_executor().timer(deadline - now).fuse();
+        futures::pin_mut!(timer);
+        futures::select_biased! {
+            () = timer => break,
+            signal = signals.next().fuse() => {
+                if signal.is_none() {
+                    break;
+                }
+                deadline = (cx.background_executor().now() + DRIVE_SETTLE).min(maximum);
             }
+        }
+    }
+}
+
+impl FerriteWindow {
+    pub(super) fn watch_drives(&mut self, cx: &mut Context<Self>) {
+        self.refresh_drives(cx);
+        let changes = self.drives.hooks.changes.as_mut();
+        let Some(mut signals) = changes.and_then(|changes| changes.signals.take()) else {
+            return;
+        };
+        cx.spawn(async move |this, cx| Self::follow_volumes(&this, &mut signals, cx).await)
+            .detach();
+    }
+
+    async fn follow_volumes(
+        this: &WeakEntity<Self>,
+        signals: &mut UnboundedReceiver<()>,
+        cx: &mut AsyncApp,
+    ) {
+        while signals.next().await.is_some() {
+            settle_drive_changes(signals, cx).await;
+            if this.update(cx, |view, cx| view.refresh_drives(cx)).is_err() {
+                return;
+            }
+        }
+    }
+
+    pub(super) fn refresh_drives(&mut self, cx: &mut Context<Self>) {
+        if self.drives.refresh != RefreshState::Idle {
+            self.drives.refresh = RefreshState::Again;
+            return;
+        }
+        self.drives.refresh = RefreshState::Running;
+        let refresh = self.drives.hooks.refresh.clone();
+        cx.spawn(async move |this, cx| {
+            let list = cx.background_spawn(async move { refresh() }).await;
+            let _ = this.update(cx, |view, cx| view.drives_read(list, cx));
         })
         .detach();
     }
 
-    async fn refresh_drives(this: &WeakEntity<Self>, cx: &mut AsyncApp) -> bool {
-        let Ok(refresh) = this.read_with(cx, |view, _| view.drives.hooks.refresh.clone()) else {
-            return false;
-        };
-        let list = cx.background_spawn(async move { refresh() }).await;
-        this.update(cx, |view, cx| view.set_drives(list, cx))
-            .is_ok()
+    fn drives_read(&mut self, list: Vec<DriveInfo>, cx: &mut Context<Self>) {
+        let again = self.drives.refresh == RefreshState::Again;
+        self.drives.refresh = RefreshState::Idle;
+        self.set_drives(list, cx);
+        if again {
+            self.refresh_drives(cx);
+        }
     }
 
     fn set_drives(&mut self, list: Vec<DriveInfo>, cx: &mut Context<Self>) {
@@ -106,6 +207,7 @@ impl FerriteWindow {
         let Some(drive) = self.drives.list.get(index).cloned() else {
             return;
         };
+        self.refresh_drives(cx);
         if drive.connected {
             self.apply(&Command::PaneGoDrive { root: drive.root }, window, cx);
             return;

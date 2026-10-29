@@ -25,6 +25,7 @@ impl FerriteWindow {
             self.restart_index_activity(cx);
             self.apply_theme(window, cx);
             self.browser.revalidate_unwatched();
+            self.refresh_drives(cx);
             cx.notify();
         }
     }

@@ -1,4 +1,5 @@
 use std::ptr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -51,7 +52,12 @@ const REMEMBERED_EVERY: Duration = Duration::from_secs(30);
 
 type Remembered = Vec<(char, String)>;
 
-static REMEMBERED: Mutex<Option<(Instant, Remembered)>> = Mutex::new(None);
+static REMEMBERED: Mutex<Option<(Instant, u64, Remembered)>> = Mutex::new(None);
+static TOPOLOGY: AtomicU64 = AtomicU64::new(0);
+
+pub(super) fn invalidate_remembered() {
+    TOPOLOGY.fetch_add(1, Ordering::Relaxed);
+}
 
 fn connection(letter: char) -> Option<(String, bool)> {
     let local = wide(&format!("{letter}:"));
@@ -68,13 +74,15 @@ fn connection(letter: char) -> Option<(String, bool)> {
 
 fn remembered_cached() -> Remembered {
     let mut cached = REMEMBERED.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some((read_at, list)) = cached.as_ref()
+    let topology = TOPOLOGY.load(Ordering::Relaxed);
+    if let Some((read_at, generation, list)) = cached.as_ref()
+        && *generation == topology
         && read_at.elapsed() < REMEMBERED_EVERY
     {
         return list.clone();
     }
     let list = remembered();
-    *cached = Some((Instant::now(), list.clone()));
+    *cached = Some((Instant::now(), topology, list.clone()));
     list
 }
 

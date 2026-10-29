@@ -1,5 +1,7 @@
-use gpui_kit::TestAppContext;
+use std::time::Duration;
+
 use gpui_kit::test::TestWindowExt;
+use gpui_kit::{TestAppContext, VisualTestContext};
 use rusty_core::{Command, PaneId};
 
 use super::drive_fs::{Rig, Setup, drive_window, local};
@@ -164,4 +166,91 @@ fn clicking_the_pill_of_an_open_list_closes_it(cx: &mut TestAppContext) {
     assert_eq!(menu_pane(&rig, cx), None);
     open_list(&rig, cx, pane);
     assert_eq!(menu_pane(&rig, cx), Some(pane));
+}
+
+fn idle(cx: &mut TestAppContext, wait: Duration) {
+    cx.executor().advance_clock(wait);
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn drives_are_read_once_at_start_and_not_again_while_idle(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let started = rig.reads();
+    assert!(started >= 1, "the drive bar needs one read at start");
+    idle(cx, Duration::from_secs(30));
+    assert_eq!(rig.reads(), started);
+}
+
+#[gpui_kit::test]
+fn window_activation_reads_the_drives_once(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let mut visual = VisualTestContext::from_window(rig.window, cx);
+    visual.deactivate_window();
+    visual.run_until_parked();
+    let before = rig.reads();
+    visual.update(|window, _| window.activate_window());
+    visual.run_until_parked();
+    assert_eq!(rig.reads(), before + 1);
+}
+
+#[gpui_kit::test]
+fn a_burst_of_volume_changes_reads_the_drives_once_after_they_settle(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let before = rig.reads();
+    for _ in 0..3 {
+        rig.signal.send();
+    }
+    idle(cx, Duration::from_millis(100));
+    assert_eq!(rig.reads(), before);
+    idle(cx, Duration::from_millis(300));
+    assert_eq!(rig.reads(), before + 1);
+    idle(cx, Duration::from_secs(5));
+    assert_eq!(rig.reads(), before + 1);
+}
+
+#[gpui_kit::test]
+fn opening_the_drive_list_reads_the_drives(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let pane = first_pane(&rig, cx);
+    let before = rig.reads();
+    open_list(&rig, cx, pane);
+    assert_eq!(rig.reads(), before + 1);
+}
+
+#[gpui_kit::test]
+fn staggered_volume_changes_restart_the_settle_deadline(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let before = rig.reads();
+    rig.signal.send();
+    cx.run_until_parked();
+    idle(cx, Duration::from_millis(290));
+    rig.signal.send();
+    cx.run_until_parked();
+    idle(cx, Duration::from_millis(10));
+    assert_eq!(rig.reads(), before);
+    idle(cx, Duration::from_millis(289));
+    assert_eq!(rig.reads(), before);
+    idle(cx, Duration::from_millis(1));
+    assert_eq!(rig.reads(), before + 1);
+}
+
+#[gpui_kit::test]
+fn continuous_volume_changes_refresh_within_two_seconds(cx: &mut TestAppContext) {
+    let rig = drive_window(cx, Setup::default());
+    let before = rig.reads();
+    let start = cx.background_executor.now();
+    rig.signal.send();
+    cx.run_until_parked();
+    for _ in 0..6 {
+        idle(cx, Duration::from_millis(290));
+        rig.signal.send();
+        cx.run_until_parked();
+        assert_eq!(rig.reads(), before);
+    }
+    idle(cx, Duration::from_millis(259));
+    assert_eq!(rig.reads(), before);
+    idle(cx, Duration::from_millis(1));
+    assert_eq!(cx.background_executor.now() - start, Duration::from_secs(2));
+    assert_eq!(rig.reads(), before + 1);
 }

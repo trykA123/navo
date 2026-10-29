@@ -395,6 +395,7 @@ terminal-not-configured = Terminals are not set up.
 terminal-command-empty = Set a terminal command in settings.
 terminal-provider-unknown = Choose a terminal provider in settings.
 terminal-command-quotes = Close the quotation marks in the terminal command.
+terminal-command-path = Pass the folder as a separate argument to a terminal launcher. Shells inherit the working directory.
 terminal-spawn-error = Could not start the terminal: { $error }
 
 cmd-workspace-preview-first = Preview workspace 1

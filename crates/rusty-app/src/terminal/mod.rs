@@ -16,7 +16,7 @@ pub fn command_line(
 ) -> Result<(String, Vec<String>), String> {
     let folder = folder.to_string_lossy().into_owned();
     let (program, args) = match provider {
-        "windows-terminal" => ("wt.exe", vec!["-d".to_owned(), folder]),
+        "windows-terminal" => ("wt.exe", vec!["-d".to_owned(), ".".to_owned()]),
         "powershell" => {
             let search = crate::editor::Search {
                 path: std::env::var("PATH").unwrap_or_default(),
@@ -27,29 +27,100 @@ pub fn command_line(
             } else {
                 "powershell.exe"
             };
-            (
-                program,
-                vec!["-NoExit".to_owned(), "-WorkingDirectory".to_owned(), folder],
-            )
+            (program, vec!["-NoExit".to_owned()])
         }
-        "cmd" => (
-            "cmd.exe",
-            vec!["/K".to_owned(), "cd".to_owned(), "/d".to_owned(), folder],
-        ),
-        "custom" => {
-            let mut words = split(template.unwrap_or_default())?.into_iter();
-            let program = words
-                .next()
-                .filter(|word| !word.is_empty())
-                .ok_or_else(|| rusty_l10n::tr("terminal-command-empty"))?;
-            return Ok((
-                program.replace("{path}", &folder),
-                words.map(|word| word.replace("{path}", &folder)).collect(),
-            ));
-        }
+        "cmd" => ("cmd.exe", vec![]),
+        "custom" => return custom_command(template.unwrap_or_default(), &folder),
         _ => return Err(rusty_l10n::tr("terminal-provider-unknown")),
     };
     Ok((program.to_owned(), args))
+}
+
+fn custom_command(template: &str, folder: &str) -> Result<(String, Vec<String>), String> {
+    let mut words = split(template)?.into_iter();
+    let program = words
+        .next()
+        .filter(|word| !word.is_empty())
+        .ok_or_else(|| rusty_l10n::tr("terminal-command-empty"))?;
+    if program.contains("{path}") {
+        return Err(rusty_l10n::tr("terminal-command-path"));
+    }
+    let mut shell = is_shell_program(&program);
+    let folder = if program_identity(&program) == "wt" {
+        folder.replace(';', r"\;")
+    } else {
+        folder.to_owned()
+    };
+    let mut args = Vec::new();
+    for word in words {
+        if word.contains("{path}") && (word != "{path}" || shell) {
+            return Err(rusty_l10n::tr("terminal-command-path"));
+        }
+        shell |= is_shell_program(&word);
+        args.push(if word == "{path}" {
+            folder.clone()
+        } else {
+            word
+        });
+    }
+    Ok((program, args))
+}
+
+fn program_identity(program: &str) -> String {
+    let name = program
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(program)
+        .trim_end_matches(['.', ' '])
+        .to_ascii_lowercase();
+    name.rsplit_once('.')
+        .filter(|(_, extension)| matches!(*extension, "exe" | "com" | "bat" | "cmd"))
+        .map_or(name.as_str(), |(stem, _)| stem)
+        .to_owned()
+}
+
+fn is_shell_program(program: &str) -> bool {
+    program
+        .trim_end_matches(['.', ' '])
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| {
+            extension.eq_ignore_ascii_case("bat") || extension.eq_ignore_ascii_case("cmd")
+        })
+        || matches!(
+            program_identity(program).as_str(),
+            "cmd"
+                | "powershell"
+                | "pwsh"
+                | "sh"
+                | "bash"
+                | "dash"
+                | "zsh"
+                | "fish"
+                | "ksh"
+                | "wsl"
+                | "wscript"
+                | "cscript"
+                | "mshta"
+                | "conhost"
+        )
+}
+
+#[cfg(any(windows, test))]
+fn is_console_provider(provider: &str) -> bool {
+    matches!(
+        program_identity(provider).as_str(),
+        "cmd" | "powershell" | "pwsh"
+    )
+}
+
+#[cfg(any(windows, test))]
+fn windows_creation_flags(provider: &str) -> u32 {
+    let console = if is_console_provider(provider) {
+        0x0000_0010
+    } else {
+        0x0000_0008
+    };
+    console | 0x0000_0200
 }
 
 fn split(template: &str) -> Result<Vec<String>, String> {
@@ -131,14 +202,20 @@ pub fn hooks(values: &Values) -> TerminalHooks {
         open: Rc::new(move |folder| {
             let mut command =
                 launch_command(provider, template.as_deref(), Path::new(folder.as_str()))?;
-            command
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null());
             #[cfg(windows)]
-            {
+            let detached = {
                 use std::os::windows::process::CommandExt as _;
-                command.creation_flags(0x0000_0008 | 0x0000_0200);
+                let flags = windows_creation_flags(&command.get_program().to_string_lossy());
+                command.creation_flags(flags);
+                flags & 0x0000_0008 != 0
+            };
+            #[cfg(not(windows))]
+            let detached = true;
+            if detached {
+                command
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null());
             }
             #[cfg(unix)]
             {

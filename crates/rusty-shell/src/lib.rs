@@ -16,8 +16,9 @@ pub use display::display_scale;
 pub use drag_out::data_object;
 pub use drag_out::{DragError, DropOutcome, drag_files};
 pub use drives::{
-    Drive, DriveKind, RawDrives, Space, VolumeIdentity, assemble, drive_details, list_drives,
-    parse_mounts, reconnect, volume_identity,
+    DeviceEvent, Drive, DriveKind, RawDrives, Space, VolumeIdentity, VolumeWatch, assemble,
+    device_event, drive_details, list_drives, parse_mounts, reconnect, volume_identity,
+    watch_volumes,
 };
 pub use helper_job::HelperLimits;
 #[cfg(windows)]

@@ -6660,6 +6660,7 @@ dependencies = [
  "rusty-core",
  "tempfile",
  "thiserror 2.0.21",
+ "tracing",
  "windows 0.62.2",
  "windows-sys 0.61.2",
  "zip",

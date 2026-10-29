@@ -112,7 +112,7 @@ impl FerriteWindow {
         self.listen_open(open, window, cx);
         self.apply_theme(window, cx);
         Self::close_saves_and_quits(window, cx);
-        Self::poll_drives(cx);
+        self.watch_drives(cx);
         Self::poll_index_activity(cx);
         self.check_index_upgrade(cx);
         cx.defer_in(window, move |view, window, cx| {

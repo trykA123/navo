@@ -1,27 +1,18 @@
 use std::path::Path;
 
 use super::system::{unix_terminal, windows_provider};
-use super::{command_line, launch_command, split};
+use super::{command_line, launch_command, split, windows_creation_flags};
 
 #[test]
-fn terminal_providers_keep_a_folder_with_spaces_in_one_argument() {
-    let folder = Path::new(r"C:\Example Folder\docs");
-    for (provider, program, prefix) in [
-        ("windows-terminal", "wt.exe", vec!["-d"]),
-        ("cmd", "cmd.exe", vec!["/K", "cd", "/d"]),
-    ] {
-        let (actual, args) = command_line(provider, None, folder).unwrap();
-        assert_eq!(actual, program);
-        let expected: Vec<&str> = prefix
-            .into_iter()
-            .chain([folder.to_str().unwrap()])
-            .collect();
-        assert_eq!(args, expected);
-    }
+fn windows_terminal_never_puts_the_folder_in_arguments() {
+    let folder = Path::new(r"C:\Example Folder;calc.exe\docs");
+    let (program, args) = command_line("windows-terminal", None, folder).unwrap();
+    assert_eq!(program, "wt.exe");
+    assert_eq!(args, ["-d", "."]);
 }
 
 #[test]
-fn powershell_uses_the_available_executable_and_working_directory_argument() {
+fn powershell_uses_the_available_executable_without_a_folder_argument() {
     let folder = Path::new(r"C:\Example Folder");
     let (program, args) = command_line("powershell", None, folder).unwrap();
     let search = crate::editor::Search {
@@ -34,7 +25,44 @@ fn powershell_uses_the_available_executable_and_working_directory_argument() {
         "powershell.exe"
     };
     assert_eq!(program, expected);
-    assert_eq!(args, ["-NoExit", "-WorkingDirectory", r"C:\Example Folder"]);
+    assert_eq!(args, ["-NoExit"]);
+}
+
+#[test]
+fn console_providers_never_put_folder_metacharacters_in_arguments() {
+    let folder = Path::new(r"C:\x&calc|^%$;` folder");
+    for (provider, expected) in [("cmd", vec![]), ("powershell", vec!["-NoExit"])] {
+        let (_, args) = command_line(provider, None, folder).unwrap();
+        assert_eq!(args, expected);
+        let command = launch_command(provider, None, folder).unwrap();
+        assert_eq!(command.get_current_dir(), Some(folder));
+        assert!(
+            command
+                .get_args()
+                .all(|arg| !arg.to_string_lossy().contains("x&calc"))
+        );
+    }
+}
+
+#[test]
+fn windows_console_providers_get_a_new_console_instead_of_detaching() {
+    for provider in [
+        "cmd",
+        "powershell",
+        "pwsh",
+        "cmd.exe",
+        "powershell.exe",
+        "pwsh.exe",
+        "cmd.exe.",
+        "CMD.EXE  ",
+        "cmd.com",
+        r"C:\Windows\System32\CMD.EXE",
+    ] {
+        assert_eq!(windows_creation_flags(provider), 0x10 | 0x200);
+        assert_eq!(windows_creation_flags(provider) & 0x8, 0);
+    }
+    assert_eq!(windows_creation_flags("windows-terminal"), 0x8 | 0x200);
+    assert_eq!(windows_creation_flags("wt.exe"), 0x8 | 0x200);
 }
 
 #[test]
@@ -42,20 +70,88 @@ fn custom_templates_split_before_replacing_paths() {
     let (program, args) = command_line(
         "custom",
         Some(r#""C:\Terminal App\terminal.exe" --cwd {path} """#),
-        Path::new(r"C:\Example Folder\"),
+        Path::new(r"C:\Example &|^%$;` Folder\"),
     )
     .unwrap();
     assert_eq!(program, r"C:\Terminal App\terminal.exe");
-    assert_eq!(args, ["--cwd", r"C:\Example Folder\", ""]);
+    assert_eq!(args, ["--cwd", r"C:\Example &|^%$;` Folder\", ""]);
+}
+
+#[test]
+fn custom_windows_terminal_escapes_every_folder_semicolon() {
+    let folder = Path::new(r"C:\safe;calc.exe; folder");
+    for template in [
+        "wt -d {path}",
+        "WT.EXE -d {path}",
+        r#""C:\Terminal App\Wt.ExE" -d {path}"#,
+        "/terminal/WT.exe -d {path}",
+    ] {
+        let (_, args) = command_line("custom", Some(template), folder).unwrap();
+        assert_eq!(args, ["-d", r"C:\safe\;calc.exe\; folder"]);
+    }
+}
+
+#[test]
+fn custom_non_shell_programs_accept_folder_substitution() {
+    let folder = Path::new(r"C:\Example Folder");
+    for template in ["code {path}", "wt -d {path}"] {
+        let (_, args) = command_line("custom", Some(template), folder).unwrap();
+        assert_eq!(args.last().unwrap(), folder.to_str().unwrap());
+    }
+}
+
+#[test]
+fn custom_templates_reject_folder_substitution_in_shell_commands() {
+    for template in [
+        r#"terminal --command "cd {path}""#,
+        "terminal --cwd={path}",
+        "{path} --new-window",
+        "cmd.exe /K cd /d {path}",
+        "wt.exe cmd.exe /K cd /d {path}",
+        r#""C:\Windows\System32\CMD.EXE" /K {path}"#,
+        "powershell.exe -Command {path}",
+        "pwsh -Command {path}",
+        "sh -c {path}",
+        r"C:\bin\BASH.EXE -c {path}",
+        "cmd.exe. /c {path}",
+        "CMD.EXE   /c {path}",
+        r#""CMD.EXE  " /c {path}"#,
+        r#""C:\Windows\System32\cmd.exe" /c {path}"#,
+        "x.bat {path}",
+        "x.CMD. {path}",
+        "pwsh.EXE -c {path}",
+        "cmd.com /c {path}",
+        "wsl {path}",
+        "wscript {path}",
+        "cscript {path}",
+        "mshta {path}",
+        "conhost {path}",
+        "wt cmd.exe. /c {path}",
+    ] {
+        assert!(
+            command_line(
+                "custom",
+                Some(template),
+                Path::new(r"C:\x&calc|^%$;` folder")
+            )
+            .is_err()
+        );
+    }
 }
 
 #[test]
 fn custom_template_without_a_path_still_sets_the_working_directory() {
     let folder = Path::new("example folder");
-    let command = launch_command("custom", Some("terminal --new-window"), folder).unwrap();
-    assert_eq!(command.get_current_dir(), Some(folder));
-    assert_eq!(command.get_program(), "terminal");
-    assert_eq!(command.get_args().collect::<Vec<_>>(), ["--new-window"]);
+    for (template, program, argument) in [
+        ("terminal --new-window", "terminal", "--new-window"),
+        ("cmd.exe. /c", "cmd.exe.", "/c"),
+        (r#""CMD.EXE  " /c"#, "CMD.EXE  ", "/c"),
+    ] {
+        let command = launch_command("custom", Some(template), folder).unwrap();
+        assert_eq!(command.get_current_dir(), Some(folder));
+        assert_eq!(command.get_program(), program);
+        assert_eq!(command.get_args().collect::<Vec<_>>(), [argument]);
+    }
 }
 
 #[test]
@@ -158,5 +254,5 @@ fn the_windows_choice_maps_to_the_folder_command() {
     let folder = Path::new(r"C:\Example Folder");
     let (program, args) = command_line(windows_provider(None, false), None, folder).unwrap();
     assert_eq!(program, "cmd.exe");
-    assert_eq!(args, ["/K", "cd", "/d", r"C:\Example Folder"]);
+    assert!(args.is_empty());
 }

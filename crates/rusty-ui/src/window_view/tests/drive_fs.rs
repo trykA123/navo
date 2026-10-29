@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -11,7 +12,9 @@ use rusty_fs::{
     CancelToken, Capabilities, FakeFs, FakeOp, Fault, FsEntry, ListSink, Provider, ProviderOps,
 };
 
-use super::super::{DriveHooks, DriveIcon, DriveInfo, FerriteWindow, StartOptions};
+use super::super::{
+    DriveChanges, DriveHooks, DriveIcon, DriveInfo, DriveSignal, FerriteWindow, StartOptions,
+};
 use super::open_options;
 use crate::browser::Operations;
 use crate::tokens::Mode;
@@ -202,6 +205,8 @@ pub(super) struct Rig {
     pub(super) view: Entity<FerriteWindow>,
     pub(super) fs: Arc<DriveFs>,
     pub(super) calls: Arc<Mutex<Vec<(char, String)>>>,
+    pub(super) reads: Arc<AtomicUsize>,
+    pub(super) signal: DriveSignal,
 }
 
 pub(super) struct Setup {
@@ -229,11 +234,30 @@ fn two_panes_at_home() -> AppState {
     state
 }
 
+fn counting(reads: Arc<AtomicUsize>) -> Arc<dyn Fn() -> Vec<DriveInfo> + Send + Sync> {
+    Arc::new(move || {
+        reads.fetch_add(1, Ordering::Relaxed);
+        sample_drives()
+    })
+}
+
+type Reconnect = Arc<dyn Fn(char, &str) -> Result<(), String> + Send + Sync>;
+
+fn recording(calls: Arc<Mutex<Vec<(char, String)>>>, answer: Result<(), String>) -> Reconnect {
+    Arc::new(move |letter, remote| {
+        calls
+            .lock()
+            .expect("calls")
+            .push((letter, remote.to_owned()));
+        answer.clone()
+    })
+}
+
 pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
     let fs = Arc::new(DriveFs::new(setup.slow));
     let calls: Arc<Mutex<Vec<(char, String)>>> = Arc::default();
-    let seen = calls.clone();
-    let answer = setup.reconnect;
+    let reads = Arc::new(AtomicUsize::new(0));
+    let (signal, changes) = DriveChanges::channel();
     let options = StartOptions {
         state: two_panes_at_home(),
         provider: fs.clone(),
@@ -246,13 +270,9 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         files: super::super::FileHooks::none(),
         kinds: super::super::Kinds::builtin(),
         drives: DriveHooks {
-            refresh: Arc::new(sample_drives),
-            reconnect: Arc::new(move |letter, remote| {
-                seen.lock()
-                    .expect("calls")
-                    .push((letter, remote.to_owned()));
-                answer.clone()
-            }),
+            refresh: counting(reads.clone()),
+            reconnect: recording(calls.clone(), setup.reconnect),
+            changes: Some(changes),
         },
         app_menu: crate::window_view::AppMenuHooks::none(),
         settings: crate::window_view::SettingsHooks::none(),
@@ -276,10 +296,16 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         view,
         fs,
         calls,
+        reads,
+        signal,
     }
 }
 
 impl Rig {
+    pub(super) fn reads(&self) -> usize {
+        self.reads.load(Ordering::Relaxed)
+    }
+
     pub(super) fn panes(&self, cx: &mut TestAppContext) -> Vec<PaneId> {
         self.view.read_with(cx, |view, _| view.panes())
     }

@@ -1,10 +1,12 @@
 mod model;
 #[cfg(unix)]
 mod unix;
+mod volumes;
 #[cfg(windows)]
 mod windows;
 
 pub use model::{Drive, DriveKind, RawDrives, Space, assemble, parse_mounts};
+pub use volumes::{DeviceEvent, VolumeWatch, device_event, watch_volumes};
 
 use std::collections::HashSet;
 use std::sync::{Mutex, PoisonError, mpsc};

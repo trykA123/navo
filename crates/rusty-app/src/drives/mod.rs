@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use rusty_core::Location;
 use rusty_shell::{Drive, DriveKind, Space};
-use rusty_ui::window_view::{DriveHooks, DriveIcon, DriveInfo};
+use rusty_ui::window_view::{DriveChanges, DriveHooks, DriveIcon, DriveInfo};
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const REREAD_EVERY: Duration = Duration::from_secs(30);
@@ -124,7 +124,14 @@ pub fn hooks() -> DriveHooks {
                 .refresh(drives, &probe, Instant::now())
         }),
         reconnect: Arc::new(rusty_shell::reconnect),
+        changes: changes(),
     }
+}
+
+fn changes() -> Option<DriveChanges> {
+    let (signal, changes) = DriveChanges::channel();
+    let watch = rusty_shell::watch_volumes(move || signal.send())?;
+    Some(changes.keeping(Box::new(watch)))
 }
 
 #[cfg(test)]
