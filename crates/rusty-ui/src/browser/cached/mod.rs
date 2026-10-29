@@ -6,18 +6,20 @@ use rusty_cache::{CacheKey, CacheKeys, CachedListing, Change, ListingCache};
 use rusty_core::{Event, FsError, FsErrorKind, Listing, Location, ProviderPath, TabId};
 use rusty_fs::{CancelToken, FsEntry, ProviderOps, WatchChange, load_folder_reporting};
 
-use super::Browser;
 use super::filter::Full;
 use super::offline::Progress;
 use super::sort::sorted_full;
+use super::{Browser, Message};
 use crate::file_list::SortKey;
+pub(in crate::browser) use early::{CachedSorted, Early};
 
 const KEEP_SORTED: usize = 2;
+const SYNC_ROWS: usize = 20_000;
 
 pub(super) struct WorkerSorted {
-    key: SortKey,
-    folders_first: bool,
-    full: Full,
+    pub(super) key: SortKey,
+    pub(super) folders_first: bool,
+    pub(super) full: Full,
 }
 
 pub(super) enum Fresh {
@@ -48,11 +50,15 @@ pub(super) struct Fetch {
     pub(super) is_kept_on_disk: bool,
     pub(super) progress: Progress,
     pub(super) sort: Option<(SortKey, bool)>,
+    pub(super) early: Option<Early>,
 }
 
 impl Fetch {
-    pub(super) fn run(self, cancel: &CancelToken) -> Result<Fresh, FsError> {
+    pub(super) fn run(mut self, cancel: &CancelToken) -> Result<Fresh, FsError> {
         let _span = tracing::debug_span!("listing.load").entered();
+        if let Some(early) = self.early.take().filter(|_| !cancel.is_cancelled()) {
+            early.send(cancel);
+        }
         let read_at = SystemTime::now();
         let folder = self.provider.metadata(&self.location).ok();
         if folder.is_some() {
@@ -86,22 +92,27 @@ impl Fetch {
         let rows: Arc<[FsEntry]> = snapshot.details.into();
         let unchanged = self
             .shown
+            .as_ref()
             .filter(|shown| shown.rows[..] == rows[..])
             .map(|shown| Arc::clone(&shown.rows));
-        if let Some(key) = self.keys.key(&self.location) {
-            let listing = CachedListing {
-                rows: unchanged.clone().unwrap_or_else(|| Arc::clone(&rows)),
-                read_at,
-                folder_changed,
-                complete: true,
-            };
-            self.cache.put(key.clone(), listing);
-            persist_if(&self.cache, &key, self.is_kept_on_disk);
-        }
+        self.store(CachedListing {
+            rows: Arc::clone(unchanged.as_ref().unwrap_or(&rows)),
+            read_at,
+            folder_changed,
+            complete: true,
+        });
         Ok(match unchanged {
             Some(_) => Fresh::Unchanged,
             None => fresh_rows(rows, self.sort),
         })
+    }
+
+    fn store(&self, listing: CachedListing) {
+        let Some(key) = self.keys.key(&self.location) else {
+            return;
+        };
+        self.cache.put(key.clone(), listing);
+        persist_if(&self.cache, &key, self.is_kept_on_disk);
     }
 
     fn patched(&self, changes: &[WatchChange]) -> Option<Arc<[FsEntry]>> {
@@ -170,11 +181,34 @@ impl Browser {
 
     pub(super) fn fetch(&mut self, tab: TabId, location: &Location, request: u64) -> Fetch {
         let is_arriving = self.state.tab(tab).is_some_and(|t| t.listing().is_none());
-        let shown = is_arriving
+        let cached = is_arriving
             .then(|| self.keys.key(location))
             .flatten()
-            .and_then(|key| self.cache.get(&key))
-            .filter(|cached| self.show_cached(tab, request, &cached.rows));
+            .and_then(|key| self.cache.get(&key));
+        let (shown, early) = match cached {
+            Some(cached) if cached.rows.len() > SYNC_ROWS => {
+                let (sender, wake) = (self.sender.clone(), Arc::clone(&self.wake));
+                let early = Early {
+                    cached: Arc::clone(&cached),
+                    sort: (self.sort_key(tab), self.folders_first),
+                    notify: Box::new(move |rows, sorted| {
+                        let _ = sender.send(Message::CachedSorted(CachedSorted {
+                            tab,
+                            request,
+                            rows,
+                            sorted,
+                        }));
+                        wake();
+                    }),
+                };
+                (Some(cached), Some(early))
+            }
+            Some(cached) => (
+                Some(cached).filter(|cached| self.show_cached(tab, request, &cached.rows)),
+                None,
+            ),
+            None => (None, None),
+        };
         Fetch {
             provider: Arc::clone(&self.provider),
             cache: self.cache.clone(),
@@ -186,6 +220,7 @@ impl Browser {
             is_kept_on_disk: true,
             progress: self.stalls.progress(tab),
             sort: Some((self.sort_key(tab), self.folders_first)),
+            early,
         }
     }
 
@@ -197,34 +232,34 @@ impl Browser {
     ) -> Listing {
         match fresh {
             Fresh::Rows { rows, full } => {
-                let current = (self.sort_key(tab), self.folders_first);
-                let full = match full {
-                    Some(sorted) if (sorted.key, sorted.folders_first) == current => {
-                        self.remember(
-                            tab,
-                            Sorted {
-                                source: Arc::clone(&rows),
-                                key: sorted.key,
-                                full: sorted.full.clone(),
-                            },
-                        );
-                        sorted.full
-                    }
-                    _ => self.sorted_full(tab, &rows),
-                };
+                let full = self.adopt(tab, &rows, full);
                 let (listing, details) = self.narrow(tab, location, full);
                 self.details.insert(tab, details);
                 listing
             }
-            Fresh::Unchanged => self
-                .state
-                .tab(tab)
-                .and_then(|t| t.listing().cloned())
-                .unwrap_or_else(|| Listing::new(Vec::new())),
+            Fresh::Unchanged => match self.state.tab(tab).and_then(|t| t.listing().cloned()) {
+                Some(listing) => listing,
+                None => self.rebuild_unchanged(tab, location),
+            },
         }
     }
 
-    fn sorted_full(&mut self, tab: TabId, rows: &Arc<[FsEntry]>) -> Full {
+    fn rebuild_unchanged(&mut self, tab: TabId, location: &Location) -> Listing {
+        let rows = self
+            .keys
+            .key(location)
+            .and_then(|key| self.cache.get(&key))
+            .map(|cached| Arc::clone(&cached.rows));
+        let Some(rows) = rows else {
+            return Listing::new(Vec::new());
+        };
+        let full = self.sorted_full(tab, &rows);
+        let (listing, details) = self.narrow(tab, location, full);
+        self.details.insert(tab, details);
+        listing
+    }
+
+    pub(super) fn sorted_full(&mut self, tab: TabId, rows: &Arc<[FsEntry]>) -> Full {
         let key = self.sort_key(tab);
         let memo = self.sorted.entry(tab).or_default();
         if let Some(at) = memo
@@ -248,17 +283,21 @@ impl Browser {
         full
     }
 
-    fn remember(&mut self, tab: TabId, sorted: Sorted) {
+    pub(super) fn remember(&mut self, tab: TabId, sorted: Sorted) {
         let memo = self.sorted.entry(tab).or_default();
         memo.insert(0, sorted);
         memo.truncate(KEEP_SORTED);
     }
 
     fn show_cached(&mut self, tab: TabId, request: u64, rows: &Arc<[FsEntry]>) -> bool {
+        let full = self.sorted_full(tab, rows);
+        self.show_cached_full(tab, request, full)
+    }
+
+    pub(super) fn show_cached_full(&mut self, tab: TabId, request: u64, full: Full) -> bool {
         let Some(location) = self.state.tab(tab).map(|t| t.location().clone()) else {
             return false;
         };
-        let full = self.sorted_full(tab, rows);
         let (listing, details) = self.narrow(tab, &location, full);
         self.details.insert(tab, details);
         self.errors.remove(&tab);
@@ -324,5 +363,8 @@ impl Drop for Browser {
     }
 }
 
+mod early;
 #[cfg(test)]
-pub(super) mod tests;
+pub(crate) mod tests;
+#[cfg(test)]
+mod tests_early;

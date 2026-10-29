@@ -6,11 +6,11 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use rusty_cache::{CacheKeys, CachedListing, ListingCache};
 use rusty_core::{AppState, Command, CursorMove, ProviderPath};
-use rusty_fs::{Attributes, EntryKind, FakeFs, FsEntry};
+use rusty_fs::{Attributes, EntryKind, FakeFs, FsEntry, ProviderOps};
 
 use super::super::{FerriteWindow, StartOptions};
 use super::{open_options, settle};
-use crate::browser::Operations;
+use crate::browser::{GatedFs, Operations};
 use crate::tokens::Mode;
 
 const ROWS: usize = 50_000;
@@ -44,6 +44,14 @@ fn open_big(
     cx: &mut TestAppContext,
     cache: &ListingCache,
 ) -> (AnyWindowHandle, Entity<FerriteWindow>, Arc<FakeFs>) {
+    open_big_on(cx, cache, |fs| fs.clone())
+}
+
+fn open_big_on(
+    cx: &mut TestAppContext,
+    cache: &ListingCache,
+    provider: impl FnOnce(&Arc<FakeFs>) -> Arc<dyn ProviderOps>,
+) -> (AnyWindowHandle, Entity<FerriteWindow>, Arc<FakeFs>) {
     let fs = FakeFs::new();
     fs.add_folder("big/sub");
     fs.add_file("big/f00000.txt", 1);
@@ -51,7 +59,7 @@ fn open_big(
     let fs = Arc::new(fs);
     let options = StartOptions {
         state: AppState::new(fs.location("big")),
-        provider: fs.clone(),
+        provider: provider(&fs),
         on_save: Rc::new(|_| {}),
         mode: Mode::Light,
         operations: Operations::unlogged(),
@@ -103,13 +111,38 @@ fn visit_sub_while_big_grows(
 }
 
 #[gpui_kit::test]
-fn back_into_a_cached_50k_folder_shows_its_rows_in_the_first_frame(cx: &mut TestAppContext) {
+fn back_into_a_cached_50k_folder_waits_for_the_worker_sort(cx: &mut TestAppContext) {
     let cache = ListingCache::default();
-    let (window, view, fs) = open_big(cx, &cache);
+    let mut held = None;
+    let (window, view, fs) = open_big_on(cx, &cache, |fs| {
+        let gate = GatedFs::new(fs, "big", 2);
+        held = Some(gate.clone());
+        gate
+    });
+    let gate = held.expect("gate");
     visit_sub_while_big_grows(cx, &view, &fs, &cache);
-    let pane = view.read_with(cx, |view, _| view.browser.state().focused_pane());
     cx.update_window(window, |_, window, cx| {
         window.press("alt-left", cx);
+        window.render_frame(cx);
+    })
+    .expect("window");
+    let shown = view.read_with(cx, |view, _| {
+        view.browser.state().active_tab().listing().is_some()
+    });
+    assert!(!shown);
+    gate.wait_until_held();
+    view.update(cx, |view, cx| view.wake(cx));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !view.read_with(cx, |view, _| {
+        view.browser.state().active_tab().listing().is_some()
+    }) && std::time::Instant::now() < deadline
+    {
+        view.update(cx, |view, cx| view.wake(cx));
+        cx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let pane = view.read_with(cx, |view, _| view.browser.state().focused_pane());
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let list = window.within(("list", pane.get()));
         let row = list.find(("row", 31_338usize));
@@ -127,6 +160,8 @@ fn back_into_a_cached_50k_folder_shows_its_rows_in_the_first_frame(cx: &mut Test
         (tab.listing().map_or(0, |l| l.len()), tab.view().cursor)
     });
     assert_eq!((rows, cursor), (ROWS as u64 + 1, 31_338));
+    gate.release();
+    settle(cx, &view);
 }
 
 #[gpui_kit::test]

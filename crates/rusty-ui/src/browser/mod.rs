@@ -8,15 +8,13 @@ use rusty_core::{
     AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location, PaneId,
     TabId, apply_event, list_missing,
 };
-use rusty_fs::{
-    FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, WatchEvent, volume_of,
-};
+use rusty_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
 
 pub use find::FindResults;
 pub use measure::{FolderTotals, FolderTotalsQuery, no_folder_totals};
 pub(crate) use measure::{Measured, folder_bytes};
+use message::Message;
 pub(crate) use open::Seen;
-use operate::JobUpdate;
 pub use operate::*;
 pub use rename_batch::{
     DeletePreset, LastRename, ListPresets, NamedPreset, RenameHooks, RenameLogStatus,
@@ -35,33 +33,6 @@ struct Loaded {
     location: Location,
     request: u64,
     result: Result<cached::Fresh, FsError>,
-}
-
-enum Message {
-    Loaded(Loaded),
-    Measured(rusty_fs::OwnerId, measure::Measured),
-    Found(TabId, rusty_fs::OwnerId, find::Update),
-    Job(JobUpdate),
-    Named(naming::Named),
-    Watched(Location, WatchEvent),
-    Recheck(Location),
-    Prefetched(u64),
-    Left(TabId, Vec<Location>),
-}
-
-impl Message {
-    fn is_queued(&self) -> bool {
-        !matches!(
-            self,
-            Self::Job(
-                JobUpdate::Progress { .. } | JobUpdate::Waiting { .. } | JobUpdate::Done { .. }
-            ) | Self::Measured(..)
-                | Self::Found(..)
-                | Self::Watched(..)
-                | Self::Recheck(_)
-                | Self::Prefetched(_)
-        )
-    }
 }
 
 pub struct Browser {
@@ -239,6 +210,7 @@ impl Browser {
             }
             changed |= match message {
                 Message::Loaded(loaded) => self.accept(loaded),
+                Message::CachedSorted(early) => self.accept_cached_sorted(early),
                 Message::Measured(owner, measured) => self.accept_size(owner, &measured),
                 Message::Found(tab, owner, update) => self.accept_find(tab, owner, update),
                 Message::Job(update) => self.accept_job(update),
@@ -413,9 +385,12 @@ impl Browser {
 }
 
 mod cached;
+#[cfg(test)]
+pub(crate) use cached::tests::gated::Gated as GatedFs;
 mod filter;
 mod find;
 mod measure;
+mod message;
 mod naming;
 mod offline;
 mod open;

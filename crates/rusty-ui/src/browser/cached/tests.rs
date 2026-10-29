@@ -9,7 +9,7 @@ use super::{Fetch, Fresh, Progress};
 use crate::browser::Browser;
 use crate::file_list::SortBy;
 
-pub(in crate::browser) mod gated;
+pub(crate) mod gated;
 mod kept;
 mod offline;
 pub(in crate::browser) mod stalled;
@@ -23,7 +23,11 @@ fn fake() -> Arc<FakeFs> {
     Arc::new(fs)
 }
 
-fn browser_with(provider: Arc<dyn ProviderOps>, fs: &FakeFs, cache: ListingCache) -> Browser {
+pub(super) fn browser_with(
+    provider: Arc<dyn ProviderOps>,
+    fs: &FakeFs,
+    cache: ListingCache,
+) -> Browser {
     let state = AppState::new(fs.location("home"));
     let mut browser = Browser::new(state, provider, Arc::new(|| {}));
     browser.set_listing_cache(cache, CacheKeys::default());
@@ -36,7 +40,7 @@ fn browser(fs: &Arc<FakeFs>) -> Browser {
     browser_with(fs.clone(), fs, ListingCache::default())
 }
 
-fn settle(browser: &mut Browser) {
+pub(super) fn settle(browser: &mut Browser) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while browser.loading() && Instant::now() < deadline {
         browser.poll();
@@ -45,7 +49,7 @@ fn settle(browser: &mut Browser) {
     browser.poll();
 }
 
-fn names(browser: &Browser) -> Vec<String> {
+pub(super) fn names(browser: &Browser) -> Vec<String> {
     browser
         .state()
         .active_tab()
@@ -77,7 +81,7 @@ fn into_docs_and_back(browser: &mut Browser, fs: &FakeFs, change: impl FnOnce())
     browser.command(&Command::PaneBack).unwrap();
 }
 
-fn is_cached(browser: &Browser) -> bool {
+pub(super) fn is_cached(browser: &Browser) -> bool {
     browser.is_cached(browser.state().active_tab().id())
 }
 
@@ -185,6 +189,7 @@ fn a_slower_stale_revalidation_never_overwrites_a_newer_one() {
         is_kept_on_disk: true,
         progress: Progress::default(),
         sort: None,
+        early: None,
     };
     let slow = fetch(gate.clone());
     let older = std::thread::spawn(move || slow.run(&CancelToken::new()));
@@ -355,7 +360,7 @@ fn filler(rows: usize) -> CachedListing {
     }
 }
 
-fn big_fake(rows: usize) -> Arc<FakeFs> {
+pub(super) fn big_fake(rows: usize) -> Arc<FakeFs> {
     let fs = FakeFs::new();
     fs.add_folder("home");
     for index in 0..rows {
