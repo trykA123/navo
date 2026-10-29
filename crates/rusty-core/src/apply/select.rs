@@ -120,13 +120,13 @@ pub(super) fn pattern_command(
         ),
         _ => return Ok(Vec::new()),
     };
-    pattern(state, text, marking)
+    pattern(state, text, &marking)
 }
 
 pub(super) fn pattern(
     state: &mut AppState,
     text: &str,
-    marking: Marking,
+    marking: &Marking,
 ) -> Result<Vec<Effect>, CommandError> {
     let pattern = Pattern::parse(text)?;
     let listing = loaded_listing(state)?;

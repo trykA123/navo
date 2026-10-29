@@ -56,7 +56,7 @@ fn the_cursor_goes_to_the_first_row_when_its_entry_is_hidden() {
 #[test]
 fn marks_follow_their_names_and_hidden_ones_drop() {
     let mut state = at_work(mixed());
-    run(&mut state, Command::SelectionAll);
+    run(&mut state, &Command::SelectionAll);
     filter(&mut state, "/work", only(&["a.rs", "c.rs"]));
     assert_eq!(marked(&state), [0, 1]);
 }
@@ -75,7 +75,7 @@ fn a_filtered_listing_for_another_folder_is_ignored() {
 #[test]
 fn a_filtered_listing_applies_to_rows_shown_while_a_load_is_pending() {
     let mut state = at_work(mixed());
-    run(&mut state, Command::PaneRefresh);
+    run(&mut state, &Command::PaneRefresh);
     filter(&mut state, "/work", only(&["a.rs"]));
     assert_eq!(names(&state), ["a.rs"]);
     assert!(state.active_tab().pending_request().is_some());

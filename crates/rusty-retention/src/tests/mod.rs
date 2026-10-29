@@ -36,7 +36,7 @@ fn run<R>(action: impl FnOnce(&mut RetentionRun<'_>) -> R) -> R {
 fn capture(vault: &mut Vault<'_>, source: &Location) -> RetentionEntry {
     run(|run| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source,
                 policy: RetentionPolicy::new(3, 1000, 10).unwrap(),
                 created_at: 100,
@@ -53,7 +53,7 @@ fn restore(
     id: RetentionId,
     target: &Location,
 ) -> Result<RetentionEntry, Error> {
-    run(|run| vault.restore(RestoreRequest { id, target }, run))
+    run(|run| vault.restore(&RestoreRequest { id, target }, run))
 }
 
 fn purge(vault: &mut Vault<'_>, id: RetentionId) -> Result<RetentionEntry, Error> {

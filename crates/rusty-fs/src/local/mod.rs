@@ -103,7 +103,7 @@ pub struct LocalFs {
 impl LocalFs {
     #[must_use]
     pub fn new() -> Self {
-        Self::with_auto_tuning(AutoTuning::default())
+        Self::with_auto_tuning(&AutoTuning::default())
     }
 
     #[must_use]
@@ -111,11 +111,11 @@ impl LocalFs {
         not(windows),
         expect(unused_variables, reason = "auto tuning is only used on Windows")
     )]
-    pub fn with_auto_tuning(auto_tuning: AutoTuning) -> Self {
+    pub fn with_auto_tuning(auto_tuning: &AutoTuning) -> Self {
         Self {
             batch_size: DEFAULT_BATCH,
             #[cfg(windows)]
-            auto_tuning,
+            auto_tuning: auto_tuning.clone(),
             #[cfg(windows)]
             std_listing: false,
         }

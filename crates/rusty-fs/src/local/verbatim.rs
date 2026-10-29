@@ -42,11 +42,10 @@ fn normalized(rest: &[u16], fixed: usize) -> Vec<&[u16]> {
     let mut segments: Vec<&[u16]> = Vec::new();
     for segment in rest.split(|&unit| is_separator(unit)) {
         match segment {
-            [] | [DOT] => {}
             [DOT, DOT] if segments.len() > fixed => {
                 segments.pop();
             }
-            [DOT, DOT] => {}
+            [] | [DOT] | [DOT, DOT] => {}
             _ => segments.push(segment),
         }
     }

@@ -12,7 +12,7 @@ fn owner(profile: &Path) -> JobId {
 fn owned(vault: &mut Vault<'_>, job: JobId, source: &Location) -> RetentionEntry {
     run(|run| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source,
                 policy: RetentionPolicy::new(3, 1000, 0).unwrap(),
                 created_at: 100,

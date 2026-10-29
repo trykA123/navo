@@ -113,15 +113,15 @@ impl FsError {
             FsErrorKind::NotFound => &[Skip, SkipAll, Cancel],
             FsErrorKind::AccessDenied => &[RetryAsAdmin, Skip, SkipAll, Cancel],
             FsErrorKind::SharingViolation | FsErrorKind::Locked => &[Retry, Skip, SkipAll, Cancel],
-            FsErrorKind::DiskFull => &[Retry, Cancel],
+            FsErrorKind::DiskFull | FsErrorKind::Timeout | FsErrorKind::JournalWriteFailed => {
+                &[Retry, Cancel]
+            }
             FsErrorKind::PathTooLong | FsErrorKind::NameInvalid => &[Rename, Skip, Cancel],
             FsErrorKind::NetworkLost => &[Reconnect, Retry, Cancel],
-            FsErrorKind::Timeout => &[Retry, Cancel],
             FsErrorKind::Cancelled => &[],
             FsErrorKind::NotSupportedYet | FsErrorKind::IdentityUnavailable => {
                 &[Skip, SkipAll, Cancel]
             }
-            FsErrorKind::JournalWriteFailed => &[Retry, Cancel],
             FsErrorKind::Unknown => &[Retry, Skip, Cancel],
         }
     }

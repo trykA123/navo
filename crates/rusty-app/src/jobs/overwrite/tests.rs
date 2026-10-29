@@ -322,7 +322,7 @@ fn overwrite_adoption_rechecks_prior_payloads_after_progress_callbacks() {
     let (db, _) = Db::open(&dirs.journal_file(), false).unwrap();
     let mut vault = Vault::new(db, &dirs.data, &fs).unwrap();
     let result = vault.adopt_job(
-        rusty_retention::AdoptJob {
+        &rusty_retention::AdoptJob {
             job: job.id,
             state: JobState::Done,
             files: &held.proved,
@@ -378,7 +378,7 @@ fn native_shared_holder_restores_each_version_without_removing_its_neighbor() {
         let target = dest.join(format!("restored-{index}"));
         vault
             .restore(
-                RestoreRequest {
+                &RestoreRequest {
                     id: entry.id,
                     target: &location(&target),
                 },

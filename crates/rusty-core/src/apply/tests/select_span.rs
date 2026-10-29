@@ -2,7 +2,7 @@ use super::{at_work, cursor, fail, files, home, load, marked, mixed, move_cursor
 use crate::{Command, CommandError, CursorMove, Entry, Listing, SpanMode};
 
 fn extend(state: &mut crate::AppState, to: CursorMove, mode: SpanMode) {
-    run(state, Command::SelectionExtend { to, mode });
+    run(state, &Command::SelectionExtend { to, mode });
 }
 
 #[test]
@@ -37,10 +37,10 @@ fn extend_resolves_pages_endpoints_and_rows_like_cursor_move() {
 #[test]
 fn a_scroll_keeps_the_span_so_moving_back_shrinks_to_the_base() {
     let mut state = at_work(files(8));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     move_cursor(&mut state, CursorMove::Row(2));
     extend(&mut state, CursorMove::Row(5), SpanMode::Mark);
-    run(&mut state, Command::PaneScroll { to: 3 });
+    run(&mut state, &Command::PaneScroll { to: 3 });
     extend(&mut state, CursorMove::Row(3), SpanMode::Mark);
     assert_eq!(marked(&state), vec![0, 2, 3]);
 }
@@ -48,7 +48,7 @@ fn a_scroll_keeps_the_span_so_moving_back_shrinks_to_the_base() {
 #[test]
 fn toggle_mode_flips_each_row_against_the_base() {
     let mut state = at_work(files(8));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     extend(&mut state, CursorMove::Row(3), SpanMode::Toggle);
     assert_eq!(marked(&state), vec![1, 2, 3]);
     extend(&mut state, CursorMove::Row(0), SpanMode::Toggle);
@@ -59,7 +59,7 @@ fn toggle_mode_flips_each_row_against_the_base() {
 fn toggle_ends_the_span() {
     let mut state = at_work(files(8));
     extend(&mut state, CursorMove::Row(3), SpanMode::Mark);
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     extend(&mut state, CursorMove::Row(5), SpanMode::Mark);
     extend(&mut state, CursorMove::Row(4), SpanMode::Mark);
     assert_eq!(marked(&state), vec![0, 1, 2, 3, 4]);
@@ -95,7 +95,7 @@ fn listing_reload_ends_the_span() {
 #[test]
 fn extend_unmarks_and_shrinks() {
     let mut state = at_work(files(8));
-    run(&mut state, Command::SelectionAll);
+    run(&mut state, &Command::SelectionAll);
     move_cursor(&mut state, CursorMove::Row(2));
     extend(&mut state, CursorMove::Row(5), SpanMode::Unmark);
     assert_eq!(marked(&state), vec![0, 1, 6, 7]);
@@ -109,9 +109,9 @@ fn extend_requires_a_nonempty_listing() {
         to: CursorMove::Down,
         mode: SpanMode::Mark,
     };
-    assert_eq!(fail(&mut home(), command.clone()), CommandError::NoListing);
+    assert_eq!(fail(&mut home(), &command), CommandError::NoListing);
     assert_eq!(
-        fail(&mut at_work(files(0)), command),
+        fail(&mut at_work(files(0)), &command),
         CommandError::EmptyListing
     );
 }
@@ -120,20 +120,20 @@ fn extend_requires_a_nonempty_listing() {
 fn extension_marks_and_unmarks_the_cursor_file_suffix() {
     let mut state = at_work(mixed());
     move_cursor(&mut state, CursorMove::Row(1));
-    run(&mut state, Command::SelectionExtension { mark: true });
+    run(&mut state, &Command::SelectionExtension { mark: true });
     assert_eq!(marked(&state), vec![1, 4]);
-    run(&mut state, Command::SelectionExtension { mark: false });
+    run(&mut state, &Command::SelectionExtension { mark: false });
     assert!(marked(&state).is_empty());
 }
 
 #[test]
 fn extension_on_a_folder_leaves_marks_unchanged() {
     let mut state = at_work(mixed());
-    run(&mut state, Command::SelectionAll);
+    run(&mut state, &Command::SelectionAll);
     move_cursor(&mut state, CursorMove::Row(3));
     for mark in [true, false] {
         assert_eq!(
-            run(&mut state, Command::SelectionExtension { mark }),
+            run(&mut state, &Command::SelectionExtension { mark }),
             vec![]
         );
         assert_eq!(marked(&state), vec![0, 1, 2, 3, 4]);
@@ -156,16 +156,16 @@ fn extension_on_a_file_without_a_suffix_marks_other_unsuffixed_files() {
             is_folder: false,
         },
     ]));
-    run(&mut state, Command::SelectionExtension { mark: true });
+    run(&mut state, &Command::SelectionExtension { mark: true });
     assert_eq!(marked(&state), vec![0, 1]);
 }
 
 #[test]
 fn extension_requires_a_nonempty_listing() {
     let command = Command::SelectionExtension { mark: true };
-    assert_eq!(fail(&mut home(), command.clone()), CommandError::NoListing);
+    assert_eq!(fail(&mut home(), &command), CommandError::NoListing);
     assert_eq!(
-        fail(&mut at_work(files(0)), command),
+        fail(&mut at_work(files(0)), &command),
         CommandError::EmptyListing
     );
 }
@@ -173,7 +173,7 @@ fn extension_requires_a_nonempty_listing() {
 #[test]
 fn loaded_listing_reload_ends_the_span() {
     let mut state = at_work(files(8));
-    run(&mut state, Command::PaneRefresh);
+    run(&mut state, &Command::PaneRefresh);
     extend(&mut state, CursorMove::Row(3), SpanMode::Mark);
     load(&mut state, files(8));
     extend(&mut state, CursorMove::Row(5), SpanMode::Mark);

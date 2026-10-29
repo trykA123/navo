@@ -123,7 +123,7 @@ pub fn load_session(path: &Path) -> (Option<SessionState>, SessionSource, Vec<Se
 
 fn usable(path: &Path) -> Result<SessionState, SessionFileError> {
     let session = read_session_file(path)?;
-    AppState::from_session(session.clone()).map_err(|e| SessionFileError::Decode(e.to_string()))?;
+    AppState::from_session(&session).map_err(|e| SessionFileError::Decode(e.to_string()))?;
     Ok(session)
 }
 

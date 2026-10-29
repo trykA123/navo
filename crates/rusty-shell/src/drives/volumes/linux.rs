@@ -52,9 +52,9 @@ fn changed(mounts: &File, stop: &OwnedFd) -> rustix::io::Result<bool> {
     }
 }
 
-fn follow(mut mounts: File, stop: OwnedFd, on_change: impl Fn()) {
+fn follow(mut mounts: File, stop: &OwnedFd, on_change: impl Fn()) {
     loop {
-        match changed(&mounts, &stop) {
+        match changed(&mounts, stop) {
             Ok(false) => return,
             Ok(true) => {}
             Err(error) => {
@@ -83,7 +83,7 @@ pub fn watch_volumes(on_change: impl Fn() + Send + 'static) -> Option<VolumeWatc
         .ok()?;
     let thread = std::thread::Builder::new()
         .name("mount-watch".to_owned())
-        .spawn(move || follow(mounts, read, on_change))
+        .spawn(move || follow(mounts, &read, on_change))
         .inspect_err(|error| tracing::warn!(%error, "starting mount watcher failed"))
         .ok()?;
     Some(VolumeWatch {

@@ -10,8 +10,8 @@ fn state() -> AppState {
     AppState::new(loc("C:/start"))
 }
 
-fn action(state: &mut AppState, action: W) -> Vec<Effect> {
-    apply_workspace(state, &action).unwrap()
+fn action(state: &mut AppState, action: &W) -> Vec<Effect> {
+    apply_workspace(state, action).unwrap()
 }
 
 #[test]
@@ -19,22 +19,22 @@ fn workspace_switch_restores_tabs_focus_layout_and_marks_without_listings() {
     let mut state = state();
     run(
         &mut state,
-        Command::LayoutSplit {
+        &Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("C:/work")),
         },
     );
     state.remember_marks(vec!["remember.txt".into()]);
     load(&mut state, files(3));
     let before = state.window(state.focused_window()).unwrap().snapshot();
-    action(&mut state, W::New { name: None });
-    run(&mut state, Command::LayoutClose);
-    let effects = action(&mut state, W::Switch { n: 1 });
+    action(&mut state, &W::New { name: None });
+    run(&mut state, &Command::LayoutClose);
+    let effects = action(&mut state, &W::Switch { n: 1 });
     let window = state.window(state.focused_window()).unwrap();
     assert_eq!(window.snapshot(), before);
     assert_eq!(window.active_workspace(), 0);
@@ -59,26 +59,26 @@ fn workspace_switch_restores_tabs_focus_layout_and_marks_without_listings() {
 #[test]
 fn workspace_switch_saves_navigated_folders_and_tabs_without_a_save_step() {
     let mut state = state();
-    action(&mut state, W::New { name: None });
-    action(&mut state, W::Switch { n: 1 });
+    action(&mut state, &W::New { name: None });
+    action(&mut state, &W::Switch { n: 1 });
     run(
         &mut state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc("C:/work"),
         },
     );
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("C:/other")),
         },
     );
     let before = state.window(state.focused_window()).unwrap().snapshot();
-    action(&mut state, W::Switch { n: 2 });
+    action(&mut state, &W::Switch { n: 2 });
     let workspace = &state.window(state.focused_window()).unwrap().workspaces()[0];
     assert_eq!(workspace.saved, before);
     assert!(workspace.live.is_none());
-    action(&mut state, W::Switch { n: 1 });
+    action(&mut state, &W::Switch { n: 1 });
     assert_eq!(
         state.window(state.focused_window()).unwrap().snapshot(),
         before
@@ -89,14 +89,14 @@ fn workspace_switch_saves_navigated_folders_and_tabs_without_a_save_step() {
 fn workspace_discard_restores_active_saved_tabs_and_keeps_saved_inactive_tabs() {
     let mut state = state();
     let id = state.active_tab().id();
-    run(&mut state, Command::PaneOpenTab { location: None });
-    action(&mut state, W::Discard { n: 1 });
+    run(&mut state, &Command::PaneOpenTab { location: None });
+    action(&mut state, &W::Discard { n: 1 });
     assert_eq!(state.active_tab().id(), id);
-    action(&mut state, W::New { name: None });
-    run(&mut state, Command::PaneOpenTab { location: None });
-    action(&mut state, W::Switch { n: 1 });
-    action(&mut state, W::Discard { n: 2 });
-    action(&mut state, W::Switch { n: 2 });
+    action(&mut state, &W::New { name: None });
+    run(&mut state, &Command::PaneOpenTab { location: None });
+    action(&mut state, &W::Switch { n: 1 });
+    action(&mut state, &W::Discard { n: 2 });
+    action(&mut state, &W::Switch { n: 2 });
     assert_eq!(state.pane(state.focused_pane()).unwrap().tabs().len(), 2);
 }
 
@@ -104,7 +104,7 @@ fn workspace_discard_restores_active_saved_tabs_and_keeps_saved_inactive_tabs() 
 fn workspace_limits_and_missing_numbers_leave_state_unchanged() {
     let mut state = state();
     for _ in 1..3 {
-        action(&mut state, W::New { name: None });
+        action(&mut state, &W::New { name: None });
     }
     let before = state.clone();
     assert_eq!(
@@ -113,7 +113,7 @@ fn workspace_limits_and_missing_numbers_leave_state_unchanged() {
     );
     assert_eq!(state, before);
     for _ in 3..9 {
-        action(&mut state, W::New { name: None });
+        action(&mut state, &W::New { name: None });
     }
     let before = state.clone();
     assert_eq!(
@@ -128,24 +128,24 @@ fn workspace_delete_restore_preserves_index_draft_and_ids() {
     let mut state = state();
     action(
         &mut state,
-        W::New {
+        &W::New {
             name: Some("Middle".into()),
         },
     );
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("C:/draft")),
         },
     );
     let before = state.window(state.focused_window()).unwrap().snapshot();
-    action(&mut state, W::New { name: None });
-    action(&mut state, W::Delete { n: 2 });
-    action(&mut state, W::Restore);
+    action(&mut state, &W::New { name: None });
+    action(&mut state, &W::Delete { n: 2 });
+    action(&mut state, &W::Restore);
     let window = state.window(state.focused_window()).unwrap();
     assert_eq!(window.workspaces()[1].name, "Middle");
     assert_eq!(window.active_workspace(), 2);
-    action(&mut state, W::Switch { n: 2 });
+    action(&mut state, &W::Switch { n: 2 });
     assert_eq!(
         state.window(state.focused_window()).unwrap().snapshot(),
         before
@@ -171,18 +171,18 @@ fn workspace_rename_move_and_last_delete_validate_input() {
     }
     action(
         &mut state,
-        W::Rename {
+        &W::Rename {
             n: 1,
             name: "  Project  ".into(),
         },
     );
-    action(&mut state, W::New { name: None });
-    action(&mut state, W::Move { n: 2, by: -1 });
+    action(&mut state, &W::New { name: None });
+    action(&mut state, &W::Move { n: 2, by: -1 });
     let window = state.window(state.focused_window()).unwrap();
     assert_eq!(window.active_workspace(), 0);
     assert_eq!(window.workspaces()[1].name, "Project");
     let before = state.clone();
-    assert!(action(&mut state, W::Switch { n: 1 }).is_empty());
+    assert!(action(&mut state, &W::Switch { n: 1 }).is_empty());
     assert_eq!(state, before);
 }
 
@@ -192,7 +192,7 @@ fn workspace_changes_counts_folder_positions_active_tab_and_layout() {
     let before = state.window(state.focused_window()).unwrap().snapshot();
     run(
         &mut state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc("C:/other"),
         },
     );
@@ -205,7 +205,7 @@ fn workspace_changes_counts_folder_positions_active_tab_and_layout() {
     );
     run(
         &mut state,
-        Command::LayoutSplit {
+        &Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
@@ -221,18 +221,18 @@ fn workspace_changes_counts_folder_positions_active_tab_and_layout() {
 #[test]
 fn workspace_active_delete_restore_keeps_draft_and_selects_neighbour() {
     let mut state = state();
-    action(&mut state, W::New { name: None });
+    action(&mut state, &W::New { name: None });
     run(
         &mut state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc("C:/draft"),
         },
     );
     let snapshot = state.window(state.focused_window()).unwrap().snapshot();
-    action(&mut state, W::Delete { n: 2 });
+    action(&mut state, &W::Delete { n: 2 });
     assert_eq!(state.active_tab().location(), &loc("C:/start"));
-    action(&mut state, W::Restore);
-    action(&mut state, W::Switch { n: 2 });
+    action(&mut state, &W::Restore);
+    action(&mut state, &W::Switch { n: 2 });
     assert_eq!(
         state.window(state.focused_window()).unwrap().snapshot(),
         snapshot
@@ -242,9 +242,9 @@ fn workspace_active_delete_restore_keeps_draft_and_selects_neighbour() {
 #[test]
 fn workspace_switch_rejects_a_listing_from_the_previous_visit() {
     let mut state = state();
-    let previous = run(&mut state, Command::PaneRefresh);
-    action(&mut state, W::New { name: None });
-    action(&mut state, W::Switch { n: 1 });
+    let previous = run(&mut state, &Command::PaneRefresh);
+    action(&mut state, &W::New { name: None });
+    action(&mut state, &W::Switch { n: 1 });
     for effect in previous {
         if let Effect::ListFolder {
             tab,
@@ -314,11 +314,11 @@ proptest! {
                 4 => W::Save,
                 5 => W::Discard { n },
                 6 => W::Move { n, by: if n.is_multiple_of(2) { -1 } else { 1 } },
-                7 => { run(&mut state, Command::PaneOpenTab { location: None }); unique_ids(&state); continue; },
+                7 => { run(&mut state, &Command::PaneOpenTab { location: None }); unique_ids(&state); continue; },
                 8 => { let _ = crate::apply(&mut state, &Command::PaneCloseTab { tab: None }); unique_ids(&state); continue; },
                 9 => { let _ = crate::apply(&mut state, &Command::LayoutSplit { direction: Direction::Right }); unique_ids(&state); continue; },
                 10 => { let _ = crate::apply(&mut state, &Command::LayoutClose); unique_ids(&state); continue; },
-                11 => { state = AppState::from_session(state.to_session(0)).unwrap(); unique_ids(&state); continue; },
+                11 => { state = AppState::from_session(&state.to_session(0)).unwrap(); unique_ids(&state); continue; },
                 _ => W::Rename { n, name: "Name".into() },
             };
             let before = state.clone();
@@ -333,12 +333,12 @@ fn workspace_new_command_copies_layout_and_lists_visible_tabs() {
     let mut state = state();
     run(
         &mut state,
-        Command::LayoutSplit {
+        &Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
     let original = state.active_tab().id();
-    let effects = run(&mut state, Command::WorkspaceNew { name: None });
+    let effects = run(&mut state, &Command::WorkspaceNew { name: None });
     let window = state.window(state.focused_window()).unwrap();
     assert_eq!(window.active_workspace(), 1);
     assert_eq!(window.workspaces()[1].name, "Workspace 2");
@@ -360,25 +360,25 @@ fn workspace_switch_command_preserves_drafts_and_refuses_missing_numbers() {
     let mut state = state();
     run(
         &mut state,
-        Command::WorkspaceNew {
+        &Command::WorkspaceNew {
             name: Some("Project".into()),
         },
     );
     run(
         &mut state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc("C:/draft"),
         },
     );
-    let effects = run(&mut state, Command::WorkspaceSwitch { n: 1 });
+    let effects = run(&mut state, &Command::WorkspaceSwitch { n: 1 });
     assert!(matches!(
         effects.as_slice(),
         [Effect::ListFolder { .. }, Effect::SaveSession]
     ));
-    run(&mut state, Command::WorkspaceSwitch { n: 2 });
+    run(&mut state, &Command::WorkspaceSwitch { n: 2 });
     assert_eq!(state.active_tab().location(), &loc("C:/draft"));
     let before = state.clone();
-    assert!(run(&mut state, Command::WorkspaceSwitch { n: 2 }).is_empty());
+    assert!(run(&mut state, &Command::WorkspaceSwitch { n: 2 }).is_empty());
     assert_eq!(state, before);
     assert_eq!(
         crate::apply(&mut state, &Command::WorkspaceSwitch { n: 5 }),
@@ -390,40 +390,40 @@ fn workspace_switch_command_preserves_drafts_and_refuses_missing_numbers() {
 #[test]
 fn workspace_commands_rename_move_save_discard_delete_and_restore() {
     let mut state = state();
-    run(&mut state, Command::WorkspaceNew { name: None });
+    run(&mut state, &Command::WorkspaceNew { name: None });
     run(
         &mut state,
-        Command::WorkspaceRename {
+        &Command::WorkspaceRename {
             n: 2,
             name: "  Project  ".into(),
         },
     );
-    run(&mut state, Command::WorkspaceMove { n: 2, by: -1 });
+    run(&mut state, &Command::WorkspaceMove { n: 2, by: -1 });
     let window = state.window(state.focused_window()).unwrap();
     assert_eq!(window.active_workspace(), 0);
     assert_eq!(window.workspaces()[0].name, "Project");
     run(
         &mut state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc("C:/saved"),
         },
     );
     assert_eq!(
-        run(&mut state, Command::WorkspaceSave),
+        run(&mut state, &Command::WorkspaceSave),
         vec![Effect::SaveSession]
     );
     run(
         &mut state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc("C:/draft"),
         },
     );
-    run(&mut state, Command::WorkspaceDiscard { n: 1 });
+    run(&mut state, &Command::WorkspaceDiscard { n: 1 });
     assert_eq!(state.active_tab().location(), &loc("C:/saved"));
-    run(&mut state, Command::WorkspaceDelete { n: 1 });
+    run(&mut state, &Command::WorkspaceDelete { n: 1 });
     assert_eq!(state.active_tab().location(), &loc("C:/start"));
-    run(&mut state, Command::WorkspaceRestore);
-    run(&mut state, Command::WorkspaceSwitch { n: 1 });
+    run(&mut state, &Command::WorkspaceRestore);
+    run(&mut state, &Command::WorkspaceSwitch { n: 1 });
     assert_eq!(state.active_tab().location(), &loc("C:/saved"));
     assert_eq!(
         state.window(state.focused_window()).unwrap().workspaces()[0].name,

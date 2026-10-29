@@ -23,7 +23,7 @@ impl PumpError {
 pub(super) fn pump(
     input: &mut File,
     output: &mut File,
-    control: crate::CopyControl<'_>,
+    control: &mut crate::CopyControl<'_>,
 ) -> Result<u64, PumpError> {
     let mut buffer = vec![0_u8; CHUNK];
     let mut total = 0_u64;

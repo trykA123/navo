@@ -4,7 +4,7 @@ use crate::{AppState, Command, CommandError, CursorMove, Effect, StateError, Win
 fn open_window(state: &mut AppState, location: Option<&str>) -> Vec<Effect> {
     run(
         state,
-        Command::WindowOpen {
+        &Command::WindowOpen {
             location: location.map(loc),
         },
     )
@@ -43,7 +43,7 @@ fn window_focus_returns_to_an_earlier_window() {
     open_window(&mut state, Some("/work"));
     run(
         &mut state,
-        Command::WindowFocus {
+        &Command::WindowFocus {
             window: first.get(),
         },
     );
@@ -54,7 +54,7 @@ fn window_focus_returns_to_an_earlier_window() {
 fn window_focus_of_an_unknown_window_fails() {
     let mut state = home();
     assert_eq!(
-        fail(&mut state, Command::WindowFocus { window: 999 }),
+        fail(&mut state, &Command::WindowFocus { window: 999 }),
         CommandError::State(StateError::UnknownWindow(WindowId::new(999)))
     );
 }
@@ -64,7 +64,7 @@ fn window_close_without_id_closes_the_focused_window() {
     let mut state = home();
     let first = state.focused_window();
     open_window(&mut state, Some("/work"));
-    run(&mut state, Command::WindowClose { window: None });
+    run(&mut state, &Command::WindowClose { window: None });
     assert_eq!(state.window_ids(), vec![first]);
 }
 
@@ -76,7 +76,7 @@ fn window_close_of_another_window_keeps_the_focus() {
     let second = state.focused_window();
     run(
         &mut state,
-        Command::WindowClose {
+        &Command::WindowClose {
             window: Some(first.get()),
         },
     );
@@ -87,7 +87,7 @@ fn window_close_of_another_window_keeps_the_focus() {
 fn window_close_refuses_the_last_window() {
     let mut state = home();
     assert_eq!(
-        fail(&mut state, Command::WindowClose { window: None }),
+        fail(&mut state, &Command::WindowClose { window: None }),
         CommandError::State(StateError::LastWindow)
     );
 }
@@ -97,11 +97,11 @@ fn pane_activate_tab_switches_the_active_tab() {
     let mut state = home();
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("/work")),
         },
     );
-    run(&mut state, Command::PaneActivateTab { tab: 0 });
+    run(&mut state, &Command::PaneActivateTab { tab: 0 });
     assert_eq!(state.active_tab().location().as_str(), "/home");
 }
 
@@ -110,11 +110,11 @@ fn pane_activate_tab_lists_an_unloaded_tab() {
     let mut state = home();
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("/work")),
         },
     );
-    let effects = run(&mut state, Command::PaneActivateTab { tab: 0 });
+    let effects = run(&mut state, &Command::PaneActivateTab { tab: 0 });
     assert!(matches!(
         effects.as_slice(),
         [Effect::ListFolder { location, .. }] if location.as_str() == "/home"
@@ -126,18 +126,21 @@ fn pane_activate_tab_does_not_relist_a_loaded_tab() {
     let mut state = at_work(files(3));
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("/home")),
         },
     );
-    assert_eq!(run(&mut state, Command::PaneActivateTab { tab: 0 }), vec![]);
+    assert_eq!(
+        run(&mut state, &Command::PaneActivateTab { tab: 0 }),
+        vec![]
+    );
 }
 
 #[test]
 fn pane_activate_tab_out_of_range_fails() {
     let mut state = home();
     assert_eq!(
-        fail(&mut state, Command::PaneActivateTab { tab: 5 }),
+        fail(&mut state, &Command::PaneActivateTab { tab: 5 }),
         CommandError::State(StateError::NoSuchTab(5))
     );
 }
@@ -145,21 +148,21 @@ fn pane_activate_tab_out_of_range_fails() {
 #[test]
 fn pane_scroll_sets_the_first_visible_row() {
     let mut state = at_work(files(100));
-    run(&mut state, Command::PaneScroll { to: 40 });
+    run(&mut state, &Command::PaneScroll { to: 40 });
     assert_eq!(state.active_tab().view().scroll, 40);
 }
 
 #[test]
 fn pane_scroll_does_not_move_the_cursor() {
     let mut state = at_work(files(100));
-    run(&mut state, Command::PaneScroll { to: 40 });
+    run(&mut state, &Command::PaneScroll { to: 40 });
     assert_eq!(state.active_tab().view().cursor, 0);
 }
 
 #[test]
 fn pane_scroll_clamps_to_the_last_row() {
     let mut state = at_work(files(10));
-    run(&mut state, Command::PaneScroll { to: 400 });
+    run(&mut state, &Command::PaneScroll { to: 400 });
     assert_eq!(state.active_tab().view().scroll, 9);
 }
 
@@ -173,7 +176,7 @@ fn moving_the_cursor_below_the_page_scrolls_down() {
     page_rows(&mut state, 10);
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Row(25),
         },
     );
@@ -184,10 +187,10 @@ fn moving_the_cursor_below_the_page_scrolls_down() {
 fn moving_the_cursor_above_the_page_scrolls_up() {
     let mut state = at_work(files(100));
     page_rows(&mut state, 10);
-    run(&mut state, Command::PaneScroll { to: 50 });
+    run(&mut state, &Command::PaneScroll { to: 50 });
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Row(20),
         },
     );
@@ -198,10 +201,10 @@ fn moving_the_cursor_above_the_page_scrolls_up() {
 fn moving_the_cursor_inside_the_page_keeps_the_scroll() {
     let mut state = at_work(files(100));
     page_rows(&mut state, 10);
-    run(&mut state, Command::PaneScroll { to: 30 });
+    run(&mut state, &Command::PaneScroll { to: 30 });
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Row(35),
         },
     );
@@ -214,7 +217,7 @@ fn last_scrolls_the_last_row_into_view() {
     page_rows(&mut state, 10);
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Last,
         },
     );
@@ -226,7 +229,7 @@ fn the_default_page_keeps_a_row_near_the_top_unscrolled() {
     let mut state = at_work(files(100));
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Row(7),
         },
     );
@@ -246,7 +249,7 @@ fn holding_insert_scrolls_the_cursor_into_view() {
     let mut state = at_work(files(100));
     page_rows(&mut state, 10);
     for _ in 0..15 {
-        run(&mut state, Command::SelectionToggleDown);
+        run(&mut state, &Command::SelectionToggleDown);
     }
     assert_eq!(scrolled_to(&state), 6);
 }
@@ -255,7 +258,7 @@ fn holding_insert_scrolls_the_cursor_into_view() {
 fn a_range_selection_scrolls_its_end_into_view() {
     let mut state = at_work(files(100));
     page_rows(&mut state, 10);
-    run(&mut state, Command::SelectionRange { to: 40 });
+    run(&mut state, &Command::SelectionRange { to: 40 });
     assert_eq!(scrolled_to(&state), 31);
 }
 
@@ -265,7 +268,7 @@ fn shrinking_the_page_keeps_the_cursor_visible() {
     page_rows(&mut state, 30);
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Row(25),
         },
     );

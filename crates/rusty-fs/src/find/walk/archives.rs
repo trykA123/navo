@@ -37,7 +37,7 @@ impl Walk<'_> {
                 );
                 let found = FoundFile {
                     relative: ProviderPath::from_text(&relative),
-                    entry: describe(entry),
+                    entry: describe(&entry),
                     hits: FileHits::default(),
                 };
                 self.archive_entry((&path, index), found, compiled)?;
@@ -101,7 +101,7 @@ fn has_archive_extension(name: &str) -> bool {
     .any(|extension| name.ends_with(extension))
 }
 
-fn describe(entry: ArchiveEntry) -> FsEntry {
+fn describe(entry: &ArchiveEntry) -> FsEntry {
     let name = entry.name.rsplit(['/', '\\']).next().unwrap_or_default();
     let modified_ms = entry.modified.map(|stamp| match stamp {
         Stamp::UnixMs(value) => value,

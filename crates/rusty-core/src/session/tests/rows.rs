@@ -56,7 +56,7 @@ fn empty_listing_saves_empty_rows() {
 #[test]
 fn inactive_tabs_with_a_listing_save_rows_too() {
     let mut state = home();
-    run(&mut state, Command::PaneOpenTab { location: None });
+    run(&mut state, &Command::PaneOpenTab { location: None });
     load_tab(&mut state, TabId::new(3), "/home", files(4));
     assert_eq!(
         first_tab_rows(&state, 100).map(|r| r.entries),

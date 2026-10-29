@@ -65,7 +65,7 @@ fn session_round_trip_drops_the_runtime_base() {
     state.active_tab_mut().set_base(Some(loc(r"D:\results")));
     let bytes = postcard::to_stdvec(&state.to_session(0)).unwrap();
     let saved = postcard::from_bytes(&bytes).unwrap();
-    let restored = crate::AppState::from_session(saved).unwrap();
+    let restored = crate::AppState::from_session(&saved).unwrap();
     assert_eq!(restored, crate::AppState::new(loc(r"C:\work")));
     assert_eq!(restored.active_tab().base_or_location(), &loc(r"C:\work"));
 }

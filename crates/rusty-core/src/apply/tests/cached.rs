@@ -26,7 +26,7 @@ fn cursor_name(state: &AppState) -> Option<String> {
 fn away_and_back(state: &mut AppState) {
     navigate(state, "/other");
     load(state, files(1));
-    run(state, Command::PaneBack);
+    run(state, &Command::PaneBack);
 }
 
 #[test]
@@ -100,11 +100,11 @@ fn the_cursor_keeps_its_place_on_screen_when_rows_appear_above() {
 fn marks_stay_on_their_names_through_the_fresh_listing() {
     let mut state = at_work(named(&["a", "b", "c"]));
     move_cursor(&mut state, CursorMove::Row(2));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     away_and_back(&mut state);
     show_cached(&mut state, named(&["a", "b", "c"]));
     move_cursor(&mut state, CursorMove::Row(1));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     load(&mut state, named(&["0", "a", "b", "c"]));
     assert_eq!(marked(&state), [2]);
     assert_eq!(cursor(&state), 2);

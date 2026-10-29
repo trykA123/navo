@@ -25,12 +25,12 @@ struct Source {
 impl Vault<'_> {
     pub fn capture(
         &mut self,
-        request: CaptureRequest<'_>,
+        request: &CaptureRequest<'_>,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
-        let source = self.inspect(&request, run)?;
+        let source = self.inspect(request, run)?;
         for chain in place::chains(self.ops, (&source.parent, source.scope), &self.places)? {
-            if let Some(entry) = self.capture_in(&chain, (&request, &source), run)? {
+            if let Some(entry) = self.capture_in(&chain, (request, &source), run)? {
                 return Ok(entry);
             }
         }
@@ -77,7 +77,7 @@ impl Vault<'_> {
             }
         };
         let id = entry.id;
-        match self.fill(entry, run)? {
+        match self.fill(&entry, run)? {
             Some(entry) => Ok(Some(entry)),
             None => self.withdraw(id, run),
         }
@@ -109,7 +109,7 @@ impl Vault<'_> {
 
     fn fill(
         &mut self,
-        entry: RetentionEntry,
+        entry: &RetentionEntry,
         run: &mut RetentionRun<'_>,
     ) -> Result<Option<RetentionEntry>, Error> {
         match self.ops.create_private_folder(&entry.record.container) {
@@ -123,7 +123,7 @@ impl Vault<'_> {
         tx.save(&entry, RetainedState::Preparing)?;
         tx.commit()?;
         self.ops.hide_retained(&entry.record.container, identity)?;
-        self.complete_capture(entry, run)
+        self.complete_capture(&entry, run)
     }
 
     fn withdraw(
@@ -144,7 +144,7 @@ impl Vault<'_> {
 
     fn complete_capture(
         &mut self,
-        entry: RetentionEntry,
+        entry: &RetentionEntry,
         run: &mut RetentionRun<'_>,
     ) -> Result<Option<RetentionEntry>, Error> {
         let mut entry = self.catalog.get(entry.id)?;

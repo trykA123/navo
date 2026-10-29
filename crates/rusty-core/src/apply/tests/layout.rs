@@ -116,7 +116,7 @@ fn target_tracks_focus_and_falls_back_when_removed() {
     assert_eq!(target(&state), Some(ids[0]));
     run(
         &mut state,
-        Command::LayoutFocus {
+        &Command::LayoutFocus {
             direction: Direction::Left,
         },
     );
@@ -147,7 +147,7 @@ fn closing_focused_pane_keeps_all_its_tabs() {
     let active = state.active_tab().id();
     let mut expected = tab_ids(&state, ids[0]);
     expected.extend(tab_ids(&state, ids[1]));
-    run(&mut state, Command::LayoutClose);
+    run(&mut state, &Command::LayoutClose);
     assert_eq!(tab_ids(&state, ids[0]), expected);
     assert!(state.tab(active).is_some());
     assert_eq!(target(&state), None);
@@ -161,7 +161,7 @@ fn fifth_split_refuses_without_changing_state() {
     assert_eq!(
         fail(
             &mut state,
-            Command::LayoutSplit {
+            &Command::LayoutSplit {
                 direction: Direction::Right
             }
         ),
@@ -235,7 +235,7 @@ fn workspace_switch_restores_layout_and_target_and_copy_remaps_target() {
 }
 
 fn split(state: &mut AppState, direction: Direction) -> Vec<Effect> {
-    run(state, Command::LayoutSplit { direction })
+    run(state, &Command::LayoutSplit { direction })
 }
 
 fn panes(state: &AppState) -> Vec<PaneId> {
@@ -285,7 +285,7 @@ fn close_removes_the_focused_pane() {
     let mut state = home();
     let first = state.focused_pane();
     split(&mut state, Direction::Right);
-    run(&mut state, Command::LayoutClose);
+    run(&mut state, &Command::LayoutClose);
     assert_eq!(panes(&state), vec![first]);
 }
 
@@ -294,13 +294,13 @@ fn close_has_no_effects() {
     let mut state = home();
     super::load(&mut state, super::files(1));
     split(&mut state, Direction::Right);
-    assert_eq!(run(&mut state, Command::LayoutClose), vec![]);
+    assert_eq!(run(&mut state, &Command::LayoutClose), vec![]);
 }
 
 #[test]
 fn close_refuses_the_last_pane() {
     assert_eq!(
-        fail(&mut home(), Command::LayoutClose),
+        fail(&mut home(), &Command::LayoutClose),
         CommandError::State(StateError::Layout(LayoutError::LastPane))
     );
 }
@@ -312,7 +312,7 @@ fn focus_moves_to_the_neighbour() {
     split(&mut state, Direction::Right);
     run(
         &mut state,
-        Command::LayoutFocus {
+        &Command::LayoutFocus {
             direction: Direction::Left,
         },
     );
@@ -327,7 +327,7 @@ fn focus_has_no_effects() {
     assert_eq!(
         run(
             &mut state,
-            Command::LayoutFocus {
+            &Command::LayoutFocus {
                 direction: Direction::Left
             }
         ),
@@ -340,7 +340,7 @@ fn focus_without_a_neighbour_fails() {
     assert_eq!(
         fail(
             &mut home(),
-            Command::LayoutFocus {
+            &Command::LayoutFocus {
                 direction: Direction::Up
             }
         ),
@@ -351,7 +351,7 @@ fn focus_without_a_neighbour_fails() {
 #[test]
 fn save_session_asks_to_save_the_session() {
     assert_eq!(
-        run(&mut home(), Command::AppSaveSession),
+        run(&mut home(), &Command::AppSaveSession),
         vec![Effect::SaveSession]
     );
 }
@@ -361,7 +361,7 @@ fn save_session_leaves_the_state_alone() {
     let mut state = home();
     navigate(&mut state, "/work");
     let before = state.clone();
-    run(&mut state, Command::AppSaveSession);
+    run(&mut state, &Command::AppSaveSession);
     assert_eq!(state, before);
 }
 
@@ -372,7 +372,7 @@ fn preset_command_lists_new_panes_without_relisting_loaded_tabs() {
     let original = state.active_tab().id();
     let effects = run(
         &mut state,
-        Command::LayoutPreset {
+        &Command::LayoutPreset {
             tiles: crate::Tiles::builtin()[3].tiles.clone(),
         },
     );
@@ -399,7 +399,7 @@ fn swap_command_uses_reading_order_numbers() {
     preset(&mut state, 3);
     let ids = numbered(&state);
     let focused = state.focused_pane();
-    assert!(run(&mut state, Command::LayoutSwap { a: 1, b: 4 }).is_empty());
+    assert!(run(&mut state, &Command::LayoutSwap { a: 1, b: 4 }).is_empty());
     assert_eq!(numbered(&state), vec![ids[3], ids[1], ids[2], ids[0]]);
     assert_eq!(state.focused_pane(), focused);
 }
@@ -412,7 +412,7 @@ fn swap_toward_command_moves_focused_pane_without_changing_focus() {
     assert!(
         run(
             &mut state,
-            Command::LayoutSwapToward {
+            &Command::LayoutSwapToward {
                 direction: Direction::Right
             }
         )
@@ -429,7 +429,7 @@ fn resize_command_moves_split_by_fifty_permille() {
     assert!(
         run(
             &mut state,
-            Command::LayoutResize {
+            &Command::LayoutResize {
                 direction: Direction::Right
             }
         )
@@ -451,15 +451,15 @@ fn focus_pane_command_lists_only_when_moving_to_an_unlisted_tab() {
     let mut state = home();
     preset(&mut state, 0);
     let ids = numbered(&state);
-    let effects = run(&mut state, Command::LayoutFocusPane { n: 2 });
+    let effects = run(&mut state, &Command::LayoutFocusPane { n: 2 });
     assert_eq!(state.focused_pane(), ids[1]);
     assert!(
         matches!(&effects[..], [Effect::ListFolder { tab, .. }] if *tab == state.active_tab().id())
     );
-    assert!(run(&mut state, Command::LayoutFocusPane { n: 2 }).is_empty());
+    assert!(run(&mut state, &Command::LayoutFocusPane { n: 2 }).is_empty());
     super::load(&mut state, super::files(1));
-    run(&mut state, Command::LayoutFocusPane { n: 1 });
-    assert!(run(&mut state, Command::LayoutFocusPane { n: 2 }).is_empty());
+    run(&mut state, &Command::LayoutFocusPane { n: 1 });
+    assert!(run(&mut state, &Command::LayoutFocusPane { n: 2 }).is_empty());
 }
 
 #[test]
@@ -469,7 +469,7 @@ fn ratio_and_even_commands_update_splits() {
     assert!(
         run(
             &mut state,
-            Command::LayoutRatio {
+            &Command::LayoutRatio {
                 split: crate::SplitPath(vec![]),
                 ratio: 700
             }
@@ -485,7 +485,7 @@ fn ratio_and_even_commands_update_splits() {
             .ratio,
         700
     );
-    assert!(run(&mut state, Command::LayoutEven).is_empty());
+    assert!(run(&mut state, &Command::LayoutEven).is_empty());
     assert_eq!(
         state
             .window(state.focused_window())

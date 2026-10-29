@@ -82,7 +82,7 @@ pub fn find_files(
             let _ = send.send(Event::Done(result));
         }),
     );
-    receive_batches(receive, cancel, sink)
+    receive_batches(&receive, cancel, sink)
 }
 
 pub fn walk_files(
@@ -124,7 +124,7 @@ fn rebase_batch(mut batch: FoundBatch, base: &Location, root: &Location) -> Foun
 }
 
 fn receive_batches(
-    receive: Receiver<Event>,
+    receive: &Receiver<Event>,
     cancel: &CancelToken,
     mut sink: impl FnMut(FoundBatch) -> ControlFlow<()>,
 ) -> Result<FindProgress, FindError> {

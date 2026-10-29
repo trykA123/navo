@@ -16,7 +16,7 @@ fn old_session() -> SessionState {
     session.windows.push(other);
     session.focused_window = 4;
     session.next_id = 7;
-    AppState::from_session(session).unwrap().to_session(0)
+    AppState::from_session(&session).unwrap().to_session(0)
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn v3_round_trip_keeps_workspaces_and_writes_no_drafts() {
     let loaded = load_session(&path).0.unwrap();
     assert_eq!(loaded, expected);
     assert_eq!(
-        AppState::from_session(loaded).unwrap().to_session(0),
+        AppState::from_session(&loaded).unwrap().to_session(0),
         expected
     );
 }
@@ -308,7 +308,7 @@ fn frozen_v3_file_loads_its_workspaces_with_fallback_targets() {
         }
     }
     assert_eq!(promoted, expected);
-    let restored = AppState::from_session(session).unwrap();
+    let restored = AppState::from_session(&session).unwrap();
     let window = restored.window(restored.focused_window()).unwrap();
     assert_eq!(window.workspaces().len(), 2);
     assert_eq!(window.layout().numbered().len(), 3);

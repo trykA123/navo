@@ -51,18 +51,18 @@ fn home() -> AppState {
     AppState::new(loc("/home"))
 }
 
-fn run(state: &mut AppState, command: Command) -> Vec<Effect> {
-    apply(state, &command).unwrap()
+fn run(state: &mut AppState, command: &Command) -> Vec<Effect> {
+    apply(state, command).unwrap()
 }
 
-fn fail(state: &mut AppState, command: Command) -> CommandError {
-    apply(state, &command).unwrap_err()
+fn fail(state: &mut AppState, command: &Command) -> CommandError {
+    apply(state, command).unwrap_err()
 }
 
 fn navigate(state: &mut AppState, location: &str) -> Vec<Effect> {
     run(
         state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc(location),
         },
     )
@@ -70,7 +70,7 @@ fn navigate(state: &mut AppState, location: &str) -> Vec<Effect> {
 
 fn load(state: &mut AppState, listing: Listing) {
     if state.active_tab().pending_request().is_none() {
-        run(state, Command::PaneRefresh);
+        run(state, &Command::PaneRefresh);
     }
     let tab = state.active_tab();
     let event = Event::ListingLoaded {
@@ -90,7 +90,7 @@ fn at_work(listing: Listing) -> AppState {
 }
 
 fn move_cursor(state: &mut AppState, to: CursorMove) {
-    run(state, Command::PaneCursorMove { to });
+    run(state, &Command::PaneCursorMove { to });
 }
 
 fn cursor(state: &AppState) -> u64 {

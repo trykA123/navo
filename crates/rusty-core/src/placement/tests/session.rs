@@ -13,7 +13,7 @@ fn placement_round_trips_through_postcard_and_app_state() {
     let decoded: SessionState = postcard::from_bytes(&bytes).unwrap();
     assert_eq!(decoded, session);
     assert_eq!(
-        AppState::from_session(decoded).unwrap().to_session(10),
+        AppState::from_session(&decoded).unwrap().to_session(10),
         session
     );
 }

@@ -55,7 +55,7 @@ pub fn existing_at(
                 batch
                     .entries
                     .into_iter()
-                    .filter_map(|entry| existing_item(&folder, entry)),
+                    .filter_map(|entry| existing_item(&folder, &entry)),
             );
             ControlFlow::Continue(())
         };
@@ -69,7 +69,7 @@ pub fn existing_at(
     Ok(existing)
 }
 
-fn existing_item(folder: &Location, entry: FsEntry) -> Option<ExistingItem> {
+fn existing_item(folder: &Location, entry: &FsEntry) -> Option<ExistingItem> {
     Some(ExistingItem {
         location: folder.join(&entry.name).ok()?,
         kind: item_kind(entry.kind),

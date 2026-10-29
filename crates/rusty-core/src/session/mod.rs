@@ -170,8 +170,8 @@ impl AppState {
         convert::save(self, rows_per_pane)
     }
 
-    pub fn from_session(session: SessionState) -> Result<AppState, SessionError> {
-        convert::restore(&session).map_err(SessionError::Invalid)
+    pub fn from_session(session: &SessionState) -> Result<AppState, SessionError> {
+        convert::restore(session).map_err(SessionError::Invalid)
     }
 }
 

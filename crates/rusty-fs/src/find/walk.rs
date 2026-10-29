@@ -137,7 +137,7 @@ impl<'a> Walk<'a> {
             if self.filters.query.archives {
                 self.archive(&location, &found, compiled)?;
             }
-            self.file(location, found, compiled)?;
+            self.file(&location, found, compiled)?;
         }
         self.flush_if_due()?;
         Ok(None)
@@ -145,13 +145,13 @@ impl<'a> Walk<'a> {
 
     fn file(
         &mut self,
-        location: Location,
+        location: &Location,
         mut found: FoundFile,
         compiled: &Compiled,
     ) -> Result<(), FindError> {
         self.progress.scanned += 1;
         self.progress.current = Some(location.clone());
-        if !self.filters.file(Some(&location), &found.entry) {
+        if !self.filters.file(Some(location), &found.entry) {
             return Ok(());
         }
         if found.entry.size > FILE_LIMIT && self.filters.query.size.is_none() {
@@ -159,7 +159,7 @@ impl<'a> Walk<'a> {
             return Ok(());
         }
         if !self.filters.query.text.is_empty() {
-            let Some(hits) = self.scan_file(&location, compiled)? else {
+            let Some(hits) = self.scan_file(location, compiled)? else {
                 return Ok(());
             };
             found.hits = hits;

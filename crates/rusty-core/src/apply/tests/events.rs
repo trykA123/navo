@@ -35,7 +35,7 @@ fn listing_loaded_sets_the_listing() {
 fn a_refresh_keeps_the_marks_by_name() {
     let mut state = at_work(files(4));
     move_cursor(&mut state, CursorMove::Row(2));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     load(&mut state, files(6));
     assert_eq!(marked(&state), vec![2]);
 }
@@ -44,7 +44,7 @@ fn a_refresh_keeps_the_marks_by_name() {
 fn a_refresh_drops_marks_of_names_that_are_gone() {
     let mut state = at_work(files(4));
     move_cursor(&mut state, CursorMove::Row(3));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     load(&mut state, files(2));
     assert_eq!(marked(&state), Vec::<u64>::new());
 }
@@ -55,7 +55,7 @@ fn an_older_answer_for_the_same_folder_is_ignored() {
     let tab = state.active_tab().id();
     let first = request_of(&navigate(&mut state, "/work"));
     navigate(&mut state, "/other");
-    run(&mut state, Command::PaneBack);
+    run(&mut state, &Command::PaneBack);
     let before = state.clone();
     let _ = apply_event(&mut state, loaded(tab, "/work", first, 3));
     assert_eq!(state, before);
@@ -88,7 +88,7 @@ fn listing_loaded_clamps_the_remembered_cursor() {
     let mut state = at_work(files(10));
     move_cursor(&mut state, CursorMove::Row(8));
     navigate(&mut state, "/other");
-    run(&mut state, Command::PaneBack);
+    run(&mut state, &Command::PaneBack);
     load(&mut state, files(3));
     assert_eq!(cursor(&state), 2);
 }
@@ -107,9 +107,9 @@ fn listing_loaded_after_navigating_away_is_ignored() {
 #[test]
 fn listing_loaded_for_a_closed_tab_is_ignored() {
     let mut state = home();
-    let request = request_of(&run(&mut state, Command::PaneOpenTab { location: None }));
+    let request = request_of(&run(&mut state, &Command::PaneOpenTab { location: None }));
     let closed = state.active_tab().id();
-    run(&mut state, Command::PaneCloseTab { tab: None });
+    run(&mut state, &Command::PaneCloseTab { tab: None });
     let before = state.clone();
     let _ = apply_event(&mut state, loaded(closed, "/home", request, 3));
     assert_eq!(state, before);
@@ -121,7 +121,7 @@ fn listing_loaded_reaches_a_tab_in_another_pane() {
     let first = state.active_tab().id();
     run(
         &mut state,
-        Command::LayoutSplit {
+        &Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
@@ -135,7 +135,7 @@ fn listing_loaded_for_an_inactive_tab_leaves_the_active_tab_alone() {
     let mut state = home();
     let first = state.active_tab().id();
     let request = request_of(&list_unloaded(&mut state));
-    run(&mut state, Command::PaneOpenTab { location: None });
+    run(&mut state, &Command::PaneOpenTab { location: None });
     let _ = apply_event(&mut state, loaded(first, "/home", request, 3));
     assert_eq!(state.active_tab().listing(), None);
 }
@@ -178,14 +178,14 @@ fn page_rows_belong_to_their_pane() {
     let mut state = at_work(files(50));
     run(
         &mut state,
-        Command::LayoutSplit {
+        &Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
     page_rows(&mut state, 5);
     run(
         &mut state,
-        Command::LayoutFocus {
+        &Command::LayoutFocus {
             direction: Direction::Left,
         },
     );
@@ -210,7 +210,7 @@ fn page_rows_changed_for_an_unknown_pane_is_ignored() {
 #[test]
 fn listing_loaded_for_another_location_keeps_the_marks() {
     let mut state = at_work(files(4));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     let tab = state.active_tab().id();
     let _ = apply_event(&mut state, loaded(tab, "/elsewhere", 999, 2));
     assert_eq!(marked(&state), vec![0]);
@@ -232,7 +232,7 @@ fn list_missing_also_relists_pending_tabs_at_start_up() {
     let mut state = home();
     run(
         &mut state,
-        Command::LayoutSplit {
+        &Command::LayoutSplit {
             direction: Direction::Right,
         },
     );
@@ -250,7 +250,7 @@ fn list_active_tabs_relists_every_pane_after_an_operation() {
     let mut state = at_work(files(3));
     run(
         &mut state,
-        Command::LayoutSplit {
+        &Command::LayoutSplit {
             direction: Direction::Right,
         },
     );

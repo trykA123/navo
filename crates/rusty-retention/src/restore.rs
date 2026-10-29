@@ -6,7 +6,7 @@ use crate::{Error, RestoreRequest, RetentionRun, Vault, proof, snapshot};
 impl Vault<'_> {
     pub fn restore(
         &mut self,
-        request: RestoreRequest<'_>,
+        request: &RestoreRequest<'_>,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
         self.restore_authorized(request, None, run)
@@ -39,7 +39,7 @@ impl Vault<'_> {
         match entry.state {
             RetainedState::Restored | RetainedState::Aborted => Ok(entry),
             RetainedState::Ready => self.restore_authorized(
-                RestoreRequest {
+                &RestoreRequest {
                     id,
                     target: &entry.record.source,
                 },
@@ -52,7 +52,7 @@ impl Vault<'_> {
 
     fn restore_authorized(
         &mut self,
-        request: RestoreRequest<'_>,
+        request: &RestoreRequest<'_>,
         owner: Option<JobId>,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
@@ -90,7 +90,7 @@ impl Vault<'_> {
 
     fn complete_restore(
         &mut self,
-        request: RestoreRequest<'_>,
+        request: &RestoreRequest<'_>,
         owner: Option<JobId>,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {

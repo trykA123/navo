@@ -51,7 +51,7 @@ impl RetainedHooks for VaultHooks {
         let mut vault = self.vault()?;
         let entry = vault.get(id).map_err(|error| refused(&error))?;
         let target = names::free_target(self.ops.as_ref(), &entry)?;
-        let request = RestoreRequest {
+        let request = &RestoreRequest {
             id,
             target: &target,
         };

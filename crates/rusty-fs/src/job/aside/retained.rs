@@ -16,14 +16,14 @@ impl Aside {
     pub(super) fn place_retained(
         &self,
         ctx: &mut JobContext<'_>,
-        request: Replacement<'_>,
+        request: &Replacement<'_>,
     ) -> Result<(), FsError> {
         let Replacement {
             source,
             target,
             allow,
             expected_identity,
-        } = request;
+        } = *request;
         let ops = ctx.ops;
         if !ops.supports_atomic_rename() {
             return Err(failure(FsErrorKind::NotSupportedYet, target));

@@ -26,7 +26,7 @@ impl FakeFs {
         let limit = match fault {
             Some(Fault::FailAfterBytes { kind, bytes }) => Some((kind, bytes)),
             other => {
-                fail_now(other, source)?;
+                fail_now(other.as_ref(), source)?;
                 None
             }
         };
@@ -96,7 +96,7 @@ impl FakeFs {
         identity: u64,
     ) -> Result<crate::FileIdentity, FsError> {
         let path = self.own_path(target)?;
-        fail_now(self.record_call(&path, FakeOp::Identity), target)?;
+        fail_now(self.record_call(&path, FakeOp::Identity).as_ref(), target)?;
         let volume = self
             .volume_serial(target)?
             .ok_or_else(|| error(FsErrorKind::IdentityUnavailable, target))?;

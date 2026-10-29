@@ -134,7 +134,7 @@ fn every_batch_is_reported_as_it_arrives() {
     }
     let mut batches = 0;
     let snapshot = load_folder_reporting(&fs, &fs.location("d"), &CancelToken::new(), &mut || {
-        batches += 1
+        batches += 1;
     })
     .unwrap();
     assert_eq!(batches, 3);

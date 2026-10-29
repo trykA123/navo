@@ -76,7 +76,7 @@ fn focused_pane_is_saved() {
     split(&mut state, Direction::Right);
     run(
         &mut state,
-        Command::LayoutFocus {
+        &Command::LayoutFocus {
             direction: Direction::Left,
         },
     );
@@ -89,8 +89,8 @@ fn history_saves_back_oldest_first_and_forward_next_first() {
     navigate(&mut state, "/a");
     navigate(&mut state, "/b");
     navigate(&mut state, "/c");
-    run(&mut state, Command::PaneBack);
-    run(&mut state, Command::PaneBack);
+    run(&mut state, &Command::PaneBack);
+    run(&mut state, &Command::PaneBack);
     let tab = &state.to_session(100).windows[0].panes[0].tabs[0];
     let saved = (tab.location.as_str(), &tab.back, &tab.forward);
     assert_eq!(
@@ -109,7 +109,7 @@ fn view_saves_cursor_and_scroll() {
     load(&mut state, files(50));
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Row(17),
         },
     );
@@ -123,17 +123,17 @@ fn tabs_and_active_index_are_saved() {
     let mut state = home();
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("/a")),
         },
     );
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("/b")),
         },
     );
-    run(&mut state, Command::PaneCloseTab { tab: Some(0) });
+    run(&mut state, &Command::PaneCloseTab { tab: Some(0) });
     let pane = &state.to_session(100).windows[0].panes[0];
     let tabs: Vec<(u64, &str)> = pane
         .tabs
@@ -164,6 +164,6 @@ fn windows_are_saved_in_ascending_id_with_the_focused_one_named() {
 fn next_id_is_saved() {
     let mut state = home();
     split(&mut state, Direction::Right);
-    run(&mut state, Command::PaneOpenTab { location: None });
+    run(&mut state, &Command::PaneOpenTab { location: None });
     assert_eq!(state.to_session(100).next_id, 7);
 }

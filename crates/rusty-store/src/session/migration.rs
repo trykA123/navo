@@ -178,7 +178,7 @@ pub(super) fn decode(version: u16, body: &[u8]) -> Result<SessionState, SessionF
         focused_window: old.focused_window,
         next_id: old.next_id,
     };
-    let converted = rusty_core::AppState::from_session(session.clone())
+    let converted = rusty_core::AppState::from_session(&session)
         .map_err(|error| SessionFileError::Decode(error.to_string()))?
         .to_session(0);
     for converted in converted.windows {
@@ -217,7 +217,7 @@ fn sanitize_workspaces(session: &mut SessionState) {
                 active.unwrap_or(0)
             };
             load_active_snapshot(candidate);
-            if let Err(error) = rusty_core::AppState::from_session(trial.clone()) {
+            if let Err(error) = rusty_core::AppState::from_session(&trial) {
                 tracing::warn!(
                     window = window.id,
                     workspace = position + 1,

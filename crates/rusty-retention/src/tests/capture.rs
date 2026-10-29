@@ -69,7 +69,7 @@ fn unknown_volume_identity_and_nested_mounts_leave_the_source_in_place() {
     let source = fs.location("home/tree");
     let result = run(|run| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &source,
                 policy: RetentionPolicy::new(1, 100, 0).unwrap(),
                 created_at: 0,
@@ -85,7 +85,7 @@ fn unknown_volume_identity_and_nested_mounts_leave_the_source_in_place() {
     fs.set_volume_serial("home", None);
     assert!(
         run(|run| vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &source,
                 policy: RetentionPolicy::new(1, 100, 0).unwrap(),
                 created_at: 0,
@@ -112,7 +112,7 @@ fn cancellation_during_the_snapshot_never_creates_a_capture_intent() {
     assert!(
         vault
             .capture(
-                CaptureRequest {
+                &CaptureRequest {
                     source: &source,
                     policy: RetentionPolicy::new(1, 100, 0).unwrap(),
                     created_at: 0,
@@ -142,7 +142,7 @@ fn an_active_owner_pins_its_retained_files_until_the_job_finishes() {
     let source = fs.location("home/a");
     let entry = run(|run| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &source,
                 policy: RetentionPolicy::new(1, 100, 0).unwrap(),
                 created_at: 0,
@@ -175,7 +175,7 @@ fn a_same_volume_mount_is_rejected_before_listing_its_contents() {
     let mut vault = open(profile.path(), &fs);
     assert!(
         run(|run| vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &source,
                 policy: RetentionPolicy::new(1, 100, 0).unwrap(),
                 created_at: 0,

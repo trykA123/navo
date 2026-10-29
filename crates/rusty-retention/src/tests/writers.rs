@@ -31,7 +31,7 @@ fn a_paused_capture_leaves_the_database_available_to_another_writer() {
     std::thread::scope(|scope| {
         let worker = scope.spawn(|| {
             vault.capture(
-                CaptureRequest {
+                &CaptureRequest {
                     source: &source,
                     policy: Default::default(),
                     created_at: 0,
@@ -83,7 +83,7 @@ fn callbacks_can_write(phase: Phase) {
         writes.push(writer.connection().execute(
             "INSERT OR IGNORE INTO tags VALUES ('/progress', 'writer')",
             [],
-        ))
+        ));
     };
     let cancel = CancelToken::new();
     let mut run = RetentionRun::new(&cancel, &mut report);
@@ -101,7 +101,7 @@ fn exercise(
         (Phase::Capture, _) => {
             vault
                 .capture(
-                    CaptureRequest {
+                    &CaptureRequest {
                         source,
                         policy: Default::default(),
                         created_at: 0,
@@ -114,7 +114,7 @@ fn exercise(
         (Phase::Restore, Some(entry)) => {
             vault
                 .restore(
-                    RestoreRequest {
+                    &RestoreRequest {
                         id: entry.id,
                         target: &entry
                             .record

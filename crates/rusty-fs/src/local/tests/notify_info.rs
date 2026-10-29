@@ -12,9 +12,9 @@ fn record(action: u32, name: &str, last: bool) -> Vec<u8> {
     bytes.extend(next.to_le_bytes());
     bytes.extend(action.to_le_bytes());
     bytes.extend(length.to_le_bytes());
-    units
-        .iter()
-        .for_each(|unit| bytes.extend(unit.to_le_bytes()));
+    for unit in units {
+        bytes.extend(unit.to_le_bytes());
+    }
     bytes.resize(size, 0);
     bytes
 }

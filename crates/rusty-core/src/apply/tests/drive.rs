@@ -11,12 +11,12 @@ fn start(at: &str, then: &[&str]) -> AppState {
 
 fn back(state: &mut AppState, times: usize) {
     for _ in 0..times {
-        run(state, Command::PaneBack);
+        run(state, &Command::PaneBack);
     }
 }
 
 fn go_drive(state: &mut AppState, root: &str) -> Vec<Effect> {
-    run(state, Command::PaneGoDrive { root: loc(root) })
+    run(state, &Command::PaneGoDrive { root: loc(root) })
 }
 
 fn location(state: &AppState) -> &Location {

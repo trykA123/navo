@@ -52,11 +52,11 @@ pub(super) fn details(path: &Path) -> io::Result<FileDetails> {
 #[cfg(target_os = "linux")]
 fn read_security(details: &mut FileDetails, metadata: &Metadata) {
     let names = account_name(metadata.uid(), false)
-        .map_err(|error| security_note("Owner", error))
+        .map_err(|error| security_note("Owner", &error))
         .and_then(|owner| {
             account_name(metadata.gid(), true)
                 .map(|group| (owner, group))
-                .map_err(|error| security_note("Group", error))
+                .map_err(|error| security_note("Group", &error))
         });
     let (owner, group) = match names {
         Ok(names) => names,
@@ -83,7 +83,7 @@ fn read_security(details: &mut FileDetails, metadata: &Metadata) {
 }
 
 #[cfg(target_os = "linux")]
-fn security_note(subject: &str, error: io::Error) -> String {
+fn security_note(subject: &str, error: &io::Error) -> String {
     if error.kind() == io::ErrorKind::PermissionDenied {
         "Access denied".into()
     } else {

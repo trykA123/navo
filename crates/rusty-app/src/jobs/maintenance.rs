@@ -87,7 +87,7 @@ fn maintain(
         .map_err(|error| error.to_string())?;
     let mut vault = Vault::new(db, data, ops).map_err(|error| error.to_string())?;
     for at in volumes.values() {
-        let request = MaintenanceRequest {
+        let request = &MaintenanceRequest {
             at,
             policy,
             now: super::now_ms(),

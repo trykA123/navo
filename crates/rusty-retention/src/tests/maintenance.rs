@@ -29,14 +29,15 @@ fn maintenance_expiry_budget_reports_actual_remaining_bytes_and_resumes_next_pas
     let at = fs.location("home");
     let mut args = request(&at, 4 * DAY_MS, RetentionPolicy::new(3, 1, 0).unwrap());
     args.max_purges = 1;
-    let result = run(|run| vault.maintain_volume(args, run)).unwrap();
+    let result = run(|run| vault.maintain_volume(&args, run)).unwrap();
     assert_eq!(result.purged, vec![entries[0].id]);
     assert_eq!(result.remaining_bytes, 7);
     assert!(result.budget_exhausted);
     assert!(result.quota_unmet);
-    let result =
-        run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
-            .unwrap();
+    let result = run(|run| {
+        vault.maintain_volume(&request(&at, 4 * DAY_MS, RetentionPolicy::default()), run)
+    })
+    .unwrap();
     assert_eq!(result.purged, vec![entries[1].id]);
     assert_eq!(result.remaining_bytes, 0);
     assert!(!result.budget_exhausted);
@@ -53,7 +54,7 @@ fn maintenance_rechecks_physical_space_after_each_purge_and_stops_when_recovered
     let at = fs.location("home");
     let result = vault
         .maintain_volume(
-            request(&at, 100, RetentionPolicy::new(3, 1000, 10).unwrap()),
+            &request(&at, 100, RetentionPolicy::new(3, 1000, 10).unwrap()),
             &mut RetentionRun::new(&CancelToken::new(), &mut |update| {
                 if update.current == first {
                     fs.set_available_space("home", Some(100));
@@ -77,7 +78,7 @@ fn maintenance_quota_uses_actual_remaining_logical_inventory() {
     let at = fs.location("home");
     let result = run(|run| {
         vault.maintain_volume(
-            request(&at, 100, RetentionPolicy::new(3, 8, 0).unwrap()),
+            &request(&at, 100, RetentionPolicy::new(3, 8, 0).unwrap()),
             run,
         )
     })
@@ -99,7 +100,7 @@ fn unavailable_space_observation_refuses_any_purge() {
     let entries = pair(&mut vault, &fs);
     let at = fs.location("home");
     assert!(
-        run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
+        run(|run| vault.maintain_volume(&request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
             .is_err()
     );
     for entry in entries {
@@ -122,7 +123,7 @@ fn failed_fresh_space_query_stops_after_the_already_committed_purge() {
     let entries = pair(&mut vault, &fs);
     let at = fs.location("home");
     assert!(
-        run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
+        run(|run| vault.maintain_volume(&request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
             .is_err()
     );
     assert_eq!(
@@ -162,7 +163,7 @@ fn maintenance_resumes_an_interrupted_purge_before_choosing_new_entries() {
     let mut vault = open(profile.path(), &fs);
     let at = fs.location("home");
     let result =
-        run(|run| vault.maintain_volume(request(&at, 100, RetentionPolicy::default()), run))
+        run(|run| vault.maintain_volume(&request(&at, 100, RetentionPolicy::default()), run))
             .unwrap();
     assert_eq!(result.purged, vec![entry.id]);
     assert_eq!(vault.get(entry.id).unwrap().state, RetainedState::Purged);
@@ -179,7 +180,7 @@ fn changed_observed_mount_and_cancelled_pass_preserve_payloads() {
     let at = fs.location("home");
     let mut calls = 0;
     let result = vault.maintain_volume(
-        request(&at, 4 * DAY_MS, RetentionPolicy::default()),
+        &request(&at, 4 * DAY_MS, RetentionPolicy::default()),
         &mut RetentionRun::new(&CancelToken::new(), &mut |_| {
             calls += 1;
             if calls == 2 {
@@ -193,7 +194,7 @@ fn changed_observed_mount_and_cancelled_pass_preserve_payloads() {
     assert!(
         vault
             .maintain_volume(
-                request(&at, 4 * DAY_MS, RetentionPolicy::default()),
+                &request(&at, 4 * DAY_MS, RetentionPolicy::default()),
                 &mut RetentionRun::new(&cancel, &mut |_| {})
             )
             .is_err()
@@ -214,9 +215,10 @@ fn native_maintenance_removes_expired_payload_and_preserves_new_user_file() {
     let entry = capture(&mut vault, &location(&source));
     std::fs::write(&source, b"new user version").unwrap();
     let at = location(files.path());
-    let result =
-        run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
-            .unwrap();
+    let result = run(|run| {
+        vault.maintain_volume(&request(&at, 4 * DAY_MS, RetentionPolicy::default()), run)
+    })
+    .unwrap();
     assert_eq!(result.purged, vec![entry.id]);
     assert_eq!(std::fs::read(source).unwrap(), b"new user version");
     assert!(fs.metadata(&entry.record.container).is_err());
@@ -234,7 +236,7 @@ fn maintenance_preserves_pinned_versions_and_reports_unmet_limits() {
     let job = journal.create_job("copy", b"{}", 0, 100).unwrap();
     let entry = run(|run| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &fs.location("home/a"),
                 policy: RetentionPolicy::default(),
                 created_at: 100,
@@ -247,7 +249,7 @@ fn maintenance_preserves_pinned_versions_and_reports_unmet_limits() {
     let at = fs.location("home");
     let report = run(|run| {
         vault.maintain_volume(
-            request(&at, 4 * DAY_MS, RetentionPolicy::new(3, 1, 10).unwrap()),
+            &request(&at, 4 * DAY_MS, RetentionPolicy::new(3, 1, 10).unwrap()),
             run,
         )
     })
@@ -275,13 +277,14 @@ fn maintenance_retries_empty_holder_cleanup_after_the_purge_state_was_committed(
         Fault::Fail(FsErrorKind::Locked),
     );
     let at = fs.location("home");
-    let first =
-        run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
-            .unwrap();
+    let first = run(|run| {
+        vault.maintain_volume(&request(&at, 4 * DAY_MS, RetentionPolicy::default()), run)
+    })
+    .unwrap();
     assert!(first.cleanup_pending);
     assert_eq!(vault.get(entry.id).unwrap().state, RetainedState::Purged);
     assert!(fs.metadata(&entry.record.container).is_ok());
-    run(|run| vault.maintain_volume(request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
+    run(|run| vault.maintain_volume(&request(&at, 4 * DAY_MS, RetentionPolicy::default()), run))
         .unwrap();
     assert!(fs.metadata(&entry.record.container).is_err());
 }
@@ -308,8 +311,8 @@ fn a_failed_cleanup_does_not_starve_later_empty_holders_on_the_next_pass() {
         max_purges: 1,
         ..request(&at, 100, RetentionPolicy::default())
     };
-    run(|run| vault.maintain_volume(args(), run)).unwrap();
-    let result = run(|run| vault.maintain_volume(args(), run)).unwrap();
+    run(|run| vault.maintain_volume(&args(), run)).unwrap();
+    let result = run(|run| vault.maintain_volume(&args(), run)).unwrap();
     assert!(result.cleanup_pending);
     assert!(fs.metadata(&extra).is_ok());
     assert!(fs.metadata(&entries[1].record.container).is_err());
@@ -329,7 +332,7 @@ fn terminal_cleanup_without_container_identity_keeps_an_unknown_holder_pending()
     db.connection().execute("UPDATE retained_entry SET state = 'aborted', record = CAST(json_set(record, '$.container_identity', NULL) AS BLOB) WHERE id = ?1", [entry.id.0]).unwrap();
     let at = fs.location("home");
     let result =
-        run(|run| vault.maintain_volume(request(&at, 100, RetentionPolicy::default()), run))
+        run(|run| vault.maintain_volume(&request(&at, 100, RetentionPolicy::default()), run))
             .unwrap();
     assert!(result.cleanup_pending);
     assert!(fs.metadata(&record.held().unwrap()).is_ok());
@@ -337,7 +340,7 @@ fn terminal_cleanup_without_container_identity_keeps_an_unknown_holder_pending()
         .unwrap();
     fs.remove_empty_folder(&record.container).unwrap();
     let result =
-        run(|run| vault.maintain_volume(request(&at, 100, RetentionPolicy::default()), run))
+        run(|run| vault.maintain_volume(&request(&at, 100, RetentionPolicy::default()), run))
             .unwrap();
     assert!(!result.cleanup_pending);
     assert_eq!(fs.metadata(&record.source).unwrap().size, 7);

@@ -14,7 +14,7 @@ fn workspace_session_round_trip_saves_folders_tabs_and_active_state() {
     navigate(&mut state, "C:/work");
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("C:/other")),
         },
     );
@@ -30,7 +30,7 @@ fn workspace_session_round_trip_saves_folders_tabs_and_active_state() {
     );
     let bytes = postcard::to_stdvec(&session).unwrap();
     let decoded = postcard::from_bytes(&bytes).unwrap();
-    let mut restored = AppState::from_session(decoded).unwrap();
+    let mut restored = AppState::from_session(&decoded).unwrap();
     assert_eq!(restored.to_session(0), session);
     apply_workspace(&mut restored, &W::Switch { n: 2 }).unwrap();
     assert_eq!(restored.active_tab().location(), &loc("C:/other"));
@@ -49,7 +49,7 @@ fn workspace_session_without_workspaces_migrates_to_one_saved_workspace() {
     window.remove("workspaces");
     window.remove("active_workspace");
     let session = serde_json::from_value(legacy).unwrap();
-    let restored = AppState::from_session(session).unwrap();
+    let restored = AppState::from_session(&session).unwrap();
     let window = restored.window(restored.focused_window()).unwrap();
     assert_eq!(window.workspaces().len(), 1);
     assert_eq!(window.workspaces()[0].name, "Workspace 1");
@@ -62,12 +62,12 @@ fn workspace_session_rejects_ids_owned_by_another_workspace() {
     apply_workspace(&mut state, &W::New { name: None }).unwrap();
     let mut session = state.to_session(0);
     session.windows[0].workspaces[1].saved.panes[0].tabs[0].id = 3;
-    assert!(AppState::from_session(session).is_err());
+    assert!(AppState::from_session(&session).is_err());
 }
 
 fn focus(state: &mut AppState, order: &[usize]) {
     for &n in order {
-        run(state, Command::LayoutFocusPane { n });
+        run(state, &Command::LayoutFocusPane { n });
     }
 }
 
@@ -102,7 +102,7 @@ fn workspace_session_round_trip_keeps_each_workspace_target() {
     let session = state.to_session(0);
     assert!(session.windows[0].target.is_some());
     let bytes = postcard::to_stdvec(&session).unwrap();
-    let mut restored = AppState::from_session(postcard::from_bytes(&bytes).unwrap()).unwrap();
+    let mut restored = AppState::from_session(&postcard::from_bytes(&bytes).unwrap()).unwrap();
     assert_eq!(restored.to_session(0), session);
     assert_eq!(target_and_fallback(&restored), first);
     let mut original = state;
@@ -125,7 +125,7 @@ fn workspace_session_without_targets_loads_with_the_fallback_target() {
             }
         }
     }
-    let restored = AppState::from_session(serde_json::from_value(old).unwrap()).unwrap();
+    let restored = AppState::from_session(&serde_json::from_value(old).unwrap()).unwrap();
     let (target, fallback) = target_and_fallback(&restored);
     assert_eq!(target, fallback);
 }
@@ -141,7 +141,7 @@ fn workspace_session_replaces_a_target_that_is_not_a_leaf() {
         for snapshot in std::iter::once(&mut workspace.saved).chain(workspace.live.as_mut()) {
             snapshot.target = Some(stale);
         }
-        let restored = AppState::from_session(session).unwrap();
+        let restored = AppState::from_session(&session).unwrap();
         let (target, fallback) = target_and_fallback(&restored);
         assert_eq!(target, fallback, "{stale}");
         let window = restored.window(restored.focused_window()).unwrap();
@@ -160,7 +160,7 @@ fn workspace_session_promotes_old_active_and_inactive_drafts_to_saved_state() {
         workspace.saved.panes[0].tabs[0].location = "C:/obsolete".into();
     }
     let bytes = postcard::to_stdvec(&session).unwrap();
-    let mut restored = AppState::from_session(postcard::from_bytes(&bytes).unwrap()).unwrap();
+    let mut restored = AppState::from_session(&postcard::from_bytes(&bytes).unwrap()).unwrap();
     for (n, path) in [(2, "C:/second"), (1, "C:/first")] {
         apply_workspace(&mut restored, &W::Switch { n }).unwrap();
         assert_eq!(restored.active_tab().location(), &loc(path));

@@ -28,7 +28,7 @@ fn an_interrupted_preparation_does_not_start_a_new_source_move() {
     let source = fs.location("home/a");
     assert!(
         run(|run| vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &source,
                 policy: RetentionPolicy::new(1, 100, 0).unwrap(),
                 created_at: 0,
@@ -127,7 +127,7 @@ fn unrecorded_container(profile: &Path, fs: &FakeFs) -> RetentionEntry {
     let mut vault = open(profile, fs);
     assert!(
         run(|run| vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &fs.location("home/a"),
                 policy: Default::default(),
                 created_at: 0,

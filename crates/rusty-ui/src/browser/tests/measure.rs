@@ -152,7 +152,7 @@ fn tabs_measuring_at_once_do_not_cancel_each_other() {
     let (mut browser, fs, started, _) = measuring();
     let first = started.recv_timeout(WAIT).unwrap();
     browser.pools.queue(JobKind::Size).set_volume(
-        volume_of(&fs.location("home/docs")),
+        &volume_of(&fs.location("home/docs")),
         rusty_fs::VolumeKind::Ssd,
     );
     browser

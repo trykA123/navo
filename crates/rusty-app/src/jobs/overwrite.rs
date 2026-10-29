@@ -110,7 +110,7 @@ fn adopt(
     let mut vault = Vault::new(db, data, ops).map_err(|error| error.to_string())?;
     vault
         .adopt_job(
-            AdoptJob {
+            &AdoptJob {
                 job: job.id,
                 state,
                 files: &held.proved,

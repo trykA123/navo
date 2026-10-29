@@ -82,7 +82,7 @@ fn capture_all(
         };
         let entry = vault
             .capture(
-                CaptureRequest {
+                &CaptureRequest {
                     source: &root,
                     policy: job.plan.policy(),
                     created_at: stored.created_at,

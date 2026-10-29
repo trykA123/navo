@@ -172,11 +172,11 @@ impl IoQueue {
         }
     }
 
-    pub fn set_volume(&self, volume: VolumeId, kind: VolumeKind) {
+    pub fn set_volume(&self, volume: &VolumeId, kind: VolumeKind) {
         let mut state = self.shared.lock();
         state.scheduler.set_volume(volume.clone(), kind);
         if !state.closed {
-            spawn_workers(&self.shared, &mut state, &volume);
+            spawn_workers(&self.shared, &mut state, volume);
         }
     }
 

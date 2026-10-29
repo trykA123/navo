@@ -63,7 +63,7 @@ pub(super) enum Copied {
 pub(super) fn copy(
     copier: &Copier<'_>,
     step: &CopyStep<'_>,
-    hooks: CopyHooks<'_>,
+    mut hooks: CopyHooks<'_>,
 ) -> Result<Copied, FsError> {
     let exists = copier.ops.metadata(step.target).is_ok();
     if exists && !overwrites(copier.plan, step.target) {
@@ -77,7 +77,7 @@ pub(super) fn copy(
     } else {
         remove_if_present(copier.ops, &temp)?;
     }
-    let result = write(copier, (step, &temp), hooks).and_then(|(stamp, identity)| {
+    let result = write(copier, (step, &temp), &mut hooks).and_then(|(stamp, identity)| {
         if exists || copier.strict {
             Ok(Copied::Ready {
                 overwrite: !copier.strict || overwrites(copier.plan, step.target),
@@ -115,7 +115,7 @@ pub(super) fn place(
         } => {
             let placed = aside.place_over(
                 ctx,
-                super::aside::Replacement {
+                &super::aside::Replacement {
                     source: &temporary,
                     target,
                     allow: overwrite,
@@ -148,7 +148,7 @@ pub(super) fn journal_placed(
 fn write(
     copier: &Copier<'_>,
     (step, temp): (&CopyStep<'_>, &Location),
-    hooks: CopyHooks<'_>,
+    hooks: &mut CopyHooks<'_>,
 ) -> Result<(FileStamp, Option<FileIdentity>), FsError> {
     let Copier { ops, cancel, .. } = *copier;
     let mut identity = None;

@@ -35,7 +35,7 @@ struct Observation<'a> {
 impl Vault<'_> {
     pub fn maintain_volume(
         &mut self,
-        request: MaintenanceRequest<'_>,
+        request: &MaintenanceRequest<'_>,
         run: &mut RetentionRun<'_>,
     ) -> Result<MaintenanceReport, Error> {
         self.maintain_inner(request, run, &HashSet::new())
@@ -43,7 +43,7 @@ impl Vault<'_> {
 
     pub fn maintain_job_volume(
         &mut self,
-        request: MaintenanceRequest<'_>,
+        request: &MaintenanceRequest<'_>,
         job: rusty_store::JobId,
         run: &mut RetentionRun<'_>,
     ) -> Result<MaintenanceReport, Error> {
@@ -53,11 +53,11 @@ impl Vault<'_> {
 
     fn maintain_inner(
         &mut self,
-        request: MaintenanceRequest<'_>,
+        request: &MaintenanceRequest<'_>,
         run: &mut RetentionRun<'_>,
         protected: &HashSet<RetentionId>,
     ) -> Result<MaintenanceReport, Error> {
-        let observed = self.observe(&request, run)?;
+        let observed = self.observe(request, run)?;
         let mut inventory = self.inventory((request.at, run), protected)?;
         let (mut skipped, mut attempts) =
             self.cleanup_terminal(&observed, (request.max_purges, run))?;
@@ -78,7 +78,7 @@ impl Vault<'_> {
                 .map(|entry| entry.id());
             let next = resume.or_else(|| plan.choices.first().map(|choice| choice.id));
             let Some(id) = next.filter(|_| attempts < request.max_purges) else {
-                let mut result = report(purged, &inventory, (&request, space, next.is_some()));
+                let mut result = report(purged, &inventory, (request, space, next.is_some()));
                 result.skipped = skipped;
                 result.cleanup_pending = !self.catalog.pending_cleanup(space.volume, 1)?.is_empty();
                 return Ok(result);

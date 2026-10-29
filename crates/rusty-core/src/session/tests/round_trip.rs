@@ -1,12 +1,12 @@
 use super::*;
 
 fn restored(state: &AppState) -> AppState {
-    AppState::from_session(state.to_session(100)).unwrap()
+    AppState::from_session(&state.to_session(100)).unwrap()
 }
 
 #[test]
 fn valid_session_is_accepted() {
-    assert!(AppState::from_session(valid()).is_ok());
+    assert!(AppState::from_session(&valid()).is_ok());
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn restored_view_is_kept_without_a_listing_to_clamp_it() {
     let mut session = valid();
     session.windows[0].panes[1].tabs[0].cursor = 500;
     session.windows[0].panes[1].tabs[0].scroll = 480;
-    let state = AppState::from_session(session).unwrap();
+    let state = AppState::from_session(&session).unwrap();
     let view = state.active_tab().view();
     assert_eq!(
         view,
@@ -68,14 +68,14 @@ fn restored_layout_keeps_the_ratio() {
         first: Box::new(LayoutState::Pane(2)),
         second: Box::new(LayoutState::Pane(4)),
     };
-    let state = AppState::from_session(session).unwrap();
+    let state = AppState::from_session(&session).unwrap();
     let rects = state.window(WindowId::new(1)).unwrap().layout().rects();
     assert!((rects[0].1.width - 0.35).abs() < 1e-9, "{rects:?}");
 }
 
 #[test]
 fn restored_state_focuses_the_saved_window_and_pane() {
-    let state = AppState::from_session(valid()).unwrap();
+    let state = AppState::from_session(&valid()).unwrap();
     assert_eq!(
         (state.focused_window(), state.focused_pane()),
         (WindowId::new(1), PaneId::new(4))
@@ -90,14 +90,14 @@ fn restored_rows_are_ignored_by_the_state() {
         total: 2,
         entries: entries(0..2),
     });
-    let a = AppState::from_session(with_rows).unwrap();
-    let b = AppState::from_session(valid()).unwrap();
+    let a = AppState::from_session(&with_rows).unwrap();
+    let b = AppState::from_session(&valid()).unwrap();
     assert_eq!(a, b);
 }
 
 #[test]
 fn new_ids_continue_from_next_id() {
-    let mut state = AppState::from_session(valid()).unwrap();
+    let mut state = AppState::from_session(&valid()).unwrap();
     split(&mut state, Direction::Right);
     assert_eq!(state.focused_pane(), PaneId::new(7));
 }

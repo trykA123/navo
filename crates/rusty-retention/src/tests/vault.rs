@@ -7,7 +7,7 @@ use crate::place::{Places, candidates, volume_root};
 fn try_capture(vault: &mut Vault<'_>, source: &Location) -> Result<RetentionEntry, Error> {
     run(|run| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source,
                 policy: RetentionPolicy::new(1, 1000, 0).unwrap(),
                 created_at: 0,
@@ -82,7 +82,7 @@ fn expiry_removes_the_container_from_the_vault_but_keeps_the_vault() {
     let at = fs.location("home/docs");
     let report = run(|run| {
         vault.maintain_volume(
-            MaintenanceRequest {
+            &MaintenanceRequest {
                 at: &at,
                 policy: RetentionPolicy::default(),
                 now: 4 * DAY_MS,
@@ -228,7 +228,7 @@ fn one_stuck_entry_does_not_stop_expiry_of_the_others() {
     let at = fs.location("home");
     let report = run(|run| {
         vault.maintain_volume(
-            MaintenanceRequest {
+            &MaintenanceRequest {
                 at: &at,
                 policy: RetentionPolicy::default(),
                 now: 4 * DAY_MS,

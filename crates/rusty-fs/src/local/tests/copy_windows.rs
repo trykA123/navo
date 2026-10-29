@@ -245,7 +245,7 @@ fn a_job_overwrites_an_existing_readonly_target() {
 #[test]
 fn unbuffered_copy_handles_the_threshold_and_an_unaligned_end() {
     let (dir, root) = temp();
-    let ops = LocalFs::with_auto_tuning(AutoTuning {
+    let ops = LocalFs::with_auto_tuning(&AutoTuning {
         unbuffered_from: 4096,
         ..AutoTuning::default()
     });

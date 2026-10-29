@@ -258,7 +258,7 @@ fn join_all(target: &Location, names: &[crate::ProviderPath]) -> Option<Location
         .try_fold(target.clone(), |folder, name| folder.join(name).ok())
 }
 
-pub(super) fn is_copy_like(kind: &OpKind) -> bool {
+pub(super) fn is_copy_like(kind: OpKind) -> bool {
     matches!(kind, OpKind::Copy | OpKind::Move)
 }
 

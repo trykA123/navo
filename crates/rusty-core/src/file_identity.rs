@@ -10,6 +10,10 @@ pub enum FileIdentityKind {
 }
 
 impl FileIdentityKind {
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "Serde skip_serializing_if requires a borrowed callback argument"
+    )]
     fn is_native(&self) -> bool {
         *self == Self::Native
     }

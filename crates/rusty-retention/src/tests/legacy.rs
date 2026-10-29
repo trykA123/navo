@@ -84,7 +84,7 @@ fn maintenance_cleans_an_old_sibling_container_left_after_purge() {
     let at = fs.location("home/docs");
     let report = run(|run| {
         vault.maintain_volume(
-            MaintenanceRequest {
+            &MaintenanceRequest {
                 at: &at,
                 policy: RetentionPolicy::default(),
                 now: 100,

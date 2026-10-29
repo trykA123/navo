@@ -62,7 +62,7 @@ impl Aside {
     pub(super) fn place_over(
         &self,
         ctx: &mut JobContext<'_>,
-        request: Replacement<'_>,
+        request: &Replacement<'_>,
     ) -> Result<(), FsError> {
         if ctx.log.preserve_overwrites() {
             return self.place_retained(ctx, request);
@@ -106,7 +106,7 @@ impl Aside {
         if ctx.log.preserve_overwrites() {
             return self.place_retained(
                 ctx,
-                retained::Replacement {
+                &retained::Replacement {
                     source,
                     target,
                     allow: true,

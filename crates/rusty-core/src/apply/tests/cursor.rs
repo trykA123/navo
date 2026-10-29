@@ -93,7 +93,7 @@ fn cursor_move_has_no_effects() {
     assert_eq!(
         run(
             &mut state,
-            Command::PaneCursorMove {
+            &Command::PaneCursorMove {
                 to: CursorMove::Down
             }
         ),
@@ -108,7 +108,7 @@ fn cursor_move_without_a_listing_fails() {
     assert_eq!(
         fail(
             &mut state,
-            Command::PaneCursorMove {
+            &Command::PaneCursorMove {
                 to: CursorMove::Down
             }
         ),
@@ -122,7 +122,7 @@ fn cursor_move_on_an_empty_listing_fails() {
     assert_eq!(
         fail(
             &mut state,
-            Command::PaneCursorMove {
+            &Command::PaneCursorMove {
                 to: CursorMove::Last
             }
         ),

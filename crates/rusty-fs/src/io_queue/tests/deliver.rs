@@ -17,7 +17,7 @@ fn slot(owner: OwnerId) -> JobSlot {
 
 fn ssd_queue() -> IoQueue {
     let queue = IoQueue::with(Limits::LISTING, Arc::new(|_| VolumeKind::Ssd));
-    queue.set_volume(vol("V:"), VolumeKind::Ssd);
+    queue.set_volume(&vol("V:"), VolumeKind::Ssd);
     queue
 }
 

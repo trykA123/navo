@@ -33,7 +33,7 @@ pub(super) fn read(
             ancestors.remember(&path, identity);
             children(ops, (&path, &location), &mut pending, run)?;
         }
-        nodes.push(retained_node(path, found, identity));
+        nodes.push(retained_node(path, &found, identity));
     }
     Ok(nodes)
 }
@@ -100,7 +100,7 @@ pub(super) fn verify(
 
 fn retained_node(
     path: Vec<String>,
-    found: rusty_fs::FsEntry,
+    found: &rusty_fs::FsEntry,
     identity: rusty_core::FileIdentity,
 ) -> RetainedNode {
     RetainedNode {

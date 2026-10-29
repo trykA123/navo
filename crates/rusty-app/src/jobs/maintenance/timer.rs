@@ -309,7 +309,7 @@ fn purge_volumes(
 ) -> (usize, u64) {
     let (mut purged, mut bytes) = (0, 0_u64);
     for at in live.volumes.values() {
-        let request = MaintenanceRequest {
+        let request = &MaintenanceRequest {
             at,
             policy,
             now,

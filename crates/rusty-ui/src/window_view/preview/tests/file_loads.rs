@@ -145,10 +145,10 @@ fn a_stalled_preview_read_on_one_volume_does_not_delay_another(cx: &mut TestAppC
     held.rig.view.update(cx, |view, _| {
         view.preview
             .reads
-            .set_volume(volume_of(&a), VolumeKind::Hdd);
+            .set_volume(&volume_of(&a), VolumeKind::Hdd);
         view.preview
             .reads
-            .set_volume(volume_of(&b), VolumeKind::Hdd);
+            .set_volume(&volume_of(&b), VolumeKind::Hdd);
     });
     start_at(cx, &held.rig, &a);
     held.started.recv_timeout(WITHIN).unwrap();

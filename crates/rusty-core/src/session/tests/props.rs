@@ -109,7 +109,7 @@ proptest! {
             perform(&mut state, step);
         }
         let session = state.to_session(rows_per_pane);
-        let restored = AppState::from_session(session.clone())
+        let restored = AppState::from_session(&session)
             .map_err(|e| TestCaseError::fail(format!("{e}")))?;
         prop_assert_eq!(restored.to_session(rows_per_pane), without_rows(session));
     }

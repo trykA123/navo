@@ -15,8 +15,8 @@ use super::{fake, home_beside_dest, open_options, options_for, press, settle};
 use crate::settings::{Change, Field, Values};
 use crate::window_view::{EditorHooks, FerriteWindow, SettingsHooks, TerminalHooks};
 
-const SLOW: Duration = Duration::from_millis(300);
-const ONE_FRAME: Duration = Duration::from_millis(100);
+const SLOW: Duration = Duration::from_millis(1500);
+const ONE_FRAME: Duration = Duration::from_millis(750);
 
 type Calls = Arc<Mutex<Vec<(String, String)>>>;
 

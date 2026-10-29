@@ -5,7 +5,10 @@ use rusty_core::{FsError, FsErrorKind};
 use super::super::{copy_pump, error, identity, io_error, os_path};
 use crate::{CopyControl, OwnedCopy};
 
-pub(super) fn copy(request: OwnedCopy<'_>, control: CopyControl<'_>) -> Result<u64, FsError> {
+pub(super) fn copy(
+    request: &mut OwnedCopy<'_>,
+    mut control: CopyControl<'_>,
+) -> Result<u64, FsError> {
     if control.cancel.is_cancelled() {
         return Err(error(FsErrorKind::Cancelled, request.target));
     }
@@ -20,7 +23,7 @@ pub(super) fn copy(request: OwnedCopy<'_>, control: CopyControl<'_>) -> Result<u
         .map_err(|failure| io_error(&failure, request.target))?
         .ok_or_else(|| error(FsErrorKind::IdentityUnavailable, request.target))?;
     (request.created)(identity)?;
-    let total = copy_pump::pump(&mut input, &mut output, control)
+    let total = copy_pump::pump(&mut input, &mut output, &mut control)
         .map_err(|failure| failure.located(request.source, request.target))?;
     finish(&output, &metadata).map_err(|failure| io_error(&failure, request.target))?;
     Ok(total)

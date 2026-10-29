@@ -42,7 +42,7 @@ fn partial_adoption_cannot_discard_other_durable_overwrite_proofs() {
     let (db, _) = Db::open(&dirs.journal_file(), false).unwrap();
     let mut vault = Vault::new(db, &dirs.data, &fs).unwrap();
     let result = vault.adopt_job(
-        rusty_retention::AdoptJob {
+        &rusty_retention::AdoptJob {
             job: job.id,
             state: JobState::Done,
             files: &held.proved[..1],
@@ -228,7 +228,7 @@ fn returned_previously_adopted_entries_settle_even_after_a_lost_completion_commi
     let mut vault = Vault::new(db, &dirs.data, &fs).unwrap();
     vault
         .adopt_job(
-            rusty_retention::AdoptJob {
+            &rusty_retention::AdoptJob {
                 job: job.id,
                 state: JobState::RestorePending,
                 files: &held.proved,
@@ -298,7 +298,7 @@ fn a_terminal_owner_cannot_return_another_jobs_proved_version() {
     assert!(
         vault
             .adopt_job(
-                rusty_retention::AdoptJob {
+                &rusty_retention::AdoptJob {
                     job: owner,
                     state: JobState::Failed,
                     files: &held.proved,

@@ -42,7 +42,7 @@ fn wait_cancelled(token: &CancelToken) -> bool {
 
 fn queue_with(kind: VolumeKind) -> IoQueue {
     let queue = IoQueue::new();
-    queue.set_volume(vol("V:"), kind);
+    queue.set_volume(&vol("V:"), kind);
     queue
 }
 
@@ -200,7 +200,7 @@ fn dropping_the_owner_skips_its_queued_jobs() {
     let ran = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&ran);
     submit(&queue, Priority::Visible, guard.id(), move |_| {
-        flag.store(true, Ordering::SeqCst)
+        flag.store(true, Ordering::SeqCst);
     });
     drop(guard);
     let other = queue.owner();
@@ -250,7 +250,7 @@ fn shutdown_with_running_and_queued() -> (Receiver<bool>, Arc<AtomicBool>, Recei
     let ran = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&ran);
     submit(&queue, Priority::Visible, A, move |_| {
-        flag.store(true, Ordering::SeqCst)
+        flag.store(true, Ordering::SeqCst);
     });
     let (returned, wait_returned) = mpsc::channel();
     thread::spawn(move || {
@@ -314,7 +314,7 @@ fn raising_the_limit_starts_queued_jobs() {
     for index in 0..3 {
         submit(&queue, Priority::Visible, A, signal(&started, index));
     }
-    queue.set_volume(vol("V:"), VolumeKind::Network);
+    queue.set_volume(&vol("V:"), VolumeKind::Network);
     let mut seen = collect(&wait_started, 3);
     seen.sort_unstable();
     release.open();
@@ -325,8 +325,10 @@ fn raising_the_limit_starts_queued_jobs() {
 fn lowering_the_limit_while_busy_limits_later_jobs() {
     let queue = queue_with(VolumeKind::Ssd);
     let releases: Vec<Arc<Gate>> = (0..3).map(|_| blocker(&queue, A)).collect();
-    queue.set_volume(vol("V:"), VolumeKind::Hdd);
-    releases.iter().for_each(|gate| gate.open());
+    queue.set_volume(&vol("V:"), VolumeKind::Hdd);
+    for gate in &releases {
+        gate.open();
+    }
     let active = Arc::new(AtomicUsize::new(0));
     let high = Arc::new(AtomicUsize::new(0));
     let (done, wait_done) = mpsc::channel();

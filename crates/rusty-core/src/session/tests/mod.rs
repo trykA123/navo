@@ -19,21 +19,21 @@ fn home() -> AppState {
     AppState::new(loc("/home"))
 }
 
-fn run(state: &mut AppState, command: Command) {
-    apply(state, &command).unwrap();
+fn run(state: &mut AppState, command: &Command) {
+    apply(state, command).unwrap();
 }
 
 fn navigate(state: &mut AppState, location: &str) {
     run(
         state,
-        Command::PaneNavigate {
+        &Command::PaneNavigate {
             location: loc(location),
         },
     );
 }
 
 fn split(state: &mut AppState, direction: Direction) {
-    run(state, Command::LayoutSplit { direction });
+    run(state, &Command::LayoutSplit { direction });
 }
 
 fn name(row: usize) -> String {
@@ -212,21 +212,21 @@ fn busy() -> AppState {
     load(&mut state, files(40));
     run(
         &mut state,
-        Command::PaneCursorMove {
+        &Command::PaneCursorMove {
             to: CursorMove::Row(30),
         },
     );
     navigate(&mut state, "/b");
     load(&mut state, files(10));
-    run(&mut state, Command::PaneBack);
+    run(&mut state, &Command::PaneBack);
     load(&mut state, files(40));
     state.active_tab_mut().set_scroll(12);
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     split(&mut state, Direction::Right);
     navigate(&mut state, "/c");
     run(
         &mut state,
-        Command::PaneOpenTab {
+        &Command::PaneOpenTab {
             location: Some(loc("/d")),
         },
     );
@@ -236,7 +236,7 @@ fn busy() -> AppState {
     split(&mut state, Direction::Down);
     run(
         &mut state,
-        Command::LayoutFocus {
+        &Command::LayoutFocus {
             direction: Direction::Left,
         },
     );

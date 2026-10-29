@@ -25,7 +25,7 @@ pub fn initial_state(session_file: &Path, home: Location) -> AppState {
         );
     }
     session
-        .and_then(|session| AppState::from_session(session).ok())
+        .and_then(|session| AppState::from_session(&session).ok())
         .unwrap_or_else(|| fresh(home))
 }
 

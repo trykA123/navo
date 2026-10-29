@@ -69,7 +69,7 @@ fn hash_path(
     cancel: &CancelToken,
     mut progress: impl FnMut(u64),
 ) -> Result<String, FsError> {
-    let mut file = File::open(path).map_err(io_error)?;
+    let mut file = File::open(path).map_err(|error| io_error(&error))?;
     let mut digest = HashState::new(algo);
     let mut buffer = vec![0; CHUNK];
     let mut bytes = 0;
@@ -82,7 +82,7 @@ fn hash_path(
             Ok(0) => break,
             Ok(count) => count,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(io_error(error)),
+            Err(error) => return Err(io_error(&error)),
         };
         digest.update(&buffer[..count]);
         bytes += count as u64;
@@ -100,7 +100,7 @@ fn check_cancelled(cancel: &CancelToken, location: &Location) -> Result<(), FsEr
     Err(error)
 }
 
-fn io_error(error: io::Error) -> FsError {
+fn io_error(error: &io::Error) -> FsError {
     let code = error.raw_os_error();
     #[cfg(windows)]
     let kind = code.map(|code| FsErrorKind::from_windows_code(code.cast_unsigned()));

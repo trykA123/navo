@@ -11,7 +11,8 @@ pub(super) fn copy(request: OwnedCopy<'_>, control: CopyControl<'_>) -> Result<u
     }
     #[cfg(not(windows))]
     {
-        buffered::copy(request, control)
+        let mut request = request;
+        buffered::copy(&mut request, control)
     }
 }
 

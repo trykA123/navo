@@ -32,7 +32,7 @@ fn stuck_entries_use_up_the_purge_budget_of_one_pass() {
     let at = fs.location("home");
     let report = run(|run| {
         vault.maintain_volume(
-            MaintenanceRequest {
+            &MaintenanceRequest {
                 at: &at,
                 policy: RetentionPolicy::default(),
                 now: 4 * DAY_MS,
@@ -55,7 +55,7 @@ fn maintain(
 ) -> MaintenanceReport {
     run(|run| {
         vault.maintain_volume(
-            MaintenanceRequest {
+            &MaintenanceRequest {
                 at,
                 policy,
                 now: 4 * DAY_MS,

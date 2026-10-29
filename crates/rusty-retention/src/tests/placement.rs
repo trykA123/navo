@@ -6,7 +6,7 @@ use crate::place::is_private;
 fn try_capture(vault: &mut Vault<'_>, source: &Location) -> Result<RetentionEntry, Error> {
     run(|run| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source,
                 policy: RetentionPolicy::new(1, 1000, 0).unwrap(),
                 created_at: 0,

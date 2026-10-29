@@ -35,7 +35,7 @@ fn moved(workers: usize) -> (FakeFs, OperationPlan, Harness) {
 fn undo_with(
     fs: &FakeFs,
     plan: &OperationPlan,
-    held: Vec<HeldFile>,
+    held: &[HeldFile],
     unreadable: bool,
 ) -> (JobOutcome, Log) {
     let mut harness = Harness::default();
@@ -43,7 +43,7 @@ fn undo_with(
     let job = Journaled {
         plan,
         done: &done,
-        held: &held,
+        held,
         placed: &[],
         held_unreadable: unreadable,
         unsure: None,
@@ -53,7 +53,7 @@ fn undo_with(
 }
 
 fn undone(fs: &FakeFs, plan: &OperationPlan, harness: &Harness) -> JobOutcome {
-    undo_with(fs, plan, harness.log.held.clone(), false).0
+    undo_with(fs, plan, &harness.log.held, false).0
 }
 
 #[test]
@@ -187,9 +187,9 @@ fn a_second_undo_changes_nothing() {
 
 fn kept_moved_file(edit: impl Fn(&FakeFs, &mut Vec<HeldFile>)) -> (FakeFs, JobOutcome) {
     let (fs, plan, harness) = moved(0);
-    let mut held = harness.log.held.clone();
+    let mut held = harness.log.held;
     edit(&fs, &mut held);
-    let (outcome, _) = undo_with(&fs, &plan, held, false);
+    let (outcome, _) = undo_with(&fs, &plan, &held, false);
     (fs, outcome)
 }
 
@@ -261,7 +261,7 @@ fn a_target_folder_missing_on_another_volume_keeps_the_job_waiting() {
     let mut harness = keeping(0);
     let _ = harness.run(&fs, &plan, &[]);
     fs.remove("dst");
-    let (outcome, _) = undo_with(&fs, &plan, harness.log.held.clone(), false);
+    let (outcome, _) = undo_with(&fs, &plan, &harness.log.held, false);
     assert_eq!(
         (failure(&outcome), exists(&fs, "src/a.txt")),
         (Some((0, FsErrorKind::NotFound)), false)
@@ -278,7 +278,7 @@ fn a_target_folder_deleted_on_its_own_volume_lets_the_undo_finish() {
 #[test]
 fn an_unreadable_held_row_leaves_an_overwriting_move_for_the_next_start() {
     let (fs, plan, _) = moved(0);
-    let (outcome, log) = undo_with(&fs, &plan, Vec::new(), true);
+    let (outcome, log) = undo_with(&fs, &plan, &[], true);
     assert_eq!(
         (outcome, entry_at(&fs, "dst/a.txt"), log.entries),
         (JobOutcome::Done, Some(moved_entry()), Vec::new())

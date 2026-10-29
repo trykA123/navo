@@ -55,7 +55,7 @@ pub(super) fn measure(options: &Options, workspace: &Workspace) -> Result<String
     );
     let benchmark = Benchmark {
         workspace,
-        ops: LocalFs::with_auto_tuning(tuning),
+        ops: LocalFs::with_auto_tuning(&tuning),
         workers,
     };
     let methods = [

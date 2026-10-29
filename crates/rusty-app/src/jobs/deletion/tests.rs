@@ -596,7 +596,7 @@ fn interrupted_preparation(
     assert!(
         vault
             .capture(
-                CaptureRequest {
+                &CaptureRequest {
                     source: &source,
                     policy: Default::default(),
                     created_at: job.created_at,

@@ -42,7 +42,7 @@ impl FakeFs {
 
     pub(super) fn restrict(&self, location: &Location) -> Result<(), FsError> {
         let path = self.own_path(location)?;
-        fail_now(self.record_call(&path, FakeOp::Secure), location)?;
+        fail_now(self.record_call(&path, FakeOp::Secure).as_ref(), location)?;
         let mut permissions = lock(&self.permissions);
         if permissions.fixed {
             return Ok(());
@@ -56,6 +56,6 @@ impl FakeFs {
 
     pub(super) fn record_secure(&self, location: &Location) -> Result<(), FsError> {
         let path = self.own_path(location)?;
-        fail_now(self.record_call(&path, FakeOp::Secure), location)
+        fail_now(self.record_call(&path, FakeOp::Secure).as_ref(), location)
     }
 }

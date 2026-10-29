@@ -89,7 +89,7 @@ pub(super) fn risks(request: &PlanRequest, walk: &Walk<'_>, totals: &Totals) -> 
     if totals.bytes > LARGE_BYTES {
         risks.push(Risk::Large(totals.bytes));
     }
-    if is_copy_like(&request.kind) && walk.links_skipped > 0 {
+    if is_copy_like(request.kind) && walk.links_skipped > 0 {
         risks.push(Risk::LinksSkipped(walk.links_skipped));
     }
     risks

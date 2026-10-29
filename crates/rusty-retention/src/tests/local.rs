@@ -152,7 +152,7 @@ fn a_target_created_after_restore_preflight_is_never_overwritten() {
     assert!(
         vault
             .restore(
-                RestoreRequest {
+                &RestoreRequest {
                     id: entry.id,
                     target: &source
                 },
@@ -191,7 +191,7 @@ fn a_payload_replaced_after_restore_preflight_stays_in_its_original_location() {
     assert!(
         vault
             .restore(
-                RestoreRequest {
+                &RestoreRequest {
                     id: entry.id,
                     target: &source
                 },
@@ -227,7 +227,7 @@ fn a_native_capture_interrupted_after_rename_reconciles_after_reopening() {
     let cancel = CancelToken::new();
     let interrupted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         vault.capture(
-            CaptureRequest {
+            &CaptureRequest {
                 source: &source,
                 policy: Default::default(),
                 created_at: 0,

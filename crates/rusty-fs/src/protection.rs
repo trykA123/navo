@@ -97,7 +97,7 @@ pub fn check_relocation(
         }
         match ops.metadata(source) {
             Ok(entry) if entry.kind == EntryKind::Folder => {
-                refuse_reserved_below(source, ops, cancel)?
+                refuse_reserved_below(source, ops, cancel)?;
             }
             Ok(_) => (),
             Err(error) if error.kind == FsErrorKind::NotFound => (),

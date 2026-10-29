@@ -21,11 +21,11 @@ struct Batch {
 impl Vault<'_> {
     pub fn adopt_job(
         &mut self,
-        request: AdoptJob<'_>,
+        request: &AdoptJob<'_>,
         run: &mut RetentionRun<'_>,
     ) -> Result<Vec<RetentionEntry>, Error> {
-        let records = self.prepare_adoptions(&request, run)?;
-        let batch = self.collect_adoptions(&request, (records, run.cancel))?;
+        let records = self.prepare_adoptions(request, run)?;
+        let batch = self.collect_adoptions(request, (records, run.cancel))?;
         for (record, mount) in &batch.retained {
             verify_record(self.ops, record, *mount)?;
         }

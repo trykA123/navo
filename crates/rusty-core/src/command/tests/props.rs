@@ -158,7 +158,7 @@ proptest! {
     ) {
         let loose = loosen(&command.to_string(), &ws, trailing_comma);
         let once = printed(&loose).map_err(|e| TestCaseError::fail(format!("{loose:?}: {e}")))?;
-        prop_assert_eq!(printed(&once), Ok(once.clone()));
+        prop_assert_eq!(printed(&once), Ok(once));
     }
 
     #[test]

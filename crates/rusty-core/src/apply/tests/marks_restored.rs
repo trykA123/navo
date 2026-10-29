@@ -17,7 +17,7 @@ fn active(state: &AppState) -> TabId {
 fn restored_names_add_to_the_existing_marks() {
     let mut state = at_work(files(5));
     move_cursor(&mut state, CursorMove::Row(1));
-    run(&mut state, Command::SelectionToggle);
+    run(&mut state, &Command::SelectionToggle);
     let tab = active(&state);
     restore(&mut state, tab, &["f3.txt", "f4.txt"]);
     assert_eq!(marked(&state), vec![1, 3, 4]);
@@ -45,7 +45,7 @@ fn restoring_marks_ends_the_span() {
     let mut state = at_work(files(6));
     run(
         &mut state,
-        Command::SelectionExtend {
+        &Command::SelectionExtend {
             to: CursorMove::Down,
             mode: crate::SpanMode::Mark,
         },
@@ -54,7 +54,7 @@ fn restoring_marks_ends_the_span() {
     restore(&mut state, tab, &["f5.txt"]);
     run(
         &mut state,
-        Command::SelectionExtend {
+        &Command::SelectionExtend {
             to: CursorMove::Down,
             mode: crate::SpanMode::Mark,
         },

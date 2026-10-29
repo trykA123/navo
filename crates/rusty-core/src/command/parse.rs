@@ -151,7 +151,7 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::SelectionToggle => Command::SelectionToggle,
         Id::SelectionToggleDown => Command::SelectionToggleDown,
         Id::SelectionRange => Command::SelectionRange {
-            to: fields.required("to", unsigned::<u64>)?,
+            to: fields.required("to", |value| unsigned::<u64>(&value))?,
         },
         Id::SelectionExtend | Id::SelectionExtension | Id::SelectionRestore => {
             selection_command(&mut fields)?
@@ -161,7 +161,7 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         Id::SelectionAll => Command::SelectionAll,
         Id::SelectionClear => Command::SelectionClear,
         Id::LayoutSplit => Command::LayoutSplit {
-            direction: fields.required("direction", direction)?,
+            direction: fields.required("direction", |value| direction(&value))?,
         },
         Id::LayoutPreset
         | Id::LayoutSwap
@@ -172,7 +172,7 @@ fn build(mut fields: Fields<'_>) -> Result<Command, ParseError> {
         | Id::LayoutFocusPane => layout_command(&mut fields)?,
         Id::LayoutClose => Command::LayoutClose,
         Id::LayoutFocus => Command::LayoutFocus {
-            direction: fields.required("direction", direction)?,
+            direction: fields.required("direction", |value| direction(&value))?,
         },
         Id::WindowOpen | Id::WindowClose | Id::WindowFocus => window_command(&mut fields)?,
         Id::WorkspaceSwitch
@@ -196,22 +196,22 @@ fn layout_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
             })?,
         },
         Id::LayoutSwap => Command::LayoutSwap {
-            a: fields.required("a", pane_number)?,
-            b: fields.required("b", pane_number)?,
+            a: fields.required("a", |value| pane_number(&value))?,
+            b: fields.required("b", |value| pane_number(&value))?,
         },
         Id::LayoutSwapToward => Command::LayoutSwapToward {
-            direction: fields.required("direction", direction)?,
+            direction: fields.required("direction", |value| direction(&value))?,
         },
         Id::LayoutResize => Command::LayoutResize {
-            direction: fields.required("direction", direction)?,
+            direction: fields.required("direction", |value| direction(&value))?,
         },
         Id::LayoutRatio => Command::LayoutRatio {
-            split: fields.required("split", split_path)?,
-            ratio: fields.required("ratio", |v| bounded_number(v, 100, 900).map(|n| n as u16))?,
+            split: fields.required("split", |value| split_path(&value))?,
+            ratio: fields.required("ratio", |v| bounded_number(&v, 100, 900).map(|n| n as u16))?,
         },
         Id::LayoutEven => Command::LayoutEven,
         _ => Command::LayoutFocusPane {
-            n: fields.required("n", pane_number)?,
+            n: fields.required("n", |value| pane_number(&value))?,
         },
     })
 }
@@ -222,7 +222,7 @@ fn pane_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
             location: fields.optional("location", location)?,
         },
         CommandId::PaneCloseTab => Command::PaneCloseTab {
-            tab: fields.optional("tab", unsigned::<u32>)?,
+            tab: fields.optional("tab", |value| unsigned::<u32>(&value))?,
         },
         CommandId::PaneNavigate => Command::PaneNavigate {
             location: fields.required("location", location)?,
@@ -234,13 +234,13 @@ fn pane_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
         CommandId::PaneForward => Command::PaneForward,
         CommandId::PaneRefresh => Command::PaneRefresh,
         CommandId::PaneCursorMove => Command::PaneCursorMove {
-            to: fields.required("to", cursor_move)?,
+            to: fields.required("to", |value| cursor_move(&value))?,
         },
         CommandId::PaneActivateTab => Command::PaneActivateTab {
-            tab: fields.required("tab", unsigned::<u32>)?,
+            tab: fields.required("tab", |value| unsigned::<u32>(&value))?,
         },
         _ => Command::PaneScroll {
-            to: fields.required("to", unsigned::<u64>)?,
+            to: fields.required("to", |value| unsigned::<u64>(&value))?,
         },
     })
 }
@@ -248,11 +248,11 @@ fn pane_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
 fn selection_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
     Ok(match fields.command {
         CommandId::SelectionExtend => Command::SelectionExtend {
-            to: fields.required("to", cursor_move)?,
-            mode: fields.required("mode", span_mode)?,
+            to: fields.required("to", |value| cursor_move(&value))?,
+            mode: fields.required("mode", |value| span_mode(&value))?,
         },
         CommandId::SelectionExtension => Command::SelectionExtension {
-            mark: fields.required("mark", flag)?,
+            mark: fields.required("mark", |value| flag(&value))?,
         },
         _ => Command::SelectionRestore,
     })
@@ -260,7 +260,9 @@ fn selection_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
 
 fn pattern_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
     let pattern = fields.required("pattern", string)?;
-    let folders = fields.optional("folders", flag)?.unwrap_or(false);
+    let folders = fields
+        .optional("folders", |value| flag(&value))?
+        .unwrap_or(false);
     Ok(match fields.command {
         CommandId::SelectionAddPattern => Command::SelectionAddPattern { pattern, folders },
         _ => Command::SelectionRemovePattern { pattern, folders },
@@ -273,10 +275,10 @@ fn window_command(fields: &mut Fields<'_>) -> Result<Command, ParseError> {
             location: fields.optional("location", location)?,
         },
         CommandId::WindowClose => Command::WindowClose {
-            window: fields.optional("window", unsigned::<u64>)?,
+            window: fields.optional("window", |value| unsigned::<u64>(&value))?,
         },
         _ => Command::WindowFocus {
-            window: fields.required("window", unsigned::<u64>)?,
+            window: fields.required("window", |value| unsigned::<u64>(&value))?,
         },
     })
 }
@@ -333,7 +335,7 @@ fn string(value: Value<'_>) -> Result<String, Problem> {
     }
 }
 
-fn flag(value: Value<'_>) -> Result<bool, Problem> {
+fn flag(value: &Value<'_>) -> Result<bool, Problem> {
     match value {
         Value::Word("true") => Ok(true),
         Value::Word("false") => Ok(false),
@@ -346,7 +348,7 @@ fn location(value: Value<'_>) -> Result<Location, Problem> {
     Location::new(string(value)?).map_err(|e| Problem::Invalid(e.to_string()))
 }
 
-fn unsigned<T: std::str::FromStr + Bounded>(value: Value<'_>) -> Result<T, Problem> {
+fn unsigned<T: std::str::FromStr + Bounded>(value: &Value<'_>) -> Result<T, Problem> {
     match value {
         Value::Int(text) => text.parse().map_err(|_| {
             Problem::Invalid(format!("expected a whole number from 0 to {}", T::MAX_TEXT))
@@ -367,7 +369,7 @@ impl Bounded for u64 {
     const MAX_TEXT: &'static str = "18446744073709551615";
 }
 
-fn direction(value: Value<'_>) -> Result<Direction, Problem> {
+fn direction(value: &Value<'_>) -> Result<Direction, Problem> {
     match value {
         Value::Word(word) => Direction::from_keyword(word)
             .ok_or_else(|| Problem::Invalid("expected left, right, up or down".to_owned())),
@@ -375,7 +377,7 @@ fn direction(value: Value<'_>) -> Result<Direction, Problem> {
     }
 }
 
-fn span_mode(value: Value<'_>) -> Result<SpanMode, Problem> {
+fn span_mode(value: &Value<'_>) -> Result<SpanMode, Problem> {
     match value {
         Value::Word(word) => SpanMode::from_keyword(word)
             .ok_or_else(|| Problem::Invalid("expected mark, unmark or toggle".to_owned())),
@@ -383,7 +385,7 @@ fn span_mode(value: Value<'_>) -> Result<SpanMode, Problem> {
     }
 }
 
-fn cursor_move(value: Value<'_>) -> Result<CursorMove, Problem> {
+fn cursor_move(value: &Value<'_>) -> Result<CursorMove, Problem> {
     match value {
         Value::Word(word) => CursorMove::from_keyword(word).ok_or_else(|| {
             Problem::Invalid(
@@ -395,7 +397,7 @@ fn cursor_move(value: Value<'_>) -> Result<CursorMove, Problem> {
     }
 }
 
-fn bounded_number(value: Value<'_>, min: usize, max: usize) -> Result<usize, Problem> {
+fn bounded_number(value: &Value<'_>, min: usize, max: usize) -> Result<usize, Problem> {
     let Value::Int(text) = value else {
         return Err(Problem::WrongType("integer"));
     };
@@ -405,12 +407,12 @@ fn bounded_number(value: Value<'_>, min: usize, max: usize) -> Result<usize, Pro
         .ok_or_else(|| Problem::Invalid(format!("expected a whole number from {min} to {max}")))
 }
 
-fn pane_number(value: Value<'_>) -> Result<usize, Problem> {
+fn pane_number(value: &Value<'_>) -> Result<usize, Problem> {
     bounded_number(value, 1, crate::MAX_PANES)
 }
 
-fn split_path(value: Value<'_>) -> Result<crate::SplitPath, Problem> {
-    let text = match &value {
+fn split_path(value: &Value<'_>) -> Result<crate::SplitPath, Problem> {
+    let text = match value {
         Value::Str(text) => text.as_str(),
         Value::Int(text) | Value::Word(text) => text,
     };

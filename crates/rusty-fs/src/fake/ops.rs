@@ -10,16 +10,16 @@ use crate::{
 
 const DEFAULT_VOLUME: u64 = 1;
 
-pub(super) fn fail_now(fault: Option<Fault>, location: &Location) -> Result<(), FsError> {
+pub(super) fn fail_now(fault: Option<&Fault>, location: &Location) -> Result<(), FsError> {
     match fault {
         Some(
             Fault::Fail(kind)
             | Fault::FailAfterEntries { kind, .. }
             | Fault::FailAfterBytes { kind, .. },
-        ) => Err(error(kind, location)),
+        ) => Err(error(*kind, location)),
         Some(Fault::FailOs { kind, code }) => Err(FsError {
-            os_code: Some(code),
-            ..error(kind, location)
+            os_code: Some(*code),
+            ..error(*kind, location)
         }),
         Some(Fault::Collide | Fault::LinkThenFail(_) | Fault::RenameThenFail(_)) | None => Ok(()),
     }
@@ -53,7 +53,7 @@ fn existing_kind(tree: &Tree, path: &str) -> Result<EntryKind, FsErrorKind> {
 impl FakeFs {
     fn write_call(&self, location: &Location, op: FakeOp) -> Result<String, FsError> {
         let path = self.own_path(location)?;
-        fail_now(self.record_call(&path, op), location)?;
+        fail_now(self.record_call(&path, op).as_ref(), location)?;
         Ok(path)
     }
 
@@ -78,7 +78,7 @@ impl FakeFs {
 impl ProviderOps for FakeFs {
     fn available_space(&self, location: &Location) -> Result<Option<u64>, FsError> {
         let path = self.own_path(location)?;
-        fail_now(self.record_call(&path, FakeOp::Space), location)?;
+        fail_now(self.record_call(&path, FakeOp::Space).as_ref(), location)?;
         crate::Provider::metadata(self, location)?;
         Ok(lock(&self.space).get(&path).copied().flatten())
     }
@@ -93,7 +93,7 @@ impl ProviderOps for FakeFs {
 
     fn mount_identity(&self, location: &Location) -> Result<Option<u64>, FsError> {
         let path = self.own_path(location)?;
-        fail_now(self.record_call(&path, FakeOp::Mount), location)?;
+        fail_now(self.record_call(&path, FakeOp::Mount).as_ref(), location)?;
         let mounts = lock(&self.mounts);
         let nearest = mounts
             .iter()
@@ -106,7 +106,7 @@ impl ProviderOps for FakeFs {
     }
     fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
         let path = self.own_path(location)?;
-        fail_now(self.record_call(&path, FakeOp::Identity), location)?;
+        fail_now(self.record_call(&path, FakeOp::Identity).as_ref(), location)?;
         let identity = self
             .tree()
             .identity(&path)
@@ -210,7 +210,7 @@ impl ProviderOps for FakeFs {
             _ => None,
         };
         if !collide && linked.is_none() {
-            fail_now(fault, source)?;
+            fail_now(fault.as_ref(), source)?;
         }
         let mut tree = self.tree();
         if collide || linked.is_some() {

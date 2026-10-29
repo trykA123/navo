@@ -155,7 +155,7 @@ impl ProviderOps for LocalFs {
         let total = super::copy_pump::pump(
             &mut input,
             &mut output,
-            crate::CopyControl { progress, cancel },
+            &mut crate::CopyControl { progress, cancel },
         )
         .map_err(|failure| failure.located(source, target))?;
         output.sync_all().map_err(|e| io_error(&e, target))?;
