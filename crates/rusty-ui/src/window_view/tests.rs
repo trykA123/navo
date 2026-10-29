@@ -41,6 +41,7 @@ mod layout_switcher;
 mod layout_widths;
 mod look_up;
 mod marks;
+pub(in crate::window_view) mod mouse_cost;
 mod mouse_marks;
 mod multi_rename;
 mod off_thread;

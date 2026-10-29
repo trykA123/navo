@@ -180,3 +180,25 @@ fn raw_keys_and_mouse_inputs_each_produce_a_line(cx: &mut TestAppContext) {
     assert_eq!(records[2].disk_calls, 2);
     assert_eq!(records[2].ui_busy_ms, 8.);
 }
+
+#[gpui_kit::test]
+fn an_input_that_paints_no_frame_still_gets_a_line_without_render_time(cx: &mut TestAppContext) {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("keys.jsonl");
+    let trace = InputTrace::new(path.clone()).unwrap();
+    let rig = open_probe(cx, Some(&trace));
+    cx.update_window(rig.window, |_, window, cx| {
+        window.dispatch_event(
+            gpui_kit::PlatformInput::MouseMove(gpui_kit::MouseMoveEvent::default()),
+            cx,
+        );
+        window.simulate_next_frame(cx);
+        window.simulate_next_frame(cx);
+    })
+    .unwrap();
+    drop(trace);
+    let records = read(&path);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].action, "mouse:move");
+    assert_eq!(records[0].ui_busy_ms, 0.);
+}

@@ -352,6 +352,8 @@ impl FerriteWindow {
 
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        tests::mouse_cost::note_render();
         let trace = input_trace::frame(window, cx);
         self.sync_workspaces(window, cx);
         let frame = self.perf_frame(window);

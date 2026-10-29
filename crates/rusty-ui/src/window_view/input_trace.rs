@@ -128,28 +128,52 @@ impl State {
                 input.disk_calls = u32::try_from(count).unwrap_or(u32::MAX);
             });
         });
-        let frames = self.frames.clone();
+        let state = self.clone();
         window.on_next_frame(move |window, cx| {
             input.borrow_mut().frame = Some(cx.background_executor().now());
-            frames.borrow_mut().entry(id).or_default().push(input);
-            window.refresh();
+            state
+                .frames
+                .borrow_mut()
+                .entry(id)
+                .or_default()
+                .push(input.clone());
+            window.on_next_frame(move |_, _| state.finish_unpainted(id, &input));
         });
     }
 
     fn finish(&self, id: WindowId, render: Duration) {
         let inputs = self.frames.borrow_mut().remove(&id).unwrap_or_default();
         for input in inputs {
-            let input = input.borrow();
-            let Some(frame) = input.frame else { continue };
-            let record = Record {
-                action: input.action.clone(),
-                key_to_frame_ms: (frame - input.started).as_secs_f64() * 1000.,
-                ui_busy_ms: (input.dispatch + render).as_secs_f64() * 1000.,
-                disk_calls: input.disk_calls,
-            };
-            if let Err(error) = self.sender.send(Some(record)) {
-                tracing::error!(%error, "input trace record could not be queued");
-            }
+            self.record(&input.borrow(), render);
+        }
+    }
+
+    fn finish_unpainted(&self, id: WindowId, input: &PendingInput) {
+        let mut frames = self.frames.borrow_mut();
+        let Some(pending) = frames.get_mut(&id) else {
+            return;
+        };
+        let Some(at) = pending
+            .iter()
+            .position(|pending| Rc::ptr_eq(pending, input))
+        else {
+            return;
+        };
+        let input = pending.remove(at);
+        drop(frames);
+        self.record(&input.borrow(), Duration::ZERO);
+    }
+
+    fn record(&self, input: &Input, render: Duration) {
+        let Some(frame) = input.frame else { return };
+        let record = Record {
+            action: input.action.clone(),
+            key_to_frame_ms: (frame - input.started).as_secs_f64() * 1000.,
+            ui_busy_ms: (input.dispatch + render).as_secs_f64() * 1000.,
+            disk_calls: input.disk_calls,
+        };
+        if let Err(error) = self.sender.send(Some(record)) {
+            tracing::error!(%error, "input trace record could not be queued");
         }
     }
 }
