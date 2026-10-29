@@ -68,7 +68,7 @@ impl Engine for PdfiumEngine {
         let document = self
             .pdfium
             .load_pdf_from_file(path, password)
-            .map_err(|error| open_error(error, password.is_some()))?;
+            .map_err(|error| open_error(&error, password.is_some()))?;
         let pages = page_total(&document);
         self.document = Some(document);
         Ok(pages)
@@ -128,7 +128,7 @@ impl Engine for PdfiumEngine {
     }
 
     fn links(&mut self, page: u32) -> Result<PageLinks, PdfError> {
-        links::extract(self, self.page(page)?)
+        links::extract(self, &self.page(page)?)
     }
 
     fn outline(&mut self) -> Result<Outline, PdfError> {
@@ -202,7 +202,7 @@ impl Upright {
     }
 }
 
-fn open_error(error: PdfiumError, has_password: bool) -> PdfError {
+fn open_error(error: &PdfiumError, has_password: bool) -> PdfError {
     match error {
         PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => {
             if has_password {

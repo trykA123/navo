@@ -38,7 +38,7 @@ pub fn write_on_demand(
         path,
         &input,
         &diagnostics.redactor,
-        ReportAttachments {
+        &ReportAttachments {
             disk_use: disk_use(data, &diagnostics.redactor),
             ..ReportAttachments::default()
         },
@@ -62,7 +62,7 @@ pub(crate) fn write_with_extras(
     attachments: ReportAttachments<'_>,
 ) -> io::Result<()> {
     let input = filled_input(started, diagnostics);
-    write_report_bundle(path, &input, &diagnostics.redactor, attachments).map(drop)
+    write_report_bundle(path, &input, &diagnostics.redactor, &attachments).map(drop)
 }
 
 pub(crate) fn disk_use(data: Option<&Path>, redactor: &Redactor) -> DiskUse {

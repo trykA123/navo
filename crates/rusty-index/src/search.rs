@@ -38,7 +38,7 @@ pub fn search(
     search_filtered(
         table,
         query,
-        SearchOptions {
+        &SearchOptions {
             limit,
             cancel,
             include: &|_| true,
@@ -49,12 +49,12 @@ pub fn search(
 pub fn search_filtered(
     table: &NameTable,
     query: &[Term<'_>],
-    options: SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn(u32) -> bool + Sync>,
+    options: &SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn(u32) -> bool + Sync>,
 ) -> Vec<TableHit> {
     search_filtered_with(
         table,
         query,
-        SearchOptions {
+        &SearchOptions {
             limit: options.limit,
             cancel: options.cancel,
             include: &|| |id| (options.include)(id),
@@ -65,13 +65,13 @@ pub fn search_filtered(
 pub fn search_filtered_with<I: FnMut(u32) -> bool>(
     table: &NameTable,
     query: &[Term<'_>],
-    options: SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn() -> I + Sync>,
+    options: &SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn() -> I + Sync>,
 ) -> Vec<TableHit> {
     let SearchOptions {
         limit,
         cancel,
         include,
-    } = options;
+    } = *options;
     if limit == 0 || table.is_empty() || cancel() {
         return Vec::new();
     }
@@ -277,7 +277,7 @@ mod worker_filter_tests {
         let result = search_filtered_with(
             &table,
             &[Term::Name("match")],
-            SearchOptions {
+            &SearchOptions {
                 limit: 500,
                 cancel: &|| false,
                 include: &|| {

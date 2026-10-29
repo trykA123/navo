@@ -53,19 +53,19 @@ fn emit(round: usize) {
     let msg = MESSAGES[round % MESSAGES.len()];
     match round % 7 {
         0 => {
-            tracing::info!(target: TARGET, user = "canary-user-7731", host = %"CANARY-PC-7731", "{msg}")
+            tracing::info!(target: TARGET, user = "canary-user-7731", host = %"CANARY-PC-7731", "{msg}");
         }
         1 => tracing::warn!(target: TARGET, path = PROFILE_PATH, dest_path = %UNC_PATH, "{msg}"),
         2 => {
-            tracing::debug!(target: TARGET, detail = PROFILE_PATH, owner = ?r"CANARYDOM\canary-user-7731", "{msg}")
+            tracing::debug!(target: TARGET, detail = PROFILE_PATH, owner = ?r"CANARYDOM\canary-user-7731", "{msg}");
         }
         3 => {
-            tracing::error!(target: TARGET, share = UNC_PATH, domain = "CANARYDOM", code = 5, "{msg}")
+            tracing::error!(target: TARGET, share = UNC_PATH, domain = "CANARYDOM", code = 5, "{msg}");
         }
         4 => tracing::info!(target: TARGET, query = "canary secret plan", hits = 3, "search done"),
         5 => tracing::warn!(target: TARGET, "cannot rename 'Secret Plan.docx'"),
         _ => {
-            tracing::trace!(target: TARGET, source_path = PROFILE_PATH, "{msg} {PROFILE_PATH} {UNC_PATH}")
+            tracing::trace!(target: TARGET, source_path = PROFILE_PATH, "{msg} {PROFILE_PATH} {UNC_PATH}");
         }
     }
 }

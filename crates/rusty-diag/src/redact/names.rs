@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::sync::PoisonError;
 
 use super::Redactor;
@@ -17,15 +18,16 @@ impl NetworkNames {
                 root.push_str(server);
             } else {
                 let number = number(&mut self.servers, server);
-                root.push_str(&format!("<server:{number}>"));
+                let _ = write!(root, "<server:{number}>");
             }
         }
         if let Some(share) = share {
             if numbered_token(share, "share") {
-                root.push_str(&format!(r"\{share}"));
+                root.push('\\');
+                root.push_str(share);
             } else {
                 let number = number(&mut self.shares, share);
-                root.push_str(&format!(r"\<share:{number}>"));
+                let _ = write!(root, r"\<share:{number}>");
             }
         }
         root

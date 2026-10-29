@@ -184,7 +184,9 @@ mod caches {
     #[test]
     fn a_cloned_registry_shares_its_caches() {
         let caches = CacheRegistry::default();
-        caches.clone().register("icons", 8 * KB, CacheSize::default);
+        let shared = caches.clone();
+        shared.register("icons", 8 * KB, CacheSize::default);
+        drop(shared);
         assert_eq!(
             caches.usage(),
             [usage("icons", CacheSize::default(), 8 * KB)]
@@ -235,7 +237,9 @@ mod tasks {
     #[test]
     fn a_cloned_counter_shares_its_counts() {
         let tasks = TaskCounters::default();
-        let _guard = tasks.clone().start("watcher");
+        let shared = tasks.clone();
+        let _guard = shared.start("watcher");
+        drop(shared);
         assert_eq!(
             report(&CacheRegistry::default(), &tasks).tasks,
             owners(&[("watcher", 1)])

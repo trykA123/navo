@@ -185,7 +185,7 @@ fn search_empty_query_returns_the_first_included_entries_across_chunks() {
     let hits = super::search_filtered(
         &table,
         &[],
-        super::SearchOptions {
+        &super::SearchOptions {
             limit: 4,
             cancel: &|| false,
             include: &|id| id % 2 == 1 || id > 30_000,
@@ -195,7 +195,7 @@ fn search_empty_query_returns_the_first_included_entries_across_chunks() {
     let all = super::search_filtered(
         &table,
         &[],
-        super::SearchOptions {
+        &super::SearchOptions {
             limit: 3,
             cancel: &|| false,
             include: &|id| id >= 33_000,

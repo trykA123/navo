@@ -38,20 +38,20 @@ impl<F: FnMut(u32) -> Option<Upright>> Targets<F> {
         match action {
             Some(PdfAction::LocalDestination(action)) => action
                 .destination()
-                .map(|destination| self.destination_target(destination))
+                .map(|destination| self.destination_target(&destination))
                 .unwrap_or(LinkTarget::Unsupported),
             Some(PdfAction::Uri(action)) => action
                 .uri()
                 .map(uri_target)
                 .unwrap_or(LinkTarget::Unsupported),
             None => destination()
-                .map(|destination| self.destination_target(destination))
+                .map(|destination| self.destination_target(&destination))
                 .unwrap_or(LinkTarget::Unsupported),
             Some(_) => LinkTarget::Unsupported,
         }
     }
 
-    fn destination_target(&mut self, destination: PdfDestination<'_>) -> LinkTarget {
+    fn destination_target(&mut self, destination: &PdfDestination<'_>) -> LinkTarget {
         let Some(page) = destination
             .page_index()
             .ok()
@@ -77,9 +77,9 @@ fn upright_of(page: &PdfPage<'_>) -> Upright {
     )
 }
 
-pub(super) fn extract(engine: &PdfiumEngine, page: PdfPage<'_>) -> Result<PageLinks, PdfError> {
+pub(super) fn extract(engine: &PdfiumEngine, page: &PdfPage<'_>) -> Result<PageLinks, PdfError> {
     let (width, height) = (page.width().value, page.height().value);
-    let upright = upright_of(&page);
+    let upright = upright_of(page);
     let mut targets = targets(engine);
     let annotations = page.annotations();
     let mut links = Vec::new();

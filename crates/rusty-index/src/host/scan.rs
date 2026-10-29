@@ -9,10 +9,11 @@ use crate::walker::{self, Outcome, Progress, WalkResult};
 
 impl Worker {
     pub(super) fn scan(&mut self) {
-        self.scan_root(self.options.root.clone());
+        let root = self.options.root.clone();
+        self.scan_root(&root);
     }
 
-    fn scan_root(&mut self, root: Location) {
+    fn scan_root(&mut self, root: &Location) {
         if self.cancel.is_cancelled() {
             return;
         }
@@ -46,7 +47,7 @@ impl Worker {
         };
         self.options.queue.submit(self.slot.clone(), Box::new(job));
         match result.recv() {
-            Ok(Ok(result)) => self.finish_scan(&root, result),
+            Ok(Ok(result)) => self.finish_scan(root, result),
             Ok(Err(error)) => self.error(format!("scanning index: {error}")),
             _ if !self.cancel.is_cancelled() => self.error("scanning index: worker stopped".into()),
             _ => {}
@@ -141,7 +142,7 @@ impl Worker {
         drop(table);
         self.publish();
         for root in roots {
-            self.scan_root(root);
+            self.scan_root(&root);
         }
     }
 

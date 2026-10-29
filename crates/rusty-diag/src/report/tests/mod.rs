@@ -196,7 +196,7 @@ fn disk_section_contains_redacted_locations_in_text_and_json() {
         &path,
         &input(),
         &redactor(),
-        crate::ReportAttachments {
+        &crate::ReportAttachments {
             disk_use: disk,
             ..Default::default()
         },

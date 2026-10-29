@@ -121,7 +121,7 @@ pub(super) fn serve_session(
     std::thread::scope(|scope| {
         let _stop = StopOnDrop(session.stopped.clone());
         let reader = scope.spawn(|| read_queries(pipe, &session, tokens, wake));
-        let result = send_replies(pipe, answers, &session, events);
+        let result = send_replies(pipe, answers, &session, &events);
         session.stopped.cancel();
         let read_result = reader.join().map_err(|_| PipeError::NotAvailable)?;
         result.and(read_result)
@@ -154,6 +154,7 @@ fn read_queries(
         .cancel
         .cancel();
     session.stopped.cancel();
+    drop(wake);
     result
 }
 
@@ -161,7 +162,7 @@ fn send_replies(
     pipe: &impl Transport,
     answers: &mpsc::Sender<Job>,
     session: &Session,
-    events: mpsc::Receiver<()>,
+    events: &mpsc::Receiver<()>,
 ) -> Result<(), PipeError> {
     while !session.stopped.is_cancelled() {
         let next = {

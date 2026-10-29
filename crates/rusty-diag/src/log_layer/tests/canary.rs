@@ -31,7 +31,7 @@ fn emit_session(round: usize) {
         1 => tracing::debug!(target: TARGET, host = %"CANARY-PC-7731", path = %safe, "{msg}"),
         2 => tracing::info!(target: TARGET, detail = raw, source_path = %raw, "{msg}"),
         3 => {
-            tracing::warn!(target: TARGET, owner = ?"CANARYDOM\\canary-user-7731", dest_path = raw, "{msg}")
+            tracing::warn!(target: TARGET, owner = ?"CANARYDOM\\canary-user-7731", dest_path = raw, "{msg}");
         }
         _ => tracing::error!(target: TARGET, domain = "CANARYDOM", path = %safe, code = 7, "{msg}"),
     }

@@ -143,6 +143,7 @@ mod tests {
         thread.join().unwrap();
         assert!(result.is_ok(), "panic flushing must skip a locked log");
         handle.try_flush();
+        drop(writer);
         assert_eq!(
             std::fs::read_to_string(dir.path().join("navo.log")).unwrap(),
             "buffered\n"

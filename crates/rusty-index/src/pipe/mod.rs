@@ -155,7 +155,7 @@ impl Client {
                     generation: found,
                     hits: batch,
                 } if found == generation && hits.is_none() && batch.len() <= MAX_HITS => {
-                    hits = Some(batch)
+                    hits = Some(batch);
                 }
                 Response::Status {
                     generation: found,

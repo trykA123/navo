@@ -153,7 +153,7 @@ impl<F: FnMut(&NameTable, Progress)> State<F> {
             if self.stopped(cancel) {
                 return ControlFlow::Break(());
             }
-            if let Err(error) = self.record(folder, entry) {
+            if let Err(error) = self.record(folder, &entry) {
                 self.error = Some(error);
                 return ControlFlow::Break(());
             }
@@ -165,7 +165,7 @@ impl<F: FnMut(&NameTable, Progress)> State<F> {
         }
     }
 
-    fn record(&mut self, folder: &Folder, entry: FsEntry) -> Result<(), TableError> {
+    fn record(&mut self, folder: &Folder, entry: &FsEntry) -> Result<(), TableError> {
         let Ok(location) = folder.location.join(&entry.name) else {
             self.skipped += usize::from(entry.kind == EntryKind::Folder);
             return Ok(());
@@ -174,7 +174,7 @@ impl<F: FnMut(&NameTable, Progress)> State<F> {
         if self.excluded(&location, &name) {
             return Ok(());
         }
-        let id = self.table.push(folder.id, &name, flags(&entry))?;
+        let id = self.table.push(folder.id, &name, flags(entry))?;
         if entry.kind == EntryKind::Folder {
             let depth = folder.depth + 1;
             if depth == MAX_DEPTH {

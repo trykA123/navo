@@ -89,7 +89,7 @@ pub fn write_report_with_crashes(
         path,
         input,
         redactor,
-        ReportAttachments {
+        &ReportAttachments {
             crashes,
             ..ReportAttachments::default()
         },
@@ -106,7 +106,7 @@ pub fn write_report_with_extras(
         path,
         input,
         redactor,
-        ReportAttachments {
+        &ReportAttachments {
             extras,
             ..ReportAttachments::default()
         },
@@ -131,7 +131,7 @@ pub fn write_report_bundle(
     path: &Path,
     input: &ReportInput,
     redactor: &Redactor,
-    attachments: ReportAttachments<'_>,
+    attachments: &ReportAttachments<'_>,
 ) -> io::Result<ReportSummary> {
     let report = serde_json::to_vec_pretty(&DiskDocument {
         report: Document::new(input, redactor),

@@ -36,7 +36,7 @@ impl SearchIndex {
         rusty_index::search::search_filtered_with(
             table,
             &request.terms(),
-            rusty_index::search::SearchOptions {
+            &rusty_index::search::SearchOptions {
                 limit: pipe::MAX_HITS,
                 cancel: &|| cancel.is_cancelled(),
                 include: &|| {
