@@ -203,6 +203,7 @@ fn a_new_name_outside_the_filter_drops_the_filter_and_is_shown() {
     let fs = fake();
     fs.add_file("home/apple.txt", 1);
     let mut browser = browser(&fs);
+    browser.filter_push('^');
     browser.filter_push('a');
     assert_eq!(browser.rename("a.txt", "zebra.txt"), Ok(()));
     settle(&mut browser);

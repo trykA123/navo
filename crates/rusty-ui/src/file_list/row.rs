@@ -1,13 +1,17 @@
+use std::ops::Range;
+
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    BoxShadow, Div, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels, Role,
-    SharedString, Stateful, StatefulInteractiveElement, Styled, div, point, px,
+    BoxShadow, Div, FontWeight, HighlightStyle, Hsla, InteractiveElement, IntoElement,
+    ParentElement, Pixels, Role, SharedString, Stateful, StatefulInteractiveElement, Styled,
+    StyledText, div, point, px,
 };
 use rusty_fs::{EntryKind, FsEntry};
 
 use super::widths::ColumnWidths;
 use super::{ListParts, SortBy, kind};
+use crate::name_match::{Needle, Scratch};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
@@ -22,6 +26,7 @@ pub(super) struct RowLook<'a> {
     pub parts: ListParts,
     pub widths: ColumnWidths,
     pub is_find: bool,
+    pub needle: Option<&'a Needle>,
 }
 
 fn fixed_width(look: &RowLook, by: SortBy) -> Pixels {
@@ -112,6 +117,44 @@ pub(super) fn name_text(
     }
 }
 
+type Run = (Range<usize>, HighlightStyle);
+
+fn match_runs(look: &RowLook, full: &str, text: &str) -> Vec<Run> {
+    let Some(needle) = look.needle.filter(|_| !look.is_find) else {
+        return Vec::new();
+    };
+    let found = needle.find(full, &mut Scratch::default()).unwrap_or(0..0);
+    let shift = usize::from(look.entry.kind == EntryKind::Folder);
+    let range = found.start + shift..(found.end + shift).min(text.len());
+    let style = HighlightStyle {
+        color: Some(look.theme.colors.accent_text),
+        font_weight: Some(FontWeight::MEDIUM),
+        ..HighlightStyle::default()
+    };
+    if range.is_empty() {
+        return Vec::new();
+    }
+    vec![(range, style)]
+}
+
+fn name_label(look: &RowLook, text: String, runs: Vec<Run>) -> impl IntoElement {
+    let is_bold = look.entry.kind == EntryKind::Folder || look.is_marked;
+    div()
+        .id("find-name")
+        .aria_label(text.clone())
+        .test_support()
+        .min_w_0()
+        .truncate()
+        .when(is_bold, |d| d.font_weight(FontWeight::SEMIBOLD))
+        .child(if runs.is_empty() {
+            text.into_any_element()
+        } else {
+            StyledText::new(text)
+                .with_highlights(runs)
+                .into_any_element()
+        })
+}
+
 fn name_cell(
     look: &RowLook,
     (name, extension): (&str, &str),
@@ -123,6 +166,7 @@ fn name_cell(
     let (glyph, glyph_color) = kind::icon(entry.kind, extension, c);
     let is_folder = entry.kind == EntryKind::Folder;
     let text = name_text((name, extension), is_folder, look.parts.ext);
+    let runs = match_runs(look, &entry.name.display(), &text);
     let glyph = div()
         .id("row-icon")
         .test_support()
@@ -148,18 +192,7 @@ fn name_cell(
                 .min_w_0()
                 .h_full()
                 .when(look.parts.icons, |d| d.child(glyph))
-                .child(
-                    div()
-                        .id("find-name")
-                        .aria_label(text.clone())
-                        .test_support()
-                        .min_w_0()
-                        .truncate()
-                        .when(is_folder || look.is_marked, |d| {
-                            d.font_weight(FontWeight::SEMIBOLD)
-                        })
-                        .child(text),
-                ),
+                .child(name_label(look, text, runs)),
         )
         .child(zone.flex_1().h_full())
 }

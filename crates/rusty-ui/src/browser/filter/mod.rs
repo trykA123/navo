@@ -1,9 +1,10 @@
 use std::rc::Rc;
 
-use rusty_core::{Entry, Event, Listing, Location, Pattern, TabId};
+use rusty_core::{Command, CursorMove, Entry, Event, Listing, Location, TabId};
 use rusty_fs::FsEntry;
 
 use super::Browser;
+use crate::name_match::{Needle, Scratch};
 
 mod marks;
 pub(super) use marks::HiddenMarks;
@@ -105,7 +106,7 @@ impl Browser {
         let tab = self.state.active_tab().id();
         let mut text = self.filter_text(tab).unwrap_or_default().to_owned();
         text.push(ch);
-        self.set_filter(tab, text)
+        self.set_filter(tab, text) && self.land_cursor(tab)
     }
 
     pub fn filter_pop(&mut self) -> bool {
@@ -114,12 +115,33 @@ impl Browser {
             return false;
         };
         text.pop();
-        self.set_filter(tab, text)
+        self.set_filter(tab, text) && self.land_cursor(tab)
     }
 
     pub fn filter_clear(&mut self) -> bool {
         let tab = self.state.active_tab().id();
         self.filter_text(tab).is_some() && self.set_filter(tab, String::new())
+    }
+
+    fn land_cursor(&mut self, tab: TabId) -> bool {
+        let Some(text) = self.filter_text(tab).filter(|text| !text.is_empty()) else {
+            return true;
+        };
+        let needle = Needle::parse(text);
+        let mut scratch = Scratch::default();
+        let row = self
+            .state
+            .tab(tab)
+            .and_then(|t| t.listing())
+            .and_then(|listing| {
+                listing
+                    .entries()
+                    .iter()
+                    .position(|entry| needle.starts(&entry.name, &mut scratch))
+            })
+            .unwrap_or(0);
+        let to = CursorMove::Row(u64::try_from(row).unwrap_or(0));
+        self.command(&Command::PaneCursorMove { to }).is_ok()
     }
 
     pub(super) fn narrow(
@@ -150,7 +172,7 @@ impl Browser {
 
     pub(super) fn reveal_name(&mut self, tab: TabId, name: &str) {
         let hidden = self.filters.get(&tab).is_some_and(|filter| {
-            Pattern::parse(&format!("{}*", filter.text)).is_ok_and(|p| !p.matches(name))
+            !Needle::parse(&filter.text).matches(name, &mut Scratch::default())
         });
         if hidden {
             self.filters.remove(&tab);
@@ -242,11 +264,8 @@ fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
             details: full.details.clone(),
         });
     }
-    let pattern = if text.is_empty() {
-        None
-    } else {
-        Some(Pattern::parse(&format!("{text}*")).ok()?)
-    };
+    let needle = (!text.is_empty()).then(|| Needle::parse(text));
+    let mut scratch = Scratch::default();
     let keep: Vec<usize> = full
         .listing
         .entries()
@@ -254,10 +273,14 @@ fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
         .enumerate()
         .filter(|(_, entry)| !is_reserved(entry))
         .filter(|(index, _)| is_visible(full.details.get(*index), shows))
-        .filter(|(_, entry)| pattern.as_ref().is_none_or(|p| p.matches(&entry.name)))
+        .filter(|(_, entry)| {
+            needle
+                .as_ref()
+                .is_none_or(|n| n.matches(&entry.name, &mut scratch))
+        })
         .map(|(index, _)| index)
         .collect();
-    if keep.is_empty() && pattern.is_some() {
+    if keep.is_empty() && needle.is_some() {
         return None;
     }
     let entries = keep

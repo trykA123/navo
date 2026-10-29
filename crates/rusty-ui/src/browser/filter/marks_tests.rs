@@ -61,10 +61,10 @@ fn active(browser: &Browser) -> rusty_core::TabId {
 
 fn two_groups(fs: &Arc<FakeFs>) -> Browser {
     let mut browser = browser(fs);
-    typed(&mut browser, "a");
+    typed(&mut browser, "^a");
     mark_all(&mut browser);
     browser.filter_clear();
-    typed(&mut browser, "b");
+    typed(&mut browser, "^b");
     mark_all(&mut browser);
     browser
 }
@@ -88,7 +88,7 @@ fn marks_come_back_when_the_filter_changes_to_show_them() {
     let fs = fake();
     let mut browser = two_groups(&fs);
     browser.filter_clear();
-    typed(&mut browser, "a");
+    typed(&mut browser, "^a");
     assert_eq!(names(&browser), ["alpha.txt", "apple.txt"]);
     assert_eq!(marked_names(&browser), ["alpha.txt", "apple.txt"]);
     assert_eq!(browser.hidden_marks(active(&browser)), 2);
@@ -105,7 +105,7 @@ fn selected_sources_never_contains_hidden_rows() {
 fn marks_hidden_by_a_longer_filter_stay_out_of_the_sources() {
     let fs = fake();
     let mut browser = browser(&fs);
-    typed(&mut browser, "a");
+    typed(&mut browser, "^a");
     mark_all(&mut browser);
     typed(&mut browser, "l");
     assert_eq!(browser.hidden_marks(active(&browser)), 1);
@@ -148,7 +148,7 @@ fn hiding_every_mark_counts_them_and_clearing_the_filter_resets_the_count() {
     let fs = fake();
     let mut browser = browser(&fs);
     mark_all(&mut browser);
-    typed(&mut browser, "a");
+    typed(&mut browser, "^a");
     assert_eq!(browser.hidden_marks(active(&browser)), 4);
     browser.filter_clear();
     assert_eq!(browser.hidden_marks(active(&browser)), 0);
@@ -172,10 +172,10 @@ fn unmark_all_saves_the_hidden_marks_so_restore_brings_all_back() {
 fn unmark_all_with_only_hidden_marks_saves_them() {
     let fs = fake();
     let mut browser = browser(&fs);
-    typed(&mut browser, "a");
+    typed(&mut browser, "^a");
     mark_all(&mut browser);
     browser.filter_clear();
-    typed(&mut browser, "b");
+    typed(&mut browser, "^b");
     browser.command(&Command::SelectionClear).unwrap();
     browser.filter_clear();
     browser.command(&Command::SelectionRestore).unwrap();
@@ -188,7 +188,7 @@ fn restore_under_a_filter_keeps_the_filtered_names_for_later() {
     let mut browser = browser(&fs);
     mark_all(&mut browser);
     browser.command(&Command::SelectionClear).unwrap();
-    typed(&mut browser, "a");
+    typed(&mut browser, "^a");
     browser.command(&Command::SelectionRestore).unwrap();
     assert_eq!(marked_names(&browser), ["alpha.txt", "apple.txt"]);
     assert_eq!(browser.hidden_marks(active(&browser)), 4);
@@ -200,11 +200,11 @@ fn restore_under_a_filter_keeps_the_filtered_names_for_later() {
 fn restore_succeeds_when_the_filter_hides_every_saved_name() {
     let fs = fake();
     let mut browser = browser(&fs);
-    typed(&mut browser, "b");
+    typed(&mut browser, "^b");
     mark_all(&mut browser);
     browser.command(&Command::SelectionClear).unwrap();
     browser.filter_clear();
-    typed(&mut browser, "a");
+    typed(&mut browser, "^a");
     browser.command(&Command::SelectionRestore).unwrap();
     assert_eq!(browser.hidden_marks(active(&browser)), 2);
     browser.filter_clear();

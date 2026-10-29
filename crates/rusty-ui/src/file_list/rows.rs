@@ -9,9 +9,14 @@ use rusty_core::{Command, CursorMove, SpanMode};
 
 use super::row::{self, RowLook};
 use super::{FileListAction, ListContext, drop, lasso, press, row_number};
+use crate::name_match::Needle;
 use crate::tokens::{self, Theme};
 
-fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyElement> {
+fn render_row(
+    ctx: &Rc<ListContext>,
+    (theme, needle): (&Theme, Option<&Needle>),
+    index: usize,
+) -> Option<AnyElement> {
     let entry = ctx.props.rows.get(index)?;
     let row = row_number(index);
     let look = RowLook {
@@ -23,6 +28,7 @@ fn render_row(ctx: &Rc<ListContext>, theme: &Theme, index: usize) -> Option<AnyE
         parts: ctx.parts,
         widths: ctx.widths,
         is_find: ctx.find_results.is_some(),
+        needle,
     };
     let (left, right, click) = (ctx.clone(), ctx.clone(), ctx.clone());
     let zones = (drop::grip(ctx, row), lasso::start_zone(ctx, row));
@@ -46,8 +52,9 @@ pub(super) fn render_rows(
     let ctx = ctx.clone();
     move |range, _, cx| {
         let theme = tokens::current(cx);
+        let needle = ctx.props.filter.as_deref().map(Needle::parse);
         range
-            .filter_map(|index| render_row(&ctx, theme, index))
+            .filter_map(|index| render_row(&ctx, (theme, needle.as_ref()), index))
             .collect()
     }
 }

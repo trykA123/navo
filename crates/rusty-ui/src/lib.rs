@@ -21,6 +21,7 @@ pub mod job_row;
 pub mod languages;
 pub mod modifier_hints;
 pub mod multi_rename;
+mod name_match;
 pub mod pane_chrome;
 pub mod perf;
 pub mod prelude;

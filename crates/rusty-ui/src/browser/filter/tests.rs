@@ -64,14 +64,93 @@ fn filter_text(browser: &Browser) -> Option<String> {
     browser.filter_text(tab).map(str::to_owned)
 }
 
+fn numbered() -> Arc<FakeFs> {
+    let fs = FakeFs::new();
+    fs.add_folder("home");
+    for name in ["file-4999", "file-5000", "my-file", "4999.txt", "notes.txt"] {
+        fs.add_file(&format!("home/{name}"), 1);
+    }
+    Arc::new(fs)
+}
+
+fn cursor_name(browser: &Browser) -> Option<String> {
+    let tab = browser.state().active_tab();
+    let row = tab.view().cursor;
+    tab.listing()?.get(row).map(|entry| entry.name.clone())
+}
+
 #[test]
-fn typing_keeps_only_names_that_start_with_the_text() {
+fn digits_inside_a_name_are_found() {
+    let fs = numbered();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "4999");
+    assert_eq!(names(&browser), ["4999.txt", "file-4999"]);
+}
+
+#[test]
+fn a_caret_keeps_only_names_that_start_with_the_rest() {
+    let fs = numbered();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "^file");
+    assert_eq!(names(&browser), ["file-4999", "file-5000"]);
+}
+
+#[test]
+fn a_semicolon_shows_the_names_that_match_either_part() {
+    let fs = FakeFs::new();
+    fs.add_folder("home");
+    for name in ["a.txt", "b.doc", "c.png"] {
+        fs.add_file(&format!("home/{name}"), 1);
+    }
+    let mut browser = browser(&Arc::new(fs));
+    typed(&mut browser, "txt;doc");
+    assert_eq!(names(&browser), ["a.txt", "b.doc"]);
+    browser.filter_clear();
+    typed(&mut browser, "^a;^b");
+    assert_eq!(names(&browser), ["a.txt", "b.doc"]);
+}
+
+#[test]
+fn wildcards_match_a_part_of_the_name() {
+    let fs = numbered();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "f*9");
+    assert_eq!(names(&browser), ["file-4999"]);
+}
+
+#[test]
+fn the_cursor_lands_on_the_first_name_that_starts_with_the_text() {
+    let fs = numbered();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "4999");
+    assert_eq!(cursor_name(&browser).as_deref(), Some("4999.txt"));
+}
+
+#[test]
+fn the_cursor_lands_on_the_first_row_when_no_name_starts_with_the_text() {
+    let fs = numbered();
+    let mut browser = browser(&fs);
+    typed(&mut browser, "e-5");
+    assert_eq!(names(&browser), ["file-5000"]);
+    assert_eq!(cursor_name(&browser).as_deref(), Some("file-5000"));
+    browser.filter_clear();
+    typed(&mut browser, "e-");
+    assert_eq!(cursor_name(&browser).as_deref(), Some("file-4999"));
+}
+
+#[test]
+fn typing_keeps_the_names_that_contain_the_text() {
     let fs = fake();
     let mut browser = browser(&fs);
     typed(&mut browser, "p");
     assert_eq!(
         names(&browser),
-        ["prototype", "package-lock.json", "package.json"]
+        [
+            "prototype",
+            "app-icon.svg",
+            "package-lock.json",
+            "package.json"
+        ]
     );
     typed(&mut browser, "A");
     assert_eq!(names(&browser), ["package-lock.json", "package.json"]);
@@ -119,7 +198,7 @@ fn backspace_widens_and_clear_shows_everything() {
     let mut browser = browser(&fs);
     typed(&mut browser, "pa");
     assert!(browser.filter_pop());
-    assert_eq!(names(&browser).len(), 3);
+    assert_eq!(names(&browser).len(), 4);
     assert!(browser.filter_pop());
     assert_eq!(names(&browser).len(), 5);
     assert_eq!(filter_text(&browser), None);

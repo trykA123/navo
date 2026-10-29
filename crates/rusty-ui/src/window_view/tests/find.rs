@@ -195,13 +195,13 @@ fn escape_stops_an_unfiltered_search_and_keeps_rows(cx: &mut TestAppContext) {
 fn escape_stops_search_and_keeps_rows_even_with_a_filter(cx: &mut TestAppContext) {
     let rig = rig(cx);
     let tab = rig.start(cx);
-    rig.press(cx, "s");
+    rig.press(cx, "n");
     assert_eq!(
         rig.view.read_with(cx, |view, _| view
             .browser
             .filter_text(tab)
             .map(str::to_owned)),
-        Some("s".to_owned())
+        Some("n".to_owned())
     );
     rig.press(cx, "escape");
     rig.view.read_with(cx, |view, _| {

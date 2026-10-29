@@ -269,11 +269,11 @@ fn filter_and_sort_work_on_cached_rows_while_the_fresh_listing_is_held() {
         ["docs", "d.txt", "c.txt", "b.txt", "a.txt"]
     );
     assert!(browser.filter_push('c'));
-    assert_eq!(names(&browser), ["c.txt"]);
+    assert_eq!(names(&browser), ["docs", "c.txt"]);
     assert!(is_cached(&browser));
     gate.release();
     settle(&mut browser);
-    assert_eq!(names(&browser), ["c2.txt", "c.txt"]);
+    assert_eq!(names(&browser), ["docs", "c2.txt", "c.txt"]);
     assert_eq!(cursor_name(&browser).as_deref(), Some("c.txt"));
     let tab = browser.state().active_tab().id();
     let shown: Vec<String> = browser
@@ -281,7 +281,7 @@ fn filter_and_sort_work_on_cached_rows_while_the_fresh_listing_is_held() {
         .iter()
         .map(|e| e.name.to_text())
         .collect();
-    assert_eq!(shown, ["c2.txt", "c.txt"]);
+    assert_eq!(shown, ["docs", "c2.txt", "c.txt"]);
 }
 
 #[test]
