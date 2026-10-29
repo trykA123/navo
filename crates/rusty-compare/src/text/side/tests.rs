@@ -9,7 +9,7 @@ use rusty_core::{FileIdentity, ProviderId, ProviderPath};
 use super::*;
 use crate::model::{
     CancelToken, ContentClass, EntryKind, ObjectId, ReadHint, Reason, RelPath, SideEntry,
-    SideSource,
+    SideSource, Stamp,
 };
 
 fn encoding(label: &[u8]) -> &'static Encoding {
@@ -109,6 +109,13 @@ impl SideSource for FakeSource {
             pos: 0,
             reads: self.reads.clone(),
         }))
+    }
+
+    fn stamp(&self, _: &RelPath) -> Result<Stamp, Reason> {
+        Ok(Stamp {
+            size: self.len,
+            ..Stamp::default()
+        })
     }
 
     fn object_id(&self, _: &RelPath) -> Option<ObjectId> {

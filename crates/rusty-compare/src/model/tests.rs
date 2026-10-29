@@ -33,6 +33,10 @@ impl SideSource for EmptySource {
         Ok(Box::new(std::io::empty()))
     }
 
+    fn stamp(&self, _rel: &RelPath) -> Result<Stamp, Reason> {
+        Ok(Stamp::default())
+    }
+
     fn object_id(&self, _rel: &RelPath) -> Option<ObjectId> {
         None
     }

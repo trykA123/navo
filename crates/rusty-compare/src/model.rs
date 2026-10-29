@@ -283,6 +283,13 @@ impl CancelToken {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Stamp {
+    pub size: u64,
+    pub modified: Option<i64>,
+    pub file_id: Option<FileIdentity>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContentKey {
     pub provider: ProviderId,
@@ -303,6 +310,8 @@ pub trait SideSource: Send + Sync {
     ) -> Result<(), Reason>;
 
     fn open(&self, rel: &RelPath, hint: ReadHint) -> Result<Box<dyn Read + Send>, Reason>;
+
+    fn stamp(&self, rel: &RelPath) -> Result<Stamp, Reason>;
 
     fn object_id(&self, rel: &RelPath) -> Option<ObjectId>;
 
