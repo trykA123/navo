@@ -10,11 +10,13 @@ name = "navo"
 path = "src/main.rs"
 
 [features]
+mimalloc = ["dep:mimalloc"]
 tracy = ["rusty-diag/tracy"]
 
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 encoding_rs = "0.8.42"
+mimalloc = { version = "=0.1.52", optional = true, default-features = false }
 rusty-cache = { path = "../rusty-cache" }
 rusty-core = { path = "../rusty-core" }
 rusty-diag = { path = "../rusty-diag" }

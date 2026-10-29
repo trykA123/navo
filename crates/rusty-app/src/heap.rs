@@ -1,19 +1,29 @@
-use std::alloc::{GlobalAlloc, Layout, System};
+use std::alloc::{GlobalAlloc, Layout};
+
+#[cfg(feature = "mimalloc")]
+use mimalloc::MiMalloc;
+#[cfg(not(feature = "mimalloc"))]
+use std::alloc::System;
 
 use rusty_diag::heap::{HeapCounter, HeapStats};
 
 static COUNTER: HeapCounter = HeapCounter::new();
+
+#[cfg(feature = "mimalloc")]
+static INNER: MiMalloc = MiMalloc;
+#[cfg(not(feature = "mimalloc"))]
+static INNER: System = System;
 
 struct CountingAlloc;
 
 #[global_allocator]
 static ALLOCATOR: CountingAlloc = CountingAlloc;
 
-// SAFETY: every call forwards to `System` with the caller's layout and pointer unchanged; the counter only does relaxed atomic arithmetic and never allocates.
+// SAFETY: every call forwards to the inner allocator with the caller's layout and pointer unchanged; the counter only does relaxed atomic arithmetic and never allocates.
 unsafe impl GlobalAlloc for CountingAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         // SAFETY: the caller upholds `GlobalAlloc::alloc`'s contract for `layout`.
-        let block = unsafe { System.alloc(layout) };
+        let block = unsafe { INNER.alloc(layout) };
         if !block.is_null() {
             COUNTER.allocated(layout.size());
         }
@@ -22,7 +32,7 @@ unsafe impl GlobalAlloc for CountingAlloc {
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         // SAFETY: the caller upholds `GlobalAlloc::alloc_zeroed`'s contract for `layout`.
-        let block = unsafe { System.alloc_zeroed(layout) };
+        let block = unsafe { INNER.alloc_zeroed(layout) };
         if !block.is_null() {
             COUNTER.allocated(layout.size());
         }
@@ -30,14 +40,14 @@ unsafe impl GlobalAlloc for CountingAlloc {
     }
 
     unsafe fn dealloc(&self, block: *mut u8, layout: Layout) {
-        // SAFETY: `block` came from this allocator, which got it from `System` with the same `layout`.
-        unsafe { System.dealloc(block, layout) };
+        // SAFETY: `block` came from this allocator, which got it from the inner allocator with the same `layout`.
+        unsafe { INNER.dealloc(block, layout) };
         COUNTER.freed(layout.size());
     }
 
     unsafe fn realloc(&self, block: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        // SAFETY: `block` came from `System` with `layout`, and the caller upholds `realloc`'s contract for `new_size`.
-        let moved = unsafe { System.realloc(block, layout, new_size) };
+        // SAFETY: `block` came from the inner allocator with `layout`, and the caller upholds `realloc`'s contract for `new_size`.
+        let moved = unsafe { INNER.realloc(block, layout, new_size) };
         if !moved.is_null() {
             COUNTER.reallocated(layout.size(), new_size);
         }
