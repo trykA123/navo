@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 mod support;
 
 use rusty_automotive::{
@@ -78,10 +80,12 @@ fn trc_20_reads_length_and_omitted_event_fields() {
 fn trc_21_reads_dlc_bus_reserved_and_all_fd_flags() {
     let mut text = String::from(";$FILEVERSION=2.1\n;$COLUMNS=N,O,T,B,I,d,R,L,D\n");
     for (at, kind) in ["FD", "FB", "FE", "BI"].iter().enumerate() {
-        text.push_str(&format!(
-            "{} 1.000 {kind} 2 00000010 Tx - 9 00 01 02 03 04 05 06 07 08 09 0A 0B\n",
+        writeln!(
+            text,
+            "{} 1.000 {kind} 2 00000010 Tx - 9 00 01 02 03 04 05 06 07 08 09 0A 0B",
             at + 1
-        ));
+        )
+        .unwrap();
     }
     text.push_str("5 2.000 ER 2 - Rx - 5 04 01 02 03 04\n6 3.000 EV - invented event\n7 4.000 ST 2 - Rx - 4 00 00 00 08\n8 5.000 EC 2 - Rx - 2 03 04\n");
     let trace = trace_of(&text);

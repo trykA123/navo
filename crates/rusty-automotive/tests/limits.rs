@@ -45,11 +45,11 @@ fn cancel_is_seen_inside_one_endless_line() {
     let mut progress = |_| {
         calls.fetch_add(1, Ordering::Relaxed);
     };
-    let watch = Watch {
+    let mut watch = Watch {
         cancel: &cancel,
         progress: &mut progress,
     };
-    let result = index(Format::IntelHex, text.as_bytes(), watch);
+    let result = index(Format::IntelHex, text.as_bytes(), &mut watch);
     assert!(matches!(result, Err(IndexError::Cancelled)));
 }
 

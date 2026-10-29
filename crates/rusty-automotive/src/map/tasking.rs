@@ -38,17 +38,17 @@ impl Tasking {
         }
     }
 
-    fn header(&mut self, name: String) {
-        self.part = parts::part(&name);
+    fn header(&mut self, name: &str) {
+        self.part = parts::part(name);
         if self.part == Part::Skip
             && self.model.skipped_parts.len() < 32
             && !self
                 .model
                 .skipped_parts
                 .iter()
-                .any(|title| title.eq_ignore_ascii_case(&name))
+                .any(|title| title.eq_ignore_ascii_case(name))
         {
-            self.model.skipped_parts.push(name.clone());
+            self.model.skipped_parts.push(name.to_owned());
         }
         if self.part == Part::Symbols {
             let name = name.to_ascii_lowercase();
@@ -97,7 +97,7 @@ impl Tasking {
         self.flush_row();
         let header = parts::header(text, self.previous_title.take().as_deref());
         if let Some(header) = header {
-            return self.header(header);
+            return self.header(&header);
         }
         self.previous_title = parts::title(text).map(str::to_owned);
         if self.previous_title.is_some() {

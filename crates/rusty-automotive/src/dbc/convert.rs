@@ -93,11 +93,11 @@ fn values(values: Vec<can_dbc::ValDescription>) -> Vec<Value> {
         .collect()
 }
 
-fn cycle(value: AttributeValue) -> Option<f64> {
+fn cycle(value: &AttributeValue) -> Option<f64> {
     let number = match value {
-        AttributeValue::Uint(n) => n as f64,
-        AttributeValue::Int(n) => n as f64,
-        AttributeValue::Double(n) => n,
+        AttributeValue::Uint(n) => *n as f64,
+        AttributeValue::Int(n) => *n as f64,
+        AttributeValue::Double(n) => *n,
         AttributeValue::String(_) => return None,
     };
     (number.is_finite() && number >= 0.0).then_some(number)
@@ -136,12 +136,12 @@ impl DbcModel {
         }
         for attribute in parsed.attribute_values_message {
             if attribute.name == "GenMsgCycleTime" {
-                self.take_cycle(Some(id(attribute.message_id)), attribute.value, line);
+                self.take_cycle(Some(id(attribute.message_id)), &attribute.value, line);
             }
         }
         for attribute in parsed.attribute_defaults {
             if attribute.name == "GenMsgCycleTime" {
-                self.take_cycle(None, attribute.value, line);
+                self.take_cycle(None, &attribute.value, line);
             }
         }
     }
@@ -188,7 +188,7 @@ impl DbcModel {
             }));
     }
 
-    fn take_cycle(&mut self, id: Option<CanId>, value: AttributeValue, line: u64) {
+    fn take_cycle(&mut self, id: Option<CanId>, value: &AttributeValue, line: u64) {
         let Some(value) = cycle(value) else {
             self.report.problem(line, "invalid GenMsgCycleTime");
             return;

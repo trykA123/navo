@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 mod support;
 
 use rusty_automotive::{Base, Body, CanId, Direction, Evidence, Frame, FrameKind, sniff_trace};
@@ -292,7 +294,7 @@ fn more_lines_after_a_chunked_read_reuse_the_known_ids() {
 fn ids_beyond_the_limit_are_counted_but_not_listed() {
     let mut text = String::new();
     for raw in 0..=rusty_automotive::MAX_IDS as u32 {
-        text.push_str(&format!("0.1 1 {raw:X}x Rx d 0\n"));
+        writeln!(text, "0.1 1 {raw:X}x Rx d 0").unwrap();
     }
     let trace = trace_of(&text);
     assert_eq!(trace.stats.len(), rusty_automotive::MAX_IDS);

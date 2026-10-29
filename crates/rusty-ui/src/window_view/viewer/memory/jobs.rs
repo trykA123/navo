@@ -40,12 +40,12 @@ pub(super) fn start_index(
             let mut progress = |done: u64| {
                 throttle.when_due(|| send(IndexMessage::Progress(done)));
             };
-            let watch = Watch {
+            let mut watch = Watch {
                 cancel,
                 progress: &mut progress,
             };
             let source = BufReader::with_capacity(CHUNK, Ranged { read, at: 0, len });
-            send(IndexMessage::Done(index(format, source, watch)));
+            send(IndexMessage::Done(index(format, source, &mut watch)));
         },
         MemoryView::index_message,
     )

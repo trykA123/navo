@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::atomic::AtomicBool;
 
 use super::{
@@ -75,9 +76,9 @@ fn the_record_index_reads_any_rows_on_demand() {
     let mut text = String::from("id,note\n");
     for row in 0..100 {
         if row % 7 == 0 {
-            text.push_str(&format!("{row},\"multi\nline {row}\"\r\n"));
+            write!(text, "{row},\"multi\nline {row}\"\r\n").unwrap();
         } else {
-            text.push_str(&format!("{row},plain {row}\n"));
+            writeln!(text, "{row},plain {row}").unwrap();
         }
         if row % 30 == 0 {
             text.push('\n');

@@ -108,7 +108,7 @@ impl Trace {
     pub(super) fn binary_row(&mut self, now: u64, frame: &super::Frame) {
         self.row(
             Some(now),
-            Shape::Frame(Head {
+            &Shape::Frame(Head {
                 channel: frame.channel,
                 id: frame.id,
                 direction: frame.direction,
@@ -307,7 +307,7 @@ impl Trace {
             shape => {
                 self.start_row(at);
                 let now = self.clock.tick(time);
-                self.row(now, shape);
+                self.row(now, &shape);
             }
         }
     }
@@ -336,14 +336,14 @@ impl Trace {
         }
     }
 
-    fn row(&mut self, now: Option<u64>, shape: Shape) {
+    fn row(&mut self, now: Option<u64>, shape: &Shape) {
         self.rows += 1;
         if let Some(now) = now {
             self.first_ns.get_or_insert(now);
             self.last_ns = Some(now);
         }
         let key = match shape {
-            Shape::Frame(head) => self.frame(head, now.unwrap_or(0)),
+            Shape::Frame(head) => self.frame(*head, now.unwrap_or(0)),
             Shape::Malformed(reason) => {
                 self.kinds.other += 1;
                 self.note(reason);

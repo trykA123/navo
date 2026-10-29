@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 mod support;
 
 use std::time::Instant;
@@ -10,12 +12,14 @@ fn a_million_line_log_is_indexed_and_any_row_decodes() {
         String::from("date Mon Oct 19 09:41:07.000 am 2026\nbase hex  timestamps absolute\n");
     for at in 0..1_000_000u64 {
         let id = 0x100 + at % 50;
-        text.push_str(&format!(
-            "{:>4}.{:06} 1  {id:X}             Rx   d 8 {:02X} 01 02 03 04 05 06 07\n",
+        writeln!(
+            text,
+            "{:>4}.{:06} 1  {id:X}             Rx   d 8 {:02X} 01 02 03 04 05 06 07",
             at / 10_000,
             at % 10_000 * 100,
             at % 256
-        ));
+        )
+        .unwrap();
     }
     let started = Instant::now();
     let trace = trace_of(&text);

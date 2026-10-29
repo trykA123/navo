@@ -95,7 +95,7 @@ pub(crate) fn has_unsupported_version(line: &[u8]) -> bool {
 }
 
 impl State {
-    pub(crate) fn version_label(&self) -> Option<&'static str> {
+    pub(crate) fn version_label(self) -> Option<&'static str> {
         self.version.label()
     }
 
@@ -113,7 +113,7 @@ impl State {
         if text.starts_with(';') {
             return (None, self.header(text));
         }
-        row::parse(self, text, data)
+        row::parse(*self, text, data)
     }
 
     fn header(&mut self, text: &str) -> Shape {

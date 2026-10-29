@@ -173,7 +173,7 @@ impl Scanner {
         }
     }
 
-    fn end(&mut self, tag: Token) {
+    fn end(&mut self, tag: &Token) {
         let Some(at) = self.scopes.iter().rposition(|scope| scope.kind == tag.text) else {
             self.model
                 .report
@@ -195,7 +195,7 @@ impl Scanner {
             .is_some_and(|block| block.kind == tag.text && block.depth == at)
             && let (Some(block), Some(module)) = (self.block.take(), self.module())
         {
-            self.model.parse(block, module);
+            self.model.parse(&block, module);
         }
         if self.block.as_ref().is_some_and(|block| block.depth > at) {
             self.block = None;
@@ -259,7 +259,7 @@ pub fn index_a2l(read: impl BufRead, watch: Watch<'_>) -> Result<A2lModel, Descr
             }
             (TokenKind::Word, "/end") => {
                 if let Some(tag) = lexer.significant()? {
-                    scanner.end(tag);
+                    scanner.end(&tag);
                 }
             }
             (TokenKind::Word, "ASAP2_VERSION") if scanner.scopes.is_empty() => {

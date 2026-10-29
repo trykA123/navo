@@ -383,7 +383,7 @@ fn gcc_merged_layout_with_210k_symbols_times_the_estimate_path() {
 fn rich_small_fixtures_cover_classes_endianness_stripping_dwarf_and_siblings() {
     for (is_64, is_big) in [(false, false), (false, true), (true, false), (true, true)] {
         for (stripped, dwarf) in [(false, false), (false, true), (true, false), (true, true)] {
-            let fixture = rich::small(is_64, is_big, stripped, dwarf);
+            let fixture = rich::small((is_64, is_big), stripped, dwarf);
             let map = index_map(
                 fixture.map().as_bytes(),
                 &AtomicBool::new(false),

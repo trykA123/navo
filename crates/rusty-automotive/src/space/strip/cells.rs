@@ -77,7 +77,7 @@ pub(super) fn merged(spans: impl Iterator<Item = Span>, scale: &Scale, width_px:
             columns,
             narrow,
         };
-        place(&mut out, piece, width_px);
+        place(&mut out, &piece, width_px);
     }
     out.into_iter().map(Open::finish).collect()
 }
@@ -99,13 +99,13 @@ fn columns(scale: &Scale, span: &Range<u64>, width: u32) -> (Range<u32>, bool) {
     (start..(to.round() as u32).clamp(start + 1, width), false)
 }
 
-fn place(out: &mut Vec<Open>, piece: Piece, width: u32) {
+fn place(out: &mut Vec<Open>, piece: &Piece, width: u32) {
     let narrow = piece.narrow;
     let cursor = out.last().map_or(0, |last| last.cell.x1);
     if let Some(last) = out.last_mut() {
         let joins = narrow && last.narrow && piece.columns.start < last.cell.x1;
         if joins || cursor >= width {
-            last.absorb(&piece);
+            last.absorb(piece);
             return;
         }
     }
@@ -115,7 +115,7 @@ fn place(out: &mut Vec<Open>, piece: Piece, width: u32) {
     } else {
         piece.columns.end.max(x0 + 1)
     };
-    out.push(Open::new(&piece, x0..x1, narrow));
+    out.push(Open::new(piece, x0..x1, narrow));
 }
 
 impl Open {

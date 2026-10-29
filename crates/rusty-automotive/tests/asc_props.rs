@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 mod support;
 
 use proptest::prelude::*;
@@ -64,13 +66,13 @@ proptest! {
         for (at, (id, extended, data)) in frames.iter().enumerate() {
             let bytes: Vec<String> = data.iter().map(|byte| format!("{byte:02X}")).collect();
             let suffix = if *extended { "x" } else { "" };
-            text.push_str(&format!(
-                "{}.{:06} 1 {id:X}{suffix} Rx d {} {}\n",
+            writeln!(text,
+                "{}.{:06} 1 {id:X}{suffix} Rx d {} {}",
                 at / 1000,
                 at % 1000,
                 data.len(),
                 bytes.join(" ")
-            ));
+            ).unwrap();
         }
         let trace = trace_of(&text);
         let entries = every_entry(&text, &trace);
@@ -89,7 +91,7 @@ proptest! {
         let mut text = String::new();
         for (at, (id, _, data)) in frames.iter().enumerate() {
             let bytes: Vec<String> = data.iter().map(|byte| format!("{byte:02X}")).collect();
-            text.push_str(&format!("{at}.5 1 {id:X} Rx d {} {}\n", data.len(), bytes.join(" ")));
+            writeln!(text, "{at}.5 1 {id:X} Rx d {} {}", data.len(), bytes.join(" ")).unwrap();
         }
         let whole = trace_of(&text);
         let chunked = support::chunked_trace(&text, cut);

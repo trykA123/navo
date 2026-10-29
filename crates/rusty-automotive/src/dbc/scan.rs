@@ -158,7 +158,7 @@ impl Scanner {
                 ) =>
             {
                 self.model
-                    .take(parsed, &mut self.current, (record.line, is_signal))
+                    .take(parsed, &mut self.current, (record.line, is_signal));
             }
             Ok(_) => {}
             Err(error) => {

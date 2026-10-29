@@ -5,6 +5,7 @@
     reason = "test helpers; each test binary uses a part of them"
 )]
 
+use std::fmt::Write as _;
 use std::sync::atomic::AtomicBool;
 
 use rusty_automotive::{Body, Entry, Format, Frame, Image, Trace, Watch, index, index_trace};
@@ -28,7 +29,7 @@ S9030000FC
 
 fn hex(out: &mut String, bytes: &[u8]) {
     for byte in bytes {
-        out.push_str(&format!("{byte:02X}"));
+        write!(out, "{byte:02X}").unwrap();
     }
 }
 
@@ -98,11 +99,11 @@ pub fn s_records(blocks: &[(u32, Vec<u8>)], start: u32) -> String {
 pub fn parse(format: Format, text: &str) -> Image {
     let cancel = AtomicBool::new(false);
     let mut progress = |_| {};
-    let watch = Watch {
+    let mut watch = Watch {
         cancel: &cancel,
         progress: &mut progress,
     };
-    index(format, text.as_bytes(), watch).unwrap()
+    index(format, text.as_bytes(), &mut watch).unwrap()
 }
 
 pub fn read_all(text: &str, image: &Image, window: std::ops::Range<u64>) -> Vec<Option<u8>> {

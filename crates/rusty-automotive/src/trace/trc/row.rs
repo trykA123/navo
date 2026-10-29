@@ -21,7 +21,7 @@ struct Row<'a> {
     data: SplitAsciiWhitespace<'a>,
 }
 
-pub(super) fn parse(state: &State, text: &str, data: &mut Vec<u8>) -> (Option<u64>, Shape) {
+pub(super) fn parse(state: State, text: &str, data: &mut Vec<u8>) -> (Option<u64>, Shape) {
     let mut words = text.split_ascii_whitespace();
     let row = match state.version {
         Version::V11 | Version::V13 => legacy(state.version, &mut words),

@@ -322,7 +322,7 @@ fn merged_with(symbols: usize, estimated: usize, pad: usize) -> Fixture {
     fixture
 }
 
-pub fn small(is_64: bool, is_big: bool, stripped: bool, dwarf: bool) -> Fixture {
+pub fn small((is_64, is_big): (bool, bool), stripped: bool, dwarf: bool) -> Fixture {
     let mut fixture = Fixture::new();
     fixture.spec.is_64 = is_64;
     fixture.spec.is_big = is_big;

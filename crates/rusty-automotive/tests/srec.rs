@@ -102,11 +102,11 @@ fn indexing_stops_when_cancelled() {
     let text = s_records(&[(0, vec![1; 32 * 10_000])], 0);
     let cancel = AtomicBool::new(true);
     let mut progress = |_| {};
-    let watch = Watch {
+    let mut watch = Watch {
         cancel: &cancel,
         progress: &mut progress,
     };
-    let result = index(Format::SRecord, text.as_bytes(), watch);
+    let result = index(Format::SRecord, text.as_bytes(), &mut watch);
     assert!(matches!(result, Err(IndexError::Cancelled)));
 }
 
@@ -116,11 +116,11 @@ fn indexing_reports_progress_in_bytes() {
     let cancel = AtomicBool::new(false);
     let mut last = 0;
     let mut progress = |done| last = done;
-    let watch = Watch {
+    let mut watch = Watch {
         cancel: &cancel,
         progress: &mut progress,
     };
-    index(Format::SRecord, text.as_bytes(), watch).unwrap();
+    index(Format::SRecord, text.as_bytes(), &mut watch).unwrap();
     assert!(last > 0 && last <= text.len() as u64);
     assert!(!cancel.load(Ordering::Relaxed));
 }

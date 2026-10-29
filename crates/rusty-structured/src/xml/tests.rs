@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::sync::atomic::AtomicBool;
@@ -230,7 +231,7 @@ fn lazy_nodes_ask_to_load_when_expanded() {
 fn a_cancelled_index_returns_nothing_and_bad_xml_reports_its_line() {
     let mut text = String::from("<a>\n");
     for at in 0..20_000 {
-        text.push_str(&format!("<b n=\"{at}\"/>\n"));
+        writeln!(text, "<b n=\"{at}\"/>").unwrap();
     }
     let bytes = text.into_bytes();
     let len = bytes.len() as u64;

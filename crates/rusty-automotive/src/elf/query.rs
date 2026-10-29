@@ -219,7 +219,7 @@ pub fn select(elf: &Elf, query: &Query, cancel: &AtomicBool) -> Option<Selection
         }
         match &boundaries {
             Some(boundaries) if query.hide_noise && is_noise(elf, boundaries, symbol) => {
-                hidden += 1
+                hidden += 1;
             }
             _ => rows.push((
                 at as u32,

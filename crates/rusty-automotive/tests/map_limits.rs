@@ -22,7 +22,7 @@ fn cancellation_is_checked_before_reading_and_during_an_endless_line() {
     cancel.store(false, Ordering::Relaxed);
     let source = HEADER.as_bytes().chain(io::repeat(b'x').take(50_000_000));
     let result = index_map(BufReader::new(source), &cancel, &mut |_| {
-        cancel.store(true, Ordering::Relaxed)
+        cancel.store(true, Ordering::Relaxed);
     });
     assert!(matches!(result, Err(MapError::Cancelled)));
 }

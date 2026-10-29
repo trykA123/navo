@@ -42,7 +42,7 @@ impl Block {
 }
 
 impl A2lModel {
-    pub(super) fn parse(&mut self, block: Block, module: usize) {
+    pub(super) fn parse(&mut self, block: &Block, module: usize) {
         if block.overflow {
             self.report.problem(
                 block.line,
@@ -58,13 +58,13 @@ impl A2lModel {
         match a2lfile::load_from_string(&text, None, false) {
             Ok((parsed, warnings)) => {
                 for warning in warnings {
-                    self.problem(&warning, &block);
+                    self.problem(&warning, block);
                 }
                 for parsed_module in parsed.project.module {
                     self.take(parsed_module, module, block.line);
                 }
             }
-            Err(error) => self.problem(&error, &block),
+            Err(error) => self.problem(&error, block),
         }
     }
 

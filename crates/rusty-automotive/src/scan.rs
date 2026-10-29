@@ -40,7 +40,11 @@ struct Scan {
     pieces: Vec<Piece>,
 }
 
-pub fn index(format: Format, source: impl BufRead, watch: Watch<'_>) -> Result<Image, IndexError> {
+pub fn index(
+    format: Format,
+    source: impl BufRead,
+    watch: &mut Watch<'_>,
+) -> Result<Image, IndexError> {
     let mut scan = Scan::new(format);
     let mut lines = Lines::new(source);
     let (mut line, mut bytes) = (Vec::new(), Vec::new());
@@ -135,7 +139,7 @@ impl Scan {
         let base = self.cursor.base;
         match self.cursor.locate(&record) {
             Ok(Event::Data(address)) => {
-                self.data(address..address + record.data.len() as u64, at, base)
+                self.data(address..address + record.data.len() as u64, at, base);
             }
             Ok(Event::Start(start)) => self.start = Some(start),
             Ok(Event::End(start)) => {

@@ -81,13 +81,13 @@ impl Full<'_> {
         ParseError::at_offset(message, self.bytes, offset)
     }
 
-    fn open(&mut self, label: Label, offset: u64) -> Result<NodeId, ParseError> {
+    fn open(&mut self, label: &Label, offset: u64) -> Result<NodeId, ParseError> {
         let parent = self.stack.last().map(|(id, _)| *id);
         if parent.is_none() && self.tree.root().is_some() {
             return Err(self.error("more than one root element", offset));
         }
         self.tree
-            .push(parent, element(&label))
+            .push(parent, element(label))
             .ok_or_else(|| self.error("too many elements to show as a tree", offset))
     }
 
@@ -107,11 +107,11 @@ impl Full<'_> {
         match event {
             Event::Start(start) => {
                 let label = label_of(&start);
-                let id = self.open(label.clone(), offset)?;
+                let id = self.open(&label, offset)?;
                 self.stack.push((id, label));
             }
             Event::Empty(start) => {
-                self.open(label_of(&start), offset)?;
+                self.open(&label_of(&start), offset)?;
             }
             Event::End(_) => self.close(),
             Event::Text(text) => self.text(&String::from_utf8_lossy(&text)),

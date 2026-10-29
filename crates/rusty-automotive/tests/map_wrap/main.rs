@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::atomic::AtomicBool;
 
 use rusty_automotive::map::{MapModel, MapProblem, index_map};
@@ -15,9 +16,9 @@ fn line(cells: &[(&str, usize)]) -> String {
     for (cell, width) in cells {
         text.push('|');
         if cell.len() > *width {
-            text.push_str(&format!(" {cell}"));
+            assert!(write!(text, " {cell}").is_ok());
         } else {
-            text.push_str(&format!(" {cell:<width$} "));
+            assert!(write!(text, " {cell:<width$} ").is_ok());
         }
     }
     text.push_str("|\n");
@@ -174,7 +175,7 @@ fn processed_files_wrapped_rows_produce_no_problems() {
         ("Orbit_Far_Symbol_", 17),
     ]);
     body += &line(&[("th_a_long_name.o", 16), ("", 12), ("Name", 17)]);
-    body += &format!("{LINK_HEAD}{}", wrapped_link_row());
+    write!(body, "{LINK_HEAD}{}", wrapped_link_row()).unwrap();
     let model = parse(&body);
     assert!(model.problems.is_empty(), "{:?}", model.problems);
     assert_eq!(model.contributions.len(), 1);

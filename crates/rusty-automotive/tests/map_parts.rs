@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::atomic::AtomicBool;
 
 use rusty_automotive::map::{MapFlavor, MapModel, index_map, sniff_map};
@@ -65,7 +66,7 @@ fn map_symbol_sizes_include_zero_and_skip_empty_cells() {
 fn map_unread_parts_are_deduplicated_case_insensitively_and_capped() {
     let mut body = "*** Invented First ***\n=== invented first ===\n".to_owned();
     for index in 0..40 {
-        body.push_str(&format!("*** Invented Part {index} ***\n"));
+        writeln!(body, "*** Invented Part {index} ***").unwrap();
     }
     let model = parse(&body);
     assert_eq!(model.skipped_parts.len(), 32);
