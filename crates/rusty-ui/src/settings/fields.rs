@@ -69,9 +69,8 @@ impl Section {
             Self::Copy => IconName::Copy,
             Self::Safety => IconName::Undo2,
             Self::Search => IconName::Search,
-            Self::Display => IconName::Eye,
+            Self::Display | Self::Diagnostics => IconName::Eye,
             Self::Tray => IconName::PanelBottom,
-            Self::Diagnostics => IconName::Eye,
             Self::Help => IconName::BookOpen,
         }
     }

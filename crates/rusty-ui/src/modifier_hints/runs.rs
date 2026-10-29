@@ -48,11 +48,11 @@ fn fold(members: &[Entry]) -> Option<Entry> {
     })
 }
 
-pub(super) fn folded(entries: Vec<Entry>) -> Vec<Entry> {
+pub(super) fn folded(entries: &[Entry]) -> Vec<Entry> {
     let mut out = Vec::with_capacity(entries.len());
     let mut at = 0;
     while at < entries.len() {
-        let run = run_at(&entries, at).and_then(|len| Some((len, fold(&entries[at..at + len])?)));
+        let run = run_at(entries, at).and_then(|len| Some((len, fold(&entries[at..at + len])?)));
         match run {
             Some((len, entry)) => {
                 out.push(entry);

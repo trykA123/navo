@@ -49,6 +49,7 @@ pub(super) fn chrome(t: &Theme, level: usize) -> ObservedElement<Stateful<Div>> 
 }
 
 /// How one panel looks this frame; `loading` is set once its loading cue is due.
+#[derive(Clone, Copy)]
 pub(super) struct PanelLook<'a> {
     pub level: usize,
     pub frame: Frame,

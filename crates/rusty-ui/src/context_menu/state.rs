@@ -134,7 +134,7 @@ impl MenuState {
         if self.query == query {
             return;
         }
-        self.query = query.to_owned();
+        query.clone_into(&mut self.query);
         self.close_after(0);
         self.levels[0] = Level::new(&self.menu, Vec::new(), &self.query);
     }

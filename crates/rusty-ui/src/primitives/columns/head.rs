@@ -145,6 +145,7 @@ fn handle(t: &Theme, set: Entity<ColumnSet>, at: usize, label: &str) -> impl Int
         )
 }
 
+#[derive(Clone, Copy)]
 struct Column<'a> {
     set: &'a Entity<ColumnSet>,
     at: usize,

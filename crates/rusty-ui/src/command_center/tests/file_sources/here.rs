@@ -37,7 +37,7 @@ fn setup(fs: Arc<FakeFs>, cap: usize) -> Setup {
     };
     let walks = HereWalks::with_options(fs.clone(), options);
     Setup {
-        source: HereSource::new(walks.clone()),
+        source: HereSource::new(walks),
         fs,
         offset,
     }
@@ -220,7 +220,7 @@ fn reopening_on_a_hung_root_reuses_the_running_walk() {
     gate.wait_until("the walk to start", |gate| {
         *gate.entered.lock().unwrap() >= 1
     });
-    let reopened = HereSource::new(walks.clone());
+    let reopened = HereSource::new(walks);
     for typed in ["b", "bu", "bud", "budg", "budget"] {
         reopened.search(&request(typed, &root), &sink, &cancel);
     }

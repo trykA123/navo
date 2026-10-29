@@ -137,7 +137,7 @@ fn button(
         })
 }
 
-fn service_row(t: &Theme, page: &SearchPage, send: Option<&Handler>) -> AnyElement {
+fn service_row(t: &Theme, page: SearchPage, send: Option<&Handler>) -> AnyElement {
     let status = page.status;
     let install = button(
         (
@@ -186,7 +186,7 @@ fn windows_only_note(t: &Theme) -> AnyElement {
         .into_any_element()
 }
 
-fn history_row(t: &Theme, page: &SearchPage, send: Option<&Handler>) -> AnyElement {
+fn history_row(t: &Theme, page: SearchPage, send: Option<&Handler>) -> AnyElement {
     let cleared = page.is_cleared.then(|| {
         div()
             .id("settings-history-cleared")
@@ -218,7 +218,7 @@ fn history_row(t: &Theme, page: &SearchPage, send: Option<&Handler>) -> AnyEleme
 
 pub(super) fn service_block(
     t: &Theme,
-    page: &SearchPage,
+    page: SearchPage,
     send: Option<&Handler>,
 ) -> Vec<AnyElement> {
     let body = if page.is_windows {
@@ -231,7 +231,7 @@ pub(super) fn service_block(
 
 pub(super) fn history_block(
     t: &Theme,
-    page: &SearchPage,
+    page: SearchPage,
     send: Option<&Handler>,
 ) -> Vec<AnyElement> {
     vec![

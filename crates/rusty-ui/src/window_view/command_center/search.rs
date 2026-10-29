@@ -345,7 +345,7 @@ impl FerriteWindow {
         let query = open.center.read(cx).query(cx);
         if open.mode == Mode::Names && open.step.is_none() && !query.trim().is_empty() {
             rows.push(crate::command_center::content_row(
-                query,
+                &query,
                 self.browser.state().active_tab().location(),
             ));
         }

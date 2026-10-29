@@ -263,7 +263,7 @@ fn key_hints(t: &Theme, hints: &[Hint], keys: &HintKeys) -> impl IntoElement {
         }))
 }
 
-pub(super) fn render(look: FooterLook) -> Div {
+pub(super) fn render(look: &FooterLook) -> Div {
     let t = look.theme;
     div()
         .flex_none()
@@ -278,7 +278,7 @@ pub(super) fn render(look: FooterLook) -> Div {
         .text_size(t.typography.tiny)
         .text_color(t.colors.muted)
         .whitespace_nowrap()
-        .children(status(t, &look))
+        .children(status(t, look))
         .when_some(look.hints.as_ref(), |footer, (hints, keys)| {
             footer.child(key_hints(t, hints, keys))
         })

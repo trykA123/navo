@@ -61,8 +61,13 @@ pub(super) fn grip(t: &Theme, side: Side, owner: EntityId) -> impl IntoElement {
     }
 }
 
-fn close_button(t: &Theme, key: SharedString, on_close: CloseHandler) -> impl IntoElement + use<> {
-    let kbd = Kbd::new("side-sheet-close-key", &key);
+fn close_button(
+    t: &Theme,
+    key: &SharedString,
+    on_close: &CloseHandler,
+) -> impl IntoElement + use<> {
+    let on_close: CloseHandler = on_close.clone();
+    let kbd = Kbd::new("side-sheet-close-key", key);
     let shortcut = kbd.as_ref().map(Kbd::text);
     let hover = (t.surfaces.field, t.colors.text);
     div()
@@ -113,7 +118,7 @@ pub(super) fn header(
                 .gap(t.spacing.lg)
                 .children(title),
         )
-        .children(close.map(|(key, on_close)| close_button(t, key, on_close)))
+        .children(close.map(|(key, on_close)| close_button(t, &key, &on_close)))
 }
 
 pub(super) fn body(content: Vec<AnyElement>) -> Div {

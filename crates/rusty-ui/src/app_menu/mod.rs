@@ -170,10 +170,10 @@ fn ring() -> Ring {
 }
 
 fn emit(
-    handler: &Option<EventHandler>,
+    handler: Option<&EventHandler>,
     event: Option<AppMenuEvent>,
 ) -> impl Fn(&mut Window, &mut App) + 'static {
-    let handler = handler.clone();
+    let handler = handler.cloned();
     move |window, cx| {
         if let Some(event) = event {
             send(handler.as_ref(), event, window, cx);
@@ -184,7 +184,7 @@ fn emit(
 fn register(root: Stateful<Div>, selected: usize, handler: Option<EventHandler>) -> Stateful<Div> {
     let moved = |step| {
         emit(
-            &handler,
+            handler.as_ref(),
             Some(AppMenuEvent::Select(ring().step(selected, step))),
         )
     };
@@ -194,8 +194,8 @@ fn register(root: Stateful<Div>, selected: usize, handler: Option<EventHandler>)
         moved(Step::Up),
         moved(Step::Down),
     );
-    let activate = emit(&handler, item_at(selected).and_then(event_for));
-    let close = emit(&handler, Some(AppMenuEvent::Close));
+    let activate = emit(handler.as_ref(), item_at(selected).and_then(event_for));
+    let close = emit(handler.as_ref(), Some(AppMenuEvent::Close));
     root.on_action(move |_: &FocusLeft, window, cx| left(window, cx))
         .on_action(move |_: &FocusRight, window, cx| right(window, cx))
         .on_action(move |_: &FocusUp, window, cx| up(window, cx))

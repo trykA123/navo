@@ -53,8 +53,7 @@ fn is_path_mode(input: &str) -> bool {
     let mut chars = input.chars();
     match (chars.next(), chars.next()) {
         (Some(letter), Some(':')) => letter.is_ascii_alphabetic(),
-        (Some('\\'), Some('\\')) => true,
-        (Some('~'), None | Some('/' | '\\')) => true,
+        (Some('\\'), Some('\\')) | (Some('~'), None | Some('/' | '\\')) => true,
         _ => false,
     }
 }

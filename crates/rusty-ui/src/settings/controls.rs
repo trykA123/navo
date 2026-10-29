@@ -152,7 +152,7 @@ pub(super) fn toggle(t: &Theme, is_on: bool, send: Option<&Handler>, field: Fiel
         .into_any_element()
 }
 
-pub(super) fn value_box(t: &Theme, text: SharedString) -> AnyElement {
+pub(super) fn value_box(t: &Theme, text: &SharedString) -> AnyElement {
     let shown = if text.is_empty() {
         SharedString::from("Not set")
     } else {

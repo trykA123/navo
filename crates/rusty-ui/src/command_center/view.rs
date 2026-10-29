@@ -326,7 +326,7 @@ impl CommandCenter {
             .then(|| props.selection.row(&props.rows))
             .flatten();
         let keys = props.key_hints.as_ref();
-        footer::render(FooterLook {
+        footer::render(&FooterLook {
             theme: t,
             note: is_active.then(|| props.note.clone()).flatten(),
             error: is_active.then(|| props.error.clone()).flatten(),

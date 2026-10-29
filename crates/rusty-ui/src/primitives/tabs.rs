@@ -217,7 +217,7 @@ fn closable(
     base.group(format!("tab-{index}"))
         .child(close_button(t, index, is_selected, close))
         .on_mouse_down(MouseButton::Middle, move |_, window, cx| {
-            middle(&index, window, cx)
+            middle(&index, window, cx);
         })
 }
 

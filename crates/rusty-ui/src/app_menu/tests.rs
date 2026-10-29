@@ -381,7 +381,7 @@ fn escape_and_a_click_outside_close_the_menu(cx: &mut TestAppContext) {
     rig.press(cx, "escape");
     assert_eq!(rig.take(), [AppMenuEvent::Close]);
     cx.update_window(rig.window, |_, window, cx| {
-        window.click("app-menu-backdrop", cx)
+        window.click("app-menu-backdrop", cx);
     })
     .expect("window");
     assert_eq!(rig.take(), [AppMenuEvent::Close]);
@@ -391,7 +391,7 @@ fn escape_and_a_click_outside_close_the_menu(cx: &mut TestAppContext) {
 fn a_click_inside_the_menu_does_not_close_it(cx: &mut TestAppContext) {
     let rig = open(cx);
     cx.update_window(rig.window, |_, window, cx| {
-        window.click("app-menu-identity", cx)
+        window.click("app-menu-identity", cx);
     })
     .expect("window");
     assert!(!rig.take().contains(&AppMenuEvent::Close));

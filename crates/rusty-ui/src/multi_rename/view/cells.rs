@@ -29,6 +29,7 @@ pub(super) fn name_cell(set: &ColumnSet, (at, text): (usize, &str), look: Look<'
     set.cell(at).child(body)
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct Look<'a> {
     pub color: Hsla,
     pub is_struck: bool,

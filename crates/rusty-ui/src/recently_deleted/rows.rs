@@ -128,9 +128,9 @@ fn meta(t: &Theme, row: &RetainedRow, now_ms: i64) -> Div {
         .child(line(t).text_color(expires).child(text::expires(left)))
 }
 
-fn actions(t: &Theme, index: usize, send: &Option<Send>) -> Div {
+fn actions(t: &Theme, index: usize, send: Option<&Send>) -> Div {
     let button = |id: &'static str, glyph: IconName, label: String, event: Event| {
-        let send = send.clone();
+        let send = send.cloned();
         IconButton::new((id, index), glyph, label).on_click(move |_, window, cx| {
             if let Some(send) = &send {
                 send(event, window, cx);
@@ -191,7 +191,7 @@ fn item(t: &Theme, (index, row): (usize, &RetainedRow), frame: &Frame) -> Statef
     let (_, extension) = kind::split_name(&name, EntryKind::File);
     let (glyph, tone) = kind::icon(EntryKind::File, extension, &t.colors);
     let side = if is_cursor && !is_working {
-        actions(t, index, &frame.send)
+        actions(t, index, frame.send.as_ref())
     } else {
         meta(t, row, frame.now_ms)
     };

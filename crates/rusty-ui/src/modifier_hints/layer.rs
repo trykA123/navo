@@ -120,7 +120,7 @@ fn entries(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<Entry> {
         });
     }
     entries.sort_by_key(|entry| place_of(entry.command));
-    folded(entries)
+    folded(&entries)
 }
 
 fn grouped(entries: Vec<Entry>) -> Vec<Group> {

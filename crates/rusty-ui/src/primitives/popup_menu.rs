@@ -175,7 +175,7 @@ pub(crate) fn wire_keys(
         state.clone(),
         state.clone(),
         state.clone(),
-        state.clone(),
+        state,
     );
     panel
         .key_context(CONTEXT)

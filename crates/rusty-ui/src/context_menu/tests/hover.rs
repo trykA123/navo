@@ -145,6 +145,6 @@ fn hovering_another_panel_keeps_a_scrolled_flyout_where_it_is(cx: &mut TestAppCo
     menu.wait(100, cx);
     assert_eq!(menu.levels(cx), 2);
     menu.menu.read_with(cx, |menu, _| {
-        assert_eq!(menu.views[1].scroll.offset(), offset)
+        assert_eq!(menu.views[1].scroll.offset(), offset);
     });
 }

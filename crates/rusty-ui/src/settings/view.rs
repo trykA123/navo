@@ -17,7 +17,6 @@ const NAV_WIDTH: f32 = 148.;
 const NAV_ITEM: f32 = 30.;
 const MARKER: (f32, f32) = (3., 14.);
 const ROW_MIN: f32 = 48.;
-const NOT_APPLIED: &str = "Not applied yet";
 const SHORTCUTS: &str = "Shortcuts";
 const NO_MATCH: &str = "No setting matches";
 const DIMMED: f32 = 0.45;
@@ -31,6 +30,7 @@ pub(super) struct Look<'a> {
     pub version: &'a SharedString,
     pub page: &'a SearchPage,
     pub send: Option<Handler>,
+    pub summon_key_taken: bool,
 }
 
 fn send_on_click<E: StatefulInteractiveElement>(
@@ -192,7 +192,7 @@ fn control(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
         }
         (Control::Toggle, Value::Flag(on)) => Some(controls::toggle(t, *on, send, spec.field)),
         (Control::Text | Control::Number, value) => {
-            Some(controls::value_box(t, spoken(spec, value)))
+            Some(controls::value_box(t, &spoken(spec, value)))
         }
         _ => None,
     }
@@ -237,16 +237,6 @@ fn key_line(t: &Theme, spec: &FieldSpec, is_current: bool) -> impl IntoElement +
 
 fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
     let t = look.theme;
-    let pending = (!spec.field.is_applied()).then(|| {
-        div()
-            .id("settings-not-applied")
-            .role(Role::Note)
-            .aria_label(NOT_APPLIED)
-            .test_support()
-            .text_size(t.typography.small)
-            .text_color(t.colors.muted)
-            .child(NOT_APPLIED)
-    });
     let name = div()
         .flex()
         .items_baseline()
@@ -265,7 +255,7 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
                 .text_color(t.colors.muted)
                 .child(spec.help()),
         )
-        .children(pending)
+        .children(row_state::notes(t, spec.field, look.summon_key_taken))
         .child(key_line(t, spec, index == look.row))
 }
 
@@ -381,8 +371,8 @@ pub(super) fn content(
                 .map(|spec| row(look, index, spec))
                 .into_iter()
                 .collect(),
-            Line::Service => search_page::service_block(t, look.page, send),
-            Line::History => search_page::history_block(t, look.page, send),
+            Line::Service => search_page::service_block(t, *look.page, send),
+            Line::History => search_page::history_block(t, *look.page, send),
         })
         .collect();
     if is_page_shown(look, section, Section::Diagnostics) {

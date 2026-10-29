@@ -110,7 +110,7 @@ pub fn highlight_theme(
     base: &HighlightTheme,
 ) -> HighlightTheme {
     let mut theme = base.clone();
-    theme.name = syntax.toml().to_owned();
+    syntax.toml().clone_into(&mut theme.name);
     theme.appearance = if mode.is_dark() {
         ThemeMode::Dark
     } else {

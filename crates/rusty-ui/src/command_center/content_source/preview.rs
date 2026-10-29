@@ -80,7 +80,7 @@ struct Delivery {
 }
 
 impl Delivery {
-    fn row(&self, relative: &str, hit: rusty_core::find::LineHit) -> Option<Row> {
+    fn row(&self, relative: &str, hit: &rusty_core::find::LineHit) -> Option<Row> {
         let target = target::target(&self.base, relative, hit.line, self.archives)?;
         Some(Row::Hit(Hit {
             source: "content",
@@ -130,7 +130,7 @@ impl Delivery {
         if cancel.is_cancelled() || self.count == LIMIT {
             return ControlFlow::Break(());
         }
-        let Some(row) = self.row(relative, hit) else {
+        let Some(row) = self.row(relative, &hit) else {
             return ControlFlow::Continue(());
         };
         if self

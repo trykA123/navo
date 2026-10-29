@@ -121,7 +121,7 @@ impl RenderOnce for PathInput {
         });
         start(&state, window, cx);
         let field = state.read(cx).field.clone();
-        *state.read(cx).submit.borrow_mut() = self.on_submit.clone();
+        (*state.read(cx).submit.borrow_mut()).clone_from(&self.on_submit);
         let cancel = self.on_cancel;
         div()
             .id(self.id)

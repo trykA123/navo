@@ -41,23 +41,23 @@ impl Change {
     }
 
     pub fn theme(theme: ThemeChoice) -> Self {
-        Self::pick(Field::Theme, &THEME_ORDER, theme)
+        Self::pick(Field::Theme, &THEME_ORDER, &theme)
     }
 
     pub fn color_theme(theme: ColorTheme) -> Self {
-        Self::pick(Field::ColorTheme, &ColorTheme::ALL, theme)
+        Self::pick(Field::ColorTheme, &ColorTheme::ALL, &theme)
     }
 
     pub fn density(density: Density) -> Self {
-        Self::pick(Field::Density, &DENSITY_ORDER, density)
+        Self::pick(Field::Density, &DENSITY_ORDER, &density)
     }
 
     pub fn syntax_theme(theme: SyntaxTheme) -> Self {
-        Self::pick(Field::TextSyntaxTheme, &SyntaxTheme::ALL, theme)
+        Self::pick(Field::TextSyntaxTheme, &SyntaxTheme::ALL, &theme)
     }
 
     pub fn modifier_hints(hints: HintsMode) -> Self {
-        Self::pick(Field::ModifierHints, &HINTS_ORDER, hints)
+        Self::pick(Field::ModifierHints, &HINTS_ORDER, &hints)
     }
 
     pub fn show_hidden(shown: bool) -> Self {
@@ -81,8 +81,8 @@ impl Change {
         }
     }
 
-    fn pick<T: PartialEq>(field: Field, order: &[T], wanted: T) -> Self {
-        let index = order.iter().position(|item| *item == wanted).unwrap_or(0);
+    fn pick<T: PartialEq>(field: Field, order: &[T], wanted: &T) -> Self {
+        let index = order.iter().position(|item| item == wanted).unwrap_or(0);
         Self {
             field,
             value: Value::Pick(index),
@@ -116,8 +116,10 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::TextLineNumbers
         | Field::MarkdownPreviewSplit
         | Field::PreviewTypeBars
-        | Field::PreviewLargestFiles => Value::Flag(true),
-        Field::SearchRemember | Field::RetainDeletes | Field::RetainOverwrites => Value::Flag(true),
+        | Field::PreviewLargestFiles
+        | Field::SearchRemember
+        | Field::RetainDeletes
+        | Field::RetainOverwrites => Value::Flag(true),
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
         Field::SummonKey => text("Win+Alt+N"),
         Field::WindowFkeyBar => Value::Flag(false),

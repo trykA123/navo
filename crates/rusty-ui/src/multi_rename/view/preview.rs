@@ -34,6 +34,7 @@ pub enum PreviewEvent {
     Sort(usize),
 }
 
+#[derive(Clone, Copy)]
 pub struct Shown<'a> {
     pub items: &'a [Item],
     pub preview: &'a Preview,
@@ -224,7 +225,7 @@ fn toggle(table: &Table, row: usize, line: &Line) -> impl IntoElement {
                 cx.emit(PreviewEvent::RowToggled {
                     parent: parent.clone(),
                     name: name.clone(),
-                })
+                });
             });
         })
 }

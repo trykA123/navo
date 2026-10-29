@@ -106,7 +106,7 @@ pub(crate) fn scope_name(scope: &rusty_core::Location) -> String {
     )
 }
 
-pub(crate) fn content_row(query: SharedString, scope: &rusty_core::Location) -> Row {
+pub(crate) fn content_row(query: &SharedString, scope: &rusty_core::Location) -> Row {
     Row::Hit(Hit {
         source: "content-mode",
         group: Group::Commands,
