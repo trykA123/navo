@@ -82,7 +82,11 @@ fn capture_with(config: LogConfig, redactor: Arc<Redactor>, emit: impl FnOnce())
     let ring = Arc::new(EventRing::new(EventRing::DEFAULT_BUDGET));
     let layer = LogLayer::new(config, redactor, Arc::clone(&ring)).unwrap();
     let misses = layer.misses();
-    tracing::subscriber::with_default(Registry::default().with(layer), emit);
+    let flush = layer.flush_handle();
+    tracing::subscriber::with_default(Registry::default().with(layer), || {
+        emit();
+        flush.shutdown();
+    });
     Capture { ring, misses }
 }
 

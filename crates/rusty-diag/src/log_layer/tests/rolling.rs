@@ -95,7 +95,9 @@ fn rolling_drops_the_oldest_lines_and_keeps_the_order() {
 fn oversized_line_is_written_alone_to_a_fresh_file() {
     let dir = TempDir::new().unwrap();
     let big = "x".repeat(400);
+    let mut retained_dispatch = None;
     capture_with(config(Some(dir.path()), MAX), redactor(), || {
+        tracing::dispatcher::get_default(|dispatch| retained_dispatch = Some(dispatch.clone()));
         tracing::info!(target: TARGET, "before");
         tracing::info!(target: TARGET, "{big}");
         tracing::info!(target: TARGET, "after");
@@ -120,6 +122,7 @@ fn oversized_line_is_written_alone_to_a_fresh_file() {
             vec!["after".to_owned()]
         ]
     );
+    drop(retained_dispatch);
 }
 
 #[test]
