@@ -497,3 +497,25 @@ fn the_safety_net_section_lists_its_five_retention_fields() {
     assert_eq!(Section::Safety.label(), "settings-safety");
     assert!(spec(Field::RetentionDays).help().contains("Not a backup"));
 }
+
+#[test]
+fn the_theme_help_names_the_platform() {
+    let help = spec(Field::Theme).help();
+    assert_eq!(
+        help.contains("Windows"),
+        cfg!(windows),
+        "theme help was: {help}"
+    );
+}
+
+#[test]
+fn system_files_are_a_windows_only_setting() {
+    let shown = Filter::new("").admits(spec(Field::ShowSystem));
+    assert_eq!(shown, cfg!(windows));
+}
+
+#[test]
+fn the_sort_choice_for_extensions_is_not_called_kind() {
+    assert!(SORTS.iter().all(|choice| choice.text() != "Kind"));
+    assert_eq!(SORTS[3].text(), "Extension");
+}

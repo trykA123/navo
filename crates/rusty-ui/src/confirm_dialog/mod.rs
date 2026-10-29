@@ -1,3 +1,4 @@
+mod elide;
 mod keys;
 
 #[cfg(test)]
@@ -25,6 +26,7 @@ use keys::Keys;
 type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
 
 const SHOWN_LINES: usize = 5;
+const LINE_CHARS: usize = 54;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConfirmProps {
@@ -220,7 +222,7 @@ fn paths(t: &Theme, props: &ConfirmProps) -> Div {
         .shown()
         .iter()
         .enumerate()
-        .map(|(index, line)| label(("line", index), line.clone()));
+        .map(|(index, line)| label(("line", index), elide::middle(line, LINE_CHARS).into()));
     div()
         .flex()
         .flex_col()

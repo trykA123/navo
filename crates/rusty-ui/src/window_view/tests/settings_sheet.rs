@@ -189,11 +189,11 @@ fn space_on_hidden_files_hides_them_in_the_live_pane(cx: &mut TestAppContext) {
 fn space_flips_a_toggle(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    go_to(cx, &rig, Field::ShowSystem);
+    go_to(cx, &rig, Field::FoldersFirst);
     rig.press(cx, "space");
     let change = Change {
-        field: Field::ShowSystem,
-        value: Value::Flag(true),
+        field: Field::FoldersFirst,
+        value: Value::Flag(false),
     };
     assert_eq!(last_change(&rig), Some(change));
 }
@@ -437,7 +437,7 @@ fn undo_of_a_key_that_was_not_in_the_file_unsets_it(cx: &mut TestAppContext) {
 fn undo_while_a_save_is_in_flight_writes_the_old_value(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    go_to(cx, &rig, Field::ShowSystem);
+    go_to(cx, &rig, Field::FoldersFirst);
     cx.update_window(rig.window, |_, window, cx| {
         window.press("space", cx);
         window.press("ctrl-z", cx);
@@ -445,14 +445,14 @@ fn undo_while_a_save_is_in_flight_writes_the_old_value(cx: &mut TestAppContext) 
     .expect("window");
     cx.run_until_parked();
     let off = Change {
-        field: Field::ShowSystem,
-        value: Value::Flag(false),
+        field: Field::FoldersFirst,
+        value: Value::Flag(true),
     };
     assert_eq!(last_change(&rig), Some(off));
     let shown = rig
         .view
-        .read_with(cx, |view, _| view.values.get(Field::ShowSystem).clone());
-    assert_eq!(shown, Value::Flag(false));
+        .read_with(cx, |view, _| view.values.get(Field::FoldersFirst).clone());
+    assert_eq!(shown, Value::Flag(true));
 }
 
 #[gpui_kit::test]

@@ -185,7 +185,7 @@ pub const SORTS: [Choice; 4] = [
     choice("Name", "name"),
     choice("Size", "size"),
     choice("Date", "date"),
-    choice("Kind", "kind"),
+    choice("Extension", "kind"),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

@@ -11,8 +11,10 @@ fn names(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
 
 fn open_at(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     rig.press(cx, "ctrl-,");
+    let filter = crate::settings::Filter::default();
     let row = crate::settings::FIELDS
         .iter()
+        .filter(|spec| filter.admits(spec))
         .position(|spec| spec.field == field)
         .expect("a row");
     for _ in 0..row {
@@ -63,6 +65,7 @@ fn folders_first_off_mixes_folders_into_the_live_pane(cx: &mut TestAppContext) {
     assert_eq!(names(cx, &rig), ["a.txt", "b-secret.txt", "docs"]);
 }
 
+#[cfg(windows)]
 #[gpui_kit::test]
 fn show_system_files_shows_them_in_the_live_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);

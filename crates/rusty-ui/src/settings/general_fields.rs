@@ -17,7 +17,7 @@ const TERMINAL_PROVIDERS: [Choice; 5] = [
 pub(super) const GENERAL: [FieldSpec; 28] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
-        ("Theme", "Follow Windows, or keep light or dark"),
+        ("Theme", "settings-theme-help"),
         Control::Choices(&THEMES, Look::ThemePictures),
     ),
     spec(

@@ -109,3 +109,7 @@ settings-terminal-provider-windows-terminal = Windows Terminal
 settings-terminal-provider-powershell = PowerShell
 settings-terminal-provider-cmd = Command Prompt
 settings-terminal-provider-custom = Custom
+settings-theme-help = { PLATFORM() ->
+    [windows] Follow Windows, or keep light or dark
+   *[other] Follow system, or keep light or dark
+}
