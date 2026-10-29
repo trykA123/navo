@@ -269,7 +269,10 @@ impl Worker {
             return Ok(());
         };
         let snapshot = index.snapshot();
-        if !self.clock.due(self.started.elapsed(), snapshot.as_ref(), stopping) {
+        if !self
+            .clock
+            .due(self.started.elapsed(), snapshot.as_ref(), stopping)
+        {
             return Ok(());
         }
         let Some((table, ids, position)) = snapshot else {
