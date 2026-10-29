@@ -15,6 +15,7 @@ mod drop_menu;
 mod drop_platform;
 mod editor;
 mod find_tab;
+mod first_keys;
 mod fkeys;
 mod font_settings;
 mod hand_off;
@@ -183,6 +184,7 @@ pub struct FerriteWindow {
     autosave: closing::Autosave,
     prompt: Option<prompt::Prompt>,
     dialog_input: dialog_input::DialogInput,
+    first_keys: first_keys::FirstKeys,
     editor: EditorHooks,
     terminal: TerminalHooks,
     files: FileHooks,
@@ -222,7 +224,7 @@ pub struct FerriteWindow {
     chrome: chrome_state::Chromes,
     cached: cached_views::CachedViews,
     workspace_keys: workspace_keys::WorkspaceKeys,
-    _watches: [Subscription; 6],
+    _watches: [Subscription; 7],
 }
 
 impl FerriteWindow {
@@ -241,6 +243,7 @@ impl FerriteWindow {
             autosave: closing::Autosave::observe(cx),
             prompt: None,
             dialog_input: dialog_input::DialogInput::default(),
+            first_keys: first_keys::FirstKeys::new(window),
             editor: options.editor,
             terminal: options.terminal,
             files: options.files,
@@ -318,6 +321,7 @@ impl FerriteWindow {
             cx.notify();
         }
         self.linger_ended(cx);
+        self.release_first_keys(cx);
     }
 
     fn handle(&mut self, pane: PaneId, cx: &mut Context<Self>) -> FocusHandle {

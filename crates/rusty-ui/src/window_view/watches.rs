@@ -4,7 +4,7 @@ use super::FerriteWindow;
 use crate::prelude::*;
 
 impl FerriteWindow {
-    pub(super) fn watches(window: &mut Window, cx: &mut Context<Self>) -> [Subscription; 6] {
+    pub(super) fn watches(window: &mut Window, cx: &mut Context<Self>) -> [Subscription; 7] {
         [
             cx.observe_in(&cx.entity(), window, |view, entity, window, cx| {
                 view.follow_cursor(entity, window, cx);
@@ -15,6 +15,7 @@ impl FerriteWindow {
             cx.observe_window_bounds(window, Self::viewport_changed),
             cx.on_focus_lost(window, Self::popup_focus_lost),
             Self::watch_dialog_input(window, cx),
+            Self::watch_first_keys(window, cx),
         ]
     }
 

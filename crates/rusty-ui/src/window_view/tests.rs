@@ -31,6 +31,7 @@ mod drive_fs;
 mod drives;
 mod drop;
 mod find;
+mod first_key;
 mod fkeys;
 mod hand_off;
 pub(in crate::window_view) mod held;

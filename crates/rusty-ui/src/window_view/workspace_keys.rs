@@ -137,7 +137,7 @@ impl FerriteWindow {
         window.is_window_active() && self.pane_has_focus(window)
     }
 
-    fn pane_has_focus(&self, window: &Window) -> bool {
+    pub(super) fn pane_has_focus(&self, window: &Window) -> bool {
         let pane = self.browser.state().focused_pane();
         self.viewer.is_none()
             && self
